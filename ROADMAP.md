@@ -42,6 +42,7 @@ For the full vision and rationale see [VISION.md](./VISION.md).
 
 ### Phase 2 — Runtime foundation
 
+- [ ] `docs/architecture.md` Layer Diagram updated: split App Code into `.ui` DSL layer and host-code layer, clarify each layer's responsibilities
 - [ ] Visual Layer integration strategy agreed (`docs/architecture.md` updated)
 - [ ] Win32 window creation and message loop
 - [ ] `DispatcherQueueController` initialization

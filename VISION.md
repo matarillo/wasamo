@@ -76,7 +76,7 @@ The following are explicitly *not* on the table. Letting these go is what makes 
 When design choices come into conflict, we resolve them in this order.
 
 1. **Native Windows feel.** Mica/Acrylic, system theming, type ramp, accent, smooth animation — these must look right by default
-2. **Minimum app code.** UI structure in the DSL, logic in the host language; both expressed in their shortest natural form
+2. **Minimum app code.** UI structure in the DSL, logic in the host language; both expressed in their shortest natural form. The underlying model is declarative and unidirectional: the view is a pure function of state (`view = f(state)`), state flows down through property bindings, and user interactions flow up as events handled by host-language callbacks.
 3. **Lean resources.** Target <100ms cold start, <30MB memory, single-digit-MB binaries
 4. **Multi-language support.** The C ABI is the primary boundary. Language-specific optimizations are secondary
 5. **Contribution to the OSS ecosystem.** Permissive licensing, open specifications, hospitality toward third-party extensions
