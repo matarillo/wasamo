@@ -338,3 +338,184 @@ impl<'a> Parser<'a> {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::parse;
+    use crate::ast::*;
+    use crate::diagnostic::Diagnostic;
+    use crate::lexer::tokenize;
+
+    fn parse_str(src: &str) -> Result<ComponentDef, Diagnostic> {
+        let tokens = tokenize(src, "<test>").unwrap();
+        parse(&tokens, "<test>")
+    }
+
+    fn parse_ok(src: &str) -> ComponentDef {
+        parse_str(src).expect("parse failed")
+    }
+
+    fn parse_err_msg(src: &str) -> String {
+        parse_str(src).expect_err("expected parse error").message
+    }
+
+    #[test]
+    fn empty_component() {
+        let def = parse_ok("component Foo inherits Bar {}");
+        assert_eq!(def.name, "Foo");
+        assert_eq!(def.base, "Bar");
+        assert!(def.members.is_empty());
+    }
+
+    #[test]
+    fn property_decl_int() {
+        let def = parse_ok("component C inherits W { in-out property <int> count: 0 }");
+        assert_eq!(def.members.len(), 1);
+        if let Member::PropertyDecl { name, ty, default, .. } = &def.members[0] {
+            assert_eq!(name, "count");
+            assert!(matches!(ty, TypeName::Int));
+            assert!(matches!(default, Expr::IntLit { value: 0, .. }));
+        } else {
+            panic!("expected PropertyDecl");
+        }
+    }
+
+    #[test]
+    fn property_decl_string() {
+        let def = parse_ok(r#"component C inherits W { in-out property <string> title: "hello" }"#);
+        if let Member::PropertyDecl { name, ty, default, .. } = &def.members[0] {
+            assert_eq!(name, "title");
+            assert!(matches!(ty, TypeName::Str));
+            assert!(matches!(default, Expr::StringLit { .. }));
+        } else {
+            panic!("expected PropertyDecl");
+        }
+    }
+
+    #[test]
+    fn property_bind_string() {
+        let def = parse_ok(r#"component C inherits W { title: "Counter" }"#);
+        if let Member::PropertyBind { name, value, .. } = &def.members[0] {
+            assert_eq!(name, "title");
+            assert!(matches!(value, Expr::StringLit { .. }));
+        } else {
+            panic!("expected PropertyBind");
+        }
+    }
+
+    #[test]
+    fn property_bind_ident() {
+        let def = parse_ok("component C inherits W { theme: system }");
+        if let Member::PropertyBind { name, value, .. } = &def.members[0] {
+            assert_eq!(name, "theme");
+            assert!(matches!(value, Expr::Ident { name: n, .. } if n == "system"));
+        } else {
+            panic!("expected PropertyBind");
+        }
+    }
+
+    #[test]
+    fn property_bind_measurement() {
+        let def = parse_ok("component C inherits W { spacing: 12px }");
+        if let Member::PropertyBind { name, value, .. } = &def.members[0] {
+            assert_eq!(name, "spacing");
+            assert!(matches!(value, Expr::Measurement { value: v, unit: Unit::Px, .. } if *v == 12.0));
+        } else {
+            panic!("expected PropertyBind");
+        }
+    }
+
+    #[test]
+    fn widget_decl_empty() {
+        let def = parse_ok("component C inherits W { VStack {} }");
+        if let Member::WidgetDecl { type_name, members, .. } = &def.members[0] {
+            assert_eq!(type_name, "VStack");
+            assert!(members.is_empty());
+        } else {
+            panic!("expected WidgetDecl");
+        }
+    }
+
+    #[test]
+    fn widget_decl_with_property() {
+        let def = parse_ok("component C inherits W { VStack { spacing: 12px } }");
+        if let Member::WidgetDecl { type_name, members, .. } = &def.members[0] {
+            assert_eq!(type_name, "VStack");
+            assert_eq!(members.len(), 1);
+            assert!(matches!(&members[0], Member::PropertyBind { name, .. } if name == "spacing"));
+        } else {
+            panic!("expected WidgetDecl");
+        }
+    }
+
+    #[test]
+    fn signal_handler_plus_eq() {
+        let def = parse_ok("component C inherits W { clicked => { root.count += 1; } }");
+        if let Member::SignalHandler { signal, body, .. } = &def.members[0] {
+            assert_eq!(signal, "clicked");
+            assert_eq!(body.statements.len(), 1);
+            let stmt = &body.statements[0];
+            assert_eq!(stmt.target.segments, vec!["root", "count"]);
+            assert!(matches!(stmt.op, AssignOp::PlusEq));
+            assert!(matches!(stmt.value, Expr::IntLit { value: 1, .. }));
+        } else {
+            panic!("expected SignalHandler");
+        }
+    }
+
+    #[test]
+    fn nested_widgets() {
+        let def = parse_ok("component C inherits W { VStack { Text {} Button {} } }");
+        if let Member::WidgetDecl { type_name, members, .. } = &def.members[0] {
+            assert_eq!(type_name, "VStack");
+            assert_eq!(members.len(), 2);
+            assert!(matches!(&members[0], Member::WidgetDecl { type_name, .. } if type_name == "Text"));
+            assert!(matches!(&members[1], Member::WidgetDecl { type_name, .. } if type_name == "Button"));
+        } else {
+            panic!("expected VStack WidgetDecl");
+        }
+    }
+
+    #[test]
+    fn full_counter_component() {
+        let src = r#"component Counter inherits Window {
+    title: "Counter"
+    in-out property <int> count: 0
+    VStack {
+        spacing: 12px
+        Text {
+            text: "Count: \{root.count}"
+        }
+        Button {
+            text: "Increment"
+            clicked => { root.count += 1; }
+        }
+    }
+}"#;
+        let def = parse_ok(src);
+        assert_eq!(def.name, "Counter");
+        assert_eq!(def.base, "Window");
+        assert_eq!(def.members.len(), 3);
+        assert!(matches!(&def.members[0], Member::PropertyBind { name, .. } if name == "title"));
+        assert!(matches!(&def.members[1], Member::PropertyDecl { name, .. } if name == "count"));
+        assert!(matches!(&def.members[2], Member::WidgetDecl { type_name, .. } if type_name == "VStack"));
+    }
+
+    #[test]
+    fn error_missing_inherits() {
+        let msg = parse_err_msg("component Foo Bar {}");
+        assert!(msg.contains("`inherits`"), "message: {msg}");
+    }
+
+    #[test]
+    fn error_missing_lbrace() {
+        let msg = parse_err_msg("component Foo inherits Bar");
+        assert!(msg.contains("`{`") || msg.contains("end of file"), "message: {msg}");
+    }
+
+    #[test]
+    fn error_trailing_tokens() {
+        let msg = parse_err_msg("component Foo inherits Bar {} extra");
+        assert!(msg.contains("end of file"), "message: {msg}");
+    }
+}

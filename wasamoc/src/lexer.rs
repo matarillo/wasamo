@@ -368,3 +368,207 @@ fn scan_interp_ident(c: &mut Cursor, filename: &str) -> Result<String, Diagnosti
     }
     Ok(s)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::ast::{StringPart, Unit};
+
+    fn lex_ok(src: &str) -> Vec<Token> {
+        tokenize(src, "<test>")
+            .expect("tokenize failed")
+            .into_iter()
+            .map(|st| st.token)
+            .collect()
+    }
+
+    fn lex_err(src: &str) -> String {
+        tokenize(src, "<test>").expect_err("expected error").message
+    }
+
+    #[test]
+    fn keywords() {
+        let toks = lex_ok("component inherits property");
+        assert!(matches!(&toks[0], Token::Kw(Keyword::Component)));
+        assert!(matches!(&toks[1], Token::Kw(Keyword::Inherits)));
+        assert!(matches!(&toks[2], Token::Kw(Keyword::Property)));
+    }
+
+    #[test]
+    fn in_out_keyword() {
+        let toks = lex_ok("in-out");
+        assert!(matches!(&toks[0], Token::Kw(Keyword::InOut)));
+        assert!(matches!(&toks[1], Token::Eof));
+    }
+
+    #[test]
+    fn in_out_followed_by_space() {
+        let toks = lex_ok("in-out property");
+        assert!(matches!(&toks[0], Token::Kw(Keyword::InOut)));
+        assert!(matches!(&toks[1], Token::Kw(Keyword::Property)));
+    }
+
+    #[test]
+    fn in_out_followed_by_alphanumeric_is_error() {
+        // "in-outx": scans "in", hits "-" which is not "-=" so errors
+        assert!(lex_err("in-outx").contains("unexpected"));
+    }
+
+    #[test]
+    fn identifiers() {
+        let toks = lex_ok("Counter _foo abc123");
+        assert!(matches!(&toks[0], Token::Ident(s) if s == "Counter"));
+        assert!(matches!(&toks[1], Token::Ident(s) if s == "_foo"));
+        assert!(matches!(&toks[2], Token::Ident(s) if s == "abc123"));
+    }
+
+    #[test]
+    fn integer_literals() {
+        let toks = lex_ok("0 42 100");
+        assert!(matches!(&toks[0], Token::IntLit(0)));
+        assert!(matches!(&toks[1], Token::IntLit(42)));
+        assert!(matches!(&toks[2], Token::IntLit(100)));
+    }
+
+    #[test]
+    fn float_literal() {
+        let toks = lex_ok("3.14");
+        assert!(matches!(&toks[0], Token::FloatLit(v) if *v == 3.14_f64));
+    }
+
+    #[test]
+    fn measurement_px() {
+        let toks = lex_ok("12px 0px");
+        assert!(matches!(&toks[0], Token::Measurement(v, Unit::Px) if *v == 12.0));
+        assert!(matches!(&toks[1], Token::Measurement(v, Unit::Px) if *v == 0.0));
+    }
+
+    #[test]
+    fn punctuation() {
+        let toks = lex_ok("{ } < > : . ;");
+        assert!(matches!(&toks[0], Token::LBrace));
+        assert!(matches!(&toks[1], Token::RBrace));
+        assert!(matches!(&toks[2], Token::LAngle));
+        assert!(matches!(&toks[3], Token::RAngle));
+        assert!(matches!(&toks[4], Token::Colon));
+        assert!(matches!(&toks[5], Token::Dot));
+        assert!(matches!(&toks[6], Token::Semicolon));
+    }
+
+    #[test]
+    fn arrow_and_eq() {
+        let toks = lex_ok("=> =");
+        assert!(matches!(&toks[0], Token::Arrow));
+        assert!(matches!(&toks[1], Token::Eq));
+    }
+
+    #[test]
+    fn compound_assign_ops() {
+        let toks = lex_ok("+= -= *= /=");
+        assert!(matches!(&toks[0], Token::PlusEq));
+        assert!(matches!(&toks[1], Token::MinusEq));
+        assert!(matches!(&toks[2], Token::StarEq));
+        assert!(matches!(&toks[3], Token::SlashEq));
+    }
+
+    #[test]
+    fn string_plain_text() {
+        let toks = lex_ok(r#""hello""#);
+        if let Token::StringLit(parts) = &toks[0] {
+            assert_eq!(parts.len(), 1);
+            assert!(matches!(&parts[0], StringPart::Text(s) if s == "hello"));
+        } else {
+            panic!("expected StringLit");
+        }
+    }
+
+    #[test]
+    fn string_escape_backslash() {
+        // DSL source: "\\" → single backslash in the text value
+        let toks = lex_ok("\"\\\\\"");
+        if let Token::StringLit(parts) = &toks[0] {
+            assert_eq!(parts.len(), 1);
+            assert!(matches!(&parts[0], StringPart::Text(s) if s == "\\"));
+        } else {
+            panic!("expected StringLit");
+        }
+    }
+
+    #[test]
+    fn string_escape_quote() {
+        // DSL source: "\"" → double-quote in the text value
+        let toks = lex_ok("\"\\\"\"");
+        if let Token::StringLit(parts) = &toks[0] {
+            assert_eq!(parts.len(), 1);
+            assert!(matches!(&parts[0], StringPart::Text(s) if s == "\""));
+        } else {
+            panic!("expected StringLit");
+        }
+    }
+
+    #[test]
+    fn string_interpolation_single_ident() {
+        let toks = lex_ok(r#""Count: \{count}""#);
+        if let Token::StringLit(parts) = &toks[0] {
+            assert_eq!(parts.len(), 2);
+            assert!(matches!(&parts[0], StringPart::Text(s) if s == "Count: "));
+            if let StringPart::Interp(qn) = &parts[1] {
+                assert_eq!(qn.segments, vec!["count"]);
+            } else {
+                panic!("expected Interp");
+            }
+        } else {
+            panic!("expected StringLit");
+        }
+    }
+
+    #[test]
+    fn string_interpolation_dotted_path() {
+        let toks = lex_ok(r#""\{root.count}""#);
+        if let Token::StringLit(parts) = &toks[0] {
+            assert_eq!(parts.len(), 1);
+            if let StringPart::Interp(qn) = &parts[0] {
+                assert_eq!(qn.segments, vec!["root", "count"]);
+            } else {
+                panic!("expected Interp");
+            }
+        } else {
+            panic!("expected StringLit");
+        }
+    }
+
+    #[test]
+    fn error_unterminated_string() {
+        assert!(lex_err("\"hello").contains("unterminated"));
+    }
+
+    #[test]
+    fn error_unknown_escape() {
+        assert!(lex_err("\"\\n\"").contains("unknown escape"));
+    }
+
+    #[test]
+    fn error_bare_minus() {
+        assert!(lex_err("- ").contains("unexpected"));
+    }
+
+    #[test]
+    fn error_unexpected_character() {
+        assert!(lex_err("@").contains("unexpected character"));
+    }
+
+    #[test]
+    fn error_interp_missing_ident_after_dot() {
+        // \{root.} — dot followed by closing brace: missing ident
+        assert!(lex_err(r#""\{root.}""#).contains("expected identifier"));
+    }
+
+    #[test]
+    fn span_line_and_col() {
+        let tokens = tokenize("component\n  Foo", "<test>").unwrap();
+        assert_eq!(tokens[0].span.line, 1);
+        assert_eq!(tokens[0].span.col, 1);
+        assert_eq!(tokens[1].span.line, 2);
+        assert_eq!(tokens[1].span.col, 3);
+    }
+}

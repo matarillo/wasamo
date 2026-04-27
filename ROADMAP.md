@@ -38,7 +38,7 @@ For the full vision and rationale see [VISION.md](./VISION.md).
 - [x] `docs/dsl_spec.md` updated to match implementation
 - [x] `docs/architecture.md` wasamoc section updated
 - [x] CI updated (workspace build + `cargo test --workspace`)
-- [ ] Unit tests added to `wasamoc` (lexer and parser)
+- [x] Unit tests added to `wasamoc` (lexer and parser)
 
 ### Phase 2 — Runtime foundation
 

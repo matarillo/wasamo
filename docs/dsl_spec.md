@@ -1,8 +1,8 @@
 # Wasamo DSL Specification — M1 Scope
 
-**Document version:** 0.1 (Draft — Phase 1, pending owner agreement)
+**Document version:** 0.2
 **Last updated:** 2026-04-27
-**Status:** Draft
+**Status:** Phase 1 agreed
 
 ---
 
@@ -75,6 +75,9 @@ component Counter inherits Window {
 | `Dot`       | `.`                                    |                              |
 | `Semicolon` | `;`                                    |                              |
 | `PlusEq`    | `+=`                                   |                              |
+| `MinusEq`   | `-=`                                   |                              |
+| `StarEq`    | `*=`                                   |                              |
+| `SlashEq`   | `/=`                                   |                              |
 | `Eq`        | `=`                                    |                              |
 
 ### 2.3 Whitespace and comments
@@ -249,28 +252,35 @@ ComponentDef {
 }
 
 Member (enum) {
-    PropertyDecl   { name: String, ty: TypeName, default: Expr },
-    PropertyBind   { name: String, value: Expr },
-    WidgetDecl     { type_name: String, members: Vec<Member> },
-    SignalHandler  { signal: String, body: Block },
+    PropertyDecl  { name: String, ty: TypeName, default: Expr },
+    PropertyBind  { name: String, value: Expr },
+    WidgetDecl    { type_name: String, members: Vec<Member> },
+    SignalHandler { signal: String, body: Block },
+}
+
+StringPart (enum) {
+    Text(String),
+    Interp(QualifiedName),
 }
 
 Expr (enum) {
-    StringLit(String),
-    IntLit(i64),
-    FloatLit(f64),
+    StringLit   { parts: Vec<StringPart> },
+    IntLit      { value: i64 },
+    FloatLit    { value: f64 },
     Measurement { value: f64, unit: Unit },
-    Ident(String),
+    Ident       { name: String },
 }
 
 Unit (enum) { Px }
 
-TypeName (enum) { Int, String, Float, Bool }
+TypeName (enum) { Int, Str, Float, Bool }
 
 Block { statements: Vec<Statement> }
 
-Statement (enum) {
-    Assign { target: QualifiedName, op: AssignOp, value: Expr },
+Statement {
+    target: QualifiedName,
+    op:     AssignOp,
+    value:  Expr,
 }
 
 QualifiedName { segments: Vec<String> }
@@ -278,7 +288,7 @@ QualifiedName { segments: Vec<String> }
 AssignOp (enum) { Eq, PlusEq, MinusEq, MulEq, DivEq }
 ```
 
-All AST nodes carry a `span: Span` field (byte offset range) for error reporting.
+All AST nodes carry a `span: Span` field (byte offset, line, col) for error reporting.
 
 ---
 
@@ -295,13 +305,14 @@ wasamoc check <file.ui>
 Error output format:
 
 ```
-error[E001]: <message>
+error: <message>
   --> <filename>:<line>:<column>
    |
-42 |     Buttun {
-   |     ^^^^^^ unknown widget type; did you mean `Button`?
+8  |     Buttun {
+   |     ^
 ```
 
+Warnings use the same format with `warning:` in place of `error:`.
 Warnings are printed to stderr but do not affect the exit code.
 
 ---
@@ -385,6 +396,7 @@ schema change is required; M2 adds evaluation logic, not a new representation.
 
 ## Revision history
 
-| Version | Date       | Notes                                        |
-|---------|------------|----------------------------------------------|
-| 0.1     | 2026-04-27 | Initial draft (Phase 1, pending owner agreement) |
+| Version | Date       | Notes                                                                             |
+|---------|------------|-----------------------------------------------------------------------------------|
+| 0.1     | 2026-04-27 | Initial draft (Phase 1, pending owner agreement)                                  |
+| 0.2     | 2026-04-27 | Phase 1 agreed; added missing tokens (MinusEq/StarEq/SlashEq); corrected AST types (StringLit → Vec<StringPart>, Statement as struct); corrected error output format |

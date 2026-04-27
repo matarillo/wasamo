@@ -1,8 +1,8 @@
 # Wasamo Architecture
 
-**Document version:** 0.2 (Draft — Phase 1, pending owner agreement)
+**Document version:** 0.3
 **Last updated:** 2026-04-27
-**Status:** Phase 0 sections agreed; Phase 1 wasamoc section is a new draft
+**Status:** Phase 0 and Phase 1 agreed
 
 ---
 
@@ -246,3 +246,4 @@ The following are intentionally left open at this draft stage.
 |---------|------------|---------------------------------------------------------------|
 | 0.1     | 2026-04-27 | Initial draft (Phase 0, pending owner agreement)              |
 | 0.2     | 2026-04-27 | Phase 0 agreed; added §7 wasamoc detail (Phase 1, pending owner agreement) |
+| 0.3     | 2026-04-27 | Phase 1 agreed; status updated to reflect completed implementation |
