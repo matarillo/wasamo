@@ -1,8 +1,8 @@
 # Wasamo Architecture
 
-**Document version:** 0.1 (Draft — Phase 0, pending owner agreement)
+**Document version:** 0.2 (Draft — Phase 1, pending owner agreement)
 **Last updated:** 2026-04-27
-**Status:** Draft
+**Status:** Phase 0 sections agreed; Phase 1 wasamoc section is a new draft
 
 ---
 
@@ -159,19 +159,58 @@ In M1 there is no reconciler. The host language constructs the view tree directl
 
 ## 7. wasamoc (DSL Compiler) — M1 Scope
 
-M1 does not include code generation. Only parsing and syntax checking.
-
-```
-.ui file
-  ↓ lexer
-token stream
-  ↓ parser
-AST (Rust enum/struct)
-  ↓ wasamoc check command
-result: OK  or  error message + line number
-```
-
+M1 covers lexing, parsing, and syntax checking only.
 Code generation (conversion to runtime calls, binding generation) is M2 scope.
+The full DSL grammar and AST type definitions are specified in [`docs/dsl_spec.md`](./dsl_spec.md).
+
+### Processing pipeline
+
+```
+.ui source file
+  │
+  ▼  wasamoc/src/lexer.rs
+token stream  (Keyword, Ident, IntLit, StringLit, …)
+  │
+  ▼  wasamoc/src/parser.rs
+AST  (ComponentDef → Vec<Member> → …)
+  │
+  ▼  wasamoc/src/check.rs
+diagnostics  (errors + warnings with file:line:col)
+  │
+  ▼  wasamoc check exit code
+0 = success  |  1 = error
+```
+
+### Module layout (`wasamoc/src/`)
+
+| File          | Responsibility                                              |
+|---------------|-------------------------------------------------------------|
+| `main.rs`     | CLI entry point; parses `wasamoc check <file>` arguments   |
+| `lexer.rs`    | Converts `.ui` source text into a flat token stream        |
+| `parser.rs`   | Recursive-descent parser; builds the AST from tokens       |
+| `ast.rs`      | AST type definitions (`ComponentDef`, `Member`, `Expr`, …) |
+| `check.rs`    | Post-parse validation: widget type registry, warnings      |
+| `diagnostic.rs` | Error/warning formatting and span-based reporting        |
+
+### Relation to the runtime (M1)
+
+In M1, `wasamoc` and the `wasamo` runtime DLL are **decoupled**:
+`wasamoc check` only validates syntax; it does not call into the runtime or produce any
+output artifact consumed by the DLL.
+
+The host language constructs the widget tree directly through the C ABI at startup.
+The DSL file serves as the design source of truth; code generation that bridges the two
+is M2 scope.
+
+```
+M1 data flow:
+
+developer ──writes──▶ counter.ui ──wasamoc check──▶ OK / errors
+                                                          (no artifact)
+
+host app ──calls──▶ wasamo C ABI ──builds──▶ widget tree at runtime
+                    (manually, by the developer)
+```
 
 ---
 
@@ -192,6 +231,7 @@ The following are intentionally left open at this draft stage.
 
 ## Revision history
 
-| Version | Date | Notes |
-|---|---|---|
-| 0.1 | 2026-04-27 | Initial draft (Phase 0, pending owner agreement) |
+| Version | Date       | Notes                                                         |
+|---------|------------|---------------------------------------------------------------|
+| 0.1     | 2026-04-27 | Initial draft (Phase 0, pending owner agreement)              |
+| 0.2     | 2026-04-27 | Phase 0 agreed; added §7 wasamoc detail (Phase 1, pending owner agreement) |

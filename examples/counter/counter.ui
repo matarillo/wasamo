@@ -1,0 +1,22 @@
+component Counter inherits Window {
+    title: "Counter"
+    backdrop: mica
+    theme: system
+
+    in-out property <int> count: 0
+
+    VStack {
+        spacing: 12px
+        padding: 24px
+
+        Text {
+            text: "Count: \{root.count}"
+            font: title
+        }
+        Button {
+            text: "Increment"
+            style: accent
+            clicked => { root.count += 1; }
+        }
+    }
+}

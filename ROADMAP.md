@@ -29,14 +29,14 @@ For the full vision and rationale see [VISION.md](./VISION.md).
 
 ### Phase 1 — DSL parser (wasamoc)
 
-- [ ] `docs/dsl_spec.md` M1 scope draft, owner agreement obtained
-- [ ] `docs/architecture.md` wasamoc section added, owner agreement obtained
-- [ ] Lexer for `.ui` files
-- [ ] Parser for `.ui` files
-- [ ] AST type definitions (Rust enum/struct)
-- [ ] `wasamoc check` CLI command
-- [ ] `docs/dsl_spec.md` updated to match implementation
-- [ ] `docs/architecture.md` wasamoc section updated
+- [x] `docs/dsl_spec.md` M1 scope draft, owner agreement obtained
+- [x] `docs/architecture.md` wasamoc section added, owner agreement obtained
+- [x] Lexer for `.ui` files
+- [x] Parser for `.ui` files
+- [x] AST type definitions (Rust enum/struct)
+- [x] `wasamoc check` CLI command
+- [x] `docs/dsl_spec.md` updated to match implementation
+- [x] `docs/architecture.md` wasamoc section updated
 
 ### Phase 2 — Runtime foundation
 
