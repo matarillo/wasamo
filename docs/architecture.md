@@ -106,6 +106,17 @@ For M1, only the following crate is adopted:
 
 Adding `clap` or similar to `wasamoc` (CLI) is acceptable. Adding any dependency to the `wasamo` runtime DLL requires explicit case-by-case approval.
 
+### OSS adoption criteria (for future phases)
+
+For non-trivial algorithms introduced in later phases (layout, accessibility, etc.), a proven OSS library is preferred over a custom implementation when all of the following hold:
+
+- **Rust-native**: no C FFI required (avoids build system complexity and unsafe surface area)
+- **Production-proven**: the library has real-world deployment history at meaningful scale
+- **Low integration cost**: the library's output maps naturally onto Visual Layer primitives without a large bridging layer
+- **Acceptable dependency risk**: upstream bugs or API churn would not block the project
+
+Specific adoption decisions are made in the pre-implementation document for the relevant phase and require owner agreement before implementation begins.
+
 ### `windows` crate feature set
 
 ```toml
