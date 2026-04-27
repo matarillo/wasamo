@@ -1,0 +1,7 @@
+[workspace]
+members = [
+    "wasamo",
+    "wasamoc",
+    "bindings/rust",
+]
+resolver = "2"

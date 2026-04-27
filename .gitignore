@@ -1,0 +1,9 @@
+# Claude Code sessions, settings, and memory
+.claude/
+
+# Private planning documents and work-in-progress notes
+private/
+
+# Rust / Cargo
+target/
+
