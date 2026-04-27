@@ -37,6 +37,8 @@ For the full vision and rationale see [VISION.md](./VISION.md).
 - [x] `wasamoc check` CLI command
 - [x] `docs/dsl_spec.md` updated to match implementation
 - [x] `docs/architecture.md` wasamoc section updated
+- [x] CI updated (workspace build + `cargo test --workspace`)
+- [ ] Unit tests added to `wasamoc` (lexer and parser)
 
 ### Phase 2 — Runtime foundation
 
@@ -58,6 +60,7 @@ For the full vision and rationale see [VISION.md](./VISION.md).
 - [ ] `HStack` layout (spacing, padding)
 - [ ] Two-pass layout (measure → arrange)
 - [ ] Layout results applied to `SpriteVisual` offset and size
+- [ ] Unit tests for layout calculations (measure/arrange, VStack, HStack)
 - [ ] `docs/rfcs/0001-layout-model.md` updated to match implementation
 - [ ] `docs/architecture.md` layout section updated
 
@@ -70,6 +73,7 @@ For the full vision and rationale see [VISION.md](./VISION.md).
 - [ ] Button: hover / press visual feedback
 - [ ] Button: `clicked` callback via C ABI function pointer
 - [ ] Button: `style: accent` with system accent color
+- [ ] Unit tests for hit-testing coordinate logic
 - [ ] `docs/rfcs/0002-widget-model.md` updated
 
 ### Phase 5 — Implicit animations
@@ -88,6 +92,7 @@ For the full vision and rationale see [VISION.md](./VISION.md).
 - [ ] All public functions carry `WASAMO_EXPORT`
 - [ ] Opaque pointer types (`WasamoWindow*`, `WasamoWidget*`)
 - [ ] `docs/abi_spec.md` finalized to match `wasamo.h`
+- [ ] CI: C header compilation smoke test added (`wasamo.h` compiles with MSVC/Clang)
 
 ### Phase 7 — Language bindings
 
@@ -97,6 +102,7 @@ For the full vision and rationale see [VISION.md](./VISION.md).
 - [ ] Zig: `bindings/zig/wasamo.zig` with `@cImport`
 - [ ] `CONTRIBUTING.md` documents how to add a binding
 - [ ] `docs/architecture.md` bindings section updated
+- [ ] CI: Zig and CMake/C build steps added
 
 ### Phase 8 — Hello Counter sample × 3 languages
 

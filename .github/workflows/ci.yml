@@ -22,5 +22,8 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-cargo-
 
-      - name: Build wasamo
-        run: cargo build --release -p wasamo
+      - name: Build (workspace)
+        run: cargo build --release --workspace
+
+      - name: Test (workspace)
+        run: cargo test --workspace
