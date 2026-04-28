@@ -1,8 +1,8 @@
 # Wasamo Architecture
 
-**Document version:** 0.5
+**Document version:** 0.6
 **Last updated:** 2026-04-28
-**Status:** Phase 0, Phase 1, and Phase 2 complete
+**Status:** Phase 0, Phase 1, Phase 2, and Phase 3 complete
 
 ---
 
@@ -195,7 +195,91 @@ DWM to render the dark frame colour across the client area, covering Mica.
 
 ---
 
-## 6. Three-Layer Tree Model
+## 6. Layout Engine (Phase 3)
+
+Full decision rationale: [`docs/decisions/phase-3-layout-engine.md`](./decisions/phase-3-layout-engine.md)
+
+### 6.1 Module structure
+
+| Module | Win32/WinRT dependency | Responsibility |
+|---|---|---|
+| `wasamo/src/layout.rs` | None (pure Rust) | `LayoutNode` data type; `measure()`, `arrange()`, `run_layout()` |
+| `wasamo/src/widget.rs` | `windows` crate | `WidgetNode` — `SpriteVisual` + layout configuration + child tree |
+
+The split keeps all layout calculation free of Win32/WinRT so it is unit-testable without
+OS initialisation.
+
+### 6.2 Algorithm: two-pass measure/arrange
+
+```
+run_layout(root, window_w, window_h)
+  │
+  ├─ measure(root, window_w, window_h)       — returns desired (w, h); recurses into children
+  │
+  ├─ resolve root size against SizeConstraint
+  │    Fixed(v) → v  |  Fill → available  |  Shrink → desired
+  │
+  └─ arrange(root, 0, 0, final_w, final_h)   — writes offset/size; recurses into children
+```
+
+### 6.3 Size model
+
+```rust
+pub enum SizeConstraint { Fixed(f32), Fill, Shrink }
+```
+
+| Value | `measure()` returns | Final size in `arrange()` |
+|---|---|---|
+| `Fixed(v)` | `v` | `v` |
+| `Fill` | `0.0` — signals "take what parent allocates" | Remaining space after Fixed+Shrink siblings |
+| `Shrink` | Content size | Content size |
+
+Default constraints by widget type:
+
+| Widget | Width default | Height default |
+|---|---|---|
+| `VStack` | `Fill` | `Shrink` |
+| `HStack` | `Shrink` | `Fill` |
+| `Rectangle` | Caller-specified | Caller-specified |
+
+### 6.4 Cross-axis alignment
+
+```rust
+pub enum Alignment { Leading, Center, Trailing, Stretch }
+```
+
+`alignment` on a stack governs child placement on the cross axis (VStack cross = horizontal;
+HStack cross = vertical). `Stretch` is the default. A child with `Fill` on the cross axis
+always expands to the full inner extent regardless of the stack's `alignment`.
+
+### 6.5 WidgetNode and Visual Layer sync
+
+```
+WidgetNode tree  (owns SpriteVisuals + child WidgetNodes)
+  │
+  ├── build_layout_tree()  →  LayoutNode tree (pure, temporary)
+  │
+  ├── layout::run_layout()  →  fills offset/size on each LayoutNode
+  │
+  └── sync_visuals()  →  Visual.SetOffset / Visual.SetSize on each SpriteVisual
+```
+
+The `LayoutNode` tree is rebuilt on each layout pass (O(n)).
+No persistent layout cache exists in M1.
+
+### 6.6 Decisions summary
+
+| Decision | Chosen | See |
+|---|---|---|
+| DD-P3-001: Layout algorithm | Custom two-pass measure/arrange; Taffy deferred to M2 | [ADR](./decisions/phase-3-layout-engine.md#dd-p3-001) |
+| DD-P3-002: Node ownership | Engine owns; host holds `WasamoWidget*` opaque handles | [ADR](./decisions/phase-3-layout-engine.md#dd-p3-002) |
+| DD-P3-003: Size model | `Fixed / Fill / Shrink` (`Fill` returns 0.0 in measure, resolved in arrange) | [ADR](./decisions/phase-3-layout-engine.md#dd-p3-003) |
+| DD-P3-004: Cross-axis alignment | `Leading / Center / Trailing / Stretch` (Stretch default) | [ADR](./decisions/phase-3-layout-engine.md#dd-p3-004) |
+| DD-P3-005: Error handling | API errors strict (`Result`); degenerate layout clamps to 0.0 | [ADR](./decisions/phase-3-layout-engine.md#dd-p3-005) |
+
+---
+
+## 7. Three-Layer Tree Model
 
 | Layer | Owner | Contents |
 |---|---|---|
@@ -207,7 +291,7 @@ In M1 there is no reconciler. The host language constructs the view tree directl
 
 ---
 
-## 7. wasamoc (DSL Compiler) — M1 Scope
+## 8. wasamoc (DSL Compiler) — M1 Scope
 
 M1 covers lexing, parsing, and syntax checking only.
 Code generation (conversion to runtime calls, binding generation) is M2 scope.
@@ -264,7 +348,7 @@ host app ──calls──▶ wasamo C ABI ──builds──▶ widget tree at 
 
 ---
 
-## 8. Open Questions (to be resolved in later phases)
+## 9. Open Questions (to be resolved in later phases)
 
 The following are intentionally left open at this draft stage.
 
@@ -273,7 +357,8 @@ The following are intentionally left open at this draft stage.
 | `DispatcherQueueController` thread model | Phase 2 | Resolved → DD-P2-001 (§5.3) |
 | Global state management strategy (singleton vs. handle-based) | Phase 2 | Resolved → DD-P2-002 (§5.4) |
 | Mica backdrop support scope for M1 | Phase 2 | Resolved → DD-P2-003 (§5.5) |
-| Layout algorithm (custom measure/arrange vs. Taffy) | Phase 3 | Open |
+| Layout algorithm (custom measure/arrange vs. Taffy) | Phase 3 | Resolved → DD-P3-001 (§6.6) |
+| Layout node ownership model (opaque handle vs. direct Rust type exposure) | Phase 3 | Resolved → DD-P3-002 (§6.6) |
 | Widget property API details | Phase 4 | Open |
 | Full C ABI function signatures | Phase 6 | Open |
 
@@ -288,3 +373,4 @@ The following are intentionally left open at this draft stage.
 | 0.3     | 2026-04-27 | Phase 1 agreed; status updated to reflect completed implementation |
 | 0.4     | 2026-04-28 | Phase 2 pre-doc: §5 expanded with thread model, global state, Mica scope, feature decisions (pending owner agreement) |
 | 0.5     | 2026-04-28 | Phase 2 post-doc: status updated to complete; initialization sequence corrected (WS_EX_NOREDIRECTIONBITMAP, WM_ERASEBKGND; DwmExtendFrameIntoClientArea removed) |
+| 0.6     | 2026-04-28 | Phase 3 post-doc: §6 Layout Engine added; §7–§9 renumbered; Open Questions updated |

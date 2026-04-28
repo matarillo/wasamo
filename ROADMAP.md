@@ -54,16 +54,16 @@ For the full vision and rationale see [VISION.md](./VISION.md).
 
 ### Phase 3 — Layout engine
 
-- [ ] `docs/rfcs/0001-layout-model.md` created, owner agreement obtained
-- [ ] `LayoutNode` type definition
-- [ ] `Rectangle` layout
-- [ ] `VStack` layout (spacing, padding)
-- [ ] `HStack` layout (spacing, padding)
-- [ ] Two-pass layout (measure → arrange)
-- [ ] Layout results applied to `SpriteVisual` offset and size
-- [ ] Unit tests for layout calculations (measure/arrange, VStack, HStack)
-- [ ] `docs/rfcs/0001-layout-model.md` updated to match implementation
-- [ ] `docs/architecture.md` layout section updated
+- [x] `docs/decisions/phase-3-layout-engine.md` created, owner agreement obtained (layout algorithm, VStack/HStack semantics, fill/shrink model, LayoutNode ownership, error handling strategy)
+- [x] `LayoutNode` type definition
+- [x] `Rectangle` layout
+- [x] `VStack` layout (spacing, padding)
+- [x] `HStack` layout (spacing, padding)
+- [x] Two-pass layout (measure → arrange)
+- [x] Layout results applied to `SpriteVisual` offset and size
+- [x] Unit tests for layout calculations (measure/arrange, VStack, HStack)
+- [x] `docs/decisions/phase-3-layout-engine.md` updated to match implementation
+- [x] `docs/architecture.md` layout section updated
 
 ### Phase 4 — Widget implementation
 

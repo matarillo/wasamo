@@ -1,6 +1,10 @@
+mod layout;
 mod runtime;
+mod widget;
 mod window;
 
+pub use layout::{Alignment, SizeConstraint, WidgetKind};
+pub use widget::WidgetNode;
 pub use window::WindowState;
 
 use windows::Win32::UI::WindowsAndMessaging::{DispatchMessageW, GetMessageW, TranslateMessage, MSG};
@@ -25,6 +29,17 @@ pub fn window_show(state: &WindowState) {
 
 pub fn get_compositor() -> &'static windows::UI::Composition::Compositor {
     &runtime::get().compositor
+}
+
+pub fn window_add_widget(
+    window: &WindowState,
+    widget: &WidgetNode,
+) -> windows::core::Result<()> {
+    use windows::core::Interface;
+    use windows::UI::Composition::Visual;
+    let child_visual: Visual = widget.visual.cast()?;
+    window.root.Children()?.InsertAtTop(&child_visual)?;
+    Ok(())
 }
 
 pub fn run() {
