@@ -5,17 +5,16 @@ use windows::{
     Win32::{
         Foundation::{HWND, LPARAM, LRESULT, WPARAM},
         Graphics::Dwm::{
-            DwmExtendFrameIntoClientArea, DwmSetWindowAttribute,
-            DWMWA_SYSTEMBACKDROP_TYPE, DWMWA_USE_IMMERSIVE_DARK_MODE,
+            DwmSetWindowAttribute,
+            DWMWA_SYSTEMBACKDROP_TYPE,
             DWMWINDOWATTRIBUTE, DWM_SYSTEMBACKDROP_TYPE, DWMSBT_MAINWINDOW,
         },
         UI::{
-            Controls::MARGINS,
             WindowsAndMessaging::{
                 CreateWindowExW, DefWindowProcW, LoadCursorW, PostQuitMessage,
                 RegisterClassExW, ShowWindow, CS_HREDRAW, CS_VREDRAW,
-                CW_USEDEFAULT, IDC_ARROW, SW_SHOW, WM_DESTROY, WNDCLASSEXW,
-                WS_OVERLAPPEDWINDOW,
+                CW_USEDEFAULT, IDC_ARROW, SW_SHOW, WM_DESTROY, WM_ERASEBKGND,
+                WNDCLASSEXW, WS_EX_NOREDIRECTIONBITMAP, WS_OVERLAPPEDWINDOW,
             },
         },
     },
@@ -36,12 +35,6 @@ unsafe impl Sync for WindowState {}
 pub fn create(title: &str, width: i32, height: i32) -> windows::core::Result<Box<WindowState>> {
     let hwnd = create_hwnd(title, width, height)?;
     apply_mica(hwnd);
-    unsafe {
-        DwmExtendFrameIntoClientArea(
-            hwnd,
-            &MARGINS { cxLeftWidth: -1, cxRightWidth: -1, cyTopHeight: -1, cyBottomHeight: -1 },
-        )?;
-    }
     let compositor = &runtime::get().compositor;
     let target = create_desktop_window_target(compositor, hwnd)?;
     let root = compositor.CreateContainerVisual()?;
@@ -66,7 +59,7 @@ fn create_hwnd(title: &str, width: i32, height: i32) -> windows::core::Result<HW
 
     let hwnd = unsafe {
         CreateWindowExW(
-            Default::default(),
+            WS_EX_NOREDIRECTIONBITMAP,  // required for Visual Layer + DWM backdrop (Mica)
             windows::core::PCWSTR(class_name.as_ptr()),
             windows::core::PCWSTR(title_w.as_ptr()),
             WS_OVERLAPPEDWINDOW,
@@ -105,15 +98,6 @@ fn apply_mica(hwnd: HWND) {
         .is_ok()
     };
     if ok {
-        let dark: u32 = 1;
-        let _ = unsafe {
-            DwmSetWindowAttribute(
-                hwnd,
-                DWMWA_USE_IMMERSIVE_DARK_MODE,
-                &dark as *const u32 as *const _,
-                std::mem::size_of::<u32>() as u32,
-            )
-        };
         return;
     }
     // Win11 21H2 (Build 22000–22522): private DWMWA_MICA_EFFECT attribute.
@@ -138,6 +122,10 @@ unsafe extern "system" fn wnd_proc(
     if msg == WM_DESTROY {
         PostQuitMessage(0);
         return LRESULT(0);
+    }
+    // Prevent GDI from painting an opaque background over the DWM backdrop.
+    if msg == WM_ERASEBKGND {
+        return LRESULT(1);
     }
     DefWindowProcW(hwnd, msg, wparam, lparam)
 }
