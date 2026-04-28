@@ -1,8 +1,8 @@
 # Wasamo Architecture
 
-**Document version:** 0.3
-**Last updated:** 2026-04-27
-**Status:** Phase 0 and Phase 1 agreed
+**Document version:** 0.4
+**Last updated:** 2026-04-28
+**Status:** Phase 0, Phase 1, and Phase 2 pre-implementation agreed
 
 ---
 
@@ -139,9 +139,11 @@ features = [
 
 ---
 
-## 5. Visual Layer Integration Overview
+## 5. Visual Layer Integration (Phase 2)
 
-### HWND host model
+Full decision rationale: [`docs/decisions/phase-2-runtime-foundation.md`](./decisions/phase-2-runtime-foundation.md)
+
+### 5.1 HWND host model
 
 A Win32 `HWND` created by `CreateWindowExW` hosts the Visual Layer via `DesktopWindowTarget`.
 
@@ -152,7 +154,39 @@ HWND
               └── (widget SpriteVisual tree)
 ```
 
-Detailed decisions — thread model for `DispatcherQueueController`, global state management, Mica support scope — are deferred to the Phase 2 pre-implementation document.
+### 5.2 Initialization sequence
+
+```
+1. CreateDispatcherQueueController(           — init current thread as STA + attach DQ
+       DQTYPE_THREAD_CURRENT, DQTAT_COM_STA)
+2. Compositor::new()                          — create WinRT Compositor
+3. CreateWindowExW(…)                         — create HWND
+4. apply_mica(hwnd)                           — DwmSetWindowAttribute (Win11); no-op on Win10
+5. DwmExtendFrameIntoClientArea(hwnd, -1)     — extend DWM frame to cover client area
+6. DesktopWindowTarget::CreateForWindow(hwnd) — attach Visual Layer to HWND
+7. ContainerVisual::new() → set as root       — root visual (no background brush; Mica shows through)
+8. GetMessage / TranslateMessage / DispatchMessage loop
+```
+
+### 5.3 Decisions summary
+
+| Decision | Chosen | See |
+|---|---|---|
+| DD-P2-001: `DispatcherQueueController` thread model | `DQTYPE_THREAD_CURRENT` — main thread; single-threaded, no synchronization needed | [ADR](./decisions/phase-2-runtime-foundation.md#dd-p2-001) |
+| DD-P2-001b: COM apartment type | `DQTAT_COM_STA` — standard STA; Win32 desktop convention, matches Windows App SDK direction | [ADR](./decisions/phase-2-runtime-foundation.md#dd-p2-001b) |
+| DD-P2-002: Global state management | Two-layer split: process-wide `Runtime` singleton (`Compositor` + `DispatcherQueueController`) + per-window `WindowState` handle (`HWND` + `DesktopWindowTarget` + root `ContainerVisual`) | [ADR](./decisions/phase-2-runtime-foundation.md#dd-p2-002) |
+| DD-P2-003: Mica backdrop | `DwmSetWindowAttribute` direct (Win11 21H2+); solid color fallback on Win10; root ContainerVisual is transparent | [ADR](./decisions/phase-2-runtime-foundation.md#dd-p2-003) |
+
+### 5.4 `windows` crate feature additions for Phase 2
+
+```toml
+"System",              # Windows::System::DispatcherQueueController
+"Win32_Graphics_Dwm",  # DwmSetWindowAttribute, DwmExtendFrameIntoClientArea, DWMWA_* constants
+```
+
+`Win32_System_WinRT` (already present) provides `CreateDispatcherQueueController`,
+`DispatcherQueueOptions`, `DQTYPE_THREAD_CURRENT`, and `DQTAT_COM_STA`.
+(`"System_DispatcherQueue"` does not exist in windows 0.58 — types live directly in the `System` module.)
 
 ---
 
@@ -229,14 +263,14 @@ host app ──calls──▶ wasamo C ABI ──builds──▶ widget tree at 
 
 The following are intentionally left open at this draft stage.
 
-| Question | Resolution phase |
-|---|---|
-| `DispatcherQueueController` thread model | Phase 2 |
-| Global state management strategy (singleton vs. handle-based) | Phase 2 |
-| Mica backdrop support scope for M1 | Phase 2 |
-| Layout algorithm (custom measure/arrange vs. Taffy) | Phase 3 |
-| Widget property API details | Phase 4 |
-| Full C ABI function signatures | Phase 6 |
+| Question | Resolution phase | Status |
+|---|---|---|
+| `DispatcherQueueController` thread model | Phase 2 | Resolved → DD-P2-001 (§5.3) |
+| Global state management strategy (singleton vs. handle-based) | Phase 2 | Resolved → DD-P2-002 (§5.4) |
+| Mica backdrop support scope for M1 | Phase 2 | Resolved → DD-P2-003 (§5.5) |
+| Layout algorithm (custom measure/arrange vs. Taffy) | Phase 3 | Open |
+| Widget property API details | Phase 4 | Open |
+| Full C ABI function signatures | Phase 6 | Open |
 
 ---
 
@@ -247,3 +281,4 @@ The following are intentionally left open at this draft stage.
 | 0.1     | 2026-04-27 | Initial draft (Phase 0, pending owner agreement)              |
 | 0.2     | 2026-04-27 | Phase 0 agreed; added §7 wasamoc detail (Phase 1, pending owner agreement) |
 | 0.3     | 2026-04-27 | Phase 1 agreed; status updated to reflect completed implementation |
+| 0.4     | 2026-04-28 | Phase 2 pre-doc: §5 expanded with thread model, global state, Mica scope, feature decisions (pending owner agreement) |
