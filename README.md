@@ -77,7 +77,7 @@ See [VISION.md](./VISION.md#5-differentiators) for a full discussion.
 
 **Pre-alpha.** This is a proof-of-concept stage project; not ready for production use. We welcome design discussion and contributions to the foundational implementation.
 
-The roadmap lives in [ROADMAP.md](./ROADMAP.md). Design decisions are archived as RFCs under [docs/rfcs/](./docs/rfcs/).
+The roadmap lives in [ROADMAP.md](./ROADMAP.md). Implementation decisions are recorded as Architecture Decision Records in [docs/decisions/](./docs/decisions/).
 
 ## Requirements
 
@@ -97,7 +97,7 @@ The roadmap lives in [ROADMAP.md](./ROADMAP.md). Design decisions are archived a
 - [docs/dsl_spec.md](./docs/dsl_spec.md) — The `.ui` DSL language specification
 - [ROADMAP.md](./ROADMAP.md) — Milestones and acceptance criteria
 - [CONTRIBUTING.md](./CONTRIBUTING.md) — How to contribute
-- [docs/rfcs/](./docs/rfcs/) — Design decision archive
+- [docs/decisions/](./docs/decisions/) — Architecture Decision Records (ADRs)
 
 ## License
 

@@ -5,7 +5,7 @@
 **Status:** Pre-alpha, design in progress
 
 > This document describes why Wasamo exists, what it prioritizes, and where it's headed.
-> For implementation details see [docs/architecture.md](./docs/architecture.md); for feature specifications see [docs/rfcs/](./docs/rfcs/).
+> For implementation details see [docs/architecture.md](./docs/architecture.md); for phase-by-phase design decisions see [docs/decisions/](./docs/decisions/).
 
 ## 1. TL;DR
 
@@ -215,7 +215,7 @@ Why:
 
 ### 9.2 Decision-making
 
-**Early stages (M1-M2).** BDFL (Benevolent Dictator) model. Design coherence comes first.
+**Early stages (M1-M2).** BDFL (Benevolent Dictator) model. Design coherence comes first. Implementation decisions are recorded as Architecture Decision Records (ADRs) in [docs/decisions/](./docs/decisions/), one file per phase.
 
 **M3 onward.** Gradual transition to RFC-based consensus. Major changes are discussed in documents under [docs/rfcs/](./docs/rfcs/), with adoption decided by core maintainer agreement.
 
@@ -274,7 +274,7 @@ Wasamo is currently pre-alpha. You can help in several ways.
 
 **Contribute code.** [Good first issues](https://github.com/veltra/veltra/issues?q=label%3A%22good+first+issue%22) on the M1 roadmap are a reasonable starting point.
 
-**Write an RFC.** For substantial features or design changes, file an RFC in [docs/rfcs/](./docs/rfcs/). Use [docs/rfcs/0000-template.md](./docs/rfcs/0000-template.md) as a starting template.
+**Record a decision.** For M1-M2 implementation decisions, create an ADR in [docs/decisions/](./docs/decisions/) following the format in [docs/decisions/README.md](./docs/decisions/README.md). From M3 onward, substantial feature proposals follow the RFC process in [docs/rfcs/](./docs/rfcs/).
 
 **Documentation and samples.** Examples for each language, tutorials, and best practices are always needed.
 
@@ -315,7 +315,7 @@ Channels:
 - [ROADMAP.md](./ROADMAP.md) — Detailed milestones
 - [CONTRIBUTING.md](./CONTRIBUTING.md) — Contribution guide
 - [CODE_OF_CONDUCT.md](./CODE_OF_CONDUCT.md) — Code of Conduct
-- [docs/rfcs/](./docs/rfcs/) — Design decision archive
+- [docs/decisions/](./docs/decisions/) — Architecture Decision Records (ADRs)
 
 ## Appendix B: Revision history
 

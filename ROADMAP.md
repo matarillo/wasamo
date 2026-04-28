@@ -67,7 +67,7 @@ For the full vision and rationale see [VISION.md](./VISION.md).
 
 ### Phase 4 — Widget implementation
 
-- [ ] `docs/rfcs/0002-widget-model.md` created, owner agreement obtained
+- [ ] `docs/decisions/phase-4-widget-implementation.md` created, owner agreement obtained
 - [ ] Text: `IDWriteTextLayout` + `ICompositionDrawingSurface` rendering
 - [ ] Text: `font` property mapped to Windows type ramp constants
 - [ ] Button: hit testing (WM_LBUTTONDOWN / WM_LBUTTONUP)
@@ -75,7 +75,7 @@ For the full vision and rationale see [VISION.md](./VISION.md).
 - [ ] Button: `clicked` callback via C ABI function pointer
 - [ ] Button: `style: accent` with system accent color
 - [ ] Unit tests for hit-testing coordinate logic
-- [ ] `docs/rfcs/0002-widget-model.md` updated
+- [ ] `docs/decisions/phase-4-widget-implementation.md` updated
 
 ### Phase 5 — Implicit animations
 

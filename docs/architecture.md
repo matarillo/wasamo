@@ -361,6 +361,11 @@ The following are intentionally left open at this draft stage.
 | Layout node ownership model (opaque handle vs. direct Rust type exposure) | Phase 3 | Resolved → DD-P3-002 (§6.6) |
 | Widget property API details | Phase 4 | Open |
 | Full C ABI function signatures | Phase 6 | Open |
+| DPI scaling localization: whether the layout engine should operate in physical pixels and implications for DirectWrite hinting | M2+ | Open |
+| AccessKit / UIA sync: when and how layout results are propagated to the accessibility tree, and the performance impact | M2 | Open |
+| Async measure: how to handle widgets whose size is unknown at measure time (e.g. image load pending) | M2+ | Open |
+| Cache invalidation granularity: strategy for detecting local property changes and recomputing only affected subtrees | M2+ | Open |
+| Custom layout extensibility: approach to layouts beyond built-in primitives — host-language callbacks, data-driven IR injection, or other | M2+ | Open |
 
 ---
 
@@ -374,3 +379,4 @@ The following are intentionally left open at this draft stage.
 | 0.4     | 2026-04-28 | Phase 2 pre-doc: §5 expanded with thread model, global state, Mica scope, feature decisions (pending owner agreement) |
 | 0.5     | 2026-04-28 | Phase 2 post-doc: status updated to complete; initialization sequence corrected (WS_EX_NOREDIRECTIONBITMAP, WM_ERASEBKGND; DwmExtendFrameIntoClientArea removed) |
 | 0.6     | 2026-04-28 | Phase 3 post-doc: §6 Layout Engine added; §7–§9 renumbered; Open Questions updated |
+| 0.7     | 2026-04-28 | §9 Open Questions: five layout-related items added (DPI scaling, AccessKit sync, async measure, cache invalidation, custom layout extensibility) |
