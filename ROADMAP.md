@@ -12,7 +12,7 @@ For the full vision and rationale see [VISION.md](./VISION.md).
 **Acceptance criteria**
 
 - VStack / HStack / Text / Button / Rectangle work
-- Rendering through Visual Layer with implicit animations
+- Rendering through the Visual Layer (DWM compositing engaged, visual tree responsive on the compositor thread)
 - Minimal C ABI header (`wasamo.h`)
 - "Hello Counter" example runs in three languages: C, Rust, and Zig
 
@@ -77,14 +77,26 @@ For the full vision and rationale see [VISION.md](./VISION.md).
 - [ ] Unit tests for hit-testing coordinate logic
 - [ ] `docs/decisions/phase-4-widget-implementation.md` updated
 
-### Phase 5 — Implicit animations
+### Phase 5 — Visual Layer integration sanity check (dev-only animation helper)
 
-- [ ] `ImplicitAnimationCollection` on each `SpriteVisual`
+Phase 5 verifies that the Visual Layer is correctly engaged on the DWM
+compositor thread. Wasamo's default property-change behavior remains
+**instant** (consistent with SwiftUI / Compose / Flutter / CSS); the
+public opt-in animation API is deferred to M5. This phase implements
+only an internal, dev-only helper used by a verification binary. See
+[docs/decisions/vision-m1-acceptance-criteria.md](./docs/decisions/vision-m1-acceptance-criteria.md)
+(vision-level decision DD-V-001) and
+[docs/decisions/phase-5-implicit-animations-dev-api.md](./docs/decisions/phase-5-implicit-animations-dev-api.md)
+(Phase 5 implementation decisions DD-P5-001..003).
+
+- [x] `docs/decisions/vision-m1-acceptance-criteria.md` created, owner agreement obtained (DD-V-001)
+- [x] `docs/decisions/phase-5-implicit-animations-dev-api.md` created, owner agreement obtained (DD-P5-001..003)
+- [ ] Internal `wasamo::dev` module with `set_dev_implicit_animations(bool)` (Rust-only, **not** exposed via C ABI)
   - Offset: `Vector3KeyFrameAnimation` (150 ms, cubic-ease)
   - Size: `Vector2KeyFrameAnimation` (150 ms)
   - Opacity: `ScalarKeyFrameAnimation` (100 ms)
-- [ ] Animation setup centralized in a runtime helper
-- [ ] `docs/architecture.md` animation section added
+- [ ] `examples/phase5_visual_check.rs` exercising the dev API and compositor-thread independence (Space inserts a child, I toggles dev animations, B blocks the app thread for 2 s)
+- [ ] `docs/architecture.md` animation section added (documents the deferred public API and the dev helper's scope/removal plan)
 
 ### Phase 6 — C ABI header
 

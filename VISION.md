@@ -25,7 +25,7 @@ Building a modern native UI app for Windows today forces a major sacrifice no ma
 
 **Flutter** gives you a modern DSL (Dart) and high-quality rendering, but Windows is a second-class target — system integration (Mica, theming, native dialogs) is weak. It also locks you into Dart and gives up multi-language support entirely.
 
-**Slint** is the closest spiritual sibling to this project, but its rendering abstraction sits at the pixel level for cross-platform reasons. That makes it structurally hard to take advantage of a retained compositor like the Visual Layer (animations that keep running while the app thread is idle, vSync alignment with the OS, integration with system materials). Windows-specific vocabulary like Mica/Acrylic and system accent is also difficult to express through that abstraction.
+**Slint** is the closest spiritual sibling to this project, but its rendering abstraction sits at the pixel level for cross-platform reasons. That makes it structurally hard to take advantage of a retained compositor like the Visual Layer — independent compositor-thread rendering, vSync alignment with the OS, and integration with system materials are all properties Slint cannot easily inherit. Windows-specific vocabulary like Mica/Acrylic and system accent is also difficult to express through that abstraction.
 
 ### 2.2 The hypothesis
 
@@ -75,7 +75,7 @@ The following are explicitly *not* on the table. Letting these go is what makes 
 
 When design choices come into conflict, we resolve them in this order.
 
-1. **Native Windows feel.** Mica/Acrylic, system theming, type ramp, accent, smooth animation — these must look right by default
+1. **Native Windows feel.** Mica/Acrylic, system theming, type ramp, and accent must look right by default. Animation is opt-in (consistent with the conventions of SwiftUI, Jetpack Compose, Flutter, and CSS); when invoked, it is compositor-driven and smooth without app effort.
 2. **Minimum app code.** UI structure in the DSL, logic in the host language; both expressed in their shortest natural form. The underlying model is declarative and unidirectional: the view is a pure function of state (`view = f(state)`), state flows down through property bindings, and user interactions flow up as events handled by host-language callbacks.
 3. **Lean resources.** Target <100ms cold start, <30MB memory, single-digit-MB binaries
 4. **Multi-language support.** The C ABI is the primary boundary. Language-specific optimizations are secondary
@@ -142,7 +142,7 @@ Each milestone is defined by **acceptance criteria**, not dates. We deliberately
 ### M1: Proof of concept
 
 - VStack / HStack / Text / Button / Rectangle work
-- Rendering through Visual Layer with implicit animations
+- Rendering through the Visual Layer (DWM compositing engaged, visual tree responsive on the compositor thread)
 - Minimal C ABI header
 - "Hello Counter" example runs in three languages: C, Rust, and Zig
 
