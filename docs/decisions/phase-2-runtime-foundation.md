@@ -182,6 +182,19 @@ Build 22000–22522 (Win11 21H2): DwmSetWindowAttribute(DWMWA_MICA_EFFECT, 1)
 Pre-Win11: solid-color fallback (no DWM call)
 ```
 
-Dark mode integration: `DwmSetWindowAttribute(DWMWA_USE_IMMERSIVE_DARK_MODE, 1)`.
-
 Additional `windows` feature required: `Win32_Graphics_Dwm`.
+
+**Implementation notes (post-implementation):**
+
+Two additional requirements emerged during implementation:
+
+- `WS_EX_NOREDIRECTIONBITMAP` must be set on the HWND. Without it, DWM creates a GDI
+  redirection buffer that paints an opaque white surface over the Mica backdrop.
+- `WM_ERASEBKGND` must return 1. Without it, GDI paints the default background colour
+  over the DWM backdrop even when a redirection buffer is not present.
+- `DwmExtendFrameIntoClientArea` with `{-1,-1,-1,-1}` (Aero Glass "sheet of glass") must
+  **not** be called alongside `DWMSBT_MAINWINDOW`. When called with no GDI surface, DWM
+  renders the DWM frame colour (dark in dark mode) across the entire client area, covering
+  the Mica material. `DWMSBT_MAINWINDOW` covers the full window backdrop automatically.
+- `DWMWA_USE_IMMERSIVE_DARK_MODE` is not set unconditionally. The Mica material follows the
+  system colour theme; forcing it overrides appearance without a corresponding system preference.

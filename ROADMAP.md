@@ -42,15 +42,15 @@ For the full vision and rationale see [VISION.md](./VISION.md).
 
 ### Phase 2 — Runtime foundation
 
-- [ ] `docs/architecture.md` Layer Diagram updated: split App Code into `.ui` DSL layer and host-code layer, clarify each layer's responsibilities
-- [ ] Visual Layer integration strategy agreed (`docs/architecture.md` updated)
-- [ ] Win32 window creation and message loop
-- [ ] `DispatcherQueueController` initialization
-- [ ] `Compositor` creation
-- [ ] `DesktopWindowTarget` attaches Visual Layer to HWND
-- [ ] Root `ContainerVisual` in place
-- [ ] DLL entry point and basic global state management
-- [ ] `docs/architecture.md` runtime section updated
+- [x] `docs/architecture.md` Layer Diagram updated: split App Code into `.ui` DSL layer and host-code layer, clarify each layer's responsibilities
+- [x] Visual Layer integration strategy agreed (`docs/architecture.md` updated)
+- [x] Win32 window creation and message loop
+- [x] `DispatcherQueueController` initialization
+- [x] `Compositor` creation
+- [x] `DesktopWindowTarget` attaches Visual Layer to HWND
+- [x] Root `ContainerVisual` in place
+- [x] DLL entry point and basic global state management
+- [x] `docs/architecture.md` runtime section updated
 
 ### Phase 3 — Layout engine
 

@@ -1,8 +1,8 @@
 # Wasamo Architecture
 
-**Document version:** 0.4
+**Document version:** 0.5
 **Last updated:** 2026-04-28
-**Status:** Phase 0, Phase 1, and Phase 2 pre-implementation agreed
+**Status:** Phase 0, Phase 1, and Phase 2 complete
 
 ---
 
@@ -160,13 +160,18 @@ HWND
 1. CreateDispatcherQueueController(           — init current thread as STA + attach DQ
        DQTYPE_THREAD_CURRENT, DQTAT_COM_STA)
 2. Compositor::new()                          — create WinRT Compositor
-3. CreateWindowExW(…)                         — create HWND
+3. CreateWindowExW(WS_EX_NOREDIRECTIONBITMAP) — create HWND; flag prevents GDI redirection
+                                                buffer that would paint over DWM backdrop
 4. apply_mica(hwnd)                           — DwmSetWindowAttribute (Win11); no-op on Win10
-5. DwmExtendFrameIntoClientArea(hwnd, -1)     — extend DWM frame to cover client area
-6. DesktopWindowTarget::CreateForWindow(hwnd) — attach Visual Layer to HWND
-7. ContainerVisual::new() → set as root       — root visual (no background brush; Mica shows through)
-8. GetMessage / TranslateMessage / DispatchMessage loop
+5. DesktopWindowTarget::CreateForWindow(hwnd) — attach Visual Layer to HWND
+6. ContainerVisual::new() → set as root       — root visual (no background brush; Mica shows through)
+7. GetMessage / TranslateMessage / DispatchMessage loop
 ```
+
+`WM_ERASEBKGND` returns 1 to prevent GDI from painting an opaque background over the DWM
+backdrop. `DwmExtendFrameIntoClientArea` is **not** called: with `DWMSBT_MAINWINDOW` the Mica
+material covers the entire window automatically; calling it with `{-1,-1,-1,-1}` margins causes
+DWM to render the dark frame colour across the client area, covering Mica.
 
 ### 5.3 Decisions summary
 
@@ -282,3 +287,4 @@ The following are intentionally left open at this draft stage.
 | 0.2     | 2026-04-27 | Phase 0 agreed; added §7 wasamoc detail (Phase 1, pending owner agreement) |
 | 0.3     | 2026-04-27 | Phase 1 agreed; status updated to reflect completed implementation |
 | 0.4     | 2026-04-28 | Phase 2 pre-doc: §5 expanded with thread model, global state, Mica scope, feature decisions (pending owner agreement) |
+| 0.5     | 2026-04-28 | Phase 2 post-doc: status updated to complete; initialization sequence corrected (WS_EX_NOREDIRECTIONBITMAP, WM_ERASEBKGND; DwmExtendFrameIntoClientArea removed) |
