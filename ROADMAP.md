@@ -133,17 +133,17 @@ items. The checklist below reflects that decomposition.
   macro / calling convention / memory ownership)
 - [x] `docs/abi_spec.md` initial draft, owner agreement obtained
   (two-layer: **stable core** + **M1 experimental**, each marked clearly)
-- [ ] `wasamo` crate `Cargo.toml`: add `crate-type = ["cdylib", "rlib"]`;
-  verify `wasamo.dll` + `wasamo.lib` (import library) emit on build
-- [ ] `wasamo.h` placed at `bindings/c/wasamo.h` with header preamble:
+- [x] `wasamo` crate `Cargo.toml`: `crate-type = ["cdylib", "rlib"]`;
+  `wasamo.dll` + `wasamo.dll.lib` (import library) emit on build
+- [x] `wasamo.h` placed at `bindings/c/wasamo.h` with header preamble:
   `WASAMO_EXPORT` / `WASAMO_API` (`__cdecl`) / `WASAMO_EXPERIMENTAL`
   macros, opaque handle typedefs (`WasamoWindow`, `WasamoWidget`)
-- [ ] Rust-side `#[repr(C)]` types: `WasamoStatus` constants,
+- [x] Rust-side `#[repr(C)]` types: `WasamoStatus` constants,
   `WasamoValue` tagged union, callback fn-ptr typedefs
   (`WasamoSignalHandlerFn`, `WasamoPropertyObserverFn`,
   `WasamoDestroyFn`)
-- [ ] Thread-local last-error storage + `wasamo_last_error_message`
-- [ ] Existing `wasamo_*` (init / window_create / show / destroy / run)
+- [x] Thread-local last-error storage + `wasamo_last_error_message`
+- [x] Existing `wasamo_*` (init / window_create / show / destroy / run)
   migrated to `WasamoStatus` + out-param shape; `wasamo_shutdown` and
   `wasamo_quit` added
 - [ ] Property accessor infrastructure on `WidgetNode`: per-widget
