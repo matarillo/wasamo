@@ -1,8 +1,8 @@
 # Wasamo Architecture
 
-**Document version:** 0.8
+**Document version:** 0.9
 **Last updated:** 2026-04-29
-**Status:** Phase 0, Phase 1, Phase 2, Phase 3, and Phase 4 complete
+**Status:** Phase 0, Phase 1, Phase 2, Phase 3, Phase 4, and Phase 5 complete
 
 ---
 
@@ -352,8 +352,12 @@ Button root: SpriteVisual (background brush)
   └── child: SpriteVisual (text label, offset by PAD_H/PAD_V)
 ```
 
-State transitions use brush replacement (instant, per DD-V-001). `ButtonStyle::Accent` reads the
-system accent color via `UISettings::GetColorValue(UIColorType::Accent)` at creation time.
+State transitions animate the background brush color using `ColorKeyFrameAnimation` (Phase 5,
+DD-P5-005). The `CompositionColorBrush` is retained on `ButtonData` and animated in place; no
+new brush is created per transition. Duration values: 83 ms for entering a more-active state
+(hover-in, press-down); 167 ms for returning to a less-active state (hover-out, press-up).
+See §8 for details. `ButtonStyle::Accent` reads the system accent color via
+`UISettings::GetColorValue(UIColorType::Accent)` at creation time.
 
 ### 7.5 `wnd_proc` ↔ `WindowState` linkage
 
@@ -363,6 +367,7 @@ system accent color via `UISettings::GetColorValue(UIColorType::Accent)` at crea
 | Message | Callback field | Effect |
 |---|---|---|
 | `WM_SIZE` | `resize_fn: Option<Box<dyn FnMut(f32, f32)>>` | Re-run layout with new client dimensions |
+| `WM_KEYDOWN` | `key_down_fn: Option<Box<dyn FnMut(u16)>>` | Deliver virtual key code to host (Phase 5) |
 | `WM_MOUSEMOVE` | `mouse_move_fn` | Update button hover state; arm `TrackMouseEvent` for leave |
 | `WM_MOUSELEAVE` | `mouse_leave_fn` | Clear all button hover states |
 | `WM_LBUTTONDOWN` | `mouse_down_fn` | Hit-test button tree; fire `clicked_fn` if hit |
@@ -386,13 +391,90 @@ callback fields themselves are safe Rust types.
 | DD-P4-001: Text rendering pipeline | `ICompositionDrawingSurface` + D2D + DirectWrite | [ADR](./decisions/phase-4-widget-implementation.md#dd-p4-001) |
 | DD-P4-002: Font property model | 4-value `TypographyStyle` enum (Caption / Body / Subtitle / Title) | [ADR](./decisions/phase-4-widget-implementation.md#dd-p4-002) |
 | DD-P4-003: Text natural size | Measured at creation/update; cached as `Fixed` on `WidgetNode` | [ADR](./decisions/phase-4-widget-implementation.md#dd-p4-003) |
-| DD-P4-004: Button visual structure | Root `SpriteVisual` + child text `SpriteVisual`; instant brush swap | [ADR](./decisions/phase-4-widget-implementation.md#dd-p4-004) |
+| DD-P4-004: Button visual structure | Root `SpriteVisual` + child text `SpriteVisual`; color animated via `ColorKeyFrameAnimation` (Phase 5) | [ADR](./decisions/phase-4-widget-implementation.md#dd-p4-004) |
 | DD-P4-005: `wnd_proc` linkage | `GWLP_USERDATA` + event callbacks on `WindowState`; unsafe confined to `window.rs` | [ADR](./decisions/phase-4-widget-implementation.md#dd-p4-005) |
 | DD-P4-006: Button clicked callback | `Box<dyn Fn()>` internally; C ABI adapter deferred to Phase 6 | [ADR](./decisions/phase-4-widget-implementation.md#dd-p4-006) |
 
 ---
 
-## 8. Three-Layer Tree Model
+## 8. Animation (Phase 5)
+
+Full decision rationale: [`docs/decisions/phase-5-compositor-independence-check.md`](./decisions/phase-5-compositor-independence-check.md)
+
+### 8.1 Compositor-thread independence
+
+The Windows Composition runtime (`Compositor`) drives all `KeyFrameAnimation` instances on
+the **DWM compositor thread**, which is independent of the application's Win32 message loop.
+This means:
+
+- Animations continue to run while the app thread is blocked (e.g., during a long callback).
+- Mica material continues to be composited by DWM regardless of app-thread state.
+- The `DispatcherQueueController` created on the main thread (§5.2) initialises the
+  `Compositor` and the animation subsystem, but the compositor executes on its own internal
+  thread once `StartAnimation` is called.
+
+### 8.2 Animation primitives used in M1
+
+| Primitive | Used for | Loop behavior |
+|---|---|---|
+| `ColorKeyFrameAnimation` | Button hover/press state-transition color | One-shot (`IterationCount = 1`) |
+| `Vector3KeyFrameAnimation` | Synthetic SpriteVisual offset (verification artifact) | Forever |
+
+### 8.3 Button state-transition animation (permanent — DD-P5-005)
+
+Button hover and press state transitions animate the background brush color in place using
+`ColorKeyFrameAnimation`. The `CompositionColorBrush` is retained on `ButtonData` and
+animated via `CompositionObject::StartAnimation("Color", ...)` on each state change; no new
+brush is created per transition.
+
+**Duration values (measured against WinUI Button on the same OS build):**
+
+| Transition | Duration | Rationale |
+|---|---|---|
+| Normal → Hovered (hover-in) | 83 ms | Fluent "ControlFast" token; matches WinUI hover-in |
+| Hovered → Normal (hover-out) | 167 ms | Fluent "ControlNormal" token; settles rather than snapping |
+| Any → Pressed (press-down) | 83 ms | Fast response for direct user input |
+| Pressed → Any (press-up) | 167 ms | Slower release gives tactile "settle" feel |
+
+Easing: linear (default; no `CompositionEasingFunction` attached). WinUI Button uses a
+near-linear ease-out; the visual difference is imperceptible at these durations. A
+cubic-bezier easing can be substituted in a future revision without any API or ABI impact.
+
+These values are **internal Button implementation details**. They are not exposed via the C
+ABI or any public Rust surface and can be tuned without a version bump.
+
+### 8.4 Property-change animation (deferred — DD-V-001)
+
+The default behavior when host code changes a widget property is **instant** — no animation
+occurs. Opt-in property-change animation is the scope of M5 "Higher-level animation DSL" and
+is not designed or implemented in M1.
+
+This is the same convention used by SwiftUI, Jetpack Compose, Material Design, and CSS:
+built-in widgets animate their own *state transitions* internally, but property changes
+driven by host code are instant unless the host explicitly opts in to animation.
+
+### 8.5 Verification synthetic visual (DD-P5-006)
+
+`examples/phase5_visual_check.rs` contains a 32×32 magenta `SpriteVisual` in the top-right
+corner of the window. A looping `Vector3KeyFrameAnimation` (2-second period, `Forever`)
+drives its `Offset` property. Pressing `[B]` blocks the app thread for 2 seconds; the
+synthetic visual continues moving, confirming compositor-thread independence.
+
+The synthetic visual is attached directly to `WindowState::root` (the public
+`ContainerVisual` field) from the example. No new API surface was added to the runtime or
+C ABI for this purpose.
+
+### 8.6 Decisions summary
+
+| Decision | Chosen | See |
+|---|---|---|
+| DD-P5-004: Verification approach | Widget-internal state animation + continuous synthetic visual (Option D) | [ADR](./decisions/phase-5-compositor-independence-check.md#dd-p5-004) |
+| DD-P5-005: Button state animation | `ColorKeyFrameAnimation` on retained brush; 83/167 ms durations | [ADR](./decisions/phase-5-compositor-independence-check.md#dd-p5-005) |
+| DD-P5-006: Synthetic visual | `SpriteVisual` + `Vector3KeyFrameAnimation` in example only; no new runtime API | [ADR](./decisions/phase-5-compositor-independence-check.md#dd-p5-006) |
+
+---
+
+## 9. Three-Layer Tree Model
 
 | Layer | Owner | Contents |
 |---|---|---|
@@ -404,7 +486,7 @@ In M1 there is no reconciler. The host language constructs the view tree directl
 
 ---
 
-## 9. wasamoc (DSL Compiler) — M1 Scope
+## 10. wasamoc (DSL Compiler) — M1 Scope
 
 M1 covers lexing, parsing, and syntax checking only.
 Code generation (conversion to runtime calls, binding generation) is M2 scope.
@@ -461,7 +543,7 @@ host app ──calls──▶ wasamo C ABI ──builds──▶ widget tree at 
 
 ---
 
-## 10. Open Questions (to be resolved in later phases)
+## 11. Open Questions (to be resolved in later phases)
 
 The following are intentionally left open at this draft stage.
 
@@ -494,3 +576,4 @@ The following are intentionally left open at this draft stage.
 | 0.6     | 2026-04-28 | Phase 3 post-doc: §6 Layout Engine added; §7–§9 renumbered; Open Questions updated |
 | 0.7     | 2026-04-28 | §9 Open Questions: five layout-related items added (DPI scaling, AccessKit sync, async measure, cache invalidation, custom layout extensibility) |
 | 0.8     | 2026-04-29 | Phase 4 post-doc: §7 Widget Implementation added; §7–§9 renumbered to §8–§10; §4 windows feature set updated; Open Questions updated |
+| 0.9     | 2026-04-29 | Phase 5 post-doc: §8 Animation added (compositor-thread independence, ColorKeyFrameAnimation durations, DD-P5-004..006); §8–§10 renumbered to §9–§11; §7.4/§7.5 updated |

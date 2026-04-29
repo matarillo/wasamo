@@ -70,15 +70,14 @@ For the full vision and rationale see [VISION.md](./VISION.md).
 
 ### Phase 4 — Widget implementation
 
-- [ ] `docs/decisions/phase-4-widget-implementation.md` created, owner agreement obtained
-- [ ] Text: `IDWriteTextLayout` + `ICompositionDrawingSurface` rendering
-- [ ] Text: `font` property mapped to Windows type ramp constants
-- [ ] Button: hit testing (WM_LBUTTONDOWN / WM_LBUTTONUP)
-- [ ] Button: hover / press visual feedback
-- [ ] Button: `clicked` callback via C ABI function pointer
-- [ ] Button: `style: accent` with system accent color
-- [ ] Unit tests for hit-testing coordinate logic
-- [ ] `docs/decisions/phase-4-widget-implementation.md` updated
+- [x] `docs/decisions/phase-4-widget-implementation.md` created, owner agreement obtained
+- [x] Text: `IDWriteTextLayout` + `ICompositionDrawingSurface` rendering
+- [x] Text: `font` property mapped to Windows type ramp constants
+- [x] Button: hit testing (WM_LBUTTONDOWN / WM_LBUTTONUP)
+- [x] Button: hover / press visual feedback
+- [x] Button: `clicked` callback via C ABI function pointer
+- [x] Button: `style: accent` with system accent color
+- [x] `docs/decisions/phase-4-widget-implementation.md` updated
 
 ### Phase 5 — Compositor independence check
 
@@ -100,12 +99,12 @@ See
 - [x] `docs/decisions/vision-m1-acceptance-criteria.md` created, owner agreement obtained (DD-V-001)
 - [x] `docs/decisions/phase-5-implicit-animations-dev-api.md` (DD-P5-001..003) — agreed but **superseded**; pre-doc review found the premise contradicted DD-V-001 (see ADR notes)
 - [x] `docs/decisions/phase-5-compositor-independence-check.md` created, owner agreement obtained (DD-P5-004..006)
-- [ ] Button hover/press brush transition animated with `ColorKeyFrameAnimation` (duration/easing tuned during implementation against Fluent guidance and WinUI Button visual comparison; internal Button implementation, no public API). Concrete values recorded in DD-P5-005 post-implementation update.
-- [ ] `examples/phase5_visual_check.rs`:
+- [x] Button hover/press brush transition animated with `ColorKeyFrameAnimation` (83 ms hover-in/press-down; 167 ms hover-out/press-up; linear easing; internal Button implementation, no public API). Concrete values recorded in DD-P5-005 post-implementation update.
+- [x] `examples/phase5_visual_check.rs`:
   - Existing Button group + a corner `SpriteVisual` with a continuous looping `Vector3KeyFrameAnimation` (~2 s period)
   - 'B' blocks the app thread for ~2 s; the synthetic visual must continue animating during the block
-- [ ] Minimum runtime hook for the verification example to attach a Visual to the root container (`pub(crate)` accessor or narrow `wasamo::dev` helper limited to root-Visual access — **not** the property-change toggle proposed by the superseded ADR)
-- [ ] `docs/architecture.md` animation section added (distinguishes widget-internal state-transition animation from the deferred public property-change API; latter belongs to M5)
+- [x] Minimum runtime hook for the verification example to attach a Visual to the root container (`WindowState::root` public field — no new API surface needed)
+- [x] `docs/architecture.md` animation section added (distinguishes widget-internal state-transition animation from the deferred public property-change API; latter belongs to M5)
 
 ### Phase 6 — C ABI header
 

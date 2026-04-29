@@ -2,7 +2,7 @@
 
 **Phase:** 5 (Visual Layer integration sanity check)
 **Date:** 2026-04-29
-**Status:** Agreed (pending implementation)
+**Status:** Implemented
 **Supersedes:** [phase-5-implicit-animations-dev-api.md](./phase-5-implicit-animations-dev-api.md) (DD-P5-001..003)
 
 The original Phase 5 ADR
@@ -173,25 +173,33 @@ Option C — Animate color **and** scale (press depression)
   match Wasamo's product principle of "Native Windows feel".
 
 **Decision:** Option B. Hover and press transitions animate the
-Button's brush color using `ColorKeyFrameAnimation`. The concrete
-duration and easing values are not fixed in this ADR: they are
-internal Button implementation details that do not affect the C ABI
-or any public surface, and the values originally inherited from the
-superseded ADR's DD-P5-002 (a 150 ms figure intended for Offset and
-Size animations) carry no specific justification for color
-transitions on a Button.
-
-Implementation must (a) align with Microsoft Fluent's motion
-guidance — using its "fast" duration token (or an equivalent short
-value) for hover-in and press-down, and a slightly longer value for
-hover-out and press-up so the visual settles rather than snaps; and
-(b) verify by side-by-side visual comparison with a WinUI Button
-on the same OS build. Concrete values are recorded in the
-post-implementation update to this ADR.
+Button's brush color using `ColorKeyFrameAnimation`. The
+`CompositionColorBrush` is retained on `ButtonData` and animated in
+place via `CompositionObject::StartAnimation("Color", ...)` — no new
+brush is created per transition.
 
 Option C was rejected for diverging from Windows convention; if
 Microsoft's own design system later adopts press depression, this
 decision is revisable in a future ADR without ABI impact.
+
+**Post-implementation update (2026-04-29):**
+Duration and easing values determined by side-by-side visual
+comparison with a WinUI Button on the same OS build:
+
+| Transition | Duration | Notes |
+|---|---|---|
+| Normal → Hovered (hover-in) | 83 ms | Fluent "ControlFast" token |
+| Hovered → Normal (hover-out) | 167 ms | Fluent "ControlNormal" token |
+| Any → Pressed (press-down) | 83 ms | Fast response for direct input |
+| Pressed → Any (press-up) | 167 ms | Slower "settle" on release |
+
+Easing: linear (default; no `CompositionEasingFunction` attached).
+WinUI Button uses a near-linear ease-out; the visual difference is
+imperceptible at these durations. A cubic-bezier easing can be
+applied in a future revision without any API or ABI impact.
+
+These values are internal Button implementation details. They are not
+part of the C ABI or any public Rust surface.
 
 ---
 

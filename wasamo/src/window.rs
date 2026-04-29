@@ -15,8 +15,8 @@ use windows::{
                 CreateWindowExW, DefWindowProcW, GetWindowLongPtrW, LoadCursorW,
                 PostQuitMessage, RegisterClassExW, SetWindowLongPtrW, ShowWindow,
                 CS_HREDRAW, CS_VREDRAW, CW_USEDEFAULT, GWLP_USERDATA, IDC_ARROW,
-                SW_SHOW, WM_DESTROY, WM_ERASEBKGND, WM_LBUTTONDOWN, WM_LBUTTONUP,
-                WM_MOUSEMOVE, WM_SIZE, WNDCLASSEXW,
+                SW_SHOW, WM_DESTROY, WM_ERASEBKGND, WM_KEYDOWN, WM_LBUTTONDOWN,
+                WM_LBUTTONUP, WM_MOUSEMOVE, WM_SIZE, WNDCLASSEXW,
                 WS_EX_NOREDIRECTIONBITMAP, WS_OVERLAPPEDWINDOW,
             },
         },
@@ -35,6 +35,7 @@ pub struct WindowState {
 
     // Event callbacks set by the host before wasamo_run().
     pub resize_fn:      Option<Box<dyn FnMut(f32, f32)>>,
+    pub key_down_fn:    Option<Box<dyn FnMut(u16)>>,
     pub mouse_down_fn:  Option<Box<dyn FnMut(i32, i32)>>,
     pub mouse_move_fn:  Option<Box<dyn FnMut(i32, i32)>>,
     pub mouse_leave_fn: Option<Box<dyn FnMut()>>,
@@ -61,6 +62,7 @@ pub fn create(title: &str, width: i32, height: i32) -> windows::core::Result<Box
         root,
         _target: target,
         resize_fn: None,
+        key_down_fn: None,
         mouse_down_fn: None,
         mouse_move_fn: None,
         mouse_leave_fn: None,
@@ -200,6 +202,14 @@ unsafe extern "system" fn wnd_proc(
             let h = ((lparam.0 >> 16) & 0xFFFF) as f32;
             if let Some(f) = &mut state.resize_fn {
                 f(w, h);
+            }
+            return LRESULT(0);
+        }
+
+        if msg == WM_KEYDOWN {
+            let vk = wparam.0 as u16;
+            if let Some(f) = &mut state.key_down_fn {
+                f(vk);
             }
             return LRESULT(0);
         }

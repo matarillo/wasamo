@@ -1,12 +1,20 @@
 use crate::layout::{self, Alignment, LayoutNode, SizeConstraint};
 use crate::text::{TextRenderer, TypographyStyle};
 use windows::{
-    Foundation::Numerics::{Vector2, Vector3},
+    Foundation::{Numerics::{Vector2, Vector3}, TimeSpan},
     UI::{
         Color,
         Composition::{
-            CompositionColorBrush, CompositionSurfaceBrush, Compositor, ContainerVisual,
-            SpriteVisual, Visual,
+            AnimationIterationBehavior,
+            ColorKeyFrameAnimation,
+            CompositionAnimation,
+            CompositionColorBrush,
+            CompositionObject,
+            CompositionSurfaceBrush,
+            Compositor,
+            ContainerVisual,
+            SpriteVisual,
+            Visual,
         },
     },
 };
@@ -24,6 +32,8 @@ enum ButtonState { Normal, Hovered, Pressed }
 struct ButtonData {
     style: ButtonStyle,
     state: ButtonState,
+    // Background brush retained for in-place color animation (DD-P5-005).
+    bg_brush: CompositionColorBrush,
     label_visual: SpriteVisual,
     label_text: String,
     label_style: TypographyStyle,
@@ -148,7 +158,8 @@ impl WidgetNode {
 
         // Root visual: background.
         let bg_visual = compositor.CreateSpriteVisual()?;
-        let bg_brush = make_button_brush(compositor, style, ButtonState::Normal, accent)?;
+        let initial_color = button_state_color(style, ButtonState::Normal, accent);
+        let bg_brush = compositor.CreateColorBrushWithColor(initial_color)?;
         bg_visual.SetBrush(&bg_brush)?;
 
         // Child visual: text label.
@@ -175,6 +186,7 @@ impl WidgetNode {
         let btn_data = Box::new(ButtonData {
             style,
             state: ButtonState::Normal,
+            bg_brush,
             label_visual,
             label_text: label.to_owned(),
             label_style,
@@ -280,10 +292,11 @@ impl WidgetNode {
                 ButtonState::Normal
             };
             if new_state != btn.state {
+                let old_state = btn.state;
                 btn.state = new_state;
-                let brush =
-                    make_button_brush(compositor, btn.style, new_state, btn.accent)?;
-                self.visual.SetBrush(&brush)?;
+                let target = button_state_color(btn.style, new_state, btn.accent);
+                let ticks = transition_duration(old_state, new_state);
+                start_color_anim(compositor, &btn.bg_brush, target, ticks)?;
             }
         }
 
@@ -298,9 +311,8 @@ impl WidgetNode {
         if let WidgetData::Button(ref mut btn) = self.data {
             if btn.state != ButtonState::Normal {
                 btn.state = ButtonState::Normal;
-                let brush =
-                    make_button_brush(compositor, btn.style, ButtonState::Normal, btn.accent)?;
-                self.visual.SetBrush(&brush)?;
+                let target = button_state_color(btn.style, ButtonState::Normal, btn.accent);
+                start_color_anim(compositor, &btn.bg_brush, target, 1_670_000)?;
             }
         }
         for child in &mut self.children {
@@ -388,21 +400,43 @@ fn visual_rect(v: &SpriteVisual) -> (f32, f32, f32, f32) {
     (off.X, off.Y, sz.X, sz.Y)
 }
 
-fn make_button_brush(
-    compositor: &Compositor,
-    style: ButtonStyle,
-    state: ButtonState,
-    accent: Color,
-) -> windows::core::Result<CompositionColorBrush> {
-    let color = match (style, state) {
+fn button_state_color(style: ButtonStyle, state: ButtonState, accent: Color) -> Color {
+    match (style, state) {
         (ButtonStyle::Default, ButtonState::Normal)  => Color { A: 0x20, R: 0xFF, G: 0xFF, B: 0xFF },
         (ButtonStyle::Default, ButtonState::Hovered) => Color { A: 0x33, R: 0xFF, G: 0xFF, B: 0xFF },
         (ButtonStyle::Default, ButtonState::Pressed) => Color { A: 0x10, R: 0xFF, G: 0xFF, B: 0xFF },
         (ButtonStyle::Accent,  ButtonState::Normal)  => accent,
         (ButtonStyle::Accent,  ButtonState::Hovered) => lighten(accent, 26),
         (ButtonStyle::Accent,  ButtonState::Pressed) => darken(accent, 26),
-    };
-    compositor.CreateColorBrushWithColor(color)
+    }
+}
+
+// Duration in 100-ns ticks: fast (83 ms) for entering active state, slow (167 ms) for leaving.
+fn transition_duration(old: ButtonState, new: ButtonState) -> i64 {
+    match (old, new) {
+        (_, ButtonState::Pressed)                         => 830_000,   // press-down: fast
+        (ButtonState::Pressed, _)                         => 1_670_000, // press-up: slow
+        (ButtonState::Normal,  ButtonState::Hovered)      => 830_000,   // hover-in: fast
+        _                                                 => 1_670_000, // hover-out: slow
+    }
+}
+
+fn start_color_anim(
+    compositor: &Compositor,
+    brush: &CompositionColorBrush,
+    target: Color,
+    duration_ticks: i64,
+) -> windows::core::Result<()> {
+    use windows::core::{Interface, HSTRING};
+    let anim: ColorKeyFrameAnimation = compositor.CreateColorKeyFrameAnimation()?;
+    anim.InsertKeyFrame(1.0_f32, target)?;
+    anim.SetDuration(TimeSpan { Duration: duration_ticks })?;
+    anim.SetIterationBehavior(AnimationIterationBehavior::Count)?;
+    anim.SetIterationCount(1)?;
+    let comp_anim: CompositionAnimation = anim.cast()?;
+    let obj: CompositionObject = brush.cast()?;
+    obj.StartAnimation(&HSTRING::from("Color"), &comp_anim)?;
+    Ok(())
 }
 
 fn lighten(c: Color, amount: u8) -> Color {
