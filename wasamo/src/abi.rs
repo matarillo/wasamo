@@ -5,8 +5,11 @@
 //! CI smoke test (compile + link a TU including `wasamo.h` against
 //! `wasamo.dll.lib`) catches drift.
 
-// Constants and types are exported across the C ABI by name; rustc's
-// dead_code lint cannot see those uses.
+// The constants below mirror the closed enum tag sets defined in
+// `wasamo.h` (§3.1 `WasamoStatus`, §3.3 `WasamoValueTag`). Several
+// values aren't emitted by any M1 widget yet but are part of the ABI
+// surface and visible to Rust callers of the rlib, so we keep the
+// full set declared.
 #![allow(dead_code)]
 
 use std::cell::RefCell;
@@ -564,6 +567,11 @@ pub unsafe extern "C" fn wasamo_button_create(
     }
 }
 
+// Each child entered the ABI as a `Box::into_raw` pointer; we recover
+// them via `Box::from_raw` and pass them along to `append_child`, which
+// also takes `Box<WidgetNode>`. Flattening to `Vec<WidgetNode>` here
+// would force an unbox-rebox round trip per child for no benefit.
+#[allow(clippy::vec_box)]
 unsafe fn collect_children(
     children: *mut *mut WasamoWidget,
     count: usize,
@@ -592,6 +600,8 @@ unsafe fn collect_children(
     Ok(out)
 }
 
+// See note on `collect_children` for the `Vec<Box<...>>` shape.
+#[allow(clippy::vec_box)]
 unsafe fn finish_stack(
     mut node: Box<WidgetNode>,
     children: Vec<Box<WidgetNode>>,

@@ -24,23 +24,17 @@ use std::os::raw::c_char;
 
 use crate::abi::{
     WasamoStringView, WasamoValue, WasamoValuePayload, WasamoWidget,
-    WASAMO_VALUE_BOOL, WASAMO_VALUE_F64, WASAMO_VALUE_I32, WASAMO_VALUE_NONE,
-    WASAMO_VALUE_STRING, WASAMO_VALUE_WIDGET,
+    WASAMO_VALUE_I32, WASAMO_VALUE_STRING,
 };
 use crate::registry;
 
-// Variants F64/Bool/Widget/None are part of the closed M4 tag set
-// (abi_spec §3.3); they aren't produced by M1 widgets but the
-// dispatcher must round-trip them once future widgets emit them.
-#[allow(dead_code)]
+// Only the value tags M1 widgets actually emit. The full closed tag set
+// (abi_spec §3.3) gets variants added here when future widgets need them;
+// adding a tag is non-breaking.
 #[derive(Clone)]
 pub enum OwnedArg {
-    None,
     I32(i32),
-    F64(f64),
-    Bool(bool),
     String(String),
-    Widget(*mut WasamoWidget),
 }
 
 enum Pending {
@@ -49,7 +43,7 @@ enum Pending {
 }
 
 thread_local! {
-    static QUEUE: RefCell<VecDeque<Pending>> = RefCell::new(VecDeque::new());
+    static QUEUE: RefCell<VecDeque<Pending>> = const { RefCell::new(VecDeque::new()) };
     static DISPATCHING: Cell<bool> = const { Cell::new(false) };
 }
 
@@ -119,6 +113,8 @@ fn dispatch(p: Pending) {
                 return;
             };
             let Some(cb) = cb else { return };
+            // `args` is held in scope so any v_string pointer in `vals`
+            // stays valid through the callback.
             let vals: Vec<WasamoValue> = args.iter().map(owned_to_value).collect();
             let (ptr, len): (*const WasamoValue, usize) = if vals.is_empty() {
                 (std::ptr::null(), 0)
@@ -126,32 +122,16 @@ fn dispatch(p: Pending) {
                 (vals.as_ptr(), vals.len())
             };
             unsafe { cb(widget, ptr, len, user_data) };
-            // `args` and `vals` drop here, after the callback returns,
-            // keeping any string buffers alive for the call's duration.
             drop(args);
-            drop(vals);
-            let _ = user_data;
         }
     }
 }
 
 fn owned_to_value(a: &OwnedArg) -> WasamoValue {
     match a {
-        OwnedArg::None => WasamoValue {
-            tag: WASAMO_VALUE_NONE,
-            payload: WasamoValuePayload { v_i32: 0 },
-        },
         OwnedArg::I32(v) => WasamoValue {
             tag: WASAMO_VALUE_I32,
             payload: WasamoValuePayload { v_i32: *v },
-        },
-        OwnedArg::F64(v) => WasamoValue {
-            tag: WASAMO_VALUE_F64,
-            payload: WasamoValuePayload { v_f64: *v },
-        },
-        OwnedArg::Bool(b) => WasamoValue {
-            tag: WASAMO_VALUE_BOOL,
-            payload: WasamoValuePayload { v_bool: if *b { 1 } else { 0 } },
         },
         OwnedArg::String(s) => WasamoValue {
             tag: WASAMO_VALUE_STRING,
@@ -161,10 +141,6 @@ fn owned_to_value(a: &OwnedArg) -> WasamoValue {
                     len: s.len(),
                 },
             },
-        },
-        OwnedArg::Widget(w) => WasamoValue {
-            tag: WASAMO_VALUE_WIDGET,
-            payload: WasamoValuePayload { v_widget: *w },
         },
     }
 }

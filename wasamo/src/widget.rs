@@ -27,8 +27,6 @@ pub enum ButtonStyle { Default, Accent }
 #[derive(Clone, Copy, PartialEq, Debug)]
 enum ButtonState { Normal, Hovered, Pressed }
 
-// label_visual/text/style are retained for future set_label() support.
-#[allow(dead_code)]
 struct ButtonData {
     style: ButtonStyle,
     state: ButtonState,
@@ -407,7 +405,6 @@ impl WidgetNode {
         let WidgetData::Text { ref mut content, style } = self.data else {
             return Err(PropertyError::UnknownId);
         };
-        let style = style;
         let (w, h) = renderer.measure(new_content, style)?;
         let surface = renderer.draw_text(
             new_content,

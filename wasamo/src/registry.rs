@@ -20,8 +20,6 @@ use crate::abi::{
     WasamoDestroyFn, WasamoPropertyObserverFn, WasamoSignalHandlerFn, WasamoWidget,
 };
 
-// Fields are read by the queued-emission machinery (next Phase 6 item).
-#[allow(dead_code)]
 pub enum EntryKind {
     Observer {
         property_id: u32,
@@ -33,7 +31,6 @@ pub enum EntryKind {
     },
 }
 
-#[allow(dead_code)]
 pub struct Entry {
     pub widget: *mut WasamoWidget,
     pub kind: EntryKind,
@@ -116,8 +113,8 @@ pub fn remove(token: u64) -> bool {
 }
 
 /// Sever every registration owned by `widget`. Used by widget-destroy
-/// hooks once the experimental constructor layer lands.
-#[allow(dead_code)]
+/// hooks (`wasamo_window_destroy`, `window::set_root` when replacing
+/// the previous root).
 pub fn remove_for_widget(widget: *mut WasamoWidget) {
     let drained = REG.with(|r| {
         let mut r = r.borrow_mut();
