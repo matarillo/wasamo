@@ -1,7 +1,7 @@
 # Wasamo C ABI Specification
 
-**Version:** M1 draft (2026-04-30)
-**Status:** Initial draft Agreed (2026-04-30) — finalised against `wasamo.h` at end of Phase 6
+**Version:** M1 (2026-04-30)
+**Status:** Agreed (2026-04-30) — finalised against the implemented `wasamo.h`
 **Authoritative decisions:** [decisions/phase-6-c-abi.md](decisions/phase-6-c-abi.md) (DD-P6-001..007)
 
 This document specifies the C ABI exposed by `wasamo.dll` via the
@@ -340,27 +340,83 @@ M2+ release. The runtime build does not gate experimental symbols
 behind a compile-time flag in M1; binding generators are expected
 to honor the marker by tagging generated wrappers as experimental.
 
-The exact set of experimental functions is finalised when
-`wasamo.h` is implemented. The minimum needed for Phase 8 "Hello
-Counter":
+The set finalised for Phase 8 "Hello Counter":
 
-- **All-at-once widget constructors** for VStack / HStack / Text /
-  Button. Container constructors take a children array at
-  construction time; the widget tree is built bottom-up and is
-  immutable thereafter. Updates to a constructed tree happen via
-  property R/W (§4.3), not by mutating the tree structure:
-  `wasamo_vstack_create(WasamoWidget** children, size_t count, WasamoWidget** out)`,
-  `wasamo_hstack_create(...)`,
-  `wasamo_text_create(const char* content, size_t len, WasamoWidget** out)`,
-  `wasamo_button_create(const char* label, size_t len, WasamoWidget** out)`,
-  `wasamo_window_set_root(WasamoWindow*, WasamoWidget* root)`.
-- `wasamo_button_set_clicked` — direct typed callback for the
-  most common signal in M1 demos. Equivalent to
-  `wasamo_signal_connect(button, "clicked", ...)` but without
-  the string lookup.
-- Property-ID constants for M1 widgets
-  (`WASAMO_BUTTON_LABEL`, `WASAMO_TEXT_CONTENT`, …) used with
-  the stable §4.3 mechanism.
+```c
+WASAMO_EXPERIMENTAL
+WasamoStatus wasamo_text_create(
+    const char* content_utf8, size_t content_len,
+    WasamoWidget** out);
+
+WASAMO_EXPERIMENTAL
+WasamoStatus wasamo_button_create(
+    const char* label_utf8, size_t label_len,
+    WasamoWidget** out);
+
+WASAMO_EXPERIMENTAL
+WasamoStatus wasamo_vstack_create(
+    WasamoWidget** children, size_t count,
+    WasamoWidget** out);
+
+WASAMO_EXPERIMENTAL
+WasamoStatus wasamo_hstack_create(
+    WasamoWidget** children, size_t count,
+    WasamoWidget** out);
+
+WASAMO_EXPERIMENTAL
+WasamoStatus wasamo_window_set_root(
+    WasamoWindow* window, WasamoWidget* root);
+
+WASAMO_EXPERIMENTAL
+WasamoStatus wasamo_button_set_clicked(
+    WasamoWidget* button,
+    WasamoSignalHandlerFn callback,
+    void* user_data,
+    WasamoDestroyFn destroy_fn,
+    uint64_t* out_token);
+```
+
+Property-ID constants for M1 widgets — used with the stable §4.3
+mechanism — are also experimental:
+
+```c
+#define WASAMO_BUTTON_LABEL  1u   /* String  */
+#define WASAMO_BUTTON_STYLE  2u   /* I32     */
+#define WASAMO_TEXT_CONTENT  3u   /* String  */
+#define WASAMO_TEXT_STYLE    4u   /* I32     */
+```
+
+`BUTTON_STYLE` values: `0 = Default`, `1 = Accent`. `TEXT_STYLE`
+values: `0 = Caption`, `1 = Body`, `2 = Subtitle`, `3 = Title`. The
+numeric assignments are M1 stopgaps and may change before M4.
+
+**Construction defaults.** Container constructors do not take
+spacing / padding / alignment arguments in M1; the runtime applies
+fixed defaults (`spacing = 8.0`, `padding = 8.0`, alignment
+`Center`). `wasamo_button_create` defaults to `BUTTON_STYLE = Default`;
+`wasamo_text_create` defaults to `TEXT_STYLE = Body`. Hosts override
+post-construction via `wasamo_set_property` (§4.3).
+
+**Ownership semantics for container constructors.** Children
+pointers passed in the `children` array are MOVED into the new
+container. On `WASAMO_OK` return, the host's child pointers are
+stale and must not be reused. On any non-OK return, no children
+are consumed (constructors validate the array before taking
+ownership of any element).
+
+**Ownership transfer to a window.** `wasamo_window_set_root` moves
+the root widget into the window. After that call the widget tree
+is owned by the window: it is dropped when the window is destroyed
+or when `wasamo_shutdown` is called, whichever comes first. There
+is no separate widget-destroy ABI in M1 — destruction is always
+keyed off the owning window.
+
+**Auto-routing on installed roots.** When a window has a root
+installed via `wasamo_window_set_root`, the runtime forwards
+`WM_SIZE` to a re-layout pass, `WM_MOUSEMOVE` /
+`WM_LBUTTON{DOWN,UP}` to per-widget hover and click hit-testing,
+and emits `"clicked"` signals through the registry on Button hits.
+Hosts do not need to wire window-message callbacks for these.
 
 These symbols are removed (or migrated into the stable core) when
 `wasamoc` codegen lands in M2.

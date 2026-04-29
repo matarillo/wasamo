@@ -166,7 +166,7 @@ items. The checklist below reflects that decomposition.
   `docs/abi_spec.md` §5 / §5.1 for verification scope.
 - [x] CI: C smoke test that **compiles and links** a TU including
   `wasamo.h` against `wasamo.lib` (MSVC + Clang)
-- [ ] `docs/abi_spec.md` finalised to match `wasamo.h`; status updated
+- [x] `docs/abi_spec.md` finalised to match `wasamo.h`; status updated
   from "initial draft Agreed" to "Agreed"
 
 ### Phase 7 — Language bindings
