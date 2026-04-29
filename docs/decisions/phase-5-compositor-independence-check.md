@@ -173,13 +173,25 @@ Option C — Animate color **and** scale (press depression)
   match Wasamo's product principle of "Native Windows feel".
 
 **Decision:** Option B. Hover and press transitions animate the
-Button's brush color over **150 ms** (cubic ease-out for hover-in
-and press-down; cubic ease-in for hover-out and press-up). These
-values are internal Button implementation and are not exposed to
-host code. Option C was rejected for diverging from Windows
-convention; if Microsoft's own design system later adopts press
-depression, this decision is revisable in a future ADR without ABI
-impact.
+Button's brush color using `ColorKeyFrameAnimation`. The concrete
+duration and easing values are not fixed in this ADR: they are
+internal Button implementation details that do not affect the C ABI
+or any public surface, and the values originally inherited from the
+superseded ADR's DD-P5-002 (a 150 ms figure intended for Offset and
+Size animations) carry no specific justification for color
+transitions on a Button.
+
+Implementation must (a) align with Microsoft Fluent's motion
+guidance — using its "fast" duration token (or an equivalent short
+value) for hover-in and press-down, and a slightly longer value for
+hover-out and press-up so the visual settles rather than snaps; and
+(b) verify by side-by-side visual comparison with a WinUI Button
+on the same OS build. Concrete values are recorded in the
+post-implementation update to this ADR.
+
+Option C was rejected for diverging from Windows convention; if
+Microsoft's own design system later adopts press depression, this
+decision is revisable in a future ADR without ABI impact.
 
 ---
 

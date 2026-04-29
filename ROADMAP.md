@@ -100,7 +100,7 @@ See
 - [x] `docs/decisions/vision-m1-acceptance-criteria.md` created, owner agreement obtained (DD-V-001)
 - [x] `docs/decisions/phase-5-implicit-animations-dev-api.md` (DD-P5-001..003) — agreed but **superseded**; pre-doc review found the premise contradicted DD-V-001 (see ADR notes)
 - [x] `docs/decisions/phase-5-compositor-independence-check.md` created, owner agreement obtained (DD-P5-004..006)
-- [ ] Button hover/press brush transition animated with `ColorKeyFrameAnimation` (150 ms, cubic ease; internal Button implementation, no public API)
+- [ ] Button hover/press brush transition animated with `ColorKeyFrameAnimation` (duration/easing tuned during implementation against Fluent guidance and WinUI Button visual comparison; internal Button implementation, no public API). Concrete values recorded in DD-P5-005 post-implementation update.
 - [ ] `examples/phase5_visual_check.rs`:
   - Existing Button group + a corner `SpriteVisual` with a continuous looping `Vector3KeyFrameAnimation` (~2 s period)
   - 'B' blocks the app thread for ~2 s; the synthetic visual must continue animating during the block
