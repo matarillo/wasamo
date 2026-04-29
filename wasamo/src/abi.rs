@@ -210,6 +210,11 @@ pub unsafe extern "C" fn wasamo_window_destroy(window: *mut WasamoWindow) -> Was
         return WASAMO_OK;
     }
     let boxed = Box::from_raw(window);
+    // Sever registry entries for the entire owned widget subtree before any
+    // widget memory is freed. Any host-supplied destroy_fn is invoked here.
+    if let Some(root) = boxed.root_widget.as_ref() {
+        root.for_each_ptr(&mut |p| crate::registry::remove_for_widget(p));
+    }
     let _ = windows::Win32::UI::WindowsAndMessaging::DestroyWindow(boxed.hwnd);
     clear_last_error();
     WASAMO_OK
@@ -465,4 +470,243 @@ pub extern "C" fn wasamo_signal_disconnect(token: u64) -> WasamoStatus {
         set_last_error("wasamo_signal_disconnect: unknown token");
         WASAMO_ERR_INVALID_ARG
     }
+}
+
+// ── 5. M1 experimental layer (abi_spec §5) ───────────────────────────────────
+//
+// Constructors return a runtime-owned `*mut WasamoWidget` (boxed `WidgetNode`
+// internally). Children handed to a container constructor are MOVED into it;
+// the host's child pointers become stale on success and must not be reused.
+// Final ownership is transferred to a `WasamoWindow` via `wasamo_window_set_root`,
+// which is also responsible for the eventual drop.
+
+unsafe fn read_utf8(ptr: *const c_char, len: usize) -> Result<String, &'static str> {
+    if ptr.is_null() || len == 0 {
+        return Ok(String::new());
+    }
+    let bytes = std::slice::from_raw_parts(ptr as *const u8, len);
+    std::str::from_utf8(bytes)
+        .map(|s| s.to_owned())
+        .map_err(|_| "invalid UTF-8")
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn wasamo_text_create(
+    content_utf8: *const c_char,
+    content_len: usize,
+    out: *mut *mut WasamoWidget,
+) -> WasamoStatus {
+    if out.is_null() {
+        set_last_error("wasamo_text_create: out is null");
+        return WASAMO_ERR_INVALID_ARG;
+    }
+    *out = ptr::null_mut();
+    let content = match read_utf8(content_utf8, content_len) {
+        Ok(s) => s,
+        Err(e) => {
+            set_last_error(format!("wasamo_text_create: {e}"));
+            return WASAMO_ERR_INVALID_ARG;
+        }
+    };
+    let rt = crate::runtime::get();
+    match WidgetNode::text(
+        &rt.compositor,
+        &rt.text_renderer,
+        &content,
+        crate::text::TypographyStyle::Body,
+    ) {
+        Ok(node) => {
+            *out = Box::into_raw(node);
+            clear_last_error();
+            WASAMO_OK
+        }
+        Err(e) => {
+            set_last_error(format!("wasamo_text_create: {e}"));
+            WASAMO_ERR_RUNTIME
+        }
+    }
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn wasamo_button_create(
+    label_utf8: *const c_char,
+    label_len: usize,
+    out: *mut *mut WasamoWidget,
+) -> WasamoStatus {
+    if out.is_null() {
+        set_last_error("wasamo_button_create: out is null");
+        return WASAMO_ERR_INVALID_ARG;
+    }
+    *out = ptr::null_mut();
+    let label = match read_utf8(label_utf8, label_len) {
+        Ok(s) => s,
+        Err(e) => {
+            set_last_error(format!("wasamo_button_create: {e}"));
+            return WASAMO_ERR_INVALID_ARG;
+        }
+    };
+    let rt = crate::runtime::get();
+    match WidgetNode::button(
+        &rt.compositor,
+        &rt.text_renderer,
+        &label,
+        crate::widget::ButtonStyle::Default,
+    ) {
+        Ok(node) => {
+            *out = Box::into_raw(node);
+            clear_last_error();
+            WASAMO_OK
+        }
+        Err(e) => {
+            set_last_error(format!("wasamo_button_create: {e}"));
+            WASAMO_ERR_RUNTIME
+        }
+    }
+}
+
+unsafe fn collect_children(
+    children: *mut *mut WasamoWidget,
+    count: usize,
+    fn_name: &str,
+) -> Result<Vec<Box<WidgetNode>>, WasamoStatus> {
+    if count == 0 {
+        return Ok(Vec::new());
+    }
+    if children.is_null() {
+        set_last_error(format!("{fn_name}: children is null but count > 0"));
+        return Err(WASAMO_ERR_INVALID_ARG);
+    }
+    let slice = std::slice::from_raw_parts(children, count);
+    // Validate everything before taking ownership of any element so we don't
+    // leak halfway through a malformed call.
+    for &p in slice {
+        if p.is_null() {
+            set_last_error(format!("{fn_name}: children[i] is null"));
+            return Err(WASAMO_ERR_INVALID_ARG);
+        }
+    }
+    let mut out = Vec::with_capacity(count);
+    for &p in slice {
+        out.push(Box::from_raw(p));
+    }
+    Ok(out)
+}
+
+unsafe fn finish_stack(
+    mut node: Box<WidgetNode>,
+    children: Vec<Box<WidgetNode>>,
+    out: *mut *mut WasamoWidget,
+    fn_name: &str,
+) -> WasamoStatus {
+    for c in children {
+        if let Err(e) = node.append_child(c) {
+            set_last_error(format!("{fn_name}: append_child failed: {e}"));
+            return WASAMO_ERR_RUNTIME;
+        }
+    }
+    *out = Box::into_raw(node);
+    clear_last_error();
+    WASAMO_OK
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn wasamo_vstack_create(
+    children: *mut *mut WasamoWidget,
+    count: usize,
+    out: *mut *mut WasamoWidget,
+) -> WasamoStatus {
+    if out.is_null() {
+        set_last_error("wasamo_vstack_create: out is null");
+        return WASAMO_ERR_INVALID_ARG;
+    }
+    *out = ptr::null_mut();
+    let kids = match collect_children(children, count, "wasamo_vstack_create") {
+        Ok(v) => v,
+        Err(s) => return s,
+    };
+    let rt = crate::runtime::get();
+    let node = match WidgetNode::vstack(
+        &rt.compositor, 8.0, 8.0, crate::layout::Alignment::Center,
+    ) {
+        Ok(n) => n,
+        Err(e) => {
+            set_last_error(format!("wasamo_vstack_create: {e}"));
+            return WASAMO_ERR_RUNTIME;
+        }
+    };
+    finish_stack(node, kids, out, "wasamo_vstack_create")
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn wasamo_hstack_create(
+    children: *mut *mut WasamoWidget,
+    count: usize,
+    out: *mut *mut WasamoWidget,
+) -> WasamoStatus {
+    if out.is_null() {
+        set_last_error("wasamo_hstack_create: out is null");
+        return WASAMO_ERR_INVALID_ARG;
+    }
+    *out = ptr::null_mut();
+    let kids = match collect_children(children, count, "wasamo_hstack_create") {
+        Ok(v) => v,
+        Err(s) => return s,
+    };
+    let rt = crate::runtime::get();
+    let node = match WidgetNode::hstack(
+        &rt.compositor, 8.0, 8.0, crate::layout::Alignment::Center,
+    ) {
+        Ok(n) => n,
+        Err(e) => {
+            set_last_error(format!("wasamo_hstack_create: {e}"));
+            return WASAMO_ERR_RUNTIME;
+        }
+    };
+    finish_stack(node, kids, out, "wasamo_hstack_create")
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn wasamo_window_set_root(
+    window: *mut WasamoWindow,
+    root: *mut WasamoWidget,
+) -> WasamoStatus {
+    if window.is_null() {
+        set_last_error("wasamo_window_set_root: window is null");
+        return WASAMO_ERR_INVALID_ARG;
+    }
+    if root.is_null() {
+        set_last_error("wasamo_window_set_root: root is null");
+        return WASAMO_ERR_INVALID_ARG;
+    }
+    let root_box: Box<WidgetNode> = Box::from_raw(root);
+    match crate::window::set_root(&mut *window, root_box) {
+        Ok(()) => {
+            clear_last_error();
+            WASAMO_OK
+        }
+        Err(e) => {
+            set_last_error(format!("wasamo_window_set_root: {e}"));
+            WASAMO_ERR_RUNTIME
+        }
+    }
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn wasamo_button_set_clicked(
+    button: *mut WasamoWidget,
+    callback: WasamoSignalHandlerFn,
+    user_data: *mut std::ffi::c_void,
+    destroy_fn: WasamoDestroyFn,
+    out_token: *mut u64,
+) -> WasamoStatus {
+    let name = b"clicked";
+    wasamo_signal_connect(
+        button,
+        name.as_ptr() as *const c_char,
+        name.len(),
+        callback,
+        user_data,
+        destroy_fn,
+        out_token,
+    )
 }

@@ -30,6 +30,13 @@ int main(void) {
         (void*)&wasamo_unobserve_property,
         (void*)&wasamo_signal_connect,
         (void*)&wasamo_signal_disconnect,
+        /* M1 experimental layer (abi_spec §5). */
+        (void*)&wasamo_text_create,
+        (void*)&wasamo_button_create,
+        (void*)&wasamo_vstack_create,
+        (void*)&wasamo_hstack_create,
+        (void*)&wasamo_window_set_root,
+        (void*)&wasamo_button_set_clicked,
     };
     return (int)(sizeof(fns) / sizeof(fns[0]));
 }

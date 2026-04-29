@@ -182,18 +182,60 @@ WASAMO_EXPORT WasamoStatus WASAMO_API wasamo_signal_disconnect(uint64_t token);
 #define WASAMO_TEXT_CONTENT  3u
 #define WASAMO_TEXT_STYLE    4u
 
-/* All-at-once widget constructors. WASAMO_EXPERIMENTAL.
- * Trees are built bottom-up at construction; post-construction
- * updates go through property R/W (§4.3). See abi_spec.md §5 / §5.1.
+/*
+ * All-at-once widget constructors. WASAMO_EXPERIMENTAL.
  *
- * Declared here when added:
- *   wasamo_vstack_create(WasamoWidget** children, size_t count, WasamoWidget** out)
- *   wasamo_hstack_create(WasamoWidget** children, size_t count, WasamoWidget** out)
- *   wasamo_text_create(const char* content, size_t len, WasamoWidget** out)
- *   wasamo_button_create(const char* label, size_t len, WasamoWidget** out)
- *   wasamo_window_set_root(WasamoWindow*, WasamoWidget* root)
- *   wasamo_button_set_clicked(WasamoWidget*, ...)
+ * Children passed to a container are MOVED into it; after the call
+ * the host's child pointers are stale and must not be reused.
+ * Trees are built bottom-up at construction and are immutable
+ * thereafter — post-construction updates go through property R/W
+ * (§4.3). See abi_spec.md §5 / §5.1.
+ *
+ * Returned widgets are runtime-owned; freeing a widget happens when
+ * the window that received it via wasamo_window_set_root is
+ * destroyed, or on wasamo_shutdown.
  */
+
+WASAMO_EXPERIMENTAL
+WASAMO_EXPORT WasamoStatus WASAMO_API wasamo_text_create(
+    const char*    content_utf8,
+    size_t         content_len,
+    WasamoWidget** out);
+
+WASAMO_EXPERIMENTAL
+WASAMO_EXPORT WasamoStatus WASAMO_API wasamo_button_create(
+    const char*    label_utf8,
+    size_t         label_len,
+    WasamoWidget** out);
+
+WASAMO_EXPERIMENTAL
+WASAMO_EXPORT WasamoStatus WASAMO_API wasamo_vstack_create(
+    WasamoWidget** children,    /* may be NULL when count == 0 */
+    size_t         count,
+    WasamoWidget** out);
+
+WASAMO_EXPERIMENTAL
+WASAMO_EXPORT WasamoStatus WASAMO_API wasamo_hstack_create(
+    WasamoWidget** children,    /* may be NULL when count == 0 */
+    size_t         count,
+    WasamoWidget** out);
+
+WASAMO_EXPERIMENTAL
+WASAMO_EXPORT WasamoStatus WASAMO_API wasamo_window_set_root(
+    WasamoWindow*  window,
+    WasamoWidget*  root);
+
+/*
+ * Convenience wrapper for the most common M1 signal:
+ *   equivalent to wasamo_signal_connect(button, "clicked", 7, ...).
+ */
+WASAMO_EXPERIMENTAL
+WASAMO_EXPORT WasamoStatus WASAMO_API wasamo_button_set_clicked(
+    WasamoWidget*          button,
+    WasamoSignalHandlerFn  callback,
+    void*                  user_data,
+    WasamoDestroyFn        destroy_fn,
+    uint64_t*              out_token);
 
 #ifdef __cplusplus
 } /* extern "C" */

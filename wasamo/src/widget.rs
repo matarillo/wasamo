@@ -562,6 +562,16 @@ impl WidgetNode {
 
     // ── Tree building ─────────────────────────────────────────────────────────
 
+    /// Visit every node in the subtree rooted at `self`, including `self`.
+    /// The visitor receives a raw pointer suitable for registry lookup
+    /// (the same pointer the host received as `WasamoWidget*`).
+    pub fn for_each_ptr(&self, visit: &mut dyn FnMut(*mut WidgetNode)) {
+        visit(self as *const WidgetNode as *mut WidgetNode);
+        for c in &self.children {
+            c.for_each_ptr(visit);
+        }
+    }
+
     pub fn append_child(&mut self, child: Box<WidgetNode>) -> windows::core::Result<()> {
         use windows::core::Interface;
         let parent_container: ContainerVisual = self.visual.cast()?;

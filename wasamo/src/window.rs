@@ -1,4 +1,5 @@
 use crate::runtime;
+use crate::widget::WidgetNode;
 use windows::{
     core::Interface,
     Foundation::Numerics::Vector2,
@@ -43,6 +44,12 @@ pub struct WindowState {
 
     // Tracks whether TrackMouseEvent has been called for the current enter/leave cycle.
     tracking_mouse: bool,
+
+    // Owned widget tree installed via `wasamo_window_set_root`. When set,
+    // wnd_proc auto-routes WM_SIZE / mouse events to it.
+    pub root_widget: Option<Box<WidgetNode>>,
+    // Last reported mouse-down state, for hover/press routing through `root_widget`.
+    mouse_down: bool,
 }
 
 // Safety: same single-thread contract as Runtime.
@@ -68,6 +75,8 @@ pub fn create(title: &str, width: i32, height: i32) -> windows::core::Result<Box
         mouse_leave_fn: None,
         mouse_up_fn: None,
         tracking_mouse: false,
+        root_widget: None,
+        mouse_down: false,
     });
     // Store a raw pointer to WindowState in GWLP_USERDATA so wnd_proc can reach it.
     // Safety: state is heap-allocated (Box) and will outlive the HWND.
@@ -115,6 +124,46 @@ fn create_desktop_window_target(
 
 pub fn show(state: &WindowState) {
     unsafe { let _ = ShowWindow(state.hwnd, SW_SHOW); };
+}
+
+/// Install `root` as the window's content tree, taking ownership of the
+/// subtree. A previously-installed root is detached and dropped after
+/// disconnecting any registry entries it held. Performs an initial
+/// layout pass against the window's current client size.
+pub fn set_root(
+    state: &mut WindowState,
+    root: Box<WidgetNode>,
+) -> windows::core::Result<()> {
+    use windows::Win32::UI::WindowsAndMessaging::GetClientRect;
+    use windows::Win32::Foundation::RECT;
+
+    if let Some(prev) = state.root_widget.take() {
+        prev.for_each_ptr(&mut |p| {
+            crate::registry::remove_for_widget(p as *mut crate::abi::WasamoWidget);
+        });
+        // Detach the previous root visual from the container.
+        let prev_visual: Visual = prev.visual.cast()?;
+        let _ = state.root.Children()?.Remove(&prev_visual);
+        drop(prev);
+    }
+
+    let child_visual: Visual = root.visual.cast()?;
+    state.root.Children()?.InsertAtTop(&child_visual)?;
+
+    // Initial layout against current client size.
+    let mut rect = RECT::default();
+    let (cw, ch) = unsafe {
+        if GetClientRect(state.hwnd, &mut rect).is_ok() {
+            ((rect.right - rect.left) as f32, (rect.bottom - rect.top) as f32)
+        } else {
+            (0.0, 0.0)
+        }
+    };
+    state.root_widget = Some(root);
+    if let Some(r) = state.root_widget.as_mut() {
+        let _ = r.run_layout(cw, ch);
+    }
+    Ok(())
 }
 
 // Try Win11 22H2+ public API first; fall back to Win11 21H2 private attribute.
@@ -203,6 +252,9 @@ unsafe extern "system" fn wnd_proc(
             if let Some(f) = &mut state.resize_fn {
                 f(w, h);
             }
+            if let Some(root) = state.root_widget.as_mut() {
+                let _ = root.run_layout(w, h);
+            }
             return LRESULT(0);
         }
 
@@ -231,6 +283,12 @@ unsafe extern "system" fn wnd_proc(
             if let Some(f) = &mut state.mouse_move_fn {
                 f(x, y);
             }
+            if let Some(root) = state.root_widget.as_mut() {
+                let _ = root.update_hover(
+                    &runtime::get().compositor,
+                    x, y, state.mouse_down,
+                );
+            }
             return LRESULT(0);
         }
 
@@ -239,14 +297,24 @@ unsafe extern "system" fn wnd_proc(
             if let Some(f) = &mut state.mouse_leave_fn {
                 f();
             }
+            if let Some(root) = state.root_widget.as_mut() {
+                let _ = root.clear_hover(&runtime::get().compositor);
+            }
             return LRESULT(0);
         }
 
         if msg == WM_LBUTTONDOWN {
             let x = (lparam.0 & 0xFFFF) as i16 as i32;
             let y = ((lparam.0 >> 16) & 0xFFFF) as i16 as i32;
+            state.mouse_down = true;
             if let Some(f) = &mut state.mouse_down_fn {
                 f(x, y);
+            }
+            if let Some(root) = state.root_widget.as_mut() {
+                let _ = root.update_hover(
+                    &runtime::get().compositor,
+                    x, y, true,
+                );
             }
             return LRESULT(0);
         }
@@ -254,8 +322,16 @@ unsafe extern "system" fn wnd_proc(
         if msg == WM_LBUTTONUP {
             let x = (lparam.0 & 0xFFFF) as i16 as i32;
             let y = ((lparam.0 >> 16) & 0xFFFF) as i16 as i32;
+            state.mouse_down = false;
             if let Some(f) = &mut state.mouse_up_fn {
                 f(x, y);
+            }
+            if let Some(root) = state.root_widget.as_mut() {
+                root.hit_test_click(x, y);
+                let _ = root.update_hover(
+                    &runtime::get().compositor,
+                    x, y, false,
+                );
             }
             return LRESULT(0);
         }

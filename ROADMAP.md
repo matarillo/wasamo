@@ -158,7 +158,7 @@ items. The checklist below reflects that decomposition.
 - [x] Queued emission machinery: re-entry flag at every public ABI
   entry; emission queue drained on exit; verify no callback fires
   during a `wasamo_*` call on the same thread
-- [ ] M1 experimental layer: all-at-once widget constructors
+- [x] M1 experimental layer: all-at-once widget constructors
   for VStack / HStack / Text / Button (children passed at
   construction; post-construction updates via property R/W);
   `wasamo_button_set_clicked` direct callback; per-widget
