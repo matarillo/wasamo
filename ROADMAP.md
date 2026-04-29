@@ -150,7 +150,7 @@ items. The checklist below reflects that decomposition.
   property ID enumeration + dispatch (Button label/style, Text
   content/style at minimum); `wasamo_get_property` /
   `wasamo_set_property` wired
-- [ ] Signal / observer registry: token table; `(fn, user_data,
+- [x] Signal / observer registry: token table; `(fn, user_data,
   destroy_fn)` lifecycle; automatic disconnect on widget/window destroy
   and on `wasamo_shutdown`; `wasamo_signal_connect` /
   `wasamo_signal_disconnect`, `wasamo_observe_property` /

@@ -1,5 +1,6 @@
 mod abi;
 mod layout;
+mod registry;
 mod runtime;
 mod text;
 mod widget;

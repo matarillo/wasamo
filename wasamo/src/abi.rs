@@ -133,10 +133,11 @@ pub extern "C" fn wasamo_init() -> WasamoStatus {
 
 #[no_mangle]
 pub extern "C" fn wasamo_shutdown() {
-    // M1: runtime state is process-global and lives until process exit.
-    // A real shutdown (releasing Compositor / DispatcherQueue, severing all
-    // signal/observer registrations) lands together with the registry
-    // implementation. For now this is a documented no-op.
+    // M1: Compositor / DispatcherQueue are kept alive for the process; we
+    // only sever signal/observer registrations and clear thread-local
+    // diagnostic buffers. Each surviving destroy_fn is invoked exactly
+    // once (abi_spec §4.4 / §4.5).
+    crate::registry::drain_all();
     clear_last_error();
 }
 
@@ -359,39 +360,93 @@ pub unsafe extern "C" fn wasamo_set_property(
 
 #[no_mangle]
 pub unsafe extern "C" fn wasamo_observe_property(
-    _widget: *mut WasamoWidget,
-    _property_id: u32,
-    _callback: WasamoPropertyObserverFn,
-    _user_data: *mut std::ffi::c_void,
-    _destroy_fn: WasamoDestroyFn,
-    _out_token: *mut u64,
+    widget: *mut WasamoWidget,
+    property_id: u32,
+    callback: WasamoPropertyObserverFn,
+    user_data: *mut std::ffi::c_void,
+    destroy_fn: WasamoDestroyFn,
+    out_token: *mut u64,
 ) -> WasamoStatus {
-    set_last_error("wasamo_observe_property: not yet implemented (phase 6 in progress)");
-    WASAMO_ERR_RUNTIME
+    if widget.is_null() {
+        set_last_error("wasamo_observe_property: widget is null");
+        return WASAMO_ERR_INVALID_ARG;
+    }
+    if callback.is_none() {
+        set_last_error("wasamo_observe_property: callback is null");
+        return WASAMO_ERR_INVALID_ARG;
+    }
+    if out_token.is_null() {
+        set_last_error("wasamo_observe_property: out_token is null");
+        return WASAMO_ERR_INVALID_ARG;
+    }
+    let token = crate::registry::add_observer(
+        widget, property_id, callback, user_data, destroy_fn,
+    );
+    *out_token = token;
+    clear_last_error();
+    WASAMO_OK
 }
 
 #[no_mangle]
-pub extern "C" fn wasamo_unobserve_property(_token: u64) -> WasamoStatus {
-    set_last_error("wasamo_unobserve_property: not yet implemented (phase 6 in progress)");
-    WASAMO_ERR_RUNTIME
+pub extern "C" fn wasamo_unobserve_property(token: u64) -> WasamoStatus {
+    if crate::registry::remove(token) {
+        clear_last_error();
+        WASAMO_OK
+    } else {
+        set_last_error("wasamo_unobserve_property: unknown token");
+        WASAMO_ERR_INVALID_ARG
+    }
 }
 
 #[no_mangle]
 pub unsafe extern "C" fn wasamo_signal_connect(
-    _widget: *mut WasamoWidget,
-    _signal_name_utf8: *const c_char,
-    _name_len: usize,
-    _callback: WasamoSignalHandlerFn,
-    _user_data: *mut std::ffi::c_void,
-    _destroy_fn: WasamoDestroyFn,
-    _out_token: *mut u64,
+    widget: *mut WasamoWidget,
+    signal_name_utf8: *const c_char,
+    name_len: usize,
+    callback: WasamoSignalHandlerFn,
+    user_data: *mut std::ffi::c_void,
+    destroy_fn: WasamoDestroyFn,
+    out_token: *mut u64,
 ) -> WasamoStatus {
-    set_last_error("wasamo_signal_connect: not yet implemented (phase 6 in progress)");
-    WASAMO_ERR_RUNTIME
+    if widget.is_null() {
+        set_last_error("wasamo_signal_connect: widget is null");
+        return WASAMO_ERR_INVALID_ARG;
+    }
+    if callback.is_none() {
+        set_last_error("wasamo_signal_connect: callback is null");
+        return WASAMO_ERR_INVALID_ARG;
+    }
+    if out_token.is_null() {
+        set_last_error("wasamo_signal_connect: out_token is null");
+        return WASAMO_ERR_INVALID_ARG;
+    }
+    if signal_name_utf8.is_null() || name_len == 0 {
+        set_last_error("wasamo_signal_connect: signal_name is empty");
+        return WASAMO_ERR_INVALID_ARG;
+    }
+    let bytes = std::slice::from_raw_parts(signal_name_utf8 as *const u8, name_len);
+    let name = match std::str::from_utf8(bytes) {
+        Ok(s) => s.to_owned(),
+        Err(_) => {
+            set_last_error("wasamo_signal_connect: signal_name is not valid UTF-8");
+            return WASAMO_ERR_INVALID_ARG;
+        }
+    };
+    let token = crate::registry::add_signal(
+        widget, name, callback, user_data, destroy_fn,
+    );
+    *out_token = token;
+    clear_last_error();
+    WASAMO_OK
 }
 
 #[no_mangle]
-pub extern "C" fn wasamo_signal_disconnect(_token: u64) -> WasamoStatus {
-    set_last_error("wasamo_signal_disconnect: not yet implemented (phase 6 in progress)");
-    WASAMO_ERR_RUNTIME
+pub extern "C" fn wasamo_signal_disconnect(token: u64) -> WasamoStatus {
+    if crate::registry::remove(token) {
+        clear_last_error();
+        WASAMO_OK
+    } else {
+        set_last_error("wasamo_signal_disconnect: unknown token");
+        WASAMO_ERR_INVALID_ARG
+    }
 }
