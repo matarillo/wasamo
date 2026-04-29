@@ -1,6 +1,9 @@
 # Wasamo Roadmap
 
 Milestones are defined by acceptance criteria, not dates.
+Phase task lists are working hypotheses for satisfying those
+criteria; they may be revised during a phase's pre-implementation
+ADR review (see [docs/decisions/README.md](./docs/decisions/README.md#pre-doc-discipline)).
 For the full vision and rationale see [VISION.md](./VISION.md).
 
 ---

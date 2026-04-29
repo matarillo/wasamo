@@ -69,3 +69,38 @@ When a later phase overrides a prior decision:
 2. In the **new entry**, add a `Supersedes` line:  
    `Supersedes: DD-P<N>-<seq> (<phase-N-file>.md)`
 3. Never delete or rewrite old entries — keep them as historical record.
+
+## Pre-doc discipline
+
+A phase ADR's pre-doc must verify that the proposed approach serves
+the **acceptance criterion** the phase is meant to satisfy, not merely
+implement the ROADMAP task list literally.
+
+ROADMAP phase task lists are working hypotheses written before pre-doc
+began. They are proposals, not constraints. If pre-doc surfaces a
+better approach to the same acceptance criterion, the task list is
+revised as part of the pre-doc work — the ROADMAP entry is updated
+alongside the ADR.
+
+The discipline:
+
+1. Identify the phase's acceptance criterion (from VISION §7 /
+   ROADMAP milestone-level goal). This is the constraint.
+2. Treat the phase's task list as one candidate path to that
+   criterion. Ask: are there other paths? Does the task list actually
+   serve the criterion, or does it conflate means with ends?
+3. If pre-doc finds the acceptance criterion itself was misframed
+   (e.g. it elevates a particular implementation tactic to the level
+   of the criterion), file a vision ADR (`vision-<topic>.md`)
+   revising VISION/ROADMAP at that level before continuing with the
+   phase ADR.
+
+The Phase 5 ADR pair is a worked example. The original ROADMAP task
+list ("ImplicitAnimationCollection animates Offset/Size/Opacity")
+served a misframed acceptance criterion, requiring both a
+vision-level revision ([vision-m1-acceptance-criteria.md](./vision-m1-acceptance-criteria.md))
+and a phase-level redirection ([phase-5-implicit-animations-dev-api.md](./phase-5-implicit-animations-dev-api.md)
+superseded by its replacement). Without pre-doc discipline the
+original task list would have been implemented as written, embedding
+a behavior that contradicts the milestone's actual acceptance
+criterion.
