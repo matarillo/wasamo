@@ -80,26 +80,32 @@ For the full vision and rationale see [VISION.md](./VISION.md).
 - [ ] Unit tests for hit-testing coordinate logic
 - [ ] `docs/decisions/phase-4-widget-implementation.md` updated
 
-### Phase 5 — Visual Layer integration sanity check (dev-only animation helper)
+### Phase 5 — Compositor independence check
 
 Phase 5 verifies that the Visual Layer is correctly engaged on the DWM
 compositor thread. Wasamo's default property-change behavior remains
 **instant** (consistent with SwiftUI / Compose / Flutter / CSS); the
-public opt-in animation API is deferred to M5. This phase implements
-only an internal, dev-only helper used by a verification binary. See
+public opt-in animation API is deferred to M5. This phase delivers
+two things: (1) Button's internal hover/press transition animation
+as a permanent product behavior aligned with industry convention
+(widgets animating their own state transitions), and (2) a
+verification example exhibiting a continuous synthetic visual that
+demonstrates compositor-thread independence under app-thread blocking.
+See
 [docs/decisions/vision-m1-acceptance-criteria.md](./docs/decisions/vision-m1-acceptance-criteria.md)
-(vision-level decision DD-V-001) and
-[docs/decisions/phase-5-implicit-animations-dev-api.md](./docs/decisions/phase-5-implicit-animations-dev-api.md)
-(Phase 5 implementation decisions DD-P5-001..003).
+(DD-V-001) and
+[docs/decisions/phase-5-compositor-independence-check.md](./docs/decisions/phase-5-compositor-independence-check.md)
+(DD-P5-004..006).
 
 - [x] `docs/decisions/vision-m1-acceptance-criteria.md` created, owner agreement obtained (DD-V-001)
-- [x] `docs/decisions/phase-5-implicit-animations-dev-api.md` created, owner agreement obtained (DD-P5-001..003)
-- [ ] Internal `wasamo::dev` module with `set_dev_implicit_animations(bool)` (Rust-only, **not** exposed via C ABI)
-  - Offset: `Vector3KeyFrameAnimation` (150 ms, cubic-ease)
-  - Size: `Vector2KeyFrameAnimation` (150 ms)
-  - Opacity: `ScalarKeyFrameAnimation` (100 ms)
-- [ ] `examples/phase5_visual_check.rs` exercising the dev API and compositor-thread independence (Space inserts a child, I toggles dev animations, B blocks the app thread for 2 s)
-- [ ] `docs/architecture.md` animation section added (documents the deferred public API and the dev helper's scope/removal plan)
+- [x] `docs/decisions/phase-5-implicit-animations-dev-api.md` (DD-P5-001..003) — agreed but **superseded**; pre-doc review found the premise contradicted DD-V-001 (see ADR notes)
+- [x] `docs/decisions/phase-5-compositor-independence-check.md` created, owner agreement obtained (DD-P5-004..006)
+- [ ] Button hover/press brush transition animated with `ColorKeyFrameAnimation` (150 ms, cubic ease; internal Button implementation, no public API)
+- [ ] `examples/phase5_visual_check.rs`:
+  - Existing Button group + a corner `SpriteVisual` with a continuous looping `Vector3KeyFrameAnimation` (~2 s period)
+  - 'B' blocks the app thread for ~2 s; the synthetic visual must continue animating during the block
+- [ ] Minimum runtime hook for the verification example to attach a Visual to the root container (`pub(crate)` accessor or narrow `wasamo::dev` helper limited to root-Visual access — **not** the property-change toggle proposed by the superseded ADR)
+- [ ] `docs/architecture.md` animation section added (distinguishes widget-internal state-transition animation from the deferred public property-change API; latter belongs to M5)
 
 ### Phase 6 — C ABI header
 
