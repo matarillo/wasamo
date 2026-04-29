@@ -182,13 +182,17 @@ WASAMO_EXPORT WasamoStatus WASAMO_API wasamo_signal_disconnect(uint64_t token);
 #define WASAMO_TEXT_CONTENT  3u
 #define WASAMO_TEXT_STYLE    4u
 
-/* Imperative widget builders. WASAMO_EXPERIMENTAL.
- * Finalised during Phase 6 implementation; declared here when added:
- *   wasamo_vstack_create / wasamo_hstack_create /
- *   wasamo_text_create / wasamo_button_create /
- *   wasamo_container_append_child /
- *   wasamo_window_set_root /
- *   wasamo_button_set_clicked
+/* All-at-once widget constructors. WASAMO_EXPERIMENTAL.
+ * Trees are built bottom-up at construction; post-construction
+ * updates go through property R/W (§4.3). See abi_spec.md §5 / §5.1.
+ *
+ * Declared here when added:
+ *   wasamo_vstack_create(WasamoWidget** children, size_t count, WasamoWidget** out)
+ *   wasamo_hstack_create(WasamoWidget** children, size_t count, WasamoWidget** out)
+ *   wasamo_text_create(const char* content, size_t len, WasamoWidget** out)
+ *   wasamo_button_create(const char* label, size_t len, WasamoWidget** out)
+ *   wasamo_window_set_root(WasamoWindow*, WasamoWidget* root)
+ *   wasamo_button_set_clicked(WasamoWidget*, ...)
  */
 
 #ifdef __cplusplus

@@ -344,9 +344,16 @@ The exact set of experimental functions is finalised when
 `wasamo.h` is implemented. The minimum needed for Phase 8 "Hello
 Counter":
 
-- An imperative widget-tree builder covering VStack / HStack /
-  Text / Button (`wasamo_vstack_create`, `wasamo_button_create`,
-  `wasamo_container_append_child`, etc.).
+- **All-at-once widget constructors** for VStack / HStack / Text /
+  Button. Container constructors take a children array at
+  construction time; the widget tree is built bottom-up and is
+  immutable thereafter. Updates to a constructed tree happen via
+  property R/W (§4.3), not by mutating the tree structure:
+  `wasamo_vstack_create(WasamoWidget** children, size_t count, WasamoWidget** out)`,
+  `wasamo_hstack_create(...)`,
+  `wasamo_text_create(const char* content, size_t len, WasamoWidget** out)`,
+  `wasamo_button_create(const char* label, size_t len, WasamoWidget** out)`,
+  `wasamo_window_set_root(WasamoWindow*, WasamoWidget* root)`.
 - `wasamo_button_set_clicked` — direct typed callback for the
   most common signal in M1 demos. Equivalent to
   `wasamo_signal_connect(button, "clicked", ...)` but without
@@ -357,6 +364,52 @@ Counter":
 
 These symbols are removed (or migrated into the stable core) when
 `wasamoc` codegen lands in M2.
+
+### 5.1 What M1 experimental verifies, and what it does not
+
+The shape above is deliberately the smallest experimental layer
+that lets Phase 8 "Hello Counter" run, while keeping the eventual
+M2 direction (SwiftUI/Compose-style codegen vs Slint-style
+IR/runtime interpretation — deferred question (b) in
+[../decisions/phase-6-c-abi.md](decisions/phase-6-c-abi.md)) open.
+
+**M1 experimental verifies:**
+
+- **Stable-core property R/W as the post-construction update
+  channel.** Hello Counter's `+/-` mutates `Text.content` via
+  `wasamo_set_property`; this is the one runtime path both
+  candidate M2 directions need.
+- **Signal registry token lifecycle.** `wasamo_button_set_clicked`
+  exercises both the direct-callback experimental shape and the
+  underlying stable `wasamo_signal_connect` path.
+- **Queued emission re-entrancy contract** on the UI thread (§6).
+- **Bottom-up immutable tree construction** as one viable
+  building primitive. This matches DSL semantics (`.ui` declares
+  a tree, not a mutation sequence).
+
+**M1 experimental does NOT verify, and intentionally does not
+attempt to:**
+
+- **Tree mutation primitives** (incremental `append_child`,
+  widget destroy of unattached subtrees, reparenting). Whether
+  these belong in any future ABI surface depends on the
+  resolution of deferred question (b); investigated in M2 pre-doc.
+- **Codegen vs IR design alternatives.** This is the core M2
+  question and belongs to M2 pre-doc, not M1 implementation.
+  Prototyping multiple candidates is M2's job.
+- **Reactive primitives** (conditional rendering, list
+  rendering, fine-grained reactivity). These are M2+ scope; M1
+  validates only static tree construction with property-level
+  updates.
+- **`.ui` DSL → ABI lowering.** M1 wasamoc is parser-only by
+  design; host code constructs the equivalent tree directly
+  through the experimental layer. The lowering itself is M2
+  scope.
+
+This division is recorded so M1 implementation work is not
+inflated by speculative future-proofing, and so M2 pre-doc starts
+from a clean slate rather than from M1 stopgap shapes that may
+read as commitments.
 
 ## 6. Threading and re-entrancy
 

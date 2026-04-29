@@ -158,10 +158,12 @@ items. The checklist below reflects that decomposition.
 - [ ] Queued emission machinery: re-entry flag at every public ABI
   entry; emission queue drained on exit; verify no callback fires
   during a `wasamo_*` call on the same thread
-- [ ] M1 experimental layer: imperative widget builder for
-  VStack/HStack/Text/Button; `wasamo_button_set_clicked` direct
-  callback; per-widget property-ID constants. All marked
-  `WASAMO_EXPERIMENTAL`.
+- [ ] M1 experimental layer: all-at-once widget constructors
+  for VStack / HStack / Text / Button (children passed at
+  construction; post-construction updates via property R/W);
+  `wasamo_button_set_clicked` direct callback; per-widget
+  property-ID constants. All marked `WASAMO_EXPERIMENTAL`. See
+  `docs/abi_spec.md` §5 / §5.1 for verification scope.
 - [x] CI: C smoke test that **compiles and links** a TU including
   `wasamo.h` against `wasamo.lib` (MSVC + Clang)
 - [ ] `docs/abi_spec.md` finalised to match `wasamo.h`; status updated
