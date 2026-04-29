@@ -146,7 +146,7 @@ items. The checklist below reflects that decomposition.
 - [x] Existing `wasamo_*` (init / window_create / show / destroy / run)
   migrated to `WasamoStatus` + out-param shape; `wasamo_shutdown` and
   `wasamo_quit` added
-- [ ] Property accessor infrastructure on `WidgetNode`: per-widget
+- [x] Property accessor infrastructure on `WidgetNode`: per-widget
   property ID enumeration + dispatch (Button label/style, Text
   content/style at minimum); `wasamo_get_property` /
   `wasamo_set_property` wired

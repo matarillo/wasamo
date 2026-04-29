@@ -14,7 +14,7 @@ use std::ffi::CString;
 use std::os::raw::c_char;
 use std::ptr;
 
-use crate::widget::WidgetNode;
+use crate::widget::{PropertyError, PropertyValue, WidgetNode};
 use crate::window::WindowState;
 
 // ── Type aliases for opaque handles ──────────────────────────────────────────
@@ -100,6 +100,10 @@ pub type WasamoPropertyObserverFn = Option<
 
 thread_local! {
     static LAST_ERROR: RefCell<Option<CString>> = const { RefCell::new(None) };
+    // Holds the most recent string returned through `wasamo_get_property`.
+    // `WasamoValue.v_string.ptr` points into this buffer; valid until the
+    // next ABI call on the same thread (abi_spec §3.3, §2.3 rule 2).
+    static PROP_STRING_BUF: RefCell<Option<CString>> = const { RefCell::new(None) };
 }
 
 pub(crate) fn set_last_error(msg: impl Into<Vec<u8>>) {
@@ -229,24 +233,128 @@ pub extern "C" fn wasamo_quit() {
 // Phase 6. The function symbols are declared here so the header and the
 // Rust extern "C" surface stay in alignment from the start.
 
+fn property_error_to_status(e: &PropertyError) -> WasamoStatus {
+    match e {
+        PropertyError::UnknownId | PropertyError::TypeMismatch => WASAMO_ERR_INVALID_ARG,
+        PropertyError::Runtime(_) => WASAMO_ERR_RUNTIME,
+    }
+}
+
+fn property_error_msg(prefix: &str, e: &PropertyError) -> String {
+    match e {
+        PropertyError::UnknownId => format!("{prefix}: unknown property id for this widget"),
+        PropertyError::TypeMismatch => format!("{prefix}: value type does not match property"),
+        PropertyError::Runtime(s) => format!("{prefix}: {s}"),
+    }
+}
+
+unsafe fn read_property_value(
+    value: *const WasamoValue,
+) -> Result<PropertyValue, &'static str> {
+    if value.is_null() {
+        return Err("value is null");
+    }
+    let v = &*value;
+    match v.tag {
+        WASAMO_VALUE_I32 => Ok(PropertyValue::I32(v.payload.v_i32)),
+        WASAMO_VALUE_STRING => {
+            let view = v.payload.v_string;
+            let s = if view.ptr.is_null() || view.len == 0 {
+                String::new()
+            } else {
+                let bytes = std::slice::from_raw_parts(view.ptr as *const u8, view.len);
+                std::str::from_utf8(bytes)
+                    .map_err(|_| "string payload is not valid UTF-8")?
+                    .to_owned()
+            };
+            Ok(PropertyValue::String(s))
+        }
+        _ => Err("unsupported value tag"),
+    }
+}
+
+fn write_property_value(out: &mut WasamoValue, value: PropertyValue) {
+    match value {
+        PropertyValue::I32(v) => {
+            out.tag = WASAMO_VALUE_I32;
+            out.payload = WasamoValuePayload { v_i32: v };
+        }
+        PropertyValue::String(s) => {
+            // Store the CString in TLS; the pointer we hand back stays valid
+            // until the next ABI call on this thread overwrites the slot.
+            let cs = CString::new(s).unwrap_or_else(|_| {
+                CString::new("(string contained NUL)").unwrap()
+            });
+            let len = cs.as_bytes().len();
+            // Borrow the buffer slot, replace its contents, and re-borrow to
+            // grab a stable pointer into the now-owned CString.
+            let ptr = PROP_STRING_BUF.with(|cell| {
+                let mut slot = cell.borrow_mut();
+                *slot = Some(cs);
+                slot.as_ref().unwrap().as_ptr()
+            });
+            out.tag = WASAMO_VALUE_STRING;
+            out.payload = WasamoValuePayload {
+                v_string: WasamoStringView { ptr, len },
+            };
+        }
+    }
+}
+
 #[no_mangle]
 pub unsafe extern "C" fn wasamo_get_property(
-    _widget: *mut WasamoWidget,
-    _property_id: u32,
-    _out_value: *mut WasamoValue,
+    widget: *mut WasamoWidget,
+    property_id: u32,
+    out_value: *mut WasamoValue,
 ) -> WasamoStatus {
-    set_last_error("wasamo_get_property: not yet implemented (phase 6 in progress)");
-    WASAMO_ERR_RUNTIME
+    if widget.is_null() {
+        set_last_error("wasamo_get_property: widget is null");
+        return WASAMO_ERR_INVALID_ARG;
+    }
+    if out_value.is_null() {
+        set_last_error("wasamo_get_property: out_value is null");
+        return WASAMO_ERR_INVALID_ARG;
+    }
+    match (*widget).get_property(property_id) {
+        Ok(value) => {
+            write_property_value(&mut *out_value, value);
+            clear_last_error();
+            WASAMO_OK
+        }
+        Err(e) => {
+            set_last_error(property_error_msg("wasamo_get_property", &e));
+            property_error_to_status(&e)
+        }
+    }
 }
 
 #[no_mangle]
 pub unsafe extern "C" fn wasamo_set_property(
-    _widget: *mut WasamoWidget,
-    _property_id: u32,
-    _value: *const WasamoValue,
+    widget: *mut WasamoWidget,
+    property_id: u32,
+    value: *const WasamoValue,
 ) -> WasamoStatus {
-    set_last_error("wasamo_set_property: not yet implemented (phase 6 in progress)");
-    WASAMO_ERR_RUNTIME
+    if widget.is_null() {
+        set_last_error("wasamo_set_property: widget is null");
+        return WASAMO_ERR_INVALID_ARG;
+    }
+    let pv = match read_property_value(value) {
+        Ok(v) => v,
+        Err(msg) => {
+            set_last_error(format!("wasamo_set_property: {msg}"));
+            return WASAMO_ERR_INVALID_ARG;
+        }
+    };
+    match (*widget).set_property(property_id, &pv) {
+        Ok(()) => {
+            clear_last_error();
+            WASAMO_OK
+        }
+        Err(e) => {
+            set_last_error(property_error_msg("wasamo_set_property", &e));
+            property_error_to_status(&e)
+        }
+    }
 }
 
 #[no_mangle]

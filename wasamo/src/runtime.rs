@@ -8,8 +8,11 @@ use windows::{
     UI::Composition::Compositor,
 };
 
+use crate::text::TextRenderer;
+
 pub struct Runtime {
     pub compositor: Compositor,
+    pub text_renderer: TextRenderer,
     // Kept alive for the process lifetime; dropping it shuts down the DQ.
     _dq_controller: DispatcherQueueController,
 }
@@ -32,8 +35,9 @@ pub fn init() -> windows::core::Result<()> {
     };
     let dq_controller = unsafe { CreateDispatcherQueueController(options)? };
     let compositor = Compositor::new()?;
+    let text_renderer = TextRenderer::new(&compositor)?;
     RUNTIME
-        .set(Runtime { compositor, _dq_controller: dq_controller })
+        .set(Runtime { compositor, text_renderer, _dq_controller: dq_controller })
         .ok();
     Ok(())
 }

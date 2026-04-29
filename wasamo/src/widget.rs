@@ -48,8 +48,65 @@ enum WidgetData {
     Rectangle,
     VStack { spacing: f32, padding: f32, alignment: Alignment },
     HStack { spacing: f32, padding: f32, alignment: Alignment },
-    Text,
+    Text { content: String, style: TypographyStyle },
     Button(Box<ButtonData>),
+}
+
+// ── Property dispatch (M1 experimental property IDs from wasamo.h §5) ─────────
+
+pub const PROP_BUTTON_LABEL: u32 = 1;
+pub const PROP_BUTTON_STYLE: u32 = 2;
+pub const PROP_TEXT_CONTENT: u32 = 3;
+pub const PROP_TEXT_STYLE: u32 = 4;
+
+#[derive(Debug, Clone)]
+pub enum PropertyValue {
+    I32(i32),
+    String(String),
+}
+
+#[derive(Debug)]
+pub enum PropertyError {
+    UnknownId,
+    TypeMismatch,
+    Runtime(String),
+}
+
+impl From<windows::core::Error> for PropertyError {
+    fn from(e: windows::core::Error) -> Self {
+        PropertyError::Runtime(format!("{e}"))
+    }
+}
+
+fn button_style_to_i32(s: ButtonStyle) -> i32 {
+    match s { ButtonStyle::Default => 0, ButtonStyle::Accent => 1 }
+}
+
+fn button_style_from_i32(v: i32) -> Option<ButtonStyle> {
+    match v {
+        0 => Some(ButtonStyle::Default),
+        1 => Some(ButtonStyle::Accent),
+        _ => None,
+    }
+}
+
+fn typography_to_i32(s: TypographyStyle) -> i32 {
+    match s {
+        TypographyStyle::Caption  => 0,
+        TypographyStyle::Body     => 1,
+        TypographyStyle::Subtitle => 2,
+        TypographyStyle::Title    => 3,
+    }
+}
+
+fn typography_from_i32(v: i32) -> Option<TypographyStyle> {
+    match v {
+        0 => Some(TypographyStyle::Caption),
+        1 => Some(TypographyStyle::Body),
+        2 => Some(TypographyStyle::Subtitle),
+        3 => Some(TypographyStyle::Title),
+        _ => None,
+    }
 }
 
 // ── WidgetNode ────────────────────────────────────────────────────────────────
@@ -131,7 +188,7 @@ impl WidgetNode {
         let brush: CompositionSurfaceBrush = compositor.CreateSurfaceBrushWithSurface(&surface)?;
         visual.SetBrush(&brush)?;
         Ok(Box::new(Self {
-            data: WidgetData::Text,
+            data: WidgetData::Text { content: text.to_owned(), style },
             width: SizeConstraint::Fixed(w),
             height: SizeConstraint::Fixed(h),
             visual,
@@ -222,6 +279,180 @@ impl WidgetNode {
         if let WidgetData::Button(ref mut btn) = self.data {
             btn.clicked_fn = Some(Box::new(f));
         }
+    }
+
+    // ── Property R/W (wasamo.h §4.3 + §5 experimental property IDs) ───────────
+    //
+    // Dispatch is enum-on-`WidgetData`: each variant accepts only the IDs that
+    // belong to it; everything else returns `UnknownId`. Types that do not
+    // match the property's declared type return `TypeMismatch`.
+
+    pub fn get_property(&self, id: u32) -> Result<PropertyValue, PropertyError> {
+        match (&self.data, id) {
+            (WidgetData::Button(btn), PROP_BUTTON_LABEL) => {
+                Ok(PropertyValue::String(btn.label_text.clone()))
+            }
+            (WidgetData::Button(btn), PROP_BUTTON_STYLE) => {
+                Ok(PropertyValue::I32(button_style_to_i32(btn.style)))
+            }
+            (WidgetData::Text { content, .. }, PROP_TEXT_CONTENT) => {
+                Ok(PropertyValue::String(content.clone()))
+            }
+            (WidgetData::Text { style, .. }, PROP_TEXT_STYLE) => {
+                Ok(PropertyValue::I32(typography_to_i32(*style)))
+            }
+            _ => Err(PropertyError::UnknownId),
+        }
+    }
+
+    pub fn set_property(
+        &mut self,
+        id: u32,
+        value: &PropertyValue,
+    ) -> Result<(), PropertyError> {
+        match (&mut self.data, id) {
+            (WidgetData::Button(_), PROP_BUTTON_LABEL) => {
+                let s = match value {
+                    PropertyValue::String(s) => s.clone(),
+                    _ => return Err(PropertyError::TypeMismatch),
+                };
+                self.update_button_label(&s)
+            }
+            (WidgetData::Button(_), PROP_BUTTON_STYLE) => {
+                let v = match value {
+                    PropertyValue::I32(v) => *v,
+                    _ => return Err(PropertyError::TypeMismatch),
+                };
+                let new_style =
+                    button_style_from_i32(v).ok_or(PropertyError::TypeMismatch)?;
+                self.update_button_style(new_style)
+            }
+            (WidgetData::Text { .. }, PROP_TEXT_CONTENT) => {
+                let s = match value {
+                    PropertyValue::String(s) => s.clone(),
+                    _ => return Err(PropertyError::TypeMismatch),
+                };
+                self.update_text_content(&s)
+            }
+            (WidgetData::Text { .. }, PROP_TEXT_STYLE) => {
+                let v = match value {
+                    PropertyValue::I32(v) => *v,
+                    _ => return Err(PropertyError::TypeMismatch),
+                };
+                let new_style =
+                    typography_from_i32(v).ok_or(PropertyError::TypeMismatch)?;
+                self.update_text_style(new_style)
+            }
+            _ => Err(PropertyError::UnknownId),
+        }
+    }
+
+    fn update_button_label(&mut self, new_label: &str) -> Result<(), PropertyError> {
+        let rt = crate::runtime::get();
+        let compositor = &rt.compositor;
+        let renderer = &rt.text_renderer;
+
+        let WidgetData::Button(ref mut btn) = self.data else {
+            return Err(PropertyError::UnknownId);
+        };
+        let label_style = btn.label_style;
+        let (lw, lh) = renderer.measure(new_label, label_style)?;
+        let surface = renderer.draw_text(
+            new_label,
+            label_style,
+            lw.max(1.0),
+            lh.max(1.0),
+            Color { A: 255, R: 255, G: 255, B: 255 },
+        )?;
+        let label_brush: CompositionSurfaceBrush =
+            compositor.CreateSurfaceBrushWithSurface(&surface)?;
+        btn.label_visual.SetBrush(&label_brush)?;
+
+        use windows::core::Interface;
+        const PAD_H: f32 = 16.0;
+        const PAD_V: f32 = 8.0;
+        let label_vis: Visual = btn.label_visual.cast()?;
+        label_vis.SetOffset(Vector3 { X: PAD_H, Y: PAD_V, Z: 0.0 })?;
+        label_vis.SetSize(Vector2 { X: lw, Y: lh })?;
+
+        btn.label_text = new_label.to_owned();
+        // Natural size updates; takes effect on the next layout pass.
+        self.width = SizeConstraint::Fixed(lw + PAD_H * 2.0);
+        self.height = SizeConstraint::Fixed(lh + PAD_V * 2.0);
+        Ok(())
+    }
+
+    fn update_button_style(&mut self, new_style: ButtonStyle) -> Result<(), PropertyError> {
+        let rt = crate::runtime::get();
+        let compositor = &rt.compositor;
+        let WidgetData::Button(ref mut btn) = self.data else {
+            return Err(PropertyError::UnknownId);
+        };
+        if btn.style == new_style {
+            return Ok(());
+        }
+        btn.style = new_style;
+        let target = button_state_color(btn.style, btn.state, btn.accent);
+        let new_brush = compositor.CreateColorBrushWithColor(target)?;
+        self.visual.SetBrush(&new_brush)?;
+        btn.bg_brush = new_brush;
+        Ok(())
+    }
+
+    fn update_text_content(&mut self, new_content: &str) -> Result<(), PropertyError> {
+        let rt = crate::runtime::get();
+        let compositor = &rt.compositor;
+        let renderer = &rt.text_renderer;
+
+        let WidgetData::Text { ref mut content, style } = self.data else {
+            return Err(PropertyError::UnknownId);
+        };
+        let style = style;
+        let (w, h) = renderer.measure(new_content, style)?;
+        let surface = renderer.draw_text(
+            new_content,
+            style,
+            w.max(1.0),
+            h.max(1.0),
+            Color { A: 255, R: 255, G: 255, B: 255 },
+        )?;
+        let brush: CompositionSurfaceBrush =
+            compositor.CreateSurfaceBrushWithSurface(&surface)?;
+        self.visual.SetBrush(&brush)?;
+
+        *content = new_content.to_owned();
+        self.width = SizeConstraint::Fixed(w);
+        self.height = SizeConstraint::Fixed(h);
+        Ok(())
+    }
+
+    fn update_text_style(&mut self, new_style: TypographyStyle) -> Result<(), PropertyError> {
+        let rt = crate::runtime::get();
+        let compositor = &rt.compositor;
+        let renderer = &rt.text_renderer;
+
+        let WidgetData::Text { ref mut content, ref mut style } = self.data else {
+            return Err(PropertyError::UnknownId);
+        };
+        if *style == new_style {
+            return Ok(());
+        }
+        *style = new_style;
+        let (w, h) = renderer.measure(content, new_style)?;
+        let surface = renderer.draw_text(
+            content,
+            new_style,
+            w.max(1.0),
+            h.max(1.0),
+            Color { A: 255, R: 255, G: 255, B: 255 },
+        )?;
+        let brush: CompositionSurfaceBrush =
+            compositor.CreateSurfaceBrushWithSurface(&surface)?;
+        self.visual.SetBrush(&brush)?;
+
+        self.width = SizeConstraint::Fixed(w);
+        self.height = SizeConstraint::Fixed(h);
+        Ok(())
     }
 
     // ── Hit testing ───────────────────────────────────────────────────────────
@@ -343,7 +574,7 @@ impl WidgetNode {
 
     fn build_layout_tree(&self) -> LayoutNode {
         match &self.data {
-            WidgetData::Rectangle | WidgetData::Text | WidgetData::Button(_) => {
+            WidgetData::Rectangle | WidgetData::Text { .. } | WidgetData::Button(_) => {
                 LayoutNode::rectangle(self.width.clone(), self.height.clone())
             }
             WidgetData::VStack { spacing, padding, alignment } => {
