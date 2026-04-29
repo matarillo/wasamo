@@ -85,22 +85,35 @@ examples/counter
 
 `wasamo.dll` is the single deployable artifact that exposes the C ABI. Any language that can `#include` a C header — C, C++, Rust FFI, Zig `@cImport`, Go `cgo` — can call it directly.
 
-- Every public function carries `WASAMO_EXPORT` (`__declspec(dllexport)`).
-- Public types are opaque pointers (`WasamoWindow*`, `WasamoWidget*`) to preserve ABI stability.
-- Error handling: M1 uses `int` return values (0 = success, negative = error code).
-- Thread safety: M1 requires all calls to originate from the main thread only.
+- Every public function carries `WASAMO_EXPORT` (`__declspec(dllexport)`)
+  and the `__cdecl` calling convention (`WASAMO_API`).
+- Public types are opaque pointers (`WasamoWindow*`, `WasamoWidget*`); the
+  runtime never reveals their layout.
+- Error handling uses `WasamoStatus` (negative = error) plus an
+  out-parameter for produced handles. A thread-local
+  `wasamo_last_error_message` carries a human-readable description of
+  the most recent non-OK status on the calling thread.
+- Strict UI-thread affinity: the thread that calls `wasamo_init` owns
+  the runtime; all other functions and callbacks fire on it.
+- Re-entrancy: callbacks are queued and drained at safe boundaries —
+  no callback fires while the host is inside a `wasamo_*` call.
 
-The full ABI specification will be finalized in Phase 6 as `docs/abi_spec.md`. No ABI stability guarantee is made for M1.
+The full ABI specification is `docs/abi_spec.md` (Agreed, 2026-04-30).
+No ABI stability guarantee is made for M1; M4 is when stability
+commitments begin.
 
-`abi_spec.md` will be structured in **two layers**:
+`abi_spec.md` is structured in **two layers**:
 
 - **Stable core** — runtime lifecycle, window + event loop, property
-  get/set, property change observer, component-declared signal register.
+  get/set, property change observers, signal connect/disconnect.
   Written as a candidate for the M4 ABI freeze.
-- **M1 experimental** — imperative widget-tree builder and direct
-  `wasamo_button_set_clicked` callback. Required because M1 `wasamoc` is
-  parser-only and the host must construct the widget tree by hand. Marked
-  experimental in both header and spec; not subject to M4 stability.
+- **M1 experimental** — all-at-once widget constructors
+  (`wasamo_text_create`, `wasamo_button_create`, `wasamo_vstack_create`,
+  `wasamo_hstack_create`), `wasamo_window_set_root`, and the typed
+  `wasamo_button_set_clicked` convenience. Required because M1 `wasamoc`
+  is parser-only and the host must construct the widget tree by hand.
+  Marked `WASAMO_EXPERIMENTAL` in both header and spec; not subject to
+  M4 stability.
 
 The Phase 6 ADR explicitly **does not decide** (a) where DSL inline handler
 bodies (`clicked => { … }`) will execute — host-side vs runtime-side; or
@@ -571,8 +584,8 @@ The following are intentionally left open at this draft stage.
 | Layout algorithm (custom measure/arrange vs. Taffy) | Phase 3 | Resolved → DD-P3-001 (§6.6) |
 | Layout node ownership model (opaque handle vs. direct Rust type exposure) | Phase 3 | Resolved → DD-P3-002 (§6.6) |
 | Widget property API details | Phase 4 | Resolved → DD-P4-001 through DD-P4-006 (§7.7) |
-| Full C ABI function signatures | Phase 6 | Open |
-| Component-declared signal model: Slint-style (DSL inline body) vs XAML-style (host code-behind only) vs hybrid | Phase 6 pre-doc | Open |
+| Full C ABI function signatures | Phase 6 | Resolved → `docs/abi_spec.md` (Agreed) + DD-P6-001..007 |
+| Component-declared signal model: Slint-style (DSL inline body) vs XAML-style (host code-behind only) vs hybrid | Phase 6 pre-doc | Resolved → DD-P6-002 (string-keyed + `WasamoValue` payload) |
 | Inline DSL handler execution location: host-side (callback) vs runtime-side (interpreted IR) | M2 | Open |
 | `wasamoc` M2 output format: host-language codegen vs IR + runtime interpretation | M2 | Open |
 | DPI scaling localization: whether the layout engine should operate in physical pixels and implications for DirectWrite hinting | M2+ | Open |
@@ -597,3 +610,4 @@ The following are intentionally left open at this draft stage.
 | 0.8     | 2026-04-29 | Phase 4 post-doc: §7 Widget Implementation added; §7–§9 renumbered to §8–§10; §4 windows feature set updated; Open Questions updated |
 | 0.9     | 2026-04-29 | Phase 5 post-doc: §8 Animation added (compositor-thread independence, ColorKeyFrameAnimation durations, DD-P5-004..006); §8–§10 renumbered to §9–§11; §7.4/§7.5 updated |
 | 0.10    | 2026-04-29 | Phase 6 pre-direction: §3 abi_spec two-layer structure (stable core + M1 experimental); §11 Open Questions extended with signal-model and execution-location items |
+| 0.11    | 2026-04-30 | Phase 6 post-doc: §3 updated to reflect implemented `wasamo.h` (WASAMO_API, WasamoStatus + last-error, re-entrancy contract, finalised experimental set); §11 C-ABI and signal-model questions marked Resolved |

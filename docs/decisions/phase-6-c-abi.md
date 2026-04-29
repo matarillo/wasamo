@@ -2,7 +2,7 @@
 
 **Phase:** 6 (C ABI header — `wasamo.h` + `docs/abi_spec.md`)
 **Date:** 2026-04-30
-**Status:** Agreed (2026-04-30)
+**Status:** Agreed and implemented (2026-04-30)
 
 ## Context
 
