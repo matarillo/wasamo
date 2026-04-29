@@ -1,7 +1,7 @@
 # Wasamo Vision
 
-**Document version:** 0.2 (Draft)
-**Last updated:** 2026-04-29
+**Document version:** 0.3 (Draft)
+**Last updated:** 2026-04-30
 **Status:** Pre-alpha, design in progress
 
 > This document describes why Wasamo exists, what it prioritizes, and where it's headed.
@@ -34,6 +34,8 @@ Building a modern native UI app for Windows today forces a major sacrifice no ma
 - Going Windows-only lets us call Visual Layer and TSF directly, without an abstraction tax
 - An external DSL means we don't depend on host-language syntax features, so every language gets the same declarative experience
 - A C ABI doesn't get in the way of third-party language bindings
+
+`.ui` is the canonical declarative form, but the C ABI also permits host languages to construct UI directly. Internal DSLs built on top of bindings — Rust macros, Swift result builders, and the like — are welcomed as derivative shapes that serve language-specific developer experience; they do not replace `.ui` as the canonical form. The conditions under which `.ui` and the C ABI evolve in response to such experiments are recorded in [docs/decisions/vision-internal-dsl-policy.md](./docs/decisions/vision-internal-dsl-policy.md).
 
 The project's purpose is to validate this hypothesis and carry the implementation to production-grade quality.
 
@@ -237,6 +239,8 @@ The `.ui` DSL specification is maintained as a document — [docs/dsl_spec.md](.
 
 The C ABI header gets the same treatment once stabilized: a separate, normative specification document.
 
+`.ui` is canonical; internal DSLs built on host-language bindings (Rust macros, Swift result builders, Zig `comptime`, Go builders, …) are welcomed as derivative shapes that serve language-specific developer experience without claiming canonical status. The project does not commit to keeping `.ui` at feature parity with the most expressive internal DSL. `.ui` is extended only when a proposed feature is both motivated by an end-user product capability that cannot be provided through bindings or design-system components, and expressible across all officially supported bindings. C ABI changes follow the same review process as any other ABI proposal under the M4 stability commitment. Full rationale and gating conditions are recorded in [docs/decisions/vision-internal-dsl-policy.md](./docs/decisions/vision-internal-dsl-policy.md).
+
 ### 9.5 Trademark and naming
 
 We intend to register the "Wasamo" name and logo as trademarks in the future. The trademark would be held by the project's governance entity (TBD at the time of registration), with a permissive policy for community use. Forking is unconditionally allowed; what's restricted is the right of a fork to call itself "Wasamo."
@@ -323,5 +327,6 @@ Channels:
 
 | Version | Date | Notes |
 |---------|------|------|
+| 0.3 | 2026-04-30 | Canonical-form policy clarified: `.ui` is canonical, internal DSLs built on host-language bindings are welcomed as derivative shapes; gating conditions for `.ui` and C ABI evolution recorded in `docs/decisions/vision-internal-dsl-policy.md`. §2.2 and §9.4 updated. |
 | 0.2 | 2026-04-29 | Animation reframed as opt-in (instant-by-default); M1 acceptance for Visual Layer rewritten in terms of DWM compositing rather than implicit animations; principle 2 augmented with explicit `view = f(state)` unidirectional model; ADR practice (docs/decisions/) adopted for M1-M2 decisions. |
 | 0.1 | 2026-04-27 | Initial draft |
