@@ -1,7 +1,7 @@
 # Wasamo Vision
 
 **Document version:** 0.1 (Draft)
-**Last updated:** 2026-04-27
+**Last updated:** 2026-04-29
 **Status:** Pre-alpha, design in progress
 
 > This document describes why Wasamo exists, what it prioritizes, and where it's headed.
@@ -107,9 +107,9 @@ The position Wasamo carves out is **"Slint's design philosophy × XAML's Windows
 │    typed view handles, property accessors       │
 ├─────────────────────────────────────────────────┤
 │  .ui DSL files                                  │
-│    ↓ AOT compile (veltrac)                      │
+│    ↓ AOT compile (wasamoc)                      │
 ├─────────────────────────────────────────────────┤
-│  Wasamo Runtime  (veltra.dll, C ABI)            │
+│  Wasamo Runtime  (wasamo.dll, C ABI)            │
 │    Reconciler / Layout / Property bindings      │
 │    Animation / Input / IME / Accessibility      │
 ├─────────────────────────────────────────────────┤
@@ -127,7 +127,7 @@ Responsibilities by layer:
 
 **Generated Bindings** are auto-generated from `.ui` files. Each language gets a typed API in its own idioms; under the hood they call the C ABI.
 
-**.ui DSL** describes UI structure, properties, simple expressions, and reactivity. The `veltrac` AOT compiler turns it into native code or an intermediate binary.
+**.ui DSL** describes UI structure, properties, simple expressions, and reactivity. The `wasamoc` AOT compiler turns it into native code or an intermediate binary.
 
 **Wasamo Runtime** is a single DLL exposed via C ABI. It owns the reconciler, layout, input handling, IME, and accessibility. The implementation language is Rust.
 
@@ -272,7 +272,7 @@ Wasamo is currently pre-alpha. You can help in several ways.
 
 **Join the design discussion.** GitHub Discussions hosts active topics. We particularly welcome feedback on the validity of the [non-goals](#23-non-goals), the direction of the DSL syntax, and our priority calls.
 
-**Contribute code.** [Good first issues](https://github.com/veltra/veltra/issues?q=label%3A%22good+first+issue%22) on the M1 roadmap are a reasonable starting point.
+**Contribute code.** [Good first issues](https://github.com/matarillo/wasamo/issues?q=label%3A%22good+first+issue%22) on the M1 roadmap are a reasonable starting point.
 
 **Record a decision.** For M1-M2 implementation decisions, create an ADR in [docs/decisions/](./docs/decisions/) following the format in [docs/decisions/README.md](./docs/decisions/README.md). From M3 onward, substantial feature proposals follow the RFC process in [docs/rfcs/](./docs/rfcs/).
 
