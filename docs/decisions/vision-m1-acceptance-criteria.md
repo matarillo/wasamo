@@ -103,3 +103,15 @@ records the Phase 5 implementation decisions that follow from DD-V-001:
 
 DD-V-001 is the upstream root for those decisions. The Phase 5 ADR
 references this ADR rather than restating the default-behavior decision.
+
+**Update (2026-04-29):** The Phase 5 implementation ADR referenced
+above was itself superseded later the same day by
+[phase-5-compositor-independence-check.md](./phase-5-compositor-independence-check.md)
+(DD-P5-004..006), after a second pre-doc review found that its
+premise — verifying property-change animation via a dev-only toggle
+— contradicted DD-V-001. The redirection adopts widget-internal
+state-transition animation for Button (permanent product behavior)
+plus a continuous synthetic Visual in the verification example.
+DD-V-001 in this vision ADR remains in effect unchanged; only the
+downstream phase-level implementation decisions were redirected.
+See the new phase ADR for the current Phase 5 plan.
