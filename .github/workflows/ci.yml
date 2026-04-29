@@ -27,3 +27,18 @@ jobs:
 
       - name: Test (workspace)
         run: cargo test --workspace
+
+      - name: Setup MSVC dev environment
+        uses: ilammy/msvc-dev-cmd@v1
+
+      - name: C ABI smoke test (MSVC cl)
+        shell: cmd
+        run: |
+          cl /nologo /W3 /utf-8 /c /I bindings\c bindings\c\smoke.c /Fo:smoke_msvc.obj
+          link /nologo smoke_msvc.obj target\release\wasamo.dll.lib /OUT:smoke_msvc.exe
+
+      - name: C ABI smoke test (clang-cl)
+        shell: cmd
+        run: |
+          clang-cl /nologo /W3 /utf-8 /c /I bindings\c bindings\c\smoke.c /Fo:smoke_clang.obj
+          lld-link /nologo smoke_clang.obj target\release\wasamo.dll.lib /OUT:smoke_clang.exe

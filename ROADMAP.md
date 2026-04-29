@@ -162,7 +162,7 @@ items. The checklist below reflects that decomposition.
   VStack/HStack/Text/Button; `wasamo_button_set_clicked` direct
   callback; per-widget property-ID constants. All marked
   `WASAMO_EXPERIMENTAL`.
-- [ ] CI: C smoke test that **compiles and links** a TU including
+- [x] CI: C smoke test that **compiles and links** a TU including
   `wasamo.h` against `wasamo.lib` (MSVC + Clang)
 - [ ] `docs/abi_spec.md` finalised to match `wasamo.h`; status updated
   from "initial draft Agreed" to "Agreed"
