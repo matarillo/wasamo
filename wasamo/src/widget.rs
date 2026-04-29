@@ -470,6 +470,10 @@ impl WidgetNode {
         let abs_x = off_x + vx;
         let abs_y = off_y + vy;
 
+        // We need a stable pointer to `self` for the registry signal lookup
+        // before we re-borrow `self.data` mutably below.
+        let widget_ptr: *mut WidgetNode = self as *mut WidgetNode;
+
         if let WidgetData::Button(ref mut btn) = self.data {
             let fx = x as f32;
             let fy = y as f32;
@@ -477,6 +481,10 @@ impl WidgetNode {
                 if let Some(ref f) = btn.clicked_fn {
                     f();
                 }
+                // Route "clicked" through the C-ABI signal registry. The
+                // emission is queued and fires after the current call
+                // returns to wasamo_run's message-loop drain (abi_spec §6).
+                crate::emit::enqueue_signal(widget_ptr, "clicked", Vec::new());
                 return;
             }
         }

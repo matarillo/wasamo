@@ -348,13 +348,29 @@ pub unsafe extern "C" fn wasamo_set_property(
     };
     match (*widget).set_property(property_id, &pv) {
         Ok(()) => {
+            // abi_spec §4.3: schedule observers AFTER the call returns.
+            // We push to the emission queue here; the actual callbacks
+            // fire when `drain_if_outermost` runs at the tail.
+            crate::emit::enqueue_property_change(
+                widget,
+                property_id,
+                property_value_to_owned(&pv),
+            );
             clear_last_error();
+            crate::emit::drain_if_outermost();
             WASAMO_OK
         }
         Err(e) => {
             set_last_error(property_error_msg("wasamo_set_property", &e));
             property_error_to_status(&e)
         }
+    }
+}
+
+fn property_value_to_owned(pv: &PropertyValue) -> crate::emit::OwnedArg {
+    match pv {
+        PropertyValue::I32(v) => crate::emit::OwnedArg::I32(*v),
+        PropertyValue::String(s) => crate::emit::OwnedArg::String(s.clone()),
     }
 }
 

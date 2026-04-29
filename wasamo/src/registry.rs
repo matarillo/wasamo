@@ -151,6 +151,88 @@ pub fn drain_all() {
     }
 }
 
+/// Tokens of every observer matching `(widget, property_id)`, in
+/// insertion (token) order so emission preserves connection order.
+pub fn observer_tokens_for(widget: *mut WasamoWidget, property_id: u32) -> Vec<u64> {
+    REG.with(|r| {
+        let r = r.borrow();
+        let mut tokens: Vec<u64> = r
+            .entries
+            .iter()
+            .filter(|(_, e)| {
+                std::ptr::eq(e.widget, widget)
+                    && matches!(
+                        e.kind,
+                        EntryKind::Observer { property_id: pid, .. } if pid == property_id
+                    )
+            })
+            .map(|(t, _)| *t)
+            .collect();
+        tokens.sort_unstable();
+        tokens
+    })
+}
+
+/// Tokens of every signal handler matching `(widget, name)`, in
+/// insertion order.
+pub fn signal_tokens_for(widget: *mut WasamoWidget, name: &str) -> Vec<u64> {
+    REG.with(|r| {
+        let r = r.borrow();
+        let mut tokens: Vec<u64> = r
+            .entries
+            .iter()
+            .filter(|(_, e)| {
+                std::ptr::eq(e.widget, widget)
+                    && match &e.kind {
+                        EntryKind::Signal { name: n, .. } => n == name,
+                        _ => false,
+                    }
+            })
+            .map(|(t, _)| *t)
+            .collect();
+        tokens.sort_unstable();
+        tokens
+    })
+}
+
+/// Resolve an observer token to its callback pointer and identity. Returns
+/// `None` if the token has been disconnected since the emission was queued.
+pub fn lookup_observer(
+    token: u64,
+) -> Option<(
+    crate::abi::WasamoPropertyObserverFn,
+    *mut WasamoWidget,
+    u32,
+    *mut c_void,
+)> {
+    REG.with(|r| {
+        let r = r.borrow();
+        let e = r.entries.get(&token)?;
+        match &e.kind {
+            EntryKind::Observer { property_id, callback } => {
+                Some((*callback, e.widget, *property_id, e.user_data))
+            }
+            _ => None,
+        }
+    })
+}
+
+/// Resolve a signal token to its callback pointer and identity.
+pub fn lookup_signal(
+    token: u64,
+) -> Option<(crate::abi::WasamoSignalHandlerFn, *mut WasamoWidget, *mut c_void)> {
+    REG.with(|r| {
+        let r = r.borrow();
+        let e = r.entries.get(&token)?;
+        match &e.kind {
+            EntryKind::Signal { callback, .. } => {
+                Some((*callback, e.widget, e.user_data))
+            }
+            _ => None,
+        }
+    })
+}
+
 fn invoke_destroy(e: &Entry) {
     if let Some(f) = e.destroy_fn {
         // Safety: the host-supplied destroy_fn is __cdecl per DD-P6-007 and

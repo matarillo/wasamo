@@ -155,7 +155,7 @@ items. The checklist below reflects that decomposition.
   and on `wasamo_shutdown`; `wasamo_signal_connect` /
   `wasamo_signal_disconnect`, `wasamo_observe_property` /
   `wasamo_unobserve_property`
-- [ ] Queued emission machinery: re-entry flag at every public ABI
+- [x] Queued emission machinery: re-entry flag at every public ABI
   entry; emission queue drained on exit; verify no callback fires
   during a `wasamo_*` call on the same thread
 - [ ] M1 experimental layer: all-at-once widget constructors

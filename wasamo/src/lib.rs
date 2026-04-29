@@ -1,4 +1,5 @@
 mod abi;
+mod emit;
 mod layout;
 mod registry;
 mod runtime;
@@ -52,6 +53,10 @@ pub fn run() {
         while GetMessageW(&mut msg, None, 0, 0).as_bool() {
             let _ = TranslateMessage(&msg);
             DispatchMessageW(&msg);
+            // Drain queued callback emissions between message dispatches —
+            // the message-loop iteration boundary is a "no host code is
+            // currently inside a wasamo_* call" point (abi_spec §6).
+            emit::drain_if_outermost();
         }
     }
 }
