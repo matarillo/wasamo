@@ -119,22 +119,53 @@ handler bodies (`clicked => { … }`) will execute — host-side vs runtime-side
 (b) wasamoc's M2 output format — host-language codegen vs IR + runtime
 interpretation. The stable core is sized so it survives either resolution.
 
-- [ ] `docs/decisions/phase-6-c-abi.md` created, owner agreement obtained
-  (stable-core scope at function granularity; signal model; callback
-  contract incl. destroy_fn / lifetime; threading and re-entrancy; error
-  convention; header generation method — cbindgen vs hand-written)
-- [ ] `docs/abi_spec.md` initial draft, owner agreement obtained
+The pre-doc agreement (ADR + abi_spec) surfaced implementation work the
+original task list had hidden inside the single line "wasamo.h
+implemented" — property R/W dispatch on widgets, a token-based
+signal/observer registry, queued emission for re-entrancy, thread-local
+last-error storage, and DLL build configuration are all distinct work
+items. The checklist below reflects that decomposition.
+
+- [x] `docs/decisions/phase-6-c-abi.md` created, owner agreement obtained
+  (DD-P6-001..007: stable-core scope; signal model; callback contract
+  incl. destroy_fn / lifetime; threading and re-entrancy; error
+  convention; header generation method; DLL boundary contract — export
+  macro / calling convention / memory ownership)
+- [x] `docs/abi_spec.md` initial draft, owner agreement obtained
   (two-layer: **stable core** + **M1 experimental**, each marked clearly)
-- [ ] `wasamo.h` stable-core implemented: runtime lifecycle / window + event
-  loop / property get-set / property change observer / component-declared
-  signal register
-- [ ] `wasamo.h` M1 experimental implemented: imperative widget tree builder;
-  `wasamo_button_set_clicked` direct callback. Marked `WASAMO_EXPERIMENTAL`
-  in headers and noted in `abi_spec.md` as not subject to M4 stability
-- [ ] All public functions carry `WASAMO_EXPORT`
-- [ ] Opaque pointer types (`WasamoWindow*`, `WasamoWidget*`, …)
-- [ ] `docs/abi_spec.md` finalized to match `wasamo.h`
-- [ ] CI: C header compilation smoke test added (`wasamo.h` compiles with MSVC/Clang)
+- [ ] `wasamo` crate `Cargo.toml`: add `crate-type = ["cdylib", "rlib"]`;
+  verify `wasamo.dll` + `wasamo.lib` (import library) emit on build
+- [ ] `wasamo.h` placed at `bindings/c/wasamo.h` with header preamble:
+  `WASAMO_EXPORT` / `WASAMO_API` (`__cdecl`) / `WASAMO_EXPERIMENTAL`
+  macros, opaque handle typedefs (`WasamoWindow`, `WasamoWidget`)
+- [ ] Rust-side `#[repr(C)]` types: `WasamoStatus` constants,
+  `WasamoValue` tagged union, callback fn-ptr typedefs
+  (`WasamoSignalHandlerFn`, `WasamoPropertyObserverFn`,
+  `WasamoDestroyFn`)
+- [ ] Thread-local last-error storage + `wasamo_last_error_message`
+- [ ] Existing `wasamo_*` (init / window_create / show / destroy / run)
+  migrated to `WasamoStatus` + out-param shape; `wasamo_shutdown` and
+  `wasamo_quit` added
+- [ ] Property accessor infrastructure on `WidgetNode`: per-widget
+  property ID enumeration + dispatch (Button label/style, Text
+  content/style at minimum); `wasamo_get_property` /
+  `wasamo_set_property` wired
+- [ ] Signal / observer registry: token table; `(fn, user_data,
+  destroy_fn)` lifecycle; automatic disconnect on widget/window destroy
+  and on `wasamo_shutdown`; `wasamo_signal_connect` /
+  `wasamo_signal_disconnect`, `wasamo_observe_property` /
+  `wasamo_unobserve_property`
+- [ ] Queued emission machinery: re-entry flag at every public ABI
+  entry; emission queue drained on exit; verify no callback fires
+  during a `wasamo_*` call on the same thread
+- [ ] M1 experimental layer: imperative widget builder for
+  VStack/HStack/Text/Button; `wasamo_button_set_clicked` direct
+  callback; per-widget property-ID constants. All marked
+  `WASAMO_EXPERIMENTAL`.
+- [ ] CI: C smoke test that **compiles and links** a TU including
+  `wasamo.h` against `wasamo.lib` (MSVC + Clang)
+- [ ] `docs/abi_spec.md` finalised to match `wasamo.h`; status updated
+  from "initial draft Agreed" to "Agreed"
 
 ### Phase 7 — Language bindings
 
