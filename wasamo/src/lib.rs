@@ -1,10 +1,12 @@
 mod layout;
 mod runtime;
+mod text;
 mod widget;
 mod window;
 
 pub use layout::{Alignment, SizeConstraint, WidgetKind};
-pub use widget::WidgetNode;
+pub use text::{TextRenderer, TypographyStyle};
+pub use widget::{ButtonStyle, WidgetNode};
 pub use window::WindowState;
 
 use windows::Win32::UI::WindowsAndMessaging::{DispatchMessageW, GetMessageW, TranslateMessage, MSG};

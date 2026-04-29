@@ -196,5 +196,9 @@ Two additional requirements emerged during implementation:
   **not** be called alongside `DWMSBT_MAINWINDOW`. When called with no GDI surface, DWM
   renders the DWM frame colour (dark in dark mode) across the entire client area, covering
   the Mica material. `DWMSBT_MAINWINDOW` covers the full window backdrop automatically.
-- `DWMWA_USE_IMMERSIVE_DARK_MODE` is not set unconditionally. The Mica material follows the
-  system colour theme; forcing it overrides appearance without a corresponding system preference.
+- `DWMWA_USE_IMMERSIVE_DARK_MODE` must be set based on the system theme, not omitted and not
+  hardcoded. The correct pattern: read `UISettings::GetColorValue(UIColorType::Background)`;
+  if `R < 128` (near-black) the system is in dark mode. Pass `TRUE` or `FALSE` accordingly.
+  Omitting the call causes DWM to default to light-mode Mica even on dark-mode systems.
+  Hardcoding `TRUE` overrides the system theme for users on light mode (original finding still
+  holds — do not force; do read and mirror the system preference).

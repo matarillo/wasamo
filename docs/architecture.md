@@ -1,8 +1,8 @@
 # Wasamo Architecture
 
-**Document version:** 0.6
-**Last updated:** 2026-04-28
-**Status:** Phase 0, Phase 1, Phase 2, and Phase 3 complete
+**Document version:** 0.8
+**Last updated:** 2026-04-29
+**Status:** Phase 0, Phase 1, Phase 2, Phase 3, and Phase 4 complete
 
 ---
 
@@ -123,17 +123,34 @@ Specific adoption decisions are made in the pre-implementation document for the 
 [dependencies.windows]
 version = "0.58"
 features = [
+  # Core Win32
   "Win32_Foundation",
   "Win32_UI_WindowsAndMessaging",
+  "Win32_UI_Input_KeyboardAndMouse",  # TrackMouseEvent, WM_MOUSELEAVE (Phase 4)
   "Win32_System_LibraryLoader",
-  "Win32_Graphics_DirectWrite",
+  # Graphics — Phase 2
+  "Win32_Graphics_Dwm",
+  "Win32_Graphics_Gdi",
+  # Graphics — Phase 4 (text rendering pipeline)
   "Win32_Graphics_Direct2D",
   "Win32_Graphics_Direct2D_Common",
+  "Win32_Graphics_Direct3D",
+  "Win32_Graphics_Direct3D11",
+  "Win32_Graphics_DirectWrite",
+  "Win32_Graphics_Dxgi",
   "Win32_Graphics_Dxgi_Common",
+  # WinRT interop
+  "Win32_System_WinRT",               # ICompositionDrawingSurfaceInterop (Phase 4)
   "Win32_System_WinRT_Composition",
+  "Win32_UI_Controls",
+  # WinRT / Composition
+  "Foundation",                       # Windows.Foundation.Size (Phase 4)
+  "Graphics_DirectX",                 # DirectXPixelFormat/AlphaMode (Phase 4)
+  "System",
+  "UI",
   "UI_Composition",
   "UI_Composition_Desktop",
-  # DispatcherQueue feature TBD in Phase 2
+  "UI_ViewManagement",                # UISettings accent color (Phase 4)
 ]
 ```
 
@@ -279,7 +296,103 @@ No persistent layout cache exists in M1.
 
 ---
 
-## 7. Three-Layer Tree Model
+## 7. Widget Implementation (Phase 4)
+
+Full decision rationale: [`docs/decisions/phase-4-widget-implementation.md`](./decisions/phase-4-widget-implementation.md)
+
+### 7.1 New widget types
+
+| Widget | Module | Description |
+|---|---|---|
+| `Text` | `wasamo/src/widget.rs` + `text.rs` | Unicode text label rendered via DirectWrite onto a `CompositionDrawingSurface` |
+| `Button` | `wasamo/src/widget.rs` | Clickable control with background `SpriteVisual` + child text `SpriteVisual`; hover/press state via brush swap |
+
+### 7.2 Text rendering pipeline
+
+```
+TextRenderer (created once per process)
+  │
+  ├── ID3D11Device (BGRA support)  →  IDXGIDevice  →  ID2D1Device
+  │
+  ├── ICompositorInterop::CreateGraphicsDevice(d2d_device)
+  │     └── CompositionGraphicsDevice
+  │
+  └── IDWriteFactory (shared)
+
+Text::new(text, style)
+  │
+  ├── IDWriteFactory::CreateTextLayout  →  measure natural (w, h)
+  │     stored as Fixed(w) × Fixed(h) on WidgetNode
+  │
+  └── CompositionGraphicsDevice::CreateDrawingSurface(Size{w,h}, BGRA, Premultiplied)
+        └── ICompositionDrawingSurfaceInterop::BeginDraw
+              └── ID2D1DeviceContext::DrawTextLayout  →  EndDraw
+                    └── CompositionSurfaceBrush → SpriteVisual
+```
+
+### 7.3 TypographyStyle type ramp
+
+```rust
+pub enum TypographyStyle { Caption, Body, Subtitle, Title }
+```
+
+| Value | Size | Weight | Font |
+|---|---|---|---|
+| `Caption` | 12 sp | Regular | Segoe UI Variable |
+| `Body` | 14 sp | Regular | Segoe UI Variable |
+| `Subtitle` | 20 sp | Semi-bold | Segoe UI Variable |
+| `Title` | 28 sp | Semi-bold | Segoe UI Variable |
+
+Maps to the WinUI 2 / WinApp SDK typography token set. Custom font descriptors deferred to M2.
+
+### 7.4 Button structure
+
+```
+Button root: SpriteVisual (background brush)
+  └── child: SpriteVisual (text label, offset by PAD_H/PAD_V)
+```
+
+State transitions use brush replacement (instant, per DD-V-001). `ButtonStyle::Accent` reads the
+system accent color via `UISettings::GetColorValue(UIColorType::Accent)` at creation time.
+
+### 7.5 `wnd_proc` ↔ `WindowState` linkage
+
+`window::create()` stores `*mut WindowState` in `GWLP_USERDATA` after the `Box` is allocated.
+`wnd_proc` reads it via `GetWindowLongPtrW` and calls the corresponding callback field:
+
+| Message | Callback field | Effect |
+|---|---|---|
+| `WM_SIZE` | `resize_fn: Option<Box<dyn FnMut(f32, f32)>>` | Re-run layout with new client dimensions |
+| `WM_MOUSEMOVE` | `mouse_move_fn` | Update button hover state; arm `TrackMouseEvent` for leave |
+| `WM_MOUSELEAVE` | `mouse_leave_fn` | Clear all button hover states |
+| `WM_LBUTTONDOWN` | `mouse_down_fn` | Hit-test button tree; fire `clicked_fn` if hit |
+| `WM_LBUTTONUP` | `mouse_up_fn` | Available for future press-release distinction |
+
+All `unsafe` operations are confined to `window.rs` (`window::create()` + `wnd_proc`). The
+callback fields themselves are safe Rust types.
+
+### 7.6 Module additions
+
+| File | Responsibility |
+|---|---|
+| `wasamo/src/text.rs` | `TextRenderer` + `TypographyStyle`; D3D11/D2D/DWrite device setup; surface draw |
+| `wasamo/src/widget.rs` | Extended with `Text`, `Button`, `ButtonStyle`; hit-test and hover methods |
+| `wasamo/src/window.rs` | `WindowState` extended with `GWLP_USERDATA`, event callback fields, mouse tracking |
+
+### 7.7 Decisions summary
+
+| Decision | Chosen | See |
+|---|---|---|
+| DD-P4-001: Text rendering pipeline | `ICompositionDrawingSurface` + D2D + DirectWrite | [ADR](./decisions/phase-4-widget-implementation.md#dd-p4-001) |
+| DD-P4-002: Font property model | 4-value `TypographyStyle` enum (Caption / Body / Subtitle / Title) | [ADR](./decisions/phase-4-widget-implementation.md#dd-p4-002) |
+| DD-P4-003: Text natural size | Measured at creation/update; cached as `Fixed` on `WidgetNode` | [ADR](./decisions/phase-4-widget-implementation.md#dd-p4-003) |
+| DD-P4-004: Button visual structure | Root `SpriteVisual` + child text `SpriteVisual`; instant brush swap | [ADR](./decisions/phase-4-widget-implementation.md#dd-p4-004) |
+| DD-P4-005: `wnd_proc` linkage | `GWLP_USERDATA` + event callbacks on `WindowState`; unsafe confined to `window.rs` | [ADR](./decisions/phase-4-widget-implementation.md#dd-p4-005) |
+| DD-P4-006: Button clicked callback | `Box<dyn Fn()>` internally; C ABI adapter deferred to Phase 6 | [ADR](./decisions/phase-4-widget-implementation.md#dd-p4-006) |
+
+---
+
+## 8. Three-Layer Tree Model
 
 | Layer | Owner | Contents |
 |---|---|---|
@@ -291,7 +404,7 @@ In M1 there is no reconciler. The host language constructs the view tree directl
 
 ---
 
-## 8. wasamoc (DSL Compiler) — M1 Scope
+## 9. wasamoc (DSL Compiler) — M1 Scope
 
 M1 covers lexing, parsing, and syntax checking only.
 Code generation (conversion to runtime calls, binding generation) is M2 scope.
@@ -348,7 +461,7 @@ host app ──calls──▶ wasamo C ABI ──builds──▶ widget tree at 
 
 ---
 
-## 9. Open Questions (to be resolved in later phases)
+## 10. Open Questions (to be resolved in later phases)
 
 The following are intentionally left open at this draft stage.
 
@@ -359,7 +472,7 @@ The following are intentionally left open at this draft stage.
 | Mica backdrop support scope for M1 | Phase 2 | Resolved → DD-P2-003 (§5.5) |
 | Layout algorithm (custom measure/arrange vs. Taffy) | Phase 3 | Resolved → DD-P3-001 (§6.6) |
 | Layout node ownership model (opaque handle vs. direct Rust type exposure) | Phase 3 | Resolved → DD-P3-002 (§6.6) |
-| Widget property API details | Phase 4 | Open |
+| Widget property API details | Phase 4 | Resolved → DD-P4-001 through DD-P4-006 (§7.7) |
 | Full C ABI function signatures | Phase 6 | Open |
 | DPI scaling localization: whether the layout engine should operate in physical pixels and implications for DirectWrite hinting | M2+ | Open |
 | AccessKit / UIA sync: when and how layout results are propagated to the accessibility tree, and the performance impact | M2 | Open |
@@ -380,3 +493,4 @@ The following are intentionally left open at this draft stage.
 | 0.5     | 2026-04-28 | Phase 2 post-doc: status updated to complete; initialization sequence corrected (WS_EX_NOREDIRECTIONBITMAP, WM_ERASEBKGND; DwmExtendFrameIntoClientArea removed) |
 | 0.6     | 2026-04-28 | Phase 3 post-doc: §6 Layout Engine added; §7–§9 renumbered; Open Questions updated |
 | 0.7     | 2026-04-28 | §9 Open Questions: five layout-related items added (DPI scaling, AccessKit sync, async measure, cache invalidation, custom layout extensibility) |
+| 0.8     | 2026-04-29 | Phase 4 post-doc: §7 Widget Implementation added; §7–§9 renumbered to §8–§10; §4 windows feature set updated; Open Questions updated |
