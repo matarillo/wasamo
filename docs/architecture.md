@@ -1,6 +1,6 @@
 # Wasamo Architecture
 
-**Document version:** 0.9
+**Document version:** 0.10
 **Last updated:** 2026-04-29
 **Status:** Phase 0, Phase 1, Phase 2, Phase 3, Phase 4, and Phase 5 complete
 
@@ -91,6 +91,22 @@ examples/counter
 - Thread safety: M1 requires all calls to originate from the main thread only.
 
 The full ABI specification will be finalized in Phase 6 as `docs/abi_spec.md`. No ABI stability guarantee is made for M1.
+
+`abi_spec.md` will be structured in **two layers**:
+
+- **Stable core** — runtime lifecycle, window + event loop, property
+  get/set, property change observer, component-declared signal register.
+  Written as a candidate for the M4 ABI freeze.
+- **M1 experimental** — imperative widget-tree builder and direct
+  `wasamo_button_set_clicked` callback. Required because M1 `wasamoc` is
+  parser-only and the host must construct the widget tree by hand. Marked
+  experimental in both header and spec; not subject to M4 stability.
+
+The Phase 6 ADR explicitly **does not decide** (a) where DSL inline handler
+bodies (`clicked => { … }`) will execute — host-side vs runtime-side; or
+(b) `wasamoc`'s M2 output format — host-language codegen vs IR + runtime
+interpretation. The stable core is sized so it survives either resolution.
+These remain open in §11.
 
 ---
 
@@ -556,6 +572,9 @@ The following are intentionally left open at this draft stage.
 | Layout node ownership model (opaque handle vs. direct Rust type exposure) | Phase 3 | Resolved → DD-P3-002 (§6.6) |
 | Widget property API details | Phase 4 | Resolved → DD-P4-001 through DD-P4-006 (§7.7) |
 | Full C ABI function signatures | Phase 6 | Open |
+| Component-declared signal model: Slint-style (DSL inline body) vs XAML-style (host code-behind only) vs hybrid | Phase 6 pre-doc | Open |
+| Inline DSL handler execution location: host-side (callback) vs runtime-side (interpreted IR) | M2 | Open |
+| `wasamoc` M2 output format: host-language codegen vs IR + runtime interpretation | M2 | Open |
 | DPI scaling localization: whether the layout engine should operate in physical pixels and implications for DirectWrite hinting | M2+ | Open |
 | AccessKit / UIA sync: when and how layout results are propagated to the accessibility tree, and the performance impact | M2 | Open |
 | Async measure: how to handle widgets whose size is unknown at measure time (e.g. image load pending) | M2+ | Open |
@@ -577,3 +596,4 @@ The following are intentionally left open at this draft stage.
 | 0.7     | 2026-04-28 | §9 Open Questions: five layout-related items added (DPI scaling, AccessKit sync, async measure, cache invalidation, custom layout extensibility) |
 | 0.8     | 2026-04-29 | Phase 4 post-doc: §7 Widget Implementation added; §7–§9 renumbered to §8–§10; §4 windows feature set updated; Open Questions updated |
 | 0.9     | 2026-04-29 | Phase 5 post-doc: §8 Animation added (compositor-thread independence, ColorKeyFrameAnimation durations, DD-P5-004..006); §8–§10 renumbered to §9–§11; §7.4/§7.5 updated |
+| 0.10    | 2026-04-29 | Phase 6 pre-direction: §3 abi_spec two-layer structure (stable core + M1 experimental); §11 Open Questions extended with signal-model and execution-location items |

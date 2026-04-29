@@ -108,10 +108,31 @@ See
 
 ### Phase 6 — C ABI header
 
+`abi_spec.md` is structured in **two layers**: a **stable core** intended as a
+candidate for the M4 ABI freeze, and an **M1 experimental** layer that exists
+because M1 `wasamoc` is parser-only and host code must construct the widget
+tree imperatively. The split is to avoid letting M1 stopgap shapes leak into
+long-term ABI commitments.
+
+The Phase 6 pre-doc explicitly **defers** two questions: (a) where DSL inline
+handler bodies (`clicked => { … }`) will execute — host-side vs runtime-side;
+(b) wasamoc's M2 output format — host-language codegen vs IR + runtime
+interpretation. The stable core is sized so it survives either resolution.
+
+- [ ] `docs/decisions/phase-6-c-abi.md` created, owner agreement obtained
+  (stable-core scope at function granularity; signal model; callback
+  contract incl. destroy_fn / lifetime; threading and re-entrancy; error
+  convention; header generation method — cbindgen vs hand-written)
 - [ ] `docs/abi_spec.md` initial draft, owner agreement obtained
-- [ ] `wasamo.h` implemented (init / window / widget / property / hierarchy APIs)
+  (two-layer: **stable core** + **M1 experimental**, each marked clearly)
+- [ ] `wasamo.h` stable-core implemented: runtime lifecycle / window + event
+  loop / property get-set / property change observer / component-declared
+  signal register
+- [ ] `wasamo.h` M1 experimental implemented: imperative widget tree builder;
+  `wasamo_button_set_clicked` direct callback. Marked `WASAMO_EXPERIMENTAL`
+  in headers and noted in `abi_spec.md` as not subject to M4 stability
 - [ ] All public functions carry `WASAMO_EXPORT`
-- [ ] Opaque pointer types (`WasamoWindow*`, `WasamoWidget*`)
+- [ ] Opaque pointer types (`WasamoWindow*`, `WasamoWidget*`, …)
 - [ ] `docs/abi_spec.md` finalized to match `wasamo.h`
 - [ ] CI: C header compilation smoke test added (`wasamo.h` compiles with MSVC/Clang)
 
