@@ -1,6 +1,6 @@
 # Wasamo Vision
 
-**Document version:** 0.1 (Draft)
+**Document version:** 0.2 (Draft)
 **Last updated:** 2026-04-29
 **Status:** Pre-alpha, design in progress
 
@@ -321,4 +321,5 @@ Channels:
 
 | Version | Date | Notes |
 |---------|------|------|
+| 0.2 | 2026-04-29 | Animation reframed as opt-in (instant-by-default); M1 acceptance for Visual Layer rewritten in terms of DWM compositing rather than implicit animations; principle 2 augmented with explicit `view = f(state)` unidirectional model; ADR practice (docs/decisions/) adopted for M1-M2 decisions. |
 | 0.1 | 2026-04-27 | Initial draft |
