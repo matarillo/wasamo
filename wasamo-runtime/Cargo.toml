@@ -4,6 +4,14 @@ version = "0.1.0"
 edition = "2021"
 
 [lib]
+# `name = "wasamo"` keeps the cdylib output as `wasamo.dll` / `wasamo.dll.lib`
+# (the public C ABI artifact name agreed in DD-P6-007). The downside is that
+# the rlib is also named `libwasamo.rlib`, which collides with the safe wrapper
+# crate at bindings/rust/ (package name "wasamo"). Cargo emits a warning today;
+# it may become a hard error (rust-lang/cargo#6313). Accepted for M1 — the
+# collision is at the non-hashed output path, not the hashed deps path; actual
+# linking is unaffected. Proper fix (splitting cdylib and rlib into separate
+# crates, or renaming to wasamo_runtime.dll) is deferred to a post-M1 cleanup.
 name = "wasamo"
 crate-type = ["cdylib", "rlib"]
 

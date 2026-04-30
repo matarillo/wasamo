@@ -1,4 +1,8 @@
 [package]
-name = "wasamo-bindings"
+name = "wasamo"
 version = "0.1.0"
 edition = "2021"
+description = "Safe Rust bindings for the Wasamo UI framework."
+
+[dependencies]
+wasamo-sys = { path = "../rust-sys" }
