@@ -1,0 +1,13 @@
+[package]
+name = "wasamo-sys"
+version = "0.1.0"
+edition = "2021"
+description = "Raw FFI bindings to the Wasamo C ABI (wasamo.dll)."
+links = "wasamo"
+
+# No Rust dep on `wasamo-runtime` — wasamo-sys consumes the runtime through
+# the C ABI (wasamo.dll.lib), not through the rlib. Build-order safety:
+# wasamo-sys itself only produces an rlib, and rlibs do not invoke the
+# native linker. The final binary's link step is what consumes
+# wasamo.dll.lib, by which time the workspace build has already produced it
+# under target/<profile>/.

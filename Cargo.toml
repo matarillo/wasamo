@@ -3,5 +3,6 @@ members = [
     "wasamo-runtime",
     "wasamoc",
     "bindings/rust",
+    "bindings/rust-sys",
 ]
 resolver = "2"

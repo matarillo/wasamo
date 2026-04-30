@@ -22,8 +22,19 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-cargo-
 
-      - name: Build (workspace)
+      - name: Build (workspace, release)
         run: cargo build --release --workspace
+
+      # Builds the debug-profile libs (including wasamo-runtime's cdylib).
+      # The next step (`cargo test --workspace`) compiles test binaries
+      # in the debug profile; if the debug-profile wasamo.dll.lib isn't
+      # already present when wasamo-sys's test binary reaches its link
+      # step, link.exe fails (wasamo-sys has no Rust dep on
+      # wasamo-runtime — it crosses the C ABI). Sequencing the lib
+      # build before the test build sidesteps the parallel-scheduling
+      # window where the import lib hasn't been emitted yet.
+      - name: Build (workspace, debug — for tests)
+        run: cargo build --workspace
 
       - name: Test (workspace)
         run: cargo test --workspace
