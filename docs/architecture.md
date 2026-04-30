@@ -1,8 +1,8 @@
 # Wasamo Architecture
 
-**Document version:** 0.13
+**Document version:** 0.14
 **Last updated:** 2026-05-01
-**Status:** Phases 0-7 (bindings) in progress; C/Rust/Zig bindings shipped
+**Status:** Phases 0-8 in progress; runtime re-layout on property change added
 
 ---
 
@@ -355,6 +355,36 @@ No persistent layout cache exists in M1.
 | DD-P3-003: Size model | `Fixed / Fill / Shrink` (`Fill` returns 0.0 in measure, resolved in arrange) | [ADR](./decisions/phase-3-layout-engine.md#dd-p3-003) |
 | DD-P3-004: Cross-axis alignment | `Leading / Center / Trailing / Stretch` (Stretch default) | [ADR](./decisions/phase-3-layout-engine.md#dd-p3-004) |
 | DD-P3-005: Error handling | API errors strict (`Result`); degenerate layout clamps to 0.0 | [ADR](./decisions/phase-3-layout-engine.md#dd-p3-005) |
+
+### 6.7 Layout invalidation on property change (Phase 8, DD-P8-002)
+
+Before Phase 8, the only path that triggered a layout pass was `WM_SIZE`.
+`wasamo_set_property` for size-affecting properties (`BUTTON_LABEL`,
+`TEXT_CONTENT`, `TEXT_STYLE`) updated the widget's intrinsic
+`width`/`height` but left the surrounding tree visually stale.
+
+**Implementation (Phase 8):**
+
+- `WidgetNode::set_property` detects size-affecting property updates and
+  calls `emit::mark_layout_dirty_for(widget_ptr)`.
+- `emit::mark_layout_dirty_for` walks the live-window registry
+  (`WINDOWS` thread-local in `emit.rs`) to find the window whose
+  `root_widget` subtree contains the widget, then adds that window to
+  a `DIRTY` set.
+- After each `drain_if_outermost` cycle empties the callback queue,
+  `flush_layout` runs one `run_layout` pass on every window in `DIRTY`
+  and clears the set. Multiple property changes within one drain cycle
+  coalesce into a single pass per window.
+- Widgets not yet attached to a window (pre-`set_root`) defer; layout
+  runs when they enter a window via `wasamo_window_set_root`.
+- `BUTTON_STYLE` does not affect intrinsic size in M1 (Default and
+  Accent share the same metrics); it remains a pure visual refresh.
+
+Window registration lifecycle:
+- `window::create` calls `emit::register_window` after `Box<WindowState>` is
+  heap-allocated (pointer is stable).
+- `wasamo_window_destroy` calls `emit::unregister_window` before the box
+  is dropped.
 
 ---
 

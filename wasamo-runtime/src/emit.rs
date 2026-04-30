@@ -17,9 +17,20 @@
 //!   if a handler disconnected itself or another handler before its
 //!   turn, the lookup returns `None` and we skip — this is the
 //!   "disconnect-during-emission" semantics required by §4.4.
+//!
+//! Layout invalidation (DD-P8-002):
+//! - `mark_layout_dirty` / `unmark_layout_dirty` register windows
+//!   that need a layout pass after the signal queue empties.
+//! - After each full drain cycle, all marked windows run one layout
+//!   pass. Multiple property changes in one drain cycle coalesce
+//!   into a single pass per window.
+//! - Window registration (`register_window` / `unregister_window`)
+//!   is called by `window::create` / `wasamo_window_destroy` so that
+//!   `drain_if_outermost` can reach live windows without an explicit
+//!   window pointer in `wasamo_set_property`.
 
 use std::cell::{Cell, RefCell};
-use std::collections::VecDeque;
+use std::collections::{HashSet, VecDeque};
 use std::os::raw::c_char;
 
 use crate::abi::{
@@ -27,6 +38,7 @@ use crate::abi::{
     WASAMO_VALUE_I32, WASAMO_VALUE_STRING,
 };
 use crate::registry;
+use crate::window::WindowState;
 
 // Only the value tags M1 widgets actually emit. The full closed tag set
 // (abi_spec §3.3) gets variants added here when future widgets need them;
@@ -45,6 +57,70 @@ enum Pending {
 thread_local! {
     static QUEUE: RefCell<VecDeque<Pending>> = const { RefCell::new(VecDeque::new()) };
     static DISPATCHING: Cell<bool> = const { Cell::new(false) };
+    // Raw pointers to all live WindowState allocations on this thread.
+    // Populated by window::create; removed by wasamo_window_destroy.
+    static WINDOWS: RefCell<Vec<*mut WindowState>> = const { RefCell::new(Vec::new()) };
+    // Windows marked dirty by a size-affecting set_property call.
+    // Holds raw pointers that are always a subset of WINDOWS.
+    static DIRTY: RefCell<HashSet<*mut WindowState>> = RefCell::new(HashSet::new());
+}
+
+// ── Window registration for layout invalidation ───────────────────────────────
+
+pub fn register_window(window: *mut WindowState) {
+    WINDOWS.with(|w| w.borrow_mut().push(window));
+}
+
+pub fn unregister_window(window: *mut WindowState) {
+    WINDOWS.with(|w| w.borrow_mut().retain(|&p| p != window));
+    DIRTY.with(|d| { d.borrow_mut().remove(&window); });
+}
+
+/// Called from set_property when a size-affecting property changes.
+/// Marks the window that owns `widget` as needing a layout pass.
+/// If `widget` is not yet attached to any window, this is a no-op;
+/// layout will run when the widget enters a window via `set_root`.
+pub fn mark_layout_dirty_for(widget: *mut WasamoWidget) {
+    WINDOWS.with(|windows| {
+        let windows = windows.borrow();
+        for &wptr in windows.iter() {
+            // Safety: wptr is a live Box<WindowState> allocated on this thread.
+            let state = unsafe { &*wptr };
+            if let Some(ref root) = state.root_widget {
+                let mut found = false;
+                root.for_each_ptr(&mut |p| {
+                    if p == widget {
+                        found = true;
+                    }
+                });
+                if found {
+                    DIRTY.with(|d| { d.borrow_mut().insert(wptr); });
+                    return;
+                }
+            }
+        }
+    });
+}
+
+fn flush_layout() {
+    let dirty: Vec<*mut WindowState> = DIRTY.with(|d| d.borrow_mut().drain().collect());
+    for wptr in dirty {
+        // Safety: wptr lives in WINDOWS and is still a valid Box<WindowState>.
+        let state = unsafe { &mut *wptr };
+        if let Some(ref mut root) = state.root_widget {
+            use windows::Win32::UI::WindowsAndMessaging::GetClientRect;
+            use windows::Win32::Foundation::RECT;
+            let mut rect = RECT::default();
+            let (cw, ch) = unsafe {
+                if GetClientRect(state.hwnd, &mut rect).is_ok() {
+                    ((rect.right - rect.left) as f32, (rect.bottom - rect.top) as f32)
+                } else {
+                    (0.0, 0.0)
+                }
+            };
+            let _ = root.run_layout(cw, ch);
+        }
+    }
 }
 
 pub fn enqueue_property_change(
@@ -90,6 +166,9 @@ pub fn drain_if_outermost() {
         }
     }
     DISPATCHING.with(|d| d.set(false));
+    // After all callbacks have fired, run one layout pass per dirty window.
+    // This coalesces multiple property changes from the same drain cycle.
+    flush_layout();
 }
 
 fn dispatch(p: Pending) {

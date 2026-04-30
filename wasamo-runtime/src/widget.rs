@@ -308,7 +308,14 @@ impl WidgetNode {
         id: u32,
         value: &PropertyValue,
     ) -> Result<(), PropertyError> {
-        match (&mut self.data, id) {
+        // Track whether this property affects intrinsic size (DD-P8-002).
+        let size_affecting = matches!(
+            (&self.data, id),
+            (WidgetData::Button(_), PROP_BUTTON_LABEL)
+                | (WidgetData::Text { .. }, PROP_TEXT_CONTENT)
+                | (WidgetData::Text { .. }, PROP_TEXT_STYLE)
+        );
+        let result = match (&mut self.data, id) {
             (WidgetData::Button(_), PROP_BUTTON_LABEL) => {
                 let s = match value {
                     PropertyValue::String(s) => s.clone(),
@@ -342,7 +349,11 @@ impl WidgetNode {
                 self.update_text_style(new_style)
             }
             _ => Err(PropertyError::UnknownId),
+        };
+        if result.is_ok() && size_affecting {
+            crate::emit::mark_layout_dirty_for(self as *mut WidgetNode);
         }
+        result
     }
 
     fn update_button_label(&mut self, new_label: &str) -> Result<(), PropertyError> {

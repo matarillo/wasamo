@@ -212,6 +212,7 @@ pub unsafe extern "C" fn wasamo_window_destroy(window: *mut WasamoWindow) -> Was
         // Idempotent on null per spec §4.2.
         return WASAMO_OK;
     }
+    crate::emit::unregister_window(window);
     let boxed = Box::from_raw(window);
     // Sever registry entries for the entire owned widget subtree before any
     // widget memory is freed. Any host-supplied destroy_fn is invoked here.

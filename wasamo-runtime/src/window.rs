@@ -82,6 +82,7 @@ pub fn create(title: &str, width: i32, height: i32) -> windows::core::Result<Box
     // Safety: state is heap-allocated (Box) and will outlive the HWND.
     let ptr = &mut *state as *mut WindowState as isize;
     unsafe { SetWindowLongPtrW(hwnd, GWLP_USERDATA, ptr) };
+    crate::emit::register_window(&mut *state as *mut WindowState);
     Ok(state)
 }
 
