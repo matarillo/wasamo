@@ -200,11 +200,13 @@ commit.
   intentionally omitted per DD-P7-004). CI now sequences
   `cargo build --workspace` (debug) between release build and tests
   so the import lib exists before wasamo-sys's test link step
-- [ ] `wasamo` (safe wrapper) crate at `bindings/rust/`:
-  stable-core surface at crate root; `wasamo::experimental`
-  submodule for the experimental constructors and
-  `button_set_clicked`. `!Send` handles, closure-capable callbacks
-  via trampoline + `destroy_fn` drop hook
+- [x] `wasamo` (safe wrapper) crate at `bindings/rust/`:
+  stable-core surface at crate root (`Runtime`, `Window`, `Widget`,
+  `Value`, `OwnedValue`, `Connection`, `Error`); `wasamo::experimental`
+  submodule for widget constructors and `on_clicked`. `!Send` handles,
+  closure-safe callbacks via trampoline + `destroy_fn` drop hook.
+  Known: rlib name collision warning with wasamo-runtime (cargo#6313);
+  deferred to post-M1 cleanup
 - [ ] `bindings/zig/wasamo.zig`: `@cImport(wasamo.h)` + Zig-idiomatic
   wrappers (slices, error sets, tagged unions); same module split
   as Rust (`wasamo.experimental`)
