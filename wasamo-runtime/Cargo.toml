@@ -1,9 +1,10 @@
 [package]
-name = "wasamo"
+name = "wasamo-runtime"
 version = "0.1.0"
 edition = "2021"
 
 [lib]
+name = "wasamo"
 crate-type = ["cdylib", "rlib"]
 
 [dependencies.windows]

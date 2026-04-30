@@ -1,8 +1,8 @@
 # Wasamo Architecture
 
-**Document version:** 0.10
-**Last updated:** 2026-04-29
-**Status:** Phase 0, Phase 1, Phase 2, Phase 3, Phase 4, and Phase 5 complete
+**Document version:** 0.12
+**Last updated:** 2026-04-30
+**Status:** Phases 0-6 complete; Phase 7 in progress
 
 ---
 
@@ -11,19 +11,22 @@
 ```
 wasamo/                         ← workspace root
 ├── Cargo.toml                  ← workspace manifest
-├── wasamo/                     ← runtime DLL crate
-│   ├── Cargo.toml
-│   └── src/
-│       └── lib.rs
+├── wasamo-runtime/             ← runtime DLL crate (cdylib + rlib)
+│   ├── Cargo.toml              ← package = wasamo-runtime; [lib].name = "wasamo"
+│   ├── src/
+│   │   └── lib.rs
+│   └── examples/               ← Phase 2-5 visual-check binaries (internal/dev)
 ├── wasamoc/                    ← DSL compiler CLI crate
 │   ├── Cargo.toml
 │   └── src/
 │       └── main.rs
 ├── bindings/
-│   └── rust/                   ← Rust bindings (M1 scope)
-│       ├── Cargo.toml
-│       └── src/
-│           └── lib.rs
+│   ├── c/                      ← wasamo.h, smoke.c, CMake template (Phase 6-7)
+│   ├── rust/                   ← Rust safe wrapper crate (Phase 7)
+│   │   ├── Cargo.toml
+│   │   └── src/
+│   │       └── lib.rs
+│   └── zig/                    ← Zig binding (Phase 7)
 └── examples/
     └── counter/                ← Hello Counter (Phase 8)
 ```
@@ -32,10 +35,20 @@ wasamo/                         ← workspace root
 
 | Crate | crate-type | Output | Responsibility |
 |---|---|---|---|
-| `wasamo` | `cdylib` | `wasamo.dll` + `wasamo.lib` | Runtime. Exposes the C ABI. |
+| `wasamo-runtime` | `cdylib` + `rlib` | `wasamo.dll` + `wasamo.dll.lib` (cdylib); `libwasamo.rlib` (rlib) | Runtime. Exposes the C ABI through the cdylib; the rlib is **internal/dev-only** (consumed by Phase 2-5 visual-check examples; not the supported public Rust API — see DD-P7-002). |
 | `wasamoc` | `bin` | `wasamoc.exe` | `.ui` file parser and checker CLI. |
-| `bindings/rust` | `lib` | Rust library | Safe Rust wrapper over `wasamo.dll`. |
-| `examples/counter` | `bin` | `counter.exe` | Sample app via Rust bindings. |
+| `wasamo-sys` *(Phase 7)* | `lib` | Raw FFI crate | `extern "C"` declarations matching `wasamo.h`; links `wasamo.dll.lib`. |
+| `wasamo` *(Phase 7, at `bindings/rust/`)* | `lib` | Safe Rust wrapper | Idiomatic Rust over `wasamo-sys`; `wasamo::experimental` for the M1 experimental layer. **This** is the supported public Rust API. |
+| `examples/counter` *(Phase 8)* | `bin` | `counter.exe` | Sample app via the safe `wasamo` wrapper. |
+
+The `[lib].name = "wasamo"` setting on `wasamo-runtime` keeps the
+DLL/import-lib filenames at `wasamo.dll` / `wasamo.dll.lib`, so the
+C ABI artifact name is unaffected by the package rename. The
+package and crate are renamed because, per
+[DD-P7-002](./decisions/phase-7-language-bindings.md#dd-p7-002--wasamo-rlib-status-and-crate-naming),
+the user-facing Rust safe wrapper at `bindings/rust/` takes the
+`wasamo` crate name; the runtime crate that produces the DLL is
+named after its role (`wasamo-runtime`).
 
 ### Inter-crate dependencies
 
@@ -43,14 +56,24 @@ wasamo/                         ← workspace root
 wasamoc
   └── (future) wasamo-ast crate  ← to be split in M2; internal to wasamoc in M1
 
-bindings/rust
-  └── wasamo.dll (dynamic link)
+bindings/rust  (safe wrapper, crate name: wasamo)
+  └── wasamo-sys (raw FFI)
+        └── wasamo.dll (dynamic link via wasamo.dll.lib)
 
 examples/counter
   └── bindings/rust
+
+wasamo-runtime/examples/phase{2,3,4,5}_visual_check  (internal/dev)
+  └── wasamo-runtime (rlib path; not via the C ABI)
 ```
 
-`wasamo` (the DLL) does not depend on any other Rust crate in this workspace. The C ABI boundary is the only coupling point.
+`wasamo-runtime` (the DLL) does not depend on any other Rust crate
+in this workspace. The C ABI boundary is the only coupling point
+between the runtime and the Rust binding pair. The rlib path is
+retained solely so the Phase 2-5 visual-check examples (which
+predate the C ABI and exist to verify Win32/WinRT integration)
+continue to compile without churn; it is **not** part of the
+supported public Rust API.
 
 ---
 

@@ -1,6 +1,6 @@
 [workspace]
 members = [
-    "wasamo",
+    "wasamo-runtime",
     "wasamoc",
     "bindings/rust",
 ]
