@@ -171,13 +171,48 @@ items. The checklist below reflects that decomposition.
 
 ### Phase 7 — Language bindings
 
-- [ ] C: `wasamo.h` + `wasamo.lib` placed in `bindings/c/`, CMake sample
-- [ ] Rust: `wasamo-sys` crate with `build.rs` linkage
-- [ ] Rust: safe wrapper crate (`wasamo`)
-- [ ] Zig: `bindings/zig/wasamo.zig` with `@cImport`
-- [ ] `CONTRIBUTING.md` documents how to add a binding
-- [ ] `docs/architecture.md` bindings section updated
-- [ ] CI: Zig and CMake/C build steps added
+The Phase 7 pre-doc
+([docs/decisions/phase-7-language-bindings.md](./docs/decisions/phase-7-language-bindings.md),
+DD-P7-001..006, Agreed 2026-04-30) revised the original task list.
+Two facts shaped the revision: (1) M1's "C ABI verified in three
+languages" criterion is hollow if Rust uses the rlib directly
+instead of crossing the C ABI, so a `wasamo-sys` + safe wrapper
+pair is required (DD-P7-001); (2) the cdylib's `wasamo` crate name
+collides with what the safe wrapper wants to be called, so the
+runtime crate is renamed to `wasamo-runtime` while keeping
+`wasamo.dll` / `wasamo.dll.lib` filenames stable (DD-P7-002).
+Scope is Hello-Counter-minimal, not full ABI coverage (DD-P7-004).
+Per session-end agreement, each item below lands as a separate
+commit.
+
+- [x] `docs/decisions/phase-7-language-bindings.md` created, owner
+  agreement obtained (DD-P7-001..006); ROADMAP task list revised
+  alongside ADR
+- [ ] Workspace: rename runtime crate `wasamo` → `wasamo-runtime`;
+  `[lib].name = "wasamo"` keeps `wasamo.dll` / `wasamo.dll.lib`
+  filenames stable. Update Phase 4/5 visual-check examples'
+  `Cargo.toml` deps. Reposition the rlib path as internal/dev-only
+- [ ] `wasamo-sys` crate: raw `extern "C"` declarations matching
+  `wasamo.h`; `build.rs` links `wasamo.dll.lib`; coverage scoped to
+  Hello-Counter-minimum (DD-P7-004)
+- [ ] `wasamo` (safe wrapper) crate at `bindings/rust/`:
+  stable-core surface at crate root; `wasamo::experimental`
+  submodule for the experimental constructors and
+  `button_set_clicked`. `!Send` handles, closure-capable callbacks
+  via trampoline + `destroy_fn` drop hook
+- [ ] `bindings/zig/wasamo.zig`: `@cImport(wasamo.h)` + Zig-idiomatic
+  wrappers (slices, error sets, tagged unions); same module split
+  as Rust (`wasamo.experimental`)
+- [ ] `bindings/c/CMakeLists.txt` template; CI extended to build
+  the existing smoke TU through CMake (MSVC + clang-cl)
+- [ ] `CONTRIBUTING.md` documents how to add a binding (sys/safe
+  pair pattern; experimental module convention; expected coverage
+  level per phase)
+- [ ] `docs/architecture.md` bindings section updated: crate layout,
+  rlib path documented as internal/dev-only, experimental module
+  convention recorded
+- [ ] CI: Zig install step; CMake build step; both link against
+  `wasamo.dll.lib`
 
 ### Phase 8 — Hello Counter sample × 3 languages
 
