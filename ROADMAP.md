@@ -210,16 +210,16 @@ commit.
 - [x] `bindings/zig/wasamo.zig`: hand-written extern block + Zig-idiomatic
   wrappers (slices, error sets, tagged unions); same module split
   as Rust (`wasamo.experimental`)
-- [ ] `bindings/c/CMakeLists.txt` template; CI extended to build
-  the existing smoke TU through CMake (MSVC + clang-cl)
-- [ ] `CONTRIBUTING.md` documents how to add a binding (sys/safe
+- [x] `bindings/c/CMakeLists.txt` template; CI extended to build
+  the existing smoke TU through CMake (MSVC generator; Release config)
+- [x] `CONTRIBUTING.md` documents how to add a binding (sys/safe
   pair pattern; experimental module convention; expected coverage
   level per phase)
-- [ ] `docs/architecture.md` bindings section updated: crate layout,
+- [x] `docs/architecture.md` bindings section updated: crate layout,
   rlib path documented as internal/dev-only, experimental module
-  convention recorded
-- [ ] CI: CMake build step; links against `wasamo.dll.lib`
-  (Zig install + Zig smoke step already added this commit)
+  convention recorded (v0.13)
+- [x] CI: CMake build step + Zig install + Zig smoke step; both link
+  against `wasamo.dll.lib`
 
 ### Phase 8 — Hello Counter sample × 3 languages
 
