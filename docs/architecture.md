@@ -37,8 +37,8 @@ wasamo/                         ← workspace root
 |---|---|---|---|
 | `wasamo-runtime` | `cdylib` + `rlib` | `wasamo.dll` + `wasamo.dll.lib` (cdylib); `libwasamo.rlib` (rlib) | Runtime. Exposes the C ABI through the cdylib; the rlib is **internal/dev-only** (consumed by Phase 2-5 visual-check examples; not the supported public Rust API — see DD-P7-002). |
 | `wasamoc` | `bin` | `wasamoc.exe` | `.ui` file parser and checker CLI. |
-| `wasamo-sys` *(Phase 7)* | `lib` | Raw FFI crate | `extern "C"` declarations matching `wasamo.h`; links `wasamo.dll.lib`. |
-| `wasamo` *(Phase 7, at `bindings/rust/`)* | `lib` | Safe Rust wrapper | Idiomatic Rust over `wasamo-sys`; `wasamo::experimental` for the M1 experimental layer. **This** is the supported public Rust API. |
+| `wasamo-sys` (at `bindings/rust-sys/`) | `lib` | Raw FFI crate | `extern "C"` declarations matching `wasamo.h`; `build.rs` links `wasamo.dll.lib` via `dylib:+verbatim`. Hello-Counter-minimal scope. |
+| `wasamo` (at `bindings/rust/`) | `lib` | Safe Rust wrapper | Idiomatic Rust over `wasamo-sys`: `Runtime`/`Window`/`Widget`/`Value`/`Error`; `wasamo::experimental` for the M1 experimental layer. **This** is the supported public Rust API. |
 | `examples/counter` *(Phase 8)* | `bin` | `counter.exe` | Sample app via the safe `wasamo` wrapper. |
 
 The `[lib].name = "wasamo"` setting on `wasamo-runtime` keeps the
