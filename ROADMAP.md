@@ -193,9 +193,13 @@ commit.
   filenames stable. Phase 2-5 visual-check examples move with the
   crate; rlib path documented as internal/dev-only in
   `architecture.md`
-- [ ] `wasamo-sys` crate: raw `extern "C"` declarations matching
-  `wasamo.h`; `build.rs` links `wasamo.dll.lib`; coverage scoped to
-  Hello-Counter-minimum (DD-P7-004)
+- [x] `wasamo-sys` crate at `bindings/rust-sys/`: raw `extern "C"`
+  declarations matching `wasamo.h`; `build.rs` links
+  `wasamo.dll.lib` via `dylib:+verbatim`; coverage scoped to
+  Hello-Counter-minimum (observers and generic signal connect
+  intentionally omitted per DD-P7-004). CI now sequences
+  `cargo build --workspace` (debug) between release build and tests
+  so the import lib exists before wasamo-sys's test link step
 - [ ] `wasamo` (safe wrapper) crate at `bindings/rust/`:
   stable-core surface at crate root; `wasamo::experimental`
   submodule for the experimental constructors and
