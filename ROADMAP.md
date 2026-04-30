@@ -207,7 +207,7 @@ commit.
   closure-safe callbacks via trampoline + `destroy_fn` drop hook.
   Known: rlib name collision warning with wasamo-runtime (cargo#6313);
   deferred to post-M1 cleanup
-- [ ] `bindings/zig/wasamo.zig`: `@cImport(wasamo.h)` + Zig-idiomatic
+- [x] `bindings/zig/wasamo.zig`: hand-written extern block + Zig-idiomatic
   wrappers (slices, error sets, tagged unions); same module split
   as Rust (`wasamo.experimental`)
 - [ ] `bindings/c/CMakeLists.txt` template; CI extended to build
@@ -218,8 +218,8 @@ commit.
 - [ ] `docs/architecture.md` bindings section updated: crate layout,
   rlib path documented as internal/dev-only, experimental module
   convention recorded
-- [ ] CI: Zig install step; CMake build step; both link against
-  `wasamo.dll.lib`
+- [ ] CI: CMake build step; links against `wasamo.dll.lib`
+  (Zig install + Zig smoke step already added this commit)
 
 ### Phase 8 — Hello Counter sample × 3 languages
 
