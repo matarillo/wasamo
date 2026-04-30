@@ -53,3 +53,12 @@ jobs:
         run: |
           clang-cl /nologo /W3 /utf-8 /c /I bindings\c bindings\c\smoke.c /Fo:smoke_clang.obj
           lld-link /nologo smoke_clang.obj target\release\wasamo.dll.lib /OUT:smoke_clang.exe
+
+      - name: Install Zig
+        uses: mlugg/setup-zig@v2
+        with:
+          version: "0.16.0"
+
+      - name: Zig binding smoke test
+        run: zig build test --wasamo-lib ../../target/release/wasamo.dll.lib
+        working-directory: bindings/zig
