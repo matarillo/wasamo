@@ -357,6 +357,16 @@ that cannot be cleanly resolved, fall back to Option B
 (hand-written `extern` block) is acceptable. The choice will be
 re-evaluated on concrete CI evidence rather than speculatively.
 
+**Implementation note (2026-05-01):** Option B (hand-written `extern`
+block) was chosen during implementation. Zig 0.16.0 was found to be
+installed locally (`winget`), enabling local verification before CI.
+`wasamo.h` uses `__declspec(dllimport)` / `WASAMO_EXPORT` macros whose
+Windows-specific expansion complicates `@cImport` on MSVC targets;
+the hand-written extern block is more predictable and mirrors the
+established pattern in `wasamo-sys` (Rust). The fallback clause in
+the agreement was exercised. Rationale recorded in `docs/architecture.md`
+§11.3 (DD-P7-005).
+
 ---
 
 ### DD-P7-006 — C bindings layout and CMake sample shape
