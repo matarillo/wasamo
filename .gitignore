@@ -11,3 +11,6 @@ target/
 .zig-cache/
 zig-out/
 
+# CMake build directory
+build/
+

@@ -54,6 +54,11 @@ jobs:
           clang-cl /nologo /W3 /utf-8 /c /I bindings\c bindings\c\smoke.c /Fo:smoke_clang.obj
           lld-link /nologo smoke_clang.obj target\release\wasamo.dll.lib /OUT:smoke_clang.exe
 
+      - name: CMake smoke test
+        run: |
+          cmake -S bindings/c -B build/cmake-c
+          cmake --build build/cmake-c --config Release
+
       - name: Install Zig
         uses: mlugg/setup-zig@v2
         with:

@@ -1,8 +1,8 @@
 # Wasamo Architecture
 
-**Document version:** 0.12
-**Last updated:** 2026-04-30
-**Status:** Phases 0-6 complete; Phase 7 in progress
+**Document version:** 0.13
+**Last updated:** 2026-05-01
+**Status:** Phases 0-7 (bindings) in progress; C/Rust/Zig bindings shipped
 
 ---
 
@@ -21,12 +21,21 @@ wasamo/                         ← workspace root
 │   └── src/
 │       └── main.rs
 ├── bindings/
-│   ├── c/                      ← wasamo.h, smoke.c, CMake template (Phase 6-7)
-│   ├── rust/                   ← Rust safe wrapper crate (Phase 7)
+│   ├── c/                      ← wasamo.h, smoke.c, CMakeLists.txt (Phase 6-7)
+│   ├── rust-sys/               ← Rust raw FFI crate wasamo-sys (Phase 7)
+│   │   ├── Cargo.toml
+│   │   ├── build.rs
+│   │   └── src/
+│   │       └── lib.rs
+│   ├── rust/                   ← Rust safe wrapper crate wasamo (Phase 7)
 │   │   ├── Cargo.toml
 │   │   └── src/
 │   │       └── lib.rs
 │   └── zig/                    ← Zig binding (Phase 7)
+│       ├── build.zig
+│       ├── build.zig.zon
+│       ├── wasamo.zig
+│       └── smoke_test.zig
 └── examples/
     └── counter/                ← Hello Counter (Phase 8)
 ```
@@ -40,6 +49,7 @@ wasamo/                         ← workspace root
 | `wasamo-sys` (at `bindings/rust-sys/`) | `lib` | Raw FFI crate | `extern "C"` declarations matching `wasamo.h`; `build.rs` links `wasamo.dll.lib` via `dylib:+verbatim`. Hello-Counter-minimal scope. |
 | `wasamo` (at `bindings/rust/`) | `lib` | Safe Rust wrapper | Idiomatic Rust over `wasamo-sys`: `Runtime`/`Window`/`Widget`/`Value`/`Error`; `wasamo::experimental` for the M1 experimental layer. **This** is the supported public Rust API. |
 | `examples/counter` *(Phase 8)* | `bin` | `counter.exe` | Sample app via the safe `wasamo` wrapper. |
+| `bindings/zig/` | Zig package | link-time artifact | Zig binding: hand-written extern block + idiomatic wrappers. `wasamo.experimental` namespace mirrors the M1 experimental layer. |
 
 The `[lib].name = "wasamo"` setting on `wasamo-runtime` keeps the
 DLL/import-lib filenames at `wasamo.dll` / `wasamo.dll.lib`, so the
@@ -595,7 +605,65 @@ host app ──calls──▶ wasamo C ABI ──builds──▶ widget tree at 
 
 ---
 
-## 11. Open Questions (to be resolved in later phases)
+## 11. Language Bindings (Phase 7)
+
+Full decision rationale: [`docs/decisions/phase-7-language-bindings.md`](./decisions/phase-7-language-bindings.md)
+
+### 11.1 Binding overview
+
+| Binding | Path | Status |
+|---|---|---|
+| C | `bindings/c/` | Header (`wasamo.h`) + CMake template; **no wrapper needed** — host `#include`s directly |
+| Rust (raw FFI) | `bindings/rust-sys/` | `wasamo-sys` crate; `extern "C"` declarations; not for direct host use |
+| Rust (safe) | `bindings/rust/` | `wasamo` crate; idiomatic API; **public Rust API** |
+| Zig | `bindings/zig/` | Hand-written extern block + idiomatic wrappers; `wasamo.experimental` namespace |
+
+### 11.2 Why Rust uses a sys + safe pair (DD-P7-001)
+
+M1's acceptance criterion is "C ABI verified in three languages". Routing
+Rust through the `wasamo-runtime` rlib (which bypasses FFI entirely) would
+be a hollow check. `wasamo-sys` crosses the actual C ABI boundary; `wasamo`
+(the safe wrapper) builds on top of it.
+
+### 11.3 Why `@cImport` was not used for Zig (DD-P7-005)
+
+`@cImport` parses a C header at compile time. `wasamo.h` uses
+`__declspec(dllimport)` / `WASAMO_API` macros that complicate header
+parsing on Windows. A hand-written `extern` block is more predictable
+and explicit; it mirrors exactly what `wasamo-sys` does in Rust.
+
+### 11.4 rlib path status (DD-P7-002)
+
+`wasamo-runtime` keeps `[lib].name = "wasamo"` so `wasamo.dll` and
+`wasamo.dll.lib` filenames are stable. The rlib path is retained solely
+for the Phase 2-5 visual-check examples. It is **not** the supported
+public Rust API; use the `wasamo` safe wrapper crate instead.
+
+A `cargo` rlib-name collision warning (cargo#6313) exists between
+`wasamo-runtime` (`[lib].name = "wasamo"`) and the `wasamo` safe wrapper
+crate. This warning is deferred to post-M1 cleanup.
+
+### 11.5 Experimental module convention (DD-P7-003)
+
+Every binding exposes `WASAMO_EXPERIMENTAL`-marked symbols in a clearly
+separated namespace:
+
+| Language | Namespace |
+|---|---|
+| Rust | `wasamo::experimental` submodule |
+| Zig | `wasamo.experimental` (pub const struct) |
+| C | `WASAMO_EXPERIMENTAL` macro annotates each symbol inline |
+
+### 11.6 Smoke test pattern
+
+Each binding includes a link-resolution smoke test that forces the linker
+to resolve every declared ABI symbol without calling into the runtime.
+See `CONTRIBUTING.md` §5 for the pattern and the three reference
+implementations.
+
+---
+
+## 12. Open Questions (to be resolved in later phases)
 
 The following are intentionally left open at this draft stage.
 
@@ -634,3 +702,5 @@ The following are intentionally left open at this draft stage.
 | 0.9     | 2026-04-29 | Phase 5 post-doc: §8 Animation added (compositor-thread independence, ColorKeyFrameAnimation durations, DD-P5-004..006); §8–§10 renumbered to §9–§11; §7.4/§7.5 updated |
 | 0.10    | 2026-04-29 | Phase 6 pre-direction: §3 abi_spec two-layer structure (stable core + M1 experimental); §11 Open Questions extended with signal-model and execution-location items |
 | 0.11    | 2026-04-30 | Phase 6 post-doc: §3 updated to reflect implemented `wasamo.h` (WASAMO_API, WasamoStatus + last-error, re-entrancy contract, finalised experimental set); §11 C-ABI and signal-model questions marked Resolved |
+| 0.12    | 2026-04-30 | Phase 7 pre-doc: §1 workspace layout updated (wasamo-runtime rename, rust-sys + rust safe wrapper + zig placeholders); crate table extended |
+| 0.13    | 2026-05-01 | Phase 7 bindings shipped: §1 workspace layout finalised (rust-sys, rust, zig full paths); crate table + inter-crate dep graph updated; §11 Language Bindings added (overview, sys+safe rationale, @cImport decision, rlib status, experimental convention, smoke test pattern); §12 renumbered from §11 |
