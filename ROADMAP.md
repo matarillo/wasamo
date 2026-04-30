@@ -188,10 +188,11 @@ commit.
 - [x] `docs/decisions/phase-7-language-bindings.md` created, owner
   agreement obtained (DD-P7-001..006); ROADMAP task list revised
   alongside ADR
-- [ ] Workspace: rename runtime crate `wasamo` → `wasamo-runtime`;
+- [x] Workspace: rename runtime crate `wasamo` → `wasamo-runtime`;
   `[lib].name = "wasamo"` keeps `wasamo.dll` / `wasamo.dll.lib`
-  filenames stable. Update Phase 4/5 visual-check examples'
-  `Cargo.toml` deps. Reposition the rlib path as internal/dev-only
+  filenames stable. Phase 2-5 visual-check examples move with the
+  crate; rlib path documented as internal/dev-only in
+  `architecture.md`
 - [ ] `wasamo-sys` crate: raw `extern "C"` declarations matching
   `wasamo.h`; `build.rs` links `wasamo.dll.lib`; coverage scoped to
   Hello-Counter-minimum (DD-P7-004)
