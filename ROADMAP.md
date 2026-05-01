@@ -253,7 +253,7 @@ existing queued-emission machinery (DD-P8-002).
 - [x] `README.md` Quick Start section written (C; links to Rust and Zig examples)
 - [x] `abi_spec.md` §2.3 / §4.3: host→runtime string lifetime clarified
 - [x] All M1 checklist items above marked complete
-- [ ] M1 tag `v0.1.0` released, GitHub Releases notes created
+- [x] M1 tag `v0.1.0` released, GitHub Releases notes created
 
 ---
 
