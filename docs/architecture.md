@@ -1,8 +1,8 @@
 # Wasamo Architecture
 
-**Document version:** 0.14
+**Document version:** 0.15
 **Last updated:** 2026-05-01
-**Status:** Phases 0-8 in progress; runtime re-layout on property change added
+**Status:** Phases 0-8 complete (M1); rlib removed from wasamo-runtime, Phase 2-5 examples deleted
 
 ---
 
@@ -11,11 +11,10 @@
 ```
 wasamo/                         ← workspace root
 ├── Cargo.toml                  ← workspace manifest
-├── wasamo-runtime/             ← runtime DLL crate (cdylib + rlib)
+├── wasamo-runtime/             ← runtime DLL crate (cdylib only)
 │   ├── Cargo.toml              ← package = wasamo-runtime; [lib].name = "wasamo"
-│   ├── src/
-│   │   └── lib.rs
-│   └── examples/               ← Phase 2-5 visual-check binaries (internal/dev)
+│   └── src/
+│       └── lib.rs
 ├── wasamoc/                    ← DSL compiler CLI crate
 │   ├── Cargo.toml
 │   └── src/
@@ -44,7 +43,7 @@ wasamo/                         ← workspace root
 
 | Crate | crate-type | Output | Responsibility |
 |---|---|---|---|
-| `wasamo-runtime` | `cdylib` + `rlib` | `wasamo.dll` + `wasamo.dll.lib` (cdylib); `libwasamo.rlib` (rlib) | Runtime. Exposes the C ABI through the cdylib; the rlib is **internal/dev-only** (consumed by Phase 2-5 visual-check examples; not the supported public Rust API — see DD-P7-002). |
+| `wasamo-runtime` | `cdylib` | `wasamo.dll` + `wasamo.dll.lib` | Runtime. Exposes the C ABI through the cdylib. No rlib emitted — see §11.4. |
 | `wasamoc` | `bin` | `wasamoc.exe` | `.ui` file parser and checker CLI. |
 | `wasamo-sys` (at `bindings/rust-sys/`) | `lib` | Raw FFI crate | `extern "C"` declarations matching `wasamo.h`; `build.rs` links `wasamo.dll.lib` via `dylib:+verbatim`. Hello-Counter-minimal scope. |
 | `wasamo` (at `bindings/rust/`) | `lib` | Safe Rust wrapper | Idiomatic Rust over `wasamo-sys`: `Runtime`/`Window`/`Widget`/`Value`/`Error`; `wasamo::experimental` for the M1 experimental layer. **This** is the supported public Rust API. |
@@ -73,17 +72,11 @@ bindings/rust  (safe wrapper, crate name: wasamo)
 examples/counter
   └── bindings/rust
 
-wasamo-runtime/examples/phase{2,3,4,5}_visual_check  (internal/dev)
-  └── wasamo-runtime (rlib path; not via the C ABI)
 ```
 
 `wasamo-runtime` (the DLL) does not depend on any other Rust crate
 in this workspace. The C ABI boundary is the only coupling point
-between the runtime and the Rust binding pair. The rlib path is
-retained solely so the Phase 2-5 visual-check examples (which
-predate the C ABI and exist to verify Win32/WinRT integration)
-continue to compile without churn; it is **not** part of the
-supported public Rust API.
+between the runtime and the Rust binding pair.
 
 ---
 
@@ -662,16 +655,34 @@ be a hollow check. `wasamo-sys` crosses the actual C ABI boundary; `wasamo`
 parsing on Windows. A hand-written `extern` block is more predictable
 and explicit; it mirrors exactly what `wasamo-sys` does in Rust.
 
-### 11.4 rlib path status (DD-P7-002)
+### 11.4 rlib removal and the cargo#6313 collision
 
-`wasamo-runtime` keeps `[lib].name = "wasamo"` so `wasamo.dll` and
-`wasamo.dll.lib` filenames are stable. The rlib path is retained solely
-for the Phase 2-5 visual-check examples. It is **not** the supported
-public Rust API; use the `wasamo` safe wrapper crate instead.
+`wasamo-runtime` originally used `crate-type = ["cdylib", "rlib"]`.
+The `rlib` was retained solely for the Phase 2-5 visual-check examples
+(internal Win32/WinRT verification tools written before the C ABI
+existed).
 
-A `cargo` rlib-name collision warning (cargo#6313) exists between
-`wasamo-runtime` (`[lib].name = "wasamo"`) and the `wasamo` safe wrapper
-crate. This warning is deferred to post-M1 cleanup.
+Both `wasamo-runtime` (`[lib].name = "wasamo"`) and the `wasamo` safe
+wrapper package produce an rlib named `libwasamo.rlib`. cargo#6313
+describes this as a filename-collision warning, but in practice the
+collision caused cargo to resolve `counter-rust`'s `wasamo` dependency
+to `wasamo-runtime`'s rlib instead of the safe wrapper — a compile
+error (unresolved `Runtime`, `Window`, `Widget`, `Value`).
+
+**Resolution (post-M1):** The `rlib` crate-type was removed from
+`wasamo-runtime` and the Phase 2-5 visual-check examples were deleted.
+Those examples used internal Rust APIs (`WidgetNode`, `TextRenderer`,
+`window.root`, etc.) that are not accessible through the C ABI, so they
+could not be converted to use the cdylib. Their source is preserved in
+git history (see the commit that added this note). The DLL filename
+`wasamo.dll` and all C ABI symbols are unaffected.
+
+**Long-term fix (M2 ADR):** A cdylib-shim crate (`wasamo-dll`) that
+depends on `wasamo-runtime` (rlib-only, renamed to `wasamo_runtime`)
+will restore the separation cleanly — `wasamo-dll` emits `wasamo.dll`
+without an rlib, so no collision with the safe wrapper's rlib. The
+Phase 2-5 dev examples can be re-introduced under a `wasamo-poc`
+workspace once that refactor is complete.
 
 ### 11.5 Experimental module convention (DD-P7-003)
 
@@ -734,3 +745,5 @@ The following are intentionally left open at this draft stage.
 | 0.11    | 2026-04-30 | Phase 6 post-doc: §3 updated to reflect implemented `wasamo.h` (WASAMO_API, WasamoStatus + last-error, re-entrancy contract, finalised experimental set); §11 C-ABI and signal-model questions marked Resolved |
 | 0.12    | 2026-04-30 | Phase 7 pre-doc: §1 workspace layout updated (wasamo-runtime rename, rust-sys + rust safe wrapper + zig placeholders); crate table extended |
 | 0.13    | 2026-05-01 | Phase 7 bindings shipped: §1 workspace layout finalised (rust-sys, rust, zig full paths); crate table + inter-crate dep graph updated; §11 Language Bindings added (overview, sys+safe rationale, @cImport decision, rlib status, experimental convention, smoke test pattern); §12 renumbered from §11 |
+| 0.14    | 2026-05-01 | Phase 8 post-doc: §6.7 Layout invalidation on property change added (DD-P8-002); status updated |
+| 0.15    | 2026-05-01 | Post-M1 cleanup: rlib removed from wasamo-runtime crate-type; Phase 2-5 visual-check examples deleted; §1 workspace layout, crate table, inter-crate dep graph, §11.4 updated to reflect removal and document M2 cdylib-shim plan |

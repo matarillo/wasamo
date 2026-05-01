@@ -5,15 +5,16 @@ edition = "2021"
 
 [lib]
 # `name = "wasamo"` keeps the cdylib output as `wasamo.dll` / `wasamo.dll.lib`
-# (the public C ABI artifact name agreed in DD-P6-007). The downside is that
-# the rlib is also named `libwasamo.rlib`, which collides with the safe wrapper
-# crate at bindings/rust/ (package name "wasamo"). Cargo emits a warning today;
-# it may become a hard error (rust-lang/cargo#6313). Accepted for M1 — the
-# collision is at the non-hashed output path, not the hashed deps path; actual
-# linking is unaffected. Proper fix (splitting cdylib and rlib into separate
-# crates, or renaming to wasamo_runtime.dll) is deferred to a post-M1 cleanup.
+# (the public C ABI artifact name agreed in DD-P6-007).
+# `rlib` is intentionally absent: both this crate (lib.name = "wasamo") and
+# the safe wrapper package (also named "wasamo") produced libwasamo.rlib,
+# causing cargo to resolve counter-rust's `wasamo` dep to this internal
+# rlib instead of the safe wrapper (cargo#6313 became a compile error).
+# The Phase 2-5 visual-check examples that previously depended on the rlib
+# were deleted in the same commit; see docs/architecture.md §11.4.
+# The proper long-term fix is a cdylib-shim crate (M2 ADR).
 name = "wasamo"
-crate-type = ["cdylib", "rlib"]
+crate-type = ["cdylib"]
 
 [dependencies.windows]
 version = "0.58"
