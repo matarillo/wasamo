@@ -124,7 +124,7 @@ impl Widget {
         };
         if status != sys::WASAMO_OK {
             // Runtime rejected the connect; free the boxed closure now.
-            unsafe { drop_box(raw_ud); }
+            drop_box(raw_ud);
         }
         Connection { token }
     }
