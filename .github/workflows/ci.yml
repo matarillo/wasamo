@@ -65,7 +65,7 @@ jobs:
           version: "0.16.0"
 
       - name: Zig binding smoke test
-        run: zig build test -Dwasamo-lib=../../target/release/wasamo.dll.lib
+        run: zig build test "-Dwasamo-lib=../../target/release/wasamo.dll.lib"
         working-directory: bindings/zig
 
       - name: counter-c (CMake, Release)
@@ -77,11 +77,7 @@ jobs:
         run: cargo build --release -p counter-rust
 
       - name: counter-zig (Zig, ReleaseSafe)
-        run: >-
-          zig build -p .
-          -Dwasamo-lib=../../target/release/wasamo.dll.lib
-          -Dwasamo-zig=../../bindings/zig/wasamo.zig
-          -Doptimize=ReleaseSafe
+        run: zig build -p . "-Dwasamo-lib=../../target/release/wasamo.dll.lib" "-Dwasamo-zig=../../bindings/zig/wasamo.zig" "-Doptimize=ReleaseSafe"
         working-directory: examples/counter-zig
 
       - name: wasamoc check counter.ui
