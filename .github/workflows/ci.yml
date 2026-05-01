@@ -40,7 +40,7 @@ jobs:
         run: cargo test --workspace
 
       - name: Setup MSVC dev environment
-        uses: matarillo/msvc-dev-cmd@v1-node24
+        uses: matarillo/msvc-dev-cmd@release/v1-node24
 
       - name: C ABI smoke test (MSVC cl)
         shell: cmd
