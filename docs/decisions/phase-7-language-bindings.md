@@ -189,6 +189,21 @@ The `[lib].name = "wasamo"` setting in `wasamo-runtime/Cargo.toml`
 preserves `wasamo.dll` / `wasamo.dll.lib` filenames, so the C ABI
 artifact is unaffected.
 
+**Post-M1 implementation note (2026-05-01):** Option A was shipped as
+agreed. However, the cargo#6313 filename collision (`libwasamo.rlib`
+produced by both `wasamo-runtime` and the `wasamo` safe wrapper)
+escalated from a warning to an actual compile error — cargo resolved
+`counter-rust`'s `wasamo` dep to `wasamo-runtime`'s rlib instead of
+the safe wrapper. This made Option C (retire the rlib) effectively
+necessary. The Phase 2-5 visual-check examples were deleted (their
+internal Rust APIs are not accessible through the C ABI, so rewriting
+them would be pure churn as this ADR's Option C analysis notes). The
+`rlib` crate-type was removed from `wasamo-runtime`. The DLL filename
+`wasamo.dll` and all C ABI symbols are unaffected. The long-term proper
+fix — a cdylib-shim crate (`wasamo-dll`) that separates DLL output from
+rlib so `wasamo-runtime` can be renamed cleanly — is planned for M2
+(see `docs/architecture.md` §11.4).
+
 ---
 
 ### DD-P7-003 — Experimental layer surfacing in bindings
