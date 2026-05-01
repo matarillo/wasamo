@@ -86,9 +86,30 @@ The roadmap lives in [ROADMAP.md](./ROADMAP.md). Implementation decisions are re
 
 ## Quick start
 
-```bash
-# Coming soon. Will be published once milestone M1 is reached.
+> **M1 (proof-of-concept).** The DSL → runtime lowering is M2 scope;
+> M1 host programs construct widget trees imperatively through the C ABI.
+> See [`examples/counter/counter.ui`](./examples/counter/counter.ui) for
+> the future declarative form.
+
+**Prerequisites:** Visual Studio 2022 Build Tools, CMake ≥ 3.21, Rust stable (MSVC target).
+
+```bat
+rem Clone and build the runtime DLL
+git clone https://github.com/matarillo/wasamo.git
+cd wasamo
+cargo build --release --workspace
+
+rem Build and run the Hello Counter example (C)
+cmake -S examples/counter-c -B build/counter-c
+cmake --build build/counter-c --config Release
+copy target\release\wasamo.dll build\counter-c\Release\
+build\counter-c\Release\counter.exe
 ```
+
+The same counter is also available in Rust and Zig:
+
+- [examples/counter-rust/](./examples/counter-rust/README.md) — Rust safe wrapper
+- [examples/counter-zig/](./examples/counter-zig/README.md) — Zig binding
 
 ## Documentation
 

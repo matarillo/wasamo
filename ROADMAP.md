@@ -235,24 +235,24 @@ properties must trigger a re-layout pass — currently only `WM_SIZE`
 does; fixed by auto-invalidate inside `set_property`, draining via the
 existing queued-emission machinery (DD-P8-002).
 
-- [ ] `docs/decisions/phase-8-hello-counter.md` created, owner
+- [x] `docs/decisions/phase-8-hello-counter.md` created, owner
   agreement obtained (DD-P8-001..002); ROADMAP task list revised
   alongside ADR
-- [ ] Runtime: `wasamo_set_property` triggers re-layout for
+- [x] Runtime: `wasamo_set_property` triggers re-layout for
   size-affecting properties (`TEXT_CONTENT`, `TEXT_STYLE`,
   `BUTTON_LABEL`); layout drain added to queued-emission machinery;
   `architecture.md` §6 updated
-- [ ] `examples/counter-c/` (`CMakeLists.txt`, `main.c`, `README.md`)
-- [ ] `examples/counter-rust/` (`Cargo.toml`, `src/main.rs`, `README.md`)
-- [ ] `examples/counter-zig/` (`build.zig`, `main.zig`, `README.md`)
-- [ ] Each example README explains: this is the M1 host-imperative
+- [x] `examples/counter-c/` (`CMakeLists.txt`, `main.c`, `README.md`)
+- [x] `examples/counter-rust/` (`Cargo.toml`, `src/main.rs`, `README.md`)
+- [x] `examples/counter-zig/` (`build.zig`, `main.zig`, `README.md`)
+- [x] Each example README explains: this is the M1 host-imperative
   shape (the C ABI experimental layer); `counter.ui` shows the future
   M2 form; `wasamoc check examples/counter/counter.ui` passes
-- [ ] CI: build all three counter examples to release-build success
+- [x] CI: build all three counter examples to release-build success
   (run is GUI-only; CI verifies link, not execution)
-- [ ] `README.md` Quick Start section written (C; links to Rust and Zig examples)
-- [ ] `abi_spec.md` §2.3 / §4.3: host→runtime string lifetime clarified
-- [ ] All M1 checklist items above marked complete
+- [x] `README.md` Quick Start section written (C; links to Rust and Zig examples)
+- [x] `abi_spec.md` §2.3 / §4.3: host→runtime string lifetime clarified
+- [x] All M1 checklist items above marked complete
 - [ ] M1 tag `v0.1.0` released, GitHub Releases notes created
 
 ---

@@ -90,6 +90,10 @@ boundary. Three rules govern any pointer that crosses the ABI:
    call only.** The runtime copies internally if it needs to
    retain them. This applies to all `(const char* ptr, size_t len)`
    string arguments and to `const WasamoValue*` value arguments.
+   Concretely: a string passed as `title_utf8` / `content_utf8` /
+   `label_utf8` / a `WasamoValue.v_string` payload does not need
+   to remain valid after the `wasamo_*` call returns. The caller
+   is free to free, overwrite, or reuse that buffer immediately.
 2. **Runtime-returned pointers are owned by the runtime** and have
    a documented bounded lifetime tied to a specific runtime state.
    Hosts must not call `free` on them. Hosts that need to retain
@@ -277,6 +281,14 @@ change before M4. The contract here:
 - On a successful `wasamo_set_property`, any registered observers
   for this `(widget, property_id)` pair are scheduled to fire
   after the call returns (§6).
+- **String lifetime for `wasamo_set_property`:** the
+  `WasamoValue.v_string` payload passed to `wasamo_set_property`
+  follows §2.3 rule 1 — it is borrowed for the duration of the
+  call only. The runtime copies the UTF-8 bytes internally; the
+  host may free or reuse the buffer as soon as the call returns.
+  (The same rule applies to `wasamo_window_create`'s `title_utf8`
+  and to all widget-constructor `content_utf8` / `label_utf8`
+  arguments.)
 
 ### 4.4 Property-change observers
 
