@@ -2,10 +2,26 @@
 
 ## Language rules
 
-- All files under `docs/` must be written in **English**.
+- All files under `docs/` must be written in **English**, with one
+  exception: `docs/notes/` may be in Japanese (owner-authored exploratory
+  notes — see `docs/notes/README.md`).
 - Conversation with the project owner (chat) is in Japanese.
 - Code comments: English only.
 - Commit messages: English only.
+
+## Document categories under `docs/`
+
+- `docs/decisions/` — ADRs. Per-phase design decisions, agreed and
+  immutable (revisions follow the supersede rule). See its README.
+- `docs/plans/` — Milestone plans. Upstream agreement artifacts that
+  feed into ROADMAP and ADRs. Frozen once `status: in-progress`. See its
+  README for lifecycle and archival policy.
+- `docs/notes/` — Owner-authored exploratory notes and live open
+  questions. Japanese allowed. See its README.
+
+When information settles into a decision, it moves: notes → ADR. When a
+milestone is committed, structure moves: plan → ROADMAP. Each category
+has a single role; do not duplicate content across them.
 
 ## Testing rules
 
