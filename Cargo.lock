@@ -3,6 +3,13 @@
 version = 4
 
 [[package]]
+name = "counter-rust"
+version = "0.1.0"
+dependencies = [
+ "wasamo",
+]
+
+[[package]]
 name = "proc-macro2"
 version = "1.0.106"
 source = "registry+https://github.com/rust-lang/crates.io-index"

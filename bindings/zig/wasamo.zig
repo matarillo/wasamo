@@ -357,26 +357,28 @@ pub const experimental = struct {
     /// Create a vertical stack. Children are consumed: the runtime takes
     /// ownership of the underlying allocations. Widget handles remain
     /// valid for property R/W after this call.
+    /// Supports up to 64 children (sufficient for M1 Hello Counter).
     pub fn vstack(children: []Widget) Error!Widget {
-        var raw_children = std.BoundedArray(?*c.WasamoWidget, 64).init(0) catch unreachable;
-        for (children) |ch| raw_children.append(ch.raw) catch unreachable;
+        var raw_buf: [64]?*c.WasamoWidget = undefined;
+        for (children, 0..) |ch, i| raw_buf[i] = ch.raw;
         var raw: ?*c.WasamoWidget = null;
         try check(c.wasamo_vstack_create(
-            raw_children.slice().ptr,
-            raw_children.len,
+            raw_buf[0..children.len].ptr,
+            children.len,
             &raw,
         ));
         return .{ .raw = raw };
     }
 
     /// Create a horizontal stack. Same ownership semantics as `vstack`.
+    /// Supports up to 64 children (sufficient for M1 Hello Counter).
     pub fn hstack(children: []Widget) Error!Widget {
-        var raw_children = std.BoundedArray(?*c.WasamoWidget, 64).init(0) catch unreachable;
-        for (children) |ch| raw_children.append(ch.raw) catch unreachable;
+        var raw_buf: [64]?*c.WasamoWidget = undefined;
+        for (children, 0..) |ch, i| raw_buf[i] = ch.raw;
         var raw: ?*c.WasamoWidget = null;
         try check(c.wasamo_hstack_create(
-            raw_children.slice().ptr,
-            raw_children.len,
+            raw_buf[0..children.len].ptr,
+            children.len,
             &raw,
         ));
         return .{ .raw = raw };

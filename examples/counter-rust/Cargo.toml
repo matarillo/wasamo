@@ -1,0 +1,11 @@
+[package]
+name    = "counter-rust"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "counter-rust"
+path = "src/main.rs"
+
+[dependencies]
+wasamo = { path = "../../bindings/rust" }

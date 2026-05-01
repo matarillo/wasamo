@@ -4,5 +4,6 @@ members = [
     "wasamoc",
     "bindings/rust",
     "bindings/rust-sys",
+    "examples/counter-rust",
 ]
 resolver = "2"
