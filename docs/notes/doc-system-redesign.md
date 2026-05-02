@@ -1,11 +1,19 @@
 ---
 title: 開発文書体系の再検討
-status: live
+status: resolved
 created: 2026-05-02
-related-adrs: []
+resolved: 2026-05-02
+related-adrs:
+  - docs/decisions/vision-doc-system.md
 ---
 
 # 開発文書体系の再検討
+
+> **Resolved 2026-05-02.** 本ノートで議論した論点 A〜G は
+> [docs/decisions/vision-doc-system.md](../decisions/vision-doc-system.md)
+> (DD-V-010..016) として確定済み。CHANGELOG.md 導入(C-4)+ plan
+> 2層化(F-5)を含む合意内容は ADR を参照。本ファイルは経緯記録として
+> 残す(議論の出発点と却下された選択肢を含む)。
 
 M1 完了直後・M2 計画策定中の現時点で、プロジェクト文書群
 (`VISION.md` / `ROADMAP.md` / `README.md` / `docs/plans/` /
