@@ -252,6 +252,62 @@ ROADMAP commits acceptance criteria → plan tracks progress →
 ADRs record per-phase decisions". `docs/plans/README.md` is
 revised to match.
 
+## DD-V-017 — Revision-history sections in non-normative docs
+
+**Status:** Accepted
+
+**Context:** The same duplication-with-git problem that motivated
+removing VISION's Appendix B (DD-V-012) recurs in other top-of-file
+revision-history tables. A critical re-examination distinguished
+three cases:
+
+1. `docs/architecture.md` — internal design explanation, not a
+   normative specification. Carries a 15-row revision history that
+   duplicates git log + ADRs.
+2. `docs/dsl_spec.md` — the normative `.ui` DSL specification, kept
+   deliberately separate from the reference implementation
+   ([VISION §9.4](../../VISION.md#94-independence-of-the-core-specification))
+   so future third-party implementations can target it. Same applies
+   to the future `docs/abi_spec.md` after the M6 freeze.
+3. ADR-internal "Revision history" sections (e.g. `phase-8-hello-counter.md`)
+   — amendment trail within a single living ADR, not a duplicate of
+   git log per se.
+
+**Options:**
+
+Option A — Apply DD-V-012's logic uniformly: drop revision-history
+tables from all three
+- What you gain: full structural consistency.
+- What you give up: third-party implementers of the DSL spec lose
+  the in-document version trail that is industry-standard for
+  normative specifications (W3C, IETF, TC39).
+
+Option B — Distinguish by document role: drop only from
+non-normative docs
+- What you gain: normative specs keep the version trail their
+  external consumers expect; non-normative docs stop duplicating
+  git.
+- What you give up: introduces a per-document rule that has to be
+  remembered.
+
+Option C — Status quo
+- What you gain: zero change.
+- What you give up: duplication continues in `architecture.md`.
+
+**Decision:** Option B.
+
+- `docs/architecture.md` — revision history table and document
+  version header removed. It is internal design documentation;
+  per-phase changes are recorded in the phase ADRs.
+- `docs/dsl_spec.md`, future `docs/abi_spec.md` — revision history
+  retained. These are normative specifications maintained
+  independently of the reference implementation
+  ([VISION §9.4](../../VISION.md#94-independence-of-the-core-specification)),
+  and external implementers need an in-spec version trail.
+- ADR-internal "Revision history" sections — out of scope for this
+  decision; they serve a different purpose (single-ADR amendment
+  trail) than duplicating project history.
+
 ## Cross-references
 
 - [docs/notes/doc-system-redesign.md](../notes/doc-system-redesign.md)

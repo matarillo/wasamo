@@ -1,7 +1,5 @@
 # Wasamo Architecture
 
-**Document version:** 0.15
-**Last updated:** 2026-05-01
 **Status:** Phases 0-8 complete (M1); rlib removed from wasamo-runtime, Phase 2-5 examples deleted
 
 ---
@@ -725,25 +723,3 @@ The following are intentionally left open at this draft stage.
 | Async measure: how to handle widgets whose size is unknown at measure time (e.g. image load pending) | M2+ | Open |
 | Cache invalidation granularity: strategy for detecting local property changes and recomputing only affected subtrees | M2+ | Open |
 | Custom layout extensibility: approach to layouts beyond built-in primitives — host-language callbacks, data-driven IR injection, or other | M2+ | Open |
-
----
-
-## Revision history
-
-| Version | Date       | Notes                                                         |
-|---------|------------|---------------------------------------------------------------|
-| 0.1     | 2026-04-27 | Initial draft (Phase 0, pending owner agreement)              |
-| 0.2     | 2026-04-27 | Phase 0 agreed; added §7 wasamoc detail (Phase 1, pending owner agreement) |
-| 0.3     | 2026-04-27 | Phase 1 agreed; status updated to reflect completed implementation |
-| 0.4     | 2026-04-28 | Phase 2 pre-doc: §5 expanded with thread model, global state, Mica scope, feature decisions (pending owner agreement) |
-| 0.5     | 2026-04-28 | Phase 2 post-doc: status updated to complete; initialization sequence corrected (WS_EX_NOREDIRECTIONBITMAP, WM_ERASEBKGND; DwmExtendFrameIntoClientArea removed) |
-| 0.6     | 2026-04-28 | Phase 3 post-doc: §6 Layout Engine added; §7–§9 renumbered; Open Questions updated |
-| 0.7     | 2026-04-28 | §9 Open Questions: five layout-related items added (DPI scaling, AccessKit sync, async measure, cache invalidation, custom layout extensibility) |
-| 0.8     | 2026-04-29 | Phase 4 post-doc: §7 Widget Implementation added; §7–§9 renumbered to §8–§10; §4 windows feature set updated; Open Questions updated |
-| 0.9     | 2026-04-29 | Phase 5 post-doc: §8 Animation added (compositor-thread independence, ColorKeyFrameAnimation durations, DD-P5-004..006); §8–§10 renumbered to §9–§11; §7.4/§7.5 updated |
-| 0.10    | 2026-04-29 | Phase 6 pre-direction: §3 abi_spec two-layer structure (stable core + M1 experimental); §11 Open Questions extended with signal-model and execution-location items |
-| 0.11    | 2026-04-30 | Phase 6 post-doc: §3 updated to reflect implemented `wasamo.h` (WASAMO_API, WasamoStatus + last-error, re-entrancy contract, finalised experimental set); §11 C-ABI and signal-model questions marked Resolved |
-| 0.12    | 2026-04-30 | Phase 7 pre-doc: §1 workspace layout updated (wasamo-runtime rename, rust-sys + rust safe wrapper + zig placeholders); crate table extended |
-| 0.13    | 2026-05-01 | Phase 7 bindings shipped: §1 workspace layout finalised (rust-sys, rust, zig full paths); crate table + inter-crate dep graph updated; §11 Language Bindings added (overview, sys+safe rationale, @cImport decision, rlib status, experimental convention, smoke test pattern); §12 renumbered from §11 |
-| 0.14    | 2026-05-01 | Phase 8 post-doc: §6.7 Layout invalidation on property change added (DD-P8-002); status updated |
-| 0.15    | 2026-05-01 | Post-M1 cleanup: rlib removed from wasamo-runtime crate-type; Phase 2-5 visual-check examples deleted; §1 workspace layout, crate table, inter-crate dep graph, §11.4 updated to reflect removal and document M2 cdylib-shim plan |
