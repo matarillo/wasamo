@@ -1,7 +1,5 @@
 # Wasamo Vision
 
-**Document version:** 0.4 (Draft)
-**Last updated:** 2026-05-02
 **Status:** Pre-alpha, design in progress
 
 > This document describes why Wasamo exists, what it prioritizes, and where it's headed.
@@ -139,44 +137,33 @@ For the full story, see [docs/architecture.md](./docs/architecture.md).
 
 ## 7. Roadmap
 
-Each milestone is defined by **acceptance criteria**, not dates. We deliberately don't put dates on these.
+Each milestone closes a single thesis — a hypothesis the milestone
+verifies — rather than a feature checklist. The goal is to keep
+verification scoped and avoid wishlist-style milestones.
+[ROADMAP.md](./ROADMAP.md) is the SSOT for acceptance criteria; the
+thesis summaries below are vision-level framing
+([DD-V-010](./docs/decisions/vision-doc-system.md#dd-v-010--acceptance-criteria-ssot)).
 
-### M1: Proof of concept
-
-- VStack / HStack / Text / Button / Rectangle work
-- Rendering through the Visual Layer (DWM compositing engaged, visual tree responsive on the compositor thread)
-- Minimal C ABI header
-- "Hello Counter" example runs in three languages: C, Rust, and Zig
-
-The point of this milestone is to prove that the core hypothesis — external DSL × C ABI × Visual Layer — actually holds.
-
-M1 deliberately scopes verification to runtime-side ABI mechanics (property read/write, signals, threading and re-entrancy, bottom-up widget construction). It does **not** attempt to settle the M2 direction — wasamoc output format (codegen vs IR), reactive UI primitive design (conditional / list rendering, fine-grained reactivity), or tree-mutation primitives at the ABI surface. Those questions belong to M2 pre-doc, where multiple candidates can be prototyped against concrete data; embedding speculative shapes into M1 risks reading them as commitments. The full M1 / M2 verification split is recorded in [docs/abi_spec.md §5.1](docs/abi_spec.md#51-what-m1-experimental-verifies-and-what-it-does-not). Concretely, the M1 Hello Counter examples construct the widget tree imperatively through the C ABI; the `.ui → runtime` lowering arrives in M2.
-
-Milestones from M2 onward each carry a single thesis (a hypothesis the milestone closes), not a feature checklist — the goal is to keep verification scoped and avoid wishlist-style milestones. ROADMAP.md is authoritative; the summaries below are vision-level framing.
-
-### M2: Foundation
-
-Close the loop on the DSL side: `.ui` files drive the runtime through reactive state propagation, replacing M1's host-imperative widget tree construction. Detail in [docs/plans/m2-plan.md](./docs/plans/m2-plan.md).
-
-### M3: DSL surface
-
-The DSL is expressive enough to write real layouts (Grid / ScrollView / List), and the `.ui` specification is published as a public draft.
-
-### M4: Interaction stack
-
-Input, multi-window, IME, AccessKit, and TextField ship together because they share a focus model. Mica / Acrylic is included from this milestone so Wasamo's identity feature is demonstrable in the first contributor-facing showcase, which also ships here.
-
-### M5: Identity & tooling
-
-Full theming surface (light / dark / accent / type ramp), the official widget set beyond TextField (CheckBox, ComboBox, Menu, …), and the VS Code extension (LSP / highlighting / diagnostics). The VS Code work may run in parallel from M3's spec draft onward; M5 is its acceptance gate.
-
-### M6: 1.0 (C ABI stabilization)
-
-C ABI freeze and SemVer commitment. Performance targets met (<100 ms cold start, <30 MB memory, single-digit-MB binaries). Polished showcase application ships. C / Rust / Zig bindings mature; Swift / Go bindings are post-1.0 community work.
-
-### Post-1.0
-
-Hot reload (interpreter mode; feasibility depends on the wasamoc output format chosen in M2-Phase 2), higher-level animation DSL (the public property-change animation API deferred from Phase 5; see DD-V-001), advanced layout (LazyList, CollectionView), multi-window features beyond M4's primitives, system tray and notification integration, MSIX packaging integration, Swift / Go bindings.
+- **M1 — Proof of concept** ✅ shipped 2026-05-01. Validated the core
+  hypothesis (external DSL × C ABI × Visual Layer) end-to-end.
+  See [CHANGELOG.md](./CHANGELOG.md).
+- **M2 — Foundation.** Close the loop on the DSL side: `.ui` files
+  drive the runtime through reactive state propagation, replacing
+  M1's host-imperative widget tree construction.
+- **M3 — DSL surface.** The DSL is expressive enough to write real
+  layouts, and the `.ui` specification is published as a public
+  draft.
+- **M4 — Interaction stack.** Input, multi-window, IME, AccessKit,
+  and TextField ship together because they share a focus model.
+  Mica / Acrylic ships here so Wasamo's identity feature is
+  demonstrable in the first contributor-facing showcase.
+- **M5 — Identity & tooling.** Full theming surface, the official
+  widget set beyond TextField, and the VS Code extension.
+- **M6 — 1.0 (C ABI stabilization).** ABI freeze and SemVer
+  commitment. Performance targets met. Polished showcase ships.
+  C / Rust / Zig bindings mature.
+- **Post-1.0.** Hot reload, higher-level animation DSL, advanced
+  layout, system integration features, Swift / Go community bindings.
 
 ## 8. Success metrics
 
@@ -313,15 +300,7 @@ Channels:
 - [docs/architecture.md](./docs/architecture.md) — Technical architecture in depth
 - [docs/dsl_spec.md](./docs/dsl_spec.md) — `.ui` DSL specification
 - [ROADMAP.md](./ROADMAP.md) — Detailed milestones
+- [CHANGELOG.md](./CHANGELOG.md) — What has shipped
 - [CONTRIBUTING.md](./CONTRIBUTING.md) — Contribution guide
 - [CODE_OF_CONDUCT.md](./CODE_OF_CONDUCT.md) — Code of Conduct
 - [docs/decisions/](./docs/decisions/) — Architecture Decision Records (ADRs)
-
-## Appendix B: Revision history
-
-| Version | Date | Notes |
-|---------|------|------|
-| 0.4 | 2026-05-02 | §7 Roadmap restructured: M2 redefined as Foundation; post-M2 milestones rebalanced into thesis-driven M3 (DSL surface) / M4 (Interaction stack, including Mica/Acrylic and first showcase) / M5 (Identity & tooling) / M6 (1.0). §10.2 showcase commitment anchored to M4 and M6. §11 official bindings list aligned with M1 verification (C / Rust / Zig); Swift / Go reclassified as post-1.0 community bindings. Roadmap-side detail in `ROADMAP.md` and `docs/decisions/vision-post-m2-roadmap.md`. |
-| 0.3 | 2026-04-30 | Canonical-form policy clarified: `.ui` is canonical, internal DSLs built on host-language bindings are welcomed as derivative shapes; gating conditions for `.ui` and C ABI evolution recorded in `docs/decisions/vision-internal-dsl-policy.md`. §2.2 and §9.4 updated. |
-| 0.2 | 2026-04-29 | Animation reframed as opt-in (instant-by-default); M1 acceptance for Visual Layer rewritten in terms of DWM compositing rather than implicit animations; principle 2 augmented with explicit `view = f(state)` unidirectional model; ADR practice (docs/decisions/) adopted for M1-M2 decisions. |
-| 0.1 | 2026-04-27 | Initial draft |

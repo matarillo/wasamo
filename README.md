@@ -75,9 +75,16 @@ See [VISION.md](./VISION.md#5-differentiators) for a full discussion.
 
 ## Status
 
-**Pre-alpha.** This is a proof-of-concept stage project; not ready for production use. We welcome design discussion and contributions to the foundational implementation.
+**Pre-alpha.** M1 (proof of concept) shipped as
+[v0.1.0](https://github.com/matarillo/wasamo/releases/tag/v0.1.0) on
+2026-05-01; M2 (Foundation) is in planning — see
+[docs/plans/m2-plan.md](./docs/plans/m2-plan.md). Not ready for
+production use. Design discussion and contributions to the
+foundational implementation are welcome.
 
-The roadmap lives in [ROADMAP.md](./ROADMAP.md). Implementation decisions are recorded as Architecture Decision Records in [docs/decisions/](./docs/decisions/).
+Future milestones live in [ROADMAP.md](./ROADMAP.md); shipped
+milestones in [CHANGELOG.md](./CHANGELOG.md); per-phase decisions
+in [docs/decisions/](./docs/decisions/).
 
 ## Requirements
 
@@ -116,7 +123,8 @@ The same counter is also available in Rust and Zig:
 - [VISION.md](./VISION.md) — Why this project exists, what it values, how it's governed
 - [docs/architecture.md](./docs/architecture.md) — Technical architecture in depth
 - [docs/dsl_spec.md](./docs/dsl_spec.md) — The `.ui` DSL language specification
-- [ROADMAP.md](./ROADMAP.md) — Milestones and acceptance criteria
+- [ROADMAP.md](./ROADMAP.md) — Future milestones and acceptance criteria
+- [CHANGELOG.md](./CHANGELOG.md) — Shipped milestones
 - [CONTRIBUTING.md](./CONTRIBUTING.md) — How to contribute
 - [docs/decisions/](./docs/decisions/) — Architecture Decision Records (ADRs)
 
