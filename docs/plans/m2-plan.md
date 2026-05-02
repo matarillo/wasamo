@@ -9,7 +9,9 @@ created: 2026-05-02
 
 # M2 Plan — Foundation Milestone
 
-## Purpose
+## Frozen agreement
+
+### Purpose
 
 M1 proved the core hypothesis (external DSL × C ABI × Visual Layer) by
 exercising the runtime side end-to-end, with hosts constructing widget
@@ -22,12 +24,12 @@ reproducing the DSL by hand.
 This redefines M2 from the original "Alpha" feature wishlist (Grid /
 ScrollView / List / input / IME / AccessKit / VS Code / DSL spec
 public draft) into a **foundation milestone** whose acceptance is
-structural, not feature breadth. The Alpha-style feature work — now
-including Grid layout and the DSL spec public draft — is deferred to
-a later milestone whose label and scope will be settled in a
-follow-up revision (see "Deferred to the next plan revision" below).
+structural, not feature breadth. The Alpha-style feature work has
+been redistributed across M3–M6 (see
+[ROADMAP.md](../../ROADMAP.md) and
+[docs/decisions/vision-post-m2-roadmap.md](../decisions/vision-post-m2-roadmap.md)).
 
-## Phase numbering
+### Phase numbering
 
 Phase numbers in this plan are **local to M2** (M2-Phase 1, 2, …).
 M1's global Phase 1–8 numbering is not continued. ADR identifiers
@@ -36,7 +38,9 @@ from M2 onward use the scope `M<N>-P<n>` (e.g. `DD-M2-P2-001`); see
 M1 phase ADRs (`DD-P3-001` etc.) remain as historical records and
 are not renumbered.
 
-## Acceptance criteria
+### Acceptance criteria
+
+ROADMAP is the SSOT; mirrored here for ergonomics:
 
 - **A1.** `examples/counter/counter.ui` drives the running Hello
   Counter in C, Rust, and Zig — the M1 host-imperative trees in
@@ -56,7 +60,7 @@ are not renumbered.
   constructors remain available but are no longer the only way to
   construct UI.
 
-## Phase breakdown
+### Phase breakdown
 
 The phases below are working hypotheses; each one's design questions
 become a phase ADR at pre-doc time, per
@@ -99,7 +103,7 @@ become a phase ADR at pre-doc time, per
   Counter from `counter.ui`. Replaces the imperative tree
   construction in `examples/counter-{c,rust,zig}/`.
 
-## Phase dependencies
+### Phase dependencies
 
 ```
 M2-Phase 1   ── independent infra; lands any time
@@ -113,7 +117,7 @@ M2-Phases 2 and 3 are decision phases and can run in parallel; both
 gate M2-Phase 4. M2-Phase 5 depends on 4. M2-Phase 6 depends on the
 decisions (2, 3) and on 5.
 
-## Acceptance ↔ phase mapping
+### Acceptance ↔ phase mapping
 
 | Acceptance | Phase(s) |
 |---|---|
@@ -125,10 +129,10 @@ decisions (2, 3) and on 5.
 M2-Phases 2 and 3 are **decision phases** without a direct acceptance
 hook; their outputs are ADR-shaped and feed M2-Phases 4 / 6.
 
-## Out of scope (deferred to later milestones)
+### Out of scope (deferred to later milestones)
 
 Items that originally appeared in the M2 Alpha paragraph but are
-**not** in M2-as-foundation. Allocation to post-M2 milestones is now
+**not** in M2-as-foundation. Allocation to post-M2 milestones is
 recorded in [ROADMAP.md](../../ROADMAP.md):
 
 - Grid / ScrollView / List layout primitives → M3
@@ -149,7 +153,7 @@ recorded in [ROADMAP.md](../../ROADMAP.md):
 - Higher-level animation DSL → post-1.0
 - Swift / Go bindings → post-1.0 community track
 
-## Risks
+### Risks
 
 - **Decision phases (M2-Phase 2, M2-Phase 3) blocking the DSL
   track.** If 2 / 3 do not converge in pre-doc, M2-Phase 6 cannot
@@ -164,7 +168,7 @@ recorded in [ROADMAP.md](../../ROADMAP.md):
   granularity for correctness (not performance), the layout-engine
   changes ripple beyond M2-Phase 5's nominal scope.
 
-## Resolved deferrals
+### Resolved deferrals
 
 The post-M2 questions raised alongside the M2 redefinition were
 resolved on 2026-05-02 and are now recorded in
@@ -184,3 +188,27 @@ and [docs/decisions/vision-post-m2-roadmap.md](../decisions/vision-post-m2-roadm
 - 1.0 binding list → C / Rust / Zig; Swift / Go → post-1.0 community
 - ADR identifier scope `M<N>-P<n>` from M2 onward (see Phase
   numbering above)
+
+## Progress
+
+The progress section is live until M2 reaches `completed`; it tracks
+sub-task state for each phase and the owner-facing "where did we
+leave off" memory. ADR links and commit references are added as
+phases land.
+
+- [ ] **M2-Phase 1 — cdylib-shim cleanup**
+  - ADR: _not yet filed_
+- [ ] **M2-Phase 2 — wasamoc output format decision**
+  - ADR: _not yet filed_
+- [ ] **M2-Phase 3 — Handler execution location**
+  - ADR: _not yet filed_
+- [ ] **M2-Phase 4 — Tree-mutation ABI primitives**
+  - ADR: _not yet filed_
+- [ ] **M2-Phase 5 — Reactive engine**
+  - ADR: _not yet filed_
+- [ ] **M2-Phase 6 — `.ui → runtime` lowering**
+  - ADR: _not yet filed_
+
+### Notes
+
+_Empty._
