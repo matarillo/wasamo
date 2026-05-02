@@ -57,8 +57,17 @@ Option B — <name>
 
 `<scope>` is:
 
-- `P<N>` for phase ADRs (e.g. `DD-P3-001` is the first decision in the Phase 3 ADR)
-- `V` for vision ADRs (e.g. `DD-V-001` is the first decision in any vision ADR; vision ADRs share a single `V` numbering space)
+- `P<N>` for M1 phase ADRs (e.g. `DD-P3-001` is the first decision in
+  the Phase 3 ADR). M1 used global Phase 1–8 numbering.
+- `M<N>-P<n>` for phase ADRs from M2 onward (e.g. `DD-M2-P2-001`).
+  Phase numbering is local to each milestone from M2; the milestone
+  prefix prevents collisions across milestones.
+- `V` for vision ADRs (e.g. `DD-V-001` is the first decision in any
+  vision ADR; vision ADRs share a single `V` numbering space across
+  milestones).
+
+M1 phase ADRs are not renumbered; they remain `DD-P<N>-<seq>` as
+historical record.
 
 ## Revision rule
 

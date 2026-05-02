@@ -1,8 +1,9 @@
 ---
 milestone: M2
-status: drafting
-roadmap-anchor: ROADMAP.md#m2-alpha
-adrs: []
+status: agreed
+roadmap-anchor: ROADMAP.md#m2-foundation
+adrs:
+  - docs/decisions/vision-post-m2-roadmap.md
 created: 2026-05-02
 ---
 
@@ -29,10 +30,11 @@ follow-up revision (see "Deferred to the next plan revision" below).
 ## Phase numbering
 
 Phase numbers in this plan are **local to M2** (M2-Phase 1, 2, …).
-M1's global Phase 1–8 numbering is not continued. ADR identifier
-discipline under the new scheme is one of the questions deferred to
-the next plan revision; pre-doc for each phase will settle the ADR ID
-form at the time it is written.
+M1's global Phase 1–8 numbering is not continued. ADR identifiers
+from M2 onward use the scope `M<N>-P<n>` (e.g. `DD-M2-P2-001`); see
+[docs/decisions/README.md](../decisions/README.md#file-naming).
+M1 phase ADRs (`DD-P3-001` etc.) remain as historical records and
+are not renumbered.
 
 ## Acceptance criteria
 
@@ -125,28 +127,27 @@ hook; their outputs are ADR-shaped and feed M2-Phases 4 / 6.
 
 ## Out of scope (deferred to later milestones)
 
-Items that appear in the current ROADMAP M2 paragraph but are **not**
-in M2-as-foundation:
+Items that originally appeared in the M2 Alpha paragraph but are
+**not** in M2-as-foundation. Allocation to post-M2 milestones is now
+recorded in [ROADMAP.md](../../ROADMAP.md):
 
-- Grid layout primitive (originally an M2 acceptance criterion;
-  moved to the next milestone alongside the other layout work)
-- DSL spec public draft (originally an M2 acceptance criterion;
-  moved to the next milestone so it can reflect Grid and the rest
-  of the post-foundation surface)
-- ScrollView, List, and other layout primitives beyond Grid
-- Input handling beyond M1's mouse-button hit-testing (full mouse
-  semantics, keyboard, touch)
-- IME via TSF (Japanese / CJK input)
-- AccessKit / UIA accessibility integration
-- VS Code extension (LSP, syntax highlighting, diagnostics)
-- Theming, Mica / Acrylic, accent color follow-through
-- Hot reload (interpreter mode)
-- Performance target verification (<100 ms startup, <30 MB memory)
-- Multi-window support
-- Binding coverage beyond Hello-Counter level for Rust / Zig
-
-These will be reallocated across post-M2 milestones in a follow-up
-revision. This plan does not commit to that reallocation.
+- Grid / ScrollView / List layout primitives → M3
+- DSL spec public draft → M3
+- Input handling (kbd / mouse / touch + focus model) → M4
+- Multi-window support → M4 (pre-1.0 because of cross-cutting ABI)
+- TextField widget → M4 (required by IME verification)
+- IME via TSF (Japanese / CJK input) → M4
+- AccessKit / UIA accessibility integration → M4
+- Mica / Acrylic root-window backdrop, system accent → M4
+- VS Code extension (LSP / highlighting / diagnostics) → M5 (parallel
+  track may begin once M3 spec draft is agreed)
+- Full theming surface, official widget set beyond TextField → M5
+- Performance target verification (<100 ms startup, <30 MB memory) → M6
+- Polished showcase + ABI freeze + C/Rust/Zig bindings mature → M6
+- Hot reload (interpreter mode) → post-1.0; feasibility depends on
+  M2-Phase 2's wasamoc output format decision
+- Higher-level animation DSL → post-1.0
+- Swift / Go bindings → post-1.0 community track
 
 ## Risks
 
@@ -163,28 +164,23 @@ revision. This plan does not commit to that reallocation.
   granularity for correctness (not performance), the layout-engine
   changes ripple beyond M2-Phase 5's nominal scope.
 
-## Deferred to the next plan revision
+## Resolved deferrals
 
-The following questions were raised in the same conversation that
-agreed the M2 redefinition, but the owner decided to settle M2 first
-and rebalance the rest afterward. They are recorded here so the next
-revision picks them up rather than re-discovering them:
+The post-M2 questions raised alongside the M2 redefinition were
+resolved on 2026-05-02 and are now recorded in
+[ROADMAP.md](../../ROADMAP.md), [VISION.md §7](../../VISION.md#7-roadmap),
+and [docs/decisions/vision-post-m2-roadmap.md](../decisions/vision-post-m2-roadmap.md)
+(DD-V-005..009). Summary:
 
-- Placement of Grid layout and the DSL spec public draft (moved out
-  of M2 in this revision; the receiving milestone is open)
-- Renumbering / relabeling of post-M2 milestones (current
-  ROADMAP M2 → new M3 Alpha, etc.)
-- Goal rebalance across post-M2 milestones (IME, AccessKit, and
-  VS Code LSP each plausibly warranting their own milestone;
-  Mica / Acrylic positioning given VISION's identity-feature
-  framing)
-- C ABI freeze positioning (currently ROADMAP M4 = 1.0; question
-  whether the freeze should move given M2 redefinition)
-- Bindings list for 1.0 (currently lists Rust / Swift / Zig / Go;
-  M1 verified only C / Rust / Zig — Swift / Go positioning open)
-- Showcase-app placement (VISION §10.2 commits to "shipping
-  showcase apps early"; not currently anchored in any milestone)
-- ADR identifier discipline under M2-local phase numbering (e.g.
-  whether IDs become `DD-M2-P<N>-<seq>` or another form), and the
-  mapping note for prior references such as DD-V-001's "M5 scope"
-  if milestone numbers shift
+- Grid / DSL spec public draft → M3
+- Post-M2 structure: thesis-driven milestones M3 (DSL surface) /
+  M4 (Interaction stack) / M5 (Identity & tooling) / M6 (1.0);
+  Alpha / Beta labels dropped
+- Multi-window → M4 (pre-1.0, ABI cross-cutting)
+- Mica / Acrylic + first showcase → M4 (identity feature
+  demonstrable from M4)
+- VS Code LSP → M5 acceptance, parallel track from M3 spec draft
+- Hot reload → post-1.0
+- 1.0 binding list → C / Rust / Zig; Swift / Go → post-1.0 community
+- ADR identifier scope `M<N>-P<n>` from M2 onward (see Phase
+  numbering above)
