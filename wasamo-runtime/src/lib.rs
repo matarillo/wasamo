@@ -1,5 +1,6 @@
 mod abi;
 mod emit;
+pub mod handler;
 mod layout;
 mod registry;
 mod runtime;
