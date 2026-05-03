@@ -2,7 +2,7 @@
 
 **Phase:** M2-Phase 3 (DSL inline handler execution location)
 **Date:** 2026-05-04
-**Status:** Proposed
+**Status:** Accepted (2026-05-04)
 
 ## Context
 
@@ -79,7 +79,7 @@ this ADR answers.**
 
 ### DD-M2-P3-001 — Where DSL inline handler bodies execute
 
-**Status:** Proposed
+**Status:** Accepted
 
 **Context:**
 With DD-M2-P2-001 = B, the IR carries handler bodies as typed
@@ -269,7 +269,7 @@ future DSL evolution does not re-open this DD.
 
 ### DD-M2-P3-002 — Coexistence with `wasamo_signal_connect`
 
-**Status:** Proposed
+**Status:** Accepted
 
 **Context:**
 Inline handlers in the DSL and host-registered listeners through
@@ -382,7 +382,7 @@ order. Risk reinforces the recommendation.
 
 ### DD-M2-P3-003 — Handler error / panic policy
 
-**Status:** Proposed
+**Status:** Accepted
 
 **Context:**
 Runtime evaluation of handler bodies (DD-M2-P3-001 = A) can raise
@@ -487,7 +487,7 @@ without acceptance demand). Option C's risk is disqualifying.
 
 ### DD-M2-P3-004 — Source location preservation in handler diagnostics
 
-**Status:** Proposed
+**Status:** Accepted
 
 **Context:**
 DD-M2-P3-003 commits the runtime to logging handler errors. The

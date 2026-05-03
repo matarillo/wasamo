@@ -230,16 +230,61 @@ phases land.
   - [x] Spike result appended to ADR; status → **Accepted**
   - [x] `docs/plans/m2-plan.md` Progress: phase ticked, ADR linked, task list written
 - [ ] **M2-Phase 3 — Handler execution location**
-  - ADR: [docs/decisions/m2-phase-3-handler-exec-location.md](../decisions/m2-phase-3-handler-exec-location.md) — **Proposed 2026-05-04** (awaiting owner agreement)
+  - ADR: [docs/decisions/m2-phase-3-handler-exec-location.md](../decisions/m2-phase-3-handler-exec-location.md) — **Accepted 2026-05-04**
   - [x] `docs/decisions/m2-phase-3-handler-exec-location.md` — pre-doc filed (DD-M2-P3-001..004); status "Proposed"
-  - [ ] Owner agreement on DD-M2-P3-001 (Option A: runtime-side interpreter), DD-M2-P3-002 (Option B: separate paths, inline first), DD-M2-P3-003 (Option A: catch_unwind + stderr), DD-M2-P3-004 (Option B: IR reserves optional span; coarse identifiers in M2)
-  - [ ] On agreement: status → **Accepted**, M2-Phase 3 task list written into this Progress section
+  - [x] Owner agreement on DD-M2-P3-001 (Option A: runtime-side interpreter), DD-M2-P3-002 (Option B: separate paths, inline first), DD-M2-P3-003 (Option A: catch_unwind + stderr), DD-M2-P3-004 (Option B: IR reserves optional span; coarse identifiers in M2)
+  - [x] ADR status → **Accepted**
+  - [x] `docs/notes/headless-verification.md` — new live note: ヘッドレス検証機構の必要性検討 (Phase 3 verification gap を契機に起草; M2 内では構築せず pure-logic test fixture 戦略で閉じる)
+  - [x] `docs/plans/m2-plan.md` Progress: phase still **open** — task list expanded below; coding work begins next session
+  - **Implementation scope (this phase, scheduled for next session):**
+    - [ ] `wasamo-runtime/src/handler.rs` 新規 — `HandlerExpr` enum (assign / `+=` `-=` `*=` `/=` / property read+write / int literal / block) + `EvalContext` trait + `evaluate()` + 単体テスト (assign / compound / wrapping overflow / nested block)
+    - [ ] `WidgetNode` に inline-handler slot 追加 + signal emit 経路を「inline 評価 → host listener iter」順に改造 (DD-M2-P3-002 Option B); fake listener list で順序検証 unit test
+    - [ ] handler invoke を `std::panic::catch_unwind` で wrap + 書式 `wasamo: handler error in <component>.<widget-path>.<signal>: <message>` で stderr ログ (DD-M2-P3-003); panic injection unit test
+    - [ ] coarse identifier `<component>.<widget-path>.<signal>` formatter (DD-M2-P3-004 Option B); pure logic として単体テスト
+    - [ ] `cargo build --release --workspace` + `cargo test --workspace` 緑、push、CI Windows runner 緑
+  - **Boundary with adjacent phases:**
+    - vs Phase 4: handler は internal `set_property` のまま (C ABI 越えない — DD-M2-P3-001 Option A の本質)。Phase 4 の C ABI 化は handler 経路を再触しない。
+    - vs Phase 5: `HandlerExpr` evaluator は handler 軸のみ実装。binding 評価器との共通基盤化は Phase 5 で実施 (handler evaluator が Phase 5 の出発点)。
+    - vs Phase 6: `HandlerExpr` は in-memory enum として定義。textual IR ↔ `HandlerExpr` の serialization 接続は Phase 6 で実施。Phase 3 では `experiments/ir-spike/` の throwaway IR は触らない (Phase 6 で全面再設計)。
+  - **GUI 検証は本フェーズでは実施しない.** Phase 5 (reactive 統合) 完了時に counter の click → label 更新が e2e で動くことで遡及的に確認。理由は [docs/notes/headless-verification.md](../notes/headless-verification.md) 参照。
 - [ ] **M2-Phase 4 — Tree-mutation ABI primitives**
   - ADR: _not yet filed_
+  - **Implementation scope (provisional, settled at pre-doc time):**
+    - 既存 internal builder (insert / remove / replace child; property set) を C ABI に昇格。
+    - 複数 property write のバッチ化 (Phase 5 invalidation cascade の amortize 用)。
+    - `wasamo.dll` の export 表に新シンボル追加 (`dumpbin /exports` で検証)。
+  - **Boundary with adjacent phases:**
+    - vs Phase 3: handler は Phase 3 で internal `set_property` を直接呼ぶ実装にしてあり、Phase 4 C ABI 化後も internal 経路を維持 (re-entrancy 回避 + DD-M2-P3-001 Option A の利点保持)。
+    - vs Phase 5: reactive engine の invalidation cascade は Phase 4 の batching primitive に乗る。Phase 4 が batching API を出さないと Phase 5 が大量 write を amortize できない。
+    - vs Phase 6: `wasamo_load_ui` (Phase 6) は新 C ABI 1 本だが、tree 構築自体は Phase 4 の primitive を runtime 内部から使う想定。
+  - **検証種別:** build (`cargo build --release --workspace`) + link/export (`dumpbin /exports target/release/wasamo.dll`) + 単体テスト (pure logic 部分のみ; ABI surface は CI build 緑で代替)。GUI 検証は本フェーズ単独では不要。
 - [ ] **M2-Phase 5 — Reactive engine**
   - ADR: _not yet filed_
+  - **Implementation scope (provisional, settled at pre-doc time):**
+    - property → binding の依存グラフ (dependency tracker) — Solid / Vue 系の signals パターンを参考に数百行規模。
+    - property write 観測 → 依存 binding の invalidate → 再評価 → widget property 書込 → 必要に応じて relayout/render 起動。
+    - binding expression evaluator (read-only / 文字列補間 `"Count: \{root.count}"` 含む) — Phase 3 の `HandlerExpr` evaluator を共通基盤に格上げ (handler evaluator は side-effecting / binding evaluator は pure read; 評価器の core を共有)。
+    - DD-P8-002 の "whole-window dirty" 経路に上乗せ。subtree 粒度は acceptance demand があれば検討、なければ live note に open question として残す。
+  - **Boundary with adjacent phases:**
+    - vs Phase 3: Phase 3 の `HandlerExpr` を読込み、評価器 core を共通化。Phase 3 で property write が呼ばれた時に Phase 5 の dependency tracker が hook 経由で invalidate を起動する。
+    - vs Phase 4: Phase 4 の batching primitive 上で実装。Phase 4 が batching を提供しないと再評価カスケードが性能悪化。
+    - vs Phase 6: Phase 6 が `.ui` の binding 文を typed IR に降下し、Phase 5 の binding expression evaluator が消費する。
+  - **検証種別:** unit test (dependency tracker, binding evaluator は pure logic) + GUI 手動 (実機で counter の reactive 連動を確認 — acceptance A2)。**ヘッドレス検証機構の必要性が顕在化する可能性の高いフェーズ**; Phase 5 着手時に [docs/notes/headless-verification.md](../notes/headless-verification.md) を再評価し、必要なら "no-Compositor" mode の独立 ADR を起こす。
 - [ ] **M2-Phase 6 — `.ui → runtime` lowering**
   - ADR: _not yet filed_
+  - **Implementation scope (provisional, settled at pre-doc time):**
+    - `wasamoc` typed IR emit — DD-M2-P2-003 activities 1-7 を実装 (parse → check → 型推論 → property binding lowering → handler body lowering → textual IR 出力)。
+    - textual IR の normative grammar 起草 (DD-M2-P2-002 Option B; s-expression 風)。
+    - `wasamo-runtime` 側 textual IR parser — Phase 2 spike の `experimental_ir_loader` を production 化、`HandlerExpr` (Phase 3) と binding expression (Phase 5) を生成する。
+    - 新 C ABI 1 本: `wasamo_load_ui(path, &out_root)` 系。
+    - `examples/counter-{c,rust,zig}/` を `.ui` 駆動 host に置換 — acceptance A1。
+    - `architecture.md` 改訂: §6 (or M2 改訂版) に signal dispatch 順序の runtime contract を記載 (DD-M2-P3-002 末尾の指示; 実物が Phase 6 で揃うのでここで記述)。
+  - **Boundary with adjacent phases:**
+    - 新規 core 機構なし。Phase 3 の `HandlerExpr`、Phase 4 の C ABI primitive、Phase 5 の binding evaluator を消費する純統合フェーズ。
+    - 出力先言語別の codegen は **不要** (DD-M2-P2-001 Option B により runtime 側 1 本で足りる)。
+  - **検証種別:** build + 単体テスト (textual IR parser は pure logic) + **GUI 手動 (RDP / 物理) で 3 言語すべての counter を実機確認 — acceptance A1/A2 そのもの**。CI build 緑だけでは A1/A2 は満たせない (verification-environments.md Observation 1 参照)。
+- **Out of M2 scope (再掲):**
+  - ヘッドレス検証 backend — [docs/notes/headless-verification.md](../notes/headless-verification.md) で批判的に検討、構築せず pure-logic test fixture 戦略で M2 を閉じる方針。Phase 5 で再評価トリガあり。
 
 ### Notes
 
