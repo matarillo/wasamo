@@ -241,6 +241,30 @@ recommendation.
 - Option C carries Option A's risk **plus** Option B's risk **plus**
   the classification rule, for no acceptance benefit at M2.
 
+**Forward-compat exposure:** Options differ on this axis. The "Out of
+scope" items at the bottom of this ADR — host-defined function calls
+from handler bodies, component-declared signals firing inline
+handlers at instantiation sites, async handler bodies — are the
+foreseeable directions DSL evolution can take post-M2.
+
+- Option A absorbs each direction inside `wasamo-runtime`: the
+  interpreter grows, or a separate host-call path is added behind the
+  same C ABI surface. Per-binding work scales with C ABI growth, not
+  with DSL growth.
+- Option B requires every binding-language emitter (Rust + C + Zig at
+  M2-Phase 6, more post-M2) to transliterate each new handler-body
+  syntax form. DSL growth multiplies binding workload directly. Async
+  handler bodies in particular are not cleanly unifiable across the
+  three host languages by a syntactic emitter.
+- Option C inherits Option B's emitter coupling for the "non-pure"
+  branch and adds an additional moving piece: the "pure subset"
+  classification rule, which is renegotiated each time the DSL
+  surface grows.
+
+This axis reinforces the Option A recommendation independently of the
+implementation-risk argument: implementation cost is paid once;
+future DSL evolution does not re-open this DD.
+
 ---
 
 ### DD-M2-P3-002 — Coexistence with `wasamo_signal_connect`
@@ -567,26 +591,62 @@ choice that does not foreclose the eventual M3 outcome. Option A
 is also low-risk but converts a future decision into a present
 commitment with no current beneficiary. Option C is overcommitment.
 
+**Forward-compat exposure:** Options differ; this axis is the
+dominant one for this DD. The relevant out-of-scope item is
+"Tightening DD-M2-P3-004 to require spans" — M3's DSL spec work
+decides whether spans become required, and what shape that
+requirement takes (positions only, or richer provenance such as
+macro-expansion stacks and generated-code origin).
+
+- Option A commits M2 to `(span L:C)` as the IR span shape. If M3
+  ultimately requires a different shape, M2 producers and consumers
+  are both wrong, and an IR-format break is needed.
+- Option B reserves the slot as optional: M2 producers may emit
+  nothing, M2 consumers ignore the slot. M3 can replace the slot's
+  payload (`(span L:C)` → `(origin …)`) without breaking either
+  side — the deferral is itself the mitigation.
+- Option C inherits Option A's shape commitment.
+
+Implementation risk is similar across Options A and B; this axis is
+what tilts the recommendation to B.
+
 ---
 
 ## Summary of proposed decisions
 
-| ID | Topic | Recommendation | Risk of recommended |
-|---|---|---|---|
-| DD-M2-P3-001 | Handler-body execution location | **Option A** — runtime-side interpreter (consistent with DD-M2-P2-001 = B layering) | Medium (handler-body evaluator; largely shared with M2-Phase 5) |
-| DD-M2-P3-002 | Coexistence with `wasamo_signal_connect` | **Option B** — separate paths; inline runs first, host listeners after | Low |
-| DD-M2-P3-003 | Handler error / panic policy | **Option A** — `catch_unwind` + stderr log; continue event loop; pluggable sink deferred | Low |
-| DD-M2-P3-004 | Source-location preservation | **Option B** — IR reserves optional span slot; M2 uses coarse identifiers; M3 tightens | Low |
+| ID | Topic | Recommendation | Impl risk | Forward-compat exposure |
+|---|---|---|---|---|
+| DD-M2-P3-001 | Handler-body execution location | **Option A** — runtime-side interpreter (consistent with DD-M2-P2-001 = B layering) | Medium (handler-body evaluator; largely shared with M2-Phase 5) | Low |
+| DD-M2-P3-002 | Coexistence with `wasamo_signal_connect` | **Option B** — separate paths; inline runs first, host listeners after | Low | Low |
+| DD-M2-P3-003 | Handler error / panic policy | **Option A** — `catch_unwind` + stderr log; continue event loop; pluggable sink deferred | Low | Low |
+| DD-M2-P3-004 | Source-location preservation | **Option B** — IR reserves optional span slot; M2 uses coarse identifiers; M3 tightens | Low | Medium |
 
-**Aggregate risk picture.** The only non-trivial risk in the
-recommended package is DD-M2-P3-001's handler-body evaluator, and
-that work is largely shared with M2-Phase 5 (which evaluates
+The Impl-risk column reads the same as prior ADRs: feasibility within
+this phase. The Forward-compat exposure column is new from this ADR
+onwards (see [decisions/README.md](./README.md)) and rates how much
+the recommended option is exposed to revision when post-M2 DSL or
+C ABI extensions land. A per-DD `**Forward-compat exposure**`
+paragraph is written only where options differ on this axis;
+DD-M2-P3-002 and DD-M2-P3-003 have no such paragraph because their
+options are equally additive-compatible with foreseeable extensions.
+
+**Aggregate impl-risk picture.** The only non-trivial impl risk in
+the recommended package is DD-M2-P3-001's handler-body evaluator,
+and that work is largely shared with M2-Phase 5 (which evaluates
 property-binding expressions on invalidation regardless of handler
 location). No option in the recommended package introduces a
 mechanism that has no prior art in similar projects (Slint /
 SwiftUI / Vue all run UI-state mutations through an in-process
 evaluator); the M2-Phase 2 spike already exercised the
 IR-walker → internal-builder shape that Option A extends.
+
+**Aggregate forward-compat exposure.** The dominant exposure in the
+recommended package is DD-M2-P3-004's M3-deferral, mitigated by
+reserving the IR span slot as optional rather than committing to its
+shape now. DD-M2-P3-001's recommendation (Option A) is the
+lowest-exposure option among its three; the alternative (Option B)
+would have ratcheted forward-compat cost with every post-M2 DSL
+extension by requiring per-binding-language emitter updates.
 
 **Pre-doc validation spike.** Not required. The M2-Phase 2 spike
 ([`exp/m2-p2-ir-loader-spike`](https://github.com/matarillo/wasamo/tree/exp/m2-p2-ir-loader-spike),
