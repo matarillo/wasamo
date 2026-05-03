@@ -239,6 +239,20 @@ in-workspace rlib consumers and as a reference for any future formal
 resurrection. It is not merged to main unless a concrete acceptance
 criterion demands it.
 
+**Verified (2026-05-03).** Branch `exp/m2-p1-poc-examples` (tip
+`d86d81c`, pushed to origin) restored all four examples from
+`3a6da11^` into `wasamo-poc/` (workspace-excluded). The only edit
+needed was renaming `wasamo::` to `wasamo_runtime::`; no widget or
+runtime API change was required, confirming the cdylib-shim split
+left the internal Rust API surface untouched. Build and interactive
+verification (window display, hover/press, click → stdout, resize
+re-layout, KeyFrame animation continuing while [B]-key blocks the
+app thread) all pass on a local Windows 11 desktop. A side
+observation about which environments are appropriate for which kinds
+of verification (and why "SSH dev box" in DD-M2-P1-005 is not
+interchangeable with GUI verification) is recorded in
+[`docs/notes/verification-environments.md`](../notes/verification-environments.md).
+
 ---
 
 ### DD-M2-P1-004 — Workspace location of the shim crate
