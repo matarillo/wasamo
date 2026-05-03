@@ -1,6 +1,6 @@
 # Vision ADR — Document system redesign
 
-**Status:** Agreed 2026-05-02
+**Status:** Accepted 2026-05-02
 
 **Scope:** `README.md`, `VISION.md`, `ROADMAP.md`, new `CHANGELOG.md`,
 `docs/plans/README.md`, `docs/plans/<M>-plan.md` structure.

@@ -2,13 +2,13 @@
 
 **Phase:** 2 (Runtime Foundation)
 **Date:** 2026-04-28
-**Status:** Agreed
+**Status:** Accepted
 
 ---
 
 ### DD-P2-001 — `DispatcherQueueController` thread model
 
-**Status:** Agreed
+**Status:** Accepted
 
 **Context:**
 Visual Layer (`Windows.UI.Composition`) requires a `DispatcherQueue` to be
@@ -41,7 +41,7 @@ desktop apps using `Windows.UI.Composition` and matches M1's complexity budget.
 
 ### DD-P2-001b — `apartmentType`: `DQTAT_COM_STA` vs `DQTAT_COM_ASTA`
 
-**Status:** Agreed
+**Status:** Accepted
 
 **Context:**
 `CreateDispatcherQueueController` takes a `DispatcherQueueOptions.apartmentType`
@@ -92,7 +92,7 @@ already available via the existing `Win32_System_WinRT` feature.
 
 ### DD-P2-002 — Global state management strategy
 
-**Status:** Agreed
+**Status:** Accepted
 
 **Context:**
 The runtime DLL needs to store live objects across C ABI call boundaries.
@@ -141,7 +141,7 @@ justified by the single-thread contract in §3 of `architecture.md`.
 
 ### DD-P2-003 — Mica backdrop implementation approach
 
-**Status:** Agreed
+**Status:** Accepted
 
 **Context:**
 The DSL already declares `backdrop: mica` in the reference example

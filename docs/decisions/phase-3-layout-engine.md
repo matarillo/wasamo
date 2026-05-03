@@ -2,13 +2,13 @@
 
 **Phase:** 3 (Layout Engine)
 **Date:** 2026-04-28
-**Status:** Agreed and implemented
+**Status:** Accepted and implemented
 
 ---
 
 ### DD-P3-001 — Layout algorithm
 
-**Status:** Agreed
+**Status:** Accepted
 
 **Context:**
 Phase 3 introduces the layout engine responsible for computing the position
@@ -43,7 +43,7 @@ that adoption decision will be made in the M2 pre-document.
 
 ### DD-P3-002 — LayoutNode ownership and handle model
 
-**Status:** Agreed
+**Status:** Accepted
 
 **Context:**
 The layout engine builds an internal tree of `LayoutNode` structs. The C ABI
@@ -75,7 +75,7 @@ already plans.
 
 ### DD-P3-003 — Size constraint model
 
-**Status:** Agreed
+**Status:** Accepted
 
 **Context:**
 Each widget must declare how it occupies space on each axis. The model
@@ -126,7 +126,7 @@ A `Rectangle` with no explicit dimension is treated as an API error
 
 ### DD-P3-004 — Cross-axis alignment
 
-**Status:** Agreed
+**Status:** Accepted
 
 **Context:**
 Stacks have a main axis (VStack: vertical, HStack: horizontal) and a cross
@@ -155,7 +155,7 @@ when Phase 4 introduces Text and Button.
 
 ### DD-P3-005 — Error handling strategy
 
-**Status:** Agreed
+**Status:** Accepted
 
 **Context:**
 The layout engine can encounter two categories of failure:

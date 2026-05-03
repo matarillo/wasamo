@@ -38,7 +38,7 @@ Each decision entry uses the following structure:
 ```
 ### DD-<scope>-<seq> — <title>
 
-**Status:** Accepted | Superseded by DD-<scope>-<seq>
+**Status:** Proposed | Accepted | Superseded by DD-<scope>-<seq>
 
 **Context:** Why this decision needed to be made.
 
@@ -116,7 +116,7 @@ criterion.
 
 ## Task lists
 
-Implementation task lists — the ordered steps to carry out the agreed
+Implementation task lists — the ordered steps to carry out the Accepted
 decisions — belong in the milestone plan's Progress section
 (`docs/plans/<M>-plan.md`), not in the phase ADR.
 

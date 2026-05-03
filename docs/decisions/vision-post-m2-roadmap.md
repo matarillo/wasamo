@@ -1,6 +1,6 @@
 # Vision ADR — Post-M2 roadmap restructuring
 
-**Status:** Agreed 2026-05-02
+**Status:** Accepted 2026-05-02
 
 **Scope:** ROADMAP.md (M2 onward) and VISION.md §7 / §10.2 / §11.
 

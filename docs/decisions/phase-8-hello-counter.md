@@ -2,7 +2,7 @@
 
 **Phase:** 8 (Hello Counter sample × C / Rust / Zig — final M1 deliverable)
 **Date:** 2026-05-01
-**Status:** Agreed (2026-05-01)
+**Status:** Accepted (2026-05-01)
 
 ## Context
 
@@ -58,7 +58,7 @@ sub-task.
 
 ### DD-P8-001 — `counter.ui` positioning in Hello Counter
 
-**Status:** Agreed
+**Status:** Accepted
 
 **Context:**
 [`examples/counter/counter.ui`](../../examples/counter/counter.ui)
@@ -174,7 +174,7 @@ abi_spec §5.1 needs no change.
 
 ### DD-P8-002 — Property-change layout invalidation
 
-**Status:** Agreed
+**Status:** Accepted
 
 **Context:**
 The current runtime updates `widget.width` / `widget.height`
@@ -300,4 +300,4 @@ and D contort the example to hide the gap.
 
 | Version | Date       | Notes                             |
 |---------|------------|-----------------------------------|
-| 0.1     | 2026-05-01 | Initial draft, agreed same session |
+| 0.1     | 2026-05-01 | Initial draft, Accepted same session |

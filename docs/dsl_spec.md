@@ -2,7 +2,7 @@
 
 **Document version:** 0.2
 **Last updated:** 2026-04-27
-**Status:** Phase 1 agreed
+**Status:** Phase 1 Accepted
 
 ---
 
@@ -399,4 +399,4 @@ schema change is required; M2 adds evaluation logic, not a new representation.
 | Version | Date       | Notes                                                                             |
 |---------|------------|-----------------------------------------------------------------------------------|
 | 0.1     | 2026-04-27 | Initial draft (Phase 1, pending owner agreement)                                  |
-| 0.2     | 2026-04-27 | Phase 1 agreed; added missing tokens (MinusEq/StarEq/SlashEq); corrected AST types (StringLit → Vec<StringPart>, Statement as struct); corrected error output format |
+| 0.2     | 2026-04-27 | Phase 1 Accepted; added missing tokens (MinusEq/StarEq/SlashEq); corrected AST types (StringLit → Vec<StringPart>, Statement as struct); corrected error output format |

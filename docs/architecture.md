@@ -131,7 +131,7 @@ pair (`wasamo-runtime` + `wasamo-dll`) and the Rust binding pair.
 - Re-entrancy: callbacks are queued and drained at safe boundaries —
   no callback fires while the host is inside a `wasamo_*` call.
 
-The full ABI specification is `docs/abi_spec.md` (Agreed, 2026-04-30).
+The full ABI specification is `docs/abi_spec.md` (Accepted, 2026-04-30).
 No ABI stability guarantee is made for M1; M4 is when stability
 commitments begin.
 
@@ -728,7 +728,7 @@ The following are intentionally left open at this draft stage.
 | Layout algorithm (custom measure/arrange vs. Taffy) | Phase 3 | Resolved → DD-P3-001 (§6.6) |
 | Layout node ownership model (opaque handle vs. direct Rust type exposure) | Phase 3 | Resolved → DD-P3-002 (§6.6) |
 | Widget property API details | Phase 4 | Resolved → DD-P4-001 through DD-P4-006 (§7.7) |
-| Full C ABI function signatures | Phase 6 | Resolved → `docs/abi_spec.md` (Agreed) + DD-P6-001..007 |
+| Full C ABI function signatures | Phase 6 | Resolved → `docs/abi_spec.md` (Accepted) + DD-P6-001..007 |
 | Component-declared signal model: Slint-style (DSL inline body) vs XAML-style (host code-behind only) vs hybrid | Phase 6 pre-doc | Resolved → DD-P6-002 (string-keyed + `WasamoValue` payload) |
 | Inline DSL handler execution location: host-side (callback) vs runtime-side (interpreted IR) | M2 | Open |
 | `wasamoc` M2 output format: host-language codegen vs IR + runtime interpretation | M2 | Open |

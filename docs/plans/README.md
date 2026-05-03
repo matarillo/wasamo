@@ -96,7 +96,7 @@ The Frozen agreement section does **not** contain:
 The Progress section contains:
 - A top-level checklist of phases
 - Per-phase implementation task lists (the ordered steps to carry out
-  each phase's agreed decisions)
+  each phase's accepted decisions)
 - Owner-facing notes ("where did we leave off")
 - Links to landed ADRs, commits, or pull requests as phases complete
 

@@ -2,7 +2,7 @@
 
 **Phase:** M2-Phase 2 (wasamoc output format decision)
 **Date:** 2026-05-03
-**Status:** Agreed (2026-05-04; spike passed — see DD-M2-P2-001 spike note)
+**Status:** Accepted (2026-05-04; spike passed — see DD-M2-P2-001 spike note)
 
 ## Context
 
@@ -68,7 +68,7 @@ answers.**
 
 ### DD-M2-P2-001 — Where the .ui→tree work happens
 
-**Status:** Agreed
+**Status:** Accepted
 
 **Context:**
 Three real points in the design space, distinguished by *when* the
@@ -273,7 +273,7 @@ Fail criteria:
 
 Disposition:
 - **Pass** → spike outcome (3-5 line note) appended to this ADR's
-  Context, status moves to **Agreed**, spike branch
+  Context, status moves to **Accepted**, spike branch
   `exp/m2-p2-ir-loader-spike` pushed to origin as the Phase 6
   implementation reference point.
 - **Fail** → DD-M2-P2-001 Recommendation flips to Option A,
@@ -292,7 +292,7 @@ gated on pre-doc validation. The spike validates only the
 
 ### DD-M2-P2-002 — IR artifact form
 
-**Status:** Agreed
+**Status:** Accepted
 
 **Context:**
 Conditional on DD-M2-P2-001 = Option B. The IR has to be serialized
@@ -415,7 +415,7 @@ axis reinforces, rather than complicates, the recommendation.
 
 ### DD-M2-P2-003 — wasamoc 責務境界 (compiler vs runtime division)
 
-**Status:** Agreed
+**Status:** Accepted
 
 **Context:**
 With DD-M2-P2-001 = B, the work of going from `.ui` source to a
@@ -545,7 +545,7 @@ flattening happens in `wasamoc` or in the interpreter.
 
 ### DD-M2-P2-004 — Sequencing relative to M2-Phase 3
 
-**Status:** Agreed
+**Status:** Accepted
 
 **Context:**
 [m2-plan phase dependencies](../plans/m2-plan.md#phase-dependencies)
@@ -571,7 +571,7 @@ host-side leaves all three Phase 2 options viable.
 **Options:**
 
 Option A — Sequential: this ADR (Phase 2) lands first; Phase 3 ADR
-follows once Phase 2 is Agreed (recommended)
+follows once Phase 2 is Accepted (recommended)
 
 - What you gain: Phase 2's outcome reduces Phase 3's option space
   before Phase 3 review begins. Owner reviews one ADR at a time.
@@ -585,7 +585,7 @@ follows once Phase 2 is Agreed (recommended)
 
 Option B — Parallel: both ADRs filed and reviewed together
 - What you gain: A coherent joint shape can be reviewed in one
-  pass; no risk of "Phase 2 agreed then Phase 3 reopens it".
+  pass; no risk of "Phase 2 Accepted then Phase 3 reopens it".
 - What you give up: Two ADRs in flight at once; doubled review
   surface; risk that Phase 3 disagreements re-litigate Phase 2
   mid-discussion.
@@ -607,7 +607,7 @@ overkill given the questions are conceptually separable.
 To insulate the sequential path against a Phase 3 surprise, the
 following table records each Phase 2 option's downstream Phase 3
 implication. If a future Phase 3 outcome is incompatible with the
-Phase 2 option agreed here, this ADR is reopened (per
+Phase 2 option Accepted here, this ADR is reopened (per
 [docs/decisions/README.md supersede policy](./README.md)) rather
 than Phase 3 silently working around it.
 
@@ -663,6 +663,6 @@ Pass criteria confirmed:
 3. **GUI verified locally** — counter window rendered; `Count: 0`
    → `Count: N` on click; hover/press animation intact.
 
-This ADR is now **Agreed**. M2-Phase 2 task list is written in
+This ADR is now **Accepted**. M2-Phase 2 task list is written in
 [m2-plan.md Progress](../plans/m2-plan.md#progress) and M2-Phase 3
 pre-doc is the next phase to enter.

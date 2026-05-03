@@ -2,7 +2,7 @@
 
 **Phase:** M2-Phase 1 (cdylib-shim cleanup)
 **Date:** 2026-05-03
-**Status:** Agreed (2026-05-03)
+**Status:** Accepted (2026-05-03)
 
 ## Context
 
@@ -41,7 +41,7 @@ Phase 2-5 examples) is treated as out-of-scope unless A3 demands it.
 
 ### DD-M2-P1-001 — Existence and shape of the cdylib shim
 
-**Status:** Agreed
+**Status:** Accepted
 
 **Context:**
 The rlib filename collision was resolved in M1 by removing the rlib
@@ -107,13 +107,13 @@ Option C — Status quo: keep `wasamo-runtime` cdylib-only, no shim
     plan's framing of A3 as "the cdylib-shim split" makes this
     option a misread of the criterion.
 
-**Decision:** Option A — Agreed (2026-05-03).
+**Decision:** Option A — Accepted (2026-05-03).
 
 ---
 
 ### DD-M2-P1-002 — Naming of the rlib crate and the shim crate
 
-**Status:** Agreed
+**Status:** Accepted
 
 **Context:**
 Once Option A is taken, two crates need names. The cdylib's
@@ -179,7 +179,7 @@ Option C — Distinct rlib name only (no rename of either crate); only `[lib].na
     This option is structurally not expressible. Listed for
     completeness; rejected on feasibility.
 
-**Decision:** Option A — Agreed (2026-05-03).
+**Decision:** Option A — Accepted (2026-05-03).
 
 **Note on naming convention deviation:**
 Setting `[lib].name = "wasamo"` on a package named `wasamo-dll`
@@ -209,7 +209,7 @@ explicitly.
 
 ### DD-M2-P1-003 — Phase 2-5 dev examples: resurrect now, or defer?
 
-**Status:** Agreed
+**Status:** Accepted
 
 **Context:**
 The M1 resolution to the rlib collision deleted
@@ -229,7 +229,7 @@ Option A — Resurrect under a new workspace dir (e.g. `wasamo-poc/`) in this ph
 Option B — Defer; ship the structural split alone (recommended)
 Option C — Drop them permanently
 
-**Decision:** Option B on the main branch — Agreed (2026-05-03).
+**Decision:** Option B on the main branch — Accepted (2026-05-03).
 
 After the main-branch portion of M2-Phase 1 lands, an experimental
 branch (`exp/m2-p1-poc-examples`) will be created to attempt
@@ -257,7 +257,7 @@ interchangeable with GUI verification) is recorded in
 
 ### DD-M2-P1-004 — Workspace location of the shim crate
 
-**Status:** Agreed
+**Status:** Accepted
 
 **Context:**
 The workspace currently has crates at top level (`wasamo-runtime/`,
@@ -295,7 +295,7 @@ Option C — `crates/wasamo-dll/`
     entangles a workspace-layout open question with an unrelated
     phase.
 
-**Decision:** Option A — Agreed conditionally (2026-05-03). The
+**Decision:** Option A — Accepted conditionally (2026-05-03). The
 `crates/` pattern (Option C) would only make sense if all crates
 migrated together. That is a separate workspace-layout decision,
 not part of this phase. The open question — whether a future
@@ -309,7 +309,7 @@ addressed in the same migration commit.
 
 ### DD-M2-P1-005 — How the shim re-exports the C ABI symbols
 
-**Status:** Agreed
+**Status:** Accepted
 
 **Context:**
 The `#[no_mangle] pub extern "C"` symbols defined in
@@ -341,14 +341,14 @@ Option C — `#[used]` annotations on each symbol in `wasamo-runtime`
   - What you give up: Non-idiomatic for functions in stable Rust;
     documented whole-archive is the standard cdylib-shim mechanism.
 
-**Decision:** Option A — Agreed (2026-05-03). SSH dev box verification
+**Decision:** Option A — Accepted (2026-05-03). SSH dev box verification
 (cargo build + `dumpbin /exports`) is required before pushing to CI.
 
 ---
 
 ### DD-M2-P1-006 — Build-order edge between cdylib shim and final binaries
 
-**Status:** Agreed (2026-05-03)
+**Status:** Accepted (2026-05-03)
 
 **Context:**
 After implementing DD-M2-P1-001..005 in a working tree,
@@ -391,7 +391,7 @@ Option C — Add `wasamo-dll` to `[dependencies]` of each Rust binary individual
     forgot the extra line. Centralising the edge in `rust-sys` (which
     every Rust host already depends on) is strictly safer.
 
-**Decision:** Option A — Agreed (2026-05-03). The `no linkable target`
+**Decision:** Option A — Accepted (2026-05-03). The `no linkable target`
 warning is accepted as a known wart, not a settled end-state; the
 note records re-evaluation triggers (cargo making the warning a hard
 error; a second cdylib-only build-order dependency appearing; a real
@@ -413,7 +413,7 @@ revisit this DD.
 - **Workspace-wide `crates/` reorganisation.** Recorded as an open
   question in [`docs/notes/workspace-layout.md`](../notes/workspace-layout.md).
 
-## Summary of agreed decisions
+## Summary of Accepted decisions
 
 | ID | Topic | Decision |
 |---|---|---|

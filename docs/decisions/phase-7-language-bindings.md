@@ -2,7 +2,7 @@
 
 **Phase:** 7 (Language bindings — C / Rust / Zig)
 **Date:** 2026-04-30
-**Status:** Agreed (2026-04-30)
+**Status:** Accepted (2026-04-30)
 
 ## Context
 
@@ -15,7 +15,7 @@ writes the actual `counter` apps in each language.
 
 The C ABI is already shaped and shipped in Phase 6
 ([`bindings/c/wasamo.h`](../../bindings/c/wasamo.h),
-[`docs/abi_spec.md`](../abi_spec.md), Agreed). On the C side Phase 7
+[`docs/abi_spec.md`](../abi_spec.md), Accepted). On the C side Phase 7
 adds only sample-build infrastructure, not new ABI. The substantive
 work is on the Rust and Zig wrapper sides.
 
@@ -46,7 +46,7 @@ criterion. The decisions below are sequenced so that DD-P7-001
 
 ### DD-P7-001 — Rust binding architecture
 
-**Status:** Agreed
+**Status:** Accepted
 
 **Context:**
 Phase 8's Rust "Hello Counter" needs *some* Rust API to drive the
@@ -118,7 +118,7 @@ the M1 acceptance surface. DD-P7-002 documents this explicitly.
 
 ### DD-P7-002 — `wasamo` rlib status and crate naming
 
-**Status:** Agreed
+**Status:** Accepted
 
 **Context:**
 If DD-P7-001 = B, two derived questions arise:
@@ -190,7 +190,7 @@ preserves `wasamo.dll` / `wasamo.dll.lib` filenames, so the C ABI
 artifact is unaffected.
 
 **Post-M1 implementation note (2026-05-01):** Option A was shipped as
-agreed. However, the cargo#6313 filename collision (`libwasamo.rlib`
+Accepted. However, the cargo#6313 filename collision (`libwasamo.rlib`
 produced by both `wasamo-runtime` and the `wasamo` safe wrapper)
 escalated from a warning to an actual compile error — cargo resolved
 `counter-rust`'s `wasamo` dep to `wasamo-runtime`'s rlib instead of
@@ -208,7 +208,7 @@ rlib so `wasamo-runtime` can be renamed cleanly — is planned for M2
 
 ### DD-P7-003 — Experimental layer surfacing in bindings
 
-**Status:** Agreed
+**Status:** Accepted
 
 **Context:**
 [abi_spec.md §5](../abi_spec.md) marks roughly half the C ABI surface
@@ -272,7 +272,7 @@ retained as a hand-builder escape hatch).
 
 ### DD-P7-004 — Phase 7 scope: Hello-Counter-minimal
 
-**Status:** Agreed
+**Status:** Accepted
 
 **Context:**
 The Phase 6 stable core has 13 functions; the experimental layer
@@ -320,7 +320,7 @@ already commits to verifying in M1.
 
 ### DD-P7-005 — Zig binding strategy
 
-**Status:** Agreed (with CI-driven fallback clause — see note below)
+**Status:** Accepted (with CI-driven fallback clause — see note below)
 
 **Context:**
 Zig has two natural strategies for consuming a C ABI:
@@ -386,7 +386,7 @@ the agreement was exercised. Rationale recorded in `docs/architecture.md`
 
 ### DD-P7-006 — C bindings layout and CMake sample shape
 
-**Status:** Agreed (CMake build verifiable locally — see note below)
+**Status:** Accepted (CMake build verifiable locally — see note below)
 
 **Context:**
 The C side already has `bindings/c/wasamo.h` and a smoke-test TU
@@ -528,7 +528,7 @@ the runtime owns the storage, the closure borrows for its duration.
 
 ## Revised Phase 7 ROADMAP task list (proposed)
 
-If the above decisions are agreed, the Phase 7 task list in
+If the above decisions are Accepted, the Phase 7 task list in
 [ROADMAP.md](../../ROADMAP.md#L172-L180) is revised to reflect the
 crate rename and the scope split:
 

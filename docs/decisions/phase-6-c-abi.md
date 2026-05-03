@@ -2,7 +2,7 @@
 
 **Phase:** 6 (C ABI header — `wasamo.h` + `docs/abi_spec.md`)
 **Date:** 2026-04-30
-**Status:** Agreed and implemented (2026-04-30)
+**Status:** Accepted and implemented (2026-04-30)
 
 ## Context
 
@@ -13,7 +13,7 @@ Phase 6's acceptance criterion (from
 C, Rust, and Zig at Phase 8. The header is *minimal*, not *frozen*:
 M4 is when ABI stability commitments begin.
 
-Two pre-pre-doc framing decisions (agreed 2026-04-29, recorded in
+Two pre-pre-doc framing decisions (Accepted 2026-04-29, recorded in
 [../../ROADMAP.md §Phase 6](../../ROADMAP.md)) precede this ADR:
 
 1. **Two-layer `abi_spec.md`.** The spec is partitioned into a
@@ -50,7 +50,7 @@ method.
 
 ### DD-P6-001 — Stable-core scope at function granularity
 
-**Status:** Agreed
+**Status:** Accepted
 
 **Context:**
 The stable core must be the smallest set of functions that lets a
@@ -112,7 +112,7 @@ HWND access during M1 stays in the experimental layer if needed.
 
 ### DD-P6-002 — Signal model
 
-**Status:** Agreed
+**Status:** Accepted
 
 **Context:**
 A "signal" in wasamo is a named, typed event a component can declare
@@ -180,7 +180,7 @@ reasons.
 
 ### DD-P6-003 — Callback contract (lifetime, destroy_fn, re-entrancy)
 
-**Status:** Agreed
+**Status:** Accepted
 
 **Context:**
 Every callback registered through the ABI (signal connect, property
@@ -248,7 +248,7 @@ lifetime bugs.
 
 ### DD-P6-004 — Threading and re-entrancy
 
-**Status:** Agreed
+**Status:** Accepted
 
 **Context:**
 The runtime is built on Win32 + Visual Layer, both of which have
@@ -308,7 +308,7 @@ have a path forward in M1.
 
 ### DD-P6-005 — Error convention
 
-**Status:** Agreed
+**Status:** Accepted
 
 **Context:**
 The current ABI returns `i32` (`0` = ok, `-1` = err) for `wasamo_init`
@@ -367,7 +367,7 @@ needed — adding new codes is non-breaking.
 
 ### DD-P6-006 — Header generation method
 
-**Status:** Agreed
+**Status:** Accepted
 
 **Context:**
 `wasamo.h` can be hand-written, generated from Rust by a tool
@@ -430,7 +430,7 @@ Phase 7-8.
 
 ### DD-P6-007 — DLL boundary contract (export, calling convention, memory ownership)
 
-**Status:** Agreed
+**Status:** Accepted
 
 **Context:**
 `wasamo.dll` is consumed across a dynamic link boundary by hosts
@@ -570,6 +570,6 @@ This decision interacts with prior DDs:
 | DD-P6-006 | Header generation | Option A — hand-written `wasamo.h`, CI-verified |
 | DD-P6-007 | DLL boundary | `WASAMO_EXPORT` via `WASAMO_BUILDING_DLL`; `WASAMO_API = __cdecl`; Option A for memory (runtime owns, bounded lifetime) |
 
-Once agreed, this ADR's status moves to **Agreed** and the next
+Once Accepted, this ADR's status moves to **Accepted** and the next
 artifact (`docs/abi_spec.md` initial draft) is written against
 these decisions.

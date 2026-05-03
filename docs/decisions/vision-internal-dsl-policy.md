@@ -1,7 +1,7 @@
 # Vision Revision — Canonical Status of `.ui` and the Role of Internal DSLs
 
 **Date:** 2026-04-30
-**Status:** Agreed
+**Status:** Accepted
 **Triggered by:** Pre-Phase-7 review of how host-language bindings relate to the `.ui` DSL
 
 ---
@@ -50,7 +50,7 @@ itself once internal DSL experiments begin to surface gaps.
 
 ### DD-V-002 — `.ui` is canonical; internal DSLs are welcome derivatives
 
-**Status:** Agreed
+**Status:** Accepted
 
 **Context:**
 What is the relationship between `.ui` and host-language internal DSLs
@@ -107,7 +107,7 @@ at feature parity with the most expressive internal DSL.
 
 ### DD-V-003 — Conditions under which `.ui` and the C ABI evolve in response to internal DSL experience
 
-**Status:** Agreed
+**Status:** Accepted
 
 **Context:**
 DD-V-002 establishes that `.ui` need not absorb everything an internal
@@ -174,7 +174,7 @@ merits.
 
 ### DD-V-004 — Treat M1–M3 as an observation period for `.ui` evolution
 
-**Status:** Agreed
+**Status:** Accepted
 
 **Context:**
 Internal DSL experiments have not yet happened; product usage of

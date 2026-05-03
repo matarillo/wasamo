@@ -2,13 +2,13 @@
 
 **Phase:** 4 (Text + Button widgets)
 **Date:** 2026-04-29
-**Status:** Agreed and implemented
+**Status:** Accepted and implemented
 
 ---
 
 ### DD-P4-001 — Text rendering pipeline
 
-**Status:** Agreed
+**Status:** Accepted
 
 **Context:**
 `Text` must render Unicode glyphs onto a `SpriteVisual` using the Windows
@@ -57,7 +57,7 @@ Option B at that time. That decision belongs in the M2 pre-document.
 
 ### DD-P4-002 — Font property model
 
-**Status:** Agreed
+**Status:** Accepted
 
 **Context:**
 `Text` needs a `font` property. The DSL spec (`docs/dsl_spec.md`) already
@@ -96,7 +96,7 @@ the API surface small.
 
 ### DD-P4-003 — Text natural size measurement
 
-**Status:** Agreed
+**Status:** Accepted
 
 **Context:**
 The layout engine (`layout.rs`) is pure Rust with no Win32/WinRT
@@ -139,7 +139,7 @@ DPI re-measurement deferred to M2 (tracked in `architecture.md §9`).
 
 ### DD-P4-004 — Button visual structure
 
-**Status:** Agreed
+**Status:** Accepted
 
 **Context:**
 `Button` needs a background layer (fill color that changes on hover/press)
@@ -197,7 +197,7 @@ deferred to M5 (public animation API).
 
 ### DD-P4-005 — `wnd_proc` ↔ `WindowState` linkage; WM_SIZE and mouse input
 
-**Status:** Agreed
+**Status:** Accepted
 
 **Context:**
 `wnd_proc` is a `unsafe extern "system" fn` registered at window class
@@ -266,7 +266,7 @@ converted to `f32`. The host closure calls `root.run_layout(w, h)`.
 
 ### DD-P4-006 — Button clicked callback model
 
-**Status:** Agreed
+**Status:** Accepted
 
 **Context:**
 When a button is clicked, the host code must be notified. The callback

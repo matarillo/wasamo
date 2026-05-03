@@ -1,7 +1,7 @@
 # Wasamo C ABI Specification
 
 **Version:** M1 (2026-04-30)
-**Status:** Agreed (2026-04-30) — finalised against the implemented `wasamo.h`
+**Status:** Accepted (2026-04-30) — finalised against the implemented `wasamo.h`
 **Authoritative decisions:** [decisions/phase-6-c-abi.md](decisions/phase-6-c-abi.md) (DD-P6-001..007)
 
 This document specifies the C ABI exposed by `wasamo.dll` via the

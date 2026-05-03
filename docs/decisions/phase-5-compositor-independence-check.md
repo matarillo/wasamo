@@ -39,7 +39,7 @@ property-change animation.
 
 ### DD-P5-004 — Verification approach: widget-internal state animation + continuous synthetic visual
 
-**Status:** Agreed
+**Status:** Accepted
 **Supersedes:** DD-P5-001 ([phase-5-implicit-animations-dev-api.md](./phase-5-implicit-animations-dev-api.md))
 
 **Context:**
@@ -133,7 +133,7 @@ rejected outright.
 
 ### DD-P5-005 — Button widget-internal state-transition animation (permanent)
 
-**Status:** Agreed
+**Status:** Accepted
 
 **Context:**
 Phase 4 shipped Button with hover and press states implemented as
@@ -205,7 +205,7 @@ part of the C ABI or any public Rust surface.
 
 ### DD-P5-006 — Verification synthetic visual in `phase5_visual_check.rs`
 
-**Status:** Agreed
+**Status:** Accepted
 **Supersedes:** DD-P5-002, DD-P5-003 ([phase-5-implicit-animations-dev-api.md](./phase-5-implicit-animations-dev-api.md))
 
 **Context:**

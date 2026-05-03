@@ -198,8 +198,8 @@ leave off" memory. ADR links and commit references are added as
 phases land.
 
 - [x] **M2-Phase 1 — cdylib-shim cleanup**
-  - ADR: [docs/decisions/m2-phase-1-cdylib-shim.md](../decisions/m2-phase-1-cdylib-shim.md) (Agreed 2026-05-03)
-  - [x] `docs/decisions/m2-phase-1-cdylib-shim.md` — owner agreement (status "Agreed")
+  - ADR: [docs/decisions/m2-phase-1-cdylib-shim.md](../decisions/m2-phase-1-cdylib-shim.md) (Accepted 2026-05-03)
+  - [x] `docs/decisions/m2-phase-1-cdylib-shim.md` — owner agreement (status "Accepted")
   - [x] `docs/notes/workspace-layout.md` — new live note: workspace layout open question (`crates/` migration) per DD-M2-P1-004
   - [x] `wasamo-runtime/Cargo.toml`: `[lib].name = "wasamo_runtime"`, `crate-type = ["rlib"]`. Comment update.
   - [x] **Intermediate verification (after rlib rename only):** `cargo build --release --workspace` passes.
@@ -217,7 +217,7 @@ phases land.
     - [x] Verify they compile and run on the SSH dev box.
     - [x] Do not merge to main; branch serves as resurrection reference.
 - [x] **M2-Phase 2 — wasamoc output format decision**
-  - ADR: [docs/decisions/m2-phase-2-wasamoc-output-format.md](../decisions/m2-phase-2-wasamoc-output-format.md) — **Agreed 2026-05-04** (spike passed; Option B adopted)
+  - ADR: [docs/decisions/m2-phase-2-wasamoc-output-format.md](../decisions/m2-phase-2-wasamoc-output-format.md) — **Accepted 2026-05-04** (spike passed; Option B adopted)
   - [x] `docs/decisions/m2-phase-2-wasamoc-output-format.md` — pre-doc filed (DD-M2-P2-001..004); status "Pre-doc", agreement gated on feasibility spike
   - [x] Owner agreement on DD-M2-P2-001 (Option B: IR + interpreter), DD-M2-P2-002 (textual IR), DD-M2-P2-003 (activities 1–7 in `wasamoc`), DD-M2-P2-004 (sequential sequencing vs Phase 3)
   - Feasibility spike (`exp/m2-p2-ir-loader-spike`, commit `b7ab4dc`):
@@ -227,7 +227,7 @@ phases land.
     - [x] ~200-line loader (tokenizer + tree walker) implemented in `wasamo-runtime`
     - [x] `experiments/ir-spike/` driver crate renders counter window end-to-end
     - [x] Pass criteria confirmed: internal builder API (`WidgetNode::vstack`, `text`, `button`, `append_child`, `set_clicked`) driven without modification; tagged-value `PropertyValue` sufficient; GUI renders identically to M1 hand-written example
-  - [x] Spike result appended to ADR; status → **Agreed**
+  - [x] Spike result appended to ADR; status → **Accepted**
   - [x] `docs/plans/m2-plan.md` Progress: phase ticked, ADR linked, task list written
 - [ ] **M2-Phase 3 — Handler execution location**
   - ADR: _not yet filed_

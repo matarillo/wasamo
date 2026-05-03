@@ -1,7 +1,7 @@
 # Vision Revision — M1 Acceptance Criteria and Animation Defaults
 
 **Date:** 2026-04-29
-**Status:** Agreed
+**Status:** Accepted
 **Triggered by:** Pre-implementation review of Phase 5 (see
 [phase-5-implicit-animations-dev-api.md](./phase-5-implicit-animations-dev-api.md))
 
@@ -46,7 +46,7 @@ downstream Phase 5 implementation decisions are recorded separately in
 
 ### DD-V-001 — Default property-change behavior is instant; animation is opt-in
 
-**Status:** Agreed
+**Status:** Accepted
 
 **Context:**
 Should Wasamo's default property-change behavior be animated (always
