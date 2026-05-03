@@ -1,0 +1,26 @@
+[package]
+name = "wasamo-poc"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+# wasamo-poc resurrects the M1 Phase 2-5 dev examples that exercised
+# wasamo-runtime's internal Rust API (WidgetNode, window.root, the
+# Compositor handle). These APIs are not exposed through the C ABI
+# and were removed from wasamo-runtime/examples/ when the rlib
+# crate-type was dropped to resolve cargo#6313 (commit 3a6da11).
+#
+# This crate is intentionally outside the main workspace
+# (Cargo.toml [workspace].exclude) and is not built by
+# `cargo build --workspace`. It exists as a resurrection reference
+# for the cdylib-shim split (DD-M2-P1-003) and is not intended to
+# land on main.
+
+[dependencies]
+wasamo-runtime = { path = "../wasamo-runtime" }
+windows = { version = "0.58", features = [
+    "Foundation",
+    "Foundation_Numerics",
+    "UI",
+    "UI_Composition",
+] }

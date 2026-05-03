@@ -7,4 +7,5 @@ members = [
     "bindings/rust-sys",
     "examples/counter-rust",
 ]
+exclude = ["wasamo-poc"]
 resolver = "2"
