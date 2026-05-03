@@ -1,0 +1,15 @@
+[package]
+name = "wasamo-dll"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+# `[lib].name = "wasamo"` deviates from the cargo convention of mirroring the
+# package name (`wasamo-dll` → `wasamo_dll`). The deviation is deliberate:
+# `wasamo.dll` is the public C ABI artifact name fixed by DD-P6-007; changing
+# it would break all downstream consumers. See DD-M2-P1-002 for rationale.
+name = "wasamo"
+crate-type = ["cdylib"]
+
+[dependencies]
+wasamo-runtime = { path = "../wasamo-runtime" }

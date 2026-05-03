@@ -4,17 +4,12 @@ version = "0.1.0"
 edition = "2021"
 
 [lib]
-# `name = "wasamo"` keeps the cdylib output as `wasamo.dll` / `wasamo.dll.lib`
-# (the public C ABI artifact name agreed in DD-P6-007).
-# `rlib` is intentionally absent: both this crate (lib.name = "wasamo") and
-# the safe wrapper package (also named "wasamo") produced libwasamo.rlib,
-# causing cargo to resolve counter-rust's `wasamo` dep to this internal
-# rlib instead of the safe wrapper (cargo#6313 became a compile error).
-# The Phase 2-5 visual-check examples that previously depended on the rlib
-# were deleted in the same commit; see docs/architecture.md §11.4.
-# The proper long-term fix is a cdylib-shim crate (M2 ADR).
-name = "wasamo"
-crate-type = ["cdylib"]
+# rlib-only: the cdylib output (`wasamo.dll`) is now produced by the
+# `wasamo-dll` shim crate (DD-M2-P1-001/002). `[lib].name` is set to
+# `wasamo_runtime` so the rlib filename (`libwasamo_runtime.rlib`) does
+# not collide with the safe wrapper's `libwasamo.rlib` (cargo#6313).
+name = "wasamo_runtime"
+crate-type = ["rlib"]
 
 [dependencies.windows]
 version = "0.58"

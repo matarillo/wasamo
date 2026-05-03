@@ -1,20 +1,14 @@
 // Build script for wasamo-sys.
 //
 // `wasamo.dll.lib` (the import library for `wasamo.dll`) is produced by
-// the `wasamo-runtime` crate into `<target>/<profile>/`. This script
-// tells the linker where to find it. The path is derived from OUT_DIR,
-// which cargo sets to `<target>/<profile>/build/wasamo-sys-<hash>/out`.
+// the `wasamo-dll` cdylib shim crate into `<target>/<profile>/`. This
+// script tells the linker where to find it. The path is derived from
+// OUT_DIR, which cargo sets to `<target>/<profile>/build/wasamo-sys-<hash>/out`.
 //
-// Build-order requirement: `wasamo-runtime` must finish its lib build
-// before any binary that consumes `wasamo-sys` reaches its link step.
-// In a workspace build (`cargo build --workspace` / `cargo test
-// --workspace`) cargo schedules both crates and the lib-build of
-// `wasamo-runtime` reliably finishes before the test/binary link step
-// that needs it. In contrast, a lone `cargo test -p wasamo-sys` does
-// not pull `wasamo-runtime` into the build graph and will fail to link
-// unless `wasamo-runtime` was built earlier into the same target dir.
-// This is acceptable for M1: workspace-level invocations are the
-// supported entry points (and what CI uses).
+// Build-order is enforced by the `wasamo-dll` dependency entry in this
+// crate's Cargo.toml (DD-M2-P1-006): cargo will not start building any
+// binary that depends on `wasamo-sys` until `wasamo-dll` has finished
+// producing `wasamo.dll` and its import library.
 
 use std::env;
 use std::path::PathBuf;

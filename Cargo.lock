@@ -52,6 +52,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "wasamo-dll"
+version = "0.1.0"
+dependencies = [
+ "wasamo-runtime",
+]
+
+[[package]]
 name = "wasamo-runtime"
 version = "0.1.0"
 dependencies = [
@@ -61,6 +68,9 @@ dependencies = [
 [[package]]
 name = "wasamo-sys"
 version = "0.1.0"
+dependencies = [
+ "wasamo-dll",
+]
 
 [[package]]
 name = "wasamoc"

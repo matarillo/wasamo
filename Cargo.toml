@@ -1,6 +1,7 @@
 [workspace]
 members = [
     "wasamo-runtime",
+    "wasamo-dll",
     "wasamoc",
     "bindings/rust",
     "bindings/rust-sys",
