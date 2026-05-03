@@ -94,9 +94,18 @@ The Frozen agreement section does **not** contain:
 - Implementation details
 
 The Progress section contains:
-- A checklist of phases / sub-tasks
+- A top-level checklist of phases
+- Per-phase implementation task lists (the ordered steps to carry out
+  each phase's agreed decisions)
 - Owner-facing notes ("where did we leave off")
 - Links to landed ADRs, commits, or pull requests as phases complete
+
+Per-phase task lists live here — not in the phase ADR — because task
+lists remain hypotheses even after pre-doc agreement. Build failures,
+linker errors, CI surprises, and direct application verification can all
+require steps to be added, split, reordered, or dropped after the design
+decisions themselves are settled. Progress is explicitly mutable
+throughout implementation; the ADR's DD entries are not.
 
 The Progress section does **not** contain:
 - Design decisions (still ADR-shaped)

@@ -1,9 +1,10 @@
 ---
 milestone: M2
-status: agreed
+status: in-progress
 roadmap-anchor: ROADMAP.md#m2-foundation
 adrs:
   - docs/decisions/vision-post-m2-roadmap.md
+  - docs/decisions/m2-phase-1-cdylib-shim.md
 created: 2026-05-02
 ---
 
@@ -198,6 +199,23 @@ phases land.
 
 - [x] **M2-Phase 1 — cdylib-shim cleanup**
   - ADR: [docs/decisions/m2-phase-1-cdylib-shim.md](../decisions/m2-phase-1-cdylib-shim.md) (Agreed 2026-05-03)
+  - [x] `docs/decisions/m2-phase-1-cdylib-shim.md` — owner agreement (status "Agreed")
+  - [x] `docs/notes/workspace-layout.md` — new live note: workspace layout open question (`crates/` migration) per DD-M2-P1-004
+  - [x] `wasamo-runtime/Cargo.toml`: `[lib].name = "wasamo_runtime"`, `crate-type = ["rlib"]`. Comment update.
+  - [x] **Intermediate verification (after rlib rename only):** `cargo build --release --workspace` passes.
+  - [x] New `wasamo-dll/` crate: `Cargo.toml` (`[lib] name = "wasamo" crate-type = ["cdylib"]`), `build.rs` with MSVC `/WHOLEARCHIVE:wasamo_runtime` link arg, `src/lib.rs`. Workspace `Cargo.toml` `members += ["wasamo-dll"]`. Bundled with dep-edge step below (DD-M2-P1-006: shim without the edge reproduces the LNK1181 race).
+  - [x] `bindings/rust-sys/build.rs` and any other consumer: cdylib build output path verified unchanged.
+  - [x] `bindings/rust-sys/Cargo.toml`: `wasamo-dll = { path = "../../wasamo-dll" }` added to `[dependencies]` for build-order edge (DD-M2-P1-006). `no linkable target` warning accepted per linked note.
+  - [x] `docs/notes/cdylib-shim-build-graph.md` — new live note: `no linkable target` deferral and re-evaluation triggers (DD-M2-P1-006)
+  - [x] **Final verification:** `cargo clean && cargo build --release --workspace` passes; `dumpbin /exports target/release/wasamo.dll` shows all 19 `wasamo_*` symbols; `cargo run -p counter-rust --release` works end-to-end.
+  - [x] `docs/architecture.md`: §1 workspace layout and crate responsibilities table updated; §11.4 replaced.
+  - [x] `docs/plans/m2-plan.md` Progress: phase ticked, ADR linked.
+  - [x] `CHANGELOG.md`: cdylib-shim split entry added.
+  - Experimental branch (after main landed):
+    - [ ] Create branch `exp/m2-p1-poc-examples` from M2-Phase 1 tip.
+    - [ ] Recover Phase 2-5 examples from git history; place under `wasamo-poc/`; add to workspace. Update their `wasamo` dep to `wasamo-runtime`.
+    - [ ] Verify they compile and run on the SSH dev box.
+    - [ ] Do not merge to main; branch serves as resurrection reference.
 - [ ] **M2-Phase 2 — wasamoc output format decision**
   - ADR: _not yet filed_
 - [ ] **M2-Phase 3 — Handler execution location**

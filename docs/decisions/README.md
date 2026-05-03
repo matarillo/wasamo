@@ -113,3 +113,27 @@ superseded by its replacement). Without pre-doc discipline the
 original task list would have been implemented as written, embedding
 a behavior that contradicts the milestone's actual acceptance
 criterion.
+
+## Task lists
+
+Implementation task lists — the ordered steps to carry out the agreed
+decisions — belong in the milestone plan's Progress section
+(`docs/plans/<M>-plan.md`), not in the phase ADR.
+
+The rationale: even a task list agreed in pre-doc remains a hypothesis.
+Build failures, linker errors, CI surprises, and direct application
+observation can all reveal that a step needs to be split, reordered,
+added, or dropped after the design decisions themselves are settled.
+Keeping task lists in the plan's Progress section (which is explicitly
+mutable throughout implementation) allows those adjustments without
+implying that a design decision has changed. DD entries follow the
+supersede rule and stay stable; task steps are operational detail and
+stay flexible.
+
+An ADR may include:
+- DD entries (the decision record)
+- A summary table of DD entries at the end
+- An explicit out-of-scope list
+
+An ADR must not include:
+- A per-step implementation checklist
