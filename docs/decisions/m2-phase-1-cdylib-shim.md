@@ -420,6 +420,10 @@ revisit this DD.
       layout open question (`crates/` migration) per DD-M2-P1-004
 - [ ] `wasamo-runtime/Cargo.toml`: `[lib].name = "wasamo_runtime"`,
       `crate-type = ["rlib"]`. Comment update.
+- [ ] **Intermediate verification (after rlib rename only):**
+      `cargo build --release --workspace` passes. This isolates any
+      breakage caused by the rename itself before the cdylib shim
+      exists.
 - [ ] New `wasamo-dll/` crate: `Cargo.toml`
       (`[lib] name = "wasamo" crate-type = ["cdylib"]`), `build.rs`
       with MSVC `/WHOLEARCHIVE:wasamo_runtime` link arg, `src/lib.rs`.
@@ -430,12 +434,15 @@ revisit this DD.
       `wasamo-dll = { path = "../../wasamo-dll" }` to `[dependencies]`
       to create the build-order edge (DD-M2-P1-006). Accept the
       `no linkable target` warning per the linked note.
-- [ ] `docs/notes/cdylib-shim-build-graph.md` — new live note
+      Note: the two steps above (wasamo-dll creation + dep edge) must
+      land together — wasamo-dll without the dep edge reproduces
+      the LNK1181 race under `cargo clean`.
+- [x] `docs/notes/cdylib-shim-build-graph.md` — new live note
       recording the `no linkable target` deferral and re-evaluation
       triggers (DD-M2-P1-006).
-- [ ] Local verification: `cargo clean && cargo build --release --workspace`;
+- [ ] **Final verification:** `cargo clean && cargo build --release --workspace`;
       `dumpbin /exports target/release/wasamo.dll` shows all 19
-      `wasamo_*` symbols; `cargo run -p counter-rust` works
+      `wasamo_*` symbols; `cargo run -p counter-rust --release` works
       end-to-end.
 - [ ] `docs/architecture.md`: update §1 workspace layout (add
       `wasamo-dll/`) and crate responsibilities table (`wasamo-runtime`
