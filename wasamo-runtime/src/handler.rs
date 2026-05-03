@@ -113,6 +113,57 @@ pub fn evaluate(expr: &HandlerExpr, ctx: &mut dyn EvalContext) -> Result<i32, Ev
     }
 }
 
+/// Format the coarse handler-location identifier used in diagnostic messages
+/// (DD-M2-P3-004 = Option B).
+///
+/// Format: `<component>.<widget-path>.<signal>`
+/// - `component`: name of the UI component that declared the inline handler
+///   (e.g. `"Counter"`). Supplied by the IR loader at widget-tree build time;
+///   Phase 3 callers pass `"?"` as a placeholder until Phase 6 fills it in.
+/// - `widget_path`: slash-free widget path segments joined by `.`, with an
+///   optional `[index]` suffix for repeated siblings (e.g. `"button[1]"`).
+/// - `signal`: the signal name (e.g. `"clicked"`).
+///
+/// This is pure formatting logic with no runtime dependencies; all inputs are
+/// caller-supplied strings or index values.
+pub fn format_handler_location(
+    component: &str,
+    widget_path: &[WidgetPathSegment],
+    signal: &str,
+) -> String {
+    if widget_path.is_empty() {
+        return format!("{component}.{signal}");
+    }
+    let path_str = widget_path
+        .iter()
+        .map(|seg| match seg.index {
+            None => seg.name.clone(),
+            Some(i) => format!("{}[{}]", seg.name, i),
+        })
+        .collect::<Vec<_>>()
+        .join(".");
+    format!("{component}.{path_str}.{signal}")
+}
+
+/// One segment of a dot-path widget identifier.
+#[derive(Debug, Clone, PartialEq)]
+pub struct WidgetPathSegment {
+    /// Widget type or instance name (e.g. `"button"`, `"label"`).
+    pub name: String,
+    /// Positional index among siblings of the same name, if disambiguation is
+    /// needed. `None` when the name is unique at that level.
+    pub index: Option<usize>,
+}
+
+impl WidgetPathSegment {
+    pub fn named(name: impl Into<String>) -> Self {
+        Self { name: name.into(), index: None }
+    }
+    pub fn indexed(name: impl Into<String>, index: usize) -> Self {
+        Self { name: name.into(), index: Some(index) }
+    }
+}
+
 /// Invoke a `HandlerExpr` against `ctx`, catching any panic that the evaluator
 /// might raise (DD-M2-P3-003 = Option A). On error or panic, logs one line to
 /// stderr in the form:
@@ -342,6 +393,58 @@ mod tests {
     fn empty_block() {
         let mut ctx = MapCtx::new(&[]);
         assert_eq!(evaluate(&HandlerExpr::Block(vec![]), &mut ctx), Ok(0));
+    }
+
+    // ── format_handler_location tests (DD-M2-P3-004) ─────────────────────────
+
+    #[test]
+    fn location_no_path_segments() {
+        let loc = format_handler_location("Counter", &[], "clicked");
+        assert_eq!(loc, "Counter.clicked");
+    }
+
+    #[test]
+    fn location_single_segment_no_index() {
+        let loc = format_handler_location(
+            "Counter",
+            &[WidgetPathSegment::named("button")],
+            "clicked",
+        );
+        assert_eq!(loc, "Counter.button.clicked");
+    }
+
+    #[test]
+    fn location_single_segment_with_index() {
+        let loc = format_handler_location(
+            "Counter",
+            &[WidgetPathSegment::indexed("button", 1)],
+            "clicked",
+        );
+        assert_eq!(loc, "Counter.button[1].clicked");
+    }
+
+    #[test]
+    fn location_nested_path() {
+        let loc = format_handler_location(
+            "App",
+            &[
+                WidgetPathSegment::named("vstack"),
+                WidgetPathSegment::indexed("button", 0),
+            ],
+            "clicked",
+        );
+        assert_eq!(loc, "App.vstack.button[0].clicked");
+    }
+
+    #[test]
+    fn location_placeholder_component() {
+        // Phase 3 placeholder: component not yet known from IR.
+        let loc = format_handler_location(
+            "?",
+            &[WidgetPathSegment::named("button")],
+            "clicked",
+        );
+        assert_eq!(loc, "?.button.clicked");
     }
 
     // ── invoke_handler tests (DD-M2-P3-003) ──────────────────────────────────
