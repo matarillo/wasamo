@@ -229,19 +229,19 @@ phases land.
     - [x] Pass criteria confirmed: internal builder API (`WidgetNode::vstack`, `text`, `button`, `append_child`, `set_clicked`) driven without modification; tagged-value `PropertyValue` sufficient; GUI renders identically to M1 hand-written example
   - [x] Spike result appended to ADR; status → **Accepted**
   - [x] `docs/plans/m2-plan.md` Progress: phase ticked, ADR linked, task list written
-- [ ] **M2-Phase 3 — Handler execution location**
+- [x] **M2-Phase 3 — Handler execution location**
   - ADR: [docs/decisions/m2-phase-3-handler-exec-location.md](../decisions/m2-phase-3-handler-exec-location.md) — **Accepted 2026-05-04**
   - [x] `docs/decisions/m2-phase-3-handler-exec-location.md` — pre-doc filed (DD-M2-P3-001..004); status "Proposed"
   - [x] Owner agreement on DD-M2-P3-001 (Option A: runtime-side interpreter), DD-M2-P3-002 (Option B: separate paths, inline first), DD-M2-P3-003 (Option A: catch_unwind + stderr), DD-M2-P3-004 (Option B: IR reserves optional span; coarse identifiers in M2)
   - [x] ADR status → **Accepted**
   - [x] `docs/notes/headless-verification.md` — new live note: ヘッドレス検証機構の必要性検討 (Phase 3 verification gap を契機に起草; M2 内では構築せず pure-logic test fixture 戦略で閉じる)
   - [x] `docs/plans/m2-plan.md` Progress: phase still **open** — task list expanded below; coding work begins next session
-  - **Implementation scope (this phase, scheduled for next session):**
-    - [ ] `wasamo-runtime/src/handler.rs` 新規 — `HandlerExpr` enum (assign / `+=` `-=` `*=` `/=` / property read+write / int literal / block) + `EvalContext` trait + `evaluate()` + 単体テスト (assign / compound / wrapping overflow / nested block)
-    - [ ] `WidgetNode` に inline-handler slot 追加 + signal emit 経路を「inline 評価 → host listener iter」順に改造 (DD-M2-P3-002 Option B); fake listener list で順序検証 unit test
-    - [ ] handler invoke を `std::panic::catch_unwind` で wrap + 書式 `wasamo: handler error in <component>.<widget-path>.<signal>: <message>` で stderr ログ (DD-M2-P3-003); panic injection unit test
-    - [ ] coarse identifier `<component>.<widget-path>.<signal>` formatter (DD-M2-P3-004 Option B); pure logic として単体テスト
-    - [ ] `cargo build --release --workspace` + `cargo test --workspace` 緑、push、CI Windows runner 緑
+  - **Implementation scope (this phase):**
+    - [x] `wasamo-runtime/src/handler.rs` 新規 — `HandlerExpr` enum (assign / `+=` `-=` `*=` `/=` / property read+write / int literal / block) + `EvalContext` trait + `evaluate()` + 単体テスト 14本 (assign / compound / wrapping overflow / nested block / empty block / division-by-zero / prop-read-unknown)
+    - [x] `WidgetNode` に `inline_handlers` slot 追加 + `set_inline_handler()` API + signal emit 経路を「inline 評価 → host listener iter」順に改造 (DD-M2-P3-002 Option B); `inline_before_host_ordering` unit test で順序検証; `NullEvalContext` placeholder (Phase 5 で実 context に差し替え)
+    - [x] `invoke_handler()` — handler invoke を `std::panic::catch_unwind` で wrap + 書式 `wasamo: handler error in <location>: <message>` で stderr ログ (DD-M2-P3-003); panic injection / eval-error / success の unit test 3本
+    - [x] `format_handler_location()` + `WidgetPathSegment` — coarse identifier `<component>.<widget-path>.<signal>` formatter (DD-M2-P3-004 Option B); pure logic として unit test 5本
+    - [x] `cargo build --release --workspace` 緑 / `cargo test --workspace` 緑 (30 wasamo-runtime tests + 36 wasamoc tests + 1 wasamo-sys smoke test)
   - **Boundary with adjacent phases:**
     - vs Phase 4: handler は internal `set_property` のまま (C ABI 越えない — DD-M2-P3-001 Option A の本質)。Phase 4 の C ABI 化は handler 経路を再触しない。
     - vs Phase 5: `HandlerExpr` evaluator は handler 軸のみ実装。binding 評価器との共通基盤化は Phase 5 で実施 (handler evaluator が Phase 5 の出発点)。
