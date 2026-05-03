@@ -332,6 +332,60 @@ Option C — `#[used]` annotations on each symbol in `wasamo-runtime`
 
 ---
 
+### DD-M2-P1-006 — Build-order edge between cdylib shim and final binaries
+
+**Status:** Agreed (2026-05-03)
+
+**Context:**
+After implementing DD-M2-P1-001..005 in a working tree,
+`cargo clean && cargo build --release --workspace` reproducibly failed
+with `LNK1181: cannot open input file 'wasamo.dll.lib'`. Diagnosis: the
+cargo dependency graph had no edge between `wasamo-dll` (cdylib
+producer of `wasamo.dll.lib`) and the final binaries (`counter-rust`
+etc.) that consume it via `bindings/rust-sys`'s `#[link]`. Cargo
+parallelised them, and the linker for `counter-rust` ran before the
+cdylib finished. The `#[link]` attribute alone does not create a build
+order edge — cargo only orders crates that appear in some `dependencies`
+table.
+
+**Options:**
+
+Option A — Add `wasamo-dll` to `[dependencies]` of `bindings/rust-sys/Cargo.toml` (recommended)
+- One edge covers every binary that links the C ABI (all Rust hosts
+  go through `rust-sys`).
+- Verified locally: `cargo clean && cargo build --release --workspace`
+  succeeds; `dumpbin /exports target/release/wasamo.dll` shows all 19
+  ABI symbols; `cargo run -p counter-rust --release` works
+  end-to-end.
+- What you give up: cargo emits `warning: the package wasamo
+  provides no linkable target` (rust-lang/cargo#6313) for every
+  build, because a cdylib has no Rust-linkable surface and `rust-sys`
+  is a normal Rust crate. Accepted as a deferred / open issue —
+  recorded in [`docs/notes/cdylib-shim-build-graph.md`](../notes/cdylib-shim-build-graph.md)
+  with explicit re-evaluation triggers.
+
+Option B — `[build-dependencies] wasamo-dll` or `artifact = "cdylib"`
+  - What you give up: `[build-dependencies]` triggers host-target
+    double build → filename collision on `wasamo.dll`. The
+    `artifact`/`-Z bindeps` mechanism is unstable on stable Rust and
+    has had similar collision behaviour in tested forms. Not
+    actionable today.
+
+Option C — Add `wasamo-dll` to `[dependencies]` of each Rust binary individually
+  - What you give up: Fragile — every new Rust binary added to the
+    workspace would silently regress to LNK1181 if the maintainer
+    forgot the extra line. Centralising the edge in `rust-sys` (which
+    every Rust host already depends on) is strictly safer.
+
+**Decision:** Option A — Agreed (2026-05-03). The `no linkable target`
+warning is accepted as a known wart, not a settled end-state; the
+note records re-evaluation triggers (cargo making the warning a hard
+error; a second cdylib-only build-order dependency appearing; a real
+need to consume `wasamo-dll`'s Rust surface). If any trigger fires,
+revisit this DD.
+
+---
+
 ## Out of scope (for M2-Phase 1; recorded explicitly)
 
 - **Resurrecting Phase 2-5 dev examples on main.** Mechanism enabled
@@ -354,10 +408,9 @@ Option C — `#[used]` annotations on each symbol in `wasamo-runtime`
 | DD-M2-P1-003 | Phase 2-5 examples | Option B (main) — defer; experimental branch `exp/m2-p1-poc-examples` after main lands |
 | DD-M2-P1-004 | Shim location | Option A — top-level `wasamo-dll/`; `crates/` question deferred to `docs/notes/workspace-layout.md` |
 | DD-M2-P1-005 | ABI symbol propagation | Option A — `+whole-archive` via build.rs; local SSH dev box verification required |
+| DD-M2-P1-006 | Build-order edge for cdylib consumers | Option A — add `wasamo-dll` to `[dependencies]` of `bindings/rust-sys/Cargo.toml`; `no linkable target` warning accepted as deferred (see `docs/notes/cdylib-shim-build-graph.md`) |
 
 ## Agreed M2-Phase 1 task list
-
-Each item is a separate commit per session-end agreement.
 
 ### Main branch
 
@@ -373,7 +426,14 @@ Each item is a separate commit per session-end agreement.
       Workspace `Cargo.toml` `members += ["wasamo-dll"]`.
 - [ ] `bindings/rust-sys/build.rs` and any other consumer: verify
       cdylib build output path is unchanged; update if needed.
-- [ ] Local verification: `cargo build --release --workspace`;
+- [ ] `bindings/rust-sys/Cargo.toml`: add
+      `wasamo-dll = { path = "../../wasamo-dll" }` to `[dependencies]`
+      to create the build-order edge (DD-M2-P1-006). Accept the
+      `no linkable target` warning per the linked note.
+- [ ] `docs/notes/cdylib-shim-build-graph.md` — new live note
+      recording the `no linkable target` deferral and re-evaluation
+      triggers (DD-M2-P1-006).
+- [ ] Local verification: `cargo clean && cargo build --release --workspace`;
       `dumpbin /exports target/release/wasamo.dll` shows all 19
       `wasamo_*` symbols; `cargo run -p counter-rust` works
       end-to-end.
