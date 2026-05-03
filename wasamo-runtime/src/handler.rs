@@ -113,6 +113,43 @@ pub fn evaluate(expr: &HandlerExpr, ctx: &mut dyn EvalContext) -> Result<i32, Ev
     }
 }
 
+/// Invoke a `HandlerExpr` against `ctx`, catching any panic that the evaluator
+/// might raise (DD-M2-P3-003 = Option A). On error or panic, logs one line to
+/// stderr in the form:
+/// `wasamo: handler error in <location>: <message>`
+/// where `location` is a caller-supplied coarse identifier
+/// (see `format_handler_location` in this module).
+/// Returns `true` if the handler completed without error.
+pub fn invoke_handler(
+    expr: &HandlerExpr,
+    ctx: &mut dyn EvalContext,
+    location: &str,
+) -> bool {
+    // RefUnwindSafe is not automatically satisfied for trait objects, so we
+    // evaluate inside a wrapper that AssertUnwindSafe asserts the invariant.
+    // The safety argument: `ctx` releases any interior borrows before this
+    // call (see DD-M2-P3-003 risk note); no RefCell is live across the boundary.
+    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        evaluate(expr, ctx)
+    }));
+    match result {
+        Ok(Ok(_)) => true,
+        Ok(Err(e)) => {
+            eprintln!("wasamo: handler error in {location}: {e}");
+            false
+        }
+        Err(payload) => {
+            let msg = payload
+                .downcast_ref::<&str>()
+                .copied()
+                .or_else(|| payload.downcast_ref::<String>().map(String::as_str))
+                .unwrap_or("unknown panic");
+            eprintln!("wasamo: handler error in {location}: {msg}");
+            false
+        }
+    }
+}
+
 // ── Unit tests ────────────────────────────────────────────────────────────────
 
 #[cfg(test)]
@@ -305,6 +342,55 @@ mod tests {
     fn empty_block() {
         let mut ctx = MapCtx::new(&[]);
         assert_eq!(evaluate(&HandlerExpr::Block(vec![]), &mut ctx), Ok(0));
+    }
+
+    // ── invoke_handler tests (DD-M2-P3-003) ──────────────────────────────────
+
+    #[test]
+    fn invoke_handler_success() {
+        let mut ctx = MapCtx::new(&[("x", 0)]);
+        let expr = HandlerExpr::Assign {
+            lhs: "x".into(),
+            rhs: Box::new(HandlerExpr::IntLit(7)),
+        };
+        let ok = invoke_handler(&expr, &mut ctx, "Counter.button.clicked");
+        assert!(ok);
+        assert_eq!(ctx.get("x"), 7);
+    }
+
+    #[test]
+    fn invoke_handler_eval_error_returns_false() {
+        let mut ctx = MapCtx::new(&[("x", 5)]);
+        // Division by zero → EvalError, not a panic.
+        let expr = HandlerExpr::CompoundAssign {
+            lhs: "x".into(),
+            op: CompoundOp::Div,
+            rhs: Box::new(HandlerExpr::IntLit(0)),
+        };
+        let ok = invoke_handler(&expr, &mut ctx, "Counter.button.clicked");
+        assert!(!ok);
+        // Value unchanged on error.
+        assert_eq!(ctx.get("x"), 5);
+    }
+
+    #[test]
+    fn invoke_handler_catches_panic() {
+        // EvalContext implementation that panics on set_i32.
+        struct PanicCtx;
+        impl EvalContext for PanicCtx {
+            fn get_i32(&self, _: &str) -> Result<i32, EvalError> { Ok(0) }
+            fn set_i32(&mut self, _: &str, _: i32) -> Result<(), EvalError> {
+                panic!("injected panic for testing")
+            }
+        }
+        let expr = HandlerExpr::Assign {
+            lhs: "x".into(),
+            rhs: Box::new(HandlerExpr::IntLit(1)),
+        };
+        let mut ctx = PanicCtx;
+        // Must not propagate the panic; returns false.
+        let ok = invoke_handler(&expr, &mut ctx, "Counter.button.clicked");
+        assert!(!ok);
     }
 
     /// DD-M2-P3-002 Option B: inline handler runs and mutates state *before*

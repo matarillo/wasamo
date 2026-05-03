@@ -526,14 +526,12 @@ impl WidgetNode {
                     // Phase 5 will wire up a real EvalContext that reaches
                     // the reactive property store. For Phase 3 we provide a
                     // no-op context; the evaluator runs but property
-                    // reads/writes are silently no-ops (unknown property).
+                    // reads/writes report "unknown property".
                     let mut ctx = NullEvalContext;
-                    if let Err(e) = handler::evaluate(expr, &mut ctx) {
-                        // Error logging is the catch_unwind wrapper's job
-                        // (added in the next commit). For now surface to
-                        // eprintln so the path is exercised.
-                        eprintln!("wasamo: handler eval error: {e}");
-                    }
+                    // DD-M2-P3-003: catch_unwind wrapper logs errors and
+                    // continues the event loop; location is a coarse
+                    // identifier (Phase 6 supplies the component name prefix).
+                    handler::invoke_handler(expr, &mut ctx, "?.clicked");
                 }
                 // Route "clicked" through the C-ABI signal registry. The
                 // emission is queued and fires after the current call
