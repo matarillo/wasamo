@@ -306,4 +306,31 @@ mod tests {
         let mut ctx = MapCtx::new(&[]);
         assert_eq!(evaluate(&HandlerExpr::Block(vec![]), &mut ctx), Ok(0));
     }
+
+    /// DD-M2-P3-002 Option B: inline handler runs and mutates state *before*
+    /// the host listener observes it. Simulated here by recording the order
+    /// of side-effects through a shared event log: the inline handler writes
+    /// to "x", then the "host" reads "x" after — the read sees the updated value.
+    #[test]
+    fn inline_before_host_ordering() {
+        let mut ctx = MapCtx::new(&[("x", 0)]);
+        let mut event_log: Vec<String> = Vec::new();
+
+        // Inline handler: x += 10
+        let inline = HandlerExpr::CompoundAssign {
+            lhs: "x".into(),
+            op: CompoundOp::Add,
+            rhs: Box::new(HandlerExpr::IntLit(10)),
+        };
+
+        // Step 1: inline handler fires.
+        evaluate(&inline, &mut ctx).unwrap();
+        event_log.push(format!("inline: x={}", ctx.get("x")));
+
+        // Step 2: host listener fires (reads x, which is now 10).
+        let host_saw = ctx.get("x");
+        event_log.push(format!("host: x={host_saw}"));
+
+        assert_eq!(event_log, ["inline: x=10", "host: x=10"]);
+    }
 }

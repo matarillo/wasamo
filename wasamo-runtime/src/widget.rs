@@ -1,3 +1,4 @@
+use crate::handler::{self, EvalContext, EvalError, HandlerExpr};
 use crate::layout::{self, Alignment, LayoutNode, SizeConstraint};
 use crate::text::{TextRenderer, TypographyStyle};
 use windows::{
@@ -115,6 +116,10 @@ pub struct WidgetNode {
     height: SizeConstraint,
     pub visual: SpriteVisual,
     pub children: Vec<Box<WidgetNode>>,
+    /// DSL inline handler body for a named signal (DD-M2-P3-002 = Option B).
+    /// `(signal_name, expr)` — stored directly on the widget, separate from
+    /// the host listener list. Phase 6 populates this from textual IR.
+    pub inline_handlers: Vec<(String, HandlerExpr)>,
 }
 
 impl WidgetNode {
@@ -132,6 +137,7 @@ impl WidgetNode {
             height,
             visual,
             children: Vec::new(),
+            inline_handlers: Vec::new(),
         }))
     }
 
@@ -148,6 +154,7 @@ impl WidgetNode {
             height: SizeConstraint::Shrink,
             visual,
             children: Vec::new(),
+            inline_handlers: Vec::new(),
         }))
     }
 
@@ -164,6 +171,7 @@ impl WidgetNode {
             height: SizeConstraint::Fill,
             visual,
             children: Vec::new(),
+            inline_handlers: Vec::new(),
         }))
     }
 
@@ -191,6 +199,7 @@ impl WidgetNode {
             height: SizeConstraint::Fixed(h),
             visual,
             children: Vec::new(),
+            inline_handlers: Vec::new(),
         }))
     }
 
@@ -255,6 +264,7 @@ impl WidgetNode {
             height: SizeConstraint::Fixed(btn_h),
             visual: bg_visual,
             children: Vec::new(),
+            inline_handlers: Vec::new(),
         }))
     }
 
@@ -463,6 +473,14 @@ impl WidgetNode {
         Ok(())
     }
 
+    // ── Inline handler registration ───────────────────────────────────────────
+
+    /// Attach a DSL inline handler for `signal_name` to this widget.
+    /// Called by the IR loader (Phase 6) when building the widget tree.
+    pub fn set_inline_handler(&mut self, signal_name: impl Into<String>, expr: HandlerExpr) {
+        self.inline_handlers.push((signal_name.into(), expr));
+    }
+
     // ── Hit testing ───────────────────────────────────────────────────────────
 
     /// Traverse the tree and fire the `clicked_fn` of the first Button whose
@@ -488,6 +506,34 @@ impl WidgetNode {
             if fx >= abs_x && fx < abs_x + vw && fy >= abs_y && fy < abs_y + vh {
                 if let Some(ref f) = btn.clicked_fn {
                     f();
+                }
+                // DD-M2-P3-002 Option B: evaluate inline handlers first, then
+                // enqueue host listeners. Inline path is separate from the
+                // host listener list and is not a disconnectable token.
+                // Safety: inline_handlers borrows are released before
+                // enqueue_signal, which does not touch this node.
+                let handler_exprs: Vec<HandlerExpr> = {
+                    // Safety: widget_ptr aliases self; we collect clones before
+                    // dispatch so no aliased mutable borrow is live during eval.
+                    unsafe { &*widget_ptr }
+                        .inline_handlers
+                        .iter()
+                        .filter(|(sig, _)| sig == "clicked")
+                        .map(|(_, expr)| expr.clone())
+                        .collect()
+                };
+                for expr in &handler_exprs {
+                    // Phase 5 will wire up a real EvalContext that reaches
+                    // the reactive property store. For Phase 3 we provide a
+                    // no-op context; the evaluator runs but property
+                    // reads/writes are silently no-ops (unknown property).
+                    let mut ctx = NullEvalContext;
+                    if let Err(e) = handler::evaluate(expr, &mut ctx) {
+                        // Error logging is the catch_unwind wrapper's job
+                        // (added in the next commit). For now surface to
+                        // eprintln so the path is exercised.
+                        eprintln!("wasamo: handler eval error: {e}");
+                    }
                 }
                 // Route "clicked" through the C-ABI signal registry. The
                 // emission is queued and fires after the current call
@@ -644,6 +690,23 @@ impl WidgetNode {
             child.sync_visuals(child_computed)?;
         }
         Ok(())
+    }
+}
+
+// ── EvalContext placeholder (Phase 3) ─────────────────────────────────────────
+//
+// Phase 5 (reactive engine) will replace this with a context that resolves
+// dot-path property names against the live widget tree and property store.
+// For Phase 3 the evaluator runs but all property accesses return "unknown".
+
+struct NullEvalContext;
+
+impl EvalContext for NullEvalContext {
+    fn get_i32(&self, path: &str) -> Result<i32, EvalError> {
+        Err(EvalError::UnknownProperty(path.to_string()))
+    }
+    fn set_i32(&mut self, path: &str, _value: i32) -> Result<(), EvalError> {
+        Err(EvalError::UnknownProperty(path.to_string()))
     }
 }
 
