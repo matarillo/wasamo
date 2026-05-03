@@ -69,6 +69,61 @@ Option B — <name>
 M1 phase ADRs are not renumbered; they remain `DD-P<N>-<seq>` as
 historical record.
 
+## Risk evaluation
+
+DD entries evaluate two axes of risk under deliberately distinct
+labels:
+
+- **Technical risk** (per option, required) — the risk that
+  implementing this option within the phase reveals an unworkable
+  premise: build failures, missing platform support, abstraction
+  leaks. Converges within the phase via spike / build / test.
+  Rated `Low` / `Medium` / `High` on each option's bullet list.
+
+- **Forward-compat exposure** (per DD, conditional) — how exposed
+  the recommended option is to revision when post-phase DSL or
+  C ABI extensions land. Does not converge within the phase; a
+  projected estimate. Written as a paragraph inside the
+  Recommendation block, and rated as a column in the DD summary
+  table for the recommended option.
+
+The two axes use different labels (`risk` vs `exposure`)
+intentionally: a unified `risk` vocabulary would imply equal
+epistemic confidence, which the project does not have.
+
+### Conditional rule for the Forward-compat exposure paragraph
+
+The paragraph is written only when candidate options differ on
+this axis. Absence of the paragraph signals "options are equally
+additive-compatible with foreseeable extensions" — not an
+oversight. (The summary-table column is still filled for the
+recommended option of every DD.)
+
+The paragraph **must reference the ADR's Out of scope items** as
+its source of foreseeable future events, rather than introducing
+new ones mid-prose. The Out of scope section is the single truth
+source for "events that may revisit this DD"; the exposure
+paragraph discusses how each option would survive those events.
+
+### What is *not* a separate axis
+
+**Design quality** (coherence, ergonomics, footgun-avoidance) is
+intentionally not formalized as a third axis. It lives in the
+Recommendation prose, where it can be argued in context rather
+than collapsed into a Low/Medium/High rating. When a DD is
+dominated by design quality, the option bullet may say so
+explicitly ("the risk axis here is design-quality, not
+implementability").
+
+### Adoption
+
+The two-axis evaluation is in effect from the **M2-Phase 3 ADR**
+([m2-phase-3-handler-exec-location.md](./m2-phase-3-handler-exec-location.md))
+onwards. Earlier ADRs follow the supersede rule and are not
+retroactively updated; the absence of the column in older ADRs
+reflects the format of their time, not a judgement that the axis
+was irrelevant there.
+
 ## Revision rule
 
 When a later phase overrides a prior decision:
