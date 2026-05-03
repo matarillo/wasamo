@@ -1,0 +1,12 @@
+; counter.uic — hand-written spike IR for counter.ui
+; Throwaway grammar (DD-M2-P2-002 textual IR shape TBD post-spike).
+; wasamoc-generated; do not edit
+
+(component Counter
+  (state count i32 0)
+  (vstack 12 24
+    (text label "Count: 0")
+    (button "Increment" accent
+      (on clicked
+        (assign-add count 1)
+        (update-text label count "Count: ")))))

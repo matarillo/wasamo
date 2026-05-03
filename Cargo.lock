@@ -10,6 +10,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "ir-spike"
+version = "0.1.0"
+dependencies = [
+ "wasamo-runtime",
+]
+
+[[package]]
 name = "proc-macro2"
 version = "1.0.106"
 source = "registry+https://github.com/rust-lang/crates.io-index"

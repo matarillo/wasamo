@@ -11,6 +11,9 @@ edition = "2021"
 name = "wasamo_runtime"
 crate-type = ["rlib"]
 
+[features]
+experimental-ir = []
+
 [dependencies.windows]
 version = "0.58"
 features = [

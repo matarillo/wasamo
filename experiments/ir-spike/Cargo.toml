@@ -1,0 +1,11 @@
+[package]
+name = "ir-spike"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "ir-spike"
+path = "src/main.rs"
+
+[dependencies]
+wasamo-runtime = { path = "../../wasamo-runtime", features = ["experimental-ir"] }

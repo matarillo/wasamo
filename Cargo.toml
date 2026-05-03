@@ -6,5 +6,6 @@ members = [
     "bindings/rust",
     "bindings/rust-sys",
     "examples/counter-rust",
+    "experiments/ir-spike",
 ]
 resolver = "2"

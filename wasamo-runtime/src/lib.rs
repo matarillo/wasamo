@@ -6,6 +6,8 @@ mod runtime;
 mod text;
 mod widget;
 mod window;
+#[cfg(feature = "experimental-ir")]
+pub mod experimental_ir_loader;
 
 pub use layout::{Alignment, SizeConstraint, WidgetKind};
 pub use text::{TextRenderer, TypographyStyle};
@@ -34,6 +36,13 @@ pub fn window_show(state: &WindowState) {
 
 pub fn get_compositor() -> &'static windows::UI::Composition::Compositor {
     &runtime::get().compositor
+}
+
+pub fn window_set_root(
+    state: &mut WindowState,
+    root: Box<WidgetNode>,
+) -> windows::core::Result<()> {
+    window::set_root(state, root)
 }
 
 pub fn window_add_widget(
