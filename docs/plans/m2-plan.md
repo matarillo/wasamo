@@ -196,8 +196,8 @@ sub-task state for each phase and the owner-facing "where did we
 leave off" memory. ADR links and commit references are added as
 phases land.
 
-- [ ] **M2-Phase 1 — cdylib-shim cleanup**
-  - ADR: _not yet filed_
+- [x] **M2-Phase 1 — cdylib-shim cleanup**
+  - ADR: [docs/decisions/m2-phase-1-cdylib-shim.md](../decisions/m2-phase-1-cdylib-shim.md) (Agreed 2026-05-03)
 - [ ] **M2-Phase 2 — wasamoc output format decision**
   - ADR: _not yet filed_
 - [ ] **M2-Phase 3 — Handler execution location**

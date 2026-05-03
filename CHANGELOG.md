@@ -12,6 +12,22 @@ This file records what has shipped. For what is planned, see
 [ROADMAP.md](./ROADMAP.md). For the current state of work, see
 the **Status** section of [README.md](./README.md).
 
+## [Unreleased] — M2: Foundation (in progress)
+
+### M2-Phase 1 — cdylib-shim cleanup (2026-05-03)
+
+Resolved the rlib filename collision (cargo#6313) that was worked
+around in M1 by dropping `wasamo-runtime`'s rlib. `wasamo-runtime`
+is now rlib-only (`[lib].name = "wasamo_runtime"`); a new
+`wasamo-dll` cdylib shim depends on it and re-exports all C ABI
+symbols via MSVC `/WHOLEARCHIVE`. `wasamo.dll` filename and all 20
+`wasamo_*` ABI symbols are preserved. Acceptance criterion A3 of M2
+discharged.
+
+Decisions: [DD-M2-P1-001..006](./docs/decisions/m2-phase-1-cdylib-shim.md).
+
+---
+
 ## [v0.1.0] — 2026-05-01 — M1: Proof of Concept
 
 Validated the core hypothesis: external DSL × C ABI × Visual

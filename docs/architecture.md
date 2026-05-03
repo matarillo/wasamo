@@ -1,6 +1,6 @@
 # Wasamo Architecture
 
-**Status:** Phases 0-8 complete (M1); rlib removed from wasamo-runtime, Phase 2-5 examples deleted
+**Status:** M1 complete (Phases 0-8); M2-Phase 1 complete (cdylib-shim split)
 
 ---
 
@@ -9,8 +9,13 @@
 ```
 wasamo/                         ← workspace root
 ├── Cargo.toml                  ← workspace manifest
-├── wasamo-runtime/             ← runtime DLL crate (cdylib only)
-│   ├── Cargo.toml              ← package = wasamo-runtime; [lib].name = "wasamo"
+├── wasamo-runtime/             ← runtime rlib crate (rlib only; no DLL emitted)
+│   ├── Cargo.toml              ← package = wasamo-runtime; [lib].name = "wasamo_runtime"
+│   └── src/
+│       └── lib.rs
+├── wasamo-dll/                 ← cdylib shim crate (M2-Phase 1)
+│   ├── Cargo.toml              ← [lib].name = "wasamo" (DD-M2-P1-002); crate-type = ["cdylib"]
+│   ├── build.rs                ← /WHOLEARCHIVE:libwasamo_runtime.rlib (DD-M2-P1-005)
 │   └── src/
 │       └── lib.rs
 ├── wasamoc/                    ← DSL compiler CLI crate
@@ -41,21 +46,20 @@ wasamo/                         ← workspace root
 
 | Crate | crate-type | Output | Responsibility |
 |---|---|---|---|
-| `wasamo-runtime` | `cdylib` | `wasamo.dll` + `wasamo.dll.lib` | Runtime. Exposes the C ABI through the cdylib. No rlib emitted — see §11.4. |
+| `wasamo-runtime` | `rlib` | `libwasamo_runtime.rlib` | Runtime logic. Houses all `#[no_mangle] pub extern "C"` ABI symbol definitions. No DLL emitted — see §11.4. |
+| `wasamo-dll` | `cdylib` | `wasamo.dll` + `wasamo.dll.lib` | Cdylib shim (M2-Phase 1). Depends on `wasamo-runtime`; re-exports all C ABI symbols via `/WHOLEARCHIVE` (DD-M2-P1-005). `[lib].name = "wasamo"` — see note below. |
 | `wasamoc` | `bin` | `wasamoc.exe` | `.ui` file parser and checker CLI. |
-| `wasamo-sys` (at `bindings/rust-sys/`) | `lib` | Raw FFI crate | `extern "C"` declarations matching `wasamo.h`; `build.rs` links `wasamo.dll.lib` via `dylib:+verbatim`. Hello-Counter-minimal scope. |
+| `wasamo-sys` (at `bindings/rust-sys/`) | `lib` | Raw FFI crate | `extern "C"` declarations matching `wasamo.h`; `build.rs` links `wasamo.dll.lib` via `dylib:+verbatim`. |
 | `wasamo` (at `bindings/rust/`) | `lib` | Safe Rust wrapper | Idiomatic Rust over `wasamo-sys`: `Runtime`/`Window`/`Widget`/`Value`/`Error`; `wasamo::experimental` for the M1 experimental layer. **This** is the supported public Rust API. |
 | `examples/counter` *(Phase 8)* | `bin` | `counter.exe` | Sample app via the safe `wasamo` wrapper. |
 | `bindings/zig/` | Zig package | link-time artifact | Zig binding: hand-written extern block + idiomatic wrappers. `wasamo.experimental` namespace mirrors the M1 experimental layer. |
 
-The `[lib].name = "wasamo"` setting on `wasamo-runtime` keeps the
-DLL/import-lib filenames at `wasamo.dll` / `wasamo.dll.lib`, so the
-C ABI artifact name is unaffected by the package rename. The
-package and crate are renamed because, per
-[DD-P7-002](./decisions/phase-7-language-bindings.md#dd-p7-002--wasamo-rlib-status-and-crate-naming),
-the user-facing Rust safe wrapper at `bindings/rust/` takes the
-`wasamo` crate name; the runtime crate that produces the DLL is
-named after its role (`wasamo-runtime`).
+`wasamo-dll` sets `[lib].name = "wasamo"` (not the cargo-conventional
+`wasamo_dll`). This deviation is deliberate: `wasamo.dll` is the public
+C ABI artifact name fixed by DD-P6-007; changing it would break all
+downstream consumers. The deviation is confined to the shim crate and
+documented in `wasamo-dll/Cargo.toml` — see
+[DD-M2-P1-002](./decisions/m2-phase-1-cdylib-shim.md#dd-m2-p1-002--naming-of-the-rlib-crate-and-the-shim-crate).
 
 ### Inter-crate dependencies
 
@@ -63,18 +67,23 @@ named after its role (`wasamo-runtime`).
 wasamoc
   └── (future) wasamo-ast crate  ← to be split in M2; internal to wasamoc in M1
 
+wasamo-dll  (cdylib shim; produces wasamo.dll)
+  └── wasamo-runtime  (rlib; all C ABI symbol definitions)
+
 bindings/rust  (safe wrapper, crate name: wasamo)
   └── wasamo-sys (raw FFI)
-        └── wasamo.dll (dynamic link via wasamo.dll.lib)
+        ├── wasamo-dll  ← build-order edge (DD-M2-P1-006); no Rust link
+        └── wasamo.dll  (dynamic link via wasamo.dll.lib)
 
 examples/counter
   └── bindings/rust
 
 ```
 
-`wasamo-runtime` (the DLL) does not depend on any other Rust crate
-in this workspace. The C ABI boundary is the only coupling point
-between the runtime and the Rust binding pair.
+`wasamo-runtime` does not depend on any other Rust crate in this
+workspace. `wasamo-dll` depends on `wasamo-runtime` (rlib) only.
+The C ABI boundary is the only coupling point between the runtime
+pair (`wasamo-runtime` + `wasamo-dll`) and the Rust binding pair.
 
 ---
 
@@ -653,34 +662,39 @@ be a hollow check. `wasamo-sys` crosses the actual C ABI boundary; `wasamo`
 parsing on Windows. A hand-written `extern` block is more predictable
 and explicit; it mirrors exactly what `wasamo-sys` does in Rust.
 
-### 11.4 rlib removal and the cargo#6313 collision
+### 11.4 cdylib-shim split (M2-Phase 1, DD-M2-P1-001..006)
 
-`wasamo-runtime` originally used `crate-type = ["cdylib", "rlib"]`.
-The `rlib` was retained solely for the Phase 2-5 visual-check examples
-(internal Win32/WinRT verification tools written before the C ABI
-existed).
+**History.** `wasamo-runtime` originally used
+`crate-type = ["cdylib", "rlib"]`. Both it (`[lib].name = "wasamo"`)
+and the `wasamo` safe wrapper produced `libwasamo.rlib`. cargo#6313
+surfaced as a compile error: cargo resolved `counter-rust`'s `wasamo`
+dep to the runtime rlib instead of the safe wrapper. The M1 workaround
+was to remove the `rlib` crate-type and delete the Phase 2-5
+visual-check examples (which needed internal Rust API reachable only
+through the rlib). Source is preserved in git history.
 
-Both `wasamo-runtime` (`[lib].name = "wasamo"`) and the `wasamo` safe
-wrapper package produce an rlib named `libwasamo.rlib`. cargo#6313
-describes this as a filename-collision warning, but in practice the
-collision caused cargo to resolve `counter-rust`'s `wasamo` dependency
-to `wasamo-runtime`'s rlib instead of the safe wrapper — a compile
-error (unresolved `Runtime`, `Window`, `Widget`, `Value`).
+**M2-Phase 1 resolution (structural).** The collision class is
+eliminated by construction:
 
-**Resolution (post-M1):** The `rlib` crate-type was removed from
-`wasamo-runtime` and the Phase 2-5 visual-check examples were deleted.
-Those examples used internal Rust APIs (`WidgetNode`, `TextRenderer`,
-`window.root`, etc.) that are not accessible through the C ABI, so they
-could not be converted to use the cdylib. Their source is preserved in
-git history (see the commit that added this note). The DLL filename
-`wasamo.dll` and all C ABI symbols are unaffected.
+- `wasamo-runtime` is now **rlib-only** (`[lib].name = "wasamo_runtime"`
+  → `libwasamo_runtime.rlib`). No filename overlap with the safe
+  wrapper's `libwasamo.rlib`.
+- `wasamo-dll` is a new **cdylib-only** shim crate
+  (`[lib].name = "wasamo"` → `wasamo.dll` + `wasamo.dll.lib`).
+  `build.rs` uses MSVC `/WHOLEARCHIVE` to force all
+  `#[no_mangle] pub extern "C"` symbols from `wasamo-runtime` into the
+  cdylib output. New ABI symbols in `wasamo-runtime` appear in
+  `wasamo.dll` automatically, with no per-symbol maintenance.
+- `bindings/rust-sys/Cargo.toml` carries a `[dependencies]` entry on
+  `wasamo-dll` to create a cargo build-order edge. Without it, cargo
+  could parallelise `counter-rust`'s link step ahead of the cdylib
+  build, reproducing `LNK1181`. The `warning: no linkable target`
+  (cargo#6313) that this edge causes is accepted as a known wart; see
+  [`docs/notes/cdylib-shim-build-graph.md`](./notes/cdylib-shim-build-graph.md).
 
-**Long-term fix (M2 ADR):** A cdylib-shim crate (`wasamo-dll`) that
-depends on `wasamo-runtime` (rlib-only, renamed to `wasamo_runtime`)
-will restore the separation cleanly — `wasamo-dll` emits `wasamo.dll`
-without an rlib, so no collision with the safe wrapper's rlib. The
-Phase 2-5 dev examples can be re-introduced under a `wasamo-poc`
-workspace once that refactor is complete.
+Full rationale: [`docs/decisions/m2-phase-1-cdylib-shim.md`](./decisions/m2-phase-1-cdylib-shim.md).
+Phase 2-5 examples can be re-introduced under a `wasamo-poc` workspace
+(experimental branch `exp/m2-p1-poc-examples`; not merged to main).
 
 ### 11.5 Experimental module convention (DD-P7-003)
 
