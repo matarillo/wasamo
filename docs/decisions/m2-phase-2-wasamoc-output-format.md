@@ -2,7 +2,7 @@
 
 **Phase:** M2-Phase 2 (wasamoc output format decision)
 **Date:** 2026-05-03
-**Status:** Pre-doc — on hold pending feasibility spike (see DD-M2-P2-001 Recommendation)
+**Status:** Agreed (2026-05-04; spike passed — see DD-M2-P2-001 spike note)
 
 ## Context
 
@@ -68,7 +68,7 @@ answers.**
 
 ### DD-M2-P2-001 — Where the .ui→tree work happens
 
-**Status:** Pre-doc
+**Status:** Agreed
 
 **Context:**
 Three real points in the design space, distinguished by *when* the
@@ -292,7 +292,7 @@ gated on pre-doc validation. The spike validates only the
 
 ### DD-M2-P2-002 — IR artifact form
 
-**Status:** Pre-doc
+**Status:** Agreed
 
 **Context:**
 Conditional on DD-M2-P2-001 = Option B. The IR has to be serialized
@@ -415,7 +415,7 @@ axis reinforces, rather than complicates, the recommendation.
 
 ### DD-M2-P2-003 — wasamoc 責務境界 (compiler vs runtime division)
 
-**Status:** Pre-doc
+**Status:** Agreed
 
 **Context:**
 With DD-M2-P2-001 = B, the work of going from `.ui` source to a
@@ -545,7 +545,7 @@ flattening happens in `wasamoc` or in the interpreter.
 
 ### DD-M2-P2-004 — Sequencing relative to M2-Phase 3
 
-**Status:** Pre-doc
+**Status:** Agreed
 
 **Context:**
 [m2-plan phase dependencies](../plans/m2-plan.md#phase-dependencies)
@@ -639,25 +639,30 @@ recommended package is "we don't know if it works" in the strong
 sense; all are "well-understood pattern, no prior art in this
 repo".
 
-## Agreement gate
+## Spike result
 
-This ADR is currently **on hold** pending the feasibility spike
-described in DD-M2-P2-001's Recommendation. Agreement (status
-move to **Agreed**) does not happen until the spike runs and
-passes. On failure, the recommendation flips and the ADR is
-rewritten before re-review.
+**Pass** — 2026-05-04, branch
+[`exp/m2-p2-ir-loader-spike`](https://github.com/matarillo/wasamo/tree/exp/m2-p2-ir-loader-spike),
+commit `b7ab4dc`.
 
-The M2-Phase 2 task list in
-[m2-plan.md Progress](../plans/m2-plan.md#progress) is **not**
-written until after agreement, per the order
-spike → ADR agree → m2-plan task list adopted as the M2 default.
+Spike scope: `experimental_ir_loader` module (feature-gated
+`experimental-ir`) added to `wasamo-runtime`; hand-written
+`experiments/ir-spike/counter.uic` in throwaway s-expression IR;
+~200-line loader (tokenizer + parser + tree walker); driver crate
+`experiments/ir-spike/` renders the counter window.
 
-Once agreed, this ADR moves to **Agreed** and the M2-Phase 2
-checkbox in [m2-plan.md Progress](../plans/m2-plan.md#progress) is
-ticked with the agreement commit. Pre-doc → agreement → impl
-post-doc lifecycle. M2-Phase 3 pre-doc is the next phase to enter.
+Pass criteria confirmed:
+1. **Internal builder API unchanged** — `WidgetNode::vstack`,
+   `text`, `button`, `append_child`, `set_clicked` driven by IR
+   walker without modification to `widget.rs` or any other runtime
+   file.
+2. **Tagged-value property set** — `PropertyValue::String` used
+   in the click handler via `set_property(PROP_TEXT_CONTENT, &val)`;
+   existing two-variant `PropertyValue` enum sufficient (no new
+   variants needed).
+3. **GUI verified locally** — counter window rendered; `Count: 0`
+   → `Count: N` on click; hover/press animation intact.
 
-A live note (`docs/notes/wasamoc-ir.md`) capturing open questions
-about the textual IR grammar and `wasamoc` responsibility-boundary
-edge cases is created in M2-Phase 6 implementation, not here — this
-ADR has no implementation work, so there is nothing to feed it yet.
+This ADR is now **Agreed**. M2-Phase 2 task list is written in
+[m2-plan.md Progress](../plans/m2-plan.md#progress) and M2-Phase 3
+pre-doc is the next phase to enter.

@@ -216,8 +216,8 @@ phases land.
     - [ ] Recover Phase 2-5 examples from git history; place under `wasamo-poc/`; add to workspace. Update their `wasamo` dep to `wasamo-runtime`.
     - [ ] Verify they compile and run on the SSH dev box.
     - [ ] Do not merge to main; branch serves as resurrection reference.
-- [ ] **M2-Phase 2 — wasamoc output format decision**
-  - ADR: [docs/decisions/m2-phase-2-wasamoc-output-format.md](../decisions/m2-phase-2-wasamoc-output-format.md) (Pre-doc; on hold pending feasibility spike — see ADR DD-M2-P2-001 Recommendation)
+- [x] **M2-Phase 2 — wasamoc output format decision**
+  - ADR: [docs/decisions/m2-phase-2-wasamoc-output-format.md](../decisions/m2-phase-2-wasamoc-output-format.md) — **Agreed 2026-05-04** (spike passed; Option B adopted)
 - [ ] **M2-Phase 3 — Handler execution location**
   - ADR: _not yet filed_
 - [ ] **M2-Phase 4 — Tree-mutation ABI primitives**
