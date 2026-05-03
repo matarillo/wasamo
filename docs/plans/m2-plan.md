@@ -218,6 +218,17 @@ phases land.
     - [x] Do not merge to main; branch serves as resurrection reference.
 - [x] **M2-Phase 2 — wasamoc output format decision**
   - ADR: [docs/decisions/m2-phase-2-wasamoc-output-format.md](../decisions/m2-phase-2-wasamoc-output-format.md) — **Agreed 2026-05-04** (spike passed; Option B adopted)
+  - [x] `docs/decisions/m2-phase-2-wasamoc-output-format.md` — pre-doc filed (DD-M2-P2-001..004); status "Pre-doc", agreement gated on feasibility spike
+  - [x] Owner agreement on DD-M2-P2-001 (Option B: IR + interpreter), DD-M2-P2-002 (textual IR), DD-M2-P2-003 (activities 1–7 in `wasamoc`), DD-M2-P2-004 (sequential sequencing vs Phase 3)
+  - Feasibility spike (`exp/m2-p2-ir-loader-spike`, commit `b7ab4dc`):
+    - [x] Branch `exp/m2-p2-ir-loader-spike` created from M2-Phase 1 tip
+    - [x] `experimental_ir_loader` module added to `wasamo-runtime` (feature-gated `experimental-ir`)
+    - [x] `experiments/ir-spike/counter.uic` hand-written in throwaway s-expression IR form
+    - [x] ~200-line loader (tokenizer + tree walker) implemented in `wasamo-runtime`
+    - [x] `experiments/ir-spike/` driver crate renders counter window end-to-end
+    - [x] Pass criteria confirmed: internal builder API (`WidgetNode::vstack`, `text`, `button`, `append_child`, `set_clicked`) driven without modification; tagged-value `PropertyValue` sufficient; GUI renders identically to M1 hand-written example
+  - [x] Spike result appended to ADR; status → **Agreed**
+  - [x] `docs/plans/m2-plan.md` Progress: phase ticked, ADR linked, task list written
 - [ ] **M2-Phase 3 — Handler execution location**
   - ADR: _not yet filed_
 - [ ] **M2-Phase 4 — Tree-mutation ABI primitives**
