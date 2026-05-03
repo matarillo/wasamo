@@ -556,6 +556,3 @@ crate rename and the scope split:
       convention recorded.
 - [ ] CI: Zig install step; CMake build step; both link against
       `wasamo.dll.lib`.
-
-Per session-end agreement (recorded in project memory), each item
-above lands as a separate commit.
