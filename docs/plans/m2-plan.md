@@ -230,7 +230,10 @@ phases land.
   - [x] Spike result appended to ADR; status → **Accepted**
   - [x] `docs/plans/m2-plan.md` Progress: phase ticked, ADR linked, task list written
 - [ ] **M2-Phase 3 — Handler execution location**
-  - ADR: _not yet filed_
+  - ADR: [docs/decisions/m2-phase-3-handler-exec-location.md](../decisions/m2-phase-3-handler-exec-location.md) — **Proposed 2026-05-04** (awaiting owner agreement)
+  - [x] `docs/decisions/m2-phase-3-handler-exec-location.md` — pre-doc filed (DD-M2-P3-001..004); status "Proposed"
+  - [ ] Owner agreement on DD-M2-P3-001 (Option A: runtime-side interpreter), DD-M2-P3-002 (Option B: separate paths, inline first), DD-M2-P3-003 (Option A: catch_unwind + stderr), DD-M2-P3-004 (Option B: IR reserves optional span; coarse identifiers in M2)
+  - [ ] On agreement: status → **Accepted**, M2-Phase 3 task list written into this Progress section
 - [ ] **M2-Phase 4 — Tree-mutation ABI primitives**
   - ADR: _not yet filed_
 - [ ] **M2-Phase 5 — Reactive engine**
