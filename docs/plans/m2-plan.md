@@ -212,10 +212,10 @@ phases land.
   - [x] `docs/plans/m2-plan.md` Progress: phase ticked, ADR linked.
   - [x] `CHANGELOG.md`: cdylib-shim split entry added.
   - Experimental branch (after main landed):
-    - [ ] Create branch `exp/m2-p1-poc-examples` from M2-Phase 1 tip.
-    - [ ] Recover Phase 2-5 examples from git history; place under `wasamo-poc/`; add to workspace. Update their `wasamo` dep to `wasamo-runtime`.
-    - [ ] Verify they compile and run on the SSH dev box.
-    - [ ] Do not merge to main; branch serves as resurrection reference.
+    - [x] Create branch `exp/m2-p1-poc-examples` from M2-Phase 1 tip.
+    - [x] Recover Phase 2-5 examples from git history; place under `wasamo-poc/`; add to workspace. Update their `wasamo` dep to `wasamo-runtime`.
+    - [x] Verify they compile and run on the SSH dev box.
+    - [x] Do not merge to main; branch serves as resurrection reference.
 - [x] **M2-Phase 2 — wasamoc output format decision**
   - ADR: [docs/decisions/m2-phase-2-wasamoc-output-format.md](../decisions/m2-phase-2-wasamoc-output-format.md) — **Agreed 2026-05-04** (spike passed; Option B adopted)
 - [ ] **M2-Phase 3 — Handler execution location**
