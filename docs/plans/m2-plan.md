@@ -248,10 +248,12 @@ phases land.
     - vs Phase 6: `HandlerExpr` は in-memory enum として定義。textual IR ↔ `HandlerExpr` の serialization 接続は Phase 6 で実施。Phase 3 では `experiments/ir-spike/` の throwaway IR は触らない (Phase 6 で全面再設計)。
   - **GUI 検証は本フェーズでは実施しない.** Phase 5 (reactive 統合) 完了時に counter の click → label 更新が e2e で動くことで遡及的に確認。理由は [docs/notes/headless-verification.md](../notes/headless-verification.md) 参照。
 - [ ] **M2-Phase 4 — Tree-mutation ABI primitives**
-  - ADR: _not yet filed_
+  - ADR: [docs/decisions/m2-phase-4-tree-mutation-abi.md](../decisions/m2-phase-4-tree-mutation-abi.md) — **Status: Proposed (2026-05-04)**, owner agreement pending
   - **Implementation scope (provisional, settled at pre-doc time):**
-    - 既存 internal builder (insert / remove / replace child; property set) を C ABI に昇格。
-    - 複数 property write のバッチ化 (Phase 5 invalidation cascade の amortize 用)。
+    - 既存 internal builder を拡張: `insert_child(index)` / `remove_child(index) -> Box` / `replace_child(index, new) -> Box` / `child_count()` / `widget_destroy` を内部 Rust API として追加 (現状 `append_child` のみ)。
+    - 上記 5 関数 + `wasamo_widget_append_child` を stable core C ABI として昇格 (DD-M2-P4-001 = A / DD-M2-P4-002 = A / DD-M2-P4-003 = A)。
+    - `wasamo_*_create` constructors は **experimental layer のまま据え置き** (DD-M2-P4-001 = A; M3 DSL spec と合わせて再検討)。
+    - **property batching の host-visible API は追加しない** (DD-M2-P4-004 = A; 既存 `drain_if_outermost` 経路を `abi_spec.md §6` で M2 batching contract として明文化)。Phase 5 reactive engine 用の internal-Rust coalescing helper は Phase 5 で実装。
     - `wasamo.dll` の export 表に新シンボル追加 (`dumpbin /exports` で検証)。
   - **Boundary with adjacent phases:**
     - vs Phase 3: handler は Phase 3 で internal `set_property` を直接呼ぶ実装にしてあり、Phase 4 C ABI 化後も internal 経路を維持 (re-entrancy 回避 + DD-M2-P3-001 Option A の利点保持)。
