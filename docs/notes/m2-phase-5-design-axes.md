@@ -70,3 +70,16 @@ Reactive engine は pure logic 部分が大きいので unit test の余地が�
 
 回答は pre-doc 起草時に DD として展開する。本 note は資料置き場で、
 ここで決定はしない。
+
+## オーナー方向感 (2026-05-05)
+
+pre-doc ADR 起草への入力として記録する。決定は ADR 側に書く。
+
+- **軸 (a)**: 中間案を採用。Signal + Effect の 2 層、依存収集は read 時の
+  thread-local stack で自動。Computed は M3 へ。スコープ膨張は許容範囲。
+- **軸 (b)**: Option A を基本とする。Effect closure を fake にした pure-logic
+  test で Signal/Effect 伝搬を覆う。Mirror は Phase 4 既存 mirror を活用できる
+  範囲に限定し、新規 mirror は起こさない。Option C は不採用
+  (headless-verification.md の方針通り、Phase 5 で先回り構築しない)。
+- **軸以外の論点** (Effect disposal 責務境界 / 同期 dispatch 方針 /
+  Phase 6 接続点 API): ADR 起票時に DD として展開する。事前会話は不要。
