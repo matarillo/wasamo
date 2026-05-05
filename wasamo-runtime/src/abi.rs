@@ -224,6 +224,179 @@ pub unsafe extern "C" fn wasamo_window_destroy(window: *mut WasamoWindow) -> Was
     WASAMO_OK
 }
 
+// ── 4.6 Tree mutation (DD-M2-P4-001/002/003 = Option A) ──────────────────────
+
+#[no_mangle]
+pub unsafe extern "C" fn wasamo_widget_append_child(
+    parent: *mut WasamoWidget,
+    child: *mut WasamoWidget,
+) -> WasamoStatus {
+    if parent.is_null() {
+        set_last_error("wasamo_widget_append_child: parent is null");
+        return WASAMO_ERR_INVALID_ARG;
+    }
+    if child.is_null() {
+        set_last_error("wasamo_widget_append_child: child is null");
+        return WASAMO_ERR_INVALID_ARG;
+    }
+    let child_box = Box::from_raw(child);
+    if child_box.attached {
+        // Don't consume the box if we're going to return an error; leak-free
+        // by converting back to raw and setting the error.
+        let _ = Box::into_raw(child_box);
+        set_last_error("wasamo_widget_append_child: child is already attached");
+        return WASAMO_ERR_INVALID_ARG;
+    }
+    match (*parent).append_child(child_box) {
+        Ok(()) => {
+            clear_last_error();
+            WASAMO_OK
+        }
+        Err(e) => {
+            set_last_error(format!("wasamo_widget_append_child: {e}"));
+            WASAMO_ERR_RUNTIME
+        }
+    }
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn wasamo_widget_insert_child(
+    parent: *mut WasamoWidget,
+    index: usize,
+    child: *mut WasamoWidget,
+) -> WasamoStatus {
+    if parent.is_null() {
+        set_last_error("wasamo_widget_insert_child: parent is null");
+        return WASAMO_ERR_INVALID_ARG;
+    }
+    if child.is_null() {
+        set_last_error("wasamo_widget_insert_child: child is null");
+        return WASAMO_ERR_INVALID_ARG;
+    }
+    let child_box = Box::from_raw(child);
+    match (*parent).insert_child(index, child_box) {
+        Ok(()) => {
+            clear_last_error();
+            WASAMO_OK
+        }
+        Err(crate::widget::MutationError::IndexOutOfBounds) => {
+            set_last_error(format!("wasamo_widget_insert_child: index {index} out of bounds"));
+            WASAMO_ERR_INVALID_ARG
+        }
+        Err(crate::widget::MutationError::AlreadyAttached) => {
+            set_last_error("wasamo_widget_insert_child: child is already attached");
+            WASAMO_ERR_INVALID_ARG
+        }
+    }
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn wasamo_widget_remove_child(
+    parent: *mut WasamoWidget,
+    index: usize,
+    out_removed: *mut *mut WasamoWidget,
+) -> WasamoStatus {
+    if parent.is_null() {
+        set_last_error("wasamo_widget_remove_child: parent is null");
+        return WASAMO_ERR_INVALID_ARG;
+    }
+    if out_removed.is_null() {
+        set_last_error("wasamo_widget_remove_child: out_removed is null");
+        return WASAMO_ERR_INVALID_ARG;
+    }
+    *out_removed = ptr::null_mut();
+    match (*parent).remove_child(index) {
+        Ok(removed) => {
+            *out_removed = Box::into_raw(removed);
+            clear_last_error();
+            WASAMO_OK
+        }
+        Err(crate::widget::MutationError::IndexOutOfBounds) => {
+            set_last_error(format!("wasamo_widget_remove_child: index {index} out of bounds"));
+            WASAMO_ERR_INVALID_ARG
+        }
+        Err(crate::widget::MutationError::AlreadyAttached) => {
+            set_last_error("wasamo_widget_remove_child: unexpected AlreadyAttached error");
+            WASAMO_ERR_RUNTIME
+        }
+    }
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn wasamo_widget_replace_child(
+    parent: *mut WasamoWidget,
+    index: usize,
+    new_child: *mut WasamoWidget,
+    out_old: *mut *mut WasamoWidget,
+) -> WasamoStatus {
+    if parent.is_null() {
+        set_last_error("wasamo_widget_replace_child: parent is null");
+        return WASAMO_ERR_INVALID_ARG;
+    }
+    if new_child.is_null() {
+        set_last_error("wasamo_widget_replace_child: new_child is null");
+        return WASAMO_ERR_INVALID_ARG;
+    }
+    if out_old.is_null() {
+        set_last_error("wasamo_widget_replace_child: out_old is null");
+        return WASAMO_ERR_INVALID_ARG;
+    }
+    *out_old = ptr::null_mut();
+    let new_box = Box::from_raw(new_child);
+    match (*parent).replace_child(index, new_box) {
+        Ok(old) => {
+            *out_old = Box::into_raw(old);
+            clear_last_error();
+            WASAMO_OK
+        }
+        Err(crate::widget::MutationError::IndexOutOfBounds) => {
+            set_last_error(format!("wasamo_widget_replace_child: index {index} out of bounds"));
+            WASAMO_ERR_INVALID_ARG
+        }
+        Err(crate::widget::MutationError::AlreadyAttached) => {
+            set_last_error("wasamo_widget_replace_child: new_child is already attached");
+            WASAMO_ERR_INVALID_ARG
+        }
+    }
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn wasamo_widget_child_count(
+    parent: *mut WasamoWidget,
+    out_count: *mut usize,
+) -> WasamoStatus {
+    if parent.is_null() {
+        set_last_error("wasamo_widget_child_count: parent is null");
+        return WASAMO_ERR_INVALID_ARG;
+    }
+    if out_count.is_null() {
+        set_last_error("wasamo_widget_child_count: out_count is null");
+        return WASAMO_ERR_INVALID_ARG;
+    }
+    *out_count = (*parent).child_count();
+    clear_last_error();
+    WASAMO_OK
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn wasamo_widget_destroy(widget: *mut WasamoWidget) -> WasamoStatus {
+    if widget.is_null() {
+        // Idempotent on null, matching wasamo_window_destroy (DD-M2-P4-003).
+        return WASAMO_OK;
+    }
+    if (*widget).attached {
+        set_last_error(
+            "wasamo_widget_destroy: widget is currently attached; \
+             remove it from its parent first or destroy the owning window",
+        );
+        return WASAMO_ERR_INVALID_ARG;
+    }
+    let node = Box::from_raw(widget);
+    crate::widget::widget_destroy(node);
+    clear_last_error();
+    WASAMO_OK
+}
+
 #[no_mangle]
 pub extern "C" fn wasamo_run() {
     crate::run();
