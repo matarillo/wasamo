@@ -3,6 +3,8 @@ use std::collections::{HashMap, HashSet};
 use std::rc::{Rc, Weak};
 use std::sync::atomic::{AtomicU64, Ordering};
 
+use crate::handler::{EvalContext, EvalError};
+
 #[derive(Copy, Clone, Eq, PartialEq, Hash, Debug)]
 pub(crate) struct SignalId(u64);
 
@@ -198,6 +200,50 @@ pub(crate) fn with_batched_writes<R, F: FnOnce() -> R>(f: F) -> R {
         drain_dirty_effects();
     }
     result
+}
+
+/// Read-only `EvalContext` adapter for binding expressions (DD-M2-P5-002 = B).
+///
+/// Wraps a map of `Signal<i32>` instances keyed by property path. Property
+/// reads go through `Signal::get()`, which registers the read with the
+/// thread-local reactive tracking stack, causing the enclosing Effect (if any)
+/// to subscribe to the Signal automatically.
+///
+/// Write attempts (`set_i32`) always return `EvalError::WriteInBindingContext`;
+/// binding expressions are read-only by contract (DD-M2-P5-006 = A).
+///
+/// The property map is `&HashMap<String, Signal<i32>>` for M2 (integer
+/// properties only; the Text `content` binding stringifies the integer result).
+/// The next task (`register_binding`) wires this against the real property
+/// storage; for now the shape is validated via unit tests with test-local maps.
+pub(crate) struct BindingEvalContext<'a> {
+    properties: &'a HashMap<String, Signal<i32>>,
+}
+
+impl<'a> BindingEvalContext<'a> {
+    pub(crate) fn new(properties: &'a HashMap<String, Signal<i32>>) -> Self {
+        Self { properties }
+    }
+}
+
+impl<'a> EvalContext for BindingEvalContext<'a> {
+    fn get_i32(&self, path: &str) -> Result<i32, EvalError> {
+        self.properties
+            .get(path)
+            .ok_or_else(|| EvalError::UnknownProperty(path.to_string()))
+            .map(|s| s.get_untracked())
+    }
+
+    fn set_i32(&mut self, path: &str, _value: i32) -> Result<(), EvalError> {
+        Err(EvalError::WriteInBindingContext { path: path.to_string() })
+    }
+
+    fn read_i32_tracked(&self, path: &str) -> Result<i32, EvalError> {
+        self.properties
+            .get(path)
+            .ok_or_else(|| EvalError::UnknownProperty(path.to_string()))
+            .map(|s| s.get())
+    }
 }
 
 #[cfg(test)]
@@ -400,5 +446,89 @@ mod tests {
         });
         // 1 (initial run_effect) + 16 (drain iterations before cap) = 17 bounded runs.
         assert_eq!(*count.borrow(), 17);
+    }
+
+    // ── BindingEvalContext tests (DD-M2-P5-006) ───────────────────────────────
+
+    #[test]
+    fn binding_ctx_reads_are_tracked() {
+        // Wrap a Signal<i32> in BindingEvalContext, evaluate a PropRead binding
+        // inside an Effect, then update the Signal and assert the Effect re-ran.
+        use crate::handler::{evaluate_binding, HandlerExpr, InterpolationPart};
+
+        let sig = Signal::new(0i32);
+        let mut props = std::collections::HashMap::new();
+        props.insert("root.count".to_string(), sig.clone());
+
+        let log: Rc<RefCell<Vec<String>>> = Rc::new(RefCell::new(Vec::new()));
+        let log_c = Rc::clone(&log);
+        let props_c = props.clone();
+
+        let _h = EffectHandle::new(move || {
+            let mut ctx = BindingEvalContext::new(&props_c);
+            let expr = HandlerExpr::Interpolation(vec![
+                InterpolationPart::Literal("Count: ".into()),
+                InterpolationPart::Expr(HandlerExpr::PropRead {
+                    path: "root.count".into(),
+                }),
+            ]);
+            let result = evaluate_binding(&expr, &mut ctx).unwrap();
+            log_c.borrow_mut().push(result);
+        });
+
+        // Initial run.
+        assert_eq!(*log.borrow(), vec!["Count: 0"]);
+
+        // Update the Signal → Effect re-runs because read was tracked.
+        sig.set(7);
+        assert_eq!(*log.borrow(), vec!["Count: 0", "Count: 7"]);
+    }
+
+    #[test]
+    fn binding_ctx_set_returns_write_error() {
+        use crate::handler::EvalError;
+
+        let props = std::collections::HashMap::<String, Signal<i32>>::new();
+        let mut ctx = BindingEvalContext::new(&props);
+        let result = ctx.set_i32("x", 1);
+        assert_eq!(result, Err(EvalError::WriteInBindingContext { path: "x".into() }));
+    }
+
+    #[test]
+    fn binding_ctx_get_untracked_vs_tracked() {
+        // get_i32 must NOT register a dependency; read_i32_tracked must.
+        use crate::handler::EvalContext;
+
+        let sig = Signal::new(42i32);
+        let mut props = std::collections::HashMap::new();
+        props.insert("p".to_string(), sig.clone());
+
+        let run_count = Rc::new(RefCell::new(0i32));
+        let run_count_c = Rc::clone(&run_count);
+        let props_for_untracked = props.clone();
+
+        // Effect using get_i32 (untracked): Signal update must NOT re-run it.
+        let _h_untracked = EffectHandle::new(move || {
+            *run_count_c.borrow_mut() += 1;
+            let ctx = BindingEvalContext::new(&props_for_untracked);
+            let _ = ctx.get_i32("p").unwrap();
+        });
+        assert_eq!(*run_count.borrow(), 1);
+        sig.set(99);
+        assert_eq!(*run_count.borrow(), 1, "get_i32 should not register a dependency");
+
+        // Effect using read_i32_tracked: Signal update MUST re-run it.
+        let run_count2 = Rc::new(RefCell::new(0i32));
+        let run_count2_c = Rc::clone(&run_count2);
+        let props2 = props.clone();
+
+        let _h_tracked = EffectHandle::new(move || {
+            *run_count2_c.borrow_mut() += 1;
+            let ctx = BindingEvalContext::new(&props2);
+            let _ = ctx.read_i32_tracked("p").unwrap();
+        });
+        assert_eq!(*run_count2.borrow(), 1);
+        sig.set(100);
+        assert_eq!(*run_count2.borrow(), 2, "read_i32_tracked should register a dependency");
     }
 }
