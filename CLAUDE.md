@@ -32,6 +32,8 @@ Unit tests are only appropriate for logic that has **no Win32/WinRT FFI dependen
 
 Adding unit tests to a phase checklist is only warranted when that phase introduces testable pure logic. Do not add unit test checklist items to phases whose work is entirely Win32/WinRT (e.g. Phase 2, Phase 5).
 
+When pure logic is entangled with a Win32/WinRT-bound type (e.g. a struct whose constructor requires a live `Compositor`), you **may** introduce a test-module-only mirror struct that replicates the index/state logic without the OS dependency. Use this sparingly — only when the logic is non-trivial enough to warrant a test and cannot be exercised through pure free functions. Prefer extracting the logic into a free function first; reach for the mirror pattern only when extraction would distort the production type's API.
+
 ## Commit rules
 
 Default to one commit per task-list item in the active ADR / plan. This

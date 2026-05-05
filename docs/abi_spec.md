@@ -338,6 +338,96 @@ This is the path that handles **both** built-in widget signals
 The M1 experimental `wasamo_button_set_clicked` (§5) is a
 convenience for the former; it is not part of the stable core.
 
+### 4.6 Tree mutation
+
+Added in M2-Phase 4 (DD-M2-P4-001/002/003 = Option A). Grows the stable
+core with a sixth area: index-based widget-tree mutation. Constructors
+(`wasamo_*_create`) remain in the M1 experimental layer (§5) until the
+M3 DSL spec draft settles their parameter shapes.
+
+```c
+WASAMO_EXPORT WasamoStatus WASAMO_API wasamo_widget_append_child(
+    WasamoWidget*  parent,
+    WasamoWidget*  child);
+
+WASAMO_EXPORT WasamoStatus WASAMO_API wasamo_widget_insert_child(
+    WasamoWidget*  parent,
+    size_t         index,
+    WasamoWidget*  child);
+
+WASAMO_EXPORT WasamoStatus WASAMO_API wasamo_widget_remove_child(
+    WasamoWidget*   parent,
+    size_t          index,
+    WasamoWidget**  out_removed);
+
+WASAMO_EXPORT WasamoStatus WASAMO_API wasamo_widget_replace_child(
+    WasamoWidget*   parent,
+    size_t          index,
+    WasamoWidget*   new_child,
+    WasamoWidget**  out_old);
+
+WASAMO_EXPORT WasamoStatus WASAMO_API wasamo_widget_child_count(
+    WasamoWidget*  parent,
+    size_t*        out_count);
+
+WASAMO_EXPORT WasamoStatus WASAMO_API wasamo_widget_destroy(WasamoWidget* widget);
+```
+
+**Identifier scheme.** Children are addressed by zero-based index into the
+parent's ordered child list (DD-M2-P4-002 = Option A). `child_count` is
+provided so hosts can construct loop bounds; no random-access `_get` is
+exposed (the returned handle's lifetime would be tied to the list position,
+which shifts under any subsequent `insert` or `remove`).
+
+**Widget lifecycle and attached state.** Each widget is in one of three
+states:
+
+- **Detached / host-owned** — produced by a constructor
+  (`wasamo_*_create`) or by a successful `remove_child` /
+  `replace_child` call. The host holds the only reference.
+- **Attached** — successfully passed to `append_child`,
+  `insert_child`, or `replace_child` as the `new_child`. Ownership
+  transfers to the parent node.
+- **Window-root** — attached via `wasamo_window_set_root`; freed when
+  the window is destroyed.
+
+A widget in the **attached** or **window-root** state may not be passed to
+`wasamo_widget_destroy`; remove it from its parent first.
+
+**`wasamo_widget_append_child`** appends `child` as the last child of
+`parent`. Equivalent to `insert_child(parent, child_count(parent), child)`.
+A separate entry point is provided because appending is the most common
+operation and avoids a round-trip `child_count` query. Returns
+`WASAMO_ERR_INVALID_ARG` if `child` is already attached.
+
+**`wasamo_widget_insert_child`** inserts `child` at `index`; existing
+children at `index` and beyond shift right. `index` must satisfy
+`0 ≤ index ≤ child_count`. Returns `WASAMO_ERR_INVALID_ARG` if
+`index > child_count` or if `child` is already attached.
+
+**`wasamo_widget_remove_child`** detaches the child at `index` and writes
+a detached handle to `*out_removed`. The host owns the handle after the
+call (re-attach or destroy it). Returns `WASAMO_ERR_INVALID_ARG` if
+`index ≥ child_count`.
+
+**`wasamo_widget_replace_child`** atomically detaches the child at `index`
+and attaches `new_child` in its place. Writes the detached old handle to
+`*out_old`. Returns `WASAMO_ERR_INVALID_ARG` if `index ≥ child_count` or
+if `new_child` is already attached.
+
+**`wasamo_widget_child_count`** writes the number of direct children of
+`parent` to `*out_count`.
+
+**`wasamo_widget_destroy`** releases a detached widget and its entire
+subtree. All registry entries (signal handlers, property observers) for
+every node in the subtree are severed and their `destroy_fn` callbacks
+invoked exactly once. The handle is invalid after the call. Behaviour on
+a `NULL` argument: idempotent `WASAMO_OK`, matching
+`wasamo_window_destroy`. Behaviour on an attached widget:
+`WASAMO_ERR_INVALID_ARG` with last-error message
+`"widget is currently attached; remove it from its parent first or destroy
+the owning window"`.
+
 ## 5. M1 experimental layer
 
 Every symbol in this section is declared with `WASAMO_EXPERIMENTAL`:
@@ -419,9 +509,9 @@ ownership of any element).
 **Ownership transfer to a window.** `wasamo_window_set_root` moves
 the root widget into the window. After that call the widget tree
 is owned by the window: it is dropped when the window is destroyed
-or when `wasamo_shutdown` is called, whichever comes first. There
-is no separate widget-destroy ABI in M1 — destruction is always
-keyed off the owning window.
+or when `wasamo_shutdown` is called, whichever comes first. The
+stable-core `wasamo_widget_destroy` (§4.6) handles destruction of
+detached widgets that have been removed from their parent.
 
 **Auto-routing on installed roots.** When a window has a root
 installed via `wasamo_window_set_root`, the runtime forwards
@@ -462,6 +552,8 @@ attempt to:**
   widget destroy of unattached subtrees, reparenting). Whether
   these belong in any future ABI surface depends on the
   resolution of deferred question (b); investigated in M2 pre-doc.
+  *M2-Phase 4 discharged this item: §4.6 stable-core mutation
+  primitives now cover insert / remove / replace / destroy.*
 - **Codegen vs IR design alternatives.** This is the core M2
   question and belongs to M2 pre-doc, not M1 implementation.
   Prototyping multiple candidates is M2's job.
@@ -502,6 +594,25 @@ the host obtains the window's HWND through a future
 `PostMessage`, and performs the `wasamo_*` work in the UI-thread
 message handler. A built-in `wasamo_post` is deferred to the phase
 that needs it; adding it later is purely additive.
+
+### M2 batching contract (DD-M2-P4-004 = Option A)
+
+The M2 batching contract is the existing queue-and-drain semantics
+described above; no host-visible batching API was added in M2-Phase 4.
+
+**Observable behaviour:** within a single host call frame, consecutive
+`wasamo_set_property` calls on any widget (including calls made from
+inside a signal-handler callback) are queued and their observer
+notifications fired together in a single drain pass after control returns
+to the outermost host frame. A host loop calling `wasamo_set_property`
+N times in succession therefore causes observers to fire once per
+observed `(widget, property_id)` pair, not N times.
+
+*This is the M2 batching contract.* A host-visible begin/commit
+transaction API — for cases where heterogeneous cross-widget operations
+must be batched as a single observable event — is deferred to M3+
+(DD-M2-P4-004 Out of scope). Adding it later is purely additive and does
+not break the existing queue-and-drain contract.
 
 ## 7. Header generation, distribution, and CI
 

@@ -138,15 +138,21 @@ commitments begin.
 `abi_spec.md` is structured in **two layers**:
 
 - **Stable core** — runtime lifecycle, window + event loop, property
-  get/set, property change observers, signal connect/disconnect.
+  get/set, property change observers, signal connect/disconnect, and
+  **tree mutation** (M2-Phase 4: append / insert / remove / replace /
+  child_count / widget_destroy — `abi_spec.md §4.6`).
   Written as a candidate for the M4 ABI freeze.
+  The stable core covers **six areas** as of M2-Phase 4 (DD-P6-001
+  defined the initial five-area minimum; §4.6 tree mutation is the
+  sixth area added by DD-M2-P4-001).
 - **M1 experimental** — all-at-once widget constructors
   (`wasamo_text_create`, `wasamo_button_create`, `wasamo_vstack_create`,
   `wasamo_hstack_create`), `wasamo_window_set_root`, and the typed
   `wasamo_button_set_clicked` convenience. Required because M1 `wasamoc`
   is parser-only and the host must construct the widget tree by hand.
   Marked `WASAMO_EXPERIMENTAL` in both header and spec; not subject to
-  M4 stability.
+  M4 stability. Constructor promotion to stable core deferred to M3
+  (DD-M2-P4-001).
 
 The Phase 6 ADR explicitly **does not decide** (a) where DSL inline handler
 bodies (`clicked => { … }`) will execute — host-side vs runtime-side; or

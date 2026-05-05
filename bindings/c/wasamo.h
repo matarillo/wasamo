@@ -167,6 +167,49 @@ WASAMO_EXPORT WasamoStatus WASAMO_API wasamo_signal_connect(
 
 WASAMO_EXPORT WasamoStatus WASAMO_API wasamo_signal_disconnect(uint64_t token);
 
+/* ── 4.6 Tree mutation ─────────────────────────────────────────────────── */
+/*
+ * Index-based tree mutation primitives (DD-M2-P4-001/002 = Option A).
+ * Stable core. Child positions are 0-based; index == child_count is
+ * accepted by append_child and insert_child (append semantics).
+ *
+ * Ownership after remove/replace: the out_removed / out_old handle is
+ * detached and owned by the host. Re-attach via append/insert/replace, or
+ * release via wasamo_widget_destroy (DD-M2-P4-003).
+ */
+
+WASAMO_EXPORT WasamoStatus WASAMO_API wasamo_widget_append_child(
+    WasamoWidget*  parent,
+    WasamoWidget*  child);
+
+WASAMO_EXPORT WasamoStatus WASAMO_API wasamo_widget_insert_child(
+    WasamoWidget*  parent,
+    size_t         index,
+    WasamoWidget*  child);
+
+WASAMO_EXPORT WasamoStatus WASAMO_API wasamo_widget_remove_child(
+    WasamoWidget*   parent,
+    size_t          index,
+    WasamoWidget**  out_removed);
+
+WASAMO_EXPORT WasamoStatus WASAMO_API wasamo_widget_replace_child(
+    WasamoWidget*   parent,
+    size_t          index,
+    WasamoWidget*   new_child,
+    WasamoWidget**  out_old);
+
+WASAMO_EXPORT WasamoStatus WASAMO_API wasamo_widget_child_count(
+    WasamoWidget*  parent,
+    size_t*        out_count);
+
+/*
+ * Destroy a detached widget and any subtree it owns. The handle is invalid
+ * after this call. NULL is idempotent (returns WASAMO_OK). Calling on an
+ * attached widget returns WASAMO_ERR_INVALID_ARG; remove it from its parent
+ * first or destroy the owning window.
+ */
+WASAMO_EXPORT WasamoStatus WASAMO_API wasamo_widget_destroy(WasamoWidget* widget);
+
 /* ── 5. M1 experimental layer ──────────────────────────────────────────── */
 /*
  * Every symbol below is WASAMO_EXPERIMENTAL. Hosts that use these must

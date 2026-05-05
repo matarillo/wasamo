@@ -14,6 +14,23 @@ the **Status** section of [README.md](./README.md).
 
 ## [Unreleased] — M2: Foundation (in progress)
 
+### M2-Phase 4 — Tree-mutation ABI primitives (2026-05-05)
+
+Grows the stable C ABI with a sixth area (DD-P6-001 defined the
+initial five): index-based widget-tree mutation. New stable-core
+symbols: `wasamo_widget_append_child` (promoted from internal),
+`wasamo_widget_insert_child`, `wasamo_widget_remove_child`,
+`wasamo_widget_replace_child`, `wasamo_widget_child_count`,
+`wasamo_widget_destroy`. `WidgetNode` gains an `attached: bool`
+invariant maintained by all mutators; `wasamo_widget_destroy` rejects
+attached widgets. No host-visible batching API added (DD-M2-P4-004 =
+Option A; existing queue-and-drain is the M2 batching contract, now
+documented in `abi_spec.md §6`). `reactive.rs` skeleton provides
+`with_batched_writes` (internal-only; Phase 5 fills the body).
+Acceptance criterion A4 of M2 discharged.
+
+Decisions: [DD-M2-P4-001..004](./docs/decisions/m2-phase-4-tree-mutation-abi.md).
+
 ### M2-Phase 1 — cdylib-shim cleanup (2026-05-03)
 
 Resolved the rlib filename collision (cargo#6313) that was worked

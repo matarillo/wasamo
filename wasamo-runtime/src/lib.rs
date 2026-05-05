@@ -2,6 +2,7 @@ mod abi;
 mod emit;
 pub mod handler;
 mod layout;
+pub(crate) mod reactive;
 mod registry;
 mod runtime;
 mod text;
