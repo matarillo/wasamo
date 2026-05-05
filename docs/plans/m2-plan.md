@@ -234,73 +234,78 @@ phases land.
   - [x] `docs/decisions/m2-phase-3-handler-exec-location.md` — pre-doc filed (DD-M2-P3-001..004); status "Proposed"
   - [x] Owner agreement on DD-M2-P3-001 (Option A: runtime-side interpreter), DD-M2-P3-002 (Option B: separate paths, inline first), DD-M2-P3-003 (Option A: catch_unwind + stderr), DD-M2-P3-004 (Option B: IR reserves optional span; coarse identifiers in M2)
   - [x] ADR status → **Accepted**
-  - [x] `docs/notes/headless-verification.md` — new live note: ヘッドレス検証機構の必要性検討 (Phase 3 verification gap を契機に起草; M2 内では構築せず pure-logic test fixture 戦略で閉じる)
+  - [x] `docs/notes/headless-verification.md` — new live note: examining the need for a headless-verification mechanism (drafted on the Phase 3 verification gap; M2 closes with a pure-logic test fixture strategy without building one)
   - [x] `docs/plans/m2-plan.md` Progress: phase still **open** — task list expanded below; coding work begins next session
   - **Implementation scope (this phase):**
-    - [x] `wasamo-runtime/src/handler.rs` 新規 — `HandlerExpr` enum (assign / `+=` `-=` `*=` `/=` / property read+write / int literal / block) + `EvalContext` trait + `evaluate()` + 単体テスト 14本 (assign / compound / wrapping overflow / nested block / empty block / division-by-zero / prop-read-unknown)
-    - [x] `WidgetNode` に `inline_handlers` slot 追加 + `set_inline_handler()` API + signal emit 経路を「inline 評価 → host listener iter」順に改造 (DD-M2-P3-002 Option B); `inline_before_host_ordering` unit test で順序検証; `NullEvalContext` placeholder (Phase 5 で実 context に差し替え)
-    - [x] `invoke_handler()` — handler invoke を `std::panic::catch_unwind` で wrap + 書式 `wasamo: handler error in <location>: <message>` で stderr ログ (DD-M2-P3-003); panic injection / eval-error / success の unit test 3本
-    - [x] `format_handler_location()` + `WidgetPathSegment` — coarse identifier `<component>.<widget-path>.<signal>` formatter (DD-M2-P3-004 Option B); pure logic として unit test 5本
-    - [x] `cargo build --release --workspace` 緑 / `cargo test --workspace` 緑 (30 wasamo-runtime tests + 36 wasamoc tests + 1 wasamo-sys smoke test)
+    - [x] New `wasamo-runtime/src/handler.rs` — `HandlerExpr` enum (assign / `+=` `-=` `*=` `/=` / property read+write / int literal / block) + `EvalContext` trait + `evaluate()` + 14 unit tests (assign / compound / wrapping overflow / nested block / empty block / division-by-zero / prop-read-unknown)
+    - [x] Added `inline_handlers` slot + `set_inline_handler()` API to `WidgetNode`; signal emit path reworked to run inline evaluation before host listener iteration (DD-M2-P3-002 Option B); ordering verified by `inline_before_host_ordering` unit test; `NullEvalContext` placeholder (replaced with the real context in Phase 5)
+    - [x] `invoke_handler()` — handler invocation wrapped in `std::panic::catch_unwind`, logged to stderr in the format `wasamo: handler error in <location>: <message>` (DD-M2-P3-003); 3 unit tests covering panic injection / eval-error / success
+    - [x] `format_handler_location()` + `WidgetPathSegment` — coarse identifier `<component>.<widget-path>.<signal>` formatter (DD-M2-P3-004 Option B); 5 pure-logic unit tests
+    - [x] `cargo build --release --workspace` passes / `cargo test --workspace` passes (30 wasamo-runtime tests + 36 wasamoc tests + 1 wasamo-sys smoke test)
   - **Boundary with adjacent phases:**
-    - vs Phase 4: handler は internal `set_property` のまま (C ABI 越えない — DD-M2-P3-001 Option A の本質)。Phase 4 の C ABI 化は handler 経路を再触しない。
-    - vs Phase 5: `HandlerExpr` evaluator は handler 軸のみ実装。binding 評価器との共通基盤化は Phase 5 で実施 (handler evaluator が Phase 5 の出発点)。
-    - vs Phase 6: `HandlerExpr` は in-memory enum として定義。textual IR ↔ `HandlerExpr` の serialization 接続は Phase 6 で実施。Phase 3 では `experiments/ir-spike/` の throwaway IR は触らない (Phase 6 で全面再設計)。
-  - **GUI 検証は本フェーズでは実施しない.** Phase 5 (reactive 統合) 完了時に counter の click → label 更新が e2e で動くことで遡及的に確認。理由は [docs/notes/headless-verification.md](../notes/headless-verification.md) 参照。
+    - vs Phase 4: handlers stay on internal `set_property` (no C ABI crossing — the essence of DD-M2-P3-001 Option A). Phase 4's C ABI promotion does not touch the handler path.
+    - vs Phase 5: the `HandlerExpr` evaluator is implemented for the handler axis only. Sharing a common base with the binding evaluator happens in Phase 5 (the handler evaluator is Phase 5's starting point).
+    - vs Phase 6: `HandlerExpr` is defined as an in-memory enum. Wiring textual IR ↔ `HandlerExpr` serialization is done in Phase 6. Phase 3 does not touch the throwaway IR in `experiments/ir-spike/` (it is fully redesigned in Phase 6).
+  - **No GUI verification in this phase.** It will be confirmed retroactively when Phase 5 (reactive integration) completes and the counter's click → label update works end-to-end. See [docs/notes/headless-verification.md](../notes/headless-verification.md) for the rationale.
 - [x] **M2-Phase 4 — Tree-mutation ABI primitives**
-  - ADR: [docs/decisions/m2-phase-4-tree-mutation-abi.md](../decisions/m2-phase-4-tree-mutation-abi.md) — **Accepted 2026-05-05** (DD-M2-P4-001..004 全て Option A)
+  - ADR: [docs/decisions/m2-phase-4-tree-mutation-abi.md](../decisions/m2-phase-4-tree-mutation-abi.md) — **Accepted 2026-05-05** (DD-M2-P4-001..004 all Option A)
   - **Implementation scope (this phase):**
-    - [x] `wasamo-runtime/src/widget.rs` — `WidgetNode` に `attached: bool` フィールド追加 (DD-M2-P4-003)。`append_child` の attach 時に `true` をセット; detach 時に `false` に戻す。
-    - [x] `wasamo-runtime/src/widget.rs` — internal Rust mutation API 4 本追加: `insert_child(&mut self, index: usize, child: Box<WidgetNode>) -> Result<(), MutationError>` / `remove_child(&mut self, index: usize) -> Result<Box<WidgetNode>, MutationError>` / `replace_child(&mut self, index: usize, new_child: Box<WidgetNode>) -> Result<Box<WidgetNode>, MutationError>` / `child_count(&self) -> usize`。`MutationError` は `IndexOutOfBounds` / `AlreadyAttached` (新 child が他所に attach 済み) を表現。
-    - [x] `wasamo-runtime/src/widget.rs` — `widget_destroy(node: Box<WidgetNode>)` internal helper: subtree を walk して signal handler / observer registry エントリを sever し、`Box` を drop。`wasamo_window_destroy` の subtree-teardown 経路 と共通化 (shared sweep helper に factor out)。
-    - [x] **Pure-logic 単体テスト** (`widget.rs`): 16 本 (Slot/Children mirror で index bounds / attached transition を検証; Win32/WinRT 不要)
-    - [x] `wasamo-runtime/src/abi.rs` — stable-core C ABI 5 本追加 + `wasamo_widget_append_child` 昇格 (DD-M2-P4-001 = A / DD-M2-P4-002 = A)
-    - [x] `wasamo_widget_destroy` の precondition 検証: NULL → `WASAMO_OK` 冪等; attached → `WASAMO_ERR_INVALID_ARG` + last-error メッセージ (DD-M2-P4-003 ADR 規定)。
-    - [x] `wasamo.h` に新 6 シンボルを §4.6 として追加; `wasamo_widget_append_child` は stable-core へ。
-    - [x] `wasamo-runtime/src/reactive.rs` — `with_batched_writes` skeleton 作成 (pub(crate); Phase 5 で実装)。DD-M2-P4-004 = A により C ABI シンボルは追加しない。
-    - [x] `docs/abi_spec.md` 改訂: §4.6 Tree mutation 追加 / §5 ownership 記述更新 / §6 batching contract 段落追加。
-    - [x] `cargo build --release --workspace` 緑 / `cargo test -p wasamo-runtime -p wasamoc --release` 緑 (45 + 36 + 1 = 82 tests)。
-    - [x] **Link/export 検証:** `dumpbin /exports target/release/wasamo.dll` で新 6 シンボル全て確認済み (wasamo_widget_append/insert/remove/replace_child / child_count / destroy)。
-    - [x] CI smoke test — CI 設定変更不要 (`cargo build --release --workspace` が新シンボルをカバー)。
-    - [x] `docs/architecture.md` — stable core 6 領域になったことを記述追加。
-    - [x] `CHANGELOG.md` — Phase 4 entry 追加。
+    - [x] `wasamo-runtime/src/widget.rs` — added `attached: bool` field to `WidgetNode` (DD-M2-P4-003). Set to `true` on `append_child` attach; reset to `false` on detach.
+    - [x] `wasamo-runtime/src/widget.rs` — added 4 internal Rust mutation APIs: `insert_child(&mut self, index: usize, child: Box<WidgetNode>) -> Result<(), MutationError>` / `remove_child(&mut self, index: usize) -> Result<Box<WidgetNode>, MutationError>` / `replace_child(&mut self, index: usize, new_child: Box<WidgetNode>) -> Result<Box<WidgetNode>, MutationError>` / `child_count(&self) -> usize`. `MutationError` represents `IndexOutOfBounds` / `AlreadyAttached` (the new child is already attached elsewhere).
+    - [x] `wasamo-runtime/src/widget.rs` — `widget_destroy(node: Box<WidgetNode>)` internal helper: walks the subtree, severs signal-handler / observer-registry entries, and drops the `Box`. Shared with the `wasamo_window_destroy` subtree-teardown path (factored out into a shared sweep helper).
+    - [x] **Pure-logic unit tests** (`widget.rs`): 16 tests (Slot/Children mirror verifies index bounds / attached transitions; no Win32/WinRT required)
+    - [x] `wasamo-runtime/src/abi.rs` — added 5 stable-core C ABI functions + promoted `wasamo_widget_append_child` (DD-M2-P4-001 = A / DD-M2-P4-002 = A)
+    - [x] `wasamo_widget_destroy` precondition handling: NULL → `WASAMO_OK` idempotent; attached → `WASAMO_ERR_INVALID_ARG` + last-error message (per the DD-M2-P4-003 ADR).
+    - [x] Added the 6 new symbols to `wasamo.h` as §4.6; `wasamo_widget_append_child` moved into stable-core.
+    - [x] `wasamo-runtime/src/reactive.rs` — created `with_batched_writes` skeleton (pub(crate); implementation in Phase 5). No C ABI symbol added per DD-M2-P4-004 = A.
+    - [x] Revised `docs/abi_spec.md`: added §4.6 Tree mutation; updated §5 ownership wording; added §6 batching contract paragraph.
+    - [x] `cargo build --release --workspace` passes / `cargo test -p wasamo-runtime -p wasamoc --release` passes (45 + 36 + 1 = 82 tests).
+    - [x] **Link/export verification:** all 6 new symbols confirmed via `dumpbin /exports target/release/wasamo.dll` (wasamo_widget_append/insert/remove/replace_child / child_count / destroy).
+    - [x] CI smoke test — no CI config change required (`cargo build --release --workspace` covers the new symbols).
+    - [x] `docs/architecture.md` — added a note that stable core now covers 6 areas.
+    - [x] `CHANGELOG.md` — added Phase 4 entry.
   - **Boundary with adjacent phases:**
-    - vs Phase 3: handler は Phase 3 で internal `set_property` を直接呼ぶ実装にしてあり、Phase 4 C ABI 化後も internal 経路を維持 (re-entrancy 回避 + DD-M2-P3-001 Option A の利点保持)。Phase 4 の mutation primitives は handler 経路を再触しない。
-    - vs Phase 5: reactive engine の invalidation cascade は Phase 4 の `with_batched_writes` skeleton (internal Rust) 上で実装される。host-visible batching API は M2 では出さない (DD-M2-P4-004 = A)。Phase 5 で binding evaluator が internal mutation API (`insert_child` / `remove_child` 等) を呼ぶ際は本 phase の attached-state 不変条件に従う。
-    - vs Phase 6: `wasamo_load_ui` (Phase 6) は新 C ABI 1 本だが、tree 構築自体は本 phase の internal Rust mutation API を runtime 内部から使う (C ABI を経由しない — Phase 2 spike `experimental_ir_loader` と同パターン)。
-  - **検証種別:** unit test (pure logic: index bounds / attached-state transitions / subtree teardown — `widget.rs` 内で完結) + build (`cargo build --release --workspace`) + link/export (`dumpbin /exports`) + ABI smoke (CI header consistency)。**GUI 検証は本フェーズ単独では実施しない** — mutation primitives 単体は Phase 5 の reactive 動作と Phase 6 の `.ui` 駆動 counter で遡及的に exercise される。Phase 3 と同じく [docs/notes/headless-verification.md](../notes/headless-verification.md) の方針に従う。
+    - vs Phase 3: handlers were implemented in Phase 3 to call internal `set_property` directly, and the internal path is preserved after Phase 4 C ABI promotion (avoids re-entrancy + retains the benefit of DD-M2-P3-001 Option A). Phase 4's mutation primitives do not touch the handler path.
+    - vs Phase 5: the reactive engine's invalidation cascade is implemented on top of Phase 4's `with_batched_writes` skeleton (internal Rust). No host-visible batching API ships in M2 (DD-M2-P4-004 = A). When the Phase 5 binding evaluator calls the internal mutation API (`insert_child` / `remove_child`, etc.), it must obey this phase's attached-state invariants.
+    - vs Phase 6: `wasamo_load_ui` (Phase 6) is one new C ABI entry, but tree construction itself uses this phase's internal Rust mutation API from inside the runtime (it does not go through the C ABI — same pattern as the Phase 2 spike's `experimental_ir_loader`).
+  - **Verification kinds:** unit tests (pure logic: index bounds / attached-state transitions / subtree teardown — self-contained in `widget.rs`) + build (`cargo build --release --workspace`) + link/export (`dumpbin /exports`) + ABI smoke (CI header consistency). **No GUI verification in this phase alone** — mutation primitives are exercised retroactively by Phase 5's reactive behaviour and Phase 6's `.ui`-driven counter. Same policy as Phase 3 ([docs/notes/headless-verification.md](../notes/headless-verification.md)).
 - [ ] **M2-Phase 5 — Reactive engine**
-  - ADR: _not yet filed_
-  - **Risk concentration (M2 内で本フェーズが取るべき risk):**
-    - 本フェーズは M2 で唯一の technical-thesis 検証点 (A2: host 配線なしで reactive 伝搬)。他 phase は構造ゴール (A3) / ABI surface 拡張 (A4) / 統合 (A1) に閉じており、「DD-P8-002 の whole-window dirty + queued emission の上に dependency tracker が乗る」という M2 の foundation 仮説はここで初めて exercise される。
-    - 他 phase が punt した決定が本 phase に集積する: Phase 4 の `with_batched_writes` shape 確定 (DD-M2-P4-004 = A) / Phase 3 `HandlerExpr` evaluator と binding evaluator の core 共通化判断 / DD-P8-002 が残した subtree 粒度 open question ([layout-engine note §3.4](../notes/layout-engine.md)) / headless verification の再評価 ([headless-verification note](../notes/headless-verification.md))。
-    - 後続 (Phase 6 / M3+) の rework コストが本 phase の shape に強く依存。Phase 6 は新規機構なしで Phase 5 の evaluator 出力 (binding 文の typed IR 表現) を消費するだけ — Phase 5 で shape を間違えると Phase 2 の textual IR normative grammar まで戻る。M3 以降の binding 機能拡張 (Grid セルバインディング / List per-item context) も本 phase の dependency tracker 設計の上に積む。
-    - Risk-taking 軸は 2 つ: (a) dependency tracker の設計深度 — minimum viable (counter 1 binding が動けば良い) で済ませると M3 で書き直し。Solid / Vue 系 signals パターンの prior art を初手から踏むかを pre-doc で決断する。(b) headless verification への踏み込み — pure-logic fixture 方針を本 phase で本当に維持できるか試し、無理なら no-Compositor mode の独立 ADR を切る。Phase 6 (GUI 手動検証必須) で初めて headless が要ると判明する経路は最も詰むので、本 phase 着手時に決める。
-  - **Implementation scope (provisional, settled at pre-doc time):**
-    - property → binding の依存グラフ (dependency tracker) — Solid / Vue 系の signals パターンを参考に数百行規模。
-    - property write 観測 → 依存 binding の invalidate → 再評価 → widget property 書込 → 必要に応じて relayout/render 起動。
-    - binding expression evaluator (read-only / 文字列補間 `"Count: \{root.count}"` 含む) — Phase 3 の `HandlerExpr` evaluator を共通基盤に格上げ (handler evaluator は side-effecting / binding evaluator は pure read; 評価器の core を共有)。
-    - DD-P8-002 の "whole-window dirty" 経路に上乗せ。subtree 粒度は acceptance demand があれば検討、なければ live note に open question として残す。
+  - ADR: [docs/decisions/m2-phase-5-reactive-engine.md](../decisions/m2-phase-5-reactive-engine.md) — **Proposed 2026-05-05** (DD-M2-P5-001..006; awaiting owner agreement)
+  - Live note: [docs/notes/architectural-family.md](../notes/architectural-family.md) — records the tree-with-bindings family as a working hypothesis (not a long-term commitment); re-evaluation triggers documented for M3 DSL spec drafting and post-1.0 hot reload.
+  - Pre-aligned design axes: [docs/notes/m2-phase-5-design-axes.md](../notes/m2-phase-5-design-axes.md) — owner direction (2026-05-05) on dependency-tracker depth and Option A verification, recorded before pre-doc.
+  - **Risk concentration (the risk this phase must absorb within M2):**
+    - This is the only technical-thesis validation point in M2 (A2: reactive propagation without host wiring). Every other phase stays in structural goals (A3) / ABI surface extension (A4) / integration (A1); the M2 foundation hypothesis — "a dependency tracker on top of DD-P8-002's whole-window dirty + queued emission" — is exercised here for the first time.
+    - Decisions punted by other phases accumulate here: settling the `with_batched_writes` shape from Phase 4 (DD-M2-P4-004 = A); deciding whether Phase 3's `HandlerExpr` evaluator and the binding evaluator share a common core; the subtree-granularity open question left by DD-P8-002 ([layout-engine note §3.4](../notes/layout-engine.md)); re-evaluation of headless verification ([headless-verification note](../notes/headless-verification.md)).
+    - Downstream rework costs (Phase 6 / M3+) depend heavily on this phase's shape. Phase 6 introduces no new mechanisms and just consumes Phase 5's evaluator output (the typed-IR representation of binding statements) — getting the shape wrong here forces a regression all the way back to Phase 2's textual IR normative grammar. M3+ binding-feature extensions (Grid cell bindings, List per-item context) also stack on top of this phase's dependency-tracker design.
+    - Two risk-taking axes: (a) dependency-tracker design depth — settling for minimum viable (counter's single binding working is enough) means a rewrite in M3. Decide at pre-doc time whether to adopt the Solid / Vue signals prior-art pattern from the start. (b) commitment to headless verification — test in this phase whether the pure-logic fixture policy actually holds; if not, file an independent ADR for a no-Compositor mode. Discovering at Phase 6 (GUI manual verification mandatory) that headless is needed is the worst-case trajectory, so decide at the start of this phase.
+  - **Implementation scope (provisional; pre-doc proposes the shape below per DD-M2-P5-001..006, settled when the ADR is Accepted):**
+    - Signal + Effect 2-layer reactive primitive with read-time auto-tracking (DD-M2-P5-001 = B; DD-M2-P5-002 = B). `Signal<T>` is an observable storage cell; `Effect` is a re-runnable closure whose dependencies are auto-collected via a thread-local current-effect stack. No `Computed` layer in M2.
+    - Effect lifetime tied to an owner Drop handle (DD-M2-P5-003); explicit disposal removes the effect from all dependent Signals' dependent sets.
+    - Outermost-frame deferred dispatch (DD-M2-P5-004) — re-evaluation flush composes with `emit::drain_if_outermost`, not bypassing the queued-emission rule (DD-P6-003).
+    - `BindingTarget` enum + `register_binding()` API (DD-M2-P5-005; `pub(crate)`) — encodes the "binding lives on a tree node" assumption; family-coupled but internal, revisable without C ABI churn (see architectural-family note).
+    - Binding expression evaluator reusing Phase 3's `HandlerExpr` evaluator core through a read-only `EvalContext` variant that records reads (DD-M2-P5-006). Includes string interpolation like `"Count: \{root.count}"`.
+    - Layered on top of DD-P8-002's "whole-window dirty" path; binding writes go through `set_property` and inherit existing layout-dirty marking. Subtree granularity stays out of scope (open question in [layout-engine note §3.4](../notes/layout-engine.md)).
+    - No C ABI symbols added (per DD-M2-P4-004 = A). All Phase 5 types are `pub(crate)` in `wasamo-runtime/src/reactive.rs`.
   - **Boundary with adjacent phases:**
-    - vs Phase 3: Phase 3 の `HandlerExpr` を読込み、評価器 core を共通化。Phase 3 で property write が呼ばれた時に Phase 5 の dependency tracker が hook 経由で invalidate を起動する。
-    - vs Phase 4: Phase 4 の batching primitive 上で実装。Phase 4 が batching を提供しないと再評価カスケードが性能悪化。
-    - vs Phase 6: Phase 6 が `.ui` の binding 文を typed IR に降下し、Phase 5 の binding expression evaluator が消費する。
-  - **検証種別:** unit test (dependency tracker, binding evaluator は pure logic) + GUI 手動 (実機で counter の reactive 連動を確認 — acceptance A2)。**ヘッドレス検証機構の必要性が顕在化する可能性の高いフェーズ**; Phase 5 着手時に [docs/notes/headless-verification.md](../notes/headless-verification.md) を再評価し、必要なら "no-Compositor" mode の独立 ADR を起こす。
+    - vs Phase 3: consumes Phase 3's `HandlerExpr` and shares the evaluator core. When Phase 3 triggers a property write, Phase 5's dependency tracker fires invalidation via a hook.
+    - vs Phase 4: implemented on top of Phase 4's `with_batched_writes` skeleton. Without Phase 4 batching, re-evaluation cascades degrade performance.
+    - vs Phase 6: Phase 6 lowers `.ui` binding statements into typed IR, which Phase 5's binding expression evaluator consumes.
+  - **Verification kinds:** unit tests (dependency tracker and binding evaluator are pure logic; Option A verification per the design-axes note uses fake Effect closures with no new mirrors and no headless backend) + GUI manual (verify reactive linkage of the counter on real hardware — acceptance A2). **The phase most likely to surface a need for a headless-verification mechanism**; on entering Phase 5, re-evaluate [docs/notes/headless-verification.md](../notes/headless-verification.md) and, if needed, file an independent ADR for a "no-Compositor" mode.
 - [ ] **M2-Phase 6 — `.ui → runtime` lowering**
   - ADR: _not yet filed_
   - **Implementation scope (provisional, settled at pre-doc time):**
-    - `wasamoc` typed IR emit — DD-M2-P2-003 activities 1-7 を実装 (parse → check → 型推論 → property binding lowering → handler body lowering → textual IR 出力)。
-    - textual IR の normative grammar 起草 (DD-M2-P2-002 Option B; s-expression 風)。
-    - `wasamo-runtime` 側 textual IR parser — Phase 2 spike の `experimental_ir_loader` を production 化、`HandlerExpr` (Phase 3) と binding expression (Phase 5) を生成する。
-    - 新 C ABI 1 本: `wasamo_load_ui(path, &out_root)` 系。
-    - `examples/counter-{c,rust,zig}/` を `.ui` 駆動 host に置換 — acceptance A1。
-    - `architecture.md` 改訂: §6 (or M2 改訂版) に signal dispatch 順序の runtime contract を記載 (DD-M2-P3-002 末尾の指示; 実物が Phase 6 で揃うのでここで記述)。
+    - `wasamoc` typed IR emit — implement DD-M2-P2-003 activities 1–7 (parse → check → type inference → property binding lowering → handler body lowering → textual IR output).
+    - Draft the textual IR's normative grammar (DD-M2-P2-002 Option B; s-expression-flavoured).
+    - `wasamo-runtime` textual IR parser — productionise the Phase 2 spike's `experimental_ir_loader`; emits `HandlerExpr` (Phase 3) and binding expressions (Phase 5).
+    - One new C ABI: `wasamo_load_ui(path, &out_root)` and friends.
+    - Replace `examples/counter-{c,rust,zig}/` with `.ui`-driven hosts — acceptance A1.
+    - Revise `architecture.md`: document the signal-dispatch ordering runtime contract in §6 (or its M2-revised version) (per the closing instruction of DD-M2-P3-002; the real implementation lands in Phase 6, so the description goes here).
   - **Boundary with adjacent phases:**
-    - 新規 core 機構なし。Phase 3 の `HandlerExpr`、Phase 4 の C ABI primitive、Phase 5 の binding evaluator を消費する純統合フェーズ。
-    - 出力先言語別の codegen は **不要** (DD-M2-P2-001 Option B により runtime 側 1 本で足りる)。
-  - **検証種別:** build + 単体テスト (textual IR parser は pure logic) + **GUI 手動 (RDP / 物理) で 3 言語すべての counter を実機確認 — acceptance A1/A2 そのもの**。CI build 緑だけでは A1/A2 は満たせない (verification-environments.md Observation 1 参照)。
-- **Out of M2 scope (再掲):**
-  - ヘッドレス検証 backend — [docs/notes/headless-verification.md](../notes/headless-verification.md) で批判的に検討、構築せず pure-logic test fixture 戦略で M2 を閉じる方針。Phase 5 で再評価トリガあり。
+    - No new core mechanisms. A pure integration phase consuming Phase 3's `HandlerExpr`, Phase 4's C ABI primitives, and Phase 5's binding evaluator.
+    - Per-target-language codegen is **not required** (per DD-M2-P2-001 Option B, a single runtime-side path suffices).
+  - **Verification kinds:** build + unit tests (the textual IR parser is pure logic) + **GUI manual (RDP / physical) verification of all three language counters on real hardware — this is acceptance A1/A2 itself**. A green CI build alone does not satisfy A1/A2 (see verification-environments.md Observation 1).
+- **Out of M2 scope (restated):**
+  - Headless-verification backend — examined critically in [docs/notes/headless-verification.md](../notes/headless-verification.md); the policy is to close M2 with a pure-logic test fixture strategy without building one. Re-evaluation trigger in Phase 5.
 
 ### Notes
 
