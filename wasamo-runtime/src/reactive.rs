@@ -1,4 +1,4 @@
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::collections::{HashMap, HashSet};
 use std::rc::{Rc, Weak};
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -6,7 +6,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 #[derive(Copy, Clone, Eq, PartialEq, Hash, Debug)]
 pub(crate) struct SignalId(u64);
 
-#[derive(Copy, Clone, Eq, PartialEq, Hash, Debug)]
+#[derive(Copy, Clone, Eq, PartialEq, Hash, Debug, Ord, PartialOrd)]
 pub(crate) struct EffectId(u64);
 
 static NEXT_SIGNAL_ID: AtomicU64 = AtomicU64::new(1);
@@ -47,6 +47,11 @@ impl ReactiveGraph {
 
 thread_local! {
     static GRAPH: RefCell<ReactiveGraph> = RefCell::new(ReactiveGraph::new());
+    /// Nesting depth of `with_batched_writes` (and of the drain pass itself).
+    /// While > 0, `Signal::set` defers Effect execution to the outermost exit.
+    static BATCH_DEPTH: Cell<u32> = Cell::new(0);
+    /// Effects whose dependency changed and have not yet been re-run.
+    static DIRTY_EFFECTS: RefCell<HashSet<EffectId>> = RefCell::new(HashSet::new());
 }
 
 fn run_effect(effect_id: EffectId) {
@@ -65,9 +70,42 @@ fn run_effect(effect_id: EffectId) {
         GRAPH.with(|g| g.borrow().closures.get(&effect_id).and_then(|w| w.upgrade()));
     let Some(closure_rc) = closure_rc else { return };
 
+    // Raise BATCH_DEPTH while the closure runs so that any Signal::set call
+    // inside the body enqueues into DIRTY_EFFECTS rather than triggering an
+    // immediate (re-entrant) drain.
+    BATCH_DEPTH.with(|d| d.set(d.get() + 1));
     GRAPH.with(|g| g.borrow_mut().tracking_stack.push(effect_id));
     (closure_rc.borrow_mut())();
     GRAPH.with(|g| g.borrow_mut().tracking_stack.pop());
+    BATCH_DEPTH.with(|d| d.set(d.get() - 1));
+}
+
+/// Drain the dirty-Effect set until quiescent, or until the iteration cap is
+/// reached.  Each `run_effect` call manages `BATCH_DEPTH` internally, so
+/// writes made inside Effect bodies are deferred to the next drain iteration.
+fn drain_dirty_effects() {
+    const ITERATION_CAP: usize = 16;
+    for _ in 0..ITERATION_CAP {
+        let dirty: Vec<EffectId> = DIRTY_EFFECTS.with(|d| {
+            let mut set = d.borrow_mut();
+            let mut v: Vec<EffectId> = set.drain().collect();
+            v.sort_unstable();
+            v
+        });
+        if dirty.is_empty() {
+            return;
+        }
+        for effect_id in dirty {
+            run_effect(effect_id);
+        }
+    }
+    if DIRTY_EFFECTS.with(|d| !d.borrow().is_empty()) {
+        eprintln!(
+            "wasamo reactive: drain loop exceeded iteration cap (16); \
+             divergent binding detected"
+        );
+        DIRTY_EFFECTS.with(|d| d.borrow_mut().clear());
+    }
 }
 
 pub(crate) struct Signal<T> {
@@ -97,7 +135,6 @@ impl<T: Clone + 'static> Signal<T> {
 
     pub(crate) fn set(&self, value: T) {
         *self.value.borrow_mut() = value;
-        // with_batched_writes (next task) will replace this with dirty-set enqueue.
         let dependents: Vec<EffectId> = GRAPH.with(|g| {
             g.borrow()
                 .forward
@@ -105,8 +142,9 @@ impl<T: Clone + 'static> Signal<T> {
                 .map(|s| s.iter().copied().collect())
                 .unwrap_or_default()
         });
-        for effect_id in dependents {
-            run_effect(effect_id);
+        DIRTY_EFFECTS.with(|d| d.borrow_mut().extend(dependents));
+        if BATCH_DEPTH.with(|d| d.get()) == 0 {
+            drain_dirty_effects();
         }
     }
 }
@@ -122,6 +160,10 @@ impl EffectHandle {
         let closure: Rc<RefCell<Box<dyn FnMut()>>> = Rc::new(RefCell::new(Box::new(f)));
         GRAPH.with(|g| g.borrow_mut().closures.insert(id, Rc::downgrade(&closure)));
         run_effect(id);
+        // Drain effects that became dirty during the initial run (e.g. re-entrant writes).
+        if BATCH_DEPTH.with(|d| d.get()) == 0 {
+            drain_dirty_effects();
+        }
         EffectHandle { id, _closure: closure }
     }
 }
@@ -144,10 +186,18 @@ impl Drop for EffectHandle {
 
 /// Execute `f` with writes batched: invalidation cascades triggered inside
 /// `f` are deferred until `f` returns, then flushed once.
-///
-/// Phase 5 next task: fill in depth counter + dirty-Effect drain.
 pub(crate) fn with_batched_writes<R, F: FnOnce() -> R>(f: F) -> R {
-    f()
+    BATCH_DEPTH.with(|d| d.set(d.get() + 1));
+    let result = f();
+    let depth = BATCH_DEPTH.with(|d| {
+        let new = d.get() - 1;
+        d.set(new);
+        new
+    });
+    if depth == 0 {
+        drain_dirty_effects();
+    }
+    result
 }
 
 #[cfg(test)]
@@ -277,5 +327,64 @@ mod tests {
         drop(h);
         sig.set(1);
         assert_eq!(*count.borrow(), 1);
+    }
+
+    #[test]
+    fn batched_writes_coalesce_reruns() {
+        let sig = Signal::new(0i32);
+        let count = Rc::new(RefCell::new(0i32));
+        let sig_c = sig.clone();
+        let count_c = Rc::clone(&count);
+        let _h = EffectHandle::new(move || {
+            let _ = sig_c.get();
+            *count_c.borrow_mut() += 1;
+        });
+        assert_eq!(*count.borrow(), 1); // initial run
+        with_batched_writes(|| {
+            sig.set(1);
+            sig.set(2);
+            sig.set(3);
+        });
+        // Three writes inside the batch produce exactly one re-run.
+        assert_eq!(*count.borrow(), 2);
+        assert_eq!(sig.get_untracked(), 3);
+    }
+
+    #[test]
+    fn reentrant_write_in_effect_converges() {
+        // An Effect that conditionally writes back to its own dependency.
+        // The drain loop must re-run it until the condition is false (convergent).
+        let sig = Signal::new(0i32);
+        let count = Rc::new(RefCell::new(0i32));
+        let sig_c = sig.clone();
+        let count_c = Rc::clone(&count);
+        let _h = EffectHandle::new(move || {
+            let v = sig_c.get();
+            *count_c.borrow_mut() += 1;
+            if v < 3 {
+                sig_c.set(v + 1);
+            }
+        });
+        // Runs: v=0 (initial), v=1, v=2, v=3 — 4 runs, then quiesces.
+        assert_eq!(*count.borrow(), 4);
+        assert_eq!(sig.get_untracked(), 3);
+    }
+
+    #[test]
+    fn iteration_cap_exhaustion_does_not_hang() {
+        // A divergent Effect that always re-enqueues itself is bounded by the
+        // drain iteration cap (16). After cap exhaustion the dirty set is
+        // cleared and execution continues normally.
+        let sig = Signal::new(0i32);
+        let count = Rc::new(RefCell::new(0i32));
+        let sig_c = sig.clone();
+        let count_c = Rc::clone(&count);
+        let _h = EffectHandle::new(move || {
+            let v = sig_c.get();
+            *count_c.borrow_mut() += 1;
+            sig_c.set(v.saturating_add(1)); // always dirty — never converges
+        });
+        // 1 (initial run_effect) + 16 (drain iterations before cap) = 17 bounded runs.
+        assert_eq!(*count.borrow(), 17);
     }
 }

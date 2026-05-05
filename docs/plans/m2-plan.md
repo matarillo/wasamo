@@ -284,7 +284,7 @@ phases land.
       - **Technical risk: Low.** Solid.js / Vue ref / MobX prior art is canonical; the data-structure choice is HashMap/HashSet; thread-local stack is a standard pattern.
       - **Failure mode:** ID allocator (monotonic `u64` vs `slotmap`) may need a swap. Absorbable as DD-M2-P5-007 or a private refactor.
       - **Implementation note:** `Signal::set` does immediate Effect re-execution in this task. `with_batched_writes` (next task) will replace that with a dirty-set enqueue path.
-    - [ ] **`reactive.rs`: `with_batched_writes` body — fill in the Phase 4 skeleton.** Thread-local depth counter; outermost exit drains the dirty Effect set with an iteration cap (e.g. 16) to detect runaway re-entry.
+    - [x] **`reactive.rs`: `with_batched_writes` body — fill in the Phase 4 skeleton.** Thread-local depth counter; outermost exit drains the dirty Effect set with an iteration cap (e.g. 16) to detect runaway re-entry.
       - **Verification:** pure-logic test — N writes inside the closure produce one Effect re-run; a re-entrant write inside the Effect re-runs but is bounded; iteration-cap exhaustion logs an error and breaks the loop.
       - **Technical risk: Low.** Phase 4's skeleton already established the entry/exit shape; bodywork is bookkeeping.
       - **Failure mode:** cap value or the diagnostics format may shift. Absorbable.
