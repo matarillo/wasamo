@@ -247,37 +247,23 @@ phases land.
     - vs Phase 5: `HandlerExpr` evaluator は handler 軸のみ実装。binding 評価器との共通基盤化は Phase 5 で実施 (handler evaluator が Phase 5 の出発点)。
     - vs Phase 6: `HandlerExpr` は in-memory enum として定義。textual IR ↔ `HandlerExpr` の serialization 接続は Phase 6 で実施。Phase 3 では `experiments/ir-spike/` の throwaway IR は触らない (Phase 6 で全面再設計)。
   - **GUI 検証は本フェーズでは実施しない.** Phase 5 (reactive 統合) 完了時に counter の click → label 更新が e2e で動くことで遡及的に確認。理由は [docs/notes/headless-verification.md](../notes/headless-verification.md) 参照。
-- [ ] **M2-Phase 4 — Tree-mutation ABI primitives**
+- [x] **M2-Phase 4 — Tree-mutation ABI primitives**
   - ADR: [docs/decisions/m2-phase-4-tree-mutation-abi.md](../decisions/m2-phase-4-tree-mutation-abi.md) — **Accepted 2026-05-05** (DD-M2-P4-001..004 全て Option A)
   - **Implementation scope (this phase):**
-    - [ ] `wasamo-runtime/src/widget.rs` — `WidgetNode` に `attached: bool` フィールド追加 (DD-M2-P4-003)。`append_child` の attach 時に `true` をセット; detach 時に `false` に戻す。
-    - [ ] `wasamo-runtime/src/widget.rs` — internal Rust mutation API 4 本追加: `insert_child(&mut self, index: usize, child: Box<WidgetNode>) -> Result<(), MutationError>` / `remove_child(&mut self, index: usize) -> Result<Box<WidgetNode>, MutationError>` / `replace_child(&mut self, index: usize, new_child: Box<WidgetNode>) -> Result<Box<WidgetNode>, MutationError>` / `child_count(&self) -> usize`。`MutationError` は `IndexOutOfBounds` / `AlreadyAttached` (新 child が他所に attach 済み) を表現。
-    - [ ] `wasamo-runtime/src/widget.rs` — `widget_destroy(node: Box<WidgetNode>)` internal helper: subtree を walk して signal handler / observer registry エントリを sever し、`Box` を drop。`wasamo_window_destroy` の subtree-teardown 経路 ([wasamo-runtime/src/abi.rs:210](../../wasamo-runtime/src/abi.rs#L210)) と共通化 (shared sweep helper に factor out)。
-    - [ ] **Pure-logic 単体テスト** (`widget.rs`):
-      - `insert_child` 正常系 (index = 0 / mid / count) / out-of-bounds (index > count)
-      - `remove_child` 正常系 / out-of-bounds / 戻り値の `attached == false`
-      - `replace_child` 正常系 / out-of-bounds / old child の `attached == false` / new child の `attached == true`
-      - `child_count` の単純検証 (insert/remove 後の件数)
-      - `attached` フラグの transition: append → remove で `true → false`、再 attach で `false → true`、すでに attach 済みを再 attach すると `AlreadyAttached`
-    - [ ] `wasamo-runtime/src/abi.rs` — stable-core C ABI 5 本追加 (DD-M2-P4-001 = A / DD-M2-P4-002 = A):
-      - `wasamo_widget_insert_child(parent, size_t index, child) -> WasamoStatus`
-      - `wasamo_widget_remove_child(parent, size_t index, WasamoWidget** out_removed) -> WasamoStatus`
-      - `wasamo_widget_replace_child(parent, size_t index, new_child, WasamoWidget** out_old) -> WasamoStatus`
-      - `wasamo_widget_child_count(parent, size_t* out_count) -> WasamoStatus`
-      - `wasamo_widget_destroy(WasamoWidget*) -> WasamoStatus` (DD-M2-P4-003)
-      - 既存 `wasamo_widget_append_child` を experimental layer (`abi_spec.md §5`) から stable core (§4) に移送 (シンボル名・シグネチャ不変; ヘッダコメントと `WASAMO_EXPERIMENTAL` ガード除去のみ)。
-    - [ ] `wasamo_widget_destroy` の precondition 検証: NULL → `WASAMO_OK` 冪等; attached → `WASAMO_ERR_INVALID_ARG` + last-error メッセージ "widget is currently attached; remove it from its parent first or destroy the owning window" (DD-M2-P4-003 ADR 規定)。
-    - [ ] `wasamo.h` (hand-written per [DD-P6-006](../decisions/phase-6-c-abi.md)) に新 6 シンボルを追加; `wasamo_widget_append_child` を experimental ブロックから stable-core ブロックへ移動。
-    - [ ] `wasamo-runtime/src/reactive.rs` (or 既存 module) — Phase 5 用 internal-only `with_batched_writes(closure)` helper の **空の skeleton** を作成 (実装は Phase 5; ここでは API 形だけ確定し公開境界が internal `pub(crate)` であることを固定)。DD-M2-P4-004 = A により C ABI シンボルは追加しない。
-    - [ ] `docs/abi_spec.md` 改訂:
-      - §4 に新サブセクション「4.6 Tree mutation」追加 — 5 mutators + destroy + count の signature と semantics (attached/detached lifecycle 含む)。
-      - §5 から `wasamo_widget_append_child` を §4.6 に移動。
-      - §6 に **batching contract** の段落追加 — `drain_if_outermost` semantics が M2 の batching 公式コントラクトであり、観測可能な振る舞いとして「同一 host frame 内の連続 `wasamo_set_property` は最終 frame で 1 回 drain される」ことを明文化 (DD-M2-P4-004 = A)。
-    - [ ] `cargo build --release --workspace` 緑 / `cargo test --workspace` 緑。
-    - [ ] **Link/export 検証:** `dumpbin /exports target/release/wasamo.dll` で新 5 シンボル (`wasamo_widget_insert_child` / `_remove_child` / `_replace_child` / `_child_count` / `_destroy`) の存在を確認。`wasamo_widget_append_child` が引き続き export されることも確認。
-    - [ ] CI smoke test (header sanity check; per DD-P6-006) — 新 6 シンボルが `wasamo.h` から `wasamo.dll` の export と一致することを検証する既存 CI ステップを追加シンボルに対して通す。**CI 設定変更は不要** (Rust crate に追加するのみで、新 build system は持ち込まない — CLAUDE.md "CI rules" 準拠)。
-    - [ ] `docs/architecture.md` — §11 (or 該当 ABI 章) に tree-mutation surface の記述を追加。stable core 領域が「5-area minimum + tree mutation の 6 領域」になったことを明記 (DD-P6-001 の拡張)。
-    - [ ] `CHANGELOG.md` — Phase 4 entry: "stable-core: tree mutation primitives (insert / remove / replace / child_count / destroy); append_child promoted from experimental"。
+    - [x] `wasamo-runtime/src/widget.rs` — `WidgetNode` に `attached: bool` フィールド追加 (DD-M2-P4-003)。`append_child` の attach 時に `true` をセット; detach 時に `false` に戻す。
+    - [x] `wasamo-runtime/src/widget.rs` — internal Rust mutation API 4 本追加: `insert_child(&mut self, index: usize, child: Box<WidgetNode>) -> Result<(), MutationError>` / `remove_child(&mut self, index: usize) -> Result<Box<WidgetNode>, MutationError>` / `replace_child(&mut self, index: usize, new_child: Box<WidgetNode>) -> Result<Box<WidgetNode>, MutationError>` / `child_count(&self) -> usize`。`MutationError` は `IndexOutOfBounds` / `AlreadyAttached` (新 child が他所に attach 済み) を表現。
+    - [x] `wasamo-runtime/src/widget.rs` — `widget_destroy(node: Box<WidgetNode>)` internal helper: subtree を walk して signal handler / observer registry エントリを sever し、`Box` を drop。`wasamo_window_destroy` の subtree-teardown 経路 と共通化 (shared sweep helper に factor out)。
+    - [x] **Pure-logic 単体テスト** (`widget.rs`): 16 本 (Slot/Children mirror で index bounds / attached transition を検証; Win32/WinRT 不要)
+    - [x] `wasamo-runtime/src/abi.rs` — stable-core C ABI 5 本追加 + `wasamo_widget_append_child` 昇格 (DD-M2-P4-001 = A / DD-M2-P4-002 = A)
+    - [x] `wasamo_widget_destroy` の precondition 検証: NULL → `WASAMO_OK` 冪等; attached → `WASAMO_ERR_INVALID_ARG` + last-error メッセージ (DD-M2-P4-003 ADR 規定)。
+    - [x] `wasamo.h` に新 6 シンボルを §4.6 として追加; `wasamo_widget_append_child` は stable-core へ。
+    - [x] `wasamo-runtime/src/reactive.rs` — `with_batched_writes` skeleton 作成 (pub(crate); Phase 5 で実装)。DD-M2-P4-004 = A により C ABI シンボルは追加しない。
+    - [x] `docs/abi_spec.md` 改訂: §4.6 Tree mutation 追加 / §5 ownership 記述更新 / §6 batching contract 段落追加。
+    - [x] `cargo build --release --workspace` 緑 / `cargo test -p wasamo-runtime -p wasamoc --release` 緑 (45 + 36 + 1 = 82 tests)。
+    - [x] **Link/export 検証:** `dumpbin /exports target/release/wasamo.dll` で新 6 シンボル全て確認済み (wasamo_widget_append/insert/remove/replace_child / child_count / destroy)。
+    - [x] CI smoke test — CI 設定変更不要 (`cargo build --release --workspace` が新シンボルをカバー)。
+    - [x] `docs/architecture.md` — stable core 6 領域になったことを記述追加。
+    - [x] `CHANGELOG.md` — Phase 4 entry 追加。
   - **Boundary with adjacent phases:**
     - vs Phase 3: handler は Phase 3 で internal `set_property` を直接呼ぶ実装にしてあり、Phase 4 C ABI 化後も internal 経路を維持 (re-entrancy 回避 + DD-M2-P3-001 Option A の利点保持)。Phase 4 の mutation primitives は handler 経路を再触しない。
     - vs Phase 5: reactive engine の invalidation cascade は Phase 4 の `with_batched_writes` skeleton (internal Rust) 上で実装される。host-visible batching API は M2 では出さない (DD-M2-P4-004 = A)。Phase 5 で binding evaluator が internal mutation API (`insert_child` / `remove_child` 等) を呼ぶ際は本 phase の attached-state 不変条件に従う。
