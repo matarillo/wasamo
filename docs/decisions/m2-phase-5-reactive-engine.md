@@ -2,7 +2,7 @@
 
 **Phase:** M2-Phase 5 (reactive state propagation engine)
 **Date:** 2026-05-05
-**Status:** Proposed
+**Status:** Accepted
 
 ## Context
 
@@ -129,7 +129,7 @@ churn. The cost of the implicit framing is bounded to that surface.
 
 ### DD-M2-P5-001 — Reactive primitive layering
 
-**Status:** Proposed
+**Status:** Accepted
 
 **Context:**
 The reactive engine's abstraction surface determines how much
@@ -264,7 +264,7 @@ without M2 acceptance to amortise it. Risk reinforces Option B.
 
 ### DD-M2-P5-002 — Dependency collection mechanism
 
-**Status:** Proposed
+**Status:** Accepted
 
 **Context:**
 Given Option B in DD-M2-P5-001, Effects need to know which Signals
@@ -410,7 +410,7 @@ Risk reinforces Option B.
 
 ### DD-M2-P5-003 — Effect lifetime and disposal
 
-**Status:** Proposed
+**Status:** Accepted
 
 **Context:**
 DD-M2-P5-001 = B introduces Effects (re-runnable closures) registered
@@ -551,7 +551,7 @@ and scales poorly. Risk reinforces Option A.
 
 ### DD-M2-P5-004 — Reactive dispatch timing
 
-**Status:** Proposed
+**Status:** Accepted
 
 **Context:**
 DD-P6-003 = A guarantees no callback fires while the host is inside
@@ -704,7 +704,7 @@ Option B.
 
 ### DD-M2-P5-005 — Phase 6 binding registration API surface
 
-**Status:** Proposed
+**Status:** Accepted
 
 **Context:**
 Phase 6 (`.ui → runtime` lowering) consumes the textual IR and
@@ -843,7 +843,7 @@ Option A.
 
 ### DD-M2-P5-006 — Verification strategy
 
-**Status:** Proposed
+**Status:** Accepted
 
 **Context:**
 [docs/notes/headless-verification.md](../notes/headless-verification.md)
