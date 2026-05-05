@@ -2,7 +2,7 @@
 
 **Phase:** M2-Phase 4 (tree-mutation primitives at the stable C ABI)
 **Date:** 2026-05-04
-**Status:** Proposed
+**Status:** Accepted (2026-05-05)
 
 ## Context
 
@@ -138,7 +138,7 @@ commitment. Both are listed in **Out of scope**.
 
 ### DD-M2-P4-001 — Stable-core mutation primitive scope
 
-**Status:** Proposed
+**Status:** Accepted
 
 **Context:**
 A4 explicitly puts tree-mutation primitives in the C ABI. The question
@@ -279,7 +279,7 @@ C is acceptance-coverage-deficient.
 
 ### DD-M2-P4-002 — Mutation primitive identifier scheme
 
-**Status:** Proposed
+**Status:** Accepted
 
 **Context:**
 DD-M2-P4-001 = A commits to four mutator functions plus destroy. Each
@@ -426,7 +426,7 @@ acceptance gain. Risk reinforces the recommendation.
 
 ### DD-M2-P4-003 — Detached subtree ownership and widget destroy ABI
 
-**Status:** Proposed
+**Status:** Accepted
 
 **Context:**
 DD-M2-P4-002 = A's `remove_child` and `replace_child` produce
@@ -598,7 +598,7 @@ Risk reinforces the recommendation.
 
 ### DD-M2-P4-004 — Property batching API shape
 
-**Status:** Proposed
+**Status:** Accepted
 
 **Context:**
 The Phase 4 plan task list calls for "複数 property write のバッチ化

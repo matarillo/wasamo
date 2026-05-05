@@ -248,20 +248,48 @@ phases land.
     - vs Phase 6: `HandlerExpr` は in-memory enum として定義。textual IR ↔ `HandlerExpr` の serialization 接続は Phase 6 で実施。Phase 3 では `experiments/ir-spike/` の throwaway IR は触らない (Phase 6 で全面再設計)。
   - **GUI 検証は本フェーズでは実施しない.** Phase 5 (reactive 統合) 完了時に counter の click → label 更新が e2e で動くことで遡及的に確認。理由は [docs/notes/headless-verification.md](../notes/headless-verification.md) 参照。
 - [ ] **M2-Phase 4 — Tree-mutation ABI primitives**
-  - ADR: [docs/decisions/m2-phase-4-tree-mutation-abi.md](../decisions/m2-phase-4-tree-mutation-abi.md) — **Status: Proposed (2026-05-04)**, owner agreement pending
-  - **Implementation scope (provisional, settled at pre-doc time):**
-    - 既存 internal builder を拡張: `insert_child(index)` / `remove_child(index) -> Box` / `replace_child(index, new) -> Box` / `child_count()` / `widget_destroy` を内部 Rust API として追加 (現状 `append_child` のみ)。
-    - 上記 5 関数 + `wasamo_widget_append_child` を stable core C ABI として昇格 (DD-M2-P4-001 = A / DD-M2-P4-002 = A / DD-M2-P4-003 = A)。
-    - `wasamo_*_create` constructors は **experimental layer のまま据え置き** (DD-M2-P4-001 = A; M3 DSL spec と合わせて再検討)。
-    - **property batching の host-visible API は追加しない** (DD-M2-P4-004 = A; 既存 `drain_if_outermost` 経路を `abi_spec.md §6` で M2 batching contract として明文化)。Phase 5 reactive engine 用の internal-Rust coalescing helper は Phase 5 で実装。
-    - `wasamo.dll` の export 表に新シンボル追加 (`dumpbin /exports` で検証)。
+  - ADR: [docs/decisions/m2-phase-4-tree-mutation-abi.md](../decisions/m2-phase-4-tree-mutation-abi.md) — **Accepted 2026-05-05** (DD-M2-P4-001..004 全て Option A)
+  - **Implementation scope (this phase):**
+    - [ ] `wasamo-runtime/src/widget.rs` — `WidgetNode` に `attached: bool` フィールド追加 (DD-M2-P4-003)。`append_child` の attach 時に `true` をセット; detach 時に `false` に戻す。
+    - [ ] `wasamo-runtime/src/widget.rs` — internal Rust mutation API 4 本追加: `insert_child(&mut self, index: usize, child: Box<WidgetNode>) -> Result<(), MutationError>` / `remove_child(&mut self, index: usize) -> Result<Box<WidgetNode>, MutationError>` / `replace_child(&mut self, index: usize, new_child: Box<WidgetNode>) -> Result<Box<WidgetNode>, MutationError>` / `child_count(&self) -> usize`。`MutationError` は `IndexOutOfBounds` / `AlreadyAttached` (新 child が他所に attach 済み) を表現。
+    - [ ] `wasamo-runtime/src/widget.rs` — `widget_destroy(node: Box<WidgetNode>)` internal helper: subtree を walk して signal handler / observer registry エントリを sever し、`Box` を drop。`wasamo_window_destroy` の subtree-teardown 経路 ([wasamo-runtime/src/abi.rs:210](../../wasamo-runtime/src/abi.rs#L210)) と共通化 (shared sweep helper に factor out)。
+    - [ ] **Pure-logic 単体テスト** (`widget.rs`):
+      - `insert_child` 正常系 (index = 0 / mid / count) / out-of-bounds (index > count)
+      - `remove_child` 正常系 / out-of-bounds / 戻り値の `attached == false`
+      - `replace_child` 正常系 / out-of-bounds / old child の `attached == false` / new child の `attached == true`
+      - `child_count` の単純検証 (insert/remove 後の件数)
+      - `attached` フラグの transition: append → remove で `true → false`、再 attach で `false → true`、すでに attach 済みを再 attach すると `AlreadyAttached`
+    - [ ] `wasamo-runtime/src/abi.rs` — stable-core C ABI 5 本追加 (DD-M2-P4-001 = A / DD-M2-P4-002 = A):
+      - `wasamo_widget_insert_child(parent, size_t index, child) -> WasamoStatus`
+      - `wasamo_widget_remove_child(parent, size_t index, WasamoWidget** out_removed) -> WasamoStatus`
+      - `wasamo_widget_replace_child(parent, size_t index, new_child, WasamoWidget** out_old) -> WasamoStatus`
+      - `wasamo_widget_child_count(parent, size_t* out_count) -> WasamoStatus`
+      - `wasamo_widget_destroy(WasamoWidget*) -> WasamoStatus` (DD-M2-P4-003)
+      - 既存 `wasamo_widget_append_child` を experimental layer (`abi_spec.md §5`) から stable core (§4) に移送 (シンボル名・シグネチャ不変; ヘッダコメントと `WASAMO_EXPERIMENTAL` ガード除去のみ)。
+    - [ ] `wasamo_widget_destroy` の precondition 検証: NULL → `WASAMO_OK` 冪等; attached → `WASAMO_ERR_INVALID_ARG` + last-error メッセージ "widget is currently attached; remove it from its parent first or destroy the owning window" (DD-M2-P4-003 ADR 規定)。
+    - [ ] `wasamo.h` (hand-written per [DD-P6-006](../decisions/phase-6-c-abi.md)) に新 6 シンボルを追加; `wasamo_widget_append_child` を experimental ブロックから stable-core ブロックへ移動。
+    - [ ] `wasamo-runtime/src/reactive.rs` (or 既存 module) — Phase 5 用 internal-only `with_batched_writes(closure)` helper の **空の skeleton** を作成 (実装は Phase 5; ここでは API 形だけ確定し公開境界が internal `pub(crate)` であることを固定)。DD-M2-P4-004 = A により C ABI シンボルは追加しない。
+    - [ ] `docs/abi_spec.md` 改訂:
+      - §4 に新サブセクション「4.6 Tree mutation」追加 — 5 mutators + destroy + count の signature と semantics (attached/detached lifecycle 含む)。
+      - §5 から `wasamo_widget_append_child` を §4.6 に移動。
+      - §6 に **batching contract** の段落追加 — `drain_if_outermost` semantics が M2 の batching 公式コントラクトであり、観測可能な振る舞いとして「同一 host frame 内の連続 `wasamo_set_property` は最終 frame で 1 回 drain される」ことを明文化 (DD-M2-P4-004 = A)。
+    - [ ] `cargo build --release --workspace` 緑 / `cargo test --workspace` 緑。
+    - [ ] **Link/export 検証:** `dumpbin /exports target/release/wasamo.dll` で新 5 シンボル (`wasamo_widget_insert_child` / `_remove_child` / `_replace_child` / `_child_count` / `_destroy`) の存在を確認。`wasamo_widget_append_child` が引き続き export されることも確認。
+    - [ ] CI smoke test (header sanity check; per DD-P6-006) — 新 6 シンボルが `wasamo.h` から `wasamo.dll` の export と一致することを検証する既存 CI ステップを追加シンボルに対して通す。**CI 設定変更は不要** (Rust crate に追加するのみで、新 build system は持ち込まない — CLAUDE.md "CI rules" 準拠)。
+    - [ ] `docs/architecture.md` — §11 (or 該当 ABI 章) に tree-mutation surface の記述を追加。stable core 領域が「5-area minimum + tree mutation の 6 領域」になったことを明記 (DD-P6-001 の拡張)。
+    - [ ] `CHANGELOG.md` — Phase 4 entry: "stable-core: tree mutation primitives (insert / remove / replace / child_count / destroy); append_child promoted from experimental"。
   - **Boundary with adjacent phases:**
-    - vs Phase 3: handler は Phase 3 で internal `set_property` を直接呼ぶ実装にしてあり、Phase 4 C ABI 化後も internal 経路を維持 (re-entrancy 回避 + DD-M2-P3-001 Option A の利点保持)。
-    - vs Phase 5: reactive engine の invalidation cascade は Phase 4 の batching primitive に乗る。Phase 4 が batching API を出さないと Phase 5 が大量 write を amortize できない。
-    - vs Phase 6: `wasamo_load_ui` (Phase 6) は新 C ABI 1 本だが、tree 構築自体は Phase 4 の primitive を runtime 内部から使う想定。
-  - **検証種別:** build (`cargo build --release --workspace`) + link/export (`dumpbin /exports target/release/wasamo.dll`) + 単体テスト (pure logic 部分のみ; ABI surface は CI build 緑で代替)。GUI 検証は本フェーズ単独では不要。
+    - vs Phase 3: handler は Phase 3 で internal `set_property` を直接呼ぶ実装にしてあり、Phase 4 C ABI 化後も internal 経路を維持 (re-entrancy 回避 + DD-M2-P3-001 Option A の利点保持)。Phase 4 の mutation primitives は handler 経路を再触しない。
+    - vs Phase 5: reactive engine の invalidation cascade は Phase 4 の `with_batched_writes` skeleton (internal Rust) 上で実装される。host-visible batching API は M2 では出さない (DD-M2-P4-004 = A)。Phase 5 で binding evaluator が internal mutation API (`insert_child` / `remove_child` 等) を呼ぶ際は本 phase の attached-state 不変条件に従う。
+    - vs Phase 6: `wasamo_load_ui` (Phase 6) は新 C ABI 1 本だが、tree 構築自体は本 phase の internal Rust mutation API を runtime 内部から使う (C ABI を経由しない — Phase 2 spike `experimental_ir_loader` と同パターン)。
+  - **検証種別:** unit test (pure logic: index bounds / attached-state transitions / subtree teardown — `widget.rs` 内で完結) + build (`cargo build --release --workspace`) + link/export (`dumpbin /exports`) + ABI smoke (CI header consistency)。**GUI 検証は本フェーズ単独では実施しない** — mutation primitives 単体は Phase 5 の reactive 動作と Phase 6 の `.ui` 駆動 counter で遡及的に exercise される。Phase 3 と同じく [docs/notes/headless-verification.md](../notes/headless-verification.md) の方針に従う。
 - [ ] **M2-Phase 5 — Reactive engine**
   - ADR: _not yet filed_
+  - **Risk concentration (M2 内で本フェーズが取るべき risk):**
+    - 本フェーズは M2 で唯一の technical-thesis 検証点 (A2: host 配線なしで reactive 伝搬)。他 phase は構造ゴール (A3) / ABI surface 拡張 (A4) / 統合 (A1) に閉じており、「DD-P8-002 の whole-window dirty + queued emission の上に dependency tracker が乗る」という M2 の foundation 仮説はここで初めて exercise される。
+    - 他 phase が punt した決定が本 phase に集積する: Phase 4 の `with_batched_writes` shape 確定 (DD-M2-P4-004 = A) / Phase 3 `HandlerExpr` evaluator と binding evaluator の core 共通化判断 / DD-P8-002 が残した subtree 粒度 open question ([layout-engine note §3.4](../notes/layout-engine.md)) / headless verification の再評価 ([headless-verification note](../notes/headless-verification.md))。
+    - 後続 (Phase 6 / M3+) の rework コストが本 phase の shape に強く依存。Phase 6 は新規機構なしで Phase 5 の evaluator 出力 (binding 文の typed IR 表現) を消費するだけ — Phase 5 で shape を間違えると Phase 2 の textual IR normative grammar まで戻る。M3 以降の binding 機能拡張 (Grid セルバインディング / List per-item context) も本 phase の dependency tracker 設計の上に積む。
+    - Risk-taking 軸は 2 つ: (a) dependency tracker の設計深度 — minimum viable (counter 1 binding が動けば良い) で済ませると M3 で書き直し。Solid / Vue 系 signals パターンの prior art を初手から踏むかを pre-doc で決断する。(b) headless verification への踏み込み — pure-logic fixture 方針を本 phase で本当に維持できるか試し、無理なら no-Compositor mode の独立 ADR を切る。Phase 6 (GUI 手動検証必須) で初めて headless が要ると判明する経路は最も詰むので、本 phase 着手時に決める。
   - **Implementation scope (provisional, settled at pre-doc time):**
     - property → binding の依存グラフ (dependency tracker) — Solid / Vue 系の signals パターンを参考に数百行規模。
     - property write 観測 → 依存 binding の invalidate → 再評価 → widget property 書込 → 必要に応じて relayout/render 起動。
