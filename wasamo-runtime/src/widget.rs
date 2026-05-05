@@ -120,6 +120,19 @@ pub struct WidgetNode {
     /// `(signal_name, expr)` — stored directly on the widget, separate from
     /// the host listener list. Phase 6 populates this from textual IR.
     pub inline_handlers: Vec<(String, HandlerExpr)>,
+    /// True while this node is attached to a parent (or window root).
+    /// Maintained by `append_child`, `insert_child`, `remove_child`,
+    /// `replace_child`, and `window::set_root`. Used by `widget_destroy`
+    /// to reject destruction of still-attached widgets (DD-M2-P4-003).
+    pub attached: bool,
+}
+
+// ── Tree-mutation errors ──────────────────────────────────────────────────────
+
+#[derive(Debug, PartialEq)]
+pub enum MutationError {
+    IndexOutOfBounds,
+    AlreadyAttached,
 }
 
 impl WidgetNode {
@@ -138,6 +151,7 @@ impl WidgetNode {
             visual,
             children: Vec::new(),
             inline_handlers: Vec::new(),
+            attached: false,
         }))
     }
 
@@ -155,6 +169,7 @@ impl WidgetNode {
             visual,
             children: Vec::new(),
             inline_handlers: Vec::new(),
+            attached: false,
         }))
     }
 
@@ -172,6 +187,7 @@ impl WidgetNode {
             visual,
             children: Vec::new(),
             inline_handlers: Vec::new(),
+            attached: false,
         }))
     }
 
@@ -200,6 +216,7 @@ impl WidgetNode {
             visual,
             children: Vec::new(),
             inline_handlers: Vec::new(),
+            attached: false,
         }))
     }
 
@@ -265,6 +282,7 @@ impl WidgetNode {
             visual: bg_visual,
             children: Vec::new(),
             inline_handlers: Vec::new(),
+            attached: false,
         }))
     }
 
@@ -624,13 +642,96 @@ impl WidgetNode {
         }
     }
 
-    pub fn append_child(&mut self, child: Box<WidgetNode>) -> windows::core::Result<()> {
+    pub fn append_child(&mut self, mut child: Box<WidgetNode>) -> windows::core::Result<()> {
         use windows::core::Interface;
         let parent_container: ContainerVisual = self.visual.cast()?;
         let child_visual: Visual = child.visual.cast()?;
         parent_container.Children()?.InsertAtTop(&child_visual)?;
+        child.attached = true;
         self.children.push(child);
         Ok(())
+    }
+
+    // ── Tree-mutation primitives (DD-M2-P4-001/002 = Option A) ───────────────
+
+    pub fn child_count(&self) -> usize {
+        self.children.len()
+    }
+
+    pub fn insert_child(
+        &mut self,
+        index: usize,
+        mut child: Box<WidgetNode>,
+    ) -> Result<(), MutationError> {
+        if index > self.children.len() {
+            return Err(MutationError::IndexOutOfBounds);
+        }
+        if child.attached {
+            return Err(MutationError::AlreadyAttached);
+        }
+        use windows::core::Interface;
+        let parent_container: ContainerVisual =
+            self.visual.cast().map_err(|_| MutationError::IndexOutOfBounds)?;
+        let child_visual: Visual =
+            child.visual.cast().map_err(|_| MutationError::IndexOutOfBounds)?;
+        parent_container
+            .Children()
+            .and_then(|c| c.InsertAtTop(&child_visual))
+            .map_err(|_| MutationError::IndexOutOfBounds)?;
+        child.attached = true;
+        self.children.insert(index, child);
+        Ok(())
+    }
+
+    pub fn remove_child(&mut self, index: usize) -> Result<Box<WidgetNode>, MutationError> {
+        if index >= self.children.len() {
+            return Err(MutationError::IndexOutOfBounds);
+        }
+        use windows::core::Interface;
+        let child_visual: Visual = self.children[index]
+            .visual
+            .cast()
+            .map_err(|_| MutationError::IndexOutOfBounds)?;
+        let parent_container: ContainerVisual =
+            self.visual.cast().map_err(|_| MutationError::IndexOutOfBounds)?;
+        parent_container
+            .Children()
+            .and_then(|c| c.Remove(&child_visual))
+            .map_err(|_| MutationError::IndexOutOfBounds)?;
+        let mut removed = self.children.remove(index);
+        removed.attached = false;
+        Ok(removed)
+    }
+
+    pub fn replace_child(
+        &mut self,
+        index: usize,
+        mut new_child: Box<WidgetNode>,
+    ) -> Result<Box<WidgetNode>, MutationError> {
+        if index >= self.children.len() {
+            return Err(MutationError::IndexOutOfBounds);
+        }
+        if new_child.attached {
+            return Err(MutationError::AlreadyAttached);
+        }
+        use windows::core::Interface;
+        let old_visual: Visual = self.children[index]
+            .visual
+            .cast()
+            .map_err(|_| MutationError::IndexOutOfBounds)?;
+        let new_visual: Visual =
+            new_child.visual.cast().map_err(|_| MutationError::IndexOutOfBounds)?;
+        let parent_container: ContainerVisual =
+            self.visual.cast().map_err(|_| MutationError::IndexOutOfBounds)?;
+        let children_col = parent_container
+            .Children()
+            .map_err(|_| MutationError::IndexOutOfBounds)?;
+        children_col.Remove(&old_visual).map_err(|_| MutationError::IndexOutOfBounds)?;
+        children_col.InsertAtTop(&new_visual).map_err(|_| MutationError::IndexOutOfBounds)?;
+        new_child.attached = true;
+        let mut old = std::mem::replace(&mut self.children[index], new_child);
+        old.attached = false;
+        Ok(old)
     }
 
     // ── Layout ────────────────────────────────────────────────────────────────
@@ -708,6 +809,16 @@ impl EvalContext for NullEvalContext {
     }
 }
 
+// ── Subtree teardown helper (DD-M2-P4-003) ───────────────────────────────────
+
+/// Sever all registry entries in the subtree, then drop it.
+/// Called by `wasamo_widget_destroy` (abi.rs) and shared with
+/// `wasamo_window_destroy`'s existing sweep path.
+pub fn widget_destroy(node: Box<WidgetNode>) {
+    node.for_each_ptr(&mut |p| crate::registry::remove_for_widget(p));
+    drop(node);
+}
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 fn visual_rect(v: &SpriteVisual) -> (f32, f32, f32, f32) {
@@ -780,4 +891,200 @@ fn read_accent_color() -> Color {
     UISettings::new()
         .and_then(|s| s.GetColorValue(UIColorType::Accent))
         .unwrap_or(Color { A: 255, R: 0, G: 120, B: 215 }) // Windows default blue
+}
+
+// ── Unit tests ────────────────────────────────────────────────────────────────
+//
+// These tests exercise the pure-logic parts of the mutation API: bounds
+// checking and `attached` flag transitions. The WinRT visual operations
+// within `WidgetNode` cannot run without a live Compositor; the logic
+// below is extracted into a minimal `Slot` that mirrors the same invariants
+// without any OS dependency.
+
+#[cfg(test)]
+mod tests {
+    use super::MutationError;
+
+    // Minimal stand-in for WidgetNode used only to verify index-check and
+    // attached-flag logic, without requiring a Win32/WinRT environment.
+    #[derive(Debug, PartialEq)]
+    struct Slot {
+        attached: bool,
+    }
+
+    impl Slot {
+        fn new() -> Self {
+            Slot { attached: false }
+        }
+    }
+
+    struct Children(Vec<Slot>);
+
+    impl Children {
+        fn new() -> Self {
+            Children(Vec::new())
+        }
+
+        fn len(&self) -> usize {
+            self.0.len()
+        }
+
+        fn insert(&mut self, index: usize, mut slot: Slot) -> Result<(), MutationError> {
+            if index > self.0.len() {
+                return Err(MutationError::IndexOutOfBounds);
+            }
+            if slot.attached {
+                return Err(MutationError::AlreadyAttached);
+            }
+            slot.attached = true;
+            self.0.insert(index, slot);
+            Ok(())
+        }
+
+        fn remove(&mut self, index: usize) -> Result<Slot, MutationError> {
+            if index >= self.0.len() {
+                return Err(MutationError::IndexOutOfBounds);
+            }
+            let mut slot = self.0.remove(index);
+            slot.attached = false;
+            Ok(slot)
+        }
+
+        fn replace(&mut self, index: usize, mut new: Slot) -> Result<Slot, MutationError> {
+            if index >= self.0.len() {
+                return Err(MutationError::IndexOutOfBounds);
+            }
+            if new.attached {
+                return Err(MutationError::AlreadyAttached);
+            }
+            new.attached = true;
+            let mut old = std::mem::replace(&mut self.0[index], new);
+            old.attached = false;
+            Ok(old)
+        }
+    }
+
+    #[test]
+    fn insert_at_zero() {
+        let mut ch = Children::new();
+        assert!(ch.insert(0, Slot::new()).is_ok());
+        assert_eq!(ch.len(), 1);
+        assert!(ch.0[0].attached);
+    }
+
+    #[test]
+    fn insert_at_end() {
+        let mut ch = Children::new();
+        ch.insert(0, Slot::new()).unwrap();
+        ch.insert(1, Slot::new()).unwrap();
+        assert_eq!(ch.len(), 2);
+    }
+
+    #[test]
+    fn insert_at_mid() {
+        let mut ch = Children::new();
+        ch.insert(0, Slot::new()).unwrap();
+        ch.insert(1, Slot::new()).unwrap();
+        ch.insert(1, Slot::new()).unwrap();
+        assert_eq!(ch.len(), 3);
+    }
+
+    #[test]
+    fn insert_out_of_bounds() {
+        let mut ch = Children::new();
+        assert_eq!(ch.insert(1, Slot::new()), Err(MutationError::IndexOutOfBounds));
+    }
+
+    #[test]
+    fn insert_already_attached() {
+        let mut ch = Children::new();
+        let s = Slot { attached: true };
+        assert_eq!(ch.insert(0, s), Err(MutationError::AlreadyAttached));
+    }
+
+    #[test]
+    fn remove_normal() {
+        let mut ch = Children::new();
+        ch.insert(0, Slot::new()).unwrap();
+        let removed = ch.remove(0).unwrap();
+        assert!(!removed.attached);
+        assert_eq!(ch.len(), 0);
+    }
+
+    #[test]
+    fn remove_out_of_bounds() {
+        let mut ch = Children::new();
+        assert_eq!(ch.remove(0), Err(MutationError::IndexOutOfBounds));
+    }
+
+    #[test]
+    fn remove_returns_detached() {
+        let mut ch = Children::new();
+        ch.insert(0, Slot::new()).unwrap();
+        let removed = ch.remove(0).unwrap();
+        assert!(!removed.attached);
+    }
+
+    #[test]
+    fn replace_normal() {
+        let mut ch = Children::new();
+        ch.insert(0, Slot::new()).unwrap();
+        let old = ch.replace(0, Slot::new()).unwrap();
+        assert!(!old.attached);
+        assert!(ch.0[0].attached);
+    }
+
+    #[test]
+    fn replace_out_of_bounds() {
+        let mut ch = Children::new();
+        assert_eq!(ch.replace(0, Slot::new()), Err(MutationError::IndexOutOfBounds));
+    }
+
+    #[test]
+    fn replace_new_already_attached() {
+        let mut ch = Children::new();
+        ch.insert(0, Slot::new()).unwrap();
+        let s = Slot { attached: true };
+        assert_eq!(ch.replace(0, s), Err(MutationError::AlreadyAttached));
+    }
+
+    #[test]
+    fn child_count_after_insert_remove() {
+        let mut ch = Children::new();
+        assert_eq!(ch.len(), 0);
+        ch.insert(0, Slot::new()).unwrap();
+        assert_eq!(ch.len(), 1);
+        ch.insert(1, Slot::new()).unwrap();
+        assert_eq!(ch.len(), 2);
+        ch.remove(0).unwrap();
+        assert_eq!(ch.len(), 1);
+    }
+
+    #[test]
+    fn attached_transition_append_remove() {
+        let mut ch = Children::new();
+        ch.insert(0, Slot::new()).unwrap();
+        assert!(ch.0[0].attached);
+        let s = ch.remove(0).unwrap();
+        assert!(!s.attached);
+    }
+
+    #[test]
+    fn reattach_after_remove() {
+        let mut ch = Children::new();
+        ch.insert(0, Slot::new()).unwrap();
+        let s = ch.remove(0).unwrap();
+        assert!(!s.attached);
+        // Re-attaching the same slot (now detached) should succeed.
+        ch.insert(0, s).unwrap();
+        assert!(ch.0[0].attached);
+    }
+
+    #[test]
+    fn already_attached_cannot_reattach() {
+        let mut ch = Children::new();
+        ch.insert(0, Slot::new()).unwrap();
+        let already = Slot { attached: true };
+        assert_eq!(ch.insert(0, already), Err(MutationError::AlreadyAttached));
+    }
 }
