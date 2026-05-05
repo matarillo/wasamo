@@ -99,6 +99,32 @@ scope** for M2 — they belong with the M3 DSL spec work that defines
 the DSL surface for derivations. The Phase 5 architecture leaves room
 for a Computed layer to be added without disturbing Signal or Effect.
 
+### Architectural framing assumption
+
+Reactive GUI architectures span several families: tree-with-bindings
+(Slint, QML/Qt), view-function with re-execution (SwiftUI, Jetpack
+Compose), coarse subtree-rebuild (Flutter `setState`), and manual
+property notification (WPF / WinUI). The cumulative effect of accepted
+decisions (DSL × C ABI thesis; DD-M2-P2-001 = B textual IR as a tree
+description; DD-P6-001..007 handle-based stable core; DD-M2-P3-001 = A
+handler on internal `set_property`) currently fits the
+tree-with-bindings family best, but no accepted ADR names that
+selection as a long-term commitment.
+
+[docs/notes/architectural-family.md](../notes/architectural-family.md)
+tracks the current hypothesis status, the family-neutral vs
+family-coupled split of the design, and the re-evaluation triggers
+(M3 DSL spec drafting; hot-reload work; binding shapes that don't fit
+`BindingTarget`; owner revisitation). This Phase 5 ADR's
+recommendations apply within that current hypothesis frame.
+
+The Phase 5 primitive selection is deliberately family-neutral:
+Signal + Effect 2-layer with read-time auto-tracking is shared by
+families (1) and (2) and degenerates cleanly to (3); only the
+`BindingTarget` shape (DD-M2-P5-005) is family-coupled, and it is
+`pub(crate)`, revisable through internal refactor without C ABI
+churn. The cost of the implicit framing is bounded to that surface.
+
 ---
 
 ### DD-M2-P5-001 — Reactive primitive layering
