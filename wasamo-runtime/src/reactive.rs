@@ -186,6 +186,13 @@ impl Drop for EffectHandle {
     }
 }
 
+/// Flush all dirty Effects (called from emit::drain_if_outermost, DD-M2-P5-004 = B).
+/// Runs inside a batched-writes context so that writes made by Effect bodies
+/// are deferred and coalesced before the next drain iteration.
+pub(crate) fn drain_reactive() {
+    with_batched_writes(|| {});
+}
+
 /// Execute `f` with writes batched: invalidation cascades triggered inside
 /// `f` are deferred until `f` returns, then flushed once.
 pub(crate) fn with_batched_writes<R, F: FnOnce() -> R>(f: F) -> R {
@@ -640,5 +647,78 @@ mod tests {
         dirty.set(false);
         sig.set(99);
         assert!(dirty.get(), "writer not called after Signal update");
+    }
+
+    // ── drain ordering tests (DD-M2-P5-004) ──────────────────────────────────
+
+    // drain_if_outermost ordering contract: observer drain → reactive drain → layout drain.
+    //
+    // The full path (including the observer queue and flush_layout) requires a live
+    // WindowState and Win32 calls, so those phases are covered by the Phase 5-close
+    // GUI checkpoint.  These tests verify the reactive-phase behaviour that is
+    // exercisable with pure logic: dirty Effects run when drain_reactive() is called,
+    // and writes made by Effects during the reactive phase take effect before the
+    // hypothetical layout drain that follows.
+
+    #[test]
+    fn drain_reactive_flushes_dirty_effects() {
+        // A Signal dirtied while BATCH_DEPTH > 0 is not drained until
+        // drain_reactive() is called.  This exercises the entry point that
+        // emit::drain_if_outermost calls as the reactive phase (phase 2).
+        let sig = Signal::new(0i32);
+        let log: Rc<RefCell<Vec<i32>>> = Rc::new(RefCell::new(Vec::new()));
+
+        let sig_c = sig.clone();
+        let log_c = Rc::clone(&log);
+        let _h = EffectHandle::new(move || {
+            log_c.borrow_mut().push(sig_c.get());
+        });
+        assert_eq!(*log.borrow(), vec![0]); // initial run
+
+        // Dirty the Signal inside a batch so the drain is deferred.
+        BATCH_DEPTH.with(|d| d.set(d.get() + 1));
+        sig.set(1);
+        assert_eq!(*log.borrow(), vec![0], "effect must not fire while batched");
+
+        BATCH_DEPTH.with(|d| d.set(d.get() - 1));
+        // Now simulate the reactive phase of drain_if_outermost.
+        drain_reactive();
+        assert_eq!(*log.borrow(), vec![0, 1], "drain_reactive must flush the dirty effect");
+    }
+
+    #[test]
+    fn reactive_effect_write_visible_before_layout_phase() {
+        // Simulate the ordering: observer phase (no-op here) → reactive phase →
+        // layout phase.  A Signal written by a reactive Effect must be updated
+        // by the time the layout phase reads it.
+        //
+        // In production the "layout phase" calls flush_layout(), which requires
+        // Win32; here we use a read of the Signal as a proxy for what the layout
+        // pass would observe.
+        let source = Signal::new(0i32);
+        let derived = Signal::new(-1i32);
+
+        let source_c = source.clone();
+        let derived_c = derived.clone();
+        let _h = EffectHandle::new(move || {
+            derived_c.set(source_c.get() * 2);
+        });
+        // After initial run: derived == 0.
+        assert_eq!(derived.get_untracked(), 0);
+
+        // Change the source inside a batch (simulates a property change arriving
+        // during the observer phase, before reactive drain runs).
+        BATCH_DEPTH.with(|d| d.set(d.get() + 1));
+        source.set(5);
+        assert_eq!(derived.get_untracked(), 0, "derived not yet updated mid-batch");
+        BATCH_DEPTH.with(|d| d.set(d.get() - 1));
+
+        // Reactive drain (phase 2 of drain_if_outermost).
+        drain_reactive();
+
+        // A layout pass reading `derived` now sees the updated value — this
+        // is the DD-P8-002 contract: reactive writes precede the layout drain.
+        assert_eq!(derived.get_untracked(), 10,
+            "layout phase must observe the reactive-updated value");
     }
 }

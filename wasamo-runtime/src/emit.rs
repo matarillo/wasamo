@@ -37,6 +37,7 @@ use crate::abi::{
     WasamoStringView, WasamoValue, WasamoValuePayload, WasamoWidget,
     WASAMO_VALUE_I32, WASAMO_VALUE_STRING,
 };
+use crate::reactive;
 use crate::registry;
 use crate::window::WindowState;
 
@@ -158,6 +159,7 @@ pub fn drain_if_outermost() {
         return;
     }
     DISPATCHING.with(|d| d.set(true));
+    // Phase 1: drain queued observer callbacks (DD-P6-003).
     loop {
         let next = QUEUE.with(|q| q.borrow_mut().pop_front());
         match next {
@@ -166,8 +168,14 @@ pub fn drain_if_outermost() {
         }
     }
     DISPATCHING.with(|d| d.set(false));
-    // After all callbacks have fired, run one layout pass per dirty window.
-    // This coalesces multiple property changes from the same drain cycle.
+    // Phase 2: flush dirty reactive Effects (DD-M2-P5-004 = B).
+    // Reactive writes call set_property, which may enqueue further observer
+    // notifications (processed next cycle) and marks layout dirty (DD-P8-002).
+    // Must run before layout so that binding-driven property changes are
+    // reflected in the layout pass that follows.
+    reactive::drain_reactive();
+    // Phase 3: run one layout pass per dirty window.
+    // Coalesces all property changes from phases 1 and 2 into a single pass.
     flush_layout();
 }
 
