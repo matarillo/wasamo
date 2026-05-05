@@ -204,6 +204,16 @@ pub(crate) fn with_batched_writes<R, F: FnOnce() -> R>(f: F) -> R {
 mod tests {
     use super::*;
 
+    // Returns (in_back, in_forward) — whether the EffectId appears anywhere in either edge map.
+    fn graph_traces_of(id: EffectId) -> (bool, bool) {
+        GRAPH.with(|g| {
+            let g = g.borrow();
+            let in_back = g.back.contains_key(&id);
+            let in_forward = g.forward.values().any(|deps| deps.contains(&id));
+            (in_back, in_forward)
+        })
+    }
+
     #[test]
     fn signal_set_invalidates_dependents() {
         let sig = Signal::new(0i32);
@@ -324,7 +334,11 @@ mod tests {
             *count_c.borrow_mut() += 1;
         });
         assert_eq!(*count.borrow(), 1);
+        let effect_id = h.id;
         drop(h);
+        let (in_back, in_forward) = graph_traces_of(effect_id);
+        assert!(!in_back, "EffectId leaked in back-edge map after Drop");
+        assert!(!in_forward, "EffectId leaked in forward-edge map after Drop");
         sig.set(1);
         assert_eq!(*count.borrow(), 1);
     }

@@ -288,10 +288,11 @@ phases land.
       - **Verification:** pure-logic test — N writes inside the closure produce one Effect re-run; a re-entrant write inside the Effect re-runs but is bounded; iteration-cap exhaustion logs an error and breaks the loop.
       - **Technical risk: Low.** Phase 4's skeleton already established the entry/exit shape; bodywork is bookkeeping.
       - **Failure mode:** cap value or the diagnostics format may shift. Absorbable.
-    - [ ] **`reactive.rs`: Effect disposal via owner Drop** (DD-M2-P5-003). `EffectHandle` is the owner; its `Drop` walks the back-edge map, removes the EffectId from every Signal's dependent set, then frees the closure.
+    - [x] **`reactive.rs`: Effect disposal via owner Drop** (DD-M2-P5-003). `EffectHandle` is the owner; its `Drop` walks the back-edge map, removes the EffectId from every Signal's dependent set, then frees the closure.
       - **Verification:** pure-logic test — register binding, drop the handle, write to the previously-tracked Signal, assert the closure does not run; assert no leaked entries in either edge map.
       - **Technical risk: Low.** Disposal is O(deps); the back-edge map exists to make it so.
       - **Failure mode:** disposal that fires while the Effect is mid-run (rare: a binding writes to a property that destroys its owning widget) may need a "currently-running" guard. Absorbable as DD-M2-P5-007.
+      - **Implementation note:** `Drop` body landed bundled with step 1 (closure `Rc` must outlive the initial `run_effect` call). This step adds the leak-free edge-map verification to `dropped_handle_stops_effect`.
     - [ ] **`handler.rs` / `reactive.rs`: `BindingEvalContext` — read-only `EvalContext` variant that wraps property storage and reports reads to the current Effect.** Reuses Phase 3's `EvalContext` trait (extends with a `read_property_tracked` path) and `HandlerExpr::evaluate()` (read-only subset; rejects `set` / compound-assign nodes at evaluation time per DD-M2-P5-006). Includes string-interpolation evaluation for `"Count: \{root.count}"`.
       - **Verification:** extend handler.rs unit tests — evaluator with `BindingEvalContext` records the expected Signal reads; rejects write expressions with a typed error.
       - **Technical risk: Low.** `EvalContext` is already mock-friendly (`NullEvalContext` exists from Phase 3). The variant is essentially a property-store adapter with a `track_read()` hook.
