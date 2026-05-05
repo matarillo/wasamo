@@ -3,7 +3,7 @@ use std::collections::{HashMap, HashSet};
 use std::rc::{Rc, Weak};
 use std::sync::atomic::{AtomicU64, Ordering};
 
-use crate::handler::{EvalContext, EvalError};
+use crate::handler::{evaluate_binding, EvalContext, EvalError, HandlerExpr};
 
 #[derive(Copy, Clone, Eq, PartialEq, Hash, Debug)]
 pub(crate) struct SignalId(u64);
@@ -244,6 +244,64 @@ impl<'a> EvalContext for BindingEvalContext<'a> {
             .ok_or_else(|| EvalError::UnknownProperty(path.to_string()))
             .map(|s| s.get())
     }
+}
+
+// ── Binding registration (DD-M2-P5-005) ──────────────────────────────────────
+
+/// Opaque handle to a widget node. Avoids a circular import between reactive.rs
+/// and widget.rs by erasing the concrete `WidgetNode` type. The caller (widget.rs
+/// or a future loader) is responsible for casting back to the real pointer.
+#[derive(Copy, Clone)]
+pub(crate) struct WidgetId(pub(crate) *mut ());
+
+// SAFETY: wasamo-runtime is single-threaded GUI; WidgetId is only used on the
+// UI thread. The `*mut ()` makes the struct !Send/!Sync, matching that contract.
+unsafe impl Send for WidgetId {}
+
+/// Property key — corresponds to the PROP_* constants in widget.rs.
+pub(crate) type PropertyKey = u32;
+
+/// The binding target — what gets written when a reactive binding re-evaluates.
+pub(crate) enum BindingTarget {
+    /// Write to a widget property identified by its node pointer and property id.
+    WidgetProperty { node: WidgetId, prop: PropertyKey },
+}
+
+/// Register a reactive binding that evaluates `expr` against `props` and calls
+/// `write_fn(node, prop, value)` whenever a tracked Signal changes.
+///
+/// `write_fn` is a plain function pointer (not a closure) so that `reactive.rs`
+/// does not need to import `widget::WidgetNode`. The concrete implementation
+/// lives in `widget.rs`.
+pub(crate) fn register_binding(
+    target: BindingTarget,
+    expr: HandlerExpr,
+    props: Rc<HashMap<String, Signal<i32>>>,
+    write_fn: fn(WidgetId, PropertyKey, &str),
+) -> EffectHandle {
+    let BindingTarget::WidgetProperty { node, prop } = target;
+    register_binding_with_writer(
+        Box::new(move |value: String| write_fn(node, prop, &value)),
+        expr,
+        props,
+    )
+}
+
+/// Core: build an `EffectHandle` whose closure evaluates `expr` and pipes the
+/// `String` result to `writer`. Shared between production (`register_binding`)
+/// and unit tests (which supply a mock writer).
+fn register_binding_with_writer(
+    mut writer: Box<dyn FnMut(String)>,
+    expr: HandlerExpr,
+    props: Rc<HashMap<String, Signal<i32>>>,
+) -> EffectHandle {
+    EffectHandle::new(move || {
+        let mut ctx = BindingEvalContext::new(&props);
+        match evaluate_binding(&expr, &mut ctx) {
+            Ok(value) => writer(value),
+            Err(e) => eprintln!("wasamo: binding eval error: {e}"),
+        }
+    })
 }
 
 #[cfg(test)]
@@ -530,5 +588,57 @@ mod tests {
         assert_eq!(*run_count2.borrow(), 1);
         sig.set(100);
         assert_eq!(*run_count2.borrow(), 2, "read_i32_tracked should register a dependency");
+    }
+
+    // ── register_binding tests (DD-M2-P5-005) ────────────────────────────────
+
+    #[test]
+    fn register_binding_writes_initial_and_updates() {
+        use crate::handler::{HandlerExpr, InterpolationPart};
+
+        let sig = Signal::new(0i32);
+        let mut props = HashMap::new();
+        props.insert("root.count".to_string(), sig.clone());
+        let props = Rc::new(props);
+
+        let written: Rc<RefCell<Vec<String>>> = Rc::new(RefCell::new(Vec::new()));
+        let written_c = Rc::clone(&written);
+        let writer: Box<dyn FnMut(String)> = Box::new(move |v| written_c.borrow_mut().push(v));
+
+        let expr = HandlerExpr::Interpolation(vec![
+            InterpolationPart::Literal("Count: ".into()),
+            InterpolationPart::Expr(HandlerExpr::PropRead { path: "root.count".into() }),
+        ]);
+
+        let _h = register_binding_with_writer(writer, expr, props);
+        assert_eq!(*written.borrow(), vec!["Count: 0"]);
+
+        sig.set(5);
+        assert_eq!(*written.borrow(), vec!["Count: 0", "Count: 5"]);
+    }
+
+    #[test]
+    fn register_binding_writer_called_for_size_affecting_prop() {
+        // The writer is called on initial run and on every Signal change.
+        // In production, the writer calls set_property which triggers
+        // DD-P8-002 layout-dirty for size-affecting properties.
+        use crate::handler::HandlerExpr;
+
+        let sig = Signal::new(42i32);
+        let mut props = HashMap::new();
+        props.insert("p".to_string(), sig.clone());
+        let props = Rc::new(props);
+
+        let dirty = Rc::new(Cell::new(false));
+        let dirty_c = Rc::clone(&dirty);
+        let writer: Box<dyn FnMut(String)> = Box::new(move |_v| dirty_c.set(true));
+
+        let expr = HandlerExpr::PropRead { path: "p".into() };
+        let _h = register_binding_with_writer(writer, expr, props);
+        assert!(dirty.get(), "writer not called on initial binding run");
+
+        dirty.set(false);
+        sig.set(99);
+        assert!(dirty.get(), "writer not called after Signal update");
     }
 }
