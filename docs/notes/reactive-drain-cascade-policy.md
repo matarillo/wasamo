@@ -1,12 +1,18 @@
 ---
 title: Reactive drain cascade policy — open question
-status: live
+status: superseded
 created: 2026-05-06
+superseded: 2026-05-07
+superseded-by: docs/decisions/m2-phase-6-ui-lowering.md#dd-m2-p6-001--drain-transaction-semantics
 related-plans:
   - docs/plans/m2-plan.md (DD-M2-P5-004 = B)
 related-decisions:
   - docs/decisions/m2-phase-5-reactive-engine.md
+  - docs/decisions/m2-phase-6-ui-lowering.md (DD-M2-P6-001 = D, resolves this question)
 ---
+
+> **Resolution (2026-05-07)**: DD-M2-P6-001 = Option D により本問は解決。observer は post-commit pure effect として再定義され、reactive Effect 起源の `set_property` から発生する observer 通知は同じ outermost cycle の Phase 3 で消化される (経路非対称性なし)。Phase 1 (mutation 収束) → Phase 2 (layout) → Phase 3 (post-commit observers, mutation 不可) の 3-phase + terminal 構造。詳細は ADR 参照。以下は問いが立った時点の記録として残置。
+
 
 # Reactive drain cascade policy
 

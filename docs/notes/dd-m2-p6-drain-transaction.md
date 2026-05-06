@@ -1,6 +1,6 @@
 # DD-M2-P6-XXX (draft) — Drain transaction semantics
 
-**Status:** Draft for M2-Phase 6 (DD 番号は Phase 6 ADR 起草時に確定)
+**Status:** Superseded — content folded into [DD-M2-P6-001](../decisions/m2-phase-6-ui-lowering.md#dd-m2-p6-001--drain-transaction-semantics) (Accepted, 2026-05-07). この note は draft 履歴として残置。最新仕様は ADR を参照。
 **Date:** 2026-05-06
 **Targets phase:** M2-Phase 6 (`.ui → runtime` lowering の pre-doc サイクルで正式採用予定)
 **Affects:** DD-M2-P5-004 (drain stage 框組み, 部分 supersede), DD-P6-003 (queued emission, 不変), VISION §4 Principle 2 (任意で補足)
@@ -149,16 +149,26 @@ Phase 3 (post-commit observers, terminal 1 pass):
     state-mutating ABI called while flag set → WASAMO_ERR_OBSERVER_MUTATION
 ```
 
-- **得るもの**:
+- **得るもの (思想的整合)**:
   - **VISION §4 P2 を ABI 表面で構造的に enforce**: mutation channel は events up / bindings down のみ。observer は read-only 観察 + 外部 I/O。
   - 経路非対称性が原理的に存在しない (どの経路の observer も Phase 3 で発火)。
   - 単一 MUTATION_CAP。
   - **収束レイヤの真の分離**: Phase 1 = state mutation 収束 (signal + reactive 統合)、Phase 2 = view consistency、Phase 3 = pure side effects。各 phase の責任が明確。
-- **失うもの**:
-  - **既存 UI モデルとの構造的断絶**: 「観測 → 状態更新」を許す既存パターン (MVVM の `INotifyPropertyChanged` → ViewModel mutation, Cocoa KVO callback → state update, DOM `MutationObserver` → DOM mutation など) は **すべて Wasamo では書けなくなる**。これは慣習からの移行コストではなく、**エコシステム設計レベルの制約**。binding 著者・外部統合コード・ツール系コードの三方面で確実に摩擦が発生する。VISION の「OSS 貢献」「多言語ホスト」原則と部分的に緊張する。
+- **得るもの (実務的優位)** — 単に「思想的に正しい」のではなく、ランタイム性質として他案より優れる点:
+  - **Predictability (予測可能性)**: Phase 1 の mutation graph は Signal の dependency graph に閉じる。observer は graph の外側に出るので、システムの動的挙動が **dependency graph から静的に決定可能**。LSP / devtool が「この state を変えたら何が起きるか」を実行せずに解析できる。Option C/E は observer mutation が graph に混ざるため、実行しないと挙動が決まらない (動的決定論しか得られない)。
+  - **Debuggability (デバッグ可能性)**: causal chain が常に明示的。mutation の発生源は signal handler または Effect に限定され、stack trace に必ず現れる。Option C/E では observer callback が hidden mutation を起こし、stack trace に現れない causal chain が生じうる。実務上、reactive 系のデバッグ困難の典型パターンを構造的に排除する。
+  - **Optimization headroom (最適化余地)**: Phase 1 が純粋に dependency graph 収束であるため、将来的な並列化・incremental evaluation・dirty subgraph スコープ縮小などの最適化余地が広い。Option C/E は observer が pipeline に混ざるため順序依存が強くなり、最適化の余地が原理的に狭まる。
+- **失うもの — 「摩擦」ではなく「表現力の意図的削減」**:
+  - **既存パターンの一部を構造的に書けなくする**: 「観測 → 状態更新」を許す既存パターン (MVVM の `INotifyPropertyChanged` → ViewModel mutation, Cocoa KVO callback → state update, DOM `MutationObserver` → DOM mutation, Reactive Extensions の Subject による host 側 state 同期など) は **Wasamo では原理的に書けない**。これは慣習からの移行コストや binding ガイドで緩和できる「摩擦」ではなく、**フレームワークが意図的に表現力を削っている設計選択**。
+  - **双方向同期は observer ベースで原理的に不可能**: external state ↔ UI state を observer 経由で同期する既存ライブラリは、適応では済まず **書き直し (別モデルへの強制移行)** が必要。具体的には「observer → host-side mutation」前提のコードはすべて「signal handler に集約」or「reactive Effect で双方向 binding を組む」or「将来の post_event API を待つ」のいずれかへ移行を要求される。
+  - **影響範囲は 3 方面**:
+    - **Binding 著者**: 各言語の慣習パターンを移植しようとして衝突
+    - **外部統合コード**: state の永続化・analytics・log・bidirectional sync を `set_property` / signal handler 経由で組む必要 (既存の双方向同期ライブラリは流用不可)
+    - **ツール系コード**: devtool や inspector で「state を読んで書き戻す」操作には特別経路が必要
+  - VISION の「OSS 貢献」「multi-language ホスト」原則と **部分的に正面衝突**。
   - 「observer が次フレームでの mutation を post する」escape hatch は本 DD では未設計 (open question)。Option F を後追いで加える経路は自然だが、その間 host 側で workaround が必要になる期間が生じる。
   - 新 error code 1 個追加。TLS flag コード追加。
-- **失うものの引き受け方**: 上記摩擦は無視できないが、Wasamo は「Slint × XAML × multi-language」の**新しい組合せ**を主張するフレームワークであり、既存の「観測 → 更新」パターンに迎合せず declarative model の構造的整合を選ぶことは、差別化の核心にむしろ整合する。摩擦は許容コストであり、binding 著者向けのドキュメントで「Wasamo では reactive Effect に書け」というガイドを明示することで緩和する。
+- **削減の引き受け方**: 上記は無視できない能力制限だが、Wasamo は「Slint × XAML × multi-language」の**新しい組合せ**を主張するフレームワークであり、既存の「観測 → 更新」パターンに迎合せず declarative model の構造的整合を選ぶことは差別化の核心に整合する。表現力の削減は許容コストではなく **アイデンティティの一部としての意図的選択**。binding 著者向けに「mutation は signal handler / Effect に集約せよ」「observer は read-only」を強く打ち出すドキュメントが必須。
 - **VISION 整合**: 強い。Phase 3 で mutation 不可なので戻り時に確実に静止する quiescent state も同時に達成。ただし下記注記参照 — 採択は VISION の意味の **強化** を含む。
 
 **注記 — VISION との関係 (双方向の正直さ)**: 「VISION が正しいから D を選ぶ」のではなく、**「D を選ぶことは VISION §4 P2 を convention から structural constraint へ昇格させる決定である」**。現状の VISION 文面は「declarative + unidirectional」を方向性として宣言しているが、observer の意味論を ABI 表面でどう扱うかまでは明示していない。本 DD はその空白を **強い側 (mutation 不可)** に埋める仕様強化判断。すなわち VISION の自然な解釈の中に既に含まれていたわけではなく、**設計判断によって VISION の意味を強く固定している**。このことを §11.1 の VISION 補足追加が表現する。
@@ -175,19 +185,20 @@ set_property は **property 値の更新と dirty マークのみ** を行い、
   - **中途半端の本質**: 構造的にはクリーンだが、observer に mutation を残しているため「mutation graph に非宣言的エッジが存在する」という Option C と同じ問題が、phase 分離されただけで残る。次 outermost cycle で処理される deferred mutation という形で graph の影響は伝搬する。**完全な declarative にはならない**。
   - **mental model がやや複雑**: ホスト視点では「observer から set_property してもすぐには反映されず、次の ABI 呼出後に処理される」という非自明な遅延が semantics に組込まれる。Option A の 1 frame 遅延を別位置に押し付けただけにも見える。
   - 実装複雑度: diff 計算または pending property set の管理が runtime 側に増える。
-- **位置付け**: 「構造的にはクリーンだが、観測者から見て中途半端」。Option C の「同 cycle 完結」と Option D の「observer mutation 禁止」の中間に立とうとして、両者の利点を半分ずつしか取れていない。「declarative を完成させる」立場からは D に劣り、「observer の自由度を残す」立場からは C より複雑。**両軸で次善**。
+- **位置付け — 「almost correct」性が本質**: 「通知は commit 後」という phase 分離の点では React の commit/effect 分離と同型 (構造的にはクリーン)。だが mutation を observer に残しているため "effect" になりきれていない (意味論が中途半端)。Option C の「同 cycle 完結」と Option D の「observer mutation 禁止」の中間に立とうとして、両者の利点を半分ずつしか取れていない。「declarative を完成させる」立場からは D に劣り、「observer の自由度を残す」立場からは C より複雑。**両軸で次善** = **設計として最も「迷っている」形**。意思決定論的には、E を選ぶことは「declarative を完成させる気はないが C の同期混合は嫌」という両義的態度を ABI 仕様として固定することを意味し、後で C か D いずれかへ揺り戻す圧力が継続的にかかる。
 - **VISION 整合**: 中。observer mutation の事実は隠蔽されないが、phase 分離によって observer が「同期 mutation channel」ではなく「deferred mutation channel」として整理される点は VISION 整合に寄与。
 
-### Option F — Event-source observer [β3 + post-event API]
+### Option F — Event-source observer [β3 + post-event API] — D の標準拡張路
 
 Option D を採るが、**初日から escape hatch を組込む**。observer は state-mutating ABI を呼べないが、`wasamo_post_event(event_id, payload)` によって**次 outermost cycle に処理される event を post できる**。投稿された event は signal handler キューに乗り、次 cycle の Phase 1 で処理される。
 
-- **得るもの**: D の利点 (VISION 整合、Phase 分離、単一 cap) + 「observer 内で何かをトリガーしたい」ニーズへの構造化された経路。observer の表現力を D より高める。
+- **位置付け — D を採る場合の標準的拡張路**: F は D に対する「optional な保険」ではない。D の最大の弱点 (表現力削減) を補う **唯一の構造的解決** であり、analytics・外部統合 (logging / persistence / IPC)・async bridge など、observer から何らかのトリガーを起こしたいユースケースは M3 以降ほぼ確実に出現する。これらは「observer → 何かを post」という形で必ず必要になるため、F は「将来出るかもしれない拡張」ではなく、**「D を採るなら採用される進化経路」**。本 DD で初日から採るか後追いで採るかは設計コストの前倒し vs 後倒しの差に過ぎず、F そのものの必要性は D の採択と実質的に一体。
+- **得るもの**: D の利点 (VISION 整合、Phase 分離、単一 cap、predictability、debuggability、optimization headroom) + 「observer 内で何かをトリガーしたい」ニーズへの構造化された経路。observer の表現力を D より高め、D の「表現力削減」コストを大幅に緩和する。
 - **失うもの**:
   - **概念表面積**: signal handler / property observer / posted event の 3 概念をホストが学ぶ必要。
   - posted event の意味論を本 DD で確定する必要 (D は将来 deferred mutation API として open のまま許容)。
   - 設計コスト前倒し。
-- **VISION 整合**: 強い (D 同様)。
+- **VISION 整合**: 強い (D 同様)。post_event は「events up」軸の拡張として VISION §4 P2 に整合的に位置付けられる。
 
 ---
 
@@ -205,7 +216,10 @@ Option D を採るが、**初日から escape hatch を組込む**。observer �
 | 既存 UI モデル (MVVM/KVO) との互換 | ○ | ○ | ○ | **× (構造的断絶)** | ○ | △ (post_event 経由) |
 | 実装コスト | 0 (現状維持) | 中 | 中 | 中 | 大 | 中大 |
 | 既存 ABI 表面変更 | なし | なし | なし | error code 1 個追加 | 内部のみ | post_event API 追加 |
-| 設計の位置付け | **仕様的逸脱** (緊急避難) | 表面積増・利得小 | 構造的に不安定 | declarative の構造的完成 | 両軸で次善 | D + 表現力確保 |
+| 設計の位置付け | **仕様的逸脱** (緊急避難) | 表面積増・利得小 | 構造的に不安定 | declarative の構造的完成 | **設計として最も迷う形** (両軸で次善) | **D の標準拡張路** (将来の保険ではない) |
+| Predictability (静的解析可能性) | × | × | × (graph 動的) | **○ (graph 静的)** | × (deferred mutation) | **○** |
+| Debuggability (causal chain 明示) | △ | △ | × (hidden mutation) | **○** | △ | **○** |
+| 最適化余地 (並列化等) | 低 | 低 | 低 (順序依存強) | **高 (graph 純粋)** | 中 | **高** |
 
 ---
 
@@ -227,18 +241,19 @@ VISION §4 P2 (`view = f(state)`, 単方向) を ABI 表面で構造的に enfor
 
 ここで本案推奨に対し、可能な限り辛口に批判する:
 
-1. **「observer mutation 不可」はエコシステム設計レベルの制約である**
-   - 既存 UI モデルの「観測 → 状態更新」パターン群は、Wasamo では **すべて書けない**:
+1. **「observer mutation 不可」は表現力の意図的削減である (摩擦ではなく能力制限)**
+   - 既存 UI モデルの「観測 → 状態更新」パターン群は Wasamo では **原理的に書けない**:
      - .NET MVVM の `INotifyPropertyChanged` → ViewModel mutation
      - Cocoa KVO callback → state update
      - DOM `MutationObserver` → DOM mutation
      - Reactive Extensions の Subject pattern (host 側で state 同期)
-   - 影響範囲は単に「言語ホスト著者の慣習からの移行」ではなく、**3 方面のエコシステム摩擦**:
+   - これらは「慣習からの移行コスト」ではなく、Wasamo が **特定のユースケースを構造的に不可能にする** 設計選択である。特に「双方向同期 (external state ↔ UI state) を observer ベースで書く」ことは原理的に不可能であり、既存の bidirectional sync ライブラリは適応では済まず **書き直し (別モデルへの強制移行)** を要求する。
+   - 影響範囲は **3 方面**:
      - **Binding 著者**: Swift / Go / Nim 等のコミュニティ binding が慣習パターンを移植しようとして衝突
-     - **外部統合コード**: state の永続化・ログ出力・analytics と双方向同期するコードを `set_property` 経由で常に書く必要が出る (= 既存の bidirectional sync ライブラリは流用不可)
+     - **外部統合コード**: state の永続化・ログ出力・analytics と双方向同期するコードを `set_property` / signal handler 経由で組み直す必要 (既存の bidirectional sync ライブラリは流用不可)
      - **ツール系コード**: devtool や inspector が「state を読んで書き戻す」操作を行う場合、特別経路が必要
-   - これは VISION の「OSS 貢献」「multi-language ホスト」原則と **部分的に正面衝突** する。Wasamo は「declarative-first を貫いた結果、既存ライブラリ群との互換性を一部捨てる」というアイデンティティを引き受ける。
-   - **覚悟すべき結論**: D を採ることは「Wasamo は declarative-first フレームワークであり、imperative 統合は別経路 (signal handler or future post_event API) で解く」というスタンスを永続的にコミットすること。撤回するなら DD を分裂させる必要がある。緩和は binding 著者ガイドの提供で行うが、エッジケースで unconditional に解消できるとは保証できない。
+   - これは VISION の「OSS 貢献」「multi-language ホスト」原則と **部分的に正面衝突** する。Wasamo は「declarative-first を貫いた結果、一部のユースケースを意図的に削除する」というアイデンティティを引き受ける。
+   - **覚悟すべき結論**: D を採ることは「Wasamo は declarative-first フレームワークであり、imperative 統合は別経路 (signal handler / 将来の post_event API = Option F) で解く」というスタンスを永続的にコミットすること。表現力削減は「許容できる摩擦」ではなく「フレームワークが意図的に取った立場」として正面から書く。緩和は binding 著者ガイドと Option F の早期検討で行うが、削減そのものを撤回することはしない (撤回は Option C/E への退却を意味する)。
 
 2. **「deferred mutation API」が未設計のまま open にされる**
    - 反論可能性: 本 DD は open question として残すが、実際のユースケースが M3 で出てきた時に設計が間に合わない可能性 (= 結果的に Option F を後追いで作る羽目になる)。
@@ -273,9 +288,17 @@ Option C は表面上の整合性原則 (quiescent state, 単一 cap, 経路非�
 
 これらは限定条件であり、Wasamo の現状 VISION (§4 P2 を含む declarative + unidirectional の明示) からは適合しにくい。
 
-### 6.4 Option F は将来の保険
+### 6.4 Option F は D の標準拡張路 (将来の保険ではなく)
 
-Option F は「D の VISION 整合 + observer 表現力の確保」を両立するが、概念数増加と前倒し設計コストを払う。M3 で observer の実用ニーズが見えた段階で D → F に拡張する経路は自然なので、本 DD では D を採り、F は将来の拡張余地として open question 化するのが穏当。
+Option F は「optional な将来拡張」ではなく、**D を採るなら現実的にほぼ必須に近い進化経路**として位置付ける。理由は §4 Option F に記した通り、analytics / 外部統合 / async bridge など「observer → 何かを post」需要は M3 以降確実に出現し、これに構造的に応える唯一の経路が post_event API だからである。したがって F vs D の問いは「F が要るか」ではなく **「F を初日から入れるか後追いで入れるか」**。
+
+本 DD では以下の理由で **D を採り、F は M3 で実シナリオを見て確定する** とするが、これは「F を保留する」のではなく「F の API 形 (event_id 体系・payload 型・signal_queue との関係) を実シナリオに基づいて設計する余地を確保する」意図である:
+
+- M2 acceptance に F は不要 (counter シナリオは F なしで完結)
+- post_event の API 形は具体ユースケースが見えた方が良い設計になる (event_id の名前空間設計・payload encoding は推測で固めるとミスる)
+- D 単独の実装は M2-Phase 6 帯域に収まり、F を含めるとスコープが膨らむ
+
+ただし「F は D の標準拡張路である」というスタンスは本 DD で明文化し、M3 以降に F を導入する際に「機能追加」ではなく「予定通りの拡張」として扱う。
 
 ### 6.5 Option A を切り捨てる覚悟
 
@@ -321,6 +344,47 @@ drain_if_outermost()
 ```
 
 **戻り時の不変条件**: signal_queue 空 ∧ dirty_effects 空 ∧ layout-dirty 空 ∧ observer_queue 空。`drain_if_outermost` がホストに制御を返した瞬間、システムは完全な静止状態にある (cap 到達による打切り除く)。
+
+### 7.1 Option D の適用境界 (mutation boundary)
+
+「observer mutation 不可」は **無条件の禁止ではなく、runtime state に対する mutation の禁止** である。境界を明示する:
+
+#### 禁止される mutation (Phase 3 中、TLS flag 検出対象)
+
+observer callback 実行中に以下を行うと `WASAMO_ERR_OBSERVER_MUTATION` を返す (debug build では panic):
+
+- **Runtime state の書込み** — `wasamo_set_property`, `wasamo_emit_signal`, `wasamo_signal_set` 等、Signal 値・property 値・dirty マークのいずれかを変更する ABI 呼出
+- **Runtime structure の変更** — window / element / binding の生成・破棄・親子関係変更
+- **Reactive graph への介入** — Effect の登録・解除、Signal の subscribe/unsubscribe 相当の操作
+- **再入的な drain 起動** — `wasamo_*` 関数を呼び出すこと自体が DD-P6-003 により queue されるため、observer 内では事実上発火されない (Phase 3 で再入するべきではないという意味で禁止)
+
+#### 許可される副作用 (runtime に戻らない経路)
+
+observer callback 内で自由に行ってよい:
+
+- **外部 I/O** — ファイル書込み、ネットワーク送信、IPC、log 出力、telemetry/analytics 送信
+- **Host 言語側 (runtime 外) の state 変更** — host のグローバル変数、in-memory cache、永続化バッファ、外部ライブラリの状態
+- **Pure な計算・読取り** — runtime state の **読取り** は自由 (`wasamo_get_property`, signal 値の参照)
+- **別スレッドへのタスク投入** — task queue / channel への送信は許可 (ただし投入先スレッドから ABI を叩くのは UI-thread affinity 違反として元々別問題)
+
+#### Runtime state へ戻したい場合の正規経路
+
+observer から最終的に runtime state を変更したい場合、許可される経路は次の 2 つのみ:
+
+1. **Signal handler 経由** — host が独自に「observer → host event → next ABI 呼出で signal emit」を組む。host 側責任。本 DD で API 追加は無し。
+2. **Future post_event API (Option F) 経由** — `wasamo_post_event` で次 outermost cycle の signal_queue にエントリを積む。本 DD では未確定 (M3 で別 DD)。
+
+これらはいずれも **「次 cycle の Phase 1 で処理される event」** という形を取り、observer から runtime state への直接経路は構造的に存在しない。
+
+#### 境界が侵食されないための原則
+
+将来「ここは例外として observer mutation を許してよいのでは」という議論が出たとき、本 DD は次の立場で却下する:
+
+- **境界は callback の意図ではなく ABI 表面で定義される**: 「これは log 用 observer だから安全」「これは frame まで遅延しないので OK」のような意図ベースの例外は認めない。`WASAMO_ERR_OBSERVER_MUTATION` の検出は ABI entry の TLS flag 検査のみで行い、callback の用途で分岐しない。
+- **「runtime 外」の判断は host 側の責任**: host が自前で持つ state は runtime の関知外。observer から host state を更新し、それが結果として後続 ABI 呼出で runtime state に反映されるのは正規 (それは「observer → host → 次 cycle の ABI 呼出」という時間分離経路を通っている)。
+- **拡張は F の名前空間でのみ**: 「observer から何かしたい」要望はすべて post_event API (Option F) の仕様議論に集約する。observer 自体に機能を足す方向には拡張しない。
+
+この境界定義により、F が後追いで導入されても D の構造的純度は保たれ、observer / signal handler / post_event の三者の責務分離が時間とともに崩れない。
 
 ---
 
@@ -378,14 +442,14 @@ acceptance criterion A2 (counter シナリオ: click → count++ → bound Text 
 
 主要選択肢:
 
-- **D (推奨)**: declarative transaction + post-commit pure observer。VISION §4 P2 補足追加必須。M2-Phase 6 冒頭で実装。エコシステム摩擦 (MVVM/KVO 系との断絶) を Wasamo アイデンティティの一部として正面から引き受ける判断を含む。
-- **F (declarative + 表現力両立)**: D + post_event API。設計コスト前倒しと引換えに observer 表現力を確保。エコシステム摩擦は D より緩和される。
+- **D (推奨)**: declarative transaction + post-commit pure observer。VISION §4 P2 補足追加必須。M2-Phase 6 冒頭で実装。実務的優位 (predictability / debuggability / optimization headroom) と構造的整合を両立。代償は表現力の意図的削減 (MVVM/KVO 系パターンを書けなくする) であり、これを Wasamo アイデンティティの一部として引き受ける。**Option F は D の標準拡張路として M3 で具体化を予定** (本 DD では API 形を確定しない)。
+- **F (D + 初日から escape hatch)**: D + post_event API を本 DD で確定。D の表現力削減を緩和。設計コスト前倒し vs 後倒しのトレードオフのみが D との差。
 - **C (declarative 純度妥協)**: 統合 side-effect drain。observer 自由度維持の代償として mutation graph に非宣言的エッジ混入。**起草者は構造的不安定性ゆえ推奨しない**。
 - **A (緊急避難)**: 現状維持 + 経路依存 semantics を仕様逸脱として明記。**起草者は仕様的逸脱として推奨しない**。
 
 起草者の批判的選好順: **D > F > C >> E > A > B**。
 
-D と F の差は「observer 表現力」と「設計コスト前倒し」のトレードオフであり、両者とも declarative 構造的整合は達成する。C と D の間には大きなギャップ (graph 構造の declarative 純度) があり、A は本選択肢から事実上脱落させるべき。
+D と F の差は「observer 表現力を初日から確保するか、M3 で確定するか」のみであり、両者とも declarative 構造的整合と実務的優位 (predictability / debuggability / optimization headroom) を達成する。F は D の対立案ではなく D の拡張路。C と D の間には大きなギャップ (graph 構造の declarative 純度) があり、A は本選択肢から事実上脱落させるべき。
 
 ---
 

@@ -340,18 +340,83 @@ phases land.
     - vs Phase 6: Phase 6 lowers `.ui` binding statements into typed IR, which Phase 5's binding expression evaluator consumes.
   - **Verification kinds:** unit tests (dependency tracker and binding evaluator are pure logic; Option A verification per the design-axes note uses fake Effect closures with no new mirrors and no headless backend) + GUI manual (verify reactive linkage of the counter on real hardware — acceptance A2). **The phase most likely to surface a need for a headless-verification mechanism**; on entering Phase 5, re-evaluate [docs/notes/headless-verification.md](../notes/headless-verification.md) and, if needed, file an independent ADR for a "no-Compositor" mode.
 - [ ] **M2-Phase 6 — `.ui → runtime` lowering**
-  - ADR: _not yet filed_
-  - **Implementation scope (provisional, settled at pre-doc time):**
-    - `wasamoc` typed IR emit — implement DD-M2-P2-003 activities 1–7 (parse → check → type inference → property binding lowering → handler body lowering → textual IR output).
-    - Draft the textual IR's normative grammar (DD-M2-P2-002 Option B; s-expression-flavoured).
-    - `wasamo-runtime` textual IR parser — productionise the Phase 2 spike's `experimental_ir_loader`; emits `HandlerExpr` (Phase 3) and binding expressions (Phase 5).
-    - One new C ABI: `wasamo_load_ui(path, &out_root)` and friends.
-    - Replace `examples/counter-{c,rust,zig}/` with `.ui`-driven hosts — acceptance A1.
-    - Revise `architecture.md`: document the signal-dispatch ordering runtime contract in §6 (or its M2-revised version) (per the closing instruction of DD-M2-P3-002; the real implementation lands in Phase 6, so the description goes here).
+  - ADR: [docs/decisions/m2-phase-6-ui-lowering.md](../decisions/m2-phase-6-ui-lowering.md) — **Status: Proposed** (DD-M2-P6-001..009 drafted; agreement gating implementation start)
+  - Pre-doc framing: [docs/notes/m2-phase-6-pre-doc-framing.md](../notes/m2-phase-6-pre-doc-framing.md) — owner-aligned slate / scope / upstream-update bundling.
+  - **Risk concentration (the risk this phase must absorb within M2):**
+    - Phase 6 introduces *no* new core mechanism (Phases 3/4/5 supplied them) but is the first place Phase 5's reactive engine, Phase 4's mutation ABI, and Phase 3's `HandlerExpr` interpreter meet at the host surface. A1/A2 are only *fully* discharged here.
+    - The drain transaction DD (DD-M2-P6-001 = D) supersedes DD-M2-P5-004's three-stage shape and rewrites the runtime's observer model to "post-commit pure effect". This is the single non-additive shape change in M2; if Option D's structural cost (MVVM/KVO patterns become unwriteable) surfaces as an M2 acceptance blocker — which is unlikely since the counter has no observer — the fallback is Option C, recoverable mid-phase.
+    - Counter-only acceptance does not stress-exercise Phase 1 ordering rules (FIFO + topological + last-wins) or MUTATION_CAP exhaustion. Synthetic pure-logic fixtures cover those; the GUI checkpoint validates only the single-binding path.
+  - **Implementation scope (this phase, settled by the proposed ADR):**
+    - [ ] **Owner agreement on DD-M2-P6-001..009.** ADR flips to Accepted once agreement on all nine DDs is recorded; coding work begins after.
+    - [ ] **DD-M2-P6-002 / DD-M2-P6-003: Normative textual IR grammar + handler/binding expression form.** Add an IR chapter to `docs/dsl_spec.md`. Specify a header line (`;wasamo-ir v0` style) and productions for tree nodes / properties / bindings / handler bodies / `state` declarations. Promote the Phase 2 spike's tagged-value form for `HandlerExpr` (`(assign root.count (add (read root.count) 1))`) shared across bindings and handlers; permit bare literals in unambiguous positions.
+      - **Verification:** spec-only step; round-trip regression deferred to the loader/emitter rewrite below.
+    - [ ] **DD-M2-P6-001: Drain transaction (Option D, declarative + post-commit pure observer).** In `wasamo-runtime/src/emit.rs` (or sibling), replace Phase 5's three-stage drain with the three-phase form:
+      - Phase 1 — mutation convergence loop (signal_queue + dirty_effects until quiescent or MUTATION_CAP).
+      - Phase 2 — layout pass (terminal, read-only).
+      - Phase 3 — post-commit observer drain with `IN_OBSERVER_CALLBACK` TLS flag; state-mutating ABI returns `WASAMO_ERR_OBSERVER_MUTATION`.
+      - Phase 1 ordering rules: FIFO `signal_queue`, topological-by-dependency-graph `dirty_effects`, last-wins per-Signal write semantics.
+      - Phase 1 re-entrancy: state mutation permitted; structure-changing ABI (e.g. `wasamo_load_ui`) returns `WASAMO_ERR_REENTRANT_LOAD`.
+      - Divergence: MUTATION_CAP exhaustion drives an irreversible `Healthy → Diverged` transition; all subsequent ABI calls return `WASAMO_ERR_REACTIVE_DIVERGED` except `wasamo_runtime_destroy`. Diagnostics payload (offending Effect ID + iteration count + last-iteration dirty Signal IDs) lands in `wasamo_last_error_message`.
+      - Reuse the existing TLS used by DD-P6-003's queued-emission `IN_DRAIN` flag; same TLS underpins thread affinity (see DD-M2-P6-005).
+      - **Verification:** pure-logic tests for Phase 1 ordering (FIFO emission order; topological resolution across two dependent Effects; last-wins reduces observer entries to one); pure-logic tests for Phase 3 mutation guard (state-mutating call inside observer returns the error); pure-logic tests for divergence state machine (cap break → Diverged → no-op except destroy; diagnostics payload populated). Drain-pass interaction with real `WindowState` is covered retroactively by the GUI checkpoint.
+      - **Technical risk: Medium.** The riskiest step in the phase. Failure modes are local (cap value tuning, ordering edge cases for the M3 multi-binding case); structural retreat path is Option C of the ADR.
+    - [ ] **DD-M2-P6-007: `SignalRegistry` per-type struct.** In `wasamo-runtime/src/reactive.rs`, replace DD-M2-P5-005's provisional `properties: Rc<HashMap<String, Signal<i32>>>` with `SignalRegistry { i32s: HashMap<String, Signal<i32>>, strings: HashMap<String, Signal<String>> }`. `register_binding(target, expr, registry: &SignalRegistry)` becomes the final signature. Keys are `wasamoc`-resolved names per DD-M2-P6-004's name-resolution rules.
+      - **Verification:** existing reactive unit tests adapted; new pure-logic tests for string-typed Signal registration and binding.
+      - **Technical risk: Low.** Mechanical rewrite of the spike's single-type map.
+    - [ ] **DD-M2-P6-004: `wasamoc` lowering activities (parse, check, property-binding lowering, handler-body lowering, IR emit, file write-out).** Extend `wasamoc` from M1's parse+check shape:
+      - Parse `state count: i32` declarations; emit Signal nodes in the IR (Signal ownership in `.ui`).
+      - Restricted type inference: `i32` and string only; reject other types at check time.
+      - Property-binding lowering: lower DSL binding expressions (`text: "Count: \{root.count}"`) to `HandlerExpr` AST in the IR.
+      - Handler-body lowering: lower DSL handler bodies (`clicked => { count += 1 }`) to `HandlerExpr` AST.
+      - Compile-time name resolution: flat namespace per `.ui`; reject undefined references and duplicate `state` names; IR carries already-resolved names.
+      - IR emit + file write-out per DD-M2-P6-002 grammar.
+      - **Verification:** unit tests for each lowering pass (pure logic); end-to-end round trip — `wasamoc counter.ui` produces IR that the loader (next step) constructs into the expected widget tree. `cargo test -p wasamoc` green.
+      - **Technical risk: Low–medium.** Lowering shape is small (counter exercises one binding + one handler); type inference is two cases.
+    - [ ] **DD-M2-P6-006: Productionise the IR loader.** Move `wasamo-runtime/src/experimental_ir_loader.rs` → `wasamo-runtime/src/ir_loader.rs`. Remove the `experimental-ir` feature flag from `wasamo-runtime/Cargo.toml`. Update the loader to:
+      - Consume DD-M2-P6-002's normative grammar (header line + productions).
+      - Build via Phase 4 internal mutation API (`insert_child` / `set_property` / etc.) — same pattern as the spike, no C ABI crossing.
+      - Construct `SignalRegistry` from IR `state` nodes; call `register_binding` for each binding node.
+      - Wire handler bodies via `set_inline_handler` (Phase 3 path).
+      - Decommission the Phase 2 spike's `experiments/ir-spike/counter.uic` (the runtime no longer carries the throwaway IR shape).
+      - **Verification:** existing spike round-trip test migrated to the new grammar; counter window renders identically to the Phase 5 spike harness when driven by `wasamoc`-produced IR.
+    - [ ] **DD-M2-P6-009: Defense-in-depth IR loader validation.** Within `ir_loader.rs`:
+      - Verify magic + version header line; mismatch → `WASAMO_ERR_IR_MALFORMED`.
+      - Verify reference resolution (every binding/handler name resolves to a declared `state` or widget); failure → `WASAMO_ERR_IR_MALFORMED`.
+      - Verify top-level document structure.
+      - Trust emitter-side type integrity (no per-node re-validation).
+      - **Verification:** pure-logic tests with hand-crafted malformed IR fragments — each failure path returns `WASAMO_ERR_IR_MALFORMED` with a populated `wasamo_last_error_message`.
+    - [ ] **DD-M2-P6-005: `wasamo_load_ui` C ABI + error infrastructure.** In `wasamo-runtime/src/abi.rs` and `bindings/c/wasamo.h`:
+      - Add `WasamoStatus wasamo_load_ui(const char* resource, uint32_t flags, WasamoWindowHandle* out_root)` — single-function loader (Option α). Flags discriminate path-vs-embedded (sub-decision A and C).
+      - Add `const char* wasamo_last_error_message(void)` — thread-local last-error string (sub-decision (i)).
+      - Add error codes: `WASAMO_ERR_OBSERVER_MUTATION`, `WASAMO_ERR_REACTIVE_DIVERGED`, `WASAMO_ERR_REENTRANT_LOAD`, `WASAMO_ERR_WRONG_THREAD`, `WASAMO_ERR_IR_MALFORMED`.
+      - Thread affinity: every `wasamo_*` ABI checks the runtime's owning thread; cross-thread call returns `WASAMO_ERR_WRONG_THREAD` without side effect. Owning thread is fixed at `wasamo_load_ui` time.
+      - Handle ownership: `WasamoWindowHandle` runtime-owned; valid for runtime lifetime (no per-window destroy in M2).
+      - Update `docs/abi_spec.md`: §4.x for `wasamo_load_ui`, §5 ownership/lifetime, §7 thread-affinity, §8 error codes.
+      - **Verification:** build + `dumpbin /exports` confirms new symbols; pure-logic test exercising `WASAMO_ERR_WRONG_THREAD` (spawn thread, call ABI, assert error); resource-resolution dispatch tested for both path and embedded blob.
+    - [ ] **DD-M2-P6-008: Counter examples migration (acceptance A1/A2).** Create `examples/counter/counter.ui` (single shared file). Replace the imperative tree construction in `examples/counter-{c,rust,zig}/`:
+      - **counter-rust:** call `wasamo_load_ui` directly via the existing rust-sys binding; resource resolution = absolute path (DD-M2-P6-005 sub (A)).
+      - **counter-c:** embed `counter.ui` at compile time (DD-M2-P6-005 sub (C)); pass `(pointer, length)` blob.
+      - **counter-zig:** embed `counter.ui` at compile time via Zig's `@embedFile`.
+      - Direct ABI calls only; no per-language idiomatic helper (Option α). The host code must contain *zero* `wasamo_set_property` calls in the click path — A2 is structurally enforced.
+      - **Verification:** **GUI manual (RDP / physical desktop) — this is acceptance A1/A2 itself.** All three counters launch from `counter.ui`, click increments visibly, no host-side property writes. Captured per [docs/notes/verification-environments.md](../notes/verification-environments.md).
+      - **Technical risk: Low.** Embedding ergonomics are binding-side; the runtime path is identical to the Phase 5 spike harness.
+    - [ ] **Upstream-document bundle (lands in the same commit that flips the ADR to Accepted):**
+      - `VISION.md §4 Principle 2` — append the supplement text (ADR §11.1; observer = post-commit pure effect; mutation = events-up + bindings-down).
+      - `docs/architecture.md §6` (or its M2-revised form) — rewrite drain spec to the three-phase + terminal form; document the mutation boundary; discharges DD-M2-P3-002's side obligation.
+      - `docs/decisions/m2-phase-5-reactive-engine.md` — DD-M2-P5-004 status flipped to "Superseded in part by DD-M2-P6-001 (drain stage framing)"; deferred-dispatch trigger contract preserved.
+      - `docs/decisions/m2-phase-5-reactive-engine.md` — DD-M2-P5-005 status flipped to "Superseded by DD-M2-P6-007 (`properties` shape; registration API itself preserved)".
+      - `docs/notes/dd-m2-p6-drain-transaction.md` — archived/removed; content folded into the ADR.
+      - `docs/notes/reactive-drain-cascade-policy.md` — closed.
+    - [ ] `cargo build --release --workspace` passes; `cargo test --workspace` passes.
+    - [ ] **Link/export verification:** new symbols (`wasamo_load_ui`, `wasamo_last_error_message`) confirmed via `dumpbin /exports target/release/wasamo.dll`.
+    - [ ] `CHANGELOG.md` — Phase 6 entry covering the IR pipeline, drain transaction reshape, new error codes, and counter examples migration.
+    - [ ] `docs/plans/m2-plan.md` Progress: phase ticked, ADR linked.
   - **Boundary with adjacent phases:**
-    - No new core mechanisms. A pure integration phase consuming Phase 3's `HandlerExpr`, Phase 4's C ABI primitives, and Phase 5's binding evaluator.
-    - Per-target-language codegen is **not required** (per DD-M2-P2-001 Option B, a single runtime-side path suffices).
-  - **Verification kinds:** build + unit tests (the textual IR parser is pure logic) + **GUI manual (RDP / physical) verification of all three language counters on real hardware — this is acceptance A1/A2 itself**. A green CI build alone does not satisfy A1/A2 (see verification-environments.md Observation 1).
+    - vs Phase 3: Phase 6 wires the IR-side serialisation of `HandlerExpr` (DD-M2-P6-003 promotes the spike's tagged-value form). The handler evaluator itself is unchanged from Phase 3.
+    - vs Phase 4: tree construction during `wasamo_load_ui` uses Phase 4's *internal* Rust mutation API (`insert_child` / `set_property` / etc.), not the C ABI — same pattern as the Phase 2 spike's loader. The new `wasamo_load_ui` is the only C ABI entry this phase adds beyond Phase 4's six tree-mutation symbols, plus `wasamo_last_error_message`.
+    - vs Phase 5: Phase 6 supersedes DD-M2-P5-004's three-stage drain (Option D's three-phase form replaces it) and supersedes DD-M2-P5-005's `properties` parameter shape (`SignalRegistry` replaces it). The Signal/Effect/Binding primitives themselves and the dependency-tracker are unchanged.
+    - Per-target-language codegen is **not required** (per DD-M2-P2-001 = B, a single runtime-side path suffices).
+  - **Verification kinds:** unit tests (lowering passes / IR loader validation / drain ordering rules / divergence state machine — all pure logic) + build (`cargo build --release --workspace`) + link/export (`dumpbin /exports`) + ABI smoke + **GUI manual (RDP / physical) of all three language counters on real hardware — this is acceptance A1/A2 itself**. A green CI build alone does not satisfy A1/A2 (see [verification-environments.md](../notes/verification-environments.md) Observation 1).
 - **Out of M2 scope (restated):**
   - Headless-verification backend — examined critically in [docs/notes/headless-verification.md](../notes/headless-verification.md); the policy is to close M2 with a pure-logic test fixture strategy without building one. Re-evaluation trigger in Phase 5.
 
