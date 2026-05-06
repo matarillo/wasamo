@@ -1635,6 +1635,73 @@ reinforces C.
 
 ---
 
+### DD-M2-P6-010 — `dirty_effects` topological sort fidelity
+
+**Status: Proposed**
+
+#### Context
+
+DD-M2-P6-001 = Option D specifies Phase 1 ordering as
+"topological-by-dependency-graph" for `dirty_effects`. The M2
+implementation in `drain_dirty_effects()` uses `sort_unstable()` on
+`EffectId` values, which are monotonically increasing integers assigned
+at Effect creation time. This approximates topological order only
+because, in the M2 counter shape, a binding Effect is always created
+after any Effect it depends on, so its ID is always larger.
+
+The approximation holds for the M2 acceptance set (single binding, one
+handler, one reactive value) because there is only one Effect per
+Signal. It breaks silently when two Effects depend on the same Signal
+in a non-trivial order, or when an Effect created earlier in time
+happens to be a downstream consumer of one created later.
+
+This gap was discovered during the DD-M2-P6-001 implementation
+retrospective (2026-05-07).
+
+#### Options
+
+**Option A — Fix now.** Replace `sort_unstable()` with a true
+topological walk of `ReactiveGraph::forward` / `back` before M2 ships.
+
+- Pro: spec-faithful immediately.
+- Con: adds graph-traversal code with no M2 test stimulus. The counter
+  shape never exercises non-trivial ordering; correctness of the walk
+  would be asserted by tests alone, with no GUI confirmation.
+
+**Option B — Defer to M3 pre-doc with an explicit constraint record.**
+Accept the EffectId-numeric approximation for M2. Record the
+constraint here. Make "replace with true topological walk" a mandatory
+pre-condition for the M3 multi-binding implementation step.
+
+- Pro: no code risk in M2; the approximation is not observable by any
+  M2 acceptance criterion.
+- Con: the spec-vs-impl gap exists for the M2 lifetime. A reader of
+  `drain_dirty_effects()` without this note would not know the sort is
+  an approximation.
+
+#### Recommendation
+
+**Option B.** The M2 acceptance criteria (counter with one binding and
+one handler) do not exercise multi-Effect ordering; the approximation
+is not observable. Shipping a topological walk implementation without
+a stimulus that would catch a bug in that walk creates more risk than
+it removes.
+
+**Mandatory constraint for M3:** Before any M3 work that introduces
+more than one Effect per reactive Signal (multi-binding, computed
+values, cross-widget bindings), replace `sort_unstable()` in
+`drain_dirty_effects()` with a true topological sort over
+`ReactiveGraph::forward` / `back`. The M3 multi-binding test cases
+will provide the exercise stimulus that makes the walk verifiable.
+
+#### Forward-compat exposure
+
+Medium. The graph-walk implementation is not complex, but it is
+load-bearing for M3 correctness. The constraint must be discharged
+in the M3 pre-doc phase before coding begins.
+
+---
+
 ## Summary of proposed decisions
 
 | ID | Topic | Recommendation | Impl risk | Forward-compat exposure |
@@ -1648,6 +1715,7 @@ reinforces C.
 | DD-M2-P6-007 | Final signature of `register_binding` | **Option B** — `SignalRegistry` per-type struct keyed by `wasamoc`-resolved names; supersedes DD-M2-P5-005 provisional `properties` shape only | Low | Low |
 | DD-M2-P6-008 | Counter examples migration shape | **α + (X)** — direct ABI calls; shared `examples/counter/counter.ui`; embedded for C/Zig, path for Rust | Low | Low |
 | DD-M2-P6-009 | IR loader malformed-input validation policy | **Option C** — defense-in-depth: header/version + reference resolution + top-level structure; trust emitter invariants including type integrity | Low | Low |
+| DD-M2-P6-010 *(Proposed)* | `dirty_effects` topological sort fidelity | **Option B** *(recommended)* — EffectId-numeric-order approximation accepted for M2 single-binding scope; replace with true graph walk before M3 multi-binding work begins | Low | Medium |
 
 **Aggregate impl-risk picture.** DD-M2-P6-001 and DD-M2-P6-005
 introduce the new ABI-surface error codes M2 ships
@@ -1683,6 +1751,7 @@ the M3-additive option. The named successor work for M3 is:
 - DD-M2-P6-008's idiomatic per-language helpers (paired with
   M3 wrapper-crate API design).
 - DD-M2-P6-009's validation-path reuse for hot reload.
+- DD-M2-P6-010's true topological sort (mandatory pre-condition before M3 multi-binding work begins; pending owner agreement).
 
 **Pre-doc validation spike.** Not required for this ADR. The
 Phase 2 spike already round-trips the IR through
