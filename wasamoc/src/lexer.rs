@@ -7,6 +7,7 @@ pub enum Keyword {
     Inherits,
     InOut,
     Property,
+    State,
 }
 
 impl Keyword {
@@ -16,6 +17,7 @@ impl Keyword {
             Keyword::Inherits => "`inherits`",
             Keyword::InOut => "`in-out`",
             Keyword::Property => "`property`",
+            Keyword::State => "`state`",
         }
     }
 }
@@ -243,6 +245,7 @@ fn scan_ident(c: &mut Cursor) -> Token {
         "component" => Token::Kw(Keyword::Component),
         "inherits" => Token::Kw(Keyword::Inherits),
         "property" => Token::Kw(Keyword::Property),
+        "state" => Token::Kw(Keyword::State),
         _ => Token::Ident(s),
     }
 }

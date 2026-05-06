@@ -79,6 +79,12 @@ pub struct Block {
 
 #[derive(Debug, Clone)]
 pub enum Member {
+    StateMember {
+        name: String,
+        ty: TypeName,
+        default: Expr,
+        span: Span,
+    },
     PropertyDecl {
         name: String,
         ty: TypeName,
