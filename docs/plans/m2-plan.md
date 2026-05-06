@@ -409,7 +409,7 @@ phases land.
     - [x] **DD-M2-P6-007: `SignalRegistry` per-type struct.** In `wasamo-runtime/src/reactive.rs`, replace DD-M2-P5-005's provisional `properties: Rc<HashMap<String, Signal<i32>>>` with `SignalRegistry { i32s: HashMap<String, Signal<i32>>, strings: HashMap<String, Signal<String>> }`. `register_binding(target, expr, registry: &SignalRegistry)` becomes the final signature. Keys are `wasamoc`-resolved names per DD-M2-P6-004's name-resolution rules.
       - **Verification:** existing reactive unit tests adapted; new pure-logic tests for string-typed Signal registration and binding.
       - **Technical risk: Low.** Mechanical rewrite of the spike's single-type map.
-    - [ ] **DD-M2-P6-004: `wasamoc` lowering activities (parse, check, property-binding lowering, handler-body lowering, IR emit, file write-out).** Extend `wasamoc` from M1's parse+check shape:
+    - [x] **DD-M2-P6-004: `wasamoc` lowering activities (parse, check, property-binding lowering, handler-body lowering, IR emit, file write-out).** Extend `wasamoc` from M1's parse+check shape:
       - Parse `state count: i32` declarations; emit Signal nodes in the IR (Signal ownership in `.ui`).
       - Restricted type inference: `i32` and string only; reject other types at check time.
       - Property-binding lowering: lower DSL binding expressions (`text: "Count: \{root.count}"`) to `HandlerExpr` AST in the IR.
