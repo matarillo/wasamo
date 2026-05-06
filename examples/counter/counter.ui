@@ -3,7 +3,7 @@ component Counter inherits Window {
     backdrop: mica
     theme: system
 
-    in-out property <int> count: 0
+    state count: i32 = 0
 
     VStack {
         spacing: 12px

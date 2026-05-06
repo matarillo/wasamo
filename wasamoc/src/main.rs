@@ -1,11 +1,4 @@
-mod ast;
-mod check;
-mod diagnostic;
-mod emit;
-mod ir;
-mod lexer;
-mod lower;
-mod parser;
+use wasamoc::{ast, check, emit, lexer, lower, parser};
 
 fn main() {
     let args: Vec<String> = std::env::args().collect();
