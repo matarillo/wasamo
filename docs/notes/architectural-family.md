@@ -86,7 +86,7 @@ commitment:
 | DD-M2-P2-001 = B (textual IR + runtime interpreter) | IR is a tree description; family (2) would require IR semantics covering view-function execution |
 | DD-P6-001..007 (stable-core C ABI) | Handle-based; no scope / view-body primitive |
 | DD-M2-P3-001 = A (handler runs runtime-side) | Handler mutates persistent property storage; family (2) handler would update state to trigger view re-execution |
-| DD-M2-P5-001..006 (Phase 5, Proposed) | Signal + Effect on a tree with `BindingTarget` enum; family (1)-flavored API surface |
+| DD-M2-P5-001..006 (Phase 5, Accepted) | Signal + Effect on a tree with `BindingTarget` enum; family (1)-flavored API surface |
 
 No accepted ADR names family (1) as the long-term selection. This
 note does not upgrade the implicit fit to an explicit commitment.
@@ -177,7 +177,7 @@ normally.
 
 ## References
 
-- Phase 5 ADR pre-doc — [m2-phase-5-reactive-engine.md](../decisions/m2-phase-5-reactive-engine.md)
+- Phase 5 ADR — [m2-phase-5-reactive-engine.md](../decisions/m2-phase-5-reactive-engine.md) (Accepted 2026-05-05)
 - DSL × C ABI thesis — [VISION.md](../../VISION.md)
 - IR shape — [m2-phase-2-wasamoc-output-format.md](../decisions/m2-phase-2-wasamoc-output-format.md)
 - Stable-core C ABI — [phase-6-c-abi.md](../decisions/phase-6-c-abi.md)

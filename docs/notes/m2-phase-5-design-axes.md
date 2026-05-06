@@ -1,7 +1,9 @@
 ---
 title: M2-Phase 5 (Reactive engine) — 設計の 2 軸
-status: live
+status: superseded
 created: 2026-05-05
+superseded-by: docs/decisions/m2-phase-5-reactive-engine.md
+superseded-on: 2026-05-05
 related-plans:
   - docs/plans/m2-plan.md
 related-notes:
@@ -9,6 +11,11 @@ related-notes:
 ---
 
 # M2-Phase 5 — 設計の 2 軸
+
+> **Superseded 2026-05-05.** 本ノートで擦り合わせた 2 軸は
+> [docs/decisions/m2-phase-5-reactive-engine.md](../decisions/m2-phase-5-reactive-engine.md)
+> (DD-M2-P5-001/002/006, Accepted 2026-05-05) として確定済み。本ファイルは
+> pre-doc 入力の経緯記録として残す。
 
 Phase 5 (Reactive engine) は M2 で唯一の technical-thesis 検証点
 (A2: host 配線なしで reactive 伝搬) であり、リスクが集中する。

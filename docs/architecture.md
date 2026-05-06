@@ -1,6 +1,6 @@
 # Wasamo Architecture
 
-**Status:** M1 complete (Phases 0-8); M2-Phases 1-4 complete; M2-Phase 5 (reactive engine) in progress
+**Status:** M1 complete (Phases 0-8); M2-Phases 1-5 complete; M2-Phase 6 (`.ui → runtime` lowering) pending
 
 ---
 
@@ -953,7 +953,7 @@ The following are intentionally left open at this draft stage.
 | Inline DSL handler execution location: host-side (callback) vs runtime-side (interpreted IR) | M2 | Resolved → DD-M2-P3-001 (runtime-side interpreter) |
 | `wasamoc` M2 output format: host-language codegen vs IR + runtime interpretation | M2 | Resolved → DD-M2-P2-001 (textual IR + runtime interpreter) |
 | DPI scaling localization: whether the layout engine should operate in physical pixels and implications for DirectWrite hinting | M2+ | Open |
-| AccessKit / UIA sync: when and how layout results are propagated to the accessibility tree, and the performance impact | M2 | Open |
+| AccessKit / UIA sync: when and how layout results are propagated to the accessibility tree, and the performance impact | M4 | Open (re-scoped from M2 to M4 alongside the M2-as-foundation redefinition; see [docs/plans/m2-plan.md](./plans/m2-plan.md) Out-of-scope) |
 | Async measure: how to handle widgets whose size is unknown at measure time (e.g. image load pending) | M2+ | Open |
 | Cache invalidation granularity: strategy for detecting local property changes and recomputing only affected subtrees | M2+ | Open |
 | Custom layout extensibility: approach to layouts beyond built-in primitives — host-language callbacks, data-driven IR injection, or other | M2+ | Open |

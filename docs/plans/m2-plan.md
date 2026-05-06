@@ -5,6 +5,10 @@ roadmap-anchor: ROADMAP.md#m2-foundation
 adrs:
   - docs/decisions/vision-post-m2-roadmap.md
   - docs/decisions/m2-phase-1-cdylib-shim.md
+  - docs/decisions/m2-phase-2-wasamoc-output-format.md
+  - docs/decisions/m2-phase-3-handler-exec-location.md
+  - docs/decisions/m2-phase-4-tree-mutation-abi.md
+  - docs/decisions/m2-phase-5-reactive-engine.md
 created: 2026-05-02
 ---
 
