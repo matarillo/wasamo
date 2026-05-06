@@ -1702,6 +1702,79 @@ in the M3 pre-doc phase before coding begins.
 
 ---
 
+### DD-M2-P6-011 — String-typed property binding
+
+**Status: Proposed**
+
+#### Context
+
+DD-M2-P6-007 added `strings: HashMap<String, Signal<String>>` to
+`SignalRegistry`, but the binding evaluator path (`BindingEvalContext` /
+`HandlerExpr::PropRead` / `evaluate_tracked`) reads only `i32s`.
+To support a `.ui` property whose source Signal is `String`-typed,
+three gaps must be closed:
+
+1. `EvalContext` trait needs `get_string(&self, path) -> Result<String, EvalError>`
+   and `read_string_tracked` (dependency-tracking variant).
+2. `BindingEvalContext` must implement both, routing through
+   `registry.strings`.
+3. `HandlerExpr` / `evaluate_tracked` must dispatch to
+   `read_string_tracked` when the expression is a string-typed PropRead.
+
+Gap 3 requires a disambiguation strategy: the evaluator currently treats
+every `PropRead` as i32. This gap was surfaced during the DD-M2-P6-007
+implementation step (2026-05-07) and deferred because resolving it requires
+an IR design decision that is independent of the `SignalRegistry` shape.
+
+#### Options
+
+**Option A — Type-tag `PropRead` at the IR level.**
+Add a `ty` field: `PropRead { path: String, ty: PropType }` where
+`PropType` is `I32 | Str`. The loader sets `ty` at name-resolution time;
+`evaluate_tracked` dispatches on `ty`.
+
+- Pro: single variant; evaluator dispatch is one match arm per type;
+  IR stays compact.
+- Con: all existing `PropRead` construction sites gain a required field;
+  a test-only `PropType::I32` default must be added or all tests updated.
+
+**Option B — Introduce a `StrPropRead` variant (recommended).**
+Add `HandlerExpr::StrPropRead { path: String }` alongside the existing
+`PropRead`. `evaluate_tracked` dispatches `StrPropRead` to
+`ctx.read_string_tracked`; existing `PropRead` path is unchanged.
+
+- Pro: no change to existing `PropRead` construction sites or tests;
+  the two read paths are structurally separated in the IR.
+- Con: minor IR variant proliferation; conceptually redundant with `PropRead`.
+
+**Option C — Unified `read_typed(path) -> TypedValue` on `EvalContext`.**
+Replace `get_i32` / `get_string` with a single polymorphic method returning
+a `TypedValue` enum. The evaluator extracts the arm it needs.
+
+- Pro: one method handles all future types.
+- Con: replaces the existing `get_i32` / `set_i32` API surface, requiring
+  changes to all `EvalContext` implementors (including test stubs);
+  `TypedValue` enum adds a dependency between `handler.rs` and a new type.
+
+#### Recommendation
+
+**Option B.** Adding `StrPropRead` is the smallest change that closes all
+three gaps without touching existing `PropRead` paths or `EvalContext`
+method signatures beyond the two new `get_string` / `read_string_tracked`
+additions. Option A is equally low-risk but forces every `PropRead`
+construction site to supply a type tag today. Option C is premature
+generalisation — M2 has only two types, and the current two-method
+`EvalContext` shape already encodes that.
+
+#### Forward-compat exposure
+
+Low. `StrPropRead` is additive. If M3 introduces additional scalar types
+(e.g. `f32`, `bool`), each adds a parallel `<T>PropRead` variant and
+`EvalContext::get_<T>` pair, or the `TypedValue` unification (Option C)
+is revisited at that point with concrete M3 stimulus.
+
+---
+
 ## Summary of proposed decisions
 
 | ID | Topic | Recommendation | Impl risk | Forward-compat exposure |
@@ -1716,6 +1789,7 @@ in the M3 pre-doc phase before coding begins.
 | DD-M2-P6-008 | Counter examples migration shape | **α + (X)** — direct ABI calls; shared `examples/counter/counter.ui`; embedded for C/Zig, path for Rust | Low | Low |
 | DD-M2-P6-009 | IR loader malformed-input validation policy | **Option C** — defense-in-depth: header/version + reference resolution + top-level structure; trust emitter invariants including type integrity | Low | Low |
 | DD-M2-P6-010 *(Proposed)* | `dirty_effects` topological sort fidelity | **Option B** *(recommended)* — EffectId-numeric-order approximation accepted for M2 single-binding scope; replace with true graph walk before M3 multi-binding work begins | Low | Medium |
+| DD-M2-P6-011 *(Proposed)* | String-typed property binding | **Option B** *(recommended)* — `StrPropRead` HandlerExpr variant + `EvalContext::get_string` / `read_string_tracked`; `BindingEvalContext` wired to `registry.strings` | Low–medium | Low |
 
 **Aggregate impl-risk picture.** DD-M2-P6-001 and DD-M2-P6-005
 introduce the new ABI-surface error codes M2 ships
@@ -1752,6 +1826,7 @@ the M3-additive option. The named successor work for M3 is:
   M3 wrapper-crate API design).
 - DD-M2-P6-009's validation-path reuse for hot reload.
 - DD-M2-P6-010's true topological sort (mandatory pre-condition before M3 multi-binding work begins; pending owner agreement).
+- DD-M2-P6-011's `StrPropRead` evaluator path (prerequisite for any `.ui` property whose source Signal is `String`-typed; pending owner agreement).
 
 **Pre-doc validation spike.** Not required for this ADR. The
 Phase 2 spike already round-trips the IR through
