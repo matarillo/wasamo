@@ -14,6 +14,30 @@ the **Status** section of [README.md](./README.md).
 
 ## [Unreleased] — M2: Foundation (in progress)
 
+### M2-Phase 5 — Reactive engine (2026-05-06)
+
+Implements the M2 thesis-validation surface for acceptance A2:
+host `count.set(...)` updates a bound `Text` label without any
+host-side `wasamo_set_property` call. Pure-internal Rust; no C ABI
+symbol added (per DD-M2-P4-004 = A). `wasamo-runtime/src/reactive.rs`
+gains `Signal<T>` + `EffectHandle` + thread-local effect stack +
+forward/back dependency edges + dirty-set drain + iteration-cap
+divergence trap; `with_batched_writes` body fills the Phase 4
+skeleton. The handler evaluator (`HandlerExpr` + `EvalContext`)
+is reused via a read-only `BindingEvalContext` that records
+Signal reads as dependency edges. `WidgetNode` gains a
+`bindings: Vec<EffectHandle>` field disposed at the head of the
+Phase 4 `widget_destroy` sweep. `register_binding(target, expr,
+write_fn, properties)` is the Phase 6-facing internal API.
+`drain_if_outermost` now runs observer drain → reactive drain →
+layout drain in one outermost-frame cycle, composing with
+DD-P6-003 queued emission and DD-P8-002 layout invalidation. GUI
+checkpoint (`exp/m2-p5-reactive-checkpoint`, commit `fdc1545`)
+confirms click → label update through the reactive path on real
+hardware. A2 fully discharged at Phase 6 close (counter.ui-driven).
+
+Decisions: [DD-M2-P5-001..006](./docs/decisions/m2-phase-5-reactive-engine.md).
+
 ### M2-Phase 4 — Tree-mutation ABI primitives (2026-05-05)
 
 Grows the stable C ABI with a sixth area (DD-P6-001 defined the

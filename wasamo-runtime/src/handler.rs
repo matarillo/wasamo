@@ -5,14 +5,23 @@
 //! evaluation. The binding expression evaluator (Phase 5) will share the
 //! core once it is built on top of this foundation.
 
-/// A single expression node in a DSL handler body.
+/// A single expression node in a DSL handler body or binding expression.
 ///
 /// M2 scope: the subset of expression forms that appear in `counter.ui`.
-/// Phase 5 extends this with the read-only binding expression forms.
+/// `StrLit` and `Interpolation` are binding-only — `evaluate()` rejects them;
+/// use `evaluate_binding()` for contexts that produce string output.
 #[derive(Debug, Clone)]
 pub enum HandlerExpr {
     /// Integer literal.
     IntLit(i32),
+
+    /// String literal (binding-only).
+    StrLit(String),
+
+    /// String interpolation: a sequence of literal and expression parts
+    /// (binding-only). Example: `"Count: \{root.count}"` →
+    /// `Interpolation(vec![Literal("Count: "), Expr(PropRead("root.count"))])`.
+    Interpolation(Vec<InterpolationPart>),
 
     /// Read a named property from the evaluation context.
     /// `path` is a dot-separated widget-path + property name, e.g. `"root.count"`.
@@ -29,6 +38,15 @@ pub enum HandlerExpr {
     Block(Vec<HandlerExpr>),
 }
 
+/// One segment of a string interpolation expression.
+#[derive(Debug, Clone)]
+pub enum InterpolationPart {
+    /// A literal string fragment.
+    Literal(String),
+    /// An embedded expression whose value is stringified and inserted.
+    Expr(HandlerExpr),
+}
+
 /// Compound-assignment operators supported in M2 handler bodies.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CompoundOp {
@@ -39,15 +57,19 @@ pub enum CompoundOp {
 }
 
 /// Evaluation context: property read / write access for a specific component.
-///
-/// Phase 5 will unify this with the binding evaluator context; for Phase 3 the
-/// trait stays minimal (integer properties only, matching `counter.ui` needs).
 pub trait EvalContext {
-    /// Read an integer property by dot-separated path.
+    /// Read an integer property by dot-separated path (untracked).
     fn get_i32(&self, path: &str) -> Result<i32, EvalError>;
 
     /// Write an integer property by dot-separated path.
     fn set_i32(&mut self, path: &str, value: i32) -> Result<(), EvalError>;
+
+    /// Read an integer property and report the read to the active reactive
+    /// scope (if any). Default impl is untracked — forwards to `get_i32`.
+    /// `BindingEvalContext` overrides this to route through `Signal::get()`.
+    fn read_i32_tracked(&self, path: &str) -> Result<i32, EvalError> {
+        self.get_i32(path)
+    }
 }
 
 /// Errors that the evaluator can produce.
@@ -56,6 +78,9 @@ pub enum EvalError {
     UnknownProperty(String),
     TypeMismatch { path: String },
     DivisionByZero,
+    /// A write expression (`Assign` / `CompoundAssign`) appeared in a
+    /// read-only binding context where only property reads are permitted.
+    WriteInBindingContext { path: String },
 }
 
 impl std::fmt::Display for EvalError {
@@ -64,6 +89,9 @@ impl std::fmt::Display for EvalError {
             EvalError::UnknownProperty(p) => write!(f, "unknown property: {p}"),
             EvalError::TypeMismatch { path } => write!(f, "type mismatch at: {path}"),
             EvalError::DivisionByZero => write!(f, "division by zero"),
+            EvalError::WriteInBindingContext { path } => {
+                write!(f, "write expression not allowed in binding context: {path}")
+            }
         }
     }
 }
@@ -76,6 +104,11 @@ impl std::fmt::Display for EvalError {
 pub fn evaluate(expr: &HandlerExpr, ctx: &mut dyn EvalContext) -> Result<i32, EvalError> {
     match expr {
         HandlerExpr::IntLit(v) => Ok(*v),
+
+        // String-typed forms are only valid in binding context.
+        HandlerExpr::StrLit(_) | HandlerExpr::Interpolation(_) => {
+            Err(EvalError::TypeMismatch { path: "<string expression in integer context>".into() })
+        }
 
         HandlerExpr::PropRead { path } => ctx.get_i32(path),
 
@@ -197,6 +230,78 @@ pub fn invoke_handler(
                 .unwrap_or("unknown panic");
             eprintln!("wasamo: handler error in {location}: {msg}");
             false
+        }
+    }
+}
+
+/// Evaluate a `HandlerExpr` in binding (read-only) context and return a
+/// string representation of the result.
+///
+/// - `StrLit` returns the literal unchanged.
+/// - `Interpolation` concatenates literal parts with stringified expression
+///   parts evaluated via `evaluate_tracked`.
+/// - Integer-typed leaf expressions (`IntLit`, `PropRead`, integer `Block`)
+///   are evaluated via `evaluate_tracked` and stringified.
+/// - `Assign` and `CompoundAssign` are rejected at the AST level with
+///   `EvalError::WriteInBindingContext` regardless of nesting depth.
+///
+/// Reads go through `ctx.read_i32_tracked()`, so `BindingEvalContext` (which
+/// routes that method through `Signal::get()`) causes dependency collection
+/// to happen automatically as a side effect of evaluation.
+pub fn evaluate_binding(
+    expr: &HandlerExpr,
+    ctx: &mut dyn EvalContext,
+) -> Result<String, EvalError> {
+    match expr {
+        HandlerExpr::StrLit(s) => Ok(s.clone()),
+        HandlerExpr::Interpolation(parts) => {
+            let mut out = String::new();
+            for part in parts {
+                match part {
+                    InterpolationPart::Literal(s) => out.push_str(s),
+                    InterpolationPart::Expr(e) => {
+                        out.push_str(&evaluate_tracked(e, ctx)?.to_string());
+                    }
+                }
+            }
+            Ok(out)
+        }
+        // Integer-typed top-level binding (e.g. a bare `root.count` binding).
+        _ => evaluate_tracked(expr, ctx).map(|v| v.to_string()),
+    }
+}
+
+/// Integer-typed evaluation in binding (read-only) mode.
+///
+/// Like `evaluate()` but:
+/// - Uses `ctx.read_i32_tracked()` for `PropRead` (enabling dependency tracking).
+/// - Rejects `Assign` and `CompoundAssign` with `WriteInBindingContext`.
+/// - Rejects string-typed forms (`StrLit`, `Interpolation`) with `TypeMismatch`.
+fn evaluate_tracked(
+    expr: &HandlerExpr,
+    ctx: &mut dyn EvalContext,
+) -> Result<i32, EvalError> {
+    match expr {
+        HandlerExpr::IntLit(v) => Ok(*v),
+
+        HandlerExpr::PropRead { path } => ctx.read_i32_tracked(path),
+
+        HandlerExpr::Assign { lhs, .. } | HandlerExpr::CompoundAssign { lhs, .. } => {
+            Err(EvalError::WriteInBindingContext { path: lhs.clone() })
+        }
+
+        HandlerExpr::Block(stmts) => {
+            let mut last = 0i32;
+            for stmt in stmts {
+                last = evaluate_tracked(stmt, ctx)?;
+            }
+            Ok(last)
+        }
+
+        HandlerExpr::StrLit(_) | HandlerExpr::Interpolation(_) => {
+            Err(EvalError::TypeMismatch {
+                path: "<string expression in integer context>".into(),
+            })
         }
     }
 }
@@ -521,5 +626,94 @@ mod tests {
         event_log.push(format!("host: x={host_saw}"));
 
         assert_eq!(event_log, ["inline: x=10", "host: x=10"]);
+    }
+
+    // ── evaluate_binding / evaluate_tracked tests (DD-M2-P5-006) ─────────────
+
+    #[test]
+    fn binding_str_lit() {
+        let mut ctx = MapCtx::new(&[]);
+        let expr = HandlerExpr::StrLit("hello".into());
+        assert_eq!(evaluate_binding(&expr, &mut ctx), Ok("hello".into()));
+    }
+
+    #[test]
+    fn binding_interpolation_counter() {
+        // Simulates `"Count: \{root.count}"` with root.count = 7.
+        let mut ctx = MapCtx::new(&[("root.count", 7)]);
+        let expr = HandlerExpr::Interpolation(vec![
+            InterpolationPart::Literal("Count: ".into()),
+            InterpolationPart::Expr(HandlerExpr::PropRead { path: "root.count".into() }),
+        ]);
+        assert_eq!(evaluate_binding(&expr, &mut ctx), Ok("Count: 7".into()));
+    }
+
+    #[test]
+    fn binding_bare_int_prop_read() {
+        // A bare integer property binding (not wrapped in interpolation).
+        let mut ctx = MapCtx::new(&[("root.count", 3)]);
+        let expr = HandlerExpr::PropRead { path: "root.count".into() };
+        assert_eq!(evaluate_binding(&expr, &mut ctx), Ok("3".into()));
+    }
+
+    #[test]
+    fn binding_rejects_assign() {
+        let mut ctx = MapCtx::new(&[("x", 0)]);
+        let expr = HandlerExpr::Assign {
+            lhs: "x".into(),
+            rhs: Box::new(HandlerExpr::IntLit(1)),
+        };
+        assert_eq!(
+            evaluate_binding(&expr, &mut ctx),
+            Err(EvalError::WriteInBindingContext { path: "x".into() }),
+        );
+    }
+
+    #[test]
+    fn binding_rejects_compound_assign() {
+        let mut ctx = MapCtx::new(&[("x", 5)]);
+        let expr = HandlerExpr::CompoundAssign {
+            lhs: "x".into(),
+            op: CompoundOp::Add,
+            rhs: Box::new(HandlerExpr::IntLit(1)),
+        };
+        assert_eq!(
+            evaluate_binding(&expr, &mut ctx),
+            Err(EvalError::WriteInBindingContext { path: "x".into() }),
+        );
+    }
+
+    #[test]
+    fn binding_rejects_write_nested_in_interpolation() {
+        // A write expression hidden inside an interpolation part should also
+        // be rejected at evaluation time.
+        let mut ctx = MapCtx::new(&[("x", 0)]);
+        let expr = HandlerExpr::Interpolation(vec![
+            InterpolationPart::Literal("v=".into()),
+            InterpolationPart::Expr(HandlerExpr::Assign {
+                lhs: "x".into(),
+                rhs: Box::new(HandlerExpr::IntLit(99)),
+            }),
+        ]);
+        assert_eq!(
+            evaluate_binding(&expr, &mut ctx),
+            Err(EvalError::WriteInBindingContext { path: "x".into() }),
+        );
+        // The value must be unchanged.
+        assert_eq!(ctx.get("x"), 0);
+    }
+
+    #[test]
+    fn evaluate_rejects_str_lit_in_handler_context() {
+        let mut ctx = MapCtx::new(&[]);
+        let expr = HandlerExpr::StrLit("oops".into());
+        assert!(matches!(evaluate(&expr, &mut ctx), Err(EvalError::TypeMismatch { .. })));
+    }
+
+    #[test]
+    fn evaluate_rejects_interpolation_in_handler_context() {
+        let mut ctx = MapCtx::new(&[]);
+        let expr = HandlerExpr::Interpolation(vec![InterpolationPart::Literal("x".into())]);
+        assert!(matches!(evaluate(&expr, &mut ctx), Err(EvalError::TypeMismatch { .. })));
     }
 }

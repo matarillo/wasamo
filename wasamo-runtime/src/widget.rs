@@ -1,4 +1,5 @@
 use crate::handler::{self, EvalContext, EvalError, HandlerExpr};
+use crate::reactive::EffectHandle;
 use crate::layout::{self, Alignment, LayoutNode, SizeConstraint};
 use crate::text::{TextRenderer, TypographyStyle};
 use windows::{
@@ -125,6 +126,9 @@ pub struct WidgetNode {
     /// `replace_child`, and `window::set_root`. Used by `widget_destroy`
     /// to reject destruction of still-attached widgets (DD-M2-P4-003).
     pub attached: bool,
+    /// Reactive bindings owned by this node. Dropping an EffectHandle
+    /// removes it from the dependency graph (DD-M2-P5-003).
+    pub(crate) bindings: Vec<EffectHandle>,
 }
 
 // ── Tree-mutation errors ──────────────────────────────────────────────────────
@@ -152,6 +156,7 @@ impl WidgetNode {
             children: Vec::new(),
             inline_handlers: Vec::new(),
             attached: false,
+            bindings: Vec::new(),
         }))
     }
 
@@ -170,6 +175,7 @@ impl WidgetNode {
             children: Vec::new(),
             inline_handlers: Vec::new(),
             attached: false,
+            bindings: Vec::new(),
         }))
     }
 
@@ -188,6 +194,7 @@ impl WidgetNode {
             children: Vec::new(),
             inline_handlers: Vec::new(),
             attached: false,
+            bindings: Vec::new(),
         }))
     }
 
@@ -217,6 +224,7 @@ impl WidgetNode {
             children: Vec::new(),
             inline_handlers: Vec::new(),
             attached: false,
+            bindings: Vec::new(),
         }))
     }
 
@@ -283,6 +291,7 @@ impl WidgetNode {
             children: Vec::new(),
             inline_handlers: Vec::new(),
             attached: false,
+            bindings: Vec::new(),
         }))
     }
 
@@ -814,9 +823,17 @@ impl EvalContext for NullEvalContext {
 /// Sever all registry entries in the subtree, then drop it.
 /// Called by `wasamo_widget_destroy` (abi.rs) and shared with
 /// `wasamo_window_destroy`'s existing sweep path.
-pub fn widget_destroy(node: Box<WidgetNode>) {
+pub fn widget_destroy(mut node: Box<WidgetNode>) {
+    dispose_subtree_bindings(&mut node);
     node.for_each_ptr(&mut |p| crate::registry::remove_for_widget(p));
     drop(node);
+}
+
+fn dispose_subtree_bindings(node: &mut WidgetNode) {
+    node.bindings.clear();
+    for child in &mut node.children {
+        dispose_subtree_bindings(child);
+    }
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -1086,5 +1103,83 @@ mod tests {
         ch.insert(0, Slot::new()).unwrap();
         let already = Slot { attached: true };
         assert_eq!(ch.insert(0, already), Err(MutationError::AlreadyAttached));
+    }
+
+    // ── Binding disposal mirror ───────────────────────────────────────────────
+    //
+    // NodeMirror replicates the WidgetNode.bindings + widget_destroy ordering
+    // without any Win32/WinRT dependency. `destroy()` mirrors
+    // dispose_subtree_bindings → registry-sever → drop.
+
+    use crate::reactive::{EffectHandle, Signal};
+
+    struct NodeMirror {
+        bindings: Vec<EffectHandle>,
+        children: Vec<NodeMirror>,
+    }
+
+    impl NodeMirror {
+        fn new() -> Self {
+            NodeMirror { bindings: Vec::new(), children: Vec::new() }
+        }
+
+        fn destroy(mut self) {
+            self.dispose_bindings();
+            // registry-sever would go here in production; nothing to do in mirror
+            drop(self);
+        }
+
+        fn dispose_bindings(&mut self) {
+            self.bindings.clear();
+            for child in &mut self.children {
+                child.dispose_bindings();
+            }
+        }
+    }
+
+    #[test]
+    fn destroy_disposes_bindings_and_stops_effect() {
+        let sig = Signal::new(0i32);
+        let fired = std::rc::Rc::new(std::cell::Cell::new(false));
+        let fired_clone = fired.clone();
+        let sig_clone = sig.clone();
+
+        let mut node = NodeMirror::new();
+        node.bindings.push(EffectHandle::new(move || {
+            sig_clone.get();
+            fired_clone.set(true);
+        }));
+
+        // Initial run set fired; clear before destroy.
+        fired.set(false);
+        node.destroy();
+
+        // Writing the signal must not re-fire the disposed binding.
+        fired.set(false);
+        sig.set(1);
+        assert!(!fired.get(), "binding fired after widget_destroy");
+    }
+
+    #[test]
+    fn destroy_child_binding_also_stopped() {
+        let sig = Signal::new(0i32);
+        let fired = std::rc::Rc::new(std::cell::Cell::new(false));
+        let fired_clone = fired.clone();
+        let sig_clone = sig.clone();
+
+        let mut parent = NodeMirror::new();
+        let mut child = NodeMirror::new();
+        child.bindings.push(EffectHandle::new(move || {
+            sig_clone.get();
+            fired_clone.set(true);
+        }));
+        parent.children.push(child);
+
+        fired.set(false);
+        parent.destroy();
+
+        fired.set(false);
+        sig.set(1);
+        assert!(!fired.get(), "child binding fired after parent widget_destroy");
     }
 }

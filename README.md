@@ -77,7 +77,8 @@ See [VISION.md](./VISION.md#5-differentiators) for a full discussion.
 
 **Pre-alpha.** M1 (proof of concept) shipped as
 [v0.1.0](https://github.com/matarillo/wasamo/releases/tag/v0.1.0) on
-2026-05-01; M2 (Foundation) is in planning — see
+2026-05-01; M2 (Foundation) is in progress — Phases 1–5 complete,
+Phase 6 (`.ui → runtime` lowering) pending. See
 [docs/plans/m2-plan.md](./docs/plans/m2-plan.md). Not ready for
 production use. Design discussion and contributions to the
 foundational implementation are welcome.
