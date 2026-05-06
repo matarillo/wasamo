@@ -1,8 +1,8 @@
-# Wasamo DSL Specification — M1 Scope
+# Wasamo DSL Specification
 
-**Document version:** 0.2
-**Last updated:** 2026-04-27
-**Status:** Phase 1 Accepted
+**Document version:** 0.3
+**Last updated:** 2026-05-07
+**Status:** M2-Phase 6 Accepted
 
 ---
 
@@ -337,6 +337,278 @@ The following are explicitly **out of scope for M1**:
 
 ---
 
+## 8. Wasamo IR — Normative Specification (M2)
+
+The **Wasamo IR** is the textual file format emitted by `wasamoc` and consumed
+by the `wasamo-runtime` loader.  It is the contract between the two tools;
+this chapter specifies it normatively (DD-M2-P6-002 = Option B).
+
+The IR is not intended for hand-authoring.  Its surface form is optimised for
+diff-readability and machine parsability, not ergonomics.
+
+### 8.1 File header
+
+Every IR file begins with a magic + version line:
+
+```
+;wasamo-ir v0
+```
+
+- The line starts with `;` (semicolon), which also serves as the IR comment
+  character.
+- `wasamo-ir` is the format name; `v0` is the format version.
+- The loader **rejects** any file whose first line does not match this literal
+  exactly, returning `WASAMO_ERR_IR_MALFORMED`.
+- When the grammar evolves incompatibly, the version is bumped (e.g. `v1`).
+  The bump policy is: any change to the grammar that would cause a v0 file to
+  parse differently under a v1 parser requires a version bump.
+
+### 8.2 Notation
+
+Grammar rules use the same notation as §3:
+
+- `::=` defines a rule; `|` alternation; `*` zero-or-more; `+` one-or-more;
+  `?` optional; `( )` grouping.
+- Terminals appear in `"quotes"` or ALL_CAPS token names.
+- `IDENT` matches `[A-Za-z_][A-Za-z0-9_.\-]*` (dots and hyphens allowed for
+  path segments and widget-type names).
+- `INT` matches `[0-9]+` with an optional leading `-`.
+- `STRING` matches a double-quoted string with `\"` and `\\` escapes.
+- Whitespace (space, tab, `\r`, `\n`) is ignored between tokens.
+- A `;` outside the header line begins a line comment; the rest of that line
+  is ignored.
+
+### 8.3 Top-level grammar
+
+```
+ir_file        ::= header component_def EOF
+
+header         ::= ";wasamo-ir v0" NEWLINE
+
+component_def  ::= "component" IDENT "inherits" IDENT
+                   "{" component_body "}"
+
+component_body ::= state_decl* widget_node
+```
+
+One `component_def` per IR file (matches the M2 single-component restriction
+from DD-M2-P6-004).
+
+### 8.4 State declarations
+
+`state` declarations encode the Signal ownership transferred from the DSL
+(DD-M2-P6-004 = B).  The runtime allocates a `Signal<T>` for each one.
+
+```
+state_decl ::= "state" IDENT ":" type_name "=" literal
+```
+
+| Element     | Meaning                                          |
+|-------------|--------------------------------------------------|
+| `IDENT`     | Signal name; unique within the component (flat namespace) |
+| `type_name` | `"i32"` or `"string"` (M2 type set)             |
+| `literal`   | Default value: `INT` for `i32`; `STRING` for string |
+
+Example:
+
+```
+state count: i32 = 0
+```
+
+### 8.5 Widget nodes
+
+```
+widget_node ::= "node" IDENT "{" node_body "}"
+
+node_body   ::= (property_set | binding | handler | widget_node)*
+```
+
+`IDENT` is the widget type (e.g. `Window`, `VStack`, `Text`, `Button`).
+Children appear as nested `node` blocks in document order.
+
+### 8.6 Property sets
+
+A `property_set` writes a static value to a widget property at load time.
+It is used for properties whose value is a plain literal (not reactive).
+
+```
+property_set ::= "prop" IDENT "=" literal
+
+literal      ::= INT | STRING | IDENT
+```
+
+The third `literal` alternative (`IDENT`) encodes keyword-valued properties
+such as `mica`, `system`, `accent`, `title` (see §4.3).
+
+Examples:
+
+```
+prop title = "Counter"
+prop backdrop = mica
+prop spacing = 12
+prop padding = 24
+```
+
+### 8.7 Reactive bindings
+
+A `binding` wires a `HandlerExpr` to a widget property reactively.  Every
+time a referenced Signal changes, the expression is re-evaluated and the
+property is updated.
+
+```
+binding ::= "bind" IDENT "=" expr
+```
+
+`IDENT` is the property name on the enclosing widget node.
+
+`expr` is a `HandlerExpr` in the tagged-value form defined in §8.9.
+
+Example (the `text` property of `Text`, reactive on `count`):
+
+```
+bind text = (interp "Count: " (prop-read count))
+```
+
+### 8.8 Signal handlers
+
+A `handler` attaches a `HandlerExpr` body to a named signal on the enclosing
+widget.
+
+```
+handler ::= "on" IDENT "{" expr "}"
+```
+
+`IDENT` is the signal name (e.g. `clicked`).
+
+The body is one `expr`.  Multiple top-level statements are encoded as a
+`(block ...)` expression (§8.9).
+
+Example (the `clicked` handler on `Button`):
+
+```
+on clicked {
+    (compound-assign += count (lit 1))
+}
+```
+
+### 8.9 Expressions (`HandlerExpr` tagged-value form)
+
+Expressions are written in a parenthesised prefix form.  Each form maps
+1-to-1 to a `HandlerExpr` variant (DD-M2-P6-003 = Option A).
+
+**Bare-literal shorthand.** Where the position is unambiguous (i.e. the
+parser expects an expression and the next token is `INT` or `STRING`), a
+bare literal may be written without the `(lit ...)` wrapper.  The grammar
+below calls these positions out with `atom`.
+
+```
+expr  ::= atom
+        | "(" "lit"             INT ")"
+        | "(" "str"             STRING ")"
+        | "(" "prop-read"       IDENT ")"
+        | "(" "assign"          IDENT expr ")"
+        | "(" "compound-assign" compound_op IDENT expr ")"
+        | "(" "interp"          interp_part+ ")"
+        | "(" "block"           expr* ")"
+
+atom  ::= INT
+        | STRING
+
+compound_op ::= "+=" | "-=" | "*=" | "/="
+
+interp_part ::= STRING         ; literal text fragment
+              | "(" expr ")"   ; embedded expression (re-uses the expr rule)
+```
+
+**Mapping to `HandlerExpr` variants:**
+
+| IR form | `HandlerExpr` variant | Notes |
+|---|---|---|
+| `INT` / `(lit INT)` | `IntLit(i32)` | Bare `INT` is equivalent to `(lit INT)` |
+| `STRING` / `(str STRING)` | `StrLit(String)` | Binding-only |
+| `(prop-read NAME)` | `PropRead { path }` | `NAME` is the Signal name from `state` |
+| `(assign NAME expr)` | `Assign { lhs, rhs }` | Handler-only |
+| `(compound-assign OP NAME expr)` | `CompoundAssign { lhs, op, rhs }` | Handler-only |
+| `(interp part+)` | `Interpolation(Vec<InterpolationPart>)` | Binding-only |
+| `(block expr*)` | `Block(Vec<HandlerExpr>)` | Empty block evaluates to `0` |
+
+**`interp_part` mapping:**
+
+| Part | `InterpolationPart` variant |
+|---|---|
+| `STRING` | `Literal(String)` |
+| `(expr)` | `Expr(HandlerExpr)` |
+
+### 8.10 Complete annotated example
+
+The following is the full IR for `examples/counter/counter.ui`:
+
+```
+;wasamo-ir v0
+
+component Counter inherits Window {
+    ; Signal declarations (DD-M2-P6-004 = B: state ownership in .ui)
+    state count: i32 = 0
+
+    ; Root window node — static properties only
+    node Window {
+        prop title = "Counter"
+        prop backdrop = mica
+        prop theme = system
+
+        node VStack {
+            prop spacing = 12
+            prop padding = 24
+
+            node Text {
+                ; Reactive binding: re-evaluates whenever `count` changes
+                bind text = (interp "Count: " (prop-read count))
+                prop font = title
+            }
+
+            node Button {
+                prop text = "Increment"
+                prop style = accent
+
+                ; Signal handler body: count += 1
+                on clicked {
+                    (compound-assign += count (lit 1))
+                }
+            }
+        }
+    }
+}
+```
+
+### 8.11 Loader validation policy (DD-M2-P6-009 = C)
+
+The runtime loader (`wasamo-runtime/src/ir_loader.rs`) applies
+defense-in-depth validation:
+
+| Check | Enforced at load | On failure |
+|---|---|---|
+| Header line matches `;wasamo-ir v0` | Yes | `WASAMO_ERR_IR_MALFORMED` |
+| Top-level structure is `component_def` | Yes | `WASAMO_ERR_IR_MALFORMED` |
+| Every `prop-read` / `assign` / `compound-assign` name resolves to a declared `state` | Yes | `WASAMO_ERR_IR_MALFORMED` |
+| Binding expression result type matches target property type | **No** (trusted from `wasamoc`) | Undefined behaviour |
+| Per-node emitter invariants (e.g. `on` only on signal-capable widgets) | **No** (trusted from `wasamoc`) | Undefined behaviour |
+
+The loader trusts type-level invariants established by `wasamoc`'s check pass.
+Type mismatches indicate a `wasamoc` bug, not a recoverable load-time error.
+
+### 8.12 Scope out (post-M2)
+
+| Feature | Deferred to |
+|---|---|
+| `(computed ...)` expression form | M3 |
+| `(if ...)` / `(for ...)` binding forms | M3+ |
+| M3 expanded type set (`float`, `bool`, user types) | M3 |
+| Binary IR format | Post-M2 |
+| Grammar version `v1` (first incompatible change) | When required |
+| `(post-event ...)` escape hatch for observer callbacks | M3 (DD-M2-P6-001 Option F) |
+
+---
+
 ## Appendix A: Design Decisions
 
 ### DD-001 — `in-out` is a single keyword token
@@ -400,3 +672,4 @@ schema change is required; M2 adds evaluation logic, not a new representation.
 |---------|------------|-----------------------------------------------------------------------------------|
 | 0.1     | 2026-04-27 | Initial draft (Phase 1, pending owner agreement)                                  |
 | 0.2     | 2026-04-27 | Phase 1 Accepted; added missing tokens (MinusEq/StarEq/SlashEq); corrected AST types (StringLit → Vec<StringPart>, Statement as struct); corrected error output format |
+| 0.3     | 2026-05-07 | M2-Phase 6 Accepted; added §8 Wasamo IR normative spec (DD-M2-P6-002 + DD-M2-P6-003) |
