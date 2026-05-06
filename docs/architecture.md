@@ -1,6 +1,6 @@
 # Wasamo Architecture
 
-**Status:** M1 complete (Phases 0-8); M2-Phase 1 complete (cdylib-shim split)
+**Status:** M1 complete (Phases 0-8); M2-Phases 1-4 complete; M2-Phase 5 (reactive engine) in progress
 
 ---
 
@@ -392,6 +392,220 @@ Window registration lifecycle:
 - `wasamo_window_destroy` calls `emit::unregister_window` before the box
   is dropped.
 
+### 6.8 Reactive engine (M2-Phase 5)
+
+Full decision rationale: [`docs/decisions/m2-phase-5-reactive-engine.md`](./decisions/m2-phase-5-reactive-engine.md).
+Architectural-family hypothesis (tree-with-bindings, working
+hypothesis only): [`docs/notes/architectural-family.md`](./notes/architectural-family.md).
+
+The reactive engine is the M2 thesis-validation surface for
+acceptance A2 — `count++` in a host handler updates a bound
+`Text` label without any host-side `wasamo_set_property` call. It
+sits entirely inside `wasamo-runtime` and is `pub(crate)`; no C
+ABI symbol is added (DD-M2-P4-004 = A).
+
+#### 6.8.1 Module placement
+
+| Module | Responsibility |
+|---|---|
+| `wasamo-runtime/src/reactive.rs` | `Signal<T>` / `EffectHandle` / dependency graph / `with_batched_writes` / dirty-set drain / `BindingEvalContext` / `register_binding` / `BindingTarget` |
+| `wasamo-runtime/src/handler.rs` | `HandlerExpr` AST + `EvalContext` trait + `evaluate()` (Phase 3); reused by the binding evaluator in read-only mode |
+| `wasamo-runtime/src/widget.rs` | `WidgetNode.bindings: Vec<EffectHandle>`; binding disposal during the Phase 4 `widget_destroy` sweep |
+| `wasamo-runtime/src/emit.rs` | `drain_if_outermost` integrates the reactive drain between observer drain and layout drain |
+
+Pure-logic surfaces — Signal storage, dependency tracker,
+dirty-set drain, evaluator wiring — are unit-tested with
+side-effect-logger Effect closures (DD-M2-P5-006 = A); no
+test-only mirror of `WidgetNode` is introduced.
+
+#### 6.8.2 Two-layer primitive (DD-M2-P5-001 = B, DD-M2-P5-002 = B)
+
+```
+Signal<T>   — observable storage cell
+  │  get()   → records dependency on current Effect (if any)
+  │  set(v)  → marks dependent Effects dirty (no inline re-run)
+  ▼
+Effect      — re-runnable closure with auto-tracked dependencies
+   run()    → push self onto thread-local effect stack;
+              evaluate body; pop; reconcile dependency edges
+```
+
+Dependency collection is automatic: `Signal::get()` peeks the
+thread-local "current effect" stack and, if present, records the
+edge in both directions (forward `SignalId → {EffectId}` for
+dirty propagation; back `EffectId → {SignalId}` for disposal).
+Re-running an Effect first clears its prior back-edges so a
+binding may pick up different Signals each pass — this is what
+makes future M3 conditional bindings (`if cond { a } else { b }`)
+work without per-binding scaffolding.
+
+`Signal::get_untracked()` is the escape hatch for the rare reads
+outside dependency collection (e.g. diagnostics). The general
+"reads outside any Effect" case (host code, handler bodies that
+incidentally read a Signal) is already untracked: the
+thread-local stack is empty, so `get()` short-circuits without
+recording an edge.
+
+`Computed<T>` (a third layer between Signal and Effect) is **not**
+introduced in M2; it is shape-additive and lands with the M3 DSL
+spec when derivation grammar exists to align against. Same for
+`untrack` as a public escape hatch (DD-M2-P5-002 Out of scope).
+
+#### 6.8.3 Drain ordering inside `drain_if_outermost`
+
+The reactive dispatch is **deferred**, not synchronous (DD-M2-P5-004
+= B). `Signal::set()` writes the new value, marks dependent
+Effects in a thread-local dirty-set, and returns. Re-evaluation
+runs at the outermost-frame boundary — the same boundary
+DD-P6-003 already uses for queued observer notifications.
+
+```
+drain_if_outermost()
+  │
+  ├─ 1. Observer drain          (existing, DD-P6-003)
+  │     queued WasamoObserver* callbacks → host code
+  │
+  ├─ 2. Reactive drain          (new in Phase 5, DD-M2-P5-004 = B)
+  │     while dirty-set nonempty and iter < CAP:
+  │       take a snapshot of dirty Effects, deduplicated
+  │       re-run each Effect once; its writes go through
+  │         set_property (which queues observer notifications
+  │         and, if size-affecting, marks layout dirty)
+  │     CAP exhaustion logs an error and breaks (divergence trap)
+  │
+  └─ 3. Layout drain            (existing, DD-P8-002)
+        run_layout once per dirty window; clear DIRTY set
+```
+
+The placement is load-bearing: reactive writes go through
+`set_property`, so the reactive pass must precede the layout
+drain to fold its size-affecting changes into the same layout
+pass. Observer notifications enqueued by reactive writes are
+left for the next outermost-frame cycle, matching the existing
+queued-emission contract.
+
+`with_batched_writes(f)` (Phase 4 skeleton, body filled in
+Phase 5) increments a thread-local depth counter; the per-call
+drain at the end of each `wasamo_*` entry is suppressed while
+depth > 0. On outermost-frame exit, a single drain processes the
+accumulated dirty-set. The iteration cap is a small constant (16
+in current implementation) — enough headroom for legitimate
+multi-pass cascades, low enough to surface a divergent binding
+before it exhausts CPU.
+
+#### 6.8.4 Signal-dispatch ordering (signal-side runtime contract)
+
+Independent of the reactive drain, when a `WasamoSignal` fires
+through `signal_emit`:
+
+```
+signal_emit(widget, signal_id, payload)
+  │
+  ├─ 1. Inline handler         (DD-M2-P3-002 = B; runtime-side
+  │     HandlerExpr evaluator with EvalContext)
+  │
+  └─ 2. Host listener iteration (existing C ABI observer list)
+```
+
+Inline handlers run before host listeners and write through
+`set_property`, which in turn enqueues observer notifications and
+marks reactive-bound Signals dirty. The reactive drain (above)
+then propagates those changes within the same outermost-frame
+boundary. This is the path that makes "click → handler runs
+`count.set(...)` → bound Text re-renders" fire end-to-end before
+control returns to the host's message loop.
+
+The handler evaluator and the binding evaluator share the same
+`HandlerExpr` AST and `EvalContext` trait. The binding side uses
+a `BindingEvalContext` variant: reads route through `Signal::get()`
+(dependency-tracking), writes are rejected at evaluation time
+(binding bodies are pure-read; mutation only happens through the
+binding's bound write target).
+
+#### 6.8.5 Effect lifetime (DD-M2-P5-003 = A)
+
+Effects are owned by the widget that hosts the binding.
+
+```
+WidgetNode
+  │
+  └── bindings: Vec<EffectHandle>     ← pub(crate); empty for unbound widgets
+        │
+        └── on dispose:
+              walk back-edge map → remove EffectId from every
+              Signal's dependent set → drop the closure
+```
+
+Disposal is structural: every existing teardown path —
+`wasamo_widget_destroy` subtree sweep, `wasamo_window_destroy`
+whole-tree drop, `remove_child` + drop, `replace_child` of an
+attached subtree — already walks the subtree and drops each
+`Box<WidgetNode>`; binding disposal piggy-backs on that walk by
+running ahead of the existing signal-handler / observer
+unregistration so an Effect that captured widget references
+cannot fire against a half-torn-down widget.
+
+Re-attach (M3 conditional binding rebuilds at a different
+position) just creates fresh Effects on the new widgets; old
+widgets' Effects dispose through the same path. No explicit hook.
+
+#### 6.8.6 Phase 6 binding registration API (DD-M2-P5-005 = A)
+
+```rust
+pub(crate) fn register_binding(
+    target: BindingTarget,
+    expr: HandlerExpr,
+    write_fn: fn(WidgetId, PropertyKey, &str),
+    properties: Rc<HashMap<String, Signal<i32>>>,
+) -> EffectHandle;
+
+pub(crate) enum BindingTarget {
+    WidgetProperty { node: WidgetId, prop: PropertyKey },
+    // M3+ adds ConditionalSubtree, ForLoopSubtree, …
+}
+```
+
+`WidgetId` is type-erased (`*mut ()`) to keep `reactive.rs`
+free of a circular dependency on `widget.rs`; the production
+caller in `widget.rs` casts `*mut WidgetNode` at the call site.
+The `write_fn` function-pointer parameter is the seam that lets
+`reactive.rs` perform property writes without importing
+`widget.rs` types — production callers pass
+`widget::widget_write_property`. An internal
+`register_binding_with_writer(Box<dyn FnMut(String)>, …)` is the
+testable core; pure-logic tests inject a recording writer.
+
+The `properties` parameter (provisional shape — likely revisited
+when Phase 6 wires the IR loader) carries the Signal-backed
+property store the binding expression evaluates against. The
+broader pattern survives: M3 binding shapes (Computed,
+conditional, for-loop) add `BindingTarget` variants and reuse
+the same `HandlerExpr` AST without disturbing `register_binding`'s
+signature.
+
+#### 6.8.7 Forward-compatibility and out-of-scope
+
+The Phase 5 architecture is shape-compatible with the M3
+extensions it defers:
+
+- `Computed<T>` lands as a third layer between Signal and Effect;
+  the drain loop gains a pre-Effect topological pass before
+  dirty Effects re-run.
+- Structural bindings (conditional / for-loop / list-rendered)
+  add `BindingTarget` variants; subtree rebuilds Drop old
+  Effects through the existing widget teardown path.
+- Subtree-grain layout dirty (open question in
+  [layout-engine note §3.4](./notes/layout-engine.md)) is
+  unaffected by Phase 5; the engine inherits DD-P8-002's
+  whole-window dirty path.
+- `untrack` / explicit `engine.flush()` / multi-threaded Signal
+  access are post-M2 and have no M2 driver.
+
+The post-1.0 hot-reload work fits the same drain shape:
+whole-graph teardown disposes every Effect via root drop; the
+new graph's Effects re-run on first drain. No engine change is
+required.
+
 ---
 
 ## 7. Widget Implementation (Phase 4)
@@ -736,8 +950,8 @@ The following are intentionally left open at this draft stage.
 | Widget property API details | Phase 4 | Resolved → DD-P4-001 through DD-P4-006 (§7.7) |
 | Full C ABI function signatures | Phase 6 | Resolved → `docs/abi_spec.md` (Accepted) + DD-P6-001..007 |
 | Component-declared signal model: Slint-style (DSL inline body) vs XAML-style (host code-behind only) vs hybrid | Phase 6 pre-doc | Resolved → DD-P6-002 (string-keyed + `WasamoValue` payload) |
-| Inline DSL handler execution location: host-side (callback) vs runtime-side (interpreted IR) | M2 | Open |
-| `wasamoc` M2 output format: host-language codegen vs IR + runtime interpretation | M2 | Open |
+| Inline DSL handler execution location: host-side (callback) vs runtime-side (interpreted IR) | M2 | Resolved → DD-M2-P3-001 (runtime-side interpreter) |
+| `wasamoc` M2 output format: host-language codegen vs IR + runtime interpretation | M2 | Resolved → DD-M2-P2-001 (textual IR + runtime interpreter) |
 | DPI scaling localization: whether the layout engine should operate in physical pixels and implications for DirectWrite hinting | M2+ | Open |
 | AccessKit / UIA sync: when and how layout results are propagated to the accessibility tree, and the performance impact | M2 | Open |
 | Async measure: how to handle widgets whose size is unknown at measure time (e.g. image load pending) | M2+ | Open |
