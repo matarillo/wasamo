@@ -173,8 +173,13 @@ pub fn enqueue_signal(widget: *mut WasamoWidget, name: &str, args: Vec<OwnedArg>
 ///
 /// Re-entry while IN_DRAIN is set is a no-op: the outer loop keeps executing
 /// and will process any entries enqueued by the nested call.
+/// In Diverged state all three phases are suppressed (ADR §divergence
+/// commit-forbidden conditions).
 pub fn drain_if_outermost() {
     if IN_DRAIN.with(|f| f.get()) {
+        return;
+    }
+    if reactive::runtime_health() == reactive::RuntimeHealth::Diverged {
         return;
     }
 
