@@ -1,7 +1,7 @@
 # M2-Phase 6 — `.ui` → runtime lowering: Architecture Decisions
 
 **Phase:** M2-Phase 6 (`.ui` → runtime lowering)
-**Date:** 2026-05-06
+**Date:** 2026-05-07
 **Status:** Proposed
 
 ## Context
@@ -243,6 +243,18 @@ Option D — Declarative transaction + post-commit pure observer  [β3, δ2] (re
   - Single MUTATION_CAP; convergence layers truly separated
     (Phase 1 = state-mutation fixpoint; Phase 2 = view consistency;
     Phase 3 = pure side effects).
+- Scope of these guarantees: the structural determinism above
+  applies *within the runtime boundary*. The dependency graph is
+  the ground truth for runtime-state mutation; host-side state
+  changes that re-enter the runtime via a subsequent ABI call
+  (sanctioned route 1 in the Adoption boundary below) are by
+  construction outside the graph and surface only as fresh signal
+  emissions on the next cycle. Option D makes the *runtime's*
+  mutation graph declarative — the layer the framework controls
+  — not the host's full mutation graph. The "what changes when
+  this state is set" tooling claim under operational gains is
+  scoped accordingly (it answers the question for the runtime's
+  own state; host-side state is opaque to it by construction).
 - What you gain (operational, not just philosophical):
   - **Predictability** — Phase 1's mutation graph is closed under
     the Signal dependency graph; observers are outside that graph,
@@ -491,6 +503,26 @@ runtime):
 Both sanction "next cycle's Phase 1 processes the event", with
 no synchronous return path.
 
+**Phase 1 re-entrancy — host-callback ABI rules.** Inside a
+signal handler or Effect body, the host may freely call
+state-mutating ABI (`wasamo_set_property`, `wasamo_emit_signal`,
+`wasamo_signal_set`); these enqueue further work that the same
+drain processes before returning. **Structure-changing ABI is
+forbidden during Phase 1**: a nested `wasamo_load_ui` (or any
+future tear-down/rebuild call) returns
+`WASAMO_ERR_REENTRANT_LOAD` and panics in debug. This separation
+keeps Phase 1's mutation graph closed under the dependency graph
+(state writes only) while preventing structural changes from
+racing the in-progress drain.
+
+A coupled question is what happens when a nested `wasamo_*` ABI
+call would itself enter `drain_if_outermost`. DD-P6-003's queued
+emission machinery already handles this: the `if_outermost` test
+sees an in-progress drain and the nested call skips its own
+drain, returning to the outer drain to continue. No new TLS flag
+is required; the existing one suffices for both Phase 1
+nest-detection and Phase 3 mutation-blocking.
+
 **Boundary maintenance principle.** The boundary is defined at
 the ABI surface, not by callback role. Future requests of the
 form "this observer is logging-only, surely it can mutate" are
@@ -527,6 +559,240 @@ drain_if_outermost()
 
 Return-time invariant: `signal_queue` empty, `dirty_effects`
 empty, layout-dirty empty, `observer_queue` empty.
+
+#### Phase 1 ordering rules
+
+Structural determinism requires Phase 1 to define an evaluation
+order, not merely a fixed point. Three rules fix the order:
+
+1. **`signal_queue` is FIFO** in emission order. Multiple host
+   `wasamo_emit_signal` calls within a single ABI entry, or
+   chained Effect re-runs that emit further signals, fire their
+   handlers in the order they were enqueued.
+
+2. **`dirty_effects` drains in topological order over the Signal
+   dependency graph.** An Effect that reads a Signal `a` runs
+   after any Effect that writes the Signals on which `a`'s
+   readers depend, when both are dirty. Within a topological
+   rank, ties resolve by registration order (`EffectHandle`
+   allocation order). The topological order exists because the
+   Phase 5 dependency graph is acyclic by construction; cycles
+   among Effects would imply a divergent dependency, which
+   MUTATION_CAP detects (see "Divergence semantics" below).
+
+3. **Same-cycle write-after-write to a Signal: last-wins.** A
+   Signal's value at any Phase 1 read is its most recent write;
+   intermediate values are not observed. The Phase 3 observer
+   queue is computed from the diff between each Signal's value
+   at Phase 1 entry and its value at Phase 1 exit; intermediate
+   transitions do not produce observer entries (this also
+   formalises why repeated writes to the same value are no-ops
+   on observer notification).
+
+Rule 1 makes signal-handler firing order portable; rule 2 makes
+binding re-evaluation deterministic across runs; rule 3 makes
+observer notification volume independent of the intra-Phase-1
+trajectory. Together they discharge "structural determinism"
+operationally: given an initial state and a sequence of host
+events, Phase 1's outcome is a function of that sequence alone,
+independent of internal scheduling choices.
+
+The signal/Effect alternation in the spec block ("if signal_queue
+≠ ∅: pop … else if dirty_effects ≠ ∅: take one") is one
+canonical interleaving compatible with these rules; an
+implementation may batch (e.g. drain all signals, then all dirty
+Effects in topological order) provided the resulting per-Signal
+value sequence is identical to the alternating form. The
+alternating form is the spec; batched implementations are
+conformant if equivalent.
+
+#### Phase 2 read-only constraint
+
+Phase 2 is strictly read-only with respect to runtime state:
+layout reads property values to compute geometry, but layout
+code does not subscribe to Signals (no reactive dependency edge
+originates in Phase 2) and does not write properties or emit
+signals. A layout pass that wrote properties would create a
+Phase 1↔Phase 2 cycle outside the fixpoint convergence; a
+layout pass that subscribed would extend the dependency graph
+with edges no `.ui` construct produced. Both are forbidden by
+construction: the layout API surface (internal to the runtime)
+takes a read-only view of property values and returns geometry,
+nothing more.
+
+#### Divergence semantics (MUTATION_CAP exhaustion)
+
+The spec block's `iter > MUTATION_CAP: error-log, break` line
+is incomplete on its own — it leaves the post-break state
+unspecified (partial mutation? Phase 2/3 still run?). Three
+options were considered:
+
+- **(a) Transactional rollback.** Snapshot all Signal values
+  and dirty marks at Phase 1 entry; on cap break, restore the
+  snapshot and return an error; skip Phase 2 and Phase 3.
+  - Cost: O(|Signals|) snapshot bookkeeping on every outermost
+    frame, in the success path as well as the failure path.
+    Disproportionate for a failure that indicates a graph bug,
+    not a recoverable runtime error.
+- **(b) Quarantine frame.** Keep partial mutations in place;
+  skip Phase 2 and Phase 3; return an error code; allow the
+  next outermost ABI call to resume with the still-dirty
+  queues.
+  - Failure mode: if the divergence is structural (true cyclic
+    or runaway binding), every subsequent frame exhausts the
+    cap as well, producing an unbounded error stream rather
+    than a clear stop signal. The state is also "valid but
+    unconverged" — observable by the host through reads with
+    no contract for what is or is not consistent.
+- **(c) Terminal error state (recommended).** On cap break,
+  the runtime enters a terminal state: every subsequent ABI
+  call returns `WASAMO_ERR_REACTIVE_DIVERGED` as a no-op;
+  Phase 2 and Phase 3 are skipped for the offending frame; the
+  partially mutated state is no longer observable through the
+  ABI (read calls also return the error). The host's recourse
+  is to tear down the runtime and rebuild — the same recourse
+  it has for any unrecoverable runtime error.
+
+**Recommendation: (c).** MUTATION_CAP exhaustion indicates a
+structural defect in the binding/Effect graph (cyclic
+dependency, runaway re-entry, or a binding that mutates its own
+dependency without converging). It is not an error a host can
+sensibly recover from at the call site. A terminal error rather
+than a per-frame error makes the failure unambiguous: either
+the runtime is healthy or it is dead. Option (b)'s "valid but
+unconverged" middle state and (a)'s success-path snapshot cost
+both make the framework worse to use overall in exchange for
+handling a case that is, by definition, a graph bug.
+
+The terminal state is reached only on cap exhaustion; Phase 3's
+`WASAMO_ERR_OBSERVER_MUTATION` violations do not put the
+runtime in this state (they are caller errors, recoverable by
+the host correcting the offending observer body and continuing).
+
+`WASAMO_ERR_REACTIVE_DIVERGED` is added to the M2 error-code
+set alongside `WASAMO_ERR_OBSERVER_MUTATION`,
+`WASAMO_ERR_REENTRANT_LOAD`, and `WASAMO_ERR_IR_MALFORMED`
+(DD-M2-P6-009). All four surface through the
+`wasamo_last_error_message` channel established in
+DD-M2-P6-005 = (i).
+
+Calling "fatal" a divergence is not yet a specification; the
+following four sub-clauses make it one.
+
+##### Divergence: state machine
+
+The runtime carries a single boolean liveness state, with one
+irreversible transition:
+
+```
+   Healthy  ──(MUTATION_CAP exhausted in Phase 1)──▶  Diverged
+```
+
+- Initial state on `wasamo_runtime_create` success: `Healthy`.
+- The only transition into `Diverged` is Phase 1 breaking out
+  of its inner loop because `iter > MUTATION_CAP`.
+- There is no reverse transition. `Diverged` is absorbing for
+  the lifetime of the runtime instance.
+- Phase 3 `WASAMO_ERR_OBSERVER_MUTATION` and other recoverable
+  caller errors do **not** transition state.
+
+##### Divergence: commit-forbidden conditions
+
+A frame whose Phase 1 breaks on cap exhaustion is **never
+committed**:
+
+- Phase 2 (layout) is skipped for that frame.
+- Phase 3 (post-commit observers) is skipped for that frame.
+- The Signal mutations written during the diverging Phase 1
+  remain physically present in runtime memory (no rollback —
+  see option (a) rejection above), but they are **never
+  observable through the ABI**: every read after the transition
+  returns `WASAMO_ERR_REACTIVE_DIVERGED`.
+
+This is the "unobservable partial mutation" contract: the
+runtime does not pay for snapshot bookkeeping, and the host
+cannot witness inconsistent state.
+
+##### Divergence: post-divergence ABI contract
+
+While the runtime is in `Diverged`:
+
+| ABI                           | Behaviour                                         |
+|---|---|
+| `wasamo_runtime_create`       | n/a — operates on a different instance            |
+| `wasamo_runtime_destroy`      | **Succeeds**; releases resources; returns `WASAMO_OK` |
+| All other `wasamo_*` calls    | No-op; return `WASAMO_ERR_REACTIVE_DIVERGED`      |
+| Observer execution            | Does not run                                      |
+| Layout pass                   | Does not run                                      |
+
+`wasamo_runtime_destroy` is the single ABI carved out of the
+no-op rule: a host must always be able to release a diverged
+runtime's resources. Its success in `Diverged` is part of the
+ABI contract, not an implementation detail.
+
+##### Divergence: recovery
+
+The only sanctioned recovery path is **destroy + recreate**:
+
+```
+   wasamo_runtime_destroy(rt);
+   rt = wasamo_runtime_create(/* fresh IR / state */);
+```
+
+There is no `wasamo_runtime_reset`-style API. A reset API would
+require defining which Signals and Effects survive a partial
+recovery and which do not, reintroducing the "valid but
+unconverged" middle state that option (b) was rejected for.
+Recovery is per-runtime-instance; a host that wants to retain
+unrelated state across recovery is expected to scope that state
+outside the diverged runtime instance, not inside it.
+
+##### Divergence: debug vs release behaviour
+
+Behaviour is **uniform across debug and release builds**: both
+transition to `Diverged` and surface `WASAMO_ERR_REACTIVE_DIVERGED`
+through the ABI. The runtime does not panic or `abort()` on
+divergence in any standard build configuration.
+
+Rationale: MUTATION_CAP exhaustion is a defect in the host's
+binding/Effect graph, not a violation of an engine invariant.
+A debug-only panic would make the divergence path itself
+untestable for hosts that test against debug builds, and would
+diverge the ABI contract by build mode.
+
+A diagnostic-only escape hatch is permitted but not required:
+if the environment variable `WASAMO_REACTIVE_ABORT_ON_DIVERGE`
+is set to `1` at runtime, the runtime may call
+`std::process::abort()` instead of (or immediately after)
+transitioning state. This is a triage aid for engine
+developers; it does not alter the specified state machine for
+hosts that do not set the variable.
+
+##### Divergence: diagnostics contract
+
+On the transition to `Diverged`, the runtime populates
+`wasamo_last_error_message` (DD-M2-P6-005 = (i)) with a
+structured payload sufficient to identify the offending region
+of the binding graph:
+
+- The ID of the Effect being executed when the cap was
+  exhausted (or a sentinel if the inner-loop exit happened
+  outside any Effect body).
+- The iteration count at which the loop broke (= MUTATION_CAP).
+- The set of Signal IDs that were dirtied during the final
+  iteration, capped at an implementation-defined N with
+  `+K more` overflow notation.
+
+This payload remains readable until the runtime is destroyed
+(reads of `wasamo_last_error_message` are themselves no-ops in
+`Diverged`, but the message buffer is set before the transition
+takes effect on the ABI).
+
+Richer diagnostics — full dependency-graph snapshots, cycle
+visualisation, time-travel into the diverging frame — are
+out of scope (see "Out of scope"); the payload above is
+designed to be sufficient raw material for a future tool to
+attach to.
 
 #### Upstream-document effects (bundled into the Accepted commit)
 
@@ -793,6 +1059,38 @@ Option C — Minimum viable: 1, 2, 5, 6, 7 (skip property-binding lowering as a 
   defeating A2's "no host-side property-set plumbing"
   acceptance.
 
+**Coupled consequence — name resolution.**
+
+Signal ownership in `.ui` makes name resolution a `wasamoc`
+responsibility, not a runtime one. The rules are fixed here so
+that DD-M2-P6-007 (`SignalRegistry`) and DD-M2-P6-009 (loader
+validation) inherit a defined contract:
+
+- **Scope:** the `.ui` document is a single flat namespace for
+  M2. Counter has one `state count: i32` declaration and a
+  small set of references; flat scope is trivially sufficient.
+- **Resolution time:** compile-time. `wasamoc` rejects undefined
+  references and duplicate `state` names at parse/check time.
+  The IR carries already-resolved names; "binding references
+  state X" appears in IR as a resolved reference to declared
+  state X, not as a pending lookup.
+- **Shadowing:** prohibited in M2. Two `state` declarations
+  with the same name are a `wasamoc` error. M3 component
+  scoping (when introduced) revisits this; M2's prohibition is
+  the conservative starting point that does not foreclose any
+  M3 scoping shape.
+- **Runtime side:** the loader (DD-M2-P6-006) reads
+  already-resolved names from the IR and indexes
+  `SignalRegistry` (DD-M2-P6-007) by them. Reference-resolution
+  validation at load (DD-M2-P6-009 = C) verifies every IR-side
+  name resolves to a declared registry entry; "unresolved name
+  at runtime" is not a possible failure mode beyond malformed
+  IR detection.
+
+Component-level scoping, dotted access (`component.state`),
+and renaming-on-import are out of scope for M2; they live in
+M3's binding-feature DDs.
+
 **Recommendation:** **Option B**, with `state` declarations in
 `.ui` (Signal ownership in DSL).
 
@@ -925,7 +1223,57 @@ added later as a precedence-overriding mechanism.
 `WASAMO_ERR_OBSERVER_MUTATION` (DD-M2-P6-001) is consolidated
 in this error mechanism: the error code is returned from the
 violating ABI call, and the message string identifies the
-observer callback in flight (file/line where available).
+observer callback in flight (file/line where available). The
+other M2-introduced error codes
+(`WASAMO_ERR_REACTIVE_DIVERGED`, `WASAMO_ERR_REENTRANT_LOAD`,
+`WASAMO_ERR_IR_MALFORMED`, `WASAMO_ERR_WRONG_THREAD`) use the
+same channel.
+
+**Lifetime and threading model (sub-decision).**
+
+The single-function load shape leaves four contract points
+unspecified that every binding language must agree on. Each
+is fixed here:
+
+- **Handle ownership.** `WasamoWindowHandle` is owned by the
+  runtime. The host receives an opaque pointer; passing it to
+  any `wasamo_*` ABI is the only legal use. The runtime is the
+  sole party that mutates or frees the underlying window
+  structure.
+- **Handle lifetime.** A handle is valid from successful return
+  of `wasamo_load_ui` until runtime shutdown. M2 does not
+  expose a per-window destroy ABI; the M2 counter's window
+  lifetime spans the process. M3 multi-instance scenarios will
+  introduce `wasamo_destroy_window` (or equivalent); the M2
+  contract is the constant-lifetime base case of that future
+  shape, so M2-era hosts do not require revision when explicit
+  destruction lands.
+- **Last-error message lifetime.** The string returned by
+  `wasamo_last_error_message` is owned by the runtime, valid
+  until the next `wasamo_*` ABI call from the same thread. The
+  storage is thread-local; concurrent calls from different
+  threads do not overwrite each other's last error (modulo the
+  thread-affinity rule below, which makes "different threads"
+  itself a contract violation in M2). The host must copy the
+  string if it needs to retain it across ABI calls.
+- **Thread affinity (UI-thread confinement).** All `wasamo_*`
+  ABI calls must originate from a single thread per runtime
+  instance — the thread that called `wasamo_load_ui`. Calls
+  from any other thread return `WASAMO_ERR_WRONG_THREAD`
+  without performing the requested action and without
+  modifying runtime state. This matches the discipline of
+  every major retained-mode UI framework (Win32 message
+  thread, AppKit main thread, GTK main thread, Slint event
+  loop) and is the only model under which the lock-free
+  queue / TLS-flag machinery in DD-M2-P6-001 is sound (the
+  TLS used by DD-P6-001's IN_OBSERVER_CALLBACK and DD-P6-003's
+  IN_DRAIN flags is the same TLS the thread-affinity check
+  relies on).
+
+Cross-thread "post a callable to the UI thread" patterns are
+the host's responsibility for M2; if a binding-author audience
+need surfaces in M3, a `wasamo_post_to_ui_thread` helper can
+be added additively. The M2 contract does not foreclose it.
 
 **Forward-compat exposure:**
 
@@ -1082,6 +1430,16 @@ exercises; per-binding generics (C) defeat the evaluator
 sharing. B is the smallest shape that fits both M2 acceptance
 and M3 type-set growth.
 
+**Registry key semantics.** `SignalRegistry` keys are the
+`wasamoc`-resolved state names defined in DD-M2-P6-004's
+name-resolution rules: post-resolution, single flat namespace
+per `.ui` document, no shadowing. The runtime does not
+interpret the key string; access is `HashMap::get` only. M3
+component scoping (when introduced) translates to either a
+key-namespacing convention or a nested registry shape; the M2
+single-document flat case is compatible with either future
+choice and does not foreclose them.
+
 **Forward-compat exposure:**
 
 - Out-of-scope items engaged: M3 expanded type set; M3
@@ -1225,6 +1583,17 @@ Option C — Defense-in-depth (recommended)
   trusted; type-level invariants the emitter establishes
   (e.g. binding expression result type matches target
   property type) are *not* re-checked at load.
+- The emitter's type-checking pass (DD-M2-P6-004 = B's "check"
+  activity, restricted to `i32` and string for M2) is the sole
+  guard on binding-expression / property-type integrity. The
+  runtime is permitted to assume that every binding
+  expression's evaluated `PropertyValue` matches its target
+  property's declared type; mismatches indicate a `wasamoc`
+  bug, not a recoverable load-time error, and surface as
+  whatever evaluation behaviour the type mismatch produces (no
+  guaranteed diagnostic). This trust placement is what makes
+  DD-M2-P6-007's monomorphic per-type registry sound at load
+  time.
 - What you gain: cheap; aligned with the M2 trust model
   (single-workspace co-build); correct defensiveness for
   the post-M2 stale-IR scenario (header + reference
@@ -1270,27 +1639,32 @@ reinforces C.
 
 | ID | Topic | Recommendation | Impl risk | Forward-compat exposure |
 |---|---|---|---|---|
-| DD-M2-P6-001 | Drain transaction semantics | **Option D** — declarative transaction + post-commit pure observer; VISION §4 P2 supplement mandatory; F as planned M3 extension | Low | Low |
+| DD-M2-P6-001 | Drain transaction semantics | **Option D** — declarative transaction + post-commit pure observer; Phase 1 ordering rules (FIFO + topological + last-wins); MUTATION_CAP exhaustion = terminal error state; Phase 2 strictly read-only; Phase 1 re-entrancy permits state mutation, forbids structure change; VISION §4 P2 supplement mandatory; F as planned M3 extension | Low | Low |
 | DD-M2-P6-002 | Normative grammar of textual IR | **Option B** — new normative grammar in `docs/dsl_spec.md`'s IR chapter; mandatory header line | Low–medium | Low |
 | DD-M2-P6-003 | IR representation of `HandlerExpr` and bindings | **Option A** — promote tagged-value form; share between bindings and handlers | Low | Low |
-| DD-M2-P6-004 | M2 scope of `wasamoc` activities | **Option B** — restricted: parse, check, lower bindings + handlers, emit, write; type inference limited to `i32` + string; `state` declarations in `.ui` | Low–medium | Low |
-| DD-M2-P6-005 | `wasamo_load_ui` C ABI shape | **α + (A)/(C) + (i)** — single function, path or embedded blob, last-error string API | Low | Low |
+| DD-M2-P6-004 | M2 scope of `wasamoc` activities | **Option B** — restricted: parse, check, lower bindings + handlers, emit, write; type inference limited to `i32` + string; `state` declarations in `.ui`; compile-time name resolution (flat namespace, no shadowing) | Low–medium | Low |
+| DD-M2-P6-005 | `wasamo_load_ui` C ABI shape | **α + (A)/(C) + (i)** — single function, path or embedded blob, last-error string API; runtime-owned handles for runtime lifetime; UI-thread-confined; `WASAMO_ERR_WRONG_THREAD` on cross-thread call | Low | Low |
 | DD-M2-P6-006 | Productionised placement of IR loader | **Option A** — inside `wasamo-runtime`; remove `experimental_ir_loader` flag | Low | Low |
-| DD-M2-P6-007 | Final signature of `register_binding` | **Option B** — `SignalRegistry` per-type struct; supersedes DD-M2-P5-005 provisional `properties` shape only | Low | Low |
+| DD-M2-P6-007 | Final signature of `register_binding` | **Option B** — `SignalRegistry` per-type struct keyed by `wasamoc`-resolved names; supersedes DD-M2-P5-005 provisional `properties` shape only | Low | Low |
 | DD-M2-P6-008 | Counter examples migration shape | **α + (X)** — direct ABI calls; shared `examples/counter/counter.ui`; embedded for C/Zig, path for Rust | Low | Low |
-| DD-M2-P6-009 | IR loader malformed-input validation policy | **Option C** — defense-in-depth: header/version + reference resolution + top-level structure; trust emitter invariants | Low | Low |
+| DD-M2-P6-009 | IR loader malformed-input validation policy | **Option C** — defense-in-depth: header/version + reference resolution + top-level structure; trust emitter invariants including type integrity | Low | Low |
 
-**Aggregate impl-risk picture.** DD-M2-P6-001 is the only DD
-introducing new ABI-surface behaviour (the
-`WASAMO_ERR_OBSERVER_MUTATION` code and TLS-flag guard); its
-risk is bounded by the same shape DD-P6-003's queued-emission
-machinery already exercises. DD-M2-P6-002's grammar rewrite is
-the largest *code-volume* change, but it is a structured
-rewrite of an existing parser/emitter pair with the round-trip
-test from the spike as a regression baseline. Every other DD
-recommends an additive or scope-restricting choice; the M2
-delta is concentrated in the drain transaction and the loader
-production-ising.
+**Aggregate impl-risk picture.** DD-M2-P6-001 and DD-M2-P6-005
+introduce the new ABI-surface error codes M2 ships
+(`WASAMO_ERR_OBSERVER_MUTATION`, `WASAMO_ERR_REACTIVE_DIVERGED`,
+`WASAMO_ERR_REENTRANT_LOAD`, `WASAMO_ERR_WRONG_THREAD`,
+plus DD-M2-P6-009's `WASAMO_ERR_IR_MALFORMED`). All five share
+the `wasamo_last_error_message` channel and the TLS infrastructure
+that DD-P6-003's queued-emission machinery and DD-P6-001's
+observer-callback flag already require; the marginal
+implementation cost per code is small. DD-M2-P6-002's grammar
+rewrite is the largest *code-volume* change, but it is a
+structured rewrite of an existing parser/emitter pair with the
+round-trip test from the spike as a regression baseline. Every
+other DD recommends an additive or scope-restricting choice;
+the M2 delta is concentrated in the drain transaction (with
+its operational sub-rules — ordering, divergence semantics,
+re-entrancy boundary) and the loader production-ising.
 
 **Aggregate forward-compat exposure.** All nine DDs recommend
 the M3-additive option. The named successor work for M3 is:
@@ -1327,7 +1701,17 @@ the regression risk against existing exercise is zero.
   DD-M2-P6-005's split-on-demand allowance, DD-M2-P6-006's
   loader colocation, and DD-M2-P6-009's defense-in-depth
   validation collectively keep the M2 architecture amenable;
-  no M2 work item enables it.
+  no M2 work item enables it. **Assumed model: tear-down +
+  full rebuild.** When designed post-1.0, the existing window
+  tree, dependency graph, signal_queue, and observer queue are
+  atomically destroyed; a new IR is loaded and instantiated.
+  State preservation across reload (incremental hot reload) is
+  a separate post-1.0 question and is *not* implied by the M2
+  choices that keep hot reload amenable. This assumption is
+  recorded so the M2 choices (header line, loader placement,
+  validation policy, single-thread affinity) can be validated
+  against a concrete future shape; the actual hot-reload DD
+  will revisit the model and may refine it.
 - **Binary IR format.** M2 = textual only (DD-M2-P2-001 = B);
   binary is post-M2.
 - **LSP / diagnostics integration.** M5. DD-M2-P6-002's
@@ -1349,6 +1733,13 @@ the regression risk against existing exercise is zero.
 - **Logger callback registration ((iii) variant of error
   reporting).** Planned M3 path; DD-M2-P6-005 = (i) ships
   M2.
+- **Dependency-cycle visualisation tooling.** DD-M2-P6-001 = D's
+  divergence diagnostics emit a structured payload (offending
+  Effect ID, iteration count, last-iteration dirty Signal IDs)
+  through `wasamo_last_error_message`. Tooling that consumes
+  this payload to render the cyclic sub-graph or to time-travel
+  into the diverging frame is post-M2; the M2 contract only
+  guarantees the raw material is available.
 
 ## VISION §4 Principle 2 supplement (mandatory; bundled with Accepted commit)
 
@@ -1360,10 +1751,15 @@ review pass that flips this ADR to `Accepted`):
 > changes) are post-commit pure effects: they observe a fully
 > converged frozen state and perform external side effects
 > (logging, telemetry, I/O) without mutating runtime state.
-> State mutation flows exclusively through user events
-> (signal handlers) and reactive bindings (declarative
-> property bindings). This makes the unidirectional model
-> structurally enforced rather than merely conventional.
+> State mutation **into the runtime** flows exclusively
+> through user events (signal handlers) and reactive bindings
+> (declarative property bindings). This makes the
+> unidirectional model structurally enforced at the runtime
+> boundary rather than merely conventional. Host-side state
+> external to the runtime may be mutated freely; the
+> constraint applies to the runtime's own state — Signals,
+> properties, and the dependency graph — and to the channels
+> that mutate it.
 
 The supplement is recorded here as inseparable from the DD's
 acceptance: choosing D and not writing the supplement leaves
