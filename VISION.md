@@ -76,12 +76,20 @@ The following are explicitly *not* on the table. Letting these go is what makes 
 When design choices come into conflict, we resolve them in this order.
 
 1. **Native Windows feel.** Mica/Acrylic, system theming, type ramp, and accent must look right by default. Animation is opt-in (consistent with the conventions of SwiftUI, Jetpack Compose, Flutter, and CSS); when invoked, it is compositor-driven and smooth without app effort.
-2. **Minimum app code.** UI structure in the DSL, logic in the host language; both expressed in their shortest natural form. The underlying model is declarative and unidirectional: the view is a pure function of state (`view = f(state)`), state flows down through property bindings, and user interactions flow up as events handled by host-language callbacks.
+2. **Minimum app code.** UI structure in the DSL, logic in the host language; both expressed in their shortest natural form. The underlying model is declarative and unidirectional — see [§4.1](#41-the-declarative-unidirectional-model).
 3. **Lean resources.** Target <100ms cold start, <30MB memory, single-digit-MB binaries
 4. **Multi-language support.** The C ABI is the primary boundary. Language-specific optimizations are secondary
 5. **Contribution to the OSS ecosystem.** Permissive licensing, open specifications, hospitality toward third-party extensions
 
 To make this concrete: if a Swift-specific optimization would compromise API neutrality, principle 4 wins and we don't take it. If beautiful default rendering inflates the binary, we weigh principle 1 against principle 3, favoring principle 1 in places that hit first impressions and principle 3 in internal implementation details.
+
+### 4.1 The declarative unidirectional model
+
+Principle 2 expands into a model that the rest of the framework is built around. The view is a pure function of state (`view = f(state)`): state flows down through property bindings, and user interactions flow up as events handled by host-language callbacks.
+
+Property observers — host-registered watchers on property changes — are post-commit pure effects: they observe a fully converged frozen state and perform external side effects (logging, telemetry, I/O) without mutating runtime state. State mutation **into the runtime** flows exclusively through user events (signal handlers) and reactive bindings (declarative property bindings). This makes the unidirectional model structurally enforced at the runtime boundary rather than merely conventional.
+
+Host-side state external to the runtime may be mutated freely; the constraint applies to the runtime's own state — Signals, properties, and the dependency graph — and to the channels that mutate it. Recorded as [DD-M2-P6-001](./docs/decisions/m2-phase-6-ui-lowering.md#dd-m2-p6-001--drain-transaction-semantics).
 
 ## 5. Differentiators
 

@@ -2,7 +2,7 @@
 
 **Phase:** M2-Phase 6 (`.ui` → runtime lowering)
 **Date:** 2026-05-07
-**Status:** Proposed
+**Status:** Accepted
 
 ## Context
 
@@ -90,7 +90,7 @@ that note is archived together with the ADR's `Accepted` flip.
 
 ### DD-M2-P6-001 — Drain transaction semantics
 
-**Status:** Proposed
+**Status:** Accepted
 **Supersedes:** DD-M2-P5-004 (partial — three-stage drain framing
 replaced; deferred-dispatch trigger contract preserved)
 
@@ -808,7 +808,7 @@ attach to.
 
 ### DD-M2-P6-002 — Normative grammar of the textual IR
 
-**Status:** Proposed
+**Status:** Accepted
 
 **Context:**
 DD-M2-P2-001 = B settled "textual IR" as the M2 wasamoc output
@@ -908,7 +908,7 @@ Risk reinforces B.
 
 ### DD-M2-P6-003 — IR representation of `HandlerExpr` and binding expressions
 
-**Status:** Proposed
+**Status:** Accepted
 
 **Context:**
 DD-M2-P3-001 = A established `HandlerExpr` as the in-runtime AST
@@ -985,7 +985,7 @@ near-zero. Risk reinforces A.
 
 ### DD-M2-P6-004 — M2 scope of `wasamoc` activities
 
-**Status:** Proposed
+**Status:** Accepted
 
 **Context:**
 DD-M2-P2-003 enumerates seven candidate `wasamoc` activities:
@@ -1122,7 +1122,7 @@ design-degraded. Risk reinforces B.
 
 ### DD-M2-P6-005 — `wasamo_load_ui` C ABI shape
 
-**Status:** Proposed
+**Status:** Accepted
 
 **Context:**
 The host calls into the runtime to turn a `.ui` (or its
@@ -1296,7 +1296,7 @@ runtime concern. Risk reinforces the recommendation.
 
 ### DD-M2-P6-006 — Productionised placement of the IR loader
 
-**Status:** Proposed
+**Status:** Accepted
 
 **Context:**
 The Phase 2 spike's `wasamo-runtime/src/experimental_ir_loader.rs`
@@ -1362,7 +1362,7 @@ Risk reinforces A.
 
 ### DD-M2-P6-007 — Final signature of `register_binding`
 
-**Status:** Proposed
+**Status:** Accepted
 **Supersedes:** DD-M2-P5-005 (provisional `properties: Rc<HashMap<String, Signal<i32>>>` parameter shape only; the registration-API surface itself is preserved)
 
 **Context:**
@@ -1459,7 +1459,7 @@ Risk reinforces B.
 
 ### DD-M2-P6-008 — Migration shape for `examples/counter-{c,rust,zig}`
 
-**Status:** Proposed
+**Status:** Accepted
 
 **Context:**
 M2 acceptance A1 replaces the per-language imperative tree
@@ -1536,7 +1536,7 @@ choice (no new API surface); risk reinforces it.
 
 ### DD-M2-P6-009 — IR loader malformed-input validation policy
 
-**Status:** Proposed
+**Status:** Accepted
 
 **Context:**
 The IR loader (DD-M2-P6-006 = A, in-runtime) reads textual IR

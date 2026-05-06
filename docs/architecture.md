@@ -459,39 +459,100 @@ Effects in a thread-local dirty-set, and returns. Re-evaluation
 runs at the outermost-frame boundary — the same boundary
 DD-P6-003 already uses for queued observer notifications.
 
+The drain itself is a three-phase + terminal transaction
+([DD-M2-P6-001](./decisions/m2-phase-6-ui-lowering.md#dd-m2-p6-001--drain-transaction-semantics) =
+Option D, supersedes DD-M2-P5-004's three-stage `observer → reactive
+→ layout` framing). Phase 1 unifies signal-handler firing and
+reactive Effect re-runs into a single mutation-convergence loop;
+Phase 2 runs layout against a frozen state; Phase 3 fires
+post-commit observers under a TLS flag that blocks state mutation:
+
 ```
 drain_if_outermost()
   │
-  ├─ 1. Observer drain          (existing, DD-P6-003)
-  │     queued WasamoObserver* callbacks → host code
+  ├─ Phase 1: Mutation convergence  (loop until fixed point)
+  │     while signal_queue ≠ ∅ OR dirty_effects ≠ ∅:
+  │         if signal_queue ≠ ∅:
+  │             pop signal handler, fire host callback
+  │             (callback may freely mutate state via ABI)
+  │         else if dirty_effects ≠ ∅:
+  │             take one dirty Effect, re-run in topological order
+  │             (effect body calls internal set_property)
+  │         iter += 1
+  │         if iter > MUTATION_CAP: enter Diverged terminal state
   │
-  ├─ 2. Reactive drain          (new in Phase 5, DD-M2-P5-004 = B)
-  │     while dirty-set nonempty and iter < CAP:
-  │       take a snapshot of dirty Effects, deduplicated
-  │       re-run each Effect once; its writes go through
-  │         set_property (which queues observer notifications
-  │         and, if size-affecting, marks layout dirty)
-  │     CAP exhaustion logs an error and breaks (divergence trap)
+  ├─ Phase 2: Layout  (1 pass, terminal; read-only over runtime state)
+  │     for each layout-dirty window: run_layout
   │
-  └─ 3. Layout drain            (existing, DD-P8-002)
-        run_layout once per dirty window; clear DIRTY set
+  └─ Phase 3: Post-commit observers  (1 pass, terminal)
+        IN_OBSERVER_CALLBACK := true
+        drain observer queue;
+          state-mutating ABI returns WASAMO_ERR_OBSERVER_MUTATION
+          (panic in debug)
+        IN_OBSERVER_CALLBACK := false
 ```
 
-The placement is load-bearing: reactive writes go through
-`set_property`, so the reactive pass must precede the layout
-drain to fold its size-affecting changes into the same layout
-pass. Observer notifications enqueued by reactive writes are
-left for the next outermost-frame cycle, matching the existing
-queued-emission contract.
+Return-time invariant: `signal_queue` empty, `dirty_effects`
+empty, layout-dirty empty, `observer_queue` empty.
+
+Phase 1 ordering rules — required for structural determinism:
+(1) `signal_queue` is FIFO in emission order; (2) `dirty_effects`
+drains in topological order over the Signal dependency graph,
+ties broken by `EffectHandle` registration order; (3) same-cycle
+write-after-write to a Signal is last-wins, with the Phase 3
+observer queue computed from the diff between each Signal's
+value at Phase 1 entry and exit (intermediate transitions do not
+produce observer entries). The signal/Effect alternation in the
+spec block is one canonical interleaving; an implementation may
+batch (e.g. drain all signals, then all dirty Effects in
+topological order) provided the per-Signal value sequence is
+identical.
+
+Phase 2 is strictly read-only: layout reads property values to
+compute geometry but does not subscribe to Signals (no
+dependency edge originates in Phase 2) and does not write
+properties or emit signals. A layout pass that wrote properties
+would create a Phase 1↔Phase 2 cycle outside the fixpoint
+convergence; the layout API surface (internal to the runtime)
+takes a read-only view of property values and returns geometry,
+nothing more.
+
+Mutation boundary — what observer callbacks (Phase 3) may and
+may not do:
+
+- **Forbidden** (TLS-flag detected, returns
+  `WASAMO_ERR_OBSERVER_MUTATION`, panics in debug):
+  runtime state writes (`wasamo_set_property`,
+  `wasamo_emit_signal`, `wasamo_signal_set`), runtime structure
+  changes (window/element/binding create/destroy,
+  parent/child reparenting), reactive graph intervention
+  (Effect register/dispose, Signal subscribe/unsubscribe),
+  re-entrant `wasamo_*` calls.
+- **Allowed**: external I/O (file, network, IPC, log,
+  telemetry), host-side (runtime-external) state mutation, pure
+  reads of runtime state (`wasamo_get_property`, Signal value
+  reads), task submission to other threads (the receiving
+  thread is bound by the existing UI-thread affinity rule, not
+  by the observer mutation rule).
+- **Path back into runtime state** when an observer needs to
+  trigger one: route through a host-side queue and post a
+  signal on the next ABI entry, or use the future
+  `wasamo_post_event` API (DD-M2-P6-001 Option F, scheduled for
+  M3). Observer callbacks never write runtime state directly.
 
 `with_batched_writes(f)` (Phase 4 skeleton, body filled in
 Phase 5) increments a thread-local depth counter; the per-call
 drain at the end of each `wasamo_*` entry is suppressed while
 depth > 0. On outermost-frame exit, a single drain processes the
-accumulated dirty-set. The iteration cap is a small constant (16
-in current implementation) — enough headroom for legitimate
-multi-pass cascades, low enough to surface a divergent binding
-before it exhausts CPU.
+accumulated dirty-set. The iteration cap is a small constant
+(16 in current implementation, named `MUTATION_CAP` per
+DD-M2-P6-001) — enough headroom for legitimate multi-pass
+cascades, low enough to surface a divergent binding before it
+exhausts CPU. Cap exhaustion is fatal: the runtime transitions
+to a `Diverged` terminal state, Phase 2 and Phase 3 are skipped
+for that frame, and every subsequent ABI call other than
+`wasamo_runtime_destroy` returns `WASAMO_ERR_REACTIVE_DIVERGED`
+(see DD-M2-P6-001 §"Divergence semantics").
 
 #### 6.8.4 Signal-dispatch ordering (signal-side runtime contract)
 
