@@ -53,8 +53,11 @@ fn run_check(path: &str) {
         }
     };
 
-    let warnings = check::check(&ast, path);
-    for w in &warnings {
-        eprintln!("{}", w.render(&src));
+    let result = check::check(&ast, path);
+    for d in &result.diagnostics {
+        eprintln!("{}", d.render(&src));
+    }
+    if result.has_errors() {
+        std::process::exit(1);
     }
 }
