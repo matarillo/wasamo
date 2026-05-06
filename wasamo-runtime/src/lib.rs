@@ -9,6 +9,9 @@ mod text;
 mod widget;
 mod window;
 
+#[cfg(feature = "experimental-reactive-spike")]
+pub mod experimental_reactive_spike;
+
 pub use layout::{Alignment, SizeConstraint, WidgetKind};
 pub use text::{TextRenderer, TypographyStyle};
 pub use widget::{ButtonStyle, WidgetNode};
@@ -38,6 +41,10 @@ pub fn get_compositor() -> &'static windows::UI::Composition::Compositor {
     &runtime::get().compositor
 }
 
+pub fn get_text_renderer() -> &'static TextRenderer {
+    &runtime::get().text_renderer
+}
+
 pub fn window_add_widget(
     window: &WindowState,
     widget: &WidgetNode,
@@ -47,6 +54,15 @@ pub fn window_add_widget(
     let child_visual: Visual = widget.visual.cast()?;
     window.root.Children()?.InsertAtTop(&child_visual)?;
     Ok(())
+}
+
+/// Install `root` as the window's owned widget tree. Routes mouse / resize
+/// events to it automatically. Exposed for direct Rust callers (spike, tests).
+pub fn window_set_root(
+    window: &mut WindowState,
+    root: Box<WidgetNode>,
+) -> windows::core::Result<()> {
+    window::set_root(window, root)
 }
 
 pub fn run() {

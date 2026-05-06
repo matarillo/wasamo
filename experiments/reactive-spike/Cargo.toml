@@ -1,0 +1,12 @@
+[package]
+name    = "reactive-spike"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "reactive-spike"
+path = "src/main.rs"
+
+[dependencies.wasamo-runtime]
+path = "../../wasamo-runtime"
+features = ["experimental-reactive-spike"]
