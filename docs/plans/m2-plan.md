@@ -396,7 +396,7 @@ phases land.
     - [x] **Owner agreement on DD-M2-P6-001..009.** ADR flips to Accepted once agreement on all nine DDs is recorded; coding work begins after.
     - [x] **DD-M2-P6-002 / DD-M2-P6-003: Normative textual IR grammar + handler/binding expression form.** Add an IR chapter to `docs/dsl_spec.md`. Specify a header line (`;wasamo-ir v0` style) and productions for tree nodes / properties / bindings / handler bodies / `state` declarations. Promote the Phase 2 spike's tagged-value form for `HandlerExpr` (`(assign root.count (add (read root.count) 1))`) shared across bindings and handlers; permit bare literals in unambiguous positions.
       - **Verification:** spec-only step; round-trip regression deferred to the loader/emitter rewrite below.
-    - [ ] **DD-M2-P6-001: Drain transaction (Option D, declarative + post-commit pure observer).** In `wasamo-runtime/src/emit.rs` (or sibling), replace Phase 5's three-stage drain with the three-phase form:
+    - [x] **DD-M2-P6-001: Drain transaction (Option D, declarative + post-commit pure observer).** In `wasamo-runtime/src/emit.rs` (or sibling), replace Phase 5's three-stage drain with the three-phase form:
       - Phase 1 — mutation convergence loop (signal_queue + dirty_effects until quiescent or MUTATION_CAP).
       - Phase 2 — layout pass (terminal, read-only).
       - Phase 3 — post-commit observer drain with `IN_OBSERVER_CALLBACK` TLS flag; state-mutating ABI returns `WASAMO_ERR_OBSERVER_MUTATION`.
