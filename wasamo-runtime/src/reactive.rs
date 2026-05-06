@@ -271,33 +271,49 @@ pub(crate) fn with_batched_writes<R, F: FnOnce() -> R>(f: F) -> R {
     result
 }
 
+/// Per-type Signal storage keyed by `wasamoc`-resolved state names (DD-M2-P6-007).
+///
+/// M2 supports `i32` and `String` typed Signals; M3 type expansion adds fields
+/// without changing the registration call site.
+///
+/// **DD-M2-P6-011 placeholder.** Wiring `BindingEvalContext` / `HandlerExpr::PropRead`
+/// to read `strings`-typed Signals through the binding evaluator is deferred to
+/// DD-M2-P6-011 (string-typed property binding). At this step only `i32s` is
+/// consumed by the binding path; `strings` registration and `Signal::get()` access
+/// are exercised through pure-logic tests.
+pub(crate) struct SignalRegistry {
+    pub(crate) i32s: HashMap<String, Signal<i32>>,
+    pub(crate) strings: HashMap<String, Signal<String>>,
+}
+
+impl SignalRegistry {
+    pub(crate) fn new() -> Self {
+        Self { i32s: HashMap::new(), strings: HashMap::new() }
+    }
+}
+
 /// Read-only `EvalContext` adapter for binding expressions (DD-M2-P5-002 = B).
 ///
-/// Wraps a map of `Signal<i32>` instances keyed by property path. Property
-/// reads go through `Signal::get()`, which registers the read with the
-/// thread-local reactive tracking stack, causing the enclosing Effect (if any)
-/// to subscribe to the Signal automatically.
+/// Wraps a `SignalRegistry` reference. `i32` property reads go through
+/// `Signal::get()`, which registers the read with the thread-local reactive
+/// tracking stack, causing the enclosing Effect (if any) to subscribe
+/// automatically.
 ///
 /// Write attempts (`set_i32`) always return `EvalError::WriteInBindingContext`;
 /// binding expressions are read-only by contract (DD-M2-P5-006 = A).
-///
-/// The property map is `&HashMap<String, Signal<i32>>` for M2 (integer
-/// properties only; the Text `content` binding stringifies the integer result).
-/// The next task (`register_binding`) wires this against the real property
-/// storage; for now the shape is validated via unit tests with test-local maps.
 pub(crate) struct BindingEvalContext<'a> {
-    properties: &'a HashMap<String, Signal<i32>>,
+    registry: &'a SignalRegistry,
 }
 
 impl<'a> BindingEvalContext<'a> {
-    pub(crate) fn new(properties: &'a HashMap<String, Signal<i32>>) -> Self {
-        Self { properties }
+    pub(crate) fn new(registry: &'a SignalRegistry) -> Self {
+        Self { registry }
     }
 }
 
 impl<'a> EvalContext for BindingEvalContext<'a> {
     fn get_i32(&self, path: &str) -> Result<i32, EvalError> {
-        self.properties
+        self.registry.i32s
             .get(path)
             .ok_or_else(|| EvalError::UnknownProperty(path.to_string()))
             .map(|s| s.get_untracked())
@@ -308,7 +324,7 @@ impl<'a> EvalContext for BindingEvalContext<'a> {
     }
 
     fn read_i32_tracked(&self, path: &str) -> Result<i32, EvalError> {
-        self.properties
+        self.registry.i32s
             .get(path)
             .ok_or_else(|| EvalError::UnknownProperty(path.to_string()))
             .map(|s| s.get())
@@ -336,7 +352,7 @@ pub(crate) enum BindingTarget {
     WidgetProperty { node: WidgetId, prop: PropertyKey },
 }
 
-/// Register a reactive binding that evaluates `expr` against `props` and calls
+/// Register a reactive binding that evaluates `expr` against `registry` and calls
 /// `write_fn(node, prop, value)` whenever a tracked Signal changes.
 ///
 /// `write_fn` is a plain function pointer (not a closure) so that `reactive.rs`
@@ -345,14 +361,14 @@ pub(crate) enum BindingTarget {
 pub(crate) fn register_binding(
     target: BindingTarget,
     expr: HandlerExpr,
-    props: Rc<HashMap<String, Signal<i32>>>,
+    registry: Rc<SignalRegistry>,
     write_fn: fn(WidgetId, PropertyKey, &str),
 ) -> EffectHandle {
     let BindingTarget::WidgetProperty { node, prop } = target;
     register_binding_with_writer(
         Box::new(move |value: String| write_fn(node, prop, &value)),
         expr,
-        props,
+        registry,
     )
 }
 
@@ -362,10 +378,10 @@ pub(crate) fn register_binding(
 fn register_binding_with_writer(
     mut writer: Box<dyn FnMut(String)>,
     expr: HandlerExpr,
-    props: Rc<HashMap<String, Signal<i32>>>,
+    registry: Rc<SignalRegistry>,
 ) -> EffectHandle {
     EffectHandle::new(move || {
-        let mut ctx = BindingEvalContext::new(&props);
+        let mut ctx = BindingEvalContext::new(&registry);
         match evaluate_binding(&expr, &mut ctx) {
             Ok(value) => writer(value),
             Err(e) => eprintln!("wasamo: binding eval error: {e}"),
@@ -579,20 +595,22 @@ mod tests {
 
     #[test]
     fn binding_ctx_reads_are_tracked() {
-        // Wrap a Signal<i32> in BindingEvalContext, evaluate a PropRead binding
-        // inside an Effect, then update the Signal and assert the Effect re-ran.
+        // Wrap a Signal<i32> in BindingEvalContext via SignalRegistry, evaluate a
+        // PropRead binding inside an Effect, then update the Signal and assert the
+        // Effect re-ran.
         use crate::handler::{evaluate_binding, HandlerExpr, InterpolationPart};
 
         let sig = Signal::new(0i32);
-        let mut props = std::collections::HashMap::new();
-        props.insert("root.count".to_string(), sig.clone());
+        let mut registry = SignalRegistry::new();
+        registry.i32s.insert("root.count".to_string(), sig.clone());
+        let registry = Rc::new(registry);
 
         let log: Rc<RefCell<Vec<String>>> = Rc::new(RefCell::new(Vec::new()));
         let log_c = Rc::clone(&log);
-        let props_c = props.clone();
+        let registry_c = Rc::clone(&registry);
 
         let _h = EffectHandle::new(move || {
-            let mut ctx = BindingEvalContext::new(&props_c);
+            let mut ctx = BindingEvalContext::new(&registry_c);
             let expr = HandlerExpr::Interpolation(vec![
                 InterpolationPart::Literal("Count: ".into()),
                 InterpolationPart::Expr(HandlerExpr::PropRead {
@@ -615,8 +633,8 @@ mod tests {
     fn binding_ctx_set_returns_write_error() {
         use crate::handler::EvalError;
 
-        let props = std::collections::HashMap::<String, Signal<i32>>::new();
-        let mut ctx = BindingEvalContext::new(&props);
+        let registry = SignalRegistry::new();
+        let mut ctx = BindingEvalContext::new(&registry);
         let result = ctx.set_i32("x", 1);
         assert_eq!(result, Err(EvalError::WriteInBindingContext { path: "x".into() }));
     }
@@ -627,17 +645,18 @@ mod tests {
         use crate::handler::EvalContext;
 
         let sig = Signal::new(42i32);
-        let mut props = std::collections::HashMap::new();
-        props.insert("p".to_string(), sig.clone());
+        let mut registry = SignalRegistry::new();
+        registry.i32s.insert("p".to_string(), sig.clone());
+        let registry = Rc::new(registry);
 
         let run_count = Rc::new(RefCell::new(0i32));
         let run_count_c = Rc::clone(&run_count);
-        let props_for_untracked = props.clone();
+        let registry_untracked = Rc::clone(&registry);
 
         // Effect using get_i32 (untracked): Signal update must NOT re-run it.
         let _h_untracked = EffectHandle::new(move || {
             *run_count_c.borrow_mut() += 1;
-            let ctx = BindingEvalContext::new(&props_for_untracked);
+            let ctx = BindingEvalContext::new(&registry_untracked);
             let _ = ctx.get_i32("p").unwrap();
         });
         assert_eq!(*run_count.borrow(), 1);
@@ -647,11 +666,11 @@ mod tests {
         // Effect using read_i32_tracked: Signal update MUST re-run it.
         let run_count2 = Rc::new(RefCell::new(0i32));
         let run_count2_c = Rc::clone(&run_count2);
-        let props2 = props.clone();
+        let registry_tracked = Rc::clone(&registry);
 
         let _h_tracked = EffectHandle::new(move || {
             *run_count2_c.borrow_mut() += 1;
-            let ctx = BindingEvalContext::new(&props2);
+            let ctx = BindingEvalContext::new(&registry_tracked);
             let _ = ctx.read_i32_tracked("p").unwrap();
         });
         assert_eq!(*run_count2.borrow(), 1);
@@ -666,9 +685,9 @@ mod tests {
         use crate::handler::{HandlerExpr, InterpolationPart};
 
         let sig = Signal::new(0i32);
-        let mut props = HashMap::new();
-        props.insert("root.count".to_string(), sig.clone());
-        let props = Rc::new(props);
+        let mut registry = SignalRegistry::new();
+        registry.i32s.insert("root.count".to_string(), sig.clone());
+        let registry = Rc::new(registry);
 
         let written: Rc<RefCell<Vec<String>>> = Rc::new(RefCell::new(Vec::new()));
         let written_c = Rc::clone(&written);
@@ -679,7 +698,7 @@ mod tests {
             InterpolationPart::Expr(HandlerExpr::PropRead { path: "root.count".into() }),
         ]);
 
-        let _h = register_binding_with_writer(writer, expr, props);
+        let _h = register_binding_with_writer(writer, expr, registry);
         assert_eq!(*written.borrow(), vec!["Count: 0"]);
 
         sig.set(5);
@@ -694,21 +713,60 @@ mod tests {
         use crate::handler::HandlerExpr;
 
         let sig = Signal::new(42i32);
-        let mut props = HashMap::new();
-        props.insert("p".to_string(), sig.clone());
-        let props = Rc::new(props);
+        let mut registry = SignalRegistry::new();
+        registry.i32s.insert("p".to_string(), sig.clone());
+        let registry = Rc::new(registry);
 
         let dirty = Rc::new(Cell::new(false));
         let dirty_c = Rc::clone(&dirty);
         let writer: Box<dyn FnMut(String)> = Box::new(move |_v| dirty_c.set(true));
 
         let expr = HandlerExpr::PropRead { path: "p".into() };
-        let _h = register_binding_with_writer(writer, expr, props);
+        let _h = register_binding_with_writer(writer, expr, registry);
         assert!(dirty.get(), "writer not called on initial binding run");
 
         dirty.set(false);
         sig.set(99);
         assert!(dirty.get(), "writer not called after Signal update");
+    }
+
+    // ── SignalRegistry string-typed Signal tests (DD-M2-P6-007) ─────────────
+
+    #[test]
+    fn signal_registry_strings_register_and_read() {
+        // Signal<String> can be inserted into SignalRegistry.strings and read
+        // back with the correct value — pure-logic verification that the strings
+        // field is wired correctly.  Binding-evaluator integration is deferred
+        // to DD-M2-P6-011.
+        let mut registry = SignalRegistry::new();
+        let sig = Signal::new("hello".to_string());
+        registry.strings.insert("label".to_string(), sig.clone());
+
+        assert_eq!(registry.strings.get("label").unwrap().get_untracked(), "hello");
+
+        sig.set("world".to_string());
+        assert_eq!(registry.strings.get("label").unwrap().get_untracked(), "world");
+    }
+
+    #[test]
+    fn signal_string_set_invalidates_dependents() {
+        // Signal<String>::set notifies dependent Effects — same tracking
+        // contract as Signal<i32>.
+        let mut registry = SignalRegistry::new();
+        let sig = Signal::new("a".to_string());
+        registry.strings.insert("s".to_string(), sig.clone());
+
+        let log: Rc<RefCell<Vec<String>>> = Rc::new(RefCell::new(Vec::new()));
+        let log_c = Rc::clone(&log);
+        let sig_c = sig.clone();
+
+        let _h = EffectHandle::new(move || {
+            log_c.borrow_mut().push(sig_c.get());
+        });
+        assert_eq!(*log.borrow(), vec!["a"]);
+
+        sig.set("b".to_string());
+        assert_eq!(*log.borrow(), vec!["a", "b"]);
     }
 
     // ── drain ordering tests (DD-M2-P5-004) ──────────────────────────────────
