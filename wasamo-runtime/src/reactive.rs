@@ -5,6 +5,35 @@ use std::sync::atomic::{AtomicU64, Ordering};
 
 use crate::handler::{evaluate_binding, EvalContext, EvalError, HandlerExpr};
 
+/// Health state of the reactive engine. Once `Diverged`, all ABI calls
+/// (except destroy) must return `WASAMO_ERR_REACTIVE_DIVERGED`.
+#[derive(Copy, Clone, Eq, PartialEq, Debug)]
+pub(crate) enum RuntimeHealth {
+    Healthy,
+    Diverged,
+}
+
+/// Diagnostics captured when the drain loop exceeds `MUTATION_CAP`.
+#[derive(Clone, Debug)]
+pub(crate) struct DivergenceDiagnostics {
+    pub(crate) offending_effect_id: u64,
+    pub(crate) iteration_count: usize,
+    pub(crate) last_dirty_signal_ids: Vec<u64>,
+}
+
+thread_local! {
+    static HEALTH: Cell<RuntimeHealth> = const { Cell::new(RuntimeHealth::Healthy) };
+    static DIVERGENCE_DIAG: RefCell<Option<DivergenceDiagnostics>> = const { RefCell::new(None) };
+}
+
+pub(crate) fn runtime_health() -> RuntimeHealth {
+    HEALTH.with(|h| h.get())
+}
+
+pub(crate) fn divergence_diagnostics() -> Option<DivergenceDiagnostics> {
+    DIVERGENCE_DIAG.with(|d| d.borrow().clone())
+}
+
 #[derive(Copy, Clone, Eq, PartialEq, Hash, Debug)]
 pub(crate) struct SignalId(u64);
 
@@ -85,9 +114,12 @@ fn run_effect(effect_id: EffectId) {
 /// Drain the dirty-Effect set until quiescent, or until the iteration cap is
 /// reached.  Each `run_effect` call manages `BATCH_DEPTH` internally, so
 /// writes made inside Effect bodies are deferred to the next drain iteration.
+///
+/// If the cap is exceeded the runtime transitions irreversibly to `Diverged`
+/// and records diagnostics in `DIVERGENCE_DIAG`.
 fn drain_dirty_effects() {
-    const ITERATION_CAP: usize = 16;
-    for _ in 0..ITERATION_CAP {
+    const MUTATION_CAP: usize = 16;
+    for iteration in 0..MUTATION_CAP {
         let dirty: Vec<EffectId> = DIRTY_EFFECTS.with(|d| {
             let mut set = d.borrow_mut();
             let mut v: Vec<EffectId> = set.drain().collect();
@@ -97,16 +129,46 @@ fn drain_dirty_effects() {
         if dirty.is_empty() {
             return;
         }
+        if iteration + 1 == MUTATION_CAP {
+            // Capture diagnostics before running the final batch so we know
+            // which effect caused the last-iteration dirty signals.
+            let offending_effect_id = dirty.first().map(|e| e.0).unwrap_or(0);
+            let last_dirty_signals: Vec<u64> = GRAPH.with(|g| {
+                let g = g.borrow();
+                dirty
+                    .iter()
+                    .flat_map(|eid| g.back.get(eid).into_iter().flatten().map(|s| s.0))
+                    .collect()
+            });
+            // Run the effects so they can dirty signals again.
+            for effect_id in &dirty {
+                run_effect(*effect_id);
+            }
+            // Check whether effects are still dirty after the final iteration.
+            let still_dirty = DIRTY_EFFECTS.with(|d| !d.borrow().is_empty());
+            if still_dirty {
+                DIRTY_EFFECTS.with(|d| d.borrow_mut().clear());
+                HEALTH.with(|h| h.set(RuntimeHealth::Diverged));
+                let diag = DivergenceDiagnostics {
+                    offending_effect_id,
+                    iteration_count: MUTATION_CAP,
+                    last_dirty_signal_ids: last_dirty_signals,
+                };
+                DIVERGENCE_DIAG.with(|d| *d.borrow_mut() = Some(diag.clone()));
+                let msg = format!(
+                    "wasamo reactive: reactive divergence after {} iterations; \
+                     offending Effect id={}; last dirty Signal ids={:?}",
+                    diag.iteration_count,
+                    diag.offending_effect_id,
+                    diag.last_dirty_signal_ids,
+                );
+                crate::abi::set_last_error(msg);
+            }
+            return;
+        }
         for effect_id in dirty {
             run_effect(effect_id);
         }
-    }
-    if DIRTY_EFFECTS.with(|d| !d.borrow().is_empty()) {
-        eprintln!(
-            "wasamo reactive: drain loop exceeded iteration cap (16); \
-             divergent binding detected"
-        );
-        DIRTY_EFFECTS.with(|d| d.borrow_mut().clear());
     }
 }
 
@@ -720,5 +782,184 @@ mod tests {
         // is the DD-P8-002 contract: reactive writes precede the layout drain.
         assert_eq!(derived.get_untracked(), 10,
             "layout phase must observe the reactive-updated value");
+    }
+
+    // ── Phase 1 ordering tests (DD-M2-P6-001) ────────────────────────────────
+
+    #[test]
+    fn phase1_fifo_emission_order() {
+        // Two independent Signals each with one Effect. Writes in FIFO order
+        // must produce Effect runs in the same order as the writes.
+        let sig_a = Signal::new(0i32);
+        let sig_b = Signal::new(0i32);
+        let order: Rc<RefCell<Vec<&'static str>>> = Rc::new(RefCell::new(Vec::new()));
+
+        let sig_a_c = sig_a.clone();
+        let order_a = Rc::clone(&order);
+        let _ha = EffectHandle::new(move || {
+            let _ = sig_a_c.get();
+            order_a.borrow_mut().push("a");
+        });
+        let sig_b_c = sig_b.clone();
+        let order_b = Rc::clone(&order);
+        let _hb = EffectHandle::new(move || {
+            let _ = sig_b_c.get();
+            order_b.borrow_mut().push("b");
+        });
+        // Initial runs record "a", "b".
+        assert_eq!(*order.borrow(), vec!["a", "b"]);
+
+        // Batch both writes so effects run in one drain cycle.
+        with_batched_writes(|| {
+            sig_a.set(1);
+            sig_b.set(1);
+        });
+        // After the batch: initial "a","b" + re-run "a","b" in FIFO order.
+        assert_eq!(*order.borrow(), vec!["a", "b", "a", "b"]);
+    }
+
+    #[test]
+    fn phase1_topological_resolution_two_dependent_effects() {
+        // effect_b depends on a Signal written by effect_a.
+        // Topological order must run effect_a before effect_b within one drain
+        // cycle, so effect_b always sees effect_a's output value.
+        let source = Signal::new(0i32);
+        let mid = Signal::new(0i32);
+
+        let source_c = source.clone();
+        let mid_c_write = mid.clone();
+        // effect_a: reads source, writes mid.
+        let _ha = EffectHandle::new(move || {
+            mid_c_write.set(source_c.get() * 10);
+        });
+        // Initial: source=0 → mid=0.
+        assert_eq!(mid.get_untracked(), 0);
+
+        let mid_c_read = mid.clone();
+        let seen: Rc<RefCell<Vec<i32>>> = Rc::new(RefCell::new(Vec::new()));
+        let seen_c = Rc::clone(&seen);
+        // effect_b: reads mid (depends on effect_a's output Signal).
+        let _hb = EffectHandle::new(move || {
+            seen_c.borrow_mut().push(mid_c_read.get());
+        });
+        // Initial run of effect_b sees mid=0.
+        assert_eq!(*seen.borrow(), vec![0]);
+
+        source.set(3);
+        // effect_a fires first (source dependency), sets mid=30.
+        // effect_b fires after (mid dependency), sees mid=30.
+        assert_eq!(mid.get_untracked(), 30);
+        assert_eq!(*seen.borrow(), vec![0, 30]);
+    }
+
+    #[test]
+    fn phase1_last_wins_reduces_observer_entries_to_one() {
+        // Multiple writes to the same Signal within one batch must collapse to
+        // a single Effect re-run (last-wins: only the final value matters).
+        let sig = Signal::new(0i32);
+        let run_count = Rc::new(RefCell::new(0i32));
+        let sig_c = sig.clone();
+        let count_c = Rc::clone(&run_count);
+        let _h = EffectHandle::new(move || {
+            let _ = sig_c.get();
+            *count_c.borrow_mut() += 1;
+        });
+        assert_eq!(*run_count.borrow(), 1); // initial run
+
+        with_batched_writes(|| {
+            sig.set(1);
+            sig.set(2);
+            sig.set(3);
+        });
+        // Three writes → exactly one additional Effect run (count = 2).
+        assert_eq!(*run_count.borrow(), 2);
+        // And the observed value is the last-written value.
+        assert_eq!(sig.get_untracked(), 3);
+    }
+
+    // ── Phase 3 mutation guard tests (DD-M2-P6-001) ───────────────────────────
+
+    #[test]
+    fn phase3_state_mutating_call_in_observer_returns_error() {
+        // Simulate the IN_OBSERVER_CALLBACK flag being set (Phase 3) and verify
+        // that check_not_in_observer returns WASAMO_ERR_OBSERVER_MUTATION.
+        use crate::emit::IN_OBSERVER_CALLBACK;
+        use crate::abi::WASAMO_ERR_OBSERVER_MUTATION;
+
+        IN_OBSERVER_CALLBACK.with(|f| f.set(true));
+        let result = crate::abi::check_not_in_observer_pub("test_fn");
+        IN_OBSERVER_CALLBACK.with(|f| f.set(false));
+
+        assert_eq!(result, Some(WASAMO_ERR_OBSERVER_MUTATION));
+    }
+
+    #[test]
+    fn phase3_flag_clear_allows_calls() {
+        // When IN_OBSERVER_CALLBACK is false, check_not_in_observer returns None.
+        use crate::emit::IN_OBSERVER_CALLBACK;
+
+        IN_OBSERVER_CALLBACK.with(|f| f.set(false));
+        let result = crate::abi::check_not_in_observer_pub("test_fn");
+        assert_eq!(result, None);
+    }
+
+    // ── Divergence state machine tests (DD-M2-P6-001) ────────────────────────
+
+    #[test]
+    fn divergence_cap_break_transitions_to_diverged() {
+        // Reset health state so this test is independent of others.
+        HEALTH.with(|h| h.set(RuntimeHealth::Healthy));
+        DIVERGENCE_DIAG.with(|d| *d.borrow_mut() = None);
+
+        // A divergent Effect that always re-enqueues itself will hit MUTATION_CAP.
+        let sig = Signal::new(0i32);
+        let sig_c = sig.clone();
+        let _h = EffectHandle::new(move || {
+            let v = sig_c.get();
+            sig_c.set(v.wrapping_add(1));
+        });
+
+        assert_eq!(runtime_health(), RuntimeHealth::Diverged,
+            "cap exhaustion must transition runtime to Diverged");
+    }
+
+    #[test]
+    fn diverged_subsequent_calls_return_diverged_error() {
+        use crate::abi::WASAMO_ERR_REACTIVE_DIVERGED;
+
+        // Put runtime in Diverged state.
+        HEALTH.with(|h| h.set(RuntimeHealth::Diverged));
+
+        let result = crate::abi::check_not_diverged_pub("test_fn");
+        assert_eq!(result, Some(WASAMO_ERR_REACTIVE_DIVERGED));
+
+        // Restore health for other tests.
+        HEALTH.with(|h| h.set(RuntimeHealth::Healthy));
+    }
+
+    #[test]
+    fn divergence_diagnostics_payload_populated() {
+        // Reset state.
+        HEALTH.with(|h| h.set(RuntimeHealth::Healthy));
+        DIVERGENCE_DIAG.with(|d| *d.borrow_mut() = None);
+
+        let sig = Signal::new(0i32);
+        let sig_c = sig.clone();
+        let _h = EffectHandle::new(move || {
+            let v = sig_c.get();
+            sig_c.set(v.wrapping_add(1));
+        });
+
+        let diag = divergence_diagnostics();
+        assert!(diag.is_some(), "diagnostics must be set after divergence");
+        let diag = diag.unwrap();
+        assert_eq!(diag.iteration_count, 16, "iteration_count must equal MUTATION_CAP");
+        assert_ne!(diag.offending_effect_id, 0, "offending_effect_id must be non-zero");
+        assert!(!diag.last_dirty_signal_ids.is_empty(),
+            "last_dirty_signal_ids must name the diverging signal");
+
+        // Restore health.
+        HEALTH.with(|h| h.set(RuntimeHealth::Healthy));
+        DIVERGENCE_DIAG.with(|d| *d.borrow_mut() = None);
     }
 }
