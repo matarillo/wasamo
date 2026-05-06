@@ -1,7 +1,9 @@
 mod ast;
 mod check;
 mod diagnostic;
+mod ir;
 mod lexer;
+mod lower;
 mod parser;
 
 fn main() {
