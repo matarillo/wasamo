@@ -14,6 +14,9 @@ crate-type = ["rlib"]
 [dependencies]
 wasamo-ir = { path = "../wasamo-ir" }
 
+[dev-dependencies]
+wasamoc = { path = "../wasamoc" }
+
 [dependencies.windows]
 version = "0.58"
 features = [

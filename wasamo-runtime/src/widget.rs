@@ -549,16 +549,23 @@ impl WidgetNode {
                         .map(|(_, expr)| expr.clone())
                         .collect()
                 };
+                // DD-M2-P6-006: dispatch handler bodies against the
+                // SignalRegistry installed by the IR loader. If no registry
+                // is active (e.g. tests building widgets directly) fall back
+                // to a no-op context — the evaluator runs but property
+                // reads/writes report "unknown property".
+                let registry = crate::reactive::active_registry();
                 for expr in &handler_exprs {
-                    // Phase 5 will wire up a real EvalContext that reaches
-                    // the reactive property store. For Phase 3 we provide a
-                    // no-op context; the evaluator runs but property
-                    // reads/writes report "unknown property".
-                    let mut ctx = NullEvalContext;
                     // DD-M2-P3-003: catch_unwind wrapper logs errors and
                     // continues the event loop; location is a coarse
                     // identifier (Phase 6 supplies the component name prefix).
-                    handler::invoke_handler(expr, &mut ctx, "?.clicked");
+                    if let Some(reg) = registry.as_deref() {
+                        let mut ctx = crate::reactive::HandlerEvalContext::new(reg);
+                        handler::invoke_handler(expr, &mut ctx, "?.clicked");
+                    } else {
+                        let mut ctx = NullEvalContext;
+                        handler::invoke_handler(expr, &mut ctx, "?.clicked");
+                    }
                 }
                 // Route "clicked" through the C-ABI signal registry. The
                 // emission is queued and fires after the current call
@@ -815,6 +822,36 @@ impl EvalContext for NullEvalContext {
     }
     fn set_i32(&mut self, path: &str, _value: i32) -> Result<(), EvalError> {
         Err(EvalError::UnknownProperty(path.to_string()))
+    }
+}
+
+// ── Reactive binding writer (DD-M2-P5-005 production caller) ─────────────────
+
+/// Static write function passed to `register_binding` as the property writer.
+///
+/// The reactive engine calls this whenever a binding's tracked Signal changes;
+/// the stringified value produced by `evaluate_binding` is written to the
+/// widget property identified by `(id, prop)`. M2 string-typed properties
+/// (`PROP_TEXT_CONTENT`, `PROP_BUTTON_LABEL`) accept the value as-is. Other
+/// property kinds (e.g. typed integers via DD-M2-P6-011) will introduce
+/// kind-aware dispatch when their loader paths land.
+///
+/// Safety: `id` was created from `widget.as_mut() as *mut WidgetNode` by the
+/// IR loader; the runtime is single-threaded GUI; the WidgetNode outlives the
+/// binding (the EffectHandle is owned by `WidgetNode.bindings`, so disposal
+/// runs before the node is dropped — DD-M2-P5-003).
+pub(crate) fn widget_write_property(
+    id: crate::reactive::WidgetId,
+    prop: u32,
+    value: &str,
+) {
+    let node_ptr = id.0 as *mut WidgetNode;
+    if node_ptr.is_null() {
+        return;
+    }
+    let val = PropertyValue::String(value.to_string());
+    unsafe {
+        let _ = (*node_ptr).set_property(prop, &val);
     }
 }
 

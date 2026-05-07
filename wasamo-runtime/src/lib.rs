@@ -1,6 +1,7 @@
 mod abi;
 mod emit;
 pub mod handler;
+pub mod ir_loader;
 mod layout;
 pub(crate) mod reactive;
 mod registry;

@@ -331,6 +331,60 @@ impl<'a> EvalContext for BindingEvalContext<'a> {
     }
 }
 
+/// Read/write `EvalContext` adapter used by inline handler evaluation
+/// (DD-M2-P6-006). Reads are *untracked* — handlers run outside the reactive
+/// scope, so dependency collection is not desired here. Writes mutate the
+/// underlying `Signal`, triggering reactive cascade through the existing
+/// `Signal::set` path.
+pub(crate) struct HandlerEvalContext<'a> {
+    registry: &'a SignalRegistry,
+}
+
+impl<'a> HandlerEvalContext<'a> {
+    pub(crate) fn new(registry: &'a SignalRegistry) -> Self {
+        Self { registry }
+    }
+}
+
+impl<'a> EvalContext for HandlerEvalContext<'a> {
+    fn get_i32(&self, path: &str) -> Result<i32, EvalError> {
+        self.registry.i32s
+            .get(path)
+            .ok_or_else(|| EvalError::UnknownProperty(path.to_string()))
+            .map(|s| s.get_untracked())
+    }
+
+    fn set_i32(&mut self, path: &str, value: i32) -> Result<(), EvalError> {
+        let sig = self
+            .registry
+            .i32s
+            .get(path)
+            .ok_or_else(|| EvalError::UnknownProperty(path.to_string()))?;
+        sig.set(value);
+        Ok(())
+    }
+}
+
+// ── Active SignalRegistry handoff (DD-M2-P6-006) ────────────────────────────
+//
+// The IR loader (`ir_loader::build_widget_tree`) installs the per-component
+// SignalRegistry here so click-handler dispatch (`widget::hit_test_click`)
+// can reach it without threading the registry through every WidgetNode method.
+// Single-threaded GUI; one component per runtime in M2 — M3 may swap this for
+// per-window scoping when multi-window support lands.
+
+thread_local! {
+    static ACTIVE_REGISTRY: RefCell<Option<Rc<SignalRegistry>>> = const { RefCell::new(None) };
+}
+
+pub(crate) fn set_active_registry(registry: Rc<SignalRegistry>) {
+    ACTIVE_REGISTRY.with(|r| *r.borrow_mut() = Some(registry));
+}
+
+pub(crate) fn active_registry() -> Option<Rc<SignalRegistry>> {
+    ACTIVE_REGISTRY.with(|r| r.borrow().clone())
+}
+
 // ── Binding registration (DD-M2-P5-005) ──────────────────────────────────────
 
 /// Opaque handle to a widget node. Avoids a circular import between reactive.rs

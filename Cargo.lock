@@ -67,6 +67,7 @@ name = "wasamo-runtime"
 version = "0.1.0"
 dependencies = [
  "wasamo-ir",
+ "wasamoc",
  "windows",
 ]
 
