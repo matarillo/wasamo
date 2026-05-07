@@ -54,6 +54,22 @@ pub fn window_add_widget(
     Ok(())
 }
 
+/// Install `root` as the window's content tree, taking ownership of the
+/// subtree. Performs an initial layout pass against the window's current
+/// client size and registers the root for click hit-testing and
+/// resize-driven re-layout.
+///
+/// Counterpart to `window_add_widget` — the latter merely attaches a Visual
+/// to the Composition tree without putting the widget into the window's
+/// `root_widget` slot, so it is suitable only for direct visual hosting (no
+/// layout, no hit-test). IR-loader-driven trees should use `window_set_root`.
+pub fn window_set_root(
+    window: &mut WindowState,
+    root: Box<WidgetNode>,
+) -> windows::core::Result<()> {
+    window::set_root(window, root)
+}
+
 pub fn run() {
     let mut msg = MSG::default();
     unsafe {
