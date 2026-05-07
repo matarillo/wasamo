@@ -1,0 +1,15 @@
+[package]
+name = "ir-loader-checkpoint"
+version = "0.0.0"
+edition = "2021"
+publish = false
+description = "DD-M2-P6-006 GUI checkpoint harness — drives counter.ui through wasamoc + ir_loader and renders identically to the Phase 5 reactive spike."
+
+[dependencies]
+wasamo-runtime = { path = "../../wasamo-runtime" }
+wasamo-ir = { path = "../../wasamo-ir" }
+wasamoc = { path = "../../wasamoc" }
+windows = { version = "0.58", features = [
+    "Win32_Foundation",
+    "UI_Composition",
+] }
