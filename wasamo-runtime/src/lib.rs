@@ -10,6 +10,22 @@ mod text;
 mod widget;
 mod window;
 
+/// Re-export of the C ABI surface for integration-test consumption. The
+/// production callers always go through `wasamo.h` against `wasamo.dll`;
+/// this module only exists so cross-crate tests inside this workspace can
+/// invoke the ABI without an extra FFI hop.
+pub mod ffi {
+    pub use crate::abi::*;
+
+    /// Test-only seam exposed through `__install_owning_thread_for_test`
+    /// in the runtime module. See its documentation. Intended exclusively
+    /// for the workspace's integration tests.
+    #[doc(hidden)]
+    pub fn __install_owning_thread_for_test() {
+        crate::runtime::__install_owning_thread_for_test();
+    }
+}
+
 pub use layout::{Alignment, SizeConstraint, WidgetKind};
 pub use text::{TextRenderer, TypographyStyle};
 pub use widget::{ButtonStyle, WidgetNode};
