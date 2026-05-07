@@ -85,6 +85,63 @@ workspace. `wasamo-dll` depends on `wasamo-runtime` (rlib) only.
 The C ABI boundary is the only coupling point between the runtime
 pair (`wasamo-runtime` + `wasamo-dll`) and the Rust binding pair.
 
+### DSL build pipeline (M2-Phase 6 onward)
+
+The `examples/counter-{c,rust,zig}/` hosts consume `examples/counter/counter.ui`
+through `wasamoc`-emitted IR. The pipeline at build time:
+
+```
+counter.ui  ──[wasamoc build]──▶  counter.uic  ──[host build]──▶  counter-{c,rust,zig}.exe
+   (DSL)                            (IR text;                       (host calls
+                                     wasamoc-internal               wasamo_load_ui at
+                                     emit format)                   runtime with the
+                                                                    .uic content)
+```
+
+Each host's build system invokes `wasamoc` directly:
+
+- **counter-rust**: `build.rs` runs `wasamoc build` and writes the IR to `OUT_DIR`;
+  the binary loads it via absolute path through `wasamo_load_ui` (`WASAMO_LOAD_PATH`).
+- **counter-c**: CMake's `add_custom_command` runs `wasamoc build` and a generated
+  C header (`xxd -i`-equivalent) embeds the IR bytes; the binary passes the blob
+  through `wasamo_load_ui` (`WASAMO_LOAD_MEMORY`).
+- **counter-zig**: a `build.zig` step runs `wasamoc build` and writes the IR
+  alongside the build artifacts; `@embedFile` inlines it; the binary passes the
+  blob through `wasamo_load_ui` (`WASAMO_LOAD_MEMORY`).
+
+This means **every host build depends on `wasamoc` having been built first**.
+For Rust, `cargo build -p counter-rust` resolves this via the workspace and
+`build.rs`'s `cargo:rerun-if-changed` directive; for the C and Zig hosts,
+`cargo build -p wasamoc` must precede the host build. See `CLAUDE.md` §
+"Build ordering requirements" for the operational rule.
+
+**This pipeline is provisional.** The current shape — three independent
+build systems each invoking `wasamoc` — is acceptable while M2 has a single
+DSL example, but does not generalize:
+
+- **Hot reload** (post-1.0; `wasamoc`-output-format ADR /
+  [DD-M2-P2-001](./decisions/m2-phase-2-wasamoc-output-format.md))
+  presumes IR can be loaded at runtime without re-linking the host. The
+  build-time embed model in counter-{c,zig} is incompatible with that goal
+  and would need to migrate to `WASAMO_LOAD_PATH` with a runtime-discovered
+  IR file.
+- **Multiple `.ui` files per host** (likely from M3 onward) makes per-host
+  hand-written wasamoc invocation untenable; a higher-level mechanism (e.g.
+  a `cargo wasamoc` subcommand or a build-system-agnostic `wasamoc` driver
+  emitting per-host integration shims) is the natural successor.
+
+**Re-evaluation triggers:**
+
+- M3 DSL spec drafting — when the public DSL surface stabilizes, decide
+  whether `wasamoc` should expose a build-time integration API beyond
+  `wasamoc build <file.ui>`.
+- M3+ — the first host with more than one `.ui` file.
+- Hot reload feasibility work (post-1.0) — if pursued, the embed-at-build
+  model is out and runtime IR loading becomes the only path.
+
+The current per-host invocation should be treated as an **expedient for the
+M2 acceptance gate**, not as the long-term architecture.
+
 ---
 
 ## 2. Layer Diagram
