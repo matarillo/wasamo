@@ -31,7 +31,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     wasamo_runtime::init()?;
 
     // 3. Create the window.
-    let window = wasamo_runtime::window_create("Counter (IR loader checkpoint)", 320, 240)?;
+    let mut window = wasamo_runtime::window_create("Counter (IR loader checkpoint)", 320, 240)?;
 
     // 4. Parse IR + build widget tree via the production loader.
     let comp = wasamo_runtime::ir_loader::parse_ir(&ir_text)
@@ -41,15 +41,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let built = wasamo_runtime::ir_loader::build_widget_tree(&comp, compositor, renderer)
         .map_err(|e| format!("build_widget_tree: {e}"))?;
 
-    // 5. Attach root to window.
-    wasamo_runtime::window_add_widget(&window, &built.root)?;
+    // 5. Install root as the window's content tree. window_set_root takes
+    //    ownership of the WidgetNode subtree, runs the initial layout pass,
+    //    and registers the root for click hit-testing — window_add_widget is
+    //    Visual-only and would skip both, leaving Text zero-sized and
+    //    Button clicks undispatched.
+    wasamo_runtime::window_set_root(&mut window, built.root)?;
 
-    // 6. Show window. The widget tree must outlive the message loop, but
-    //    Box<WidgetNode> would normally drop at end of `main`'s scope — leak
-    //    it explicitly for the harness lifetime (process exits when window
-    //    closes, so the OS reclaims everything). Mirrors how the Phase 5
-    //    spike harness handled the same constraint.
-    let _root_leak = Box::leak(built.root);
+    // 6. Show the window.
     wasamo_runtime::window_show(&window);
 
     // 7. Run the message loop. Returns when the window is closed.
