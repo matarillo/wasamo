@@ -27,14 +27,35 @@ use crate::widget::{
 
 use windows::UI::Composition::Compositor;
 
-/// Errors surfaced by the IR loader. The C ABI translation
-/// (`WASAMO_ERR_IR_MALFORMED`) is wired in DD-M2-P6-005 / DD-M2-P6-009.
+/// Errors surfaced by the IR loader.
+///
+/// `InvalidHeader`, `Parse`, `UnknownWidget`, and `Validate` are all
+/// "malformed IR" failures — DD-M2-P6-005 maps them to
+/// `WASAMO_ERR_IR_MALFORMED` at the C ABI boundary, with the `Display`
+/// rendering surfaced through `wasamo_last_error_message`. `Build`
+/// failures originate from the Win32/WinRT side and are not part of the
+/// defense-in-depth surface targeted by DD-M2-P6-009.
 #[derive(Debug, Clone, PartialEq)]
 pub enum IrLoadError {
     InvalidHeader(String),
     Parse(String),
     UnknownWidget(String),
+    Validate(String),
     Build(String),
+}
+
+impl IrLoadError {
+    /// Whether this variant represents a "malformed IR" failure
+    /// (DD-M2-P6-009). Useful for the C ABI translation in DD-M2-P6-005.
+    pub fn is_malformed(&self) -> bool {
+        matches!(
+            self,
+            IrLoadError::InvalidHeader(_)
+                | IrLoadError::Parse(_)
+                | IrLoadError::UnknownWidget(_)
+                | IrLoadError::Validate(_)
+        )
+    }
 }
 
 impl std::fmt::Display for IrLoadError {
@@ -43,6 +64,7 @@ impl std::fmt::Display for IrLoadError {
             IrLoadError::InvalidHeader(msg) => write!(f, "invalid IR header: {msg}"),
             IrLoadError::Parse(msg) => write!(f, "IR parse error: {msg}"),
             IrLoadError::UnknownWidget(name) => write!(f, "unknown widget type: {name}"),
+            IrLoadError::Validate(msg) => write!(f, "IR validation error: {msg}"),
             IrLoadError::Build(msg) => write!(f, "IR build error: {msg}"),
         }
     }
@@ -66,6 +88,13 @@ pub struct BuiltUi {
 
 /// Parse the normative IR text (DD-M2-P6-002) into an `IrComponent`. Pure
 /// logic — testable without any Win32/WinRT dependency.
+///
+/// On success the returned `IrComponent` has passed defense-in-depth
+/// validation (DD-M2-P6-009): header magic + version, top-level document
+/// structure (enforced by the parser), unique `state` names, and
+/// resolution of every name referenced by a binding/handler expression
+/// to a declared `state`. Per-node value-type integrity is trusted from
+/// the emitter (`wasamoc`) and is **not** re-validated here.
 pub fn parse_ir(text: &str) -> Result<IrComponent, IrLoadError> {
     let body = check_and_strip_header(text)?;
     let tokens = tokenize(body)?;
@@ -77,7 +106,98 @@ pub fn parse_ir(text: &str) -> Result<IrComponent, IrLoadError> {
             p.pos
         )));
     }
+    validate(&comp)?;
     Ok(comp)
+}
+
+/// Defense-in-depth validation pass (DD-M2-P6-009).
+///
+/// Currently checks:
+/// 1. `state` declarations have unique names (flat namespace per
+///    DD-M2-P6-004's name-resolution rules).
+/// 2. Every name referenced by a binding/handler expression resolves to
+///    a declared `state`. Widget-instance references are not yet part of
+///    the IR — see `docs/notes/dsl-grammar.md` Q1 for the open question.
+fn validate(comp: &IrComponent) -> Result<(), IrLoadError> {
+    let mut declared = std::collections::HashSet::new();
+    for state in &comp.states {
+        if !declared.insert(state.name.as_str()) {
+            return Err(IrLoadError::Validate(format!(
+                "duplicate `state` name: `{}`",
+                state.name
+            )));
+        }
+    }
+    validate_node_references(&comp.root, &declared)
+}
+
+fn validate_node_references(
+    node: &IrNode,
+    declared: &std::collections::HashSet<&str>,
+) -> Result<(), IrLoadError> {
+    for binding in &node.bindings {
+        validate_expr_references(&binding.expr, declared, &|name| {
+            format!(
+                "binding `{}` references undeclared name `{}`",
+                binding.prop_name, name
+            )
+        })?;
+    }
+    for handler in &node.handlers {
+        validate_expr_references(&handler.expr, declared, &|name| {
+            format!(
+                "handler `on {}` references undeclared name `{}`",
+                handler.signal, name
+            )
+        })?;
+    }
+    for child in &node.children {
+        validate_node_references(child, declared)?;
+    }
+    Ok(())
+}
+
+fn validate_expr_references(
+    expr: &HandlerExpr,
+    declared: &std::collections::HashSet<&str>,
+    err_msg: &dyn Fn(&str) -> String,
+) -> Result<(), IrLoadError> {
+    match expr {
+        HandlerExpr::IntLit(_) | HandlerExpr::StrLit(_) => Ok(()),
+        HandlerExpr::PropRead { path } => {
+            if !declared.contains(path.as_str()) {
+                Err(IrLoadError::Validate(err_msg(path)))
+            } else {
+                Ok(())
+            }
+        }
+        HandlerExpr::Assign { lhs, rhs } => {
+            if !declared.contains(lhs.as_str()) {
+                return Err(IrLoadError::Validate(err_msg(lhs)));
+            }
+            validate_expr_references(rhs, declared, err_msg)
+        }
+        HandlerExpr::CompoundAssign { lhs, rhs, .. } => {
+            if !declared.contains(lhs.as_str()) {
+                return Err(IrLoadError::Validate(err_msg(lhs)));
+            }
+            validate_expr_references(rhs, declared, err_msg)
+        }
+        HandlerExpr::Interpolation(parts) => {
+            for part in parts {
+                if let InterpolationPart::Expr(inner) = part {
+                    validate_expr_references(inner, declared, err_msg)?;
+                }
+            }
+            Ok(())
+        }
+        HandlerExpr::Block(exprs) => {
+            for inner in exprs {
+                validate_expr_references(inner, declared, err_msg)?;
+            }
+            Ok(())
+        }
+    }
 }
 
 fn check_and_strip_header(text: &str) -> Result<&str, IrLoadError> {
@@ -776,6 +896,7 @@ mod tests {
     fn binding_with_prop_read() {
         let c = parse_ok(
             ";wasamo-ir v0\ncomponent C inherits W {\n\
+             state count: i32 = 0\n\
              node V { bind text = (prop-read count) }\n}",
         );
         assert_eq!(c.root.bindings.len(), 1);
@@ -788,6 +909,7 @@ mod tests {
     fn binding_with_interpolation() {
         let c = parse_ok(
             ";wasamo-ir v0\ncomponent C inherits W {\n\
+             state count: i32 = 0\n\
              node V { bind text = (interp \"Count: \" ((prop-read count))) }\n}",
         );
         let b = &c.root.bindings[0];
@@ -804,6 +926,7 @@ mod tests {
     fn handler_with_compound_assign() {
         let c = parse_ok(
             ";wasamo-ir v0\ncomponent C inherits W {\n\
+             state count: i32 = 0\n\
              node V { on clicked { (compound-assign += count 1) } }\n}",
         );
         assert_eq!(c.root.handlers.len(), 1);
@@ -823,6 +946,8 @@ mod tests {
     fn handler_with_assign_and_block() {
         let c = parse_ok(
             ";wasamo-ir v0\ncomponent C inherits W {\n\
+             state x: i32 = 0\n\
+             state y: i32 = 0\n\
              node V { on clicked { (block (assign x 1) (assign y 2)) } }\n}",
         );
         let h = &c.root.handlers[0];
@@ -1000,5 +1125,165 @@ mod tests {
                 }
             }
         }
+    }
+
+    // ── DD-M2-P6-009 defense-in-depth validation tests ──────────────────
+
+    fn parse_err(src: &str) -> IrLoadError {
+        match parse_ir(src) {
+            Ok(_) => panic!("expected parse error, but parse succeeded:\n{src}"),
+            Err(e) => e,
+        }
+    }
+
+    fn assert_malformed_display_nonempty(err: &IrLoadError) {
+        assert!(err.is_malformed(), "expected malformed-class error, got {err:?}");
+        let msg = err.to_string();
+        assert!(
+            !msg.is_empty(),
+            "Display impl must produce non-empty message for {err:?}"
+        );
+    }
+
+    // Top-level structure ----------------------------------------------------
+
+    #[test]
+    fn malformed_no_root_node() {
+        let err = parse_err(";wasamo-ir v0\ncomponent C inherits W { }");
+        assert!(matches!(err, IrLoadError::Parse(ref m) if m.contains("no root node")));
+        assert_malformed_display_nonempty(&err);
+    }
+
+    #[test]
+    fn malformed_multiple_root_nodes() {
+        let err = parse_err(
+            ";wasamo-ir v0\ncomponent C inherits W { node V {} node W {} }",
+        );
+        assert!(matches!(err, IrLoadError::Parse(ref m) if m.contains("multiple root nodes")));
+        assert_malformed_display_nonempty(&err);
+    }
+
+    #[test]
+    fn malformed_missing_component_keyword() {
+        let err = parse_err(";wasamo-ir v0\nfoo C inherits W { node V {} }");
+        assert!(matches!(err, IrLoadError::Parse(_)));
+        assert_malformed_display_nonempty(&err);
+    }
+
+    #[test]
+    fn malformed_missing_inherits_keyword() {
+        let err = parse_err(";wasamo-ir v0\ncomponent C foo W { node V {} }");
+        assert!(matches!(err, IrLoadError::Parse(_)));
+        assert_malformed_display_nonempty(&err);
+    }
+
+    #[test]
+    fn malformed_trailing_tokens() {
+        let err = parse_err(
+            ";wasamo-ir v0\ncomponent C inherits W { node V {} } stray",
+        );
+        assert!(matches!(err, IrLoadError::Parse(ref m) if m.contains("trailing tokens")));
+        assert_malformed_display_nonempty(&err);
+    }
+
+    // Reference resolution ---------------------------------------------------
+
+    #[test]
+    fn malformed_propread_undeclared() {
+        let err = parse_err(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             node V { bind text = (prop-read missing) }\n}",
+        );
+        assert!(matches!(err, IrLoadError::Validate(ref m) if m.contains("missing")));
+        assert_malformed_display_nonempty(&err);
+    }
+
+    #[test]
+    fn malformed_assign_undeclared() {
+        let err = parse_err(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             node V { on clicked { (assign nope 1) } }\n}",
+        );
+        assert!(matches!(err, IrLoadError::Validate(ref m) if m.contains("nope")));
+        assert_malformed_display_nonempty(&err);
+    }
+
+    #[test]
+    fn malformed_compound_assign_undeclared() {
+        let err = parse_err(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             node V { on clicked { (compound-assign += counter 1) } }\n}",
+        );
+        assert!(matches!(err, IrLoadError::Validate(ref m) if m.contains("counter")));
+        assert_malformed_display_nonempty(&err);
+    }
+
+    #[test]
+    fn malformed_undeclared_inside_interpolation() {
+        let err = parse_err(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             node V { bind text = (interp \"x: \" ((prop-read ghost))) }\n}",
+        );
+        assert!(matches!(err, IrLoadError::Validate(ref m) if m.contains("ghost")));
+        assert_malformed_display_nonempty(&err);
+    }
+
+    #[test]
+    fn malformed_undeclared_inside_block() {
+        let err = parse_err(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             state x: i32 = 0\n\
+             node V { on clicked { (block (assign x 1) (assign y 2)) } }\n}",
+        );
+        // `x` is fine; `y` is not.
+        assert!(matches!(err, IrLoadError::Validate(ref m) if m.contains("y")));
+        assert_malformed_display_nonempty(&err);
+    }
+
+    #[test]
+    fn malformed_undeclared_in_child_node() {
+        let err = parse_err(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             state count: i32 = 0\n\
+             node Root {\n\
+               node Inner { bind text = (prop-read missing) }\n\
+             }\n}",
+        );
+        assert!(matches!(err, IrLoadError::Validate(ref m) if m.contains("missing")));
+        assert_malformed_display_nonempty(&err);
+    }
+
+    #[test]
+    fn malformed_duplicate_state_name() {
+        let err = parse_err(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             state count: i32 = 0\n\
+             state count: string = \"hi\"\n\
+             node V {}\n}",
+        );
+        assert!(matches!(err, IrLoadError::Validate(ref m) if m.contains("duplicate")));
+        assert_malformed_display_nonempty(&err);
+    }
+
+    #[test]
+    fn validate_passes_with_all_references_declared() {
+        // Sanity-check: every reference resolves, so parse_ir succeeds.
+        let c = parse_ok(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             state count: i32 = 0\n\
+             state label: string = \"hi\"\n\
+             node Root {\n\
+               node Text { bind text = (interp \"n=\" ((prop-read count))) }\n\
+               node Button { on clicked { (compound-assign += count 1) } }\n\
+             }\n}",
+        );
+        assert_eq!(c.states.len(), 2);
+    }
+
+    #[test]
+    fn header_error_is_malformed_class() {
+        let err = parse_err("not-a-header\ncomponent C inherits W { node V {} }");
+        assert!(matches!(err, IrLoadError::InvalidHeader(_)));
+        assert_malformed_display_nonempty(&err);
     }
 }
