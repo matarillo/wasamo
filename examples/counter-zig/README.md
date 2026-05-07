@@ -1,41 +1,50 @@
 # counter-zig — Hello Counter (Zig)
 
-A minimal counter application written in Zig using the `wasamo` Zig
-binding. This is the **M1 host-imperative** shape: the widget tree is
-constructed by hand through the `wasamo.experimental` namespace because
-`wasamoc` is parser-only in M1. The M2 form — `wasamoc` lowering
-`counter.ui` to Zig code — is future work.
-
-The equivalent declarative source lives at
-[`examples/counter/counter.ui`](../counter/counter.ui); run
-`wasamoc check examples/counter/counter.ui` to verify it still parses.
+A minimal counter application written in Zig. The widget tree, state,
+binding, and click handler all live in
+[`examples/counter/counter.ui`](../counter/counter.ui); `build.zig`
+invokes `wasamoc` to compile that file to Wasamo IR and exposes the
+result to `main.zig` as the anonymous import `counter_uic`. `@embedFile`
+inlines the IR bytes at compile time, and `main.zig` hands the
+`(pointer, length)` blob to `wasamo_load_ui` via `WASAMO_LOAD_MEMORY`
+through the raw `wasamo.c` extern surface. No imperative widget
+construction, no `wasamo_set_property` calls — A1/A2 (DD-M2-P6-008) are
+structurally satisfied.
 
 ## What it does
 
-- Opens an 800 × 600 Mica window titled "Counter".
+- Opens an 800 × 600 window (default title "Wasamo" — DSL-side
+  `title: "Counter"` is currently dropped by the runtime; tracked in
+  [docs/notes/dsl-grammar.md Q2](../../docs/notes/dsl-grammar.md)).
 - Displays a title-size text label reading "Count: 0".
 - Shows an accent-style "Increment" button below the label.
-- Clicking Increment updates the label to "Count: N" and re-lays out
-  the widget tree so the new text width is reflected immediately.
+- Clicking Increment updates the label to "Count: N" via the reactive
+  binding declared in `counter.ui`.
 
 ## Build
 
 Prerequisites: Zig 0.16.0 (install via `winget install -e --id zig.zig`),
-a release build of `wasamo.dll` / `wasamo.dll.lib` from the repo root,
-and the Visual Studio 2022 Build Tools.
+a release build of `wasamo.dll` / `wasamo.dll.lib` and `wasamoc.exe`
+from the repo root, and the Visual Studio 2022 Build Tools.
 
 ```bat
 rem From the repo root:
 cargo build --release --workspace
 
-zig build -p . ^
-    --wasamo-lib target/release/wasamo.dll.lib ^
-    --wasamo-zig bindings/zig/wasamo.zig ^
+cd examples\counter-zig
+zig build ^
+    -Dwasamo-lib=../../target/release/wasamo.dll.lib ^
+    -Dwasamo-zig=../../bindings/zig/wasamo.zig ^
+    -Dwasamoc=../../target/release/wasamoc.exe ^
     -Doptimize=ReleaseSafe
 ```
 
-The resulting `bin/counter-zig.exe` requires `wasamo.dll` on the
-`PATH` or in the same directory to run.
+The build invokes `wasamoc.exe` to compile `counter.ui`, then embeds
+the IR via `@embedFile`. `wasamoc.exe` must exist at the configured
+path — see CLAUDE.md "Build ordering requirements".
+
+The resulting `zig-out/bin/counter-zig.exe` requires `wasamo.dll` on
+the `PATH` or in the same directory to run.
 
 ## See also
 

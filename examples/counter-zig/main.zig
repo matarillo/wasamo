@@ -1,88 +1,50 @@
-//! counter-zig/main.zig — Hello Counter example in Zig (M1 host-imperative shape)
+//! counter-zig/main.zig — Hello Counter, M2 declarative shape (DD-M2-P6-008).
 //!
-//! This program constructs the same widget tree as examples/counter/counter.ui
-//! imperatively through the wasamo Zig binding over the experimental C ABI:
-//!
-//!   VStack {
-//!     Text  { "Count: 0"  font: title }
-//!     Button { "Increment" style: accent }
-//!   }
-//!
-//! See examples/counter/counter.ui for the future M2 declarative form.
-//! The .ui -> runtime lowering (wasamoc codegen) is M2 scope; M1 verifies
-//! that the C ABI and Visual Layer work correctly.
+//! All UI structure (widget tree, state, binding, click handler) lives in
+//! examples/counter/counter.ui. build.zig invokes wasamoc to compile that
+//! file to IR text; the resulting counter.uic is exposed to this source
+//! as the anonymous import "counter_uic" (see build.zig). @embedFile
+//! inlines the IR bytes at compile time. main hands the (pointer, length)
+//! blob to wasamo_load_ui via WASAMO_LOAD_MEMORY. The host contains zero
+//! wasamo_set_property calls — A2 is structurally enforced.
 
 const std = @import("std");
 const wasamo = @import("wasamo");
 
-// ── Counter state ──────────────────────────────────────────────────────────────
-
-const CounterState = struct {
-    label: wasamo.Widget,
-    count: i32,
-};
-
-var g_state: CounterState = undefined;
-
-// ── Button click callback ──────────────────────────────────────────────────────
-
-fn onIncrement(
-    sender: ?*wasamo.c.WasamoWidget,
-    args: [*c]const wasamo.c.WasamoValue,
-    arg_count: usize,
-    user_data: ?*anyopaque,
-) callconv(.c) void {
-    _ = sender;
-    _ = args;
-    _ = arg_count;
-    _ = user_data;
-
-    g_state.count += 1;
-
-    var buf: [32]u8 = undefined;
-    const text = std.fmt.bufPrint(&buf, "Count: {}", .{g_state.count}) catch return;
-
-    g_state.label.setProperty(
-        wasamo.experimental.TEXT_CONTENT,
-        .{ .string = text },
-    ) catch {};
-}
-
-// ── Entry point ────────────────────────────────────────────────────────────────
+const counter_uic: []const u8 = @embedFile("counter_uic");
 
 pub fn main() !void {
-    // 1. Initialize the runtime.
-    var rt = try wasamo.Runtime.init();
-    defer rt.deinit();
+    if (wasamo.c.wasamo_init() != wasamo.c.WASAMO_OK) {
+        try printLastError("wasamo_init");
+        return error.InitFailed;
+    }
+    defer wasamo.c.wasamo_shutdown();
 
-    // 2. Create a window (800 x 600).
-    var window = try wasamo.Window.create("Counter", 800, 600);
-    defer window.deinit();
+    var window: ?*wasamo.c.WasamoWindow = null;
+    const status = wasamo.c.wasamo_load_ui(
+        wasamo.c.WASAMO_LOAD_MEMORY,
+        counter_uic.ptr,
+        counter_uic.len,
+        &window,
+    );
+    if (status != wasamo.c.WASAMO_OK) {
+        try printLastError("wasamo_load_ui");
+        return error.LoadUiFailed;
+    }
 
-    // 3. Build the widget tree (bottom-up, matching counter.ui).
+    const w = window orelse return error.LoadUiReturnedNull;
+    if (wasamo.c.wasamo_window_show(w) != wasamo.c.WASAMO_OK) {
+        try printLastError("wasamo_window_show");
+        return error.WindowShowFailed;
+    }
 
-    // Text: "Count: 0" with title typography (TypographyStyle::Title = 3).
-    const label = try wasamo.experimental.text("Count: 0");
-    try label.setProperty(wasamo.experimental.TEXT_STYLE, .{ .i32 = 3 });
+    wasamo.c.wasamo_run();
+}
 
-    // Button: "Increment" with accent style (ButtonStyle::Accent = 1).
-    const btn = try wasamo.experimental.button("Increment");
-    try btn.setProperty(wasamo.experimental.BUTTON_STYLE, .{ .i32 = 1 });
-
-    // Store label in global state for the callback to update.
-    g_state = .{ .label = label, .count = 0 };
-
-    // Connect the click handler before handing children to the stack.
-    _ = try btn.onClicked(onIncrement, null);
-
-    // VStack: label + button.
-    var children = [_]wasamo.Widget{ label, btn };
-    const root = try wasamo.experimental.vstack(&children);
-
-    // 4. Install the root widget and show the window.
-    try window.setRoot(root);
-    try window.show();
-
-    // 5. Run the message loop (blocks until the window is closed).
-    rt.run();
+fn printLastError(prefix: []const u8) !void {
+    if (wasamo.lastErrorMessage()) |msg| {
+        std.debug.print("{s} failed: {s}\n", .{ prefix, msg });
+    } else {
+        std.debug.print("{s} failed (no error message)\n", .{prefix});
+    }
 }
