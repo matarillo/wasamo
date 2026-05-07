@@ -2,3 +2,6 @@
 name = "wasamoc"
 version = "0.1.0"
 edition = "2021"
+
+[dependencies]
+wasamo-ir = { path = "../wasamo-ir" }

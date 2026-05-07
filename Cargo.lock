@@ -59,6 +59,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "wasamo-ir"
+version = "0.1.0"
+
+[[package]]
 name = "wasamo-runtime"
 version = "0.1.0"
 dependencies = [
@@ -75,6 +79,9 @@ dependencies = [
 [[package]]
 name = "wasamoc"
 version = "0.1.0"
+dependencies = [
+ "wasamo-ir",
+]
 
 [[package]]
 name = "windows"

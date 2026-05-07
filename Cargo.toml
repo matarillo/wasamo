@@ -1,5 +1,6 @@
 [workspace]
 members = [
+    "wasamo-ir",
     "wasamo-runtime",
     "wasamo-dll",
     "wasamoc",

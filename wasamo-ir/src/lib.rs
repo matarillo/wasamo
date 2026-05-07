@@ -1,5 +1,7 @@
-//! Wasamo IR types — the in-memory representation emitted by the lowering pass
-//! and serialised by the emit pass per DD-M2-P6-002 / DD-M2-P6-003.
+//! Wasamo IR types — the in-memory representation shared between the compiler
+//! (`wasamoc`) and the runtime loader (`wasamo-runtime`).
+//!
+//! Grammar spec: DD-M2-P6-002 / DD-M2-P6-003.
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum IrType {
