@@ -8,4 +8,7 @@ name = "counter-rust"
 path = "src/main.rs"
 
 [dependencies]
-wasamo = { path = "../../bindings/rust" }
+wasamo-sys = { path = "../../bindings/rust-sys" }
+
+[build-dependencies]
+wasamoc = { path = "../../wasamoc" }
