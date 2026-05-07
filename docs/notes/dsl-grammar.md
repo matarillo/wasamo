@@ -2,7 +2,7 @@
 title: DSL 文法 — 検討メモと未解決事項
 status: live
 created: 2026-05-07
-last-updated: 2026-05-07
+last-updated: 2026-05-08
 related-adrs:
   - docs/decisions/m2-phase-2-wasamoc-output-format.md
   - docs/decisions/m2-phase-6-ir-loader.md
@@ -64,3 +64,52 @@ related-specs:
 M3 の Grid / List 設計で per-item context が必要になった時、または、M2
 完了後の retrospective で「state 経由のみ」では表現力が足りない事例が
 出た時。
+
+---
+
+### Q2. Window 由来の component-level prop の runtime 配線
+
+**現状（M2-Phase 6 / DD-M2-P6-008 時点）:**
+
+- DSL では `component Counter inherits Window { title: "Counter"; backdrop: mica;
+  theme: system; ... }` のように Window 由来 prop を component 直下に書ける。
+- wasamoc の lowering（[wasamoc/src/lower.rs](../../wasamoc/src/lower.rs) の
+  `lower()`）は component-level の `PropertyBind` を root widget node の props に
+  splice し、IR 上は root の `prop title = "Counter"` 等として正しく出力される。
+- しかし IR loader の `construct_widget`（[wasamo-runtime/src/ir_loader.rs:714](../../wasamo-runtime/src/ir_loader.rs#L714)）
+  は `VStack`/`HStack`/`Text`/`Button` の各 widget が認識する prop しか参照せず、
+  認識しない prop は黙って drop する（M3 diagnostic system 移送の予告コメントが
+  [ir_loader.rs:684-685](../../wasamo-runtime/src/ir_loader.rs#L684) にある）。
+- 加えて `wasamo_load_ui` は内部で `window::create("Wasamo", 800, 600)` を固定で
+  呼ぶため、DSL の `title` を window のタイトルバーに反映する経路が ABI 上存在
+  しない（[wasamo-runtime/src/abi.rs:1081-1083](../../wasamo-runtime/src/abi.rs#L1081)
+  の `DEFAULT_WINDOW_TITLE` / `DEFAULT_WINDOW_WIDTH` / `DEFAULT_WINDOW_HEIGHT`）。
+
+**結果として M2 で起きること:**
+
+- M1 の counter examples では `wasamo_window_create("Counter", ...)` でタイトルが
+  `"Counter"` だったが、DD-M2-P6-008 で `wasamo_load_ui` 経由に切り替わると
+  default の `"Wasamo"` になる。
+- `backdrop: mica` / `theme: system` も同様に未配線（M4 の Mica/Acrylic 導入で
+  まとめて扱う想定）。
+- これは A1/A2 acceptance（DSL drives / reactive propagation without host wiring）
+  には抵触しない（acceptance 文面はタイトル文言を要求していない）。
+
+**意図的な未実装である理由:**
+
+- 配線するには ABI 拡張が必要（`wasamo_load_ui` への `WindowConfig` 引数追加か、
+  新規 `wasamo_window_set_title` などの導入）。これは Phase 6 のスコープ
+  「counter examples migration」を超え、abi_spec.md / wasamo.h / 新規 DD を
+  伴うため、Phase 6 に含めない判断とした。
+- 一方で wasamoc は正しく lowering しており、DSL surface としての記法は
+  既に確定している。ABI 配線が追いついていないだけ。
+
+**この議論を再訪する契機:**
+
+- M3 の DSL spec drafting — Window 由来 prop の意味論を normative spec に
+  書き起こす際に、配線も含めて整理する。
+- M4 の Mica / Acrylic 導入（[ROADMAP.md](../../ROADMAP.md) の M4） — backdrop
+  prop の実体実装に着手するタイミングで title も含めて ABI 設計を見直す。
+- それより早く必要が生じた場合（counter 以外の demo で title が要件になる等）
+  は、独立 DD を切って `wasamo_load_ui` の signature 拡張または sibling ABI
+  追加を検討する。
