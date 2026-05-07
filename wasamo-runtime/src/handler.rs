@@ -1,60 +1,12 @@
 //! Runtime-side DSL inline handler evaluator (DD-M2-P3-001 = Option A).
 //!
-//! `HandlerExpr` is the in-memory IR for handler bodies. Textual IR ↔
-//! `HandlerExpr` translation is Phase 6 work; this module is handler-only
-//! evaluation. The binding expression evaluator (Phase 5) will share the
-//! core once it is built on top of this foundation.
+//! `HandlerExpr` is the in-memory IR for handler bodies and binding
+//! expressions. The type is defined once in `wasamo-ir` and shared by both
+//! the compiler (`wasamoc::lower` / `emit`) and this evaluator; this module
+//! re-exports it for backwards-compatible call-sites and contributes the
+//! evaluator, error types, and diagnostic-location helpers.
 
-/// A single expression node in a DSL handler body or binding expression.
-///
-/// M2 scope: the subset of expression forms that appear in `counter.ui`.
-/// `StrLit` and `Interpolation` are binding-only — `evaluate()` rejects them;
-/// use `evaluate_binding()` for contexts that produce string output.
-#[derive(Debug, Clone)]
-pub enum HandlerExpr {
-    /// Integer literal.
-    IntLit(i32),
-
-    /// String literal (binding-only).
-    StrLit(String),
-
-    /// String interpolation: a sequence of literal and expression parts
-    /// (binding-only). Example: `"Count: \{root.count}"` →
-    /// `Interpolation(vec![Literal("Count: "), Expr(PropRead("root.count"))])`.
-    Interpolation(Vec<InterpolationPart>),
-
-    /// Read a named property from the evaluation context.
-    /// `path` is a dot-separated widget-path + property name, e.g. `"root.count"`.
-    PropRead { path: String },
-
-    /// Assign a value to a property: `lhs = rhs`.
-    Assign { lhs: String, rhs: Box<HandlerExpr> },
-
-    /// Compound-assign: `lhs op= rhs`.
-    CompoundAssign { lhs: String, op: CompoundOp, rhs: Box<HandlerExpr> },
-
-    /// A sequential block of statements; the value of the last expression is
-    /// the value of the block (unit / discarded for statement blocks).
-    Block(Vec<HandlerExpr>),
-}
-
-/// One segment of a string interpolation expression.
-#[derive(Debug, Clone)]
-pub enum InterpolationPart {
-    /// A literal string fragment.
-    Literal(String),
-    /// An embedded expression whose value is stringified and inserted.
-    Expr(HandlerExpr),
-}
-
-/// Compound-assignment operators supported in M2 handler bodies.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum CompoundOp {
-    Add,
-    Sub,
-    Mul,
-    Div,
-}
+pub use wasamo_ir::{CompoundOp, HandlerExpr, InterpolationPart};
 
 /// Evaluation context: property read / write access for a specific component.
 pub trait EvalContext {

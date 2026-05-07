@@ -79,16 +79,16 @@ fn emit_expr(expr: &HandlerExpr) -> String {
     match expr {
         HandlerExpr::IntLit(n) => n.to_string(),
         HandlerExpr::StrLit(s) => format!("\"{}\"", escape_string(s)),
-        HandlerExpr::PropRead { name } => format!("(prop-read {})", name),
+        HandlerExpr::PropRead { path } => format!("(prop-read {})", path),
         HandlerExpr::Assign { lhs, rhs } => {
             format!("(assign {} {})", lhs, emit_expr(rhs))
         }
         HandlerExpr::CompoundAssign { op, lhs, rhs } => {
             let op_str = match op {
-                CompoundOp::PlusEq => "+=",
-                CompoundOp::MinusEq => "-=",
-                CompoundOp::MulEq => "*=",
-                CompoundOp::DivEq => "/=",
+                CompoundOp::Add => "+=",
+                CompoundOp::Sub => "-=",
+                CompoundOp::Mul => "*=",
+                CompoundOp::Div => "/=",
             };
             format!("(compound-assign {} {} {})", op_str, lhs, emit_expr(rhs))
         }

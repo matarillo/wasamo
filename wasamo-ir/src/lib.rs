@@ -18,23 +18,30 @@ pub enum IrLiteral {
 
 /// HandlerExpr — the tagged-value expression form (DD-M2-P6-003 = Option A).
 /// Maps 1-to-1 to the IR text grammar §8.9.
+///
+/// This is the single source of truth shared between `wasamoc` (lowering /
+/// emit) and `wasamo-runtime` (loader / evaluator). Field / variant naming
+/// follows the runtime evaluator's prior conventions: `PropRead { path }`
+/// (the field carries a dot-separated path like `root.count`); `CompoundOp`
+/// variants are operator names without an `Eq` suffix because the assignment
+/// is implicit in the enclosing `CompoundAssign`.
 #[derive(Debug, Clone, PartialEq)]
 pub enum HandlerExpr {
     IntLit(i32),
     StrLit(String),
-    PropRead { name: String },
+    PropRead { path: String },
     Assign { lhs: String, rhs: Box<HandlerExpr> },
-    CompoundAssign { op: CompoundOp, lhs: String, rhs: Box<HandlerExpr> },
+    CompoundAssign { lhs: String, op: CompoundOp, rhs: Box<HandlerExpr> },
     Interpolation(Vec<InterpolationPart>),
     Block(Vec<HandlerExpr>),
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CompoundOp {
-    PlusEq,
-    MinusEq,
-    MulEq,
-    DivEq,
+    Add,
+    Sub,
+    Mul,
+    Div,
 }
 
 #[derive(Debug, Clone, PartialEq)]

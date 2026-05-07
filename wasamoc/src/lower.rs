@@ -135,8 +135,8 @@ fn lower_string_parts(parts: &[StringPart]) -> Vec<InterpolationPart> {
         .map(|p| match p {
             StringPart::Text(s) => InterpolationPart::Literal(s.clone()),
             StringPart::Interp(qn) => {
-                let name = qn.segments.last().cloned().unwrap_or_default();
-                InterpolationPart::Expr(HandlerExpr::PropRead { name })
+                let path = qn.segments.last().cloned().unwrap_or_default();
+                InterpolationPart::Expr(HandlerExpr::PropRead { path })
             }
         })
         .collect()
@@ -156,10 +156,10 @@ fn lower_statement(stmt: &Statement) -> HandlerExpr {
     let rhs = Box::new(lower_rhs_expr(&stmt.value));
     match stmt.op {
         AssignOp::Eq => HandlerExpr::Assign { lhs, rhs },
-        AssignOp::PlusEq => HandlerExpr::CompoundAssign { op: CompoundOp::PlusEq, lhs, rhs },
-        AssignOp::MinusEq => HandlerExpr::CompoundAssign { op: CompoundOp::MinusEq, lhs, rhs },
-        AssignOp::MulEq => HandlerExpr::CompoundAssign { op: CompoundOp::MulEq, lhs, rhs },
-        AssignOp::DivEq => HandlerExpr::CompoundAssign { op: CompoundOp::DivEq, lhs, rhs },
+        AssignOp::PlusEq => HandlerExpr::CompoundAssign { op: CompoundOp::Add, lhs, rhs },
+        AssignOp::MinusEq => HandlerExpr::CompoundAssign { op: CompoundOp::Sub, lhs, rhs },
+        AssignOp::MulEq => HandlerExpr::CompoundAssign { op: CompoundOp::Mul, lhs, rhs },
+        AssignOp::DivEq => HandlerExpr::CompoundAssign { op: CompoundOp::Div, lhs, rhs },
     }
 }
 
@@ -173,7 +173,7 @@ fn lower_rhs_expr(expr: &Expr) -> HandlerExpr {
                 HandlerExpr::Interpolation(lower_string_parts(parts))
             }
         }
-        Expr::Ident { name, .. } => HandlerExpr::PropRead { name: name.clone() },
+        Expr::Ident { name, .. } => HandlerExpr::PropRead { path: name.clone() },
         Expr::Measurement { value, .. } => HandlerExpr::IntLit(*value as i32),
         Expr::FloatLit { .. } => panic!("lower_rhs_expr: float not supported"),
     }
@@ -231,7 +231,7 @@ mod tests {
             b.expr,
             HandlerExpr::Interpolation(vec![
                 InterpolationPart::Literal("Count: ".into()),
-                InterpolationPart::Expr(HandlerExpr::PropRead { name: "count".into() }),
+                InterpolationPart::Expr(HandlerExpr::PropRead { path: "count".into() }),
             ])
         );
     }
@@ -248,7 +248,7 @@ mod tests {
         assert_eq!(
             h.expr,
             HandlerExpr::CompoundAssign {
-                op: CompoundOp::PlusEq,
+                op: CompoundOp::Add,
                 lhs: "count".into(),
                 rhs: Box::new(HandlerExpr::IntLit(1)),
             }
