@@ -39,6 +39,10 @@ pub fn get_compositor() -> &'static windows::UI::Composition::Compositor {
     &runtime::get().compositor
 }
 
+pub fn get_text_renderer() -> &'static TextRenderer {
+    &runtime::get().text_renderer
+}
+
 pub fn window_add_widget(
     window: &WindowState,
     widget: &WidgetNode,
