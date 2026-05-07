@@ -55,3 +55,30 @@ freeze the plan.
 ## CI rules
 
 Add a "update CI" checklist item only when a phase introduces a **new language or build system** (e.g. Zig, CMake/C). Phases that add Rust code to existing crates need no CI update — `cargo build --release --workspace` and `cargo test --workspace` already cover them.
+
+## Build ordering requirements
+
+The DSL examples consume IR text emitted by `wasamoc` at host build
+time. Builds in the C and Zig host build systems shell out to
+`wasamoc.exe`, so:
+
+- **`cargo build -p wasamoc` must succeed before building
+  `examples/counter-c/` (CMake) or `examples/counter-zig/`
+  (`zig build`).** Both build systems expect `wasamoc.exe` to be
+  available at a known location (typically `target/release/wasamoc.exe`
+  or `target/debug/wasamoc.exe`).
+- **`cargo build -p counter-rust` does not require a separate
+  `wasamoc` build step**: its `build.rs` declares a workspace-internal
+  build dependency on `wasamoc` and uses `cargo:rerun-if-changed` to
+  recompile when `examples/counter/counter.ui` or `wasamoc` itself
+  changes.
+- **Workspace-wide builds** (`cargo build --release --workspace`)
+  build `wasamoc` as part of the graph, so they implicitly satisfy
+  the ordering for `counter-rust`. C and Zig hosts still need an
+  explicit prior `wasamoc` build because they live outside the cargo
+  workspace's build graph.
+
+This pipeline is provisional — see
+[docs/architecture.md §1 "DSL build pipeline"](docs/architecture.md#dsl-build-pipeline-m2-phase-6-onward)
+for the re-evaluation triggers (M3 multi-`.ui` host, post-1.0 hot
+reload).
