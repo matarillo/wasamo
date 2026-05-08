@@ -24,46 +24,87 @@ checklist 完了 = merge 許可ではない。順序を固定する:
 1. 下記 checklist を実施
 2. 結果をオーナーに報告 (CHANGELOG / plan diff、CI / rebuild 結果、
    未決事項、retrospective 所見)
-3. オーナーが merge 種別 (ff / no-ff) を承認
-4. 承認後に merge を実行
-5. (phase-end のみ) オーナーが push タイミングを別途承認
-6. 承認後に push を実行
-7. push 後 CI を確認 (項目 12)
+3. **ファストトラック判定** (下記参照):
+   - **scope = step-end** かつ checklist 項目 2–8 がすべて「なし」/
+     項目 3 が green の場合に限り、報告と同時に ff merge を実行し、
+     事後にオーナーへ通知してよい。
+   - それ以外は従来通りオーナーの承認を待つ (4 へ)。
+4. オーナーが merge 種別 (ff / no-ff) を承認
+5. 承認後に merge を実行
+6. (phase-end のみ) オーナーが push タイミングを別途承認
+7. 承認後に push を実行
+8. push 後 main CI green 確認 (項目 15)
 
-## 共通項目 (両 scope で確認)
+**phase-end (main への no-ff merge) は常にオーナー明示承認が必要**で、
+ファストトラックの対象外 (AC 達成判定・thesis 影響評価を含み、機械的
+判定に委ねない)。
 
-1. 本作業の主要な学び (計画時に想定しなかったこと)
-2. 仕様文書 (`abi_spec.md` / `architecture.md` / `dsl_spec.md`) への
-   想定以上の変更が発生していないか
+## checklist
+
+各項目「あり/なし」(または green/fail、必要/不要) で答える。
+**「あり」「fail」「必要」が 1 つでもあればオーナー報告 + 承認必須**。
+ファストトラック対象項目は項目末尾に **(FT)** を付す。
+
+### 共通 (両 scope)
+
+1. 本作業の主要な学び (記述項目、判定対象外)
+2. 仕様文書 (`abi_spec.md` / `architecture.md` / `dsl_spec.md`) の
+   変更 — あり/なし **(FT)**。タイポ修正、または既に Accepted な DD の
+   機械的転記は「なし」扱い。
 3. ローカル clean rebuild (`cargo clean` → release+debug build →
-   `cargo test --workspace`) が green
-4. その他、プロダクトオーナーに相談すべき事項
+   `cargo test --workspace`) — green/fail **(FT)**
+4. PO に相談すべき設計判断・トレードオフ — あり/なし **(FT)**
 
-## step-end 固有 (merge → phase ブランチ)
+### step-end 固有 (merge → phase ブランチ)
 
-5. タスクリストの後続 step を見直す必要があるか (現在の phase ADR には
-   影響しない範囲)
-6. 現在の phase ADR に追加の DD が必要か
-7. 後続 phase に引き継ぐ制約が増えたか
+5. plan/ADR に記載の step 目的から外れた「ついで」のリファクタ・
+   構造変更 — あり/なし **(FT)**
+6. 現在の phase ADR への追加 DD 必要性 — あり/なし **(FT)**
+7. 既存 ADR の Proposed 項目の新規追加、または Proposed → Accepted
+   への昇格 — あり/なし **(FT)**
+8. `m2-plan.md` の AC (Ax) 追加・変更、または Phase 構成の追加・統合・
+   分割 — あり/なし **(FT)**
+9. 後続 step に持ち越す仮実装・近似・新規 `dead_code` 警告 — あり/なし
+   **(FT)**
+10. タスクリストの後続 step 見直し (現在の phase ADR に影響しない
+    範囲) — 必要/不要
 
-CI green: 推奨 (PR を上げていれば PR CI、ローカルのみなら clean rebuild
-が proxy)。CI YAML 変更は通常不要 (phase 内で発生したら ADR に補足 DD)。
+CI green: 推奨 (PR を上げていれば PR CI、ローカルのみなら項目 3 の
+clean rebuild が proxy)。CI YAML 変更は通常不要 (phase 内で発生したら
+ADR に補足 DD)。
 
-## phase-end 固有 (merge → main)
+### phase-end 固有 (merge → main、ファストトラック対象外)
 
-8. acceptance criteria (Ax) が本当に達成されているか — ADR レベルの
-   「discharged」表記と実装が乖離していないか
-9. `CHANGELOG.md` / `ROADMAP.md` の記述が実装と整合しているか
-10. `VISION.md` / thesis-level claim に影響を与えたか — 影響あれば本
-    phase 内で更新するか、別 ADR に切るかを決める
-11. 次 phase の pre-doc への送り込み材料を `docs/notes/` に整理したか
+11. acceptance criteria (Ax) が本当に達成されているか — ADR の
+    「discharged」表記と実装の乖離
+12. `CHANGELOG.md` / `ROADMAP.md` の記述と実装の整合
+13. `VISION.md` / thesis-level claim への影響 — 影響あれば本 phase 内
+    で更新するか、別 ADR に切るかを決める
+14. 次 phase の pre-doc への送り込み材料を `docs/notes/` に整理したか
     (出発点になる設計軸、未決の論点、引き継ぎ制約など)
-12. CI green 確認 — push 前は local clean rebuild green (項目 3) が
-    CI の proxy。**push はオーナー明示承認後のみ**。push 後 GitHub
-    Actions で main CI green を確認、失敗時の recovery (revert PR /
-    force reset 等) はオーナー判断。
-13. CI YAML 変更要否の sanity check — 本 phase で新言語/新ビルド系を
+15. CI green 確認 — phase ブランチ上で `workflow_dispatch` から CI を
+    走らせ、**merge 前に GitHub Actions green を確認する** (proxy では
+    なく実 CI を gate にする)。**push はオーナー明示承認後のみ**。
+    push 後は main 上で CI green を再確認 (push トリガで自動実行)、
+    失敗時の recovery (revert PR / force reset 等) はオーナー判断。
+16. CI YAML 変更要否の sanity check — 本 phase で新言語/新ビルド系を
     追加していれば CI 更新済みであること (CLAUDE.md の CI rules)
 
 CI green: **必須**。clean rebuild は **必須** (incremental cache の嘘を
 main に持ち込まない)。
+
+## ファストトラック基準の根拠
+
+各 (FT) 項目を独立に守る理由:
+
+- **項目 2 (仕様変更)**: ABI シグネチャの微調整等は C/Zig ホストへの
+  波及効果があり、型システム整合性のゲートを残す必要がある
+  (cf. DD-M2-P6-005)。
+- **項目 7 (Proposed 増加・昇格)**: 「とりあえず Proposed でマージ」は
+  M3 以降での設計負債を蓄積させうる (cf. DD-M2-P6-010 トポロジカル
+  ソート近似)。昇格もオーナー裁定が必要。
+- **項目 8 (m2-plan.md)**: AC の追加 (例: A5 再入安全性、A6 String
+  通電) は完了定義を変える重い判断で、リソース配分の再確認を含む。
+- **項目 5 / 6 / 9**: 計画外の構造変更・新規 DD・引き継ぎ技術的負債は
+  いずれも「次の step / phase の前提」を変えるため、機械判定に委ねず
+  オーナーの可視化を経る。
