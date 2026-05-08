@@ -65,6 +65,25 @@ ROADMAP is the SSOT; mirrored here for ergonomics:
   constructors remain available but are no longer the only way to
   construct UI.
 
+- **A5.** Reactive Foundation Hardening. The reactive engine's
+  execution-order guarantees and the runtime's re-entrancy/guard
+  placement principle are settled at design level (Accepted ADRs)
+  and reflected in implementation. Specifically:
+  - DD-M2-P6-010 (topological sort of the dirty Effect drain) is
+    Accepted and the implementation no longer relies on the counter
+    case happening to converge.
+  - DD-M2-P6-012 (re-entrancy / safety-guard placement principle)
+    is Accepted and the principle is recorded in
+    `docs/architecture.md` as a global runtime invariant that future
+    M3+ entry paths must observe.
+
+- **A6.** Type-Agnostic Reactive Binding. The reactive binding path
+  is demonstrated end-to-end with a non-`i32` property type
+  (`String`), proving the `EvalContext` / `HandlerExpr` / IR design
+  is not silently `i32`-specialized.
+  - DD-M2-P6-011 is Accepted; `.ui` String property bound to
+    `Signal<String>` propagates to the visible widget.
+
 ### Phase breakdown
 
 The phases below are working hypotheses; each one's design questions
@@ -108,6 +127,16 @@ become a phase ADR at pre-doc time, per
   Counter from `counter.ui`. Replaces the imperative tree
   construction in `examples/counter-{c,rust,zig}/`.
 
+- **M2-Phase 7 — Reactive Foundation Hardening & Contract
+  Finalization.** Discharge the three DDs deferred from Phase 6
+  closing (DD-M2-P6-010 / 011 / 012). Phase 6 establishes the
+  pipeline (counter `.ui` → runtime, A1/A2); Phase 7 establishes the
+  foundation guarantees that distinguish "it runs" from "it is a
+  Foundation" (A5/A6). Order of work: 010 (topo sort) → 012 (guard
+  placement principle, including `architecture.md` update) → 011
+  (String binding end-to-end). The phase closes when all three DDs
+  are Accepted and their implementation lands.
+
 ### Phase dependencies
 
 ```
@@ -115,12 +144,12 @@ M2-Phase 1   ── independent infra; lands any time
 
 M2-Phase 2 ─┐
 M2-Phase 3 ─┤
-            ├─ M2-Phase 4 ─ M2-Phase 5 ─ M2-Phase 6
+            ├─ M2-Phase 4 ─ M2-Phase 5 ─ M2-Phase 6 ─ M2-Phase 7
 ```
 
 M2-Phases 2 and 3 are decision phases and can run in parallel; both
 gate M2-Phase 4. M2-Phase 5 depends on 4. M2-Phase 6 depends on the
-decisions (2, 3) and on 5.
+decisions (2, 3) and on 5. M2-Phase 7 depends on M2-Phase 6.
 
 ### Acceptance ↔ phase mapping
 
@@ -130,6 +159,8 @@ decisions (2, 3) and on 5.
 | A2 (reactive propagation, no host wiring) | M2-Phase 5, M2-Phase 6 |
 | A3 (cdylib-shim cleanup) | M2-Phase 1 |
 | A4 (tree-mutation ABI primitives) | M2-Phase 4 |
+| A5 (Reactive Foundation Hardening) | M2-Phase 7 |
+| A6 (Type-Agnostic Reactive Binding) | M2-Phase 7 |
 
 M2-Phases 2 and 3 are **decision phases** without a direct acceptance
 hook; their outputs are ADR-shaped and feed M2-Phases 4 / 6.
@@ -193,6 +224,21 @@ and [docs/decisions/vision-post-m2-roadmap.md](../decisions/vision-post-m2-roadm
 - 1.0 binding list → C / Rust / Zig; Swift / Go → post-1.0 community
 - ADR identifier scope `M<N>-P<n>` from M2 onward (see Phase
   numbering above)
+
+### Revision log
+
+- **2026-05-08** — Acceptance criteria revision under the
+  README.md "Acceptance criteria revision" exception.
+  - Motivation: A1–A4 cover pipeline wiring and structural cleanup
+    but do not cover the runtime guarantees (execution order,
+    re-entrancy/guard placement, type-agnostic binding) required to
+    call M2 a Foundation milestone in a non-trivial sense.
+  - Added: A5 (Reactive Foundation Hardening), A6 (Type-Agnostic
+    Reactive Binding).
+  - Added: M2-Phase 7 (Reactive Foundation Hardening & Contract
+    Finalization), depending on M2-Phase 6.
+  - DD-M2-P6-010 / 011 / 012 status remains Proposed; their
+    discharge is now scoped to Phase 7.
 
 ## Progress
 

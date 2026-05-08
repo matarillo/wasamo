@@ -45,6 +45,16 @@ by hand through the experimental C ABI.
   reactive engine; the experimental layer's all-at-once
   constructors remain available but are no longer the only way
   to construct UI
+- Reactive Foundation Hardening: the reactive engine's
+  execution-order guarantee (topological drain of dirty Effects)
+  and the runtime's re-entrancy/guard placement principle are
+  settled at design level (Accepted ADRs) and reflected in
+  implementation; the guard placement principle is recorded in
+  `docs/architecture.md` as a global runtime invariant
+- Type-Agnostic Reactive Binding: the reactive binding path is
+  demonstrated end-to-end with a non-`i32` property type
+  (`String`), proving the `EvalContext` / `HandlerExpr` / IR
+  design is not silently `i32`-specialized
 
 Phase breakdown, dependencies, and progress live in
 [docs/plans/m2-plan.md](./docs/plans/m2-plan.md).
