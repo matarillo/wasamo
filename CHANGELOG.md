@@ -14,6 +14,59 @@ the **Status** section of [README.md](./README.md).
 
 ## [Unreleased] — M2: Foundation (in progress)
 
+### M2-Phase 6 — `.ui` → runtime lowering (2026-05-08)
+
+Closes the loop between the DSL and the runtime: `examples/counter/counter.ui`
+now drives the running Hello Counter in C, Rust, and Zig through the agreed
+`wasamoc` → IR → `wasamo_load_ui` pipeline, with reactive state propagation
+landing through the M2 reactive path (no host-side `wasamo_set_property`).
+M2 acceptance **A1** and **A2** discharged.
+
+`wasamoc` extends from M1's parse+check shape with `state` declarations,
+restricted type inference (`i32` + string), property-binding lowering,
+handler-body lowering, compile-time name resolution, and IR file emission
+following the new `;wasamo-ir v0` normative grammar (`docs/dsl_spec.md` §8).
+A new `wasamo-ir` crate hosts the shared `IrComponent` / `HandlerExpr`
+types so the compiler emits and the runtime consumes the same in-memory
+shape. `wasamo-runtime` gains `ir_loader.rs` (parse + defense-in-depth
+validation per DD-M2-P6-009 — header/version, reference resolution,
+top-level structure; trusts emitter type integrity), the
+`wasamo_load_ui(WasamoLoadType, const void*, size_t, WasamoWindow**)`
+C ABI entry point with `WASAMO_LOAD_PATH` / `WASAMO_LOAD_MEMORY` modes,
+and `wasamo_last_error_message` as the thread-local last-error channel.
+Five new error codes ship: `WASAMO_ERR_OBSERVER_MUTATION`,
+`WASAMO_ERR_REACTIVE_DIVERGED`, `WASAMO_ERR_REENTRANT_LOAD`,
+`WASAMO_ERR_WRONG_THREAD`, `WASAMO_ERR_IR_MALFORMED`.
+
+The reactive drain transaction is rewritten to the three-phase + terminal
+form (DD-M2-P6-001 = D, supersedes DD-M2-P5-004's three-stage framing):
+Phase 1 mutation convergence loop (FIFO `signal_queue` + topological
+`dirty_effects` + last-wins; structure-changing ABI returns
+`WASAMO_ERR_REENTRANT_LOAD`), Phase 2 terminal layout pass, Phase 3
+post-commit observer drain (state-mutating ABI returns
+`WASAMO_ERR_OBSERVER_MUTATION`). `MUTATION_CAP` exhaustion drives an
+irreversible `Healthy → Diverged` transition; subsequent ABI calls
+return `WASAMO_ERR_REACTIVE_DIVERGED` except `wasamo_runtime_destroy`.
+`SignalRegistry { i32s, strings }` (DD-M2-P6-007) replaces Phase 5's
+provisional single-type `properties` map; the registration API
+(`register_binding(target, expr)`) is preserved.
+
+Documentation: `VISION.md §4 Principle 2` supplement (observer = post-commit
+pure effect; mutation = events-up + bindings-down); `docs/architecture.md`
+§6.8.3 documents the three-phase + terminal drain; `docs/abi_spec.md`
+§3.1/§5.2/§6 cover the new status codes, `wasamo_load_ui`, and thread
+affinity rules; `CLAUDE.md` records the build-ordering requirement
+(`cargo build -p wasamoc` precedes C/Zig host builds).
+
+The three deferred DDs — DD-M2-P6-010 (dirty_effects topo sort fidelity),
+DD-M2-P6-011 (String-typed property binding), DD-M2-P6-012 (re-entrancy /
+safety-guard placement principle) — remain `Proposed` and are scoped to
+M2-Phase 7 alongside acceptance criteria A5 / A6 (added by the
+2026-05-08 plan revision).
+
+Decisions: [DD-M2-P6-001..009](./docs/decisions/m2-phase-6-ui-lowering.md);
+DD-M2-P6-010..012 deferred to M2-Phase 7.
+
 ### M2-Phase 5 — Reactive engine (2026-05-06)
 
 Implements the M2 thesis-validation surface for acceptance A2:

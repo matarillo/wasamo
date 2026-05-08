@@ -39,6 +39,30 @@ pub const WASAMO_ERR_INVALID_ARG: WasamoStatus = -1;
 pub const WASAMO_ERR_RUNTIME: WasamoStatus = -2;
 pub const WASAMO_ERR_NOT_INITIALIZED: WasamoStatus = -3;
 pub const WASAMO_ERR_WRONG_THREAD: WasamoStatus = -4;
+/// Returned when a structure-changing ABI call (e.g. `wasamo_load_ui`) is
+/// issued while the reactive drain's Phase 1 convergence loop is executing.
+pub const WASAMO_ERR_REENTRANT_LOAD: WasamoStatus = -5;
+/// Returned by every ABI call (except `wasamo_runtime_destroy`) after the
+/// runtime has entered the irreversible `Diverged` health state.
+pub const WASAMO_ERR_REACTIVE_DIVERGED: WasamoStatus = -6;
+/// Returned when a state-mutating ABI call is issued from within a Phase 3
+/// post-commit observer callback.
+pub const WASAMO_ERR_OBSERVER_MUTATION: WasamoStatus = -7;
+/// Returned by `wasamo_load_ui` when the supplied IR fails header,
+/// parse, unknown-widget, or defense-in-depth validation
+/// (DD-M2-P6-009 / DD-M2-P6-005).
+pub const WASAMO_ERR_IR_MALFORMED: WasamoStatus = -8;
+
+// ── 3.5 wasamo_load_ui resource type (DD-M2-P6-005) ──────────────────────────
+
+pub type WasamoLoadType = i32;
+
+/// `data` is a UTF-8 filesystem path of length `data_len` (no NUL required).
+pub const WASAMO_LOAD_PATH: WasamoLoadType = 0;
+/// `data` is a `data_len`-byte in-memory blob carrying the IR. M2 accepts
+/// only the IR text grammar (DD-M2-P6-002); the byte layout is defined to
+/// admit a future binary IR without ABI breakage.
+pub const WASAMO_LOAD_MEMORY: WasamoLoadType = 1;
 
 // ── 3.3 WasamoValue ──────────────────────────────────────────────────────────
 
@@ -118,6 +142,112 @@ pub(crate) fn clear_last_error() {
     LAST_ERROR.with(|cell| *cell.borrow_mut() = None);
 }
 
+/// Guard: reject if the runtime is uninitialized or the calling thread is
+/// not the runtime's owning UI thread (DD-M2-P6-005, abi_spec §6).
+///
+/// Pre-init calls return `WASAMO_ERR_NOT_INITIALIZED`; cross-thread calls
+/// return `WASAMO_ERR_WRONG_THREAD` without performing the requested
+/// action. Both leave runtime state untouched.
+#[inline]
+fn check_owning_thread(fn_name: &str) -> Option<WasamoStatus> {
+    if !crate::runtime::is_initialized() {
+        set_last_error(format!("{fn_name}: wasamo_init has not been called"));
+        return Some(WASAMO_ERR_NOT_INITIALIZED);
+    }
+    if !crate::runtime::is_owning_thread() {
+        set_last_error(format!(
+            "{fn_name}: called from non-owning thread (must be the thread that called wasamo_init)"
+        ));
+        return Some(WASAMO_ERR_WRONG_THREAD);
+    }
+    None
+}
+
+/// Guard: reject if the runtime has diverged (called by most ABI functions).
+/// Returns `Some(WASAMO_ERR_REACTIVE_DIVERGED)` if the caller should return
+/// immediately; `None` if the runtime is healthy.
+///
+/// On entry to the Diverged path the structured diagnostics captured by the
+/// drain loop (DD-M2-P6-006) are folded into the thread-local last-error
+/// payload so binding callers see them through `wasamo_last_error_message`
+/// (DD-M2-P6-005 carry-over).
+#[inline]
+fn check_not_diverged(fn_name: &str) -> Option<WasamoStatus> {
+    if crate::reactive::runtime_health() == crate::reactive::RuntimeHealth::Diverged {
+        let detail = crate::reactive::divergence_diagnostics()
+            .map(|d| {
+                format!(
+                    " (offending effect id={}, iterations={}, last dirty signals={:?})",
+                    d.offending_effect_id, d.iteration_count, d.last_dirty_signal_ids
+                )
+            })
+            .unwrap_or_default();
+        set_last_error(format!(
+            "{fn_name}: runtime is in Diverged state; call wasamo_runtime_destroy{detail}"
+        ));
+        Some(WASAMO_ERR_REACTIVE_DIVERGED)
+    } else {
+        None
+    }
+}
+
+/// Guard: reject structure-changing calls issued during Phase 1 drain.
+#[inline]
+fn check_not_in_drain(fn_name: &str) -> Option<WasamoStatus> {
+    if crate::emit::in_drain() {
+        set_last_error(format!(
+            "{fn_name}: structure-changing ABI called during reactive drain (Phase 1)"
+        ));
+        Some(WASAMO_ERR_REENTRANT_LOAD)
+    } else {
+        None
+    }
+}
+
+/// Guard: reject state-mutating calls issued from a Phase 3 observer callback.
+#[inline]
+fn check_not_in_observer(fn_name: &str) -> Option<WasamoStatus> {
+    if crate::emit::in_observer_callback() {
+        set_last_error(format!(
+            "{fn_name}: state-mutating ABI called from within observer callback (Phase 3)"
+        ));
+        Some(WASAMO_ERR_OBSERVER_MUTATION)
+    } else {
+        None
+    }
+}
+
+/// Test-only pub wrappers so reactive.rs tests can exercise the guard logic
+/// without going through the full ABI stack.
+#[cfg(test)]
+pub(crate) fn check_not_in_observer_pub(fn_name: &str) -> Option<WasamoStatus> {
+    check_not_in_observer(fn_name)
+}
+
+#[cfg(test)]
+pub(crate) fn check_not_diverged_pub(fn_name: &str) -> Option<WasamoStatus> {
+    check_not_diverged(fn_name)
+}
+
+/// Shorthand: check thread + diverged + in_drain (structure-changing ABI).
+macro_rules! guard_structural {
+    ($fn_name:expr) => {
+        if let Some(s) = check_owning_thread($fn_name) { return s; }
+        if let Some(s) = check_not_diverged($fn_name) { return s; }
+        if let Some(s) = check_not_in_drain($fn_name) { return s; }
+        if let Some(s) = check_not_in_observer($fn_name) { return s; }
+    };
+}
+
+/// Shorthand: check thread + diverged + in_observer (state-mutating ABI).
+macro_rules! guard_mutating {
+    ($fn_name:expr) => {
+        if let Some(s) = check_owning_thread($fn_name) { return s; }
+        if let Some(s) = check_not_diverged($fn_name) { return s; }
+        if let Some(s) = check_not_in_observer($fn_name) { return s; }
+    };
+}
+
 // ── 4.1 Runtime lifecycle ────────────────────────────────────────────────────
 
 #[no_mangle]
@@ -140,6 +270,14 @@ pub extern "C" fn wasamo_shutdown() {
     // only sever signal/observer registrations and clear thread-local
     // diagnostic buffers. Each surviving destroy_fn is invoked exactly
     // once (abi_spec §4.4 / §4.5).
+    //
+    // Thread affinity: shutdown must run on the owning UI thread. From a
+    // wrong thread we silently no-op (the void return type leaves no
+    // channel to report the error); the last-error TLS is still updated
+    // so a subsequent same-thread call can observe it.
+    if check_owning_thread("wasamo_shutdown").is_some() {
+        return;
+    }
     crate::registry::drain_all();
     clear_last_error();
 }
@@ -163,6 +301,7 @@ pub unsafe extern "C" fn wasamo_window_create(
     height: i32,
     out: *mut *mut WasamoWindow,
 ) -> WasamoStatus {
+    guard_structural!("wasamo_window_create");
     if out.is_null() {
         set_last_error("wasamo_window_create: out is null");
         return WASAMO_ERR_INVALID_ARG;
@@ -197,6 +336,7 @@ pub unsafe extern "C" fn wasamo_window_create(
 
 #[no_mangle]
 pub unsafe extern "C" fn wasamo_window_show(window: *mut WasamoWindow) -> WasamoStatus {
+    guard_mutating!("wasamo_window_show");
     if window.is_null() {
         set_last_error("wasamo_window_show: window is null");
         return WASAMO_ERR_INVALID_ARG;
@@ -208,6 +348,11 @@ pub unsafe extern "C" fn wasamo_window_show(window: *mut WasamoWindow) -> Wasamo
 
 #[no_mangle]
 pub unsafe extern "C" fn wasamo_window_destroy(window: *mut WasamoWindow) -> WasamoStatus {
+    // Note: wasamo_window_destroy is NOT guarded by check_not_diverged — destroy
+    // must succeed even in Diverged state (spec: only wasamo_runtime_destroy is
+    // exempt, but window/widget destroy are also safe to allow for cleanup).
+    // Thread affinity is still enforced.
+    if let Some(s) = check_owning_thread("wasamo_window_destroy") { return s; }
     if window.is_null() {
         // Idempotent on null per spec §4.2.
         return WASAMO_OK;
@@ -231,6 +376,7 @@ pub unsafe extern "C" fn wasamo_widget_append_child(
     parent: *mut WasamoWidget,
     child: *mut WasamoWidget,
 ) -> WasamoStatus {
+    guard_structural!("wasamo_widget_append_child");
     if parent.is_null() {
         set_last_error("wasamo_widget_append_child: parent is null");
         return WASAMO_ERR_INVALID_ARG;
@@ -265,6 +411,7 @@ pub unsafe extern "C" fn wasamo_widget_insert_child(
     index: usize,
     child: *mut WasamoWidget,
 ) -> WasamoStatus {
+    guard_structural!("wasamo_widget_insert_child");
     if parent.is_null() {
         set_last_error("wasamo_widget_insert_child: parent is null");
         return WASAMO_ERR_INVALID_ARG;
@@ -296,6 +443,7 @@ pub unsafe extern "C" fn wasamo_widget_remove_child(
     index: usize,
     out_removed: *mut *mut WasamoWidget,
 ) -> WasamoStatus {
+    guard_structural!("wasamo_widget_remove_child");
     if parent.is_null() {
         set_last_error("wasamo_widget_remove_child: parent is null");
         return WASAMO_ERR_INVALID_ARG;
@@ -329,6 +477,7 @@ pub unsafe extern "C" fn wasamo_widget_replace_child(
     new_child: *mut WasamoWidget,
     out_old: *mut *mut WasamoWidget,
 ) -> WasamoStatus {
+    guard_structural!("wasamo_widget_replace_child");
     if parent.is_null() {
         set_last_error("wasamo_widget_replace_child: parent is null");
         return WASAMO_ERR_INVALID_ARG;
@@ -365,6 +514,8 @@ pub unsafe extern "C" fn wasamo_widget_child_count(
     parent: *mut WasamoWidget,
     out_count: *mut usize,
 ) -> WasamoStatus {
+    if let Some(s) = check_owning_thread("wasamo_widget_child_count") { return s; }
+    if let Some(s) = check_not_diverged("wasamo_widget_child_count") { return s; }
     if parent.is_null() {
         set_last_error("wasamo_widget_child_count: parent is null");
         return WASAMO_ERR_INVALID_ARG;
@@ -380,6 +531,9 @@ pub unsafe extern "C" fn wasamo_widget_child_count(
 
 #[no_mangle]
 pub unsafe extern "C" fn wasamo_widget_destroy(widget: *mut WasamoWidget) -> WasamoStatus {
+    // Like wasamo_window_destroy, destroy is allowed in Diverged state for cleanup.
+    // Thread affinity is still enforced.
+    if let Some(s) = check_owning_thread("wasamo_widget_destroy") { return s; }
     if widget.is_null() {
         // Idempotent on null, matching wasamo_window_destroy (DD-M2-P4-003).
         return WASAMO_OK;
@@ -399,11 +553,19 @@ pub unsafe extern "C" fn wasamo_widget_destroy(widget: *mut WasamoWidget) -> Was
 
 #[no_mangle]
 pub extern "C" fn wasamo_run() {
+    // No-op if called off the owning thread; the void return has no error
+    // channel, but the last-error TLS records the violation.
+    if check_owning_thread("wasamo_run").is_some() {
+        return;
+    }
     crate::run();
 }
 
 #[no_mangle]
 pub extern "C" fn wasamo_quit() {
+    if check_owning_thread("wasamo_quit").is_some() {
+        return;
+    }
     unsafe {
         windows::Win32::UI::WindowsAndMessaging::PostQuitMessage(0);
     }
@@ -490,6 +652,8 @@ pub unsafe extern "C" fn wasamo_get_property(
     property_id: u32,
     out_value: *mut WasamoValue,
 ) -> WasamoStatus {
+    if let Some(s) = check_owning_thread("wasamo_get_property") { return s; }
+    if let Some(s) = check_not_diverged("wasamo_get_property") { return s; }
     if widget.is_null() {
         set_last_error("wasamo_get_property: widget is null");
         return WASAMO_ERR_INVALID_ARG;
@@ -517,6 +681,7 @@ pub unsafe extern "C" fn wasamo_set_property(
     property_id: u32,
     value: *const WasamoValue,
 ) -> WasamoStatus {
+    guard_mutating!("wasamo_set_property");
     if widget.is_null() {
         set_last_error("wasamo_set_property: widget is null");
         return WASAMO_ERR_INVALID_ARG;
@@ -565,6 +730,7 @@ pub unsafe extern "C" fn wasamo_observe_property(
     destroy_fn: WasamoDestroyFn,
     out_token: *mut u64,
 ) -> WasamoStatus {
+    guard_structural!("wasamo_observe_property");
     if widget.is_null() {
         set_last_error("wasamo_observe_property: widget is null");
         return WASAMO_ERR_INVALID_ARG;
@@ -587,6 +753,8 @@ pub unsafe extern "C" fn wasamo_observe_property(
 
 #[no_mangle]
 pub extern "C" fn wasamo_unobserve_property(token: u64) -> WasamoStatus {
+    if let Some(s) = check_owning_thread("wasamo_unobserve_property") { return s; }
+    if let Some(s) = check_not_diverged("wasamo_unobserve_property") { return s; }
     if crate::registry::remove(token) {
         clear_last_error();
         WASAMO_OK
@@ -606,6 +774,7 @@ pub unsafe extern "C" fn wasamo_signal_connect(
     destroy_fn: WasamoDestroyFn,
     out_token: *mut u64,
 ) -> WasamoStatus {
+    guard_structural!("wasamo_signal_connect");
     if widget.is_null() {
         set_last_error("wasamo_signal_connect: widget is null");
         return WASAMO_ERR_INVALID_ARG;
@@ -640,6 +809,8 @@ pub unsafe extern "C" fn wasamo_signal_connect(
 
 #[no_mangle]
 pub extern "C" fn wasamo_signal_disconnect(token: u64) -> WasamoStatus {
+    if let Some(s) = check_owning_thread("wasamo_signal_disconnect") { return s; }
+    if let Some(s) = check_not_diverged("wasamo_signal_disconnect") { return s; }
     if crate::registry::remove(token) {
         clear_last_error();
         WASAMO_OK
@@ -673,6 +844,7 @@ pub unsafe extern "C" fn wasamo_text_create(
     content_len: usize,
     out: *mut *mut WasamoWidget,
 ) -> WasamoStatus {
+    guard_structural!("wasamo_text_create");
     if out.is_null() {
         set_last_error("wasamo_text_create: out is null");
         return WASAMO_ERR_INVALID_ARG;
@@ -710,6 +882,7 @@ pub unsafe extern "C" fn wasamo_button_create(
     label_len: usize,
     out: *mut *mut WasamoWidget,
 ) -> WasamoStatus {
+    guard_structural!("wasamo_button_create");
     if out.is_null() {
         set_last_error("wasamo_button_create: out is null");
         return WASAMO_ERR_INVALID_ARG;
@@ -799,6 +972,7 @@ pub unsafe extern "C" fn wasamo_vstack_create(
     count: usize,
     out: *mut *mut WasamoWidget,
 ) -> WasamoStatus {
+    guard_structural!("wasamo_vstack_create");
     if out.is_null() {
         set_last_error("wasamo_vstack_create: out is null");
         return WASAMO_ERR_INVALID_ARG;
@@ -827,6 +1001,7 @@ pub unsafe extern "C" fn wasamo_hstack_create(
     count: usize,
     out: *mut *mut WasamoWidget,
 ) -> WasamoStatus {
+    guard_structural!("wasamo_hstack_create");
     if out.is_null() {
         set_last_error("wasamo_hstack_create: out is null");
         return WASAMO_ERR_INVALID_ARG;
@@ -854,6 +1029,7 @@ pub unsafe extern "C" fn wasamo_window_set_root(
     window: *mut WasamoWindow,
     root: *mut WasamoWidget,
 ) -> WasamoStatus {
+    guard_structural!("wasamo_window_set_root");
     if window.is_null() {
         set_last_error("wasamo_window_set_root: window is null");
         return WASAMO_ERR_INVALID_ARG;
@@ -893,4 +1069,133 @@ pub unsafe extern "C" fn wasamo_button_set_clicked(
         destroy_fn,
         out_token,
     )
+}
+
+// ── DD-M2-P6-005 — wasamo_load_ui ────────────────────────────────────────────
+//
+// Single-function loader (Option α). The `type` discriminant chooses
+// between resource-resolution forms (sub-decision A: filesystem path,
+// sub-decision C: in-memory blob); both share the `(data, data_len)`
+// shape so a future binary IR can be admitted without ABI breakage.
+
+const DEFAULT_WINDOW_TITLE: &str = "Wasamo";
+const DEFAULT_WINDOW_WIDTH: i32 = 800;
+const DEFAULT_WINDOW_HEIGHT: i32 = 600;
+
+unsafe fn read_load_payload(
+    type_: WasamoLoadType,
+    data: *const std::ffi::c_void,
+    data_len: usize,
+) -> Result<String, (WasamoStatus, String)> {
+    if data.is_null() {
+        return Err((WASAMO_ERR_INVALID_ARG, "data is null".into()));
+    }
+    if data_len == 0 {
+        return Err((WASAMO_ERR_INVALID_ARG, "data_len must be > 0".into()));
+    }
+    let bytes = std::slice::from_raw_parts(data as *const u8, data_len);
+    match type_ {
+        WASAMO_LOAD_PATH => {
+            let path = std::str::from_utf8(bytes)
+                .map_err(|_| (WASAMO_ERR_INVALID_ARG, "path is not valid UTF-8".to_string()))?;
+            std::fs::read_to_string(path).map_err(|e| {
+                (
+                    WASAMO_ERR_RUNTIME,
+                    format!("failed to read IR file `{path}`: {e}"),
+                )
+            })
+        }
+        WASAMO_LOAD_MEMORY => {
+            // M2 accepts only the IR text grammar (DD-M2-P6-002). The
+            // (data, data_len) shape is fixed so a future binary IR can be
+            // recognized via header magic without ABI changes; if a binary
+            // form is added later, this branch dispatches by sniffing the
+            // first bytes.
+            std::str::from_utf8(bytes)
+                .map(|s| s.to_owned())
+                .map_err(|_| {
+                    (
+                        WASAMO_ERR_IR_MALFORMED,
+                        "in-memory IR is not valid UTF-8".to_string(),
+                    )
+                })
+        }
+        _ => Err((
+            WASAMO_ERR_INVALID_ARG,
+            format!("unknown WasamoLoadType: {type_}"),
+        )),
+    }
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn wasamo_load_ui(
+    type_: WasamoLoadType,
+    data: *const std::ffi::c_void,
+    data_len: usize,
+    out_root: *mut *mut WasamoWindow,
+) -> WasamoStatus {
+    guard_structural!("wasamo_load_ui");
+    if out_root.is_null() {
+        set_last_error("wasamo_load_ui: out_root is null");
+        return WASAMO_ERR_INVALID_ARG;
+    }
+    *out_root = ptr::null_mut();
+
+    let ir_text = match read_load_payload(type_, data, data_len) {
+        Ok(s) => s,
+        Err((status, msg)) => {
+            set_last_error(format!("wasamo_load_ui: {msg}"));
+            return status;
+        }
+    };
+
+    let component = match crate::ir_loader::parse_ir(&ir_text) {
+        Ok(c) => c,
+        Err(e) => {
+            set_last_error(format!("wasamo_load_ui: {e}"));
+            return if e.is_malformed() {
+                WASAMO_ERR_IR_MALFORMED
+            } else {
+                WASAMO_ERR_RUNTIME
+            };
+        }
+    };
+
+    let rt = crate::runtime::get();
+    let built = match crate::ir_loader::build_widget_tree(
+        &component,
+        &rt.compositor,
+        &rt.text_renderer,
+    ) {
+        Ok(b) => b,
+        Err(e) => {
+            set_last_error(format!("wasamo_load_ui: {e}"));
+            return if e.is_malformed() {
+                WASAMO_ERR_IR_MALFORMED
+            } else {
+                WASAMO_ERR_RUNTIME
+            };
+        }
+    };
+
+    let mut window = match crate::window::create(
+        DEFAULT_WINDOW_TITLE,
+        DEFAULT_WINDOW_WIDTH,
+        DEFAULT_WINDOW_HEIGHT,
+    ) {
+        Ok(w) => w,
+        Err(e) => {
+            set_last_error(format!("wasamo_load_ui: window_create: {e}"));
+            return WASAMO_ERR_RUNTIME;
+        }
+    };
+
+    if let Err(e) = crate::window::set_root(&mut window, built.root) {
+        set_last_error(format!("wasamo_load_ui: window_set_root: {e}"));
+        return WASAMO_ERR_RUNTIME;
+    }
+
+    *out_root = Box::into_raw(window);
+    clear_last_error();
+    WASAMO_OK
 }

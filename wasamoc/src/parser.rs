@@ -134,14 +134,15 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_member(&mut self) -> Result<Member, Diagnostic> {
-        let is_in_out = self.peek().is_kw(&Keyword::InOut);
-        let is_ident = matches!(self.peek(), Token::Ident(_));
-
-        if is_in_out {
+        if self.peek().is_kw(&Keyword::InOut) {
             return self.parse_property_decl();
         }
 
-        if is_ident {
+        if self.peek().is_kw(&Keyword::State) {
+            return self.parse_state_member();
+        }
+
+        if matches!(self.peek(), Token::Ident(_)) {
             let next_colon = matches!(self.peek_next(), Token::Colon);
             let next_lbrace = matches!(self.peek_next(), Token::LBrace);
             let next_arrow = matches!(self.peek_next(), Token::Arrow);
@@ -160,6 +161,29 @@ impl<'a> Parser<'a> {
 
         let desc = self.peek().description();
         Err(self.error(format!("expected member, found {}", desc)))
+    }
+
+    fn parse_state_member(&mut self) -> Result<Member, Diagnostic> {
+        let start = self.current_span().clone();
+        self.expect_kw(Keyword::State)?;
+        let (name, _) = self.expect_ident()?;
+        self.expect_colon()?;
+        let ty = self.parse_type_name()?;
+
+        let eq_desc = self.peek().description();
+        if !matches!(self.peek(), Token::Eq) {
+            return Err(self.error(format!("expected `=`, found {}", eq_desc)));
+        }
+        self.advance();
+
+        let default = self.parse_expr()?;
+        let end = default.span().end;
+        Ok(Member::StateMember {
+            name,
+            ty,
+            default,
+            span: Span { start: start.start, end, line: start.line, col: start.col },
+        })
     }
 
     fn parse_property_decl(&mut self) -> Result<Member, Diagnostic> {
@@ -323,12 +347,12 @@ impl<'a> Parser<'a> {
     fn parse_type_name(&mut self) -> Result<TypeName, Diagnostic> {
         let ident = self.peek().as_ident().map(|s| s.to_string());
         match ident.as_deref() {
-            Some("int") => { self.advance(); Ok(TypeName::Int) }
+            Some("int") | Some("i32") => { self.advance(); Ok(TypeName::Int) }
             Some("string") => { self.advance(); Ok(TypeName::Str) }
             Some("float") => { self.advance(); Ok(TypeName::Float) }
             Some("bool") => { self.advance(); Ok(TypeName::Bool) }
             Some(other) => {
-                let msg = format!("unknown type `{}`; expected int, string, float, or bool", other);
+                let msg = format!("unknown type `{}`; expected i32 or string", other);
                 Err(self.error(msg))
             }
             None => {
@@ -357,6 +381,39 @@ mod tests {
 
     fn parse_err_msg(src: &str) -> String {
         parse_str(src).expect_err("expected parse error").message
+    }
+
+    #[test]
+    fn state_decl_i32() {
+        let def = parse_ok("component C inherits W { state count: i32 = 0 }");
+        assert_eq!(def.members.len(), 1);
+        if let Member::StateMember { name, ty, default, .. } = &def.members[0] {
+            assert_eq!(name, "count");
+            assert!(matches!(ty, TypeName::Int));
+            assert!(matches!(default, Expr::IntLit { value: 0, .. }));
+        } else {
+            panic!("expected StateMember");
+        }
+    }
+
+    #[test]
+    fn state_decl_string() {
+        let def = parse_ok(r#"component C inherits W { state label: string = "hello" }"#);
+        assert_eq!(def.members.len(), 1);
+        if let Member::StateMember { name, ty, .. } = &def.members[0] {
+            assert_eq!(name, "label");
+            assert!(matches!(ty, TypeName::Str));
+        } else {
+            panic!("expected StateMember");
+        }
+    }
+
+    #[test]
+    fn state_decl_before_widget() {
+        let def = parse_ok("component C inherits W { state count: i32 = 0 VStack {} }");
+        assert_eq!(def.members.len(), 2);
+        assert!(matches!(&def.members[0], Member::StateMember { name, .. } if name == "count"));
+        assert!(matches!(&def.members[1], Member::WidgetDecl { type_name, .. } if type_name == "VStack"));
     }
 
     #[test]

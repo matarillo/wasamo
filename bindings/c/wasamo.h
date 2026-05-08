@@ -48,11 +48,15 @@ extern "C" {
 
 typedef int32_t WasamoStatus;
 
-#define WASAMO_OK                   0
-#define WASAMO_ERR_INVALID_ARG     -1
-#define WASAMO_ERR_RUNTIME         -2
-#define WASAMO_ERR_NOT_INITIALIZED -3
-#define WASAMO_ERR_WRONG_THREAD    -4
+#define WASAMO_OK                       0
+#define WASAMO_ERR_INVALID_ARG         -1
+#define WASAMO_ERR_RUNTIME             -2
+#define WASAMO_ERR_NOT_INITIALIZED     -3
+#define WASAMO_ERR_WRONG_THREAD        -4
+#define WASAMO_ERR_REENTRANT_LOAD      -5
+#define WASAMO_ERR_REACTIVE_DIVERGED   -6
+#define WASAMO_ERR_OBSERVER_MUTATION   -7
+#define WASAMO_ERR_IR_MALFORMED        -8
 
 /* ── 3.2 Opaque handles ────────────────────────────────────────────────── */
 
@@ -279,6 +283,33 @@ WASAMO_EXPORT WasamoStatus WASAMO_API wasamo_button_set_clicked(
     void*                  user_data,
     WasamoDestroyFn        destroy_fn,
     uint64_t*              out_token);
+
+/* ── DD-M2-P6-005 — wasamo_load_ui ──────────────────────────────────────── */
+/*
+ * Single-function loader (Option α). The runtime parses the IR and
+ * constructs a default-sized window whose root is the loaded widget tree.
+ * Returned `*out_root` is runtime-owned and valid until runtime shutdown
+ * (M2 has no per-window destroy ABI — see abi_spec §5).
+ *
+ * The `(data, data_len)` shape is the same in both modes so a future
+ * binary IR can be admitted without ABI breakage. M2 accepts only the
+ * IR text grammar (DD-M2-P6-002).
+ */
+
+typedef int32_t WasamoLoadType;
+
+/* `data` is a UTF-8 filesystem path of `data_len` bytes (no NUL terminator
+ * is required; the runtime treats the slice as the entire path). */
+#define WASAMO_LOAD_PATH    0
+/* `data` is a `data_len`-byte in-memory IR blob. */
+#define WASAMO_LOAD_MEMORY  1
+
+WASAMO_EXPERIMENTAL
+WASAMO_EXPORT WasamoStatus WASAMO_API wasamo_load_ui(
+    WasamoLoadType  type,
+    const void*     data,
+    size_t          data_len,
+    WasamoWindow**  out_root);
 
 #ifdef __cplusplus
 } /* extern "C" */

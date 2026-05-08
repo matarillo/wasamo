@@ -87,6 +87,11 @@ pub const c = struct {
     pub const WASAMO_TEXT_CONTENT: u32 = 3;
     pub const WASAMO_TEXT_STYLE: u32 = 4;
 
+    // DD-M2-P6-005 — wasamo_load_ui resource type
+    pub const WasamoLoadType = i32;
+    pub const WASAMO_LOAD_PATH: WasamoLoadType = 0;
+    pub const WASAMO_LOAD_MEMORY: WasamoLoadType = 1;
+
     pub extern fn wasamo_init() WasamoStatus;
     pub extern fn wasamo_shutdown() void;
     pub extern fn wasamo_last_error_message() ?[*:0]const u8;
@@ -145,6 +150,14 @@ pub const c = struct {
         user_data: ?*anyopaque,
         destroy_fn: WasamoDestroyFn,
         out_token: *u64,
+    ) WasamoStatus;
+
+    // DD-M2-P6-005 — wasamo_load_ui (M1 experimental)
+    pub extern fn wasamo_load_ui(
+        type_: WasamoLoadType,
+        data: ?*const anyopaque,
+        data_len: usize,
+        out_root: *?*WasamoWindow,
     ) WasamoStatus;
 };
 

@@ -1,17 +1,22 @@
 const std = @import("std");
 
-// Build script for the Hello Counter Zig example.
+// Build script for the Hello Counter Zig example (M2 declarative shape,
+// DD-M2-P6-008).
 //
 // CI usage (from repo root):
 //   cargo build --release --workspace
-//   zig build --prefix-exe-dir . \
-//       --wasamo-lib ../../target/release/wasamo.dll.lib \
-//       --wasamo-zig ../../bindings/zig/wasamo.zig
+//   zig build -Dwasamo-lib=../../target/release/wasamo.dll.lib \
+//             -Dwasamo-zig=../../bindings/zig/wasamo.zig \
+//             -Dwasamoc=../../target/release/wasamoc.exe
 //
 // Local usage:
 //   cargo build --workspace
-//   zig build --wasamo-lib ../../target/debug/wasamo.dll.lib \
-//              --wasamo-zig ../../bindings/zig/wasamo.zig
+//   zig build -Dwasamo-lib=../../target/debug/wasamo.dll.lib \
+//             -Dwasamo-zig=../../bindings/zig/wasamo.zig \
+//             -Dwasamoc=../../target/debug/wasamoc.exe
+//
+// `wasamoc` must have been built beforehand — see CLAUDE.md
+// "Build ordering requirements".
 
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
@@ -29,6 +34,28 @@ pub fn build(b: *std.Build) void {
         "Path to bindings/zig/wasamo.zig (default: ../../bindings/zig/wasamo.zig)",
     ) orelse "../../bindings/zig/wasamo.zig";
 
+    const wasamoc_path = b.option(
+        []const u8,
+        "wasamoc",
+        "Path to wasamoc.exe (default: ../../target/release/wasamoc.exe)",
+    ) orelse "../../target/release/wasamoc.exe";
+
+    const counter_ui_path = b.option(
+        []const u8,
+        "counter-ui",
+        "Path to examples/counter/counter.ui (default: ../counter/counter.ui)",
+    ) orelse "../counter/counter.ui";
+
+    // ── DSL build pipeline (DD-M2-P6-008) ──────────────────────────────
+    //
+    // wasamoc compiles counter.ui to counter.uic; the resulting LazyPath
+    // is exposed to main.zig as an anonymous import, which @embedFile
+    // reads at compile time.
+    const wasamoc_run = b.addSystemCommand(&.{wasamoc_path});
+    wasamoc_run.addArg("build");
+    wasamoc_run.addFileArg(b.path(counter_ui_path));
+    const counter_uic = wasamoc_run.addOutputFileArg("counter.uic");
+
     // ── wasamo module ──────────────────────────────────────────────────
     const wasamo_mod = b.addModule("wasamo", .{
         .root_source_file = b.path(wasamo_zig_path),
@@ -38,16 +65,21 @@ pub fn build(b: *std.Build) void {
     wasamo_mod.addObjectFile(.{ .cwd_relative = wasamo_lib_path });
 
     // ── counter executable ─────────────────────────────────────────────
+    const exe_module = b.createModule(.{
+        .root_source_file = b.path("main.zig"),
+        .target = target,
+        .optimize = optimize,
+        .imports = &.{
+            .{ .name = "wasamo", .module = wasamo_mod },
+        },
+    });
+    exe_module.addAnonymousImport("counter_uic", .{
+        .root_source_file = counter_uic,
+    });
+
     const exe = b.addExecutable(.{
         .name = "counter-zig",
-        .root_module = b.createModule(.{
-            .root_source_file = b.path("main.zig"),
-            .target = target,
-            .optimize = optimize,
-            .imports = &.{
-                .{ .name = "wasamo", .module = wasamo_mod },
-            },
-        }),
+        .root_module = exe_module,
     });
 
     b.installArtifact(exe);

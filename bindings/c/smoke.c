@@ -37,6 +37,7 @@ int main(void) {
         (void*)&wasamo_hstack_create,
         (void*)&wasamo_window_set_root,
         (void*)&wasamo_button_set_clicked,
+        (void*)&wasamo_load_ui,
     };
     return (int)(sizeof(fns) / sizeof(fns[0]));
 }

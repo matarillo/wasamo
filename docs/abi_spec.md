@@ -115,11 +115,15 @@ targeted exceptions (and will not affect existing signatures).
 ```c
 typedef int32_t WasamoStatus;
 
-#define WASAMO_OK                  0
-#define WASAMO_ERR_INVALID_ARG    -1
-#define WASAMO_ERR_RUNTIME        -2
-#define WASAMO_ERR_NOT_INITIALIZED -3
-#define WASAMO_ERR_WRONG_THREAD   -4
+#define WASAMO_OK                       0
+#define WASAMO_ERR_INVALID_ARG         -1
+#define WASAMO_ERR_RUNTIME             -2
+#define WASAMO_ERR_NOT_INITIALIZED     -3
+#define WASAMO_ERR_WRONG_THREAD        -4
+#define WASAMO_ERR_REENTRANT_LOAD      -5  /* DD-M2-P6-001 */
+#define WASAMO_ERR_REACTIVE_DIVERGED   -6  /* DD-M2-P6-001 / DD-M2-P6-006 */
+#define WASAMO_ERR_OBSERVER_MUTATION   -7  /* DD-M2-P6-001 */
+#define WASAMO_ERR_IR_MALFORMED        -8  /* DD-M2-P6-005 / DD-M2-P6-009 */
 ```
 
 The status space is closed at M4. New codes added before M4 are
@@ -513,6 +517,73 @@ or when `wasamo_shutdown` is called, whichever comes first. The
 stable-core `wasamo_widget_destroy` (§4.6) handles destruction of
 detached widgets that have been removed from their parent.
 
+### 5.2 `wasamo_load_ui` (DD-M2-P6-005)
+
+```c
+typedef int32_t WasamoLoadType;
+#define WASAMO_LOAD_PATH    0
+#define WASAMO_LOAD_MEMORY  1
+
+WASAMO_EXPERIMENTAL
+WasamoStatus wasamo_load_ui(
+    WasamoLoadType  type,
+    const void*     data,
+    size_t          data_len,
+    WasamoWindow**  out_root);
+```
+
+Single-function loader (Option α). The runtime parses the
+`.ui`-derived IR (DD-M2-P6-002), constructs the widget tree, opens a
+default-sized window, installs the tree as the window's root, and
+returns the window handle through `*out_root`.
+
+**`type` discriminant.**
+
+- `WASAMO_LOAD_PATH` — `data` is a UTF-8 filesystem path of
+  exactly `data_len` bytes. NUL termination is **not** expected;
+  the runtime treats the slice as the full path. This matches the
+  `(const char* utf8, size_t len)` convention used by every other
+  string-bearing `wasamo_*` ABI.
+- `WASAMO_LOAD_MEMORY` — `data` is a `data_len`-byte in-memory IR
+  blob. M2 accepts only the IR text grammar (DD-M2-P6-002) and
+  rejects non-UTF-8 bytes with `WASAMO_ERR_IR_MALFORMED`. The byte
+  layout is the canonical shape so a future binary IR can be added
+  by sniffing a header magic without changing the function
+  signature.
+
+`data_len == 0` is rejected as `WASAMO_ERR_INVALID_ARG` for both
+modes; an unknown `type` is also `WASAMO_ERR_INVALID_ARG`.
+
+**Errors.**
+
+| Status | Cause |
+|---|---|
+| `WASAMO_OK` | Window opened, root installed, `*out_root` populated. |
+| `WASAMO_ERR_INVALID_ARG` | Null `data` / null `out_root`, `data_len == 0`, unknown `type`, or non-UTF-8 path bytes. |
+| `WASAMO_ERR_NOT_INITIALIZED` | `wasamo_init` has not been called. |
+| `WASAMO_ERR_WRONG_THREAD` | Caller is not the runtime's owning thread (§6). |
+| `WASAMO_ERR_IR_MALFORMED` | Header magic / version mismatch, parse error, unknown widget type, defense-in-depth validation failure (DD-M2-P6-009), or non-UTF-8 in-memory blob. |
+| `WASAMO_ERR_RUNTIME` | I/O failure while reading the path, or window/Compositor construction failed. |
+| `WASAMO_ERR_REENTRANT_LOAD` / `WASAMO_ERR_OBSERVER_MUTATION` / `WASAMO_ERR_REACTIVE_DIVERGED` | Standard structure-changing-ABI guards (DD-M2-P6-001 / DD-M2-P6-006). |
+
+On any non-OK return, `*out_root` is left as `NULL` (the function
+zeroes it on entry) and `wasamo_last_error_message` carries a
+human-readable description.
+
+**Handle ownership and lifetime.** The returned `WasamoWindow*` is
+runtime-owned and valid until `wasamo_shutdown`. M2 does not expose a
+per-window destroy ABI (DD-M2-P6-005); the M2 counter holds the
+window for the process lifetime. M3 multi-instance scenarios will
+introduce explicit destruction; the M2 contract is the
+constant-lifetime base case of that future shape, so M2-era hosts do
+not require revision when explicit destruction lands.
+
+**Threading.** Like every other `wasamo_*` ABI, `wasamo_load_ui` must
+be called on the runtime's owning UI thread (§6). Because the M2
+contract fixes thread affinity at `wasamo_init` time, the loader
+inherits the same thread; cross-thread calls return
+`WASAMO_ERR_WRONG_THREAD` with no side effect.
+
 **Auto-routing on installed roots.** When a window has a root
 installed via `wasamo_window_set_root`, the runtime forwards
 `WM_SIZE` to a re-layout pass, `WM_MOUSEMOVE` /
@@ -575,12 +646,19 @@ read as commitments.
 
 Wasamo follows strict UI-thread affinity:
 
-- The thread that calls `wasamo_init` is the **UI thread**.
-- All other `wasamo_*` functions, except as noted, must be called
-  on the UI thread. Calling from another thread is undefined
-  behavior; the runtime may detect it via debug assertions but is
-  not required to in release builds. When detected, the function
-  returns `WASAMO_ERR_WRONG_THREAD`.
+- The thread that calls `wasamo_init` is the **UI thread** for the
+  runtime's lifetime. The `ThreadId` is captured during `wasamo_init`.
+- Every `wasamo_*` function except `wasamo_init` and
+  `wasamo_last_error_message` checks the calling thread on entry and
+  returns `WASAMO_ERR_WRONG_THREAD` without performing the requested
+  action and without modifying runtime state. Functions with a `void`
+  return (`wasamo_shutdown`, `wasamo_run`, `wasamo_quit`) silently
+  no-op on a wrong-thread call but still record the violation in the
+  thread-local last-error string. (DD-M2-P6-005.)
+- Calls before `wasamo_init` return `WASAMO_ERR_NOT_INITIALIZED`. The
+  same `void`-return rule applies to lifecycle entry points.
+- `wasamo_last_error_message` is exempt from the thread check so a
+  caller can read the violation message after a wrong-thread call.
 - All callbacks (signal handlers, property observers, destroy
   functions) are invoked on the UI thread.
 - **Re-entrancy:** while the host is inside a `wasamo_*` call, the
@@ -642,9 +720,11 @@ both layers from the same header.
 |---|---|
 | §1 conventions, §3.1 status, §4.1 last-error | DD-P6-005 |
 | §2.1 export, §2.2 calling convention, §2.3 ownership | DD-P6-007 |
+| §3.1 status codes (M2 additions) | DD-M2-P6-001, DD-M2-P6-005, DD-M2-P6-006 |
 | §3.3 `WasamoValue`, §4.5 signals | DD-P6-002 |
 | §3.4 callbacks, §4.4 observers, §4.5 signals (lifetime) | DD-P6-003 |
 | §4 stable core scope | DD-P6-001 |
 | §5 experimental layer | DD-P6-001 (experimental layer), framing |
-| §6 threading | DD-P6-004 |
+| §5.2 `wasamo_load_ui` | DD-M2-P6-005 |
+| §6 threading | DD-P6-004, DD-M2-P6-005 (init-time fix, error returns) |
 | §7 header generation | DD-P6-006 |

@@ -1,6 +1,7 @@
 mod abi;
 mod emit;
 pub mod handler;
+pub mod ir_loader;
 mod layout;
 pub(crate) mod reactive;
 mod registry;
@@ -8,6 +9,22 @@ mod runtime;
 mod text;
 mod widget;
 mod window;
+
+/// Re-export of the C ABI surface for integration-test consumption. The
+/// production callers always go through `wasamo.h` against `wasamo.dll`;
+/// this module only exists so cross-crate tests inside this workspace can
+/// invoke the ABI without an extra FFI hop.
+pub mod ffi {
+    pub use crate::abi::*;
+
+    /// Test-only seam exposed through `__install_owning_thread_for_test`
+    /// in the runtime module. See its documentation. Intended exclusively
+    /// for the workspace's integration tests.
+    #[doc(hidden)]
+    pub fn __install_owning_thread_for_test() {
+        crate::runtime::__install_owning_thread_for_test();
+    }
+}
 
 pub use layout::{Alignment, SizeConstraint, WidgetKind};
 pub use text::{TextRenderer, TypographyStyle};
@@ -38,6 +55,10 @@ pub fn get_compositor() -> &'static windows::UI::Composition::Compositor {
     &runtime::get().compositor
 }
 
+pub fn get_text_renderer() -> &'static TextRenderer {
+    &runtime::get().text_renderer
+}
+
 pub fn window_add_widget(
     window: &WindowState,
     widget: &WidgetNode,
@@ -47,6 +68,22 @@ pub fn window_add_widget(
     let child_visual: Visual = widget.visual.cast()?;
     window.root.Children()?.InsertAtTop(&child_visual)?;
     Ok(())
+}
+
+/// Install `root` as the window's content tree, taking ownership of the
+/// subtree. Performs an initial layout pass against the window's current
+/// client size and registers the root for click hit-testing and
+/// resize-driven re-layout.
+///
+/// Counterpart to `window_add_widget` — the latter merely attaches a Visual
+/// to the Composition tree without putting the widget into the window's
+/// `root_widget` slot, so it is suitable only for direct visual hosting (no
+/// layout, no hit-test). IR-loader-driven trees should use `window_set_root`.
+pub fn window_set_root(
+    window: &mut WindowState,
+    root: Box<WidgetNode>,
+) -> windows::core::Result<()> {
+    window::set_root(window, root)
 }
 
 pub fn run() {

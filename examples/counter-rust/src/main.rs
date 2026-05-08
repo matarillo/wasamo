@@ -1,65 +1,52 @@
-//! counter-rust/src/main.rs — Hello Counter example in Rust (M1 host-imperative shape)
+//! counter-rust/src/main.rs — Hello Counter, M2 declarative shape.
 //!
-//! This program constructs the same widget tree as examples/counter/counter.ui
-//! imperatively through the wasamo safe Rust wrapper over the experimental C ABI:
-//!
-//!   VStack {
-//!     Text  { "Count: 0"  font: title }
-//!     Button { "Increment" style: accent }
-//!   }
-//!
-//! See examples/counter/counter.ui for the future M2 declarative form.
-//! The .ui → runtime lowering (wasamoc codegen) is M2 scope; M1 verifies
-//! that the C ABI and Visual Layer work correctly.
+//! All UI structure (widget tree, state, binding, click handler) lives in
+//! examples/counter/counter.ui. build.rs compiles that to IR text via
+//! wasamoc; this binary just hands the IR's absolute path to wasamo_load_ui
+//! and runs the message loop. The host contains no wasamo_set_property
+//! calls — A2 is structurally enforced.
 
-use std::cell::Cell;
-use std::rc::Rc;
+use std::ffi::{c_void, CStr};
+use std::ptr;
 
-use wasamo::{Runtime, Value, Widget, Window};
-use wasamo::experimental::{
-    button, text, vstack, WASAMO_BUTTON_STYLE, WASAMO_TEXT_CONTENT, WASAMO_TEXT_STYLE,
+use wasamo_sys::{
+    wasamo_init, wasamo_last_error_message, wasamo_load_ui, wasamo_run, wasamo_shutdown,
+    wasamo_window_show, WasamoWindow, WASAMO_LOAD_PATH, WASAMO_OK,
 };
 
-fn main() -> Result<(), wasamo::Error> {
-    // 1. Initialize the runtime (calls wasamo_init; shutdown on drop).
-    let rt = Runtime::init()?;
-
-    // 2. Create a window (800 × 600).
-    let window = Window::create("Counter", 800, 600)?;
-
-    // 3. Build the widget tree (bottom-up, matching counter.ui).
-
-    // Text: "Count: 0" with title typography (TypographyStyle::Title = 3).
-    let label: Widget = text("Count: 0")?;
-    label.set_property(WASAMO_TEXT_STYLE, &Value::I32(3))?;
-
-    // Button: "Increment" with accent style (ButtonStyle::Accent = 1).
-    let btn: Widget = button("Increment")?;
-    btn.set_property(WASAMO_BUTTON_STYLE, &Value::I32(1))?;
-
-    // Shared counter state. Widget is Copy so `label` can be captured
-    // in the closure and also passed to vstack below.
-    let count = Rc::new(Cell::new(0i32));
-    let _conn = btn.on_clicked({
-        let count = Rc::clone(&count);
-        move || {
-            let n = count.get() + 1;
-            count.set(n);
-            let s = format!("Count: {}", n);
-            let _ = label.set_property(WASAMO_TEXT_CONTENT, &Value::String(&s));
+fn main() {
+    unsafe {
+        if wasamo_init() != WASAMO_OK {
+            panic!("wasamo_init failed: {}", last_error());
         }
-    });
 
-    // VStack: label + button.
-    // Widget is Copy so both handles remain valid after this call.
-    let root: Widget = vstack(&[label, btn])?;
+        let path: &str = env!("WASAMO_COUNTER_IR");
+        let path_bytes = path.as_bytes();
 
-    // 4. Install the root widget and show the window.
-    window.set_root(root)?;
-    window.show()?;
+        let mut window: *mut WasamoWindow = ptr::null_mut();
+        let status = wasamo_load_ui(
+            WASAMO_LOAD_PATH,
+            path_bytes.as_ptr() as *const c_void,
+            path_bytes.len(),
+            &mut window,
+        );
+        if status != WASAMO_OK {
+            panic!("wasamo_load_ui failed: {}", last_error());
+        }
 
-    // 5. Run the message loop (blocks until the window is closed).
-    rt.run();
+        if wasamo_window_show(window) != WASAMO_OK {
+            panic!("wasamo_window_show failed: {}", last_error());
+        }
 
-    Ok(())
+        wasamo_run();
+        wasamo_shutdown();
+    }
+}
+
+unsafe fn last_error() -> String {
+    let p = wasamo_last_error_message();
+    if p.is_null() {
+        return "(no error message)".into();
+    }
+    CStr::from_ptr(p).to_string_lossy().into_owned()
 }

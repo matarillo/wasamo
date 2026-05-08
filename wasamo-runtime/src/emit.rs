@@ -5,25 +5,27 @@
 //! Emissions triggered by a call are queued and drained at a later
 //! safe point.
 //!
-//! Implementation sketch:
-//! - `enqueue_property_change` / `enqueue_signal` resolve matching
-//!   tokens through `registry` and push `Pending` entries onto a
-//!   thread-local FIFO. They never invoke callbacks themselves.
-//! - `drain_if_outermost` is called from every public ABI entry's
-//!   tail and from `wasamo_run`'s message loop between dispatches.
-//!   Re-entry into it is a no-op (the outer loop keeps popping, so
-//!   emissions queued by callbacks fire in the same drain cycle).
-//! - At dispatch time tokens are re-resolved through `registry`;
-//!   if a handler disconnected itself or another handler before its
-//!   turn, the lookup returns `None` and we skip — this is the
-//!   "disconnect-during-emission" semantics required by §4.4.
+//! Three-phase drain (DD-M2-P6-001, Option D):
+//!
+//!   Phase 1 — Mutation convergence loop.
+//!     `signal_queue` (FIFO) and `dirty_effects` (topological) are processed
+//!     until quiescent or MUTATION_CAP.  State mutation (Signal::set) is
+//!     permitted; structure-changing ABI (e.g. `wasamo_load_ui`) returns
+//!     `WASAMO_ERR_REENTRANT_LOAD`.  The `IN_DRAIN` TLS flag guards this phase.
+//!
+//!   Phase 2 — Layout pass (terminal, read-only).
+//!     One layout pass per dirty window; coalesces all property changes from
+//!     Phase 1.
+//!
+//!   Phase 3 — Post-commit observer drain.
+//!     Queued observer/signal callbacks fire under the `IN_OBSERVER_CALLBACK`
+//!     TLS flag.  State-mutating ABI returns `WASAMO_ERR_OBSERVER_MUTATION`.
+//!     New emissions enqueued during Phase 3 are deferred to the next drain
+//!     cycle.
 //!
 //! Layout invalidation (DD-P8-002):
 //! - `mark_layout_dirty` / `unmark_layout_dirty` register windows
-//!   that need a layout pass after the signal queue empties.
-//! - After each full drain cycle, all marked windows run one layout
-//!   pass. Multiple property changes in one drain cycle coalesce
-//!   into a single pass per window.
+//!   that need a layout pass after Phase 1 empties.
 //! - Window registration (`register_window` / `unregister_window`)
 //!   is called by `window::create` / `wasamo_window_destroy` so that
 //!   `drain_if_outermost` can reach live windows without an explicit
@@ -57,13 +59,26 @@ enum Pending {
 
 thread_local! {
     static QUEUE: RefCell<VecDeque<Pending>> = const { RefCell::new(VecDeque::new()) };
-    static DISPATCHING: Cell<bool> = const { Cell::new(false) };
+    /// Set while Phase 1 (mutation convergence) is executing.
+    /// Structure-changing ABI calls check this and return WASAMO_ERR_REENTRANT_LOAD.
+    static IN_DRAIN: Cell<bool> = const { Cell::new(false) };
+    /// Set while Phase 3 (observer drain) is executing.
+    /// State-mutating ABI calls check this and return WASAMO_ERR_OBSERVER_MUTATION.
+    pub(crate) static IN_OBSERVER_CALLBACK: Cell<bool> = const { Cell::new(false) };
     // Raw pointers to all live WindowState allocations on this thread.
     // Populated by window::create; removed by wasamo_window_destroy.
     static WINDOWS: RefCell<Vec<*mut WindowState>> = const { RefCell::new(Vec::new()) };
     // Windows marked dirty by a size-affecting set_property call.
     // Holds raw pointers that are always a subset of WINDOWS.
     static DIRTY: RefCell<HashSet<*mut WindowState>> = RefCell::new(HashSet::new());
+}
+
+pub(crate) fn in_drain() -> bool {
+    IN_DRAIN.with(|f| f.get())
+}
+
+pub(crate) fn in_observer_callback() -> bool {
+    IN_OBSERVER_CALLBACK.with(|f| f.get())
 }
 
 // ── Window registration for layout invalidation ───────────────────────────────
@@ -154,12 +169,36 @@ pub fn enqueue_signal(widget: *mut WasamoWidget, name: &str, args: Vec<OwnedArg>
     });
 }
 
+/// Three-phase drain (Option D, DD-M2-P6-001).
+///
+/// Re-entry while IN_DRAIN is set is a no-op: the outer loop keeps executing
+/// and will process any entries enqueued by the nested call.
+/// In Diverged state all three phases are suppressed (ADR §divergence
+/// commit-forbidden conditions).
 pub fn drain_if_outermost() {
-    if DISPATCHING.with(|d| d.get()) {
+    if IN_DRAIN.with(|f| f.get()) {
         return;
     }
-    DISPATCHING.with(|d| d.set(true));
-    // Phase 1: drain queued observer callbacks (DD-P6-003).
+    if reactive::runtime_health() == reactive::RuntimeHealth::Diverged {
+        return;
+    }
+
+    // Phase 1 — mutation convergence loop.
+    // reactive::drain_reactive runs dirty Effects (topological order) until
+    // quiescent or MUTATION_CAP. Writes inside Effects enqueue further observer
+    // notifications (processed in Phase 3) and mark layout dirty (Phase 2).
+    IN_DRAIN.with(|f| f.set(true));
+    reactive::drain_reactive();
+    IN_DRAIN.with(|f| f.set(false));
+
+    // Phase 2 — layout pass (terminal, read-only).
+    // Coalesces all property changes from Phase 1 into a single pass per window.
+    flush_layout();
+
+    // Phase 3 — post-commit observer drain.
+    // Callbacks fire under IN_OBSERVER_CALLBACK; state-mutating ABI calls are
+    // rejected. New enqueues during Phase 3 land in QUEUE for the next cycle.
+    IN_OBSERVER_CALLBACK.with(|f| f.set(true));
     loop {
         let next = QUEUE.with(|q| q.borrow_mut().pop_front());
         match next {
@@ -167,16 +206,7 @@ pub fn drain_if_outermost() {
             None => break,
         }
     }
-    DISPATCHING.with(|d| d.set(false));
-    // Phase 2: flush dirty reactive Effects (DD-M2-P5-004 = B).
-    // Reactive writes call set_property, which may enqueue further observer
-    // notifications (processed next cycle) and marks layout dirty (DD-P8-002).
-    // Must run before layout so that binding-driven property changes are
-    // reflected in the layout pass that follows.
-    reactive::drain_reactive();
-    // Phase 3: run one layout pass per dirty window.
-    // Coalesces all property changes from phases 1 and 2 into a single pass.
-    flush_layout();
+    IN_OBSERVER_CALLBACK.with(|f| f.set(false));
 }
 
 fn dispatch(p: Pending) {
@@ -231,4 +261,3 @@ fn owned_to_value(a: &OwnedArg) -> WasamoValue {
         },
     }
 }
-

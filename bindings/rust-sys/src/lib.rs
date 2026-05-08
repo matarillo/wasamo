@@ -41,6 +41,17 @@ pub const WASAMO_ERR_INVALID_ARG: WasamoStatus = -1;
 pub const WASAMO_ERR_RUNTIME: WasamoStatus = -2;
 pub const WASAMO_ERR_NOT_INITIALIZED: WasamoStatus = -3;
 pub const WASAMO_ERR_WRONG_THREAD: WasamoStatus = -4;
+pub const WASAMO_ERR_REENTRANT_LOAD: WasamoStatus = -5;
+pub const WASAMO_ERR_REACTIVE_DIVERGED: WasamoStatus = -6;
+pub const WASAMO_ERR_OBSERVER_MUTATION: WasamoStatus = -7;
+pub const WASAMO_ERR_IR_MALFORMED: WasamoStatus = -8;
+
+// ─── DD-M2-P6-005 — wasamo_load_ui resource type ───────────────────────
+
+pub type WasamoLoadType = i32;
+
+pub const WASAMO_LOAD_PATH: WasamoLoadType = 0;
+pub const WASAMO_LOAD_MEMORY: WasamoLoadType = 1;
 
 // ─── 3.2 Opaque handles ────────────────────────────────────────────────
 
@@ -182,6 +193,14 @@ extern "C" {
         destroy_fn: Option<WasamoDestroyFn>,
         out_token: *mut u64,
     ) -> WasamoStatus;
+
+    // ── DD-M2-P6-005 — wasamo_load_ui (M1 experimental) ────────────────
+    pub fn wasamo_load_ui(
+        type_: WasamoLoadType,
+        data: *const c_void,
+        data_len: usize,
+        out_root: *mut *mut WasamoWindow,
+    ) -> WasamoStatus;
 }
 
 // ─── Link smoke test ───────────────────────────────────────────────────
@@ -206,5 +225,11 @@ mod link_smoke {
         let _: unsafe extern "C" fn() -> *const c_char = wasamo_last_error_message;
         let _: unsafe extern "C" fn() = wasamo_run;
         let _: unsafe extern "C" fn() = wasamo_quit;
+        let _: unsafe extern "C" fn(
+            WasamoLoadType,
+            *const c_void,
+            usize,
+            *mut *mut WasamoWindow,
+        ) -> WasamoStatus = wasamo_load_ui;
     }
 }

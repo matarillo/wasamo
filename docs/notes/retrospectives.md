@@ -9,10 +9,26 @@ created: 2026-05-05
 ブランチをマージする前に retrospective を実施する。**scope はマージ先で
 決まる**:
 
-- merge 先 = phase ブランチ → **step retrospective**
-- merge 先 = main → **phase retrospective**
+- merge 先 = phase ブランチ → **step retrospective** → オーナー確認後 ff merge
+- merge 先 = main → **phase retrospective** → オーナー確認後 no-ff merge → オーナー確認後 push
 - 1 step = 1 phase (step ブランチが phase 全体をカバー) の場合は
-  step → phase merge 後に **続けて phase retrospective も回す**
+  step → phase merge 後に **続けて phase retrospective も回す**。
+  ff (step→phase) と no-ff (phase→main) はそれぞれ独立した gate で、
+  **オーナー確認は最低 2 回必要** (retrospective を 1 回にまとめて main
+  まで一気に進めない)。push は no-ff merge とも別 gate。
+
+## 進行手順
+
+checklist 完了 = merge 許可ではない。順序を固定する:
+
+1. 下記 checklist を実施
+2. 結果をオーナーに報告 (CHANGELOG / plan diff、CI / rebuild 結果、
+   未決事項、retrospective 所見)
+3. オーナーが merge 種別 (ff / no-ff) を承認
+4. 承認後に merge を実行
+5. (phase-end のみ) オーナーが push タイミングを別途承認
+6. 承認後に push を実行
+7. push 後 CI を確認 (項目 12)
 
 ## 共通項目 (両 scope で確認)
 
@@ -42,7 +58,10 @@ CI green: 推奨 (PR を上げていれば PR CI、ローカルのみなら clea
     phase 内で更新するか、別 ADR に切るかを決める
 11. 次 phase の pre-doc への送り込み材料を `docs/notes/` に整理したか
     (出発点になる設計軸、未決の論点、引き継ぎ制約など)
-12. main CI green の最終確認 (push 直前)
+12. CI green 確認 — push 前は local clean rebuild green (項目 3) が
+    CI の proxy。**push はオーナー明示承認後のみ**。push 後 GitHub
+    Actions で main CI green を確認、失敗時の recovery (revert PR /
+    force reset 等) はオーナー判断。
 13. CI YAML 変更要否の sanity check — 本 phase で新言語/新ビルド系を
     追加していれば CI 更新済みであること (CLAUDE.md の CI rules)
 
