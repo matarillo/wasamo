@@ -1777,7 +1777,7 @@ is revisited at that point with concrete M3 stimulus.
 
 ### DD-M2-P6-012 — Re-entrancy and safety-guard placement principle
 
-**Status: Proposed (discussion deferred to M2 Phase 6 closing)**
+**Status: Proposed (discussion deferred to M2 Phase 7)**
 
 #### Context
 
@@ -1921,7 +1921,7 @@ fails to compile.
 #### Recommendation
 
 **Deferred.** This DD is opened in `Proposed` status as a placeholder
-to record the principle as an open question for the Phase 6 closing
+to record the principle as an open question for the Phase 7
 discussion. The decision is intentionally **not** settled mid-
 implementation. The Phase 5 retrospective bug has been (or will be)
 repaired as a local correction independent of this principle, and
@@ -1932,13 +1932,12 @@ Detailed evaluation of A / B / C / D — including which runtime
 states each option enforces, which non-ABI entry paths each option
 leaves exposed, how each option interacts with the M3 timer and
 async-I/O extensions, and how the Win32 / WinRT FFI surface
-constrains the choice — is scheduled for the Phase 6 closing
-discussion when M2 acceptance work is otherwise complete and the
-full set of Phase 6 implementation experience is available as
-evidence.
+constrains the choice — is scheduled for the Phase 7 discussion
+when M2 acceptance work is otherwise complete and the full set of
+Phase 6 implementation experience is available as evidence.
 
 Until that discussion settles the rule, **no new ABI function and
-no new non-ABI entry path introduced before Phase 6 close should be
+no new non-ABI entry path introduced before Phase 7 should be
 treated as setting precedent**: any guard placement chosen for a
 new entry point is provisional and may be reorganised once the
 principle is decided.
@@ -1949,8 +1948,8 @@ High if left unspecified through M2. The cost of choosing incorrectly
 grows with each new re-entrancy state and each new non-ABI entry
 path; M3 is expected to add at least timer, async-I/O, and
 additional Win32 message handling, multiplying combinations through
-the four existing states. Settling the principle at the close of
-Phase 6 keeps the M3 pre-doc free to apply it uniformly across its
+the four existing states. Settling the principle in Phase 7
+keeps the M3 pre-doc free to apply it uniformly across its
 new surface.
 
 Low specifically for the Phase 5 retrospective bug. That bug is a
@@ -1974,7 +1973,7 @@ independently of which option is eventually chosen.
 | DD-M2-P6-009 | IR loader malformed-input validation policy | **Option C** — defense-in-depth: header/version + reference resolution + top-level structure; trust emitter invariants including type integrity | Low | Low |
 | DD-M2-P6-010 *(Proposed)* | `dirty_effects` topological sort fidelity | **Option B** *(recommended)* — EffectId-numeric-order approximation accepted for M2 single-binding scope; replace with true graph walk before M3 multi-binding work begins | Low | Medium |
 | DD-M2-P6-011 *(Proposed)* | String-typed property binding | **Option B** *(recommended)* — `StrPropRead` HandlerExpr variant + `EvalContext::get_string` / `read_string_tracked`; `BindingEvalContext` wired to `registry.strings` | Low–medium | Low |
-| DD-M2-P6-012 *(Proposed, decision deferred to Phase 6 closing)* | Re-entrancy and safety-guard placement principle | **Deferred** — A (ABI-boundary) / B (internal-state-machine) / C (defense-in-depth) / D (typed guard tokens) evaluated at Phase 6 close with full Phase 6 implementation evidence | n/a (deferred) | High if unspecified through M2 |
+| DD-M2-P6-012 *(Proposed, decision deferred to Phase 7)* | Re-entrancy and safety-guard placement principle | **Deferred** — A (ABI-boundary) / B (internal-state-machine) / C (defense-in-depth) / D (typed guard tokens) evaluated in Phase 7 with full Phase 6 implementation evidence | n/a (deferred) | High if unspecified through M2 |
 
 **Aggregate impl-risk picture.** DD-M2-P6-001 and DD-M2-P6-005
 introduce the new ABI-surface error codes M2 ships
