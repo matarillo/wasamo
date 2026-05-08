@@ -81,6 +81,44 @@ read-only — substantive scope changes go through a vision ADR, not by
 editing the plan. The **Progress** section is the active workspace for the
 milestone.
 
+### Acceptance criteria revision (in-progress only)
+
+The Frozen agreement is read-only while a milestone is `in-progress`,
+with **one narrow exception**: the **Acceptance criteria** subsection
+may be revised in place if owner and Claude agree that the existing
+criteria are structurally insufficient to satisfy the milestone's
+stated purpose (for example, a foundation milestone whose criteria
+cover only pipeline wiring and miss the runtime guarantees that
+distinguish "it runs" from "it is a Foundation"). This exception
+exists because pre-doc cannot always anticipate which guarantees a
+milestone needs to commit to; once implementation is underway, the
+shape of the gap may only become legible against concrete code.
+
+Revisions under this exception are subject to the following rules:
+
+- **Existing AC IDs are preserved.** New criteria are **added** with
+  fresh IDs (e.g. A5, A6). Existing criteria may be **refined** in
+  wording or marked **superseded** with a pointer to the replacement,
+  but **silent renumbering is forbidden** — readers and ROADMAP
+  references must remain valid.
+- **A *Revision log* subsection is mandatory.** It lives at the end
+  of the Frozen agreement (after `### Resolved deferrals`, before
+  `## Progress`) and records, for each revision: date, motivation,
+  added/refined/superseded AC IDs.
+- **Phase breakdown / dependencies / acceptance ↔ phase mapping /
+  out-of-scope remain read-only under this exception.** Changes to
+  those parts still go through a vision ADR. New phases added to
+  cover newly-added criteria are a structural change to the plan and
+  are recorded both in the Revision log and in the Phase breakdown
+  table; this is the one place the exception spills past the AC
+  subsection, and only because new AC without a phase is meaningless.
+- **ROADMAP must be updated to mirror the revision.** ROADMAP is the
+  acceptance-criteria SSOT; the plan's mirror cannot diverge.
+
+If the disagreement is about the milestone's purpose itself rather
+than the criteria that satisfy it, that is a vision-level question
+and goes through a vision ADR — not this exception.
+
 ## Scope rule (plan vs ADR)
 
 The Frozen agreement section contains:
