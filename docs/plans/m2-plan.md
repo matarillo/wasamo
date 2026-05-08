@@ -385,8 +385,8 @@ phases land.
     - vs Phase 4: implemented on top of Phase 4's `with_batched_writes` skeleton. Without Phase 4 batching, re-evaluation cascades degrade performance.
     - vs Phase 6: Phase 6 lowers `.ui` binding statements into typed IR, which Phase 5's binding expression evaluator consumes.
   - **Verification kinds:** unit tests (dependency tracker and binding evaluator are pure logic; Option A verification per the design-axes note uses fake Effect closures with no new mirrors and no headless backend) + GUI manual (verify reactive linkage of the counter on real hardware — acceptance A2). **The phase most likely to surface a need for a headless-verification mechanism**; on entering Phase 5, re-evaluate [docs/notes/headless-verification.md](../notes/headless-verification.md) and, if needed, file an independent ADR for a "no-Compositor" mode.
-- [ ] **M2-Phase 6 — `.ui → runtime` lowering**
-  - ADR: [docs/decisions/m2-phase-6-ui-lowering.md](../decisions/m2-phase-6-ui-lowering.md) — **Status: Proposed** (DD-M2-P6-001..009 drafted; agreement gating implementation start)
+- [x] **M2-Phase 6 — `.ui → runtime` lowering**
+  - ADR: [docs/decisions/m2-phase-6-ui-lowering.md](../decisions/m2-phase-6-ui-lowering.md) — **Accepted 2026-05-07** (DD-M2-P6-001..009 Accepted; DD-M2-P6-010/011/012 Proposed and deferred to M2-Phase 7 per the 2026-05-08 acceptance-criteria revision)
   - Pre-doc framing: [docs/notes/m2-phase-6-pre-doc-framing.md](../notes/m2-phase-6-pre-doc-framing.md) — owner-aligned slate / scope / upstream-update bundling.
   - **Risk concentration (the risk this phase must absorb within M2):**
     - Phase 6 introduces *no* new core mechanism (Phases 3/4/5 supplied them) but is the first place Phase 5's reactive engine, Phase 4's mutation ABI, and Phase 3's `HandlerExpr` interpreter meet at the host surface. A1/A2 are only *fully* discharged here.
@@ -456,26 +456,36 @@ phases land.
         - **Embed-at-compile-time means embed the wasamoc-emitted IR (`.uic`), not the DSL source (`.ui`).** The plan says "embed `counter.ui` at compile time" but `wasamo_load_ui` only accepts the IR text grammar (`;wasamo-ir v0` header). Resolved as Approach B (each build system invokes `wasamoc` at build time) over Approach A (commit `.uic` alongside `.ui`) to preserve a single source-of-truth. The pipeline is recorded as provisional in `docs/architecture.md` §1 ("DSL build pipeline") with re-evaluation triggers (M3 multi-`.ui` host, post-1.0 hot reload). Operational rule (`cargo build -p wasamoc` must precede C/Zig host builds) recorded in `CLAUDE.md` "Build ordering requirements".
         - **Window-level DSL props (`title`, `backdrop`, `theme`) silently dropped at the runtime boundary.** `wasamoc` correctly lowers them onto root-widget IR props, but `ir_loader::construct_widget` only honors widget-recognized props and `wasamo_load_ui` hardcodes the window title to `"Wasamo"`. M2-side window title is therefore `"Wasamo"` rather than M1's `"Counter"`. A1/A2 acceptance is unaffected (no title-text requirement in either criterion). Wiring window-level DSL props would require ABI extension (new `wasamo_window_set_title` or `wasamo_load_ui` config arg), which is out of Phase 6's "counter examples migration" scope. Captured as `docs/notes/dsl-grammar.md` Q2 with re-evaluation triggers (M3 DSL spec drafting, M4 Mica/Acrylic introduction).
       - **Technical risk: Low.** Embedding ergonomics are binding-side; the runtime path is identical to the Phase 5 spike harness.
-    - [ ] **DD-M2-P6-011: String-typed property binding.** Wire `BindingEvalContext` / `HandlerExpr::PropRead` to read `Signal<String>` values from `SignalRegistry.strings` through the binding evaluator. Add `EvalContext::get_string` / `read_string_tracked` to `handler.rs`; extend `evaluate_binding` / `evaluate_tracked` to dispatch on string-typed PropRead. Decide the PropRead disambiguation strategy (`StrPropRead` variant vs. type-tag inference) in a short ADR entry (DD-M2-P6-011). Keys follow the same `wasamoc`-resolved flat namespace as `i32s`.
-      - **Verification:** end-to-end pure-logic test: `Signal<String>` in `SignalRegistry.strings` → `register_binding_with_writer` → binding closure produces expected string output on initial run and after `Signal::set`.
-      - **Technical risk: Low–medium.** `HandlerExpr` IR disambiguation is the only non-mechanical step; `i32` path is a template.
-    - [ ] **Upstream-document bundle (lands in the same commit that flips the ADR to Accepted):**
-      - `VISION.md §4 Principle 2` — append the supplement text (ADR §11.1; observer = post-commit pure effect; mutation = events-up + bindings-down).
-      - `docs/architecture.md §6` (or its M2-revised form) — rewrite drain spec to the three-phase + terminal form; document the mutation boundary; discharges DD-M2-P3-002's side obligation.
-      - `docs/decisions/m2-phase-5-reactive-engine.md` — DD-M2-P5-004 status flipped to "Superseded in part by DD-M2-P6-001 (drain stage framing)"; deferred-dispatch trigger contract preserved.
-      - `docs/decisions/m2-phase-5-reactive-engine.md` — DD-M2-P5-005 status flipped to "Superseded by DD-M2-P6-007 (`properties` shape; registration API itself preserved)".
-      - `docs/notes/dd-m2-p6-drain-transaction.md` — archived/removed; content folded into the ADR.
-      - `docs/notes/reactive-drain-cascade-policy.md` — closed.
-    - [ ] `cargo build --release --workspace` passes; `cargo test --workspace` passes.
-    - [ ] **Link/export verification:** new symbols (`wasamo_load_ui`, `wasamo_last_error_message`) confirmed via `dumpbin /exports target/release/wasamo.dll`.
-    - [ ] `CHANGELOG.md` — Phase 6 entry covering the IR pipeline, drain transaction reshape, new error codes, and counter examples migration.
-    - [ ] `docs/plans/m2-plan.md` Progress: phase ticked, ADR linked.
+    - **DD-M2-P6-011 (String-typed property binding) — moved to M2-Phase 7.** The 2026-05-08 acceptance-criteria revision split this DD off the Phase 6 task list and made it part of A6 under the new Phase 7 (`.ui` String property bound to `Signal<String>`). Phase 6 closes with `i32`-typed binding only, which suffices for A1/A2.
+    - [x] **Upstream-document bundle (landed alongside ADR Accepted flip 2026-05-07; commit `d5415fe` and predecessors):**
+      - [x] `VISION.md §4 Principle 2` supplement text appended.
+      - [x] `docs/architecture.md` §6.8.3 rewritten to the three-phase + terminal drain form; mutation boundary documented; DD-M2-P3-002 side obligation discharged.
+      - [x] `docs/decisions/m2-phase-5-reactive-engine.md` DD-M2-P5-004 Status flipped to "Superseded in part by DD-M2-P6-001"; deferred-dispatch trigger contract preserved.
+      - [x] `docs/decisions/m2-phase-5-reactive-engine.md` DD-M2-P5-005 Status flipped to "Superseded in part by DD-M2-P6-007"; registration API preserved.
+      - [x] `docs/notes/dd-m2-p6-drain-transaction.md` Status flipped to `superseded` (file retained as draft history; content folded into the ADR).
+      - [x] `docs/notes/reactive-drain-cascade-policy.md` Status flipped to `superseded` (frontmatter; superseded-by points to DD-M2-P6-001).
+    - [x] **Local clean rebuild green (Phase 6 closing, 2026-05-08):** `cargo clean` → `cargo build --release --workspace` → `cargo build --workspace` → `cargo test --workspace` — 177 passed, 0 failed across 16 test binaries.
+    - [x] **Link/export verification (Phase 6 closing, 2026-05-08):** `dumpbin /exports target/release/wasamo.dll` confirms `wasamo_load_ui` and `wasamo_last_error_message` among the 27 exported `wasamo_*` symbols.
+    - [x] `CHANGELOG.md` — Phase 6 entry added at closing.
+    - [x] `docs/plans/m2-plan.md` Progress: phase ticked, ADR linked.
   - **Boundary with adjacent phases:**
     - vs Phase 3: Phase 6 wires the IR-side serialisation of `HandlerExpr` (DD-M2-P6-003 promotes the spike's tagged-value form). The handler evaluator itself is unchanged from Phase 3.
     - vs Phase 4: tree construction during `wasamo_load_ui` uses Phase 4's *internal* Rust mutation API (`insert_child` / `set_property` / etc.), not the C ABI — same pattern as the Phase 2 spike's loader. The new `wasamo_load_ui` is the only C ABI entry this phase adds beyond Phase 4's six tree-mutation symbols, plus `wasamo_last_error_message`.
     - vs Phase 5: Phase 6 supersedes DD-M2-P5-004's three-stage drain (Option D's three-phase form replaces it) and supersedes DD-M2-P5-005's `properties` parameter shape (`SignalRegistry` replaces it). The Signal/Effect/Binding primitives themselves and the dependency-tracker are unchanged.
     - Per-target-language codegen is **not required** (per DD-M2-P2-001 = B, a single runtime-side path suffices).
   - **Verification kinds:** unit tests (lowering passes / IR loader validation / drain ordering rules / divergence state machine — all pure logic) + build (`cargo build --release --workspace`) + link/export (`dumpbin /exports`) + ABI smoke + **GUI manual (RDP / physical) of all three language counters on real hardware — this is acceptance A1/A2 itself**. A green CI build alone does not satisfy A1/A2 (see [verification-environments.md](../notes/verification-environments.md) Observation 1).
+- [ ] **M2-Phase 7 — Reactive Foundation Hardening & Contract Finalization**
+  - ADR: shares [docs/decisions/m2-phase-6-ui-lowering.md](../decisions/m2-phase-6-ui-lowering.md) for the three deferred DDs (DD-M2-P6-010 / 011 / 012) — **Status: Proposed** for all three; pre-doc cycles re-run at Phase 7 entry per DD before any are flipped to Accepted.
+  - **Scope.** Discharge the three DDs deferred from Phase 6 closing. Phase 6 established the `.ui → runtime` pipeline (A1/A2); Phase 7 establishes the foundation guarantees that distinguish "it runs" from "it is a Foundation" (A5/A6).
+  - **Order of work (agreed 2026-05-08):**
+    1. **DD-M2-P6-010** (dirty_effects topological sort fidelity) — re-run pre-doc with full Phase 6 implementation evidence; agreement → Accepted; replace EffectId-numeric-order approximation with true graph walk.
+    2. **DD-M2-P6-012** (re-entrancy / safety-guard placement principle) — re-run pre-doc with full Phase 6 implementation evidence (now available; ADR Context section already reflects the Phase 5 retrospective bug shape); agreement → Accepted; record the principle in `docs/architecture.md` as a global runtime invariant (per A5).
+    3. **DD-M2-P6-011** (String-typed property binding) — re-run pre-doc; agreement → Accepted; implement until a `.ui` String property bound to `Signal<String>` propagates through `BindingEvalContext` / `HandlerExpr::PropRead` to the visible widget (per A6).
+  - **Acceptance discharged here:**
+    - **A5** (Reactive Foundation Hardening) — both DD-M2-P6-010 and DD-M2-P6-012 must be Accepted with implementation landed; the guard-placement principle must be recorded in `docs/architecture.md`.
+    - **A6** (Type-Agnostic Reactive Binding) — DD-M2-P6-011 Accepted with end-to-end `Signal<String>` binding demonstrated.
+  - **Verification kinds:** unit tests (topo sort fidelity / guard-placement enforcement / String binding propagation — pure logic) + the existing Phase 6 GUI counter (regression check; no new GUI fixture mandated unless a DD demands it).
+  - **Closing items:** `cargo build --release --workspace` + `cargo test --workspace` green; `CHANGELOG.md` Phase 7 entry; ROADMAP M2 marked shipped; M2-plan status → `completed`.
 - **Out of M2 scope (restated):**
   - Headless-verification backend — examined critically in [docs/notes/headless-verification.md](../notes/headless-verification.md); the policy is to close M2 with a pure-logic test fixture strategy without building one. Re-evaluation trigger in Phase 5.
 
