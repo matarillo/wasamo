@@ -48,7 +48,7 @@ created: YYYY-MM-DD
 ---
 ```
 
-## Plan structure: frozen agreement + live progress
+## Plan structure: frozen agreement + progress index
 
 Each plan has two top-level sections
 ([DD-V-015](../decisions/vision-doc-system.md#dd-v-015--plan-two-layer-structure-frozen-agreement--live-progress)):
@@ -59,13 +59,14 @@ Each plan has two top-level sections
    acceptance ↔ phase mapping, out-of-scope, risks
 
 ## Progress
-   per-phase checklist, owner-facing notes, links to landed ADRs
-   and commits as phases complete
+   compact phase status table, links to active phase progress files,
+   links to landed ADRs / CHANGELOG entries as phases complete
 ```
 
 The **Frozen agreement** section follows the status lifecycle below. The
-**Progress** section is live until the milestone reaches `completed`; it
-takes over the role that ROADMAP phase checklists used to play.
+**Progress** section is live until the milestone reaches `completed`, but
+it is an index, not the long-form execution log. Detailed live task
+tracking happens at the phase level.
 
 ## Status lifecycle
 
@@ -78,8 +79,9 @@ takes over the role that ROADMAP phase checklists used to play.
 
 The key discipline: once `in-progress`, the **Frozen agreement** section is
 read-only — substantive scope changes go through a vision ADR, not by
-editing the plan. The **Progress** section is the active workspace for the
-milestone.
+editing the plan. The **Progress** section is the milestone's active
+index; phase-level progress files are the active workspace for
+implementation details.
 
 ### Acceptance criteria revision (in-progress only)
 
@@ -131,27 +133,69 @@ The Frozen agreement section does **not** contain:
 - Per-phase design decisions (those go into phase ADRs)
 - Implementation details
 
-The Progress section contains:
-- A top-level checklist of phases
-- Per-phase implementation task lists (the ordered steps to carry out
-  each phase's accepted decisions)
-- Owner-facing notes ("where did we leave off")
-- Links to landed ADRs, commits, or pull requests as phases complete
+The milestone plan's Progress section contains:
+- A compact phase status table
+- Links to active phase progress files, if any
+- Links to landed ADRs, CHANGELOG entries, commits, or pull requests as
+  phases complete
+- A short owner-facing note only when needed to resume the milestone
 
-Per-phase task lists live here — not in the phase ADR — because task
-lists remain hypotheses even after pre-doc agreement. Build failures,
-linker errors, CI surprises, and direct application verification can all
-require steps to be added, split, reordered, or dropped after the design
-decisions themselves are settled. Progress is explicitly mutable
-throughout implementation; the ADR's DD entries are not.
+Detailed task lists do **not** live in the milestone plan. They live in
+phase progress files:
+
+```text
+docs/plans/progress/<milestone>-phase-<n>-progress.md
+```
+
+Example:
+
+```text
+docs/plans/progress/m2-phase-7-progress.md
+```
+
+Per-phase task lists live in phase progress files - not in phase ADRs -
+because task lists remain hypotheses even after pre-doc agreement. Build
+failures, linker errors, CI surprises, and direct application
+verification can all require steps to be added, split, reordered, or
+dropped after the design decisions themselves are settled. Phase progress
+is explicitly mutable throughout implementation; the ADR's DD entries are
+not.
 
 The Progress section does **not** contain:
+- Per-phase implementation task lists
+- Long verification logs
+- Phase retrospective detail once the phase has closed
 - Design decisions (still ADR-shaped)
 - Acceptance criteria (still in ROADMAP)
 
 If pre-doc surfaces a phase-level design decision while the plan is being
-written, file a phase ADR for it — do not bury it in the plan's Frozen
+written, file a phase ADR for it - do not bury it in the plan's Frozen
 agreement.
+
+## Phase progress file lifecycle
+
+A phase progress file follows this lifecycle:
+
+| Status | Meaning | Editing rule |
+|---|---|---|
+| `active` | The phase is being implemented. | Free updates |
+| `closing` | Implementation is done; distillation is in progress. | Only closing notes / verification / links |
+| `retired` | Durable information has been moved elsewhere. | Delete by default |
+| `archived` | Kept for a documented reason. | Move to `docs/plans/progress/archive/` |
+
+At phase close:
+
+1. Move durable decisions into the phase ADR.
+2. Move user-visible shipped work into `CHANGELOG.md` when appropriate.
+3. Move reusable operational knowledge into `docs/notes/` or architecture
+   docs.
+4. Keep only a compact row in the milestone plan's Progress table.
+5. Delete the phase progress file by default.
+
+Archive instead of delete only if there is a documented reason to keep
+the phase log accessible without using git history. Completed phase logs
+that remain in the active progress directory consume context and invite
+confusion about whether they are still authoritative.
 
 ## Archival policy
 
