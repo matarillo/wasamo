@@ -1637,9 +1637,16 @@ reinforces C.
 
 ### DD-M2-P6-010 — `dirty_effects` topological sort fidelity
 
-**Status:** Proposed — housing migrated to
+**Status:** Accepted (2026-05-09) in
 [m2-phase-7-reactive-foundation.md](./m2-phase-7-reactive-foundation.md#dd-m2-p6-010--dirty_effects-topological-sort-fidelity)
-(2026-05-08).
+(housing migrated 2026-05-08; resolved Option A — true topological
+walk in M2). The Phase 6 ADR's "Forward-compat carry-forward" entry
+for DD-010 (line above) refers to the resolved DD; the mandatory
+pre-condition for M3 multi-binding is **discharged at acceptance**
+(the walk lands in M2; M3 inherits the verified primitive). M3
+residuals (cycle detection, ordering ties, fan-out × `MUTATION_CAP`)
+are recorded in
+[docs/notes/m2-to-m3-handover.md](../notes/m2-to-m3-handover.md).
 
 This DD was opened in the Phase 6 ADR's draft slate and deferred to
 M2-Phase 7 per the 2026-05-08 acceptance-criteria revision recorded in

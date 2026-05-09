@@ -240,6 +240,17 @@ and [docs/decisions/vision-post-m2-roadmap.md](../decisions/vision-post-m2-roadm
   - DD-M2-P6-010 / 011 / 012 status remains Proposed; their
     discharge is now scoped to Phase 7.
 
+- **2026-05-09** — Phase 7 progress (no acceptance-criteria change).
+  - DD-M2-P6-010 (`dirty_effects` topological sort fidelity)
+    Accepted in [m2-phase-7-reactive-foundation.md](../decisions/m2-phase-7-reactive-foundation.md#dd-m2-p6-010--dirty_effects-topological-sort-fidelity)
+    — Option A (true topological walk in M2; pure-logic unit tests
+    on synthetic dependency graphs; single drain code path). M3
+    residuals (cycle detection, ordering ties, fan-out × MUTATION_CAP)
+    recorded in [m2-to-m3-handover.md](../notes/m2-to-m3-handover.md)
+    §3. Implementation step pending; A5 first clause (DD-010 Accepted)
+    discharged at design level; second clause (implementation
+    reflects it) opens the next step.
+
 ## Progress
 
 The progress section is live until M2 reaches `completed`; it tracks
