@@ -1,7 +1,9 @@
 # M2-Phase 7 / DD-M2-P6-010 pre-doc framing
 
-**Status:** framing aligned with owner (2026-05-08); input artefact for
-ADR drafting
+**Status:** framing aligned with owner (2026-05-08); ADR drafted and
+DD-010 Accepted (2026-05-09, Option A). Retained as input artefact
+for the implementation step; archive after implementation lands per
+decision F below.
 **Date:** 2026-05-08
 **Targets DD:** DD-M2-P6-010 — `dirty_effects` topological sort fidelity
 **Targets phase:** M2-Phase 7 (Reactive Foundation Hardening)
@@ -102,6 +104,117 @@ Carrying these forward into the option re-evaluation:
    [testing rules](../../CLAUDE.md#testing-rules) (no Win32/WinRT
    FFI dependency); GUI confirmation requires multi-binding stimulus
    that does not exist before M3.
+
+---
+
+## Phase 6 retrospective observations (private archive, not git-tracked)
+
+The owner maintains a private archive of step / phase retrospectives
+outside the repository. The drafter re-read the DD-M2-P6-001..009 +
+Phase 6 entries (per decision E below) and extracted the observations
+worth folding into DD-010's ADR. Each observation is paired with the
+**abstracted invariant** that the ADR carries forward — the retro
+specifics stay here as audit trail, the abstracted invariant is what
+the ADR cites. This indirection avoids dead links to git-untracked
+material and keeps the ADR readable as a timeless document.
+
+### O1 — DD-010 origin condition
+
+DD-010 surfaced during the DD-M2-P6-001 implementation retrospective
+on 2026-05-07. The drafter discovered that `sort_unstable()` works
+only because `EffectId` assignment is monotonic at creation and the
+counter shape creates Effects in dependency order. Owner directive at
+that time: add DD-010 as `Proposed`, settle later.
+
+- **Abstracted invariant for ADR:** "ID-numeric ≡ topological" is a
+  property of the IR loader's emit order, not a structural guarantee
+  of the runtime. The approximation's correctness depends on a
+  precondition the runtime does not enforce.
+
+### O2 — Recommendation history
+
+The Phase 6 ADR draft and the DD-007 retrospective both recorded
+**Option B as the drafter recommendation**, on the criterion that the
+M2 acceptance set does not exercise the gap. Phase 7's A5 literal
+framing changes the criterion from "M2-acceptance-observable" to
+"shipped binary structurally guarantees the property". Under the new
+criterion the recommendation flips to Option A. The reversal is
+explained by the criterion change, not by new technical evidence.
+
+- **Abstracted invariant for ADR:** the recommendation flip from B to
+  A is a consequence of A5 framing, not of newly-discovered
+  implementation facts. Stating this in the ADR Context prevents the
+  flip from reading as post-hoc rationalisation.
+
+### O3 — A5/A6 deferral provenance
+
+The Phase 6 phase retrospective explicitly records "A5, A6: revision
+log 通り Phase 7 移譲" — confirming that A5's literal-reading
+discipline applies cleanly to Phase 7 work without retroactive
+re-litigation of Phase 6 closure.
+
+- **Abstracted invariant for ADR:** A5 framing's authority over DD-010
+  is established by the Phase 6 closing record; no further
+  justification is required for invoking it in DD-010 Context.
+
+### O4 — Pure-logic test seam pattern (Phase 6 precedent)
+
+DD-M2-P6-005 introduced `__install_owning_thread_for_test`
+(`#[doc(hidden)]`) — a pure-logic seam that lets unit tests exercise
+thread-affinity logic without instantiating a Compositor. The pattern
+respects CLAUDE.md testing rules (no Win32/WinRT FFI dependency in
+tests) and was accepted without controversy.
+
+- **Abstracted invariant for ADR:** "extract Win32/WinRT-free logic
+  into a free function or `#[doc(hidden)]` seam, then unit-test it"
+  is an established Phase 6 pattern, not a Phase 7 invention.
+  Option A's plan to extract the topological walk as a free function
+  inherits this pattern; it does not introduce a new test discipline.
+
+### O5 — Primitive-introduced-ahead-of-consumer pattern (Phase 6 precedent)
+
+DD-M2-P6-009 added `IrLoadError::is_malformed()` "as reservation for
+DD-M2-P6-005 ABI wiring" — i.e. the helper landed before its single
+consumer existed, with the explicit purpose of making later wiring
+clean. This was reviewed and accepted without objection.
+
+- **Abstracted invariant for ADR:** introducing a primitive ahead of
+  its production consumer is an established Phase 6 move, conditional
+  on a near-future consumer being named. Option A's topological walk
+  has its named consumer (M3 multi-binding); the move is in pattern.
+
+### O6 — "Implementation untested at GUI level" risk is concrete, not hypothetical
+
+DD-M2-P6-006 surfaced a runtime difference between
+`window_add_widget` and `window_set_root` (layout-pass / hit-test
+registration) that was invisible to source review and only caught
+during GUI checkpoint execution. The Phase 6 draft's objection to
+Option A — "ships unexercised; correctness asserted by tests alone,
+with no GUI confirmation" — is therefore a real risk class, not
+abstract concern.
+
+- **Abstracted invariant for ADR:** "code untested through GUI
+  execution" is a known Phase 6 risk class, with at least one
+  realised instance. Option A's Con must take it seriously.
+  Mitigation is constrained to what is reachable from pure-logic
+  tests, since no M2 GUI stimulus exercises multi-Effect ordering.
+
+### O7 — "Small additions are implicit design commits" pattern
+
+DD-M2-P6-007 retrospective records that adding `EvalContext::get_string`
+— a single method — was inseparable from a `PropRead` polymorphism
+direction commitment. The owner-recorded learning is: a localised
+implementation change can carry an unrecognised design commitment.
+
+- **Abstracted invariant for ADR:** "implementation locality ≠ design
+  locality" is a specifically-observed Phase 6 failure mode. Option C's
+  structural-invariant sub-variant (asserting at Effect creation time
+  that every newly-tracked Signal's existing dependents have lower IDs)
+  is the same shape: a localised assertion that commits the runtime to
+  an Effect-creation-order discipline that M3 features (lazy computed
+  values, host-driven creation order) have not yet been designed
+  against. The pattern argues against Option C's structural sub-variant
+  on principle, not on cost.
 
 ---
 
