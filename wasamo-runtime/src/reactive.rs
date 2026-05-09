@@ -5,6 +5,8 @@ use std::sync::atomic::{AtomicU64, Ordering};
 
 use crate::handler::{evaluate_binding, EvalContext, EvalError, HandlerExpr};
 
+const MUTATION_CAP: usize = 16;
+
 /// Health state of the reactive engine. Once `Diverged`, all ABI calls
 /// (except destroy) must return `WASAMO_ERR_REACTIVE_DIVERGED`.
 #[derive(Copy, Clone, Eq, PartialEq, Debug)]
@@ -54,6 +56,7 @@ fn next_effect_id() -> EffectId {
 struct ReactiveGraph {
     forward: HashMap<SignalId, HashSet<EffectId>>,
     back: HashMap<EffectId, HashSet<SignalId>>,
+    writes: HashMap<EffectId, HashSet<SignalId>>,
     tracking_stack: Vec<EffectId>,
     closures: HashMap<EffectId, Weak<RefCell<Box<dyn FnMut()>>>>,
 }
@@ -63,6 +66,7 @@ impl ReactiveGraph {
         Self {
             forward: HashMap::new(),
             back: HashMap::new(),
+            writes: HashMap::new(),
             tracking_stack: Vec::new(),
             closures: HashMap::new(),
         }
@@ -72,6 +76,12 @@ impl ReactiveGraph {
         if let Some(&effect_id) = self.tracking_stack.last() {
             self.forward.entry(signal_id).or_default().insert(effect_id);
             self.back.entry(effect_id).or_default().insert(signal_id);
+        }
+    }
+
+    fn track_write(&mut self, signal_id: SignalId) {
+        if let Some(&effect_id) = self.tracking_stack.last() {
+            self.writes.entry(effect_id).or_default().insert(signal_id);
         }
     }
 }
@@ -90,6 +100,7 @@ fn run_effect(effect_id: EffectId) {
     GRAPH.with(|g| {
         let mut g = g.borrow_mut();
         let old_sigs = g.back.remove(&effect_id).unwrap_or_default();
+        g.writes.remove(&effect_id);
         for sig_id in &old_sigs {
             if let Some(deps) = g.forward.get_mut(sig_id) {
                 deps.remove(&effect_id);
@@ -97,8 +108,12 @@ fn run_effect(effect_id: EffectId) {
         }
     });
 
-    let closure_rc =
-        GRAPH.with(|g| g.borrow().closures.get(&effect_id).and_then(|w| w.upgrade()));
+    let closure_rc = GRAPH.with(|g| {
+        g.borrow()
+            .closures
+            .get(&effect_id)
+            .and_then(|w| w.upgrade())
+    });
     let Some(closure_rc) = closure_rc else { return };
 
     // Raise BATCH_DEPTH while the closure runs so that any Signal::set call
@@ -118,13 +133,14 @@ fn run_effect(effect_id: EffectId) {
 /// If the cap is exceeded the runtime transitions irreversibly to `Diverged`
 /// and records diagnostics in `DIVERGENCE_DIAG`.
 fn drain_dirty_effects() {
-    const MUTATION_CAP: usize = 16;
     for iteration in 0..MUTATION_CAP {
         let dirty: Vec<EffectId> = DIRTY_EFFECTS.with(|d| {
             let mut set = d.borrow_mut();
-            let mut v: Vec<EffectId> = set.drain().collect();
-            v.sort_unstable();
-            v
+            let dirty: HashSet<EffectId> = set.drain().collect();
+            GRAPH.with(|g| {
+                let g = g.borrow();
+                order_dirty_effects_topologically(&g.forward, &g.back, &g.writes, &dirty)
+            })
         });
         if dirty.is_empty() {
             return;
@@ -158,9 +174,7 @@ fn drain_dirty_effects() {
                 let msg = format!(
                     "wasamo reactive: reactive divergence after {} iterations; \
                      offending Effect id={}; last dirty Signal ids={:?}",
-                    diag.iteration_count,
-                    diag.offending_effect_id,
-                    diag.last_dirty_signal_ids,
+                    diag.iteration_count, diag.offending_effect_id, diag.last_dirty_signal_ids,
                 );
                 crate::abi::set_last_error(msg);
             }
@@ -179,13 +193,19 @@ pub(crate) struct Signal<T> {
 
 impl<T> Clone for Signal<T> {
     fn clone(&self) -> Self {
-        Signal { id: self.id, value: Rc::clone(&self.value) }
+        Signal {
+            id: self.id,
+            value: Rc::clone(&self.value),
+        }
     }
 }
 
 impl<T: Clone + 'static> Signal<T> {
     pub(crate) fn new(value: T) -> Self {
-        Signal { id: next_signal_id(), value: Rc::new(RefCell::new(value)) }
+        Signal {
+            id: next_signal_id(),
+            value: Rc::new(RefCell::new(value)),
+        }
     }
 
     pub(crate) fn get(&self) -> T {
@@ -200,8 +220,9 @@ impl<T: Clone + 'static> Signal<T> {
     pub(crate) fn set(&self, value: T) {
         *self.value.borrow_mut() = value;
         let dependents: Vec<EffectId> = GRAPH.with(|g| {
-            g.borrow()
-                .forward
+            let mut g = g.borrow_mut();
+            g.track_write(self.id);
+            g.forward
                 .get(&self.id)
                 .map(|s| s.iter().copied().collect())
                 .unwrap_or_default()
@@ -228,7 +249,10 @@ impl EffectHandle {
         if BATCH_DEPTH.with(|d| d.get()) == 0 {
             drain_dirty_effects();
         }
-        EffectHandle { id, _closure: closure }
+        EffectHandle {
+            id,
+            _closure: closure,
+        }
     }
 }
 
@@ -237,6 +261,7 @@ impl Drop for EffectHandle {
         GRAPH.with(|g| {
             let mut g = g.borrow_mut();
             g.closures.remove(&self.id);
+            g.writes.remove(&self.id);
             if let Some(old_sigs) = g.back.remove(&self.id) {
                 for sig_id in &old_sigs {
                     if let Some(deps) = g.forward.get_mut(sig_id) {
@@ -246,6 +271,83 @@ impl Drop for EffectHandle {
             }
         });
     }
+}
+
+fn order_dirty_effects_topologically(
+    forward: &HashMap<SignalId, HashSet<EffectId>>,
+    back: &HashMap<EffectId, HashSet<SignalId>>,
+    writes: &HashMap<EffectId, HashSet<SignalId>>,
+    dirty: &HashSet<EffectId>,
+) -> Vec<EffectId> {
+    let mut outgoing: HashMap<EffectId, HashSet<EffectId>> = HashMap::new();
+    let mut indegree: HashMap<EffectId, usize> = dirty.iter().map(|&id| (id, 0)).collect();
+
+    for &writer in dirty {
+        let Some(written_signals) = writes.get(&writer) else {
+            continue;
+        };
+        for signal_id in written_signals {
+            let Some(readers) = forward.get(signal_id) else {
+                continue;
+            };
+            for &reader in readers {
+                if reader == writer || !dirty.contains(&reader) {
+                    continue;
+                }
+                if !back
+                    .get(&reader)
+                    .is_some_and(|signals| signals.contains(signal_id))
+                {
+                    continue;
+                }
+                if outgoing.entry(writer).or_default().insert(reader) {
+                    *indegree.entry(reader).or_insert(0) += 1;
+                }
+            }
+        }
+    }
+
+    let mut ready: Vec<EffectId> = indegree
+        .iter()
+        .filter_map(|(&id, &degree)| (degree == 0).then_some(id))
+        .collect();
+    ready.sort_unstable();
+
+    let mut ordered = Vec::with_capacity(dirty.len());
+    while let Some(effect_id) = ready.first().copied() {
+        ready.remove(0);
+        ordered.push(effect_id);
+
+        let mut children: Vec<EffectId> = outgoing
+            .get(&effect_id)
+            .into_iter()
+            .flatten()
+            .copied()
+            .collect();
+        children.sort_unstable();
+        for child in children {
+            let Some(degree) = indegree.get_mut(&child) else {
+                continue;
+            };
+            *degree -= 1;
+            if *degree == 0 {
+                ready.push(child);
+            }
+        }
+        ready.sort_unstable();
+    }
+
+    if ordered.len() != dirty.len() {
+        let mut remaining: Vec<EffectId> = dirty
+            .iter()
+            .copied()
+            .filter(|id| !ordered.contains(id))
+            .collect();
+        remaining.sort_unstable();
+        ordered.extend(remaining);
+    }
+
+    ordered
 }
 
 /// Flush all dirty Effects (called from emit::drain_if_outermost, DD-M2-P5-004 = B).
@@ -288,7 +390,10 @@ pub(crate) struct SignalRegistry {
 
 impl SignalRegistry {
     pub(crate) fn new() -> Self {
-        Self { i32s: HashMap::new(), strings: HashMap::new() }
+        Self {
+            i32s: HashMap::new(),
+            strings: HashMap::new(),
+        }
     }
 }
 
@@ -313,18 +418,22 @@ impl<'a> BindingEvalContext<'a> {
 
 impl<'a> EvalContext for BindingEvalContext<'a> {
     fn get_i32(&self, path: &str) -> Result<i32, EvalError> {
-        self.registry.i32s
+        self.registry
+            .i32s
             .get(path)
             .ok_or_else(|| EvalError::UnknownProperty(path.to_string()))
             .map(|s| s.get_untracked())
     }
 
     fn set_i32(&mut self, path: &str, _value: i32) -> Result<(), EvalError> {
-        Err(EvalError::WriteInBindingContext { path: path.to_string() })
+        Err(EvalError::WriteInBindingContext {
+            path: path.to_string(),
+        })
     }
 
     fn read_i32_tracked(&self, path: &str) -> Result<i32, EvalError> {
-        self.registry.i32s
+        self.registry
+            .i32s
             .get(path)
             .ok_or_else(|| EvalError::UnknownProperty(path.to_string()))
             .map(|s| s.get())
@@ -348,7 +457,8 @@ impl<'a> HandlerEvalContext<'a> {
 
 impl<'a> EvalContext for HandlerEvalContext<'a> {
     fn get_i32(&self, path: &str) -> Result<i32, EvalError> {
-        self.registry.i32s
+        self.registry
+            .i32s
             .get(path)
             .ok_or_else(|| EvalError::UnknownProperty(path.to_string()))
             .map(|s| s.get_untracked())
@@ -455,6 +565,124 @@ mod tests {
             let in_forward = g.forward.values().any(|deps| deps.contains(&id));
             (in_back, in_forward)
         })
+    }
+
+    fn add_synthetic_edge(
+        forward: &mut HashMap<SignalId, HashSet<EffectId>>,
+        back: &mut HashMap<EffectId, HashSet<SignalId>>,
+        writes: &mut HashMap<EffectId, HashSet<SignalId>>,
+        writer: EffectId,
+        signal: SignalId,
+        reader: EffectId,
+    ) {
+        writes.entry(writer).or_default().insert(signal);
+        forward.entry(signal).or_default().insert(reader);
+        back.entry(reader).or_default().insert(signal);
+    }
+
+    fn synthetic_order(
+        forward: &HashMap<SignalId, HashSet<EffectId>>,
+        back: &HashMap<EffectId, HashSet<SignalId>>,
+        writes: &HashMap<EffectId, HashSet<SignalId>>,
+        dirty: &[EffectId],
+    ) -> Vec<EffectId> {
+        let dirty = dirty.iter().copied().collect();
+        order_dirty_effects_topologically(forward, back, writes, &dirty)
+    }
+
+    #[test]
+    fn topo_walk_orders_chain() {
+        let a = EffectId(1);
+        let b = EffectId(2);
+        let c = EffectId(3);
+        let ab = SignalId(10);
+        let bc = SignalId(11);
+        let mut forward = HashMap::new();
+        let mut back = HashMap::new();
+        let mut writes = HashMap::new();
+
+        add_synthetic_edge(&mut forward, &mut back, &mut writes, a, ab, b);
+        add_synthetic_edge(&mut forward, &mut back, &mut writes, b, bc, c);
+
+        assert_eq!(
+            synthetic_order(&forward, &back, &writes, &[c, b, a]),
+            vec![a, b, c]
+        );
+    }
+
+    #[test]
+    fn topo_walk_orders_diamond_with_deterministic_ties() {
+        let a = EffectId(1);
+        let b = EffectId(2);
+        let c = EffectId(3);
+        let d = EffectId(4);
+        let ab = SignalId(10);
+        let ac = SignalId(11);
+        let bd = SignalId(12);
+        let cd = SignalId(13);
+        let mut forward = HashMap::new();
+        let mut back = HashMap::new();
+        let mut writes = HashMap::new();
+
+        add_synthetic_edge(&mut forward, &mut back, &mut writes, a, ab, b);
+        add_synthetic_edge(&mut forward, &mut back, &mut writes, a, ac, c);
+        add_synthetic_edge(&mut forward, &mut back, &mut writes, b, bd, d);
+        add_synthetic_edge(&mut forward, &mut back, &mut writes, c, cd, d);
+
+        assert_eq!(
+            synthetic_order(&forward, &back, &writes, &[d, c, b, a]),
+            vec![a, b, c, d]
+        );
+    }
+
+    #[test]
+    fn topo_walk_orders_fan_out_wider_than_mutation_cap() {
+        let root = EffectId(1);
+        let mut forward = HashMap::new();
+        let mut back = HashMap::new();
+        let mut writes = HashMap::new();
+        let mut dirty = vec![root];
+
+        for offset in 0..=MUTATION_CAP {
+            let child = EffectId(10 + offset as u64);
+            let signal = SignalId(100 + offset as u64);
+            add_synthetic_edge(&mut forward, &mut back, &mut writes, root, signal, child);
+            dirty.push(child);
+        }
+
+        let ordered = synthetic_order(&forward, &back, &writes, &dirty);
+        assert_eq!(ordered.first(), Some(&root));
+        assert_eq!(ordered.len(), MUTATION_CAP + 2);
+        assert_eq!(&ordered[1..], &dirty[1..]);
+    }
+
+    #[test]
+    fn topo_walk_handles_out_of_id_order_dependency() {
+        let downstream_smaller_id = EffectId(1);
+        let upstream_larger_id = EffectId(20);
+        let signal = SignalId(10);
+        let mut forward = HashMap::new();
+        let mut back = HashMap::new();
+        let mut writes = HashMap::new();
+
+        add_synthetic_edge(
+            &mut forward,
+            &mut back,
+            &mut writes,
+            upstream_larger_id,
+            signal,
+            downstream_smaller_id,
+        );
+
+        assert_eq!(
+            synthetic_order(
+                &forward,
+                &back,
+                &writes,
+                &[downstream_smaller_id, upstream_larger_id],
+            ),
+            vec![upstream_larger_id, downstream_smaller_id],
+        );
     }
 
     #[test]
@@ -581,7 +809,10 @@ mod tests {
         drop(h);
         let (in_back, in_forward) = graph_traces_of(effect_id);
         assert!(!in_back, "EffectId leaked in back-edge map after Drop");
-        assert!(!in_forward, "EffectId leaked in forward-edge map after Drop");
+        assert!(
+            !in_forward,
+            "EffectId leaked in forward-edge map after Drop"
+        );
         sig.set(1);
         assert_eq!(*count.borrow(), 1);
     }
@@ -690,7 +921,10 @@ mod tests {
         let registry = SignalRegistry::new();
         let mut ctx = BindingEvalContext::new(&registry);
         let result = ctx.set_i32("x", 1);
-        assert_eq!(result, Err(EvalError::WriteInBindingContext { path: "x".into() }));
+        assert_eq!(
+            result,
+            Err(EvalError::WriteInBindingContext { path: "x".into() })
+        );
     }
 
     #[test]
@@ -715,7 +949,11 @@ mod tests {
         });
         assert_eq!(*run_count.borrow(), 1);
         sig.set(99);
-        assert_eq!(*run_count.borrow(), 1, "get_i32 should not register a dependency");
+        assert_eq!(
+            *run_count.borrow(),
+            1,
+            "get_i32 should not register a dependency"
+        );
 
         // Effect using read_i32_tracked: Signal update MUST re-run it.
         let run_count2 = Rc::new(RefCell::new(0i32));
@@ -729,7 +967,11 @@ mod tests {
         });
         assert_eq!(*run_count2.borrow(), 1);
         sig.set(100);
-        assert_eq!(*run_count2.borrow(), 2, "read_i32_tracked should register a dependency");
+        assert_eq!(
+            *run_count2.borrow(),
+            2,
+            "read_i32_tracked should register a dependency"
+        );
     }
 
     // ── register_binding tests (DD-M2-P5-005) ────────────────────────────────
@@ -749,7 +991,9 @@ mod tests {
 
         let expr = HandlerExpr::Interpolation(vec![
             InterpolationPart::Literal("Count: ".into()),
-            InterpolationPart::Expr(HandlerExpr::PropRead { path: "root.count".into() }),
+            InterpolationPart::Expr(HandlerExpr::PropRead {
+                path: "root.count".into(),
+            }),
         ]);
 
         let _h = register_binding_with_writer(writer, expr, registry);
@@ -796,10 +1040,16 @@ mod tests {
         let sig = Signal::new("hello".to_string());
         registry.strings.insert("label".to_string(), sig.clone());
 
-        assert_eq!(registry.strings.get("label").unwrap().get_untracked(), "hello");
+        assert_eq!(
+            registry.strings.get("label").unwrap().get_untracked(),
+            "hello"
+        );
 
         sig.set("world".to_string());
-        assert_eq!(registry.strings.get("label").unwrap().get_untracked(), "world");
+        assert_eq!(
+            registry.strings.get("label").unwrap().get_untracked(),
+            "world"
+        );
     }
 
     #[test]
@@ -857,7 +1107,11 @@ mod tests {
         BATCH_DEPTH.with(|d| d.set(d.get() - 1));
         // Now simulate the reactive phase of drain_if_outermost.
         drain_reactive();
-        assert_eq!(*log.borrow(), vec![0, 1], "drain_reactive must flush the dirty effect");
+        assert_eq!(
+            *log.borrow(),
+            vec![0, 1],
+            "drain_reactive must flush the dirty effect"
+        );
     }
 
     #[test]
@@ -884,7 +1138,11 @@ mod tests {
         // during the observer phase, before reactive drain runs).
         BATCH_DEPTH.with(|d| d.set(d.get() + 1));
         source.set(5);
-        assert_eq!(derived.get_untracked(), 0, "derived not yet updated mid-batch");
+        assert_eq!(
+            derived.get_untracked(),
+            0,
+            "derived not yet updated mid-batch"
+        );
         BATCH_DEPTH.with(|d| d.set(d.get() - 1));
 
         // Reactive drain (phase 2 of drain_if_outermost).
@@ -892,8 +1150,11 @@ mod tests {
 
         // A layout pass reading `derived` now sees the updated value — this
         // is the DD-P8-002 contract: reactive writes precede the layout drain.
-        assert_eq!(derived.get_untracked(), 10,
-            "layout phase must observe the reactive-updated value");
+        assert_eq!(
+            derived.get_untracked(),
+            10,
+            "layout phase must observe the reactive-updated value"
+        );
     }
 
     // ── Phase 1 ordering tests (DD-M2-P6-001) ────────────────────────────────
@@ -965,6 +1226,36 @@ mod tests {
     }
 
     #[test]
+    fn phase1_topological_resolution_does_not_follow_effect_id_order() {
+        let source = Signal::new(0i32);
+        let mid = Signal::new(0i32);
+        let seen: Rc<RefCell<Vec<i32>>> = Rc::new(RefCell::new(Vec::new()));
+
+        let mid_downstream = mid.clone();
+        let seen_downstream = Rc::clone(&seen);
+        let _downstream_smaller_id = EffectHandle::new(move || {
+            seen_downstream.borrow_mut().push(mid_downstream.get());
+        });
+
+        let source_upstream = source.clone();
+        let mid_upstream = mid.clone();
+        let _upstream_larger_id = EffectHandle::new(move || {
+            mid_upstream.set(source_upstream.get() * 10);
+        });
+
+        with_batched_writes(|| {
+            mid.set(-1);
+            source.set(3);
+        });
+
+        assert!(
+            !seen.borrow().contains(&-1),
+            "downstream Effect must not run before the larger-id upstream writer",
+        );
+        assert_eq!(seen.borrow().last(), Some(&30));
+    }
+
+    #[test]
     fn phase1_last_wins_reduces_observer_entries_to_one() {
         // Multiple writes to the same Signal within one batch must collapse to
         // a single Effect re-run (last-wins: only the final value matters).
@@ -995,8 +1286,8 @@ mod tests {
     fn phase3_state_mutating_call_in_observer_returns_error() {
         // Simulate the IN_OBSERVER_CALLBACK flag being set (Phase 3) and verify
         // that check_not_in_observer returns WASAMO_ERR_OBSERVER_MUTATION.
-        use crate::emit::IN_OBSERVER_CALLBACK;
         use crate::abi::WASAMO_ERR_OBSERVER_MUTATION;
+        use crate::emit::IN_OBSERVER_CALLBACK;
 
         IN_OBSERVER_CALLBACK.with(|f| f.set(true));
         let result = crate::abi::check_not_in_observer_pub("test_fn");
@@ -1031,8 +1322,11 @@ mod tests {
             sig_c.set(v.wrapping_add(1));
         });
 
-        assert_eq!(runtime_health(), RuntimeHealth::Diverged,
-            "cap exhaustion must transition runtime to Diverged");
+        assert_eq!(
+            runtime_health(),
+            RuntimeHealth::Diverged,
+            "cap exhaustion must transition runtime to Diverged"
+        );
     }
 
     #[test]
@@ -1065,10 +1359,18 @@ mod tests {
         let diag = divergence_diagnostics();
         assert!(diag.is_some(), "diagnostics must be set after divergence");
         let diag = diag.unwrap();
-        assert_eq!(diag.iteration_count, 16, "iteration_count must equal MUTATION_CAP");
-        assert_ne!(diag.offending_effect_id, 0, "offending_effect_id must be non-zero");
-        assert!(!diag.last_dirty_signal_ids.is_empty(),
-            "last_dirty_signal_ids must name the diverging signal");
+        assert_eq!(
+            diag.iteration_count, 16,
+            "iteration_count must equal MUTATION_CAP"
+        );
+        assert_ne!(
+            diag.offending_effect_id, 0,
+            "offending_effect_id must be non-zero"
+        );
+        assert!(
+            !diag.last_dirty_signal_ids.is_empty(),
+            "last_dirty_signal_ids must name the diverging signal"
+        );
 
         // Restore health.
         HEALTH.with(|h| h.set(RuntimeHealth::Healthy));

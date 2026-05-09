@@ -89,11 +89,14 @@ expressions and binding expressions as separate languages.
 
 **Premise.** `drain_dirty_effects()` in `wasamo-runtime` orders the
 dirty Effect set with a Kahn-style topological walk over
-`ReactiveGraph::forward` / `back`, restricted to the dirty set. The
-walk is implemented as a free function and covered by pure-logic unit
-tests on synthetic dependency graphs (chain, diamond, fan-out vs
-`MUTATION_CAP`, out-of-ID-order). There is a single drain code path;
-no debug/release behavioural asymmetry.
+`ReactiveGraph::forward` / `back` plus the Effect write-edge map,
+restricted to the dirty set. `forward` / `back` encode read
+dependencies; the write-edge map is required to derive writer-Effect
+to reader-Effect ordering edges. The walk is implemented as a free
+function and covered by pure-logic unit tests on synthetic dependency
+graphs (chain, diamond, fan-out vs `MUTATION_CAP`, out-of-ID-order).
+There is a single drain code path; no debug/release behavioural
+asymmetry.
 
 **Origin.** Phase 7 ADR DD-M2-P6-010 (Accepted 2026-05-09) — Option A.
 A5's literal reading required a structural correctness guarantee in

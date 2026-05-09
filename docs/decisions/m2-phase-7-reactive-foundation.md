@@ -1,7 +1,7 @@
 # M2-Phase 7 — Reactive Foundation Hardening & Contract Finalization: Architecture Decisions
 
 **Phase:** M2-Phase 7 (Reactive Foundation Hardening & Contract Finalization)
-**Date:** 2026-05-08 (ADR opened; DDs remain Proposed pending per-DD pre-doc cycles); 2026-05-09 (DD-M2-P6-010 Accepted)
+**Date:** 2026-05-08 (ADR opened; DDs remain Proposed pending per-DD pre-doc cycles); 2026-05-09 (DD-M2-P6-010 Accepted; DD-M2-P6-010 minor implementation clarification recorded)
 **Status:** Proposed (DD-M2-P6-010 Accepted; DD-M2-P6-011 / DD-M2-P6-012 Proposed)
 
 ## Context
@@ -255,10 +255,11 @@ following shape; deviation from any of these requires a new pre-doc
 cycle, not an in-step adjustment.
 
 1. **Free-function extraction.** The topological walk is implemented
-   as a free function whose inputs are `&forward`, `&back`, and the
-   dirty set (or equivalent borrows). It must not require a
-   `Compositor`, a Win32 / WinRT handle, or any state owned by the
-   ABI layer. The function is the unit of verification.
+   as a free function whose inputs are `&forward`, `&back`, the
+   write-edge map, and the dirty set (or equivalent graph borrows).
+   It must not require a `Compositor`, a Win32 / WinRT handle, or any
+   state owned by the ABI layer. The function is the unit of
+   verification.
 2. **Mandatory synthetic-graph unit tests.** Coverage of the free
    function by pure-logic unit tests on synthetic dependency graphs
    is a precondition of step acceptance, not a follow-up task. The
@@ -646,3 +647,15 @@ The acceptance-criteria revision that introduced A5/A6 and scoped them
 to Phase 7 is recorded in the Progress section of
 [m2-plan.md](../plans/m2-plan.md) under the 2026-05-08 entry; the
 Phase 7 entry there names this ADR as the housing for DD-010/011/012.
+
+### Minor implementation clarifications
+
+- **2026-05-09 — DD-M2-P6-010 write-edge borrow.** During DD-010
+  implementation, `ReactiveGraph::forward` / `back` were confirmed to
+  encode read dependencies only. They are sufficient for invalidation
+  but not for deriving the Effect-to-Effect ordering edge "writer runs
+  before reader when both are dirty." The required implementation form
+  was therefore clarified to name the write-edge map as an explicit
+  graph borrow. This does not supersede DD-010 or change Option A; it
+  records the concrete graph input needed to implement the accepted
+  topological walk faithfully.
