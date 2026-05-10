@@ -1,6 +1,6 @@
 # M2-Phase 7 / DD-M2-P6-011 pre-doc framing
 
-**Status:** framing draft started; F1/F2/F3/F4 aligned with owner (2026-05-10)
+**Status:** framing completed; F1/F2/F3/F4 aligned with owner (2026-05-10)
 **Date:** 2026-05-10
 **Targets DD:** DD-M2-P6-011 - String-typed property binding
 **Targets phase:** M2-Phase 7 (Reactive Foundation Hardening & Contract Finalization)
