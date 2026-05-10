@@ -263,6 +263,12 @@ and [docs/decisions/vision-post-m2-roadmap.md](../decisions/vision-post-m2-roadm
     as a global runtime invariant. A5 now has both DDs accepted at
     design level; remaining A5 work is DD-012 implementation alignment
     and focused guard-placement tests.
+  - DD-M2-P6-011 (`String`-typed property binding)
+    Accepted in [m2-phase-7-reactive-foundation.md](../decisions/m2-phase-7-reactive-foundation.md#dd-m2-p6-011--string-typed-property-binding)
+    — Option B (`StrPropRead`). A6 is accepted at design level;
+    remaining A6 work is implementation: `.ui` String binding must
+    propagate through runtime widget property state while preserving
+    existing integer binding behavior.
 
 ## Progress
 
@@ -279,11 +285,11 @@ history, then deleted by default.
 | M2-Phase 4 - Tree-mutation ABI primitives | completed | retired | [m2-phase-4-tree-mutation-abi.md](../decisions/m2-phase-4-tree-mutation-abi.md) | Stable-core tree mutation ABI landed; CHANGELOG entry added. |
 | M2-Phase 5 - Reactive engine | completed | retired | [m2-phase-5-reactive-engine.md](../decisions/m2-phase-5-reactive-engine.md) | Reactive primitives and binding path landed; later drain refinements folded into Phase 6/7 records. |
 | M2-Phase 6 - `.ui -> runtime` lowering | completed | retired | [m2-phase-6-ui-lowering.md](../decisions/m2-phase-6-ui-lowering.md) | A1/A2 discharged by the C/Rust/Zig counter migration; CHANGELOG entry added. |
-| M2-Phase 7 - Reactive Foundation Hardening & Contract Finalization | in-progress | [progress/m2-phase-7-progress.md](progress/m2-phase-7-progress.md) | [m2-phase-7-reactive-foundation.md](../decisions/m2-phase-7-reactive-foundation.md) | Active phase for A5/A6. DD-M2-P6-010 is implemented; DD-M2-P6-012 is Accepted with implementation alignment next. |
+| M2-Phase 7 - Reactive Foundation Hardening & Contract Finalization | in-progress | [progress/m2-phase-7-progress.md](progress/m2-phase-7-progress.md) | [m2-phase-7-reactive-foundation.md](../decisions/m2-phase-7-reactive-foundation.md) | Active phase for A5/A6. DD-M2-P6-010 and DD-M2-P6-012 are implemented; DD-M2-P6-011 is Accepted with implementation pending. |
 
 ### Owner-facing resume note
 
 Continue in [progress/m2-phase-7-progress.md](progress/m2-phase-7-progress.md).
-DD-M2-P6-012 is Accepted as Option C. The next implementation step is to
-align existing guard placement with the ABI diagnostic boundary /
-internal invariant boundary split and add focused guard-placement tests.
+DD-M2-P6-011 is Accepted as Option B (`StrPropRead`). The next implementation
+step is to land String binding propagation through runtime widget property
+state and protect the existing integer binding path.
