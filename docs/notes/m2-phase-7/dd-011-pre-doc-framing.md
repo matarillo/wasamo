@@ -1,6 +1,6 @@
 # M2-Phase 7 / DD-M2-P6-011 pre-doc framing
 
-**Status:** framing draft started; F1/F2/F3 aligned with owner (2026-05-10)
+**Status:** framing draft started; F1/F2/F3/F4 aligned with owner (2026-05-10)
 **Date:** 2026-05-10
 **Targets DD:** DD-M2-P6-011 - String-typed property binding
 **Targets phase:** M2-Phase 7 (Reactive Foundation Hardening & Contract Finalization)
@@ -166,8 +166,28 @@ interpolation of integer expressions. Existing `PropRead` behavior and tests
 are part of the Phase 6 acceptance surface that Phase 7 is hardening, not
 reopening wholesale.
 
-Consequence: whichever option is accepted should include regression tests for
-the current i32 binding path alongside the new String path.
+Owner alignment (2026-05-10): F4 is accepted. Under the Option B direction,
+existing `PropRead { path }` remains the integer read form. String reads use
+the accepted String-read form (`StrPropRead` under the current framing).
+
+Consequences:
+
+- Bare integer binding remains supported and continues to stringify the i32
+  result for text binding.
+- Integer interpolation remains supported and continues to track dependencies
+  through `read_i32_tracked()`.
+- Handler-side integer mutation (`Assign` / `CompoundAssign`) is not reopened
+  by DD-011; existing counter-style handler behavior is regression-protected.
+- DD-011 does not introduce broad implicit conversions. Cross-type reads must
+  fail rather than silently coerce. The exact diagnostic (`UnknownProperty`
+  vs `TypeMismatch`) may follow the existing registry / error shape unless
+  the implementation can report `TypeMismatch` without broad churn.
+
+Whichever option is accepted should include regression tests for the current
+i32 binding / interpolation path alongside the new String path. As with F2,
+those tests should target runtime state that can be verified without Win32 /
+WinRT FFI; actual on-screen confirmation remains part of phase-close manual
+GUI regression.
 
 ---
 
@@ -193,9 +213,13 @@ the current i32 binding path alongside the new String path.
 DD-M2-P6-011 can move from Proposed to Accepted when the ADR:
 
 1. records the A6 interpretation from F1;
-2. chooses the property-read disambiguation strategy;
-3. requires an end-to-end `.ui` String binding demonstration;
-4. records Option C as either accepted now or explicitly deferred as the
-   typed-value generalization revisit point.
+2. recommends Option B (`StrPropRead`) for M2 as the property-read
+   disambiguation strategy;
+3. requires a `.ui` / emitted-IR String binding demonstration through runtime
+   widget property state, without adding a new Visual Layer CI fixture;
+4. preserves the existing integer `PropRead` / interpolation / handler
+   mutation behavior with focused regression tests;
+5. records Option C as explicitly deferred to the post-M2 `TypedValue`
+   open question.
 
 Implementation can then proceed against that accepted shape.
