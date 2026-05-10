@@ -1,22 +1,18 @@
 use crate::handler::{self, EvalContext, EvalError, HandlerExpr};
-use crate::reactive::EffectHandle;
 use crate::layout::{self, Alignment, LayoutNode, SizeConstraint};
+use crate::reactive::EffectHandle;
 use crate::text::{TextRenderer, TypographyStyle};
 use windows::{
-    Foundation::{Numerics::{Vector2, Vector3}, TimeSpan},
+    Foundation::{
+        Numerics::{Vector2, Vector3},
+        TimeSpan,
+    },
     UI::{
         Color,
         Composition::{
-            AnimationIterationBehavior,
-            ColorKeyFrameAnimation,
-            CompositionAnimation,
-            CompositionColorBrush,
-            CompositionObject,
-            CompositionSurfaceBrush,
-            Compositor,
-            ContainerVisual,
-            SpriteVisual,
-            Visual,
+            AnimationIterationBehavior, ColorKeyFrameAnimation, CompositionAnimation,
+            CompositionColorBrush, CompositionObject, CompositionSurfaceBrush, Compositor,
+            ContainerVisual, SpriteVisual, Visual,
         },
     },
 };
@@ -24,10 +20,17 @@ use windows::{
 // ── Button state ─────────────────────────────────────────────────────────────
 
 #[derive(Clone, Copy, PartialEq, Debug)]
-pub enum ButtonStyle { Default, Accent }
+pub enum ButtonStyle {
+    Default,
+    Accent,
+}
 
 #[derive(Clone, Copy, PartialEq, Debug)]
-enum ButtonState { Normal, Hovered, Pressed }
+enum ButtonState {
+    Normal,
+    Hovered,
+    Pressed,
+}
 
 struct ButtonData {
     style: ButtonStyle,
@@ -46,9 +49,20 @@ struct ButtonData {
 
 enum WidgetData {
     Rectangle,
-    VStack { spacing: f32, padding: f32, alignment: Alignment },
-    HStack { spacing: f32, padding: f32, alignment: Alignment },
-    Text { content: String, style: TypographyStyle },
+    VStack {
+        spacing: f32,
+        padding: f32,
+        alignment: Alignment,
+    },
+    HStack {
+        spacing: f32,
+        padding: f32,
+        alignment: Alignment,
+    },
+    Text {
+        content: String,
+        style: TypographyStyle,
+    },
     Button(Box<ButtonData>),
 }
 
@@ -79,7 +93,10 @@ impl From<windows::core::Error> for PropertyError {
 }
 
 fn button_style_to_i32(s: ButtonStyle) -> i32 {
-    match s { ButtonStyle::Default => 0, ButtonStyle::Accent => 1 }
+    match s {
+        ButtonStyle::Default => 0,
+        ButtonStyle::Accent => 1,
+    }
 }
 
 fn button_style_from_i32(v: i32) -> Option<ButtonStyle> {
@@ -92,10 +109,10 @@ fn button_style_from_i32(v: i32) -> Option<ButtonStyle> {
 
 fn typography_to_i32(s: TypographyStyle) -> i32 {
     match s {
-        TypographyStyle::Caption  => 0,
-        TypographyStyle::Body     => 1,
+        TypographyStyle::Caption => 0,
+        TypographyStyle::Body => 1,
         TypographyStyle::Subtitle => 2,
-        TypographyStyle::Title    => 3,
+        TypographyStyle::Title => 3,
     }
 }
 
@@ -168,7 +185,11 @@ impl WidgetNode {
     ) -> windows::core::Result<Box<Self>> {
         let visual = compositor.CreateSpriteVisual()?;
         Ok(Box::new(Self {
-            data: WidgetData::VStack { spacing, padding, alignment },
+            data: WidgetData::VStack {
+                spacing,
+                padding,
+                alignment,
+            },
             width: SizeConstraint::Fill,
             height: SizeConstraint::Shrink,
             visual,
@@ -187,7 +208,11 @@ impl WidgetNode {
     ) -> windows::core::Result<Box<Self>> {
         let visual = compositor.CreateSpriteVisual()?;
         Ok(Box::new(Self {
-            data: WidgetData::HStack { spacing, padding, alignment },
+            data: WidgetData::HStack {
+                spacing,
+                padding,
+                alignment,
+            },
             width: SizeConstraint::Shrink,
             height: SizeConstraint::Fill,
             visual,
@@ -212,12 +237,20 @@ impl WidgetNode {
             style,
             w.max(1.0),
             h.max(1.0),
-            Color { A: 255, R: 255, G: 255, B: 255 },
+            Color {
+                A: 255,
+                R: 255,
+                G: 255,
+                B: 255,
+            },
         )?;
         let brush: CompositionSurfaceBrush = compositor.CreateSurfaceBrushWithSurface(&surface)?;
         visual.SetBrush(&brush)?;
         Ok(Box::new(Self {
-            data: WidgetData::Text { content: text.to_owned(), style },
+            data: WidgetData::Text {
+                content: text.to_owned(),
+                style,
+            },
             width: SizeConstraint::Fixed(w),
             height: SizeConstraint::Fixed(h),
             visual,
@@ -258,7 +291,12 @@ impl WidgetNode {
             label_style,
             lw.max(1.0),
             lh.max(1.0),
-            Color { A: 255, R: 255, G: 255, B: 255 },
+            Color {
+                A: 255,
+                R: 255,
+                G: 255,
+                B: 255,
+            },
         )?;
         let label_brush: CompositionSurfaceBrush =
             compositor.CreateSurfaceBrushWithSurface(&surface)?;
@@ -267,7 +305,11 @@ impl WidgetNode {
         // Position label centered in the button.
         use windows::core::Interface;
         let label_vis: Visual = label_visual.cast()?;
-        label_vis.SetOffset(Vector3 { X: PAD_H, Y: PAD_V, Z: 0.0 })?;
+        label_vis.SetOffset(Vector3 {
+            X: PAD_H,
+            Y: PAD_V,
+            Z: 0.0,
+        })?;
         label_vis.SetSize(Vector2 { X: lw, Y: lh })?;
         let bg_container: ContainerVisual = bg_visual.cast()?;
         bg_container.Children()?.InsertAtTop(&label_vis)?;
@@ -300,10 +342,16 @@ impl WidgetNode {
     pub fn set_color(
         &self,
         compositor: &Compositor,
-        r: u8, g: u8, b: u8,
+        r: u8,
+        g: u8,
+        b: u8,
     ) -> windows::core::Result<()> {
-        let brush =
-            compositor.CreateColorBrushWithColor(Color { A: 255, R: r, G: g, B: b })?;
+        let brush = compositor.CreateColorBrushWithColor(Color {
+            A: 255,
+            R: r,
+            G: g,
+            B: b,
+        })?;
         self.visual.SetBrush(&brush)?;
         Ok(())
     }
@@ -340,11 +388,7 @@ impl WidgetNode {
         }
     }
 
-    pub fn set_property(
-        &mut self,
-        id: u32,
-        value: &PropertyValue,
-    ) -> Result<(), PropertyError> {
+    pub fn set_property(&mut self, id: u32, value: &PropertyValue) -> Result<(), PropertyError> {
         // Track whether this property affects intrinsic size (DD-P8-002).
         let size_affecting = matches!(
             (&self.data, id),
@@ -365,8 +409,7 @@ impl WidgetNode {
                     PropertyValue::I32(v) => *v,
                     _ => return Err(PropertyError::TypeMismatch),
                 };
-                let new_style =
-                    button_style_from_i32(v).ok_or(PropertyError::TypeMismatch)?;
+                let new_style = button_style_from_i32(v).ok_or(PropertyError::TypeMismatch)?;
                 self.update_button_style(new_style)
             }
             (WidgetData::Text { .. }, PROP_TEXT_CONTENT) => {
@@ -381,8 +424,7 @@ impl WidgetNode {
                     PropertyValue::I32(v) => *v,
                     _ => return Err(PropertyError::TypeMismatch),
                 };
-                let new_style =
-                    typography_from_i32(v).ok_or(PropertyError::TypeMismatch)?;
+                let new_style = typography_from_i32(v).ok_or(PropertyError::TypeMismatch)?;
                 self.update_text_style(new_style)
             }
             _ => Err(PropertyError::UnknownId),
@@ -408,7 +450,12 @@ impl WidgetNode {
             label_style,
             lw.max(1.0),
             lh.max(1.0),
-            Color { A: 255, R: 255, G: 255, B: 255 },
+            Color {
+                A: 255,
+                R: 255,
+                G: 255,
+                B: 255,
+            },
         )?;
         let label_brush: CompositionSurfaceBrush =
             compositor.CreateSurfaceBrushWithSurface(&surface)?;
@@ -418,7 +465,11 @@ impl WidgetNode {
         const PAD_H: f32 = 16.0;
         const PAD_V: f32 = 8.0;
         let label_vis: Visual = btn.label_visual.cast()?;
-        label_vis.SetOffset(Vector3 { X: PAD_H, Y: PAD_V, Z: 0.0 })?;
+        label_vis.SetOffset(Vector3 {
+            X: PAD_H,
+            Y: PAD_V,
+            Z: 0.0,
+        })?;
         label_vis.SetSize(Vector2 { X: lw, Y: lh })?;
 
         btn.label_text = new_label.to_owned();
@@ -450,7 +501,11 @@ impl WidgetNode {
         let compositor = &rt.compositor;
         let renderer = &rt.text_renderer;
 
-        let WidgetData::Text { ref mut content, style } = self.data else {
+        let WidgetData::Text {
+            ref mut content,
+            style,
+        } = self.data
+        else {
             return Err(PropertyError::UnknownId);
         };
         let (w, h) = renderer.measure(new_content, style)?;
@@ -459,10 +514,14 @@ impl WidgetNode {
             style,
             w.max(1.0),
             h.max(1.0),
-            Color { A: 255, R: 255, G: 255, B: 255 },
+            Color {
+                A: 255,
+                R: 255,
+                G: 255,
+                B: 255,
+            },
         )?;
-        let brush: CompositionSurfaceBrush =
-            compositor.CreateSurfaceBrushWithSurface(&surface)?;
+        let brush: CompositionSurfaceBrush = compositor.CreateSurfaceBrushWithSurface(&surface)?;
         self.visual.SetBrush(&brush)?;
 
         *content = new_content.to_owned();
@@ -476,7 +535,11 @@ impl WidgetNode {
         let compositor = &rt.compositor;
         let renderer = &rt.text_renderer;
 
-        let WidgetData::Text { ref mut content, ref mut style } = self.data else {
+        let WidgetData::Text {
+            ref mut content,
+            ref mut style,
+        } = self.data
+        else {
             return Err(PropertyError::UnknownId);
         };
         if *style == new_style {
@@ -489,10 +552,14 @@ impl WidgetNode {
             new_style,
             w.max(1.0),
             h.max(1.0),
-            Color { A: 255, R: 255, G: 255, B: 255 },
+            Color {
+                A: 255,
+                R: 255,
+                G: 255,
+                B: 255,
+            },
         )?;
-        let brush: CompositionSurfaceBrush =
-            compositor.CreateSurfaceBrushWithSurface(&surface)?;
+        let brush: CompositionSurfaceBrush = compositor.CreateSurfaceBrushWithSurface(&surface)?;
         self.visual.SetBrush(&brush)?;
 
         self.width = SizeConstraint::Fixed(w);
@@ -686,10 +753,14 @@ impl WidgetNode {
             return Err(MutationError::AlreadyAttached);
         }
         use windows::core::Interface;
-        let parent_container: ContainerVisual =
-            self.visual.cast().map_err(|_| MutationError::IndexOutOfBounds)?;
-        let child_visual: Visual =
-            child.visual.cast().map_err(|_| MutationError::IndexOutOfBounds)?;
+        let parent_container: ContainerVisual = self
+            .visual
+            .cast()
+            .map_err(|_| MutationError::IndexOutOfBounds)?;
+        let child_visual: Visual = child
+            .visual
+            .cast()
+            .map_err(|_| MutationError::IndexOutOfBounds)?;
         parent_container
             .Children()
             .and_then(|c| c.InsertAtTop(&child_visual))
@@ -708,8 +779,10 @@ impl WidgetNode {
             .visual
             .cast()
             .map_err(|_| MutationError::IndexOutOfBounds)?;
-        let parent_container: ContainerVisual =
-            self.visual.cast().map_err(|_| MutationError::IndexOutOfBounds)?;
+        let parent_container: ContainerVisual = self
+            .visual
+            .cast()
+            .map_err(|_| MutationError::IndexOutOfBounds)?;
         parent_container
             .Children()
             .and_then(|c| c.Remove(&child_visual))
@@ -735,15 +808,23 @@ impl WidgetNode {
             .visual
             .cast()
             .map_err(|_| MutationError::IndexOutOfBounds)?;
-        let new_visual: Visual =
-            new_child.visual.cast().map_err(|_| MutationError::IndexOutOfBounds)?;
-        let parent_container: ContainerVisual =
-            self.visual.cast().map_err(|_| MutationError::IndexOutOfBounds)?;
+        let new_visual: Visual = new_child
+            .visual
+            .cast()
+            .map_err(|_| MutationError::IndexOutOfBounds)?;
+        let parent_container: ContainerVisual = self
+            .visual
+            .cast()
+            .map_err(|_| MutationError::IndexOutOfBounds)?;
         let children_col = parent_container
             .Children()
             .map_err(|_| MutationError::IndexOutOfBounds)?;
-        children_col.Remove(&old_visual).map_err(|_| MutationError::IndexOutOfBounds)?;
-        children_col.InsertAtTop(&new_visual).map_err(|_| MutationError::IndexOutOfBounds)?;
+        children_col
+            .Remove(&old_visual)
+            .map_err(|_| MutationError::IndexOutOfBounds)?;
+        children_col
+            .InsertAtTop(&new_visual)
+            .map_err(|_| MutationError::IndexOutOfBounds)?;
         new_child.attached = true;
         let mut old = std::mem::replace(&mut self.children[index], new_child);
         old.attached = false;
@@ -764,22 +845,34 @@ impl WidgetNode {
             WidgetData::Rectangle | WidgetData::Text { .. } | WidgetData::Button(_) => {
                 LayoutNode::rectangle(self.width.clone(), self.height.clone())
             }
-            WidgetData::VStack { spacing, padding, alignment } => {
-                let mut node =
-                    LayoutNode::vstack(*spacing, *padding, *alignment);
+            WidgetData::VStack {
+                spacing,
+                padding,
+                alignment,
+            } => {
+                let mut node = LayoutNode::vstack(*spacing, *padding, *alignment);
                 node.width = self.width.clone();
                 node.height = self.height.clone();
-                node.children =
-                    self.children.iter().map(|c| c.build_layout_tree()).collect();
+                node.children = self
+                    .children
+                    .iter()
+                    .map(|c| c.build_layout_tree())
+                    .collect();
                 node
             }
-            WidgetData::HStack { spacing, padding, alignment } => {
-                let mut node =
-                    LayoutNode::hstack(*spacing, *padding, *alignment);
+            WidgetData::HStack {
+                spacing,
+                padding,
+                alignment,
+            } => {
+                let mut node = LayoutNode::hstack(*spacing, *padding, *alignment);
                 node.width = self.width.clone();
                 node.height = self.height.clone();
-                node.children =
-                    self.children.iter().map(|c| c.build_layout_tree()).collect();
+                node.children = self
+                    .children
+                    .iter()
+                    .map(|c| c.build_layout_tree())
+                    .collect();
                 node
             }
         }
@@ -799,9 +892,7 @@ impl WidgetNode {
         })?;
         // For Button, also resize the root SpriteVisual (already done above)
         // and keep the label visual's size/offset constant (set at creation).
-        for (child, child_computed) in
-            self.children.iter_mut().zip(computed.children.iter())
-        {
+        for (child, child_computed) in self.children.iter_mut().zip(computed.children.iter()) {
             child.sync_visuals(child_computed)?;
         }
         Ok(())
@@ -818,6 +909,9 @@ struct NullEvalContext;
 
 impl EvalContext for NullEvalContext {
     fn get_i32(&self, path: &str) -> Result<i32, EvalError> {
+        Err(EvalError::UnknownProperty(path.to_string()))
+    }
+    fn get_string(&self, path: &str) -> Result<String, EvalError> {
         Err(EvalError::UnknownProperty(path.to_string()))
     }
     fn set_i32(&mut self, path: &str, _value: i32) -> Result<(), EvalError> {
@@ -840,11 +934,7 @@ impl EvalContext for NullEvalContext {
 /// IR loader; the runtime is single-threaded GUI; the WidgetNode outlives the
 /// binding (the EffectHandle is owned by `WidgetNode.bindings`, so disposal
 /// runs before the node is dropped — DD-M2-P5-003).
-pub(crate) fn widget_write_property(
-    id: crate::reactive::WidgetId,
-    prop: u32,
-    value: &str,
-) {
+pub(crate) fn widget_write_property(id: crate::reactive::WidgetId, prop: u32, value: &str) {
     let node_ptr = id.0 as *mut WidgetNode;
     if node_ptr.is_null() {
         return;
@@ -878,29 +968,48 @@ fn dispose_subtree_bindings(node: &mut WidgetNode) {
 fn visual_rect(v: &SpriteVisual) -> (f32, f32, f32, f32) {
     use windows::core::Interface;
     let vis: Visual = v.cast().unwrap_or_else(|_| panic!("cast failed"));
-    let off = vis.Offset().unwrap_or(Vector3 { X: 0.0, Y: 0.0, Z: 0.0 });
+    let off = vis.Offset().unwrap_or(Vector3 {
+        X: 0.0,
+        Y: 0.0,
+        Z: 0.0,
+    });
     let sz = vis.Size().unwrap_or(Vector2 { X: 0.0, Y: 0.0 });
     (off.X, off.Y, sz.X, sz.Y)
 }
 
 fn button_state_color(style: ButtonStyle, state: ButtonState, accent: Color) -> Color {
     match (style, state) {
-        (ButtonStyle::Default, ButtonState::Normal)  => Color { A: 0x20, R: 0xFF, G: 0xFF, B: 0xFF },
-        (ButtonStyle::Default, ButtonState::Hovered) => Color { A: 0x33, R: 0xFF, G: 0xFF, B: 0xFF },
-        (ButtonStyle::Default, ButtonState::Pressed) => Color { A: 0x10, R: 0xFF, G: 0xFF, B: 0xFF },
-        (ButtonStyle::Accent,  ButtonState::Normal)  => accent,
-        (ButtonStyle::Accent,  ButtonState::Hovered) => lighten(accent, 26),
-        (ButtonStyle::Accent,  ButtonState::Pressed) => darken(accent, 26),
+        (ButtonStyle::Default, ButtonState::Normal) => Color {
+            A: 0x20,
+            R: 0xFF,
+            G: 0xFF,
+            B: 0xFF,
+        },
+        (ButtonStyle::Default, ButtonState::Hovered) => Color {
+            A: 0x33,
+            R: 0xFF,
+            G: 0xFF,
+            B: 0xFF,
+        },
+        (ButtonStyle::Default, ButtonState::Pressed) => Color {
+            A: 0x10,
+            R: 0xFF,
+            G: 0xFF,
+            B: 0xFF,
+        },
+        (ButtonStyle::Accent, ButtonState::Normal) => accent,
+        (ButtonStyle::Accent, ButtonState::Hovered) => lighten(accent, 26),
+        (ButtonStyle::Accent, ButtonState::Pressed) => darken(accent, 26),
     }
 }
 
 // Duration in 100-ns ticks: fast (83 ms) for entering active state, slow (167 ms) for leaving.
 fn transition_duration(old: ButtonState, new: ButtonState) -> i64 {
     match (old, new) {
-        (_, ButtonState::Pressed)                         => 830_000,   // press-down: fast
-        (ButtonState::Pressed, _)                         => 1_670_000, // press-up: slow
-        (ButtonState::Normal,  ButtonState::Hovered)      => 830_000,   // hover-in: fast
-        _                                                 => 1_670_000, // hover-out: slow
+        (_, ButtonState::Pressed) => 830_000,   // press-down: fast
+        (ButtonState::Pressed, _) => 1_670_000, // press-up: slow
+        (ButtonState::Normal, ButtonState::Hovered) => 830_000, // hover-in: fast
+        _ => 1_670_000,                         // hover-out: slow
     }
 }
 
@@ -913,7 +1022,9 @@ fn start_color_anim(
     use windows::core::{Interface, HSTRING};
     let anim: ColorKeyFrameAnimation = compositor.CreateColorKeyFrameAnimation()?;
     anim.InsertKeyFrame(1.0_f32, target)?;
-    anim.SetDuration(TimeSpan { Duration: duration_ticks })?;
+    anim.SetDuration(TimeSpan {
+        Duration: duration_ticks,
+    })?;
     anim.SetIterationBehavior(AnimationIterationBehavior::Count)?;
     anim.SetIterationCount(1)?;
     let comp_anim: CompositionAnimation = anim.cast()?;
@@ -944,7 +1055,12 @@ fn read_accent_color() -> Color {
     use windows::UI::ViewManagement::{UIColorType, UISettings};
     UISettings::new()
         .and_then(|s| s.GetColorValue(UIColorType::Accent))
-        .unwrap_or(Color { A: 255, R: 0, G: 120, B: 215 }) // Windows default blue
+        .unwrap_or(Color {
+            A: 255,
+            R: 0,
+            G: 120,
+            B: 215,
+        }) // Windows default blue
 }
 
 // ── Unit tests ────────────────────────────────────────────────────────────────
@@ -1046,7 +1162,10 @@ mod tests {
     #[test]
     fn insert_out_of_bounds() {
         let mut ch = Children::new();
-        assert_eq!(ch.insert(1, Slot::new()), Err(MutationError::IndexOutOfBounds));
+        assert_eq!(
+            ch.insert(1, Slot::new()),
+            Err(MutationError::IndexOutOfBounds)
+        );
     }
 
     #[test]
@@ -1091,7 +1210,10 @@ mod tests {
     #[test]
     fn replace_out_of_bounds() {
         let mut ch = Children::new();
-        assert_eq!(ch.replace(0, Slot::new()), Err(MutationError::IndexOutOfBounds));
+        assert_eq!(
+            ch.replace(0, Slot::new()),
+            Err(MutationError::IndexOutOfBounds)
+        );
     }
 
     #[test]
@@ -1157,7 +1279,10 @@ mod tests {
 
     impl NodeMirror {
         fn new() -> Self {
-            NodeMirror { bindings: Vec::new(), children: Vec::new() }
+            NodeMirror {
+                bindings: Vec::new(),
+                children: Vec::new(),
+            }
         }
 
         fn destroy(mut self) {
@@ -1217,6 +1342,9 @@ mod tests {
 
         fired.set(false);
         sig.set(1);
-        assert!(!fired.get(), "child binding fired after parent widget_destroy");
+        assert!(
+            !fired.get(),
+            "child binding fired after parent widget_destroy"
+        );
     }
 }

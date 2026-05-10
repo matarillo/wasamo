@@ -386,11 +386,6 @@ pub(crate) fn with_batched_writes<R, F: FnOnce() -> R>(f: F) -> R {
 /// M2 supports `i32` and `String` typed Signals; M3 type expansion adds fields
 /// without changing the registration call site.
 ///
-/// **DD-M2-P6-011 placeholder.** Wiring `BindingEvalContext` / `HandlerExpr::PropRead`
-/// to read `strings`-typed Signals through the binding evaluator is deferred to
-/// DD-M2-P6-011 (string-typed property binding). At this step only `i32s` is
-/// consumed by the binding path; `strings` registration and `Signal::get()` access
-/// are exercised through pure-logic tests.
 pub(crate) struct SignalRegistry {
     pub(crate) i32s: HashMap<String, Signal<i32>>,
     pub(crate) strings: HashMap<String, Signal<String>>,
@@ -433,6 +428,14 @@ impl<'a> EvalContext for BindingEvalContext<'a> {
             .map(|s| s.get_untracked())
     }
 
+    fn get_string(&self, path: &str) -> Result<String, EvalError> {
+        self.registry
+            .strings
+            .get(path)
+            .ok_or_else(|| EvalError::UnknownProperty(path.to_string()))
+            .map(|s| s.get_untracked())
+    }
+
     fn set_i32(&mut self, path: &str, _value: i32) -> Result<(), EvalError> {
         Err(EvalError::WriteInBindingContext {
             path: path.to_string(),
@@ -442,6 +445,14 @@ impl<'a> EvalContext for BindingEvalContext<'a> {
     fn read_i32_tracked(&self, path: &str) -> Result<i32, EvalError> {
         self.registry
             .i32s
+            .get(path)
+            .ok_or_else(|| EvalError::UnknownProperty(path.to_string()))
+            .map(|s| s.get())
+    }
+
+    fn read_string_tracked(&self, path: &str) -> Result<String, EvalError> {
+        self.registry
+            .strings
             .get(path)
             .ok_or_else(|| EvalError::UnknownProperty(path.to_string()))
             .map(|s| s.get())
@@ -467,6 +478,14 @@ impl<'a> EvalContext for HandlerEvalContext<'a> {
     fn get_i32(&self, path: &str) -> Result<i32, EvalError> {
         self.registry
             .i32s
+            .get(path)
+            .ok_or_else(|| EvalError::UnknownProperty(path.to_string()))
+            .map(|s| s.get_untracked())
+    }
+
+    fn get_string(&self, path: &str) -> Result<String, EvalError> {
+        self.registry
+            .strings
             .get(path)
             .ok_or_else(|| EvalError::UnknownProperty(path.to_string()))
             .map(|s| s.get_untracked())
@@ -923,6 +942,34 @@ mod tests {
     }
 
     #[test]
+    fn binding_ctx_string_reads_are_tracked() {
+        use crate::handler::{evaluate_binding, HandlerExpr};
+
+        let sig = Signal::new("hello".to_string());
+        let mut registry = SignalRegistry::new();
+        registry.strings.insert("label".to_string(), sig.clone());
+        let registry = Rc::new(registry);
+
+        let log: Rc<RefCell<Vec<String>>> = Rc::new(RefCell::new(Vec::new()));
+        let log_c = Rc::clone(&log);
+        let registry_c = Rc::clone(&registry);
+
+        let _h = EffectHandle::new(move || {
+            let mut ctx = BindingEvalContext::new(&registry_c);
+            let expr = HandlerExpr::StrPropRead {
+                path: "label".into(),
+            };
+            let result = evaluate_binding(&expr, &mut ctx).unwrap();
+            log_c.borrow_mut().push(result);
+        });
+
+        assert_eq!(*log.borrow(), vec!["hello"]);
+
+        sig.set("world".to_string());
+        assert_eq!(*log.borrow(), vec!["hello", "world"]);
+    }
+
+    #[test]
     fn binding_ctx_set_returns_write_error() {
         use crate::handler::EvalError;
 
@@ -982,6 +1029,42 @@ mod tests {
         );
     }
 
+    #[test]
+    fn binding_ctx_get_string_untracked_vs_tracked() {
+        use crate::handler::EvalContext;
+
+        let sig = Signal::new("a".to_string());
+        let mut registry = SignalRegistry::new();
+        registry.strings.insert("p".to_string(), sig.clone());
+        let registry = Rc::new(registry);
+
+        let run_count = Rc::new(RefCell::new(0i32));
+        let run_count_c = Rc::clone(&run_count);
+        let registry_untracked = Rc::clone(&registry);
+
+        let _h_untracked = EffectHandle::new(move || {
+            *run_count_c.borrow_mut() += 1;
+            let ctx = BindingEvalContext::new(&registry_untracked);
+            let _ = ctx.get_string("p").unwrap();
+        });
+        assert_eq!(*run_count.borrow(), 1);
+        sig.set("b".to_string());
+        assert_eq!(*run_count.borrow(), 1);
+
+        let run_count2 = Rc::new(RefCell::new(0i32));
+        let run_count2_c = Rc::clone(&run_count2);
+        let registry_tracked = Rc::clone(&registry);
+
+        let _h_tracked = EffectHandle::new(move || {
+            *run_count2_c.borrow_mut() += 1;
+            let ctx = BindingEvalContext::new(&registry_tracked);
+            let _ = ctx.read_string_tracked("p").unwrap();
+        });
+        assert_eq!(*run_count2.borrow(), 1);
+        sig.set("c".to_string());
+        assert_eq!(*run_count2.borrow(), 2);
+    }
+
     // ── register_binding tests (DD-M2-P5-005) ────────────────────────────────
 
     #[test]
@@ -1034,6 +1117,29 @@ mod tests {
         dirty.set(false);
         sig.set(99);
         assert!(dirty.get(), "writer not called after Signal update");
+    }
+
+    #[test]
+    fn register_binding_writes_string_signal_initial_and_updates() {
+        use crate::handler::HandlerExpr;
+
+        let sig = Signal::new("Ready".to_string());
+        let mut registry = SignalRegistry::new();
+        registry.strings.insert("label".to_string(), sig.clone());
+        let registry = Rc::new(registry);
+
+        let written: Rc<RefCell<Vec<String>>> = Rc::new(RefCell::new(Vec::new()));
+        let written_c = Rc::clone(&written);
+        let writer: Box<dyn FnMut(String)> = Box::new(move |v| written_c.borrow_mut().push(v));
+
+        let expr = HandlerExpr::StrPropRead {
+            path: "label".into(),
+        };
+        let _h = register_binding_with_writer(writer, expr, registry);
+        assert_eq!(*written.borrow(), vec!["Ready"]);
+
+        sig.set("Done".to_string());
+        assert_eq!(*written.borrow(), vec!["Ready", "Done"]);
     }
 
     // ── SignalRegistry string-typed Signal tests (DD-M2-P6-007) ─────────────
