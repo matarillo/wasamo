@@ -1,7 +1,7 @@
 # M2-Phase 7 / DD-M2-P6-012 pre-doc framing
 
-**Status:** framing aligned with owner through F1-F4 (2026-05-10);
-Option comparison not yet started
+**Status:** framing completed; DD-M2-P6-012 Accepted as Option C in ADR
+(2026-05-10)
 **Date:** 2026-05-10
 **Targets DD:** DD-M2-P6-012 - Re-entrancy and safety-guard placement principle
 **Targets phase:** M2-Phase 7 (Reactive Foundation Hardening & Contract Finalization)
@@ -18,8 +18,9 @@ implemented 済みである。したがって DD-012 は、010 の実装結果�
 前提にして A5 の残り半分を閉じる。すなわち、`dirty_effects` の
 EffectId-order 近似は既に production path から外れ、抽出された
 topological walk が本番経路になっている。一方で、re-entrancy /
-safety guard の配置原則はまだ Proposed のままであり、
-`docs/architecture.md` への global runtime invariant 記録も未完了である。
+safety guard の配置原則はこの framing を入力にして Option C
+(role-specified defense in depth) として Accepted になり、
+`docs/architecture.md` に global runtime invariant として記録された。
 
 ---
 
@@ -285,9 +286,17 @@ non-ABI entry も principle 上の guarded boundary として扱う必要があ�
 
 ---
 
-## Next session - handoff
+## Post-framing outcome (2026-05-10)
 
-Inputs for ADR drafting after framing agreement:
+The framing above fed the ADR update for
+[DD-M2-P6-012](../../decisions/m2-phase-7-reactive-foundation.md#dd-m2-p6-012--re-entrancy-and-safety-guard-placement-principle).
+Owner agreement selected **Option C - role-specified defense in depth**:
+ABI boundary owns caller-facing diagnostics; internal runtime boundary owns
+invariant enforcement for non-ABI entries; cleanup/destroy exceptions must be
+explicit. Option D typed guard tokens were left as a M3+ revisit trigger rather
+than an M2 acceptance requirement.
+
+Completed from this handoff:
 
 1. **Guard inventory.** Existing ABI helpers, `drain_if_outermost()`,
    `lib.rs::run()` message-loop path, and destroy/cleanup exceptions を
@@ -300,8 +309,11 @@ Inputs for ADR drafting after framing agreement:
    - Update the Summary table for DD-012.
 3. **architecture.md invariant draft.** Add a global runtime invariant section
    that states where guards live and how ABI / non-ABI / internal paths apply it.
+
+Remaining implementation work:
+
 4. **Implementation alignment.** Adjust existing guard placement to match the
    accepted principle, then add focused tests for the principle's enforcement.
-5. **Progress update.** Once ADR, architecture.md, implementation, and tests land,
+5. **Progress update.** Once implementation and tests land,
    update [docs/plans/progress/m2-phase-7-progress.md](../../plans/progress/m2-phase-7-progress.md)
    for DD-M2-P6-012.

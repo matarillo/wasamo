@@ -253,6 +253,17 @@ and [docs/decisions/vision-post-m2-roadmap.md](../decisions/vision-post-m2-roadm
     discharged at design level; second clause (implementation
     reflects it) opens the next step.
 
+- **2026-05-10** — Phase 7 progress (no acceptance-criteria change).
+  - DD-M2-P6-010 implementation landed; the production dirty-Effect
+    drain no longer relies on `EffectId` numeric order.
+  - DD-M2-P6-012 (`re-entrancy / safety-guard placement principle`)
+    Accepted in [m2-phase-7-reactive-foundation.md](../decisions/m2-phase-7-reactive-foundation.md#dd-m2-p6-012--re-entrancy-and-safety-guard-placement-principle)
+    — Option C (role-specified defense in depth). The principle is
+    recorded in [architecture.md](../architecture.md#684-runtime-safety-guard-placement)
+    as a global runtime invariant. A5 now has both DDs accepted at
+    design level; remaining A5 work is DD-012 implementation alignment
+    and focused guard-placement tests.
+
 ## Progress
 
 The Progress section is a compact milestone index. Detailed live task
@@ -268,12 +279,11 @@ history, then deleted by default.
 | M2-Phase 4 - Tree-mutation ABI primitives | completed | retired | [m2-phase-4-tree-mutation-abi.md](../decisions/m2-phase-4-tree-mutation-abi.md) | Stable-core tree mutation ABI landed; CHANGELOG entry added. |
 | M2-Phase 5 - Reactive engine | completed | retired | [m2-phase-5-reactive-engine.md](../decisions/m2-phase-5-reactive-engine.md) | Reactive primitives and binding path landed; later drain refinements folded into Phase 6/7 records. |
 | M2-Phase 6 - `.ui -> runtime` lowering | completed | retired | [m2-phase-6-ui-lowering.md](../decisions/m2-phase-6-ui-lowering.md) | A1/A2 discharged by the C/Rust/Zig counter migration; CHANGELOG entry added. |
-| M2-Phase 7 - Reactive Foundation Hardening & Contract Finalization | in-progress | [progress/m2-phase-7-progress.md](progress/m2-phase-7-progress.md) | [m2-phase-7-reactive-foundation.md](../decisions/m2-phase-7-reactive-foundation.md) | Active phase for A5/A6. DD-M2-P6-010 is Accepted at design level; implementation is next. |
+| M2-Phase 7 - Reactive Foundation Hardening & Contract Finalization | in-progress | [progress/m2-phase-7-progress.md](progress/m2-phase-7-progress.md) | [m2-phase-7-reactive-foundation.md](../decisions/m2-phase-7-reactive-foundation.md) | Active phase for A5/A6. DD-M2-P6-010 is implemented; DD-M2-P6-012 is Accepted with implementation alignment next. |
 
 ### Owner-facing resume note
 
 Continue in [progress/m2-phase-7-progress.md](progress/m2-phase-7-progress.md).
-DD-M2-P6-010 has been accepted at design level, so the next implementation
-step is to replace the current `EffectId`-numeric-order approximation with
-a true topological walk and pure-logic tests on synthetic dependency
-graphs.
+DD-M2-P6-012 is Accepted as Option C. The next implementation step is to
+align existing guard placement with the ABI diagnostic boundary /
+internal invariant boundary split and add focused guard-placement tests.

@@ -1,8 +1,8 @@
 # M2-Phase 7 — Reactive Foundation Hardening & Contract Finalization: Architecture Decisions
 
 **Phase:** M2-Phase 7 (Reactive Foundation Hardening & Contract Finalization)
-**Date:** 2026-05-08 (ADR opened; DDs remain Proposed pending per-DD pre-doc cycles); 2026-05-09 (DD-M2-P6-010 Accepted; DD-M2-P6-010 minor implementation clarification recorded)
-**Status:** Proposed (DD-M2-P6-010 Accepted; DD-M2-P6-011 / DD-M2-P6-012 Proposed)
+**Date:** 2026-05-08 (ADR opened; DDs remain Proposed pending per-DD pre-doc cycles); 2026-05-09 (DD-M2-P6-010 Accepted; DD-M2-P6-010 minor implementation clarification recorded); 2026-05-10 (DD-M2-P6-012 Accepted)
+**Status:** Mixed (DD-M2-P6-011 Proposed; DD-M2-P6-010 / DD-M2-P6-012 Accepted)
 
 ## Context
 
@@ -414,7 +414,7 @@ is revisited at that point with concrete M3 stimulus.
 
 ### DD-M2-P6-012 — Re-entrancy and safety-guard placement principle
 
-**Status: Proposed**
+**Status: Accepted (2026-05-10)**
 
 #### Context
 
@@ -557,35 +557,64 @@ fails to compile.
 
 #### Recommendation
 
-**To be settled by the DD-012 pre-doc cycle.** The Phase 6 draft
-recorded this DD as `Deferred` with no recommendation, on the explicit
-ground that the decision should not be made mid-Phase-6 implementation.
-With Phase 6 closed, the DD-012 working branch evaluates A / B / C / D
-against full Phase 6 implementation evidence — including which runtime
-states each option enforces, which non-ABI entry paths each option
-leaves exposed, how each option interacts with the M3 timer and
-async-I/O extensions, and how the Win32 / WinRT FFI surface constrains
-the choice — and the agreed option is recorded here.
+**Choose Option C — role-specified defense in depth.** The accepted
+guard-placement principle is:
 
-Until that cycle settles the rule, **no new ABI function and no new
-non-ABI entry path introduced before this DD's Acceptance should be
-treated as setting precedent**: any guard placement chosen for a new
-entry point is provisional and may be reorganised once the principle
-is decided.
+- The **ABI boundary is the diagnostic boundary**. Exported
+  `wasamo_*` functions perform the relevant UI-thread, Diverged,
+  `IN_DRAIN`, and `IN_OBSERVER_CALLBACK` checks before mutating or
+  structurally changing runtime state. These checks own caller-facing
+  `WasamoStatus` return values and last-error messages because that
+  layer knows the public function name, argument context, and lifecycle
+  exception being applied.
+- The **internal runtime boundary is the invariant boundary**.
+  Internal entry points that may be reached without crossing an
+  exported ABI function must refuse or suppress work when the runtime
+  state would make that work invalid. In M2 this is concretely
+  represented by `emit::drain_if_outermost()` suppressing re-entrant
+  drains while `IN_DRAIN` is set and suppressing all drain phases after
+  `RuntimeHealth::Diverged`.
+- **Runtime-owned non-ABI entry paths are first-class runtime entries**,
+  not exceptions to the rule. The Win32 message-loop path in
+  `lib.rs::run()` and future M3 timer / async-I/O / additional
+  window-procedure paths must enter runtime state through an internal
+  invariant boundary rather than relying on ABI-only guards they do not
+  cross.
+- **Cleanup / destroy paths remain explicit exceptions.** Any operation
+  that is allowed after `Diverged` must be named at its entry boundary
+  and documented as a lifecycle exception; the exception does not imply
+  general permission to touch runtime state after divergence.
+
+Option A is rejected because ABI-only enforcement still leaves the
+Phase 5 omission shape as a per-entry-path obligation: every non-ABI
+entry must remember to call an ABI-shaped guard helper even though it
+does not cross the ABI. Option B is rejected because moving all guards
+into internal primitives would either lose ABI diagnostic precision or
+force public-call context through otherwise local runtime APIs. Option
+D is not required for M2 acceptance: typed guard tokens are the
+strongest structural answer, but their blast radius is disproportionate
+to the Phase 7 acceptance need now that Option C gives both a
+diagnostic boundary and an invariant boundary.
+
+DD-012 acceptance therefore updates `docs/architecture.md` with this
+principle as a global runtime invariant. Implementation alignment is
+scoped to ensuring existing M2 paths match the accepted rule and adding
+focused guard-placement tests; broader tokenisation or callback-surface
+redesign is not part of this DD.
 
 #### Forward-compat exposure
 
-High if left unspecified through M2. The cost of choosing incorrectly
-grows with each new re-entrancy state and each new non-ABI entry
-path; M3 is expected to add at least timer, async-I/O, and
-additional Win32 message handling, multiplying combinations through
-the four existing states. Settling the principle in Phase 7
-keeps the M3 pre-doc free to apply it uniformly across its
-new surface.
+Low-medium after acceptance. The placement rule is now explicit before
+M3 adds timer, async-I/O, and additional Win32 message handling, so
+those new surfaces inherit the Option C responsibility split instead
+of re-deciding guard placement locally.
 
-Low specifically for the Phase 5 retrospective bug. That bug is a
-single missed call site and is repaired by adding the missing guard,
-independently of which option is eventually chosen.
+Residual exposure remains in two places. First, each new non-ABI entry
+path must name the internal invariant boundary it crosses; omission is
+now review-visible but not compile-time impossible. Second, typed guard
+tokens remain a M3+ revisit trigger if the number of internal entry
+paths grows enough that runtime checks and review discipline no longer
+provide sufficient structural confidence.
 
 ---
 
@@ -595,17 +624,17 @@ independently of which option is eventually chosen.
 |---|---|---|---|---|
 | DD-M2-P6-010 *(Accepted 2026-05-09)* | `dirty_effects` topological sort fidelity | **Option A** — true topological walk in M2, extracted as a free function with pure-logic unit tests. A5 (literal reading) discharged by implementation; M3 inherits the verified primitive. Options B / C / C-lite recorded as considered, not recommended. | Low–medium (Option A) | Discharged at acceptance; M3 residuals (cycle / ties / fan-out) recorded in m2-to-m3-handover.md |
 | DD-M2-P6-011 *(Proposed)* | String-typed property binding | Inherited Phase 6 draft: **Option B** — `StrPropRead` HandlerExpr variant. Subject to Phase 7 pre-doc revision under A6 framing (which may favour Option C). | Low (Option B) / Low–medium (Option A or C) | Low |
-| DD-M2-P6-012 *(Proposed)* | Re-entrancy and safety-guard placement principle | **To be settled by DD-012 pre-doc cycle.** A (ABI-boundary) / B (internal-state-machine) / C (defense-in-depth) / D (typed guard tokens). | n/a (open) | High if unspecified through M2 |
+| DD-M2-P6-012 *(Accepted 2026-05-10)* | Re-entrancy and safety-guard placement principle | **Option C** — role-specified defense in depth. ABI boundary owns caller-facing diagnostics; internal runtime boundary owns invariant enforcement for ABI-bypassing entries; cleanup exceptions are explicit. Option D typed tokens deferred as a M3+ revisit trigger. | Low-medium (focused implementation alignment and tests) | Low-medium; M3 timer / async-I/O / windowproc surfaces inherit the rule |
 
 **Aggregate impl-risk picture.** The three DDs are scoped narrowly:
 010 changes `drain_dirty_effects()` only; 011 adds an additive
 `HandlerExpr` variant and two `EvalContext` methods (under the inherited
 recommendation); 012 settles a *principle* whose enforcement may or may
 not require code change beyond the local Phase 5 retrospective fix
-(already landed in Phase 6). The Phase 7 closing risk is therefore
-concentrated in 012 — both because its option set ranges from
-documentation-only to pervasive type-system change, and because A5
-acceptance hinges on its quality, not its presence.
+(already landed in Phase 6). With 012 accepted as Option C, the Phase 7
+closing risk shifts from principle selection to focused implementation
+alignment and guard-placement tests; the broader type-token rewrite is
+explicitly outside M2 unless M3 evidence reopens it.
 
 **Aggregate forward-compat exposure.** All three DDs have explicit
 M3-or-later successor work — 010's mandatory pre-condition (or its

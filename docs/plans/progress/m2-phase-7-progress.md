@@ -28,7 +28,7 @@ Current status:
 
 - DD-M2-P6-010: Accepted and implemented on 2026-05-09.
 - DD-M2-P6-011: Proposed.
-- DD-M2-P6-012: Proposed.
+- DD-M2-P6-012: Accepted on 2026-05-10; implementation alignment next.
 
 ## Order of Work
 
@@ -40,9 +40,9 @@ Current status:
    - [x] Add pure-logic unit tests on synthetic dependency graphs.
 
 2. **DD-M2-P6-012 - re-entrancy / safety-guard placement principle**
-   - [ ] Re-run pre-doc with full Phase 6 implementation evidence.
-   - [ ] Flip agreement to Accepted.
-   - [ ] Record the principle in `docs/architecture.md` as a global
+   - [x] Re-run pre-doc with full Phase 6 implementation evidence.
+   - [x] Flip agreement to Accepted.
+   - [x] Record the principle in `docs/architecture.md` as a global
      runtime invariant.
    - [ ] Reflect the principle in implementation.
 
@@ -80,6 +80,8 @@ Current status:
 
 ## Owner-Facing Notes
 
-DD-M2-P6-010 is Accepted and implemented. The runtime no longer uses the
-EffectId-order approximation in `drain_dirty_effects()`; the production
-path calls the extracted topological walk.
+DD-M2-P6-010 is Accepted and implemented. DD-M2-P6-012 is Accepted as
+Option C (role-specified defense in depth): ABI boundary owns diagnostics,
+internal runtime boundary owns invariant enforcement for non-ABI entries,
+and cleanup exceptions must be explicit. Next step is implementation
+alignment plus focused guard-placement tests before DD-M2-P6-011 resumes.
