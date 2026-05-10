@@ -14,11 +14,17 @@ use std::path::PathBuf;
 use wasamo_runtime::ir_loader::parse_ir;
 
 fn workspace_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).parent().unwrap().to_path_buf()
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .unwrap()
+        .to_path_buf()
 }
 
 fn counter_ui() -> PathBuf {
-    workspace_root().join("examples").join("counter").join("counter.ui")
+    workspace_root()
+        .join("examples")
+        .join("counter")
+        .join("counter.ui")
 }
 
 fn build_counter_ir() -> wasamo_ir::IrComponent {
@@ -29,13 +35,36 @@ fn build_counter_ir() -> wasamo_ir::IrComponent {
     let tokens = lexer::tokenize(&src, &path_str).expect("lex failed");
     let ast = parser::parse(&tokens, &path_str).expect("parse failed");
     let result = check::check(&ast, &path_str);
-    assert!(!result.has_errors(), "check errors: {:?}", result.diagnostics);
+    assert!(
+        !result.has_errors(),
+        "check errors: {:?}",
+        result.diagnostics
+    );
     lower::lower(&ast, &result.namespace)
 }
 
 fn emit_counter_ir() -> String {
     use wasamoc::emit;
     emit::emit(&build_counter_ir())
+}
+
+fn build_string_binding_ir() -> wasamo_ir::IrComponent {
+    use wasamoc::{check, lexer, lower, parser};
+    let src = r#"component StringBinding inherits Window {
+    state label: string = "Ready"
+    VStack {
+        Text { text: "State: \{root.label}" }
+    }
+}"#;
+    let tokens = lexer::tokenize(src, "<string-binding>").expect("lex failed");
+    let ast = parser::parse(&tokens, "<string-binding>").expect("parse failed");
+    let result = check::check(&ast, "<string-binding>");
+    assert!(
+        !result.has_errors(),
+        "check errors: {:?}",
+        result.diagnostics
+    );
+    lower::lower(&ast, &result.namespace)
 }
 
 #[test]
@@ -95,5 +124,38 @@ fn parsed_counter_has_text_binding_and_clicked_handler() {
             lhs: "count".into(),
             rhs: Box::new(HandlerExpr::IntLit(1)),
         }
+    );
+}
+
+#[test]
+fn string_state_binding_emits_and_parses_str_prop_read() {
+    let original = build_string_binding_ir();
+    let text = wasamoc::emit::emit(&original);
+    assert!(
+        text.contains("(str-prop-read label)"),
+        "String state interpolation must emit StrPropRead form\n{text}"
+    );
+    let parsed = parse_ir(&text).expect("parse_ir failed");
+    assert_eq!(parsed, original, "round-trip mismatch\nIR text:\n{text}");
+
+    let text_node = parsed
+        .root
+        .children
+        .iter()
+        .find(|c| c.widget_type == "Text")
+        .unwrap();
+    let binding = text_node
+        .bindings
+        .iter()
+        .find(|b| b.prop_name == "text")
+        .unwrap();
+    assert_eq!(
+        binding.expr,
+        wasamo_ir::HandlerExpr::Interpolation(vec![
+            wasamo_ir::InterpolationPart::Literal("State: ".into()),
+            wasamo_ir::InterpolationPart::Expr(wasamo_ir::HandlerExpr::StrPropRead {
+                path: "label".into(),
+            }),
+        ])
     );
 }
