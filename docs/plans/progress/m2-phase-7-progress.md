@@ -48,6 +48,7 @@ Current status:
 
 3. **DD-M2-P6-011 - String-typed property binding**
    - [ ] Re-run pre-doc.
+   - Pre-doc framing draft: [docs/notes/m2-phase-7/dd-011-pre-doc-framing.md](../../notes/m2-phase-7/dd-011-pre-doc-framing.md).
    - [ ] Flip agreement to Accepted.
    - [ ] Implement until a `.ui` String property bound to `Signal<String>`
      propagates through `BindingEvalContext` / `HandlerExpr::PropRead` to
