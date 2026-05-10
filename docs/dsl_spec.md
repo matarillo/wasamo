@@ -1,8 +1,8 @@
 # Wasamo DSL Specification
 
-**Document version:** 0.3
-**Last updated:** 2026-05-07
-**Status:** M2-Phase 6 Accepted
+**Document version:** 0.4
+**Last updated:** 2026-05-11
+**Status:** M2 complete; covers the M2 `.ui` surface and `;wasamo-ir v0`
 
 ---
 
@@ -11,8 +11,9 @@
 The Wasamo DSL is an external domain-specific language for declaring UI component structure.
 Source files use the `.ui` extension.
 
-M1 scope covers **lexing, parsing, and syntax checking only**.
-Code generation and reactive evaluation are M2 scope.
+M2 scope covers lexing, parsing, checking, IR text emission, runtime IR
+loading, inline handler evaluation, and reactive property binding for the
+Foundation counter surface.
 
 ### Reference example (`examples/counter/counter.ui`)
 
@@ -506,6 +507,7 @@ expr  ::= atom
         | "(" "lit"             INT ")"
         | "(" "str"             STRING ")"
         | "(" "prop-read"       IDENT ")"
+        | "(" "str-prop-read"   IDENT ")"
         | "(" "assign"          IDENT expr ")"
         | "(" "compound-assign" compound_op IDENT expr ")"
         | "(" "interp"          interp_part+ ")"
@@ -527,6 +529,7 @@ interp_part ::= STRING         ; literal text fragment
 | `INT` / `(lit INT)` | `IntLit(i32)` | Bare `INT` is equivalent to `(lit INT)` |
 | `STRING` / `(str STRING)` | `StrLit(String)` | Binding-only |
 | `(prop-read NAME)` | `PropRead { path }` | `NAME` is the Signal name from `state` |
+| `(str-prop-read NAME)` | `StrPropRead { path }` | String-typed binding read; `NAME` is the Signal name from `state` |
 | `(assign NAME expr)` | `Assign { lhs, rhs }` | Handler-only |
 | `(compound-assign OP NAME expr)` | `CompoundAssign { lhs, op, rhs }` | Handler-only |
 | `(interp part+)` | `Interpolation(Vec<InterpolationPart>)` | Binding-only |
@@ -589,7 +592,7 @@ defense-in-depth validation:
 |---|---|---|
 | Header line matches `;wasamo-ir v0` | Yes | `WASAMO_ERR_IR_MALFORMED` |
 | Top-level structure is `component_def` | Yes | `WASAMO_ERR_IR_MALFORMED` |
-| Every `prop-read` / `assign` / `compound-assign` name resolves to a declared `state` | Yes | `WASAMO_ERR_IR_MALFORMED` |
+| Every `prop-read` / `str-prop-read` / `assign` / `compound-assign` name resolves to a declared `state` | Yes | `WASAMO_ERR_IR_MALFORMED` |
 | Binding expression result type matches target property type | **No** (trusted from `wasamoc`) | Undefined behaviour |
 | Per-node emitter invariants (e.g. `on` only on signal-capable widgets) | **No** (trusted from `wasamoc`) | Undefined behaviour |
 
@@ -623,16 +626,17 @@ make `-` serve double duty as both an arithmetic operator and a keyword separato
 complicates the grammar as soon as expression syntax expands in M2.
 
 **Explicitly deferred:** `in` (read-only from outside) and `out` (write-only from outside)
-as standalone modifiers. These are M2 scope.
+as standalone modifiers. These remain post-M2 scope.
 
-**Future impact (M2):** When `in` and `out` are introduced as standalone modifiers, the
+**Future impact:** When `in` and `out` are introduced as standalone modifiers, the
 lexer will need to be updated. Two viable paths at that point:
 
 - Promote `in` and `out` to separate keywords and keep `in-out` as a third compound keyword.
 - Drop the compound `InOut` token and instead have the parser recognize `In Minus Out`.
 
-The right choice depends on whether M2 also adds `-` to expression syntax inside property
-bindings. That decision belongs in the M2 DSL spec revision.
+The right choice depends on whether the future expression grammar also adds `-`
+inside property bindings. That decision belongs to the milestone that expands
+the DSL expression surface.
 
 ---
 
@@ -656,13 +660,16 @@ Parsing the structure once at lex/parse time avoids re-parsing in M2 and catches
 mistakes (e.g. `\{root.}`) early without adding significant complexity — the lexer merely
 switches to a mini-mode inside `\{…}` to tokenize a `qualified_name`.
 
-**Explicitly deferred:** Reactive evaluation of `Interp` nodes (observing state changes and
-re-rendering affected text). This is M2 scope.
+**Discharged in M2:** Reactive evaluation of `Interp` nodes for the Foundation
+counter surface. M2 consumes the structured interpolation nodes when lowering
+property bindings to IR.
 
-**Future impact (M2):** The M2 reactive engine consumes `StringPart::Interp(QualifiedName)`
+**M2 impact:** The M2 reactive engine consumes `StringPart::Interp(QualifiedName)`
 nodes directly. It resolves the `QualifiedName` against the component's property scope,
 subscribes to changes, and re-evaluates the concatenated string on each change. No AST
-schema change is required; M2 adds evaluation logic, not a new representation.
+schema change was required; M2 added lowering/evaluation logic, not a new source
+representation. String-typed interpolation lowers to `str-prop-read` in
+`;wasamo-ir v0`.
 
 ---
 
@@ -673,3 +680,4 @@ schema change is required; M2 adds evaluation logic, not a new representation.
 | 0.1     | 2026-04-27 | Initial draft (Phase 1, pending owner agreement)                                  |
 | 0.2     | 2026-04-27 | Phase 1 Accepted; added missing tokens (MinusEq/StarEq/SlashEq); corrected AST types (StringLit → Vec<StringPart>, Statement as struct); corrected error output format |
 | 0.3     | 2026-05-07 | M2-Phase 6 Accepted; added §8 Wasamo IR normative spec (DD-M2-P6-002 + DD-M2-P6-003) |
+| 0.4     | 2026-05-11 | M2 complete; added `str-prop-read` IR form from DD-M2-P6-011 and updated M2/post-M2 status language |

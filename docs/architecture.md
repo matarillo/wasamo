@@ -188,8 +188,8 @@ M2 acceptance gate**, not as the long-term architecture.
 - Re-entrancy: callbacks are queued and drained at safe boundaries —
   no callback fires while the host is inside a `wasamo_*` call.
 
-The full ABI specification is `docs/abi_spec.md` (Accepted, 2026-04-30).
-No ABI stability guarantee is made for M1; M4 is when stability
+The full ABI specification is `docs/abi_spec.md` (accepted for M2).
+No ABI stability guarantee is made before 1.0; M6 is when stability
 commitments begin.
 
 `abi_spec.md` is structured in **two layers**:
@@ -198,7 +198,7 @@ commitments begin.
   get/set, property change observers, signal connect/disconnect, and
   **tree mutation** (M2-Phase 4: append / insert / remove / replace /
   child_count / widget_destroy — `abi_spec.md §4.6`).
-  Written as a candidate for the M4 ABI freeze.
+  Written as a candidate surface for the M6 ABI freeze.
   The stable core covers **six areas** as of M2-Phase 4 (DD-P6-001
   defined the initial five-area minimum; §4.6 tree mutation is the
   sixth area added by DD-M2-P4-001).
@@ -208,14 +208,14 @@ commitments begin.
   `wasamo_button_set_clicked` convenience. Required because M1 `wasamoc`
   is parser-only and the host must construct the widget tree by hand.
   Marked `WASAMO_EXPERIMENTAL` in both header and spec; not subject to
-  M4 stability. Constructor promotion to stable core deferred to M3
-  (DD-M2-P4-001).
+  M6 stability. Constructor promotion to stable core is deferred to a
+  later DSL/widget-surface milestone (DD-M2-P4-001).
 
-The Phase 6 ADR explicitly **does not decide** (a) where DSL inline handler
-bodies (`clicked => { … }`) will execute — host-side vs runtime-side; or
-(b) `wasamoc`'s M2 output format — host-language codegen vs IR + runtime
-interpretation. The stable core is sized so it survives either resolution.
-These remain open in §11.
+M2 resolved the two Phase 6-deferred questions that shaped the stable core:
+DSL inline handler bodies execute in the runtime interpreter
+(DD-M2-P3-001), and `wasamoc` emits IR consumed by `wasamo_load_ui`
+(DD-M2-P2-001 / DD-M2-P6-005). The stable core remains sized to survive
+those decisions and later M3+ surface growth.
 
 ---
 
@@ -704,15 +704,20 @@ Re-attach (M3 conditional binding rebuilds at a different
 position) just creates fresh Effects on the new widgets; old
 widgets' Effects dispose through the same path. No explicit hook.
 
-#### 6.8.7 Phase 6 binding registration API (DD-M2-P5-005 = A)
+#### 6.8.7 Binding registration API after M2 (DD-M2-P5-005, DD-M2-P6-007, DD-M2-P6-011)
 
 ```rust
 pub(crate) fn register_binding(
     target: BindingTarget,
     expr: HandlerExpr,
+    registry: Rc<SignalRegistry>,
     write_fn: fn(WidgetId, PropertyKey, &str),
-    properties: Rc<HashMap<String, Signal<i32>>>,
 ) -> EffectHandle;
+
+pub(crate) struct SignalRegistry {
+    i32s: HashMap<String, Signal<i32>>,
+    strings: HashMap<String, Signal<String>>,
+}
 
 pub(crate) enum BindingTarget {
     WidgetProperty { node: WidgetId, prop: PropertyKey },
@@ -730,13 +735,13 @@ The `write_fn` function-pointer parameter is the seam that lets
 `register_binding_with_writer(Box<dyn FnMut(String)>, …)` is the
 testable core; pure-logic tests inject a recording writer.
 
-The `properties` parameter (provisional shape — likely revisited
-when Phase 6 wires the IR loader) carries the Signal-backed
-property store the binding expression evaluates against. The
-broader pattern survives: M3 binding shapes (Computed,
-conditional, for-loop) add `BindingTarget` variants and reuse
-the same `HandlerExpr` AST without disturbing `register_binding`'s
-signature.
+`SignalRegistry` is the per-component Signal store installed by the IR
+loader. M2 supports `i32` and `String` Signals; integer reads use
+`HandlerExpr::PropRead`, while String reads use `HandlerExpr::StrPropRead`
+and evaluate through `BindingEvalContext::read_string_tracked`. The broader
+pattern survives: M3 binding shapes (Computed, conditional, for-loop) add
+`BindingTarget` variants and may expand `SignalRegistry` without disturbing
+the widget-write seam.
 
 #### 6.8.8 Forward-compatibility and out-of-scope
 
@@ -744,8 +749,9 @@ The Phase 5 architecture is shape-compatible with the M3
 extensions it defers:
 
 - `Computed<T>` lands as a third layer between Signal and Effect;
-  the drain loop gains a pre-Effect topological pass before
-  dirty Effects re-run.
+  it inherits the M2 topological dirty-Effect walk. M3 still decides
+  cycle policy, ordering ties, and fan-out interaction with
+  `MUTATION_CAP`.
 - Structural bindings (conditional / for-loop / list-rendered)
   add `BindingTarget` variants; subtree rebuilds Drop old
   Effects through the existing widget teardown path.
