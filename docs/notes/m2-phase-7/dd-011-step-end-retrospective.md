@@ -106,10 +106,16 @@ headless integration test」と「既存の GUI checkpoint」のどちらに属�
      `0x80070005 (Access denied)` で失敗した。`RoInitialize` の明示追加でも
      解消しなかったため、この環境では "runtime compositor unavailable" と
      分類する。
+   - 同じ test を SSH ではない Local physical machine で再実行したところ、
+     `cargo test -p wasamo-runtime --test live_widgetnode_headless -- --nocapture` は
+     green (`1 passed`) で、runtime compositor unavailable の skip message は出なかった。
+     したがってこの環境では `wasamo_init` / `build_widget_tree` / live `WidgetNode`
+     property read が通り、`wasamo_get_property` で `"State: Ready"` まで確認できた。
    - そのため、SSH dev box は build / link / pure runtime logic の確認には使えるが、
      live `WidgetNode` construction を含む headless proof には十分ではない可能性がある。
-     この proof を gate にするなら、GitHub Actions Windows runner か visible desktop
-     session で再分類する必要がある。
+     一方で Local physical machine は、この Windows-only headless proof に必要な
+     runtime compositor capability を満たすことを確認済みである。CI runner で同じ
+     capability があるかは、必要なら別途再分類する。
    - Owner に確認したい点: この proof を DD-011 / A6 の step evidence として十分と
      みなすか、または live `WidgetNode` まで到達する headless Windows test や
      GUI checkpoint を gate にするか。
@@ -190,6 +196,9 @@ DD-011 実装で追加した主なテスト:
   - `string_binding_reaches_live_widgetnode_property_state`
   - SSH dev box では `wasamo_init` が `0x80070005 (Access denied)` を返し、
     test は runtime compositor unavailable として通過した。
+  - Local physical machine では skip されずに `wasamo_init` から
+    `build_widget_tree` / `wasamo_get_property` まで到達し、`"State: Ready"` の
+    property state を確認した。
 
 Commands run for this retrospective:
 
@@ -202,7 +211,9 @@ cargo test -p wasamo-runtime --test live_widgetnode_headless -- --nocapture
 cargo test -p wasamo-runtime
 ```
 
-All completed successfully.
+All completed successfully. The `live_widgetnode_headless` command was later rerun on a
+Local physical machine as the non-SSH verification noted above, and also completed
+successfully without the runtime-compositor-unavailable skip path.
 
 ## Follow-Up
 
@@ -215,8 +226,9 @@ Owner に確認する項目:
    - live `WidgetNode` を作る Windows-only headless integration test を追加する。
      ただし、`Compositor` / `TextRenderer` / DirectWrite が CI runner 上で
      visible desktop なしに deterministic に初期化できることが条件。
-     SSH dev box では `0x80070005` により runtime compositor unavailable だったため、
-     この環境だけでは condition を満たすとは判断できない。
+     SSH dev box では `0x80070005` により runtime compositor unavailable だったが、
+     Local physical machine では同 test が skip されず green になったため、
+     少なくとも local physical verification environment では condition を満たす。
    - 上記が visible desktop session を要求する、または CI 上で不安定な場合は、
      既存 GUI checkpoint に String binding case を含める。
    - production `widget_write_property` の手前までを M2 自動テストの上限として

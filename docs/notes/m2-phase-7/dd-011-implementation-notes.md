@@ -70,6 +70,14 @@ property binding を `.ui` から runtime binding evaluator まで通すこと�
   SSH dev box では live `WidgetNode` headless proof は "runtime compositor
   unavailable" として扱い、CI runner や interactive desktop session とは
   別の verification environment として記録する。
+- 2026-05-10: 同じ実験ブランチ `exp/m2-p7-live-widgetnode-headless-test` を
+  SSH ではない Local physical machine 上で再実行した。
+  `cargo test -p wasamo-runtime --test live_widgetnode_headless -- --nocapture` は
+  green (`1 passed`) で、skip message は出なかった。これは `wasamo_init` が通り、
+  `.ui -> wasamoc lowering -> runtime IR parser -> build_widget_tree -> live WidgetNode
+  -> wasamo_get_property` の path が実際に `"State: Ready"` まで到達したことを示す。
+  SSH dev box の `runtime compositor unavailable` は test failure ではなく
+  environment capability の違いとして扱う。
 - 2026-05-10: `cargo check --workspace` は green。既存の `wasamo` crate-type warning は
   観測されたが今回の DD-011 差分由来ではない。
 
@@ -97,5 +105,6 @@ property binding を `.ui` から runtime binding evaluator まで通すこと�
 - `wasamo-runtime/tests/ir_loader_roundtrip.rs`: `.ui` String binding の emitted-IR round-trip test を追加。
 - `wasamo-runtime/tests/live_widgetnode_headless.rs`: Windows-only headless integration
   test を追加。Compositor が初期化できる Windows 環境では live `WidgetNode`
-  property state を確認し、SSH dev box で観測した `0x80070005` は
-  runtime compositor unavailable として記録して通過する。
+  property state を確認する。SSH dev box で観測した `0x80070005` は
+  runtime compositor unavailable として記録して通過する一方、Local physical
+  machine では skip されずに `"State: Ready"` の property state まで到達した。
