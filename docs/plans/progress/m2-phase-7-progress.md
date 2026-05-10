@@ -35,7 +35,7 @@ Current status:
 1. **DD-M2-P6-010 - dirty_effects topological sort fidelity**
    - [x] Re-run pre-doc with full Phase 6 implementation evidence.
    - [x] Flip agreement to Accepted.
-   - Implementation notes: [docs/notes/m2-phase-7-dd-010-implementation-notes.md](../../notes/m2-phase-7-dd-010-implementation-notes.md).
+   - Implementation notes: [docs/notes/m2-phase-7/m2-phase-7-dd-010-implementation-notes.md](../../notes/m2-phase-7/m2-phase-7-dd-010-implementation-notes.md).
    - [x] Replace EffectId-numeric-order approximation with true graph walk.
    - [x] Add pure-logic unit tests on synthetic dependency graphs.
 

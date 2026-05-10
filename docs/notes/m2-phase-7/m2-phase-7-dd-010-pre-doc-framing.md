@@ -13,7 +13,7 @@ Per the project's doc-driven workflow, framing is aligned in chat first
 and recorded here as the input artefact for ADR drafting. Phase 7's
 three DDs (010 / 012 / 011) are processed as **independent** pre-doc
 cycles; this note covers DD-010 only. The Phase 6 framing precedent is
-[m2-phase-6-pre-doc-framing.md](./m2-phase-6-pre-doc-framing.md).
+[m2-phase-6-pre-doc-framing.md](../m2-phase-6/m2-phase-6-pre-doc-framing.md).
 
 ---
 

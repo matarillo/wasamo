@@ -80,10 +80,10 @@ to `Status: Accepted`.
 
 The owner-aligned framing of this ADR's slate, scope, and
 upstream-document update bundling is recorded in
-[docs/notes/m2-phase-6-pre-doc-framing.md](../notes/m2-phase-6-pre-doc-framing.md).
+[docs/notes/m2-phase-6/m2-phase-6-pre-doc-framing.md](../notes/m2-phase-6/m2-phase-6-pre-doc-framing.md).
 The drain DD's mature draft analysis is folded into DD-M2-P6-001
 below, replacing
-[docs/notes/dd-m2-p6-drain-transaction.md](../notes/dd-m2-p6-drain-transaction.md);
+[docs/notes/m2-phase-6/dd-m2-p6-drain-transaction.md](../notes/m2-phase-6/dd-m2-p6-drain-transaction.md);
 that note is archived together with the ADR's `Accepted` flip.
 
 ---
@@ -801,7 +801,7 @@ attach to.
 | `VISION.md §4 Principle 2` | **Mandatory** supplement (§11.1 below) — observer = post-commit pure effect; mutation channel is two-route only. |
 | `architecture.md §6` (or its M2-revised section) | drain spec rewritten to the three-phase + terminal form above; mutation boundary documented (DD-M2-P3-002 side obligation discharged here). |
 | `m2-phase-5-reactive-engine.md` (DD-M2-P5-004) | Status flipped to "Superseded in part by DD-M2-P6-001 (drain stage framing)"; deferred-dispatch trigger contract preserved. |
-| `docs/notes/dd-m2-p6-drain-transaction.md` | Archived/removed; content folded into this DD. |
+| `docs/notes/m2-phase-6/dd-m2-p6-drain-transaction.md` | Archived/removed; content folded into this DD. |
 | `docs/notes/reactive-drain-cascade-policy.md` | Closed; question resolved by this DD. |
 
 ---
