@@ -12,7 +12,7 @@
 
 ### 1.1 プロジェクトと runtime モデル
 
-Wasamo は Windows 専用の宣言的 UI フレームワーク。`.ui` という外部 DSL で UI を記述し、C ABI を介して任意言語ホスト (C / Rust / Zig 等) から runtime を呼び出す。runtime 本体は単一 DLL (`wasamo.dll`)、レンダリングは Windows.UI.Composition (Visual Layer)。現在は M2 (Foundation) マイルストーン Phase 5 (reactive engine) を実装し終えた段階。
+Wasamo は Windows 専用の宣言的 UI フレームワーク。`.ui` という外部 DSL で UI を記述し、C ABI を介して任意言語ホスト (C / Rust / Zig 等) から runtime を呼び出す。runtime 本体は単一 DLL (`wasamo.dll`)、レンダリングは Windows.UI.Composition (Visual Layer)。この draft note は 2026-05-06 時点、M2 (Foundation) マイルストーン Phase 5 (reactive engine) 実装直後の文脈で書かれた履歴である。M2 は 2026-05-11 に完了済み。
 
 ### 1.2 UI スレッドモデルと queued emission
 

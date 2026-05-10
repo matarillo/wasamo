@@ -1745,7 +1745,7 @@ the M3-additive option. The named successor work for M3 is:
 - DD-M2-P6-008's idiomatic per-language helpers (paired with
   M3 wrapper-crate API design).
 - DD-M2-P6-009's validation-path reuse for hot reload.
-- DD-M2-P6-010, 011, 012 — successor work scoped to M2-Phase 7 and beyond; see [m2-phase-7-reactive-foundation.md](./m2-phase-7-reactive-foundation.md) for the per-DD forward-compat treatment.
+- DD-M2-P6-010, 011, 012 — successor work completed in M2-Phase 7; see [m2-phase-7-reactive-foundation.md](./m2-phase-7-reactive-foundation.md) for the accepted decisions and per-DD forward-compat treatment.
 
 **Pre-doc validation spike.** Not required for this ADR. The
 Phase 2 spike already round-trips the IR through

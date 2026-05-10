@@ -1,7 +1,7 @@
 # M2-Phase 7 — Reactive Foundation Hardening & Contract Finalization: Architecture Decisions
 
 **Phase:** M2-Phase 7 (Reactive Foundation Hardening & Contract Finalization)
-**Date:** 2026-05-08 (ADR opened; DDs remain Proposed pending per-DD pre-doc cycles); 2026-05-09 (DD-M2-P6-010 Accepted; DD-M2-P6-010 minor implementation clarification recorded); 2026-05-10 (DD-M2-P6-012 Accepted; DD-M2-P6-011 Accepted)
+**Date:** 2026-05-08 (ADR opened; DDs remain Proposed pending per-DD pre-doc cycles); 2026-05-09 (DD-M2-P6-010 Accepted; DD-M2-P6-010 minor implementation clarification recorded); 2026-05-10 (DD-M2-P6-012 Accepted; DD-M2-P6-011 Accepted); 2026-05-11 (M2 completed)
 **Status:** Accepted (DD-M2-P6-010 / 011 / 012)
 
 ## Context
@@ -650,7 +650,7 @@ provide sufficient structural confidence.
 
 ---
 
-## Summary of proposed decisions
+## Summary of accepted decisions
 
 | ID | Topic | Recommendation | Impl risk | Forward-compat exposure |
 |---|---|---|---|---|
@@ -658,15 +658,14 @@ provide sufficient structural confidence.
 | DD-M2-P6-011 *(Accepted 2026-05-10)* | String-typed property binding | **Option B** — `StrPropRead` HandlerExpr variant. A6 is discharged demonstratively: M2 proves `.ui` String binding through runtime widget property state while preserving existing integer `PropRead` behavior. Option C `TypedValue` unification is deferred to a post-M2 open question. | Low (Option B) | Low for M2; later typed-expression pressure tracked in typed-value-evaluator.md |
 | DD-M2-P6-012 *(Accepted 2026-05-10)* | Re-entrancy and safety-guard placement principle | **Option C** — role-specified defense in depth. ABI boundary owns caller-facing diagnostics; internal runtime boundary owns invariant enforcement for ABI-bypassing entries; cleanup exceptions are explicit. Option D typed tokens deferred as a M3+ revisit trigger. | Low-medium (focused implementation alignment and tests) | Low-medium; M3 timer / async-I/O / windowproc surfaces inherit the rule |
 
-**Aggregate impl-risk picture.** The three DDs are scoped narrowly:
-010 changes `drain_dirty_effects()` only; 011 adds an additive
-`HandlerExpr` variant plus String read methods while preserving the
-existing integer path; 012 settles a *principle* whose enforcement may or
-may not require code change beyond the local Phase 5 retrospective fix
-(already landed in Phase 6). With 011 and 012 accepted, the Phase 7
-closing risk shifts from principle selection to focused implementation
-alignment and tests; the broader typed-value rewrite is explicitly
-outside M2 unless later DSL/tooling evidence reopens it.
+**Aggregate shipped picture.** The three DDs stayed narrowly scoped:
+010 replaced the production dirty-Effect ordering path with a true graph
+walk; 011 added an additive `HandlerExpr` variant plus String read methods
+while preserving the existing integer path; 012 settled the guard-placement
+principle and aligned the visible M2 gaps with focused tests. With these
+implemented, M2's A5/A6 acceptance criteria are discharged. The broader
+typed-value rewrite remains outside M2 unless later DSL/tooling evidence
+reopens it.
 
 **Aggregate forward-compat exposure.** All three DDs have explicit
 successor work or revisit triggers — 010's M3 residuals after the

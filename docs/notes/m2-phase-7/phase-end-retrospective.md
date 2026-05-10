@@ -24,8 +24,9 @@ phase-end checklist に沿って、A5 / A6 の達成、上位文書との整合�
 
 ## Current Judgment
 
-2026-05-11 時点の判定は、**M2-Phase 7 の実装・検証 criteria は達成済み、
-ただし main merge gate としては文書 closing items の処理が残っている**。
+2026-05-11 の retrospective 実施時点の判定は、**M2-Phase 7 の実装・検証
+criteria は達成済み、ただし main merge gate としては文書 closing items の処理が
+残っている**、だった。
 
 具体的には、A5 / A6 と local clean rebuild、GitHub Actions CI は green である。
 一方で、phase progress の Closing Items にはまだ次の未完了項目が残っている。
@@ -35,10 +36,16 @@ phase-end checklist に沿って、A5 / A6 の達成、上位文書との整合�
 - `docs/plans/m2-plan.md` status changed to `completed`
 - phase progress file の蒸留・削除または archive
 
-したがって、この retrospective の結論は「Phase 7 の technical acceptance は
-閉じられるが、main への no-ff merge 承認前に上位文書の closing bundle を
-適用する必要がある」である。phase-end はファストトラック対象外なので、
+したがって、この retrospective の実施時点の結論は「Phase 7 の technical
+acceptance は閉じられるが、main への no-ff merge 承認前に上位文書の closing
+bundle を適用する必要がある」である。phase-end はファストトラック対象外なので、
 この記録をもって自動 merge せず、owner の明示承認を待つ。
+
+Post-retrospective update: closing bundle は 2026-05-11 に
+`709294a docs(m2): close phase 7 and mark M2 complete` で適用済み。
+`CHANGELOG.md`、`ROADMAP.md`、`docs/plans/m2-plan.md`、`README.md`、
+`docs/architecture.md` は M2 complete / shipped 状態に更新され、
+`docs/plans/progress/m2-phase-7-progress.md` は retired として削除済みである。
 
 ## Main Learning
 
@@ -173,15 +180,17 @@ phase-level 判定に蒸留されている。
 
 ## Phase-End Gate
 
-**Merge readiness:** hold pending document closing bundle and owner approval.
+**Merge readiness:** ready for owner no-ff merge approval; push remains a
+separate owner-approved gate.
 
 phase-end retrospective としては、以下を owner に報告する。
 
 - A5 / A6 は達成済み。
 - local clean rebuild と GitHub Actions CI は green。
 - new CI YAML work は不要。
-- main merge 前に `CHANGELOG.md`、`ROADMAP.md`、`docs/plans/m2-plan.md`、
-  `docs/plans/progress/m2-phase-7-progress.md` の closing bundle が必要。
+- main merge 前に必要だった `CHANGELOG.md`、`ROADMAP.md`、
+  `docs/plans/m2-plan.md`、`docs/plans/progress/m2-phase-7-progress.md` の
+  closing bundle は 2026-05-11 に適用済み。
 - no-ff merge と push は別 gate であり、どちらも owner の明示承認が必要。
 
 ## Commands Run

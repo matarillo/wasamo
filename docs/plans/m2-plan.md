@@ -261,14 +261,14 @@ and [docs/decisions/vision-post-m2-roadmap.md](../decisions/vision-post-m2-roadm
     — Option C (role-specified defense in depth). The principle is
     recorded in [architecture.md](../architecture.md#684-runtime-safety-guard-placement)
     as a global runtime invariant. A5 now has both DDs accepted at
-    design level; remaining A5 work is DD-012 implementation alignment
-    and focused guard-placement tests.
+    design level; at this point the remaining A5 work was DD-012
+    implementation alignment and focused guard-placement tests.
   - DD-M2-P6-011 (`String`-typed property binding)
     Accepted in [m2-phase-7-reactive-foundation.md](../decisions/m2-phase-7-reactive-foundation.md#dd-m2-p6-011--string-typed-property-binding)
     — Option B (`StrPropRead`). A6 is accepted at design level;
-    remaining A6 work is implementation: `.ui` String binding must
-    propagate through runtime widget property state while preserving
-    existing integer binding behavior.
+    at this point the remaining A6 work was implementation: `.ui`
+    String binding must propagate through runtime widget property state
+    while preserving existing integer binding behavior.
 
 - **2026-05-11** — Phase 7 closed; M2 completed.
   - DD-M2-P6-011 implementation landed with `HandlerExpr::StrPropRead`,
