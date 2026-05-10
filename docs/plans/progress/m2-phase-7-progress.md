@@ -27,7 +27,7 @@ houses DD-M2-P6-010 / 011 / 012.
 Current status:
 
 - DD-M2-P6-010: Accepted and implemented on 2026-05-09.
-- DD-M2-P6-011: Accepted on 2026-05-10; implementation pending.
+- DD-M2-P6-011: Accepted and implemented on 2026-05-10.
 - DD-M2-P6-012: Accepted and implemented on 2026-05-10.
 
 ## Order of Work
@@ -50,20 +50,21 @@ Current status:
    - [x] Re-run pre-doc.
    - Pre-doc framing: [docs/notes/m2-phase-7/dd-011-pre-doc-framing.md](../../notes/m2-phase-7/dd-011-pre-doc-framing.md).
    - [x] Flip agreement to Accepted.
-   - [ ] Add the String read surface to `EvalContext` and route
+   - Implementation notes: [docs/notes/m2-phase-7/dd-011-implementation-notes.md](../../notes/m2-phase-7/dd-011-implementation-notes.md).
+   - [x] Add the String read surface to `EvalContext` and route
      `BindingEvalContext` tracked String reads through
      `SignalRegistry.strings`.
-   - [ ] Add the accepted String property-read representation
+   - [x] Add the accepted String property-read representation
      (`HandlerExpr::StrPropRead`) and dispatch it to the tracked String
      read path.
-   - [ ] Wire a real `.ui` / emitted-IR path into the String read form based
+   - [x] Wire a real `.ui` / emitted-IR path into the String read form based
      on declared state type; hand-written `StrPropRead` tests alone do not
      discharge A6.
-   - [ ] Demonstrate `.ui` String binding through runtime widget property
+   - [x] Demonstrate `.ui` String binding through runtime widget property
      state without adding a new Visual Layer CI fixture.
-   - [ ] Regression-protect existing integer `PropRead`, integer
+   - [x] Regression-protect existing integer `PropRead`, integer
      interpolation, and counter-style handler mutation behavior.
-   - [ ] Record any implementation deviations in a DD-011 retrospective and
+   - [x] Record any implementation deviations in a DD-011 retrospective and
      update the appropriate higher-level document if the accepted design
      assumptions change.
 
