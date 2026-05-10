@@ -1,6 +1,6 @@
 # M2-Phase 7 / DD-M2-P6-011 pre-doc framing
 
-**Status:** framing draft started; F1/F2 aligned with owner (2026-05-10)
+**Status:** framing draft started; F1/F2/F3 aligned with owner (2026-05-10)
 **Date:** 2026-05-10
 **Targets DD:** DD-M2-P6-011 - String-typed property binding
 **Targets phase:** M2-Phase 7 (Reactive Foundation Hardening & Contract Finalization)
@@ -142,9 +142,22 @@ blast radius across handler evaluation, binding evaluation, test stubs, and
 IR tooling. If Option B or a narrow Option A can satisfy F1 and F2, Option C
 should be treated as M3+ revisit material rather than required M2 work.
 
+Owner alignment (2026-05-10): F3 is accepted. M2 should not adopt
+`TypedValue` unification for DD-011. The preferred M2 recommendation is
+Option B (`HandlerExpr::StrPropRead`) because it is additive, preserves the
+existing integer `PropRead` path, and is sufficient to satisfy F1 / F2.
+
 Consequence: the ADR should compare Option C honestly as the future-friendly
 shape, but should not recommend it solely because its name sounds more
-"type-agnostic."
+"type-agnostic." The ADR should instead recommend Option B for M2, while
+recording `TypedValue` as the post-M2 open question tracked in
+[docs/notes/typed-value-evaluator.md](../typed-value-evaluator.md).
+
+F2 still constrains Option B: a hand-written `StrPropRead` unit test is not
+enough. The implementation must include a `.ui` / emitted-IR path that reaches
+`StrPropRead` (or the accepted String-read dispatch shape) based on the
+declared state type, then proves the binding reaches runtime widget property
+state.
 
 ### F4 - String binding should preserve the existing integer binding behavior
 
@@ -163,9 +176,11 @@ the current i32 binding path alongside the new String path.
 - **Option A - Type-tag `PropRead`:** viable if the loader / lowering layer can
   reliably attach type information at every property-read expression site.
   It keeps one read variant but forces construction-site churn.
-- **Option B - `StrPropRead`:** likely still sufficient for M2 if F1 is
-  accepted. It is additive, keeps existing `PropRead` semantics stable, and
-  gives the evaluator an explicit String read path.
+- **Option B - `StrPropRead`:** recommended for M2. It is additive, keeps
+  existing `PropRead` semantics stable, and gives the evaluator an explicit
+  String read path. The accepted implementation must still provide a real
+  `.ui` / emitted-IR path into this variant, not only hand-written runtime
+  tests.
 - **Option C - `TypedValue`:** strongest long-term abstraction, but broader
   than M2 needs if "type-agnostic" is read demonstratively. Keep as a
   documented M3+ revisit trigger unless implementation evidence shows Option
