@@ -67,6 +67,10 @@ fn runtime_compositor_unavailable(msg: Option<&str>) -> bool {
     msg.is_some_and(|m| m.contains("0x80070005"))
 }
 
+fn github_actions() -> bool {
+    std::env::var_os("GITHUB_ACTIONS").is_some()
+}
+
 #[test]
 fn string_binding_reaches_live_widgetnode_property_state() {
     let _ = unsafe {
@@ -79,6 +83,11 @@ fn string_binding_reaches_live_widgetnode_property_state() {
     if status == ffi::WASAMO_ERR_RUNTIME {
         let msg = last_error();
         if runtime_compositor_unavailable(msg.as_deref()) {
+            assert!(
+                !github_actions(),
+                "live WidgetNode headless test cannot skip on GitHub Actions: \
+                 runtime compositor unavailable ({msg:?})"
+            );
             eprintln!(
                 "skipping live WidgetNode headless test: runtime compositor unavailable ({msg:?})"
             );
