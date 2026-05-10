@@ -27,7 +27,7 @@ houses DD-M2-P6-010 / 011 / 012.
 Current status:
 
 - DD-M2-P6-010: Accepted and implemented on 2026-05-09.
-- DD-M2-P6-011: Proposed.
+- DD-M2-P6-011: Accepted on 2026-05-10; implementation pending.
 - DD-M2-P6-012: Accepted and implemented on 2026-05-10.
 
 ## Order of Work
@@ -47,12 +47,14 @@ Current status:
    - [x] Reflect the principle in implementation.
 
 3. **DD-M2-P6-011 - String-typed property binding**
-   - [ ] Re-run pre-doc.
-   - Pre-doc framing draft: [docs/notes/m2-phase-7/dd-011-pre-doc-framing.md](../../notes/m2-phase-7/dd-011-pre-doc-framing.md).
-   - [ ] Flip agreement to Accepted.
+   - [x] Re-run pre-doc.
+   - Pre-doc framing: [docs/notes/m2-phase-7/dd-011-pre-doc-framing.md](../../notes/m2-phase-7/dd-011-pre-doc-framing.md).
+   - [x] Flip agreement to Accepted.
    - [ ] Implement until a `.ui` String property bound to `Signal<String>`
-     propagates through `BindingEvalContext` / `HandlerExpr::PropRead` to
-     the visible widget.
+     propagates through `BindingEvalContext` / `HandlerExpr::StrPropRead`
+     to runtime widget property state, with existing integer binding
+     behavior regression-protected. GUI visibility remains covered by the
+     existing phase-close manual regression.
 
 ## Acceptance Discharged Here
 
@@ -81,7 +83,8 @@ Current status:
 
 ## Owner-Facing Notes
 
-DD-M2-P6-010 and DD-M2-P6-012 are Accepted and implemented. DD-M2-P6-012
-implementation alignment added focused guard-placement tests for both the
-ABI diagnostic boundary and the internal `drain_if_outermost` invariant
-boundary. Next step is DD-M2-P6-011 pre-doc / acceptance work for A6.
+DD-M2-P6-010 and DD-M2-P6-012 are Accepted and implemented. DD-M2-P6-011
+is Accepted with Option B (`StrPropRead`) after pre-doc framing; implementation
+is the remaining A6 work. DD-M2-P6-012 implementation alignment added focused
+guard-placement tests for both the ABI diagnostic boundary and the internal
+`drain_if_outermost` invariant boundary.
