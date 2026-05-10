@@ -29,6 +29,10 @@ Unit tests are only appropriate for logic that has **no Win32/WinRT FFI dependen
 
 - Pure Rust logic (parsers, layout algorithms, coordinate math): write unit tests.
 - Win32/WinRT code (window creation, Compositor, Visual Layer, DirectWrite): do **not** mock the OS API surface. Correctness is verified by the CI Windows runner building and running the code.
+- Mock-free Windows-only integration tests that use the real OS runtime
+  surface are allowed. They are not unit tests. When such a test is used
+  as CI-gated evidence, it should fail rather than silently skip on GitHub
+  Actions if the required runtime capability is unavailable.
 
 Adding unit tests to a phase checklist is only warranted when that phase introduces testable pure logic. Do not add unit test checklist items to phases whose work is entirely Win32/WinRT (e.g. Phase 2, Phase 5).
 

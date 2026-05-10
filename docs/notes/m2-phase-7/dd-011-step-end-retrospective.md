@@ -41,16 +41,18 @@ DD-M2-P6-011 (String-typed property binding) の step-end retrospective。
 この形により、既存の counter-style handler mutation、integer `PropRead`、
 integer interpolation を大きく触らずに String binding を追加できた。
 
-同時に、検証粒度については注意点が残った。今回の自動テストは
+同時に、検証粒度については注意点が残った。当初の自動テストは
 `register_binding_with_writer` までの production binding core を通して
 `Signal<String>` の初回値・更新値が writer に渡ることを確認している。一方で、
 live `WidgetNode` を構築して `widget_write_property` から実 property state を読む
-テストは追加していない。DD の「runtime widget property state」という表現に対し、
-この writer-surface proof を十分な step evidence とみなすかは owner-facing な確認点である。
-後続の実験ブランチ `exp/m2-p7-live-widgetnode-headless-test` では、live `WidgetNode`
-まで到達する Windows-only headless integration test を追加し、Local physical machine
-と GitHub Actions `windows-latest` では skip なしで `"State: Ready"` の property
-state まで確認できた。
+テストはまだ追加していなかった。DD の「runtime widget property state」という表現に対し、
+この writer-surface proof を十分な step evidence とみなすかは owner-facing な確認点だった。
+その後、`wasamo-runtime/tests/live_widgetnode_headless.rs` を採用した。これは live
+`WidgetNode` まで到達する Windows-only headless integration test であり、Local physical
+machine と GitHub Actions `windows-latest` では `"State: Ready"` の property state
+まで確認できた。GitHub Actions では `GITHUB_ACTIONS` guard により
+runtime-compositor-unavailable skip path が failure になるため、CI green は live proof が
+実行された evidence として扱える。
 
 `docs/notes/verification-environments.md` に照らすと、ここで混同してはいけない
 環境区分がある。GitHub Actions は Windows runner なので build / link / headless
@@ -68,8 +70,9 @@ headless integration test」と「既存の GUI checkpoint」のどちらに属�
      rewrite を避けつつ A6 の String read path を実証できた。
    - `.ui` 由来の型情報は runtime ではなく wasamoc lowering 側で反映するのが
      もっとも局所的だった。
-   - 検証は cross-crate round-trip と runtime binding core の pure-logic tests で
-     かなり覆えたが、live widget property state までは自動化していない。
+   - 検証は cross-crate round-trip と runtime binding core の pure-logic tests に加え、
+     Windows-only headless runtime integration test で live widget property state まで
+     自動化した。
 
 2. **仕様文書 (`abi_spec.md` / `architecture.md` / `dsl_spec.md`) の変更:** **なし**
    - 変更した文書は Phase 7 progress と DD-011 implementation notes のみ。
@@ -88,10 +91,10 @@ headless integration test」と「既存の GUI checkpoint」のどちらに属�
      warning が出た。
    - いずれも今回の DD-011 差分由来ではない。
 
-4. **PO に相談すべき設計判断・トレードオフ:** **あり**
+4. **PO に相談すべき設計判断・トレードオフ:** **解消済み**
    - DD-011 の implementation requirement 4 は「runtime widget property state」
      への到達を求めている。
-   - 今回の自動テストは `.ui -> emitted IR -> runtime parser` と
+   - 当初の自動テストは `.ui -> emitted IR -> runtime parser` と
      `Signal<String> -> BindingEvalContext -> evaluate_binding -> binding writer`
      を確認しているが、live `WidgetNode` property state そのものは確認していない。
    - `widget_write_property` は production `register_binding` で使われる既存 writer
@@ -122,13 +125,20 @@ headless integration test」と「既存の GUI checkpoint」のどちらに属�
    - その後、実験ブランチを origin に push し、GitHub Actions manual CI run
      <https://github.com/matarillo/wasamo/actions/runs/25630928372/job/75234360458>
      で `cargo test --workspace` 内の `tests\live_widgetnode_headless.rs` を確認した。
-     `string_binding_reaches_live_widgetnode_property_state` は `ok` / `1 passed` で、
-     runtime-compositor-unavailable の skip message は出なかった。したがって
-     GitHub Actions `windows-latest` も、この headless proof に必要な runtime
-     compositor capability を満たす環境として分類する。
-   - Owner に確認したい点: この proof を DD-011 / A6 の step evidence として十分と
-     みなすか、または live `WidgetNode` まで到達する headless Windows test や
-     GUI checkpoint を gate にするか。
+     `string_binding_reaches_live_widgetnode_property_state` は `ok` / `1 passed` だった。
+     通常の CI log は test output を capture するため、この時点では
+     runtime-compositor-unavailable skip path が通らなかったことまでは log 単体から
+     断定しない。
+   - `GITHUB_ACTIONS` guard 追加後の manual CI run
+     <https://github.com/matarillo/wasamo/actions/runs/25631782149/job/75236689367>
+     でも `cargo test --workspace` 内の同 test は `ok` / `1 passed` だった。
+     guard 後は runtime-compositor-unavailable path が GitHub Actions 上で failure になるため、
+     GitHub Actions `windows-latest` はこの headless proof に必要な runtime compositor
+     capability を満たす環境として分類できる。
+   - 採用後の扱い: live `WidgetNode` まで到達する headless Windows test を
+     `wasamo-runtime/tests/live_widgetnode_headless.rs` として追加したため、DD-011 / A6 の
+     automatic evidence は writer surface だけでなく runtime widget property state まで
+     到達する。
 
 ### step-end 固有
 
@@ -154,8 +164,8 @@ headless integration test」と「既存の GUI checkpoint」のどちらに属�
 9. **後続 step に持ち越す仮実装・近似・新規 `dead_code` 警告:** **なし**
    - `StrPropRead` は runtime parser / evaluator / wasamoc lowering / emitter に実装済み。
    - 新規 `dead_code` warning は観測していない。
-   - ただし item 4 の通り、live widget property state までを追加 gate にするかは
-     owner 確認事項。
+   - live widget property state までの追加 gate は
+     `wasamo-runtime/tests/live_widgetnode_headless.rs` として採用済み。
 
 10. **タスクリストの後続 step 見直し:** **必要**
     - `docs/plans/progress/m2-phase-7-progress.md` は DD-011 を implemented として
@@ -167,20 +177,22 @@ headless integration test」と「既存の GUI checkpoint」のどちらに属�
 
 ## Fast-Track Judgment
 
-Fast-track criteria は **満たしていない**。
+Fast-track criteria は step-end 記録時点では **満たしていない**。
 
 - item 2: なし
 - item 3: green
-- item 4: **あり**
+- item 4: 記録時点では **あり**。2026-05-11 に
+  `wasamo-runtime/tests/live_widgetnode_headless.rs` を採用して解消。
 - item 5: なし
 - item 6: なし
 - item 7: なし
 - item 8: なし
 - item 9: なし
 
-blocking item は item 4。DD-011 / A6 の自動検証を
+blocking item は item 4 だった。DD-011 / A6 の自動検証を
 `register_binding_with_writer` までで十分とみなすか、live widget property state
-への追加 evidence を要求するかについて owner 判断が必要。
+への追加 evidence を要求するかについて owner 判断が必要だったが、2026-05-11 に
+後者を採用した。
 
 ## Verification Notes
 
@@ -202,7 +214,7 @@ DD-011 実装で追加した主なテスト:
   - `string_state_binding_emits_str_prop_read`
 - cross-crate `.ui` / emitted-IR / runtime parser:
   - `string_state_binding_emits_and_parses_str_prop_read`
-- experimental Windows-only live `WidgetNode` headless proof:
+- adopted Windows-only live `WidgetNode` headless proof:
   - `string_binding_reaches_live_widgetnode_property_state`
   - SSH dev box では `wasamo_init` が `0x80070005 (Access denied)` を返し、
     test は runtime compositor unavailable として通過した。
@@ -211,7 +223,13 @@ DD-011 実装で追加した主なテスト:
     property state を確認した。
   - GitHub Actions `windows-latest` の manual CI run
     <https://github.com/matarillo/wasamo/actions/runs/25630928372/job/75234360458>
-    でも skip message なしで `ok` / `1 passed` だった。
+    でも `cargo test --workspace` 内で `ok` / `1 passed` だった。この通常 CI log
+    だけでは captured skip output の有無までは evidence にしない。
+  - `GITHUB_ACTIONS` guard 追加後の manual CI run
+    <https://github.com/matarillo/wasamo/actions/runs/25631782149/job/75236689367>
+    でも `ok` / `1 passed` だった。guard 後は runtime-compositor-unavailable path が
+    GitHub Actions 上で failure になるため、この CI green は live proof が実行された
+    evidence として扱える。
 
 Commands run for this retrospective:
 
@@ -223,32 +241,22 @@ cargo test --workspace
 cargo test -p wasamo-runtime --test live_widgetnode_headless -- --nocapture
 ```
 
-すべて成功した。`live_widgetnode_headless` command は
-`exp/m2-p7-live-widgetnode-headless-test` 上で実行した。まず SSH dev box を
+すべて成功した。`live_widgetnode_headless` command は当初
+`exp/m2-p7-live-widgetnode-headless-test` 上で実行し、その後
+`wasamo-runtime/tests/live_widgetnode_headless.rs` として採用した。まず SSH dev box を
 runtime-compositor-unavailable と分類し、その後 Local physical machine では
 その skip path を通らずに成功した。さらに GitHub Actions manual CI run でも
-同じ test が skip message なしで `ok` / `1 passed` となった。
+同じ test が `ok` / `1 passed` となった。`GITHUB_ACTIONS` guard 追加後は、CI 上で
+runtime-compositor-unavailable path が通ると failure になる。
 
 ## Follow-Up
 
-Owner に確認する項目:
+Owner 確認事項だった A6 evidence の扱いは、live `WidgetNode` を作る
+Windows-only headless integration test を採用する形で解消した。
 
-1. DD-011 の A6 evidence として、現在の
-   `.ui -> emitted IR -> runtime parser` + `register_binding_with_writer`
-   proof を十分とみなすか。
-2. 十分でない場合、追加 evidence の候補:
-   - live `WidgetNode` を作る Windows-only headless integration test を追加する。
-     ただし、`Compositor` / `TextRenderer` / DirectWrite が CI runner 上で
-     visible desktop なしに deterministic に初期化できることが条件。
-     SSH dev box では `0x80070005` により runtime compositor unavailable だったが、
-     Local physical machine では同 test が skip されず green になったため、
-     少なくとも local physical verification environment では condition を満たす。
-     GitHub Actions `windows-latest` の manual CI run でも skip なし green だったため、
-     CI runner についても condition を満たすものとして扱える。
-   - 上記が visible desktop session を要求する、または CI 上で不安定な場合は、
-     既存 GUI checkpoint に String binding case を含める。
-   - production `widget_write_property` の手前までを M2 自動テストの上限として
-     ADR / progress に明記する。
-
-この判断が済むまでは、DD-011 implementation は code/test としては green だが、
-step-end merge gate は fast-track ではなく owner approval を待つ扱いにする。
+- `wasamo-runtime/tests/live_widgetnode_headless.rs` は visible desktop session を要求しない。
+- SSH dev box では `0x80070005` により runtime compositor unavailable として skip する。
+- GitHub Actions `windows-latest` では、`GITHUB_ACTIONS` guard により同じ skip path が
+  failure になるため、CI green は live proof 実行の evidence になる。
+- production `widget_write_property` の手前までを M2 自動テストの上限とする案は採らず、
+  `wasamo_init -> build_widget_tree -> wasamo_get_property` までを自動 test gate に含める。
