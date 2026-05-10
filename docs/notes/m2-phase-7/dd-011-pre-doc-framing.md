@@ -1,6 +1,6 @@
 # M2-Phase 7 / DD-M2-P6-011 pre-doc framing
 
-**Status:** framing draft started; F1 aligned with owner (2026-05-10)
+**Status:** framing draft started; F1/F2 aligned with owner (2026-05-10)
 **Date:** 2026-05-10
 **Targets DD:** DD-M2-P6-011 - String-typed property binding
 **Targets phase:** M2-Phase 7 (Reactive Foundation Hardening & Contract Finalization)
@@ -118,8 +118,22 @@ DD-M2-P6-007 already proved that `SignalRegistry.strings` can store and read
 `Signal<String>` must flow through lowering / IR loading / `BindingEvalContext`
 / binding evaluation to the visible widget.
 
-Consequence: an implementation that only adds `get_string` unit tests without
-an end-to-end binding demonstration does not discharge A6.
+Owner alignment (2026-05-10): yes, pure evaluator tests alone are not enough.
+However, the automated test boundary must respect the project testing policy
+in `CLAUDE.md`: unit / integration tests should cover logic that has no
+Win32 / WinRT FFI dependency, and must not mock HWND / Compositor / Visual
+Layer / DirectWrite.
+
+Consequence: DD-011 should include an automated test that starts from a `.ui`
+fixture or its emitted IR and proves the String binding reaches the runtime
+widget property state through the real lowering / loading / binding-evaluator
+path. That test should not require a visible window, pixel inspection, or a
+mock Visual Layer. Actual on-screen visibility remains part of the existing
+Phase 6 GUI counter regression / phase-close manual verification, not a new
+CI fixture.
+
+An implementation that only adds `get_string` unit tests without this
+`.ui -> runtime widget property state` demonstration does not discharge A6.
 
 ### F3 - Avoid broad evaluator churn unless it buys M2-visible correctness
 
