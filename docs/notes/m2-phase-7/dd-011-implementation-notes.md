@@ -55,6 +55,34 @@ property binding を `.ui` から runtime binding evaluator まで通すこと�
   `register_binding_with_writer` の pure-logic test で固定した。これは production
   `register_binding` と同じ evaluator / Effect / tracked Signal path を使うが、Win32 /
   Composition の live widget construction は既存 phase-close GUI checkpoint に委ねる。
+- 2026-05-10: 実験ブランチ `exp/m2-p7-live-widgetnode-headless-test` で
+  Windows-only headless integration test を追加し、`.ui -> wasamoc lowering ->
+  runtime IR parser -> build_widget_tree -> live WidgetNode -> wasamo_get_property`
+  まで到達する proof を試した。テストは `wasamo-runtime/tests` に置くのが適切:
+  live `WidgetNode` construction は runtime crate の Compositor / TextRenderer /
+  property ABI surface を横断するため、compiler crate や binding crate ではなく
+  runtime integration test として扱う。
+- 2026-05-10: SSH dev box 相当の環境では `wasamo_init` が
+  `0x80070005 (Access denied)` を返した。`RoInitialize` を明示しても結果は
+  変わらず、`CreateDispatcherQueueController` / Compositor 側の OS/session
+  policy による拒否とみなした。したがって SSH dev box では live `WidgetNode`
+  headless proof は "runtime compositor unavailable" として扱い、CI runner や
+  interactive desktop session とは別の verification environment として記録する。
+- 2026-05-10: 同じ実験ブランチを SSH ではない Local physical machine 上で再実行した。
+  `cargo test -p wasamo-runtime --test live_widgetnode_headless -- --nocapture` は
+  green (`1 passed`) で、skip message は出なかった。これは `wasamo_init` が通り、
+  `.ui -> wasamoc lowering -> runtime IR parser -> build_widget_tree -> live WidgetNode
+  -> wasamo_get_property` の path が実際に `"State: Ready"` まで到達したことを示す。
+  SSH dev box の `runtime compositor unavailable` は test failure ではなく
+  environment capability の違いとして扱う。
+- 2026-05-10: `exp/m2-p7-live-widgetnode-headless-test` を origin に push し、
+  GitHub Actions の manual CI run
+  <https://github.com/matarillo/wasamo/actions/runs/25630928372/job/75234360458>
+  で `cargo test --workspace` 内の `tests\live_widgetnode_headless.rs` を確認した。
+  `string_binding_reaches_live_widgetnode_property_state` は `ok` / `1 passed` で、
+  runtime-compositor-unavailable の skip message は出なかった。したがって
+  GitHub Actions `windows-latest` でも live `WidgetNode` headless proof は実行可能と
+  分類する。
 - 2026-05-10: `cargo check --workspace` は green。既存の `wasamo` crate-type warning は
   観測されたが今回の DD-011 差分由来ではない。
 
@@ -80,3 +108,8 @@ property binding を `.ui` から runtime binding evaluator まで通すこと�
   String binding propagation tests を追加。
 - `wasamo-runtime/src/ir_loader.rs`: `(str-prop-read ...)` parse / validate と parser test を追加。
 - `wasamo-runtime/tests/ir_loader_roundtrip.rs`: `.ui` String binding の emitted-IR round-trip test を追加。
+- `exp/m2-p7-live-widgetnode-headless-test`:
+  `wasamo-runtime/tests/live_widgetnode_headless.rs` で Windows-only headless integration
+  test を試した。SSH dev box では `0x80070005` を runtime compositor unavailable
+  として記録して通過し、Local physical machine と GitHub Actions `windows-latest`
+  では skip されずに `"State: Ready"` の live `WidgetNode` property state まで到達した。

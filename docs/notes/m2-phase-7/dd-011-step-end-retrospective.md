@@ -47,6 +47,10 @@ integer interpolation を大きく触らずに String binding を追加できた
 live `WidgetNode` を構築して `widget_write_property` から実 property state を読む
 テストは追加していない。DD の「runtime widget property state」という表現に対し、
 この writer-surface proof を十分な step evidence とみなすかは owner-facing な確認点である。
+後続の実験ブランチ `exp/m2-p7-live-widgetnode-headless-test` では、live `WidgetNode`
+まで到達する Windows-only headless integration test を追加し、Local physical machine
+と GitHub Actions `windows-latest` では skip なしで `"State: Ready"` の property
+state まで確認できた。
 
 `docs/notes/verification-environments.md` に照らすと、ここで混同してはいけない
 環境区分がある。GitHub Actions は Windows runner なので build / link / headless
@@ -100,6 +104,28 @@ headless integration test」と「既存の GUI checkpoint」のどちらに属�
      判定する必要がある。`WidgetNode::text` / `WidgetNode::button` の construction が
      `Compositor` / `TextRenderer` / DirectWrite state に依存するため、CI で安定に
      作れるかは別途確認が必要。
+   - 追加実験として `exp/m2-p7-live-widgetnode-headless-test` 上で
+     Windows-only headless integration test を作成した。SSH dev box 相当の環境では
+     `wasamo_init` が `0x80070005 (Access denied)` で失敗し、`RoInitialize` の
+     明示追加でも解消しなかったため、この環境では "runtime compositor unavailable"
+     と分類する。
+   - 同じ test を SSH ではない Local physical machine で再実行したところ、
+     `cargo test -p wasamo-runtime --test live_widgetnode_headless -- --nocapture` は
+     green (`1 passed`) で、runtime compositor unavailable の skip message は出なかった。
+     したがってこの環境では `wasamo_init` / `build_widget_tree` / live `WidgetNode`
+     property read が通り、`wasamo_get_property` で `"State: Ready"` まで確認できた。
+   - そのため、SSH dev box は build / link / pure runtime logic の確認には使えるが、
+     live `WidgetNode` construction を含む headless proof には十分ではない可能性がある。
+     一方で Local physical machine は、この Windows-only headless proof に必要な
+     runtime compositor capability を満たすことを確認済みである。CI runner で同じ
+     capability があるかは、必要なら別途再分類する。
+   - その後、実験ブランチを origin に push し、GitHub Actions manual CI run
+     <https://github.com/matarillo/wasamo/actions/runs/25630928372/job/75234360458>
+     で `cargo test --workspace` 内の `tests\live_widgetnode_headless.rs` を確認した。
+     `string_binding_reaches_live_widgetnode_property_state` は `ok` / `1 passed` で、
+     runtime-compositor-unavailable の skip message は出なかった。したがって
+     GitHub Actions `windows-latest` も、この headless proof に必要な runtime
+     compositor capability を満たす環境として分類する。
    - Owner に確認したい点: この proof を DD-011 / A6 の step evidence として十分と
      みなすか、または live `WidgetNode` まで到達する headless Windows test や
      GUI checkpoint を gate にするか。
@@ -176,6 +202,16 @@ DD-011 実装で追加した主なテスト:
   - `string_state_binding_emits_str_prop_read`
 - cross-crate `.ui` / emitted-IR / runtime parser:
   - `string_state_binding_emits_and_parses_str_prop_read`
+- experimental Windows-only live `WidgetNode` headless proof:
+  - `string_binding_reaches_live_widgetnode_property_state`
+  - SSH dev box では `wasamo_init` が `0x80070005 (Access denied)` を返し、
+    test は runtime compositor unavailable として通過した。
+  - Local physical machine では skip されずに `wasamo_init` から
+    `build_widget_tree` / `wasamo_get_property` まで到達し、`"State: Ready"` の
+    property state を確認した。
+  - GitHub Actions `windows-latest` の manual CI run
+    <https://github.com/matarillo/wasamo/actions/runs/25630928372/job/75234360458>
+    でも skip message なしで `ok` / `1 passed` だった。
 
 Commands run for this retrospective:
 
@@ -184,9 +220,14 @@ cargo clean
 cargo build --release --workspace
 cargo build --workspace
 cargo test --workspace
+cargo test -p wasamo-runtime --test live_widgetnode_headless -- --nocapture
 ```
 
-All completed successfully.
+すべて成功した。`live_widgetnode_headless` command は
+`exp/m2-p7-live-widgetnode-headless-test` 上で実行した。まず SSH dev box を
+runtime-compositor-unavailable と分類し、その後 Local physical machine では
+その skip path を通らずに成功した。さらに GitHub Actions manual CI run でも
+同じ test が skip message なしで `ok` / `1 passed` となった。
 
 ## Follow-Up
 
@@ -199,6 +240,11 @@ Owner に確認する項目:
    - live `WidgetNode` を作る Windows-only headless integration test を追加する。
      ただし、`Compositor` / `TextRenderer` / DirectWrite が CI runner 上で
      visible desktop なしに deterministic に初期化できることが条件。
+     SSH dev box では `0x80070005` により runtime compositor unavailable だったが、
+     Local physical machine では同 test が skip されず green になったため、
+     少なくとも local physical verification environment では condition を満たす。
+     GitHub Actions `windows-latest` の manual CI run でも skip なし green だったため、
+     CI runner についても condition を満たすものとして扱える。
    - 上記が visible desktop session を要求する、または CI 上で不安定な場合は、
      既存 GUI checkpoint に String binding case を含める。
    - production `widget_write_property` の手前までを M2 自動テストの上限として
