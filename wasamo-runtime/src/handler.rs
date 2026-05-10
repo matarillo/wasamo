@@ -13,6 +13,11 @@ pub trait EvalContext {
     /// Read an integer property by dot-separated path (untracked).
     fn get_i32(&self, path: &str) -> Result<i32, EvalError>;
 
+    /// Read a string property by dot-separated path (untracked).
+    fn get_string(&self, path: &str) -> Result<String, EvalError> {
+        Err(EvalError::UnknownProperty(path.to_string()))
+    }
+
     /// Write an integer property by dot-separated path.
     fn set_i32(&mut self, path: &str, value: i32) -> Result<(), EvalError>;
 
@@ -22,17 +27,27 @@ pub trait EvalContext {
     fn read_i32_tracked(&self, path: &str) -> Result<i32, EvalError> {
         self.get_i32(path)
     }
+
+    /// Read a string property and report the read to the active reactive
+    /// scope (if any). Default impl is untracked — forwards to `get_string`.
+    fn read_string_tracked(&self, path: &str) -> Result<String, EvalError> {
+        self.get_string(path)
+    }
 }
 
 /// Errors that the evaluator can produce.
 #[derive(Debug, Clone, PartialEq)]
 pub enum EvalError {
     UnknownProperty(String),
-    TypeMismatch { path: String },
+    TypeMismatch {
+        path: String,
+    },
     DivisionByZero,
     /// A write expression (`Assign` / `CompoundAssign`) appeared in a
     /// read-only binding context where only property reads are permitted.
-    WriteInBindingContext { path: String },
+    WriteInBindingContext {
+        path: String,
+    },
 }
 
 impl std::fmt::Display for EvalError {
@@ -58,9 +73,11 @@ pub fn evaluate(expr: &HandlerExpr, ctx: &mut dyn EvalContext) -> Result<i32, Ev
         HandlerExpr::IntLit(v) => Ok(*v),
 
         // String-typed forms are only valid in binding context.
-        HandlerExpr::StrLit(_) | HandlerExpr::Interpolation(_) => {
-            Err(EvalError::TypeMismatch { path: "<string expression in integer context>".into() })
-        }
+        HandlerExpr::StrLit(_)
+        | HandlerExpr::StrPropRead { .. }
+        | HandlerExpr::Interpolation(_) => Err(EvalError::TypeMismatch {
+            path: "<string expression in integer context>".into(),
+        }),
 
         HandlerExpr::PropRead { path } => ctx.get_i32(path),
 
@@ -142,10 +159,16 @@ pub struct WidgetPathSegment {
 
 impl WidgetPathSegment {
     pub fn named(name: impl Into<String>) -> Self {
-        Self { name: name.into(), index: None }
+        Self {
+            name: name.into(),
+            index: None,
+        }
     }
     pub fn indexed(name: impl Into<String>, index: usize) -> Self {
-        Self { name: name.into(), index: Some(index) }
+        Self {
+            name: name.into(),
+            index: Some(index),
+        }
     }
 }
 
@@ -156,18 +179,12 @@ impl WidgetPathSegment {
 /// where `location` is a caller-supplied coarse identifier
 /// (see `format_handler_location` in this module).
 /// Returns `true` if the handler completed without error.
-pub fn invoke_handler(
-    expr: &HandlerExpr,
-    ctx: &mut dyn EvalContext,
-    location: &str,
-) -> bool {
+pub fn invoke_handler(expr: &HandlerExpr, ctx: &mut dyn EvalContext, location: &str) -> bool {
     // RefUnwindSafe is not automatically satisfied for trait objects, so we
     // evaluate inside a wrapper that AssertUnwindSafe asserts the invariant.
     // The safety argument: `ctx` releases any interior borrows before this
     // call (see DD-M2-P3-003 risk note); no RefCell is live across the boundary.
-    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-        evaluate(expr, ctx)
-    }));
+    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| evaluate(expr, ctx)));
     match result {
         Ok(Ok(_)) => true,
         Ok(Err(e)) => {
@@ -212,13 +229,24 @@ pub fn evaluate_binding(
                 match part {
                     InterpolationPart::Literal(s) => out.push_str(s),
                     InterpolationPart::Expr(e) => {
-                        out.push_str(&evaluate_tracked(e, ctx)?.to_string());
+                        out.push_str(&evaluate_binding_part(e, ctx)?);
                     }
                 }
             }
             Ok(out)
         }
+        HandlerExpr::StrPropRead { path } => ctx.read_string_tracked(path),
         // Integer-typed top-level binding (e.g. a bare `root.count` binding).
+        _ => evaluate_tracked(expr, ctx).map(|v| v.to_string()),
+    }
+}
+
+fn evaluate_binding_part(
+    expr: &HandlerExpr,
+    ctx: &mut dyn EvalContext,
+) -> Result<String, EvalError> {
+    match expr {
+        HandlerExpr::StrPropRead { path } => ctx.read_string_tracked(path),
         _ => evaluate_tracked(expr, ctx).map(|v| v.to_string()),
     }
 }
@@ -229,10 +257,7 @@ pub fn evaluate_binding(
 /// - Uses `ctx.read_i32_tracked()` for `PropRead` (enabling dependency tracking).
 /// - Rejects `Assign` and `CompoundAssign` with `WriteInBindingContext`.
 /// - Rejects string-typed forms (`StrLit`, `Interpolation`) with `TypeMismatch`.
-fn evaluate_tracked(
-    expr: &HandlerExpr,
-    ctx: &mut dyn EvalContext,
-) -> Result<i32, EvalError> {
+fn evaluate_tracked(expr: &HandlerExpr, ctx: &mut dyn EvalContext) -> Result<i32, EvalError> {
     match expr {
         HandlerExpr::IntLit(v) => Ok(*v),
 
@@ -250,11 +275,11 @@ fn evaluate_tracked(
             Ok(last)
         }
 
-        HandlerExpr::StrLit(_) | HandlerExpr::Interpolation(_) => {
-            Err(EvalError::TypeMismatch {
-                path: "<string expression in integer context>".into(),
-            })
-        }
+        HandlerExpr::StrLit(_)
+        | HandlerExpr::StrPropRead { .. }
+        | HandlerExpr::Interpolation(_) => Err(EvalError::TypeMismatch {
+            path: "<string expression in integer context>".into(),
+        }),
     }
 }
 
@@ -266,26 +291,45 @@ mod tests {
     use std::collections::HashMap;
 
     /// Simple in-memory context for unit testing.
-    struct MapCtx(HashMap<String, i32>);
+    struct MapCtx {
+        i32s: HashMap<String, i32>,
+        strings: HashMap<String, String>,
+    }
 
     impl MapCtx {
         fn new(pairs: &[(&str, i32)]) -> Self {
-            Self(pairs.iter().map(|(k, v)| (k.to_string(), *v)).collect())
+            Self {
+                i32s: pairs.iter().map(|(k, v)| (k.to_string(), *v)).collect(),
+                strings: HashMap::new(),
+            }
+        }
+        fn with_strings(mut self, pairs: &[(&str, &str)]) -> Self {
+            self.strings = pairs
+                .iter()
+                .map(|(k, v)| (k.to_string(), v.to_string()))
+                .collect();
+            self
         }
         fn get(&self, key: &str) -> i32 {
-            *self.0.get(key).unwrap_or(&0)
+            *self.i32s.get(key).unwrap_or(&0)
         }
     }
 
     impl EvalContext for MapCtx {
         fn get_i32(&self, path: &str) -> Result<i32, EvalError> {
-            self.0
+            self.i32s
                 .get(path)
                 .copied()
                 .ok_or_else(|| EvalError::UnknownProperty(path.to_string()))
         }
+        fn get_string(&self, path: &str) -> Result<String, EvalError> {
+            self.strings
+                .get(path)
+                .cloned()
+                .ok_or_else(|| EvalError::UnknownProperty(path.to_string()))
+        }
         fn set_i32(&mut self, path: &str, value: i32) -> Result<(), EvalError> {
-            self.0.insert(path.to_string(), value);
+            self.i32s.insert(path.to_string(), value);
             Ok(())
         }
     }
@@ -299,14 +343,18 @@ mod tests {
     #[test]
     fn prop_read() {
         let mut ctx = MapCtx::new(&[("root.count", 7)]);
-        let expr = HandlerExpr::PropRead { path: "root.count".into() };
+        let expr = HandlerExpr::PropRead {
+            path: "root.count".into(),
+        };
         assert_eq!(evaluate(&expr, &mut ctx), Ok(7));
     }
 
     #[test]
     fn prop_read_unknown() {
         let mut ctx = MapCtx::new(&[]);
-        let expr = HandlerExpr::PropRead { path: "root.count".into() };
+        let expr = HandlerExpr::PropRead {
+            path: "root.count".into(),
+        };
         assert_eq!(
             evaluate(&expr, &mut ctx),
             Err(EvalError::UnknownProperty("root.count".into()))
@@ -440,7 +488,9 @@ mod tests {
                 op: CompoundOp::Add,
                 rhs: Box::new(HandlerExpr::IntLit(1)),
             },
-            HandlerExpr::PropRead { path: "root.count".into() },
+            HandlerExpr::PropRead {
+                path: "root.count".into(),
+            },
         ]);
         assert_eq!(evaluate(&expr, &mut ctx), Ok(6));
         assert_eq!(ctx.get("root.count"), 6);
@@ -462,11 +512,8 @@ mod tests {
 
     #[test]
     fn location_single_segment_no_index() {
-        let loc = format_handler_location(
-            "Counter",
-            &[WidgetPathSegment::named("button")],
-            "clicked",
-        );
+        let loc =
+            format_handler_location("Counter", &[WidgetPathSegment::named("button")], "clicked");
         assert_eq!(loc, "Counter.button.clicked");
     }
 
@@ -496,11 +543,7 @@ mod tests {
     #[test]
     fn location_placeholder_component() {
         // Phase 3 placeholder: component not yet known from IR.
-        let loc = format_handler_location(
-            "?",
-            &[WidgetPathSegment::named("button")],
-            "clicked",
-        );
+        let loc = format_handler_location("?", &[WidgetPathSegment::named("button")], "clicked");
         assert_eq!(loc, "?.button.clicked");
     }
 
@@ -538,7 +581,9 @@ mod tests {
         // EvalContext implementation that panics on set_i32.
         struct PanicCtx;
         impl EvalContext for PanicCtx {
-            fn get_i32(&self, _: &str) -> Result<i32, EvalError> { Ok(0) }
+            fn get_i32(&self, _: &str) -> Result<i32, EvalError> {
+                Ok(0)
+            }
             fn set_i32(&mut self, _: &str, _: i32) -> Result<(), EvalError> {
                 panic!("injected panic for testing")
             }
@@ -595,7 +640,9 @@ mod tests {
         let mut ctx = MapCtx::new(&[("root.count", 7)]);
         let expr = HandlerExpr::Interpolation(vec![
             InterpolationPart::Literal("Count: ".into()),
-            InterpolationPart::Expr(HandlerExpr::PropRead { path: "root.count".into() }),
+            InterpolationPart::Expr(HandlerExpr::PropRead {
+                path: "root.count".into(),
+            }),
         ]);
         assert_eq!(evaluate_binding(&expr, &mut ctx), Ok("Count: 7".into()));
     }
@@ -604,8 +651,50 @@ mod tests {
     fn binding_bare_int_prop_read() {
         // A bare integer property binding (not wrapped in interpolation).
         let mut ctx = MapCtx::new(&[("root.count", 3)]);
-        let expr = HandlerExpr::PropRead { path: "root.count".into() };
+        let expr = HandlerExpr::PropRead {
+            path: "root.count".into(),
+        };
         assert_eq!(evaluate_binding(&expr, &mut ctx), Ok("3".into()));
+    }
+
+    #[test]
+    fn binding_bare_string_prop_read() {
+        let mut ctx = MapCtx::new(&[]).with_strings(&[("root.label", "Ready")]);
+        let expr = HandlerExpr::StrPropRead {
+            path: "root.label".into(),
+        };
+        assert_eq!(evaluate_binding(&expr, &mut ctx), Ok("Ready".into()));
+    }
+
+    #[test]
+    fn binding_interpolation_string_prop_read() {
+        let mut ctx = MapCtx::new(&[("root.count", 3)]).with_strings(&[("root.label", "Ready")]);
+        let expr = HandlerExpr::Interpolation(vec![
+            InterpolationPart::Literal("State: ".into()),
+            InterpolationPart::Expr(HandlerExpr::StrPropRead {
+                path: "root.label".into(),
+            }),
+            InterpolationPart::Literal(" #".into()),
+            InterpolationPart::Expr(HandlerExpr::PropRead {
+                path: "root.count".into(),
+            }),
+        ]);
+        assert_eq!(
+            evaluate_binding(&expr, &mut ctx),
+            Ok("State: Ready #3".into())
+        );
+    }
+
+    #[test]
+    fn binding_rejects_string_read_in_integer_context() {
+        let mut ctx = MapCtx::new(&[]).with_strings(&[("root.label", "Ready")]);
+        let expr = HandlerExpr::Block(vec![HandlerExpr::StrPropRead {
+            path: "root.label".into(),
+        }]);
+        assert!(matches!(
+            evaluate_binding(&expr, &mut ctx),
+            Err(EvalError::TypeMismatch { .. })
+        ));
     }
 
     #[test]
@@ -659,13 +748,31 @@ mod tests {
     fn evaluate_rejects_str_lit_in_handler_context() {
         let mut ctx = MapCtx::new(&[]);
         let expr = HandlerExpr::StrLit("oops".into());
-        assert!(matches!(evaluate(&expr, &mut ctx), Err(EvalError::TypeMismatch { .. })));
+        assert!(matches!(
+            evaluate(&expr, &mut ctx),
+            Err(EvalError::TypeMismatch { .. })
+        ));
     }
 
     #[test]
     fn evaluate_rejects_interpolation_in_handler_context() {
         let mut ctx = MapCtx::new(&[]);
         let expr = HandlerExpr::Interpolation(vec![InterpolationPart::Literal("x".into())]);
-        assert!(matches!(evaluate(&expr, &mut ctx), Err(EvalError::TypeMismatch { .. })));
+        assert!(matches!(
+            evaluate(&expr, &mut ctx),
+            Err(EvalError::TypeMismatch { .. })
+        ));
+    }
+
+    #[test]
+    fn evaluate_rejects_str_prop_read_in_handler_context() {
+        let mut ctx = MapCtx::new(&[]).with_strings(&[("root.label", "Ready")]);
+        let expr = HandlerExpr::StrPropRead {
+            path: "root.label".into(),
+        };
+        assert!(matches!(
+            evaluate(&expr, &mut ctx),
+            Err(EvalError::TypeMismatch { .. })
+        ));
     }
 }
