@@ -13,7 +13,9 @@ pub fn lower(ast: &ComponentDef, ns: &Namespace) -> IrComponent {
 
     for member in &ast.members {
         match member {
-            Member::StateMember { name, ty, default, .. } => {
+            Member::StateMember {
+                name, ty, default, ..
+            } => {
                 states.push(lower_state(name, ty, default));
             }
             Member::PropertyDecl { .. } => {}
@@ -29,13 +31,19 @@ pub fn lower(ast: &ComponentDef, ns: &Namespace) -> IrComponent {
 
     for member in &widget_members {
         match member {
-            Member::PropertyBind { name, value, .. } => {
-                match lower_expr(value, ns) {
-                    LoweredExpr::Static(lit) => comp_props.push(IrProp { name: name.clone(), value: lit }),
-                    LoweredExpr::Dynamic(expr) => comp_bindings.push(IrBinding { prop_name: name.clone(), expr }),
-                }
-            }
-            Member::WidgetDecl { type_name, members, .. } => {
+            Member::PropertyBind { name, value, .. } => match lower_expr(value, ns) {
+                LoweredExpr::Static(lit) => comp_props.push(IrProp {
+                    name: name.clone(),
+                    value: lit,
+                }),
+                LoweredExpr::Dynamic(expr) => comp_bindings.push(IrBinding {
+                    prop_name: name.clone(),
+                    expr,
+                }),
+            },
+            Member::WidgetDecl {
+                type_name, members, ..
+            } => {
                 root_opt = Some(lower_node(type_name, members, ns));
             }
             Member::SignalHandler { .. } => {}
@@ -48,7 +56,12 @@ pub fn lower(ast: &ComponentDef, ns: &Namespace) -> IrComponent {
     root.props.splice(0..0, comp_props);
     root.bindings.splice(0..0, comp_bindings);
 
-    IrComponent { name: ast.name.clone(), base: ast.base.clone(), states, root }
+    IrComponent {
+        name: ast.name.clone(),
+        base: ast.base.clone(),
+        states,
+        root,
+    }
 }
 
 fn lower_state(name: &str, ty: &TypeName, default: &Expr) -> IrState {
@@ -62,7 +75,11 @@ fn lower_state(name: &str, ty: &TypeName, default: &Expr) -> IrState {
         Expr::StringLit { parts, .. } => IrLiteral::Str(string_parts_to_static(parts)),
         _ => panic!("lower_state: unsupported default (check should have rejected this)"),
     };
-    IrState { name: name.to_string(), ty: ir_type, default: ir_default }
+    IrState {
+        name: name.to_string(),
+        ty: ir_type,
+        default: ir_default,
+    }
 }
 
 fn lower_node(widget_type: &str, members: &[Member], ns: &Namespace) -> IrNode {
@@ -73,23 +90,40 @@ fn lower_node(widget_type: &str, members: &[Member], ns: &Namespace) -> IrNode {
 
     for member in members {
         match member {
-            Member::PropertyBind { name, value, .. } => {
-                match lower_expr(value, ns) {
-                    LoweredExpr::Static(lit) => props.push(IrProp { name: name.clone(), value: lit }),
-                    LoweredExpr::Dynamic(expr) => bindings.push(IrBinding { prop_name: name.clone(), expr }),
-                }
-            }
+            Member::PropertyBind { name, value, .. } => match lower_expr(value, ns) {
+                LoweredExpr::Static(lit) => props.push(IrProp {
+                    name: name.clone(),
+                    value: lit,
+                }),
+                LoweredExpr::Dynamic(expr) => bindings.push(IrBinding {
+                    prop_name: name.clone(),
+                    expr,
+                }),
+            },
             Member::SignalHandler { signal, body, .. } => {
-                handlers.push(IrHandler { signal: signal.clone(), expr: lower_block(body) });
+                handlers.push(IrHandler {
+                    signal: signal.clone(),
+                    expr: lower_block(body),
+                });
             }
-            Member::WidgetDecl { type_name, members: child_members, .. } => {
+            Member::WidgetDecl {
+                type_name,
+                members: child_members,
+                ..
+            } => {
                 children.push(lower_node(type_name, child_members, ns));
             }
             Member::StateMember { .. } | Member::PropertyDecl { .. } => {}
         }
     }
 
-    IrNode { widget_type: widget_type.to_string(), props, bindings, handlers, children }
+    IrNode {
+        widget_type: widget_type.to_string(),
+        props,
+        bindings,
+        handlers,
+        children,
+    }
 }
 
 enum LoweredExpr {
@@ -97,7 +131,7 @@ enum LoweredExpr {
     Dynamic(HandlerExpr),
 }
 
-fn lower_expr(expr: &Expr, _ns: &Namespace) -> LoweredExpr {
+fn lower_expr(expr: &Expr, ns: &Namespace) -> LoweredExpr {
     match expr {
         Expr::IntLit { value, .. } => LoweredExpr::Static(IrLiteral::Int(*value as i32)),
         Expr::Ident { name, .. } => LoweredExpr::Static(IrLiteral::Ident(name.clone())),
@@ -106,7 +140,7 @@ fn lower_expr(expr: &Expr, _ns: &Namespace) -> LoweredExpr {
             if is_static_string(parts) {
                 LoweredExpr::Static(IrLiteral::Str(string_parts_to_static(parts)))
             } else {
-                LoweredExpr::Dynamic(HandlerExpr::Interpolation(lower_string_parts(parts)))
+                LoweredExpr::Dynamic(HandlerExpr::Interpolation(lower_string_parts(parts, ns)))
             }
         }
         Expr::FloatLit { .. } => {
@@ -129,14 +163,18 @@ fn string_parts_to_static(parts: &[StringPart]) -> String {
         .collect()
 }
 
-fn lower_string_parts(parts: &[StringPart]) -> Vec<InterpolationPart> {
+fn lower_string_parts(parts: &[StringPart], ns: &Namespace) -> Vec<InterpolationPart> {
     parts
         .iter()
         .map(|p| match p {
             StringPart::Text(s) => InterpolationPart::Literal(s.clone()),
             StringPart::Interp(qn) => {
                 let path = qn.segments.last().cloned().unwrap_or_default();
-                InterpolationPart::Expr(HandlerExpr::PropRead { path })
+                let expr = match ns.get(&path) {
+                    Some(TypeName::Str) => HandlerExpr::StrPropRead { path },
+                    _ => HandlerExpr::PropRead { path },
+                };
+                InterpolationPart::Expr(expr)
             }
         })
         .collect()
@@ -156,10 +194,26 @@ fn lower_statement(stmt: &Statement) -> HandlerExpr {
     let rhs = Box::new(lower_rhs_expr(&stmt.value));
     match stmt.op {
         AssignOp::Eq => HandlerExpr::Assign { lhs, rhs },
-        AssignOp::PlusEq => HandlerExpr::CompoundAssign { op: CompoundOp::Add, lhs, rhs },
-        AssignOp::MinusEq => HandlerExpr::CompoundAssign { op: CompoundOp::Sub, lhs, rhs },
-        AssignOp::MulEq => HandlerExpr::CompoundAssign { op: CompoundOp::Mul, lhs, rhs },
-        AssignOp::DivEq => HandlerExpr::CompoundAssign { op: CompoundOp::Div, lhs, rhs },
+        AssignOp::PlusEq => HandlerExpr::CompoundAssign {
+            op: CompoundOp::Add,
+            lhs,
+            rhs,
+        },
+        AssignOp::MinusEq => HandlerExpr::CompoundAssign {
+            op: CompoundOp::Sub,
+            lhs,
+            rhs,
+        },
+        AssignOp::MulEq => HandlerExpr::CompoundAssign {
+            op: CompoundOp::Mul,
+            lhs,
+            rhs,
+        },
+        AssignOp::DivEq => HandlerExpr::CompoundAssign {
+            op: CompoundOp::Div,
+            lhs,
+            rhs,
+        },
     }
 }
 
@@ -170,7 +224,7 @@ fn lower_rhs_expr(expr: &Expr) -> HandlerExpr {
             if is_static_string(parts) {
                 HandlerExpr::StrLit(string_parts_to_static(parts))
             } else {
-                HandlerExpr::Interpolation(lower_string_parts(parts))
+                HandlerExpr::Interpolation(lower_string_parts(parts, &Namespace::new()))
             }
         }
         Expr::Ident { name, .. } => HandlerExpr::PropRead { path: name.clone() },
@@ -190,7 +244,11 @@ mod tests {
         let tokens = tokenize(src, "<test>").unwrap();
         let ast = parse(&tokens, "<test>").unwrap();
         let result = check(&ast, "<test>");
-        assert!(!result.has_errors(), "check errors: {:?}", result.diagnostics);
+        assert!(
+            !result.has_errors(),
+            "check errors: {:?}",
+            result.diagnostics
+        );
         lower(&ast, &result.namespace)
     }
 
@@ -198,7 +256,14 @@ mod tests {
     fn state_lowered_to_ir_state() {
         let comp = lower_src("component C inherits W { state count: i32 = 0 VStack {} }");
         assert_eq!(comp.states.len(), 1);
-        assert_eq!(comp.states[0], IrState { name: "count".into(), ty: IrType::I32, default: IrLiteral::Int(0) });
+        assert_eq!(
+            comp.states[0],
+            IrState {
+                name: "count".into(),
+                ty: IrType::I32,
+                default: IrLiteral::Int(0)
+            }
+        );
     }
 
     #[test]
@@ -231,7 +296,29 @@ mod tests {
             b.expr,
             HandlerExpr::Interpolation(vec![
                 InterpolationPart::Literal("Count: ".into()),
-                InterpolationPart::Expr(HandlerExpr::PropRead { path: "count".into() }),
+                InterpolationPart::Expr(HandlerExpr::PropRead {
+                    path: "count".into()
+                }),
+            ])
+        );
+    }
+
+    #[test]
+    fn dynamic_string_interp_uses_str_prop_read_for_string_state() {
+        let comp = lower_src(
+            r#"component C inherits W { state label: string = "Ready" VStack { text: "State: \{root.label}" } }"#,
+        );
+        let vstack = &comp.root;
+        assert_eq!(vstack.bindings.len(), 1);
+        let b = &vstack.bindings[0];
+        assert_eq!(b.prop_name, "text");
+        assert_eq!(
+            b.expr,
+            HandlerExpr::Interpolation(vec![
+                InterpolationPart::Literal("State: ".into()),
+                InterpolationPart::Expr(HandlerExpr::StrPropRead {
+                    path: "label".into()
+                }),
             ])
         );
     }

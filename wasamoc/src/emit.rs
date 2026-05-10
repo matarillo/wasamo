@@ -14,7 +14,10 @@ pub fn emit(component: &IrComponent) -> String {
 
 fn emit_component(out: &mut String, comp: &IrComponent, indent: usize) {
     let i = ind(indent);
-    out.push_str(&format!("{}component {} inherits {} {{\n", i, comp.name, comp.base));
+    out.push_str(&format!(
+        "{}component {} inherits {} {{\n",
+        i, comp.name, comp.base
+    ));
     for state in &comp.states {
         emit_state(out, state, indent + 1);
     }
@@ -31,7 +34,13 @@ fn emit_state(out: &mut String, state: &IrState, indent: usize) {
         IrType::Str => "string",
     };
     let default_str = emit_literal(&state.default);
-    out.push_str(&format!("{}state {}: {} = {}\n", ind(indent), state.name, type_str, default_str));
+    out.push_str(&format!(
+        "{}state {}: {} = {}\n",
+        ind(indent),
+        state.name,
+        type_str,
+        default_str
+    ));
 }
 
 fn emit_node(out: &mut String, node: &IrNode, indent: usize) {
@@ -53,11 +62,21 @@ fn emit_node(out: &mut String, node: &IrNode, indent: usize) {
 }
 
 fn emit_prop(out: &mut String, prop: &IrProp, indent: usize) {
-    out.push_str(&format!("{}prop {} = {}\n", ind(indent), prop.name, emit_literal(&prop.value)));
+    out.push_str(&format!(
+        "{}prop {} = {}\n",
+        ind(indent),
+        prop.name,
+        emit_literal(&prop.value)
+    ));
 }
 
 fn emit_binding(out: &mut String, binding: &IrBinding, indent: usize) {
-    out.push_str(&format!("{}bind {} = {}\n", ind(indent), binding.prop_name, emit_expr(&binding.expr)));
+    out.push_str(&format!(
+        "{}bind {} = {}\n",
+        ind(indent),
+        binding.prop_name,
+        emit_expr(&binding.expr)
+    ));
 }
 
 fn emit_handler(out: &mut String, handler: &IrHandler, indent: usize) {
@@ -80,6 +99,7 @@ fn emit_expr(expr: &HandlerExpr) -> String {
         HandlerExpr::IntLit(n) => n.to_string(),
         HandlerExpr::StrLit(s) => format!("\"{}\"", escape_string(s)),
         HandlerExpr::PropRead { path } => format!("(prop-read {})", path),
+        HandlerExpr::StrPropRead { path } => format!("(str-prop-read {})", path),
         HandlerExpr::Assign { lhs, rhs } => {
             format!("(assign {} {})", lhs, emit_expr(rhs))
         }
@@ -169,7 +189,23 @@ mod tests {
         let out = emit_src(
             r#"component C inherits W { state count: i32 = 0 VStack { text: "Count: \{root.count}" } }"#,
         );
-        assert!(out.contains(r#"bind text = (interp "Count: " ((prop-read count)))"#), "got: {}", out);
+        assert!(
+            out.contains(r#"bind text = (interp "Count: " ((prop-read count)))"#),
+            "got: {}",
+            out
+        );
+    }
+
+    #[test]
+    fn string_state_binding_emits_str_prop_read() {
+        let out = emit_src(
+            r#"component C inherits W { state label: string = "Ready" VStack { text: "State: \{root.label}" } }"#,
+        );
+        assert!(
+            out.contains(r#"bind text = (interp "State: " ((str-prop-read label)))"#),
+            "got: {}",
+            out
+        );
     }
 
     #[test]

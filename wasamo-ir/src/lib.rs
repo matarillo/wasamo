@@ -29,9 +29,21 @@ pub enum IrLiteral {
 pub enum HandlerExpr {
     IntLit(i32),
     StrLit(String),
-    PropRead { path: String },
-    Assign { lhs: String, rhs: Box<HandlerExpr> },
-    CompoundAssign { lhs: String, op: CompoundOp, rhs: Box<HandlerExpr> },
+    PropRead {
+        path: String,
+    },
+    StrPropRead {
+        path: String,
+    },
+    Assign {
+        lhs: String,
+        rhs: Box<HandlerExpr>,
+    },
+    CompoundAssign {
+        lhs: String,
+        op: CompoundOp,
+        rhs: Box<HandlerExpr>,
+    },
     Interpolation(Vec<InterpolationPart>),
     Block(Vec<HandlerExpr>),
 }
