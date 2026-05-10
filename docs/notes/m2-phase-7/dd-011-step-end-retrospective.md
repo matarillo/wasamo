@@ -20,8 +20,25 @@ DD-M2-P6-011 (String-typed property binding) の step-end retrospective。
 - `73df424 feat(wasamoc): lower string state reads for DD-011`
 - `07f6be4 feat(runtime): track DD-011 string bindings`
 - `fb59bb4 docs(m2): record DD-011 implementation`
+- `5c59d81 test(runtime): add live WidgetNode headless proof`
+- `d07e5de docs(runtime): record live WidgetNode verification`
 
 この retrospective は step-end の gate であり、phase-end retrospective ではない。
+
+## Current Judgment
+
+2026-05-11 時点では、DD-011 の step-end 基準は **達成済み** と判定する。
+
+当初の blocking item は、DD-011 / A6 の evidence が
+`register_binding_with_writer` までで十分か、live `WidgetNode` property state まで
+要求するかの判断だった。その後、後者を採用し、
+`wasamo-runtime/tests/live_widgetnode_headless.rs` を追加した。この test は
+`GITHUB_ACTIONS` 上では runtime-compositor-unavailable skip path を failure にするため、
+CI green を `wasamo_init -> build_widget_tree -> wasamo_get_property` まで到達した
+evidence として扱える。
+
+したがって、step-end retrospective の unresolved owner decision は解消済みであり、
+残る作業は Phase 7 closing items であって DD-011 step-end の blocker ではない。
 
 ## Main Learning
 
@@ -75,7 +92,8 @@ headless integration test」と「既存の GUI checkpoint」のどちらに属�
      自動化した。
 
 2. **仕様文書 (`abi_spec.md` / `architecture.md` / `dsl_spec.md`) の変更:** **なし**
-   - 変更した文書は Phase 7 progress と DD-011 implementation notes のみ。
+   - 変更した文書は Phase 7 progress、DD-011 implementation notes、
+     DD-011 retrospective、verification environment note、project convention note。
    - `dsl_spec.md` などの仕様文書は変更していない。
 
 3. **ローカル clean rebuild:** **green**
@@ -170,14 +188,16 @@ headless integration test」と「既存の GUI checkpoint」のどちらに属�
 10. **タスクリストの後続 step 見直し:** **必要**
     - `docs/plans/progress/m2-phase-7-progress.md` は DD-011 を implemented として
       更新済み。
-    - item 4 の owner disposition に応じて、DD-011 の evidence 記述をそのまま
-      維持するか、追加テスト / GUI checkpoint を progress に戻すかを判断する。
+    - item 4 の owner disposition は、live `WidgetNode` headless integration test を
+      採用する形で解消済み。
     - Phase 7 closing items (`CHANGELOG.md`, `ROADMAP.md`, `m2-plan.md` completed 化、
       phase progress の蒸留) はまだ残っている。
 
 ## Fast-Track Judgment
 
-Fast-track criteria は step-end 記録時点では **満たしていない**。
+Fast-track criteria は、当初記録時点では item 4 により **満たしていない**。
+2026-05-11 に live `WidgetNode` headless integration test を採用した後の現在判定では
+**満たしている**。
 
 - item 2: なし
 - item 3: green
@@ -193,6 +213,8 @@ blocking item は item 4 だった。DD-011 / A6 の自動検証を
 `register_binding_with_writer` までで十分とみなすか、live widget property state
 への追加 evidence を要求するかについて owner 判断が必要だったが、2026-05-11 に
 後者を採用した。
+
+現在は DD-011 step-end の blocker は残っていない。
 
 ## Verification Notes
 
