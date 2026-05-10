@@ -611,7 +611,44 @@ for that frame, and every subsequent ABI call other than
 `wasamo_runtime_destroy` returns `WASAMO_ERR_REACTIVE_DIVERGED`
 (see DD-M2-P6-001 §"Divergence semantics").
 
-#### 6.8.4 Signal-dispatch ordering (signal-side runtime contract)
+#### 6.8.4 Runtime safety guard placement
+
+Guard placement is a global runtime invariant
+([DD-M2-P6-012](./decisions/m2-phase-7-reactive-foundation.md#dd-m2-p6-012--re-entrancy-and-safety-guard-placement-principle)
+= Option C). Re-entrancy and lifecycle guards are enforced with
+role-specified defense in depth:
+
+- **ABI boundary = diagnostic boundary.** Exported `wasamo_*`
+  functions check the relevant runtime state before touching state.
+  This layer owns caller-facing `WasamoStatus` values and
+  `wasamo_last_error_message` text because it has the public function
+  name, argument context, and lifecycle exception in hand.
+- **Internal runtime boundary = invariant boundary.** Runtime-owned
+  entry points that can be reached without crossing an exported ABI
+  function must guard the invariant before executing. In M2,
+  `emit::drain_if_outermost()` is that boundary for the drain
+  transaction: re-entry while `IN_DRAIN` is set is a no-op, and
+  `RuntimeHealth::Diverged` suppresses all drain phases.
+- **Non-ABI entries are first-class runtime entries.** The Win32
+  message-loop drain in `lib.rs::run()` and future M3 timer,
+  async-I/O, or additional window-procedure callbacks must enter
+  runtime state through an internal invariant boundary. They do not get
+  to rely on ABI-only guards because they do not cross the ABI.
+- **Cleanup exceptions are explicit.** Any operation allowed after
+  `Diverged` (for example destroy/cleanup paths) must be named at its
+  entry boundary. Such an exception does not grant general permission
+  to mutate or drain runtime state after divergence.
+
+The current guard set is therefore interpreted by role:
+UI-thread-affinity and public error reporting live at ABI entry;
+`IN_DRAIN` and `IN_OBSERVER_CALLBACK` remain observable ABI refusals
+for structure-changing and state-mutating calls; `drain_if_outermost`
+also guards the internal transaction boundary used by non-ABI message
+loop entry. M3+ entry paths inherit this split unless a later ADR
+reopens DD-M2-P6-012, most likely because typed guard tokens become
+worth their API cost.
+
+#### 6.8.5 Signal-dispatch ordering (signal-side runtime contract)
 
 Independent of the reactive drain, when a `WasamoSignal` fires
 through `signal_emit`:
@@ -640,7 +677,7 @@ a `BindingEvalContext` variant: reads route through `Signal::get()`
 (binding bodies are pure-read; mutation only happens through the
 binding's bound write target).
 
-#### 6.8.5 Effect lifetime (DD-M2-P5-003 = A)
+#### 6.8.6 Effect lifetime (DD-M2-P5-003 = A)
 
 Effects are owned by the widget that hosts the binding.
 
@@ -667,7 +704,7 @@ Re-attach (M3 conditional binding rebuilds at a different
 position) just creates fresh Effects on the new widgets; old
 widgets' Effects dispose through the same path. No explicit hook.
 
-#### 6.8.6 Phase 6 binding registration API (DD-M2-P5-005 = A)
+#### 6.8.7 Phase 6 binding registration API (DD-M2-P5-005 = A)
 
 ```rust
 pub(crate) fn register_binding(
@@ -701,7 +738,7 @@ conditional, for-loop) add `BindingTarget` variants and reuse
 the same `HandlerExpr` AST without disturbing `register_binding`'s
 signature.
 
-#### 6.8.7 Forward-compatibility and out-of-scope
+#### 6.8.8 Forward-compatibility and out-of-scope
 
 The Phase 5 architecture is shape-compatible with the M3
 extensions it defers:

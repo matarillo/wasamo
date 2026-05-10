@@ -79,7 +79,7 @@ DD-M2-P5-004 実装（wip/step）では **案 2** を採用する。
   Phase 5 close は現在の暫定実装 (案 2 = 直列 1 回) のまま実施する。
 - 本問題は「案 1 vs 案 2」の二択ではなく **drain pipeline の設計軸そのもの** に関する
   問題であることが判明 (経路非対称性、observer の意味論、収束レイヤ分離 など)。
-  これを反映したドラフト DD を [dd-m2-p6-drain-transaction.md](./dd-m2-p6-drain-transaction.md)
+  これを反映したドラフト DD を [dd-m2-p6-drain-transaction.md](./m2-phase-6/dd-m2-p6-drain-transaction.md)
   に作成済。Phase 6 pre-doc サイクルで正式採用予定 (DD 番号は Phase 6 ADR 起草時に確定)。
 - 採択候補は 6 option (A〜F)、起草者推奨は **Option D**
   (declarative transaction + post-commit pure observer)。本ノートはオーナー判断後に
