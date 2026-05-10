@@ -16,7 +16,7 @@ the **Status** section of [README.md](./README.md).
 
 No shipped changes yet.
 
-## M2: Foundation — shipped 2026-05-11
+## [v0.2.0] — 2026-05-11 — M2: Foundation
 
 M2 closes the loop on the DSL side: `.ui` files now drive the runtime
 through the agreed `wasamoc` -> IR -> `wasamo_load_ui` pipeline, with
@@ -163,6 +163,8 @@ symbols via MSVC `/WHOLEARCHIVE`. `wasamo.dll` filename and all 20
 discharged.
 
 Decisions: [DD-M2-P1-001..006](./docs/decisions/m2-phase-1-cdylib-shim.md).
+
+Release: [v0.2.0](https://github.com/matarillo/wasamo/releases/tag/v0.2.0).
 
 ---
 
