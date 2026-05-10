@@ -553,9 +553,12 @@ pub unsafe extern "C" fn wasamo_widget_destroy(widget: *mut WasamoWidget) -> Was
 
 #[no_mangle]
 pub extern "C" fn wasamo_run() {
-    // No-op if called off the owning thread; the void return has no error
-    // channel, but the last-error TLS records the violation.
+    // No-op if called from a disallowed runtime state; the void return has no
+    // status channel, but the last-error TLS records the violation.
     if check_owning_thread("wasamo_run").is_some() {
+        return;
+    }
+    if check_not_diverged("wasamo_run").is_some() {
         return;
     }
     crate::run();
@@ -564,6 +567,9 @@ pub extern "C" fn wasamo_run() {
 #[no_mangle]
 pub extern "C" fn wasamo_quit() {
     if check_owning_thread("wasamo_quit").is_some() {
+        return;
+    }
+    if check_not_diverged("wasamo_quit").is_some() {
         return;
     }
     unsafe {
@@ -1198,4 +1204,52 @@ pub unsafe extern "C" fn wasamo_load_ui(
     *out_root = Box::into_raw(window);
     clear_last_error();
     WASAMO_OK
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::reactive::RuntimeHealth;
+    use std::ffi::CStr;
+    use std::ptr;
+
+    fn install_owning_thread() {
+        crate::runtime::__install_owning_thread_for_test();
+        crate::reactive::set_runtime_health_for_test(RuntimeHealth::Healthy);
+        clear_last_error();
+    }
+
+    fn last_error_string() -> String {
+        let ptr = wasamo_last_error_message();
+        assert!(!ptr.is_null(), "last-error should be populated");
+        unsafe { CStr::from_ptr(ptr) }
+            .to_str()
+            .expect("last-error must be UTF-8")
+            .to_owned()
+    }
+
+    #[test]
+    fn guard_placement_after_divergence_matches_abi_roles() {
+        install_owning_thread();
+        crate::reactive::set_runtime_health_for_test(RuntimeHealth::Diverged);
+
+        wasamo_run();
+        let msg = last_error_string();
+        assert!(msg.contains("wasamo_run"), "{msg}");
+        assert!(msg.contains("Diverged"), "{msg}");
+
+        wasamo_quit();
+        let msg = last_error_string();
+        assert!(msg.contains("wasamo_quit"), "{msg}");
+        assert!(msg.contains("Diverged"), "{msg}");
+
+        let window_status = unsafe { wasamo_window_destroy(ptr::null_mut()) };
+        assert_eq!(window_status, WASAMO_OK);
+
+        let widget_status = unsafe { wasamo_widget_destroy(ptr::null_mut()) };
+        assert_eq!(widget_status, WASAMO_OK);
+
+        crate::reactive::set_runtime_health_for_test(RuntimeHealth::Healthy);
+        clear_last_error();
+    }
 }
