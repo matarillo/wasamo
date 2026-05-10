@@ -100,6 +100,16 @@ headless integration test」と「既存の GUI checkpoint」のどちらに属�
      判定する必要がある。`WidgetNode::text` / `WidgetNode::button` の construction が
      `Compositor` / `TextRenderer` / DirectWrite state に依存するため、CI で安定に
      作れるかは別途確認が必要。
+   - 追加実験として `exp/m2-p7-live-widgetnode-headless-test` 上で
+     Windows-only headless integration test を作成した。このチャットの実行環境は
+     `verification-environments.md` の SSH dev box に相当し、`wasamo_init` が
+     `0x80070005 (Access denied)` で失敗した。`RoInitialize` の明示追加でも
+     解消しなかったため、この環境では "runtime compositor unavailable" と
+     分類する。
+   - そのため、SSH dev box は build / link / pure runtime logic の確認には使えるが、
+     live `WidgetNode` construction を含む headless proof には十分ではない可能性がある。
+     この proof を gate にするなら、GitHub Actions Windows runner か visible desktop
+     session で再分類する必要がある。
    - Owner に確認したい点: この proof を DD-011 / A6 の step evidence として十分と
      みなすか、または live `WidgetNode` まで到達する headless Windows test や
      GUI checkpoint を gate にするか。
@@ -176,6 +186,10 @@ DD-011 実装で追加した主なテスト:
   - `string_state_binding_emits_str_prop_read`
 - cross-crate `.ui` / emitted-IR / runtime parser:
   - `string_state_binding_emits_and_parses_str_prop_read`
+- experimental Windows-only live `WidgetNode` headless proof:
+  - `string_binding_reaches_live_widgetnode_property_state`
+  - SSH dev box では `wasamo_init` が `0x80070005 (Access denied)` を返し、
+    test は runtime compositor unavailable として通過した。
 
 Commands run for this retrospective:
 
@@ -184,6 +198,8 @@ cargo clean
 cargo build --release --workspace
 cargo build --workspace
 cargo test --workspace
+cargo test -p wasamo-runtime --test live_widgetnode_headless -- --nocapture
+cargo test -p wasamo-runtime
 ```
 
 All completed successfully.
@@ -199,6 +215,8 @@ Owner に確認する項目:
    - live `WidgetNode` を作る Windows-only headless integration test を追加する。
      ただし、`Compositor` / `TextRenderer` / DirectWrite が CI runner 上で
      visible desktop なしに deterministic に初期化できることが条件。
+     SSH dev box では `0x80070005` により runtime compositor unavailable だったため、
+     この環境だけでは condition を満たすとは判断できない。
    - 上記が visible desktop session を要求する、または CI 上で不安定な場合は、
      既存 GUI checkpoint に String binding case を含める。
    - production `widget_write_property` の手前までを M2 自動テストの上限として

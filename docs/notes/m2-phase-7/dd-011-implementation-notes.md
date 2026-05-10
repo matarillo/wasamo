@@ -55,6 +55,21 @@ property binding を `.ui` から runtime binding evaluator まで通すこと�
   `register_binding_with_writer` の pure-logic test で固定した。これは production
   `register_binding` と同じ evaluator / Effect / tracked Signal path を使うが、Win32 /
   Composition の live widget construction は既存 phase-close GUI checkpoint に委ねる。
+- 2026-05-10: 実験ブランチ `exp/m2-p7-live-widgetnode-headless-test` で
+  Windows-only headless integration test を追加し、`.ui -> wasamoc lowering ->
+  runtime IR parser -> build_widget_tree -> live WidgetNode -> wasamo_get_property`
+  まで到達する proof を試した。テストは `wasamo-runtime/tests` に置くのが適切:
+  live `WidgetNode` construction は runtime crate の Compositor / TextRenderer /
+  property ABI surface を横断するため、compiler crate や binding crate ではなく
+  runtime integration test として扱う。
+- 2026-05-10: このチャットの実行環境は
+  `docs/notes/verification-environments.md` でいう SSH dev box に相当し、
+  `wasamo_init` が `0x80070005 (Access denied)` を返した。`RoInitialize`
+  を明示しても結果は変わらず、`CreateDispatcherQueueController` /
+  Compositor 側の OS/session policy による拒否とみなした。したがって、
+  SSH dev box では live `WidgetNode` headless proof は "runtime compositor
+  unavailable" として扱い、CI runner や interactive desktop session とは
+  別の verification environment として記録する。
 - 2026-05-10: `cargo check --workspace` は green。既存の `wasamo` crate-type warning は
   観測されたが今回の DD-011 差分由来ではない。
 
@@ -80,3 +95,7 @@ property binding を `.ui` から runtime binding evaluator まで通すこと�
   String binding propagation tests を追加。
 - `wasamo-runtime/src/ir_loader.rs`: `(str-prop-read ...)` parse / validate と parser test を追加。
 - `wasamo-runtime/tests/ir_loader_roundtrip.rs`: `.ui` String binding の emitted-IR round-trip test を追加。
+- `wasamo-runtime/tests/live_widgetnode_headless.rs`: Windows-only headless integration
+  test を追加。Compositor が初期化できる Windows 環境では live `WidgetNode`
+  property state を確認し、SSH dev box で観測した `0x80070005` は
+  runtime compositor unavailable として記録して通過する。
