@@ -261,3 +261,74 @@ fn owned_to_value(a: &OwnedArg) -> WasamoValue {
         },
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::reactive::RuntimeHealth;
+
+    fn reset_emit_state() {
+        IN_DRAIN.with(|f| f.set(false));
+        IN_OBSERVER_CALLBACK.with(|f| f.set(false));
+        QUEUE.with(|q| q.borrow_mut().clear());
+        DIRTY.with(|d| d.borrow_mut().clear());
+        crate::reactive::set_runtime_health_for_test(RuntimeHealth::Healthy);
+    }
+
+    fn queued_count() -> usize {
+        QUEUE.with(|q| q.borrow().len())
+    }
+
+    #[test]
+    fn drain_if_outermost_suppresses_all_phases_after_divergence() {
+        reset_emit_state();
+        QUEUE.with(|q| {
+            q.borrow_mut().push_back(Pending::Signal {
+                token: 0,
+                args: Vec::new(),
+            });
+        });
+
+        crate::reactive::set_runtime_health_for_test(RuntimeHealth::Diverged);
+        drain_if_outermost();
+
+        assert_eq!(
+            queued_count(),
+            1,
+            "Diverged internal boundary must not drain queued callbacks"
+        );
+        assert!(!in_drain(), "Diverged suppression must not enter Phase 1");
+        assert!(
+            !in_observer_callback(),
+            "Diverged suppression must not enter Phase 3"
+        );
+
+        reset_emit_state();
+    }
+
+    #[test]
+    fn drain_if_outermost_reentrant_call_is_noop() {
+        reset_emit_state();
+        QUEUE.with(|q| {
+            q.borrow_mut().push_back(Pending::Signal {
+                token: 0,
+                args: Vec::new(),
+            });
+        });
+
+        IN_DRAIN.with(|f| f.set(true));
+        drain_if_outermost();
+
+        assert_eq!(
+            queued_count(),
+            1,
+            "nested drain must leave work for the outer drain"
+        );
+        assert!(
+            in_drain(),
+            "nested drain must not clear the outer Phase 1 flag"
+        );
+
+        reset_emit_state();
+    }
+}
