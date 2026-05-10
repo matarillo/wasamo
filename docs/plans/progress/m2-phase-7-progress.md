@@ -50,11 +50,22 @@ Current status:
    - [x] Re-run pre-doc.
    - Pre-doc framing: [docs/notes/m2-phase-7/dd-011-pre-doc-framing.md](../../notes/m2-phase-7/dd-011-pre-doc-framing.md).
    - [x] Flip agreement to Accepted.
-   - [ ] Implement until a `.ui` String property bound to `Signal<String>`
-     propagates through `BindingEvalContext` / `HandlerExpr::StrPropRead`
-     to runtime widget property state, with existing integer binding
-     behavior regression-protected. GUI visibility remains covered by the
-     existing phase-close manual regression.
+   - [ ] Add the String read surface to `EvalContext` and route
+     `BindingEvalContext` tracked String reads through
+     `SignalRegistry.strings`.
+   - [ ] Add the accepted String property-read representation
+     (`HandlerExpr::StrPropRead`) and dispatch it to the tracked String
+     read path.
+   - [ ] Wire a real `.ui` / emitted-IR path into the String read form based
+     on declared state type; hand-written `StrPropRead` tests alone do not
+     discharge A6.
+   - [ ] Demonstrate `.ui` String binding through runtime widget property
+     state without adding a new Visual Layer CI fixture.
+   - [ ] Regression-protect existing integer `PropRead`, integer
+     interpolation, and counter-style handler mutation behavior.
+   - [ ] Record any implementation deviations in a DD-011 retrospective and
+     update the appropriate higher-level document if the accepted design
+     assumptions change.
 
 ## Acceptance Discharged Here
 
@@ -68,7 +79,8 @@ Current status:
 
 - Unit tests for topological sort fidelity.
 - Unit tests for guard-placement enforcement.
-- Unit tests for String binding propagation.
+- Automated runtime-state tests for String binding propagation and integer
+  binding regression.
 - Existing Phase 6 GUI counter regression check. No new GUI fixture is
   mandated unless a DD demands it.
 
