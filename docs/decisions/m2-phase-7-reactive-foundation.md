@@ -1,8 +1,8 @@
 # M2-Phase 7 — Reactive Foundation Hardening & Contract Finalization: Architecture Decisions
 
 **Phase:** M2-Phase 7 (Reactive Foundation Hardening & Contract Finalization)
-**Date:** 2026-05-08 (ADR opened; DDs remain Proposed pending per-DD pre-doc cycles); 2026-05-09 (DD-M2-P6-010 Accepted)
-**Status:** Proposed (DD-M2-P6-010 Accepted; DD-M2-P6-011 / DD-M2-P6-012 Proposed)
+**Date:** 2026-05-08 (ADR opened; DDs remain Proposed pending per-DD pre-doc cycles); 2026-05-09 (DD-M2-P6-010 Accepted; DD-M2-P6-010 minor implementation clarification recorded); 2026-05-10 (DD-M2-P6-012 Accepted; DD-M2-P6-011 Accepted); 2026-05-11 (M2 completed)
+**Status:** Accepted (DD-M2-P6-010 / 011 / 012)
 
 ## Context
 
@@ -255,10 +255,11 @@ following shape; deviation from any of these requires a new pre-doc
 cycle, not an in-step adjustment.
 
 1. **Free-function extraction.** The topological walk is implemented
-   as a free function whose inputs are `&forward`, `&back`, and the
-   dirty set (or equivalent borrows). It must not require a
-   `Compositor`, a Win32 / WinRT handle, or any state owned by the
-   ABI layer. The function is the unit of verification.
+   as a free function whose inputs are `&forward`, `&back`, the
+   write-edge map, and the dirty set (or equivalent graph borrows).
+   It must not require a `Compositor`, a Win32 / WinRT handle, or any
+   state owned by the ABI layer. The function is the unit of
+   verification.
 2. **Mandatory synthetic-graph unit tests.** Coverage of the free
    function by pure-logic unit tests on synthetic dependency graphs
    is a precondition of step acceptance, not a follow-up task. The
@@ -333,7 +334,7 @@ handover note into specific acceptance criteria when M3 opens.
 
 ### DD-M2-P6-011 — String-typed property binding
 
-**Status: Proposed**
+**Status: Accepted (2026-05-10)**
 
 #### Context
 
@@ -367,7 +368,7 @@ Add a `ty` field: `PropRead { path: String, ty: PropType }` where
 - Con: all existing `PropRead` construction sites gain a required field;
   a test-only `PropType::I32` default must be added or all tests updated.
 
-**Option B — Introduce a `StrPropRead` variant (recommended).**
+**Option B — Introduce a `StrPropRead` variant (accepted).**
 Add `HandlerExpr::StrPropRead { path: String }` alongside the existing
 `PropRead`. `evaluate_tracked` dispatches `StrPropRead` to
 `ctx.read_string_tracked`; existing `PropRead` path is unchanged.
@@ -387,33 +388,65 @@ a `TypedValue` enum. The evaluator extracts the arm it needs.
 
 #### Recommendation
 
-**Option B.** Adding `StrPropRead` is the smallest change that closes all
-three gaps without touching existing `PropRead` paths or `EvalContext`
-method signatures beyond the two new `get_string` / `read_string_tracked`
-additions. Option A is equally low-risk but forces every `PropRead`
-construction site to supply a type tag today. Option C is premature
-generalisation — M2 has only two types, and the current two-method
-`EvalContext` shape already encodes that.
+**Accepted: Option B.** Phase 7 pre-doc framing resolved A6 as
+demonstrative rather than fully generic: M2 must prove the binding path is
+not silently `i32`-specialized by carrying a `.ui` String property bound to
+`Signal<String>` through to runtime widget property state, but M2 does not
+require full `TypedValue` unification.
+
+Adding `StrPropRead` is the smallest change that closes the three DD-011
+gaps while preserving the existing integer `PropRead` path. Option A is
+viable but forces every `PropRead` construction site to supply a type tag
+today. Option C remains the future-friendly abstraction, but its blast
+radius across `EvalContext`, handler evaluation, binding evaluation, test
+stubs, and IR tooling is broader than the M2 acceptance pressure.
+
+#### Implementation requirements
+
+Acceptance of Option B carries the following implementation requirements:
+
+1. Add a String read path to `EvalContext` (`get_string` plus tracked read)
+   and route `BindingEvalContext` String reads through `SignalRegistry.strings`
+   with dependency tracking.
+2. Add the accepted String property-read representation
+   (`HandlerExpr::StrPropRead { path }` under Option B) and dispatch it to the
+   tracked String read path.
+3. Provide a real `.ui` / emitted-IR path into the String read form based on
+   the declared state type. A hand-written `StrPropRead` unit test alone does
+   not discharge A6.
+4. Add an automated test that proves a `.ui` or emitted-IR String binding
+   reaches runtime widget property state without requiring a visible window,
+   pixel inspection, or a mock Visual Layer. Actual on-screen confirmation
+   remains part of the existing phase-close GUI/manual regression.
+5. Preserve existing integer behavior: `PropRead { path }` remains the i32
+   read form; bare integer binding, integer interpolation, and counter-style
+   handler mutation are regression-protected.
+6. Cross-type reads must fail rather than silently coerce. The exact
+   diagnostic (`UnknownProperty` vs `TypeMismatch`) may follow the existing
+   registry/error shape unless the implementation can report `TypeMismatch`
+   without broad churn.
+
+If implementation evidence changes any of these assumptions, the DD-011
+implementation retrospective must record the deviation and update the
+appropriate higher-level document (this ADR, the phase progress file, or a
+live note such as `docs/notes/typed-value-evaluator.md`) rather than leaving
+the design record stale.
 
 #### Forward-compat exposure
 
-Low. `StrPropRead` is additive. If M3 introduces additional scalar types
-(e.g. `f32`, `bool`), each adds a parallel `<T>PropRead` variant and
-`EvalContext::get_<T>` pair, or the `TypedValue` unification (Option C)
-is revisited at that point with concrete M3 stimulus.
-
-> Note: the recommendation text is inherited verbatim from the Phase 6
-> draft. Phase 7 pre-doc revisits it under A6 framing
-> ("Type-Agnostic Reactive Binding") — A6 may favour Option C
-> (`TypedValue` unification) as the more "type-agnostic" surface, even
-> at the cost of broader churn. The DD-011 working branch is where
-> that re-evaluation lands.
+Low for M2. `StrPropRead` is additive and leaves the existing integer
+binding path intact. The main forward-compat exposure is not a hidden M2
+requirement: if later DSL or tooling work introduces a third scalar property
+type, typed item/context binding, non-string binding result values, or a
+normative expression type system, the project must revisit whether parallel
+typed reads are still appropriate. That open question is tracked in
+[docs/notes/typed-value-evaluator.md](../notes/typed-value-evaluator.md).
 
 ---
 
 ### DD-M2-P6-012 — Re-entrancy and safety-guard placement principle
 
-**Status: Proposed**
+**Status: Accepted (2026-05-10)**
 
 #### Context
 
@@ -556,60 +589,89 @@ fails to compile.
 
 #### Recommendation
 
-**To be settled by the DD-012 pre-doc cycle.** The Phase 6 draft
-recorded this DD as `Deferred` with no recommendation, on the explicit
-ground that the decision should not be made mid-Phase-6 implementation.
-With Phase 6 closed, the DD-012 working branch evaluates A / B / C / D
-against full Phase 6 implementation evidence — including which runtime
-states each option enforces, which non-ABI entry paths each option
-leaves exposed, how each option interacts with the M3 timer and
-async-I/O extensions, and how the Win32 / WinRT FFI surface constrains
-the choice — and the agreed option is recorded here.
+**Choose Option C — role-specified defense in depth.** The accepted
+guard-placement principle is:
 
-Until that cycle settles the rule, **no new ABI function and no new
-non-ABI entry path introduced before this DD's Acceptance should be
-treated as setting precedent**: any guard placement chosen for a new
-entry point is provisional and may be reorganised once the principle
-is decided.
+- The **ABI boundary is the diagnostic boundary**. Exported
+  `wasamo_*` functions perform the relevant UI-thread, Diverged,
+  `IN_DRAIN`, and `IN_OBSERVER_CALLBACK` checks before mutating or
+  structurally changing runtime state. These checks own caller-facing
+  `WasamoStatus` return values and last-error messages because that
+  layer knows the public function name, argument context, and lifecycle
+  exception being applied.
+- The **internal runtime boundary is the invariant boundary**.
+  Internal entry points that may be reached without crossing an
+  exported ABI function must refuse or suppress work when the runtime
+  state would make that work invalid. In M2 this is concretely
+  represented by `emit::drain_if_outermost()` suppressing re-entrant
+  drains while `IN_DRAIN` is set and suppressing all drain phases after
+  `RuntimeHealth::Diverged`.
+- **Runtime-owned non-ABI entry paths are first-class runtime entries**,
+  not exceptions to the rule. The Win32 message-loop path in
+  `lib.rs::run()` and future M3 timer / async-I/O / additional
+  window-procedure paths must enter runtime state through an internal
+  invariant boundary rather than relying on ABI-only guards they do not
+  cross.
+- **Cleanup / destroy paths remain explicit exceptions.** Any operation
+  that is allowed after `Diverged` must be named at its entry boundary
+  and documented as a lifecycle exception; the exception does not imply
+  general permission to touch runtime state after divergence.
+
+Option A is rejected because ABI-only enforcement still leaves the
+Phase 5 omission shape as a per-entry-path obligation: every non-ABI
+entry must remember to call an ABI-shaped guard helper even though it
+does not cross the ABI. Option B is rejected because moving all guards
+into internal primitives would either lose ABI diagnostic precision or
+force public-call context through otherwise local runtime APIs. Option
+D is not required for M2 acceptance: typed guard tokens are the
+strongest structural answer, but their blast radius is disproportionate
+to the Phase 7 acceptance need now that Option C gives both a
+diagnostic boundary and an invariant boundary.
+
+DD-012 acceptance therefore updates `docs/architecture.md` with this
+principle as a global runtime invariant. Implementation alignment is
+scoped to ensuring existing M2 paths match the accepted rule and adding
+focused guard-placement tests; broader tokenisation or callback-surface
+redesign is not part of this DD.
 
 #### Forward-compat exposure
 
-High if left unspecified through M2. The cost of choosing incorrectly
-grows with each new re-entrancy state and each new non-ABI entry
-path; M3 is expected to add at least timer, async-I/O, and
-additional Win32 message handling, multiplying combinations through
-the four existing states. Settling the principle in Phase 7
-keeps the M3 pre-doc free to apply it uniformly across its
-new surface.
+Low-medium after acceptance. The placement rule is now explicit before
+M3 adds timer, async-I/O, and additional Win32 message handling, so
+those new surfaces inherit the Option C responsibility split instead
+of re-deciding guard placement locally.
 
-Low specifically for the Phase 5 retrospective bug. That bug is a
-single missed call site and is repaired by adding the missing guard,
-independently of which option is eventually chosen.
+Residual exposure remains in two places. First, each new non-ABI entry
+path must name the internal invariant boundary it crosses; omission is
+now review-visible but not compile-time impossible. Second, typed guard
+tokens remain a M3+ revisit trigger if the number of internal entry
+paths grows enough that runtime checks and review discipline no longer
+provide sufficient structural confidence.
 
 ---
 
-## Summary of proposed decisions
+## Summary of accepted decisions
 
 | ID | Topic | Recommendation | Impl risk | Forward-compat exposure |
 |---|---|---|---|---|
 | DD-M2-P6-010 *(Accepted 2026-05-09)* | `dirty_effects` topological sort fidelity | **Option A** — true topological walk in M2, extracted as a free function with pure-logic unit tests. A5 (literal reading) discharged by implementation; M3 inherits the verified primitive. Options B / C / C-lite recorded as considered, not recommended. | Low–medium (Option A) | Discharged at acceptance; M3 residuals (cycle / ties / fan-out) recorded in m2-to-m3-handover.md |
-| DD-M2-P6-011 *(Proposed)* | String-typed property binding | Inherited Phase 6 draft: **Option B** — `StrPropRead` HandlerExpr variant. Subject to Phase 7 pre-doc revision under A6 framing (which may favour Option C). | Low (Option B) / Low–medium (Option A or C) | Low |
-| DD-M2-P6-012 *(Proposed)* | Re-entrancy and safety-guard placement principle | **To be settled by DD-012 pre-doc cycle.** A (ABI-boundary) / B (internal-state-machine) / C (defense-in-depth) / D (typed guard tokens). | n/a (open) | High if unspecified through M2 |
+| DD-M2-P6-011 *(Accepted 2026-05-10)* | String-typed property binding | **Option B** — `StrPropRead` HandlerExpr variant. A6 is discharged demonstratively: M2 proves `.ui` String binding through runtime widget property state while preserving existing integer `PropRead` behavior. Option C `TypedValue` unification is deferred to a post-M2 open question. | Low (Option B) | Low for M2; later typed-expression pressure tracked in typed-value-evaluator.md |
+| DD-M2-P6-012 *(Accepted 2026-05-10)* | Re-entrancy and safety-guard placement principle | **Option C** — role-specified defense in depth. ABI boundary owns caller-facing diagnostics; internal runtime boundary owns invariant enforcement for ABI-bypassing entries; cleanup exceptions are explicit. Option D typed tokens deferred as a M3+ revisit trigger. | Low-medium (focused implementation alignment and tests) | Low-medium; M3 timer / async-I/O / windowproc surfaces inherit the rule |
 
-**Aggregate impl-risk picture.** The three DDs are scoped narrowly:
-010 changes `drain_dirty_effects()` only; 011 adds an additive
-`HandlerExpr` variant and two `EvalContext` methods (under the inherited
-recommendation); 012 settles a *principle* whose enforcement may or may
-not require code change beyond the local Phase 5 retrospective fix
-(already landed in Phase 6). The Phase 7 closing risk is therefore
-concentrated in 012 — both because its option set ranges from
-documentation-only to pervasive type-system change, and because A5
-acceptance hinges on its quality, not its presence.
+**Aggregate shipped picture.** The three DDs stayed narrowly scoped:
+010 replaced the production dirty-Effect ordering path with a true graph
+walk; 011 added an additive `HandlerExpr` variant plus String read methods
+while preserving the existing integer path; 012 settled the guard-placement
+principle and aligned the visible M2 gaps with focused tests. With these
+implemented, M2's A5/A6 acceptance criteria are discharged. The broader
+typed-value rewrite remains outside M2 unless later DSL/tooling evidence
+reopens it.
 
 **Aggregate forward-compat exposure.** All three DDs have explicit
-M3-or-later successor work — 010's mandatory pre-condition (or its
-discharge), 011's M3 type-system extension trigger, and 012's
-application across timer / async-I/O / windowproc surfaces in M3.
+successor work or revisit triggers — 010's M3 residuals after the
+topological primitive is discharged, 011's post-M2 typed-value open
+question, and 012's application across timer / async-I/O / windowproc
+surfaces in M3.
 
 ## Out of scope
 
@@ -618,9 +680,10 @@ application across timer / async-I/O / windowproc surfaces in M3.
   B); a tool that visualises the dependency graph or its SCCs is
   post-M2.
 - **`f32` / `bool` / aggregate-typed property binding.** DD-011 covers
-  `i32` and `String` only. Additional scalar types are M3, paired with
-  the DSL spec finalisation; the DD's Forward-compat exposure
-  paragraph names them as the trigger for revisiting Option C.
+  `i32` and `String` only. Additional scalar types are post-M2 work.
+  They are one possible trigger for revisiting Option C, but they are
+  not forced into M3 unless M3's DSL surface or public spec draft
+  creates real type-system pressure.
 - **`wasamo_post_event` and timer / async-I/O ABI.** DD-012's option
   set considers M3 timer and async-I/O entry paths as constraints on
   the principle; designing those entry paths themselves is M3.
@@ -646,3 +709,15 @@ The acceptance-criteria revision that introduced A5/A6 and scoped them
 to Phase 7 is recorded in the Progress section of
 [m2-plan.md](../plans/m2-plan.md) under the 2026-05-08 entry; the
 Phase 7 entry there names this ADR as the housing for DD-010/011/012.
+
+### Minor implementation clarifications
+
+- **2026-05-09 — DD-M2-P6-010 write-edge borrow.** During DD-010
+  implementation, `ReactiveGraph::forward` / `back` were confirmed to
+  encode read dependencies only. They are sufficient for invalidation
+  but not for deriving the Effect-to-Effect ordering edge "writer runs
+  before reader when both are dirty." The required implementation form
+  was therefore clarified to name the write-edge map as an explicit
+  graph borrow. This does not supersede DD-010 or change Option A; it
+  records the concrete graph input needed to implement the accepted
+  topological walk faithfully.

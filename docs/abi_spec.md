@@ -1,8 +1,8 @@
 # Wasamo C ABI Specification
 
-**Version:** M1 (2026-04-30)
-**Status:** Accepted (2026-04-30) — finalised against the implemented `wasamo.h`
-**Authoritative decisions:** [decisions/phase-6-c-abi.md](decisions/phase-6-c-abi.md) (DD-P6-001..007)
+**Version:** M2 Foundation (2026-05-11)
+**Status:** Accepted for M2 — finalised against the implemented `wasamo.h`
+**Authoritative decisions:** [decisions/phase-6-c-abi.md](decisions/phase-6-c-abi.md) (DD-P6-001..007), M2 phase ADRs under [decisions/](decisions/)
 
 This document specifies the C ABI exposed by `wasamo.dll` via the
 `wasamo.h` header. It is the normative reference for binding
@@ -12,16 +12,16 @@ counterpart.
 
 The ABI is **two-layer**:
 
-- **Stable core** — candidate for the M4 ABI freeze. Functions
+- **Stable core** — candidate surface for the M6 ABI freeze. Functions
   and types in this layer are designed to survive both deferred
   Phase 6 questions: (a) where DSL inline handler bodies execute,
   and (b) `wasamoc`'s M2 output format. They are not yet frozen;
-  M1-M3 may revise them. M4 commits to backward compatibility
+  M1-M5 may revise them. M6 commits to backward compatibility
   going forward.
 - **M1 experimental** — exists because M1 `wasamoc` is parser-only
   and host code must construct widget trees imperatively. Every
   symbol in this layer is marked `WASAMO_EXPERIMENTAL` in the
-  header and is **not** subject to M4 stability. Code that uses
+  header and is **not** subject to M6 stability. Code that uses
   these symbols must expect breakage.
 
 ## 1. Conventions
@@ -61,8 +61,7 @@ left as the host-initialised `NULL`).
 ```
 
 The wasamo build defines `WASAMO_BUILDING_DLL`. Hosts including
-`wasamo.h` do **not** define it. Static linking is unsupported in
-M1.
+`wasamo.h` do **not** define it. Static linking is unsupported.
 
 ### 2.2 Calling convention
 
@@ -126,7 +125,7 @@ typedef int32_t WasamoStatus;
 #define WASAMO_ERR_IR_MALFORMED        -8  /* DD-M2-P6-005 / DD-M2-P6-009 */
 ```
 
-The status space is closed at M4. New codes added before M4 are
+The status space is closed at M6. New codes added before M6 are
 non-breaking; codes are never reassigned. Negative values denote
 errors; zero is success. Hosts should treat any unknown negative
 code as a generic failure rather than asserting.
@@ -184,7 +183,7 @@ the next ABI call on the same thread for property reads, or for
 the duration of the callback for signal arguments. Hosts copy
 when they need retention.
 
-The tag set is closed at M4. New tags added before M4 are
+The tag set is closed at M6. New tags added before M6 are
 non-breaking provided existing tags keep their numeric values.
 
 ### 3.4 Callback typedefs
@@ -277,7 +276,7 @@ WASAMO_EXPORT WasamoStatus WASAMO_API wasamo_set_property(
 Property IDs are `uint32_t` keys. The ID space is partitioned per
 widget type. The mechanism is stable; the concrete ID values for
 M1 widgets are defined in the M1 experimental layer (§5) and may
-change before M4. The contract here:
+change before M6. The contract here:
 
 - An ID unknown to the given widget returns `WASAMO_ERR_INVALID_ARG`.
 - A type-mismatched value (e.g. setting a string property to an
@@ -346,8 +345,8 @@ convenience for the former; it is not part of the stable core.
 
 Added in M2-Phase 4 (DD-M2-P4-001/002/003 = Option A). Grows the stable
 core with a sixth area: index-based widget-tree mutation. Constructors
-(`wasamo_*_create`) remain in the M1 experimental layer (§5) until the
-M3 DSL spec draft settles their parameter shapes.
+(`wasamo_*_create`) remain in the M1 experimental layer (§5) until a later
+DSL/widget-surface milestone settles their parameter shapes.
 
 ```c
 WASAMO_EXPORT WasamoStatus WASAMO_API wasamo_widget_append_child(
@@ -494,7 +493,7 @@ mechanism — are also experimental:
 
 `BUTTON_STYLE` values: `0 = Default`, `1 = Accent`. `TEXT_STYLE`
 values: `0 = Caption`, `1 = Body`, `2 = Subtitle`, `3 = Title`. The
-numeric assignments are M1 stopgaps and may change before M4.
+numeric assignments are M1 stopgaps and may change before M6.
 
 **Construction defaults.** Container constructors do not take
 spacing / padding / alignment arguments in M1; the runtime applies
@@ -571,12 +570,9 @@ zeroes it on entry) and `wasamo_last_error_message` carries a
 human-readable description.
 
 **Handle ownership and lifetime.** The returned `WasamoWindow*` is
-runtime-owned and valid until `wasamo_shutdown`. M2 does not expose a
-per-window destroy ABI (DD-M2-P6-005); the M2 counter holds the
-window for the process lifetime. M3 multi-instance scenarios will
-introduce explicit destruction; the M2 contract is the
-constant-lifetime base case of that future shape, so M2-era hosts do
-not require revision when explicit destruction lands.
+runtime-owned and remains valid until the host calls
+`wasamo_window_destroy` or shuts the runtime down. The loader transfers
+ownership of the constructed root widget to the returned window.
 
 **Threading.** Like every other `wasamo_*` ABI, `wasamo_load_ui` must
 be called on the runtime's owning UI thread (§6). Because the M2
@@ -700,7 +696,7 @@ header are kept in sync by CI, not by code generation:
 
 - A C compilation smoke test in CI builds a minimal TU that
   `#include`s `wasamo.h` and exercises every public function
-  signature; linker errors against `wasamo.lib` catch ABI drift.
+  signature; linker errors against `wasamo.dll.lib` catch ABI drift.
 - A function-name parity check (optional, may land later) parses
   both `wasamo.h` and the Rust ABI block and asserts the function
   sets agree.
@@ -709,8 +705,8 @@ The two-layer split is expressed by section ordering and the
 `WASAMO_EXPERIMENTAL` marker, not by `#ifdef` gates — hosts get
 both layers from the same header.
 
-`wasamo.h` and the import library `wasamo.lib` are placed under
-`bindings/c/` in Phase 7.
+`wasamo.h` lives under `bindings/c/`; the MSVC import library is emitted
+by the Rust build as `target/<profile>/wasamo.dll.lib`.
 
 ---
 

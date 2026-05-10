@@ -23,7 +23,7 @@ discipline is described in
 See [CHANGELOG entry](./CHANGELOG.md#v010--2026-05-01--m1-proof-of-concept)
 and [docs/decisions/](./docs/decisions/) for the per-phase ADRs.
 
-## M2: Foundation
+## M2: Foundation ✅ shipped 2026-05-11
 
 **Goal:** close the loop on the DSL side — make `.ui` files actually
 drive the runtime, with reactive state propagation, so Hello Counter
@@ -56,8 +56,9 @@ by hand through the experimental C ABI.
   (`String`), proving the `EvalContext` / `HandlerExpr` / IR
   design is not silently `i32`-specialized
 
-Phase breakdown, dependencies, and progress live in
-[docs/plans/m2-plan.md](./docs/plans/m2-plan.md).
+See [CHANGELOG entry](./CHANGELOG.md#m2-foundation--shipped-2026-05-11)
+and [docs/plans/m2-plan.md](./docs/plans/m2-plan.md) for the completed
+phase breakdown.
 
 ## M3: DSL surface
 

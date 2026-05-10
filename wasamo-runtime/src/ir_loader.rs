@@ -98,7 +98,10 @@ pub struct BuiltUi {
 pub fn parse_ir(text: &str) -> Result<IrComponent, IrLoadError> {
     let body = check_and_strip_header(text)?;
     let tokens = tokenize(body)?;
-    let mut p = Parser { tokens: &tokens, pos: 0 };
+    let mut p = Parser {
+        tokens: &tokens,
+        pos: 0,
+    };
     let comp = p.parse_component()?;
     if p.pos < p.tokens.len() {
         return Err(IrLoadError::Parse(format!(
@@ -164,7 +167,7 @@ fn validate_expr_references(
 ) -> Result<(), IrLoadError> {
     match expr {
         HandlerExpr::IntLit(_) | HandlerExpr::StrLit(_) => Ok(()),
-        HandlerExpr::PropRead { path } => {
+        HandlerExpr::PropRead { path } | HandlerExpr::StrPropRead { path } => {
             if !declared.contains(path.as_str()) {
                 Err(IrLoadError::Validate(err_msg(path)))
             } else {
@@ -326,9 +329,9 @@ fn tokenize(text: &str) -> Result<Vec<Token>, IrLoadError> {
                         i += 1;
                     }
                     let s: String = chars[start..i].iter().collect();
-                    let n: i32 = s.parse().map_err(|_| {
-                        IrLoadError::Parse(format!("invalid integer: -{s}"))
-                    })?;
+                    let n: i32 = s
+                        .parse()
+                        .map_err(|_| IrLoadError::Parse(format!("invalid integer: -{s}")))?;
                     tokens.push(Token::Int(-n));
                 } else {
                     return Err(IrLoadError::Parse("unexpected character: '-'".into()));
@@ -359,7 +362,9 @@ fn tokenize(text: &str) -> Result<Vec<Token>, IrLoadError> {
                 tokens.push(Token::Ident(s));
             }
             other => {
-                return Err(IrLoadError::Parse(format!("unexpected character: '{other}'")));
+                return Err(IrLoadError::Parse(format!(
+                    "unexpected character: '{other}'"
+                )));
             }
         }
     }
@@ -383,9 +388,9 @@ impl<'a> Parser<'a> {
     }
 
     fn expect(&mut self, expected: &Token) -> Result<(), IrLoadError> {
-        let actual = self.advance().ok_or_else(|| {
-            IrLoadError::Parse(format!("expected {expected:?}, got EOF"))
-        })?;
+        let actual = self
+            .advance()
+            .ok_or_else(|| IrLoadError::Parse(format!("expected {expected:?}, got EOF")))?;
         if actual != expected {
             return Err(IrLoadError::Parse(format!(
                 "expected {expected:?}, got {actual:?}"
@@ -445,14 +450,20 @@ impl<'a> Parser<'a> {
                     )));
                 }
                 None => {
-                    return Err(IrLoadError::Parse("unexpected EOF in component body".into()));
+                    return Err(IrLoadError::Parse(
+                        "unexpected EOF in component body".into(),
+                    ));
                 }
             }
         }
 
-        let root = root
-            .ok_or_else(|| IrLoadError::Parse("component has no root node".into()))?;
-        Ok(IrComponent { name, base, states, root })
+        let root = root.ok_or_else(|| IrLoadError::Parse("component has no root node".into()))?;
+        Ok(IrComponent {
+            name,
+            base,
+            states,
+            root,
+        })
     }
 
     fn parse_state(&mut self) -> Result<IrState, IrLoadError> {
@@ -503,7 +514,13 @@ impl<'a> Parser<'a> {
             }
         }
 
-        Ok(IrNode { widget_type, props, bindings, handlers, children })
+        Ok(IrNode {
+            widget_type,
+            props,
+            bindings,
+            handlers,
+            children,
+        })
     }
 
     fn parse_prop(&mut self) -> Result<IrProp, IrLoadError> {
@@ -536,7 +553,9 @@ impl<'a> Parser<'a> {
             Some(Token::Int(n)) => Ok(IrLiteral::Int(*n)),
             Some(Token::Str(s)) => Ok(IrLiteral::Str(s.clone())),
             Some(Token::Ident(s)) => Ok(IrLiteral::Ident(s.clone())),
-            other => Err(IrLoadError::Parse(format!("expected literal, got {other:?}"))),
+            other => Err(IrLoadError::Parse(format!(
+                "expected literal, got {other:?}"
+            ))),
         }
     }
 
@@ -567,10 +586,17 @@ impl<'a> Parser<'a> {
                 let path = self.expect_ident()?;
                 HandlerExpr::PropRead { path }
             }
+            "str-prop-read" => {
+                let path = self.expect_ident()?;
+                HandlerExpr::StrPropRead { path }
+            }
             "assign" => {
                 let lhs = self.expect_ident()?;
                 let rhs = self.parse_expr()?;
-                HandlerExpr::Assign { lhs, rhs: Box::new(rhs) }
+                HandlerExpr::Assign {
+                    lhs,
+                    rhs: Box::new(rhs),
+                }
             }
             "compound-assign" => {
                 let op = match self.advance() {
@@ -583,7 +609,11 @@ impl<'a> Parser<'a> {
                 };
                 let lhs = self.expect_ident()?;
                 let rhs = self.parse_expr()?;
-                HandlerExpr::CompoundAssign { op, lhs, rhs: Box::new(rhs) }
+                HandlerExpr::CompoundAssign {
+                    op,
+                    lhs,
+                    rhs: Box::new(rhs),
+                }
             }
             "interp" => {
                 let mut parts = Vec::new();
@@ -655,14 +685,18 @@ fn build_signal_registry(states: &[IrState]) -> SignalRegistry {
                     IrLiteral::Int(n) => *n,
                     _ => 0,
                 };
-                registry.i32s.insert(state.name.clone(), Signal::new(initial));
+                registry
+                    .i32s
+                    .insert(state.name.clone(), Signal::new(initial));
             }
             IrType::Str => {
                 let initial = match &state.default {
                     IrLiteral::Str(s) => s.clone(),
                     _ => String::new(),
                 };
-                registry.strings.insert(state.name.clone(), Signal::new(initial));
+                registry
+                    .strings
+                    .insert(state.name.clone(), Signal::new(initial));
             }
         }
     }
@@ -685,7 +719,10 @@ fn build_node(
             continue;
         };
         let widget_id = WidgetId(widget.as_mut() as *mut WidgetNode as *mut ());
-        let target = BindingTarget::WidgetProperty { node: widget_id, prop: prop_key };
+        let target = BindingTarget::WidgetProperty {
+            node: widget_id,
+            prop: prop_key,
+        };
         let handle = register_binding(
             target,
             binding.expr.clone(),
@@ -734,15 +771,22 @@ fn construct_widget(
             let style = extract_typography(&node.props, "font");
             // If `text` will be filled by a binding, construct with empty content;
             // the binding's initial run writes the actual value during build.
-            let initial = if has_binding(&node.bindings, "text") { String::new() } else { text };
+            let initial = if has_binding(&node.bindings, "text") {
+                String::new()
+            } else {
+                text
+            };
             WidgetNode::text(compositor, renderer, &initial, style)
                 .map_err(|e| IrLoadError::Build(format!("text: {e}")))
         }
         "Button" => {
             let label = extract_str_prop(&node.props, "text").unwrap_or_default();
             let style = extract_button_style(&node.props, "style");
-            let initial =
-                if has_binding(&node.bindings, "text") { String::new() } else { label };
+            let initial = if has_binding(&node.bindings, "text") {
+                String::new()
+            } else {
+                label
+            };
             WidgetNode::button(compositor, renderer, &initial, style)
                 .map_err(|e| IrLoadError::Build(format!("button: {e}")))
         }
@@ -761,24 +805,33 @@ fn resolve_prop_key(widget_type: &str, prop_name: &str) -> Option<PropertyKey> {
 }
 
 fn extract_int_prop(props: &[IrProp], name: &str) -> Option<i32> {
-    props.iter().find(|p| p.name == name).and_then(|p| match &p.value {
-        IrLiteral::Int(n) => Some(*n),
-        _ => None,
-    })
+    props
+        .iter()
+        .find(|p| p.name == name)
+        .and_then(|p| match &p.value {
+            IrLiteral::Int(n) => Some(*n),
+            _ => None,
+        })
 }
 
 fn extract_str_prop(props: &[IrProp], name: &str) -> Option<String> {
-    props.iter().find(|p| p.name == name).and_then(|p| match &p.value {
-        IrLiteral::Str(s) => Some(s.clone()),
-        _ => None,
-    })
+    props
+        .iter()
+        .find(|p| p.name == name)
+        .and_then(|p| match &p.value {
+            IrLiteral::Str(s) => Some(s.clone()),
+            _ => None,
+        })
 }
 
 fn extract_typography(props: &[IrProp], name: &str) -> TypographyStyle {
-    let ident = props.iter().find(|p| p.name == name).and_then(|p| match &p.value {
-        IrLiteral::Ident(id) => Some(id.as_str()),
-        _ => None,
-    });
+    let ident = props
+        .iter()
+        .find(|p| p.name == name)
+        .and_then(|p| match &p.value {
+            IrLiteral::Ident(id) => Some(id.as_str()),
+            _ => None,
+        });
     match ident {
         Some("caption") => TypographyStyle::Caption,
         Some("subtitle") => TypographyStyle::Subtitle,
@@ -788,10 +841,13 @@ fn extract_typography(props: &[IrProp], name: &str) -> TypographyStyle {
 }
 
 fn extract_button_style(props: &[IrProp], name: &str) -> ButtonStyle {
-    let ident = props.iter().find(|p| p.name == name).and_then(|p| match &p.value {
-        IrLiteral::Ident(id) => Some(id.as_str()),
-        _ => None,
-    });
+    let ident = props
+        .iter()
+        .find(|p| p.name == name)
+        .and_then(|p| match &p.value {
+            IrLiteral::Ident(id) => Some(id.as_str()),
+            _ => None,
+        });
     match ident {
         Some("accent") => ButtonStyle::Accent,
         _ => ButtonStyle::Default,
@@ -872,9 +928,27 @@ mod tests {
         );
         let props = &c.root.props;
         assert_eq!(props.len(), 3);
-        assert_eq!(props[0], IrProp { name: "spacing".into(), value: IrLiteral::Int(12) });
-        assert_eq!(props[1], IrProp { name: "theme".into(), value: IrLiteral::Ident("system".into()) });
-        assert_eq!(props[2], IrProp { name: "title".into(), value: IrLiteral::Str("Hi".into()) });
+        assert_eq!(
+            props[0],
+            IrProp {
+                name: "spacing".into(),
+                value: IrLiteral::Int(12)
+            }
+        );
+        assert_eq!(
+            props[1],
+            IrProp {
+                name: "theme".into(),
+                value: IrLiteral::Ident("system".into())
+            }
+        );
+        assert_eq!(
+            props[2],
+            IrProp {
+                name: "title".into(),
+                value: IrLiteral::Str("Hi".into())
+            }
+        );
     }
 
     #[test]
@@ -902,7 +976,30 @@ mod tests {
         assert_eq!(c.root.bindings.len(), 1);
         let b = &c.root.bindings[0];
         assert_eq!(b.prop_name, "text");
-        assert_eq!(b.expr, HandlerExpr::PropRead { path: "count".into() });
+        assert_eq!(
+            b.expr,
+            HandlerExpr::PropRead {
+                path: "count".into()
+            }
+        );
+    }
+
+    #[test]
+    fn binding_with_str_prop_read() {
+        let c = parse_ok(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             state label: string = \"hi\"\n\
+             node V { bind text = (str-prop-read label) }\n}",
+        );
+        assert_eq!(c.root.bindings.len(), 1);
+        let b = &c.root.bindings[0];
+        assert_eq!(b.prop_name, "text");
+        assert_eq!(
+            b.expr,
+            HandlerExpr::StrPropRead {
+                path: "label".into()
+            }
+        );
     }
 
     #[test]
@@ -917,7 +1014,9 @@ mod tests {
             b.expr,
             HandlerExpr::Interpolation(vec![
                 InterpolationPart::Literal("Count: ".into()),
-                InterpolationPart::Expr(HandlerExpr::PropRead { path: "count".into() }),
+                InterpolationPart::Expr(HandlerExpr::PropRead {
+                    path: "count".into()
+                }),
             ])
         );
     }
@@ -957,7 +1056,10 @@ mod tests {
         assert_eq!(exprs.len(), 2);
         assert_eq!(
             exprs[0],
-            HandlerExpr::Assign { lhs: "x".into(), rhs: Box::new(HandlerExpr::IntLit(1)) }
+            HandlerExpr::Assign {
+                lhs: "x".into(),
+                rhs: Box::new(HandlerExpr::IntLit(1))
+            }
         );
     }
 
@@ -989,8 +1091,14 @@ mod tests {
             root: IrNode {
                 widget_type: "VStack".into(),
                 props: vec![
-                    IrProp { name: "spacing".into(), value: IrLiteral::Int(12) },
-                    IrProp { name: "padding".into(), value: IrLiteral::Int(24) },
+                    IrProp {
+                        name: "spacing".into(),
+                        value: IrLiteral::Int(12),
+                    },
+                    IrProp {
+                        name: "padding".into(),
+                        value: IrLiteral::Int(24),
+                    },
                 ],
                 bindings: vec![],
                 handlers: vec![],
@@ -1016,8 +1124,14 @@ mod tests {
                     IrNode {
                         widget_type: "Button".into(),
                         props: vec![
-                            IrProp { name: "text".into(), value: IrLiteral::Str("Increment".into()) },
-                            IrProp { name: "style".into(), value: IrLiteral::Ident("accent".into()) },
+                            IrProp {
+                                name: "text".into(),
+                                value: IrLiteral::Str("Increment".into()),
+                            },
+                            IrProp {
+                                name: "style".into(),
+                                value: IrLiteral::Ident("accent".into()),
+                            },
                         ],
                         bindings: vec![],
                         handlers: vec![IrHandler {
@@ -1053,7 +1167,12 @@ mod tests {
                 IrType::I32 => "i32",
                 IrType::Str => "string",
             };
-            out.push_str(&format!("    state {}: {} = {}\n", s.name, ty, render_lit(&s.default)));
+            out.push_str(&format!(
+                "    state {}: {} = {}\n",
+                s.name,
+                ty,
+                render_lit(&s.default)
+            ));
         }
         if !c.states.is_empty() {
             out.push('\n');
@@ -1067,10 +1186,18 @@ mod tests {
         let i = "    ".repeat(depth);
         out.push_str(&format!("{i}node {} {{\n", n.widget_type));
         for p in &n.props {
-            out.push_str(&format!("{i}    prop {} = {}\n", p.name, render_lit(&p.value)));
+            out.push_str(&format!(
+                "{i}    prop {} = {}\n",
+                p.name,
+                render_lit(&p.value)
+            ));
         }
         for b in &n.bindings {
-            out.push_str(&format!("{i}    bind {} = {}\n", b.prop_name, render_expr(&b.expr)));
+            out.push_str(&format!(
+                "{i}    bind {} = {}\n",
+                b.prop_name,
+                render_expr(&b.expr)
+            ));
         }
         for h in &n.handlers {
             out.push_str(&format!("{i}    on {} {{\n", h.signal));
@@ -1096,6 +1223,7 @@ mod tests {
             HandlerExpr::IntLit(n) => n.to_string(),
             HandlerExpr::StrLit(s) => format!("\"{}\"", s),
             HandlerExpr::PropRead { path } => format!("(prop-read {})", path),
+            HandlerExpr::StrPropRead { path } => format!("(str-prop-read {})", path),
             HandlerExpr::Assign { lhs, rhs } => format!("(assign {} {})", lhs, render_expr(rhs)),
             HandlerExpr::CompoundAssign { lhs, op, rhs } => {
                 let op_str = match op {
@@ -1137,7 +1265,10 @@ mod tests {
     }
 
     fn assert_malformed_display_nonempty(err: &IrLoadError) {
-        assert!(err.is_malformed(), "expected malformed-class error, got {err:?}");
+        assert!(
+            err.is_malformed(),
+            "expected malformed-class error, got {err:?}"
+        );
         let msg = err.to_string();
         assert!(
             !msg.is_empty(),
@@ -1156,9 +1287,7 @@ mod tests {
 
     #[test]
     fn malformed_multiple_root_nodes() {
-        let err = parse_err(
-            ";wasamo-ir v0\ncomponent C inherits W { node V {} node W {} }",
-        );
+        let err = parse_err(";wasamo-ir v0\ncomponent C inherits W { node V {} node W {} }");
         assert!(matches!(err, IrLoadError::Parse(ref m) if m.contains("multiple root nodes")));
         assert_malformed_display_nonempty(&err);
     }
@@ -1179,9 +1308,7 @@ mod tests {
 
     #[test]
     fn malformed_trailing_tokens() {
-        let err = parse_err(
-            ";wasamo-ir v0\ncomponent C inherits W { node V {} } stray",
-        );
+        let err = parse_err(";wasamo-ir v0\ncomponent C inherits W { node V {} } stray");
         assert!(matches!(err, IrLoadError::Parse(ref m) if m.contains("trailing tokens")));
         assert_malformed_display_nonempty(&err);
     }

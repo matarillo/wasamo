@@ -1,6 +1,6 @@
 # Wasamo Vision
 
-**Status:** Pre-alpha, design in progress
+**Status:** Pre-alpha; M2 Foundation shipped 2026-05-11; M3 DSL surface is next
 
 > This document describes why Wasamo exists, what it prioritizes, and where it's headed.
 > For implementation details see [docs/architecture.md](./docs/architecture.md); for phase-by-phase design decisions see [docs/decisions/](./docs/decisions/).
@@ -155,10 +155,11 @@ thesis summaries below are vision-level framing
 - **M1 — Proof of concept** ✅ shipped 2026-05-01. Validated the core
   hypothesis (external DSL × C ABI × Visual Layer) end-to-end.
   See [CHANGELOG.md](./CHANGELOG.md).
-- **M2 — Foundation.** Close the loop on the DSL side: `.ui` files
-  drive the runtime through reactive state propagation, replacing
-  M1's host-imperative widget tree construction.
-- **M3 — DSL surface.** The DSL is expressive enough to write real
+- **M2 — Foundation** ✅ shipped 2026-05-11. Closed the loop on the
+  DSL side: `.ui` files drive the runtime through reactive state
+  propagation, replacing M1's host-imperative widget tree construction.
+  See [CHANGELOG.md](./CHANGELOG.md#m2-foundation--shipped-2026-05-11).
+- **M3 — DSL surface** *(next)*. The DSL is expressive enough to write real
   layouts, and the `.ui` specification is published as a public
   draft.
 - **M4 — Interaction stack.** Input, multi-window, IME, AccessKit,
@@ -263,11 +264,12 @@ We intend to register the "Wasamo" name and logo as trademarks in the future. Th
 
 ## 11. How to contribute
 
-Wasamo is currently pre-alpha. You can help in several ways.
+Wasamo is currently pre-alpha; M3 is the next milestone. You can help in
+several ways.
 
 **Join the design discussion.** GitHub Discussions hosts active topics. We particularly welcome feedback on the validity of the [non-goals](#23-non-goals), the direction of the DSL syntax, and our priority calls.
 
-**Contribute code.** [Good first issues](https://github.com/matarillo/wasamo/issues?q=label%3A%22good+first+issue%22) on the M1 roadmap are a reasonable starting point.
+**Contribute code.** [Good first issues](https://github.com/matarillo/wasamo/issues?q=label%3A%22good+first+issue%22) on the current roadmap are a reasonable starting point.
 
 **Record a decision.** For M1-M2 implementation decisions, create an ADR in [docs/decisions/](./docs/decisions/) following the format in [docs/decisions/README.md](./docs/decisions/README.md). From M3 onward, substantial feature proposals follow the RFC process in [docs/rfcs/](./docs/rfcs/).
 

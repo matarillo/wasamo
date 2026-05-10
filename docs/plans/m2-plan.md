@@ -1,6 +1,6 @@
 ---
 milestone: M2
-status: in-progress
+status: completed
 roadmap-anchor: ROADMAP.md#m2-foundation
 adrs:
   - docs/decisions/vision-post-m2-roadmap.md
@@ -253,6 +253,35 @@ and [docs/decisions/vision-post-m2-roadmap.md](../decisions/vision-post-m2-roadm
     discharged at design level; second clause (implementation
     reflects it) opens the next step.
 
+- **2026-05-10** — Phase 7 progress (no acceptance-criteria change).
+  - DD-M2-P6-010 implementation landed; the production dirty-Effect
+    drain no longer relies on `EffectId` numeric order.
+  - DD-M2-P6-012 (`re-entrancy / safety-guard placement principle`)
+    Accepted in [m2-phase-7-reactive-foundation.md](../decisions/m2-phase-7-reactive-foundation.md#dd-m2-p6-012--re-entrancy-and-safety-guard-placement-principle)
+    — Option C (role-specified defense in depth). The principle is
+    recorded in [architecture.md](../architecture.md#684-runtime-safety-guard-placement)
+    as a global runtime invariant. A5 now has both DDs accepted at
+    design level; at this point the remaining A5 work was DD-012
+    implementation alignment and focused guard-placement tests.
+  - DD-M2-P6-011 (`String`-typed property binding)
+    Accepted in [m2-phase-7-reactive-foundation.md](../decisions/m2-phase-7-reactive-foundation.md#dd-m2-p6-011--string-typed-property-binding)
+    — Option B (`StrPropRead`). A6 is accepted at design level;
+    at this point the remaining A6 work was implementation: `.ui`
+    String binding must propagate through runtime widget property state
+    while preserving existing integer binding behavior.
+
+- **2026-05-11** — Phase 7 closed; M2 completed.
+  - DD-M2-P6-011 implementation landed with `HandlerExpr::StrPropRead`,
+    wasamoc lowering based on declared state type, runtime String read
+    tracking, and a Windows-only headless live `WidgetNode` proof.
+  - DD-M2-P6-010 / 011 / 012 are all Accepted and implemented. A5 and A6
+    are discharged.
+  - Phase-end retrospective recorded local clean rebuild green and
+    GitHub Actions CI success for `feat/m2-phase-7` at
+    `d730124192e97da3fc20749a2dad3be7c1f3d3ea`.
+  - M2 is now complete; M3 opens from `docs/notes/m2-to-m3-handover.md`,
+    `docs/notes/typed-value-evaluator.md`, and the accepted ADR residuals.
+
 ## Progress
 
 The Progress section is a compact milestone index. Detailed live task
@@ -268,12 +297,9 @@ history, then deleted by default.
 | M2-Phase 4 - Tree-mutation ABI primitives | completed | retired | [m2-phase-4-tree-mutation-abi.md](../decisions/m2-phase-4-tree-mutation-abi.md) | Stable-core tree mutation ABI landed; CHANGELOG entry added. |
 | M2-Phase 5 - Reactive engine | completed | retired | [m2-phase-5-reactive-engine.md](../decisions/m2-phase-5-reactive-engine.md) | Reactive primitives and binding path landed; later drain refinements folded into Phase 6/7 records. |
 | M2-Phase 6 - `.ui -> runtime` lowering | completed | retired | [m2-phase-6-ui-lowering.md](../decisions/m2-phase-6-ui-lowering.md) | A1/A2 discharged by the C/Rust/Zig counter migration; CHANGELOG entry added. |
-| M2-Phase 7 - Reactive Foundation Hardening & Contract Finalization | in-progress | [progress/m2-phase-7-progress.md](progress/m2-phase-7-progress.md) | [m2-phase-7-reactive-foundation.md](../decisions/m2-phase-7-reactive-foundation.md) | Active phase for A5/A6. DD-M2-P6-010 is Accepted at design level; implementation is next. |
+| M2-Phase 7 - Reactive Foundation Hardening & Contract Finalization | completed | retired | [m2-phase-7-reactive-foundation.md](../decisions/m2-phase-7-reactive-foundation.md) | A5/A6 discharged by topological dirty-Effect drain, runtime guard-placement invariant, and String binding through live widget property state; phase-end retrospective recorded in `docs/notes/m2-phase-7/phase-end-retrospective.md`. |
 
 ### Owner-facing resume note
 
-Continue in [progress/m2-phase-7-progress.md](progress/m2-phase-7-progress.md).
-DD-M2-P6-010 has been accepted at design level, so the next implementation
-step is to replace the current `EffectId`-numeric-order approximation with
-a true topological walk and pure-logic tests on synthetic dependency
-graphs.
+M2 is complete. Open M3 from the completed M2 plan, the M2-to-M3 handover
+note, and the residuals recorded in the accepted Phase 7 ADR.

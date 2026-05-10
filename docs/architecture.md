@@ -1,6 +1,6 @@
 # Wasamo Architecture
 
-**Status:** M1 complete (Phases 0-8); M2-Phases 1-5 complete; M2-Phase 6 in progress — acceptance A1/A2 discharged via DD-M2-P6-008 (counter examples migration); Phase-end gate pending (DD-M2-P6-010/011/012 pre-doc re-execution, upstream-document bundle, Phase 6 CHANGELOG entry)
+**Status:** M1 complete (Phases 0-8); M2 complete (Phases 1-7) — Foundation acceptance A1-A6 discharged; M3 DSL surface work is next.
 
 ---
 
@@ -188,8 +188,8 @@ M2 acceptance gate**, not as the long-term architecture.
 - Re-entrancy: callbacks are queued and drained at safe boundaries —
   no callback fires while the host is inside a `wasamo_*` call.
 
-The full ABI specification is `docs/abi_spec.md` (Accepted, 2026-04-30).
-No ABI stability guarantee is made for M1; M4 is when stability
+The full ABI specification is `docs/abi_spec.md` (accepted for M2).
+No ABI stability guarantee is made before 1.0; M6 is when stability
 commitments begin.
 
 `abi_spec.md` is structured in **two layers**:
@@ -198,7 +198,7 @@ commitments begin.
   get/set, property change observers, signal connect/disconnect, and
   **tree mutation** (M2-Phase 4: append / insert / remove / replace /
   child_count / widget_destroy — `abi_spec.md §4.6`).
-  Written as a candidate for the M4 ABI freeze.
+  Written as a candidate surface for the M6 ABI freeze.
   The stable core covers **six areas** as of M2-Phase 4 (DD-P6-001
   defined the initial five-area minimum; §4.6 tree mutation is the
   sixth area added by DD-M2-P4-001).
@@ -208,14 +208,14 @@ commitments begin.
   `wasamo_button_set_clicked` convenience. Required because M1 `wasamoc`
   is parser-only and the host must construct the widget tree by hand.
   Marked `WASAMO_EXPERIMENTAL` in both header and spec; not subject to
-  M4 stability. Constructor promotion to stable core deferred to M3
-  (DD-M2-P4-001).
+  M6 stability. Constructor promotion to stable core is deferred to a
+  later DSL/widget-surface milestone (DD-M2-P4-001).
 
-The Phase 6 ADR explicitly **does not decide** (a) where DSL inline handler
-bodies (`clicked => { … }`) will execute — host-side vs runtime-side; or
-(b) `wasamoc`'s M2 output format — host-language codegen vs IR + runtime
-interpretation. The stable core is sized so it survives either resolution.
-These remain open in §11.
+M2 resolved the two Phase 6-deferred questions that shaped the stable core:
+DSL inline handler bodies execute in the runtime interpreter
+(DD-M2-P3-001), and `wasamoc` emits IR consumed by `wasamo_load_ui`
+(DD-M2-P2-001 / DD-M2-P6-005). The stable core remains sized to survive
+those decisions and later M3+ surface growth.
 
 ---
 
@@ -611,7 +611,44 @@ for that frame, and every subsequent ABI call other than
 `wasamo_runtime_destroy` returns `WASAMO_ERR_REACTIVE_DIVERGED`
 (see DD-M2-P6-001 §"Divergence semantics").
 
-#### 6.8.4 Signal-dispatch ordering (signal-side runtime contract)
+#### 6.8.4 Runtime safety guard placement
+
+Guard placement is a global runtime invariant
+([DD-M2-P6-012](./decisions/m2-phase-7-reactive-foundation.md#dd-m2-p6-012--re-entrancy-and-safety-guard-placement-principle)
+= Option C). Re-entrancy and lifecycle guards are enforced with
+role-specified defense in depth:
+
+- **ABI boundary = diagnostic boundary.** Exported `wasamo_*`
+  functions check the relevant runtime state before touching state.
+  This layer owns caller-facing `WasamoStatus` values and
+  `wasamo_last_error_message` text because it has the public function
+  name, argument context, and lifecycle exception in hand.
+- **Internal runtime boundary = invariant boundary.** Runtime-owned
+  entry points that can be reached without crossing an exported ABI
+  function must guard the invariant before executing. In M2,
+  `emit::drain_if_outermost()` is that boundary for the drain
+  transaction: re-entry while `IN_DRAIN` is set is a no-op, and
+  `RuntimeHealth::Diverged` suppresses all drain phases.
+- **Non-ABI entries are first-class runtime entries.** The Win32
+  message-loop drain in `lib.rs::run()` and future M3 timer,
+  async-I/O, or additional window-procedure callbacks must enter
+  runtime state through an internal invariant boundary. They do not get
+  to rely on ABI-only guards because they do not cross the ABI.
+- **Cleanup exceptions are explicit.** Any operation allowed after
+  `Diverged` (for example destroy/cleanup paths) must be named at its
+  entry boundary. Such an exception does not grant general permission
+  to mutate or drain runtime state after divergence.
+
+The current guard set is therefore interpreted by role:
+UI-thread-affinity and public error reporting live at ABI entry;
+`IN_DRAIN` and `IN_OBSERVER_CALLBACK` remain observable ABI refusals
+for structure-changing and state-mutating calls; `drain_if_outermost`
+also guards the internal transaction boundary used by non-ABI message
+loop entry. M3+ entry paths inherit this split unless a later ADR
+reopens DD-M2-P6-012, most likely because typed guard tokens become
+worth their API cost.
+
+#### 6.8.5 Signal-dispatch ordering (signal-side runtime contract)
 
 Independent of the reactive drain, when a `WasamoSignal` fires
 through `signal_emit`:
@@ -640,7 +677,7 @@ a `BindingEvalContext` variant: reads route through `Signal::get()`
 (binding bodies are pure-read; mutation only happens through the
 binding's bound write target).
 
-#### 6.8.5 Effect lifetime (DD-M2-P5-003 = A)
+#### 6.8.6 Effect lifetime (DD-M2-P5-003 = A)
 
 Effects are owned by the widget that hosts the binding.
 
@@ -667,15 +704,20 @@ Re-attach (M3 conditional binding rebuilds at a different
 position) just creates fresh Effects on the new widgets; old
 widgets' Effects dispose through the same path. No explicit hook.
 
-#### 6.8.6 Phase 6 binding registration API (DD-M2-P5-005 = A)
+#### 6.8.7 Binding registration API after M2 (DD-M2-P5-005, DD-M2-P6-007, DD-M2-P6-011)
 
 ```rust
 pub(crate) fn register_binding(
     target: BindingTarget,
     expr: HandlerExpr,
+    registry: Rc<SignalRegistry>,
     write_fn: fn(WidgetId, PropertyKey, &str),
-    properties: Rc<HashMap<String, Signal<i32>>>,
 ) -> EffectHandle;
+
+pub(crate) struct SignalRegistry {
+    i32s: HashMap<String, Signal<i32>>,
+    strings: HashMap<String, Signal<String>>,
+}
 
 pub(crate) enum BindingTarget {
     WidgetProperty { node: WidgetId, prop: PropertyKey },
@@ -693,22 +735,23 @@ The `write_fn` function-pointer parameter is the seam that lets
 `register_binding_with_writer(Box<dyn FnMut(String)>, …)` is the
 testable core; pure-logic tests inject a recording writer.
 
-The `properties` parameter (provisional shape — likely revisited
-when Phase 6 wires the IR loader) carries the Signal-backed
-property store the binding expression evaluates against. The
-broader pattern survives: M3 binding shapes (Computed,
-conditional, for-loop) add `BindingTarget` variants and reuse
-the same `HandlerExpr` AST without disturbing `register_binding`'s
-signature.
+`SignalRegistry` is the per-component Signal store installed by the IR
+loader. M2 supports `i32` and `String` Signals; integer reads use
+`HandlerExpr::PropRead`, while String reads use `HandlerExpr::StrPropRead`
+and evaluate through `BindingEvalContext::read_string_tracked`. The broader
+pattern survives: M3 binding shapes (Computed, conditional, for-loop) add
+`BindingTarget` variants and may expand `SignalRegistry` without disturbing
+the widget-write seam.
 
-#### 6.8.7 Forward-compatibility and out-of-scope
+#### 6.8.8 Forward-compatibility and out-of-scope
 
 The Phase 5 architecture is shape-compatible with the M3
 extensions it defers:
 
 - `Computed<T>` lands as a third layer between Signal and Effect;
-  the drain loop gains a pre-Effect topological pass before
-  dirty Effects re-run.
+  it inherits the M2 topological dirty-Effect walk. M3 still decides
+  cycle policy, ordering ties, and fan-out interaction with
+  `MUTATION_CAP`.
 - Structural bindings (conditional / for-loop / list-rendered)
   add `BindingTarget` variants; subtree rebuilds Drop old
   Effects through the existing widget teardown path.
