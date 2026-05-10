@@ -1,6 +1,6 @@
 # M2-Phase 7 / DD-M2-P6-011 pre-doc framing
 
-**Status:** framing draft started; pending owner alignment
+**Status:** framing draft started; F1 aligned with owner (2026-05-10)
 **Date:** 2026-05-10
 **Targets DD:** DD-M2-P6-011 - String-typed property binding
 **Targets phase:** M2-Phase 7 (Reactive Foundation Hardening & Contract Finalization)
@@ -100,7 +100,16 @@ the evaluator API to be fully generalized for all future scalar types before
 M2 can close.
 
 Consequence: Option C remains valid and documented, but it is not forced by
-the wording of A6 alone.
+the wording of A6 alone. The `TypedValue` unification should be recorded as
+a post-M2 revisit trigger, not forgotten as a rejected idea. The earliest
+possible revisit point is M3 if the DSL surface work introduces another
+scalar property type, item/context-typed binding expressions for List/Grid,
+or a binding-language feature whose evaluator result cannot be cleanly
+represented by the current parallel typed read methods. If M3's Grid /
+ScrollView / List and public spec draft do not create that pressure, the
+revisit should remain open for M4/M5/post-1.0 rather than being forced into
+M3 merely because it is the next milestone. The live open question is tracked
+in [docs/notes/typed-value-evaluator.md](../typed-value-evaluator.md).
 
 ### F2 - The accepted option must cover the `.ui` path, not only pure logic
 
