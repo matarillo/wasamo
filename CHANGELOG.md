@@ -12,10 +12,6 @@ This file records what has shipped. For what is planned, see
 [ROADMAP.md](./ROADMAP.md). For the current state of work, see
 the **Status** section of [README.md](./README.md).
 
-## [Unreleased]
-
-No shipped changes yet.
-
 ## [v0.2.0] — 2026-05-11 — M2: Foundation
 
 M2 closes the loop on the DSL side: `.ui` files now drive the runtime
