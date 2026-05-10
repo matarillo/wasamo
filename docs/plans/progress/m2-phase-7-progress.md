@@ -26,8 +26,7 @@ houses DD-M2-P6-010 / 011 / 012.
 
 Current status:
 
-- DD-M2-P6-010: Accepted at design level on 2026-05-09; implementation
-  pending.
+- DD-M2-P6-010: Accepted and implemented on 2026-05-09.
 - DD-M2-P6-011: Proposed.
 - DD-M2-P6-012: Proposed.
 
@@ -36,8 +35,9 @@ Current status:
 1. **DD-M2-P6-010 - dirty_effects topological sort fidelity**
    - [x] Re-run pre-doc with full Phase 6 implementation evidence.
    - [x] Flip agreement to Accepted.
-   - [ ] Replace EffectId-numeric-order approximation with true graph walk.
-   - [ ] Add pure-logic unit tests on synthetic dependency graphs.
+   - Implementation notes: [docs/notes/m2-phase-7-dd-010-implementation-notes.md](../../notes/m2-phase-7-dd-010-implementation-notes.md).
+   - [x] Replace EffectId-numeric-order approximation with true graph walk.
+   - [x] Add pure-logic unit tests on synthetic dependency graphs.
 
 2. **DD-M2-P6-012 - re-entrancy / safety-guard placement principle**
    - [ ] Re-run pre-doc with full Phase 6 implementation evidence.
@@ -80,6 +80,6 @@ Current status:
 
 ## Owner-Facing Notes
 
-DD-M2-P6-010 is Accepted at design level. A5's first clause is discharged
-at design level, but the implementation still needs to replace the current
-EffectId-order approximation with a true topological walk.
+DD-M2-P6-010 is Accepted and implemented. The runtime no longer uses the
+EffectId-order approximation in `drain_dirty_effects()`; the production
+path calls the extracted topological walk.
