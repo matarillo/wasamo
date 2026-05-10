@@ -28,7 +28,7 @@ Current status:
 
 - DD-M2-P6-010: Accepted and implemented on 2026-05-09.
 - DD-M2-P6-011: Proposed.
-- DD-M2-P6-012: Accepted on 2026-05-10; implementation alignment next.
+- DD-M2-P6-012: Accepted and implemented on 2026-05-10.
 
 ## Order of Work
 
@@ -44,7 +44,7 @@ Current status:
    - [x] Flip agreement to Accepted.
    - [x] Record the principle in `docs/architecture.md` as a global
      runtime invariant.
-   - [ ] Reflect the principle in implementation.
+   - [x] Reflect the principle in implementation.
 
 3. **DD-M2-P6-011 - String-typed property binding**
    - [ ] Re-run pre-doc.
@@ -80,8 +80,7 @@ Current status:
 
 ## Owner-Facing Notes
 
-DD-M2-P6-010 is Accepted and implemented. DD-M2-P6-012 is Accepted as
-Option C (role-specified defense in depth): ABI boundary owns diagnostics,
-internal runtime boundary owns invariant enforcement for non-ABI entries,
-and cleanup exceptions must be explicit. Next step is implementation
-alignment plus focused guard-placement tests before DD-M2-P6-011 resumes.
+DD-M2-P6-010 and DD-M2-P6-012 are Accepted and implemented. DD-M2-P6-012
+implementation alignment added focused guard-placement tests for both the
+ABI diagnostic boundary and the internal `drain_if_outermost` invariant
+boundary. Next step is DD-M2-P6-011 pre-doc / acceptance work for A6.

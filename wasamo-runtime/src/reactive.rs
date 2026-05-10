@@ -32,6 +32,14 @@ pub(crate) fn runtime_health() -> RuntimeHealth {
     HEALTH.with(|h| h.get())
 }
 
+#[cfg(test)]
+pub(crate) fn set_runtime_health_for_test(health: RuntimeHealth) {
+    HEALTH.with(|h| h.set(health));
+    if health == RuntimeHealth::Healthy {
+        DIVERGENCE_DIAG.with(|d| *d.borrow_mut() = None);
+    }
+}
+
 pub(crate) fn divergence_diagnostics() -> Option<DivergenceDiagnostics> {
     DIVERGENCE_DIAG.with(|d| d.borrow().clone())
 }
