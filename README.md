@@ -77,11 +77,12 @@ See [VISION.md](./VISION.md#5-differentiators) for a full discussion.
 
 **Pre-alpha.** M1 (proof of concept) shipped as
 [v0.1.0](https://github.com/matarillo/wasamo/releases/tag/v0.1.0) on
-2026-05-01; M2 (Foundation) is in progress — Phases 1–5 complete,
-Phase 6 (`.ui → runtime` lowering) pending. See
+2026-05-01; M2 (Foundation) shipped on 2026-05-11. The DSL now drives
+the runtime through the M2 `wasamoc` -> IR -> `wasamo_load_ui` path, with
+reactive state propagation in the C, Rust, and Zig counter examples. See
+[CHANGELOG.md](./CHANGELOG.md#m2-foundation--shipped-2026-05-11) and
 [docs/plans/m2-plan.md](./docs/plans/m2-plan.md). Not ready for
-production use. Design discussion and contributions to the
-foundational implementation are welcome.
+production use. Design discussion and contributions to M3 are welcome.
 
 Future milestones live in [ROADMAP.md](./ROADMAP.md); shipped
 milestones in [CHANGELOG.md](./CHANGELOG.md); per-phase decisions
@@ -94,10 +95,10 @@ in [docs/decisions/](./docs/decisions/).
 
 ## Quick start
 
-> **M1 (proof-of-concept).** The DSL → runtime lowering is M2 scope;
-> M1 host programs construct widget trees imperatively through the C ABI.
-> See [`examples/counter/counter.ui`](./examples/counter/counter.ui) for
-> the future declarative form.
+> **M2 (Foundation).** The counter examples load
+> [`examples/counter/counter.ui`](./examples/counter/counter.ui) through
+> the DSL compiler and runtime IR loader. Broader DSL surface work starts
+> in M3.
 
 **Prerequisites:** Visual Studio 2022 Build Tools, CMake ≥ 3.21, Rust stable (MSVC target).
 

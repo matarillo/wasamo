@@ -1,6 +1,6 @@
 ---
 milestone: M2
-status: in-progress
+status: completed
 roadmap-anchor: ROADMAP.md#m2-foundation
 adrs:
   - docs/decisions/vision-post-m2-roadmap.md
@@ -270,6 +270,18 @@ and [docs/decisions/vision-post-m2-roadmap.md](../decisions/vision-post-m2-roadm
     propagate through runtime widget property state while preserving
     existing integer binding behavior.
 
+- **2026-05-11** — Phase 7 closed; M2 completed.
+  - DD-M2-P6-011 implementation landed with `HandlerExpr::StrPropRead`,
+    wasamoc lowering based on declared state type, runtime String read
+    tracking, and a Windows-only headless live `WidgetNode` proof.
+  - DD-M2-P6-010 / 011 / 012 are all Accepted and implemented. A5 and A6
+    are discharged.
+  - Phase-end retrospective recorded local clean rebuild green and
+    GitHub Actions CI success for `feat/m2-phase-7` at
+    `d730124192e97da3fc20749a2dad3be7c1f3d3ea`.
+  - M2 is now complete; M3 opens from `docs/notes/m2-to-m3-handover.md`,
+    `docs/notes/typed-value-evaluator.md`, and the accepted ADR residuals.
+
 ## Progress
 
 The Progress section is a compact milestone index. Detailed live task
@@ -285,11 +297,9 @@ history, then deleted by default.
 | M2-Phase 4 - Tree-mutation ABI primitives | completed | retired | [m2-phase-4-tree-mutation-abi.md](../decisions/m2-phase-4-tree-mutation-abi.md) | Stable-core tree mutation ABI landed; CHANGELOG entry added. |
 | M2-Phase 5 - Reactive engine | completed | retired | [m2-phase-5-reactive-engine.md](../decisions/m2-phase-5-reactive-engine.md) | Reactive primitives and binding path landed; later drain refinements folded into Phase 6/7 records. |
 | M2-Phase 6 - `.ui -> runtime` lowering | completed | retired | [m2-phase-6-ui-lowering.md](../decisions/m2-phase-6-ui-lowering.md) | A1/A2 discharged by the C/Rust/Zig counter migration; CHANGELOG entry added. |
-| M2-Phase 7 - Reactive Foundation Hardening & Contract Finalization | in-progress | [progress/m2-phase-7-progress.md](progress/m2-phase-7-progress.md) | [m2-phase-7-reactive-foundation.md](../decisions/m2-phase-7-reactive-foundation.md) | Active phase for A5/A6. DD-M2-P6-010 and DD-M2-P6-012 are implemented; DD-M2-P6-011 is Accepted with implementation pending. |
+| M2-Phase 7 - Reactive Foundation Hardening & Contract Finalization | completed | retired | [m2-phase-7-reactive-foundation.md](../decisions/m2-phase-7-reactive-foundation.md) | A5/A6 discharged by topological dirty-Effect drain, runtime guard-placement invariant, and String binding through live widget property state; phase-end retrospective recorded in `docs/notes/m2-phase-7/phase-end-retrospective.md`. |
 
 ### Owner-facing resume note
 
-Continue in [progress/m2-phase-7-progress.md](progress/m2-phase-7-progress.md).
-DD-M2-P6-011 is Accepted as Option B (`StrPropRead`). The next implementation
-step is to land String binding propagation through runtime widget property
-state and protect the existing integer binding path.
+M2 is complete. Open M3 from the completed M2 plan, the M2-to-M3 handover
+note, and the residuals recorded in the accepted Phase 7 ADR.

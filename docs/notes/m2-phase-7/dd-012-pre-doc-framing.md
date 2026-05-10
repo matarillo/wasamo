@@ -6,7 +6,8 @@
 **Targets DD:** DD-M2-P6-012 - Re-entrancy and safety-guard placement principle
 **Targets phase:** M2-Phase 7 (Reactive Foundation Hardening & Contract Finalization)
 **ADR housing:** [docs/decisions/m2-phase-7-reactive-foundation.md](../../decisions/m2-phase-7-reactive-foundation.md)
-**Progress tracker:** [docs/plans/progress/m2-phase-7-progress.md](../../plans/progress/m2-phase-7-progress.md)
+**Progress tracker:** `docs/plans/progress/m2-phase-7-progress.md`
+(retired at M2 close; summary remains in `docs/plans/m2-plan.md`)
 
 このノートは、DD-M2-P6-012 の Option A / B / C / D を選ぶ前に、
 何をこのDDの問いとして扱い、何を比較軸として固定するかを揃えるための
@@ -315,5 +316,5 @@ Remaining implementation work:
 4. **Implementation alignment.** Adjust existing guard placement to match the
    accepted principle, then add focused tests for the principle's enforcement.
 5. **Progress update.** Once implementation and tests land,
-   update [docs/plans/progress/m2-phase-7-progress.md](../../plans/progress/m2-phase-7-progress.md)
-   for DD-M2-P6-012.
+   update `docs/plans/progress/m2-phase-7-progress.md` for DD-M2-P6-012.
+   That progress file was retired at M2 close.

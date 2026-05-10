@@ -5,7 +5,8 @@
 **Targets DD:** DD-M2-P6-011 - String-typed property binding
 **Targets phase:** M2-Phase 7 (Reactive Foundation Hardening & Contract Finalization)
 **ADR housing:** [docs/decisions/m2-phase-7-reactive-foundation.md](../../decisions/m2-phase-7-reactive-foundation.md)
-**Progress tracker:** [docs/plans/progress/m2-phase-7-progress.md](../../plans/progress/m2-phase-7-progress.md)
+**Progress tracker:** `docs/plans/progress/m2-phase-7-progress.md`
+(retired at M2 close; summary remains in `docs/plans/m2-plan.md`)
 
 このノートは、DD-M2-P6-011 の Option A / B / C を選ぶ前に、A6
 ("Type-Agnostic Reactive Binding") をどう読むかを揃えるための

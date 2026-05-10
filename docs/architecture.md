@@ -1,6 +1,6 @@
 # Wasamo Architecture
 
-**Status:** M1 complete (Phases 0-8); M2-Phases 1-5 complete; M2-Phase 6 in progress — acceptance A1/A2 discharged via DD-M2-P6-008 (counter examples migration); Phase-end gate pending (DD-M2-P6-010/011/012 pre-doc re-execution, upstream-document bundle, Phase 6 CHANGELOG entry)
+**Status:** M1 complete (Phases 0-8); M2 complete (Phases 1-7) — Foundation acceptance A1-A6 discharged; M3 DSL surface work is next.
 
 ---
 

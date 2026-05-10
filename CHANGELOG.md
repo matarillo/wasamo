@@ -12,7 +12,51 @@ This file records what has shipped. For what is planned, see
 [ROADMAP.md](./ROADMAP.md). For the current state of work, see
 the **Status** section of [README.md](./README.md).
 
-## [Unreleased] — M2: Foundation (in progress)
+## [Unreleased]
+
+No shipped changes yet.
+
+## M2: Foundation — shipped 2026-05-11
+
+M2 closes the loop on the DSL side: `.ui` files now drive the runtime
+through the agreed `wasamoc` -> IR -> `wasamo_load_ui` pipeline, with
+reactive state propagation rather than host-side property-set plumbing.
+The milestone discharges acceptance criteria A1-A6: C/Rust/Zig counter
+hosts load `counter.ui`, tree-mutation ABI primitives and the cdylib shim
+cleanup are in place, and the reactive foundation now has release-mode
+ordering, guard-placement, and non-`i32` binding evidence.
+
+### M2-Phase 7 — Reactive Foundation Hardening & Contract Finalization (2026-05-11)
+
+Completes the three deferred Phase 6 DDs that distinguish "the DSL
+pipeline runs" from "the DSL pipeline is a Foundation other layers can
+rely on." M2 acceptance **A5** and **A6** are discharged.
+
+`dirty_effects` now drains through a dependency-graph topological walk
+instead of `EffectId` numeric ordering. The implementation adds explicit
+write-edge tracking to `ReactiveGraph`, removes the `sort_unstable()`
+production path, and covers chain, diamond, fan-out, and out-of-ID-order
+dependency shapes with pure-logic tests. M3 residuals for cycle policy,
+ordering ties, and `MUTATION_CAP` interaction are recorded in
+`docs/notes/m2-to-m3-handover.md`.
+
+Runtime guard placement is now an accepted architectural invariant:
+the ABI boundary owns caller-facing diagnostics, while internal runtime
+boundaries protect invariants for entry paths that do not cross the ABI.
+`wasamo_run` and `wasamo_quit` now record divergence diagnostics and
+return as no-ops after divergence, and focused tests cover
+`drain_if_outermost` suppression, re-entrant drain behavior, and cleanup
+exceptions.
+
+String-typed property binding is implemented with
+`HandlerExpr::StrPropRead`, `EvalContext` String reads, wasamoc lowering
+based on declared state type, runtime IR parsing, tracked
+`Signal<String>` reads, and regression coverage for the existing integer
+binding path. A Windows-only headless integration test proves `.ui`
+String binding reaches live `WidgetNode` property state; GitHub Actions
+green is evidence that the live path ran rather than skipped.
+
+Decisions: [DD-M2-P6-010..012](./docs/decisions/m2-phase-7-reactive-foundation.md).
 
 ### M2-Phase 6 — `.ui` → runtime lowering (2026-05-08)
 
