@@ -3,13 +3,15 @@ use windows::{
     Foundation::Size,
     Graphics::DirectX::{DirectXAlphaMode, DirectXPixelFormat},
     Win32::Graphics::{
+        Direct2D::Common::{D2D1_COLOR_F, D2D_POINT_2F},
         Direct2D::{
             D2D1CreateFactory, ID2D1DeviceContext, ID2D1Factory1, ID2D1SolidColorBrush,
             D2D1_FACTORY_TYPE_SINGLE_THREADED,
         },
-        Direct2D::Common::{D2D1_COLOR_F, D2D_POINT_2F},
         Direct3D::D3D_DRIVER_TYPE_HARDWARE,
-        Direct3D11::{D3D11CreateDevice, ID3D11Device, D3D11_CREATE_DEVICE_BGRA_SUPPORT, D3D11_SDK_VERSION},
+        Direct3D11::{
+            D3D11CreateDevice, ID3D11Device, D3D11_CREATE_DEVICE_BGRA_SUPPORT, D3D11_SDK_VERSION,
+        },
         DirectWrite::{
             DWriteCreateFactory, IDWriteFactory, IDWriteTextFormat, IDWriteTextLayout,
             DWRITE_FACTORY_TYPE_SHARED, DWRITE_FONT_STRETCH_NORMAL, DWRITE_FONT_STYLE_NORMAL,
@@ -27,19 +29,19 @@ use windows::{
 /// Semantic typography style mapping to Windows type ramp constants (Segoe UI Variable).
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum TypographyStyle {
-    Caption,   // 12sp regular
-    Body,      // 14sp regular
-    Subtitle,  // 20sp semi-bold
-    Title,     // 28sp semi-bold
+    Caption,  // 12sp regular
+    Body,     // 14sp regular
+    Subtitle, // 20sp semi-bold
+    Title,    // 28sp semi-bold
 }
 
 impl TypographyStyle {
     pub fn size_sp(self) -> f32 {
         match self {
-            Self::Caption  => 12.0,
-            Self::Body     => 14.0,
+            Self::Caption => 12.0,
+            Self::Body => 14.0,
             Self::Subtitle => 20.0,
-            Self::Title    => 28.0,
+            Self::Title => 28.0,
         }
     }
 
@@ -90,15 +92,15 @@ impl TextRenderer {
         let dwrite_factory: IDWriteFactory =
             unsafe { DWriteCreateFactory(DWRITE_FACTORY_TYPE_SHARED)? };
 
-        Ok(Self { dwrite_factory, _d2d_factory: d2d_factory, gfx_device })
+        Ok(Self {
+            dwrite_factory,
+            _d2d_factory: d2d_factory,
+            gfx_device,
+        })
     }
 
     /// Measure the natural (unconstrained) pixel size of a text string.
-    pub fn measure(
-        &self,
-        text: &str,
-        style: TypographyStyle,
-    ) -> windows::core::Result<(f32, f32)> {
+    pub fn measure(&self, text: &str, style: TypographyStyle) -> windows::core::Result<(f32, f32)> {
         let layout = self.create_text_layout(text, style, f32::MAX, f32::MAX)?;
         let mut metrics = DWRITE_TEXT_METRICS::default();
         unsafe { layout.GetMetrics(&mut metrics)? };
@@ -115,18 +117,25 @@ impl TextRenderer {
         color: Color,
     ) -> windows::core::Result<CompositionDrawingSurface> {
         let surface = self.gfx_device.CreateDrawingSurface(
-            Size { Width: width.max(1.0), Height: height.max(1.0) },
+            Size {
+                Width: width.max(1.0),
+                Height: height.max(1.0),
+            },
             DirectXPixelFormat::B8G8R8A8UIntNormalized,
             DirectXAlphaMode::Premultiplied,
         )?;
 
         let interop: ICompositionDrawingSurfaceInterop = surface.cast()?;
         let mut offset = windows::Win32::Foundation::POINT::default();
-        let dc: ID2D1DeviceContext =
-            unsafe { interop.BeginDraw(None, &mut offset)? };
+        let dc: ID2D1DeviceContext = unsafe { interop.BeginDraw(None, &mut offset)? };
 
         unsafe {
-            dc.Clear(Some(&D2D1_COLOR_F { r: 0.0, g: 0.0, b: 0.0, a: 0.0 }));
+            dc.Clear(Some(&D2D1_COLOR_F {
+                r: 0.0,
+                g: 0.0,
+                b: 0.0,
+                a: 0.0,
+            }));
         }
 
         let color_f = D2D1_COLOR_F {
@@ -135,8 +144,7 @@ impl TextRenderer {
             b: color.B as f32 / 255.0,
             a: color.A as f32 / 255.0,
         };
-        let brush: ID2D1SolidColorBrush =
-            unsafe { dc.CreateSolidColorBrush(&color_f, None)? };
+        let brush: ID2D1SolidColorBrush = unsafe { dc.CreateSolidColorBrush(&color_f, None)? };
 
         let layout = self.create_text_layout(text, style, width, height)?;
         let origin = D2D_POINT_2F {
@@ -178,12 +186,8 @@ impl TextRenderer {
         };
         let text_w: Vec<u16> = text.encode_utf16().collect();
         let layout: IDWriteTextLayout = unsafe {
-            self.dwrite_factory.CreateTextLayout(
-                &text_w,
-                &format,
-                max_w,
-                max_h,
-            )?
+            self.dwrite_factory
+                .CreateTextLayout(&text_w, &format, max_w, max_h)?
         };
         Ok(layout)
     }

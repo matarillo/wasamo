@@ -15,7 +15,9 @@ pub struct CheckResult {
 
 impl CheckResult {
     pub fn has_errors(&self) -> bool {
-        self.diagnostics.iter().any(|d| d.severity == crate::diagnostic::Severity::Error)
+        self.diagnostics
+            .iter()
+            .any(|d| d.severity == crate::diagnostic::Severity::Error)
     }
 }
 
@@ -23,16 +25,27 @@ pub fn check(ast: &ComponentDef, filename: &str) -> CheckResult {
     let mut diags = Vec::new();
     let namespace = collect_state_namespace(&ast.members, filename, &mut diags);
     check_members(&ast.members, filename, &namespace, &mut diags);
-    CheckResult { diagnostics: diags, namespace }
+    CheckResult {
+        diagnostics: diags,
+        namespace,
+    }
 }
 
 /// First pass: collect `state` names and detect duplicates.
-fn collect_state_namespace(members: &[Member], filename: &str, diags: &mut Vec<Diagnostic>) -> Namespace {
+fn collect_state_namespace(
+    members: &[Member],
+    filename: &str,
+    diags: &mut Vec<Diagnostic>,
+) -> Namespace {
     let mut ns: Namespace = HashMap::new();
     for member in members {
         if let Member::StateMember { name, ty, span, .. } = member {
             if ns.contains_key(name) {
-                diags.push(error(filename, span, format!("duplicate state name `{}`", name)));
+                diags.push(error(
+                    filename,
+                    span,
+                    format!("duplicate state name `{}`", name),
+                ));
             } else {
                 ns.insert(name.clone(), ty.clone());
             }
@@ -49,11 +62,19 @@ fn check_members(members: &[Member], filename: &str, ns: &Namespace, diags: &mut
 
             Member::PropertyDecl { .. } => {}
 
-            Member::PropertyBind { name: _, value, span } => {
+            Member::PropertyBind {
+                name: _,
+                value,
+                span,
+            } => {
                 check_expr_type(value, span, filename, ns, diags);
             }
 
-            Member::WidgetDecl { type_name, members: children, span } => {
+            Member::WidgetDecl {
+                type_name,
+                members: children,
+                span,
+            } => {
                 if !M1_WIDGET_TYPES.contains(&type_name.as_str()) {
                     diags.push(Diagnostic::warning(
                         filename,
@@ -80,7 +101,13 @@ fn check_members(members: &[Member], filename: &str, ns: &Namespace, diags: &mut
 }
 
 /// Validate expression: reject unsupported types; resolve name references against namespace.
-fn check_expr_type(expr: &Expr, ctx_span: &Span, filename: &str, ns: &Namespace, diags: &mut Vec<Diagnostic>) {
+fn check_expr_type(
+    expr: &Expr,
+    ctx_span: &Span,
+    filename: &str,
+    ns: &Namespace,
+    diags: &mut Vec<Diagnostic>,
+) {
     match expr {
         Expr::IntLit { .. } | Expr::StringLit { .. } | Expr::Ident { .. } => {
             if let Expr::Ident { name, span } = expr {
@@ -104,7 +131,11 @@ fn check_expr_type(expr: &Expr, ctx_span: &Span, filename: &str, ns: &Namespace,
             }
         }
         Expr::FloatLit { span, .. } => {
-            diags.push(error(filename, span, "float literals are not supported in M2 (only i32 and string)"));
+            diags.push(error(
+                filename,
+                span,
+                "float literals are not supported in M2 (only i32 and string)",
+            ));
         }
         Expr::Measurement { span, .. } => {
             // Measurements (e.g. 12px) are static property values, not typed state — allowed.
@@ -114,7 +145,12 @@ fn check_expr_type(expr: &Expr, ctx_span: &Span, filename: &str, ns: &Namespace,
 }
 
 /// Validate that every segment of a qualified name resolves to a declared state.
-fn check_qualified_name(qn: &QualifiedName, filename: &str, ns: &Namespace, diags: &mut Vec<Diagnostic>) {
+fn check_qualified_name(
+    qn: &QualifiedName,
+    filename: &str,
+    ns: &Namespace,
+    diags: &mut Vec<Diagnostic>,
+) {
     // In the counter DSL, state references appear as `root.count` — the first
     // segment is `root` (the component root alias) and the second is the state name.
     // For M2 flat namespace we resolve the last segment as the state name.
@@ -126,7 +162,10 @@ fn check_qualified_name(qn: &QualifiedName, filename: &str, ns: &Namespace, diag
         diags.push(error(
             filename,
             &qn.span,
-            format!("undefined state `{}`; declare it with `state {}: <type> = <default>`", state_name, state_name),
+            format!(
+                "undefined state `{}`; declare it with `state {}: <type> = <default>`",
+                state_name, state_name
+            ),
         ));
     }
 }
@@ -167,11 +206,13 @@ mod tests {
 
     #[test]
     fn duplicate_state_name() {
-        let errs = errors(
-            "component C inherits W { state count: i32 = 0 state count: i32 = 1 }",
-        );
+        let errs = errors("component C inherits W { state count: i32 = 0 state count: i32 = 1 }");
         assert_eq!(errs.len(), 1);
-        assert!(errs[0].contains("duplicate state name `count`"), "{:?}", errs);
+        assert!(
+            errs[0].contains("duplicate state name `count`"),
+            "{:?}",
+            errs
+        );
     }
 
     #[test]
@@ -194,11 +235,13 @@ mod tests {
 
     #[test]
     fn float_literal_rejected() {
-        let errs = errors(
-            "component C inherits W { VStack { spacing: 1.5 } }",
-        );
+        let errs = errors("component C inherits W { VStack { spacing: 1.5 } }");
         assert_eq!(errs.len(), 1);
-        assert!(errs[0].contains("float literals are not supported"), "{:?}", errs);
+        assert!(
+            errs[0].contains("float literals are not supported"),
+            "{:?}",
+            errs
+        );
     }
 
     #[test]
@@ -219,9 +262,8 @@ mod tests {
 
     #[test]
     fn namespace_collected() {
-        let result = check_src(
-            "component C inherits W { state count: i32 = 0 state label: string = \"\" }",
-        );
+        let result =
+            check_src("component C inherits W { state count: i32 = 0 state label: string = \"\" }");
         assert!(result.namespace.contains_key("count"));
         assert!(result.namespace.contains_key("label"));
         assert!(matches!(result.namespace["count"], TypeName::Int));

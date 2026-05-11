@@ -3,8 +3,8 @@ use std::thread::ThreadId;
 use windows::{
     System::DispatcherQueueController,
     Win32::System::WinRT::{
-        CreateDispatcherQueueController, DispatcherQueueOptions,
-        DQTAT_COM_STA, DQTYPE_THREAD_CURRENT,
+        CreateDispatcherQueueController, DispatcherQueueOptions, DQTAT_COM_STA,
+        DQTYPE_THREAD_CURRENT,
     },
     UI::Composition::Compositor,
 };
@@ -50,7 +50,11 @@ pub fn init() -> windows::core::Result<()> {
     let compositor = Compositor::new()?;
     let text_renderer = TextRenderer::new(&compositor)?;
     RUNTIME
-        .set(Runtime { compositor, text_renderer, _dq_controller: dq_controller })
+        .set(Runtime {
+            compositor,
+            text_renderer,
+            _dq_controller: dq_controller,
+        })
         .ok();
     Ok(())
 }

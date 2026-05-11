@@ -52,7 +52,11 @@ impl Token {
     }
 
     pub fn as_ident(&self) -> Option<&str> {
-        if let Token::Ident(s) = self { Some(s) } else { None }
+        if let Token::Ident(s) = self {
+            Some(s)
+        } else {
+            None
+        }
     }
 
     pub fn description(&self) -> &'static str {
@@ -96,7 +100,12 @@ struct Cursor<'a> {
 
 impl<'a> Cursor<'a> {
     fn new(src: &'a str) -> Self {
-        Cursor { src, pos: 0, line: 1, col: 1 }
+        Cursor {
+            src,
+            pos: 0,
+            line: 1,
+            col: 1,
+        }
     }
 
     fn peek(&self) -> Option<char> {
@@ -130,7 +139,12 @@ impl<'a> Cursor<'a> {
     }
 
     fn here(&self) -> Span {
-        Span { start: self.pos, end: self.pos, line: self.line, col: self.col }
+        Span {
+            start: self.pos,
+            end: self.pos,
+            line: self.line,
+            col: self.col,
+        }
     }
 }
 
@@ -145,7 +159,10 @@ pub fn tokenize(src: &str, filename: &str) -> Result<Vec<SpannedToken>, Diagnost
 
         if c.is_at_end() {
             let sp = c.here();
-            tokens.push(SpannedToken { token: Token::Eof, span: sp });
+            tokens.push(SpannedToken {
+                token: Token::Eof,
+                span: sp,
+            });
             break;
         }
 
@@ -153,16 +170,42 @@ pub fn tokenize(src: &str, filename: &str) -> Result<Vec<SpannedToken>, Diagnost
         let ch = c.peek().unwrap();
 
         let token = match ch {
-            '{' => { c.advance(); Token::LBrace }
-            '}' => { c.advance(); Token::RBrace }
-            '<' => { c.advance(); Token::LAngle }
-            '>' => { c.advance(); Token::RAngle }
-            ':' => { c.advance(); Token::Colon }
-            '.' => { c.advance(); Token::Dot }
-            ';' => { c.advance(); Token::Semicolon }
+            '{' => {
+                c.advance();
+                Token::LBrace
+            }
+            '}' => {
+                c.advance();
+                Token::RBrace
+            }
+            '<' => {
+                c.advance();
+                Token::LAngle
+            }
+            '>' => {
+                c.advance();
+                Token::RAngle
+            }
+            ':' => {
+                c.advance();
+                Token::Colon
+            }
+            '.' => {
+                c.advance();
+                Token::Dot
+            }
+            ';' => {
+                c.advance();
+                Token::Semicolon
+            }
             '=' => {
                 c.advance();
-                if c.peek() == Some('>') { c.advance(); Token::Arrow } else { Token::Eq }
+                if c.peek() == Some('>') {
+                    c.advance();
+                    Token::Arrow
+                } else {
+                    Token::Eq
+                }
             }
             '+' => {
                 c.advance();
@@ -170,7 +213,12 @@ pub fn tokenize(src: &str, filename: &str) -> Result<Vec<SpannedToken>, Diagnost
                     c.advance();
                     Token::PlusEq
                 } else {
-                    return Err(Diagnostic::error(filename, start.line, start.col, "expected `+=`"));
+                    return Err(Diagnostic::error(
+                        filename,
+                        start.line,
+                        start.col,
+                        "expected `+=`",
+                    ));
                 }
             }
             '-' => {
@@ -179,7 +227,12 @@ pub fn tokenize(src: &str, filename: &str) -> Result<Vec<SpannedToken>, Diagnost
                     c.advance();
                     Token::MinusEq
                 } else {
-                    return Err(Diagnostic::error(filename, start.line, start.col, "unexpected `-`"));
+                    return Err(Diagnostic::error(
+                        filename,
+                        start.line,
+                        start.col,
+                        "unexpected `-`",
+                    ));
                 }
             }
             '*' => {
@@ -188,7 +241,12 @@ pub fn tokenize(src: &str, filename: &str) -> Result<Vec<SpannedToken>, Diagnost
                     c.advance();
                     Token::StarEq
                 } else {
-                    return Err(Diagnostic::error(filename, start.line, start.col, "unexpected `*`"));
+                    return Err(Diagnostic::error(
+                        filename,
+                        start.line,
+                        start.col,
+                        "unexpected `*`",
+                    ));
                 }
             }
             '/' => {
@@ -197,7 +255,12 @@ pub fn tokenize(src: &str, filename: &str) -> Result<Vec<SpannedToken>, Diagnost
                     c.advance();
                     Token::SlashEq
                 } else {
-                    return Err(Diagnostic::error(filename, start.line, start.col, "unexpected `/`"));
+                    return Err(Diagnostic::error(
+                        filename,
+                        start.line,
+                        start.col,
+                        "unexpected `/`",
+                    ));
                 }
             }
             '"' => scan_string(&mut c, filename)?,
@@ -206,7 +269,9 @@ pub fn tokenize(src: &str, filename: &str) -> Result<Vec<SpannedToken>, Diagnost
             other => {
                 c.advance();
                 return Err(Diagnostic::error(
-                    filename, start.line, start.col,
+                    filename,
+                    start.line,
+                    start.col,
                     format!("unexpected character `{}`", other),
                 ));
             }
@@ -214,7 +279,12 @@ pub fn tokenize(src: &str, filename: &str) -> Result<Vec<SpannedToken>, Diagnost
 
         tokens.push(SpannedToken {
             token,
-            span: Span { start: start.start, end: c.pos, line: start.line, col: start.col },
+            span: Span {
+                start: start.start,
+                end: c.pos,
+                line: start.line,
+                col: start.col,
+            },
         });
     }
 
@@ -235,8 +305,13 @@ fn scan_ident(c: &mut Cursor) -> Token {
     // Compound keyword "in-out" (DD-001)
     if s == "in" && c.remaining().starts_with("-out") {
         let after = c.remaining()[4..].chars().next();
-        if !after.map(|ch| ch.is_alphanumeric() || ch == '_').unwrap_or(false) {
-            for _ in 0..4 { c.advance(); }
+        if !after
+            .map(|ch| ch.is_alphanumeric() || ch == '_')
+            .unwrap_or(false)
+        {
+            for _ in 0..4 {
+                c.advance();
+            }
             return Token::Kw(Keyword::InOut);
         }
     }
@@ -255,21 +330,37 @@ fn scan_number(c: &mut Cursor, filename: &str, line: u32, col: u32) -> Result<To
     let mut is_float = false;
 
     while let Some(ch) = c.peek() {
-        if ch.is_ascii_digit() { s.push(ch); c.advance(); } else { break; }
+        if ch.is_ascii_digit() {
+            s.push(ch);
+            c.advance();
+        } else {
+            break;
+        }
     }
 
     if c.peek() == Some('.') && c.peek2().map(|ch| ch.is_ascii_digit()).unwrap_or(false) {
-        s.push('.'); c.advance(); is_float = true;
+        s.push('.');
+        c.advance();
+        is_float = true;
         while let Some(ch) = c.peek() {
-            if ch.is_ascii_digit() { s.push(ch); c.advance(); } else { break; }
+            if ch.is_ascii_digit() {
+                s.push(ch);
+                c.advance();
+            } else {
+                break;
+            }
         }
     }
 
     // Unit "px"
     if c.remaining().starts_with("px") {
         let after = c.remaining()[2..].chars().next();
-        if !after.map(|ch| ch.is_alphanumeric() || ch == '_').unwrap_or(false) {
-            c.advance(); c.advance();
+        if !after
+            .map(|ch| ch.is_alphanumeric() || ch == '_')
+            .unwrap_or(false)
+        {
+            c.advance();
+            c.advance();
             let value: f64 = s.parse().unwrap();
             return Ok(Token::Measurement(value, Unit::Px));
         }
@@ -292,7 +383,12 @@ fn scan_string(c: &mut Cursor, filename: &str) -> Result<Token, Diagnostic> {
     loop {
         match c.peek() {
             None => {
-                return Err(Diagnostic::error(filename, c.line, c.col, "unterminated string literal"));
+                return Err(Diagnostic::error(
+                    filename,
+                    c.line,
+                    c.col,
+                    "unterminated string literal",
+                ));
             }
             Some('"') => {
                 c.advance();
@@ -304,8 +400,14 @@ fn scan_string(c: &mut Cursor, filename: &str) -> Result<Token, Diagnostic> {
             Some('\\') => {
                 c.advance();
                 match c.peek() {
-                    Some('\\') => { c.advance(); text.push('\\'); }
-                    Some('"') => { c.advance(); text.push('"'); }
+                    Some('\\') => {
+                        c.advance();
+                        text.push('\\');
+                    }
+                    Some('"') => {
+                        c.advance();
+                        text.push('"');
+                    }
                     Some('{') => {
                         c.advance();
                         if !text.is_empty() {
@@ -315,19 +417,34 @@ fn scan_string(c: &mut Cursor, filename: &str) -> Result<Token, Diagnostic> {
                     }
                     Some(ch) => {
                         return Err(Diagnostic::error(
-                            filename, c.line, c.col,
+                            filename,
+                            c.line,
+                            c.col,
                             format!("unknown escape sequence `\\{}`", ch),
                         ));
                     }
                     None => {
-                        return Err(Diagnostic::error(filename, c.line, c.col, "unterminated escape sequence"));
+                        return Err(Diagnostic::error(
+                            filename,
+                            c.line,
+                            c.col,
+                            "unterminated escape sequence",
+                        ));
                     }
                 }
             }
             Some('\n') | Some('\r') => {
-                return Err(Diagnostic::error(filename, c.line, c.col, "unterminated string literal"));
+                return Err(Diagnostic::error(
+                    filename,
+                    c.line,
+                    c.col,
+                    "unterminated string literal",
+                ));
             }
-            Some(ch) => { text.push(ch); c.advance(); }
+            Some(ch) => {
+                text.push(ch);
+                c.advance();
+            }
         }
     }
 }
@@ -345,13 +462,23 @@ fn scan_interp(c: &mut Cursor, filename: &str) -> Result<QualifiedName, Diagnost
     }
 
     if c.peek() != Some('}') {
-        return Err(Diagnostic::error(filename, c.line, c.col, "expected `}` to close interpolation"));
+        return Err(Diagnostic::error(
+            filename,
+            c.line,
+            c.col,
+            "expected `}` to close interpolation",
+        ));
     }
     c.advance();
 
     Ok(QualifiedName {
         segments,
-        span: Span { start: start_pos, end: c.pos, line: start_line, col: start_col },
+        span: Span {
+            start: start_pos,
+            end: c.pos,
+            line: start_line,
+            col: start_col,
+        },
     })
 }
 
@@ -360,14 +487,21 @@ fn scan_interp_ident(c: &mut Cursor, filename: &str) -> Result<String, Diagnosti
         Some(ch) if ch.is_alphabetic() || ch == '_' => {}
         _ => {
             return Err(Diagnostic::error(
-                filename, c.line, c.col,
+                filename,
+                c.line,
+                c.col,
                 "expected identifier in interpolation",
             ));
         }
     }
     let mut s = String::new();
     while let Some(ch) = c.peek() {
-        if ch.is_alphanumeric() || ch == '_' { s.push(ch); c.advance(); } else { break; }
+        if ch.is_alphanumeric() || ch == '_' {
+            s.push(ch);
+            c.advance();
+        } else {
+            break;
+        }
     }
     Ok(s)
 }

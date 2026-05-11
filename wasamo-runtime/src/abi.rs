@@ -134,7 +134,8 @@ thread_local! {
 }
 
 pub(crate) fn set_last_error(msg: impl Into<Vec<u8>>) {
-    let cs = CString::new(msg).unwrap_or_else(|_| CString::new("(error message contained NUL)").unwrap());
+    let cs = CString::new(msg)
+        .unwrap_or_else(|_| CString::new("(error message contained NUL)").unwrap());
     LAST_ERROR.with(|cell| *cell.borrow_mut() = Some(cs));
 }
 
@@ -232,19 +233,33 @@ pub(crate) fn check_not_diverged_pub(fn_name: &str) -> Option<WasamoStatus> {
 /// Shorthand: check thread + diverged + in_drain (structure-changing ABI).
 macro_rules! guard_structural {
     ($fn_name:expr) => {
-        if let Some(s) = check_owning_thread($fn_name) { return s; }
-        if let Some(s) = check_not_diverged($fn_name) { return s; }
-        if let Some(s) = check_not_in_drain($fn_name) { return s; }
-        if let Some(s) = check_not_in_observer($fn_name) { return s; }
+        if let Some(s) = check_owning_thread($fn_name) {
+            return s;
+        }
+        if let Some(s) = check_not_diverged($fn_name) {
+            return s;
+        }
+        if let Some(s) = check_not_in_drain($fn_name) {
+            return s;
+        }
+        if let Some(s) = check_not_in_observer($fn_name) {
+            return s;
+        }
     };
 }
 
 /// Shorthand: check thread + diverged + in_observer (state-mutating ABI).
 macro_rules! guard_mutating {
     ($fn_name:expr) => {
-        if let Some(s) = check_owning_thread($fn_name) { return s; }
-        if let Some(s) = check_not_diverged($fn_name) { return s; }
-        if let Some(s) = check_not_in_observer($fn_name) { return s; }
+        if let Some(s) = check_owning_thread($fn_name) {
+            return s;
+        }
+        if let Some(s) = check_not_diverged($fn_name) {
+            return s;
+        }
+        if let Some(s) = check_not_in_observer($fn_name) {
+            return s;
+        }
     };
 }
 
@@ -284,11 +299,7 @@ pub extern "C" fn wasamo_shutdown() {
 
 #[no_mangle]
 pub extern "C" fn wasamo_last_error_message() -> *const c_char {
-    LAST_ERROR.with(|cell| {
-        cell.borrow()
-            .as_ref()
-            .map_or(ptr::null(), |s| s.as_ptr())
-    })
+    LAST_ERROR.with(|cell| cell.borrow().as_ref().map_or(ptr::null(), |s| s.as_ptr()))
 }
 
 // ── 4.2 Window and event loop ────────────────────────────────────────────────
@@ -352,7 +363,9 @@ pub unsafe extern "C" fn wasamo_window_destroy(window: *mut WasamoWindow) -> Was
     // must succeed even in Diverged state (spec: only wasamo_runtime_destroy is
     // exempt, but window/widget destroy are also safe to allow for cleanup).
     // Thread affinity is still enforced.
-    if let Some(s) = check_owning_thread("wasamo_window_destroy") { return s; }
+    if let Some(s) = check_owning_thread("wasamo_window_destroy") {
+        return s;
+    }
     if window.is_null() {
         // Idempotent on null per spec §4.2.
         return WASAMO_OK;
@@ -427,7 +440,9 @@ pub unsafe extern "C" fn wasamo_widget_insert_child(
             WASAMO_OK
         }
         Err(crate::widget::MutationError::IndexOutOfBounds) => {
-            set_last_error(format!("wasamo_widget_insert_child: index {index} out of bounds"));
+            set_last_error(format!(
+                "wasamo_widget_insert_child: index {index} out of bounds"
+            ));
             WASAMO_ERR_INVALID_ARG
         }
         Err(crate::widget::MutationError::AlreadyAttached) => {
@@ -460,7 +475,9 @@ pub unsafe extern "C" fn wasamo_widget_remove_child(
             WASAMO_OK
         }
         Err(crate::widget::MutationError::IndexOutOfBounds) => {
-            set_last_error(format!("wasamo_widget_remove_child: index {index} out of bounds"));
+            set_last_error(format!(
+                "wasamo_widget_remove_child: index {index} out of bounds"
+            ));
             WASAMO_ERR_INVALID_ARG
         }
         Err(crate::widget::MutationError::AlreadyAttached) => {
@@ -499,7 +516,9 @@ pub unsafe extern "C" fn wasamo_widget_replace_child(
             WASAMO_OK
         }
         Err(crate::widget::MutationError::IndexOutOfBounds) => {
-            set_last_error(format!("wasamo_widget_replace_child: index {index} out of bounds"));
+            set_last_error(format!(
+                "wasamo_widget_replace_child: index {index} out of bounds"
+            ));
             WASAMO_ERR_INVALID_ARG
         }
         Err(crate::widget::MutationError::AlreadyAttached) => {
@@ -514,8 +533,12 @@ pub unsafe extern "C" fn wasamo_widget_child_count(
     parent: *mut WasamoWidget,
     out_count: *mut usize,
 ) -> WasamoStatus {
-    if let Some(s) = check_owning_thread("wasamo_widget_child_count") { return s; }
-    if let Some(s) = check_not_diverged("wasamo_widget_child_count") { return s; }
+    if let Some(s) = check_owning_thread("wasamo_widget_child_count") {
+        return s;
+    }
+    if let Some(s) = check_not_diverged("wasamo_widget_child_count") {
+        return s;
+    }
     if parent.is_null() {
         set_last_error("wasamo_widget_child_count: parent is null");
         return WASAMO_ERR_INVALID_ARG;
@@ -533,7 +556,9 @@ pub unsafe extern "C" fn wasamo_widget_child_count(
 pub unsafe extern "C" fn wasamo_widget_destroy(widget: *mut WasamoWidget) -> WasamoStatus {
     // Like wasamo_window_destroy, destroy is allowed in Diverged state for cleanup.
     // Thread affinity is still enforced.
-    if let Some(s) = check_owning_thread("wasamo_widget_destroy") { return s; }
+    if let Some(s) = check_owning_thread("wasamo_widget_destroy") {
+        return s;
+    }
     if widget.is_null() {
         // Idempotent on null, matching wasamo_window_destroy (DD-M2-P4-003).
         return WASAMO_OK;
@@ -599,9 +624,7 @@ fn property_error_msg(prefix: &str, e: &PropertyError) -> String {
     }
 }
 
-unsafe fn read_property_value(
-    value: *const WasamoValue,
-) -> Result<PropertyValue, &'static str> {
+unsafe fn read_property_value(value: *const WasamoValue) -> Result<PropertyValue, &'static str> {
     if value.is_null() {
         return Err("value is null");
     }
@@ -633,9 +656,8 @@ fn write_property_value(out: &mut WasamoValue, value: PropertyValue) {
         PropertyValue::String(s) => {
             // Store the CString in TLS; the pointer we hand back stays valid
             // until the next ABI call on this thread overwrites the slot.
-            let cs = CString::new(s).unwrap_or_else(|_| {
-                CString::new("(string contained NUL)").unwrap()
-            });
+            let cs =
+                CString::new(s).unwrap_or_else(|_| CString::new("(string contained NUL)").unwrap());
             let len = cs.as_bytes().len();
             // Borrow the buffer slot, replace its contents, and re-borrow to
             // grab a stable pointer into the now-owned CString.
@@ -658,8 +680,12 @@ pub unsafe extern "C" fn wasamo_get_property(
     property_id: u32,
     out_value: *mut WasamoValue,
 ) -> WasamoStatus {
-    if let Some(s) = check_owning_thread("wasamo_get_property") { return s; }
-    if let Some(s) = check_not_diverged("wasamo_get_property") { return s; }
+    if let Some(s) = check_owning_thread("wasamo_get_property") {
+        return s;
+    }
+    if let Some(s) = check_not_diverged("wasamo_get_property") {
+        return s;
+    }
     if widget.is_null() {
         set_last_error("wasamo_get_property: widget is null");
         return WASAMO_ERR_INVALID_ARG;
@@ -704,11 +730,7 @@ pub unsafe extern "C" fn wasamo_set_property(
             // abi_spec §4.3: schedule observers AFTER the call returns.
             // We push to the emission queue here; the actual callbacks
             // fire when `drain_if_outermost` runs at the tail.
-            crate::emit::enqueue_property_change(
-                widget,
-                property_id,
-                property_value_to_owned(&pv),
-            );
+            crate::emit::enqueue_property_change(widget, property_id, property_value_to_owned(&pv));
             clear_last_error();
             crate::emit::drain_if_outermost();
             WASAMO_OK
@@ -749,9 +771,7 @@ pub unsafe extern "C" fn wasamo_observe_property(
         set_last_error("wasamo_observe_property: out_token is null");
         return WASAMO_ERR_INVALID_ARG;
     }
-    let token = crate::registry::add_observer(
-        widget, property_id, callback, user_data, destroy_fn,
-    );
+    let token = crate::registry::add_observer(widget, property_id, callback, user_data, destroy_fn);
     *out_token = token;
     clear_last_error();
     WASAMO_OK
@@ -759,8 +779,12 @@ pub unsafe extern "C" fn wasamo_observe_property(
 
 #[no_mangle]
 pub extern "C" fn wasamo_unobserve_property(token: u64) -> WasamoStatus {
-    if let Some(s) = check_owning_thread("wasamo_unobserve_property") { return s; }
-    if let Some(s) = check_not_diverged("wasamo_unobserve_property") { return s; }
+    if let Some(s) = check_owning_thread("wasamo_unobserve_property") {
+        return s;
+    }
+    if let Some(s) = check_not_diverged("wasamo_unobserve_property") {
+        return s;
+    }
     if crate::registry::remove(token) {
         clear_last_error();
         WASAMO_OK
@@ -805,9 +829,7 @@ pub unsafe extern "C" fn wasamo_signal_connect(
             return WASAMO_ERR_INVALID_ARG;
         }
     };
-    let token = crate::registry::add_signal(
-        widget, name, callback, user_data, destroy_fn,
-    );
+    let token = crate::registry::add_signal(widget, name, callback, user_data, destroy_fn);
     *out_token = token;
     clear_last_error();
     WASAMO_OK
@@ -815,8 +837,12 @@ pub unsafe extern "C" fn wasamo_signal_connect(
 
 #[no_mangle]
 pub extern "C" fn wasamo_signal_disconnect(token: u64) -> WasamoStatus {
-    if let Some(s) = check_owning_thread("wasamo_signal_disconnect") { return s; }
-    if let Some(s) = check_not_diverged("wasamo_signal_disconnect") { return s; }
+    if let Some(s) = check_owning_thread("wasamo_signal_disconnect") {
+        return s;
+    }
+    if let Some(s) = check_not_diverged("wasamo_signal_disconnect") {
+        return s;
+    }
     if crate::registry::remove(token) {
         clear_last_error();
         WASAMO_OK
@@ -989,9 +1015,8 @@ pub unsafe extern "C" fn wasamo_vstack_create(
         Err(s) => return s,
     };
     let rt = crate::runtime::get();
-    let node = match WidgetNode::vstack(
-        &rt.compositor, 8.0, 8.0, crate::layout::Alignment::Center,
-    ) {
+    let node = match WidgetNode::vstack(&rt.compositor, 8.0, 8.0, crate::layout::Alignment::Center)
+    {
         Ok(n) => n,
         Err(e) => {
             set_last_error(format!("wasamo_vstack_create: {e}"));
@@ -1018,9 +1043,8 @@ pub unsafe extern "C" fn wasamo_hstack_create(
         Err(s) => return s,
     };
     let rt = crate::runtime::get();
-    let node = match WidgetNode::hstack(
-        &rt.compositor, 8.0, 8.0, crate::layout::Alignment::Center,
-    ) {
+    let node = match WidgetNode::hstack(&rt.compositor, 8.0, 8.0, crate::layout::Alignment::Center)
+    {
         Ok(n) => n,
         Err(e) => {
             set_last_error(format!("wasamo_hstack_create: {e}"));
@@ -1102,8 +1126,12 @@ unsafe fn read_load_payload(
     let bytes = std::slice::from_raw_parts(data as *const u8, data_len);
     match type_ {
         WASAMO_LOAD_PATH => {
-            let path = std::str::from_utf8(bytes)
-                .map_err(|_| (WASAMO_ERR_INVALID_ARG, "path is not valid UTF-8".to_string()))?;
+            let path = std::str::from_utf8(bytes).map_err(|_| {
+                (
+                    WASAMO_ERR_INVALID_ARG,
+                    "path is not valid UTF-8".to_string(),
+                )
+            })?;
             std::fs::read_to_string(path).map_err(|e| {
                 (
                     WASAMO_ERR_RUNTIME,
@@ -1168,21 +1196,18 @@ pub unsafe extern "C" fn wasamo_load_ui(
     };
 
     let rt = crate::runtime::get();
-    let built = match crate::ir_loader::build_widget_tree(
-        &component,
-        &rt.compositor,
-        &rt.text_renderer,
-    ) {
-        Ok(b) => b,
-        Err(e) => {
-            set_last_error(format!("wasamo_load_ui: {e}"));
-            return if e.is_malformed() {
-                WASAMO_ERR_IR_MALFORMED
-            } else {
-                WASAMO_ERR_RUNTIME
-            };
-        }
-    };
+    let built =
+        match crate::ir_loader::build_widget_tree(&component, &rt.compositor, &rt.text_renderer) {
+            Ok(b) => b,
+            Err(e) => {
+                set_last_error(format!("wasamo_load_ui: {e}"));
+                return if e.is_malformed() {
+                    WASAMO_ERR_IR_MALFORMED
+                } else {
+                    WASAMO_ERR_RUNTIME
+                };
+            }
+        };
 
     let mut window = match crate::window::create(
         DEFAULT_WINDOW_TITLE,

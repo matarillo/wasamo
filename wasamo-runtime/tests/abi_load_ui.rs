@@ -19,7 +19,7 @@
 use std::ffi::c_void;
 use std::ptr;
 
-use wasamo_runtime::ffi as ffi;
+use wasamo_runtime::ffi;
 
 #[test]
 fn dd_m2_p6_005_wasamo_load_ui_and_thread_affinity() {
@@ -30,9 +30,8 @@ fn dd_m2_p6_005_wasamo_load_ui_and_thread_affinity() {
     // ── 1. Cross-thread call returns WASAMO_ERR_WRONG_THREAD ──────────────
     let join = std::thread::spawn(|| {
         let mut count: usize = 7; // sentinel; must NOT be touched on error
-        let status = unsafe {
-            ffi::wasamo_widget_child_count(ptr::null_mut(), &mut count as *mut usize)
-        };
+        let status =
+            unsafe { ffi::wasamo_widget_child_count(ptr::null_mut(), &mut count as *mut usize) };
         assert_eq!(status, ffi::WASAMO_ERR_WRONG_THREAD);
         assert_eq!(count, 7, "out_count must not be touched on wrong-thread");
 

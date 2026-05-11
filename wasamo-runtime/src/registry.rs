@@ -16,9 +16,7 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::ffi::c_void;
 
-use crate::abi::{
-    WasamoDestroyFn, WasamoPropertyObserverFn, WasamoSignalHandlerFn, WasamoWidget,
-};
+use crate::abi::{WasamoDestroyFn, WasamoPropertyObserverFn, WasamoSignalHandlerFn, WasamoWidget};
 
 pub enum EntryKind {
     Observer {
@@ -45,7 +43,10 @@ struct Registry {
 
 impl Registry {
     fn new() -> Self {
-        Self { next_token: 1, entries: HashMap::new() }
+        Self {
+            next_token: 1,
+            entries: HashMap::new(),
+        }
     }
 
     fn alloc_token(&mut self) -> u64 {
@@ -78,7 +79,10 @@ pub fn add_observer(
 ) -> u64 {
     insert(Entry {
         widget,
-        kind: EntryKind::Observer { property_id, callback },
+        kind: EntryKind::Observer {
+            property_id,
+            callback,
+        },
         user_data,
         destroy_fn,
     })
@@ -206,9 +210,10 @@ pub fn lookup_observer(
         let r = r.borrow();
         let e = r.entries.get(&token)?;
         match &e.kind {
-            EntryKind::Observer { property_id, callback } => {
-                Some((*callback, e.widget, *property_id, e.user_data))
-            }
+            EntryKind::Observer {
+                property_id,
+                callback,
+            } => Some((*callback, e.widget, *property_id, e.user_data)),
             _ => None,
         }
     })
@@ -217,14 +222,16 @@ pub fn lookup_observer(
 /// Resolve a signal token to its callback pointer and identity.
 pub fn lookup_signal(
     token: u64,
-) -> Option<(crate::abi::WasamoSignalHandlerFn, *mut WasamoWidget, *mut c_void)> {
+) -> Option<(
+    crate::abi::WasamoSignalHandlerFn,
+    *mut WasamoWidget,
+    *mut c_void,
+)> {
     REG.with(|r| {
         let r = r.borrow();
         let e = r.entries.get(&token)?;
         match &e.kind {
-            EntryKind::Signal { callback, .. } => {
-                Some((*callback, e.widget, e.user_data))
-            }
+            EntryKind::Signal { callback, .. } => Some((*callback, e.widget, e.user_data)),
             _ => None,
         }
     })

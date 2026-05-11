@@ -83,7 +83,13 @@ impl Widget {
             tag: sys::WASAMO_VALUE_NONE,
             as_: sys::WasamoValueAs { v_i32: 0 },
         };
-        unsafe { check(sys::wasamo_get_property(self.raw, property_id, &mut raw_val))?; }
+        unsafe {
+            check(sys::wasamo_get_property(
+                self.raw,
+                property_id,
+                &mut raw_val,
+            ))?;
+        }
         Ok(raw_value_to_owned(&raw_val))
     }
 
@@ -113,7 +119,9 @@ impl Widget {
             }
         }
         extern "C" fn drop_box(user_data: *mut c_void) {
-            unsafe { drop(Box::from_raw(user_data as *mut Box<dyn FnMut()>)); }
+            unsafe {
+                drop(Box::from_raw(user_data as *mut Box<dyn FnMut()>));
+            }
         }
 
         let erased: Box<dyn FnMut()> = Box::new(f);
@@ -180,23 +188,31 @@ pub struct Runtime {
 impl Runtime {
     pub fn init() -> Result<Self, Error> {
         unsafe { check(sys::wasamo_init())? };
-        Ok(Runtime { _not_send: PhantomData })
+        Ok(Runtime {
+            _not_send: PhantomData,
+        })
     }
 
     /// Enter the event loop. Blocks until `quit()` is called.
     pub fn run(&self) {
-        unsafe { sys::wasamo_run(); }
+        unsafe {
+            sys::wasamo_run();
+        }
     }
 
     /// Signal the event loop to exit.
     pub fn quit(&self) {
-        unsafe { sys::wasamo_quit(); }
+        unsafe {
+            sys::wasamo_quit();
+        }
     }
 }
 
 impl Drop for Runtime {
     fn drop(&mut self) {
-        unsafe { sys::wasamo_shutdown(); }
+        unsafe {
+            sys::wasamo_shutdown();
+        }
     }
 }
 
@@ -222,7 +238,10 @@ impl Window {
                 &mut raw,
             ))?;
         }
-        Ok(Window { raw, _not_send: PhantomData })
+        Ok(Window {
+            raw,
+            _not_send: PhantomData,
+        })
     }
 
     pub fn show(&self) -> Result<(), Error> {
@@ -241,7 +260,9 @@ impl Window {
 impl Drop for Window {
     fn drop(&mut self) {
         if !self.raw.is_null() {
-            unsafe { sys::wasamo_window_destroy(self.raw); }
+            unsafe {
+                sys::wasamo_window_destroy(self.raw);
+            }
         }
     }
 }
@@ -273,7 +294,10 @@ pub mod experimental {
                 &mut raw,
             ))?;
         }
-        Ok(Widget { raw, _not_send: PhantomData })
+        Ok(Widget {
+            raw,
+            _not_send: PhantomData,
+        })
     }
 
     pub fn button(label: &str) -> Result<Widget, Error> {
@@ -285,7 +309,10 @@ pub mod experimental {
                 &mut raw,
             ))?;
         }
-        Ok(Widget { raw, _not_send: PhantomData })
+        Ok(Widget {
+            raw,
+            _not_send: PhantomData,
+        })
     }
 
     /// Create a vertical stack. Children are consumed: the runtime takes
@@ -302,7 +329,10 @@ pub mod experimental {
                 &mut raw,
             ))?;
         }
-        Ok(Widget { raw, _not_send: PhantomData })
+        Ok(Widget {
+            raw,
+            _not_send: PhantomData,
+        })
     }
 
     /// Create a horizontal stack. Same ownership semantics as [`vstack`].
@@ -317,7 +347,10 @@ pub mod experimental {
                 &mut raw,
             ))?;
         }
-        Ok(Widget { raw, _not_send: PhantomData })
+        Ok(Widget {
+            raw,
+            _not_send: PhantomData,
+        })
     }
 }
 
@@ -339,7 +372,9 @@ fn value_to_raw(v: &Value<'_>) -> sys::WasamoValue {
         },
         Value::Bool(b) => sys::WasamoValue {
             tag: sys::WASAMO_VALUE_BOOL,
-            as_: sys::WasamoValueAs { v_bool: if *b { 1 } else { 0 } },
+            as_: sys::WasamoValueAs {
+                v_bool: if *b { 1 } else { 0 },
+            },
         },
         Value::String(s) => sys::WasamoValue {
             tag: sys::WASAMO_VALUE_STRING,

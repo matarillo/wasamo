@@ -18,8 +18,8 @@ fn main() {
 
     println!("cargo:rerun-if-changed={}", ui_path.display());
 
-    let src = fs::read_to_string(&ui_path)
-        .unwrap_or_else(|e| panic!("read {}: {e}", ui_path.display()));
+    let src =
+        fs::read_to_string(&ui_path).unwrap_or_else(|e| panic!("read {}: {e}", ui_path.display()));
     let path_str = ui_path.to_string_lossy();
 
     let tokens = wasamoc::lexer::tokenize(&src, &path_str)
@@ -28,11 +28,7 @@ fn main() {
         .unwrap_or_else(|d| panic!("counter.ui parse:\n{}", d.render(&src)));
     let result = wasamoc::check::check(&ast, &path_str);
     if result.has_errors() {
-        let rendered: Vec<String> = result
-            .diagnostics
-            .iter()
-            .map(|d| d.render(&src))
-            .collect();
+        let rendered: Vec<String> = result.diagnostics.iter().map(|d| d.render(&src)).collect();
         panic!("counter.ui check failed:\n{}", rendered.join("\n"));
     }
     let comp = wasamoc::lower::lower(&ast, &result.namespace);
@@ -40,8 +36,7 @@ fn main() {
 
     let out_dir = PathBuf::from(env::var("OUT_DIR").unwrap());
     let out_path = out_dir.join("counter.uic");
-    fs::write(&out_path, &ir_text)
-        .unwrap_or_else(|e| panic!("write {}: {e}", out_path.display()));
+    fs::write(&out_path, &ir_text).unwrap_or_else(|e| panic!("write {}: {e}", out_path.display()));
 
     println!("cargo:rustc-env=WASAMO_COUNTER_IR={}", out_path.display());
 }

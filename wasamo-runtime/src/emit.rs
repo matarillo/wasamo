@@ -36,8 +36,8 @@ use std::collections::{HashSet, VecDeque};
 use std::os::raw::c_char;
 
 use crate::abi::{
-    WasamoStringView, WasamoValue, WasamoValuePayload, WasamoWidget,
-    WASAMO_VALUE_I32, WASAMO_VALUE_STRING,
+    WasamoStringView, WasamoValue, WasamoValuePayload, WasamoWidget, WASAMO_VALUE_I32,
+    WASAMO_VALUE_STRING,
 };
 use crate::reactive;
 use crate::registry;
@@ -89,7 +89,9 @@ pub fn register_window(window: *mut WindowState) {
 
 pub fn unregister_window(window: *mut WindowState) {
     WINDOWS.with(|w| w.borrow_mut().retain(|&p| p != window));
-    DIRTY.with(|d| { d.borrow_mut().remove(&window); });
+    DIRTY.with(|d| {
+        d.borrow_mut().remove(&window);
+    });
 }
 
 /// Called from set_property when a size-affecting property changes.
@@ -110,7 +112,9 @@ pub fn mark_layout_dirty_for(widget: *mut WasamoWidget) {
                     }
                 });
                 if found {
-                    DIRTY.with(|d| { d.borrow_mut().insert(wptr); });
+                    DIRTY.with(|d| {
+                        d.borrow_mut().insert(wptr);
+                    });
                     return;
                 }
             }
@@ -124,12 +128,15 @@ fn flush_layout() {
         // Safety: wptr lives in WINDOWS and is still a valid Box<WindowState>.
         let state = unsafe { &mut *wptr };
         if let Some(ref mut root) = state.root_widget {
-            use windows::Win32::UI::WindowsAndMessaging::GetClientRect;
             use windows::Win32::Foundation::RECT;
+            use windows::Win32::UI::WindowsAndMessaging::GetClientRect;
             let mut rect = RECT::default();
             let (cw, ch) = unsafe {
                 if GetClientRect(state.hwnd, &mut rect).is_ok() {
-                    ((rect.right - rect.left) as f32, (rect.bottom - rect.top) as f32)
+                    (
+                        (rect.right - rect.left) as f32,
+                        (rect.bottom - rect.top) as f32,
+                    )
                 } else {
                     (0.0, 0.0)
                 }
@@ -139,11 +146,7 @@ fn flush_layout() {
     }
 }
 
-pub fn enqueue_property_change(
-    widget: *mut WasamoWidget,
-    property_id: u32,
-    value: OwnedArg,
-) {
+pub fn enqueue_property_change(widget: *mut WasamoWidget, property_id: u32, value: OwnedArg) {
     let tokens = registry::observer_tokens_for(widget, property_id);
     if tokens.is_empty() {
         return;
@@ -151,7 +154,10 @@ pub fn enqueue_property_change(
     QUEUE.with(|q| {
         let mut q = q.borrow_mut();
         for t in tokens {
-            q.push_back(Pending::Observer { token: t, value: value.clone() });
+            q.push_back(Pending::Observer {
+                token: t,
+                value: value.clone(),
+            });
         }
     });
 }
@@ -164,7 +170,10 @@ pub fn enqueue_signal(widget: *mut WasamoWidget, name: &str, args: Vec<OwnedArg>
     QUEUE.with(|q| {
         let mut q = q.borrow_mut();
         for t in tokens {
-            q.push_back(Pending::Signal { token: t, args: args.clone() });
+            q.push_back(Pending::Signal {
+                token: t,
+                args: args.clone(),
+            });
         }
     });
 }
@@ -212,9 +221,7 @@ pub fn drain_if_outermost() {
 fn dispatch(p: Pending) {
     match p {
         Pending::Observer { token, value } => {
-            let Some((cb, widget, prop_id, user_data)) =
-                registry::lookup_observer(token)
-            else {
+            let Some((cb, widget, prop_id, user_data)) = registry::lookup_observer(token) else {
                 return;
             };
             let Some(cb) = cb else { return };
@@ -225,8 +232,7 @@ fn dispatch(p: Pending) {
             unsafe { cb(widget, prop_id, &v, user_data) };
         }
         Pending::Signal { token, args } => {
-            let Some((cb, widget, user_data)) = registry::lookup_signal(token)
-            else {
+            let Some((cb, widget, user_data)) = registry::lookup_signal(token) else {
                 return;
             };
             let Some(cb) = cb else { return };

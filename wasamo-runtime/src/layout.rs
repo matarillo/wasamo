@@ -92,30 +92,49 @@ pub fn measure(node: &LayoutNode, avail_w: f32, avail_h: f32) -> (f32, f32) {
 }
 
 fn measure_leaf(node: &LayoutNode) -> (f32, f32) {
-    let w = if let SizeConstraint::Fixed(v) = node.width { v } else { 0.0 };
-    let h = if let SizeConstraint::Fixed(v) = node.height { v } else { 0.0 };
+    let w = if let SizeConstraint::Fixed(v) = node.width {
+        v
+    } else {
+        0.0
+    };
+    let h = if let SizeConstraint::Fixed(v) = node.height {
+        v
+    } else {
+        0.0
+    };
     (w, h)
 }
 
 fn measure_vstack(node: &LayoutNode, avail_w: f32) -> (f32, f32) {
     let inner_w = (avail_w - 2.0 * node.padding).max(0.0);
-    let child_desired: Vec<(f32, f32)> = node.children.iter()
+    let child_desired: Vec<(f32, f32)> = node
+        .children
+        .iter()
         .map(|c| measure(c, inner_w, f32::INFINITY))
         .collect();
 
     let n = node.children.len();
-    let spacing_total = if n > 0 { node.spacing * (n as f32 - 1.0) } else { 0.0 };
+    let spacing_total = if n > 0 {
+        node.spacing * (n as f32 - 1.0)
+    } else {
+        0.0
+    };
 
     let desired_w = match &node.width {
         SizeConstraint::Fixed(v) => *v,
         SizeConstraint::Fill => 0.0,
         SizeConstraint::Shrink => {
-            let max_cw = child_desired.iter().map(|&(w, _)| w).fold(0.0_f32, f32::max);
+            let max_cw = child_desired
+                .iter()
+                .map(|&(w, _)| w)
+                .fold(0.0_f32, f32::max);
             max_cw + 2.0 * node.padding
         }
     };
 
-    let non_fill_h: f32 = node.children.iter()
+    let non_fill_h: f32 = node
+        .children
+        .iter()
         .zip(child_desired.iter())
         .filter(|(c, _)| c.height != SizeConstraint::Fill)
         .map(|(_, &(_, h))| h)
@@ -132,23 +151,34 @@ fn measure_vstack(node: &LayoutNode, avail_w: f32) -> (f32, f32) {
 
 fn measure_hstack(node: &LayoutNode, avail_h: f32) -> (f32, f32) {
     let inner_h = (avail_h - 2.0 * node.padding).max(0.0);
-    let child_desired: Vec<(f32, f32)> = node.children.iter()
+    let child_desired: Vec<(f32, f32)> = node
+        .children
+        .iter()
         .map(|c| measure(c, f32::INFINITY, inner_h))
         .collect();
 
     let n = node.children.len();
-    let spacing_total = if n > 0 { node.spacing * (n as f32 - 1.0) } else { 0.0 };
+    let spacing_total = if n > 0 {
+        node.spacing * (n as f32 - 1.0)
+    } else {
+        0.0
+    };
 
     let desired_h = match &node.height {
         SizeConstraint::Fixed(v) => *v,
         SizeConstraint::Fill => 0.0,
         SizeConstraint::Shrink => {
-            let max_ch = child_desired.iter().map(|&(_, h)| h).fold(0.0_f32, f32::max);
+            let max_ch = child_desired
+                .iter()
+                .map(|&(_, h)| h)
+                .fold(0.0_f32, f32::max);
             max_ch + 2.0 * node.padding
         }
     };
 
-    let non_fill_w: f32 = node.children.iter()
+    let non_fill_w: f32 = node
+        .children
+        .iter()
         .zip(child_desired.iter())
         .filter(|(c, _)| c.width != SizeConstraint::Fill)
         .map(|(_, &(w, _))| w)
@@ -175,45 +205,70 @@ pub fn arrange(node: &mut LayoutNode, x: f32, y: f32, w: f32, h: f32) {
 
     match kind {
         WidgetKind::Rectangle => {}
-        WidgetKind::VStack => arrange_vstack(&mut node.children, x, y, w, h, padding, spacing, alignment),
-        WidgetKind::HStack => arrange_hstack(&mut node.children, x, y, w, h, padding, spacing, alignment),
+        WidgetKind::VStack => {
+            arrange_vstack(&mut node.children, x, y, w, h, padding, spacing, alignment)
+        }
+        WidgetKind::HStack => {
+            arrange_hstack(&mut node.children, x, y, w, h, padding, spacing, alignment)
+        }
     }
 }
 
 fn arrange_vstack(
     children: &mut [LayoutNode],
-    x: f32, y: f32, w: f32, h: f32,
-    padding: f32, spacing: f32, alignment: Alignment,
+    x: f32,
+    y: f32,
+    w: f32,
+    h: f32,
+    padding: f32,
+    spacing: f32,
+    alignment: Alignment,
 ) {
     let inner_x = x + padding;
     let inner_y = y + padding;
     let inner_w = (w - 2.0 * padding).max(0.0);
     let inner_h = (h - 2.0 * padding).max(0.0);
 
-    let child_desired: Vec<(f32, f32)> = children.iter()
+    let child_desired: Vec<(f32, f32)> = children
+        .iter()
         .map(|c| measure(c, inner_w, f32::INFINITY))
         .collect();
 
     let n = children.len();
-    let fill_count = children.iter().filter(|c| c.height == SizeConstraint::Fill).count();
-    let non_fill_h: f32 = children.iter()
+    let fill_count = children
+        .iter()
+        .filter(|c| c.height == SizeConstraint::Fill)
+        .count();
+    let non_fill_h: f32 = children
+        .iter()
         .zip(child_desired.iter())
         .filter(|(c, _)| c.height != SizeConstraint::Fill)
         .map(|(_, &(_, h))| h)
         .sum();
-    let spacing_total = if n > 0 { spacing * (n as f32 - 1.0) } else { 0.0 };
+    let spacing_total = if n > 0 {
+        spacing * (n as f32 - 1.0)
+    } else {
+        0.0
+    };
     let remaining = (inner_h - non_fill_h - spacing_total).max(0.0);
-    let fill_child_h = if fill_count > 0 { remaining / fill_count as f32 } else { 0.0 };
+    let fill_child_h = if fill_count > 0 {
+        remaining / fill_count as f32
+    } else {
+        0.0
+    };
 
     let mut cur_y = inner_y;
     for (i, child) in children.iter_mut().enumerate() {
         let (desired_w, desired_h) = child_desired[i];
 
-        let child_h = if child.height == SizeConstraint::Fill { fill_child_h } else { desired_h };
+        let child_h = if child.height == SizeConstraint::Fill {
+            fill_child_h
+        } else {
+            desired_h
+        };
 
-        let (child_x, child_w) = cross_axis_position(
-            &child.width, desired_w, inner_x, inner_w, alignment,
-        );
+        let (child_x, child_w) =
+            cross_axis_position(&child.width, desired_w, inner_x, inner_w, alignment);
 
         arrange(child, child_x, cur_y, child_w, child_h);
         cur_y += child_h;
@@ -225,38 +280,59 @@ fn arrange_vstack(
 
 fn arrange_hstack(
     children: &mut [LayoutNode],
-    x: f32, y: f32, w: f32, h: f32,
-    padding: f32, spacing: f32, alignment: Alignment,
+    x: f32,
+    y: f32,
+    w: f32,
+    h: f32,
+    padding: f32,
+    spacing: f32,
+    alignment: Alignment,
 ) {
     let inner_x = x + padding;
     let inner_y = y + padding;
     let inner_w = (w - 2.0 * padding).max(0.0);
     let inner_h = (h - 2.0 * padding).max(0.0);
 
-    let child_desired: Vec<(f32, f32)> = children.iter()
+    let child_desired: Vec<(f32, f32)> = children
+        .iter()
         .map(|c| measure(c, f32::INFINITY, inner_h))
         .collect();
 
     let n = children.len();
-    let fill_count = children.iter().filter(|c| c.width == SizeConstraint::Fill).count();
-    let non_fill_w: f32 = children.iter()
+    let fill_count = children
+        .iter()
+        .filter(|c| c.width == SizeConstraint::Fill)
+        .count();
+    let non_fill_w: f32 = children
+        .iter()
         .zip(child_desired.iter())
         .filter(|(c, _)| c.width != SizeConstraint::Fill)
         .map(|(_, &(w, _))| w)
         .sum();
-    let spacing_total = if n > 0 { spacing * (n as f32 - 1.0) } else { 0.0 };
+    let spacing_total = if n > 0 {
+        spacing * (n as f32 - 1.0)
+    } else {
+        0.0
+    };
     let remaining = (inner_w - non_fill_w - spacing_total).max(0.0);
-    let fill_child_w = if fill_count > 0 { remaining / fill_count as f32 } else { 0.0 };
+    let fill_child_w = if fill_count > 0 {
+        remaining / fill_count as f32
+    } else {
+        0.0
+    };
 
     let mut cur_x = inner_x;
     for (i, child) in children.iter_mut().enumerate() {
         let (desired_w, desired_h) = child_desired[i];
 
-        let child_w = if child.width == SizeConstraint::Fill { fill_child_w } else { desired_w };
+        let child_w = if child.width == SizeConstraint::Fill {
+            fill_child_w
+        } else {
+            desired_w
+        };
 
-        let (child_y, child_h) = cross_axis_position(
-            &child.height, desired_h, inner_y, inner_h, alignment,
-        );
+        let (child_y, child_h) =
+            cross_axis_position(&child.height, desired_h, inner_y, inner_h, alignment);
 
         arrange(child, cur_x, child_y, child_w, child_h);
         cur_x += child_w;
@@ -311,7 +387,8 @@ mod tests {
 
     #[test]
     fn rectangle_fixed_size() {
-        let mut rect = LayoutNode::rectangle(SizeConstraint::Fixed(100.0), SizeConstraint::Fixed(50.0));
+        let mut rect =
+            LayoutNode::rectangle(SizeConstraint::Fixed(100.0), SizeConstraint::Fixed(50.0));
         arrange(&mut rect, 10.0, 20.0, 100.0, 50.0);
         assert_eq!(rect.offset, (10.0, 20.0));
         assert_eq!(rect.size, (100.0, 50.0));

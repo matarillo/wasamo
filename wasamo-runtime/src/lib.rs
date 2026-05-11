@@ -31,7 +31,9 @@ pub use text::{TextRenderer, TypographyStyle};
 pub use widget::{ButtonStyle, WidgetNode};
 pub use window::WindowState;
 
-use windows::Win32::UI::WindowsAndMessaging::{DispatchMessageW, GetMessageW, TranslateMessage, MSG};
+use windows::Win32::UI::WindowsAndMessaging::{
+    DispatchMessageW, GetMessageW, TranslateMessage, MSG,
+};
 
 // ── Rust-native API (used by examples and future bindings) ───────────────────
 
@@ -59,10 +61,7 @@ pub fn get_text_renderer() -> &'static TextRenderer {
     &runtime::get().text_renderer
 }
 
-pub fn window_add_widget(
-    window: &WindowState,
-    widget: &WidgetNode,
-) -> windows::core::Result<()> {
+pub fn window_add_widget(window: &WindowState, widget: &WidgetNode) -> windows::core::Result<()> {
     use windows::core::Interface;
     use windows::UI::Composition::Visual;
     let child_visual: Visual = widget.visual.cast()?;

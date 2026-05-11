@@ -6,18 +6,16 @@ use windows::{
     Win32::{
         Foundation::{HWND, LPARAM, LRESULT, WPARAM},
         Graphics::Dwm::{
-            DwmSetWindowAttribute,
-            DWMWA_SYSTEMBACKDROP_TYPE,
-            DWMWINDOWATTRIBUTE, DWM_SYSTEMBACKDROP_TYPE, DWMSBT_MAINWINDOW,
+            DwmSetWindowAttribute, DWMSBT_MAINWINDOW, DWMWA_SYSTEMBACKDROP_TYPE,
+            DWMWINDOWATTRIBUTE, DWM_SYSTEMBACKDROP_TYPE,
         },
         UI::{
             Input::KeyboardAndMouse::{TrackMouseEvent, TME_LEAVE, TRACKMOUSEEVENT},
             WindowsAndMessaging::{
-                CreateWindowExW, DefWindowProcW, GetWindowLongPtrW, LoadCursorW,
-                PostQuitMessage, RegisterClassExW, SetWindowLongPtrW, ShowWindow,
-                CS_HREDRAW, CS_VREDRAW, CW_USEDEFAULT, GWLP_USERDATA, IDC_ARROW,
-                SW_SHOW, WM_DESTROY, WM_ERASEBKGND, WM_KEYDOWN, WM_LBUTTONDOWN,
-                WM_LBUTTONUP, WM_MOUSEMOVE, WM_SIZE, WNDCLASSEXW,
+                CreateWindowExW, DefWindowProcW, GetWindowLongPtrW, LoadCursorW, PostQuitMessage,
+                RegisterClassExW, SetWindowLongPtrW, ShowWindow, CS_HREDRAW, CS_VREDRAW,
+                CW_USEDEFAULT, GWLP_USERDATA, IDC_ARROW, SW_SHOW, WM_DESTROY, WM_ERASEBKGND,
+                WM_KEYDOWN, WM_LBUTTONDOWN, WM_LBUTTONUP, WM_MOUSEMOVE, WM_SIZE, WNDCLASSEXW,
                 WS_EX_NOREDIRECTIONBITMAP, WS_OVERLAPPEDWINDOW,
             },
         },
@@ -35,12 +33,12 @@ pub struct WindowState {
     _target: DesktopWindowTarget,
 
     // Event callbacks set by the host before wasamo_run().
-    pub resize_fn:      Option<Box<dyn FnMut(f32, f32)>>,
-    pub key_down_fn:    Option<Box<dyn FnMut(u16)>>,
-    pub mouse_down_fn:  Option<Box<dyn FnMut(i32, i32)>>,
-    pub mouse_move_fn:  Option<Box<dyn FnMut(i32, i32)>>,
+    pub resize_fn: Option<Box<dyn FnMut(f32, f32)>>,
+    pub key_down_fn: Option<Box<dyn FnMut(u16)>>,
+    pub mouse_down_fn: Option<Box<dyn FnMut(i32, i32)>>,
+    pub mouse_move_fn: Option<Box<dyn FnMut(i32, i32)>>,
     pub mouse_leave_fn: Option<Box<dyn FnMut()>>,
-    pub mouse_up_fn:    Option<Box<dyn FnMut(i32, i32)>>,
+    pub mouse_up_fn: Option<Box<dyn FnMut(i32, i32)>>,
 
     // Tracks whether TrackMouseEvent has been called for the current enter/leave cycle.
     tracking_mouse: bool,
@@ -62,7 +60,8 @@ pub fn create(title: &str, width: i32, height: i32) -> windows::core::Result<Box
     let compositor = &runtime::get().compositor;
     let target = create_desktop_window_target(compositor, hwnd)?;
     let root = compositor.CreateContainerVisual()?;
-    root.cast::<Visual>()?.SetRelativeSizeAdjustment(Vector2 { X: 1.0, Y: 1.0 })?;
+    root.cast::<Visual>()?
+        .SetRelativeSizeAdjustment(Vector2 { X: 1.0, Y: 1.0 })?;
     target.SetRoot(&root.cast::<Visual>()?)?;
     let mut state = Box::new(WindowState {
         hwnd,
@@ -102,13 +101,18 @@ fn create_hwnd(title: &str, width: i32, height: i32) -> windows::core::Result<HW
 
     let hwnd = unsafe {
         CreateWindowExW(
-            WS_EX_NOREDIRECTIONBITMAP,  // required for Visual Layer + DWM backdrop (Mica)
+            WS_EX_NOREDIRECTIONBITMAP, // required for Visual Layer + DWM backdrop (Mica)
             windows::core::PCWSTR(class_name.as_ptr()),
             windows::core::PCWSTR(title_w.as_ptr()),
             WS_OVERLAPPEDWINDOW,
-            CW_USEDEFAULT, CW_USEDEFAULT,
-            width, height,
-            None, None, None, None,
+            CW_USEDEFAULT,
+            CW_USEDEFAULT,
+            width,
+            height,
+            None,
+            None,
+            None,
+            None,
         )?
     };
     Ok(hwnd)
@@ -124,19 +128,18 @@ fn create_desktop_window_target(
 }
 
 pub fn show(state: &WindowState) {
-    unsafe { let _ = ShowWindow(state.hwnd, SW_SHOW); };
+    unsafe {
+        let _ = ShowWindow(state.hwnd, SW_SHOW);
+    };
 }
 
 /// Install `root` as the window's content tree, taking ownership of the
 /// subtree. A previously-installed root is detached and dropped after
 /// disconnecting any registry entries it held. Performs an initial
 /// layout pass against the window's current client size.
-pub fn set_root(
-    state: &mut WindowState,
-    root: Box<WidgetNode>,
-) -> windows::core::Result<()> {
-    use windows::Win32::UI::WindowsAndMessaging::GetClientRect;
+pub fn set_root(state: &mut WindowState, root: Box<WidgetNode>) -> windows::core::Result<()> {
     use windows::Win32::Foundation::RECT;
+    use windows::Win32::UI::WindowsAndMessaging::GetClientRect;
 
     if let Some(prev) = state.root_widget.take() {
         prev.for_each_ptr(&mut |p| {
@@ -155,7 +158,10 @@ pub fn set_root(
     let mut rect = RECT::default();
     let (cw, ch) = unsafe {
         if GetClientRect(state.hwnd, &mut rect).is_ok() {
-            ((rect.right - rect.left) as f32, (rect.bottom - rect.top) as f32)
+            (
+                (rect.right - rect.left) as f32,
+                (rect.bottom - rect.top) as f32,
+            )
         } else {
             (0.0, 0.0)
         }
@@ -285,10 +291,7 @@ unsafe extern "system" fn wnd_proc(
                 f(x, y);
             }
             if let Some(root) = state.root_widget.as_mut() {
-                let _ = root.update_hover(
-                    &runtime::get().compositor,
-                    x, y, state.mouse_down,
-                );
+                let _ = root.update_hover(&runtime::get().compositor, x, y, state.mouse_down);
             }
             return LRESULT(0);
         }
@@ -312,10 +315,7 @@ unsafe extern "system" fn wnd_proc(
                 f(x, y);
             }
             if let Some(root) = state.root_widget.as_mut() {
-                let _ = root.update_hover(
-                    &runtime::get().compositor,
-                    x, y, true,
-                );
+                let _ = root.update_hover(&runtime::get().compositor, x, y, true);
             }
             return LRESULT(0);
         }
@@ -329,10 +329,7 @@ unsafe extern "system" fn wnd_proc(
             }
             if let Some(root) = state.root_widget.as_mut() {
                 root.hit_test_click(x, y);
-                let _ = root.update_hover(
-                    &runtime::get().compositor,
-                    x, y, false,
-                );
+                let _ = root.update_hover(&runtime::get().compositor, x, y, false);
             }
             return LRESULT(0);
         }

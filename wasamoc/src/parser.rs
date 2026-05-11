@@ -3,10 +3,17 @@ use crate::diagnostic::Diagnostic;
 use crate::lexer::{Keyword, SpannedToken, Token};
 
 pub fn parse(tokens: &[SpannedToken], filename: &str) -> Result<ComponentDef, Diagnostic> {
-    let mut p = Parser { tokens, pos: 0, filename };
+    let mut p = Parser {
+        tokens,
+        pos: 0,
+        filename,
+    };
     let def = p.parse_component_def()?;
     if !matches!(p.peek(), Token::Eof) {
-        return Err(p.error(format!("expected end of file, found {}", p.peek().description())));
+        return Err(p.error(format!(
+            "expected end of file, found {}",
+            p.peek().description()
+        )));
     }
     Ok(def)
 }
@@ -23,7 +30,10 @@ impl<'a> Parser<'a> {
     }
 
     fn peek_next(&self) -> &Token {
-        self.tokens.get(self.pos + 1).map(|t| &t.token).unwrap_or(&Token::Eof)
+        self.tokens
+            .get(self.pos + 1)
+            .map(|t| &t.token)
+            .unwrap_or(&Token::Eof)
     }
 
     fn current_span(&self) -> &Span {
@@ -129,7 +139,12 @@ impl<'a> Parser<'a> {
             name,
             base,
             members,
-            span: Span { start: start.start, end: end_tok.span.end, line: start.line, col: start.col },
+            span: Span {
+                start: start.start,
+                end: end_tok.span.end,
+                line: start.line,
+                col: start.col,
+            },
         })
     }
 
@@ -182,7 +197,12 @@ impl<'a> Parser<'a> {
             name,
             ty,
             default,
-            span: Span { start: start.start, end, line: start.line, col: start.col },
+            span: Span {
+                start: start.start,
+                end,
+                line: start.line,
+                col: start.col,
+            },
         })
     }
 
@@ -201,7 +221,12 @@ impl<'a> Parser<'a> {
             name,
             ty,
             default,
-            span: Span { start: start.start, end, line: start.line, col: start.col },
+            span: Span {
+                start: start.start,
+                end,
+                line: start.line,
+                col: start.col,
+            },
         })
     }
 
@@ -214,7 +239,12 @@ impl<'a> Parser<'a> {
         Ok(Member::PropertyBind {
             name,
             value,
-            span: Span { start: start.start, end, line: start.line, col: start.col },
+            span: Span {
+                start: start.start,
+                end,
+                line: start.line,
+                col: start.col,
+            },
         })
     }
 
@@ -232,7 +262,12 @@ impl<'a> Parser<'a> {
         Ok(Member::WidgetDecl {
             type_name,
             members,
-            span: Span { start: start.start, end: end_tok.span.end, line: start.line, col: start.col },
+            span: Span {
+                start: start.start,
+                end: end_tok.span.end,
+                line: start.line,
+                col: start.col,
+            },
         })
     }
 
@@ -251,7 +286,12 @@ impl<'a> Parser<'a> {
         Ok(Member::SignalHandler {
             signal,
             body,
-            span: Span { start: start.start, end, line: start.line, col: start.col },
+            span: Span {
+                start: start.start,
+                end,
+                line: start.line,
+                col: start.col,
+            },
         })
     }
 
@@ -267,7 +307,12 @@ impl<'a> Parser<'a> {
         let end_tok = self.expect_rbrace()?;
         Ok(Block {
             statements,
-            span: Span { start: start.start, end: end_tok.span.end, line: start.line, col: start.col },
+            span: Span {
+                start: start.start,
+                end: end_tok.span.end,
+                line: start.line,
+                col: start.col,
+            },
         })
     }
 
@@ -286,7 +331,12 @@ impl<'a> Parser<'a> {
             target,
             op,
             value,
-            span: Span { start: start.start, end: semi.span.end, line: start.line, col: start.col },
+            span: Span {
+                start: start.start,
+                end: semi.span.end,
+                line: start.line,
+                col: start.col,
+            },
         })
     }
 
@@ -319,15 +369,23 @@ impl<'a> Parser<'a> {
 
         Ok(QualifiedName {
             segments,
-            span: Span { start: start.start, end: last_end, line: start.line, col: start.col },
+            span: Span {
+                start: start.start,
+                end: last_end,
+                line: start.line,
+                col: start.col,
+            },
         })
     }
 
     fn parse_expr(&mut self) -> Result<Expr, Diagnostic> {
         let is_valid = matches!(
             self.peek(),
-            Token::StringLit(_) | Token::IntLit(_) | Token::FloatLit(_)
-                | Token::Measurement(_, _) | Token::Ident(_)
+            Token::StringLit(_)
+                | Token::IntLit(_)
+                | Token::FloatLit(_)
+                | Token::Measurement(_, _)
+                | Token::Ident(_)
         );
         if !is_valid {
             let desc = self.peek().description();
@@ -335,11 +393,27 @@ impl<'a> Parser<'a> {
         }
         let tok = self.advance();
         match tok.token {
-            Token::StringLit(parts) => Ok(Expr::StringLit { parts, span: tok.span }),
-            Token::IntLit(v) => Ok(Expr::IntLit { value: v, span: tok.span }),
-            Token::FloatLit(v) => Ok(Expr::FloatLit { value: v, span: tok.span }),
-            Token::Measurement(v, u) => Ok(Expr::Measurement { value: v, unit: u, span: tok.span }),
-            Token::Ident(name) => Ok(Expr::Ident { name, span: tok.span }),
+            Token::StringLit(parts) => Ok(Expr::StringLit {
+                parts,
+                span: tok.span,
+            }),
+            Token::IntLit(v) => Ok(Expr::IntLit {
+                value: v,
+                span: tok.span,
+            }),
+            Token::FloatLit(v) => Ok(Expr::FloatLit {
+                value: v,
+                span: tok.span,
+            }),
+            Token::Measurement(v, u) => Ok(Expr::Measurement {
+                value: v,
+                unit: u,
+                span: tok.span,
+            }),
+            Token::Ident(name) => Ok(Expr::Ident {
+                name,
+                span: tok.span,
+            }),
             _ => unreachable!(),
         }
     }
@@ -347,10 +421,22 @@ impl<'a> Parser<'a> {
     fn parse_type_name(&mut self) -> Result<TypeName, Diagnostic> {
         let ident = self.peek().as_ident().map(|s| s.to_string());
         match ident.as_deref() {
-            Some("int") | Some("i32") => { self.advance(); Ok(TypeName::Int) }
-            Some("string") => { self.advance(); Ok(TypeName::Str) }
-            Some("float") => { self.advance(); Ok(TypeName::Float) }
-            Some("bool") => { self.advance(); Ok(TypeName::Bool) }
+            Some("int") | Some("i32") => {
+                self.advance();
+                Ok(TypeName::Int)
+            }
+            Some("string") => {
+                self.advance();
+                Ok(TypeName::Str)
+            }
+            Some("float") => {
+                self.advance();
+                Ok(TypeName::Float)
+            }
+            Some("bool") => {
+                self.advance();
+                Ok(TypeName::Bool)
+            }
             Some(other) => {
                 let msg = format!("unknown type `{}`; expected i32 or string", other);
                 Err(self.error(msg))
@@ -387,7 +473,10 @@ mod tests {
     fn state_decl_i32() {
         let def = parse_ok("component C inherits W { state count: i32 = 0 }");
         assert_eq!(def.members.len(), 1);
-        if let Member::StateMember { name, ty, default, .. } = &def.members[0] {
+        if let Member::StateMember {
+            name, ty, default, ..
+        } = &def.members[0]
+        {
             assert_eq!(name, "count");
             assert!(matches!(ty, TypeName::Int));
             assert!(matches!(default, Expr::IntLit { value: 0, .. }));
@@ -413,7 +502,9 @@ mod tests {
         let def = parse_ok("component C inherits W { state count: i32 = 0 VStack {} }");
         assert_eq!(def.members.len(), 2);
         assert!(matches!(&def.members[0], Member::StateMember { name, .. } if name == "count"));
-        assert!(matches!(&def.members[1], Member::WidgetDecl { type_name, .. } if type_name == "VStack"));
+        assert!(
+            matches!(&def.members[1], Member::WidgetDecl { type_name, .. } if type_name == "VStack")
+        );
     }
 
     #[test]
@@ -428,7 +519,10 @@ mod tests {
     fn property_decl_int() {
         let def = parse_ok("component C inherits W { in-out property <int> count: 0 }");
         assert_eq!(def.members.len(), 1);
-        if let Member::PropertyDecl { name, ty, default, .. } = &def.members[0] {
+        if let Member::PropertyDecl {
+            name, ty, default, ..
+        } = &def.members[0]
+        {
             assert_eq!(name, "count");
             assert!(matches!(ty, TypeName::Int));
             assert!(matches!(default, Expr::IntLit { value: 0, .. }));
@@ -440,7 +534,10 @@ mod tests {
     #[test]
     fn property_decl_string() {
         let def = parse_ok(r#"component C inherits W { in-out property <string> title: "hello" }"#);
-        if let Member::PropertyDecl { name, ty, default, .. } = &def.members[0] {
+        if let Member::PropertyDecl {
+            name, ty, default, ..
+        } = &def.members[0]
+        {
             assert_eq!(name, "title");
             assert!(matches!(ty, TypeName::Str));
             assert!(matches!(default, Expr::StringLit { .. }));
@@ -476,7 +573,9 @@ mod tests {
         let def = parse_ok("component C inherits W { spacing: 12px }");
         if let Member::PropertyBind { name, value, .. } = &def.members[0] {
             assert_eq!(name, "spacing");
-            assert!(matches!(value, Expr::Measurement { value: v, unit: Unit::Px, .. } if *v == 12.0));
+            assert!(
+                matches!(value, Expr::Measurement { value: v, unit: Unit::Px, .. } if *v == 12.0)
+            );
         } else {
             panic!("expected PropertyBind");
         }
@@ -485,7 +584,10 @@ mod tests {
     #[test]
     fn widget_decl_empty() {
         let def = parse_ok("component C inherits W { VStack {} }");
-        if let Member::WidgetDecl { type_name, members, .. } = &def.members[0] {
+        if let Member::WidgetDecl {
+            type_name, members, ..
+        } = &def.members[0]
+        {
             assert_eq!(type_name, "VStack");
             assert!(members.is_empty());
         } else {
@@ -496,7 +598,10 @@ mod tests {
     #[test]
     fn widget_decl_with_property() {
         let def = parse_ok("component C inherits W { VStack { spacing: 12px } }");
-        if let Member::WidgetDecl { type_name, members, .. } = &def.members[0] {
+        if let Member::WidgetDecl {
+            type_name, members, ..
+        } = &def.members[0]
+        {
             assert_eq!(type_name, "VStack");
             assert_eq!(members.len(), 1);
             assert!(matches!(&members[0], Member::PropertyBind { name, .. } if name == "spacing"));
@@ -523,11 +628,18 @@ mod tests {
     #[test]
     fn nested_widgets() {
         let def = parse_ok("component C inherits W { VStack { Text {} Button {} } }");
-        if let Member::WidgetDecl { type_name, members, .. } = &def.members[0] {
+        if let Member::WidgetDecl {
+            type_name, members, ..
+        } = &def.members[0]
+        {
             assert_eq!(type_name, "VStack");
             assert_eq!(members.len(), 2);
-            assert!(matches!(&members[0], Member::WidgetDecl { type_name, .. } if type_name == "Text"));
-            assert!(matches!(&members[1], Member::WidgetDecl { type_name, .. } if type_name == "Button"));
+            assert!(
+                matches!(&members[0], Member::WidgetDecl { type_name, .. } if type_name == "Text")
+            );
+            assert!(
+                matches!(&members[1], Member::WidgetDecl { type_name, .. } if type_name == "Button")
+            );
         } else {
             panic!("expected VStack WidgetDecl");
         }
@@ -555,7 +667,9 @@ mod tests {
         assert_eq!(def.members.len(), 3);
         assert!(matches!(&def.members[0], Member::PropertyBind { name, .. } if name == "title"));
         assert!(matches!(&def.members[1], Member::PropertyDecl { name, .. } if name == "count"));
-        assert!(matches!(&def.members[2], Member::WidgetDecl { type_name, .. } if type_name == "VStack"));
+        assert!(
+            matches!(&def.members[2], Member::WidgetDecl { type_name, .. } if type_name == "VStack")
+        );
     }
 
     #[test]
@@ -567,7 +681,10 @@ mod tests {
     #[test]
     fn error_missing_lbrace() {
         let msg = parse_err_msg("component Foo inherits Bar");
-        assert!(msg.contains("`{`") || msg.contains("end of file"), "message: {msg}");
+        assert!(
+            msg.contains("`{`") || msg.contains("end of file"),
+            "message: {msg}"
+        );
     }
 
     #[test]
