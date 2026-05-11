@@ -51,7 +51,8 @@ checklist 完了 = merge 許可ではない。順序を固定する:
 2. 仕様文書 (`abi_spec.md` / `architecture.md` / `dsl_spec.md`) の
    変更 — あり/なし **(FT)**。タイポ修正、または既に Accepted な DD の
    機械的転記は「なし」扱い。
-3. ローカル clean rebuild (`cargo clean` → release+debug build →
+3. プロジェクトルートで `cargo fmt` を実行した上で、ローカル clean
+   rebuild (`cargo clean` → release+debug build →
    `cargo test --workspace`) — green/fail **(FT)**
 4. PO に相談すべき設計判断・トレードオフ — あり/なし **(FT)**
 
@@ -87,7 +88,12 @@ ADR に補足 DD)。
     なく実 CI を gate にする)。**push はオーナー明示承認後のみ**。
     push 後は main 上で CI green を再確認 (push トリガで自動実行)、
     失敗時の recovery (revert PR / force reset 等) はオーナー判断。
-16. CI YAML 変更要否の sanity check — 本 phase で新言語/新ビルド系を
+16. human-visible GUI smoke — 必要/不要。runtime / ABI / binding /
+    wasamoc lowering / examples 等、ユーザー可視の挙動に影響しうる
+    phase では必要。必要な場合は
+    [human-visible GUI smoke](./human-visible-smoke.md) に従い、
+    `counter-c`, `counter-rust`, `counter-zig` を確認する。
+17. CI YAML 変更要否の sanity check — 本 phase で新言語/新ビルド系を
     追加していれば CI 更新済みであること (CLAUDE.md の CI rules)
 
 CI green: **必須**。clean rebuild は **必須** (incremental cache の嘘を
