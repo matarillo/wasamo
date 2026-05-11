@@ -1,6 +1,6 @@
 ---
 title: M3 start framing — DSL surface
-status: draft
+status: accepted
 created: 2026-05-11
 related:
   - ROADMAP.md
@@ -12,7 +12,7 @@ related:
 # M3 start framing — DSL surface
 
 このノートは M3 の milestone plan と最初の設計文書を書く前に、
-M3 の読み方を揃えるための framing draft である。ADR / RFC そのものではなく、
+M3 の読み方を揃えるための owner-agreed framing である。ADR / RFC そのものではなく、
 M3 の phase breakdown、各 phase の pre-doc、必要なら M3-era RFC の入力 artefact
 として扱う。
 
@@ -21,12 +21,13 @@ M3 では同じ規律を使うが、焦点は少し違う。ここで決めた�
 option ではなく、ROADMAP の M3 thesis をどう読むか、そして M3 に入れないものを
 どこまで明示的に切るかである。
 
-Owner note (2026-05-11): ROADMAP の M3 acceptance criteria は VISION の
+Owner agreement (2026-05-11): ROADMAP の M3 acceptance criteria は VISION の
 thesis 表現をもとにした仮設定であり、M3 開始時点で見直す価値がある。
 特に Grid / ScrollView / List を primitives として選ぶことには、まだ十分な
-根拠があるとまでは言えない。また `docs/notes/` 以下の live notes は
-オーナー要求事項の種であり、open question の一部は M3 に入れる候補として
-棚卸する。
+根拠があるとまでは言えない。さらに、primitives の妥当性は単体では判断できない。
+M3 で実際に作る E2E proof の画面を先に固定し、その画面が要求する surface から
+Grid / ScrollView / List の採否を逆算する。また `docs/notes/` 以下の live notes は
+オーナー要求事項の種であり、open question の一部は M3 に入れる候補として棚卸する。
 
 ---
 
@@ -45,6 +46,28 @@ M2 で通った `.ui -> IR -> runtime` 基盤の上に、実用的な画面構�
 feature」でも「editor tooling」でもない。M3 は、選定した DSL surface と public
 spec draft を通じて、Wasamo の DSL が Hello Counter を超えた画面を表現できることを
 閉じる。Grid / ScrollView / List はその現在の候補であり、ここで審査する。
+
+---
+
+## M3 target app を先に決める
+
+M3 の最初の設計対象は primitive list ではなく、M3 で作る **target app / E2E proof**
+である。M3 thesis が "real layouts" なら、まず「どんな実用画面を DSL で書けるように
+するか」を固定し、その画面から必要な primitives、binding context、layout constraint、
+spec 記述を逆算する。
+
+target app が未定義のまま Grid / ScrollView / List の妥当性を議論すると、判断基準が
+設計美学に寄りやすい。M3 pre-doc は少なくとも次を成果物として持つ。
+
+1. M3 で作る E2E 画面のワイヤーフレーム、または動く最小プロトタイプ。
+2. その画面に必要な primitives と binding / layout capability の一覧。
+3. 各 primitive が検証する thesis。
+4. M3 では明示的に扱わない機能のリスト。
+5. spec / implementation / E2E proof の同期ルール。
+
+候補画面は、設定画面、簡易ファイルブラウザ風リスト、サイドバー + detail layout などで
+よい。ただし Hello Counter の延長ではなく、複数の layout primitives と複数の
+binding / layout constraint が同じ画面内で同時に成立するものを選ぶ。
 
 ---
 
@@ -72,6 +95,8 @@ ROADMAP は acceptance criteria の SSOT であり、M3 は現時点で次の 4 
 
 従って M3 plan は、単にこの 4 項目を phase structure に落とすのではなく、
 まずこの 4 項目を採用・修正・置換する根拠を持つ必要がある。
+その根拠は、先に固定した target app / E2E proof に対して各 primitive が何を
+証明するかで説明されるべきである。
 
 ---
 
@@ -148,10 +173,26 @@ defer してよい。
 
 ## M3 で最初に決めるべき問い
 
-### 1. M3 acceptance criteria revision
+### 1. M3 target app / E2E proof
 
-Grid / ScrollView / List / DSL spec draft をそのまま採るか、修正するか、置換するか。
-この問いは phase order より先に来る。M3 thesis が "real layouts + public draft" なら、
+Grid / ScrollView / List の実装順を決める前に、M3 で実際に作る画面を決める。
+この画面は単なるデモではなく、M3 acceptance criteria の判断基準に近い位置づけを持つ。
+
+よい target app は次を同時に満たす。
+
+- 採用候補の layout primitive を少なくとも一度は使う。
+- viewport / overflow を扱う。
+- 繰り返し要素、またはそれに相当する実用データ表示を含む。
+- 複数の binding / layout constraint が同時に成立する。
+- `.ui` から runtime まで通り、M2 の手動 host wiring に戻らない。
+
+この target app を先に選ぶと、Grid / ScrollView / List が本当に M3 AC として妥当かを
+検証しやすい。逆に primitive 名を先に固定すると、サンプルが後付けのデモに落ちる。
+
+### 2. M3 acceptance criteria revision
+
+target app を固定したうえで、Grid / ScrollView / List / DSL spec draft をそのまま採るか、
+修正するか、置換するかを判断する。M3 thesis が "real layouts + public draft" なら、
 primitive の選定は「作りたい widget 名」ではなく「どんな UI を実際に書けるようにするか」
 から逆算する。
 
@@ -160,7 +201,7 @@ M3 の visible proof にとって強い説得力を持つ。ScrollView は実用
 最初の M3 で独立 primitive として acceptance に置くべきか、List/Grid の supporting
 primitive として扱うべきかはまだ未確定である。
 
-### 2. Phase order
+### 3. Phase order
 
 acceptance を見直したうえで、Grid / ScrollView / List / DSL spec draft をどの順に進めるか。
 素朴には Grid → ScrollView → List → spec finalization が考えられるが、List が item-template と
@@ -168,28 +209,14 @@ binding-context を要求するなら、最も設計圧力が高いのは List �
 
 M3 plan は「実装しやすい順」だけではなく、「後続 surface の設計を支配する順」を見る。
 
-### 3. M3 の E2E サンプル
-
-M2 の Hello Counter に相当する、M3 の目に見える到達点を決める必要がある。候補は、
-設定画面、簡易ファイルブラウザ風リスト、サイドバー + detail layout など。
-
-よいサンプルは次を同時に使う。
-
-- chosen layout primitive で全体構造を作る。
-- viewport / overflow を扱う。
-- 繰り返し要素、またはそれに相当する実用データ表示を含む。
-- `.ui` から runtime まで通り、M2 の手動 host wiring に戻らない。
-
-このサンプルを先に選ぶと、Grid / ScrollView / List が本当に M3 AC として妥当かを
-検証しやすい。逆に primitive 名を先に固定すると、サンプルが後付けのデモに落ちる。
-
 ### 4. DSL spec draft の進め方
 
 DSL spec draft を最後にまとめるだけにすると、各 phase の設計判断が実装に埋もれやすい。
 逆に最初に全部書こうとすると、未検証の surface を固定しやすい。
 
 暫定方針としては、各 M3 phase で `docs/dsl_spec.md` を同時更新し、M3 の最後に
-public draft として整える形が最も自然である。
+public draft として整える形が最も自然である。implementation が変わったら spec と
+E2E proof も同じ phase 内で追随させ、spec を実装後のメモに落とさない。
 
 ### 5. `docs/notes` open question の昇格基準
 
@@ -209,7 +236,10 @@ List が `item`, `index`, selected state, template-local binding などを導入
 既存の `EvalContext` method family に足すだけでよいのか、共通 typed-value surface が
 必要になるのかを判断する。
 
-ここは M3 の最初から結論を固定しない。List pre-doc の主要論点として扱う。
+ここは M3 の最初から結論を固定しない。List / Grid の設計レビューでは、
+「この設計は将来 `TypedValue` に自然に接続できるか」を明示的なチェック項目として扱う。
+`TypedValue` を実装しない場合でも、後から導入する際のリファクタリング範囲を無用に
+広げない。
 
 ### 7. Grid / ScrollView の責務境界
 
@@ -243,7 +273,12 @@ acceptance や実装完了条件にはしない。
 syntax を予約してよいが、レンダリング契約まで M3 で閉じようとすると、M3 が
 "DSL surface" ではなく "feature breadth" milestone に戻ってしまう。
 
-ただし、この out-of-scope list も棚卸後に確定する。たとえば Window title のような
+ただし、LSP / diagnostics を実装対象外にすることは、tooling を設計制約から外すことを
+意味しない。M3 の DSL は人間が書けるだけでなく、後続の静的解析・診断・補完の対象として
+破綻しない構文と意味論を保つ必要がある。これは M3 の acceptance ではなく、
+surface design の制約として扱う。
+
+なお、この out-of-scope list も棚卸後に確定する。たとえば Window title のような
 component-level prop は、Mica / Acrylic rendering semantics とは別に、M3 public DSL draft の
 誠実性に関わる可能性がある。
 
@@ -252,21 +287,24 @@ component-level prop は、Mica / Acrylic rendering semantics とは別に、M3 
 ## 初期 phase breakdown 仮説
 
 以下は plan ではなく、plan drafting の出発点である。ROADMAP AC を見直した結果、
-この表自体が変わる可能性がある。
+この表自体が変わる可能性がある。特に M3-Phase 0 は、実装 phase ではなく
+acceptance を選ぶための pre-doc phase である。
 
 | Phase | 仮名 | 主な問い | Acceptance hook |
 |---|---|---|---|
+| M3-Phase 0 | Target app framing | E2E proof の画面、必要 surface、out-of-scope、spec 同期ルールを固定する | AC 選定の根拠 |
 | M3-Phase 1 | Grid layout primitive | row / column / span / measure-arrange の DSL・IR・runtime 表現 | Grid |
 | M3-Phase 2 | ScrollView primitive | viewport、clip、content size、layout invalidation 境界 | ScrollView |
 | M3-Phase 3 | List primitive | item template、item context、binding、rebuild / reuse scope | List |
 | M3-Phase 4 | Public DSL draft | M2 + M3 surface の grammar / IR / semantics 整理 | DSL spec draft |
 
-この順序は保守的である。List が最も大きな設計圧力を持つなら、List pre-doc を早めに開いて
-TypedValue / item context の判断だけ先に済ませる alternative もありうる。
+Phase 1 以降の順序は保守的である。Phase 0 で選ぶ target app によっては、
+List pre-doc を早めに開いて TypedValue / item context の判断だけ先に済ませる、
+または ScrollView を List/Grid の supporting primitive として扱う alternative もありうる。
 
 ---
 
-## Draft framing decisions
+## Owner-agreed framing decisions
 
 ### F1 — M3 は DSL surface milestone と読む
 
@@ -274,11 +312,12 @@ M3 の目的は、DSL が実用的な画面構造を表現できることを示�
 として文書化することである。Grid / ScrollView / List はそのための現在の候補であり、
 無批判に確定済みとは扱わない。
 
-### F2 — ROADMAP の M3 acceptance は開始時に審査する
+### F2 — ROADMAP の M3 acceptance は target app に照らして審査する
 
 ROADMAP は SSOT だが、現在の M3 acceptance は VISION 由来の仮説を含む。
-M3 plan drafting の前に、Grid / ScrollView / List / spec draft が M3 thesis を
-最もよく検証する組み合わせかを審査する。必要なら ROADMAP revision を起こす。
+M3 plan drafting の前に target app / E2E proof を定義し、その画面に対して
+Grid / ScrollView / List / spec draft が M3 thesis を最もよく検証する組み合わせかを
+審査する。必要なら ROADMAP revision を起こす。
 
 ### F3 — `docs/notes` の open question を棚卸してから M3 scope を切る
 
@@ -290,33 +329,42 @@ public draft の誠実性、visible proof への必要性、grammar / IR の破�
 
 M2 開始時に original Alpha wishlist を Foundation milestone へ絞ったのと同じ理由で、
 M3 でも Theming、input、LSP、hot reload、ABI freeze を同時に抱え込まない。
+ただし DSL surface は、後続の diagnostics / completion / static analysis が扱える形を
+設計制約として維持する。
 
 ### F5 — `TypedValue` は再評価候補だが、開始時点の M3 acceptance ではない
 
 M3 の実装が第三の scalar type、typed item context、runtime value binding を必要とするなら
-`TypedValue` を設計判断として開く。そうでなければ defer してよい。
+`TypedValue` を設計判断として開く。そうでなければ defer してよい。ただし List / Grid の
+設計レビューでは、将来 `TypedValue` に自然に接続できるかを明示的に確認する。
 
 ### F6 — DSL spec draft は各 phase の副産物ではなく acceptance の一部
 
 M3 の最後に spec を慌てて書くのではなく、各 phase で surface 変更を spec に反映し、
 最後に public draft として整える。spec は tooling / external implementation の参照元になるため、
-実装後メモではなく M3 の成果物として扱う。
+実装後メモではなく M3 の成果物として扱う。implementation / spec / E2E proof は同じ phase で
+同期させる。
 
 ### F7 — M3 の E2E proof は Hello Counter を超える
 
 M3 は単一 counter の延長では閉じない。採用した M3 surface を同時に使う小さな実用画面を
 M3 の visible proof として置き、`.ui -> IR -> runtime` の path が M2 基盤の上で拡張された
-ことを確認する。
+ことを確認する。この proof はデモではなく、M3 acceptance criteria を選ぶための基準でもある。
 
 ---
 
 ## Next step
 
-この framing を owner とすり合わせた後、まず M3 acceptance candidates を整理する。
-必要なら ROADMAP revision のための vision-level decision を起こし、その後
-`docs/plans/m3-plan.md` を `status: drafting` で作成する。M3 plan では確定した
-ROADMAP acceptance を mirror し、phase breakdown、dependencies、acceptance ↔ phase mapping、
-out-of-scope、risks を frozen agreement として整理する。
+この framing は owner-agreed として扱う。次に、まず M3 target app / E2E proof を決める。
+その pre-doc では、ワイヤーフレームまたは最小プロトタイプ、必要 primitives、
+各 primitive が検証する thesis、out-of-scope、spec / implementation / E2E proof の
+同期ルールを明示する。
 
-最初の phase に進む前に、phase-specific pre-doc で DSL / IR / runtime / spec の変更単位を
-明示する。
+そのうえで M3 acceptance candidates を整理し、必要なら ROADMAP revision のための
+vision-level decision を起こす。その後 `docs/plans/m3-plan.md` を `status: drafting` で
+作成する。M3 plan では確定した ROADMAP acceptance を mirror し、phase breakdown、
+dependencies、acceptance ↔ phase mapping、out-of-scope、risks を frozen agreement として
+整理する。
+
+最初の implementation phase に進む前に、phase-specific pre-doc で DSL / IR / runtime /
+spec / E2E proof の変更単位を明示する。
