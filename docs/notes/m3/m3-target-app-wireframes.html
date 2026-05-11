@@ -1,0 +1,1049 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<title>M3 target app — wireframe 候補</title>
+<style>
+  :root {
+    --ink: #222;
+    --muted: #666;
+    --line: #999;
+    --chrome: #ececec;
+    --pane: #f6f6f6;
+    --sel: #d6e4ff;
+    --sel-stroke: #5b8def;
+    --thumb: #d8d8e2;
+    --accent: #c0392b;
+    --splitter: #ff6a00;
+    --chip: #eef;
+    --chip-stroke: #99a;
+  }
+  body {
+    font-family: -apple-system, "Segoe UI", "Yu Gothic UI", system-ui, sans-serif;
+    margin: 0;
+    padding: 32px;
+    background: #fafafa;
+    color: var(--ink);
+    line-height: 1.55;
+  }
+  h1 { font-size: 22px; margin: 0 0 8px; }
+  .lede { color: var(--muted); margin: 0 0 28px; max-width: 820px; font-size: 14px; }
+  .lede code { background: #eee; padding: 1px 5px; border-radius: 3px; font-size: 12px; }
+  section.candidate {
+    background: white;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    padding: 24px 28px;
+    margin-bottom: 24px;
+  }
+  h2 { margin: 0; font-size: 18px; }
+  .tag {
+    display: inline-block;
+    background: #eef;
+    color: #335;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 11px;
+    margin-left: 8px;
+    vertical-align: middle;
+  }
+  .desc { color: #333; margin: 8px 0 18px; max-width: 820px; font-size: 14px; }
+  .wire-wrap { display: flex; gap: 16px; flex-wrap: wrap; }
+  svg { display: block; border: 1px solid #eee; background: #fff; }
+  .surface-block {
+    margin-top: 16px;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px 32px;
+  }
+  .surface-block h3 {
+    font-size: 13px;
+    margin: 0 0 6px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  .surface-block ul {
+    font-size: 13px;
+    color: #333;
+    padding-left: 18px;
+    margin: 0;
+  }
+  .surface-block li { margin: 2px 0; }
+  .surface-block li code {
+    background: #f3f3f3;
+    padding: 0 4px;
+    border-radius: 3px;
+    font-size: 12px;
+  }
+
+  /* SVG primitives */
+  .frame      { fill: #fff;    stroke: #333;        stroke-width: 1.5; }
+  .pane       { fill: var(--pane); stroke: var(--line); stroke-width: 1; }
+  .chrome     { fill: var(--chrome); stroke: var(--line); stroke-width: 1; }
+  .btn        { fill: #fff; stroke: #888; stroke-width: 1; }
+  .splitter   { stroke: var(--splitter); stroke-width: 2; stroke-dasharray: 5 3; fill: none; }
+  .item       { fill: #fff; stroke: #ccc; stroke-width: 1; }
+  .item-sel   { fill: var(--sel); stroke: var(--sel-stroke); stroke-width: 1; }
+  .thumb      { fill: var(--thumb); stroke: #aaa; stroke-width: 1; }
+  .chip       { fill: var(--chip); stroke: var(--chip-stroke); stroke-width: 1; }
+  .divider    { stroke: #ddd; stroke-width: 1; }
+  .lbl        { font: 12px -apple-system, "Segoe UI", system-ui, sans-serif; fill: #333; }
+  .lbl-sm     { font: 10.5px -apple-system, "Segoe UI", system-ui, sans-serif; fill: #555; }
+  .lbl-muted  { font: 10.5px -apple-system, "Segoe UI", system-ui, sans-serif; fill: #888; }
+  .lbl-bold   { font: 600 12px -apple-system, "Segoe UI", system-ui, sans-serif; fill: #222; }
+  .annot      { font: 10.5px -apple-system, "Segoe UI", system-ui, sans-serif; fill: var(--accent); font-style: italic; }
+  .num-circle { fill: var(--accent); }
+  .num-text   { font: 600 10px -apple-system, system-ui, sans-serif; fill: #fff; text-anchor: middle; }
+</style>
+</head>
+<body>
+
+<h1>M3 target app — wireframe 候補</h1>
+<p class="lede">
+Grid / ScrollView / List では済まない layout 要求を出す desktop app の wireframe 4 案。
+入力可能な widget は M2 surface（Text, Button）+ 視覚 placeholder のみで成立する範囲に留めている。
+本ファイルは pre-doc 前の検討用ドラフトであり、合意成果物ではない。
+赤丸数字は <code>ui-layoutsystem.md</code> 表のうち各案が要求する surface 概念への参照番号。
+</p>
+
+<!-- ======================================================================= -->
+<!-- 案 X: Mail Reader                                                       -->
+<!-- ======================================================================= -->
+<section class="candidate">
+  <h2>案 X — Mail Reader <span class="tag">3-pane viewer</span></h2>
+  <p class="desc">
+    フォルダ｜メッセージ一覧｜本文 preview の 3-pane。Dock chrome（top toolbar / bottom status）+
+    SplitView × 2 + 多重 List + 本文末尾の WrapPanel タグ列。
+    desktop メール clientの最も普及した形。
+  </p>
+
+  <svg viewBox="0 0 940 540" width="940" height="540" xmlns="http://www.w3.org/2000/svg">
+    <!-- Window frame -->
+    <rect x="20" y="20" width="900" height="500" class="frame"/>
+
+    <!-- Top toolbar (Dock=Top) -->
+    <rect x="20" y="20" width="900" height="40" class="chrome"/>
+    <rect x="32" y="30" width="64" height="20" class="btn"/>
+    <text x="64" y="44" text-anchor="middle" class="lbl-sm">Refresh</text>
+    <rect x="104" y="30" width="64" height="20" class="btn"/>
+    <text x="136" y="44" text-anchor="middle" class="lbl-sm">Mark read</text>
+    <rect x="176" y="30" width="64" height="20" class="btn"/>
+    <text x="208" y="44" text-anchor="middle" class="lbl-sm">Archive</text>
+    <text x="320" y="44" class="lbl-sm">Inbox › Subject A</text>
+    <!-- ① -->
+    <circle cx="908" cy="40" r="9" class="num-circle"/>
+    <text x="908" y="43.5" class="num-text">1</text>
+
+    <!-- Bottom status (Dock=Bottom) -->
+    <rect x="20" y="500" width="900" height="20" class="chrome"/>
+    <text x="32" y="514" class="lbl-sm">142 items · last sync 11:02</text>
+    <text x="908" y="514" text-anchor="end" class="lbl-sm">Online</text>
+    <!-- Folder pane -->
+    <rect x="20" y="60" width="160" height="440" class="pane"/>
+    <text x="32" y="80" class="lbl-bold">Folders</text>
+    <rect x="26" y="90" width="148" height="22" class="item"/>
+    <text x="34" y="105" class="lbl">Inbox</text>
+    <text x="168" y="105" text-anchor="end" class="lbl-muted">3</text>
+    <rect x="26" y="114" width="148" height="22" class="item"/>
+    <text x="34" y="129" class="lbl">Sent</text>
+    <rect x="26" y="138" width="148" height="22" class="item"/>
+    <text x="34" y="153" class="lbl">Drafts</text>
+    <rect x="26" y="162" width="148" height="22" class="item"/>
+    <text x="34" y="177" class="lbl">Archive</text>
+    <rect x="26" y="186" width="148" height="22" class="item"/>
+    <text x="34" y="201" class="lbl">Spam</text>
+    <text x="32" y="232" class="lbl-bold">Labels</text>
+    <rect x="26" y="242" width="148" height="22" class="item"/>
+    <text x="34" y="257" class="lbl">work</text>
+    <rect x="26" y="266" width="148" height="22" class="item"/>
+    <text x="34" y="281" class="lbl">personal</text>
+    <text x="32" y="490" class="lbl-muted">(scrolls)</text>
+    <!-- ③ List + ScrollView -->
+    <circle cx="170" cy="74" r="9" class="num-circle"/>
+    <text x="170" y="77.5" class="num-text">3</text>
+
+    <!-- Splitter 1 -->
+    <line x1="180" y1="60" x2="180" y2="500" class="splitter"/>
+
+    <!-- Message list pane -->
+    <rect x="180" y="60" width="320" height="440" class="pane"/>
+    <!-- selected -->
+    <rect x="186" y="68" width="308" height="56" class="item-sel"/>
+    <text x="194" y="84" class="lbl-bold">Alice Chen</text>
+    <text x="486" y="84" text-anchor="end" class="lbl-sm">10:23</text>
+    <text x="194" y="100" class="lbl">Subject A — quick question</text>
+    <text x="194" y="116" class="lbl-muted">Hey, do you have a moment to look at the…</text>
+
+    <rect x="186" y="128" width="308" height="56" class="item"/>
+    <text x="194" y="144" class="lbl-bold">Bob Tanaka</text>
+    <text x="486" y="144" text-anchor="end" class="lbl-sm">09:15</text>
+    <text x="194" y="160" class="lbl">Re: layout review</text>
+    <text x="194" y="176" class="lbl-muted">Sounds good. I'll prep the diff before…</text>
+
+    <rect x="186" y="188" width="308" height="56" class="item"/>
+    <text x="194" y="204" class="lbl-bold">Carol Diaz</text>
+    <text x="486" y="204" text-anchor="end" class="lbl-sm">Yest.</text>
+    <text x="194" y="220" class="lbl">Weekly digest</text>
+    <text x="194" y="236" class="lbl-muted">Highlights from this week's progress…</text>
+
+    <rect x="186" y="248" width="308" height="56" class="item"/>
+    <text x="194" y="264" class="lbl-bold">Dave Park</text>
+    <text x="486" y="264" text-anchor="end" class="lbl-sm">Mon</text>
+    <text x="194" y="280" class="lbl">Heads up on Friday</text>
+    <text x="194" y="296" class="lbl-muted">Just a quick note that I'll be out…</text>
+
+    <rect x="186" y="308" width="308" height="56" class="item"/>
+    <text x="194" y="324" class="lbl-bold">Eve Schultz</text>
+    <text x="486" y="324" text-anchor="end" class="lbl-sm">Mon</text>
+    <text x="194" y="340" class="lbl">Slides ready</text>
+    <text x="194" y="356" class="lbl-muted">Attached the deck for tomorrow's…</text>
+
+    <text x="194" y="490" class="lbl-muted">(scrolls)</text>
+    <!-- ③ List with multi-field item template -->
+    <circle cx="490" cy="74" r="9" class="num-circle"/>
+    <text x="490" y="77.5" class="num-text">3</text>
+
+    <!-- Splitter 2 -->
+    <line x1="500" y1="60" x2="500" y2="500" class="splitter"/>
+
+    <!-- Body pane -->
+    <rect x="500" y="60" width="420" height="440" class="pane"/>
+    <text x="512" y="84" class="lbl-bold">From: Alice Chen &lt;alice@example.com&gt;</text>
+    <text x="512" y="102" class="lbl-bold">Subject A — quick question</text>
+    <text x="512" y="118" class="lbl-muted">2026-05-11 10:23</text>
+    <line x1="512" y1="128" x2="908" y2="128" class="divider"/>
+    <text x="512" y="148" class="lbl-sm">Hi —</text>
+    <text x="512" y="166" class="lbl-sm">Following up on the layout review from</text>
+    <text x="512" y="180" class="lbl-sm">Monday. The 3-pane variant looks much</text>
+    <text x="512" y="194" class="lbl-sm">cleaner than the tabbed version we tried</text>
+    <text x="512" y="208" class="lbl-sm">last week.</text>
+    <text x="512" y="234" class="lbl-sm">A few open questions:</text>
+    <text x="512" y="252" class="lbl-sm">  · Where does the toolbar live when</text>
+    <text x="512" y="266" class="lbl-sm">    the window narrows below 800px?</text>
+    <text x="512" y="284" class="lbl-sm">  · Do we keep the bottom status bar</text>
+    <text x="512" y="298" class="lbl-sm">    or fold it into the footer?</text>
+    <text x="512" y="324" class="lbl-sm">Looking forward to your thoughts.</text>
+    <text x="512" y="350" class="lbl-sm">Alice</text>
+    <text x="512" y="420" class="lbl-muted">(body scrolls when longer)</text>
+    <!-- ④ ScrollView -->
+    <circle cx="908" cy="74" r="9" class="num-circle"/>
+    <text x="908" y="77.5" class="num-text">4</text>
+
+    <line x1="512" y1="444" x2="908" y2="444" class="divider"/>
+    <!-- Tag chips wrap -->
+    <rect x="512" y="454" width="44" height="20" rx="10" class="chip"/>
+    <text x="534" y="468" text-anchor="middle" class="lbl-sm">work</text>
+    <rect x="562" y="454" width="60" height="20" rx="10" class="chip"/>
+    <text x="592" y="468" text-anchor="middle" class="lbl-sm">layout</text>
+    <rect x="628" y="454" width="56" height="20" rx="10" class="chip"/>
+    <text x="656" y="468" text-anchor="middle" class="lbl-sm">review</text>
+    <rect x="690" y="454" width="68" height="20" rx="10" class="chip"/>
+    <text x="724" y="468" text-anchor="middle" class="lbl-sm">priority</text>
+    <rect x="764" y="454" width="80" height="20" rx="10" class="chip"/>
+    <text x="804" y="468" text-anchor="middle" class="lbl-sm">follow-up</text>
+    <!-- second row showing wrap -->
+    <rect x="512" y="480" width="48" height="20" rx="10" class="chip"/>
+    <text x="536" y="494" text-anchor="middle" class="lbl-sm">draft</text>
+    <rect x="566" y="480" width="56" height="20" rx="10" class="chip"/>
+    <text x="594" y="494" text-anchor="middle" class="lbl-sm">design</text>
+    <!-- ⑤ WrapPanel -->
+    <circle cx="908" cy="464" r="9" class="num-circle"/>
+    <text x="908" y="467.5" class="num-text">5</text>
+
+    <!-- Annotation overlays (drawn last to stay above panes) -->
+    <circle cx="180" cy="280" r="9" class="num-circle"/>
+    <text x="180" y="283.5" class="num-text">2</text>
+    <circle cx="500" cy="380" r="9" class="num-circle"/>
+    <text x="500" y="383.5" class="num-text">2</text>
+    <circle cx="908" cy="492" r="9" class="num-circle"/>
+    <text x="908" y="495.5" class="num-text">1</text>
+  </svg>
+
+  <div class="surface-block">
+    <div>
+      <h3>要求される layout surface</h3>
+      <ul>
+        <li>① <b>DockPanel</b> 相当（top toolbar / bottom status の edge dock）</li>
+        <li>② <b>SplitView</b> × 2（folder/list, list/body のリサイズ）</li>
+        <li>③ <b>List</b> × 2（folder, message。message 側は <code>from / subject / preview / time</code> の <b>多フィールド item template</b>）</li>
+        <li>④ <b>ScrollView</b> × 3（folder, list, body の独立 viewport）</li>
+        <li>⑤ <b>WrapPanel</b>（タグ chip 列、折り返し）</li>
+        <li>Separator / Divider（本文区切り線）</li>
+      </ul>
+    </div>
+    <div>
+      <h3>bindings / state</h3>
+      <ul>
+        <li><code>selected_folder</code> → message list を filter</li>
+        <li><code>selected_message</code> → body pane の全フィールドに分配</li>
+        <li>item template が <code>message.from / subject / preview / time</code> を同時参照</li>
+        <li>tag chips は <code>selected_message.tags[]</code> の繰り返し（message list の繰り返しとは並列、ネストではない）</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+
+<!-- ======================================================================= -->
+<!-- 案 Y: Music Player                                                      -->
+<!-- ======================================================================= -->
+<section class="candidate">
+  <h2>案 Y — Music Player <span class="tag">now-playing + queue</span></h2>
+  <p class="desc">
+    左に playlist sidebar、中央上に now-playing（album art 正方形 + コントロール）、
+    中央下に再生 queue。AspectRatio と ZStack overlay が必然的に登場する。
+  </p>
+
+  <svg viewBox="0 0 940 540" width="940" height="540" xmlns="http://www.w3.org/2000/svg">
+    <rect x="20" y="20" width="900" height="500" class="frame"/>
+
+    <!-- Top chrome -->
+    <rect x="20" y="20" width="900" height="36" class="chrome"/>
+    <text x="32" y="42" class="lbl-bold">♪ Wasamo Music</text>
+    <rect x="820" y="28" width="84" height="20" class="btn"/>
+    <text x="862" y="42" text-anchor="middle" class="lbl-sm">Settings</text>
+
+    <!-- Sidebar -->
+    <rect x="20" y="56" width="180" height="444" class="pane"/>
+    <text x="32" y="78" class="lbl-bold">Library</text>
+    <rect x="26" y="86" width="168" height="22" class="item"/>
+    <text x="34" y="101" class="lbl">Recently played</text>
+    <rect x="26" y="110" width="168" height="22" class="item-sel"/>
+    <text x="34" y="125" class="lbl">Liked songs</text>
+    <rect x="26" y="134" width="168" height="22" class="item"/>
+    <text x="34" y="149" class="lbl">Discover Weekly</text>
+    <text x="32" y="180" class="lbl-bold">Playlists</text>
+    <rect x="26" y="188" width="168" height="22" class="item"/>
+    <text x="34" y="203" class="lbl">Morning focus</text>
+    <rect x="26" y="212" width="168" height="22" class="item"/>
+    <text x="34" y="227" class="lbl">Late night</text>
+    <rect x="26" y="236" width="168" height="22" class="item"/>
+    <text x="34" y="251" class="lbl">Workout</text>
+    <rect x="26" y="260" width="168" height="22" class="item"/>
+    <text x="34" y="275" class="lbl">Lo-fi mix</text>
+
+    <!-- Bottom status -->
+    <rect x="20" y="500" width="900" height="20" class="chrome"/>
+    <text x="32" y="514" class="lbl-sm">Connected · 192 kbps</text>
+
+    <!-- Splitter (sidebar / main) -->
+    <line x1="200" y1="56" x2="200" y2="500" class="splitter"/>
+
+    <!-- Now playing area -->
+    <rect x="200" y="56" width="720" height="240" class="pane"/>
+
+    <!-- Album art (AspectRatio 1:1) -->
+    <rect x="220" y="76" width="200" height="200" class="thumb"/>
+    <text x="320" y="180" text-anchor="middle" class="lbl-muted">[album art]</text>
+    <!-- ZStack overlay: large play indicator -->
+    <circle cx="320" cy="176" r="32" fill="#000" fill-opacity="0.45"/>
+    <polygon points="312,162 312,190 336,176" fill="#fff"/>
+    <text x="320" y="220" text-anchor="middle" class="annot">↑ ZStack: play indicator overlaid on art</text>
+    <!-- ① AspectRatio -->
+    <circle cx="412" cy="84" r="9" class="num-circle"/>
+    <text x="412" y="87.5" class="num-text">1</text>
+
+    <!-- Track info -->
+    <text x="448" y="100" class="lbl-bold" style="font-size:16px">Midnight Quartz</text>
+    <text x="448" y="122" class="lbl">Sora Akiyama · Northern Wind (2024)</text>
+    <!-- Progress -->
+    <rect x="448" y="156" width="440" height="6" fill="#ddd"/>
+    <rect x="448" y="156" width="180" height="6" fill="#5b8def"/>
+    <text x="448" y="180" class="lbl-sm">1:42</text>
+    <text x="888" y="180" text-anchor="end" class="lbl-sm">4:08</text>
+    <!-- Buttons -->
+    <rect x="580" y="208" width="40" height="40" rx="20" class="btn"/>
+    <text x="600" y="234" text-anchor="middle" class="lbl">⏮</text>
+    <rect x="630" y="200" width="56" height="56" rx="28" fill="#5b8def" stroke="#3b5fb5"/>
+    <text x="658" y="234" text-anchor="middle" fill="#fff" class="lbl" style="font-size:20px">▶</text>
+    <rect x="696" y="208" width="40" height="40" rx="20" class="btn"/>
+    <text x="716" y="234" text-anchor="middle" class="lbl">⏭</text>
+
+    <!-- Horizontal splitter between now-playing and queue -->
+    <line x1="200" y1="296" x2="920" y2="296" class="splitter"/>
+
+    <!-- Queue -->
+    <rect x="200" y="296" width="720" height="204" class="pane"/>
+    <text x="216" y="318" class="lbl-bold">Up next</text>
+    <line x1="216" y1="324" x2="904" y2="324" class="divider"/>
+
+    <rect x="216" y="330" width="688" height="24" class="item"/>
+    <text x="226" y="346" class="lbl-muted">1</text>
+    <rect x="246" y="334" width="16" height="16" class="thumb"/>
+    <text x="272" y="346" class="lbl">River Floor</text>
+    <text x="500" y="346" class="lbl-sm">Sora Akiyama</text>
+    <text x="894" y="346" text-anchor="end" class="lbl-sm">3:21</text>
+
+    <rect x="216" y="358" width="688" height="24" class="item"/>
+    <text x="226" y="374" class="lbl-muted">2</text>
+    <rect x="246" y="362" width="16" height="16" class="thumb"/>
+    <text x="272" y="374" class="lbl">Glass Map</text>
+    <text x="500" y="374" class="lbl-sm">Hana Mori</text>
+    <text x="894" y="374" text-anchor="end" class="lbl-sm">4:05</text>
+
+    <rect x="216" y="386" width="688" height="24" class="item"/>
+    <text x="226" y="402" class="lbl-muted">3</text>
+    <rect x="246" y="390" width="16" height="16" class="thumb"/>
+    <text x="272" y="402" class="lbl">Pale Drift</text>
+    <text x="500" y="402" class="lbl-sm">Kite Ensemble</text>
+    <text x="894" y="402" text-anchor="end" class="lbl-sm">2:54</text>
+
+    <rect x="216" y="414" width="688" height="24" class="item"/>
+    <text x="226" y="430" class="lbl-muted">4</text>
+    <rect x="246" y="418" width="16" height="16" class="thumb"/>
+    <text x="272" y="430" class="lbl">Soft Iron</text>
+    <text x="500" y="430" class="lbl-sm">Sora Akiyama</text>
+    <text x="894" y="430" text-anchor="end" class="lbl-sm">3:47</text>
+
+    <rect x="216" y="442" width="688" height="24" class="item"/>
+    <text x="226" y="458" class="lbl-muted">5</text>
+    <rect x="246" y="446" width="16" height="16" class="thumb"/>
+    <text x="272" y="458" class="lbl">North Light</text>
+    <text x="500" y="458" class="lbl-sm">Toya Sato</text>
+    <text x="894" y="458" text-anchor="end" class="lbl-sm">5:12</text>
+    <text x="216" y="490" class="lbl-muted">(scrolls)</text>
+
+    <!-- ③ List + ScrollView -->
+    <circle cx="908" cy="312" r="9" class="num-circle"/>
+    <text x="908" y="315.5" class="num-text">3</text>
+
+    <!-- Annotation overlays (drawn last to stay above panes) -->
+    <circle cx="560" cy="296" r="9" class="num-circle"/>
+    <text x="560" y="299.5" class="num-text">2</text>
+  </svg>
+
+  <div class="surface-block">
+    <div>
+      <h3>要求される layout surface</h3>
+      <ul>
+        <li>① <b>AspectRatio</b> コンテナ（album art の 1:1 固定）</li>
+        <li>① <b>ZStack</b>（art 上に再生インジケータを重ねる）</li>
+        <li>② <b>SplitView</b>（now-playing と queue の縦分割。水平方向）+ sidebar との垂直分割</li>
+        <li>③ <b>List + ScrollView</b>（queue）</li>
+        <li>Sidebar の List（playlists、selectable）</li>
+        <li>Card 相当のグループ化（now-playing 領域の視覚枠）</li>
+      </ul>
+    </div>
+    <div>
+      <h3>bindings / state</h3>
+      <ul>
+        <li><code>current_track</code>（i32 index）→ now-playing 各フィールド</li>
+        <li><code>progress_sec</code>（i32）→ progress bar 幅</li>
+        <li><code>is_playing</code> → 再生ボタンの表示切替</li>
+        <li>queue items: <code>track.title / artist / duration</code></li>
+        <li>i32 / String binding のみで成立（M2 surface の延長）</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+
+<!-- ======================================================================= -->
+<!-- 案 Z: Photo Gallery                                                     -->
+<!-- ======================================================================= -->
+<section class="candidate">
+  <h2>案 Z — Photo Gallery <span class="tag">thumbnail grid + lightbox</span></h2>
+  <p class="desc">
+    WrapPanel の thumbnail 配列と、選択時に画面全体にかぶせる lightbox overlay。
+    WrapPanel と AspectRatio と ZStack を中心要件にできる。
+  </p>
+
+  <div class="wire-wrap">
+
+    <svg viewBox="0 0 560 540" width="560" height="540" xmlns="http://www.w3.org/2000/svg">
+      <text x="20" y="14" class="lbl-muted">— default state —</text>
+      <rect x="20" y="20" width="520" height="500" class="frame"/>
+
+      <!-- Top chrome / tabs -->
+      <rect x="20" y="20" width="520" height="40" class="chrome"/>
+      <rect x="32" y="28" width="60" height="24" class="item-sel"/>
+      <text x="62" y="44" text-anchor="middle" class="lbl">All</text>
+      <rect x="96" y="28" width="68" height="24" class="item"/>
+      <text x="130" y="44" text-anchor="middle" class="lbl">Albums</text>
+      <rect x="168" y="28" width="84" height="24" class="item"/>
+      <text x="210" y="44" text-anchor="middle" class="lbl">Favorites</text>
+      <rect x="476" y="28" width="52" height="24" class="btn"/>
+      <text x="502" y="44" text-anchor="middle" class="lbl-sm">▦ Grid</text>
+
+      <!-- Bottom status -->
+      <rect x="20" y="500" width="520" height="20" class="chrome"/>
+      <text x="32" y="514" class="lbl-sm">218 photos</text>
+
+      <!-- WrapPanel: 5 cols × 4 rows of square AspectRatio thumbnails -->
+      <!-- Row 1 -->
+      <rect x="36"  y="76" width="88" height="88" class="thumb"/>
+      <rect x="136" y="76" width="88" height="88" class="thumb"/>
+      <rect x="236" y="76" width="88" height="88" class="thumb"/>
+      <rect x="336" y="76" width="88" height="88" class="thumb"/>
+      <rect x="436" y="76" width="88" height="88" class="thumb"/>
+      <!-- Row 2 -->
+      <rect x="36"  y="176" width="88" height="88" class="thumb"/>
+      <rect x="136" y="176" width="88" height="88" class="thumb"/>
+      <rect x="236" y="176" width="88" height="88" class="item-sel"/>
+      <rect x="336" y="176" width="88" height="88" class="thumb"/>
+      <rect x="436" y="176" width="88" height="88" class="thumb"/>
+      <!-- Row 3 -->
+      <rect x="36"  y="276" width="88" height="88" class="thumb"/>
+      <rect x="136" y="276" width="88" height="88" class="thumb"/>
+      <rect x="236" y="276" width="88" height="88" class="thumb"/>
+      <rect x="336" y="276" width="88" height="88" class="thumb"/>
+      <rect x="436" y="276" width="88" height="88" class="thumb"/>
+      <!-- Row 4 partial -->
+      <rect x="36"  y="376" width="88" height="88" class="thumb"/>
+      <rect x="136" y="376" width="88" height="88" class="thumb"/>
+      <rect x="236" y="376" width="88" height="88" class="thumb"/>
+
+      <text x="36" y="488" class="lbl-muted">(scrolls vertically; cells re-wrap on width change)</text>
+
+      <!-- ① WrapPanel -->
+      <circle cx="528" cy="76" r="9" class="num-circle"/>
+      <text x="528" y="79.5" class="num-text">1</text>
+      <!-- ② AspectRatio -->
+      <circle cx="124" cy="164" r="9" class="num-circle"/>
+      <text x="124" y="167.5" class="num-text">2</text>
+    </svg>
+
+    <svg viewBox="0 0 560 540" width="560" height="540" xmlns="http://www.w3.org/2000/svg">
+      <text x="20" y="14" class="lbl-muted">— lightbox state (click a thumbnail) —</text>
+      <rect x="20" y="20" width="520" height="500" class="frame"/>
+      <!-- Same chrome + dimmed grid in background -->
+      <rect x="20" y="20" width="520" height="40" class="chrome" opacity="0.4"/>
+      <rect x="20" y="500" width="520" height="20" class="chrome" opacity="0.4"/>
+      <g opacity="0.18">
+        <rect x="36"  y="76" width="88" height="88" class="thumb"/>
+        <rect x="136" y="76" width="88" height="88" class="thumb"/>
+        <rect x="236" y="76" width="88" height="88" class="thumb"/>
+        <rect x="336" y="76" width="88" height="88" class="thumb"/>
+        <rect x="436" y="76" width="88" height="88" class="thumb"/>
+        <rect x="36"  y="176" width="88" height="88" class="thumb"/>
+        <rect x="136" y="176" width="88" height="88" class="thumb"/>
+        <rect x="236" y="176" width="88" height="88" class="thumb"/>
+        <rect x="336" y="176" width="88" height="88" class="thumb"/>
+        <rect x="436" y="176" width="88" height="88" class="thumb"/>
+      </g>
+
+      <!-- Overlay scrim (full window) -->
+      <rect x="20" y="20" width="520" height="500" fill="#000" fill-opacity="0.55"/>
+
+      <!-- Centered large image (AspectRatio 4:3 or 1:1) -->
+      <rect x="120" y="120" width="320" height="240" fill="#bbb" stroke="#fff" stroke-width="2"/>
+      <text x="280" y="244" text-anchor="middle" fill="#fff" class="lbl">[photo]</text>
+
+      <!-- Caption -->
+      <text x="280" y="396" text-anchor="middle" fill="#fff" class="lbl-bold">IMG_0237 · 2026-04-12</text>
+      <text x="280" y="414" text-anchor="middle" fill="#ddd" class="lbl-sm">3024 × 2016 · 2.4 MB</text>
+
+      <!-- Nav controls -->
+      <circle cx="64" cy="240" r="22" fill="#fff" fill-opacity="0.9"/>
+      <text x="64" y="246" text-anchor="middle" class="lbl" style="font-size:18px">‹</text>
+      <circle cx="496" cy="240" r="22" fill="#fff" fill-opacity="0.9"/>
+      <text x="496" y="246" text-anchor="middle" class="lbl" style="font-size:18px">›</text>
+      <circle cx="500" cy="40" r="14" fill="#fff" fill-opacity="0.9"/>
+      <text x="500" y="46" text-anchor="middle" class="lbl">×</text>
+
+      <!-- ③ ZStack overlay -->
+      <circle cx="40" cy="40" r="9" class="num-circle"/>
+      <text x="40" y="43.5" class="num-text">3</text>
+    </svg>
+
+  </div>
+
+  <div class="surface-block">
+    <div>
+      <h3>要求される layout surface</h3>
+      <ul>
+        <li>① <b>WrapPanel / Flow</b>（thumbnail の auto-wrap、viewport 幅依存の order）</li>
+        <li>② <b>AspectRatio</b>（thumbnail 正方形、lightbox 写真の比率固定）</li>
+        <li>③ <b>ZStack</b>（画面全体に dim scrim + 中央 image + ナビ ボタン）</li>
+        <li>ScrollView（thumbnail grid の縦 overflow）</li>
+        <li>繰り返し生成（thumbnail items）</li>
+        <li>Tabs（top chrome の view 切替）</li>
+      </ul>
+    </div>
+    <div>
+      <h3>bindings / state</h3>
+      <ul>
+        <li><code>selected_id</code>（i32, -1 で lightbox 非表示）→ overlay 表示制御</li>
+        <li>state 切替で同一画面に 2 つの構造（grid / lightbox）が共存 → ZStack の必然性</li>
+        <li>thumbnails: <code>photo.id / thumb_color / caption</code></li>
+        <li>conditional rendering（<code>if selected_id &gt;= 0 { lightbox }</code>）の DSL 表現が必要</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+
+<!-- ======================================================================= -->
+<!-- 案 W: File Explorer                                                     -->
+<!-- ======================================================================= -->
+<section class="candidate">
+  <h2>案 W — File Explorer <span class="tag">2-pane file manager</span></h2>
+  <p class="desc">
+    Toolbar + breadcrumb + sidebar + 多列 detail list + status bar。
+    List の各 item template の内部が Grid の 3 列揃え（Name | Size | Modified）になっており、
+    <b>layout primitive の入れ子</b> が thesis の中心になる。
+  </p>
+
+  <svg viewBox="0 0 940 540" width="940" height="540" xmlns="http://www.w3.org/2000/svg">
+    <rect x="20" y="20" width="900" height="500" class="frame"/>
+
+    <!-- Top toolbar row -->
+    <rect x="20" y="20" width="900" height="36" class="chrome"/>
+    <rect x="32" y="28" width="32" height="20" class="btn"/>
+    <text x="48" y="42" text-anchor="middle" class="lbl-sm">←</text>
+    <rect x="68" y="28" width="32" height="20" class="btn"/>
+    <text x="84" y="42" text-anchor="middle" class="lbl-sm">→</text>
+    <rect x="104" y="28" width="32" height="20" class="btn"/>
+    <text x="120" y="42" text-anchor="middle" class="lbl-sm">↑</text>
+    <rect x="148" y="28" width="60" height="20" class="btn"/>
+    <text x="178" y="42" text-anchor="middle" class="lbl-sm">New</text>
+    <rect x="212" y="28" width="60" height="20" class="btn"/>
+    <text x="242" y="42" text-anchor="middle" class="lbl-sm">Delete</text>
+    <rect x="836" y="28" width="72" height="20" class="btn"/>
+    <text x="872" y="42" text-anchor="middle" class="lbl-sm">▦ Icons</text>
+
+    <!-- Breadcrumb row -->
+    <rect x="20" y="56" width="900" height="28" class="pane"/>
+    <text x="32" y="74" class="lbl">📁</text>
+    <text x="52" y="74" class="lbl">C:</text>
+    <text x="70" y="74" class="lbl-muted">›</text>
+    <text x="84" y="74" class="lbl">Users</text>
+    <text x="124" y="74" class="lbl-muted">›</text>
+    <text x="138" y="74" class="lbl">devuser</text>
+    <text x="194" y="74" class="lbl-muted">›</text>
+    <text x="208" y="74" class="lbl">dev</text>
+    <text x="240" y="74" class="lbl-muted">›</text>
+    <text x="254" y="74" class="lbl-bold">wasamo</text>
+
+    <!-- Bottom status -->
+    <rect x="20" y="500" width="900" height="20" class="chrome"/>
+    <text x="32" y="514" class="lbl-sm">12 items · 4 folders · 8 files</text>
+    <text x="908" y="514" text-anchor="end" class="lbl-sm">Free: 142 GB</text>
+
+    <!-- Sidebar -->
+    <rect x="20" y="84" width="180" height="416" class="pane"/>
+    <text x="32" y="104" class="lbl-bold">Quick access</text>
+    <rect x="26" y="112" width="168" height="22" class="item"/>
+    <text x="42" y="127" class="lbl">🏠 Home</text>
+    <rect x="26" y="136" width="168" height="22" class="item"/>
+    <text x="42" y="151" class="lbl">📄 Documents</text>
+    <rect x="26" y="160" width="168" height="22" class="item"/>
+    <text x="42" y="175" class="lbl">⬇ Downloads</text>
+    <rect x="26" y="184" width="168" height="22" class="item-sel"/>
+    <text x="42" y="199" class="lbl">📁 dev</text>
+
+    <text x="32" y="232" class="lbl-bold">Drives</text>
+    <rect x="26" y="240" width="168" height="22" class="item"/>
+    <text x="42" y="255" class="lbl">💽 C:</text>
+    <rect x="26" y="264" width="168" height="22" class="item"/>
+    <text x="42" y="279" class="lbl">💽 D:</text>
+
+    <!-- Splitter -->
+    <line x1="200" y1="84" x2="200" y2="500" class="splitter"/>
+
+    <!-- Main detail list -->
+    <rect x="200" y="84" width="720" height="416" class="pane"/>
+
+    <!-- Header row (3-column Grid) -->
+    <rect x="200" y="84" width="720" height="24" fill="#e8e8e8" stroke="#999"/>
+    <text x="216" y="100" class="lbl-bold">Name</text>
+    <line x1="560" y1="84" x2="560" y2="500" stroke="#ddd"/>
+    <text x="572" y="100" class="lbl-bold">Size</text>
+    <line x1="680" y1="84" x2="680" y2="500" stroke="#ddd"/>
+    <text x="692" y="100" class="lbl-bold">Modified</text>
+    <!-- ② Grid inside List item template -->
+    <circle cx="908" cy="96" r="9" class="num-circle"/>
+    <text x="908" y="99.5" class="num-text">2</text>
+
+    <!-- Item rows: each row = Grid 3-column inside List item template -->
+    <rect x="200" y="108" width="720" height="26" class="item"/>
+    <text x="216" y="125" class="lbl">📁 src</text>
+    <text x="572" y="125" class="lbl-muted">—</text>
+    <text x="692" y="125" class="lbl-sm">2026-05-10 18:42</text>
+
+    <rect x="200" y="134" width="720" height="26" class="item-sel"/>
+    <text x="216" y="151" class="lbl">📁 docs</text>
+    <text x="572" y="151" class="lbl-muted">—</text>
+    <text x="692" y="151" class="lbl-sm">2026-05-11 09:14</text>
+
+    <rect x="200" y="160" width="720" height="26" class="item"/>
+    <text x="216" y="177" class="lbl">📁 examples</text>
+    <text x="572" y="177" class="lbl-muted">—</text>
+    <text x="692" y="177" class="lbl-sm">2026-05-09 22:01</text>
+
+    <rect x="200" y="186" width="720" height="26" class="item"/>
+    <text x="216" y="203" class="lbl">📁 private</text>
+    <text x="572" y="203" class="lbl-muted">—</text>
+    <text x="692" y="203" class="lbl-sm">2026-05-11 11:30</text>
+
+    <rect x="200" y="212" width="720" height="26" class="item"/>
+    <text x="216" y="229" class="lbl">📄 README.md</text>
+    <text x="572" y="229" class="lbl-sm">4 KB</text>
+    <text x="692" y="229" class="lbl-sm">2026-05-11 09:14</text>
+
+    <rect x="200" y="238" width="720" height="26" class="item"/>
+    <text x="216" y="255" class="lbl">📄 ROADMAP.md</text>
+    <text x="572" y="255" class="lbl-sm">3 KB</text>
+    <text x="692" y="255" class="lbl-sm">2026-05-11 09:14</text>
+
+    <rect x="200" y="264" width="720" height="26" class="item"/>
+    <text x="216" y="281" class="lbl">📄 VISION.md</text>
+    <text x="572" y="281" class="lbl-sm">8 KB</text>
+    <text x="692" y="281" class="lbl-sm">2026-04-28 14:02</text>
+
+    <rect x="200" y="290" width="720" height="26" class="item"/>
+    <text x="216" y="307" class="lbl">📄 CHANGELOG.md</text>
+    <text x="572" y="307" class="lbl-sm">2 KB</text>
+    <text x="692" y="307" class="lbl-sm">2026-05-11 09:14</text>
+
+    <rect x="200" y="316" width="720" height="26" class="item"/>
+    <text x="216" y="333" class="lbl">📄 CLAUDE.md</text>
+    <text x="572" y="333" class="lbl-sm">5 KB</text>
+    <text x="692" y="333" class="lbl-sm">2026-05-11 10:08</text>
+
+    <rect x="200" y="342" width="720" height="26" class="item"/>
+    <text x="216" y="359" class="lbl">📄 Cargo.toml</text>
+    <text x="572" y="359" class="lbl-sm">1 KB</text>
+    <text x="692" y="359" class="lbl-sm">2026-04-20 11:00</text>
+
+    <rect x="200" y="368" width="720" height="26" class="item"/>
+    <text x="216" y="385" class="lbl">📄 Cargo.lock</text>
+    <text x="572" y="385" class="lbl-sm">38 KB</text>
+    <text x="692" y="385" class="lbl-sm">2026-05-11 09:14</text>
+
+    <text x="216" y="490" class="lbl-muted">(scrolls)</text>
+
+    <!-- ① DockPanel -->
+    <circle cx="908" cy="40" r="9" class="num-circle"/>
+    <text x="908" y="43.5" class="num-text">1</text>
+    <!-- ③ Breadcrumb -->
+    <circle cx="908" cy="70" r="9" class="num-circle"/>
+    <text x="908" y="73.5" class="num-text">3</text>
+    <!-- ④ SplitView -->
+    <circle cx="200" cy="280" r="9" class="num-circle"/>
+    <text x="200" y="283.5" class="num-text">4</text>
+  </svg>
+
+  <div class="surface-block">
+    <div>
+      <h3>要求される layout surface</h3>
+      <ul>
+        <li>① <b>DockPanel</b>（toolbar / breadcrumb / status bar の edge dock）</li>
+        <li>② <b>List 内 item template に Grid（3 列）</b>。layout primitive の入れ子が thesis の中心</li>
+        <li>③ <b>Breadcrumb</b>（HStack + 折り返し / WrapPanel 弱要求）</li>
+        <li>④ <b>SplitView</b>（sidebar / main）</li>
+        <li>ScrollView（main list の縦 overflow）</li>
+        <li>Sidebar 内 List + section header（Quick access / Drives）</li>
+        <li>view 切替で WrapPanel（icon view）への分岐も視野に入る</li>
+      </ul>
+    </div>
+    <div>
+      <h3>bindings / state</h3>
+      <ul>
+        <li><code>current_path</code>（String）→ breadcrumb segments、main list の seed</li>
+        <li><code>selected_id</code> → row 強調</li>
+        <li>item: <code>file.name / size / modified / is_dir</code>（複数フィールド + conditional display）</li>
+        <li>view_mode（i32 or enum 相当）で main 領域の primitive を切替</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+
+<!-- ======================================================================= -->
+<!-- 比較表                                                                  -->
+<!-- ======================================================================= -->
+<section class="candidate">
+  <h2>4 案 横並び比較</h2>
+  <p class="desc">
+    比較軸は <b>layout primitive</b>（layout-engine が解く問題：配置 / overflow / 重ね / 比率固定 等）。
+    Sidebar / Tabs / Breadcrumb / Toolbar 等の <b>composed widget</b>（名前付き UI 部品）は次節で別途比較する。
+  </p>
+
+  <h3 style="margin-top: 20px; font-size: 15px;">概念の語彙と機能の批判的検討</h3>
+  <p class="desc">
+    比較表に挙げる概念について、<b>語彙の出典</b> / <b>機能</b> / <b>既存 primitive での代替可否</b> / <b>M3 AC への含意</b> を整理する。
+    「追加検討が必要」と見える surface のいくつかは Grid star sizing や属性化で済むことが、ここでの整理から見えてくる。
+  </p>
+
+  <div style="display: grid; grid-template-columns: 170px 1fr; gap: 10px 18px; font-size: 13px; max-width: 880px; margin: 14px 0 8px; line-height: 1.55;">
+
+    <div style="font-weight: 600;">Grid</div>
+    <div>
+      <b>機能:</b> 行と列で 2 次元の格子状にレイアウト。セルサイズは絶対値（px）/ 比率（<code>*</code> / <code>fr</code>）/ 内容依存（<code>auto</code>）から選ぶ。<br>
+      <b>語彙の出典:</b> 全フレームワーク横断（XAML / WPF, MUI, Compose, Slint, QML, CSS Grid）— 名前のばらつきが最も小さい primitive。<br>
+      <b>批判的検討:</b> 単一行 / 単一列で使えば実質的に Stack (V/H) を兼ねる。star sizing を持てば後述の Dock / Split / ZStack の多くを代替できる「<b>土台 primitive</b>」。<br>
+      <b>M3 AC との関係:</b> 既存 AC 候補。star sizing を含むかは spec で明示する論点。
+    </div>
+
+    <div style="font-weight: 600;">ScrollView</div>
+    <div>
+      <b>機能:</b> 子要素を viewport にクリップし、超過分をスクロール操作で露出する。<br>
+      <b>語彙の出典:</b> 全フレームワーク共通（ScrollViewer / ScrollView / ScrollArea）。<br>
+      <b>批判的検討:</b> 独立性が最も高い。viewport / clipping を扱う唯一の primitive で、他で代替できない。<br>
+      <b>M3 AC との関係:</b> 既存 AC 候補。
+    </div>
+
+    <div style="font-weight: 600;">List</div>
+    <div>
+      <b>機能:</b> 配列データから item template を介して N 個の子を生成し、<b>選択管理</b>と<b>仮想化</b>を伴って表示する。<br>
+      <b>語彙の出典:</b> List (SwiftUI), ListView (XAML / QML), LazyColumn (Compose)。「item template」は XAML / QML 語彙。<br>
+      <b>批判的検討:</b> 単なる繰り返しは「要素の繰り返し生成」だけで足りる。<b>List 独自の付加価値は (i) 選択状態管理 (ii) 仮想化の 2 点</b>。ROADMAP 末尾で LazyList が post-1.0 として分離されているので、<b>M3 の List は仮想化を含まない可能性が高い</b>。とすると M3 の "List" は実質「選択管理付き 繰り返し生成 + ScrollView」に縮約され、独立 primitive と呼ぶべきか議論の余地がある。<br>
+      <b>M3 AC との関係:</b> 既存 AC 候補。仮想化を含むかは spec で明示する論点。
+    </div>
+
+    <div style="font-weight: 600;">要素の繰り返し生成<br><span style="font-weight: 400; color: #888; font-size: 12px;">(Repeater / ForEach / map / for-in)</span></div>
+    <div>
+      <b>機能:</b> コレクションを反復して N 個の子要素を生成する。選択 / 仮想化を持たない汎用反復。<br>
+      <b>語彙の出典:</b> 各フレームワークで実装方式が異なる：
+        <ul style="margin: 4px 0 6px 16px; padding: 0;">
+          <li><b>container 型 primitive</b> — Repeater (Qt QML), ItemsControl (XAML / WPF)</li>
+          <li><b>View ラッパー型</b> — ForEach (SwiftUI)。View に見えるが Range/Collection を取る構文的ラッパー</li>
+          <li><b>言語キーワード / テンプレート構文型</b> — <code>for in</code> (Slint), <code>{#each}</code> (Svelte), <code>v-for</code> (Vue)</li>
+          <li><b>ホスト言語 loop</b> — <code>.map()</code> (React / shadcn / MUI)。JSX が JS 式なのでそのまま動く</li>
+        </ul>
+      <b>批判的検討:</b> Wasamo の DSL は自前言語（ホスト言語に埋め込まれていない）ので、設計選択肢は <b>三択</b>：
+        <ol style="margin: 4px 0 6px 16px; padding: 0;">
+          <li><b>独立 primitive（container 型）として切り出す</b>。QML / XAML 流儀。新 IR ノード + runtime container + spec 章が要る。合成しやすいが primitive 数が増える。</li>
+          <li><b>DSL 構文要素（loop + template）として組み込む</b>。Slint <code>for in</code> 流儀。wasamoc の grammar 拡張と IR 上の child-generation 表現が要る。primitive 数は増えないが、<b>DSL 構文が「宣言的木」から「制御フロー含み」へ広がる</b>。M2 で統一した <code>HandlerExpr</code> がここに干渉しうるかも論点。</li>
+          <li><b>List の subset として吸収</b>。M3 AC の List 1 つだけで全反復を賄う。最小 primitive 数だが、Grid セル / WrapPanel 子 / breadcrumb segments を「List」と呼ばせる無理が出る。<b>表現力上の歪みが大きい</b>。</li>
+        </ol>
+        ui-layoutsystem 表の分布で見ると、Web 系（React / Vue / Svelte）は何らかの構文型、XAML / QML は container 型、Slint / SwiftUI はその中間（言語側の宣言形）に置かれる。Wasamo はどの流儀でも採れるが、<b>(2) を採ると spec の「文法」と「木構造」の境界が動く</b> 点が M3 DSL spec 公開判断に直接効く。<br>
+      <b>M3 AC との関係:</b> 既存 AC では List の内訳として暗黙化されている。target app 決定後に上記三択を明示的に選ぶ判断が要る。(3) を取らない限り、何らかの形で AC か spec の射程に入る。
+    </div>
+
+    <div style="font-weight: 600;">DockPanel</div>
+    <div>
+      <b>機能:</b> 親要素の上下左右の端に子要素を順次吸着し、最後の子要素が残り中央領域を占める。<br>
+      <b>語彙の出典:</b> <b>DockPanel (XAML / WPF)</b>。機能的に近いのは Compose の Scaffold（ただし Scaffold は composed widget）。<br>
+      <b>批判的検討:</b> <b>toolbar / 中央 / statusbar の 3-edge 構造は Grid (<code>auto / * / auto</code>) で素直に表現できる</b>。4-edge（上下左右 + 中央）も Grid の入れ子で書ける。XAML 自身が Grid と DockPanel の両方を持つが、現代の WinUI / WPF コードでも Grid が主流で DockPanel は legacy 寄り。4 案いずれも chrome は Grid star sizing で構成可能。<br>
+      <b>M3 AC との関係:</b> Grid star sizing で代替可能。独立 primitive として追加するかは target app 決定後の判断。
+    </div>
+
+    <div style="font-weight: 600;">SplitView (resizable)</div>
+    <div>
+      <b>機能:</b> 隣接する 2 (以上) の領域の境界をユーザーがドラッグして、領域比率を再分配する。<br>
+      <b>語彙の出典:</b> SplitView (WinUI / QML), HSplitView/VSplitView (SwiftUI), Resizable (shadcn), <b>GridSplitter (XAML / WPF)</b>。<br>
+      <b>批判的検討:</b> WPF の GridSplitter が示すように、<b>SplitView = Grid + Splitter widget</b>（ドラッグで Grid の star ratio を mutate するもの）として因数分解できる。container 自体は Grid のままで、<code>Splitter</code> を子要素として追加すれば十分。M3 surface としては「独立 container」か「Grid + Splitter widget」かの 2 通りの捉え方がある。<br>
+      <b>M3 AC との関係:</b> Splitter widget として組み込む形が筋。ただし widget 追加は drag interaction を伴うので、M3 が drag を扱うかは別議論として残る論点。
+    </div>
+
+    <div style="font-weight: 600;">WrapPanel / Flow</div>
+    <div>
+      <b>機能:</b> 子要素を主軸方向に並べ、viewport の主軸サイズを超えたら副軸方向の次行に折り返す。<br>
+      <b>語彙の出典:</b> <b>WrapPanel (XAML)</b>, <b>Flow (Qt QML)</b>, FlowRow / FlowColumn (Compose), <code>flex-wrap</code> (CSS)。XAML と QML が独立に同じ名前を持たない点が珍しい primitive。<br>
+      <b>批判的検討:</b> <b>Grid では代替不可</b>。Grid は列数 / 行数が事前定義されるが、WrapPanel は viewport 幅で動的に列数が決まる。layout-engine に「viewport 幅依存の measure → wrap → arrange」のロジックを新規追加する必要がある。代替不能性の意味で独立 primitive として扱う動機が最も強い。<br>
+      <b>M3 AC との関係:</b> 既存 AC 外。target app が要求するなら追加候補。
+    </div>
+
+    <div style="font-weight: 600;">ZStack / Overlay</div>
+    <div>
+      <b>機能:</b> 子要素を同一座標空間に z 順で重ねる。子要素間で位置を押し合わない。<br>
+      <b>語彙の出典:</b> <b>ZStack (SwiftUI)</b>, Box (Compose), <code>z-index</code> (CSS)。XAML には専用 primitive がなく、<b>Grid の同一セルに複数の child を置く</b>ことで実現する。<br>
+      <b>批判的検討:</b> XAML 流儀では Grid が ZStack を兼ねる。M3 が Grid を持つなら、ZStack 機能は Grid の自然な副作用として得られる。SwiftUI のように独立 primitive にするかは構文の明示性の問題で、機能としては Grid 同一セルで代替可能。<br>
+      <b>M3 AC との関係:</b> Grid 同一セル overlap で代替可能（spec で z 順を明文化する形）。独立 primitive にするかは構文の明示性で判断する論点。
+    </div>
+
+    <div style="font-weight: 600;">AspectRatio</div>
+    <div>
+      <b>機能:</b> 子要素 / 容器のサイズを指定した縦横比に固定する（例: 1:1, 16:9）。<br>
+      <b>語彙の出典:</b> <b>AspectRatio (shadcn / radix-ui)</b>, <code>.aspectRatio()</code> (SwiftUI), <code>aspect-ratio</code> CSS property, <code>Modifier.aspectRatio()</code> (Compose)。XAML の Viewbox は scaling 中心で semantics が異なる。<br>
+      <b>批判的検討:</b> <b>container ではなく sizing constraint（任意 container に適用できる属性）として捉えるのが現代的</b>。CSS の <code>aspect-ratio</code> property、Compose の Modifier がこの捉え方。container の sizing 属性として layout-engine の measure 段階に組み込めば、独立 primitive を立てずに済む。<br>
+      <b>M3 AC との関係:</b> sizing 属性として扱う形なら独立 primitive 不要。独立 container にするかは構文の明示性で判断する論点。
+    </div>
+
+    <div style="font-weight: 600;">Card / GroupBox / Separator / Divider</div>
+    <div>
+      <b>機能:</b> 視覚的グループ化（背景色 + 角丸 + 境界線 + 影）/ 視覚的区切り（1px ライン）。<br>
+      <b>語彙の出典:</b> Card (Material / shadcn), GroupBox (XAML), Pane (QML), Separator (shadcn), Divider (Material)。<br>
+      <b>批判的検討:</b> <b>layout primitive ではなく styling</b>。M5 (Identity & tooling) の theming surface に属する性格。<br>
+      <b>M3 AC との関係:</b> layout 議論の射程外。M5 で扱うのが筋。
+    </div>
+
+  </div>
+
+  <p class="desc" style="margin-top: 16px;">
+    <b>整理のまとめ:</b> 表の「追加検討が必要」5 項目（DockPanel / SplitView / WrapPanel / ZStack / AspectRatio）の代替可否を見ると、
+    DockPanel と ZStack は Grid (star sizing + 同一セル overlap) で代替可能、AspectRatio は sizing 属性化で代替可能、
+    SplitView は「Grid + Splitter widget」に因数分解可能、と整理できる。
+    <b>Grid で代替できないのは WrapPanel のみ</b>。
+    また「要素の繰り返し生成」は表に追加する余地がある — ただしこれは独立 primitive 化（Repeater 型）/ DSL 構文要素化（for-in 型）/ List 吸収の三択の判断対象。
+    どれを実際に M3 AC へ含めるか / どの形で扱うかは target app 決定後に別途検討する。
+  </p>
+
+  <h3 style="margin-top: 28px; font-size: 15px;">4 案 × layout surface マトリクス</h3>
+  <p class="desc">記号：「○」= 中心要件、「△」= 部分的に登場、「—」= 不要 / 副次的。</p>
+  <table style="border-collapse: collapse; font-size: 13px; width: 100%; max-width: 880px;">
+    <thead>
+      <tr style="background: #f0f0f0;">
+        <th style="text-align: left; padding: 8px 12px; border: 1px solid #ddd;">Layout surface</th>
+        <th style="padding: 8px 12px; border: 1px solid #ddd;">X Mail</th>
+        <th style="padding: 8px 12px; border: 1px solid #ddd;">Y Music</th>
+        <th style="padding: 8px 12px; border: 1px solid #ddd;">Z Gallery</th>
+        <th style="padding: 8px 12px; border: 1px solid #ddd;">W Explorer</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr><td style="padding: 6px 12px; border: 1px solid #eee;">Grid (row/col, sizing)</td>
+          <td style="text-align: center; border: 1px solid #eee;">○</td><td style="text-align: center; border: 1px solid #eee;">○</td><td style="text-align: center; border: 1px solid #eee;">△</td><td style="text-align: center; border: 1px solid #eee;">○ (入れ子)</td></tr>
+      <tr><td style="padding: 6px 12px; border: 1px solid #eee;">List + item template</td>
+          <td style="text-align: center; border: 1px solid #eee;">○ × 2</td><td style="text-align: center; border: 1px solid #eee;">○</td><td style="text-align: center; border: 1px solid #eee;">△</td><td style="text-align: center; border: 1px solid #eee;">○</td></tr>
+      <tr><td style="padding: 6px 12px; border: 1px solid #eee;"><b>要素の繰り返し生成</b><br><span style="font-size: 11px; color: #888;">container / 構文要素 / List 吸収の三択</span></td>
+          <td style="text-align: center; border: 1px solid #eee;">○ (tags)</td><td style="text-align: center; border: 1px solid #eee;">○ (playlist)</td><td style="text-align: center; border: 1px solid #eee;">○ (thumbs)</td><td style="text-align: center; border: 1px solid #eee;">○ (breadcrumb segs)</td></tr>
+      <tr><td style="padding: 6px 12px; border: 1px solid #eee;">ScrollView</td>
+          <td style="text-align: center; border: 1px solid #eee;">○ × 3</td><td style="text-align: center; border: 1px solid #eee;">○</td><td style="text-align: center; border: 1px solid #eee;">○</td><td style="text-align: center; border: 1px solid #eee;">○</td></tr>
+      <tr><td style="padding: 6px 12px; border: 1px solid #eee;"><b>DockPanel</b></td>
+          <td style="text-align: center; border: 1px solid #eee;">○</td><td style="text-align: center; border: 1px solid #eee;">○</td><td style="text-align: center; border: 1px solid #eee;">△</td><td style="text-align: center; border: 1px solid #eee;">○</td></tr>
+      <tr><td style="padding: 6px 12px; border: 1px solid #eee;"><b>SplitView (resizable)</b></td>
+          <td style="text-align: center; border: 1px solid #eee;">○ × 2</td><td style="text-align: center; border: 1px solid #eee;">○ × 2</td><td style="text-align: center; border: 1px solid #eee;">—</td><td style="text-align: center; border: 1px solid #eee;">○</td></tr>
+      <tr><td style="padding: 6px 12px; border: 1px solid #eee;"><b>WrapPanel / Flow</b></td>
+          <td style="text-align: center; border: 1px solid #eee;">○ (tags)</td><td style="text-align: center; border: 1px solid #eee;">—</td><td style="text-align: center; border: 1px solid #eee;">○ (主役)</td><td style="text-align: center; border: 1px solid #eee;">△ (icon view)</td></tr>
+      <tr><td style="padding: 6px 12px; border: 1px solid #eee;"><b>ZStack / Overlay</b></td>
+          <td style="text-align: center; border: 1px solid #eee;">—</td><td style="text-align: center; border: 1px solid #eee;">○</td><td style="text-align: center; border: 1px solid #eee;">○ (主役)</td><td style="text-align: center; border: 1px solid #eee;">—</td></tr>
+      <tr><td style="padding: 6px 12px; border: 1px solid #eee;"><b>AspectRatio</b></td>
+          <td style="text-align: center; border: 1px solid #eee;">—</td><td style="text-align: center; border: 1px solid #eee;">○</td><td style="text-align: center; border: 1px solid #eee;">○</td><td style="text-align: center; border: 1px solid #eee;">—</td></tr>
+      <tr><td style="padding: 6px 12px; border: 1px solid #eee;">Card / GroupBox 視覚枠</td>
+          <td style="text-align: center; border: 1px solid #eee;">△</td><td style="text-align: center; border: 1px solid #eee;">○</td><td style="text-align: center; border: 1px solid #eee;">△</td><td style="text-align: center; border: 1px solid #eee;">—</td></tr>
+      <tr><td style="padding: 6px 12px; border: 1px solid #eee;">Separator / Divider</td>
+          <td style="text-align: center; border: 1px solid #eee;">○</td><td style="text-align: center; border: 1px solid #eee;">○</td><td style="text-align: center; border: 1px solid #eee;">—</td><td style="text-align: center; border: 1px solid #eee;">○</td></tr>
+      <tr><td style="padding: 6px 12px; border: 1px solid #eee;">入力 widget 追加要求</td>
+          <td style="text-align: center; border: 1px solid #eee;">なし</td><td style="text-align: center; border: 1px solid #eee;">なし</td><td style="text-align: center; border: 1px solid #eee;">なし</td><td style="text-align: center; border: 1px solid #eee;">なし</td></tr>
+      <tr><td style="padding: 6px 12px; border: 1px solid #eee;">視覚 placeholder 必要性</td>
+          <td style="text-align: center; border: 1px solid #eee;">弱</td><td style="text-align: center; border: 1px solid #eee;">中 (album art)</td><td style="text-align: center; border: 1px solid #eee;">強 (写真)</td><td style="text-align: center; border: 1px solid #eee;">弱</td></tr>
+      <tr><td style="padding: 6px 12px; border: 1px solid #eee;">item context フィールド数</td>
+          <td style="text-align: center; border: 1px solid #eee;">4–5</td><td style="text-align: center; border: 1px solid #eee;">3</td><td style="text-align: center; border: 1px solid #eee;">2–3</td><td style="text-align: center; border: 1px solid #eee;">4</td></tr>
+    </tbody>
+  </table>
+
+  <p class="desc" style="margin-top: 20px;">
+    マトリクス上は太字行（DockPanel / SplitView / WrapPanel / ZStack / AspectRatio）が「ROADMAP M3 AC 外の surface」だが、
+    上の批判的検討に従って読み直すと次のように整理される：
+  </p>
+  <ul style="font-size: 13px; max-width: 820px; margin: 0 0 12px;">
+    <li><b>DockPanel</b>（X / Y / W で要件）— Grid <code>auto / * / auto</code> sizing で代替。新 primitive 不要。</li>
+    <li><b>SplitView</b>（X × 2 / Y × 2 / W で要件）— Grid star sizing + <b>Splitter widget</b> に因数分解。M3 で必要なのは Splitter widget のみ。</li>
+    <li><b>WrapPanel</b>（Z で主役 / X で tags / W で icon view）— Grid では代替不可。<b>M3 で真に新規追加すべき layout primitive</b>。</li>
+    <li><b>ZStack</b>（Y / Z で要件）— Grid 同一セル overlap で代替。spec で明文化すれば足りる。</li>
+    <li><b>AspectRatio</b>（Y / Z で要件）— sizing 属性として layout-engine に組み込めば足りる。新 primitive 不要。</li>
+    <li><b>要素の繰り返し生成</b>（全案で要件）— 独立 primitive 化（Repeater 型）/ DSL 構文要素化（for-in 型）/ List 吸収のいずれを採るかの三択判断。</li>
+  </ul>
+  <p class="desc">
+    上の代替可否を踏まえ、各案について<b>新規追加を検討する余地がある surface</b>を並べると次のようになる
+    （Grid star sizing と同一セル overlap は spec 明文化のみで足りる前提）：
+  </p>
+  <ul style="font-size: 13px; max-width: 820px; margin: 0;">
+    <li><b>案 X (Mail)</b>: WrapPanel / Splitter widget / 繰り返し生成</li>
+    <li><b>案 Y (Music)</b>: Splitter widget / 繰り返し生成 / AspectRatio 属性</li>
+    <li><b>案 Z (Gallery)</b>: WrapPanel / 繰り返し生成 / AspectRatio 属性</li>
+    <li><b>案 W (Explorer)</b>: Splitter widget / 繰り返し生成（WrapPanel は icon view を採るなら追加候補）</li>
+  </ul>
+
+  <h3 style="margin-top: 28px; font-size: 15px;">composed widget（命名された UI 部品）</h3>
+  <p class="desc">
+    Sidebar / Tabs / Breadcrumb / Toolbar / Card は主要フレームワークで <b>名前付きの合成 widget</b> として提供される（XAML NavigationView、MUI Drawer、Compose TopAppBar 等）。
+    M3 でこれらを <b>(A) layout primitive の組合せで表現させる</b> か <b>(B) M3 surface に composed widget として加える</b> かは設計判断。
+    framing F4「M3 を feature breadth milestone に戻さない」の素直な読みでは (A) を取り、navigation 系 widget は M4 以降に置く。
+    下表は <b>(A) の立場を取った場合に各案で必要な layout 組合せ</b> を示す。組合せで素直に書けない箇所は M3 surface の不足を意味する。
+  </p>
+  <table style="border-collapse: collapse; font-size: 13px; width: 100%; max-width: 880px;">
+    <thead>
+      <tr style="background: #f0f0f0;">
+        <th style="text-align: left; padding: 8px 12px; border: 1px solid #ddd;">Composed widget</th>
+        <th style="padding: 8px 12px; border: 1px solid #ddd;">X Mail</th>
+        <th style="padding: 8px 12px; border: 1px solid #ddd;">Y Music</th>
+        <th style="padding: 8px 12px; border: 1px solid #ddd;">Z Gallery</th>
+        <th style="padding: 8px 12px; border: 1px solid #ddd;">W Explorer</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td style="padding: 6px 12px; border: 1px solid #eee;">Toolbar（上部ボタン列）</td>
+        <td style="padding: 6px 12px; border: 1px solid #eee; font-size: 12px;">Dock-top + HStack + Button×N</td>
+        <td style="padding: 6px 12px; border: 1px solid #eee; font-size: 12px;">Dock-top + HStack</td>
+        <td style="padding: 6px 12px; border: 1px solid #eee; font-size: 12px;">Dock-top + HStack</td>
+        <td style="padding: 6px 12px; border: 1px solid #eee; font-size: 12px;">Dock-top + HStack（2 段）</td>
+      </tr>
+      <tr>
+        <td style="padding: 6px 12px; border: 1px solid #eee;">Sidebar（左側 nav）</td>
+        <td style="padding: 6px 12px; border: 1px solid #eee; font-size: 12px;">SplitView 左 pane + List（folders + labels）</td>
+        <td style="padding: 6px 12px; border: 1px solid #eee; font-size: 12px;">SplitView 左 pane + 2 つの List（Library / Playlists）</td>
+        <td style="padding: 6px 12px; border: 1px solid #eee; font-size: 12px;">（なし）</td>
+        <td style="padding: 6px 12px; border: 1px solid #eee; font-size: 12px;">SplitView 左 pane + List（Quick / Drives セクション）</td>
+      </tr>
+      <tr>
+        <td style="padding: 6px 12px; border: 1px solid #eee;">Tabs（上部タブ切替）</td>
+        <td style="padding: 6px 12px; border: 1px solid #eee; font-size: 12px;">（なし）</td>
+        <td style="padding: 6px 12px; border: 1px solid #eee; font-size: 12px;">（なし）</td>
+        <td style="padding: 6px 12px; border: 1px solid #eee; font-size: 12px; background: #fff5f5;">HStack + Button + selected state binding<br><span style="color: var(--accent); font-style: italic;">⚠ Button-as-tab の視覚区別は theming に依存</span></td>
+        <td style="padding: 6px 12px; border: 1px solid #eee; font-size: 12px;">（なし）</td>
+      </tr>
+      <tr>
+        <td style="padding: 6px 12px; border: 1px solid #eee;">Breadcrumb（パス表示）</td>
+        <td style="padding: 6px 12px; border: 1px solid #eee; font-size: 12px;">Text 単発（軽量）</td>
+        <td style="padding: 6px 12px; border: 1px solid #eee; font-size: 12px;">（なし）</td>
+        <td style="padding: 6px 12px; border: 1px solid #eee; font-size: 12px;">（なし）</td>
+        <td style="padding: 6px 12px; border: 1px solid #eee; font-size: 12px; background: #fff5f5;">HStack + 繰り返し生成 + 区切り文字<br><span style="color: var(--accent); font-style: italic;">⚠ クリック可能セグメントは Button per segment が必要</span></td>
+      </tr>
+      <tr>
+        <td style="padding: 6px 12px; border: 1px solid #eee;">Status bar（下部状態）</td>
+        <td style="padding: 6px 12px; border: 1px solid #eee; font-size: 12px;">Dock-bottom + HStack</td>
+        <td style="padding: 6px 12px; border: 1px solid #eee; font-size: 12px;">Dock-bottom + HStack</td>
+        <td style="padding: 6px 12px; border: 1px solid #eee; font-size: 12px;">Dock-bottom + HStack</td>
+        <td style="padding: 6px 12px; border: 1px solid #eee; font-size: 12px;">Dock-bottom + HStack</td>
+      </tr>
+      <tr>
+        <td style="padding: 6px 12px; border: 1px solid #eee;">Card / GroupBox</td>
+        <td style="padding: 6px 12px; border: 1px solid #eee; font-size: 12px;">（不要）</td>
+        <td style="padding: 6px 12px; border: 1px solid #eee; font-size: 12px;">VStack + border / background<br><span style="color: var(--accent); font-style: italic;">⚠ styling DSL 範囲</span></td>
+        <td style="padding: 6px 12px; border: 1px solid #eee; font-size: 12px;">（不要）</td>
+        <td style="padding: 6px 12px; border: 1px solid #eee; font-size: 12px;">（不要）</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <p class="desc" style="margin-top: 16px;">
+    <b>(A) で素直に書けない箇所</b>（赤背景）が <b>composed widget を M3 surface に入れるかどうか</b> の判断点：
+  </p>
+  <ul style="font-size: 13px; max-width: 820px;">
+    <li><b>Tabs の視覚区別</b>（案 Z）— Button の selected 状態を視覚的に表す手段が M2 の <code>style: accent</code> のみ。M3 で selected/normal の styling 切替 surface を持たないと Tabs として読めない。これは theming 議論（M4–M5）と接続するので、案 Z を採るなら M3 で <b>最低限の selected styling</b> を入れるか、tabs を全く違う UI（例: dropdown）に置き換えるかを決める必要がある。</li>
+    <li><b>Breadcrumb のクリック可能セグメント</b>（案 W）— セグメントごとに Button を生やすことは繰り返し生成で可能だが、視覚的に「Button らしくない Button」が要る点で Tabs と同じ styling 問題を持つ。</li>
+    <li><b>Card / GroupBox</b>（案 Y）— 視覚的グループ化（背景色 + 角丸 + 境界線）は VStack + style 属性で書けるが、これは layout primitive ではなく <b>styling DSL の射程</b>。Card を独立 widget として持つかは M5 (Identity & tooling) 寄りの判断。</li>
+  </ul>
+  <p class="desc">
+    まとめると、案 X / Y / W は composed widget をすべて (A) layout 組合せで書ける（styling の細部を除く）。
+    <b>案 Z は Tabs が selected styling を要求する点で M3 surface に圧力をかける</b>。
+    Toolbar / Sidebar / Status bar / Breadcrumb（表示のみ）は全案で (A) で成立する。
+  </p>
+</section>
+
+<!-- ======================================================================= -->
+<!-- このファイルの位置づけと将来再構成トリガー                              -->
+<!-- ======================================================================= -->
+<section class="candidate">
+  <h2>このファイルの位置づけと将来再構成トリガー</h2>
+  <p class="desc">
+    本ファイルは M3 target app 候補を選択するための exploratory artifact である。
+    最終的な選定理由・必要 surface・out-of-scope・spec 同期ルールは、本ファイルではなく
+    候補確定後に起こす target app pre-doc（markdown）で明文化する。本 HTML はその pre-doc から
+    視覚 input として参照される位置づけになる。
+  </p>
+  <p class="desc">
+    現状の単一 HTML 構成（wireframes + 語彙批判的検討 + マトリクス + composed widget 比較）は
+    候補選択フェーズに最適化されている。以下のいずれかが起きたら、
+    本 HTML を <b>wireframe のみ</b>の構成に縮小し、cross-cutting 分析（特に「概念の語彙と機能の批判的検討」）を
+    別の markdown note に抽出する再構成を検討する：
+  </p>
+  <ul style="font-size: 13px; max-width: 820px; margin: 0;">
+    <li>語彙批判的検討の中身を M3 DSL spec ドラフトが直接参照する必要が出たとき</li>
+    <li>HTML 内の vocabulary 整理が target app 選択の文脈と切り離されて参照されるようになったとき</li>
+    <li>別の milestone（M4 以降）で同様の primitive 整理を再利用したくなったとき</li>
+  </ul>
+  <p class="desc" style="margin-top: 12px;">
+    上記のいずれも当てはまらないうちは、単一 HTML を維持することを優先する
+    （markdown 抽出は pre-doc 執筆時に再度書き直しになる可能性が高いため、early extraction は割に合わない）。
+  </p>
+</section>
+
+</body>
+</html>
