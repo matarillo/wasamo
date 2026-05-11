@@ -101,9 +101,13 @@
 
 <h1>M3 target app — wireframe 候補</h1>
 <p class="lede">
-Grid / ScrollView / List では済まない layout 要求を出す desktop app の wireframe 4 案。
+M3 target app 候補を選定するための exploratory artifact。
+Grid / ScrollView / List では済まない layout 要求を出す desktop app の wireframe 4 案を示し、
+(i) 各案が必要とする surface とその代替可否を整理し、
+(ii) <a href="m3-start-framing.md">m3-start-framing.md</a> に照らした 5 つの判断軸で候補を比較する。
 入力可能な widget は M2 surface（Text, Button）+ 視覚 placeholder のみで成立する範囲に留めている。
-本ファイルは pre-doc 前の検討用ドラフトであり、合意成果物ではない。
+本ファイルは合意成果物ではなく、最終的な選定理由・out-of-scope・spec 同期ルールは
+候補確定後に起こす target app pre-doc（markdown）で明文化する。
 赤丸数字は <code>ui-layoutsystem.md</code> 表のうち各案が要求する surface 概念への参照番号。
 </p>
 
@@ -755,10 +759,12 @@ Grid / ScrollView / List では済まない layout 要求を出す desktop app �
 <!-- 比較表                                                                  -->
 <!-- ======================================================================= -->
 <section class="candidate">
-  <h2>4 案 横並び比較</h2>
+  <h2>判断材料 — 必要 surface とその代替可否</h2>
   <p class="desc">
+    本節は候補ごとに「何が必要か」を整理する <b>input</b> レイヤーである。
     比較軸は <b>layout primitive</b>（layout-engine が解く問題：配置 / overflow / 重ね / 比率固定 等）。
-    Sidebar / Tabs / Breadcrumb / Toolbar 等の <b>composed widget</b>（名前付き UI 部品）は次節で別途比較する。
+    Sidebar / Tabs / Breadcrumb / Toolbar 等の <b>composed widget</b>（名前付き UI 部品）は本節後半で別途比較する。
+    候補選定そのもの（thesis / framing に照らした判断）は次節「判断軸 — 候補選定の 5 軸」で扱う。
   </p>
 
   <h3 style="margin-top: 20px; font-size: 15px;">概念の語彙と機能の批判的検討</h3>
@@ -938,6 +944,10 @@ Grid / ScrollView / List では済まない layout 要求を出す desktop app �
     <li><b>案 Z (Gallery)</b>: WrapPanel / 繰り返し生成 / AspectRatio 属性</li>
     <li><b>案 W (Explorer)</b>: Splitter widget / 繰り返し生成（WrapPanel は icon view を採るなら追加候補）</li>
   </ul>
+  <p class="desc" style="margin-top: 12px;">
+    なお、これらの「新規追加候補」を ROADMAP M3 AC との縮約・拡張の観点で総合判定する整理は、
+    後続「判断軸 — 候補選定の 5 軸」節の <b>軸 4（ROADMAP M3 AC の縮約余地）</b> を参照。
+  </p>
 
   <h3 style="margin-top: 28px; font-size: 15px;">composed widget（命名された UI 部品）</h3>
   <p class="desc">
@@ -1014,6 +1024,193 @@ Grid / ScrollView / List では済まない layout 要求を出す desktop app �
     まとめると、案 X / Y / W は composed widget をすべて (A) layout 組合せで書ける（styling の細部を除く）。
     <b>案 Z は Tabs が selected styling を要求する点で M3 surface に圧力をかける</b>。
     Toolbar / Sidebar / Status bar / Breadcrumb（表示のみ）は全案で (A) で成立する。
+  </p>
+  <p class="desc">
+    これらの styling 圧力を含む M4–M5 surface への漏出を、4 案横断で
+    「不可避 / 回避可能 / reservation で十分」のラベル付きで整理した一覧は、
+    後続「判断軸 — 候補選定の 5 軸」節の <b>軸 5（M4–M5 surface への漏出）</b> を参照。
+  </p>
+</section>
+
+<!-- ======================================================================= -->
+<!-- 判断軸 — 候補選定の 5 軸                                                -->
+<!-- ======================================================================= -->
+<section class="candidate">
+  <h2>判断軸 — 候補選定の 5 軸</h2>
+  <p class="desc">
+    本節は前節「判断材料」を <b>input</b> として、
+    <a href="m3-start-framing.md">m3-start-framing.md</a> の framing decisions (F1–F7) に照らして
+    候補を比較する <b>synthesis</b> レイヤーである。
+    軸は 5 つで、それぞれが framing の特定の決定に接続している。
+    判断はオーナーが行うものであり、本節は「候補ごとの傾向」を整理するに留める。
+  </p>
+
+  <h3 style="margin-top: 20px; font-size: 15px;">軸の定義</h3>
+
+  <div style="display: grid; grid-template-columns: 200px 1fr; gap: 14px 18px; font-size: 13px; max-width: 880px; margin: 14px 0 8px; line-height: 1.55;">
+
+    <div style="font-weight: 600;">軸 1<br>Phase 単位の<br>(spec + impl + visible proof)<br>出荷可能性</div>
+    <div>
+      <b>framing 接続:</b> F6（spec / impl / proof は同期、各 phase で更新）<br>
+      <b>何を測るか:</b> 各 phase で「spec slice + impl slice + その時点で動かせる小さな proof」が自己完結で出るか。
+      proof slice は単に「動く」だけでなく、その phase が積んだ surface ぶんだけ M2 から拡張されたことが見えること。
+      後続 phase に依存して初めて proof が成立する候補は減点。<br>
+      <b>表記:</b> 良 / 中 / 悪
+    </div>
+
+    <div style="font-weight: 600;">軸 2<br>Public DSL draft の<br>執筆量と novel surface</div>
+    <div>
+      <b>framing 接続:</b> F1 後半（thesis "published as a stable public draft"）, F6<br>
+      <b>何を測るか:</b> その候補を成立させるために public draft へ normative に書き下ろす必要がある内容のボリュームと、
+      既存フレームワーク先例の有無（先例があればコピーで足り、なければ新規仕様化が必要）。<br>
+      <b>表記:</b> 軽 / 中 / 重 + 主な normative 項目
+    </div>
+
+    <div style="font-weight: 600;">軸 3<br>Visible proof による<br>M2 拡張の可観測性</div>
+    <div>
+      <b>framing 接続:</b> F7（"<code>.ui -&gt; IR -&gt; runtime</code> の path が M2 基盤の上で <b>拡張された</b> ことを確認"）<br>
+      <b>何を測るか:</b> proof を <code>.ui → IR → runtime → 描画</code> まで通したとき、
+      <ul style="margin: 4px 0 6px 16px; padding: 0;">
+        <li>(i) surface が動いたことを示すために何を見ればよいか</li>
+        <li>(ii) その観察対象が M2 surface（Text / Button / i32 + String binding / Hello Counter スケール）では描けないものであり、「拡張」が画面に直接出ているか</li>
+        <li>(iii) 観察対象が離散イベントか時間依存の連続挙動か</li>
+        <li>(iv) 同じ手順で同じ観察が得られるか</li>
+      </ul>
+      <b>表記:</b> 観察対象 / M2 不可能性（強・中・弱）/ 離散・連続 / 再現性（高・中・低）
+    </div>
+
+    <div style="font-weight: 600;">軸 4<br>ROADMAP M3 AC の<br>縮約余地</div>
+    <div>
+      <b>framing 接続:</b> F1（"enough" の射程）, F2（AC revision を target app に照らす）<br>
+      <b>何を測るか:</b> その候補を採用した場合、現在の ROADMAP M3 AC（Grid / ScrollView / List / DSL spec draft）から削れる項目があるか。
+      「追加候補」だけでなく「縮約候補」も並べることで AC revision 議論を両方向に開く。<br>
+      <b>表記:</b> 各 AC 項目について 維持 / 任意 / 不要
+    </div>
+
+    <div style="font-weight: 600;">軸 5<br>M4–M5 surface への漏出</div>
+    <div>
+      <b>framing 接続:</b> F4（M3 を feature breadth milestone に戻さない）, F5（TypedValue は AC ではない）<br>
+      <b>何を測るか:</b> その候補を proof として成立させるために、framing が out-of-scope に置いた surface
+      （Theming / Mica, input / focus, TextField / IME, AccessKit, multi-window, LSP, hot reload, C ABI freeze, TypedValue 無条件導入）への踏み込みが発生するか。
+      grammar の open question（条件レンダリング構文 / nested template scope 等）は M4–M5 漏出ではなく M3 内部の scope 議論なのでここに含めず、軸 2 で扱う。<br>
+      <b>表記:</b> 漏出項目を列挙、各項目に <b>不可避 / 回避可能 / reservation で十分</b>
+    </div>
+
+  </div>
+
+  <h3 style="margin-top: 28px; font-size: 15px;">5 軸 × 4 候補 比較マトリクス</h3>
+  <p class="desc">表のセルは要約。詳細根拠は表下の候補別記述を参照。</p>
+  <table style="border-collapse: collapse; font-size: 13px; width: 100%; max-width: 880px;">
+    <thead>
+      <tr style="background: #f0f0f0;">
+        <th style="text-align: left; padding: 8px 12px; border: 1px solid #ddd; width: 200px;">判断軸</th>
+        <th style="padding: 8px 12px; border: 1px solid #ddd;">X Mail</th>
+        <th style="padding: 8px 12px; border: 1px solid #ddd;">Y Music</th>
+        <th style="padding: 8px 12px; border: 1px solid #ddd;">Z Gallery</th>
+        <th style="padding: 8px 12px; border: 1px solid #ddd;">W Explorer</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td style="padding: 6px 12px; border: 1px solid #eee;">軸 1: Phase 出荷可能性</td>
+        <td style="text-align: center; border: 1px solid #eee;">悪</td>
+        <td style="text-align: center; border: 1px solid #eee;">中</td>
+        <td style="text-align: center; border: 1px solid #eee;">良</td>
+        <td style="text-align: center; border: 1px solid #eee;">中〜良</td>
+      </tr>
+      <tr>
+        <td style="padding: 6px 12px; border: 1px solid #eee;">軸 2: Public draft 執筆量</td>
+        <td style="text-align: center; border: 1px solid #eee;">中</td>
+        <td style="text-align: center; border: 1px solid #eee;">中</td>
+        <td style="text-align: center; border: 1px solid #eee;">重</td>
+        <td style="text-align: center; border: 1px solid #eee;">中</td>
+      </tr>
+      <tr>
+        <td style="padding: 6px 12px; border: 1px solid #eee;">軸 3: M2 拡張可観測性<br><span style="font-size: 11px; color: #888;">(M2不可能性 / 離散・連続 / 再現性)</span></td>
+        <td style="text-align: center; border: 1px solid #eee; font-size: 12px;">中 / 離散 / 高</td>
+        <td style="text-align: center; border: 1px solid #eee; font-size: 12px;">強 / 連続 / 低</td>
+        <td style="text-align: center; border: 1px solid #eee; font-size: 12px;">強 / 離散 / 高</td>
+        <td style="text-align: center; border: 1px solid #eee; font-size: 12px;">強 / 離散 / 高</td>
+      </tr>
+      <tr>
+        <td style="padding: 6px 12px; border: 1px solid #eee;">軸 4: AC 縮約余地</td>
+        <td style="text-align: center; border: 1px solid #eee; font-size: 12px;">なし</td>
+        <td style="text-align: center; border: 1px solid #eee; font-size: 12px;">小</td>
+        <td style="text-align: center; border: 1px solid #eee; font-size: 12px;">中（List 不要）</td>
+        <td style="text-align: center; border: 1px solid #eee; font-size: 12px;">なし</td>
+      </tr>
+      <tr>
+        <td style="padding: 6px 12px; border: 1px solid #eee;">軸 5: M4–M5 漏出（項目数）</td>
+        <td style="text-align: center; border: 1px solid #eee;">1</td>
+        <td style="text-align: center; border: 1px solid #eee;">1〜3</td>
+        <td style="text-align: center; border: 1px solid #eee;">0〜2</td>
+        <td style="text-align: center; border: 1px solid #eee;">1〜2</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h3 style="margin-top: 28px; font-size: 15px;">各軸の詳細根拠</h3>
+
+  <div style="font-size: 13px; max-width: 880px; margin: 14px 0 8px; line-height: 1.55;">
+
+    <p style="margin: 12px 0 4px;"><b>軸 1 — Phase 単位の出荷可能性</b></p>
+    <ul style="margin: 0 0 12px 20px; padding: 0;">
+      <li><b>案 X (Mail)</b> — <b>悪</b>。Grid + SplitView + List + 多フィールド template が同時に揃わないと 3-pane が画面として成立しない。途中段階で意味のある proof が出にくい。</li>
+      <li><b>案 Y (Music)</b> — <b>中</b>。now-playing (AspectRatio + ZStack) と queue (List) は別 phase に切れる。</li>
+      <li><b>案 Z (Gallery)</b> — <b>良</b>。phase 1 = WrapPanel + thumbnails、phase 2 = lightbox (ZStack + 条件レンダリング) と段階化が自然で、各 slice が M2 拡張を観察可能に示せる。</li>
+      <li><b>案 W (Explorer)</b> — <b>中〜良</b>。sidebar List → main detail List (Grid in template) と段階出荷可能。</li>
+    </ul>
+
+    <p style="margin: 12px 0 4px;"><b>軸 2 — Public DSL draft の執筆量と novel surface</b></p>
+    <ul style="margin: 0 0 12px 20px; padding: 0;">
+      <li><b>案 X (Mail)</b> — <b>中</b>。多フィールド item template の binding scope / name resolution（<code>dsl-grammar.md</code> の open question を直撃）が重い。layout 自体は Grid star sizing で書けるので軽い。</li>
+      <li><b>案 Y (Music)</b> — <b>中</b>。AspectRatio sizing 規則、ZStack の z 順 / hit 規則、bool binding。先例は揃っている。</li>
+      <li><b>案 Z (Gallery)</b> — <b>重</b>。WrapPanel の measure→wrap→arrange を normative に規定（先例は CSS / Compose Flow）+ 条件レンダリング構文（先例まちまち）。public draft 執筆コスト最大。</li>
+      <li><b>案 W (Explorer)</b> — <b>中</b>。nested template scope + 繰り返し生成構文の確定が要る。layout 自体は Grid 入れ子のみ。</li>
+    </ul>
+
+    <p style="margin: 12px 0 4px;"><b>軸 3 — Visible proof による M2 拡張の可観測性</b></p>
+    <ul style="margin: 0 0 12px 20px; padding: 0;">
+      <li><b>案 X (Mail)</b> — 観察対象は多フィールド item template による message list。M2 不可能性 <b>中</b>（M2 でも複数 Text を縦に並べて擬似 list は擬装できるので「拡張」が弱く見える可能性あり）。離散・再現性 高。</li>
+      <li><b>案 Y (Music)</b> — 観察対象は AspectRatio で固定された album art + ZStack overlay。M2 不可能性 <b>強</b>。ただし再生 progress は連続・再現性低で proof として劣化、AspectRatio / ZStack に観察を寄せれば離散化できる。</li>
+      <li><b>案 Z (Gallery)</b> — 観察対象は WrapPanel の viewport 幅依存 wrap と lightbox overlay。M2 不可能性 <b>強</b>（両方 M2 で表現原理的に不可能）。「拡張」が画面に直撃する最強候補。離散・再現性 高（resize 操作の正確さに依存する点のみ注意）。</li>
+      <li><b>案 W (Explorer)</b> — 観察対象は List item template 内の Grid 3 列揃え（Name / Size / Modified）。M2 不可能性 <b>強</b>（M2 は揃えられない）。離散・再現性 高。</li>
+    </ul>
+
+    <p style="margin: 12px 0 4px;"><b>軸 4 — ROADMAP M3 AC の縮約余地</b></p>
+    <ul style="margin: 0 0 12px 20px; padding: 0;">
+      <li><b>案 X (Mail)</b> — 全 4 項目維持。縮約余地なし。</li>
+      <li><b>案 Y (Music)</b> — List は queue 用に必要だが小規模、Grid は star sizing で必要、ScrollView 必要。縮約余地小。</li>
+      <li><b>案 Z (Gallery)</b> — <b>List 不要</b>（thumbnails は WrapPanel + 繰り返し生成、queue 的選択管理なし）。Grid は ZStack 兼用で任意。WrapPanel が新規追加 AC 候補に。</li>
+      <li><b>案 W (Explorer)</b> — 全 4 項目維持 + Splitter widget 追加候補。縮約余地なし。</li>
+    </ul>
+
+    <p style="margin: 12px 0 4px;"><b>軸 5 — M4–M5 surface への漏出</b></p>
+    <ul style="margin: 0 0 12px 20px; padding: 0;">
+      <li><b>案 X (Mail)</b> — 漏出 <b>1</b>: Splitter widget の drag → input model（不可避 if resizable、固定比 Grid に退行すれば回避可能だが mail-like 感が薄まる）</li>
+      <li><b>案 Y (Music)</b> — 漏出 <b>1〜3</b>: Splitter（X と同様）、Card / GroupBox の視覚枠 → styling / theming（回避可能 — 視覚枠なし placeholder でも proof は成立）、bool (<code>is_playing</code>) → TypedValue 圧力（回避可能 — i32 の 0/1 で擬装可、ただし擬装感あり）</li>
+      <li><b>案 Z (Gallery)</b> — 漏出 <b>0〜2</b>: Tabs の selected styling → theming（不可避 if Tabs 採用、dropdown / 単一 view に退行すれば回避可能）、lightbox scrim opacity → styling（回避可能 — 不透明矩形でも overlay 構造の proof は成立）。<b>Tabs を落とし scrim を不透明矩形にすれば漏出 0</b> が達成可能。</li>
+      <li><b>案 W (Explorer)</b> — 漏出 <b>1〜2</b>: Splitter（不可避 if resizable）、Breadcrumb の「Button-not-Button」styling → theming（現 desc は表示専用なら回避可能）、bool (<code>is_dir</code>) → TypedValue 圧力（icon glyph で表現すれば回避可能）</li>
+    </ul>
+    <p class="desc" style="margin-top: 8px;">
+      <b>観察:</b> Splitter widget は X / Y / W に共通して effectively 不可避な漏出。
+      Z だけが構造的に Splitter を持たない（gallery は single-pane + overlay）。
+      これは F4 軸では Z の固有の強みになる。
+    </p>
+
+  </div>
+
+  <h3 style="margin-top: 28px; font-size: 15px;">観察 — 候補ごとの傾向</h3>
+  <p class="desc">5 軸を並べたときの候補ごとの傾向は次のとおり。判断はオーナー。</p>
+  <ul style="font-size: 13px; max-width: 820px;">
+    <li><b>案 Z (Gallery)</b> — 軸 1・3・4・5 で強く、軸 2 で重い（WrapPanel の measure-arrange 仕様）。spec を書く覚悟があれば最良候補。Tabs を落とせば軸 5 の漏出も 0 まで落とせる。</li>
+    <li><b>案 W (Explorer)</b> — 軸 1・3 で良、軸 2・4・5 で中庸。バランス型だが Splitter 漏出と AC 縮約なしが弱点。</li>
+    <li><b>案 X (Mail)</b> — 軸 3 (ii) で「M2 でも擬装可能」のリスク、軸 1 (3-pane 同時成立) で減点。最も「mail らしい」が proof としての切れ味は鈍い。</li>
+    <li><b>案 Y (Music)</b> — 軸 3 で再生 progress の連続性が proof としての観察対象を弱める。漏出も多め。</li>
+  </ul>
+  <p class="desc">
+    ただしこれは軸を均等加重した場合の素読みで、framing 上の重み付け
+    （spec drafting コスト vs M4–M5 漏出回避、どちらを重く見るか）はオーナー判断。
   </p>
 </section>
 
