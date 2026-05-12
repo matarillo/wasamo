@@ -102,13 +102,28 @@
 <h1>M3 target app — wireframe 候補</h1>
 <p class="lede">
 M3 target app 候補を選定するための exploratory artifact。
-Grid / ScrollView / List では済まない layout 要求を出す desktop app の wireframe 4 案を示し、
+現 ROADMAP の M3 AC (Grid / ScrollView / List) は VISION 由来の仮説であり、
+本ファイルではその拘束力から意図的に外れ、
+target app の wireframe から必要 surface を逆算する。
+4 案の wireframe を示し、
 (i) 各案が必要とする surface とその代替可否を整理し、
 (ii) <a href="m3-start-framing.md">m3-start-framing.md</a> に照らした 5 つの判断軸で候補を比較する。
+判断軸には意図的に「現 AC への近さ / delta」を含めない —
+仮説への近さを評価に混ぜると、評価が仮説に引き寄せられて
+target app からの逆算が機能しないため
+（この方法論は軸 4 注記と最終観察でも再確認する）。
 入力可能な widget は M2 surface（Text, Button）+ 視覚 placeholder のみで成立する範囲に留めている。
 本ファイルは合意成果物ではなく、最終的な選定理由・out-of-scope・spec 同期ルールは
 候補確定後に起こす target app pre-doc（markdown）で明文化する。
-赤丸数字は <code>ui-layoutsystem.md</code> 表のうち各案が要求する surface 概念への参照番号。
+赤丸数字は、各案が要求する layout surface / binding surface の注目箇所を示す。
+</p>
+<p class="desc">
+  用語メモ：本ファイルでいう <b>layout primitive</b> は、DSL の原理的な最小演算ではなく、
+  M3 時点で Wasamo が標準提供し、public DSL draft に normative に記載する
+  <b>built-in layout component</b> を指す。将来的には、アプリまたはサードパーティライブラリが
+  custom component を定義し、子要素構造や measure / arrange の挙動を native binding 経由で実装し、
+  DSL から import して利用できる component extension model を想定しうる。
+  ただし、その extension model 自体は M3 の acceptance scope には含めない。
 </p>
 
 <!-- ======================================================================= -->
@@ -451,6 +466,9 @@ Grid / ScrollView / List では済まない layout 要求を出す desktop app �
   <p class="desc">
     WrapPanel の thumbnail 配列と、選択時に画面全体にかぶせる lightbox overlay。
     WrapPanel と AspectRatio と ZStack を中心要件にできる。
+    layout primitive 数自体は小さいが、<b>条件レンダリング</b>（lightbox の表示制御）と
+    <b>繰り返し生成</b>（thumbnail items）を M3 で public spec 化する含意を伴う点に注意
+    — 詳細は「判断軸」節の軸 2・軸 4・最終観察を参照。
   </p>
 
   <div class="wire-wrap">
@@ -551,6 +569,66 @@ Grid / ScrollView / List では済まない layout 要求を出す desktop app �
       <text x="40" y="43.5" class="num-text">3</text>
     </svg>
 
+  </div>
+
+  <!-- WrapPanel proof strip: viewport 幅依存 re-wrap と overflow scroll を補強 -->
+  <div style="margin-top: 12px;">
+    <p class="desc" style="margin: 0 0 6px;">
+      <b>WrapPanel proof strip</b> — 1 枚の static wire では <b>viewport 幅依存の re-wrap</b> が伝わりにくいので、
+      narrow viewport（3 列 wrap）と overflow（vertical scroll）の状態を補足する。Z の主役 surface は
+      これら 3 状態（wide / narrow / overflow）を通じて初めて proof として成立する。
+    </p>
+    <div class="wire-wrap" style="gap: 12px;">
+
+      <!-- narrow viewport: 3-col wrap -->
+      <svg viewBox="0 0 280 200" width="280" height="200" xmlns="http://www.w3.org/2000/svg">
+        <text x="10" y="14" class="lbl-muted">narrow (3-col wrap)</text>
+        <rect x="10" y="20" width="260" height="170" class="frame"/>
+        <rect x="10" y="20" width="260" height="22" class="chrome"/>
+        <text x="20" y="36" class="lbl-sm">All · Albums · Favorites</text>
+        <!-- 3 cols × 3 rows of squares (smaller) -->
+        <rect x="20"  y="50" width="68" height="40" class="thumb"/>
+        <rect x="106" y="50" width="68" height="40" class="thumb"/>
+        <rect x="192" y="50" width="68" height="40" class="thumb"/>
+        <rect x="20"  y="98" width="68" height="40" class="thumb"/>
+        <rect x="106" y="98" width="68" height="40" class="item-sel"/>
+        <rect x="192" y="98" width="68" height="40" class="thumb"/>
+        <rect x="20"  y="146" width="68" height="40" class="thumb"/>
+        <rect x="106" y="146" width="68" height="40" class="thumb"/>
+        <text x="20" y="184" class="annot">同じ data, 列数が viewport 幅で 5→3 に変化</text>
+      </svg>
+
+      <!-- overflow: vertical scroll indicator -->
+      <svg viewBox="0 0 280 200" width="280" height="200" xmlns="http://www.w3.org/2000/svg">
+        <text x="10" y="14" class="lbl-muted">overflow (vertical scroll)</text>
+        <rect x="10" y="20" width="260" height="170" class="frame"/>
+        <rect x="10" y="20" width="260" height="22" class="chrome"/>
+        <text x="20" y="36" class="lbl-sm">All · Albums · Favorites</text>
+        <!-- 4 visible rows + clipped row -->
+        <rect x="20"  y="50" width="44" height="28" class="thumb"/>
+        <rect x="74"  y="50" width="44" height="28" class="thumb"/>
+        <rect x="128" y="50" width="44" height="28" class="thumb"/>
+        <rect x="182" y="50" width="44" height="28" class="thumb"/>
+        <rect x="20"  y="86" width="44" height="28" class="thumb"/>
+        <rect x="74"  y="86" width="44" height="28" class="thumb"/>
+        <rect x="128" y="86" width="44" height="28" class="thumb"/>
+        <rect x="182" y="86" width="44" height="28" class="thumb"/>
+        <rect x="20"  y="122" width="44" height="28" class="thumb"/>
+        <rect x="74"  y="122" width="44" height="28" class="thumb"/>
+        <rect x="128" y="122" width="44" height="28" class="thumb"/>
+        <rect x="182" y="122" width="44" height="28" class="thumb"/>
+        <!-- partially clipped row at the bottom -->
+        <rect x="20"  y="158" width="44" height="22" class="thumb" opacity="0.55"/>
+        <rect x="74"  y="158" width="44" height="22" class="thumb" opacity="0.55"/>
+        <rect x="128" y="158" width="44" height="22" class="thumb" opacity="0.55"/>
+        <rect x="182" y="158" width="44" height="22" class="thumb" opacity="0.55"/>
+        <!-- scrollbar indicator -->
+        <rect x="240" y="46" width="4" height="44" fill="#888"/>
+        <line x1="244" y1="44" x2="244" y2="186" stroke="#ccc" stroke-width="1"/>
+        <text x="20" y="196" class="annot">clip + scroll: ScrollView が WrapPanel と組む観察点</text>
+      </svg>
+
+    </div>
   </div>
 
   <div class="surface-block">
@@ -1103,11 +1181,13 @@ Grid / ScrollView / List では済まない layout 要求を出す desktop app �
       これらが thesis "real layouts + public draft" に対して enough を満たす最小に近いか、
       feature breadth 方向に膨らんでいるか、または過小で thesis を検証しきれないかを質的に判定する。<br>
       <span style="font-size: 12px; color: #555;">
-      「最小」の reference baseline は本軸では固定しない。現 M3 AC (Grid / ScrollView / List) も
-      VISION 由来の仮説 (F2) であり、baseline として固定すると候補選定が現 AC への
-      回帰圧力に拘束されるため。判定はオーナーが M3 thesis に直接照らして行う。
-      また AC delta は本軸では扱わない。ワイヤーフレーム選定の結果として ROADMAP revision
-      proposal が必要なら、target app pre-doc で別途整理する（F2 に従う）。
+      「最小」の reference baseline は本軸では固定しない。現 M3 AC (Grid / ScrollView / List) は
+      VISION 由来の<b>仮説</b> (F2) であり、仮説への近さ（AC delta）を候補評価に混ぜると、
+      評価が仮説に引き寄せられて target app からの逆算が機能しないため、
+      AC delta は本軸の比較軸として用いない。
+      判定はオーナーが M3 thesis に直接照らして行う。
+      ワイヤーフレーム選定の結果として ROADMAP revision proposal が必要なら、
+      target app pre-doc で別途整理する（F2 に従う）。
       </span><br>
       <b>表記:</b> primitive: 列挙 / 追加 grammar 機能: 列挙 / phase 数: N — 質的判定: 適正 / 過大 / 過小
       <p style="font-size: 11px; color: #777; margin: 8px 0 0;">
@@ -1118,17 +1198,24 @@ Grid / ScrollView / List では済まない layout 要求を出す desktop app �
       </p>
     </div>
 
-    <div style="font-weight: 600;">軸 5<br>M4–M5 surface への漏出</div>
+    <div style="font-weight: 600;">軸 5<br>M4–M5 surface への漏出<br><span style="font-weight: 400; color: #888; font-size: 12px;">（漏出カテゴリ別）</span></div>
     <div>
       <b>framing 接続:</b> F4 external（M3 外 surface への踏み込み抑制 — feature breadth milestone に戻さない）,
       F5（TypedValue 無条件導入の defer）<br>
-      <b>何を測るか:</b> その候補を proof として成立させるために、framing が out-of-scope に置いた surface
-      （Theming / Mica, input / focus, TextField / IME, AccessKit, multi-window, LSP, hot reload, C ABI freeze, TypedValue 無条件導入）への踏み込みが発生するか。
-      grammar の open question（条件レンダリング構文 / nested template scope 等）は M4–M5 漏出ではなく M3 内 scope の問題なので本軸では扱わず、軸 4 で扱う。<br>
+      <b>何を測るか:</b> その候補を proof として成立させるために、framing が out-of-scope に置いた surface への踏み込みが発生するか。漏出を性質ごとに 4 カテゴリに分けて整理する：
+      <ul style="margin: 4px 0 6px 16px; padding: 0;">
+        <li><b>visual / styling 漏出</b> — selected / unselected の視覚区別、scrim opacity、Card / GroupBox の視覚枠など（M4–M5 theming surface）</li>
+        <li><b>interaction 漏出</b> — drag（Splitter）、hit-testing 上の click target semantics（Button-not-Button 等）、overlay の dismissal、next/prev navigation（M4 input model / focus）</li>
+        <li><b>value / type 漏出</b> — bool, enum, TypedValue 圧力（F5 で defer 対象とした値の型を proof のために前倒し必要になるか）</li>
+        <li><b>platform / tooling 漏出</b> — focus, AccessKit, multi-window, LSP, hot reload, C ABI freeze 等（M4–M5）</li>
+      </ul>
+      grammar の open question（条件レンダリング構文 / nested template scope / 繰り返し生成構文 等）は M4–M5 漏出ではなく M3 内 scope の問題なので本軸では扱わず、軸 4 で扱う。<br>
       <span style="font-size: 12px; color: #555;">
       本軸は M3 外への breadth 漏出、軸 4 は M3 内の breadth 膨張を見る。
+      interaction を独立カテゴリとして見ることで、Button-click だけで閉じる interaction と
+      hit-testing / drag / modal-ish overlay まで踏み込む interaction の差が比較に出る。
       </span><br>
-      <b>表記:</b> 漏出項目を列挙、各項目に <b>不可避 / 回避可能 / reservation で十分</b>
+      <b>表記:</b> 各カテゴリで漏出項目を列挙、各項目に <b>不可避 / 回避可能 / reservation で十分</b>
     </div>
 
   </div>
@@ -1195,11 +1282,35 @@ Grid / ScrollView / List では済まない layout 要求を出す desktop app �
         </td>
       </tr>
       <tr>
-        <td style="padding: 6px 12px; border: 1px solid #eee;">軸 5: M4–M5 漏出（項目数）</td>
-        <td style="text-align: center; border: 1px solid #eee;">1</td>
-        <td style="text-align: center; border: 1px solid #eee;">1〜3</td>
-        <td style="text-align: center; border: 1px solid #eee;">0〜2</td>
-        <td style="text-align: center; border: 1px solid #eee;">1〜2</td>
+        <td style="padding: 6px 12px; border: 1px solid #eee;">軸 5: M4–M5 漏出<br><span style="font-size: 11px; color: #888;">(visual / interaction / type / platform)</span></td>
+        <td style="text-align: left; border: 1px solid #eee; font-size: 11px; padding: 6px 8px;">
+          visual: —<br>
+          interaction: Splitter drag (resizable なら不可避)<br>
+          type: —<br>
+          platform: —<br>
+          <b>1 項目</b>
+        </td>
+        <td style="text-align: left; border: 1px solid #eee; font-size: 11px; padding: 6px 8px;">
+          visual: Card / GroupBox（回避可）<br>
+          interaction: Splitter drag<br>
+          type: bool (<code>is_playing</code>)<br>
+          platform: —<br>
+          <b>1〜3 項目</b>
+        </td>
+        <td style="text-align: left; border: 1px solid #eee; font-size: 11px; padding: 6px 8px;">
+          visual: Tabs selected styling, scrim opacity（共に回避可）<br>
+          interaction: lightbox close / prev / next は Button で回避可<br>
+          type: —<br>
+          platform: —<br>
+          <b>0〜2 項目</b>
+        </td>
+        <td style="text-align: left; border: 1px solid #eee; font-size: 11px; padding: 6px 8px;">
+          visual: Breadcrumb の Button-not-Button styling（表示専用なら回避可）<br>
+          interaction: Splitter drag<br>
+          type: bool (<code>is_dir</code>; icon で回避可)<br>
+          platform: —<br>
+          <b>1〜2 項目</b>
+        </td>
       </tr>
     </tbody>
   </table>
@@ -1275,32 +1386,79 @@ Grid / ScrollView / List では済まない layout 要求を出す desktop app �
       別途扱う（F2）。
     </p>
 
-    <p style="margin: 12px 0 4px;"><b>軸 5 — M4–M5 surface への漏出</b></p>
+    <p style="margin: 12px 0 4px;"><b>軸 5 — M4–M5 surface への漏出（カテゴリ別）</b></p>
     <ul style="margin: 0 0 12px 20px; padding: 0;">
-      <li><b>案 X (Mail)</b> — 漏出 <b>1</b>: Splitter widget の drag → input model（不可避 if resizable、固定比 Grid に退行すれば回避可能だが mail-like 感が薄まる）</li>
-      <li><b>案 Y (Music)</b> — 漏出 <b>1〜3</b>: Splitter（X と同様）、Card / GroupBox の視覚枠 → styling / theming（回避可能 — 視覚枠なし placeholder でも proof は成立）、bool (<code>is_playing</code>) → TypedValue 圧力（回避可能 — i32 の 0/1 で擬装可、ただし擬装感あり）</li>
-      <li><b>案 Z (Gallery)</b> — 漏出 <b>0〜2</b>: Tabs の selected styling → theming（不可避 if Tabs 採用、dropdown / 単一 view に退行すれば回避可能）、lightbox scrim opacity → styling（回避可能 — 不透明矩形でも overlay 構造の proof は成立）。<b>Tabs を落とし scrim を不透明矩形にすれば漏出 0</b> が達成可能。</li>
-      <li><b>案 W (Explorer)</b> — 漏出 <b>1〜2</b>: Splitter（不可避 if resizable）、Breadcrumb の「Button-not-Button」styling → theming（現 desc は表示専用なら回避可能）、bool (<code>is_dir</code>) → TypedValue 圧力（icon glyph で表現すれば回避可能）</li>
+      <li><b>案 X (Mail)</b>
+        <ul style="margin: 2px 0 6px 16px; padding: 0;">
+          <li><b>visual:</b> なし</li>
+          <li><b>interaction:</b> Splitter drag → input model（<b>不可避</b> if resizable。固定比 Grid に退行すれば回避可能だが mail-like 感が薄まる）</li>
+          <li><b>value/type:</b> なし</li>
+          <li><b>platform:</b> なし</li>
+        </ul>
+      </li>
+      <li><b>案 Y (Music)</b>
+        <ul style="margin: 2px 0 6px 16px; padding: 0;">
+          <li><b>visual:</b> Card / GroupBox の視覚枠 → styling / theming（<b>回避可能</b> — 視覚枠なし placeholder でも proof は成立）</li>
+          <li><b>interaction:</b> Splitter drag（X と同様）</li>
+          <li><b>value/type:</b> bool (<code>is_playing</code>) → TypedValue 圧力（<b>回避可能</b> — i32 の 0/1 で擬装可、ただし擬装感あり）</li>
+          <li><b>platform:</b> なし</li>
+        </ul>
+      </li>
+      <li><b>案 Z (Gallery)</b>
+        <ul style="margin: 2px 0 6px 16px; padding: 0;">
+          <li><b>visual:</b> Tabs の selected styling → theming（<b>回避可能</b> — dropdown / 単一 view に退行）、lightbox scrim opacity → styling（<b>回避可能</b> — 不透明矩形でも overlay 構造の proof は成立）</li>
+          <li><b>interaction:</b> lightbox の close / prev / next → 全て Button click で <b>回避可能</b>（hit-testing / drag / focus capture を要求しない）。drag を一切持たない構造が Z の固有の強み</li>
+          <li><b>value/type:</b> <code>selected_id</code> は i32 (-1 で非表示) で済むので TypedValue 圧力なし</li>
+          <li><b>platform:</b> なし</li>
+        </ul>
+        <span style="color: #555; font-size: 12px;">Tabs を落とし scrim を不透明矩形にすれば <b>全カテゴリで漏出 0</b> が達成可能。</span>
+      </li>
+      <li><b>案 W (Explorer)</b>
+        <ul style="margin: 2px 0 6px 16px; padding: 0;">
+          <li><b>visual:</b> Breadcrumb の「Button-not-Button」styling → theming（表示専用なら回避可能）</li>
+          <li><b>interaction:</b> Splitter drag（<b>不可避</b> if resizable）、Breadcrumb segment click → クリック可能化するなら Button per segment + hit-testing が必要</li>
+          <li><b>value/type:</b> bool (<code>is_dir</code>) → TypedValue 圧力（icon glyph で表現すれば回避可能）</li>
+          <li><b>platform:</b> なし</li>
+        </ul>
+      </li>
     </ul>
     <p class="desc" style="margin-top: 8px;">
-      <b>観察:</b> Splitter widget は X / Y / W に共通して effectively 不可避な漏出。
-      Z だけが構造的に Splitter を持たない（gallery は single-pane + overlay）。
-      これは F4 軸では Z の固有の強みになる。
+      <b>カテゴリ別観察:</b>
     </p>
+    <ul style="font-size: 13px; max-width: 820px; margin: 0 0 12px;">
+      <li><b>interaction 漏出</b> — Splitter drag は X / Y / W に共通して effectively 不可避。
+        Z のみが構造的に drag を持たず、modal-ish overlay の dismissal も Button-click で閉じられる。
+        Button-click だけで閉じる interaction と、hit-testing / drag / modal focus capture まで踏み込む interaction の差で見ると、Z だけが前者に閉じている。</li>
+      <li><b>visual 漏出</b> — Y の Card / GroupBox と Z の Tabs / scrim は<b>いずれも回避可能</b>な視覚要素。proof のために必須ではないので、ワイヤーフレーム上は付いていても M3 surface 圧力には換算しない。</li>
+      <li><b>value/type 漏出</b> — Y の bool が最も生々しく F5 (TypedValue defer) と干渉する。W の bool は icon 表現で回避しやすい。Z は i32 のみで済む。</li>
+      <li><b>platform 漏出</b> — どの候補も focus / AccessKit / multi-window / hot reload / C ABI を要求しない（4 案いずれも M3 framing 内で閉じる）。</li>
+    </ul>
 
   </div>
 
   <h3 style="margin-top: 28px; font-size: 15px;">観察 — 候補ごとの傾向</h3>
-  <p class="desc">5 軸を並べたときの候補ごとの傾向は次のとおり。判断はオーナー。</p>
+  <p class="desc">
+    5 軸を並べたときの候補ごとの傾向は次のとおり。判断はオーナー。
+    本観察も冒頭で述べた方法論（現 AC delta を比較軸に含めない）を維持し、
+    各候補は「M3 thesis に対して何を proof できるか」と「どの surface を前倒しで public spec 化するか」で論じる。
+  </p>
   <ul style="font-size: 13px; max-width: 820px;">
-    <li><b>案 Z (Gallery)</b> — 軸 1・3・5 で強く、軸 4 で適正（primitive 2 種、phase 2、grammar 機能 2）。軸 2 のみ重い（WrapPanel の measure-arrange 仕様 + 条件レンダリング構文 2 件の normative 化）。spec を書く覚悟があれば最良候補。Tabs を落とせば軸 5 の漏出も 0 まで落とせる。</li>
-    <li><b>案 W (Explorer)</b> — 軸 1・3 で良、軸 2・5 で中庸、軸 4 はやや過大寄り（nested template scope + Splitter による phase 追加圧力）。バランス型だが Splitter 漏出が弱点。</li>
+    <li><b>案 Z (Gallery)</b> — 軸 1・3 で強く、軸 5 で（Tabs を落とせば）全カテゴリ漏出 0 を達成可能。軸 4 は primitive 数の最小性（WrapPanel + ZStack 相当 = 2 種）の意味で「適正」だが、その内実は <b>layout primitive を最小に抑える代わりに grammar surface（条件レンダリング・繰り返し生成）を M3 で前倒し public spec 化する含意</b>を伴う。WrapPanel の measure-arrange 仕様も novel な normative 執筆（軸 2 重）を要求する。Z を採るかの本質的判断点は「layout だけでなく grammar surface も M3 で公開する覚悟」と「proof / 漏出回避の切れ味」を秤にかけるところにある。</li>
+    <li><b>案 W (Explorer)</b> — 軸 1・3 で良、軸 2・5 で中庸、軸 4 はやや過大寄り（nested template scope + Splitter による phase 追加圧力）。primitive の入れ子（List item template 内の Grid）が thesis の中心になり、現 ROADMAP M3 AC の延長線で読みやすい。Splitter の interaction 漏出が固有の弱点。</li>
     <li><b>案 X (Mail)</b> — 軸 3 (ii) で「M2 でも擬装可能」のリスク、軸 1 (3-pane 同時成立) で減点、軸 4 で「同時成立要件による phase 分割困難」もやや過大判定。最も「mail らしい」が proof としての切れ味は鈍い。</li>
-    <li><b>案 Y (Music)</b> — 軸 3 で再生 progress の連続性が proof としての観察対象を弱める。漏出も多め。軸 4 は適正寄りだが bool binding が TypedValue 圧力を呼ぶ点に注意。</li>
+    <li><b>案 Y (Music)</b> — 軸 3 で再生 progress の連続性が proof としての観察対象を弱める。漏出も多め（value/type に bool が出る）。軸 4 は適正寄りだが bool binding が F5（TypedValue 無条件導入 defer）と干渉する。</li>
+  </ul>
+  <p class="desc" style="margin-top: 12px;">
+    上を 1 行に縮約すると、4 案は <b>攻め / 堅実 / 中間</b> の 3 群に分かれる：
+  </p>
+  <ul style="font-size: 13px; max-width: 820px;">
+    <li><b>Z = 攻め候補</b> — visible proof と M4–M5 漏出回避で強いが、grammar / IR / spec drafting の重さを M3 に前倒しで持ち込む。M3 を「layout primitive + grammar surface」の両軸で thesis 化する立場。</li>
+    <li><b>W = 現 thesis に近い堅実候補</b> — primitive の入れ子で thesis に直撃し、現 AC (Grid / ScrollView / List) の延長で読みやすい。Splitter の interaction 漏出が固有の弱点。</li>
+    <li><b>X / Y = 中間</b> — X は proof 切れ味で、Y は連続性 proof と漏出多めで、それぞれ軽い減点が積み重なる。</li>
   </ul>
   <p class="desc">
     ただしこれは軸を均等加重した場合の素読みで、framing 上の重み付け
-    （spec drafting コスト vs M4–M5 漏出回避、どちらを重く見るか）はオーナー判断。
+    （proof 切れ味 vs spec drafting コスト vs M4–M5 漏出回避、どれを重く見るか）はオーナー判断。
   </p>
 </section>
 
