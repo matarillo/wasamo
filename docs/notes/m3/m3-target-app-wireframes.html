@@ -945,8 +945,10 @@ Grid / ScrollView / List では済まない layout 要求を出す desktop app �
     <li><b>案 W (Explorer)</b>: Splitter widget / 繰り返し生成（WrapPanel は icon view を採るなら追加候補）</li>
   </ul>
   <p class="desc" style="margin-top: 12px;">
-    なお、これらの「新規追加候補」を ROADMAP M3 AC との縮約・拡張の観点で総合判定する整理は、
-    後続「判断軸 — 候補選定の 5 軸」節の <b>軸 4（ROADMAP M3 AC の縮約余地）</b> を参照。
+    なお、これらの「新規追加候補」を含めた各案の primitive 総量 / 追加 grammar 機能数 / phase 数の
+    観点での総合判定は、後続「判断軸 — 候補選定の 5 軸」節の <b>軸 4（M3 scope 射程の妥当性）</b> を参照。
+    ROADMAP M3 AC との縮約・拡張の差分整理は本ファイルでは扱わず、ワイヤーフレーム選定後の
+    target app pre-doc で ROADMAP revision proposal の input として別途行う（F2）。
   </p>
 
   <h3 style="margin-top: 28px; font-size: 15px;">composed widget（命名された UI 部品）</h3>
@@ -1051,19 +1053,25 @@ Grid / ScrollView / List では済まない layout 要求を出す desktop app �
 
     <div style="font-weight: 600;">軸 1<br>Phase 単位の<br>(spec + impl + visible proof)<br>出荷可能性</div>
     <div>
-      <b>framing 接続:</b> F6（spec / impl / proof は同期、各 phase で更新）<br>
+      <b>framing 接続:</b> F6（spec / impl / proof は各 phase で同期）,
+      F7（per-slice で M2 拡張が見える proof）<br>
       <b>何を測るか:</b> 各 phase で「spec slice + impl slice + その時点で動かせる小さな proof」が自己完結で出るか。
       proof slice は単に「動く」だけでなく、その phase が積んだ surface ぶんだけ M2 から拡張されたことが見えること。
       後続 phase に依存して初めて proof が成立する候補は減点。<br>
+      <span style="font-size: 12px; color: #555;">
+      軸 3 が aggregate proof としての M2 不可能性を見るのに対し、本軸は per-slice の proof 自立性を見る。
+      </span><br>
       <b>表記:</b> 良 / 中 / 悪
     </div>
 
-    <div style="font-weight: 600;">軸 2<br>Public DSL draft の<br>執筆量と novel surface</div>
+    <div style="font-weight: 600;">軸 2<br>Public DSL draft の<br>執筆コスト</div>
     <div>
       <b>framing 接続:</b> F1 後半（thesis "published as a stable public draft"）, F6<br>
-      <b>何を測るか:</b> その候補を成立させるために public draft へ normative に書き下ろす必要がある内容のボリュームと、
-      既存フレームワーク先例の有無（先例があればコピーで足り、なければ新規仕様化が必要）。<br>
-      <b>表記:</b> 軽 / 中 / 重 + 主な normative 項目
+      <b>何を測るか:</b> その候補で normative に書き下ろす必要がある各項目について、
+      既存フレームワーク先例の有無で決まる drafting 単位コスト
+      （先例があればコピー寄り、先例まちまち / 不在なら新規仕様化）。
+      surface の総量（項目数）は軸 4 で扱い、本軸では項目あたりの執筆重さに集中する。<br>
+      <b>表記:</b> 軽 / 中 / 重 + 主な normative 項目（先例の有無を付記）
     </div>
 
     <div style="font-weight: 600;">軸 3<br>Visible proof による<br>M2 拡張の可観測性</div>
@@ -1076,23 +1084,50 @@ Grid / ScrollView / List では済まない layout 要求を出す desktop app �
         <li>(iii) 観察対象が離散イベントか時間依存の連続挙動か</li>
         <li>(iv) 同じ手順で同じ観察が得られるか</li>
       </ul>
+      <span style="font-size: 12px; color: #555;">
+      本軸は aggregate proof としての M2 不可能性 / 切れ味を見る。per-phase で proof が出るかは軸 1 で扱う。
+      </span><br>
       <b>表記:</b> 観察対象 / M2 不可能性（強・中・弱）/ 離散・連続 / 再現性（高・中・低）
     </div>
 
-    <div style="font-weight: 600;">軸 4<br>ROADMAP M3 AC の<br>縮約余地</div>
+    <div style="font-weight: 600;">軸 4<br>M3 scope 射程の<br>妥当性</div>
     <div>
-      <b>framing 接続:</b> F1（"enough" の射程）, F2（AC revision を target app に照らす）<br>
-      <b>何を測るか:</b> その候補を採用した場合、現在の ROADMAP M3 AC（Grid / ScrollView / List / DSL spec draft）から削れる項目があるか。
-      「追加候補」だけでなく「縮約候補」も並べることで AC revision 議論を両方向に開く。<br>
-      <b>表記:</b> 各 AC 項目について 維持 / 任意 / 不要
+      <b>framing 接続:</b> F1 前半（"expressive enough" の射程）,
+      F4 internal（M3 内 breadth 抑制 — feature breadth milestone に戻さない）<sup>※</sup><br>
+      <b>何を測るか:</b> その候補を成立させるために M3 が積むべき surface の総量。
+      <ul style="margin: 4px 0 6px 16px; padding: 0;">
+        <li>(a) 必要 layout primitive（列挙）</li>
+        <li>(b) 必要追加 grammar 機能（条件レンダリング、繰り返し生成、nested template scope 等の M2 を超える構文機能の列挙）</li>
+        <li>(c) 自然な M3 phase 数</li>
+      </ul>
+      これらが thesis "real layouts + public draft" に対して enough を満たす最小に近いか、
+      feature breadth 方向に膨らんでいるか、または過小で thesis を検証しきれないかを質的に判定する。<br>
+      <span style="font-size: 12px; color: #555;">
+      「最小」の reference baseline は本軸では固定しない。現 M3 AC (Grid / ScrollView / List) も
+      VISION 由来の仮説 (F2) であり、baseline として固定すると候補選定が現 AC への
+      回帰圧力に拘束されるため。判定はオーナーが M3 thesis に直接照らして行う。
+      また AC delta は本軸では扱わない。ワイヤーフレーム選定の結果として ROADMAP revision
+      proposal が必要なら、target app pre-doc で別途整理する（F2 に従う）。
+      </span><br>
+      <b>表記:</b> primitive: 列挙 / 追加 grammar 機能: 列挙 / phase 数: N — 質的判定: 適正 / 過大 / 過小
+      <p style="font-size: 11px; color: #777; margin: 8px 0 0;">
+      <sup>※</sup> F4 は <code>m3-start-framing.md</code> では M3 外 surface
+      （Theming / Mica, input, LSP, hot reload, C ABI freeze 等）への踏み込み抑制として書かれているが、
+      その motivation（M3 を feature breadth milestone に戻さない）は M3 内 surface の primitive 数膨張にも
+      同じ理由で適用できる。本軸が internal 側面、軸 5 が external 側面を担う。
+      </p>
     </div>
 
     <div style="font-weight: 600;">軸 5<br>M4–M5 surface への漏出</div>
     <div>
-      <b>framing 接続:</b> F4（M3 を feature breadth milestone に戻さない）, F5（TypedValue は AC ではない）<br>
+      <b>framing 接続:</b> F4 external（M3 外 surface への踏み込み抑制 — feature breadth milestone に戻さない）,
+      F5（TypedValue 無条件導入の defer）<br>
       <b>何を測るか:</b> その候補を proof として成立させるために、framing が out-of-scope に置いた surface
       （Theming / Mica, input / focus, TextField / IME, AccessKit, multi-window, LSP, hot reload, C ABI freeze, TypedValue 無条件導入）への踏み込みが発生するか。
-      grammar の open question（条件レンダリング構文 / nested template scope 等）は M4–M5 漏出ではなく M3 内部の scope 議論なのでここに含めず、軸 2 で扱う。<br>
+      grammar の open question（条件レンダリング構文 / nested template scope 等）は M4–M5 漏出ではなく M3 内 scope の問題なので本軸では扱わず、軸 4 で扱う。<br>
+      <span style="font-size: 12px; color: #555;">
+      本軸は M3 外への breadth 漏出、軸 4 は M3 内の breadth 膨張を見る。
+      </span><br>
       <b>表記:</b> 漏出項目を列挙、各項目に <b>不可避 / 回避可能 / reservation で十分</b>
     </div>
 
@@ -1133,11 +1168,31 @@ Grid / ScrollView / List では済まない layout 要求を出す desktop app �
         <td style="text-align: center; border: 1px solid #eee; font-size: 12px;">強 / 離散 / 高</td>
       </tr>
       <tr>
-        <td style="padding: 6px 12px; border: 1px solid #eee;">軸 4: AC 縮約余地</td>
-        <td style="text-align: center; border: 1px solid #eee; font-size: 12px;">なし</td>
-        <td style="text-align: center; border: 1px solid #eee; font-size: 12px;">小</td>
-        <td style="text-align: center; border: 1px solid #eee; font-size: 12px;">中（List 不要）</td>
-        <td style="text-align: center; border: 1px solid #eee; font-size: 12px;">なし</td>
+        <td style="padding: 6px 12px; border: 1px solid #eee;">軸 4: M3 scope 射程<br><span style="font-size: 11px; color: #888;">(primitive / 追加 grammar / phase 数 / 判定)</span></td>
+        <td style="text-align: left; border: 1px solid #eee; font-size: 11px; padding: 6px 8px;">
+          Grid + List + SplitView<br>
+          多フィールド item template scope<br>
+          phase: 実質一括（3-pane 同時成立要件）<br>
+          <b>判定: やや過大</b>
+        </td>
+        <td style="text-align: left; border: 1px solid #eee; font-size: 11px; padding: 6px 8px;">
+          AspectRatio + ZStack + List<br>
+          bool binding<br>
+          phase: 2<br>
+          <b>判定: 適正〜やや過大</b>
+        </td>
+        <td style="text-align: left; border: 1px solid #eee; font-size: 11px; padding: 6px 8px;">
+          WrapPanel + ZStack<br>
+          条件レンダリング, 繰り返し生成<br>
+          phase: 2<br>
+          <b>判定: 適正</b>
+        </td>
+        <td style="text-align: left; border: 1px solid #eee; font-size: 11px; padding: 6px 8px;">
+          Grid + List (+ Splitter if resizable)<br>
+          nested template scope, 繰り返し生成<br>
+          phase: 2〜3<br>
+          <b>判定: 適正〜やや過大</b>
+        </td>
       </tr>
       <tr>
         <td style="padding: 6px 12px; border: 1px solid #eee;">軸 5: M4–M5 漏出（項目数）</td>
@@ -1177,13 +1232,48 @@ Grid / ScrollView / List では済まない layout 要求を出す desktop app �
       <li><b>案 W (Explorer)</b> — 観察対象は List item template 内の Grid 3 列揃え（Name / Size / Modified）。M2 不可能性 <b>強</b>（M2 は揃えられない）。離散・再現性 高。</li>
     </ul>
 
-    <p style="margin: 12px 0 4px;"><b>軸 4 — ROADMAP M3 AC の縮約余地</b></p>
+    <p style="margin: 12px 0 4px;"><b>軸 4 — M3 scope 射程の妥当性</b></p>
+    <p style="margin: 0 0 8px; font-size: 12px; color: #555;">
+      ScrollView は全候補で必要（list / grid の overflow を要する）ため、下記の primitive 列挙では
+      共通要素として省略する。
+    </p>
     <ul style="margin: 0 0 12px 20px; padding: 0;">
-      <li><b>案 X (Mail)</b> — 全 4 項目維持。縮約余地なし。</li>
-      <li><b>案 Y (Music)</b> — List は queue 用に必要だが小規模、Grid は star sizing で必要、ScrollView 必要。縮約余地小。</li>
-      <li><b>案 Z (Gallery)</b> — <b>List 不要</b>（thumbnails は WrapPanel + 繰り返し生成、queue 的選択管理なし）。Grid は ZStack 兼用で任意。WrapPanel が新規追加 AC 候補に。</li>
-      <li><b>案 W (Explorer)</b> — 全 4 項目維持 + Splitter widget 追加候補。縮約余地なし。</li>
+      <li><b>案 X (Mail)</b> —
+        primitive: Grid + List + SplitView（または fixed Grid 退行） /
+        追加 grammar: 多フィールド item template scope /
+        phase: 実質一括（3-pane が同時に揃わないと proof として読めない）。
+        <b>判定: やや過大</b>。primitive 数は穏当だが、同時成立要件で phase 分割の自由度が低く、
+        per-slice の proof が出にくい構造（軸 1 と連動）。
+      </li>
+      <li><b>案 Y (Music)</b> —
+        primitive: AspectRatio + ZStack + List /
+        追加 grammar: bool binding（<code>is_playing</code> 等） /
+        phase: 2（now-playing → queue）。
+        <b>判定: 適正〜やや過大</b>。primitive 数は中程度で phase 分割は自然だが、
+        bool binding が TypedValue 圧力を生む（F5 関連、軸 5 と連動）。
+      </li>
+      <li><b>案 Z (Gallery)</b> —
+        primitive: WrapPanel + ZStack /
+        追加 grammar: 条件レンダリング, 繰り返し生成 /
+        phase: 2（thumbnails → lightbox）。
+        <b>判定: 適正</b>。primitive 数は最小寄りで phase 分割が自然。
+        ただし grammar 機能 2 つ（条件レンダリング・繰り返し生成）は spec drafting コストが重く、
+        その重さは軸 2 が拾う。
+      </li>
+      <li><b>案 W (Explorer)</b> —
+        primitive: Grid + List（+ resizable なら Splitter） /
+        追加 grammar: nested template scope, 繰り返し生成 /
+        phase: 2〜3（sidebar → main → detail）。
+        <b>判定: 適正〜やや過大</b>。primitive 数は中程度だが nested template scope が
+        grammar 追加 2 機能のうち重い側で、Splitter 採用時は phase 追加圧力もある。
+      </li>
     </ul>
+    <p style="margin: 8px 0 12px; font-size: 12px; color: #555;">
+      なお、各候補の「primitive 数 / 追加 grammar 機能数 / phase 数」を現 ROADMAP M3 AC
+      (Grid / ScrollView / List) と比較した差分の整理は、本軸では行わない。
+      ワイヤーフレーム選定後の target app pre-doc で ROADMAP revision proposal の input として
+      別途扱う（F2）。
+    </p>
 
     <p style="margin: 12px 0 4px;"><b>軸 5 — M4–M5 surface への漏出</b></p>
     <ul style="margin: 0 0 12px 20px; padding: 0;">
@@ -1203,10 +1293,10 @@ Grid / ScrollView / List では済まない layout 要求を出す desktop app �
   <h3 style="margin-top: 28px; font-size: 15px;">観察 — 候補ごとの傾向</h3>
   <p class="desc">5 軸を並べたときの候補ごとの傾向は次のとおり。判断はオーナー。</p>
   <ul style="font-size: 13px; max-width: 820px;">
-    <li><b>案 Z (Gallery)</b> — 軸 1・3・4・5 で強く、軸 2 で重い（WrapPanel の measure-arrange 仕様）。spec を書く覚悟があれば最良候補。Tabs を落とせば軸 5 の漏出も 0 まで落とせる。</li>
-    <li><b>案 W (Explorer)</b> — 軸 1・3 で良、軸 2・4・5 で中庸。バランス型だが Splitter 漏出と AC 縮約なしが弱点。</li>
-    <li><b>案 X (Mail)</b> — 軸 3 (ii) で「M2 でも擬装可能」のリスク、軸 1 (3-pane 同時成立) で減点。最も「mail らしい」が proof としての切れ味は鈍い。</li>
-    <li><b>案 Y (Music)</b> — 軸 3 で再生 progress の連続性が proof としての観察対象を弱める。漏出も多め。</li>
+    <li><b>案 Z (Gallery)</b> — 軸 1・3・5 で強く、軸 4 で適正（primitive 2 種、phase 2、grammar 機能 2）。軸 2 のみ重い（WrapPanel の measure-arrange 仕様 + 条件レンダリング構文 2 件の normative 化）。spec を書く覚悟があれば最良候補。Tabs を落とせば軸 5 の漏出も 0 まで落とせる。</li>
+    <li><b>案 W (Explorer)</b> — 軸 1・3 で良、軸 2・5 で中庸、軸 4 はやや過大寄り（nested template scope + Splitter による phase 追加圧力）。バランス型だが Splitter 漏出が弱点。</li>
+    <li><b>案 X (Mail)</b> — 軸 3 (ii) で「M2 でも擬装可能」のリスク、軸 1 (3-pane 同時成立) で減点、軸 4 で「同時成立要件による phase 分割困難」もやや過大判定。最も「mail らしい」が proof としての切れ味は鈍い。</li>
+    <li><b>案 Y (Music)</b> — 軸 3 で再生 progress の連続性が proof としての観察対象を弱める。漏出も多め。軸 4 は適正寄りだが bool binding が TypedValue 圧力を呼ぶ点に注意。</li>
   </ul>
   <p class="desc">
     ただしこれは軸を均等加重した場合の素読みで、framing 上の重み付け
