@@ -2,7 +2,7 @@
 title: DSL 文法 — 検討メモと未解決事項
 status: live
 created: 2026-05-07
-last-updated: 2026-05-08
+last-updated: 2026-05-12
 related-adrs:
   - docs/decisions/m2-phase-2-wasamoc-output-format.md
   - docs/decisions/m2-phase-6-ir-loader.md
@@ -15,6 +15,11 @@ related-specs:
 このノートは Wasamo DSL の文法に関するオーナーの検討記録の live note。
 確定済みの normative 仕様は `docs/dsl_spec.md` を参照。本ノートは
 **未解決の文法上の論点** と、**将来 ADR に昇格しうる検討メモ** を残す。
+
+特に M3 以降では、target app pre-doc / phase pre-doc / DD で直接扱う論点は
+そちらを本線とする。本ノートは、M3 の採用案からこぼれた選択肢、M3 では
+解かないことにした残余、または M3 完了時に再整理すべき open question の
+受け皿として使う。
 
 ---
 
@@ -65,6 +70,19 @@ M3 の Grid / List 設計で per-item context が必要になった時、また�
 完了後の retrospective で「state 経由のみ」では表現力が足りない事例が
 出た時。
 
+**M3 target app framing からの追記（2026-05-12）:**
+
+- `docs/notes/m3/m3-target-app-wireframes.html` の候補整理により、List item
+  template、Grid inside List item template、breadcrumb segments、gallery
+  thumbnails のような **template-local / repeated child scope** が M3 の
+  target app 候補に直接出てきた。
+- これらは widget instance id を直ちに要求するとは限らないが、少なくとも
+  `item`, `index`, selected state, nested template-local names などの名前解決を
+  Q1 と同じ文脈で再確認する必要がある。
+- Q3 はこの再訪からこぼれうる文法残余の置き場である。M3 target app pre-doc や
+  phase pre-doc で直接扱う論点はそちらを本線とし、本ノートには M3 で未採用・
+  defer・制限された選択肢だけを残す。
+
 ---
 
 ### Q2. Window 由来の component-level prop の runtime 配線
@@ -113,3 +131,54 @@ M3 の Grid / List 設計で per-item context が必要になった時、また�
 - それより早く必要が生じた場合（counter 以外の demo で title が要件になる等）
   は、独立 DD を切って `wasamo_load_ui` の signature 拡張または sibling ABI
   追加を検討する。
+
+---
+
+### Q3. M3 target app からこぼれうる文法残余
+
+**位置づけ:**
+
+M3 target app pre-doc / phase pre-doc / DD で直接扱う文法論点は、そちらを本線とする。
+本節は、M3 で採用しない、制限する、または M3 完了時に再整理すべき grammar 残余だけを
+短く残す。
+
+**候補残余:**
+
+- **繰り返し生成:** M3 が `List` 吸収 / Repeater 型 / `for` 構文のどれかを採る場合、
+  採らなかった形と rebuild / diff / invalidation の残余。
+- **条件表示:** M3 が `visible` prop / conditional child / 回避のどれかを採る場合、
+  採らなかった条件レンダリング方式と非表示 child semantics の残余。
+- **template-local scope:** M3 が一段 item context に制限する場合、nested template scope、
+  named context、List-owned selection model の残余。
+- **TypedValue / evaluator 接続:** M3 proof が bool / comparison / item context を
+  制限した場合の将来接続。
+
+**この議論を再訪する契機:**
+
+- M3 target app pre-doc / phase pre-doc が grammar 採用案を確定した時。
+- M3 で制限・未採用にした形が M4+ で必要になった時。
+- M3 完了時に、採用案と残余選択肢をこのノートから整理し直す時。
+
+---
+
+### Q4. Component extension model と DSL import surface
+
+**背景（M3 target app framing 時点）:**
+
+- M3 wireframe 検討では `layout primitive` という語を使っているが、これは
+  Wasamo が M3 public draft で標準提供する built-in layout component を指す。
+  Wasamo の component set が将来これらだけに閉じるという意味ではない。
+- component extension model の本体は grammar だけでなく、component registry、
+  measure / arrange protocol、native binding、package / import resolution を横断する。
+  そのため詳細は `docs/notes/component-extension-model.md` に分離する。
+
+**このノートでの扱い:**
+
+- `dsl-grammar.md` では import / name resolution / reserved syntax に関係する
+  ポインタだけを保持する。
+- component extension model 自体は M3 acceptance scope に含めない。
+
+**この議論を再訪する契機:**
+
+- M3 ではなく、custom component / package / native binding を扱う milestone に入る時。
+- M3 grammar が import 構文や component name resolution を予約する必要を持った時。
