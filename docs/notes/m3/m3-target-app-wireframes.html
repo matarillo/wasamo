@@ -1460,6 +1460,107 @@ target app からの逆算が機能しないため
     ただしこれは軸を均等加重した場合の素読みで、framing 上の重み付け
     （proof 切れ味 vs spec drafting コスト vs M4–M5 漏出回避、どれを重く見るか）はオーナー判断。
   </p>
+
+  <h3 style="margin-top: 28px; font-size: 15px;">オーナー加重を反映した素読み</h3>
+  <p class="desc">
+    上の「観察 — 候補ごとの傾向」は軸を均等加重した素読みである。
+    オーナーから与えられた軸別加重を反映すると、候補の序列が動く。
+    本サブセクションでは加重後の再計算結果のみを記録する
+    （最終採択と採用理由は本ファイルではなく後続の target app pre-doc で明文化する。
+    本ファイル末尾「位置づけと将来再構成トリガー」節も参照）。
+  </p>
+
+  <p class="desc" style="margin-top: 12px;">
+    <b>オーナー加重:</b>
+  </p>
+  <ul style="font-size: 13px; max-width: 820px;">
+    <li>軸 1（Phase 出荷可能性）— <b>通常</b></li>
+    <li>軸 2（Public draft 執筆量）— <b>低</b>（執筆コストがある程度重くても許容可能）</li>
+    <li>軸 3（M2 拡張可観測性）— <b>通常</b></li>
+    <li>軸 4（M3 scope 射程）— <b>中低</b>（あきらかに過大でなければ許容可能）</li>
+    <li>軸 5（M4–M5 漏出）— <b>中低</b>（0 より大きくても許容可能）</li>
+  </ul>
+
+  <p class="desc" style="margin-top: 12px;">
+    <b>加重の効果（要約）:</b>
+  </p>
+  <ul style="font-size: 13px; max-width: 820px;">
+    <li>軸 1（通常）+ 軸 3（通常）が事実上の主軸になる。proof（出荷可能性 + 可観測性）が選定の支配的尺度になる。</li>
+    <li>軸 2（低）— Z の「重」が実質ほぼ無効化される。執筆量の重さは候補序列を動かさない。</li>
+    <li>軸 4（中低）— 「やや過大」級は許容、「明らかに過大」のみ減点。</li>
+    <li>軸 5（中低）— 漏出 0 を要求しない。1〜2 項目は許容圏内。</li>
+  </ul>
+
+  <h4 style="margin-top: 20px; font-size: 14px;">加重後の比較</h4>
+  <table style="border-collapse: collapse; font-size: 13px; width: 100%; max-width: 880px;">
+    <thead>
+      <tr style="background: #f0f0f0;">
+        <th style="text-align: left; padding: 8px 12px; border: 1px solid #ddd; width: 200px;">判断軸（加重）</th>
+        <th style="padding: 8px 12px; border: 1px solid #ddd;">X Mail</th>
+        <th style="padding: 8px 12px; border: 1px solid #ddd;">Y Music</th>
+        <th style="padding: 8px 12px; border: 1px solid #ddd;">Z Gallery</th>
+        <th style="padding: 8px 12px; border: 1px solid #ddd;">W Explorer</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td style="padding: 6px 12px; border: 1px solid #eee;">軸 1 出荷可能性（通常）</td>
+        <td style="text-align: center; border: 1px solid #eee;">悪 ✗</td>
+        <td style="text-align: center; border: 1px solid #eee;">中 △</td>
+        <td style="text-align: center; border: 1px solid #eee;"><b>良 ◎</b></td>
+        <td style="text-align: center; border: 1px solid #eee;">中〜良 ○</td>
+      </tr>
+      <tr>
+        <td style="padding: 6px 12px; border: 1px solid #eee;">軸 2 執筆量（低）</td>
+        <td style="text-align: center; border: 1px solid #eee;">中</td>
+        <td style="text-align: center; border: 1px solid #eee;">中</td>
+        <td style="text-align: center; border: 1px solid #eee;">重（実質無効化）</td>
+        <td style="text-align: center; border: 1px solid #eee;">中</td>
+      </tr>
+      <tr>
+        <td style="padding: 6px 12px; border: 1px solid #eee;">軸 3 M2 拡張可観測性（通常）</td>
+        <td style="text-align: center; border: 1px solid #eee; font-size: 12px;">中 / 離散 △</td>
+        <td style="text-align: center; border: 1px solid #eee; font-size: 12px;">強 / <b>連続</b> / 低 ▼</td>
+        <td style="text-align: center; border: 1px solid #eee; font-size: 12px;"><b>強 / 離散 / 高 ◎</b></td>
+        <td style="text-align: center; border: 1px solid #eee; font-size: 12px;"><b>強 / 離散 / 高 ◎</b></td>
+      </tr>
+      <tr>
+        <td style="padding: 6px 12px; border: 1px solid #eee;">軸 4 M3 射程（中低）</td>
+        <td style="text-align: center; border: 1px solid #eee; font-size: 12px;">やや過大（許容）</td>
+        <td style="text-align: center; border: 1px solid #eee; font-size: 12px;">適正〜やや過大（許容）</td>
+        <td style="text-align: center; border: 1px solid #eee; font-size: 12px;"><b>適正</b></td>
+        <td style="text-align: center; border: 1px solid #eee; font-size: 12px;">適正〜やや過大（許容）</td>
+      </tr>
+      <tr>
+        <td style="padding: 6px 12px; border: 1px solid #eee;">軸 5 漏出（中低）</td>
+        <td style="text-align: center; border: 1px solid #eee; font-size: 12px;">1 項目（許容）</td>
+        <td style="text-align: center; border: 1px solid #eee; font-size: 12px;">1〜3 項目（許容）</td>
+        <td style="text-align: center; border: 1px solid #eee; font-size: 12px;">0〜2 項目（許容）</td>
+        <td style="text-align: center; border: 1px solid #eee; font-size: 12px;">1〜2 項目（許容）</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h4 style="margin-top: 20px; font-size: 14px;">加重後の素読み</h4>
+  <ul style="font-size: 13px; max-width: 820px;">
+    <li><b>Z (Gallery) が単独首位</b>。重み付けが軽い軸（軸 2 / 軸 4 / 軸 5）が Z の固有弱点と一致しており減点されない一方、重み付けが通常の軸（軸 1 / 軸 3）で Z は最上位（良・強/離散/高）。</li>
+    <li><b>W (Explorer) は二番手</b>。軸 3 は Z と同点だが、軸 1 で Z にわずかに劣る（中〜良 vs 良）。軸 5 の Splitter interaction 漏出は加重後の減点小。</li>
+    <li><b>X / Y は脱落</b>。X は軸 1（悪）で重み付けの効いた軸に致命的減点。Y は軸 3 の「連続/低 再現性」で重み付けの効いた軸に致命的減点。</li>
+  </ul>
+
+  <p class="desc" style="margin-top: 12px;">
+    <b>残る判断点（加重では解消されない構造的論点）:</b>
+    均等加重時に Z の本質的判断点として残っていた
+    「<b>layout primitive だけでなく grammar surface（条件レンダリング・繰り返し生成）も M3 で前倒し public spec 化する覚悟</b>」
+    は、軸 2・軸 4 を低/中低加重にしても消えない。これは加重の問題ではなく、Z を選んだ場合に
+    M3 thesis の射程そのものが「primitive + grammar surface」の二軸構えになるという構造的含意。
+    加重判断とは独立に、オーナーが framing 上これを許容するかを別途問う必要がある。
+  </p>
+
+  <p class="desc" style="margin-top: 12px;">
+    最終採択と採用理由は本ファイルではなく target app pre-doc
+    （<code>docs/notes/m3/m3-target-app-predoc.md</code>）で明文化する。
+  </p>
 </section>
 
 <!-- ======================================================================= -->
