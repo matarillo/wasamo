@@ -38,16 +38,21 @@ M3 で作る画面・必要 surface・out-of-scope・spec 同期ルールを固�
 
 **Drafting-for-discussion 範囲**（未合意、これから詰める）:
 
-- 「必要 surface」節 — WrapPanel / ZStack の選定、grammar surface（条件レンダリング・
-  繰り返し生成）の構文方針、binding / value 型方針（bool 不採用 / i32+String のみで
-  閉じる、等）。
+- 「必要 surface」節 — Layout primitive 集合 (WrapPanel / Grid / ZStack / ScrollView /
+  HStack-VStack 並存)、grammar surface（条件レンダリング・繰り返し生成）の構文方針、
+  binding / value 型方針（bool 不採用 / i32+String のみで閉じる、等）。
+  **状態**: Layout primitive 集合は 2026-05-14 セッションで収束（未合意）、AspectRatio /
+  Image widget surface / Tabs 選択状態 は保留（後述「議論再開点」節）。
 - 「各 surface が検証する thesis」節（上に依存）。
 - 「Out-of-scope」節 — visual / interaction / value-type / platform 各カテゴリの具体項目。
 - 「spec / implementation / E2E proof の同期ルール」節。
-- 「ROADMAP との同期」節 — 現 AC との差分表、revision 単位、特に ScrollView を完全 defer
-  とするか部分代替とするか、List を ZStack + 繰り返し生成へ分解する案の妥当性。
+- 「ROADMAP との同期」節 — 現 AC との差分表、revision 単位。
+  **状態**: 2026-05-14 セッションで差分表が更新済（収束、未合意）。ScrollView は完全 defer
+  ではなく minimal surface (clip + offset binding) 採用、List は WrapPanel + ZStack +
+  繰り返し生成へ分解、Grid は 1 cell 1 child 制約で残す方向。
 - 「HTML との参照関係」節（procedural だが未確認）。
 - 「Next step」節（procedural、approval 後の運用手順）。
+- 「議論再開点」節（2026-05-14 追加、保留項目の追跡）。
 
 drafting-for-discussion 範囲は wireframe 分析と合意済みの framing decision からの
 逆算として assistant が起草した内容で、owner レビューを経て合意・修正・置換される
@@ -120,34 +125,66 @@ W (Explorer) は backup ではなく、本採択により候補集合から外�
 Z の wireframe から逆算した M3 surface は次のとおり。各項目は
 [m3-start-framing.md](m3-start-framing.md#L60) の「M3 pre-doc 成果物 2 / 3 項」に対応する。
 
+各 surface の状態マーカーは:
+
+- **収束**: 2026-05-14 セッションで内容が定まったが、本 pre-doc としては未合意（owner 確認待ち）
+- **既存合意**: 本 pre-doc 採択時点で合意済み
+- **保留**: 別議論として開封予定、本セッション内では結論を出さない
+
 ### Layout primitive
 
-| Primitive | 役割 | 検証する thesis |
-|---|---|---|
-| **WrapPanel** | 子要素を主軸方向に並べ、viewport 主軸サイズ超過で副軸方向の次行へ折り返す | 主軸 / 副軸の measure-arrange 二段階解決を持つ layout primitive を DSL で書けること |
-| **ZStack** | 子要素を重ね合わせる（lightbox overlay の構造） | 兄弟要素の Z 順 + 部分透過レイヤを DSL で書けること |
+| Primitive | 状態 | 役割 | 検証する thesis |
+|---|---|---|---|
+| **WrapPanel** | 収束 | 子要素を主軸方向に並べ、viewport 主軸サイズ超過で副軸方向の次行へ折り返す | 主軸 / 副軸の measure-arrange 二段階解決を持つ layout primitive を DSL で書けること |
+| **Grid** | 収束 | 2D 座標系で子要素を配置、**1 cell 1 child** 制約、row/column sizing (auto / fixed / star) + spanning | 2D layout の measure-arrange (star sizing の他軸依存解決を含む) を DSL で書けること |
+| **ZStack** | 収束 | 子要素を重ね合わせる（lightbox overlay の構造）。z-order は document order | 兄弟要素の Z 順 + 部分透過レイヤを DSL で書けること |
+| **ScrollView** | 収束 (minimal) | 内側 unbounded measure + viewport clip + offset binding。scrollbar widget / wheel handler / drag は M4 へ defer | viewport 概念と content offset を持つ layout primitive を DSL で書けること |
+| HStack / VStack | 既存 (M2) | 線形配置、Fill/Shrink sizing policy | M2 で確立済み、本 milestone では break しない |
+| **AspectRatio** | 保留 | thumbnail 正方形固定、lightbox 写真の比率固定 | 独立 primitive とするか Image/Box の attribute とするかは別議論（「議論再開点」節） |
 
-WrapPanel の measure-arrange 仕様は novel な normative 執筆を要求する。これは
+WrapPanel と Grid の measure-arrange 仕様は novel な normative 執筆を要求する。これは
 [m3-target-app-wireframes.html](m3-target-app-wireframes.html) の軸 2 評価で「重」と評価された
-内訳の主要部分であり、本 pre-doc 採択時点で許容済み（採用理由 §2 参照）。
+内訳の主要部分であり、本 pre-doc 採択時点で許容済み（採用理由 §2 参照）。M3 を「DSL surface
+milestone + first public spec draft」と framing する以上、spec 執筆量自体はコストではなく
+成果物。
+
+**Grid と ZStack の責務境界**: Grid は 2D 座標系での配置、ZStack は overlay (Z 順) の責務。
+XAML / WPF が Grid に same-cell overlap を許す慣習は採用しない（XAML に ZStack が無い歴史的
+事情によるもので、orthogonal primitive 思想を採る本 milestone では分離する）。SwiftUI の
+modern Grid (1 cell 1 child) と Compose の Box (= ZStack) の分離方針と整合する。
+
+**ZStack を Grid same-cell overlap で代替する案は不採用**: HTML 整理
+[L928, L1011](m3-target-app-wireframes.html#L928) の「Grid 同一セル overlap で ZStack を代替」
+は star sizing と same-cell overlap という Grid の独立 2 機能を conflate した記述で、論理的
+には独立。overlay 表現は ZStack 専管とし、Grid spec は z-order を扱わない。
 
 ### Grammar surface
 
-| Surface | 役割 | 検証する thesis |
-|---|---|---|
-| **条件レンダリング構文** | lightbox open / close のような binding 駆動の present/absent 切り替え | binding が boolean-ish な意味で widget の存否を制御する文法を DSL が持てること |
-| **繰り返し生成構文** | gallery item の列挙（コレクション driven） | binding が列を生み、その各要素から widget tree が生成される文法を DSL が持てること |
+| Surface | 状態 | 役割 | 検証する thesis |
+|---|---|---|---|
+| **条件レンダリング構文** | 既存合意 | lightbox open / close のような binding 駆動の present/absent 切り替え | binding が boolean-ish な意味で widget の存否を制御する文法を DSL が持てること |
+| **繰り返し生成構文** | 既存合意 | gallery item の列挙（コレクション driven） | binding が列を生み、その各要素から widget tree が生成される文法を DSL が持てること |
 
 両 grammar surface は M3 で **public spec として normative に書く**。M4 以降への
 syntax reservation で済ませない。
 
+### Widget / content surface (保留、別議論として開封予定)
+
+| Surface | 状態 | 連動 |
+|---|---|---|
+| **Image widget** | 保留 | アイコン Button / lightbox 閉じるボタン表現 / Music album art 等 M3 一般論。Z 限定の判断ではないため別議論 |
+| **Button content 拡張** | 保留 | Image widget 採否の従属変数。defer なら `Button { "×" }` で済む |
+| **Tabs / Button 選択状態** | 保留 (framing 連動) | 入れるなら bool 不採用 / `TypedValue` defer の見直しセット |
+
+これらは「議論再開点」節で追跡する。
+
 ### Binding / value surface
 
-- スカラー型は M2 までの範囲（`i32` + `String`）で閉じる。
+- スカラー型は M2 までの範囲（`i32` + `String`）で閉じる。**既存合意**
 - 第三 scalar 型（特に `bool`）は本採択では導入しない。条件レンダリングは
   bool 値 binding を要求しないかたちで grammar 設計する（具体的な構文選択は
   M3 phase 単位の pre-doc で決める）。これは
-  [m3-start-framing.md](m3-start-framing.md#L335) §F5（`TypedValue` 無条件導入 defer）と整合する。
+  [m3-start-framing.md](m3-start-framing.md#L335) §F5（`TypedValue` 無条件導入 defer）と整合する。**既存合意**
 
 ---
 
@@ -244,12 +281,23 @@ DSL public draft）は見直し対象となる。[m3-start-framing.md](m3-start-
 
 ### 現 ROADMAP M3 AC と Z 採択の差分
 
-| 項 | 現 ROADMAP | Z 採択後 |
+| 項 | 現 ROADMAP | Z 採択後 (2026-05-14 セッション収束) |
 |---|---|---|
-| Layout primitive A | Grid layout primitive | **WrapPanel** layout primitive |
-| Layout primitive B | ScrollView primitive | （Z は本格的 viewport / overflow を要求しない。WrapPanel の wrap が overflow handling を兼ねる範囲で扱う。完全な ScrollView surface は M4 以降へ defer 候補） |
-| Layout primitive C | List primitive | **ZStack** layout primitive + **繰り返し生成 grammar**（List の責務をこの 2 surface へ分解） |
-| Spec | DSL specification first public draft | DSL specification first public draft（**条件レンダリング + 繰り返し生成を含む**） |
+| Layout primitive A | Grid layout primitive | **Grid** layout primitive (1 cell 1 child、star sizing + spanning、same-cell overlap は持たない) |
+| Layout primitive B | ScrollView primitive | **ScrollView** layout primitive (minimal: clip + offset binding。scrollbar widget / wheel handler / drag は M4 へ defer) |
+| Layout primitive C | List primitive | **WrapPanel** + **ZStack** + **繰り返し生成 grammar**（List の責務をこの 3 surface へ分解） |
+| Layout primitive 追加 | — | (上記合算で 4 layout primitive: Grid / WrapPanel / ZStack / ScrollView。M2 既存の HStack / VStack は並存維持) |
+| Spec | DSL specification first public draft | DSL specification first public draft（**Grid / WrapPanel / ZStack / ScrollView の normative spec + 条件レンダリング + 繰り返し生成を含む**） |
+
+注: 旧案では「Grid を削除し WrapPanel で置換 / ScrollView を完全 defer / ZStack を独立
+primitive 化」を検討したが、2026-05-14 セッションで以下が確認された:
+
+- Grid は語彙の普遍性（XAML / MUI / Compose / Slint / QML / CSS Grid 全部にある）と表現力
+  (star sizing) の点で M3 layout primitive set から外すと M3 thesis を弱める。
+- ScrollView は WrapPanel の wrap だけでは副軸方向 overflow を扱えず、Photo Gallery の
+  実用要件 (thumbnail 数十枚〜) に届かない。完全 defer は破綻するため minimal surface で残す。
+- ZStack は overlay 専管として独立必要。Grid same-cell overlap での代替は star sizing と
+  same-cell overlap を conflate した記述で、論理的に独立。
 
 ### ROADMAP revision の単位
 
@@ -291,3 +339,56 @@ ROADMAP revision の具体的執筆作業は本 pre-doc の owner approval を�
 2. ROADMAP M3 acceptance の revision を起こす（本 pre-doc「ROADMAP との同期」節の差分を反映）。
 3. `docs/plans/m3-plan.md` を `status: drafting` で作成し、phase breakdown を本採択に基づき drafting する。
 4. M3 最初の implementation phase の pre-doc を開く前に、本ファイルと m3-plan の owner agreement を確認する。
+
+---
+
+## 議論再開点
+
+2026-05-14 セッションで保留扱いとし、本 pre-doc の `status: accepted` 到達前に
+決着が必要な論点を追跡する。各項目は本セッション内では結論を出していないが、
+M3 plan drafting / ROADMAP revision に進む前に owner と詰める必要がある。
+
+### 保留 1: AspectRatio surface の形式
+
+- **論点**: thumbnail 正方形固定 / lightbox 写真の比率固定をどう表現するか
+- **選択肢**:
+  - (a) 独立 primitive `AspectRatio { ratio: w/h; child }` として導入
+  - (b) Image widget や Box の attribute (`aspect: 1/1`) として組み込む
+- **連動**: Image widget surface の採否（保留 2）と Box 系 primitive の有無
+- **判断基準候補**: 他 layout primitive との orthogonality / spec の単純さ /
+  Z 以外の M3+ app での再利用性
+
+### 保留 2: Image widget surface の M3 開封可否
+
+- **論点**: Image (画像 / アイコン) を widget primitive として M3 で開けるか
+- **影響範囲**:
+  - default 画面右上のアイコン Button の表現可否
+  - lightbox 閉じるボタンを `Button { "×" }` (text) で済ますか `Button { Image(...) }`
+    (icon) で書くか
+  - Z 以外の app (Mail の avatar、Music の album art) での要求
+  - asset pipeline / icon font / image decoder の M3 surface 化
+- **連動**: Button content surface の拡張 (text のみ → text + Image)
+- **判断基準候補**: M3 thesis (layout primitive + grammar surface 二軸構え) との整合性、
+  surface explosion の許容度
+
+### 保留 3: Tabs / Button 選択状態 surface の M3 開封可否
+
+- **論点**: Tabs (top chrome の view 切替) の selected 状態を視覚的に区別する surface を
+  M3 で持つか
+- **影響範囲**:
+  - default 画面の Tabs を装飾なしの最小表現で残す (現 out-of-scope 方針) か、
+    selected styling を入れる方向に振るか
+  - 入れる場合、Button に `selected: bool` 的 attribute / ToggleButton primitive /
+    theming binding のいずれかが必要
+- **連動 (framing 整合性)**: bool 不採用方針 (本 pre-doc Binding / value surface 節) と
+  `TypedValue` 無条件導入 defer ([m3-start-framing.md](m3-start-framing.md#L335) §F5) の
+  見直しセット
+- **判断基準候補**: bool / `TypedValue` defer を本 milestone で覆す意思があるか、
+  Tabs 自体を wireframe から落とす選択肢の許容度
+
+### 議論再開点を解消する単位
+
+上記 3 保留は、本 pre-doc 内で個別節を立てて議論を畳む。畳んだ結果は「必要 surface」節
+(Layout primitive / Widget / content surface) と「Out-of-scope」節に反映される。
+3 保留が全て決着し、かつ既存「drafting-for-discussion 範囲」リストの他項目も合意に到達
+した時点で `status: accepted` への遷移条件を満たす。
