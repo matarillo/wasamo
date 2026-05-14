@@ -24,6 +24,41 @@ M3 で作る画面・必要 surface・out-of-scope・spec 同期ルールを固�
 
 ---
 
+## 合意状態 (drafting marker)
+
+本 pre-doc の `status: drafting` は、ファイル全体が一律にドラフトであることを意味しない。
+節レベルで合意境界が分かれている。
+
+**合意済み範囲**（owner-agreed, 2026-05-14）:
+
+- 「採択」節 — Z (Photo Gallery) を M3 target app として採用する判断。
+- 「採用理由」節の 3 層すべて — 加重判断レイヤ、framing レイヤ（実用的な画面構造を
+  優先する立場 + grammar surface 前倒し許容）、結論レイヤ（M3 thesis を
+  「layout primitive + grammar surface」の二軸構えにする含意）。
+
+**Drafting-for-discussion 範囲**（未合意、これから詰める）:
+
+- 「必要 surface」節 — WrapPanel / ZStack の選定、grammar surface（条件レンダリング・
+  繰り返し生成）の構文方針、binding / value 型方針（bool 不採用 / i32+String のみで
+  閉じる、等）。
+- 「各 surface が検証する thesis」節（上に依存）。
+- 「Out-of-scope」節 — visual / interaction / value-type / platform 各カテゴリの具体項目。
+- 「spec / implementation / E2E proof の同期ルール」節。
+- 「ROADMAP との同期」節 — 現 AC との差分表、revision 単位、特に ScrollView を完全 defer
+  とするか部分代替とするか、List を ZStack + 繰り返し生成へ分解する案の妥当性。
+- 「HTML との参照関係」節（procedural だが未確認）。
+- 「Next step」節（procedural、approval 後の運用手順）。
+
+drafting-for-discussion 範囲は wireframe 分析と合意済みの framing decision からの
+逆算として assistant が起草した内容で、owner レビューを経て合意・修正・置換される
+対象である。各節の declarative tone は drafting artifact のスタイルにすぎず、
+合意済みを意味しない。
+
+`status:` を `accepted` に更新する条件は、上記 drafting-for-discussion 範囲すべてが
+owner レビューを経て合意（修正含む）状態に到達したときとする。
+
+---
+
 ## 採択
 
 **M3 target app = 案 Z (Photo Gallery)** を採用する。
