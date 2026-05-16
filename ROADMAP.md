@@ -131,11 +131,9 @@ is published as a stable public draft.
   per-phase deliverable, not an end-of-milestone byproduct
 - DSL specification first public draft (covers M2 surface plus
   the above M3 primitives, grammar surface, scalar type, and
-  selected state surface; reserves syntax for material — see M4
-  — without committing to its rendering semantics). The novel
-  normative content is the measure-arrange spec for WrapPanel
-  and Grid and the grammar surface (conditional rendering,
-  iteration)
+  selected state surface). The novel normative content is the
+  measure-arrange spec for WrapPanel and Grid and the grammar
+  surface (conditional rendering, iteration)
 
 ## M4: Interaction stack
 

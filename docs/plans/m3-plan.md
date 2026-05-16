@@ -108,8 +108,7 @@ with stable IDs for phase mapping:
 - **A12.** DSL specification first public draft. Covers the M2
   surface plus A2–A10; the novel normative content is the
   measure-arrange specifications for WrapPanel and Grid and the
-  grammar surface for A7–A8. May reserve syntax for material
-  (M4) without committing to its rendering semantics.
+  grammar surface for A7–A8.
 
 ### Phase breakdown
 
@@ -137,7 +136,7 @@ exercises that surface in `examples/gallery/`.
   constraint resolution and child layout. Establishes the
   placeholder pattern (Box + Text child) that carries the M3
   Image-widget deferral. Origin:
-  [m3-target-app-predoc.md §保留 1 + §保留 2](../notes/m3/m3-target-app-predoc.md#保留-1-closure-aspectratio-surface-の形式--b-box-attribute-化).
+  [m3-target-app-predoc.md — AspectRatio attribute and Image-widget deferral closures](../notes/m3/m3-target-app-predoc.md#保留点の決着).
 
 - **M3-Phase 3 — WrapPanel layout primitive.** Two-stage
   measure-arrange: linear main-axis placement plus cross-axis
@@ -186,7 +185,16 @@ exercises that surface in `examples/gallery/`.
   pass on `docs/dsl_spec.md` to promote it to **first public
   draft** (A12). Per-phase spec updates from Phases 1–7 mean
   Phase 8's spec work is editorial, not writing the spec from
-  scratch.
+  scratch. The framing-level permission to reserve syntax for
+  M4 material in the public draft
+  (per the framing's ROADMAP-acceptance discussion in
+  [m3-start-framing.md](../notes/m3/m3-start-framing.md),
+  owner-agreed 2026-05-11) is
+  **not** carried as an M3 acceptance criterion; the Phase 8
+  phase-ADR is where it is either exercised as an explicit DD
+  or recorded as declined. The pre-doc's silence on material
+  reservation is the default state — Phase 8 must act
+  affirmatively to exercise the permission.
 
 ### Phase dependencies
 
