@@ -67,12 +67,75 @@ is published as a stable public draft.
 
 **Acceptance criteria**
 
-- Grid layout primitive
-- ScrollView primitive
-- List primitive
-- DSL specification first public draft (covers M2 + M3 surface;
-  reserves syntax for material — see M4 — without committing to its
-  rendering semantics)
+- **A1.** `examples/gallery/gallery.ui` (Photo Gallery target app)
+  drives the M3 surface end-to-end on the M2 reactive foundation,
+  exercising every M3 layout primitive, grammar construct, scalar
+  extension, and widget surface enumerated below through the
+  `.ui -> IR -> runtime` path. The Gallery composes Grid (overall
+  frame), WrapPanel + ScrollView (thumbnail grid), ZStack
+  (lightbox overlay), and Box (aspect-constrained placeholders);
+  `bool` bindings drive conditional rendering (lightbox open /
+  close) and Button `selected` state (tab-like sections); an
+  iteration grammar generates thumbnails from a collection
+  binding
+- **A2.** Grid layout primitive (1 cell 1 child, star sizing +
+  spanning; same-cell overlap is not provided — overlay is
+  ZStack's responsibility), demonstrating that DSL can express 2D
+  measure-arrange including star sizing's cross-axis dependency
+  resolution, as an axis of layout proof independent of
+  WrapPanel's main / cross-axis reflow
+- **A3.** WrapPanel layout primitive, demonstrating that DSL can
+  express a two-stage measure-arrange — linear main-axis placement
+  plus cross-axis wrap on main-axis overflow — that goes beyond
+  the linear arrangement (HStack / VStack) established in M2
+- **A4.** ZStack layout primitive (sibling z-order by document
+  order), demonstrating that DSL can express the layout semantics
+  of overlapping siblings. Through M2 the widget tree was linear;
+  this primitive is a genuine extension of the M2 surface
+- **A5.** ScrollView primitive (minimal: inner unbounded measure +
+  viewport clip + content offset binding; scrollbar widget, wheel
+  handler, and drag are deferred to M4), demonstrating that the
+  viewport concept and content offset binding traverse DSL / IR /
+  runtime — a structural prerequisite for the thumbnail-scale
+  scenarios in the target app
+- **A6.** Box layout primitive (0+ child container; `aspect:
+  <ratio>` attribute subsumes AspectRatio; minimal `fill: <color>`
+  attribute for scrim use), proving that aspect can be folded as
+  an attribute rather than a standalone primitive, and that the
+  M3 deferral of an Image widget surface can be carried by a
+  placeholder form (Box + Text child) without opening the
+  asset / decoder surface
+- **A7.** Conditional rendering grammar (binding-driven widget
+  present / absent), demonstrating that binding can drive the
+  structure of the widget tree — the present / absent status of
+  a subtree. Through M2, binding drove property values only;
+  this construct extends what bindings reach into tree shape
+- **A8.** Iteration grammar (collection-driven widget tree
+  generation), demonstrating that binding can drive the
+  cardinality of the widget tree. The foundation for the
+  dynamic-UI surfaces (filter, sort, virtualization) that come
+  after M3
+- **A9.** `bool` added as the third scalar binding type alongside
+  `i32` and `String`, demonstrating that subtree presence
+  (conditional rendering) and widget attribute state (Button
+  selected) can both be driven by a scalar extension without
+  introducing the `TypedValue` generic value union, which remains
+  deferred
+- **A10.** Button `selected` state surface admitted (the concrete
+  construct — `selected: bool` attribute vs separate
+  `ToggleButton` primitive vs theming binding — is settled per
+  phase under M3), demonstrating that a `bool` scalar binding
+  can drive a widget attribute
+- **A11.** DSL spec, implementation, and E2E proof are
+  synchronized per phase: each M3 phase updates `docs/dsl_spec.md`
+  for the surface it ships and exercises that surface in
+  `examples/gallery/` within the same phase. Spec drafting is a
+  per-phase deliverable, not an end-of-milestone byproduct
+- **A12.** DSL specification first public draft (covers M2 surface
+  plus the above M3 primitives, grammar surface, scalar type, and
+  selected state surface). The novel normative content is the
+  measure-arrange spec for WrapPanel and Grid and the grammar
+  surface (conditional rendering, iteration)
 
 ## M4: Interaction stack
 

@@ -18,10 +18,20 @@
   README for lifecycle and archival policy.
 - `docs/notes/` — Owner-authored exploratory notes and live open
   questions. Japanese allowed. See its README.
+- `docs/references/` — Durable supporting reference artifacts that
+  other documents (plans, phase pre-docs, specs, ADRs) cite as stable
+  input. Expected content is **extracted, stable** material (e.g. an
+  accepted wireframe lifted out of an exploratory note). Do not place
+  decisions, execution trackers, or work-in-progress drafts here — those
+  belong in `docs/decisions/`, `docs/plans/`, or `docs/notes/`. When the
+  number of files grows, consider subdirectories such as
+  `docs/references/m3/`.
 
 When information settles into a decision, it moves: notes → ADR. When a
-milestone is committed, structure moves: plan → ROADMAP. Each category
-has a single role; do not duplicate content across them.
+milestone is committed, structure moves: plan → ROADMAP. When an
+accepted visual or supporting artifact needs to be cited by downstream
+documents, the stable portion is extracted: notes → references. Each
+category has a single role; do not duplicate content across them.
 
 ## Testing rules
 
