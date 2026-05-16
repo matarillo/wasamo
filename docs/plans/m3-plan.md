@@ -167,13 +167,18 @@ exercises that surface in `examples/gallery/`.
 
 - **M3-Phase 7 — Iteration grammar.** Collection-driven widget
   tree generation. The gallery's thumbnail set is generated from a
-  collection binding. Introduces the per-item context (`item`,
-  `index`) into `HandlerExpr`-shaped expressions per the M2-to-M3
-  handover (`docs/notes/m2-to-m3-handover.md` §2). Whether
-  this phase pressures `TypedValue` adoption is an open phase-ADR
-  question; the plan's working assumption is that scalar `bool`
+  collection binding. The concrete shape of the per-item context
+  (identifier naming such as `item` / `index`, whether it rides on
+  the unified `HandlerExpr` enum per the M2-to-M3 handover
+  ([m2-to-m3-handover.md](../notes/m2-to-m3-handover.md) §2) or
+  requires a separate context type, and how the collection type
+  is exposed) is settled in the phase ADR — the plan commits only
+  to the surface identity, not the syntactic form. The same phase
+  ADR also decides whether iteration pressures `TypedValue`
+  adoption; the plan's working assumption is that scalar `bool`
   + existing `i32` / `String` are sufficient and `TypedValue`
-  remains deferred. If pressure surfaces, the phase ADR opens it.
+  remains deferred. If pressure surfaces, the phase ADR opens it
+  as an explicit DD.
 
 - **M3-Phase 8 — Button `selected` state + Gallery E2E + DSL
   spec public draft.** Three workstreams that close M3 together:
@@ -260,14 +265,24 @@ gallery and promotes the cumulative spec).
 
 Surfaces explicitly excluded by the M3 target-app pre-doc and the
 M3 start framing. Allocation to post-M3 milestones is recorded in
-[ROADMAP.md](../../ROADMAP.md):
+[ROADMAP.md](../../ROADMAP.md) where ROADMAP commits to a specific
+milestone; where ROADMAP is silent, the pre-doc's "M4 以降" / "later"
+wording is preserved here as "M4 or later" rather than tightened:
 
-- Image widget surface, asset pipeline, icon font, image decoder → M4
-- Button content other than text (e.g. Image inside Button) → M4
-- Scrollbar widget, wheel handler, drag-to-scroll → M4
-- Splitter drag and any drag-driven layout resize → M4 (or later)
-- lightbox swipe / pinch / keyboard-shortcut gestures → M4 (input)
-- hit-testing, focus capture, modal focus trap → M4 (focus model)
+- Image widget surface, asset pipeline, icon font, image decoder
+  → M4 or later (pre-doc: "M4 以降"; ROADMAP M4 does not name it
+  explicitly)
+- Button content other than text (e.g. Image inside Button)
+  → M4 or later (tied to the Image-widget deferral)
+- Scrollbar widget, wheel handler, drag-to-scroll → M4 or later
+  (pre-doc: "M4 へ defer"; ROADMAP M4 does not name scrollbar
+  explicitly — the M4 Input AC may absorb wheel/drag handling but
+  the scrollbar *widget* is not yet committed)
+- Splitter drag and any drag-driven layout resize → M4 or later
+- lightbox swipe / pinch / keyboard-shortcut gestures → M4
+  (covered by M4 Input handling AC)
+- hit-testing, focus capture, modal focus trap → M4 (covered by
+  M4 focus model AC)
 - Input handling (kbd / mouse / touch), focus model → M4
 - TextField, IME (TSF, Japanese / CJK) → M4
 - Multi-window → M4
