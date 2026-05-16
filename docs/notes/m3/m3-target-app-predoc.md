@@ -1,7 +1,8 @@
 ---
 title: M3 target app pre-doc — Photo Gallery (案 Z)
-status: drafting
+status: accepted
 created: 2026-05-14
+accepted: 2026-05-16
 related:
   - ROADMAP.md
   - docs/notes/m3/m3-start-framing.md
@@ -21,49 +22,6 @@ M3 で作る画面・必要 surface・out-of-scope・spec 同期ルールを固�
 本 pre-doc は HTML を視覚 input として参照し、HTML が exploratory artifact
 として持つ「均等加重時の素読み」「オーナー加重を反映した素読み」の上に立つ
 「採択」を本ファイル側で明文化する役割を持つ。
-
----
-
-## 合意状態 (drafting marker)
-
-本 pre-doc の `status: drafting` は、ファイル全体が一律にドラフトであることを意味しない。
-節レベルで合意境界が分かれている。
-
-**合意済み範囲**（owner-agreed, 2026-05-14）:
-
-- 「採択」節 — Z (Photo Gallery) を M3 target app として採用する判断。
-- 「採用理由」節の 3 層すべて — 加重判断レイヤ、framing レイヤ（実用的な画面構造を
-  優先する立場 + grammar surface 前倒し許容）、結論レイヤ（M3 thesis を
-  「layout primitive + grammar surface」の二軸構えにする含意）。
-
-**Drafting-for-discussion 範囲**（未合意、これから詰める）:
-
-- 「必要 surface」節 — Layout primitive 集合 (WrapPanel / Grid / ZStack / ScrollView /
-  Box / HStack-VStack 並存)、grammar surface（条件レンダリング・繰り返し生成）の構文方針、
-  binding / value 型方針（`i32` + `String` + `bool` の 3 scalar）。
-  **状態**: Layout primitive 集合は 2026-05-14 セッションで収束（未合意）。
-  AspectRatio / Image widget surface / Tabs 選択状態 の 3 保留は 2026-05-15 セッションで
-  決着（未合意。後述「議論再開点 closure」節を参照）。
-- 「各 surface が検証する thesis」節（上に依存）。
-- 「Out-of-scope」節 — visual / interaction / value-type / platform 各カテゴリの具体項目。
-- 「spec / implementation / E2E proof の同期ルール」節。
-- 「ROADMAP との同期」節 — 現 AC との差分表、revision 単位。
-  **状態**: 2026-05-14 セッションで差分表が更新済、2026-05-15 セッションで Box /
-  Scalar type / Widget surface 行を追加（収束、未合意）。ScrollView は完全 defer ではなく
-  minimal surface (clip + offset binding) 採用、List は WrapPanel + ZStack + 繰り返し生成
-  へ分解、Grid は 1 cell 1 child 制約で残す、Box を 5 つ目の primitive として追加、bool を
-  3 つ目の scalar として追加、Button selected state を widget surface として追加。
-- 「HTML との参照関係」節（procedural だが未確認）。
-- 「Next step」節（procedural、approval 後の運用手順）。
-- 「議論再開点 closure」節（2026-05-14 追加 / 2026-05-15 closure 化、3 保留の決着記録）。
-
-drafting-for-discussion 範囲は wireframe 分析と合意済みの framing decision からの
-逆算として assistant が起草した内容で、owner レビューを経て合意・修正・置換される
-対象である。各節の declarative tone は drafting artifact のスタイルにすぎず、
-合意済みを意味しない。
-
-`status:` を `accepted` に更新する条件は、上記 drafting-for-discussion 範囲すべてが
-owner レビューを経て合意（修正含む）状態に到達したときとする。
 
 ---
 
@@ -128,25 +86,23 @@ W (Explorer) は backup ではなく、本採択により候補集合から外�
 Z の wireframe から逆算した M3 surface は次のとおり。各項目は
 [m3-start-framing.md](m3-start-framing.md#L60) の「M3 pre-doc 成果物 2 / 3 項」に対応する。
 
-各 surface の状態マーカーは:
+状態列の凡例:
 
-- **収束**: 該当セッションで内容が定まったが、本 pre-doc としては未合意（owner 確認待ち）。
-  日付注記がない行は 2026-05-14 セッション収束、日付注記付きの行は当該日のセッション収束。
-- **既存合意**: 本 pre-doc 採択時点で合意済み
-- **保留**: 別議論として開封予定、本セッション内では結論を出さない
+- **日付** (YYYY-MM-DD): 当該 surface 仕様が本 pre-doc 上で合意に到達したセッション日付。
+- **既存 (M2)**: M2 までに合意済み、本 milestone では break しない。
 
 ### Layout primitive
 
 | Primitive | 状態 | 役割 | 検証する thesis |
 |---|---|---|---|
-| **WrapPanel** | 収束 | 子要素を主軸方向に並べ、viewport 主軸サイズ超過で副軸方向の次行へ折り返す | 主軸 / 副軸の measure-arrange 二段階解決を持つ layout primitive を DSL で書けること |
-| **Grid** | 収束 | 2D 座標系で子要素を配置、**1 cell 1 child** 制約、row/column sizing (auto / fixed / star) + spanning | 2D layout の measure-arrange (star sizing の他軸依存解決を含む) を DSL で書けること |
-| **ZStack** | 収束 | 子要素を重ね合わせる（lightbox overlay の構造）。z-order は document order | 兄弟要素の Z 順 + 部分透過レイヤを DSL で書けること |
-| **ScrollView** | 収束 (minimal) | 内側 unbounded measure + viewport clip + offset binding。scrollbar widget / wheel handler / drag は M4 へ defer | viewport 概念と content offset を持つ layout primitive を DSL で書けること |
-| **Box** | 収束 (2026-05-15) | 0 個以上の子 widget を保持する汎用 container。属性として `aspect: <ratio>` (AspectRatio 兼任) と最小限の `fill: <color>` (scrim 用) を持つ | aspect 制約付き container を独立 primitive として DSL で書けること、および Image 未開封下での placeholder 表現 (Box + Text 子) を支えること |
+| **WrapPanel** | 2026-05-14 | 子要素を主軸方向に並べ、viewport 主軸サイズ超過で副軸方向の次行へ折り返す | 主軸 / 副軸の measure-arrange 二段階解決を持つ layout primitive を DSL で書けること |
+| **Grid** | 2026-05-14 | 2D 座標系で子要素を配置、**1 cell 1 child** 制約、row/column sizing (auto / fixed / star) + spanning | 2D layout の measure-arrange (star sizing の他軸依存解決を含む) を DSL で書けること |
+| **ZStack** | 2026-05-14 | 子要素を重ね合わせる（lightbox overlay の構造）。z-order は document order | 兄弟要素の Z 順 + 部分透過レイヤを DSL で書けること |
+| **ScrollView** | 2026-05-14 (minimal) | 内側 unbounded measure + viewport clip + offset binding。scrollbar widget / wheel handler / drag は M4 へ defer | viewport 概念と content offset を持つ layout primitive を DSL で書けること |
+| **Box** | 2026-05-15 | 0 個以上の子 widget を保持する汎用 container。属性として `aspect: <ratio>` (AspectRatio 兼任) と最小限の `fill: <color>` (scrim 用) を持つ | aspect 制約付き container を独立 primitive として DSL で書けること、および Image 未開封下での placeholder 表現 (Box + Text 子) を支えること |
 | HStack / VStack | 既存 (M2) | 線形配置、Fill/Shrink sizing policy | M2 で確立済み、本 milestone では break しない |
 
-**AspectRatio surface の扱い** (議論再開点 closure §保留 1 反映): AspectRatio は独立
+**AspectRatio surface の扱い** (「保留点の決着」§保留 1 反映): AspectRatio は独立
 primitive とせず Box の `aspect: <ratio>` attribute として畳む。thumbnail の正方形固定
 (`Box { aspect: 1/1; ... }`) も lightbox 写真の比率固定 (`Box { aspect: 4/3; ... }`) も
 Box 上で表現する。
@@ -171,8 +127,8 @@ modern Grid (1 cell 1 child) と Compose の Box (= ZStack) の分離方針と�
 
 | Surface | 状態 | 役割 | 検証する thesis |
 |---|---|---|---|
-| **条件レンダリング構文** | 既存合意 | lightbox open / close のような binding 駆動の present/absent 切り替え | binding が boolean-ish な意味で widget の存否を制御する文法を DSL が持てること |
-| **繰り返し生成構文** | 既存合意 | gallery item の列挙（コレクション driven） | binding が列を生み、その各要素から widget tree が生成される文法を DSL が持てること |
+| **条件レンダリング構文** | 2026-05-14 | lightbox open / close のような binding 駆動の present/absent 切り替え | binding が boolean-ish な意味で widget の存否を制御する文法を DSL が持てること |
+| **繰り返し生成構文** | 2026-05-14 | gallery item の列挙（コレクション driven） | binding が列を生み、その各要素から widget tree が生成される文法を DSL が持てること |
 
 両 grammar surface は M3 で **public spec として normative に書く**。M4 以降への
 syntax reservation で済ませない。
@@ -181,20 +137,20 @@ syntax reservation で済ませない。
 
 | Surface | 状態 | 役割 | 検証する thesis |
 |---|---|---|---|
-| **Button `selected` 系 surface** | 収束 (2026-05-15) | Tabs 切替 / トグル等で「選択中」を視覚的に区別する surface。bool binding を直接駆動する | bool scalar binding が widget attribute を駆動できることを示す |
+| **Button `selected` 系 surface** | 2026-05-15 | Tabs 切替 / トグル等で「選択中」を視覚的に区別する surface。bool binding を直接駆動する | bool scalar binding が widget attribute を駆動できることを示す |
 
 具体的な construct (Button attribute `selected: bool` / 独立 `ToggleButton` primitive /
 theming binding) のいずれを採るかは M3 phase pre-doc で詰める。本 pre-doc は selected
 state surface を M3 で開けることのみ確定する。
 
 Image widget surface および Button content の text 以外への拡張は M3 では開けない
-(議論再開点 closure §保留 2 を参照、Out-of-scope §Value / type にも記載)。thumbnail /
+(「保留点の決着」§保留 2 を参照、Out-of-scope §Value / type にも記載)。thumbnail /
 lightbox photo / scrim 等の「写真らしき領域」は Box + Text 子要素で placeholder 表現する。
 
 ### Binding / value surface
 
 - スカラー型は `i32` + `String` + **`bool`** の 3 種で閉じる。M2 までの範囲 (`i32` +
-  `String`) に bool を 3 つ目の scalar として追加する。**収束 (2026-05-15)**
+  `String`) に bool を 3 つ目の scalar として追加する (合意 2026-05-15)。
 - bool の M3 採用は条件レンダリング (lightbox open/close 等の binding 駆動 present/absent
   切替) および Button selected state surface の自然な台座となる。bool を入れない場合の
   代替 (String 等価比較 / Option / int truthy / コレクション empty 判定 等) はいずれも
@@ -211,11 +167,22 @@ lightbox photo / scrim 等の「写真らしき領域」は Box + Text 子要素
 
 各 primitive / grammar が M3 thesis に対して何を proof するかを明示する。
 
-- **WrapPanel** — primitive の自前 measure-arrange を DSL が記述・実装・spec 化できることを示す。
-  Grid（線形 row/column）よりも主軸 / 副軸の reflow ロジックが非自明であり、
-  layout primitive の M3 spec drafting に対する切れ味として強い。
+- **WrapPanel** — 主軸方向の連続配置と viewport 主軸サイズ超過時の副軸方向 wrap という
+  二段階 reflow を持つ layout primitive の measure-arrange を DSL が記述・実装・spec
+  化できることを示す。M2 までの線形配置 (HStack / VStack) を超えた non-trivial reflow
+  ロジックの M3 spec drafting に対する切れ味として立つ。
+- **Grid** — 2D 座標系での measure-arrange (star sizing の他軸依存解決を含む) と
+  1 cell 1 child 制約下での spanning を DSL が記述できることを示す。WrapPanel の
+  主軸 / 副軸 reflow とは独立した 2D layout 検証として M3 thesis に並列に立つ。
+  same-cell overlap は持たず、overlay は ZStack 専管とすることで orthogonal primitive
+  思想を proof する。
 - **ZStack** — 兄弟要素が重なる layout の意味論を DSL が記述できることを示す。
   Hello Counter までは linear tree しか出現せず、本 primitive は M2 surface の真の拡張になる。
+- **ScrollView** (minimal) — 内側 unbounded measure + viewport clip + content offset binding
+  を持つ layout primitive を DSL が記述できることを示す。scrollbar widget / wheel handler /
+  drag を M4 へ defer した minimal surface であり、proof の射程は「viewport 概念と offset
+  binding が DSL / IR / runtime を通る」点に限定されるが、Photo Gallery の thumbnail 数十枚
+  シナリオを成立させる構造的必要条件として M3 thesis に位置づく。
 - **Box** — 任意の子要素を保持する汎用 container と aspect 制約を兼ねる layout primitive を
   DSL が記述できることを示す。AspectRatio を独立 primitive とせず attribute として畳む
   設計判断、および Image widget を M4 へ defer した上で placeholder 表現 (Box + Text 子)
@@ -269,7 +236,7 @@ Z 採択により、wireframe 上には存在するが M3 surface としては�
   union) の無条件導入は M3 では行わない ([m3-start-framing.md](m3-start-framing.md#L335)
   §F5)。本 target app は `TypedValue` 圧力を構造的に避ける設計に寄せる。
 - **Image widget surface** — 画像 / アイコン用の widget primitive は M3 では開けない
-  (議論再開点 closure §保留 2 参照)。thumbnail / lightbox photo / scrim 等の「写真らしき
+  (「保留点の決着」§保留 2 参照)。thumbnail / lightbox photo / scrim 等の「写真らしき
   領域」は Box + Text 子要素で placeholder 表現する。asset pipeline / icon font / image
   decoder の surface 化は M4 以降。
 - **Button content の text 以外への拡張** — Image widget の M3 defer に従い、Button content
@@ -301,10 +268,13 @@ Z 採択により、wireframe 上には存在するが M3 surface としては�
   レンダリング・繰り返し生成）は normative spec の対象として、各 phase 完了時点で
   `docs/dsl_spec.md` に反映済みであることを要求する。M3 最終 phase でまとめて spec を書く
   運用にしない。
-- **HTML pre-doc 視覚 input**: [m3-target-app-wireframes.html](m3-target-app-wireframes.html) は
-  wireframe / 候補比較 artifact として M3 plan / phase pre-doc から視覚 input に参照される。
-  pre-doc が HTML 内容を上書き・更新する関係ではない（HTML は exploratory artifact のまま
-  維持する。本ファイル末尾「HTML との参照関係」節も参照）。
+- **視覚 input**: M3 plan / phase pre-doc / dsl_spec drafting / E2E proof acceptance の視覚
+  input は [docs/references/m3-gallery-wireframe.html](../../references/m3-gallery-wireframe.html)
+  を参照する (採択済み Photo Gallery 視覚仕様を英語ラベルで固定した stable artifact)。元の
+  探索アーティファクト [m3-target-app-wireframes.html](m3-target-app-wireframes.html) は
+  候補比較 / 加重判断記録 / 語彙批判的検討の歴史的記録として `docs/notes/` 配下に保持し、
+  抽出版から "Source exploratory note" pointer で参照される。詳細は本ファイル末尾
+  「視覚 artifacts との参照関係」節を参照。
 
 ---
 
@@ -316,7 +286,7 @@ DSL public draft）は見直し対象となる。[m3-start-framing.md](m3-start-
 
 ### 現 ROADMAP M3 AC と Z 採択の差分
 
-| 項 | 現 ROADMAP | Z 採択後 (2026-05-15 セッション時点) |
+| 項 | 現 ROADMAP | Z 採択後 (pre-doc accepted 2026-05-16) |
 |---|---|---|
 | Layout primitive A | Grid layout primitive | **Grid** layout primitive (1 cell 1 child、star sizing + spanning、same-cell overlap は持たない) |
 | Layout primitive B | ScrollView primitive | **ScrollView** layout primitive (minimal: clip + offset binding。scrollbar widget / wheel handler / drag は M4 へ defer) |
@@ -361,39 +331,68 @@ ROADMAP revision の具体的執筆作業は本 pre-doc の owner approval を�
 
 ---
 
-## HTML との参照関係
+## 視覚 artifacts との参照関係
 
-[m3-target-app-wireframes.html](m3-target-app-wireframes.html) との関係を明示する。
+本 pre-doc は 2 つの視覚 artifact と参照関係を持つ。役割は明確に分かれる。
 
-- HTML は **exploratory artifact**（候補比較 + wireframe + 語彙批判的検討 + 加重判断記録）
-  として維持する。本 pre-doc の採択に伴って HTML を縮小再構成しない。
-- HTML 末尾「位置づけと将来再構成トリガー」節（[m3-target-app-wireframes.html L1470-1490](m3-target-app-wireframes.html#L1470-L1490)）
-  で予告されている再構成（wireframe-only + 語彙整理 markdown 抽出）は、
-  本採択時点では発火条件を満たさない。発火条件のいずれかが満たされた段階で再評価する。
-- 本 pre-doc は HTML から候補選定結果と加重判断を受け、採用理由・必要 surface・out-of-scope・
-  spec 同期ルール・ROADMAP との同期 を明文化する役割を持つ。HTML は本 pre-doc から
-  視覚 input として参照される。
-- 本 pre-doc が status: accepted になった後、HTML の「採択」記述は本 pre-doc を pointer 参照で
-  指す状態のままにする（HTML 側に採択結論を duplicate しない、本 pre-doc が SSOT）。
+### 抽出版 — `docs/references/m3-gallery-wireframe.html` (forward reference)
+
+- 採択済み Photo Gallery 視覚仕様のみを英語ラベルで固定した stable artifact。
+- 候補比較 / 加重判断 / 日本語の批判的検討は持ち込まない。本 pre-doc が SSOT (採択判断 / 採用
+  理由 / 必要 surface / out-of-scope / spec 同期ルール / ROADMAP との同期) として残り、抽出版は
+  対応する視覚仕様部分のみを担う。
+- M3 plan / phase pre-doc / dsl_spec drafting / E2E proof acceptance から視覚 input として参照
+  される。
+- 抽出版から元の探索ノートへ "Source exploratory note" pointer リンクを置き、歴史的議論経緯への
+  遡及参照を残す。
+- `docs/references/` カテゴリは新設。CLAUDE.md「Document categories under `docs/`」節に
+  durable supporting reference artifacts の置き場所として狭く定義し、decisions や execution
+  tracker は置かず、extracted で stable な artifact を期待する旨を追記する。
+
+### 元の探索ノート — `docs/notes/m3/m3-target-app-wireframes.html` (historical record)
+
+- **exploratory artifact**（候補比較 X/Y/Z/W + 4 wireframe + 語彙批判的検討 + 加重判断記録）
+  として `docs/notes/` 配下に維持する。本 pre-doc 採択により内容を縮小再構成しない。
+- 本 pre-doc の採択により、HTML 末尾「位置づけと将来再構成トリガー」節
+  ([m3-target-app-wireframes.html L1470-L1490](m3-target-app-wireframes.html#L1470-L1490)) で
+  予告されていた再構成 trigger が **発火する**。発火形は予告された「wireframe-only + 語彙整理
+  markdown 抽出」全面再構成ではなく、採択された Z (Gallery) wireframe のみを `docs/references/`
+  へ抽出する **部分的再構成** とする。X / Y / W wireframe および候補比較 / 加重判断記録 / 語彙
+  批判的検討は元 HTML にそのまま残す。
+- 元 HTML の「採択」記述は本 pre-doc を pointer 参照で指す状態のままにする（HTML 側に採択結論
+  を duplicate しない、本 pre-doc が SSOT）。
 
 ---
 
 ## Next step
 
-本 pre-doc が owner approval を得たら、次の順で進める。
+本 pre-doc が owner approval を得たら、以下を進める。
 
 1. 本ファイルの `status:` を `drafting` から `accepted` へ更新する。
-2. ROADMAP M3 acceptance の revision を起こす（本 pre-doc「ROADMAP との同期」節の差分を反映）。
-3. `docs/plans/m3-plan.md` を `status: drafting` で作成し、phase breakdown を本採択に基づき drafting する。
-4. M3 最初の implementation phase の pre-doc を開く前に、本ファイルと m3-plan の owner agreement を確認する。
+2. **`docs/references/` カテゴリ新設と Gallery wireframe 抽出** (本 pre-doc「視覚 artifacts
+   との参照関係」節に基づく):
+   - CLAUDE.md「Document categories under `docs/`」節に `docs/references/` の役割を狭く
+     定義して追記する (durable supporting reference artifacts の置き場所、decisions や
+     execution tracker は置かない、extracted で stable な artifact を期待、等)。ファイル数が
+     増えてきた段階で `docs/references/m3/` のようなサブディレクトリ化を検討する旨も併記。
+   - `docs/references/m3-gallery-wireframe.html` を作成 (採択 Z wireframe のみ、英語ラベル、
+     候補比較 / 日本語議論は持ち込まない、`docs/notes/m3/m3-target-app-wireframes.html` への
+     "Source exploratory note" pointer リンクを置く)。
+3. **ROADMAP M3 acceptance の revision** を起こす (本 pre-doc「ROADMAP との同期」節の差分を
+   反映)。2 と独立、並行可。
+4. **`docs/plans/m3-plan.md` を `status: drafting` で作成** し、phase breakdown を本採択に
+   基づき drafting する。2 と 3 の両方が完了していると plan が抽出版 wireframe と revised AC
+   を直接参照できて望ましいが、厳格な依存ではない。
+5. M3 最初の implementation phase の pre-doc を開く前に、本ファイル / 抽出版 wireframe /
+   revised ROADMAP / m3-plan の owner agreement を確認する。
 
 ---
 
-## 議論再開点 closure
+## 保留点の決着
 
-2026-05-14 セッションで開いた 3 保留は 2026-05-15 セッションで決着した（未合意の収束
-扱い、本 pre-doc としては owner レビュー後に確定）。決着内容と反映先を下に記録する。
-詳細議論経緯は本 pre-doc 上に残さず、決着の事実と該当節への pointer のみ保持する。
+2026-05-14 セッションで開いた 3 保留は 2026-05-15 セッションで決着した。決着内容と
+反映先を下に記録する。詳細議論経緯は本 pre-doc 上に残さず、決着の事実と該当節への
+pointer のみ保持する。
 
 ### 保留 1 closure: AspectRatio surface の形式 → (b) Box attribute 化
 
@@ -438,18 +437,3 @@ pre-doc で詰める。
   いずれも bool より重く非直交になるため、bool 採用が grammar / widget 双方で最小コストの
   選択肢として確認された。
 
-### closure 後の残作業
-
-3 保留が決着したことで、§合意状態 の drafting-for-discussion 範囲リスト上の
-「必要 surface」節 内項目は全て収束に到達した（owner レビュー待ち）。残る
-drafting-for-discussion 範囲は以下:
-
-- 「各 surface が検証する thesis」節（本セッションで Box / bool 追記。owner レビュー待ち）
-- 「Out-of-scope」節（本セッションで Tabs styling / Value-type / Image を整理。
-  owner レビュー待ち）
-- 「spec / implementation / E2E proof の同期ルール」節
-- 「ROADMAP との同期」節（本セッションで差分表を更新。owner レビュー待ち）
-- 「HTML との参照関係」節（procedural、未確認）
-- 「Next step」節（procedural、未確認）
-
-これらが owner レビューを通った時点で `status: accepted` 遷移条件を満たす。
