@@ -1,10 +1,11 @@
 ---
 milestone: M3
-status: drafting
+status: agreed
 roadmap-anchor: ROADMAP.md#m3-dsl-surface
 adrs:
   # filled in as ADRs are written
 created: 2026-05-16
+agreed: 2026-05-16
 ---
 
 # M3 Plan — DSL surface milestone
@@ -477,9 +478,10 @@ ADRs, CHANGELOG, notes, and git history, then deleted by default.
 
 ### Owner-facing resume note
 
-M3 plan is in `drafting`. Next: owner review of the phase
-breakdown, dependencies, verification strategy, and phase-end /
-milestone-end criteria. On agreement, status moves to `agreed`,
-ROADMAP M3 acceptance text is reconciled with A1–A12 IDs (the
-bullet content already matches the pre-doc; only ID mirroring is
-needed), and M3-Phase 1 pre-doc opens.
+M3 plan is `agreed` (owner sign-off 2026-05-16). ROADMAP M3 AC
+bullets carry **A1–A12** IDs mirroring this plan. Next: merge
+`docs/m3-predoc` into `main` so M3-Phase 1 (`bool` scalar) can
+open its pre-doc from `main`. Status moves to `in-progress` when
+Phase 1 actually starts execution; until then the Frozen
+agreement section is read-only under the standard `agreed`
+lifecycle.
