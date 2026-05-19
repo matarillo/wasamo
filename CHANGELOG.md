@@ -41,6 +41,13 @@ across `read_property_value` / `write_property_value` /
 `property_value_to_owned` / `owned_to_value` (no new public ABI
 functions; the existing `WASAMO_VALUE_BOOL = 3` tag was M2-reserved).
 
+The Phase 1 `bool` surface itself is also intentionally narrow at the
+language level: `bool` is admitted for bool-typed property bindings
+(e.g. `Button.enabled`) and inline handler assignments to bool state,
+but rejected in string interpolation (e.g. `Text.text: "ready={ready}"`
+is a compile error). Display conversion is a deliberate Phase 1
+non-goal and remains a later expression / formatting concern.
+
 The Phase 1 `Button.enabled` runtime contract is narrow: when
 `false`, `hit_test_click_inner` suppresses host callback / inline
 `clicked` handler / `enqueue_signal("clicked", …)` while preserving
@@ -58,17 +65,18 @@ pipeline (same shape as `counter-rust`), so the M2 Hello Counter
 reference stays unmodified. CI coverage: pure-logic unit tests in
 `wasamo-ir` / `wasamoc` / `wasamo-runtime`, an IR round-trip
 integration test (`wasamoc::emit` → `wasamo-runtime::parse_ir`),
-and a Windows-only mock-free integration test
-(`button_enabled_property_flips_visual_and_suppresses_click`)
-that drives `wasamo_set_property(PROP_BUTTON_ENABLED, …)` against a
-live `WidgetNode` and asserts both the `CompositionColorBrush`
-colour flip and click-callback suppression.
+and two Windows-only mock-free integration tests covering both the
+end-to-end `.ui → IR → load → click → state → bound widget
+property` chain through the binding pipeline and the direct
+widget-setter path via `wasamo_set_property(PROP_BUTTON_ENABLED, …)`
+on a live `WidgetNode` (asserting both the `CompositionColorBrush`
+colour flip and click-callback suppression).
 
 Per-phase spec sync ([A11](./ROADMAP.md#m3-dsl-surface)):
 `docs/dsl_spec.md` 0.4 → 0.5 (§§2.1 / 2.2 / 3 / 4.3 / 4.6 / 4.7 /
 4.8 / 5 / 8.2 / 8.4 / 8.6 / 8.9 / 8.12; also folds in a minimal
 retroactive `state` surface entry for the M2-Phase 6 documentation
-gap, owner-agreed during T10); `docs/architecture.md` §6.8.7
+gap, owner-agreed during the Phase 1 spec sync); `docs/architecture.md` §6.8.7
 documents the bool path through `register_bool_binding`,
 `SignalRegistry::bools`, `widget_write_property_bool`, and the
 DD-M3-P1-007 per-type seam.
