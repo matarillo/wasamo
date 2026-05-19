@@ -67,6 +67,26 @@ fn build_string_binding_ir() -> wasamo_ir::IrComponent {
     lower::lower(&ast, &result.namespace)
 }
 
+fn build_bool_binding_ir() -> wasamo_ir::IrComponent {
+    use wasamoc::{check, lexer, lower, parser};
+    let src = r#"component BoolBinding inherits Window {
+    state ready: bool = false
+    Button {
+        enabled: ready
+        clicked => { root.ready = true; }
+    }
+}"#;
+    let tokens = lexer::tokenize(src, "<bool-binding>").expect("lex failed");
+    let ast = parser::parse(&tokens, "<bool-binding>").expect("parse failed");
+    let result = check::check(&ast, "<bool-binding>");
+    assert!(
+        !result.has_errors(),
+        "check errors: {:?}",
+        result.diagnostics
+    );
+    lower::lower(&ast, &result.namespace)
+}
+
 #[test]
 fn counter_ui_emit_then_parse_yields_equal_ir() {
     let original = build_counter_ir();
@@ -123,6 +143,62 @@ fn parsed_counter_has_text_binding_and_clicked_handler() {
             op: CompoundOp::Add,
             lhs: "count".into(),
             rhs: Box::new(HandlerExpr::IntLit(1)),
+        }
+    );
+}
+
+#[test]
+fn bool_state_binding_emits_and_parses_bool_productions() {
+    let original = build_bool_binding_ir();
+    let text = wasamoc::emit::emit(&original);
+    assert!(
+        text.contains("state ready: bool = false"),
+        "bool state must emit `bool` type and `false` literal\n{text}"
+    );
+    assert!(
+        text.contains("(bool-prop-read ready)"),
+        "bool state binding must emit BoolPropRead form\n{text}"
+    );
+    assert!(
+        text.contains("(assign ready true)"),
+        "bool literal in handler RHS must emit as `true`\n{text}"
+    );
+    let parsed = parse_ir(&text).expect("parse_ir failed");
+    assert_eq!(parsed, original, "round-trip mismatch\nIR text:\n{text}");
+
+    // T5 acceptance: round-trip reconstructs the bool state declaration
+    // and `BoolPropRead { path: "ready" }`.
+    assert_eq!(parsed.states.len(), 1);
+    let state = &parsed.states[0];
+    assert_eq!(state.name, "ready");
+    assert_eq!(state.ty, wasamo_ir::IrType::Bool);
+    assert_eq!(state.default, wasamo_ir::IrLiteral::Bool(false));
+
+    let button = &parsed.root;
+    assert_eq!(button.widget_type, "Button");
+    let binding = button
+        .bindings
+        .iter()
+        .find(|b| b.prop_name == "enabled")
+        .expect("Button must declare a `bind enabled = ...`");
+    assert_eq!(
+        binding.expr,
+        wasamo_ir::HandlerExpr::BoolPropRead {
+            path: "ready".into()
+        }
+    );
+
+    // Handler RHS `BoolLit(true)` survives the round-trip too.
+    let clicked = button
+        .handlers
+        .iter()
+        .find(|h| h.signal == "clicked")
+        .expect("Button must declare an `on clicked` handler");
+    assert_eq!(
+        clicked.expr,
+        wasamo_ir::HandlerExpr::Assign {
+            lhs: "ready".into(),
+            rhs: Box::new(wasamo_ir::HandlerExpr::BoolLit(true)),
         }
     );
 }
