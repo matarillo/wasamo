@@ -22,15 +22,17 @@ checklist に沿って、A9 の達成、上位文書との整合、CI、次 phas
 - branch: `wip/step` (→ `feat/m3-phase-1` への ff merge 候補)
 - HEAD commit: `1129aea style: apply cargo fmt across T6-T8 …`
   以降に本 retrospective コミット
-- CI: `workflow_dispatch` 後に追記 (本文 §15 参照)
+- CI: GitHub Actions `workflow_dispatch` run
+  [26094510225](https://github.com/matarillo/wasamo/actions/runs/26094510225)
+  on `feat/m3-phase-1` — green (本文 §15 参照)
 
 ## Current Judgment
 
 2026-05-19 時点の判定は、**M3-Phase 1 の implementation/verification
-criteria はローカルで達成済み。owner-review findings (1–4) はいずれも
-本 retrospective commit (および同 commit の関連 doc-edit) で discharge
-された。main merge gate としては GitHub Actions CI green 確認と owner
-明示承認が残っている**、である。
+criteria はローカルおよび GitHub Actions CI で達成済み。owner-review
+findings (1–4) はいずれも本 retrospective commit (および同 commit の
+関連 doc-edit) で discharge された。main merge gate として残るのは
+owner の no-ff merge 明示承認であり、push はさらに別 gate**、である。
 
 owner-review findings の処理結果は [progress file §Owner-review follow-ups
 (closed at T12 phase-end)](../../plans/progress/m3-phase-1-progress.md#owner-review-follow-ups-closed-at-t12-phase-end)
@@ -49,9 +51,9 @@ owner-review findings の処理結果は [progress file §Owner-review follow-up
   sub-screen を代替したことを文書上整合させた。Phase 2 以降は item 5
   原則どおり `examples/gallery/` sub-screen を成長させる。
 - **Finding 3** (checklist item 16 GUI smoke 欠落) → 本 §Checklist
-  phase-end 固有 に item 16 (human-visible GUI smoke) を追加し
-  「不要」判定を記録、旧 item 16 (CI YAML sanity check) を item 17 に
-  renumber。
+  phase-end 固有 に item 16 (human-visible GUI smoke) を追加し、
+  Phase 1 用 host (`examples/bool-demo-rust`) で実施済みと記録、
+  旧 item 16 (CI YAML sanity check) を item 17 に renumber。
 - **Finding 4** (progress file lifecycle) → progress file frontmatter
   `status: active` → `closing` に変更、本 retrospective の checkbox を
   tick 済み (本 commit で進捗反映)。
@@ -335,15 +337,15 @@ retroactive fill) と process correction (GUI smoke は owner 領域)
      phase ブランチ HEAD に含まれた状態での CI green であり、
      owner の main no-ff merge 承認に進める。
 
-16. **human-visible GUI smoke:** 不要。
+16. **human-visible GUI smoke:** 必要、Phase 1 用 host で実施済み。
    - retrospectives.md §checklist item 16 は「runtime / ABI / binding /
      wasamoc lowering / examples 等、ユーザー可視の挙動に影響しうる
      phase では必要」と定めている。Phase 1 はそのすべてに該当する
      ので、本来は `counter-c` / `counter-rust` / `counter-zig` を
      [human-visible GUI smoke](../human-visible-smoke.md) に従って
      確認すべき位置にある。
-   - **不要判定の根拠:** Phase 1 の人間可視領域は次の三層で既に
-     カバー済み。
+   - **実施済み判定の根拠:** Phase 1 の新 surface の人間可視領域は
+     次の三層でカバー済み。
      1. T6 の mock-free Windows-only integration test
         `button_enabled_property_flips_visual_and_suppresses_click`
         が `CompositionColorBrush::Color()` flip と click 抑制を
@@ -373,8 +375,8 @@ retroactive fill) と process correction (GUI smoke は owner 領域)
 
 ## Phase-End Gate
 
-**Merge readiness:** ready for owner no-ff merge approval **after**
-GitHub Actions CI green confirmation on `feat/m3-phase-1`. push remains
+**Merge readiness:** ready for owner no-ff merge approval. GitHub
+Actions CI green has been confirmed on `feat/m3-phase-1`; push remains
 a separate owner-approved gate per
 [docs/notes/retrospectives.md](../retrospectives.md) と
 `feedback_phase_end_merge` memory。
@@ -388,7 +390,8 @@ phase-end retrospective としては、以下を owner に報告する。
 - A11 spec sync (T10) は external-implementor smoke check を owner
   確認済み。
 - 新 CI YAML 作業は不要。
-- main merge 前に GitHub Actions CI green の確認が必要。
+- GitHub Actions CI green は確認済み
+  (`workflow_dispatch` run `26094510225`)。
 - no-ff merge と push は別 gate であり、どちらも owner の明示承認が
   必要。
 
@@ -419,10 +422,10 @@ cargo build --workspace
 cargo test --workspace
 ```
 
-All local build/test commands completed successfully. The GitHub
-Actions run for the phase branch will be triggered via
-`workflow_dispatch` after this retrospective lands and the wip/step
-branch is ff-merged into `feat/m3-phase-1`; its link will be appended
-to [`docs/plans/progress/m3-phase-1-progress.md` §CI / verification
-log](../../plans/progress/m3-phase-1-progress.md#ci--verification-log)
-before owner no-ff merge approval.
+All local build/test commands completed successfully. GitHub Actions
+`workflow_dispatch` run
+[26094510225](https://github.com/matarillo/wasamo/actions/runs/26094510225)
+on `feat/m3-phase-1` is green, and the progress file's
+[§CI / verification log](../../plans/progress/m3-phase-1-progress.md#ci--verification-log)
+records that it includes both T6 `button_enabled` and T13
+`bool_binding_live_propagation`.

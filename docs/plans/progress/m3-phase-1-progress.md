@@ -647,21 +647,20 @@ headless assertion. T13 closes the gap.
     slice; the previous "Button.enabled live propagation" claim
     against `button_enabled.rs` corrected.
   - phase-end retrospective §Checklist 16 (human-visible GUI
-    smoke): "不要" judgment added with rationale (T6 headless
-    widget-setter slice + T13 headless binding-pipeline live test
-    + T11 owner-manual `bool-demo-rust` smoke cover the
-    human-visible territory; `counter-*` hosts have no Phase 1
-    surface change). Original §16 (CI YAML sanity check)
-    renumbered to §17.
+    smoke): recorded as required and completed through the Phase 1
+    `bool-demo-rust` host, with rationale (T6 headless widget-setter
+    slice + T13 headless binding-pipeline live test + T11 owner-manual
+    `bool-demo-rust` smoke cover the human-visible territory;
+    `counter-*` hosts have no Phase 1 surface change). Original §16
+    (CI YAML sanity check) renumbered to §17.
   - progress file frontmatter `status: active` → `status:
     closing` (added `closing: 2026-05-19`); T12 phase-end
-    retrospective checkbox ticked. The remaining open box is the
-    "Windows-only mock-free integration tests pass on CI" line,
-    which depends on the `feat/m3-phase-1` `workflow_dispatch`
-    completion link.
-  - progress file §CI / verification log: T13 local run entries
-    already recorded (2026-05-19 / T13 local); CI inclusion link
-    pending the shared `feat/m3-phase-1` `workflow_dispatch`.
+    retrospective checkbox ticked. The Windows-only mock-free
+    integration test checkbox is also ticked after `feat/m3-phase-1`
+    `workflow_dispatch` run 26094510225 passed.
+  - progress file §CI / verification log: T13 local run entries and
+    CI inclusion link recorded (2026-05-19 / T13 local and
+    `workflow_dispatch` run 26094510225).
 
 Retrospective:
 [docs/notes/m3-phase-1/t13-step-end-retrospective.md](../../notes/m3-phase-1/t13-step-end-retrospective.md).
@@ -696,8 +695,9 @@ Notes:
 owner が 2026-05-19 に T12 phase-end retrospective + 関連
 artifact をレビューした際に挙げた 4 件の findings。1 が実体に関わる
 判断、2 が文書整合、3 と 4 が doc/lifecycle の後始末。**4 件すべて
-2026-05-19 に discharge 済み**。残るのは GitHub Actions CI green の
-確認と owner の main no-ff merge / push 承認のみ。
+2026-05-19 に discharge 済み**。GitHub Actions CI green も
+`workflow_dispatch` run 26094510225 で確認済み。残るのは owner の
+main no-ff merge 承認と、その後の別 gate である push 承認のみ。
 
 ### Finding 1 — A9 evidence wording / ADR item 3 unmet → **T13 で対処**
 
@@ -744,19 +744,18 @@ artifact をレビューした際に挙げた 4 件の findings。1 が実体に
   sanity check (実際は item 17 相当) として書いてしまっており、GUI
   smoke の判定が欠けている。
 - **対応:** phase-end retrospective §Checklist §phase-end 固有 に
-  item 16 (human-visible GUI smoke) を追加。判定は「不要」相当
-  (理由: T6 `button_enabled` headless live test と T11
+  item 16 (human-visible GUI smoke) を追加。判定は「必要、Phase 1 用
+  host で実施済み」(理由: T6 `button_enabled` headless live test と
+  T13 `bool_binding_live_propagation` headless live test、T11
   `bool-demo-rust` owner manual smoke で human-visible 領域は
-  既にカバー済み; T13 完了でさらに binding-pipeline live propagation
-  も headless で証明される)。item 17 は CI YAML sanity check として
-  renumber、もしくは現在の item 16 内容を item 17 に renumber。
+  既にカバー済み)。item 17 は CI YAML sanity check として renumber。
 - **status (closed 2026-05-19):** phase-end retrospective §Checklist
-  に item 16 (human-visible GUI smoke) を追加して「不要」判定を
-  記録。理由は T6 headless widget-setter slice + T13 headless
-  binding-pipeline live test + T11 owner-manual `bool-demo-rust`
-  smoke で human-visible 領域が既にカバーされており、`counter-*`
-  hosts には Phase 1 surface 拡張が無いため。旧 item 16 (CI YAML
-  sanity check) を item 17 に renumber 済み。
+  に item 16 (human-visible GUI smoke) を追加して「必要、Phase 1 用
+  host で実施済み」判定を記録。理由は T6 headless widget-setter
+  slice + T13 headless binding-pipeline live test + T11 owner-manual
+  `bool-demo-rust` smoke で human-visible 領域が既にカバーされており、
+  `counter-*` hosts には Phase 1 surface 拡張が無いため。旧 item 16
+  (CI YAML sanity check) を item 17 に renumber 済み。
 
 ### Finding 4 — progress file lifecycle 後始末
 
@@ -879,8 +878,9 @@ artifact をレビューした際に挙げた 4 件の findings。1 が実体に
   - phase-end retrospective: §Current Judgment rewritten to reflect
     findings closure; §Checklist 11 A9 evidence anchored to T13 with
     T6 widget-setter slice as auxiliary; §Checklist 16
-    (human-visible GUI smoke) added with "不要" judgment; original
-    §16 (CI YAML sanity check) renumbered to §17 (Findings 1 / 3).
+    (human-visible GUI smoke) added as required and completed through
+    the Phase 1 host; original §16 (CI YAML sanity check) renumbered
+    to §17 (Findings 1 / 3).
   - progress file frontmatter: `status: active` →
     `status: closing` + `closing: 2026-05-19` (Finding 4); T13 box 4
     and T12 "Phase-end retrospective entry added" checkbox ticked;
