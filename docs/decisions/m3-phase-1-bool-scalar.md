@@ -2,7 +2,7 @@
 
 **Phase:** M3-Phase 1 (`bool` scalar binding)
 **Date:** 2026-05-19
-**Status:** Drafting
+**Status:** Accepted
 
 ## Context
 
@@ -57,7 +57,7 @@ are explicitly out of scope here.
 
 ### DD-M3-P1-001 — `IrType` extension
 
-**Status:** Drafting
+**Status:** Accepted
 
 **Context:**
 `IrType` is a two-variant enum (`I32 | Str`) that tags `state`
@@ -109,7 +109,7 @@ the rest of M3 has to navigate around.
 
 ### DD-M3-P1-002 — `IrLiteral` extension and surface syntax
 
-**Status:** Drafting
+**Status:** Accepted
 
 **Context:**
 Once Option A of DD-M3-P1-001 is taken, `IrLiteral` needs to carry a
@@ -181,7 +181,7 @@ is nil.
 
 ### DD-M3-P1-003 — `HandlerExpr` variants for `bool`
 
-**Status:** Drafting
+**Status:** Accepted
 
 **Context:**
 `HandlerExpr` is the shared IR ([wasamo-ir/src/lib.rs L28–L49](../../wasamo-ir/src/lib.rs#L28-L49))
@@ -259,7 +259,7 @@ discarded anyway, so its absence does not increase exposure.
 
 ### DD-M3-P1-004 — `EvalContext` method shape for `bool`
 
-**Status:** Drafting
+**Status:** Accepted
 
 **Context:**
 `EvalContext` is the trait through which `HandlerExpr` evaluation
@@ -321,7 +321,7 @@ handler-side trait extension. If DD-M3-P1-008 lands as Option B
 
 ### DD-M3-P1-005 — Phase 1 evidence: which widget attribute carries the `bool` binding?
 
-**Status:** Drafting
+**Status:** Accepted
 
 **Context:**
 The m3-plan ([§Phase 1](../plans/m3-plan.md#phase-breakdown)) requires
@@ -467,7 +467,7 @@ spec evidence for A9 beyond the scalar/literal/grammar additions.
 
 ### DD-M3-P1-006 — IR text grammar surface for `bool`
 
-**Status:** Drafting
+**Status:** Accepted
 
 **Context:**
 The IR text format (DD-M2-P6-002) is the on-disk form `wasamoc` emits
@@ -509,7 +509,7 @@ the per-phase spec update (A11) has a single citable record.
 
 ### DD-M3-P1-007 — Binding evaluation result shape for `bool`
 
-**Status:** Drafting
+**Status:** Accepted
 
 **Context:**
 M2 ended with `evaluate_binding()` returning `Result<String, EvalError>`
@@ -610,7 +610,7 @@ enforceable.
 
 ### DD-M3-P1-008 — Mutation source for the Phase 1 live-propagation evidence
 
-**Status:** Drafting
+**Status:** Accepted
 
 **Context:**
 DD-M3-P1-005 picks `Button.enabled: bool` as the property carrying
@@ -762,7 +762,7 @@ additional ABI scope.
 
 ### DD-M3-P1-009 — Property type metadata and writer dispatch
 
-**Status:** Drafting
+**Status:** Accepted
 
 **Context:**
 DD-M3-P1-007 chooses per-type binding writers
@@ -845,7 +845,7 @@ territory.
 
 ### DD-M3-P1-010 — `wasamoc` type-checker scope for `bool`
 
-**Status:** Drafting
+**Status:** Accepted
 
 **Context:**
 Phase 1 introduces a new scalar type. The `wasamoc` checker
@@ -965,7 +965,17 @@ identifier → one typed PropRead variant).
   pending demand from a phase whose evidence shape requires host-
   side state mutation (Phase 1's evidence is admitted via handler-
   side `set_bool` per DD-M3-P1-008 Option A, sidestepping this
-  question for Phase 1).
+  question for Phase 1). Plausible triggers: M4 input / event-source
+  phases needing async state injection from outside the handler
+  model (timer-driven, I/O completion, host-side animation
+  parameters), or a pre-M6 ABI-hardening review. Deadline-bounded
+  by M6 C ABI freeze — post-1.0 ABI surface is append-only, so if
+  this primitive is needed at all it must land before the freeze.
+  No current ROADMAP item names it as a hard prerequisite; the
+  VISION §4 Principle 2 two-channel model ("events up, bindings
+  down") also argues against treating host-observed-property →
+  host-written-state as a routine channel, so this deferral is
+  principled rather than tacit.
 - **Full `Button.enabled` interaction-state contract.** Phase 1
   narrows to: click suppression, layout slot preserved, minimal
   visual. Deferred to M4 (input/focus) / M5 (a11y): keyboard
@@ -1090,10 +1100,16 @@ clean fallback.
 | DD-M3-P1-009 | Property type metadata + writer dispatch | Option A — `resolve_prop_key` returns `(PropertyKey, IrType)`; widget catalog row carries the type |
 | DD-M3-P1-010 | `wasamoc` type-checker scope for bool | Option A — full state/binding/identifier type-checking at `wasamoc check`; mismatches are compile-time diagnostics |
 
-Implementation task list: belongs in
-[`docs/plans/m3-plan.md` — M3-Phase 1 Progress](../plans/m3-plan.md)
-once this ADR is accepted; not in this ADR per
-[decisions/README.md §Task lists](./README.md#task-lists).
+Implementation task list: belongs in the Phase 1 progress file
+`docs/plans/progress/m3-phase-1-progress.md` (created when this ADR
+is Accepted and Phase 1 starts execution); not in this ADR and not
+in `m3-plan.md` itself. See
+[plans/README.md §Scope rule (plan vs ADR)](../plans/README.md#scope-rule-plan-vs-adr)
+and [plans/README.md §Phase progress file lifecycle](../plans/README.md#phase-progress-file-lifecycle)
+for the authoritative location and the `active → closing → retired`
+lifecycle the file follows. The Progress table in
+[m3-plan.md](../plans/m3-plan.md) carries only a one-row index entry
+pointing at this progress file.
 
 ## Spec impact preview (for owner agreement)
 
