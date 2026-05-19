@@ -99,6 +99,19 @@ ADR に補足 DD)。
 CI green: **必須**。clean rebuild は **必須** (incremental cache の嘘を
 main に持ち込まない)。
 
+## Retrospective Main Learning の前送り
+
+phase-end retrospective の `Main Learning` (および step-end
+retrospective に含まれる相当内容) は、次 phase の pre-doc input
+section に **何らかの形で記載する** こと。記載形態は次 phase の
+framing に合わせて選んでよい (逐語引用 / 要約 / 該当 retrospective
+への明示リンク化など)。
+
+これは A11 (per-phase spec sync) と並ぶ phase 間連続性の gate であり、
+checklist 項目 14「次 phase の pre-doc への送り込み材料を
+`docs/notes/` に整理したか」の達成判定はこの前送りが計画されている
+ことを含意する。
+
 ## ファストトラック基準の根拠
 
 各 (FT) 項目を独立に守る理由:
