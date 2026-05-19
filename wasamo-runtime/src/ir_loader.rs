@@ -476,6 +476,7 @@ impl<'a> Parser<'a> {
         let ty = match ty_str.as_str() {
             "i32" => IrType::I32,
             "string" => IrType::Str,
+            "bool" => IrType::Bool,
             other => {
                 return Err(IrLoadError::Parse(format!("unknown state type: {other}")));
             }
@@ -554,6 +555,8 @@ impl<'a> Parser<'a> {
         match self.advance() {
             Some(Token::Int(n)) => Ok(IrLiteral::Int(*n)),
             Some(Token::Str(s)) => Ok(IrLiteral::Str(s.clone())),
+            Some(Token::Ident(s)) if s == "true" => Ok(IrLiteral::Bool(true)),
+            Some(Token::Ident(s)) if s == "false" => Ok(IrLiteral::Bool(false)),
             Some(Token::Ident(s)) => Ok(IrLiteral::Ident(s.clone())),
             other => Err(IrLoadError::Parse(format!(
                 "expected literal, got {other:?}"
@@ -573,6 +576,14 @@ impl<'a> Parser<'a> {
                 self.advance();
                 Ok(HandlerExpr::StrLit(v))
             }
+            Some(Token::Ident(s)) if s == "true" => {
+                self.advance();
+                Ok(HandlerExpr::BoolLit(true))
+            }
+            Some(Token::Ident(s)) if s == "false" => {
+                self.advance();
+                Ok(HandlerExpr::BoolLit(false))
+            }
             Some(Token::LParen) => self.parse_sexpr(),
             other => Err(IrLoadError::Parse(format!(
                 "expected expression, got {other:?}"
@@ -591,6 +602,10 @@ impl<'a> Parser<'a> {
             "str-prop-read" => {
                 let path = self.expect_ident()?;
                 HandlerExpr::StrPropRead { path }
+            }
+            "bool-prop-read" => {
+                let path = self.expect_ident()?;
+                HandlerExpr::BoolPropRead { path }
             }
             "assign" => {
                 let lhs = self.expect_ident()?;
@@ -701,11 +716,11 @@ fn build_signal_registry(states: &[IrState]) -> SignalRegistry {
                     .insert(state.name.clone(), Signal::new(initial));
             }
             IrType::Bool => {
-                // T6/T7: SignalRegistry::bools and Signal<bool> registration land
-                // in M3-Phase 1 T6 (widget catalog + PropertyValue::Bool) and
-                // T7 (EvalContext bool surface). T1 only adds the IR variant
-                // to keep the workspace compiling; an IR component that declares
-                // a bool state cannot be loaded yet.
+                // T5 (this commit) wires the parser side, so an IR text that
+                // declares a bool state now parses through `parse_ir`. The
+                // build seam below still depends on `SignalRegistry::bools`
+                // and `Signal<bool>`, which land in T6 (widget catalog +
+                // `PropertyValue::Bool`) and T7 (`EvalContext` bool surface).
                 unimplemented!(
                     "M3-Phase 1: bool state signal registration is not wired \
                      yet (pending T6 widget catalog and T7 EvalContext work)"
@@ -1077,6 +1092,110 @@ mod tests {
     }
 
     #[test]
+    fn state_bool_with_false_default() {
+        let c = parse_ok(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             state ready: bool = false\n\
+             node V {}\n}",
+        );
+        assert_eq!(c.states.len(), 1);
+        assert_eq!(c.states[0].name, "ready");
+        assert_eq!(c.states[0].ty, IrType::Bool);
+        assert_eq!(c.states[0].default, IrLiteral::Bool(false));
+    }
+
+    #[test]
+    fn state_bool_with_true_default() {
+        let c = parse_ok(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             state ready: bool = true\n\
+             node V {}\n}",
+        );
+        assert_eq!(c.states[0].ty, IrType::Bool);
+        assert_eq!(c.states[0].default, IrLiteral::Bool(true));
+    }
+
+    #[test]
+    fn prop_bool_literal() {
+        let c = parse_ok(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             node Button {\n\
+               prop enabled = true\n\
+             }\n}",
+        );
+        let props = &c.root.props;
+        assert_eq!(
+            props[0],
+            IrProp {
+                name: "enabled".into(),
+                value: IrLiteral::Bool(true)
+            }
+        );
+    }
+
+    #[test]
+    fn binding_with_bool_prop_read() {
+        let c = parse_ok(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             state ready: bool = false\n\
+             node Button { bind enabled = (bool-prop-read ready) }\n}",
+        );
+        assert_eq!(c.root.bindings.len(), 1);
+        let b = &c.root.bindings[0];
+        assert_eq!(b.prop_name, "enabled");
+        assert_eq!(
+            b.expr,
+            HandlerExpr::BoolPropRead {
+                path: "ready".into()
+            }
+        );
+    }
+
+    #[test]
+    fn binding_with_bool_literal() {
+        let c = parse_ok(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             node Button { bind enabled = true }\n}",
+        );
+        assert_eq!(c.root.bindings[0].expr, HandlerExpr::BoolLit(true));
+    }
+
+    #[test]
+    fn handler_assign_bool_literal() {
+        let c = parse_ok(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             state ready: bool = true\n\
+             node Button { on clicked { (assign ready false) } }\n}",
+        );
+        let h = &c.root.handlers[0];
+        assert_eq!(
+            h.expr,
+            HandlerExpr::Assign {
+                lhs: "ready".into(),
+                rhs: Box::new(HandlerExpr::BoolLit(false))
+            }
+        );
+    }
+
+    #[test]
+    fn handler_assign_bool_prop_read() {
+        let c = parse_ok(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             state a: bool = false\n\
+             state b: bool = true\n\
+             node V { on clicked { (assign a (bool-prop-read b)) } }\n}",
+        );
+        let h = &c.root.handlers[0];
+        assert_eq!(
+            h.expr,
+            HandlerExpr::Assign {
+                lhs: "a".into(),
+                rhs: Box::new(HandlerExpr::BoolPropRead { path: "b".into() })
+            }
+        );
+    }
+
+    #[test]
     fn negative_int_literal() {
         let c = parse_ok(
             ";wasamo-ir v0\ncomponent C inherits W {\n\
@@ -1337,6 +1456,16 @@ mod tests {
         let err = parse_err(
             ";wasamo-ir v0\ncomponent C inherits W {\n\
              node V { bind text = (prop-read missing) }\n}",
+        );
+        assert!(matches!(err, IrLoadError::Validate(ref m) if m.contains("missing")));
+        assert_malformed_display_nonempty(&err);
+    }
+
+    #[test]
+    fn malformed_bool_prop_read_undeclared() {
+        let err = parse_err(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             node V { bind enabled = (bool-prop-read missing) }\n}",
         );
         assert!(matches!(err, IrLoadError::Validate(ref m) if m.contains("missing")));
         assert_malformed_display_nonempty(&err);
