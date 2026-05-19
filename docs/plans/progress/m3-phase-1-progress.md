@@ -149,13 +149,40 @@ Notes:
 
 ### T5 — `wasamo-runtime` IR loader: read new productions
 
-Discharges the IR-text-load half of DD-M3-P1-006.
+Discharges the IR-text-load half of DD-M3-P1-006. **Landed in
+6dbbbba + ef6e3a0 (2026-05-19).**
 
-- [ ] IR text loader accepts the new `IrType` / `IrLiteral` /
-      `HandlerExpr` productions.
-- [ ] Round-trip test (`wasamoc` emit → `wasamo-runtime` load)
+- [x] IR text loader accepts the new `IrType` / `IrLiteral` /
+      `HandlerExpr` productions: `parse_state` resolves `"bool"`,
+      `parse_literal` lowers bare `true` / `false` idents to
+      `IrLiteral::Bool`, `parse_expr` recognises `true` / `false`
+      in expression position as `HandlerExpr::BoolLit`, and
+      `parse_sexpr` gains a `bool-prop-read` tag arm. Defense-in-
+      depth validation (DD-M2-P6-009) covered `BoolLit` /
+      `BoolPropRead` from T1.
+- [x] Round-trip test (`wasamoc` emit → `wasamo-runtime` load)
       reconstructs `IrState { ty: Bool, default: Bool(false) }` and
-      `HandlerExpr::BoolPropRead { path: "ready" }`.
+      `HandlerExpr::BoolPropRead { path: "ready" }`. Lives as
+      `bool_state_binding_emits_and_parses_bool_productions` in
+      [wasamo-runtime/tests/ir_loader_roundtrip.rs](../../../wasamo-runtime/tests/ir_loader_roundtrip.rs)
+      alongside the existing i32 / string round-trips.
+
+Retrospective:
+[docs/notes/m3-phase-1/t5-step-end-retrospective.md](../../notes/m3-phase-1/t5-step-end-retrospective.md).
+
+Notes:
+
+- `build_signal_registry`'s `IrType::Bool` arm still raises
+  `unimplemented!()`. T5 only wires the parser; the build seam
+  depends on `SignalRegistry::bools` and `Signal<bool>`, which
+  arrive in T6 (widget catalog + `PropertyValue::Bool`) and T7
+  (`EvalContext` bool surface). The arm's comment is updated to
+  reflect the new sequencing.
+- The cross-crate integration test in T5 part 2 piggybacks on the
+  real T2 / T3 / T4 surfaces (lexer, checker, lower), so it
+  doubles as a regression guard for the seam between
+  `wasamoc::emit` and `parse_ir`. Any future divergence in IR
+  text spelling (e.g. a tag rename) will fail it.
 
 ### T6 — `wasamo-runtime` widget catalog: `PropertyValue::Bool`, typed `resolve_prop_key`, `Button.enabled`
 
