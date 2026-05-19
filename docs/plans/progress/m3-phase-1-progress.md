@@ -595,26 +595,30 @@ item 3 calls for. T11's `bool-demo-rust` host carries the visible
 window proof, but as owner-observed manual smoke, not a CI-gated
 headless assertion. T13 closes the gap.
 
-- [ ] New mock-free Windows-only integration test under
-      `wasamo-runtime/tests/` (working name
-      `bool_binding_live_propagation.rs`): lowers the Phase 1 bool
-      binding fixture (a minimal in-test variant of
-      `examples/bool-demo/bool-demo.ui` — just `state ready: bool =
-      true` + `Button { enabled: ready; clicked => { root.ready =
-      false; } }` inside `VStack`, no window chrome / theming
-      properties) through
-      `wasamoc → IR → parse_ir → build_widget_tree`, navigates the
-      built tree to the `Button` widget, pins its background visual
-      size so `hit_test_click` lands inside (the same workaround
-      `button_enabled.rs` uses because `layout::arrange` is not
-      driven in tests), asserts `PROP_BUTTON_ENABLED = true` via
-      `wasamo_get_property`, calls `hit_test_click(...)` on the
-      Button to fire the inline `clicked => { root.ready = false; }`
-      handler, ensures the reactive drain runs, then asserts
-      `PROP_BUTTON_ENABLED = false`. Asserts on the registry's
-      `Signal<bool>` value too if reachable, to give the test a
-      second axis of evidence parallel to the widget-side read.
-- [ ] Skip-guard follows the established pattern: fail (not skip)
+- [x] New mock-free Windows-only integration test under
+      `wasamo-runtime/tests/`:
+      [bool_binding_live_propagation.rs](../../../wasamo-runtime/tests/bool_binding_live_propagation.rs)
+      lowers a minimal in-test variant of
+      `examples/bool-demo/bool-demo.ui` (`state ready: bool = true`
+      + `Button { enabled: ready; clicked => { root.ready = false; } }`
+      with `Button` as the component root — the VStack wrapper was
+      dropped during implementation because the lower tests already
+      use this `Button`-as-root shape and it removes one navigation
+      step) through `wasamoc → IR → parse_ir → build_widget_tree`,
+      pins the Button's background visual size so `hit_test_click`
+      lands inside (the same workaround `button_enabled.rs` uses
+      because `layout::arrange` is not driven in tests), asserts
+      `PROP_BUTTON_ENABLED = true` via `wasamo_get_property` (driven
+      by the binding's initial run), calls `hit_test_click(...)` to
+      fire the inline `clicked => { root.ready = false; }` handler,
+      and asserts `PROP_BUTTON_ENABLED = false` after the reactive
+      drain. Registry `Signal<bool>` direct readback was not needed
+      and not added: it would require widening the `pub(crate)`
+      surface on `Signal::get_untracked` / `SignalRegistry::bools`,
+      and the widget-side read already proves the signal flipped —
+      a widget setter call without an upstream signal write is
+      structurally impossible in the binding pipeline.
+- [x] Skip-guard follows the established pattern: fail (not skip)
       on GitHub Actions when the runtime Compositor is unavailable
       (`0x80070005`), per
       [CLAUDE.md §Testing rules](../../../CLAUDE.md) and the
@@ -622,9 +626,11 @@ headless assertion. T13 closes the gap.
       taxonomy. T13's guard is the same shape as
       `button_enabled.rs` / `live_widgetnode_headless.rs` and
       inherits their SSH-class verification.
-- [ ] `cargo test --workspace` re-run green locally after T13
-      lands; CI run on `feat/m3-phase-1` includes the new test in
-      the workspace test run.
+- [x] `cargo test --workspace` re-run green locally after T13
+      lands (see CI / verification log entry for 2026-05-19 / T13);
+      CI run on `feat/m3-phase-1` includes the new test in the
+      workspace test run — link to be recorded in the CI /
+      verification log once `workflow_dispatch` completes.
 - [ ] Phase-end retrospective and progress file updated:
   - phase-end retrospective §Current Judgment / §Checklist 11
     (A9 evidence): A9 anchored to T13 alongside T6 widget-setter
@@ -637,6 +643,9 @@ headless assertion. T13 closes the gap.
   - progress file §CI / verification log: T13 local run + CI
     inclusion recorded.
 
+Retrospective:
+[docs/notes/m3-phase-1/t13-step-end-retrospective.md](../../notes/m3-phase-1/t13-step-end-retrospective.md).
+
 Notes:
 
 - **Reactive-drain mechanics in a headless test:** in production
@@ -646,12 +655,15 @@ Notes:
   `hit_test_click_inner`'s synchronous handler dispatch path. The
   current implementation calls `handler::invoke_handler` directly
   on the inline handler (widget.rs L675–L686), which writes to the
-  Signal via `HandlerEvalContext`. Whether that synchronous write
-  triggers the drain within the same call depends on
-  `with_batched_writes` framing. The test implementation will pick
-  whichever matches the runtime's actual contract; if a new
-  public-but-internal drain entry point is needed, that is a
-  documented seam (no new ABI surface).
+  Signal via `HandlerEvalContext`. **The synchronous write does
+  trigger the drain within the same call:** `Signal::set` calls
+  `drain_dirty_effects()` immediately when `BATCH_DEPTH == 0`, and
+  `hit_test_click` does not wrap its handler dispatch in
+  `with_batched_writes`. The test therefore needs no explicit
+  drain call and no new public drain seam — the assertion after
+  `hit_test_click(...)` sees `PROP_BUTTON_ENABLED = false` because
+  the binding effect ran inside `Signal::set` before
+  `hit_test_click` returned.
 - T13 does **not** reopen T6 / DD-M3-P1-005. The widget-setter
   slice covered by `button_enabled.rs` remains valid evidence for
   the bool plumbing through the C ABI. T13 is the
@@ -676,7 +688,11 @@ artifact をレビューした際に挙げた 4 件の findings。1 が実体に
   unified chain は covered になっていない。
 - **対応:** T13 (上記) として独立 task に切り出して discharge する。
   T12 の closing checkbox は T13 完了に依存。
-- **status:** task list 上で進行中 (T13 全 box 未 tick)。
+- **status:** T13 の box 1–3 (test 実装 + skip-guard + local
+  workspace test green) は tick 済み (2026-05-19)。box 4 (phase-end
+  retrospective / progress file frontmatter 更新) は Finding 3 +
+  Finding 4 と一体で動くため、phase close 文脈で処理予定。CI
+  inclusion は T12 と同じ `feat/m3-phase-1` `workflow_dispatch` 待ち。
 
 ### Finding 2 — m3-plan §Phase-end criteria item 5 (gallery sub-screen) との読み替え
 
@@ -786,6 +802,25 @@ artifact をレビューした際に挙げた 4 件の findings。1 が実体に
     (DD-M2-P1-006-era; not build/test failures).
 - **2026-05-19 / T12 CI:** pending `workflow_dispatch` trigger on
   `feat/m3-phase-1`. Link to be recorded here.
+- **2026-05-19 / T13 local:** `cargo build -p wasamo-runtime --tests` —
+  green after a one-line refactor of the `read_bool_property` helper
+  (`unsafe { value.payload.v_bool } != 0` is parsed as
+  `unsafe-block; != 0` rather than as the comparison; bound the union
+  read into a local first).
+- **2026-05-19 / T13 local:** `cargo test -p wasamo-runtime --test
+  bool_binding_live_propagation` — green, 1 passed (the new
+  `bool_binding_propagates_state_write_through_inline_handler_to_widget_property`).
+- **2026-05-19 / T13 local:** `cargo fmt --all -- --check` — initial
+  diff in the new test file; `cargo fmt --all` applied; re-run green.
+- **2026-05-19 / T13 local:** `cargo test --workspace` — green.
+  `wasamo-runtime` integration count rose from 8 → 9 (added
+  `bool_binding_live_propagation`); other crates unchanged
+  (`wasamo-ir` 7 unit, `wasamoc` 98 unit + 6 roundtrip,
+  `wasamo-runtime` 165 unit + 9 integration, `wasamo-sys` 1 unit).
+  No failures, no ignored.
+- **2026-05-19 / T13 CI:** pending — folded into the `feat/m3-phase-1`
+  `workflow_dispatch` run with T12. Link to be recorded here once CI
+  completes.
 
 ## Out-of-phase residuals
 
