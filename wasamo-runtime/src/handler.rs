@@ -79,6 +79,16 @@ pub fn evaluate(expr: &HandlerExpr, ctx: &mut dyn EvalContext) -> Result<i32, Ev
             path: "<string expression in integer context>".into(),
         }),
 
+        // Bool-typed forms are not yet wired into the handler evaluator;
+        // M3-Phase 1 T7 will add `EvalContext::set_bool` and a bool-typed
+        // `Assign` arm. Until then a bool expression in integer context is a
+        // type mismatch.
+        HandlerExpr::BoolLit(_) | HandlerExpr::BoolPropRead { .. } => {
+            Err(EvalError::TypeMismatch {
+                path: "<bool expression in integer context>".into(),
+            })
+        }
+
         HandlerExpr::PropRead { path } => ctx.get_i32(path),
 
         HandlerExpr::Assign { lhs, rhs } => {
@@ -280,6 +290,15 @@ fn evaluate_tracked(expr: &HandlerExpr, ctx: &mut dyn EvalContext) -> Result<i32
         | HandlerExpr::Interpolation(_) => Err(EvalError::TypeMismatch {
             path: "<string expression in integer context>".into(),
         }),
+
+        // M3-Phase 1 T7 / T8 will provide a bool-typed binding evaluator
+        // (`evaluate_bool_binding`); until that lands, a bool expression in
+        // integer binding context is a type mismatch.
+        HandlerExpr::BoolLit(_) | HandlerExpr::BoolPropRead { .. } => {
+            Err(EvalError::TypeMismatch {
+                path: "<bool expression in integer context>".into(),
+            })
+        }
     }
 }
 

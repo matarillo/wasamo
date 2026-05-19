@@ -166,8 +166,10 @@ fn validate_expr_references(
     err_msg: &dyn Fn(&str) -> String,
 ) -> Result<(), IrLoadError> {
     match expr {
-        HandlerExpr::IntLit(_) | HandlerExpr::StrLit(_) => Ok(()),
-        HandlerExpr::PropRead { path } | HandlerExpr::StrPropRead { path } => {
+        HandlerExpr::IntLit(_) | HandlerExpr::StrLit(_) | HandlerExpr::BoolLit(_) => Ok(()),
+        HandlerExpr::PropRead { path }
+        | HandlerExpr::StrPropRead { path }
+        | HandlerExpr::BoolPropRead { path } => {
             if !declared.contains(path.as_str()) {
                 Err(IrLoadError::Validate(err_msg(path)))
             } else {
@@ -698,6 +700,17 @@ fn build_signal_registry(states: &[IrState]) -> SignalRegistry {
                     .strings
                     .insert(state.name.clone(), Signal::new(initial));
             }
+            IrType::Bool => {
+                // T6/T7: SignalRegistry::bools and Signal<bool> registration land
+                // in M3-Phase 1 T6 (widget catalog + PropertyValue::Bool) and
+                // T7 (EvalContext bool surface). T1 only adds the IR variant
+                // to keep the workspace compiling; an IR component that declares
+                // a bool state cannot be loaded yet.
+                unimplemented!(
+                    "M3-Phase 1: bool state signal registration is not wired \
+                     yet (pending T6 widget catalog and T7 EvalContext work)"
+                );
+            }
         }
     }
     registry
@@ -1166,6 +1179,7 @@ mod tests {
             let ty = match s.ty {
                 IrType::I32 => "i32",
                 IrType::Str => "string",
+                IrType::Bool => "bool",
             };
             out.push_str(&format!(
                 "    state {}: {} = {}\n",
@@ -1215,6 +1229,7 @@ mod tests {
             IrLiteral::Int(n) => n.to_string(),
             IrLiteral::Str(s) => format!("\"{}\"", s.replace('\\', "\\\\").replace('"', "\\\"")),
             IrLiteral::Ident(id) => id.clone(),
+            IrLiteral::Bool(b) => (if *b { "true" } else { "false" }).to_string(),
         }
     }
 
@@ -1222,8 +1237,10 @@ mod tests {
         match e {
             HandlerExpr::IntLit(n) => n.to_string(),
             HandlerExpr::StrLit(s) => format!("\"{}\"", s),
+            HandlerExpr::BoolLit(b) => (if *b { "true" } else { "false" }).to_string(),
             HandlerExpr::PropRead { path } => format!("(prop-read {})", path),
             HandlerExpr::StrPropRead { path } => format!("(str-prop-read {})", path),
+            HandlerExpr::BoolPropRead { path } => format!("(bool-prop-read {})", path),
             HandlerExpr::Assign { lhs, rhs } => format!("(assign {} {})", lhs, render_expr(rhs)),
             HandlerExpr::CompoundAssign { lhs, op, rhs } => {
                 let op_str = match op {
