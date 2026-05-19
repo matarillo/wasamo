@@ -77,6 +77,31 @@ path, name the environment kind explicitly:
 Avoid the bare phrase "verify on SSH dev box" if the verification
 includes any visual or input-driven observation.
 
+### Implication for future mock-free Windows integration tests
+
+When introducing a new mock-free Windows-only integration test that
+follows the `runtime_compositor_unavailable` skip-guard pattern
+(origin DD-M2-P6-011 in
+[wasamo-runtime/tests/live_widgetnode_headless.rs](../../wasamo-runtime/tests/live_widgetnode_headless.rs);
+also used in
+[wasamo-runtime/tests/button_enabled.rs](../../wasamo-runtime/tests/button_enabled.rs)),
+verify the skip path is actually triggered on an SSH-dev-box-class
+environment (where `wasamo_init` returns `0x80070005`) before landing.
+A successful local run that does **not** hit the skip path is
+necessary but **not sufficient** evidence — it only proves the guard's
+happy path doesn't break the test, not that the guard correctly
+classifies the compositor-unavailable failure on the environments the
+guard exists to protect against.
+
+In particular, the substring match against `0x80070005` is fragile to
+different HRESULTs; a guard that has never been observed to fire is a
+guard that may not fire when needed. Reproduce the skip path
+explicitly on a Compositor-unavailable environment and record the
+observation in the relevant step-end retrospective.
+
+CLAUDE.md `Testing rules` lifts this implication into a project-wide
+rule so it is in scope for every Windows test author.
+
 ## Origin
 
 These observations crystallised during the Phase 2-5 example

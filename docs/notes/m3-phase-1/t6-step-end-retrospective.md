@@ -293,6 +293,32 @@ cargo test -p wasamo-runtime --test button_enabled
 
 いずれも green。`button_enabled` 1 件 passed。
 
+**SSH dev box 上での guard 経路確認 (2026-05-19 追記):**
+本 commit 群 (158e4fa まで含む) を SSH dev box 上で `cargo clean`
+後に再ビルドして `cargo test -p wasamo-runtime --test
+button_enabled -- --nocapture` を実行した結果、
+`wasamo_init: アクセスが拒否されました。 (0x80070005)` で初期化が
+失敗し、`runtime_compositor_unavailable` guard が想定通り発火して
+"skipping Button.enabled headless test: runtime compositor
+unavailable (...)" を stdout に出した上で `1 passed` で完了することを
+直接観測した。並走させた `cargo test -p wasamo-runtime --test
+live_widgetnode_headless -- --nocapture` も同じ HRESULT で同じ
+skip 動作を示し、両 test の guard 判定 (`0x80070005` substring
+match) が **DD-M2-P6-011 確立の precedent と完全 parity** であることが
+確認できた。Claude Code セッションが回している Windows 環境
+(physical machine 相当、Compositor 利用可能) では skip 経路を踏まず
+通常実行で `1 passed` だったため、guard の **happy path** と
+**skip path** の双方が単一 commit 群で両環境にまたがって検証された
+ことになる。
+
+本確認をきっかけに、project-wide rule として
+[CLAUDE.md `Testing rules`](../../../CLAUDE.md) に「新規 mock-free
+Windows-only test を land する前に、Compositor-unavailable 環境で
+skip-guard の発火を観測すること」を 1 bullet 追加し、根拠と env
+分類を [docs/notes/verification-environments.md](../verification-environments.md)
+§ "Implication for future mock-free Windows integration tests" に
+拡張した(本 retrospective と同一コミットで反映)。
+
 ## Follow-Up
 
 T6 から後続 task への明示的な引き渡し:
