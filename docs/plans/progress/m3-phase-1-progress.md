@@ -112,14 +112,40 @@ Notes:
 ### T4 — `wasamoc` lowering: identifier → typed `*PropRead`
 
 Discharges DD-M3-P1-003 / DD-M3-P1-010 interaction (typed
-lowering).
+lowering). **Landed in 5a5ba28 (2026-05-19).**
 
-- [ ] Identifier lowering consults the state-type table: `bool`
+- [x] Identifier lowering consults the state-type table: `bool`
       state name → `BoolPropRead`; `i32` → `PropRead`; `String` →
-      `StrPropRead`.
-- [ ] Unit test asserts lowering of `bind enabled: ready` for
+      `StrPropRead`. Applied uniformly to (1) `lower_expr` for
+      prop-bind RHS, (2) `lower_rhs_expr` for handler RHS (with
+      `&Namespace` now threaded through `lower_block` /
+      `lower_statement`), and (3) `lower_string_parts` for string-
+      interpolation parts.
+- [x] Unit test asserts lowering of `bind enabled: ready` for
       `state ready: bool = …` emits `BoolPropRead { path:
-      "ready" }`.
+      "ready" }`. Six further tests cover the other three ident-
+      resolution outcomes (i32 / string state → `PropRead` /
+      `StrPropRead`; non-state keyword stays as
+      `IrLiteral::Ident`) plus handler-RHS and string-interp
+      paths.
+
+Retrospective:
+[docs/notes/m3-phase-1/t4-step-end-retrospective.md](../../notes/m3-phase-1/t4-step-end-retrospective.md).
+
+Notes:
+
+- The non-state ident pass-through (`theme: system`, `style:
+  accent`, `font: title`, `backdrop: mica`) is what keeps the
+  M2-era `.ui` corpus lowering unchanged under T4 — only idents
+  that the namespace identifies as `state` become reactive
+  bindings; everything else stays a static `IrLiteral::Ident`.
+  This mirrors the soft-catalog discipline T3 chose on the
+  checker side.
+- Float-typed state idents (if any ever appear) fall through to
+  the static-ident branch alongside non-state idents, because
+  Phase 1 has no `*PropRead` variant for `f32` / `f64` and the
+  checker rejects float earlier; the lower-side fallback is
+  defensive only.
 
 ### T5 — `wasamo-runtime` IR loader: read new productions
 
