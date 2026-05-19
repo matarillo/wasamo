@@ -438,7 +438,21 @@ impl<'a> EvalContext for BindingEvalContext<'a> {
             .map(|s| s.get_untracked())
     }
 
+    fn get_bool(&self, path: &str) -> Result<bool, EvalError> {
+        self.registry
+            .bools
+            .get(path)
+            .ok_or_else(|| EvalError::UnknownProperty(path.to_string()))
+            .map(|s| s.get_untracked())
+    }
+
     fn set_i32(&mut self, path: &str, _value: i32) -> Result<(), EvalError> {
+        Err(EvalError::WriteInBindingContext {
+            path: path.to_string(),
+        })
+    }
+
+    fn set_bool(&mut self, path: &str, _value: bool) -> Result<(), EvalError> {
         Err(EvalError::WriteInBindingContext {
             path: path.to_string(),
         })
@@ -455,6 +469,14 @@ impl<'a> EvalContext for BindingEvalContext<'a> {
     fn read_string_tracked(&self, path: &str) -> Result<String, EvalError> {
         self.registry
             .strings
+            .get(path)
+            .ok_or_else(|| EvalError::UnknownProperty(path.to_string()))
+            .map(|s| s.get())
+    }
+
+    fn read_bool_tracked(&self, path: &str) -> Result<bool, EvalError> {
+        self.registry
+            .bools
             .get(path)
             .ok_or_else(|| EvalError::UnknownProperty(path.to_string()))
             .map(|s| s.get())
@@ -493,10 +515,28 @@ impl<'a> EvalContext for HandlerEvalContext<'a> {
             .map(|s| s.get_untracked())
     }
 
+    fn get_bool(&self, path: &str) -> Result<bool, EvalError> {
+        self.registry
+            .bools
+            .get(path)
+            .ok_or_else(|| EvalError::UnknownProperty(path.to_string()))
+            .map(|s| s.get_untracked())
+    }
+
     fn set_i32(&mut self, path: &str, value: i32) -> Result<(), EvalError> {
         let sig = self
             .registry
             .i32s
+            .get(path)
+            .ok_or_else(|| EvalError::UnknownProperty(path.to_string()))?;
+        sig.set(value);
+        Ok(())
+    }
+
+    fn set_bool(&mut self, path: &str, value: bool) -> Result<(), EvalError> {
+        let sig = self
+            .registry
+            .bools
             .get(path)
             .ok_or_else(|| EvalError::UnknownProperty(path.to_string()))?;
         sig.set(value);
@@ -1028,6 +1068,117 @@ mod tests {
             *run_count2.borrow(),
             2,
             "read_i32_tracked should register a dependency"
+        );
+    }
+
+    #[test]
+    fn binding_ctx_get_bool_untracked_vs_tracked() {
+        // M3-Phase 1 T7: parallels the i32/String tracked-read tests for
+        // the new bool surface. `get_bool` must NOT register a dependency;
+        // `read_bool_tracked` must.
+        use crate::handler::EvalContext;
+
+        let sig = Signal::new(false);
+        let mut registry = SignalRegistry::new();
+        registry.bools.insert("ready".to_string(), sig.clone());
+        let registry = Rc::new(registry);
+
+        let run_count = Rc::new(RefCell::new(0i32));
+        let run_count_c = Rc::clone(&run_count);
+        let registry_untracked = Rc::clone(&registry);
+
+        let _h_untracked = EffectHandle::new(move || {
+            *run_count_c.borrow_mut() += 1;
+            let ctx = BindingEvalContext::new(&registry_untracked);
+            let _ = ctx.get_bool("ready").unwrap();
+        });
+        assert_eq!(*run_count.borrow(), 1);
+        sig.set(true);
+        assert_eq!(
+            *run_count.borrow(),
+            1,
+            "get_bool should not register a dependency"
+        );
+
+        let run_count2 = Rc::new(RefCell::new(0i32));
+        let run_count2_c = Rc::clone(&run_count2);
+        let registry_tracked = Rc::clone(&registry);
+
+        let _h_tracked = EffectHandle::new(move || {
+            *run_count2_c.borrow_mut() += 1;
+            let ctx = BindingEvalContext::new(&registry_tracked);
+            let _ = ctx.read_bool_tracked("ready").unwrap();
+        });
+        assert_eq!(*run_count2.borrow(), 1);
+        sig.set(false);
+        assert_eq!(
+            *run_count2.borrow(),
+            2,
+            "read_bool_tracked should register a dependency"
+        );
+    }
+
+    #[test]
+    fn binding_ctx_set_bool_returns_write_error() {
+        use crate::handler::EvalError;
+
+        let registry = SignalRegistry::new();
+        let mut ctx = BindingEvalContext::new(&registry);
+        let result = ctx.set_bool("ready", true);
+        assert_eq!(
+            result,
+            Err(EvalError::WriteInBindingContext {
+                path: "ready".into()
+            })
+        );
+    }
+
+    /// `HandlerEvalContext::set_bool` drives `Signal<bool>::set`, the path
+    /// the live `Assign { rhs: BoolLit | BoolPropRead }` evaluator arm
+    /// from T7 takes when an inline `on click { ready = false }` handler
+    /// fires (DD-M3-P1-008 Option A).
+    #[test]
+    fn handler_ctx_set_bool_drives_signal_set() {
+        use crate::handler::{evaluate, EvalContext, HandlerExpr};
+
+        let sig = Signal::new(true);
+        let mut registry = SignalRegistry::new();
+        registry.bools.insert("ready".to_string(), sig.clone());
+
+        // Confirm an effect tracking `ready` re-runs after the handler
+        // write — proves the reactive cascade fires on bool writes too.
+        let run_count = Rc::new(RefCell::new(0i32));
+        let run_count_c = Rc::clone(&run_count);
+        let sig_c = sig.clone();
+        let _h = EffectHandle::new(move || {
+            *run_count_c.borrow_mut() += 1;
+            let _ = sig_c.get();
+        });
+        assert_eq!(*run_count.borrow(), 1);
+
+        // Drive the assign through the public `evaluate()` entry point,
+        // not just `set_bool` directly — proves the T7 arm reaches the
+        // typed registry write path through `HandlerEvalContext`.
+        let mut ctx = HandlerEvalContext::new(&registry);
+        let expr = HandlerExpr::Assign {
+            lhs: "ready".into(),
+            rhs: Box::new(HandlerExpr::BoolLit(false)),
+        };
+        assert_eq!(evaluate(&expr, &mut ctx), Ok(0));
+        assert_eq!(ctx.get_bool("ready"), Ok(false));
+        // Reactive cascade fired.
+        assert_eq!(*run_count.borrow(), 2);
+    }
+
+    #[test]
+    fn handler_ctx_set_bool_unknown_path_errors() {
+        use crate::handler::{EvalContext, EvalError};
+
+        let registry = SignalRegistry::new();
+        let mut ctx = HandlerEvalContext::new(&registry);
+        assert_eq!(
+            ctx.set_bool("nope", true),
+            Err(EvalError::UnknownProperty("nope".into()))
         );
     }
 
