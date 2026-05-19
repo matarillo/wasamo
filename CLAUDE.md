@@ -43,6 +43,13 @@ Unit tests are only appropriate for logic that has **no Win32/WinRT FFI dependen
   surface are allowed. They are not unit tests. When such a test is used
   as CI-gated evidence, it should fail rather than silently skip on GitHub
   Actions if the required runtime capability is unavailable.
+- Before landing such a test, verify its skip-guard actually triggers on
+  an environment where the required runtime capability is missing (e.g.
+  an SSH dev box where `wasamo_init` returns `0x80070005`). Local
+  "passed without skip" only proves the guard's happy path doesn't break
+  the test — it does not prove the guard works. See
+  [docs/notes/verification-environments.md](docs/notes/verification-environments.md)
+  for the environment taxonomy.
 
 Adding unit tests to a phase checklist is only warranted when that phase introduces testable pure logic. Do not add unit test checklist items to phases whose work is entirely Win32/WinRT (e.g. Phase 2, Phase 5).
 

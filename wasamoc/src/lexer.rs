@@ -8,6 +8,8 @@ pub enum Keyword {
     InOut,
     Property,
     State,
+    True,
+    False,
 }
 
 impl Keyword {
@@ -18,6 +20,8 @@ impl Keyword {
             Keyword::InOut => "`in-out`",
             Keyword::Property => "`property`",
             Keyword::State => "`state`",
+            Keyword::True => "`true`",
+            Keyword::False => "`false`",
         }
     }
 }
@@ -321,6 +325,8 @@ fn scan_ident(c: &mut Cursor) -> Token {
         "inherits" => Token::Kw(Keyword::Inherits),
         "property" => Token::Kw(Keyword::Property),
         "state" => Token::Kw(Keyword::State),
+        "true" => Token::Kw(Keyword::True),
+        "false" => Token::Kw(Keyword::False),
         _ => Token::Ident(s),
     }
 }
@@ -557,6 +563,39 @@ mod tests {
         assert!(matches!(&toks[0], Token::Ident(s) if s == "Counter"));
         assert!(matches!(&toks[1], Token::Ident(s) if s == "_foo"));
         assert!(matches!(&toks[2], Token::Ident(s) if s == "abc123"));
+    }
+
+    #[test]
+    fn bool_keywords() {
+        let toks = lex_ok("true false");
+        assert!(matches!(&toks[0], Token::Kw(Keyword::True)));
+        assert!(matches!(&toks[1], Token::Kw(Keyword::False)));
+    }
+
+    #[test]
+    fn bool_keywords_not_treated_as_idents() {
+        // `true` / `false` must not lex as Token::Ident.
+        let toks = lex_ok("true");
+        assert!(
+            !matches!(&toks[0], Token::Ident(_)),
+            "`true` lexed as identifier: {:?}",
+            &toks[0]
+        );
+        let toks = lex_ok("false");
+        assert!(
+            !matches!(&toks[0], Token::Ident(_)),
+            "`false` lexed as identifier: {:?}",
+            &toks[0]
+        );
+    }
+
+    #[test]
+    fn bool_keyword_word_boundary() {
+        // Identifiers that merely start with `true`/`false` must not be split.
+        let toks = lex_ok("trueish falsey true_");
+        assert!(matches!(&toks[0], Token::Ident(s) if s == "trueish"));
+        assert!(matches!(&toks[1], Token::Ident(s) if s == "falsey"));
+        assert!(matches!(&toks[2], Token::Ident(s) if s == "true_"));
     }
 
     #[test]

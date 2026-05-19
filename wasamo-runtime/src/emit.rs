@@ -36,8 +36,8 @@ use std::collections::{HashSet, VecDeque};
 use std::os::raw::c_char;
 
 use crate::abi::{
-    WasamoStringView, WasamoValue, WasamoValuePayload, WasamoWidget, WASAMO_VALUE_I32,
-    WASAMO_VALUE_STRING,
+    WasamoStringView, WasamoValue, WasamoValuePayload, WasamoWidget, WASAMO_VALUE_BOOL,
+    WASAMO_VALUE_I32, WASAMO_VALUE_STRING,
 };
 use crate::reactive;
 use crate::registry;
@@ -49,6 +49,7 @@ use crate::window::WindowState;
 #[derive(Clone)]
 pub enum OwnedArg {
     I32(i32),
+    Bool(bool),
     String(String),
 }
 
@@ -255,6 +256,12 @@ fn owned_to_value(a: &OwnedArg) -> WasamoValue {
         OwnedArg::I32(v) => WasamoValue {
             tag: WASAMO_VALUE_I32,
             payload: WasamoValuePayload { v_i32: *v },
+        },
+        OwnedArg::Bool(b) => WasamoValue {
+            tag: WASAMO_VALUE_BOOL,
+            payload: WasamoValuePayload {
+                v_bool: if *b { 1 } else { 0 },
+            },
         },
         OwnedArg::String(s) => WasamoValue {
             tag: WASAMO_VALUE_STRING,

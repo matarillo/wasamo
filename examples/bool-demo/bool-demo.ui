@@ -1,0 +1,23 @@
+component BoolDemo inherits Window {
+    title: "Bool Demo"
+    backdrop: mica
+    theme: system
+
+    state ready: bool = true
+
+    VStack {
+        spacing: 12px
+        padding: 24px
+
+        Text {
+            text: "Click the button once; the bool binding disables it."
+            font: body
+        }
+        Button {
+            text: "Disable me"
+            style: accent
+            enabled: ready
+            clicked => { root.ready = false; }
+        }
+    }
+}

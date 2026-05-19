@@ -38,6 +38,7 @@ pub enum Expr {
     StringLit { parts: Vec<StringPart>, span: Span },
     IntLit { value: i64, span: Span },
     FloatLit { value: f64, span: Span },
+    BoolLit { value: bool, span: Span },
     Measurement { value: f64, unit: Unit, span: Span },
     Ident { name: String, span: Span },
 }
@@ -48,6 +49,7 @@ impl Expr {
             Expr::StringLit { span, .. }
             | Expr::IntLit { span, .. }
             | Expr::FloatLit { span, .. }
+            | Expr::BoolLit { span, .. }
             | Expr::Measurement { span, .. }
             | Expr::Ident { span, .. } => span,
         }

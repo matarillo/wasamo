@@ -2,10 +2,11 @@
 title: DSL 文法 — 検討メモと未解決事項
 status: live
 created: 2026-05-07
-last-updated: 2026-05-12
+last-updated: 2026-05-19
 related-adrs:
   - docs/decisions/m2-phase-2-wasamoc-output-format.md
   - docs/decisions/m2-phase-6-ir-loader.md
+  - docs/decisions/m3-phase-1-bool-scalar.md
 related-specs:
   - docs/dsl_spec.md
 ---
@@ -182,3 +183,52 @@ M3 target app pre-doc / phase pre-doc / DD で直接扱う文法論点は、そ�
 
 - M3 ではなく、custom component / package / native binding を扱う milestone に入る時。
 - M3 grammar が import 構文や component name resolution を予約する必要を持った時。
+
+---
+
+### Q5. Property RHS の式位置とテンプレート風参照構文
+
+**背景（M3-Phase 1 / bool scalar 実装後）:**
+
+- M3-Phase 1 では `Button.enabled: bool` が入り、次の 2 種類の RHS が
+  `bool` として扱われる。
+  - `enabled: ready` — `ready` は識別子。`state ready: bool = ...` に
+    解決されると `BoolPropRead` に lower される。
+  - `enabled: true` / `enabled: false` — `true` / `false` は識別子ではなく、
+    lexer で予約された bool literal。`BoolLit` に lower される。
+- `state false: bool = true` / `state true: bool = false` のような宣言は
+  禁止される。これは実装先行の副作用ではなく、DD-M3-P1-002 の
+  `true` / `false` keywords 採用と `docs/dsl_spec.md` §2.1 の予約語規則に
+  よる明示的な設計判断。
+
+**批判的検討:**
+
+- `enabled: ${ready}` のようなテンプレート言語由来の参照構文は、
+  Phase 1 では採らなかった。理由は、property binding の RHS はすでに
+  `expr` 位置であり、識別子 `ready` をそのまま式として読めるため。
+- `${...}` は HTML / text template / shell-like interpolation では自然だが、
+  Wasamo DSL では文字列内 interpolation が既に `"\{root.count}"` で存在する。
+  property RHS に `${ready}` を別途導入すると、
+  「これは文字列 interpolation なのか」「式 interpolation なのか」
+  「文字列化や coercion が起きるのか」という余計な区別を作る。
+- M3-Phase 1 は `enabled: <bool-expr>` の `<bool-expr>` として
+  bool literal と state identifier だけを認める狭い段階であり、
+  将来の `!ready`, `root.ready`, comparison, logical operator は
+  expression grammar の拡張として扱う方が一貫する。
+
+**現時点の扱い:**
+
+- Open question ではない。Phase 1 の `true` / `false` 予約と
+  identifier resolution は DD-M3-P1-002 / DD-M3-P1-010 で閉じている。
+- ただし、将来の expression grammar 拡張時に `${...}` 型のテンプレート風構文を
+  再提案する場合は、文字列 interpolation との関係と coercion の有無を
+  先に明文化すること。
+
+**この議論を再訪する契機:**
+
+- M3-Phase 6 conditional rendering で `if <expr>` / `enabled: !ready` /
+  comparison / logical operator を導入する時。
+- `root.ready` のような qualified state reference を property RHS に許すかを
+  決める時。
+- 文字列以外の属性値に template interpolation 風 syntax を導入したい強い
+  外部要件が出た時。

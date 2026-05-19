@@ -3,7 +3,9 @@ use std::collections::{HashMap, HashSet};
 use std::rc::{Rc, Weak};
 use std::sync::atomic::{AtomicU64, Ordering};
 
-use crate::handler::{evaluate_binding, EvalContext, EvalError, HandlerExpr};
+use crate::handler::{
+    evaluate_binding, evaluate_bool_binding, EvalContext, EvalError, HandlerExpr,
+};
 
 const MUTATION_CAP: usize = 16;
 
@@ -389,6 +391,7 @@ pub(crate) fn with_batched_writes<R, F: FnOnce() -> R>(f: F) -> R {
 pub(crate) struct SignalRegistry {
     pub(crate) i32s: HashMap<String, Signal<i32>>,
     pub(crate) strings: HashMap<String, Signal<String>>,
+    pub(crate) bools: HashMap<String, Signal<bool>>,
 }
 
 impl SignalRegistry {
@@ -396,6 +399,7 @@ impl SignalRegistry {
         Self {
             i32s: HashMap::new(),
             strings: HashMap::new(),
+            bools: HashMap::new(),
         }
     }
 }
@@ -436,7 +440,21 @@ impl<'a> EvalContext for BindingEvalContext<'a> {
             .map(|s| s.get_untracked())
     }
 
+    fn get_bool(&self, path: &str) -> Result<bool, EvalError> {
+        self.registry
+            .bools
+            .get(path)
+            .ok_or_else(|| EvalError::UnknownProperty(path.to_string()))
+            .map(|s| s.get_untracked())
+    }
+
     fn set_i32(&mut self, path: &str, _value: i32) -> Result<(), EvalError> {
+        Err(EvalError::WriteInBindingContext {
+            path: path.to_string(),
+        })
+    }
+
+    fn set_bool(&mut self, path: &str, _value: bool) -> Result<(), EvalError> {
         Err(EvalError::WriteInBindingContext {
             path: path.to_string(),
         })
@@ -453,6 +471,14 @@ impl<'a> EvalContext for BindingEvalContext<'a> {
     fn read_string_tracked(&self, path: &str) -> Result<String, EvalError> {
         self.registry
             .strings
+            .get(path)
+            .ok_or_else(|| EvalError::UnknownProperty(path.to_string()))
+            .map(|s| s.get())
+    }
+
+    fn read_bool_tracked(&self, path: &str) -> Result<bool, EvalError> {
+        self.registry
+            .bools
             .get(path)
             .ok_or_else(|| EvalError::UnknownProperty(path.to_string()))
             .map(|s| s.get())
@@ -491,10 +517,28 @@ impl<'a> EvalContext for HandlerEvalContext<'a> {
             .map(|s| s.get_untracked())
     }
 
+    fn get_bool(&self, path: &str) -> Result<bool, EvalError> {
+        self.registry
+            .bools
+            .get(path)
+            .ok_or_else(|| EvalError::UnknownProperty(path.to_string()))
+            .map(|s| s.get_untracked())
+    }
+
     fn set_i32(&mut self, path: &str, value: i32) -> Result<(), EvalError> {
         let sig = self
             .registry
             .i32s
+            .get(path)
+            .ok_or_else(|| EvalError::UnknownProperty(path.to_string()))?;
+        sig.set(value);
+        Ok(())
+    }
+
+    fn set_bool(&mut self, path: &str, value: bool) -> Result<(), EvalError> {
+        let sig = self
+            .registry
+            .bools
             .get(path)
             .ok_or_else(|| EvalError::UnknownProperty(path.to_string()))?;
         sig.set(value);
@@ -574,6 +618,44 @@ fn register_binding_with_writer(
     EffectHandle::new(move || {
         let mut ctx = BindingEvalContext::new(&registry);
         match evaluate_binding(&expr, &mut ctx) {
+            Ok(value) => writer(value),
+            Err(e) => eprintln!("wasamo: binding eval error: {e}"),
+        }
+    })
+}
+
+/// Bool-typed counterpart of `register_binding` (DD-M3-P1-007 Option A).
+///
+/// The loader selects this entry point when the target property's declared
+/// `IrType` is `Bool` (per DD-M3-P1-009's `resolve_prop_key` widening). The
+/// reactive engine itself stays type-agnostic — the per-type seam lives at
+/// the call site here, not inside the engine. `write_fn` is a plain function
+/// pointer paired with `widget::widget_write_property_bool`.
+pub(crate) fn register_bool_binding(
+    target: BindingTarget,
+    expr: HandlerExpr,
+    registry: Rc<SignalRegistry>,
+    write_fn: fn(WidgetId, PropertyKey, bool),
+) -> EffectHandle {
+    let BindingTarget::WidgetProperty { node, prop } = target;
+    register_bool_binding_with_writer(
+        Box::new(move |value: bool| write_fn(node, prop, value)),
+        expr,
+        registry,
+    )
+}
+
+/// Core: build an `EffectHandle` whose closure evaluates `expr` through
+/// `evaluate_bool_binding` and pipes the `bool` result to `writer`. Shared
+/// between production (`register_bool_binding`) and unit tests.
+fn register_bool_binding_with_writer(
+    mut writer: Box<dyn FnMut(bool)>,
+    expr: HandlerExpr,
+    registry: Rc<SignalRegistry>,
+) -> EffectHandle {
+    EffectHandle::new(move || {
+        let mut ctx = BindingEvalContext::new(&registry);
+        match evaluate_bool_binding(&expr, &mut ctx) {
             Ok(value) => writer(value),
             Err(e) => eprintln!("wasamo: binding eval error: {e}"),
         }
@@ -1030,6 +1112,117 @@ mod tests {
     }
 
     #[test]
+    fn binding_ctx_get_bool_untracked_vs_tracked() {
+        // M3-Phase 1 T7: parallels the i32/String tracked-read tests for
+        // the new bool surface. `get_bool` must NOT register a dependency;
+        // `read_bool_tracked` must.
+        use crate::handler::EvalContext;
+
+        let sig = Signal::new(false);
+        let mut registry = SignalRegistry::new();
+        registry.bools.insert("ready".to_string(), sig.clone());
+        let registry = Rc::new(registry);
+
+        let run_count = Rc::new(RefCell::new(0i32));
+        let run_count_c = Rc::clone(&run_count);
+        let registry_untracked = Rc::clone(&registry);
+
+        let _h_untracked = EffectHandle::new(move || {
+            *run_count_c.borrow_mut() += 1;
+            let ctx = BindingEvalContext::new(&registry_untracked);
+            let _ = ctx.get_bool("ready").unwrap();
+        });
+        assert_eq!(*run_count.borrow(), 1);
+        sig.set(true);
+        assert_eq!(
+            *run_count.borrow(),
+            1,
+            "get_bool should not register a dependency"
+        );
+
+        let run_count2 = Rc::new(RefCell::new(0i32));
+        let run_count2_c = Rc::clone(&run_count2);
+        let registry_tracked = Rc::clone(&registry);
+
+        let _h_tracked = EffectHandle::new(move || {
+            *run_count2_c.borrow_mut() += 1;
+            let ctx = BindingEvalContext::new(&registry_tracked);
+            let _ = ctx.read_bool_tracked("ready").unwrap();
+        });
+        assert_eq!(*run_count2.borrow(), 1);
+        sig.set(false);
+        assert_eq!(
+            *run_count2.borrow(),
+            2,
+            "read_bool_tracked should register a dependency"
+        );
+    }
+
+    #[test]
+    fn binding_ctx_set_bool_returns_write_error() {
+        use crate::handler::EvalError;
+
+        let registry = SignalRegistry::new();
+        let mut ctx = BindingEvalContext::new(&registry);
+        let result = ctx.set_bool("ready", true);
+        assert_eq!(
+            result,
+            Err(EvalError::WriteInBindingContext {
+                path: "ready".into()
+            })
+        );
+    }
+
+    /// `HandlerEvalContext::set_bool` drives `Signal<bool>::set`, the path
+    /// the live `Assign { rhs: BoolLit | BoolPropRead }` evaluator arm
+    /// from T7 takes when an inline `on click { ready = false }` handler
+    /// fires (DD-M3-P1-008 Option A).
+    #[test]
+    fn handler_ctx_set_bool_drives_signal_set() {
+        use crate::handler::{evaluate, EvalContext, HandlerExpr};
+
+        let sig = Signal::new(true);
+        let mut registry = SignalRegistry::new();
+        registry.bools.insert("ready".to_string(), sig.clone());
+
+        // Confirm an effect tracking `ready` re-runs after the handler
+        // write — proves the reactive cascade fires on bool writes too.
+        let run_count = Rc::new(RefCell::new(0i32));
+        let run_count_c = Rc::clone(&run_count);
+        let sig_c = sig.clone();
+        let _h = EffectHandle::new(move || {
+            *run_count_c.borrow_mut() += 1;
+            let _ = sig_c.get();
+        });
+        assert_eq!(*run_count.borrow(), 1);
+
+        // Drive the assign through the public `evaluate()` entry point,
+        // not just `set_bool` directly — proves the T7 arm reaches the
+        // typed registry write path through `HandlerEvalContext`.
+        let mut ctx = HandlerEvalContext::new(&registry);
+        let expr = HandlerExpr::Assign {
+            lhs: "ready".into(),
+            rhs: Box::new(HandlerExpr::BoolLit(false)),
+        };
+        assert_eq!(evaluate(&expr, &mut ctx), Ok(0));
+        assert_eq!(ctx.get_bool("ready"), Ok(false));
+        // Reactive cascade fired.
+        assert_eq!(*run_count.borrow(), 2);
+    }
+
+    #[test]
+    fn handler_ctx_set_bool_unknown_path_errors() {
+        use crate::handler::{EvalContext, EvalError};
+
+        let registry = SignalRegistry::new();
+        let mut ctx = HandlerEvalContext::new(&registry);
+        assert_eq!(
+            ctx.set_bool("nope", true),
+            Err(EvalError::UnknownProperty("nope".into()))
+        );
+    }
+
+    #[test]
     fn binding_ctx_get_string_untracked_vs_tracked() {
         use crate::handler::EvalContext;
 
@@ -1140,6 +1333,55 @@ mod tests {
 
         sig.set("Done".to_string());
         assert_eq!(*written.borrow(), vec!["Ready", "Done"]);
+    }
+
+    // ── register_bool_binding tests (M3-Phase 1 T8 / DD-M3-P1-007) ──────────
+
+    #[test]
+    fn register_bool_binding_writes_initial_and_updates_for_bool_prop_read() {
+        // BoolPropRead reaches through read_bool_tracked, so the binding
+        // subscribes to the source Signal<bool> and the writer fires both on
+        // initial run and on every set.
+        use crate::handler::HandlerExpr;
+
+        let sig = Signal::new(true);
+        let mut registry = SignalRegistry::new();
+        registry.bools.insert("ready".to_string(), sig.clone());
+        let registry = Rc::new(registry);
+
+        let written: Rc<RefCell<Vec<bool>>> = Rc::new(RefCell::new(Vec::new()));
+        let written_c = Rc::clone(&written);
+        let writer: Box<dyn FnMut(bool)> = Box::new(move |v| written_c.borrow_mut().push(v));
+
+        let expr = HandlerExpr::BoolPropRead {
+            path: "ready".into(),
+        };
+        let _h = register_bool_binding_with_writer(writer, expr, registry);
+        assert_eq!(*written.borrow(), vec![true]);
+
+        sig.set(false);
+        assert_eq!(*written.borrow(), vec![true, false]);
+
+        sig.set(true);
+        assert_eq!(*written.borrow(), vec![true, false, true]);
+    }
+
+    #[test]
+    fn register_bool_binding_writes_initial_for_bool_lit() {
+        // A bool literal binding (e.g. `bind enabled: true`) is a constant —
+        // it fires exactly once on initial run and never subscribes to any
+        // Signal (no tracked read happens during evaluation).
+        use crate::handler::HandlerExpr;
+
+        let registry = Rc::new(SignalRegistry::new());
+
+        let written: Rc<RefCell<Vec<bool>>> = Rc::new(RefCell::new(Vec::new()));
+        let written_c = Rc::clone(&written);
+        let writer: Box<dyn FnMut(bool)> = Box::new(move |v| written_c.borrow_mut().push(v));
+
+        let expr = HandlerExpr::BoolLit(false);
+        let _h = register_bool_binding_with_writer(writer, expr, registry);
+        assert_eq!(*written.borrow(), vec![false]);
     }
 
     // ── SignalRegistry string-typed Signal tests (DD-M2-P6-007) ─────────────

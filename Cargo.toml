@@ -6,6 +6,7 @@ members = [
     "wasamoc",
     "bindings/rust",
     "bindings/rust-sys",
+    "examples/bool-demo-rust",
     "examples/counter-rust",
 ]
 resolver = "2"

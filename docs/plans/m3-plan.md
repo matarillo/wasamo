@@ -1,11 +1,12 @@
 ---
 milestone: M3
-status: agreed
+status: in-progress
 roadmap-anchor: ROADMAP.md#m3-dsl-surface
 adrs:
-  # filled in as ADRs are written
+  - docs/decisions/m3-phase-1-bool-scalar.md  # Phase 1 (bool scalar)
 created: 2026-05-16
 agreed: 2026-05-16
+in-progress: 2026-05-19
 ---
 
 # M3 Plan — DSL surface milestone
@@ -369,6 +370,14 @@ A phase closes when **all** of the following hold:
    construction. The sub-screen is invoked from at least one
    example host (C / Rust / Zig — Phase 8 broadens this to all
    three for the full gallery).
+   *Foundational-phase exception:* Phase 1 closes before
+   `examples/gallery/` exists, so per its ADR
+   ([m3-phase-1-bool-scalar.md §Verification closure item 4](../decisions/m3-phase-1-bool-scalar.md#phase-1-verification-closure-what-counts-as-a9-evidence)),
+   a dedicated minimal example under `examples/` (Phase 1 chose
+   `examples/bool-demo/` + `examples/bool-demo-rust/`) is
+   acceptable as substitute. The exception is scoped to Phase 1
+   only; Phase 2 onward follows this item as written, with
+   `examples/gallery/` being grown sub-screen by sub-screen.
 6. **Out-of-phase residuals filed.** Anything discovered during
    the phase that is real but not in the phase's scope is recorded
    in a live note under `docs/notes/m3/` and pointed to from the
@@ -467,7 +476,7 @@ ADRs, CHANGELOG, notes, and git history, then deleted by default.
 
 | Phase | Status | Progress file | ADR | Notes |
 |---|---|---|---|---|
-| M3-Phase 1 — `bool` scalar binding | not started | — | — | — |
+| M3-Phase 1 — `bool` scalar binding | complete | [m3-phase-1-progress.md](progress/m3-phase-1-progress.md) | [m3-phase-1-bool-scalar.md](../decisions/m3-phase-1-bool-scalar.md) | ADR Accepted 2026-05-19; execution opened 2026-05-19; A9 discharged 2026-05-19 |
 | M3-Phase 2 — Box layout primitive | not started | — | — | — |
 | M3-Phase 3 — WrapPanel layout primitive | not started | — | — | First novel-normative-spec phase |
 | M3-Phase 4 — ScrollView (minimal) | not started | — | — | — |
@@ -478,10 +487,9 @@ ADRs, CHANGELOG, notes, and git history, then deleted by default.
 
 ### Owner-facing resume note
 
-M3 plan is `agreed` (owner sign-off 2026-05-16). ROADMAP M3 AC
-bullets carry **A1–A12** IDs mirroring this plan. Next: merge
-`docs/m3-predoc` into `main` so M3-Phase 1 (`bool` scalar) can
-open its pre-doc from `main`. Status moves to `in-progress` when
-Phase 1 actually starts execution; until then the Frozen
-agreement section is read-only under the standard `agreed`
-lifecycle.
+M3 plan is `in-progress` as of 2026-05-19. M3-Phase 1 (`bool`
+scalar) ADR is Accepted and execution has opened against
+[progress/m3-phase-1-progress.md](progress/m3-phase-1-progress.md);
+the Frozen agreement section is now read-only under the
+`in-progress` lifecycle (acceptance-criteria revision exception
+aside).

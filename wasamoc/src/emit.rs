@@ -32,6 +32,7 @@ fn emit_state(out: &mut String, state: &IrState, indent: usize) {
     let type_str = match state.ty {
         IrType::I32 => "i32",
         IrType::Str => "string",
+        IrType::Bool => "bool",
     };
     let default_str = emit_literal(&state.default);
     out.push_str(&format!(
@@ -91,6 +92,7 @@ fn emit_literal(lit: &IrLiteral) -> String {
         IrLiteral::Int(n) => n.to_string(),
         IrLiteral::Str(s) => format!("\"{}\"", escape_string(s)),
         IrLiteral::Ident(id) => id.clone(),
+        IrLiteral::Bool(b) => (if *b { "true" } else { "false" }).to_string(),
     }
 }
 
@@ -98,8 +100,10 @@ fn emit_expr(expr: &HandlerExpr) -> String {
     match expr {
         HandlerExpr::IntLit(n) => n.to_string(),
         HandlerExpr::StrLit(s) => format!("\"{}\"", escape_string(s)),
+        HandlerExpr::BoolLit(b) => (if *b { "true" } else { "false" }).to_string(),
         HandlerExpr::PropRead { path } => format!("(prop-read {})", path),
         HandlerExpr::StrPropRead { path } => format!("(str-prop-read {})", path),
+        HandlerExpr::BoolPropRead { path } => format!("(bool-prop-read {})", path),
         HandlerExpr::Assign { lhs, rhs } => {
             format!("(assign {} {})", lhs, emit_expr(rhs))
         }
@@ -215,6 +219,27 @@ mod tests {
         );
         assert!(out.contains("on clicked {"), "got: {}", out);
         assert!(out.contains("(compound-assign += count 1)"), "got: {}", out);
+    }
+
+    #[test]
+    fn bool_state_emitted() {
+        let out = emit_src("component C inherits W { state ready: bool = false VStack {} }");
+        assert!(out.contains("state ready: bool = false"), "got: {}", out);
+    }
+
+    #[test]
+    fn bool_literal_prop_emitted() {
+        let out = emit_src("component C inherits W { Button { enabled: true } }");
+        assert!(out.contains("prop enabled = true"), "got: {}", out);
+    }
+
+    #[test]
+    fn bool_literal_in_handler_emitted() {
+        let out = emit_src(
+            "component C inherits W { state ready: bool = true Button { clicked => { root.ready = false; } } }",
+        );
+        assert!(out.contains("on clicked {"), "got: {}", out);
+        assert!(out.contains("(assign ready false)"), "got: {}", out);
     }
 
     #[test]

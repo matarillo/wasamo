@@ -33,6 +33,29 @@ pub trait EvalContext {
     fn read_string_tracked(&self, path: &str) -> Result<String, EvalError> {
         self.get_string(path)
     }
+
+    /// Read a bool property by dot-separated path (untracked).
+    ///
+    /// Default impl returns `UnknownProperty` so existing `EvalContext`
+    /// impls without bool support continue to compile (DD-M3-P1-004
+    /// Option B + DD-M3-P1-008 Option A).
+    fn get_bool(&self, path: &str) -> Result<bool, EvalError> {
+        Err(EvalError::UnknownProperty(path.to_string()))
+    }
+
+    /// Read a bool property and report the read to the active reactive
+    /// scope (if any). Default impl is untracked — forwards to `get_bool`.
+    /// `BindingEvalContext` overrides this to route through `Signal::get()`.
+    fn read_bool_tracked(&self, path: &str) -> Result<bool, EvalError> {
+        self.get_bool(path)
+    }
+
+    /// Write a bool property by dot-separated path. Default impl returns
+    /// `UnknownProperty`; live impls (the runtime's `HandlerEvalContext`)
+    /// override this to drive `Signal<bool>::set`.
+    fn set_bool(&mut self, path: &str, _value: bool) -> Result<(), EvalError> {
+        Err(EvalError::UnknownProperty(path.to_string()))
+    }
 }
 
 /// Errors that the evaluator can produce.
@@ -79,13 +102,43 @@ pub fn evaluate(expr: &HandlerExpr, ctx: &mut dyn EvalContext) -> Result<i32, Ev
             path: "<string expression in integer context>".into(),
         }),
 
+        // A bare bool literal / bool property-read in integer context is a
+        // type mismatch — only `Assign { rhs: BoolLit | BoolPropRead }` is
+        // admitted (DD-M3-P1-004 Option B; the bool-typed `Assign` arm
+        // below handles that pairing). `CompoundAssign` over bool is out of
+        // scope per ADR §Out of scope.
+        HandlerExpr::BoolLit(_) | HandlerExpr::BoolPropRead { .. } => {
+            Err(EvalError::TypeMismatch {
+                path: "<bool expression in integer context>".into(),
+            })
+        }
+
         HandlerExpr::PropRead { path } => ctx.get_i32(path),
 
-        HandlerExpr::Assign { lhs, rhs } => {
-            let v = evaluate(rhs, ctx)?;
-            ctx.set_i32(lhs, v)?;
-            Ok(v)
-        }
+        // `Assign` peeks at `rhs` to pick the typed write path.
+        // DD-M3-P1-004 Option B + DD-M3-P1-008 Option A admit
+        // `rhs ∈ { BoolLit, BoolPropRead }` for bool-typed targets.
+        // Other variants stay on the i32 path. The return value of a
+        // bool-typed assign is unused (handlers run for side effects);
+        // returning 0 keeps `evaluate()`'s `Result<i32, _>` contract
+        // without implicit bool→i32 coercion (DD-M3-P1-001 Option B
+        // explicitly rejected).
+        HandlerExpr::Assign { lhs, rhs } => match rhs.as_ref() {
+            HandlerExpr::BoolLit(b) => {
+                ctx.set_bool(lhs, *b)?;
+                Ok(0)
+            }
+            HandlerExpr::BoolPropRead { path } => {
+                let v = ctx.get_bool(path)?;
+                ctx.set_bool(lhs, v)?;
+                Ok(0)
+            }
+            _ => {
+                let v = evaluate(rhs, ctx)?;
+                ctx.set_i32(lhs, v)?;
+                Ok(v)
+            }
+        },
 
         HandlerExpr::CompoundAssign { lhs, op, rhs } => {
             let current = ctx.get_i32(lhs)?;
@@ -251,6 +304,36 @@ fn evaluate_binding_part(
     }
 }
 
+/// Evaluate a `HandlerExpr` in bool-typed binding (read-only) context.
+///
+/// Per DD-M3-P1-007 Option A, bool bindings travel a separate per-type
+/// evaluator/writer pair rather than funnelling through a `PropertyValue`
+/// union — this keeps F5 (`TypedValue` deferral) structurally enforced.
+///
+/// Accepted shapes (DD-M3-P1-003):
+/// - `BoolLit(b)` returns the literal.
+/// - `BoolPropRead { path }` reads through `ctx.read_bool_tracked`, so
+///   `BindingEvalContext` registers the read with the active reactive
+///   scope and the binding subscribes to the source `Signal<bool>`.
+///
+/// All other variants are rejected with `EvalError::TypeMismatch`. This
+/// mirrors the way `evaluate()` rejects string-typed forms — binding
+/// lowering for a bool-typed target property only produces the two
+/// shapes above (DD-M3-P1-010), so any other variant reaching this
+/// evaluator is an IR-level type error rather than a user-syntax error.
+pub fn evaluate_bool_binding(
+    expr: &HandlerExpr,
+    ctx: &mut dyn EvalContext,
+) -> Result<bool, EvalError> {
+    match expr {
+        HandlerExpr::BoolLit(b) => Ok(*b),
+        HandlerExpr::BoolPropRead { path } => ctx.read_bool_tracked(path),
+        _ => Err(EvalError::TypeMismatch {
+            path: "<non-bool expression in bool binding context>".into(),
+        }),
+    }
+}
+
 /// Integer-typed evaluation in binding (read-only) mode.
 ///
 /// Like `evaluate()` but:
@@ -280,6 +363,15 @@ fn evaluate_tracked(expr: &HandlerExpr, ctx: &mut dyn EvalContext) -> Result<i32
         | HandlerExpr::Interpolation(_) => Err(EvalError::TypeMismatch {
             path: "<string expression in integer context>".into(),
         }),
+
+        // M3-Phase 1 T7 / T8 will provide a bool-typed binding evaluator
+        // (`evaluate_bool_binding`); until that lands, a bool expression in
+        // integer binding context is a type mismatch.
+        HandlerExpr::BoolLit(_) | HandlerExpr::BoolPropRead { .. } => {
+            Err(EvalError::TypeMismatch {
+                path: "<bool expression in integer context>".into(),
+            })
+        }
     }
 }
 
@@ -294,6 +386,7 @@ mod tests {
     struct MapCtx {
         i32s: HashMap<String, i32>,
         strings: HashMap<String, String>,
+        bools: HashMap<String, bool>,
     }
 
     impl MapCtx {
@@ -301,6 +394,7 @@ mod tests {
             Self {
                 i32s: pairs.iter().map(|(k, v)| (k.to_string(), *v)).collect(),
                 strings: HashMap::new(),
+                bools: HashMap::new(),
             }
         }
         fn with_strings(mut self, pairs: &[(&str, &str)]) -> Self {
@@ -310,8 +404,15 @@ mod tests {
                 .collect();
             self
         }
+        fn with_bools(mut self, pairs: &[(&str, bool)]) -> Self {
+            self.bools = pairs.iter().map(|(k, v)| (k.to_string(), *v)).collect();
+            self
+        }
         fn get(&self, key: &str) -> i32 {
             *self.i32s.get(key).unwrap_or(&0)
+        }
+        fn get_b(&self, key: &str) -> bool {
+            *self.bools.get(key).unwrap_or(&false)
         }
     }
 
@@ -328,8 +429,18 @@ mod tests {
                 .cloned()
                 .ok_or_else(|| EvalError::UnknownProperty(path.to_string()))
         }
+        fn get_bool(&self, path: &str) -> Result<bool, EvalError> {
+            self.bools
+                .get(path)
+                .copied()
+                .ok_or_else(|| EvalError::UnknownProperty(path.to_string()))
+        }
         fn set_i32(&mut self, path: &str, value: i32) -> Result<(), EvalError> {
             self.i32s.insert(path.to_string(), value);
+            Ok(())
+        }
+        fn set_bool(&mut self, path: &str, value: bool) -> Result<(), EvalError> {
+            self.bools.insert(path.to_string(), value);
             Ok(())
         }
     }
@@ -774,5 +885,292 @@ mod tests {
             evaluate(&expr, &mut ctx),
             Err(EvalError::TypeMismatch { .. })
         ));
+    }
+
+    // ── Bool surface tests (M3-Phase 1 T7) ───────────────────────────────────
+
+    /// Default trait impl: a context without bool support reports
+    /// `UnknownProperty`, paralleling the `get_string` default.
+    #[test]
+    fn eval_context_default_get_bool_is_unknown() {
+        struct OnlyI32;
+        impl EvalContext for OnlyI32 {
+            fn get_i32(&self, _: &str) -> Result<i32, EvalError> {
+                Ok(0)
+            }
+            fn set_i32(&mut self, _: &str, _: i32) -> Result<(), EvalError> {
+                Ok(())
+            }
+        }
+        let ctx = OnlyI32;
+        assert_eq!(
+            ctx.get_bool("ready"),
+            Err(EvalError::UnknownProperty("ready".into()))
+        );
+        assert_eq!(
+            ctx.read_bool_tracked("ready"),
+            Err(EvalError::UnknownProperty("ready".into()))
+        );
+    }
+
+    #[test]
+    fn eval_context_default_set_bool_is_unknown() {
+        struct OnlyI32;
+        impl EvalContext for OnlyI32 {
+            fn get_i32(&self, _: &str) -> Result<i32, EvalError> {
+                Ok(0)
+            }
+            fn set_i32(&mut self, _: &str, _: i32) -> Result<(), EvalError> {
+                Ok(())
+            }
+        }
+        let mut ctx = OnlyI32;
+        assert_eq!(
+            ctx.set_bool("ready", true),
+            Err(EvalError::UnknownProperty("ready".into()))
+        );
+    }
+
+    /// Default `read_bool_tracked` forwards to `get_bool`. Overriding
+    /// `get_bool` is enough for the default tracking shim to surface the
+    /// value.
+    #[test]
+    fn read_bool_tracked_default_forwards_to_get_bool() {
+        let ctx = MapCtx::new(&[]).with_bools(&[("ready", true)]);
+        assert_eq!(ctx.read_bool_tracked("ready"), Ok(true));
+    }
+
+    #[test]
+    fn assign_bool_lit_writes_through_set_bool() {
+        let mut ctx = MapCtx::new(&[]).with_bools(&[("ready", true)]);
+        let expr = HandlerExpr::Assign {
+            lhs: "ready".into(),
+            rhs: Box::new(HandlerExpr::BoolLit(false)),
+        };
+        assert_eq!(evaluate(&expr, &mut ctx), Ok(0));
+        assert_eq!(ctx.get_b("ready"), false);
+    }
+
+    #[test]
+    fn assign_bool_prop_read_copies_value() {
+        // ready = other  where other = true
+        let mut ctx = MapCtx::new(&[]).with_bools(&[("ready", false), ("other", true)]);
+        let expr = HandlerExpr::Assign {
+            lhs: "ready".into(),
+            rhs: Box::new(HandlerExpr::BoolPropRead {
+                path: "other".into(),
+            }),
+        };
+        assert_eq!(evaluate(&expr, &mut ctx), Ok(0));
+        assert_eq!(ctx.get_b("ready"), true);
+        // Source untouched.
+        assert_eq!(ctx.get_b("other"), true);
+    }
+
+    #[test]
+    fn assign_bool_prop_read_unknown_source_propagates_error() {
+        let mut ctx = MapCtx::new(&[]).with_bools(&[("ready", false)]);
+        let expr = HandlerExpr::Assign {
+            lhs: "ready".into(),
+            rhs: Box::new(HandlerExpr::BoolPropRead {
+                path: "missing".into(),
+            }),
+        };
+        assert_eq!(
+            evaluate(&expr, &mut ctx),
+            Err(EvalError::UnknownProperty("missing".into()))
+        );
+        // Target unchanged.
+        assert_eq!(ctx.get_b("ready"), false);
+    }
+
+    #[test]
+    fn invoke_handler_drives_bool_assign() {
+        // End-to-end via `invoke_handler` (the path inline click handlers
+        // take): `Button { on click { ready = false } }` shape.
+        let mut ctx = MapCtx::new(&[]).with_bools(&[("ready", true)]);
+        let expr = HandlerExpr::Assign {
+            lhs: "ready".into(),
+            rhs: Box::new(HandlerExpr::BoolLit(false)),
+        };
+        let ok = invoke_handler(&expr, &mut ctx, "Demo.button.clicked");
+        assert!(ok);
+        assert_eq!(ctx.get_b("ready"), false);
+    }
+
+    /// Bare bool literal in handler (integer) context is still a type
+    /// mismatch — only the `Assign { rhs: BoolLit | BoolPropRead }`
+    /// shape is admitted (ADR §Out of scope: no implicit bool→i32).
+    #[test]
+    fn evaluate_rejects_bare_bool_lit_in_handler_context() {
+        let mut ctx = MapCtx::new(&[]);
+        let expr = HandlerExpr::BoolLit(true);
+        assert!(matches!(
+            evaluate(&expr, &mut ctx),
+            Err(EvalError::TypeMismatch { .. })
+        ));
+    }
+
+    #[test]
+    fn evaluate_rejects_bare_bool_prop_read_in_handler_context() {
+        let mut ctx = MapCtx::new(&[]).with_bools(&[("ready", true)]);
+        let expr = HandlerExpr::BoolPropRead {
+            path: "ready".into(),
+        };
+        assert!(matches!(
+            evaluate(&expr, &mut ctx),
+            Err(EvalError::TypeMismatch { .. })
+        ));
+    }
+
+    /// `CompoundAssign` over bool is out of scope (no naturally bool-typed
+    /// `CompoundOp`). The bool rhs of a CompoundAssign falls through the
+    /// existing i32 path, where the bare BoolLit/BoolPropRead arm rejects
+    /// it as a TypeMismatch — proving compound-bool is not silently
+    /// admitted.
+    #[test]
+    fn evaluate_rejects_compound_assign_with_bool_rhs() {
+        let mut ctx = MapCtx::new(&[("x", 1)]);
+        let expr = HandlerExpr::CompoundAssign {
+            lhs: "x".into(),
+            op: CompoundOp::Add,
+            rhs: Box::new(HandlerExpr::BoolLit(true)),
+        };
+        assert!(matches!(
+            evaluate(&expr, &mut ctx),
+            Err(EvalError::TypeMismatch { .. })
+        ));
+        // Target unchanged.
+        assert_eq!(ctx.get("x"), 1);
+    }
+
+    // ── evaluate_bool_binding tests (M3-Phase 1 T8 / DD-M3-P1-007) ──────────
+
+    #[test]
+    fn bool_binding_accepts_bool_lit_true() {
+        let mut ctx = MapCtx::new(&[]);
+        assert_eq!(
+            evaluate_bool_binding(&HandlerExpr::BoolLit(true), &mut ctx),
+            Ok(true)
+        );
+    }
+
+    #[test]
+    fn bool_binding_accepts_bool_lit_false() {
+        let mut ctx = MapCtx::new(&[]);
+        assert_eq!(
+            evaluate_bool_binding(&HandlerExpr::BoolLit(false), &mut ctx),
+            Ok(false)
+        );
+    }
+
+    #[test]
+    fn bool_binding_accepts_bool_prop_read() {
+        let mut ctx = MapCtx::new(&[]).with_bools(&[("ready", true)]);
+        let expr = HandlerExpr::BoolPropRead {
+            path: "ready".into(),
+        };
+        assert_eq!(evaluate_bool_binding(&expr, &mut ctx), Ok(true));
+    }
+
+    #[test]
+    fn bool_binding_bool_prop_read_unknown_is_unknown_property() {
+        let mut ctx = MapCtx::new(&[]);
+        let expr = HandlerExpr::BoolPropRead {
+            path: "missing".into(),
+        };
+        assert_eq!(
+            evaluate_bool_binding(&expr, &mut ctx),
+            Err(EvalError::UnknownProperty("missing".into()))
+        );
+    }
+
+    #[test]
+    fn bool_binding_rejects_int_lit() {
+        let mut ctx = MapCtx::new(&[]);
+        assert!(matches!(
+            evaluate_bool_binding(&HandlerExpr::IntLit(1), &mut ctx),
+            Err(EvalError::TypeMismatch { .. })
+        ));
+    }
+
+    #[test]
+    fn bool_binding_rejects_prop_read() {
+        let mut ctx = MapCtx::new(&[("root.count", 1)]);
+        let expr = HandlerExpr::PropRead {
+            path: "root.count".into(),
+        };
+        assert!(matches!(
+            evaluate_bool_binding(&expr, &mut ctx),
+            Err(EvalError::TypeMismatch { .. })
+        ));
+    }
+
+    #[test]
+    fn bool_binding_rejects_str_lit() {
+        let mut ctx = MapCtx::new(&[]);
+        let expr = HandlerExpr::StrLit("true".into());
+        assert!(matches!(
+            evaluate_bool_binding(&expr, &mut ctx),
+            Err(EvalError::TypeMismatch { .. })
+        ));
+    }
+
+    #[test]
+    fn bool_binding_rejects_str_prop_read() {
+        let mut ctx = MapCtx::new(&[]).with_strings(&[("root.label", "true")]);
+        let expr = HandlerExpr::StrPropRead {
+            path: "root.label".into(),
+        };
+        assert!(matches!(
+            evaluate_bool_binding(&expr, &mut ctx),
+            Err(EvalError::TypeMismatch { .. })
+        ));
+    }
+
+    #[test]
+    fn bool_binding_rejects_interpolation() {
+        let mut ctx = MapCtx::new(&[]);
+        let expr = HandlerExpr::Interpolation(vec![InterpolationPart::Literal("true".into())]);
+        assert!(matches!(
+            evaluate_bool_binding(&expr, &mut ctx),
+            Err(EvalError::TypeMismatch { .. })
+        ));
+    }
+
+    #[test]
+    fn bool_binding_rejects_assign() {
+        let mut ctx = MapCtx::new(&[]).with_bools(&[("ready", false)]);
+        let expr = HandlerExpr::Assign {
+            lhs: "ready".into(),
+            rhs: Box::new(HandlerExpr::BoolLit(true)),
+        };
+        assert!(matches!(
+            evaluate_bool_binding(&expr, &mut ctx),
+            Err(EvalError::TypeMismatch { .. })
+        ));
+    }
+
+    #[test]
+    fn bool_binding_rejects_block() {
+        let mut ctx = MapCtx::new(&[]);
+        let expr = HandlerExpr::Block(vec![HandlerExpr::BoolLit(true)]);
+        assert!(matches!(
+            evaluate_bool_binding(&expr, &mut ctx),
+            Err(EvalError::TypeMismatch { .. })
+        ));
+    }
+
+    /// Existing i32 `Assign` arm still works — the bool peek does not
+    /// regress the M2 path.
+    #[test]
+    fn assign_i32_lit_still_works_after_bool_arm() {
+        let mut ctx = MapCtx::new(&[("count", 0)]);
+        let expr = HandlerExpr::Assign {
+            lhs: "count".into(),
+            rhs: Box::new(HandlerExpr::IntLit(9)),
+        };
+        assert_eq!(evaluate(&expr, &mut ctx), Ok(9));
+        assert_eq!(ctx.get("count"), 9);
     }
 }

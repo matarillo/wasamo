@@ -7,6 +7,7 @@
 pub enum IrType {
     I32,
     Str,
+    Bool,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -14,6 +15,7 @@ pub enum IrLiteral {
     Int(i32),
     Str(String),
     Ident(String),
+    Bool(bool),
 }
 
 /// HandlerExpr — the tagged-value expression form (DD-M2-P6-003 = Option A).
@@ -29,10 +31,14 @@ pub enum IrLiteral {
 pub enum HandlerExpr {
     IntLit(i32),
     StrLit(String),
+    BoolLit(bool),
     PropRead {
         path: String,
     },
     StrPropRead {
+        path: String,
+    },
+    BoolPropRead {
         path: String,
     },
     Assign {
@@ -108,4 +114,86 @@ pub struct IrComponent {
     pub base: String,
     pub states: Vec<IrState>,
     pub root: IrNode,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn ir_type_bool_distinct_from_i32_and_str() {
+        assert_ne!(IrType::Bool, IrType::I32);
+        assert_ne!(IrType::Bool, IrType::Str);
+        assert_eq!(IrType::Bool, IrType::Bool);
+    }
+
+    #[test]
+    fn ir_literal_bool_round_trip_values() {
+        let t = IrLiteral::Bool(true);
+        let f = IrLiteral::Bool(false);
+        assert_ne!(t, f);
+        assert_eq!(t.clone(), IrLiteral::Bool(true));
+        assert_eq!(f.clone(), IrLiteral::Bool(false));
+    }
+
+    #[test]
+    fn ir_literal_bool_distinct_from_int_zero_one() {
+        assert_ne!(IrLiteral::Bool(false), IrLiteral::Int(0));
+        assert_ne!(IrLiteral::Bool(true), IrLiteral::Int(1));
+    }
+
+    #[test]
+    fn handler_expr_bool_lit_round_trip() {
+        let t = HandlerExpr::BoolLit(true);
+        let f = HandlerExpr::BoolLit(false);
+        assert_ne!(t, f);
+        assert_eq!(t.clone(), HandlerExpr::BoolLit(true));
+    }
+
+    #[test]
+    fn handler_expr_bool_prop_read_carries_path() {
+        let e = HandlerExpr::BoolPropRead {
+            path: "root.ready".into(),
+        };
+        match &e {
+            HandlerExpr::BoolPropRead { path } => assert_eq!(path, "root.ready"),
+            _ => panic!("expected BoolPropRead"),
+        }
+    }
+
+    #[test]
+    fn handler_expr_bool_variants_distinct_from_other_scalars() {
+        assert_ne!(HandlerExpr::BoolLit(true), HandlerExpr::IntLit(1));
+        assert_ne!(
+            HandlerExpr::BoolLit(false),
+            HandlerExpr::StrLit("false".into())
+        );
+        assert_ne!(
+            HandlerExpr::BoolPropRead {
+                path: "ready".into()
+            },
+            HandlerExpr::PropRead {
+                path: "ready".into()
+            }
+        );
+        assert_ne!(
+            HandlerExpr::BoolPropRead {
+                path: "ready".into()
+            },
+            HandlerExpr::StrPropRead {
+                path: "ready".into()
+            }
+        );
+    }
+
+    #[test]
+    fn ir_state_bool_declaration() {
+        let s = IrState {
+            name: "ready".into(),
+            ty: IrType::Bool,
+            default: IrLiteral::Bool(false),
+        };
+        assert_eq!(s.ty, IrType::Bool);
+        assert_eq!(s.default, IrLiteral::Bool(false));
+    }
 }

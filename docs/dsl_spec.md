@@ -1,8 +1,10 @@
 # Wasamo DSL Specification
 
-**Document version:** 0.4
-**Last updated:** 2026-05-11
-**Status:** M2 complete; covers the M2 `.ui` surface and `;wasamo-ir v0`
+**Document version:** 0.6
+**Last updated:** 2026-05-19
+**Status:** M3-Phase 1 in progress; covers the M2 `.ui` surface, the
+`state` surface keyword retroactively, the M3-Phase 1 `bool` scalar
+binding additions, and `;wasamo-ir v0`
 
 ---
 
@@ -54,8 +56,15 @@ component Counter inherits Window {
 | `inherits`  | Names the base type                      |
 | `in-out`    | Property modifier: readable and writable |
 | `property`  | Starts a property declaration            |
+| `state`     | Starts a state declaration (see §4.7)    |
+| `true`      | Bool literal — reserved identifier (M3-Phase 1) |
+| `false`     | Bool literal — reserved identifier (M3-Phase 1) |
 
 `in-out` is lexed as a **single keyword token** (not `in`, `-`, `out`).
+
+`true` and `false` are reserved by the lexer and may not appear as
+identifiers (state names, property names, widget type names, qualified-
+name segments). Using either in identifier position is a parse error.
 
 ### 2.2 Token types
 
@@ -65,6 +74,7 @@ component Counter inherits Window {
 | `Ident`     | `[A-Za-z_][A-Za-z0-9_]*`              | `Counter`, `VStack`, `count` |
 | `IntLit`    | `[0-9]+`                               | `0`, `12`, `24`              |
 | `FloatLit`  | `[0-9]+\.[0-9]+`                       | `1.5`, `0.0`                 |
+| `BoolLit`   | `true` \| `false`                      | `true`, `false`              |
 | `StringLit` | `"` string content `"`                 | `"Counter"`, `"Count: \{…}"` |
 | `Unit`      | `px`                                   | `px`                         |
 | `LBrace`    | `{`                                    |                              |
@@ -100,6 +110,12 @@ followed by `}`.
 In M1 the entire string content (including placeholders) is stored **as-is** in the AST.
 No evaluation or reactive binding is performed at parse time.
 
+M3-Phase 1 supports interpolation over `i32` and `string` state values.
+Interpolation over a `bool`-typed `state` is a compile-time error:
+`bool` may be used in bool-typed property bindings and bool handler
+assignments, but no implicit bool-to-string formatting/display
+conversion is defined.
+
 ---
 
 ## 3. Grammar
@@ -118,9 +134,12 @@ member           ::= property_decl
                   |  property_bind
                   |  widget_decl
                   |  signal_handler
+                  |  state_decl
 
 property_decl    ::= "in-out" "property" "<" type_name ">" IDENT
                      ":" expr
+
+state_decl       ::= "state" IDENT ":" state_type "=" expr
 
 property_bind    ::= IDENT ":" expr
 
@@ -140,13 +159,18 @@ qualified_name   ::= IDENT ("." IDENT)*
 
 expr             ::= STRING_LIT
                   |  number_with_unit
+                  |  BOOL_LIT
                   |  IDENT
+
+BOOL_LIT         ::= "true" | "false"
 
 number_with_unit ::= (INT_LIT | FLOAT_LIT) UNIT?
 
 UNIT             ::= "px"
 
 type_name        ::= "int" | "string" | "float" | "bool"
+
+state_type       ::= "i32" | "string" | "bool"
 ```
 
 ### Disambiguation
@@ -156,13 +180,14 @@ Within `member`, a 2-token lookahead resolves the alternative:
 | First token | Second token | Rule matched      |
 |-------------|--------------|-------------------|
 | `in-out`    | `property`   | `property_decl`   |
+| `state`     | `IDENT`      | `state_decl`      |
 | `IDENT`     | `:`          | `property_bind`   |
 | `IDENT`     | `{`          | `widget_decl`     |
 | `IDENT`     | `=>`         | `signal_handler`  |
 
 ---
 
-## 4. Semantics (M1 Scope)
+## 4. Semantics (M2 Surface, M3-Phase 1 Additions)
 
 ### 4.1 `component` declaration
 
@@ -194,8 +219,23 @@ Supported types in M1: `int`, `string`, `float`, `bool`.
 <name>: <expr>
 ```
 
-Associates a value with a named property. In M1 all bindings are **static**: they are
-evaluated once at construction time. Reactive re-evaluation is M2 scope.
+Associates a value with a named property. M1 treated all bindings as
+static construction-time values. M2 added reactive re-evaluation for
+state-backed bindings; M3-Phase 1 adds the bool cases described below.
+The right-hand side is an expression position, not a template
+interpolation position: state references are written directly
+(`enabled: ready`), without an additional interpolation or embedding
+wrapper around the expression. String interpolation remains confined
+to string literals (see §2.4).
+
+`<expr>` may be a `BOOL_LIT` (`true` / `false`) or an identifier that
+resolves to a `bool`-typed `state` declaration (M3-Phase 1) when the
+target property is itself `bool`-typed. `wasamoc check` validates the
+LHS/RHS type pair against the widget-property catalog (see §4.8) and
+the state-name → declared-type table built from `state_decl`s; type
+mismatches such as `enabled: 1` (i32 RHS into `bool` target) or
+`text: ready` (`bool` source into `string` target) are
+compile-time errors.
 
 ### 4.4 Widget declaration
 
@@ -236,8 +276,86 @@ The only recognized signal name in M1 is `clicked`.
 | `"…"` string       | `Expr::StringLit(String)` — raw content     |
 | `42` integer       | `Expr::IntLit(i64)`                         |
 | `3.14` float       | `Expr::FloatLit(f64)`                       |
+| `true` / `false`   | `Expr::BoolLit(bool)` (M3-Phase 1)          |
 | `12px` measurement | `Expr::Measurement { value: f64, unit: Unit }` |
 | `mica` identifier  | `Expr::Ident(String)` — no resolution       |
+
+**Handler-side expressions over `bool` (M3-Phase 1).** Inside a
+`signal_handler` body, an assignment whose right-hand side is a
+`BOOL_LIT` (`true` / `false`) or an identifier resolving to a
+`bool`-typed `state` declaration is well-typed, e.g.
+`ready = false;`. This lowers to a `HandlerExpr::Assign` with a
+`BoolLit` or `BoolPropRead` RHS (see §8.9). Compound assignment
+(`+=`, `-=`, `*=`, `/=`) is **not** defined over `bool` and is
+rejected by `wasamoc check`.
+
+### 4.7 State declarations (M2 surface; bool added in M3-Phase 1)
+
+```
+state <name>: <state_type> = <default>
+```
+
+Declares a per-component reactive `Signal<T>` whose value is owned by
+the `.ui` source (DD-M2-P6-004). `state` declarations are a
+component-level member, parallel to `in-out property`. Multiple
+`state` declarations may appear in any order; names share a flat
+namespace within the component.
+
+Supported `state_type`s:
+
+| `state_type` | Runtime store                            |
+|--------------|------------------------------------------|
+| `i32`        | `Signal<i32>` — integer reactive value   |
+| `string`     | `Signal<String>` — string reactive value |
+| `bool`       | `Signal<bool>` — bool reactive value (M3-Phase 1) |
+
+The `<default>` expression must be a literal of the matching type:
+`INT_LIT` for `i32`, `STRING_LIT` for `string`, `BOOL_LIT` for
+`bool`. `wasamoc check` rejects mismatches (e.g.
+`state ready: bool = 0` or `state ready: bool = "false"`) as
+compile-time errors with line/column.
+
+Example:
+
+```
+state count: i32 = 0
+state label: string = "Click me"
+state ready: bool = true
+```
+
+State declarations lower to the IR `state_decl` form (§8.4).
+
+### 4.8 Widget property catalog (M3-Phase 1)
+
+Per-widget typed property entries that may be bound (`prop: <expr>`
+or reactively from a `state` declaration). M2 widget properties
+remain bindable through the M2 string-baked path; the entries below
+are the ones whose declared type is checked at `wasamoc check` and
+dispatched through a per-type binding writer at the runtime loader
+(DD-M3-P1-007, DD-M3-P1-009).
+
+| Widget | Property  | Type   | Default | Notes |
+|--------|-----------|--------|---------|-------|
+| `Button` | `enabled` | `bool` | `true`  | M3-Phase 1; see contract below |
+
+**`Button.enabled` Phase 1 contract.** When bound to `false`:
+
+- The button suppresses click-handler dispatch (no host callback, no
+  inline `clicked` handler invocation, no `enqueue_signal("clicked", …)`).
+- Hover / press visual transitions are frozen; the background paints a
+  flat disabled grey directly (no `ColorKeyFrameAnimation` runs).
+- The layout slot is **preserved** — the button still measures and
+  arranges identically to its enabled form; there is no
+  `display: none` semantics.
+- Child hit-test traversal is preserved.
+
+**Explicitly deferred to later milestones.** Keyboard focusability and
+tab-order semantics when disabled, AccessKit / `aria-disabled`
+accessibility tree state, hover and focus visual variations, and key
+activation suppression. M4 (input/focus) and M5 (accessibility) own
+the full interaction-state contract for disabled controls; the Phase 1
+contract above is structured to be additive under that widening, not
+superseded by it.
 
 ---
 
@@ -257,6 +375,7 @@ Member (enum) {
     PropertyBind  { name: String, value: Expr },
     WidgetDecl    { type_name: String, members: Vec<Member> },
     SignalHandler { signal: String, body: Block },
+    StateMember   { name: String, ty: TypeName, default: Expr },  // M2
 }
 
 StringPart (enum) {
@@ -268,6 +387,7 @@ Expr (enum) {
     StringLit   { parts: Vec<StringPart> },
     IntLit      { value: i64 },
     FloatLit    { value: f64 },
+    BoolLit     { value: bool },             // M3-Phase 1
     Measurement { value: f64, unit: Unit },
     Ident       { name: String },
 }
@@ -374,6 +494,9 @@ Grammar rules use the same notation as §3:
 - `IDENT` matches `[A-Za-z_][A-Za-z0-9_.\-]*` (dots and hyphens allowed for
   path segments and widget-type names).
 - `INT` matches `[0-9]+` with an optional leading `-`.
+- `BOOL` matches the literal text `true` or `false` (M3-Phase 1). In
+  positions where the grammar accepts a `literal` or an `atom`, a bare
+  `true` / `false` IDENT is recognised as `BOOL` rather than `IDENT`.
 - `STRING` matches a double-quoted string with `\"` and `\\` escapes.
 - Whitespace (space, tab, `\r`, `\n`) is ignored between tokens.
 - A `;` outside the header line begins a line comment; the rest of that line
@@ -407,13 +530,14 @@ state_decl ::= "state" IDENT ":" type_name "=" literal
 | Element     | Meaning                                          |
 |-------------|--------------------------------------------------|
 | `IDENT`     | Signal name; unique within the component (flat namespace) |
-| `type_name` | `"i32"` or `"string"` (M2 type set)             |
-| `literal`   | Default value: `INT` for `i32`; `STRING` for string |
+| `type_name` | `"i32"`, `"string"`, or `"bool"` (M3-Phase 1 adds `bool`) |
+| `literal`   | Default value: `INT` for `i32`; `STRING` for string; `BOOL` (`true`/`false`) for `bool` |
 
-Example:
+Examples:
 
 ```
 state count: i32 = 0
+state ready: bool = false
 ```
 
 ### 8.5 Widget nodes
@@ -435,11 +559,14 @@ It is used for properties whose value is a plain literal (not reactive).
 ```
 property_set ::= "prop" IDENT "=" literal
 
-literal      ::= INT | STRING | IDENT
+literal      ::= INT | STRING | BOOL | IDENT
 ```
 
-The third `literal` alternative (`IDENT`) encodes keyword-valued properties
-such as `mica`, `system`, `accent`, `title` (see §4.3).
+The `IDENT` alternative encodes keyword-valued properties such as
+`mica`, `system`, `accent`, `title` (see §4.3). The `BOOL`
+alternative is M3-Phase 1: a bare `true` or `false` in literal
+position is interpreted as `IrLiteral::Bool` (per §8.2 Notation),
+not as an `IDENT`-valued literal.
 
 Examples:
 
@@ -508,6 +635,7 @@ expr  ::= atom
         | "(" "str"             STRING ")"
         | "(" "prop-read"       IDENT ")"
         | "(" "str-prop-read"   IDENT ")"
+        | "(" "bool-prop-read"  IDENT ")"     ; M3-Phase 1
         | "(" "assign"          IDENT expr ")"
         | "(" "compound-assign" compound_op IDENT expr ")"
         | "(" "interp"          interp_part+ ")"
@@ -515,6 +643,7 @@ expr  ::= atom
 
 atom  ::= INT
         | STRING
+        | BOOL                                ; M3-Phase 1
 
 compound_op ::= "+=" | "-=" | "*=" | "/="
 
@@ -528,10 +657,12 @@ interp_part ::= STRING         ; literal text fragment
 |---|---|---|
 | `INT` / `(lit INT)` | `IntLit(i32)` | Bare `INT` is equivalent to `(lit INT)` |
 | `STRING` / `(str STRING)` | `StrLit(String)` | Binding-only |
+| `BOOL` | `BoolLit(bool)` | M3-Phase 1. Bare `true` / `false` in atom position. No `(bool …)` wrapper form is defined |
 | `(prop-read NAME)` | `PropRead { path }` | `NAME` is the Signal name from `state` |
 | `(str-prop-read NAME)` | `StrPropRead { path }` | String-typed binding read; `NAME` is the Signal name from `state` |
-| `(assign NAME expr)` | `Assign { lhs, rhs }` | Handler-only |
-| `(compound-assign OP NAME expr)` | `CompoundAssign { lhs, op, rhs }` | Handler-only |
+| `(bool-prop-read NAME)` | `BoolPropRead { path }` | M3-Phase 1. Bool-typed binding read; `NAME` is the Signal name from `state` |
+| `(assign NAME expr)` | `Assign { lhs, rhs }` | Handler-only. M3-Phase 1: `rhs` may now be `BoolLit` or `BoolPropRead` when the LHS state is `bool`-typed |
+| `(compound-assign OP NAME expr)` | `CompoundAssign { lhs, op, rhs }` | Handler-only. **Not defined over `bool`** — no `CompoundOp` is naturally bool-typed |
 | `(interp part+)` | `Interpolation(Vec<InterpolationPart>)` | Binding-only |
 | `(block expr*)` | `Block(Vec<HandlerExpr>)` | Empty block evaluates to `0` |
 
@@ -605,10 +736,21 @@ Type mismatches indicate a `wasamoc` bug, not a recoverable load-time error.
 |---|---|
 | `(computed ...)` expression form | M3 |
 | `(if ...)` / `(for ...)` binding forms | M3+ |
-| M3 expanded type set (`float`, `bool`, user types) | M3 |
+| M3 expanded type set (`float`, user types; `bool` landed in M3-Phase 1) | M3 |
+| Generic `TypedValue` value union (F5 deferral) | Post-M3 |
 | Binary IR format | Post-M2 |
 | Grammar version `v1` (first incompatible change) | When required |
 | `(post-event ...)` escape hatch for observer callbacks | M3 (DD-M2-P6-001 Option F) |
+
+**F5 (`TypedValue`) deferral.** M3-Phase 1 admits `bool` as a third
+tagged scalar (`IrType::Bool`, `IrLiteral::Bool`, `HandlerExpr::BoolLit` /
+`BoolPropRead`) using the same type-suffixed variant pattern M2
+adopted for `i32` and `String` (DD-M2-P6-003). It does not introduce
+a generic `TypedValue` value union; the per-type binding evaluator and
+per-type widget property writer (see `architecture.md` §6.8.7 and
+[m3-phase-1-bool-scalar.md DD-M3-P1-007](./decisions/m3-phase-1-bool-scalar.md))
+are the structural form of that deferral. F5 is recorded in
+[notes/m3/m3-start-framing.md §F5](./notes/m3/m3-start-framing.md#f5--typedvalue-は再評価候補だが開始時点の-m3-acceptance-ではない).
 
 ---
 
@@ -669,7 +811,10 @@ nodes directly. It resolves the `QualifiedName` against the component's property
 subscribes to changes, and re-evaluates the concatenated string on each change. No AST
 schema change was required; M2 added lowering/evaluation logic, not a new source
 representation. String-typed interpolation lowers to `str-prop-read` in
-`;wasamo-ir v0`.
+`;wasamo-ir v0`. M3-Phase 1 rejects `bool`-typed state interpolation
+at `wasamoc check` time rather than lowering it to a runtime
+`TypeMismatch`; an explicit formatting/display-conversion surface is a
+future design item.
 
 ---
 
@@ -681,3 +826,5 @@ representation. String-typed interpolation lowers to `str-prop-read` in
 | 0.2     | 2026-04-27 | Phase 1 Accepted; added missing tokens (MinusEq/StarEq/SlashEq); corrected AST types (StringLit → Vec<StringPart>, Statement as struct); corrected error output format |
 | 0.3     | 2026-05-07 | M2-Phase 6 Accepted; added §8 Wasamo IR normative spec (DD-M2-P6-002 + DD-M2-P6-003) |
 | 0.4     | 2026-05-11 | M2 complete; added `str-prop-read` IR form from DD-M2-P6-011 and updated M2/post-M2 status language |
+| 0.5     | 2026-05-19 | M3-Phase 1 (`bool` scalar binding): added `true`/`false` keywords, `BoolLit` token, `BoolLit`/`BoolPropRead` IR expression forms, `bool` to `state_decl` type set, `Button.enabled` widget-catalog entry, and `state` surface declaration §4.7 (retroactive M2 gap); recorded F5 (`TypedValue`) deferral in §8.12 |
+| 0.6     | 2026-05-19 | M3-Phase 1 T14: documented that string interpolation over `bool`-typed state is rejected until an explicit formatting/display-conversion surface exists |

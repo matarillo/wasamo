@@ -16,13 +16,13 @@ use wasamo_ir::{
 
 use crate::layout::Alignment;
 use crate::reactive::{
-    register_binding, set_active_registry, BindingTarget, PropertyKey, Signal, SignalRegistry,
-    WidgetId,
+    register_binding, register_bool_binding, set_active_registry, BindingTarget, PropertyKey,
+    Signal, SignalRegistry, WidgetId,
 };
 use crate::text::{TextRenderer, TypographyStyle};
 use crate::widget::{
-    widget_write_property, ButtonStyle, WidgetNode, PROP_BUTTON_LABEL, PROP_BUTTON_STYLE,
-    PROP_TEXT_CONTENT, PROP_TEXT_STYLE,
+    widget_write_property, widget_write_property_bool, ButtonStyle, WidgetNode,
+    PROP_BUTTON_ENABLED, PROP_BUTTON_LABEL, PROP_BUTTON_STYLE, PROP_TEXT_CONTENT, PROP_TEXT_STYLE,
 };
 
 use windows::UI::Composition::Compositor;
@@ -166,8 +166,10 @@ fn validate_expr_references(
     err_msg: &dyn Fn(&str) -> String,
 ) -> Result<(), IrLoadError> {
     match expr {
-        HandlerExpr::IntLit(_) | HandlerExpr::StrLit(_) => Ok(()),
-        HandlerExpr::PropRead { path } | HandlerExpr::StrPropRead { path } => {
+        HandlerExpr::IntLit(_) | HandlerExpr::StrLit(_) | HandlerExpr::BoolLit(_) => Ok(()),
+        HandlerExpr::PropRead { path }
+        | HandlerExpr::StrPropRead { path }
+        | HandlerExpr::BoolPropRead { path } => {
             if !declared.contains(path.as_str()) {
                 Err(IrLoadError::Validate(err_msg(path)))
             } else {
@@ -474,6 +476,7 @@ impl<'a> Parser<'a> {
         let ty = match ty_str.as_str() {
             "i32" => IrType::I32,
             "string" => IrType::Str,
+            "bool" => IrType::Bool,
             other => {
                 return Err(IrLoadError::Parse(format!("unknown state type: {other}")));
             }
@@ -552,6 +555,8 @@ impl<'a> Parser<'a> {
         match self.advance() {
             Some(Token::Int(n)) => Ok(IrLiteral::Int(*n)),
             Some(Token::Str(s)) => Ok(IrLiteral::Str(s.clone())),
+            Some(Token::Ident(s)) if s == "true" => Ok(IrLiteral::Bool(true)),
+            Some(Token::Ident(s)) if s == "false" => Ok(IrLiteral::Bool(false)),
             Some(Token::Ident(s)) => Ok(IrLiteral::Ident(s.clone())),
             other => Err(IrLoadError::Parse(format!(
                 "expected literal, got {other:?}"
@@ -571,6 +576,14 @@ impl<'a> Parser<'a> {
                 self.advance();
                 Ok(HandlerExpr::StrLit(v))
             }
+            Some(Token::Ident(s)) if s == "true" => {
+                self.advance();
+                Ok(HandlerExpr::BoolLit(true))
+            }
+            Some(Token::Ident(s)) if s == "false" => {
+                self.advance();
+                Ok(HandlerExpr::BoolLit(false))
+            }
             Some(Token::LParen) => self.parse_sexpr(),
             other => Err(IrLoadError::Parse(format!(
                 "expected expression, got {other:?}"
@@ -589,6 +602,10 @@ impl<'a> Parser<'a> {
             "str-prop-read" => {
                 let path = self.expect_ident()?;
                 HandlerExpr::StrPropRead { path }
+            }
+            "bool-prop-read" => {
+                let path = self.expect_ident()?;
+                HandlerExpr::BoolPropRead { path }
             }
             "assign" => {
                 let lhs = self.expect_ident()?;
@@ -698,6 +715,15 @@ fn build_signal_registry(states: &[IrState]) -> SignalRegistry {
                     .strings
                     .insert(state.name.clone(), Signal::new(initial));
             }
+            IrType::Bool => {
+                let initial = match &state.default {
+                    IrLiteral::Bool(b) => *b,
+                    _ => false,
+                };
+                registry
+                    .bools
+                    .insert(state.name.clone(), Signal::new(initial));
+            }
         }
     }
     registry
@@ -713,7 +739,8 @@ fn build_node(
 
     // Bindings: register each `bind` as a reactive Effect targeting the widget property.
     for binding in &node.bindings {
-        let Some(prop_key) = resolve_prop_key(&node.widget_type, &binding.prop_name) else {
+        let Some((prop_key, prop_ty)) = resolve_prop_key(&node.widget_type, &binding.prop_name)
+        else {
             // Unknown property name on this widget type — silently skip in M2.
             // M3 will surface this through the diagnostic system.
             continue;
@@ -723,12 +750,28 @@ fn build_node(
             node: widget_id,
             prop: prop_key,
         };
-        let handle = register_binding(
-            target,
-            binding.expr.clone(),
-            Rc::clone(registry),
-            widget_write_property,
-        );
+        // Per-type writer dispatch (DD-M3-P1-007 Option A + DD-M3-P1-009):
+        // the loader selects the evaluator/writer pair matching the target
+        // property's declared `IrType`. The reactive engine itself stays
+        // type-agnostic; the seam lives here at the call site.
+        let handle = match prop_ty {
+            IrType::Bool => register_bool_binding(
+                target,
+                binding.expr.clone(),
+                Rc::clone(registry),
+                widget_write_property_bool,
+            ),
+            // I32 and Str properties continue through the M2 string-baked
+            // writer (stringified by `evaluate_binding`, parsed at the
+            // per-widget setter — typed-i32 writer lands when its use case
+            // arrives).
+            IrType::I32 | IrType::Str => register_binding(
+                target,
+                binding.expr.clone(),
+                Rc::clone(registry),
+                widget_write_property,
+            ),
+        };
         widget.bindings.push(handle);
     }
 
@@ -794,12 +837,18 @@ fn construct_widget(
     }
 }
 
-fn resolve_prop_key(widget_type: &str, prop_name: &str) -> Option<PropertyKey> {
+// Widget catalog: `(widget_type, prop_name) → (PROP_* id, declared IrType)`.
+// DD-M3-P1-009 widens the return shape so the binding loader can pick the
+// per-type writer that matches the target property. The catalog mirrors the
+// soft `wasamoc::check` widget-property table (kept independently so the
+// compiler stays self-contained — see m3-phase-1-progress.md T3 Notes).
+fn resolve_prop_key(widget_type: &str, prop_name: &str) -> Option<(PropertyKey, IrType)> {
     match (widget_type, prop_name) {
-        ("Text", "text") => Some(PROP_TEXT_CONTENT),
-        ("Text", "font") => Some(PROP_TEXT_STYLE),
-        ("Button", "text") => Some(PROP_BUTTON_LABEL),
-        ("Button", "style") => Some(PROP_BUTTON_STYLE),
+        ("Text", "text") => Some((PROP_TEXT_CONTENT, IrType::Str)),
+        ("Text", "font") => Some((PROP_TEXT_STYLE, IrType::I32)),
+        ("Button", "text") => Some((PROP_BUTTON_LABEL, IrType::Str)),
+        ("Button", "style") => Some((PROP_BUTTON_STYLE, IrType::I32)),
+        ("Button", "enabled") => Some((PROP_BUTTON_ENABLED, IrType::Bool)),
         _ => None,
     }
 }
@@ -863,6 +912,55 @@ fn has_binding(bindings: &[IrBinding], name: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // ── resolve_prop_key / binding dispatch (M3-Phase 1 T8 / DD-M3-P1-009) ──
+    //
+    // resolve_prop_key drives the per-type writer dispatch in `build_node`:
+    // its returned `IrType` selects between `register_bool_binding`
+    // (+ widget_write_property_bool) and the string-baked `register_binding`
+    // path. End-to-end exercise lives in the Windows-bound integration test
+    // for `Button.enabled` (T6); these tests cover the pure-logic seam.
+
+    #[test]
+    fn resolve_prop_key_button_enabled_is_bool() {
+        let (key, ty) = resolve_prop_key("Button", "enabled").expect("Button.enabled exists");
+        assert_eq!(key, PROP_BUTTON_ENABLED);
+        assert_eq!(ty, IrType::Bool);
+    }
+
+    #[test]
+    fn resolve_prop_key_text_text_is_string() {
+        let (key, ty) = resolve_prop_key("Text", "text").expect("Text.text exists");
+        assert_eq!(key, PROP_TEXT_CONTENT);
+        assert_eq!(ty, IrType::Str);
+    }
+
+    #[test]
+    fn resolve_prop_key_button_text_is_string() {
+        let (key, ty) = resolve_prop_key("Button", "text").expect("Button.text exists");
+        assert_eq!(key, PROP_BUTTON_LABEL);
+        assert_eq!(ty, IrType::Str);
+    }
+
+    #[test]
+    fn resolve_prop_key_button_style_is_i32() {
+        let (key, ty) = resolve_prop_key("Button", "style").expect("Button.style exists");
+        assert_eq!(key, PROP_BUTTON_STYLE);
+        assert_eq!(ty, IrType::I32);
+    }
+
+    #[test]
+    fn resolve_prop_key_text_font_is_i32() {
+        let (key, ty) = resolve_prop_key("Text", "font").expect("Text.font exists");
+        assert_eq!(key, PROP_TEXT_STYLE);
+        assert_eq!(ty, IrType::I32);
+    }
+
+    #[test]
+    fn resolve_prop_key_unknown_pair_is_none() {
+        assert!(resolve_prop_key("Button", "nonsuch").is_none());
+        assert!(resolve_prop_key("Nonsuch", "enabled").is_none());
+    }
 
     fn parse_ok(src: &str) -> IrComponent {
         match parse_ir(src) {
@@ -1064,6 +1162,110 @@ mod tests {
     }
 
     #[test]
+    fn state_bool_with_false_default() {
+        let c = parse_ok(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             state ready: bool = false\n\
+             node V {}\n}",
+        );
+        assert_eq!(c.states.len(), 1);
+        assert_eq!(c.states[0].name, "ready");
+        assert_eq!(c.states[0].ty, IrType::Bool);
+        assert_eq!(c.states[0].default, IrLiteral::Bool(false));
+    }
+
+    #[test]
+    fn state_bool_with_true_default() {
+        let c = parse_ok(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             state ready: bool = true\n\
+             node V {}\n}",
+        );
+        assert_eq!(c.states[0].ty, IrType::Bool);
+        assert_eq!(c.states[0].default, IrLiteral::Bool(true));
+    }
+
+    #[test]
+    fn prop_bool_literal() {
+        let c = parse_ok(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             node Button {\n\
+               prop enabled = true\n\
+             }\n}",
+        );
+        let props = &c.root.props;
+        assert_eq!(
+            props[0],
+            IrProp {
+                name: "enabled".into(),
+                value: IrLiteral::Bool(true)
+            }
+        );
+    }
+
+    #[test]
+    fn binding_with_bool_prop_read() {
+        let c = parse_ok(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             state ready: bool = false\n\
+             node Button { bind enabled = (bool-prop-read ready) }\n}",
+        );
+        assert_eq!(c.root.bindings.len(), 1);
+        let b = &c.root.bindings[0];
+        assert_eq!(b.prop_name, "enabled");
+        assert_eq!(
+            b.expr,
+            HandlerExpr::BoolPropRead {
+                path: "ready".into()
+            }
+        );
+    }
+
+    #[test]
+    fn binding_with_bool_literal() {
+        let c = parse_ok(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             node Button { bind enabled = true }\n}",
+        );
+        assert_eq!(c.root.bindings[0].expr, HandlerExpr::BoolLit(true));
+    }
+
+    #[test]
+    fn handler_assign_bool_literal() {
+        let c = parse_ok(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             state ready: bool = true\n\
+             node Button { on clicked { (assign ready false) } }\n}",
+        );
+        let h = &c.root.handlers[0];
+        assert_eq!(
+            h.expr,
+            HandlerExpr::Assign {
+                lhs: "ready".into(),
+                rhs: Box::new(HandlerExpr::BoolLit(false))
+            }
+        );
+    }
+
+    #[test]
+    fn handler_assign_bool_prop_read() {
+        let c = parse_ok(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             state a: bool = false\n\
+             state b: bool = true\n\
+             node V { on clicked { (assign a (bool-prop-read b)) } }\n}",
+        );
+        let h = &c.root.handlers[0];
+        assert_eq!(
+            h.expr,
+            HandlerExpr::Assign {
+                lhs: "a".into(),
+                rhs: Box::new(HandlerExpr::BoolPropRead { path: "b".into() })
+            }
+        );
+    }
+
+    #[test]
     fn negative_int_literal() {
         let c = parse_ok(
             ";wasamo-ir v0\ncomponent C inherits W {\n\
@@ -1166,6 +1368,7 @@ mod tests {
             let ty = match s.ty {
                 IrType::I32 => "i32",
                 IrType::Str => "string",
+                IrType::Bool => "bool",
             };
             out.push_str(&format!(
                 "    state {}: {} = {}\n",
@@ -1215,6 +1418,7 @@ mod tests {
             IrLiteral::Int(n) => n.to_string(),
             IrLiteral::Str(s) => format!("\"{}\"", s.replace('\\', "\\\\").replace('"', "\\\"")),
             IrLiteral::Ident(id) => id.clone(),
+            IrLiteral::Bool(b) => (if *b { "true" } else { "false" }).to_string(),
         }
     }
 
@@ -1222,8 +1426,10 @@ mod tests {
         match e {
             HandlerExpr::IntLit(n) => n.to_string(),
             HandlerExpr::StrLit(s) => format!("\"{}\"", s),
+            HandlerExpr::BoolLit(b) => (if *b { "true" } else { "false" }).to_string(),
             HandlerExpr::PropRead { path } => format!("(prop-read {})", path),
             HandlerExpr::StrPropRead { path } => format!("(str-prop-read {})", path),
+            HandlerExpr::BoolPropRead { path } => format!("(bool-prop-read {})", path),
             HandlerExpr::Assign { lhs, rhs } => format!("(assign {} {})", lhs, render_expr(rhs)),
             HandlerExpr::CompoundAssign { lhs, op, rhs } => {
                 let op_str = match op {
@@ -1320,6 +1526,16 @@ mod tests {
         let err = parse_err(
             ";wasamo-ir v0\ncomponent C inherits W {\n\
              node V { bind text = (prop-read missing) }\n}",
+        );
+        assert!(matches!(err, IrLoadError::Validate(ref m) if m.contains("missing")));
+        assert_malformed_display_nonempty(&err);
+    }
+
+    #[test]
+    fn malformed_bool_prop_read_undeclared() {
+        let err = parse_err(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             node V { bind enabled = (bool-prop-read missing) }\n}",
         );
         assert!(matches!(err, IrLoadError::Validate(ref m) if m.contains("missing")));
         assert_malformed_display_nonempty(&err);

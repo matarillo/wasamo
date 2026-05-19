@@ -1,0 +1,200 @@
+---
+title: M3-Phase 1 / T1 step-end retrospective
+status: recorded
+created: 2026-05-19
+scope: step-end
+task: T1 — wasamo-ir bool variants
+---
+
+# M3-Phase 1 / T1 step-end retrospective
+
+## Scope
+
+`docs/plans/progress/m3-phase-1-progress.md` の **T1** ("`wasamo-ir`:
+add `bool` to the type / literal / handler surfaces") の step-end
+retrospective。T1 が discharge する DD は
+DD-M3-P1-001 / DD-M3-P1-002 (IR variant 側) / DD-M3-P1-003 で、
+DD-M3-P1-006 で決まった IR text spelling のうち `wasamoc::emit` と
+`wasamo-runtime::ir_loader` の test-render helper 側の mechanical
+更新も同じ commit に含めた。
+
+対象コミット:
+
+- `7cc52f4 feat(ir): add bool to IrType / IrLiteral / HandlerExpr (M3-Phase 1 T1)`
+
+これは step-end の gate であり、phase-end retrospective ではない。
+
+## Current Judgment
+
+2026-05-19 時点で T1 step-end 基準は **達成済み**。
+
+- `wasamo-ir` に `IrType::Bool` / `IrLiteral::Bool(bool)` /
+  `HandlerExpr::BoolLit(bool)` / `HandlerExpr::BoolPropRead { path }`
+  を追加。M2 の type-suffix 規律 (DD-M2-P6-003) を保ち、`IntLit` /
+  `PropRead` は i32-implicit のまま据え置いた。
+- 下流の exhaustive match (`wasamoc::emit`, `wasamo-runtime::handler`,
+  `wasamo-runtime::ir_loader`) には Bool arm を追加し、workspace が
+  exhaustiveness で割れない状態を維持した。
+- `wasamo-ir` に 7 件の pure-logic unit test を追加 (variant
+  construction, equality, 他 scalar との distinctness, `IrState` 経由の
+  bool 宣言)。
+- `cargo build --workspace` / `cargo test --workspace` どちらも local で
+  green。
+
+T1 の blocker は残っていない。
+
+## Main Learning
+
+中心的な学びは「`IrType::Bool` を追加する瞬間に下流のどの match が
+exhaustive で割れるか」を**着手前に grep で網羅した**ことが効いたという
+点。先に reject-stub の配置場所を全部洗い出してから本体を編集すると、
+`cargo check` の error log を見ながら逐次対応する流れにならず、ひとつの
+コミットで build green に着地できた。
+
+下流 stub の方針として有効だった分割:
+
+- IR text spelling (DD-M3-P1-006 で決まっている `"bool"` / `"true"` /
+  `"false"` / `"(bool-prop-read PATH)"`) のように **設計が既に閉じている
+  mechanical な arm** は、T1 の中で正しく書く。
+- 一方、`build_signal_registry` の `IrType::Bool` arm のように **後続
+  task の構造変更が必要なもの** (T6 で `SignalRegistry::bools` を追加
+  する) は `unimplemented!` で打ち切り、コメントに T6/T7 の参照を残す。
+- `handler::evaluate` / `evaluate_tracked` の bool arm は T7 が
+  `set_bool` を入れて置き換える前提で、現状は `TypeMismatch` を返す
+  arm として明示。
+
+この使い分けで、T1 の commit は「`wasamo-ir` の純粋追加 + 既決事項の
+spelling 反映 + 後続 task の足場」だけで構成でき、T2 以降の design
+surface を先食いしなかった。
+
+副次的な学びとして、`wasamo-runtime::ir_loader` の `parse_state` /
+`parse_literal` / `parse_sexpr` は **既に catch-all `other =>` で
+書かれている** ため、新規 variant 追加で割れなかった。これは T5 の IR
+text loader 側拡張が「catch-all から正規 arm に格上げ」する形で進めば
+よいことを意味し、T1 で先回りする必要が無いと確認できた。
+
+## Checklist
+
+1. **本作業の主要な学び:** あり。
+   - 着手前に下流の exhaustive match を全列挙したことで commit を
+     bisect 不能にしなかった。
+   - 「DD-M3-P1-006 で既に決まっている spelling」は T1 内で書く、
+     「後続 task の構造変更が必要なもの」は stub に留める、という
+     線引きが mechanical / design 両面で破綻しなかった。
+
+2. **仕様文書 (`abi_spec.md` / `architecture.md` / `dsl_spec.md`) の変更:** **なし**
+   - T1 の対象は `wasamo-ir` crate と下流の stub のみ。spec sync (A11)
+     は T10 の責任範囲。
+
+3. **ローカル clean rebuild:** **green**
+   - `cargo build --workspace`: green (13.8s)
+   - `cargo test --workspace`: green (新規 7 件含め、retire 済みの既存
+     test も含めて failure 0 件)
+   - `cargo test -p wasamo-ir`: 7 passed (T1 新規)
+   - GitHub Actions 上の clean rebuild は phase-end gate で確認する
+     (T12)。
+
+4. **PO に相談すべき設計判断・トレードオフ:** **なし**
+   - DD-M3-P1-001..003 / 006 は ADR Accepted 済み。T1 はそれらの IR
+     surface への mechanical 反映で、新規 design call は出ていない。
+
+### step-end 固有
+
+5. **plan/ADR に記載の step 目的から外れた「ついで」のリファクタ・
+   構造変更:** **なし**
+   - T1 の編集は IR variant 追加と exhaustive match の Bool arm に
+     限定。format 系の churn なし。
+
+6. **現在の phase ADR への追加 DD 必要性:** **なし**
+   - 既存 DD-M3-P1-001..010 で T1 範囲はすべてカバーされている。
+
+7. **既存 ADR の Proposed 項目の新規追加、または Proposed → Accepted
+   への昇格:** **なし**
+   - 当該 ADR は 2026-05-19 時点で全 DD Accepted 済み (commit
+     d7c77b9)。T1 では昇格対象なし。
+
+8. **`m3-plan.md` の AC 追加・変更、または Phase 構成の追加・統合・
+   分割:** **なし**
+   - A9 / A11 / A12 の文言は変更なし。Phase 構成変更なし。
+
+9. **後続 step に持ち越す仮実装・近似・新規 `dead_code` 警告:**
+   **意図的な stub あり、`dead_code` 警告なし**
+   - `wasamo-runtime/src/ir_loader.rs` の `build_signal_registry` で
+     `IrType::Bool => unimplemented!(...)` を T6/T7 用に残した。実際に
+     bool state を含む IR component を load しようとすると panic する
+     が、現在の test fixture にそのような component は存在しない。
+   - `wasamo-runtime/src/handler.rs` の `evaluate` /
+     `evaluate_tracked` には bool arm を `EvalError::TypeMismatch`
+     として置いた。T7 で `set_bool` + bool-typed `Assign` arm が入る
+     タイミングで上書きされる前提。
+   - 新規 `dead_code` 警告は観測していない (cargo build / test の
+     warning 出力に新規ノイズ無し)。
+
+10. **タスクリストの後続 step 見直し:** **なし (進行通り)**
+    - progress file の T1 行を `[x]` に更新し、retrospective への
+      link を追加。
+    - T2 以降の task 構成・順序・依存関係に T1 実装から見て調整すべき
+      点は出ていない。
+
+## Fast-Track Judgment
+
+Fast-track criteria を満たしている。
+
+- item 2 (spec doc 変更): なし
+- item 3 (local clean rebuild): green
+- item 4 (PO 相談事項): なし
+- item 5 (ついでのリファクタ): なし
+- item 6 (追加 DD 必要性): なし
+- item 7 (Proposed → Accepted 昇格): なし
+- item 8 (plan AC / Phase 構成変更): なし
+- item 9 (持ち越し): 意図的な stub のみ (T6/T7 で解消)
+
+blocking item なし。
+
+## Verification Notes
+
+T1 で追加したテストと、走らせた command を記録する。
+
+新規テスト (`wasamo-ir/src/lib.rs` 内 `#[cfg(test)] mod tests`):
+
+- `ir_type_bool_distinct_from_i32_and_str`
+- `ir_literal_bool_round_trip_values`
+- `ir_literal_bool_distinct_from_int_zero_one`
+- `handler_expr_bool_lit_round_trip`
+- `handler_expr_bool_prop_read_carries_path`
+- `handler_expr_bool_variants_distinct_from_other_scalars`
+- `ir_state_bool_declaration`
+
+実行コマンド:
+
+```text
+cargo build --workspace
+cargo test --workspace
+cargo test -p wasamo-ir
+```
+
+いずれも green。`wasamo-ir` 単体テストは 7 passed。
+
+## Follow-Up
+
+T1 から後続 task への明示的な引き渡し:
+
+- **T2 (wasamoc lexer/parser):** surface syntax 側で `true` / `false`
+  キーワード予約 + bool 検査。`wasamoc::emit` の `IrLiteral::Bool` /
+  `HandlerExpr::BoolLit` / `HandlerExpr::BoolPropRead` arm は T1 で
+  spelling 反映済み (DD-M3-P1-006 準拠)。T2 は emit を上書きせず、
+  lexer/parser/lower の側を増やす形で良い。
+- **T5 (wasamo-runtime IR loader):** `parse_state` / `parse_literal`
+  / `parse_sexpr` は catch-all 経由で reject される状態。T5 で `"bool"`
+  / `Token::Ident("true"|"false")` / `"bool-prop-read"` の正規 arm を
+  追加する。
+- **T6 (widget catalog + PropertyValue::Bool):** `build_signal_registry`
+  の `IrType::Bool => unimplemented!()` を解消するために
+  `SignalRegistry::bools` を導入する。`PropertyValue::Bool(bool)` /
+  `PROP_BUTTON_ENABLED` / `Button.enabled` 周りもここ。
+- **T7 (EvalContext bool surface):** `handler::evaluate` /
+  `evaluate_tracked` の bool arm を `TypeMismatch` から正規の
+  bool-typed `Assign` / `set_bool` ルートに置き換える。
+
+これらはすべて progress file の T2–T10 として既に列挙済み。T1 単体で
+新たに発見された follow-up は無い。
