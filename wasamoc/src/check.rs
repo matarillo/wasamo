@@ -270,11 +270,14 @@ fn check_expr_type(
                 // ambiguous (could be enum/keyword value); we don't reject them here.
                 let _ = (name, span);
             }
-            // String interpolation parts: check that Interp segments resolve to declared state.
+            // String interpolation parts: check that Interp segments resolve
+            // to declared state and stay within the currently supported
+            // interpolation value types.
             if let Expr::StringLit { parts, .. } = expr {
                 for part in parts {
                     if let crate::ast::StringPart::Interp(qn) = part {
                         check_qualified_name(qn, filename, ns, diags);
+                        check_string_interpolation_type(qn, filename, ns, diags);
                     }
                 }
             }
@@ -290,6 +293,29 @@ fn check_expr_type(
             // Measurements (e.g. 12px) are static property values, not typed state — allowed.
             let _ = (ctx_span, span);
         }
+    }
+}
+
+fn check_string_interpolation_type(
+    qn: &QualifiedName,
+    filename: &str,
+    ns: &Namespace,
+    diags: &mut Vec<Diagnostic>,
+) {
+    if qn.segments.is_empty() {
+        return;
+    }
+    let state_name = qn.segments.last().unwrap();
+    if matches!(ns.get(state_name), Some(TypeName::Bool)) {
+        diags.push(error(
+            filename,
+            &qn.span,
+            format!(
+                "bool state `{}` cannot be used in string interpolation; \
+                 bool formatting/display conversion is not defined in M3-Phase 1",
+                state_name
+            ),
+        ));
     }
 }
 
@@ -407,6 +433,20 @@ mod tests {
             r#"component C inherits W { state count: i32 = 0 VStack { text: "x: \{root.count}" } }"#,
         );
         assert!(!result.has_errors(), "{:?}", result.diagnostics);
+    }
+
+    #[test]
+    fn bool_state_in_string_interp_rejected() {
+        let errs = errors(
+            r#"component C inherits W { state ready: bool = true Text { text: "ready=\{root.ready}" } }"#,
+        );
+        assert_eq!(errs.len(), 1, "{:?}", errs);
+        assert!(
+            errs[0].contains("bool state `ready` cannot be used in string interpolation")
+                && errs[0].contains("bool formatting/display conversion is not defined"),
+            "{:?}",
+            errs
+        );
     }
 
     #[test]

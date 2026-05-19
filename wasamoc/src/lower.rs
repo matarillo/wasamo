@@ -527,29 +527,6 @@ mod tests {
     }
 
     #[test]
-    fn bool_state_ident_in_string_interp_lowered_to_bool_prop_read() {
-        // String interpolation parts also consult the namespace so a bool
-        // state ident becomes `BoolPropRead` inside the interpolation
-        // sequence. Type-correctness of the interpolation itself is the
-        // runtime evaluator's responsibility (out of scope for T4 — see
-        // T7 / T8).
-        let comp = lower_src(
-            r#"component C inherits W { state ready: bool = true Text { text: "R: \{root.ready}" } }"#,
-        );
-        let text = &comp.root;
-        assert_eq!(text.bindings.len(), 1);
-        assert_eq!(
-            text.bindings[0].expr,
-            HandlerExpr::Interpolation(vec![
-                InterpolationPart::Literal("R: ".into()),
-                InterpolationPart::Expr(HandlerExpr::BoolPropRead {
-                    path: "ready".into(),
-                }),
-            ])
-        );
-    }
-
-    #[test]
     fn nested_widget_lowered() {
         let comp = lower_src("component C inherits W { VStack { Text {} Button {} } }");
         let vstack = &comp.root;
