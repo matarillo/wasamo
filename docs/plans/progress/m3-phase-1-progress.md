@@ -47,17 +47,24 @@ Retrospective:
 ### T2 — `wasamoc` lexer / parser: `true` / `false` keywords and bool literal
 
 Discharges DD-M3-P1-002 surface-syntax half, DD-M3-P1-006 (IR text
-spelling).
+spelling). **Landed in 992e7e1 (2026-05-19).**
 
-- [ ] Lexer recognises `true` and `false` as reserved keywords;
+- [x] Lexer recognises `true` and `false` as reserved keywords;
       reservation is a hard error if used as an identifier.
-- [ ] Parser produces `IrLiteral::Bool(true|false)` for surface
-      bool literals.
-- [ ] `wasamoc` IR text emitter writes bool literals as `true` /
+- [x] Parser produces `IrLiteral::Bool(true|false)` for surface
+      bool literals (via `Expr::BoolLit` AST node + `lower_expr` /
+      `lower_rhs_expr` / `lower_state` bool arms).
+- [x] `wasamoc` IR text emitter writes bool literals as `true` /
       `false` and emits `BoolLit` / `BoolPropRead` productions
-      verbatim.
-- [ ] Unit tests: parse `state ready: bool = false`; parse
-      `bind enabled: true`; reject `true` as a state name.
+      verbatim (emit arms were wired mechanically in T1 per
+      DD-M3-P1-006; T2 adds end-to-end coverage in
+      `wasamoc::emit` tests).
+- [x] Unit tests: parse `state ready: bool = false`; parse
+      `Button { enabled: true }`; reject `true` / `false` as state
+      names and as property-bind LHS.
+
+Retrospective:
+[docs/notes/m3-phase-1/t2-step-end-retrospective.md](../../notes/m3-phase-1/t2-step-end-retrospective.md).
 
 ### T3 — `wasamoc` checker: state-type table and bool type-checking
 
