@@ -241,19 +241,42 @@ retroactive fill) と process correction (GUI smoke は owner 領域)
      を変更しない。F5 deferral も M2 / M3 plan の既定路線。
 
 14. **次 phase の pre-doc への送り込み材料を `docs/notes/` に
-    整理したか:** 部分的に達成。
-   - 既存: `docs/notes/m3/m3-start-framing.md` / `m3-target-app-predoc.md`
-     / `m2-to-m3-handover.md` / `typed-value-evaluator.md` /
-     `reactive-drain-cascade-policy.md` / `verification-environments.md`
-     が引き続き M3 後続 phase の pre-doc に対する出発点として有効。
-   - 本 phase 固有: `docs/notes/m3-phase-1/t1-…/t11-step-end-
-     retrospective.md` と本 retrospective が後続 phase (特に
-     M3-Phase 6 conditional rendering、Phase 8 selected state)
-     からの参照対象として残る。
-   - 新規追加候補: `cargo fmt` process gap の対策 (§Main Learning #3)
-     を M3-Phase 2 pre-doc に持ち込むメモを Phase 2 開始時に
-     `docs/notes/m3-phase-2/` 配下に切る (本 phase 内では新規 note
-     を切らず、本 retrospective §Main Learning に位置づけるに留める)。
+    整理したか:** 達成。
+   - 既存 M3 横断材料: `docs/notes/m3/m3-start-framing.md` /
+     `m3-target-app-predoc.md` / `m2-to-m3-handover.md` /
+     `typed-value-evaluator.md` / `reactive-drain-cascade-policy.md` /
+     `verification-environments.md` が引き続き M3 後続 phase の
+     pre-doc に対する出発点として有効。
+   - 本 phase の蒸留先: 本 phase-end retrospective §Main Learning
+     #1–#3 が phase-level の主な学びの一次記録であり、step-end
+     retrospective `docs/notes/m3-phase-1/t1-…/t11-*.md` 11 本は
+     execution-level の細部を引き続き保持する。
+   - **次 phase pre-doc input の書き起こし (本 phase close 内で完了):**
+     [docs/notes/m3-phase-2/predoc-inputs.md](../m3-phase-2/predoc-inputs.md)
+     に M3-Phase 2 (Box layout primitive) 視点で書き起こし済み。
+     §1–§7 が以下を網羅:
+     - §1: 新規 `PropertyValue` variant 追加 = ABI value-conversion
+       arm を同一 step に fold する規律 (Main Learning #2)。
+     - §2: 新規 bindable property の per-type writer seam を
+       ir_loader call site で選ぶ規律 (Main Learning #1 /
+       DD-M3-P1-007)。
+     - §3: `cargo fmt` process gap への対策候補
+       (step checklist 改訂 vs CI 強制) を Phase 2 開始時 DD として
+       提示 (Main Learning #3)。
+     - §4: 可視 proof は既存 canonical example を太らせず sibling
+       example を立てる規律 (T11)。
+     - §5: GUI smoke は owner manual、Codex は launch command 成功
+       までを記録する process correction (T11 §Follow-Up)。
+     - §6: spec sync 中の retroactive earlier-phase docs gap fold
+       規律 (T10、memory `feedback_retroactive_spec_gap_fold` と同期)。
+     - §7: Box の `aspect` 属性で float type を IR に入れるかの
+       再評価論点 (Phase 1 defensive fallback)。
+   - これは
+     [docs/notes/retrospectives.md §Retrospective Main Learning の前送り](../retrospectives.md#retrospective-main-learning-の前送り)
+     の「phase close 内で書き起こす」要件への適合。次 phase pre-doc
+     起草時は M3-Phase 2 owner-agreed framing に合わせて §1–§7 を
+     取り込む / 並べ替える / 削減することは Phase 2 内の判断だが、
+     **本ノートの存在自体は本 phase の close 内で確定**。
 
 15. **CI green 確認:** 未確認 (本 retrospective 記録時点)。
    - GitHub Actions manual CI run: `feat/m3-phase-1` に対する

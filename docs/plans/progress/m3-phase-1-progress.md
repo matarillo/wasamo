@@ -555,6 +555,12 @@ Discharges the m3-plan §Phase-end criteria checklist.
       M2-to-M3 handover (cycle detection / dependency-tie /
       `MUTATION_CAP` × fan-out — carried forward unchanged per
       [m2-to-m3-handover.md §3](../../notes/m2-to-m3-handover.md)).
+- [x] Forward-distillation note for the next phase (M3-Phase 2)
+      authored within this phase's close per
+      [docs/notes/retrospectives.md §Retrospective Main Learning の前送り](../../notes/retrospectives.md#retrospective-main-learning-の前送り):
+      [docs/notes/m3-phase-2/predoc-inputs.md](../../notes/m3-phase-2/predoc-inputs.md)
+      (§1–§7 carry the phase-end retrospective Main Learnings into
+      Phase 2 Box-primitive framing).
 - [ ] Phase-end retrospective entry added in
       [docs/notes/m3-phase-1/phase-end-retrospective.md](../../notes/m3-phase-1/phase-end-retrospective.md);
       merge & push gating handled per owner-facing protocol
