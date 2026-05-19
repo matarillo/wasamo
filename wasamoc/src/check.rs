@@ -128,20 +128,52 @@ fn type_name_display(ty: &TypeName) -> &'static str {
     }
 }
 
+/// Widget property type catalog. Returns the declared `TypeName` for known
+/// (widget, property) pairs and `None` for everything else — including
+/// non-typed values like enum / keyword props (`Button.style: accent`,
+/// `Text.font: title`) which the loader handles by ident name. The catalog
+/// is soft: an entry is added only when the property has a meaningful
+/// static type to check against. Mirrors `wasamo-runtime`'s
+/// `resolve_prop_key` table (DD-M3-P1-009) but lives here so `wasamoc check`
+/// is self-contained.
+fn widget_prop_type(widget_type: &str, prop_name: &str) -> Option<TypeName> {
+    match (widget_type, prop_name) {
+        ("Text", "text") => Some(TypeName::Str),
+        ("Button", "text") => Some(TypeName::Str),
+        ("Button", "enabled") => Some(TypeName::Bool),
+        _ => None,
+    }
+}
+
 /// Second pass: validate widget types, property-bind types, and name references.
 fn check_members(members: &[Member], filename: &str, ns: &Namespace, diags: &mut Vec<Diagnostic>) {
+    check_members_inner(members, None, filename, ns, diags);
+}
+
+fn check_members_inner(
+    members: &[Member],
+    enclosing_widget: Option<&str>,
+    filename: &str,
+    ns: &Namespace,
+    diags: &mut Vec<Diagnostic>,
+) {
     for member in members {
         match member {
             Member::StateMember { .. } => {}
 
             Member::PropertyDecl { .. } => {}
 
-            Member::PropertyBind {
-                name: _,
-                value,
-                span,
-            } => {
+            Member::PropertyBind { name, value, span } => {
                 check_expr_type(value, span, filename, ns, diags);
+                check_property_bind_target(
+                    enclosing_widget,
+                    name,
+                    value,
+                    span,
+                    filename,
+                    ns,
+                    diags,
+                );
             }
 
             Member::WidgetDecl {
@@ -161,7 +193,7 @@ fn check_members(members: &[Member], filename: &str, ns: &Namespace, diags: &mut
                         ),
                     ));
                 }
-                check_members(children, filename, ns, diags);
+                check_members_inner(children, Some(type_name), filename, ns, diags);
             }
 
             Member::SignalHandler { body, .. } => {
@@ -171,6 +203,46 @@ fn check_members(members: &[Member], filename: &str, ns: &Namespace, diags: &mut
                 }
             }
         }
+    }
+}
+
+/// Type-check a property binding's RHS against the target property's
+/// declared type (if known via the widget catalog). Soft when either the
+/// enclosing widget context or the property entry is unknown.
+fn check_property_bind_target(
+    enclosing_widget: Option<&str>,
+    prop_name: &str,
+    value: &Expr,
+    span: &Span,
+    filename: &str,
+    ns: &Namespace,
+    diags: &mut Vec<Diagnostic>,
+) {
+    let Some(widget) = enclosing_widget else {
+        return;
+    };
+    let Some(target_ty) = widget_prop_type(widget, prop_name) else {
+        return;
+    };
+    let Some(source_ty) = expr_static_type(value, ns) else {
+        return;
+    };
+    if matches!(source_ty, TypeName::Float) {
+        // FloatLit is rejected separately; avoid the redundant mismatch.
+        return;
+    }
+    if !types_compatible(&target_ty, &source_ty) {
+        diags.push(error(
+            filename,
+            span,
+            format!(
+                "type mismatch in binding `{}.{}`: target is `{}`, source is `{}`",
+                widget,
+                prop_name,
+                type_name_display(&target_ty),
+                type_name_display(&source_ty),
+            ),
+        ));
     }
 }
 
@@ -397,6 +469,101 @@ mod tests {
             "{:?}",
             errs
         );
+    }
+
+    #[test]
+    fn bind_bool_target_bool_state_ident_accepted() {
+        let result = check_src(
+            "component C inherits W { state ready: bool = true Button { enabled: ready } }",
+        );
+        assert!(!result.has_errors(), "{:?}", result.diagnostics);
+    }
+
+    #[test]
+    fn bind_bool_target_bool_literal_accepted() {
+        let result = check_src("component C inherits W { Button { enabled: true } }");
+        assert!(!result.has_errors(), "{:?}", result.diagnostics);
+    }
+
+    #[test]
+    fn bind_bool_target_int_literal_rejected() {
+        let errs = errors("component C inherits W { Button { enabled: 1 } }");
+        assert_eq!(errs.len(), 1, "{:?}", errs);
+        assert!(
+            errs[0].contains("type mismatch in binding `Button.enabled`")
+                && errs[0].contains("target is `bool`")
+                && errs[0].contains("source is `i32`"),
+            "{:?}",
+            errs
+        );
+    }
+
+    #[test]
+    fn bind_string_target_bool_literal_rejected() {
+        let errs = errors("component C inherits W { Text { text: true } }");
+        assert_eq!(errs.len(), 1, "{:?}", errs);
+        assert!(
+            errs[0].contains("type mismatch in binding `Text.text`")
+                && errs[0].contains("target is `string`")
+                && errs[0].contains("source is `bool`"),
+            "{:?}",
+            errs
+        );
+    }
+
+    #[test]
+    fn bind_string_target_bool_state_ident_rejected() {
+        let errs = errors(
+            "component C inherits W { state ready: bool = true Text { text: ready } }",
+        );
+        assert_eq!(errs.len(), 1, "{:?}", errs);
+        assert!(
+            errs[0].contains("type mismatch in binding `Text.text`")
+                && errs[0].contains("target is `string`")
+                && errs[0].contains("source is `bool`"),
+            "{:?}",
+            errs
+        );
+    }
+
+    #[test]
+    fn bind_bool_target_i32_state_ident_rejected() {
+        let errs = errors(
+            "component C inherits W { state x: i32 = 5 Button { enabled: x } }",
+        );
+        assert_eq!(errs.len(), 1, "{:?}", errs);
+        assert!(
+            errs[0].contains("type mismatch in binding `Button.enabled`")
+                && errs[0].contains("target is `bool`")
+                && errs[0].contains("source is `i32`"),
+            "{:?}",
+            errs
+        );
+    }
+
+    #[test]
+    fn bind_unknown_property_no_type_check() {
+        // `font: title` and `style: accent` are keyword-value idents on
+        // properties not yet in the static catalog — must pass through.
+        let result = check_src(
+            r#"component C inherits W { Text { font: title } Button { style: accent } }"#,
+        );
+        assert!(!result.has_errors(), "{:?}", result.diagnostics);
+    }
+
+    #[test]
+    fn bind_component_level_no_type_check() {
+        // Component-level prop binds (`title:`, `backdrop:`) have no
+        // enclosing widget catalog — pass through.
+        let result =
+            check_src(r#"component C inherits W { title: "Counter" backdrop: mica VStack {} }"#);
+        assert!(!result.has_errors(), "{:?}", result.diagnostics);
+    }
+
+    #[test]
+    fn bind_string_target_string_literal_accepted() {
+        let result = check_src(r#"component C inherits W { Button { text: "Click" } }"#);
+        assert!(!result.has_errors(), "{:?}", result.diagnostics);
     }
 
     #[test]
