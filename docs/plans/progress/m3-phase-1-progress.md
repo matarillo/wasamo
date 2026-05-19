@@ -532,19 +532,33 @@ Retrospective:
 
 Discharges the m3-plan §Phase-end criteria checklist.
 
-- [ ] `cargo build --release --workspace` and
-      `cargo test --workspace` green locally and on GitHub Actions
-      CI; CI run link recorded below.
+- [x] `cargo fmt --all -- --check` — initial run surfaced
+      accumulated rustfmt drift across six files committed during
+      T6 (parts 1–3), T7 (part 2), and T8 (part 2); fixed in commit
+      `1129aea style: apply cargo fmt across T6-T8 …` (fmt-only,
+      no semantic change). Process gap recorded in the phase-end
+      retrospective Main Learning.
+- [x] `cargo build --release --workspace` and
+      `cargo test --workspace` green **locally** (`cargo clean` →
+      release build → debug build → workspace tests); CI run link
+      recorded below once `workflow_dispatch` on `feat/m3-phase-1`
+      completes.
 - [ ] Windows-only mock-free integration test from T6 passes on
       CI (fails — not skips — if Compositor capability missing).
+      Pending CI run.
 - [x] Spec & architecture edits from T10 reviewed for
       external-implementor reproducibility.
-- [ ] Residuals captured under [docs/notes/m3/](../../notes/m3/)
+- [x] Residuals captured under [docs/notes/m3/](../../notes/m3/)
       if any surfaced during execution; phase ADR's residual
-      section (if applicable) points at them.
+      section (if applicable) points at them. Phase 1 surfaced no
+      new out-of-phase residuals beyond those already filed by the
+      M2-to-M3 handover (cycle detection / dependency-tie /
+      `MUTATION_CAP` × fan-out — carried forward unchanged per
+      [m2-to-m3-handover.md §3](../../notes/m2-to-m3-handover.md)).
 - [ ] Phase-end retrospective entry added in
-      [docs/notes/retrospectives.md](../../notes/retrospectives.md);
-      merge & push gating handled per owner-facing protocol.
+      [docs/notes/m3-phase-1/phase-end-retrospective.md](../../notes/m3-phase-1/phase-end-retrospective.md);
+      merge & push gating handled per owner-facing protocol
+      ([docs/notes/retrospectives.md](../../notes/retrospectives.md)).
 
 ## Decisions log
 
@@ -569,6 +583,27 @@ Discharges the m3-plan §Phase-end criteria checklist.
   .\target\release\bool-demo-rust.exe` — command succeeded. Manual
   visible-window smoke was owner-confirmed. Full workspace release
   build, full workspace tests, and CI run remain T12 phase-end gates.
+- **2026-05-19 / T12 local fmt drift fix:** `cargo fmt --all --
+  --check` surfaced rustfmt drift in `wasamo-runtime/src/{emit,
+  reactive,widget}.rs`, `wasamo-runtime/tests/button_enabled.rs`,
+  `wasamoc/src/{check,lower}.rs`. `cargo fmt --all` applied; fmt-only
+  commit `1129aea`. Re-run `cargo fmt --all -- --check` — green.
+- **2026-05-19 / T12 local clean rebuild:**
+  - `cargo clean` — green (`Removed 3834 files, 973.9MiB total`).
+  - `cargo build --release --workspace` — green (`Finished
+    `release` profile [optimized] target(s) in 43.73s`).
+  - `cargo build --workspace` — green (`Finished `dev` profile
+    [unoptimized + debuginfo] target(s) in 38.14s`).
+  - `cargo test --workspace` — green. `wasamo-ir` 7 unit, `wasamoc`
+    98 unit + 6 roundtrip, `wasamo-runtime` 165 unit + 8 integration
+    (incl. `abi_load_ui`, `button_enabled` Windows-only live test,
+    `ir_loader_roundtrip` 5, `live_widgetnode_headless`), `wasamo-sys`
+    1 unit, plus host crates with 0 tests. No failures, no ignored.
+  - Known warnings unchanged: `wasamo` crate "provides no linkable
+    target" notice and `wasamo-sys` import-library ordering note
+    (DD-M2-P1-006-era; not build/test failures).
+- **2026-05-19 / T12 CI:** pending `workflow_dispatch` trigger on
+  `feat/m3-phase-1`. Link to be recorded here.
 
 ## Out-of-phase residuals
 

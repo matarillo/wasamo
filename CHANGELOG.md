@@ -12,6 +12,69 @@ This file records what has shipped. For what is planned, see
 [ROADMAP.md](./ROADMAP.md). For the current state of work, see
 the **Status** section of [README.md](./README.md).
 
+## [Unreleased] — M3: DSL surface (in progress)
+
+### M3-Phase 1 — `bool` scalar binding (2026-05-19)
+
+Adds `bool` as the third scalar binding type alongside `i32` and
+`String`, discharging M3 acceptance **A9**. The reactive path stays
+type-agnostic — `bool` threads through the same `wasamo-ir` ↔
+`wasamoc` ↔ `wasamo-runtime` pipeline that `i32` and `String`
+already travel, with `Button.enabled` as the live `WidgetNode`
+attribute that proves end-to-end propagation. The `TypedValue`
+generic value union remains deferred (F5).
+
+`wasamo-ir` gains `IrType::Bool`, `IrLiteral::Bool`, and
+`HandlerExpr::{BoolLit, BoolPropRead}` variants. `wasamoc` reserves
+`true` / `false` as keywords, type-checks `state` defaults and
+property-bind RHS against a soft widget-property catalog
+(`Text.text` / `Button.text` / `Button.enabled`), and lowers
+state-name idents to typed `*PropRead` variants based on the
+declared state type. `wasamo-runtime` adds `PropertyValue::Bool`,
+widens `resolve_prop_key` to return `(PropertyKey, IrType)`,
+introduces the per-type binding writer seam
+(`evaluate_bool_binding` + `widget_write_property_bool` +
+`register_bool_binding`), and extends `EvalContext` with
+`get_bool` / `read_bool_tracked` / `set_bool`. The C ABI gains
+`PropertyValue::Bool` ↔ `WasamoValue::v_bool` conversion arms
+across `read_property_value` / `write_property_value` /
+`property_value_to_owned` / `owned_to_value` (no new public ABI
+functions; the existing `WASAMO_VALUE_BOOL = 3` tag was M2-reserved).
+
+The Phase 1 `Button.enabled` runtime contract is narrow: when
+`false`, `hit_test_click_inner` suppresses host callback / inline
+`clicked` handler / `enqueue_signal("clicked", …)` while preserving
+child hit-test traversal; `update_hover_inner` freezes hover/press
+transitions; `effective_button_color` paints a flat grey
+`(A=0x40, R=G=B=0x80)` directly (no `ColorKeyFrameAnimation`); the
+layout slot is preserved. Focus / a11y / keyboard activation are
+deferred to M4–M5.
+
+Visible proof: a new `examples/bool-demo/bool-demo.ui` fixture
+(`state ready: bool = true`, `Button.enabled: ready`,
+`clicked => { root.ready = false; }`) drives a new
+`examples/bool-demo-rust/` host through the build-time `wasamoc`
+pipeline (same shape as `counter-rust`), so the M2 Hello Counter
+reference stays unmodified. CI coverage: pure-logic unit tests in
+`wasamo-ir` / `wasamoc` / `wasamo-runtime`, an IR round-trip
+integration test (`wasamoc::emit` → `wasamo-runtime::parse_ir`),
+and a Windows-only mock-free integration test
+(`button_enabled_property_flips_visual_and_suppresses_click`)
+that drives `wasamo_set_property(PROP_BUTTON_ENABLED, …)` against a
+live `WidgetNode` and asserts both the `CompositionColorBrush`
+colour flip and click-callback suppression.
+
+Per-phase spec sync ([A11](./ROADMAP.md#m3-dsl-surface)):
+`docs/dsl_spec.md` 0.4 → 0.5 (§§2.1 / 2.2 / 3 / 4.3 / 4.6 / 4.7 /
+4.8 / 5 / 8.2 / 8.4 / 8.6 / 8.9 / 8.12; also folds in a minimal
+retroactive `state` surface entry for the M2-Phase 6 documentation
+gap, owner-agreed during T10); `docs/architecture.md` §6.8.7
+documents the bool path through `register_bool_binding`,
+`SignalRegistry::bools`, `widget_write_property_bool`, and the
+DD-M3-P1-007 per-type seam.
+
+Decisions: [DD-M3-P1-001..010](./docs/decisions/m3-phase-1-bool-scalar.md).
+
 ## [v0.2.0] — 2026-05-11 — M2: Foundation
 
 M2 closes the loop on the DSL side: `.ui` files now drive the runtime

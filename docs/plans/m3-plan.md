@@ -468,7 +468,7 @@ ADRs, CHANGELOG, notes, and git history, then deleted by default.
 
 | Phase | Status | Progress file | ADR | Notes |
 |---|---|---|---|---|
-| M3-Phase 1 — `bool` scalar binding | active | [m3-phase-1-progress.md](progress/m3-phase-1-progress.md) | [m3-phase-1-bool-scalar.md](../decisions/m3-phase-1-bool-scalar.md) | ADR Accepted 2026-05-19; execution opened 2026-05-19 |
+| M3-Phase 1 — `bool` scalar binding | complete | [m3-phase-1-progress.md](progress/m3-phase-1-progress.md) | [m3-phase-1-bool-scalar.md](../decisions/m3-phase-1-bool-scalar.md) | ADR Accepted 2026-05-19; execution opened 2026-05-19; A9 discharged 2026-05-19 |
 | M3-Phase 2 — Box layout primitive | not started | — | — | — |
 | M3-Phase 3 — WrapPanel layout primitive | not started | — | — | First novel-normative-spec phase |
 | M3-Phase 4 — ScrollView (minimal) | not started | — | — | — |
