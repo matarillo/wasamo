@@ -181,7 +181,7 @@ Within `member`, a 2-token lookahead resolves the alternative:
 
 ---
 
-## 4. Semantics (M1 Scope)
+## 4. Semantics (M2 Surface, M3-Phase 1 Additions)
 
 ### 4.1 `component` declaration
 
@@ -213,16 +213,17 @@ Supported types in M1: `int`, `string`, `float`, `bool`.
 <name>: <expr>
 ```
 
-Associates a value with a named property. In M1 all bindings are **static**: they are
-evaluated once at construction time. Reactive re-evaluation is M2 scope.
+Associates a value with a named property. M1 treated all bindings as
+static construction-time values. M2 added reactive re-evaluation for
+state-backed bindings; M3-Phase 1 adds the bool cases described below.
 
 `<expr>` may be a `BOOL_LIT` (`true` / `false`) or an identifier that
 resolves to a `bool`-typed `state` declaration (M3-Phase 1) when the
 target property is itself `bool`-typed. `wasamoc check` validates the
 LHS/RHS type pair against the widget-property catalog (see §4.8) and
 the state-name → declared-type table built from `state_decl`s; type
-mismatches such as `bind enabled: 1` (i32 RHS into `bool` target) or
-`bind text: ready` (`bool` source into `string` target) are
+mismatches such as `enabled: 1` (i32 RHS into `bool` target) or
+`text: ready` (`bool` source into `string` target) are
 compile-time errors.
 
 ### 4.4 Widget declaration

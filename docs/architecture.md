@@ -1,6 +1,6 @@
 # Wasamo Architecture
 
-**Status:** M1 complete (Phases 0-8); M2 complete (Phases 1-7) — Foundation acceptance A1-A6 discharged; M3 DSL surface work is next.
+**Status:** M1 complete (Phases 0-8); M2 complete (Phases 1-7) — Foundation acceptance A1-A6 discharged; M3-Phase 1 in progress.
 
 ---
 
@@ -993,10 +993,13 @@ In M1 there is no reconciler. The host language constructs the view tree directl
 
 ---
 
-## 10. wasamoc (DSL Compiler) — M1 Scope
+## 10. wasamoc (DSL Compiler) — Current Scope
 
-M1 covers lexing, parsing, and syntax checking only.
-Code generation (conversion to runtime calls, binding generation) is M2 scope.
+M1 covered lexing, parsing, and syntax checking only. M2 added checked
+lowering, textual IR emission, runtime IR loading, inline handler
+evaluation, and reactive property bindings for the Foundation counter
+surface. M3-Phase 1 extends that surface with `bool` state, bool
+property bindings, and `Button.enabled`.
 The full DSL grammar and AST type definitions are specified in [`docs/dsl_spec.md`](./dsl_spec.md).
 
 ### Processing pipeline
@@ -1028,15 +1031,15 @@ diagnostics  (errors + warnings with file:line:col)
 | `check.rs`    | Post-parse validation: widget type registry, warnings      |
 | `diagnostic.rs` | Error/warning formatting and span-based reporting        |
 
-### Relation to the runtime (M1)
+### Relation to the runtime
 
-In M1, `wasamoc` and the `wasamo` runtime DLL are **decoupled**:
-`wasamoc check` only validates syntax; it does not call into the runtime or produce any
-output artifact consumed by the DLL.
+In M1, `wasamoc` and the `wasamo` runtime DLL were **decoupled**:
+`wasamoc check` only validated syntax; it did not call into the
+runtime or produce any output artifact consumed by the DLL.
 
 The host language constructs the widget tree directly through the C ABI at startup.
 The DSL file serves as the design source of truth; code generation that bridges the two
-is M2 scope.
+landed in M2 as textual IR plus runtime interpretation.
 
 ```
 M1 data flow:
@@ -1047,6 +1050,10 @@ developer ──writes──▶ counter.ui ──wasamoc check──▶ OK / err
 host app ──calls──▶ wasamo C ABI ──builds──▶ widget tree at runtime
                     (manually, by the developer)
 ```
+
+M2 and later data flow is the IR pipeline described in §1: host builds
+invoke `wasamoc build`, then call `wasamo_load_ui` with the emitted
+`;wasamo-ir v0` payload at runtime.
 
 ---
 

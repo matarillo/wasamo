@@ -1,7 +1,7 @@
 # Wasamo C ABI Specification
 
-**Version:** M2 Foundation (2026-05-11)
-**Status:** Accepted for M2 — finalised against the implemented `wasamo.h`
+**Version:** M2 Foundation ABI surface (2026-05-11)
+**Status:** Accepted for M2 — finalised against the implemented `wasamo.h`; M3-Phase 1 in progress with no new ABI surface
 **Authoritative decisions:** [decisions/phase-6-c-abi.md](decisions/phase-6-c-abi.md) (DD-P6-001..007), M2 phase ADRs under [decisions/](decisions/)
 
 This document specifies the C ABI exposed by `wasamo.dll` via the
@@ -587,23 +587,24 @@ installed via `wasamo_window_set_root`, the runtime forwards
 and emits `"clicked"` signals through the registry on Button hits.
 Hosts do not need to wire window-message callbacks for these.
 
-These symbols are removed (or migrated into the stable core) when
-`wasamoc` codegen lands in M2.
+These symbols remain experimental after M2. Promotion, removal, or
+replacement is deferred to the later DSL/widget-surface milestone that
+settles constructor shapes for the stable core.
 
 ### 5.1 What M1 experimental verifies, and what it does not
 
-The shape above is deliberately the smallest experimental layer
-that lets Phase 8 "Hello Counter" run, while keeping the eventual
-M2 direction (SwiftUI/Compose-style codegen vs Slint-style
-IR/runtime interpretation — deferred question (b) in
-[../decisions/phase-6-c-abi.md](decisions/phase-6-c-abi.md)) open.
+At M1, the shape above was deliberately the smallest experimental
+layer that let Phase 8 "Hello Counter" run while keeping the eventual
+M2 direction open. M2 later chose textual IR plus runtime
+interpretation (DD-M2-P2-001); this section remains as historical
+rationale for why the constructor conveniences are still experimental.
 
 **M1 experimental verifies:**
 
 - **Stable-core property R/W as the post-construction update
   channel.** Hello Counter's `+/-` mutates `Text.content` via
-  `wasamo_set_property`; this is the one runtime path both
-  candidate M2 directions need.
+  `wasamo_set_property`; this is the runtime path both M2 candidate
+  directions needed.
 - **Signal registry token lifecycle.** `wasamo_button_set_clicked`
   exercises both the direct-callback experimental shape and the
   underlying stable `wasamo_signal_connect` path.
@@ -621,17 +622,16 @@ attempt to:**
   resolution of deferred question (b); investigated in M2 pre-doc.
   *M2-Phase 4 discharged this item: §4.6 stable-core mutation
   primitives now cover insert / remove / replace / destroy.*
-- **Codegen vs IR design alternatives.** This is the core M2
-  question and belongs to M2 pre-doc, not M1 implementation.
-  Prototyping multiple candidates is M2's job.
+- **Codegen vs IR design alternatives.** This was the core M2
+  question and belonged to M2 pre-doc, not M1 implementation.
+  M2 resolved it as textual IR plus runtime interpretation.
 - **Reactive primitives** (conditional rendering, list
-  rendering, fine-grained reactivity). These are M2+ scope; M1
+  rendering, fine-grained reactivity). These are M3+ scope; M1
   validates only static tree construction with property-level
   updates.
-- **`.ui` DSL → ABI lowering.** M1 wasamoc is parser-only by
-  design; host code constructs the equivalent tree directly
-  through the experimental layer. The lowering itself is M2
-  scope.
+- **`.ui` DSL → ABI lowering.** M1 wasamoc was parser-only by
+  design; host code constructed the equivalent tree directly
+  through the experimental layer. The lowering itself landed in M2.
 
 This division is recorded so M1 implementation work is not
 inflated by speculative future-proofing, and so M2 pre-doc starts
