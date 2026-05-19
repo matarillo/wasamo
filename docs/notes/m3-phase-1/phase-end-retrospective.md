@@ -26,6 +26,15 @@ checklist に沿って、A9 の達成、上位文書との整合、CI、次 phas
 
 ## Current Judgment
 
+2026-05-19 時点の判定は、**Phase 1 close は 4 件の owner-review
+findings 対応待ちで保留中**。詳細と planned response は
+[progress file §Owner-review follow-ups (open at T12 phase-end)](../../plans/progress/m3-phase-1-progress.md#owner-review-follow-ups-open-at-t12-phase-end)
+に記録した。本 retrospective §Checklist の判定 (特に item 11 / 12 /
+14 / 16 / 17) は、T13 完了および Finding 2–4 の対応完了後に再判定する。
+
+[以下は T12 当初 (Finding 発見前) の判定。Finding 1–4 の対応によって
+更新される。]
+
 2026-05-19 時点の判定は、**M3-Phase 1 の implementation/verification
 criteria はローカルで達成済み。main merge gate としては
 GitHub Actions CI green 確認と owner 明示承認が残っている**、である。

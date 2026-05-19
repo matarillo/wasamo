@@ -659,6 +659,78 @@ Notes:
   evidence in T8 (`register_bool_binding`) to discharge ADR
   item 3 in full.
 
+## Owner-review follow-ups (open at T12 phase-end)
+
+owner が 2026-05-19 に T12 phase-end retrospective + 関連
+artifact をレビューした際に挙げた 4 件の findings。1 が実体に関わる
+判断、2 が文書整合、3 と 4 が doc/lifecycle の後始末。**phase 1 close
+は 4 件すべての対応が完了するまで保留**。
+
+### Finding 1 — A9 evidence wording / ADR item 3 unmet → **T13 で対処**
+
+- **問題:** phase-end retrospective の「`Button.enabled` の live
+  propagation を mock-free Windows integration test で証明」表現は
+  過大。`button_enabled.rs` は冒頭で「binding pipeline を bypass し
+  `wasamo_set_property` を直接叩く」と明記しており、ADR §Verification
+  → item 3 が要求する `.ui → load → click → state → enabled`
+  unified chain は covered になっていない。
+- **対応:** T13 (上記) として独立 task に切り出して discharge する。
+  T12 の closing checkbox は T13 完了に依存。
+- **status:** task list 上で進行中 (T13 全 box 未 tick)。
+
+### Finding 2 — m3-plan §Phase-end criteria item 5 (gallery sub-screen) との読み替え
+
+- **問題:** m3-plan の phase-end criteria は「relevant slice of
+  `examples/gallery/` exercises the new surface through `.ui → IR →
+  runtime` end-to-end」を要求しているが、現状の実証は
+  `examples/bool-demo/` + `examples/bool-demo-rust/` で、
+  `examples/gallery/` 自体は未作成。ADR §Verification item 4 は
+  「`examples/counter-*` の拡張 or 新規 minimal `bool-demo` 例外」を
+  許容しているので、ADR と plan が乖離している。
+- **対応:** 二択で owner と協議:
+  - **(a) plan の側を修正:** m3-plan §Phase-end criteria item 5 に
+    「Phase 1 は ADR の bool-demo 例外を適用してよい (gallery
+    sub-screen の前提が成立しない最初の foundational phase だから)」
+    の語を追加。後続 Phase 2+ は gallery sub-screen 原則を維持。
+  - **(b) phase-end retrospective に exception 記録:** plan 文面は
+    変えず、本 phase 限りの exception として retrospective §Checklist
+    に書き、ROADMAP / VISION 整合は plan-amendment ではなく
+    case-by-case の owner-approved deviation として扱う。
+- **status:** owner 判断待ち。phase-end retrospective に exception
+  記録の section を起こすかどうかは選択結果次第。
+
+### Finding 3 — retrospectives.md checklist item 16 (human-visible GUI smoke) 欠落
+
+- **問題:** [docs/notes/retrospectives.md](../../notes/retrospectives.md)
+  §phase-end 固有 checklist の item 16 は human-visible GUI smoke の
+  必要/不要判定。現 phase-end retrospective は item 16 を CI YAML
+  sanity check (実際は item 17 相当) として書いてしまっており、GUI
+  smoke の判定が欠けている。
+- **対応:** phase-end retrospective §Checklist §phase-end 固有 に
+  item 16 (human-visible GUI smoke) を追加。判定は「不要」相当
+  (理由: T6 `button_enabled` headless live test と T11
+  `bool-demo-rust` owner manual smoke で human-visible 領域は
+  既にカバー済み; T13 完了でさらに binding-pipeline live propagation
+  も headless で証明される)。item 17 は CI YAML sanity check として
+  renumber、もしくは現在の item 16 内容を item 17 に renumber。
+- **status:** doc-edit のみ。T13 の方針確定後に着手。
+
+### Finding 4 — progress file lifecycle 後始末
+
+- **問題:** progress file frontmatter `status: active` のまま。
+  [plans/README.md §Phase progress file lifecycle](../README.md#phase-progress-file-lifecycle)
+  によれば、phase implementation 完了後は `status: closing`、
+  distill 完了後は `status: retired` (削除) または `archived`。
+  T12 phase-end retrospective の checkbox も未 tick。
+- **対応:** T13 完了 + T12 全 box tick 後に:
+  - frontmatter `status: active` → `status: closing`。
+  - T12 checklist 「Phase-end retrospective entry added in …」box を
+    tick (現在の phase-end-retrospective.md が既存; T13 で更新後に
+    再確認)。
+  - phase merge gate 通過後に retired / archived のどちらにするか
+    owner 判断。default は retired (削除)。
+- **status:** T13 完了待ち。doc-edit のみ。
+
 ## Decisions log
 
 - **T11 host choice (2026-05-19):** Added a dedicated
