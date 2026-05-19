@@ -728,6 +728,9 @@ Notes:
   callers, but the normal `parse → check → lower` pipeline rejects the
   source before lowering.
 
+Retrospective:
+[docs/notes/m3-phase-1/t14-step-end-retrospective.md](../../notes/m3-phase-1/t14-step-end-retrospective.md).
+
 ## Owner-review follow-ups (closed at T12 phase-end)
 
 Owner review on 2026-05-19 raised four findings against the T12
@@ -957,6 +960,18 @@ behavior or explicitly revise the proof contract."
   `check::tests::bool_state_in_string_interp_rejected` and removed the
   obsolete lowering test that expected bool interpolation to lower to
   `BoolPropRead`.
+- **2026-05-19 / T14 local clean rebuild:**
+  - `cargo clean` — green (`Removed 3317 files, 919.2MiB total`).
+  - `cargo build --release --workspace` — green (`Finished
+    `release` profile [optimized] target(s) in 40.03s`).
+  - `cargo build --workspace` — green (`Finished `dev` profile
+    [unoptimized + debuginfo] target(s) in 34.54s`).
+  - `cargo test --workspace` — green. No failures, no ignored tests.
+    Counts: `wasamo-ir` 7 unit, `wasamoc` 98 unit + 6 roundtrip,
+    `wasamo-runtime` 165 unit + 9 integration, `wasamo-sys` 1 unit,
+    host/binding crates and doc tests with 0 tests where present. Known
+    warnings unchanged: `wasamo` crate "provides no linkable target"
+    notice and `wasamo-sys` import-library ordering note.
 
 ## Out-of-phase residuals
 
