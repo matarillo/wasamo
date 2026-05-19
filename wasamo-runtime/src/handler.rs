@@ -304,6 +304,36 @@ fn evaluate_binding_part(
     }
 }
 
+/// Evaluate a `HandlerExpr` in bool-typed binding (read-only) context.
+///
+/// Per DD-M3-P1-007 Option A, bool bindings travel a separate per-type
+/// evaluator/writer pair rather than funnelling through a `PropertyValue`
+/// union — this keeps F5 (`TypedValue` deferral) structurally enforced.
+///
+/// Accepted shapes (DD-M3-P1-003):
+/// - `BoolLit(b)` returns the literal.
+/// - `BoolPropRead { path }` reads through `ctx.read_bool_tracked`, so
+///   `BindingEvalContext` registers the read with the active reactive
+///   scope and the binding subscribes to the source `Signal<bool>`.
+///
+/// All other variants are rejected with `EvalError::TypeMismatch`. This
+/// mirrors the way `evaluate()` rejects string-typed forms — binding
+/// lowering for a bool-typed target property only produces the two
+/// shapes above (DD-M3-P1-010), so any other variant reaching this
+/// evaluator is an IR-level type error rather than a user-syntax error.
+pub fn evaluate_bool_binding(
+    expr: &HandlerExpr,
+    ctx: &mut dyn EvalContext,
+) -> Result<bool, EvalError> {
+    match expr {
+        HandlerExpr::BoolLit(b) => Ok(*b),
+        HandlerExpr::BoolPropRead { path } => ctx.read_bool_tracked(path),
+        _ => Err(EvalError::TypeMismatch {
+            path: "<non-bool expression in bool binding context>".into(),
+        }),
+    }
+}
+
 /// Integer-typed evaluation in binding (read-only) mode.
 ///
 /// Like `evaluate()` but:
@@ -1012,6 +1042,123 @@ mod tests {
         ));
         // Target unchanged.
         assert_eq!(ctx.get("x"), 1);
+    }
+
+    // ── evaluate_bool_binding tests (M3-Phase 1 T8 / DD-M3-P1-007) ──────────
+
+    #[test]
+    fn bool_binding_accepts_bool_lit_true() {
+        let mut ctx = MapCtx::new(&[]);
+        assert_eq!(
+            evaluate_bool_binding(&HandlerExpr::BoolLit(true), &mut ctx),
+            Ok(true)
+        );
+    }
+
+    #[test]
+    fn bool_binding_accepts_bool_lit_false() {
+        let mut ctx = MapCtx::new(&[]);
+        assert_eq!(
+            evaluate_bool_binding(&HandlerExpr::BoolLit(false), &mut ctx),
+            Ok(false)
+        );
+    }
+
+    #[test]
+    fn bool_binding_accepts_bool_prop_read() {
+        let mut ctx = MapCtx::new(&[]).with_bools(&[("ready", true)]);
+        let expr = HandlerExpr::BoolPropRead {
+            path: "ready".into(),
+        };
+        assert_eq!(evaluate_bool_binding(&expr, &mut ctx), Ok(true));
+    }
+
+    #[test]
+    fn bool_binding_bool_prop_read_unknown_is_unknown_property() {
+        let mut ctx = MapCtx::new(&[]);
+        let expr = HandlerExpr::BoolPropRead {
+            path: "missing".into(),
+        };
+        assert_eq!(
+            evaluate_bool_binding(&expr, &mut ctx),
+            Err(EvalError::UnknownProperty("missing".into()))
+        );
+    }
+
+    #[test]
+    fn bool_binding_rejects_int_lit() {
+        let mut ctx = MapCtx::new(&[]);
+        assert!(matches!(
+            evaluate_bool_binding(&HandlerExpr::IntLit(1), &mut ctx),
+            Err(EvalError::TypeMismatch { .. })
+        ));
+    }
+
+    #[test]
+    fn bool_binding_rejects_prop_read() {
+        let mut ctx = MapCtx::new(&[("root.count", 1)]);
+        let expr = HandlerExpr::PropRead {
+            path: "root.count".into(),
+        };
+        assert!(matches!(
+            evaluate_bool_binding(&expr, &mut ctx),
+            Err(EvalError::TypeMismatch { .. })
+        ));
+    }
+
+    #[test]
+    fn bool_binding_rejects_str_lit() {
+        let mut ctx = MapCtx::new(&[]);
+        let expr = HandlerExpr::StrLit("true".into());
+        assert!(matches!(
+            evaluate_bool_binding(&expr, &mut ctx),
+            Err(EvalError::TypeMismatch { .. })
+        ));
+    }
+
+    #[test]
+    fn bool_binding_rejects_str_prop_read() {
+        let mut ctx = MapCtx::new(&[]).with_strings(&[("root.label", "true")]);
+        let expr = HandlerExpr::StrPropRead {
+            path: "root.label".into(),
+        };
+        assert!(matches!(
+            evaluate_bool_binding(&expr, &mut ctx),
+            Err(EvalError::TypeMismatch { .. })
+        ));
+    }
+
+    #[test]
+    fn bool_binding_rejects_interpolation() {
+        let mut ctx = MapCtx::new(&[]);
+        let expr = HandlerExpr::Interpolation(vec![InterpolationPart::Literal("true".into())]);
+        assert!(matches!(
+            evaluate_bool_binding(&expr, &mut ctx),
+            Err(EvalError::TypeMismatch { .. })
+        ));
+    }
+
+    #[test]
+    fn bool_binding_rejects_assign() {
+        let mut ctx = MapCtx::new(&[]).with_bools(&[("ready", false)]);
+        let expr = HandlerExpr::Assign {
+            lhs: "ready".into(),
+            rhs: Box::new(HandlerExpr::BoolLit(true)),
+        };
+        assert!(matches!(
+            evaluate_bool_binding(&expr, &mut ctx),
+            Err(EvalError::TypeMismatch { .. })
+        ));
+    }
+
+    #[test]
+    fn bool_binding_rejects_block() {
+        let mut ctx = MapCtx::new(&[]);
+        let expr = HandlerExpr::Block(vec![HandlerExpr::BoolLit(true)]);
+        assert!(matches!(
+            evaluate_bool_binding(&expr, &mut ctx),
+            Err(EvalError::TypeMismatch { .. })
+        ));
     }
 
     /// Existing i32 `Assign` arm still works — the bool peek does not
