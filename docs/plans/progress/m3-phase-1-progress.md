@@ -979,6 +979,21 @@ back-pointer because the issue is cross-phase rather than Box-specific.
   `docs/notes/m2-to-m3-handover.md` §3 item 4, with
   `docs/notes/m3-phase-2/predoc-inputs.md` §9 kept as a back-pointer.
   No code changes; tests not re-run.
+- **2026-05-19 / post-T14 + follow-up A/B + retro/CHANGELOG fold-in CI:**
+  `workflow_dispatch` run
+  [26100232039](https://github.com/matarillo/wasamo/actions/runs/26100232039)
+  on `feat/m3-phase-1` (HEAD `6c97459`) — **green**
+  (conclusion=success, 2m34s). First CI run on top of the post-T12
+  commits: T14 (`fix(m3-phase-1): reject bool string interpolation`,
+  code change introducing
+  `wasamoc::check::tests::bool_state_in_string_interp_rejected`), the
+  implicit-constraint follow-up A/B doc closure, the retrospective
+  fold-in (`docs(m3-phase-1): fold follow-up A/B closure into
+  phase-end retro`), and the CHANGELOG fold-in (`docs(m3-phase-1):
+  reflect T13 binding-pipeline evidence and bool surface rule`). The
+  T12 / T13 entry above remains the CI evidence for the original
+  phase close on HEAD `f6b6d74`; this entry covers the post-T12
+  doc-finalization and language-rule tightening commits added on top.
 
 ## Out-of-phase residuals
 

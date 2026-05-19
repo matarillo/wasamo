@@ -21,10 +21,17 @@ checklist に沿って、A9 の達成、上位文書との整合、CI、次 phas
 
 - branch: `wip/step` (→ `feat/m3-phase-1` への ff merge 候補)
 - HEAD commit: `1129aea style: apply cargo fmt across T6-T8 …`
-  以降に本 retrospective コミット
+  以降に本 retrospective コミット [T12 phase-end 当初]
 - CI: GitHub Actions `workflow_dispatch` run
   [26094510225](https://github.com/matarillo/wasamo/actions/runs/26094510225)
-  on `feat/m3-phase-1` — green (本文 §15 参照)
+  on `feat/m3-phase-1` — green (本文 §15 参照) [T12 phase-end 当初]
+
+**T12 phase-end 後追記 (2026-05-19):** phase close 後の T14 (bool
+string interpolation rejection / code change)、implicit-constraint
+follow-up A/B doc closure、retro fold-in、CHANGELOG fold-in を経た現
+HEAD は `6c97459`。同 HEAD に対する CI green は `workflow_dispatch`
+run [26100232039](https://github.com/matarillo/wasamo/actions/runs/26100232039)
+on `feat/m3-phase-1` で確認済み (本文 §15 参照)。
 
 ## Current Judgment
 
@@ -395,6 +402,16 @@ retroactive fill) と process correction (GUI smoke は owner 領域)
    - 本 retrospective および関連 phase-close commit (`f6b6d74`) が
      phase ブランチ HEAD に含まれた状態での CI green であり、
      owner の main no-ff merge 承認に進める。
+   - **T12 phase-end 後追記 (2026-05-19):** phase close 後に T14
+     (`fix(m3-phase-1): reject bool string interpolation` / code
+     change)、implicit-constraint follow-up A/B doc closure、retro
+     fold-in、CHANGELOG fold-in を順次 phase ブランチに積んだ。現
+     HEAD `6c97459` に対する CI green は `workflow_dispatch` run
+     [26100232039](https://github.com/matarillo/wasamo/actions/runs/26100232039)
+     on `feat/m3-phase-1` で確認済み (conclusion=success, 2m34s)。
+     `cargo test --workspace` は T14 が追加した
+     `bool_state_in_string_interp_rejected` を含む形で pass。これに
+     より owner の main no-ff merge 承認に正式に進める。
 
 16. **human-visible GUI smoke:** 必要、Phase 1 用 host で実施済み。
    - retrospectives.md §checklist item 16 は「runtime / ABI / binding /
@@ -450,7 +467,9 @@ phase-end retrospective としては、以下を owner に報告する。
   確認済み。
 - 新 CI YAML 作業は不要。
 - GitHub Actions CI green は確認済み
-  (`workflow_dispatch` run `26094510225`)。
+  (`workflow_dispatch` run `26094510225` [T12 phase-end 当初]; T12
+  phase-end 後追記 (2026-05-19): 現 HEAD `6c97459` に対しては
+  `workflow_dispatch` run `26100232039` も green、本文 §15 参照)。
 - no-ff merge と push は別 gate であり、どちらも owner の明示承認が
   必要。
 
@@ -498,3 +517,11 @@ on `feat/m3-phase-1` is green, and the progress file's
 [§CI / verification log](../../plans/progress/m3-phase-1-progress.md#ci--verification-log)
 records that it includes both T6 `button_enabled` and T13
 `bool_binding_live_propagation`.
+
+**T12 phase-end 後追記 (2026-05-19):** 上記 run は T12 phase-end
+時点の HEAD `f6b6d74` 込みの CI green。phase close 後に積んだ T14
+(code change) / follow-up A/B doc closure / retro fold-in /
+CHANGELOG fold-in を含む現 HEAD `6c97459` に対しては
+`workflow_dispatch` run
+[26100232039](https://github.com/matarillo/wasamo/actions/runs/26100232039)
+on `feat/m3-phase-1` で再 green を確認 (本文 §15 参照)。
