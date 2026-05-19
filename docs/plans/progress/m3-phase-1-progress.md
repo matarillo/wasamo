@@ -388,6 +388,25 @@ preview. **Folded into T6 part 1 (commit a550bd9, 2026-05-19).**
 - [x] No new public ABI functions added (DD-M3-P1-008 Option B
       explicitly deferred to its own future ADR).
 
+Retrospective:
+[docs/notes/m3-phase-1/t9-step-end-retrospective.md](../../notes/m3-phase-1/t9-step-end-retrospective.md).
+
+Notes:
+
+- T9 has no independent commit — the work landed inside T6 part 1
+  (commit a550bd9) because Rust's exhaustive `match` on
+  `PropertyValue` mechanically required the bool arms in `abi.rs` and
+  `emit.rs` as soon as `PropertyValue::Bool` was added. See T6 Notes
+  for the §Main Learning that prompted the fold, and the T9
+  retrospective §Main Learning for the task-slicing observation: ABI
+  value-conversion warrants its own step only when new public ABI
+  functions (DD-M3-P1-008 Option B family) accompany it.
+- The wire format is unchanged from M2: `WASAMO_VALUE_BOOL = 3` and
+  `WasamoValuePayload::v_bool` were both reserved during M2-Phase 6
+  ABI design. Phase 1 only adds the Rust-side arms that route through
+  them. Host C/Rust code linking against the ABI does not need to be
+  rebuilt for the bool path.
+
 See T6 Notes for why this landed inside T6.
 
 ### T10 — Spec / architecture documentation update (A11)

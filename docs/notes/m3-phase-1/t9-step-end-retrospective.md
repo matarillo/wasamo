@@ -1,0 +1,304 @@
+---
+title: M3-Phase 1 / T9 step-end retrospective
+status: recorded
+created: 2026-05-19
+scope: step-end
+task: T9 — C ABI value-conversion arms (no new functions)
+---
+
+# M3-Phase 1 / T9 step-end retrospective
+
+## Scope
+
+`docs/plans/progress/m3-phase-1-progress.md` の **T9**
+("C ABI value-conversion arms (no new functions)") の step-end
+retrospective。T9 が discharge するのは ADR §Spec impact preview に
+記載された abi-side のスペック反映 — `PropertyValue::Bool(bool)` ↔
+`WasamoValue::v_bool` (tag `WASAMO_VALUE_BOOL = 3`) の双方向
+変換 arm を `read_property_value` / `write_property_value` /
+`property_value_to_owned` (`abi.rs`) と `owned_to_value` (`emit.rs`)
+の四箇所に追加すること。新たな公開 ABI 関数は導入しない
+(DD-M3-P1-008 Option B は将来 ADR 送り)。
+
+対象コミット:
+
+- `a550bd9 feat(wasamo-runtime): Button.enabled + PropertyValue::Bool (M3-Phase 1 T6, part 1)`
+  ([T6 retrospective](t6-step-end-retrospective.md) §Main Learning で
+  詳述した通り、T9 は T6 の同 commit に fold されており、T9 単独の
+  commit は存在しない)。
+
+これは step-end の gate であり、phase-end retrospective ではない。
+T9 の step-end retrospective を独立に置く目的は、(a) progress file
+の T1–T12 構成と平仄を合わせる、(b) T6 retrospective からは
+拾いきれない「T9 視点での discharge 範囲」を再度俯瞰し、T10
+(spec sync) が abi_spec 側を更新するときの参照を作る、の二点。
+
+## Current Judgment
+
+2026-05-19 時点で T9 step-end 基準は **達成済み** (T6 part 1 で
+landed)。
+
+- `read_property_value` (`abi.rs` L631-) に `WASAMO_VALUE_BOOL` arm を
+  追加し、`v.payload.v_bool != 0` で `PropertyValue::Bool(bool)` を
+  構築する。`v_bool` は M2 で既に `WasamoValuePayload` の union 要素
+  として存在しており、tag id `WASAMO_VALUE_BOOL = 3` も M2 で予約
+  済み — T9 が追加したのは Rust 側で実際にその tag を受ける arm のみ。
+- `write_property_value` (`abi.rs` L654-) に `PropertyValue::Bool(b)`
+  arm を追加し、`out.tag = WASAMO_VALUE_BOOL` / `out.payload.v_bool =
+  if b { 1 } else { 0 }` を書き込む。C ABI 側で `WasamoValue` を
+  読む host は M2 から `tag == 3 ⇒ payload.v_bool` を扱える設計
+  なので、host 側に変更は不要。
+- `property_value_to_owned` (`abi.rs` L752-) に `PropertyValue::Bool(b)`
+  → `OwnedArg::Bool(*b)` arm を追加。これは property observer (host
+  callback) に通知する値を所有形に複製する関数で、bool は `Copy` 型
+  なので `String` のような alloc は不要。
+- `OwnedArg::Bool(bool)` variant を `emit.rs` の `OwnedArg` 列挙に
+  追加 (`emit.rs` L49-)。`Clone` derive は既存通り。
+- `owned_to_value` (`emit.rs` L257-) に `OwnedArg::Bool(b)` arm を
+  追加し、`WASAMO_VALUE_BOOL`-tagged `WasamoValue` を構築する。
+  これにより property observer 経路 (`enqueue_property_change`) が
+  drain 時に bool 値を `v_bool` で host に通知する。
+- `cargo build --release --workspace` / `cargo test --workspace` は
+  T6 retrospective の §Current Judgment で記録済み、いずれも green。
+  T9 起因の新規 warning なし (`#[derive(Clone)]` の `OwnedArg` は
+  variant 追加で自動展開)。
+- T9 単体で増やすべき unit test はない。`PropertyValue::Bool` ↔
+  `WasamoValue::v_bool` の往復は T6 part 3 の mock-free Windows-only
+  integration test (`button_enabled_property_flips_visual_and_
+  suppresses_click`) が `wasamo_set_property(PROP_BUTTON_ENABLED,
+  WASAMO_VALUE_BOOL)` 経路と `wasamo_get_property(PROP_BUTTON_ENABLED)`
+  → `(WASAMO_VALUE_BOOL, v_bool: 1)` の検査で end-to-end カバー済み。
+  property observer 経路の bool 通知は M3-Phase 1 のスコープ内に
+  observer-side の検証 fixture が存在しないため、T11 / 後続フェーズで
+  必要が生じた時点でテストを追加する。
+
+T9 の blocker は残っていない。
+
+## Main Learning
+
+中心的な学びは、**Rust の exhaustive match が T9 の dispatch shape を
+T6 と同じ commit に物理的に固定した、という観測そのもの** が
+ADR / plan の "task 切り出しの粒度" を再考する根拠になる、という
+方法論。
+
+- T9 を T6 から切り離した progress file 上の動機は、ADR §Spec impact
+  preview の文書化単位に揃えたかったから (abi 側と widget 側で
+  spec を別行に書く構造)。だが実装単位では、`PropertyValue` への
+  variant 追加は非 non-exhaustive 列挙への破壊的変更であり、`abi.rs`
+  / `emit.rs` の 4 arm が同時に compile を要求する。panic stub も
+  選べたが (a) runtime で死ぬ経路を残す不健全さ、(b) `OwnedArg` も
+  variant 増加で連鎖、を考えると fold が最短かつ正しい
+  ([T6 retrospective §Main Learning](t6-step-end-retrospective.md#main-learning)
+  と同一観察の別角度)。
+- 学びとして残すのは **「ABI value-conversion を独立 step に
+  分ける合理性は、新規 ABI 関数 (`wasamo_subscribe_signal` 等の
+  DD-M3-P1-008 Option B 系列) を導入するときに初めて発生する」**
+  という線引き。今回の T9 のように「列挙 variant 増加に伴う
+  exhaustive match の機械的拡張」は、本質的に widget catalog
+  作業の一部であり、独立 task として切り出すと "依存先 commit に
+  吸収されるだけの空 step" になる。M3-Phase 5+ で float/int 拡張や
+  collection-typed property を入れるフェーズでも、value-conversion
+  arm を独立 task にする計画は同じ理由で fold される可能性が高い
+  ため、phase pre-doc の段階で task 切り出しを再考する材料として
+  本 retrospective を参照する。
+
+副次的な学び:
+
+- **公開 ABI tag の事前予約が今回 fold をスムーズにした**。
+  `WASAMO_VALUE_BOOL = 3` と `v_bool` フィールドは M2 段階で既に
+  `WasamoValue` の union に存在しており、Phase 1 では Rust 側で
+  arm を生やすだけで済んだ。これは M2-Phase 6 の ABI 設計が
+  "scalar 型の tag id を将来分まで予約" 方針を採ったおかげで、
+  C ABI の wire format は無変更。host 側の再ビルド不要。今後 ABI
+  の wire-level 拡張が必要なフェーズ (DD-M3-P1-008 Option B 系列、
+  あるいは観測者 subscribe API) が訪れたときは、この "M3-Phase 1
+  は wire 不変だった" precedent が「どこから wire 変更が始まったか」
+  の境界として有用。
+- **`OwnedArg` の clone 動作が bool で trivially copy になった** —
+  M2 の `OwnedArg::String(String)` は `Clone` で alloc を伴うが、
+  `OwnedArg::Bool(bool)` は `Copy` を実装する原始型のため `clone()`
+  は実質コピー。property observer の deferred drain で bool 通知が
+  発生しても追加 alloc は無い。Phase 1 の hot-path 性能特性に変化
+  なし。
+
+## Checklist
+
+1. **本作業の主要な学び:** あり。
+   - "ABI value-conversion を独立 task にする合理性は、新規 ABI
+     関数を入れるときに発生する" という task 切り出しの線引き。M3
+     後続フェーズの phase pre-doc で参照する。本 retrospective に
+     残す以上、ADR 追補は不要。
+
+2. **仕様文書 (`abi_spec.md` / `architecture.md` / `dsl_spec.md`)
+   の変更:** **なし (T10 で扱う)**
+   - `abi_spec.md` 側で `WASAMO_VALUE_BOOL` ↔ `PropertyValue::Bool`
+     の説明、および property observer payload の bool 経路の文書化
+     は T10 (A11 = per-phase spec sync) の責任。T9 は実装 fold の
+     確認のみで、spec edit は意図的に分離。
+   - 公開 wire format (tag id / payload union) は M2 から不変なので、
+     `abi_spec.md` 側の更新は **意味論側のみ** (どの
+     `PropertyValue` variant がどの tag に対応するか) で済む。
+
+3. **ローカル clean rebuild:** **green** (T6 part 1 commit a550bd9
+   で確認済み、T6 retrospective §Current Judgment 参照)
+   - `cargo build --release --workspace`: green
+   - `cargo test --workspace`: 全 crate green
+   - T9 fold は T6 part 1 と分離不可能なので、独立 rebuild を改めて
+     回す意味はない。GitHub Actions 上の clean rebuild は phase-end
+     gate (T12) で確認する。
+
+4. **PO に相談すべき設計判断・トレードオフ:** **なし**
+   - ADR §Spec impact preview と DD-M3-P1-008 Option A (pair flip)
+     で T9 の範囲は確定済み。
+   - 実装裁量 (panic stub vs T6 fold) は CLAUDE.md `Commit rules`
+     "items split or reordered when implementation reveals a tighter
+     ordering" の枠内で T6 fold を選択しており、PO 相談を要する
+     設計判断ではない。
+
+### step-end 固有
+
+5. **plan/ADR に記載の step 目的から外れた「ついで」のリファクタ・
+   構造変更:** **なし**
+   - T9 が触ったのは `abi.rs` の 3 関数 + `emit.rs` の 2 箇所のみ。
+     既存の `WASAMO_VALUE_I32` / `WASAMO_VALUE_STRING` arm の処理
+     は touched せず、新規 arm を並べて挿入しただけ。
+   - `OwnedArg` の Clone derive、`emit.rs` の use 文の
+     `WASAMO_VALUE_BOOL` 追加もすべて bool 経路を生やすために必要な
+     最小変更。
+
+6. **現在の phase ADR への追加 DD 必要性:** **なし**
+   - 既存 DD-M3-P1-005 (`PropertyValue::Bool` 自体) と
+     DD-M3-P1-008 Option A (新規 ABI 関数を Phase 1 で出さない) で
+     T9 範囲は完全にカバー。
+
+7. **既存 ADR の Proposed 項目の新規追加、または Proposed → Accepted
+   への昇格:** **なし**
+   - 当該 ADR は全 DD Accepted 済み。
+
+8. **`m3-plan.md` の AC 追加・変更、または Phase 構成の追加・統合・
+   分割:** **なし**
+   - A9 / A11 / A12 等の文言は変更なし。Phase 構成変更なし。
+   - 「ABI value-conversion を独立 task にする合理性」の §Main
+     Learning は plan 文面ではなく後続フェーズ pre-doc 時の参照
+     資料として残す。
+
+9. **後続 step に持ち越す仮実装・近似・新規 `dead_code` 警告:**
+   **持ち越しなし、`dead_code` 警告なし**
+   - T6 part 1 が landed した時点で `OwnedArg::Bool` は
+     `owned_to_value` から呼ばれており、`property_value_to_owned`
+     経由で `PropertyValue::Bool` から生成されるため、いずれの
+     identifier も dead ではない。
+   - DD-M3-P1-008 Option B (`wasamo_subscribe_signal` 等の新規 ABI
+     関数) は Phase 1 では明示的に未着手で、別 ADR 送り。これは
+     仮実装ではなく out-of-scope の決定。
+
+10. **タスクリストの後続 step 見直し:** **T9 の retrospective link
+    追記のみ**
+    - progress file の T9 section に本 retrospective への link を
+      追記し、T1–T8 と同じ "Retrospective: [...]" 行を持たせる。
+    - T10 (spec sync) は `abi_spec.md` 側で bool 経路の意味論を
+      記述する作業を含むが、これは Phase 1 ADR §Spec impact preview
+      で既に予告済みで、T10 として消化する。
+    - T11 / T12 の構成・順序に T9 fold からの影響はない。
+
+## Fast-Track Judgment
+
+Fast-track criteria を満たしている。
+
+- item 2 (spec doc 変更): なし (T10 で扱う)
+- item 3 (local clean rebuild): green (T6 part 1 で確認済み)
+- item 4 (PO 相談事項): なし
+- item 5 (ついでのリファクタ): なし
+- item 6 (追加 DD 必要性): なし
+- item 7 (Proposed → Accepted 昇格): なし
+- item 8 (plan AC / Phase 構成変更): なし
+- item 9 (持ち越し): なし
+
+blocking item なし。本 retrospective は形式整合のための事後記録で
+あり、新規 commit を伴わない (進捗ファイルへの link 追記のみ別途
+landing)。
+
+## Verification Notes
+
+T9 が discharge したコード変更と、検証経路を記録する。
+
+新規コード (T6 part 1 commit a550bd9 内の T9 fold 部分):
+
+| ファイル | 変更 |
+|---|---|
+| `wasamo-runtime/src/abi.rs` L631- | `read_property_value` に `WASAMO_VALUE_BOOL` → `PropertyValue::Bool(v.payload.v_bool != 0)` arm |
+| `wasamo-runtime/src/abi.rs` L654- | `write_property_value` に `PropertyValue::Bool(b)` → `tag = WASAMO_VALUE_BOOL`, `v_bool = if b { 1 } else { 0 }` arm |
+| `wasamo-runtime/src/abi.rs` L752- | `property_value_to_owned` に `PropertyValue::Bool(b)` → `OwnedArg::Bool(*b)` arm |
+| `wasamo-runtime/src/emit.rs` L49- | `OwnedArg::Bool(bool)` variant 追加 |
+| `wasamo-runtime/src/emit.rs` L257- | `owned_to_value` に `OwnedArg::Bool(b)` → `WASAMO_VALUE_BOOL`-tagged `WasamoValue` arm |
+| `wasamo-runtime/src/emit.rs` L37-39 | use 文に `WASAMO_VALUE_BOOL` を追加 |
+
+T9 acceptance との対応:
+
+| T9 checklist | Coverage |
+|---|---|
+| `read_property_value` / `write_property_value` / `property_value_to_owned` bool arms | a550bd9 `abi.rs` 3 関数の arm 追加 |
+| `OwnedArg::Bool(bool)` + `owned_to_value` bool arm | a550bd9 `emit.rs` variant + arm |
+| No new public ABI functions | DD-M3-P1-008 Option B 系列は別 ADR 送り。本 commit でも `pub unsafe extern "C" fn` の追加なし |
+
+end-to-end 検証経路:
+
+- **`wasamo_set_property` → `read_property_value` → `widget.set_property`
+  の bool 経路**: T6 part 3 (commit cf8467a) の Windows-only
+  integration test `button_enabled_property_flips_visual_and_
+  suppresses_click` が `WASAMO_VALUE_BOOL` tag で
+  `PROP_BUTTON_ENABLED` を flip して、背景 brush color と click
+  dispatch suppression を assert している。
+- **`widget.get_property` → `write_property_value` →
+  `WasamoValue::v_bool` の bool 経路**: 同じ integration test が
+  `wasamo_get_property(PROP_BUTTON_ENABLED)` で `(WASAMO_VALUE_BOOL,
+  v_bool: 1)` を読み出して assert。
+- **`property_value_to_owned` → `OwnedArg::Bool` → `owned_to_value`
+  の property observer 経路**: M3-Phase 1 では bool observer
+  fixture を持たないため、unit test では `owned_to_value`
+  単体テストを追加していない。end-to-end 検証は後続フェーズ
+  (M3-Phase 2+ で bool observer を使う初の test fixture が
+  現れたとき) に追加する。Phase 1 ADR §Out of scope と整合。
+
+実行コマンド: T6 retrospective §Verification Notes と同一 (T9 fold
+分は同 commit 群で同時に build & test されている)。
+
+```text
+cargo build --release --workspace
+cargo test --workspace
+cargo test -p wasamo-runtime --test button_enabled
+```
+
+いずれも green。
+
+## Follow-Up
+
+T9 から後続 task への明示的な引き渡し:
+
+- **T10 (spec sync):** `abi_spec.md` で
+  `WASAMO_VALUE_BOOL ↔ PropertyValue::Bool` の意味論を文書化。
+  `WasamoValuePayload::v_bool` (M2 から存在) を Phase 1 で初めて
+  使用する旨を明記。`OwnedArg::Bool` 経由の property observer
+  payload は crate-private 実装なので abi_spec への記述は不要、
+  `architecture.md` 側で property observer の値 conversion 経路を
+  記述する際に bool 経路を含める。
+- **T11 (`.ui` fixture + host evidence):** T9 fold によって
+  `wasamo_set_property(PROP_BUTTON_ENABLED, WASAMO_VALUE_BOOL)` /
+  `wasamo_get_property(PROP_BUTTON_ENABLED)` は M2 段階の ABI shape
+  のまま動作する。T11 の `.ui` fixture が host 側で
+  `WasamoValue::v_bool` を扱う必要がある場合も、host 側の C/Rust
+  コードは M2 と同じ pattern (tag dispatch + payload union) で書ける。
+- **T12 (phase-end gates):** Windows CI 上で T6 integration test が
+  bool tag 経路を pass することを再確認。CI 側の capability check
+  (`wasamo_init` の `0x80070005` skip-guard) の扱いに T9 fold から
+  の影響はない。
+- **DD-M3-P1-008 Option B の将来 ADR:** `wasamo_subscribe_signal`
+  等の新規公開 ABI 関数は M3-Phase 1 では出さない決定。後続
+  フェーズで host-side observer をリッチ化する判断が立ったときに、
+  本 retrospective §Main Learning の "ABI value-conversion を独立
+  task にする合理性は、新規 ABI 関数を入れるときに発生する" 線引き
+  を参照する。
+
+これらはすべて progress file の T10–T12 として既に列挙済み。T9
+単体で新たに発見された follow-up は無い (T6 fold の取り扱い自体は
+本 retrospective を持って整合完了)。
