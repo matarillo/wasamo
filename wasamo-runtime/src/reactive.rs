@@ -389,6 +389,7 @@ pub(crate) fn with_batched_writes<R, F: FnOnce() -> R>(f: F) -> R {
 pub(crate) struct SignalRegistry {
     pub(crate) i32s: HashMap<String, Signal<i32>>,
     pub(crate) strings: HashMap<String, Signal<String>>,
+    pub(crate) bools: HashMap<String, Signal<bool>>,
 }
 
 impl SignalRegistry {
@@ -396,6 +397,7 @@ impl SignalRegistry {
         Self {
             i32s: HashMap::new(),
             strings: HashMap::new(),
+            bools: HashMap::new(),
         }
     }
 }

@@ -716,15 +716,13 @@ fn build_signal_registry(states: &[IrState]) -> SignalRegistry {
                     .insert(state.name.clone(), Signal::new(initial));
             }
             IrType::Bool => {
-                // T5 (this commit) wires the parser side, so an IR text that
-                // declares a bool state now parses through `parse_ir`. The
-                // build seam below still depends on `SignalRegistry::bools`
-                // and `Signal<bool>`, which land in T6 (widget catalog +
-                // `PropertyValue::Bool`) and T7 (`EvalContext` bool surface).
-                unimplemented!(
-                    "M3-Phase 1: bool state signal registration is not wired \
-                     yet (pending T6 widget catalog and T7 EvalContext work)"
-                );
+                let initial = match &state.default {
+                    IrLiteral::Bool(b) => *b,
+                    _ => false,
+                };
+                registry
+                    .bools
+                    .insert(state.name.clone(), Signal::new(initial));
             }
         }
     }
