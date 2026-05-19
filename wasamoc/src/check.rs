@@ -513,9 +513,8 @@ mod tests {
 
     #[test]
     fn bind_string_target_bool_state_ident_rejected() {
-        let errs = errors(
-            "component C inherits W { state ready: bool = true Text { text: ready } }",
-        );
+        let errs =
+            errors("component C inherits W { state ready: bool = true Text { text: ready } }");
         assert_eq!(errs.len(), 1, "{:?}", errs);
         assert!(
             errs[0].contains("type mismatch in binding `Text.text`")
@@ -528,9 +527,7 @@ mod tests {
 
     #[test]
     fn bind_bool_target_i32_state_ident_rejected() {
-        let errs = errors(
-            "component C inherits W { state x: i32 = 5 Button { enabled: x } }",
-        );
+        let errs = errors("component C inherits W { state x: i32 = 5 Button { enabled: x } }");
         assert_eq!(errs.len(), 1, "{:?}", errs);
         assert!(
             errs[0].contains("type mismatch in binding `Button.enabled`")

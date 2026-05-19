@@ -36,8 +36,8 @@ use std::collections::{HashSet, VecDeque};
 use std::os::raw::c_char;
 
 use crate::abi::{
-    WasamoStringView, WasamoValue, WasamoValuePayload, WasamoWidget, WASAMO_VALUE_I32,
-    WASAMO_VALUE_BOOL, WASAMO_VALUE_STRING,
+    WasamoStringView, WasamoValue, WasamoValuePayload, WasamoWidget, WASAMO_VALUE_BOOL,
+    WASAMO_VALUE_I32, WASAMO_VALUE_STRING,
 };
 use crate::reactive;
 use crate::registry;

@@ -22,8 +22,8 @@ use wasamo_runtime::WidgetNode;
 
 use windows::core::Interface;
 use windows::Foundation::Numerics::{Vector2, Vector3};
-use windows::UI::Composition::{CompositionColorBrush, Visual};
 use windows::UI::Color;
+use windows::UI::Composition::{CompositionColorBrush, Visual};
 
 const PROP_BUTTON_ENABLED: u32 = 5;
 
@@ -101,9 +101,13 @@ fn button_enabled_property_flips_visual_and_suppresses_click() {
 
     let compositor = wasamo_runtime::get_compositor();
     let text_renderer = wasamo_runtime::get_text_renderer();
-    let mut button =
-        WidgetNode::button(compositor, text_renderer, "Click me", wasamo_runtime::ButtonStyle::Default)
-            .expect("button construction must succeed");
+    let mut button = WidgetNode::button(
+        compositor,
+        text_renderer,
+        "Click me",
+        wasamo_runtime::ButtonStyle::Default,
+    )
+    .expect("button construction must succeed");
 
     // Initial state: enabled=true, brush is the Default/Normal hue, click
     // dispatch fires the registered callback.
@@ -120,9 +124,16 @@ fn button_enabled_property_flips_visual_and_suppresses_click() {
     // normally happens during the layout pass owned by the host window. The
     // test bypasses windowing, so manually pin the visual at (0,0)/(100,40)
     // so `hit_test_click` has a non-empty rect to land inside.
-    let bg_vis: Visual = button.visual.cast().expect("cast bg SpriteVisual to Visual");
+    let bg_vis: Visual = button
+        .visual
+        .cast()
+        .expect("cast bg SpriteVisual to Visual");
     bg_vis
-        .SetOffset(Vector3 { X: 0.0, Y: 0.0, Z: 0.0 })
+        .SetOffset(Vector3 {
+            X: 0.0,
+            Y: 0.0,
+            Z: 0.0,
+        })
         .expect("set bg offset");
     bg_vis
         .SetSize(Vector2 { X: 100.0, Y: 40.0 })
@@ -160,12 +171,27 @@ fn button_enabled_property_flips_visual_and_suppresses_click() {
     // see widget.rs `update_button_enabled`).
     let disabled_color = read_button_color(&button);
     assert_ne!(
-        (disabled_color.A, disabled_color.R, disabled_color.G, disabled_color.B),
-        (initial_color.A, initial_color.R, initial_color.G, initial_color.B),
+        (
+            disabled_color.A,
+            disabled_color.R,
+            disabled_color.G,
+            disabled_color.B
+        ),
+        (
+            initial_color.A,
+            initial_color.R,
+            initial_color.G,
+            initial_color.B
+        ),
         "disabled brush colour must differ from the enabled-state colour"
     );
     assert_eq!(
-        (disabled_color.A, disabled_color.R, disabled_color.G, disabled_color.B),
+        (
+            disabled_color.A,
+            disabled_color.R,
+            disabled_color.G,
+            disabled_color.B
+        ),
         (0x40, 0x80, 0x80, 0x80),
         "disabled brush colour must be the documented flat grey"
     );
@@ -185,8 +211,18 @@ fn button_enabled_property_flips_visual_and_suppresses_click() {
     assert_eq!(status, ffi::WASAMO_OK);
     let restored_color = read_button_color(&button);
     assert_eq!(
-        (restored_color.A, restored_color.R, restored_color.G, restored_color.B),
-        (initial_color.A, initial_color.R, initial_color.G, initial_color.B),
+        (
+            restored_color.A,
+            restored_color.R,
+            restored_color.G,
+            restored_color.B
+        ),
+        (
+            initial_color.A,
+            initial_color.R,
+            initial_color.G,
+            initial_color.B
+        ),
         "re-enabling must restore the original enabled-state brush colour"
     );
 

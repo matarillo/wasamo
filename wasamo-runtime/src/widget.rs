@@ -386,9 +386,7 @@ impl WidgetNode {
             (WidgetData::Button(btn), PROP_BUTTON_STYLE) => {
                 Ok(PropertyValue::I32(button_style_to_i32(btn.style)))
             }
-            (WidgetData::Button(btn), PROP_BUTTON_ENABLED) => {
-                Ok(PropertyValue::Bool(btn.enabled))
-            }
+            (WidgetData::Button(btn), PROP_BUTTON_ENABLED) => Ok(PropertyValue::Bool(btn.enabled)),
             (WidgetData::Text { content, .. }, PROP_TEXT_CONTENT) => {
                 Ok(PropertyValue::String(content.clone()))
             }
@@ -1019,11 +1017,7 @@ pub(crate) fn widget_write_property(id: crate::reactive::WidgetId, prop: u32, va
 /// the loader-supplied node pointer, the runtime is single-threaded GUI,
 /// and the EffectHandle that owns this closure lives no longer than the
 /// `WidgetNode.bindings` vec.
-pub(crate) fn widget_write_property_bool(
-    id: crate::reactive::WidgetId,
-    prop: u32,
-    value: bool,
-) {
+pub(crate) fn widget_write_property_bool(id: crate::reactive::WidgetId, prop: u32, value: bool) {
     let node_ptr = id.0 as *mut WidgetNode;
     if node_ptr.is_null() {
         return;

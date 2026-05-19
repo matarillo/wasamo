@@ -3,7 +3,9 @@ use std::collections::{HashMap, HashSet};
 use std::rc::{Rc, Weak};
 use std::sync::atomic::{AtomicU64, Ordering};
 
-use crate::handler::{evaluate_binding, evaluate_bool_binding, EvalContext, EvalError, HandlerExpr};
+use crate::handler::{
+    evaluate_binding, evaluate_bool_binding, EvalContext, EvalError, HandlerExpr,
+};
 
 const MUTATION_CAP: usize = 16;
 

@@ -144,18 +144,16 @@ fn lower_expr(expr: &Expr, ns: &Namespace) -> LoweredExpr {
             // not in `ns` (keyword-valued idents like `mica` / `system` /
             // `accent`) stay as static `IrLiteral::Ident`.
             match ns.get(name) {
-                Some(TypeName::Bool) => LoweredExpr::Dynamic(HandlerExpr::BoolPropRead {
-                    path: name.clone(),
-                }),
-                Some(TypeName::Str) => LoweredExpr::Dynamic(HandlerExpr::StrPropRead {
-                    path: name.clone(),
-                }),
-                Some(TypeName::Int) => LoweredExpr::Dynamic(HandlerExpr::PropRead {
-                    path: name.clone(),
-                }),
-                Some(TypeName::Float) | None => {
-                    LoweredExpr::Static(IrLiteral::Ident(name.clone()))
+                Some(TypeName::Bool) => {
+                    LoweredExpr::Dynamic(HandlerExpr::BoolPropRead { path: name.clone() })
                 }
+                Some(TypeName::Str) => {
+                    LoweredExpr::Dynamic(HandlerExpr::StrPropRead { path: name.clone() })
+                }
+                Some(TypeName::Int) => {
+                    LoweredExpr::Dynamic(HandlerExpr::PropRead { path: name.clone() })
+                }
+                Some(TypeName::Float) | None => LoweredExpr::Static(IrLiteral::Ident(name.clone())),
             }
         }
         Expr::Measurement { value, .. } => LoweredExpr::Static(IrLiteral::Int(*value as i32)),
@@ -451,9 +449,8 @@ mod tests {
         // implicit-i32 variant). The catalog-soft `bind` target here
         // (`VStack.spacing`) is not type-checked so the unchanged
         // `*PropRead` shape is the lowering outcome.
-        let comp = lower_src(
-            "component C inherits W { state count: i32 = 0 VStack { spacing: count } }",
-        );
+        let comp =
+            lower_src("component C inherits W { state count: i32 = 0 VStack { spacing: count } }");
         let vstack = &comp.root;
         assert!(vstack.props.is_empty());
         assert_eq!(vstack.bindings.len(), 1);
