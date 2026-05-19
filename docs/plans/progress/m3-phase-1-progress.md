@@ -499,15 +499,33 @@ Notes:
 ### T11 — `.ui` fixture and end-to-end host evidence
 
 Discharges Phase 1 verification closure item (4) from the ADR.
+**Landed in b2433eb (2026-05-19).**
 
-- [ ] A `.ui` fixture declares `state ready: bool = true; Button {
-      enabled: ready; on click { ready = false } }` (or
-      equivalent) and lives where the chosen host can load it.
-- [ ] Working default: extend `examples/counter-rust` or add a
-      minimal `examples/bool-demo-rust/` host. Final choice
-      recorded below in §Decisions log when execution lands.
-- [ ] Host launches to a visible window where clicking the button
-      visibly greys it.
+- [x] A `.ui` fixture declares the Phase 1 bool binding path and
+      lives where the chosen host can load it:
+      [examples/bool-demo/bool-demo.ui](../../../examples/bool-demo/bool-demo.ui)
+      defines `state ready: bool = true`, binds
+      `Button.enabled: ready`, and runs
+      `clicked => { root.ready = false; }`.
+- [x] Chosen host: add a minimal
+      [examples/bool-demo-rust/](../../../examples/bool-demo-rust/)
+      host instead of extending `examples/counter-rust`, preserving
+      the M2 counter as a stable reference while giving M3-Phase 1
+      its own visible proof. The host mirrors the counter-rust
+      build-time pipeline: `build.rs` compiles the `.ui` through
+      `wasamoc`, writes `bool-demo.uic`, and `main.rs` loads that IR
+      through `wasamo_load_ui`.
+- [x] Host launch command succeeded locally:
+      `cargo build --release -p bool-demo-rust`, then
+      `Start-Process .\target\release\bool-demo-rust.exe`.
+      The expected manual smoke is an enabled accent button that
+      becomes grey and inert after one click. The compiler-side
+      fixture regression is covered by
+      `cargo test -p wasamoc --test roundtrip`
+      (`bool_demo_ui_contains_bool_binding_and_handler`).
+
+Retrospective:
+[docs/notes/m3-phase-1/t11-step-end-retrospective.md](../../notes/m3-phase-1/t11-step-end-retrospective.md).
 
 ### T12 — Phase-end gates
 
@@ -529,11 +547,27 @@ Discharges the m3-plan §Phase-end criteria checklist.
 
 ## Decisions log
 
-(none yet — execution opened 2026-05-19.)
+- **T11 host choice (2026-05-19):** Added a dedicated
+  `examples/bool-demo-rust/` host instead of extending
+  `examples/counter-rust`. Rationale: `counter-rust` remains the M2
+  Hello Counter reference, while T11's bool proof gets a fixture whose
+  behavior is exactly the Phase 1 closure item (`Button.enabled`
+  driven by `state ready: bool` and disabled by the button's own click
+  handler).
 
 ## CI / verification log
 
-(empty — populated as tasks land.)
+- **2026-05-19 / T11 local:** `cargo fmt` — green.
+- **2026-05-19 / T11 local:** `cargo test -p wasamoc --test roundtrip`
+  — green, 6 passed including
+  `bool_demo_ui_contains_bool_binding_and_handler`.
+- **2026-05-19 / T11 local:** `cargo build -p bool-demo-rust` — green.
+- **2026-05-19 / T11 local:** `cargo build --release -p bool-demo-rust`
+  — green.
+- **2026-05-19 / T11 local GUI smoke:** `Start-Process
+  .\target\release\bool-demo-rust.exe` — command succeeded; manual
+  visible-window click smoke available. Full workspace release build,
+  full workspace tests, and CI run remain T12 phase-end gates.
 
 ## Out-of-phase residuals
 
