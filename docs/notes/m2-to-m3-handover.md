@@ -1,5 +1,5 @@
 ---
-title: M2 → M3 handover — design prerequisites carried forward from Phase 6
+title: M2 → M3 handover — design prerequisites and M3-Phase 1 addenda
 status: live
 created: 2026-05-08
 ---
@@ -7,8 +7,9 @@ created: 2026-05-08
 # M2 → M3 handover
 
 Structural decisions that landed inside M2-Phase 6 implementation
-steps (rather than as standalone DDs) and that M3 DSL-extension work
-(Grid / ScrollView / List per [ROADMAP.md M3](../../ROADMAP.md#m3-dsl-surface)
+steps (rather than as standalone DDs), plus later addenda discovered
+during M3-Phase 1 close, that M3 DSL-extension work (Grid /
+ScrollView / List per [ROADMAP.md M3](../../ROADMAP.md#m3-dsl-surface)
 and the M3 DSL spec public-draft acceptance criterion) must inherit
 as design premises, not re-litigate.
 
@@ -21,10 +22,9 @@ These are recorded here because:
   not the M3-facing commitment.
 - They are not in the live ADR set for any later phase. (Sections
   1–2 originated as Phase 6 plan deviations; section 3 records the
-  M3-facing residuals from DD-M2-P6-010, which is Accepted but whose
-  M3 obligations are pre-doc inputs rather than ADR successor work;
-  section 4 points to the DD-M2-P6-011 `TypedValue` open question
-  that M3 may be the first milestone to pressure.)
+  M3-facing residuals from DD-M2-P6-010, plus item 4 added during
+  M3-Phase 1 close; section 4 points to the DD-M2-P6-011 `TypedValue`
+  open question that M3 may be the first milestone to pressure.)
 
 ## 1. `wasamo-ir` is the shared IR crate; compiler and runtime both
    depend on it
@@ -137,6 +137,22 @@ implementation silently.
    replaced by a different convergence guarantee. This was already
    named as an open question in DD-M2-P6-001's divergence semantics;
    M3 inherits it alongside the residual above.
+
+4. **Synchronous non-batched drain proof contract (M3-Phase 1
+   addendum).** This item did **not** originate in M2; it was added
+   during M3-Phase 1 close after T13's bool live-propagation proof.
+   T13's `.ui → load → click → state → bound widget property`
+   integration test relies on the current implementation detail that
+   `Signal<bool>::set` drains dirty Effects before `hit_test_click(...)`
+   returns when the write occurs outside batching (`BATCH_DEPTH == 0`).
+   That proof did not add a public drain seam, and it did not explicitly
+   call `drain_if_outermost`; it observed quiescence through
+   `wasamo_get_property(PROP_BUTTON_ENABLED)` immediately after the
+   click. Later M3 phases that introduce event/input batching or
+   bool-dependent display structure (notably conditional rendering and
+   Button selected state) must either preserve that observable proof
+   contract or explicitly revise the boundary at which a test/host may
+   expect bound widget properties to be up to date.
 
 The M3 DSL spec drafting work and the M3 multi-binding implementation
 step are the natural places these obligations are discharged. They

@@ -313,7 +313,7 @@ retroactive fill) と process correction (GUI smoke は owner 領域)
    - **次 phase pre-doc input の書き起こし (本 phase close 内で完了):**
      [docs/notes/m3-phase-2/predoc-inputs.md](../m3-phase-2/predoc-inputs.md)
      に M3-Phase 2 (Box layout primitive) 視点で書き起こし済み。
-     §1–§8 が以下を網羅:
+     §1–§9 が以下を網羅:
      - §1: 新規 `PropertyValue` variant 追加 = ABI value-conversion
        arm を同一 step に fold する規律 (Main Learning #2)。
      - §2: 新規 bindable property の per-type writer seam を
@@ -332,10 +332,14 @@ retroactive fill) と process correction (GUI smoke は owner 領域)
        再評価論点 (Phase 1 defensive fallback)。
      - §8: `bool` string interpolation rejection を、後続の expression /
        formatting work への input として追加 (T14)。
+     - §9: T13 の bool live proof が現行の同期 non-batched dirty-effect
+       drain に依存している点は M3 横断の reactive/drain 前提なので
+       `m2-to-m3-handover.md` §3 item 4 に本体を置き、ここでは
+       back-pointer として残す (Follow-up B)。
    - これは
      [docs/notes/retrospectives.md §Retrospective Main Learning の前送り](../retrospectives.md#retrospective-main-learning-の前送り)
      の「phase close 内で書き起こす」要件への適合。次 phase pre-doc
-     起草時は M3-Phase 2 owner-agreed framing に合わせて §1–§8 を
+     起草時は M3-Phase 2 owner-agreed framing に合わせて §1–§9 を
      取り込む / 並べ替える / 削減することは Phase 2 内の判断だが、
      **本ノートの存在自体は本 phase の close 内で確定**。
 

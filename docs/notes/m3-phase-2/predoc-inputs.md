@@ -215,6 +215,17 @@ surface が広がる時、または target app 側で status text が必要に�
 
 ---
 
+## 9. Bool live proof は現行の同期 non-batched drain に依存している
+
+この項目の本体は M3 横断の reactive/drain 前提なので、
+[docs/notes/m2-to-m3-handover.md](../m2-to-m3-handover.md) §3 item 4
+に移した。M3-Phase 2 の Box layout primitive は通常この前提を直接
+触らないが、Phase 2 pre-doc が event/input batching、layout scheduling、
+または headless integration proof の boundary を扱う場合は、handover
+側の M3-Phase 1 addendum を読む。
+
+---
+
 ## 適用方法のサマリ
 
 | Phase 2 pre-doc DD 候補 | 起源 | このノート §           |
@@ -227,6 +238,7 @@ surface が広がる時、または target app 側で status text が必要に�
 | spec sync 中の retroactive fold 許容           | T10 | §6                       |
 | `f32` を IrType に入れるかの再判定           | Phase 1 defensive fallback | §7      |
 | bool display conversion / formatting surface を明示化するか | T14 | §8 |
+| bool live proof の同期 drain 前提を preserve / 改訂するか | T13 / Follow-up B | §9 |
 
 Phase 2 pre-doc が起こされる時、上表のうち pre-doc framing が触れる
 ものを Context / Inputs / Open questions section に取り込む。触れな

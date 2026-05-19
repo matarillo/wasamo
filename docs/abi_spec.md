@@ -491,6 +491,13 @@ mechanism — are also experimental:
 #define WASAMO_TEXT_STYLE    4u   /* I32     */
 ```
 
+M3-Phase 1 added `Button.enabled` as a DSL/runtime property for
+`wasamo_load_ui` evidence, but did **not** promote its internal property
+key to this public experimental ABI layer. Hosts should not rely on an
+undocumented numeric ID for `Button.enabled`; use the DSL surface or wait
+for a future ABI decision that explicitly publishes a constant in
+`wasamo.h` and the raw bindings.
+
 `BUTTON_STYLE` values: `0 = Default`, `1 = Accent`. `TEXT_STYLE`
 values: `0 = Caption`, `1 = Body`, `2 = Subtitle`, `3 = Title`. The
 numeric assignments are M1 stopgaps and may change before M6.

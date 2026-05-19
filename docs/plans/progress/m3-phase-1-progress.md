@@ -807,12 +807,11 @@ no-ff merge and the separate owner-approved push gate.
   main no-ff merge and push gates, owner decides whether to retire
   (default: delete) or archive this progress file.
 
-## Remaining implicit-constraint follow-ups (planned; no task yet)
+## Remaining implicit-constraint follow-ups (closed after T14)
 
 These items came from the same phase-end implicit-constraint review as
-T14, but they are not yet task-sized implementation work. They should be
-handled by documentation decisions after T14, or promoted to tasks if
-the chosen resolution requires code changes.
+T14. They were resolved as documentation decisions after T14 rather than
+promoted to implementation tasks.
 
 ### Follow-up A — `Button.enabled` property ID ABI exposure
 
@@ -821,13 +820,13 @@ exercise it through `wasamo_get_property` / `wasamo_set_property`, but
 the public C header, Rust sys constants, and `abi_spec.md` still expose
 only the M1 experimental property IDs 1–4.
 
-Planned resolution: decide and document whether `Button.enabled` remains
-a DSL/runtime-internal experimental property ID for Phase 1 evidence, or
-whether it becomes a public experimental property constant in
-`bindings/c/wasamo.h`, `bindings/rust-sys/src/lib.rs`, and
-`docs/abi_spec.md`. The recommended default is to keep it internal for
-Phase 1 and document that choice, because the phase did not intend to
-add public ABI surface beyond existing `WASAMO_VALUE_BOOL` plumbing.
+Resolution (2026-05-19): keep `PROP_BUTTON_ENABLED = 5` internal for
+Phase 1. The public C header and Rust sys constants remain unchanged;
+`docs/abi_spec.md` now explicitly documents that M3-Phase 1's
+`Button.enabled` key is a DSL/runtime-internal property for
+`wasamo_load_ui` evidence, not a published experimental ABI constant.
+This preserves the Phase 1 scope: no public ABI surface beyond existing
+`WASAMO_VALUE_BOOL` plumbing.
 
 ### Follow-up B — Synchronous drain dependency in T13
 
@@ -838,12 +837,13 @@ returns. This is documented in T13 Notes, but it may become an
 observable constraint for later bool-dependent surfaces such as
 conditional rendering (Phase 6) and Button selected state (Phase 8).
 
-Planned resolution: forward this as a design input, not a Phase 1 code
-change. The next doc touch should add it to
-`docs/notes/m3-phase-2/predoc-inputs.md` or a broader M3 handover note
-as "bool live proofs currently rely on synchronous non-batched drains;
-event/input batching phases must either preserve that observable
-behavior or explicitly revise the proof contract."
+Resolution (2026-05-19): forward this as a design input, not a Phase 1
+code change. `docs/notes/m2-to-m3-handover.md` §3 item 4 now records
+this as a M3-Phase 1 addendum: bool live proofs currently rely on
+synchronous non-batched drains; event/input batching phases must either
+preserve that observable behavior or explicitly revise the proof
+contract. `docs/notes/m3-phase-2/predoc-inputs.md` §9 keeps only a
+back-pointer because the issue is cross-phase rather than Box-specific.
 
 ## Decisions log
 
@@ -972,6 +972,13 @@ behavior or explicitly revise the proof contract."
     host/binding crates and doc tests with 0 tests where present. Known
     warnings unchanged: `wasamo` crate "provides no linkable target"
     notice and `wasamo-sys` import-library ordering note.
+- **2026-05-19 / remaining follow-ups doc close:** Follow-up A resolved
+  by documenting that `Button.enabled`'s internal property key remains
+  outside the public experimental ABI in `docs/abi_spec.md`; Follow-up B
+  resolved by adding the synchronous non-batched drain proof contract to
+  `docs/notes/m2-to-m3-handover.md` §3 item 4, with
+  `docs/notes/m3-phase-2/predoc-inputs.md` §9 kept as a back-pointer.
+  No code changes; tests not re-run.
 
 ## Out-of-phase residuals
 
