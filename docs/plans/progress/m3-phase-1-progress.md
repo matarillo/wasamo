@@ -257,16 +257,61 @@ Notes:
 ### T7 — `EvalContext` bool trait surface and handler evaluator arm
 
 Discharges DD-M3-P1-004 (Option B), DD-M3-P1-008 (Option A — pair
-flip).
+flip). **Landed in 46546a1 + 6d9217e (2026-05-19).**
 
-- [ ] `EvalContext::get_bool`, `EvalContext::read_bool_tracked`,
+- [x] `EvalContext::get_bool`, `EvalContext::read_bool_tracked`,
       `EvalContext::set_bool` added with default impls mirroring
-      the M2 i32 shape.
-- [ ] `evaluate()` gains an arm for `Assign { lhs, rhs: BoolLit |
-      BoolPropRead }`; rejects other bool-typed compound forms
-      (`CompoundAssign` over bool is out of scope per ADR §Out of
-      scope).
-- [ ] Unit tests cover the new arm and the trait defaults.
+      the M2 String shape (`UnknownProperty` for `get_bool` /
+      `set_bool`; `read_bool_tracked` forwards to `get_bool`). Live
+      impls follow in
+      [reactive.rs](../../../wasamo-runtime/src/reactive.rs):
+      `BindingEvalContext` reads via `registry.bools[path]` and
+      rejects writes with `WriteInBindingContext`;
+      `HandlerEvalContext` reads via `get_untracked()` and writes via
+      `Signal::set`.
+- [x] `evaluate()` peeks at `Assign`'s `rhs` and dispatches to
+      `set_bool` when `rhs ∈ { BoolLit, BoolPropRead }`. Other
+      variants stay on the existing i32 path; bare `BoolLit` /
+      `BoolPropRead` and `CompoundAssign` with bool rhs continue to
+      return `EvalError::TypeMismatch` (no implicit bool→i32
+      coercion; no compound-bool semantics — both out of scope per
+      ADR).
+- [x] Unit tests cover the trait defaults
+      (`eval_context_default_get_bool_is_unknown`,
+      `eval_context_default_set_bool_is_unknown`,
+      `read_bool_tracked_default_forwards_to_get_bool`), the new
+      `Assign` arm on both `BoolLit` and `BoolPropRead`
+      (`assign_bool_lit_writes_through_set_bool`,
+      `assign_bool_prop_read_copies_value`,
+      `assign_bool_prop_read_unknown_source_propagates_error`,
+      `invoke_handler_drives_bool_assign`), the rejection of bare
+      bool expressions and `CompoundAssign` with bool rhs
+      (`evaluate_rejects_bare_bool_lit_in_handler_context`,
+      `evaluate_rejects_bare_bool_prop_read_in_handler_context`,
+      `evaluate_rejects_compound_assign_with_bool_rhs`), the i32
+      regression guard (`assign_i32_lit_still_works_after_bool_arm`),
+      and the live `BindingEvalContext` / `HandlerEvalContext`
+      surfaces (`binding_ctx_get_bool_untracked_vs_tracked`,
+      `binding_ctx_set_bool_returns_write_error`,
+      `handler_ctx_set_bool_drives_signal_set`,
+      `handler_ctx_set_bool_unknown_path_errors`).
+
+Retrospective:
+[docs/notes/m3-phase-1/t7-step-end-retrospective.md](../../notes/m3-phase-1/t7-step-end-retrospective.md).
+
+Notes:
+
+- The default impls follow the M2 String shape (`get_string` /
+  `read_string_tracked` both defaulted) rather than the i32 shape
+  (`get_i32` / `set_i32` required). This keeps existing
+  `EvalContext` impls (e.g. `widget::NullEvalContext`, test
+  fixtures) compiling without changes — they pick up the
+  `UnknownProperty` defaults until they opt in to overriding.
+- The bool-typed `Assign` arm returns `Ok(0)` to satisfy
+  `evaluate()`'s `Result<i32, _>` contract without implicit
+  bool→i32 coercion. Handlers run for side effects; the integer
+  return value is only consumed by `Block`'s "last expression"
+  semantics, where `0` is already the empty-block default.
 
 ### T8 — Binding evaluator and per-type writer seam
 
