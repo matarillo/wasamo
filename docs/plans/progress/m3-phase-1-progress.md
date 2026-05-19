@@ -28,18 +28,21 @@ prediction.
 ### T1 — `wasamo-ir`: add `bool` to the type / literal / handler surfaces
 
 Discharges DD-M3-P1-001, DD-M3-P1-002 (IR variant half),
-DD-M3-P1-003.
+DD-M3-P1-003. **Landed in 7cc52f4 (2026-05-19).**
 
-- [ ] `IrType::Bool` variant added; every existing `match` on
+- [x] `IrType::Bool` variant added; every existing `match` on
       `IrType` in the workspace gains a `Bool` arm (or an explicit
       reject) so the compiler enforces completeness.
-- [ ] `IrLiteral::Bool(bool)` variant added; parallel to `Int` /
+- [x] `IrLiteral::Bool(bool)` variant added; parallel to `Int` /
       `Str`.
-- [ ] `HandlerExpr::BoolLit(bool)` and `HandlerExpr::BoolPropRead {
+- [x] `HandlerExpr::BoolLit(bool)` and `HandlerExpr::BoolPropRead {
       path }` added; existing `IntLit` / `PropRead` left
       i32-implicit (no rename per DD-M3-P1-003 Option A).
-- [ ] Pure-logic unit tests in `wasamo-ir` covering construction
+- [x] Pure-logic unit tests in `wasamo-ir` covering construction
       and equality of the new variants.
+
+Retrospective:
+[docs/notes/m3-phase-1/t1-step-end-retrospective.md](../../notes/m3-phase-1/t1-step-end-retrospective.md).
 
 ### T2 — `wasamoc` lexer / parser: `true` / `false` keywords and bool literal
 
