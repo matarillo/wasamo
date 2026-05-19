@@ -172,18 +172,25 @@ criterion.
 ## Task lists
 
 Implementation task lists — the ordered steps to carry out the Accepted
-decisions — belong in the milestone plan's Progress section
-(`docs/plans/<M>-plan.md`), not in the phase ADR.
+decisions — belong in the **phase progress file**
+(`docs/plans/progress/<milestone>-phase-<n>-progress.md`), not in the
+phase ADR and not in the milestone plan itself. The milestone plan's
+Progress section carries only a compact index row pointing at the
+progress file; see [plans/README.md §Scope rule (plan vs ADR)](../plans/README.md#scope-rule-plan-vs-adr)
+and [plans/README.md §Phase progress file lifecycle](../plans/README.md#phase-progress-file-lifecycle)
+for the authoritative location and the `active → closing → retired →
+archived` lifecycle the file follows.
 
 The rationale: even a task list agreed in pre-doc remains a hypothesis.
 Build failures, linker errors, CI surprises, and direct application
 observation can all reveal that a step needs to be split, reordered,
 added, or dropped after the design decisions themselves are settled.
-Keeping task lists in the plan's Progress section (which is explicitly
-mutable throughout implementation) allows those adjustments without
-implying that a design decision has changed. DD entries follow the
-supersede rule and stay stable; task steps are operational detail and
-stay flexible.
+Keeping task lists in a phase progress file (which is explicitly
+mutable throughout implementation and retired at phase close) allows
+those adjustments without implying that a design decision has changed
+and without bloating the milestone plan with eight phases' worth of
+operational detail. DD entries follow the supersede rule and stay
+stable; task steps are operational detail and stay flexible.
 
 An ADR may include:
 - DD entries (the decision record)
