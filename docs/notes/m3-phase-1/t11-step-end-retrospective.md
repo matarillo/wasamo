@@ -67,7 +67,10 @@ Windows integration test は T6 で既に CI-gated。T11 はそれと別に、
 - `cargo build -p bool-demo-rust` — green。
 - `cargo build --release -p bool-demo-rust` — green。
 - `Start-Process .\target\release\bool-demo-rust.exe` — command
-  succeeded。GUI の目視 click smoke は owner/manual 確認可能な状態。
+  succeeded。GUI の目視 click smoke は owner 確認が必要な範囲であり、
+  owner から `private/m3-p1-t11 screenshot 2026-05-19 190441.png`
+  が証跡として提供された。対応する baseline として
+  `private/m3-p1-t10 screenshot 2026-05-19 190455.png` も残っている。
 
 ## Retrospective Checklist
 
@@ -92,3 +95,7 @@ Windows integration test は T6 で既に CI-gated。T11 はそれと別に、
 - T12 の phase-end retrospective では、この `bool-demo-rust` が
   M3-Phase 1 の gallery-sub-screen 相当の可視 proof として十分だったかを
   再確認する。
+- Process correction: GUI の「動作した」確認は owner/manual 領域なので、
+  Codex 側は launch command 成功までを記録し、クリック後の visible
+  behavior は owner に明示確認する。今回の T11 記録は owner-provided
+  screenshot を証跡として補正した。
