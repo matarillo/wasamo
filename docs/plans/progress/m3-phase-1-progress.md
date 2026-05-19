@@ -186,24 +186,73 @@ Notes:
 
 ### T6 — `wasamo-runtime` widget catalog: `PropertyValue::Bool`, typed `resolve_prop_key`, `Button.enabled`
 
-Discharges DD-M3-P1-005, DD-M3-P1-009.
+Discharges DD-M3-P1-005, DD-M3-P1-009. Also folds in T9 (C ABI
+value-conversion arms) — see Notes. **Landed in a550bd9 + 36be13c +
+cf8467a (2026-05-19).**
 
-- [ ] `PropertyValue::Bool(bool)` variant added in
-      [widget.rs L77-L80](../../../wasamo-runtime/src/widget.rs#L77-L80).
-- [ ] `resolve_prop_key` widened to return `Option<(PropertyKey,
+- [x] `PropertyValue::Bool(bool)` variant added in
+      [widget.rs L77-L81](../../../wasamo-runtime/src/widget.rs#L77-L81).
+- [x] `resolve_prop_key` widened to return `Option<(PropertyKey,
       IrType)>`; widget catalog rows carry `IrType` (M2 rows
-      retain their declared types).
-- [ ] `PROP_BUTTON_ENABLED` u32 id added (next free slot).
-- [ ] `Button` widget setter dispatches `PROP_BUTTON_ENABLED` to
-      the bool-typed setter; default value `true`.
-- [ ] Phase 1 `Button.enabled` runtime contract: layout slot
-      preserved when `false`; click-handler dispatch suppressed
-      when `false`; minimal disabled visual (greyed colours, no
-      animation). Out of Phase 1: focus / a11y / hover-state /
-      key-activation behaviour (deferred per ADR §Out of scope).
-- [ ] Mock-free Windows-only integration test asserting
-      `PROP_BUTTON_ENABLED` flips the visual state on a live
-      `WidgetNode`.
+      `Text.text`/`Text.font`/`Button.text`/`Button.style` retain
+      their declared `Str`/`I32`/`Str`/`I32` types; new
+      `Button.enabled` row carries `IrType::Bool`). The `IrType`
+      tag is plumbed through the binding loader (`_prop_ty`) but
+      not yet consumed — the per-type writer dispatch lands in T8.
+- [x] `PROP_BUTTON_ENABLED = 5` u32 id added (next free slot).
+- [x] `Button` widget setter dispatches `PROP_BUTTON_ENABLED` to
+      `update_button_enabled`; `ButtonData.enabled` defaults to
+      `true` at `WidgetNode::button` construction.
+- [x] Phase 1 `Button.enabled` runtime contract:
+      `hit_test_click_inner` guards Button dispatch on
+      `btn.enabled`, skipping host callback / inline `clicked`
+      handler / `enqueue_signal("clicked", …)` while preserving
+      child hit-test traversal; `update_hover_inner` freezes
+      hover/press transitions when disabled; `effective_button_color`
+      paints the documented flat grey
+      `(A=0x40, R=G=B=0x80)` directly (no
+      `ColorKeyFrameAnimation`); layout slot is preserved (no
+      `display: none` semantics). Focus / a11y / keyboard
+      activation deferred to M4–M5 per ADR §Out of scope.
+- [x] Mock-free Windows-only integration test
+      `button_enabled_property_flips_visual_and_suppresses_click`
+      in [wasamo-runtime/tests/button_enabled.rs](../../../wasamo-runtime/tests/button_enabled.rs);
+      drives `wasamo_set_property(PROP_BUTTON_ENABLED,
+      WASAMO_VALUE_BOOL)` and asserts the
+      `CompositionColorBrush::Color()` flip plus click-callback
+      suppression. Fails (not skips) on GitHub Actions when the
+      runtime Compositor is unavailable.
+
+Retrospective:
+[docs/notes/m3-phase-1/t6-step-end-retrospective.md](../../notes/m3-phase-1/t6-step-end-retrospective.md).
+
+Notes:
+
+- **T9 fold:** Adding `PropertyValue::Bool` mechanically required
+  exhaustive `match` arms in `abi::read_property_value`,
+  `abi::write_property_value`, `abi::property_value_to_owned`, and
+  `emit::owned_to_value` (the latter through a new `OwnedArg::Bool`
+  variant). Rather than landing panic stubs, T9's planned
+  ABI-side bool plumbing was completed in T6 part 1 (commit
+  a550bd9). T9 below is marked `[x]` with this commit reference;
+  no independent T9 commit will land. This is the
+  "implementation reveals a tighter ordering" path permitted by
+  [CLAUDE.md §Commit rules](../../../CLAUDE.md).
+- **`SignalRegistry::bools` landed in T6 (part 2, commit
+  36be13c)** even though the strict T6 acceptance bullets don't
+  mention it. The bool registry is the natural pairing for the
+  widget-side `PropertyValue::Bool` work and allows T7 to focus
+  purely on the `EvalContext` trait surface without simultaneously
+  introducing the data store. `build_signal_registry`'s
+  `IrType::Bool` arm now resolves `Signal::new(default)` instead
+  of T5's `unimplemented!()`.
+- **Test sizing quirk:** `WidgetNode::button` does not size its
+  background `SpriteVisual` (that is the host window's
+  `layout::arrange` responsibility). The Windows integration test
+  therefore calls `button.visual.SetSize(...)` directly so
+  `hit_test_click` has a non-empty rect; T11's `.ui` fixture-based
+  test will not need this because it runs through the window
+  path.
 
 ### T7 — `EvalContext` bool trait surface and handler evaluator arm
 
@@ -244,16 +293,21 @@ Discharges DD-M3-P1-007.
 ### T9 — C ABI value-conversion arms (no new functions)
 
 Discharges the abi-side spec impact recorded in ADR §Spec impact
-preview.
+preview. **Folded into T6 part 1 (commit a550bd9, 2026-05-19).**
 
-- [ ] `read_property_value` / `write_property_value` /
+- [x] `read_property_value` / `write_property_value` /
       `property_value_to_owned` in
-      [abi.rs L745-L749](../../../wasamo-runtime/src/abi.rs#L745-L749)
-      gain bool arms threading `PropertyValue::Bool(bool)` ↔
-      `WasamoValue::v_bool` (existing `WASAMO_VALUE_BOOL = 3` tag).
-- [ ] Property-observer payload conversion carries bool through.
-- [ ] No new public ABI functions added (DD-M3-P1-008 Option B
+      [abi.rs](../../../wasamo-runtime/src/abi.rs) gained bool arms
+      threading `PropertyValue::Bool(bool)` ↔ `WasamoValue::v_bool`
+      (existing `WASAMO_VALUE_BOOL = 3` tag).
+- [x] Property-observer payload conversion carries bool through:
+      `OwnedArg::Bool(bool)` added in
+      [emit.rs](../../../wasamo-runtime/src/emit.rs); `owned_to_value`
+      builds the `WASAMO_VALUE_BOOL`-tagged `WasamoValue`.
+- [x] No new public ABI functions added (DD-M3-P1-008 Option B
       explicitly deferred to its own future ADR).
+
+See T6 Notes for why this landed inside T6.
 
 ### T10 — Spec / architecture documentation update (A11)
 
