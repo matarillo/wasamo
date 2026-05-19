@@ -544,7 +544,7 @@ Discharges the m3-plan §Phase-end criteria checklist.
       release build → debug build → workspace tests); CI run link
       recorded below once `workflow_dispatch` on `feat/m3-phase-1`
       completes.
-- [ ] Windows-only mock-free integration tests pass on CI
+- [x] Windows-only mock-free integration tests pass on CI
       (fail — not skip — if Compositor capability missing):
       - T6's `button_enabled` (widget-setter slice; bypasses the
         binding pipeline per file-level comment).
@@ -552,7 +552,10 @@ Discharges the m3-plan §Phase-end criteria checklist.
         this phase-end review when owner observed the gap; see
         T13 below).** This is the test that ADR
         [§Verification → item 3](../../decisions/m3-phase-1-bool-scalar.md#verification-strategy)
-        actually calls for. T12 cannot close until T13's box ticks.
+        actually calls for.
+      - Confirmed green in `workflow_dispatch` run
+        [26094510225](https://github.com/matarillo/wasamo/actions/runs/26094510225)
+        on `feat/m3-phase-1` (2026-05-19).
 - [x] Spec & architecture edits from T10 reviewed for
       external-implementor reproducibility.
 - [x] Residuals captured under [docs/notes/m3/](../../notes/m3/)
@@ -843,8 +846,13 @@ artifact をレビューした際に挙げた 4 件の findings。1 が実体に
   - Known warnings unchanged: `wasamo` crate "provides no linkable
     target" notice and `wasamo-sys` import-library ordering note
     (DD-M2-P1-006-era; not build/test failures).
-- **2026-05-19 / T12 CI:** pending `workflow_dispatch` trigger on
-  `feat/m3-phase-1`. Link to be recorded here.
+- **2026-05-19 / T12 CI:** `workflow_dispatch` run
+  [26094510225](https://github.com/matarillo/wasamo/actions/runs/26094510225)
+  on `feat/m3-phase-1` — **green** (cargo build job: success). This
+  run includes both T6's `button_enabled` and T13's
+  `bool_binding_live_propagation` mock-free Windows integration tests
+  in `cargo test --workspace`, so it serves as the CI inclusion link
+  for both T12 and T13.
 - **2026-05-19 / T13 local:** `cargo build -p wasamo-runtime --tests` —
   green after a one-line refactor of the `read_bool_property` helper
   (`unsafe { value.payload.v_bool } != 0` is parsed as
@@ -861,9 +869,10 @@ artifact をレビューした際に挙げた 4 件の findings。1 が実体に
   (`wasamo-ir` 7 unit, `wasamoc` 98 unit + 6 roundtrip,
   `wasamo-runtime` 165 unit + 9 integration, `wasamo-sys` 1 unit).
   No failures, no ignored.
-- **2026-05-19 / T13 CI:** pending — folded into the `feat/m3-phase-1`
-  `workflow_dispatch` run with T12. Link to be recorded here once CI
-  completes.
+- **2026-05-19 / T13 CI:** folded into the same
+  `feat/m3-phase-1` `workflow_dispatch` run as T12 —
+  [26094510225](https://github.com/matarillo/wasamo/actions/runs/26094510225)
+  green.
 - **2026-05-19 / phase-close doc-edit step:** Findings 1–4 closed.
   - m3-plan.md §Phase-end criteria item 5: added foundational-phase
     exception clause (Finding 2 / option (a)).

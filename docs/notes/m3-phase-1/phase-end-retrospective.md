@@ -320,18 +320,20 @@ retroactive fill) と process correction (GUI smoke は owner 領域)
      取り込む / 並べ替える / 削減することは Phase 2 内の判断だが、
      **本ノートの存在自体は本 phase の close 内で確定**。
 
-15. **CI green 確認:** 未確認 (本 retrospective 記録時点)。
-   - GitHub Actions manual CI run: `feat/m3-phase-1` に対する
-     `workflow_dispatch` を本 retrospective commit / 関連 commit を
-     phase ブランチへ ff merge した後に走らせ、green を確認してから
-     owner の no-ff merge 承認に進む。
+15. **CI green 確認:** 確認済み。
+   - GitHub Actions `workflow_dispatch` run
+     [26094510225](https://github.com/matarillo/wasamo/actions/runs/26094510225)
+     on `feat/m3-phase-1` — green (cargo build job: success)。
+     `cargo test --workspace` 内で T6 `button_enabled` と T13
+     `bool_binding_live_propagation` の mock-free Windows integration
+     test が skip せず pass していることをこの run が証明する。
    - 本 phase は `cargo fmt --check` を CI が enforce していないが、
-     §Main Learning #3 の通り、本 phase 内では応急処置の fmt-only
-     commit `1129aea` を入れた上で release/debug build と test を CI
-     上で green にすることが gate。
-   - Windows-only mock-free integration test (`button_enabled` /
-     `live_widgetnode_headless`) が CI 上でも skip せず実行 / pass
-     することを再確認する。
+     §Main Learning #3 の通り、応急処置の fmt-only commit `1129aea`
+     を入れた上で release/debug build と test が CI 上で green に
+     なった。
+   - 本 retrospective および関連 phase-close commit (`f6b6d74`) が
+     phase ブランチ HEAD に含まれた状態での CI green であり、
+     owner の main no-ff merge 承認に進める。
 
 16. **human-visible GUI smoke:** 不要。
    - retrospectives.md §checklist item 16 は「runtime / ABI / binding /
