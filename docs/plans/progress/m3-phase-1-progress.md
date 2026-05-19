@@ -459,10 +459,11 @@ ed93d5e + b7f91ce (2026-05-19).**
       [m3-phase-1-bool-scalar.md DD-M3-P1-007](../../decisions/m3-phase-1-bool-scalar.md)
       and the canonical F5 record in
       [notes/m3/m3-start-framing.md §F5](../../notes/m3/m3-start-framing.md)).
-- [ ] External-implementor smoke check on the spec edits: the
+- [x] External-implementor smoke check on the spec edits: the
       bool-specific additions are sufficient for a reader to
       reproduce the Phase 1 surface against a hypothetical host
-      (Phase 8 bar applied at phase-end — deferred to T12).
+      (Phase 8 bar applied at phase-end — completed during T12
+      review).
 
 Retrospective:
 [docs/notes/m3-phase-1/t10-step-end-retrospective.md](../../notes/m3-phase-1/t10-step-end-retrospective.md).
@@ -487,6 +488,13 @@ Notes:
   not list abi_spec.md. T9's retrospective §Follow-Up mentioned
   abi_spec.md prose as a possibility but it is not a required
   Phase 1 spec sync.
+- **External-implementor smoke check passed (2026-05-19).** Owner
+  review confirmed the bool-specific spec edits are reproducible for
+  a hypothetical host. Follow-up wording clarified that property-bind
+  RHS is an expression position (`enabled: ready`) rather than a
+  template interpolation position, and `docs/notes/dsl-grammar.md`
+  records the related grammar guardrail for future expression-surface
+  work.
 
 ### T11 — `.ui` fixture and end-to-end host evidence
 
@@ -510,7 +518,7 @@ Discharges the m3-plan §Phase-end criteria checklist.
       CI; CI run link recorded below.
 - [ ] Windows-only mock-free integration test from T6 passes on
       CI (fails — not skips — if Compositor capability missing).
-- [ ] Spec & architecture edits from T10 reviewed for
+- [x] Spec & architecture edits from T10 reviewed for
       external-implementor reproducibility.
 - [ ] Residuals captured under [docs/notes/m3/](../../notes/m3/)
       if any surfaced during execution; phase ADR's residual

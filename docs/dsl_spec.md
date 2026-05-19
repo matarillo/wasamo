@@ -216,6 +216,11 @@ Supported types in M1: `int`, `string`, `float`, `bool`.
 Associates a value with a named property. M1 treated all bindings as
 static construction-time values. M2 added reactive re-evaluation for
 state-backed bindings; M3-Phase 1 adds the bool cases described below.
+The right-hand side is an expression position, not a template
+interpolation position: state references are written directly
+(`enabled: ready`), without an additional interpolation or embedding
+wrapper around the expression. String interpolation remains confined
+to string literals (see §2.4).
 
 `<expr>` may be a `BOOL_LIT` (`true` / `false`) or an identifier that
 resolves to a `bool`-typed `state` declaration (M3-Phase 1) when the
