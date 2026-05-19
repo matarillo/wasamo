@@ -68,22 +68,46 @@ Retrospective:
 
 ### T3 — `wasamoc` checker: state-type table and bool type-checking
 
-Discharges DD-M3-P1-010.
+Discharges DD-M3-P1-010. **Landed in 710eea8 + 3cbe257 (2026-05-19).**
 
-- [ ] Parse-time `HashMap<String, IrType>` populated from `state`
-      declarations.
-- [ ] `check_members` (or equivalent) widened to carry enclosing
-      widget context so `bind` LHS type-checking sees the target
-      property's declared `IrType`.
-- [ ] Accept / reject rules from DD-M3-P1-010's table implemented
+- [x] Parse-time `HashMap<String, TypeName>` populated from `state`
+      declarations (already present pre-T3 as
+      `check::Namespace = HashMap<String, TypeName>`; T3 reuses it
+      via `expr_static_type` for ident resolution against declared
+      types).
+- [x] `check_members` widened to carry enclosing widget context
+      (`check_members_inner` with `enclosing_widget: Option<&str>`)
+      so `bind` LHS type-checking sees the target property's
+      declared `TypeName` via the new `widget_prop_type` catalog.
+- [x] Accept / reject rules from DD-M3-P1-010's table implemented
       as compile-time diagnostics with line/column:
   - accept: `state ready: bool = false`,
     `bind enabled: ready` (bool/bool), `bind enabled: true`.
   - reject: `state ready: bool = 0`, `state ready: bool =
-    "false"`, `bind enabled: 1`, `bind label: true`,
-    `bind label: ready` (bool source / string target),
+    "false"`, `bind enabled: 1`, `bind text: true` (string
+    target), `bind text: ready` (bool source / string target),
     `state x: i32 = 5; bind enabled: x`.
-- [ ] Unit tests cover every row of DD-M3-P1-010's table.
+- [x] Unit tests cover every row of DD-M3-P1-010's table.
+
+Retrospective:
+[docs/notes/m3-phase-1/t3-step-end-retrospective.md](../../notes/m3-phase-1/t3-step-end-retrospective.md).
+
+Notes:
+
+- DD-M3-P1-010's example uses an abstract `bind label: <…>` target
+  to illustrate a `String`-typed property. T3 implements the same
+  rejection on the concrete catalog entry `Text.text: string` (the
+  string-typed property that actually exists in M2). The mismatch
+  shape and diagnostic structure are identical.
+- The widget-property catalog in `wasamoc::check` is intentionally
+  soft and Phase-1-minimal: only `Text.text`, `Button.text`, and
+  `Button.enabled` are listed. Properties handled by ident keyword
+  values (`Button.style: accent`, `Text.font: title`) and
+  component-level binds (`title: "…"`, `backdrop: mica`) pass
+  through with no type-check, preserving M2 patterns. The
+  `wasamoc` catalog mirrors `wasamo-runtime`'s `resolve_prop_key`
+  table (DD-M3-P1-009) but lives independently in the compiler so
+  `wasamoc check` is self-contained.
 
 ### T4 — `wasamoc` lowering: identifier → typed `*PropRead`
 
