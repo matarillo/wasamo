@@ -543,9 +543,15 @@ Discharges the m3-plan §Phase-end criteria checklist.
       release build → debug build → workspace tests); CI run link
       recorded below once `workflow_dispatch` on `feat/m3-phase-1`
       completes.
-- [ ] Windows-only mock-free integration test from T6 passes on
-      CI (fails — not skips — if Compositor capability missing).
-      Pending CI run.
+- [ ] Windows-only mock-free integration tests pass on CI
+      (fail — not skip — if Compositor capability missing):
+      - T6's `button_enabled` (widget-setter slice; bypasses the
+        binding pipeline per file-level comment).
+      - **T13's bool binding live-propagation test (added during
+        this phase-end review when owner observed the gap; see
+        T13 below).** This is the test that ADR
+        [§Verification → item 3](../../decisions/m3-phase-1-bool-scalar.md#verification-strategy)
+        actually calls for. T12 cannot close until T13's box ticks.
 - [x] Spec & architecture edits from T10 reviewed for
       external-implementor reproducibility.
 - [x] Residuals captured under [docs/notes/m3/](../../notes/m3/)
@@ -566,6 +572,93 @@ Discharges the m3-plan §Phase-end criteria checklist.
       merge & push gating handled per owner-facing protocol
       ([docs/notes/retrospectives.md](../../notes/retrospectives.md)).
 
+### T13 — ADR item 3 live-propagation CI-gated Windows integration test
+
+Discharges
+[ADR §Verification → item 3](../../decisions/m3-phase-1-bool-scalar.md#verification-strategy):
+a mock-free Windows-only integration test that loads the Phase 1
+`.ui` fixture (`state ready: bool = true; Button { enabled: ready;
+on click { ready = false } }`), invokes the button's click signal,
+observes `Signal<bool>::get_untracked()` flips, and observes that
+`Button.PROP_BUTTON_ENABLED` reflects the new value end-to-end.
+
+**Inserted retroactively at phase-end (2026-05-19) when owner review
+of T12 surfaced an evidence gap.** The original T6 acceptance bullet
+shipped
+[wasamo-runtime/tests/button_enabled.rs](../../../wasamo-runtime/tests/button_enabled.rs)
+which **bypasses the binding pipeline** (file-level comment, L1–L13)
+and drives `wasamo_set_property(PROP_BUTTON_ENABLED, …)` directly to
+exercise the widget-setter / visual-flip / click-suppression slice.
+That covers DD-M3-P1-005 but is not the unified
+`.ui → load → click → state → bound widget property` chain ADR
+item 3 calls for. T11's `bool-demo-rust` host carries the visible
+window proof, but as owner-observed manual smoke, not a CI-gated
+headless assertion. T13 closes the gap.
+
+- [ ] New mock-free Windows-only integration test under
+      `wasamo-runtime/tests/` (working name
+      `bool_binding_live_propagation.rs`): lowers the Phase 1 bool
+      binding fixture (a minimal in-test variant of
+      `examples/bool-demo/bool-demo.ui` — just `state ready: bool =
+      true` + `Button { enabled: ready; clicked => { root.ready =
+      false; } }` inside `VStack`, no window chrome / theming
+      properties) through
+      `wasamoc → IR → parse_ir → build_widget_tree`, navigates the
+      built tree to the `Button` widget, pins its background visual
+      size so `hit_test_click` lands inside (the same workaround
+      `button_enabled.rs` uses because `layout::arrange` is not
+      driven in tests), asserts `PROP_BUTTON_ENABLED = true` via
+      `wasamo_get_property`, calls `hit_test_click(...)` on the
+      Button to fire the inline `clicked => { root.ready = false; }`
+      handler, ensures the reactive drain runs, then asserts
+      `PROP_BUTTON_ENABLED = false`. Asserts on the registry's
+      `Signal<bool>` value too if reachable, to give the test a
+      second axis of evidence parallel to the widget-side read.
+- [ ] Skip-guard follows the established pattern: fail (not skip)
+      on GitHub Actions when the runtime Compositor is unavailable
+      (`0x80070005`), per
+      [CLAUDE.md §Testing rules](../../../CLAUDE.md) and the
+      [verification-environments.md](../../notes/verification-environments.md)
+      taxonomy. T13's guard is the same shape as
+      `button_enabled.rs` / `live_widgetnode_headless.rs` and
+      inherits their SSH-class verification.
+- [ ] `cargo test --workspace` re-run green locally after T13
+      lands; CI run on `feat/m3-phase-1` includes the new test in
+      the workspace test run.
+- [ ] Phase-end retrospective and progress file updated:
+  - phase-end retrospective §Current Judgment / §Checklist 11
+    (A9 evidence): A9 anchored to T13 alongside T6 widget-setter
+    slice; the previous "Button.enabled live propagation" claim
+    against `button_enabled.rs` corrected.
+  - phase-end retrospective §Checklist 16 (human-visible GUI
+    smoke): explicit 必要/不要 judgment added.
+  - progress file frontmatter `status: active` → `closing` once
+    all T12 / T13 boxes are ticked.
+  - progress file §CI / verification log: T13 local run + CI
+    inclusion recorded.
+
+Notes:
+
+- **Reactive-drain mechanics in a headless test:** in production
+  the drain fires from `emit::drain_if_outermost` after `wasamo_run`
+  returns from its message-loop iteration. The test has no message
+  loop, so it must either invoke the drain explicitly or rely on
+  `hit_test_click_inner`'s synchronous handler dispatch path. The
+  current implementation calls `handler::invoke_handler` directly
+  on the inline handler (widget.rs L675–L686), which writes to the
+  Signal via `HandlerEvalContext`. Whether that synchronous write
+  triggers the drain within the same call depends on
+  `with_batched_writes` framing. The test implementation will pick
+  whichever matches the runtime's actual contract; if a new
+  public-but-internal drain entry point is needed, that is a
+  documented seam (no new ABI surface).
+- T13 does **not** reopen T6 / DD-M3-P1-005. The widget-setter
+  slice covered by `button_enabled.rs` remains valid evidence for
+  the bool plumbing through the C ABI. T13 is the
+  binding-pipeline-inclusive proof that pairs with the unit-level
+  evidence in T8 (`register_bool_binding`) to discharge ADR
+  item 3 in full.
+
 ## Decisions log
 
 - **T11 host choice (2026-05-19):** Added a dedicated
@@ -575,6 +668,17 @@ Discharges the m3-plan §Phase-end criteria checklist.
   behavior is exactly the Phase 1 closure item (`Button.enabled`
   driven by `state ready: bool` and disabled by the button's own click
   handler).
+- **T13 retroactive insertion (2026-05-19):** Owner review at T12
+  phase-end surfaced that the original T6 acceptance bullet had been
+  reading the
+  [m3-phase-1-bool-scalar.md ADR §Verification item 3](../../decisions/m3-phase-1-bool-scalar.md#verification-strategy)
+  as discharged by `button_enabled.rs`, but that test bypasses the
+  binding pipeline by design. T13 was added to discharge the actual
+  `.ui → load → click → state → bound widget property` chain that
+  ADR item 3 requires. CLAUDE.md §Commit rules permits this kind of
+  retroactive task insertion ("implementation reveals that an item
+  should be split"); the deviation is recorded here rather than the
+  task list being silently rewritten.
 
 ## CI / verification log
 
