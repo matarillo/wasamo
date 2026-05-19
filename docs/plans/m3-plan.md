@@ -370,6 +370,14 @@ A phase closes when **all** of the following hold:
    construction. The sub-screen is invoked from at least one
    example host (C / Rust / Zig — Phase 8 broadens this to all
    three for the full gallery).
+   *Foundational-phase exception:* Phase 1 closes before
+   `examples/gallery/` exists, so per its ADR
+   ([m3-phase-1-bool-scalar.md §Verification closure item 4](../decisions/m3-phase-1-bool-scalar.md#phase-1-verification-closure-what-counts-as-a9-evidence)),
+   a dedicated minimal example under `examples/` (Phase 1 chose
+   `examples/bool-demo/` + `examples/bool-demo-rust/`) is
+   acceptable as substitute. The exception is scoped to Phase 1
+   only; Phase 2 onward follows this item as written, with
+   `examples/gallery/` being grown sub-screen by sub-screen.
 6. **Out-of-phase residuals filed.** Anything discovered during
    the phase that is real but not in the phase's scope is recorded
    in a live note under `docs/notes/m3/` and pointed to from the

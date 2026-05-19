@@ -26,28 +26,53 @@ checklist に沿って、A9 の達成、上位文書との整合、CI、次 phas
 
 ## Current Judgment
 
-2026-05-19 時点の判定は、**Phase 1 close は 4 件の owner-review
-findings 対応待ちで保留中**。詳細と planned response は
-[progress file §Owner-review follow-ups (open at T12 phase-end)](../../plans/progress/m3-phase-1-progress.md#owner-review-follow-ups-open-at-t12-phase-end)
-に記録した。本 retrospective §Checklist の判定 (特に item 11 / 12 /
-14 / 16 / 17) は、T13 完了および Finding 2–4 の対応完了後に再判定する。
-
-[以下は T12 当初 (Finding 発見前) の判定。Finding 1–4 の対応によって
-更新される。]
-
 2026-05-19 時点の判定は、**M3-Phase 1 の implementation/verification
-criteria はローカルで達成済み。main merge gate としては
-GitHub Actions CI green 確認と owner 明示承認が残っている**、である。
+criteria はローカルで達成済み。owner-review findings (1–4) はいずれも
+本 retrospective commit (および同 commit の関連 doc-edit) で discharge
+された。main merge gate としては GitHub Actions CI green 確認と owner
+明示承認が残っている**、である。
+
+owner-review findings の処理結果は [progress file §Owner-review follow-ups
+(closed at T12 phase-end)](../../plans/progress/m3-phase-1-progress.md#owner-review-follow-ups-closed-at-t12-phase-end)
+に記録した。要点:
+
+- **Finding 1** (A9 evidence wording / ADR item 3 未達) → T13 を新設し
+  binding-pipeline-inclusive な mock-free Windows-only integration test
+  ([wasamo-runtime/tests/bool_binding_live_propagation.rs](../../../wasamo-runtime/tests/bool_binding_live_propagation.rs))
+  で discharge。本 retrospective §Checklist 11 の A9 evidence 表現も
+  T13 を main anchor、T6 widget-setter slice を補助 evidence として
+  訂正済み。
+- **Finding 2** (m3-plan §Phase-end criteria item 5 と ADR §Verification
+  item 4 の乖離) → option (a) を採用。m3-plan §Phase-end criteria
+  item 5 に foundational-phase exception 句を追加し、Phase 1 が
+  `examples/bool-demo/` + `examples/bool-demo-rust/` で gallery
+  sub-screen を代替したことを文書上整合させた。Phase 2 以降は item 5
+  原則どおり `examples/gallery/` sub-screen を成長させる。
+- **Finding 3** (checklist item 16 GUI smoke 欠落) → 本 §Checklist
+  phase-end 固有 に item 16 (human-visible GUI smoke) を追加し
+  「不要」判定を記録、旧 item 16 (CI YAML sanity check) を item 17 に
+  renumber。
+- **Finding 4** (progress file lifecycle) → progress file frontmatter
+  `status: active` → `closing` に変更、本 retrospective の checkbox を
+  tick 済み (本 commit で進捗反映)。
 
 具体的には、
 
 - A9 (`bool` admitted as the third scalar binding type alongside `i32`
-  and `String`) は実装・テストの両面で discharged。`Button.enabled`
-  のライブ propagation は mock-free Windows-only integration test
-  ([wasamo-runtime/tests/button_enabled.rs](../../../wasamo-runtime/tests/button_enabled.rs))
-  と、`.ui`-driven visible proof
-  ([examples/bool-demo-rust/](../../../examples/bool-demo-rust/))
-  の両方でカバーされている。
+  and `String`) は実装・テストの両面で discharged。
+  - ADR §Verification item 3 (unified `.ui → load → click → state →
+    bound widget property` chain) は T13 の mock-free Windows-only
+    integration test
+    ([wasamo-runtime/tests/bool_binding_live_propagation.rs](../../../wasamo-runtime/tests/bool_binding_live_propagation.rs))
+    で証拠化。
+  - T6 の widget-setter slice
+    ([wasamo-runtime/tests/button_enabled.rs](../../../wasamo-runtime/tests/button_enabled.rs))
+    は file-level comment 通り binding pipeline を bypass する slice
+    test で、DD-M3-P1-005 (`PROP_BUTTON_ENABLED` ABI dispatch + visual
+    flip + click suppression) の補助 evidence。
+  - visible-window proof は `.ui`-driven
+    [examples/bool-demo-rust/](../../../examples/bool-demo-rust/)
+    の owner-manual smoke でカバー。
 - `TypedValue` (F5) は本 phase でも引き続き deferred。DD-M3-P1-007 は
   「per-type evaluator/writer pair を ir_loader の call site で選ぶ」
   というかたちで seam を確立し、reactive engine 自体は依然
@@ -229,10 +254,18 @@ retroactive fill) と process correction (GUI smoke は owner 領域)
      `HandlerExpr` 三層、`wasamoc` の lex / parse / check / lower /
      emit、`wasamo-runtime` の IR loader / `PropertyValue` /
      `resolve_prop_key` / `EvalContext` / binding writer seam の
-     すべてを通る。`Button.enabled` の live propagation は mock-free
-     Windows integration test (`button_enabled_property_flips_visual_
-     and_suppresses_click`) と `.ui`-driven `examples/bool-demo-rust/`
-     の両方で証拠化されている。
+     すべてを通る。ADR §Verification item 3 (unified `.ui → load →
+     click → state → bound widget property` chain) は T13 の mock-free
+     Windows-only integration test
+     `bool_binding_propagates_state_write_through_inline_handler_to_widget_property`
+     ([wasamo-runtime/tests/bool_binding_live_propagation.rs](../../../wasamo-runtime/tests/bool_binding_live_propagation.rs))
+     で discharge。T6 の `button_enabled_property_flips_visual_and_
+     suppresses_click` ([wasamo-runtime/tests/button_enabled.rs](../../../wasamo-runtime/tests/button_enabled.rs))
+     は file-level comment 通り binding pipeline を bypass する
+     widget-setter slice であり、DD-M3-P1-005 の補助 evidence。
+     visible-window proof は `.ui`-driven
+     [examples/bool-demo-rust/](../../../examples/bool-demo-rust/)
+     の owner-manual smoke。
    - A11 (per-phase spec sync): T10 で `dsl_spec.md` / `architecture.md`
      が同 phase 内に更新済み。
 
@@ -300,7 +333,34 @@ retroactive fill) と process correction (GUI smoke は owner 領域)
      `live_widgetnode_headless`) が CI 上でも skip せず実行 / pass
      することを再確認する。
 
-16. **CI YAML 変更要否の sanity check:** 不要。
+16. **human-visible GUI smoke:** 不要。
+   - retrospectives.md §checklist item 16 は「runtime / ABI / binding /
+     wasamoc lowering / examples 等、ユーザー可視の挙動に影響しうる
+     phase では必要」と定めている。Phase 1 はそのすべてに該当する
+     ので、本来は `counter-c` / `counter-rust` / `counter-zig` を
+     [human-visible GUI smoke](../human-visible-smoke.md) に従って
+     確認すべき位置にある。
+   - **不要判定の根拠:** Phase 1 の人間可視領域は次の三層で既に
+     カバー済み。
+     1. T6 の mock-free Windows-only integration test
+        `button_enabled_property_flips_visual_and_suppresses_click`
+        が `CompositionColorBrush::Color()` flip と click 抑制を
+        headless で assert。
+     2. T13 の mock-free Windows-only integration test
+        `bool_binding_propagates_state_write_through_inline_handler_to_widget_property`
+        が `.ui → IR → click → state → bound widget property` chain を
+        headless で assert (新規 binding-pipeline-inclusive evidence)。
+     3. T11 で `examples/bool-demo-rust` を owner-manual smoke
+        (`Start-Process .\target\release\bool-demo-rust.exe`、visible
+        window 確認) で実機検証済み。
+   - `counter-c` / `counter-rust` / `counter-zig` 自体は Phase 1 で
+     surface 拡張を受けておらず (Hello Counter は `i32` / `String` の
+     既存路線のみで動作)、新 surface の人間可視 smoke として走らせる
+     意義は薄い。`examples/bool-demo-rust` が Phase 1 の新 surface を
+     人間可視で検証する正規の host である点は §14 / Finding 2 の
+     foundational-phase exception と整合する。
+
+17. **CI YAML 変更要否の sanity check:** 不要。
    - Phase 1 は新言語・新ビルド系を追加していない (Rust crate
      `examples/bool-demo-rust` は既存 Rust workspace の追加 member
      であり、CLAUDE.md §CI rules の「Rust コードを既存 crate に

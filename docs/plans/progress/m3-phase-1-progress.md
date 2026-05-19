@@ -1,10 +1,11 @@
 ---
 phase: M3-Phase 1
 title: bool scalar binding
-status: active
+status: closing
 adr: docs/decisions/m3-phase-1-bool-scalar.md
 plan: docs/plans/m3-plan.md
 opened: 2026-05-19
+closing: 2026-05-19
 ---
 
 # M3-Phase 1 — `bool` scalar binding: Progress
@@ -567,10 +568,16 @@ Discharges the m3-plan §Phase-end criteria checklist.
       [docs/notes/m3-phase-2/predoc-inputs.md](../../notes/m3-phase-2/predoc-inputs.md)
       (§1–§7 carry the phase-end retrospective Main Learnings into
       Phase 2 Box-primitive framing).
-- [ ] Phase-end retrospective entry added in
+- [x] Phase-end retrospective entry added in
       [docs/notes/m3-phase-1/phase-end-retrospective.md](../../notes/m3-phase-1/phase-end-retrospective.md);
       merge & push gating handled per owner-facing protocol
       ([docs/notes/retrospectives.md](../../notes/retrospectives.md)).
+      Retrospective was updated during phase close to anchor A9
+      evidence to T13 (binding-pipeline-inclusive Windows live test)
+      with T6 widget-setter slice as auxiliary evidence, add
+      §Checklist 16 (human-visible GUI smoke 不要 judgment), and
+      renumber the original §16 (CI YAML sanity check) to §17 —
+      per Findings 1 / 3 below.
 
 ### T13 — ADR item 3 live-propagation CI-gated Windows integration test
 
@@ -631,17 +638,27 @@ headless assertion. T13 closes the gap.
       CI run on `feat/m3-phase-1` includes the new test in the
       workspace test run — link to be recorded in the CI /
       verification log once `workflow_dispatch` completes.
-- [ ] Phase-end retrospective and progress file updated:
+- [x] Phase-end retrospective and progress file updated:
   - phase-end retrospective §Current Judgment / §Checklist 11
     (A9 evidence): A9 anchored to T13 alongside T6 widget-setter
     slice; the previous "Button.enabled live propagation" claim
     against `button_enabled.rs` corrected.
   - phase-end retrospective §Checklist 16 (human-visible GUI
-    smoke): explicit 必要/不要 judgment added.
-  - progress file frontmatter `status: active` → `closing` once
-    all T12 / T13 boxes are ticked.
-  - progress file §CI / verification log: T13 local run + CI
-    inclusion recorded.
+    smoke): "不要" judgment added with rationale (T6 headless
+    widget-setter slice + T13 headless binding-pipeline live test
+    + T11 owner-manual `bool-demo-rust` smoke cover the
+    human-visible territory; `counter-*` hosts have no Phase 1
+    surface change). Original §16 (CI YAML sanity check)
+    renumbered to §17.
+  - progress file frontmatter `status: active` → `status:
+    closing` (added `closing: 2026-05-19`); T12 phase-end
+    retrospective checkbox ticked. The remaining open box is the
+    "Windows-only mock-free integration tests pass on CI" line,
+    which depends on the `feat/m3-phase-1` `workflow_dispatch`
+    completion link.
+  - progress file §CI / verification log: T13 local run entries
+    already recorded (2026-05-19 / T13 local); CI inclusion link
+    pending the shared `feat/m3-phase-1` `workflow_dispatch`.
 
 Retrospective:
 [docs/notes/m3-phase-1/t13-step-end-retrospective.md](../../notes/m3-phase-1/t13-step-end-retrospective.md).
@@ -671,12 +688,13 @@ Notes:
   evidence in T8 (`register_bool_binding`) to discharge ADR
   item 3 in full.
 
-## Owner-review follow-ups (open at T12 phase-end)
+## Owner-review follow-ups (closed at T12 phase-end)
 
 owner が 2026-05-19 に T12 phase-end retrospective + 関連
 artifact をレビューした際に挙げた 4 件の findings。1 が実体に関わる
-判断、2 が文書整合、3 と 4 が doc/lifecycle の後始末。**phase 1 close
-は 4 件すべての対応が完了するまで保留**。
+判断、2 が文書整合、3 と 4 が doc/lifecycle の後始末。**4 件すべて
+2026-05-19 に discharge 済み**。残るのは GitHub Actions CI green の
+確認と owner の main no-ff merge / push 承認のみ。
 
 ### Finding 1 — A9 evidence wording / ADR item 3 unmet → **T13 で対処**
 
@@ -688,11 +706,14 @@ artifact をレビューした際に挙げた 4 件の findings。1 が実体に
   unified chain は covered になっていない。
 - **対応:** T13 (上記) として独立 task に切り出して discharge する。
   T12 の closing checkbox は T13 完了に依存。
-- **status:** T13 の box 1–3 (test 実装 + skip-guard + local
-  workspace test green) は tick 済み (2026-05-19)。box 4 (phase-end
-  retrospective / progress file frontmatter 更新) は Finding 3 +
-  Finding 4 と一体で動くため、phase close 文脈で処理予定。CI
-  inclusion は T12 と同じ `feat/m3-phase-1` `workflow_dispatch` 待ち。
+- **status (closed 2026-05-19):** T13 の box 1–4 すべて tick 済み。
+  box 4 (phase-end retrospective / progress file frontmatter 更新)
+  は本セクションの Finding 3 + Finding 4 と同 commit で処理された
+  (phase-end retrospective §Current Judgment / §Checklist 11 / §16
+  更新、progress file frontmatter `status: closing` 化)。CI
+  inclusion link は T12 と同じ `feat/m3-phase-1` `workflow_dispatch`
+  完了後に §CI / verification log へ追記する (phase-end gate の
+  最後の機械的ステップ)。
 
 ### Finding 2 — m3-plan §Phase-end criteria item 5 (gallery sub-screen) との読み替え
 
@@ -703,17 +724,14 @@ artifact をレビューした際に挙げた 4 件の findings。1 が実体に
   `examples/gallery/` 自体は未作成。ADR §Verification item 4 は
   「`examples/counter-*` の拡張 or 新規 minimal `bool-demo` 例外」を
   許容しているので、ADR と plan が乖離している。
-- **対応:** 二択で owner と協議:
-  - **(a) plan の側を修正:** m3-plan §Phase-end criteria item 5 に
-    「Phase 1 は ADR の bool-demo 例外を適用してよい (gallery
-    sub-screen の前提が成立しない最初の foundational phase だから)」
-    の語を追加。後続 Phase 2+ は gallery sub-screen 原則を維持。
-  - **(b) phase-end retrospective に exception 記録:** plan 文面は
-    変えず、本 phase 限りの exception として retrospective §Checklist
-    に書き、ROADMAP / VISION 整合は plan-amendment ではなく
-    case-by-case の owner-approved deviation として扱う。
-- **status:** owner 判断待ち。phase-end retrospective に exception
-  記録の section を起こすかどうかは選択結果次第。
+- **対応:** owner 判断 (2026-05-19) は **(a) plan の側を修正**。
+  m3-plan §Phase-end criteria item 5 に foundational-phase exception
+  句を追加し、Phase 1 が `examples/bool-demo/` +
+  `examples/bool-demo-rust/` を gallery sub-screen の代替として
+  shipped したことを文書上整合させた。例外は Phase 1 限り;
+  Phase 2 以降は item 5 原則どおり `examples/gallery/` sub-screen
+  を成長させる。
+- **status (closed 2026-05-19):** m3-plan の修正 commit に同梱。
 
 ### Finding 3 — retrospectives.md checklist item 16 (human-visible GUI smoke) 欠落
 
@@ -729,7 +747,13 @@ artifact をレビューした際に挙げた 4 件の findings。1 が実体に
   既にカバー済み; T13 完了でさらに binding-pipeline live propagation
   も headless で証明される)。item 17 は CI YAML sanity check として
   renumber、もしくは現在の item 16 内容を item 17 に renumber。
-- **status:** doc-edit のみ。T13 の方針確定後に着手。
+- **status (closed 2026-05-19):** phase-end retrospective §Checklist
+  に item 16 (human-visible GUI smoke) を追加して「不要」判定を
+  記録。理由は T6 headless widget-setter slice + T13 headless
+  binding-pipeline live test + T11 owner-manual `bool-demo-rust`
+  smoke で human-visible 領域が既にカバーされており、`counter-*`
+  hosts には Phase 1 surface 拡張が無いため。旧 item 16 (CI YAML
+  sanity check) を item 17 に renumber 済み。
 
 ### Finding 4 — progress file lifecycle 後始末
 
@@ -745,7 +769,14 @@ artifact をレビューした際に挙げた 4 件の findings。1 が実体に
     再確認)。
   - phase merge gate 通過後に retired / archived のどちらにするか
     owner 判断。default は retired (削除)。
-- **status:** T13 完了待ち。doc-edit のみ。
+- **status (closed 2026-05-19):** frontmatter `status: active` →
+  `status: closing` 変更済み (`closing: 2026-05-19` 追加)。
+  T12 「Phase-end retrospective entry added in …」 checkbox tick
+  済み (本 commit で retrospective を最終形に更新)。残るのは:
+  (i) CI run 完了後の §CI / verification log 追記 + T12 「Windows-
+  only mock-free integration tests pass on CI」 checkbox tick、
+  (ii) main no-ff merge / push 通過後の retired vs archived
+  判断 (owner default は retired = 削除)。
 
 ## Decisions log
 
@@ -767,6 +798,18 @@ artifact をレビューした際に挙げた 4 件の findings。1 が実体に
   retroactive task insertion ("implementation reveals that an item
   should be split"); the deviation is recorded here rather than the
   task list being silently rewritten.
+- **Finding 2 resolution (2026-05-19):** Owner chose option (a) —
+  amend m3-plan §Phase-end criteria item 5 with a foundational-phase
+  exception clause rather than recording a one-off deviation in the
+  retrospective. Rationale: the ADR §Verification item 4 explicitly
+  permitted the `bool-demo` substitute path from the start, so the
+  plan ↔ ADR mismatch was a plan-side drafting gap (the gallery
+  sub-screen criterion implicitly assumed `examples/gallery/` would
+  exist before any phase closed). Foundational phase status does not
+  recur, so the exception's scope is statically bounded to Phase 1.
+  Aligns with `feedback_revise_dont_workaround` (revise the document
+  rather than working around it) and `feedback_doc_cost_not_a_factor`
+  (plan revision size is not a design factor).
 
 ## CI / verification log
 
@@ -821,6 +864,22 @@ artifact をレビューした際に挙げた 4 件の findings。1 が実体に
 - **2026-05-19 / T13 CI:** pending — folded into the `feat/m3-phase-1`
   `workflow_dispatch` run with T12. Link to be recorded here once CI
   completes.
+- **2026-05-19 / phase-close doc-edit step:** Findings 1–4 closed.
+  - m3-plan.md §Phase-end criteria item 5: added foundational-phase
+    exception clause (Finding 2 / option (a)).
+  - phase-end retrospective: §Current Judgment rewritten to reflect
+    findings closure; §Checklist 11 A9 evidence anchored to T13 with
+    T6 widget-setter slice as auxiliary; §Checklist 16
+    (human-visible GUI smoke) added with "不要" judgment; original
+    §16 (CI YAML sanity check) renumbered to §17 (Findings 1 / 3).
+  - progress file frontmatter: `status: active` →
+    `status: closing` + `closing: 2026-05-19` (Finding 4); T13 box 4
+    and T12 "Phase-end retrospective entry added" checkbox ticked;
+    Owner-review follow-ups section heading updated to "(closed at
+    T12 phase-end)".
+  - No code changes in this step; only doc/spec/plan synchronization
+    per CLAUDE.md §Document categories. `cargo test --workspace` not
+    re-run because no source files changed.
 
 ## Out-of-phase residuals
 
