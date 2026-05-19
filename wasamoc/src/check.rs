@@ -24,6 +24,7 @@ impl CheckResult {
 pub fn check(ast: &ComponentDef, filename: &str) -> CheckResult {
     let mut diags = Vec::new();
     let namespace = collect_state_namespace(&ast.members, filename, &mut diags);
+    check_state_defaults(&ast.members, filename, &namespace, &mut diags);
     check_members(&ast.members, filename, &namespace, &mut diags);
     CheckResult {
         diagnostics: diags,
@@ -52,6 +53,79 @@ fn collect_state_namespace(
         }
     }
     ns
+}
+
+/// Second pass (state-side): validate that each state's default expression
+/// type matches the declared type. Runs before `check_members` so type
+/// mismatches surface at the declaration site.
+fn check_state_defaults(
+    members: &[Member],
+    filename: &str,
+    ns: &Namespace,
+    diags: &mut Vec<Diagnostic>,
+) {
+    for member in members {
+        if let Member::StateMember {
+            name,
+            ty,
+            default,
+            span,
+        } = member
+        {
+            let Some(source_ty) = expr_static_type(default, ns) else {
+                continue;
+            };
+            if matches!(source_ty, TypeName::Float) {
+                // Float literals are rejected separately in `check_expr_type`;
+                // suppress the redundant type-mismatch diagnostic.
+                continue;
+            }
+            if !types_compatible(ty, &source_ty) {
+                diags.push(error(
+                    filename,
+                    span,
+                    format!(
+                        "type mismatch in state default for `{}`: declared `{}`, got `{}`",
+                        name,
+                        type_name_display(ty),
+                        type_name_display(&source_ty),
+                    ),
+                ));
+            }
+        }
+    }
+}
+
+/// Returns the static type of an expression, or `None` if the type cannot be
+/// determined here (e.g. an identifier that does not resolve to a declared
+/// state name — treated as a widget-property keyword value).
+fn expr_static_type(expr: &Expr, ns: &Namespace) -> Option<TypeName> {
+    match expr {
+        Expr::IntLit { .. } | Expr::Measurement { .. } => Some(TypeName::Int),
+        Expr::FloatLit { .. } => Some(TypeName::Float),
+        Expr::StringLit { .. } => Some(TypeName::Str),
+        Expr::BoolLit { .. } => Some(TypeName::Bool),
+        Expr::Ident { name, .. } => ns.get(name).cloned(),
+    }
+}
+
+fn types_compatible(a: &TypeName, b: &TypeName) -> bool {
+    matches!(
+        (a, b),
+        (TypeName::Int, TypeName::Int)
+            | (TypeName::Str, TypeName::Str)
+            | (TypeName::Bool, TypeName::Bool)
+            | (TypeName::Float, TypeName::Float)
+    )
+}
+
+fn type_name_display(ty: &TypeName) -> &'static str {
+    match ty {
+        TypeName::Int => "i32",
+        TypeName::Str => "string",
+        TypeName::Float => "float",
+        TypeName::Bool => "bool",
+    }
 }
 
 /// Second pass: validate widget types, property-bind types, and name references.
@@ -271,6 +345,58 @@ mod tests {
         assert!(result.namespace.contains_key("label"));
         assert!(matches!(result.namespace["count"], TypeName::Int));
         assert!(matches!(result.namespace["label"], TypeName::Str));
+    }
+
+    #[test]
+    fn bool_state_default_accepted() {
+        let result = check_src("component C inherits W { state ready: bool = false }");
+        assert!(!result.has_errors(), "{:?}", result.diagnostics);
+    }
+
+    #[test]
+    fn bool_state_default_int_literal_rejected() {
+        let errs = errors("component C inherits W { state ready: bool = 0 }");
+        assert_eq!(errs.len(), 1, "{:?}", errs);
+        assert!(
+            errs[0].contains("type mismatch in state default for `ready`")
+                && errs[0].contains("declared `bool`")
+                && errs[0].contains("got `i32`"),
+            "{:?}",
+            errs
+        );
+    }
+
+    #[test]
+    fn bool_state_default_string_literal_rejected() {
+        let errs = errors(r#"component C inherits W { state ready: bool = "false" }"#);
+        assert_eq!(errs.len(), 1, "{:?}", errs);
+        assert!(
+            errs[0].contains("declared `bool`") && errs[0].contains("got `string`"),
+            "{:?}",
+            errs
+        );
+    }
+
+    #[test]
+    fn i32_state_default_bool_literal_rejected() {
+        let errs = errors("component C inherits W { state count: i32 = true }");
+        assert_eq!(errs.len(), 1, "{:?}", errs);
+        assert!(
+            errs[0].contains("declared `i32`") && errs[0].contains("got `bool`"),
+            "{:?}",
+            errs
+        );
+    }
+
+    #[test]
+    fn string_state_default_bool_literal_rejected() {
+        let errs = errors("component C inherits W { state label: string = true }");
+        assert_eq!(errs.len(), 1, "{:?}", errs);
+        assert!(
+            errs[0].contains("declared `string`") && errs[0].contains("got `bool`"),
+            "{:?}",
+            errs
+        );
     }
 
     #[test]
