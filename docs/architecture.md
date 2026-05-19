@@ -704,9 +704,11 @@ Re-attach (M3 conditional binding rebuilds at a different
 position) just creates fresh Effects on the new widgets; old
 widgets' Effects dispose through the same path. No explicit hook.
 
-#### 6.8.7 Binding registration API after M2 (DD-M2-P5-005, DD-M2-P6-007, DD-M2-P6-011)
+#### 6.8.7 Binding registration API after M2 (DD-M2-P5-005, DD-M2-P6-007, DD-M2-P6-011, DD-M3-P1-007)
 
 ```rust
+// String-baked path (M2): used for i32 / String targets, which the
+// per-widget setter parses on the value-side of the call.
 pub(crate) fn register_binding(
     target: BindingTarget,
     expr: HandlerExpr,
@@ -714,9 +716,19 @@ pub(crate) fn register_binding(
     write_fn: fn(WidgetId, PropertyKey, &str),
 ) -> EffectHandle;
 
+// Bool-typed path (M3-Phase 1, DD-M3-P1-007): selected by the IR
+// loader when the target property's declared `IrType` is `Bool`.
+pub(crate) fn register_bool_binding(
+    target: BindingTarget,
+    expr: HandlerExpr,
+    registry: Rc<SignalRegistry>,
+    write_fn: fn(WidgetId, PropertyKey, bool),
+) -> EffectHandle;
+
 pub(crate) struct SignalRegistry {
-    i32s: HashMap<String, Signal<i32>>,
+    i32s:    HashMap<String, Signal<i32>>,
     strings: HashMap<String, Signal<String>>,
+    bools:   HashMap<String, Signal<bool>>,   // M3-Phase 1
 }
 
 pub(crate) enum BindingTarget {
@@ -731,17 +743,39 @@ caller in `widget.rs` casts `*mut WidgetNode` at the call site.
 The `write_fn` function-pointer parameter is the seam that lets
 `reactive.rs` perform property writes without importing
 `widget.rs` types — production callers pass
-`widget::widget_write_property`. An internal
-`register_binding_with_writer(Box<dyn FnMut(String)>, …)` is the
-testable core; pure-logic tests inject a recording writer.
+`widget::widget_write_property` (string-baked) or
+`widget::widget_write_property_bool` (bool). An internal
+`register_binding_with_writer(Box<dyn FnMut(String)>, …)` and its
+bool sibling `register_bool_binding_with_writer(Box<dyn FnMut(bool)>, …)`
+are the testable cores; pure-logic tests inject a recording writer.
 
-`SignalRegistry` is the per-component Signal store installed by the IR
-loader. M2 supports `i32` and `String` Signals; integer reads use
-`HandlerExpr::PropRead`, while String reads use `HandlerExpr::StrPropRead`
-and evaluate through `BindingEvalContext::read_string_tracked`. The broader
-pattern survives: M3 binding shapes (Computed, conditional, for-loop) add
-`BindingTarget` variants and may expand `SignalRegistry` without disturbing
-the widget-write seam.
+**Per-type seam (DD-M3-P1-007).** The `write_fn` parameter is typed
+per scalar — string for M2 paths, `bool` for the M3-Phase 1 bool
+path — and the **IR loader picks which evaluator/writer pair to
+instantiate** based on the target property's declared `IrType`
+returned by `resolve_prop_key` (DD-M3-P1-009 widens the catalog row
+to `(PropertyKey, IrType)`). The reactive engine itself stays
+type-agnostic: it receives a monomorphic writer closure with the
+value type baked in, never branches on a runtime value tag. This is
+the structural form of the F5 (`TypedValue`) deferral — see
+[dsl_spec.md §8.12 F5 deferral](./dsl_spec.md#812-scope-out-post-m2)
+and [m3-phase-1-bool-scalar.md DD-M3-P1-007](./decisions/m3-phase-1-bool-scalar.md).
+When a typed-i32 binding writer becomes warranted (no current
+catalog row needs it; `Button.style` / `Text.font` are enum i32s the
+setter parses from a lowered ident), it lands as a third pair with
+the same shape — additive, not by widening `write_fn` into a value
+union.
+
+`SignalRegistry` is the per-component Signal store installed by the
+IR loader. M2 supports `i32` and `String` Signals; M3-Phase 1 adds
+`bool`. Integer reads use `HandlerExpr::PropRead`, String reads use
+`HandlerExpr::StrPropRead` (evaluating through
+`BindingEvalContext::read_string_tracked`), and bool reads use
+`HandlerExpr::BoolPropRead` (evaluating through
+`BindingEvalContext::read_bool_tracked`). The broader pattern
+survives: M3 binding shapes (Computed, conditional, for-loop) add
+`BindingTarget` variants and may expand `SignalRegistry` further
+without disturbing the per-type widget-write seam.
 
 #### 6.8.8 Forward-compatibility and out-of-scope
 
