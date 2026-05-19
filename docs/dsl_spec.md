@@ -1,6 +1,6 @@
 # Wasamo DSL Specification
 
-**Document version:** 0.5
+**Document version:** 0.6
 **Last updated:** 2026-05-19
 **Status:** M3-Phase 1 in progress; covers the M2 `.ui` surface, the
 `state` surface keyword retroactively, the M3-Phase 1 `bool` scalar
@@ -109,6 +109,12 @@ followed by `}`.
 
 In M1 the entire string content (including placeholders) is stored **as-is** in the AST.
 No evaluation or reactive binding is performed at parse time.
+
+M3-Phase 1 supports interpolation over `i32` and `string` state values.
+Interpolation over a `bool`-typed `state` is a compile-time error:
+`bool` may be used in bool-typed property bindings and bool handler
+assignments, but no implicit bool-to-string formatting/display
+conversion is defined.
 
 ---
 
@@ -805,7 +811,10 @@ nodes directly. It resolves the `QualifiedName` against the component's property
 subscribes to changes, and re-evaluates the concatenated string on each change. No AST
 schema change was required; M2 added lowering/evaluation logic, not a new source
 representation. String-typed interpolation lowers to `str-prop-read` in
-`;wasamo-ir v0`.
+`;wasamo-ir v0`. M3-Phase 1 rejects `bool`-typed state interpolation
+at `wasamoc check` time rather than lowering it to a runtime
+`TypeMismatch`; an explicit formatting/display-conversion surface is a
+future design item.
 
 ---
 
@@ -818,3 +827,4 @@ representation. String-typed interpolation lowers to `str-prop-read` in
 | 0.3     | 2026-05-07 | M2-Phase 6 Accepted; added §8 Wasamo IR normative spec (DD-M2-P6-002 + DD-M2-P6-003) |
 | 0.4     | 2026-05-11 | M2 complete; added `str-prop-read` IR form from DD-M2-P6-011 and updated M2/post-M2 status language |
 | 0.5     | 2026-05-19 | M3-Phase 1 (`bool` scalar binding): added `true`/`false` keywords, `BoolLit` token, `BoolLit`/`BoolPropRead` IR expression forms, `bool` to `state_decl` type set, `Button.enabled` widget-catalog entry, and `state` surface declaration §4.7 (retroactive M2 gap); recorded F5 (`TypedValue`) deferral in §8.12 |
+| 0.6     | 2026-05-19 | M3-Phase 1 T14: documented that string interpolation over `bool`-typed state is rejected until an explicit formatting/display-conversion surface exists |

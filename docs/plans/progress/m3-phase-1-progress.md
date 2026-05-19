@@ -697,27 +697,36 @@ Discharges the phase-end implicit-constraint review item that
 `bool`-typed state interpolation in string bindings must not silently
 compile into a runtime `TypeMismatch`.
 
-**Planned as the next implementation task.** This is intentionally
-tracked as a task, not a doc-only note, because it changes the
-`wasamoc check` accept/reject set and therefore the Phase 1 language
-surface.
+**Completed on 2026-05-19.** This was intentionally tracked as a task,
+not a doc-only note, because it changes the `wasamoc check`
+accept/reject set and therefore the Phase 1 language surface.
 
-- [ ] `wasamoc check` rejects string interpolation placeholders that
+- [x] `wasamoc check` rejects string interpolation placeholders that
       resolve to `bool` state declarations.
-- [ ] Unit coverage rejects a fixture shaped like
+- [x] Unit coverage rejects a fixture shaped like
       `state ready: bool = true; Text { text: "ready=\\{root.ready}" }`
       with a compile-time diagnostic.
-- [ ] `docs/dsl_spec.md` documents that M3-Phase 1 admits `bool` in
+- [x] `docs/dsl_spec.md` documents that M3-Phase 1 admits `bool` in
       bool-typed property bindings and handler assignments only;
       string interpolation over `bool` is rejected until an explicit
       formatting / display-conversion surface is designed.
-- [ ] `docs/notes/m3-phase-1/phase-end-retrospective.md` and
+- [x] `docs/notes/m3-phase-1/phase-end-retrospective.md` and
       `docs/notes/m3-phase-2/predoc-inputs.md` record the constraint
       and forward it to later expression / formatting work.
-- [ ] Local verification for the implementation commit:
+- [x] Local verification for the implementation commit:
       `cargo fmt --all -- --check`,
       `cargo test -p wasamoc`, and any narrower targeted test added
       for this diagnostic.
+
+Notes:
+
+- The checker now emits a source-level diagnostic for bool state
+  placeholders in string interpolation, rather than allowing lowering
+  to produce `BoolPropRead` inside `HandlerExpr::Interpolation` and
+  failing later at runtime.
+- The lowering helper still contains the typed fallback for unchecked
+  callers, but the normal `parse → check → lower` pipeline rejects the
+  source before lowering.
 
 ## Owner-review follow-ups (closed at T12 phase-end)
 
@@ -942,6 +951,12 @@ behavior or explicitly revise the proof contract."
   - No code changes in this step; only doc/spec/plan synchronization
     per CLAUDE.md §Document categories. `cargo test --workspace` not
     re-run because no source files changed.
+- **2026-05-19 / T14 local:** `cargo fmt --all -- --check` — green.
+- **2026-05-19 / T14 local:** `cargo test -p wasamoc` — green. 98 unit
+  tests, 6 roundtrip tests, and 0 doc tests passed. Added
+  `check::tests::bool_state_in_string_interp_rejected` and removed the
+  obsolete lowering test that expected bool interpolation to lower to
+  `BoolPropRead`.
 
 ## Out-of-phase residuals
 

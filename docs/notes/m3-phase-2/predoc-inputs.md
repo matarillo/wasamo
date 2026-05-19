@@ -195,6 +195,26 @@ default は「追加しない」。
 
 ---
 
+## 8. `bool` の display conversion は明示 surface ができるまで禁止
+
+**根拠 (M3-Phase 1 T14):** Phase 1 close 時の implicit-constraint review
+で、`bool` state を string interpolation に入れると runtime
+`TypeMismatch` まで進んでしまう gap が見つかった。T14 で
+`wasamoc check` が `bool`-typed state interpolation を compile-time
+error として拒否するようにした。
+
+**M3-Phase 2 への適用:** Box 自体は formatting surface を持たない想定
+だが、`fill` / `aspect` の値型設計で「表示用 string への暗黙変換」を
+便利機能として足さない。Phase 1 のルールは、`bool` は bool-typed
+property binding と bool handler assignment に限る、である。
+
+**後続 phase への送り:** Phase 6 以降で conditional / expression
+surface が広がる時、または target app 側で status text が必要になった
+時に、`format(...)` / template filter / display trait 相当のどれを採る
+かを明示 DD にする。暗黙の bool→string 変換は既定では入れない。
+
+---
+
 ## 適用方法のサマリ
 
 | Phase 2 pre-doc DD 候補 | 起源 | このノート §           |
@@ -206,6 +226,7 @@ default は「追加しない」。
 | visual smoke gate の責任分離                   | T11 §Follow-Up | §5            |
 | spec sync 中の retroactive fold 許容           | T10 | §6                       |
 | `f32` を IrType に入れるかの再判定           | Phase 1 defensive fallback | §7      |
+| bool display conversion / formatting surface を明示化するか | T14 | §8 |
 
 Phase 2 pre-doc が起こされる時、上表のうち pre-doc framing が触れる
 ものを Context / Inputs / Open questions section に取り込む。触れな

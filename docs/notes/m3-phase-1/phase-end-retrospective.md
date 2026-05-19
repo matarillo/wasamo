@@ -90,7 +90,7 @@ owner-review findings の処理結果は [progress file §Owner-review follow-up
 
 ## Main Learning
 
-本 phase の主要な学びは三点ある。
+本 phase の主要な学びは、phase-end 後の T14 addendum を含めて四点ある。
 
 ### 1. 既存の type-suffix pattern は第三 scalar まで自然に伸びる
 
@@ -152,6 +152,21 @@ step-end checklist 改訂提案として M3-Phase 2 開始時に owner と
 pre-doc で別途扱う。**Phase 1 の close 自体は (a)/(b) のどちらかが
 入る前であっても問題ない**: A9 達成と spec sync が gate であり、
 fmt drift は本 phase の commit `1129aea` で解消済み。
+
+### 4. T14 addendum: bool formatting must be explicit
+
+Phase-end implicit-constraint review surfaced one remaining language
+edge: `bool`-typed state interpolation inside string bindings had been
+lowered to `BoolPropRead` inside `HandlerExpr::Interpolation`, which
+would defer failure to runtime (`TypeMismatch`) instead of giving a
+source-level diagnostic. T14 closes that gap by making `wasamoc check`
+reject `bool` state placeholders in string interpolation.
+
+The resulting Phase 1 rule is deliberately narrow: `bool` is admitted
+for bool-typed property bindings (`Button.enabled`) and handler
+assignments to bool state, but not for display conversion. Later
+expression / formatting work must add an explicit surface if strings
+should render boolean values.
 
 ## Step Artifacts Reviewed
 
@@ -298,7 +313,7 @@ retroactive fill) と process correction (GUI smoke は owner 領域)
    - **次 phase pre-doc input の書き起こし (本 phase close 内で完了):**
      [docs/notes/m3-phase-2/predoc-inputs.md](../m3-phase-2/predoc-inputs.md)
      に M3-Phase 2 (Box layout primitive) 視点で書き起こし済み。
-     §1–§7 が以下を網羅:
+     §1–§8 が以下を網羅:
      - §1: 新規 `PropertyValue` variant 追加 = ABI value-conversion
        arm を同一 step に fold する規律 (Main Learning #2)。
      - §2: 新規 bindable property の per-type writer seam を
@@ -315,10 +330,12 @@ retroactive fill) と process correction (GUI smoke は owner 領域)
        規律 (T10、memory `feedback_retroactive_spec_gap_fold` と同期)。
      - §7: Box の `aspect` 属性で float type を IR に入れるかの
        再評価論点 (Phase 1 defensive fallback)。
+     - §8: `bool` string interpolation rejection を、後続の expression /
+       formatting work への input として追加 (T14)。
    - これは
      [docs/notes/retrospectives.md §Retrospective Main Learning の前送り](../retrospectives.md#retrospective-main-learning-の前送り)
      の「phase close 内で書き起こす」要件への適合。次 phase pre-doc
-     起草時は M3-Phase 2 owner-agreed framing に合わせて §1–§7 を
+     起草時は M3-Phase 2 owner-agreed framing に合わせて §1–§8 を
      取り込む / 並べ替える / 削減することは Phase 2 内の判断だが、
      **本ノートの存在自体は本 phase の close 内で確定**。
 
