@@ -567,7 +567,7 @@ Discharges the m3-plan §Phase-end criteria checklist.
       [m2-to-m3-handover.md §3](../../notes/m2-to-m3-handover.md)).
 - [x] Forward-distillation note for the next phase (M3-Phase 2)
       authored within this phase's close per
-      [docs/notes/retrospectives.md §Retrospective Main Learning の前送り](../../notes/retrospectives.md#retrospective-main-learning-の前送り):
+      [docs/notes/retrospectives.md forward-carry rule](../../notes/retrospectives.md):
       [docs/notes/m3-phase-2/predoc-inputs.md](../../notes/m3-phase-2/predoc-inputs.md)
       (§1–§7 carry the phase-end retrospective Main Learnings into
       Phase 2 Box-primitive framing).
@@ -578,7 +578,8 @@ Discharges the m3-plan §Phase-end criteria checklist.
       Retrospective was updated during phase close to anchor A9
       evidence to T13 (binding-pipeline-inclusive Windows live test)
       with T6 widget-setter slice as auxiliary evidence, add
-      §Checklist 16 (human-visible GUI smoke 不要 judgment), and
+      §Checklist 16 (human-visible GUI smoke completed through the
+      Phase 1 host), and
       renumber the original §16 (CI YAML sanity check) to §17 —
       per Findings 1 / 3 below.
 
@@ -690,95 +691,147 @@ Notes:
   evidence in T8 (`register_bool_binding`) to discharge ADR
   item 3 in full.
 
+### T14 — Reject bool state interpolation in string bindings
+
+Discharges the phase-end implicit-constraint review item that
+`bool`-typed state interpolation in string bindings must not silently
+compile into a runtime `TypeMismatch`.
+
+**Planned as the next implementation task.** This is intentionally
+tracked as a task, not a doc-only note, because it changes the
+`wasamoc check` accept/reject set and therefore the Phase 1 language
+surface.
+
+- [ ] `wasamoc check` rejects string interpolation placeholders that
+      resolve to `bool` state declarations.
+- [ ] Unit coverage rejects a fixture shaped like
+      `state ready: bool = true; Text { text: "ready=\\{root.ready}" }`
+      with a compile-time diagnostic.
+- [ ] `docs/dsl_spec.md` documents that M3-Phase 1 admits `bool` in
+      bool-typed property bindings and handler assignments only;
+      string interpolation over `bool` is rejected until an explicit
+      formatting / display-conversion surface is designed.
+- [ ] `docs/notes/m3-phase-1/phase-end-retrospective.md` and
+      `docs/notes/m3-phase-2/predoc-inputs.md` record the constraint
+      and forward it to later expression / formatting work.
+- [ ] Local verification for the implementation commit:
+      `cargo fmt --all -- --check`,
+      `cargo test -p wasamoc`, and any narrower targeted test added
+      for this diagnostic.
+
 ## Owner-review follow-ups (closed at T12 phase-end)
 
-owner が 2026-05-19 に T12 phase-end retrospective + 関連
-artifact をレビューした際に挙げた 4 件の findings。1 が実体に関わる
-判断、2 が文書整合、3 と 4 が doc/lifecycle の後始末。**4 件すべて
-2026-05-19 に discharge 済み**。GitHub Actions CI green も
-`workflow_dispatch` run 26094510225 で確認済み。残るのは owner の
-main no-ff merge 承認と、その後の別 gate である push 承認のみ。
+Owner review on 2026-05-19 raised four findings against the T12
+phase-end retrospective and related artifacts. Finding 1 was evidence
+quality, Finding 2 was plan / ADR consistency, and Findings 3–4 were
+doc and lifecycle cleanup. **All four were discharged on 2026-05-19.**
+GitHub Actions CI green was also confirmed by `workflow_dispatch` run
+26094510225. The remaining gates are owner approval for the main
+no-ff merge and the separate owner-approved push gate.
 
-### Finding 1 — A9 evidence wording / ADR item 3 unmet → **T13 で対処**
+### Finding 1 — A9 evidence wording / ADR item 3 unmet → **resolved by T13**
 
-- **問題:** phase-end retrospective の「`Button.enabled` の live
-  propagation を mock-free Windows integration test で証明」表現は
-  過大。`button_enabled.rs` は冒頭で「binding pipeline を bypass し
-  `wasamo_set_property` を直接叩く」と明記しており、ADR §Verification
-  → item 3 が要求する `.ui → load → click → state → enabled`
-  unified chain は covered になっていない。
-- **対応:** T13 (上記) として独立 task に切り出して discharge する。
-  T12 の closing checkbox は T13 完了に依存。
-- **status (closed 2026-05-19):** T13 の box 1–4 すべて tick 済み。
-  box 4 (phase-end retrospective / progress file frontmatter 更新)
-  は本セクションの Finding 3 + Finding 4 と同 commit で処理された
-  (phase-end retrospective §Current Judgment / §Checklist 11 / §16
-  更新、progress file frontmatter `status: closing` 化)。CI
-  inclusion link は T12 と同じ `feat/m3-phase-1` `workflow_dispatch`
-  完了後に §CI / verification log へ追記する (phase-end gate の
-  最後の機械的ステップ)。
+- **Problem:** The phase-end retrospective overstated
+  `button_enabled.rs` as proof of `Button.enabled` live propagation
+  through a mock-free Windows integration test. That test explicitly
+  bypasses the binding pipeline and drives
+  `wasamo_set_property(PROP_BUTTON_ENABLED, …)` directly, so it did
+  not cover the `.ui → load → click → state → enabled` unified chain
+  required by ADR §Verification item 3.
+- **Resolution:** T13 was split out as an explicit task to discharge
+  the actual binding-pipeline-inclusive evidence. The T12 closing
+  checkbox depended on T13 completion.
+- **Status (closed 2026-05-19):** All T13 boxes are ticked. Box 4
+  (phase-end retrospective and progress-file updates) was handled in
+  the same doc-edit pass as Findings 3 and 4. The CI inclusion link is
+  recorded in the CI / verification log via the shared
+  `feat/m3-phase-1` `workflow_dispatch` run.
 
-### Finding 2 — m3-plan §Phase-end criteria item 5 (gallery sub-screen) との読み替え
+### Finding 2 — m3-plan §Phase-end criteria item 5 gallery-sub-screen mismatch
 
-- **問題:** m3-plan の phase-end criteria は「relevant slice of
-  `examples/gallery/` exercises the new surface through `.ui → IR →
-  runtime` end-to-end」を要求しているが、現状の実証は
-  `examples/bool-demo/` + `examples/bool-demo-rust/` で、
-  `examples/gallery/` 自体は未作成。ADR §Verification item 4 は
-  「`examples/counter-*` の拡張 or 新規 minimal `bool-demo` 例外」を
-  許容しているので、ADR と plan が乖離している。
-- **対応:** owner 判断 (2026-05-19) は **(a) plan の側を修正**。
-  m3-plan §Phase-end criteria item 5 に foundational-phase exception
-  句を追加し、Phase 1 が `examples/bool-demo/` +
-  `examples/bool-demo-rust/` を gallery sub-screen の代替として
-  shipped したことを文書上整合させた。例外は Phase 1 限り;
-  Phase 2 以降は item 5 原則どおり `examples/gallery/` sub-screen
-  を成長させる。
-- **status (closed 2026-05-19):** m3-plan の修正 commit に同梱。
+- **Problem:** The m3-plan phase-end criteria required the relevant
+  slice of `examples/gallery/` to exercise the new surface through
+  `.ui → IR → runtime` end-to-end, but Phase 1 evidence used
+  `examples/bool-demo/` + `examples/bool-demo-rust/` and
+  `examples/gallery/` did not exist yet. The ADR verification closure
+  had already allowed extending an existing counter host or adding a
+  new minimal `bool-demo`, so the ADR and plan were inconsistent.
+- **Resolution:** Owner chose option (a): amend the plan. The m3-plan
+  §Phase-end criteria item 5 now has a foundational-phase exception
+  stating that Phase 1 may use `examples/bool-demo/` +
+  `examples/bool-demo-rust/` as the gallery-sub-screen substitute.
+  The exception is Phase 1 only; Phase 2 onward follows the gallery
+  sub-screen rule as written.
+- **Status (closed 2026-05-19):** Included in the m3-plan fix commit.
 
-### Finding 3 — retrospectives.md checklist item 16 (human-visible GUI smoke) 欠落
+### Finding 3 — Missing retrospectives.md checklist item 16
 
-- **問題:** [docs/notes/retrospectives.md](../../notes/retrospectives.md)
-  §phase-end 固有 checklist の item 16 は human-visible GUI smoke の
-  必要/不要判定。現 phase-end retrospective は item 16 を CI YAML
-  sanity check (実際は item 17 相当) として書いてしまっており、GUI
-  smoke の判定が欠けている。
-- **対応:** phase-end retrospective §Checklist §phase-end 固有 に
-  item 16 (human-visible GUI smoke) を追加。判定は「必要、Phase 1 用
-  host で実施済み」(理由: T6 `button_enabled` headless live test と
-  T13 `bool_binding_live_propagation` headless live test、T11
-  `bool-demo-rust` owner manual smoke で human-visible 領域は
-  既にカバー済み)。item 17 は CI YAML sanity check として renumber。
-- **status (closed 2026-05-19):** phase-end retrospective §Checklist
-  に item 16 (human-visible GUI smoke) を追加して「必要、Phase 1 用
-  host で実施済み」判定を記録。理由は T6 headless widget-setter
-  slice + T13 headless binding-pipeline live test + T11 owner-manual
-  `bool-demo-rust` smoke で human-visible 領域が既にカバーされており、
-  `counter-*` hosts には Phase 1 surface 拡張が無いため。旧 item 16
-  (CI YAML sanity check) を item 17 に renumber 済み。
+- **Problem:** The phase-end checklist item 16 is the human-visible GUI
+  smoke necessary / unnecessary judgment. The phase-end retrospective
+  had accidentally used item 16 for CI YAML sanity check, which is
+  actually item 17, so the GUI smoke judgment was missing.
+- **Resolution:** The phase-end retrospective now includes item 16 and
+  records the judgment as "required, completed through the Phase 1
+  host." The rationale is that T6 `button_enabled`, T13
+  `bool_binding_live_propagation`, and the T11 owner-manual
+  `bool-demo-rust` smoke cover the Phase 1 human-visible territory.
+  The original CI YAML item was renumbered to item 17.
+- **Status (closed 2026-05-19):** Recorded in the phase-end
+  retrospective. `counter-*` hosts have no Phase 1 surface extension,
+  so `bool-demo-rust` is the relevant human-visible host for this
+  phase.
 
-### Finding 4 — progress file lifecycle 後始末
+### Finding 4 — Progress-file lifecycle cleanup
 
-- **問題:** progress file frontmatter `status: active` のまま。
-  [plans/README.md §Phase progress file lifecycle](../README.md#phase-progress-file-lifecycle)
-  によれば、phase implementation 完了後は `status: closing`、
-  distill 完了後は `status: retired` (削除) または `archived`。
-  T12 phase-end retrospective の checkbox も未 tick。
-- **対応:** T13 完了 + T12 全 box tick 後に:
-  - frontmatter `status: active` → `status: closing`。
-  - T12 checklist 「Phase-end retrospective entry added in …」box を
-    tick (現在の phase-end-retrospective.md が既存; T13 で更新後に
-    再確認)。
-  - phase merge gate 通過後に retired / archived のどちらにするか
-    owner 判断。default は retired (削除)。
-- **status (closed 2026-05-19):** frontmatter `status: active` →
-  `status: closing` 変更済み (`closing: 2026-05-19` 追加)。
-  T12 「Phase-end retrospective entry added in …」 checkbox tick
-  済み (本 commit で retrospective を最終形に更新)。残るのは:
-  (i) CI run 完了後の §CI / verification log 追記 + T12 「Windows-
-  only mock-free integration tests pass on CI」 checkbox tick、
-  (ii) main no-ff merge / push 通過後の retired vs archived
-  判断 (owner default は retired = 削除)。
+- **Problem:** The progress file frontmatter was still `status:
+  active`, and the T12 "Phase-end retrospective entry added" checkbox
+  was not ticked. Per the progress-file lifecycle, a phase whose
+  implementation is done should move to `closing`, then later retire
+  or archive the progress file after durable distillation.
+- **Resolution:** After T13 completion and T12 checkbox closure, the
+  frontmatter changed from `status: active` to `status: closing`, with
+  `closing: 2026-05-19`; the T12 retrospective checkbox was ticked.
+- **Status (closed 2026-05-19):** The file is in `closing`. After the
+  main no-ff merge and push gates, owner decides whether to retire
+  (default: delete) or archive this progress file.
+
+## Remaining implicit-constraint follow-ups (planned; no task yet)
+
+These items came from the same phase-end implicit-constraint review as
+T14, but they are not yet task-sized implementation work. They should be
+handled by documentation decisions after T14, or promoted to tasks if
+the chosen resolution requires code changes.
+
+### Follow-up A — `Button.enabled` property ID ABI exposure
+
+Implementation introduced internal `PROP_BUTTON_ENABLED = 5` and tests
+exercise it through `wasamo_get_property` / `wasamo_set_property`, but
+the public C header, Rust sys constants, and `abi_spec.md` still expose
+only the M1 experimental property IDs 1–4.
+
+Planned resolution: decide and document whether `Button.enabled` remains
+a DSL/runtime-internal experimental property ID for Phase 1 evidence, or
+whether it becomes a public experimental property constant in
+`bindings/c/wasamo.h`, `bindings/rust-sys/src/lib.rs`, and
+`docs/abi_spec.md`. The recommended default is to keep it internal for
+Phase 1 and document that choice, because the phase did not intend to
+add public ABI surface beyond existing `WASAMO_VALUE_BOOL` plumbing.
+
+### Follow-up B — Synchronous drain dependency in T13
+
+T13 proves `.ui → load → click → state → bound widget property` by
+relying on the current synchronous drain behavior: outside batching,
+`Signal<bool>::set` drains dirty effects before `hit_test_click`
+returns. This is documented in T13 Notes, but it may become an
+observable constraint for later bool-dependent surfaces such as
+conditional rendering (Phase 6) and Button selected state (Phase 8).
+
+Planned resolution: forward this as a design input, not a Phase 1 code
+change. The next doc touch should add it to
+`docs/notes/m3-phase-2/predoc-inputs.md` or a broader M3 handover note
+as "bool live proofs currently rely on synchronous non-batched drains;
+event/input batching phases must either preserve that observable
+behavior or explicitly revise the proof contract."
 
 ## Decisions log
 
