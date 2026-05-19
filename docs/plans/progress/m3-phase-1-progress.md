@@ -315,25 +315,61 @@ Notes:
 
 ### T8 — Binding evaluator and per-type writer seam
 
-Discharges DD-M3-P1-007.
+Discharges DD-M3-P1-007. **Landed in a9e93e4 + fa79336 (2026-05-19).**
 
-- [ ] `evaluate_bool_binding(expr, ctx) -> Result<bool,
+- [x] `evaluate_bool_binding(expr, ctx) -> Result<bool,
       EvalError>` added in
       [handler.rs](../../../wasamo-runtime/src/handler.rs); accepts
-      `BoolLit` / `BoolPropRead`, rejects all other variants with
-      `EvalError::TypeMismatch`.
-- [ ] `widget_write_property_bool(id, prop, value: bool)` added in
+      `BoolLit` (returns literal) and `BoolPropRead` (reads via
+      `ctx.read_bool_tracked`, so `BindingEvalContext` subscribes
+      to the source `Signal<bool>`); rejects all other variants
+      with `EvalError::TypeMismatch`.
+- [x] `widget_write_property_bool(id, prop, value: bool)` added in
       [widget.rs](../../../wasamo-runtime/src/widget.rs);
       constructs `PropertyValue::Bool(bool)` and dispatches to the
-      per-widget setter.
-- [ ] Binding loader picks the bool writer when
+      per-widget setter (same `WidgetNode::set_property` match the
+      string writer uses).
+- [x] Binding loader picks the bool writer when
       `resolve_prop_key` returns `IrType::Bool`; string writer
-      otherwise. The reactive engine's `write_fn` parameter stays
-      type-agnostic from the engine's perspective; the seam is at
-      the loader call site
+      otherwise (I32 / Str both flow through the existing
+      string-baked path until a typed-i32 writer's use case
+      arrives). The reactive engine stays type-agnostic — a new
+      `register_bool_binding` in
+      [reactive.rs](../../../wasamo-runtime/src/reactive.rs)
+      mirrors `register_binding`'s shape but pipes through
+      `evaluate_bool_binding`; the per-type selection lives at the
+      ir_loader call site
       ([architecture.md L714](../../architecture.md#L714)).
-- [ ] Unit tests cover dispatch selection for bool and string
-      target properties.
+- [x] Unit tests cover dispatch selection:
+      `evaluate_bool_binding`'s accept/reject set (handler.rs, 10
+      tests); `register_bool_binding`'s initial-run + update path
+      for `BoolPropRead` and constant path for `BoolLit`
+      (reactive.rs, 2 tests); and `resolve_prop_key`'s `IrType`
+      result for every M2/M3 catalog row (ir_loader.rs, 6 tests).
+      End-to-end live propagation is already covered by T6's
+      mock-free Windows-only `button_enabled_property_*` test.
+
+Retrospective:
+[docs/notes/m3-phase-1/t8-step-end-retrospective.md](../../notes/m3-phase-1/t8-step-end-retrospective.md).
+
+Notes:
+
+- The per-type seam is operational at the ir_loader call site
+  (`build_node`'s `match prop_ty`), not inside the reactive
+  engine. The engine still receives a writer closure with a
+  monomorphic value type baked in — the seam exists because the
+  loader picks which evaluator/writer pair to instantiate, not
+  because the engine dispatches on `IrType` at write time. This
+  is the structural form of F5 (`TypedValue` deferral)
+  enforcement DD-M3-P1-007 calls for.
+- The dispatch arm for `IrType::I32` and `IrType::Str` both route
+  to the M2 string-baked writer. A typed-i32 evaluator/writer pair
+  is not introduced in Phase 1 because no current widget catalog
+  row has its declared `IrType::I32` semantically distinct from
+  the stringified path (`Button.style` / `Text.font` are enum
+  i32s parsed at the setter from their lowered ident). Adding the
+  typed-i32 path is mechanically the same shape as the bool path
+  and lands when an actual i32-bound property needs it.
 
 ### T9 — C ABI value-conversion arms (no new functions)
 
