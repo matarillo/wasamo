@@ -631,6 +631,7 @@ unsafe fn read_property_value(value: *const WasamoValue) -> Result<PropertyValue
     let v = &*value;
     match v.tag {
         WASAMO_VALUE_I32 => Ok(PropertyValue::I32(v.payload.v_i32)),
+        WASAMO_VALUE_BOOL => Ok(PropertyValue::Bool(v.payload.v_bool != 0)),
         WASAMO_VALUE_STRING => {
             let view = v.payload.v_string;
             let s = if view.ptr.is_null() || view.len == 0 {
@@ -652,6 +653,12 @@ fn write_property_value(out: &mut WasamoValue, value: PropertyValue) {
         PropertyValue::I32(v) => {
             out.tag = WASAMO_VALUE_I32;
             out.payload = WasamoValuePayload { v_i32: v };
+        }
+        PropertyValue::Bool(b) => {
+            out.tag = WASAMO_VALUE_BOOL;
+            out.payload = WasamoValuePayload {
+                v_bool: if b { 1 } else { 0 },
+            };
         }
         PropertyValue::String(s) => {
             // Store the CString in TLS; the pointer we hand back stays valid
@@ -745,6 +752,7 @@ pub unsafe extern "C" fn wasamo_set_property(
 fn property_value_to_owned(pv: &PropertyValue) -> crate::emit::OwnedArg {
     match pv {
         PropertyValue::I32(v) => crate::emit::OwnedArg::I32(*v),
+        PropertyValue::Bool(b) => crate::emit::OwnedArg::Bool(*b),
         PropertyValue::String(s) => crate::emit::OwnedArg::String(s.clone()),
     }
 }

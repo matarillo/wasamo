@@ -21,8 +21,8 @@ use crate::reactive::{
 };
 use crate::text::{TextRenderer, TypographyStyle};
 use crate::widget::{
-    widget_write_property, ButtonStyle, WidgetNode, PROP_BUTTON_LABEL, PROP_BUTTON_STYLE,
-    PROP_TEXT_CONTENT, PROP_TEXT_STYLE,
+    widget_write_property, ButtonStyle, WidgetNode, PROP_BUTTON_ENABLED, PROP_BUTTON_LABEL,
+    PROP_BUTTON_STYLE, PROP_TEXT_CONTENT, PROP_TEXT_STYLE,
 };
 
 use windows::UI::Composition::Compositor;
@@ -741,11 +741,16 @@ fn build_node(
 
     // Bindings: register each `bind` as a reactive Effect targeting the widget property.
     for binding in &node.bindings {
-        let Some(prop_key) = resolve_prop_key(&node.widget_type, &binding.prop_name) else {
+        let Some((prop_key, _prop_ty)) = resolve_prop_key(&node.widget_type, &binding.prop_name)
+        else {
             // Unknown property name on this widget type — silently skip in M2.
             // M3 will surface this through the diagnostic system.
             continue;
         };
+        // `_prop_ty` is the declared `IrType` of the target property
+        // (DD-M3-P1-009). The per-type writer dispatch that consumes this
+        // tag lands in T8; until then the M2 string-baked writer remains the
+        // single path, so bool bindings are not yet exercisable end-to-end.
         let widget_id = WidgetId(widget.as_mut() as *mut WidgetNode as *mut ());
         let target = BindingTarget::WidgetProperty {
             node: widget_id,
@@ -822,12 +827,18 @@ fn construct_widget(
     }
 }
 
-fn resolve_prop_key(widget_type: &str, prop_name: &str) -> Option<PropertyKey> {
+// Widget catalog: `(widget_type, prop_name) → (PROP_* id, declared IrType)`.
+// DD-M3-P1-009 widens the return shape so the binding loader can pick the
+// per-type writer that matches the target property. The catalog mirrors the
+// soft `wasamoc::check` widget-property table (kept independently so the
+// compiler stays self-contained — see m3-phase-1-progress.md T3 Notes).
+fn resolve_prop_key(widget_type: &str, prop_name: &str) -> Option<(PropertyKey, IrType)> {
     match (widget_type, prop_name) {
-        ("Text", "text") => Some(PROP_TEXT_CONTENT),
-        ("Text", "font") => Some(PROP_TEXT_STYLE),
-        ("Button", "text") => Some(PROP_BUTTON_LABEL),
-        ("Button", "style") => Some(PROP_BUTTON_STYLE),
+        ("Text", "text") => Some((PROP_TEXT_CONTENT, IrType::Str)),
+        ("Text", "font") => Some((PROP_TEXT_STYLE, IrType::I32)),
+        ("Button", "text") => Some((PROP_BUTTON_LABEL, IrType::Str)),
+        ("Button", "style") => Some((PROP_BUTTON_STYLE, IrType::I32)),
+        ("Button", "enabled") => Some((PROP_BUTTON_ENABLED, IrType::Bool)),
         _ => None,
     }
 }

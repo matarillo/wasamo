@@ -43,6 +43,11 @@ struct ButtonData {
     clicked_fn: Option<Box<dyn Fn()>>,
     // Accent color for ButtonStyle::Accent (read from UISettings at creation).
     accent: Color,
+    // Phase 1 narrow `Button.enabled` contract (M3-Phase 1 DD-M3-P1-005):
+    // when false, click-handler dispatch is suppressed and the background is
+    // greyed with no animation. Focus / a11y / hover-state semantics are
+    // deferred to M4–M5.
+    enabled: bool,
 }
 
 // ── Widget kinds ──────────────────────────────────────────────────────────────
@@ -72,11 +77,13 @@ pub const PROP_BUTTON_LABEL: u32 = 1;
 pub const PROP_BUTTON_STYLE: u32 = 2;
 pub const PROP_TEXT_CONTENT: u32 = 3;
 pub const PROP_TEXT_STYLE: u32 = 4;
+pub const PROP_BUTTON_ENABLED: u32 = 5;
 
 #[derive(Debug, Clone)]
 pub enum PropertyValue {
     I32(i32),
     String(String),
+    Bool(bool),
 }
 
 #[derive(Debug)]
@@ -323,6 +330,7 @@ impl WidgetNode {
             label_style,
             clicked_fn: None,
             accent,
+            enabled: true,
         });
 
         Ok(Box::new(Self {
@@ -378,6 +386,9 @@ impl WidgetNode {
             (WidgetData::Button(btn), PROP_BUTTON_STYLE) => {
                 Ok(PropertyValue::I32(button_style_to_i32(btn.style)))
             }
+            (WidgetData::Button(btn), PROP_BUTTON_ENABLED) => {
+                Ok(PropertyValue::Bool(btn.enabled))
+            }
             (WidgetData::Text { content, .. }, PROP_TEXT_CONTENT) => {
                 Ok(PropertyValue::String(content.clone()))
             }
@@ -411,6 +422,13 @@ impl WidgetNode {
                 };
                 let new_style = button_style_from_i32(v).ok_or(PropertyError::TypeMismatch)?;
                 self.update_button_style(new_style)
+            }
+            (WidgetData::Button(_), PROP_BUTTON_ENABLED) => {
+                let v = match value {
+                    PropertyValue::Bool(b) => *b,
+                    _ => return Err(PropertyError::TypeMismatch),
+                };
+                self.update_button_enabled(v)
             }
             (WidgetData::Text { .. }, PROP_TEXT_CONTENT) => {
                 let s = match value {
@@ -489,7 +507,29 @@ impl WidgetNode {
             return Ok(());
         }
         btn.style = new_style;
-        let target = button_state_color(btn.style, btn.state, btn.accent);
+        let target = effective_button_color(btn.style, btn.state, btn.accent, btn.enabled);
+        let new_brush = compositor.CreateColorBrushWithColor(target)?;
+        self.visual.SetBrush(&new_brush)?;
+        btn.bg_brush = new_brush;
+        Ok(())
+    }
+
+    fn update_button_enabled(&mut self, new_enabled: bool) -> Result<(), PropertyError> {
+        let rt = crate::runtime::get();
+        let compositor = &rt.compositor;
+        let WidgetData::Button(ref mut btn) = self.data else {
+            return Err(PropertyError::UnknownId);
+        };
+        if btn.enabled == new_enabled {
+            return Ok(());
+        }
+        btn.enabled = new_enabled;
+        // Phase 1 narrow contract (DD-M3-P1-005): swap the brush directly with
+        // no animation. A disabled button still occupies its layout slot — we
+        // only repaint the background and reset the transient state so the
+        // grey colour isn't immediately overridden by a stale hover/press.
+        btn.state = ButtonState::Normal;
+        let target = effective_button_color(btn.style, btn.state, btn.accent, btn.enabled);
         let new_brush = compositor.CreateColorBrushWithColor(target)?;
         self.visual.SetBrush(&new_brush)?;
         btn.bg_brush = new_brush;
@@ -595,6 +635,18 @@ impl WidgetNode {
         let widget_ptr: *mut WidgetNode = self as *mut WidgetNode;
 
         if let WidgetData::Button(ref mut btn) = self.data {
+            // Phase 1 `Button.enabled` (DD-M3-P1-005): suppress click dispatch
+            // when disabled — neither the host callback nor the inline `clicked`
+            // handler fires, and no "clicked" signal is enqueued. Hit-testing
+            // still recurses into children below so non-Button descendants of
+            // a disabled Button (none in M3-Phase 1, defensive) remain
+            // reachable.
+            if !btn.enabled {
+                for child in &mut self.children {
+                    child.hit_test_click_inner(x, y, abs_x, abs_y);
+                }
+                return;
+            }
             let fx = x as f32;
             let fy = y as f32;
             if fx >= abs_x && fx < abs_x + vw && fy >= abs_y && fy < abs_y + vh {
@@ -673,6 +725,15 @@ impl WidgetNode {
         let abs_y = off_y + vy;
 
         if let WidgetData::Button(ref mut btn) = self.data {
+            // Phase 1 `Button.enabled` (DD-M3-P1-005): a disabled button does
+            // not react to hover/press — its background stays at the flat
+            // grey set by `update_button_enabled`.
+            if !btn.enabled {
+                for child in &mut self.children {
+                    child.update_hover_inner(compositor, x, y, down, abs_x, abs_y)?;
+                }
+                return Ok(());
+            }
             let fx = x as f32;
             let fy = y as f32;
             let inside = fx >= abs_x && fx < abs_x + vw && fy >= abs_y && fy < abs_y + vh;
@@ -975,6 +1036,29 @@ fn visual_rect(v: &SpriteVisual) -> (f32, f32, f32, f32) {
     });
     let sz = vis.Size().unwrap_or(Vector2 { X: 0.0, Y: 0.0 });
     (off.X, off.Y, sz.X, sz.Y)
+}
+
+// Minimal disabled-state colour (DD-M3-P1-005 Phase 1 contract): a flat grey
+// fill, independent of style and hover/press state, deliberately animation-
+// free. M4/M5 own the richer disabled visuals.
+const BUTTON_DISABLED_COLOR: Color = Color {
+    A: 0x40,
+    R: 0x80,
+    G: 0x80,
+    B: 0x80,
+};
+
+fn effective_button_color(
+    style: ButtonStyle,
+    state: ButtonState,
+    accent: Color,
+    enabled: bool,
+) -> Color {
+    if !enabled {
+        BUTTON_DISABLED_COLOR
+    } else {
+        button_state_color(style, state, accent)
+    }
 }
 
 fn button_state_color(style: ButtonStyle, state: ButtonState, accent: Color) -> Color {
