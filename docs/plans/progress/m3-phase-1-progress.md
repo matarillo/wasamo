@@ -518,10 +518,7 @@ Discharges Phase 1 verification closure item (4) from the ADR.
 - [x] Host launch command succeeded locally:
       `cargo build --release -p bool-demo-rust`, then
       `Start-Process .\target\release\bool-demo-rust.exe`.
-      Owner-provided manual smoke evidence lives in
-      `private/m3-p1-t11 screenshot 2026-05-19 190441.png`
-      (paired with the T10 baseline screenshot
-      `private/m3-p1-t10 screenshot 2026-05-19 190455.png`).
+      Owner performed the manual visible-window smoke check.
       The expected behavior is an enabled accent button that becomes
       grey and inert after one click. The compiler-side fixture
       regression is covered by
@@ -570,11 +567,8 @@ Discharges the m3-plan §Phase-end criteria checklist.
   — green.
 - **2026-05-19 / T11 local GUI smoke:** `Start-Process
   .\target\release\bool-demo-rust.exe` — command succeeded. Manual
-  visible-window evidence was supplied by the owner as
-  `private/m3-p1-t11 screenshot 2026-05-19 190441.png` (with
-  `private/m3-p1-t10 screenshot 2026-05-19 190455.png` as the paired
-  baseline). Full workspace release build, full workspace tests, and
-  CI run remain T12 phase-end gates.
+  visible-window smoke was owner-confirmed. Full workspace release
+  build, full workspace tests, and CI run remain T12 phase-end gates.
 
 ## Out-of-phase residuals
 
