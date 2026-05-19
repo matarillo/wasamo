@@ -16,13 +16,13 @@ use wasamo_ir::{
 
 use crate::layout::Alignment;
 use crate::reactive::{
-    register_binding, set_active_registry, BindingTarget, PropertyKey, Signal, SignalRegistry,
-    WidgetId,
+    register_binding, register_bool_binding, set_active_registry, BindingTarget, PropertyKey,
+    Signal, SignalRegistry, WidgetId,
 };
 use crate::text::{TextRenderer, TypographyStyle};
 use crate::widget::{
-    widget_write_property, ButtonStyle, WidgetNode, PROP_BUTTON_ENABLED, PROP_BUTTON_LABEL,
-    PROP_BUTTON_STYLE, PROP_TEXT_CONTENT, PROP_TEXT_STYLE,
+    widget_write_property, widget_write_property_bool, ButtonStyle, WidgetNode,
+    PROP_BUTTON_ENABLED, PROP_BUTTON_LABEL, PROP_BUTTON_STYLE, PROP_TEXT_CONTENT, PROP_TEXT_STYLE,
 };
 
 use windows::UI::Composition::Compositor;
@@ -739,27 +739,39 @@ fn build_node(
 
     // Bindings: register each `bind` as a reactive Effect targeting the widget property.
     for binding in &node.bindings {
-        let Some((prop_key, _prop_ty)) = resolve_prop_key(&node.widget_type, &binding.prop_name)
+        let Some((prop_key, prop_ty)) = resolve_prop_key(&node.widget_type, &binding.prop_name)
         else {
             // Unknown property name on this widget type — silently skip in M2.
             // M3 will surface this through the diagnostic system.
             continue;
         };
-        // `_prop_ty` is the declared `IrType` of the target property
-        // (DD-M3-P1-009). The per-type writer dispatch that consumes this
-        // tag lands in T8; until then the M2 string-baked writer remains the
-        // single path, so bool bindings are not yet exercisable end-to-end.
         let widget_id = WidgetId(widget.as_mut() as *mut WidgetNode as *mut ());
         let target = BindingTarget::WidgetProperty {
             node: widget_id,
             prop: prop_key,
         };
-        let handle = register_binding(
-            target,
-            binding.expr.clone(),
-            Rc::clone(registry),
-            widget_write_property,
-        );
+        // Per-type writer dispatch (DD-M3-P1-007 Option A + DD-M3-P1-009):
+        // the loader selects the evaluator/writer pair matching the target
+        // property's declared `IrType`. The reactive engine itself stays
+        // type-agnostic; the seam lives here at the call site.
+        let handle = match prop_ty {
+            IrType::Bool => register_bool_binding(
+                target,
+                binding.expr.clone(),
+                Rc::clone(registry),
+                widget_write_property_bool,
+            ),
+            // I32 and Str properties continue through the M2 string-baked
+            // writer (stringified by `evaluate_binding`, parsed at the
+            // per-widget setter — typed-i32 writer lands when its use case
+            // arrives).
+            IrType::I32 | IrType::Str => register_binding(
+                target,
+                binding.expr.clone(),
+                Rc::clone(registry),
+                widget_write_property,
+            ),
+        };
         widget.bindings.push(handle);
     }
 
@@ -900,6 +912,55 @@ fn has_binding(bindings: &[IrBinding], name: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // ── resolve_prop_key / binding dispatch (M3-Phase 1 T8 / DD-M3-P1-009) ──
+    //
+    // resolve_prop_key drives the per-type writer dispatch in `build_node`:
+    // its returned `IrType` selects between `register_bool_binding`
+    // (+ widget_write_property_bool) and the string-baked `register_binding`
+    // path. End-to-end exercise lives in the Windows-bound integration test
+    // for `Button.enabled` (T6); these tests cover the pure-logic seam.
+
+    #[test]
+    fn resolve_prop_key_button_enabled_is_bool() {
+        let (key, ty) = resolve_prop_key("Button", "enabled").expect("Button.enabled exists");
+        assert_eq!(key, PROP_BUTTON_ENABLED);
+        assert_eq!(ty, IrType::Bool);
+    }
+
+    #[test]
+    fn resolve_prop_key_text_text_is_string() {
+        let (key, ty) = resolve_prop_key("Text", "text").expect("Text.text exists");
+        assert_eq!(key, PROP_TEXT_CONTENT);
+        assert_eq!(ty, IrType::Str);
+    }
+
+    #[test]
+    fn resolve_prop_key_button_text_is_string() {
+        let (key, ty) = resolve_prop_key("Button", "text").expect("Button.text exists");
+        assert_eq!(key, PROP_BUTTON_LABEL);
+        assert_eq!(ty, IrType::Str);
+    }
+
+    #[test]
+    fn resolve_prop_key_button_style_is_i32() {
+        let (key, ty) = resolve_prop_key("Button", "style").expect("Button.style exists");
+        assert_eq!(key, PROP_BUTTON_STYLE);
+        assert_eq!(ty, IrType::I32);
+    }
+
+    #[test]
+    fn resolve_prop_key_text_font_is_i32() {
+        let (key, ty) = resolve_prop_key("Text", "font").expect("Text.font exists");
+        assert_eq!(key, PROP_TEXT_STYLE);
+        assert_eq!(ty, IrType::I32);
+    }
+
+    #[test]
+    fn resolve_prop_key_unknown_pair_is_none() {
+        assert!(resolve_prop_key("Button", "nonsuch").is_none());
+        assert!(resolve_prop_key("Nonsuch", "enabled").is_none());
+    }
 
     fn parse_ok(src: &str) -> IrComponent {
         match parse_ir(src) {

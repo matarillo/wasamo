@@ -1006,6 +1006,34 @@ pub(crate) fn widget_write_property(id: crate::reactive::WidgetId, prop: u32, va
     }
 }
 
+/// Bool-typed counterpart of `widget_write_property` (DD-M3-P1-007 Option A).
+///
+/// Paired with `reactive::register_bool_binding` at the IR loader's binding
+/// registration site: when `resolve_prop_key` reports `IrType::Bool` for the
+/// target property, the loader selects this writer instead of the string
+/// writer. The `PropertyValue::Bool` constructed here flows through the same
+/// per-widget `set_property` dispatch the string writer uses; only the
+/// `PropertyValue` variant changes.
+///
+/// Safety: identical contract to `widget_write_property` — the WidgetId is
+/// the loader-supplied node pointer, the runtime is single-threaded GUI,
+/// and the EffectHandle that owns this closure lives no longer than the
+/// `WidgetNode.bindings` vec.
+pub(crate) fn widget_write_property_bool(
+    id: crate::reactive::WidgetId,
+    prop: u32,
+    value: bool,
+) {
+    let node_ptr = id.0 as *mut WidgetNode;
+    if node_ptr.is_null() {
+        return;
+    }
+    let val = PropertyValue::Bool(value);
+    unsafe {
+        let _ = (*node_ptr).set_property(prop, &val);
+    }
+}
+
 // ── Subtree teardown helper (DD-M2-P4-003) ───────────────────────────────────
 
 /// Sever all registry entries in the subtree, then drop it.

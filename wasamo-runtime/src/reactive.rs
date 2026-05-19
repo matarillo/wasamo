@@ -3,7 +3,7 @@ use std::collections::{HashMap, HashSet};
 use std::rc::{Rc, Weak};
 use std::sync::atomic::{AtomicU64, Ordering};
 
-use crate::handler::{evaluate_binding, EvalContext, EvalError, HandlerExpr};
+use crate::handler::{evaluate_binding, evaluate_bool_binding, EvalContext, EvalError, HandlerExpr};
 
 const MUTATION_CAP: usize = 16;
 
@@ -616,6 +616,44 @@ fn register_binding_with_writer(
     EffectHandle::new(move || {
         let mut ctx = BindingEvalContext::new(&registry);
         match evaluate_binding(&expr, &mut ctx) {
+            Ok(value) => writer(value),
+            Err(e) => eprintln!("wasamo: binding eval error: {e}"),
+        }
+    })
+}
+
+/// Bool-typed counterpart of `register_binding` (DD-M3-P1-007 Option A).
+///
+/// The loader selects this entry point when the target property's declared
+/// `IrType` is `Bool` (per DD-M3-P1-009's `resolve_prop_key` widening). The
+/// reactive engine itself stays type-agnostic — the per-type seam lives at
+/// the call site here, not inside the engine. `write_fn` is a plain function
+/// pointer paired with `widget::widget_write_property_bool`.
+pub(crate) fn register_bool_binding(
+    target: BindingTarget,
+    expr: HandlerExpr,
+    registry: Rc<SignalRegistry>,
+    write_fn: fn(WidgetId, PropertyKey, bool),
+) -> EffectHandle {
+    let BindingTarget::WidgetProperty { node, prop } = target;
+    register_bool_binding_with_writer(
+        Box::new(move |value: bool| write_fn(node, prop, value)),
+        expr,
+        registry,
+    )
+}
+
+/// Core: build an `EffectHandle` whose closure evaluates `expr` through
+/// `evaluate_bool_binding` and pipes the `bool` result to `writer`. Shared
+/// between production (`register_bool_binding`) and unit tests.
+fn register_bool_binding_with_writer(
+    mut writer: Box<dyn FnMut(bool)>,
+    expr: HandlerExpr,
+    registry: Rc<SignalRegistry>,
+) -> EffectHandle {
+    EffectHandle::new(move || {
+        let mut ctx = BindingEvalContext::new(&registry);
+        match evaluate_bool_binding(&expr, &mut ctx) {
             Ok(value) => writer(value),
             Err(e) => eprintln!("wasamo: binding eval error: {e}"),
         }
@@ -1293,6 +1331,55 @@ mod tests {
 
         sig.set("Done".to_string());
         assert_eq!(*written.borrow(), vec!["Ready", "Done"]);
+    }
+
+    // ── register_bool_binding tests (M3-Phase 1 T8 / DD-M3-P1-007) ──────────
+
+    #[test]
+    fn register_bool_binding_writes_initial_and_updates_for_bool_prop_read() {
+        // BoolPropRead reaches through read_bool_tracked, so the binding
+        // subscribes to the source Signal<bool> and the writer fires both on
+        // initial run and on every set.
+        use crate::handler::HandlerExpr;
+
+        let sig = Signal::new(true);
+        let mut registry = SignalRegistry::new();
+        registry.bools.insert("ready".to_string(), sig.clone());
+        let registry = Rc::new(registry);
+
+        let written: Rc<RefCell<Vec<bool>>> = Rc::new(RefCell::new(Vec::new()));
+        let written_c = Rc::clone(&written);
+        let writer: Box<dyn FnMut(bool)> = Box::new(move |v| written_c.borrow_mut().push(v));
+
+        let expr = HandlerExpr::BoolPropRead {
+            path: "ready".into(),
+        };
+        let _h = register_bool_binding_with_writer(writer, expr, registry);
+        assert_eq!(*written.borrow(), vec![true]);
+
+        sig.set(false);
+        assert_eq!(*written.borrow(), vec![true, false]);
+
+        sig.set(true);
+        assert_eq!(*written.borrow(), vec![true, false, true]);
+    }
+
+    #[test]
+    fn register_bool_binding_writes_initial_for_bool_lit() {
+        // A bool literal binding (e.g. `bind enabled: true`) is a constant —
+        // it fires exactly once on initial run and never subscribes to any
+        // Signal (no tracked read happens during evaluation).
+        use crate::handler::HandlerExpr;
+
+        let registry = Rc::new(SignalRegistry::new());
+
+        let written: Rc<RefCell<Vec<bool>>> = Rc::new(RefCell::new(Vec::new()));
+        let written_c = Rc::clone(&written);
+        let writer: Box<dyn FnMut(bool)> = Box::new(move |v| written_c.borrow_mut().push(v));
+
+        let expr = HandlerExpr::BoolLit(false);
+        let _h = register_bool_binding_with_writer(writer, expr, registry);
+        assert_eq!(*written.borrow(), vec![false]);
     }
 
     // ── SignalRegistry string-typed Signal tests (DD-M2-P6-007) ─────────────
