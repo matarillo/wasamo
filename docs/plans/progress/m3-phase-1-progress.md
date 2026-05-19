@@ -411,32 +411,82 @@ See T6 Notes for why this landed inside T6.
 
 ### T10 — Spec / architecture documentation update (A11)
 
-Discharges the per-phase spec sync acceptance criterion.
+Discharges the per-phase spec sync acceptance criterion. **Landed in
+ed93d5e + b7f91ce (2026-05-19).**
 
-- [ ] [docs/dsl_spec.md](../../dsl_spec.md): §2.1 `true` / `false`
-      keyword reservation; §2 bool literal token; §4.2 `bool` state
-      declarations; §4.3 property binding with bool; §4.6
-      expression grammar (`BoolLit`, `BoolPropRead`, bool `Assign`
-      arm; `CompoundAssign` bool exclusion noted); §8 IR text
-      grammar (`IrType` += `bool`; `BoolLit`; `BoolPropRead`);
-      widget catalog entry for `Button.enabled` with the narrow
-      Phase 1 contract.
-- [ ] [docs/architecture.md](../../architecture.md): §6
-      SignalRegistry snippet around
-      [L717-L744](../../architecture.md#L717-L744) updated to
-      include `bools: HashMap<String, Signal<bool>>`; prose extends
-      "M2 supports `i32` and `String` Signals" to include `bool`
-      and notes `HandlerExpr::BoolPropRead` evaluates through
-      `BindingEvalContext::read_bool_tracked`. Binding write-seam
-      description around
-      [L714](../../architecture.md#L714) updated to describe the
-      per-type `write_fn` selection from DD-M3-P1-007.
-- [ ] F5 (`TypedValue`) deferral cross-reference preserved in both
-      docs.
+- [x] [docs/dsl_spec.md](../../dsl_spec.md) (ed93d5e): §2.1 `true` /
+      `false` keyword reservation (and `state` added retroactively
+      to fill the M2-Phase 6 surface-keyword gap, per owner
+      agreement); §2.2 `BoolLit` token row; §3 grammar adds
+      `state_decl` member, `BOOL_LIT` expression form, and
+      `state_type` rule; §3 disambiguation gains a `state` row; §4.3
+      property-binding prose admits bool RHS with cross-reference to
+      the new §4.8 catalog; §4.6 expressions table gains
+      `Expr::BoolLit` row and a paragraph on handler-side bool
+      `Assign` and the explicit `CompoundAssign`-over-bool
+      exclusion; §4.7 (new) documents `state` declarations with the
+      `i32` / `string` / `bool` type set; §4.8 (new) is the widget
+      property catalog with the narrow Phase 1 `Button.enabled`
+      contract (click suppression + flat grey visual + layout-slot
+      preservation; focus / a11y / keyboard deferred to M4–M5); §5
+      AST snippet adds `Member::StateMember` and `Expr::BoolLit`;
+      §8.2 terminals gain `BOOL`; §8.4 state_decl `type_name` /
+      `literal` columns gain bool; §8.6 `literal` rule gains `BOOL`
+      alternative with the IDENT-disambiguation note; §8.9
+      expressions gain `BOOL` atom and `(bool-prop-read NAME)` form,
+      mapping table gains `BoolLit` / `BoolPropRead`, `Assign` note
+      widened for bool RHS, `CompoundAssign` exclusion documented;
+      §8.12 records F5 (`TypedValue`) deferral cross-reference and
+      removes `bool` from the "expanded type set" pending entry.
+      Document version bumped 0.4 → 0.5.
+- [x] [docs/architecture.md](../../architecture.md) (b7f91ce): §6.8.7
+      code block adds `register_bool_binding` alongside
+      `register_binding` with per-type `write_fn` (string vs `bool`);
+      `SignalRegistry` gains `bools: HashMap<String, Signal<bool>>`;
+      prose names both production writers
+      (`widget_write_property` and `widget_write_property_bool`)
+      and both `register_*_with_writer` testable cores; a new
+      paragraph on the DD-M3-P1-007 per-type seam describes how the
+      loader picks the evaluator/writer pair from
+      `resolve_prop_key`'s widened `(PropertyKey, IrType)` return
+      (DD-M3-P1-009) and how the reactive engine stays type-
+      agnostic; "M2 supports `i32` and `String` Signals" widened to
+      include `bool` with `HandlerExpr::BoolPropRead` routed through
+      `BindingEvalContext::read_bool_tracked`.
+- [x] F5 (`TypedValue`) deferral cross-reference preserved in both
+      docs (dsl_spec.md §8.12 and architecture.md §6.8.7 new
+      per-type-seam paragraph; both link back to
+      [m3-phase-1-bool-scalar.md DD-M3-P1-007](../../decisions/m3-phase-1-bool-scalar.md)
+      and the canonical F5 record in
+      [notes/m3/m3-start-framing.md §F5](../../notes/m3/m3-start-framing.md)).
 - [ ] External-implementor smoke check on the spec edits: the
       bool-specific additions are sufficient for a reader to
       reproduce the Phase 1 surface against a hypothetical host
-      (Phase 8 bar applied at phase-end).
+      (Phase 8 bar applied at phase-end — deferred to T12).
+
+Retrospective:
+[docs/notes/m3-phase-1/t10-step-end-retrospective.md](../../notes/m3-phase-1/t10-step-end-retrospective.md).
+
+Notes:
+
+- **Scope-creep call (owner-agreed):** the `state` surface keyword
+  was added to `wasamoc` in M2-Phase 6 (commit 0283093) but never
+  documented in `dsl_spec.md` §§1–7 — only IR §8.4 mentioned it.
+  T10's bool work for `state` declarations is unanchorable without
+  documenting the surface form, so the owner agreed to fold a
+  minimal `state` surface entry into T10 (new §4.7 + `state`
+  keyword row in §2.1 + grammar additions in §3). This is a
+  retroactive M2 gap fix scoped to the minimum needed for Phase 1's
+  bool documentation — not a substantive surface change.
+- **abi_spec.md intentionally untouched.** Phase 1 makes no ABI
+  wire-format change (`WASAMO_VALUE_BOOL = 3` and `v_bool` are M2-
+  reserved); the bool plumbing landed by T9 is internal to
+  `wasamo-runtime`'s value-conversion arms. The ADR §Spec impact
+  preview explicitly records "no new ABI surface added", and the
+  progress-file T10 checklist (the authoritative task list) does
+  not list abi_spec.md. T9's retrospective §Follow-Up mentioned
+  abi_spec.md prose as a possibility but it is not a required
+  Phase 1 spec sync.
 
 ### T11 — `.ui` fixture and end-to-end host evidence
 
