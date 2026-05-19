@@ -58,6 +58,15 @@ owner-review findings の処理結果は [progress file §Owner-review follow-up
   `status: active` → `closing` に変更、本 retrospective の checkbox を
   tick 済み (本 commit で進捗反映)。
 
+**T12 phase-end 後追記 (2026-05-19):** Findings 1–4 と同じ phase-end
+implicit-constraint review が surface した残り二項目 — Follow-up A
+(`Button.enabled` property ID の public ABI 昇格可否) と Follow-up B
+(T13 proof が synchronous non-batched drain に依存している点) — は、
+T14 (bool string interpolation rejection) 完了後にいずれも documentation
+decision として close 済み。詳細は [progress file §Remaining
+implicit-constraint follow-ups (closed after T14)](../../plans/progress/m3-phase-1-progress.md#remaining-implicit-constraint-follow-ups-closed-after-t14)
+を参照。
+
 具体的には、
 
 - A9 (`bool` admitted as the third scalar binding type alongside `i32`
@@ -167,6 +176,35 @@ for bool-typed property bindings (`Button.enabled`) and handler
 assignments to bool state, but not for display conversion. Later
 expression / formatting work must add an explicit surface if strings
 should render boolean values.
+
+### 5. T12 phase-end 後追記: implicit-constraint review は ABI 境界と cross-phase proof contract も surface する
+
+**T12 phase-end 後追記 (2026-05-19):** §4 で扱った T14 と同じ
+phase-end implicit-constraint review は、code change を伴わない残り
+二項目も surface した。両者とも T14 close 後に documentation decision
+として閉じた。
+
+- **Follow-up A** (`PROP_BUTTON_ENABLED = 5` を public experimental
+  ABI に昇格させるか): 「Phase 1 evidence のための internal property
+  key であり public ABI surface ではない」点を `docs/abi_spec.md` に
+  明示する形で close。Phase scope の暗黙境界 — "新 binding type を
+  入れる phase は ABI value-conversion arm まで、public property ID
+  列の拡張は別 ADR" — が retroactively 明文化された。
+- **Follow-up B** (T13 の `.ui → load → click → state → bound widget
+  property` proof が synchronous non-batched drain に依存している
+  点): cross-phase の reactive/drain 前提に該当するため、
+  `docs/notes/m2-to-m3-handover.md` §3 item 4 に M3-Phase 1 addendum
+  として登録、`docs/notes/m3-phase-2/predoc-inputs.md` §9 は
+  back-pointer のみ。後続 phase (event/input batching, conditional
+  rendering, Button selected state) は本 proof contract を preserve
+  するか explicit に revise するかを判断する責務を負う。
+
+学び: phase-end implicit-constraint review は §4 のような言語仕様 edge
+だけでなく、(i) **internal vs public ABI 境界の retroactive 明文化**、
+(ii) **proof artifact が暗黙に依存している runtime semantics の
+cross-phase boundary 化**、も同じ pass で拾える。次 phase 以降の
+implicit-constraint review は、言語面・ABI 面・proof contract 面の
+三層を意識して run するのが効率的。
 
 ## Step Artifacts Reviewed
 
@@ -418,16 +456,26 @@ phase-end retrospective としては、以下を owner に報告する。
 
 ## Out-of-Phase Residuals
 
-Phase 1 内で新たに発生した out-of-phase residual はなし。M2-to-M3
-の引き継ぎ residual (cycle detection / dependency-tie observable
-contract / `MUTATION_CAP` × fan-out interaction) は
-[m2-to-m3-handover.md §3](../m2-to-m3-handover.md) に既記載のままで、
-本 phase は触れていない。
+Phase 1 内で新たに発生した out-of-phase residual はなし [T12
+phase-end 時点]。M2-to-M3 の引き継ぎ residual (cycle detection /
+dependency-tie observable contract / `MUTATION_CAP` × fan-out
+interaction) は [m2-to-m3-handover.md §3](../m2-to-m3-handover.md)
+に既記載のままで、本 phase は触れていない。
 
 §Main Learning #3 の `cargo fmt` process gap は M3-Phase 1 内で応急
 処置済み (fmt-only commit `1129aea`)。恒久対策は M3-Phase 2 pre-doc
 で扱う候補として記録するに留め、本 phase の residual には数えない
 (対策が次 phase の preparation 範囲のため)。
+
+**T12 phase-end 後追記 (2026-05-19):** 本 phase close 中に Follow-up B
+(T13 proof の synchronous non-batched drain 依存) を新規 cross-phase
+前提として [m2-to-m3-handover.md §3 item 4](../m2-to-m3-handover.md)
+に M3-Phase 1 addendum として登録した。これは「本 phase 中に新規発生
+した cross-phase residual を handover に追加した」例であり、上記の
+既存 M2-to-M3 residual とは出自が異なる。Follow-up A
+(`Button.enabled` property ID ABI exposure) は Phase 1 内の
+documentation decision として完結したので residual ではない
+(詳細は §Current Judgment / §Main Learning #5)。
 
 ## Commands Run
 
