@@ -105,7 +105,7 @@ fn lower_node(widget_type: &str, members: &[Member], ns: &Namespace) -> IrNode {
             Member::SignalHandler { signal, body, .. } => {
                 handlers.push(IrHandler {
                     signal: signal.clone(),
-                    expr: lower_block(body),
+                    expr: lower_block(body, ns),
                 });
             }
             Member::WidgetDecl {
@@ -137,7 +137,27 @@ fn lower_expr(expr: &Expr, ns: &Namespace) -> LoweredExpr {
     match expr {
         Expr::IntLit { value, .. } => LoweredExpr::Static(IrLiteral::Int(*value as i32)),
         Expr::BoolLit { value, .. } => LoweredExpr::Static(IrLiteral::Bool(*value)),
-        Expr::Ident { name, .. } => LoweredExpr::Static(IrLiteral::Ident(name.clone())),
+        Expr::Ident { name, .. } => {
+            // Per DD-M3-P1-010: identifier resolution at lowering time
+            // consults the state-type table. A name that matches a declared
+            // `state` becomes a typed `*PropRead` (reactive binding). Names
+            // not in `ns` (keyword-valued idents like `mica` / `system` /
+            // `accent`) stay as static `IrLiteral::Ident`.
+            match ns.get(name) {
+                Some(TypeName::Bool) => LoweredExpr::Dynamic(HandlerExpr::BoolPropRead {
+                    path: name.clone(),
+                }),
+                Some(TypeName::Str) => LoweredExpr::Dynamic(HandlerExpr::StrPropRead {
+                    path: name.clone(),
+                }),
+                Some(TypeName::Int) => LoweredExpr::Dynamic(HandlerExpr::PropRead {
+                    path: name.clone(),
+                }),
+                Some(TypeName::Float) | None => {
+                    LoweredExpr::Static(IrLiteral::Ident(name.clone()))
+                }
+            }
+        }
         Expr::Measurement { value, .. } => LoweredExpr::Static(IrLiteral::Int(*value as i32)),
         Expr::StringLit { parts, .. } => {
             if is_static_string(parts) {
@@ -175,6 +195,7 @@ fn lower_string_parts(parts: &[StringPart], ns: &Namespace) -> Vec<Interpolation
                 let path = qn.segments.last().cloned().unwrap_or_default();
                 let expr = match ns.get(&path) {
                     Some(TypeName::Str) => HandlerExpr::StrPropRead { path },
+                    Some(TypeName::Bool) => HandlerExpr::BoolPropRead { path },
                     _ => HandlerExpr::PropRead { path },
                 };
                 InterpolationPart::Expr(expr)
@@ -183,8 +204,12 @@ fn lower_string_parts(parts: &[StringPart], ns: &Namespace) -> Vec<Interpolation
         .collect()
 }
 
-fn lower_block(block: &Block) -> HandlerExpr {
-    let mut exprs: Vec<HandlerExpr> = block.statements.iter().map(lower_statement).collect();
+fn lower_block(block: &Block, ns: &Namespace) -> HandlerExpr {
+    let mut exprs: Vec<HandlerExpr> = block
+        .statements
+        .iter()
+        .map(|s| lower_statement(s, ns))
+        .collect();
     if exprs.len() == 1 {
         exprs.remove(0)
     } else {
@@ -192,9 +217,9 @@ fn lower_block(block: &Block) -> HandlerExpr {
     }
 }
 
-fn lower_statement(stmt: &Statement) -> HandlerExpr {
+fn lower_statement(stmt: &Statement, ns: &Namespace) -> HandlerExpr {
     let lhs = stmt.target.segments.last().cloned().unwrap_or_default();
-    let rhs = Box::new(lower_rhs_expr(&stmt.value));
+    let rhs = Box::new(lower_rhs_expr(&stmt.value, ns));
     match stmt.op {
         AssignOp::Eq => HandlerExpr::Assign { lhs, rhs },
         AssignOp::PlusEq => HandlerExpr::CompoundAssign {
@@ -220,7 +245,7 @@ fn lower_statement(stmt: &Statement) -> HandlerExpr {
     }
 }
 
-fn lower_rhs_expr(expr: &Expr) -> HandlerExpr {
+fn lower_rhs_expr(expr: &Expr, ns: &Namespace) -> HandlerExpr {
     match expr {
         Expr::IntLit { value, .. } => HandlerExpr::IntLit(*value as i32),
         Expr::BoolLit { value, .. } => HandlerExpr::BoolLit(*value),
@@ -228,10 +253,19 @@ fn lower_rhs_expr(expr: &Expr) -> HandlerExpr {
             if is_static_string(parts) {
                 HandlerExpr::StrLit(string_parts_to_static(parts))
             } else {
-                HandlerExpr::Interpolation(lower_string_parts(parts, &Namespace::new()))
+                HandlerExpr::Interpolation(lower_string_parts(parts, ns))
             }
         }
-        Expr::Ident { name, .. } => HandlerExpr::PropRead { path: name.clone() },
+        // Per DD-M3-P1-010: identifier resolution in handler RHS consults
+        // the state-type table — `bool` → `BoolPropRead`, `String` →
+        // `StrPropRead`, `i32` → `PropRead`. An ident not in `ns` keeps the
+        // M2 i32-implicit `PropRead` shape (runtime will reject if the
+        // surrounding assignment is bool-typed).
+        Expr::Ident { name, .. } => match ns.get(name) {
+            Some(TypeName::Bool) => HandlerExpr::BoolPropRead { path: name.clone() },
+            Some(TypeName::Str) => HandlerExpr::StrPropRead { path: name.clone() },
+            _ => HandlerExpr::PropRead { path: name.clone() },
+        },
         Expr::Measurement { value, .. } => HandlerExpr::IntLit(*value as i32),
         Expr::FloatLit { .. } => panic!("lower_rhs_expr: float not supported"),
     }
@@ -382,6 +416,139 @@ mod tests {
                 lhs: "ready".into(),
                 rhs: Box::new(HandlerExpr::BoolLit(false)),
             }
+        );
+    }
+
+    #[test]
+    fn bool_state_ident_in_prop_bind_lowered_to_bool_prop_read_binding() {
+        // Per DD-M3-P1-010 identifier-resolution row: a bind whose RHS is
+        // an ident matching a `bool` state lowers to a reactive
+        // `BoolPropRead` binding (not a static `IrLiteral::Ident`).
+        let comp = lower_src(
+            "component C inherits W { state ready: bool = true Button { enabled: ready } }",
+        );
+        let button = &comp.root;
+        assert!(
+            button.props.is_empty(),
+            "expected no static prop, found {:?}",
+            button.props
+        );
+        assert_eq!(button.bindings.len(), 1);
+        let b = &button.bindings[0];
+        assert_eq!(b.prop_name, "enabled");
+        assert_eq!(
+            b.expr,
+            HandlerExpr::BoolPropRead {
+                path: "ready".into(),
+            }
+        );
+    }
+
+    #[test]
+    fn i32_state_ident_in_prop_bind_lowered_to_prop_read_binding() {
+        // i32 state ident in prop-bind RHS lowers to the i32-implicit
+        // `PropRead` (DD-M3-P1-003 Option A leaves `PropRead` as the
+        // implicit-i32 variant). The catalog-soft `bind` target here
+        // (`VStack.spacing`) is not type-checked so the unchanged
+        // `*PropRead` shape is the lowering outcome.
+        let comp = lower_src(
+            "component C inherits W { state count: i32 = 0 VStack { spacing: count } }",
+        );
+        let vstack = &comp.root;
+        assert!(vstack.props.is_empty());
+        assert_eq!(vstack.bindings.len(), 1);
+        assert_eq!(
+            vstack.bindings[0].expr,
+            HandlerExpr::PropRead {
+                path: "count".into(),
+            }
+        );
+    }
+
+    #[test]
+    fn string_state_ident_in_prop_bind_lowered_to_str_prop_read_binding() {
+        let comp = lower_src(
+            r#"component C inherits W { state label: string = "hi" Text { text: label } }"#,
+        );
+        let text = &comp.root;
+        assert!(text.props.is_empty());
+        assert_eq!(text.bindings.len(), 1);
+        assert_eq!(
+            text.bindings[0].expr,
+            HandlerExpr::StrPropRead {
+                path: "label".into(),
+            }
+        );
+    }
+
+    #[test]
+    fn keyword_ident_not_in_namespace_stays_static() {
+        // `system`, `accent`, `mica` etc. are keyword-valued idents — they
+        // are not state names so `lower_expr` leaves them as static
+        // `IrLiteral::Ident`. Regression guard: ensure T4's typed
+        // identifier lowering does NOT capture non-state idents into
+        // reactive bindings.
+        let comp = lower_src("component C inherits W { VStack { theme: system } }");
+        let vstack = &comp.root;
+        assert!(vstack.bindings.is_empty());
+        assert_eq!(vstack.props.len(), 1);
+        assert_eq!(vstack.props[0].value, IrLiteral::Ident("system".into()));
+    }
+
+    #[test]
+    fn bool_state_ident_in_handler_rhs_lowered_to_bool_prop_read() {
+        // Handler-side ident RHS picks the typed `*PropRead` from the
+        // state-type table, mirroring the prop-bind path.
+        let comp = lower_src(
+            "component C inherits W { state ready: bool = true state other: bool = false Button { clicked => { root.ready = other; } } }",
+        );
+        let h = &comp.root.handlers[0];
+        assert_eq!(
+            h.expr,
+            HandlerExpr::Assign {
+                lhs: "ready".into(),
+                rhs: Box::new(HandlerExpr::BoolPropRead {
+                    path: "other".into(),
+                }),
+            }
+        );
+    }
+
+    #[test]
+    fn string_state_ident_in_handler_rhs_lowered_to_str_prop_read() {
+        let comp = lower_src(
+            r#"component C inherits W { state a: string = "x" state b: string = "y" Button { clicked => { root.a = b; } } }"#,
+        );
+        let h = &comp.root.handlers[0];
+        assert_eq!(
+            h.expr,
+            HandlerExpr::Assign {
+                lhs: "a".into(),
+                rhs: Box::new(HandlerExpr::StrPropRead { path: "b".into() }),
+            }
+        );
+    }
+
+    #[test]
+    fn bool_state_ident_in_string_interp_lowered_to_bool_prop_read() {
+        // String interpolation parts also consult the namespace so a bool
+        // state ident becomes `BoolPropRead` inside the interpolation
+        // sequence. Type-correctness of the interpolation itself is the
+        // runtime evaluator's responsibility (out of scope for T4 — see
+        // T7 / T8).
+        let comp = lower_src(
+            r#"component C inherits W { state ready: bool = true Text { text: "R: \{root.ready}" } }"#,
+        );
+        let text = &comp.root;
+        assert_eq!(text.bindings.len(), 1);
+        assert_eq!(
+            text.bindings[0].expr,
+            HandlerExpr::Interpolation(vec![
+                InterpolationPart::Literal("R: ".into()),
+                InterpolationPart::Expr(HandlerExpr::BoolPropRead {
+                    path: "ready".into(),
+                }),
+            ])
         );
     }
 
