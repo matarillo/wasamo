@@ -68,11 +68,13 @@ fn lower_state(name: &str, ty: &TypeName, default: &Expr) -> IrState {
     let ir_type = match ty {
         TypeName::Int => IrType::I32,
         TypeName::Str => IrType::Str,
+        TypeName::Bool => IrType::Bool,
         _ => panic!("lower_state: unsupported type (check should have rejected this)"),
     };
     let ir_default = match default {
         Expr::IntLit { value, .. } => IrLiteral::Int(*value as i32),
         Expr::StringLit { parts, .. } => IrLiteral::Str(string_parts_to_static(parts)),
+        Expr::BoolLit { value, .. } => IrLiteral::Bool(*value),
         _ => panic!("lower_state: unsupported default (check should have rejected this)"),
     };
     IrState {
@@ -134,6 +136,7 @@ enum LoweredExpr {
 fn lower_expr(expr: &Expr, ns: &Namespace) -> LoweredExpr {
     match expr {
         Expr::IntLit { value, .. } => LoweredExpr::Static(IrLiteral::Int(*value as i32)),
+        Expr::BoolLit { value, .. } => LoweredExpr::Static(IrLiteral::Bool(*value)),
         Expr::Ident { name, .. } => LoweredExpr::Static(IrLiteral::Ident(name.clone())),
         Expr::Measurement { value, .. } => LoweredExpr::Static(IrLiteral::Int(*value as i32)),
         Expr::StringLit { parts, .. } => {
@@ -220,6 +223,7 @@ fn lower_statement(stmt: &Statement) -> HandlerExpr {
 fn lower_rhs_expr(expr: &Expr) -> HandlerExpr {
     match expr {
         Expr::IntLit { value, .. } => HandlerExpr::IntLit(*value as i32),
+        Expr::BoolLit { value, .. } => HandlerExpr::BoolLit(*value),
         Expr::StringLit { parts, .. } => {
             if is_static_string(parts) {
                 HandlerExpr::StrLit(string_parts_to_static(parts))
@@ -338,6 +342,45 @@ mod tests {
                 op: CompoundOp::Add,
                 lhs: "count".into(),
                 rhs: Box::new(HandlerExpr::IntLit(1)),
+            }
+        );
+    }
+
+    #[test]
+    fn bool_state_lowered_to_ir_state() {
+        let comp = lower_src("component C inherits W { state ready: bool = false VStack {} }");
+        assert_eq!(comp.states.len(), 1);
+        assert_eq!(
+            comp.states[0],
+            IrState {
+                name: "ready".into(),
+                ty: IrType::Bool,
+                default: IrLiteral::Bool(false),
+            }
+        );
+    }
+
+    #[test]
+    fn bool_literal_prop_bind_lowered_to_ir_prop() {
+        let comp = lower_src("component C inherits W { Button { enabled: true } }");
+        let prop = &comp.root.props[0];
+        assert_eq!(prop.name, "enabled");
+        assert_eq!(prop.value, IrLiteral::Bool(true));
+    }
+
+    #[test]
+    fn bool_literal_in_handler_lowered_to_handler_expr() {
+        let comp = lower_src(
+            "component C inherits W { state ready: bool = true Button { clicked => { root.ready = false; } } }",
+        );
+        let button = &comp.root;
+        let h = &button.handlers[0];
+        assert_eq!(h.signal, "clicked");
+        assert_eq!(
+            h.expr,
+            HandlerExpr::Assign {
+                lhs: "ready".into(),
+                rhs: Box::new(HandlerExpr::BoolLit(false)),
             }
         );
     }

@@ -386,6 +386,8 @@ impl<'a> Parser<'a> {
                 | Token::FloatLit(_)
                 | Token::Measurement(_, _)
                 | Token::Ident(_)
+                | Token::Kw(Keyword::True)
+                | Token::Kw(Keyword::False)
         );
         if !is_valid {
             let desc = self.peek().description();
@@ -414,6 +416,14 @@ impl<'a> Parser<'a> {
                 name,
                 span: tok.span,
             }),
+            Token::Kw(Keyword::True) => Ok(Expr::BoolLit {
+                value: true,
+                span: tok.span,
+            }),
+            Token::Kw(Keyword::False) => Ok(Expr::BoolLit {
+                value: false,
+                span: tok.span,
+            }),
             _ => unreachable!(),
         }
     }
@@ -438,7 +448,7 @@ impl<'a> Parser<'a> {
                 Ok(TypeName::Bool)
             }
             Some(other) => {
-                let msg = format!("unknown type `{}`; expected i32 or string", other);
+                let msg = format!("unknown type `{}`; expected i32, string, or bool", other);
                 Err(self.error(msg))
             }
             None => {
@@ -483,6 +493,76 @@ mod tests {
         } else {
             panic!("expected StateMember");
         }
+    }
+
+    #[test]
+    fn state_decl_bool_false() {
+        let def = parse_ok("component C inherits W { state ready: bool = false }");
+        assert_eq!(def.members.len(), 1);
+        if let Member::StateMember {
+            name, ty, default, ..
+        } = &def.members[0]
+        {
+            assert_eq!(name, "ready");
+            assert!(matches!(ty, TypeName::Bool));
+            assert!(matches!(default, Expr::BoolLit { value: false, .. }));
+        } else {
+            panic!("expected StateMember");
+        }
+    }
+
+    #[test]
+    fn state_decl_bool_true() {
+        let def = parse_ok("component C inherits W { state ready: bool = true }");
+        if let Member::StateMember { default, .. } = &def.members[0] {
+            assert!(matches!(default, Expr::BoolLit { value: true, .. }));
+        } else {
+            panic!("expected StateMember");
+        }
+    }
+
+    #[test]
+    fn property_bind_bool_literal() {
+        let def = parse_ok("component C inherits W { Button { enabled: true } }");
+        if let Member::WidgetDecl { members, .. } = &def.members[0] {
+            if let Member::PropertyBind { name, value, .. } = &members[0] {
+                assert_eq!(name, "enabled");
+                assert!(matches!(value, Expr::BoolLit { value: true, .. }));
+            } else {
+                panic!("expected PropertyBind");
+            }
+        } else {
+            panic!("expected WidgetDecl");
+        }
+    }
+
+    #[test]
+    fn true_rejected_as_state_name() {
+        // `state true: bool = false` — `true` is reserved, cannot be used as an identifier.
+        let msg = parse_err_msg("component C inherits W { state true: bool = false }");
+        assert!(
+            msg.contains("expected identifier") && msg.contains("`true`"),
+            "message: {msg}"
+        );
+    }
+
+    #[test]
+    fn false_rejected_as_state_name() {
+        let msg = parse_err_msg("component C inherits W { state false: bool = true }");
+        assert!(
+            msg.contains("expected identifier") && msg.contains("`false`"),
+            "message: {msg}"
+        );
+    }
+
+    #[test]
+    fn true_rejected_as_widget_property_name() {
+        // Property-bind LHS is also an identifier; `true: …` must not parse.
+        let msg = parse_err_msg("component C inherits W { Button { true: false } }");
+        assert!(
+            msg.contains("expected identifier") || msg.contains("expected member"),
+            "message: {msg}"
+        );
     }
 
     #[test]

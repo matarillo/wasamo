@@ -109,7 +109,10 @@ fn check_expr_type(
     diags: &mut Vec<Diagnostic>,
 ) {
     match expr {
-        Expr::IntLit { .. } | Expr::StringLit { .. } | Expr::Ident { .. } => {
+        Expr::IntLit { .. }
+        | Expr::StringLit { .. }
+        | Expr::BoolLit { .. }
+        | Expr::Ident { .. } => {
             if let Expr::Ident { name, span } = expr {
                 // Keyword-valued idents (e.g. mica, system, accent, title) are not state refs.
                 // State refs must resolve; plain keyword values pass through.

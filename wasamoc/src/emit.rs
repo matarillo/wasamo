@@ -222,6 +222,27 @@ mod tests {
     }
 
     #[test]
+    fn bool_state_emitted() {
+        let out = emit_src("component C inherits W { state ready: bool = false VStack {} }");
+        assert!(out.contains("state ready: bool = false"), "got: {}", out);
+    }
+
+    #[test]
+    fn bool_literal_prop_emitted() {
+        let out = emit_src("component C inherits W { Button { enabled: true } }");
+        assert!(out.contains("prop enabled = true"), "got: {}", out);
+    }
+
+    #[test]
+    fn bool_literal_in_handler_emitted() {
+        let out = emit_src(
+            "component C inherits W { state ready: bool = true Button { clicked => { root.ready = false; } } }",
+        );
+        assert!(out.contains("on clicked {"), "got: {}", out);
+        assert!(out.contains("(assign ready false)"), "got: {}", out);
+    }
+
+    #[test]
     fn full_counter_ir_roundtrip() {
         let src = r#"component Counter inherits Window {
     title: "Counter"
