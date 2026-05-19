@@ -14,12 +14,18 @@ fn counter_ui() -> PathBuf {
         .join("counter.ui")
 }
 
-/// Run `wasamoc build` on counter.ui and return the emitted IR text.
-fn build_counter() -> String {
+fn bool_demo_ui() -> PathBuf {
+    workspace_root()
+        .join("examples")
+        .join("bool-demo")
+        .join("bool-demo.ui")
+}
+
+/// Run `wasamoc build` on a .ui fixture and return the emitted IR text.
+fn build_ui(path: PathBuf) -> String {
     use wasamoc::{check, emit, lexer, lower, parser};
 
-    let path = counter_ui();
-    let src = std::fs::read_to_string(&path).expect("counter.ui not found");
+    let src = std::fs::read_to_string(&path).expect(".ui fixture not found");
     let path_str = path.to_string_lossy().to_string();
 
     let tokens = lexer::tokenize(&src, &path_str).expect("lex failed");
@@ -32,6 +38,14 @@ fn build_counter() -> String {
     );
     let comp = lower::lower(&ast, &result.namespace);
     emit::emit(&comp)
+}
+
+fn build_counter() -> String {
+    build_ui(counter_ui())
+}
+
+fn build_bool_demo() -> String {
+    build_ui(bool_demo_ui())
 }
 
 #[test]
@@ -90,6 +104,31 @@ fn counter_ui_component_structure() {
     assert!(
         ir.contains("node Window {") || ir.contains("node VStack {"),
         "got:\n{}",
+        ir
+    );
+}
+
+#[test]
+fn bool_demo_ui_contains_bool_binding_and_handler() {
+    let ir = build_bool_demo();
+    assert!(
+        ir.contains("component BoolDemo inherits Window {"),
+        "got:\n{}",
+        ir
+    );
+    assert!(
+        ir.contains("state ready: bool = true"),
+        "missing bool state declaration, got:\n{}",
+        ir
+    );
+    assert!(
+        ir.contains("bind enabled =") && ir.contains("bool-prop-read ready"),
+        "missing Button.enabled bool binding, got:\n{}",
+        ir
+    );
+    assert!(
+        ir.contains("on clicked {") && ir.contains("(assign ready false)"),
+        "missing clicked handler bool assignment, got:\n{}",
         ir
     );
 }

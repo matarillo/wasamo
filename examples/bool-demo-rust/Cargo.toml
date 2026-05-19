@@ -1,0 +1,14 @@
+[package]
+name = "bool-demo-rust"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "bool-demo-rust"
+path = "src/main.rs"
+
+[dependencies]
+wasamo-sys = { path = "../../bindings/rust-sys" }
+
+[build-dependencies]
+wasamoc = { path = "../../wasamoc" }
