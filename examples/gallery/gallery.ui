@@ -1,0 +1,15 @@
+component Gallery inherits Window {
+    title: "Gallery"
+    backdrop: mica
+    theme: system
+
+    Box {
+        aspect: 16:9
+        fill: #336699cc
+
+        Text {
+            text: "M3 Phase 2 Box"
+            font: title
+        }
+    }
+}

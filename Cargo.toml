@@ -8,5 +8,6 @@ members = [
     "bindings/rust-sys",
     "examples/bool-demo-rust",
     "examples/counter-rust",
+    "examples/gallery-rust",
 ]
 resolver = "2"
