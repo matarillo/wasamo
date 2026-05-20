@@ -88,11 +88,12 @@ distillation になった。
 15. **CI green 確認:** **merge 前 green**
     - T13 は merge 前に final phase-close commit 上の GitHub Actions
       `workflow_dispatch` run で gate 済み。
-    - main merge 前の current branch HEAD
+    - main merge 前の branch verification target
       `89939855129ed77ef9055d6774c5781367fdc317` でも
       `workflow_dispatch` run
       <https://github.com/matarillo/wasamo/actions/runs/26171511748>
-      が green。main push は引き続き owner-gated。
+      が green。この retrospective evidence update は docs-only なので、
+      main push は引き続き owner-gated。
 
 16. **human-visible GUI smoke:** **必要 / 実施済み**
     - T12 で `Start-Process .\target\release\gallery-rust.exe` success
