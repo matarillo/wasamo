@@ -283,6 +283,11 @@ profile / debug profile / 全 test suite の三段、いずれも failure
 0 件)。GitHub Actions 上の clean rebuild は phase-end gate (T13)
 で改めて確認する。
 
+Post-review correction 後の HEAD `bee916a` でも、同じ step-end gate
+(`cargo fmt --all -- --check` → `cargo clean` →
+`cargo build --release --workspace` → `cargo build --workspace` →
+`cargo test --workspace`) は green。
+
 skip-guard の動作:
 
 - ローカル Windows 開発機 (本 retro 実行環境): Compositor 利用可、
