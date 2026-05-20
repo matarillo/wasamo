@@ -370,6 +370,12 @@ shape.)
 - **2026-05-20 / T12 local GUI smoke:** `Start-Process
   .\target\release\gallery-rust.exe` — command succeeded. Manual
   visual correctness is owner-manual GUI smoke per framing decision G.
+- **2026-05-20 / T12 owner-manual GUI smoke:** owner-provided
+  screenshot `private/m3-p2-t12 screenshot 2026-05-20 232123.png`
+  reviewed locally. The blue `Box` fill is visible, the
+  `M3 Phase 2 Box` `Text` placeholder is centred inside it, and the
+  Box occupies the expected 16:9 width-fit region within the window.
+  The screenshot remains untracked under `private/`.
 - **2026-05-20 / T12 step-end local:** `cargo fmt --all -- --check`
   — green.
 - **2026-05-20 / T12 step-end local:** `cargo clean` — initial run

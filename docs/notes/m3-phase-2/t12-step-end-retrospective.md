@@ -29,6 +29,11 @@ T12 が discharge した材料は次:
   `bool-demo-rust` と同じ build pipeline にした。
 - `cargo build -p gallery-rust`、`cargo build --release -p gallery-rust`、
   `Start-Process .\target\release\gallery-rust.exe` が成功。
+- owner-provided screenshot
+  `private/m3-p2-t12 screenshot 2026-05-20 232123.png` を確認し、
+  blue `Box` fill、centred `M3 Phase 2 Box` text placeholder、
+  window 内の 16:9 width-fit region を視認した。画像は
+  `private/` 配下のためコミット対象外。
 - C / Zig hosts は Phase 2 では追加しない、という framing decision F
   と ADR out-of-scope を progress checklist 上で明示的に閉じた。
 
@@ -44,7 +49,8 @@ T12 が discharge した材料は次:
 - Rust host は workspace member として登録され、Cargo.lock も
   `gallery-rust` package を含む。
 - `Start-Process` は command 成功まで確認済み。visual correctness は
-  pre-doc framing decision G の通り owner-manual GUI smoke。
+  pre-doc framing decision G の通り owner-manual GUI smoke として、
+  owner-provided screenshot を確認済み。
 
 ## Main Learning
 
@@ -153,7 +159,9 @@ import library order warning が表示されたが、T12 由来の warning /
 failure はなし。
 
 `Start-Process` は command 成功を確認済み。visual correctness は
-owner-manual GUI smoke に委ねる。
+owner-manual GUI smoke として owner-provided screenshot を確認済み。
+確認した見え方は、青い `Box` fill、中央の `M3 Phase 2 Box` text、
+window 幅に対して 16:9 で収まった Box region。
 
 ## Follow-Up
 
