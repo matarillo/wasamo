@@ -176,9 +176,22 @@ error の伝播路が VStack / HStack arrangement を含めて uniform に
 なった**。VStack / HStack 内の child measure は
 `.collect::<Result<Vec<_>, _>>()?` 1 行で書ける形で T8 の error
 class を透過的に通過する。これにより「将来 ScrollView /
-WrapPanel が独自の layout error を導入する」場合、`LayoutError`
-を拡張するだけで既存の伝播路がそのまま使える (個別 panic /
-silent zero に逃げず、構造的に error path を保つ)。
+WrapPanel が、**各 phase ADR で明示的に layout-time runtime error
+を採択する** 場合」は、`LayoutError` を拡張するだけで既存の伝播路
+がそのまま使える (個別 panic / silent zero に逃げず、構造的に
+error path を保つ)。
+
+ここで「明示的に採択する場合」と限定する理由は、Phase 3 layout
+engine ADR ([phase-3-layout-engine.md](../../decisions/phase-3-layout-engine.md))
+が **degenerate layout は clamp して error を返さない** という
+方針を default として持っているため。T8 が `LayoutError` を導入
+できたのは M3-Phase 2 ADR DD-M3-P2-005 が「Box(aspect) で parent
+両軸 unbounded の場合は layout-time runtime error」を明示的に
+上書き採択した結果であり、この採択 **無し** に WrapPanel /
+ScrollView の degenerate path を runtime error 化すると Phase 3
+default を破る。`LayoutError` の伝播路が「型として使える」と
+「ある phase で使ってよい」は別の判断であり、後者は当該 phase の
+ADR が明示するまで保留 — という理解で残す。
 
 もう一つ副次的な学びは、**`arrange_box` で inscribed-fit を **
 **再計算する設計判断**。parent allocator (例えば Stretch
