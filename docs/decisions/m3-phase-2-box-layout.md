@@ -2,7 +2,7 @@
 
 **Phase:** M3-Phase 2 (Box layout primitive)
 **Date:** 2026-05-20
-**Status:** Proposed
+**Status:** Accepted
 
 ## Context
 
@@ -104,7 +104,7 @@ dependency direction.
 
 ### DD-M3-P2-001 — Box IR node form and 0+ child layout semantics
 
-**Status:** Proposed
+**Status:** Accepted
 
 **Context:**
 Box is a new layout primitive in `wasamo-ir` and `wasamo-runtime`.
@@ -324,7 +324,7 @@ future events (see Out of scope below):
 
 ### DD-M3-P2-002 — `aspect: <ratio>` value-type representation
 
-**Status:** Proposed
+**Status:** Accepted
 
 **Context:**
 Box's `aspect` attribute requires a value type representing an
@@ -340,11 +340,15 @@ needed; only a new `IrLiteral::Ratio` for the literal attribute value.
 **Options (numeric form / surface syntax):**
 
 Option A — Rational pair `aspect: <num>:<den>`, with both sides
-positive integer literals (recommended)
-- Surface syntax: `aspect: 16:9` or `aspect: 1:1`. `wasamoc` lexer
-  emits a new `Ratio` token; parser produces
-  `IrLiteral::Ratio { num: i32, den: i32 }`.
-  `wasamoc check` rejects `num <= 0` or `den <= 0` at compile time.
+unsigned integer literals (recommended)
+- Surface syntax: `aspect: 16:9` or `aspect: 1:1`. Ratio literals
+  are written as two unsigned integer tokens joined by `:`;
+  `wasamoc` lexer emits a new `Ratio` token; parser produces
+  `IrLiteral::Ratio { num: i32, den: i32 }`. `wasamoc check`
+  rejects zero on either side at compile time; negative sides are
+  not ratio literals (a leading `-` parses as unary minus and does
+  not form `Ratio`), so the runtime cannot see `num < 0` /
+  `den < 0`.
 
   - What you gain: Exact arithmetic for measure-arrange (Box bounds
     derive from `parent_width * num / den` or `parent_height * den /
@@ -466,7 +470,7 @@ future events (see Out of scope):
 
 ### DD-M3-P2-003 — `fill: <color>` value-type representation
 
-**Status:** Proposed
+**Status:** Accepted
 
 **Context:**
 The `fill` attribute requires a color representation. The central
@@ -516,8 +520,10 @@ Option B — Color value type excludes alpha; M3 scrim is opaque-by-spec
 Option A — Box-internal `Color(u32)` domain type; **not** added to
 `PropertyValue` in Phase 2 (recommended)
 - A new private domain type `Color(u32)` lives in `wasamo-runtime`
-  (packed `u32`; 0xAARRGGBB or 0xRRGGBBAA, fixed at one byte order —
-  DSL spec records the choice). `WidgetData::Box` stores
+  (packed `u32` in `0xAARRGGBB` layout, alpha in the most
+  significant byte; recorded in
+  [dsl_spec.md §8.2](../dsl_spec.md#82-notation) `COLOR` token).
+  `WidgetData::Box` stores
   `fill: Option<Color>` as a Box-internal field. `IrLiteral::Color(u32)`
   parallel in `wasamo-ir`. `wasamoc` lexer accepts `#RRGGBB` (alpha
   implied 0xFF) and `#RRGGBBAA`. `ir_loader` materialises
@@ -631,7 +637,7 @@ former event and is "scrim cannot be expressed" under either.
 
 ### DD-M3-P2-004 — Bindable surface for `aspect` and `fill`
 
-**Status:** Proposed
+**Status:** Accepted
 
 **Context:**
 Whether `aspect` and `fill` can each be driven by a reactive Signal
@@ -739,7 +745,7 @@ the Phase 2 literal plumbing is not revised, only extended.
 
 ### DD-M3-P2-005 — Aspect constraint measure-arrange algorithm
 
-**Status:** Proposed
+**Status:** Accepted
 
 **Context:**
 When Box carries `aspect`, the measure-arrange pass computes a
@@ -956,12 +962,15 @@ Option B — Box always expands to parent bounds
 
 **Options (aspect value validity):**
 
-Option A — `wasamoc check` rejects `num <= 0` or `den <= 0`
+Option A — `wasamoc check` rejects zero on either side
 (recommended)
-- The literal form (DD-002 Option A: positive integer pair) makes
-  zero / negative reachable only through author error; compile-time
-  rejection per Phase 1's T14 discipline ("bad surface forms fail
-  at the source-level diagnostic gate"). Runtime cannot see invalid
+- The literal form (DD-002 Option A: unsigned integer pair) makes
+  zero the only reachable invalid side via author error (e.g.
+  `Box { aspect: 0:9 }`); negative sides do not parse as `Ratio`
+  literals at all (a leading `-` parses as unary minus, which does
+  not form the `Ratio` token). Compile-time rejection of zero per
+  Phase 1's T14 discipline ("bad surface forms fail at the
+  source-level diagnostic gate"); runtime cannot see invalid
   ratios.
 
   - **Technical risk:** Low.
@@ -990,7 +999,8 @@ Option B — Runtime fallback to spec-defined default
 - Child intrinsic (no aspect): shrink-to-fit; fall back to parent
   bounds when no children, with the unbounded-both-axes runtime
   error noted above.
-- Aspect value validity: `wasamoc check` rejects non-positive sides.
+- Aspect value validity: `wasamoc check` rejects zero on either
+  side; negative sides are not ratio literals.
 
 The algorithm has no novel paradigm but the spec content is real:
 the edge cases above are written into `docs/dsl_spec.md` so Phase 3
@@ -1018,7 +1028,7 @@ the resolved Box bounds to whatever widget the child is.
 
 ### DD-M3-P2-006 — Placeholder pattern (Box + Text child) canonicalization
 
-**Status:** Proposed
+**Status:** Accepted
 
 **Context:**
 [m3-target-app-predoc.md — 保留 2 closure](../notes/m3/m3-target-app-predoc.md#保留-2-closure-image-widget-surface-の-m3-開封可否--不開封-m4-へ-defer)
