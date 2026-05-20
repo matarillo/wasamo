@@ -14,6 +14,7 @@ use wasamo_ir::{
     IrNode, IrProp, IrState, IrType,
 };
 
+use crate::box_values;
 use crate::layout::Alignment;
 use crate::reactive::{
     register_binding, register_bool_binding, set_active_registry, BindingTarget, PropertyKey,
@@ -131,7 +132,61 @@ fn validate(comp: &IrComponent) -> Result<(), IrLoadError> {
             )));
         }
     }
-    validate_node_references(&comp.root, &declared)
+    validate_node_references(&comp.root, &declared)?;
+    // M3-Phase 2 T7 defense-in-depth gates (DD-M3-P2-001 / DD-M3-P2-002 /
+    // DD-M3-P2-003). The shared mapping at the C ABI boundary is
+    // `WASAMO_ERR_IR_MALFORMED` (DD-M2-P6-005 / DD-M2-P6-009). These
+    // checks live in `validate` so they exercise without a live
+    // `Compositor`; `build_node` would otherwise have had to repeat them
+    // before construction. wasamoc emits IR that already respects both
+    // invariants — these gates exist for IR not produced by wasamoc
+    // (e.g. via `wasamo_load_ui` directly).
+    validate_phase2_node_invariants(&comp.root)
+}
+
+fn validate_phase2_node_invariants(node: &IrNode) -> Result<(), IrLoadError> {
+    // Box single-child invariant (DD-M3-P2-001). wasamoc check (T3)
+    // diagnoses the same condition at compile time; this is the runtime
+    // defense for IR not produced by wasamoc.
+    if node.widget_type == "Box" && node.children.len() > 1 {
+        return Err(IrLoadError::Validate(format!(
+            "`Box` node accepts at most one child, got {} (use `VStack` / `HStack` / `ZStack` for multi-child layouts)",
+            node.children.len()
+        )));
+    }
+    // Ratio / Color literal placement (DD-M3-P2-002 / DD-M3-P2-003,
+    // variant strategy Option A). These literals materialise directly
+    // into Box-internal `Ratio` / `Color` at `build_node` and never
+    // travel as `PropertyValue`; appearing in any other prop position
+    // would imply a `PropertyValue` boundary that does not exist in
+    // Phase 2.
+    for prop in &node.props {
+        match &prop.value {
+            IrLiteral::Ratio { .. } => {
+                let valid = node.widget_type == "Box" && prop.name == "aspect";
+                if !valid {
+                    return Err(IrLoadError::Validate(format!(
+                        "ratio literal valid only on `Box.aspect`, found on `{}.{}`",
+                        node.widget_type, prop.name
+                    )));
+                }
+            }
+            IrLiteral::Color(_) => {
+                let valid = node.widget_type == "Box" && prop.name == "fill";
+                if !valid {
+                    return Err(IrLoadError::Validate(format!(
+                        "color literal valid only on `Box.fill`, found on `{}.{}`",
+                        node.widget_type, prop.name
+                    )));
+                }
+            }
+            _ => {}
+        }
+    }
+    for child in &node.children {
+        validate_phase2_node_invariants(child)?;
+    }
+    Ok(())
 }
 
 fn validate_node_references(
@@ -233,6 +288,12 @@ enum Token {
     Int(i32),
     Str(String),
     AssignOp(CompoundOp),
+    // M3-Phase 2 T7: ratio / color literal terminals (DD-M3-P2-002 /
+    // DD-M3-P2-003). Both reach `parse_literal` only — they are not
+    // valid in handler / binding expression position (no new
+    // `HandlerExpr` variant per DD-M3-P2-004).
+    Ratio { num: i32, den: i32 },
+    Color(u32),
 }
 
 fn tokenize(text: &str) -> Result<Vec<Token>, IrLoadError> {
@@ -344,11 +405,62 @@ fn tokenize(text: &str) -> Result<Vec<Token>, IrLoadError> {
                 while i < chars.len() && chars[i].is_ascii_digit() {
                     i += 1;
                 }
-                let s: String = chars[start..i].iter().collect();
-                let n: i32 = s
+                let num_s: String = chars[start..i].iter().collect();
+                let num: i32 = num_s
                     .parse()
-                    .map_err(|_| IrLoadError::Parse(format!("invalid integer: {s}")))?;
-                tokens.push(Token::Int(n));
+                    .map_err(|_| IrLoadError::Parse(format!("invalid integer: {num_s}")))?;
+                // M3-Phase 2 T7: ratio literal `<digits>:<digits>` (DD-M3-P2-002,
+                // surface form Option A). Triggered only when `:` immediately
+                // follows the integer with no intervening whitespace and a
+                // digit immediately follows the `:`; otherwise the colon is
+                // left for the `Colon` arm (e.g. `state name: type`). Mirrors
+                // `wasamoc`'s lexer disambiguation in `scan_int_or_float`.
+                if i + 1 < chars.len() && chars[i] == ':' && chars[i + 1].is_ascii_digit() {
+                    i += 1; // consume ':'
+                    let den_start = i;
+                    while i < chars.len() && chars[i].is_ascii_digit() {
+                        i += 1;
+                    }
+                    let den_s: String = chars[den_start..i].iter().collect();
+                    let den: i32 = den_s.parse().map_err(|_| {
+                        IrLoadError::Parse(format!("invalid ratio denominator: {den_s}"))
+                    })?;
+                    tokens.push(Token::Ratio { num, den });
+                } else {
+                    tokens.push(Token::Int(num));
+                }
+            }
+            // M3-Phase 2 T7: color literal `#RRGGBB` / `#RRGGBBAA`
+            // (DD-M3-P2-003, surface form Option A). Packed `0xAARRGGBB`
+            // per dsl_spec §8.2 — `#RRGGBB` materialises with implicit
+            // alpha `0xFF`. Mirrors `wasamoc::lexer::scan_color`.
+            '#' => {
+                i += 1;
+                let start = i;
+                while i < chars.len() && chars[i].is_ascii_hexdigit() {
+                    i += 1;
+                }
+                let hex: String = chars[start..i].iter().collect();
+                let packed = match hex.len() {
+                    6 => {
+                        let rgb = u32::from_str_radix(&hex, 16).map_err(|_| {
+                            IrLoadError::Parse(format!("invalid color literal: #{hex}"))
+                        })?;
+                        0xFF00_0000 | rgb
+                    }
+                    8 => {
+                        let rgba = u32::from_str_radix(&hex, 16).map_err(|_| {
+                            IrLoadError::Parse(format!("invalid color literal: #{hex}"))
+                        })?;
+                        ((rgba & 0xFF) << 24) | (rgba >> 8)
+                    }
+                    n => {
+                        return Err(IrLoadError::Parse(format!(
+                            "color literal `#{hex}` must have 6 or 8 hex digits, got {n}"
+                        )));
+                    }
+                };
+                tokens.push(Token::Color(packed));
             }
             l if l.is_ascii_alphabetic() || l == '_' => {
                 let start = i;
@@ -558,6 +670,16 @@ impl<'a> Parser<'a> {
             Some(Token::Ident(s)) if s == "true" => Ok(IrLiteral::Bool(true)),
             Some(Token::Ident(s)) if s == "false" => Ok(IrLiteral::Bool(false)),
             Some(Token::Ident(s)) => Ok(IrLiteral::Ident(s.clone())),
+            // M3-Phase 2 T7: ratio / color literals reach this arm only —
+            // there is no `HandlerExpr::RatioLit` / `ColorLit` (DD-M3-P2-004),
+            // so binding / handler position cannot accept them. The
+            // placement-level rejection (literal only valid on Box
+            // `aspect` / `fill`) is enforced by `validate` below.
+            Some(Token::Ratio { num, den }) => Ok(IrLiteral::Ratio {
+                num: *num,
+                den: *den,
+            }),
+            Some(Token::Color(value)) => Ok(IrLiteral::Color(*value)),
             other => Err(IrLoadError::Parse(format!(
                 "expected literal, got {other:?}"
             ))),
@@ -833,6 +955,19 @@ fn construct_widget(
             WidgetNode::button(compositor, renderer, &initial, style)
                 .map_err(|e| IrLoadError::Build(format!("button: {e}")))
         }
+        // M3-Phase 2 T7: Box materialisation. `IrLiteral::Ratio` and
+        // `IrLiteral::Color` are unpacked directly into Box-internal
+        // domain types (DD-M3-P2-002 / DD-M3-P2-003 Option A) — they
+        // never round through `PropertyValue`. `validate` has already
+        // refused any Ratio / Color outside Box `aspect` / `fill` and
+        // any Box with >1 children, so the extracts here are total over
+        // their accept set.
+        "Box" => {
+            let aspect = extract_ratio_prop(&node.props, "aspect");
+            let fill = extract_color_prop(&node.props, "fill");
+            WidgetNode::box_(compositor, aspect, fill)
+                .map_err(|e| IrLoadError::Build(format!("box: {e}")))
+        }
         other => Err(IrLoadError::UnknownWidget(other.to_string())),
     }
 }
@@ -887,6 +1022,29 @@ fn extract_typography(props: &[IrProp], name: &str) -> TypographyStyle {
         Some("title") => TypographyStyle::Title,
         _ => TypographyStyle::Body,
     }
+}
+
+fn extract_ratio_prop(props: &[IrProp], name: &str) -> Option<box_values::Ratio> {
+    props
+        .iter()
+        .find(|p| p.name == name)
+        .and_then(|p| match &p.value {
+            IrLiteral::Ratio { num, den } => Some(box_values::Ratio {
+                num: *num,
+                den: *den,
+            }),
+            _ => None,
+        })
+}
+
+fn extract_color_prop(props: &[IrProp], name: &str) -> Option<box_values::Color> {
+    props
+        .iter()
+        .find(|p| p.name == name)
+        .and_then(|p| match &p.value {
+            IrLiteral::Color(value) => Some(box_values::Color(*value)),
+            _ => None,
+        })
 }
 
 fn extract_button_style(props: &[IrProp], name: &str) -> ButtonStyle {
@@ -1419,6 +1577,16 @@ mod tests {
             IrLiteral::Str(s) => format!("\"{}\"", s.replace('\\', "\\\\").replace('"', "\\\"")),
             IrLiteral::Ident(id) => id.clone(),
             IrLiteral::Bool(b) => (if *b { "true" } else { "false" }).to_string(),
+            IrLiteral::Ratio { num, den } => format!("{}:{}", num, den),
+            IrLiteral::Color(value) => {
+                let alpha = (*value >> 24) & 0xFF;
+                let rgb = *value & 0x00FF_FFFF;
+                if alpha == 0xFF {
+                    format!("#{:06x}", rgb)
+                } else {
+                    format!("#{:06x}{:02x}", rgb, alpha)
+                }
+            }
         }
     }
 
@@ -1628,5 +1796,233 @@ mod tests {
         let err = parse_err("not-a-header\ncomponent C inherits W { node V {} }");
         assert!(matches!(err, IrLoadError::InvalidHeader(_)));
         assert_malformed_display_nonempty(&err);
+    }
+
+    // ── M3-Phase 2 T7: ratio / color literal lex + parse + placement ─────
+    //
+    // These tests cover the pure-logic surface of T7. The `build_node`
+    // materialisation path (IR → `WidgetData::Box`) needs a live
+    // `Compositor` and is exercised end-to-end by T10's Box round-trip
+    // integration test. The accept-shape lex / parse / placement / single-
+    // child invariants are testable without a Compositor and live here.
+
+    #[test]
+    fn ratio_literal_in_prop_position() {
+        let c = parse_ok(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             node Box { prop aspect = 16:9 }\n}",
+        );
+        assert_eq!(c.root.widget_type, "Box");
+        assert_eq!(c.root.props.len(), 1);
+        assert_eq!(c.root.props[0].name, "aspect");
+        assert_eq!(c.root.props[0].value, IrLiteral::Ratio { num: 16, den: 9 });
+    }
+
+    #[test]
+    fn color_literal_short_form_packs_implicit_alpha_ff() {
+        let c = parse_ok(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             node Box { prop fill = #cccccc }\n}",
+        );
+        // `#cccccc` materialises with implicit alpha `0xFF` in the MSB
+        // (dsl_spec §8.2 packing).
+        assert_eq!(c.root.props[0].value, IrLiteral::Color(0xFF_CC_CC_CC));
+    }
+
+    #[test]
+    fn color_literal_long_form_carries_explicit_alpha() {
+        let c = parse_ok(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             node Box { prop fill = #00000080 }\n}",
+        );
+        // `#00000080`: RR=GG=BB=0x00, AA=0x80 → packed `0x80_00_00_00`.
+        assert_eq!(c.root.props[0].value, IrLiteral::Color(0x80_00_00_00));
+    }
+
+    #[test]
+    fn color_literal_long_form_with_full_rgba() {
+        let c = parse_ok(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             node Box { prop fill = #11223344 }\n}",
+        );
+        // `#11223344`: RR=0x11, GG=0x22, BB=0x33, AA=0x44 →
+        // packed `0x44_11_22_33`.
+        assert_eq!(c.root.props[0].value, IrLiteral::Color(0x44_11_22_33));
+    }
+
+    #[test]
+    fn box_phase2_load_side_fixture() {
+        // ADR §Phase 2 verification closure item 2 (load-side gate at the
+        // parse level — the build_node materialisation half lands in T10's
+        // Windows-only `wasamo-runtime/tests/box_round_trip.rs`). For the
+        // fixture
+        // `Box { aspect: 16:9; fill: #00000080; Text { text: "Photo 12" } }`,
+        // assert the post-parse `IrLiteral` variants match the emit-side
+        // fixture `box_phase2_ir_text_emit_fixture` in `wasamoc::emit`.
+        // The two halves together establish that the literal types
+        // survive both directions of the IR text grammar.
+        let src = ";wasamo-ir v0\n\
+                   component C inherits W {\n\
+                       node Box {\n\
+                           prop aspect = 16:9\n\
+                           prop fill = #00000080\n\
+                           node Text { prop text = \"Photo 12\" }\n\
+                       }\n\
+                   }";
+        let c = parse_ok(src);
+        assert_eq!(c.root.widget_type, "Box");
+        let aspect = c
+            .root
+            .props
+            .iter()
+            .find(|p| p.name == "aspect")
+            .expect("aspect prop");
+        let fill = c
+            .root
+            .props
+            .iter()
+            .find(|p| p.name == "fill")
+            .expect("fill prop");
+        assert_eq!(aspect.value, IrLiteral::Ratio { num: 16, den: 9 });
+        assert_eq!(fill.value, IrLiteral::Color(0x80_00_00_00));
+        assert_eq!(c.root.children.len(), 1);
+        assert_eq!(c.root.children[0].widget_type, "Text");
+    }
+
+    #[test]
+    fn color_must_be_six_or_eight_hex_digits() {
+        // 5 hex digits — neither short nor long form.
+        let err = parse_err(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             node Box { prop fill = #aabbc }\n}",
+        );
+        assert!(matches!(err, IrLoadError::Parse(ref m) if m.contains("6 or 8 hex digits")));
+        assert_malformed_display_nonempty(&err);
+    }
+
+    #[test]
+    fn malformed_ratio_outside_box_aspect_on_vstack() {
+        // DD-M3-P2-002: Ratio literal valid only on Box.aspect.
+        let err = parse_err(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             node VStack { prop aspect = 16:9 }\n}",
+        );
+        assert!(
+            matches!(err, IrLoadError::Validate(ref m) if m.contains("ratio") && m.contains("VStack"))
+        );
+        assert_malformed_display_nonempty(&err);
+    }
+
+    #[test]
+    fn malformed_ratio_on_box_wrong_prop_name() {
+        // Ratio on Box but in a prop slot other than `aspect`.
+        let err = parse_err(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             node Box { prop spacing = 16:9 }\n}",
+        );
+        assert!(matches!(err, IrLoadError::Validate(ref m) if m.contains("ratio")));
+        assert_malformed_display_nonempty(&err);
+    }
+
+    #[test]
+    fn malformed_color_outside_box_fill_on_text() {
+        // DD-M3-P2-003: Color literal valid only on Box.fill.
+        let err = parse_err(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             node Text { prop fill = #cccccc }\n}",
+        );
+        assert!(
+            matches!(err, IrLoadError::Validate(ref m) if m.contains("color") && m.contains("Text"))
+        );
+        assert_malformed_display_nonempty(&err);
+    }
+
+    #[test]
+    fn malformed_color_on_box_wrong_prop_name() {
+        let err = parse_err(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             node Box { prop aspect = #cccccc }\n}",
+        );
+        assert!(matches!(err, IrLoadError::Validate(ref m) if m.contains("color")));
+        assert_malformed_display_nonempty(&err);
+    }
+
+    #[test]
+    fn malformed_ratio_in_nested_node() {
+        // The walk recurses — a Ratio on a child VStack inside Box is
+        // still rejected.
+        let err = parse_err(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             node Box {\n\
+               node VStack { prop aspect = 4:3 }\n\
+             }\n}",
+        );
+        assert!(matches!(err, IrLoadError::Validate(ref m) if m.contains("ratio")));
+        assert_malformed_display_nonempty(&err);
+    }
+
+    #[test]
+    fn malformed_box_with_two_children() {
+        // DD-M3-P2-001: Box accepts at most one child.
+        let err = parse_err(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             node Box {\n\
+               node Text {}\n\
+               node Text {}\n\
+             }\n}",
+        );
+        assert!(
+            matches!(err, IrLoadError::Validate(ref m) if m.contains("Box") && m.contains("at most one child"))
+        );
+        assert_malformed_display_nonempty(&err);
+    }
+
+    #[test]
+    fn box_with_zero_children_is_valid() {
+        // Box without a child is valid (per DD-M3-P2-005 no-aspect bounded
+        // Box / aspect-only scrim use case).
+        let c = parse_ok(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             node Box { prop fill = #cccccc }\n}",
+        );
+        assert!(c.root.children.is_empty());
+    }
+
+    #[test]
+    fn box_with_single_child_is_valid() {
+        let c = parse_ok(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             node Box { node Text { prop text = \"hi\" } }\n}",
+        );
+        assert_eq!(c.root.children.len(), 1);
+        assert_eq!(c.root.children[0].widget_type, "Text");
+    }
+
+    #[test]
+    fn ratio_lex_requires_colon_immediately_after_digits() {
+        // `prop spacing = 12` followed by `node Text` must tokenize the
+        // `12` as Int, not snare the next colon (there isn't one here —
+        // this guards against the digit lookahead misfiring across
+        // whitespace).
+        let c = parse_ok(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             node VStack { prop spacing = 12 node Text {} }\n}",
+        );
+        assert_eq!(c.root.props[0].value, IrLiteral::Int(12));
+        assert_eq!(c.root.children.len(), 1);
+    }
+
+    #[test]
+    fn ratio_lex_does_not_capture_state_colon() {
+        // `state count: i32 = 0` — the `count` ident is followed by `:`,
+        // but the digit lookahead is anchored at the digit side, so `count:`
+        // remains Ident + Colon and parsing proceeds normally.
+        let c = parse_ok(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             state count: i32 = 0\n\
+             node V {}\n}",
+        );
+        assert_eq!(c.states.len(), 1);
+        assert_eq!(c.states[0].default, IrLiteral::Int(0));
     }
 }

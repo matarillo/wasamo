@@ -1,5 +1,6 @@
+use crate::box_values;
 use crate::handler::{self, EvalContext, EvalError, HandlerExpr};
-use crate::layout::{self, Alignment, LayoutNode, SizeConstraint};
+use crate::layout::{self, Alignment, LayoutError, LayoutNode, SizeConstraint};
 use crate::reactive::EffectHandle;
 use crate::text::{TextRenderer, TypographyStyle};
 use windows::{
@@ -69,6 +70,23 @@ enum WidgetData {
         style: TypographyStyle,
     },
     Button(Box<ButtonData>),
+    // M3-Phase 2 DD-M3-P2-001 per-kind tag. `aspect` / `fill` are stored as
+    // Box-internal domain types (DD-M3-P2-002 / DD-M3-P2-003 variant
+    // strategy Option A) — neither is a `PropertyValue` variant in Phase 2,
+    // and DD-M3-P2-004 keeps both constant-only, so they never traverse the
+    // property / binding / ABI paths. The (at most one) child lives on
+    // `WidgetNode.children` per the existing per-widget convention; the
+    // single-child invariant is enforced by `wasamoc check` (T3) and
+    // `ir_loader::build_node` (T7), not by this data shape.
+    //
+    // Readers: `aspect` is forwarded into `LayoutNode` at `build_layout_tree`
+    // and drives the DD-M3-P2-005 measure-arrange. `fill` is materialised as
+    // a `CompositionColorBrush` on the SpriteVisual at construction time
+    // (`WidgetNode::box_`); Phase 2 keeps it constant per DD-M3-P2-004.
+    Box {
+        aspect: Option<box_values::Ratio>,
+        fill: Option<box_values::Color>,
+    },
 }
 
 // ── Property dispatch (M1 experimental property IDs from wasamo.h §5) ─────────
@@ -97,6 +115,25 @@ impl From<windows::core::Error> for PropertyError {
     fn from(e: windows::core::Error) -> Self {
         PropertyError::Runtime(format!("{e}"))
     }
+}
+
+// M3-Phase 2 T8 / DD-M3-P2-005: translate the pure-logic `LayoutError`
+// into a `windows::core::Error` so the `WM_SIZE` → `run_layout` call
+// chain keeps its existing `windows::core::Result<()>` shape. The
+// `WASAMO_ERR_*` ABI surface for layout-time runtime errors is deferred
+// (today's call sites at `window.rs` / `emit.rs` already swallow the
+// Result with `let _ = …`); for now we propagate the message as `E_FAIL`
+// so the GUI-loop diagnostic is at least visible to a debugger.
+fn layout_error_to_winerr(err: LayoutError) -> windows::core::Error {
+    use windows::core::{Error, HRESULT};
+    const E_FAIL: HRESULT = HRESULT(0x80004005_u32 as i32);
+    let msg = match err {
+        LayoutError::BoxAspectUnboundedBoth => {
+            "Box with `aspect` has no bounded parent axis (DD-M3-P2-005)"
+        }
+        LayoutError::BoxNoExtent => "Box has no extent to resolve (DD-M3-P2-005)",
+    };
+    Error::new(E_FAIL, msg)
 }
 
 fn button_style_to_i32(s: ButtonStyle) -> i32 {
@@ -266,6 +303,75 @@ impl WidgetNode {
             attached: false,
             bindings: Vec::new(),
         }))
+    }
+
+    // M3-Phase 2 T6 / T7 / T8: Box constructor. The (at most one) child is
+    // appended via the existing tree-mutation API, matching every other
+    // widget. `aspect` / `fill` are populated by `ir_loader::build_node`
+    // from `IrLiteral::Ratio` / `IrLiteral::Color` (T7) — they are
+    // Box-internal domain types (DD-M3-P2-002 / DD-M3-P2-003 Option A)
+    // and never travel as `PropertyValue`.
+    //
+    // T8: default `width` / `height` are `Shrink` so parent containers
+    // (VStack / HStack / window root) honour the size produced by the
+    // DD-M3-P2-005 inscribed-fit measure-arrange in `layout::measure_box`.
+    // `fill` materialises as a `CompositionColorBrush` on the SpriteVisual
+    // here (Phase 2 keeps `fill` constant per DD-M3-P2-004, so no later
+    // mutation path needs to retain the brush). An absent `fill` leaves
+    // the visual without a brush — i.e. transparent — per DD-M3-P2-005's
+    // "zero-child Box still produces a sized rectangle (filled with
+    // `fill`, or transparent when absent)".
+    pub(crate) fn box_(
+        compositor: &Compositor,
+        aspect: Option<box_values::Ratio>,
+        fill: Option<box_values::Color>,
+    ) -> windows::core::Result<Box<Self>> {
+        let visual = compositor.CreateSpriteVisual()?;
+        if let Some(c) = fill {
+            // box_values::Color packs as 0xAARRGGBB per dsl_spec §8.2.
+            let packed = c.0;
+            let color = Color {
+                A: ((packed >> 24) & 0xFF) as u8,
+                R: ((packed >> 16) & 0xFF) as u8,
+                G: ((packed >> 8) & 0xFF) as u8,
+                B: (packed & 0xFF) as u8,
+            };
+            let brush = compositor.CreateColorBrushWithColor(color)?;
+            visual.SetBrush(&brush)?;
+        }
+        Ok(Box::new(Self {
+            data: WidgetData::Box { aspect, fill },
+            width: SizeConstraint::Shrink,
+            height: SizeConstraint::Shrink,
+            visual,
+            children: Vec::new(),
+            inline_handlers: Vec::new(),
+            attached: false,
+            bindings: Vec::new(),
+        }))
+    }
+
+    // Test-only accessor for `WidgetData::Box` (M3-Phase 2 ADR §Phase 2
+    // verification closure item 2, build_node materialisation half). Returns
+    // the Box-internal `aspect` / `fill` as primitives so cross-crate
+    // integration tests can assert that `IrLiteral::Ratio` / `IrLiteral::Color`
+    // materialised into the Box-internal domain types per DD-M3-P2-002 /
+    // DD-M3-P2-003 variant strategy Option A — without leaking the
+    // `box_values::Ratio` / `box_values::Color` `pub(crate)` types past
+    // crate boundaries. `None` for non-Box widgets. Hidden from rustdoc
+    // and named with the project's `__*_for_test` convention (cf.
+    // `lib.rs::ffi::__install_owning_thread_for_test`); production callers
+    // must use `wasamo_get_property` for the M3-Phase 2 `PropertyValue`-
+    // mediated paths (which `aspect` / `fill` deliberately are not part
+    // of, per DD-M3-P2-004 keeping both constant-only).
+    #[doc(hidden)]
+    pub fn __box_state_for_test(&self) -> Option<(Option<(i32, i32)>, Option<u32>)> {
+        match &self.data {
+            WidgetData::Box { aspect, fill } => {
+                Some((aspect.map(|r| (r.num, r.den)), fill.map(|c| c.0)))
+            }
+            _ => None,
+        }
     }
 
     pub fn button(
@@ -893,9 +999,18 @@ impl WidgetNode {
     // ── Layout ────────────────────────────────────────────────────────────────
 
     /// Builds a LayoutNode tree, runs layout, then syncs results back to SpriteVisuals.
+    ///
+    /// M3-Phase 2 T8: `layout::run_layout` is fallible — it surfaces
+    /// `LayoutError::BoxAspectUnboundedBoth` / `BoxNoExtent` from
+    /// DD-M3-P2-005. We translate those into `windows::core::Error` so
+    /// the existing `WM_SIZE` -> `r.run_layout(cw, ch)` call sites (which
+    /// already swallow the Result with `let _ = …`) keep their current
+    /// shape. A dedicated C ABI surface for layout-time runtime errors
+    /// is out of Phase 2 scope and tracked alongside the ABI work in
+    /// later phases.
     pub fn run_layout(&mut self, window_w: f32, window_h: f32) -> windows::core::Result<()> {
         let mut layout_tree = self.build_layout_tree();
-        layout::run_layout(&mut layout_tree, window_w, window_h);
+        layout::run_layout(&mut layout_tree, window_w, window_h).map_err(layout_error_to_winerr)?;
         self.sync_visuals(&layout_tree)
     }
 
@@ -925,6 +1040,30 @@ impl WidgetNode {
                 alignment,
             } => {
                 let mut node = LayoutNode::hstack(*spacing, *padding, *alignment);
+                node.width = self.width.clone();
+                node.height = self.height.clone();
+                node.children = self
+                    .children
+                    .iter()
+                    .map(|c| c.build_layout_tree())
+                    .collect();
+                node
+            }
+            // M3-Phase 2 T8: thread the Box-internal `aspect` into the
+            // pure-logic layout engine. The engine's `layout::Ratio` is a
+            // structural mirror of `box_values::Ratio` (DD-M3-P2-002
+            // Option A keeps both Box-internal — neither is a
+            // `PropertyValue`); the conversion here is the boundary at
+            // which the runtime's `WidgetData::Box` field hands data to
+            // the Win32/WinRT-free layout module. `fill` is consumed by
+            // `WidgetNode::box_` at construction (painted onto the
+            // SpriteVisual brush) and does not enter `LayoutNode`.
+            WidgetData::Box { aspect, .. } => {
+                let layout_ratio = aspect.map(|r| layout::Ratio {
+                    num: r.num,
+                    den: r.den,
+                });
+                let mut node = LayoutNode::box_(layout_ratio);
                 node.width = self.width.clone();
                 node.height = self.height.clone();
                 node.children = self
@@ -1452,5 +1591,51 @@ mod tests {
             !fired.get(),
             "child binding fired after parent widget_destroy"
         );
+    }
+
+    // ── M3-Phase 2 T6: Box widget data shape ─────────────────────────────────
+    //
+    // These tests exercise the `WidgetData::Box` variant directly without a
+    // Compositor — the variant has no Win32/WinRT field, so its data shape
+    // is verifiable as pure logic. The `WidgetNode::box_` constructor itself
+    // needs a Compositor; the build_node materialisation half of ADR §Phase 2
+    // verification closure item 2 is exercised by the Windows-only integration
+    // test landed in T10 (`wasamo-runtime/tests/box_round_trip.rs`), which
+    // reads the resulting `WidgetData::Box` through `__box_state_for_test`.
+
+    use super::WidgetData;
+    use crate::box_values::{Color as BoxFill, Ratio};
+
+    #[test]
+    fn box_variant_carries_optional_aspect_and_fill() {
+        let data = WidgetData::Box {
+            aspect: Some(Ratio { num: 16, den: 9 }),
+            fill: Some(BoxFill(0x80_00_00_00)),
+        };
+        match &data {
+            WidgetData::Box { aspect, fill } => {
+                assert_eq!(*aspect, Some(Ratio { num: 16, den: 9 }));
+                assert_eq!(*fill, Some(BoxFill(0x80_00_00_00)));
+            }
+            _ => panic!("expected WidgetData::Box variant"),
+        }
+    }
+
+    #[test]
+    fn box_variant_defaults_both_fields_to_none() {
+        // Mirrors the `WidgetNode::box_` constructor's default field
+        // initialisation. The constructor itself requires a Compositor;
+        // here we only assert the data-shape default that the constructor
+        // writes.
+        let data = WidgetData::Box {
+            aspect: None,
+            fill: None,
+        };
+        if let WidgetData::Box { aspect, fill } = &data {
+            assert!(aspect.is_none());
+            assert!(fill.is_none());
+        } else {
+            panic!("expected WidgetData::Box variant");
+        }
     }
 }

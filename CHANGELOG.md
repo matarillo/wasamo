@@ -14,6 +14,40 @@ the **Status** section of [README.md](./README.md).
 
 ## [Unreleased] — M3: DSL surface (in progress)
 
+### M3-Phase 2 — Box layout primitive (2026-05-20)
+
+Adds the `Box` layout primitive, discharging M3 acceptance **A6**.
+`Box` admits zero or one child, supports constant-only
+`aspect: <ratio>` and `fill: <color>` attributes, centres and clips
+its single child, and provides the Box + Text placeholder pattern that
+carries the M3 Image-widget deferral.
+
+`wasamo-ir` gains `IrLiteral::Ratio { num, den }` and
+`IrLiteral::Color(u32)` without adding `IrType::Ratio`,
+`IrType::Color`, `PropertyValue` variants, public ABI tags, or new
+handler expression variants. `wasamoc` lexes / parses / checks /
+lowers / emits ratio and color literals, rejects non-positive ratios,
+rejects `bind aspect:` / `bind fill:`, and rejects 2+ Box children.
+`wasamo-runtime` adds a Box widget kind, Box-internal `Ratio` /
+`Color` domain types, IR-loader materialisation for Box `aspect` /
+`fill`, defense-in-depth IR validation, and pure-layout
+measure-arrange support for bounded inscribed fit, one-axis-unbounded
+bounded-axis-wins, no-aspect shrink-to-fit, centred child placement,
+and layout-time errors for no-extent cases.
+
+Visible proof: `examples/gallery/gallery.ui` now contains the Phase 2
+Box sub-screen, and `examples/gallery-rust/` builds and launches it
+through the same `.ui -> wasamoc -> IR text -> wasamo_load_ui` path as
+the M2/M3 Rust hosts. Owner-manual GUI smoke confirmed the blue
+16:9 Box fill and centred placeholder text.
+
+Per-phase spec sync ([A11](./ROADMAP.md#m3-dsl-surface)):
+`docs/dsl_spec.md` 0.7 -> 0.8 flips §4.9 to
+`M3-Phase 2 closed; implementation-synced`; no implementation/spec
+divergence was found during the close re-sync.
+
+Decisions: [DD-M3-P2-001..006](./docs/decisions/m3-phase-2-box-layout.md).
+
 ### M3-Phase 1 — `bool` scalar binding (2026-05-19)
 
 Adds `bool` as the third scalar binding type alongside `i32` and

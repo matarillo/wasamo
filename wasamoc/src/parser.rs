@@ -388,6 +388,8 @@ impl<'a> Parser<'a> {
                 | Token::Ident(_)
                 | Token::Kw(Keyword::True)
                 | Token::Kw(Keyword::False)
+                | Token::RatioLit(_, _)
+                | Token::ColorLit(_)
         );
         if !is_valid {
             let desc = self.peek().description();
@@ -422,6 +424,15 @@ impl<'a> Parser<'a> {
             }),
             Token::Kw(Keyword::False) => Ok(Expr::BoolLit {
                 value: false,
+                span: tok.span,
+            }),
+            Token::RatioLit(num, den) => Ok(Expr::RatioLit {
+                num,
+                den,
+                span: tok.span,
+            }),
+            Token::ColorLit(value) => Ok(Expr::ColorLit {
+                value,
                 span: tok.span,
             }),
             _ => unreachable!(),
@@ -750,6 +761,121 @@ mod tests {
         assert!(
             matches!(&def.members[2], Member::WidgetDecl { type_name, .. } if type_name == "VStack")
         );
+    }
+
+    #[test]
+    fn property_bind_ratio_literal() {
+        // `Box { aspect: 16:9 }` — DD-M3-P2-002 surface form.
+        let def = parse_ok("component C inherits W { Box { aspect: 16:9 } }");
+        if let Member::WidgetDecl { members, .. } = &def.members[0] {
+            if let Member::PropertyBind { name, value, .. } = &members[0] {
+                assert_eq!(name, "aspect");
+                assert!(matches!(
+                    value,
+                    Expr::RatioLit {
+                        num: 16,
+                        den: 9,
+                        ..
+                    }
+                ));
+            } else {
+                panic!("expected PropertyBind");
+            }
+        } else {
+            panic!("expected WidgetDecl");
+        }
+    }
+
+    #[test]
+    fn property_bind_color_literal_six_hex() {
+        // `Box { fill: #cccccc }` — DD-M3-P2-003 surface form, alpha=0xFF.
+        let def = parse_ok("component C inherits W { Box { fill: #cccccc } }");
+        if let Member::WidgetDecl { members, .. } = &def.members[0] {
+            if let Member::PropertyBind { name, value, .. } = &members[0] {
+                assert_eq!(name, "fill");
+                assert!(matches!(
+                    value,
+                    Expr::ColorLit {
+                        value: 0xFFCC_CCCC,
+                        ..
+                    }
+                ));
+            } else {
+                panic!("expected PropertyBind");
+            }
+        } else {
+            panic!("expected WidgetDecl");
+        }
+    }
+
+    #[test]
+    fn property_bind_color_literal_eight_hex() {
+        // Scrim: `#00000080` packs to 0x80000000.
+        let def = parse_ok("component C inherits W { Box { fill: #00000080 } }");
+        if let Member::WidgetDecl { members, .. } = &def.members[0] {
+            if let Member::PropertyBind { value, .. } = &members[0] {
+                assert!(matches!(
+                    value,
+                    Expr::ColorLit {
+                        value: 0x8000_0000,
+                        ..
+                    }
+                ));
+            } else {
+                panic!("expected PropertyBind");
+            }
+        } else {
+            panic!("expected WidgetDecl");
+        }
+    }
+
+    #[test]
+    fn box_image_placeholder_shape() {
+        // dsl_spec §4.9 normative shape:
+        //   Box { aspect: 1:1; fill: #cccccc; Text { text: "Photo 12" } }
+        // Whitespace (newlines) substitute for `;` separators between
+        // members — the existing grammar has no statement terminator at
+        // member level, mirroring the M1 / M2 surface.
+        let src = r#"component C inherits W {
+            Box {
+                aspect: 1:1
+                fill: #cccccc
+                Text { text: "Photo 12" }
+            }
+        }"#;
+        let def = parse_ok(src);
+        if let Member::WidgetDecl {
+            type_name, members, ..
+        } = &def.members[0]
+        {
+            assert_eq!(type_name, "Box");
+            assert_eq!(members.len(), 3);
+            assert!(matches!(
+                &members[0],
+                Member::PropertyBind {
+                    name,
+                    value: Expr::RatioLit { num: 1, den: 1, .. },
+                    ..
+                } if name == "aspect"
+            ));
+            assert!(matches!(
+                &members[1],
+                Member::PropertyBind {
+                    name,
+                    value: Expr::ColorLit {
+                        value: 0xFFCC_CCCC,
+                        ..
+                    },
+                    ..
+                } if name == "fill"
+            ));
+            assert!(matches!(
+                &members[2],
+                Member::WidgetDecl { type_name, .. } if type_name == "Text"
+            ));
+        } else {
+            panic!("expected WidgetDecl for Box");
+        }
     }
 
     #[test]

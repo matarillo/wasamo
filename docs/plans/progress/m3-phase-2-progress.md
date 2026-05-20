@@ -1,7 +1,7 @@
 ---
 phase: M3-Phase 2
 title: Box layout primitive
-status: active
+status: retired
 adr: docs/decisions/m3-phase-2-box-layout.md
 plan: docs/plans/m3-plan.md
 opened: 2026-05-20
@@ -34,183 +34,310 @@ Each T below cites the evidence item it discharges.
 
 Discharges the IR-layer halves of DD-M3-P2-002 and DD-M3-P2-003.
 
-- [ ] `IrLiteral::Ratio { num: i32, den: i32 }` variant added;
+- [x] `IrLiteral::Ratio { num: i32, den: i32 }` variant added;
       every existing `match` on `IrLiteral` gains a `Ratio` arm.
-- [ ] `IrLiteral::Color(u32)` variant added; arm coverage as above.
-- [ ] **No** `IrType::Ratio` / `IrType::Color` added; **no** new
+- [x] `IrLiteral::Color(u32)` variant added; arm coverage as above.
+- [x] **No** `IrType::Ratio` / `IrType::Color` added; **no** new
       `HandlerExpr` variant (per DD-M3-P2-004).
-- [ ] Pure-logic unit tests covering construction and equality of
+- [x] Pure-logic unit tests covering construction and equality of
       both variants.
+
+Closed by commit `3708bb2 feat(ir): add Ratio / Color literals to
+IrLiteral (M3-Phase 2 T1)`. Step-end retrospective recorded in
+[../../notes/m3-phase-2/t1-step-end-retrospective.md](../../notes/m3-phase-2/t1-step-end-retrospective.md).
 
 ### T2 — `wasamoc` lexer / parser: `RatioLit` and `ColorLit` tokens, AST variants
 
 Discharges the surface-syntax halves of DD-M3-P2-002 and DD-M3-P2-003.
 
-- [ ] Lexer recognises `<num>:<den>` as a `RatioLit` token (surface
+- [x] Lexer recognises `<num>:<den>` as a `RatioLit` token (surface
       form per DD-M3-P2-002 Option A), with lookahead / contextual
       disambiguation against a stray integer-then-colon appropriate
       to the existing lexer structure.
-- [ ] Lexer recognises `#` followed by 6 or 8 hex digits as a
+- [x] Lexer recognises `#` followed by 6 or 8 hex digits as a
       `ColorLit` token (per DD-M3-P2-003 Option A).
-- [ ] `Expr::RatioLit { num: i32, den: i32 }` and
+- [x] `Expr::RatioLit { num: i32, den: i32 }` and
       `Expr::ColorLit { value: u32 }` AST variants added in
       `wasamoc/src/ast.rs`.
-- [ ] Parser produces these AST nodes in `property_bind` RHS
+- [x] Parser produces these AST nodes in `property_bind` RHS
       position.
-- [ ] Unit tests covering the accept shapes from
+- [x] Unit tests covering the accept shapes from
       [dsl_spec §4.9](../../dsl_spec.md#49-box-layout-primitive-m3-phase-2).
+
+Closed by commit `735a337 feat(wasamoc): lex Ratio / Color literals,
+add Expr variants (M3-Phase 2 T2)`. Step-end retrospective recorded
+in [../../notes/m3-phase-2/t2-step-end-retrospective.md](../../notes/m3-phase-2/t2-step-end-retrospective.md).
 
 ### T3 — `wasamoc check`: validity and reject set
 
 Discharges DD-M3-P2-001 (multi-child reject), DD-M3-P2-004 (bind reject
 for `aspect` / `fill`), and the value-validity portion of DD-M3-P2-005.
 
-- [ ] Reject zero on either side of ratio (per DD-M3-P2-005 aspect
+- [x] Reject zero on either side of ratio (per DD-M3-P2-005 aspect
       value validity); diagnostic names the rejected side.
-- [ ] Reject `bind aspect:` and `bind fill:` (per DD-M3-P2-004);
+- [x] Reject `bind aspect:` and `bind fill:` (per DD-M3-P2-004);
       diagnostic names the rejected attribute.
-- [ ] Reject 2+ children on Box (per DD-M3-P2-001 multi-child);
+- [x] Reject 2+ children on Box (per DD-M3-P2-001 multi-child);
       diagnostic recommends `VStack` / `HStack` / `ZStack` (Phase 6
       forward-pointer).
-- [ ] Widget property catalog extended for Box (`aspect: Ratio`,
+- [x] Widget property catalog extended for Box (`aspect: Ratio`,
       `fill: Color` — Box-internal types, not new `IrType` entries)
       so the checker can name the attribute types in diagnostics.
-- [ ] Unit tests cover each row of the reject set + each accept
+      Box-internal value types are deliberately **not** entered in
+      `widget_prop_type`'s `TypeName` table (they have no `TypeName`
+      enum entry per DD-M3-P2-002 / DD-M3-P2-003 Option A); the
+      catalog row is named in a code comment in that function and
+      validity is enforced by a dedicated `check_box_const_only_bind`
+      helper.
+- [x] Unit tests cover each row of the reject set + each accept
       shape from the ADR.
+
+Closed by commit `f70424d feat(wasamoc): Box widget validity and
+reject set (M3-Phase 2 T3)`. Step-end retrospective recorded in
+[../../notes/m3-phase-2/t3-step-end-retrospective.md](../../notes/m3-phase-2/t3-step-end-retrospective.md).
 
 ### T4 — `wasamoc` lowering: AST → IR
 
-- [ ] `Expr::RatioLit` → `IrLiteral::Ratio { num, den }`.
-- [ ] `Expr::ColorLit` → `IrLiteral::Color(u32)`; packed `u32`
+- [x] `Expr::RatioLit` → `IrLiteral::Ratio { num, den }`.
+- [x] `Expr::ColorLit` → `IrLiteral::Color(u32)`; packed `u32`
       layout per
       [dsl_spec §8.2](../../dsl_spec.md#82-notation) `COLOR` token.
-- [ ] Unit tests assert lowering of representative `Box { ... }`
+- [x] Unit tests assert lowering of representative `Box { ... }`
       forms.
+
+Closed by commit `5be7df6 feat(wasamoc): lower Ratio / Color literals
+to IR (M3-Phase 2 T4)`. Step-end retrospective recorded in
+[../../notes/m3-phase-2/t4-step-end-retrospective.md](../../notes/m3-phase-2/t4-step-end-retrospective.md).
 
 ### T5 — `wasamoc` IR text emit
 
 Discharges the IR-text-spelling halves of DD-M3-P2-002 and DD-M3-P2-003.
 
-- [ ] Emitter writes ratio and color literals in the surface forms
+- [x] Emitter writes ratio and color literals in the surface forms
       (`<num>:<den>`, `#RRGGBB` / `#RRGGBBAA`) in `prop` literal
-      position.
-- [ ] IR text emit covers the Box widget node shape:
+      position. Canonical emit policy: alpha = `0xFF` normalises to
+      short `#RRGGBB`; otherwise the full `#RRGGBBAA` form is
+      written. Policy documented on `emit_color_lit` and pinned by
+      `color_emit_normalises_alpha_ff_input_to_short_form`.
+- [x] IR text emit covers the Box widget node shape:
       `node Box { prop aspect = 16:9; prop fill = #cccccc; node Text { ... } }`.
-- [ ] In-process roundtrip-shaped test in `wasamoc::emit` (ADR
-      §Phase 2 verification closure item 2).
+- [x] In-process roundtrip-shaped test in `wasamoc::emit` (ADR
+      §Phase 2 verification closure item 2). The
+      `Box { aspect: 16:9 fill: #00000080 Text { text: "Photo 12" } }`
+      fixture is asserted at both the `IrLiteral::Ratio` /
+      `IrLiteral::Color` variant level and the emitted IR text level
+      by `box_phase2_ir_text_emit_fixture`; the load-side half is
+      T7 / T10.
+
+Closed by commit `935b5d0 feat(wasamoc): IR text emit for Ratio /
+Color literals (M3-Phase 2 T5)`. Step-end retrospective recorded in
+[../../notes/m3-phase-2/t5-step-end-retrospective.md](../../notes/m3-phase-2/t5-step-end-retrospective.md).
 
 ### T6 — `wasamo-runtime` widget catalog: Box
 
 Discharges DD-M3-P2-001 (IR node shape / per-kind tag).
 
-- [ ] `WidgetKind::Box` variant added; every existing `match` on
+- [x] `WidgetKind::Box` variant added; every existing `match` on
       `WidgetKind` gains a `Box` arm.
-- [ ] `WidgetData::Box { aspect: Option<Ratio>, fill: Option<Color>,
+- [x] `WidgetData::Box { aspect: Option<Ratio>, fill: Option<Color>,
       child: Option<Box<WidgetNode>> }` (or layout-equivalent shape).
-- [ ] `WidgetNode::box_` (or equivalent constructor) with default
+      Layout-equivalent shape taken: child lives on
+      `WidgetNode.children: Vec<Box<WidgetNode>>` per the existing
+      per-widget convention; single-child invariant is enforced at
+      `wasamoc check` (T3) and `ir_loader::build_node` (T7) gates
+      rather than this data shape.
+- [x] `WidgetNode::box_` (or equivalent constructor) with default
       `aspect: None, fill: None, child: None`.
-- [ ] Internal `Ratio` and `Color` domain types declared inside
+- [x] Internal `Ratio` and `Color` domain types declared inside
       `wasamo-runtime`; visibility minimal (not `pub` beyond what
-      tests require).
+      tests require). Declared `pub(crate)` in a private
+      `wasamo-runtime/src/box_values.rs` module to avoid the
+      `windows::UI::Color` name collision inside `widget.rs`.
+
+Closed by commit `b4dff5d feat(wasamo-runtime): add Box widget
+catalog (M3-Phase 2 T6)`. Step-end retrospective recorded in
+[../../notes/m3-phase-2/t6-step-end-retrospective.md](../../notes/m3-phase-2/t6-step-end-retrospective.md).
 
 ### T7 — `wasamo-runtime` IR loader: parse new literal terminals and Box widget
 
-- [ ] IR text loader (`wasamo-runtime/src/ir_loader.rs`) accepts
-      `RATIO` and `COLOR` terminals in `literal` position.
-- [ ] `ir_loader::build_node` materialises ratio / color literals
+- [x] IR text loader (`wasamo-runtime/src/ir_loader.rs`) accepts
+      `RATIO` and `COLOR` terminals in `literal` position. New
+      `Token::Ratio { num, den }` / `Token::Color(u32)` tokens with
+      lex-time disambiguation mirroring `wasamoc::lexer`
+      (`<digits>:<digits>` only triggers Ratio when the colon
+      immediately follows the integer and a digit immediately
+      follows the colon; `#` followed by 6 or 8 hex digits, packed
+      `0xAARRGGBB` with implicit alpha `0xFF` for the short form
+      per dsl_spec §8.2).
+- [x] `ir_loader::build_node` materialises ratio / color literals
       for Box `aspect` / `fill` directly into Box-internal `Ratio`
       / `Color` (not via `PropertyValue`), per DD-M3-P2-002 /
       DD-M3-P2-003 variant strategy Option A.
-- [ ] `ir_loader::build_node` rejects ratio / color literals
+      `WidgetNode::box_` constructor signature extended to take
+      `Option<box_values::Ratio>` / `Option<box_values::Color>`
+      (only call site is `ir_loader::construct_widget`'s "Box"
+      arm; visibility narrowed to `pub(crate)` to match the
+      `box_values` visibility surface).
+- [x] `ir_loader::build_node` rejects ratio / color literals
       appearing outside Box `aspect` / Box `fill` with
       `WASAMO_ERR_IR_MALFORMED` (defense-in-depth for the
-      "not via `PropertyValue`" boundary).
-- [ ] `ir_loader::build_node` rejects a Box IR node with
+      "not via `PropertyValue`" boundary). Check lives in
+      `validate()` (pure logic, exercised without a live
+      `Compositor`); error class `IrLoadError::Validate` maps to
+      `WASAMO_ERR_IR_MALFORMED` at the C ABI boundary
+      (DD-M2-P6-005 / DD-M2-P6-009).
+- [x] `ir_loader::build_node` rejects a Box IR node with
       `len(children) > 1` with `WASAMO_ERR_IR_MALFORMED` (defense-
       in-depth for DD-M3-P2-001 against IR not produced by
-      `wasamoc`, e.g. via `wasamo_load_ui`).
-- [ ] **No** new `PropertyValue` variant, **no** new
+      `wasamoc`, e.g. via `wasamo_load_ui`). Same `validate()`
+      pass as the literal-placement gate.
+- [x] **No** new `PropertyValue` variant, **no** new
       `WASAMO_VALUE_*` tag, **no** new `abi.rs` arms (per
       DD-M3-P2-002 / DD-M3-P2-003 / DD-M3-P2-004).
+
+Closed by commit `5169c99 feat(wasamo-runtime): IR loader for Ratio /
+Color literals and Box widget (M3-Phase 2 T7)`. Step-end retrospective
+recorded in
+[../../notes/m3-phase-2/t7-step-end-retrospective.md](../../notes/m3-phase-2/t7-step-end-retrospective.md).
 
 ### T8 — `wasamo-runtime` layout: aspect measure-arrange
 
 Discharges DD-M3-P2-005 and the child-layout portion of DD-M3-P2-001.
 
-- [ ] Bounded inscribed-fit branch selection per the DD-M3-P2-005
-      numeric / rounding contract.
-- [ ] Unbounded-on-one-axis: bounded-axis-wins.
-- [ ] Unbounded-on-both-axes (aspect set, or no-aspect Box with
-      no bounded extent): layout-time runtime error.
-- [ ] No-aspect bounded Box: matches parent bounds when empty;
+- [x] Bounded inscribed-fit branch selection per the DD-M3-P2-005
+      numeric / rounding contract, including equality landing on the
+      width branch.
+- [x] Unbounded-on-one-axis: bounded-axis-wins.
+- [x] Unbounded-on-both-axes (aspect set, or no-aspect Box with
+      no bounded extent): layout-time runtime error. The deferred
+      dedicated `WASAMO_ERR_*` code is captured under Out-of-phase
+      residuals.
+- [x] No-aspect bounded Box: matches parent bounds when empty;
       shrink-to-fit child intrinsic measure when child present.
-- [ ] Single child: measured against Box bounds, centred, clipped
+      Empty Box with one axis unbounded collapses to `0.0`; only
+      fully-unbounded empties trip `BoxNoExtent`.
+- [x] Single child: measured against Box bounds, centred, and clipped
       on overflow (per DD-M3-P2-001 child measure / alignment /
       overflow).
-- [ ] Zero-child Box still produces a sized rectangle (filled with
-      `fill`, or transparent when absent).
+- [x] Zero-child Box still produces a sized rectangle (filled with
+      `fill`, or transparent when absent); parent containers honour
+      the measure-arrange output.
+
+Closed by commit `5021936 feat(wasamo-runtime): Box aspect
+measure-arrange (M3-Phase 2 T8)`. Step-end retrospective recorded in
+[../../notes/m3-phase-2/t8-step-end-retrospective.md](../../notes/m3-phase-2/t8-step-end-retrospective.md).
 
 ### T9 — Pure-logic unit tests (ADR §Phase 2 verification closure item 1)
 
-- [ ] Ratio literal: accept shapes; zero side rejected at check.
-- [ ] Color literal: `#RRGGBB` / `#RRGGBBAA` accept; malformed
-      forms rejected at lex / parse.
-- [ ] Aspect measure-arrange resolver: each DD-M3-P2-005 case
-      enumerated in T8.
-- [ ] `wasamoc check` diagnostics: `bind aspect:`, `bind fill:`,
+T9 is a coverage-inventory step: every checklist item below is
+already discharged by tests landed during T1–T5 / T7 / T8. The
+T9 commit updates this checklist to cross-link the existing tests
+so the ADR §Phase 2 verification closure item 1 has an auditable
+mapping. No new test files are added in this step. The
+"explicit width/height conflict" sub-item from the ADR's item 1
+enumeration is **out of Phase 2 scope** (per the ADR
+DD-M3-P2-005 §"Phase 2 scope note": `width` / `height` are not in
+the M3-Phase 2 DSL surface) and is therefore not exercised here.
+
+- [x] Ratio literal coverage mapped across IR construction (T1),
+      lexer/parser accept and disambiguation (T2), checker accepts
+      and zero-side / positional rejects (T3), lowering (T4), and
+      IR text emit (T5).
+- [x] Color literal coverage mapped across IR construction (T1),
+      lexer/parser accept and malformed-shape rejects (T2), checker
+      accepts and positional rejects (T3), lowering (T4), IR text
+      emit (T5), and IR-loader lexing (T7).
+- [x] Aspect measure-arrange resolver: each DD-M3-P2-005 case
+      enumerated in T8's 13 `wasamo-runtime/src/layout.rs::tests`
+      cases.
+- [x] `wasamoc check` diagnostics: `bind aspect:`, `bind fill:`,
       2+ children rejected (per DD-M3-P2-001 / DD-M3-P2-004).
+      Covered at compile time by T3 checker tests and at IR-load
+      time by T7 runtime loader tests. Full test-name inventory is
+      recorded in the T9 step-end retrospective.
+
+Closed by commit `1e42d85 docs(m3-phase-2): T9 pure-logic test
+inventory and checklist close (M3-Phase 2 T9)`. Step-end
+retrospective recorded in
+[../../notes/m3-phase-2/t9-step-end-retrospective.md](../../notes/m3-phase-2/t9-step-end-retrospective.md).
 
 ### T10 — IR text round-trip evidence (ADR §Phase 2 verification closure item 2)
 
-- [ ] Round-trip fixture:
+- [x] Round-trip fixture:
       `Box { aspect: 16:9; fill: #00000080; Text { text: "Photo 12" } }`.
-- [ ] Emit side: Box node carries
+      Covered by `PHASE2_FIXTURE` in
+      `wasamo-runtime/tests/box_round_trip.rs`, joining the T5 emit
+      and T7 load-side fixtures through actual emitted IR text.
+- [x] Emit side: Box node carries
       `IrLiteral::Ratio { num: 16, den: 9 }` and
-      `IrLiteral::Color(<packed>)`.
-- [ ] Load side: after `ir_loader::build_node`, runtime state is
+      `IrLiteral::Color(0x80_00_00_00)`. Covered by
+      `box_phase2_emit_parses_back_to_ir_literal_variants` (pure
+      logic, cross-crate).
+- [x] Load side: after `ir_loader::build_node`, runtime state is
       `WidgetData::Box { aspect: Some(Ratio { 16, 9 }),
       fill: Some(Color(<packed>)), .. }` — `IrLiteral::*` do not
       survive into runtime state (per DD-M3-P2-002 / DD-M3-P2-003).
-- [ ] `ir_loader` rejection of 2+ children also exercised here.
+      Covered by the Windows-only
+      `box_phase2_build_node_materialises_box_internal_state` via
+      `WidgetNode::__box_state_for_test`; T11 reuses the accessor and
+      skip-guard pattern.
+- [x] `ir_loader` rejection of 2+ children also exercised here.
+      Covered by `box_phase2_two_children_rejected_at_parse_ir`.
+
+Closed by commit `8d12f66 feat(wasamo-runtime): IR text round-trip
+evidence for Box (M3-Phase 2 T10)`. Step-end retrospective recorded
+in
+[../../notes/m3-phase-2/t10-step-end-retrospective.md](../../notes/m3-phase-2/t10-step-end-retrospective.md).
 
 ### T11 — Windows-runtime layout integration test (ADR §Phase 2 verification closure item 3, CI-gated)
 
-- [ ] Mock-free Windows-only integration test under
+- [x] Mock-free Windows-only integration test under
       `wasamo-runtime/tests/`: aspect-fixed Box with Text child
       inside a parent of known size; asserts inscribed-fit
       resolved rectangle and child centred.
-- [ ] `fill` verified via a Box-internal / test-only accessor or
+- [x] `fill` verified via a Box-internal / test-only accessor or
       via the render model (`SpriteVisual` brush), not via
       `wasamo_get_property` (per DD-M3-P2-003 variant strategy).
-- [ ] Skip-guard matches Phase 1 T6 / T13: fail (not skip) on CI
+- [x] Skip-guard matches Phase 1 T6 / T13: fail (not skip) on CI
       when Compositor unavailable, per
       [CLAUDE.md §Testing rules](../../../CLAUDE.md).
+      Reuse T10's `0x80070005` skip pattern, already observed on an
+      SSH dev box as a local skip/pass path.
+
+Closed by commit `216cb5e test(wasamo-runtime): add Box layout
+integration evidence (M3-Phase 2 T11)`. Step-end retrospective
+recorded in
+[../../notes/m3-phase-2/t11-step-end-retrospective.md](../../notes/m3-phase-2/t11-step-end-retrospective.md).
 
 ### T12 — Seed `examples/gallery/` + `examples/gallery-rust/` (ADR §Phase 2 verification closure item 4)
 
-- [ ] `examples/gallery/` with a Phase 2 sub-screen (Box + Text
+- [x] `examples/gallery/` with a Phase 2 sub-screen (Box + Text
       placeholder against a trivial frame). Later M3 phases grow
       this directory sub-screen by sub-screen.
-- [ ] `examples/gallery-rust/` workspace-member host (mirrors the
+- [x] `examples/gallery-rust/` workspace-member host (mirrors the
       `examples/bool-demo-rust/` build pipeline from Phase 1).
-- [ ] `Start-Process` launch recorded as successful; visual
+- [x] `Start-Process` launch recorded as successful; visual
       correctness is owner-manual GUI smoke (per pre-doc framing
       decision G).
-- [ ] C / Zig hosts not required in Phase 2 (per framing decision F
+- [x] C / Zig hosts not required in Phase 2 (per framing decision F
       and the ADR Out-of-scope list).
+
+Closed by commit `83126b7 feat(examples): seed M3 Phase 2 gallery
+host`. Step-end retrospective recorded in
+[../../notes/m3-phase-2/t12-step-end-retrospective.md](../../notes/m3-phase-2/t12-step-end-retrospective.md).
 
 ### T13 — Phase-end gates
 
 Discharges the m3-plan §Phase-end criteria checklist for Phase 2.
 
-- [ ] `cargo fmt --all -- --check` green (per
+- [x] `cargo fmt --all -- --check` green (per
       [retrospectives.md item 3 amendment](../../notes/retrospectives.md)
       landed in Moment 1).
-- [ ] `cargo build --release --workspace` and `cargo test
+- [x] `cargo build --release --workspace` and `cargo test
       --workspace` green locally and on CI (`workflow_dispatch`).
-- [ ] Windows-only integration test (T11) green on CI (fail, not
+- [x] Windows-only integration test (T11) green on CI (fail, not
       skip, if Compositor missing).
-- [ ] Moment 2 spec re-sync: flip
+- [x] Moment 2 spec re-sync: flip
       [dsl_spec.md §4.9](../../dsl_spec.md#49-box-layout-primitive-m3-phase-2)
       Phase status marker to
       `**Phase status:** M3-Phase 2 closed; implementation-synced`,
@@ -218,14 +345,14 @@ Discharges the m3-plan §Phase-end criteria checklist for Phase 2.
       Earlier-phase spec gaps may fold per
       [predoc-inputs.md §6](../../notes/m3-phase-2/predoc-inputs.md#6-retroactive-spec-gap-fold-は最小範囲で同じ-phase-に折り込む)
       with explicit owner confirmation.
-- [ ] Forward-distillation note for M3-Phase 3 authored within
+- [x] Forward-distillation note for M3-Phase 3 authored within
       this phase's close (per
       [retrospectives.md forward-carry rule](../../notes/retrospectives.md)):
       `docs/notes/m3-phase-3/predoc-inputs.md` (or phase-named
       pre-doc candidate file).
-- [ ] Phase-end retrospective entry in
+- [x] Phase-end retrospective entry in
       `docs/notes/m3-phase-2/phase-end-retrospective.md`.
-- [ ] Progress file lifecycle: `status: active` → `status: closing`
+- [x] Progress file lifecycle: `status: active` → `status: closing`
       → retired (per
       [plans/README.md §Phase progress file lifecycle](../README.md#phase-progress-file-lifecycle)).
 
@@ -237,11 +364,76 @@ shape.)
 
 ## CI / verification log
 
-(empty — record `cargo` runs, `workflow_dispatch` CI runs, and
-GUI-smoke launches here as they happen.)
+- **2026-05-20 / T12 local:** `cargo build -p gallery-rust` — green.
+- **2026-05-20 / T12 local:** `cargo build --release -p
+  gallery-rust` — green.
+- **2026-05-20 / T12 local GUI smoke:** `Start-Process
+  .\target\release\gallery-rust.exe` — command succeeded. Manual
+  visual correctness is owner-manual GUI smoke per framing decision G.
+- **2026-05-20 / T12 owner-manual GUI smoke:** owner-provided
+  screenshot `private/m3-p2-t12 screenshot 2026-05-20 232123.png`
+  reviewed locally. The blue `Box` fill is visible, the
+  `M3 Phase 2 Box` `Text` placeholder is centred inside it, and the
+  Box occupies the expected 16:9 width-fit region within the window.
+  The screenshot remains untracked under `private/`.
+- **2026-05-20 / T12 step-end local:** `cargo fmt --all -- --check`
+  — green.
+- **2026-05-20 / T12 step-end local:** `cargo clean` — initial run
+  blocked on the launched `gallery-rust.exe`; after it exited, rerun
+  succeeded.
+- **2026-05-20 / T12 step-end local:** `cargo build --release
+  --workspace` — green (existing `wasamo` linkable target /
+  `wasamo-sys` import library order warnings only).
+- **2026-05-20 / T12 step-end local:** `cargo build --workspace` —
+  green (same existing warnings only).
+- **2026-05-20 / T12 step-end local:** `cargo test --workspace` —
+  green.
+- **2026-05-20 / T12 step-end local:** final `cargo fmt --all --
+  --check` — green.
+- **2026-05-20 / T13 phase-end local:** `cargo fmt --all --
+  --check` — green.
+- **2026-05-20 / T13 phase-end clean rebuild:** `cargo clean` —
+  succeeded; removed 3027 files / 942.7 MiB.
+- **2026-05-20 / T13 phase-end local:** `cargo build --release
+  --workspace` — green (existing `wasamo` linkable target /
+  `wasamo-sys` import library order warnings only).
+- **2026-05-20 / T13 phase-end local:** `cargo build --workspace` —
+  green (same existing warnings only).
+- **2026-05-20 / T13 phase-end local:** `cargo test --workspace` —
+  green, including T11 `aspect_box_with_text_child_lays_out_and_paints_fill`.
+- **2026-05-20 / T13 spec re-sync:** `docs/dsl_spec.md` 0.7 →
+  0.8; §4.9 Phase status marker flipped to `M3-Phase 2 closed;
+  implementation-synced`. No draft / implementation divergence was
+  found during the close re-sync.
+- **2026-05-20 / T13 forward distillation:** M3-Phase 3 pre-doc
+  input authored at `docs/notes/m3-phase-3/predoc-inputs.md`,
+  carrying forward Box intrinsic sizing, placeholder thumbnails,
+  spec-drafting, value-boundary, and verification constraints.
+- **2026-05-20 / T13 phase-end retrospective:** recorded at
+  `docs/notes/m3-phase-2/phase-end-retrospective.md`; T13's
+  step-end pointer recorded at
+  `docs/notes/m3-phase-2/t13-step-end-retrospective.md`.
+- **2026-05-20 / T13 progress lifecycle:** frontmatter moved
+  `active` → `closing` at T13 start, then `closing` → `retired`
+  after checklist flip confirmation. The file remains present for
+  owner review of the T13 flip; durable information has been
+  distilled into the ADR, spec, CHANGELOG, notes, and M3 plan
+  progress row.
 
 ## Out-of-phase residuals
 
-(empty — record here anything discovered during execution that is
-out of Phase 2 scope, and file a `docs/notes/m3/` entry pointing
-back to it per the m3-plan §Phase-end criteria.)
+- **Dedicated `WASAMO_ERR_*` ABI code for layout-time runtime errors
+  (T8).** DD-M3-P2-005 specifies that the unbounded-both-axes /
+  no-extent conditions surface as runtime diagnostics with the Box's
+  IR location. T8 lands the structural surface (`LayoutError` enum
+  returned from `layout::run_layout`) and maps both variants to
+  `windows::core::Error(E_FAIL)` at `WidgetNode::run_layout` so the
+  existing `WM_SIZE` callsites keep their `windows::core::Result<()>`
+  shape. The dedicated `wasamo.h` error code, IR-location plumbing on
+  `LayoutNode`, and the C ABI translation are out of Phase 2 scope:
+  the call sites at `window.rs::WM_SIZE` and `emit.rs::mark_layout
+  _dirty_for` already swallow the Result with `let _ = …`, so a richer
+  surface would be unused until a phase introduces a `wasamo_run
+  _layout` (or layout-error callback) entry point. Tracked here so
+  the residual lands in the M3-Phase 3 / Phase 4 pre-doc input scan
+  rather than getting lost.

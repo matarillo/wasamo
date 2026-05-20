@@ -1,0 +1,291 @@
+---
+title: M3-Phase 2 / T2 step-end retrospective
+status: recorded
+created: 2026-05-20
+scope: step-end
+task: T2 — wasamoc lexer / parser RatioLit / ColorLit
+---
+
+# M3-Phase 2 / T2 step-end retrospective
+
+## Scope
+
+`docs/plans/progress/m3-phase-2-progress.md` の **T2**
+("`wasamoc` lexer / parser: `RatioLit` and `ColorLit` tokens, AST
+variants") の step-end retrospective。T2 が discharge する DD は
+DD-M3-P2-002 (Ratio surface 形 `<num>:<den>`) と DD-M3-P2-003
+(Color surface 形 `#RRGGBB` / `#RRGGBBAA`、`0xAARRGGBB` packing) の
+**surface-syntax 半分** で、IR-layer 半分は T1 で済んでいる。
+
+対象コミット:
+
+- `735a337 feat(wasamoc): lex Ratio / Color literals, add Expr variants (M3-Phase 2 T2)`
+
+これは step-end の gate であり、phase-end retrospective ではない。
+本 step (T2) は単一 step = 単一 task 構造で、merge 先は phase ブランチ
+`feat/m3-phase-2` (ff)。
+
+## Current Judgment
+
+2026-05-20 時点で T2 step-end 基準は **達成済み**。
+
+- `wasamoc::lexer` に `Token::RatioLit(i32, i32)` と
+  `Token::ColorLit(u32)` を追加。
+  - `scan_number` 内で整数を読み終わったあと、`is_float == false` かつ
+    next char が `:` かつ peek2 が数字のときに限り、`:` と第二整数を
+    呑んで `RatioLit` を emit。**whitespace を許容しない**仕様
+    (dsl_spec §2.2 の lexical pattern `[0-9]+ : [0-9]+` 通り)。
+  - `#` から始まる場合は新規 `scan_color` で hex 桁を消費し、桁数 6 /
+    8 のみ受理。それ以外は `unexpected character` ではなく明示的に
+    "must have 6 or 8 hex digits, got N" で reject。
+  - 桁数 8 の場合、surface 表記 `RRGGBBAA` を packing `0xAARRGGBB`
+    に並べ替えて u32 へ。桁数 6 の場合は alpha=`0xFF` を MSB に補う。
+- `wasamoc::ast` に `Expr::RatioLit { num, den, span }` /
+  `Expr::ColorLit { value, span }` を追加。`Expr::span()` の OR-arm に
+  両 variant を追加。
+- `wasamoc::parser::parse_expr` の `is_valid` 集合と match の arm に
+  両 variant を追加。`property_bind` RHS の position で
+  `aspect: 16:9` / `fill: #cccccc` / `fill: #00000080` が正しく
+  AST 化されることを 4 テストで確認。
+- 下流 (`check.rs`, `lower.rs`) の exhaustive match site に必要な arm を
+  追加して build を green に保った。
+  - `check::expr_static_type` は Ratio / Color に対して `None` を返す
+    (Box-internal 値型なので `TypeName` を持たない)。
+  - `check::check_expr_type` は Ratio / Color を pass-through し、
+    positional + value 妥当性チェックは **T3 の仕事** として残す。
+  - `lower::lower_state` / `lower::lower_expr` / `lower::lower_rhs_expr`
+    は Ratio / Color に対して `panic!("… T4 …")` を返す。これは
+    FloatLit の既存スタブパターンに揃えてある (cf. T1 retro Main
+    Learning: "T2 以降が IR variant を直接消費する場所で初めて新規
+    構造を要求する")。
+- `cargo fmt --all -- --check` (post-commit state), `cargo clean` →
+  `cargo build --release --workspace` → `cargo build --workspace` →
+  `cargo test --workspace`, いずれも local で green。
+
+T2 の blocker は残っていない。
+
+## Main Learning
+
+中心的な学びは「**lexer のコンテキスト解消は最小フックで済んだ**」と
+いう確認。`scan_number` に
+"next char が `:` かつ peek2 が数字" の lookahead 一つを足すだけで
+`Ident : type` / `Ident : expr` のような既存 `:` 使用と衝突なく
+`RatioLit` が抜ける。今回はこの非衝突性をテストで直接確認した:
+
+- `integer_followed_by_colon_then_non_digit_is_not_ratio` (`16: x`)
+- `integer_with_whitespace_before_colon_is_not_ratio` (`16 :9`)
+- `float_followed_by_colon_is_not_ratio` (`1.5:9`)
+- `measurement_not_disturbed_by_ratio_lookahead` (`12px`)
+- `ratio_literal_in_property_bind_position` (`aspect: 16:9`)
+
+副次的な学びとして、AST の `Expr` enum に doc-comment 付き variant を
+追加すると `rustfmt` が enum 全体を多行スタイルに揃え直す挙動が
+発生した。これは intentional な churn で、本 commit で受け入れたが、
+今後 enum に variant を増やす場合は doc-comment ありき (=多行スタイル
+強制) になることを意識する。
+
+ColorLit の packing 規約 `0xAARRGGBB` (alpha MSB) は **lexer** で
+固定した。これは `wasamo-ir` の `IrLiteral::Color(u32)` doc-comment
+(T1 で書いた仕様) と一致しており、後段 (T4 lowering, T5 emit
+round-trip, T7 ir_loader) では同じ packing をそのまま運ぶ。lexer で
+packing を決めることで、AST → IR の lowering arm (T4) は
+`IrLiteral::Color(*value)` という one-line mapping で済む。
+
+T3 (`wasamoc check` validity / reject set) に持ち越した境界:
+
+- `num <= 0` / `den <= 0` の reject (現状 lexer は `0:0` も accept)。
+- `bind aspect:` / `bind fill:` の reject (DD-M3-P2-004)。
+- Box の 2+ children reject (DD-M3-P2-001) + ZStack/HStack/VStack の
+  diagnostic 推奨。
+- Ratio / Color literal の出現位置を `Box.aspect` / `Box.fill` RHS
+  のみに制限 (dsl_spec §4.9 の "rejected position" 記述)。
+- Widget property catalog の Box 行 (`aspect: Ratio`, `fill: Color`)
+  の追加。
+
+これらは progress file の T3 に既に列挙済み。
+
+## Checklist
+
+1. **本作業の主要な学び:** あり。
+   - `scan_number` への 1 lookahead で `RatioLit` のコンテキスト
+     解消が衝突なく成立した (上で展開)。
+   - ColorLit の `0xAARRGGBB` packing を lexer 側で固定したことで、
+     T4 lowering / T5 emit / T7 ir_loader が one-line mapping で
+     済む構造になった。
+   - doc-comment 付き enum variant 追加で rustfmt が enum 全体を
+     多行スタイルに揃える挙動 (一回限りの churn)。
+
+2. **仕様文書 (`abi_spec.md` / `architecture.md` / `dsl_spec.md`) の変更:**
+   **なし**
+   - T2 の対象は `wasamoc` crate (lexer / parser / AST) のみ。
+     dsl_spec §2.2 / §4.9 / §8.2 は M3-Phase 2 pre-doc 期の draft で
+     既に当該 spelling を明記済み (DD-M3-P2-002 / 003 が Accepted の時点
+     で反映)。Moment 2 spec re-sync は T13 の責任範囲。
+
+3. **ローカル clean rebuild:** **green**
+   - `cargo fmt --all -- --check` (post-commit state): zero exit。
+   - `cargo clean` → `cargo build --release --workspace`: green
+     (release, 1m 03s)。
+   - `cargo build --workspace`: green (debug)。
+   - `cargo test --workspace`: failure 0 件。
+     - `wasamoc`: 117 passed (T2 で +18; lexer 14, parser 4)。
+     - `wasamo-ir`: 12 passed (T1 で +5、T2 で変化なし)。
+     - `wasamo-runtime`: 165 passed (変化なし)。
+     - 他 crate も変化なし。
+   - GitHub Actions 上の clean rebuild は phase-end gate (T13) で確認。
+
+4. **PO に相談すべき設計判断・トレードオフ:** **なし**
+   - DD-M3-P2-001..006 は ADR Accepted 済み (commit `6d597b1`)。
+     T2 はそのうち DD-M3-P2-002 / 003 の surface-syntax 半分の
+     mechanical 反映で、新規 design call は出ていない。
+   - lexer の lookahead "no whitespace between integer and `:`" は
+     dsl_spec §2.2 の lexical pattern (`[0-9]+ : [0-9]+`) の素直な
+     読み取りで、新規判断ではない (テストで非衝突性を確認済み)。
+
+### step-end 固有
+
+5. **plan/ADR に記載の step 目的から外れた「ついで」のリファクタ・
+   構造変更:** **なし**
+   - T2 の編集は (a) lexer に 2 token + scan_color 追加、
+     (b) AST に 2 Expr variant 追加、(c) parser の expr accept 集合に
+     2 token 追加、(d) check / lower の exhaustive match arm を build
+     green 維持のため追加、(e) テスト追加 — に限定。
+   - rustfmt が `Expr` enum を多行スタイルに揃え直したのは fmt
+     gate (item 3 (a)) を満たすための受け入れで、ついで化ではない。
+
+6. **現在の phase ADR への追加 DD 必要性:** **なし**
+   - 既存 DD-M3-P2-001..006 で T2 範囲はすべてカバー。
+   - lexer の "no whitespace before `:`" 規約は dsl_spec §2.2 の
+     lexical pattern を素直に解釈したもので、追加 DD 起こし不要。
+
+7. **既存 ADR の Proposed 項目の新規追加、または Proposed → Accepted
+   への昇格:** **なし**
+   - 当該 ADR は全 DD Accepted 済み (commit `6d597b1`)。T2 では昇格
+     対象なし。
+
+8. **`m3-plan.md` の AC 追加・変更、または Phase 構成の追加・統合・
+   分割:** **なし**
+   - A6 / A11 の文言は変更なし。Phase 構成変更なし。T1 終了時点で
+     m3-plan のステータス行は past tense に整っており、T2 完了でも
+     その記述は変える必要がない。
+
+9. **後続 step に持ち越す仮実装・近似・新規 `dead_code` 警告:**
+   **あり (T3 / T4 設計通り)**
+   - `lower.rs` に Ratio / Color 用の `panic!` スタブを 3 箇所追加。
+     これは **FloatLit と同じパターン** で、T3 が check で reject
+     する位置にしか降りない設計。T3 が通ると "現役パスでは panic
+     スタブに到達しない" 不変が成立し、T4 で正規 lowering に置き換え。
+   - `check.rs::check_expr_type` の Ratio / Color arm は pass-through。
+     T3 が positional + value reject を加える前提で残してある。
+   - 新規 `dead_code` 警告: なし (cargo build / test の warning 出力に
+     新規ノイズ無し)。
+
+10. **タスクリストの後続 step 見直し:** **なし (進行通り)**
+    - progress file の T2 行を `[x]` に更新し、本 retrospective への
+      link を追加する (次のドキュメントコミットで反映)。
+    - T3 以降の task 構成・順序・依存関係に T2 実装から見て調整すべき
+      点は出ていない。
+    - T3 / T4 への follow-up は下記 "Follow-Up" 節に明示。
+
+## Fast-Track Judgment
+
+Fast-track criteria を満たしている。
+
+- item 2 (spec doc 変更): なし
+- item 3 (local clean rebuild): green
+- item 4 (PO 相談事項): なし
+- item 5 (ついでのリファクタ): なし
+- item 6 (追加 DD 必要性): なし
+- item 7 (Proposed → Accepted 昇格): なし
+- item 8 (plan AC / Phase 構成変更): なし
+- item 9 (持ち越し): あり、ただし T3 / T4 で確実に消化する設計済み
+  pattern (FloatLit と同形) で blocker ではない。
+
+item 9 が "あり" のため厳密には fast-track 全条件は満たさないが、
+内容が新規負債ではなく **既存 FloatLit と同形の設計済みパターン**
+である点をオーナー報告に明記して、ff merge 判断を仰ぐ。
+
+## Verification Notes
+
+T2 で追加したテストと、走らせた command を記録する。
+
+新規 lexer テスト (`wasamoc/src/lexer.rs` 内 `#[cfg(test)] mod tests`):
+
+- `ratio_literal_basic`
+- `ratio_literal_one_to_one`
+- `ratio_literal_in_property_bind_position`
+- `integer_followed_by_colon_then_non_digit_is_not_ratio`
+- `integer_with_whitespace_before_colon_is_not_ratio`
+- `float_followed_by_colon_is_not_ratio`
+- `measurement_not_disturbed_by_ratio_lookahead`
+- `ratio_zero_sides_lex_ok_check_rejects_later`
+- `color_literal_six_digit_packs_with_full_alpha`
+- `color_literal_eight_digit_explicit_alpha`
+- `color_literal_eight_digit_mixed_channels`
+- `color_literal_uppercase_hex_accepted`
+- `color_literal_three_hex_rejected`
+- `color_literal_seven_hex_rejected`
+- `color_literal_no_hex_rejected`
+
+新規 parser テスト (`wasamoc/src/parser.rs` 内 `#[cfg(test)] mod tests`):
+
+- `property_bind_ratio_literal`
+- `property_bind_color_literal_six_hex`
+- `property_bind_color_literal_eight_hex`
+- `box_image_placeholder_shape`
+  - dsl_spec §4.9 の normative shape
+    `Box { aspect: 1:1; fill: #cccccc; Text { text: "Photo 12" } }`
+    を多行で受理することを確認。
+
+実行コマンド:
+
+```text
+cargo fmt --all -- --check   (post-commit state)
+cargo clean
+cargo build --release --workspace
+cargo build --workspace
+cargo test --workspace
+```
+
+いずれも green。
+
+## Follow-Up
+
+T2 から後続 task への明示的な引き渡し:
+
+- **T3 (`wasamoc check`):**
+  - `bind aspect:` / `bind fill:` を attribute 名で reject
+    (DD-M3-P2-004 constant-only contract)。
+  - `num <= 0` / `den <= 0` を rejected side を名指しで reject
+    (DD-M3-P2-005 aspect value validity)。lexer は `0:0` を syntactic
+    に accept する仕様なので、value reject は check の責任。
+  - Box 多子を `ZStack/VStack/HStack` 推奨 diagnostic で reject
+    (DD-M3-P2-001 multi-child)。
+  - Ratio / Color literal の **出現位置** を `Box.aspect` / `Box.fill`
+    RHS のみに制限 (dsl_spec §4.9: "rejected in any other syntactic
+    position with a diagnostic naming the offending position")。
+  - Widget property catalog (`widget_prop_type`) に Box 行を追加:
+    `aspect: Ratio`, `fill: Color` (Box-internal 型名で、`TypeName`
+    enum は拡張しない)。
+- **T4 (`wasamoc` lowering):**
+  - `lower.rs` の 3 つの panic スタブ (`lower_state`, `lower_expr`,
+    `lower_rhs_expr`) を Ratio / Color の正規 lowering に置き換え:
+    - `Expr::RatioLit { num, den, .. }` → `IrLiteral::Ratio { num, den }`
+    - `Expr::ColorLit { value, .. }` → `IrLiteral::Color(*value)`
+  - `lower_rhs_expr` の Ratio / Color arm は T3 が handler RHS を
+    reject する前提で `unreachable!` パスに留めるか、ガード残しで
+    `panic!` のままにするかは T4 の判断 (lower_state の FloatLit と
+    同じトレードオフ)。
+- **T5 (`wasamoc` IR text emit):** lexer 側 packing 規約と
+  `wasamo-ir::IrLiteral::Color(u32)` doc-comment が同じ
+  `0xAARRGGBB` を約束しているので、emit 側の hex 変換も同じ規約で
+  行えば lexer ↔ emit ↔ ir_loader が同期する。emit の Ratio / Color
+  arm は T1 で spelling-correct に書き終わっている (T1 retro 参照)
+  ので、T5 は in-process round-trip テスト整備に集中できる。
+- **T7 (`wasamo-runtime` ir_loader):** `parse_literal` の現状 catch-all
+  を `RATIO` / `COLOR` terminal の正規 arm に格上げ。lexer 側で
+  packing が固定されているので、emit text 経由でも同じ u32 を
+  そのまま運べる前提で書ける。
+
+これらはすべて progress file の T3–T7 として既に列挙済み。T2 単体で
+新たに発見された follow-up は無い。

@@ -75,6 +75,10 @@ fn lower_state(name: &str, ty: &TypeName, default: &Expr) -> IrState {
         Expr::IntLit { value, .. } => IrLiteral::Int(*value as i32),
         Expr::StringLit { parts, .. } => IrLiteral::Str(string_parts_to_static(parts)),
         Expr::BoolLit { value, .. } => IrLiteral::Bool(*value),
+        // Ratio / Color literals in a `state` default are a positional
+        // error rejected by `wasamoc check` (DD-M3-P2-002 / 003 confine
+        // them to `Box.aspect` / `Box.fill` RHS); they fall through to
+        // the catch-all below as a defense-in-depth panic.
         _ => panic!("lower_state: unsupported default (check should have rejected this)"),
     };
     IrState {
@@ -167,6 +171,17 @@ fn lower_expr(expr: &Expr, ns: &Namespace) -> LoweredExpr {
         Expr::FloatLit { .. } => {
             panic!("lower_expr: float not supported (check should have rejected this)");
         }
+        // Ratio / Color literals are admitted only as the RHS of
+        // `Box.aspect` / `Box.fill` (DD-M3-P2-002 / 003 Option A —
+        // surface literal → IR literal, no `PropertyValue` round-trip).
+        // `wasamoc check` rejects them in every other position, so the
+        // arms here are reached only on the accepted positions and lower
+        // straight to their `IrLiteral` siblings.
+        Expr::RatioLit { num, den, .. } => LoweredExpr::Static(IrLiteral::Ratio {
+            num: *num,
+            den: *den,
+        }),
+        Expr::ColorLit { value, .. } => LoweredExpr::Static(IrLiteral::Color(*value)),
     }
 }
 
@@ -266,6 +281,17 @@ fn lower_rhs_expr(expr: &Expr, ns: &Namespace) -> HandlerExpr {
         },
         Expr::Measurement { value, .. } => HandlerExpr::IntLit(*value as i32),
         Expr::FloatLit { .. } => panic!("lower_rhs_expr: float not supported"),
+        // Ratio / Color literals in handler RHS position are positional
+        // errors rejected by `wasamoc check` (DD-M3-P2-002 / 003 confine
+        // them to `Box.aspect` / `Box.fill`; DD-M3-P2-004 keeps both
+        // constant-only at the bind site). The arms remain as
+        // defense-in-depth panics, mirroring `FloatLit` above.
+        Expr::RatioLit { .. } => {
+            panic!("lower_rhs_expr: ratio literal in handler RHS (check should have rejected)")
+        }
+        Expr::ColorLit { .. } => {
+            panic!("lower_rhs_expr: color literal in handler RHS (check should have rejected)")
+        }
     }
 }
 
@@ -533,5 +559,95 @@ mod tests {
         assert_eq!(vstack.children.len(), 2);
         assert_eq!(vstack.children[0].widget_type, "Text");
         assert_eq!(vstack.children[1].widget_type, "Button");
+    }
+
+    // --- T4: Box ratio / color literal lowering -------------------------
+    //
+    // The accepted positions for `Expr::RatioLit` / `Expr::ColorLit` are
+    // `Box.aspect` / `Box.fill` RHS (DD-M3-P2-002 / 003 Option A — surface
+    // literal → IR literal, no `PropertyValue`). These tests pin the
+    // straight-through lowering for representative `Box { ... }` shapes
+    // from dsl_spec §4.9.
+
+    fn box_root<'a>(comp: &'a IrComponent) -> &'a IrNode {
+        assert_eq!(comp.root.widget_type, "Box");
+        &comp.root
+    }
+
+    #[test]
+    fn box_aspect_only_lowered_to_ir_ratio() {
+        let comp = lower_src("component C inherits W { Box { aspect: 16:9 } }");
+        let b = box_root(&comp);
+        assert!(b.bindings.is_empty());
+        assert_eq!(b.props.len(), 1);
+        assert_eq!(b.props[0].name, "aspect");
+        assert_eq!(b.props[0].value, IrLiteral::Ratio { num: 16, den: 9 });
+        assert!(b.children.is_empty());
+    }
+
+    #[test]
+    fn box_fill_only_opaque_lowered_to_ir_color() {
+        let comp = lower_src("component C inherits W { Box { fill: #cccccc } }");
+        let b = box_root(&comp);
+        assert_eq!(b.props.len(), 1);
+        assert_eq!(b.props[0].name, "fill");
+        // `#RRGGBB` → `0xFFRRGGBB` (alpha defaulted to 0xFF per dsl_spec §8.2).
+        assert_eq!(b.props[0].value, IrLiteral::Color(0xFF_CC_CC_CC));
+    }
+
+    #[test]
+    fn box_fill_with_alpha_lowered_to_ir_color() {
+        let comp = lower_src("component C inherits W { Box { fill: #00000080 } }");
+        let b = box_root(&comp);
+        assert_eq!(b.props.len(), 1);
+        assert_eq!(b.props[0].name, "fill");
+        assert_eq!(b.props[0].value, IrLiteral::Color(0x80_00_00_00));
+    }
+
+    #[test]
+    fn box_aspect_and_fill_lowered_together() {
+        let comp = lower_src("component C inherits W { Box { aspect: 16:9 fill: #ffffffff } }");
+        let b = box_root(&comp);
+        assert_eq!(b.props.len(), 2);
+        let aspect = b
+            .props
+            .iter()
+            .find(|p| p.name == "aspect")
+            .expect("aspect prop");
+        assert_eq!(aspect.value, IrLiteral::Ratio { num: 16, den: 9 });
+        let fill = b
+            .props
+            .iter()
+            .find(|p| p.name == "fill")
+            .expect("fill prop");
+        assert_eq!(fill.value, IrLiteral::Color(0xFF_FF_FF_FF));
+    }
+
+    #[test]
+    fn box_with_text_child_placeholder_shape_lowered() {
+        // The dsl_spec §4.9 normative placeholder shape:
+        //   Box { aspect: 16:9; fill: #cccccc; Text { text: "Photo 12" } }
+        let comp = lower_src(
+            r#"component C inherits W { Box { aspect: 16:9 fill: #cccccc Text { text: "Photo 12" } } }"#,
+        );
+        let b = box_root(&comp);
+        assert_eq!(b.props.len(), 2);
+        assert_eq!(
+            b.props
+                .iter()
+                .find(|p| p.name == "aspect")
+                .map(|p| &p.value),
+            Some(&IrLiteral::Ratio { num: 16, den: 9 })
+        );
+        assert_eq!(
+            b.props.iter().find(|p| p.name == "fill").map(|p| &p.value),
+            Some(&IrLiteral::Color(0xFF_CC_CC_CC))
+        );
+        assert_eq!(b.children.len(), 1);
+        let child = &b.children[0];
+        assert_eq!(child.widget_type, "Text");
+        assert_eq!(child.props.len(), 1);
+        assert_eq!(child.props[0].name, "text");
+        assert_eq!(child.props[0].value, IrLiteral::Str("Photo 12".into()));
     }
 }

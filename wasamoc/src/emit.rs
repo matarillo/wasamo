@@ -93,6 +93,32 @@ fn emit_literal(lit: &IrLiteral) -> String {
         IrLiteral::Str(s) => format!("\"{}\"", escape_string(s)),
         IrLiteral::Ident(id) => id.clone(),
         IrLiteral::Bool(b) => (if *b { "true" } else { "false" }).to_string(),
+        IrLiteral::Ratio { num, den } => format!("{}:{}", num, den),
+        IrLiteral::Color(value) => emit_color_lit(*value),
+    }
+}
+
+/// Render a `Color(u32)` packed as `0xAARRGGBB`.
+///
+/// **Canonical emit policy (M3-Phase 2 T5).** Both `#RRGGBB` and
+/// `#RRGGBBAA` are valid surface forms (dsl_spec §8.2 `COLOR`) and
+/// both are accepted by `wasamoc` lex and by `ir_loader`; the choice
+/// of which form the emitter writes is a separate decision. The
+/// emitter normalises alpha = `0xFF` to the short `#RRGGBB` form
+/// (implicit-opaque) and writes the full `#RRGGBBAA` form otherwise.
+/// This keeps the common opaque case readable (`#cccccc`) while
+/// reserving the 8-digit form for values where alpha actually
+/// carries information (e.g. `#00000080` for a structural scrim).
+/// `#RRGGBBFF` written explicitly in surface does **not** survive
+/// emit byte-for-byte — it round-trips through `IrLiteral::Color`
+/// and re-emits as `#RRGGBB`.
+fn emit_color_lit(value: u32) -> String {
+    let alpha = (value >> 24) & 0xFF;
+    let rgb = value & 0x00FF_FFFF;
+    if alpha == 0xFF {
+        format!("#{:06x}", rgb)
+    } else {
+        format!("#{:06x}{:02x}", rgb, alpha)
     }
 }
 
@@ -240,6 +266,116 @@ mod tests {
         );
         assert!(out.contains("on clicked {"), "got: {}", out);
         assert!(out.contains("(assign ready false)"), "got: {}", out);
+    }
+
+    // --- T5: Box ratio / color literal IR text emit ---------------------
+    //
+    // Verifies that ratio and color literals appear in `prop` literal
+    // position in their surface forms (`<num>:<den>`, `#RRGGBB` /
+    // `#RRGGBBAA`), that the full Box widget node shape from dsl_spec
+    // §4.9 emits intact, and that the canonical alpha = `0xFF`
+    // normalisation documented on `emit_color_lit` holds end-to-end
+    // from surface input through IR text emit. The corresponding
+    // IR-text-side fixture for ADR §Phase 2 verification closure item 2
+    // is pinned by `box_phase2_ir_text_emit_fixture` below; the load-
+    // side half lives in `wasamo-runtime::ir_loader` (T7 / T10).
+
+    #[test]
+    fn box_aspect_ratio_emitted_in_surface_form() {
+        let out = emit_src("component C inherits W { Box { aspect: 16:9 } }");
+        assert!(out.contains("node Box {"), "got: {}", out);
+        assert!(out.contains("prop aspect = 16:9"), "got: {}", out);
+    }
+
+    #[test]
+    fn box_fill_opaque_color_emitted_in_short_form() {
+        // `#cccccc` lowers to `IrLiteral::Color(0xFF_CC_CC_CC)`; emit
+        // normalises alpha = `0xFF` back to the short `#cccccc` form
+        // (canonical emit policy on `emit_color_lit`).
+        let out = emit_src("component C inherits W { Box { fill: #cccccc } }");
+        assert!(out.contains("prop fill = #cccccc"), "got: {}", out);
+        assert!(!out.contains("#ccccccff"), "got: {}", out);
+    }
+
+    #[test]
+    fn box_fill_color_with_alpha_emitted_in_full_form() {
+        // `#00000080` lowers to `IrLiteral::Color(0x80_00_00_00)`;
+        // alpha != `0xFF`, so emit writes the full 8-hex form.
+        let out = emit_src("component C inherits W { Box { fill: #00000080 } }");
+        assert!(out.contains("prop fill = #00000080"), "got: {}", out);
+    }
+
+    #[test]
+    fn color_emit_normalises_alpha_ff_input_to_short_form() {
+        // Surface `#ffffffff` (explicit alpha = `0xFF`) round-trips
+        // through `IrLiteral::Color(0xFF_FF_FF_FF)` and re-emits as
+        // `#ffffff` — the canonical-policy normalisation direction.
+        // This is the byte-for-byte case the policy intentionally
+        // does **not** preserve.
+        let out = emit_src("component C inherits W { Box { fill: #ffffffff } }");
+        assert!(out.contains("prop fill = #ffffff\n"), "got: {}", out);
+        assert!(!out.contains("#ffffffff"), "got: {}", out);
+    }
+
+    #[test]
+    fn box_phase2_placeholder_widget_node_shape_emitted() {
+        // dsl_spec §4.9 normative placeholder shape:
+        //   Box { aspect: 16:9; fill: #cccccc; Text { text: "Photo 12" } }
+        let out = emit_src(
+            r#"component C inherits W { Box { aspect: 16:9 fill: #cccccc Text { text: "Photo 12" } } }"#,
+        );
+        assert!(out.contains("node Box {"), "got: {}", out);
+        assert!(out.contains("prop aspect = 16:9"), "got: {}", out);
+        assert!(out.contains("prop fill = #cccccc"), "got: {}", out);
+        assert!(out.contains("node Text {"), "got: {}", out);
+        assert!(out.contains(r#"prop text = "Photo 12""#), "got: {}", out);
+    }
+
+    #[test]
+    fn box_phase2_ir_text_emit_fixture() {
+        // ADR §Phase 2 verification closure item 2 (emit-side gate):
+        // for the fixture `Box { aspect: 16:9; fill: #00000080;
+        // Text { text: "Photo 12" } }`, an in-process test inspects
+        // both the underlying `IrLiteral` variants and the emitted
+        // IR text. DD-M3-P2-002 / DD-M3-P2-003 require the literals
+        // travel as `IrLiteral::Ratio` / `IrLiteral::Color` directly
+        // (not via `PropertyValue`); §8.2 fixes the packed `u32`
+        // layout as `0xAARRGGBB`. The load-side half (the same
+        // fixture re-entering `wasamo-runtime::ir_loader`) lives in
+        // T7 / T10.
+        let src = r#"component C inherits W { Box { aspect: 16:9 fill: #00000080 Text { text: "Photo 12" } } }"#;
+        let tokens = tokenize(src, "<test>").unwrap();
+        let ast = parse(&tokens, "<test>").unwrap();
+        let result = check(&ast, "<test>");
+        assert!(!result.has_errors(), "{:?}", result.diagnostics);
+        let comp = lower(&ast, &result.namespace);
+
+        let b = &comp.root;
+        assert_eq!(b.widget_type, "Box");
+        let aspect = &b
+            .props
+            .iter()
+            .find(|p| p.name == "aspect")
+            .expect("aspect prop")
+            .value;
+        let fill = &b
+            .props
+            .iter()
+            .find(|p| p.name == "fill")
+            .expect("fill prop")
+            .value;
+        assert_eq!(*aspect, IrLiteral::Ratio { num: 16, den: 9 });
+        assert_eq!(*fill, IrLiteral::Color(0x80_00_00_00));
+        assert_eq!(b.children.len(), 1);
+        assert_eq!(b.children[0].widget_type, "Text");
+
+        let out = emit(&comp);
+        assert!(out.starts_with(";wasamo-ir v0\n"), "got: {}", out);
+        assert!(out.contains("node Box {"), "got: {}", out);
+        assert!(out.contains("prop aspect = 16:9"), "got: {}", out);
+        assert!(out.contains("prop fill = #00000080"), "got: {}", out);
+        assert!(out.contains("node Text {"), "got: {}", out);
+        assert!(out.contains(r#"prop text = "Photo 12""#), "got: {}", out);
     }
 
     #[test]
