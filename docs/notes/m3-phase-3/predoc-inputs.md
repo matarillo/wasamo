@@ -210,3 +210,96 @@ future-width/height rule を Phase 3 の都合で暗黙に ship しない。
 - thumbnail size は WrapPanel property で決めるのか、parent constraint から
   導くのか、child intrinsic size に任せるのか。Box 自身に新しい dimension
   attribute を足す必要が本当にあるか。
+
+## 13. `docs/notes` 直下の open question audit を Phase 3 冒頭で読む
+
+Phase 2 close 由来ではないが、`docs/notes` 直下の live note には M3 の
+phase pre-doc が入口で確認すべき open question / reconsider trigger が残る。
+Phase 3 (WrapPanel) で全てを解く必要はないが、少なくとも次を「発火 / 未発火」
+として判定してから ADR scope を切る。
+
+- `architectural-family.md`: **trigger 発火**。M3 DSL spec drafting が始まって
+  いるため再読必須。ただし WrapPanel が tree-with-bindings から外れる
+  grammar / IR を要求しない限り、vision-level ADR へ昇格する必要はない。
+- `layout-engine.md`: **部分発火**。WrapPanel は novel measure-arrange
+  algorithm なので、DPI scaling / cache invalidation / async measure /
+  user-defined layout の各 open question が Phase 3 scope に入るかを明示する。
+  Image は M3 で defer されているため async measure は原則未発火。
+- `typed-value-evaluator.md`: **Phase 1 で bool により trigger 済みだが、
+  Phase 3 で再発火するかは条件付き**。WrapPanel が bindable dimension /
+  layout numeric value / item context を要求しないなら `TypedValue` は再度
+  defer してよい。
+- `dsl-grammar.md`: **WrapPanel 単体では大半未発火**。template-local scope、
+  条件レンダリング、繰り返し生成、qualified state reference は後続 grammar
+  phase の本線。ただし Phase 3 proof が repeated thumbnail 生成まで踏むなら
+  Q1 / Q3 を再読する。
+- `component-extension-model.md`: **未発火**。WrapPanel は built-in component
+  として扱い、custom layout / import / registry は M3 scope に入れない。
+- `workspace-layout.md`: **未発火**。Phase 3 が新 crate を増やさない限り
+  `crates/` migration は扱わない。
+
+具体的な pre-doc question:
+
+- Phase 3 ADR の Context / Inputs に、上記 audit のうち「発火済み」とした
+  note を明示的に listed input として入れるか。未発火扱いにする note は、
+  out-of-scope に短く理由を残すか。
+
+## 14. architectural-family trigger は「読む」が、WrapPanel で決めすぎない
+
+`architectural-family.md` の re-evaluation trigger 1 は「M3 DSL spec drafting
+begins」であり、これは既に満たされている。したがって Phase 3 の pre-doc は、
+tree-with-bindings family を前提として WrapPanel を設計してよいかを入口で
+確認する。
+
+ただし WrapPanel は layout primitive であり、view-function re-execution、
+template expansion、diff / reuse semantics を直接要求しない。Phase 3 が
+static / finite child list の wrapping に閉じるなら、trigger の処理は
+「再読し、現 hypothesis と整合することを確認」で十分。vision-level family
+ADR への昇格は、Phase 3 が tree shape re-execution や host-provided view
+function を必要とする場合に限る。
+
+具体的な pre-doc question:
+
+- WrapPanel の child tree は existing IR tree + layout pass だけで説明できるか。
+  できるなら `architectural-family.md` は consumed input として記録し、
+  family decision は再オープンしない。
+
+## 15. layout-engine open questions は WrapPanel scope に入れるものだけ選ぶ
+
+`layout-engine.md` の M2 以降 open questions のうち、WrapPanel が直接触るのは
+主に measure-arrange algorithm と cache invalidation の境界である。
+Phase 3 は次の扱いを pre-doc で明示する:
+
+- DPI scaling: logical pixel layout のまま進めるなら未発火。physical pixel /
+  text hinting / per-monitor DPI を WrapPanel semantics に入れない。
+- async measure: Image widget は M3 で defer 済みなので未発火。Box placeholder
+  は synchronous intrinsic sizing として扱う。
+- cache invalidation: WrapPanel child count / item size / parent width の変更で
+  layout dirty が必要になるなら、既存 whole-window dirty で十分かを確認する。
+  1,000 node 指標や subtree dirty への移行は、性能 evidence が出ない限り
+  Phase 3 scope にしない。
+- user-defined layout: custom component / custom measure-arrange は未発火。
+  WrapPanel は built-in layout primitive として ship する。
+
+具体的な pre-doc question:
+
+- WrapPanel が追加する dirty trigger は既存 layout invalidation path に乗るか。
+  乗らない場合だけ、cache invalidation open question を ADR sub-issue に昇格する。
+
+## 16. verification / process 系 note は evidence の置き場を先に決める
+
+`verification-environments.md` と `headless-verification.md` は、Phase 3 の
+test strategy に直結する。pure line-breaker test で閉じる item と、
+live Compositor-backed runtime state を読む item を混同しない。
+
+加えて `process-rules-ssot.md` Q6 は、phase progress / retrospective /
+acceptance evidence の責務境界が未決であることを記録している。Phase 3 が
+novel layout verification を複数 item で閉じるなら、progress file に
+詳細 mapping を積みすぎず、ADR verification closure / step retrospective /
+phase-end retrospective のどこへ蒸留するかを最初に決める。
+
+具体的な pre-doc question:
+
+- WrapPanel の evidence は、pure layout tests、IR round-trip tests、
+  Windows-only integration tests、gallery proof のどれで閉じるか。各 evidence
+  の永続参照先は ADR / step retrospective / phase-end retrospective のどれか。
