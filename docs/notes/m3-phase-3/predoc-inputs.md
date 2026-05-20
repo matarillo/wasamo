@@ -1,5 +1,5 @@
 ---
-title: M3-Phase 3 pre-doc inputs — carried forward from M3-Phase 2 close
+title: M3-Phase 3 pre-doc inputs — M3-Phase 2 close からの前送り
 status: live
 created: 2026-05-20
 source-phase: M3-Phase 2
@@ -8,92 +8,90 @@ target-phase: M3-Phase 3
 
 # M3-Phase 3 pre-doc inputs
 
-This note carries forward the Phase 2 close learnings into the
-M3-Phase 3 (WrapPanel layout primitive) pre-doc. It is intentionally
-actionable rather than retrospective-only: Phase 3 should be able to
-start from these constraints without re-reading every Phase 2 commit.
+この note は、Phase 2 close の学びを M3-Phase 3 (WrapPanel layout
+primitive) の pre-doc へ前送りするもの。単なる retrospective ではなく、
+Phase 3 が Phase 2 の全 commit を読み直さなくても、この制約群から
+着手できるように action-oriented に書く。
 
-## 1. WrapPanel should consume Box intrinsic sizing, not redefine it
+## 1. WrapPanel は Box intrinsic sizing を consume し、再定義しない
 
-Phase 2 gave `Box { aspect: <ratio> }` a defined intrinsic size when
-one parent axis is bounded: the bounded axis wins and the other axis is
-derived from the ratio. Phase 3's WrapPanel ADR should cite
-`docs/dsl_spec.md` §4.9 for that behavior and define how WrapPanel
-offers main-axis / cross-axis constraints to children; it should avoid
-restating the Box aspect algorithm.
+Phase 2 では、parent axis の片方が bounded の場合に
+`Box { aspect: <ratio> }` が defined intrinsic size を持つようにした:
+bounded axis が勝ち、もう片方の axis は ratio から導出される。Phase 3 の
+WrapPanel ADR はこの behavior について `docs/dsl_spec.md` §4.9 を cite
+し、WrapPanel が child に main-axis / cross-axis constraint をどう渡すかを
+定義する。Box aspect algorithm を再記述しない。
 
-Concrete pre-doc question:
+具体的な pre-doc question:
 
-- In a thumbnail strip, does WrapPanel measure each child with a fixed
-  main-axis item slot, a max main-axis constraint, or an unbounded
-  main-axis constraint plus later arrange? The answer determines how
-  `Box { aspect: 1:1 }` obtains its thumbnail size.
+- thumbnail strip で、WrapPanel は child を fixed main-axis item slot で
+  measure するのか、max main-axis constraint で measure するのか、
+  unbounded main-axis constraint + later arrange で扱うのか。この答えで
+  `Box { aspect: 1:1 }` が thumbnail size をどう得るかが決まる。
 
-## 2. Placeholder thumbnails are now the normative gallery asset shape
+## 2. Placeholder thumbnail は gallery asset shape の normative 形になった
 
-Phase 2 made `Box { aspect: <ratio>; fill: <color>; Text { ... } }`
-the normative pre-Image placeholder pattern. Phase 3 should build its
-gallery sub-screen from that shape rather than introducing an Image-like
-surface, asset pipeline, or host-imperative fixture.
+Phase 2 では `Box { aspect: <ratio>; fill: <color>; Text { ... } }` を
+normative pre-Image placeholder pattern にした。Phase 3 は Image-like
+surface、asset pipeline、host-imperative fixture を導入せず、この shape から
+gallery sub-screen を構築する。
 
-Concrete pre-doc question:
+具体的な pre-doc question:
 
-- What minimal thumbnail item shape should Phase 3 use for visible
-  proof: square placeholders (`1:1`), mixed aspect placeholders, or a
-  fixed set that includes both? Mixed aspect items are better evidence
-  for wrapping only if the WrapPanel contract intentionally supports
-  variable child extents in the main axis.
+- Phase 3 の visible proof には、どの minimal thumbnail item shape を
+  使うべきか: square placeholder (`1:1`) か、mixed aspect placeholder
+  か、その両方を含む fixed set か。mixed aspect item は、WrapPanel
+  contract が main axis の variable child extent を意図的に support する
+  場合にだけ wrapping の良い evidence になる。
 
-## 3. Multi-child overlap remains out of Box scope
+## 3. Multi-child overlap は Box scope 外のまま
 
-Phase 2 deliberately rejected 2+ children in Box and pointed overlap to
-ZStack. Phase 3 should not rely on Box for labels over thumbnails or
-badges over images. If a WrapPanel item needs a composite thumbnail
-before ZStack ships, the Phase 3 ADR should keep it as a plain child
-tree that does not require overlap semantics.
+Phase 2 は Box の 2+ children を意図的に reject し、overlap は ZStack に
+向けた。Phase 3 は thumbnail 上の label や image 上の badge のために Box
+へ依存しない。ZStack が ship する前に WrapPanel item が composite
+thumbnail を必要とする場合でも、Phase 3 ADR は overlap semantics を
+必要としない plain child tree として保つ。
 
-Concrete pre-doc question:
+具体的な pre-doc question:
 
-- Does the Phase 3 gallery proof need labels inside the placeholder, or
-  can the visible item be a single Box + centred Text placeholder until
-  ZStack / Image later broaden the composition?
+- Phase 3 gallery proof は placeholder 内の label を必要とするか。それとも
+  ZStack / Image が後で composition を広げるまで、visible item は single
+  Box + centred Text placeholder でよいか。
 
-## 4. Spec-drafting bar rises in Phase 3
+## 4. Phase 3 では spec-drafting bar が上がる
 
-Phase 2's spec close was mostly a re-sync of an ADR-written Box chapter.
-Phase 3 is the first M3 phase whose acceptance text calls out a novel
-normative measure-arrange algorithm. The pre-doc should land a draft
-WrapPanel spec outline before implementation starts, including:
+Phase 2 の spec close は、ADR-written な Box chapter の re-sync が中心
+だった。Phase 3 は、acceptance text が novel normative measure-arrange
+algorithm を明示する最初の M3 phase になる。pre-doc では implementation
+開始前に WrapPanel spec outline の draft を置く。少なくとも次を含める:
 
-- line formation inputs and outputs;
+- line formation の input / output;
 - main-axis overflow behavior;
 - cross-axis line sizing;
-- spacing / padding treatment, or an explicit statement that those
-  attributes are not in Phase 3 scope;
-- unbounded-parent behavior, especially inside the later ScrollView
-  phase.
+- spacing / padding treatment、またはそれらの attribute が Phase 3 scope
+  外であるという明示;
+- unbounded-parent behavior。特に後続の ScrollView phase 内での扱い。
 
-## 5. Keep the constant-only value boundary unless Phase 3 needs more
+## 5. Phase 3 が必要としない限り constant-only value boundary を保つ
 
-Phase 2 kept `Ratio` and `Color` Box-internal and avoided new
-`PropertyValue` / ABI arms. Phase 3 should preserve that boundary unless
-WrapPanel itself introduces a bindable value type. If a new property
-needs binding, the per-type runtime writer, IR literal/type surface, and
-ABI conversion story should be decided in the same step rather than
-split across phases.
+Phase 2 は `Ratio` と `Color` を Box-internal に保ち、新しい
+`PropertyValue` / ABI arm を避けた。Phase 3 も、WrapPanel 自身が
+bindable value type を導入しない限り、この boundary を保つ。新しい
+property が binding を必要とする場合は、per-type runtime writer、IR
+literal/type surface、ABI conversion story を phase 跨ぎにせず、同じ
+step で決める。
 
-## 6. Verification shape to inherit
+## 6. 引き継ぐ verification shape
 
-Phase 3 should keep the Phase 2 split:
+Phase 3 は Phase 2 の分割を引き継ぐ:
 
-- pure-logic measure-arrange tests for the WrapPanel line breaker;
-- IR / loader tests only for the new widget and properties it actually
-  adds;
-- one Windows-only integration test if the visible behavior depends on
-  real compositor-backed widget state;
-- a gallery sub-screen grown through `.ui -> wasamoc -> IR text ->
-  wasamo_load_ui`, not host-imperative construction.
+- WrapPanel line breaker には pure-logic measure-arrange test;
+- IR / loader test は実際に追加する new widget / property だけを対象にする;
+- visible behavior が real compositor-backed widget state に依存する場合は、
+  Windows-only integration test を 1 つ置く;
+- gallery sub-screen は host-imperative construction ではなく
+  `.ui -> wasamoc -> IR text -> wasamo_load_ui` で育てる。
 
-The Phase 2 T11 skip guard pattern is still the right model: local
-developer machines may skip when Compositor creation is unavailable, but
-GitHub Actions must fail rather than silently skip.
+Phase 2 T11 の skip guard pattern は引き続き正しい model。local developer
+machine では Compositor creation が unavailable な場合に skip してよいが、
+GitHub Actions では silent skip ではなく fail しなければならない。

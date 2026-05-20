@@ -1,22 +1,22 @@
 ---
-title: M3-Phase 2 / T13 step-end retrospective
+title: M3-Phase 2 / T13 step-end 振り返り
 status: recorded
 created: 2026-05-20
 scope: step-end
 task: T13 — Phase-end gates
 ---
 
-# M3-Phase 2 / T13 step-end retrospective
+# M3-Phase 2 / T13 step-end 振り返り
 
-T13 is the phase-end gate step, so its detailed retrospective is the
-phase-end retrospective:
+T13 は phase-end gate そのものの step なので、詳細な振り返りは
+phase-end 振り返りに集約する:
 
 - [phase-end-retrospective.md](./phase-end-retrospective.md)
 
-T13-specific closure items completed there:
+そこで完了確認した T13 固有の close 項目は次の通り:
 
-- local fmt / clean rebuild / workspace test gates;
-- `dsl_spec.md` §4.9 implementation-sync marker flip;
+- local fmt / clean rebuild / workspace test gate;
+- `dsl_spec.md` §4.9 の implementation-sync marker flip;
 - M3-Phase 3 forward-distillation note;
 - phase progress lifecycle transition;
-- CI workflow_dispatch gate before merge.
+- merge 前の CI `workflow_dispatch` gate。

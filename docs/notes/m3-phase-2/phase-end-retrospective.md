@@ -1,101 +1,100 @@
 ---
-title: M3-Phase 2 phase-end retrospective
+title: M3-Phase 2 phase-end 振り返り
 status: recorded
 created: 2026-05-20
 scope: phase-end
 phase: M3-Phase 2 — Box layout primitive
 ---
 
-# M3-Phase 2 phase-end retrospective
+# M3-Phase 2 phase-end 振り返り
 
-## Scope
+## 対象範囲
 
-M3-Phase 2 shipped the Box layout primitive and closes M3 acceptance
-criterion A6. The phase added constant-only `aspect: <ratio>` and
-`fill: <color>` attributes, Box-internal Ratio / Color runtime values,
-IR text support, runtime IR loading and validation, aspect-aware
-measure-arrange, Windows-runtime integration evidence, and the first
-`examples/gallery/` sub-screen with a Rust host.
+M3-Phase 2 は Box layout primitive を shipped とし、M3 acceptance
+criterion A6 を close した。この phase では constant-only な
+`aspect: <ratio>` / `fill: <color>` attribute、Box-internal な Ratio /
+Color runtime value、IR text support、runtime IR loading / validation、
+aspect-aware measure-arrange、Windows-runtime integration evidence、
+および Rust host を伴う最初の `examples/gallery/` sub-screen を追加した。
 
-## Main Learning
+## 主な学び
 
-The main learning is that a layout primitive can own a narrow internal
-value surface without pressuring the public ABI or the generic
-`TypedValue` deferral. Keeping `Ratio` and `Color` Box-internal let the
-phase prove aspect and fill behavior while preserving the later option
-to add bindable values only when a phase actually needs them.
+主な学びは、layout primitive が狭い internal value surface を持っても、
+public ABI や generic `TypedValue` deferral に圧をかけずに済む、という
+こと。`Ratio` と `Color` を Box-internal に保ったことで、aspect / fill
+behavior を証明しつつ、bindable value が本当に必要になった phase でだけ
+拡張する余地を残せた。
 
-The second learning is procedural: phase-end spec sync works best when
-the ADR has already written the normative chapter shape. T13 found no
-draft / implementation divergence in `dsl_spec.md` §4.9; the close work
-was a status flip and evidence distillation rather than late spec
-invention.
+二つ目の学びは手順面。phase-end spec sync は、ADR 側で normative
+chapter の形を先に書いておくと一番うまく進む。T13 では
+`dsl_spec.md` §4.9 に draft / implementation divergence は見つからず、
+close 作業は late spec invention ではなく、status flip と evidence
+distillation になった。
 
-## Checklist
+## チェックリスト
 
 1. **本作業の主要な学び:** あり。
-   - Box's literal-only internal values avoided public ABI churn and
-     kept the F5 `TypedValue` deferral unpressured.
+   - Box の literal-only internal value により、public ABI churn を避け、
+     F5 `TypedValue` deferral への圧もかけずに済んだ。
 
 2. **仕様文書 (`abi_spec.md` / `architecture.md` / `dsl_spec.md`) の変更:**
    **あり**
-   - `dsl_spec.md` changed by the planned Phase 2 close marker:
-     document version 0.8 and §4.9
+   - `dsl_spec.md` は planned Phase 2 close marker として変更:
+     document version 0.8 および §4.9
      `M3-Phase 2 closed; implementation-synced`.
-   - `abi_spec.md` and `architecture.md` did not change at phase close.
+   - `abi_spec.md` と `architecture.md` は phase close では変更なし。
 
 3. **ローカル clean rebuild:** **green**
    - `cargo fmt --all -- --check`: green.
-   - `cargo clean`: succeeded.
+   - `cargo clean`: success.
    - `cargo build --release --workspace`: green.
    - `cargo build --workspace`: green.
-   - `cargo test --workspace`: green, including T11
+   - `cargo test --workspace`: green。T11
      `aspect_box_with_text_child_lays_out_and_paints_fill`.
 
 4. **PO に相談すべき設計判断・トレードオフ:** **なし**
-   - Phase 2 stayed within the Accepted ADR.
+   - Phase 2 は Accepted ADR の範囲内に収まった。
 
 ### phase-end 固有
 
 11. **Acceptance criteria (Ax) 達成確認:** **達成**
-    - A6 is discharged by T1-T13: Box syntax, IR, checker, runtime
-      loader, layout, tests, Windows integration evidence, gallery
-      sub-screen, spec sync, and phase-end gates.
+    - A6 は T1-T13 により discharged: Box syntax、IR、checker、
+      runtime loader、layout、tests、Windows integration evidence、
+      gallery sub-screen、spec sync、phase-end gate。
 
 12. **`CHANGELOG.md` / `ROADMAP.md` 整合:** **整合**
-    - `CHANGELOG.md` Unreleased now records the M3-Phase 2 Box
-      delivery and A6 discharge.
-    - `ROADMAP.md` required no change; A6 already described this
-      phase's delivered surface.
+    - `CHANGELOG.md` Unreleased に M3-Phase 2 Box delivery と A6
+      discharge を記録済み。
+    - `ROADMAP.md` は変更不要。A6 はこの phase の delivered surface を
+      既に記述している。
 
 13. **`VISION.md` / thesis-level claim への影響:** **なし**
-    - Phase 2 advances the existing M3 thesis ("DSL can express real
-      layouts") but does not change the thesis wording or milestone
-      scope.
+    - Phase 2 は既存の M3 thesis ("DSL can express real layouts") を
+      前進させるが、thesis wording や milestone scope は変更しない。
 
 14. **次 phase の pre-doc への送り込み材料:** **整理済み**
-    - `docs/notes/m3-phase-3/predoc-inputs.md` carries forward Box
-      intrinsic sizing, placeholder-thumbnail, value-boundary,
-      spec-drafting, and verification constraints.
+    - `docs/notes/m3-phase-3/predoc-inputs.md` に Box intrinsic sizing、
+      placeholder-thumbnail、value-boundary、spec-drafting、
+      verification constraint を前送り済み。
 
-15. **CI green 確認:** **green before merge**
-    - T13 is gated by a GitHub Actions `workflow_dispatch` run on the
-      final phase-close commit before merge. Main push remains
-      owner-gated.
+15. **CI green 確認:** **merge 前 green**
+    - T13 は merge 前に final phase-close commit 上の GitHub Actions
+      `workflow_dispatch` run で gate 済み。main push は引き続き
+      owner-gated。
 
 16. **human-visible GUI smoke:** **必要 / 実施済み**
-    - T12 recorded `Start-Process .\target\release\gallery-rust.exe`
-      success and owner-manual screenshot confirmation of the Phase 2
-      gallery sub-screen. No new GUI surface was added in T13.
+    - T12 で `Start-Process .\target\release\gallery-rust.exe` success
+      と、Phase 2 gallery sub-screen の owner-manual screenshot
+      confirmation を記録済み。T13 では新しい GUI surface は追加していない。
 
 17. **CI YAML 変更要否 sanity check:** **不要**
-    - Phase 2 added no new language or build system. The existing
-      Windows CI `cargo test --workspace` runs the T11 integration
-      evidence and fails on CI if the Compositor path cannot run.
+    - Phase 2 は新しい language / build system を追加していない。既存の
+      Windows CI `cargo test --workspace` が T11 integration evidence を
+      実行し、CI 上で Compositor path が走れない場合は fail する。
 
-## Verification Notes
+## 検証メモ
 
-Local commands run during T13:
+T13 中に実行した local command:
 
 ```text
 cargo fmt --all -- --check
@@ -105,14 +104,14 @@ cargo build --workspace
 cargo test --workspace
 ```
 
-All local commands were green. Workspace build / test retained the known
-`wasamo` linkable-target warning and `wasamo-sys` import-library order
-warning, matching prior T12 evidence.
+すべて green。workspace build / test では既知の `wasamo`
+linkable-target warning と `wasamo-sys` import-library order warning が
+残ったが、これは prior T12 evidence と同じ。
 
-## Follow-Up
+## フォローアップ
 
-- M3-Phase 3 should start from
-  `docs/notes/m3-phase-3/predoc-inputs.md`.
-- The Phase 2 progress file is retired after T13 checklist confirmation;
-  durable information now lives in the ADR, spec, CHANGELOG, notes, and
-  git history.
+- M3-Phase 3 は
+  `docs/notes/m3-phase-3/predoc-inputs.md` から開始する。
+- Phase 2 progress file は T13 checklist confirmation 後に retired。
+  durable information は ADR、spec、CHANGELOG、notes、git history に
+  移した。
