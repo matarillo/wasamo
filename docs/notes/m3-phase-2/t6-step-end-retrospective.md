@@ -101,21 +101,29 @@ T6 の blocker は残っていない。
 ことの設計確認。T1 で `IrLiteral::Ratio` / `IrLiteral::Color` を IR
 variant に足したときは、arm-exhaustiveness が即時 callers を全部
 押さえる安全網になっていた (= match 漏れがあると build が落ちる)。
-T6 の `WidgetData::Box { aspect, fill }` は逆に、field 単位の dead_code
-警告が同じ機能を果たす — fields が unused になった瞬間 cargo build が
-"never read" を吐き、後続 step が writer / reader を入れ忘れたら sign
-が立つ。今回はそれを `#[allow(dead_code)]` + forward-pointer comment で
-意図的に抑制した。この抑制は **意図された hand-off marker** であり、
-技術的負債ではない:
+T6 の `WidgetData::Box { aspect, fill }` には同等の compile-time
+安全網が **存在しない** — field の未使用は dead_code lint で検出
+されうるが、今回はそれを `#[allow(dead_code)]` で **意図的に抑制した**
+ので、現状の build では writer / reader 漏れを検出する仕組みは無い。
+従って `#[allow(dead_code)]` は安全網ではなく、純粋に
+**forward-pointer comment と組になった hand-off marker** として
+機能する:
 
-- `aspect` field reader は T8 (inscribed-fit measure-arrange) と T11
-  (Windows-runtime integration test) で必ず触る。
-- `fill` field reader は T8 / T11 で必ず触る。
-- `aspect` / `fill` field writer は T7 (`ir_loader::build_node` が
-  `IrLiteral::Ratio` / `IrLiteral::Color` から materialise) で必ず触る。
-- T8 / T11 が完了した時点で `#[allow(dead_code)]` は外せる
-  (= 次の retro での checklist item 5 "ついでリファクタ" の対象に
-  ならない、forward-pointer 解消は本来の wiring の一部)。
+- `aspect` / `fill` field を読む production code は今 T6 時点では
+  存在しない (T8 / T11 で入る)。書く production code も今は存在しない
+  (T7 で入る)。Rust の `dead_code` lint は基本的に「読まれない field」
+  を検出するもので、書かれない field は対象外なので、いずれにせよ
+  writer 漏れの自動検出は無い。
+- 後続 step の作業者は **コードコメントと progress file の T7 / T8 /
+  T11 行を信頼して wiring を入れる必要がある** (lint は補助になら
+  ない)。これは前 step (T5) の "意図の明示は実装と同じくらい重要" の
+  Main Learning と同じ精神 — 安全網が無いところでは意図表明を強化
+  するしかない。
+- T7 / T8 / T11 が完了して production read / write が入った時点で
+  `#[allow(dead_code)]` を外す (= 本来の wiring の一部であり、別途の
+  ついでリファクタではない)。`#[allow]` を外したときに reader 側が
+  まだ繋がっていなければそこで lint が再点灯する可能性がある — その
+  範囲では allow を外す瞬間が遅延した check point になる。
 
 副次的な学びとして、**OS API 型 (`windows::UI::Color`) と DSL 値型
 (`box_widget::Color`) の同名衝突は module 分割で安価に解消できる**
@@ -129,6 +137,18 @@ import しており、ここに `box_widget::Color` を持ち込むと use 競�
 の二点を同時に成立させた。同じ pattern は今後 `wasamo-runtime` が
 さらに OS-API-collision-prone な名前を domain 型として導入する
 場合 (Vector, Rectangle, Brush, ...) に再利用できる。
+
+ただし `box_widget` という module 名は現時点で違和感を残している —
+中身は `Ratio` / `Color` の二つの value 型だけで、Box widget の
+constructor / layout tree 化 / SpriteVisual 配線は `widget.rs` /
+`layout.rs` 側にある。**module 名と責務の粒度が今は不一致**。今 T6
+で rename しないのは、T7 で `ir_loader::build_node` が
+`WidgetData::Box` の field に値を直接書く際に `pub(crate)` の setter
+ないし builder が必要になる可能性があり、その時に `box_widget` の
+責務が広がるか、それとも純粋な value 型 module のまま残るかが
+決まるため。**T7 着手時に再評価**し、まだ違和感が残るなら
+`box_values.rs` への rename が最小・最も clean な対応 (Follow-Up に
+記録)。
 
 T7 / T8 / T11 への持ち越し:
 
@@ -215,14 +235,27 @@ T7 / T8 / T11 への持ち越し:
    - A6 / A11 文言変更なし。Phase 構成変更なし。
 
 9. **後続 step に持ち越す仮実装・近似・新規 `dead_code` 警告:**
-   **なし**
+   **あり (T8 boundary placeholder)**
    - `cargo build` 出力に新規の dead_code 警告は出ていない
-     (`#[allow(dead_code)]` で抑制済み)。抑制は **意図的な hand-off
-     marker** であり、T7 (writer) / T8 / T11 (reader) で本来の wiring
-     が入った時点で外す — Main Learning に展開済み。`unimplemented!`
-     stub は一切置いていない。`measure`/`arrange` の Box arm は
-     T8 で置き換えられる placeholder であり、コメントで明示してある
-     (technical debt ではなく next-step boundary marker)。
+     (`#[allow(dead_code)]` で抑制済み)。
+   - ただし `layout.rs` の `WidgetKind::Box` 用 arm は明示的な
+     **仮実装** が残っている:
+     - `measure`: `WidgetKind::Box => measure_leaf(node)`
+       (DD-M3-P2-005 inscribed-fit ではなく leaf 扱い)。
+     - `arrange`: `WidgetKind::Box => {}` (DD-M3-P2-001 の子 centring /
+       clip overflow を行わず no-op)。
+     - これらは progress file の T8 行で置き換えられる前提の
+       boundary placeholder で、コードコメントで T8 / DD-M3-P2-005 /
+       DD-M3-P2-001 への forward-pointer を入れている。
+   - `unimplemented!` / `todo!` stub は置いていない (build / test は
+     panic せずに通る)。`#[allow(dead_code)]` 自体は警告ではなく
+     抑制だが、Main Learning の通り **安全網としては機能していない**
+     ため、後続 step の作業者は progress file と forward-pointer
+     comment に依存する必要がある。
+   - 上記 placeholder は T8 完了時に消える設計であり、T8 のタスク
+     範囲そのもの。T6 単独で「次 step 以降に解決すべき技術的負債」
+     として持ち越しているわけではないが、retrospective rule の
+     文言 "仮実装・近似" には該当するため **あり** で記録する。
 
 10. **タスクリストの後続 step 見直し:** **なし (進行通り)**
     - T7–T13 の構成・順序・依存関係に T6 実装から見て調整すべき点は
@@ -232,7 +265,7 @@ T7 / T8 / T11 への持ち越し:
 
 ## Fast-Track Judgment
 
-Fast-track criteria は **満たす**:
+Fast-track criteria は **満たさない** (item 9 の "仮実装" 該当):
 
 - item 2 (spec doc 変更): なし
 - item 3 (local clean rebuild): green
@@ -241,14 +274,17 @@ Fast-track criteria は **満たす**:
 - item 6 (追加 DD): なし
 - item 7 (Proposed 増加/昇格): なし
 - item 8 (m3-plan AC 変更): なし
-- item 9 (新規 dead_code 警告): なし
+- item 9 (仮実装・近似・新規 dead_code 警告): **あり** —
+  `layout.rs` の `WidgetKind::Box` arm が leaf-like measure /
+  no-op arrange の placeholder。T8 で置き換えられる boundary
+  placeholder だが、retrospective rule の "仮実装・近似" に該当する。
 - item 10 (タスクリスト見直し): なし
 
-step→phase ブランチへの ff merge は fast-track 対象だが、本 step では
-オーナーへの報告と同時に明示確認を取った上で実行する (memory note
-"Phase-end merge & push gating" は phase-end についての規律だが、
-本プロジェクトの会話文脈では step-end でも明示確認を取る運用が
-慣例となっているため)。
+step→phase ブランチへの ff merge はオーナー明示確認後に実行する
+(retrospectives.md §3 のファストトラック基準は item 2–8 (FT 印つき)
+が全て「なし」を要求し、本 step は item 9 で "あり" のためファスト
+トラック不適格。FT 範囲を 2–8 と読むか 2–9 と読むかに関わらず、
+item 9 の素直な意味で本 step は対象外と判定)。
 
 ## Verification Notes
 
@@ -289,9 +325,17 @@ T6 から後続 task への明示的な引き渡し:
   `WidgetData::Box` の field に直接書き込む (DD-M3-P2-002 /
   DD-M3-P2-003 Option A boundary)。emit canonical (短縮優先) と
   ir_loader accept (両形受理) の非対称性は T5 retro の Main Learning
-  に既出。T7 実装で `aspect` / `fill` field の writer が入ると
-  `#[allow(dead_code)]` の片方 (writer 側の "never set" が出る条件)
-  が外せる可能性がある — T7 retro 時に再確認。
+  に既出。T7 で `WidgetData::Box` の field に値を書く手段として
+  `pub(crate)` setter / builder が `box_widget` 側に必要になるかを
+  実装時に判断し、必要なら同 module に置く。
+- **T7 module 名再評価:** 今 T6 時点で `box_widget` という module
+  名は中身 (純粋な `Ratio` / `Color` value 型のみ) に対して広すぎる。
+  T7 で setter / builder が追加されて module が "Box 関連の crate-
+  internal API 集" に育つなら現状名のまま正当化できる。逆に T7 でも
+  純粋な value 型しか足さない場合は `box_values.rs` への rename が
+  最小・最も clean な対応。T7 retro 時の判定項目とする。
+  rename 自体はファイル名 + `lib.rs` の `mod` 行 + `widget.rs` の
+  `use crate::box_widget` 行のみで完結する小変更。
 - **T8 (`wasamo-runtime` layout):** `WidgetKind::Box` の
   `measure` / `arrange` placeholder を DD-M3-P2-005 inscribed-fit
   algorithm + DD-M3-P2-001 child centring / clip overflow に
