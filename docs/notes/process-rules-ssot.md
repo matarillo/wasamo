@@ -126,6 +126,54 @@ SSOT 化を決めた場合、現状の散在を整理する作業量は小さく
 - 「触ったときに必ず SSOT 側も同期」というルールを立てる（drift 防止に
   強いが負担大）。
 
+### Q6. phase progress / retrospective / acceptance evidence の責務境界
+
+M3-Phase 2 T10 で、phase progress file の完了済み checklist に
+実装メモ・test mapping・後続 step への引き渡しが集まりすぎる兆候が出た。
+これは単なる局所的な冗長さではなく、現状のプロセス上、次の 3 役の境界が
+明示されていないことから来る:
+
+- **短期の execution log。** 実装中の作業台、task list の変化、green
+  workspace の記録。`docs/plans/README.md` は phase progress file を
+  "live task list and execution log" と定義している。
+- **step retrospective。** step-end の学び、判断理由、検証結果の要約、
+  Follow-Up / residual の記録。`docs/notes/retrospectives.md` が手順を
+  持つが、全 test mapping の永続台帳という役割までは明文化していない。
+- **phase acceptance evidence。** ADR verification closure / ROADMAP AC を
+  どの test / example / CI run で閉じたかの対応表。phase close や後続
+  phase の pre-doc で参照したいが、専用の "evidence note" という文書種別
+  や置き場は未定義。
+
+候補:
+
+- **(a) phase progress file に全部置き、phase close で蒸留する。**
+  現状に近い。active 中の検索性は高いが、完了済み checklist が肥大化し、
+  未完了 task が読みにくくなる。
+- **(b) step retrospective に verification detail を寄せる。**
+  step ごとの判断と検証がまとまるが、retrospective が execution log と
+  evidence inventory を兼ねて肥大化する。
+- **(c) phase-level evidence note を新設する。**
+  ADR verification closure / acceptance evidence の長期参照性は高いが、
+  文書種別が増え、phase close 時の distillation ルールも追加で必要になる。
+- **(d) ADR または phase-end retrospective に最終 mapping だけ残す。**
+  永続文書は増えにくいが、実装中の evidence 更新先が曖昧なまま残る。
+
+批判点:
+
+- progress file は退役・削除が default なので、長期参照したい evidence を
+  そこだけに置くと phase close で取りこぼしやすい。
+- retrospective に詳細 mapping を集めると、学び・判断・Follow-Up の読み筋が
+  埋もれる。
+- evidence note 新設は魅力的だが、`docs/notes/` の open question / live note
+  とどう違うのか、いつ作りいつ閉じるのかを別途決める必要がある。
+- ADR に implementation evidence を厚く入れると、decision record と実装ログが
+  混ざる。
+
+未決: phase verification closure を持つ今後の phase で、上記 3 役をどの
+文書に分担させるか。少なくとも、progress file の完了済み checklist は
+"何を discharge したか" に寄せ、詳細な "なぜ / どう検証したか" は別の
+置き場へ蒸留する方針が必要かもしれない。
+
 ## 関連する既決事項
 
 [vision-doc-system.md](../decisions/vision-doc-system.md) DD-V-010..016
