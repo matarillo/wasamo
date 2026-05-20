@@ -35,12 +35,46 @@ pub enum StringPart {
 
 #[derive(Debug, Clone)]
 pub enum Expr {
-    StringLit { parts: Vec<StringPart>, span: Span },
-    IntLit { value: i64, span: Span },
-    FloatLit { value: f64, span: Span },
-    BoolLit { value: bool, span: Span },
-    Measurement { value: f64, unit: Unit, span: Span },
-    Ident { name: String, span: Span },
+    StringLit {
+        parts: Vec<StringPart>,
+        span: Span,
+    },
+    IntLit {
+        value: i64,
+        span: Span,
+    },
+    FloatLit {
+        value: f64,
+        span: Span,
+    },
+    BoolLit {
+        value: bool,
+        span: Span,
+    },
+    Measurement {
+        value: f64,
+        unit: Unit,
+        span: Span,
+    },
+    Ident {
+        name: String,
+        span: Span,
+    },
+    /// Ratio literal `<num>:<den>` (DD-M3-P2-002). Per dsl_spec §4.9
+    /// this expression is only accepted as the RHS of `Box.aspect`;
+    /// rejection in other positions is `wasamoc check`'s responsibility.
+    RatioLit {
+        num: i32,
+        den: i32,
+        span: Span,
+    },
+    /// Color literal `#RRGGBB` / `#RRGGBBAA` (DD-M3-P2-003), packed to
+    /// `0xAARRGGBB` (alpha in MSB). Position validity (Box.fill only)
+    /// is enforced at `wasamoc check`.
+    ColorLit {
+        value: u32,
+        span: Span,
+    },
 }
 
 impl Expr {
@@ -51,7 +85,9 @@ impl Expr {
             | Expr::FloatLit { span, .. }
             | Expr::BoolLit { span, .. }
             | Expr::Measurement { span, .. }
-            | Expr::Ident { span, .. } => span,
+            | Expr::Ident { span, .. }
+            | Expr::RatioLit { span, .. }
+            | Expr::ColorLit { span, .. } => span,
         }
     }
 }

@@ -50,19 +50,23 @@ IrLiteral (M3-Phase 2 T1)`. Step-end retrospective recorded in
 
 Discharges the surface-syntax halves of DD-M3-P2-002 and DD-M3-P2-003.
 
-- [ ] Lexer recognises `<num>:<den>` as a `RatioLit` token (surface
+- [x] Lexer recognises `<num>:<den>` as a `RatioLit` token (surface
       form per DD-M3-P2-002 Option A), with lookahead / contextual
       disambiguation against a stray integer-then-colon appropriate
       to the existing lexer structure.
-- [ ] Lexer recognises `#` followed by 6 or 8 hex digits as a
+- [x] Lexer recognises `#` followed by 6 or 8 hex digits as a
       `ColorLit` token (per DD-M3-P2-003 Option A).
-- [ ] `Expr::RatioLit { num: i32, den: i32 }` and
+- [x] `Expr::RatioLit { num: i32, den: i32 }` and
       `Expr::ColorLit { value: u32 }` AST variants added in
       `wasamoc/src/ast.rs`.
-- [ ] Parser produces these AST nodes in `property_bind` RHS
+- [x] Parser produces these AST nodes in `property_bind` RHS
       position.
-- [ ] Unit tests covering the accept shapes from
+- [x] Unit tests covering the accept shapes from
       [dsl_spec §4.9](../../dsl_spec.md#49-box-layout-primitive-m3-phase-2).
+
+Closed by commit `735a337 feat(wasamoc): lex Ratio / Color literals,
+add Expr variants (M3-Phase 2 T2)`. Step-end retrospective recorded
+in [../../notes/m3-phase-2/t2-step-end-retrospective.md](../../notes/m3-phase-2/t2-step-end-retrospective.md).
 
 ### T3 — `wasamoc check`: validity and reject set
 
