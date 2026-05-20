@@ -75,6 +75,11 @@ fn lower_state(name: &str, ty: &TypeName, default: &Expr) -> IrState {
         Expr::IntLit { value, .. } => IrLiteral::Int(*value as i32),
         Expr::StringLit { parts, .. } => IrLiteral::Str(string_parts_to_static(parts)),
         Expr::BoolLit { value, .. } => IrLiteral::Bool(*value),
+        // Ratio / Color literals in a `state` default are a positional
+        // error rejected by `wasamoc check` (DD-M3-P2-002 / 003 confine
+        // them to `Box.aspect` / `Box.fill` RHS). The positional reject
+        // is wired up in T3; the catch-all below already covers them in
+        // the meantime.
         _ => panic!("lower_state: unsupported default (check should have rejected this)"),
     };
     IrState {
@@ -166,6 +171,17 @@ fn lower_expr(expr: &Expr, ns: &Namespace) -> LoweredExpr {
         }
         Expr::FloatLit { .. } => {
             panic!("lower_expr: float not supported (check should have rejected this)");
+        }
+        // T4 will replace these stubs with `IrLiteral::Ratio { num, den }`
+        // and `IrLiteral::Color(value)` lowering for `Box.aspect` /
+        // `Box.fill`. The IR variants already exist (T1). Until T4 these
+        // are unreachable through tests because T2 emits no lowering
+        // exercises for ratio / color.
+        Expr::RatioLit { .. } => {
+            panic!("lower_expr: ratio literal lowering arrives in T4 (M3-Phase 2)");
+        }
+        Expr::ColorLit { .. } => {
+            panic!("lower_expr: color literal lowering arrives in T4 (M3-Phase 2)");
         }
     }
 }
@@ -266,6 +282,15 @@ fn lower_rhs_expr(expr: &Expr, ns: &Namespace) -> HandlerExpr {
         },
         Expr::Measurement { value, .. } => HandlerExpr::IntLit(*value as i32),
         Expr::FloatLit { .. } => panic!("lower_rhs_expr: float not supported"),
+        // Ratio / Color literals in handler RHS position are a positional
+        // error rejected by `wasamoc check` per DD-M3-P2-004 (constant-only
+        // contract); see lower_state above.
+        Expr::RatioLit { .. } => {
+            panic!("lower_rhs_expr: ratio literal in handler RHS (check should have rejected)")
+        }
+        Expr::ColorLit { .. } => {
+            panic!("lower_rhs_expr: color literal in handler RHS (check should have rejected)")
+        }
     }
 }
 

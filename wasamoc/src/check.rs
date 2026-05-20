@@ -106,6 +106,12 @@ fn expr_static_type(expr: &Expr, ns: &Namespace) -> Option<TypeName> {
         Expr::StringLit { .. } => Some(TypeName::Str),
         Expr::BoolLit { .. } => Some(TypeName::Bool),
         Expr::Ident { name, .. } => ns.get(name).cloned(),
+        // Ratio / Color are Box-internal value types (DD-M3-P2-002 /
+        // DD-M3-P2-003 Option A); they have no `TypeName` entry. Position
+        // and value validity for these literals are checked at the
+        // property-bind layer (T3), not via the state-type compatibility
+        // table.
+        Expr::RatioLit { .. } | Expr::ColorLit { .. } => None,
     }
 }
 
@@ -292,6 +298,13 @@ fn check_expr_type(
         Expr::Measurement { span, .. } => {
             // Measurements (e.g. 12px) are static property values, not typed state — allowed.
             let _ = (ctx_span, span);
+        }
+        // T2: ratio / color literals lex and parse cleanly; T3 will add
+        // the positional reject (only valid as `Box.aspect` / `Box.fill`
+        // RHS per dsl_spec §4.9) and the value-validity reject
+        // (`num > 0` / `den > 0`). Until T3 lands they pass through here.
+        Expr::RatioLit { .. } | Expr::ColorLit { .. } => {
+            let _ = ctx_span;
         }
     }
 }

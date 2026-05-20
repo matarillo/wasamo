@@ -34,6 +34,14 @@ pub enum Token {
     FloatLit(f64),
     Measurement(f64, Unit),
     StringLit(Vec<StringPart>),
+    /// Ratio literal `<num>:<den>` (DD-M3-P2-002). Both sides are
+    /// non-negative integers that fit in `i32`; value validity
+    /// (`num > 0`, `den > 0`) is enforced at `wasamoc check` time
+    /// per dsl_spec §4.9, not here.
+    RatioLit(i32, i32),
+    /// Color literal `#RRGGBB` / `#RRGGBBAA` (DD-M3-P2-003), packed
+    /// to `0xAARRGGBB` (alpha in MSB). 6-digit form takes `AA = 0xFF`.
+    ColorLit(u32),
     LBrace,
     RBrace,
     LAngle,
@@ -71,6 +79,8 @@ impl Token {
             Token::FloatLit(_) => "float literal",
             Token::Measurement(_, _) => "measurement",
             Token::StringLit(_) => "string literal",
+            Token::RatioLit(_, _) => "ratio literal",
+            Token::ColorLit(_) => "color literal",
             Token::LBrace => "`{`",
             Token::RBrace => "`}`",
             Token::LAngle => "`<`",
@@ -268,6 +278,7 @@ pub fn tokenize(src: &str, filename: &str) -> Result<Vec<SpannedToken>, Diagnost
                 }
             }
             '"' => scan_string(&mut c, filename)?,
+            '#' => scan_color(&mut c, filename, start.line, start.col)?,
             '0'..='9' => scan_number(&mut c, filename, start.line, start.col)?,
             ch if ch.is_alphabetic() || ch == '_' => scan_ident(&mut c),
             other => {
@@ -373,12 +384,88 @@ fn scan_number(c: &mut Cursor, filename: &str, line: u32, col: u32) -> Result<To
     }
 
     if is_float {
-        Ok(Token::FloatLit(s.parse().unwrap()))
-    } else {
-        s.parse::<i64>()
-            .map(Token::IntLit)
-            .map_err(|_| Diagnostic::error(filename, line, col, "integer literal out of range"))
+        return Ok(Token::FloatLit(s.parse().unwrap()));
     }
+
+    // Ratio literal `<num>:<den>` (DD-M3-P2-002). Triggered only when a
+    // colon immediately follows the integer with no intervening
+    // whitespace, and a digit immediately follows the colon. Otherwise
+    // the colon is left to be tokenized as `Colon` separately.
+    if c.peek() == Some(':') && c.peek2().map(|ch| ch.is_ascii_digit()).unwrap_or(false) {
+        let num = s.parse::<i32>().map_err(|_| {
+            Diagnostic::error(filename, line, col, "ratio numerator out of range for i32")
+        })?;
+        c.advance(); // consume ':'
+        let den_line = c.line;
+        let den_col = c.col;
+        let mut den_str = String::new();
+        while let Some(ch) = c.peek() {
+            if ch.is_ascii_digit() {
+                den_str.push(ch);
+                c.advance();
+            } else {
+                break;
+            }
+        }
+        let den = den_str.parse::<i32>().map_err(|_| {
+            Diagnostic::error(
+                filename,
+                den_line,
+                den_col,
+                "ratio denominator out of range for i32",
+            )
+        })?;
+        return Ok(Token::RatioLit(num, den));
+    }
+
+    s.parse::<i64>()
+        .map(Token::IntLit)
+        .map_err(|_| Diagnostic::error(filename, line, col, "integer literal out of range"))
+}
+
+fn scan_color(c: &mut Cursor, filename: &str, line: u32, col: u32) -> Result<Token, Diagnostic> {
+    // Consume the leading `#`.
+    c.advance();
+
+    let mut hex = String::new();
+    while let Some(ch) = c.peek() {
+        if ch.is_ascii_hexdigit() {
+            hex.push(ch);
+            c.advance();
+        } else {
+            break;
+        }
+    }
+
+    // Spec §2.2 / §4.9: `#` followed by exactly 6 or 8 hex digits.
+    // Pack to `0xAARRGGBB` per dsl_spec (alpha in MSB); 6-digit form
+    // takes `AA = 0xFF`.
+    let packed = match hex.len() {
+        6 => {
+            let rgb = u32::from_str_radix(&hex, 16).unwrap();
+            0xFF00_0000 | rgb
+        }
+        8 => {
+            let rr = u32::from_str_radix(&hex[0..2], 16).unwrap();
+            let gg = u32::from_str_radix(&hex[2..4], 16).unwrap();
+            let bb = u32::from_str_radix(&hex[4..6], 16).unwrap();
+            let aa = u32::from_str_radix(&hex[6..8], 16).unwrap();
+            (aa << 24) | (rr << 16) | (gg << 8) | bb
+        }
+        n => {
+            return Err(Diagnostic::error(
+                filename,
+                line,
+                col,
+                format!(
+                    "color literal `#{}` must have 6 or 8 hex digits, got {}",
+                    hex, n
+                ),
+            ));
+        }
+    };
+
+    Ok(Token::ColorLit(packed))
 }
 
 fn scan_string(c: &mut Cursor, filename: &str) -> Result<Token, Diagnostic> {
@@ -737,6 +824,115 @@ mod tests {
     fn error_interp_missing_ident_after_dot() {
         // \{root.} — dot followed by closing brace: missing ident
         assert!(lex_err(r#""\{root.}""#).contains("expected identifier"));
+    }
+
+    #[test]
+    fn ratio_literal_basic() {
+        let toks = lex_ok("16:9");
+        assert!(matches!(&toks[0], Token::RatioLit(16, 9)));
+        assert!(matches!(&toks[1], Token::Eof));
+    }
+
+    #[test]
+    fn ratio_literal_one_to_one() {
+        let toks = lex_ok("1:1");
+        assert!(matches!(&toks[0], Token::RatioLit(1, 1)));
+    }
+
+    #[test]
+    fn ratio_literal_in_property_bind_position() {
+        // Two `:` tokens: one for the property-bind, one folded into the
+        // ratio. The lexer must split them correctly.
+        let toks = lex_ok("aspect: 16:9");
+        assert!(matches!(&toks[0], Token::Ident(s) if s == "aspect"));
+        assert!(matches!(&toks[1], Token::Colon));
+        assert!(matches!(&toks[2], Token::RatioLit(16, 9)));
+    }
+
+    #[test]
+    fn integer_followed_by_colon_then_non_digit_is_not_ratio() {
+        // `state count: i32 = 16` end-of-expr followed by `: i32` of a next
+        // hypothetical token sequence with whitespace must not absorb the
+        // colon — verify on `16: x` shape.
+        let toks = lex_ok("16: x");
+        assert!(matches!(&toks[0], Token::IntLit(16)));
+        assert!(matches!(&toks[1], Token::Colon));
+        assert!(matches!(&toks[2], Token::Ident(s) if s == "x"));
+    }
+
+    #[test]
+    fn integer_with_whitespace_before_colon_is_not_ratio() {
+        // Whitespace between the integer and `:` defeats the ratio token.
+        let toks = lex_ok("16 :9");
+        assert!(matches!(&toks[0], Token::IntLit(16)));
+        assert!(matches!(&toks[1], Token::Colon));
+        assert!(matches!(&toks[2], Token::IntLit(9)));
+    }
+
+    #[test]
+    fn float_followed_by_colon_is_not_ratio() {
+        // `1.5:9` — the lexer must not fold a float into a RatioLit.
+        let toks = lex_ok("1.5:9");
+        assert!(matches!(&toks[0], Token::FloatLit(v) if *v == 1.5_f64));
+        assert!(matches!(&toks[1], Token::Colon));
+        assert!(matches!(&toks[2], Token::IntLit(9)));
+    }
+
+    #[test]
+    fn measurement_not_disturbed_by_ratio_lookahead() {
+        let toks = lex_ok("12px");
+        assert!(matches!(&toks[0], Token::Measurement(v, Unit::Px) if *v == 12.0));
+    }
+
+    #[test]
+    fn ratio_zero_sides_lex_ok_check_rejects_later() {
+        // Lexer accepts `0:0` syntactically; value validity (positive
+        // integers) is enforced at `wasamoc check` time per dsl_spec §4.9.
+        let toks = lex_ok("0:0");
+        assert!(matches!(&toks[0], Token::RatioLit(0, 0)));
+    }
+
+    #[test]
+    fn color_literal_six_digit_packs_with_full_alpha() {
+        // `#cccccc` → 0xFFcccccc (alpha in MSB defaults to 0xFF).
+        let toks = lex_ok("#cccccc");
+        assert!(matches!(&toks[0], Token::ColorLit(0xFFCC_CCCC)));
+    }
+
+    #[test]
+    fn color_literal_eight_digit_explicit_alpha() {
+        // `#00000080` → AA=80, RR=00, GG=00, BB=00 → 0x80000000 (scrim).
+        let toks = lex_ok("#00000080");
+        assert!(matches!(&toks[0], Token::ColorLit(0x8000_0000)));
+    }
+
+    #[test]
+    fn color_literal_eight_digit_mixed_channels() {
+        // `#11223344` → RR=11, GG=22, BB=33, AA=44 → 0x44112233.
+        let toks = lex_ok("#11223344");
+        assert!(matches!(&toks[0], Token::ColorLit(0x4411_2233)));
+    }
+
+    #[test]
+    fn color_literal_uppercase_hex_accepted() {
+        let toks = lex_ok("#ABCDEF");
+        assert!(matches!(&toks[0], Token::ColorLit(0xFFAB_CDEF)));
+    }
+
+    #[test]
+    fn color_literal_three_hex_rejected() {
+        // Short-form `#ccc` is not in the grammar; reject.
+        assert!(lex_err("#ccc").contains("6 or 8 hex digits"));
+    }
+
+    #[test]
+    fn color_literal_seven_hex_rejected() {
+        assert!(lex_err("#1234567").contains("6 or 8 hex digits"));
+    }
+
+    #[test]
+    fn color_literal_no_hex_rejected() {
+        assert!(lex_err("#xyz").contains("6 or 8 hex digits"));
     }
 
     #[test]
