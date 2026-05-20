@@ -5,6 +5,11 @@ pub enum WidgetKind {
     Rectangle,
     VStack,
     HStack,
+    // M3-Phase 2 DD-M3-P2-001: per-kind tag for the Box layout primitive.
+    // T6 wires the tag and a leaf-like measure/arrange placeholder; the
+    // aspect-driven inscribed-fit algorithm and child measure / centring /
+    // clip lands in T8.
+    Box,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -78,6 +83,24 @@ impl LayoutNode {
             size: (0.0, 0.0),
         }
     }
+
+    // M3-Phase 2 T6: minimal `Box` LayoutNode constructor. Aspect / fill /
+    // single-child measure live on `WidgetData::Box` for now; T8 either
+    // widens this constructor or threads the aspect through a parallel
+    // measure-arrange entry point.
+    pub fn box_(width: SizeConstraint, height: SizeConstraint) -> Self {
+        Self {
+            kind: WidgetKind::Box,
+            width,
+            height,
+            spacing: 0.0,
+            padding: 0.0,
+            alignment: Alignment::Center,
+            children: Vec::new(),
+            offset: (0.0, 0.0),
+            size: (0.0, 0.0),
+        }
+    }
 }
 
 /// Returns the desired (width, height) of a node given available space.
@@ -88,6 +111,10 @@ pub fn measure(node: &LayoutNode, avail_w: f32, avail_h: f32) -> (f32, f32) {
         WidgetKind::Rectangle => measure_leaf(node),
         WidgetKind::VStack => measure_vstack(node, avail_w),
         WidgetKind::HStack => measure_hstack(node, avail_h),
+        // T6 placeholder: treat Box as a leaf for sizing. T8 replaces this
+        // with the DD-M3-P2-005 inscribed-fit measure that honours `aspect`
+        // and the bounded/unbounded-axis cases.
+        WidgetKind::Box => measure_leaf(node),
     }
 }
 
@@ -211,6 +238,10 @@ pub fn arrange(node: &mut LayoutNode, x: f32, y: f32, w: f32, h: f32) {
         WidgetKind::HStack => {
             arrange_hstack(&mut node.children, x, y, w, h, padding, spacing, alignment)
         }
+        // T6 placeholder: own offset/size already written above. T8 replaces
+        // this with the DD-M3-P2-005 inscribed-fit arrange and the
+        // DD-M3-P2-001 child measure / centred alignment / clip overflow.
+        WidgetKind::Box => {}
     }
 }
 
