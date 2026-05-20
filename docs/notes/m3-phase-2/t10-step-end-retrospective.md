@@ -294,11 +294,12 @@ skip-guard の動作:
   `wasamo_init` が `WASAMO_OK` を返したため skip-guard は発火せず
   `box_phase2_build_node_materialises_box_internal_state` 本体を
   実行し pass。
-- skip-guard の実発火は SSH dev box 等で `wasamo_init` が
-  `0x80070005` を返す環境で T11 着地時に併せて確認する
-  (CLAUDE.md `verification-environments.md` 準拠)。**現時点では
-  guard の発火経路は実観測されていない**ことを Out-of-phase
-  residual / Follow-Up に明示。
+- SSH dev box: `cargo test -p wasamo-runtime --test box_round_trip
+  box_phase2_build_node_materialises_box_internal_state -- --nocapture`
+  で `wasamo_init: アクセスが拒否されました。 (0x80070005)` を
+  runtime compositor unavailable として検出し、
+  `skipping box round-trip materialisation test: runtime compositor
+  unavailable (...)` を出して pass。local skip 経路も観測済み。
 
 ## Follow-Up
 
@@ -311,17 +312,16 @@ T10 から後続 task / phase への明示的な引き渡し:
   「`fill` verified via a Box-internal / test-only accessor」は
   accessor (packed `u32`) 経由で観測可能。新規 accessor を T11 で
   追加する必要はない見込み。
-- **T11 / phase-end gate (T13) の skip-guard 実発火確認:** T10 の
-  Windows-only test は本機 (Compositor 利用可) では skip-guard を
-  発火させない経路でのみ pass しており、`0x80070005`-skip 経路は
-  未観測。T11 で同 pattern を使う際、SSH dev box 等で実発火を確認
-  する (Verification Notes 末尾の通り)。
+- **T11 の skip-guard pattern 再利用:** T10 の
+  `box_round_trip.rs` pattern は、本機の `WASAMO_OK` 経路と SSH dev
+  box の `0x80070005` local skip 経路の両方で観測済み。T11 は同
+  pattern を layout integration test に再利用し、CI では fail
+  (not skip) の gate を維持する。
 - **T13 (Phase-end gates):** T10 から phase-end Out-of-phase scan
   に追加項目を出していない。T8 で記録した `WASAMO_ERR_*` 拡張の
   residual のみが scope 内。
 
-これらは progress file の T11 / T13 に引き渡し済み。skip-guard
-実発火確認は T11 の skip-guard checklist に明示し、T10 から新たに
+これらは progress file の T11 / T13 に引き渡し済み。T10 から新たに
 発生した out-of-phase 項目は無い。
 
 ## Post-Review Corrections
