@@ -318,3 +318,29 @@ T10 から後続 task / phase への明示的な引き渡し:
 これらは progress file の T11 / T13 に引き渡し済み。skip-guard
 実発火確認は T11 の skip-guard checklist に明示し、T10 から新たに
 発生した out-of-phase 項目は無い。
+
+## Post-Review Corrections
+
+T10 step-end review 後、phase-end retrospective で拾うべき記録整合性
+修正を追加で行った:
+
+- `0d601750cdb68dcf9aeac9ed636d7c8a60d0714d`
+  `docs(m3-phase-2): align T10 follow-up records`
+  - `ir_loader.rs` の stale な T11 forward-pointer を T10 に修正。
+  - T11 progress checklist に `0x80070005` skip path 実発火確認を明示。
+  - 本 retrospective の Follow-Up 締め文を progress file の引き渡し状態に
+    合わせた。
+- `027ba68 docs(process): record evidence-boundary open question`
+  - phase progress file / step retrospective / phase acceptance evidence の
+    責務境界が未定義であることを
+    `docs/notes/process-rules-ssot.md` Q6 に open question として記録。
+- `56608da docs(m3-phase-2): compact completed progress records`
+  - `docs/plans/progress/m3-phase-2-progress.md` の T8–T10 完了済み
+    checklist を discharge 要約に圧縮。
+  - T9 の full test-name inventory と T10 の判断理由は、それぞれ
+    step-end retrospective 側を詳細記録として扱う形に整理。
+
+Phase-end retrospective では、T10 本体の ADR 適合だけでなく、
+"phase progress file に execution log / retrospective detail /
+acceptance evidence が混ざり始めた" 運用論点を
+`process-rules-ssot.md` Q6 として再確認する。
