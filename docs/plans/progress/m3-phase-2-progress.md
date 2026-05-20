@@ -449,6 +449,9 @@ in
 - [ ] Skip-guard matches Phase 1 T6 / T13: fail (not skip) on CI
       when Compositor unavailable, per
       [CLAUDE.md §Testing rules](../../../CLAUDE.md).
+      Reuse T10's `0x80070005` skip pattern and explicitly observe
+      the skip path on an SSH dev box or equivalent non-Compositor
+      environment; T10 only observed the `WASAMO_OK` path locally.
 
 ### T12 — Seed `examples/gallery/` + `examples/gallery-rust/` (ADR §Phase 2 verification closure item 4)
 

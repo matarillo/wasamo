@@ -315,5 +315,6 @@ T10 から後続 task / phase への明示的な引き渡し:
   に追加項目を出していない。T8 で記録した `WASAMO_ERR_*` 拡張の
   residual のみが scope 内。
 
-これらはすべて progress file の T11 / T13 として既に列挙されて
-おり、T10 から新たに発生した out-of-phase 項目は無い。
+これらは progress file の T11 / T13 に引き渡し済み。skip-guard
+実発火確認は T11 の skip-guard checklist に明示し、T10 から新たに
+発生した out-of-phase 項目は無い。

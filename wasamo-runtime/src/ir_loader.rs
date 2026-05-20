@@ -1802,7 +1802,7 @@ mod tests {
     //
     // These tests cover the pure-logic surface of T7. The `build_node`
     // materialisation path (IR → `WidgetData::Box`) needs a live
-    // `Compositor` and is exercised end-to-end by T11's Windows-runtime
+    // `Compositor` and is exercised end-to-end by T10's Box round-trip
     // integration test. The accept-shape lex / parse / placement / single-
     // child invariants are testable without a Compositor and live here.
 
