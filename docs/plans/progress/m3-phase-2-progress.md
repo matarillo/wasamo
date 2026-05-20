@@ -34,13 +34,17 @@ Each T below cites the evidence item it discharges.
 
 Discharges the IR-layer halves of DD-M3-P2-002 and DD-M3-P2-003.
 
-- [ ] `IrLiteral::Ratio { num: i32, den: i32 }` variant added;
+- [x] `IrLiteral::Ratio { num: i32, den: i32 }` variant added;
       every existing `match` on `IrLiteral` gains a `Ratio` arm.
-- [ ] `IrLiteral::Color(u32)` variant added; arm coverage as above.
-- [ ] **No** `IrType::Ratio` / `IrType::Color` added; **no** new
+- [x] `IrLiteral::Color(u32)` variant added; arm coverage as above.
+- [x] **No** `IrType::Ratio` / `IrType::Color` added; **no** new
       `HandlerExpr` variant (per DD-M3-P2-004).
-- [ ] Pure-logic unit tests covering construction and equality of
+- [x] Pure-logic unit tests covering construction and equality of
       both variants.
+
+Closed by commit `3708bb2 feat(ir): add Ratio / Color literals to
+IrLiteral (M3-Phase 2 T1)`. Step-end retrospective recorded in
+[../../notes/m3-phase-2/t1-step-end-retrospective.md](../../notes/m3-phase-2/t1-step-end-retrospective.md).
 
 ### T2 — `wasamoc` lexer / parser: `RatioLit` and `ColorLit` tokens, AST variants
 

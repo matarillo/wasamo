@@ -16,6 +16,19 @@ pub enum IrLiteral {
     Str(String),
     Ident(String),
     Bool(bool),
+    /// Ratio literal — surface form `<num>:<den>`, both sides positive
+    /// integer literals (DD-M3-P2-002). Phase 2 admits this literal only
+    /// as the RHS of `Box.aspect`; value-validity (`num > 0`, `den > 0`)
+    /// is enforced at `wasamoc check`, not at the variant.
+    Ratio {
+        num: i32,
+        den: i32,
+    },
+    /// Color literal — surface forms `#RRGGBB` / `#RRGGBBAA`, packed in
+    /// `0xAARRGGBB` layout with alpha in the most-significant byte
+    /// (DD-M3-P2-003; dsl_spec §8.2 `COLOR` token). Phase 2 admits this
+    /// literal only as the RHS of `Box.fill`.
+    Color(u32),
 }
 
 /// HandlerExpr — the tagged-value expression form (DD-M2-P6-003 = Option A).
@@ -183,6 +196,60 @@ mod tests {
             HandlerExpr::StrPropRead {
                 path: "ready".into()
             }
+        );
+    }
+
+    #[test]
+    fn ir_literal_ratio_round_trip_values() {
+        let r = IrLiteral::Ratio { num: 16, den: 9 };
+        match &r {
+            IrLiteral::Ratio { num, den } => {
+                assert_eq!(*num, 16);
+                assert_eq!(*den, 9);
+            }
+            _ => panic!("expected Ratio"),
+        }
+        assert_eq!(r.clone(), IrLiteral::Ratio { num: 16, den: 9 });
+    }
+
+    #[test]
+    fn ir_literal_ratio_distinct_by_components() {
+        assert_ne!(
+            IrLiteral::Ratio { num: 16, den: 9 },
+            IrLiteral::Ratio { num: 9, den: 16 }
+        );
+        assert_ne!(
+            IrLiteral::Ratio { num: 16, den: 9 },
+            IrLiteral::Ratio { num: 32, den: 18 }
+        );
+    }
+
+    #[test]
+    fn ir_literal_color_round_trip_value() {
+        let c = IrLiteral::Color(0x80_00_00_00);
+        match &c {
+            IrLiteral::Color(v) => assert_eq!(*v, 0x80_00_00_00),
+            _ => panic!("expected Color"),
+        }
+        assert_eq!(c.clone(), IrLiteral::Color(0x80_00_00_00));
+    }
+
+    #[test]
+    fn ir_literal_color_distinct_by_packed_value() {
+        // #cccccc with implicit alpha 0xFF → 0xFFCCCCCC
+        let opaque = IrLiteral::Color(0xFF_CC_CC_CC);
+        // #cccccc00 (fully transparent same RGB) → 0x00CCCCCC
+        let transparent = IrLiteral::Color(0x00_CC_CC_CC);
+        assert_ne!(opaque, transparent);
+    }
+
+    #[test]
+    fn ir_literal_ratio_and_color_distinct_from_other_variants() {
+        assert_ne!(IrLiteral::Ratio { num: 1, den: 1 }, IrLiteral::Int(1));
+        assert_ne!(IrLiteral::Color(0), IrLiteral::Int(0));
+        assert_ne!(
+            IrLiteral::Color(0xFFFFFFFF),
+            IrLiteral::Ident("white".into())
         );
     }
 

@@ -1419,6 +1419,16 @@ mod tests {
             IrLiteral::Str(s) => format!("\"{}\"", s.replace('\\', "\\\\").replace('"', "\\\"")),
             IrLiteral::Ident(id) => id.clone(),
             IrLiteral::Bool(b) => (if *b { "true" } else { "false" }).to_string(),
+            IrLiteral::Ratio { num, den } => format!("{}:{}", num, den),
+            IrLiteral::Color(value) => {
+                let alpha = (*value >> 24) & 0xFF;
+                let rgb = *value & 0x00FF_FFFF;
+                if alpha == 0xFF {
+                    format!("#{:06x}", rgb)
+                } else {
+                    format!("#{:06x}{:02x}", rgb, alpha)
+                }
+            }
         }
     }
 
