@@ -42,7 +42,11 @@ distillation になった。
    - `dsl_spec.md` は planned Phase 2 close marker として変更:
      document version 0.8 および §4.9
      `M3-Phase 2 closed; implementation-synced`.
-   - `abi_spec.md` と `architecture.md` は phase close では変更なし。
+   - `abi_spec.md` は phase close では変更なし。
+   - `architecture.md` は phase close 後、main merge 前の status refresh
+     として先頭 status line を `M3-Phase 1 and M3-Phase 2 complete;
+     M3-Phase 3 is next` に更新した。これは architecture contract の
+     変更ではなく、上位文書の現在地表示の同期。
 
 3. **ローカル clean rebuild:** **green**
    - `cargo fmt --all -- --check`: green.
@@ -76,11 +80,19 @@ distillation になった。
     - `docs/notes/m3-phase-3/predoc-inputs.md` に Box intrinsic sizing、
       placeholder-thumbnail、value-boundary、spec-drafting、
       verification constraint を前送り済み。
+    - その後の `docs/notes` 直下 open question audit で、
+      architectural-family / layout-engine / TypedValue / grammar /
+      verification evidence placement の Phase 3 冒頭チェックも同じ
+      file に追記済み。
 
 15. **CI green 確認:** **merge 前 green**
     - T13 は merge 前に final phase-close commit 上の GitHub Actions
-      `workflow_dispatch` run で gate 済み。main push は引き続き
-      owner-gated。
+      `workflow_dispatch` run で gate 済み。
+    - main merge 前の current branch HEAD
+      `89939855129ed77ef9055d6774c5781367fdc317` でも
+      `workflow_dispatch` run
+      <https://github.com/matarillo/wasamo/actions/runs/26171511748>
+      が green。main push は引き続き owner-gated。
 
 16. **human-visible GUI smoke:** **必要 / 実施済み**
     - T12 で `Start-Process .\target\release\gallery-rust.exe` success
