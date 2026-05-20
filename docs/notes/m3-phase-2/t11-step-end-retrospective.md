@@ -168,8 +168,13 @@ skip-guard の動作:
 
 - 本 Windows 開発環境では `wasamo_init` が `WASAMO_OK` を返し、
   test body が実行されて pass。
-- `0x80070005` の local skip branch は T10 で観測済みの pattern を
-  同形で再利用。GitHub Actions では skip せず fail する assert を維持。
+- SSH Dev Box では
+  `cargo test -p wasamo-runtime --test box_layout_integration -- --nocapture`
+  が `wasamo_init: アクセスが拒否されました。 (0x80070005)` を
+  runtime compositor unavailable として検出し、
+  `skipping Box layout integration test: runtime compositor unavailable (...)`
+  を出して pass (`1 passed`)。T11 自身でも local skip/pass path を観測済み。
+- GitHub Actions では同じ skip path を skip せず fail する assert を維持。
 
 ## Follow-Up
 
