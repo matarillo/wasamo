@@ -777,6 +777,33 @@ survives: M3 binding shapes (Computed, conditional, for-loop) add
 `BindingTarget` variants and may expand `SignalRegistry` further
 without disturbing the per-type widget-write seam.
 
+**M3-Phase 2 (Box layout primitive) does not extend this seam.**
+The Box widget's two literal attributes — `aspect: <num>:<den>` and
+`fill: #RRGGBB[AA]` — are **constant-only** in Phase 2
+(DD-M3-P2-004). The IR loader materialises `IrLiteral::Ratio` and
+`IrLiteral::Color` into Box-internal domain types (`Ratio` / `Color`
+on `WidgetData::Box`) directly, **not** as new `PropertyValue`
+variants. No `evaluate_ratio_binding` / `evaluate_color_binding`
+writer triples are added; no `register_ratio_binding` /
+`register_color_binding` sibling is added; no `IrType::Ratio` /
+`IrType::Color` is added to the type-suffix chain. F5 (`TypedValue`)
+deferral is doubly protected: no new bindable type means no new
+pressure on the per-type seam, and no widening of `write_fn` into a
+value union. The first phase that needs reactive aspect or fill
+opens the seam triple for that attribute at that point — Phase 2's
+literal plumbing is forward-compatible and is extended, not revised.
+See [m3-phase-2-box-layout.md](./decisions/m3-phase-2-box-layout.md)
+DD-M3-P2-002 / DD-M3-P2-003 / DD-M3-P2-004 and the
+[dsl_spec.md §4.9 Box chapter](./dsl_spec.md#49-box-layout-primitive-m3-phase-2).
+
+The same Phase 2 boundary applies to the C ABI: because `Ratio` and
+`Color` do not enter `PropertyValue`, the exhaustive-match arms in
+`wasamo-runtime/src/abi.rs` (`read_property_value` /
+`write_property_value` / `property_value_to_owned`) are untouched in
+Phase 2, and no `WASAMO_VALUE_RATIO` / `WASAMO_VALUE_COLOR` tag is
+added to the C ABI's value union. See
+[abi_spec.md](./abi_spec.md) — Phase 2 ships **no** ABI changes.
+
 #### 6.8.8 Forward-compatibility and out-of-scope
 
 The Phase 5 architecture is shape-compatible with the M3

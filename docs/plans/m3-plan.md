@@ -4,6 +4,7 @@ status: in-progress
 roadmap-anchor: ROADMAP.md#m3-dsl-surface
 adrs:
   - docs/decisions/m3-phase-1-bool-scalar.md  # Phase 1 (bool scalar)
+  - docs/decisions/m3-phase-2-box-layout.md   # Phase 2 (Box layout primitive)
 created: 2026-05-16
 agreed: 2026-05-16
 in-progress: 2026-05-19
@@ -477,7 +478,7 @@ ADRs, CHANGELOG, notes, and git history, then deleted by default.
 | Phase | Status | Progress file | ADR | Notes |
 |---|---|---|---|---|
 | M3-Phase 1 — `bool` scalar binding | complete | [m3-phase-1-progress.md](progress/m3-phase-1-progress.md) | [m3-phase-1-bool-scalar.md](../decisions/m3-phase-1-bool-scalar.md) | ADR Accepted 2026-05-19; execution opened 2026-05-19; A9 discharged 2026-05-19 |
-| M3-Phase 2 — Box layout primitive | not started | — | — | — |
+| M3-Phase 2 — Box layout primitive | in progress | [m3-phase-2-progress.md](progress/m3-phase-2-progress.md) | [m3-phase-2-box-layout.md](../decisions/m3-phase-2-box-layout.md) | ADR Accepted 2026-05-20; execution opens 2026-05-20 |
 | M3-Phase 3 — WrapPanel layout primitive | not started | — | — | First novel-normative-spec phase |
 | M3-Phase 4 — ScrollView (minimal) | not started | — | — | — |
 | M3-Phase 5 — Grid layout primitive | not started | — | — | Second novel-normative-spec phase; star sizing |
@@ -488,8 +489,9 @@ ADRs, CHANGELOG, notes, and git history, then deleted by default.
 ### Owner-facing resume note
 
 M3 plan is `in-progress` as of 2026-05-19. M3-Phase 1 (`bool`
-scalar) ADR is Accepted and execution has opened against
-[progress/m3-phase-1-progress.md](progress/m3-phase-1-progress.md);
-the Frozen agreement section is now read-only under the
+scalar) closed 2026-05-19. M3-Phase 2 (Box layout primitive) ADR
+is Accepted as of 2026-05-20 and execution has opened against
+[progress/m3-phase-2-progress.md](progress/m3-phase-2-progress.md);
+the Frozen agreement section remains read-only under the
 `in-progress` lifecycle (acceptance-criteria revision exception
 aside).
