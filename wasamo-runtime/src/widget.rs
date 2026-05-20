@@ -85,7 +85,6 @@ enum WidgetData {
     // (`WidgetNode::box_`); Phase 2 keeps it constant per DD-M3-P2-004.
     Box {
         aspect: Option<box_values::Ratio>,
-        #[allow(dead_code)]
         fill: Option<box_values::Color>,
     },
 }
@@ -350,6 +349,29 @@ impl WidgetNode {
             attached: false,
             bindings: Vec::new(),
         }))
+    }
+
+    // Test-only accessor for `WidgetData::Box` (M3-Phase 2 ADR §Phase 2
+    // verification closure item 2, build_node materialisation half). Returns
+    // the Box-internal `aspect` / `fill` as primitives so cross-crate
+    // integration tests can assert that `IrLiteral::Ratio` / `IrLiteral::Color`
+    // materialised into the Box-internal domain types per DD-M3-P2-002 /
+    // DD-M3-P2-003 variant strategy Option A — without leaking the
+    // `box_values::Ratio` / `box_values::Color` `pub(crate)` types past
+    // crate boundaries. `None` for non-Box widgets. Hidden from rustdoc
+    // and named with the project's `__*_for_test` convention (cf.
+    // `lib.rs::ffi::__install_owning_thread_for_test`); production callers
+    // must use `wasamo_get_property` for the M3-Phase 2 `PropertyValue`-
+    // mediated paths (which `aspect` / `fill` deliberately are not part
+    // of, per DD-M3-P2-004 keeping both constant-only).
+    #[doc(hidden)]
+    pub fn __box_state_for_test(&self) -> Option<(Option<(i32, i32)>, Option<u32>)> {
+        match &self.data {
+            WidgetData::Box { aspect, fill } => {
+                Some((aspect.map(|r| (r.num, r.den)), fill.map(|c| c.0)))
+            }
+            _ => None,
+        }
     }
 
     pub fn button(
@@ -1576,8 +1598,10 @@ mod tests {
     // These tests exercise the `WidgetData::Box` variant directly without a
     // Compositor — the variant has no Win32/WinRT field, so its data shape
     // is verifiable as pure logic. The `WidgetNode::box_` constructor itself
-    // needs a Compositor and is covered by T11's Windows-runtime integration
-    // test.
+    // needs a Compositor; the build_node materialisation half of ADR §Phase 2
+    // verification closure item 2 is exercised by the Windows-only integration
+    // test landed in T10 (`wasamo-runtime/tests/box_round_trip.rs`), which
+    // reads the resulting `WidgetData::Box` through `__box_state_for_test`.
 
     use super::WidgetData;
     use crate::box_values::{Color as BoxFill, Ratio};

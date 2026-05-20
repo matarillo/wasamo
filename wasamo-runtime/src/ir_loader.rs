@@ -1802,7 +1802,7 @@ mod tests {
     //
     // These tests cover the pure-logic surface of T7. The `build_node`
     // materialisation path (IR → `WidgetData::Box`) needs a live
-    // `Compositor` and is exercised end-to-end by T11's Windows-runtime
+    // `Compositor` and is exercised end-to-end by T10's Box round-trip
     // integration test. The accept-shape lex / parse / placement / single-
     // child invariants are testable without a Compositor and live here.
 
@@ -1853,7 +1853,9 @@ mod tests {
     #[test]
     fn box_phase2_load_side_fixture() {
         // ADR §Phase 2 verification closure item 2 (load-side gate at the
-        // parse level — the build_node half is T11). For the fixture
+        // parse level — the build_node materialisation half lands in T10's
+        // Windows-only `wasamo-runtime/tests/box_round_trip.rs`). For the
+        // fixture
         // `Box { aspect: 16:9; fill: #00000080; Text { text: "Photo 12" } }`,
         // assert the post-parse `IrLiteral` variants match the emit-side
         // fixture `box_phase2_ir_text_emit_fixture` in `wasamoc::emit`.
