@@ -388,16 +388,54 @@ retrospective recorded in
 
 ### T10 — IR text round-trip evidence (ADR §Phase 2 verification closure item 2)
 
-- [ ] Round-trip fixture:
+- [x] Round-trip fixture:
       `Box { aspect: 16:9; fill: #00000080; Text { text: "Photo 12" } }`.
-- [ ] Emit side: Box node carries
+      Lives as the cross-crate driver `PHASE2_FIXTURE` in
+      `wasamo-runtime/tests/box_round_trip.rs`. The same fixture
+      string is also asserted in-crate by
+      `wasamoc::emit::tests::box_phase2_ir_text_emit_fixture` (T5)
+      and `wasamo-runtime::ir_loader::tests::box_phase2_load_side
+      _fixture` (T7); T10 joins their reference strings through the
+      actual `wasamoc::emit::emit` output.
+- [x] Emit side: Box node carries
       `IrLiteral::Ratio { num: 16, den: 9 }` and
-      `IrLiteral::Color(<packed>)`.
-- [ ] Load side: after `ir_loader::build_node`, runtime state is
+      `IrLiteral::Color(<packed>)`. Exercised by the pure-logic
+      cross-crate test
+      `box_phase2_emit_parses_back_to_ir_literal_variants` —
+      `wasamoc::emit::emit` output is fed into
+      `wasamo_runtime::ir_loader::parse_ir`, and the resulting
+      `IrComponent` is asserted to carry `IrLiteral::Ratio { num: 16,
+      den: 9 }` and `IrLiteral::Color(0x80_00_00_00)`. Runs on any
+      CI runner (no Compositor needed).
+- [x] Load side: after `ir_loader::build_node`, runtime state is
       `WidgetData::Box { aspect: Some(Ratio { 16, 9 }),
       fill: Some(Color(<packed>)), .. }` — `IrLiteral::*` do not
       survive into runtime state (per DD-M3-P2-002 / DD-M3-P2-003).
-- [ ] `ir_loader` rejection of 2+ children also exercised here.
+      Exercised by the Windows-only
+      `box_phase2_build_node_materialises_box_internal_state`, which
+      drives the full `lower → emit → parse_ir → build_widget_tree`
+      chain against a live Compositor and reads the resulting
+      `WidgetData::Box` through the new `WidgetNode::__box_state
+      _for_test` accessor (a `#[doc(hidden)] pub fn` returning
+      Box-internal `aspect` / `fill` as primitives so the
+      `box_values::Ratio` / `Color` `pub(crate)` surface stays
+      narrow). Skip-guard mirrors Phase 1 T6 / T13: fail (not skip)
+      on GitHub Actions if `wasamo_init` returns `0x80070005`. The
+      `WidgetData::Box.fill` `#[allow(dead_code)]` carried from T8 /
+      T9 is dropped in this step because the accessor now reads the
+      field unconditionally — T11 reuses the accessor for its
+      `fill` brush peek with no further surface change.
+- [x] `ir_loader` rejection of 2+ children also exercised here.
+      `box_phase2_two_children_rejected_at_parse_ir` re-states the
+      `wasamo-runtime::ir_loader::tests::malformed_box_with_two
+      _children` (T7) gate from inside the cross-crate file so
+      T10's checklist owns an observable defense-in-depth test on
+      the integration-test surface.
+
+Closed by commit `8d12f66 feat(wasamo-runtime): IR text round-trip
+evidence for Box (M3-Phase 2 T10)`. Step-end retrospective recorded
+in
+[../../notes/m3-phase-2/t10-step-end-retrospective.md](../../notes/m3-phase-2/t10-step-end-retrospective.md).
 
 ### T11 — Windows-runtime layout integration test (ADR §Phase 2 verification closure item 3, CI-gated)
 
