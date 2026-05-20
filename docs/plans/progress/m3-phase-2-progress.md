@@ -151,7 +151,7 @@ Discharges DD-M3-P2-001 (IR node shape / per-kind tag).
 - [x] Internal `Ratio` and `Color` domain types declared inside
       `wasamo-runtime`; visibility minimal (not `pub` beyond what
       tests require). Declared `pub(crate)` in a private
-      `wasamo-runtime/src/box_widget.rs` module to avoid the
+      `wasamo-runtime/src/box_values.rs` module to avoid the
       `windows::UI::Color` name collision inside `widget.rs`.
 
 Closed by commit `b4dff5d feat(wasamo-runtime): add Box widget

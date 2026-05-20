@@ -126,10 +126,10 @@ T6 の `WidgetData::Box { aspect, fill }` には同等の compile-time
   範囲では allow を外す瞬間が遅延した check point になる。
 
 副次的な学びとして、**OS API 型 (`windows::UI::Color`) と DSL 値型
-(`box_widget::Color`) の同名衝突は module 分割で安価に解消できる**
+(`box_values::Color`) の同名衝突は module 分割で安価に解消できる**
 ことの再確認。widget.rs では `Color` を `windows::UI::Color` として
-import しており、ここに `box_widget::Color` を持ち込むと use 競合が
-出る。`box_widget::Color` を module-qualified path で参照することで、
+import しており、ここに `box_values::Color` を持ち込むと use 競合が
+出る。`box_values::Color` を module-qualified path で参照することで、
 - ADR / progress file が指定する名前 (`Color`) をそのまま保てる
   (alias rename 不要)、
 - widget.rs 内の既存 `Color { A, R, G, B }` 構築 site (button 系) を
@@ -138,17 +138,31 @@ import しており、ここに `box_widget::Color` を持ち込むと use 競�
 さらに OS-API-collision-prone な名前を domain 型として導入する
 場合 (Vector, Rectangle, Brush, ...) に再利用できる。
 
-ただし `box_widget` という module 名は現時点で違和感を残している —
-中身は `Ratio` / `Color` の二つの value 型だけで、Box widget の
-constructor / layout tree 化 / SpriteVisual 配線は `widget.rs` /
-`layout.rs` 側にある。**module 名と責務の粒度が今は不一致**。今 T6
-で rename しないのは、T7 で `ir_loader::build_node` が
-`WidgetData::Box` の field に値を直接書く際に `pub(crate)` の setter
-ないし builder が必要になる可能性があり、その時に `box_widget` の
-責務が広がるか、それとも純粋な value 型 module のまま残るかが
-決まるため。**T7 着手時に再評価**し、まだ違和感が残るなら
-`box_values.rs` への rename が最小・最も clean な対応 (Follow-Up に
-記録)。
+**module 名の選定 (`box_values.rs`):** 当初 `box_widget.rs` で書き
+始めたが、中身は `Ratio` / `Color` の二つの value 型だけで、Box
+widget の constructor / layout tree 化 / SpriteVisual 配線は
+`widget.rs` / `layout.rs` 側にある。module 名と責務の粒度が不一致
+だったため、T6 内で `box_values.rs` に rename して closing した。
+
+当初は「T7 で `ir_loader::build_node` が setter / builder を
+`box_widget` 側に必要とする可能性があるので T7 着手時に再評価する」
+という draft を書いたが、批判的に詰めると:
+
+- T6 end と T7 start の間に module 責務に関する新規情報は **ゼロ**
+  (= T7 はまだ何も書いていない)。「T7 着手時に再評価」は儀式的判定で
+  実質的な判断材料が増えない。
+- `WidgetData::Box` の variant 定義は `widget.rs` にあるので、その
+  setter / builder も Rust の自然な書き方では `widget.rs` 側に
+  集まる。box_values が太る経路は構造的に細い (= 予測が立つ)。
+- T7 / T8 / T11 retro まで「念のため待つ」のは、予測通りなら自明な
+  確認の儀式が増えるだけで、判断 latency を伸ばす意味が薄い。
+
+結論として **criterion が T6 時点で構造的に予測可能** な以上、待つ
+コストの方が大きい。rename はファイル名 + `lib.rs` の `mod` 行 +
+`widget.rs` の use / type-path 4 site の合計 7 行変更で完結する
+小変更なので、T6 commit `b4dff5d` (catalog 追加) の **付随変更
+として T6 内で吸収** した。後続 step は最初から `box_values` を
+参照する。
 
 T7 / T8 / T11 への持ち越し:
 
@@ -320,22 +334,14 @@ cargo test --workspace
 T6 から後続 task への明示的な引き渡し:
 
 - **T7 (`wasamo-runtime` ir_loader):** `IrLiteral::Ratio` を
-  `box_widget::Ratio` に、`IrLiteral::Color` を `box_widget::Color`
+  `box_values::Ratio` に、`IrLiteral::Color` を `box_values::Color`
   に materialise する path を書く。`PropertyValue` を経由せず
   `WidgetData::Box` の field に直接書き込む (DD-M3-P2-002 /
   DD-M3-P2-003 Option A boundary)。emit canonical (短縮優先) と
   ir_loader accept (両形受理) の非対称性は T5 retro の Main Learning
-  に既出。T7 で `WidgetData::Box` の field に値を書く手段として
-  `pub(crate)` setter / builder が `box_widget` 側に必要になるかを
-  実装時に判断し、必要なら同 module に置く。
-- **T7 module 名再評価:** 今 T6 時点で `box_widget` という module
-  名は中身 (純粋な `Ratio` / `Color` value 型のみ) に対して広すぎる。
-  T7 で setter / builder が追加されて module が "Box 関連の crate-
-  internal API 集" に育つなら現状名のまま正当化できる。逆に T7 でも
-  純粋な value 型しか足さない場合は `box_values.rs` への rename が
-  最小・最も clean な対応。T7 retro 時の判定項目とする。
-  rename 自体はファイル名 + `lib.rs` の `mod` 行 + `widget.rs` の
-  `use crate::box_widget` 行のみで完結する小変更。
+  に既出。`WidgetData::Box` の field に値を書く setter / builder が
+  必要になった場合は、variant 定義位置である `widget.rs` 側に置く
+  のが自然 (box_values は value 型のみを保つ前提で rename 済み)。
 - **T8 (`wasamo-runtime` layout):** `WidgetKind::Box` の
   `measure` / `arrange` placeholder を DD-M3-P2-005 inscribed-fit
   algorithm + DD-M3-P2-001 child centring / clip overflow に
@@ -347,10 +353,7 @@ T6 から後続 task への明示的な引き渡し:
   の反映は T11 (または T8) で。`#[allow(dead_code)]` の forward-pointer
   comment は T11 完了時に reader 側が外れることで自然解消する想定。
 
-上記のうち T7 ir_loader 本体 / T8 layout / T11 brush 反映の 3 つは
-progress file の T7 / T8 / T11 として既に列挙済み。**`box_widget`
-module 名再評価のみ T6 で新規発見した judgement call** で、progress
-file の T7 checklist 5 項目には含まれていない (= progress file 外の
-review-time consideration として retro 側にのみ記録)。T7 着手者は
-ir_loader 実装の流れで `box_widget` に setter / builder を増やすか
-の判断と同時にこの再評価を扱う想定。
+これらはすべて progress file の T7 / T8 / T11 として既に列挙済み。
+T6 で当初 follow-up に挙げた `box_widget` rename 再評価は T6 内で
+`box_values.rs` に rename して closing 済み (Main Learning §
+"module 名の選定" 参照)。

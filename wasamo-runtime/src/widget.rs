@@ -1,4 +1,4 @@
-use crate::box_widget;
+use crate::box_values;
 use crate::handler::{self, EvalContext, EvalError, HandlerExpr};
 use crate::layout::{self, Alignment, LayoutNode, SizeConstraint};
 use crate::reactive::EffectHandle;
@@ -87,9 +87,9 @@ enum WidgetData {
     // `docs/plans/progress/m3-phase-2-progress.md` T6–T11 ordering.
     Box {
         #[allow(dead_code)]
-        aspect: Option<box_widget::Ratio>,
+        aspect: Option<box_values::Ratio>,
         #[allow(dead_code)]
-        fill: Option<box_widget::Color>,
+        fill: Option<box_values::Color>,
     },
 }
 
@@ -1521,7 +1521,7 @@ mod tests {
     // test.
 
     use super::WidgetData;
-    use crate::box_widget::{Color as BoxFill, Ratio};
+    use crate::box_values::{Color as BoxFill, Ratio};
 
     #[test]
     fn box_variant_carries_optional_aspect_and_fill() {
