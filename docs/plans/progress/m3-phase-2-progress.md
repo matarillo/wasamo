@@ -381,6 +381,11 @@ the M3-Phase 2 DSL surface) and is therefore not exercised here.
         `box_with_single_child_is_valid`,
         `box_with_zero_children_is_valid`.
 
+Closed by commit `1e42d85 docs(m3-phase-2): T9 pure-logic test
+inventory and checklist close (M3-Phase 2 T9)`. Step-end
+retrospective recorded in
+[../../notes/m3-phase-2/t9-step-end-retrospective.md](../../notes/m3-phase-2/t9-step-end-retrospective.md).
+
 ### T10 — IR text round-trip evidence (ADR §Phase 2 verification closure item 2)
 
 - [ ] Round-trip fixture:
