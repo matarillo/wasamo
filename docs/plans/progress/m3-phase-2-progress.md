@@ -311,16 +311,20 @@ recorded in
 
 ### T12 — Seed `examples/gallery/` + `examples/gallery-rust/` (ADR §Phase 2 verification closure item 4)
 
-- [ ] `examples/gallery/` with a Phase 2 sub-screen (Box + Text
+- [x] `examples/gallery/` with a Phase 2 sub-screen (Box + Text
       placeholder against a trivial frame). Later M3 phases grow
       this directory sub-screen by sub-screen.
-- [ ] `examples/gallery-rust/` workspace-member host (mirrors the
+- [x] `examples/gallery-rust/` workspace-member host (mirrors the
       `examples/bool-demo-rust/` build pipeline from Phase 1).
-- [ ] `Start-Process` launch recorded as successful; visual
+- [x] `Start-Process` launch recorded as successful; visual
       correctness is owner-manual GUI smoke (per pre-doc framing
       decision G).
-- [ ] C / Zig hosts not required in Phase 2 (per framing decision F
+- [x] C / Zig hosts not required in Phase 2 (per framing decision F
       and the ADR Out-of-scope list).
+
+Closed by commit `83126b7 feat(examples): seed M3 Phase 2 gallery
+host`. Step-end retrospective recorded in
+[../../notes/m3-phase-2/t12-step-end-retrospective.md](../../notes/m3-phase-2/t12-step-end-retrospective.md).
 
 ### T13 — Phase-end gates
 
@@ -360,8 +364,26 @@ shape.)
 
 ## CI / verification log
 
-(empty — record `cargo` runs, `workflow_dispatch` CI runs, and
-GUI-smoke launches here as they happen.)
+- **2026-05-20 / T12 local:** `cargo build -p gallery-rust` — green.
+- **2026-05-20 / T12 local:** `cargo build --release -p
+  gallery-rust` — green.
+- **2026-05-20 / T12 local GUI smoke:** `Start-Process
+  .\target\release\gallery-rust.exe` — command succeeded. Manual
+  visual correctness is owner-manual GUI smoke per framing decision G.
+- **2026-05-20 / T12 step-end local:** `cargo fmt --all -- --check`
+  — green.
+- **2026-05-20 / T12 step-end local:** `cargo clean` — initial run
+  blocked on the launched `gallery-rust.exe`; after it exited, rerun
+  succeeded.
+- **2026-05-20 / T12 step-end local:** `cargo build --release
+  --workspace` — green (existing `wasamo` linkable target /
+  `wasamo-sys` import library order warnings only).
+- **2026-05-20 / T12 step-end local:** `cargo build --workspace` —
+  green (same existing warnings only).
+- **2026-05-20 / T12 step-end local:** `cargo test --workspace` —
+  green.
+- **2026-05-20 / T12 step-end local:** final `cargo fmt --all --
+  --check` — green.
 
 ## Out-of-phase residuals
 
