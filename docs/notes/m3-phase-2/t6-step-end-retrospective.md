@@ -347,5 +347,10 @@ T6 から後続 task への明示的な引き渡し:
   の反映は T11 (または T8) で。`#[allow(dead_code)]` の forward-pointer
   comment は T11 完了時に reader 側が外れることで自然解消する想定。
 
-これらはすべて progress file の T7 / T8 / T11 として既に列挙済み。
-T6 単体で新たに発見された follow-up は無い。
+上記のうち T7 ir_loader 本体 / T8 layout / T11 brush 反映の 3 つは
+progress file の T7 / T8 / T11 として既に列挙済み。**`box_widget`
+module 名再評価のみ T6 で新規発見した judgement call** で、progress
+file の T7 checklist 5 項目には含まれていない (= progress file 外の
+review-time consideration として retro 側にのみ記録)。T7 着手者は
+ir_loader 実装の流れで `box_widget` に setter / builder を増やすか
+の判断と同時にこの再評価を扱う想定。
