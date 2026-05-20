@@ -291,18 +291,23 @@ in
 
 ### T11 — Windows-runtime layout integration test (ADR §Phase 2 verification closure item 3, CI-gated)
 
-- [ ] Mock-free Windows-only integration test under
+- [x] Mock-free Windows-only integration test under
       `wasamo-runtime/tests/`: aspect-fixed Box with Text child
       inside a parent of known size; asserts inscribed-fit
       resolved rectangle and child centred.
-- [ ] `fill` verified via a Box-internal / test-only accessor or
+- [x] `fill` verified via a Box-internal / test-only accessor or
       via the render model (`SpriteVisual` brush), not via
       `wasamo_get_property` (per DD-M3-P2-003 variant strategy).
-- [ ] Skip-guard matches Phase 1 T6 / T13: fail (not skip) on CI
+- [x] Skip-guard matches Phase 1 T6 / T13: fail (not skip) on CI
       when Compositor unavailable, per
       [CLAUDE.md §Testing rules](../../../CLAUDE.md).
       Reuse T10's `0x80070005` skip pattern, already observed on an
       SSH dev box as a local skip/pass path.
+
+Closed by commit `216cb5e test(wasamo-runtime): add Box layout
+integration evidence (M3-Phase 2 T11)`. Step-end retrospective
+recorded in
+[../../notes/m3-phase-2/t11-step-end-retrospective.md](../../notes/m3-phase-2/t11-step-end-retrospective.md).
 
 ### T12 — Seed `examples/gallery/` + `examples/gallery-rust/` (ADR §Phase 2 verification closure item 4)
 
