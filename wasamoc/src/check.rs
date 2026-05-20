@@ -1063,4 +1063,36 @@ mod tests {
             errs
         );
     }
+
+    // Regression: T3 routes state-default expressions through
+    // `check_expr_type` (so Ratio / Color positional reject fires in
+    // that position). As a side effect, every `check_expr_type` branch
+    // — including StringLit interpolation validation — applies to
+    // state defaults. The two tests below pin the StringLit branch so a
+    // future regression that narrows the state-default `check_expr_type`
+    // call would also drop these cases.
+
+    #[test]
+    fn string_state_default_with_undefined_interp_rejected() {
+        let errs =
+            errors(r#"component C inherits W { state label: string = "val: \{root.missing}" }"#);
+        assert!(
+            errs.iter().any(|e| e.contains("undefined state `missing`")),
+            "{:?}",
+            errs
+        );
+    }
+
+    #[test]
+    fn string_state_default_with_bool_interp_rejected() {
+        let errs = errors(
+            r#"component C inherits W { state ready: bool = true state label: string = "v: \{root.ready}" }"#,
+        );
+        assert!(
+            errs.iter()
+                .any(|e| e.contains("bool state `ready` cannot be used in string interpolation")),
+            "{:?}",
+            errs
+        );
+    }
 }

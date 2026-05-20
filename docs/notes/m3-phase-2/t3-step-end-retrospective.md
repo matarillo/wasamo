@@ -130,6 +130,24 @@ state default / handler RHS / nested expr など Box とは無関係な site
 ことが前提になる。M2 までの「state default は type compatibility のみ」
 方針はここで微修正が入った。
 
+ここで正直に書いておくと、この `check_state_defaults -> check_expr_type`
+の呼び出し追加は **副作用が FloatLit だけにとどまらない** — state
+default が generic expression validation 全体に乗ったため:
+
+- `FloatLit` in state default → reject (これは既存方針との整合)。
+- `RatioLit` / `ColorLit` in state default → reject (T3 の目的)。
+- `StringLit` 内の interpolation 検査 (undefined state, bool
+  interpolation) も state default に広がる (新規)。
+
+3 番目は T3 の reject set を厳密には超えており、「state default 検査
+の適用範囲を広げた」という結論を伴う。方向としては既存 check の方針
+(qualified name は宣言済み state を指す、bool は interp に使えない)
+に沿う正規化で、新規 spec 判断ではないが、retrospective item 5 では
+"FloatLit を塞いだ" だけと書くと過小報告になる。StringLit 経路の
+regression test を 1 セット追加して invariant を pin し、retrospective
+本文も「state default 全体が generic expression validation に乗った」
+事実を明示する。
+
 副次的な学びとして、widget_prop_type の catalog 行に Box.aspect /
 Box.fill を **入れない判断** を明示的にコメント残しした。aspect /
 fill は Box-internal 値型で `TypeName` enum を拡張しない方針
@@ -153,7 +171,9 @@ T4 (`wasamoc` lowering) に持ち越した境界:
 1. **本作業の主要な学び:** あり。
    - 位置妥当性 reject の責任分割 ("default reject + accept 側 opt-out"
      構造) と、それに伴う state default 経路の `check_expr_type` 呼び出し
-     追加 (上で展開)。
+     追加 (上で展開)。副作用として state default が generic expression
+     validation 全体に乗ったため、FloatLit に加えて StringLit interp
+     検査も state default に適用される (item 5(b) に詳述)。
    - widget_prop_type catalog に Box の行を **入れない** ことを明示的に
      コメント残し、Box-internal 値型が catalog から不可視である理由を
      spec/ADR と同期。
@@ -171,7 +191,8 @@ T4 (`wasamoc` lowering) に持ち越した境界:
      42.83s)。
    - `cargo build --workspace`: green (debug, 38.07s)。
    - `cargo test --workspace`: failure 0 件。
-     - `wasamoc`: 140 passed (T3 で +23)。
+     - `wasamoc`: 142 passed (T3 で +25: reject set 23 + state-default
+       StringLit interp 2)。
      - `wasamo-ir`: 12 passed (変化なし)。
      - `wasamo-runtime`: 165 passed (変化なし)。
      - 他 crate 変化なし。
@@ -192,18 +213,32 @@ T4 (`wasamoc` lowering) に持ち越した境界:
 ### step-end 固有
 
 5. **plan/ADR に記載の step 目的から外れた「ついで」のリファクタ・
-   構造変更:** **あり (極小、structural な必要性に駆動)**
-   - (a) `M1_WIDGET_TYPES` → `KNOWN_WIDGET_TYPES` のリネーム。
-     既存 const は "M1 types" を assert に含むテストが無い形 (warning
-     prefix `unknown widget type` だけを assert) で書かれており、
-     リネームと "known types: ..." 文言への置き換えは破壊的変更を
-     伴わない。Box 追加に合わせて名前を時代と合わせた。
+   構造変更:** **あり (2 件、報告対象)**
+   - (a) `M1_WIDGET_TYPES` → `KNOWN_WIDGET_TYPES` のリネームと、
+     unknown-widget warning 文言の "M1 types" → "types" 一般化。
+     Box を known widget に加える際の近接変更だが、厳密には T3 の
+     reject set ではなく **診断文言の一般化も含む小リファクタ**。
+     既存 const は "M1 types" を assert に含むテストが無い形
+     (warning prefix `unknown widget type` だけを assert) で書かれて
+     おり、破壊的変更は伴わない。独立 commit に切る余地はあったが、
+     影響範囲は unknown-widget warning の説明文のみ。
    - (b) `check_state_defaults` から `check_expr_type` を呼ぶように
      変更。T3 範囲 (Ratio / Color の positional reject in state
-     default) を成立させるために必要だが、副作用として FloatLit
-     in state default の latent gap も塞いだ。これは T3 の構造的
-     必要性に駆動された変更で、独立の "ついで" ではない (定義通り
-     T3 範囲に折り込んだ)。
+     default) を成立させるために必要。ただし副作用は **FloatLit
+     だけではなく、state default の StringLit interpolation 検査も
+     generic expression validation に乗る**:
+     - `FloatLit` in state default → reject (既存方針との整合)。
+     - `RatioLit` / `ColorLit` in state default → reject (T3 の目的)。
+     - `StringLit` 内の interpolation 検査 (undefined state, bool
+       interpolation) も state default に適用される (新規)。
+
+     これは既存 check 方針 ("qualified name は宣言済み state を指す"、
+     "bool は interp に使えない") に沿う正規化だが、T3 の reject set
+     を超えて **state-default 検査の適用範囲を広げる**ため、独立で
+     item 5 に列挙する。StringLit 経路の invariant を将来の後退から
+     守るため `string_state_default_with_undefined_interp_rejected` と
+     `string_state_default_with_bool_interp_rejected` の 2 件を
+     regression test として追加した。
    - これらは前述の "Main Learning" で展開した構造変更の一部であり、
      report で明示してオーナー判断を仰ぐ。
 
@@ -290,6 +325,11 @@ Ratio / Color 位置妥当性 reject (dsl_spec §4.9):
 - `ratio_literal_in_handler_rejected`
 - `color_literal_in_non_box_prop_rejected`
 - `ratio_literal_on_non_box_widget_rejected`
+
+State default が generic expression validation に乗ったことの
+regression guard (item 5 (b) で明記した拡張):
+- `string_state_default_with_undefined_interp_rejected`
+- `string_state_default_with_bool_interp_rejected`
 
 実行コマンド:
 
