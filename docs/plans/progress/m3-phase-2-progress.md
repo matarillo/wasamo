@@ -249,13 +249,137 @@ measure-arrange (M3-Phase 2 T8)`. Step-end retrospective recorded in
 
 ### T9 — Pure-logic unit tests (ADR §Phase 2 verification closure item 1)
 
-- [ ] Ratio literal: accept shapes; zero side rejected at check.
-- [ ] Color literal: `#RRGGBB` / `#RRGGBBAA` accept; malformed
+T9 is a coverage-inventory step: every checklist item below is
+already discharged by tests landed during T1–T5 / T7 / T8. The
+T9 commit updates this checklist to cross-link the existing tests
+so the ADR §Phase 2 verification closure item 1 has an auditable
+mapping. No new test files are added in this step. The
+"explicit width/height conflict" sub-item from the ADR's item 1
+enumeration is **out of Phase 2 scope** (per the ADR
+DD-M3-P2-005 §"Phase 2 scope note": `width` / `height` are not in
+the M3-Phase 2 DSL surface) and is therefore not exercised here.
+
+- [x] Ratio literal: accept shapes; zero side rejected at check.
+      - IR variant (T1): `wasamo-ir/src/lib.rs::tests`
+        `ir_literal_ratio_round_trip_values`,
+        `ir_literal_ratio_distinct_by_components`,
+        `ir_literal_ratio_and_color_distinct_from_other_variants`.
+      - Lex accept (T2): `wasamoc/src/lexer.rs::tests`
+        `ratio_literal_basic`, `ratio_literal_one_to_one`,
+        `ratio_literal_in_property_bind_position`,
+        `ratio_zero_sides_lex_ok_check_rejects_later`.
+      - Lex disambiguation (T2): `wasamoc/src/lexer.rs::tests`
+        `integer_followed_by_colon_then_non_digit_is_not_ratio`,
+        `integer_with_whitespace_before_colon_is_not_ratio`,
+        `float_followed_by_colon_is_not_ratio`,
+        `measurement_not_disturbed_by_ratio_lookahead`.
+      - Parse accept (T2): `wasamoc/src/parser.rs::tests`
+        `property_bind_ratio_literal`,
+        `box_image_placeholder_shape`.
+      - Check accept (T3): `wasamoc/src/check.rs::tests`
+        `box_aspect_only_accepted`, `box_placeholder_shape_accepted`.
+      - Check zero-side reject (T3): `wasamoc/src/check.rs::tests`
+        `box_aspect_zero_numerator_rejected`,
+        `box_aspect_zero_denominator_rejected`,
+        `box_aspect_zero_both_sides_rejected`.
+      - Positional reject (T3): `wasamoc/src/check.rs::tests`
+        `ratio_literal_in_state_default_rejected`,
+        `ratio_literal_in_handler_rejected`,
+        `ratio_literal_on_non_box_widget_rejected`.
+      - Lower (T4): `wasamoc/src/lower.rs::tests`
+        `box_aspect_only_lowered_to_ir_ratio`,
+        `box_aspect_and_fill_lowered_together`,
+        `box_with_text_child_placeholder_shape_lowered`.
+      - Emit (T5): `wasamoc/src/emit.rs::tests`
+        `box_aspect_ratio_emitted_in_surface_form`,
+        `box_phase2_placeholder_widget_node_shape_emitted`,
+        `box_phase2_ir_text_emit_fixture`.
+- [x] Color literal: `#RRGGBB` / `#RRGGBBAA` accept; malformed
       forms rejected at lex / parse.
-- [ ] Aspect measure-arrange resolver: each DD-M3-P2-005 case
+      - IR variant (T1): `wasamo-ir/src/lib.rs::tests`
+        `ir_literal_color_round_trip_value`,
+        `ir_literal_color_distinct_by_packed_value`,
+        `ir_literal_ratio_and_color_distinct_from_other_variants`.
+      - Lex accept (T2): `wasamoc/src/lexer.rs::tests`
+        `color_literal_six_digit_packs_with_full_alpha`,
+        `color_literal_eight_digit_explicit_alpha`,
+        `color_literal_eight_digit_mixed_channels`,
+        `color_literal_uppercase_hex_accepted`.
+      - Lex reject (T2): `wasamoc/src/lexer.rs::tests`
+        `color_literal_three_hex_rejected`,
+        `color_literal_seven_hex_rejected`,
+        `color_literal_no_hex_rejected`.
+      - Parse accept (T2): `wasamoc/src/parser.rs::tests`
+        `property_bind_color_literal_six_hex`,
+        `property_bind_color_literal_eight_hex`,
+        `box_image_placeholder_shape`.
+      - Check accept (T3): `wasamoc/src/check.rs::tests`
+        `box_fill_only_accepted`, `box_scrim_alpha_accepted`,
+        `box_placeholder_shape_accepted`.
+      - Positional reject (T3): `wasamoc/src/check.rs::tests`
+        `color_literal_in_state_default_rejected`,
+        `color_literal_in_non_box_prop_rejected`.
+      - Lower (T4): `wasamoc/src/lower.rs::tests`
+        `box_fill_only_opaque_lowered_to_ir_color`,
+        `box_fill_with_alpha_lowered_to_ir_color`,
+        `box_aspect_and_fill_lowered_together`,
+        `box_with_text_child_placeholder_shape_lowered`.
+      - Emit (T5): `wasamoc/src/emit.rs::tests`
+        `box_fill_opaque_color_emitted_in_short_form`,
+        `box_fill_color_with_alpha_emitted_in_full_form`,
+        `color_emit_normalises_alpha_ff_input_to_short_form`,
+        `box_phase2_placeholder_widget_node_shape_emitted`,
+        `box_phase2_ir_text_emit_fixture`.
+      - IR-loader lex (T7): `wasamo-runtime/src/ir_loader.rs::tests`
+        `color_literal_short_form_packs_implicit_alpha_ff`,
+        `color_literal_long_form_carries_explicit_alpha`,
+        `color_literal_long_form_with_full_rgba`,
+        `color_must_be_six_or_eight_hex_digits`.
+- [x] Aspect measure-arrange resolver: each DD-M3-P2-005 case
       enumerated in T8.
-- [ ] `wasamoc check` diagnostics: `bind aspect:`, `bind fill:`,
+      - Already landed in T8 as 13 tests in
+        `wasamo-runtime/src/layout.rs::tests`:
+        - Inscribed-fit numeric contract:
+          `box_aspect_inscribed_width_constrained`,
+          `box_aspect_inscribed_height_constrained`,
+          `box_aspect_equal_touch_takes_width_branch`.
+        - One-axis bounded / both-axes runtime error:
+          `box_aspect_unbounded_height_uses_bounded_axis_wins`,
+          `box_aspect_unbounded_width_uses_bounded_axis_wins`,
+          `box_aspect_unbounded_both_axes_is_runtime_error`.
+        - No-aspect cases:
+          `box_no_aspect_empty_matches_parent_bounds`,
+          `box_no_aspect_empty_unbounded_both_is_runtime_error`,
+          `box_no_aspect_empty_one_axis_unbounded_collapses_to_zero`,
+          `box_no_aspect_shrinks_to_fit_child`.
+        - Single child centred + clipped:
+          `box_aspect_child_measured_centred_and_intrinsic_kept`,
+          `box_aspect_oversize_child_clipped_to_box_bounds`.
+        - Container integration / zero-child rectangle:
+          `box_aspect_in_vstack_uses_inscribed_via_bounded_axis_wins`,
+          `box_zero_child_still_has_size`.
+- [x] `wasamoc check` diagnostics: `bind aspect:`, `bind fill:`,
       2+ children rejected (per DD-M3-P2-001 / DD-M3-P2-004).
+      - Bind-aspect reject (T3): `wasamoc/src/check.rs::tests`
+        `box_aspect_state_ident_rejected`,
+        `box_aspect_int_literal_rejected`,
+        `box_aspect_color_literal_rejected`.
+      - Bind-fill reject (T3): `wasamoc/src/check.rs::tests`
+        `box_fill_state_ident_rejected`,
+        `box_fill_string_literal_rejected`,
+        `box_fill_ratio_literal_rejected`.
+      - 2+ children at compile time (T3):
+        `wasamoc/src/check.rs::tests`
+        `box_two_children_rejected`,
+        `box_three_children_rejected`,
+        `box_attrs_do_not_count_as_children`,
+        `box_one_child_accepted`.
+      - 2+ children at IR-load time (T7,
+        `ir_loader::build_node` defense-in-depth path):
+        `wasamo-runtime/src/ir_loader.rs::tests`
+        `malformed_box_with_two_children`,
+        `box_with_single_child_is_valid`,
+        `box_with_zero_children_is_valid`.
 
 ### T10 — IR text round-trip evidence (ADR §Phase 2 verification closure item 2)
 
