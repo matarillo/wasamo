@@ -160,23 +160,45 @@ catalog (M3-Phase 2 T6)`. Step-end retrospective recorded in
 
 ### T7 — `wasamo-runtime` IR loader: parse new literal terminals and Box widget
 
-- [ ] IR text loader (`wasamo-runtime/src/ir_loader.rs`) accepts
-      `RATIO` and `COLOR` terminals in `literal` position.
-- [ ] `ir_loader::build_node` materialises ratio / color literals
+- [x] IR text loader (`wasamo-runtime/src/ir_loader.rs`) accepts
+      `RATIO` and `COLOR` terminals in `literal` position. New
+      `Token::Ratio { num, den }` / `Token::Color(u32)` tokens with
+      lex-time disambiguation mirroring `wasamoc::lexer`
+      (`<digits>:<digits>` only triggers Ratio when the colon
+      immediately follows the integer and a digit immediately
+      follows the colon; `#` followed by 6 or 8 hex digits, packed
+      `0xAARRGGBB` with implicit alpha `0xFF` for the short form
+      per dsl_spec §8.2).
+- [x] `ir_loader::build_node` materialises ratio / color literals
       for Box `aspect` / `fill` directly into Box-internal `Ratio`
       / `Color` (not via `PropertyValue`), per DD-M3-P2-002 /
       DD-M3-P2-003 variant strategy Option A.
-- [ ] `ir_loader::build_node` rejects ratio / color literals
+      `WidgetNode::box_` constructor signature extended to take
+      `Option<box_values::Ratio>` / `Option<box_values::Color>`
+      (only call site is `ir_loader::construct_widget`'s "Box"
+      arm; visibility narrowed to `pub(crate)` to match the
+      `box_values` visibility surface).
+- [x] `ir_loader::build_node` rejects ratio / color literals
       appearing outside Box `aspect` / Box `fill` with
       `WASAMO_ERR_IR_MALFORMED` (defense-in-depth for the
-      "not via `PropertyValue`" boundary).
-- [ ] `ir_loader::build_node` rejects a Box IR node with
+      "not via `PropertyValue`" boundary). Check lives in
+      `validate()` (pure logic, exercised without a live
+      `Compositor`); error class `IrLoadError::Validate` maps to
+      `WASAMO_ERR_IR_MALFORMED` at the C ABI boundary
+      (DD-M2-P6-005 / DD-M2-P6-009).
+- [x] `ir_loader::build_node` rejects a Box IR node with
       `len(children) > 1` with `WASAMO_ERR_IR_MALFORMED` (defense-
       in-depth for DD-M3-P2-001 against IR not produced by
-      `wasamoc`, e.g. via `wasamo_load_ui`).
-- [ ] **No** new `PropertyValue` variant, **no** new
+      `wasamoc`, e.g. via `wasamo_load_ui`). Same `validate()`
+      pass as the literal-placement gate.
+- [x] **No** new `PropertyValue` variant, **no** new
       `WASAMO_VALUE_*` tag, **no** new `abi.rs` arms (per
       DD-M3-P2-002 / DD-M3-P2-003 / DD-M3-P2-004).
+
+Closed by commit `5169c99 feat(wasamo-runtime): IR loader for Ratio /
+Color literals and Box widget (M3-Phase 2 T7)`. Step-end retrospective
+recorded in
+[../../notes/m3-phase-2/t7-step-end-retrospective.md](../../notes/m3-phase-2/t7-step-end-retrospective.md).
 
 ### T8 — `wasamo-runtime` layout: aspect measure-arrange
 

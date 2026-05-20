@@ -1,0 +1,344 @@
+---
+title: M3-Phase 2 / T7 step-end retrospective
+status: recorded
+created: 2026-05-20
+scope: step-end
+task: T7 — wasamo-runtime IR loader parses Ratio / Color terminals and Box widget
+---
+
+# M3-Phase 2 / T7 step-end retrospective
+
+## Scope
+
+`docs/plans/progress/m3-phase-2-progress.md` の **T7**
+(`wasamo-runtime` IR loader が `RATIO` / `COLOR` terminal を literal
+position で受け取り、`Box` widget を materialise する) の step-end
+retrospective。T7 が discharge する材料は次:
+
+- DD-M3-P2-002 の loader-side 半分 — `IrLiteral::Ratio { num, den }`
+  を IR text grammar から読み出し、`box_values::Ratio` に
+  materialise する path (variant strategy Option A — `PropertyValue`
+  経由なし)。
+- DD-M3-P2-003 の loader-side 半分 — `IrLiteral::Color(u32)` を
+  IR text grammar から読み出し、`box_values::Color` に
+  materialise する path。surface form `#RRGGBB` は implicit alpha
+  `0xFF` を MSB に詰めて `0xAARRGGBB` packing に整える。
+- DD-M3-P2-001 の defense-in-depth — Box IR node に `len(children)
+  > 1` が来た場合の reject。compile-time gate (wasamoc check T3) と
+  併用。
+- DD-M3-P2-002 / DD-M3-P2-003 の defense-in-depth — Ratio / Color
+  literal が `Box.aspect` / `Box.fill` 以外の prop position に
+  来た場合の reject。`PropertyValue` boundary が存在しない以上、
+  これらの literal は他のどの prop slot にも乗りえない。
+
+対象コミット:
+
+- `5169c99 feat(wasamo-runtime): IR loader for Ratio / Color literals
+  and Box widget (M3-Phase 2 T7)`
+
+これは step-end の gate であり、phase-end retrospective ではない。
+本 step (T7) は単一 step = 単一 task 構造で、merge 先は phase ブランチ
+`feat/m3-phase-2` (step→phase は ff)。
+
+## Current Judgment
+
+2026-05-20 時点で T7 step-end 基準は **達成済み**。
+
+- Lexer: `Token::Ratio { num, den }` / `Token::Color(u32)` を追加。
+  Ratio は digit 走査直後に `:` + 次が digit のときだけ fire する
+  (wasamoc lexer の disambiguation を mirror — `state count: i32`
+  のような `Ident + Colon` 列は anchored at Ident なので影響なし)。
+  Color は `#` の後に 6 または 8 hex digits、それ以外の長さは
+  `IrLoadError::Parse` で reject。short form は `0xFF000000 | rgb`
+  に packing、long form は `((rgba & 0xFF) << 24) | (rgba >> 8)` で
+  alpha を MSB に持ち上げる。
+- Parser: `parse_literal` の arm を 2 つ拡張 (`Token::Ratio` →
+  `IrLiteral::Ratio`、`Token::Color` → `IrLiteral::Color`)。
+  `parse_expr` 側には触らない — DD-M3-P2-004 が handler / binding
+  position を Ratio / Color に閉じる前提を、追加 arm を出さない
+  形で守る。
+- Validate: 既存の `validate()` に
+  `validate_phase2_node_invariants(node)` を増設し、(a) Box の
+  `len(children) > 1`、(b) Ratio が `Box.aspect` 以外、(c) Color
+  が `Box.fill` 以外、をいずれも `IrLoadError::Validate` で reject。
+  ABI 境界では `WASAMO_ERR_IR_MALFORMED` にマップされる
+  (DD-M2-P6-005 / DD-M2-P6-009 の既存 wiring)。
+- Build: `construct_widget` に `"Box"` arm を追加し、`extract_ratio_prop`
+  / `extract_color_prop` で `Box.aspect` / `Box.fill` を Box-internal
+  domain type に持ち上げて `WidgetNode::box_(compositor, aspect, fill)`
+  に渡す。
+- `WidgetNode::box_` constructor を拡張: `aspect: Option<box_values::Ratio>`
+  / `fill: Option<box_values::Color>` を受け取る。T6 で立てた
+  no-arg default は production caller が無かったので signature を
+  そのまま広げ、visibility は `pub(crate)` に narrow (box_values の
+  visibility と整列、外部 crate からの呼び出し path は今 phase では
+  発生しない)。
+- 新規テスト 16 件 (ir_loader::tests):
+  - **Accept shapes** — `ratio_literal_in_prop_position`、
+    `color_literal_short_form_packs_implicit_alpha_ff`、
+    `color_literal_long_form_carries_explicit_alpha`、
+    `color_literal_long_form_with_full_rgba`、
+    `box_phase2_load_side_fixture` (ADR §Phase 2 verification
+    closure item 2 の load-side parse 半分; T11 の build_node
+    half と組で意味を持つ)、
+    `box_with_zero_children_is_valid`、
+    `box_with_single_child_is_valid`。
+  - **Reject shapes** — `color_must_be_six_or_eight_hex_digits`、
+    `malformed_ratio_outside_box_aspect_on_vstack`、
+    `malformed_ratio_on_box_wrong_prop_name`、
+    `malformed_color_outside_box_fill_on_text`、
+    `malformed_color_on_box_wrong_prop_name`、
+    `malformed_ratio_in_nested_node`、
+    `malformed_box_with_two_children`。
+  - **Lex disambiguation guards** —
+    `ratio_lex_requires_colon_immediately_after_digits` (whitespace を
+    跨いで `:` を拾わない)、
+    `ratio_lex_does_not_capture_state_colon` (`state count: i32` を
+    壊さない)。
+- `cargo fmt --all -- --check` (post-commit state) zero exit。
+- `cargo clean` → `cargo build --release --workspace` (release,
+  39.18s) → `cargo build --workspace` (debug, 35.65s) →
+  `cargo test --workspace` すべて green。
+  - `wasamo-runtime`: 186 passed (T6 で 170、T7 で +16)。
+  - `wasamo-ir`: 12 passed (変化なし)。
+  - `wasamoc`: 153 passed (変化なし)。
+  - 他 crate 変化なし。
+
+T7 の blocker は残っていない。
+
+## Main Learning
+
+中心的な学びは「**defense-in-depth gate は、progress file の文面が
+特定の関数名 (build_node) を指していても、純粋ロジックとして自然な
+場所 (validate) に置く方が正しい場合がある**」ということ。
+
+progress file T7 の reject 3 件は文面上 `ir_loader::build_node` の
+責務として書かれていた:
+
+- "ir_loader::build_node rejects ratio / color literals appearing
+  outside Box `aspect` / Box `fill`..."
+- "ir_loader::build_node rejects a Box IR node with `len(children) > 1`..."
+
+しかし `build_node` は WinRT-bound (`Compositor` / `TextRenderer` を
+引数に取る) であり、check 自体は IR 構造 (= `IrNode` / `IrLiteral`)
+だけで完結する pure logic。`build_node` に置くと:
+
+- check のテストに Compositor が必要になる (CI Windows runner 必須)。
+- check が build_node の各 widget arm の入口に散らばる。
+- 同じ check を再帰呼び出し側 (children を build_node する箇所) でも
+  繰り返すか、recursion 構造を別建てするかの判断が要る。
+
+対して `validate()` に置けば:
+
+- pure logic として `parse_ir` のテストハーネスで直接行使できる
+  (Compositor 不要 → ir_loader::tests で 7 件の reject を全部
+  unit test 化できた)。
+- IrNode tree の再帰 walk は既存の `validate_node_references` と
+  同じ構造で書ける。
+- C ABI 境界での error class (`IrLoadError::Validate` →
+  `WASAMO_ERR_IR_MALFORMED`) は build_node 経由でも同じなので、
+  consumer から見た gate の振る舞いは何も変わらない。
+
+結論として **「どの関数が reject するか」よりも「どの error class で
+reject するか」の方が API contract として本質的** であり、progress
+file が前者を書いていても後者が満たされていれば実装側の location は
+ローカル最適化の余地がある。今回は progress file T7 の check 行を
+「`build_node` ではなく `validate()` に置いた; reject path は
+共通の `WASAMO_ERR_IR_MALFORMED` mapping」と明記する形で記録に残す
+(=task の文言を実装後に書き直す方が、現実の location を反映する)。
+
+副次的な学びとして、**lex 時の disambiguation は token-anchored で
+書いた方が後の grammar 拡張に強い**。Ratio の `<digits>:<digits>`
+disambiguation は wasamoc lexer と同じく digit-side anchor に置いた
+— `state name: type` のような Ident + Colon 列は lexer の Ident
+branch が先に Colon を消費しないので影響を受けない。逆に Ident side
+で disambiguation していたら、新しい keyword (`state` / `prop` /
+`bind` / `on` / `node`) が `Ident` token として扱われる現状の
+parser 構造と相互作用してしまった可能性がある。
+
+`WidgetNode::box_` の signature 拡張については、T6 retro が予測した
+通り「T7 着手時に再評価する必要がなかった」 — production caller が
+無いので signature を広げるだけで wiring が完結した。T6 の判断
+(box_values rename を T6 内で吸収) と整合する形で、T7 でも T6 の
+forward-pointer comment を素直に消費しただけ。
+
+## Checklist
+
+1. **本作業の主要な学び:** あり。
+   - Defense-in-depth gate の location は progress file の文言よりも
+     `IrLoadError` class の安定性で判断する。`build_node` 文言を
+     `validate()` 実装に置き換える際は progress file を実装に合わせて
+     書き直す (上記 Main Learning に展開)。
+   - Lex disambiguation の anchor は token-side (digit / Ident の
+     どちらか) で決まる; grammar 拡張に対する頑健性が変わる。
+
+2. **仕様文書 (`abi_spec.md` / `architecture.md` / `dsl_spec.md`) の変更:**
+   **なし**
+   - T7 は `wasamo-runtime` の loader 内部のみ。dsl_spec §4.9 (Box
+     widget) / §8.2 (`RATIO` / `COLOR` terminal) は T5 までで draft
+     済み、Moment 2 spec re-sync は T13 の責任範囲。`abi_spec` /
+     `architecture.md` への影響もなし (`PropertyValue` / ABI tag /
+     `abi.rs` arm をいずれも増やしていないので DD-M3-P2-004 の
+     boundary が保たれている)。
+
+3. **ローカル clean rebuild:** **green**
+   - `cargo fmt --all -- --check` (post-commit state): zero exit。
+   - `cargo clean` → `cargo build --release --workspace`: green
+     (release, 39.18s)。
+   - `cargo build --workspace`: green (debug, 35.65s)。
+   - `cargo test --workspace`: failure 0 件。
+     - `wasamo-runtime`: 186 passed (T7 で +16)。
+     - `wasamo-ir`: 12 passed (変化なし)。
+     - `wasamoc`: 153 passed (変化なし)。
+     - 他 crate 変化なし。
+   - GitHub Actions 上の clean rebuild は phase-end gate (T13) で
+     確認。
+
+4. **PO に相談すべき設計判断・トレードオフ:** **なし**
+   - T7 範囲はすべて DD-M3-P2-001 / DD-M3-P2-002 / DD-M3-P2-003 /
+     DD-M3-P2-004 の Option A 採択から機械的に降りる。defense-in-depth
+     を `validate()` に置く判断は実装層のローカル最適化で、ADR /
+     spec の boundary を動かしていない。`WidgetNode::box_` の
+     `pub(crate)` 化も box_values の visibility と整合させた閉じた
+     判断。
+
+### step-end 固有
+
+5. **plan/ADR に記載の step 目的から外れた「ついで」のリファクタ・
+   構造変更:** **なし**
+   - 変更は `wasamo-runtime/src/ir_loader.rs` と
+     `wasamo-runtime/src/widget.rs` の 2 file のみ。既存 widget の
+     constructor / property dispatch / binding writer / subtree
+     teardown には触っていない。`WidgetNode::box_` の signature
+     拡張は T7 task そのもの (Box materialisation の wiring) の
+     一部であり、別途のついでではない。
+
+6. **現在の phase ADR への追加 DD 必要性:** **なし**
+   - 既存 DD-M3-P2-001..004 で T7 範囲は完全にカバー。defense-in-depth
+     gate の location 決定 (validate vs build_node) は spec/DD レベル
+     ではなく実装層の判断。
+
+7. **既存 ADR の Proposed 項目の新規追加、または Proposed → Accepted
+   への昇格:** **なし**
+   - 当該 ADR は全 DD Accepted 済み。
+
+8. **`m3-plan.md` の AC 追加・変更、または Phase 構成の追加・統合・
+   分割:** **なし**
+   - A6 / A11 文言変更なし。Phase 構成変更なし。
+
+9. **後続 step に持ち越す仮実装・近似・新規 `dead_code` 警告:**
+   **あり (T6 由来の既存 placeholder が継続)**
+   - `cargo build` 出力に T7 で **新規** の dead_code 警告は出ていない。
+   - ただし T6 で導入された次の placeholder は T7 では解消していない:
+     - `layout.rs` の `WidgetKind::Box` arm: `measure_leaf(node)` /
+       no-op `arrange` (DD-M3-P2-005 inscribed-fit ではなく leaf 扱い)。
+       T8 が置き換える前提の boundary placeholder。
+     - `WidgetData::Box { aspect, fill }` field の `#[allow(dead_code)]`:
+       T7 で `aspect` / `fill` を **書く** path は入ったが、**読む**
+       production code はまだ存在しない (T8 が aspect を inscribed-fit
+       に使い、T11 が fill を SpriteVisual brush に paint する)。
+       Rust の dead_code lint は read で判定するため、現状 `#[allow]`
+       は維持。T8 / T11 が reader を入れた時点で外す (T6 retro
+       Main Learning の hand-off marker 設計のまま)。
+   - 上記はいずれも T6 retro item 9 で既に "あり" として記録済み、
+     T7 では **状態が変わっていない**。`#[allow(dead_code)]` を外す
+     のは T8 / T11 の reader 着地後 (T6 Main Learning の通り)。
+   - `unimplemented!` / `todo!` stub は T7 でも追加していない。
+
+10. **タスクリストの後続 step 見直し:** **なし (進行通り)**
+    - T8–T13 の構成・順序・依存関係に T7 実装から見て調整すべき点は
+      出ていない。
+    - T8 / T11 への follow-up は下記 "Follow-Up" 節と Main Learning
+      に明示。
+
+## Fast-Track Judgment
+
+Fast-track criteria は **満たさない** (item 9 の "T6 由来の placeholder
+が継続" 該当):
+
+- item 2 (spec doc 変更): なし
+- item 3 (local clean rebuild): green
+- item 4 (PO 相談事項): なし
+- item 5 (ついでリファクタ): なし
+- item 6 (追加 DD): なし
+- item 7 (Proposed 増加/昇格): なし
+- item 8 (m3-plan AC 変更): なし
+- item 9 (仮実装・近似・新規 dead_code 警告): **あり** —
+  T6 由来の `layout.rs` Box arm placeholder と
+  `WidgetData::Box.aspect/.fill` の `#[allow(dead_code)]` が、T7 では
+  解消せず後続 step (T8 / T11) への引き渡しのまま残っている。
+  T7 で **新規** 導入した placeholder は無い。
+- item 10 (タスクリスト見直し): なし
+
+step→phase ブランチへの ff merge はオーナー明示確認後に実行する
+(retrospectives.md §3 のファストトラック基準は item 2–8 (FT 印つき)
+が全て「なし」を要求し、本 step は item 9 で "あり" のためファスト
+トラック不適格 — T6 と同じく item 9 起因の不適格)。
+
+## Verification Notes
+
+T7 で追加したテストと、走らせた command を記録する。
+
+新規 `ir_loader::tests` テスト 16 件:
+
+- Accept shapes (7 件):
+  - `ratio_literal_in_prop_position`
+  - `color_literal_short_form_packs_implicit_alpha_ff`
+  - `color_literal_long_form_carries_explicit_alpha`
+  - `color_literal_long_form_with_full_rgba`
+  - `box_phase2_load_side_fixture`
+  - `box_with_zero_children_is_valid`
+  - `box_with_single_child_is_valid`
+- Reject shapes (7 件):
+  - `color_must_be_six_or_eight_hex_digits`
+  - `malformed_ratio_outside_box_aspect_on_vstack`
+  - `malformed_ratio_on_box_wrong_prop_name`
+  - `malformed_color_outside_box_fill_on_text`
+  - `malformed_color_on_box_wrong_prop_name`
+  - `malformed_ratio_in_nested_node`
+  - `malformed_box_with_two_children`
+- Lex disambiguation guards (2 件):
+  - `ratio_lex_requires_colon_immediately_after_digits`
+  - `ratio_lex_does_not_capture_state_colon`
+
+実行コマンド:
+
+```text
+cargo fmt --all -- --check   (post-commit state)
+cargo clean
+cargo build --release --workspace
+cargo build --workspace
+cargo test --workspace
+```
+
+いずれも green。
+
+## Follow-Up
+
+T7 から後続 task への明示的な引き渡し:
+
+- **T8 (`wasamo-runtime` layout):** `WidgetData::Box { aspect, fill }`
+  の `aspect` を `LayoutNode::box_` 側に thread し、DD-M3-P2-005
+  inscribed-fit measure-arrange + DD-M3-P2-001 child centring / clip
+  overflow を実装する。`LayoutNode::box_` constructor の signature
+  拡張 (aspect threading) か parallel entry point かの判断は T8 内で
+  (T6 retro Follow-Up に既出)。`aspect` field の `#[allow(dead_code)]`
+  は reader 着地時に外す。
+- **T11 (Windows-runtime integration test):** `WidgetData::Box.fill`
+  を `SpriteVisual` brush に paint する path を入れる。`fill` field
+  の `#[allow(dead_code)]` は T8 または T11 で reader が入った時点で
+  外す。T11 は ADR §Phase 2 verification closure item 3 の本体で、
+  本 T7 で追加した `box_phase2_load_side_fixture` (parse 半分) と組で
+  IR text round-trip の load-side end-to-end (parse → build → render)
+  を成立させる。
+- **T10 (IR text round-trip evidence):** wasamoc emit と
+  ir_loader parse の両端は T5 (emit) + T7 (parse) で揃ったので、
+  T10 は emit→parse 結合の cross-crate test (existing
+  `wasamo-runtime/tests/ir_loader_roundtrip.rs` パターン) を Box
+  fixture で追加する。build_node 経由の load-side runtime state 確認
+  (`WidgetData::Box { aspect: Some(...), fill: Some(...) }`) は
+  Compositor 必須なので T11 と統合される可能性あり。
+
+これらはすべて progress file の T8 / T10 / T11 として既に列挙済み。
+T7 で当初 follow-up に挙げる可能性のあった `WidgetNode::box_`
+signature 拡張は T7 内で完結 (T6 Follow-Up の予測通り)。
