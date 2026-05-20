@@ -1,10 +1,13 @@
 # Wasamo DSL Specification
 
-**Document version:** 0.6
-**Last updated:** 2026-05-19
-**Status:** M3-Phase 1 in progress; covers the M2 `.ui` surface, the
-`state` surface keyword retroactively, the M3-Phase 1 `bool` scalar
-binding additions, and `;wasamo-ir v0`
+**Document version:** 0.7
+**Last updated:** 2026-05-20
+**Status:** M3-Phase 2 ADR-accepted design draft; pending
+implementation re-sync. Covers the M2 `.ui` surface, the `state`
+surface keyword retroactively, the M3-Phase 1 `bool` scalar binding
+additions, the M3-Phase 2 Box layout primitive (with `aspect` /
+`fill` literal attributes) as a design-spec draft, and `;wasamo-ir
+v0`.
 
 ---
 
@@ -76,6 +79,8 @@ name segments). Using either in identifier position is a parse error.
 | `FloatLit`  | `[0-9]+\.[0-9]+`                       | `1.5`, `0.0`                 |
 | `BoolLit`   | `true` \| `false`                      | `true`, `false`              |
 | `StringLit` | `"` string content `"`                 | `"Counter"`, `"Count: \{…}"` |
+| `RatioLit`  | `[0-9]+` `:` `[0-9]+`                  | `16:9`, `1:1`                |
+| `ColorLit`  | `#` `[0-9A-Fa-f]{6}` \| `#` `[0-9A-Fa-f]{8}` | `#cccccc`, `#00000080` |
 | `Unit`      | `px`                                   | `px`                         |
 | `LBrace`    | `{`                                    |                              |
 | `RBrace`    | `}`                                    |                              |
@@ -160,9 +165,18 @@ qualified_name   ::= IDENT ("." IDENT)*
 expr             ::= STRING_LIT
                   |  number_with_unit
                   |  BOOL_LIT
+                  |  RATIO_LIT
+                  |  COLOR_LIT
                   |  IDENT
 
 BOOL_LIT         ::= "true" | "false"
+
+RATIO_LIT        ::= INT_LIT ":" INT_LIT
+
+COLOR_LIT        ::= "#" HEX_DIGIT{6}
+                  |  "#" HEX_DIGIT{8}
+
+HEX_DIGIT        ::= [0-9A-Fa-f]
 
 number_with_unit ::= (INT_LIT | FLOAT_LIT) UNIT?
 
@@ -187,7 +201,7 @@ Within `member`, a 2-token lookahead resolves the alternative:
 
 ---
 
-## 4. Semantics (M2 Surface, M3-Phase 1 Additions)
+## 4. Semantics (M2 Surface, M3-Phase 1 / Phase 2 Additions)
 
 ### 4.1 `component` declaration
 
@@ -253,6 +267,7 @@ Declares a child widget. Widget type names are PascalCase identifiers.
 | `Text`      | Text display             |
 | `Button`    | Clickable button         |
 | `Rectangle` | Solid rectangle          |
+| `Box`       | Layout container with optional `aspect` / `fill` (M3-Phase 2; see §4.9) |
 
 Unknown widget type names produce a warning (not an error) in M1,
 to allow forward-compatibility with user-defined components.
@@ -357,6 +372,148 @@ the full interaction-state contract for disabled controls; the Phase 1
 contract above is structured to be additive under that widening, not
 superseded by it.
 
+### 4.9 Box layout primitive (M3-Phase 2)
+
+**Phase status:** M3-Phase 2 ADR-accepted design draft; pending
+implementation re-sync.
+
+`Box` is a layout container that admits **zero or one child**
+(DD-M3-P2-001). Multi-child overlap is ZStack's responsibility
+(Phase 6, not yet shipped); a Box declared with two or more children
+is rejected at compile time by `wasamoc check` **and** independently
+rejected by the runtime IR loader (`wasamo-runtime/src/ir_loader.rs`)
+at IR-load time. The two rejection gates are required because
+`wasamo_load_ui`'s memory-IR entry point does not pass through
+`wasamoc`; the runtime gate is the last line of defence for the
+spec invariant.
+
+#### Attributes
+
+| Attribute | Surface form                | Bindable in Phase 2 | Default                            |
+|-----------|-----------------------------|---------------------|------------------------------------|
+| `aspect`  | `<num>:<den>` (`RATIO_LIT`) | No                  | absent (no aspect constraint)      |
+| `fill`    | `#RRGGBB` or `#RRGGBBAA` (`COLOR_LIT`) | No       | absent (transparent rectangle)     |
+
+Both attributes are constant-only in M3-Phase 2 (DD-M3-P2-004);
+`wasamoc check` rejects any non-literal RHS for `aspect` or `fill`
+— including state-backed bindings such as `aspect: <state-ident>`
+or `fill: <state-ident>` — with a diagnostic naming the rejected
+attribute. Symmetrically, `RATIO_LIT` and `COLOR_LIT` literals are
+only accepted as the RHS of `Box.aspect` and `Box.fill` respectively;
+`wasamoc check` rejects them in any other syntactic position (a
+`state` default, a handler RHS, or a non-Box property assignment)
+with a diagnostic naming the offending position. The first phase
+to need a reactive aspect or fill opens the per-type writer seam
+triple at that point — Phase 2's literal plumbing is
+forward-compatible and is not revised, only extended (see
+[m3-phase-2-box-layout.md DD-M3-P2-004](./decisions/m3-phase-2-box-layout.md)).
+
+**`aspect` literal form.** `<num>:<den>` with both sides positive
+integer literals. `wasamoc check` rejects `num <= 0` or `den <= 0`
+at compile time; NaN and infinity are structurally unreachable.
+The ratio is preserved exactly as a pair of `i32`s through `wasamoc`
+lowering and IR; the projection onto `f32` parent bounds is the
+only floating-point step in the measure-arrange pass below.
+
+**`fill` literal form.** `#RRGGBB` carries three 8-bit channels with
+alpha implicitly `0xFF`; `#RRGGBBAA` carries the alpha channel
+explicitly. The value-layer admits alpha so that the structural
+scrim use case (`Box { fill: #00000080 }`) is expressible. The
+M3 *styling* layer does not expose alpha-styling controls beyond
+the literal hex form — theming, named palette, and dynamic alpha
+adjustment all remain M4+ work.
+
+#### Child layout contract
+
+When Box has zero children, it still produces a sized rectangle
+filled with `fill` (or transparent if `fill` is absent). The
+`aspect`-derived rectangle is the structural support for the scrim
+shape (`Box { fill: <color> }`) and the placeholder-shape subsection
+below.
+
+When Box has a single child (DD-M3-P2-001):
+
+- **Measure pass.** Box's resolved outer bounds are passed through
+  to the child as the child's measure constraint, unchanged.
+- **Alignment.** The child is centred horizontally and vertically
+  inside Box. M3-Phase 2 provides no per-child alignment override
+  attribute; later phases that need other alignments open their own
+  DD without revising Box's default.
+- **Overflow.** A child measuring larger than Box bounds is
+  visually clipped to Box's rectangle. Box's layout slot does not
+  grow to accommodate an oversized child. This is consistent with
+  Phase 4 ScrollView's separate scrollable-viewport surface
+  (ScrollView's contribution is the *viewport*, not the clipping
+  primitive — Box clips already).
+
+#### Aspect-constraint measure-arrange (DD-M3-P2-005)
+
+When Box carries `aspect`, its outer bounds are resolved from parent
+bounds via **inscribed fit**: Box's resolved rectangle is the largest
+aspect-correct rectangle that fits inside the parent. Given parent
+width `W` and height `H` and `aspect: num:den`, the branch is
+selected by integer comparison `(W as f64) * (den as f64)` vs
+`(H as f64) * (num as f64)`; once the branch is chosen the derived
+axis is computed in `f32`. No pixel-snapping in Phase 2; rasterisation
+/ DPI hinting is unaffected by this section.
+
+Edge cases:
+
+- **Unbounded parent on one axis** — the unbounded axis derives
+  from the bounded axis × aspect (bounded-axis-wins). The Box has a
+  defined intrinsic size in intrinsic-sizing contexts such as Phase
+  3 WrapPanel-of-Boxes and Phase 4 ScrollView's inner measure.
+- **Unbounded parent on both axes** — a layout-time runtime error.
+  The diagnostic names the missing input as *"aspect with no bounded
+  parent axis"*. NaN / silent-zero outcomes are structurally
+  excluded.
+- **No aspect, no children, unbounded parent on both axes** — the
+  same layout-time runtime error class. The diagnostic wording
+  names the missing input as *"neither aspect nor parent bounds"*.
+  A scrim-only Box in a fully-unbounded context is an author error
+  worth surfacing.
+- **No aspect, single child** — Box shrink-to-fits the child's
+  intrinsic size on each axis where the parent is bounded; the Box
+  collapses to zero on each unbounded axis.
+
+`width` / `height` are **not** in the M3-Phase 2 DSL surface, so the
+"explicit dimensions vs `aspect`" rule lands as spec text only:
+when those attributes are introduced by a later phase, explicit
+dimensions win and `aspect` becomes informational (with a
+`wasamoc check` warning landed by that phase, not by Phase 2).
+
+#### Image placeholder pattern (M3, DD-M3-P2-006)
+
+The Box + Text-child shape is the **normative** M3 substitute for the
+deferred Image widget surface. Phase 3 (WrapPanel of thumbnails) and
+Phase 6 (ZStack lightbox) consume this pattern verbatim.
+
+```
+Box { aspect: <ratio>; fill: <color>; Text { text: <label> } }
+```
+
+Examples from the M3 gallery:
+
+```
+Box { aspect: 1:1; fill: #cccccc; Text { text: "Photo 12" } }
+Box { aspect: 16:9; fill: #cccccc; Text { text: "photo-23.jpg" } }
+```
+
+The scrim shape, used in compositions Phase 6 ZStack assembles
+(a semi-transparent overlay over a lightbox), is:
+
+```
+Box { fill: #00000080 }
+```
+
+When an `<Image>` widget lands (M4 or later), it supersedes this
+pattern; this subsection then gains a "Superseded by `<Image>`
+widget" header. The Box + Text shape remains as a back-compat
+form for pre-Image authors, and Phase 3 / Phase 6 spec citations
+to this subsection remain valid (the cited pattern is still
+spec-recorded; downstream phases migrate to `<Image>` syntactically
+when it ships).
+
 ---
 
 ## 5. AST Structure (M1)
@@ -388,6 +545,8 @@ Expr (enum) {
     IntLit      { value: i64 },
     FloatLit    { value: f64 },
     BoolLit     { value: bool },             // M3-Phase 1
+    RatioLit    { num: i32, den: i32 },      // M3-Phase 2
+    ColorLit    { value: u32 },              // M3-Phase 2; packed 0xAARRGGBB (alpha in MSB)
     Measurement { value: f64, unit: Unit },
     Ident       { name: String },
 }
@@ -498,6 +657,16 @@ Grammar rules use the same notation as §3:
   positions where the grammar accepts a `literal` or an `atom`, a bare
   `true` / `false` IDENT is recognised as `BOOL` rather than `IDENT`.
 - `STRING` matches a double-quoted string with `\"` and `\\` escapes.
+- `RATIO` matches `[0-9]+":"[0-9]+` (M3-Phase 2). Both sides are
+  positive integer literals; zero or negative sides are rejected by
+  `wasamoc check` and independently by the runtime IR loader
+  (see §8.11), and are structurally unreachable in valid IR.
+- `COLOR` matches `"#"[0-9A-Fa-f]{6}` or `"#"[0-9A-Fa-f]{8}` (M3-Phase
+  2). The 6-digit form encodes RGB with alpha implicitly `0xFF`; the
+  8-digit form encodes RGBA with explicit alpha. Both surface forms
+  lower to a packed `u32` in `0xAARRGGBB` layout (alpha in the most
+  significant byte): `#RRGGBB` → `0xFFRRGGBB`,
+  `#RRGGBBAA` → `0xAARRGGBB`.
 - Whitespace (space, tab, `\r`, `\n`) is ignored between tokens.
 - A `;` outside the header line begins a line comment; the rest of that line
   is ignored.
@@ -559,14 +728,30 @@ It is used for properties whose value is a plain literal (not reactive).
 ```
 property_set ::= "prop" IDENT "=" literal
 
-literal      ::= INT | STRING | BOOL | IDENT
+literal      ::= INT | STRING | BOOL | RATIO | COLOR | IDENT
 ```
 
 The `IDENT` alternative encodes keyword-valued properties such as
 `mica`, `system`, `accent`, `title` (see §4.3). The `BOOL`
 alternative is M3-Phase 1: a bare `true` or `false` in literal
 position is interpreted as `IrLiteral::Bool` (per §8.2 Notation),
-not as an `IDENT`-valued literal.
+not as an `IDENT`-valued literal. The `RATIO` and `COLOR`
+alternatives are M3-Phase 2: a literal in `<num>:<den>` form is
+`IrLiteral::Ratio { num, den }` and a literal in `#RRGGBB` /
+`#RRGGBBAA` form is `IrLiteral::Color(<packed u32>)`.
+
+**Box-internal materialisation (M3-Phase 2 only).** When the
+enclosing `node` is `Box` and the property is `aspect` or `fill`, the
+runtime IR loader materialises the literal into Box-internal domain
+types (`Ratio` / `Color` on `WidgetData::Box`) **directly**, without
+constructing a `PropertyValue` variant. M3-Phase 2 deliberately does
+not add `PropertyValue::Ratio` or `PropertyValue::Color`, so the C
+ABI surface (`read_property_value` / `write_property_value` /
+`property_value_to_owned` and the `WASAMO_VALUE_*` tag space) is
+untouched. When a later phase opens bindable `aspect` or `fill`,
+the corresponding `PropertyValue` variants, `WASAMO_VALUE_*` tags,
+and `abi.rs` arms land together in that phase
+(DD-M3-P2-002 / DD-M3-P2-003 / DD-M3-P2-004).
 
 Examples:
 
@@ -724,11 +909,20 @@ defense-in-depth validation:
 | Header line matches `;wasamo-ir v0` | Yes | `WASAMO_ERR_IR_MALFORMED` |
 | Top-level structure is `component_def` | Yes | `WASAMO_ERR_IR_MALFORMED` |
 | Every `prop-read` / `str-prop-read` / `assign` / `compound-assign` name resolves to a declared `state` | Yes | `WASAMO_ERR_IR_MALFORMED` |
+| `Box` node has at most one child (M3-Phase 2, DD-M3-P2-001) | Yes | `WASAMO_ERR_IR_MALFORMED` |
+| `RATIO` literal has `num > 0` and `den > 0` (M3-Phase 2) | Yes | `WASAMO_ERR_IR_MALFORMED` |
 | Binding expression result type matches target property type | **No** (trusted from `wasamoc`) | Undefined behaviour |
 | Per-node emitter invariants (e.g. `on` only on signal-capable widgets) | **No** (trusted from `wasamoc`) | Undefined behaviour |
 
 The loader trusts type-level invariants established by `wasamoc`'s check pass.
 Type mismatches indicate a `wasamoc` bug, not a recoverable load-time error.
+
+The M3-Phase 2 rows (`Box` child count, `RATIO` sign) are explicitly
+dual-gated rather than trusted because `wasamo_load_ui`'s memory-IR
+entry point does not pass through `wasamoc`; the runtime gate is the
+last line of defence for these spec invariants. See §4.9 for the
+Box child-count rationale and §8.2 for the `RATIO` surface
+constraint that `wasamoc check` already enforces.
 
 ### 8.12 Scope out (post-M2)
 
@@ -738,6 +932,8 @@ Type mismatches indicate a `wasamoc` bug, not a recoverable load-time error.
 | `(if ...)` / `(for ...)` binding forms | M3+ |
 | M3 expanded type set (`float`, user types; `bool` landed in M3-Phase 1) | M3 |
 | Generic `TypedValue` value union (F5 deferral) | Post-M3 |
+| Bindable surface for Box `aspect` / `fill` (M3-Phase 2 admits the literals only) | Future phase that first needs reactive aspect or fill |
+| `IrType::Ratio` / `IrType::Color` (M3-Phase 2 stores them Box-internal, not as `PropertyValue` variants) | Same future phase as above |
 | Binary IR format | Post-M2 |
 | Grammar version `v1` (first incompatible change) | When required |
 | `(post-event ...)` escape hatch for observer callbacks | M3 (DD-M2-P6-001 Option F) |
@@ -828,3 +1024,4 @@ future design item.
 | 0.4     | 2026-05-11 | M2 complete; added `str-prop-read` IR form from DD-M2-P6-011 and updated M2/post-M2 status language |
 | 0.5     | 2026-05-19 | M3-Phase 1 (`bool` scalar binding): added `true`/`false` keywords, `BoolLit` token, `BoolLit`/`BoolPropRead` IR expression forms, `bool` to `state_decl` type set, `Button.enabled` widget-catalog entry, and `state` surface declaration §4.7 (retroactive M2 gap); recorded F5 (`TypedValue`) deferral in §8.12 |
 | 0.6     | 2026-05-19 | M3-Phase 1 T14: documented that string interpolation over `bool`-typed state is rejected until an explicit formatting/display-conversion surface exists |
+| 0.7     | 2026-05-20 | M3-Phase 2 ADR-accepted design draft: added §4.9 Box layout primitive chapter (Phase status marker; `aspect` / `fill` attribute surface; single-child centred-and-clipped layout contract; aspect inscribed-fit measure-arrange with edge cases; image placeholder pattern subsection per DD-M3-P2-006); added `RatioLit` / `ColorLit` tokens (§2.2), grammar rules (§3), AST variants (§5), §8.2 terminals, and §8.6 literal alternatives + Box-internal materialisation note. Pending implementation re-sync at Phase 2 close. |
