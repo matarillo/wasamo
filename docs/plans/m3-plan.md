@@ -466,7 +466,7 @@ M3 is complete when **all** of the following hold:
 
 ### Revision log
 
-(none yet — plan is `status: drafting`.)
+(none yet — plan is `status: in-progress`.)
 
 ## Progress
 

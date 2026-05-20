@@ -94,7 +94,7 @@ emit form も決めているかのように読めた。
 T4 retro が T5 への follow-up として明示した
 「alpha = `0xFF` のとき `#RRGGBB` か `#RRGGBBAA` か」という設計
 判断は、まさにこの "defaulting" を policy 化する役を担った。owner
-との合意 (本会話: 短縮形を canonical とし、ADR の "alpha-yes" / 
+との合意 (本会話: 短縮形を canonical とし、ADR の "alpha-yes" /
 "surface forms #RRGGBB and #RRGGBBAA only" のどちらとも矛盾しない
 読み) を pre-impl で取り、それを emit_color_lit の doc-comment と
 `color_emit_normalises_alpha_ff_input_to_short_form` テスト名で
@@ -127,7 +127,7 @@ T6 / T7 / T10 に持ち越した境界:
 
 - **T6 (`wasamo-runtime` Box catalog):** 影響なし。Box-internal
   `Ratio` / `Color` 型は emit policy と独立。
-- **T7 (`wasamo-runtime` ir_loader):** load 側は `#RRGGBB` / 
+- **T7 (`wasamo-runtime` ir_loader):** load 側は `#RRGGBB` /
   `#RRGGBBAA` の **両形** を受理し、Box-internal `Color` への
   materialise で `0xAARRGGBB` packing に揃える (alpha = `0xFF` を
   6-hex 入力でも 8-hex 入力でも同じ packed `u32` に。spec §8.2
