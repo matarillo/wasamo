@@ -73,6 +73,22 @@ than a frozen prediction. Plan changes mid-implementation are normal
 and expected; the rule exists to keep history reviewable, not to
 freeze the plan.
 
+**Doc-side commits are scoped by review concern, not by file.** Files
+that share a single review concern (e.g. a plan and its sibling ADR
+touched in one tracking-table update) may land together; documents
+whose review cycles converge at different rates (e.g. an owner-pre-
+approved ADR status flip, a normative spec draft, and a project-wide
+process change) must not. Draft and revision are typically separate
+commits so the review diff stays legible — but multiple small
+revisions may bundle when they share a review concern, and reviewers
+may also batch several commits into one review pass.
+
+Multi-document "Moment" or analogous bundle constructs introduced by
+a framing decision are milestone labels, not commit units. See the
+M3-Phase 2 framing decision D Postmortem in
+[docs/notes/m3-phase-2/m3-phase-2-pre-doc-framing.md](docs/notes/m3-phase-2/m3-phase-2-pre-doc-framing.md)
+for the originating failure.
+
 ## CI rules
 
 Add a "update CI" checklist item only when a phase introduces a **new language or build system** (e.g. Zig, CMake/C). Phases that add Rust code to existing crates need no CI update — `cargo build --release --workspace` and `cargo test --workspace` already cover them.

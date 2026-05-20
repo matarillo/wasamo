@@ -458,6 +458,43 @@ A11's "no side left ahead" is satisfied at Moment 2; Moment 1
 documents the intent A11 will hold the impl to, but is not itself
 the A11 close gate.
 
+**Postmortem (added 2026-05-20): "Moment = 1 commit" is the wrong unit.**
+
+Moment 1 above was first executed as a single commit on a private
+`wip/m3-phase-2-moment1-draft` branch, followed by 4 fixup commits as
+owner review surfaced issues across the bundled documents. The final
+tree was then re-decomposed into 6 separate commits on
+`docs/m3-phase-2-predoc` (Box ADR, m3-plan tracking, architecture
+boundary, dsl_spec §4.9 draft, progress file open, retrospectives §3
+amendment).
+
+The structural failure was bundling documents with different review
+profiles into one commit:
+
+- Owner-pre-approved content (ADR Status flip).
+- Normative spec draft requiring multi-round review (dsl_spec §4.9).
+- Project-wide process change with broad blast radius (retrospectives §3).
+- Mechanical tracking (m3-plan Progress row).
+- New 13-task execution list (progress file).
+
+Bundling forced owner review to be all-or-nothing across the bundle.
+The natural response — iterating in private fixup commits on a
+discardable wip branch — kept review history off the shared pre-doc
+branch, defeating the point of the pre-doc branch as a reviewable
+ledger.
+
+**Rule for future phases:** Moment (or any analogous bundle construct)
+is a milestone label, not a commit unit. Constituent documents land
+as separate commits on the pre-doc branch; the commit shape follows
+review-concern boundaries, not the Moment boundary. The Moment is
+"achieved" when all constituent commits have landed. The general
+rule lives in [CLAUDE.md §Commit rules](../../../CLAUDE.md#commit-rules).
+
+The *list* of which documents belong to Moment 1 / Moment 2 above is
+not retracted by this Postmortem — only the commit shape used to
+land that list. Moment 2 will be authored under the new rule
+(per-review-concern commits at phase close).
+
 ### E. `cargo fmt` enforcement strategy (predoc-inputs §3)
 
 The M3-Phase 1 phase-end retrospective surfaced that step-end
