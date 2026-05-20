@@ -167,25 +167,30 @@ Option B — Reject 0-child Box at IR load
 **Options (multi-child semantics — load-bearing):**
 
 Option A — Single-child-only; multi-child rejected at `wasamoc check`
-(recommended)
-- A Box admits 0 or 1 child. 2+ children is a compile-time
-  diagnostic. The "0+ child container" wording of A6 is honoured by
-  admitting 0 and 1; "+" is read as "at-most-one in Phase 2" with
-  the surface widened (if at all) by Phase 6 when ZStack lands.
+**and** at `ir_loader::build_node` (defense in depth) (recommended)
+- A Box admits 0 or 1 child. 2+ children is a compile-time diagnostic
+  in `wasamoc check`, **and** is independently rejected when
+  `wasamo-runtime::ir_loader` materialises a Box IR node with `len(children) > 1`.
+  Both gates are required because `wasamo_load_ui`'s memory-IR path does
+  not pass through the compiler; the runtime gate is the last line of
+  defence for the spec invariant. The "0+ child container" wording of A6
+  is honoured by admitting 0 and 1; "+" is read as "at-most-one in Phase
+  2" with the surface widened (if at all) by Phase 6 when ZStack lands.
 
   - What you gain: Maximum structural defence against a back-door
     ZStack. Phase 6's ZStack gets full latitude to define z-order
     and multi-child overlap semantics without inheriting an implicit
     Phase 2 contract. The two M3 gallery uses of Box (0-child scrim,
     1-child placeholder) both fit. The diagnostic message points
-    users at ZStack / VStack / HStack for multi-child needs.
+    users at ZStack / VStack / HStack for multi-child needs. The
+    `ir_loader` gate makes the invariant hold even for IR produced
+    outside `wasamoc`.
   - What you give up: A6's "0+" surface wording is narrowed at the
     spec level — readers see "Box admits 0–1 child in M3 Phase 2;
     multi-child overlap belongs in ZStack (Phase 6)." This is a real
     public-surface narrowing, recorded in `docs/dsl_spec.md` and in
     the Phase 2 spec marker.
-  - **Technical risk:** Low. Diagnostic + IR-loader rejection are
-    small.
+  - **Technical risk:** Low. Both gates are small additions.
 
 Option B — All children share full Box bounds; no z-order declared
 - The IR admits N children. Each child measures against Box bounds;
@@ -280,10 +285,12 @@ Option B — Visible overflow (child paints outside Box bounds)
     paint over each other if any one overflows.
 
 **Recommendation:** Option A for every sub-issue —
+
 - IR shape: per-kind tag (`WidgetKind::Box`).
 - 0-child: valid; renders aspect-derived rectangle filled with
   `fill`.
-- Multi-child: single-child-only; 2+ rejected at `wasamoc check`.
+- Multi-child: single-child-only; 2+ rejected at both `wasamoc check`
+  and `ir_loader::build_node` (defense in depth).
 - Child measure: Box bounds passed through unchanged.
 - Child alignment: centred.
 - Overflow: clip.
@@ -394,23 +401,42 @@ Option D — Twin i32 attributes `aspect-width: 16` and `aspect-height: 9`
     set", which is a weaker structural signal than a single Ratio
     literal.
 
-**ABI / IR plumbing (consequent on Option A):**
+**IR / runtime plumbing (consequent on Option A; ABI surface
+deliberately not extended):**
 
 - New `IrLiteral::Ratio { num: i32, den: i32 }` variant in
   `wasamo-ir`.
-- New `PropertyValue::Ratio { num: i32, den: i32 }` variant in
-  `wasamo-runtime/src/widget.rs`. ABI value-conversion arms in
-  `wasamo-runtime/src/abi.rs` (`read_property_value` /
-  `write_property_value` / `property_value_to_owned`) gain `Ratio`
-  arms in the same commit per
-  [predoc-inputs.md §1](../notes/m3-phase-2/predoc-inputs.md#1-box-が新規-propertyvalue-variant-を入れるなら-abi-value-conversion-arm-は同じ-step-に-fold-する).
+- New internal domain type `Ratio` in `wasamo-runtime` (private to
+  the crate). `WidgetData::Box` stores `aspect: Option<Ratio>` as a
+  Box-internal field. `Ratio` is **not** a `PropertyValue` variant.
+- **No** `PropertyValue::Ratio` variant in
+  `wasamo-runtime/src/widget.rs`. Aspect is constant-only per DD-004,
+  so it never traverses the `PropertyValue`-mediated paths
+  (`get_property` / `set_property` / observer payload / binding
+  writer). The `ir_loader` materialises `IrLiteral::Ratio` directly
+  into the Box's internal field, bypassing `PropertyValue`.
+- **No** ABI changes: `wasamo-runtime/src/abi.rs`
+  (`read_property_value` / `write_property_value` /
+  `property_value_to_owned`) is untouched in Phase 2; no
+  `WASAMO_VALUE_RATIO` tag is added.
 - IR text grammar (`docs/dsl_spec.md` §8) gains the `Ratio` literal
   production.
-- No new `WasamoValue` tag for the C ABI is added in Phase 2
-  because aspect is constant-only (DD-004) — the C ABI's value union
-  is the surface that *bindable* properties reach through, and aspect
-  does not. Were DD-004 to flip to bindable for aspect, a new
-  `WASAMO_VALUE_RATIO` tag would land then.
+- Rationale: adding `PropertyValue::Ratio` without an ABI tag would
+  create a structurally unreachable variant at the C ABI boundary
+  (since `read_property_value` / `write_property_value` exhaustively
+  match `PropertyValue` and pass through `WasamoValue.tag`); adding
+  the tag would widen the public ABI surface ahead of the bindable
+  surface DD-004 explicitly defers. Keeping `Ratio` Box-internal
+  matches DD-004's constant-only intent and the Phase 1 discipline
+  of "build the seam in the phase that needs it". Were DD-004 to flip
+  to bindable for aspect, that phase would land
+  `PropertyValue::Ratio` + `IrType::Ratio` +
+  `HandlerExpr::RatioLit` / `RatioPropRead` +
+  `WASAMO_VALUE_RATIO` tag + `abi.rs` arms together as one coherent
+  bindable-surface step. See
+  [predoc-inputs.md §1](../notes/m3-phase-2/predoc-inputs.md#1-box-が新規-propertyvalue-variant-を入れるなら-abi-value-conversion-arm-は同じ-step-に-fold-する):
+  the fold-in-same-step obligation triggers when `PropertyValue` does
+  gain a variant; Phase 2 satisfies it by not adding a variant.
 
 **Recommendation:** Option A — rational pair `aspect: <num>:<den>`
 with positive-integer sides, `IrLiteral::Ratio` literal form, no
@@ -460,12 +486,13 @@ separately decides whether to expose alpha control), or whether
 
 **Options (alpha — central question):**
 
-Option A — Value type carries alpha (recommended)
-- `PropertyValue::Color` carries four 8-bit channels (r, g, b, a).
-  The Phase 2 surface syntax (below) admits `#RRGGBBAA`. M3 styling
-  remains out of scope per the target-app pre-doc, but the value
-  layer is built once and reused as alpha-styling controls land in
-  M4+.
+Option A — Color value type carries alpha (recommended)
+- The Phase 2 color value carries four 8-bit channels (r, g, b, a).
+  The Phase 2 surface syntax (below) admits `#RRGGBBAA`. The value
+  layer (a Box-internal `Color` domain type — see the variant-strategy
+  sub-issue below) is built once and reused as bindable / alpha-styling
+  controls land in later phases. M3 styling remains out of scope per
+  the target-app pre-doc.
 
   - What you gain: A6's scrim use case is expressible. The
     target-app pre-doc's internal tension resolves: "M3 fills can
@@ -474,35 +501,69 @@ Option A — Value type carries alpha (recommended)
   - What you give up: 32 bits per color value vs 24. Negligible.
   - **Technical risk:** Low.
 
-Option B — Value type excludes alpha; M3 scrim is opaque-by-spec
-- `PropertyValue::Color` carries (r, g, b). Surface admits `#RRGGBB`
-  only.
+Option B — Color value type excludes alpha; M3 scrim is opaque-by-spec
+- The color value carries (r, g, b). Surface admits `#RRGGBB` only.
 
   - What you give up: A6's scrim wording is internally inconsistent
-    as recorded above. M4+ alpha-styling adoption forces a value-type
-    revision (`PropertyValue::Color` widened to 4 channels at that
-    point, with every existing `#RRGGBB` literal becoming an implied
+    as recorded above. M4+ alpha-styling adoption forces a value-
+    layer revision (color widened from 3 to 4 channels at that point,
+    with every existing `#RRGGBB` literal becoming an implied
     `alpha = 0xFF`). The revision is mechanically additive, but it's
     a revision Option A avoids.
 
 **Options (variant strategy — consequent on Option A above):**
 
-Option A — New `PropertyValue::Color(u32)` (recommended)
-- `PropertyValue::Color` carries a packed `u32` (0xAARRGGBB or
-  0xRRGGBBAA, fixed at one byte order — DSL spec records the
-  choice). `IrLiteral::Color(u32)` parallel. `wasamoc` lexer accepts
-  `#RRGGBB` (alpha implied 0xFF) and `#RRGGBBAA`. ABI value-
-  conversion arms folded into the same step per
-  [predoc-inputs.md §1](../notes/m3-phase-2/predoc-inputs.md#1-box-が新規-propertyvalue-variant-を入れるなら-abi-value-conversion-arm-は同じ-step-に-fold-する).
+Option A — Box-internal `Color(u32)` domain type; **not** added to
+`PropertyValue` in Phase 2 (recommended)
+- A new private domain type `Color(u32)` lives in `wasamo-runtime`
+  (packed `u32`; 0xAARRGGBB or 0xRRGGBBAA, fixed at one byte order —
+  DSL spec records the choice). `WidgetData::Box` stores
+  `fill: Option<Color>` as a Box-internal field. `IrLiteral::Color(u32)`
+  parallel in `wasamo-ir`. `wasamoc` lexer accepts `#RRGGBB` (alpha
+  implied 0xFF) and `#RRGGBBAA`. `ir_loader` materialises
+  `IrLiteral::Color` directly into the Box's internal field; the
+  value never traverses `PropertyValue`-mediated paths.
+  `PropertyValue` is **not** widened with a `Color` variant in Phase
+  2, and `WASAMO_VALUE_COLOR` is **not** added. The
+  [predoc-inputs.md §1](../notes/m3-phase-2/predoc-inputs.md#1-box-が新規-propertyvalue-variant-を入れるなら-abi-value-conversion-arm-は同じ-step-に-fold-する)
+  fold-in-same-step obligation triggers when `PropertyValue` gains a
+  variant; Phase 2 satisfies it by not adding a variant. See DD-002's
+  IR / runtime plumbing block for the symmetric `Ratio` treatment.
 
-  - What you gain: Type-tagged at the value layer. No string-parsing
-    at the widget setter. Forward-compatible with theming bindings
-    that produce color values.
+  - What you gain: Type-tagged at the runtime domain layer (not a
+    coerced string). No string-parsing at the widget setter. Phase 2
+    surface stays narrow: literal attribute exists but is not a
+    property / binding / ABI surface, matching DD-004's
+    constant-only intent. ABI surface (`read_property_value` /
+    `write_property_value` / `property_value_to_owned` /
+    `WASAMO_VALUE_*` tag space) is untouched.
+  - What you give up: Two seams to build later (`PropertyValue::Color`
+    + ABI tag) instead of one, **if and when** bindable `fill` lands.
+    This is a deliberate phase-deferred cost: the seam is built in
+    the phase that uses it (Phase 1 discipline; symmetric with
+    DD-M3-P1-007's "build the seam for `Button.enabled`, not
+    pre-built for unknown later callers").
   - **Technical risk:** Low.
 
-Option B — Reuse `PropertyValue::Str` with `#RRGGBB[AA]` parsing at
-the loader
-- No new variant; the loader parses the hex string when binding the
+Option B — New `PropertyValue::Color(u32)` + `WASAMO_VALUE_COLOR` ABI
+tag in Phase 2 (rejected)
+- `PropertyValue::Color` carries packed `u32`; `WASAMO_VALUE_COLOR`
+  tag added to the C ABI's value union; `read_property_value` /
+  `write_property_value` / `property_value_to_owned` arms folded into
+  the same step per
+  [predoc-inputs.md §1](../notes/m3-phase-2/predoc-inputs.md#1-box-が新規-propertyvalue-variant-を入れるなら-abi-value-conversion-arm-は同じ-step-に-fold-する);
+  `abi_spec.md` updated.
+
+  - What you give up: Widens the public ABI surface ahead of the
+    bindable-`fill` surface that DD-004 explicitly defers to a later
+    phase. The Phase 2 sub-screen exercises neither bindable nor
+    ABI-visible `fill`, so the additional surface is speculative.
+    Conflicts with DD-004's "constant-only, no new per-type writer
+    seam" stance from the value-layer side.
+
+Option C — Reuse `PropertyValue::Str` with `#RRGGBB[AA]` parsing at
+the loader (rejected)
+- No new variant; the loader parses the hex string when reading the
   fill attribute.
 
   - What you give up: Hidden string ↔ color coercion at the widget
@@ -528,26 +589,38 @@ Option B — Add named colors (`red`, `blue`, `transparent`, ...)
     theming arguably wants control over what `red` means. Defer to
     the phase that ships theming.
 
-**Recommendation:** Alpha **included**; new `PropertyValue::Color(u32)`
-+ `IrLiteral::Color(u32)`; surface forms `#RRGGBB` and
-`#RRGGBBAA` only. The alpha-yes decision is the load-bearing one —
-without it, A6's scrim wording is internally inconsistent.
+**Recommendation:** Alpha **included**; new `IrLiteral::Color(u32)`
+plus a Box-internal `Color(u32)` domain type in `wasamo-runtime`
+(stored on `WidgetData::Box`, **not** added to `PropertyValue` in
+Phase 2; no `WASAMO_VALUE_COLOR` tag, no `abi.rs` changes); surface
+forms `#RRGGBB` and `#RRGGBBAA` only. The alpha-yes decision is the
+load-bearing one — without it, A6's scrim wording is internally
+inconsistent. The "Box-internal, not PropertyValue" boundary is the
+implementation-boundary consequence of pairing alpha-yes with DD-004's
+constant-only stance: it keeps the ABI surface (DD-002 IR / runtime
+plumbing block) untouched in Phase 2. This boundary is a consistency
+choice, not a separate load-bearing yes/no for the owner — Checkpoint 2
+asks only the alpha question.
 
-The Phase 2 styling commitment remains: *the value type carries
+The Phase 2 styling commitment remains: *the value layer carries
 alpha; the M3 styling layer does not gain alpha-styling controls
 beyond the literal hex form*. Theming, palette, and dynamic alpha
 adjustment all remain M4+ work (per
 [m3-plan.md §Out of scope](../plans/m3-plan.md#out-of-scope-deferred-to-later-milestones)
 and target-app pre-doc Visual / styling Out-of-scope).
 
-**Forward-compat exposure:** Option A (alpha-yes) is dual-compatible
-with both possible future events:
+**Forward-compat exposure:** Option A (alpha-yes, Box-internal) is
+dual-compatible with both possible future events:
 
-- If M4+ theming admits alpha control, the value type is already
-  there — theming binds in semi-transparent values without value-
-  layer revision.
+- If M4+ theming admits alpha control, the value layer already
+  carries alpha — theming binds in semi-transparent values without
+  value-layer revision. The bindable-`fill` phase lands
+  `PropertyValue::Color(Color)` + `IrType::Color` +
+  `HandlerExpr::ColorLit` / `ColorPropRead` +
+  `WASAMO_VALUE_COLOR` ABI tag + `abi.rs` arms together; the Phase 2
+  `Color` domain type is the type that gets wrapped, not revised.
 - If M4+ theming explicitly forbids alpha at the styling layer, the
-  value type still carries alpha for the structural scrim case
+  value layer still carries alpha for the structural scrim case
   Phase 2 needs; styling restricts at its layer without value-layer
   revision.
 
@@ -584,13 +657,22 @@ Option A — Both `aspect` and `fill` constant-only in Phase 2
   literals only. `wasamoc check` rejects `bind aspect: ...` and
   `bind fill: ...` with a diagnostic naming the rejected attribute.
   No new per-type writer seam triple is built in Phase 2; no new
-  `IrType` (Ratio / Color) is added.
+  `IrType` (Ratio / Color) is added; no `PropertyValue::Ratio` /
+  `PropertyValue::Color` is added; no `WASAMO_VALUE_RATIO` /
+  `WASAMO_VALUE_COLOR` ABI tag is added. Aspect and fill live as
+  Box-internal domain types (`Ratio`, `Color`) on `WidgetData::Box`,
+  populated by `ir_loader` directly from `IrLiteral::Ratio` /
+  `IrLiteral::Color`. See DD-002's IR / runtime plumbing block and
+  DD-003's variant-strategy Option A for the symmetric details.
 
-  - What you gain: Smallest Phase 2 surface — value-type literal
-    plumbing only. F5 deferral is doubly protected (no new seam to
-    pressure it). Future phase that needs bindable aspect or fill
-    adds the seam triple as an additive extension; the IR / ABI
-    plumbing built in Phase 2 is forward-compatible.
+  - What you gain: Smallest Phase 2 surface — IR literal plumbing
+    plus Box-internal domain types only; no `PropertyValue` widening,
+    no ABI surface change. F5 deferral is doubly protected (no new
+    seam to pressure it). Future phase that needs bindable aspect or
+    fill adds the seam triple as an additive extension; the IR /
+    runtime plumbing built in Phase 2 is forward-compatible (the
+    Phase 2 `Ratio` / `Color` domain types are what gets wrapped by
+    later `PropertyValue::Ratio(Ratio)` / `PropertyValue::Color(Color)`).
   - What you give up: A theme-driven scrim color or an
     animated-aspect lightbox cannot be expressed in M3 until the
     phase that opens the bindable surface (M4+ theming, plausibly).
@@ -629,17 +711,24 @@ preserved: no new bindable surface means no new pressure on
 `TypedValue`. The seam pattern from Phase 1 remains available for
 the phase that first uses bindable fill / aspect.
 
-**Forward-compat exposure:** Option A keeps the value-type plumbing
-(`IrLiteral::Ratio`, `IrLiteral::Color`, `PropertyValue::Ratio`,
-`PropertyValue::Color`) additive and forward-compatible with a
-future bindable surface. When that phase lands, the additions are:
+**Forward-compat exposure:** Option A keeps the Phase 2 IR / runtime
+plumbing (`IrLiteral::Ratio`, `IrLiteral::Color`, Box-internal
+`Ratio` / `Color` domain types) additive and forward-compatible with
+a future bindable surface. When that phase lands, the additions are:
 
+- New `PropertyValue::Ratio(Ratio)` / `PropertyValue::Color(Color)`
+  variants wrapping the existing Phase 2 domain types.
 - New `IrType::Ratio` / `IrType::Color` for state declarations.
 - New `HandlerExpr::RatioLit` / `RatioPropRead` /
   `HandlerExpr::ColorLit` / `ColorPropRead`.
 - New `evaluate_ratio_binding` / `evaluate_color_binding` writer
   triples.
-- New `WASAMO_VALUE_RATIO` / `WASAMO_VALUE_COLOR` ABI tags.
+- New `WASAMO_VALUE_RATIO` / `WASAMO_VALUE_COLOR` ABI tags **and**
+  the corresponding `read_property_value` / `write_property_value` /
+  `property_value_to_owned` arms in `abi.rs`, folded into the same
+  step per
+  [predoc-inputs.md §1](../notes/m3-phase-2/predoc-inputs.md#1-box-が新規-propertyvalue-variant-を入れるなら-abi-value-conversion-arm-は同じ-step-に-fold-する).
+- `abi_spec.md` updated to record the new tags.
 - Widget-catalog `IrType` for the relevant `PROP_*` ids becomes
   `IrType::Ratio` / `IrType::Color`.
 
@@ -680,8 +769,30 @@ other (recommended)
     across XAML / SwiftUI / CSS `aspect-ratio` (when paired with
     object-fit: contain). Predictable: the Box never exceeds parent
     bounds.
-  - **Technical risk:** Low. Pure integer arithmetic; the rational
-    pair form (DD-002 Option A) makes this exact.
+  - **Technical risk:** Low. The rational pair form (DD-002 Option A)
+    keeps the *ratio* exact; the projection onto the f32 parent
+    bounds is computed in f32 (see numeric / rounding contract below).
+
+**Numeric / rounding contract:**
+- Parent bounds enter layout as `f32` (per `WM_SIZE`'s
+  `resize_fn: Option<Box<dyn FnMut(f32, f32)>>` and
+  `SizeConstraint::Fixed(f32)` in `architecture.md` §6).
+- The aspect projection is evaluated as
+  `H' = W * (den as f32) / (num as f32)` (and symmetrically for
+  the other branch), with the comparison `W * den <= H * num`
+  performed in **integer arithmetic on the rational pair extended
+  by the parent's `f32` bounds rounded to the nearest `i64` ×
+  `den`/`num`** — i.e. the branch selection never depends on f32
+  round-off. Concretely: select inscribed branch by comparing
+  `(W as f64) * (den as f64)` vs `(H as f64) * (num as f64)`; once
+  the branch is chosen, compute the derived axis in `f32`.
+- No pixel-snapping in Phase 2. The resolved rectangle stays in
+  the `f32` layout coordinate space; rasterisation / DPI hinting
+  remains an open question carried in
+  [architecture.md §Open questions](../architecture.md#open-questions-1).
+  DPI scaling localisation does not alter the DD-005 algorithm —
+  it would re-define what `f32` parent bounds *are*, not how the
+  projection is computed from them.
 
 Option B — Circumscribed: cover parent bounds so the Box overflows
 the non-constraining axis
@@ -721,18 +832,20 @@ Option B — Both axes resolve to spec-defined intrinsic 0
 
 **Options (unbounded parent on both axes):**
 
-Option A — Load-time error (recommended)
+Option A — Layout-time runtime error (recommended)
 - `wasamoc check` cannot detect this (it depends on runtime
   layout context); `wasamo-runtime`'s layout pass emits an error
   when it encounters a Box with `aspect` set whose parent provides
   no bounded axis. Error surfaces as a runtime diagnostic with
-  the Box's IR location.
+  the Box's IR location. This is **not** an IR-load-time error —
+  the condition is only knowable once the layout pass starts with a
+  concrete parent constraint, which is downstream of `ir_loader`.
 
   - What you gain: Honest behaviour. NaN / silent-zero outcomes
     are excluded structurally. Practical: a top-level Box with
     `aspect` set inside a window with no provided size is a real
     DSL author mistake; an error tells them clearly.
-  - What you give up: Phase 2 must build the layout-time error
+  - What you give up: Phase 2 must extend the layout-time error
     surface. The mechanism already exists for other layout errors
     in `wasamo-runtime`; extending it is small.
   - **Technical risk:** Low.
@@ -757,6 +870,18 @@ children exist
 
 **Options (conflict with explicit width/height):**
 
+> **Phase 2 scope note.** `width` / `height` are **not** in the
+> M3-Phase 2 DSL surface — no widget (Box included) currently
+> accepts an explicit `width:` or `height:` attribute, and the
+> grammar / `dsl_spec.md` introduces neither in Phase 2. This
+> sub-issue is therefore **forward-looking**: it settles what the
+> *first phase to introduce `width` / `height` on Box* must do,
+> so that future phase inherits the rule rather than re-deriving
+> it. Phase 2 ships no `wasamoc check` warning code for this
+> conflict (there is no surface to detect a conflict on); the
+> rule lands as spec text in the Box chapter with a "see also:
+> applies when width/height become surfaced" cross-reference.
+
 Option A — Explicit dimensions win; aspect becomes informational
 (recommended)
 - If Box carries `width: ...` and / or `height: ...` alongside
@@ -768,7 +893,9 @@ Option A — Explicit dimensions win; aspect becomes informational
     dimensions are present. Aspect remains as documentation /
     forward-compatibility for the case where one of width / height
     is removed.
-  - What you give up: A warning surface in `wasamoc check`.
+  - What you give up: A warning surface in `wasamoc check` —
+    landed by the phase that surfaces `width` / `height`, not by
+    Phase 2 (per the scope note above).
   - **Technical risk:** Low.
 
 Option B — Aspect overrides explicit
@@ -791,6 +918,31 @@ Option A — Box shrink-to-fit child's intrinsic size; fall back to
 parent bounds when no children (recommended)
 - Empty Box: matches parent bounds. Single-child Box (per DD-001
   Option A): matches the child's intrinsic measure.
+- **Unbounded-parent consistency.** "Matches parent bounds" assumes
+  a bounded parent. When `aspect` is absent **and** the parent
+  provides no bounded axis on *both* axes, the empty-Box (and the
+  single-child-Box whose child also yields no intrinsic size, e.g.
+  a `Text` whose own measure is unbounded — not a Phase 2 concern,
+  but cross-referenced for completeness) has nothing to derive size
+  from. This case follows the **same layout-time runtime error**
+  as the aspect-set unbounded-both-axes branch (Option A under
+  "Options (unbounded parent on both axes)"). The diagnostic
+  wording differs only in that it names the missing input as
+  *"neither aspect nor parent bounds"* rather than *"aspect with
+  no bounded parent axis"*; both share the "Box has no extent to
+  resolve" structural error class. Spec-defined intrinsic 0×0 is
+  rejected here for the same reason it is rejected for the
+  aspect-set case: silent zero-size dropouts are bug-magnets, and
+  a `Box { fill: #ccc }` scrim placed in a fully-unbounded context
+  is an author error worth surfacing.
+- When the parent is unbounded on **one** axis only (the
+  intrinsic-sizing case), an empty Box collapses to zero on the
+  unbounded axis and matches the bounded axis on the other — this
+  is the natural reading of "matches parent bounds" with a
+  zero-extent unbounded axis, not a runtime error. A scrim-only
+  Box in this context paints a zero-thickness strip; the author
+  must add `aspect` or wrap the Box in a sized parent to get
+  visible extent.
 
   - **Technical risk:** Low.
 
@@ -821,12 +973,23 @@ Option B — Runtime fallback to spec-defined default
     until visual inspection.
 
 **Recommendation:** Option A for every sub-issue —
-- Bounded parent: inscribed (fit smaller).
+
+- Bounded parent: inscribed (fit smaller); projection computed
+  per the numeric / rounding contract under Option A above (integer
+  branch selection, `f32` derived axis, no pixel-snapping in
+  Phase 2).
 - Unbounded on one axis: bounded-axis-wins.
-- Unbounded on both axes: load-time error.
+- Unbounded on both axes: layout-time runtime error — applies
+  symmetrically to the no-aspect empty-Box case (a Box with neither
+  `aspect` nor bounded parent extent is the same structural error).
 - Width/height conflict: explicit wins; aspect informational + warning.
+  Phase-2-scope-deferred: `width` / `height` are not in the M3-Phase 2
+  DSL surface, so the rule lands as spec text in Phase 2 and the
+  `wasamoc check` warning is implemented by the phase that surfaces
+  these attributes.
 - Child intrinsic (no aspect): shrink-to-fit; fall back to parent
-  bounds when no children.
+  bounds when no children, with the unbounded-both-axes runtime
+  error noted above.
 - Aspect value validity: `wasamoc check` rejects non-positive sides.
 
 The algorithm has no novel paradigm but the spec content is real:
@@ -1009,7 +1172,8 @@ recommended), or does Phase 2 admit N children with shared bounds
 and no z-order declared (Option B)?
 
 **Default answer:** Option A — single-child-only; 2+ children
-rejected at `wasamoc check`.
+rejected at both `wasamoc check` and `ir_loader::build_node`
+(defense in depth).
 
 **Framing for owner:** The recommendation narrows A6's "0+ child
 container" surface wording at the spec level — readers see "Box
@@ -1041,9 +1205,12 @@ ZStack-vs-Box layering; the Phase 2 marker would record the
 (Option A, recommended), or is the M3 scrim opaque-by-spec
 (Option B)?
 
-**Default answer:** Option A — alpha-yes; new `PropertyValue::Color`
-+ `IrLiteral::Color` carry four 8-bit channels; surface admits
-`#RRGGBB` (alpha 0xFF implied) and `#RRGGBBAA`.
+**Default answer:** Option A — alpha-yes; new `IrLiteral::Color` plus
+a Box-internal `Color(u32)` domain type (stored on `WidgetData::Box`)
+carry four 8-bit channels; surface admits `#RRGGBB` (alpha 0xFF
+implied) and `#RRGGBBAA`. `PropertyValue::Color` and
+`WASAMO_VALUE_COLOR` are **not** added in Phase 2 — see DD-003
+variant-strategy Option A for the boundary.
 
 **Framing for owner:** A6 explicitly names "scrim use" as the
 motivating use case for `fill`. A scrim is semantically a
@@ -1061,12 +1228,12 @@ that alpha to a state variable (DD-004 says `fill` is
 constant-only in Phase 2) or pull the color from a theme palette
 (M4+ work).
 
-Option B's positioning: the value-type layer matches the
+Option B's positioning: the value layer matches the
 styling-layer constraint — both exclude alpha. M3 scrims are
 opaque, and the target-app pre-doc wording is internally consistent
 only if M3's "scrim" is read as "an opaque background panel". M4+
-alpha-styling adoption then forces a value-type revision
-(`PropertyValue::Color` widened from 3 to 4 channels), mechanically
+alpha-styling adoption then forces a value-layer revision (the
+`Color` domain type widened from 3 to 4 channels), mechanically
 additive but a revision Option A avoids.
 
 The decision is design-quality dominated: Option A makes the M3
@@ -1080,11 +1247,11 @@ keeps the value type tighter at the cost of an internally-tense
 
 | ID | Topic | Recommendation |
 |---|---|---|
-| DD-M3-P2-001 | Box IR node form + child-layout contract | Option A across sub-issues — per-kind tag `WidgetKind::Box`; 0-child valid; **single-child-only with 2+ rejected at `wasamoc check`**; child measure passes Box bounds through unchanged; child alignment centred (no per-child override); overflow clips child to Box bounds |
-| DD-M3-P2-002 | `aspect: <ratio>` value type | Option A — rational pair `aspect: <num>:<den>`; new `IrLiteral::Ratio { num, den }` + `PropertyValue::Ratio`; no new `IrType` (constant-only per DD-004); ABI value-conversion arms folded into the same step |
-| DD-M3-P2-003 | `fill: <color>` value type | Option A — alpha-yes; new `PropertyValue::Color(u32)` + `IrLiteral::Color(u32)`; surface forms `#RRGGBB` and `#RRGGBBAA` only; ABI value-conversion arms folded into the same step |
+| DD-M3-P2-001 | Box IR node form + child-layout contract | Option A across sub-issues — per-kind tag `WidgetKind::Box`; 0-child valid; **single-child-only with 2+ rejected at both `wasamoc check` and `ir_loader::build_node` (defense in depth)**; child measure passes Box bounds through unchanged; child alignment centred (no per-child override); overflow clips child to Box bounds |
+| DD-M3-P2-002 | `aspect: <ratio>` value type | Option A — rational pair `aspect: <num>:<den>`; new `IrLiteral::Ratio { num, den }` + Box-internal `Ratio` domain type on `WidgetData::Box`; **no** `PropertyValue::Ratio`, **no** `WASAMO_VALUE_RATIO` tag, **no** `abi.rs` arms in Phase 2 (constant-only per DD-004); no new `IrType` |
+| DD-M3-P2-003 | `fill: <color>` value type | Option A — alpha-yes; new `IrLiteral::Color(u32)` + Box-internal `Color(u32)` domain type on `WidgetData::Box`; **no** `PropertyValue::Color`, **no** `WASAMO_VALUE_COLOR` tag, **no** `abi.rs` arms in Phase 2 (constant-only per DD-004); surface forms `#RRGGBB` and `#RRGGBBAA` only |
 | DD-M3-P2-004 | Bindable surface for `aspect` / `fill` | Option A — both attributes **constant-only** in Phase 2; no new per-type writer seam built; F5 deferral structurally preserved |
-| DD-M3-P2-005 | Aspect measure-arrange algorithm | Option A across sub-issues — inscribed fit (bounded parent), bounded-axis-wins (unbounded on one axis), load-time error (unbounded on both axes), explicit width/height wins + warning (conflict), child intrinsic shrink-to-fit + parent-bounds fallback (no aspect), `wasamoc check` rejects non-positive sides |
+| DD-M3-P2-005 | Aspect measure-arrange algorithm | Option A across sub-issues — inscribed fit (bounded parent) with **integer branch selection + `f32` derived axis, no pixel-snapping in Phase 2**; bounded-axis-wins (unbounded on one axis); layout-time runtime error (unbounded on both axes) **applied symmetrically to the no-aspect empty-Box case**; explicit width/height wins + warning (conflict) — **forward-looking: `width` / `height` are not in the M3-Phase 2 DSL surface, so this rule lands as spec text only in Phase 2**; child intrinsic shrink-to-fit + parent-bounds fallback (no aspect); `wasamoc check` rejects non-positive sides |
 | DD-M3-P2-006 | Placeholder pattern (Box + Text) | Option A — normative spec convention in `docs/dsl_spec.md` Box chapter; Phase 3 / Phase 6 cite it; M4 Image-widget ADR supersedes it cleanly |
 
 Implementation task list: belongs in the Phase 2 progress file
@@ -1120,15 +1287,26 @@ design-spec draft):
   the M2-revised IR section if structural placement warrants;
   short paragraph noting the per-type binding seam is *not*
   extended by Phase 2 (`aspect` / `fill` constant-only) so the F5
-  deferral is unpressured.
-- [docs/abi_spec.md](../abi_spec.md) — **no new ABI public function
-  added**, no new `WASAMO_VALUE_*` tag added (both pursuant to
-  DD-004 constant-only). The `read_property_value` /
-  `write_property_value` / `property_value_to_owned` machinery in
-  `abi.rs` does gain `Ratio` and `Color` arms in the per-type
-  conversion match, but these are private internal arms not visible
-  across the C ABI boundary; the existing ABI function signatures
-  and value-tag numeric assignments are untouched.
+  deferral is unpressured, **and** noting that `Ratio` / `Color`
+  enter the runtime as Box-internal domain types only — not as
+  `PropertyValue` variants — so the ABI surface remains unchanged
+  through Phase 2.
+- [docs/abi_spec.md](../abi_spec.md) — **no changes in Phase 2**.
+  No new ABI public function, no new `WASAMO_VALUE_*` tag, no new
+  arms in `abi.rs` (`read_property_value` / `write_property_value` /
+  `property_value_to_owned`). The new `Ratio` and `Color` types are
+  Box-internal domain types stored on `WidgetData::Box`; they do
+  **not** become `PropertyValue` variants in Phase 2 (per DD-002 IR /
+  runtime plumbing block and DD-003 variant-strategy Option A), so
+  the C ABI boundary is untouched. This is consistent with DD-004's
+  constant-only stance: with no bindable surface and no
+  `get_property` / `set_property` / observer payload exposure, the
+  values never reach the C ABI. When a later phase opens bindable
+  `fill` or `aspect`, the ABI extensions
+  (`PropertyValue::Color(Color)` / `PropertyValue::Ratio(Ratio)`
+  variants, `WASAMO_VALUE_COLOR` / `WASAMO_VALUE_RATIO` tags, and the
+  corresponding `abi.rs` arms) land together in that phase per
+  [predoc-inputs.md §1](../notes/m3-phase-2/predoc-inputs.md#1-box-が新規-propertyvalue-variant-を入れるなら-abi-value-conversion-arm-は同じ-step-に-fold-する).
 - [docs/plans/m3-plan.md](../plans/m3-plan.md) — Progress section's
   Phase 2 row populated (Status: `in progress`; ADR link; progress
   file link).
@@ -1169,35 +1347,53 @@ satisfied when **all four** of the following are observed:
    `wasamoc` (parse + check + lower) and in `wasamo-runtime`
    non-Windows-bound modules (aspect measure-arrange resolver,
    IR-loader handling of `IrLiteral::Ratio` / `IrLiteral::Color`,
-   `PropertyValue::Ratio` / `PropertyValue::Color` plumbing) cover:
+   `Ratio` / `Color` Box-internal domain-type plumbing) cover:
    ratio literal parsing; color literal parsing (both `#RRGGBB` and
    `#RRGGBBAA`); DD-005 measure-arrange edge cases (bounded
    parent inscribed fit; unbounded-on-one-axis bounded-axis-wins;
-   unbounded-on-both-axes load-time error; explicit width/height
+   unbounded-on-both-axes layout-time runtime error; explicit width/height
    conflict; child intrinsic shrink-to-fit when aspect absent;
    non-positive ratio sides rejected); `wasamoc check` diagnostics
    for `bind aspect: ...` and `bind fill: ...` (rejected per DD-004)
-   and for 2+ children under Box (rejected per DD-001). These run
-   on any CI runner.
+   and for 2+ children under Box at compile time **and** at IR-load
+   time in `ir_loader::build_node` (both rejected per DD-001). These
+   run on any CI runner.
 
-2. **IR text round-trip evidence.** `wasamoc` emits,
-   `wasamo-runtime` loads, and an in-process test reads back:
-   `Box { aspect: 16:9; fill: #00000080; Text { text: "Photo 12" } }`
-   as the corresponding `WidgetKind::Box` IR node with
-   `IrLiteral::Ratio { num: 16, den: 9 }` and
-   `IrLiteral::Color(<packed>)`. Tests the DD-001 / 002 / 003 / 006
-   surfaces together.
+2. **IR text round-trip evidence.** For the fixture
+   `Box { aspect: 16:9; fill: #00000080; Text { text: "Photo 12" } }`,
+   two separate checks gate the IR ↔ runtime boundary:
+
+   - **Emitted IR (`wasamoc` side).** An in-process test inspects the
+     `wasamoc`-emitted IR text and asserts the Box node carries
+     `IrLiteral::Ratio { num: 16, den: 9 }` and
+     `IrLiteral::Color(<packed>)`.
+   - **Loaded runtime state (`wasamo-runtime` side).** `wasamo-runtime`
+     loads that IR through `ir_loader::build_node`, which **materialises**
+     the literals into the Box-internal domain types — the resulting
+     `WidgetData::Box { aspect: Some(Ratio { num: 16, den: 9 }),
+     fill: Some(Color(<packed>)), .. }` is asserted directly. The
+     `IrLiteral::*` variants do **not** survive into runtime state;
+     they are the IR-text-side encoding only.
+
+   Tests the DD-001 / 002 / 003 / 006 surfaces together and makes the
+   "IR-side `IrLiteral::*`, runtime-side Box-internal domain type"
+   boundary (DD-002 / DD-003 variant-strategy Option A) executable.
 
 3. **Windows-runtime layout evidence (CI-gated).** A mock-free
    integration test (per CLAUDE.md "Testing rules") on the Windows
    CI runner: a `.ui` fixture declares an aspect-fixed Box with a
    Text child inside a parent of known size. The test loads the
    IR, runs the layout pass, and asserts the Box's resolved
-   rectangle matches the inscribed-fit calculation, that the Text
-   child is centred, and that the Box's `PROP_BOX_FILL` reflects
-   the color literal. Fails (not skips) on a runner that cannot
-   create the Compositor — the test gates A6 evidence in CI, not
-   local convenience.
+   rectangle matches the inscribed-fit calculation and that the
+   Text child is centred. The Box's `fill` color is verified
+   either through an in-process / test-only accessor that exposes
+   the Box-internal `Color` value, or via the layout / render model
+   (`SpriteVisual` brush color) the layout pass emits — **not**
+   through `wasamo_get_property` or any `PropertyValue`-mediated
+   path, because `fill` is not a `PropertyValue` variant in Phase 2
+   (per DD-003 variant-strategy Option A). Fails (not skips) on a
+   runner that cannot create the Compositor — the test gates A6
+   evidence in CI, not local convenience.
 
 4. **End-to-end host evidence (visible smoke).**
    `examples/gallery/gallery.ui` is seeded with the Phase 2
