@@ -98,12 +98,16 @@ reject set (M3-Phase 2 T3)`. Step-end retrospective recorded in
 
 ### T4 — `wasamoc` lowering: AST → IR
 
-- [ ] `Expr::RatioLit` → `IrLiteral::Ratio { num, den }`.
-- [ ] `Expr::ColorLit` → `IrLiteral::Color(u32)`; packed `u32`
+- [x] `Expr::RatioLit` → `IrLiteral::Ratio { num, den }`.
+- [x] `Expr::ColorLit` → `IrLiteral::Color(u32)`; packed `u32`
       layout per
       [dsl_spec §8.2](../../dsl_spec.md#82-notation) `COLOR` token.
-- [ ] Unit tests assert lowering of representative `Box { ... }`
+- [x] Unit tests assert lowering of representative `Box { ... }`
       forms.
+
+Closed by commit `5be7df6 feat(wasamoc): lower Ratio / Color literals
+to IR (M3-Phase 2 T4)`. Step-end retrospective recorded in
+[../../notes/m3-phase-2/t4-step-end-retrospective.md](../../notes/m3-phase-2/t4-step-end-retrospective.md).
 
 ### T5 — `wasamoc` IR text emit
 
