@@ -1,0 +1,332 @@
+---
+title: M3-Phase 2 / T3 step-end retrospective
+status: recorded
+created: 2026-05-20
+scope: step-end
+task: T3 — wasamoc check validity and reject set
+---
+
+# M3-Phase 2 / T3 step-end retrospective
+
+## Scope
+
+`docs/plans/progress/m3-phase-2-progress.md` の **T3**
+("`wasamoc check`: validity and reject set") の step-end
+retrospective。T3 が discharge する DD は次の三本:
+
+- DD-M3-P2-001 — Box の multi-child reject (compile gate; runtime
+  gate は T7 が defense-in-depth で重ねる)。
+- DD-M3-P2-004 — `Box.aspect` / `Box.fill` の constant-only contract
+  (state-backed binding を attribute 名指しで reject)。
+- DD-M3-P2-005 — aspect 値妥当性のうち compile-time に判定可能な
+  「ratio の零除外」(レイアウト時の unbounded 系 runtime error は T8
+  の責任)。
+
+対象コミット:
+
+- `f70424d feat(wasamoc): Box widget validity and reject set (M3-Phase 2 T3)`
+
+これは step-end の gate であり、phase-end retrospective ではない。
+本 step (T3) は単一 step = 単一 task 構造で、merge 先は phase ブランチ
+`feat/m3-phase-2` (ff)。
+
+## Current Judgment
+
+2026-05-20 時点で T3 step-end 基準は **達成済み**。
+
+- `wasamoc::check` に Box の AC を 4 軸 (known-widget / multi-child /
+  const-only bind / positional literal) で追加し、それぞれ unit テスト
+  で覆った。
+  - `KNOWN_WIDGET_TYPES` に `Box` を追加。"M1 types" という固有名を
+    脱ぐ形で定数を `KNOWN_WIDGET_TYPES` にリネームし、警告文も
+    "known types: ..." に揃えた。既存テスト
+    `unknown_widget_type_is_warning_not_error` は警告 prefix
+    ("unknown widget type") のみを assert していたので壊れず通る。
+  - `check_box_child_count` は `Member::WidgetDecl` のみを子としてカウント
+    する。PropertyBind / SignalHandler はカウント対象外。
+  - `check_box_const_only_bind` は `Box.aspect` / `Box.fill` のみで起動し、
+    `(prop, literal)` のペアが一致するときだけ accept。
+    一致しない (=state ident / 別 literal kind / wrong-type literal) と
+    "constant-only" diagnostic を発行し、reject 属性名と期待 surface
+    形 (`<num>:<den>` / `#RRGGBB or #RRGGBBAA`) を含める。
+  - aspect の値妥当性は同関数で `num <= 0` / `den <= 0` を独立に
+    判定。`0:0` のように両側が零なら 2 件発行する (テスト
+    `box_aspect_zero_both_sides_rejected` で確認)。
+  - 位置妥当性 (RatioLit / ColorLit が `Box.aspect` / `Box.fill` 以外で
+    現れる) は `check_expr_type` の Ratio / Color arm に置いた。
+    PropertyBind 経路では Box.aspect / fill のみが `check_expr_type` を
+    呼ばないため、reject はそれ以外の syntactic position (state default,
+    handler RHS, 非 Box の property assignment, "VStack { aspect: 16:9 }"
+    のような名前一致しても widget が違うケース) で確実に発火する。
+- `check_state_defaults` から `check_expr_type` を呼ぶように改修。
+  従来 state default 経路は `expr_static_type` の static 型だけを見て
+  Float / Ratio / Color を silent に飛ばしていたため、T3 で要求される
+  "state default における Ratio / Color の位置妥当性 reject" がそのまま
+  だと通らなかった。**T3 範囲外の latent gap (FloatLit in state default
+  が silent pass)** も同じ変更で塞がる副作用があるが、これは仕様文書
+  (dsl_spec) と既存 check 方針 ("bad surface forms fail at the source-
+  level diagnostic gate") に沿った正規化で、新規負債ではない。既存
+  state-default テスト 5 件 (i32/string/bool への型 mismatch ケース)
+  はいずれも 1 件のエラー想定で書かれており、check_expr_type の追加
+  呼び出しはこれらの IntLit / StringLit / BoolLit 経路を no-op で通す
+  ので、count は変化せず通る。
+- 新規テスト 23 件 (`#[cfg(test)] mod tests` 内):
+  - accept: empty Box, fill-only, scrim alpha, aspect-only, placeholder
+    shape (DD-006 normative), single-child placeholder。
+  - accept (regression guard): "Box attrs do not count as children"。
+  - reject (multi-child): 2 children, 3 children。各々 diagnostic が
+    `ZStack` / `VStack` / `HStack` を全て含むことを assert。
+  - reject (aspect 値): 零分子、零分母、両側零 (2 件発行)。
+  - reject (const-only): state-ident bind 2 種 (aspect / fill)、
+    int literal as aspect, string literal as fill, color as aspect,
+    ratio as fill。
+  - reject (positional): ratio in state default、color in state default、
+    ratio in handler RHS、color on non-Box prop (Text.text)、
+    ratio on non-Box widget (`VStack { aspect: 16:9 }`)。
+- `cargo fmt --all -- --check` (post-commit state) zero exit。
+- `cargo clean` → `cargo build --release --workspace` (release, 42.83s)
+  → `cargo build --workspace` (debug, 38.07s) → `cargo test --workspace`
+  すべて green。
+  - `wasamoc`: 140 passed (T3 で +23、すべて check モジュール)。
+  - `wasamo-ir`: 12 passed (変化なし)。
+  - `wasamo-runtime`: 165 passed (変化なし)。
+  - 他 crate 変化なし。
+
+T3 の blocker は残っていない。
+
+## Main Learning
+
+中心的な学びは「**位置妥当性 reject の責任分割が綺麗に決まった**」
+こと。「Ratio / Color literal は Box.aspect / Box.fill のみで accept」
+という仕様 (dsl_spec §4.9) を実装に落とすとき、初期案は
+"`check_expr_type` の入口に `(enclosing_widget, prop_name)` の context
+を渡して、Ratio / Color の場合だけ参照する" だった。しかしこれは
+context が多くの site で常に伴って引き回されるパターンになり、
+state default / handler RHS / nested expr など Box とは無関係な site
+まで context を持つことになる。
+
+採用した構造は逆向き:
+
+- `check_expr_type` は **位置妥当性 reject を default で発火する**。
+  Ratio / Color arm は問答無用でエラーを吐く。
+- accepted position である `Box.aspect` / `Box.fill` の PropertyBind
+  だけが `check_expr_type` を **呼ばずに** `check_box_const_only_bind`
+  に分岐する。
+
+この "accept 側が default 経路を bypass する" 形にすると、
+
+- `check_expr_type` のシグネチャに context 引数が増えない。
+- positional reject の "盲点" になりやすい場所 (state default, handler
+  RHS, 非 Box widget での `aspect:` 名一致) が、`check_expr_type` を
+  通る限り自動的に塞がる。
+- accepted 経路は明示的に分岐するので、後段 (T4 lowering) が "ここに
+  来た Ratio / Color は check を通った"と仮定して書ける boundary が
+  明確になる。
+
+ただし副作用として **state default 経路が従来 `check_expr_type` を
+呼んでいなかった** ことが露見した — これは T3 で塞いだ (上述)。
+"default で reject、accept 側が opt-out" の構造は強いが、それを成立
+させるためには **`check_expr_type` が state default にも呼ばれる**
+ことが前提になる。M2 までの「state default は type compatibility のみ」
+方針はここで微修正が入った。
+
+副次的な学びとして、widget_prop_type の catalog 行に Box.aspect /
+Box.fill を **入れない判断** を明示的にコメント残しした。aspect /
+fill は Box-internal 値型で `TypeName` enum を拡張しない方針
+(DD-M3-P2-002 / 003 Option A) なので、当該 catalog 関数からは見えなく
+する。これに気づかず将来「Box.aspect の TypeName エントリは?」と
+catalog を grep する maintainer が出ることが想定されるため、catalog 内
+にコメントとして「Box の値型は別経路 (`check_box_const_only_bind`) で
+判定」と明記した。
+
+T4 (`wasamoc` lowering) に持ち越した境界:
+
+- `lower.rs` の Ratio / Color 用 `panic!` スタブ 3 箇所 (lower_state,
+  lower_expr, lower_rhs_expr) は **T3 の check により現役パスでは到達
+  不能** になった。lower_state は state default に Ratio / Color が
+  来ない (check で reject)、lower_expr / lower_rhs_expr も同様。これで
+  FloatLit と同形の invariant が成立する。T4 で正規 lowering arm に
+  置き換え。
+
+## Checklist
+
+1. **本作業の主要な学び:** あり。
+   - 位置妥当性 reject の責任分割 ("default reject + accept 側 opt-out"
+     構造) と、それに伴う state default 経路の `check_expr_type` 呼び出し
+     追加 (上で展開)。
+   - widget_prop_type catalog に Box の行を **入れない** ことを明示的に
+     コメント残し、Box-internal 値型が catalog から不可視である理由を
+     spec/ADR と同期。
+
+2. **仕様文書 (`abi_spec.md` / `architecture.md` / `dsl_spec.md`) の変更:**
+   **なし**
+   - T3 の対象は `wasamoc::check` のみ。dsl_spec §4.9 は既に "wasamoc
+     check rejects ... naming the rejected attribute / offending position"
+     と仕様化済み (M3-Phase 2 pre-doc 期に確定)。実装はその素直な反映。
+   - Moment 2 spec re-sync は T13 の責任範囲。
+
+3. **ローカル clean rebuild:** **green**
+   - `cargo fmt --all -- --check` (post-commit state): zero exit。
+   - `cargo clean` → `cargo build --release --workspace`: green (release,
+     42.83s)。
+   - `cargo build --workspace`: green (debug, 38.07s)。
+   - `cargo test --workspace`: failure 0 件。
+     - `wasamoc`: 140 passed (T3 で +23)。
+     - `wasamo-ir`: 12 passed (変化なし)。
+     - `wasamo-runtime`: 165 passed (変化なし)。
+     - 他 crate 変化なし。
+   - GitHub Actions 上の clean rebuild は phase-end gate (T13) で確認。
+
+4. **PO に相談すべき設計判断・トレードオフ:** **なし**
+   - DD-M3-P2-001 / 004 / 005 (compile-time 部分) は ADR Accepted 済み。
+     diagnostic 文言の詳細 ("ZStack / VStack / HStack を全て名指す"
+     / "rejected attribute name を含める" / "expected surface form を
+     含める") は spec の "naming the rejected attribute / offending
+     position" を読み取った範囲で、新規 design call は出ていない。
+   - `check_state_defaults` から `check_expr_type` を呼び始めた変更は
+     副作用として FloatLit in state default を遅まきに reject 対象に
+     入れた。これは既存 spec ("float literals are not supported in
+     M2 — only i32 and string") を素直に拡張したもので、新規 DD では
+     ない。下記 item 5 (ついで変更) で軽く触れる。
+
+### step-end 固有
+
+5. **plan/ADR に記載の step 目的から外れた「ついで」のリファクタ・
+   構造変更:** **あり (極小、structural な必要性に駆動)**
+   - (a) `M1_WIDGET_TYPES` → `KNOWN_WIDGET_TYPES` のリネーム。
+     既存 const は "M1 types" を assert に含むテストが無い形 (warning
+     prefix `unknown widget type` だけを assert) で書かれており、
+     リネームと "known types: ..." 文言への置き換えは破壊的変更を
+     伴わない。Box 追加に合わせて名前を時代と合わせた。
+   - (b) `check_state_defaults` から `check_expr_type` を呼ぶように
+     変更。T3 範囲 (Ratio / Color の positional reject in state
+     default) を成立させるために必要だが、副作用として FloatLit
+     in state default の latent gap も塞いだ。これは T3 の構造的
+     必要性に駆動された変更で、独立の "ついで" ではない (定義通り
+     T3 範囲に折り込んだ)。
+   - これらは前述の "Main Learning" で展開した構造変更の一部であり、
+     report で明示してオーナー判断を仰ぐ。
+
+6. **現在の phase ADR への追加 DD 必要性:** **なし**
+   - 既存 DD-M3-P2-001..006 で T3 範囲はすべてカバー。diagnostic 文言
+     の詳細は spec の wording (naming the rejected attribute /
+     offending position) を素直に実装した範囲で、追加 DD 起こし不要。
+
+7. **既存 ADR の Proposed 項目の新規追加、または Proposed → Accepted
+   への昇格:** **なし**
+   - 当該 ADR は全 DD Accepted 済み。T3 では昇格対象なし。
+
+8. **`m3-plan.md` の AC 追加・変更、または Phase 構成の追加・統合・
+   分割:** **なし**
+   - A6 / A11 の文言は変更なし。Phase 構成変更なし。T3 終了で
+     m3-plan のステータス行は触らない。
+
+9. **後続 step に持ち越す仮実装・近似・新規 `dead_code` 警告:**
+   **あり (T4 で確実に消化する設計済み pattern)**
+   - `lower.rs` の Ratio / Color 用 panic スタブ 3 箇所は **T3 の check
+     により現役パスでは到達不能** になった。T4 で正規 lowering arm に
+     置き換える計画は T2 retro Follow-Up の段で確定済み。
+   - 新規 `dead_code` 警告: なし。
+
+10. **タスクリストの後続 step 見直し:** **なし (進行通り)**
+    - progress file の T3 行を `[x]` に更新し、本 retrospective への
+      link を追加する (次のドキュメントコミットで反映)。
+    - T4 以降の task 構成・順序・依存関係に T3 実装から見て調整すべき
+      点は出ていない。
+    - T4 への follow-up は下記 "Follow-Up" 節に明示。
+
+## Fast-Track Judgment
+
+Fast-track criteria は **満たさない**。
+
+- item 2 (spec doc 変更): なし
+- item 3 (local clean rebuild): green
+- item 4 (PO 相談事項): なし
+- item 5 (ついでのリファクタ): **あり** (前述 5(a)(b))
+- item 6 (追加 DD 必要性): なし
+- item 7 (Proposed → Accepted 昇格): なし
+- item 8 (plan AC / Phase 構成変更): なし
+- item 9 (持ち越し): あり、ただし T4 で確実に消化する設計済み pattern
+  (FloatLit と同形) で blocker ではない。
+
+item 5 が "あり" のため fast-track 対象外。retrospective.md の手順
+3 → 4 (オーナーが merge 種別を承認) のレールに乗せる。
+
+## Verification Notes
+
+T3 で追加したテストと、走らせた command を記録する。
+
+新規 check テスト (`wasamoc/src/check.rs` 内 `#[cfg(test)] mod tests`):
+
+Box accept shapes:
+- `box_empty_accepted`
+- `box_fill_only_accepted`
+- `box_scrim_alpha_accepted`
+- `box_aspect_only_accepted`
+- `box_placeholder_shape_accepted`
+- `box_one_child_accepted`
+- `box_attrs_do_not_count_as_children`
+
+Box multi-child reject (DD-M3-P2-001):
+- `box_two_children_rejected`
+- `box_three_children_rejected`
+
+aspect 値妥当性 reject (DD-M3-P2-005):
+- `box_aspect_zero_numerator_rejected`
+- `box_aspect_zero_denominator_rejected`
+- `box_aspect_zero_both_sides_rejected`
+
+const-only bind reject (DD-M3-P2-004):
+- `box_aspect_state_ident_rejected`
+- `box_fill_state_ident_rejected`
+- `box_aspect_int_literal_rejected`
+- `box_fill_string_literal_rejected`
+- `box_aspect_color_literal_rejected`
+- `box_fill_ratio_literal_rejected`
+
+Ratio / Color 位置妥当性 reject (dsl_spec §4.9):
+- `ratio_literal_in_state_default_rejected`
+- `color_literal_in_state_default_rejected`
+- `ratio_literal_in_handler_rejected`
+- `color_literal_in_non_box_prop_rejected`
+- `ratio_literal_on_non_box_widget_rejected`
+
+実行コマンド:
+
+```text
+cargo fmt --all -- --check   (post-commit state)
+cargo clean
+cargo build --release --workspace
+cargo build --workspace
+cargo test --workspace
+```
+
+いずれも green。
+
+## Follow-Up
+
+T3 から後続 task への明示的な引き渡し:
+
+- **T4 (`wasamoc` lowering):**
+  - `lower.rs` の Ratio / Color 用 `panic!` スタブ 3 箇所 (lower_state,
+    lower_expr, lower_rhs_expr) を正規 lowering に置き換え:
+    - `Expr::RatioLit { num, den, .. }` → `IrLiteral::Ratio { num, den }`
+    - `Expr::ColorLit { value, .. }` → `IrLiteral::Color(*value)`
+  - T3 の check で Box.aspect / Box.fill 以外の Ratio / Color は
+    現役パスから消えているので、lower_expr / lower_rhs_expr の Ratio /
+    Color arm は理屈上 `unreachable!` でよい。`panic!` のままにするか
+    `unreachable!` に書き換えるかは T4 の判断 (lower_state の FloatLit
+    と同じトレードオフ)。
+  - state default に対する FloatLit / Ratio / Color の reject が
+    `check_state_defaults` で発火するようになったので、lower_state の
+    Ratio / Color スタブが現役パスから消えた前提を踏める。
+- **T5 (`wasamoc` IR text emit):** 影響なし (T2 retro Follow-Up 通り)。
+- **T7 (`wasamo-runtime` ir_loader):** T3 が compile gate を確定したので、
+  T7 の defense-in-depth gate (`ir_loader` 側の 2+ child reject /
+  positional reject) は **同じエラークラスを runtime 側で重ねる**
+  作業になる。エラー文言を `wasamoc check` 側と完全に揃える必要は
+  ないが、両者が同じ invariant を守ることを spec が要求している
+  (DD-001 + dsl_spec §4.9)。
+
+これらはすべて progress file の T4–T7 として既に列挙済み。T3 単体で
+新たに発見された follow-up は無い。

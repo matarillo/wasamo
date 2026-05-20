@@ -73,18 +73,28 @@ in [../../notes/m3-phase-2/t2-step-end-retrospective.md](../../notes/m3-phase-2/
 Discharges DD-M3-P2-001 (multi-child reject), DD-M3-P2-004 (bind reject
 for `aspect` / `fill`), and the value-validity portion of DD-M3-P2-005.
 
-- [ ] Reject zero on either side of ratio (per DD-M3-P2-005 aspect
+- [x] Reject zero on either side of ratio (per DD-M3-P2-005 aspect
       value validity); diagnostic names the rejected side.
-- [ ] Reject `bind aspect:` and `bind fill:` (per DD-M3-P2-004);
+- [x] Reject `bind aspect:` and `bind fill:` (per DD-M3-P2-004);
       diagnostic names the rejected attribute.
-- [ ] Reject 2+ children on Box (per DD-M3-P2-001 multi-child);
+- [x] Reject 2+ children on Box (per DD-M3-P2-001 multi-child);
       diagnostic recommends `VStack` / `HStack` / `ZStack` (Phase 6
       forward-pointer).
-- [ ] Widget property catalog extended for Box (`aspect: Ratio`,
+- [x] Widget property catalog extended for Box (`aspect: Ratio`,
       `fill: Color` — Box-internal types, not new `IrType` entries)
       so the checker can name the attribute types in diagnostics.
-- [ ] Unit tests cover each row of the reject set + each accept
+      Box-internal value types are deliberately **not** entered in
+      `widget_prop_type`'s `TypeName` table (they have no `TypeName`
+      enum entry per DD-M3-P2-002 / DD-M3-P2-003 Option A); the
+      catalog row is named in a code comment in that function and
+      validity is enforced by a dedicated `check_box_const_only_bind`
+      helper.
+- [x] Unit tests cover each row of the reject set + each accept
       shape from the ADR.
+
+Closed by commit `f70424d feat(wasamoc): Box widget validity and
+reject set (M3-Phase 2 T3)`. Step-end retrospective recorded in
+[../../notes/m3-phase-2/t3-step-end-retrospective.md](../../notes/m3-phase-2/t3-step-end-retrospective.md).
 
 ### T4 — `wasamoc` lowering: AST → IR
 
