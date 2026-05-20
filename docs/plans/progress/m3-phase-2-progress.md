@@ -113,13 +113,25 @@ to IR (M3-Phase 2 T4)`. Step-end retrospective recorded in
 
 Discharges the IR-text-spelling halves of DD-M3-P2-002 and DD-M3-P2-003.
 
-- [ ] Emitter writes ratio and color literals in the surface forms
+- [x] Emitter writes ratio and color literals in the surface forms
       (`<num>:<den>`, `#RRGGBB` / `#RRGGBBAA`) in `prop` literal
-      position.
-- [ ] IR text emit covers the Box widget node shape:
+      position. Canonical emit policy: alpha = `0xFF` normalises to
+      short `#RRGGBB`; otherwise the full `#RRGGBBAA` form is
+      written. Policy documented on `emit_color_lit` and pinned by
+      `color_emit_normalises_alpha_ff_input_to_short_form`.
+- [x] IR text emit covers the Box widget node shape:
       `node Box { prop aspect = 16:9; prop fill = #cccccc; node Text { ... } }`.
-- [ ] In-process roundtrip-shaped test in `wasamoc::emit` (ADR
-      §Phase 2 verification closure item 2).
+- [x] In-process roundtrip-shaped test in `wasamoc::emit` (ADR
+      §Phase 2 verification closure item 2). The
+      `Box { aspect: 16:9 fill: #00000080 Text { text: "Photo 12" } }`
+      fixture is asserted at both the `IrLiteral::Ratio` /
+      `IrLiteral::Color` variant level and the emitted IR text level
+      by `box_phase2_ir_text_emit_fixture`; the load-side half is
+      T7 / T10.
+
+Closed by commit `935b5d0 feat(wasamoc): IR text emit for Ratio /
+Color literals (M3-Phase 2 T5)`. Step-end retrospective recorded in
+[../../notes/m3-phase-2/t5-step-end-retrospective.md](../../notes/m3-phase-2/t5-step-end-retrospective.md).
 
 ### T6 — `wasamo-runtime` widget catalog: Box
 
