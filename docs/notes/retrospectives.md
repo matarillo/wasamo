@@ -51,9 +51,16 @@ checklist 完了 = merge 許可ではない。順序を固定する:
 2. 仕様文書 (`abi_spec.md` / `architecture.md` / `dsl_spec.md`) の
    変更 — あり/なし **(FT)**。タイポ修正、または既に Accepted な DD の
    機械的転記は「なし」扱い。
-3. プロジェクトルートで `cargo fmt` を実行した上で、ローカル clean
-   rebuild (`cargo clean` → release+debug build →
-   `cargo test --workspace`) — green/fail **(FT)**
+3. プロジェクトルートで `cargo fmt --all -- --check` を **post-commit
+   state に対して** 実行した上で、ローカル clean rebuild (`cargo
+   clean` → release+debug build → `cargo test --workspace`) —
+   green/fail **(FT)**。「green」は `--check` がゼロ終了することを
+   指し、単に `cargo fmt --all` が走り終わったことではない。事前に
+   `cargo fmt --all` を回すのは構わないが、ゲートは post-commit
+   state での `--check` が ground truth。M3-Phase 1 phase-end で
+   step 跨ぎの fmt ドリフトを見落とした事故 (commit `1129aea`) を踏まえ、
+   M3-Phase 2 pre-doc framing 決定 E (a) で固定された discipline
+   (see [m3-phase-2 pre-doc framing §E](./m3-phase-2/m3-phase-2-pre-doc-framing.md))。
 4. PO に相談すべき設計判断・トレードオフ — あり/なし **(FT)**
 
 ### step-end 固有 (merge → phase ブランチ)
