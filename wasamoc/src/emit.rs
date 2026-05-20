@@ -93,6 +93,21 @@ fn emit_literal(lit: &IrLiteral) -> String {
         IrLiteral::Str(s) => format!("\"{}\"", escape_string(s)),
         IrLiteral::Ident(id) => id.clone(),
         IrLiteral::Bool(b) => (if *b { "true" } else { "false" }).to_string(),
+        IrLiteral::Ratio { num, den } => format!("{}:{}", num, den),
+        IrLiteral::Color(value) => emit_color_lit(*value),
+    }
+}
+
+/// Render a `Color(u32)` packed as `0xAARRGGBB` in the surface form fixed
+/// by DD-M3-P2-003 / dsl_spec §8.2: `#RRGGBB` when alpha is `0xFF`
+/// (implicit-opaque short form), otherwise `#RRGGBBAA`.
+fn emit_color_lit(value: u32) -> String {
+    let alpha = (value >> 24) & 0xFF;
+    let rgb = value & 0x00FF_FFFF;
+    if alpha == 0xFF {
+        format!("#{:06x}", rgb)
+    } else {
+        format!("#{:06x}{:02x}", rgb, alpha)
     }
 }
 
