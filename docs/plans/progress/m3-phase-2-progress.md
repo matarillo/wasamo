@@ -204,18 +204,48 @@ recorded in
 
 Discharges DD-M3-P2-005 and the child-layout portion of DD-M3-P2-001.
 
-- [ ] Bounded inscribed-fit branch selection per the DD-M3-P2-005
-      numeric / rounding contract.
-- [ ] Unbounded-on-one-axis: bounded-axis-wins.
-- [ ] Unbounded-on-both-axes (aspect set, or no-aspect Box with
-      no bounded extent): layout-time runtime error.
-- [ ] No-aspect bounded Box: matches parent bounds when empty;
+- [x] Bounded inscribed-fit branch selection per the DD-M3-P2-005
+      numeric / rounding contract. Branch selection uses `f64`
+      cross-multiplication (`W*den` vs `H*num`) to keep the choice
+      independent of `f32` round-off; the derived axis is computed in
+      `f32`. Equality lands on the width branch (`<=`), matching the
+      `Box(16:9)` in `1600×900` happy path.
+- [x] Unbounded-on-one-axis: bounded-axis-wins. Implemented in
+      `measure_box` / `arrange_box` by inspecting `avail.is_finite()`
+      on each axis.
+- [x] Unbounded-on-both-axes (aspect set, or no-aspect Box with
+      no bounded extent): layout-time runtime error. New
+      `LayoutError::{BoxAspectUnboundedBoth, BoxNoExtent}` enum,
+      returned by `measure` / `arrange` / `run_layout` (signature
+      changed to `Result<…, LayoutError>`); `WidgetNode::run_layout`
+      maps both variants to `windows::core::Error(E_FAIL)` so the
+      existing `WM_SIZE → run_layout` call sites keep their
+      `windows::core::Result<()>` shape. The deferred dedicated
+      `WASAMO_ERR_*` code is captured under Out-of-phase residuals.
+- [x] No-aspect bounded Box: matches parent bounds when empty;
       shrink-to-fit child intrinsic measure when child present.
-- [ ] Single child: measured against Box bounds, centred, clipped
+      Empty Box with one axis unbounded collapses to `0.0` on that
+      axis (the "scrim-only Box paints a zero-thickness strip"
+      reading); only fully-unbounded empties trip `BoxNoExtent`.
+- [x] Single child: measured against Box bounds, centred, clipped
       on overflow (per DD-M3-P2-001 child measure / alignment /
-      overflow).
-- [ ] Zero-child Box still produces a sized rectangle (filled with
-      `fill`, or transparent when absent).
+      overflow). `arrange_box` measures the child against the
+      resolved Box rectangle, then clamps each axis via
+      `cw.min(rw) / ch.min(rh)` (Fill children take the full Box
+      extent on the Fill axis), and centres the result inside Box
+      bounds.
+- [x] Zero-child Box still produces a sized rectangle (filled with
+      `fill`, or transparent when absent). `WidgetNode::box_` now
+      paints `fill` as a `CompositionColorBrush` on the SpriteVisual
+      at construction (`#RRGGBBAA` packed `0xAARRGGBB` unpacked into
+      WinRT `Color { A, R, G, B }`); an absent `fill` leaves the
+      visual brushless (transparent). Box's default size constraints
+      flip to `Shrink/Shrink` so parent containers honour the
+      measure-arrange output.
+
+Closed by commit `5021936 feat(wasamo-runtime): Box aspect
+measure-arrange (M3-Phase 2 T8)`. Step-end retrospective recorded in
+[../../notes/m3-phase-2/t8-step-end-retrospective.md](../../notes/m3-phase-2/t8-step-end-retrospective.md).
 
 ### T9 — Pure-logic unit tests (ADR §Phase 2 verification closure item 1)
 
@@ -309,6 +339,18 @@ GUI-smoke launches here as they happen.)
 
 ## Out-of-phase residuals
 
-(empty — record here anything discovered during execution that is
-out of Phase 2 scope, and file a `docs/notes/m3/` entry pointing
-back to it per the m3-plan §Phase-end criteria.)
+- **Dedicated `WASAMO_ERR_*` ABI code for layout-time runtime errors
+  (T8).** DD-M3-P2-005 specifies that the unbounded-both-axes /
+  no-extent conditions surface as runtime diagnostics with the Box's
+  IR location. T8 lands the structural surface (`LayoutError` enum
+  returned from `layout::run_layout`) and maps both variants to
+  `windows::core::Error(E_FAIL)` at `WidgetNode::run_layout` so the
+  existing `WM_SIZE` callsites keep their `windows::core::Result<()>`
+  shape. The dedicated `wasamo.h` error code, IR-location plumbing on
+  `LayoutNode`, and the C ABI translation are out of Phase 2 scope:
+  the call sites at `window.rs::WM_SIZE` and `emit.rs::mark_layout
+  _dirty_for` already swallow the Result with `let _ = …`, so a richer
+  surface would be unused until a phase introduces a `wasamo_run
+  _layout` (or layout-error callback) entry point. Tracked here so
+  the residual lands in the M3-Phase 3 / Phase 4 pre-doc input scan
+  rather than getting lost.
