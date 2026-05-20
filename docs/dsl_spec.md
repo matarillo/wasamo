@@ -1,13 +1,12 @@
 # Wasamo DSL Specification
 
-**Document version:** 0.7
+**Document version:** 0.8
 **Last updated:** 2026-05-20
-**Status:** M3-Phase 2 ADR-accepted design draft; pending
-implementation re-sync. Covers the M2 `.ui` surface, the `state`
-surface keyword retroactively, the M3-Phase 1 `bool` scalar binding
-additions, the M3-Phase 2 Box layout primitive (with `aspect` /
-`fill` literal attributes) as a design-spec draft, and `;wasamo-ir
-v0`.
+**Status:** M3-Phase 2 closed; implementation-synced. Covers the M2
+`.ui` surface, the `state` surface keyword retroactively, the
+M3-Phase 1 `bool` scalar binding additions, the M3-Phase 2 Box layout
+primitive (with `aspect` / `fill` literal attributes), and
+`;wasamo-ir v0`.
 
 ---
 
@@ -374,8 +373,7 @@ superseded by it.
 
 ### 4.9 Box layout primitive (M3-Phase 2)
 
-**Phase status:** M3-Phase 2 ADR-accepted design draft; pending
-implementation re-sync.
+**Phase status:** M3-Phase 2 closed; implementation-synced.
 
 `Box` is a layout container that admits **zero or one child**
 (DD-M3-P2-001). Multi-child overlap is ZStack's responsibility
@@ -1025,3 +1023,4 @@ future design item.
 | 0.5     | 2026-05-19 | M3-Phase 1 (`bool` scalar binding): added `true`/`false` keywords, `BoolLit` token, `BoolLit`/`BoolPropRead` IR expression forms, `bool` to `state_decl` type set, `Button.enabled` widget-catalog entry, and `state` surface declaration §4.7 (retroactive M2 gap); recorded F5 (`TypedValue`) deferral in §8.12 |
 | 0.6     | 2026-05-19 | M3-Phase 1 T14: documented that string interpolation over `bool`-typed state is rejected until an explicit formatting/display-conversion surface exists |
 | 0.7     | 2026-05-20 | M3-Phase 2 ADR-accepted design draft: added §4.9 Box layout primitive chapter (Phase status marker; `aspect` / `fill` attribute surface; single-child centred-and-clipped layout contract; aspect inscribed-fit measure-arrange with edge cases; image placeholder pattern subsection per DD-M3-P2-006); added `RatioLit` / `ColorLit` tokens (§2.2), grammar rules (§3), AST variants (§5), §8.2 terminals, and §8.6 literal alternatives + Box-internal materialisation note. Pending implementation re-sync at Phase 2 close. |
+| 0.8     | 2026-05-20 | M3-Phase 2 close: flipped §4.9 Phase status marker and document status to implementation-synced after T1-T13 landed and local / CI phase-end gates passed. No implementation/spec divergence was found during the close re-sync. |

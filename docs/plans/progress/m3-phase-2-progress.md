@@ -1,7 +1,7 @@
 ---
 phase: M3-Phase 2
 title: Box layout primitive
-status: active
+status: retired
 adr: docs/decisions/m3-phase-2-box-layout.md
 plan: docs/plans/m3-plan.md
 opened: 2026-05-20
@@ -330,14 +330,14 @@ host`. Step-end retrospective recorded in
 
 Discharges the m3-plan §Phase-end criteria checklist for Phase 2.
 
-- [ ] `cargo fmt --all -- --check` green (per
+- [x] `cargo fmt --all -- --check` green (per
       [retrospectives.md item 3 amendment](../../notes/retrospectives.md)
       landed in Moment 1).
-- [ ] `cargo build --release --workspace` and `cargo test
+- [x] `cargo build --release --workspace` and `cargo test
       --workspace` green locally and on CI (`workflow_dispatch`).
-- [ ] Windows-only integration test (T11) green on CI (fail, not
+- [x] Windows-only integration test (T11) green on CI (fail, not
       skip, if Compositor missing).
-- [ ] Moment 2 spec re-sync: flip
+- [x] Moment 2 spec re-sync: flip
       [dsl_spec.md §4.9](../../dsl_spec.md#49-box-layout-primitive-m3-phase-2)
       Phase status marker to
       `**Phase status:** M3-Phase 2 closed; implementation-synced`,
@@ -345,14 +345,14 @@ Discharges the m3-plan §Phase-end criteria checklist for Phase 2.
       Earlier-phase spec gaps may fold per
       [predoc-inputs.md §6](../../notes/m3-phase-2/predoc-inputs.md#6-retroactive-spec-gap-fold-は最小範囲で同じ-phase-に折り込む)
       with explicit owner confirmation.
-- [ ] Forward-distillation note for M3-Phase 3 authored within
+- [x] Forward-distillation note for M3-Phase 3 authored within
       this phase's close (per
       [retrospectives.md forward-carry rule](../../notes/retrospectives.md)):
       `docs/notes/m3-phase-3/predoc-inputs.md` (or phase-named
       pre-doc candidate file).
-- [ ] Phase-end retrospective entry in
+- [x] Phase-end retrospective entry in
       `docs/notes/m3-phase-2/phase-end-retrospective.md`.
-- [ ] Progress file lifecycle: `status: active` → `status: closing`
+- [x] Progress file lifecycle: `status: active` → `status: closing`
       → retired (per
       [plans/README.md §Phase progress file lifecycle](../README.md#phase-progress-file-lifecycle)).
 
@@ -390,6 +390,35 @@ shape.)
   green.
 - **2026-05-20 / T12 step-end local:** final `cargo fmt --all --
   --check` — green.
+- **2026-05-20 / T13 phase-end local:** `cargo fmt --all --
+  --check` — green.
+- **2026-05-20 / T13 phase-end clean rebuild:** `cargo clean` —
+  succeeded; removed 3027 files / 942.7 MiB.
+- **2026-05-20 / T13 phase-end local:** `cargo build --release
+  --workspace` — green (existing `wasamo` linkable target /
+  `wasamo-sys` import library order warnings only).
+- **2026-05-20 / T13 phase-end local:** `cargo build --workspace` —
+  green (same existing warnings only).
+- **2026-05-20 / T13 phase-end local:** `cargo test --workspace` —
+  green, including T11 `aspect_box_with_text_child_lays_out_and_paints_fill`.
+- **2026-05-20 / T13 spec re-sync:** `docs/dsl_spec.md` 0.7 →
+  0.8; §4.9 Phase status marker flipped to `M3-Phase 2 closed;
+  implementation-synced`. No draft / implementation divergence was
+  found during the close re-sync.
+- **2026-05-20 / T13 forward distillation:** M3-Phase 3 pre-doc
+  input authored at `docs/notes/m3-phase-3/predoc-inputs.md`,
+  carrying forward Box intrinsic sizing, placeholder thumbnails,
+  spec-drafting, value-boundary, and verification constraints.
+- **2026-05-20 / T13 phase-end retrospective:** recorded at
+  `docs/notes/m3-phase-2/phase-end-retrospective.md`; T13's
+  step-end pointer recorded at
+  `docs/notes/m3-phase-2/t13-step-end-retrospective.md`.
+- **2026-05-20 / T13 progress lifecycle:** frontmatter moved
+  `active` → `closing` at T13 start, then `closing` → `retired`
+  after checklist flip confirmation. The file remains present for
+  owner review of the T13 flip; durable information has been
+  distilled into the ADR, spec, CHANGELOG, notes, and M3 plan
+  progress row.
 
 ## Out-of-phase residuals
 
