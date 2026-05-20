@@ -147,6 +147,22 @@ file が前者を書いていても後者が満たされていれば実装側の
 共通の `WASAMO_ERR_IR_MALFORMED` mapping」と明記する形で記録に残す
 (=task の文言を実装後に書き直す方が、現実の location を反映する)。
 
+ADR (`docs/decisions/m3-phase-2-box-layout.md`) も DD-M3-P2-001 /
+DD-M3-P2-002 / DD-M3-P2-003 の defense-in-depth 記述で
+`ir_loader::build_node` を明示的に指している。これは ADR への逸脱
+ではなく **public な IR load → materialise 境界の shorthand** として
+満たしている: `parse_ir()` が必ず `validate()` を通してから
+`build_node` に渡す現状の入口構造により、runtime-side
+defense-in-depth gate は consumer が `parse_ir → build_widget_tree`
+(あるいは C ABI `wasamo_load_ui`) を呼ぶ全 path で保持される。
+将来 `build_node` 相当を `validate()` 抜きで呼ぶ入口を新設する場合
+(例: 既に検証済みの IR 構造から直接 widget tree を組み立てる
+short-circuit path) は、その入口で同じ invariant を **再保証する
+責務がある** — `validate_phase2_node_invariants` を呼び出すか、
+構造的に invariant が破れない型で受けるか、いずれかの形で。この
+invariant 保証点は ADR の「`build_node` が reject する」言明を
+具体化する seam として明示しておく。
+
 副次的な学びとして、**lex 時の disambiguation は token-anchored で
 書いた方が後の grammar 拡張に強い**。Ratio の `<digits>:<digits>`
 disambiguation は wasamoc lexer と同じく digit-side anchor に置いた
