@@ -1,0 +1,247 @@
+---
+phase: M3-Phase 2
+title: Box layout primitive
+status: active
+adr: docs/decisions/m3-phase-2-box-layout.md
+plan: docs/plans/m3-plan.md
+opened: 2026-05-20
+---
+
+# M3-Phase 2 — Box layout primitive: Progress
+
+This is the live task list and execution log for M3-Phase 2. The
+design decisions are frozen in
+[m3-phase-2-box-layout.md](../../decisions/m3-phase-2-box-layout.md);
+this file is mutable per
+[plans/README.md §Phase progress file lifecycle](../README.md#phase-progress-file-lifecycle).
+
+Task ordering follows the dependency direction
+`wasamo-ir → wasamoc → wasamo-runtime → tests → host/spec`, so each
+commit builds on a green workspace per
+[CLAUDE.md §Commit rules](../../../CLAUDE.md). Items may be split,
+reordered, or merged when implementation reveals a tighter ordering
+— this list is the record of what actually happens, not a frozen
+prediction.
+
+The four pieces of A6 evidence the phase closes against are
+enumerated in
+[m3-phase-2-box-layout.md §Phase 2 verification closure](../../decisions/m3-phase-2-box-layout.md#phase-2-verification-closure-what-counts-as-a6-evidence).
+Each T below cites the evidence item it discharges.
+
+## Task list
+
+### T1 — `wasamo-ir`: add `Ratio` and `Color` literal variants
+
+Discharges the IR-layer halves of DD-M3-P2-002 and DD-M3-P2-003.
+
+- [ ] `IrLiteral::Ratio { num: i32, den: i32 }` variant added;
+      every existing `match` on `IrLiteral` gains a `Ratio` arm.
+- [ ] `IrLiteral::Color(u32)` variant added; arm coverage as above.
+- [ ] **No** `IrType::Ratio` / `IrType::Color` added; **no** new
+      `HandlerExpr` variant (per DD-M3-P2-004).
+- [ ] Pure-logic unit tests covering construction and equality of
+      both variants.
+
+### T2 — `wasamoc` lexer / parser: `RatioLit` and `ColorLit` tokens, AST variants
+
+Discharges the surface-syntax halves of DD-M3-P2-002 and DD-M3-P2-003.
+
+- [ ] Lexer recognises `<num>:<den>` as a `RatioLit` token (surface
+      form per DD-M3-P2-002 Option A), with lookahead / contextual
+      disambiguation against a stray integer-then-colon appropriate
+      to the existing lexer structure.
+- [ ] Lexer recognises `#` followed by 6 or 8 hex digits as a
+      `ColorLit` token (per DD-M3-P2-003 Option A).
+- [ ] `Expr::RatioLit { num: i32, den: i32 }` and
+      `Expr::ColorLit { value: u32 }` AST variants added in
+      `wasamoc/src/ast.rs`.
+- [ ] Parser produces these AST nodes in `property_bind` RHS
+      position.
+- [ ] Unit tests covering the accept shapes from
+      [dsl_spec §4.9](../../dsl_spec.md#49-box-layout-primitive-m3-phase-2).
+
+### T3 — `wasamoc check`: validity and reject set
+
+Discharges DD-M3-P2-001 (multi-child reject), DD-M3-P2-004 (bind reject
+for `aspect` / `fill`), and the value-validity portion of DD-M3-P2-005.
+
+- [ ] Reject zero on either side of ratio (per DD-M3-P2-005 aspect
+      value validity); diagnostic names the rejected side.
+- [ ] Reject `bind aspect:` and `bind fill:` (per DD-M3-P2-004);
+      diagnostic names the rejected attribute.
+- [ ] Reject 2+ children on Box (per DD-M3-P2-001 multi-child);
+      diagnostic recommends `VStack` / `HStack` / `ZStack` (Phase 6
+      forward-pointer).
+- [ ] Widget property catalog extended for Box (`aspect: Ratio`,
+      `fill: Color` — Box-internal types, not new `IrType` entries)
+      so the checker can name the attribute types in diagnostics.
+- [ ] Unit tests cover each row of the reject set + each accept
+      shape from the ADR.
+
+### T4 — `wasamoc` lowering: AST → IR
+
+- [ ] `Expr::RatioLit` → `IrLiteral::Ratio { num, den }`.
+- [ ] `Expr::ColorLit` → `IrLiteral::Color(u32)`; packed `u32`
+      layout per
+      [dsl_spec §8.2](../../dsl_spec.md#82-notation) `COLOR` token.
+- [ ] Unit tests assert lowering of representative `Box { ... }`
+      forms.
+
+### T5 — `wasamoc` IR text emit
+
+Discharges the IR-text-spelling halves of DD-M3-P2-002 and DD-M3-P2-003.
+
+- [ ] Emitter writes ratio and color literals in the surface forms
+      (`<num>:<den>`, `#RRGGBB` / `#RRGGBBAA`) in `prop` literal
+      position.
+- [ ] IR text emit covers the Box widget node shape:
+      `node Box { prop aspect = 16:9; prop fill = #cccccc; node Text { ... } }`.
+- [ ] In-process roundtrip-shaped test in `wasamoc::emit` (ADR
+      §Phase 2 verification closure item 2).
+
+### T6 — `wasamo-runtime` widget catalog: Box
+
+Discharges DD-M3-P2-001 (IR node shape / per-kind tag).
+
+- [ ] `WidgetKind::Box` variant added; every existing `match` on
+      `WidgetKind` gains a `Box` arm.
+- [ ] `WidgetData::Box { aspect: Option<Ratio>, fill: Option<Color>,
+      child: Option<Box<WidgetNode>> }` (or layout-equivalent shape).
+- [ ] `WidgetNode::box_` (or equivalent constructor) with default
+      `aspect: None, fill: None, child: None`.
+- [ ] Internal `Ratio` and `Color` domain types declared inside
+      `wasamo-runtime`; visibility minimal (not `pub` beyond what
+      tests require).
+
+### T7 — `wasamo-runtime` IR loader: parse new literal terminals and Box widget
+
+- [ ] IR text loader (`wasamo-runtime/src/ir_loader.rs`) accepts
+      `RATIO` and `COLOR` terminals in `literal` position.
+- [ ] `ir_loader::build_node` materialises ratio / color literals
+      for Box `aspect` / `fill` directly into Box-internal `Ratio`
+      / `Color` (not via `PropertyValue`), per DD-M3-P2-002 /
+      DD-M3-P2-003 variant strategy Option A.
+- [ ] `ir_loader::build_node` rejects ratio / color literals
+      appearing outside Box `aspect` / Box `fill` with
+      `WASAMO_ERR_IR_MALFORMED` (defense-in-depth for the
+      "not via `PropertyValue`" boundary).
+- [ ] `ir_loader::build_node` rejects a Box IR node with
+      `len(children) > 1` with `WASAMO_ERR_IR_MALFORMED` (defense-
+      in-depth for DD-M3-P2-001 against IR not produced by
+      `wasamoc`, e.g. via `wasamo_load_ui`).
+- [ ] **No** new `PropertyValue` variant, **no** new
+      `WASAMO_VALUE_*` tag, **no** new `abi.rs` arms (per
+      DD-M3-P2-002 / DD-M3-P2-003 / DD-M3-P2-004).
+
+### T8 — `wasamo-runtime` layout: aspect measure-arrange
+
+Discharges DD-M3-P2-005 and the child-layout portion of DD-M3-P2-001.
+
+- [ ] Bounded inscribed-fit branch selection per the DD-M3-P2-005
+      numeric / rounding contract.
+- [ ] Unbounded-on-one-axis: bounded-axis-wins.
+- [ ] Unbounded-on-both-axes (aspect set, or no-aspect Box with
+      no bounded extent): layout-time runtime error.
+- [ ] No-aspect bounded Box: matches parent bounds when empty;
+      shrink-to-fit child intrinsic measure when child present.
+- [ ] Single child: measured against Box bounds, centred, clipped
+      on overflow (per DD-M3-P2-001 child measure / alignment /
+      overflow).
+- [ ] Zero-child Box still produces a sized rectangle (filled with
+      `fill`, or transparent when absent).
+
+### T9 — Pure-logic unit tests (ADR §Phase 2 verification closure item 1)
+
+- [ ] Ratio literal: accept shapes; zero side rejected at check.
+- [ ] Color literal: `#RRGGBB` / `#RRGGBBAA` accept; malformed
+      forms rejected at lex / parse.
+- [ ] Aspect measure-arrange resolver: each DD-M3-P2-005 case
+      enumerated in T8.
+- [ ] `wasamoc check` diagnostics: `bind aspect:`, `bind fill:`,
+      2+ children rejected (per DD-M3-P2-001 / DD-M3-P2-004).
+
+### T10 — IR text round-trip evidence (ADR §Phase 2 verification closure item 2)
+
+- [ ] Round-trip fixture:
+      `Box { aspect: 16:9; fill: #00000080; Text { text: "Photo 12" } }`.
+- [ ] Emit side: Box node carries
+      `IrLiteral::Ratio { num: 16, den: 9 }` and
+      `IrLiteral::Color(<packed>)`.
+- [ ] Load side: after `ir_loader::build_node`, runtime state is
+      `WidgetData::Box { aspect: Some(Ratio { 16, 9 }),
+      fill: Some(Color(<packed>)), .. }` — `IrLiteral::*` do not
+      survive into runtime state (per DD-M3-P2-002 / DD-M3-P2-003).
+- [ ] `ir_loader` rejection of 2+ children also exercised here.
+
+### T11 — Windows-runtime layout integration test (ADR §Phase 2 verification closure item 3, CI-gated)
+
+- [ ] Mock-free Windows-only integration test under
+      `wasamo-runtime/tests/`: aspect-fixed Box with Text child
+      inside a parent of known size; asserts inscribed-fit
+      resolved rectangle and child centred.
+- [ ] `fill` verified via a Box-internal / test-only accessor or
+      via the render model (`SpriteVisual` brush), not via
+      `wasamo_get_property` (per DD-M3-P2-003 variant strategy).
+- [ ] Skip-guard matches Phase 1 T6 / T13: fail (not skip) on CI
+      when Compositor unavailable, per
+      [CLAUDE.md §Testing rules](../../../CLAUDE.md).
+
+### T12 — Seed `examples/gallery/` + `examples/gallery-rust/` (ADR §Phase 2 verification closure item 4)
+
+- [ ] `examples/gallery/` with a Phase 2 sub-screen (Box + Text
+      placeholder against a trivial frame). Later M3 phases grow
+      this directory sub-screen by sub-screen.
+- [ ] `examples/gallery-rust/` workspace-member host (mirrors the
+      `examples/bool-demo-rust/` build pipeline from Phase 1).
+- [ ] `Start-Process` launch recorded as successful; visual
+      correctness is owner-manual GUI smoke (per pre-doc framing
+      decision G).
+- [ ] C / Zig hosts not required in Phase 2 (per framing decision F
+      and the ADR Out-of-scope list).
+
+### T13 — Phase-end gates
+
+Discharges the m3-plan §Phase-end criteria checklist for Phase 2.
+
+- [ ] `cargo fmt --all -- --check` green (per
+      [retrospectives.md item 3 amendment](../../notes/retrospectives.md)
+      landed in Moment 1).
+- [ ] `cargo build --release --workspace` and `cargo test
+      --workspace` green locally and on CI (`workflow_dispatch`).
+- [ ] Windows-only integration test (T11) green on CI (fail, not
+      skip, if Compositor missing).
+- [ ] Moment 2 spec re-sync: flip
+      [dsl_spec.md §4.9](../../dsl_spec.md#49-box-layout-primitive-m3-phase-2)
+      Phase status marker to
+      `**Phase status:** M3-Phase 2 closed; implementation-synced`,
+      correcting any draft / impl divergence in the same commit.
+      Earlier-phase spec gaps may fold per
+      [predoc-inputs.md §6](../../notes/m3-phase-2/predoc-inputs.md#6-retroactive-spec-gap-fold-は最小範囲で同じ-phase-に折り込む)
+      with explicit owner confirmation.
+- [ ] Forward-distillation note for M3-Phase 3 authored within
+      this phase's close (per
+      [retrospectives.md forward-carry rule](../../notes/retrospectives.md)):
+      `docs/notes/m3-phase-3/predoc-inputs.md` (or phase-named
+      pre-doc candidate file).
+- [ ] Phase-end retrospective entry in
+      `docs/notes/m3-phase-2/phase-end-retrospective.md`.
+- [ ] Progress file lifecycle: `status: active` → `status: closing`
+      → retired (per
+      [plans/README.md §Phase progress file lifecycle](../README.md#phase-progress-file-lifecycle)).
+
+## Decisions log
+
+(empty — record here mid-phase decisions that deviate from the ADR
+or refine its task slicing; see Phase 1's progress file for the
+shape.)
+
+## CI / verification log
+
+(empty — record `cargo` runs, `workflow_dispatch` CI runs, and
+GUI-smoke launches here as they happen.)
+
+## Out-of-phase residuals
+
+(empty — record here anything discovered during execution that is
+out of Phase 2 scope, and file a `docs/notes/m3/` entry pointing
+back to it per the m3-plan §Phase-end criteria.)
