@@ -290,18 +290,23 @@ impl WidgetNode {
         }))
     }
 
-    // M3-Phase 2 T6: Box constructor. Aspect / fill default to `None`; the
-    // (at most one) child is appended via the existing tree-mutation API,
-    // matching every other widget. The aspect-driven measure-arrange and
-    // fill-painting paths land in T8 / T11 — this constructor only stands
-    // up the data slot and a SpriteVisual.
-    pub fn box_(compositor: &Compositor) -> windows::core::Result<Box<Self>> {
+    // M3-Phase 2 T6 / T7: Box constructor. The (at most one) child is
+    // appended via the existing tree-mutation API, matching every other
+    // widget. `aspect` / `fill` are populated by `ir_loader::build_node`
+    // from `IrLiteral::Ratio` / `IrLiteral::Color` (T7) — they are
+    // Box-internal domain types (DD-M3-P2-002 / DD-M3-P2-003 Option A)
+    // and never travel as `PropertyValue`. The aspect-driven inscribed-
+    // fit measure-arrange and the fill → `SpriteVisual` brush wiring
+    // land in T8 / T11; this constructor only stands up the data slot
+    // and a bare SpriteVisual.
+    pub(crate) fn box_(
+        compositor: &Compositor,
+        aspect: Option<box_values::Ratio>,
+        fill: Option<box_values::Color>,
+    ) -> windows::core::Result<Box<Self>> {
         let visual = compositor.CreateSpriteVisual()?;
         Ok(Box::new(Self {
-            data: WidgetData::Box {
-                aspect: None,
-                fill: None,
-            },
+            data: WidgetData::Box { aspect, fill },
             width: SizeConstraint::Fill,
             height: SizeConstraint::Fill,
             visual,
