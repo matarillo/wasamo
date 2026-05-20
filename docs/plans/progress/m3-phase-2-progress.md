@@ -137,15 +137,26 @@ Color literals (M3-Phase 2 T5)`. Step-end retrospective recorded in
 
 Discharges DD-M3-P2-001 (IR node shape / per-kind tag).
 
-- [ ] `WidgetKind::Box` variant added; every existing `match` on
+- [x] `WidgetKind::Box` variant added; every existing `match` on
       `WidgetKind` gains a `Box` arm.
-- [ ] `WidgetData::Box { aspect: Option<Ratio>, fill: Option<Color>,
+- [x] `WidgetData::Box { aspect: Option<Ratio>, fill: Option<Color>,
       child: Option<Box<WidgetNode>> }` (or layout-equivalent shape).
-- [ ] `WidgetNode::box_` (or equivalent constructor) with default
+      Layout-equivalent shape taken: child lives on
+      `WidgetNode.children: Vec<Box<WidgetNode>>` per the existing
+      per-widget convention; single-child invariant is enforced at
+      `wasamoc check` (T3) and `ir_loader::build_node` (T7) gates
+      rather than this data shape.
+- [x] `WidgetNode::box_` (or equivalent constructor) with default
       `aspect: None, fill: None, child: None`.
-- [ ] Internal `Ratio` and `Color` domain types declared inside
+- [x] Internal `Ratio` and `Color` domain types declared inside
       `wasamo-runtime`; visibility minimal (not `pub` beyond what
-      tests require).
+      tests require). Declared `pub(crate)` in a private
+      `wasamo-runtime/src/box_values.rs` module to avoid the
+      `windows::UI::Color` name collision inside `widget.rs`.
+
+Closed by commit `b4dff5d feat(wasamo-runtime): add Box widget
+catalog (M3-Phase 2 T6)`. Step-end retrospective recorded in
+[../../notes/m3-phase-2/t6-step-end-retrospective.md](../../notes/m3-phase-2/t6-step-end-retrospective.md).
 
 ### T7 — `wasamo-runtime` IR loader: parse new literal terminals and Box widget
 
