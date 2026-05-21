@@ -406,6 +406,10 @@ WidgetNode tree  (owns SpriteVisuals + child WidgetNodes)
   └── sync_visuals()  →  Visual.SetOffset / Visual.SetSize on each SpriteVisual
 ```
 
+`LayoutNode` offsets are absolute (root-relative); `sync_visuals()`
+converts each child offset to parent-relative `Visual.Offset` before
+writing the Composition visual tree.
+
 The `LayoutNode` tree is rebuilt on each layout pass (O(n)).
 No persistent layout cache exists in M1.
 
