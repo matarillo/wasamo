@@ -81,22 +81,14 @@ pub struct LayoutNode {
     /// `item-cross-size: <i32>`; uniform per-line cross-axis size for
     /// every item. `None` on every other kind and on WrapPanel without
     /// the attribute (parent-cross passthrough per Option (a)).
-    /// `#[allow(dead_code)]` carries until T7's `measure_wrap_panel` /
-    /// `arrange_wrap_panel` read this field (Phase 2 T6 used the same
-    /// forward-pointer pattern on `aspect` until T8).
-    #[allow(dead_code)]
     pub item_cross_size: Option<f32>,
     /// DD-M3-P3-003: WrapPanel-only gap (main-axis) between adjacent
     /// items on the same line. `0.0` on every other kind and on
     /// WrapPanel without `item-spacing` set (touching items).
-    /// `#[allow(dead_code)]` carries until T7.
-    #[allow(dead_code)]
     pub item_spacing: f32,
     /// DD-M3-P3-003: WrapPanel-only gap (cross-axis) between adjacent
     /// lines. `0.0` on every other kind and on WrapPanel without
     /// `line-spacing` set (touching lines).
-    /// `#[allow(dead_code)]` carries until T7.
-    #[allow(dead_code)]
     pub line_spacing: f32,
     pub children: Vec<LayoutNode>,
     // Written by arrange():
@@ -222,18 +214,181 @@ pub fn measure(node: &LayoutNode, avail_w: f32, avail_h: f32) -> Result<(f32, f3
     }
 }
 
-// M3-Phase 3 T5 boundary placeholder. The DD-M3-P3-005 bounded /
-// unbounded main-axis line-breaker lands in T7; until then the
-// dispatch arm exists so the catalog wiring (variant + constructor +
-// `build_layout_tree` arm) builds, but the WrapPanel reports `(0, 0)`
-// extent and contributes no line geometry. Tests that exercise the
-// actual line-breaker arrive in T7 alongside the real implementation.
+// M3-Phase 3 T7 DD-M3-P3-005 measure: greedy line-breaker against an
+// unbounded main-axis child constraint (DD-M3-P3-001) and a
+// DD-M3-P3-004-defined per-child cross-axis input. Returns the
+// WrapPanel's outer (main, cross) extent:
+//
+// - **Outer cross** = sum of per-line cross extents + `line_spacing ×
+//   (line_count − 1)` (DD-M3-P3-005 step 3; no trailing margin after
+//   the last line, mirroring HStack/VStack `spacing` semantics).
+// - **Outer main, bounded parent** = `avail_w` unconditionally
+//   (DD-M3-P3-005 step 4 — WrapPanel does not grow to accommodate
+//   oversized first-children; the spec'd visible-overflow rule paints
+//   past this rectangle). The `width` constraint resolves at
+//   `resolve_axis` time: `Fill` returns `0.0` here (HStack/VStack
+//   convention — "take what the parent allocates"); `Fixed(v)` returns
+//   `v`; `Shrink` returns the max per-line main extent (oversized
+//   first-child extents *do* dominate the Shrink return so a
+//   `Shrink`-width WrapPanel reports the actual content extent up to
+//   its parent rather than masking the oversized child).
+// - **Outer main, unbounded parent** = max per-line main extent
+//   (DD-M3-P3-005 unbounded-main Option A: one-line flow — the line
+//   breaker degenerates to all-children-on-one-line; the cumulative
+//   intrinsic surfaces as the WrapPanel's main extent).
+//
+// `LayoutError` propagates from per-child measure — DD-M3-P3-005
+// unbounded-cross Option A lets Phase 2's
+// `LayoutError::BoxAspectUnboundedBoth` fire with the Box's IR
+// location when an aspect-only child is measured against unbounded
+// cross (no `item-cross-size` set, parent cross also unbounded).
 fn measure_wrap_panel(
-    _node: &LayoutNode,
-    _avail_w: f32,
-    _avail_h: f32,
+    node: &LayoutNode,
+    avail_w: f32,
+    avail_h: f32,
 ) -> Result<(f32, f32), LayoutError> {
-    Ok((0.0, 0.0))
+    let lines = compute_wrap_lines(node, avail_w, avail_h)?;
+    let line_count = lines.len();
+    let cross_sum: f32 = lines.iter().map(|l| l.cross_extent).sum();
+    let line_spacing_total = if line_count > 1 {
+        node.line_spacing * (line_count as f32 - 1.0)
+    } else {
+        0.0
+    };
+    let outer_cross = cross_sum + line_spacing_total;
+
+    let max_line_main = lines.iter().map(|l| l.main_extent).fold(0.0_f32, f32::max);
+
+    let outer_main = match &node.width {
+        SizeConstraint::Fixed(v) => *v,
+        SizeConstraint::Fill => {
+            if avail_w.is_finite() {
+                0.0
+            } else {
+                // Unbounded-main parent + Fill WrapPanel: report the
+                // one-line cumulative so a parent that resolves Fill
+                // against an unbounded available has a finite anchor
+                // (HStack/VStack pass `INFINITY` to children when
+                // they themselves sit on a Shrink axis).
+                max_line_main
+            }
+        }
+        SizeConstraint::Shrink => max_line_main,
+    };
+
+    Ok((outer_main, outer_cross))
+}
+
+/// Per-child slot inside a single WrapPanel line, with the (main, cross)
+/// extents the child measured to. `index` indexes back into
+/// `LayoutNode.children` so `arrange_wrap_panel` can mutate the child
+/// after the pure compute step.
+struct WrapChild {
+    index: usize,
+    main_size: f32,
+    cross_size: f32,
+}
+
+/// A single WrapPanel line: the children placed on it, the recorded
+/// main-axis extent (sum of child main sizes + `item_spacing` between
+/// adjacent siblings, with the first-child unconditional placement
+/// from DD-M3-P3-005 admitted as the only way a line's `main_extent`
+/// can exceed `parent_main_bound`), and the cross-axis extent (uniform
+/// `item_cross_size` when set per DD-M3-P3-004; max of children's
+/// reported cross sizes otherwise).
+struct WrapLine {
+    children: Vec<WrapChild>,
+    main_extent: f32,
+    cross_extent: f32,
+}
+
+/// Pure, mock-free line breaker shared by `measure_wrap_panel` and
+/// `arrange_wrap_panel` (free-function extraction per
+/// [CLAUDE.md §Testing rules]). Measures every child once against the
+/// DD-M3-P3-001 unbounded-main + DD-M3-P3-004 cross constraint, then
+/// applies the DD-M3-P3-005 greedy line breaker:
+///
+/// - **First child of any line** is placed *unconditionally* (the
+///   `line_empty == true` carve-out): even when its intrinsic main
+///   extent exceeds `parent_main_bound`, it occupies the line on its
+///   own and the line's recorded `main_extent` may exceed the bound.
+/// - **Subsequent children** are placed iff
+///   `current_line_main + item_spacing + next_child_main <=
+///    parent_main_bound` (the spacing-aware inequality of DD-M3-P3-001
+///   /  DD-M3-P3-005 step 1); failure starts a new line where the
+///   unconditional rule applies again to the same candidate.
+/// - **Unbounded main-axis** parents skip the inequality entirely so
+///   the line breaker degenerates to one-line flow
+///   (DD-M3-P3-005 unbounded-main Option A).
+fn compute_wrap_lines(
+    node: &LayoutNode,
+    main_bound: f32,
+    cross_bound: f32,
+) -> Result<Vec<WrapLine>, LayoutError> {
+    let child_cross_input = node.item_cross_size.unwrap_or(cross_bound);
+
+    let measured: Vec<(f32, f32)> = node
+        .children
+        .iter()
+        .map(|c| measure(c, f32::INFINITY, child_cross_input))
+        .collect::<Result<Vec<_>, _>>()?;
+
+    let main_bounded = main_bound.is_finite();
+    let mut lines: Vec<WrapLine> = Vec::new();
+    let mut current = WrapLine {
+        children: Vec::new(),
+        main_extent: 0.0,
+        cross_extent: 0.0,
+    };
+
+    for (idx, (cm, cc)) in measured.into_iter().enumerate() {
+        let line_empty = current.children.is_empty();
+        let fits = if line_empty || !main_bounded {
+            true
+        } else {
+            current.main_extent + node.item_spacing + cm <= main_bound
+        };
+
+        if !fits {
+            lines.push(std::mem::replace(
+                &mut current,
+                WrapLine {
+                    children: Vec::new(),
+                    main_extent: 0.0,
+                    cross_extent: 0.0,
+                },
+            ));
+        }
+
+        let new_main = if current.children.is_empty() {
+            cm
+        } else {
+            current.main_extent + node.item_spacing + cm
+        };
+        current.children.push(WrapChild {
+            index: idx,
+            main_size: cm,
+            cross_size: cc,
+        });
+        current.main_extent = new_main;
+    }
+
+    if !current.children.is_empty() {
+        lines.push(current);
+    }
+
+    for line in lines.iter_mut() {
+        line.cross_extent = if let Some(ics) = node.item_cross_size {
+            ics
+        } else {
+            line.children
+                .iter()
+                .map(|c| c.cross_size)
+                .fold(0.0_f32, f32::max)
+        };
+    }
+
+    Ok(lines)
 }
 
 fn measure_leaf(node: &LayoutNode) -> (f32, f32) {
@@ -426,18 +581,75 @@ pub fn arrange(node: &mut LayoutNode, x: f32, y: f32, w: f32, h: f32) -> Result<
             arrange_hstack(&mut node.children, x, y, w, h, padding, spacing, alignment)
         }
         WidgetKind::Box => arrange_box(node, x, y, w, h),
-        WidgetKind::WrapPanel => {
-            // M3-Phase 3 T5 boundary placeholder. The DD-M3-P3-005 line
-            // arrangement (per-line cross-axis stacking + spacing-aware
-            // main-axis flow + unconditional first-child placement) is
-            // T7's responsibility. For now we record the parent-allocated
-            // cell as the WrapPanel's outer rectangle and leave children
-            // un-arranged; T7 replaces this arm with the real arrange.
-            node.offset = (x, y);
-            node.size = (w, h);
-            Ok(())
+        WidgetKind::WrapPanel => arrange_wrap_panel(node, x, y, w, h),
+    }
+}
+
+// M3-Phase 3 T7 DD-M3-P3-005 arrange: re-run the line breaker against
+// the parent-allocated cell, then place each child within its line.
+//
+// - WrapPanel's outer rectangle is recorded as the parent-allocated
+//   `(w, h)` (DD-M3-P3-005 step 4: outer main equals parent main
+//   bound unconditionally; outer cross equals what the parent
+//   allocated, which during the typical measure→arrange flow equals
+//   the per-line-extent sum computed at measure time).
+// - Children flow left-to-right per line; the first child of any line
+//   is placed at `cur_main = x` regardless of its intrinsic main
+//   extent. Subsequent siblings advance by `item_spacing` then their
+//   own main size, with no trailing margin after the last child.
+// - **Visible overflow** of an oversized first child surfaces as
+//   `child.offset.0 + child.size.0 > node.offset.0 + node.size.0`
+//   (horizontal main axis) — the spec'd
+//   "child paints past the WrapPanel rectangle" outcome, which
+//   downstream parents (Phase 4 ScrollView) clip via their own clip
+//   surface; WrapPanel itself installs no clip (visual-layer
+//   responsibility, not layout-engine concern).
+// - Each child's cross-axis position is centred within the line
+//   (DD-M3-P3-001 cross-axis alignment Option A); smaller children
+//   sit centred inside `line.cross_extent`, larger children overflow
+//   above and below their line (visible per Phase 2 Box overflow
+//   convention; no clip installed here).
+fn arrange_wrap_panel(
+    node: &mut LayoutNode,
+    x: f32,
+    y: f32,
+    w: f32,
+    h: f32,
+) -> Result<(), LayoutError> {
+    node.offset = (x, y);
+    node.size = (w, h);
+
+    let lines = compute_wrap_lines(node, w, h)?;
+    let item_spacing = node.item_spacing;
+    let line_spacing = node.line_spacing;
+    let line_count = lines.len();
+
+    let mut cur_cross = y;
+    for (li, line) in lines.iter().enumerate() {
+        let mut cur_main = x;
+        let n = line.children.len();
+        for (i, wc) in line.children.iter().enumerate() {
+            let child_cross_offset = cur_cross + (line.cross_extent - wc.cross_size) / 2.0;
+            let child = &mut node.children[wc.index];
+            arrange(
+                child,
+                cur_main,
+                child_cross_offset,
+                wc.main_size,
+                wc.cross_size,
+            )?;
+            cur_main += wc.main_size;
+            if i < n - 1 {
+                cur_main += item_spacing;
+            }
+        }
+        cur_cross += line.cross_extent;
+        if li < line_count - 1 {
+            cur_cross += line_spacing;
         }
     }
+
+    Ok(())
 }
 
 // DD-M3-P2-005 arrange: re-derive the Box's resolved rectangle from the
@@ -945,5 +1157,266 @@ mod tests {
         // 4:3 in 600×400: 600*3 = 1800 ≤ 400*4 = 1600? 1800 > 1600 → height-branch.
         // height-constrained → (400*4/3, 400) ≈ (533.33, 400)
         assert_eq!(root.size, (400.0 * 4.0 / 3.0, 400.0));
+    }
+
+    // ── M3-Phase 3 T7: WrapPanel line-breaker and arrange (DD-M3-P3-005) ───
+
+    fn wrap_panel_with_boxes(
+        ics: Option<f32>,
+        item_spacing: f32,
+        line_spacing: f32,
+        boxes: &[(i32, i32)],
+    ) -> LayoutNode {
+        let mut wp = LayoutNode::wrap_panel(ics, item_spacing, line_spacing);
+        for &(num, den) in boxes {
+            wp.children.push(LayoutNode::box_(Some(Ratio { num, den })));
+        }
+        wp
+    }
+
+    #[test]
+    fn wrap_panel_zero_children_measures_zero() {
+        // DD-M3-P3-001 0-child shape: line set is empty, cross extent is 0.
+        let wp = LayoutNode::wrap_panel(Some(88.0), 12.0, 12.0);
+        let (_, h) = measure(&wp, 800.0, f32::INFINITY).unwrap();
+        assert_eq!(h, 0.0);
+    }
+
+    #[test]
+    fn wrap_panel_bounded_single_line_no_wrap() {
+        // Three 1:1 Boxes at 50×50 inside a 200-wide WrapPanel with
+        // item_spacing=10: 50 + 10 + 50 + 10 + 50 = 170 ≤ 200 → all fit
+        // on one line. Cross extent = 50 (uniform per DD-004 Option A).
+        let mut wp = wrap_panel_with_boxes(Some(50.0), 10.0, 8.0, &[(1, 1), (1, 1), (1, 1)]);
+        run_layout(&mut wp, 200.0, 200.0).unwrap();
+        assert_eq!(wp.size, (200.0, 50.0));
+        assert_eq!(wp.children[0].offset, (0.0, 0.0));
+        assert_eq!(wp.children[1].offset, (60.0, 0.0)); // 50 + 10
+        assert_eq!(wp.children[2].offset, (120.0, 0.0)); // 50 + 10 + 50 + 10
+        assert_eq!(wp.children[0].size, (50.0, 50.0));
+    }
+
+    #[test]
+    fn wrap_panel_bounded_multi_line_wraps() {
+        // 130-wide parent, three 50×50 Boxes, item_spacing=10, line_spacing=8.
+        // Line 1: child0(50), child1(50+10+50=110) — child2 would be
+        // 110+10+50=170 > 130 → new line. Line 2: child2(50).
+        // Outer: main=130, cross=50+50+8=108.
+        let mut wp = wrap_panel_with_boxes(Some(50.0), 10.0, 8.0, &[(1, 1), (1, 1), (1, 1)]);
+        run_layout(&mut wp, 130.0, 300.0).unwrap();
+        assert_eq!(wp.size, (130.0, 108.0));
+        assert_eq!(wp.children[0].offset, (0.0, 0.0));
+        assert_eq!(wp.children[1].offset, (60.0, 0.0));
+        assert_eq!(wp.children[2].offset, (0.0, 58.0)); // 50 + 8
+    }
+
+    #[test]
+    fn wrap_panel_spacing_aware_inequality_uses_less_equal() {
+        // 110-wide parent, two 50×50 Boxes, item_spacing=10:
+        // 50 + 10 + 50 = 110 == 110 → fits per `<=` (DD-001 / DD-005).
+        let mut wp = wrap_panel_with_boxes(Some(50.0), 10.0, 0.0, &[(1, 1), (1, 1)]);
+        run_layout(&mut wp, 110.0, 200.0).unwrap();
+        assert_eq!(wp.size, (110.0, 50.0));
+        assert_eq!(wp.children[0].offset, (0.0, 0.0));
+        assert_eq!(wp.children[1].offset, (60.0, 0.0));
+    }
+
+    #[test]
+    fn wrap_panel_no_trailing_item_spacing() {
+        // 200-wide parent, two 50×50 Boxes, item_spacing=20.
+        // Cumulative content extent is 50+20+50=120; the WrapPanel's
+        // outer main equals parent main bound (200), not 120 — that's
+        // a Fill-width convention. The check here is that the second
+        // child does *not* have trailing item_spacing accruing past it
+        // (line_main == 120, not 140).
+        let mut wp = wrap_panel_with_boxes(Some(50.0), 20.0, 0.0, &[(1, 1), (1, 1)]);
+        run_layout(&mut wp, 200.0, 200.0).unwrap();
+        assert_eq!(wp.size, (200.0, 50.0));
+        // Children sit flush-left; no trailing margin would shift child[1]
+        // outside the expected (50 + 20) = 70 offset.
+        assert_eq!(wp.children[1].offset.0, 70.0);
+    }
+
+    #[test]
+    fn wrap_panel_unbounded_main_axis_one_line_flow() {
+        // DD-M3-P3-005 unbounded-main Option A: parent gives INFINITY
+        // main; the line breaker degenerates to all-children-on-one-line.
+        // Three 50×50 Boxes, item_spacing=10 → one line, cumulative
+        // main = 50+10+50+10+50 = 170.
+        let wp = wrap_panel_with_boxes(Some(50.0), 10.0, 0.0, &[(1, 1), (1, 1), (1, 1)]);
+        let (main, cross) = measure(&wp, f32::INFINITY, 200.0).unwrap();
+        // Width=Fill on unbounded main reports the cumulative anchor.
+        assert_eq!(main, 170.0);
+        assert_eq!(cross, 50.0);
+    }
+
+    #[test]
+    fn wrap_panel_oversized_first_child_placed_unconditionally() {
+        // Box(aspect=4:1) with item_cross_size=50 → measured (200, 50).
+        // Parent main bound = 100; the oversized first child is placed
+        // anyway (DD-M3-P3-005 oversized-first-child Option A).
+        let mut wp = wrap_panel_with_boxes(Some(50.0), 0.0, 0.0, &[(4, 1)]);
+        run_layout(&mut wp, 100.0, 100.0).unwrap();
+        // WrapPanel outer main stays at parent_main_bound (= 100); the
+        // oversized line does NOT grow the WrapPanel rectangle.
+        assert_eq!(wp.size, (100.0, 50.0));
+        // The child paints at its measured extent — width 200, x = 0.
+        assert_eq!(wp.children[0].size, (200.0, 50.0));
+        assert_eq!(wp.children[0].offset, (0.0, 0.0));
+    }
+
+    #[test]
+    fn wrap_panel_arrange_visible_overflow_for_oversized_child() {
+        // Same fixture as above — the arrange-pass observable form of
+        // "child paints past the WrapPanel rectangle" is
+        // child.offset.0 + child.size.0 > wp.offset.0 + wp.size.0.
+        // ADR verification closure evidence item 2 (oversized-first-child
+        // arrange evidence).
+        let mut wp = wrap_panel_with_boxes(Some(50.0), 0.0, 0.0, &[(4, 1)]);
+        run_layout(&mut wp, 100.0, 100.0).unwrap();
+        let child_main_end = wp.children[0].offset.0 + wp.children[0].size.0;
+        let wp_main_end = wp.offset.0 + wp.size.0;
+        assert!(
+            child_main_end > wp_main_end,
+            "expected visible overflow: child end {} should exceed WrapPanel end {}",
+            child_main_end,
+            wp_main_end
+        );
+    }
+
+    #[test]
+    fn wrap_panel_oversized_first_child_then_normal_children() {
+        // Oversized child closes a line on its own; subsequent children
+        // start a new line where the unconditional-placement rule
+        // re-applies. Parent main=100, item_spacing=0:
+        //   child0(4:1 → 200 wide) on line 0 (oversized)
+        //   child1(1:1 → 50 wide), child2(1:1 → 50 wide) on line 1
+        //     (50+0+50 = 100 ≤ 100 fits)
+        let mut wp = wrap_panel_with_boxes(Some(50.0), 0.0, 0.0, &[(4, 1), (1, 1), (1, 1)]);
+        run_layout(&mut wp, 100.0, 200.0).unwrap();
+        // 2 lines × 50 cross + 0 line-spacing = 100 cross
+        assert_eq!(wp.size, (100.0, 100.0));
+        assert_eq!(wp.children[0].offset, (0.0, 0.0));
+        assert_eq!(wp.children[1].offset, (0.0, 50.0));
+        assert_eq!(wp.children[2].offset, (50.0, 50.0));
+    }
+
+    #[test]
+    fn wrap_panel_cross_axis_uniform_when_item_cross_size_set() {
+        // item_cross_size=50; Box aspect 1:1 → child cross == 50.
+        // Line cross extent equals item_cross_size uniformly per
+        // DD-M3-P3-004 per-line sizing Option A.
+        let mut wp = wrap_panel_with_boxes(Some(50.0), 0.0, 10.0, &[(1, 1), (1, 1), (1, 1)]);
+        run_layout(&mut wp, 100.0, 300.0).unwrap();
+        // 100 parent main: child0(50) + child1(50) = 100 fits, child2 wraps.
+        // Lines: 2; cross = 50 + 10 + 50 = 110.
+        assert_eq!(wp.size, (100.0, 110.0));
+    }
+
+    #[test]
+    fn wrap_panel_cross_axis_max_of_children_when_item_cross_size_unset() {
+        // No item_cross_size; each child measured with parent cross
+        // (200 here). Use plain Rectangles (no aspect) so children have
+        // independent intrinsic cross sizes.
+        let mut wp = LayoutNode::wrap_panel(None, 0.0, 0.0);
+        wp.children.push(LayoutNode::rectangle(
+            SizeConstraint::Fixed(40.0),
+            SizeConstraint::Fixed(30.0),
+        ));
+        wp.children.push(LayoutNode::rectangle(
+            SizeConstraint::Fixed(50.0),
+            SizeConstraint::Fixed(80.0),
+        ));
+        run_layout(&mut wp, 200.0, 200.0).unwrap();
+        // Both fit on one line (40 + 50 = 90 ≤ 200).
+        // Line cross = max(30, 80) = 80.
+        assert_eq!(wp.size, (200.0, 80.0));
+    }
+
+    #[test]
+    fn wrap_panel_cross_axis_center_alignment_within_line() {
+        // item_cross_size=80; child cross=20 (Fixed rectangle). Centred
+        // within line: child y = 0 + (80 - 20) / 2 = 30.
+        let mut wp = LayoutNode::wrap_panel(Some(80.0), 0.0, 0.0);
+        wp.children.push(LayoutNode::rectangle(
+            SizeConstraint::Fixed(40.0),
+            SizeConstraint::Fixed(20.0),
+        ));
+        run_layout(&mut wp, 200.0, 200.0).unwrap();
+        assert_eq!(wp.size, (200.0, 80.0));
+        assert_eq!(wp.children[0].offset, (0.0, 30.0));
+        assert_eq!(wp.children[0].size, (40.0, 20.0));
+    }
+
+    #[test]
+    fn wrap_panel_zero_item_spacing_touching_items() {
+        // DD-M3-P3-006 zero-handling: item_spacing=0 is valid; items
+        // touch on the main axis.
+        let mut wp = wrap_panel_with_boxes(Some(40.0), 0.0, 0.0, &[(1, 1), (1, 1), (1, 1)]);
+        run_layout(&mut wp, 200.0, 200.0).unwrap();
+        assert_eq!(wp.children[0].offset.0, 0.0);
+        assert_eq!(wp.children[1].offset.0, 40.0);
+        assert_eq!(wp.children[2].offset.0, 80.0);
+    }
+
+    #[test]
+    fn wrap_panel_zero_line_spacing_touching_lines() {
+        // 80-wide parent forces a wrap; line_spacing=0 makes lines touch.
+        let mut wp = wrap_panel_with_boxes(Some(50.0), 0.0, 0.0, &[(1, 1), (1, 1)]);
+        run_layout(&mut wp, 80.0, 200.0).unwrap();
+        // 50 + 0 + 50 = 100 > 80 → wrap.
+        assert_eq!(wp.size, (80.0, 100.0)); // 50 + 0 + 50 = 100
+        assert_eq!(wp.children[0].offset, (0.0, 0.0));
+        assert_eq!(wp.children[1].offset, (0.0, 50.0));
+    }
+
+    #[test]
+    fn wrap_panel_zero_item_cross_size_degenerate_layout() {
+        // DD-M3-P3-006 author-requested degenerate: item_cross_size=0 →
+        // each line collapses to zero cross extent; line count still
+        // computed. Three Boxes, aspect 1:1, parent main=200, ics=0:
+        // children measured with (INF, 0) → bounded-axis-wins → (0, 0).
+        // All fit on one line (0 + 0 + 0 = 0 ≤ 200).
+        let mut wp = wrap_panel_with_boxes(Some(0.0), 0.0, 0.0, &[(1, 1), (1, 1), (1, 1)]);
+        run_layout(&mut wp, 200.0, 200.0).unwrap();
+        assert_eq!(wp.size, (200.0, 0.0));
+    }
+
+    #[test]
+    fn wrap_panel_unbounded_cross_with_aspect_child_propagates_box_error() {
+        // DD-M3-P3-005 unbounded-cross Option A: no `item-cross-size` on
+        // WrapPanel + parent cross unbounded → child Box(aspect) measured
+        // with (INF, INF) → Phase 2 `LayoutError::BoxAspectUnboundedBoth`.
+        // Drive directly via `measure` to keep the fixture small.
+        let wp = wrap_panel_with_boxes(None, 0.0, 0.0, &[(1, 1)]);
+        let err = measure(&wp, 200.0, f32::INFINITY).unwrap_err();
+        assert_eq!(err, LayoutError::BoxAspectUnboundedBoth);
+    }
+
+    #[test]
+    fn wrap_panel_gallery_subscreen_shape() {
+        // ADR verification closure evidence item 4 wrap-path fixture
+        // dimensions, exercised as a pure-data shape sanity:
+        //   item-cross-size: 88; item-spacing: 12; line-spacing: 12;
+        //   5 Boxes aspect 1:1; parent main 250.
+        // Per-line: 88 + 12 + 88 = 188; +12+88 = 288 > 250 → 2 per line.
+        // 5 children → 3 lines (2 + 2 + 1).
+        // outer: main=250, cross=88*3 + 12*2 = 264 + 24 = 288.
+        let mut wp = wrap_panel_with_boxes(
+            Some(88.0),
+            12.0,
+            12.0,
+            &[(1, 1), (1, 1), (1, 1), (1, 1), (1, 1)],
+        );
+        run_layout(&mut wp, 250.0, 600.0).unwrap();
+        assert_eq!(wp.size, (250.0, 288.0));
+        assert_eq!(wp.children[0].offset, (0.0, 0.0));
+        assert_eq!(wp.children[1].offset, (100.0, 0.0)); // 88 + 12
+        assert_eq!(wp.children[2].offset, (0.0, 100.0)); // 88 + 12
+        assert_eq!(wp.children[3].offset, (100.0, 100.0));
+        assert_eq!(wp.children[4].offset, (0.0, 200.0));
+        for c in &wp.children {
+            assert_eq!(c.size, (88.0, 88.0));
+        }
     }
 }
