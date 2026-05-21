@@ -1,6 +1,6 @@
 # Wasamo Architecture
 
-**Status:** M1 complete (Phases 0-8); M2 complete (Phases 1-7) — Foundation acceptance A1-A6 discharged; M3-Phase 1 and M3-Phase 2 complete; M3-Phase 3 ADR-accepted design draft (pending implementation re-sync).
+**Status:** M1 complete (Phases 0-8); M2 complete (Phases 1-7) — Foundation acceptance A1-A6 discharged; M3-Phase 1, M3-Phase 2, and M3-Phase 3 complete.
 
 ---
 
@@ -405,6 +405,10 @@ WidgetNode tree  (owns SpriteVisuals + child WidgetNodes)
   │
   └── sync_visuals()  →  Visual.SetOffset / Visual.SetSize on each SpriteVisual
 ```
+
+`LayoutNode` offsets are absolute (root-relative); `sync_visuals()`
+converts each child offset to parent-relative `Visual.Offset` before
+writing the Composition visual tree.
 
 The `LayoutNode` tree is rebuilt on each layout pass (O(n)).
 No persistent layout cache exists in M1.

@@ -1,10 +1,11 @@
 ---
 phase: M3-Phase 3
 title: WrapPanel layout primitive
-status: active
+status: closing
 adr: docs/decisions/m3-phase-3-wrap-panel.md
 plan: docs/plans/m3-plan.md
 opened: 2026-05-21
+closing: 2026-05-22
 ---
 
 # M3-Phase 3 — WrapPanel layout primitive: Progress
@@ -254,47 +255,60 @@ smoke) and the
 
 Discharges the m3-plan §Phase-end criteria checklist for Phase 3.
 
-- [ ] `cargo fmt --all -- --check` green.
+- [x] `cargo fmt --all -- --check` green.
 - [ ] `cargo build --release --workspace` and `cargo test
-      --workspace` green locally and on CI (`workflow_dispatch`).
+      --workspace` green locally **and** on CI
+      (`workflow_dispatch`). Local half: green at T10 (release +
+      debug build + workspace tests). CI half: pending the
+      phase-branch run after T10 → `feat/m3-phase-3` no-ff merge
+      and push; the CI URL folds into
+      [phase-end-retrospective.md item 15](../../notes/m3-phase-3/phase-end-retrospective.md)
+      and this checkbox flips at that follow-up commit.
 - [ ] Windows-only integration test (T8) green on CI (fail, not
-      skip, if Compositor missing).
-- [ ] **Moment 2 spec re-sync.** Flip
+      skip, if Compositor missing). T8 skip-guard verified locally
+      on SSH dev box at T8 landing; CI confirmation rides on the
+      same phase-branch `workflow_dispatch` run as the previous
+      bullet and flips at the same follow-up commit.
+- [x] **Moment 2 spec re-sync.** Flipped
       [dsl_spec.md §4.10](../../dsl_spec.md#410-wrappanel-layout-primitive-m3-phase-3)
       Phase status marker to
-      `**Phase status:** M3-Phase 3 closed; implementation-synced`,
-      correcting any draft / impl divergence in the same commit.
-      Earlier-phase spec gaps may fold per
-      [m3-phase-2 predoc-inputs §6 retroactive spec-gap fold](../../notes/m3-phase-2/predoc-inputs.md#6-retroactive-spec-gap-fold-は最小範囲で同じ-phase-に折り込む)
-      (rule established in M3-P1 T10 and applied in Phase 2 T13)
-      with explicit owner confirmation. Update doc version 0.9 →
-      next (per Phase 2's 0.7 → 0.8 close pattern) and add the
-      revision-history row describing the close.
-- [ ] **Moment 2 architecture re-sync.** Flip
+      `**Phase status:** M3-Phase 3 closed; implementation-synced`.
+      Folded the T1 Decisions-log lexer-surface item per owner
+      approval (§2.2 `Ident` pattern admits kebab-case
+      continuations; §2.2 `IntLit` pattern admits an optional
+      leading `-`; one-line note that the negative-sign surface is
+      `IntLit`-only). Doc version 0.9 → 1.0 with a revision-history
+      row describing the close.
+- [x] **Moment 2 architecture re-sync.** Flipped
       [docs/architecture.md](../../architecture.md) top-level
-      Status from `M3-Phase 3 ADR-accepted design draft (pending
-      implementation re-sync)` to `M3-Phase 3 complete`, and
-      reconcile any §6.8 WrapPanel paragraph block wording against
-      the realised implementation in the same commit.
-- [ ] **Out-of-phase residuals filed** per
+      Status to `M3-Phase 1, M3-Phase 2, and M3-Phase 3 complete`.
+      §6.8 WrapPanel paragraph already described the realised
+      implementation (no wording reconciliation needed). §6.5
+      `WidgetNode` / Visual-Layer sync diagram gained a one-line
+      clarification of the absolute (`LayoutNode`) vs.
+      parent-relative (`Visual.Offset`) offset convention, folded
+      as R3-A from T9 visible-smoke (a separate commit per review-
+      concern).
+- [x] **Out-of-phase residuals filed** per
       [m3-plan §Phase-end criteria item 6](../m3-plan.md#phase-end-criteria):
-      anything surfaced during Phase 3 that is real but out of
-      scope is recorded in §Out-of-phase residuals below and
-      cross-referenced from the ADR's residual / handover section.
-- [ ] Forward-distillation note for M3-Phase 4 authored within
+      R1 (`.gitignore` `*.uic` pattern) and R2 (`sync_visuals` ↔
+      pure-layout boundary test gap) recorded in §Out-of-phase
+      residuals below and cross-referenced from
+      [the ADR's Phase 3 implementation residuals subsection](../../decisions/m3-phase-3-wrap-panel.md).
+      R3 (architecture §6.5 offset convention) was folded in T10
+      as R3-A and is not a residual.
+- [x] Forward-distillation note for M3-Phase 4 authored within
       this phase's close (per
       [retrospectives.md forward-carry rule](../../notes/retrospectives.md)):
-      `docs/notes/m3-phase-4/predoc-inputs.md` (or phase-named
-      pre-doc candidate file).
-- [ ] Phase-end retrospective entry recorded per the
+      [`docs/notes/m3-phase-4/pre-doc-inputs.md`](../../notes/m3-phase-4/pre-doc-inputs.md).
+- [x] Phase-end retrospective entry recorded per the
       [docs/notes/retrospectives.md](../../notes/retrospectives.md)
       procedure, with the durable entry at
-      `docs/notes/m3-phase-3/phase-end-retrospective.md`
-      (following Phase 2 practice; m3-plan criterion 7's wording
-      alignment is tracked in a separate plan-side revision).
-- [ ] Progress file lifecycle: `status: active` → `status: closing`
-      → retired (per
-      [plans/README.md §Phase progress file lifecycle](../README.md#phase-progress-file-lifecycle)).
+      [`docs/notes/m3-phase-3/phase-end-retrospective.md`](../../notes/m3-phase-3/phase-end-retrospective.md).
+- [x] Progress file lifecycle: `status: active` → `status: closing`
+      at the end of this T10 commit set (per
+      [plans/README.md §Phase progress file lifecycle](../README.md#phase-progress-file-lifecycle));
+      `retired` follows at the phase-end main-merge gate.
 
 ## Decisions log
 
@@ -410,7 +424,35 @@ the shape.)
 
 ## Out-of-phase residuals
 
-(empty — record here implementation findings that surface during
-Phase 3 but belong to a later phase or to a cross-cutting concern
-outside the ADR's scope; see Phase 2's `WASAMO_ERR_*` residual for
-the shape.)
+- **(R1) `.gitignore` `*.uic` pattern.** During T9, an ad-hoc debug
+  invocation `wasamoc build examples\gallery\gallery.ui
+  examples\gallery\gallery.uic` produced an in-tree `.uic` artefact
+  (removed manually). The production build paths route `.uic`
+  through `OUT_DIR` via `build.rs` (`examples/*/build.rs`), so the
+  in-tree artefact is never produced by a normal workspace build —
+  but the temptation to write `.uic` in-tree for debugging recurs.
+  A `.gitignore` rule for `*.uic` would prevent accidental commits.
+  Phase 3 scope did not include build-hygiene changes, so this is
+  not folded here; tracked for any future cross-cutting hygiene
+  pass. Surfaced in
+  [t9-step-end-retrospective.md](../../notes/m3-phase-3/t9-step-end-retrospective.md)
+  Follow-Up R1.
+
+- **(R2) `sync_visuals` ↔ pure-layout boundary test gap.** The
+  Phase 2 test suite pins `LayoutNode.offset` to the absolute
+  (root-relative) convention but does not exercise the conversion
+  to parent-relative `Visual.Offset` performed by `sync_visuals()`.
+  The T9 visible-smoke bug whose fix landed at commit `570d08a` was
+  detected only by owner-manual GUI smoke (framing decision G); a
+  regression of the same class would again rely on visible-smoke
+  detection. A pure-or-Compositor-backed test that asserts the
+  relative-offset computation for a nested non-zero-offset visual
+  tree would close the detection gap independently of visible
+  smoke. Belongs to whichever later phase first revisits the
+  `WidgetNode` / Visual-Layer sync seam (likely Phase 4 ScrollView
+  or a focused test-coverage pass). Surfaced in
+  [t9-step-end-retrospective.md](../../notes/m3-phase-3/t9-step-end-retrospective.md)
+  Follow-Up R2. Architecture-level offset convention is now stated
+  in [docs/architecture.md §6.5](../../architecture.md) (folded in
+  T10 as R3-A); this residual is the test-coverage half that is
+  not folded.

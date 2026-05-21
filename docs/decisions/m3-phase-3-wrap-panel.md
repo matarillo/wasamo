@@ -1379,6 +1379,19 @@ extended, not replaced).
   `LayoutError::BoxAspectUnboundedBoth` fire with the Box's IR
   location.
 
+### Phase 3 implementation residuals (out-of-phase, filed at close)
+
+Implementation findings that surfaced during Phase 3 T1–T9 but fall
+outside this ADR's scope are recorded under
+[m3-phase-3-progress.md §Out-of-phase residuals](../plans/progress/m3-phase-3-progress.md#out-of-phase-residuals):
+
+- **R1** — `.gitignore` `*.uic` pattern (cross-cutting build
+  hygiene).
+- **R2** — `sync_visuals` ↔ pure-layout boundary test gap
+  (post-Phase-3 test coverage; the architecture clarification half
+  was folded into [docs/architecture.md §6.5](../architecture.md)
+  in the T10 close).
+
 ## Owner-agreement checkpoints
 
 Two of the DDs above carry value judgements with multiple defensible
