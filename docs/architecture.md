@@ -1,6 +1,6 @@
 # Wasamo Architecture
 
-**Status:** M1 complete (Phases 0-8); M2 complete (Phases 1-7) — Foundation acceptance A1-A6 discharged; M3-Phase 1 and M3-Phase 2 complete; M3-Phase 3 is next.
+**Status:** M1 complete (Phases 0-8); M2 complete (Phases 1-7) — Foundation acceptance A1-A6 discharged; M3-Phase 1 and M3-Phase 2 complete; M3-Phase 3 ADR-accepted design draft (pending implementation re-sync).
 
 ---
 
@@ -803,6 +803,48 @@ The same Phase 2 boundary applies to the C ABI: because `Ratio` and
 Phase 2, and no `WASAMO_VALUE_RATIO` / `WASAMO_VALUE_COLOR` tag is
 added to the C ABI's value union. See
 [abi_spec.md](./abi_spec.md) — Phase 2 ships **no** ABI changes.
+
+**M3-Phase 3 (WrapPanel layout primitive) does not extend this seam
+either.** WrapPanel is the first M3 layout primitive whose outer
+cross-axis size depends on its children — a **two-stage measure-
+arrange** in which the line breaker decides per-child line membership
+from main-axis intrinsic measure and a cross-axis bound resolved
+from `item-cross-size` (when set) or the parent's cross-axis
+constraint (when unset). All three WrapPanel attributes —
+`item-cross-size`, `item-spacing`, and `line-spacing` — are
+**constant-only `i32`** in Phase 3 (DD-M3-P3-003 / DD-M3-P3-004).
+The IR loader materialises them as fields on `WidgetData::WrapPanel`
+directly; no new `PropertyValue` variant, no new `IrType`, no new
+`IrLiteral` variant, no new evaluator/writer pair. Phase 3 reuses
+the existing `i32` literal plumbing; a future bindable WrapPanel
+attribute can reuse the M2 string-baked path that `IrType::I32`
+properties currently dispatch to (`register_binding` +
+`widget_write_property`), or open a typed-`i32` evaluator/writer
+pair if that phase warrants it (the third per-type pair anticipated
+in the *Per-type seam* paragraph above). F5 (`TypedValue`) deferral
+is structurally unpressured by Phase 3.
+See [m3-phase-3-wrap-panel.md](./decisions/m3-phase-3-wrap-panel.md)
+DD-M3-P3-001 through DD-M3-P3-006 and the
+[dsl_spec.md §4.10 WrapPanel chapter](./dsl_spec.md#410-wrappanel-layout-primitive-m3-phase-3).
+
+The same Phase 3 boundary applies to the C ABI: because the three
+WrapPanel attributes do not enter `PropertyValue`, the exhaustive-
+match arms in `wasamo-runtime/src/abi.rs` are untouched in Phase 3,
+and no `WASAMO_VALUE_*` tag is added. DD-M3-P3-005 also adds **no
+new `LayoutError` variant** — the unbounded-main-axis branch is
+one-line-flow (visible, not an error), and the unbounded-cross-axis-
+with-aspect-child case fires Phase 2's existing
+`LayoutError::BoxAspectUnboundedBoth` — so no
+`WASAMO_LAYOUT_ERROR_*` extension lands in Phase 3 either. See
+[abi_spec.md](./abi_spec.md) — Phase 3 ships **no** ABI changes.
+
+The Phase 3 layout engine boundary remains Win32/WinRT-free: the
+WrapPanel line breaker and arrange pass operate on pure data
+(`wasamo-runtime/src/layout.rs`), composing structurally with the
+Phase 2 Box measure-arrange. Mock-free Windows integration tests
+exercise the full pipeline through the live Compositor (per
+[CLAUDE.md §Testing rules](../CLAUDE.md#testing-rules)); the
+algorithm-correctness evidence lives in pure-logic unit tests.
 
 #### 6.8.8 Forward-compatibility and out-of-scope
 
