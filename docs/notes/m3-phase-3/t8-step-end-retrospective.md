@@ -2,7 +2,7 @@
 title: M3-Phase 3 / T8 step-end retrospective
 status: recorded
 created: 2026-05-22
-revised: 2026-05-22 (rev 2 — Finding 1: weaken item 4 discharge claim; Finding 2: HEAD → hash wording)
+revised: 2026-05-22 (rev 3 — progress preamble consistency follow-up; retro body unchanged)
 scope: step-end
 task: T8 — Windows-runtime integration test (ADR §Phase 3 verification closure evidence item 4)
 ---
@@ -20,14 +20,22 @@ task: T8 — Windows-runtime integration test (ADR §Phase 3 verification closur
 >   in two places where `post-commit hash = 2a812e3` is the less
 >   misleading vocabulary (HEAD advances when the retrospective
 >   itself commits, so the equation reads as broken on review).
-> - **rev 2 (this commit):** Two review-found doc consistency fixes,
->   no code / gate change.
+> - **rev 2 (commit `e80cb56`):** Two review-found doc consistency
+>   fixes, no code / gate change.
 >   - **Finding 1:** Weaken the discharge wording to "lands the
 >     Windows-runtime integration test required by ADR item 4; CI
 >     green confirmation remains T10" so T8 and T10 no longer
 >     contradict each other.
 >   - **Finding 2:** Replace `post-commit HEAD` with
 >     `post-commit hash` in Checklist item 3 and Verification Notes.
+> - **rev 3 (this commit):** Re-review on rev 2 surfaced one Low
+>   finding — the **progress file preamble** still said
+>   `Each T below cites the evidence item it discharges.`, which
+>   contradicts T8's updated landing-vs-discharge split. Replaced
+>   with `Each T below cites the evidence item it advances or
+>   discharges.` in `m3-phase-3-progress.md`. The retrospective body
+>   itself is unchanged; this rev exists to keep the audit trail
+>   complete for the review thread that started with rev 1.
 
 ## Scope
 

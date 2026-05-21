@@ -35,7 +35,7 @@ a frozen prediction.
 The five pieces of A3 evidence the phase closes against are
 enumerated in
 [m3-phase-3-wrap-panel.md §Phase 3 verification closure](../../decisions/m3-phase-3-wrap-panel.md#phase-3-verification-closure-what-counts-as-a3-evidence).
-Each T below cites the evidence item it discharges.
+Each T below cites the evidence item it advances or discharges.
 
 ## Task list
 
