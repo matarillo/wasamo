@@ -607,11 +607,13 @@ the absence of any bound source is the error, not a written-out
 zero.
 
 The first phase to need a reactive WrapPanel attribute admits
-binding for that attribute at that point; the `i32` per-type writer
-seam already exists from M2, so the future-phase work is the
-attribute-side call-site registration rather than new engine
-plumbing. Phase 3's constant-only `i32` surface is
-forward-compatible and is extended, not revised.
+binding for that attribute at that point. Phase 3 reuses the
+existing `i32` literal plumbing; a future bindable phase can
+reuse the M2 string-baked path that `IrType::I32` properties
+currently dispatch to (`register_binding` +
+`widget_write_property`), or open a typed-`i32` evaluator/writer
+pair if that phase warrants it. Phase 3's constant-only `i32`
+surface is forward-compatible and is extended, not revised.
 
 #### Measure-arrange algorithm
 
