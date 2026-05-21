@@ -1794,9 +1794,13 @@ mod tests {
 
     #[test]
     fn wrap_panel_variant_defaults_match_constructor_defaults() {
-        // Mirrors the `WidgetNode::wrap_panel(.., None, 0, 0)` default
-        // construction — DD-M3-P3-004 Option (a) parent-cross passthrough
-        // (`None`) and DD-M3-P3-003 touching items / lines (`0` / `0`).
+        // Mirrors the data shape that `WidgetNode::wrap_panel(..,
+        // None, None, None)` produces after `apply_wrap_panel_defaults`
+        // resolves absences — DD-M3-P3-004 Option (a) parent-cross
+        // passthrough (`None`) and DD-M3-P3-003 touching items / lines
+        // (`0` / `0`). The `apply_wrap_panel_defaults_*` tests below
+        // exercise that resolution directly; this test pins only the
+        // post-resolution data carrier.
         let data = WidgetData::WrapPanel {
             item_cross_size: None,
             item_spacing: 0,
