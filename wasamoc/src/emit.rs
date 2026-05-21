@@ -435,6 +435,56 @@ mod tests {
         assert!(!out.contains("prop item-cross-size"), "got: {}", out);
     }
 
+    // The four cases below complete the 2^3 = 8 presence combinations
+    // demanded by the T4 progress-doc gate ("each combination of
+    // attribute presence / absence"). Together with `zero_children`
+    // (000), `all_three` (111), `only_item_cross_size` (100), and
+    // `only_spacings` (011) above, the eight presence vectors are
+    // covered exhaustively. The emitter is generic so the test value
+    // is in pinning the contract surface, not in stressing branches.
+
+    #[test]
+    fn wrap_panel_only_item_spacing_present() {
+        // presence = 010
+        let out =
+            emit_src("component C inherits W { WrapPanel { item-spacing: 5 Text {} Text {} } }");
+        assert!(out.contains("prop item-spacing = 5"), "got: {}", out);
+        assert!(!out.contains("prop item-cross-size"), "got: {}", out);
+        assert!(!out.contains("prop line-spacing"), "got: {}", out);
+    }
+
+    #[test]
+    fn wrap_panel_only_line_spacing_present() {
+        // presence = 001
+        let out =
+            emit_src("component C inherits W { WrapPanel { line-spacing: 7 Text {} Text {} } }");
+        assert!(out.contains("prop line-spacing = 7"), "got: {}", out);
+        assert!(!out.contains("prop item-cross-size"), "got: {}", out);
+        assert!(!out.contains("prop item-spacing"), "got: {}", out);
+    }
+
+    #[test]
+    fn wrap_panel_item_cross_size_and_item_spacing_present() {
+        // presence = 110
+        let out = emit_src(
+            "component C inherits W { WrapPanel { item-cross-size: 80 item-spacing: 4 Box { aspect: 1:1 } } }",
+        );
+        assert!(out.contains("prop item-cross-size = 80"), "got: {}", out);
+        assert!(out.contains("prop item-spacing = 4"), "got: {}", out);
+        assert!(!out.contains("prop line-spacing"), "got: {}", out);
+    }
+
+    #[test]
+    fn wrap_panel_item_cross_size_and_line_spacing_present() {
+        // presence = 101
+        let out = emit_src(
+            "component C inherits W { WrapPanel { item-cross-size: 80 line-spacing: 10 Box { aspect: 1:1 } } }",
+        );
+        assert!(out.contains("prop item-cross-size = 80"), "got: {}", out);
+        assert!(out.contains("prop line-spacing = 10"), "got: {}", out);
+        assert!(!out.contains("prop item-spacing"), "got: {}", out);
+    }
+
     #[test]
     fn wrap_panel_zero_valued_attributes_emitted_as_zero_ints() {
         // DD-M3-P3-006 zero-handling: zero is a *valid* attribute value
