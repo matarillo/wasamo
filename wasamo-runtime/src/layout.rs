@@ -1,5 +1,7 @@
 // Pure layout engine — no Win32/WinRT dependencies; all logic here is unit-testable.
 
+use std::cell::Cell;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum WidgetKind {
     Rectangle,
@@ -94,6 +96,28 @@ pub struct LayoutNode {
     // Written by arrange():
     pub offset: (f32, f32),
     pub size: (f32, f32),
+    /// DD-M3-P3-005 measure→arrange cross-bound cache used by
+    /// `measure_wrap_panel` / `arrange_wrap_panel`. When
+    /// `item_cross_size` is unset the spec passes the parent of
+    /// WrapPanel's cross-axis constraint through to each child
+    /// (DD-M3-P3-004 Option (a)); that constraint is the `avail_h`
+    /// measure received from its parent. Under the default
+    /// `height: Shrink`, the WrapPanel's own arrange-time `h`
+    /// equals its measure-time `desired_h` (the sum of line cross
+    /// extents) — which is **not** the same as `avail_h`. Without
+    /// a cache, `arrange_wrap_panel` would re-measure children
+    /// against a different cross bound, producing a different line
+    /// break from measure (a regression caught in review of the
+    /// T7 initial implementation). `measure_wrap_panel` records
+    /// the cross input it used here; `arrange_wrap_panel` reads it
+    /// back so the line breaker re-runs against the same per-child
+    /// constraint. Sentinel `f32::NAN` (initial value) means
+    /// "no prior measure"; `arrange_wrap_panel` falls back to `h`
+    /// in that case so a stand-alone `arrange` call (no prior
+    /// `measure`) still produces a self-consistent layout.
+    /// `item_cross_size` (when `Some`) always overrides the cache,
+    /// so the happy path of the gallery sub-screen is unaffected.
+    pub(crate) wrap_measured_cross_bound: Cell<f32>,
 }
 
 impl LayoutNode {
@@ -112,6 +136,7 @@ impl LayoutNode {
             children: Vec::new(),
             offset: (0.0, 0.0),
             size: (0.0, 0.0),
+            wrap_measured_cross_bound: Cell::new(f32::NAN),
         }
     }
 
@@ -130,6 +155,7 @@ impl LayoutNode {
             children: Vec::new(),
             offset: (0.0, 0.0),
             size: (0.0, 0.0),
+            wrap_measured_cross_bound: Cell::new(f32::NAN),
         }
     }
 
@@ -148,6 +174,7 @@ impl LayoutNode {
             children: Vec::new(),
             offset: (0.0, 0.0),
             size: (0.0, 0.0),
+            wrap_measured_cross_bound: Cell::new(f32::NAN),
         }
     }
 
@@ -171,6 +198,7 @@ impl LayoutNode {
             children: Vec::new(),
             offset: (0.0, 0.0),
             size: (0.0, 0.0),
+            wrap_measured_cross_bound: Cell::new(f32::NAN),
         }
     }
 
@@ -197,6 +225,7 @@ impl LayoutNode {
             children: Vec::new(),
             offset: (0.0, 0.0),
             size: (0.0, 0.0),
+            wrap_measured_cross_bound: Cell::new(f32::NAN),
         }
     }
 }
@@ -247,7 +276,18 @@ fn measure_wrap_panel(
     avail_w: f32,
     avail_h: f32,
 ) -> Result<(f32, f32), LayoutError> {
-    let lines = compute_wrap_lines(node, avail_w, avail_h)?;
+    // DD-M3-P3-004 Option (a): when `item-cross-size` is unset, the
+    // child cross input is the parent's cross-axis constraint
+    // (= `avail_h`). Cache it on the node so `arrange_wrap_panel`
+    // can re-run the line breaker with the same per-child constraint
+    // even when its own arrange-time `h` differs from `avail_h`
+    // (typical under the default `height: Shrink`, where `h` ends
+    // up being `desired_h` from this measure pass — the sum of line
+    // cross extents — not the parent's cross-axis constraint).
+    let child_cross_input = node.item_cross_size.unwrap_or(avail_h);
+    node.wrap_measured_cross_bound.set(child_cross_input);
+
+    let lines = compute_wrap_lines(node, avail_w, child_cross_input)?;
     let line_count = lines.len();
     let cross_sum: f32 = lines.iter().map(|l| l.cross_extent).sum();
     let line_spacing_total = if line_count > 1 {
@@ -305,8 +345,11 @@ struct WrapLine {
 /// Pure, mock-free line breaker shared by `measure_wrap_panel` and
 /// `arrange_wrap_panel` (free-function extraction per
 /// [CLAUDE.md §Testing rules]). Measures every child once against the
-/// DD-M3-P3-001 unbounded-main + DD-M3-P3-004 cross constraint, then
-/// applies the DD-M3-P3-005 greedy line breaker:
+/// DD-M3-P3-001 unbounded-main + DD-M3-P3-004 cross constraint
+/// (`child_cross_input` — resolved by the caller against either
+/// `item_cross_size`, the measure-time cross cache, or the arrange
+/// fallback so the two passes stay in step), then applies the
+/// DD-M3-P3-005 greedy line breaker:
 ///
 /// - **First child of any line** is placed *unconditionally* (the
 ///   `line_empty == true` carve-out): even when its intrinsic main
@@ -323,10 +366,8 @@ struct WrapLine {
 fn compute_wrap_lines(
     node: &LayoutNode,
     main_bound: f32,
-    cross_bound: f32,
+    child_cross_input: f32,
 ) -> Result<Vec<WrapLine>, LayoutError> {
-    let child_cross_input = node.item_cross_size.unwrap_or(cross_bound);
-
     let measured: Vec<(f32, f32)> = node
         .children
         .iter()
@@ -619,7 +660,27 @@ fn arrange_wrap_panel(
     node.offset = (x, y);
     node.size = (w, h);
 
-    let lines = compute_wrap_lines(node, w, h)?;
+    // Re-derive the per-child cross-axis input the way measure did,
+    // not the way the arrange-time allocation `h` suggests. The two
+    // diverge whenever the WrapPanel's `height: Shrink` default
+    // collapses its outer cross to `desired_h` (the sum of line cross
+    // extents) — taking `h` as the child cross bound would re-measure
+    // children against a different constraint and produce a different
+    // line break from measure. `item_cross_size` always wins; the
+    // cache (set by `measure_wrap_panel`) covers the unset path; the
+    // raw `h` fallback only fires if `arrange` is called without a
+    // prior `measure` on the same node (e.g. a direct unit-test call),
+    // in which case there is no measure result to be consistent with.
+    let child_cross_input = node.item_cross_size.unwrap_or_else(|| {
+        let cached = node.wrap_measured_cross_bound.get();
+        if cached.is_nan() {
+            h
+        } else {
+            cached
+        }
+    });
+
+    let lines = compute_wrap_lines(node, w, child_cross_input)?;
     let item_spacing = node.item_spacing;
     let line_spacing = node.line_spacing;
     let line_count = lines.len();
@@ -1391,6 +1452,59 @@ mod tests {
         let wp = wrap_panel_with_boxes(None, 0.0, 0.0, &[(1, 1)]);
         let err = measure(&wp, 200.0, f32::INFINITY).unwrap_err();
         assert_eq!(err, LayoutError::BoxAspectUnboundedBoth);
+    }
+
+    #[test]
+    fn wrap_panel_unset_item_cross_size_measure_arrange_consistent() {
+        // Regression for the measure→arrange drift caught in T7 review:
+        // when `item-cross-size` is unset, the spec's DD-M3-P3-004
+        // Option (a) routes the parent of WrapPanel's cross-axis bound
+        // through to each child. measure receives `avail_h` from its
+        // parent and passes it down. Under the default `height: Shrink`
+        // the WrapPanel's own arrange-time `h` collapses to
+        // `desired_h` (= sum of line cross extents), which is **not**
+        // the same value. The fix caches the measure-time cross input
+        // on the node and re-uses it at arrange so the line breaker
+        // produces the same line layout in both passes.
+        //
+        // Fixture (reviewer's example): WrapPanel(no item-cross-size,
+        // default height: Shrink), three Box{aspect:1:1}, parent
+        // 250×100.
+        //   measure(250, 100): child cross bound = 100 → children
+        //     (100, 100). Line break 250 bound: 100 / 200 fit, 300 >
+        //     250 wraps. 2 lines, outer (250, 200).
+        //   arrange(250, 200): under the buggy code the cross bound
+        //     would re-derive as h=200 → children (200, 200), 1 per
+        //     line, 3 lines stacked to 600 cross — overflowing the
+        //     allocated 200. With the cache, cross bound stays 100,
+        //     the 2-line layout matches.
+        let mut wp = wrap_panel_with_boxes(None, 0.0, 0.0, &[(1, 1), (1, 1), (1, 1)]);
+        run_layout(&mut wp, 250.0, 100.0).unwrap();
+        assert_eq!(wp.size, (250.0, 200.0));
+        assert_eq!(wp.children[0].offset, (0.0, 0.0));
+        assert_eq!(wp.children[0].size, (100.0, 100.0));
+        assert_eq!(wp.children[1].offset, (100.0, 0.0));
+        assert_eq!(wp.children[1].size, (100.0, 100.0));
+        assert_eq!(wp.children[2].offset, (0.0, 100.0));
+        assert_eq!(wp.children[2].size, (100.0, 100.0));
+    }
+
+    #[test]
+    fn wrap_panel_arrange_without_prior_measure_falls_back_to_h() {
+        // Cache fallback contract: a direct `arrange` call without a
+        // prior `measure` (uncommon outside tests) finds the cache at
+        // its `f32::NAN` sentinel and uses the allocated `h` as the
+        // cross bound. There is no measure result to be consistent
+        // with in this case, so the fallback preserves a self-
+        // consistent stand-alone arrange.
+        let mut wp = wrap_panel_with_boxes(None, 0.0, 0.0, &[(1, 1)]);
+        // Skip measure; call arrange directly with a known cell.
+        arrange(&mut wp, 0.0, 0.0, 200.0, 60.0).unwrap();
+        // Box(1:1) measured against (INF, 60) → (60, 60). One line,
+        // line cross = 60, centred at 0.
+        assert_eq!(wp.size, (200.0, 60.0));
+        assert_eq!(wp.children[0].size, (60.0, 60.0));
+        assert_eq!(wp.children[0].offset, (0.0, 0.0));
     }
 
     #[test]
