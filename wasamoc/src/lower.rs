@@ -650,4 +650,125 @@ mod tests {
         assert_eq!(child.props[0].name, "text");
         assert_eq!(child.props[0].value, IrLiteral::Str("Photo 12".into()));
     }
+
+    // --- T3: WrapPanel widget + i32 attribute lowering ------------------
+    //
+    // Phase 3 introduces no new IR variants — `WrapPanel { ... }` lowers
+    // to a generic `IrNode { widget_type: "WrapPanel", ... }` and the
+    // three `item-cross-size` / `item-spacing` / `line-spacing` attributes
+    // lower via the existing `IrLiteral::Int` path. Absent attributes are
+    // omitted from the IR; defaults are applied at the runtime layer in T5
+    // (DD-M3-P3-003 / DD-M3-P3-004), not at the IR layer.
+    //
+    // These tests double as regression coverage that the generic parser
+    // handles WrapPanel-shaped declarations without modification (no new
+    // parser grammar per the progress-doc preamble).
+
+    fn wrap_root<'a>(comp: &'a IrComponent) -> &'a IrNode {
+        assert_eq!(comp.root.widget_type, "WrapPanel");
+        &comp.root
+    }
+
+    fn find_prop<'a>(node: &'a IrNode, name: &str) -> Option<&'a IrLiteral> {
+        node.props.iter().find(|p| p.name == name).map(|p| &p.value)
+    }
+
+    #[test]
+    fn wrap_panel_zero_children_lowered() {
+        let comp = lower_src("component C inherits W { WrapPanel {} }");
+        let w = wrap_root(&comp);
+        assert!(w.props.is_empty());
+        assert!(w.bindings.is_empty());
+        assert!(w.handlers.is_empty());
+        assert!(w.children.is_empty());
+    }
+
+    #[test]
+    fn wrap_panel_single_box_child_with_item_cross_size_lowered() {
+        let comp = lower_src(
+            "component C inherits W { WrapPanel { item-cross-size: 88 Box { aspect: 1:1 } } }",
+        );
+        let w = wrap_root(&comp);
+        assert_eq!(w.props.len(), 1);
+        assert_eq!(w.props[0].name, "item-cross-size");
+        assert_eq!(w.props[0].value, IrLiteral::Int(88));
+        assert_eq!(w.children.len(), 1);
+        assert_eq!(w.children[0].widget_type, "Box");
+        assert_eq!(
+            find_prop(&w.children[0], "aspect"),
+            Some(&IrLiteral::Ratio { num: 1, den: 1 })
+        );
+    }
+
+    #[test]
+    fn wrap_panel_multi_box_child_all_three_attributes_lowered() {
+        let comp = lower_src(
+            "component C inherits W { WrapPanel { item-cross-size: 96 item-spacing: 8 line-spacing: 12 Box { aspect: 1:1 } Box { aspect: 1:1 } Box { aspect: 1:1 } } }",
+        );
+        let w = wrap_root(&comp);
+        assert_eq!(w.props.len(), 3);
+        assert_eq!(find_prop(w, "item-cross-size"), Some(&IrLiteral::Int(96)));
+        assert_eq!(find_prop(w, "item-spacing"), Some(&IrLiteral::Int(8)));
+        assert_eq!(find_prop(w, "line-spacing"), Some(&IrLiteral::Int(12)));
+        assert_eq!(w.children.len(), 3);
+        for child in &w.children {
+            assert_eq!(child.widget_type, "Box");
+        }
+    }
+
+    #[test]
+    fn wrap_panel_multi_child_only_item_cross_size_set_omits_other_attrs() {
+        // Only `item-cross-size` set; `item-spacing` / `line-spacing` are
+        // absent from the IR. Defaults are applied at the runtime layer
+        // in T5 (DD-M3-P3-003 / DD-M3-P3-004), not at the IR layer.
+        let comp = lower_src(
+            "component C inherits W { WrapPanel { item-cross-size: 64 Box { aspect: 1:1 } Box { aspect: 4:3 } } }",
+        );
+        let w = wrap_root(&comp);
+        assert_eq!(w.props.len(), 1);
+        assert_eq!(w.props[0].name, "item-cross-size");
+        assert_eq!(w.props[0].value, IrLiteral::Int(64));
+        assert!(
+            find_prop(w, "item-spacing").is_none(),
+            "absent attribute must be omitted from IR, found: {:?}",
+            w.props,
+        );
+        assert!(
+            find_prop(w, "line-spacing").is_none(),
+            "absent attribute must be omitted from IR, found: {:?}",
+            w.props,
+        );
+        assert_eq!(w.children.len(), 2);
+    }
+
+    #[test]
+    fn wrap_panel_multi_child_no_attributes_set_lowered() {
+        // All three attributes absent; the WrapPanel IR node carries zero
+        // props and only the children list. Text children avoid the T2
+        // aspect-only-Box warning so the test stays focused on lowering.
+        let comp = lower_src("component C inherits W { WrapPanel { Text {} Text {} Text {} } }");
+        let w = wrap_root(&comp);
+        assert!(w.props.is_empty());
+        assert!(w.bindings.is_empty());
+        assert_eq!(w.children.len(), 3);
+        for child in &w.children {
+            assert_eq!(child.widget_type, "Text");
+        }
+    }
+
+    #[test]
+    fn wrap_panel_zero_valued_attributes_lowered_to_ir_int_zero() {
+        // DD-M3-P3-006 zero-handling: zero is a *valid* setting on all
+        // three attributes (rejection threshold is `< 0`, not `<= 0`).
+        // Pin that a zero attribute is recorded in the IR rather than
+        // being treated as absence.
+        let comp = lower_src(
+            "component C inherits W { WrapPanel { item-cross-size: 0 item-spacing: 0 line-spacing: 0 Text {} } }",
+        );
+        let w = wrap_root(&comp);
+        assert_eq!(w.props.len(), 3);
+        assert_eq!(find_prop(w, "item-cross-size"), Some(&IrLiteral::Int(0)));
+        assert_eq!(find_prop(w, "item-spacing"), Some(&IrLiteral::Int(0)));
+        assert_eq!(find_prop(w, "line-spacing"), Some(&IrLiteral::Int(0)));
+    }
 }
