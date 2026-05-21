@@ -268,11 +268,16 @@ Pre-doc questions:
   Phase 3 sub-screen would mean Phase 3's wrap evidence is no longer
   visually isolated.
 - How many thumbnails are needed to make vertical scroll visible on
-  the 800×600 default window? With 88×88 thumbnails and 12 px
-  spacing the wrap rows fit ~67 px each (88 + 12 line-spacing leaves
-  the row taller than 88 by line-spacing); a viewport of ~400 px
-  height fits ~4 rows, so ~30 thumbnails gives ~8 rows of which 4
-  are visible.
+  the 800×600 default window? With 88×88 thumbnails, 12 px item /
+  line spacing, and Phase 3's observed 7+3 wrap (7 thumbs per row
+  at ≈784 px client width), each wrap row contributes ~100 px
+  (88 thumb + 12 line-spacing). A ScrollView viewport occupying
+  ~400 px of the window's vertical space fits ~4 rows, so total
+  content needs >4 rows for scroll to be visible — roughly 30–40
+  thumbnails (≈5–6 rows). The exact count is a Phase 4 framing
+  decision; the Phase 3 5–10 ceiling (framing decision E) does not
+  apply to Phase 4 since wrap is no longer the visible proof on
+  its own.
 - C / Zig host parity: Phase 4 still ships gallery-rust only (per
   framing decision E); full gallery parity stays at Phase 8.
 
@@ -291,6 +296,18 @@ Pre-doc questions:
   owner gates (per `retrospectives.md` and
   `feedback_phase_end_merge.md`). Phase 4 pre-doc should not assume
   any phase-end gate is auto-discharged.
+- **`retrospectives.md` step → phase merge wording drift.** The
+  procedure doc describes step → phase merge as "ff merge", but
+  Phase 2 / Phase 3 实运用 has been **no-ff** consistently (see
+  `git log --merges feat/m3-phase-3` — every T1–T10 task merge is
+  a `Merge branch 'feat/m3-phase-3-tN'` commit). The drift was
+  surfaced during M3-Phase 3 T10 phase-end review but not folded
+  into the Phase 3 close commits, so Phase 4 inherits the
+  mismatch. Pre-doc question: fold the `retrospectives.md` wording
+  to "no-ff merge" as a Phase 4 prep step (before pre-doc framing
+  begins), or fold inside the Phase 4 close commit set as a
+  retroactive-spec-gap fold. The status-quo of "doc lies, follow
+  practice" is the default-bad outcome to avoid.
 
 ## 13. `docs/notes` audit triggers for Phase 4
 
