@@ -337,6 +337,49 @@ fn check_wrappanel_attr_outside_wrappanel(
     ));
 }
 
+/// Emit a warning when a WrapPanel directly contains one or more
+/// `Box { aspect: <ratio>; … }` children and `item-cross-size` is not
+/// set on the WrapPanel itself (DD-M3-P3-004 Recommendation companion;
+/// the "huge thumbnail" footgun documented in dsl_spec §4.10 Common
+/// pitfalls). The guard scope is intentionally narrow: only direct-
+/// child Boxes with an `aspect` PropertyBind are classified; nested
+/// containers are not scanned, and other size-source shapes are not
+/// enumerated. One warning per WrapPanel regardless of how many
+/// matching children it contains.
+fn check_wrappanel_aspect_only_box_warning(
+    wrappanel_members: &[Member],
+    wrappanel_span: &Span,
+    filename: &str,
+    diags: &mut Vec<Diagnostic>,
+) {
+    let has_item_cross_size = wrappanel_members
+        .iter()
+        .any(|m| matches!(m, Member::PropertyBind { name, .. } if name == "item-cross-size"));
+    if has_item_cross_size {
+        return;
+    }
+    let any_aspect_only_box = wrappanel_members.iter().any(|m| match m {
+        Member::WidgetDecl {
+            type_name, members, ..
+        } if type_name == "Box" => members
+            .iter()
+            .any(|cm| matches!(cm, Member::PropertyBind { name, .. } if name == "aspect")),
+        _ => false,
+    });
+    if !any_aspect_only_box {
+        return;
+    }
+    diags.push(Diagnostic::warning(
+        filename,
+        wrappanel_span.line,
+        wrappanel_span.col,
+        "`WrapPanel` directly contains an aspect-only `Box` child without `item-cross-size` set; \
+         each child will inherit the parent's cross-axis constraint, producing the \"huge thumbnail\" \
+         footgun. Set `item-cross-size` on the WrapPanel to bound the per-item cross-axis size \
+         (dsl_spec §4.10 Common pitfalls).",
+    ));
+}
+
 /// Reject a Box widget with two or more child widgets (DD-M3-P2-001
 /// multi-child). The runtime IR loader independently rejects the same
 /// shape at IR-load time (defense in depth); the compile-time diagnostic
@@ -442,6 +485,9 @@ fn check_members_inner(
                 }
                 if type_name == "Box" {
                     check_box_child_count(children, span, filename, diags);
+                }
+                if type_name == "WrapPanel" {
+                    check_wrappanel_aspect_only_box_warning(children, span, filename, diags);
                 }
                 check_members_inner(children, Some(type_name), filename, ns, diags);
             }
@@ -1464,6 +1510,92 @@ mod tests {
             "{:?}",
             errs
         );
+    }
+
+    // --- T2: WrapPanel aspect-only-Box warning (DD-M3-P3-004 Recommendation) ---
+
+    #[test]
+    fn wrappanel_aspect_only_box_without_item_cross_size_warns() {
+        // Firing shape per dsl_spec §4.10 Common pitfalls: WrapPanel directly
+        // contains an aspect-bearing Box child but no `item-cross-size`.
+        let src = r#"component C inherits W {
+            WrapPanel {
+                Box { aspect: 1:1 fill: #cccccc }
+            }
+        }"#;
+        let result = check_src(src);
+        assert!(!result.has_errors(), "{:?}", result.diagnostics);
+        let ws = warnings(src);
+        assert_eq!(ws.len(), 1, "{:?}", ws);
+        assert!(
+            ws[0].contains("aspect-only `Box`")
+                && ws[0].contains("`item-cross-size`")
+                && ws[0].contains("§4.10"),
+            "{:?}",
+            ws
+        );
+    }
+
+    #[test]
+    fn wrappanel_aspect_only_box_with_item_cross_size_does_not_warn() {
+        // Positive control: matches the Phase 3 gallery sub-screen — the
+        // explicit `item-cross-size: 88` suppresses the warning.
+        let src = r#"component C inherits W {
+            WrapPanel {
+                item-cross-size: 88
+                Box { aspect: 1:1 fill: #cccccc }
+                Box { aspect: 1:1 fill: #cccccc }
+            }
+        }"#;
+        let result = check_src(src);
+        assert!(!result.has_errors(), "{:?}", result.diagnostics);
+        assert!(warnings(src).is_empty(), "{:?}", warnings(src));
+    }
+
+    #[test]
+    fn wrappanel_aspect_only_box_nested_does_not_warn() {
+        // Non-direct-child shape: the aspect-only Box is nested inside
+        // another container inside the WrapPanel. Per DD-M3-P3-004 the
+        // guard does not scan into nested containers.
+        let src = r#"component C inherits W {
+            WrapPanel {
+                VStack {
+                    Box { aspect: 1:1 fill: #cccccc }
+                }
+            }
+        }"#;
+        let result = check_src(src);
+        assert!(!result.has_errors(), "{:?}", result.diagnostics);
+        assert!(warnings(src).is_empty(), "{:?}", warnings(src));
+    }
+
+    #[test]
+    fn wrappanel_box_without_aspect_does_not_warn() {
+        // Box without `aspect:` is not the footgun shape — no warning.
+        let src = r#"component C inherits W {
+            WrapPanel {
+                Box { fill: #cccccc }
+            }
+        }"#;
+        let result = check_src(src);
+        assert!(!result.has_errors(), "{:?}", result.diagnostics);
+        assert!(warnings(src).is_empty(), "{:?}", warnings(src));
+    }
+
+    #[test]
+    fn wrappanel_multi_aspect_only_box_emits_single_warning() {
+        // One warning per WrapPanel regardless of how many matching
+        // children — the warning describes the WrapPanel-level setting,
+        // not per-child.
+        let src = r#"component C inherits W {
+            WrapPanel {
+                Box { aspect: 1:1 fill: #cccccc }
+                Box { aspect: 1:1 fill: #cccccc }
+                Box { aspect: 1:1 fill: #cccccc }
+            }
+        }"#;
+        let ws = warnings(src);
+        assert_eq!(ws.len(), 1, "{:?}", ws);
     }
 
     #[test]
