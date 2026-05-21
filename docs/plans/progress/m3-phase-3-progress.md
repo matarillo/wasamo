@@ -164,17 +164,17 @@ Discharges the DD-M3-P3-004 Recommendation companion judgement
 Discharges DD-M3-P3-006 runtime gate; ADR verification closure
 **evidence item 3**.
 
-- [ ] IR loader recognises the WrapPanel widget node and
+- [x] IR loader recognises the WrapPanel widget node and
       materialises `WidgetData::WrapPanel` directly (no
       `PropertyValue` involvement; the three attributes stay
       Box-internal-pattern fields).
-- [ ] `validate()` rejects memory-IR with negative
+- [x] `validate()` rejects memory-IR with negative
       `item_cross_size` / `item_spacing` / `line_spacing` values
       (last-line-of-defence for the spec invariant since
       `wasamo_load_ui`'s memory-IR path bypasses `wasamoc`).
       Error surface: `WASAMO_ERR_IR_MALFORMED` (DD-M3-P3-006
       error class).
-- [ ] Pure-logic unit tests covering: 0-child WrapPanel valid;
+- [x] Pure-logic unit tests covering: 0-child WrapPanel valid;
       1-child WrapPanel valid; multi-child WrapPanel valid (no
       upper bound); each of the three negative-value rejection
       paths fires under memory-IR; the zero-value path is *not*
