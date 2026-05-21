@@ -326,6 +326,15 @@ attribute names):
   by an ASCII digit. Bare `-` remains an error; binary
   subtraction is not grammatical in the DSL, so the leading-sign
   reading is unambiguous in expression position.
+- **The negative entry path is integer-only.** `scan_number`'s
+  fractional (`-1.5`) and `px`-unit (`-12px`) branches are
+  rejected at lex time when entered with `negative == true`,
+  yielding diagnostics that point to integer literals as the
+  only legal negative form. `FloatLit` and `Measurement` remain
+  unsigned per dsl_spec §5 (AST table) and §2 (measurement
+  surface). This bound was introduced after rev 1 of the T1
+  retrospective surfaced a scope-widening issue in owner review;
+  see commit `bf7aee0` and `t1-step-end-retrospective.md` rev 2.
 - Ratio literals (`<num>:<den>`) remain unsigned by construction
   (dsl_spec §4.9 surface). The negative-entry path in
   `scan_number` skips the ratio fold.
@@ -338,19 +347,28 @@ attribute names):
   No existing program shape relied on the previous rejection; the
   parser would still reject `in-outx` in any meaningful context.
 - The lexer test `in_out_followed_by_alphanumeric_is_error` was
-  replaced with `in_outx_lexes_as_kebab_ident` plus three new
-  kebab / negative-IntLit tests (`kebab_case_ident`,
-  `kebab_ident_breaks_on_non_alpha_after_hyphen`,
-  `negative_int_literal`, `negative_int_in_property_bind_position`).
+  replaced with `in_outx_lexes_as_kebab_ident` plus six new
+  kebab / negative-literal tests:
+  - `kebab_case_ident`
+  - `kebab_ident_breaks_on_non_alpha_after_hyphen`
+  - `negative_int_literal`
+  - `negative_int_in_property_bind_position`
+  - `negative_float_literal_rejected` (rev 2; `-1.5` reject)
+  - `negative_measurement_literal_rejected` (rev 2; `-12px` reject)
 
 The progress doc's "Phase 3 introduces no new parser grammar"
 prose continues to hold — the parser's IDENT-keyed PropertyBind
-shape is unchanged. The lexer's `Token::Ident` surface and
-integer-literal sign domain widen. This is recorded so the
+shape is unchanged. The lexer's `Token::Ident` surface widens
+(kebab segments admitted) and the integer-literal sign domain
+widens (negative IntLit admitted); `FloatLit` / `Measurement` /
+`RatioLit` surfaces remain unsigned. This is recorded so the
 Phase 3 closing Moment 2 spec re-sync can decide whether the
 lexer change deserves its own note in dsl_spec §2 (lexical
-surface) or is sufficiently absorbed by §4.10's normative
-attribute-name list.
+surface) — and specifically whether the "IntLit signed,
+FloatLit / Measurement unsigned" split needs a one-line
+confirmation in §2 / §5 — or is sufficiently absorbed by
+§4.10's normative attribute-name list and the existing AST
+table.
 
 ## CI / verification log
 
