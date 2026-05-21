@@ -106,21 +106,19 @@ T8 は実装着手時に何を assert すれば close できるかが既に定�
 
 ### phase-end 固有
 
-11. **Acceptance criteria (Ax) 達成確認:** **phase-branch CI green
-    待ち (preliminary 達成)**
+11. **Acceptance criteria (Ax) 達成確認:** **達成**
     - ADR §Phase 3 verification closure の evidence item 1–5 は
-      T1–T9 で landing 完了し、ローカル証跡では達成読み: (1)
-      sub-screen positive control = `examples/gallery/` 88 / 12
-      / 12 + 10 thumbs、(2) pure-logic line-breaker / arrange
-      tests = T7 unit test、(3) IR loader defense-in-depth = T6
-      `validate()`、(4) Windows-runtime clip-absence +
-      visible-overflow fixture = T8 (skip-guard は SSH dev box 上
-      で verify 済み、CI 上の実行 green は item 15 と同じ
-      phase-branch CI run で確認)、(5) visible smoke = T9
-      `Start-Process .\target\release\gallery-rust.exe` success +
-      owner-manual visual confirmation。
-    - **「達成」確定は phase-branch CI green 確認後**。CI URL fold
-      の follow-up commit で本項を「達成」に flip する。
+      T1–T9 で landing 完了 + phase-branch CI green (item 15) で
+      確定達成: (1) sub-screen positive control =
+      `examples/gallery/` 88 / 12 / 12 + 10 thumbs、(2) pure-logic
+      line-breaker / arrange tests = T7 unit test、(3) IR loader
+      defense-in-depth = T6 `validate()`、(4) Windows-runtime
+      clip-absence + visible-overflow fixture = T8 (skip-guard は
+      SSH dev box 上で verify 済み、phase-branch CI run
+      <https://github.com/matarillo/wasamo/actions/runs/26256127948>
+      で `cargo test --workspace` green を確認)、(5) visible smoke
+      = T9 `Start-Process .\target\release\gallery-rust.exe`
+      success + owner-manual visual confirmation。
 
 12. **`CHANGELOG.md` / `ROADMAP.md` 整合:** **保留**
     - `CHANGELOG.md` Unreleased への M3-Phase 3 delivery 記録は
@@ -146,17 +144,19 @@ T8 は実装着手時に何を assert すれば close できるかが既に定�
       growth path、process continuity (inline option presentation、
       fast-track / merge gate)、live-note audit triggers を含む。
 
-15. **CI green 確認:** **phase branch no-ff merge + push 後に
-    `workflow_dispatch` で実行予定**
+15. **CI green 確認:** **merge 前 green**
     - T10 commit set を `feat/m3-phase-3-t10` から
-      `feat/m3-phase-3` へ **no-ff merge** (Phase 2 / Phase 3 の
-      task → phase merge は no-ff 運用が確定。`git log --merges
-      feat/m3-phase-3` 参照) し、push 後に `workflow_dispatch` から
-      CI を回す。CI URL は green 確認後に本 retrospective item 15
-      と item 11 (A3 達成判定) へ fold する follow-up commit を
-      phase branch 上で打つ。
+      `feat/m3-phase-3` へ no-ff merge (`78652c1`、Phase 2 /
+      Phase 3 の task → phase merge は no-ff 運用が確定。`git log
+      --merges feat/m3-phase-3` 参照)、push 済み。
+    - phase-branch CI `workflow_dispatch` run on `78652c1`:
+      <https://github.com/matarillo/wasamo/actions/runs/26256127948>
+      → **green** (`cargo build --release --workspace`、
+      `cargo test --workspace` を含み、T8 Windows-runtime
+      integration test も green)。
     - main no-ff merge / push は phase-end gate の owner 明示承認
-      後 (本 retro と別 session) に行う。
+      後 (本 retro と別 session) に行う。push 後は main 上で
+      `push` トリガによる CI 自動実行 → green 再確認。
 
 16. **human-visible GUI smoke:** **不要 / Phase 3 内で実施済み**
     - T9 で `Start-Process .\target\release\gallery-rust.exe`

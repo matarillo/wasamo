@@ -256,19 +256,17 @@ smoke) and the
 Discharges the m3-plan §Phase-end criteria checklist for Phase 3.
 
 - [x] `cargo fmt --all -- --check` green.
-- [ ] `cargo build --release --workspace` and `cargo test
+- [x] `cargo build --release --workspace` and `cargo test
       --workspace` green locally **and** on CI
       (`workflow_dispatch`). Local half: green at T10 (release +
-      debug build + workspace tests). CI half: pending the
-      phase-branch run after T10 → `feat/m3-phase-3` no-ff merge
-      and push; the CI URL folds into
-      [phase-end-retrospective.md item 15](../../notes/m3-phase-3/phase-end-retrospective.md)
-      and this checkbox flips at that follow-up commit.
-- [ ] Windows-only integration test (T8) green on CI (fail, not
+      debug build + workspace tests). CI half: green on
+      `feat/m3-phase-3` `78652c1` —
+      <https://github.com/matarillo/wasamo/actions/runs/26256127948>.
+- [x] Windows-only integration test (T8) green on CI (fail, not
       skip, if Compositor missing). T8 skip-guard verified locally
-      on SSH dev box at T8 landing; CI confirmation rides on the
-      same phase-branch `workflow_dispatch` run as the previous
-      bullet and flips at the same follow-up commit.
+      on SSH dev box at T8 landing; CI green rode the same
+      phase-branch `workflow_dispatch` run as the previous bullet
+      (<https://github.com/matarillo/wasamo/actions/runs/26256127948>).
 - [x] **Moment 2 spec re-sync.** Flipped
       [dsl_spec.md §4.10](../../dsl_spec.md#410-wrappanel-layout-primitive-m3-phase-3)
       Phase status marker to
