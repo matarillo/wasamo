@@ -16,10 +16,15 @@ task: T4 — wasamoc IR text emit
 emit grammar」を test として固定すること、および emit / re-parse
 round-trip 安定性の確認。
 
-対象コミット (2 件):
+対象コミット (4 件):
 
 - `2eb7f7a test(wasamoc): cover WrapPanel IR text emit + cross-crate round-trip (M3-Phase 3 T4)`
 - `a42cb3c docs(m3-phase-3): flip T4 checkboxes (wasamoc IR text emit)`
+- `f5ba3d8 docs(m3-phase-3): record T4 step-end retrospective` (本ファイル初稿)
+- `035f566 test(wasamoc): cover remaining WrapPanel presence combinations (M3-Phase 3 T4)`
+  — オーナーレビュー指摘 (gate 文言「each combination」= 2^3 = 8 vectors
+  に対し初稿は 4 vector しか cover していなかった) に対する gap fill。
+  010 / 001 / 110 / 101 の 4 vector を追加。
 
 step-end の gate であり phase-end retrospective ではない。merge 先は
 phase ブランチ `feat/m3-phase-3` (ff)。本 step (T4) は単一 task =
@@ -40,12 +45,25 @@ phase ブランチ `feat/m3-phase-3` (ff)。本 step (T4) は単一 task =
   identifier の非先頭位置で `-` を許容しているため、emit された
   `prop item-cross-size = 96` がそのまま IR loader を逆走できる。
   これも production コード変更なしで成立。
-- 追加した unit test (emit.rs::tests) は 5 件:
-  - `wrap_panel_zero_children_no_attributes_emitted`
+- 追加した unit test (emit.rs::tests) は **9 件** (初稿 5 件 +
+  オーナーレビュー後の gap fill 4 件):
+  - `wrap_panel_zero_children_no_attributes_emitted` (presence 000)
   - `wrap_panel_all_three_attributes_emitted_as_decimal_ints`
+    (presence 111)
   - `wrap_panel_only_item_cross_size_omits_other_attributes`
-  - `wrap_panel_only_spacings_omits_item_cross_size`
+    (presence 100)
+  - `wrap_panel_only_spacings_omits_item_cross_size` (presence 011)
   - `wrap_panel_zero_valued_attributes_emitted_as_zero_ints`
+    (値の edge; presence vector としては 111)
+  - `wrap_panel_only_item_spacing_present` (presence 010)
+  - `wrap_panel_only_line_spacing_present` (presence 001)
+  - `wrap_panel_item_cross_size_and_item_spacing_present`
+    (presence 110)
+  - `wrap_panel_item_cross_size_and_line_spacing_present`
+    (presence 101)
+
+  2^3 = 8 presence vector をすべて cover し、別途 zero-edge を 1 件
+  追加した形。
 - 追加した round-trip test (`wasamo-runtime/tests/ir_loader_roundtrip.rs`)
   は 1 件: `wrap_panel_emit_then_parse_yields_equal_ir`。
   `wasamoc::emit::emit` → `wasamo_runtime::ir_loader::parse_ir` が
@@ -58,13 +76,15 @@ phase ブランチ `feat/m3-phase-3` (ff)。本 step (T4) は単一 task =
   `zero_valued_attributes_emitted_as_zero_ints` でピン留め。
   emit 側でも「explicitly zero」と「absent」を区別すること
   (`prop ... = 0` が出力される) を test で保証。
-- **Clean rebuild gate:**
-  `cargo clean` (3621 files removed, 980.6 MiB) → `cargo build
-  --release --workspace` (53.14s, green) → `cargo build --workspace`
-  (debug; 44.45s, green) → `cargo test --workspace` (failure 0 件;
-  wasamoc lib 198 passed [T3 の 193 から +5]、`ir_loader_roundtrip`
-  6 passed [T3 の 5 から +1]、他 crate も全 green) →
+- **Clean rebuild gate (gap fill 後、commit `035f566` 時点):**
+  `cargo clean` (2552 files removed, 870.0 MiB) → `cargo build
+  --release --workspace` (51.64s, green) → `cargo build --workspace`
+  (debug; 47.18s, green) → `cargo test --workspace` (failure 0 件;
+  wasamoc lib **202 passed** [T3 の 193 から +9]、`ir_loader_
+  roundtrip` 6 passed [T3 の 5 から +1]、他 crate も全 green) →
   `cargo fmt --all -- --check` (post-commit state; zero exit)。
+  初稿時点 (commit `2eb7f7a`) の rebuild も同じく green で、wasamoc
+  lib 198 passed (T3 の 193 から +5) を観測していた。
 
 T4 の blocker は残っていない。T5 (`wasamo-runtime` widget catalog) へ
 進める。
@@ -124,13 +144,14 @@ T3 (lowering) と T4 (emit) はその同じ命題を入出力の両端から押�
      T1 の Decisions log に記録済みの「IntLit signed / FloatLit
      Measurement RatioLit unsigned」の §2/§5 表記決定は T10 マター。
 
-3. **ローカル clean rebuild:** **green**
-   - `cargo clean`: 3621 files removed, 980.6 MiB。
-   - `cargo build --release --workspace`: green (53.14s)。
-   - `cargo build --workspace` (debug): green (44.45s)。
+3. **ローカル clean rebuild:** **green** (gap fill commit `035f566`
+   後に再実行した値)
+   - `cargo clean`: 2552 files removed, 870.0 MiB。
+   - `cargo build --release --workspace`: green (51.64s)。
+   - `cargo build --workspace` (debug): green (47.18s)。
    - `cargo test --workspace`: failure 0 件。
-     - `wasamoc` lib test: **198 passed** (T3 の 193 から +5: T4 で
-       追加した 5 件の emit test)。
+     - `wasamoc` lib test: **202 passed** (T3 の 193 から +9: T4 で
+       追加した 9 件の emit test [初稿 5 件 + gap fill 4 件])。
      - `wasamo-runtime` integration `ir_loader_roundtrip`:
        **6 passed** (T3 の 5 から +1: `wrap_panel_emit_then_parse_
        yields_equal_ir`)。
@@ -149,11 +170,11 @@ T3 (lowering) と T4 (emit) はその同じ命題を入出力の両端から押�
 
 5. **plan/ADR に記載の step 目的から外れた「ついで」のリファクタ・
    構造変更:** **なし**
-   - 追加したのは `emit.rs::tests` 末尾の T4 section (5 件の test)
-     と `wasamo-runtime/tests/ir_loader_roundtrip.rs` の helper +
-     test 1 件 (`build_wrap_panel_ir` / `wrap_panel_emit_then_parse_
-     yields_equal_ir`) のみ。production コードに 1 行も触れていない。
-     format / rename 系の churn なし。
+   - 追加したのは `emit.rs::tests` 末尾の T4 section (9 件の test:
+     初稿 5 件 + 後追い 4 件) と `wasamo-runtime/tests/ir_loader_
+     roundtrip.rs` の helper + test 1 件 (`build_wrap_panel_ir` /
+     `wrap_panel_emit_then_parse_yields_equal_ir`) のみ。production
+     コードに 1 行も触れていない。format / rename 系の churn なし。
 
 6. **現在の phase ADR への追加 DD 必要性:** **なし**
    - DD-M3-P3-001 / DD-M3-P3-003 / DD-M3-P3-004 / DD-M3-P3-006 の
@@ -202,17 +223,18 @@ ff merge を実行し、事後にオーナーへ通知する形を取る。
 
 T4 で追加したテストと、走らせた command を記録する。
 
-新規テスト (emit, wasamoc): 5 件
+新規テスト (emit, wasamoc): 9 件 (8 presence vector + 1 値 edge)
 
-- `wrap_panel_zero_children_no_attributes_emitted` (no-attr 出力)
-- `wrap_panel_all_three_attributes_emitted_as_decimal_ints`
-  (3 属性 + 複数 Box 子、decimal 整数形)
-- `wrap_panel_only_item_cross_size_omits_other_attributes`
-  (presence/absence の混在)
-- `wrap_panel_only_spacings_omits_item_cross_size`
-  (presence/absence の対称 case)
+- `wrap_panel_zero_children_no_attributes_emitted` (presence 000)
+- `wrap_panel_only_line_spacing_present` (presence 001)
+- `wrap_panel_only_item_spacing_present` (presence 010)
+- `wrap_panel_only_spacings_omits_item_cross_size` (presence 011)
+- `wrap_panel_only_item_cross_size_omits_other_attributes` (presence 100)
+- `wrap_panel_item_cross_size_and_line_spacing_present` (presence 101)
+- `wrap_panel_item_cross_size_and_item_spacing_present` (presence 110)
+- `wrap_panel_all_three_attributes_emitted_as_decimal_ints` (presence 111)
 - `wrap_panel_zero_valued_attributes_emitted_as_zero_ints`
-  (DD-M3-P3-006 zero は出力に明示)
+  (DD-M3-P3-006 zero は出力に明示; presence vector としては 111)
 
 新規テスト (ir_loader_roundtrip, wasamo-runtime): 1 件
 
@@ -220,21 +242,27 @@ T4 で追加したテストと、走らせた command を記録する。
   (3 属性 + Box 子複数、cross-crate emit → parse_ir → IrComponent
   完全再構成)
 
-実行コマンド:
+実行コマンド (gap fill 後、commit `035f566` 時点):
 
 ```text
-cargo clean                                (3621 files, 980.6 MiB)
-cargo build --release --workspace          (53.14s, green)
-cargo build --workspace                    (debug; 44.45s, green)
+cargo clean                                (2552 files, 870.0 MiB)
+cargo build --release --workspace          (51.64s, green)
+cargo build --workspace                    (debug; 47.18s, green)
 cargo test --workspace                     (failure 0)
-cargo test -p wasamoc --lib emit::tests    (16 passed [+5 vs T3 ベース])
+cargo test -p wasamoc --lib emit::tests    (26 passed [+9 vs T3 ベース])
 cargo test -p wasamo-runtime --test ir_loader_roundtrip
                                            (6 passed [+1 vs T3 ベース])
 cargo fmt --all -- --check                 (post-commit state; zero exit)
 ```
 
-いずれも green。`wasamoc` lib test は **198 passed** (T3 の 193 から
-+5)、`ir_loader_roundtrip` は **6 passed** (T3 の 5 から +1)。
+いずれも green。`wasamoc` lib test は **202 passed** (T3 の 193 から
++9)、`ir_loader_roundtrip` は **6 passed** (T3 の 5 から +1)。
+
+初稿時点 (commit `2eb7f7a` 後) の rebuild も同じく green で、
+`wasamoc` lib 198 passed (`emit::tests` で 22 passed)、`ir_loader_
+roundtrip` 6 passed を観測していた。初稿 retrospective には
+`emit::tests (16 passed [+5])` と誤記していた (本来 22 passed);
+オーナーレビュー指摘を契機に gap fill コミットと併せて修正。
 
 ## Follow-Up
 
