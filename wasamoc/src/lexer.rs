@@ -248,8 +248,12 @@ pub fn tokenize(src: &str, filename: &str) -> Result<Vec<SpannedToken>, Diagnost
                     // literal. Required by M3-Phase 3 to give `wasamoc
                     // check` reach over `item-cross-size: -1` etc. so the
                     // rejection diagnostic can name the offending attribute
-                    // (DD-M3-P3-006 compile-time gate). Floats / ratios /
-                    // measurements stay positive-only by construction.
+                    // (DD-M3-P3-006 compile-time gate). The negative entry
+                    // path in `scan_number` is integer-only: a fractional
+                    // continuation (`-1.5`) or `px` unit (`-12px`) is
+                    // rejected at lex time. Ratio literals (`-num:den`)
+                    // are similarly excluded because RatioLit is unsigned
+                    // per dsl_spec §4.9.
                     scan_number(&mut c, filename, start.line, start.col, true)?
                 } else {
                     return Err(Diagnostic::error(
@@ -379,6 +383,21 @@ fn scan_number(
     }
 
     if c.peek() == Some('.') && c.peek2().map(|ch| ch.is_ascii_digit()).unwrap_or(false) {
+        if negative {
+            // Negative entry is integer-only. dsl_spec FloatLit surface is
+            // unsigned (§5 AST table); the M3-Phase 3 lexer extension
+            // exists only to give `wasamoc check` reach over negative
+            // integer literals on WrapPanel attributes (DD-M3-P3-006).
+            // Reject a fractional continuation explicitly rather than
+            // silently widening the FloatLit surface.
+            return Err(Diagnostic::error(
+                filename,
+                line,
+                col,
+                "negative float literals are not part of the DSL surface; \
+                 `-` followed by digits only forms a negative integer",
+            ));
+        }
         s.push('.');
         c.advance();
         is_float = true;
@@ -392,13 +411,23 @@ fn scan_number(
         }
     }
 
-    // Unit "px"
+    // Unit "px". Negative measurements are not part of the DSL surface —
+    // the spec's measurement form (`12px`) is unsigned.
     if c.remaining().starts_with("px") {
         let after = c.remaining()[2..].chars().next();
         if !after
             .map(|ch| ch.is_alphanumeric() || ch == '_')
             .unwrap_or(false)
         {
+            if negative {
+                return Err(Diagnostic::error(
+                    filename,
+                    line,
+                    col,
+                    "negative measurement literals are not part of the DSL surface; \
+                     `-` followed by digits only forms a negative integer",
+                ));
+            }
             c.advance();
             c.advance();
             let value: f64 = s.parse().unwrap();
@@ -702,6 +731,23 @@ mod tests {
         let toks = lex_ok("-1 -42");
         assert!(matches!(&toks[0], Token::IntLit(-1)));
         assert!(matches!(&toks[1], Token::IntLit(-42)));
+    }
+
+    #[test]
+    fn negative_float_literal_rejected() {
+        // Spec §5 AST table: FloatLit surface is unsigned. The M3-Phase 3
+        // negative-entry path is integer-only; a fractional continuation
+        // is rejected at lex time so the lexer's surface widening stays
+        // scoped to the WrapPanel attribute use case.
+        assert!(lex_err("-1.5").contains("negative float"));
+    }
+
+    #[test]
+    fn negative_measurement_literal_rejected() {
+        // Measurements (`12px`) are unsigned per spec. The negative-entry
+        // path rejects `-12px` for the same scope-control reason as
+        // negative floats.
+        assert!(lex_err("-12px").contains("negative measurement"));
     }
 
     #[test]
