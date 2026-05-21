@@ -143,7 +143,7 @@ Discharges the DD-M3-P3-004 Recommendation companion judgement
 
 ### T5 — `wasamo-runtime` widget catalog
 
-- [ ] `WidgetData::WrapPanel { item_cross_size: Option<i32>,
+- [x] `WidgetData::WrapPanel { item_cross_size: Option<i32>,
       item_spacing: i32, line_spacing: i32 }` variant added in
       `wasamo-runtime/src/widget.rs` (children live on
       `WidgetNode.children` per the existing per-widget
@@ -152,10 +152,10 @@ Discharges the DD-M3-P3-004 Recommendation companion judgement
       (parent-cross passthrough per DD-M3-P3-004 Option (a));
       `item_spacing: 0` / `line_spacing: 0` (touching items /
       lines per DD-M3-P3-003).
-- [ ] `WidgetKind::WrapPanel` arm added; all existing exhaustive
+- [x] `WidgetKind::WrapPanel` arm added; all existing exhaustive
       matches on `WidgetKind` / `WidgetData` gain a `WrapPanel`
       arm.
-- [ ] Layout dispatch wires `WidgetKind::WrapPanel` into the
+- [x] Layout dispatch wires `WidgetKind::WrapPanel` into the
       Phase 3 layout function added in T7 (placeholder dispatch
       arm at this commit; T7 fills it).
 
