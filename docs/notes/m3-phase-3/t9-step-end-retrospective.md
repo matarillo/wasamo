@@ -2,11 +2,39 @@
 title: M3-Phase 3 / T9 step-end retrospective
 status: recorded
 created: 2026-05-22
+revised: 2026-05-22 (rev 2 — owner review findings 1/2/3 fold)
 scope: step-end
 task: T9 — `examples/gallery/` + `examples/gallery-rust/` additive growth (ADR §Phase 3 verification closure evidence item 5)
 ---
 
 # M3-Phase 3 / T9 step-end retrospective
+
+> **Revision history**
+>
+> - **rev 1 (initial; commit `86ebfc1`):** Initial record stated
+>   `T9 step-end 基準は達成済み` in Current Judgment, used
+>   `item-cross-size: 120; item-spacing: 16; line-spacing: 16` for
+>   the gallery sub-screen (8 thumbnails), and contained an
+>   arithmetic self-contradiction in the Main Learning example
+>   (`"(30, 306) ではなく (30, 306)"`).
+> - **rev 2 (this commit):** Three owner review findings folded.
+>   - **Finding 1:** Soften "達成済み" wording. The Current Judgment
+>     now distinguishes "checklist 上の事実関係 (実装・evidence・
+>     rebuild) は T9 close 候補に達した" from "step-end gate は
+>     fast-track 不成立 (item 4 / item 5「あり」) のため owner
+>     明示承認を経て初めて merge 可"。
+>   - **Finding 2:** Revert the gallery sub-screen numerics from
+>     `120 / 16 / 16` (8 thumbs, 5+3 wrap) to `88 / 12 / 12` (10
+>     thumbs, 7+3 wrap) to align with the ADR's canonical example
+>     in §Phase 3 verification closure item 1 (sub-screen positive
+>     control) and item 4 (CI integration fixture). The numerics
+>     revert lands as a separate commit alongside this revision;
+>     visible smoke screenshots in `docs/references/m3-phase-3/`
+>     are replaced to match.
+>   - **Finding 3:** Fix the Main Learning numeric example. The
+>     pre-fix vs post-fix Text-label screen position is recomputed
+>     against the reverted `88 / 12 / 12` geometry (Box at row 2
+>     col 1, absolute `(0, 100)`).
 
 ## Scope
 
@@ -28,14 +56,18 @@ build + 起動できることまでを確認する step である。
 - `d1e5ba6 feat(examples): grow gallery sub-screen to WrapPanel of 8 thumbnails (M3-Phase 3 T9)`
 - `e89a423 docs(m3-phase-3): close T9 gallery sub-screen step + visible-smoke evidence`
 
-T9 が本 step で landed した材料:
+T9 が本 step で landed した材料 (rev 2 反映後):
 
 - `examples/gallery/gallery.ui` を additive に成長 — Phase 2 の単一
-  `Box { aspect: 16:9; … }` を `WrapPanel` of 8 uniform 1:1 Box
-  thumbnails (`item-cross-size: 120; item-spacing: 16;
-  line-spacing: 16`) に置き換え。Default 800×600 client window で
-  5+3 wrap、より狭い window で 2-col / 1-col に rewrap することを
-  smoke 確認 (framing decision E)。
+  `Box { aspect: 16:9; … }` を `WrapPanel` of 10 uniform 1:1 Box
+  thumbnails (`item-cross-size: 88; item-spacing: 12;
+  line-spacing: 12`) に置き換え。Default 800×600 client window
+  (≈ 784×561) で 7+3 wrap、より狭い window では 2 列以下に rewrap
+  することを smoke 確認 (framing decision E)。WrapPanel attribute
+  値は ADR §Phase 3 verification closure item 1 / item 4 の
+  canonical example に一致 (rev 1 で採用した `120 / 16 / 16 +
+  8 thumbs` は visible-wrap balance のための未文書化 deviation で、
+  Finding 2 を受けて rev 2 で巻き戻し)。
 - `examples/gallery-rust/README.md` を Phase 3 のサブスクリーン形状
   に追記。`Start-Process` で .exe を起動して visible smoke が
   取れるところまで確認 (framing decision G; assistant は GUI 正しさ
@@ -65,7 +97,22 @@ phase ブランチ `feat/m3-phase-3` (ff)。本 step (T9) は単一 task =
 
 ## Current Judgment
 
-2026-05-22 時点で T9 step-end 基準は **達成済み**。
+2026-05-22 時点の判定 (rev 2 update):
+
+- **Checklist 上の事実関係:** すべて記入済み。実装・evidence・
+  rebuild gate の各事実は T9 close 候補に達した。
+- **Fast-track 判定:** **不成立**。Checklist item 4 (PO 相談あり)
+  と item 5 (off-plan refactor あり — `sync_visuals` fix) のため
+  retrospectives.md §進行手順 3 のファストトラック条件 (item 2–8
+  すべて「なし」+ item 3 green) を満たさない。
+- **Merge gate:** owner 明示承認待ち。step→phase ブランチへの ff
+  merge は本 retrospective を含む step-end report をもって owner
+  judgment を仰ぐ段階であり、本 step 単独で gate を通過したとは
+  主張しない。phase-end (Phase 3 全体 close) は T10 側の責務で、
+  T9 単独で Phase 3 discharge ではない (Verification closure item 5
+  も T10 phase-end gates に gallery sub-screen の最終確認が残る)。
+
+事実列 (checklist 達成側):
 
 - progress file T9 checklist 4 項目はすべて `[x]` に flip 済み。
 - `cargo build --release -p gallery-rust` 成功。`Start-Process
@@ -74,9 +121,10 @@ phase ブランチ `feat/m3-phase-3` (ff)。本 step (T9) は単一 task =
 - owner-manual GUI smoke で 3 width state (default / medium /
   narrow) を撮影し、すべての `Photo N` ラベルが対応 Box thumbnail
   の中央に正しく描画されることを確認。WrapPanel 自体の line
-  breaker は 5+3 / 2×4 / 1×8 と width 変化に追随して再 wrap
-  している。3 枚は `docs/references/m3-phase-3/` 配下に
-  evidence として保存済み。
+  breaker は default = 7+3 / medium = 5+5 / narrow = 3+3+3+1 と
+  width 変化に追随している (rev 2 / 88-12-12 / 10 thumbs)。
+  3 枚は `docs/references/m3-phase-3/` 配下に evidence として
+  保存済み (rev 2 で 120/16/16 版から 88/12/12 版に差し替え)。
 - clean rebuild gate (post-commit hash `e89a423`) も green:
   `cargo fmt --all -- --check` (前後とも zero exit) →
   `cargo clean` (1043 files / 236.1 MiB 削除) →
@@ -119,11 +167,35 @@ Window root → 単一 Box → 内側 Text という visual tree の各段が
 偶然が成立していた。Phase 3 T9 では WrapPanel が Box thumbnail を
 非ゼロ offset で並べた瞬間に、Text の SetOffset(absolute) が
 parent Box の SetOffset(absolute) と二重加算され、ラベルが
-WrapPanel rect の外まで押し出されて表示された (例: Box 6 が
-row 2 col 1 (0, 136) のとき Text label は (30, 306) に出るのが
-正解だが、`(0, 136) + (30, 170)` で `(30, 306)` ではなく
-`(30, 306)` … 実際の screen 上では `(0+30, 136+170) = (30, 306)`
-が表示位置になり、文字は wrap panel の下端を超えた領域に流れた)。
+WrapPanel rect の外まで押し出されて表示された。
+
+具体例 (rev 2 / 88-12-12 / 10 thumbs の row 2 col 1 = Box 8):
+
+- Box 8 absolute offset (layout 計算結果) = `(0, 100)`
+  (item-cross-size 88 + line-spacing 12 で line 2 が y = 100 から
+  始まる)。Box size = 88×88。
+- Text label の intrinsic size を仮に `(60, 20)` とすると、Box
+  内中央のための offset は `(14, 34)` (= `((88-60)/2, (88-20)/2)`)、
+  Text の絶対座標 (layout 計算結果) = `(0+14, 100+34) = (14, 134)`。
+- **Fix 前** (`Visual.SetOffset(text.absolute) = (14, 134)`):
+  WinRT は (14, 134) を Box visual からの relative offset と解釈
+  するため、画面上の表示位置 = Box の screen 位置 + (14, 134) =
+  `(0+14, 100+134) = (14, 234)`。本来の絶対座標 `(14, 134)` から
+  100 px 下にズレ、ラベルが WrapPanel rect の下端を超えた領域に
+  流れた。
+- **Fix 後**
+  (`Visual.SetOffset(text.absolute − box.absolute) = (14, 34)`):
+  画面上の表示位置 = `(0+14, 100+34) = (14, 134) = text.absolute`。
+  ラベルが Box の中央に正しく着地する。
+
+Box 8 の `(0, 100)` は説明用に最小の非ゼロ Y を選んだケース。
+実際の bug 観察 (rev 1 / 120-16-16 / 8 thumbs) では row 2 col 1
+の Box が `(0, 136)` 相当に置かれ、ラベルは `(0+30, 136+170)
+≈ (30, 306)` の位置 (本来は `(30, 170)` 相当) に流れていた —
+ズレ量は parent Box の Y 座標 = 136 px に等しい。fix の不変式は
+「Visual に書く offset = pure-layout が出した absolute − 親
+visual の absolute」であり、root から見下ろした任意のネスト深さで
+この一段引き算が累積誤差を打ち消す。
 
 修正は `sync_visuals` に `parent_abs_offset: (f32, f32)` 引数を
 増やし、
@@ -170,6 +242,22 @@ no-change で green を維持した。
   `.gitignore` への追加は T10 ではなく out-of-phase residual として
   記録 (Phase 3 scope 外、本 step で発生したが本 step では fix
   しない)。
+- **Gallery sub-screen の数値は ADR canonical example に揃える**
+  (rev 2 / Finding 2 反映)。rev 1 では 800×600 default window で
+  visible-wrap の見栄えを balanced にする目的で `88/12/12` から
+  `120/16/16 + 8 thumbs` (5+3 wrap) に deviate していたが、ADR
+  §Phase 3 verification closure item 1 が gallery を sub-screen
+  positive control として参照する際に `item-cross-size: 88` を
+  explicit に持つ前提で書かれており、item 4 (CI fixture) も
+  `88/12/12` を pin している。Visible-smoke の見栄えは判断者
+  (owner) 側の関心に属し、未文書化の deviation でこれを動かすと
+  ADR と implementation の整合性が崩れる。rev 2 では thumbnail
+  数を 8 → 10 に増やすことで 800×600 で 7+3 wrap を確保し、
+  ADR canonical 値 (`88/12/12`) と framing decision E の
+  "5–10 items" 上限に同時に収めた。判断: ADR canonical 値が
+  ある evidence chain (sub-screen → fixture → wireframe 88×88)
+  は document-driven development の core であり、未文書化 deviate
+  より restore の方が低コスト。
 
 ## Checklist
 
@@ -312,10 +400,15 @@ Visible smoke (framing decision G; owner-manual):
   `MainWindowTitle: Wasamo` の window を 1 つ確認。
 - 3 width state (default 約 800×600 / medium / narrow) の
   smoke 撮影を owner が実施。`docs/references/m3-phase-3/` に
-  3 枚を evidence として保存:
-  - `t9-gallery-smoke-default-window.png` — 5+3 wrap
-  - `t9-gallery-smoke-medium-rewrap.png` — 2-col × 4 row
-  - `t9-gallery-smoke-narrow-rewrap.png` — 1-col
+  3 枚を evidence として保存 (rev 2 で `120/16/16 + 8 thumbs`
+  版から `88/12/12 + 10 thumbs` 版に差し替え):
+  - `t9-gallery-smoke-default-window.png` — 7+3 wrap
+    (default 800×600 client ≈ 784 px width; Photo 1–7 が row 1、
+    Photo 8–10 が row 2)
+  - `t9-gallery-smoke-medium-rewrap.png` — 5+5 wrap (中幅
+    rewrap; 2 行 × 5 列の均等 grid)
+  - `t9-gallery-smoke-narrow-rewrap.png` — 3+3+3+1 wrap
+    (narrow width; Photo 10 が単独で row 4 に到達)
 - 3 枚すべてで Box thumbnail と Photo label が正しく入れ子で
   描画されていること、WrapPanel の line breaker が width 変化に
   追随して再 wrap していることを owner が目視で確認。
