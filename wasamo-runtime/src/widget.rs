@@ -87,6 +87,32 @@ enum WidgetData {
         aspect: Option<box_values::Ratio>,
         fill: Option<box_values::Color>,
     },
+    // M3-Phase 3 DD-M3-P3-001 per-kind tag for the WrapPanel layout
+    // primitive. The three attributes are stored as `i32` per DD-M3-P3-003
+    // / DD-M3-P3-004 (constant-only `i32` plumbing; no new `PropertyValue`
+    // variant). Defaults — applied at this layer, not at the IR layer —
+    // are `item_cross_size: None` (parent-cross passthrough per
+    // DD-M3-P3-004 Option (a)) and `item_spacing: 0` / `line_spacing: 0`
+    // (touching items / lines per DD-M3-P3-003). Children live on
+    // `WidgetNode.children` per the existing per-widget convention,
+    // mirroring Phase 2's `Box` shape (0+ children, no upper bound;
+    // single-child invariant intentionally absent — DD-M3-P3-001).
+    //
+    // Readers (T7 layout, T6 IR loader `validate()`) will arrive via the
+    // per-kind dispatch on `WidgetData` and the `WidgetKind::WrapPanel`
+    // arm in `layout.rs`. T5 lands the catalog wiring only — no
+    // `PropertyValue` / binding / ABI paths touch these fields per
+    // DD-M3-P3-003 / DD-M3-P3-004 constant-only invariants.
+    // `#[allow(dead_code)]` carries until the T6 IR-loader path
+    // (`ir_loader::construct_widget` "WrapPanel" arm) constructs this
+    // variant — Phase 2 T6 used the same forward-pointer pattern on
+    // `WidgetData::Box` until T7 wired the loader.
+    #[allow(dead_code)]
+    WrapPanel {
+        item_cross_size: Option<i32>,
+        item_spacing: i32,
+        line_spacing: i32,
+    },
 }
 
 // ── Property dispatch (M1 experimental property IDs from wasamo.h §5) ─────────
@@ -115,6 +141,35 @@ impl From<windows::core::Error> for PropertyError {
     fn from(e: windows::core::Error) -> Self {
         PropertyError::Runtime(format!("{e}"))
     }
+}
+
+// M3-Phase 3 T5: WrapPanel absent-to-default mapping (DD-M3-P3-003 /
+// DD-M3-P3-004). The runtime catalog owns this policy per the T3
+// progress note "defaults are applied at the runtime layer in T5, not
+// at the IR layer", so the IR loader (T6) only forwards presence /
+// absence and the constructor / pure-logic tests share one
+// authoritative mapping site.
+//
+// - `item_cross_size` absent → `None` (parent-cross passthrough per
+//   DD-M3-P3-004 Option (a); the storage is already `Option<i32>`, so
+//   absence flows through unchanged).
+// - `item_spacing` absent → `0` (touching items per DD-M3-P3-003).
+// - `line_spacing` absent → `0` (touching lines per DD-M3-P3-003).
+//
+// `#[allow(dead_code)]` carries until the T6 IR-loader path calls
+// `WidgetNode::wrap_panel` (transitively this helper); the tests
+// below already exercise it, but the production caller arrives in T6.
+#[allow(dead_code)]
+pub(crate) fn apply_wrap_panel_defaults(
+    item_cross_size: Option<i32>,
+    item_spacing: Option<i32>,
+    line_spacing: Option<i32>,
+) -> (Option<i32>, i32, i32) {
+    (
+        item_cross_size,
+        item_spacing.unwrap_or(0),
+        line_spacing.unwrap_or(0),
+    )
 }
 
 // M3-Phase 2 T8 / DD-M3-P2-005: translate the pure-logic `LayoutError`
@@ -342,6 +397,48 @@ impl WidgetNode {
         Ok(Box::new(Self {
             data: WidgetData::Box { aspect, fill },
             width: SizeConstraint::Shrink,
+            height: SizeConstraint::Shrink,
+            visual,
+            children: Vec::new(),
+            inline_handlers: Vec::new(),
+            attached: false,
+            bindings: Vec::new(),
+        }))
+    }
+
+    // M3-Phase 3 T5: WrapPanel constructor. All three attributes arrive as
+    // `Option<i32>` so callers (chiefly the T6 IR loader's
+    // `construct_widget` "WrapPanel" arm) can pass through DSL presence /
+    // absence verbatim — the runtime catalog itself owns the
+    // absent-to-default policy per the T3 progress note "defaults are
+    // applied at the runtime layer in T5, not at the IR layer". The
+    // default mapping lives in the pure-logic `apply_wrap_panel_defaults`
+    // free function below so unit tests can pin it without a Compositor.
+    // The constructor does not paint a background brush — WrapPanel is a
+    // layout container (mirrors VStack / HStack which also leave the
+    // visual brush unset). Children are appended via the existing
+    // tree-mutation API.
+    //
+    // `#[allow(dead_code)]` carries until the T6 IR-loader path calls
+    // this constructor — Phase 2 T6 used the same forward-pointer
+    // pattern on `box_` until T7 wired the loader.
+    #[allow(dead_code)]
+    pub(crate) fn wrap_panel(
+        compositor: &Compositor,
+        item_cross_size: Option<i32>,
+        item_spacing: Option<i32>,
+        line_spacing: Option<i32>,
+    ) -> windows::core::Result<Box<Self>> {
+        let (item_cross_size, item_spacing, line_spacing) =
+            apply_wrap_panel_defaults(item_cross_size, item_spacing, line_spacing);
+        let visual = compositor.CreateSpriteVisual()?;
+        Ok(Box::new(Self {
+            data: WidgetData::WrapPanel {
+                item_cross_size,
+                item_spacing,
+                line_spacing,
+            },
+            width: SizeConstraint::Fill,
             height: SizeConstraint::Shrink,
             visual,
             children: Vec::new(),
@@ -1073,6 +1170,33 @@ impl WidgetNode {
                     .collect();
                 node
             }
+            // M3-Phase 3 T5: thread the WrapPanel attribute set into the
+            // pure-logic layout engine. The conversion from `i32` (the
+            // DSL surface storage type per DD-M3-P3-003 / DD-M3-P3-004)
+            // to `f32` (the layout engine's numeric domain) lives at this
+            // build boundary — the same shape as how VStack / HStack
+            // hand `spacing` / `padding` to `LayoutNode` (loader-side
+            // i32-to-f32 cast at `ir_loader::construct_widget`). The
+            // measure-arrange itself lands in T7.
+            WidgetData::WrapPanel {
+                item_cross_size,
+                item_spacing,
+                line_spacing,
+            } => {
+                let mut node = LayoutNode::wrap_panel(
+                    item_cross_size.map(|v| v as f32),
+                    *item_spacing as f32,
+                    *line_spacing as f32,
+                );
+                node.width = self.width.clone();
+                node.height = self.height.clone();
+                node.children = self
+                    .children
+                    .iter()
+                    .map(|c| c.build_layout_tree())
+                    .collect();
+                node
+            }
         }
     }
 
@@ -1637,5 +1761,147 @@ mod tests {
         } else {
             panic!("expected WidgetData::Box variant");
         }
+    }
+
+    // ── M3-Phase 3 T5: WrapPanel widget data shape ───────────────────────────
+    //
+    // The variant has no Win32/WinRT field — its data shape is verifiable
+    // as pure logic without a Compositor. The `WidgetNode::wrap_panel`
+    // constructor itself needs a Compositor; T8 (Windows-runtime
+    // integration test) will exercise the build_node materialisation half
+    // alongside the IR loader path landed in T6.
+
+    #[test]
+    fn wrap_panel_variant_carries_three_attributes() {
+        let data = WidgetData::WrapPanel {
+            item_cross_size: Some(96),
+            item_spacing: 8,
+            line_spacing: 12,
+        };
+        match &data {
+            WidgetData::WrapPanel {
+                item_cross_size,
+                item_spacing,
+                line_spacing,
+            } => {
+                assert_eq!(*item_cross_size, Some(96));
+                assert_eq!(*item_spacing, 8);
+                assert_eq!(*line_spacing, 12);
+            }
+            _ => panic!("expected WidgetData::WrapPanel variant"),
+        }
+    }
+
+    #[test]
+    fn wrap_panel_variant_defaults_match_constructor_defaults() {
+        // Mirrors the data shape that `WidgetNode::wrap_panel(..,
+        // None, None, None)` produces after `apply_wrap_panel_defaults`
+        // resolves absences — DD-M3-P3-004 Option (a) parent-cross
+        // passthrough (`None`) and DD-M3-P3-003 touching items / lines
+        // (`0` / `0`). The `apply_wrap_panel_defaults_*` tests below
+        // exercise that resolution directly; this test pins only the
+        // post-resolution data carrier.
+        let data = WidgetData::WrapPanel {
+            item_cross_size: None,
+            item_spacing: 0,
+            line_spacing: 0,
+        };
+        if let WidgetData::WrapPanel {
+            item_cross_size,
+            item_spacing,
+            line_spacing,
+        } = &data
+        {
+            assert!(item_cross_size.is_none());
+            assert_eq!(*item_spacing, 0);
+            assert_eq!(*line_spacing, 0);
+        } else {
+            panic!("expected WidgetData::WrapPanel variant");
+        }
+    }
+
+    #[test]
+    fn wrap_panel_variant_accepts_zero_item_cross_size() {
+        // DD-M3-P3-006 zero-handling: zero is a *valid* setting on every
+        // WrapPanel integer attribute (the rejection threshold is `< 0`,
+        // not `<= 0`). `wasamoc check` (T1) already pins this on the
+        // diagnostic side; the data shape is symmetric — `Some(0)` is a
+        // distinct, legal carrier from `None`.
+        let data = WidgetData::WrapPanel {
+            item_cross_size: Some(0),
+            item_spacing: 0,
+            line_spacing: 0,
+        };
+        if let WidgetData::WrapPanel {
+            item_cross_size, ..
+        } = &data
+        {
+            assert_eq!(*item_cross_size, Some(0));
+        } else {
+            panic!("expected WidgetData::WrapPanel variant");
+        }
+    }
+
+    // ── M3-Phase 3 T5: WrapPanel absent-to-default mapping ──────────────────
+    //
+    // `apply_wrap_panel_defaults` is the single authoritative site for
+    // DD-M3-P3-003 / DD-M3-P3-004 default policy at the runtime catalog
+    // layer. The T6 IR loader forwards presence / absence verbatim and
+    // these tests pin the absent→default mapping the constructor performs.
+
+    use super::apply_wrap_panel_defaults;
+
+    #[test]
+    fn apply_wrap_panel_defaults_maps_all_absent_to_runtime_defaults() {
+        // DD-M3-P3-004 Option (a): `item_cross_size` absent → `None`
+        // (parent-cross passthrough). DD-M3-P3-003: `item_spacing` and
+        // `line_spacing` absent → `0` (touching items / lines).
+        let (item_cross_size, item_spacing, line_spacing) =
+            apply_wrap_panel_defaults(None, None, None);
+        assert_eq!(item_cross_size, None);
+        assert_eq!(item_spacing, 0);
+        assert_eq!(line_spacing, 0);
+    }
+
+    #[test]
+    fn apply_wrap_panel_defaults_passes_through_present_values() {
+        // When every attribute is present in the IR, the mapping is the
+        // identity (modulo the `Option<i32> → i32` unwrap for the two
+        // spacing attributes). Phase 3 has no clamping at this layer —
+        // `wasamoc check` T1 and the T6 `validate()` gate both reject
+        // negative values before they reach the constructor.
+        let (item_cross_size, item_spacing, line_spacing) =
+            apply_wrap_panel_defaults(Some(96), Some(8), Some(12));
+        assert_eq!(item_cross_size, Some(96));
+        assert_eq!(item_spacing, 8);
+        assert_eq!(line_spacing, 12);
+    }
+
+    #[test]
+    fn apply_wrap_panel_defaults_handles_each_attribute_independently() {
+        // Mixed presence: only `item_spacing` is set. The other two
+        // attributes must still receive their per-attribute defaults
+        // (None / 0) — the mapping does not couple attributes.
+        let (item_cross_size, item_spacing, line_spacing) =
+            apply_wrap_panel_defaults(None, Some(5), None);
+        assert_eq!(item_cross_size, None);
+        assert_eq!(item_spacing, 5);
+        assert_eq!(line_spacing, 0);
+    }
+
+    #[test]
+    fn apply_wrap_panel_defaults_preserves_some_zero_distinct_from_none() {
+        // DD-M3-P3-006 zero-handling at the default boundary: `Some(0)`
+        // for `item_cross_size` is a legal, intentional setting (uniform
+        // zero per-line cross-axis size) and must NOT collapse to `None`.
+        // `Some(0)` for the two spacings is indistinguishable from the
+        // absent default at the field-value layer (both yield `0`) but
+        // the helper still threads `Some(0)` through unwrap-or-default
+        // unchanged.
+        let (item_cross_size, item_spacing, line_spacing) =
+            apply_wrap_panel_defaults(Some(0), Some(0), Some(0));
+        assert_eq!(item_cross_size, Some(0));
+        assert_eq!(item_spacing, 0);
+        assert_eq!(line_spacing, 0);
     }
 }

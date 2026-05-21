@@ -10,6 +10,11 @@ pub enum WidgetKind {
     // DD-M3-P2-001 child measure / centred alignment / clip overflow are
     // wired below — see `measure_box` and `arrange_box`.
     Box,
+    // M3-Phase 3 DD-M3-P3-001 per-kind tag for the WrapPanel layout primitive.
+    // T5 wires the catalog half (variant + constructor + placeholder dispatch);
+    // the DD-M3-P3-005 line-breaker measure-arrange lands in T7 — see
+    // `measure_wrap_panel` / `arrange_wrap_panel` below.
+    WrapPanel,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -72,6 +77,27 @@ pub struct LayoutNode {
     /// `aspect: <num>:<den>`; `None` on every other kind and on Box
     /// without an `aspect` attribute.
     pub aspect: Option<Ratio>,
+    /// DD-M3-P3-004: present on WrapPanel when the DSL surface set
+    /// `item-cross-size: <i32>`; uniform per-line cross-axis size for
+    /// every item. `None` on every other kind and on WrapPanel without
+    /// the attribute (parent-cross passthrough per Option (a)).
+    /// `#[allow(dead_code)]` carries until T7's `measure_wrap_panel` /
+    /// `arrange_wrap_panel` read this field (Phase 2 T6 used the same
+    /// forward-pointer pattern on `aspect` until T8).
+    #[allow(dead_code)]
+    pub item_cross_size: Option<f32>,
+    /// DD-M3-P3-003: WrapPanel-only gap (main-axis) between adjacent
+    /// items on the same line. `0.0` on every other kind and on
+    /// WrapPanel without `item-spacing` set (touching items).
+    /// `#[allow(dead_code)]` carries until T7.
+    #[allow(dead_code)]
+    pub item_spacing: f32,
+    /// DD-M3-P3-003: WrapPanel-only gap (cross-axis) between adjacent
+    /// lines. `0.0` on every other kind and on WrapPanel without
+    /// `line-spacing` set (touching lines).
+    /// `#[allow(dead_code)]` carries until T7.
+    #[allow(dead_code)]
+    pub line_spacing: f32,
     pub children: Vec<LayoutNode>,
     // Written by arrange():
     pub offset: (f32, f32),
@@ -88,6 +114,9 @@ impl LayoutNode {
             padding: 0.0,
             alignment: Alignment::Stretch,
             aspect: None,
+            item_cross_size: None,
+            item_spacing: 0.0,
+            line_spacing: 0.0,
             children: Vec::new(),
             offset: (0.0, 0.0),
             size: (0.0, 0.0),
@@ -103,6 +132,9 @@ impl LayoutNode {
             padding,
             alignment,
             aspect: None,
+            item_cross_size: None,
+            item_spacing: 0.0,
+            line_spacing: 0.0,
             children: Vec::new(),
             offset: (0.0, 0.0),
             size: (0.0, 0.0),
@@ -118,6 +150,9 @@ impl LayoutNode {
             padding,
             alignment,
             aspect: None,
+            item_cross_size: None,
+            item_spacing: 0.0,
+            line_spacing: 0.0,
             children: Vec::new(),
             offset: (0.0, 0.0),
             size: (0.0, 0.0),
@@ -138,6 +173,35 @@ impl LayoutNode {
             padding: 0.0,
             alignment: Alignment::Center,
             aspect,
+            item_cross_size: None,
+            item_spacing: 0.0,
+            line_spacing: 0.0,
+            children: Vec::new(),
+            offset: (0.0, 0.0),
+            size: (0.0, 0.0),
+        }
+    }
+
+    // M3-Phase 3 DD-M3-P3-001 / DD-M3-P3-005 WrapPanel layout entry.
+    // Main axis (horizontal per DD-M3-P3-002 Option A) defaults to `Fill`
+    // so the WrapPanel outer main-axis matches the parent's main bound
+    // unconditionally (DD-M3-P3-005 visible-overflow rule); cross axis
+    // defaults to `Shrink` so the height collapses to the sum of line
+    // extents derived in T7. `item_cross_size` / `item_spacing` /
+    // `line_spacing` are wired through here so T7's measure-arrange can
+    // read them off `LayoutNode` without a second hop through `WidgetData`.
+    pub fn wrap_panel(item_cross_size: Option<f32>, item_spacing: f32, line_spacing: f32) -> Self {
+        Self {
+            kind: WidgetKind::WrapPanel,
+            width: SizeConstraint::Fill,
+            height: SizeConstraint::Shrink,
+            spacing: 0.0,
+            padding: 0.0,
+            alignment: Alignment::Stretch,
+            aspect: None,
+            item_cross_size,
+            item_spacing,
+            line_spacing,
             children: Vec::new(),
             offset: (0.0, 0.0),
             size: (0.0, 0.0),
@@ -154,7 +218,22 @@ pub fn measure(node: &LayoutNode, avail_w: f32, avail_h: f32) -> Result<(f32, f3
         WidgetKind::VStack => measure_vstack(node, avail_w),
         WidgetKind::HStack => measure_hstack(node, avail_h),
         WidgetKind::Box => measure_box(node, avail_w, avail_h),
+        WidgetKind::WrapPanel => measure_wrap_panel(node, avail_w, avail_h),
     }
+}
+
+// M3-Phase 3 T5 boundary placeholder. The DD-M3-P3-005 bounded /
+// unbounded main-axis line-breaker lands in T7; until then the
+// dispatch arm exists so the catalog wiring (variant + constructor +
+// `build_layout_tree` arm) builds, but the WrapPanel reports `(0, 0)`
+// extent and contributes no line geometry. Tests that exercise the
+// actual line-breaker arrive in T7 alongside the real implementation.
+fn measure_wrap_panel(
+    _node: &LayoutNode,
+    _avail_w: f32,
+    _avail_h: f32,
+) -> Result<(f32, f32), LayoutError> {
+    Ok((0.0, 0.0))
 }
 
 fn measure_leaf(node: &LayoutNode) -> (f32, f32) {
@@ -347,6 +426,17 @@ pub fn arrange(node: &mut LayoutNode, x: f32, y: f32, w: f32, h: f32) -> Result<
             arrange_hstack(&mut node.children, x, y, w, h, padding, spacing, alignment)
         }
         WidgetKind::Box => arrange_box(node, x, y, w, h),
+        WidgetKind::WrapPanel => {
+            // M3-Phase 3 T5 boundary placeholder. The DD-M3-P3-005 line
+            // arrangement (per-line cross-axis stacking + spacing-aware
+            // main-axis flow + unconditional first-child placement) is
+            // T7's responsibility. For now we record the parent-allocated
+            // cell as the WrapPanel's outer rectangle and leave children
+            // un-arranged; T7 replaces this arm with the real arrange.
+            node.offset = (x, y);
+            node.size = (w, h);
+            Ok(())
+        }
     }
 }
 
