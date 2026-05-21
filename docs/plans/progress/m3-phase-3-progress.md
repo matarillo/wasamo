@@ -374,6 +374,35 @@ confirmation in §2 / §5 — or is sufficiently absorbed by
 §4.10's normative attribute-name list and the existing AST
 table.
 
+### 2026-05-22 — Gallery sub-screen numerics restored to ADR canonical `88 / 12 / 12` (T9 rev 2)
+
+Initial T9 landing (commit `d1e5ba6`) used
+`item-cross-size: 120; item-spacing: 16; line-spacing: 16` with
+8 thumbnails because, on the default 800×600 window
+(≈ 784 px client width), the ADR-canonical `88 / 12 / 12` with
+8 thumbs produces a `7 + 1` wrap which is visually unbalanced. The
+deviation was un-documented at landing time; owner review
+([t9-step-end-retrospective.md rev 2](../../notes/m3-phase-3/t9-step-end-retrospective.md))
+flagged that the ADR
+[§Phase 3 verification closure item 1 (sub-screen positive control)](../../decisions/m3-phase-3-wrap-panel.md#phase-3-verification-closure-what-counts-as-a3-evidence)
+and item 4 (CI integration fixture) both reference `88` as the
+canonical example, so the implementation should match unless the
+deviation is recorded.
+
+Resolution (commit set landed after `e89a423`): restore
+`88 / 12 / 12` and grow the thumbnail count from 8 to 10 (still
+within framing decision E's 5–10 ceiling). On the same default
+window the layout becomes `7 + 3` — visible wrap is preserved and
+the numerics match the ADR-canonical example. The choice "match
+ADR canonical example, adjust count for visible balance" was
+selected over the alternatives "keep `120 / 16 / 16` with a
+deviation note" and "keep 8 thumbs with `7 + 1` wrap" after the
+review. No ADR or spec change is required by this revert — the
+ADR's normative content does not pin the gallery to specific
+dimensions; it pins the integration fixture (T8, unaffected) and
+references the sub-screen example as `item-cross-size: 88` in the
+positive-control description.
+
 ## CI / verification log
 
 (empty — populated as T1–T10 land; see Phase 2 progress file for

@@ -4,9 +4,9 @@ component Gallery inherits Window {
     theme: system
 
     WrapPanel {
-        item-cross-size: 120
-        item-spacing: 16
-        line-spacing: 16
+        item-cross-size: 88
+        item-spacing: 12
+        line-spacing: 12
 
         Box {
             aspect: 1:1
@@ -47,6 +47,16 @@ component Gallery inherits Window {
             aspect: 1:1
             fill: #3399cccc
             Text { text: "Photo 8" }
+        }
+        Box {
+            aspect: 1:1
+            fill: #cc6699cc
+            Text { text: "Photo 9" }
+        }
+        Box {
+            aspect: 1:1
+            fill: #66cc99cc
+            Text { text: "Photo 10" }
         }
     }
 }
