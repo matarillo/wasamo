@@ -1103,7 +1103,7 @@ impl WidgetNode {
     pub fn run_layout(&mut self, window_w: f32, window_h: f32) -> windows::core::Result<()> {
         let mut layout_tree = self.build_layout_tree();
         layout::run_layout(&mut layout_tree, window_w, window_h).map_err(layout_error_to_winerr)?;
-        self.sync_visuals(&layout_tree)
+        self.sync_visuals(&layout_tree, (0.0, 0.0))
     }
 
     fn build_layout_tree(&self) -> LayoutNode {
@@ -1195,22 +1195,33 @@ impl WidgetNode {
         }
     }
 
-    fn sync_visuals(&mut self, computed: &LayoutNode) -> windows::core::Result<()> {
+    // `computed.offset` is the absolute offset the layout engine assigns in
+    // `arrange` (cumulative through parents). The WinRT Composition
+    // `Visual.Offset` is parent-relative, so the parent's absolute offset
+    // is subtracted here before writing. Before M3-Phase 3 the Phase 2
+    // gallery sub-screen had its single Box rooted at the Window origin
+    // (parent absolute offset `(0, 0)`), so the absolute-as-relative write
+    // happened to render correctly; WrapPanel-arranged Boxes have non-zero
+    // offsets and exposed the latent bug as visibly mis-placed Text
+    // labels — see the M3-Phase 3 T9 step-end retrospective.
+    fn sync_visuals(
+        &mut self,
+        computed: &LayoutNode,
+        parent_abs_offset: (f32, f32),
+    ) -> windows::core::Result<()> {
         use windows::core::Interface;
         let visual: Visual = self.visual.cast()?;
         visual.SetOffset(Vector3 {
-            X: computed.offset.0,
-            Y: computed.offset.1,
+            X: computed.offset.0 - parent_abs_offset.0,
+            Y: computed.offset.1 - parent_abs_offset.1,
             Z: 0.0,
         })?;
         visual.SetSize(Vector2 {
             X: computed.size.0,
             Y: computed.size.1,
         })?;
-        // For Button, also resize the root SpriteVisual (already done above)
-        // and keep the label visual's size/offset constant (set at creation).
         for (child, child_computed) in self.children.iter_mut().zip(computed.children.iter()) {
-            child.sync_visuals(child_computed)?;
+            child.sync_visuals(child_computed, computed.offset)?;
         }
         Ok(())
     }
