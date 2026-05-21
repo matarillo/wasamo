@@ -386,8 +386,8 @@ A phase closes when **all** of the following hold:
 7. **Phase-end retrospective recorded.** A short retrospective
    entry lands in `docs/notes/retrospectives.md` covering what
    the phase shipped, what slipped (if anything), and the merge /
-   push gate per
-   [feedback_phase_end_merge memory](../../../../../Users/devuser/.claude/projects/c--Users-devuser-dev-wasamo/memory/feedback_phase_end_merge.md).
+   push gate per the *phase-end merge and push gating* discipline
+   recorded in [docs/notes/retrospectives.md](../notes/retrospectives.md).
 
 ### Milestone-end criteria
 

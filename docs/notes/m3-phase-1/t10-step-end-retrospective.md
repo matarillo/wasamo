@@ -112,9 +112,9 @@ spec sync 作業に折り込んで最小範囲で追認するのが、scope-cree
   task を立てて Phase 1 を待たせる (Phase 1 完了が遅れる; scope
   creep の正規化), (c) Phase 1 の bool spec sync に最小範囲で
   retroactive な `state` 追認を folding (今回採用)。owner 合意の
-  上で (c) を選択した根拠は、メモリ
-  [feedback_revise_dont_workaround.md](../../../../C:/Users/devuser/.claude/projects/c--Users-devuser-dev-wasamo/memory/feedback_revise_dont_workaround.md)
-  の "Revise docs, don't work around them" 原則 — (a) は実装の
+  上で (c) を選択した根拠は、*"Revise docs, don't work around them"*
+  原則 (記憶側で `feedback_revise_dont_workaround` として記録)
+  — (a) は実装の
   ad-hoc 運用上の再解釈で docs を黙って sync しない選択、(b) は
   Phase 1 の closing を待たせる代償が docs 正確性の対価に見合わ
   ない、と判断した。
