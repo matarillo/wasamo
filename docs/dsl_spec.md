@@ -1,15 +1,15 @@
 # Wasamo DSL Specification
 
-**Document version:** 0.9
-**Last updated:** 2026-05-21
+**Document version:** 1.0
+**Last updated:** 2026-05-22
 **Status:** M3-Phase 2 closed (implementation-synced); M3-Phase 3
-WrapPanel chapter is ADR-accepted design draft (pending
-implementation re-sync). Covers the M2 `.ui` surface, the `state`
-surface keyword retroactively, the M3-Phase 1 `bool` scalar binding
-additions, the M3-Phase 2 Box layout primitive (with `aspect` /
-`fill` literal attributes), the M3-Phase 3 WrapPanel layout
-primitive (with `item-cross-size` / `item-spacing` / `line-spacing`
-constant-only integer attributes), and `;wasamo-ir v0`.
+closed (implementation-synced). Covers the M2 `.ui` surface, the
+`state` surface keyword retroactively, the M3-Phase 1 `bool` scalar
+binding additions, the M3-Phase 2 Box layout primitive (with
+`aspect` / `fill` literal attributes), the M3-Phase 3 WrapPanel
+layout primitive (with `item-cross-size` / `item-spacing` /
+`line-spacing` constant-only integer attributes), and
+`;wasamo-ir v0`.
 
 ---
 
@@ -76,8 +76,8 @@ name segments). Using either in identifier position is a parse error.
 | Token       | Lexical pattern                        | Examples                     |
 |-------------|----------------------------------------|------------------------------|
 | `Keyword`   | See §2.1                               | `component`, `in-out`        |
-| `Ident`     | `[A-Za-z_][A-Za-z0-9_]*`              | `Counter`, `VStack`, `count` |
-| `IntLit`    | `[0-9]+`                               | `0`, `12`, `24`              |
+| `Ident`     | `[A-Za-z_][A-Za-z0-9_]*(?:-[A-Za-z][A-Za-z0-9_]*)*` | `Counter`, `count`, `item-cross-size` |
+| `IntLit`    | `-?[0-9]+`                             | `0`, `12`, `-1`              |
 | `FloatLit`  | `[0-9]+\.[0-9]+`                       | `1.5`, `0.0`                 |
 | `BoolLit`   | `true` \| `false`                      | `true`, `false`              |
 | `StringLit` | `"` string content `"`                 | `"Counter"`, `"Count: \{…}"` |
@@ -97,6 +97,10 @@ name segments). Using either in identifier position is a parse error.
 | `StarEq`    | `*=`                                   |                              |
 | `SlashEq`   | `/=`                                   |                              |
 | `Eq`        | `=`                                    |                              |
+
+A leading `-` is part of the `IntLit` token only; it does not extend
+the `FloatLit`, measurement, or `RatioLit` surfaces, and the DSL does
+not introduce a subtraction or unary-minus operator here.
 
 ### 2.3 Whitespace and comments
 
@@ -518,8 +522,7 @@ when it ships).
 
 ### 4.10 WrapPanel layout primitive (M3-Phase 3)
 
-**Phase status:** M3-Phase 3 ADR-accepted design draft; pending
-implementation re-sync.
+**Phase status:** M3-Phase 3 closed; implementation-synced.
 
 `WrapPanel` is a layout container that places its children along a
 **main axis** in document order and breaks onto a new **line** when
@@ -1273,3 +1276,4 @@ future design item.
 | 0.7     | 2026-05-20 | M3-Phase 2 ADR-accepted design draft: added §4.9 Box layout primitive chapter (Phase status marker; `aspect` / `fill` attribute surface; single-child centred-and-clipped layout contract; aspect inscribed-fit measure-arrange with edge cases; image placeholder pattern subsection per DD-M3-P2-006); added `RatioLit` / `ColorLit` tokens (§2.2), grammar rules (§3), AST variants (§5), §8.2 terminals, and §8.6 literal alternatives + Box-internal materialisation note. Pending implementation re-sync at Phase 2 close. |
 | 0.8     | 2026-05-20 | M3-Phase 2 close: flipped §4.9 Phase status marker and document status to implementation-synced after T1-T13 landed and local / CI phase-end gates passed. No implementation/spec divergence was found during the close re-sync. |
 | 0.9     | 2026-05-21 | M3-Phase 3 ADR-accepted design draft: added §4.10 WrapPanel layout primitive chapter (Phase status marker; sizing mental-model subsection with four-fact anchor and WPF / Compose / CSS ecosystem contrast per framing decision H; `item-cross-size` / `item-spacing` / `line-spacing` constant-only `i32` attribute surface; two-stage measure-arrange algorithm with bounded happy path, unbounded-main-axis one-line-flow branch, and unbounded-cross-axis-with-aspect-child propagation to Phase 2's `LayoutError::BoxAspectUnboundedBoth`; oversized-first-child + visible-overflow subsection; common-pitfalls note); added `WrapPanel` row to the §4.4 widget registry and dropped the stale `M1` qualifier from the registry's lead-in (the registry grew beyond M1 once `Box` landed in Phase 2; folded into this commit as a minimal retroactive fix with owner confirmation). No new tokens, grammar rules, AST variants, or IR forms — Phase 3 reuses existing `i32` plumbing. Pending implementation re-sync at Phase 3 close. |
+| 1.0     | 2026-05-22 | M3-Phase 3 close: flipped §4.10 Phase status marker and document status to implementation-synced after T1–T9 landed and the local clean-rebuild gate passed. Folded the T1 Decisions-log lexer-surface item into §2.2: generalised the `Ident` lexical pattern to admit kebab-case continuations (`-[A-Za-z]`-prefixed segments) and the `IntLit` pattern to admit an optional leading `-`; added a one-line note that the negative-sign surface is `IntLit`-only (does not extend `FloatLit` / measurement / `RatioLit` and does not introduce a subtraction or unary-minus operator). `§5` AST shapes unchanged (`IntLit { value: i64 }` already holds the signed surface). No other implementation / spec divergence found during the close re-sync. |
