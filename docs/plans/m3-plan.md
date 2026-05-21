@@ -500,7 +500,7 @@ ADRs, CHANGELOG, notes, and git history, then deleted by default.
 |---|---|---|---|---|
 | M3-Phase 1 — `bool` scalar binding | complete | [m3-phase-1-progress.md](progress/m3-phase-1-progress.md) | [m3-phase-1-bool-scalar.md](../decisions/m3-phase-1-bool-scalar.md) | ADR Accepted 2026-05-19; execution opened 2026-05-19; A9 discharged 2026-05-19 |
 | M3-Phase 2 — Box layout primitive | complete | [m3-phase-2-progress.md](progress/m3-phase-2-progress.md) | [m3-phase-2-box-layout.md](../decisions/m3-phase-2-box-layout.md) | ADR Accepted 2026-05-20; execution opened 2026-05-20; A6 discharged 2026-05-20 |
-| M3-Phase 3 — WrapPanel layout primitive | in progress | [m3-phase-3-progress.md](progress/m3-phase-3-progress.md) | [m3-phase-3-wrap-panel.md](../decisions/m3-phase-3-wrap-panel.md) | ADR Accepted 2026-05-21; first novel-normative-spec phase |
+| M3-Phase 3 — WrapPanel layout primitive | complete | [m3-phase-3-progress.md](progress/m3-phase-3-progress.md) | [m3-phase-3-wrap-panel.md](../decisions/m3-phase-3-wrap-panel.md) | ADR Accepted 2026-05-21; execution opened 2026-05-21; WrapPanel constituent of A3 discharged 2026-05-22; first novel-normative-spec phase |
 | M3-Phase 4 — ScrollView (minimal) | not started | — | — | — |
 | M3-Phase 5 — Grid layout primitive | not started | — | — | Second novel-normative-spec phase; star sizing |
 | M3-Phase 6 — ZStack + conditional rendering | not started | — | — | First grammar surface; `bool` prereq |
@@ -512,9 +512,7 @@ ADRs, CHANGELOG, notes, and git history, then deleted by default.
 M3 plan is `in-progress` as of 2026-05-19. M3-Phase 1 (`bool`
 scalar) closed 2026-05-19. M3-Phase 2 (Box layout primitive) closed
 2026-05-20 and discharged A6. M3-Phase 3 (WrapPanel layout primitive)
-opened 2026-05-21 with the ADR Accepted; Moment 1 upstream-doc sync
-(dsl_spec §4.10, architecture §6.8, this plan's Progress row,
-phase progress file) lands on the pre-doc branch ahead of
-implementation execution. The Frozen agreement section remains
-read-only under the `in-progress` lifecycle (acceptance-criteria
-revision exception aside).
+closed 2026-05-22 and discharged the WrapPanel constituent of A3
+(gallery overflow / wrapping evidence). The Frozen agreement section
+remains read-only under the `in-progress` lifecycle (acceptance-
+criteria revision exception aside).

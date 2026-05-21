@@ -1,11 +1,10 @@
 ---
 phase: M3-Phase 3
 title: WrapPanel layout primitive
-status: closing
+status: retired
 adr: docs/decisions/m3-phase-3-wrap-panel.md
 plan: docs/plans/m3-plan.md
 opened: 2026-05-21
-closing: 2026-05-22
 ---
 
 # M3-Phase 3 — WrapPanel layout primitive: Progress
@@ -304,9 +303,11 @@ Discharges the m3-plan §Phase-end criteria checklist for Phase 3.
       procedure, with the durable entry at
       [`docs/notes/m3-phase-3/phase-end-retrospective.md`](../../notes/m3-phase-3/phase-end-retrospective.md).
 - [x] Progress file lifecycle: `status: active` → `status: closing`
-      at the end of this T10 commit set (per
-      [plans/README.md §Phase progress file lifecycle](../README.md#phase-progress-file-lifecycle));
-      `retired` follows at the phase-end main-merge gate.
+      at the end of this T10 commit set, then `closing` →
+      `status: retired` on the phase branch before the phase-end
+      main-merge gate (matching the Phase 2 close pattern in
+      [m3-phase-2-progress.md](m3-phase-2-progress.md); per
+      [plans/README.md §Phase progress file lifecycle](../README.md#phase-progress-file-lifecycle)).
 
 ## Decisions log
 

@@ -298,7 +298,7 @@ Pre-doc questions:
   any phase-end gate is auto-discharged.
 - **`retrospectives.md` step → phase merge wording drift.** The
   procedure doc describes step → phase merge as "ff merge", but
-  Phase 2 / Phase 3 实运用 has been **no-ff** consistently (see
+  Phase 2 / Phase 3 実運用 has been **no-ff** consistently (see
   `git log --merges feat/m3-phase-3` — every T1–T10 task merge is
   a `Merge branch 'feat/m3-phase-3-tN'` commit). The drift was
   surfaced during M3-Phase 3 T10 phase-end review but not folded
