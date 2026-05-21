@@ -120,10 +120,15 @@ T8 は実装着手時に何を assert すれば close できるかが既に定�
       = T9 `Start-Process .\target\release\gallery-rust.exe`
       success + owner-manual visual confirmation。
 
-12. **`CHANGELOG.md` / `ROADMAP.md` 整合:** **保留**
-    - `CHANGELOG.md` Unreleased への M3-Phase 3 delivery 記録は
-      phase-end main-merge gate のタイミングで本 retrospective と
-      合わせて owner レビューに含める前提。
+12. **`CHANGELOG.md` / `ROADMAP.md` 整合:** **整合**
+    - `CHANGELOG.md` Unreleased に
+      `### M3-Phase 3 — WrapPanel layout primitive (2026-05-22)`
+      entry を追加 (Phase 2 close commit `300479f` と同じ pattern
+      で phase branch 上の close commit として landing)。entry は
+      attribute surface、IR / `wasamoc` / runtime / layout の
+      "no new IR variant" 性、`sync_visuals` parent-relative offset
+      fold、visible-smoke fixture (gallery 88 / 12 / 12 + 10
+      thumbs)、Moment 2 spec / architecture re-sync を要約。
     - `ROADMAP.md` は変更不要。A3 は WrapPanel を含む overflow /
       wrapping evidence として既に記述されており、Phase 3 はその
       構成要素 (WrapPanel 単独) を ship した。
