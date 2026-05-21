@@ -186,12 +186,12 @@ Discharges DD-M3-P3-006 runtime gate; ADR verification closure
 Discharges DD-M3-P3-005 (novel normative measure-arrange); ADR
 verification closure **evidence item 2**.
 
-- [ ] Implement the pure-data WrapPanel measure/arrange path in
+- [x] Implement the pure-data WrapPanel measure/arrange path in
       `wasamo-runtime/src/layout.rs` per
       [DD-M3-P3-005](../../decisions/m3-phase-3-wrap-panel.md#dd-m3-p3-005--measure-arrange-algorithm-novel-normative-spec).
       The layout boundary remains Win32/WinRT-free; the algorithm
       operates on `LayoutNode` / measure / arrange inputs only.
-- [ ] Add the pure-logic test coverage enumerated under the
+- [x] Add the pure-logic test coverage enumerated under the
       DD-M3-P3-005 Recommendation (bounded / unbounded main-axis
       cases, oversized-first-child unconditional placement and
       its visible-overflow arrange evidence, cross-axis sizing
@@ -199,11 +199,11 @@ verification closure **evidence item 2**.
       inequality, zero-attribute degenerate cases, and the
       unbounded-cross-axis-with-aspect-child propagation to
       `LayoutError::BoxAspectUnboundedBoth`).
-- [ ] Prefer free-function extraction before the test-only
+- [x] Prefer free-function extraction before the test-only
       mirror pattern (per
       [CLAUDE.md §Testing rules](../../../CLAUDE.md)) when
       pure logic entangles a Win32/WinRT-bound type.
-- [ ] Rounding contract inherits Phase 2 DD-M3-P2-005's
+- [x] Rounding contract inherits Phase 2 DD-M3-P2-005's
       discipline (no pixel-snapping in Phase 3).
 
 ### T8 — Windows-runtime integration test
