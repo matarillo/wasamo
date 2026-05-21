@@ -537,10 +537,12 @@ Option A — Constant-only in Phase 3 (recommended)
   building discipline. Phase 3 sub-screen has no animated spacing
   use case.
 
-  - What you gain: No new per-type writer seam built — `i32` already
-    has a writer triple (since M2's Counter), so a future phase that
-    needs animated spacing only registers a new call-site mapping in
-    `ir_loader::build_node`, not new engine plumbing.
+  - What you gain: No new per-type writer pair built. Phase 3 reuses
+    the existing `i32` literal plumbing; a future bindable-spacing
+    phase either reuses the M2 string-baked `register_binding` path
+    that `IrType::I32` properties currently dispatch to, or opens a
+    typed-`i32` evaluator/writer pair if that phase warrants it.
+    Phase 3 itself adds no engine plumbing.
   - **Technical risk:** Low.
 
 Option B — Admit bindable spacing in Phase 3
@@ -604,10 +606,12 @@ checkpoint 1**.
 **Forward-compat exposure:** Option A is dual-compatible with both
 foreseeable future events:
 
-- A future bindable-spacing phase registers the per-type writer
-  triple for `i32` (already exists since M2) at the
-  `ir_loader::build_node` call site for the new attribute. No
-  revision of the Phase 3 IR shape or the spacing semantics.
+- A future bindable-spacing phase admits binding for the attribute
+  at that point. It can reuse the M2 string-baked `register_binding`
+  path that `IrType::I32` properties currently dispatch to, or open
+  a typed-`i32` evaluator/writer pair if that phase warrants it;
+  no revision of the Phase 3 IR shape or the spacing semantics is
+  required.
 - A future padding-introducing phase adds a separate attribute (or
   attribute group); the absence of padding in Phase 3 does not
   pressure the eventual padding surface to be backward-compatible
@@ -776,7 +780,7 @@ Option B — Defer the warning to a later phase
 
 Option A — Constant-only in Phase 3 (recommended)
 - Mirrors DD-002 / DD-003 / Phase 1 / Phase 2 discipline. No new
-  per-type writer seam; `i32` plumbing already exists.
+  per-type writer seam; `i32` literal plumbing already exists.
 
   - **Technical risk:** Low.
 
@@ -817,10 +821,12 @@ wireframe (no warning triggered).
 **Forward-compat exposure:** Option A's exposure under foreseeable
 future events:
 
-- A future bindable-`item-cross-size` phase adds the call-site
-  registration in `ir_loader::build_node` for the new attribute;
-  the engine-side `i32` seam triple already exists. No revision of
-  Phase 3 IR shape or default behaviour.
+- A future bindable-`item-cross-size` phase admits binding for the
+  attribute at that point. It can reuse the M2 string-baked
+  `register_binding` path that `IrType::I32` properties currently
+  dispatch to, or open a typed-`i32` evaluator/writer pair if that
+  phase warrants it; no revision of Phase 3 IR shape or default
+  behaviour is required.
 - A future vertical-orientation phase (DD-002 deferred) does not
   need to rename — `item-cross-size` is orientation-neutral by
   design.
@@ -1392,8 +1398,8 @@ visible deviation from the wireframe in the gallery sub-screen
 reuse existing `i32` plumbing.
 
 **Framing for owner:** Option A pays a small attribute-plumbing cost
-(two new optional integer attributes on the WrapPanel IR node, both
-reusing existing `i32` literal and writer plumbing) for full
+(two new optional integer attributes on the WrapPanel IR node,
+both reusing existing `i32` literal plumbing) for full
 wireframe fidelity in the gallery sub-screen. The cost is genuinely
 small — no new `IrType`, no new `IrLiteral` variant, no new
 `PropertyValue` variant, no ABI surface change. Both attributes are
