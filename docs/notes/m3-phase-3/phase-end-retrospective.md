@@ -197,8 +197,9 @@ cargo test --workspace
   [`docs/notes/m3-phase-4/pre-doc-inputs.md`](../m3-phase-4/pre-doc-inputs.md)
   から開始する。
 - Phase 3 progress file (`docs/plans/progress/m3-phase-3-progress.md`)
-  は T10 checklist 完全 flip 後に `status: closing` →
-  ([retired] phase-end main-merge gate 完了時に retired) に進める。
+  は T10 commit set で `status: active` → `closing` に進めた後、
+  phase-end review fold (commit `ae36b16`) で `closing` →
+  `status: retired` に進めた (Phase 2 progress file と parity)。
   durable information は ADR、spec、architecture、CHANGELOG、本
   retrospective、git history に移した。
 - Phase 3 由来の out-of-phase residual:

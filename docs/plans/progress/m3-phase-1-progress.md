@@ -802,9 +802,13 @@ no-ff merge and the separate owner-approved push gate.
 - **Resolution:** After T13 completion and T12 checkbox closure, the
   frontmatter changed from `status: active` to `status: closing`, with
   `closing: 2026-05-19`; the T12 retrospective checkbox was ticked.
-- **Status (closed 2026-05-19):** The file is in `closing`. After the
-  main no-ff merge and push gates, owner decides whether to retire
-  (default: delete) or archive this progress file.
+- **Status (closed 2026-05-19; retired 2026-05-22):** Frontmatter
+  flipped from `status: closing` to `status: retired` during the
+  M3-Phase 3 phase-end review fold (commit `b512f52`), in parity
+  with `m3-phase-2-progress.md`. Durable information has already
+  moved to the ADR, dsl_spec, CHANGELOG, notes, and git history;
+  the file itself is kept (not deleted) for the same reason
+  Phase 2's retired progress file is kept.
 
 ## Remaining implicit-constraint follow-ups (closed after T14)
 
