@@ -1,6 +1,6 @@
 # M3-Phase 3 pre-doc framing
 
-**Status:** Draft (pending owner alignment)
+**Status:** framing aligned with owner (2026-05-21); input artefact for ADR drafting
 **Date:** 2026-05-21
 **Targets phase:** M3-Phase 3 (WrapPanel layout primitive)
 
@@ -952,6 +952,85 @@ reason) is **owner-manual GUI smoke**. The assistant records
 integration output but does not assert on visual rendering. The
 ADR's verification strategy section distinguishes headless test
 gates from owner GUI smoke gates per Phase 2 precedent.
+
+### H. WrapPanel sizing mental model — short anchor in dsl_spec §4.10
+
+The facts a reader needs to internalise to use WrapPanel correctly are
+distributed across DD-001 (child measure input), DD-004 (cross-axis
+bound source), and DD-005 (line-formation algorithm including its
+unbounded-axis branches). The framing direction is to consolidate them
+into a **single short subsection** in the user-facing spec so the
+reader is not forced to reconstruct the model by reading three DDs in
+sequence:
+
+1. **Main-axis intrinsic measure.** WrapPanel measures children against
+   an unbounded main-axis constraint; line membership is decided by the
+   child's reported main-axis intrinsic extent.
+2. **Cross-axis bound source.** Each child receives a cross-axis bound
+   from one of two sources — `item-cross-size` when set on the
+   WrapPanel, or the parent's cross-axis constraint passed through
+   unchanged when `item-cross-size` is unset.
+3. **Aspect-only Box requires a cross-axis bound.** A `Box { aspect: r }`
+   child has no intrinsic size of its own; without a finite cross-axis
+   bound (either from `item-cross-size` or from a bounded parent),
+   Phase 2 DD-005's `LayoutError::BoxAspectUnboundedBoth` fires.
+   WrapPanel does **not** synthesise a bound out of nowhere.
+4. **No wrap boundary ⇒ one-line flow.** When the parent supplies no
+   main-axis bound, there is no boundary against which to break lines;
+   all children flow on a single line. This is DD-005's unbounded-
+   main-axis branch (recommended Option (a)).
+
+**Placement.** The subsection lives in `docs/dsl_spec.md` §4.10 (the
+new WrapPanel chapter), positioned before the formal measure-arrange
+algorithm so the reader builds the model before the rules. The ADR's
+DD-005 Recommendation prose cross-references this subsection rather
+than restating the four facts. The ADR is the design-decision
+archaeology; dsl_spec §4.10 is the user-facing home for the mental
+model, because the users who need the model read the spec, not the
+ADR.
+
+**Ecosystem contrast (one bullet each).** `item-cross-size` is a
+**Wasamo-specific abstraction**, and readers will arrive carrying
+analogues that do not transfer cleanly. The subsection includes a
+short contrast block so the reader's prior intuition is corrected
+before they apply it:
+
+- **WPF `ItemHeight` / `ItemWidth`** — orientation-coupled fixed cell
+  extent. `item-cross-size` is orientation-neutral and conceptually a
+  **bound passed to child measure**, not a cell-extent override. Per
+  DD-004's per-line cross-axis sizing rule, the *visible* outcome
+  matches WPF in the uniform case (line cross-axis extent equals
+  `item-cross-size`), but the primitive is "child-measure bound", not
+  "cell to lay child into".
+- **Flutter / Jetpack Compose natural child size.** Those frameworks
+  expect the child to report a natural size and the parent to size
+  around it. WrapPanel's default behaviour (when `item-cross-size` is
+  unset) is *closer* to this — parent constraints pass through and
+  children measure naturally — but children with no natural cross-axis
+  size (the aspect-only Box) are supported in Wasamo by setting
+  `item-cross-size`, not by a "compute natural size" fallback.
+- **CSS `gap`.** Applies to a flex/grid container's *spacing* between
+  items, not to item sizing. `item-cross-size` is **not** a `gap`
+  analogue. `item-spacing` / `line-spacing` (DD-003) are the CSS-`gap`
+  analogues. The nearest CSS analogue to `item-cross-size` is
+  `flex-basis` on children — but Wasamo lifts the decision to container
+  level rather than repeating it per item.
+
+**This is a docs framing decision, not a design change.** The design
+recommended by DD-001 / DD-004 / DD-005 stands; the subsection exists
+only to provide a single short anchor for the model the recommended
+design implies. The Moment 1 `dsl_spec.md` draft must include the
+subsection (it is part of the WrapPanel chapter, not an optional
+add-on); the Moment 2 re-sync may refine wording based on what
+implementation reveals (in particular, whether the warning shipped per
+DD-004's framing direction changes how the aspect-only-Box bullet is
+phrased).
+
+**Inputs consumed.** Owner direction during framing alignment
+(2026-05-21): four-fact mental model identified as the minimal handle
+for WrapPanel correctness; ecosystem-contrast block identified as
+needed because `item-cross-size` has no clean WPF / Compose / CSS
+analogue and readers will mis-map it without an explicit anchor.
 
 ---
 
