@@ -2,7 +2,7 @@
 title: M3-Phase 3 / T7 step-end retrospective
 status: recorded
 created: 2026-05-22
-revised: 2026-05-22 (rev 2 — review-found bug + fix)
+revised: 2026-05-22 (rev 3 — physical clean rebuild + Main Learning dedup; metadata sync per re-review)
 scope: step-end
 task: T7 — Layout engine: WrapPanel line-breaker and arrange
 ---
@@ -13,12 +13,28 @@ task: T7 — Layout engine: WrapPanel line-breaker and arrange
 >
 > - **rev 1 (initial, commit `46f706b` / 後に `984c5b8`):** Initial
 >   record claimed fast-track 適格、blocker なし。
-> - **rev 2 (本版):** レビューで `item-cross-size`-unset path の
->   measure→arrange drift bug を指摘され、fix commit `253b207` を
->   追加。Current Judgment / Fast-Track Judgment / Main Learning /
->   Verification Notes / Follow-Up を rev 2 で改訂。rev 1 の
->   "blocker なし / fast-track 適格" の判定は **誤りだった** と
->   明示し、本版で取り消す。
+> - **rev 2 (commit `ed930b2`):** レビューで `item-cross-size`-unset
+>   path の measure→arrange drift bug を指摘され、fix commit
+>   `253b207` を追加。Current Judgment / Fast-Track Judgment /
+>   Main Learning / Verification Notes / Follow-Up を rev 2 で改訂。
+>   rev 1 の "blocker なし / fast-track 適格" の判定は **誤りだった**
+>   と明示し、本版で取り消した。
+> - **rev 3 (commit `981c63e`):** rev 2 の再 review で 2 件の指摘:
+>   (1) clean rebuild が rev 1 を proxy にしており post-fix HEAD で
+>   未実施 → post-fix `253b207` 上で `cargo clean` → release+debug
+>   build → `cargo test --workspace` を物理実施し、Checklist item 3 /
+>   Verification Notes に証跡を記録。(2) Main Learning 末尾に rev 1
+>   由来の重複ブロック (Fill width 学び / 副次的な学び / "17 件 ADR
+>   一対一対応で scope は決着済み") が残っていたため削除し、survive
+>   側の "ADR 列挙 sufficiency" 段落を rev 2 framing と整合する形に
+>   書き直した。
+> - **rev 4 (本版; this retrospective edit):** 再々 review で 2 件の
+>   Low 指摘: (a) frontmatter / Revision history / 対象コミット list
+>   が rev 3 を反映していなかったので本版で同期。(b) Fast-Track
+>   Judgment の item 9 を「(FT) ではない」と書いていたが
+>   `retrospectives.md` 上は **(FT) 付与あり**。文言を process 文書
+>   に合わせて修正 (結論 = fast-track 不適格は維持)。本版は code /
+>   gate 実態の変更を伴わない doc consistency 修正。
 
 ## Scope
 
@@ -38,12 +54,14 @@ retrospective。T7 が discharge する材料は次:
   forward-pointer を、measure-arrange の reader が入った瞬間に
   lift する。
 
-対象コミット (4 件):
+対象コミット (6 件):
 
 - `c6a0625 feat(wasamo-runtime): WrapPanel measure-arrange line breaker (M3-Phase 3 T7)`
 - `6b1b0f5 docs(m3-phase-3): flip T7 checkboxes (WrapPanel measure-arrange)`
 - `984c5b8 docs(m3-phase-3): record T7 step-end retrospective` (rev 1; amended from `46f706b` to translate the Japanese commit body to English)
-- `253b207 fix(wasamo-runtime): cache WrapPanel cross-bound across measure→arrange` (review-found drift bug; this retrospective revision)
+- `253b207 fix(wasamo-runtime): cache WrapPanel cross-bound across measure→arrange` (review-found drift bug)
+- `ed930b2 docs(m3-phase-3): T7 retrospective revision — review-found bug + fix` (rev 2 retrospective body update)
+- `981c63e docs(m3-phase-3): T7 retrospective rev 3 — physical clean rebuild + dedup` (rev 3 retrospective body update; this revision (rev 4) is a metadata sync + Fast-Track Judgment wording fix on top of rev 3)
 
 step-end の gate であり phase-end retrospective ではない。merge 先は
 phase ブランチ `feat/m3-phase-3` (ff)。本 step (T7) は単一 task =
@@ -466,7 +484,8 @@ tension を抱えている」** (rev 1 から carryover):
 
 ## Fast-Track Judgment
 
-(rev 2 で **判定を撤回**。)
+(rev 2 で **判定を撤回**。rev 4 で item 9 の (FT) 文言を process
+文書に合わせて修正。)
 
 rev 1 時点では fast-track 適格と判定したが、これは item 9 を誤って
 「なし」と書いた前提によるもので、**実態としては rev 1 commit
@@ -476,20 +495,20 @@ item 9 「あり」→ fast-track 不適格。rev 2 fix commit `253b207`
 で merge していたら bug 入りで phase ブランチに進んでいた」状況で
 あり、本 step の fast-track 規定での扱いとしては「不適格」を採る**:
 
-- item 2 (spec doc 変更): なし
-- item 3 (local clean rebuild): green (post-fix state)
-- item 4 (PO 相談事項): なし
-- item 5 (ついでリファクタ): なし
-- item 6 (追加 DD): なし
-- item 7 (Proposed 増加/昇格): なし
-- item 8 (m3-plan AC 変更): なし
-- (item 9 は (FT) ではないが、**rev 1 時点で誤って「なし」と
-  記録したため、本 step は fast-track 規定の安全マージンを
-  失っていた**。rev 2 fix 後の現在状態でも、step 全体の
-  fast-track 適否判断としては「不適格」を採るのが
-  正しい意思決定 — 規定の趣旨は「step 内で発見できた問題は
-  step 内で解決する」だが、本 step の bug は review で発見
-  された)。
+- item 2 (spec doc 変更) **(FT)**: なし
+- item 3 (local clean rebuild) **(FT)**: green (post-fix state)
+- item 4 (PO 相談事項) **(FT)**: なし
+- item 5 (ついでリファクタ) **(FT)**: なし
+- item 6 (追加 DD) **(FT)**: なし
+- item 7 (Proposed 増加/昇格) **(FT)**: なし
+- item 8 (m3-plan AC 変更) **(FT)**: なし
+- item 9 (後続に持ち越す仮実装 / 新規 `dead_code`) **(FT)**: rev 1
+  時点では誤って「なし」と記録、rev 2 fix 反映後は「なし」だが、
+  **rev 1 commit のまま phase ブランチに進んでいたら "あり" 相当
+  だった**。step 全体の fast-track 適否判断としては「不適格」を採る
+  のが正しい意思決定 — 規定の趣旨は「step 内で発見できた問題は
+  step 内で解決する」だが、本 step の bug は review で発見されており、
+  自己内発見の保証は最終的に有しなかった。
 
 memory `feedback_step_end_gate_discipline.md` の規律
 ("item 2–8 すべて『なし』+ item 3 green に厳密") は item 9 の
