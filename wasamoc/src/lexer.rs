@@ -240,6 +240,21 @@ pub fn tokenize(src: &str, filename: &str) -> Result<Vec<SpannedToken>, Diagnost
                 if c.peek() == Some('=') {
                     c.advance();
                     Token::MinusEq
+                } else if c.peek().map(|ch| ch.is_ascii_digit()).unwrap_or(false) {
+                    // Negative integer literal. The DSL surface has no
+                    // binary subtraction (M2 statement RHSes accept literal
+                    // / ident expressions only), so a `-` directly preceding
+                    // digits is unambiguous as the sign of an integer
+                    // literal. Required by M3-Phase 3 to give `wasamoc
+                    // check` reach over `item-cross-size: -1` etc. so the
+                    // rejection diagnostic can name the offending attribute
+                    // (DD-M3-P3-006 compile-time gate). The negative entry
+                    // path in `scan_number` is integer-only: a fractional
+                    // continuation (`-1.5`) or `px` unit (`-12px`) is
+                    // rejected at lex time. Ratio literals (`-num:den`)
+                    // are similarly excluded because RatioLit is unsigned
+                    // per dsl_spec §4.9.
+                    scan_number(&mut c, filename, start.line, start.col, true)?
                 } else {
                     return Err(Diagnostic::error(
                         filename,
@@ -279,7 +294,7 @@ pub fn tokenize(src: &str, filename: &str) -> Result<Vec<SpannedToken>, Diagnost
             }
             '"' => scan_string(&mut c, filename)?,
             '#' => scan_color(&mut c, filename, start.line, start.col)?,
-            '0'..='9' => scan_number(&mut c, filename, start.line, start.col)?,
+            '0'..='9' => scan_number(&mut c, filename, start.line, start.col, false)?,
             ch if ch.is_alphabetic() || ch == '_' => scan_ident(&mut c),
             other => {
                 c.advance();
@@ -307,33 +322,36 @@ pub fn tokenize(src: &str, filename: &str) -> Result<Vec<SpannedToken>, Diagnost
 }
 
 fn scan_ident(c: &mut Cursor) -> Token {
+    // Kebab-case identifier: one or more alphanumeric / underscore segments,
+    // joined by `-`. Continuation requires the character following `-` to be
+    // alphabetic, so `count -= 1` still tokenizes as `count`, `-=`, `1`
+    // (the `-` after `count` is followed by `=`, breaking out of scan_ident).
+    // Generalized in M3-Phase 3 from the previous `in-out`-only special-case
+    // to admit kebab attribute names (`item-cross-size`, `item-spacing`,
+    // `line-spacing`) without a parser-grammar change. `in-out` remains a
+    // keyword via the post-scan match below.
     let mut s = String::new();
-    while let Some(ch) = c.peek() {
-        if ch.is_alphanumeric() || ch == '_' {
-            s.push(ch);
-            c.advance();
-        } else {
-            break;
-        }
-    }
-
-    // Compound keyword "in-out" (DD-001)
-    if s == "in" && c.remaining().starts_with("-out") {
-        let after = c.remaining()[4..].chars().next();
-        if !after
-            .map(|ch| ch.is_alphanumeric() || ch == '_')
-            .unwrap_or(false)
-        {
-            for _ in 0..4 {
+    loop {
+        while let Some(ch) = c.peek() {
+            if ch.is_alphanumeric() || ch == '_' {
+                s.push(ch);
                 c.advance();
+            } else {
+                break;
             }
-            return Token::Kw(Keyword::InOut);
         }
+        if c.peek() == Some('-') && c.peek2().map(|ch| ch.is_alphabetic()).unwrap_or(false) {
+            s.push('-');
+            c.advance();
+            continue;
+        }
+        break;
     }
 
     match s.as_str() {
         "component" => Token::Kw(Keyword::Component),
         "inherits" => Token::Kw(Keyword::Inherits),
+        "in-out" => Token::Kw(Keyword::InOut),
         "property" => Token::Kw(Keyword::Property),
         "state" => Token::Kw(Keyword::State),
         "true" => Token::Kw(Keyword::True),
@@ -342,8 +360,17 @@ fn scan_ident(c: &mut Cursor) -> Token {
     }
 }
 
-fn scan_number(c: &mut Cursor, filename: &str, line: u32, col: u32) -> Result<Token, Diagnostic> {
+fn scan_number(
+    c: &mut Cursor,
+    filename: &str,
+    line: u32,
+    col: u32,
+    negative: bool,
+) -> Result<Token, Diagnostic> {
     let mut s = String::new();
+    if negative {
+        s.push('-');
+    }
     let mut is_float = false;
 
     while let Some(ch) = c.peek() {
@@ -356,6 +383,21 @@ fn scan_number(c: &mut Cursor, filename: &str, line: u32, col: u32) -> Result<To
     }
 
     if c.peek() == Some('.') && c.peek2().map(|ch| ch.is_ascii_digit()).unwrap_or(false) {
+        if negative {
+            // Negative entry is integer-only. dsl_spec FloatLit surface is
+            // unsigned (§5 AST table); the M3-Phase 3 lexer extension
+            // exists only to give `wasamoc check` reach over negative
+            // integer literals on WrapPanel attributes (DD-M3-P3-006).
+            // Reject a fractional continuation explicitly rather than
+            // silently widening the FloatLit surface.
+            return Err(Diagnostic::error(
+                filename,
+                line,
+                col,
+                "negative float literals are not part of the DSL surface; \
+                 `-` followed by digits only forms a negative integer",
+            ));
+        }
         s.push('.');
         c.advance();
         is_float = true;
@@ -369,13 +411,23 @@ fn scan_number(c: &mut Cursor, filename: &str, line: u32, col: u32) -> Result<To
         }
     }
 
-    // Unit "px"
+    // Unit "px". Negative measurements are not part of the DSL surface —
+    // the spec's measurement form (`12px`) is unsigned.
     if c.remaining().starts_with("px") {
         let after = c.remaining()[2..].chars().next();
         if !after
             .map(|ch| ch.is_alphanumeric() || ch == '_')
             .unwrap_or(false)
         {
+            if negative {
+                return Err(Diagnostic::error(
+                    filename,
+                    line,
+                    col,
+                    "negative measurement literals are not part of the DSL surface; \
+                     `-` followed by digits only forms a negative integer",
+                ));
+            }
             c.advance();
             c.advance();
             let value: f64 = s.parse().unwrap();
@@ -387,11 +439,13 @@ fn scan_number(c: &mut Cursor, filename: &str, line: u32, col: u32) -> Result<To
         return Ok(Token::FloatLit(s.parse().unwrap()));
     }
 
-    // Ratio literal `<num>:<den>` (DD-M3-P2-002). Triggered only when a
-    // colon immediately follows the integer with no intervening
-    // whitespace, and a digit immediately follows the colon. Otherwise
-    // the colon is left to be tokenized as `Colon` separately.
-    if c.peek() == Some(':') && c.peek2().map(|ch| ch.is_ascii_digit()).unwrap_or(false) {
+    // Ratio literal `<num>:<den>` (DD-M3-P2-002). Only the unsigned entry
+    // path produces a RatioLit; a leading `-` cannot start a ratio (negative
+    // ratios are not part of the spec surface).
+    if !negative
+        && c.peek() == Some(':')
+        && c.peek2().map(|ch| ch.is_ascii_digit()).unwrap_or(false)
+    {
         let num = s.parse::<i32>().map_err(|_| {
             Diagnostic::error(filename, line, col, "ratio numerator out of range for i32")
         })?;
@@ -639,9 +693,72 @@ mod tests {
     }
 
     #[test]
-    fn in_out_followed_by_alphanumeric_is_error() {
-        // "in-outx": scans "in", hits "-" which is not "-=" so errors
-        assert!(lex_err("in-outx").contains("unexpected"));
+    fn in_outx_lexes_as_kebab_ident() {
+        // Post-M3-Phase 3 generalization: `-` continues an ident when the
+        // next char is alphabetic, so `in-outx` lexes as a single Ident
+        // (no keyword match). This replaces the pre-generalization
+        // "unexpected `-`" error path; `in-out` itself is matched by the
+        // keyword table after the kebab-aware scan.
+        let toks = lex_ok("in-outx");
+        assert!(matches!(&toks[0], Token::Ident(s) if s == "in-outx"));
+    }
+
+    #[test]
+    fn kebab_case_ident() {
+        // M3-Phase 3 attribute names (`item-cross-size`, `item-spacing`,
+        // `line-spacing`) are kebab-case Idents per dsl_spec §4.10's
+        // attribute table. The lexer admits arbitrary kebab segments; the
+        // parser's IDENT-keyed PropertyBind shape is unchanged.
+        let toks = lex_ok("item-cross-size: 88");
+        assert!(matches!(&toks[0], Token::Ident(s) if s == "item-cross-size"));
+        assert!(matches!(&toks[1], Token::Colon));
+        assert!(matches!(&toks[2], Token::IntLit(88)));
+    }
+
+    #[test]
+    fn kebab_ident_breaks_on_non_alpha_after_hyphen() {
+        // `count-=1`: after `count`, `-` is followed by `=` (not
+        // alphabetic), so the kebab continuation rule does not fire and
+        // the lexer falls through to `MinusEq`.
+        let toks = lex_ok("count-=1");
+        assert!(matches!(&toks[0], Token::Ident(s) if s == "count"));
+        assert!(matches!(&toks[1], Token::MinusEq));
+        assert!(matches!(&toks[2], Token::IntLit(1)));
+    }
+
+    #[test]
+    fn negative_int_literal() {
+        let toks = lex_ok("-1 -42");
+        assert!(matches!(&toks[0], Token::IntLit(-1)));
+        assert!(matches!(&toks[1], Token::IntLit(-42)));
+    }
+
+    #[test]
+    fn negative_float_literal_rejected() {
+        // Spec §5 AST table: FloatLit surface is unsigned. The M3-Phase 3
+        // negative-entry path is integer-only; a fractional continuation
+        // is rejected at lex time so the lexer's surface widening stays
+        // scoped to the WrapPanel attribute use case.
+        assert!(lex_err("-1.5").contains("negative float"));
+    }
+
+    #[test]
+    fn negative_measurement_literal_rejected() {
+        // Measurements (`12px`) are unsigned per spec. The negative-entry
+        // path rejects `-12px` for the same scope-control reason as
+        // negative floats.
+        assert!(lex_err("-12px").contains("negative measurement"));
+    }
+
+    #[test]
+    fn negative_int_in_property_bind_position() {
+        // The check-layer reject for `item-spacing: -1` needs the lexer to
+        // produce `IntLit(-1)` so the diagnostic reaches the AST. Verify
+        // the four-token shape end-to-end.
+        let toks = lex_ok("item-spacing: -1");
+        assert!(matches!(&toks[0], Token::Ident(s) if s == "item-spacing"));
+        assert!(matches!(&toks[1], Token::Colon));
+        assert!(matches!(&toks[2], Token::IntLit(-1)));
     }
 
     #[test]

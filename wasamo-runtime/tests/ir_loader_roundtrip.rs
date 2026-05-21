@@ -203,6 +203,48 @@ fn bool_state_binding_emits_and_parses_bool_productions() {
     );
 }
 
+fn build_wrap_panel_ir() -> wasamo_ir::IrComponent {
+    use wasamoc::{check, lexer, lower, parser};
+    let src = r#"component WrapDemo inherits Window {
+    WrapPanel {
+        item-cross-size: 96
+        item-spacing: 8
+        line-spacing: 12
+        Box { aspect: 1:1 }
+        Box { aspect: 1:1 }
+        Box { aspect: 1:1 }
+    }
+}"#;
+    let tokens = lexer::tokenize(src, "<wrap-panel>").expect("lex failed");
+    let ast = parser::parse(&tokens, "<wrap-panel>").expect("parse failed");
+    let result = check::check(&ast, "<wrap-panel>");
+    assert!(
+        !result.has_errors(),
+        "check errors: {:?}",
+        result.diagnostics
+    );
+    lower::lower(&ast, &result.namespace)
+}
+
+#[test]
+fn wrap_panel_emit_then_parse_yields_equal_ir() {
+    // M3-Phase 3 T4 round-trip: WrapPanel + the three kebab-case attribute
+    // props (`item-cross-size`, `item-spacing`, `line-spacing`) traverse
+    // `wasamoc::emit::emit` and `wasamo_runtime::ir_loader::parse_ir`
+    // without changing the `IrComponent` shape. Phase 3 introduces no new
+    // emit/parse grammar; this test pins that the existing generic
+    // `node IDENT { prop IDENT = <int> ... }` form already covers the
+    // WrapPanel surface end-to-end.
+    let original = build_wrap_panel_ir();
+    let text = wasamoc::emit::emit(&original);
+    assert!(text.contains("node WrapPanel {"), "got: {}", text);
+    assert!(text.contains("prop item-cross-size = 96"), "got: {}", text);
+    assert!(text.contains("prop item-spacing = 8"), "got: {}", text);
+    assert!(text.contains("prop line-spacing = 12"), "got: {}", text);
+    let parsed = parse_ir(&text).expect("parse_ir failed");
+    assert_eq!(parsed, original, "round-trip mismatch\nIR text:\n{text}");
+}
+
 #[test]
 fn string_state_binding_emits_and_parses_str_prop_read() {
     let original = build_string_binding_ir();

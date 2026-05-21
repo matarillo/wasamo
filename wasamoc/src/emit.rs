@@ -378,6 +378,128 @@ mod tests {
         assert!(out.contains(r#"prop text = "Photo 12""#), "got: {}", out);
     }
 
+    // --- T4: WrapPanel widget + i32 attribute IR text emit -------------
+    //
+    // Phase 3 introduces no new emit grammar — `WrapPanel { ... }` emits
+    // via the generic `emit_node` path and the three
+    // `item-cross-size` / `item-spacing` / `line-spacing` attributes emit
+    // via the existing `prop <name> = <int>` form (kebab-case prop names
+    // traverse the loader unchanged; cf. ir_loader's identifier lexer
+    // which already admits `-` in non-leading position). Attributes
+    // absent on the IR side never enter `IrNode.props` (cf. T3 lowering),
+    // so they are absent from the emitted text by construction.
+    // Round-trip fidelity is exercised cross-crate in
+    // `wasamo-runtime/tests/ir_loader_roundtrip.rs`.
+    //
+    // Listed cases below cover the presence/absence combinations called
+    // out by the progress doc's T4 checklist plus the DD-M3-P3-006
+    // zero-valid edge.
+
+    #[test]
+    fn wrap_panel_zero_children_no_attributes_emitted() {
+        let out = emit_src("component C inherits W { WrapPanel {} }");
+        assert!(out.contains("node WrapPanel {"), "got: {}", out);
+        assert!(!out.contains("prop item-cross-size"), "got: {}", out);
+        assert!(!out.contains("prop item-spacing"), "got: {}", out);
+        assert!(!out.contains("prop line-spacing"), "got: {}", out);
+    }
+
+    #[test]
+    fn wrap_panel_all_three_attributes_emitted_as_decimal_ints() {
+        let out = emit_src(
+            "component C inherits W { WrapPanel { item-cross-size: 96 item-spacing: 8 line-spacing: 12 Box { aspect: 1:1 } Box { aspect: 1:1 } } }",
+        );
+        assert!(out.contains("node WrapPanel {"), "got: {}", out);
+        assert!(out.contains("prop item-cross-size = 96"), "got: {}", out);
+        assert!(out.contains("prop item-spacing = 8"), "got: {}", out);
+        assert!(out.contains("prop line-spacing = 12"), "got: {}", out);
+    }
+
+    #[test]
+    fn wrap_panel_only_item_cross_size_omits_other_attributes() {
+        let out = emit_src(
+            "component C inherits W { WrapPanel { item-cross-size: 64 Box { aspect: 1:1 } Box { aspect: 4:3 } } }",
+        );
+        assert!(out.contains("prop item-cross-size = 64"), "got: {}", out);
+        assert!(!out.contains("prop item-spacing"), "got: {}", out);
+        assert!(!out.contains("prop line-spacing"), "got: {}", out);
+    }
+
+    #[test]
+    fn wrap_panel_only_spacings_omits_item_cross_size() {
+        let out = emit_src(
+            "component C inherits W { WrapPanel { item-spacing: 4 line-spacing: 6 Text {} Text {} } }",
+        );
+        assert!(out.contains("prop item-spacing = 4"), "got: {}", out);
+        assert!(out.contains("prop line-spacing = 6"), "got: {}", out);
+        assert!(!out.contains("prop item-cross-size"), "got: {}", out);
+    }
+
+    // The four cases below complete the 2^3 = 8 presence combinations
+    // demanded by the T4 progress-doc gate ("each combination of
+    // attribute presence / absence"). Together with `zero_children`
+    // (000), `all_three` (111), `only_item_cross_size` (100), and
+    // `only_spacings` (011) above, the eight presence vectors are
+    // covered exhaustively. The emitter is generic so the test value
+    // is in pinning the contract surface, not in stressing branches.
+
+    #[test]
+    fn wrap_panel_only_item_spacing_present() {
+        // presence = 010
+        let out =
+            emit_src("component C inherits W { WrapPanel { item-spacing: 5 Text {} Text {} } }");
+        assert!(out.contains("prop item-spacing = 5"), "got: {}", out);
+        assert!(!out.contains("prop item-cross-size"), "got: {}", out);
+        assert!(!out.contains("prop line-spacing"), "got: {}", out);
+    }
+
+    #[test]
+    fn wrap_panel_only_line_spacing_present() {
+        // presence = 001
+        let out =
+            emit_src("component C inherits W { WrapPanel { line-spacing: 7 Text {} Text {} } }");
+        assert!(out.contains("prop line-spacing = 7"), "got: {}", out);
+        assert!(!out.contains("prop item-cross-size"), "got: {}", out);
+        assert!(!out.contains("prop item-spacing"), "got: {}", out);
+    }
+
+    #[test]
+    fn wrap_panel_item_cross_size_and_item_spacing_present() {
+        // presence = 110
+        let out = emit_src(
+            "component C inherits W { WrapPanel { item-cross-size: 80 item-spacing: 4 Box { aspect: 1:1 } } }",
+        );
+        assert!(out.contains("prop item-cross-size = 80"), "got: {}", out);
+        assert!(out.contains("prop item-spacing = 4"), "got: {}", out);
+        assert!(!out.contains("prop line-spacing"), "got: {}", out);
+    }
+
+    #[test]
+    fn wrap_panel_item_cross_size_and_line_spacing_present() {
+        // presence = 101
+        let out = emit_src(
+            "component C inherits W { WrapPanel { item-cross-size: 80 line-spacing: 10 Box { aspect: 1:1 } } }",
+        );
+        assert!(out.contains("prop item-cross-size = 80"), "got: {}", out);
+        assert!(out.contains("prop line-spacing = 10"), "got: {}", out);
+        assert!(!out.contains("prop item-spacing"), "got: {}", out);
+    }
+
+    #[test]
+    fn wrap_panel_zero_valued_attributes_emitted_as_zero_ints() {
+        // DD-M3-P3-006 zero-handling: zero is a *valid* attribute value
+        // (rejection threshold is `< 0`, not `<= 0`). The emitter must
+        // emit `prop <name> = 0` rather than omitting the prop, so the
+        // load side cannot conflate "explicitly zero" with "absent /
+        // apply default".
+        let out = emit_src(
+            "component C inherits W { WrapPanel { item-cross-size: 0 item-spacing: 0 line-spacing: 0 Text {} } }",
+        );
+        assert!(out.contains("prop item-cross-size = 0"), "got: {}", out);
+        assert!(out.contains("prop item-spacing = 0"), "got: {}", out);
+        assert!(out.contains("prop line-spacing = 0"), "got: {}", out);
+    }
+
     #[test]
     fn full_counter_ir_roundtrip() {
         let src = r#"component Counter inherits Window {

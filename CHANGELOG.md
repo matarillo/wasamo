@@ -14,6 +14,68 @@ the **Status** section of [README.md](./README.md).
 
 ## [Unreleased] — M3: DSL surface (in progress)
 
+### M3-Phase 3 — WrapPanel layout primitive (2026-05-22)
+
+Adds the `WrapPanel` layout primitive, the WrapPanel constituent of
+M3 acceptance **A3** (gallery overflow / wrapping evidence).
+`WrapPanel` admits zero or more children, supports constant-only
+`item-cross-size: <i32>` / `item-spacing: <i32>` / `line-spacing:
+<i32>` attributes, runs the first M3 two-stage measure-arrange whose
+outer cross-axis size depends on its children, lets oversized
+first-children flow into visible overflow (the WrapPanel installs no
+clip surface; parents clip), and pairs structurally with the
+forthcoming Phase 4 ScrollView (ScrollView bounds the main axis,
+WrapPanel resolves the cross axis).
+
+`wasamo-ir` is unchanged at the type / literal level — `WrapPanel`
+reuses `IrLiteral::Int`, the generic `IrNode` widget shape, and
+`IrProp` keyed by attribute name. No new `IrType`, `IrLiteral`,
+`PropertyValue`, `LayoutError`, `WASAMO_VALUE_*`, or
+`WASAMO_LAYOUT_ERROR_*` variant lands. `wasamoc` lexes (kebab-case
+`Token::Ident` + `IntLit` admitting optional leading `-`; both lexer
+generalisations needed for `item-cross-size: -1` to reach the
+checker), parses (unchanged grammar), checks (accepts 0+ children;
+rejects negative literals, non-`IntLit` shapes, `bind` on the three
+attributes, and the three attributes outside `WrapPanel`; warns when
+a direct-child aspect-only `Box` is missing `item-cross-size`), and
+lowers / emits the three attributes through the existing generic
+`IrProp` shapes. `wasamo-runtime` adds a `WidgetData::WrapPanel`
+widget kind with widget-catalog defaults (item-cross-size = None /
+passthrough, item-spacing = 0, line-spacing = 0), IR-loader
+materialisation, defense-in-depth `validate()` rejecting negative
+attribute values (`WASAMO_ERR_IR_MALFORMED`), and the pure-data
+line-breaker + arrange in `wasamo-runtime/src/layout.rs` (Win32 /
+WinRT-free per established layout-engine discipline).
+
+The `sync_visuals` boundary gained a parent-relative offset
+conversion for nested non-zero-offset visual trees: WrapPanel is the
+first M3 primitive whose children sit at non-zero offsets inside
+their parent, exposing an implicit absolute (`LayoutNode`) vs.
+parent-relative (`Visual.Offset`) gap that Phase 2 never triggered.
+
+Visible proof: `examples/gallery/gallery.ui` grows additively from
+the Phase 2 single-Box sub-screen to a `WrapPanel` of ten uniform
+88×88 placeholder thumbnails with the ADR-canonical 88 / 12 / 12
+attribute values (7+3 wrap on the default 800×600 window).
+`examples/gallery-rust/` builds and launches it through the same
+`.ui -> wasamoc -> IR text -> wasamo_load_ui` path; owner-manual
+GUI smoke confirmed the wrap and the post-fix non-zero-offset
+rendering.
+
+Per-phase spec sync ([A11](./ROADMAP.md#m3-dsl-surface)):
+`docs/dsl_spec.md` 0.9 -> 1.0 flips §4.10 to
+`M3-Phase 3 closed; implementation-synced` and folds the T1
+lexer-surface change into §2.2 (`Ident` admits kebab-case
+continuations; `IntLit` admits an optional leading `-` with a
+note that the negative-sign surface is `IntLit`-only).
+`docs/architecture.md` top-level Status flips to
+`M3-Phase 1, M3-Phase 2, and M3-Phase 3 complete`, and §6.5
+(WidgetNode and Visual Layer sync) gains a one-line clarification
+of the absolute vs. parent-relative offset convention discovered
+via T9 visible-smoke.
+
+Decisions: [DD-M3-P3-001..006](./docs/decisions/m3-phase-3-wrap-panel.md).
+
 ### M3-Phase 2 — Box layout primitive (2026-05-20)
 
 Adds the `Box` layout primitive, discharging M3 acceptance **A6**.
