@@ -2,7 +2,7 @@
 title: M3-Phase 3 / T9 step-end retrospective
 status: recorded
 created: 2026-05-22
-revised: 2026-05-22 (rev 2 — owner review findings 1/2/3 fold)
+revised: 2026-05-22 (rev 3 — post-rev-2 clean rebuild record refresh)
 scope: step-end
 task: T9 — `examples/gallery/` + `examples/gallery-rust/` additive growth (ADR §Phase 3 verification closure evidence item 5)
 ---
@@ -17,7 +17,7 @@ task: T9 — `examples/gallery/` + `examples/gallery-rust/` additive growth (ADR
 >   the gallery sub-screen (8 thumbnails), and contained an
 >   arithmetic self-contradiction in the Main Learning example
 >   (`"(30, 306) ではなく (30, 306)"`).
-> - **rev 2 (this commit):** Three owner review findings folded.
+> - **rev 2 (commit `f473fee`):** Three owner review findings folded.
 >   - **Finding 1:** Soften "達成済み" wording. The Current Judgment
 >     now distinguishes "checklist 上の事実関係 (実装・evidence・
 >     rebuild) は T9 close 候補に達した" from "step-end gate は
@@ -35,6 +35,15 @@ task: T9 — `examples/gallery/` + `examples/gallery-rust/` additive growth (ADR
 >     pre-fix vs post-fix Text-label screen position is recomputed
 >     against the reverted `88 / 12 / 12` geometry (Box at row 2
 >     col 1, absolute `(0, 100)`).
+> - **rev 3 (this commit):** Re-run the clean rebuild gate at
+>   the post-rev-2 tip and refresh the recorded hash. rev 2's
+>   revert commit `6a9797c` modified `examples/gallery/gallery.ui`,
+>   so the rev 1 rebuild evidence at `e89a423` is no longer
+>   "post-commit state" per retrospectives.md §共通 item 3. The
+>   commit list in §Scope adds the rev 2 commits; the Verification
+>   Notes hash is replaced; checklist item 3 hash is replaced.
+>   No checklist content otherwise changes — fast-track remains
+>   unavailable.
 
 ## Scope
 
@@ -50,11 +59,20 @@ pixel-level correctness) の制約下で、Phase 2 の単一 Box sub-screen
 を `WrapPanel` of Box thumbnails に成長させ、`gallery-rust` host が
 build + 起動できることまでを確認する step である。
 
-対象コミット (3 件; 本 doc 含まず):
+対象コミット (5 件; 本 rev 3 doc commit 含まず):
 
 - `570d08a fix(wasamo-runtime): sync_visuals writes parent-relative offset (M3-Phase 3 T9)`
 - `d1e5ba6 feat(examples): grow gallery sub-screen to WrapPanel of 8 thumbnails (M3-Phase 3 T9)`
 - `e89a423 docs(m3-phase-3): close T9 gallery sub-screen step + visible-smoke evidence`
+- `86ebfc1 docs(m3-phase-3): T9 step-end retrospective` (rev 1)
+- `6a9797c revert(examples): restore gallery to ADR-canonical 88/12/12 + 10 thumbs (M3-Phase 3 T9 rev 2)`
+- `f473fee docs(m3-phase-3): T9 retrospective rev 2 — fold owner findings 1/2/3`
+
+(rev 3 retrospective body update commit はこの list の後に乗る。
+clean rebuild gate (Checklist item 3 / Verification Notes) は
+post-commit hash `f473fee` (= rev 2 完了時点) に対して実行し、
+コードベース変化のない rev 3 doc commit は gate 結果を不変に保つ
+ため再実行不要。)
 
 T9 が本 step で landed した材料 (rev 2 反映後):
 
@@ -125,13 +143,17 @@ phase ブランチ `feat/m3-phase-3` (ff)。本 step (T9) は単一 task =
   width 変化に追随している (rev 2 / 88-12-12 / 10 thumbs)。
   3 枚は `docs/references/m3-phase-3/` 配下に evidence として
   保存済み (rev 2 で 120/16/16 版から 88/12/12 版に差し替え)。
-- clean rebuild gate (post-commit hash `e89a423`) も green:
+- clean rebuild gate (post-commit hash `f473fee`; rev 2 完了時点)
+  も green:
   `cargo fmt --all -- --check` (前後とも zero exit) →
-  `cargo clean` (1043 files / 236.1 MiB 削除) →
-  `cargo build --release --workspace` (37.09s) →
-  `cargo build --workspace` (32.99s) →
+  `cargo clean` (2491 files / 884.4 MiB 削除) →
+  `cargo build --release --workspace` (40.92s) →
+  `cargo build --workspace` (38.71s) →
   `cargo test --workspace` (workspace 全 test green; 内訳は
-  Verification Notes 参照)。
+  Verification Notes 参照)。rev 1 で記録していた `e89a423`
+  上の rebuild は rev 2 の `6a9797c` (gallery.ui 数値 revert) が
+  入ったことで post-commit state ではなくなったため、rev 3 で
+  `f473fee` 上に取り直した結果。
 - T9 由来の warning / failure はなし。既存の `wasamo-sys` import
   library order warning のみ既存通り。
 
@@ -277,10 +299,13 @@ no-change で green を維持した。
      primary record として残る。
 
 3. **ローカル clean rebuild:** **green** **(FT)**
+   - 実行 hash: `f473fee` (rev 2 完了時点)。rev 1 で記録の
+     `e89a423` 上 rebuild は rev 2 の `6a9797c` 着地で
+     post-commit state ではなくなったため、rev 3 で取り直し。
    - `cargo fmt --all -- --check` (pre-clean): zero exit。
-   - `cargo clean`: success (1043 files / 236.1 MiB 削除)。
-   - `cargo build --release --workspace`: success (37.09s)。
-   - `cargo build --workspace`: success (32.99s; 既存の
+   - `cargo clean`: success (2491 files / 884.4 MiB 削除)。
+   - `cargo build --release --workspace`: success (40.92s)。
+   - `cargo build --workspace`: success (38.71s; 既存の
      `wasamo-sys` import library order warning のみ)。
    - `cargo test --workspace`: success — 内訳 (零件数の result
      行は省略):
@@ -297,7 +322,8 @@ no-change で green を維持した。
      - wasamoc unit: 202 passed
      - wasamoc bins (check / build) と CLI tests: 各 0–6
    - `cargo fmt --all -- --check` (post-rebuild): zero exit。
-   - 全 gate は post-commit hash `e89a423` 上で実行。
+   - 全 gate は post-commit hash `f473fee` 上で実行 (rev 3 で
+     `e89a423` から差し替え; 詳細は §Revision history rev 3)。
 
 4. **PO に相談すべき設計判断・トレードオフ:** **あり** **(FT)**
    - **`sync_visuals` の parent-relative 変換を T9 内で fix するか
@@ -370,20 +396,27 @@ Fast-track criteria は **満たさない** (item 4 / item 5 が「あり」):
 
 ## Verification Notes
 
-実行コマンド (post-commit hash `e89a423` 上):
+実行コマンド (post-commit hash `f473fee` 上; rev 3 update):
 
 ```text
-cargo fmt --all -- --check
-cargo clean
-cargo build --release --workspace
-cargo build --workspace
-cargo test --workspace
-cargo fmt --all -- --check
+cargo fmt --all -- --check          # pre-clean: zero exit
+cargo clean                         # 2491 files / 884.4 MiB removed
+cargo build --release --workspace   # 40.92s
+cargo build --workspace             # 38.71s
+cargo test --workspace              # all green (workspace)
+cargo fmt --all -- --check          # post-rebuild: zero exit
 ```
 
 すべて green。`cargo build --release --workspace` /
 `cargo build --workspace` では既存の `wasamo-sys` import library
 order warning が表示されたが T9 由来の warning / failure はなし。
+
+rev 1 / rev 2 当時の rebuild 記録 (`e89a423` 上で release 37.09s
+/ debug 32.99s) は rev 2 の `6a9797c` (`examples/gallery/gallery.ui`
+の数値 revert) が post-commit state を変えたため stale 化し、
+rev 3 でこの section の hash と timings を取り直したのが上記。
+コードベースに変更のない rev 3 doc commit (本 commit) は
+post-commit state を変えないため gate 再実行は不要。
 
 `cargo build --release --workspace` の前段 (1 回目 `cargo build
 --release --workspace`) で rustc が `windows` crate compile 中に
