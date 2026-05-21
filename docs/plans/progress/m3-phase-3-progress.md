@@ -93,17 +93,17 @@ DD-M3-P3-003 / DD-M3-P3-004.
 Discharges the DD-M3-P3-004 Recommendation companion judgement
 (Checkpoint 2 ship-warning pick).
 
-- [ ] When a WrapPanel directly contains one or more
+- [x] When a WrapPanel directly contains one or more
       `Box { aspect: <ratio>; … }` children and `item-cross-size`
       is **not** set on the WrapPanel, `wasamoc check` emits a
       **warning** (not error) suggesting the attribute. The warning
       text cross-references
       [dsl_spec §4.10 Common pitfalls](../../dsl_spec.md#410-wrappanel-layout-primitive-m3-phase-3).
-- [ ] Warning fires on direct-child Boxes only (does not scan into
+- [x] Warning fires on direct-child Boxes only (does not scan into
       nested containers); narrow guard scope per DD-M3-P3-004
       "the warning does not classify all possible child shapes,
       only the known aspect-only-Box footgun".
-- [ ] Unit tests cover the firing shape, the non-firing shape
+- [x] Unit tests cover the firing shape, the non-firing shape
       (`item-cross-size` set explicitly; the Phase 3 gallery
       sub-screen's positive control), and the non-direct-child
       shape (an aspect-only Box nested inside another container
