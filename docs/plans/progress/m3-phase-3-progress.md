@@ -130,14 +130,14 @@ Discharges the DD-M3-P3-004 Recommendation companion judgement
 
 ### T4 — `wasamoc` IR text emit
 
-- [ ] Emitter writes the WrapPanel widget node and the three
+- [x] Emitter writes the WrapPanel widget node and the three
       attribute properties in the existing `prop` literal position
       using the standard `i32` literal form (decimal integer; no
       new emit grammar).
-- [ ] Attributes absent on the IR side are also omitted from the
+- [x] Attributes absent on the IR side are also omitted from the
       IR text (round-trip fidelity: parse → IR → emit → parse
       produces the same IR shape).
-- [ ] Unit tests cover the emit forms for each combination of
+- [x] Unit tests cover the emit forms for each combination of
       attribute presence / absence; one round-trip test asserts
       stability across an emit / re-parse cycle.
 
