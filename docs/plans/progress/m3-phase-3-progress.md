@@ -35,7 +35,7 @@ a frozen prediction.
 The five pieces of A3 evidence the phase closes against are
 enumerated in
 [m3-phase-3-wrap-panel.md §Phase 3 verification closure](../../decisions/m3-phase-3-wrap-panel.md#phase-3-verification-closure-what-counts-as-a3-evidence).
-Each T below cites the evidence item it discharges.
+Each T below cites the evidence item it advances or discharges.
 
 ## Task list
 
@@ -206,20 +206,24 @@ verification closure **evidence item 2**.
 - [x] Rounding contract inherits Phase 2 DD-M3-P2-005's
       discipline (no pixel-snapping in Phase 3).
 
-### T8 — Windows-runtime integration test
+### T8 — Windows-runtime integration test (ADR §Phase 3 verification closure evidence item 4, CI-gated)
 
-Discharges ADR verification closure **evidence item 4** (CI-gated
-Compositor pipeline).
+Lands the Windows-runtime integration test required by ADR
+verification closure **evidence item 4** (CI-gated Compositor
+pipeline). CI green confirmation of the test itself remains T10's
+"Windows-only integration test (T8) green on CI" checkbox — T8
+closes the test landing and the skip-guard verification, not the
+CI-execution evidence.
 
-- [ ] Mock-free integration test on the Windows CI runner that
+- [x] Mock-free integration test on the Windows CI runner that
       exercises the two fixtures specified in the ADR's
       [verification closure evidence item 4](../../decisions/m3-phase-3-wrap-panel.md#phase-3-verification-closure-what-counts-as-a3-evidence):
       the wrap-path fixture (primary positive control) and the
       oversized-child fixture (visible-overflow regulation).
-- [ ] Skip-guard matches Phase 1 T6 / T13 / Phase 2 T11: fail (not
+- [x] Skip-guard matches Phase 1 T6 / T13 / Phase 2 T11: fail (not
       skip) on CI when Compositor unavailable; locally skip on
       `0x80070005` from `wasamo_init`.
-- [ ] Skip-guard verified on an SSH dev box (or equivalent
+- [x] Skip-guard verified on an SSH dev box (or equivalent
       environment per
       [verification-environments.md](../../notes/verification-environments.md))
       before landing — local "passed without skip" does not prove
