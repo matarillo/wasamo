@@ -383,11 +383,17 @@ A phase closes when **all** of the following hold:
    the phase that is real but not in the phase's scope is recorded
    in a live note under `docs/notes/m3/` and pointed to from the
    phase ADR's residual / handover section, not silently carried.
-7. **Phase-end retrospective recorded.** A short retrospective
-   entry lands in `docs/notes/retrospectives.md` covering what
-   the phase shipped, what slipped (if anything), and the merge /
-   push gate per the *phase-end merge and push gating* discipline
-   recorded in [docs/notes/retrospectives.md](../notes/retrospectives.md).
+7. **Phase-end retrospective recorded.** A short phase-end
+   retrospective entry lands at
+   `docs/notes/m3-phase-N/phase-end-retrospective.md` (the
+   per-phase durable record, following Phase 1 / Phase 2
+   practice) covering what the phase shipped, what slipped (if
+   anything), and the merge / push gate per the *phase-end merge
+   and push gating* discipline recorded in
+   [docs/notes/retrospectives.md](../notes/retrospectives.md)
+   (the procedure document; durable per-phase entries are filed
+   under the phase's own `docs/notes/m3-phase-N/` directory, not
+   appended to the procedure document itself).
 
 ### Milestone-end criteria
 
@@ -466,7 +472,22 @@ M3 is complete when **all** of the following hold:
 
 ### Revision log
 
-(none yet — plan is `status: in-progress`.)
+- **2026-05-21 — Phase-end criterion 7 wording aligned to
+  Phase 1 / Phase 2 practice.** Routed under
+  [plans/README.md §Factual correction](../plans/README.md#factual-correction-in-progress-only).
+  The original wording named `docs/notes/retrospectives.md` as
+  the landing site for the per-phase retrospective entry. In
+  practice, both Phase 1
+  (`docs/notes/m3-phase-1/phase-end-retrospective.md`) and
+  Phase 2 (`docs/notes/m3-phase-2/phase-end-retrospective.md`)
+  filed their durable phase-end retrospectives under the
+  phase's own notes directory, treating
+  `docs/notes/retrospectives.md` as the procedure document
+  only. Criterion 7 was reworded in place to reflect that
+  established practice. The gate itself (existence of a
+  phase-end retrospective entry, covering ship / slip / merge
+  + push) is unchanged; no acceptance criterion is affected;
+  no phase scope is changed.
 
 ## Progress
 
