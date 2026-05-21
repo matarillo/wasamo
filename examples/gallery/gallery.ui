@@ -3,13 +3,50 @@ component Gallery inherits Window {
     backdrop: mica
     theme: system
 
-    Box {
-        aspect: 16:9
-        fill: #336699cc
+    WrapPanel {
+        item-cross-size: 120
+        item-spacing: 16
+        line-spacing: 16
 
-        Text {
-            text: "M3 Phase 2 Box"
-            font: title
+        Box {
+            aspect: 1:1
+            fill: #336699cc
+            Text { text: "Photo 1" }
+        }
+        Box {
+            aspect: 1:1
+            fill: #663366cc
+            Text { text: "Photo 2" }
+        }
+        Box {
+            aspect: 1:1
+            fill: #669933cc
+            Text { text: "Photo 3" }
+        }
+        Box {
+            aspect: 1:1
+            fill: #996633cc
+            Text { text: "Photo 4" }
+        }
+        Box {
+            aspect: 1:1
+            fill: #339966cc
+            Text { text: "Photo 5" }
+        }
+        Box {
+            aspect: 1:1
+            fill: #996699cc
+            Text { text: "Photo 6" }
+        }
+        Box {
+            aspect: 1:1
+            fill: #cc9933cc
+            Text { text: "Photo 7" }
+        }
+        Box {
+            aspect: 1:1
+            fill: #3399cccc
+            Text { text: "Photo 8" }
         }
     }
 }
