@@ -17,19 +17,39 @@ surface registration)、DD-M3-P3-006 (compile-time half of two-gate
 defense for non-negative integers)、および DD-M3-P3-003 / DD-M3-P3-004
 の constant-only halves。
 
-対象コミット (3 件):
+対象コミット (5 件; 2026-05-21 owner review 後の修正 1 件と本 retro
+の rev 2 を含む):
 
 - `a3dba9a feat(wasamoc): generalize kebab-case ident, admit negative integer literals`
 - `b92a876 feat(wasamoc): WrapPanel known-widget registration and attribute reject set`
 - `f505459 docs(m3-phase-3): flip T1 checkboxes and record lexer prerequisite`
+- `c21941b docs(m3-phase-3): record T1 step-end retrospective` (rev 1; 本 retro の初版)
+- `bf7aee0 fix(wasamoc): tighten negative-entry lexer path to integer-only`
+  — owner review (2026-05-21) で指摘された scope widening
+  (`-1.5` / `-12px` も lex してしまっていた問題) の修正。
 
 step-end の gate であり phase-end retrospective ではない。merge 先は
 phase ブランチ `feat/m3-phase-3` (ff)。本 step (T1) は単一 task = 単一
 step 構造で、現在のブランチは `feat/m3-phase-3-t1`。
 
+**Revision history (本 retro):**
+
+- **rev 1** (`c21941b`, 2026-05-21): 初版。fast-track 判定 = 可、
+  clean rebuild の証跡として `cargo build --workspace` /
+  `cargo test --workspace` のみを記載していた。
+- **rev 2** (本コミット, 2026-05-21): owner review で指摘された
+  3 点を反映 — (a) lexer scope widening の修正 (`bf7aee0`) と
+  対応する Main Learning 更新、(b) `cargo clean` →
+  release+debug build → test の clean rebuild 証跡を追記、
+  (c) fast-track 判定を **不適用** に flip (process 文書の
+  ルールに従い、checklist item 4 が「あり」である以上 owner
+  明示承認ルートで扱う)。
+
 ## Current Judgment
 
-2026-05-21 時点で T1 step-end 基準は **達成済み**。
+2026-05-21 (rev 2) 時点で T1 step-end 基準は **達成済み (owner 明示
+承認待ち)**。checklist item 4 (PO 相談事項) が「あり」だったため
+fast-track は不適用。ff merge には owner の明示承認が必要。
 
 - WrapPanel が `KNOWN_WIDGET_TYPES` に追加され、unknown-widget warning
   を出さない (DD-M3-P3-001 surface registration)。
@@ -49,12 +69,20 @@ step 構造で、現在のブランチは `feat/m3-phase-3-t1`。
 - 0-child / 1-child / multi-child の 3 形すべて accept (DD-M3-P3-001
   の no upper bound)。
 - 23 件の T1 unit test を `check.rs` に追加。すべて green。
-- 追加 lexer test 6 件 (kebab-case ident generalization + negative
-  IntLit) も green。`in_out_followed_by_alphanumeric_is_error` は
-  動作変化に伴い `in_outx_lexes_as_kebab_ident` へ書き換え。
-- `cargo fmt --all -- --check` (post-commit state)、`cargo build
-  --workspace`、`cargo test --workspace` どれも local で green
-  (180 wasamoc + 12 wasamo-ir + 他 crate の test result が全 ok)。
+- 追加 lexer test 8 件 (kebab-case ident generalization + negative
+  IntLit + 負数 float / measurement の reject) も green。
+  `in_out_followed_by_alphanumeric_is_error` は動作変化に伴い
+  `in_outx_lexes_as_kebab_ident` へ書き換え。
+- **負数 IntLit の lexer 経路は integer-only に scope 制限済み**
+  (`bf7aee0`)。`-1.5` (FloatLit 連結) と `-12px` (Measurement 連結)
+  はそれぞれ lex 時に reject。`-1` の IntLit 経路のみが有効で
+  `wasamoc check` の DD-M3-P3-006 gate に届く。
+- **Clean rebuild gate (rev 2 で追記):**
+  `cargo clean` (2998 files removed, 806.4 MiB) → `cargo build
+  --release --workspace` (40.62s, green) → `cargo build --workspace`
+  (debug; 34.41s, green) → `cargo test --workspace` (failure 0 件;
+  wasamoc 182 passed, wasamo-ir 12 passed, 他 crate 全 green) →
+  `cargo fmt --all -- --check` (post-commit state; zero exit)。
 
 T1 の blocker は残っていない。T2 (aspect-only-Box warning) へ進める。
 
@@ -70,7 +98,10 @@ cross-size: 88` を tokenize したら `item` Ident → `-` "unexpected `-`"
    keyword 判定経路に統一。
 2. 先頭 `-` の後ろが ASCII 数字なら scan_number 経由で負の IntLit を
    発行。binary subtraction が DSL grammar に無いため leading-sign
-   読みは曖昧ではない。
+   読みは曖昧ではない。**負数経路は integer-only に scope 制限**
+   (`-1.5` / `-12px` は lex 時に reject) — rev 1 では owner review
+   までこの制限が漏れており、`scan_number` 内の float/measurement
+   分岐をそのまま通過させていた。rev 2 で `bf7aee0` として修正。
 
 この発見は **「pre-doc framing がカバーしていない実装前提が T1 着手の
 最初の commit で surface する」** パターン。Phase 1 / Phase 2 の T1
@@ -79,6 +110,31 @@ Phase 3 T1 は最小の lexical-surface 改変を要した。これは progress
 doc の「Phase 3 introduces no new parser grammar」prose を
 **factually 正確に保ちつつ** lexer extension を Decisions log に明文
 記録した形で吸収している。
+
+**rev 2 で追加した学び (owner review 由来):**
+
+- **「最小拡張」と書いた lexer 変更でも、共有ヘルパ
+  (`scan_number`) を経由すると意図外の literal variant
+  (FloatLit / Measurement) まで surface が広がる。** 説明と実装の
+  乖離は本 step 内に閉じていれば技術的負債ではないが、retro が
+  「ついでの構造変更なし」と判定する根拠を弱める。今後 lexer 共有
+  ヘルパに新しい entry-flag を足す際は、flag が下流の各 variant
+  分岐でどう振る舞うかを明示的にテストでピン留めする (今回の
+  `negative_float_literal_rejected` / `negative_measurement_literal_rejected`
+  パターン)。
+- **Step-end fast-track の判定は process 文書のルール文面に厳密に
+  従う。** 「owner と session 内で合意済み」は本 retro 上は記録
+  対象だが、checklist item 4 を「なし」に flip する根拠にはなら
+  ない。fast-track 適用は item 2–8 がすべて「なし」かつ item 3
+  green が条件で、合意の有無は別 axis。rev 1 ではこの読み違いで
+  fast-track 可と判定していたが、rev 2 で不適用に訂正。
+- **step-end の clean rebuild 証跡は `cargo build --workspace` /
+  `cargo test --workspace` だけでは不十分**。retrospectives.md
+  §checklist item 3 は `cargo clean` + release+debug build + test
+  まで要求している。rev 1 はこの差分を見落としていた。今後は
+  最後の commit に対して必ず clean rebuild を 1 サイクル回し、
+  本セクションに `cargo clean` 出力と各 build/test phase の
+  ログ要約を載せる。
 
 副次的な学び:
 
@@ -114,16 +170,26 @@ doc の「Phase 3 introduces no new parser grammar」prose を
      対する §2 (lexical surface) サイドの記述要否は T10 で
      再判断する旨を Decisions log に記録した。
 
-3. **ローカル clean rebuild:** **green**
-   - `cargo fmt --all -- --check` (post-commit state): zero exit。
-   - `cargo build --workspace`: green (35.99s)。
+3. **ローカル clean rebuild:** **green (rev 2 で再実行・証跡追加)**
+   - `cargo clean`: 2998 files removed, 806.4 MiB。
+   - `cargo build --release --workspace`: green (40.62s)。
+   - `cargo build --workspace` (debug): green (34.41s)。
    - `cargo test --workspace`: failure 0 件。
-     - `wasamoc` lib test: 180 passed (T1 で +29: lexer +5,
-       check +23, それと既存 `in_out_followed_by_alphanumeric_is_error`
-       の置換 1)。
-     - `wasamo-ir`, `wasamo-runtime`, ABI / DLL / binding crate 群も
-       全部 green。
+     - `wasamoc` lib test: **182 passed** (T1 で +31 net: lexer
+       +7 [kebab 2、break-condition 1、negative IntLit 2、
+       negative float reject 1、negative measurement reject 1] と
+       既存 `in_out_followed_by_alphanumeric_is_error` の置換 1、
+       check +23)。
+     - `wasamo-ir`: 12 passed。
+     - `wasamo-runtime`, ABI / DLL / binding / counter-rust /
+       gallery-rust crate 群も全部 green。
+   - `cargo fmt --all -- --check` (post-commit state): zero exit。
    - GitHub Actions 上の clean rebuild は phase-end gate (T10) で確認。
+
+   **Rev 1 の漏れ:** retrospectives.md §checklist item 3 が
+   要求する `cargo clean` と `cargo build --release --workspace`
+   の証跡を欠いていた。rev 2 で実 sequence (clean → release →
+   debug → test → fmt --check) を回して証跡を追加した。
 
 4. **PO に相談すべき設計判断・トレードオフ:** **あり (解消済み)**
    - T1 着手時に **kebab-case lex の方針** を 2026-05-21 に owner と
@@ -134,14 +200,25 @@ doc の「Phase 3 introduces no new parser grammar」prose を
 ### step-end 固有
 
 5. **plan/ADR に記載の step 目的から外れた「ついで」のリファクタ・
-   構造変更:** **なし (ただし lexer 拡張あり)**
+   構造変更:** **なし (ただし lexer 拡張あり; rev 1 で scope
+   widening 発生・rev 2 で修正済み)**
    - `wasamoc::lexer` の kebab + negative IntLit 拡張は **T1 を実施
      するための前提**であり「ついで」ではない。owner 合意のうえ
      先頭 commit として切り出した。lexer / check / docs の 3 commit
-     構成は CLAUDE.md §Commit rules の split 許容条件を満たす。
+     構成 (rev 1) は CLAUDE.md §Commit rules の split 許容条件を
+     満たす。
    - 既存 test `in_out_followed_by_alphanumeric_is_error` を
      `in_outx_lexes_as_kebab_ident` に置換 (lexer behavior 変化に
      直接対応する書き換え; format / scope creep 系の churn ではない)。
+   - **Rev 1 → rev 2 で訂正した scope widening:** rev 1 の負数
+     IntLit 経路は `scan_number(..., negative=true)` を呼ぶだけで
+     downstream の `FloatLit` / `Measurement` 分岐を抑制しておらず、
+     `-1.5` / `-12px` まで lex 可能になっていた (owner review で
+     指摘)。spec §5 AST table が FloatLit を unsigned としており、
+     measurement form も unsigned のため、これは **意図外の lexical
+     surface 変更** = scope creep。rev 2 で `bf7aee0` として
+     fractional / `px` 分岐に `negative` reject を入れ、対応する
+     reject test 2 件を追加。修正後の負数経路は integer-only。
 
 6. **現在の phase ADR への追加 DD 必要性:** **なし**
    - lexer 拡張は ADR DD-001..006 のいずれの design call にも
@@ -178,33 +255,52 @@ doc の「Phase 3 introduces no new parser grammar」prose を
 
 ## Fast-Track Judgment
 
-Fast-track criteria を満たしている。
+**Fast-track 不適用 (rev 2 で訂正)。owner 明示承認ルートで処理。**
+
+retrospectives.md §進行手順 / §ファストトラック基準は item 2–8 が
+すべて「なし」かつ item 3 green を条件としており、item 4 が
+「あり」となった段階で fast-track 適用条件を外れる。session 内で
+合意が取れているかどうかは別 axis であり、ルール文面を直接緩める
+材料ではない。
+
+各項目の最終判定:
 
 - item 2 (spec doc 変更): なし
-- item 3 (local clean rebuild): green
-- item 4 (PO 相談事項): あり / **合意済み** (kebab lexer 方針を
-  2026-05-21 に確定)
-- item 5 (ついでのリファクタ): なし (lexer 拡張は T1 前提)
+- item 3 (local clean rebuild): green (rev 2 で `cargo clean`
+  + release+debug build + test の証跡を追加)
+- item 4 (PO 相談事項): **あり** (kebab lexer 方針を本 session で
+  確定、加えて owner review で scope widening を 1 件 catch・rev 2
+  で修正済み)
+- item 5 (ついでのリファクタ): なし (lexer 拡張は T1 前提; rev 1
+  の scope widening は rev 2 で修正)
 - item 6 (追加 DD 必要性): なし
 - item 7 (Proposed → Accepted 昇格): なし
 - item 8 (plan AC / Phase 構成変更): なし
 - item 9 (持ち越し): なし
 
-item 4 が「あり」だったが本 step 内で owner 合意済みのため fast-track
-を阻害しない。とはいえ step → phase ブランチへの ff merge 判断は
-オーナーに通知のうえで進める (retrospectives.md §進行手順 3 に従い、
-本 retrospective を fast-track 報告として提示)。
+**Rev 1 の判定誤り:** rev 1 は item 4 を「あり (解消済み)」と
+記して fast-track 可と判定していたが、process 文書のルール文面
+からは「合意済み」を fast-track 阻害解除条件として読めない。rev 2
+は item 4「あり」をそのまま受け止め、ff merge は owner 明示承認
+ルートへ送る。
+
+**Owner への merge 判定依頼:** rev 2 の修正 (lexer scope tightening,
+clean rebuild evidence, fast-track 訂正) を反映したうえで、
+`feat/m3-phase-3-t1` → `feat/m3-phase-3` への ff merge 承認を
+依頼する。
 
 ## Verification Notes
 
 T1 で追加したテストと、走らせた command を記録する。
 
-新規テスト (lexer): 5 件 + 既存 1 件の置換
+新規テスト (lexer): 7 件 + 既存 1 件の置換
 
 - `kebab_case_ident`
 - `kebab_ident_breaks_on_non_alpha_after_hyphen`
 - `negative_int_literal`
 - `negative_int_in_property_bind_position`
+- `negative_float_literal_rejected` (rev 2 で追加; scope tightening)
+- `negative_measurement_literal_rejected` (rev 2 で追加; scope tightening)
 - `in_outx_lexes_as_kebab_ident` (旧 `in_out_followed_by_alphanumeric_is_error`)
 
 新規テスト (check): 23 件
@@ -233,17 +329,21 @@ T1 で追加したテストと、走らせた command を記録する。
   `wrappanel_attr_on_vstack_rejected`,
   `wrappanel_attr_at_component_level_rejected`
 
-実行コマンド:
+実行コマンド (rev 2 で `cargo clean` + `cargo build --release` を
+追加し clean rebuild gate を満たす形に更新):
 
 ```text
-cargo fmt --all -- --check   (post-commit state)
-cargo build --workspace
-cargo test --workspace
-cargo test -p wasamoc --lib lexer
-cargo test -p wasamoc --lib check
+cargo clean                                (rev 2; 2998 files, 806.4 MiB)
+cargo build --release --workspace          (rev 2; 40.62s, green)
+cargo build --workspace                    (debug; 34.41s, green)
+cargo test --workspace                     (failure 0)
+cargo test -p wasamoc --lib lexer          (46 passed)
+cargo test -p wasamoc --lib check          (72 passed)
+cargo fmt --all -- --check                 (post-commit state; zero exit)
 ```
 
-いずれも green。`wasamoc` lib test は 180 passed (T1 で +29 net)。
+いずれも green。`wasamoc` lib test は **182 passed** (T1 で +31 net;
+内訳は §Checklist 項目 3 参照)。
 
 ## Follow-Up
 
@@ -266,6 +366,20 @@ T1 から後続 task への明示的な引き渡し:
     surface 文法を載せていないので、§4.10 attribute table の存在で
     充分とも判定しうる)。
   - lexer test の `in-outx` 動作変化を §2 / §4.7 に反映するか。
+  - rev 2 で確定した「負数 IntLit は integer-only、float /
+    measurement は依然 unsigned」の lexical contract を §5 (AST)
+    / §8 (IR text) のどこに明文化するか — §4.10 attribute table の
+    値域 (`<i32>` literal、非負) は既に書かれているので、§2 / §5
+    側で「IntLit は符号付き、FloatLit / Measurement は符号なし」を
+    1 行確認するだけで足りる見込み。
+- **Process discipline forward-carry (rev 2 の Main Learning 由来):**
+  - 次 step 以降の retrospective では `cargo clean` + release+debug
+    build + test を **記録テンプレートに含める** (rev 1 の漏れを
+    rev 2 で埋めた経験を再発させない)。
+  - 共有 lexer ヘルパに entry-flag を追加した場合、flag が下流の
+    各 variant 分岐でどう振る舞うかを explicit に reject test で
+    ピン留めする。次 phase の lexer 系編集に同様の構造変更が出る
+    なら本パターンを T1 段階で適用する。
 
 これらはすべて progress file の T2–T10 として既に列挙済み。T1 単体で
 新たに発見された follow-up は **lexer prerequisite** の Decisions log
