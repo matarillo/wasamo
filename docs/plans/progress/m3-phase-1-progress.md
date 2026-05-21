@@ -1,11 +1,10 @@
 ---
 phase: M3-Phase 1
 title: bool scalar binding
-status: closing
+status: retired
 adr: docs/decisions/m3-phase-1-bool-scalar.md
 plan: docs/plans/m3-plan.md
 opened: 2026-05-19
-closing: 2026-05-19
 ---
 
 # M3-Phase 1 — `bool` scalar binding: Progress
