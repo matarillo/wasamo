@@ -236,17 +236,17 @@ smoke) and the
 [m3-plan §Phase-end criteria item 5](../m3-plan.md#phase-end-criteria)
 "gallery sub-screen per phase" obligation.
 
-- [ ] `examples/gallery/gallery.ui` grows additively from Phase 2's
+- [x] `examples/gallery/gallery.ui` grows additively from Phase 2's
       single-Box sub-screen into a WrapPanel of uniform 1:1 Box
       thumbnails (5–10 items, hand-written; no iteration, no
       ScrollView). Per framing decision E.
-- [ ] `examples/gallery-rust/` (already a workspace member from
+- [x] `examples/gallery-rust/` (already a workspace member from
       Phase 2) builds and runs the grown sub-screen.
-- [ ] `Start-Process` launch recorded as successful by the
+- [x] `Start-Process` launch recorded as successful by the
       assistant; visual correctness is **owner-manual GUI smoke**
       per framing decision G — the assistant does not assert on
       pixel- or eyeball-level correctness.
-- [ ] C / Zig hosts not required in Phase 3 (per framing decision E
+- [x] C / Zig hosts not required in Phase 3 (per framing decision E
       and the ADR Out-of-scope list); Phase 8 broadens the full
       gallery to all three.
 
