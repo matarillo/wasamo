@@ -2,7 +2,7 @@
 title: M3-Phase 3 / T7 step-end retrospective
 status: recorded
 created: 2026-05-22
-revised: 2026-05-22 (rev 3 — physical clean rebuild + Main Learning dedup; metadata sync per re-review)
+revised: 2026-05-22 (rev 4 — metadata sync + item 9 (FT) wording; doc consistency on top of rev 3)
 scope: step-end
 task: T7 — Layout engine: WrapPanel line-breaker and arrange
 ---
@@ -28,13 +28,21 @@ task: T7 — Layout engine: WrapPanel line-breaker and arrange
 >   一対一対応で scope は決着済み") が残っていたため削除し、survive
 >   側の "ADR 列挙 sufficiency" 段落を rev 2 framing と整合する形に
 >   書き直した。
-> - **rev 4 (本版; this retrospective edit):** 再々 review で 2 件の
->   Low 指摘: (a) frontmatter / Revision history / 対象コミット list
->   が rev 3 を反映していなかったので本版で同期。(b) Fast-Track
->   Judgment の item 9 を「(FT) ではない」と書いていたが
->   `retrospectives.md` 上は **(FT) 付与あり**。文言を process 文書
->   に合わせて修正 (結論 = fast-track 不適格は維持)。本版は code /
->   gate 実態の変更を伴わない doc consistency 修正。
+> - **rev 4 (本版; commits `25dd993` + 後続 metadata 完成 commit):**
+>   再々 review で 2 件の Low 指摘: (a) Revision history / 対象
+>   コミット list が rev 3 を反映していなかったので本版で同期。
+>   (b) Fast-Track Judgment の item 9 を「(FT) ではない」と書いて
+>   いたが `retrospectives.md` 上は **(FT) 付与あり**。文言を
+>   process 文書に合わせて修正 (結論 = fast-track 不適格は維持)。
+>   本版は code / gate 実態の変更を伴わない doc consistency 修正。
+>   **note (rev 4 内部分割):** rev 4 は最初の commit `25dd993` で
+>   Revision history 更新 + item 9 (FT) 修正までを行ったが、
+>   frontmatter `revised:` と 対象コミット list を実体としては
+>   rev 3 のまま放置していた (rev 4 doc が「同期した」と書いた
+>   内容と乖離していた)。次の review で同 Low 指摘を受け、本 rev 4
+>   の二段目 commit で frontmatter / 対象コミット list を実際に
+>   rev 4 へ揃え直した。rev を bump しない判断はオーナー指示
+>   (「rev を上げないと決めて rev 4 で揃える」option) に従う。
 
 ## Scope
 
@@ -54,14 +62,16 @@ retrospective。T7 が discharge する材料は次:
   forward-pointer を、measure-arrange の reader が入った瞬間に
   lift する。
 
-対象コミット (6 件):
+対象コミット (8 件; rev 4 が `25dd993` と本 commit の 2 件に分割):
 
 - `c6a0625 feat(wasamo-runtime): WrapPanel measure-arrange line breaker (M3-Phase 3 T7)`
 - `6b1b0f5 docs(m3-phase-3): flip T7 checkboxes (WrapPanel measure-arrange)`
 - `984c5b8 docs(m3-phase-3): record T7 step-end retrospective` (rev 1; amended from `46f706b` to translate the Japanese commit body to English)
 - `253b207 fix(wasamo-runtime): cache WrapPanel cross-bound across measure→arrange` (review-found drift bug)
 - `ed930b2 docs(m3-phase-3): T7 retrospective revision — review-found bug + fix` (rev 2 retrospective body update)
-- `981c63e docs(m3-phase-3): T7 retrospective rev 3 — physical clean rebuild + dedup` (rev 3 retrospective body update; this revision (rev 4) is a metadata sync + Fast-Track Judgment wording fix on top of rev 3)
+- `981c63e docs(m3-phase-3): T7 retrospective rev 3 — physical clean rebuild + dedup` (rev 3 retrospective body update)
+- `25dd993 docs(m3-phase-3): T7 retrospective rev 4 — metadata sync + item 9 (FT) wording` (rev 4 first commit: Revision history 拡充 + item 9 (FT) 文言修正; frontmatter / 対象コミット list の同期は漏れた)
+- (this commit) `docs(m3-phase-3): T7 retrospective rev 4 metadata completion` (rev 4 second commit: 上記漏れを完成させて frontmatter / 対象コミット list を rev 4 へ揃え直す; rev は bump しない)
 
 step-end の gate であり phase-end retrospective ではない。merge 先は
 phase ブランチ `feat/m3-phase-3` (ff)。本 step (T7) は単一 task =
