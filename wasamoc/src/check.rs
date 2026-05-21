@@ -3,7 +3,21 @@ use std::collections::HashMap;
 use crate::ast::{ComponentDef, Expr, Member, QualifiedName, Span, TypeName};
 use crate::diagnostic::Diagnostic;
 
-const KNOWN_WIDGET_TYPES: &[&str] = &["VStack", "HStack", "Text", "Button", "Rectangle", "Box"];
+const KNOWN_WIDGET_TYPES: &[&str] = &[
+    "VStack",
+    "HStack",
+    "Text",
+    "Button",
+    "Rectangle",
+    "Box",
+    "WrapPanel",
+];
+
+/// WrapPanel's three constant-only `i32` attributes per dsl_spec §4.10
+/// (DD-M3-P3-003 / DD-M3-P3-004). Listed in a single table so the
+/// rejection paths (`bind`-style state-ident, non-`IntLit` literal,
+/// attribute-outside-WrapPanel) share one source of truth.
+const WRAPPANEL_INT_ATTRS: &[&str] = &["item-cross-size", "item-spacing", "line-spacing"];
 
 /// Flat namespace of declared state names → their types.
 pub type Namespace = HashMap<String, TypeName>;
@@ -158,6 +172,14 @@ fn widget_prop_type(widget_type: &str, prop_name: &str) -> Option<TypeName> {
         // `TypeName` entries and bypass the type-compatibility table.
         // Validity is checked by `check_box_const_only_bind` instead. The
         // catalog row is named here so future maintainers can grep for it.
+        // WrapPanel's three attributes are catalog-typed `i32` per
+        // dsl_spec §4.10 so the type-mismatch diagnostic can name them in
+        // bind contexts that survive the constant-only gate (none in
+        // Phase 3 — the gate runs first — but the catalog row keeps the
+        // attribute types reachable for future bindable phases).
+        ("WrapPanel", "item-cross-size")
+        | ("WrapPanel", "item-spacing")
+        | ("WrapPanel", "line-spacing") => Some(TypeName::Int),
         _ => None,
     }
 }
@@ -244,6 +266,77 @@ fn box_prop_surface_form(prop_name: &str) -> &'static str {
     }
 }
 
+/// Validate a property bind on `WrapPanel.item-cross-size`,
+/// `WrapPanel.item-spacing`, or `WrapPanel.line-spacing`. All three are
+/// constant-only `i32` per DD-M3-P3-003 / DD-M3-P3-004: the RHS must be
+/// an `IntLit` (positive or zero — negatives are rejected by the
+/// DD-M3-P3-006 compile-time gate). State-backed idents, ratio / color /
+/// string / bool / measurement literals are all rejected here so the
+/// diagnostic can name the attribute; the generic positional Ratio /
+/// Color rejection in `check_expr_type` is bypassed.
+fn check_wrappanel_const_only_bind(
+    prop_name: &str,
+    value: &Expr,
+    span: &Span,
+    filename: &str,
+    diags: &mut Vec<Diagnostic>,
+) {
+    match value {
+        Expr::IntLit {
+            value: v,
+            span: lit_span,
+        } => {
+            if *v < 0 {
+                diags.push(error(
+                    filename,
+                    lit_span,
+                    format!(
+                        "`WrapPanel.{}` must be a non-negative integer (got {}); \
+                         negative spacing / cross-axis sizes are rejected per dsl_spec §4.10",
+                        prop_name, v
+                    ),
+                ));
+            }
+        }
+        _ => {
+            diags.push(error(
+                filename,
+                span,
+                format!(
+                    "`WrapPanel.{}` is constant-only in M3-Phase 3; expected a non-negative `i32` literal, \
+                     not a state-backed binding or other expression form",
+                    prop_name
+                ),
+            ));
+        }
+    }
+}
+
+/// Reject WrapPanel attributes appearing outside a WrapPanel widget
+/// (DD-M3-P3-003 / DD-M3-P3-004 attribute-position). Diagnostic names
+/// the offending position (component-level vs other widget type) so
+/// the author knows the attribute name was recognised but is misplaced.
+fn check_wrappanel_attr_outside_wrappanel(
+    prop_name: &str,
+    enclosing_widget: Option<&str>,
+    span: &Span,
+    filename: &str,
+    diags: &mut Vec<Diagnostic>,
+) {
+    let position = match enclosing_widget {
+        Some(w) => format!("widget `{}`", w),
+        None => "component-level property".to_string(),
+    };
+    diags.push(error(
+        filename,
+        span,
+        format!(
+            "`{}` is a WrapPanel attribute (dsl_spec §4.10) and is not valid on {}",
+            prop_name, position
+        ),
+    ));
+}
+
 /// Reject a Box widget with two or more child widgets (DD-M3-P2-001
 /// multi-child). The runtime IR loader independently rejects the same
 /// shape at IR-load time (defense in depth); the compile-time diagnostic
@@ -299,6 +392,23 @@ fn check_members_inner(
                     && (name.as_str() == "aspect" || name.as_str() == "fill")
                 {
                     check_box_const_only_bind(name, value, span, filename, diags);
+                } else if WRAPPANEL_INT_ATTRS.contains(&name.as_str()) {
+                    // WrapPanel's three attributes (DD-M3-P3-003 /
+                    // DD-M3-P3-004) are constant-only `i32` per dsl_spec
+                    // §4.10. Two-position dispatch: inside `WrapPanel`,
+                    // validate the literal shape and non-negative value;
+                    // anywhere else, reject the attribute by position.
+                    if enclosing_widget == Some("WrapPanel") {
+                        check_wrappanel_const_only_bind(name, value, span, filename, diags);
+                    } else {
+                        check_wrappanel_attr_outside_wrappanel(
+                            name,
+                            enclosing_widget,
+                            span,
+                            filename,
+                            diags,
+                        );
+                    }
                 } else {
                     check_expr_type(value, span, filename, ns, diags);
                     check_property_bind_target(
@@ -1091,6 +1201,278 @@ mod tests {
         assert!(
             errs.iter()
                 .any(|e| e.contains("bool state `ready` cannot be used in string interpolation")),
+            "{:?}",
+            errs
+        );
+    }
+
+    // --- T1: WrapPanel accept shapes (dsl_spec §4.10) ---
+
+    #[test]
+    fn wrappanel_known_widget_no_warning() {
+        // WrapPanel is in KNOWN_WIDGET_TYPES — no "unknown widget" warning.
+        let result = check_src("component C inherits W { WrapPanel {} }");
+        assert!(!result.has_errors(), "{:?}", result.diagnostics);
+        assert!(
+            warnings("component C inherits W { WrapPanel {} }").is_empty(),
+            "WrapPanel should be a known widget type, not warn"
+        );
+    }
+
+    #[test]
+    fn wrappanel_zero_child_accepted() {
+        let result = check_src("component C inherits W { WrapPanel {} }");
+        assert!(!result.has_errors(), "{:?}", result.diagnostics);
+    }
+
+    #[test]
+    fn wrappanel_one_child_accepted() {
+        let result = check_src(
+            r#"component C inherits W {
+                WrapPanel {
+                    Box { aspect: 1:1 fill: #cccccc }
+                }
+            }"#,
+        );
+        assert!(!result.has_errors(), "{:?}", result.diagnostics);
+    }
+
+    #[test]
+    fn wrappanel_multi_child_accepted() {
+        let result = check_src(
+            r#"component C inherits W {
+                WrapPanel {
+                    Box { aspect: 1:1 fill: #cccccc }
+                    Box { aspect: 1:1 fill: #cccccc }
+                    Box { aspect: 1:1 fill: #cccccc }
+                }
+            }"#,
+        );
+        assert!(!result.has_errors(), "{:?}", result.diagnostics);
+    }
+
+    #[test]
+    fn wrappanel_with_item_cross_size_accepted() {
+        let result = check_src("component C inherits W { WrapPanel { item-cross-size: 88 } }");
+        assert!(!result.has_errors(), "{:?}", result.diagnostics);
+    }
+
+    #[test]
+    fn wrappanel_with_item_spacing_accepted() {
+        let result = check_src("component C inherits W { WrapPanel { item-spacing: 12 } }");
+        assert!(!result.has_errors(), "{:?}", result.diagnostics);
+    }
+
+    #[test]
+    fn wrappanel_with_line_spacing_accepted() {
+        let result = check_src("component C inherits W { WrapPanel { line-spacing: 12 } }");
+        assert!(!result.has_errors(), "{:?}", result.diagnostics);
+    }
+
+    #[test]
+    fn wrappanel_zero_values_accepted() {
+        // Zero is a valid setting on all three attributes (DD-M3-P3-006
+        // zero-handling); the rejection threshold is `< 0`, not `<= 0`.
+        let result = check_src(
+            "component C inherits W { WrapPanel { item-cross-size: 0 item-spacing: 0 line-spacing: 0 } }",
+        );
+        assert!(!result.has_errors(), "{:?}", result.diagnostics);
+    }
+
+    #[test]
+    fn wrappanel_full_accept_shape() {
+        // dsl_spec §4.10 wireframe-fidelity shape: all three attributes
+        // set, multi-child WrapPanel of 1:1 thumbnails.
+        let result = check_src(
+            r#"component C inherits W {
+                WrapPanel {
+                    item-cross-size: 88
+                    item-spacing: 12
+                    line-spacing: 12
+                    Box { aspect: 1:1 fill: #cccccc }
+                    Box { aspect: 1:1 fill: #cccccc }
+                }
+            }"#,
+        );
+        assert!(!result.has_errors(), "{:?}", result.diagnostics);
+    }
+
+    // --- T1: WrapPanel negative-literal reject (DD-M3-P3-006) ---
+
+    #[test]
+    fn wrappanel_negative_item_cross_size_rejected() {
+        let errs = errors("component C inherits W { WrapPanel { item-cross-size: -1 } }");
+        assert_eq!(errs.len(), 1, "{:?}", errs);
+        assert!(
+            errs[0].contains("`WrapPanel.item-cross-size`")
+                && errs[0].contains("non-negative")
+                && errs[0].contains("got -1"),
+            "{:?}",
+            errs
+        );
+    }
+
+    #[test]
+    fn wrappanel_negative_item_spacing_rejected() {
+        let errs = errors("component C inherits W { WrapPanel { item-spacing: -1 } }");
+        assert_eq!(errs.len(), 1, "{:?}", errs);
+        assert!(
+            errs[0].contains("`WrapPanel.item-spacing`") && errs[0].contains("non-negative"),
+            "{:?}",
+            errs
+        );
+    }
+
+    #[test]
+    fn wrappanel_negative_line_spacing_rejected() {
+        let errs = errors("component C inherits W { WrapPanel { line-spacing: -42 } }");
+        assert_eq!(errs.len(), 1, "{:?}", errs);
+        assert!(
+            errs[0].contains("`WrapPanel.line-spacing`")
+                && errs[0].contains("non-negative")
+                && errs[0].contains("got -42"),
+            "{:?}",
+            errs
+        );
+    }
+
+    // --- T1: WrapPanel constant-only bind reject (DD-M3-P3-003 / 004) ---
+
+    #[test]
+    fn wrappanel_item_cross_size_state_ident_rejected() {
+        // `item-cross-size: <state-ident>` — the "bind" surface that
+        // DD-M3-P3-004 declares constant-only in Phase 3.
+        let errs = errors(
+            "component C inherits W { state size: i32 = 88 WrapPanel { item-cross-size: size } }",
+        );
+        assert_eq!(errs.len(), 1, "{:?}", errs);
+        assert!(
+            errs[0].contains("`WrapPanel.item-cross-size` is constant-only")
+                && errs[0].contains("non-negative `i32` literal"),
+            "{:?}",
+            errs
+        );
+    }
+
+    #[test]
+    fn wrappanel_item_spacing_state_ident_rejected() {
+        let errs = errors(
+            "component C inherits W { state gap: i32 = 12 WrapPanel { item-spacing: gap } }",
+        );
+        assert_eq!(errs.len(), 1, "{:?}", errs);
+        assert!(
+            errs[0].contains("`WrapPanel.item-spacing` is constant-only"),
+            "{:?}",
+            errs
+        );
+    }
+
+    #[test]
+    fn wrappanel_line_spacing_state_ident_rejected() {
+        let errs = errors(
+            "component C inherits W { state gap: i32 = 12 WrapPanel { line-spacing: gap } }",
+        );
+        assert_eq!(errs.len(), 1, "{:?}", errs);
+        assert!(
+            errs[0].contains("`WrapPanel.line-spacing` is constant-only"),
+            "{:?}",
+            errs
+        );
+    }
+
+    // --- T1: WrapPanel non-IntLit RHS shape reject ---
+
+    #[test]
+    fn wrappanel_item_cross_size_ratio_literal_rejected() {
+        let errs = errors("component C inherits W { WrapPanel { item-cross-size: 16:9 } }");
+        assert_eq!(errs.len(), 1, "{:?}", errs);
+        assert!(
+            errs[0].contains("`WrapPanel.item-cross-size` is constant-only"),
+            "{:?}",
+            errs
+        );
+    }
+
+    #[test]
+    fn wrappanel_item_cross_size_string_literal_rejected() {
+        let errs = errors(r#"component C inherits W { WrapPanel { item-cross-size: "88" } }"#);
+        assert_eq!(errs.len(), 1, "{:?}", errs);
+        assert!(
+            errs[0].contains("`WrapPanel.item-cross-size` is constant-only"),
+            "{:?}",
+            errs
+        );
+    }
+
+    #[test]
+    fn wrappanel_item_cross_size_bool_literal_rejected() {
+        let errs = errors("component C inherits W { WrapPanel { item-cross-size: true } }");
+        assert_eq!(errs.len(), 1, "{:?}", errs);
+        assert!(
+            errs[0].contains("`WrapPanel.item-cross-size` is constant-only"),
+            "{:?}",
+            errs
+        );
+    }
+
+    #[test]
+    fn wrappanel_item_cross_size_color_literal_rejected() {
+        let errs = errors("component C inherits W { WrapPanel { item-cross-size: #cccccc } }");
+        assert_eq!(errs.len(), 1, "{:?}", errs);
+        assert!(
+            errs[0].contains("`WrapPanel.item-cross-size` is constant-only"),
+            "{:?}",
+            errs
+        );
+    }
+
+    #[test]
+    fn wrappanel_item_spacing_measurement_rejected() {
+        // `12px` is `Token::Measurement` — not an `IntLit`. Reject per the
+        // constant-only `i32` literal rule (dsl_spec §4.10 "bare integer
+        // literal").
+        let errs = errors("component C inherits W { WrapPanel { item-spacing: 12px } }");
+        assert_eq!(errs.len(), 1, "{:?}", errs);
+        assert!(
+            errs[0].contains("`WrapPanel.item-spacing` is constant-only"),
+            "{:?}",
+            errs
+        );
+    }
+
+    // --- T1: WrapPanel attribute outside WrapPanel reject ---
+
+    #[test]
+    fn wrappanel_attr_on_box_rejected() {
+        let errs = errors("component C inherits W { Box { item-cross-size: 88 } }");
+        assert_eq!(errs.len(), 1, "{:?}", errs);
+        assert!(
+            errs[0].contains("`item-cross-size` is a WrapPanel attribute")
+                && errs[0].contains("widget `Box`"),
+            "{:?}",
+            errs
+        );
+    }
+
+    #[test]
+    fn wrappanel_attr_on_vstack_rejected() {
+        let errs = errors("component C inherits W { VStack { item-spacing: 12 } }");
+        assert_eq!(errs.len(), 1, "{:?}", errs);
+        assert!(
+            errs[0].contains("`item-spacing` is a WrapPanel attribute")
+                && errs[0].contains("widget `VStack`"),
+            "{:?}",
+            errs
+        );
+    }
+
+    #[test]
+    fn wrappanel_attr_at_component_level_rejected() {
+        let errs = errors("component C inherits W { line-spacing: 12 WrapPanel {} }");
+        assert_eq!(errs.len(), 1, "{:?}", errs);
+        assert!(
+            errs[0].contains("`line-spacing` is a WrapPanel attribute")
+                && errs[0].contains("component-level property"),
             "{:?}",
             errs
         );
