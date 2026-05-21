@@ -236,17 +236,17 @@ smoke) and the
 [m3-plan §Phase-end criteria item 5](../m3-plan.md#phase-end-criteria)
 "gallery sub-screen per phase" obligation.
 
-- [ ] `examples/gallery/gallery.ui` grows additively from Phase 2's
+- [x] `examples/gallery/gallery.ui` grows additively from Phase 2's
       single-Box sub-screen into a WrapPanel of uniform 1:1 Box
       thumbnails (5–10 items, hand-written; no iteration, no
       ScrollView). Per framing decision E.
-- [ ] `examples/gallery-rust/` (already a workspace member from
+- [x] `examples/gallery-rust/` (already a workspace member from
       Phase 2) builds and runs the grown sub-screen.
-- [ ] `Start-Process` launch recorded as successful by the
+- [x] `Start-Process` launch recorded as successful by the
       assistant; visual correctness is **owner-manual GUI smoke**
       per framing decision G — the assistant does not assert on
       pixel- or eyeball-level correctness.
-- [ ] C / Zig hosts not required in Phase 3 (per framing decision E
+- [x] C / Zig hosts not required in Phase 3 (per framing decision E
       and the ADR Out-of-scope list); Phase 8 broadens the full
       gallery to all three.
 
@@ -373,6 +373,35 @@ FloatLit / Measurement unsigned" split needs a one-line
 confirmation in §2 / §5 — or is sufficiently absorbed by
 §4.10's normative attribute-name list and the existing AST
 table.
+
+### 2026-05-22 — Gallery sub-screen numerics restored to ADR canonical `88 / 12 / 12` (T9 rev 2)
+
+Initial T9 landing (commit `d1e5ba6`) used
+`item-cross-size: 120; item-spacing: 16; line-spacing: 16` with
+8 thumbnails because, on the default 800×600 window
+(≈ 784 px client width), the ADR-canonical `88 / 12 / 12` with
+8 thumbs produces a `7 + 1` wrap which is visually unbalanced. The
+deviation was un-documented at landing time; owner review
+([t9-step-end-retrospective.md rev 2](../../notes/m3-phase-3/t9-step-end-retrospective.md))
+flagged that the ADR
+[§Phase 3 verification closure item 1 (sub-screen positive control)](../../decisions/m3-phase-3-wrap-panel.md#phase-3-verification-closure-what-counts-as-a3-evidence)
+and item 4 (CI integration fixture) both reference `88` as the
+canonical example, so the implementation should match unless the
+deviation is recorded.
+
+Resolution (commit set landed after `e89a423`): restore
+`88 / 12 / 12` and grow the thumbnail count from 8 to 10 (still
+within framing decision E's 5–10 ceiling). On the same default
+window the layout becomes `7 + 3` — visible wrap is preserved and
+the numerics match the ADR-canonical example. The choice "match
+ADR canonical example, adjust count for visible balance" was
+selected over the alternatives "keep `120 / 16 / 16` with a
+deviation note" and "keep 8 thumbs with `7 + 1` wrap" after the
+review. No ADR or spec change is required by this revert — the
+ADR's normative content does not pin the gallery to specific
+dimensions; it pins the integration fixture (T8, unaffected) and
+references the sub-screen example as `item-cross-size: 88` in the
+positive-control description.
 
 ## CI / verification log
 
