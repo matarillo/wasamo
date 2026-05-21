@@ -1,12 +1,15 @@
 # Wasamo DSL Specification
 
-**Document version:** 0.8
-**Last updated:** 2026-05-20
-**Status:** M3-Phase 2 closed; implementation-synced. Covers the M2
-`.ui` surface, the `state` surface keyword retroactively, the
-M3-Phase 1 `bool` scalar binding additions, the M3-Phase 2 Box layout
-primitive (with `aspect` / `fill` literal attributes), and
-`;wasamo-ir v0`.
+**Document version:** 0.9
+**Last updated:** 2026-05-21
+**Status:** M3-Phase 2 closed (implementation-synced); M3-Phase 3
+WrapPanel chapter is ADR-accepted design draft (pending
+implementation re-sync). Covers the M2 `.ui` surface, the `state`
+surface keyword retroactively, the M3-Phase 1 `bool` scalar binding
+additions, the M3-Phase 2 Box layout primitive (with `aspect` /
+`fill` literal attributes), the M3-Phase 3 WrapPanel layout
+primitive (with `item-cross-size` / `item-spacing` / `line-spacing`
+constant-only integer attributes), and `;wasamo-ir v0`.
 
 ---
 
@@ -257,7 +260,7 @@ compile-time errors.
 ```
 
 Declares a child widget. Widget type names are PascalCase identifiers.
-`wasamoc check` validates the type name against the M1 widget registry below:
+`wasamoc check` validates the type name against the widget registry below:
 
 | Widget name | Description              |
 |-------------|--------------------------|
@@ -267,6 +270,7 @@ Declares a child widget. Widget type names are PascalCase identifiers.
 | `Button`    | Clickable button         |
 | `Rectangle` | Solid rectangle          |
 | `Box`       | Layout container with optional `aspect` / `fill` (M3-Phase 2; see §4.9) |
+| `WrapPanel` | Wrapping layout container (M3-Phase 3; see §4.10) |
 
 Unknown widget type names produce a warning (not an error) in M1,
 to allow forward-compatibility with user-defined components.
@@ -511,6 +515,248 @@ form for pre-Image authors, and Phase 3 / Phase 6 spec citations
 to this subsection remain valid (the cited pattern is still
 spec-recorded; downstream phases migrate to `<Image>` syntactically
 when it ships).
+
+### 4.10 WrapPanel layout primitive (M3-Phase 3)
+
+**Phase status:** M3-Phase 3 ADR-accepted design draft; pending
+implementation re-sync.
+
+`WrapPanel` is a layout container that places its children along a
+**main axis** in document order and breaks onto a new **line** when
+the next child does not fit within the parent-supplied main-axis
+bound. In M3-Phase 3 the main axis is **horizontal** unconditionally;
+a `vertical` orientation is reserved for a later additive phase
+(no `orientation` attribute is exposed in Phase 3, see
+[m3-phase-3-wrap-panel.md DD-M3-P3-002](./decisions/m3-phase-3-wrap-panel.md)).
+
+WrapPanel admits **zero or more children**; the IR loader and
+`wasamoc check` impose no child-count restriction. The line-formation
+algorithm is two-stage measure-arrange (the first M3 measure-arrange
+primitive whose outer cross-axis size depends on its children).
+
+#### Sizing mental model
+
+WrapPanel sizing follows four facts:
+
+1. **Main-axis intrinsic measure.** WrapPanel measures each child
+   against an **unbounded main-axis constraint**; line membership is
+   decided by the child's reported main-axis intrinsic extent.
+2. **Cross-axis bound source.** Each child receives a cross-axis
+   bound from one of two sources — `item-cross-size` when set on the
+   WrapPanel, or the parent's cross-axis constraint passed through
+   unchanged when `item-cross-size` is unset. WrapPanel does **not**
+   synthesise a cross-axis bound out of nowhere.
+3. **Aspect-only Box requires a cross-axis bound.** A
+   `Box { aspect: <ratio> }` child has no intrinsic size of its own.
+   Without a finite cross-axis bound (either from `item-cross-size`
+   or from a bounded parent), Phase 2's
+   `LayoutError::BoxAspectUnboundedBoth` fires at runtime.
+4. **No wrap boundary ⇒ one-line flow.** When the parent supplies no
+   main-axis bound, there is no boundary against which to break
+   lines; all children flow on a single line in document order.
+
+**Ecosystem contrast.** `item-cross-size` has no clean analogue in
+WPF, Compose, or CSS; readers arriving from those frameworks should
+note the following:
+
+- **WPF `ItemHeight` / `ItemWidth`** are orientation-coupled fixed
+  cell extents. `item-cross-size` is orientation-neutral and
+  conceptually a **bound passed to child measure**, not a cell
+  extent the child is laid into. In the uniform case the *visible*
+  outcome matches WPF (the line's cross-axis extent equals
+  `item-cross-size`), but the underlying primitive differs.
+- **Flutter / Jetpack Compose natural child size.** WrapPanel's
+  default behaviour (when `item-cross-size` is unset) is *closer*
+  to natural sizing — parent constraints pass through and children
+  measure naturally. Children with no natural cross-axis size (the
+  aspect-only Box) are supported by setting `item-cross-size`, not
+  by a "compute natural size" fallback.
+- **CSS `gap`.** Applies to container *spacing* between items, not
+  to item *sizing*. `item-cross-size` is **not** a `gap` analogue;
+  `item-spacing` / `line-spacing` are.
+
+#### Attributes
+
+| Attribute         | Surface form     | Bindable in Phase 3 | Default            |
+|-------------------|------------------|---------------------|--------------------|
+| `item-cross-size` | `<i32>` literal  | No                  | absent (parent cross-axis constraint passes through) |
+| `item-spacing`    | `<i32>` literal  | No                  | `0` (touching items on the main axis) |
+| `line-spacing`    | `<i32>` literal  | No                  | `0` (touching lines on the cross axis) |
+
+All three attributes are constant-only integer literals in M3-Phase 3
+([m3-phase-3-wrap-panel.md DD-M3-P3-003 / DD-M3-P3-004](./decisions/m3-phase-3-wrap-panel.md)).
+The values are pixel extents in the layout coordinate system; they
+reuse the existing `i32` literal plumbing from M2 (no new `IrType`,
+no new `IrLiteral` variant, no new `PropertyValue` variant).
+
+**Non-negative integer range.** All three attributes admit
+**non-negative** integer values. `wasamoc check` rejects a negative
+literal at compile time, naming the rejected attribute; the runtime
+IR loader's `validate()` independently rejects negative IR
+(DD-M3-P3-006 two-gate defense, mirroring Phase 2's `RATIO_LIT`
+rejection). Both gates are required because `wasamo_load_ui`'s
+memory-IR entry point does not pass through `wasamoc`.
+
+**Zero is a valid setting** for all three attributes, not a silent
+footgun. `item-spacing: 0` / `line-spacing: 0` is the default —
+touching items / lines, visible by construction. `item-cross-size: 0`
+is an *author-requested degenerate layout* — each line collapses to
+zero cross-axis extent (line count is still computed; no thumbnails
+are visible). This is distinct from the `LayoutError` cases below;
+the absence of any bound source is the error, not a written-out
+zero.
+
+The first phase to need a reactive WrapPanel attribute admits
+binding for that attribute at that point; the `i32` per-type writer
+seam already exists from M2, so the future-phase work is the
+attribute-side call-site registration rather than new engine
+plumbing. Phase 3's constant-only `i32` surface is
+forward-compatible and is extended, not revised.
+
+#### Measure-arrange algorithm
+
+WrapPanel's measure-arrange pass operates on pure data
+(`wasamo-runtime/src/layout.rs`); the algorithm is Win32/WinRT-free.
+
+**Bounded main-axis parent (happy path).** Children are measured
+against an unbounded main-axis constraint and a cross-axis
+constraint defined by `item-cross-size` (when set) or the parent's
+cross-axis constraint (when unset). The line breaker greedily
+appends children to the current line in document order. The
+acceptance rule is **two-cased**:
+
+- **First child of a line (`line_empty == true`).** The candidate is
+  placed unconditionally — no inequality is consulted. The line's
+  recorded main-axis extent equals the child's intrinsic main-axis
+  extent and may exceed `parent_main_bound`. See *Oversized
+  first-child and visible overflow* below.
+- **Subsequent children of the same line (`line_empty == false`).**
+  The candidate is placed on the current line iff
+
+  ```
+  current_line_main + item_spacing
+    + next_child_main_intrinsic
+    <= parent_main_bound
+  ```
+
+  When the inequality fails, a new line starts and the candidate
+  becomes the first child of that new line (the unconditional-
+  placement rule then applies).
+
+No trailing `item_spacing` accrues after the last child of a line.
+
+**Cross-axis line sizing.** Depends on whether `item-cross-size` is
+set:
+
+- **When set.** Each child receives `item-cross-size` as its
+  cross-axis bound. The line's cross-axis extent is exactly
+  `item-cross-size`. A `Box { aspect: num:den }` child derives its
+  main-axis extent as `item-cross-size × num / den` per §4.9's
+  aspect-constraint rule (bounded-axis-wins). Smaller children
+  align centred within the line; larger children clip against the
+  per-line cross-axis bound consistent with Box's overflow rule.
+- **When unset.** Each child receives the parent's cross-axis
+  constraint as its cross-axis bound (the WrapPanel-level
+  passthrough). The line's cross-axis extent is the max of the
+  children's reported cross-axis sizes. A `Box { aspect: num:den }`
+  child derives its main-axis extent as `parent_cross × num / den`,
+  which is the "huge thumbnail" path covered in *Common pitfalls*
+  below.
+
+**Per-line cross-axis item alignment.** Heterogeneous-cross-axis
+line members are **centred** within the line (no per-child override
+attribute in Phase 3, consistent with §4.9 Box's centred default).
+
+**WrapPanel outer cross-axis size.** Sum of line cross-axis extents
+plus `line_spacing × (line_count − 1)`. No trailing margin after
+the last line.
+
+**WrapPanel outer main-axis size.** Equals `parent_main_bound` —
+**unconditionally**, even when one or more lines contain an
+oversized first child whose intrinsic extent exceeds
+`parent_main_bound`. The WrapPanel does not grow upward to
+accommodate oversized children (see *Oversized first-child and
+visible overflow* below).
+
+**Unbounded main-axis parent.** When the parent supplies no
+main-axis bound — the realistic context is an outer intrinsic-sizing
+measure pass — the line breaker has no boundary to compare against
+and WrapPanel **degenerates to one-line flow**: every child sits on
+a single line in document order. The line's cross-axis extent
+follows the same per-line rule above (DD-004-bound or passthrough).
+The WrapPanel's outer main-axis size is the cumulative content
+extent (sum of children's intrinsic main-axis extents plus
+`item_spacing × (n − 1)`). This branch raises **no new
+`LayoutError`**: the one-line outcome is visible, not silent.
+(Phase 4 ScrollView is *not* an example of this branch — ScrollView
+bounds the main axis and unbounds the cross axis, so the bounded
+happy path applies inside a vertical-scroll ScrollView.)
+
+**Unbounded cross-axis parent (with `item-cross-size` unset).**
+Each child receives an unbounded cross-axis constraint. A
+`Box { aspect: <ratio> }` child in this state has both axes
+unbounded and hits Phase 2's existing
+`LayoutError::BoxAspectUnboundedBoth` — surfaced with the Box's IR
+location. WrapPanel does not add a layered diagnostic variant in
+Phase 3; the author must set `item-cross-size` or wrap the
+WrapPanel in a sized parent.
+
+**Rounding contract.** Inherits §4.9's discipline: parent bounds
+enter as `f32`; the integer attributes (`item-cross-size`,
+`item-spacing`, `line-spacing`) are promoted to `f32` for the
+overflow inequality and the cross-axis sum; child intrinsic sizes
+are `f32` from the layout engine. No pixel-snapping in Phase 3.
+
+**`LayoutError` surface.** Phase 3 introduces **no new
+`LayoutError` variant**. The unbounded-main-axis branch is one-line
+flow (not an error); the unbounded-cross-axis-with-aspect-child case
+fires Phase 2's existing `LayoutError::BoxAspectUnboundedBoth`. The
+ABI / host-visible surface is unchanged in Phase 3 (no new
+`WASAMO_LAYOUT_ERROR_*` extension; layout error class remains
+host-internal per the Phase 2 precedent).
+
+#### Oversized first-child and visible overflow
+
+When the first child of a line has an intrinsic main-axis extent
+that already exceeds `parent_main_bound`, the line breaker still
+places it on that line (unconditional first-child placement above).
+The line's recorded extent then exceeds the parent's main-axis
+bound, and the *visible* rendering proceeds as follows:
+
+- **WrapPanel's outer main-axis size is `parent_main_bound`** —
+  the WrapPanel does not grow upward to its content. Its
+  parent-facing rectangle is unchanged from the no-oversized case.
+- **The oversized child paints at its measured extent**, with its
+  main-axis-end edge extending past WrapPanel's outer rectangle.
+- **WrapPanel installs no clip surface** on the oversized line.
+  Whether visible clipping occurs is the responsibility of an
+  enclosing parent that supplies one. Phase 4 ScrollView clips by
+  definition; a plain HStack / VStack / parent component does not
+  clip and visible overflow remains visible.
+
+This matches the WPF / Slint / Compose "overflow is visible unless
+someone clips" convention and avoids propagating a parent-bound
+violation up the layout tree.
+
+#### Common pitfalls
+
+1. **Aspect-only Box children without `item-cross-size`.** When a
+   WrapPanel directly contains one or more `Box { aspect: <ratio>; … }`
+   children and `item-cross-size` is unset on the WrapPanel, each
+   child inherits the parent's cross-axis constraint as its
+   cross-axis bound. In an 800×600 window with no other cross-axis-
+   bounding container, a 1:1 thumbnail becomes ~600×600 — a single
+   huge thumbnail with subsequent children pushed onto new lines.
+   `wasamoc check` emits a **warning** on this pattern (the warning
+   does not classify all possible child shapes, only the known
+   aspect-only-Box footgun); the fix is to set `item-cross-size`
+   on the WrapPanel.
+
+2. **Oversized children paint past the WrapPanel rectangle.**
+   See *Oversized first-child and visible overflow* above —
+   WrapPanel does not clip the overflow itself; an enclosing
+   ScrollView or other clipping parent is required to truncate
+   the on-screen rendering.
 
 ---
 
@@ -1024,3 +1270,4 @@ future design item.
 | 0.6     | 2026-05-19 | M3-Phase 1 T14: documented that string interpolation over `bool`-typed state is rejected until an explicit formatting/display-conversion surface exists |
 | 0.7     | 2026-05-20 | M3-Phase 2 ADR-accepted design draft: added §4.9 Box layout primitive chapter (Phase status marker; `aspect` / `fill` attribute surface; single-child centred-and-clipped layout contract; aspect inscribed-fit measure-arrange with edge cases; image placeholder pattern subsection per DD-M3-P2-006); added `RatioLit` / `ColorLit` tokens (§2.2), grammar rules (§3), AST variants (§5), §8.2 terminals, and §8.6 literal alternatives + Box-internal materialisation note. Pending implementation re-sync at Phase 2 close. |
 | 0.8     | 2026-05-20 | M3-Phase 2 close: flipped §4.9 Phase status marker and document status to implementation-synced after T1-T13 landed and local / CI phase-end gates passed. No implementation/spec divergence was found during the close re-sync. |
+| 0.9     | 2026-05-21 | M3-Phase 3 ADR-accepted design draft: added §4.10 WrapPanel layout primitive chapter (Phase status marker; sizing mental-model subsection with four-fact anchor and WPF / Compose / CSS ecosystem contrast per framing decision H; `item-cross-size` / `item-spacing` / `line-spacing` constant-only `i32` attribute surface; two-stage measure-arrange algorithm with bounded happy path, unbounded-main-axis one-line-flow branch, and unbounded-cross-axis-with-aspect-child propagation to Phase 2's `LayoutError::BoxAspectUnboundedBoth`; oversized-first-child + visible-overflow subsection; common-pitfalls note); added `WrapPanel` row to the §4.4 widget registry and dropped the stale `M1` qualifier from the registry's lead-in (the registry grew beyond M1 once `Box` landed in Phase 2; folded into this commit as a minimal retroactive fix with owner confirmation). No new tokens, grammar rules, AST variants, or IR forms — Phase 3 reuses existing `i32` plumbing. Pending implementation re-sync at Phase 3 close. |
