@@ -121,6 +121,45 @@ If the disagreement is about the milestone's purpose itself rather
 than the criteria that satisfy it, that is a vision-level question
 and goes through a vision ADR — not this exception.
 
+### Factual correction (in-progress only)
+
+A second narrow exception: a clause in the Frozen agreement may be
+corrected in place if owner and Claude agree that the existing
+wording **misstates a fact** (a file path, a cross-reference target,
+a name) rather than expressing a different intent.
+
+This exception exists because plans are authored before phases run;
+a file-path or cross-reference recorded at agreement time may be
+contradicted later by the practice that the phases actually settle
+into, without any party ever having intended the wording's literal
+reading.
+
+Revisions under this exception are subject to the following rules:
+
+- **No gate is added, removed, or weakened.** The corrected text
+  must describe the same gate the plan already commits to. If the
+  correction would change *what* the gate is checking — its scope,
+  threshold, or applicability — the change is a scope revision, not
+  a factual correction, and routes through a vision ADR.
+- **No AC, phase structure, dependency, or scope mapping is
+  touched.** Those parts remain under the §Acceptance criteria
+  revision exception or the vision ADR route, as applicable.
+- **The correction must reflect intent that pre-dates execution
+  divergence.** Either the affected clause has not yet shaped any
+  phase's execution, or the completed phases have already
+  established a practice that honours the gate's evident intent
+  while contradicting the wording's literal reading. The exception
+  does not authorise after-the-fact normalisation of disputed
+  practice.
+- **A *Revision log* entry is mandatory**, recording date, what was
+  corrected, why the change is a factual correction rather than a
+  scope revision, and which (if any) completed phases the corrected
+  text now describes.
+
+If owner or Claude is unsure whether a candidate change is factual
+or substantive, treat it as substantive: route it through the
+appropriate vision-ADR or AC-revision channel.
+
 ## Scope rule (plan vs ADR)
 
 The Frozen agreement section contains:

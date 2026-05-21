@@ -383,11 +383,17 @@ A phase closes when **all** of the following hold:
    the phase that is real but not in the phase's scope is recorded
    in a live note under `docs/notes/m3/` and pointed to from the
    phase ADR's residual / handover section, not silently carried.
-7. **Phase-end retrospective recorded.** A short retrospective
-   entry lands in `docs/notes/retrospectives.md` covering what
-   the phase shipped, what slipped (if anything), and the merge /
-   push gate per
-   [feedback_phase_end_merge memory](../../../../../Users/devuser/.claude/projects/c--Users-devuser-dev-wasamo/memory/feedback_phase_end_merge.md).
+7. **Phase-end retrospective recorded.** A short phase-end
+   retrospective entry lands at
+   `docs/notes/m3-phase-N/phase-end-retrospective.md` (the
+   per-phase durable record, following Phase 1 / Phase 2
+   practice) covering what the phase shipped, what slipped (if
+   anything), and the merge / push gate per the *phase-end merge
+   and push gating* discipline recorded in
+   [docs/notes/retrospectives.md](../notes/retrospectives.md)
+   (the procedure document; durable per-phase entries are filed
+   under the phase's own `docs/notes/m3-phase-N/` directory, not
+   appended to the procedure document itself).
 
 ### Milestone-end criteria
 
@@ -466,7 +472,22 @@ M3 is complete when **all** of the following hold:
 
 ### Revision log
 
-(none yet — plan is `status: in-progress`.)
+- **2026-05-21 — Phase-end criterion 7 wording aligned to
+  Phase 1 / Phase 2 practice.** Routed under
+  [plans/README.md §Factual correction](../plans/README.md#factual-correction-in-progress-only).
+  The original wording named `docs/notes/retrospectives.md` as
+  the landing site for the per-phase retrospective entry. In
+  practice, both Phase 1
+  (`docs/notes/m3-phase-1/phase-end-retrospective.md`) and
+  Phase 2 (`docs/notes/m3-phase-2/phase-end-retrospective.md`)
+  filed their durable phase-end retrospectives under the
+  phase's own notes directory, treating
+  `docs/notes/retrospectives.md` as the procedure document
+  only. Criterion 7 was reworded in place to reflect that
+  established practice. The gate itself (existence of a
+  phase-end retrospective entry, covering ship / slip / merge
+  + push) is unchanged; no acceptance criterion is affected;
+  no phase scope is changed.
 
 ## Progress
 
@@ -479,7 +500,7 @@ ADRs, CHANGELOG, notes, and git history, then deleted by default.
 |---|---|---|---|---|
 | M3-Phase 1 — `bool` scalar binding | complete | [m3-phase-1-progress.md](progress/m3-phase-1-progress.md) | [m3-phase-1-bool-scalar.md](../decisions/m3-phase-1-bool-scalar.md) | ADR Accepted 2026-05-19; execution opened 2026-05-19; A9 discharged 2026-05-19 |
 | M3-Phase 2 — Box layout primitive | complete | [m3-phase-2-progress.md](progress/m3-phase-2-progress.md) | [m3-phase-2-box-layout.md](../decisions/m3-phase-2-box-layout.md) | ADR Accepted 2026-05-20; execution opened 2026-05-20; A6 discharged 2026-05-20 |
-| M3-Phase 3 — WrapPanel layout primitive | not started | — | — | First novel-normative-spec phase |
+| M3-Phase 3 — WrapPanel layout primitive | in progress | [m3-phase-3-progress.md](progress/m3-phase-3-progress.md) | [m3-phase-3-wrap-panel.md](../decisions/m3-phase-3-wrap-panel.md) | ADR Accepted 2026-05-21; first novel-normative-spec phase |
 | M3-Phase 4 — ScrollView (minimal) | not started | — | — | — |
 | M3-Phase 5 — Grid layout primitive | not started | — | — | Second novel-normative-spec phase; star sizing |
 | M3-Phase 6 — ZStack + conditional rendering | not started | — | — | First grammar surface; `bool` prereq |
@@ -490,7 +511,10 @@ ADRs, CHANGELOG, notes, and git history, then deleted by default.
 
 M3 plan is `in-progress` as of 2026-05-19. M3-Phase 1 (`bool`
 scalar) closed 2026-05-19. M3-Phase 2 (Box layout primitive) closed
-2026-05-20 and discharged A6; M3-Phase 3 (WrapPanel layout primitive)
-is the next phase. The Frozen agreement section remains read-only
-under the `in-progress` lifecycle (acceptance-criteria revision
-exception aside).
+2026-05-20 and discharged A6. M3-Phase 3 (WrapPanel layout primitive)
+opened 2026-05-21 with the ADR Accepted; Moment 1 upstream-doc sync
+(dsl_spec §4.10, architecture §6.8, this plan's Progress row,
+phase progress file) lands on the pre-doc branch ahead of
+implementation execution. The Frozen agreement section remains
+read-only under the `in-progress` lifecycle (acceptance-criteria
+revision exception aside).
