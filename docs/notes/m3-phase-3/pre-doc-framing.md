@@ -463,12 +463,29 @@ Sub-issues:
 - **Bounded main-axis parent (happy path).** Children are
   measured against an unbounded main-axis constraint (per
   DD-001). The line breaker greedily appends children to the
-  current line while their cumulative main-axis extent (plus
-  item-spacing per DD-003) does not exceed the parent's main-
-  axis bound. When the next child would exceed, a new line
-  starts. The cross-axis extent of a line is the max of its
-  members' cross-axis intrinsic sizes; WrapPanel's outer cross-
-  axis extent is the sum of line cross-axis extents plus
+  current line; the acceptance rule is two-cased (this
+  two-case form was settled during ADR review on 2026-05-21
+  after a single-inequality reading was found to leave the
+  `line_empty == true ∧ next_child_main_intrinsic >
+  parent_main_bound` case ambiguous — see the "Spacing
+  interaction with overflow comparison" sub-issue below for the
+  carve-out and the "Oversized first child / oversized line"
+  sub-issue below for the visible-overflow / outer-bound
+  settlement):
+  - **First child of a line (`line_empty == true`).** Placed
+    unconditionally on the current line, regardless of whether
+    its intrinsic main-axis extent exceeds `parent_main_bound`.
+    The line's recorded extent equals the child's intrinsic
+    extent and may exceed the bound.
+  - **Subsequent children (`line_empty == false`).** Placed iff
+    the spacing-aware inequality (below) holds; when it fails,
+    a new line starts and the candidate becomes the first child
+    of that new line (where the unconditional-placement rule
+    applies).
+
+  The cross-axis extent of a line is the max of its members'
+  cross-axis intrinsic sizes; WrapPanel's outer cross-axis
+  extent is the sum of line cross-axis extents plus
   line-spacing × (line count − 1).
 - **Unbounded main-axis parent (intrinsic-sizing context).**
   When the parent provides no main-axis bound, WrapPanel cannot
@@ -547,25 +564,56 @@ Sub-issues:
 - **Spacing interaction with overflow comparison.** When the
   comparison "next child fits on current line" is evaluated, the
   inter-item gap must be counted *only between* items, not as a
-  trailing margin on the last one. The spec states the rule as
-  a single inequality:
+  trailing margin on the last one. The rule applies **only** to
+  subsequent children (`line_empty == false`); the first child
+  of a line is placed unconditionally per the bounded-main-axis
+  carve-out above. For subsequent children, the spec states the
+  rule as the inequality:
 
   ```
   next_child fits on current_line  iff
       current_line_main
-      + (line_empty ? 0 : item_spacing)
+      + item_spacing
       + next_child_main_intrinsic
       <= parent_main_bound
   ```
 
-  where `line_empty` is true on the first child of the line
-  (no leading gap) and false otherwise (one gap precedes the
-  candidate child). After the last child of a line, no trailing
-  `item_spacing` is added to the cumulative line extent. Total
-  WrapPanel main-axis used is the max over lines of their
-  cumulative extents (which is bounded by `parent_main_bound`
-  on all but degenerate cases). This eliminates the "trailing
-  margin" reading.
+  (The earlier draft of this sub-issue carried a single
+  inequality with a `line_empty ? 0 : item_spacing` term and
+  no separate `line_empty == true` carve-out; ADR review on
+  2026-05-21 found that form ambiguous against oversized first
+  children and split it into the two cases recorded here.)
+  After the last child of a line, no trailing `item_spacing` is
+  added to the cumulative line extent. Total WrapPanel main-
+  axis used **by content** is the max over lines of their
+  cumulative extents (bounded by `parent_main_bound` only when
+  no line contains an oversized first child; otherwise unbounded
+  above by that line's oversized child — see the next
+  sub-issue). This eliminates the "trailing margin" reading.
+- **Oversized first child / oversized line (added during ADR
+  review on 2026-05-21).** When the first child of a line has
+  an intrinsic main extent that exceeds `parent_main_bound`,
+  the bounded-main-axis carve-out above places it on that line
+  anyway (line extent may exceed bound). The ADR settles two
+  separate downstream rules:
+  - **WrapPanel outer main-axis size.** Stays equal to
+    `parent_main_bound` (does not grow to accommodate oversized
+    children). Cascading parent-bound violations are excluded.
+  - **Visible overflow.** The oversized child paints at its
+    measured extent, so its main-axis end exceeds the
+    WrapPanel's outer main-axis bound. WrapPanel does **not**
+    install a clip surface; visible clipping is the responsibility
+    of an enclosing parent (Phase 4 ScrollView is the canonical
+    clipping parent; a plain HStack parent does not clip).
+    Matches the WPF / Slint / Compose "overflow is visible
+    unless someone clips" convention.
+
+  The alternative options (layout-time runtime error on
+  oversized child; silent skip; WrapPanel grows to fit; clip at
+  WrapPanel boundary) were considered and rejected in the ADR
+  ([`docs/decisions/m3-phase-3-wrap-panel.md`](../../decisions/m3-phase-3-wrap-panel.md)
+  DD-005 "Options (oversized first-child of a line)" and
+  "Options (oversized line — arrangement / paint clip)").
 - **Rounding contract.** Inherits Phase 2 DD-005's discipline:
   parent bounds enter as `f32`; integer comparisons (`<=`,
   `>`) on main-axis budget are computed in `f32` directly
@@ -736,32 +784,57 @@ merely execute the m3-plan task description literally. Check:
 Per [m3-plan.md §Verification strategy](../../plans/m3-plan.md#verification-strategy),
 Phase 3 chooses from the menu:
 
-- **Pure-logic unit tests** for the line breaker (DD-005). Per
-  [predoc-inputs.md §6](./predoc-inputs.md), this is the primary
-  evidence shape for the novel algorithm. The line breaker is a
-  pure function (line input → line output) and exercises the
-  bounded / unbounded main-axis branches, spacing-before-comparison
-  rule, cross-axis sum, and per-line cross-axis alignment default
-  without touching Compositor.
-- **Pure-logic unit tests** for IR-loader invariants (DD-006),
-  symmetric with Phase 2 T7's `validate()` discipline.
+- **`wasamoc` check-side pure-logic tests** for compile-time
+  diagnostics (DD-006 two-gate compile-time half + DD-004
+  Recommendation companion warning). Covers negative-literal
+  rejection on `item-spacing` / `line-spacing` / `item-cross-size`
+  (DD-006) and the aspect-only-Box-without-`item-cross-size`
+  warning under WrapPanel (DD-004, conditional on the "ship the
+  warning" Checkpoint 2 companion pick). Added during ADR review
+  on 2026-05-21 because DD-006's two-gate requirement and DD-004's
+  warning pick are first-class spec commitments that need
+  evidence on the `wasamoc` side, not just on the runtime side.
+- **Pure-logic unit tests** for the line breaker and arrange pass
+  (DD-005). Per [predoc-inputs.md §6](./predoc-inputs.md), this is
+  the primary evidence shape for the novel algorithm. The line
+  breaker is a pure function (line input → line output) and
+  exercises the bounded / unbounded main-axis branches,
+  spacing-before-comparison rule, oversized-first-child
+  unconditional placement, cross-axis sum, and per-line cross-axis
+  alignment default without touching Compositor. The arrange pass
+  is similarly pure and is the place where the oversized-child
+  rect-overflow observation lands (resolved child rect main-axis
+  end exceeds the WrapPanel's resolved rect main-axis end — the
+  pure-data form of "child paints past the WrapPanel rectangle").
+- **Pure-logic unit tests** for IR-loader invariants (DD-006
+  runtime half), symmetric with Phase 2 T7's `validate()`
+  discipline.
 - **Mock-free Windows-only integration test** (CI-gated, fails
   rather than skips per
   [CLAUDE.md §Testing rules](../../../CLAUDE.md)) for live
   WrapPanel materialisation through `.ui → IR → runtime` on a
   real `WidgetNode`. The integration test verifies that the
-  layout engine's line breaker output is consumed by the runtime
-  to produce correctly positioned child visuals. Scope is narrow:
-  one fixture exercising the gallery sub-screen's wrap with a
-  fixed main-axis bound.
+  layout engine's line breaker / arrange output is consumed by
+  the runtime to produce correctly positioned child visuals.
+  Scope is two narrow fixtures: the gallery sub-screen wrap-path
+  with a fixed main-axis bound, *and* an oversized-first-child
+  fixture that asserts (a) WrapPanel outer rect does not grow,
+  (b) child rect extends past it, (c) WrapPanel's
+  `ContainerVisual` has no clip surface installed by Phase 3 code
+  — the runtime-side complement to the pure-arrange overflow
+  observation.
 - **Visible smoke** via the WrapPanel-of-Boxes sub-screen in
   `examples/gallery/` + `examples/gallery-rust/` (framing
   decision E) for owner-manual GUI smoke (framing decision G).
 
 Per [predoc-inputs.md §10](./predoc-inputs.md), evidence items
 do not collapse just because they share helper infrastructure —
-in-crate line-breaker tests, IR-load gate tests, and Windows
-integration tests each have distinct evidence meanings.
+the `wasamoc` check-side tests, in-crate line-breaker / arrange
+tests, IR-load `validate()` gate tests, and Windows integration
+tests each have distinct evidence meanings (compile-time guard
+enforcement; algorithm correctness; runtime-side invariant
+enforcement; live-runtime composition including the
+visible-overflow regulation).
 
 ### D. Upstream-document revision timing (two sync moments)
 
@@ -1049,7 +1122,7 @@ analogue and readers will mis-map it without an explicit anchor.
 | §7 IR-loader defense-in-depth → pure validation | Premise / sub-issue input | DD-006 (validate() vs build_node placement) |
 | §8 layout engine stays Win32/WinRT-free | Premise | DD-005 sub-issue (layout-local pure structs; runtime → layout boundary); ADR architecture.md edit at Moment 1 |
 | §9 Layout-time error surface (internal `LayoutError` vs ABI) | Sub-issue input | DD-005 sub-issue (LayoutError extension conditional on the unbounded-main-axis Option chosen; ABI surface deferred unless host observes) |
-| §10 Verification items do not collapse via infrastructure sharing | Discipline reminder | Framing decision C (in-crate line breaker / IR-load gate / Windows integration / gallery proof remain four evidence items) |
+| §10 Verification items do not collapse via infrastructure sharing | Discipline reminder | Framing decision C (originally four evidence categories; ADR review on 2026-05-21 added `wasamoc` check-side compile-time evidence as a distinct category, so the closure now has four executable categories — `wasamoc` check / line-breaker + arrange / runtime `validate()` / Windows integration — plus owner-manual gallery smoke) |
 | §11 Gallery as additive growth | Premise | Framing decision E (grow Phase 2 sub-screen, no scrap-and-rebuild) |
 | §12 Box future-width/height rule not mixed with WrapPanel item sizing | Discipline reminder | DD-004 (thumbnail size source lives at WrapPanel level as `item-cross-size`, not as item-level `width` / `height` on Box); DD-003 (spacing is a separate WrapPanel-level concept about gaps between items) |
 | §13 docs/notes audit | Direct input | Framing decision F (per-note disposition) |
