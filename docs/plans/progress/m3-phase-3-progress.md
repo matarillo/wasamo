@@ -46,34 +46,43 @@ DD-M3-P3-006 (compile-time half of two-gate defense for non-
 negative integers), and the constant-only halves of
 DD-M3-P3-003 / DD-M3-P3-004.
 
-- [ ] `WrapPanel` added to the checker's known-widget registry
+- [x] **Lexer prerequisite — kebab-case ident generalization +
+      negative IntLit.** dsl_spec §4.10's kebab attribute names
+      (`item-cross-size`, `item-spacing`, `line-spacing`) require
+      the lexer to emit a single `Token::Ident` for each, and the
+      DD-M3-P3-006 compile-time diagnostic naming the attribute on
+      `: -1` requires `-1` to lex as `IntLit(-1)`. Both are lexer
+      changes the progress doc's "no new parser grammar" prose did
+      not surface; see Decisions log. The parser's IDENT-keyed
+      PropertyBind shape is unchanged.
+- [x] `WrapPanel` added to the checker's known-widget registry
       (`KNOWN_WIDGET_TYPES` in `wasamoc/src/check.rs` or its
       equivalent) so that the generic parser's
       `widget_type: "WrapPanel"` node is recognised as a valid
       widget rather than warning as unknown.
-- [ ] Accept 0-child / 1-child / multi-child WrapPanel (DD-M3-P3-001
+- [x] Accept 0-child / 1-child / multi-child WrapPanel (DD-M3-P3-001
       0+ children, no upper bound).
-- [ ] Reject negative literal on `item-cross-size`, `item-spacing`,
+- [x] Reject negative literal on `item-cross-size`, `item-spacing`,
       `line-spacing` (DD-M3-P3-006 compile-time gate); diagnostic
       names the rejected attribute. Zero is a *valid* setting on
       all three (DD-M3-P3-006 zero-handling); the rejection
       threshold is `< 0`, not `<= 0`.
-- [ ] Reject `bind item-cross-size:`, `bind item-spacing:`,
+- [x] Reject `bind item-cross-size:`, `bind item-spacing:`,
       `bind line-spacing:` (constant-only per DD-M3-P3-003 /
       DD-M3-P3-004); diagnostic names the rejected attribute.
-- [ ] Reject non-`IntLit` RHS shapes on the three attributes
+- [x] Reject non-`IntLit` RHS shapes on the three attributes
       (e.g. `Ident`, `RATIO_LIT`, `STRING_LIT`, `BOOL_LIT`,
       `COLOR_LIT`, `number_with_unit`) — they are constant-only
       `i32` literals per §4.10. Diagnostic names the rejected
       attribute.
-- [ ] Reject the three attributes outside WrapPanel (attribute-
+- [x] Reject the three attributes outside WrapPanel (attribute-
       position rejection); diagnostic names the offending position.
-- [ ] Widget property catalog extended for WrapPanel
+- [x] Widget property catalog extended for WrapPanel
       (`item-cross-size: i32`, `item-spacing: i32`,
       `line-spacing: i32`) so the checker can name the attribute
       types in diagnostics. The catalog reuses the existing `i32`
       `TypeName` entry (no new `TypeName` variant).
-- [ ] Unit tests cover each row of the reject set + each accept
+- [x] Unit tests cover each row of the reject set + each accept
       shape from the ADR, including the accept-shape fixtures
       from
       [dsl_spec §4.10](../../dsl_spec.md#410-wrappanel-layout-primitive-m3-phase-3)
@@ -285,9 +294,63 @@ Discharges the m3-plan §Phase-end criteria checklist for Phase 3.
 
 ## Decisions log
 
-(empty — record here mid-phase decisions that deviate from the ADR
-or refine its task slicing; see Phase 1 / Phase 2 progress files
-for the shape.)
+### 2026-05-21 — Lexer prerequisite for kebab-case attribute names and negative integer literals (T1)
+
+dsl_spec §4.10's three WrapPanel attribute names are kebab-case
+(`item-cross-size`, `item-spacing`, `line-spacing`). The
+`wasamoc` lexer prior to T1 only recognised the `in-out` keyword
+through a hardcoded special case in `scan_ident` and rejected `-`
+in identifier position elsewhere; the top-level `-` handler
+rejected `-` not followed by `=`. Both surfaces blocked T1:
+
+- Without kebab-aware `scan_ident`, `item-cross-size: 88`
+  tokenized as `item` Ident, then `-` "unexpected `-`" error.
+  The PropertyBind never reached the checker, so the attribute
+  diagnostics had no surface to fire on.
+- Without negative-IntLit support, `item-spacing: -1` errored
+  at the lexer. The DD-M3-P3-006 compile-time gate ("diagnostic
+  names the rejected attribute") was unreachable.
+
+The owner confirmed the lexer-extension approach on 2026-05-21
+(over the alternative of revising the spec to snake_case
+attribute names):
+
+- `scan_ident` now loops over alphanumeric segments joined by `-`
+  when the next character after `-` is alphabetic. `count -= 1`
+  still tokenizes correctly because the `=` after `-` breaks the
+  kebab continuation rule.
+- The `in-out` keyword's hardcoded entry in `scan_ident` is
+  removed; `in-out` is matched via the post-scan keyword table
+  on parity with `component` / `inherits` / etc.
+- The top-level `-` arm emits a negative `IntLit` when followed
+  by an ASCII digit. Bare `-` remains an error; binary
+  subtraction is not grammatical in the DSL, so the leading-sign
+  reading is unambiguous in expression position.
+- Ratio literals (`<num>:<den>`) remain unsigned by construction
+  (dsl_spec §4.9 surface). The negative-entry path in
+  `scan_number` skips the ratio fold.
+
+**Behavioural deltas from the pre-T1 lexer:**
+
+- `in-outx` previously errored at lex time (`scan_ident` saw
+  `in`, hit `-` not followed by `out`-end, returned `in`, then
+  the `-` arm errored). It now lexes as `Token::Ident("in-outx")`.
+  No existing program shape relied on the previous rejection; the
+  parser would still reject `in-outx` in any meaningful context.
+- The lexer test `in_out_followed_by_alphanumeric_is_error` was
+  replaced with `in_outx_lexes_as_kebab_ident` plus three new
+  kebab / negative-IntLit tests (`kebab_case_ident`,
+  `kebab_ident_breaks_on_non_alpha_after_hyphen`,
+  `negative_int_literal`, `negative_int_in_property_bind_position`).
+
+The progress doc's "Phase 3 introduces no new parser grammar"
+prose continues to hold — the parser's IDENT-keyed PropertyBind
+shape is unchanged. The lexer's `Token::Ident` surface and
+integer-literal sign domain widen. This is recorded so the
+Phase 3 closing Moment 2 spec re-sync can decide whether the
+lexer change deserves its own note in dsl_spec §2 (lexical
+surface) or is sufficiently absorbed by §4.10's normative
+attribute-name list.
 
 ## CI / verification log
 
