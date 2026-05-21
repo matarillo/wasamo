@@ -211,15 +211,15 @@ verification closure **evidence item 2**.
 Discharges ADR verification closure **evidence item 4** (CI-gated
 Compositor pipeline).
 
-- [ ] Mock-free integration test on the Windows CI runner that
+- [x] Mock-free integration test on the Windows CI runner that
       exercises the two fixtures specified in the ADR's
       [verification closure evidence item 4](../../decisions/m3-phase-3-wrap-panel.md#phase-3-verification-closure-what-counts-as-a3-evidence):
       the wrap-path fixture (primary positive control) and the
       oversized-child fixture (visible-overflow regulation).
-- [ ] Skip-guard matches Phase 1 T6 / T13 / Phase 2 T11: fail (not
+- [x] Skip-guard matches Phase 1 T6 / T13 / Phase 2 T11: fail (not
       skip) on CI when Compositor unavailable; locally skip on
       `0x80070005` from `wasamo_init`.
-- [ ] Skip-guard verified on an SSH dev box (or equivalent
+- [x] Skip-guard verified on an SSH dev box (or equivalent
       environment per
       [verification-environments.md](../../notes/verification-environments.md))
       before landing — local "passed without skip" does not prove
