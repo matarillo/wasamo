@@ -111,16 +111,16 @@ Discharges the DD-M3-P3-004 Recommendation companion judgement
 
 ### T3 — `wasamoc` lowering: AST → IR
 
-- [ ] `Expr::IntLit` on WrapPanel attribute RHSes lowers via the
+- [x] `Expr::IntLit` on WrapPanel attribute RHSes lowers via the
       existing `IrLiteral::Int` path. Non-`IntLit` RHS shapes
       accepted by the grammar are rejected by T1 before reaching
       lowering — no new lowering branches added.
-- [ ] `WrapPanel { ... }` widget declaration lowers to an
+- [x] `WrapPanel { ... }` widget declaration lowers to an
       `IrNode { widget_type: "WrapPanel", props: [...], children: [...] }`
       with the three attributes recorded as `IrProp` entries when
       set; absent attributes are omitted from the IR (defaults are
       applied at the runtime layer in T5, not at the IR layer).
-- [ ] Unit tests assert end-to-end parse → lower for
+- [x] Unit tests assert end-to-end parse → lower for
       representative `WrapPanel { ... }` forms (0-child, single
       Box child, multi-Box-child with all three attributes set,
       multi-child with only `item-cross-size` set, multi-child
