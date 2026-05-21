@@ -206,10 +206,14 @@ verification closure **evidence item 2**.
 - [x] Rounding contract inherits Phase 2 DD-M3-P2-005's
       discipline (no pixel-snapping in Phase 3).
 
-### T8 — Windows-runtime integration test
+### T8 — Windows-runtime integration test (ADR §Phase 3 verification closure evidence item 4, CI-gated)
 
-Discharges ADR verification closure **evidence item 4** (CI-gated
-Compositor pipeline).
+Lands the Windows-runtime integration test required by ADR
+verification closure **evidence item 4** (CI-gated Compositor
+pipeline). CI green confirmation of the test itself remains T10's
+"Windows-only integration test (T8) green on CI" checkbox — T8
+closes the test landing and the skip-guard verification, not the
+CI-execution evidence.
 
 - [x] Mock-free integration test on the Windows CI runner that
       exercises the two fixtures specified in the ADR's

@@ -2,26 +2,62 @@
 title: M3-Phase 3 / T8 step-end retrospective
 status: recorded
 created: 2026-05-22
+revised: 2026-05-22 (rev 2 — Finding 1: weaken item 4 discharge claim; Finding 2: HEAD → hash wording)
 scope: step-end
 task: T8 — Windows-runtime integration test (ADR §Phase 3 verification closure evidence item 4)
 ---
 
 # M3-Phase 3 / T8 step-end retrospective
 
+> **Revision history**
+>
+> - **rev 1 (initial; commit `1401cc7`):** Initial record claimed
+>   T8 had "discharged ADR §Phase 3 verification closure evidence
+>   item 4". The claim was too strong: ADR item 4 defines the test
+>   as **CI-gated** evidence, and the CI green confirmation belongs
+>   to T10 (phase-end gates) — only the test landing and skip-guard
+>   verification happen in T8. Also used `post-commit HEAD = 2a812e3`
+>   in two places where `post-commit hash = 2a812e3` is the less
+>   misleading vocabulary (HEAD advances when the retrospective
+>   itself commits, so the equation reads as broken on review).
+> - **rev 2 (this commit):** Two review-found doc consistency fixes,
+>   no code / gate change.
+>   - **Finding 1:** Weaken the discharge wording to "lands the
+>     Windows-runtime integration test required by ADR item 4; CI
+>     green confirmation remains T10" so T8 and T10 no longer
+>     contradict each other.
+>   - **Finding 2:** Replace `post-commit HEAD` with
+>     `post-commit hash` in Checklist item 3 and Verification Notes.
+
 ## Scope
 
 `docs/plans/progress/m3-phase-3-progress.md` の **T8**
 (ADR §Phase 3 verification closure evidence item 4 — Windows-runtime
-layout integration evidence; CI-gated Compositor pipeline) の
+layout integration evidence; **CI-gated** Compositor pipeline) の
 step-end retrospective。
 
-対象コミット (2 件; 本 doc 含む):
+ADR item 4 は CI-gated evidence であり、本 T8 は
+
+- 当該 integration test の landing
+- skip-guard の triggering half (SSH dev box 観測) 検証
+- ローカル Windows 環境での 2 fixture pass
+
+までを完了する step である。CI 上で test が実際に green であることの
+確認は phase-end の T10 ("Windows-only integration test (T8) green
+on CI") の責務として残る — T8 単独では ADR item 4 を完全に discharge
+したとは主張しない。
+
+対象コミット (3 件; 本 doc 含む):
 
 - `2a812e3 test(wasamo-runtime): add WrapPanel layout integration evidence (M3-Phase 3 T8)`
-- (this commit) `docs(m3-phase-3): close T8 layout integration step` (本
+- `1401cc7 docs(m3-phase-3): close T8 layout integration step` (rev 1
   retrospective + progress checkbox flip)
+- (this commit) `docs(m3-phase-3): T8 retrospective revision — Finding
+  1 wording + Finding 2 hash vocabulary` (rev 2 retrospective body
+  update; code / gate に変更なし)
 
-T8 が discharge した材料は次:
+T8 が本 step で **landed** した材料は次 (ADR item 4 の CI-gated
+evidence のうち、CI 実行待ちを除く範囲):
 
 - `wasamo-runtime/tests/wrap_panel_layout_integration.rs` を追加し、
   `.ui → wasamoc → IR → build_widget_tree → live WidgetNode →
@@ -47,19 +83,27 @@ T8 が discharge した材料は次:
   GitHub Actions では skip path に入ったら fail する `assert!`
   を維持。
 
+これにより ADR item 4 の **CI-gated evidence** は「test が landed し、
+guard が両方向 (happy path local pass / skip path SSH 観測) で動く」
+状態に到達する。**CI green の最終確認は T10 で `workflow_dispatch`
+から行う**。本 step retrospective はその CI 実行を兼ねない。
+
 step-end の gate であり phase-end retrospective ではない。merge 先は
 phase ブランチ `feat/m3-phase-3` (ff)。本 step (T8) は単一 task =
 単一 step 構造で、現在のブランチは `feat/m3-phase-3-t8`。
 
 ## Current Judgment
 
-2026-05-22 時点で T8 step-end 基準は **達成済み**。
+2026-05-22 時点で T8 step-end 基準は **達成済み**。ただし
+「ADR item 4 を本 step で discharge 済み」とは主張しない:
+item 4 は CI-gated evidence であり、CI 上での test green の最終確認は
+T10 ("Windows-only integration test (T8) green on CI") に残る。
 
 - progress file T8 checklist 3 項目はすべて `[x]` に flip 済み。
 - 2 fixture とも本 Windows 開発環境 (Compositor available) で
   skip ではなく実行され、pass:
   `test result: ok. 2 passed; 0 failed`。
-- clean rebuild gate (post-commit HEAD = `2a812e3`) も green:
+- clean rebuild gate (post-commit hash = `2a812e3`) も green:
   `cargo clean` → `cargo build --release --workspace` →
   `cargo build --workspace` → `cargo test --workspace` →
   `cargo fmt --all -- --check`。既存の `wasamo-sys` import library
@@ -67,6 +111,9 @@ phase ブランチ `feat/m3-phase-3` (ff)。本 step (T8) は単一 task =
 - SSH dev box 上で skip-guard の triggering half が
   `0x80070005` (`アクセスが拒否されました。`) を検出して両 test を
   skip path で pass させることを観測済み (詳細は Verification Notes)。
+- **未完了:** CI 上での test 実行 green 確認は T10 の責務として残る。
+  T8 で landing と skip-guard 検証は完了したが、CI-gated evidence
+  item 4 全体は T10 phase-end gate を通って初めて discharge する。
 
 ## Main Learning
 
@@ -117,7 +164,7 @@ WrapPanel が ScrollView や clip-aware container の中に置かれた際の
      責務。
 
 3. **ローカル clean rebuild:** **green** **(FT)**
-   - `cargo fmt --all -- --check`: zero exit (post-commit HEAD
+   - `cargo fmt --all -- --check`: zero exit (post-commit hash
      `2a812e3` で確認)。
    - `cargo clean`: success (3423 files / 1.1GiB 削除)。
    - `cargo build --release --workspace`: success (54.41s)。
@@ -179,7 +226,7 @@ Fast-track criteria は **満たす**:
 
 ## Verification Notes
 
-実行コマンド (post-commit HEAD `2a812e3` 上):
+実行コマンド (post-commit hash `2a812e3` 上):
 
 ```text
 cargo test -p wasamo-runtime --release --test wrap_panel_layout_integration
@@ -224,3 +271,9 @@ T8 から新たに発生した out-of-phase residual はなし。
   (WrapPanel × 1:1 Box thumbnails 5–10 枚; framing decision E)。
 - **T10:** phase-end gates で full workspace / CI / spec status
   marker flip / architecture.md §6.8 reconcile を実施。
+  - 特に **ADR §verification closure evidence item 4 の CI-gated
+    evidence は T10 の "Windows-only integration test (T8) green on
+    CI" gate で完結する** — T8 は landing と skip-guard 検証まで。
+    `workflow_dispatch` から CI を回し、本 step で書いた 2 fixture
+    が CI 上でも green (skip ではなく実行されて pass) になることを
+    確認した時点で item 4 が discharge される。
