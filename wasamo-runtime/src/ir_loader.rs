@@ -141,7 +141,13 @@ fn validate(comp: &IrComponent) -> Result<(), IrLoadError> {
     // before construction. wasamoc emits IR that already respects both
     // invariants — these gates exist for IR not produced by wasamoc
     // (e.g. via `wasamo_load_ui` directly).
-    validate_phase2_node_invariants(&comp.root)
+    validate_phase2_node_invariants(&comp.root)?;
+    // M3-Phase 3 T6 defense-in-depth gate (DD-M3-P3-006 runtime half).
+    // `wasamoc check` (T1) rejects negative literals on WrapPanel's three
+    // attribute names at compile time; this is the last-line-of-defence
+    // for memory-IR that reaches the runtime via `wasamo_load_ui`
+    // without traversing `wasamoc`.
+    validate_phase3_node_invariants(&comp.root)
 }
 
 fn validate_phase2_node_invariants(node: &IrNode) -> Result<(), IrLoadError> {
@@ -185,6 +191,40 @@ fn validate_phase2_node_invariants(node: &IrNode) -> Result<(), IrLoadError> {
     }
     for child in &node.children {
         validate_phase2_node_invariants(child)?;
+    }
+    Ok(())
+}
+
+// M3-Phase 3 T6 defense-in-depth: reject negative literal values on
+// WrapPanel's three attribute names (`item-cross-size` /
+// `item-spacing` / `line-spacing`). The DSL surface spec invariant is
+// non-negative `i32` per DD-M3-P3-006 (zero is *valid*; the rejection
+// threshold is `< 0`, not `<= 0`). Scoped to `widget_type == "WrapPanel"`
+// to match `wasamoc check` T1 — attribute-position rejection on other
+// widgets is the compile-time half's responsibility, not this runtime
+// gate.
+fn validate_phase3_node_invariants(node: &IrNode) -> Result<(), IrLoadError> {
+    if node.widget_type == "WrapPanel" {
+        for prop in &node.props {
+            let is_wrap_attr = matches!(
+                prop.name.as_str(),
+                "item-cross-size" | "item-spacing" | "line-spacing"
+            );
+            if !is_wrap_attr {
+                continue;
+            }
+            if let IrLiteral::Int(n) = &prop.value {
+                if *n < 0 {
+                    return Err(IrLoadError::Validate(format!(
+                        "`WrapPanel.{}` must be non-negative, got {}",
+                        prop.name, n
+                    )));
+                }
+            }
+        }
+    }
+    for child in &node.children {
+        validate_phase3_node_invariants(child)?;
     }
     Ok(())
 }
@@ -967,6 +1007,20 @@ fn construct_widget(
             let fill = extract_color_prop(&node.props, "fill");
             WidgetNode::box_(compositor, aspect, fill)
                 .map_err(|e| IrLoadError::Build(format!("box: {e}")))
+        }
+        // M3-Phase 3 T6: WrapPanel materialisation. The three kebab-case
+        // attribute names from dsl_spec §4.10 carry through as `Option<i32>`
+        // (presence-preserving) so the catalog can apply the absent-to-
+        // default policy via `apply_wrap_panel_defaults` (DD-M3-P3-003 /
+        // DD-M3-P3-004 Option (a)) — the loader stays default-knowledge-
+        // free. `validate()` has already rejected negative IntLits on
+        // these prop names (DD-M3-P3-006 runtime gate).
+        "WrapPanel" => {
+            let item_cross_size = extract_int_prop(&node.props, "item-cross-size");
+            let item_spacing = extract_int_prop(&node.props, "item-spacing");
+            let line_spacing = extract_int_prop(&node.props, "line-spacing");
+            WidgetNode::wrap_panel(compositor, item_cross_size, item_spacing, line_spacing)
+                .map_err(|e| IrLoadError::Build(format!("wrap_panel: {e}")))
         }
         other => Err(IrLoadError::UnknownWidget(other.to_string())),
     }
@@ -1996,6 +2050,132 @@ mod tests {
         );
         assert_eq!(c.root.children.len(), 1);
         assert_eq!(c.root.children[0].widget_type, "Text");
+    }
+
+    // ── M3-Phase 3 T6: WrapPanel validate() defense-in-depth ─────────────
+    //
+    // These tests cover the pure-logic `validate()` half of T6. The
+    // `construct_widget` materialisation half needs a live `Compositor`
+    // and is exercised end-to-end by T8's Windows-only integration test.
+    // DD-M3-P3-006 runtime gate: negative values on `item-cross-size` /
+    // `item-spacing` / `line-spacing` are rejected; zero is *valid*
+    // (rejection threshold is `< 0`).
+
+    #[test]
+    fn wrap_panel_zero_children_is_valid() {
+        // DD-M3-P3-001 no-lower-bound: 0+ children, no upper bound.
+        let c = parse_ok(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             node WrapPanel {}\n}",
+        );
+        assert_eq!(c.root.widget_type, "WrapPanel");
+        assert!(c.root.children.is_empty());
+    }
+
+    #[test]
+    fn wrap_panel_single_child_is_valid() {
+        let c = parse_ok(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             node WrapPanel { node Text { prop text = \"hi\" } }\n}",
+        );
+        assert_eq!(c.root.children.len(), 1);
+        assert_eq!(c.root.children[0].widget_type, "Text");
+    }
+
+    #[test]
+    fn wrap_panel_multi_child_is_valid() {
+        // DD-M3-P3-001: no upper bound on child count.
+        let c = parse_ok(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             node WrapPanel {\n\
+               node Text {}\n\
+               node Text {}\n\
+               node Text {}\n\
+               node Text {}\n\
+             }\n}",
+        );
+        assert_eq!(c.root.children.len(), 4);
+    }
+
+    #[test]
+    fn wrap_panel_rejects_negative_item_cross_size() {
+        let err = parse_err(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             node WrapPanel { prop item-cross-size = -1 }\n}",
+        );
+        assert!(
+            matches!(err, IrLoadError::Validate(ref m) if m.contains("item-cross-size") && m.contains("non-negative"))
+        );
+        assert_malformed_display_nonempty(&err);
+    }
+
+    #[test]
+    fn wrap_panel_rejects_negative_item_spacing() {
+        let err = parse_err(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             node WrapPanel { prop item-spacing = -5 }\n}",
+        );
+        assert!(
+            matches!(err, IrLoadError::Validate(ref m) if m.contains("item-spacing") && m.contains("non-negative"))
+        );
+        assert_malformed_display_nonempty(&err);
+    }
+
+    #[test]
+    fn wrap_panel_rejects_negative_line_spacing() {
+        let err = parse_err(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             node WrapPanel { prop line-spacing = -10 }\n}",
+        );
+        assert!(
+            matches!(err, IrLoadError::Validate(ref m) if m.contains("line-spacing") && m.contains("non-negative"))
+        );
+        assert_malformed_display_nonempty(&err);
+    }
+
+    #[test]
+    fn wrap_panel_accepts_zero_on_all_three_attributes() {
+        // DD-M3-P3-006 zero-handling: the rejection threshold is `< 0`,
+        // not `<= 0`. Zero is a *valid* setting on every WrapPanel
+        // integer attribute — `Some(0)` for `item-cross-size` means
+        // uniform zero per-line cross-axis size, `0` spacings mean
+        // touching items / lines.
+        let c = parse_ok(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             node WrapPanel {\n\
+               prop item-cross-size = 0\n\
+               prop item-spacing = 0\n\
+               prop line-spacing = 0\n\
+             }\n}",
+        );
+        assert_eq!(c.root.widget_type, "WrapPanel");
+    }
+
+    #[test]
+    fn wrap_panel_accepts_positive_values_on_all_three_attributes() {
+        let c = parse_ok(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             node WrapPanel {\n\
+               prop item-cross-size = 96\n\
+               prop item-spacing = 8\n\
+               prop line-spacing = 12\n\
+             }\n}",
+        );
+        assert_eq!(c.root.props.len(), 3);
+    }
+
+    #[test]
+    fn wrap_panel_negative_value_in_nested_node_is_rejected() {
+        // The walk recurses — a negative attribute on a child WrapPanel
+        // nested inside another container is still rejected.
+        let err = parse_err(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             node VStack {\n\
+               node WrapPanel { prop item-spacing = -3 }\n\
+             }\n}",
+        );
+        assert!(matches!(err, IrLoadError::Validate(ref m) if m.contains("item-spacing")));
+        assert_malformed_display_nonempty(&err);
     }
 
     #[test]

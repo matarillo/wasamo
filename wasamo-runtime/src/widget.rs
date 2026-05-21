@@ -98,16 +98,13 @@ enum WidgetData {
     // mirroring Phase 2's `Box` shape (0+ children, no upper bound;
     // single-child invariant intentionally absent — DD-M3-P3-001).
     //
-    // Readers (T7 layout, T6 IR loader `validate()`) will arrive via the
-    // per-kind dispatch on `WidgetData` and the `WidgetKind::WrapPanel`
-    // arm in `layout.rs`. T5 lands the catalog wiring only — no
-    // `PropertyValue` / binding / ABI paths touch these fields per
-    // DD-M3-P3-003 / DD-M3-P3-004 constant-only invariants.
-    // `#[allow(dead_code)]` carries until the T6 IR-loader path
-    // (`ir_loader::construct_widget` "WrapPanel" arm) constructs this
-    // variant — Phase 2 T6 used the same forward-pointer pattern on
-    // `WidgetData::Box` until T7 wired the loader.
-    #[allow(dead_code)]
+    // T7 layout reads these fields via the per-kind dispatch on
+    // `WidgetData` and the `WidgetKind::WrapPanel` arm in `layout.rs`.
+    // T6 wired the IR-loader path (`ir_loader::construct_widget`
+    // "WrapPanel" arm) so this variant is constructed in production —
+    // the T5-era `#[allow(dead_code)]` forward-pointer is no longer
+    // needed. No `PropertyValue` / binding / ABI paths touch these
+    // fields per DD-M3-P3-003 / DD-M3-P3-004 constant-only invariants.
     WrapPanel {
         item_cross_size: Option<i32>,
         item_spacing: i32,
@@ -156,10 +153,9 @@ impl From<windows::core::Error> for PropertyError {
 // - `item_spacing` absent → `0` (touching items per DD-M3-P3-003).
 // - `line_spacing` absent → `0` (touching lines per DD-M3-P3-003).
 //
-// `#[allow(dead_code)]` carries until the T6 IR-loader path calls
-// `WidgetNode::wrap_panel` (transitively this helper); the tests
-// below already exercise it, but the production caller arrives in T6.
-#[allow(dead_code)]
+// T6 wires the IR-loader path that calls `WidgetNode::wrap_panel`,
+// which in turn calls this helper — the T5-era `#[allow(dead_code)]`
+// forward-pointer is no longer needed.
 pub(crate) fn apply_wrap_panel_defaults(
     item_cross_size: Option<i32>,
     item_spacing: Option<i32>,
@@ -419,10 +415,9 @@ impl WidgetNode {
     // visual brush unset). Children are appended via the existing
     // tree-mutation API.
     //
-    // `#[allow(dead_code)]` carries until the T6 IR-loader path calls
-    // this constructor — Phase 2 T6 used the same forward-pointer
-    // pattern on `box_` until T7 wired the loader.
-    #[allow(dead_code)]
+    // T6 wires the IR-loader path that constructs this widget via
+    // `ir_loader::construct_widget` — the T5-era `#[allow(dead_code)]`
+    // forward-pointer is no longer needed.
     pub(crate) fn wrap_panel(
         compositor: &Compositor,
         item_cross_size: Option<i32>,
