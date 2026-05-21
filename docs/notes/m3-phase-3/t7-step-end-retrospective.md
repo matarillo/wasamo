@@ -332,78 +332,20 @@ tension を抱えている」** (rev 1 から carryover):
   非設置を観測する)。本 T7 で pure-data 半分を完全にカバーし、
   T8 で WinRT 半分を別途 cover する分業が ADR 通り。
 - **「test 戦略は ADR の verification closure 列挙を逐語に
-  従って書く」** が rev 1 で当てはまる **と思っていた** が、
+  従って書けば十分」** が rev 1 で当てはまる **と思っていた** が、
   ADR の文言は "cross-axis line sizing when `item-cross-size` is
   unset (max of children's reported sizes)" を要求するだけで、
   **「unset path で measure と arrange が consistent であること」
-  という不変式を明示していない**。rev 1 はこの ADR 言及通りに
-  fixture を組んだが、ADR の文言の sufficiency は別問題だった。
-  これは ADR レビュー時に owner が見抜くべき性質の問題ではなく、
-  実装者の自助義務 (implementor's diligence) として「helper の
-  引数 axis すべてに対する sensitivity test」を組むべきだった、
-  という反省。
-
-次に load-bearing な学びは **「Fill width の WrapPanel が
-unbounded main 親に出会ったときの `0.0` vs cumulative-main の
-分岐は、HStack/VStack 規約 vs WrapPanel-specific 必要性の
-tension を抱えている」**:
-
-- HStack/VStack の measure は Fill width に対して常に `0.0` を
-  返す。これは "親 arrange が `inner_w` を渡してくれるから
-  measure 段で intrinsic を主張しない" という規約。
-- WrapPanel も基本この規約に従いたいが、unbounded main 親
-  (intrinsic-sizing 文脈) に置かれた場合、`0.0` を返すと親が
-  `resolve_axis` で `available = INFINITY` を採用してしまい、
-  後段の arrange が `w = INFINITY` で呼ばれる。compute_wrap_lines
-  は `!main_bounded` で one-line flow に縮退するので bug には
-  ならないが、`f32::INFINITY` を親が rectangle として記録する
-  のは意味論的に汚い (subsequent rendering / clip / visual layer
-  への波及が読みにくい)。
-- 折衷として、Fill + unbounded のときだけ `max_line_main`
-  (= cumulative one-line main) を返す軽い anchor を入れた。
-  これは "親が WrapPanel を ScrollView 等で wrap せず直接
-  intrinsic-sizing context に置く" 非通常パスを想定する保険で
-  あり、gallery sub-screen / typical usage では一切呼ばれない
-  (Fill + finite main の最頻路、または Shrink の代替)。
-- この分岐は spec text に直接出てこない (DD-M3-P3-005 は
-  "outer main = parent_main_bound when bounded" としか言わない)。
-  spec text vs impl の差分は Phase 3 closing Moment 2 (T10) の
-  spec re-sync で吸収判定する。Out-of-phase residual ではないが、
-  forward-pointer として本 retrospective に明示する。
-
-副次的な学び:
-
-- **`#[allow(dead_code)]` forward-pointer の lift サイクルは
-  T5 → T6 → T7 で完結した**。T5 が 6 件 (variant + constructor
-  + helper + 3 fields) を導入し、T6 が catalog 側 3 件 (variant +
-  constructor + helper) を lift し、T7 が layout 側 3 件 (fields)
-  を lift する形が綺麗に揃った。Phase 2 の `WidgetData::Box`
-  単一 marker → T7 lift と比較すると markers が多い分 lift
-  span が長い (T5 → T7) が、各 step で機械的に lift できる
-  構造になっていた (= 各 step が forward-pointer を 1 種類だけ
-  解消する design)。
-- **Visible-overflow の "arrange-pass evidence" は pure-data の
-  rectangle 比較で書ける**。ADR evidence item 2 は "child.x +
-  child.w > wp.x + wp.w" を arrange 後の `LayoutNode.offset` /
-  `size` から直接読めることを要求する。これは pure-logic test で
-  完全に exercise できる (Compositor を要さない)。Windows-runtime
-  integration test (T8) の "absence of clip surface" assertion
-  とは別物 (T8 は Visual layer での clip 非設置を観測する)。
-  本 T7 で pure-data 半分を完全にカバーし、T8 で WinRT 半分を
-  別途 cover する分業が ADR 通り。
-- **「test 戦略は ADR の verification closure 列挙を逐語に
-  従って書く」** が当てはまる。17 件のテストは ADR evidence
-  item 2 の列挙 ("bounded main-axis happy path with multi-line
-  wrap; bounded main-axis happy path with single-line fit; ...
-  spacing-aware overflow inequality for `line_empty == false`;
-  `item-spacing: 0` and `line-spacing: 0` degenerate layouts;
-  `item-cross-size: 0` author-requested degenerate layout;
-  unbounded-cross-axis-with-aspect-child propagating to Phase 2's
-  `LayoutError::BoxAspectUnboundedBoth`") と一対一対応する
-  形に整理した。これは progress doc T7 が "DD-M3-P3-005
-  Recommendation の列挙に従う" と書いていることへの素直な
-  応答であり、test scope の妥当性は ADR レビュー時に既に決着
-  済み (= scope 判断は本 step 内では発生しない)。
+  という不変式を明示していない**。rev 1 は ADR 言及通りに fixture
+  を組んだが (17 件すべて DD-M3-P3-005 Recommendation の列挙と
+  一対一対応)、ADR 列挙の sufficiency は別問題だった。これは ADR
+  レビュー時に owner が見抜くべき性質の問題ではなく、実装者の
+  自助義務 (implementor's diligence) として「helper の引数 axis
+  すべてに対する sensitivity test」を組むべきだった、という反省。
+  **rev 1 の retrospective が「test scope の妥当性は ADR レビュー
+  時に既に決着済み」と書いていたのは誤り** — review fixture の
+  外側 (= ADR 言及外の不変式) を test で守る責任は実装者側に
+  残っており、本 step ではそれを果たせなかった。
 
 ## Checklist
 
@@ -450,19 +392,24 @@ tension を抱えている」**:
      必要 mechanism)。T10 spec re-sync で「impl note を追加するか、
      暗黙とするか」を判定。
 
-3. **ローカル clean rebuild:** **green**
-   - `cargo fmt --all -- --check` (post-fix state; commit `253b207`):
-     zero exit。
-   - `cargo test --workspace` (post-fix): failure 0 件。
-     - `wasamo-runtime` lib: **235 passed** (rev 1 の 233 から +2:
-       regression test 2 件)。
-     - 他 crate test count は rev 1 と同じ。
-   - rev 2 では `cargo clean` → release+debug build の full clean
-     rebuild は **走らせていない** (rev 1 で `253b207` の前提となる
-     状態に対して既に走らせており、`253b207` は 1 file の Rust
-     コード変更で同 crate 内に閉じるため、incremental の `cargo
-     test --workspace` green を proxy として採用)。rev 1 の clean
-     rebuild log は本節下記 "Verification Notes" に残す。
+3. **ローカル clean rebuild:** **green** (post-fix state で物理実施)
+   - **rev 2 review 指摘 (clean rebuild が proxy では不足)** を受け
+     **post-fix HEAD (`253b207`) で再実施した**:
+     - `cargo fmt --all -- --check` (post-fix state): zero exit。
+     - `cargo clean`: 3318 files, 997.3 MiB removed。
+     - `cargo build --release --workspace`: green (46.80s)。
+     - `cargo build --workspace`: green (debug, 39.89s)。
+     - `cargo test --workspace`: failure 0 件。
+       - `wasamo-runtime` lib: **235 passed** (rev 1 の 233 から +2:
+         regression test 2 件)。
+       - `wasamoc` lib: 202 passed (rev 1 / T6 と同じ)。
+       - `wasamo-ir`: 12 passed。
+       - `wasamo-runtime` integration `ir_loader_roundtrip`:
+         6 passed。
+       - 他 crate (ABI / DLL / binding / counter-rust / gallery-rust /
+         bool-demo-rust / counter-c) 全 green。
+   - rev 1 の clean rebuild log は "Verification Notes" 節下記に
+     歴史的記録として残す。
 
 4. **PO に相談すべき設計判断・トレードオフ:** **なし**
    - T7 範囲は DD-M3-P3-005 と DD-M3-P3-001 から機械的に降りる。
@@ -586,7 +533,7 @@ T7 で追加したテストと、走らせた command を記録する。
 - `wrap_panel_arrange_without_prior_measure_falls_back_to_h`
 
 **実行コマンド (rev 1; post-commit `6b1b0f5` 時点 — clean rebuild
-gate):**
+gate, 歴史的記録):**
 
 ```text
 cargo fmt --all -- --check                 (post-commit state; zero exit)
@@ -598,20 +545,23 @@ cargo test --workspace                     (failure 0)
 
 `wasamo-runtime` lib test: **233 passed** (T6 の 216 から +17)。
 
-**実行コマンド (rev 2; post-fix `253b207` 時点):**
+**実行コマンド (rev 2; post-fix `253b207` 時点 — full clean rebuild
+gate, 現行 step-end gate 証跡):**
 
 ```text
 cargo fmt --all -- --check                 (post-fix state; zero exit)
+cargo clean                                (3318 files, 997.3 MiB)
+cargo build --release --workspace          (46.80s, green)
+cargo build --workspace                    (debug; 39.89s, green)
 cargo test --workspace                     (failure 0)
 ```
 
 `wasamo-runtime` lib test: **235 passed** (rev 1 の 233 から +2:
-regression test 2 件)。他 crate の test count は rev 1 と同じ。
-
-rev 2 では `cargo clean` → release+debug build は走らせていない
-(rev 1 で同じ拡張範囲に対して既に走らせており、`253b207` は同
-crate 内の 1 file 変更で他 crate への波及がないため、incremental
-の `cargo test --workspace` を proxy として採用)。
+regression test 2 件)、他 crate の test count は rev 1 と同じ
+(`wasamoc` 202 / `wasamo-ir` 12 / `ir_loader_roundtrip` 6)。
+**rev 2 review 指摘 (rev 1 を proxy にして clean rebuild を省略
+していた)** を受け、本 retrospective 修正と同じタイミングで
+post-fix HEAD に対して full clean rebuild を物理実施した結果。
 
 **rev 2 fix の core assertion を物理 dry-run で確認済み:**
 `arrange_wrap_panel` の cache lookup を `let child_cross_input =
