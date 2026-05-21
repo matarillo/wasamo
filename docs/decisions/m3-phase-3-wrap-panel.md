@@ -2,7 +2,7 @@
 
 **Phase:** M3-Phase 3 (WrapPanel layout primitive)
 **Date:** 2026-05-21
-**Status:** Proposed
+**Status:** Accepted
 
 ## Context
 
@@ -166,7 +166,7 @@ do not appear as recommended options —
 
 ### DD-M3-P3-001 — WrapPanel IR node form and N-child main-axis flow contract
 
-**Status:** Proposed
+**Status:** Accepted
 
 **Context:**
 WrapPanel is a new layout primitive in `wasamo-ir` and
@@ -367,7 +367,7 @@ future events (see Out of scope):
 
 ### DD-M3-P3-002 — Orientation attribute
 
-**Status:** Proposed
+**Status:** Accepted
 
 **Context:**
 Whether WrapPanel exposes an `orientation: <horizontal|vertical>`
@@ -442,7 +442,7 @@ attribute would simply re-bind).
 
 ### DD-M3-P3-003 — Spacing attributes (item-spacing, line-spacing, padding)
 
-**Status:** Proposed
+**Status:** Accepted
 
 **Context:**
 Whether Phase 3 exposes item spacing (main-axis gap between siblings
@@ -621,7 +621,7 @@ demand visible-deviation acceptance or constrain a later split.
 
 ### DD-M3-P3-004 — Item sizing source (WrapPanel item cross-axis bound)
 
-**Status:** Proposed
+**Status:** Accepted
 
 **Context:**
 WrapPanel measures children to determine line breaks; the child
@@ -840,7 +840,7 @@ classifier that scales poorly.
 
 ### DD-M3-P3-005 — Measure-arrange algorithm (novel normative spec)
 
-**Status:** Proposed
+**Status:** Accepted
 
 **Context:**
 The load-bearing DD of Phase 3. The first M3 phase to introduce a
@@ -1211,7 +1211,7 @@ HStack / VStack. Option B's exposure is real and not free.
 
 ### DD-M3-P3-006 — IR-loader defense-in-depth invariants
 
-**Status:** Proposed
+**Status:** Accepted
 
 **Context:**
 Phase 2 T7 surfaced the principle: IR-load → runtime-materialise
