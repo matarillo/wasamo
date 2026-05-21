@@ -3,7 +3,7 @@ title: M3-Phase 3 / T10 step-end retrospective
 status: recorded
 created: 2026-05-22
 scope: step-end
-task: T10 — Phase-end gates (Phase 3 close on the step branch; ff merge into phase branch follows)
+task: T10 — Phase-end gates (step-end gate for the docs-close bundle; phase-end full close still requires phase-branch CI green and the separate owner-gated main no-ff merge)
 ---
 
 # M3-Phase 3 / T10 step-end retrospective
@@ -22,7 +22,10 @@ T10 は M3-Phase 3 progress doc §T10 — Phase-end gates の checklist
 - ADR `m3-phase-3-wrap-panel.md` への "Phase 3 implementation
   residuals" subsection 追加 (R1 / R2 へのクロスリファレンス)
 - progress doc `§Out-of-phase residuals` に R1 / R2 を記録、T10
-  checklist 全 [x] flip、front-matter `status: active` → `closing`
+  checklist の docs-deliverable 項目 [x] flip (CI 依存の 2 項目
+  — workspace build/test の CI half、T8 Windows integration の CI
+  half — は phase-branch CI green 後の follow-up commit で flip)、
+  front-matter `status: active` → `closing`
 - 次 phase 前送り note `docs/notes/m3-phase-4/pre-doc-inputs.md`
   (13 sections) 作成
 - 本 phase の durable phase-end retrospective
@@ -144,8 +147,17 @@ step-end fast-track の対象判定:
 - 項目 5 / 6 / 7 / 8 / 9 = なし
 
 → 項目 2 と項目 4 が「あり」のため **fast-track 不成立**。
-T10 → `feat/m3-phase-3` への ff merge は owner 明示承認を経る。
-本 retrospective は owner 報告材料として作成。
+T10 → `feat/m3-phase-3` への **no-ff merge** (Phase 2 / Phase 3
+の task → phase merge は実運用上 no-ff が確定。`git log --merges
+feat/m3-phase-3` 参照) は owner 明示承認を経る。本 retrospective
+は owner 報告材料として作成。
+
+なお `docs/notes/retrospectives.md` 本文は step → phase を
+"ff merge" と記述している箇所が残るが、これは実運用 (Phase 2 /
+Phase 3) と乖離している。T10 を進める blocker ではないため本 step
+では fix しないが、Phase 4 着手前に retrospectives.md を実運用 (no-ff)
+に揃える別 step を入れる価値がある (Phase 4 pre-doc input §12
+process continuity に併記推奨)。
 
 ## 検証メモ
 
@@ -178,9 +190,10 @@ review-concern 単位の分割原則 (`CLAUDE.md §Commit rules`):
 
 ## フォローアップ
 
-T10 → `feat/m3-phase-3` ff merge は owner 明示承認後に実行。
-merge 後に `feat/m3-phase-3` を push し、`workflow_dispatch` から
-CI を回す。CI green 確認後:
+T10 → `feat/m3-phase-3` **no-ff merge** は owner 明示承認後に
+実行 (実運用は no-ff、`git log --merges feat/m3-phase-3`)。merge
+後に `feat/m3-phase-3` を push し、`workflow_dispatch` から CI
+を回す。CI green 確認後:
 
 - `docs/notes/m3-phase-3/phase-end-retrospective.md` item 15 に
   CI run URL を fold (small docs-only follow-up commit)。
@@ -205,10 +218,10 @@ T10 から発生したプロセス側の継続事項:
 
 次 session の入口:
 
-- branch: `feat/m3-phase-3-t10` から ff merge 承認 → 
-  `feat/m3-phase-3` 上で CI green 確認 → CI URL fold
-  follow-up commit + push → owner へ phase-end main-merge gate
-  報告
+- branch: `feat/m3-phase-3-t10` から **no-ff merge** 承認 →
+  `feat/m3-phase-3` push → `workflow_dispatch` で CI green 確認
+  → CI URL fold follow-up commit + push → owner へ phase-end
+  main-merge gate 報告
 - phase-end main-merge: owner 明示承認 + no-ff merge + 別 gate
   での push + main CI green 再確認
 - 次 phase 着手: `feat/m3-phase-4` 系列ブランチで

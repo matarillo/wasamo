@@ -106,15 +106,21 @@ T8 は実装着手時に何を assert すれば close できるかが既に定�
 
 ### phase-end 固有
 
-11. **Acceptance criteria (Ax) 達成確認:** **達成**
+11. **Acceptance criteria (Ax) 達成確認:** **phase-branch CI green
+    待ち (preliminary 達成)**
     - ADR §Phase 3 verification closure の evidence item 1–5 は
-      T1–T9 で discharged: (1) sub-screen positive control =
-      `examples/gallery/` 88 / 12 / 12 + 10 thumbs、(2) pure-logic
-      line-breaker / arrange tests = T7 unit test、(3) IR loader
-      defense-in-depth = T6 `validate()`、(4) Windows-runtime
-      clip-absence + visible-overflow fixture = T8、(5) visible
-      smoke = T9 `Start-Process .\target\release\gallery-rust.exe`
-      success + owner-manual visual confirmation。
+      T1–T9 で landing 完了し、ローカル証跡では達成読み: (1)
+      sub-screen positive control = `examples/gallery/` 88 / 12
+      / 12 + 10 thumbs、(2) pure-logic line-breaker / arrange
+      tests = T7 unit test、(3) IR loader defense-in-depth = T6
+      `validate()`、(4) Windows-runtime clip-absence +
+      visible-overflow fixture = T8 (skip-guard は SSH dev box 上
+      で verify 済み、CI 上の実行 green は item 15 と同じ
+      phase-branch CI run で確認)、(5) visible smoke = T9
+      `Start-Process .\target\release\gallery-rust.exe` success +
+      owner-manual visual confirmation。
+    - **「達成」確定は phase-branch CI green 確認後**。CI URL fold
+      の follow-up commit で本項を「達成」に flip する。
 
 12. **`CHANGELOG.md` / `ROADMAP.md` 整合:** **保留**
     - `CHANGELOG.md` Unreleased への M3-Phase 3 delivery 記録は
@@ -140,14 +146,17 @@ T8 は実装着手時に何を assert すれば close できるかが既に定�
       growth path、process continuity (inline option presentation、
       fast-track / merge gate)、live-note audit triggers を含む。
 
-15. **CI green 確認:** **phase branch ff merge + push 後に
+15. **CI green 確認:** **phase branch no-ff merge + push 後に
     `workflow_dispatch` で実行予定**
     - T10 commit set を `feat/m3-phase-3-t10` から
-      `feat/m3-phase-3` へ ff merge し、push 後に
-      `workflow_dispatch` から CI を回す。CI URL は green 確認後に
-      本 retrospective へ folder。
-    - main push は phase-end gate の owner 明示承認後 (本 retro と
-      別 session) に行う。
+      `feat/m3-phase-3` へ **no-ff merge** (Phase 2 / Phase 3 の
+      task → phase merge は no-ff 運用が確定。`git log --merges
+      feat/m3-phase-3` 参照) し、push 後に `workflow_dispatch` から
+      CI を回す。CI URL は green 確認後に本 retrospective item 15
+      と item 11 (A3 達成判定) へ fold する follow-up commit を
+      phase branch 上で打つ。
+    - main no-ff merge / push は phase-end gate の owner 明示承認
+      後 (本 retro と別 session) に行う。
 
 16. **human-visible GUI smoke:** **不要 / Phase 3 内で実施済み**
     - T9 で `Start-Process .\target\release\gallery-rust.exe`
