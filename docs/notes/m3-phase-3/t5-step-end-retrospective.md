@@ -24,10 +24,19 @@ discharge する材料は次:
 - DD-M3-P3-004 の `item_cross_size` storage 半分 — Option (a)
   parent-cross passthrough を `None` でエンコードする。
 
-対象コミット (2 件):
+対象コミット (4 件):
 
 - `5d43f00 feat(wasamo-runtime): add WrapPanel widget catalog (M3-Phase 3 T5)`
 - `fd75ad3 docs(m3-phase-3): flip T5 checkboxes (wasamo-runtime widget catalog)`
+- `5784241 docs(m3-phase-3): record T5 step-end retrospective` (本ファイル初稿)
+- `bb5b2fd feat(wasamo-runtime): own WrapPanel absent-to-default mapping at T5 (M3-Phase 3 T5)`
+  — オーナーレビュー指摘 (progress doc T3 / T5 が「defaults are applied
+  at the runtime layer in T5, not at the IR layer」と明記しているのに
+  対し、初稿の constructor は `(Option<i32>, i32, i32)` を受けて
+  default 適用を T6 loader の `unwrap_or(0)` に委譲していた) に対する
+  gap fix。`apply_wrap_panel_defaults` pure-logic free function を
+  追加し、`wrap_panel` constructor signature を 3 つとも `Option<i32>`
+  に変更、default policy を catalog layer 内に閉じた。
 
 step-end の gate であり phase-end retrospective ではない。merge 先は
 phase ブランチ `feat/m3-phase-3` (ff)。本 step (T5) は単一 task =
@@ -47,11 +56,26 @@ phase ブランチ `feat/m3-phase-3` (ff)。本 step (T5) は単一 task =
   `line_spacing: 0` (DD-M3-P3-004 Option (a) + DD-M3-P3-003 touching
   items / lines)。
 - `WidgetNode::wrap_panel(compositor, item_cross_size, item_spacing,
-  line_spacing)` constructor: `width = SizeConstraint::Fill` (DD-M3-P3-005
-  outer main-axis = parent_main_bound)、`height = SizeConstraint::Shrink`
-  (cross-axis は T7 で line extent の sum に collapse する想定)、
-  background brush は付けない (VStack / HStack と同じ container 扱い)。
-  `pub(crate)` で IR loader 経由のみ呼び出される shape を pin。
+  line_spacing)` constructor: 3 属性は **すべて `Option<i32>`** で受け、
+  内部で `apply_wrap_panel_defaults` (新規 pure-logic free function;
+  下記参照) を呼んで absent→default mapping を行う (rev 2 で初稿
+  signature `(Option<i32>, i32, i32)` から修正)。`width =
+  SizeConstraint::Fill` (DD-M3-P3-005 outer main-axis =
+  parent_main_bound)、`height = SizeConstraint::Shrink` (cross-axis は
+  T7 で line extent の sum に collapse する想定)、background brush は
+  付けない (VStack / HStack と同じ container 扱い)。`pub(crate)` で
+  IR loader 経由のみ呼び出される shape を pin。
+- `apply_wrap_panel_defaults(Option<i32>, Option<i32>, Option<i32>) →
+  (Option<i32>, i32, i32)` を `widget.rs` の自由関数として追加
+  (rev 2 で新設)。**DD-M3-P3-003 / DD-M3-P3-004 の default policy を
+  catalog layer 内の単一権威 site に閉じる**ことで、progress doc
+  T3 / T5 の「defaults are applied at the runtime layer in T5, not at
+  the IR layer」を実装側で満たす。`item_cross_size` 不在 → `None`
+  (parent-cross passthrough)、`item_spacing` / `line_spacing` 不在 →
+  `0` (touching items / lines)。T6 IR loader は presence / absence
+  を `Option<i32>` のまま渡すだけになり、loader 側に default
+  knowledge を持ち込まない。pure-logic なので Compositor 不要で
+  unit test から直接 exercise できる。
 - `WidgetKind::WrapPanel` + `LayoutNode::wrap_panel(item_cross_size,
   item_spacing, line_spacing)` を `layout.rs` に追加。`LayoutNode`
   struct には `item_cross_size: Option<f32>` / `item_spacing: f32` /
@@ -76,31 +100,69 @@ phase ブランチ `feat/m3-phase-3` (ff)。本 step (T5) は単一 task =
   - `WidgetNode::wrap_panel` 関数 (caller は T6 で出現)。
   - `LayoutNode::item_cross_size` / `item_spacing` / `line_spacing`
     field (reader は T7 で出現)。
-- 新規 unit test 3 件 (`wasamo-runtime/src/widget.rs::tests`):
-  - `wrap_panel_variant_carries_three_attributes` — `Some(96)` /
-    `8` / `12` を carry できることを assert。
-  - `wrap_panel_variant_defaults_match_constructor_defaults` —
-    `None` / `0` / `0` の default shape が成立することを assert
-    (constructor 自体は Compositor 必須なので variant の data shape のみ
-    pure-logic で固定)。
-  - `wrap_panel_variant_accepts_zero_item_cross_size` —
-    DD-M3-P3-006 の zero-handling (`Some(0)` が `None` と distinct な
-    legal carrier) を pin。
-- **Clean rebuild gate (commit `fd75ad3` 時点):**
-  `cargo fmt --all -- --check` (post-commit state; zero exit) →
-  `cargo clean` (3863 files removed, 1.0 GiB) →
-  `cargo build --release --workspace` (44.65s, green) →
-  `cargo build --workspace` (debug; 38.92s, green) →
-  `cargo test --workspace` (failure 0 件; `wasamo-runtime` lib
-  **203 passed** [T4 の 200 から +3]、`wasamoc` lib 202 passed
-  [変化なし]、`wasamo-ir` 12 passed、他 crate 全 green)。
+- 新規 unit test 7 件 (`wasamo-runtime/src/widget.rs::tests`;
+  初稿 3 件 + rev 2 で追加した 4 件):
+  - **variant 形状 (初稿 3 件):**
+    - `wrap_panel_variant_carries_three_attributes` — `Some(96)` /
+      `8` / `12` を carry できることを assert。
+    - `wrap_panel_variant_defaults_match_constructor_defaults` —
+      `None` / `0` / `0` の data shape を assert。
+    - `wrap_panel_variant_accepts_zero_item_cross_size` —
+      DD-M3-P3-006 の zero-handling (`Some(0)` が `None` と distinct な
+      legal carrier) を pin。
+  - **absent→default mapping (rev 2 で追加 4 件):**
+    - `apply_wrap_panel_defaults_maps_all_absent_to_runtime_defaults` —
+      `(None, None, None) → (None, 0, 0)` (DD-M3-P3-003 /
+      DD-M3-P3-004 の core mapping)。
+    - `apply_wrap_panel_defaults_passes_through_present_values` —
+      `(Some(96), Some(8), Some(12)) → (Some(96), 8, 12)` (identity
+      modulo unwrap; Phase 3 はこの層では clamp しない、reject は
+      `wasamoc check` T1 + T6 `validate()` 側の責務)。
+    - `apply_wrap_panel_defaults_handles_each_attribute_independently` —
+      `(None, Some(5), None) → (None, 5, 0)` (属性間の独立性)。
+    - `apply_wrap_panel_defaults_preserves_some_zero_distinct_from_none` —
+      `(Some(0), Some(0), Some(0)) → (Some(0), 0, 0)` (DD-M3-P3-006
+      の zero-handling を default boundary 上で再確認; `Some(0)` は
+      `None` に collapse しない)。
+- **Clean rebuild gate (rev 2; gap-fix commit `bb5b2fd` 後に再実行):**
+  値は本 retrospective 末尾の "Verification Notes" 節に記録。初稿
+  rebuild (commit `fd75ad3` 時点) も green で、その時点での
+  `wasamo-runtime` lib は 203 passed (T4 の 200 から +3)、rev 2 で
+  207 passed に進む。
 
 T5 の blocker は残っていない。T6 (`wasamo-runtime` IR loader +
 `validate()` defense-in-depth) へ進める。
 
 ## Main Learning
 
-中心的な学びは **「Phase 2 T6 の `#[allow(dead_code)]` +
+最も load-bearing な学びは **「『defaults at the runtime layer in
+T5』という progress doc の文言は、catalog constructor が absent→default
+を applied する責務を持つ、ということ」** (rev 2 でオーナーレビュー
+指摘を受けて析出)。初稿実装は `WidgetNode::wrap_panel` を
+`(Option<i32>, i32, i32)` で受けて、`Option<i32> → i32` の unwrap を
+T6 IR loader の `unwrap_or(0)` に委譲する設計だった。これは技術的には
+動くが、progress doc T3 / T5 の「defaults are applied at the runtime
+layer in T5, not at the IR layer」を素直に読むと **未達**。
+
+- 「runtime layer」は wasamo-runtime crate のことであり、その内部で
+  catalog (T5) と loader (T6) のどちらが default policy を持つかは
+  独立な設計判断。progress doc は明示的に **T5** を指している。
+- catalog constructor が default を持つほうが natural — constructor
+  はその variant のすべての field invariant に責任を持つ entry point
+  で、「absent → default」もそこに含まれる。loader は単に DSL surface
+  の presence / absence を Option として transport する。
+- 副産物として、catalog 側に default policy を閉じることで
+  pure-logic test (`apply_wrap_panel_defaults`) が成立する。
+  loader-driven の defaults は Compositor が要る integration test
+  でしか pin できないが、free function に切り出された default mapping
+  は Compositor 不要で 4 個の small test に分解できる。
+- **memory `feedback_revise_dont_workaround` の体現**: progress doc を
+  ad-hoc に「実は T6 が apply するつもりでした」と reinterpret する
+  のではなく、実装を doc 文言に合わせて修正する道を選んだ。doc は
+  仮説で、実装と合わなければ doc を直すか実装を直すかのいずれかで
+  あり、両者を不整合に放置しない。
+
+次に load-bearing な学びは **「Phase 2 T6 の `#[allow(dead_code)]` +
 forward-pointer comment の hand-off pattern は Phase 3 T5 にもそのまま
 適用できる」** という再確認。Phase 2 T6 の Main Learning がそのまま
 T5 にも当てはまる:
@@ -150,9 +212,13 @@ T5 にも当てはまる:
 ## Checklist
 
 1. **本作業の主要な学び:** あり (記述項目)。
+   - **(rev 2 で析出)** progress doc の「defaults are applied at the
+     runtime layer in T5」は catalog constructor が absent→default
+     を適用する責務を持つ意味であり、loader (T6) の `unwrap_or(0)` に
+     委譲しない (Main Learning 第 1 項)。
    - Phase 2 T6 の `#[allow(dead_code)]` + forward-pointer comment
      pattern を Phase 3 T5 にも同形で適用 (variant + constructor +
-     3 fields、計 5 箇所)。
+     3 fields + apply_wrap_panel_defaults helper、計 6 箇所)。
    - LayoutNode に per-kind field を平坦に並べる pattern が複数 field
      にも scale すること、その際に bundle struct を挟まないほうが
      T7 arrange loop の readability が高いこと。
@@ -170,20 +236,24 @@ T5 にも当てはまる:
      `PropertyValue` / ABI 表面は変えていないので abi_spec も触らない。
      `architecture.md` への影響もなし。
 
-3. **ローカル clean rebuild:** **green**
+3. **ローカル clean rebuild:** **green** (rev 2; gap-fix commit
+   `bb5b2fd` 後に再実行した値)
    - `cargo fmt --all -- --check` (post-commit state; commit
-     `fd75ad3`): zero exit。
-   - `cargo clean`: 3863 files removed, 1.0 GiB total。
-   - `cargo build --release --workspace`: green (release, 44.65s)。
-   - `cargo build --workspace`: green (debug, 38.92s)。
+     `bb5b2fd`): zero exit。
+   - `cargo clean`: 2923 files removed, 941.9 MiB total。
+   - `cargo build --release --workspace`: green (release, 47.86s)。
+   - `cargo build --workspace`: green (debug, 46.92s)。
    - `cargo test --workspace`: failure 0 件。
-     - `wasamo-runtime` lib: **203 passed** (T4 の 200 から +3:
-       WrapPanel variant の 3 件)。
+     - `wasamo-runtime` lib: **207 passed** (T4 の 200 から +7:
+       WrapPanel variant 形状 3 件 + apply_wrap_panel_defaults 4 件)。
      - `wasamoc` lib: 202 passed (T4 と同じ)。
      - `wasamo-ir`: 12 passed (変化なし)。
      - `wasamo-runtime` integration `ir_loader_roundtrip`: 6 passed。
      - ABI / DLL / binding / counter-rust / gallery-rust crate 群も
        全 green。
+   - 初稿 rebuild (commit `fd75ad3` 時点) も同じく green で、
+     `wasamo-runtime` lib 203 passed (T4 の 200 から +3) を観測して
+     いた。
 
 4. **PO に相談すべき設計判断・トレードオフ:** **なし**
    - T5 範囲はすべて DD-M3-P3-001 / DD-M3-P3-003 / DD-M3-P3-004 /
@@ -230,10 +300,11 @@ T5 にも当てはまる:
      - `layout.rs` の `arrange` の `WidgetKind::WrapPanel` arm は
        parent-allocated cell を offset / size に書くだけで、children
        の arrange は呼ばない。T7 が置き換える。
-     - `#[allow(dead_code)]` の forward-pointer marker が 5 箇所
+     - `#[allow(dead_code)]` の forward-pointer marker が 6 箇所
        (`WidgetData::WrapPanel` variant / `WidgetNode::wrap_panel`
-       関数 / `LayoutNode` の 3 field)。T6 (IR loader) と T7 (layout)
-       が完了したら外す。
+       関数 / `apply_wrap_panel_defaults` 自由関数 / `LayoutNode` の
+       3 field; rev 2 で `apply_wrap_panel_defaults` が増えて 5 →
+       6)。T6 (IR loader) と T7 (layout) が完了したら外す。
    - `unimplemented!` / `todo!` stub は置いていない (build / test は
      panic せずに通る)。Phase 2 T6 retro と同じ判断基準: retrospective
      rule の文言 "仮実装・近似" に該当するため **あり** で記録する。
@@ -260,7 +331,8 @@ memory `feedback_step_end_gate_discipline.md` の規律
 - item 8 (m3-plan AC 変更): なし
 - item 9 (仮実装・近似・新規 dead_code 警告): **あり** —
   `measure_wrap_panel` placeholder / `arrange` WrapPanel arm no-op /
-  5 箇所の `#[allow(dead_code)]` boundary marker。Phase 2 T6 と
+  6 箇所の `#[allow(dead_code)]` boundary marker (rev 2 で
+  `apply_wrap_panel_defaults` が増えて 5 → 6)。Phase 2 T6 と
   同じく T7 (および T6) で置き換えられる boundary placeholder だが、
   retrospective rule の "仮実装・近似" に該当する。
 - item 10 (タスクリスト見直し): なし
@@ -269,30 +341,51 @@ step→phase ブランチへの ff merge はオーナー明示確認後に実行
 
 ## Verification Notes
 
-T5 で追加したテストと、走らせた command を記録する。
+T5 で追加したテストと、走らせた command を記録する (rev 2 状態)。
 
-新規テスト (widget, wasamo-runtime): 3 件
-(`wasamo-runtime/src/widget.rs::tests`)
+新規テスト (widget, wasamo-runtime): 7 件
+(`wasamo-runtime/src/widget.rs::tests`; 初稿 3 件 + rev 2 で
+追加した 4 件):
+
+variant 形状 (初稿 3 件):
 
 - `wrap_panel_variant_carries_three_attributes`
   (`Some(96)` / `8` / `12` の carrier 動作)
 - `wrap_panel_variant_defaults_match_constructor_defaults`
-  (`None` / `0` / `0` の default shape)
+  (`None` / `0` / `0` の data shape)
 - `wrap_panel_variant_accepts_zero_item_cross_size`
   (DD-M3-P3-006 の zero-handling: `Some(0)` ≠ `None`)
 
-実行コマンド (commit `fd75ad3` 時点):
+absent→default mapping (rev 2 で追加 4 件):
+
+- `apply_wrap_panel_defaults_maps_all_absent_to_runtime_defaults`
+  (`(None, None, None) → (None, 0, 0)`)
+- `apply_wrap_panel_defaults_passes_through_present_values`
+  (`(Some(96), Some(8), Some(12)) → (Some(96), 8, 12)`)
+- `apply_wrap_panel_defaults_handles_each_attribute_independently`
+  (`(None, Some(5), None) → (None, 5, 0)`)
+- `apply_wrap_panel_defaults_preserves_some_zero_distinct_from_none`
+  (`(Some(0), Some(0), Some(0)) → (Some(0), 0, 0)`)
+
+実行コマンド (rev 2; commit `bb5b2fd` 時点):
 
 ```text
 cargo fmt --all -- --check                 (post-commit state; zero exit)
-cargo clean                                (3863 files, 1.0 GiB)
-cargo build --release --workspace          (44.65s, green)
-cargo build --workspace                    (debug; 38.92s, green)
+cargo clean                                (2923 files, 941.9 MiB)
+cargo build --release --workspace          (47.86s, green)
+cargo build --workspace                    (debug; 46.92s, green)
 cargo test --workspace                     (failure 0)
 ```
 
-いずれも green。`wasamo-runtime` lib test は **203 passed**
-(T4 の 200 から +3)、他 crate の test count は T4 と同じ。
+いずれも green。`wasamo-runtime` lib test は **207 passed**
+(T4 の 200 から +7)、他 crate の test count は T4 と同じ。
+
+初稿時点 (commit `fd75ad3` 後) の rebuild も同じく green で、
+`wasamo-runtime` lib 203 passed (T4 の 200 から +3) を観測していた。
+初稿 retrospective には `+3` (variant 形状 test のみ) と記録して
+いたが、オーナーレビュー指摘を契機に gap fix commit と併せて
+`+7` (variant 形状 3 件 + absent→default mapping 4 件) に伸ばし、
+本 retrospective を rev 2 として整合させた。
 
 ## Follow-Up
 
@@ -300,15 +393,17 @@ T5 から後続 task への明示的な引き渡し:
 
 - **T6 (`wasamo-runtime` IR loader + `validate()` defense-in-depth):**
   `ir_loader::construct_widget` に `"WrapPanel"` arm を追加し、
-  `extract_int_prop(&node.props, "item-spacing").unwrap_or(0)` 等で
-  3 属性を抽出して `WidgetNode::wrap_panel(compositor, ..)` を呼ぶ。
-  `item_cross_size` は present / absent を `Option<i32>` で区別する
-  必要があるため、既存 `extract_int_prop` (default 込み) ではなく
-  presence を保つ抽出 helper が必要になる可能性あり (T4
-  emit retrospective でも同じ非対称性に言及)。`validate()` の側で
-  `< 0` を `WASAMO_ERR_IR_MALFORMED` で reject する arm を追加。
-  T6 完了時点で `WidgetData::WrapPanel` variant と `wrap_panel`
-  constructor の `#[allow(dead_code)]` が自然に外れる。
+  3 属性の **presence / absence を `Option<i32>` のまま** 取得して
+  `WidgetNode::wrap_panel(compositor, item_cross_size, item_spacing,
+  line_spacing)` に渡す (default 適用は T5 で catalog 内に閉じ込め
+  済み、loader 側に `unwrap_or(0)` などの default knowledge を持ち
+  込まない)。既存 `extract_int_prop` (default 込み) ではなく
+  presence を保つ抽出 helper を新設する (T4 emit retrospective でも
+  同じ非対称性に言及)。`validate()` の側で `< 0` を
+  `WASAMO_ERR_IR_MALFORMED` で reject する arm を追加。T6 完了時点で
+  `WidgetData::WrapPanel` variant、`wrap_panel` constructor、
+  `apply_wrap_panel_defaults` helper の `#[allow(dead_code)]` が
+  自然に外れる。
 - **T7 (Layout engine: line-breaker + arrange):** `measure_wrap_panel`
   placeholder (`Ok((0.0, 0.0))`) を DD-M3-P3-005 の bounded /
   unbounded main-axis line-breaker に置き換える。`arrange` の
