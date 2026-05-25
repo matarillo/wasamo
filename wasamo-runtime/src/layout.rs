@@ -275,11 +275,10 @@ impl LayoutNode {
     // the applied offset in `applied_offset_y` for the Visual layer
     // (T4) to read.
     //
-    // `dead_code` is silenced here because the constructor is wired by
-    // T3 (`ir_loader::build_node` ScrollView materialization). Tests in
-    // this module exercise it directly; the IR loader path lands in
-    // T3 and removes the suppression.
-    #[allow(dead_code)]
+    // T3 wires the IR-loader / build_layout_tree path that calls this
+    // constructor (`widget::WidgetData::ScrollView` →
+    // `LayoutNode::scroll_view`), so the T2-era `#[allow(dead_code)]`
+    // forward-pointer is no longer needed.
     pub fn scroll_view(offset_y: i32) -> Self {
         Self {
             kind: WidgetKind::ScrollView,

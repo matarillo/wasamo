@@ -110,6 +110,26 @@ enum WidgetData {
         item_spacing: i32,
         line_spacing: i32,
     },
+    // M3-Phase 4 DD-M3-P4-001 per-kind tag for the ScrollView layout
+    // primitive. `offset_y` is stored as `i32` per DD-M3-P4-003 (`i32`
+    // pixels, bindable read-only); the field default of `0` (DD-M3-P4-003
+    // absent-attribute default) is applied at the widget-catalog
+    // constructor layer (`WidgetNode::scroll_view`), not at the IR
+    // loader. The single content child lives on `WidgetNode.children`
+    // per the existing per-widget convention (mirrors Phase 2 Box); the
+    // exactly-1-child invariant is enforced by `wasamoc check` (T1) and
+    // `ir_loader::validate()` (T3), not by this data shape.
+    //
+    // T4 layout consumes `offset_y` via `build_layout_tree`'s
+    // `LayoutNode::scroll_view(offset_y)` boundary; the clamp arithmetic
+    // lives in `layout::arrange_scroll_view` (T2). No `PropertyValue`
+    // variant carries `offset_y` — the read-only binding path stringifies
+    // through `widget_write_property` and the narrow string-to-`i32`
+    // parse lives on the ScrollView arm of `set_property` (added in T4
+    // when binding evidence is exercised end-to-end).
+    ScrollView {
+        offset_y: i32,
+    },
 }
 
 // ── Property dispatch (M1 experimental property IDs from wasamo.h §5) ─────────
@@ -438,6 +458,36 @@ impl WidgetNode {
             },
             width: SizeConstraint::Fill,
             height: SizeConstraint::Shrink,
+            visual,
+            children: Vec::new(),
+            inline_handlers: Vec::new(),
+            attached: false,
+            bindings: Vec::new(),
+        }))
+    }
+
+    // M3-Phase 4 T3: ScrollView constructor. `offset_y` arrives as
+    // `Option<i32>` so the IR loader (`ir_loader::construct_widget`
+    // "ScrollView" arm) can pass through DSL presence / absence
+    // verbatim — the runtime catalog owns the absent-to-default policy
+    // per DD-M3-P4-003 (default `offset-y: 0` at the widget-catalog
+    // layer, not the IR loader). The constructor does not paint a
+    // background brush — ScrollView is a layout container that owns a
+    // clip surface (the InsetClip install lands in T4 with the
+    // intermediate content Visual). The single content child is
+    // appended via the existing tree-mutation API; the child-count
+    // invariant is enforced upstream by `wasamoc check` (T1) and
+    // `ir_loader::validate()` (T3).
+    pub(crate) fn scroll_view(
+        compositor: &Compositor,
+        offset_y: Option<i32>,
+    ) -> windows::core::Result<Box<Self>> {
+        let offset_y = offset_y.unwrap_or(0);
+        let visual = compositor.CreateSpriteVisual()?;
+        Ok(Box::new(Self {
+            data: WidgetData::ScrollView { offset_y },
+            width: SizeConstraint::Fill,
+            height: SizeConstraint::Fill,
             visual,
             children: Vec::new(),
             inline_handlers: Vec::new(),
@@ -1186,6 +1236,22 @@ impl WidgetNode {
                     *item_spacing as f32,
                     *line_spacing as f32,
                 );
+                node.width = self.width.clone();
+                node.height = self.height.clone();
+                node.children = self
+                    .children
+                    .iter()
+                    .map(|c| c.build_layout_tree())
+                    .collect();
+                node
+            }
+            // M3-Phase 4 T3: thread the ScrollView `offset_y` into the
+            // pure-logic layout engine. The `i32` DSL surface storage
+            // (DD-M3-P4-003) is handed to `LayoutNode::scroll_view` here
+            // unchanged; `arrange_scroll_view` (T2) promotes it to `f32`
+            // for clamp arithmetic per the rounding contract.
+            WidgetData::ScrollView { offset_y } => {
+                let mut node = LayoutNode::scroll_view(*offset_y);
                 node.width = self.width.clone();
                 node.height = self.height.clone();
                 node.children = self

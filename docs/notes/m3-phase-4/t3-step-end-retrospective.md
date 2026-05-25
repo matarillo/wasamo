@@ -1,0 +1,320 @@
+---
+title: M3-Phase 4 / T3 step-end retrospective
+status: recorded
+created: 2026-05-25
+scope: step-end
+task: T3 — Runtime IR loader / `validate()` invariant evidence
+---
+
+# M3-Phase 4 / T3 step-end retrospective
+
+## Scope
+
+`docs/plans/progress/m3-phase-4-progress.md` の **T3**
+("IR loader / `validate()` invariant evidence") の step-end
+retrospective。T3 が discharge する ADR 検証は Phase 4 verification
+closure **evidence item 3** (host-independent な pure-logic
+`validate()` 半分)、すなわち DD-M3-P4-001 の exactly-1-child
+構造契約と DD-M3-P4-006 の compound shape のうち
+**structural child-count gate** 側。value-range 半分は T2 の
+arrange-time clamp で既に discharged。
+
+対象実装コミット (`feat/m3-phase-4-t3` 上、本 retrospective ファイル
+自体を除く implementation-bearing 2 件。`docs/plans/progress/
+m3-phase-4-progress.md` の checkbox flip は独立 commit を切らず、
+各 implementation commit に fold している):
+
+- `7285ca0 feat(wasamo-runtime): ScrollView runtime widget kind (M3-Phase 4 T3)`
+- `7d1687b feat(wasamo-runtime): ScrollView validate() child-count gate (M3-Phase 4 T3)`
+
+merge 先は phase ブランチ `feat/m3-phase-4` (no-ff、`feedback_workflow`
+§1 / retrospectives.md §進行手順)。phase → main は T6 の phase-end
+gate に持ち越す。
+
+## Current Judgment
+
+2026-05-25 時点で T3 step-end 基準は **達成済み (owner 明示承認待ち)**。
+fast-track は廃止 (`feedback_workflow` §2(b) / 2026-05-25 `49b49fb`)
+のため、判定にかかわらず owner 明示承認待ちで停止する。
+
+- `WidgetData::ScrollView { offset_y: i32 }` を per-kind variant として
+  追加。Phase 2 (`Box`) / Phase 3 (`WrapPanel`) と同じ surface-
+  registration pattern を踏襲し、`offset_y` は DSL surface storage
+  type `i32` で保持 (DD-M3-P4-003)。
+- `WidgetNode::scroll_view(compositor, offset_y: Option<i32>)`
+  constructor を追加。DD-M3-P4-003 の "default at widget catalog,
+  not IR loader" 規定に従い、`offset_y.unwrap_or(0)` で
+  absent-to-default 適用を constructor 内で完結。
+- `widget::build_layout_tree` に ScrollView arm を 1 つ追加し、
+  `LayoutNode::scroll_view(*offset_y)` を経由して T2 の
+  pure-logic layout engine に `i32 offset_y` を委譲。これにより
+  `LayoutNode::scroll_view` の T2-era `#[allow(dead_code)]` を
+  除去 (T2 retrospective Item 9 / Follow-Up の予告どおり)。
+- `ir_loader::construct_widget` に "ScrollView" arm を追加し、
+  `extract_int_prop(&node.props, "offset-y")` で literal を抽出。
+  Phase 3 WrapPanel arm と同じ `Option<i32>` パススルー
+  pattern で catalog 側に default 判断を委ねる。
+- `validate_phase4_node_invariants` を新規追加し、`validate` の末尾
+  から phase2 / phase3 と並列で呼び出す。ScrollView ノードに対して
+  `node.children.len() != 1` なら `IrLoadError::Validate` を返し、
+  `WASAMO_ERR_IR_MALFORMED` ABI クラスに乗せる
+  (`is_malformed` の既存 `Validate` arm が網羅)。value-range 側
+  (negative / 大きい `offset-y`) は **明示的に gate を置かず**、
+  DD-M3-P4-006 の compound shape (structural validate + runtime
+  clamp) を維持。
+- 8 件の T3 unit test を `ir_loader.rs` の test module 末尾に追加。
+  Verification Notes に内訳を記載。
+- **Clean rebuild gate:**
+  `cargo clean` (3514 files, 1.1 GiB) → `cargo build --release
+  --workspace` (29.13s; 1 回 windows crate compile で
+  `STATUS_STACK_BUFFER_OVERRUN` の sporadic rustc crash を観測、
+  即時再実行で green。Phase 3 T9 / Phase 4 T2 と同種の
+  windows crate 関連 local build flakiness。Phase 4 T3 の Rust 変更
+  は `wasamo-runtime/src/{widget,layout,ir_loader}.rs` のみで
+  windows crate に触れない) → `cargo build --workspace` (debug;
+  28.32s、green) → `cargo test --workspace` (failure 0;
+  `wasamo-runtime` lib test は T3 で +8 = 256 passed、他 crate 全
+  green) → `cargo fmt --all -- --check` (post-commit state;
+  zero exit)。
+
+T3 の blocker は残っていない。T4 (Windows integration + R2 closure)
+へ進める。
+
+## Main Learning
+
+中心的な学びは **「ScrollView の defense-in-depth は Phase 2 Box
+(0 または 1 child を admit) / Phase 3 WrapPanel (0+ child の
+value-range gate のみ) のどちらでもない第三の shape
+("structural exactly-1 + value-range pass-through") であり、
+runtime gate の分割線は DD-M3-P4-006 の compound shape が
+事前に正確に規定していた」** という確認。
+
+- Phase 2 Box は "0 or 1 child" の上限 gate (`children.len() > 1`)。
+  Box は scrim 用途で 0 child も意味を持つため、下限 0 を admit
+  する設計だった (DD-M3-P2-001)。
+- Phase 3 WrapPanel は child-count 制約なし。代わりに 3 つの
+  `i32` attribute (item-cross-size / item-spacing / line-spacing)
+  に対する **value-range negative-reject** が validate-time
+  gate (DD-M3-P3-006)。
+- Phase 4 ScrollView は **両方の側面を分離**:
+  - **structural side** = exactly 1 child の both-sides gate
+    (`children.len() != 1`)。Box の上限 gate と Phase 3 の
+    "下限なし" を組み合わせた第三の cardinality。
+  - **value-range side** = `offset-y` の negative / 大きすぎる
+    値を **一切 reject しない**。これは Phase 3 WrapPanel との
+    意図的な対比で、DD-M3-P4-006 が明示的に Phase 3 pattern を
+    棄却した (binding が一時的に範囲外を通過するのを許容するため
+    runtime clamp に gate を移譲)。
+- 結果として、validate-time の test 設計は
+  "negative / very large `offset-y` は **parse_ok される**"
+  という positive assertion になり、Phase 3 の
+  "negative attribute は parse_err" と逆の極性になる
+  (`scroll_view_accepts_negative_offset_y_literal` /
+  `scroll_view_accepts_very_large_offset_y_literal`)。Phase 3
+  T6 の test pattern を機械的にコピーすると pattern が反転して
+  しまうため、ADR DD-M3-P4-006 を読み返した上で
+  positive-assertion の test を新規に書く必要があった。
+
+副次的な学び:
+
+- `validate_phase4_node_invariants` の signature は phase2 / phase3
+  と揃えた (`fn(&IrNode) -> Result<(), IrLoadError>`、再帰で children
+  を walk)。`validate` 末尾から `?` で chain することで、
+  reference-resolution → phase2 → phase3 → phase4 の順に
+  diagnostic を返す決定的な実行順が維持される。**入れ替えても
+  振る舞いは変わらない** (互いに独立) が、phase 順に並べたことで
+  読み手は "T3 が何を追加したか" を一行で把握できる。
+- `offset-y` binding (`offset-y: scroll_y` / bare state ident
+  RHS、または S-expr `(prop-read scroll_y)`) は **T3 では
+  resolve_prop_key を更新しない**。既存の reference-resolution
+  pass (`validate_node_references`) が bind/handler expr 内の
+  名前を declared state に照合するだけで通り、binding の
+  writer wiring (per-widget set_property arm + resolve_prop_key
+  entry) は T4 の責務。これは ADR DD-M3-P4-003 の "narrow
+  string-to-`i32` parse step happens at ScrollView's per-widget
+  `set_property` arm" 規定に基づく境界で、T3 の検証 evidence
+  item 3 (validate 半分) と T4 の evidence item 4 (Windows
+  integration + binding 半分) の自然な分割線。
+- T3 テストの中で `scroll_view_accepts_offset_y_state_binding` を
+  追加し、binding が **validate を通過する** ことを既存
+  reference-resolution pass で pin した。T4 で writer 経路を
+  追加した際に "binding は validate 段階で reject されない"
+  という前提が崩れていないかの regression guard になる。
+
+## Checklist
+
+1. **本作業の主要な学び:** あり。
+   - DD-M3-P4-006 の compound shape は Box (上限のみ) / WrapPanel
+     (value-range のみ) のいずれとも異なる第三の structural
+     pattern を要求する (上記 Main Learning 中心の学び)。
+   - `validate_phase4_node_invariants` の挿入位置は phase 順に
+     並べると後段ほど追加が見やすい。
+   - `offset-y` binding の writer wiring は T4 (DD-M3-P4-003 の
+     per-widget set_property arm 規定) で、T3 では既存
+     reference-resolution pass で binding が validate を通過する
+     ことだけを確認する。
+
+2. **仕様文書 (`abi_spec.md` / `architecture.md` / `dsl_spec.md`) の変更:** **なし**
+   - T3 の対象は `wasamo-runtime/src/{widget,layout,ir_loader}.rs` のみ。
+     dsl_spec §4.11 / architecture.md / abi_spec.md は Moment 1
+     で必要な記述が完了しており、T3 実装と factual 矛盾は無し。
+     Moment 2 spec sync は T6 の責任範囲。
+   - DD-M3-P4-006 の compound-shape 規定は ADR で既に明示済みで、
+     T3 はそれを machine-readable に着地させただけ。spec への
+     追記不要。
+
+3. **ローカル clean rebuild:** **green**
+   - `cargo clean`: 3514 files, 1.1 GiB removed。
+   - `cargo build --release --workspace`: 初回 windows crate
+     compile で `STATUS_STACK_BUFFER_OVERRUN` の sporadic rustc
+     crash を 1 回観測。Phase 4 T3 の Rust 変更は
+     `wasamo-runtime/src/{widget,layout,ir_loader}.rs` のみで
+     windows crate に触れていないため、windows crate を Windows
+     ホスト上で大量の feature flag つきで cargo にコンパイルさせる
+     際の local build failure と判断 (Phase 3 T9 / Phase 4 T2 で
+     同種事象を観測済み)。即時再実行で 29.13s green。
+   - `cargo build --workspace` (debug): 28.32s green。
+   - `cargo test --workspace`: failure 0 件、`wasamo-runtime` lib
+     test は T3 で +8 = **256 passed** (Verification Notes 参照)、
+     他 crate 全 green。
+   - `cargo fmt --all -- --check` (post-commit state): zero exit。
+   - GitHub Actions 上の clean rebuild は phase-end gate (T6) で
+     確認。
+
+4. **PO に相談すべき設計判断・トレードオフ:** **なし**
+   - すべて ADR DD-M3-P4-001 / DD-M3-P4-003 / DD-M3-P4-006 と
+     dsl_spec §4.11 の範囲内で完結。
+   - structural gate の分割線 (validate vs arrange) も DD-M3-P4-006
+     の compound shape 規定の自然な実装で、owner 相談不要と判定。
+
+### step-end 固有
+
+5. **plan/ADR に記載の step 目的から外れた「ついで」のリファクタ・
+   構造変更:** **なし**
+   - `WidgetData` に variant を 1 つ追加し、`WidgetNode` に
+     constructor を 1 つ追加し、`build_layout_tree` に match arm を
+     1 つ追加し、`ir_loader::construct_widget` に match arm を 1 つ
+     追加し、`validate` に新 helper を 1 つ追加した最小変更のみ。
+   - `LayoutNode::scroll_view` の `#[allow(dead_code)]` 除去は T2
+     retrospective Item 9 / Follow-Up で予告した T3 内
+     副次成果で、新規 refactor ではない。
+
+6. **現在の phase ADR への追加 DD 必要性:** **なし**
+   - validate-time の structural gate は DD-M3-P4-001 (exactly 1
+     child) / DD-M3-P4-006 (compound shape の structural 半分)
+     の組み合わせから機械的に導出。追加 DD 不要。
+   - `validate_phase4_node_invariants` の挿入位置 (phase2 / phase3
+     と並列、`validate` 末尾) は実装詳細で、ADR の決定面
+     (DD-M3-P4-006) と独立。
+
+7. **既存 ADR の Proposed 項目の新規追加、または Proposed → Accepted
+   への昇格:** **なし**
+   - 当該 ADR (`docs/decisions/m3-phase-4-scroll-view.md`) は
+     全 DD Accepted 済み。T3 では昇格対象なし。
+
+8. **`m3-plan.md` の AC 追加・変更、または Phase 構成の追加・統合・
+   分割:** **なし**
+   - A5 / A11 の文言変更なし。Phase 構成変更なし。
+
+9. **後続 step に持ち越す仮実装・近似・新規 `dead_code` 警告:** **なし**
+   - T2-era `LayoutNode::scroll_view` の `#[allow(dead_code)]` は
+     T3 で除去済み (T2 retrospective Item 9 / Follow-Up に従う)。
+   - `WidgetData::ScrollView` variant の `offset_y` フィールドは
+     `build_layout_tree` の match arm から `*offset_y` として
+     読まれており、`construct_widget` から `WidgetNode::scroll_view`
+     経由で書かれている。reader / writer がともに揃っており、
+     dead-code 警告は出ていない。
+   - T4 で必要になる "ScrollView の `offset-y` binding writer 経路"
+     (`resolve_prop_key` の ScrollView entry + `set_property` の
+     ScrollView arm) は T3 では追加していない。これは ADR
+     DD-M3-P4-003 が定める T3 / T4 の自然な境界線で、`dead_code`
+     stub にはなっていない (現時点では bind は validate を通過
+     するが writer がいないため runtime で no-op になる; T4 で
+     writer が landed すると正常動作)。
+
+10. **新たに発見・導入した cross-step / cross-phase の設計制約:** **なし**
+    - T3 の実装は ADR DD-M3-P4-001 / DD-M3-P4-003 / DD-M3-P4-006 と
+      dsl_spec §4.11 / architecture.md §6.5 の規定の範囲内で完結。
+    - T2 retrospective Item 10 で carry-forward した `applied_offset_y`
+      reader contract は T3 では touch していない (T4 が consumer)。
+      T3 は writer 側として `LayoutNode.offset_y` を書くだけで、
+      cache field とは独立。
+    - validate 内 helper の呼び出し順 (phase2 → phase3 → phase4)
+      は決定的だが、相互独立なため将来の挿入で振る舞いが変わる
+      ことはなく、cross-step 制約には該当しない (local-only な
+      実装規約に留まる)。
+
+11. **タスクリストの後続 step 見直し:** **不要**
+    - progress file の T3 行 4 項目をすべて `[x]` に flip 済み。
+    - T4-T6 の task 構成・順序・依存関係に T3 実装から見て
+      調整すべき点は出ていない。
+    - T4 (Windows integration + R2 closure) は本 retro Follow-Up
+      および T2 retrospective Item 10 が前提とする shape で
+      着手できる。
+
+## Verification Notes
+
+T3 で追加した test と、走らせた command を記録する。
+
+新規テスト (`wasamo-runtime::ir_loader::tests`, 8 件):
+
+- 正常系 (single child 受け入れ) 1:
+  `scroll_view_with_single_child_is_valid`
+- 構造的 reject 4:
+  `scroll_view_with_zero_children_rejected`,
+  `scroll_view_with_two_children_rejected`,
+  `scroll_view_with_three_children_rejected`,
+  `scroll_view_nested_zero_child_is_rejected`
+- value-range pass-through 2:
+  `scroll_view_accepts_negative_offset_y_literal`,
+  `scroll_view_accepts_very_large_offset_y_literal`
+- binding pass-through 1:
+  `scroll_view_accepts_offset_y_state_binding`
+
+実行コマンド:
+
+```text
+cargo clean                                   (3514 files, 1.1 GiB)
+cargo build --release --workspace             (29.13s, green; 初回 local build failure は本文参照)
+cargo build --workspace                       (debug; 28.32s, green)
+cargo test -p wasamo-runtime --lib ir_loader::tests::scroll_view  (8 passed)
+cargo test --workspace                        (failure 0; wasamo-runtime lib 256 passed = T3 で +8)
+cargo fmt --all -- --check                    (post-commit state; zero exit)
+```
+
+いずれも green。`wasamo-runtime` lib test は **256 passed**
+(T3 で +8)。
+
+## Follow-Up
+
+T3 から後続 task への明示的な引き渡し:
+
+- **T4 (Windows integration + R2 closure):**
+  - DD-M3-P4-003 の "narrow string-to-`i32` parse step at
+    ScrollView's per-widget `set_property` arm" を実装。
+    `resolve_prop_key` に `("ScrollView", "offset-y") =>
+    (PROP_SCROLL_VIEW_OFFSET_Y, IrType::I32)` 等 (新 PROP id 必要)
+    を追加し、`widget_write_property` 経由で stringified
+    `i32` が ScrollView arm の `set_property` に届く経路を完成
+    させる。`WidgetData::ScrollView::offset_y` の writer は
+    `LayoutNode` 再構築 (`run_layout`) 経路 or 直接 cache
+    field の更新を選ぶ判断が T4 で必要。
+  - T2 retrospective Item 10 の `applied_offset_y` reader
+    contract を `sync_visuals` の ScrollView 特化 path で実装
+    (ScrollView-owned 中間 Visual の `Visual.Offset = (0,
+    -applied_y, 0)`)。
+  - R2 closure (Phase 3 carry-over): 三層 Visual nesting の
+    root-relative offset 算術 assertion を Windows runtime
+    integration fixture に追加。
+- **T5 (gallery visible smoke):** T3 / T4 が landed した状態で
+  `examples/gallery/gallery.ui` に
+  `ScrollView { WrapPanel { Box × 30–40 } }` slice を additively
+  追加。T3 では gallery `.ui` には触れていない。
+- **T6 (phase-end / Moment 2 re-sync):** dsl_spec §4.11 /
+  architecture.md / abi_spec.md の現行 draft と T3 実装は
+  整合済み。Moment 2 で sync 必要な divergence は今のところ無し
+  (再判断は T6 で行う)。
+
+T4 の作業に直接効くのは Follow-Up 1 件目 (writer 経路) と T2
+retrospective Item 10 (reader 経路)。両者は T4 step-end までに
+揃って ADR verification closure item 4 を discharge する。
