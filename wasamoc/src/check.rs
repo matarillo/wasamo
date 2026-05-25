@@ -381,6 +381,77 @@ fn check_wrappanel_aspect_only_box_warning(
     ));
 }
 
+/// Validate a `ScrollView.offset-y` binding RHS (DD-M3-P4-003). The
+/// attribute is bindable read-only in Phase 4: the RHS is either an
+/// `IntLit` (any sign — negatives and out-of-range values are clamped
+/// at layout time per DD-M3-P4-005, not rejected here) or a bare state
+/// identifier whose namespace type is `i32` (per dsl_spec §4.3 bare-
+/// ident binding form). All other expression shapes — non-integer
+/// literals, undeclared idents, `bool` / `string` / `float` state
+/// idents — are rejected with a diagnostic that names the rejected
+/// surface.
+fn check_scrollview_offset_y_bind(
+    value: &Expr,
+    span: &Span,
+    filename: &str,
+    ns: &Namespace,
+    diags: &mut Vec<Diagnostic>,
+) {
+    match value {
+        Expr::IntLit { .. } => {}
+        Expr::Ident { name, span: ident_span } => match ns.get(name) {
+            Some(TypeName::Int) => {}
+            Some(other) => {
+                diags.push(error(
+                    filename,
+                    ident_span,
+                    format!(
+                        "`ScrollView.offset-y` binds to an `i32` state; state `{}` is declared `{}` (dsl_spec §4.11)",
+                        name,
+                        type_name_display(other),
+                    ),
+                ));
+            }
+            None => {
+                diags.push(error(
+                    filename,
+                    ident_span,
+                    format!(
+                        "`ScrollView.offset-y` binds to a declared `i32` state; `{}` is not declared (declare it with `state {}: i32 = 0`)",
+                        name, name,
+                    ),
+                ));
+            }
+        },
+        _ => {
+            diags.push(error(
+                filename,
+                span,
+                "`ScrollView.offset-y` accepts an `i32` literal or a bare `i32` state identifier (dsl_spec §4.11); other expression forms are rejected",
+            ));
+        }
+    }
+}
+
+/// Reject the writable (in-out) surface on `ScrollView.offset-y`. Phase
+/// 4 binding is read-only per DD-M3-P4-003 Option B; the in-out form
+/// (`in-out property<i32> offset-y: 0` inside a ScrollView body) would
+/// declare a writable component-shaped surface, which would require the
+/// general typed-`i32` writer pair deferred to M4 (per
+/// architecture.md §6.8 *Per-type seam* paragraph). Naming the
+/// rejection explicitly here keeps the M4 hand-off legible.
+fn check_scrollview_writable_offset_y(
+    span: &Span,
+    filename: &str,
+    diags: &mut Vec<Diagnostic>,
+) {
+    diags.push(error(
+        filename,
+        span,
+        "`ScrollView.offset-y` is bindable read-only in M3-Phase 4 (dsl_spec §4.11); the writable `in-out property<i32> offset-y` surface is deferred to M4 or later",
+    ));
+}
+
 /// Reject a ScrollView widget with anything other than exactly one
 /// child widget (DD-M3-P4-001 / DD-M3-P4-006). The runtime IR loader
 /// independently rejects the same shape at IR-load time (defense in
@@ -452,7 +523,16 @@ fn check_members_inner(
         match member {
             Member::StateMember { .. } => {}
 
-            Member::PropertyDecl { .. } => {}
+            Member::PropertyDecl { name, span, .. } => {
+                // `in-out property<i32> offset-y: ...` inside a ScrollView
+                // body is the writable surface DD-M3-P4-003 Option C
+                // deferred to M4. Reject so the read-only contract from
+                // Option B is enforced at compile time, not silently
+                // dropped by the no-op PropertyDecl arm.
+                if enclosing_widget == Some("ScrollView") && name == "offset-y" {
+                    check_scrollview_writable_offset_y(span, filename, diags);
+                }
+            }
 
             Member::PropertyBind { name, value, span } => {
                 // Box.aspect and Box.fill are constant-only per DD-M3-P2-004:
@@ -461,7 +541,18 @@ fn check_members_inner(
                 // and skip the generic `check_expr_type` path, which would
                 // otherwise re-reject the literal positionally (the Ratio /
                 // Color arm rejects every appearance outside this site).
-                if enclosing_widget == Some("Box")
+                if enclosing_widget == Some("ScrollView") && name == "offset-y" {
+                    // ScrollView's only Phase 4 attribute (DD-M3-P4-003):
+                    // i32-literal-or-bare-i32-state-ident, validated by the
+                    // ScrollView-specific helper to produce a diagnostic
+                    // that names the attribute. Skip the generic
+                    // `check_expr_type` / `check_property_bind_target`
+                    // path; the latter would pass through anyway because
+                    // ScrollView has no widget_prop_type catalog entry,
+                    // but the type-mismatch wording would not name the
+                    // ScrollView-specific Phase 4 surface contract.
+                    check_scrollview_offset_y_bind(value, span, filename, ns, diags);
+                } else if enclosing_widget == Some("Box")
                     && (name.as_str() == "aspect" || name.as_str() == "fill")
                 {
                     check_box_const_only_bind(name, value, span, filename, diags);
@@ -1708,6 +1799,212 @@ mod tests {
             !child_count_err,
             "child-count gate misfired: {:?}",
             result.diagnostics
+        );
+    }
+
+    // --- T1: ScrollView offset-y literal accept (DD-M3-P4-003) ---
+
+    #[test]
+    fn scrollview_offset_y_positive_int_literal_accepted() {
+        let result = check_src(
+            r#"component C inherits W { ScrollView { offset-y: 42 VStack {} } }"#,
+        );
+        assert!(!result.has_errors(), "{:?}", result.diagnostics);
+    }
+
+    #[test]
+    fn scrollview_offset_y_zero_literal_accepted() {
+        let result = check_src(
+            r#"component C inherits W { ScrollView { offset-y: 0 VStack {} } }"#,
+        );
+        assert!(!result.has_errors(), "{:?}", result.diagnostics);
+    }
+
+    #[test]
+    fn scrollview_offset_y_negative_literal_accepted() {
+        // DD-M3-P4-005 / DD-M3-P4-006: negative offsets are layout-time-
+        // clamped to 0, not compile-time-rejected (explicitly distinct
+        // from Phase 3 WrapPanel negative-literal rejection).
+        let result = check_src(
+            r#"component C inherits W { ScrollView { offset-y: -5 VStack {} } }"#,
+        );
+        assert!(!result.has_errors(), "{:?}", result.diagnostics);
+    }
+
+    // --- T1: ScrollView offset-y state-ident binding accept ---
+
+    #[test]
+    fn scrollview_offset_y_i32_state_ident_accepted() {
+        let result = check_src(
+            r#"component C inherits W {
+                state scroll_y: i32 = 0
+                ScrollView { offset-y: scroll_y VStack {} }
+            }"#,
+        );
+        assert!(!result.has_errors(), "{:?}", result.diagnostics);
+    }
+
+    // --- T1: ScrollView offset-y non-integer literal reject ---
+
+    #[test]
+    fn scrollview_offset_y_string_literal_rejected() {
+        let errs = errors(
+            r#"component C inherits W { ScrollView { offset-y: "hello" VStack {} } }"#,
+        );
+        assert_eq!(errs.len(), 1, "{:?}", errs);
+        assert!(
+            errs[0].contains("`ScrollView.offset-y`")
+                && errs[0].contains("`i32` literal"),
+            "{:?}",
+            errs
+        );
+    }
+
+    #[test]
+    fn scrollview_offset_y_float_literal_rejected() {
+        let errs = errors(
+            r#"component C inherits W { ScrollView { offset-y: 1.5 VStack {} } }"#,
+        );
+        // FloatLit is rejected by `check_expr_type` globally; we don't
+        // see the ScrollView-named diagnostic for floats because the
+        // ScrollView path matches `_ =>` and the float arm is taken
+        // before. Either error wording is acceptable as long as the
+        // float is rejected.
+        assert!(
+            errs.iter().any(|e| e.contains("`ScrollView.offset-y`")),
+            "{:?}",
+            errs
+        );
+    }
+
+    #[test]
+    fn scrollview_offset_y_color_literal_rejected() {
+        let errs = errors(
+            r#"component C inherits W { ScrollView { offset-y: #336699 VStack {} } }"#,
+        );
+        assert_eq!(errs.len(), 1, "{:?}", errs);
+        assert!(
+            errs[0].contains("`ScrollView.offset-y`"),
+            "{:?}",
+            errs
+        );
+    }
+
+    #[test]
+    fn scrollview_offset_y_ratio_literal_rejected() {
+        let errs = errors(
+            r#"component C inherits W { ScrollView { offset-y: 16:9 VStack {} } }"#,
+        );
+        assert_eq!(errs.len(), 1, "{:?}", errs);
+        assert!(
+            errs[0].contains("`ScrollView.offset-y`"),
+            "{:?}",
+            errs
+        );
+    }
+
+    #[test]
+    fn scrollview_offset_y_bool_literal_rejected() {
+        let errs = errors(
+            r#"component C inherits W { ScrollView { offset-y: true VStack {} } }"#,
+        );
+        assert_eq!(errs.len(), 1, "{:?}", errs);
+        assert!(
+            errs[0].contains("`ScrollView.offset-y`"),
+            "{:?}",
+            errs
+        );
+    }
+
+    #[test]
+    fn scrollview_offset_y_measurement_rejected() {
+        // `12px` is `Token::Measurement` — not an `IntLit`. Reject per
+        // dsl_spec §4.11 "i32 literal" surface contract.
+        let errs = errors(
+            r#"component C inherits W { ScrollView { offset-y: 12px VStack {} } }"#,
+        );
+        assert_eq!(errs.len(), 1, "{:?}", errs);
+        assert!(
+            errs[0].contains("`ScrollView.offset-y`"),
+            "{:?}",
+            errs
+        );
+    }
+
+    // --- T1: ScrollView offset-y bind-to-wrong-type-state reject ---
+
+    #[test]
+    fn scrollview_offset_y_undeclared_state_rejected() {
+        let errs = errors(
+            r#"component C inherits W { ScrollView { offset-y: scroll_y VStack {} } }"#,
+        );
+        assert_eq!(errs.len(), 1, "{:?}", errs);
+        assert!(
+            errs[0].contains("`ScrollView.offset-y`")
+                && errs[0].contains("not declared")
+                && errs[0].contains("scroll_y"),
+            "{:?}",
+            errs
+        );
+    }
+
+    #[test]
+    fn scrollview_offset_y_bool_state_rejected() {
+        let errs = errors(
+            r#"component C inherits W {
+                state ready: bool = true
+                ScrollView { offset-y: ready VStack {} }
+            }"#,
+        );
+        assert_eq!(errs.len(), 1, "{:?}", errs);
+        assert!(
+            errs[0].contains("`ScrollView.offset-y`")
+                && errs[0].contains("declared `bool`"),
+            "{:?}",
+            errs
+        );
+    }
+
+    #[test]
+    fn scrollview_offset_y_string_state_rejected() {
+        let errs = errors(
+            r#"component C inherits W {
+                state label: string = ""
+                ScrollView { offset-y: label VStack {} }
+            }"#,
+        );
+        assert_eq!(errs.len(), 1, "{:?}", errs);
+        assert!(
+            errs[0].contains("`ScrollView.offset-y`")
+                && errs[0].contains("declared `string`"),
+            "{:?}",
+            errs
+        );
+    }
+
+    // --- T1: ScrollView writable (in-out) offset-y reject ---
+
+    #[test]
+    fn scrollview_in_out_property_offset_y_rejected() {
+        // `in-out property<i32> offset-y: 0` inside ScrollView is the
+        // writable surface DD-M3-P4-003 Option C deferred to M4. The
+        // generic PropertyDecl arm in `check_members_inner` is otherwise
+        // a no-op; the ScrollView-specific path rejects.
+        let errs = errors(
+            r#"component C inherits W {
+                ScrollView {
+                    in-out property<i32> offset-y: 0
+                    VStack {}
+                }
+            }"#,
+        );
+        assert!(
+            errs.iter()
+                .any(|e| e.contains("`ScrollView.offset-y` is bindable read-only")
+                    && e.contains("in-out")
+                    && e.contains("M4")),
+            "{:?}",
+            errs
         );
     }
 
