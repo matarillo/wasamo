@@ -90,7 +90,7 @@ Discharges ADR verification closure **evidence item 2**.
 
 Discharges ADR verification closure **evidence item 3**.
 
-- [ ] Materialize `ScrollView` as a runtime widget kind with exactly
+- [x] Materialize `ScrollView` as a runtime widget kind with exactly
       one content child and an `offset-y` field.
 - [ ] Runtime `validate()` rejects 0-child and >1-child ScrollView IR
       with `WASAMO_ERR_IR_MALFORMED`.

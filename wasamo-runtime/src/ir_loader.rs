@@ -1022,6 +1022,24 @@ fn construct_widget(
             WidgetNode::wrap_panel(compositor, item_cross_size, item_spacing, line_spacing)
                 .map_err(|e| IrLoadError::Build(format!("wrap_panel: {e}")))
         }
+        // M3-Phase 4 T3: ScrollView materialisation. `offset-y` is the
+        // sole DSL-surface attribute (DD-M3-P4-003 `i32` pixels), carried
+        // through as `Option<i32>` so the catalog can apply the
+        // absent-to-default policy (`unwrap_or(0)` per DD-M3-P4-003).
+        // The runtime layer (`WidgetNode::scroll_view`) owns the default,
+        // mirroring the Phase 3 WrapPanel `apply_*_defaults` discipline.
+        // `validate()` has rejected 0-child and >1-child ScrollView IR
+        // before this arm runs (DD-M3-P4-006 structural gate); negative
+        // and out-of-range `offset-y` literals are layout-time-clamped
+        // (DD-M3-P4-005), not loader-rejected. A binding on `offset-y`
+        // appears on `node.bindings` and is wired through the generic
+        // `build_node` binding loop; `resolve_prop_key`'s ScrollView
+        // entry lands in T4 alongside the per-widget `set_property` arm.
+        "ScrollView" => {
+            let offset_y = extract_int_prop(&node.props, "offset-y");
+            WidgetNode::scroll_view(compositor, offset_y)
+                .map_err(|e| IrLoadError::Build(format!("scroll_view: {e}")))
+        }
         other => Err(IrLoadError::UnknownWidget(other.to_string())),
     }
 }
