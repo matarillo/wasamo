@@ -51,9 +51,9 @@ the upstream documents named by the ADR's Moment 1 queue.
 
 Discharges ADR verification closure **evidence item 1**.
 
-- [ ] Register `ScrollView` as a known widget type while preserving
+- [x] Register `ScrollView` as a known widget type while preserving
       the generic parser shape.
-- [ ] Enforce exactly one child at compile time; reject zero-child and
+- [x] Enforce exactly one child at compile time; reject zero-child and
       multi-child ScrollView declarations.
 - [ ] Accept `offset-y: <i32>` literals and `offset-y: scroll_y`
       (bare state identifier per dsl_spec §4.3) when `scroll_y` is

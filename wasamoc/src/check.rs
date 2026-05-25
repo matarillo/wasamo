@@ -11,6 +11,7 @@ const KNOWN_WIDGET_TYPES: &[&str] = &[
     "Rectangle",
     "Box",
     "WrapPanel",
+    "ScrollView",
 ];
 
 /// WrapPanel's three constant-only `i32` attributes per dsl_spec §4.10
@@ -380,6 +381,35 @@ fn check_wrappanel_aspect_only_box_warning(
     ));
 }
 
+/// Reject a ScrollView widget with anything other than exactly one
+/// child widget (DD-M3-P4-001 / DD-M3-P4-006). The runtime IR loader
+/// independently rejects the same shape at IR-load time (defense in
+/// depth, per Phase 2 T7 / Phase 3 T6 pattern); the compile-time
+/// diagnostic names the offending count and points authors at the
+/// `ScrollView { VStack { … } }` wrapping pattern for multi-child
+/// content.
+fn check_scrollview_child_count(
+    members: &[Member],
+    span: &Span,
+    filename: &str,
+    diags: &mut Vec<Diagnostic>,
+) {
+    let child_count = members
+        .iter()
+        .filter(|m| matches!(m, Member::WidgetDecl { .. }))
+        .count();
+    if child_count != 1 {
+        diags.push(error(
+            filename,
+            span,
+            format!(
+                "`ScrollView` requires exactly one child widget in M3-Phase 4 (found {}); wrap multiple children in an explicit container such as `ScrollView {{ VStack {{ … }} }}`",
+                child_count
+            ),
+        ));
+    }
+}
+
 /// Reject a Box widget with two or more child widgets (DD-M3-P2-001
 /// multi-child). The runtime IR loader independently rejects the same
 /// shape at IR-load time (defense in depth); the compile-time diagnostic
@@ -488,6 +518,9 @@ fn check_members_inner(
                 }
                 if type_name == "WrapPanel" {
                     check_wrappanel_aspect_only_box_warning(children, span, filename, diags);
+                }
+                if type_name == "ScrollView" {
+                    check_scrollview_child_count(children, span, filename, diags);
                 }
                 check_members_inner(children, Some(type_name), filename, ns, diags);
             }
@@ -1596,6 +1629,86 @@ mod tests {
         }"#;
         let ws = warnings(src);
         assert_eq!(ws.len(), 1, "{:?}", ws);
+    }
+
+    // --- T1: ScrollView known widget + child-count contract (DD-M3-P4-001) ---
+
+    #[test]
+    fn scrollview_known_widget_no_warning() {
+        // ScrollView is in KNOWN_WIDGET_TYPES — no "unknown widget" warning
+        // when the child-count contract is satisfied (one child).
+        let src = r#"component C inherits W { ScrollView { VStack {} } }"#;
+        let result = check_src(src);
+        assert!(!result.has_errors(), "{:?}", result.diagnostics);
+        assert!(
+            warnings(src).is_empty(),
+            "ScrollView should be a known widget type, not warn"
+        );
+    }
+
+    #[test]
+    fn scrollview_zero_child_rejected() {
+        let errs = errors("component C inherits W { ScrollView {} }");
+        assert_eq!(errs.len(), 1, "{:?}", errs);
+        assert!(
+            errs[0].contains("`ScrollView` requires exactly one child")
+                && errs[0].contains("found 0")
+                && errs[0].contains("VStack"),
+            "{:?}",
+            errs
+        );
+    }
+
+    #[test]
+    fn scrollview_one_child_accepted() {
+        let result = check_src("component C inherits W { ScrollView { VStack {} } }");
+        assert!(!result.has_errors(), "{:?}", result.diagnostics);
+    }
+
+    #[test]
+    fn scrollview_two_children_rejected() {
+        let errs = errors(
+            r#"component C inherits W { ScrollView { VStack {} VStack {} } }"#,
+        );
+        assert_eq!(errs.len(), 1, "{:?}", errs);
+        assert!(
+            errs[0].contains("found 2") && errs[0].contains("`ScrollView`"),
+            "{:?}",
+            errs
+        );
+    }
+
+    #[test]
+    fn scrollview_three_children_rejected() {
+        let errs = errors(
+            r#"component C inherits W { ScrollView { VStack {} HStack {} Box {} } }"#,
+        );
+        assert_eq!(errs.len(), 1, "{:?}", errs);
+        assert!(errs[0].contains("found 3"), "{:?}", errs);
+    }
+
+    #[test]
+    fn scrollview_attrs_do_not_count_as_children() {
+        // `offset-y` PropertyBind must not be miscounted as a child.
+        // (Accept rules for `offset-y` arrive in T1 sub-task 3; this test
+        // pins only the child-count side here — the bare child-count
+        // diagnostic must not fire when the single child + attribute
+        // are present.)
+        let result = check_src(
+            r#"component C inherits W { ScrollView { offset-y: 0 VStack {} } }"#,
+        );
+        // The offset-y handling lands in the next commit; for now, the
+        // child-count gate alone must not produce an error.
+        let child_count_err = result
+            .diagnostics
+            .iter()
+            .filter(|d| d.severity == crate::diagnostic::Severity::Error)
+            .any(|d| d.message.contains("`ScrollView` requires exactly one child"));
+        assert!(
+            !child_count_err,
+            "child-count gate misfired: {:?}",
+            result.diagnostics
+        );
     }
 
     #[test]
