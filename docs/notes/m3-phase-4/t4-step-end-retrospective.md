@@ -33,8 +33,11 @@ Visual convention の ScrollView 限定 local 拡張がここで実装に着地�
 - `689d381 test(wasamo-runtime): ScrollView Windows integration fixture + R2 closure (M3-Phase 4 T4)`
 
 merge 先は phase ブランチ `feat/m3-phase-4` (no-ff、`feedback_workflow`
-§1 / retrospectives.md §進行手順)。phase → main は T6 の phase-end
-gate に持ち越す。
+§1 / retrospectives.md §進行手順)。phase → main は **T7** の
+phase-end gate に持ち越す (T5 close 時の T5/T6 split で renumber:
+旧 T6 phase-end → T7、新 T6 = owner-manual GUI smoke; 詳細は
+progress doc Decisions log "T5/T6 split for owner-manual GUI smoke
+(2026-05-25)")。
 
 ## Current Judgment
 
@@ -268,7 +271,7 @@ shift が必要になる。
    - dsl_spec.md §4.11 / abi_spec.md は T4 で touch なし
      (DD-M3-P4-002 / DD-M3-P4-006 の "LayoutError stays internal"
      規定により ABI 表面に新規 tag は追加しない)。
-   - Moment 2 spec sync は T6 の責任範囲。
+   - Moment 2 spec sync は T7 の責任範囲 (T5/T6 split 後の renumber)。
 
 3. **ローカル clean rebuild:** **green**
    - `cargo clean`: 4204 files, 1.2 GiB removed。
@@ -280,8 +283,8 @@ shift が必要になる。
      test は T4 で +1 = **257 passed**、integration test
      `scroll_view_layout_integration` 2 passed、他 crate 全 green。
    - `cargo fmt --all -- --check` (post-commit state): zero exit。
-   - GitHub Actions 上の clean rebuild は phase-end gate (T6) で
-     確認。
+   - GitHub Actions 上の clean rebuild は phase-end gate (T7) で
+     確認 (T5/T6 split 後の renumber)。
 
 4. **PO に相談すべき設計判断・トレードオフ:** **なし**
    - すべて ADR DD-M3-P4-003 / DD-M3-P4-004 と architecture.md §6.5
@@ -380,7 +383,7 @@ shift が必要になる。
       両立しない (制約ありと言うなら spec への explicit 反映が必要、
       必然の帰結なら Item 10 を「なし」または `local-only` 寄りに
       分類すべき)。本 step 内では §6.5 改稿を実行しなかったため、
-      T6 Moment 2 sync 候補として送る。
+      T7 Moment 2 sync 候補として送る (T5/T6 split 後の renumber)。
       §6.5 paragraph で既に書かれている "1 WidgetNode = 1 Visual
       の ScrollView 限定 local 拡張" の必然の帰結であることは
       事実だが、retro の配置先分類は「結果として spec に書かれて
@@ -388,8 +391,9 @@ shift が必要になる。
       (ScrollView の horizontal/bidirectional extension、Phase 5
       以降の Window chrome に scroll を埋め込むケース、popup
       overlay 等) が landed すると shift の reuse 機会が visible
-      になり、§6.5 への explicit 追記の価値が上がる。T6 で
-      オーナーと共に追記実行 / 据え置きを判断する。
+      になり、§6.5 への explicit 追記の価値が上がる。T7 で
+      オーナーと共に追記実行 / 据え置きを判断する (T5/T6 split 後
+      の renumber)。
 
 11. **タスクリストの後続 step 見直し:** **不要**
     - progress file の T4 行 11 項目を 10 件 `[x]` に flip 済み、
@@ -397,7 +401,12 @@ shift が必要になる。
       未 flip で Decisions log に disposition を記録。
     - T5 (gallery visible smoke) / T6 (phase-end / Moment 2 re-sync)
       の task 構成・順序・依存関係に T4 実装から見て調整すべき点は
-      出ていない。
+      出ていない。**Note (T5 close 時の追記):** T5 close で T5/T6
+      split を実施し、新 T6 = owner-manual GUI smoke、旧 T6 =
+      phase-end → T7 に renumber 済み。T4 時点では split は未実施
+      だったため、本 retro 本文の T6 言及は文脈に応じて T7 と
+      読み替えること (split の経緯は progress doc Decisions log
+      "T5/T6 split for owner-manual GUI smoke (2026-05-25)")。
     - T5 は T1–T4 が landed した状態で `examples/gallery/gallery.ui`
       に `ScrollView { WrapPanel { Box × 30–40 } }` slice を additively
       追加する作業。T4 で writer 経路 + intermediate Visual が完成
@@ -453,19 +462,20 @@ T4 から後続 task への明示的な引き渡し:
   `.ui` 追記 + gallery-rust 経路の再ビルド + 手動 GUI smoke)。
   T4 で導入した `BuiltUi::__set_i32_state_for_test` は production
   経路には影響しないため、gallery 経路で問題にならない。
-- **T6 (phase-end / Moment 2 re-sync):** dsl_spec §4.11 /
-  architecture.md §6.5 / abi_spec.md の現行 draft と T4 実装は
-  factual な divergence なしで整合済み。ただし Item 10 の
-  `parent_abs_offset` shift は T5 close 時に配置先を `doc-folded`
-  → `phase-sync` に訂正済み (上記 Item 10 参照)。T6 Moment 2 で
-  architecture.md §6.5 に "child の `parent_abs_offset` shift" を
-  explicit 1 文で追記するか / 据え置くかをオーナーと共に判断する。
+- **T7 (= 旧 T6、phase-end / Moment 2 re-sync; T5/T6 split 後):**
+  dsl_spec §4.11 / architecture.md §6.5 / abi_spec.md の現行 draft
+  と T4 実装は factual な divergence なしで整合済み。ただし Item
+  10 の `parent_abs_offset` shift は T5 close 時に配置先を
+  `doc-folded` → `phase-sync` に訂正済み (上記 Item 10 参照)。
+  T7 Moment 2 で architecture.md §6.5 に "child の
+  `parent_abs_offset` shift" を explicit 1 文で追記するか /
+  据え置くかをオーナーと共に判断する。
 - **将来 phase**: intermediate Visual を持つ次の widget が登場する
   局面 (M4 input handling 経由の scrollbar widget、Phase 5 以降の
   popup overlay / window chrome) で `content_container_visual()`
   helper と sync_visuals shift pattern の再利用が想定される。
-  Phase 4 内では Item 10 を `phase-sync` で T6 に送るのみで、
-  将来 phase の pre-doc input への carry-forward は T6 で
+  Phase 4 内では Item 10 を `phase-sync` で T7 に送るのみで、
+  将来 phase の pre-doc input への carry-forward は T7 で
   `phase-sync` を `doc-folded` (=§6.5 改稿) で閉じるか
   `carry-forward` に降ろすかの判断に委ねる。
 

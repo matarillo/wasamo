@@ -17,18 +17,22 @@ T5 が discharge するのは Phase 4 verification closure **evidence item
 追加、build、Start-Process でのプロセス生存観測まで。残りの
 visible-correctness 部分 (viewport clip 鋭さ、Button-driven content
 motion、clipped 領域の非表示、off-viewport thumbnail が scroll で
-viewport に進入する) はオーナー手動 GUI smoke として T6 phase-end
-gate (`retrospectives.md` checklist item 17 / [human-visible GUI
-smoke](../human-visible-smoke.md)) で実施する。
+viewport に進入する) は **T6 (owner-manual GUI smoke and any
+visible-correctness fix)** で実施する。T6 は T5 close 時に
+progress doc Task list に新規挿入された step (Decisions log
+"T5/T6 split for owner-manual GUI smoke (2026-05-25)" 参照)。
+旧 T6 (Phase-end gates and Moment 2 re-sync) は **T7** にスリップ。
 
 **owner-manual GUI smoke は Phase 4 close の前段 gate** であり、
 責任分界の切り分け (assistant が pixel-level visual correctness を
 判定しない) であって、不具合の後送り受け皿ではない。ADR の "Item
 (5) is required for Phase 4 close under A11" 規定により、上記
-4 観点いずれかが目視で壊れていれば **T6 で gate fail とし、
-M3-Phase 4 phase ブランチ内で fix step を切る (T5 に巻き戻す or
-追加 step を切る)**。M4 の scrollbar / wheel / drag は「より自然な
-入力手段」の話であって、Phase 4 の Button-driven visible
+4 観点いずれかが目視で壊れていれば **T6 内で fix iteration を回し、
+smoke checklist が green になってから T6 を close する** (T6 が
+fix の container)。fix が dsl_spec / architecture.md / abi_spec.md /
+ADR の normative 変更を要する場合のみ T7 Moment 2 (または別途
+ADR 補遺) にエスカレーション。M4 の scrollbar / wheel / drag は
+「より自然な入力手段」の話であって、Phase 4 の Button-driven visible
 correctness 不具合の先送り先ではない。
 
 T5 は runtime / IR loader / wasamoc に新規コードを追加しない step。
@@ -47,8 +51,8 @@ commit に fold):
 - `256dbc0 feat(examples): gallery ScrollView slice + scroll-y buttons (M3-Phase 4 T5)`
 
 merge 先は phase ブランチ `feat/m3-phase-4` (no-ff、`feedback_workflow`
-§1 / `retrospectives.md` §進行手順)。phase → main は T6 の phase-end
-gate に持ち越す。
+§1 / `retrospectives.md` §進行手順)。phase → main は **T7** の
+phase-end gate に持ち越す (T5/T6 split 後の renumber 反映)。
 
 ## Current Judgment
 
@@ -132,16 +136,19 @@ fast-track は廃止 (`feedback_workflow` §2(b) / 2026-05-25 `49b49fb`)
   `scroll_view_layout_integration` 2 passed = T4 値で不変、他 crate
   全 green) → `cargo fmt --all -- --check` (post-commit state;
   zero exit)。
-- **CI / GitHub Actions:** T6 phase-end gate (`workflow_dispatch`) で
-  実 CI green を確認する。T5 では local clean rebuild が proxy。
+- **CI / GitHub Actions:** **T7** phase-end gate (`workflow_dispatch`)
+  で実 CI green を確認する。T5 / T6 では local clean rebuild が
+  proxy (T6 smoke step では fix commit が乗らなければ rebuild
+  そのものが不要)。
 
 **assistant-side T5 blocker は残っていない**。Phase 4 close 判定は
-owner-manual GUI smoke 後に確定する (T6 phase-end gate)。owner 明示
-承認後に `feat/m3-phase-4-t5` を `feat/m3-phase-4` に no-ff merge し、
-T6 (phase-end / Moment 2 re-sync) で owner GUI smoke + 残 sync 候補
-を消化する。owner GUI smoke で visible-correctness 観点が壊れていた
-場合は **M3-Phase 4 phase ブランチ内で fix step を切る** (本 retro
-冒頭参照)。
+T6 (owner-manual GUI smoke) を経て、T7 (phase-end / Moment 2
+re-sync) で確定する。owner 明示承認後に `feat/m3-phase-4-t5` を
+`feat/m3-phase-4` に no-ff merge し、**T6 で owner GUI smoke +
+不具合があれば T6 内 fix iteration**、続けて **T7 で機械的 close
++ Moment 2 sync 候補消化** に進む。owner GUI smoke で
+visible-correctness 観点が壊れていた場合は **T6 ブランチ内で
+fix commit を additively 積む** (本 retro 冒頭参照)。
 
 ## Main Learning
 
@@ -178,7 +185,7 @@ Phase 4 でも維持されていることの動作確認。
   と書かれている stylized 一行表記は **spec 上の説明的略記** で、
   実 parser は member の区切りに改行を必要とする
   (`expected member, found `;`` で T5 ビルド初回失敗)。spec 側を
-  修正するかは T6 Moment 2 spec sync の判断材料。T5 では `.ui`
+  修正するかは T7 Moment 2 spec sync の判断材料。T5 では `.ui`
   を multi-line に展開して回避。Item 2 (spec changes) には登る
   可能性があるが Item 10 cross-phase constraint としては小さい
   (新規 widget の `.ui` を書くたびに同じ症状に当たるが、対処は
@@ -205,7 +212,7 @@ Phase 4 でも維持されていることの動作確認。
      §4.11 Attributes で既に Moment 1 で規定済み、T5 の `.ui` は
      その規定の binding surface の適用 (literal ではなく bare state
      identifier RHS)。
-   - 副次学び #3 (`;` セパレータの spec 例) は **T6 Moment 2 で
+   - 副次学び #3 (`;` セパレータの spec 例) は **T7 Moment 2 で
      dsl_spec §4.9 例示文の修正可否を判断する候補**。retrospective
      本 step では doc-driven 反映を実行せず、phase-end の判断に
      委ねる。
@@ -221,7 +228,7 @@ Phase 4 でも維持されていることの動作確認。
      integration test `scroll_view_layout_integration` = **2 passed**
      (T4 値で不変)、他 crate 全 green。
    - `cargo fmt --all -- --check` (post-commit state): zero exit。
-   - GitHub Actions 上の clean rebuild は phase-end gate (T6) で
+   - GitHub Actions 上の clean rebuild は phase-end gate (T7) で
      確認。
 
 4. **PO に相談すべき設計判断・トレードオフ:** **なし**
@@ -245,7 +252,7 @@ Phase 4 でも維持されていることの動作確認。
    - T5 で発生した実装判断 (VStack root、Button vertical stacking、
      32 thumbnail、`item-cross-size: 64`) はいずれも `.ui` author
      スタイルの選択で、ADR 決定面に登る材料ではない。
-   - dsl_spec §4.9 例示文の `;` セパレータ表記の見直しは T6
+   - dsl_spec §4.9 例示文の `;` セパレータ表記の見直しは T7
      Moment 2 sync 候補に残し、ADR には登らせない。
 
 7. **既存 ADR の Proposed 項目の新規追加、または Proposed → Accepted
@@ -279,19 +286,26 @@ Phase 4 でも維持されていることの動作確認。
       cross-phase constraint 化する素材ではない。
     - dsl_spec §4.9 例示文の `;` セパレータ表記は spec 内の
       説明的略記の問題で、parser 側の規範は §3 grammar (改行
-      区切り) が ground truth。T6 Moment 2 で例示文を改行表記に
+      区切り) が ground truth。T7 Moment 2 で例示文を改行表記に
       揃えるかどうかを判断する candidate に留め、cross-phase
       constraint としては立てない。
 
-11. **タスクリストの後続 step 見直し:** **不要**
-    - progress file の T5 行 6 項目を 5 件 `[x]` に flip 済み、
-      残 1 件 (owner-manual GUI smoke) は ADR 規定通り T6 phase-end
-      gate に持ち越し。
-    - T6 (phase-end / Moment 2 re-sync) の task 構成・順序・依存
-      関係に T5 実装から見て調整すべき点は出ていない。
+11. **タスクリストの後続 step 見直し:** **必要 (本 retro と同じ
+    commit で実行済み)**
+    - progress file の T5 行 6 項目を 5 件 `[x]` に flip 済み。
+      残 1 件 (owner-manual GUI smoke) は **T5 から削除し、新規
+      T6 (owner-manual GUI smoke and any visible-correctness fix)
+      に移管**。旧 T6 (Phase-end gates and Moment 2 re-sync) は
+      **T7** にスリップ。本 retro と同じ commit で
+      `docs/plans/progress/m3-phase-4-progress.md` Task list を
+      revise し、Decisions log "T5/T6 split for owner-manual GUI
+      smoke (2026-05-25)" に rationale を記録。
+    - T7 (旧 T6、phase-end / Moment 2 re-sync) の checklist 内容は
+      不変。T5 実装から見て T7 の task 構成・順序・依存関係に
+      調整すべき点は出ていない。
     - Moment 2 spec sync 候補として `dsl_spec.md` §4.9 例示文の
       `;` セパレータ表記見直しが副次的に浮上 (本 retro Item 2 /
-      副次学び #3)。T6 で取り扱う / 取り扱わないをオーナーと共に
+      副次学び #3)。T7 で取り扱う / 取り扱わないをオーナーと共に
       判断。
 
 ## Verification Notes
@@ -315,23 +329,29 @@ Start-Process target/release/gallery-rust.exe -PassThru  (PID 11832, MainWindowT
 ```
 
 いずれも green。Start-Process は process-stayed-alive signal で
-discharge (visible GUI smoke は owner 手動の T6 範囲)。
+discharge (visible GUI smoke は owner 手動の T6 範囲、T5/T6 split
+後)。
 
 ## Follow-Up
 
 T5 から後続 task への明示的な引き渡し:
 
-- **T6 (phase-end / Moment 2 re-sync):**
-  - T5 残置の **owner-manual GUI smoke** (viewport clip 鋭さ、
+- **T6 (owner-manual GUI smoke and any visible-correctness fix):**
+  - T5 から移管した **owner-manual GUI smoke** (viewport clip 鋭さ、
     Button-driven content motion、clipped 領域非表示、off-viewport
     thumbnail 進入) を `retrospectives.md` checklist item 17 /
     [human-visible GUI smoke](../human-visible-smoke.md) に沿って
     T6 で消化。Phase 4 では `gallery-rust` のみ確認すれば足り、
     `counter-c` / `counter-zig` までは ADR 規定で out-of-phase
     (T5 checklist item 6)。
+  - smoke 4 観点いずれかが目視で壊れていれば **T6 ブランチ内で
+    fix iteration を additively 積む**。fix が dsl_spec /
+    architecture.md / abi_spec.md / ADR の normative 変更を要する
+    場合のみ T7 Moment 2 (または別途 ADR 補遺) にエスカレーション。
+- **T7 (phase-end / Moment 2 re-sync):**
   - Moment 2 sync 候補として 2 件浮上:
     1. dsl_spec.md §4.9 例示文の `;` セパレータ表記を改行表記に
-       揃えるかどうか (T5 副次学び #3)。判断は T6 でオーナーと共に。
+       揃えるかどうか (T5 副次学び #3)。判断は T7 でオーナーと共に。
     2. architecture.md §6.5 への "child の parent_abs_offset shift"
        明示追記の要否 (T4 retro Item 10 はもともと `doc-folded` を
        選択していたが、retrospectives.md §checklist Item 10 の
@@ -340,19 +360,20 @@ T5 から後続 task への明示的な引き渡し:
        実態としては §6.5 に shift を明示する 1 文は書き足されて
        おらず、strict reading では **`phase-sync` 候補とするのが
        正しい**。T5 close 時点で T4 retro Item 10 の配置先を
-       `phase-sync` に訂正 (本 retro Follow-Up 末尾参照)。T6 で
+       `phase-sync` に訂正 (本 retro Follow-Up 末尾参照)。T7 で
        §6.5 への explicit 追記を実行する / しないをオーナーと
        決める)。
   - dsl_spec §4.11 / architecture.md / abi_spec.md の現行 draft と
-     T5 実装は整合済み。Moment 2 で sync 必要な substantive な
-     divergence は無し。
-- **Window title wiring (out-of-phase residual):**
+    T5 実装は整合済み。Moment 2 で sync 必要な substantive な
+    divergence は無し (T6 で fix が乗らなければ)。
+- **Window title wiring (out-of-phase residual candidate):**
   - gallery host の `MainWindowTitle = "Wasamo"` は `.ui` の
     `title: "Gallery"` と一致しない。これは現行 wasamo-runtime が
     Window title を `.ui` から拾わず framework 既定値で上書き
     している実装に由来し、Phase 4 ADR / dsl_spec §4.11 とは無関係。
-    T6 で Out-of-phase residuals に登録するか、別 phase の wiring
-    として残置するかをオーナーと共に判断。T5 内 closing にはしない。
+    T7 で Out-of-phase residuals に登録するか、別 phase の wiring
+    として残置するかをオーナーと共に判断。T5 / T6 内 closing には
+    しない (T6 は visible correctness の scope のみ)。
 - **T4 retro Item 10 配置先の訂正:**
   - T4 step-end retro
     ([t4-step-end-retrospective.md](./t4-step-end-retrospective.md))
@@ -370,7 +391,7 @@ T5 から後続 task への明示的な引き渡し:
     に格上げ。理由は「将来 intermediate-Visual widget の追加で
     再利用される」と T4 自身が明記しているため、`local-only`
     ではなく、§6.5 に 1 文足す価値がある境界規約。Moment 2
-    sync 候補として T6 で処理する (上記 Follow-Up 1 件目 #2)。
+    sync 候補として T7 で処理する (上記 T7 Follow-Up #2)。
   - T4 retro 本文の Item 10 の "配置先" 文言は本訂正に揃えて
     更新する (本 retro と同じ commit で実施)。
 - **将来 phase**:
@@ -380,5 +401,7 @@ T5 から後続 task への明示的な引き渡し:
     する可能性が高いが、T5 で landed した `.ui` 形は M3-Phase 4
     範囲では十分。
 
-T6 の作業に直接効くのは Follow-Up 1 件目 (Moment 2 sync candidates)
-と 2 件目 (Window title wiring の置き場判断)。
+T6 の作業に直接効くのは Follow-Up 1 件目 (smoke 4 観点 + fix
+iteration の container)。T7 の作業には Follow-Up 2 件目 (Moment 2
+sync candidates) と 3 件目 (Window title wiring の置き場判断) が
+直接効く。
