@@ -152,6 +152,30 @@ Phase 4 close 時点で
       1 行明示し、Phase 5 自身が owning しないことを記録 (Phase 5
       が owning する判断になった場合のみ別途 DD を起こす)。
 
+## 5. phase 最終 step の retrospective / progress checklist は step-end と phase-end を分割する
+
+T7 retrospective Item 10 `carry-forward`。
+
+T7 close で、progress checklist の "Phase-end retrospective recorded"
+という単一 bullet が reviewer にとって危険な曖昧さを持つことが
+分かった。retrospectives.md の checklist items 1-11 は step-end
+retro (step → phase merge gate) で、items 12-18 は phase-end retro
+(phase → main merge gate) であり、所有者もタイミングも異なる。
+Phase 4 T7 では bullet を二段に分割し、`t7-step-end-retrospective.md`
+は T7 が所有、`phase-end-retrospective.md` は `feat/m3-phase-4` へ
+T7 merge 後の phase → main merge gate が所有する、と明示した。
+
+具体的な Phase 5 pre-doc 反映:
+
+- Phase 5 progress file の最終 step checklist は、最初から
+  **step-end retrospective** と **phase-end retrospective** を別 bullet
+  にする。step-end bullet は最終 step が `[x]` にできる。phase-end
+  bullet は phase branch 上の phase → main merge gate が所有し、最終
+  step close 時点では `[ ]` のままでよいことを明記する。
+- Phase 5 が同じ構造で問題なく回った場合、Phase 5 phase-end retro で
+  `retrospectives.md` 本文へ規範化するか判断する。Phase 4 close 時点
+  では一段先送りし、過剰一般化を避ける。
+
 ## 前送り対象に含まれないもの (`doc-folded` 相当 / `local-only`)
 
 以下は本 file には載せない (`doc-folded` または `local-only` 相当):

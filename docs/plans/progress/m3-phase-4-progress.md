@@ -554,9 +554,10 @@ T6 retrospective Follow-Up #1.
   phase-end gate (`workflow_dispatch`); local clean rebuild is the
   T6-step-level proxy.
 
-- **T7 close (2026-05-25).** Local clean rebuild on `feat/m3-phase-4-t7`
-  with the Moment 2 spec sync, m3-plan row flip, and M3-Phase 5 pre-doc
-  carry-forward landed (HEAD = `42ed208`): `cargo fmt --all -- --check`
+- **T7 close (2026-05-25).** Local clean rebuild at commit `42ed208`
+  on `feat/m3-phase-4-t7`, after the Moment 2 spec sync, m3-plan row
+  flip, and M3-Phase 5 pre-doc carry-forward had landed:
+  `cargo fmt --all -- --check`
   zero exit; `cargo clean` removed 3650 files / 1.0 GiB; `cargo build
   --release --workspace` 43.19 s green; `cargo build --workspace`
   (debug) 35.56 s green; `cargo test --workspace` failure 0 —
