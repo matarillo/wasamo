@@ -51,7 +51,7 @@ this phase extends without breaking:
   Phase 4 likewise introduces **no new `IrType`, no new
   `IrLiteral` variant, no new `PropertyValue` variant** —
   `offset-y` is `i32` per DD-003. Binding reuses the existing
-  i32 reader / binding-effect machinery (`HandlerExpr::IntPropRead`
+  i32 reader / binding-effect machinery (`HandlerExpr::PropRead`
   reads the `Signal<i32>`; `register_binding` +
   `widget_write_property` build a `PropertyValue::String` from
   the stringified result); the narrow string-to-`i32` parse step
@@ -75,7 +75,7 @@ this phase extends without breaking:
   `LayoutError::ScrollViewUnboundedAxis` per DD-002 / DD-005.
 - Binding pipeline: per-type writer seam pattern (DD-M3-P1-007).
   Phase 4's `offset-y` is bindable read-only (DD-003). The
-  existing i32 reader path (`HandlerExpr::IntPropRead` →
+  existing i32 reader path (`HandlerExpr::PropRead` →
   `Signal<i32>`) and binding-effect re-run path are reused
   unchanged; the stringified value `widget_write_property`
   passes (as `PropertyValue::String`) is parsed into ScrollView's
@@ -522,10 +522,10 @@ not as the canonical or definitive one.
 **Layering with DD-002 / DD-004 / DD-005.** Clamping bound comes
 from DD-002 (viewport size) and DD-005 (content measured size).
 The Composition primitive that applies the offset is DD-004's
-`Visual.Offset` on the content child Visual. DD-005's per-pass
-arithmetic re-applies the clamp on every layout pass (window
-resize via `WM_SIZE`, content size change, programmatic state
-mutation via the binding).
+`Visual.Offset` on the ScrollView-owned intermediate content
+Visual. DD-005's per-pass arithmetic re-applies the clamp on every
+layout pass (window resize via `WM_SIZE`, content size change,
+programmatic state mutation via the binding).
 
 ### DD-M3-P4-004 — Clip surface installation and Composition primitive choice
 
@@ -570,8 +570,9 @@ offset, and (iii) where in the Visual tree the clip sits.
 
 **Options (offset application primitive):**
 
-- **Option A — `Visual.Offset` on the content child Visual
-  (recommended).** Mutation = `SetOffset(0, -offset_y, 0)`
+- **Option A — `Visual.Offset` on the ScrollView-owned
+  intermediate content Visual (recommended).** Mutation =
+  `SetOffset(0, -offset_y, 0)`
   (negative because moving content up exposes lower content
   through the viewport).
   - What you gain: matches the existing M2 visual-layer
@@ -647,10 +648,11 @@ the test-coverage half was filed open as R2 (per
 [Phase 3 ADR Out-of-phase residuals](./m3-phase-3-wrap-panel.md)).
 Per Phase 4 framing decision F, R2 closes inside Phase 4 via the
 Windows integration test's three-level offset assertion
-(ScrollView Visual at parent offset X, content Visual at offset
-(0, -offset_y) relative to ScrollView, Box thumbnails inside
-content at their own offsets — the three-level nesting Phase 3
-lacked). See §Phase 4 verification closure item 4 below.
+(ScrollView Visual at parent offset X, ScrollView-owned
+intermediate content Visual at offset (0, -offset_y) relative to
+ScrollView, Box thumbnails inside content at their own offsets —
+the three-level nesting Phase 3 lacked). See §Phase 4 verification
+closure item 4 below.
 
 **Layering with DD-003 / DD-005.** DD-003 supplies the `offset_y`
 value (read-only-bound `i32` per recommendation, clamped per
@@ -979,31 +981,35 @@ four** of the following are observed:
      - (a) the ScrollView's resolved rectangle matches the
        expected viewport dimensions (per DD-005 outer size =
        viewport);
-     - (b) the content Visual's `Visual.Offset` is `(0, 0, 0)`
-       when `scroll_y = 0`;
-     - (c) after mutating `state.scroll_y = 100`, the content
-       Visual's `Visual.Offset` becomes `(0, -100, 0)`;
-     - (d) after mutating `state.scroll_y = -50`, the content
-       Visual's `Visual.Offset` becomes `(0, 0, 0)` (clamped to
-       0 per DD-005);
+     - (b) the ScrollView-owned intermediate content Visual's
+       `Visual.Offset` is `(0, 0, 0)` when `scroll_y = 0`;
+     - (c) after mutating `state.scroll_y = 100`, the
+       ScrollView-owned intermediate content Visual's
+       `Visual.Offset` becomes `(0, -100, 0)`;
+     - (d) after mutating `state.scroll_y = -50`, the
+       ScrollView-owned intermediate content Visual's
+       `Visual.Offset` becomes `(0, 0, 0)` (clamped to 0 per
+       DD-005);
      - (e) after mutating `state.scroll_y` to a value larger
-       than `content_h - viewport_h`, the content Visual's
-       `Visual.Offset` becomes `(0, -(content_h - viewport_h),
-       0)` (clamped to max per DD-005);
+       than `content_h - viewport_h`, the ScrollView-owned
+       intermediate content Visual's `Visual.Offset` becomes
+       `(0, -(content_h - viewport_h), 0)` (clamped to max per
+       DD-005);
      - (f) ScrollView's outer Visual has a `Visual.Clip`
        property set to a non-null clip (the InsetClip from
        DD-004) — clip **presence** assertion;
-     - (g) the content child Visual has `Visual.Clip = null`
-       — clip **absence** regression guard (the symmetric
-       inverse of Phase 3 T8's WrapPanel clip-absence
-       assertion).
+     - (g) the ScrollView-owned intermediate content Visual and
+       the single content child widget Visual both have
+       `Visual.Clip = null` — clip **absence** regression guard
+       (the symmetric inverse of Phase 3 T8's WrapPanel clip-
+       absence assertion).
    - **R2 closure — three-level nested offset assertion (R2
      test-coverage half from Phase 3).** The scroll-path fixture
      above traverses three levels of `Visual.Offset` nesting:
      parent → ScrollView Visual (at some `(parent_offset_x, …,
-     0)`) → content Visual (at `(0, -offset_y, 0)`) → Box
-     thumbnails inside content (at their own layout-derived
-     offsets). The test asserts that each thumbnail's
+     0)`) → ScrollView-owned intermediate content Visual (at
+     `(0, -offset_y, 0)`) → Box thumbnails inside content (at
+     their own layout-derived offsets). The test asserts that each thumbnail's
      *root-relative* position (computed by summing parent-
      relative offsets up the chain) equals the expected position
      given the scroll state — i.e. the
