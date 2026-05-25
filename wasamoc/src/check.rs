@@ -381,6 +381,30 @@ fn check_wrappanel_aspect_only_box_warning(
     ));
 }
 
+/// Reject any ScrollView attribute other than `offset-y` in Phase 4
+/// (DD-M3-P4-001 / DD-M3-P4-002 scoping). `viewport-width`,
+/// `viewport-height`, `scroll-axis`, and `padding` are explicitly
+/// out of scope per dsl_spec §4.11 *Attributes*; this is the catch-
+/// all rejection that fires for any other PropertyBind name a future
+/// author or migration might attempt before the corresponding DD
+/// opens that attribute. The diagnostic names the attribute and
+/// points at §4.11 so authors can locate the scoping decision.
+fn check_scrollview_unknown_attr(
+    prop_name: &str,
+    span: &Span,
+    filename: &str,
+    diags: &mut Vec<Diagnostic>,
+) {
+    diags.push(error(
+        filename,
+        span,
+        format!(
+            "`{}` is not a recognised ScrollView attribute in M3-Phase 4; only `offset-y` is in scope (dsl_spec §4.11)",
+            prop_name
+        ),
+    ));
+}
+
 /// Validate a `ScrollView.offset-y` binding RHS (DD-M3-P4-003). The
 /// attribute is bindable read-only in Phase 4: the RHS is either an
 /// `IntLit` (any sign — negatives and out-of-range values are clamped
@@ -552,6 +576,16 @@ fn check_members_inner(
                     // but the type-mismatch wording would not name the
                     // ScrollView-specific Phase 4 surface contract.
                     check_scrollview_offset_y_bind(value, span, filename, ns, diags);
+                } else if enclosing_widget == Some("ScrollView")
+                    && !WRAPPANEL_INT_ATTRS.contains(&name.as_str())
+                {
+                    // Any non-`offset-y` ScrollView attribute is out of
+                    // Phase 4 scope (`viewport-*`, `scroll-axis`,
+                    // `padding`, …). The WrapPanel-attribute-outside-
+                    // WrapPanel branch below covers the WrapPanel attr
+                    // names so the diagnostic stays attribute-specific;
+                    // everything else falls into this catch-all.
+                    check_scrollview_unknown_attr(name, span, filename, diags);
                 } else if enclosing_widget == Some("Box")
                     && (name.as_str() == "aspect" || name.as_str() == "fill")
                 {
@@ -2003,6 +2037,84 @@ mod tests {
                 .any(|e| e.contains("`ScrollView.offset-y` is bindable read-only")
                     && e.contains("in-out")
                     && e.contains("M4")),
+            "{:?}",
+            errs
+        );
+    }
+
+    // --- T1: ScrollView unknown-attribute reject (DD-M3-P4-001 / 002) ---
+
+    #[test]
+    fn scrollview_viewport_width_rejected() {
+        let errs = errors(
+            r#"component C inherits W { ScrollView { viewport-width: 320 VStack {} } }"#,
+        );
+        assert_eq!(errs.len(), 1, "{:?}", errs);
+        assert!(
+            errs[0].contains("`viewport-width`")
+                && errs[0].contains("not a recognised ScrollView attribute")
+                && errs[0].contains("§4.11"),
+            "{:?}",
+            errs
+        );
+    }
+
+    #[test]
+    fn scrollview_viewport_height_rejected() {
+        let errs = errors(
+            r#"component C inherits W { ScrollView { viewport-height: 240 VStack {} } }"#,
+        );
+        assert_eq!(errs.len(), 1, "{:?}", errs);
+        assert!(
+            errs[0].contains("`viewport-height`")
+                && errs[0].contains("not a recognised ScrollView attribute"),
+            "{:?}",
+            errs
+        );
+    }
+
+    #[test]
+    fn scrollview_scroll_axis_rejected() {
+        let errs = errors(
+            r#"component C inherits W { ScrollView { scroll-axis: vertical VStack {} } }"#,
+        );
+        assert_eq!(errs.len(), 1, "{:?}", errs);
+        assert!(
+            errs[0].contains("`scroll-axis`")
+                && errs[0].contains("not a recognised ScrollView attribute"),
+            "{:?}",
+            errs
+        );
+    }
+
+    #[test]
+    fn scrollview_padding_rejected() {
+        let errs = errors(
+            r#"component C inherits W { ScrollView { padding: 8 VStack {} } }"#,
+        );
+        assert_eq!(errs.len(), 1, "{:?}", errs);
+        assert!(
+            errs[0].contains("`padding`")
+                && errs[0].contains("not a recognised ScrollView attribute"),
+            "{:?}",
+            errs
+        );
+    }
+
+    #[test]
+    fn scrollview_wrappanel_attr_inside_routes_to_wrappanel_diag() {
+        // A WrapPanel attribute name inside ScrollView is still rejected,
+        // but the WrapPanel-attribute-outside-WrapPanel diagnostic takes
+        // precedence so the author sees the WrapPanel-specific wording
+        // (the attribute is recognised, just misplaced). This keeps the
+        // ScrollView catch-all attribute-specific.
+        let errs = errors(
+            r#"component C inherits W { ScrollView { item-cross-size: 88 VStack {} } }"#,
+        );
+        assert_eq!(errs.len(), 1, "{:?}", errs);
+        assert!(
+            errs[0].contains("`item-cross-size` is a WrapPanel attribute")
+                && errs[0].contains("widget `ScrollView`"),
             "{:?}",
             errs
         );

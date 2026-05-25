@@ -62,9 +62,9 @@ Discharges ADR verification closure **evidence item 1**.
       or `string` state.
 - [x] Reject `bind offset-y:` / `in-out offset-y:`-style writable
       surfaces; Phase 4 binding is read-only.
-- [ ] Reject unknown ScrollView attributes, including `viewport-*`,
+- [x] Reject unknown ScrollView attributes, including `viewport-*`,
       `scroll-axis`, and `padding`.
-- [ ] Keep the gallery sub-screen `.ui` compiling cleanly as the
+- [x] Keep the gallery sub-screen `.ui` compiling cleanly as the
       positive control.
 
 ### T2 — Layout engine: ScrollView measure-arrange
