@@ -1114,8 +1114,11 @@ deferred to a later phase / milestone:
 Phase 4 inherits the two-moment structure from
 [m3-phase-2 framing decision D](../notes/m3-phase-2/m3-phase-2-pre-doc-framing.md#d-upstream-document-revision-timing-two-sync-moments)
 and Phase 3's same-shape inheritance, per Phase 4 pre-doc framing
-decision D. The Phase 4 `dsl_spec.md` section marker mirrors the
-Phase 2 / Phase 3 form:
+decision D. Doc set and commit shape follow the living rule in
+[retrospectives.md](../notes/retrospectives.md) (framings inherit
+the *structure*, not the historical doc list verbatim — see the
+operational note at retrospectives.md §phase-sync). The Phase 4
+`dsl_spec.md` section marker mirrors the Phase 2 / Phase 3 form:
 
 ```
 **Phase status:** M3-Phase 4 ADR-accepted design draft; pending
@@ -1133,10 +1136,14 @@ placed as the first line under the ScrollView chapter heading
 WrapPanel chapters).
 
 **Moment 1 — ADR Accepted commit set (design-spec draft).**
-Constituent commits, each its own commit on the pre-doc branch
-per [CLAUDE.md §Commit rules](../../CLAUDE.md#commit-rules) and
-the doc set per
-[retrospectives.md §phase-sync で触る doc セット](../notes/retrospectives.md#phase-sync-moment-2-で触る-doc-セット):
+Constituent commits, each landing as its own commit on the
+pre-doc branch per the per-review-concern rule in
+[CLAUDE.md §Commit rules](../../CLAUDE.md#commit-rules) and
+[retrospectives.md](../notes/retrospectives.md). The draft-side
+doc set Phase 4 commits to at Moment 1 is enumerated below;
+retrospectives.md §phase-sync で触る doc セット規定は phase-end
+Moment 2 を対象とした規範であり、Moment 1 の draft set は
+その mirror として **直接同一視されるものではない**:
 
 - `docs/decisions/m3-phase-4-scroll-view.md` — ADR
   `Status: Accepted` flip (this file).
@@ -1161,13 +1168,15 @@ Implementation begins only after these commits land.
 
 **Moment 2 — Phase close commit set (impl re-sync).**
 
-- `docs/dsl_spec.md` §4.11 — corrections required because the
-  design draft and implementation diverged (per
+- `docs/dsl_spec.md` §4.11 — section marker flips to "closed;
+  implementation-synced", plus any corrections required if the
+  design draft and implementation diverged (marker flip is
+  required regardless of divergence; corrections are conditional
+  on what re-sync surfaces). Per
   [m3-phase-4 pre-doc-inputs §10 / retroactive spec-gap fold](../notes/m3-phase-4/pre-doc-inputs.md)
-  inherited from Phase 2 / Phase 3 — earlier-phase spec gaps
+  inherited from Phase 2 / Phase 3, earlier-phase spec gaps
   surfaced during the re-sync may fold into the same commit with
-  explicit owner confirmation). Section marker flips to "closed;
-  implementation-synced".
+  explicit owner confirmation.
 - `docs/architecture.md` — top Status flips to `M3-Phase 4
   complete`; impl-divergent paragraphs re-synced.
 - `docs/plans/progress/m3-phase-4-progress.md` — phase-close
