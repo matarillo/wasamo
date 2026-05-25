@@ -50,10 +50,16 @@ this phase extends without breaking:
   for all WrapPanel attributes without widening either enum.
   Phase 4 likewise introduces **no new `IrType`, no new
   `IrLiteral` variant, no new `PropertyValue` variant** —
-  `offset-y` is `i32` per DD-003, and binding reuses the M2
-  string-baked path that `IrType::I32` properties currently
-  dispatch through (per
-  [architecture.md §6.8 *Per-type seam* paragraph](../architecture.md#68-reactive-engine-m2-phase-5)).
+  `offset-y` is `i32` per DD-003. Binding reuses the existing
+  i32 reader / binding-effect machinery (`HandlerExpr::IntPropRead`
+  reads the `Signal<i32>`; `register_binding` +
+  `widget_write_property` build a `PropertyValue::String` from
+  the stringified result); the narrow string-to-`i32` parse step
+  needed to land the value in ScrollView's `i32` `offset-y`
+  field happens at ScrollView's per-widget `set_property` arm.
+  No general typed-`i32` evaluator / writer pair is built (per
+  [architecture.md §6.8 *Per-type seam* paragraph](../architecture.md#68-reactive-engine-m2-phase-5);
+  the "third pair" stays deferred — see §M4 hand-off item 2).
 - `wasamo-runtime` widget catalog
   ([wasamo-runtime/src/widget.rs](../../wasamo-runtime/src/widget.rs)):
   `Rectangle | VStack | HStack | Text | Button | Box | WrapPanel`
@@ -68,11 +74,16 @@ this phase extends without breaking:
   unbounded main-axis); Phase 4 extends it with
   `LayoutError::ScrollViewUnboundedAxis` per DD-002 / DD-005.
 - Binding pipeline: per-type writer seam pattern (DD-M3-P1-007).
-  Phase 4's `offset-y` is bindable read-only (DD-003), using the
-  existing M2 i32 string-baked dispatch path; **no typed-`i32`
-  writer pair is built** (the anticipated "third pair" from
+  Phase 4's `offset-y` is bindable read-only (DD-003). The
+  existing i32 reader path (`HandlerExpr::IntPropRead` →
+  `Signal<i32>`) and binding-effect re-run path are reused
+  unchanged; the stringified value `widget_write_property`
+  passes (as `PropertyValue::String`) is parsed into ScrollView's
+  `i32` `offset-y` field at ScrollView's per-widget
+  `set_property` arm. **No general typed-`i32` evaluator /
+  writer pair is built** — the anticipated "third pair" from
   [architecture.md §6.8 *Per-type seam* paragraph](../architecture.md#68-reactive-engine-m2-phase-5)
-  is deferred to M4 input-handling work — see §M4 hand-off
+  is deferred to M4 input-handling work (see §M4 hand-off
   below). F5 (`TypedValue` deferral) is held in force by
   construction.
 - `wasamoc` ([wasamoc/src/check.rs](../../wasamoc/src/check.rs)):
@@ -404,11 +415,15 @@ the typed-`i32` writer pair decision** ([architecture.md §6.8
   layout-time clamp changes the applied offset).
   - What you gain: matches A5's "content offset binding" wording
     exactly (binding is present; direction left unspecified);
-    reuses the M2 i32 string-baked dispatch path; **no new
-    `PropertyValue` / `IrType` / `IrLiteral` variants**; no
-    typed-`i32` writer pair built (seam-building discipline
-    preserved); gallery sub-screen demonstrates programmatic
-    scrolling via buttons that mutate `state.scroll_y`.
+    reuses the existing i32 reader / binding-effect machinery,
+    adding only the narrow string-to-`i32` parse step at
+    ScrollView's per-widget `set_property` arm needed to land
+    the binding result in ScrollView's `i32` `offset-y` field
+    (no general typed-`i32` evaluator / writer pair is built —
+    seam-building discipline preserved); **no new
+    `PropertyValue` / `IrType` / `IrLiteral` variants**; gallery
+    sub-screen demonstrates programmatic scrolling via buttons
+    that mutate `state.scroll_y`.
   - What you give up: when the layout-time clamp differs from
     the bound state's value, the source state and the applied
     offset diverge silently (the author observes the displayed
