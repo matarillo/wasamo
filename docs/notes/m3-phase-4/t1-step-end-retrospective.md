@@ -1,0 +1,298 @@
+---
+title: M3-Phase 4 / T1 step-end retrospective
+status: recorded
+created: 2026-05-25
+scope: step-end
+task: T1 — wasamoc check ScrollView surface and diagnostics
+---
+
+# M3-Phase 4 / T1 step-end retrospective
+
+## Scope
+
+`docs/plans/progress/m3-phase-4-progress.md` の **T1**
+("`wasamoc check`: ScrollView surface and diagnostics") の step-end
+retrospective。T1 が discharge する ADR 検証は Phase 4 verification
+closure **evidence item 1** (compile-time、host-independent)、すなわち
+DD-M3-P4-001 の child-count compile-time half、DD-M3-P4-002 の
+attribute-scope (`viewport-*` / `scroll-axis` / `padding` reject)、
+DD-M3-P4-003 の `offset-y` literal/binding accept + reject + writable
+surface reject、DD-M3-P4-006 の structural gate compile-time half。
+
+対象コミット (`feat/m3-phase-4-t1` 上、main から 4 件):
+
+- `cc3cf51 feat(wasamoc): ScrollView known widget + exactly-one-child gate (M3-Phase 4 T1)`
+- `f4fccab feat(wasamoc): ScrollView offset-y accept/reject + writable surface gate (M3-Phase 4 T1)`
+- `6a02a30 feat(wasamoc): reject unknown ScrollView attributes (M3-Phase 4 T1)`
+- `fe0e890 style(wasamoc): cargo fmt T1 ScrollView check additions`
+
+merge 先は phase ブランチ `feat/m3-phase-4` (no-ff、`feedback_workflow`
+§1 / retrospectives.md §進行手順)。本 step は単一 task = 単一 step
+ではない (T1〜T6 構成) ため、step→phase merge のみで完結し、phase →
+main は T6 の phase-end gate に持ち越す。
+
+## Current Judgment
+
+2026-05-25 時点で T1 step-end 基準は **達成済み (owner 明示承認待ち)**。
+fast-track は既に廃止 (`feedback_workflow` §2(b) / 2026-05-25 `49b49fb`)
+のため、判定にかかわらず owner 明示承認待ちで停止する。
+
+- ScrollView が `KNOWN_WIDGET_TYPES` に追加され、unknown-widget warning
+  を出さない。Phase 3 WrapPanel と同じ surface-registration pattern。
+- `check_scrollview_child_count` が 0-child / >1-child を `WASAMO_ERR`
+  相当の compile-time error として reject。DD-M3-P4-001 (exactly 1)
+  + DD-M3-P4-006 structural gate の compile-time half。
+- `check_scrollview_offset_y_bind` が `offset-y` の正/負/zero `IntLit`
+  と、`Some(TypeName::Int)` に resolve する bare Ident を accept。
+  非整数 literal (String / Float / Color / Ratio / Bool / Measurement)
+  と、`undeclared / bool / string` state binding をすべて reject。
+  各 diagnostic は attribute 名 (`ScrollView.offset-y`) と Phase 4
+  surface contract (`i32` literal / bare `i32` state ident /
+  dsl_spec §4.11) を埋め込む。
+- `check_scrollview_writable_offset_y` が `in-out property<i32>
+  offset-y: 0` 形を ScrollView body 内で reject。generic
+  `Member::PropertyDecl` arm は本体が no-op だが、ScrollView 特化
+  arm を先に挿入することで DD-M3-P4-003 Option B (read-only) を
+  compile-time に強制し、Option C 相当の writable surface は M4
+  hand-off へ向けて diagnostic に明文化。
+- `check_scrollview_unknown_attr` が `offset-y` 以外の任意の
+  PropertyBind を ScrollView body 内で reject。WrapPanel 属性名
+  (`item-cross-size` 等) は既存の "WrapPanel attribute outside
+  WrapPanel" diagnostic が先に発火するため、wording が
+  attribute-specific に保たれる。`scrollview_wrappanel_attr_inside_routes_to_wrappanel_diag`
+  test がこの dispatch order を pin している。
+- 25 件の T1 unit test を `check.rs` に追加 (accept 6 / child-count 4 /
+  literal-reject 6 / state-ident-reject 3 / writable-reject 1 /
+  unknown-attr-reject 4 / 既存設計と互換性検証 1)。
+- 既存 gallery (`examples/gallery/gallery.ui`) は `wasamoc check`
+  exit 0 (positive control 維持; T5 で additively ScrollView slice
+  を加える)。
+- **Clean rebuild gate:**
+  `cargo clean` (3524 files, 1.0 GiB) → `cargo build --release
+  --workspace` (45.15s, green) → `cargo build --workspace` (debug;
+  37.24s, green) → `cargo test --workspace` (failure 0、wasamoc lib
+  test 235 passed = T1 で +25、他 crate 全 green) → `cargo fmt --all
+  -- --check` (post-commit state; zero exit、ただし fmt 修正は
+  `fe0e890` で別 commit 化済み)。
+
+T1 の blocker は残っていない。T2 (layout engine ScrollView
+measure-arrange) へ進める。
+
+## Main Learning
+
+中心的な学びは **「Phase 3 T1 の WrapPanel constant-only pattern を
+ScrollView の bindable read-only pattern に組み替える際に、dispatch
+order を attribute-specific 診断が prevail するように設計する必要が
+ある」** という発見。
+
+- WrapPanel attribute (`item-cross-size` 等) を ScrollView body に
+  書いた場合、ScrollView の "unknown attribute" catch-all が先に
+  発火すると wording が generic になり「実は WrapPanel 属性だが
+  WrapPanel 外」という具体情報が失われる。`WRAPPANEL_INT_ATTRS`
+  メンバシップを negate して ScrollView unknown-attr arm から
+  exclude することで、既存の WrapPanel-attribute-outside-WrapPanel
+  diagnostic が prevail する dispatch order を確保した
+  (`scrollview_wrappanel_attr_inside_routes_to_wrappanel_diag` test
+  でピン留め)。これは `[[feedback_shared_lexer_helper_scope]]` の
+  「下流 variant にどう作用するか reject test で explicit に
+  ピン留めする」原則の check.rs 版。
+
+副次的な学び:
+
+- DD-M3-P4-003 Option B の "writable surface defer to M4" は
+  parser に新規 keyword を追加せず実現できた。既存の
+  `Member::PropertyDecl` arm (= `in-out property<T> X: default`)
+  が ScrollView body 内に出現したとき、`name == "offset-y"` のみを
+  reject する narrow scope で済む。`PropertyDecl` arm は他 widget
+  body 内では依然 no-op (component-level の `in-out property` 宣言
+  と意味が混ざらないよう、ScrollView 限定の reject に絞った)。
+- ADR DD-M3-P4-006 の "compound shape" (structural gate + runtime
+  clamp) は compile-time 側だけ見ると Phase 3 negative-literal gate
+  と表面上似ているが、本 T1 では **値域 reject を一切入れない**
+  (`offset-y: -5` を accept) のが load-bearing な対比点。test
+  `scrollview_offset_y_negative_literal_accepted` がこの判定を
+  ピン留めしており、Phase 3 pattern を機械的に踏襲しないよう
+  protection をかけている。
+- 既存 `check_expr_type` の FloatLit reject が global に効いている
+  ため、ScrollView offset-y の FloatLit 経路 test
+  (`scrollview_offset_y_float_literal_rejected`) は wording が
+  generic float-reject diagnostic でも合格する書き方にした
+  (assert に `"ScrollView.offset-y"` を要求しない)。これは将来
+  ScrollView 特化 float diagnostic を追加した場合にも test を
+  通すための future-proof な assertion 形だが、現状 wording が
+  generic に流れていることは記録 (Verification Notes 参照)。
+
+## Checklist
+
+1. **本作業の主要な学び:** あり。
+   - dispatch order を attribute-specific diagnostic が prevail
+     するように設計する必要 (上記 Main Learning 中心の学び)。
+   - DD-M3-P4-003 の writable surface defer は既存 PropertyDecl
+     arm に narrow reject を追加するだけで実現でき、parser 拡張
+     不要。
+   - DD-M3-P4-006 compound shape の compile-time 側は WrapPanel
+     pattern を踏襲しない (負値 accept) ことが load-bearing。
+
+2. **仕様文書 (`abi_spec.md` / `architecture.md` / `dsl_spec.md`) の変更:** **なし**
+   - T1 の対象は `wasamoc::check` および
+     `docs/plans/progress/m3-phase-4-progress.md` のみ。Moment 1 で
+     §4.11 が既に draft 済みであり、T1 から factual 矛盾は出ていない。
+     Moment 2 spec sync は T6 の責任範囲。
+
+3. **ローカル clean rebuild:** **green**
+   - `cargo clean`: 3524 files, 1.0 GiB removed。
+   - `cargo build --release --workspace`: green (45.15s)。
+   - `cargo build --workspace` (debug): green (37.24s)。
+   - `cargo test --workspace`: failure 0 件。
+     - `wasamoc` lib test: **235 passed** (T1 で +25; 内訳は
+       Verification Notes)。
+     - `wasamo-ir`, `wasamo-runtime`, ABI / DLL / binding /
+       counter-rust / gallery-rust / bool-demo-rust crate 群すべて
+       green。
+   - `cargo fmt --all -- --check` (post-commit state): zero exit
+     (fmt 修正は `fe0e890` で別 commit 化、最終 HEAD は --check に
+     対して clean)。
+   - GitHub Actions 上の clean rebuild は phase-end gate (T6) で確認。
+
+4. **PO に相談すべき設計判断・トレードオフ:** **なし**
+   - T1 はすべて ADR DD-M3-P4-001/002/003/006 と dsl_spec §4.11
+     の範囲内で完結。新規 design call は発生していない。
+   - dispatch order の選択 (WrapPanel 診断 prevail) は ADR /
+     dsl_spec の wording から自然に従う判断で、owner 相談不要と
+     判定。
+
+### step-end 固有
+
+5. **plan/ADR に記載の step 目的から外れた「ついで」のリファクタ・
+   構造変更:** **なし**
+   - 既存の `check_box_const_only_bind` /
+     `check_wrappanel_const_only_bind` の helper pattern を
+     踏襲して新規 helper 4 個 (`check_scrollview_offset_y_bind`、
+     `check_scrollview_writable_offset_y`、
+     `check_scrollview_unknown_attr`、
+     `check_scrollview_child_count`) を追加したのみ。既存 helper
+     や dispatch site の signature 変更なし。
+   - `WRAPPANEL_INT_ATTRS` メンバシップを ScrollView arm から参照
+     したが、これは dispatch order を pin するための一行参照で
+     あって構造変更ではない。
+
+6. **現在の phase ADR への追加 DD 必要性:** **なし**
+   - ScrollView attribute reject の wording・dispatch order は
+     DD-M3-P4-001/002 の attribute-scope 決定の自然な実装。
+     追加 DD は不要。
+
+7. **既存 ADR の Proposed 項目の新規追加、または Proposed → Accepted
+   への昇格:** **なし**
+   - 当該 ADR (`docs/decisions/m3-phase-4-scroll-view.md`) は
+     全 DD Accepted 済み。T1 では昇格対象なし。
+
+8. **`m3-plan.md` の AC 追加・変更、または Phase 構成の追加・統合・
+   分割:** **なし**
+   - A5 / A11 の文言変更なし。Phase 構成変更なし。
+
+9. **後続 step に持ち越す仮実装・近似・新規 `dead_code` 警告:** **なし**
+   - `unimplemented!` / `todo!()` stub は一切置いていない。
+   - 新規 `dead_code` 警告は観測なし (build / test の warning 出力
+     にノイズなし)。
+   - `WRAPPANEL_INT_ATTRS` を ScrollView dispatch 内で `contains`
+     参照しているため、catalog 行は dead にならない。
+
+10. **新たに発見・導入した cross-step / cross-phase の設計制約:** **なし**
+    - T1 で導入した制約 (ScrollView 限定の attribute set、
+      writable surface defer、dispatch order) はすべて ADR /
+      dsl_spec §4.11 の既存 anticipate 済み記述で覆われている。
+    - T2 以降が暗黙に依存する新規不変条件は導入していない
+      (T2 は pure-data layout、T3 は IR loader、T4 は WinRT
+      integration、いずれも `wasamoc::check` の internal dispatch
+      には依存しない)。
+
+11. **タスクリストの後続 step 見直し:** **不要**
+    - progress file の T1 行 7 項目をすべて `[x]` に flip 済み。
+    - T2-T6 の task 構成・順序・依存関係に T1 実装から見て調整
+      すべき点は出ていない。
+    - T3 (runtime IR loader / `validate()`) は T1 の compile-time
+      child-count gate と対になる runtime 半分。dispatch site と
+      diagnostic wording 設計は T3 着手時の参考になる程度で、
+      task 行追加・削除は不要。
+
+## Verification Notes
+
+T1 で追加した test と、走らせた command を記録する。
+
+新規テスト (`wasamoc::check`, 25 件):
+
+- child-count 4: `scrollview_known_widget_no_warning`,
+  `scrollview_zero_child_rejected`,
+  `scrollview_one_child_accepted`,
+  `scrollview_two_children_rejected`,
+  `scrollview_three_children_rejected`,
+  `scrollview_attrs_do_not_count_as_children`
+- offset-y accept 4: `scrollview_offset_y_positive_int_literal_accepted`,
+  `scrollview_offset_y_zero_literal_accepted`,
+  `scrollview_offset_y_negative_literal_accepted`,
+  `scrollview_offset_y_i32_state_ident_accepted`
+- offset-y literal reject 6: `scrollview_offset_y_string_literal_rejected`,
+  `scrollview_offset_y_float_literal_rejected`,
+  `scrollview_offset_y_color_literal_rejected`,
+  `scrollview_offset_y_ratio_literal_rejected`,
+  `scrollview_offset_y_bool_literal_rejected`,
+  `scrollview_offset_y_measurement_rejected`
+- offset-y state-ident reject 3: `scrollview_offset_y_undeclared_state_rejected`,
+  `scrollview_offset_y_bool_state_rejected`,
+  `scrollview_offset_y_string_state_rejected`
+- writable surface reject 1: `scrollview_in_out_property_offset_y_rejected`
+- unknown attr reject 5: `scrollview_viewport_width_rejected`,
+  `scrollview_viewport_height_rejected`,
+  `scrollview_scroll_axis_rejected`,
+  `scrollview_padding_rejected`,
+  `scrollview_wrappanel_attr_inside_routes_to_wrappanel_diag`
+
+実行コマンド:
+
+```text
+cargo clean                                (3524 files, 1.0 GiB)
+cargo build --release --workspace          (45.15s, green)
+cargo build --workspace                    (debug; 37.24s, green)
+cargo test --workspace                     (failure 0)
+cargo test -p wasamoc --lib check::tests::scrollview  (25 passed)
+cargo fmt --all -- --check                 (post-commit state; zero exit)
+target/release/wasamoc.exe check examples/gallery/gallery.ui  (exit 0)
+```
+
+いずれも green。`wasamoc` lib test は **235 passed** (T1 で +25)。
+
+**Wording 観測 (Main Learning §副次的な学び 由来):**
+`scrollview_offset_y_float_literal_rejected` test は generic
+float-reject diagnostic でも通る形に assert を書いており、現状の
+wording は `"float literals are not supported in M2 (only i32 and
+string)"` (= `check_expr_type` の global FloatLit reject 由来) に
+流れている。Phase 4 の `offset-y` 専用 wording (`"ScrollView.offset-y"`
+を含む) ではない。これは記録のみで、wording 変更は本 step 範囲外。
+
+## Follow-Up
+
+T1 から後続 task への明示的な引き渡し:
+
+- **T2 (layout engine ScrollView measure-arrange):** T1 は compile-
+  time gate のみを discharge。T2 は pure-data `LayoutNode` 上で
+  `LayoutError::ScrollViewUnboundedAxis` を含む measure-arrange を
+  実装し、ADR Phase 4 verification closure item 2 を discharge。
+- **T3 (`wasamo-runtime` IR loader / `validate()`):** T1 の
+  child-count compile-time gate と対になる runtime 半分。memory-IR
+  経路で bypass される compile-time gate を `WASAMO_ERR_IR_MALFORMED`
+  で押さえる。
+- **T4 (Windows integration + R2 closure):** T1 の compile-time
+  rejection wording は T4 fixture の `.ui` literal が `wasamoc check`
+  を通ることが前提。`offset-y: scroll_y` を含む fixture を書く際に
+  T1 の accept rule (`scroll_y: i32` 必須) を守る。
+- **T6 (phase-end / Moment 2 re-sync):** dsl_spec §4.11 の現行
+  draft と T1 実装は今のところ整合。Moment 2 で sync 必要な
+  divergence は今のところ無し (再判断は T6 で行う)。
+- **Wording follow-up:** `scrollview_offset_y_float_literal_rejected`
+  の wording 流出 (Verification Notes 末尾) を Phase 4 内で揃える
+  か M4 まで持つかは T6 で判断する。現状 user-visible diagnostic
+  は出力されるため Phase 4 acceptance には影響しない。
+
+これらはすべて progress file の T2–T6 として既に列挙済み。T1 単体で
+新たに発見された follow-up は **wording 観測の 1 件** のみで、
+それも本 step 範囲外。
