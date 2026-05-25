@@ -119,6 +119,12 @@ Phase 3 R2 test-coverage residual inside Phase 4.
 - [ ] Assert three-level nested root-relative position math for
       parent -> ScrollView Visual -> ScrollView-owned intermediate
       content Visual -> thumbnail Visual, closing R2.
+- [ ] Exercise the unbounded scroll-axis runtime fixture when an
+      ergonomic `.ui` / IR-level fixture exists; assert layout returns
+      `Err(LayoutError::ScrollViewUnboundedAxis)`.
+- [ ] If no ergonomic integration fixture exists, explicitly downgrade
+      the unbounded-parent case to pure-logic coverage in T2 and record
+      that decision here.
 - [ ] Preserve the CI-gated Compositor skip/fail discipline inherited
       from Phase 2 / Phase 3.
 
