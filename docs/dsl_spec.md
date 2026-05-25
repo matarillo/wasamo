@@ -1,14 +1,16 @@
 # Wasamo DSL Specification
 
-**Document version:** 1.0
-**Last updated:** 2026-05-22
+**Document version:** 1.1
+**Last updated:** 2026-05-25
 **Status:** M3-Phase 2 closed (implementation-synced); M3-Phase 3
-closed (implementation-synced). Covers the M2 `.ui` surface, the
-`state` surface keyword retroactively, the M3-Phase 1 `bool` scalar
-binding additions, the M3-Phase 2 Box layout primitive (with
-`aspect` / `fill` literal attributes), the M3-Phase 3 WrapPanel
-layout primitive (with `item-cross-size` / `item-spacing` /
-`line-spacing` constant-only integer attributes), and
+closed (implementation-synced); M3-Phase 4 ADR-accepted design draft.
+Covers the M2 `.ui` surface, the `state` surface keyword
+retroactively, the M3-Phase 1 `bool` scalar binding additions, the
+M3-Phase 2 Box layout primitive (with `aspect` / `fill` literal
+attributes), the M3-Phase 3 WrapPanel layout primitive (with
+`item-cross-size` / `item-spacing` / `line-spacing` constant-only
+integer attributes), the M3-Phase 4 ScrollView layout primitive
+(vertical-only viewport + clip + `offset-y` binding draft), and
 `;wasamo-ir v0`.
 
 ---
@@ -275,6 +277,7 @@ Declares a child widget. Widget type names are PascalCase identifiers.
 | `Rectangle` | Solid rectangle          |
 | `Box`       | Layout container with optional `aspect` / `fill` (M3-Phase 2; see §4.9) |
 | `WrapPanel` | Wrapping layout container (M3-Phase 3; see §4.10) |
+| `ScrollView` | Vertical scroll viewport with exactly one content child (M3-Phase 4 design draft; see §4.11) |
 
 Unknown widget type names produce a warning (not an error) in M1,
 to allow forward-compatibility with user-defined components.
@@ -762,6 +765,183 @@ violation up the layout tree.
    WrapPanel does not clip the overflow itself; an enclosing
    ScrollView or other clipping parent is required to truncate
    the on-screen rendering.
+
+### 4.11 ScrollView layout primitive (M3-Phase 4)
+
+**Phase status:** M3-Phase 4 ADR-accepted design draft; pending implementation re-sync
+
+`ScrollView` is a vertical-only layout primitive that exposes a
+bounded **viewport** over one scrollable **content** child. It clips at
+the viewport rectangle and translates the content upward by the
+clamped `offset-y` value. The widget itself does not synthesize
+content, scrollbars, wheel handling, drag handling, or author-declared
+viewport dimensions in M3-Phase 4.
+
+#### Sizing mental model
+
+ScrollView sizing follows five facts:
+
+1. **Viewport size comes from parent.** ScrollView fills its parent
+   slot on both axes; there is no `viewport-width`, `viewport-height`,
+   `width`, or `height` attribute on ScrollView in Phase 4. To control
+   viewport size, the parent's slot must be sized through the parent's
+   own attribute or layout role.
+2. **Content measures with viewport-bounded cross axis and unbounded
+   scroll axis.** The single content child receives the viewport width
+   as a horizontal bound and an unbounded vertical constraint. Content
+   along the scroll axis may therefore be arbitrarily tall and is
+   scrollable when it exceeds the viewport; content shorter than the
+   viewport is anchored at the top and does not scroll.
+3. **Content offset is clamped to `[0, max(0, content_height -
+   viewport_height)]`.** Out-of-range bound values (e.g. a `scroll_y`
+   state that runs past the scrollable range) are silently clamped on
+   every layout pass. The bound state is read-only-bound under the
+   Phase 4 default (see *Attributes* below), so the source state's
+   written value and the applied offset may diverge — the author
+   observes the displayed scroll position, not the bound value, as
+   ground truth.
+4. **The clip is owned by ScrollView, not by the content.** Content
+   widgets remain unclipped; only the ScrollView Visual installs a
+   clip surface. Composing two ScrollViews around the same content
+   stacks two clips; wrapping ScrollView around an HStack around
+   content does not install an HStack-level clip. The Visual-layer
+   shape is given normatively in *Visual-layer contract* below.
+5. **`offset-y` is the Phase 4 external control surface, not the only
+   future scroll model.** The bindable `offset-y` attribute is how
+   Phase 4 exposes scroll position to author code; it is not a
+   commitment that state-driven offset is the canonical way to scroll.
+   Input-driven scrolling (wheel, drag, keyboard) and scrollbar-driven
+   scrolling are M4 or later surfaces and land additively without
+   redefining `offset-y`.
+
+**Ecosystem contrast.** Readers arriving from WPF, CSS, or SwiftUI
+should map Phase 4 ScrollView to "one child in a clipped viewport",
+not to a full scroll-control stack:
+
+- **WPF `ScrollViewer`.** Carries scrollbar visibility attributes
+  and a built-in scrollbar widget. Wasamo's Phase 4 conceptual
+  primitive (clip + offset + measure-arrange) matches, but the
+  surface is narrower: no scrollbar, viewport-from-parent, and the
+  scroll position is exposed as a bindable `offset-y` attribute.
+- **CSS `overflow: scroll`.** The viewport-plus-clipped-content
+  shape applies, but Phase 4 is not a general overflow style
+  property — it is a concrete widget kind with exactly one content
+  child. Phase 4 ships no scrollbar in any state and no input-driven
+  internal scrolling, and content size does not back-propagate to
+  ScrollView's outer size (which stays at viewport).
+- **SwiftUI `ScrollView`.** Carries the viewport-from-parent default,
+  axis selection, and gesture-driven offset as the familiar
+  associations. Wasamo's Phase 4 hardcodes vertical, exposes scroll
+  position as the bindable `offset-y` attribute against a bare state
+  identifier (e.g. `offset-y: scroll_y` with `state scroll_y: i32 = 0`
+  declared per §4.7), and defers gesture / wheel input to M4 or later.
+  The `.scrollPosition($state)` SwiftUI surface is conceptually
+  closest to the future in-out / write-back direction, which Phase 4
+  defers.
+
+#### Children
+
+ScrollView admits **exactly one child**. `wasamoc check` rejects
+zero-child and multi-child ScrollView declarations; the runtime IR
+loader's `validate()` independently rejects malformed memory IR with
+0 or more than 1 child. The runtime rejection uses the existing
+`WASAMO_ERR_IR_MALFORMED` surface.
+
+#### Attributes
+
+| Attribute | Surface form | Bindable in Phase 4 | Default |
+|---|---|---|---|
+| `offset-y` | `<i32>` literal or a bare state identifier such as `scroll_y` (declared as `state scroll_y: i32 = 0` per §4.7) | Read-only binding | `0` |
+
+`offset-y` is a signed integer pixel offset in the layout coordinate
+system. Per §4.3, the bound form is a bare identifier RHS (for example
+`offset-y: scroll_y`), not a `\{…}` interpolation — string interpolation
+is confined to string literals (see §2.4). Literal values and bound
+`i32` state values may be negative or larger than the scrollable range
+in source; the runtime clamps the applied offset during layout. Absent
+`offset-y` materializes as `0` at the runtime layer.
+
+The attribute reuses the existing `i32` surface: no grammar token, AST
+variant, `IrType`, `IrLiteral`, or scalar value type is added in Phase
+4. The bindable path reuses the existing i32 reader / binding-effect
+machinery. Runtime writes reach ScrollView through a narrow
+ScrollView-specific string-to-`i32` parse / write bridge; the general
+typed-`i32` writer pair remains deferred to M4 or later.
+
+Unknown ScrollView attributes are rejected in Phase 4. In particular,
+`viewport-width`, `viewport-height`, `scroll-axis`, and `padding` are
+out of scope.
+
+#### Measure-arrange algorithm
+
+ScrollView's measure-arrange pass operates on pure data
+(`wasamo-runtime/src/layout.rs`); the algorithm is Win32/WinRT-free.
+
+**Bounded vertical parent (happy path).** ScrollView's viewport size is
+the parent-supplied bound. Its single content child is measured with:
+
+```
+content_width_constraint  = viewport_width
+content_height_constraint = unbounded
+```
+
+ScrollView's outer arranged size equals the viewport size regardless
+of the measured content height. The content is arranged at the
+top-leading origin of the ScrollView content space; ScrollView does
+not center content smaller than the viewport.
+
+**Offset clamp.** Let:
+
+```
+max_offset_y = max(0, content_height - viewport_height)
+applied_y    = clamp(offset_y, 0, max_offset_y)
+```
+
+The visible content translation is `(0, -applied_y)`. Negative
+`offset-y` clamps to `0`; values larger than `max_offset_y` clamp to
+`max_offset_y`; content smaller than or equal to the viewport also
+clamps to `0`.
+
+**Unbounded vertical parent.** A ScrollView whose scroll axis is
+unbounded has no viewport boundary to scroll within. Layout fails with
+`LayoutError::ScrollViewUnboundedAxis`. This error is runtime-internal
+in Phase 4; no new C ABI layout-error tag is added.
+
+**Rounding contract.** `offset-y` is an `i32` value promoted to `f32`
+for layout arithmetic and Visual offset writes. Phase 4 introduces no
+pixel-snapping rule.
+
+#### Visual-layer contract
+
+ScrollView owns two Visual-layer surfaces:
+
+- The outer ScrollView Visual carries the viewport size and installs
+  `Visual.Clip = InsetClip { 0, 0, 0, 0 }`.
+- A ScrollView-owned intermediate content Visual sits between the
+  outer Visual and the single content child's widget Visual. It carries
+  the scroll translation:
+
+  ```
+  Visual.Offset = (0, -applied_y, 0)
+  ```
+
+The child widget's own Visual continues to receive its layout-derived
+parent-relative offset through the normal `sync_visuals()` path. The
+ScrollView-owned intermediate content Visual and the child Visual do
+not carry the viewport clip.
+
+#### Common pitfalls
+
+1. **Expecting ScrollView to size itself.** ScrollView fills the slot
+   its parent/root allocates. Use an enclosing layout shape to control
+   the viewport; `viewport-*` attributes do not exist in Phase 4.
+2. **Putting several children directly inside ScrollView.** Wrap them
+   explicitly in a layout container. `ScrollView { WrapPanel { ... } }`
+   is the canonical Phase 4 gallery composition.
+3. **Expecting user input or scrollbar behavior.** Phase 4 demonstrates
+   programmatic scrolling through `offset-y`. Wheel, drag, scrollbar,
+   in-out write-back, and imperative scroll commands are M4 or later
+   surfaces.
 
 ---
 
@@ -1277,3 +1457,4 @@ future design item.
 | 0.8     | 2026-05-20 | M3-Phase 2 close: flipped §4.9 Phase status marker and document status to implementation-synced after T1-T13 landed and local / CI phase-end gates passed. No implementation/spec divergence was found during the close re-sync. |
 | 0.9     | 2026-05-21 | M3-Phase 3 ADR-accepted design draft: added §4.10 WrapPanel layout primitive chapter (Phase status marker; sizing mental-model subsection with four-fact anchor and WPF / Compose / CSS ecosystem contrast per framing decision H; `item-cross-size` / `item-spacing` / `line-spacing` constant-only `i32` attribute surface; two-stage measure-arrange algorithm with bounded happy path, unbounded-main-axis one-line-flow branch, and unbounded-cross-axis-with-aspect-child propagation to Phase 2's `LayoutError::BoxAspectUnboundedBoth`; oversized-first-child + visible-overflow subsection; common-pitfalls note); added `WrapPanel` row to the §4.4 widget registry and dropped the stale `M1` qualifier from the registry's lead-in (the registry grew beyond M1 once `Box` landed in Phase 2; folded into this commit as a minimal retroactive fix with owner confirmation). No new tokens, grammar rules, AST variants, or IR forms — Phase 3 reuses existing `i32` plumbing. Pending implementation re-sync at Phase 3 close. |
 | 1.0     | 2026-05-22 | M3-Phase 3 close: flipped §4.10 Phase status marker and document status to implementation-synced after T1–T9 landed and the local clean-rebuild gate passed. Folded the T1 Decisions-log lexer-surface item into §2.2: generalised the `Ident` lexical pattern to admit kebab-case continuations (`-[A-Za-z]`-prefixed segments) and the `IntLit` pattern to admit an optional leading `-`; added a one-line note that the negative-sign surface is `IntLit`-only (does not extend `FloatLit` / measurement / `RatioLit` and does not introduce a subtraction or unary-minus operator). `§5` AST shapes unchanged (`IntLit { value: i64 }` already holds the signed surface). No other implementation / spec divergence found during the close re-sync. |
+| 1.1     | 2026-05-25 | M3-Phase 4 ADR-accepted design draft: added §4.11 ScrollView layout primitive chapter (Phase status marker; viewport/content/offset mental model with WPF / CSS `overflow: scroll` / SwiftUI ecosystem contrast; exactly-one-child contract; `offset-y` signed `i32` literal or read-only `i32` state binding; parent-supplied viewport with no `viewport-*` attributes; pure-data measure-arrange algorithm including inner unbounded vertical measure, offset clamp, `LayoutError::ScrollViewUnboundedAxis`, and rounding contract; Visual-layer contract for the ScrollView-owned intermediate content Visual carrying `Visual.Offset = (0, -applied_y, 0)`; common-pitfalls note). Added `ScrollView` row to the §4.4 widget registry. No new grammar tokens, AST variants, IR literal/type variants, or scalar value types — Phase 4 reuses existing `i32` plumbing plus a narrow ScrollView string-to-`i32` parse / write bridge. Pending implementation re-sync at Phase 4 close. |
