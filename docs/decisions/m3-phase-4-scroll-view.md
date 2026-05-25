@@ -593,8 +593,9 @@ offset, and (iii) where in the Visual tree the clip sits.
 **Decision:** Option A (`Visual.Clip = InsetClip{0,0,0,0}`) +
 Option A (`Visual.Offset` on content) + Option A (outer-clipped /
 inner-offset tree shape). All three match the existing M2
-visual-layer conventions and require no new Composition
-primitives.
+visual-layer offset convention, use the simplest clip primitive
+for the required viewport clip, and avoid introducing a
+TransformMatrix-based offset path.
 
 **R2 (Phase 3 carry-over) — close inside Phase 4.** Phase 3 T9
 surfaced a `sync_visuals` bug whose root cause was the implicit
@@ -643,7 +644,8 @@ have no analogue in Phase 1–3 surfaces.
   of `(viewport_width, +∞)` — bounded cross axis (= viewport
   width per DD-001's vertical-only recommendation), unbounded
   scroll axis. Inverse of WrapPanel's measure input (WrapPanel:
-  unbounded main + DD-004-derived cross). DD-001's vertical-only
+  unbounded main + cross bound from Phase 3 DD-M3-P3-004
+  `item-cross-size` / parent-cross passthrough). DD-001's vertical-only
   implies "scroll axis = vertical, unbounded direction =
   vertical, viewport-equals-cross-axis-bound = width".
 - **Viewport vs content size relationship.**
@@ -670,8 +672,10 @@ have no analogue in Phase 1–3 surfaces.
 - **Content-smaller-than-viewport behaviour.** Content paints at
   its measured size, anchored at the viewport's top-leading corner
   (`(0, 0)` in viewport-local coordinates). Remaining viewport
-  area shows the parent's `fill` (no ScrollView-level background
-  attribute in Phase 4). Offset is forced to 0 by the clamp.
+  area shows whatever visual content is behind the ScrollView
+  (for example a Box fill supplied by surrounding composition);
+  Phase 4 adds no ScrollView-level background attribute. Offset
+  is forced to 0 by the clamp.
 - **Unbounded scroll-axis parent.** Per DD-002 decision, fires
   `LayoutError::ScrollViewUnboundedAxis` at layout time. No
   degenerate Phase 4 ScrollView shape: unbounded scroll axis is
