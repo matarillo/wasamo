@@ -266,11 +266,13 @@ offset clamp.
     expectations; smallest spec surface (no new attribute, no new
     bindable surface); composes cleanly with all existing layout
     parents.
-  - What you give up: an author who wants a fixed-size scroll
-    region inside a fluid container must wrap ScrollView in a
-    parent whose own attributes pin the slot size; the "give
-    ScrollView a fixed viewport height directly" ergonomic is
-    deferred.
+  - What you give up: direct fixed-viewport sizing is deferred.
+    In Phase 4, ScrollView obtains its viewport size from the
+    slot its parent layout allocates to it (root window bounds,
+    VStack / HStack member allocation, etc.); ScrollView itself
+    exposes no `viewport-*`, `width`, or `height` attribute. A
+    future phase that needs author-controlled viewport sizing
+    opens its own DD and adds the attribute additively.
 - Option B — Explicit `viewport-width` / `viewport-height`
   attribute pair, no passthrough. Author declares viewport
   dimensions; ScrollView ignores parent constraint.
@@ -414,9 +416,9 @@ the typed-`i32` writer pair decision** ([architecture.md §6.8
     user-input-driven scrolling (wheel / drag) requires the
     writer seam, which is deferred to M4.
 - Option C — Bindable in-out. Runtime writes back to the bound
-  state when the offset changes (which, in Phase 4 without
-  input handlers, only happens via the layout-time clamp). The
-  typed-`i32` writer pair is built.
+  state when the applied offset differs from the bound value
+  (which, in Phase 4 without input handlers, only happens via
+  the layout-time clamp). The typed-`i32` writer pair is built.
   - What you gain: most architecturally complete answer;
     natural shape M4 wheel / drag handlers will eventually
     need.
@@ -473,9 +475,8 @@ the typed-`i32` writer pair decision** ([architecture.md §6.8
 only) + Option A (silent clamp) + Option A (default at widget
 catalog). The typed-`i32` writer pair from
 [architecture.md §6.8 *Per-type seam* paragraph](../architecture.md#68-reactive-engine-m2-phase-5)
-is **deferred to M4** (input-handling work in M4-Phase 1 is the
-natural landing point); see §M4 hand-off below for the explicit
-enumeration of additive M4+ scroll-model surfaces.
+is **deferred to M4 or later**; see §M4 hand-off below for the
+explicit enumeration of additive M4+ scroll-model surfaces.
 
 **Scoping intent — Phase 4 `offset-y` is not the future scroll
 model.** Phase 4's `offset-y` binding is a **bindable control
