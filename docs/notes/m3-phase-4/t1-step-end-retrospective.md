@@ -19,7 +19,8 @@ attribute-scope (`viewport-*` / `scroll-axis` / `padding` reject)、
 DD-M3-P4-003 の `offset-y` literal/binding accept + reject + writable
 surface reject、DD-M3-P4-006 の structural gate compile-time half。
 
-対象コミット (`feat/m3-phase-4-t1` 上、main から 4 件):
+対象実装コミット (`feat/m3-phase-4-t1` 上、本 retrospective ファイル
+自体と review 反映 commit を除く 4 件):
 
 - `cc3cf51 feat(wasamoc): ScrollView known widget + exactly-one-child gate (M3-Phase 4 T1)`
 - `f4fccab feat(wasamoc): ScrollView offset-y accept/reject + writable surface gate (M3-Phase 4 T1)`
