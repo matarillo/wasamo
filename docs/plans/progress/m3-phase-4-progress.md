@@ -221,7 +221,9 @@ for owner-manual GUI smoke (2026-05-25)"** for the rationale.
 
 Discharges the m3-plan phase-end criteria for Phase 4. Renumbered
 from the original T6 when the T5/T6 split landed; checklist content
-is unchanged.
+extends the original list with Moment 2 sync items surfaced by T4
+/ T5 / T6 retrospectives' Item 10 (phase-sync classifications) and
+T6 retrospective Follow-Up #1.
 
 - [ ] `cargo fmt --all -- --check` green.
 - [ ] `cargo build --release --workspace` green locally and on CI.
@@ -231,11 +233,83 @@ is unchanged.
       `M3-Phase 4 closed; implementation-synced`.
 - [ ] `docs/architecture.md` top Status flips to include M3-Phase 4
       complete, with implementation divergences reconciled.
+- [ ] `docs/architecture.md` §6 (general layout) gains a single-sentence
+      runtime-boundary invariant covering "window-root `WidgetNode` is
+      sized to the client rect regardless of its declared width/height
+      constraints, enacted by `WidgetNode::run_layout_as_window_root`
+      and called by `window.rs`'s `WM_SIZE` handler and `set_root`
+      initial layout" (T6 retrospective Item 10 (1) `phase-sync`; T6
+      Follow-Up #1).
+- [ ] `docs/architecture.md` §6.5 (WidgetNode / Visual Layer sync)
+      gains explicit prose that the ScrollView intermediate Visual's
+      scroll translation `(0, -offset_y, 0)` also shifts each content
+      child's `sync_visuals()` `parent_abs_offset` by `(0, -offset_y)`
+      so root-relative LayoutNode offsets convert correctly under the
+      intermediate Visual (T4 retrospective Item 10, configured-class
+      corrected to `phase-sync` in T5 retrospective Follow-Up; T5
+      Follow-Up #2 / T6 Follow-Up #2).
+- [ ] `docs/dsl_spec.md` §4.9 Box examples switch from the
+      `;`-separated single-line form (`Box { aspect: <r>; fill: <c>;
+      Text { ... } }` at the four extant sites) to the parser-
+      accepted multi-line member-per-line form, plus a short adjacent
+      note clarifying that `;` is currently a statement terminator
+      inside handler blocks (§4.5 / §3 grammar) and that **accepting
+      `;` as an optional member separator remains a post-Phase-4
+      grammar open question** so this formatting does not foreclose
+      that extension. Document version bumps to `1.2`; revision
+      history wording is "parser-accepted examples; semicolon member
+      separator left as post-Phase-4 open question" rather than
+      "member separator confirmed as newline" (owner-confirmed
+      framing, T5 副次学び #3 / T5 Follow-Up #2; T6 Follow-Up
+      carry-over).
 - [ ] `docs/plans/m3-plan.md` Phase 4 row flips to complete.
+- [ ] **Out-of-phase residual R1 registration: gallery host Window
+      title wiring.** Phase 4 smoke recorded
+      `MainWindowTitle = "Wasamo"` (framework default) while
+      `examples/gallery/gallery.ui` declares `title: "Gallery"`.
+      Owner-confirmed framing: **owner intent is that `.ui` `title:`
+      must drive the actual native window title**; this is an
+      **M3 residual, not an M4 theming/chrome handoff**. Resolution
+      condition is "the runtime/ABI host path applies the
+      component-level `title` to the native window", **not** "title
+      attribute declared unsupported". Register under
+      §Out-of-phase residuals with the resolution gates: owning M3
+      phase to be assigned during **M3-Phase 5 pre-doc input
+      distillation**; implementation must land **no later than
+      M3-Phase 8 Gallery E2E close**; Phase 6 (ZStack + conditional
+      rendering) is a natural candidate for absorbing the small
+      host/window-metadata wiring task (T5 Follow-Up; T6 Follow-Up
+      #5).
+- [ ] Carry-forward inputs to the next phase's pre-doc are recorded
+      under `docs/notes/m3-phase-5/predoc-inputs.md` covering: (a)
+      the "integration test fixture parent shape must cover at least
+      one production root shape" rule (T6 retrospective Item 10 (2)
+      `carry-forward`); (b) the "non-root Shrink container with Fill
+      child" design-space note (T6 retrospective Item 10 (3)
+      `carry-forward`); (c) the M4 handoff item "`scroll_y` Signal
+      drift resolves via `in-out offset-y` write-back" (T6
+      retrospective Follow-Up #4; this one is genuinely M4 because
+      the writer-direction `in-out` surface is M4 scope); (d) the
+      **R1 Window-title wiring owning-phase assignment** that
+      M3-Phase 5 pre-doc must complete (Q2 disposition; owner
+      intent: M3 residual, not M4 handoff). Per retrospectives.md
+      §Main Learning / 設計制約の前送り, this file must be written
+      before T7's merge gate.
 - [ ] This progress file records the phase-close evidence, CI pointer,
       implementation summary, and lifecycle transition.
-- [ ] Phase-end retrospective recorded under
-      `docs/notes/m3-phase-4/`.
+- [ ] T7 step-end retrospective recorded at
+      `docs/notes/m3-phase-4/t7-step-end-retrospective.md`
+      (retrospectives.md checklist items 1-11; step → phase merge
+      gate; **owned by T7**).
+- [ ] Phase-end retrospective recorded at
+      `docs/notes/m3-phase-4/phase-end-retrospective.md`
+      (retrospectives.md checklist items 12-18; **phase → main merge
+      gate, performed on `feat/m3-phase-4` after T7 merges in**).
+      This bullet stays `[ ]` at T7 step-close and is flipped by the
+      separate phase-end retro commit; per Q3 disposition (2026-05-25)
+      a reviewer reading T7 close as "phase-end retro outstanding"
+      should resolve the apparent gap against this explicit ownership
+      split.
 
 ## Decisions log
 
@@ -392,6 +466,53 @@ is unchanged.
   No screenshot automation is required for T6 close; owner-side
   visible smoke + the new integration test together discharge
   evidence item 5's visible-correctness half.
+
+- **T7 Moment 2 dispositions for follow-up bullets (2026-05-25).**
+  Three owner judgments were requested at T7 open and resolved before
+  any spec or carry-forward editing:
+
+  - **Q1 — dsl_spec.md §4.9 Box example notation.** The
+    `;`-separated single-line `Box { aspect: <r>; fill: <c>; ... }`
+    examples (lines 501 / 507 / 508 / 752) are switched to the
+    parser-accepted multi-line form, but the revision history wording
+    is **"parser-accepted examples; semicolon member separator left
+    as post-Phase-4 open question"** and a short adjacent note
+    explicitly preserves the post-Phase-4 grammar option of
+    admitting `;` as an optional member separator. The owner-confirmed
+    framing rejects a strict-A (purely "newline confirmed as the
+    member separator") reading because it would foreclose a future
+    grammar extension the owner wants to keep open. Document version
+    bumps to `1.2`.
+  - **Q2 — Window title wiring disposition.** The
+    `MainWindowTitle = "Wasamo"` vs `.ui` `title: "Gallery"`
+    divergence is registered under §Out-of-phase residuals as **R1**
+    with a fixed resolution condition: **"the runtime/ABI host path
+    applies the component-level `title` to the native window"**, not
+    "title attribute declared unsupported". The owner-confirmed
+    framing classifies this as an **M3 residual, not an M4
+    theming/chrome handoff**. Gate structure: M3-Phase 5 pre-doc
+    input distillation assigns the owning M3 phase; implementation
+    must land **no later than M3-Phase 8 Gallery E2E close**; Phase
+    6 (ZStack + conditional rendering) is a natural candidate for
+    absorbing the small host/window-metadata wiring task because
+    the lightbox UX naturally exercises window-level metadata. The
+    pre-doc carry-forward bullet records (d) this M3-Phase 5 pre-doc
+    obligation.
+  - **Q3 — T7 retrospective scope.** T7's original last bullet
+    "Phase-end retrospective recorded under `docs/notes/m3-phase-4/`"
+    conflated two distinct retrospectives in
+    [retrospectives.md](../../notes/retrospectives.md) §進行手順:
+    step-end retro (items 1-11; step → phase merge gate) and
+    phase-end retro (items 12-18; phase → main merge gate). The
+    bullet is split into two: T7 owns the **step-end** retrospective
+    only (`t7-step-end-retrospective.md`); the phase-end
+    retrospective (`phase-end-retrospective.md`) is owned by a
+    separate commit on `feat/m3-phase-4` after T7 merges in and is
+    the precondition for the phase → main merge gate. This avoids
+    the reviewer hazard "T7 close has an unflipped phase-end
+    retrospective bullet" — the two bullets now name distinct
+    retrospectives at distinct gates, so the `[ ]` on the phase-end
+    line is the correct state at T7 step-close.
 
 ## CI / verification log
 
