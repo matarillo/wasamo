@@ -101,6 +101,22 @@ fast-track は廃止 (`feedback_workflow` §2(b) / 2026-05-25 `49b49fb`)
 - **Integration test fixture (mock-free Windows-only):**
   - `wasamo-runtime/tests/scroll_view_layout_integration.rs` を新規追加、
     2 件のテスト:
+  - **Fixture shape — ADR の `VStack { Box × N }` ではなく
+    `WrapPanel { Box × 8 }` を採用 (intentional substitution).**
+    ADR Phase 4 verification closure item 4 の primary fixture 記述は
+    `ScrollView` + `VStack { Box × N }`。T4 は同じ (a)–(g) scroll-path
+    assertion セットを **R2 closure の 4 階層 Visual nesting と一つの
+    fixture で兼ねる** ために WrapPanel に置換した。WrapPanel は
+    `item-cross-size: 50` で deterministic な 50×50 grid を作れ、8 個で
+    確実に viewport (100×100) を超える content_h = 200 を発生させ、
+    かつ T5 で `examples/gallery/gallery.ui` に additively 追加する
+    `ScrollView { WrapPanel { Box × 30–40 } }` slice (framing decision
+    E / ADR §Phase 4 verification closure item 5) と shape を合わせ
+    られる利点もある。evidence の意味は不変 (offset clamp、clip
+    presence/absence、R2 root-relative math はいずれも子コンテナ種別
+    に依存しない)。VStack 版に置き換えれば item 4 の (a)–(g) は同様に
+    discharge できるが、R2 closure の thumbnail nesting は別 fixture
+    が必要になる。
     - `scroll_path_fixture_layouts_and_scrolls_through_visual_tree`:
       ADR (a)–(g) を assert。100×100 viewport、ScrollView root +
       WrapPanel(item-cross-size: 50) + Box ×8、content_h = 200、
