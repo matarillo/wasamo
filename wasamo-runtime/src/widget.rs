@@ -183,6 +183,9 @@ fn layout_error_to_winerr(err: LayoutError) -> windows::core::Error {
             "Box with `aspect` has no bounded parent axis (DD-M3-P2-005)"
         }
         LayoutError::BoxNoExtent => "Box has no extent to resolve (DD-M3-P2-005)",
+        LayoutError::ScrollViewUnboundedAxis => {
+            "ScrollView has no bounded scroll-axis viewport (DD-M3-P4-002)"
+        }
     };
     Error::new(E_FAIL, msg)
 }

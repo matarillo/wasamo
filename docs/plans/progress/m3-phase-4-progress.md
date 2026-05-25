@@ -71,19 +71,19 @@ Discharges ADR verification closure **evidence item 1**.
 
 Discharges ADR verification closure **evidence item 2**.
 
-- [ ] Implement pure-data ScrollView measure-arrange in
+- [x] Implement pure-data ScrollView measure-arrange in
       `wasamo-runtime/src/layout.rs`.
-- [ ] Measure content with the viewport width and an unbounded
+- [x] Measure content with the viewport width and an unbounded
       vertical constraint.
-- [ ] Return ScrollView outer size equal to the viewport size,
+- [x] Return ScrollView outer size equal to the viewport size,
       independent of content size.
-- [ ] Clamp `offset-y` across negative, zero, in-range, max, and
+- [x] Clamp `offset-y` across negative, zero, in-range, max, and
       larger-than-max values.
-- [ ] Cover content smaller than viewport, equal to viewport, and
+- [x] Cover content smaller than viewport, equal to viewport, and
       larger than viewport.
-- [ ] Raise `LayoutError::ScrollViewUnboundedAxis` for an unbounded
+- [x] Raise `LayoutError::ScrollViewUnboundedAxis` for an unbounded
       vertical parent.
-- [ ] Preserve the `i32` to `f32` rounding contract with no
+- [x] Preserve the `i32` to `f32` rounding contract with no
       pixel-snapping.
 
 ### T3 — IR loader / `validate()` invariant evidence
