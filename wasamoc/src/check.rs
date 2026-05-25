@@ -1890,11 +1890,12 @@ mod tests {
     #[test]
     fn scrollview_offset_y_float_literal_rejected() {
         let errs = errors(r#"component C inherits W { ScrollView { offset-y: 1.5 VStack {} } }"#);
-        // FloatLit is rejected by `check_expr_type` globally; we don't
-        // see the ScrollView-named diagnostic for floats because the
-        // ScrollView path matches `_ =>` and the float arm is taken
-        // before. Either error wording is acceptable as long as the
-        // float is rejected.
+        // FloatLit falls into the `_` arm of
+        // `check_scrollview_offset_y_bind` and receives the
+        // ScrollView-specific wording; the dispatch site in
+        // `check_members_inner` skips the generic `check_expr_type`
+        // FloatLit reject because the ScrollView+offset-y branch is
+        // taken first.
         assert!(
             errs.iter().any(|e| e.contains("`ScrollView.offset-y`")),
             "{:?}",

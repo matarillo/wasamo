@@ -46,9 +46,11 @@ fast-track は既に廃止 (`feedback_workflow` §2(b) / 2026-05-25 `49b49fb`)
   と、`Some(TypeName::Int)` に resolve する bare Ident を accept。
   非整数 literal (String / Float / Color / Ratio / Bool / Measurement)
   と、`undeclared / bool / string` state binding をすべて reject。
-  各 diagnostic は attribute 名 (`ScrollView.offset-y`) と Phase 4
-  surface contract (`i32` literal / bare `i32` state ident /
-  dsl_spec §4.11) を埋め込む。
+  全 diagnostic は attribute 名 `ScrollView.offset-y` を含む。
+  型不一致 (bool/string state) と非整数 literal の wording は
+  `dsl_spec §4.11` も参照する; undeclared state の wording は
+  `§4.11` ではなく `state <name>: i32 = 0` の declaration hint
+  を示す。
 - `check_scrollview_writable_offset_y` が `in-out property<i32>
   offset-y: 0` 形を ScrollView body 内で reject。generic
   `Member::PropertyDecl` arm は本体が no-op だが、ScrollView 特化
@@ -61,9 +63,9 @@ fast-track は既に廃止 (`feedback_workflow` §2(b) / 2026-05-25 `49b49fb`)
   WrapPanel" diagnostic が先に発火するため、wording が
   attribute-specific に保たれる。`scrollview_wrappanel_attr_inside_routes_to_wrappanel_diag`
   test がこの dispatch order を pin している。
-- 25 件の T1 unit test を `check.rs` に追加 (accept 6 / child-count 4 /
-  literal-reject 6 / state-ident-reject 3 / writable-reject 1 /
-  unknown-attr-reject 4 / 既存設計と互換性検証 1)。
+- 25 件の T1 unit test を `check.rs` に追加 (registration + child-count 6
+  / offset-y accept 4 / literal-reject 6 / state-ident-reject 3 /
+  writable-reject 1 / unknown-attr-reject 5)。
 - 既存 gallery (`examples/gallery/gallery.ui`) は `wasamoc check`
   exit 0 (positive control 維持; T5 で additively ScrollView slice
   を加える)。
@@ -113,14 +115,18 @@ order を attribute-specific 診断が prevail するように設計する必要
   `scrollview_offset_y_negative_literal_accepted` がこの判定を
   ピン留めしており、Phase 3 pattern を機械的に踏襲しないよう
   protection をかけている。
-- 既存 `check_expr_type` の FloatLit reject が global に効いている
-  ため、ScrollView offset-y の FloatLit 経路 test
-  (`scrollview_offset_y_float_literal_rejected`) は wording が
-  generic float-reject diagnostic でも合格する書き方にした
-  (assert に `"ScrollView.offset-y"` を要求しない)。これは将来
-  ScrollView 特化 float diagnostic を追加した場合にも test を
-  通すための future-proof な assertion 形だが、現状 wording が
-  generic に流れていることは記録 (Verification Notes 参照)。
+- ScrollView+offset-y の dispatch は `check_members_inner` の
+  PropertyBind arm で先に `check_scrollview_offset_y_bind` を呼ぶ
+  ように分岐させており、generic `check_expr_type` の global
+  FloatLit reject は **発火しない**。FloatLit は
+  `check_scrollview_offset_y_bind` の `_` arm に落ちて
+  `"ScrollView.offset-y" + dsl_spec §4.11` を含む専用 wording を
+  受け取る。test `scrollview_offset_y_float_literal_rejected` も
+  この wording を assert している。当初は「FloatLit は generic
+  reject に流れる」と思い込んで test の assertion を緩く書いた
+  (commit `f4fccab` のコメント残骸) が、実際の dispatch とは
+  逆の挙動を仮定していた誤りで、owner review (本 revision) で
+  訂正された。
 
 ## Checklist
 
@@ -261,14 +267,6 @@ target/release/wasamoc.exe check examples/gallery/gallery.ui  (exit 0)
 
 いずれも green。`wasamoc` lib test は **235 passed** (T1 で +25)。
 
-**Wording 観測 (Main Learning §副次的な学び 由来):**
-`scrollview_offset_y_float_literal_rejected` test は generic
-float-reject diagnostic でも通る形に assert を書いており、現状の
-wording は `"float literals are not supported in M2 (only i32 and
-string)"` (= `check_expr_type` の global FloatLit reject 由来) に
-流れている。Phase 4 の `offset-y` 専用 wording (`"ScrollView.offset-y"`
-を含む) ではない。これは記録のみで、wording 変更は本 step 範囲外。
-
 ## Follow-Up
 
 T1 から後続 task への明示的な引き渡し:
@@ -288,11 +286,6 @@ T1 から後続 task への明示的な引き渡し:
 - **T6 (phase-end / Moment 2 re-sync):** dsl_spec §4.11 の現行
   draft と T1 実装は今のところ整合。Moment 2 で sync 必要な
   divergence は今のところ無し (再判断は T6 で行う)。
-- **Wording follow-up:** `scrollview_offset_y_float_literal_rejected`
-  の wording 流出 (Verification Notes 末尾) を Phase 4 内で揃える
-  か M4 まで持つかは T6 で判断する。現状 user-visible diagnostic
-  は出力されるため Phase 4 acceptance には影響しない。
 
 これらはすべて progress file の T2–T6 として既に列挙済み。T1 単体で
-新たに発見された follow-up は **wording 観測の 1 件** のみで、
-それも本 step 範囲外。
+新たに発見された follow-up は無し。
