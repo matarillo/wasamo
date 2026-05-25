@@ -11,6 +11,7 @@ const KNOWN_WIDGET_TYPES: &[&str] = &[
     "Rectangle",
     "Box",
     "WrapPanel",
+    "ScrollView",
 ];
 
 /// WrapPanel's three constant-only `i32` attributes per dsl_spec §4.10
@@ -380,6 +381,129 @@ fn check_wrappanel_aspect_only_box_warning(
     ));
 }
 
+/// Reject any ScrollView attribute other than `offset-y` in Phase 4
+/// (DD-M3-P4-001 / DD-M3-P4-002 scoping). `viewport-width`,
+/// `viewport-height`, `scroll-axis`, and `padding` are explicitly
+/// out of scope per dsl_spec §4.11 *Attributes*; this is the catch-
+/// all rejection that fires for any other PropertyBind name a future
+/// author or migration might attempt before the corresponding DD
+/// opens that attribute. The diagnostic names the attribute and
+/// points at §4.11 so authors can locate the scoping decision.
+fn check_scrollview_unknown_attr(
+    prop_name: &str,
+    span: &Span,
+    filename: &str,
+    diags: &mut Vec<Diagnostic>,
+) {
+    diags.push(error(
+        filename,
+        span,
+        format!(
+            "`{}` is not a recognised ScrollView attribute in M3-Phase 4; only `offset-y` is in scope (dsl_spec §4.11)",
+            prop_name
+        ),
+    ));
+}
+
+/// Validate a `ScrollView.offset-y` binding RHS (DD-M3-P4-003). The
+/// attribute is bindable read-only in Phase 4: the RHS is either an
+/// `IntLit` (any sign — negatives and out-of-range values are clamped
+/// at layout time per DD-M3-P4-005, not rejected here) or a bare state
+/// identifier whose namespace type is `i32` (per dsl_spec §4.3 bare-
+/// ident binding form). All other expression shapes — non-integer
+/// literals, undeclared idents, `bool` / `string` / `float` state
+/// idents — are rejected with a diagnostic that names the rejected
+/// surface.
+fn check_scrollview_offset_y_bind(
+    value: &Expr,
+    span: &Span,
+    filename: &str,
+    ns: &Namespace,
+    diags: &mut Vec<Diagnostic>,
+) {
+    match value {
+        Expr::IntLit { .. } => {}
+        Expr::Ident {
+            name,
+            span: ident_span,
+        } => match ns.get(name) {
+            Some(TypeName::Int) => {}
+            Some(other) => {
+                diags.push(error(
+                    filename,
+                    ident_span,
+                    format!(
+                        "`ScrollView.offset-y` binds to an `i32` state; state `{}` is declared `{}` (dsl_spec §4.11)",
+                        name,
+                        type_name_display(other),
+                    ),
+                ));
+            }
+            None => {
+                diags.push(error(
+                    filename,
+                    ident_span,
+                    format!(
+                        "`ScrollView.offset-y` binds to a declared `i32` state; `{}` is not declared (declare it with `state {}: i32 = 0`)",
+                        name, name,
+                    ),
+                ));
+            }
+        },
+        _ => {
+            diags.push(error(
+                filename,
+                span,
+                "`ScrollView.offset-y` accepts an `i32` literal or a bare `i32` state identifier (dsl_spec §4.11); other expression forms are rejected",
+            ));
+        }
+    }
+}
+
+/// Reject the writable (in-out) surface on `ScrollView.offset-y`. Phase
+/// 4 binding is read-only per DD-M3-P4-003 Option B; the in-out form
+/// (`in-out property<i32> offset-y: 0` inside a ScrollView body) would
+/// declare a writable component-shaped surface, which would require the
+/// general typed-`i32` writer pair deferred to M4 (per
+/// architecture.md §6.8 *Per-type seam* paragraph). Naming the
+/// rejection explicitly here keeps the M4 hand-off legible.
+fn check_scrollview_writable_offset_y(span: &Span, filename: &str, diags: &mut Vec<Diagnostic>) {
+    diags.push(error(
+        filename,
+        span,
+        "`ScrollView.offset-y` is bindable read-only in M3-Phase 4 (dsl_spec §4.11); the writable `in-out property<i32> offset-y` surface is deferred to M4 or later",
+    ));
+}
+
+/// Reject a ScrollView widget with anything other than exactly one
+/// child widget (DD-M3-P4-001 / DD-M3-P4-006). The runtime IR loader
+/// independently rejects the same shape at IR-load time (defense in
+/// depth, per Phase 2 T7 / Phase 3 T6 pattern); the compile-time
+/// diagnostic names the offending count and points authors at the
+/// `ScrollView { VStack { … } }` wrapping pattern for multi-child
+/// content.
+fn check_scrollview_child_count(
+    members: &[Member],
+    span: &Span,
+    filename: &str,
+    diags: &mut Vec<Diagnostic>,
+) {
+    let child_count = members
+        .iter()
+        .filter(|m| matches!(m, Member::WidgetDecl { .. }))
+        .count();
+    if child_count != 1 {
+        diags.push(error(
+            filename,
+            span,
+            format!(
+                "`ScrollView` requires exactly one child widget in M3-Phase 4 (found {}); wrap multiple children in an explicit container such as `ScrollView {{ VStack {{ … }} }}`",
+                child_count
+            ),
+        ));
+    }
+}
+
 /// Reject a Box widget with two or more child widgets (DD-M3-P2-001
 /// multi-child). The runtime IR loader independently rejects the same
 /// shape at IR-load time (defense in depth); the compile-time diagnostic
@@ -422,7 +546,16 @@ fn check_members_inner(
         match member {
             Member::StateMember { .. } => {}
 
-            Member::PropertyDecl { .. } => {}
+            Member::PropertyDecl { name, span, .. } => {
+                // `in-out property<i32> offset-y: ...` inside a ScrollView
+                // body is the writable surface DD-M3-P4-003 Option C
+                // deferred to M4. Reject so the read-only contract from
+                // Option B is enforced at compile time, not silently
+                // dropped by the no-op PropertyDecl arm.
+                if enclosing_widget == Some("ScrollView") && name == "offset-y" {
+                    check_scrollview_writable_offset_y(span, filename, diags);
+                }
+            }
 
             Member::PropertyBind { name, value, span } => {
                 // Box.aspect and Box.fill are constant-only per DD-M3-P2-004:
@@ -431,7 +564,28 @@ fn check_members_inner(
                 // and skip the generic `check_expr_type` path, which would
                 // otherwise re-reject the literal positionally (the Ratio /
                 // Color arm rejects every appearance outside this site).
-                if enclosing_widget == Some("Box")
+                if enclosing_widget == Some("ScrollView") && name == "offset-y" {
+                    // ScrollView's only Phase 4 attribute (DD-M3-P4-003):
+                    // i32-literal-or-bare-i32-state-ident, validated by the
+                    // ScrollView-specific helper to produce a diagnostic
+                    // that names the attribute. Skip the generic
+                    // `check_expr_type` / `check_property_bind_target`
+                    // path; the latter would pass through anyway because
+                    // ScrollView has no widget_prop_type catalog entry,
+                    // but the type-mismatch wording would not name the
+                    // ScrollView-specific Phase 4 surface contract.
+                    check_scrollview_offset_y_bind(value, span, filename, ns, diags);
+                } else if enclosing_widget == Some("ScrollView")
+                    && !WRAPPANEL_INT_ATTRS.contains(&name.as_str())
+                {
+                    // Any non-`offset-y` ScrollView attribute is out of
+                    // Phase 4 scope (`viewport-*`, `scroll-axis`,
+                    // `padding`, …). The WrapPanel-attribute-outside-
+                    // WrapPanel branch below covers the WrapPanel attr
+                    // names so the diagnostic stays attribute-specific;
+                    // everything else falls into this catch-all.
+                    check_scrollview_unknown_attr(name, span, filename, diags);
+                } else if enclosing_widget == Some("Box")
                     && (name.as_str() == "aspect" || name.as_str() == "fill")
                 {
                     check_box_const_only_bind(name, value, span, filename, diags);
@@ -488,6 +642,9 @@ fn check_members_inner(
                 }
                 if type_name == "WrapPanel" {
                     check_wrappanel_aspect_only_box_warning(children, span, filename, diags);
+                }
+                if type_name == "ScrollView" {
+                    check_scrollview_child_count(children, span, filename, diags);
                 }
                 check_members_inner(children, Some(type_name), filename, ns, diags);
             }
@@ -1596,6 +1753,332 @@ mod tests {
         }"#;
         let ws = warnings(src);
         assert_eq!(ws.len(), 1, "{:?}", ws);
+    }
+
+    // --- T1: ScrollView known widget + child-count contract (DD-M3-P4-001) ---
+
+    #[test]
+    fn scrollview_known_widget_no_warning() {
+        // ScrollView is in KNOWN_WIDGET_TYPES — no "unknown widget" warning
+        // when the child-count contract is satisfied (one child).
+        let src = r#"component C inherits W { ScrollView { VStack {} } }"#;
+        let result = check_src(src);
+        assert!(!result.has_errors(), "{:?}", result.diagnostics);
+        assert!(
+            warnings(src).is_empty(),
+            "ScrollView should be a known widget type, not warn"
+        );
+    }
+
+    #[test]
+    fn scrollview_zero_child_rejected() {
+        let errs = errors("component C inherits W { ScrollView {} }");
+        assert_eq!(errs.len(), 1, "{:?}", errs);
+        assert!(
+            errs[0].contains("`ScrollView` requires exactly one child")
+                && errs[0].contains("found 0")
+                && errs[0].contains("VStack"),
+            "{:?}",
+            errs
+        );
+    }
+
+    #[test]
+    fn scrollview_one_child_accepted() {
+        let result = check_src("component C inherits W { ScrollView { VStack {} } }");
+        assert!(!result.has_errors(), "{:?}", result.diagnostics);
+    }
+
+    #[test]
+    fn scrollview_two_children_rejected() {
+        let errs = errors(r#"component C inherits W { ScrollView { VStack {} VStack {} } }"#);
+        assert_eq!(errs.len(), 1, "{:?}", errs);
+        assert!(
+            errs[0].contains("found 2") && errs[0].contains("`ScrollView`"),
+            "{:?}",
+            errs
+        );
+    }
+
+    #[test]
+    fn scrollview_three_children_rejected() {
+        let errs =
+            errors(r#"component C inherits W { ScrollView { VStack {} HStack {} Box {} } }"#);
+        assert_eq!(errs.len(), 1, "{:?}", errs);
+        assert!(errs[0].contains("found 3"), "{:?}", errs);
+    }
+
+    #[test]
+    fn scrollview_attrs_do_not_count_as_children() {
+        // `offset-y` PropertyBind must not be miscounted as a child.
+        // (Accept rules for `offset-y` arrive in T1 sub-task 3; this test
+        // pins only the child-count side here — the bare child-count
+        // diagnostic must not fire when the single child + attribute
+        // are present.)
+        let result =
+            check_src(r#"component C inherits W { ScrollView { offset-y: 0 VStack {} } }"#);
+        // The offset-y handling lands in the next commit; for now, the
+        // child-count gate alone must not produce an error.
+        let child_count_err = result
+            .diagnostics
+            .iter()
+            .filter(|d| d.severity == crate::diagnostic::Severity::Error)
+            .any(|d| {
+                d.message
+                    .contains("`ScrollView` requires exactly one child")
+            });
+        assert!(
+            !child_count_err,
+            "child-count gate misfired: {:?}",
+            result.diagnostics
+        );
+    }
+
+    // --- T1: ScrollView offset-y literal accept (DD-M3-P4-003) ---
+
+    #[test]
+    fn scrollview_offset_y_positive_int_literal_accepted() {
+        let result =
+            check_src(r#"component C inherits W { ScrollView { offset-y: 42 VStack {} } }"#);
+        assert!(!result.has_errors(), "{:?}", result.diagnostics);
+    }
+
+    #[test]
+    fn scrollview_offset_y_zero_literal_accepted() {
+        let result =
+            check_src(r#"component C inherits W { ScrollView { offset-y: 0 VStack {} } }"#);
+        assert!(!result.has_errors(), "{:?}", result.diagnostics);
+    }
+
+    #[test]
+    fn scrollview_offset_y_negative_literal_accepted() {
+        // DD-M3-P4-005 / DD-M3-P4-006: negative offsets are layout-time-
+        // clamped to 0, not compile-time-rejected (explicitly distinct
+        // from Phase 3 WrapPanel negative-literal rejection).
+        let result =
+            check_src(r#"component C inherits W { ScrollView { offset-y: -5 VStack {} } }"#);
+        assert!(!result.has_errors(), "{:?}", result.diagnostics);
+    }
+
+    // --- T1: ScrollView offset-y state-ident binding accept ---
+
+    #[test]
+    fn scrollview_offset_y_i32_state_ident_accepted() {
+        let result = check_src(
+            r#"component C inherits W {
+                state scroll_y: i32 = 0
+                ScrollView { offset-y: scroll_y VStack {} }
+            }"#,
+        );
+        assert!(!result.has_errors(), "{:?}", result.diagnostics);
+    }
+
+    // --- T1: ScrollView offset-y non-integer literal reject ---
+
+    #[test]
+    fn scrollview_offset_y_string_literal_rejected() {
+        let errs =
+            errors(r#"component C inherits W { ScrollView { offset-y: "hello" VStack {} } }"#);
+        assert_eq!(errs.len(), 1, "{:?}", errs);
+        assert!(
+            errs[0].contains("`ScrollView.offset-y`") && errs[0].contains("`i32` literal"),
+            "{:?}",
+            errs
+        );
+    }
+
+    #[test]
+    fn scrollview_offset_y_float_literal_rejected() {
+        let errs = errors(r#"component C inherits W { ScrollView { offset-y: 1.5 VStack {} } }"#);
+        // FloatLit falls into the `_` arm of
+        // `check_scrollview_offset_y_bind` and receives the
+        // ScrollView-specific wording; the dispatch site in
+        // `check_members_inner` skips the generic `check_expr_type`
+        // FloatLit reject because the ScrollView+offset-y branch is
+        // taken first.
+        assert!(
+            errs.iter().any(|e| e.contains("`ScrollView.offset-y`")),
+            "{:?}",
+            errs
+        );
+    }
+
+    #[test]
+    fn scrollview_offset_y_color_literal_rejected() {
+        let errs =
+            errors(r#"component C inherits W { ScrollView { offset-y: #336699 VStack {} } }"#);
+        assert_eq!(errs.len(), 1, "{:?}", errs);
+        assert!(errs[0].contains("`ScrollView.offset-y`"), "{:?}", errs);
+    }
+
+    #[test]
+    fn scrollview_offset_y_ratio_literal_rejected() {
+        let errs = errors(r#"component C inherits W { ScrollView { offset-y: 16:9 VStack {} } }"#);
+        assert_eq!(errs.len(), 1, "{:?}", errs);
+        assert!(errs[0].contains("`ScrollView.offset-y`"), "{:?}", errs);
+    }
+
+    #[test]
+    fn scrollview_offset_y_bool_literal_rejected() {
+        let errs = errors(r#"component C inherits W { ScrollView { offset-y: true VStack {} } }"#);
+        assert_eq!(errs.len(), 1, "{:?}", errs);
+        assert!(errs[0].contains("`ScrollView.offset-y`"), "{:?}", errs);
+    }
+
+    #[test]
+    fn scrollview_offset_y_measurement_rejected() {
+        // `12px` is `Token::Measurement` — not an `IntLit`. Reject per
+        // dsl_spec §4.11 "i32 literal" surface contract.
+        let errs = errors(r#"component C inherits W { ScrollView { offset-y: 12px VStack {} } }"#);
+        assert_eq!(errs.len(), 1, "{:?}", errs);
+        assert!(errs[0].contains("`ScrollView.offset-y`"), "{:?}", errs);
+    }
+
+    // --- T1: ScrollView offset-y bind-to-wrong-type-state reject ---
+
+    #[test]
+    fn scrollview_offset_y_undeclared_state_rejected() {
+        let errs =
+            errors(r#"component C inherits W { ScrollView { offset-y: scroll_y VStack {} } }"#);
+        assert_eq!(errs.len(), 1, "{:?}", errs);
+        assert!(
+            errs[0].contains("`ScrollView.offset-y`")
+                && errs[0].contains("not declared")
+                && errs[0].contains("scroll_y"),
+            "{:?}",
+            errs
+        );
+    }
+
+    #[test]
+    fn scrollview_offset_y_bool_state_rejected() {
+        let errs = errors(
+            r#"component C inherits W {
+                state ready: bool = true
+                ScrollView { offset-y: ready VStack {} }
+            }"#,
+        );
+        assert_eq!(errs.len(), 1, "{:?}", errs);
+        assert!(
+            errs[0].contains("`ScrollView.offset-y`") && errs[0].contains("declared `bool`"),
+            "{:?}",
+            errs
+        );
+    }
+
+    #[test]
+    fn scrollview_offset_y_string_state_rejected() {
+        let errs = errors(
+            r#"component C inherits W {
+                state label: string = ""
+                ScrollView { offset-y: label VStack {} }
+            }"#,
+        );
+        assert_eq!(errs.len(), 1, "{:?}", errs);
+        assert!(
+            errs[0].contains("`ScrollView.offset-y`") && errs[0].contains("declared `string`"),
+            "{:?}",
+            errs
+        );
+    }
+
+    // --- T1: ScrollView writable (in-out) offset-y reject ---
+
+    #[test]
+    fn scrollview_in_out_property_offset_y_rejected() {
+        // `in-out property<i32> offset-y: 0` inside ScrollView is the
+        // writable surface DD-M3-P4-003 Option C deferred to M4. The
+        // generic PropertyDecl arm in `check_members_inner` is otherwise
+        // a no-op; the ScrollView-specific path rejects.
+        let errs = errors(
+            r#"component C inherits W {
+                ScrollView {
+                    in-out property<i32> offset-y: 0
+                    VStack {}
+                }
+            }"#,
+        );
+        assert!(
+            errs.iter().any(
+                |e| e.contains("`ScrollView.offset-y` is bindable read-only")
+                    && e.contains("in-out")
+                    && e.contains("M4")
+            ),
+            "{:?}",
+            errs
+        );
+    }
+
+    // --- T1: ScrollView unknown-attribute reject (DD-M3-P4-001 / 002) ---
+
+    #[test]
+    fn scrollview_viewport_width_rejected() {
+        let errs =
+            errors(r#"component C inherits W { ScrollView { viewport-width: 320 VStack {} } }"#);
+        assert_eq!(errs.len(), 1, "{:?}", errs);
+        assert!(
+            errs[0].contains("`viewport-width`")
+                && errs[0].contains("not a recognised ScrollView attribute")
+                && errs[0].contains("§4.11"),
+            "{:?}",
+            errs
+        );
+    }
+
+    #[test]
+    fn scrollview_viewport_height_rejected() {
+        let errs =
+            errors(r#"component C inherits W { ScrollView { viewport-height: 240 VStack {} } }"#);
+        assert_eq!(errs.len(), 1, "{:?}", errs);
+        assert!(
+            errs[0].contains("`viewport-height`")
+                && errs[0].contains("not a recognised ScrollView attribute"),
+            "{:?}",
+            errs
+        );
+    }
+
+    #[test]
+    fn scrollview_scroll_axis_rejected() {
+        let errs =
+            errors(r#"component C inherits W { ScrollView { scroll-axis: vertical VStack {} } }"#);
+        assert_eq!(errs.len(), 1, "{:?}", errs);
+        assert!(
+            errs[0].contains("`scroll-axis`")
+                && errs[0].contains("not a recognised ScrollView attribute"),
+            "{:?}",
+            errs
+        );
+    }
+
+    #[test]
+    fn scrollview_padding_rejected() {
+        let errs = errors(r#"component C inherits W { ScrollView { padding: 8 VStack {} } }"#);
+        assert_eq!(errs.len(), 1, "{:?}", errs);
+        assert!(
+            errs[0].contains("`padding`")
+                && errs[0].contains("not a recognised ScrollView attribute"),
+            "{:?}",
+            errs
+        );
+    }
+
+    #[test]
+    fn scrollview_wrappanel_attr_inside_routes_to_wrappanel_diag() {
+        // A WrapPanel attribute name inside ScrollView is still rejected,
+        // but the WrapPanel-attribute-outside-WrapPanel diagnostic takes
+        // precedence so the author sees the WrapPanel-specific wording
+        // (the attribute is recognised, just misplaced). This keeps the
+        // ScrollView catch-all attribute-specific.
+        let errs =
+            errors(r#"component C inherits W { ScrollView { item-cross-size: 88 VStack {} } }"#);
+        assert_eq!(errs.len(), 1, "{:?}", errs);
+        assert!(
+            errs[0].contains("`item-cross-size` is a WrapPanel attribute")
+                && errs[0].contains("widget `ScrollView`"),
+            "{:?}",
+            errs
+        );
     }
 
     #[test]

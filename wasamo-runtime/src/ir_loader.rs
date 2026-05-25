@@ -23,7 +23,8 @@ use crate::reactive::{
 use crate::text::{TextRenderer, TypographyStyle};
 use crate::widget::{
     widget_write_property, widget_write_property_bool, ButtonStyle, WidgetNode,
-    PROP_BUTTON_ENABLED, PROP_BUTTON_LABEL, PROP_BUTTON_STYLE, PROP_TEXT_CONTENT, PROP_TEXT_STYLE,
+    PROP_BUTTON_ENABLED, PROP_BUTTON_LABEL, PROP_BUTTON_STYLE, PROP_SCROLLVIEW_OFFSET_Y,
+    PROP_TEXT_CONTENT, PROP_TEXT_STYLE,
 };
 
 use windows::UI::Composition::Compositor;
@@ -83,6 +84,32 @@ pub struct BuiltUi {
     pub root: Box<WidgetNode>,
     #[allow(dead_code)]
     pub(crate) registry: Rc<SignalRegistry>,
+}
+
+impl BuiltUi {
+    /// Test-only mutator for an `i32`-typed state declared on the
+    /// component (per `state <name>: i32 = <default>`). Writes through
+    /// the underlying `Signal<i32>::set`, so the reactive engine
+    /// re-fires every binding effect that read this state — exactly
+    /// the path a handler-driven mutation (`compound-assign += scroll_y
+    /// 100`) takes at runtime. Returns `true` when the state name
+    /// exists, `false` otherwise. Hidden from rustdoc and named with
+    /// the project's `__*_for_test` convention.
+    ///
+    /// Used by `wasamo-runtime/tests/scroll_view_layout_integration.rs`
+    /// to drive the ADR Phase 4 verification closure item 4
+    /// "mutate `state.scroll_y`" assertions without rewiring the
+    /// `SignalRegistry` visibility.
+    #[doc(hidden)]
+    pub fn __set_i32_state_for_test(&self, name: &str, value: i32) -> bool {
+        match self.registry.i32s.get(name) {
+            Some(signal) => {
+                signal.set(value);
+                true
+            }
+            None => false,
+        }
+    }
 }
 
 // ── Parser ────────────────────────────────────────────────────────────────────
@@ -147,7 +174,18 @@ fn validate(comp: &IrComponent) -> Result<(), IrLoadError> {
     // attribute names at compile time; this is the last-line-of-defence
     // for memory-IR that reaches the runtime via `wasamo_load_ui`
     // without traversing `wasamoc`.
-    validate_phase3_node_invariants(&comp.root)
+    validate_phase3_node_invariants(&comp.root)?;
+    // M3-Phase 4 T3 defense-in-depth gate (DD-M3-P4-006 structural half).
+    // `wasamoc check` (T1) diagnoses 0-child / >1-child ScrollView at
+    // compile time; this is the runtime gate for memory-IR that reaches
+    // the runtime via `wasamo_load_ui` without traversing `wasamoc`. The
+    // value-range half (negative / out-of-range `offset-y`) deliberately
+    // does **not** reject — DD-M3-P4-005's layout-time clamp is the
+    // runtime gate per DD-M3-P4-006's compound-shape decision, so a
+    // bound `state.scroll_y` can legitimately transition through
+    // negative / out-of-range intermediate values without becoming a
+    // load-time error.
+    validate_phase4_node_invariants(&comp.root)
 }
 
 fn validate_phase2_node_invariants(node: &IrNode) -> Result<(), IrLoadError> {
@@ -203,6 +241,28 @@ fn validate_phase2_node_invariants(node: &IrNode) -> Result<(), IrLoadError> {
 // to match `wasamoc check` T1 — attribute-position rejection on other
 // widgets is the compile-time half's responsibility, not this runtime
 // gate.
+// M3-Phase 4 T3 defense-in-depth: enforce ScrollView's exactly-1-child
+// contract (DD-M3-P4-001 / DD-M3-P4-006). The DSL surface invariant
+// is "exactly one content child"; both 0-child and >1-child surface as
+// `WASAMO_ERR_IR_MALFORMED` at the C ABI boundary. Symmetric with
+// Phase 2's `Box`-child-count gate in shape, distinct in cardinality
+// (Box admits 0 or 1; ScrollView demands exactly 1). The value-range
+// half (`offset-y`) intentionally has no gate here — DD-M3-P4-005's
+// arrange-time clamp is the runtime gate so bindings can transition
+// through negative / out-of-range intermediates.
+fn validate_phase4_node_invariants(node: &IrNode) -> Result<(), IrLoadError> {
+    if node.widget_type == "ScrollView" && node.children.len() != 1 {
+        return Err(IrLoadError::Validate(format!(
+            "`ScrollView` requires exactly one content child, got {}",
+            node.children.len()
+        )));
+    }
+    for child in &node.children {
+        validate_phase4_node_invariants(child)?;
+    }
+    Ok(())
+}
+
 fn validate_phase3_node_invariants(node: &IrNode) -> Result<(), IrLoadError> {
     if node.widget_type == "WrapPanel" {
         for prop in &node.props {
@@ -1022,6 +1082,24 @@ fn construct_widget(
             WidgetNode::wrap_panel(compositor, item_cross_size, item_spacing, line_spacing)
                 .map_err(|e| IrLoadError::Build(format!("wrap_panel: {e}")))
         }
+        // M3-Phase 4 T3: ScrollView materialisation. `offset-y` is the
+        // sole DSL-surface attribute (DD-M3-P4-003 `i32` pixels), carried
+        // through as `Option<i32>` so the catalog can apply the
+        // absent-to-default policy (`unwrap_or(0)` per DD-M3-P4-003).
+        // The runtime layer (`WidgetNode::scroll_view`) owns the default,
+        // mirroring the Phase 3 WrapPanel `apply_*_defaults` discipline.
+        // `validate()` has rejected 0-child and >1-child ScrollView IR
+        // before this arm runs (DD-M3-P4-006 structural gate); negative
+        // and out-of-range `offset-y` literals are layout-time-clamped
+        // (DD-M3-P4-005), not loader-rejected. A binding on `offset-y`
+        // appears on `node.bindings` and is wired through the generic
+        // `build_node` binding loop; `resolve_prop_key`'s ScrollView
+        // entry lands in T4 alongside the per-widget `set_property` arm.
+        "ScrollView" => {
+            let offset_y = extract_int_prop(&node.props, "offset-y");
+            WidgetNode::scroll_view(compositor, offset_y)
+                .map_err(|e| IrLoadError::Build(format!("scroll_view: {e}")))
+        }
         other => Err(IrLoadError::UnknownWidget(other.to_string())),
     }
 }
@@ -1038,6 +1116,15 @@ fn resolve_prop_key(widget_type: &str, prop_name: &str) -> Option<(PropertyKey, 
         ("Button", "text") => Some((PROP_BUTTON_LABEL, IrType::Str)),
         ("Button", "style") => Some((PROP_BUTTON_STYLE, IrType::I32)),
         ("Button", "enabled") => Some((PROP_BUTTON_ENABLED, IrType::Bool)),
+        // M3-Phase 4 T4 / DD-M3-P4-003: ScrollView's `offset-y` is `i32`
+        // (DSL surface storage type). The `I32` selection here routes
+        // the binding through the string-baked `register_binding` +
+        // `widget_write_property` pair (per the `IrType::I32 |
+        // IrType::Str` arm in `build_node`); the narrow string-to-`i32`
+        // parse lives on the ScrollView arm of `set_property`. The
+        // general typed-`i32` evaluator / writer pair from
+        // architecture.md §6.8 *Per-type seam* stays deferred to M4+.
+        ("ScrollView", "offset-y") => Some((PROP_SCROLLVIEW_OFFSET_Y, IrType::I32)),
         _ => None,
     }
 }
@@ -1168,10 +1255,33 @@ mod tests {
         assert_eq!(ty, IrType::I32);
     }
 
+    // M3-Phase 4 T4 / DD-M3-P4-003: ScrollView's `offset-y` is `i32`.
+    // The `I32` selection routes the binding through the string-baked
+    // `register_binding` + `widget_write_property` pair (the `IrType::I32
+    // | IrType::Str` arm in `build_node`); the narrow string-to-`i32`
+    // parse lives on the ScrollView arm of `set_property`. Pins the
+    // catalog row that closes the loop between the bound `Signal<i32>`
+    // (declared in `state scroll_y: i32 = 0`) and the runtime
+    // `WidgetData::ScrollView::offset_y` field.
+    #[test]
+    fn resolve_prop_key_scrollview_offset_y_is_i32() {
+        let (key, ty) =
+            resolve_prop_key("ScrollView", "offset-y").expect("ScrollView.offset-y exists");
+        assert_eq!(key, PROP_SCROLLVIEW_OFFSET_Y);
+        assert_eq!(ty, IrType::I32);
+    }
+
     #[test]
     fn resolve_prop_key_unknown_pair_is_none() {
         assert!(resolve_prop_key("Button", "nonsuch").is_none());
         assert!(resolve_prop_key("Nonsuch", "enabled").is_none());
+        // M3-Phase 4 T4: only `offset-y` resolves on ScrollView; any
+        // other attribute name returns None and the binding loop's
+        // "silently skip unknown property" branch fires (the
+        // attribute-scope rejection itself is `wasamoc check`'s
+        // responsibility — T1 already enforces it at compile time).
+        assert!(resolve_prop_key("ScrollView", "scroll-axis").is_none());
+        assert!(resolve_prop_key("ScrollView", "viewport-width").is_none());
     }
 
     fn parse_ok(src: &str) -> IrComponent {
@@ -2190,6 +2300,140 @@ mod tests {
         );
         assert_eq!(c.root.props[0].value, IrLiteral::Int(12));
         assert_eq!(c.root.children.len(), 1);
+    }
+
+    // ── M3-Phase 4 T3: ScrollView validate() defense-in-depth ───────────
+    //
+    // Pure-logic coverage of DD-M3-P4-006's compound-shape gate:
+    //   - structural child-count rejection (exactly-1-child contract from
+    //     DD-M3-P4-001) at validate() time;
+    //   - value-range pass-through for `offset-y` (negative and very
+    //     large values reach the layout engine, which clamps them per
+    //     DD-M3-P4-005).
+    // The `construct_widget` "ScrollView" arm needs a live `Compositor`
+    // and is exercised end-to-end by T4's Windows-only integration test.
+
+    #[test]
+    fn scroll_view_with_single_child_is_valid() {
+        let c = parse_ok(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             node ScrollView { node Box {} }\n}",
+        );
+        assert_eq!(c.root.widget_type, "ScrollView");
+        assert_eq!(c.root.children.len(), 1);
+        assert_eq!(c.root.children[0].widget_type, "Box");
+    }
+
+    #[test]
+    fn scroll_view_with_zero_children_rejected() {
+        let err = parse_err(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             node ScrollView {}\n}",
+        );
+        assert!(
+            matches!(err, IrLoadError::Validate(ref m) if m.contains("ScrollView") && m.contains("exactly one"))
+        );
+        assert_malformed_display_nonempty(&err);
+    }
+
+    #[test]
+    fn scroll_view_with_two_children_rejected() {
+        let err = parse_err(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             node ScrollView {\n\
+               node Box {}\n\
+               node Box {}\n\
+             }\n}",
+        );
+        assert!(
+            matches!(err, IrLoadError::Validate(ref m) if m.contains("ScrollView") && m.contains("exactly one"))
+        );
+        assert_malformed_display_nonempty(&err);
+    }
+
+    #[test]
+    fn scroll_view_with_three_children_rejected() {
+        let err = parse_err(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             node ScrollView {\n\
+               node Box {}\n\
+               node Box {}\n\
+               node Box {}\n\
+             }\n}",
+        );
+        assert!(
+            matches!(err, IrLoadError::Validate(ref m) if m.contains("ScrollView") && m.contains("exactly one"))
+        );
+        assert_malformed_display_nonempty(&err);
+    }
+
+    #[test]
+    fn scroll_view_nested_zero_child_is_rejected() {
+        // The walk recurses — a 0-child ScrollView nested inside a
+        // structural parent is still rejected.
+        let err = parse_err(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             node VStack {\n\
+               node ScrollView {}\n\
+             }\n}",
+        );
+        assert!(
+            matches!(err, IrLoadError::Validate(ref m) if m.contains("ScrollView") && m.contains("exactly one"))
+        );
+        assert_malformed_display_nonempty(&err);
+    }
+
+    #[test]
+    fn scroll_view_accepts_negative_offset_y_literal() {
+        // DD-M3-P4-006 compound-shape: value-range invariants are
+        // layout-time-clamped, *not* validate()-rejected. A negative
+        // `offset-y` literal must reach the layout engine for the
+        // clamp to run.
+        let c = parse_ok(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             node ScrollView { prop offset-y = -5 node Box {} }\n}",
+        );
+        let offset = c
+            .root
+            .props
+            .iter()
+            .find(|p| p.name == "offset-y")
+            .expect("offset-y prop");
+        assert_eq!(offset.value, IrLiteral::Int(-5));
+    }
+
+    #[test]
+    fn scroll_view_accepts_very_large_offset_y_literal() {
+        // Far past any plausible content extent — must still pass
+        // validate(). The arrange-time clamp narrows it down to
+        // `[0, max_offset]` per DD-M3-P4-005.
+        let c = parse_ok(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             node ScrollView { prop offset-y = 2000000 node Box {} }\n}",
+        );
+        let offset = c
+            .root
+            .props
+            .iter()
+            .find(|p| p.name == "offset-y")
+            .expect("offset-y prop");
+        assert_eq!(offset.value, IrLiteral::Int(2_000_000));
+    }
+
+    #[test]
+    fn scroll_view_accepts_offset_y_state_binding() {
+        // `offset-y` may be bound to a state identifier (DD-M3-P4-003
+        // bindable read-only). validate() resolves the reference
+        // against the declared `state` table; layout consumes the
+        // bound value at run time.
+        let c = parse_ok(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             state scroll_y: i32 = 0\n\
+             node ScrollView { bind offset-y = (prop-read scroll_y) node Box {} }\n}",
+        );
+        assert_eq!(c.root.widget_type, "ScrollView");
+        assert_eq!(c.root.bindings.len(), 1);
+        assert_eq!(c.root.bindings[0].prop_name, "offset-y");
     }
 
     #[test]

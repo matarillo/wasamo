@@ -103,6 +103,27 @@ checklist は **オーナー報告の構造化テンプレ**であり、項目�
 11. タスクリストの後続 step 見直し (現在の phase ADR に影響しない
     範囲) — 必要/不要
 
+    本 step で `[ ]` のまま残る ADR / progress evidence がある
+    場合、それを **次に所有する step が progress file 上で明示
+    されているか** を点検する。owner-manual GUI smoke / 人手 CI
+    確認 / 外部レビュー gate 等の人間系 gate は、phase-end checklist
+    や `retrospectives.md` checklist への暗黙依存に置かず、
+    **(a) 実行責任 step、(b) 失敗時の fix container (= 不具合発生
+    時にどの step ブランチで additive 修正を積むか)** の両方を
+    progress file の Task list 上で明示する。次の step が現在の
+    Task list に存在しない場合、merge 前に Task list を revise
+    して step を挿入し直す (= ownership 修正としての plan revision)。
+    単なる「次の step で扱う」言及は不可。
+
+    precedent: M3-Phase 4 で T5 の "Leave visual correctness as
+    owner-manual GUI smoke" `[ ]` が T5 merge 待ち / 旧 T6 (phase-end
+    機械的 close) の両方で実行責任主体が不明という宙吊り状態だった
+    ことを T5 close 時に検出し、T5/T6 split + 旧 T6 → T7 への
+    renumber で plan revise した
+    (`docs/plans/progress/m3-phase-4-progress.md` Decisions log
+    "T5/T6 split for owner-manual GUI smoke (2026-05-25)")。本観点
+    が無かったため当初検出が遅れた。
+
 CI green: 推奨 (PR を上げていれば PR CI、ローカルのみなら項目 3 の
 clean rebuild が proxy)。CI YAML 変更は通常不要 (phase 内で発生したら
 ADR に補足 DD)。
