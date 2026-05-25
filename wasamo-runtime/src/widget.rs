@@ -13,7 +13,7 @@ use windows::{
         Composition::{
             AnimationIterationBehavior, ColorKeyFrameAnimation, CompositionAnimation,
             CompositionColorBrush, CompositionObject, CompositionSurfaceBrush, Compositor,
-            ContainerVisual, SpriteVisual, Visual,
+            ContainerVisual, InsetClip, SpriteVisual, Visual,
         },
     },
 };
@@ -124,11 +124,26 @@ enum WidgetData {
     // `LayoutNode::scroll_view(offset_y)` boundary; the clamp arithmetic
     // lives in `layout::arrange_scroll_view` (T2). No `PropertyValue`
     // variant carries `offset_y` — the read-only binding path stringifies
-    // through `widget_write_property` and the narrow string-to-`i32`
-    // parse lives on the ScrollView arm of `set_property` (added in T4
-    // when binding evidence is exercised end-to-end).
+    // through `widget_write_property`, and the narrow string-to-`i32`
+    // parse lives on the ScrollView arm of `set_property`
+    // (`update_scroll_view_offset_y`).
+    //
+    // `content_visual` is the ScrollView-owned intermediate Visual
+    // (DD-M3-P4-004): a SpriteVisual that sits between `WidgetNode.visual`
+    // (the outer clipped Visual) and the single content child's widget
+    // Visual. It carries the scroll translation
+    // `Visual.Offset = (0, -applied_y, 0)` (the clamped applied offset
+    // recorded on `LayoutNode.applied_offset_y` by `arrange_scroll_view`
+    // in T2). `WidgetNode::append_child` / `insert_child` / `remove_child`
+    // / `replace_child` route ScrollView's children into this Visual
+    // rather than the outer one, so the outer Visual carries only the
+    // viewport clip (`Visual.Clip = InsetClip{0,0,0,0}`) and the
+    // intermediate carries only the scroll translation — neither
+    // conflates with the other or with the child widget's own
+    // layout-derived `Visual.Offset`.
     ScrollView {
         offset_y: i32,
+        content_visual: SpriteVisual,
     },
 }
 
@@ -139,6 +154,15 @@ pub const PROP_BUTTON_STYLE: u32 = 2;
 pub const PROP_TEXT_CONTENT: u32 = 3;
 pub const PROP_TEXT_STYLE: u32 = 4;
 pub const PROP_BUTTON_ENABLED: u32 = 5;
+// M3-Phase 4 T4 / DD-M3-P4-003 narrow per-widget i32 parse bridge.
+// `offset-y` is an `i32` DSL surface attribute on ScrollView; the
+// existing reactive engine stringifies the bound `Signal<i32>`'s value
+// through `evaluate_binding` and `widget_write_property`, and this
+// per-widget `set_property` arm parses the string back into the `i32`
+// `offset_y` field on `WidgetData::ScrollView`. No new `PropertyValue`
+// variant is introduced (the general typed-`i32` evaluator / writer
+// pair stays deferred to M4+ per ADR §M4 hand-off item 2).
+pub const PROP_SCROLLVIEW_OFFSET_Y: u32 = 6;
 
 #[derive(Debug, Clone)]
 pub enum PropertyValue {
@@ -482,10 +506,37 @@ impl WidgetNode {
         compositor: &Compositor,
         offset_y: Option<i32>,
     ) -> windows::core::Result<Box<Self>> {
+        use windows::core::Interface;
         let offset_y = offset_y.unwrap_or(0);
         let visual = compositor.CreateSpriteVisual()?;
+        // DD-M3-P4-004 Option A: outer Visual carries the viewport clip
+        // (`Visual.Clip = InsetClip{0,0,0,0}`). Zero insets means the
+        // clip tracks the Visual's `Size` automatically, so the
+        // sync_visuals size write at every layout pass keeps the
+        // clipped region in sync with the viewport.
+        let clip: InsetClip = compositor.CreateInsetClip()?;
+        let outer_visual: Visual = visual.cast()?;
+        outer_visual.SetClip(&clip)?;
+        // DD-M3-P4-004 Option A: ScrollView-owned intermediate content
+        // Visual sits between the outer Visual and the single content
+        // child's widget Visual; carries the scroll translation
+        // `Visual.Offset = (0, -applied_y, 0)` written by `sync_visuals`.
+        // Children inserted into this WidgetNode are routed beneath
+        // `content_visual` by `content_container_visual`, so the outer
+        // Visual's child collection contains exactly the intermediate
+        // Visual and the intermediate's child collection contains the
+        // single content child widget Visual.
+        let content_visual = compositor.CreateSpriteVisual()?;
+        let outer_container: ContainerVisual = visual.cast()?;
+        let content_as_visual: Visual = content_visual.cast()?;
+        outer_container
+            .Children()?
+            .InsertAtTop(&content_as_visual)?;
         Ok(Box::new(Self {
-            data: WidgetData::ScrollView { offset_y },
+            data: WidgetData::ScrollView {
+                offset_y,
+                content_visual,
+            },
             width: SizeConstraint::Fill,
             height: SizeConstraint::Fill,
             visual,
@@ -494,6 +545,37 @@ impl WidgetNode {
             attached: false,
             bindings: Vec::new(),
         }))
+    }
+
+    /// Test-only accessor for the ScrollView-owned intermediate content
+    /// Visual (DD-M3-P4-004 Option A). Returns the `SpriteVisual` whose
+    /// `Visual.Offset` carries the scroll translation `(0, -applied_y, 0)`
+    /// and beneath which the single content child's widget Visual is
+    /// attached. Returns `None` for non-ScrollView widgets. Hidden from
+    /// rustdoc and named with the project's `__*_for_test` convention.
+    /// Used by `wasamo-runtime/tests/scroll_view_layout_integration.rs`
+    /// to assert (b)–(g) of ADR Phase 4 verification closure item 4.
+    #[doc(hidden)]
+    pub fn __scroll_view_intermediate_for_test(&self) -> Option<SpriteVisual> {
+        match &self.data {
+            WidgetData::ScrollView { content_visual, .. } => Some(content_visual.clone()),
+            _ => None,
+        }
+    }
+
+    /// Returns the Visual that ScrollView's child widget Visuals are
+    /// attached beneath: the intermediate content Visual for ScrollView
+    /// (DD-M3-P4-004 Option A); `self.visual` for every other widget.
+    /// Used by the tree-mutation primitives (`append_child` /
+    /// `insert_child` / `remove_child` / `replace_child`) so the scroll
+    /// translation `Visual.Offset = (0, -applied_y, 0)` on the
+    /// intermediate Visual stays separated from the child widget's own
+    /// layout-derived `Visual.Offset`.
+    fn content_container_visual(&self) -> &SpriteVisual {
+        match &self.data {
+            WidgetData::ScrollView { content_visual, .. } => content_visual,
+            _ => &self.visual,
+        }
     }
 
     // Test-only accessor for `WidgetData::Box` (M3-Phase 2 ADR §Phase 2
@@ -649,12 +731,21 @@ impl WidgetNode {
     }
 
     pub fn set_property(&mut self, id: u32, value: &PropertyValue) -> Result<(), PropertyError> {
-        // Track whether this property affects intrinsic size (DD-P8-002).
+        // Track whether this property write requires a layout pass
+        // (DD-P8-002 mark_layout_dirty hook). For Button / Text label
+        // and font, the intrinsic size changes; for ScrollView
+        // `offset-y` the intrinsic size is unchanged but the
+        // `arrange_scroll_view` clamp and child placement re-run, so
+        // the same dirty hook drives a re-layout in the next
+        // drain_if_outermost cycle. The DSL surface property name
+        // "size-affecting" is read loosely here as
+        // "needs a layout pass to take effect on screen".
         let size_affecting = matches!(
             (&self.data, id),
             (WidgetData::Button(_), PROP_BUTTON_LABEL)
                 | (WidgetData::Text { .. }, PROP_TEXT_CONTENT)
                 | (WidgetData::Text { .. }, PROP_TEXT_STYLE)
+                | (WidgetData::ScrollView { .. }, PROP_SCROLLVIEW_OFFSET_Y)
         );
         let result = match (&mut self.data, id) {
             (WidgetData::Button(_), PROP_BUTTON_LABEL) => {
@@ -693,6 +784,24 @@ impl WidgetNode {
                 };
                 let new_style = typography_from_i32(v).ok_or(PropertyError::TypeMismatch)?;
                 self.update_text_style(new_style)
+            }
+            // M3-Phase 4 T4 / DD-M3-P4-003: narrow string-to-`i32` parse
+            // bridge for the `offset-y` binding. The reactive engine
+            // stringifies the `Signal<i32>` value via `evaluate_binding`
+            // and routes it through `widget_write_property`, so the
+            // value arrives here as `PropertyValue::String`. Parsing
+            // failure is a `TypeMismatch` (the producer is the string
+            // baker; non-integer content would mean the upstream
+            // contract is broken). The general typed-`i32` evaluator /
+            // writer pair from architecture.md §6.8 *Per-type seam*
+            // stays deferred per ADR §M4 hand-off item 2.
+            (WidgetData::ScrollView { .. }, PROP_SCROLLVIEW_OFFSET_Y) => {
+                let s = match value {
+                    PropertyValue::String(s) => s.as_str(),
+                    _ => return Err(PropertyError::TypeMismatch),
+                };
+                let parsed: i32 = s.parse().map_err(|_| PropertyError::TypeMismatch)?;
+                self.update_scroll_view_offset_y(parsed)
             }
             _ => Err(PropertyError::UnknownId),
         };
@@ -782,6 +891,28 @@ impl WidgetNode {
         let new_brush = compositor.CreateColorBrushWithColor(target)?;
         self.visual.SetBrush(&new_brush)?;
         btn.bg_brush = new_brush;
+        Ok(())
+    }
+
+    // M3-Phase 4 T4 / DD-M3-P4-003: update the ScrollView's `i32`
+    // `offset_y` field. Pure-data mutation — no Win32/WinRT side
+    // effect at this point. The new value takes effect on the next
+    // layout pass: `arrange_scroll_view` re-clamps it against the
+    // current `(content_h - viewport_h)` upper bound and writes the
+    // clamped applied offset onto `LayoutNode.applied_offset_y`,
+    // which `sync_visuals` then writes onto the intermediate
+    // content Visual's `Visual.Offset`. The set_property caller
+    // marks the host window's layout dirty (size_affecting clause
+    // above) so the existing `drain_if_outermost` re-layout path
+    // picks up the change without a bespoke trigger.
+    fn update_scroll_view_offset_y(&mut self, new_offset_y: i32) -> Result<(), PropertyError> {
+        let WidgetData::ScrollView {
+            ref mut offset_y, ..
+        } = self.data
+        else {
+            return Err(PropertyError::UnknownId);
+        };
+        *offset_y = new_offset_y;
         Ok(())
     }
 
@@ -1037,7 +1168,10 @@ impl WidgetNode {
 
     pub fn append_child(&mut self, mut child: Box<WidgetNode>) -> windows::core::Result<()> {
         use windows::core::Interface;
-        let parent_container: ContainerVisual = self.visual.cast()?;
+        // For ScrollView, route the child into the intermediate content
+        // Visual instead of the outer clipped Visual (DD-M3-P4-004
+        // Option A). Every other widget routes into `self.visual`.
+        let parent_container: ContainerVisual = self.content_container_visual().cast()?;
         let child_visual: Visual = child.visual.cast()?;
         parent_container.Children()?.InsertAtTop(&child_visual)?;
         child.attached = true;
@@ -1064,7 +1198,7 @@ impl WidgetNode {
         }
         use windows::core::Interface;
         let parent_container: ContainerVisual = self
-            .visual
+            .content_container_visual()
             .cast()
             .map_err(|_| MutationError::IndexOutOfBounds)?;
         let child_visual: Visual = child
@@ -1090,7 +1224,7 @@ impl WidgetNode {
             .cast()
             .map_err(|_| MutationError::IndexOutOfBounds)?;
         let parent_container: ContainerVisual = self
-            .visual
+            .content_container_visual()
             .cast()
             .map_err(|_| MutationError::IndexOutOfBounds)?;
         parent_container
@@ -1123,7 +1257,7 @@ impl WidgetNode {
             .cast()
             .map_err(|_| MutationError::IndexOutOfBounds)?;
         let parent_container: ContainerVisual = self
-            .visual
+            .content_container_visual()
             .cast()
             .map_err(|_| MutationError::IndexOutOfBounds)?;
         let children_col = parent_container
@@ -1250,7 +1384,7 @@ impl WidgetNode {
             // (DD-M3-P4-003) is handed to `LayoutNode::scroll_view` here
             // unchanged; `arrange_scroll_view` (T2) promotes it to `f32`
             // for clamp arithmetic per the rounding contract.
-            WidgetData::ScrollView { offset_y } => {
+            WidgetData::ScrollView { offset_y, .. } => {
                 let mut node = LayoutNode::scroll_view(*offset_y);
                 node.width = self.width.clone();
                 node.height = self.height.clone();
@@ -1289,8 +1423,39 @@ impl WidgetNode {
             X: computed.size.0,
             Y: computed.size.1,
         })?;
+        // DD-M3-P4-004 Option A: when self is a ScrollView, the
+        // intermediate content Visual carries the scroll translation
+        // `Visual.Offset = (0, -applied_y, 0)` (T2's clamped
+        // `applied_offset_y` cache). The child widget Visual sits
+        // beneath the intermediate, so its sync_visuals parent_abs
+        // is the intermediate's absolute offset
+        // `(computed.offset.0, computed.offset.1 - applied_y)` — the
+        // layout engine arranged the child at `(x, y - applied)`
+        // absolute (per `arrange_scroll_view`), so the child
+        // Visual.Offset resolves to (0, 0) parent-relative and the
+        // scroll position is contributed exactly once by the
+        // intermediate Visual. The intermediate Visual itself carries
+        // no clip (the outer Visual's InsetClip clips the translated
+        // content); its size mirrors the viewport for hit-testing
+        // consistency with the outer Visual.
+        let child_parent_abs = if let WidgetData::ScrollView { content_visual, .. } = &self.data {
+            let applied = computed.applied_offset_y.get();
+            let int_visual: Visual = content_visual.cast()?;
+            int_visual.SetOffset(Vector3 {
+                X: 0.0,
+                Y: -applied,
+                Z: 0.0,
+            })?;
+            int_visual.SetSize(Vector2 {
+                X: computed.size.0,
+                Y: computed.size.1,
+            })?;
+            (computed.offset.0, computed.offset.1 - applied)
+        } else {
+            computed.offset
+        };
         for (child, child_computed) in self.children.iter_mut().zip(computed.children.iter()) {
-            child.sync_visuals(child_computed, computed.offset)?;
+            child.sync_visuals(child_computed, child_parent_abs)?;
         }
         Ok(())
     }
