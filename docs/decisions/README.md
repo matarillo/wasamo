@@ -2,11 +2,11 @@
 
 ## Scope and relation to RFCs
 
-This directory holds **Architecture Decision Records (ADRs)**: per-phase implementation decisions agreed between the project owner and collaborators during M1-M2 (BDFL governance).
+This directory holds **Architecture Decision Records (ADRs)**: per-phase implementation decisions agreed between the project owner and collaborators throughout the pre-1.0 period (M1 through M6, BDFL governance).
 
-From M3 onward, the project transitions to RFC-based consensus for substantial feature proposals. Community-facing RFCs will live in `docs/rfcs/`. ADRs in this directory remain the authoritative record for decisions made before that transition.
+From post-1.0 onward, the project transitions to RFC-based consensus for substantial feature proposals. Community-facing RFCs will live in `docs/rfcs/`. ADRs in this directory remain the authoritative record for decisions made during the pre-1.0 period.
 
-The governance policy is defined in [VISION.md §9.2](../../VISION.md#92-decision-making).
+The governance policy is defined in [VISION.md §9.2](../../VISION.md#92-decision-making); see [vision-governance-rfc-deferral.md](./vision-governance-rfc-deferral.md) for the rationale behind the post-1.0 timing.
 
 Most ADRs are bound to a single phase: one file per phase, recording
 all decisions made during that phase's pre-implementation agreement

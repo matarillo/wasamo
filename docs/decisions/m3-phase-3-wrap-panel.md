@@ -119,6 +119,16 @@ parity with M3 Phase 1 / Phase 2. If the owner instead wants
 Phase 3 gated on RFC-process setup, this ADR's `Status: Accepted`
 flip blocks until the governance question is resolved upstream.
 
+**Resolution (post-hoc, 2026-05-25).** The upstream governance
+question was resolved by
+[vision-governance-rfc-deferral.md DD-V-018](./vision-governance-rfc-deferral.md#dd-v-018--defer-rfc-adoption-to-post-10),
+which collapsed the three-stage governance trajectory into two
+stages (pre-1.0 BDFL + ADRs, post-1.0 open governance + RFC
+machinery introduced together). The phase-ADR path was therefore
+the correct choice for Phase 3 and remains the path for the
+remainder of the pre-1.0 period. This historical note is left
+intact per the supersede rule.
+
 ### Layering note (DD-001 ⇄ DD-004 ⇄ DD-005)
 
 Phase 3's structural DD (DD-001 — IR shape + child layout contract),

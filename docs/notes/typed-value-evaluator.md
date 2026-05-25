@@ -87,7 +87,7 @@ read_typed(path) -> TypedValue
 
 ## 再評価トリガ
 
-次のいずれかが起きたら本ノートを再読し、必要なら ADR または RFC を起こす。
+次のいずれかが起きたら本ノートを再読し、必要なら ADR を起こす。
 
 1. **第3の scalar property type が導入される。**
    `bool`, `f32`, dimension, color など、`i32` / `String` 以外の型を追加する時は、
