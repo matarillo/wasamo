@@ -589,7 +589,11 @@ T6 retrospective Follow-Up #1.
   `wrap_panel_layout_integration` **2 passed**, `wasamoc` lib
   **227 passed**, all other workspace tests green. GitHub Actions
   `workflow_dispatch` evidence on `feat/m3-phase-4`:
-  **PENDING_CI_RUN**.
+  run `26406065405` completed success
+  (<https://github.com/matarillo/wasamo/actions/runs/26406065405>);
+  `cargo build` job 2m2s, all build / test / smoke steps green.
+  Annotations only: Node.js 20 deprecation for `mlugg/setup-zig@v2`
+  and the `windows-latest` redirect notice.
 
 ## Implementation summary (Phase 4 close)
 

@@ -120,9 +120,12 @@ carry-forward した。
       `scroll_view_layout_integration` 3 passed,
       `wrap_panel_layout_integration` 2 passed, `wasamoc` lib 227
       passed, workspace failure 0).
-    - GitHub Actions `workflow_dispatch` evidence: **PENDING_CI_RUN**.
-      This placeholder is replaced after the phase-end doc commit is
-      pushed and the run completes on `feat/m3-phase-4`.
+    - GitHub Actions `workflow_dispatch` evidence: run `26406065405`
+      on `feat/m3-phase-4` completed success
+      (<https://github.com/matarillo/wasamo/actions/runs/26406065405>);
+      `cargo build` job 2m2s, all build / test / smoke steps green.
+      Annotations only: Node.js 20 deprecation for `mlugg/setup-zig@v2`
+      and the `windows-latest` redirect notice.
     - main no-ff merge / push remains a separate owner-gated action
       after this phase-end gate.
 
@@ -162,7 +165,10 @@ cargo test --workspace
 GitHub Actions:
 
 ```text
-PENDING_CI_RUN
+gh workflow run ci.yml -r feat/m3-phase-4
+  -> https://github.com/matarillo/wasamo/actions/runs/26406065405
+gh run watch 26406065405 --exit-status
+  -> success; cargo build job 2m2s; all build / test / smoke steps green
 ```
 
 ## フォローアップ
