@@ -130,8 +130,15 @@ carried by Phase 2's DD-M3-P2-006 placeholder pattern; Phase 4
 sub-screen content is Box + Text placeholders.
 
 The acceptance lens for this phase: A5 is satisfied when (i) `.ui`
-declares `ScrollView { offset-y: <i32-or-\{state.scroll_y}>; <single
-content child> }` and the shared crates lower → load → render it
+declares `ScrollView { offset-y: <i32-literal-or-state-ident>; <single
+content child> }` (where the state-ident form is a bare identifier RHS
+per [dsl_spec.md §4.3](../dsl_spec.md#43-property-binding) property-
+binding semantics, resolving to a component-scope
+`state scroll_y: i32 = 0` declaration per
+[dsl_spec.md §4.7](../dsl_spec.md#47-state-declarations-m2-surface-bool-added-in-m3-phase-1)
+state-declaration grammar, **not** a `\{…}` interpolation — see
+Revision history 2026-05-25 erratum) and the shared crates lower →
+load → render it
 with correct inner-unbounded measure + viewport clip + offset
 application, (ii) the ScrollView chapter lands in `docs/dsl_spec.md`
 §4.11 as a normative spec at the milestone-end-criteria bar
@@ -410,15 +417,20 @@ the typed-`i32` writer pair decision** ([architecture.md §6.8
 
 **Options (binding direction):**
 
-- Option A — Constant-only. `offset-y: 42` only; no `\{state.scroll_y}`
-  binding.
+- Option A — Constant-only. `offset-y: 42` only; no `offset-y:
+  scroll_y` state-identifier binding.
   - What you gain: maximum conservatism; defers all binding work.
   - What you give up: the gallery sub-screen's scroll position
     cannot change at runtime; programmatic scrolling is
     impossible without re-loading the IR; A5's "content offset
     binding" wording becomes hard to satisfy.
 - **Option B — Bindable read-only (recommended).** `offset-y:
-  \{state.scroll_y}` admitted; runtime reads the bound state on
+  scroll_y` admitted (bare state identifier RHS per
+  [dsl_spec.md §4.3](../dsl_spec.md#43-property-binding) property-
+  binding semantics, with `state scroll_y: i32 = 0` declared at
+  component scope per
+  [dsl_spec.md §4.7](../dsl_spec.md#47-state-declarations-m2-surface-bool-added-in-m3-phase-1));
+  runtime reads the bound state on
   each update and applies the offset; **no writer direction**
   (the runtime does not write back to the bound state when the
   layout-time clamp changes the applied offset).
@@ -919,8 +931,10 @@ observed:
      **accepted** (negative literals are layout-time-clamped per
      DD-005 / DD-006, not compile-time-rejected — the Phase 3
      pattern explicitly does not apply here).
-   - **`offset-y` binding admission** — `offset-y:
-     \{state.scroll_y}` accepted when `scroll_y` is declared as
+   - **`offset-y` binding admission** — `offset-y: scroll_y`
+     (bare state identifier RHS per
+     [dsl_spec.md §4.3](../dsl_spec.md#43-property-binding))
+     accepted when `scroll_y` is declared as
      `i32` in `state`; rejected when `scroll_y` is undeclared,
      `bool`, or `String`. Reuses the existing i32 reader /
      binding-effect machinery; the runtime-side narrow
@@ -981,7 +995,7 @@ observed:
    on the Windows CI runner exercises:
 
    - **Scroll-path fixture (primary).** A `.ui` declares a
-     ScrollView with `offset-y: \{state.scroll_y}` containing a
+     ScrollView with `offset-y: scroll_y` containing a
      `VStack { Box × N }` whose total height exceeds a known
      viewport size, inside a fixture whose root / parent
      allocation supplies known bounded viewport dimensions.
@@ -1107,7 +1121,7 @@ landing point:
    "third pair" anticipated in
    [architecture.md §6.8 *Per-type seam* paragraph](../architecture.md#68-reactive-engine-m2-phase-5).
    The Phase 4 surface (read-only binding) is forward-compatible:
-   `offset-y: \{state.scroll_y}` remains valid syntax when M4 or
+   `offset-y: scroll_y` remains valid syntax when M4 or
    later work adds in-out direction; no IR change is required.
 
 3. **Scrollbar widget synchronization.** A separate widget
@@ -1291,5 +1305,6 @@ recommended Options of each DD here).
 
 | Date | Change |
 |---|---|
+| 2026-05-25 | Erratum: corrected `offset-y` binding surface notation. Earlier draft examples wrote the state-bound surface as `offset-y: \{state.scroll_y}`; the actual DSL property-bind surface is `offset-y: scroll_y` (bare state identifier) per existing [dsl_spec.md §4.3](../dsl_spec.md#43-property-binding) property-binding surface, with `state scroll_y: i32 = 0` declared at component scope per [dsl_spec.md §4.7](../dsl_spec.md#47-state-declarations-m2-surface-bool-added-in-m3-phase-1). The `\{…}` syntax is reserved for string interpolation inside string literals per [dsl_spec.md §2.4](../dsl_spec.md#24-string-literals). No design decision changes; the bindable read-only direction of DD-003 is unaffected. |
 | 2026-05-25 | Status flipped to Accepted. DD-001 through DD-006 owner-accepted after per-DD review, implementation-shape recheck against existing runtime code, and final Verification / Out of scope / Upstream revisions alignment. |
 | 2026-05-25 | Initial draft (Status: Proposed). All 6 DDs at Proposed pending owner review pass. Framing-level owner alignment confirmed in chat 2026-05-25 (commits `8f19c5f`, `234a0fa` for pre-doc-framing.md). |
