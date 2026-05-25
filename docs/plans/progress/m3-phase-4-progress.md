@@ -128,26 +128,61 @@ Phase 3 R2 test-coverage residual inside Phase 4.
 - [x] Preserve the CI-gated Compositor skip/fail discipline inherited
       from Phase 2 / Phase 3.
 
-### T5 — End-to-end gallery visible smoke
+### T5 — End-to-end gallery `.ui` and assistant-side build / launch
 
-Discharges ADR verification closure **evidence item 5** and the
-phase-close / A11 gallery proof.
+Discharges the **assistant-automated portion** of ADR verification
+closure **evidence item 5**. The visible-correctness portion of
+item 5 (owner-manual GUI smoke) is split into a dedicated step at
+T6 — see the rationale in the Decisions log entry **"T5/T6 split for
+owner-manual GUI smoke (2026-05-25)"**.
 
-- [ ] Grow `examples/gallery/gallery.ui` additively with a sibling
+- [x] Grow `examples/gallery/gallery.ui` additively with a sibling
       `ScrollView { WrapPanel { Box × 30–40 } }` slice; the Phase 3
       standalone WrapPanel slice stays untouched.
-- [ ] Add programmatic scroll controls that mutate `state.scroll_y` by
+- [x] Add programmatic scroll controls that mutate `state.scroll_y` by
       fixed increments.
-- [ ] Build and run `examples/gallery-rust/`.
-- [ ] Record `Start-Process` launch success by the assistant.
-- [ ] Leave visual correctness as owner-manual GUI smoke: viewport
-      clips sharply, buttons move content, clipped content is hidden,
-      and off-viewport thumbnails enter view as scroll progresses.
-- [ ] C / Zig gallery hosts remain out of Phase 4 scope.
+- [x] Build and run `examples/gallery-rust/`.
+- [x] Record `Start-Process` launch success by the assistant.
+- [x] C / Zig gallery hosts remain out of Phase 4 scope.
 
-### T6 — Phase-end gates and Moment 2 re-sync
+(The original T5 bullet "Leave visual correctness as owner-manual GUI
+smoke" has moved to T6 — see Decisions log "T5/T6 split for
+owner-manual GUI smoke (2026-05-25)".)
 
-Discharges the m3-plan phase-end criteria for Phase 4.
+### T6 — Owner-manual GUI smoke and any visible-correctness fix
+
+Discharges the **visible-correctness portion** of ADR verification
+closure **evidence item 5** and the A11 gallery proof's owner-acceptance
+half. This step exists so that visible smoke is verified — and fixed
+if it fails — **before** any phase-close mechanical work (spec / plan
+status flips) lands in T7. See the Decisions log entry **"T5/T6 split
+for owner-manual GUI smoke (2026-05-25)"** for the rationale.
+
+- [ ] Owner runs (or builds-and-runs) `target/release/gallery-rust.exe`
+      (or the `debug/` variant); see `examples/gallery-rust/` README
+      / `cargo run -p gallery-rust` if the T5 binary is no longer on
+      disk (clean / fresh checkout). Owner observes: viewport clips
+      sharply; +100 / −100 Buttons move content; clipped content is
+      hidden; off-viewport thumbnails enter view as `scroll_y`
+      progresses.
+- [ ] Owner explicitly accepts the smoke result, or records a fail
+      observation note (per [human-visible GUI smoke](../../notes/human-visible-smoke.md)).
+- [ ] **If smoke fails:** implementation fix lands additively on the
+      T6 branch (new commits); the smoke checklist above is re-run to
+      green before T6 closes. Fix scope stays inside the Phase 4 ADR
+      (`docs/decisions/m3-phase-4-scroll-view.md`) / dsl_spec §4.11 /
+      architecture.md §6.5; any fix requiring a normative spec change
+      escalates to T7 Moment 2 (or, if unsuitable for Moment 2, a
+      mid-phase ADR addendum). Fix iterations stay inside T6 until the
+      smoke checklist is green.
+- [ ] T6 step-end retrospective recorded under
+      `docs/notes/m3-phase-4/`.
+
+### T7 — Phase-end gates and Moment 2 re-sync
+
+Discharges the m3-plan phase-end criteria for Phase 4. Renumbered
+from the original T6 when the T5/T6 split landed; checklist content
+is unchanged.
 
 - [ ] `cargo fmt --all -- --check` green.
 - [ ] `cargo build --release --workspace` green locally and on CI.
@@ -184,6 +219,41 @@ Discharges the m3-plan phase-end criteria for Phase 4.
   visible at-a-glance. Revisit if a future phase introduces a parent
   layout that legitimately passes unbounded scroll-axis input
   downstream (none anticipated through Phase 8).
+
+- **T5/T6 split for owner-manual GUI smoke (2026-05-25).** The
+  original Task list bundled owner-manual GUI smoke as the last
+  `[ ]` of T5 and treated phase-end mechanical close as T6. T5 was
+  closed by the assistant after the `.ui` + Build + Start-Process
+  bullets had landed, which left the smoke bullet with **no step
+  that actually owns its execution** — the smoke could only happen
+  after owner review of T5, but T5 was being merged. The original
+  T6 (phase-end / Moment 2 re-sync) made the smoke verification
+  implicit via [retrospectives.md item 17](../../notes/retrospectives.md#phase-end-固有-merge--main),
+  which would have meant interleaving spec / plan marker flips with
+  smoke verification in a single step. If smoke had failed mid-T6,
+  the phase branch would carry half-flipped spec markers while a
+  fix step is opened — an avoidable rollback surface.
+
+  Resolution: split the original Task list into three steps. T5
+  retains the assistant-automated bullets; **new T6** is a dedicated
+  owner-manual GUI smoke step that absorbs any fix iterations
+  inside its own branch; **T7 (= former T6)** runs the mechanical
+  phase-close gates only once visible correctness is owner-accepted.
+  Smoke gate is now explicit in the progress file rather than
+  inherited from `retrospectives.md` item 17. ADR (`docs/decisions/
+  m3-phase-4-scroll-view.md`) numbering is not affected — the ADR
+  refers to verification closure **evidence item 5**, which now
+  maps onto T5 + T6 jointly; m3-plan.md Phase 4 row does not list
+  T-numbers and needs no edit.
+
+  Phase 2 / Phase 3 precedent was to bundle smoke into the
+  phase-end step. Phase 4 deviates because the intermediate Visual
+  + `InsetClip{0,0,0,0}` + `Visual.Offset = (0, -applied_y, 0)`
+  shift + `sync_visuals` `parent_abs_offset` shift compose the
+  largest Visual-layer change of M3, raising the prior on
+  pixel-level regressions that integration tests cannot catch (e.g.
+  clip sharpness, repaint ordering, peripheral wiring). The split
+  is local to Phase 4; not a project-wide convention change.
 
 ## CI / verification log
 
