@@ -51,20 +51,20 @@ the upstream documents named by the ADR's Moment 1 queue.
 
 Discharges ADR verification closure **evidence item 1**.
 
-- [ ] Register `ScrollView` as a known widget type while preserving
+- [x] Register `ScrollView` as a known widget type while preserving
       the generic parser shape.
-- [ ] Enforce exactly one child at compile time; reject zero-child and
+- [x] Enforce exactly one child at compile time; reject zero-child and
       multi-child ScrollView declarations.
-- [ ] Accept `offset-y: <i32>` literals and `offset-y: scroll_y`
+- [x] Accept `offset-y: <i32>` literals and `offset-y: scroll_y`
       (bare state identifier per dsl_spec §4.3) when `scroll_y` is
       declared as `i32` in `state`.
-- [ ] Reject non-integer literals and bindings to undeclared, `bool`,
+- [x] Reject non-integer literals and bindings to undeclared, `bool`,
       or `string` state.
-- [ ] Reject `bind offset-y:` / `in-out offset-y:`-style writable
+- [x] Reject `bind offset-y:` / `in-out offset-y:`-style writable
       surfaces; Phase 4 binding is read-only.
-- [ ] Reject unknown ScrollView attributes, including `viewport-*`,
+- [x] Reject unknown ScrollView attributes, including `viewport-*`,
       `scroll-axis`, and `padding`.
-- [ ] Keep the gallery sub-screen `.ui` compiling cleanly as the
+- [x] Keep the gallery sub-screen `.ui` compiling cleanly as the
       positive control.
 
 ### T2 — Layout engine: ScrollView measure-arrange
