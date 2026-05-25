@@ -814,21 +814,30 @@ ScrollView sizing follows five facts:
    scrolling are M4 or later surfaces and land additively without
    redefining `offset-y`.
 
-**Ecosystem contrast.** Readers arriving from WPF, Compose, or CSS
+**Ecosystem contrast.** Readers arriving from WPF, CSS, or SwiftUI
 should map Phase 4 ScrollView to "one child in a clipped viewport",
 not to a full scroll-control stack:
 
-- **WPF `ScrollViewer`.** The single-child content model matches the
-  broad precedent, but Phase 4 intentionally ships no built-in
-  scrollbar widget and no input-driven internal scrolling.
-- **Jetpack Compose / SwiftUI.** The common mental model of a
-  viewport around content applies, but Phase 4's scroll position is an
-  explicit `offset-y` property rather than framework-owned gesture
-  state.
-- **CSS `overflow: hidden/auto`.** ScrollView installs the clipping
-  surface that WrapPanel intentionally lacks, but Phase 4 is not a
-  general overflow property. It is a concrete widget kind with one
-  content child and a vertical-only offset.
+- **WPF `ScrollViewer`.** Carries scrollbar visibility attributes
+  and a built-in scrollbar widget. Wasamo's Phase 4 conceptual
+  primitive (clip + offset + measure-arrange) matches, but the
+  surface is narrower: no scrollbar, viewport-from-parent, and the
+  scroll position is exposed as a bindable `offset-y` attribute.
+- **CSS `overflow: scroll`.** The viewport-plus-clipped-content
+  shape applies, but Phase 4 is not a general overflow style
+  property — it is a concrete widget kind with exactly one content
+  child. Phase 4 ships no scrollbar in any state and no input-driven
+  internal scrolling, and content size does not back-propagate to
+  ScrollView's outer size (which stays at viewport).
+- **SwiftUI `ScrollView`.** Carries the viewport-from-parent default,
+  axis selection, and gesture-driven offset as the familiar
+  associations. Wasamo's Phase 4 hardcodes vertical, exposes scroll
+  position as the bindable `offset-y` attribute against a bare state
+  identifier (e.g. `offset-y: scroll_y` with `state scroll_y: i32 = 0`
+  declared per §4.7), and defers gesture / wheel input to M4 or later.
+  The `.scrollPosition($state)` SwiftUI surface is conceptually
+  closest to the future in-out / write-back direction, which Phase 4
+  defers.
 
 #### Children
 
@@ -1448,4 +1457,4 @@ future design item.
 | 0.8     | 2026-05-20 | M3-Phase 2 close: flipped §4.9 Phase status marker and document status to implementation-synced after T1-T13 landed and local / CI phase-end gates passed. No implementation/spec divergence was found during the close re-sync. |
 | 0.9     | 2026-05-21 | M3-Phase 3 ADR-accepted design draft: added §4.10 WrapPanel layout primitive chapter (Phase status marker; sizing mental-model subsection with four-fact anchor and WPF / Compose / CSS ecosystem contrast per framing decision H; `item-cross-size` / `item-spacing` / `line-spacing` constant-only `i32` attribute surface; two-stage measure-arrange algorithm with bounded happy path, unbounded-main-axis one-line-flow branch, and unbounded-cross-axis-with-aspect-child propagation to Phase 2's `LayoutError::BoxAspectUnboundedBoth`; oversized-first-child + visible-overflow subsection; common-pitfalls note); added `WrapPanel` row to the §4.4 widget registry and dropped the stale `M1` qualifier from the registry's lead-in (the registry grew beyond M1 once `Box` landed in Phase 2; folded into this commit as a minimal retroactive fix with owner confirmation). No new tokens, grammar rules, AST variants, or IR forms — Phase 3 reuses existing `i32` plumbing. Pending implementation re-sync at Phase 3 close. |
 | 1.0     | 2026-05-22 | M3-Phase 3 close: flipped §4.10 Phase status marker and document status to implementation-synced after T1–T9 landed and the local clean-rebuild gate passed. Folded the T1 Decisions-log lexer-surface item into §2.2: generalised the `Ident` lexical pattern to admit kebab-case continuations (`-[A-Za-z]`-prefixed segments) and the `IntLit` pattern to admit an optional leading `-`; added a one-line note that the negative-sign surface is `IntLit`-only (does not extend `FloatLit` / measurement / `RatioLit` and does not introduce a subtraction or unary-minus operator). `§5` AST shapes unchanged (`IntLit { value: i64 }` already holds the signed surface). No other implementation / spec divergence found during the close re-sync. |
-| 1.1     | 2026-05-25 | M3-Phase 4 ADR-accepted design draft: added §4.11 ScrollView layout primitive chapter (Phase status marker; viewport/content/offset mental model with WPF / Compose / SwiftUI / CSS ecosystem contrast; exactly-one-child contract; `offset-y` signed `i32` literal or read-only `i32` state binding; parent-supplied viewport with no `viewport-*` attributes; pure-data measure-arrange algorithm including inner unbounded vertical measure, offset clamp, `LayoutError::ScrollViewUnboundedAxis`, and rounding contract; Visual-layer contract for the ScrollView-owned intermediate content Visual carrying `Visual.Offset = (0, -applied_y, 0)`; common-pitfalls note). Added `ScrollView` row to the §4.4 widget registry. No new grammar tokens, AST variants, IR literal/type variants, or scalar value types — Phase 4 reuses existing `i32` plumbing plus a narrow ScrollView string-to-`i32` parse / write bridge. Pending implementation re-sync at Phase 4 close. |
+| 1.1     | 2026-05-25 | M3-Phase 4 ADR-accepted design draft: added §4.11 ScrollView layout primitive chapter (Phase status marker; viewport/content/offset mental model with WPF / CSS `overflow: scroll` / SwiftUI ecosystem contrast; exactly-one-child contract; `offset-y` signed `i32` literal or read-only `i32` state binding; parent-supplied viewport with no `viewport-*` attributes; pure-data measure-arrange algorithm including inner unbounded vertical measure, offset clamp, `LayoutError::ScrollViewUnboundedAxis`, and rounding contract; Visual-layer contract for the ScrollView-owned intermediate content Visual carrying `Visual.Offset = (0, -applied_y, 0)`; common-pitfalls note). Added `ScrollView` row to the §4.4 widget registry. No new grammar tokens, AST variants, IR literal/type variants, or scalar value types — Phase 4 reuses existing `i32` plumbing plus a narrow ScrollView string-to-`i32` parse / write bridge. Pending implementation re-sync at Phase 4 close. |
