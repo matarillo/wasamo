@@ -190,7 +190,7 @@ Drop or revise this note if:
   recorded in the relevant M3 ADR); at that point section 3 can be
   trimmed to a back-pointer to the M3 decision.
 - The `TypedValue` open question is discharged by a later expression /
-  binding ADR or RFC; at that point section 4 can be updated to point
+  binding ADR; at that point section 4 can be updated to point
   to the accepted decision or removed if the question no longer has
   M3-facing relevance.
 

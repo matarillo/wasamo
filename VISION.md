@@ -209,11 +209,9 @@ Why:
 
 ### 9.2 Decision-making
 
-**Early stages (M1-M2).** BDFL (Benevolent Dictator) model. Design coherence comes first. Implementation decisions are recorded as Architecture Decision Records (ADRs) in [docs/decisions/](./docs/decisions/), one file per phase.
+**Pre-1.0 (M1–M6).** BDFL (Benevolent Dictator) model. Design coherence comes first. Implementation decisions are recorded as Architecture Decision Records (ADRs) in [docs/decisions/](./docs/decisions/) — one file per phase, plus vision ADRs for revisions that span phases.
 
-**M3 onward.** Gradual transition to RFC-based consensus. Major changes are discussed in documents under [docs/rfcs/](./docs/rfcs/), with adoption decided by core maintainer agreement.
-
-**Post-1.0.** Fully open governance. We'll consider establishing a Technical Steering Committee.
+**Post-1.0.** Fully open governance, with RFC-based consensus for substantial proposals. Community-facing RFCs will live in `docs/rfcs/`, with the template, lifecycle, and acceptance rule defined in a vision ADR at that time. We'll also consider establishing a Technical Steering Committee. The timing rationale is recorded in [docs/decisions/vision-governance-rfc-deferral.md](./docs/decisions/vision-governance-rfc-deferral.md).
 
 ### 9.3 Code of conduct
 
@@ -271,7 +269,7 @@ several ways.
 
 **Contribute code.** [Good first issues](https://github.com/matarillo/wasamo/issues?q=label%3A%22good+first+issue%22) on the current roadmap are a reasonable starting point.
 
-**Record a decision.** For M1-M2 implementation decisions, create an ADR in [docs/decisions/](./docs/decisions/) following the format in [docs/decisions/README.md](./docs/decisions/README.md). From M3 onward, substantial feature proposals follow the RFC process in [docs/rfcs/](./docs/rfcs/).
+**Record a decision.** For pre-1.0 implementation decisions (M1 through M6), create an ADR in [docs/decisions/](./docs/decisions/) following the format in [docs/decisions/README.md](./docs/decisions/README.md). RFC-based consensus for substantial proposals begins post-1.0 alongside fully open governance (see [§9.2](#92-decision-making)).
 
 **Documentation and samples.** Examples for each language, tutorials, and best practices are always needed.
 

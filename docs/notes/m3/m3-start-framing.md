@@ -12,8 +12,8 @@ related:
 # M3 start framing — DSL surface
 
 このノートは M3 の milestone plan と最初の設計文書を書く前に、
-M3 の読み方を揃えるための owner-agreed framing である。ADR / RFC そのものではなく、
-M3 の phase breakdown、各 phase の pre-doc、必要なら M3-era RFC の入力 artefact
+M3 の読み方を揃えるための owner-agreed framing である。ADR そのものではなく、
+M3 の phase breakdown、各 phase の pre-doc、必要なら追加の vision ADR の入力 artefact
 として扱う。
 
 M2 の pre-doc は「Foundation milestone をどう閉じるか」を中心にした。
@@ -164,7 +164,7 @@ M2 の DD-M2-P6-011 は `String` binding を通すことで、binding path が `
 ことを実証した。一方で、evaluator API 全体を `TypedValue` に一般化する決定はしていない。
 
 M3 は最初の再評価契機になりうる。特に List item context、layout value、boolean /
-dimension / color のような第三の scalar type が入るなら、`TypedValue` を ADR / RFC
+dimension / color のような第三の scalar type が入るなら、`TypedValue` を ADR
 対象にする圧力が生まれる。ただし `TypedValue` を M3 開始時点の acceptance criterion
 として先取りしない。実際の type-system pressure が出ないなら、M4 / M5 / post-1.0 へ
 defer してよい。
