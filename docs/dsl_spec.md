@@ -1,16 +1,17 @@
 # Wasamo DSL Specification
 
-**Document version:** 1.1
+**Document version:** 1.2
 **Last updated:** 2026-05-25
 **Status:** M3-Phase 2 closed (implementation-synced); M3-Phase 3
-closed (implementation-synced); M3-Phase 4 ADR-accepted design draft.
+closed (implementation-synced); M3-Phase 4 closed
+(implementation-synced).
 Covers the M2 `.ui` surface, the `state` surface keyword
 retroactively, the M3-Phase 1 `bool` scalar binding additions, the
 M3-Phase 2 Box layout primitive (with `aspect` / `fill` literal
 attributes), the M3-Phase 3 WrapPanel layout primitive (with
 `item-cross-size` / `item-spacing` / `line-spacing` constant-only
 integer attributes), the M3-Phase 4 ScrollView layout primitive
-(vertical-only viewport + clip + `offset-y` binding draft), and
+(vertical-only viewport + clip + `offset-y` binding), and
 `;wasamo-ir v0`.
 
 ---
@@ -498,14 +499,26 @@ deferred Image widget surface. Phase 3 (WrapPanel of thumbnails) and
 Phase 6 (ZStack lightbox) consume this pattern verbatim.
 
 ```
-Box { aspect: <ratio>; fill: <color>; Text { text: <label> } }
+Box {
+    aspect: <ratio>
+    fill: <color>
+    Text { text: <label> }
+}
 ```
 
 Examples from the M3 gallery:
 
 ```
-Box { aspect: 1:1; fill: #cccccc; Text { text: "Photo 12" } }
-Box { aspect: 16:9; fill: #cccccc; Text { text: "photo-23.jpg" } }
+Box {
+    aspect: 1:1
+    fill: #cccccc
+    Text { text: "Photo 12" }
+}
+Box {
+    aspect: 16:9
+    fill: #cccccc
+    Text { text: "photo-23.jpg" }
+}
 ```
 
 The scrim shape, used in compositions Phase 6 ZStack assembles
@@ -514,6 +527,15 @@ The scrim shape, used in compositions Phase 6 ZStack assembles
 ```
 Box { fill: #00000080 }
 ```
+
+> **Notation note (M3-Phase 4 close).** The examples above use the
+> parser-accepted multi-line member-per-line form. In the current
+> implementation `;` is a statement terminator inside handler blocks
+> (§4.5 / §3 grammar) and is **not** accepted as a widget/member
+> separator; the grammar uses newlines between members. Accepting
+> `;` as an optional member separator remains a **post-Phase-4 open
+> question**; the multi-line presentation above is the parser-accurate
+> form and does not foreclose that future extension.
 
 When an `<Image>` widget lands (M4 or later), it supersedes this
 pattern; this subsection then gains a "Superseded by `<Image>`
@@ -749,7 +771,7 @@ violation up the layout tree.
 #### Common pitfalls
 
 1. **Aspect-only Box children without `item-cross-size`.** When a
-   WrapPanel directly contains one or more `Box { aspect: <ratio>; … }`
+   WrapPanel directly contains one or more `Box { aspect: <ratio> … }`
    children and `item-cross-size` is unset on the WrapPanel, each
    child inherits the parent's cross-axis constraint as its
    cross-axis bound. In an 800×600 window with no other cross-axis-
@@ -768,7 +790,7 @@ violation up the layout tree.
 
 ### 4.11 ScrollView layout primitive (M3-Phase 4)
 
-**Phase status:** M3-Phase 4 ADR-accepted design draft; pending implementation re-sync
+**Phase status:** M3-Phase 4 closed; implementation-synced.
 
 `ScrollView` is a vertical-only layout primitive that exposes a
 bounded **viewport** over one scrollable **content** child. It clips at
@@ -1457,4 +1479,6 @@ future design item.
 | 0.8     | 2026-05-20 | M3-Phase 2 close: flipped §4.9 Phase status marker and document status to implementation-synced after T1-T13 landed and local / CI phase-end gates passed. No implementation/spec divergence was found during the close re-sync. |
 | 0.9     | 2026-05-21 | M3-Phase 3 ADR-accepted design draft: added §4.10 WrapPanel layout primitive chapter (Phase status marker; sizing mental-model subsection with four-fact anchor and WPF / Compose / CSS ecosystem contrast per framing decision H; `item-cross-size` / `item-spacing` / `line-spacing` constant-only `i32` attribute surface; two-stage measure-arrange algorithm with bounded happy path, unbounded-main-axis one-line-flow branch, and unbounded-cross-axis-with-aspect-child propagation to Phase 2's `LayoutError::BoxAspectUnboundedBoth`; oversized-first-child + visible-overflow subsection; common-pitfalls note); added `WrapPanel` row to the §4.4 widget registry and dropped the stale `M1` qualifier from the registry's lead-in (the registry grew beyond M1 once `Box` landed in Phase 2; folded into this commit as a minimal retroactive fix with owner confirmation). No new tokens, grammar rules, AST variants, or IR forms — Phase 3 reuses existing `i32` plumbing. Pending implementation re-sync at Phase 3 close. |
 | 1.0     | 2026-05-22 | M3-Phase 3 close: flipped §4.10 Phase status marker and document status to implementation-synced after T1–T9 landed and the local clean-rebuild gate passed. Folded the T1 Decisions-log lexer-surface item into §2.2: generalised the `Ident` lexical pattern to admit kebab-case continuations (`-[A-Za-z]`-prefixed segments) and the `IntLit` pattern to admit an optional leading `-`; added a one-line note that the negative-sign surface is `IntLit`-only (does not extend `FloatLit` / measurement / `RatioLit` and does not introduce a subtraction or unary-minus operator). `§5` AST shapes unchanged (`IntLit { value: i64 }` already holds the signed surface). No other implementation / spec divergence found during the close re-sync. |
+| 1.1     | 2026-05-25 | M3-Phase 4 ADR-accepted design draft: added §4.11 ScrollView layout primitive chapter (Phase status marker; sizing mental model; ecosystem contrast; Attributes with `offset-y` bindable state-identifier RHS and viewport / scroll-axis / padding rejection list; Visual-layer contract with intermediate content Visual + `InsetClip{0,0,0,0}` outer clip + `(0, -offset_y, 0)` translation; layout / rounding contract); added `ScrollView` row to the §4.4 widget registry. No new tokens, grammar rules, or IR forms — Phase 4 reuses existing `i32` plumbing. Pending implementation re-sync at Phase 4 close. |
+| 1.2     | 2026-05-25 | M3-Phase 4 close: flipped §4.11 Phase status marker and document status to implementation-synced after T1–T6 landed (including T6 window-root Fill/Fill fix bundle) and the T7 local clean-rebuild + GitHub Actions phase-end gates passed. Folded one Phase 4 close-time spec consistency fix: §4.9 Box examples switched from the `;`-separated single-line form (parser-invalid; surfaced by T5 first build) to the parser-accepted multi-line member-per-line form, with an adjacent notation note recording that **accepting `;` as an optional member separator remains a post-Phase-4 open question** — parser-accepted examples; semicolon member separator left as post-Phase-4 open question. §4.10 common-pitfalls example dropped its `; …` continuation to match the new multi-line convention. No other implementation / spec divergence found during the close re-sync. |
 | 1.1     | 2026-05-25 | M3-Phase 4 ADR-accepted design draft: added §4.11 ScrollView layout primitive chapter (Phase status marker; viewport/content/offset mental model with WPF / CSS `overflow: scroll` / SwiftUI ecosystem contrast; exactly-one-child contract; `offset-y` signed `i32` literal or read-only `i32` state binding; parent-supplied viewport with no `viewport-*` attributes; pure-data measure-arrange algorithm including inner unbounded vertical measure, offset clamp, `LayoutError::ScrollViewUnboundedAxis`, and rounding contract; Visual-layer contract for the ScrollView-owned intermediate content Visual carrying `Visual.Offset = (0, -applied_y, 0)`; common-pitfalls note). Added `ScrollView` row to the §4.4 widget registry. No new grammar tokens, AST variants, IR literal/type variants, or scalar value types — Phase 4 reuses existing `i32` plumbing plus a narrow ScrollView string-to-`i32` parse / write bridge. Pending implementation re-sync at Phase 4 close. |

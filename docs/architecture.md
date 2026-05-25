@@ -1,6 +1,6 @@
 # Wasamo Architecture
 
-**Status:** M1 complete (Phases 0-8); M2 complete (Phases 1-7) — Foundation acceptance A1-A6 discharged; M3-Phase 1, M3-Phase 2, and M3-Phase 3 complete.
+**Status:** M1 complete (Phases 0-8); M2 complete (Phases 1-7) — Foundation acceptance A1-A6 discharged; M3-Phase 1, M3-Phase 2, M3-Phase 3, and M3-Phase 4 complete.
 
 ---
 
@@ -384,6 +384,19 @@ Default constraints by widget type:
 | `HStack` | `Shrink` | `Fill` |
 | `Rectangle` | Caller-specified | Caller-specified |
 
+**Window-root sizing (runtime boundary, M3-Phase 4).** The
+window-root `WidgetNode` is sized to the client rect regardless of
+its declared width/height constraints. This is enacted by
+`WidgetNode::run_layout_as_window_root`, which overrides the root
+`LayoutNode`'s `width` / `height` to `SizeConstraint::Fill` before
+delegating to `layout::run_layout`. The plain `WidgetNode::run_layout`
+retains the declared-constraint semantics (used by mock-free
+integration tests that drive `WidgetNode`s as non-window roots).
+`window.rs`'s `WM_SIZE` handler and `set_root` initial layout call
+the window-root variant; the pure-logic layout engine and the
+declared-constraint conventions (including `degenerate_fill_in_
+shrink_parent_clamps_to_zero`) are untouched.
+
 ### 6.4 Cross-axis alignment
 
 ```rust
@@ -427,6 +440,18 @@ layout pass. The single content child's widget Visual remains governed
 by the normal `sync_visuals()` conversion from absolute `LayoutNode`
 offsets to parent-relative `Visual.Offset`. The intermediate content
 Visual and the child widget Visual do not carry the viewport clip.
+
+Because the intermediate content Visual carries the scroll
+translation `(0, -offset_y, 0)`, `sync_visuals()` shifts each
+content-subtree descendant's `parent_abs_offset` by the same
+`(0, -offset_y)` when descending under that intermediate Visual, so
+the root-relative `LayoutNode` offset of every descendant converts
+to the correct parent-relative `Visual.Offset` underneath the
+translated parent. This shift is local to the ScrollView subtree and
+does not affect siblings or ancestors of the ScrollView. Future
+widgets that introduce their own intermediate Visuals follow the
+same rule: any Visual that translates its own subtree must shift
+`parent_abs_offset` by the inverse translation for its descendants.
 
 The `LayoutNode` tree is rebuilt on each layout pass (O(n)).
 No persistent layout cache exists in M1.
