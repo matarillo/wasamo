@@ -23,7 +23,8 @@ use crate::reactive::{
 use crate::text::{TextRenderer, TypographyStyle};
 use crate::widget::{
     widget_write_property, widget_write_property_bool, ButtonStyle, WidgetNode,
-    PROP_BUTTON_ENABLED, PROP_BUTTON_LABEL, PROP_BUTTON_STYLE, PROP_TEXT_CONTENT, PROP_TEXT_STYLE,
+    PROP_BUTTON_ENABLED, PROP_BUTTON_LABEL, PROP_BUTTON_STYLE, PROP_SCROLLVIEW_OFFSET_Y,
+    PROP_TEXT_CONTENT, PROP_TEXT_STYLE,
 };
 
 use windows::UI::Composition::Compositor;
@@ -83,6 +84,32 @@ pub struct BuiltUi {
     pub root: Box<WidgetNode>,
     #[allow(dead_code)]
     pub(crate) registry: Rc<SignalRegistry>,
+}
+
+impl BuiltUi {
+    /// Test-only mutator for an `i32`-typed state declared on the
+    /// component (per `state <name>: i32 = <default>`). Writes through
+    /// the underlying `Signal<i32>::set`, so the reactive engine
+    /// re-fires every binding effect that read this state — exactly
+    /// the path a handler-driven mutation (`compound-assign += scroll_y
+    /// 100`) takes at runtime. Returns `true` when the state name
+    /// exists, `false` otherwise. Hidden from rustdoc and named with
+    /// the project's `__*_for_test` convention.
+    ///
+    /// Used by `wasamo-runtime/tests/scroll_view_layout_integration.rs`
+    /// to drive the ADR Phase 4 verification closure item 4
+    /// "mutate `state.scroll_y`" assertions without rewiring the
+    /// `SignalRegistry` visibility.
+    #[doc(hidden)]
+    pub fn __set_i32_state_for_test(&self, name: &str, value: i32) -> bool {
+        match self.registry.i32s.get(name) {
+            Some(signal) => {
+                signal.set(value);
+                true
+            }
+            None => false,
+        }
+    }
 }
 
 // ── Parser ────────────────────────────────────────────────────────────────────
@@ -1089,6 +1116,15 @@ fn resolve_prop_key(widget_type: &str, prop_name: &str) -> Option<(PropertyKey, 
         ("Button", "text") => Some((PROP_BUTTON_LABEL, IrType::Str)),
         ("Button", "style") => Some((PROP_BUTTON_STYLE, IrType::I32)),
         ("Button", "enabled") => Some((PROP_BUTTON_ENABLED, IrType::Bool)),
+        // M3-Phase 4 T4 / DD-M3-P4-003: ScrollView's `offset-y` is `i32`
+        // (DSL surface storage type). The `I32` selection here routes
+        // the binding through the string-baked `register_binding` +
+        // `widget_write_property` pair (per the `IrType::I32 |
+        // IrType::Str` arm in `build_node`); the narrow string-to-`i32`
+        // parse lives on the ScrollView arm of `set_property`. The
+        // general typed-`i32` evaluator / writer pair from
+        // architecture.md §6.8 *Per-type seam* stays deferred to M4+.
+        ("ScrollView", "offset-y") => Some((PROP_SCROLLVIEW_OFFSET_Y, IrType::I32)),
         _ => None,
     }
 }
@@ -1219,10 +1255,33 @@ mod tests {
         assert_eq!(ty, IrType::I32);
     }
 
+    // M3-Phase 4 T4 / DD-M3-P4-003: ScrollView's `offset-y` is `i32`.
+    // The `I32` selection routes the binding through the string-baked
+    // `register_binding` + `widget_write_property` pair (the `IrType::I32
+    // | IrType::Str` arm in `build_node`); the narrow string-to-`i32`
+    // parse lives on the ScrollView arm of `set_property`. Pins the
+    // catalog row that closes the loop between the bound `Signal<i32>`
+    // (declared in `state scroll_y: i32 = 0`) and the runtime
+    // `WidgetData::ScrollView::offset_y` field.
+    #[test]
+    fn resolve_prop_key_scrollview_offset_y_is_i32() {
+        let (key, ty) =
+            resolve_prop_key("ScrollView", "offset-y").expect("ScrollView.offset-y exists");
+        assert_eq!(key, PROP_SCROLLVIEW_OFFSET_Y);
+        assert_eq!(ty, IrType::I32);
+    }
+
     #[test]
     fn resolve_prop_key_unknown_pair_is_none() {
         assert!(resolve_prop_key("Button", "nonsuch").is_none());
         assert!(resolve_prop_key("Nonsuch", "enabled").is_none());
+        // M3-Phase 4 T4: only `offset-y` resolves on ScrollView; any
+        // other attribute name returns None and the binding loop's
+        // "silently skip unknown property" branch fires (the
+        // attribute-scope rejection itself is `wasamoc check`'s
+        // responsibility — T1 already enforces it at compile time).
+        assert!(resolve_prop_key("ScrollView", "scroll-axis").is_none());
+        assert!(resolve_prop_key("ScrollView", "viewport-width").is_none());
     }
 
     fn parse_ok(src: &str) -> IrComponent {
