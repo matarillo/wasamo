@@ -501,7 +501,7 @@ ADRs, CHANGELOG, notes, and git history, then deleted by default.
 | M3-Phase 1 — `bool` scalar binding | complete | [m3-phase-1-progress.md](progress/m3-phase-1-progress.md) | [m3-phase-1-bool-scalar.md](../decisions/m3-phase-1-bool-scalar.md) | ADR Accepted 2026-05-19; execution opened 2026-05-19; A9 discharged 2026-05-19 |
 | M3-Phase 2 — Box layout primitive | complete | [m3-phase-2-progress.md](progress/m3-phase-2-progress.md) | [m3-phase-2-box-layout.md](../decisions/m3-phase-2-box-layout.md) | ADR Accepted 2026-05-20; execution opened 2026-05-20; A6 discharged 2026-05-20 |
 | M3-Phase 3 — WrapPanel layout primitive | complete | [m3-phase-3-progress.md](progress/m3-phase-3-progress.md) | [m3-phase-3-wrap-panel.md](../decisions/m3-phase-3-wrap-panel.md) | ADR Accepted 2026-05-21; execution opened 2026-05-21; WrapPanel constituent of A3 discharged 2026-05-22; first novel-normative-spec phase |
-| M3-Phase 4 — ScrollView (minimal) | in progress | [m3-phase-4-progress.md](progress/m3-phase-4-progress.md) | [m3-phase-4-scroll-view.md](../decisions/m3-phase-4-scroll-view.md) | ADR Accepted 2026-05-25; execution opened 2026-05-25 |
+| M3-Phase 4 — ScrollView (minimal) | complete | [m3-phase-4-progress.md](progress/m3-phase-4-progress.md) | [m3-phase-4-scroll-view.md](../decisions/m3-phase-4-scroll-view.md) | ADR Accepted 2026-05-25; execution opened 2026-05-25; A5 discharged 2026-05-25; A11 gallery owner-acceptance 2026-05-25 |
 | M3-Phase 5 — Grid layout primitive | not started | — | — | Second novel-normative-spec phase; star sizing |
 | M3-Phase 6 — ZStack + conditional rendering | not started | — | — | First grammar surface; `bool` prereq |
 | M3-Phase 7 — Iteration grammar | not started | — | — | `TypedValue` pressure check |
@@ -513,6 +513,10 @@ M3 plan is `in-progress` as of 2026-05-19. M3-Phase 1 (`bool`
 scalar) closed 2026-05-19. M3-Phase 2 (Box layout primitive) closed
 2026-05-20 and discharged A6. M3-Phase 3 (WrapPanel layout primitive)
 closed 2026-05-22 and discharged the WrapPanel constituent of A3
-(gallery overflow / wrapping evidence). The Frozen agreement section
-remains read-only under the `in-progress` lifecycle (acceptance-
-criteria revision exception aside).
+(gallery overflow / wrapping evidence). M3-Phase 4 (ScrollView
+minimal) closed 2026-05-25 and discharged A5 (ScrollView minimal) and
+the A11 gallery proof's owner-acceptance half (owner-manual GUI smoke
+on the rebuilt gallery host after the T6 window-root Fill/Fill fix).
+The Frozen agreement section remains read-only under the
+`in-progress` lifecycle (acceptance-criteria revision exception
+aside).
