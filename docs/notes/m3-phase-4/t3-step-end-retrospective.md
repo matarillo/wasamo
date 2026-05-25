@@ -20,7 +20,9 @@ closure **evidence item 3** (host-independent な pure-logic
 arrange-time clamp で既に discharged。
 
 対象実装コミット (`feat/m3-phase-4-t3` 上、本 retrospective ファイル
-自体と progress-flip commit を除く 2 件):
+自体を除く implementation-bearing 2 件。`docs/plans/progress/
+m3-phase-4-progress.md` の checkbox flip は独立 commit を切らず、
+各 implementation commit に fold している):
 
 - `7285ca0 feat(wasamo-runtime): ScrollView runtime widget kind (M3-Phase 4 T3)`
 - `7d1687b feat(wasamo-runtime): ScrollView validate() child-count gate (M3-Phase 4 T3)`
