@@ -1,6 +1,6 @@
 # Vision ADR — Governance: RFC adoption deferred to post-1.0
 
-**Status:** Proposed
+**Status:** Accepted 2026-05-25
 
 **Scope:** VISION.md §9.2 and §11; docs/decisions/README.md §Scope and
 relation to RFCs; cross-references in docs/notes/m2-to-m3-handover.md,
@@ -60,7 +60,7 @@ Two resolution paths exist:
 
 ## DD-V-018 — Defer RFC adoption to post-1.0
 
-**Status:** Proposed
+**Status:** Accepted
 
 **Context:** The "M3 onward = RFC transition" wording in VISION.md
 §9.2 and §11 dates from the pre-restructuring milestone scheme
