@@ -158,24 +158,34 @@ if it fails — **before** any phase-close mechanical work (spec / plan
 status flips) lands in T7. See the Decisions log entry **"T5/T6 split
 for owner-manual GUI smoke (2026-05-25)"** for the rationale.
 
-- [ ] Owner runs (or builds-and-runs) `target/release/gallery-rust.exe`
+- [x] Owner runs (or builds-and-runs) `target/release/gallery-rust.exe`
       (or the `debug/` variant); see `examples/gallery-rust/` README
       / `cargo run -p gallery-rust` if the T5 binary is no longer on
       disk (clean / fresh checkout). Owner observes: viewport clips
       sharply; +100 / −100 Buttons move content; clipped content is
       hidden; off-viewport thumbnails enter view as `scroll_y`
       progresses.
-- [ ] Owner explicitly accepts the smoke result, or records a fail
+- [x] Owner explicitly accepts the smoke result, or records a fail
       observation note (per [human-visible GUI smoke](../../notes/human-visible-smoke.md)).
-- [ ] **If smoke fails:** implementation fix lands additively on the
+      Owner accepted on 2026-05-25 after the re-smoke pass on the
+      rebuilt binary discharged all four observation points; smoke
+      evidence at
+      [docs/references/m3-phase-4/](../../references/m3-phase-4/)
+      (`t6-gallery-smoke-scroll-y-0.png`,
+      `t6-gallery-smoke-scroll-y-100.png`,
+      `t6-gallery-smoke-scroll-y-800.png`,
+      `t6-gallery-smoke-scroll-y-back-to-0.png`).
+- [x] **If smoke fails:** implementation fix lands additively on the
       T6 branch (new commits); the smoke checklist above is re-run to
       green before T6 closes. Fix scope stays inside the Phase 4 ADR
       (`docs/decisions/m3-phase-4-scroll-view.md`) / dsl_spec §4.11 /
       architecture.md §6.5; any fix requiring a normative spec change
       escalates to T7 Moment 2 (or, if unsuitable for Moment 2, a
       mid-phase ADR addendum). Fix iterations stay inside T6 until the
-      smoke checklist is green.
-- [ ] First owner-manual smoke pass (2026-05-25) recorded as **failure
+      smoke checklist is green. Fix landed in commit `ed78d6c
+      fix(wasamo-runtime): force window-root WidgetNode to Fill/Fill
+      (M3-Phase 4 T6)`; no normative spec touch was required.
+- [x] First owner-manual smoke pass (2026-05-25) recorded as **failure
       mode A** — see Decisions log "T6 smoke failure mode A disposition
       (2026-05-25)". Fix bundle selected: (a) new
       `WidgetNode::run_layout_as_window_root` that forces the root
@@ -198,11 +208,14 @@ for owner-manual GUI smoke (2026-05-25)"** for the rationale.
       non-zero `scroll_y`. (c) and (d) together pin both the
       layout-engine invariant and the runtime-boundary override so
       future contributors do not regress either layer.
-- [ ] Re-run owner-manual smoke on the rebuilt `gallery-rust.exe`;
+- [x] Re-run owner-manual smoke on the rebuilt `gallery-rust.exe`;
       owner accepts (all 4 observation points green) or records a
-      further fail observation. Iterate until green.
-- [ ] T6 step-end retrospective recorded under
-      `docs/notes/m3-phase-4/`.
+      further fail observation. Iterate until green. Re-run on
+      2026-05-25 returned all observation points green; window close
+      (Alt+F4 / ×) crash-free.
+- [x] T6 step-end retrospective recorded under
+      `docs/notes/m3-phase-4/`
+      ([t6-step-end-retrospective.md](../../notes/m3-phase-4/t6-step-end-retrospective.md)).
 
 ### T7 — Phase-end gates and Moment 2 re-sync
 
@@ -381,7 +394,32 @@ is unchanged.
 
 ## CI / verification log
 
-(empty — populated as T1 onward lands)
+- **T6 close (2026-05-25).** Local clean rebuild proxy for the T6 fix bundle (commit `ed78d6c`) on the
+  `feat/m3-phase-4-t6` branch: `cargo fmt --all -- --check` zero
+  exit; `cargo build --release --workspace` green; `cargo build
+  --workspace` green; `cargo test --workspace` green — `wasamo-runtime`
+  lib **258 passed** (T5 baseline 257 + the new pure-logic pinning
+  test `shrink_vstack_root_with_fill_scroll_view_child_collapses`);
+  `scroll_view_layout_integration` **3 passed** (T5 baseline 2 + the
+  new mock-free runtime integration test
+  `scroll_path_vstack_root_fixture_pins_window_root_fill_override`
+  driving `run_layout_as_window_root`); `wrap_panel_layout_integration`
+  back to **2 passed** after the `run_layout` /
+  `run_layout_as_window_root` split insulated it from the window-root
+  override. Assistant-side `Start-Process` on rebuilt
+  `target/release/gallery-rust.exe` produced PID 3916, MainWindowTitle
+  `"Wasamo"`, HasExited = `$false` after 3 s, `Stop-Process -Force`
+  clean exit. Owner-manual GUI smoke (2026-05-25, re-run on the post-
+  `ed78d6c` binary) returned green on all four observation points
+  (viewport clip sharp, +100/-100 Buttons move content by ±100 px,
+  clipped regions stay within the ScrollView outer rect, off-viewport
+  thumbnails enter as `scroll_y` progresses) plus the +1 reference
+  observation (scrollbar non-display, expected under Phase 4 scope);
+  window close (Alt+F4 / ×) crash-free; smoke evidence committed at
+  `docs/references/m3-phase-4/t6-gallery-smoke-scroll-y-{0,100,800,
+  back-to-0}.png`. GitHub Actions CI green confirmation is **T7**
+  phase-end gate (`workflow_dispatch`); local clean rebuild is the
+  T6-step-level proxy.
 
 ## Out-of-phase residuals
 
