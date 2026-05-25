@@ -2,7 +2,7 @@
 
 **Phase:** M3-Phase 4 (ScrollView primitive — minimal)
 **Date:** 2026-05-25
-**Status:** Proposed
+**Status:** Accepted
 
 ## Context
 
@@ -161,7 +161,7 @@ carried.
 
 ### DD-M3-P4-001 — ScrollView IR node form, 1-child contract, and scroll-axis exposure
 
-**Status:** Proposed
+**Status:** Accepted
 
 **Context:** ScrollView is a new widget in `wasamo-ir` and
 `wasamo-runtime`. Phase 4 must commit to (i) the IR node shape
@@ -264,7 +264,7 @@ property.
 
 ### DD-M3-P4-002 — Viewport size source
 
-**Status:** Proposed
+**Status:** Accepted
 
 **Context:** ScrollView's outer extent (the "window" through
 which content is viewed) must come from somewhere. The candidate
@@ -366,7 +366,7 @@ not after.
 
 ### DD-M3-P4-003 — Content offset surface and binding direction (load-bearing)
 
-**Status:** Proposed
+**Status:** Accepted
 
 **Context:** ScrollView's content offset (`offset-y` for the
 vertical-only DD-001 recommendation) is A5's "content offset
@@ -529,7 +529,7 @@ programmatic state mutation via the binding).
 
 ### DD-M3-P4-004 — Clip surface installation and Composition primitive choice
 
-**Status:** Proposed
+**Status:** Accepted
 
 **Context:** A5 names "viewport clip" as a load-bearing
 component. Phase 3 T8 established that **WrapPanel installs no
@@ -663,7 +663,7 @@ pass re-computes the clamp on every layout pass.
 
 ### DD-M3-P4-005 — Measure-arrange algorithm (novel normative viewport / content / offset semantics)
 
-**Status:** Proposed
+**Status:** Accepted
 
 **Context:** Introduces novel normative spec content into
 `docs/dsl_spec.md` of a different *kind* than Phase 3 (no line-
@@ -812,7 +812,7 @@ phrasing.
 
 ### DD-M3-P4-006 — IR-loader defense-in-depth invariants
 
-**Status:** Proposed
+**Status:** Accepted
 
 **Context:** Phase 2 T7 surfaced the principle: IR-load → runtime-
 materialise invariants belong in pure-logic `validate()`, not in
@@ -1291,4 +1291,5 @@ recommended Options of each DD here).
 
 | Date | Change |
 |---|---|
+| 2026-05-25 | Status flipped to Accepted. DD-001 through DD-006 owner-accepted after per-DD review, implementation-shape recheck against existing runtime code, and final Verification / Out of scope / Upstream revisions alignment. |
 | 2026-05-25 | Initial draft (Status: Proposed). All 6 DDs at Proposed pending owner review pass. Framing-level owner alignment confirmed in chat 2026-05-25 (commits `8f19c5f`, `234a0fa` for pre-doc-framing.md). |
