@@ -158,10 +158,13 @@ if it fails — **before** any phase-close mechanical work (spec / plan
 status flips) lands in T7. See the Decisions log entry **"T5/T6 split
 for owner-manual GUI smoke (2026-05-25)"** for the rationale.
 
-- [ ] Owner runs `target/release/gallery-rust.exe` (or `debug/`) and
-      observes: viewport clips sharply; +100 / −100 Buttons move
-      content; clipped content is hidden; off-viewport thumbnails
-      enter view as `scroll_y` progresses.
+- [ ] Owner runs (or builds-and-runs) `target/release/gallery-rust.exe`
+      (or the `debug/` variant); see `examples/gallery-rust/` README
+      / `cargo run -p gallery-rust` if the T5 binary is no longer on
+      disk (clean / fresh checkout). Owner observes: viewport clips
+      sharply; +100 / −100 Buttons move content; clipped content is
+      hidden; off-viewport thumbnails enter view as `scroll_y`
+      progresses.
 - [ ] Owner explicitly accepts the smoke result, or records a fail
       observation note (per [human-visible GUI smoke](../../notes/human-visible-smoke.md)).
 - [ ] **If smoke fails:** implementation fix lands additively on the
