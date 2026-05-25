@@ -168,7 +168,7 @@ pub fn set_root(state: &mut WindowState, root: Box<WidgetNode>) -> windows::core
     };
     state.root_widget = Some(root);
     if let Some(r) = state.root_widget.as_mut() {
-        let _ = r.run_layout(cw, ch);
+        let _ = r.run_layout_as_window_root(cw, ch);
     }
     Ok(())
 }
@@ -260,7 +260,7 @@ unsafe extern "system" fn wnd_proc(
                 f(w, h);
             }
             if let Some(root) = state.root_widget.as_mut() {
-                let _ = root.run_layout(w, h);
+                let _ = root.run_layout_as_window_root(w, h);
             }
             return LRESULT(0);
         }

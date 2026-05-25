@@ -177,22 +177,27 @@ for owner-manual GUI smoke (2026-05-25)"** for the rationale.
       smoke checklist is green.
 - [ ] First owner-manual smoke pass (2026-05-25) recorded as **failure
       mode A** — see Decisions log "T6 smoke failure mode A disposition
-      (2026-05-25)". Fix bundle selected: (a) `WidgetNode::run_layout`
-      forces the root LayoutNode's sizing constraints to `Fill/Fill`
-      before delegating to `layout::run_layout`; (b)
-      `examples/gallery/gallery.ui` ScrollView inner WrapPanel
-      `item-cross-size: 64 → 128` so content_h exceeds viewport_h
-      across the realistic window-size range and `+100/-100` motion is
-      visible; (c) pure-logic pinning unit test in
+      (2026-05-25)". Fix bundle selected: (a) new
+      `WidgetNode::run_layout_as_window_root` that forces the root
+      LayoutNode's sizing constraints to `Fill/Fill` before delegating
+      to `layout::run_layout`, with `window.rs`'s `WM_SIZE` handler and
+      `set_root` initial layout switched to call it; the plain
+      `WidgetNode::run_layout` retains its previous semantics so
+      existing integration tests that drive `WidgetNode`s as non-window
+      roots stay green; (b) `examples/gallery/gallery.ui` ScrollView
+      inner WrapPanel `item-cross-size: 64 → 128` so content_h exceeds
+      viewport_h across the realistic window-size range and `+100/-100`
+      motion is visible; (c) pure-logic pinning unit test in
       `wasamo-runtime/src/layout.rs::tests` documenting the
       Shrink-VStack-root + Fill-child collapse alongside the override
       behaviour; (d) mock-free runtime integration test in
       `wasamo-runtime/tests/scroll_view_layout_integration.rs` rooted
-      at a VStack (gallery-shaped fixture) that asserts ScrollView
-      outer Visual height > 0 and intermediate Visual Y offset is
-      negative at non-zero `scroll_y`. (c) and (d) together pin both
-      the layout-engine invariant and the runtime-boundary override
-      so future contributors do not regress either layer.
+      at a VStack (gallery-shaped fixture) that drives
+      `run_layout_as_window_root` and asserts ScrollView outer Visual
+      height > 0 and intermediate Visual Y offset is negative at
+      non-zero `scroll_y`. (c) and (d) together pin both the
+      layout-engine invariant and the runtime-boundary override so
+      future contributors do not regress either layer.
 - [ ] Re-run owner-manual smoke on the rebuilt `gallery-rust.exe`;
       owner accepts (all 4 observation points green) or records a
       further fail observation. Iterate until green.
@@ -311,17 +316,22 @@ is unchanged.
 
   Disposition: in-scope T6 fix, **no normative spec change**.
 
-  - **Implementation fix (a):** `WidgetNode::run_layout` (the
-    WinRT-bound entry point used by `window.rs`'s `WM_SIZE` handler
-    and `set_root` initial layout) overrides the root LayoutNode's
-    `width`/`height` to `SizeConstraint::Fill` before delegating to
-    `layout::run_layout`. The pure-logic `layout::run_layout` keeps
-    its current semantics — `degenerate_fill_in_shrink_parent_clamps_to_zero`
-    and the broader Shrink/Fill convention stay pinned at the layout
-    engine; the runtime-boundary override formalises the implicit
-    "Window client rect determines the root viewport" contract that
-    Phase 2 / Phase 3 implicitly relied on but that no `.ui` had
-    previously exercised with a Fill child at the root container.
+  - **Implementation fix (a):** introduce a dedicated
+    `WidgetNode::run_layout_as_window_root` that overrides the root
+    LayoutNode's `width`/`height` to `SizeConstraint::Fill` before
+    delegating to `layout::run_layout`; route `window.rs`'s `WM_SIZE`
+    handler and `set_root` initial layout to call it. The plain
+    `WidgetNode::run_layout` retains its current semantics (so
+    existing mock-free integration tests like
+    `wrap_panel_layout_integration.rs`, which drive `WidgetNode`s
+    directly to exercise declared sizing constraints, continue to
+    pass), and the pure-logic `layout::run_layout` —
+    `degenerate_fill_in_shrink_parent_clamps_to_zero` and the broader
+    Shrink/Fill convention — also stays untouched. The override
+    formalises the implicit "Window client rect determines the root
+    viewport" contract that Phase 2 / Phase 3 implicitly relied on
+    but that no `.ui` had previously exercised with a Fill child at
+    the root container.
   - **Fixture-visibility adjustment (b):** `examples/gallery/gallery.
     ui` bumps the ScrollView inner WrapPanel's `item-cross-size` from
     `64` to `128`. With viewport height ≈ `window_h − 312` and Box ×

@@ -375,3 +375,162 @@ fn scroll_path_fixture_r2_three_level_visual_nesting_root_relative_math() {
         );
     }
 }
+
+// M3-Phase 4 T6 fix regression gate. The original FIXTURE_SRC above
+// roots a ScrollView directly under the `inherits Window` component
+// (Fill/Fill via `WidgetNode::scroll_view` defaults), which sidesteps
+// the layout path production `.ui` (counter, bool-demo, gallery) all
+// take — those root a VStack and would, prior to T6's
+// `WidgetNode::run_layout` Fill/Fill override, collapse a Fill
+// ScrollView child to a zero-height outer Visual via the convention
+// pinned by `layout::tests::degenerate_fill_in_shrink_parent_clamps_to_zero`.
+//
+// VSTACK_ROOT_FIXTURE_SRC drives the same Composition pipeline as
+// FIXTURE_SRC but with a VStack-rooted shape that pins the override.
+// The Button sibling supplies a Fixed-height non-Fill node so the
+// VStack's measure-arrange has a non-empty `non_fill_h` to subtract —
+// matching the gallery's Phase 3 WrapPanel + Button × 2 + ScrollView
+// shape in miniature. Box × 16 at `item-cross-size: 50` produces
+// content_h = 4 × 50 = 200 inside the 200×200 window's
+// `≈ 200 - btn_h` viewport, leaving `max_offset > 0` so scroll_y > 0
+// drives the intermediate content Visual's `Y` offset negative.
+const VSTACK_ROOT_FIXTURE_SRC: &str = r#"component VStackRootScroll inherits Window {
+    state scroll_y: i32 = 0
+    VStack {
+        spacing: 0
+        padding: 0
+        Button {
+            text: "scroll"
+        }
+        ScrollView {
+            offset-y: scroll_y
+            WrapPanel {
+                item-cross-size: 50
+                item-spacing: 0
+                line-spacing: 0
+                Box { aspect: 1:1 fill: #336699cc }
+                Box { aspect: 1:1 fill: #336699cc }
+                Box { aspect: 1:1 fill: #336699cc }
+                Box { aspect: 1:1 fill: #336699cc }
+                Box { aspect: 1:1 fill: #336699cc }
+                Box { aspect: 1:1 fill: #336699cc }
+                Box { aspect: 1:1 fill: #336699cc }
+                Box { aspect: 1:1 fill: #336699cc }
+                Box { aspect: 1:1 fill: #336699cc }
+                Box { aspect: 1:1 fill: #336699cc }
+                Box { aspect: 1:1 fill: #336699cc }
+                Box { aspect: 1:1 fill: #336699cc }
+                Box { aspect: 1:1 fill: #336699cc }
+                Box { aspect: 1:1 fill: #336699cc }
+                Box { aspect: 1:1 fill: #336699cc }
+                Box { aspect: 1:1 fill: #336699cc }
+            }
+        }
+    }
+}"#;
+
+const VSTACK_ROOT_WINDOW_W: f32 = 200.0;
+const VSTACK_ROOT_WINDOW_H: f32 = 200.0;
+
+#[test]
+fn scroll_path_vstack_root_fixture_pins_window_root_fill_override() {
+    if init_runtime_or_skip("VStack-rooted ScrollView scroll-path integration test").is_none() {
+        return;
+    }
+
+    let ir = lower_ui_to_ir(VSTACK_ROOT_FIXTURE_SRC);
+    let component = parse_ir(&ir).expect("parse_ir failed");
+    let compositor = wasamo_runtime::get_compositor();
+    let text_renderer = wasamo_runtime::get_text_renderer();
+    let mut built =
+        build_widget_tree(&component, compositor, text_renderer).expect("build_widget_tree failed");
+
+    // Root WidgetNode is the VStack (component-level container);
+    // children[0] is the Button, children[1] is the ScrollView.
+    {
+        let root = built.root.as_mut();
+        assert_eq!(
+            root.children.len(),
+            2,
+            "VStack root must have two children (Button + ScrollView)"
+        );
+        assert!(
+            root.children[1]
+                .__scroll_view_intermediate_for_test()
+                .is_some(),
+            "second child of VStack root must be the ScrollView",
+        );
+    }
+
+    // Drive the production WinRT-bound entry point with realistic
+    // window dimensions. Prior to T6 this collapsed the ScrollView to
+    // a zero-height outer Visual; the override in WidgetNode::run_layout
+    // forces the VStack root to Fill/Fill so the ScrollView receives
+    // the remaining viewport height after the Button's Fixed height.
+    built
+        .root
+        .run_layout_as_window_root(VSTACK_ROOT_WINDOW_W, VSTACK_ROOT_WINDOW_H)
+        .expect("run_layout failed");
+
+    let scroll_visual: Visual = built.root.children[1]
+        .visual
+        .cast()
+        .expect("cast ScrollView SpriteVisual");
+    let (_, sh0) = visual_size(&scroll_visual);
+    assert!(
+        sh0 > 0.0,
+        "regression gate (T6 fix (a)): ScrollView outer Visual height \
+         must be > 0 when the production WidgetNode::run_layout drives \
+         a VStack-rooted fixture; got {sh0}. A zero height indicates \
+         the Shrink VStack root collapsed its Fill ScrollView child — \
+         the exact failure mode A recorded in the m3-phase-4-progress \
+         Decisions log on 2026-05-25.",
+    );
+
+    let intermediate_visual: Visual = built.root.children[1]
+        .__scroll_view_intermediate_for_test()
+        .expect("ScrollView accessor must yield the intermediate Visual")
+        .cast()
+        .expect("cast intermediate to Visual");
+    let (_, iy0) = visual_offset(&intermediate_visual);
+    assert_close(
+        iy0,
+        0.0,
+        "intermediate content Visual Y offset at scroll_y = 0 (VStack root path)",
+    );
+
+    // Writer chain end-to-end on the VStack-rooted production path.
+    // Driving the state Signal directly through `__set_i32_state_for_test`
+    // mirrors what the gallery's Button `clicked` handler does (`root.
+    // scroll_y += 100`): the Signal::set fires the reactive effect that
+    // calls `widget_write_property(... PROP_SCROLLVIEW_OFFSET_Y ...)`,
+    // which the ScrollView arm of `set_property` parses back to `i32`
+    // (DD-M3-P4-003) and hands to `update_scroll_view_offset_y`.
+    // `arrange_scroll_view` then clamps to applied =
+    // min(100, max_offset). With Box × 16 at `item-cross-size: 50`
+    // inside the 200-px viewport_w, the inner WrapPanel arranges 4
+    // columns × 4 rows → content_h ≈ 200; the Button's Fixed height
+    // is label-derived, so the precise viewport_h and therefore
+    // max_offset depend on font metrics. Assert applied > 0 (some
+    // scroll happened) by checking the intermediate Visual Y offset
+    // went negative, rather than pinning a literal pixel count.
+    assert!(
+        built.__set_i32_state_for_test("scroll_y", 100),
+        "__set_i32_state_for_test must find scroll_y",
+    );
+    built
+        .root
+        .run_layout_as_window_root(VSTACK_ROOT_WINDOW_W, VSTACK_ROOT_WINDOW_H)
+        .expect("run_layout after scroll_y=100 failed");
+
+    let (_, iy_after) = visual_offset(&intermediate_visual);
+    assert!(
+        iy_after < 0.0,
+        "writer chain end-to-end (T6 fix (a) on VStack root): \
+         intermediate content Visual Y offset must be negative at \
+         scroll_y = 100 once the ScrollView has a non-zero viewport; \
+         got {iy_after}. A zero offset here would mean either (i) the \
+         viewport is zero (override regression) or (ii) the writer \
+         chain stalled at the property setter (DD-M3-P4-003).",
+    );
+}

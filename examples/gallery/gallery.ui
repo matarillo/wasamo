@@ -80,7 +80,7 @@ component Gallery inherits Window {
             offset-y: scroll_y
 
             WrapPanel {
-                item-cross-size: 64
+                item-cross-size: 128
                 item-spacing: 8
                 line-spacing: 8
 
