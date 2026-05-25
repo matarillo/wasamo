@@ -885,7 +885,13 @@ each have distinct evidence meanings.
 
 Phase 4 inherits the two-moment structure from
 [m3-phase-2 framing decision D](../m3-phase-2/m3-phase-2-pre-doc-framing.md#d-upstream-document-revision-timing-two-sync-moments)
-and Phase 3's same-shape inheritance, **without modification**.
+and Phase 3's same-shape inheritance, but follows the current
+living-rule doc set and commit shape in
+[retrospectives.md](../retrospectives.md) (per its operational
+note: doc set and commit shape have been updated after Phase 2 /
+Phase 3 実運用, and retrospectives.md is the living rule for
+phase-end execution; framing decisions inherit the *structure*,
+not the historical doc list verbatim).
 The Phase 4 `dsl_spec.md` section marker mirrors the Phase 2 /
 Phase 3 form:
 
@@ -907,10 +913,15 @@ draft** in Moment 1 (ADR-Accepted commit) and is re-synced in
 Moment 2 (phase close).
 
 **Moment 1 — ADR Accepted commit set (design-spec draft).**
-Constituent commits (each its own commit on the pre-doc branch,
-per CLAUDE.md §Commit rules; doc set per
-[retrospectives.md §phase-sync で触る doc セット](../retrospectives.md#phase-sync-moment-2-で触る-doc-セット),
-applied to Moment 1's draft-side mirror):
+Constituent commits, each landing as its own commit on the
+pre-doc branch per the per-review-concern rule in
+[CLAUDE.md §Commit rules](../../../CLAUDE.md#commit-rules) and
+[retrospectives.md](../retrospectives.md). The draft-side doc
+set Phase 4 commits to at Moment 1 is enumerated below
+(retrospectives.md §phase-sync で触る doc セット規定は phase-end
+Moment 2 を対象とした規範であり、Moment 1 の draft set はその
+mirror として **直接同一視されるものではない**; Phase 4 が
+Moment 1 で触れる文書はここで明示的に列挙する):
 
 - `docs/decisions/m3-phase-4-scroll-view.md` — ADR
   `Status: Accepted` flip.
@@ -938,9 +949,11 @@ constituent shape preserves review-concern separability under
 
 **Moment 2 — Phase close commit set (impl re-sync).**
 
-- `docs/dsl_spec.md` §4.11 — corrections required because the
-  design draft and implementation diverged. Section marker
-  flips to "closed; implementation-synced".
+- `docs/dsl_spec.md` §4.11 — section marker flips to "closed;
+  implementation-synced", plus any corrections required if the
+  design draft and implementation diverged (marker flip is
+  required regardless of divergence; corrections are conditional
+  on what re-sync surfaces).
 - `docs/architecture.md` — top Status flips to
   `M3-Phase 4 complete`; impl-divergent paragraphs re-synced.
 - `docs/plans/progress/m3-phase-4-progress.md` — phase-close
