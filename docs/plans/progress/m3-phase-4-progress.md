@@ -175,6 +175,27 @@ for owner-manual GUI smoke (2026-05-25)"** for the rationale.
       escalates to T7 Moment 2 (or, if unsuitable for Moment 2, a
       mid-phase ADR addendum). Fix iterations stay inside T6 until the
       smoke checklist is green.
+- [ ] First owner-manual smoke pass (2026-05-25) recorded as **failure
+      mode A** — see Decisions log "T6 smoke failure mode A disposition
+      (2026-05-25)". Fix bundle selected: (a) `WidgetNode::run_layout`
+      forces the root LayoutNode's sizing constraints to `Fill/Fill`
+      before delegating to `layout::run_layout`; (b)
+      `examples/gallery/gallery.ui` ScrollView inner WrapPanel
+      `item-cross-size: 64 → 128` so content_h exceeds viewport_h
+      across the realistic window-size range and `+100/-100` motion is
+      visible; (c) pure-logic pinning unit test in
+      `wasamo-runtime/src/layout.rs::tests` documenting the
+      Shrink-VStack-root + Fill-child collapse alongside the override
+      behaviour; (d) mock-free runtime integration test in
+      `wasamo-runtime/tests/scroll_view_layout_integration.rs` rooted
+      at a VStack (gallery-shaped fixture) that asserts ScrollView
+      outer Visual height > 0 and intermediate Visual Y offset is
+      negative at non-zero `scroll_y`. (c) and (d) together pin both
+      the layout-engine invariant and the runtime-boundary override
+      so future contributors do not regress either layer.
+- [ ] Re-run owner-manual smoke on the rebuilt `gallery-rust.exe`;
+      owner accepts (all 4 observation points green) or records a
+      further fail observation. Iterate until green.
 - [ ] T6 step-end retrospective recorded under
       `docs/notes/m3-phase-4/`.
 
@@ -254,6 +275,99 @@ is unchanged.
   pixel-level regressions that integration tests cannot catch (e.g.
   clip sharpness, repaint ordering, peripheral wiring). The split
   is local to Phase 4; not a project-wide convention change.
+
+- **T6 smoke failure mode A disposition (2026-05-25).** First owner-
+  manual smoke pass on the T5 release artifacts (`target/release/
+  gallery-rust.exe`, built 2026-05-25 19:49) reported (1) the ScrollView
+  region under the Button row drew completely empty at `scroll_y = 0`,
+  and (2) pressing "Scroll down (+100)" five times produced **no
+  visible change** in the rendered window. Root cause: `gallery.ui`'s
+  component root is a VStack with default `width: Fill, height:
+  Shrink`; `layout::measure_vstack` for `Shrink` height excludes Fill
+  children's desired_h (the standard Fill-collapses-under-Shrink-parent
+  convention, intentionally pinned by
+  `layout::tests::degenerate_fill_in_shrink_parent_clamps_to_zero`),
+  so the root VStack resolved to `desired_h ≈ 312`
+  (= Phase 3 WrapPanel + Button×2 + spacing/padding) regardless of
+  window height. `arrange_vstack`'s `remaining` then clamped to `0`
+  and the Fill ScrollView child received `child_h = 0`, producing an
+  outer Visual sized `(w, 0)` whose `InsetClip{0,0,0,0}` auto-tracked
+  to a zero-height clip rect → content never visible. The writer chain
+  was equally inert by composition: `max_offset = max(0, content_h −
+  0) = content_h` so `applied_offset_y = clamp(scroll_y, 0, content_h)`
+  did update, but with viewport height 0 the resulting
+  `Visual.Offset = (0, -applied_y, 0)` had nothing on-screen to move.
+
+  T4's `scroll_view_layout_integration.rs` integration fixture
+  (`FIXTURE_SRC`) roots a ScrollView directly under the `inherits
+  Window` component (`width: Fill, height: Fill` from
+  `WidgetNode::scroll_view`), bypassing the VStack-root path that
+  production `.ui` (counter, bool-demo, gallery) all use. The T4
+  Decisions log note "T4 fixture WrapPanel substitution vs ADR primary
+  VStack (2026-05-25, commit `57f2366`)" already flagged the layout
+  divergence between fixture parent and ADR's primary VStack-rooted
+  envelope; this T6 finding is the visible-correctness consequence of
+  that uncovered path.
+
+  Disposition: in-scope T6 fix, **no normative spec change**.
+
+  - **Implementation fix (a):** `WidgetNode::run_layout` (the
+    WinRT-bound entry point used by `window.rs`'s `WM_SIZE` handler
+    and `set_root` initial layout) overrides the root LayoutNode's
+    `width`/`height` to `SizeConstraint::Fill` before delegating to
+    `layout::run_layout`. The pure-logic `layout::run_layout` keeps
+    its current semantics — `degenerate_fill_in_shrink_parent_clamps_to_zero`
+    and the broader Shrink/Fill convention stay pinned at the layout
+    engine; the runtime-boundary override formalises the implicit
+    "Window client rect determines the root viewport" contract that
+    Phase 2 / Phase 3 implicitly relied on but that no `.ui` had
+    previously exercised with a Fill child at the root container.
+  - **Fixture-visibility adjustment (b):** `examples/gallery/gallery.
+    ui` bumps the ScrollView inner WrapPanel's `item-cross-size` from
+    `64` to `128`. With viewport height ≈ `window_h − 312` and Box ×
+    32, `item-cross-size: 64` produces `content_h` smaller than the
+    viewport across 800×600 – 1280×900 windows (max_offset = 0,
+    +100/-100 motion invisible even after fix (a)). Bumping to 128
+    yields `content_h > viewport_h` across the same range so scroll
+    motion is visually observable. ADR's "Box × 30–40" range and
+    Phase 3 standalone WrapPanel slice both stay untouched.
+  - **Pure-logic pinning test (c):** new `#[test]` in
+    `wasamo-runtime/src/layout.rs::tests` re-states
+    `degenerate_fill_in_shrink_parent_clamps_to_zero`'s outcome for a
+    gallery-shaped VStack root (mixed Shrink-height + Fixed-height +
+    Fill-height children including a ScrollView) and asserts that
+    pre-setting the same root to `Fill` height before `run_layout`
+    flips the Fill child's allocated height to non-zero. Captures
+    both the basal trap and the override behaviour at the layer where
+    `WidgetNode::run_layout`'s policy is enacted.
+  - **Runtime integration test (d):** new `#[test]` in
+    `wasamo-runtime/tests/scroll_view_layout_integration.rs` that
+    lowers a VStack-rooted gallery-shaped `.ui` (Phase 3 WrapPanel
+    slice + Button × 2 + ScrollView) through `wasamoc` and
+    `build_widget_tree`, then drives `WidgetNode::run_layout(800.0,
+    600.0)`. Asserts the ScrollView outer Visual height > 0 at
+    `scroll_y = 0` (the regression gate for fix (a)) and that the
+    intermediate content Visual's `Y` offset is negative at
+    `scroll_y = 100` (writer chain end-to-end on the production path,
+    not just the ScrollView-root fixture path). Reuses the existing
+    skip-guard discipline (fail on GitHub Actions, skip on
+    `0x80070005` locally).
+
+  T7 carry-over: `architecture.md §6` (general layout, not §6.5
+  ScrollView) candidate addition documenting **"the window-root
+  WidgetNode is sized to the client rect regardless of its declared
+  width/height constraints"** as a single-sentence runtime-boundary
+  invariant. The latent layout question "non-root VStack with mixed
+  Shrink + Fill children" stays out of Phase 4 scope: it is the same
+  collapse convention `degenerate_fill_in_shrink_parent_clamps_to_zero`
+  pins, surfaces only when a future widget catalog ships a
+  non-window-root container that wants Fill-child sizing, and is
+  classified `carry-forward` to the next phase pre-doc input as a
+  design-topic candidate rather than a Phase 4 bug.
+
+  No screenshot automation is required for T6 close; owner-side
+  visible smoke + the new integration test together discharge
+  evidence item 5's visible-correctness half.
 
 ## CI / verification log
 
