@@ -366,20 +366,30 @@ shift が必要になる。
       `tests/scroll_view_layout_integration.rs` の R2 closure test
       (`scroll_path_fixture_r2_three_level_visual_nesting_root_relative_math`)
       が 4 階層 chain の root-relative 一致でこの shift を pin。
-    - **配置先**: **doc-folded**。architecture.md §6.5 に ScrollView
-      の intermediate Visual と `Visual.Offset = (0, -offset_y, 0)`
-      は既に Moment 1 で記述済み (commit 範囲は M3-Phase 4 T0)。
-      sync_visuals shift は §6.5 の "1 WidgetNode = 1 Visual を
-      ScrollView が local 拡張" の convention の **必然の帰結** で、
-      §6.5 paragraph で記述されている内容を実装に落とすときに
-      自動的に出てくる詳細。新たな normative claim ではなく、既存
-      claim の精緻化に留まるため、architecture.md 改稿は不要と
-      判定。
-      もし将来 §6.5 に "child の parent_abs_offset shift" を
-      explicit に追記する局面が来る (例: 別の intermediate-Visual
-      widget が landed して shift の reuse 機会が visible になる) なら
-      その時点で Moment 2 / 別 ADR で fold すればよい。Phase 4 内では
-      文書反映は完了済み扱い。
+    - **配置先**: **phase-sync** (T5 close 時に `doc-folded` →
+      `phase-sync` に訂正。
+      [t5-step-end-retrospective.md](./t5-step-end-retrospective.md)
+      Follow-Up "T4 retro Item 10 配置先の訂正" 参照)。
+      当初は `doc-folded` と記録していたが、retrospectives.md
+      §checklist Item 10 の `doc-folded` 定義 — "本 step で
+      `architecture.md` / `dsl_spec.md` / `abi_spec.md` / ADR に
+      反映済み" — に対して、architecture.md §6.5 への "child の
+      `parent_abs_offset` shift" 明示 1 文は本 step では追加して
+      いない。「Moment 1 で intermediate Visual と offset が既に
+      書かれているため必然の帰結」という当初論拠は「制約あり」と
+      両立しない (制約ありと言うなら spec への explicit 反映が必要、
+      必然の帰結なら Item 10 を「なし」または `local-only` 寄りに
+      分類すべき)。本 step 内では §6.5 改稿を実行しなかったため、
+      T6 Moment 2 sync 候補として送る。
+      §6.5 paragraph で既に書かれている "1 WidgetNode = 1 Visual
+      の ScrollView 限定 local 拡張" の必然の帰結であることは
+      事実だが、retro の配置先分類は「結果として spec に書かれて
+      いるか」で決まる。将来 intermediate Visual を持つ別 widget
+      (ScrollView の horizontal/bidirectional extension、Phase 5
+      以降の Window chrome に scroll を埋め込むケース、popup
+      overlay 等) が landed すると shift の reuse 機会が visible
+      になり、§6.5 への explicit 追記の価値が上がる。T6 で
+      オーナーと共に追記実行 / 据え置きを判断する。
 
 11. **タスクリストの後続 step 見直し:** **不要**
     - progress file の T4 行 11 項目を 10 件 `[x]` に flip 済み、
@@ -445,18 +455,19 @@ T4 から後続 task への明示的な引き渡し:
   経路には影響しないため、gallery 経路で問題にならない。
 - **T6 (phase-end / Moment 2 re-sync):** dsl_spec §4.11 /
   architecture.md §6.5 / abi_spec.md の現行 draft と T4 実装は
-  整合済み。Moment 2 で sync 必要な divergence は今のところ無し
-  (再判断は T6 で行う)。
-  - 余地として: architecture.md §6.5 に "child の parent_abs_offset
-    shift" を explicit に追記するか否かは T6 の判断に委ねる
-    (Item 10 で doc-folded 判定済み、追加文書化は不要と現時点判定
-    だが、T5 visible smoke で sync_visuals shift の readability が
-    話題になる場合のみ Moment 2 で fold を再検討)。
+  factual な divergence なしで整合済み。ただし Item 10 の
+  `parent_abs_offset` shift は T5 close 時に配置先を `doc-folded`
+  → `phase-sync` に訂正済み (上記 Item 10 参照)。T6 Moment 2 で
+  architecture.md §6.5 に "child の `parent_abs_offset` shift" を
+  explicit 1 文で追記するか / 据え置くかをオーナーと共に判断する。
 - **将来 phase**: intermediate Visual を持つ次の widget が登場する
   局面 (M4 input handling 経由の scrollbar widget、Phase 5 以降の
   popup overlay / window chrome) で `content_container_visual()`
   helper と sync_visuals shift pattern の再利用が想定される。
-  Phase 4 内では Item 10 の `local-only` 相当の扱いで closing。
+  Phase 4 内では Item 10 を `phase-sync` で T6 に送るのみで、
+  将来 phase の pre-doc input への carry-forward は T6 で
+  `phase-sync` を `doc-folded` (=§6.5 改稿) で閉じるか
+  `carry-forward` に降ろすかの判断に委ねる。
 
 T5 の作業に直接効くのは Follow-Up 1 件目で、T4 の Visual layer +
 writer の両方が wire 済みであることが前提。

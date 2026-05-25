@@ -12,15 +12,24 @@ task: T5 — End-to-end gallery visible smoke
 
 `docs/plans/progress/m3-phase-4-progress.md` の **T5**
 ("End-to-end gallery visible smoke") の step-end retrospective。
-T5 が discharge する ADR 検証は Phase 4 verification closure
-**evidence item 5** (gallery sub-screen の `.ui` 追加 + アシスタント側
-build / launch / `Start-Process` success) と phase-close / A11 gallery
-proof のうち **アシスタント自動化部分**。残りの
+T5 が discharge するのは Phase 4 verification closure **evidence item
+5** の **アシスタント自動化部分のみ** — gallery sub-screen の `.ui`
+追加、build、Start-Process でのプロセス生存観測まで。残りの
 visible-correctness 部分 (viewport clip 鋭さ、Button-driven content
 motion、clipped 領域の非表示、off-viewport thumbnail が scroll で
 viewport に進入する) はオーナー手動 GUI smoke として T6 phase-end
 gate (`retrospectives.md` checklist item 17 / [human-visible GUI
-smoke](../human-visible-smoke.md)) に持ち越す。これは ADR 規定通り。
+smoke](../human-visible-smoke.md)) で実施する。
+
+**owner-manual GUI smoke は Phase 4 close の前段 gate** であり、
+責任分界の切り分け (assistant が pixel-level visual correctness を
+判定しない) であって、不具合の後送り受け皿ではない。ADR の "Item
+(5) is required for Phase 4 close under A11" 規定により、上記
+4 観点いずれかが目視で壊れていれば **T6 で gate fail とし、
+M3-Phase 4 phase ブランチ内で fix step を切る (T5 に巻き戻す or
+追加 step を切る)**。M4 の scrollbar / wheel / drag は「より自然な
+入力手段」の話であって、Phase 4 の Button-driven visible
+correctness 不具合の先送り先ではない。
 
 T5 は runtime / IR loader / wasamoc に新規コードを追加しない step。
 T4 で intermediate Visual + `Visual.Offset = (0, -applied_y, 0)`
@@ -43,7 +52,10 @@ gate に持ち越す。
 
 ## Current Judgment
 
-2026-05-25 時点で T5 step-end 基準は **達成済み (owner 明示承認待ち)**。
+2026-05-25 時点で **assistant-side T5 step-end 基準は達成済み (owner
+明示承認待ち)**。ただし Phase 4 close 全体としての A11 visible
+proof は owner-manual GUI smoke 後に確定する。assistant 判定の達成
+範囲と Phase 4 close gate の達成範囲を混同しないこと。
 fast-track は廃止 (`feedback_workflow` §2(b) / 2026-05-25 `49b49fb`)
 のため、判定にかかわらず owner 明示承認待ちで停止する。
 
@@ -54,17 +66,20 @@ fast-track は廃止 (`feedback_workflow` §2(b) / 2026-05-25 `49b49fb`)
     `item-cross-size: 88`) は文字どおり untouched で残置 (10 行ぶん
     1:1 文字列保存)。
   - 新規 root container を `VStack { spacing: 12px; padding: 12px }`
-    に置き、3 つの sibling 要素を持つ:
-    (1) 既存 WrapPanel (untouched) ;
-    (2) Button "Scroll down (+100)" (style: accent) +
-        Button "Scroll up (-100)" (default style)。
-        各 Button の `clicked` handler は
-        `root.scroll_y += 100;` / `root.scroll_y -= 100;` ;
+    に置き、**direct children は 4 つ** (= 3 logical slices):
+    (1) 既存 WrapPanel (untouched);
+    (2a) Button "Scroll down (+100)" (style: accent;
+         `clicked => { root.scroll_y += 100; }`);
+    (2b) Button "Scroll up (-100)" (default style;
+         `clicked => { root.scroll_y -= 100; }`);
     (3) `ScrollView { offset-y: scroll_y; WrapPanel {
         item-cross-size: 64; item-spacing: 8; line-spacing: 8;
         Box × 32 } }` slice。32 thumbnail は ADR の "Box × 30–40"
         範囲内、`item-cross-size: 64` で WrapPanel content_h を
         viewport remainder より十分大きく確保。
+    Button 2 つは 1 logical slice (scroll controls) として扱うが
+    VStack の sibling 列としては独立 (HStack ラップを避けたため。
+    HStack vs ScrollView Fill 競合の節を参照)。
   - `offset-y: scroll_y` は dsl_spec §4.11 Attributes の bare state
     identifier RHS。`\{…}` interpolation でも `bind` / `in-out`
     keyword でもなく、T1 wasamoc check で受理される唯一の bound 形。
@@ -120,9 +135,13 @@ fast-track は廃止 (`feedback_workflow` §2(b) / 2026-05-25 `49b49fb`)
 - **CI / GitHub Actions:** T6 phase-end gate (`workflow_dispatch`) で
   実 CI green を確認する。T5 では local clean rebuild が proxy。
 
-T5 の blocker は残っていない。owner 明示承認後に
-`feat/m3-phase-4-t5` を `feat/m3-phase-4` に no-ff merge して
-T6 (phase-end / Moment 2 re-sync) に進める。
+**assistant-side T5 blocker は残っていない**。Phase 4 close 判定は
+owner-manual GUI smoke 後に確定する (T6 phase-end gate)。owner 明示
+承認後に `feat/m3-phase-4-t5` を `feat/m3-phase-4` に no-ff merge し、
+T6 (phase-end / Moment 2 re-sync) で owner GUI smoke + 残 sync 候補
+を消化する。owner GUI smoke で visible-correctness 観点が壊れていた
+場合は **M3-Phase 4 phase ブランチ内で fix step を切る** (本 retro
+冒頭参照)。
 
 ## Main Learning
 
@@ -184,7 +203,8 @@ Phase 4 でも維持されていることの動作確認。
    - dsl_spec §4.11 / architecture.md §6.5 / abi_spec.md は T5 では
      touch しない。`offset-y: scroll_y` の bare-identifier RHS は
      §4.11 Attributes で既に Moment 1 で規定済み、T5 の `.ui` は
-     その規定の literal 適用。
+     その規定の binding surface の適用 (literal ではなく bare state
+     identifier RHS)。
    - 副次学び #3 (`;` セパレータの spec 例) は **T6 Moment 2 で
      dsl_spec §4.9 例示文の修正可否を判断する候補**。retrospective
      本 step では doc-driven 反映を実行せず、phase-end の判断に
@@ -313,11 +333,16 @@ T5 から後続 task への明示的な引き渡し:
     1. dsl_spec.md §4.9 例示文の `;` セパレータ表記を改行表記に
        揃えるかどうか (T5 副次学び #3)。判断は T6 でオーナーと共に。
     2. architecture.md §6.5 への "child の parent_abs_offset shift"
-       明示追記の要否 (T4 retro Item 10 で `doc-folded` 判定済みだが
-       T5 visible smoke で readability が話題になる場合は再検討、
-       との note を T4 follow-up が残している)。T5 の `.ui` 追加で
-       新たな materialな材料は出ていないので、T6 で覆す積極材料は
-       現時点ではない。
+       明示追記の要否 (T4 retro Item 10 はもともと `doc-folded` を
+       選択していたが、retrospectives.md §checklist Item 10 の
+       `doc-folded` 定義 — "本 step で `architecture.md` /
+       `dsl_spec.md` / `abi_spec.md` / ADR に反映済み" — に対し、
+       実態としては §6.5 に shift を明示する 1 文は書き足されて
+       おらず、strict reading では **`phase-sync` 候補とするのが
+       正しい**。T5 close 時点で T4 retro Item 10 の配置先を
+       `phase-sync` に訂正 (本 retro Follow-Up 末尾参照)。T6 で
+       §6.5 への explicit 追記を実行する / しないをオーナーと
+       決める)。
   - dsl_spec §4.11 / architecture.md / abi_spec.md の現行 draft と
      T5 実装は整合済み。Moment 2 で sync 必要な substantive な
      divergence は無し。
@@ -328,6 +353,26 @@ T5 から後続 task への明示的な引き渡し:
     している実装に由来し、Phase 4 ADR / dsl_spec §4.11 とは無関係。
     T6 で Out-of-phase residuals に登録するか、別 phase の wiring
     として残置するかをオーナーと共に判断。T5 内 closing にはしない。
+- **T4 retro Item 10 配置先の訂正:**
+  - T4 step-end retro
+    ([t4-step-end-retrospective.md](./t4-step-end-retrospective.md))
+    の Item 10 は `parent_abs_offset` shift を新規 cross-phase
+    制約と認めた上で配置先を `doc-folded` と記録しているが、
+    retrospectives.md §checklist Item 10 の `doc-folded` 定義は
+    「本 step で `architecture.md` / `dsl_spec.md` / `abi_spec.md`
+    / ADR に反映済み」であり、実態としては §6.5 に shift を
+    明示する 1 文は追加されていない。「Moment 1 で intermediate
+    Visual と offset が既に書かれているため必然の帰結」という
+    T4 retro の論拠は「制約あり」と両立しない (制約ありと言う
+    なら spec への explicit 反映が必要、必然の帰結と言うなら
+    「なし」または `local-only` 寄りに分類すべき)。
+  - 訂正: T4 Item 10 の配置先を **`doc-folded` → `phase-sync`**
+    に格上げ。理由は「将来 intermediate-Visual widget の追加で
+    再利用される」と T4 自身が明記しているため、`local-only`
+    ではなく、§6.5 に 1 文足す価値がある境界規約。Moment 2
+    sync 候補として T6 で処理する (上記 Follow-Up 1 件目 #2)。
+  - T4 retro 本文の Item 10 の "配置先" 文言は本訂正に揃えて
+    更新する (本 retro と同じ commit で実施)。
 - **将来 phase**:
   - M4 input handling で scrollbar widget / wheel handler / drag
     handler が入れば、Button-driven scroll controls は author が
