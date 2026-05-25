@@ -55,9 +55,9 @@ Discharges ADR verification closure **evidence item 1**.
       the generic parser shape.
 - [ ] Enforce exactly one child at compile time; reject zero-child and
       multi-child ScrollView declarations.
-- [ ] Accept `offset-y: <i32>` literals and `offset-y:
-      \{state.scroll_y}` when `scroll_y` is declared as `i32` in
-      `state`.
+- [ ] Accept `offset-y: <i32>` literals and `offset-y: scroll_y`
+      (bare state identifier per dsl_spec §4.3) when `scroll_y` is
+      declared as `i32` in `state`.
 - [ ] Reject non-integer literals and bindings to undeclared, `bool`,
       or `string` state.
 - [ ] Reject `bind offset-y:` / `in-out offset-y:`-style writable

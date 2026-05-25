@@ -874,7 +874,12 @@ the general typed-`i32` writer pair.** ScrollView appears as another
 `widget_type: "ScrollView"` value on `IrNode`, with exactly one child
 and a single `offset-y` property. No new `IrType`, `IrLiteral`, or
 `PropertyValue` variant is introduced. Literal `offset-y` values use
-the existing integer literal path; bound `offset-y: {state.scroll_y}`
+the existing integer literal path; bound `offset-y: scroll_y` (bare
+state identifier RHS per
+[dsl_spec.md §4.3](./dsl_spec.md#43-property-binding) property-binding
+semantics, with `state scroll_y: i32 = 0` declared at component scope
+per
+[dsl_spec.md §4.7](./dsl_spec.md#47-state-declarations-m2-surface-bool-added-in-m3-phase-1))
 uses `HandlerExpr::PropRead` over `Signal<i32>` and the existing
 string-baked `register_binding` / `widget_write_property` effect path.
 
