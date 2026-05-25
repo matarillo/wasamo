@@ -423,7 +423,10 @@ fn check_scrollview_offset_y_bind(
 ) {
     match value {
         Expr::IntLit { .. } => {}
-        Expr::Ident { name, span: ident_span } => match ns.get(name) {
+        Expr::Ident {
+            name,
+            span: ident_span,
+        } => match ns.get(name) {
             Some(TypeName::Int) => {}
             Some(other) => {
                 diags.push(error(
@@ -464,11 +467,7 @@ fn check_scrollview_offset_y_bind(
 /// general typed-`i32` writer pair deferred to M4 (per
 /// architecture.md §6.8 *Per-type seam* paragraph). Naming the
 /// rejection explicitly here keeps the M4 hand-off legible.
-fn check_scrollview_writable_offset_y(
-    span: &Span,
-    filename: &str,
-    diags: &mut Vec<Diagnostic>,
-) {
+fn check_scrollview_writable_offset_y(span: &Span, filename: &str, diags: &mut Vec<Diagnostic>) {
     diags.push(error(
         filename,
         span,
@@ -1792,9 +1791,7 @@ mod tests {
 
     #[test]
     fn scrollview_two_children_rejected() {
-        let errs = errors(
-            r#"component C inherits W { ScrollView { VStack {} VStack {} } }"#,
-        );
+        let errs = errors(r#"component C inherits W { ScrollView { VStack {} VStack {} } }"#);
         assert_eq!(errs.len(), 1, "{:?}", errs);
         assert!(
             errs[0].contains("found 2") && errs[0].contains("`ScrollView`"),
@@ -1805,9 +1802,8 @@ mod tests {
 
     #[test]
     fn scrollview_three_children_rejected() {
-        let errs = errors(
-            r#"component C inherits W { ScrollView { VStack {} HStack {} Box {} } }"#,
-        );
+        let errs =
+            errors(r#"component C inherits W { ScrollView { VStack {} HStack {} Box {} } }"#);
         assert_eq!(errs.len(), 1, "{:?}", errs);
         assert!(errs[0].contains("found 3"), "{:?}", errs);
     }
@@ -1819,16 +1815,18 @@ mod tests {
         // pins only the child-count side here — the bare child-count
         // diagnostic must not fire when the single child + attribute
         // are present.)
-        let result = check_src(
-            r#"component C inherits W { ScrollView { offset-y: 0 VStack {} } }"#,
-        );
+        let result =
+            check_src(r#"component C inherits W { ScrollView { offset-y: 0 VStack {} } }"#);
         // The offset-y handling lands in the next commit; for now, the
         // child-count gate alone must not produce an error.
         let child_count_err = result
             .diagnostics
             .iter()
             .filter(|d| d.severity == crate::diagnostic::Severity::Error)
-            .any(|d| d.message.contains("`ScrollView` requires exactly one child"));
+            .any(|d| {
+                d.message
+                    .contains("`ScrollView` requires exactly one child")
+            });
         assert!(
             !child_count_err,
             "child-count gate misfired: {:?}",
@@ -1840,17 +1838,15 @@ mod tests {
 
     #[test]
     fn scrollview_offset_y_positive_int_literal_accepted() {
-        let result = check_src(
-            r#"component C inherits W { ScrollView { offset-y: 42 VStack {} } }"#,
-        );
+        let result =
+            check_src(r#"component C inherits W { ScrollView { offset-y: 42 VStack {} } }"#);
         assert!(!result.has_errors(), "{:?}", result.diagnostics);
     }
 
     #[test]
     fn scrollview_offset_y_zero_literal_accepted() {
-        let result = check_src(
-            r#"component C inherits W { ScrollView { offset-y: 0 VStack {} } }"#,
-        );
+        let result =
+            check_src(r#"component C inherits W { ScrollView { offset-y: 0 VStack {} } }"#);
         assert!(!result.has_errors(), "{:?}", result.diagnostics);
     }
 
@@ -1859,9 +1855,8 @@ mod tests {
         // DD-M3-P4-005 / DD-M3-P4-006: negative offsets are layout-time-
         // clamped to 0, not compile-time-rejected (explicitly distinct
         // from Phase 3 WrapPanel negative-literal rejection).
-        let result = check_src(
-            r#"component C inherits W { ScrollView { offset-y: -5 VStack {} } }"#,
-        );
+        let result =
+            check_src(r#"component C inherits W { ScrollView { offset-y: -5 VStack {} } }"#);
         assert!(!result.has_errors(), "{:?}", result.diagnostics);
     }
 
@@ -1882,13 +1877,11 @@ mod tests {
 
     #[test]
     fn scrollview_offset_y_string_literal_rejected() {
-        let errs = errors(
-            r#"component C inherits W { ScrollView { offset-y: "hello" VStack {} } }"#,
-        );
+        let errs =
+            errors(r#"component C inherits W { ScrollView { offset-y: "hello" VStack {} } }"#);
         assert_eq!(errs.len(), 1, "{:?}", errs);
         assert!(
-            errs[0].contains("`ScrollView.offset-y`")
-                && errs[0].contains("`i32` literal"),
+            errs[0].contains("`ScrollView.offset-y`") && errs[0].contains("`i32` literal"),
             "{:?}",
             errs
         );
@@ -1896,9 +1889,7 @@ mod tests {
 
     #[test]
     fn scrollview_offset_y_float_literal_rejected() {
-        let errs = errors(
-            r#"component C inherits W { ScrollView { offset-y: 1.5 VStack {} } }"#,
-        );
+        let errs = errors(r#"component C inherits W { ScrollView { offset-y: 1.5 VStack {} } }"#);
         // FloatLit is rejected by `check_expr_type` globally; we don't
         // see the ScrollView-named diagnostic for floats because the
         // ScrollView path matches `_ =>` and the float arm is taken
@@ -1913,65 +1904,41 @@ mod tests {
 
     #[test]
     fn scrollview_offset_y_color_literal_rejected() {
-        let errs = errors(
-            r#"component C inherits W { ScrollView { offset-y: #336699 VStack {} } }"#,
-        );
+        let errs =
+            errors(r#"component C inherits W { ScrollView { offset-y: #336699 VStack {} } }"#);
         assert_eq!(errs.len(), 1, "{:?}", errs);
-        assert!(
-            errs[0].contains("`ScrollView.offset-y`"),
-            "{:?}",
-            errs
-        );
+        assert!(errs[0].contains("`ScrollView.offset-y`"), "{:?}", errs);
     }
 
     #[test]
     fn scrollview_offset_y_ratio_literal_rejected() {
-        let errs = errors(
-            r#"component C inherits W { ScrollView { offset-y: 16:9 VStack {} } }"#,
-        );
+        let errs = errors(r#"component C inherits W { ScrollView { offset-y: 16:9 VStack {} } }"#);
         assert_eq!(errs.len(), 1, "{:?}", errs);
-        assert!(
-            errs[0].contains("`ScrollView.offset-y`"),
-            "{:?}",
-            errs
-        );
+        assert!(errs[0].contains("`ScrollView.offset-y`"), "{:?}", errs);
     }
 
     #[test]
     fn scrollview_offset_y_bool_literal_rejected() {
-        let errs = errors(
-            r#"component C inherits W { ScrollView { offset-y: true VStack {} } }"#,
-        );
+        let errs = errors(r#"component C inherits W { ScrollView { offset-y: true VStack {} } }"#);
         assert_eq!(errs.len(), 1, "{:?}", errs);
-        assert!(
-            errs[0].contains("`ScrollView.offset-y`"),
-            "{:?}",
-            errs
-        );
+        assert!(errs[0].contains("`ScrollView.offset-y`"), "{:?}", errs);
     }
 
     #[test]
     fn scrollview_offset_y_measurement_rejected() {
         // `12px` is `Token::Measurement` — not an `IntLit`. Reject per
         // dsl_spec §4.11 "i32 literal" surface contract.
-        let errs = errors(
-            r#"component C inherits W { ScrollView { offset-y: 12px VStack {} } }"#,
-        );
+        let errs = errors(r#"component C inherits W { ScrollView { offset-y: 12px VStack {} } }"#);
         assert_eq!(errs.len(), 1, "{:?}", errs);
-        assert!(
-            errs[0].contains("`ScrollView.offset-y`"),
-            "{:?}",
-            errs
-        );
+        assert!(errs[0].contains("`ScrollView.offset-y`"), "{:?}", errs);
     }
 
     // --- T1: ScrollView offset-y bind-to-wrong-type-state reject ---
 
     #[test]
     fn scrollview_offset_y_undeclared_state_rejected() {
-        let errs = errors(
-            r#"component C inherits W { ScrollView { offset-y: scroll_y VStack {} } }"#,
-        );
+        let errs =
+            errors(r#"component C inherits W { ScrollView { offset-y: scroll_y VStack {} } }"#);
         assert_eq!(errs.len(), 1, "{:?}", errs);
         assert!(
             errs[0].contains("`ScrollView.offset-y`")
@@ -1992,8 +1959,7 @@ mod tests {
         );
         assert_eq!(errs.len(), 1, "{:?}", errs);
         assert!(
-            errs[0].contains("`ScrollView.offset-y`")
-                && errs[0].contains("declared `bool`"),
+            errs[0].contains("`ScrollView.offset-y`") && errs[0].contains("declared `bool`"),
             "{:?}",
             errs
         );
@@ -2009,8 +1975,7 @@ mod tests {
         );
         assert_eq!(errs.len(), 1, "{:?}", errs);
         assert!(
-            errs[0].contains("`ScrollView.offset-y`")
-                && errs[0].contains("declared `string`"),
+            errs[0].contains("`ScrollView.offset-y`") && errs[0].contains("declared `string`"),
             "{:?}",
             errs
         );
@@ -2033,10 +1998,11 @@ mod tests {
             }"#,
         );
         assert!(
-            errs.iter()
-                .any(|e| e.contains("`ScrollView.offset-y` is bindable read-only")
+            errs.iter().any(
+                |e| e.contains("`ScrollView.offset-y` is bindable read-only")
                     && e.contains("in-out")
-                    && e.contains("M4")),
+                    && e.contains("M4")
+            ),
             "{:?}",
             errs
         );
@@ -2046,9 +2012,8 @@ mod tests {
 
     #[test]
     fn scrollview_viewport_width_rejected() {
-        let errs = errors(
-            r#"component C inherits W { ScrollView { viewport-width: 320 VStack {} } }"#,
-        );
+        let errs =
+            errors(r#"component C inherits W { ScrollView { viewport-width: 320 VStack {} } }"#);
         assert_eq!(errs.len(), 1, "{:?}", errs);
         assert!(
             errs[0].contains("`viewport-width`")
@@ -2061,9 +2026,8 @@ mod tests {
 
     #[test]
     fn scrollview_viewport_height_rejected() {
-        let errs = errors(
-            r#"component C inherits W { ScrollView { viewport-height: 240 VStack {} } }"#,
-        );
+        let errs =
+            errors(r#"component C inherits W { ScrollView { viewport-height: 240 VStack {} } }"#);
         assert_eq!(errs.len(), 1, "{:?}", errs);
         assert!(
             errs[0].contains("`viewport-height`")
@@ -2075,9 +2039,8 @@ mod tests {
 
     #[test]
     fn scrollview_scroll_axis_rejected() {
-        let errs = errors(
-            r#"component C inherits W { ScrollView { scroll-axis: vertical VStack {} } }"#,
-        );
+        let errs =
+            errors(r#"component C inherits W { ScrollView { scroll-axis: vertical VStack {} } }"#);
         assert_eq!(errs.len(), 1, "{:?}", errs);
         assert!(
             errs[0].contains("`scroll-axis`")
@@ -2089,9 +2052,7 @@ mod tests {
 
     #[test]
     fn scrollview_padding_rejected() {
-        let errs = errors(
-            r#"component C inherits W { ScrollView { padding: 8 VStack {} } }"#,
-        );
+        let errs = errors(r#"component C inherits W { ScrollView { padding: 8 VStack {} } }"#);
         assert_eq!(errs.len(), 1, "{:?}", errs);
         assert!(
             errs[0].contains("`padding`")
@@ -2108,9 +2069,8 @@ mod tests {
         // precedence so the author sees the WrapPanel-specific wording
         // (the attribute is recognised, just misplaced). This keeps the
         // ScrollView catch-all attribute-specific.
-        let errs = errors(
-            r#"component C inherits W { ScrollView { item-cross-size: 88 VStack {} } }"#,
-        );
+        let errs =
+            errors(r#"component C inherits W { ScrollView { item-cross-size: 88 VStack {} } }"#);
         assert_eq!(errs.len(), 1, "{:?}", errs);
         assert!(
             errs[0].contains("`item-cross-size` is a WrapPanel attribute")
