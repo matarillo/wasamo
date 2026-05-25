@@ -75,8 +75,9 @@ fast-track は廃止 (`feedback_workflow` §2(b) / 2026-05-25 `49b49fb`)
   --workspace` (45.54s; green) → `cargo build --workspace` (debug;
   green、windows crate compile で `STATUS_STACK_BUFFER_OVERRUN` の
   sporadic rustc crash 1 回観測、再実行で 44.22s green。Phase 4 T2
-  実装と無関係な既知の rustc 上での windows crate コンパイル時
-  flakiness) → `cargo test --workspace` (failure 0、`wasamo-runtime`
+  実装と無関係な local build failure。Phase 3 T9 でも windows
+  crate compile 中の類似事象を 1 回観測済み) →
+  `cargo test --workspace` (failure 0、`wasamo-runtime`
   lib test は T2 で +13 = 248 passed、他 crate 全 green) →
   `cargo fmt --all -- --check` (post-commit state; zero exit)。
 
@@ -160,9 +161,10 @@ scroll axis) は measure ではなく arrange で発火させなければ
      `STATUS_STACK_BUFFER_OVERRUN` の sporadic rustc crash を 1 回
      観測。Phase 4 T2 実装とは無関係な、windows crate を Windows
      ホスト上で大量の feature flag つきで cargo にコンパイルさせる
-     際の既知の rustc flakiness (T2 のコード変更はいずれも
+     際の local build failure と判断 (T2 のコード変更はいずれも
      `wasamo-runtime`/`widget.rs` のみで、windows crate に触れない)。
-     再実行で 44.22s green。
+     Phase 3 T9 でも windows crate compile 中の類似事象を 1 回
+     観測済み。再実行で 44.22s green。
    - `cargo test --workspace`: failure 0 件、`wasamo-runtime` lib
      test は T2 で +13 = **248 passed** (Verification Notes 参照)、
      他 crate 全 green。
@@ -286,7 +288,7 @@ T2 で追加した test と、走らせた command を記録する。
 ```text
 cargo clean                                   (3982 files, 1.0 GiB)
 cargo build --release --workspace             (45.54s, green)
-cargo build --workspace                       (debug; 44.22s, green; 初回 windows crate flakiness は本文参照)
+cargo build --workspace                       (debug; 44.22s, green; 初回 local build failure は本文参照)
 cargo test -p wasamo-runtime --lib layout::tests::scroll_view  (13 passed)
 cargo test --workspace                        (failure 0; wasamo-runtime lib 248 passed = T2 で +13)
 cargo fmt --all -- --check                    (post-commit state; zero exit)
