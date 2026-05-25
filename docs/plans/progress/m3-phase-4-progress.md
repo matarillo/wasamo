@@ -312,15 +312,14 @@ T6 retrospective Follow-Up #1.
       `docs/notes/m3-phase-4/t7-step-end-retrospective.md`
       (retrospectives.md checklist items 1-11; step → phase merge
       gate; **owned by T7**).
-- [ ] Phase-end retrospective recorded at
+- [x] Phase-end retrospective recorded at
       `docs/notes/m3-phase-4/phase-end-retrospective.md`
       (retrospectives.md checklist items 12-18; **phase → main merge
       gate, performed on `feat/m3-phase-4` after T7 merges in**).
-      This bullet stays `[ ]` at T7 step-close and is flipped by the
-      separate phase-end retro commit; per Q3 disposition (2026-05-25)
-      a reviewer reading T7 close as "phase-end retro outstanding"
-      should resolve the apparent gap against this explicit ownership
-      split.
+      Flipped by the separate phase-end retro commit on
+      `feat/m3-phase-4`, after T7 merged in; per Q3 disposition
+      (2026-05-25), this confirms the T7 step-end / phase-end
+      ownership split.
 
 ## Decisions log
 
@@ -579,6 +578,18 @@ T6 retrospective Follow-Up #1.
   retrospectives.md items 12-18, owned by the phase → main merge gate)
   is **not** part of T7's commit set; it will land as a separate commit
   on `feat/m3-phase-4` after T7 merges in.
+
+- **Phase-end close (2026-05-25).** Local clean rebuild on
+  `feat/m3-phase-4` after the T7 merge and phase-end doc updates:
+  `cargo fmt --all -- --check` green; `cargo clean` removed 2547
+  files / 915.8 MiB; `cargo build --release --workspace` 44.17 s
+  green; `cargo build --workspace` 36.21 s green; `cargo test
+  --workspace` failure 0 — `wasamo-runtime` lib **258 passed**,
+  `scroll_view_layout_integration` **3 passed**,
+  `wrap_panel_layout_integration` **2 passed**, `wasamoc` lib
+  **227 passed**, all other workspace tests green. GitHub Actions
+  `workflow_dispatch` evidence on `feat/m3-phase-4`:
+  **PENDING_CI_RUN**.
 
 ## Implementation summary (Phase 4 close)
 

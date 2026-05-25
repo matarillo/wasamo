@@ -14,6 +14,58 @@ the **Status** section of [README.md](./README.md).
 
 ## [Unreleased] — M3: DSL surface (in progress)
 
+### M3-Phase 4 — ScrollView primitive (minimal) (2026-05-25)
+
+Adds the vertical-only `ScrollView` layout primitive, discharging M3
+acceptance **A5** and the Phase 4 owner-acceptance slice of **A11**.
+`ScrollView` admits exactly one content child, fills the parent-supplied
+viewport, measures content with bounded width and unbounded vertical
+space, clips content at the viewport, and translates the content by a
+clamped `offset-y` value.
+
+`wasamo-ir` remains on the generic node / integer-property path:
+`ScrollView` is another `IrNode.widget_type`, `offset-y` uses existing
+`IrLiteral::Int` / `IrType::I32` plumbing, and no new `IrType`,
+`IrLiteral`, `PropertyValue`, `WASAMO_VALUE_*`, or
+`WASAMO_LAYOUT_ERROR_*` surface is added. `wasamoc` registers
+`ScrollView`, enforces exactly one child, accepts `offset-y` as an
+`i32` literal or bare `i32` state identifier, rejects unknown
+ScrollView attributes (`viewport-*`, `scroll-axis`, `padding`, and
+others), and rejects writable `in-out offset-y` forms until a future
+write-back surface exists. `wasamo-runtime` adds pure-data layout
+support, IR-loader defense-in-depth for child count, a narrow
+ScrollView string-to-`i32` binding write bridge, an outer clipped
+Visual, and a ScrollView-owned intermediate content Visual that carries
+the scroll translation.
+
+Visible proof: `examples/gallery/gallery.ui` grows additively from the
+Phase 3 WrapPanel sub-screen into a `VStack` with Button-driven
+`scroll_y` controls and a `ScrollView { WrapPanel { Box × 32 } }`
+thumbnail slice. Owner-manual GUI smoke on the rebuilt gallery host
+confirmed sharp clipping, visible +100 / -100 movement, hidden
+off-viewport content, and thumbnails entering view as `scroll_y`
+progressed. The T6 visible-smoke failure uncovered the window-root
+`VStack` / Fill-child collapse; the runtime now uses
+`WidgetNode::run_layout_as_window_root` for real window roots so the
+client rect, not the root container's declared shrink height, owns the
+top-level viewport.
+
+Per-phase spec sync ([A11](./ROADMAP.md#m3-dsl-surface)):
+`docs/dsl_spec.md` 1.1 -> 1.2 flips §4.11 to
+`M3-Phase 4 closed; implementation-synced`, records parser-accepted
+multi-line Box examples while leaving `;` as a post-Phase-4 member
+separator open question, and updates the ScrollView widget-registry
+row out of design-draft status. `docs/architecture.md` top-level
+Status flips to include M3-Phase 4 complete, §6.3 records the
+window-root sizing runtime-boundary invariant, and §6.5 records the
+ScrollView intermediate-Visual `parent_abs_offset` shift rule. Phase 4
+also registers out-of-phase residual R1: component-level `.ui title:`
+must eventually drive the native Window title; owning M3 phase is to
+be assigned during M3-Phase 5 pre-doc framing, with implementation due
+no later than M3-Phase 8 Gallery E2E close.
+
+Decisions: [DD-M3-P4-001..006](./docs/decisions/m3-phase-4-scroll-view.md).
+
 ### M3-Phase 3 — WrapPanel layout primitive (2026-05-22)
 
 Adds the `WrapPanel` layout primitive, the WrapPanel constituent of
