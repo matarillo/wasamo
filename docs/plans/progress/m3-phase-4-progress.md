@@ -104,28 +104,28 @@ Discharges ADR verification closure **evidence item 3**.
 Discharges ADR verification closure **evidence item 4** and closes the
 Phase 3 R2 test-coverage residual inside Phase 4.
 
-- [ ] Add a mock-free Windows-runtime integration fixture with a
+- [x] Add a mock-free Windows-runtime integration fixture with a
       bounded ScrollView viewport and overflowing content.
-- [ ] Assert ScrollView's resolved rectangle equals the expected
+- [x] Assert ScrollView's resolved rectangle equals the expected
       viewport dimensions.
-- [ ] Assert the ScrollView-owned intermediate content Visual offset
+- [x] Assert the ScrollView-owned intermediate content Visual offset
       is `(0, 0, 0)` at `scroll_y = 0`.
-- [ ] Assert bound-state updates move the intermediate content Visual
+- [x] Assert bound-state updates move the intermediate content Visual
       to `(0, -offset_y, 0)` after clamp.
-- [ ] Assert negative and larger-than-max states clamp to 0 and max.
-- [ ] Assert the outer ScrollView Visual has a non-null clip.
-- [ ] Assert the intermediate content Visual and child widget Visual
+- [x] Assert negative and larger-than-max states clamp to 0 and max.
+- [x] Assert the outer ScrollView Visual has a non-null clip.
+- [x] Assert the intermediate content Visual and child widget Visual
       have no clip.
-- [ ] Assert three-level nested root-relative position math for
+- [x] Assert three-level nested root-relative position math for
       parent -> ScrollView Visual -> ScrollView-owned intermediate
       content Visual -> thumbnail Visual, closing R2.
 - [ ] Exercise the unbounded scroll-axis runtime fixture when an
       ergonomic `.ui` / IR-level fixture exists; assert layout returns
       `Err(LayoutError::ScrollViewUnboundedAxis)`.
-- [ ] If no ergonomic integration fixture exists, explicitly downgrade
+- [x] If no ergonomic integration fixture exists, explicitly downgrade
       the unbounded-parent case to pure-logic coverage in T2 and record
       that decision here.
-- [ ] Preserve the CI-gated Compositor skip/fail discipline inherited
+- [x] Preserve the CI-gated Compositor skip/fail discipline inherited
       from Phase 2 / Phase 3.
 
 ### T5 — End-to-end gallery visible smoke
@@ -165,7 +165,25 @@ Discharges the m3-plan phase-end criteria for Phase 4.
 
 ## Decisions log
 
-(empty — populated as T1 onward lands)
+- **T4 — unbounded-scroll-axis fixture disposition (2026-05-25).** ADR
+  Phase 4 verification closure item 4's last sub-bullet permits
+  downgrading the unbounded-scroll-axis runtime fixture to pure-logic
+  coverage when no ergonomic `.ui` / IR-level fixture can synthesise
+  the case. Every Phase 4 widget catalog parent (VStack / HStack /
+  Box / WrapPanel / window root) passes a finite scroll-axis cell to
+  its ScrollView child at arrange time — VStack / HStack arrange-time
+  `h` derives from finite parent allocation (Fixed / Fill against
+  finite window, Shrink against finite content); Box / WrapPanel
+  arrange children with their resolved finite rect; the window root
+  passes `window_h`. There is therefore no `.ui` that reaches
+  `arrange_scroll_view` with `h = f32::INFINITY`. The pure-logic
+  `scroll_view_unbounded_scroll_axis_parent_is_runtime_error` test in
+  `wasamo-runtime::layout::tests` (T2) pins the
+  `LayoutError::ScrollViewUnboundedAxis` branch; the integration-test
+  bullet is intentionally left unchecked above so the disposition is
+  visible at-a-glance. Revisit if a future phase introduces a parent
+  layout that legitimately passes unbounded scroll-axis input
+  downstream (none anticipated through Phase 8).
 
 ## CI / verification log
 
