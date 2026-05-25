@@ -454,6 +454,26 @@ default. Rationale:
   wheel / drag wiring); the framing records (c) as the explicit
   M4 hand-off rather than carrying it as a Phase 4 open question.
 
+**Scoping intent — Phase 4 `offset-y` is not the future scroll model.**
+Phase 4's `offset-y` binding is a **bindable control surface** for
+proving that viewport offset traverses the DSL / IR / runtime path
+(A5's "content offset binding" component). It does **not** make
+state-bound offset the only — or even the primary — future
+ScrollView model. M4 and beyond may additively add **input-driven
+internal scrolling** (wheel / drag / keyboard PgUp gestures
+mutating the offset without traversing author-bound state),
+**optional state write-back / in-out binding** (the deferred (c)
+shape from this DD), **scrollbar widget synchronization**, and
+**imperative `scroll_to(x, y)` / `scroll_by(dx, dy)` command
+surface** on the host-facing API. All four are additive on top of
+the Phase 4 surface — they do not require Phase 4's `offset-y`
+attribute to be removed, renamed, or re-semanticised. The Phase 4
+ADR and §4.11 spec text should therefore present `offset-y` as
+*one* control surface (the bindable one), not as the canonical
+or definitive one. The ADR's M4 hand-off section enumerates the
+four candidates above so the M4 input / scrollbar work has a
+named landing point.
+
 **Layering with DD-002 / DD-004 / DD-005.** Clamping bound
 comes from DD-002 (viewport size) and DD-005 (content measured
 size). Composition primitive that applies the offset
@@ -718,6 +738,28 @@ value-range reject for offset).
 - **In-out offset binding (writer seam)** — DD-003 ships
   read-only; writer seam is an M4 hand-off named in the ADR's
   M4 hand-off section.
+- **Future scroll-model surfaces (M4+).** Per the DD-003 scoping
+  intent paragraph, Phase 4's `offset-y` is one control surface;
+  the ADR's M4 hand-off section enumerates the additive future
+  surfaces that may land beyond Phase 4 without disturbing it:
+  - **Input-driven internal scrolling** (wheel / drag / keyboard
+    PgUp / Home / End handlers mutating the offset directly
+    inside ScrollView, without traversing author-bound state).
+  - **Optional state write-back / in-out binding** — the
+    deferred DD-003 (c) shape; requires the typed-`i32` writer
+    pair from framing decision A.
+  - **Scrollbar widget synchronization** — a separate widget
+    (likely `ScrollBar` as a sibling primitive, not built into
+    ScrollView) whose position both reflects and drives the
+    ScrollView offset.
+  - **Imperative `scroll_to(x, y)` / `scroll_by(dx, dy)` command
+    surface** on the host-facing API, for programmatic-without-
+    state-binding scrolling (the analogue of WPF's
+    `ScrollViewer.ScrollToVerticalOffset` or SwiftUI's
+    `ScrollViewReader`).
+
+  None of these require modifying Phase 4's `offset-y` attribute,
+  IR shape, or default behaviour.
 - **Over/under-scroll**, bounce, momentum — touch-flick / smooth-
   scroll territory, M4 input + animation.
 - **Background `fill` on ScrollView** — Phase 4 does not
@@ -1107,12 +1149,20 @@ in the user-facing spec, mirroring Phase 3 framing decision H's
    surface. Composing two ScrollViews around the same content
    stacks two clips; composing ScrollView around an HStack
    around content does not have an HStack-level clip.
+5. **`offset-y` is the Phase 4 external control surface, not the
+   only future scroll model.** The bindable `offset-y` attribute
+   is how Phase 4 exposes scroll position to author code; it is
+   not a commitment that state-driven offset is the canonical
+   way to scroll. Input-driven scrolling (wheel / drag /
+   keyboard) and scrollbar-driven scrolling are M4+ work and
+   land additively without redefining `offset-y` (per the DD-003
+   scoping intent paragraph and the M4 hand-off section).
 
 **Placement.** The subsection lives in `docs/dsl_spec.md` §4.11
 (the new ScrollView chapter), positioned before the formal
 measure-arrange algorithm so the reader builds the model before
 the rules. The ADR's DD-005 Recommendation prose cross-references
-this subsection rather than restating the four facts.
+this subsection rather than restating the five facts.
 
 **Ecosystem contrast (one bullet each).** ScrollView's surface
 intersects multiple ecosystem conventions; readers will arrive
