@@ -227,7 +227,7 @@ T1 で追加した test と、走らせた command を記録する。
 
 新規テスト (`wasamoc::check`, 25 件):
 
-- child-count 4: `scrollview_known_widget_no_warning`,
+- registration + child-count 6: `scrollview_known_widget_no_warning`,
   `scrollview_zero_child_rejected`,
   `scrollview_one_child_accepted`,
   `scrollview_two_children_rejected`,
