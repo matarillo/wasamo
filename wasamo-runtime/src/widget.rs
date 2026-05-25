@@ -1293,6 +1293,47 @@ impl WidgetNode {
         self.sync_visuals(&layout_tree, (0.0, 0.0))
     }
 
+    /// Layout entry for the **window-root** WidgetNode (the one
+    /// `window.rs::set_root` attaches as the topmost child of
+    /// `state.root` and re-lays out on `WM_SIZE`). Forces the root
+    /// LayoutNode's `width` / `height` to `Fill` before delegating to
+    /// `layout::run_layout`, so the window client rect determines the
+    /// root viewport regardless of the root container's declared
+    /// sizing constraints.
+    ///
+    /// M3-Phase 4 T6 fix. Without this override, a root container with
+    /// `height: Shrink` (the default for `VStack`; DSL-authored `.ui`
+    /// cannot set width/height since `dsl_spec.md` §4 does not yet
+    /// expose those attributes) holding a `height: Fill` child (e.g.
+    /// `ScrollView`) collapses the Fill child to zero via the
+    /// convention pinned by
+    /// `layout::tests::degenerate_fill_in_shrink_parent_clamps_to_zero`,
+    /// making the ScrollView's outer Visual size `(w, 0)` and clipping
+    /// its content to a zero-height rect. Phase 2 / Phase 3 examples
+    /// (counter, bool-demo) implicitly relied on the "window client
+    /// rect determines root viewport" contract because their root
+    /// containers had no Fill children; the gallery sub-screen is the
+    /// first `.ui` to surface the latent collapse.
+    ///
+    /// The plain [`Self::run_layout`] keeps its current semantics so
+    /// existing mock-free integration tests that drive `WidgetNode`s
+    /// directly (e.g. `tests/wrap_panel_layout_integration.rs`)
+    /// continue to exercise the declared sizing constraints. See
+    /// `m3-phase-4-progress.md` Decisions log "T6 smoke failure mode A
+    /// disposition (2026-05-25)" for the observation that drove this
+    /// split.
+    pub fn run_layout_as_window_root(
+        &mut self,
+        window_w: f32,
+        window_h: f32,
+    ) -> windows::core::Result<()> {
+        let mut layout_tree = self.build_layout_tree();
+        layout_tree.width = SizeConstraint::Fill;
+        layout_tree.height = SizeConstraint::Fill;
+        layout::run_layout(&mut layout_tree, window_w, window_h).map_err(layout_error_to_winerr)?;
+        self.sync_visuals(&layout_tree, (0.0, 0.0))
+    }
+
     fn build_layout_tree(&self) -> LayoutNode {
         match &self.data {
             WidgetData::Rectangle | WidgetData::Text { .. } | WidgetData::Button(_) => {

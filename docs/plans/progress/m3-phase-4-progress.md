@@ -158,25 +158,64 @@ if it fails — **before** any phase-close mechanical work (spec / plan
 status flips) lands in T7. See the Decisions log entry **"T5/T6 split
 for owner-manual GUI smoke (2026-05-25)"** for the rationale.
 
-- [ ] Owner runs (or builds-and-runs) `target/release/gallery-rust.exe`
+- [x] Owner runs (or builds-and-runs) `target/release/gallery-rust.exe`
       (or the `debug/` variant); see `examples/gallery-rust/` README
       / `cargo run -p gallery-rust` if the T5 binary is no longer on
       disk (clean / fresh checkout). Owner observes: viewport clips
       sharply; +100 / −100 Buttons move content; clipped content is
       hidden; off-viewport thumbnails enter view as `scroll_y`
       progresses.
-- [ ] Owner explicitly accepts the smoke result, or records a fail
+- [x] Owner explicitly accepts the smoke result, or records a fail
       observation note (per [human-visible GUI smoke](../../notes/human-visible-smoke.md)).
-- [ ] **If smoke fails:** implementation fix lands additively on the
+      Owner accepted on 2026-05-25 after the re-smoke pass on the
+      rebuilt binary discharged all four observation points; smoke
+      evidence at
+      [docs/references/m3-phase-4/](../../references/m3-phase-4/)
+      (`t6-gallery-smoke-scroll-y-0.png`,
+      `t6-gallery-smoke-scroll-y-100.png`,
+      `t6-gallery-smoke-scroll-y-800.png`,
+      `t6-gallery-smoke-scroll-y-back-to-0.png`).
+- [x] **If smoke fails:** implementation fix lands additively on the
       T6 branch (new commits); the smoke checklist above is re-run to
       green before T6 closes. Fix scope stays inside the Phase 4 ADR
       (`docs/decisions/m3-phase-4-scroll-view.md`) / dsl_spec §4.11 /
       architecture.md §6.5; any fix requiring a normative spec change
       escalates to T7 Moment 2 (or, if unsuitable for Moment 2, a
       mid-phase ADR addendum). Fix iterations stay inside T6 until the
-      smoke checklist is green.
-- [ ] T6 step-end retrospective recorded under
-      `docs/notes/m3-phase-4/`.
+      smoke checklist is green. Fix landed in commit `ed78d6c
+      fix(wasamo-runtime): force window-root WidgetNode to Fill/Fill
+      (M3-Phase 4 T6)`; no normative spec touch was required.
+- [x] First owner-manual smoke pass (2026-05-25) recorded as **failure
+      mode A** — see Decisions log "T6 smoke failure mode A disposition
+      (2026-05-25)". Fix bundle selected: (a) new
+      `WidgetNode::run_layout_as_window_root` that forces the root
+      LayoutNode's sizing constraints to `Fill/Fill` before delegating
+      to `layout::run_layout`, with `window.rs`'s `WM_SIZE` handler and
+      `set_root` initial layout switched to call it; the plain
+      `WidgetNode::run_layout` retains its previous semantics so
+      existing integration tests that drive `WidgetNode`s as non-window
+      roots stay green; (b) `examples/gallery/gallery.ui` ScrollView
+      inner WrapPanel `item-cross-size: 64 → 128` so content_h exceeds
+      viewport_h across the realistic window-size range and `+100/-100`
+      motion is visible; (c) pure-logic pinning unit test in
+      `wasamo-runtime/src/layout.rs::tests` documenting the
+      Shrink-VStack-root + Fill-child collapse alongside the override
+      behaviour; (d) mock-free runtime integration test in
+      `wasamo-runtime/tests/scroll_view_layout_integration.rs` rooted
+      at a VStack (gallery-shaped fixture) that drives
+      `run_layout_as_window_root` and asserts ScrollView outer Visual
+      height > 0 and intermediate Visual Y offset is negative at
+      non-zero `scroll_y`. (c) and (d) together pin both the
+      layout-engine invariant and the runtime-boundary override so
+      future contributors do not regress either layer.
+- [x] Re-run owner-manual smoke on the rebuilt `gallery-rust.exe`;
+      owner accepts (all 4 observation points green) or records a
+      further fail observation. Iterate until green. Re-run on
+      2026-05-25 returned all observation points green; window close
+      (Alt+F4 / ×) crash-free.
+- [x] T6 step-end retrospective recorded under
+      `docs/notes/m3-phase-4/`
+      ([t6-step-end-retrospective.md](../../notes/m3-phase-4/t6-step-end-retrospective.md)).
 
 ### T7 — Phase-end gates and Moment 2 re-sync
 
@@ -255,9 +294,133 @@ is unchanged.
   clip sharpness, repaint ordering, peripheral wiring). The split
   is local to Phase 4; not a project-wide convention change.
 
+- **T6 smoke failure mode A disposition (2026-05-25).** First owner-
+  manual smoke pass on the T5 release artifacts (`target/release/
+  gallery-rust.exe`, built 2026-05-25 19:49) reported (1) the ScrollView
+  region under the Button row drew completely empty at `scroll_y = 0`,
+  and (2) pressing "Scroll down (+100)" five times produced **no
+  visible change** in the rendered window. Root cause: `gallery.ui`'s
+  component root is a VStack with default `width: Fill, height:
+  Shrink`; `layout::measure_vstack` for `Shrink` height excludes Fill
+  children's desired_h (the standard Fill-collapses-under-Shrink-parent
+  convention, intentionally pinned by
+  `layout::tests::degenerate_fill_in_shrink_parent_clamps_to_zero`),
+  so the root VStack resolved to `desired_h ≈ 312`
+  (= Phase 3 WrapPanel + Button×2 + spacing/padding) regardless of
+  window height. `arrange_vstack`'s `remaining` then clamped to `0`
+  and the Fill ScrollView child received `child_h = 0`, producing an
+  outer Visual sized `(w, 0)` whose `InsetClip{0,0,0,0}` auto-tracked
+  to a zero-height clip rect → content never visible. The writer chain
+  was equally inert by composition: `max_offset = max(0, content_h −
+  0) = content_h` so `applied_offset_y = clamp(scroll_y, 0, content_h)`
+  did update, but with viewport height 0 the resulting
+  `Visual.Offset = (0, -applied_y, 0)` had nothing on-screen to move.
+
+  T4's `scroll_view_layout_integration.rs` integration fixture
+  (`FIXTURE_SRC`) roots a ScrollView directly under the `inherits
+  Window` component (`width: Fill, height: Fill` from
+  `WidgetNode::scroll_view`), bypassing the VStack-root path that
+  production `.ui` (counter, bool-demo, gallery) all use. The T4
+  Decisions log note "T4 fixture WrapPanel substitution vs ADR primary
+  VStack (2026-05-25, commit `57f2366`)" already flagged the layout
+  divergence between fixture parent and ADR's primary VStack-rooted
+  envelope; this T6 finding is the visible-correctness consequence of
+  that uncovered path.
+
+  Disposition: in-scope T6 fix, **no normative spec change**.
+
+  - **Implementation fix (a):** introduce a dedicated
+    `WidgetNode::run_layout_as_window_root` that overrides the root
+    LayoutNode's `width`/`height` to `SizeConstraint::Fill` before
+    delegating to `layout::run_layout`; route `window.rs`'s `WM_SIZE`
+    handler and `set_root` initial layout to call it. The plain
+    `WidgetNode::run_layout` retains its current semantics (so
+    existing mock-free integration tests like
+    `wrap_panel_layout_integration.rs`, which drive `WidgetNode`s
+    directly to exercise declared sizing constraints, continue to
+    pass), and the pure-logic `layout::run_layout` —
+    `degenerate_fill_in_shrink_parent_clamps_to_zero` and the broader
+    Shrink/Fill convention — also stays untouched. The override
+    formalises the implicit "Window client rect determines the root
+    viewport" contract that Phase 2 / Phase 3 implicitly relied on
+    but that no `.ui` had previously exercised with a Fill child at
+    the root container.
+  - **Fixture-visibility adjustment (b):** `examples/gallery/gallery.
+    ui` bumps the ScrollView inner WrapPanel's `item-cross-size` from
+    `64` to `128`. With viewport height ≈ `window_h − 312` and Box ×
+    32, `item-cross-size: 64` produces `content_h` smaller than the
+    viewport across 800×600 – 1280×900 windows (max_offset = 0,
+    +100/-100 motion invisible even after fix (a)). Bumping to 128
+    yields `content_h > viewport_h` across the same range so scroll
+    motion is visually observable. ADR's "Box × 30–40" range and
+    Phase 3 standalone WrapPanel slice both stay untouched.
+  - **Pure-logic pinning test (c):** new `#[test]` in
+    `wasamo-runtime/src/layout.rs::tests` re-states
+    `degenerate_fill_in_shrink_parent_clamps_to_zero`'s outcome for a
+    gallery-shaped VStack root (mixed Shrink-height + Fixed-height +
+    Fill-height children including a ScrollView) and asserts that
+    pre-setting the same root to `Fill` height before `run_layout`
+    flips the Fill child's allocated height to non-zero. Captures
+    both the basal trap and the override behaviour at the layer where
+    `WidgetNode::run_layout`'s policy is enacted.
+  - **Runtime integration test (d):** new `#[test]` in
+    `wasamo-runtime/tests/scroll_view_layout_integration.rs` that
+    lowers a VStack-rooted gallery-shaped `.ui` (Button +
+    ScrollView) through `wasamoc` and `build_widget_tree`, then
+    drives `WidgetNode::run_layout_as_window_root(200.0, 200.0)`
+    (the same WinRT-bound entry point `window.rs` uses on `WM_SIZE`).
+    Asserts the ScrollView outer Visual height > 0 at
+    `scroll_y = 0` (the regression gate for fix (a)) and that the
+    intermediate content Visual's `Y` offset is negative at
+    `scroll_y = 100` (writer chain end-to-end on the production path,
+    not just the ScrollView-root fixture path). Reuses the existing
+    skip-guard discipline (fail on GitHub Actions, skip on
+    `0x80070005` locally).
+
+  T7 carry-over: `architecture.md §6` (general layout, not §6.5
+  ScrollView) candidate addition documenting **"the window-root
+  WidgetNode is sized to the client rect regardless of its declared
+  width/height constraints"** as a single-sentence runtime-boundary
+  invariant. The latent layout question "non-root VStack with mixed
+  Shrink + Fill children" stays out of Phase 4 scope: it is the same
+  collapse convention `degenerate_fill_in_shrink_parent_clamps_to_zero`
+  pins, surfaces only when a future widget catalog ships a
+  non-window-root container that wants Fill-child sizing, and is
+  classified `carry-forward` to the next phase pre-doc input as a
+  design-topic candidate rather than a Phase 4 bug.
+
+  No screenshot automation is required for T6 close; owner-side
+  visible smoke + the new integration test together discharge
+  evidence item 5's visible-correctness half.
+
 ## CI / verification log
 
-(empty — populated as T1 onward lands)
+- **T6 close (2026-05-25).** Local clean rebuild proxy for the T6 fix bundle (commit `ed78d6c`) on the
+  `feat/m3-phase-4-t6` branch: `cargo fmt --all -- --check` zero
+  exit; `cargo build --release --workspace` green; `cargo build
+  --workspace` green; `cargo test --workspace` green — `wasamo-runtime`
+  lib **258 passed** (T5 baseline 257 + the new pure-logic pinning
+  test `shrink_vstack_root_with_fill_scroll_view_child_collapses`);
+  `scroll_view_layout_integration` **3 passed** (T5 baseline 2 + the
+  new mock-free runtime integration test
+  `scroll_path_vstack_root_fixture_pins_window_root_fill_override`
+  driving `run_layout_as_window_root`); `wrap_panel_layout_integration`
+  back to **2 passed** after the `run_layout` /
+  `run_layout_as_window_root` split insulated it from the window-root
+  override. Assistant-side `Start-Process` on rebuilt
+  `target/release/gallery-rust.exe` produced PID 3916, MainWindowTitle
+  `"Wasamo"`, HasExited = `$false` after 3 s, `Stop-Process -Force`
+  clean exit. Owner-manual GUI smoke (2026-05-25, re-run on the post-
+  `ed78d6c` binary) returned green on all four observation points
+  (viewport clip sharp, +100/-100 Buttons move content by ±100 px,
+  clipped regions stay within the ScrollView outer rect, off-viewport
+  thumbnails enter as `scroll_y` progresses) plus the +1 reference
+  observation (scrollbar non-display, expected under Phase 4 scope);
+  window close (Alt+F4 / ×) crash-free; smoke evidence committed at
+  `docs/references/m3-phase-4/t6-gallery-smoke-scroll-y-{0,100,800,
+  back-to-0}.png`. GitHub Actions CI green confirmation is **T7**
+  phase-end gate (`workflow_dispatch`); local clean rebuild is the
+  T6-step-level proxy.
 
 ## Out-of-phase residuals
 

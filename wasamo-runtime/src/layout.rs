@@ -1238,6 +1238,89 @@ mod tests {
         assert_eq!(stack.children[0].size.1, 0.0);
     }
 
+    // M3-Phase 4 T6: pin the Shrink-VStack-root + Fill-ScrollView-child
+    // collapse using a gallery-shaped fixture (mixed Shrink-height
+    // WrapPanel + Fixed-height Buttons + Fill-height ScrollView), and
+    // verify that pre-setting the same root to Fill height (the override
+    // applied by `WidgetNode::run_layout`) flips the Fill child's
+    // allocated height to non-zero. Documents the basal trap at the
+    // layer where the runtime boundary's policy is enacted; pairs with
+    // the mock-free `WidgetNode::run_layout` integration test in
+    // `tests/scroll_view_layout_integration.rs::scroll_path_vstack_root_*`
+    // which exercises the same shape through the production Composition
+    // path. See progress doc Decisions log "T6 smoke failure mode A
+    // disposition (2026-05-25)".
+    #[test]
+    fn shrink_vstack_root_with_fill_scroll_view_child_collapses() {
+        let mut root = LayoutNode::vstack(12.0, 12.0, Alignment::Stretch);
+        // root keeps default (width: Fill, height: Shrink), matching
+        // `WidgetNode::vstack` defaults the IR loader hands out for an
+        // authored `VStack { ... }`.
+
+        // Phase 3 standalone WrapPanel slice approximation: Shrink height,
+        // Fixed inner main extent. The WrapPanel's measured height does
+        // not matter for the assertion below; we only need a non-Fill
+        // sibling that consumes some of the VStack's Shrink desired_h.
+        let mut wrap = LayoutNode::wrap_panel(Some(88.0), 12.0, 12.0);
+        wrap.width = SizeConstraint::Fill;
+        wrap.height = SizeConstraint::Shrink;
+        for _ in 0..4 {
+            let b = LayoutNode::rectangle(SizeConstraint::Fixed(88.0), SizeConstraint::Fixed(88.0));
+            wrap.children.push(b);
+        }
+        root.children.push(wrap);
+
+        // Two Fixed-height Buttons (Rectangle stand-ins).
+        for _ in 0..2 {
+            root.children.push(LayoutNode::rectangle(
+                SizeConstraint::Fixed(160.0),
+                SizeConstraint::Fixed(32.0),
+            ));
+        }
+
+        // Fill-height ScrollView with one Fill-width Shrink-height child.
+        let mut sv = LayoutNode::scroll_view(0);
+        sv.width = SizeConstraint::Fill;
+        sv.height = SizeConstraint::Fill;
+        let mut inner = LayoutNode::wrap_panel(Some(64.0), 8.0, 8.0);
+        inner.width = SizeConstraint::Fill;
+        inner.height = SizeConstraint::Shrink;
+        for _ in 0..32 {
+            inner.children.push(LayoutNode::rectangle(
+                SizeConstraint::Fixed(64.0),
+                SizeConstraint::Fixed(64.0),
+            ));
+        }
+        sv.children.push(inner);
+        root.children.push(sv);
+
+        // Reproduce the original bug at the pure-layout level: with the
+        // root still in its default Shrink height, the Fill ScrollView
+        // child collapses to a zero outer rect.
+        run_layout(&mut root, 1000.0, 740.0).unwrap();
+        let sv_idx = root.children.len() - 1;
+        assert_eq!(
+            root.children[sv_idx].size.1, 0.0,
+            "Shrink-VStack-root with Fill-ScrollView child must collapse \
+             the ScrollView to height 0 — pinned to mirror \
+             degenerate_fill_in_shrink_parent_clamps_to_zero for the \
+             gallery-shaped fixture (T6 failure mode A)",
+        );
+
+        // Apply the runtime-boundary override and re-run: the ScrollView
+        // now receives the remaining height after non-Fill siblings,
+        // and arrange_scroll_view assigns it a non-zero viewport.
+        root.height = SizeConstraint::Fill;
+        run_layout(&mut root, 1000.0, 740.0).unwrap();
+        assert!(
+            root.children[sv_idx].size.1 > 0.0,
+            "with the root forced to Fill height (mirroring \
+             WidgetNode::run_layout's override), the Fill ScrollView \
+             child must receive a non-zero viewport allocation; got {}",
+            root.children[sv_idx].size.1,
+        );
+    }
+
     // ── M3-Phase 2 T8: Box aspect measure-arrange (DD-M3-P2-005) ───────────
 
     fn box_with_aspect(num: i32, den: i32) -> LayoutNode {
