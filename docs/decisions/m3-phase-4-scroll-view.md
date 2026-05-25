@@ -807,9 +807,9 @@ is *not* a validate-time reject) per
   in-out), `validate()` would need to check the bound state is
   mutable, which is currently outside the IR's vocabulary and
   would have to defer to `wasamoc check`.
-- **Error class.** All ScrollView invariant violations surface as
-  `WASAMO_ERR_IR_MALFORMED`, consistent with Phase 2 / Phase 3
-  precedent.
+- **Error class.** All ScrollView IR-loader invariant violations
+  surface as `WASAMO_ERR_IR_MALFORMED`, consistent with Phase 2 /
+  Phase 3 precedent.
 
 **Options:**
 
