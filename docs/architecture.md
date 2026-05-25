@@ -410,6 +410,24 @@ WidgetNode tree  (owns SpriteVisuals + child WidgetNodes)
 converts each child offset to parent-relative `Visual.Offset` before
 writing the Composition visual tree.
 
+M3-Phase 4 ScrollView locally extends the prior "1 WidgetNode = 1
+Visual" convention. A ScrollView owns an outer widget Visual plus a
+ScrollView-owned intermediate content Visual between that outer Visual
+and its single content child's widget Visual. The outer Visual carries
+the viewport clip (`Visual.Clip = InsetClip { 0, 0, 0, 0 }`). The
+ScrollView-owned intermediate content Visual carries the scroll
+translation:
+
+```
+Visual.Offset = (0, -offset_y, 0)
+```
+
+where `offset_y` is the clamped applied offset from the ScrollView
+layout pass. The single content child's widget Visual remains governed
+by the normal `sync_visuals()` conversion from absolute `LayoutNode`
+offsets to parent-relative `Visual.Offset`. The intermediate content
+Visual and the child widget Visual do not carry the viewport clip.
+
 The `LayoutNode` tree is rebuilt on each layout pass (O(n)).
 No persistent layout cache exists in M1.
 
@@ -849,6 +867,38 @@ Phase 2 Box measure-arrange. Mock-free Windows integration tests
 exercise the full pipeline through the live Compositor (per
 [CLAUDE.md §Testing rules](../CLAUDE.md#testing-rules)); the
 algorithm-correctness evidence lives in pure-logic unit tests.
+
+**M3-Phase 4 (ScrollView primitive) reuses the generic IR node form and
+the existing i32 binding reader path, but deliberately avoids opening
+the general typed-`i32` writer pair.** ScrollView appears as another
+`widget_type: "ScrollView"` value on `IrNode`, with exactly one child
+and a single `offset-y` property. No new `IrType`, `IrLiteral`, or
+`PropertyValue` variant is introduced. Literal `offset-y` values use
+the existing integer literal path; bound `offset-y: {state.scroll_y}`
+uses `HandlerExpr::PropRead` over `Signal<i32>` and the existing
+string-baked `register_binding` / `widget_write_property` effect path.
+
+The Phase 4-specific bridge is intentionally narrow: the binding effect
+still writes a string-form value, and ScrollView's own per-widget
+`set_property` arm parses that string into the `i32` `offset-y` field.
+That parse / write bridge exists only for ScrollView's `offset-y`
+surface. The general typed-`i32` evaluator / writer pair anticipated in
+the *Per-type seam* paragraph remains deferred to M4 or later input,
+scrollbar, writer-seam, or animation work.
+
+The runtime materializes ScrollView as a per-kind widget data shape
+with parent-supplied viewport sizing, vertical-only scroll semantics,
+and one content child. The layout engine measures the child with the
+viewport width and an unbounded vertical constraint, returns the
+ScrollView outer size as the viewport size, clamps `offset-y` into
+`[0, max(0, content_height - viewport_height)]`, and reports
+`LayoutError::ScrollViewUnboundedAxis` when the scroll axis is
+unbounded. That `LayoutError` variant is internal in Phase 4: no new C
+ABI value tag or host-visible layout-error tag is added. The
+algorithm remains a pure-data layout path in
+`wasamo-runtime/src/layout.rs`; Windows-runtime evidence is reserved
+for the Visual tree clip / offset integration and the Phase 3 R2
+relative-offset closure.
 
 #### 6.8.8 Forward-compatibility and out-of-scope
 
