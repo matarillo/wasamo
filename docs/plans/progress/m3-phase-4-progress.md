@@ -1,7 +1,7 @@
 ---
 phase: M3-Phase 4
 title: ScrollView primitive (minimal)
-status: active
+status: closing
 adr: docs/decisions/m3-phase-4-scroll-view.md
 plan: docs/plans/m3-plan.md
 opened: 2026-05-25
@@ -225,30 +225,40 @@ extends the original list with Moment 2 sync items surfaced by T4
 / T5 / T6 retrospectives' Item 10 (phase-sync classifications) and
 T6 retrospective Follow-Up #1.
 
-- [ ] `cargo fmt --all -- --check` green.
-- [ ] `cargo build --release --workspace` green locally and on CI.
-- [ ] `cargo test --workspace` green locally and on CI.
-- [ ] Windows-only integration evidence green on CI.
-- [ ] `docs/dsl_spec.md` §4.11 Phase status marker flips to
+- [x] `cargo fmt --all -- --check` green.
+- [x] `cargo build --release --workspace` green locally and on CI.
+- [x] `cargo test --workspace` green locally and on CI.
+- [x] Windows-only integration evidence green on CI.
+- [x] `docs/dsl_spec.md` §4.11 Phase status marker flips to
       `M3-Phase 4 closed; implementation-synced`.
-- [ ] `docs/architecture.md` top Status flips to include M3-Phase 4
+- [x] `docs/architecture.md` top Status flips to include M3-Phase 4
       complete, with implementation divergences reconciled.
-- [ ] `docs/architecture.md` §6 (general layout) gains a single-sentence
+- [x] `docs/architecture.md` §6 (general layout) gains a single-sentence
       runtime-boundary invariant covering "window-root `WidgetNode` is
       sized to the client rect regardless of its declared width/height
       constraints, enacted by `WidgetNode::run_layout_as_window_root`
       and called by `window.rs`'s `WM_SIZE` handler and `set_root`
       initial layout" (T6 retrospective Item 10 (1) `phase-sync`; T6
-      Follow-Up #1).
-- [ ] `docs/architecture.md` §6.5 (WidgetNode / Visual Layer sync)
+      Follow-Up #1). Landed as a paragraph after §6.3's default-
+      constraints table (single sentence expanded into a four-sentence
+      paragraph to cover the override mechanism, the unchanged plain
+      `run_layout` entry point, and the unchanged pure-logic
+      conventions including `degenerate_fill_in_shrink_parent_clamps_
+      to_zero`).
+- [x] `docs/architecture.md` §6.5 (WidgetNode / Visual Layer sync)
       gains explicit prose that the ScrollView intermediate Visual's
       scroll translation `(0, -offset_y, 0)` also shifts each content
       child's `sync_visuals()` `parent_abs_offset` by `(0, -offset_y)`
       so root-relative LayoutNode offsets convert correctly under the
       intermediate Visual (T4 retrospective Item 10, configured-class
       corrected to `phase-sync` in T5 retrospective Follow-Up; T5
-      Follow-Up #2 / T6 Follow-Up #2).
-- [ ] `docs/dsl_spec.md` §4.9 Box examples switch from the
+      Follow-Up #2 / T6 Follow-Up #2). Landed as a follow-up paragraph
+      to the existing ScrollView Visual-extension paragraph, generalised
+      to "any Visual that translates its own subtree must shift
+      `parent_abs_offset` by the inverse translation for its
+      descendants" so future intermediate-Visual widgets can cite the
+      rule.
+- [x] `docs/dsl_spec.md` §4.9 Box examples switch from the
       `;`-separated single-line form (`Box { aspect: <r>; fill: <c>;
       Text { ... } }` at the four extant sites) to the parser-
       accepted multi-line member-per-line form, plus a short adjacent
@@ -261,9 +271,10 @@ T6 retrospective Follow-Up #1.
       separator left as post-Phase-4 open question" rather than
       "member separator confirmed as newline" (owner-confirmed
       framing, T5 副次学び #3 / T5 Follow-Up #2; T6 Follow-Up
-      carry-over).
-- [ ] `docs/plans/m3-plan.md` Phase 4 row flips to complete.
-- [ ] **Out-of-phase residual R1 registration: gallery host Window
+      carry-over). §4.10 common-pitfalls 1 's `; …` continuation also
+      dropped to match the new convention.
+- [x] `docs/plans/m3-plan.md` Phase 4 row flips to complete.
+- [x] **Out-of-phase residual R1 registration: gallery host Window
       title wiring.** Phase 4 smoke recorded
       `MainWindowTitle = "Wasamo"` (framework default) while
       `examples/gallery/gallery.ui` declares `title: "Gallery"`.
@@ -279,8 +290,8 @@ T6 retrospective Follow-Up #1.
       M3-Phase 8 Gallery E2E close**; Phase 6 (ZStack + conditional
       rendering) is a natural candidate for absorbing the small
       host/window-metadata wiring task (T5 Follow-Up; T6 Follow-Up
-      #5).
-- [ ] Carry-forward inputs to the next phase's pre-doc are recorded
+      #5). See §Out-of-phase residuals below for the registered entry.
+- [x] Carry-forward inputs to the next phase's pre-doc are recorded
       under `docs/notes/m3-phase-5/predoc-inputs.md` covering: (a)
       the "integration test fixture parent shape must cover at least
       one production root shape" rule (T6 retrospective Item 10 (2)
@@ -295,9 +306,9 @@ T6 retrospective Follow-Up #1.
       intent: M3 residual, not M4 handoff). Per retrospectives.md
       §Main Learning / 設計制約の前送り, this file must be written
       before T7's merge gate.
-- [ ] This progress file records the phase-close evidence, CI pointer,
+- [x] This progress file records the phase-close evidence, CI pointer,
       implementation summary, and lifecycle transition.
-- [ ] T7 step-end retrospective recorded at
+- [x] T7 step-end retrospective recorded at
       `docs/notes/m3-phase-4/t7-step-end-retrospective.md`
       (retrospectives.md checklist items 1-11; step → phase merge
       gate; **owned by T7**).
@@ -543,7 +554,132 @@ T6 retrospective Follow-Up #1.
   phase-end gate (`workflow_dispatch`); local clean rebuild is the
   T6-step-level proxy.
 
+- **T7 close (2026-05-25).** Local clean rebuild on `feat/m3-phase-4-t7`
+  with the Moment 2 spec sync, m3-plan row flip, and M3-Phase 5 pre-doc
+  carry-forward landed (HEAD = `42ed208`): `cargo fmt --all -- --check`
+  zero exit; `cargo clean` removed 3650 files / 1.0 GiB; `cargo build
+  --release --workspace` 43.19 s green; `cargo build --workspace`
+  (debug) 35.56 s green; `cargo test --workspace` failure 0 —
+  `wasamo-runtime` lib **258 passed** (T6 baseline で不変),
+  `scroll_view_layout_integration` **3 passed** (T6 baseline で不変),
+  `wrap_panel_layout_integration` **2 passed** (T6 baseline で不変),
+  `wasamoc` lib **227 passed**, 他 crate 全 green. GitHub Actions
+  `workflow_dispatch` run `26404665377` on `feat/m3-phase-4-t7`
+  completed `success` (2026-05-25 14:08 → 14:10 UTC,
+  <https://github.com/matarillo/wasamo/actions/runs/26404665377>),
+  discharging the **and on CI** half of T7's `cargo build --release
+  --workspace` / `cargo test --workspace` / Windows-only integration
+  evidence bullets. T7's mechanical close commits are: `4b41a4c`
+  (T7 Task list revise + Q1/Q2/Q3 dispositions); `59729b1`
+  (Moment 2 spec sync — architecture.md + dsl_spec.md + m3-plan.md);
+  `42ed208` (M3-Phase 5 pre-doc carry-forward inputs); plus the
+  progress-file finalize commit (this commit) and the T7 step-end
+  retrospective commit. The separate phase-end retrospective (covering
+  retrospectives.md items 12-18, owned by the phase → main merge gate)
+  is **not** part of T7's commit set; it will land as a separate commit
+  on `feat/m3-phase-4` after T7 merges in.
+
+## Implementation summary (Phase 4 close)
+
+Phase 4 added a vertical-only ScrollView primitive that exposes a
+bounded viewport over one scrollable content child and translates
+that content by a clamped `offset-y` value. Wire-level shape:
+
+- **wasamoc surface (T1):** `ScrollView` registered as a known widget
+  type with the generic parser shape preserved; exactly one child
+  enforced at compile time; `offset-y` accepts an `i32` literal or a
+  bare `state` identifier of declared type `i32`; `bind` / `in-out`
+  modifiers, `viewport-*` / `scroll-axis` / `padding` attributes,
+  and bool/string state binding all rejected by `wasamoc check`.
+- **Layout engine (T2):** pure-data measure-arrange in
+  `wasamo-runtime/src/layout.rs`: content measured with viewport
+  width and unbounded vertical constraint; outer size equals viewport
+  size; `offset-y` clamped to `[0, max(0, content_h - viewport_h)]`;
+  unbounded vertical parent produces `LayoutError::ScrollViewUnbounded
+  Axis`; rounding contract preserved.
+- **IR loader (T3):** `ScrollView` materialised with exactly one
+  content child and an `offset-y` field; 0-child / >1-child rejected
+  at IR load with `WASAMO_ERR_IR_MALFORMED`; out-of-range `offset-y`
+  accepted as input and clamped at layout time.
+- **Visual layer + Windows runtime (T4):** ScrollView owns an outer
+  widget Visual plus a ScrollView-owned intermediate content Visual;
+  outer carries `Visual.Clip = InsetClip { 0, 0, 0, 0 }`; intermediate
+  carries `Visual.Offset = (0, -applied_offset_y, 0)`; the content
+  child's `sync_visuals()` `parent_abs_offset` is shifted by the
+  inverse translation so root-relative LayoutNode offsets convert
+  correctly underneath the intermediate Visual.
+- **Gallery integration (T5):** `examples/gallery/gallery.ui` grew an
+  additive `VStack { WrapPanel … ; Button … ; Button … ; ScrollView {
+  WrapPanel { Box × 32 } } }` slice with Button-driven `scroll_y`
+  controls; no runtime / IR loader / wasamoc code touched at T5.
+- **Window-root sizing fix (T6):** `WidgetNode::run_layout_as_window_
+  root` introduced to override the root LayoutNode's
+  `width` / `height` to `SizeConstraint::Fill` before delegating to
+  `layout::run_layout`, resolving the Shrink-VStack-root + Fill-
+  ScrollView-child collapse that the Phase 3 WrapPanel test envelope
+  had not exercised. Plain `run_layout` retained for non-window-root
+  integration tests; pure-logic layout engine and the
+  `degenerate_fill_in_shrink_parent_clamps_to_zero` convention
+  untouched. Gallery `item-cross-size: 64 → 128` made content_h
+  exceed viewport_h across realistic window sizes so `+100/-100`
+  motion is visible. Pure-logic pinning test
+  (`shrink_vstack_root_with_fill_scroll_view_child_collapses`) and
+  mock-free runtime integration test
+  (`scroll_path_vstack_root_fixture_pins_window_root_fill_override`)
+  added together to pin the layout-engine invariant and the runtime-
+  boundary override at independent layers.
+
+A5 evidence discharge: items 1-4 (wasamoc surface; layout engine;
+IR loader / validate; Windows-runtime layout + Visual + R2 closure
+including three-level nested root-relative position math for
+parent → ScrollView outer → intermediate → thumbnail) automated;
+item 5 (end-to-end gallery + visible smoke) split into T5 (assistant-
+automated) + T6 (owner-manual smoke with T6 fix iteration absorbed
+in-step). A11 owner-acceptance recorded 2026-05-25 on the rebuilt
+gallery host. CI evidence: workflow_dispatch run `26404665377`,
+success.
+
+## Lifecycle transition
+
+Per [plans/README.md §Phase progress file lifecycle](../README.md#phase-progress-file-lifecycle),
+this progress file transitions from `status: active` to
+`status: closing` at T7 step-close. Front-matter `status` flips from
+`active` to `closing` in this same commit. The progress file remains
+mutable during the `closing` window only for the phase-end
+retrospective evidence pointer and any final post-merge distillation;
+no further task checkboxes are added. The progress file flips from
+`closing` to `retired` (and is deleted by default per the lifecycle
+table) on the phase → main merge commit, after the phase-end
+retrospective lands. The phase-end retrospective
+(`docs/notes/m3-phase-4/phase-end-retrospective.md`) is owned by a
+separate commit on `feat/m3-phase-4` after T7 merges in and is the
+precondition for the phase → main merge gate; it is **not** a T7
+deliverable.
+
 ## Out-of-phase residuals
 
-(empty — populated only if Phase 4 closes with explicit carry-forward
-items)
+- **R1 — Gallery host Window title wiring (2026-05-25).** Phase 4
+  smoke recorded `MainWindowTitle = "Wasamo"` (framework default)
+  while `examples/gallery/gallery.ui` declares `title: "Gallery"`.
+  Current `.ui` lowering preserves the component-level `title:`
+  surface, but the runtime/ABI host path creates the Window with the
+  framework default title.
+  - **Owner intent (T7 Q2 disposition, 2026-05-25):** `.ui` `title:`
+    must drive the actual native Window title. This is an **M3
+    residual, not an M4 theming/chrome handoff**.
+  - **Resolution condition:** "the runtime/ABI host path applies the
+    component-level `title` to the native window", **not** "title
+    attribute declared unsupported".
+  - **Gate structure:**
+    - **M3-Phase 5 pre-doc input distillation** assigns the owning
+      M3 phase (1-2 candidates narrowed; full assignment must
+      complete before Phase 5 ADR is Accepted). Pre-doc input note
+      filed at
+      [docs/notes/m3-phase-5/predoc-inputs.md §4](../../notes/m3-phase-5/predoc-inputs.md#4-r1-window-title-wiring-の-owning-phase-割当--phase-5-pre-doc-内で必須完了).
+    - **Implementation deadline:** no later than **M3-Phase 8
+      Gallery E2E close**.
+    - **Natural candidate phase:** Phase 6 (ZStack + conditional
+      rendering) — small host/window-metadata wiring task that
+      pairs naturally with lightbox UX. Phase 5 (Grid layout
+      primitive) is **not** a recommended owning phase because the
+      task is unrelated to Grid thesis.
