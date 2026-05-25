@@ -825,13 +825,13 @@ loader's `validate()` independently rejects malformed memory IR with
 
 | Attribute | Surface form | Bindable in Phase 4 | Default |
 |---|---|---|---|
-| `offset-y` | `<i32>` literal or `{state_name}` where `state_name: i32` | Read-only binding | `0` |
+| `offset-y` | `<i32>` literal or `\{state.scroll_y}` where `scroll_y: i32` | Read-only binding | `0` |
 
 `offset-y` is a signed integer pixel offset in the layout coordinate
-system. Literal values and bound `i32` state values may be negative or
-larger than the scrollable range in source; the runtime clamps the
-applied offset during layout. Absent `offset-y` materializes as `0` at
-the runtime layer.
+system. Literal values and bound `i32` state values such as
+`\{state.scroll_y}` may be negative or larger than the scrollable range
+in source; the runtime clamps the applied offset during layout. Absent
+`offset-y` materializes as `0` at the runtime layer.
 
 The attribute reuses the existing `i32` surface: no grammar token, AST
 variant, `IrType`, `IrLiteral`, or scalar value type is added in Phase
