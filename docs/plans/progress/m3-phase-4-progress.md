@@ -133,17 +133,17 @@ Phase 3 R2 test-coverage residual inside Phase 4.
 Discharges ADR verification closure **evidence item 5** and the
 phase-close / A11 gallery proof.
 
-- [ ] Grow `examples/gallery/gallery.ui` additively with a sibling
+- [x] Grow `examples/gallery/gallery.ui` additively with a sibling
       `ScrollView { WrapPanel { Box × 30–40 } }` slice; the Phase 3
       standalone WrapPanel slice stays untouched.
-- [ ] Add programmatic scroll controls that mutate `state.scroll_y` by
+- [x] Add programmatic scroll controls that mutate `state.scroll_y` by
       fixed increments.
-- [ ] Build and run `examples/gallery-rust/`.
-- [ ] Record `Start-Process` launch success by the assistant.
+- [x] Build and run `examples/gallery-rust/`.
+- [x] Record `Start-Process` launch success by the assistant.
 - [ ] Leave visual correctness as owner-manual GUI smoke: viewport
       clips sharply, buttons move content, clipped content is hidden,
       and off-viewport thumbnails enter view as scroll progresses.
-- [ ] C / Zig gallery hosts remain out of Phase 4 scope.
+- [x] C / Zig gallery hosts remain out of Phase 4 scope.
 
 ### T6 — Phase-end gates and Moment 2 re-sync
 
