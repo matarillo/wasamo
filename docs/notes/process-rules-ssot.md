@@ -31,7 +31,7 @@ plans / decisions / notes の上位構造（"何の文書がどこに住むか"�
 | 場所 | 主に扱うプロセス | 性格 |
 |---|---|---|
 | `CLAUDE.md` | Language / Document categories / Testing / Commit / CI / Build ordering | セッション開始時に毎回読まれる "活きたルール" |
-| `docs/notes/retrospectives.md` | step-end / phase-end 振り返り手順と checklist | 手順書。retro 実施時に参照 |
+| `docs/notes/retrospectives.md` | step-end / phase-end retro 手順 + checklist + phase-sync (Moment 2) doc セット + 前送り規律 | **暫定 living rule** (運用上の正; 正式 SSOT 化判断は本ノート Q1-Q6 で未決) |
 | `docs/plans/README.md` | plan の lifecycle、Frozen agreement と Progress の構造、AC revision、progress file lifecycle、archival | plans/ ディレクトリ規約 |
 | `docs/decisions/README.md` | ADR の規約（supersede 等） | decisions/ ディレクトリ規約 |
 | `docs/notes/README.md` | notes/ の対象範囲、言語、lifecycle | notes/ ディレクトリ規約 |
@@ -62,8 +62,7 @@ plans / decisions / notes の上位構造（"何の文書がどこに住むか"�
   framing 等）を分け、前者だけ SSOT 化**。後者は履歴として温存。
 
 批判点：(a) は綺麗だが境界判定が曖昧。「lifecycle 記述」と「強制力のある
-ルール」は連続しており、`retrospectives.md` §3 のような checklist は両者の
-混合。
+ルール」は連続しており、`retrospectives.md` の checklist は両者の混合。
 
 ### Q2. SSOT の所在は CLAUDE.md か、それとも別ファイルか？
 

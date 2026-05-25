@@ -288,26 +288,48 @@ Pre-doc questions:
   over AskUserQuestion for design choices. Phase 4 pre-doc should
   follow the same pattern — present options inline with pros/cons
   and a recommendation rather than spinning up a structured question.
-- **Step-end fast-track gate.** Phase 3 closed multiple steps via
-  fast-track (T2 / T3 / T4 / T6); Phase 4 inherits the discipline
-  (items 2–8 all "なし" + item 3 green).
+- **Step-end fast-track gate is removed.** Phase 3 closed multiple
+  steps via fast-track (T2 / T3 / T4 / T6), but the gate was
+  retired as a Phase 4 prep step alongside the no-ff wording fold
+  (see next bullet). Every step-end and phase-end merge now requires
+  owner explicit approval; the "report-then-merge with after-the-fact
+  notification" path is no longer available. Rationale: step-level
+  decision visibility on the owner side outweighs the cost of
+  rubber-stamping items 2–8 = "なし" judgments inline.
 - **Phase-end merge is owner-gated.** Phase 3 close re-confirmed
   that phase-end merge to main and the subsequent push are separate
   owner gates (per `retrospectives.md` and
   `feedback_phase_end_merge.md`). Phase 4 pre-doc should not assume
   any phase-end gate is auto-discharged.
-- **`retrospectives.md` step → phase merge wording drift.** The
-  procedure doc describes step → phase merge as "ff merge", but
-  Phase 2 / Phase 3 実運用 has been **no-ff** consistently (see
-  `git log --merges feat/m3-phase-3` — every T1–T10 task merge is
-  a `Merge branch 'feat/m3-phase-3-tN'` commit). The drift was
-  surfaced during M3-Phase 3 T10 phase-end review but not folded
-  into the Phase 3 close commits, so Phase 4 inherits the
-  mismatch. Pre-doc question: fold the `retrospectives.md` wording
-  to "no-ff merge" as a Phase 4 prep step (before pre-doc framing
-  begins), or fold inside the Phase 4 close commit set as a
-  retroactive-spec-gap fold. The status-quo of "doc lies, follow
-  practice" is the default-bad outcome to avoid.
+- **`retrospectives.md` step → phase merge wording fold (resolved).**
+  Up through M3-Phase 3 the procedure doc described step → phase
+  merge as "ff merge", but Phase 2 / Phase 3 実運用 had been
+  **no-ff** consistently (see `git log --merges feat/m3-phase-2`
+  and `feat/m3-phase-3` — every task merge is a
+  `Merge branch 'feat/m3-phase-N-tM'` commit). The drift was
+  surfaced during M3-Phase 3 T10 phase-end review and folded as a
+  Phase 4 prep commit (alongside the fast-track removal above);
+  `retrospectives.md` now describes both step→phase and phase→main
+  as no-ff merge. Past step retrospectives' "ff merge" mentions are
+  preserved as historical record of the pre-fold wording.
+- **Step-end item 10 (cross-step / cross-phase 設計制約 carry) is
+  new.** Phase 4 prep commit added a new step-end checklist item to
+  `retrospectives.md` for surfacing implicit design constraints that
+  the pre-doc / ADR / `architecture.md` / `dsl_spec.md` / `abi_spec.md`
+  did not anticipate (worked-example precedent: M3-Phase 3 T9
+  pure-layout absolute vs. `Visual.Offset` parent-relative
+  convention). When "あり", the step retro classifies the constraint
+  by one of four dispositions: `doc-folded` (folded into spec / ADR
+  in-step), `phase-sync` (deferred to phase-end Moment 2), `carry-forward`
+  (forwarded to next phase pre-doc input), `local-only` (not a future
+  constraint, with one-sentence rationale). Phase 4 will be the first
+  phase to use this vocabulary; step retros and the phase-end forward
+  distillation should follow it from day 1. `phase-sync` items must
+  close at phase-end into one of `doc-folded` / `carry-forward` /
+  `local-only` (no open phase-sync items survive past phase close).
+  If the vocabulary or the disposition routing turns out to need
+  adjustment during Phase 4, fold the change back into `retrospectives.md`
+  rather than carrying drift forward.
 
 ## 13. `docs/notes` audit triggers for Phase 4
 
