@@ -17,6 +17,11 @@ pub enum WidgetKind {
     // the DD-M3-P3-005 line-breaker measure-arrange lands in T7 — see
     // `measure_wrap_panel` / `arrange_wrap_panel` below.
     WrapPanel,
+    // M3-Phase 4 DD-M3-P4-001 per-kind tag for the ScrollView layout
+    // primitive. DD-M3-P4-005 measure-arrange (asymmetric content measure
+    // + offset clamp) lives in `measure_scroll_view` / `arrange_scroll_view`
+    // below; the IR-loader / widget-catalog half lands in T3.
+    ScrollView,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -61,10 +66,17 @@ pub struct Ratio {
 //   parent bounds that are infinite on both axes — there is nothing to
 //   derive its size from, and silent 0×0 is rejected per DD-M3-P2-005's
 //   "Box has no extent to resolve" error class.
+// - `ScrollViewUnboundedAxis`: a ScrollView was given parent bounds whose
+//   scroll axis (vertical per DD-M3-P4-001) is infinite. ScrollView has no
+//   viewport boundary to scroll within in that state, so the layout pass
+//   fails per DD-M3-P4-002. The variant is **internal only** in Phase 4 —
+//   no `WASAMO_LAYOUT_ERROR_*` ABI tag is added (no host can meaningfully
+//   observe it; the C ABI for `wasamo_run_layout` does not yet exist).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum LayoutError {
     BoxAspectUnboundedBoth,
     BoxNoExtent,
+    ScrollViewUnboundedAxis,
 }
 
 #[derive(Debug, Clone)]
@@ -92,10 +104,25 @@ pub struct LayoutNode {
     /// lines. `0.0` on every other kind and on WrapPanel without
     /// `line-spacing` set (touching lines).
     pub line_spacing: f32,
+    /// DD-M3-P4-003: ScrollView's bound or literal `offset-y` value in
+    /// `i32` pixels (the DSL surface type). `0` on every other kind and
+    /// on a ScrollView whose `.ui` omits `offset-y`. The layout-time
+    /// clamp (DD-M3-P4-005) consumes this field; the clamped applied
+    /// offset is recorded back into `applied_offset_y` for the Visual
+    /// layer to read at sync time.
+    pub offset_y: i32,
     pub children: Vec<LayoutNode>,
     // Written by arrange():
     pub offset: (f32, f32),
     pub size: (f32, f32),
+    /// DD-M3-P4-005 measure→arrange clamped scroll offset cache. After
+    /// `arrange_scroll_view` runs, this holds the post-clamp `applied_y`
+    /// (`f32`, in layout-engine units) that `sync_visuals()` writes to
+    /// the ScrollView-owned intermediate content Visual's
+    /// `Visual.Offset = (0, -applied_y, 0)` per DD-M3-P4-004. `0.0` on
+    /// every other kind and on a freshly-constructed ScrollView whose
+    /// `arrange` has not yet run.
+    pub(crate) applied_offset_y: Cell<f32>,
     /// DD-M3-P3-005 measure→arrange cross-bound cache used by
     /// `measure_wrap_panel` / `arrange_wrap_panel`. When
     /// `item_cross_size` is unset the spec passes the parent of
@@ -133,9 +160,11 @@ impl LayoutNode {
             item_cross_size: None,
             item_spacing: 0.0,
             line_spacing: 0.0,
+            offset_y: 0,
             children: Vec::new(),
             offset: (0.0, 0.0),
             size: (0.0, 0.0),
+            applied_offset_y: Cell::new(0.0),
             wrap_measured_cross_bound: Cell::new(f32::NAN),
         }
     }
@@ -152,9 +181,11 @@ impl LayoutNode {
             item_cross_size: None,
             item_spacing: 0.0,
             line_spacing: 0.0,
+            offset_y: 0,
             children: Vec::new(),
             offset: (0.0, 0.0),
             size: (0.0, 0.0),
+            applied_offset_y: Cell::new(0.0),
             wrap_measured_cross_bound: Cell::new(f32::NAN),
         }
     }
@@ -171,9 +202,11 @@ impl LayoutNode {
             item_cross_size: None,
             item_spacing: 0.0,
             line_spacing: 0.0,
+            offset_y: 0,
             children: Vec::new(),
             offset: (0.0, 0.0),
             size: (0.0, 0.0),
+            applied_offset_y: Cell::new(0.0),
             wrap_measured_cross_bound: Cell::new(f32::NAN),
         }
     }
@@ -195,9 +228,11 @@ impl LayoutNode {
             item_cross_size: None,
             item_spacing: 0.0,
             line_spacing: 0.0,
+            offset_y: 0,
             children: Vec::new(),
             offset: (0.0, 0.0),
             size: (0.0, 0.0),
+            applied_offset_y: Cell::new(0.0),
             wrap_measured_cross_bound: Cell::new(f32::NAN),
         }
     }
@@ -222,9 +257,46 @@ impl LayoutNode {
             item_cross_size,
             item_spacing,
             line_spacing,
+            offset_y: 0,
             children: Vec::new(),
             offset: (0.0, 0.0),
             size: (0.0, 0.0),
+            applied_offset_y: Cell::new(0.0),
+            wrap_measured_cross_bound: Cell::new(f32::NAN),
+        }
+    }
+
+    // M3-Phase 4 DD-M3-P4-001 / DD-M3-P4-002 / DD-M3-P4-003 ScrollView
+    // layout entry. Both axes default to `Fill` so the viewport tracks
+    // the parent-allocated slot per DD-M3-P4-002 Option A (parent
+    // constraint passthrough on both axes); `offset_y` carries the
+    // bound or literal `offset-y` value (DD-M3-P4-003 `i32` pixels)
+    // which `arrange_scroll_view` clamps per DD-M3-P4-005 and records
+    // the applied offset in `applied_offset_y` for the Visual layer
+    // (T4) to read.
+    //
+    // `dead_code` is silenced here because the constructor is wired by
+    // T3 (`ir_loader::build_node` ScrollView materialization). Tests in
+    // this module exercise it directly; the IR loader path lands in
+    // T3 and removes the suppression.
+    #[allow(dead_code)]
+    pub fn scroll_view(offset_y: i32) -> Self {
+        Self {
+            kind: WidgetKind::ScrollView,
+            width: SizeConstraint::Fill,
+            height: SizeConstraint::Fill,
+            spacing: 0.0,
+            padding: 0.0,
+            alignment: Alignment::Stretch,
+            aspect: None,
+            item_cross_size: None,
+            item_spacing: 0.0,
+            line_spacing: 0.0,
+            offset_y,
+            children: Vec::new(),
+            offset: (0.0, 0.0),
+            size: (0.0, 0.0),
+            applied_offset_y: Cell::new(0.0),
             wrap_measured_cross_bound: Cell::new(f32::NAN),
         }
     }
@@ -240,6 +312,7 @@ pub fn measure(node: &LayoutNode, avail_w: f32, avail_h: f32) -> Result<(f32, f3
         WidgetKind::HStack => measure_hstack(node, avail_h),
         WidgetKind::Box => measure_box(node, avail_w, avail_h),
         WidgetKind::WrapPanel => measure_wrap_panel(node, avail_w, avail_h),
+        WidgetKind::ScrollView => measure_scroll_view(node, avail_w, avail_h),
     }
 }
 
@@ -623,6 +696,7 @@ pub fn arrange(node: &mut LayoutNode, x: f32, y: f32, w: f32, h: f32) -> Result<
         }
         WidgetKind::Box => arrange_box(node, x, y, w, h),
         WidgetKind::WrapPanel => arrange_wrap_panel(node, x, y, w, h),
+        WidgetKind::ScrollView => arrange_scroll_view(node, x, y, w, h),
     }
 }
 
@@ -711,6 +785,113 @@ fn arrange_wrap_panel(
     }
 
     Ok(())
+}
+
+// M3-Phase 4 DD-M3-P4-005 measure: ScrollView's outer size equals the
+// parent-allocated viewport regardless of content size, so measure does
+// not recurse into the single content child here. The asymmetric
+// content measure (`(viewport_w, +∞)`) happens at arrange time when the
+// concrete viewport `w` is known.
+//
+// The DD-M3-P4-002 unbounded-scroll-axis error is detected at arrange
+// time (the viewport is decided there), not here — measure-time
+// `avail_h = INFINITY` is the standard "tell me how big you want to
+// be" idiom that parents like VStack pass to their children, and
+// firing here would make every ScrollView placed inside a `Shrink`
+// vertical parent fail even though the parent will allocate a finite
+// cell at arrange. See `arrange_scroll_view` for the actual gate.
+fn measure_scroll_view(
+    node: &LayoutNode,
+    avail_w: f32,
+    avail_h: f32,
+) -> Result<(f32, f32), LayoutError> {
+    let desired_w = match &node.width {
+        SizeConstraint::Fixed(v) => *v,
+        SizeConstraint::Fill => 0.0,
+        SizeConstraint::Shrink => avail_w,
+    };
+    let desired_h = match &node.height {
+        SizeConstraint::Fixed(v) => *v,
+        SizeConstraint::Fill => 0.0,
+        SizeConstraint::Shrink => avail_h,
+    };
+    Ok((desired_w, desired_h))
+}
+
+// M3-Phase 4 DD-M3-P4-005 arrange: the viewport `(w, h)` is what the
+// parent allocated; ScrollView's own offset/size record that
+// allocation. The single content child is then measured with
+// `(viewport_w, +∞)` (DD-M3-P4-005 "bounded cross + unbounded scroll
+// axis" / inverse of WrapPanel's measure input), the resulting
+// content height drives the offset clamp, and the content is
+// arranged at the viewport's top-leading corner translated upward by
+// the clamped offset.
+//
+// - **Unbounded scroll axis** (`h.is_finite() == false`) is the
+//   structurally meaningless case from DD-M3-P4-002: there is no
+//   viewport boundary to scroll within. Fires
+//   `LayoutError::ScrollViewUnboundedAxis` before measuring content
+//   so the error names the structural problem rather than surfacing
+//   downstream child errors first.
+// - **No content child** (0-child ScrollView) is rejected by
+//   `wasamoc check` (T1) and the runtime IR loader's `validate()`
+//   (T3); layout treats the case as a no-op for robustness. The
+//   `applied_offset_y` cache clamps to 0.
+// - **Offset clamp** uses `max(0, content_h - viewport_h)` as the
+//   upper bound. Negative `offset-y`, in-range `offset-y`, `offset-y`
+//   at max, and `offset-y` larger than max all map to a well-defined
+//   applied offset in `[0, max_offset]` (DD-M3-P4-005). The clamped
+//   `applied_offset_y` is recorded on the ScrollView LayoutNode for
+//   the Visual layer (T4) to read at sync time so the
+//   ScrollView-owned intermediate content Visual can place
+//   `Visual.Offset = (0, -applied_y, 0)` (DD-M3-P4-004) without
+//   re-running the clamp arithmetic.
+// - **Rounding contract** (DD-M3-P4-005 sub-issue): `offset_y` is
+//   the `i32` DSL surface value, promoted to `f32` here for clamp
+//   arithmetic and Visual offset writes. No pixel-snapping is
+//   applied; the rounding contract matches Phase 2 / Phase 3.
+// - **Content cross-axis** mirrors the existing single-child layout
+//   convention: a `Fill`-width child expands to the viewport width;
+//   a `Shrink` / `Fixed` child sits at its measured cross extent. On
+//   the scroll axis, the child arranges at its measured `ch_desired`
+//   (Fill-height children measure to `0` and degenerate to a
+//   zero-height arrangement — consistent with the existing
+//   Fill-in-Shrink-parent convention).
+fn arrange_scroll_view(
+    node: &mut LayoutNode,
+    x: f32,
+    y: f32,
+    w: f32,
+    h: f32,
+) -> Result<(), LayoutError> {
+    if !h.is_finite() {
+        return Err(LayoutError::ScrollViewUnboundedAxis);
+    }
+
+    node.offset = (x, y);
+    node.size = (w, h);
+
+    if node.children.is_empty() {
+        node.applied_offset_y.set(0.0);
+        return Ok(());
+    }
+
+    let child = &mut node.children[0];
+    let (cw_desired, ch_desired) = measure(child, w, f32::INFINITY)?;
+
+    let final_cw = if child.width == SizeConstraint::Fill {
+        w
+    } else {
+        cw_desired
+    };
+    let final_ch = ch_desired;
+
+    let offset_f = node.offset_y as f32;
+    let max_offset = (final_ch - h).max(0.0);
+    let applied = offset_f.clamp(0.0, max_offset);
+    node.applied_offset_y.set(applied);
+
+    arrange(child, x, y - applied, final_cw, final_ch)
 }
 
 // DD-M3-P2-005 arrange: re-derive the Box's resolved rectangle from the
@@ -1532,5 +1713,171 @@ mod tests {
         for c in &wp.children {
             assert_eq!(c.size, (88.0, 88.0));
         }
+    }
+
+    // ── M3-Phase 4 T2: ScrollView measure-arrange (DD-M3-P4-005) ────────────
+
+    fn scroll_view_with_rect(offset_y: i32, content_w: f32, content_h: f32) -> LayoutNode {
+        let mut sv = LayoutNode::scroll_view(offset_y);
+        sv.children.push(LayoutNode::rectangle(
+            SizeConstraint::Fixed(content_w),
+            SizeConstraint::Fixed(content_h),
+        ));
+        sv
+    }
+
+    #[test]
+    fn scroll_view_content_smaller_than_viewport_anchors_top_leading() {
+        // DD-M3-P4-005 "content smaller than viewport" sub-issue: content
+        // paints at its measured size at the viewport's top-leading
+        // corner; max_offset = 0; outer = viewport.
+        let mut sv = scroll_view_with_rect(0, 100.0, 50.0);
+        run_layout(&mut sv, 200.0, 300.0).unwrap();
+        assert_eq!(sv.size, (200.0, 300.0));
+        assert_eq!(sv.children[0].size, (100.0, 50.0));
+        assert_eq!(sv.children[0].offset, (0.0, 0.0));
+        assert_eq!(sv.applied_offset_y.get(), 0.0);
+    }
+
+    #[test]
+    fn scroll_view_content_equal_to_viewport_max_offset_zero() {
+        // DD-M3-P4-005 boundary case: content_h == viewport_h → max_offset
+        // = max(0, 0) = 0; applied = 0 regardless of `offset-y` value.
+        let mut sv = scroll_view_with_rect(50, 200.0, 300.0);
+        run_layout(&mut sv, 200.0, 300.0).unwrap();
+        assert_eq!(sv.size, (200.0, 300.0));
+        assert_eq!(sv.applied_offset_y.get(), 0.0);
+        assert_eq!(sv.children[0].offset, (0.0, 0.0));
+    }
+
+    #[test]
+    fn scroll_view_content_larger_than_viewport_zero_offset_anchors_top() {
+        // DD-M3-P4-005 "content exceeds viewport" sub-issue, offset 0
+        // case: content paints at top-leading; viewport clip is the
+        // Visual-layer concern (T4), not observable in pure layout.
+        let mut sv = scroll_view_with_rect(0, 200.0, 500.0);
+        run_layout(&mut sv, 200.0, 300.0).unwrap();
+        assert_eq!(sv.size, (200.0, 300.0));
+        assert_eq!(sv.applied_offset_y.get(), 0.0);
+        assert_eq!(sv.children[0].offset, (0.0, 0.0));
+        assert_eq!(sv.children[0].size, (200.0, 500.0));
+    }
+
+    #[test]
+    fn scroll_view_offset_clamp_negative_pins_to_zero() {
+        // DD-M3-P4-005 clamp lower bound: `offset-y < 0` → applied = 0.
+        let mut sv = scroll_view_with_rect(-50, 200.0, 500.0);
+        run_layout(&mut sv, 200.0, 300.0).unwrap();
+        assert_eq!(sv.applied_offset_y.get(), 0.0);
+        assert_eq!(sv.children[0].offset, (0.0, 0.0));
+    }
+
+    #[test]
+    fn scroll_view_offset_clamp_zero_passes_through() {
+        // DD-M3-P4-005 clamp at lower edge: `offset-y = 0` is in range
+        // when content exceeds viewport; applied = 0.
+        let mut sv = scroll_view_with_rect(0, 200.0, 500.0);
+        run_layout(&mut sv, 200.0, 300.0).unwrap();
+        assert_eq!(sv.applied_offset_y.get(), 0.0);
+        assert_eq!(sv.children[0].offset, (0.0, 0.0));
+    }
+
+    #[test]
+    fn scroll_view_offset_clamp_mid_range_passes_through() {
+        // DD-M3-P4-005 clamp mid-range: `0 < offset-y < max_offset`
+        // applied unchanged; content translates upward by that amount.
+        // max_offset = 500 - 300 = 200; offset-y = 100 → applied = 100.
+        let mut sv = scroll_view_with_rect(100, 200.0, 500.0);
+        run_layout(&mut sv, 200.0, 300.0).unwrap();
+        assert_eq!(sv.applied_offset_y.get(), 100.0);
+        assert_eq!(sv.children[0].offset, (0.0, -100.0));
+    }
+
+    #[test]
+    fn scroll_view_offset_clamp_at_max_holds() {
+        // DD-M3-P4-005 clamp upper edge: `offset-y == max_offset` → applied
+        // = max_offset.
+        let mut sv = scroll_view_with_rect(200, 200.0, 500.0);
+        run_layout(&mut sv, 200.0, 300.0).unwrap();
+        assert_eq!(sv.applied_offset_y.get(), 200.0);
+        assert_eq!(sv.children[0].offset, (0.0, -200.0));
+    }
+
+    #[test]
+    fn scroll_view_offset_clamp_above_max_pins_to_max() {
+        // DD-M3-P4-005 clamp upper bound: `offset-y > max_offset` → applied
+        // = max_offset.
+        let mut sv = scroll_view_with_rect(500, 200.0, 500.0);
+        run_layout(&mut sv, 200.0, 300.0).unwrap();
+        assert_eq!(sv.applied_offset_y.get(), 200.0);
+        assert_eq!(sv.children[0].offset, (0.0, -200.0));
+    }
+
+    #[test]
+    fn scroll_view_outer_size_equals_viewport_regardless_of_content() {
+        // DD-M3-P4-005 outer-size invariant: ScrollView outer size = viewport
+        // size, independent of content size. Covers tall (overflowing) and
+        // short (under-filling) content in a single test.
+        let mut sv_tall = scroll_view_with_rect(0, 200.0, 1000.0);
+        run_layout(&mut sv_tall, 200.0, 300.0).unwrap();
+        assert_eq!(sv_tall.size, (200.0, 300.0));
+        let mut sv_short = scroll_view_with_rect(0, 50.0, 80.0);
+        run_layout(&mut sv_short, 200.0, 300.0).unwrap();
+        assert_eq!(sv_short.size, (200.0, 300.0));
+    }
+
+    #[test]
+    fn scroll_view_unbounded_scroll_axis_parent_is_runtime_error() {
+        // DD-M3-P4-002 unbounded-scroll-axis case: arrange called with
+        // `h = INFINITY` fires `LayoutError::ScrollViewUnboundedAxis`. The
+        // gate fires before children are measured so the error names the
+        // structural problem rather than surfacing a child error first.
+        let mut sv = scroll_view_with_rect(0, 200.0, 500.0);
+        let err = arrange(&mut sv, 0.0, 0.0, 200.0, f32::INFINITY).unwrap_err();
+        assert_eq!(err, LayoutError::ScrollViewUnboundedAxis);
+    }
+
+    #[test]
+    fn scroll_view_measures_content_with_viewport_width_unbounded_height() {
+        // DD-M3-P4-005 asymmetric measure: content receives
+        // `(viewport_w, +∞)`. A Box(aspect 1:1) inside a (100, 50)
+        // viewport bounded-axis-wins via the cross axis (viewport width)
+        // and derives height = 100 — distinguishable from a symmetric
+        // (100, 50) measure which would inscribed-fit to (50, 50).
+        let mut sv = LayoutNode::scroll_view(0);
+        sv.children
+            .push(LayoutNode::box_(Some(Ratio { num: 1, den: 1 })));
+        run_layout(&mut sv, 100.0, 50.0).unwrap();
+        assert_eq!(sv.children[0].size, (100.0, 100.0));
+        assert_eq!(sv.size, (100.0, 50.0));
+    }
+
+    #[test]
+    fn scroll_view_fill_width_child_expands_to_viewport_width() {
+        // Cross-axis child resolution: a `Fill`-width content child
+        // expands to the viewport width (mirrors VStack's Fill-cross
+        // convention). A 200-wide viewport with a Fill-width / Fixed-50
+        // child arranges to (200, 50) at the viewport's top-leading
+        // corner.
+        let mut sv = LayoutNode::scroll_view(0);
+        sv.children.push(LayoutNode::rectangle(
+            SizeConstraint::Fill,
+            SizeConstraint::Fixed(50.0),
+        ));
+        run_layout(&mut sv, 200.0, 300.0).unwrap();
+        assert_eq!(sv.children[0].size, (200.0, 50.0));
+        assert_eq!(sv.children[0].offset, (0.0, 0.0));
+    }
+
+    #[test]
+    fn scroll_view_rounding_contract_no_pixel_snap() {
+        // DD-M3-P4-005 rounding contract: `offset-y` is `i32` promoted to
+        // `f32`; clamp arithmetic preserves the value without snapping.
+        // content_h = 333, viewport_h = 200 → max_offset = 133;
+        // offset-y = 33 → applied = 33.0 (no rounding to a pixel grid).
+        let mut sv = scroll_view_with_rect(33, 200.0, 333.0);
+        run_layout(&mut sv, 200.0, 200.0).unwrap();
+        assert_eq!(sv.applied_offset_y.get(), 33.0);
+        assert_eq!(sv.children[0].offset, (0.0, -33.0));
     }
 }
