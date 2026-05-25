@@ -92,11 +92,11 @@ Discharges ADR verification closure **evidence item 3**.
 
 - [x] Materialize `ScrollView` as a runtime widget kind with exactly
       one content child and an `offset-y` field.
-- [ ] Runtime `validate()` rejects 0-child and >1-child ScrollView IR
+- [x] Runtime `validate()` rejects 0-child and >1-child ScrollView IR
       with `WASAMO_ERR_IR_MALFORMED`.
-- [ ] Runtime `validate()` accepts negative and very large `offset-y`
+- [x] Runtime `validate()` accepts negative and very large `offset-y`
       values; clamping remains a layout responsibility.
-- [ ] Keep `LayoutError::ScrollViewUnboundedAxis` internal; no
+- [x] Keep `LayoutError::ScrollViewUnboundedAxis` internal; no
       `docs/abi_spec.md` change and no new ABI tag.
 
 ### T4 — Windows-runtime layout and Visual evidence, including R2 closure
