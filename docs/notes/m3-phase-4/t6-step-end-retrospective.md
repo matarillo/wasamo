@@ -360,9 +360,18 @@ parent が Fill 子を 0 に潰す" 古典的な layout collapse が顕在化し
     - T7 (phase-end / Moment 2 re-sync) の checklist 内容は不変。
       ただし item 10 由来の `phase-sync` 制約 (1) が新規に T7
       Moment 2 sync 候補に積まれる (本 retro Follow-Up #2 参照)。
-    - 本 step `[ ]` 残り未完 evidence なし (= 後続 step が所有する
-      `[ ]` も無し)。`retrospectives.md` §step-end 固有 item 11
-      の "未完 evidence の ownership lens" 要件は trivially 満足。
+    - T6 が所有する未完 evidence は無し (T6 行 6 件すべて `[x]`)。
+      T7 phase-end gates (`cargo fmt --check` 実 CI、GitHub Actions
+      `workflow_dispatch` の workspace build/test、`dsl_spec.md`
+      §4.11 Phase status marker flip、`architecture.md` top Status
+      flip、`m3-plan.md` Phase 4 row flip、phase-end retrospective)
+      は **意図的に T7 へ分離**された別 step の所有物として
+      `[ ]` のまま残している (T5/T6/T7 構成、T5 close 時の split
+      で確立)。`retrospectives.md` §step-end 固有 item 11 の
+      "未完 evidence の ownership lens" 要件は、未完 evidence を
+      所有する step が **progress file の Task list 上で明示**
+      されていること、を求める; T7 の `[ ]` は同 progress file の
+      `### T7` section に列挙済みなので要件を満たす。
 
 ## Verification Notes
 

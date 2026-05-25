@@ -365,10 +365,11 @@ is unchanged.
     `WidgetNode::run_layout`'s policy is enacted.
   - **Runtime integration test (d):** new `#[test]` in
     `wasamo-runtime/tests/scroll_view_layout_integration.rs` that
-    lowers a VStack-rooted gallery-shaped `.ui` (Phase 3 WrapPanel
-    slice + Button × 2 + ScrollView) through `wasamoc` and
-    `build_widget_tree`, then drives `WidgetNode::run_layout(800.0,
-    600.0)`. Asserts the ScrollView outer Visual height > 0 at
+    lowers a VStack-rooted gallery-shaped `.ui` (Button +
+    ScrollView) through `wasamoc` and `build_widget_tree`, then
+    drives `WidgetNode::run_layout_as_window_root(200.0, 200.0)`
+    (the same WinRT-bound entry point `window.rs` uses on `WM_SIZE`).
+    Asserts the ScrollView outer Visual height > 0 at
     `scroll_y = 0` (the regression gate for fix (a)) and that the
     intermediate content Visual's `Y` offset is negative at
     `scroll_y = 100` (writer chain end-to-end on the production path,
