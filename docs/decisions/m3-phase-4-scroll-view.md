@@ -83,7 +83,7 @@ this phase extends without breaking:
   `set_property` arm. **No general typed-`i32` evaluator /
   writer pair is built** — the anticipated "third pair" from
   [architecture.md §6.8 *Per-type seam* paragraph](../architecture.md#68-reactive-engine-m2-phase-5)
-  is deferred to M4 input-handling work (see §M4 hand-off
+  is deferred to M4 or later input-handling work (see §M4 hand-off
   below). F5 (`TypedValue` deferral) is held in force by
   construction.
 - `wasamoc` ([wasamoc/src/check.rs](../../wasamoc/src/check.rs)):
@@ -438,7 +438,7 @@ the typed-`i32` writer pair decision** ([architecture.md §6.8
     offset diverge silently (the author observes the displayed
     scroll position as ground truth, not the bound value);
     user-input-driven scrolling (wheel / drag) requires the
-    writer seam, which is deferred to M4.
+    writer seam, which is deferred to M4 or later.
 - Option C — Bindable in-out. Runtime writes back to the bound
   state when the applied offset differs from the bound value
   (which, in Phase 4 without input handlers, only happens via
@@ -633,11 +633,12 @@ offset, and (iii) where in the Visual tree the clip sits.
     tree shape.
 
 **Decision:** Option A (`Visual.Clip = InsetClip{0,0,0,0}`) +
-Option A (`Visual.Offset` on content) + Option A (outer-clipped /
-inner-offset tree shape). All three match the existing M2
-visual-layer offset convention, use the simplest clip primitive
-for the required viewport clip, and avoid introducing a
-TransformMatrix-based offset path.
+Option A (`Visual.Offset` on the ScrollView-owned intermediate
+content Visual) + Option A (outer-clipped / inner-offset tree
+shape). All three match the existing M2 visual-layer offset
+convention, use the simplest clip primitive for the required
+viewport clip, and avoid introducing a TransformMatrix-based
+offset path.
 
 **R2 (Phase 3 carry-over) — close inside Phase 4.** Phase 3 T9
 surfaced a `sync_visuals` bug whose root cause was the implicit
@@ -656,9 +657,9 @@ closure item 4 below.
 
 **Layering with DD-003 / DD-005.** DD-003 supplies the `offset_y`
 value (read-only-bound `i32` per recommendation, clamped per
-DD-005); DD-004 applies it via `Visual.Offset` on the content
-Visual; DD-005's arrange pass re-computes the clamp on every
-layout pass.
+DD-005); DD-004 applies it via `Visual.Offset` on the
+ScrollView-owned intermediate content Visual; DD-005's arrange
+pass re-computes the clamp on every layout pass.
 
 ### DD-M3-P4-005 — Measure-arrange algorithm (novel normative viewport / content / offset semantics)
 
@@ -786,8 +787,8 @@ sub-issues map 1:1 to the §4.11 chapter outline:
    accommodate content overflow.
 7. Visible clip: ScrollView Visual installs `Visual.Clip =
    InsetClip{0,0,0,0}` (anchors to DD-004).
-8. Content Visual carries the offset: `Visual.Offset = (0,
-   -offset_y, 0)`.
+8. ScrollView-owned intermediate content Visual carries the
+   offset: `Visual.Offset = (0, -offset_y, 0)`.
 9. Unbounded scroll-axis parent fires
    `LayoutError::ScrollViewUnboundedAxis` (anchors to DD-002 /
    DD-005).
@@ -894,8 +895,14 @@ proof that closes Phase 4 per framing decision C, so the
 implementation plan inherits a concrete target.
 
 A5 (ScrollView minimal — inner unbounded measure + viewport clip
-+ content offset binding) is considered satisfied when **all
-four** of the following are observed:
++ content offset binding) has two evidence layers:
+
+- **Automated / CI-gated A5 evidence:** items (1)–(4).
+- **Phase-close / A11 gallery proof:** item (5), including the
+  owner-manual visible smoke for the grown gallery sub-screen.
+
+Phase 4 closes only when **all five** of the following are
+observed:
 
 1. **`wasamoc check` compile-time evidence (host-independent).**
    Pure-logic tests in `wasamoc`'s check / lower path cover:
@@ -915,8 +922,9 @@ four** of the following are observed:
    - **`offset-y` binding admission** — `offset-y:
      \{state.scroll_y}` accepted when `scroll_y` is declared as
      `i32` in `state`; rejected when `scroll_y` is undeclared,
-     `bool`, or `String`. Reuses the existing i32 binding
-     dispatch surface; no new `wasamoc` infrastructure.
+     `bool`, or `String`. Reuses the existing i32 reader /
+     binding-effect machinery; the runtime-side narrow
+     ScrollView parse / write bridge is covered by item 4.
    - **Unknown ScrollView attribute rejection** — any attribute
      other than `offset-y` on ScrollView is rejected (no
      `viewport-*`, no `scroll-axis`, no `padding` — all out of
@@ -975,7 +983,8 @@ four** of the following are observed:
    - **Scroll-path fixture (primary).** A `.ui` declares a
      ScrollView with `offset-y: \{state.scroll_y}` containing a
      `VStack { Box × N }` whose total height exceeds a known
-     viewport size, inside a parent of fixed dimensions.
+     viewport size, inside a fixture whose root / parent
+     allocation supplies known bounded viewport dimensions.
      `state.scroll_y` is declared `i32` initialised to 0. The
      test loads the IR, runs the layout pass, and asserts:
      - (a) the ScrollView's resolved rectangle matches the
@@ -1009,10 +1018,10 @@ four** of the following are observed:
      parent → ScrollView Visual (at some `(parent_offset_x, …,
      0)`) → ScrollView-owned intermediate content Visual (at
      `(0, -offset_y, 0)`) → Box thumbnails inside content (at
-     their own layout-derived offsets). The test asserts that each thumbnail's
-     *root-relative* position (computed by summing parent-
-     relative offsets up the chain) equals the expected position
-     given the scroll state — i.e. the
+     their own layout-derived offsets). The test asserts that
+     each thumbnail's *root-relative* position (computed by
+     summing parent-relative offsets up the chain) equals the
+     expected position given the scroll state — i.e. the
      absolute-vs-parent-relative convention from
      [architecture.md §6.5](../architecture.md#65-widgetnode-and-visual-layer-sync)
      is observed end-to-end with non-trivial nesting. This is
@@ -1052,15 +1061,16 @@ four** of the following are observed:
    assistant does not assert on pixel- or eyeball-level
    correctness.
 
-Items (1)–(4) are required for A5 acceptance; item (5) ties the
-evidence back to the m3-plan target-app trajectory and grows the
-gallery sub-screen Phase 2 / Phase 3 seeded with the canonical
-`ScrollView { WrapPanel { … } }` composition Phase 7's iteration
-grammar will later swap for collection-driven generation as a
-strict superset. C and Zig hosts for the ScrollView sub-screen
-are explicitly **not** required in Phase 4 (per framing decision
-E and the Out of scope list); Phase 8 broadens the full gallery
-to all three.
+Items (1)–(4) are the automated A5 evidence set. Item (5) is
+required for Phase 4 close under A11: it ties the evidence back
+to the m3-plan target-app trajectory and grows the gallery sub-
+screen Phase 2 / Phase 3 seeded with the canonical `ScrollView {
+WrapPanel { … } }` composition Phase 7's iteration grammar will
+later swap for collection-driven generation as a strict
+superset. C and Zig hosts for the ScrollView sub-screen are
+explicitly **not** required in Phase 4 (per framing decision E
+and the Out of scope list); Phase 8 broadens the full gallery to
+all three.
 
 Per [m3-phase-4 pre-doc-inputs §10](../notes/m3-phase-4/pre-doc-inputs.md),
 evidence items (1)–(4) do not collapse into one even though they
@@ -1079,25 +1089,26 @@ fixture) belongs in the Phase 4 progress file, not here.
 Per the DD-003 scoping intent paragraph, Phase 4's `offset-y` is
 one bindable control surface; the following surfaces are
 explicitly **anticipated for M4 or beyond** and are documented
-here so the M4 input / scrollbar / animation work has a named
+here so the M4+ input / scrollbar / animation work has a named
 landing point:
 
 1. **Input-driven internal scrolling.** Wheel handler, drag
    handler, keyboard PgUp / PgDn / Home / End / arrow key
    gestures. These mutate the ScrollView's offset *directly*
    inside the runtime, without traversing any author-bound state.
-   Lands as part of M4 input handling.
+   This is the natural landing point for M4 input handling or a
+   later input-focused phase.
 
 2. **Optional state write-back / in-out binding.** The deferred
    DD-003 Option C shape. When the author has bound `offset-y` to
    a state and the runtime mutates the offset via item 1 above,
    the runtime writes the new value back through the binding.
-   Requires building the typed-`i32` evaluator / writer pair —
-   the "third pair" anticipated in
+   Requires building the general typed-`i32` writer pair — the
+   "third pair" anticipated in
    [architecture.md §6.8 *Per-type seam* paragraph](../architecture.md#68-reactive-engine-m2-phase-5).
    The Phase 4 surface (read-only binding) is forward-compatible:
-   `offset-y: \{state.scroll_y}` remains valid syntax when M4
-   adds in-out direction; no IR change is required.
+   `offset-y: \{state.scroll_y}` remains valid syntax when M4 or
+   later work adds in-out direction; no IR change is required.
 
 3. **Scrollbar widget synchronization.** A separate widget
    (likely `ScrollBar` as a sibling primitive, not built into
@@ -1124,8 +1135,9 @@ by oversight — each is explicitly out of A5 minimal scope or
 deferred to a later phase / milestone:
 
 - **Scrollbar widget**, wheel handler, drag — A5 explicit
-  deferral to M4. Phase 4 sub-screen demonstrates programmatic
-  scroll (via the Button widgets) not user-input scroll.
+  deferral beyond Phase 4 / to M4 or later. Phase 4 sub-screen
+  demonstrates programmatic scroll (via the Button widgets) not
+  user-input scroll.
 - **Horizontal and bidirectional scroll axes** — DD-001 hardcodes
   vertical-only; later phase adds attribute additively.
 - **`viewport-width` / `viewport-height` attributes** — DD-002
@@ -1133,13 +1145,13 @@ deferred to a later phase / milestone:
 - **`f64` / ratio offset surface** — DD-003 ships `i32` pixels;
   ratio is a sibling future addition.
 - **In-out offset binding (writer seam)** — DD-003 ships
-  read-only; writer seam is an M4 hand-off (see §M4 hand-off
+  read-only; writer seam is an M4+ hand-off (see §M4 hand-off
   item 2).
 - **Future scroll-model surfaces (M4+)** — input-driven internal
   scrolling, in-out binding, scrollbar widget synchronization,
   imperative scroll commands (see §M4 hand-off items 1–4).
 - **Over/under-scroll**, bounce, momentum — touch-flick / smooth-
-  scroll territory, M4 input + animation.
+  scroll territory, M4+ input + animation.
 - **Background `fill` on ScrollView** — Phase 4 does not
   introduce a ScrollView-level `fill` attribute; the visible
   background is whatever parent / sibling provides.
@@ -1149,9 +1161,9 @@ deferred to a later phase / milestone:
   parent runtime error from DD-002 covers the pathological
   inner ScrollView whose parent is itself an unbounded
   ScrollView.
-- **Image widget as scroll content** — Image deferred to M4 per
-  Phase 2 DD-006 / M3 plan; Phase 4 sub-screen content is
-  Box + Text placeholders.
+- **Image widget as scroll content** — Image deferred to M4 or
+  later per Phase 2 DD-006 / M3 plan; Phase 4 sub-screen content
+  is Box + Text placeholders.
 - **`TypedValue` generic value union** (F5 maintained — Phase 4
   introduces no new scalar type per DD-003).
 - **Padding on ScrollView** — out of A5 minimal; defer to later
@@ -1204,10 +1216,12 @@ Moment 2 を対象とした規範であり、Moment 1 の draft set は
   ScrollView mental model + ecosystem-contrast subsection per
   Phase 4 framing decision I).
 - `docs/architecture.md` — ScrollView entry under the M2-revised
-  IR section; layout-engine section updated for the new pure-data
-  ScrollView types; §6.5 may receive a one-paragraph addition
-  naming Visual.Offset as the scroll-position primitive (cross-
-  reference target for DD-004).
+  IR section; binding section clarifies the existing i32 reader /
+  binding-effect path versus Phase 4's narrow `offset-y` parse /
+  write bridge; layout-engine section updated for the new pure-
+  data ScrollView types; §6.5 updated to record the ScrollView-
+  owned intermediate content Visual and its `Visual.Offset`
+  scroll translation.
 - `docs/abi_spec.md` — **no touch expected** per DD-005 / DD-006
   (LayoutError stays internal; no new ABI tag).
 - `docs/plans/m3-plan.md` — Progress section's Phase 4 row
@@ -1258,7 +1272,7 @@ framing decisions to DDs and ADR sections:
 
 | Framing decision | Disposition | Consumed at |
 |---|---|---|
-| A — Typed-`i32` writer pair deferred to M4 | Cross-DD intent | DD-003 (Recommendation; scoping intent paragraph); §M4 hand-off item 2 |
+| A — Typed-`i32` writer pair deferred to M4+ | Cross-DD intent | DD-003 (Recommendation; scoping intent paragraph); §M4 hand-off item 2 |
 | B — DD slate completeness check | Discipline | DD slate (6 DDs); §Out of scope (everything not A5) |
 | C — Verification strategy (4 evidence categories + owner GUI smoke) | Constraint | §Phase 4 verification closure items 1–5 |
 | D — Two-moment sync structure | Constraint | §Upstream document revisions (Moment 1 / Moment 2) |
