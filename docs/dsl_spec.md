@@ -779,23 +779,40 @@ viewport dimensions in M3-Phase 4.
 
 #### Sizing mental model
 
-ScrollView sizing follows four facts:
+ScrollView sizing follows five facts:
 
-1. **The viewport comes from the parent.** ScrollView's outer size is
-   the slot allocated by its parent or by the root window. Phase 4
-   exposes no `viewport-width`, `viewport-height`, `width`, or
-   `height` attribute on ScrollView.
-2. **The scroll axis is vertical.** ScrollView has no `scroll-axis`
-   attribute in Phase 4. Horizontal and bidirectional scrolling are
-   M4 or later additive surfaces.
-3. **There is exactly one content child.** Authors wrap multiple
-   logical children in an explicit container, for example
-   `ScrollView { WrapPanel { ... } }` or `ScrollView { VStack { ... } }`.
-4. **The content is measured taller than the viewport when needed.**
-   The single child receives the viewport width as a bound and an
-   unbounded vertical constraint. The child may therefore report a
-   content height greater than the viewport height; `offset-y` selects
-   which vertical slice is visible.
+1. **Viewport size comes from parent.** ScrollView fills its parent
+   slot on both axes; there is no `viewport-width`, `viewport-height`,
+   `width`, or `height` attribute on ScrollView in Phase 4. To control
+   viewport size, the parent's slot must be sized through the parent's
+   own attribute or layout role.
+2. **Content measures with viewport-bounded cross axis and unbounded
+   scroll axis.** The single content child receives the viewport width
+   as a horizontal bound and an unbounded vertical constraint. Content
+   along the scroll axis may therefore be arbitrarily tall and is
+   scrollable when it exceeds the viewport; content shorter than the
+   viewport is anchored at the top and does not scroll.
+3. **Content offset is clamped to `[0, max(0, content_height -
+   viewport_height)]`.** Out-of-range bound values (e.g. a `scroll_y`
+   state that runs past the scrollable range) are silently clamped on
+   every layout pass. The bound state is read-only-bound under the
+   Phase 4 default (see *Attributes* below), so the source state's
+   written value and the applied offset may diverge — the author
+   observes the displayed scroll position, not the bound value, as
+   ground truth.
+4. **The clip is owned by ScrollView, not by the content.** Content
+   widgets remain unclipped; only the ScrollView Visual installs a
+   clip surface. Composing two ScrollViews around the same content
+   stacks two clips; wrapping ScrollView around an HStack around
+   content does not install an HStack-level clip. The Visual-layer
+   shape is given normatively in *Visual-layer contract* below.
+5. **`offset-y` is the Phase 4 external control surface, not the only
+   future scroll model.** The bindable `offset-y` attribute is how
+   Phase 4 exposes scroll position to author code; it is not a
+   commitment that state-driven offset is the canonical way to scroll.
+   Input-driven scrolling (wheel, drag, keyboard) and scrollbar-driven
+   scrolling are M4 or later surfaces and land additively without
+   redefining `offset-y`.
 
 **Ecosystem contrast.** Readers arriving from WPF, Compose, or CSS
 should map Phase 4 ScrollView to "one child in a clipped viewport",
