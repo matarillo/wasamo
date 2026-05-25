@@ -97,10 +97,19 @@ this phase extends without breaking:
   ([architecture.md §6.5](../architecture.md#65-widgetnode-and-visual-layer-sync))
   `LayoutNode` offsets are absolute (root-relative); `sync_visuals()`
   converts each child offset to parent-relative `Visual.Offset`
-  before writing the Composition visual tree. Phase 4 ScrollView
-  installs a `Visual.Clip = InsetClip{0,0,0,0}` on its outer Visual
-  and translates its content child Visual by `Visual.Offset = (0,
-  -offset_y, 0)` per DD-004.
+  before writing the Composition visual tree. The current
+  convention is **1 WidgetNode = 1 Visual**: `append_child`
+  inserts the child's `WidgetNode.visual` directly beneath the
+  parent's `WidgetNode.visual`, and `sync_visuals` writes
+  offset/size to each WidgetNode's own Visual. Phase 4 ScrollView
+  **locally extends this convention** by owning a ScrollView-
+  internal intermediate Visual between its outer Visual and its
+  single content child's widget Visual (per DD-004): the outer
+  Visual carries `Visual.Clip = InsetClip{0,0,0,0}`; the
+  intermediate Visual carries the scroll translation
+  `Visual.Offset = (0, -offset_y, 0)`; the child widget's own
+  Visual continues to carry its layout-derived offset via
+  `sync_visuals` as usual.
 
 This ADR is framed against A5 and the m3-plan's "minimal: inner
 unbounded measure + viewport clip + content offset binding"
@@ -590,18 +599,35 @@ offset, and (iii) where in the Visual tree the clip sits.
 **Options (Visual tree shape):**
 
 - **Option A — Outer (clipped) + inner (offset) (recommended).**
-  ScrollView's own Visual carries the clip; the content Visual
-  is a child of the outer Visual whose `Visual.Offset` carries
-  the scroll position. Visual tree:
+  ScrollView's own Visual carries the clip; an intermediate
+  content Visual is its child and carries the scroll position
+  via `Visual.Offset`. Visual tree:
   ```
   ScrollView Visual (Size = viewport, Clip = InsetClip{0,0,0,0})
     └── content Visual (Offset = (0, -offset_y, 0))
           └── … widget tree (Box thumbnails / WrapPanel / etc.)
   ```
+  The inner content Visual is **ScrollView-owned intermediate
+  infrastructure**, not the single child widget's own Visual.
+  ScrollView attaches its single content child's widget Visual
+  beneath this intermediate Visual rather than directly under
+  the outer clipped Visual, so the scroll translation
+  (`Visual.Offset = (0, -offset_y, 0)` on the intermediate
+  Visual) stays separated from the child widget's own
+  layout-derived `Visual.Offset` written by `sync_visuals` per
+  [architecture.md §6.5](../architecture.md#65-widgetnode-and-visual-layer-sync).
+  This is a localised extension of the existing
+  "1 WidgetNode = 1 Visual" convention §6.5 establishes —
+  ScrollView is the first WidgetNode to own a second
+  intermediate Visual beneath its outer one; the §6.5 paragraph
+  added in Moment 1 (per §Upstream document revisions) records
+  the convention extension.
   - What you gain: clean separation of "viewport" (outer) from
     "scrollable canvas" (inner); the clip naturally clips the
-    translated content; verified compatible with
-    [architecture.md §6.5](../architecture.md#65-widgetnode-and-visual-layer-sync).
+    translated content; the child widget's layout offset and
+    ScrollView's scroll offset do not conflate onto a single
+    Visual; verified compatible with §6.5's parent-relative
+    offset convention.
   - What you give up: nothing relative to the natural Composition
     tree shape.
 
