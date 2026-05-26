@@ -82,8 +82,11 @@ rather than re-derives:
   Grid's star sizing requires a deterministic track-resolution
   algorithm, including how fixed and star tracks interact with
   spanning children. `auto` / intrinsic tracks are explicitly a
-  design pressure point, but the draft recommendation below defers
-  them from Phase 5 so star sizing remains the load-bearing content.
+  design pressure point. The conservative draft recommendation below
+  defers them from Phase 5 not to minimize implementation effort, but
+  to avoid shipping half-specified `auto` / spanning interactions that
+  would constrain v1.0 compatibility. The ADR must either reserve the
+  future `auto` slot cleanly or fully specify `auto` now.
   Acceptance for the spec text is
   the [m3-plan.md §Milestone-end criteria item 5](../../plans/m3-plan.md#milestone-end-criteria)
   external-reader bar, applied at phase close.
@@ -163,11 +166,14 @@ mark non-recommended:
   distribution as normative Phase 5 behavior**. If `auto` is not in
   the surface, the algorithm may reserve future terminology but must
   not depend on auto tracks.
-- **DD-002 = string-encoded track list** with **DD-006 = parser-level
-  track-list diagnostics required**. The DSL parser sees a string
-  literal; track-list syntax errors are checked by `wasamoc check`
-  and runtime validation after the string is parsed into Grid's
-  domain type.
+- **DD-001 = string-encoded track list** with **DD-006 =
+  parser-level track-list diagnostics required**. If owner chooses a
+  string mini-language, the core DSL parser sees a string literal;
+  track-list syntax errors are checked by `wasamoc check` and runtime
+  validation after the string is parsed into Grid's domain type. The
+  updated recommendation asks owner to consider a Grid-specific
+  first-class track-list value instead so token-level diagnostics and
+  future extensions are not trapped inside a string.
 - **DD-003 = auto-placement admitted** with **DD-004 = no
   document-order placement algorithm**. Auto-placement is not just a
   default; it is a layout policy. The current recommendation avoids
@@ -209,12 +215,17 @@ Sub-issues:
   another stringly widget tag.
 - **Track declaration syntax.** A compact attribute form such as
   `columns: ...` / `rows: ...`, repeated declarations, or a nested
-  track-list child surface. Default: compact attributes whose RHS is
-  a string-encoded track list (for example `columns: "180 1* 2*"`).
-  This avoids reopening general list / collection grammar in Phase 5,
-  at the cost of moving track-list syntax diagnostics out of the core
-  DSL parser and into wasamoc's Grid-specific check plus runtime
-  validation.
+  track-list child surface. Updated recommendation for owner review:
+  compact attributes whose RHS is a **Grid-specific first-class
+  track-list value** (for example `columns: 180 1* 2*`), not a
+  general collection grammar and not necessarily a string literal.
+  The ADR Options table should compare this with the earlier
+  string-encoded form (`columns: "180 1* 2*"`) and a nested
+  RowDefinition / ColumnDefinition-style surface. The first-class
+  value costs more parser work than a string, but preserves
+  token-level diagnostics, editor affordances, and a cleaner future
+  path for `auto`, `minmax`, named lines, and bindable track pieces
+  without committing Phase 5 to a general list / collection grammar.
 - **Minimum valid shape.** Empty rows / columns are malformed; a Grid
   needs at least one row and one column. Zero children are valid and
   produce an empty drawn subtree with a resolved outer size.
@@ -239,17 +250,24 @@ Sub-issues:
   integer weights because star weighting is central to A2 and avoids
   a knowingly incomplete star surface. Star weights are parsed into
   positive integers; zero and negative weights are malformed.
-- **Auto / intrinsic tracks.** Admit `auto` now, defer it, or emulate
-  it through fixed / star only. Draft recommendation: **defer `auto`
-  from Phase 5**. The Phase 5 spec reserves the concept as future
-  work but does not define auto-track demand distribution. This keeps
-  the central algorithm fixed + weighted-star + spanning rather than
-  letting auto dominate the proof.
-- **No DSL parser extension for track lists.** Because DD-001
-  recommends a string-encoded track list, Phase 5 needs no DSL parser
-  extension for Grid tracks; semicolon member-separator acceptance
-  remains a post-Phase-4 open question outside Phase 5 thesis scope.
-  See the Phase 4 close disposition of T5 副次学び #3 in
+- **Auto / intrinsic tracks.** Admit `auto` now, defer it while
+  reserving the algorithm slot, or emulate it through fixed / star
+  only. Conservative draft recommendation: **defer `auto` from Phase
+  5 while explicitly reserving where an auto-demand pass would sit**.
+  This is a compatibility choice, not an effort-minimisation choice:
+  a half-baked `auto` track without spanning demand distribution would
+  be worse for v1.0 than a clearly deferred surface. Owner may instead
+  choose the aggressive option: admit `auto` in Phase 5 and require
+  DD-M3-P5-004 to fully specify auto-track demand, including spanning
+  children, before ADR Accepted.
+- **Track-list parser surface.** If DD-001 adopts the Grid-specific
+  first-class track-list value, Phase 5 adds a narrow parser path for
+  Grid track attributes without opening general list / collection
+  grammar. If owner keeps the string-encoded form, syntax diagnostics
+  move to Grid-specific `wasamoc check` and runtime validation.
+  Semicolon member-separator acceptance remains a post-Phase-4 open
+  question outside Phase 5 thesis scope. See the Phase 4 close
+  disposition of T5 副次学び #3 in
   [m3-phase-4-progress.md](../../plans/progress/m3-phase-4-progress.md#decisions-log).
 
 ### DD-M3-P5-003 — Child placement, spanning, and conflict policy
@@ -265,7 +283,11 @@ Sub-issues:
   common Grid models, but this is **not** a general widget-catalog
   property. A `Text { row: 0 }` is meaningful when the Text is a
   direct child of Grid; the same attribute outside a Grid-parent
-  context remains invalid / unknown.
+  context remains invalid / unknown. Treat this as the first built-in
+  precedent for **parent-scoped child metadata**, not as a one-off
+  Grid hack: it should leave room for a future
+  `component-extension-model.md` design where custom layout parents
+  can define scoped child metadata such as `slot`, `dock`, or `area`.
 - **Defaults.** Decide whether omitted `row` / `column` defaults to
   `(0, 0)` or whether explicit placement is required. Default
   recommendation: a single-child Grid may omit `row` / `column` and
@@ -303,11 +325,12 @@ Sub-issues:
   track widths before `n`, and the final boundary is the Grid's
   resolved outer extent on that axis rather than an independently
   snapped pixel value.
-- **Intrinsic / auto tracks.** The draft recommendation defers auto
-  tracks. If owner reverses that decision, DD-004 must define which
-  child measurements contribute to each auto track and how spanning
-  children distribute demand across multiple tracks before ADR
-  Accepted.
+- **Intrinsic / auto tracks.** The conservative draft recommendation
+  defers auto tracks while reserving an explicit future algorithm
+  slot before star distribution. If owner reverses that decision,
+  DD-004 must define which child measurements contribute to each auto
+  track and how spanning children distribute demand across multiple
+  tracks before ADR Accepted.
 - **Spanning reconciliation.** Children spanning multiple tracks are
   measured against the combined resolved span. Phase 5 defers `auto`,
   so no track grows after fixed / star resolution: oversized spanning
@@ -315,12 +338,13 @@ Sub-issues:
   `auto`-as-growth-target rule is reserved for a future phase that
   admits `auto`.
 - **Unbounded parent branch.** The ADR must define how star tracks
-  behave when the parent bound on an axis is unbounded. Default for
-  review: star tracks act as zero-minimum intrinsic tracks unless
-  fixed content supplies size; star-only unbounded axes therefore
-  resolve to zero on that axis rather than producing NaN /
-  infinity. Because star weights are positive integers, an all-zero
-  weight sum is rejected before layout.
+  behave when the parent bound on an axis is unbounded. Options to
+  compare explicitly: star tracks act as zero-minimum intrinsic tracks
+  unless fixed content supplies size, or layout raises a
+  Grid-specific unbounded-star error analogous to Phase 4's
+  ScrollView unbounded-axis precedent. Because star weights are
+  positive integers, an all-zero weight sum is rejected before layout
+  in either option.
 
 ### DD-M3-P5-005 — Arrange algorithm and visual-layer contract
 
@@ -329,16 +353,22 @@ row / column span.
 
 Sub-issues:
 
-- **Child alignment inside cell.** Stretch by default vs leading /
-  centered placement. Default: stretch within the resolved span,
-  consistent with stack cross-axis stretch and the target app's need
-  for stable thumbnail cells.
-- **Overflow.** Grid never installs a clip in Phase 5. A child whose
-  desired size exceeds its cell paints according to the existing
-  parent / clip rules. This can produce visible paint overflow into a
-  neighbouring cell's visual area; that is permitted overflow, not
-  deliberate same-cell overlay. Occupancy overlap remains invalid, and
-  ZStack remains the surface for intentional overlay.
+- **Child alignment inside cell.** Stretch by default, with
+  per-child Grid-scoped overrides such as `h-align` / `v-align`
+  admitted in Phase 5 if owner accepts the additional surface. Updated
+  recommendation: include alignment overrides because practical Grid
+  layouts need centered text, right-aligned actions, and icon
+  placement without wrapper hacks. The defaults remain stretch /
+  stretch for stable cells.
+- **Overflow and clipping.** The ADR should separate three concepts:
+  per-cell clipping, Grid outer-bounds clipping, and intentional
+  overlay. Per-cell clipping is out of scope. Same-cell / span
+  occupancy overlap remains invalid, and ZStack remains the surface
+  for intentional overlay. The Options table should compare the
+  current pure-layout behavior (child paint follows existing parent /
+  clip rules and may overflow) with a Grid outer-bounds clip that
+  prevents paint from escaping the Grid's own rectangle without
+  turning Grid into a ScrollView-style viewport.
 - **Visual ownership.** Grid should not introduce an intermediate
   Visual. It is a pure layout container like WrapPanel, not a
   viewport / translation primitive like ScrollView.
@@ -354,7 +384,7 @@ The ADR must decide which Grid invariants are dual-gated by
 | Invariant | Gate |
 |---|---|
 | Grid has at least one row and at least one column | Structural; both `wasamoc check` and runtime `validate()` |
-| Track-list string parses successfully into a `TrackSize` sequence | **Phase 5 new string-internal gate**; `wasamoc check` is primary, runtime `validate()` is the memory-IR safety net |
+| Track-list value parses / lowers successfully into a `TrackSize` sequence | **Phase 5 new track-list gate**; parser diagnostics are primary if owner accepts the first-class track-list value, while `wasamoc check` and runtime `validate()` remain defense-in-depth safety nets |
 | Track sizes are positive where required; star weights are positive integers (`0*`, negative weights, and all-zero star sums are malformed) | Value range; both gates |
 | Child placement indices are in range of the declared track count | Cross-attribute value range; both gates |
 | Spans are positive and `origin + span <= track_count` | Cross-attribute value range; both gates |
@@ -368,13 +398,15 @@ The ADR must decide which Grid invariants are dual-gated by
 - Responsive breakpoint grammar, media queries, and named areas.
 - General list / collection syntax beyond the minimum needed to
   express row and column tracks.
-- Grid-level clip attributes or per-cell clipping. Grid never
-  installs a clip in Phase 5; clipping remains the responsibility of
-  an enclosing clipping parent such as ScrollView or a future
-  explicit surface.
+- Grid-level clip attributes and per-cell clipping. A fixed Grid
+  outer-bounds clip is an ADR option for DD-M3-P5-005, but no
+  author-facing `clip:` attribute or per-cell clip surface is in
+  Phase 5 scope.
 - Bindable Grid track definitions or bindable child placement.
   Phase 5 should keep Grid attributes constant-only unless owner
-  explicitly expands scope.
+  explicitly expands scope, but DD-M3-P5-001 / 002 should note whether
+  the chosen track-list grammar leaves a future path for bindable
+  track pieces.
 - Drag-resizable columns / rows, splitters, and any pointer-driven
   layout resize. These remain M4 or later input-handling work.
 - Scrollbar, wheel, drag-to-scroll, and `scroll_y` Signal write-back.
@@ -624,18 +656,28 @@ section can cite their disposition rather than re-deciding:
   `f32` coordinates; no pixel snapping; no subtree dirty propagation
   in Phase 5. The 1,000-node threshold remains unfired because the
   gallery slice is fixed-child and well below that scale.
-- **[dsl-grammar.md](../dsl-grammar.md) — partial fire.** DD-M3-P5-002
-  intentionally avoids general list / collection grammar by using a
-  string-encoded track list. Q1 widget ids, Q3 iteration grammar, and
-  Q5 expression grammar remain Phase 6 / Phase 7+ unless Grid
-  implementation unexpectedly needs them.
+- **[dsl-grammar.md](../dsl-grammar.md) — fired narrowly.**
+  DD-M3-P5-001 now raises a Grid-specific first-class track-list
+  value as the preferred owner-call option. This is not general list /
+  collection grammar, but it is a deliberate parser-surface choice
+  made for diagnostics, editor affordances, and future track
+  extensions. Q1 widget ids, Q3 iteration grammar, and Q5 expression
+  grammar remain Phase 6 / Phase 7+ unless Grid implementation
+  unexpectedly needs them.
 - **[component-extension-model.md](../component-extension-model.md) —
-  unfired.** Grid is built-in, not a user-defined layout component.
+  partial fire.** Grid is built-in, not a user-defined layout
+  component, but DD-M3-P5-003 should treat `row` / `column` / span /
+  alignment as the first built-in parent-scoped child metadata
+  precedent so future custom layout components are not blocked by a
+  Grid-only hack.
 - **[typed-value-evaluator.md](../typed-value-evaluator.md) —
-  unfired in the recommended path.** Grid track / placement
-  attributes are constant-only. No item context, no bindable track
-  definitions, and no new typed evaluator value are introduced.
-  Phase 7 may reopen item-context pressure.
+  unfired for Phase 5 execution, noted for future compatibility.**
+  Grid track / placement attributes remain constant-only unless owner
+  explicitly expands scope. No item context, no bindable track
+  definitions, and no new typed evaluator value are introduced in the
+  recommended Phase 5 execution path, but DD-M3-P5-001 / 002 should
+  avoid choosing a track-list grammar that makes future bindable track
+  pieces unnatural. Phase 7 may reopen item-context pressure.
 - **[workspace-layout.md](../workspace-layout.md) — unfired.** No new
   crate is expected.
 - **[verification-environments.md](../verification-environments.md) /
@@ -657,8 +699,11 @@ short mental-model anchor before the algorithm:
 - fixed tracks take definite space first;
 - star tracks divide remaining bounded space by weight;
 - children occupy exactly one cell rectangle or one rectangular span;
+- parent-scoped child metadata can place and align the child within
+  that rectangle; and
 - Grid arranges children into resolved rectangles and does not
-  provide overlay or clipping by itself.
+  provide intentional overlay. Per-cell clipping is out of scope;
+  outer-bounds clipping is an ADR option, not a framing-settled rule.
 
 This mirrors the short mental-model anchors added for WrapPanel and
 ScrollView and gives external readers a stable entry point before the
@@ -669,10 +714,11 @@ several incompatible mental models:
 
 - **WPF `Grid`.** WPF uses `RowDefinition` / `ColumnDefinition` and
   attached `Grid.Row` / `Grid.Column` properties. Wasamo adopts the
-  row / column placement idea but does not introduce definition nodes
-  or attached-property machinery in Phase 5; rows / columns are
-  compact Grid attributes and child placement is ordinary child
-  metadata.
+  row / column placement semantics as parent-scoped child metadata
+  but does not introduce the full attached-property machinery in
+  Phase 5; rows / columns are compact Grid attributes and child
+  placement is the first built-in precedent for a lighter
+  parent-scoped metadata model.
 - **CSS Grid.** CSS Grid has named lines, template areas, auto-flow,
   fractional units, minmax, gap, and dense placement. Wasamo Phase 5
   is narrower: fixed tracks, weighted star tracks, explicit placement,
@@ -693,17 +739,20 @@ several incompatible mental models:
 
 This section is illustrative input for owner alignment, not final
 grammar. It is intentionally present in the framing note because
-DD-M3-P5-002's string-encoded track-list recommendation is easier to
-review when owner can see the resulting author-facing `.ui` shape.
-The exact tokenisation inside the string is still owned by the ADR,
-but the examples below show the recommended compact `rows:` /
-`columns:` attribute shape:
+DD-M3-P5-001's track-list grammar choice is easier to review when
+owner can see the resulting author-facing `.ui` shape. The examples
+below show the updated preferred shape: compact `rows:` / `columns:`
+attributes with Grid-specific first-class track-list values. If owner
+chooses the fallback string-encoded form, the same examples would wrap
+each track list in quotes.
 
 - compact row / column declarations on `Grid`;
 - positive integer fixed tracks;
 - unit and weighted star tracks;
 - explicit child placement with `row` / `column`;
 - positive `row-span` / `column-span`;
+- optional `h-align` / `v-align` as Grid-scoped child metadata if
+  owner accepts DD-M3-P5-005's alignment recommendation;
 - no auto-placement;
 - no same-cell overlap; and
 - no ZStack-style overlay.
@@ -715,8 +764,8 @@ area:
 
 ```wasamo-ui
 Grid {
-  columns: "180 *"
-  rows: "*"
+  columns: 180 *
+  rows: *
 
   Box {
     row: 0
@@ -745,8 +794,8 @@ remaining width of each side region:
 
 ```wasamo-ui
 Grid {
-  columns: "1* 2* 1*"
-  rows: "72"
+  columns: 1* 2* 1*
+  rows: 72
 
   Text {
     row: 0
@@ -757,12 +806,15 @@ Grid {
   Text {
     row: 0
     column: 1
+    h-align: center
+    v-align: center
     text: "Summer Trip"
   }
 
   Text {
     row: 0
     column: 2
+    h-align: end
     text: "Share"
   }
 }
@@ -779,8 +831,8 @@ below it:
 
 ```wasamo-ui
 Grid {
-  columns: "1* 1*"
-  rows: "220 120"
+  columns: 1* 1*
+  rows: 220 120
 
   Box {
     row: 0
@@ -817,13 +869,15 @@ replacing the existing Box / WrapPanel / ScrollView proof:
 
 ```wasamo-ui
 Grid {
-  columns: "96 1* 96"
-  rows: "64 1* 120"
+  columns: 96 1* 96
+  rows: 64 1* 120
 
   Text {
     row: 0
     column: 0
     column-span: 3
+    h-align: center
+    v-align: center
     text: "Gallery"
   }
 
@@ -868,8 +922,8 @@ The current recommendation intentionally rejects the following shapes:
 
 ```wasamo-ui
 Grid {
-  columns: "1*"
-  rows: "1*"
+  columns: 1*
+  rows: 1*
 
   Box {
     row: 0
@@ -890,8 +944,8 @@ not as "last child wins" overlay.
 
 ```wasamo-ui
 Grid {
-  columns: "1* 1*"
-  rows: "1*"
+  columns: 1* 1*
+  rows: 1*
 
   Box {
     column: 0
@@ -913,8 +967,8 @@ may omit both and default to `(0, 0)`.
 
 ```wasamo-ui
 Grid {
-  columns: "1* 1*"
-  rows: "1*"
+  columns: 1* 1*
+  rows: 1*
 
   Box {
     row: 0
@@ -972,14 +1026,14 @@ within fixed + weighted-star semantics.
 |---|---|---|
 | DD-M3-P3-005 pure-data measure-arrange | Pattern reuse | DD-M3-P5-004 |
 | First novel-normative-spec phase discipline | Pattern reuse | Acceptance restatement; framing decisions B / G / K |
-| Paint overflow not clipped by layout primitive itself | Pattern reuse with Grid-specific clarification | DD-M3-P5-005 (paint overflow may enter neighbouring visual area; occupancy overlap still invalid) |
+| Paint overflow not clipped by layout primitive itself | Pattern reuse with Grid-specific clarification | DD-M3-P5-005 Options table must compare pure layout overflow with Grid outer-bounds clipping; occupancy overlap still invalid either way |
 
 ### From [docs/decisions/m3-phase-4-scroll-view.md](../../decisions/m3-phase-4-scroll-view.md)
 
 | DD / precedent | Disposition | Consumed at |
 |---|---|---|
 | Runtime-boundary root-shape lesson | Direct input | Framing decision C; DD-M3-P5-005 verification note |
-| ScrollView intermediate Visual pattern | Negative precedent | DD-M3-P5-005 (Grid remains one WidgetNode / one Visual unless a concrete DD demands otherwise) |
+| ScrollView intermediate Visual pattern | Negative precedent | DD-M3-P5-005 (Grid should not become a ScrollView-style viewport; outer-bounds clipping, if chosen, must be justified separately) |
 | Phase 4 R1 residual | Carry-forward assignment | Framing decisions E / F |
 | Phase 4 `scroll_y` drift | Out of scope | Out-of-scope section; M4 handoff only |
 
@@ -987,8 +1041,8 @@ within fixed + weighted-star semantics.
 
 | Section | Disposition | Consumed at |
 |---|---|---|
-| §3 reactive drain residuals | Out of scope in recommended path | Live-note decision J; constant-only Grid attributes do not pressure drain residuals |
-| §4 `TypedValue` deferral | Discipline reminder | Live-note decision J; no bindable track / placement and no item context in Phase 5 |
+| §3 reactive drain residuals | Out of scope in recommended path | Live-note decision J; constant-only Grid attributes do not pressure drain residuals, but track-list grammar should not block future bindable tracks |
+| §4 `TypedValue` deferral | Discipline reminder | Live-note decision J; no bindable track / placement and no item context in Phase 5 unless owner explicitly expands scope |
 
 ---
 
@@ -996,12 +1050,14 @@ within fixed + weighted-star semantics.
 
 To move from this draft to ADR drafting:
 
-1. Owner reviews framing decisions A-K, especially DD-M3-P5-002
-   (string-encoded track list and
-   `auto` deferral), DD-M3-P5-003 (single-child default vs
-   multi-child explicit placement), DD-M3-P5-004 (unbounded star
-   behavior), DD-M3-P5-005 (paint overflow vs overlay), and decision
-   E (R1 assigned to Phase 6).
+1. Owner reviews framing decisions A-K, especially DD-M3-P5-001 /
+   DD-M3-P5-002 (first-class track-list value vs string encoding, and
+   `auto` defer-with-slot vs fully specified `auto` now),
+   DD-M3-P5-003 (parent-scoped child metadata and explicit placement),
+   DD-M3-P5-004 (zero-minimum unbounded star vs Grid-specific layout
+   error), DD-M3-P5-005 (`h-align` / `v-align`, pure overflow vs
+   Grid outer-bounds clipping), and decision E (R1 assigned to Phase
+   6).
 2. If aligned, draft `docs/decisions/m3-phase-5-grid.md` as
    `Status: Proposed`.
 3. Draft the Moment 1 `docs/dsl_spec.md` Grid chapter and widget
