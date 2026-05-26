@@ -463,7 +463,9 @@ T9 から発生した out-of-phase residual:
   であり in-tree `.uic` は production path に存在しない) なので、
   T9 commit set には含めず、別 step (Phase 3 T10 の "Out-of-phase
   residuals filed" 枠、もしくは Phase 4 以降の cross-cutting 整理)
-  で扱う。本 retrospective に記録するに留める。
+  で扱う。本 retrospective に記録するに留める。後日、
+  repository-level `.gitignore` に `*.uic` を追加する hygiene pass
+  で解消済み。
 - **(R2) `sync_visuals` ↔ pure-layout の境界 test 欠落。** Phase 2
   の test 網は `LayoutNode.offset` の絶対座標規約は pin している
   が、その絶対値が Composition の `Visual.Offset` (parent-relative)

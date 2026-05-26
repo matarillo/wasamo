@@ -1183,9 +1183,10 @@ deferred to a later phase / milestone:
 - **Padding on ScrollView** — out of A5 minimal; defer to later
   phase if needed.
 - **R1 (`.gitignore` `*.uic`)** — Phase 3 carry-over residual;
-  cross-cutting hygiene unrelated to ScrollView; defer per Phase
-  4 framing decision F (R2 closes inside Phase 4; R1 stays
-  open).
+  cross-cutting hygiene unrelated to ScrollView; deferred per Phase
+  4 framing decision F (R2 closes inside Phase 4). Resolved later
+  by adding the repository-level ignore rule in a post-Phase-4
+  hygiene pass.
 
 ## Upstream document revisions (Moment 1 / Moment 2)
 

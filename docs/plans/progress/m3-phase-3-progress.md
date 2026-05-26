@@ -435,7 +435,8 @@ the shape.)
   not folded here; tracked for any future cross-cutting hygiene
   pass. Surfaced in
   [t9-step-end-retrospective.md](../../notes/m3-phase-3/t9-step-end-retrospective.md)
-  Follow-Up R1.
+  Follow-Up R1. **Resolved later:** a repository-level `.gitignore`
+  rule for `*.uic` was added in a post-Phase-4 hygiene pass.
 
 - **(R2) `sync_visuals` ↔ pure-layout boundary test gap.** The
   Phase 2 test suite pins `LayoutNode.offset` to the absolute

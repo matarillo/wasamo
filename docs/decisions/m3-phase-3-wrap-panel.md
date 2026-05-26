@@ -1396,7 +1396,8 @@ outside this ADR's scope are recorded under
 [m3-phase-3-progress.md §Out-of-phase residuals](../plans/progress/m3-phase-3-progress.md#out-of-phase-residuals):
 
 - **R1** — `.gitignore` `*.uic` pattern (cross-cutting build
-  hygiene).
+  hygiene); resolved later by adding the repository-level ignore
+  rule in a post-Phase-4 hygiene pass.
 - **R2** — `sync_visuals` ↔ pure-layout boundary test gap
   (post-Phase-3 test coverage; the architecture clarification half
   was folded into [docs/architecture.md §6.5](../architecture.md)

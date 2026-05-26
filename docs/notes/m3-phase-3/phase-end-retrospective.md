@@ -204,7 +204,9 @@ cargo test --workspace
   retrospective、git history に移した。
 - Phase 3 由来の out-of-phase residual:
   - **R1** `.gitignore` `*.uic` pattern — cross-cutting build
-    hygiene; Phase 4 以降の任意 step で fold 可能。
+    hygiene; Phase 4 以降の任意 step で fold 可能。後日、
+    repository-level `.gitignore` に `*.uic` を追加する hygiene pass
+    で解消済み。
   - **R2** `sync_visuals` ↔ pure-layout boundary test gap — Phase
     4 ScrollView の content offset 機構が同境界に依存するため、
     Phase 4 pre-doc input §8 で land 検討を明示している。

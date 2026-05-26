@@ -14,6 +14,9 @@ zig-out/
 # CMake build directory
 build/
 
+# Wasamo compiler output
+*.uic
+
 # Zig install prefix output (examples/counter-zig -p .)
 examples/counter-zig/bin/
 examples/counter-zig/lib/
