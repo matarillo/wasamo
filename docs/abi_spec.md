@@ -2,7 +2,7 @@
 
 **Version:** M2 Foundation ABI surface (2026-05-11)
 **Status:** Accepted for M2 — finalised against the implemented `wasamo.h`; M3-Phase 1 in progress with no new ABI surface
-**Authoritative decisions:** [decisions/phase-6-c-abi.md](decisions/phase-6-c-abi.md) (DD-P6-001..007), M2 phase ADRs under [decisions/](decisions/)
+**Authoritative decisions:** [decisions/phase-6-c-abi.md](decisions/phase-6-c-abi.md) (DD-P6-001..007), M2 ADRs under [decisions/](decisions/)
 
 This document specifies the C ABI exposed by `wasamo.dll` via the
 `wasamo.h` header. It is the normative reference for binding

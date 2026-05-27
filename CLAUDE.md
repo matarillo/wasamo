@@ -9,29 +9,45 @@
 - Code comments: English only.
 - Commit messages: English only.
 
-## Document categories under `docs/`
+## Document structure
 
-- `docs/decisions/` — ADRs. Per-phase design decisions, agreed and
-  immutable (revisions follow the supersede rule). See its README.
-- `docs/plans/` — Milestone plans. Upstream agreement artifacts that
-  feed into ROADMAP and ADRs. Frozen once `status: in-progress`. See its
-  README for lifecycle and archival policy.
+### `process/` — Development process artifacts
+
+Organized by milestone and phase. See `process/README.md` for full
+structure.
+
+- `process/_roadmap.md` — Overall milestone roadmap (SSOT for
+  acceptance criteria).
+- `process/cross-milestone/decisions/` — Vision decision records
+  (covers vision / governance / policy / roadmap): doc system,
+  RFC policy, DSL policy, process rules.
+- `process/milestone-N/` — Per-milestone artifacts:
+  - `plan.md` — Milestone execution plan. Frozen once
+    `status: in-progress`.
+  - `handoff.md` — Cross-phase design prerequisites and residuals;
+    written at milestone close.
+  - `requirements/` — Milestone-level scope, spec, and wireframes.
+  - `phase-M/requirements/` — Phase scope and constraints
+    (`framing.md`, `constraints.md`); produced before ADR drafting.
+  - `phase-M/decisions/` — ADRs. `preamble.md` holds Context/Summary/
+    Out of scope/Revisions; `dd-NNN-*.md` per decision. Immutable
+    (revisions follow the supersede rule).
+  - `phase-M/implementation/` — `plan.md` (task checklist), `log.md`
+    (decisions + CI log), `handoff.md` (items to carry to next phase).
+    Mutable during the phase.
+  - `phase-M/retrospectives/` — `phase-end.md` + `tN.md` per task.
+
+When information settles into a decision, it moves: notes →
+`decisions/`. When a milestone is committed, structure moves: plan →
+`_roadmap.md`. Each document type has a single role; do not duplicate
+content across them.
+
+### `docs/` — Technical reference and exploratory notes
+
 - `docs/notes/` — Owner-authored exploratory notes and live open
   questions. Japanese allowed. See its README.
-- `docs/references/` — Durable supporting reference artifacts that
-  other documents (plans, phase pre-docs, specs, ADRs) cite as stable
-  input. Expected content is **extracted, stable** material (e.g. an
-  accepted wireframe lifted out of an exploratory note). Do not place
-  decisions, execution trackers, or work-in-progress drafts here — those
-  belong in `docs/decisions/`, `docs/plans/`, or `docs/notes/`. When the
-  number of files grows, consider subdirectories such as
-  `docs/references/m3/`.
-
-When information settles into a decision, it moves: notes → ADR. When a
-milestone is committed, structure moves: plan → ROADMAP. When an
-accepted visual or supporting artifact needs to be cited by downstream
-documents, the stable portion is extracted: notes → references. Each
-category has a single role; do not duplicate content across them.
+- `docs/architecture.md`, `docs/abi_spec.md`, `docs/dsl_spec.md` —
+  Normative technical specifications. English only.
 
 ## Testing rules
 
@@ -86,8 +102,37 @@ may also batch several commits into one review pass.
 Multi-document "Moment" or analogous bundle constructs introduced by
 a framing decision are milestone labels, not commit units. See the
 M3-Phase 2 framing decision D Postmortem in
-[docs/notes/m3-phase-2/m3-phase-2-pre-doc-framing.md](docs/notes/m3-phase-2/m3-phase-2-pre-doc-framing.md)
+[process/milestone-3/phase-2/requirements/framing.md](process/milestone-3/phase-2/requirements/framing.md)
 for the originating failure.
+
+## Retrospective rules
+
+Run a retrospective before every merge. Scope is determined by the merge
+target:
+
+- merge target = phase branch → **task retrospective**
+- merge target = main → **phase retrospective**
+
+The merge gate requires explicit owner approval after the retrospective
+checklist is complete. Push is a separate gate from merge.
+
+Full procedure (checklist, doc-set, forward-carry discipline):
+[process/procedures/retrospectives.md](process/procedures/retrospectives.md).
+
+## Process rule lifecycle
+
+Process knowledge has four SSOTs ([process/README.md §SSOT distribution](process/README.md#ssot-distribution)).
+Changes flow as:
+
+- **Minor edits** (wording, additional examples, clarifications) — edit
+  the owning SSOT directly.
+- **Structural changes** (new enforceable rule, policy reversal, new
+  category) — file a vision decision record under `process/cross-milestone/decisions/` first, then
+  update the SSOT in the same commit batch that flips the ADR to
+  `Accepted`.
+
+Boundary test: a change is *structural* if it requires touching another
+SSOT or supersedes a prior decision. If both are no, edit in place.
 
 ## CI rules
 

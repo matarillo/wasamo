@@ -145,7 +145,7 @@ API changes. This bounds the cost of the implicit framing.
 
 ## Re-evaluation triggers
 
-Re-read this note (and consider upgrading to a vision ADR or revising
+Re-read this note (and consider upgrading to a vision decision record or revising
 the alignment table) when any of the following occur:
 
 1. **M3 DSL spec drafting begins.** The grammar choices made during
@@ -153,7 +153,7 @@ the alignment table) when any of the following occur:
    will face. Re-read before starting; if the grammar pushes toward
    family (2) (function-call composition with re-execution
    semantics), the family selection becomes a real decision and may
-   warrant a vision ADR.
+   warrant a vision decision record.
 2. **Hot reload work begins (post-1.0).** Hot reload composes
    differently with each family. Family (2)'s view-function
    re-execution makes hot reload structurally cheap; family (1)'s
@@ -169,7 +169,7 @@ the alignment table) when any of the following occur:
 4. **Owner explicit revisitation.** Any time the owner wants to
    revisit family-level direction, regardless of phase boundary.
 
-When upgrading: a vision ADR (DD-V-NNN scope) records the explicit
+When upgrading: a vision decision record (DD-V-NNN scope) records the explicit
 family commitment; this note's status changes to `superseded by
 docs/decisions/vision-architectural-family.md`. When revising in
 place: update the alignment table and re-evaluation triggers; commit
