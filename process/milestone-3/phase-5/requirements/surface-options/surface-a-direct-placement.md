@@ -318,7 +318,15 @@ Surface A は、**parent-scoped child metadata の最初の built-in precedent**
 
 ### Iteration
 
-Surface A で Phase 7 iteration を入れる場合、iteration template は placed child を
+**前提**: Grid は M3 の iteration 対象ではありません。採択済み target-app
+pre-doc ([spec.md](../../../requirements/spec.md)) は collection-driven な
+「List 責務」を WrapPanel + ZStack + 繰り返し生成 grammar に分解し、Grid を
+そこに含めていません。Phase 7 iteration の M3 対象は WrapPanel-backed な
+thumbnail collection であり、Phase 7 が Grid children を生成することは
+ありません。以下は M3 では発火しない post-M3 の可能性として、surface 比較の
+foreclosure check(将来 iteration を構造的に塞がないか)の材料に留めます。
+
+post-M3 で仮に Surface A を iterate するなら、iteration template は placed child を
 生成します。
 
 ```wasamo-ui

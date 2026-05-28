@@ -110,19 +110,27 @@ rather than re-derives:
 
 - **Downstream commitments grounded in Phase 5.** Phase 8's Gallery
   E2E proof needs a 2D composition surface for the target app. Phase
-  6 may place a lightbox above the gallery via ZStack, and Phase 7
-  may generate thumbnail children through iteration, but neither
-  phase should be the first proof that the gallery can express
-  a stable 2D layout. Phase 5 must therefore ship a fixed-child
-  Grid gallery slice that later phases can grow rather than replace.
-  Phase 7's iteration grammar is the first likely consumer that may
-  generate Grid children from a template. Phase 5 does not design
-  iteration, but it must choose a Grid surface that gives Phase 7 a
-  clear extension path: generated placed content children (Surface A),
-  generated placed `Cell` wrappers (Surface A2), generated structural
-  rows / cells with reconciled widths (Surface B), generated structural
-  rows against parent-level columns (Surface D), or generated structural
-  rows against definition nodes (Surface C).
+  6 may place a lightbox above the gallery via ZStack, but it should
+  not be the first proof that the gallery can express a stable 2D
+  layout. Phase 5 must therefore ship a fixed-child Grid gallery
+  slice that later phases can grow rather than replace.
+
+  Grid is **not** an M3 iteration target. The accepted target-app
+  pre-doc
+  ([process/milestone-3/requirements/spec.md](../../requirements/spec.md))
+  positions Grid as an independent static 2D layout primitive
+  (Layout primitive A, thesis = 2D measure-arrange + spanning) and
+  decomposes the collection-driven "List" responsibility into
+  WrapPanel + ZStack + the iteration grammar; Grid is not part of
+  that decomposition, and the iteration grammar's M3 target is the
+  WrapPanel-backed thumbnail collection. Phase 7 therefore does not
+  generate Grid children in M3. Surface selection in DD-M3-P5-001
+  must not be driven by Phase 7 iteration ergonomics. The iteration
+  grammar stays general, so the only iteration-related requirement on
+  the chosen surface is a **foreclosure check** — it must not make a
+  future, post-M3 Grid iteration structurally impossible — and every
+  candidate surface (A / A2 / B / D / C) passes that check, so it is
+  non-differentiating.
 
 ---
 
@@ -306,11 +314,19 @@ Sub-issues:
      structural). This axis is load-bearing: a structural surface that
      allows per-row column widths is a different layout primitive than
      Grid, not a stylistic variant.
-  4. **Future iteration** — what shape Phase 7 iteration must take to
-     generate Grid children: placed content children carrying `row` /
-     `column` metadata, placed `Cell` wrappers, structural rows generated
-     as templates against Grid-level columns, or `Cell` items generated
-     within a row template.
+  4. **Future iteration** — a **foreclosure check, not a
+     differentiator**. Grid is not an M3 iteration target (see the
+     "Downstream commitments grounded in Phase 5" paragraph above and
+     [spec.md](../../requirements/spec.md)): Phase 7's iteration
+     grammar drives the WrapPanel-backed thumbnail collection, not
+     Grid children. The ADR therefore must not select a surface for
+     iteration ergonomics. This axis only asks whether a surface would
+     make a future, post-M3 Grid iteration structurally *impossible*;
+     each surface has a conceivable iteration shape (placed content
+     children carrying `row` / `column` metadata, placed `Cell`
+     wrappers, structural rows generated against Grid-level columns or
+     definition nodes), so none forecloses it and the axis does not
+     separate the candidates.
   5. **Component-extension-model** — what each surface implies about
      future custom layouts and their child contracts. Surface A
      introduces parent-scoped metadata on arbitrary Grid children as a
@@ -554,8 +570,10 @@ that no family is presented as the implicit default.
     - *explicit placeholder* — `Row[i+1]` must contain a `Cell {}`
       (or a dedicated covered-from-above marker) for the occupied
       column. Local readability is preserved, but authors hand-track
-      multi-row coverage and any iteration template that generates
-      `Row`s must emit consistent placeholders.
+      multi-row coverage (and, should a post-M3 milestone ever iterate
+      Grid, a `Row`-generating template would have to emit consistent
+      placeholders — not an M3 concern, since Grid is not an M3
+      iteration target).
 
     Deferring row-span from Phase 5 leaves this rule choice open for
     a later phase but does not erase it; admitting row-span now forces
@@ -1098,9 +1116,12 @@ several incompatible mental models:
   A / A2.
 - **Jetpack Compose / SwiftUI grids.** Those ecosystems often model
   adaptive or lazy grids that generate children from data. Wasamo
-  Phase 5 is not lazy and does not generate children; Phase 7
-  iteration is the future place where generated Grid children can be
-  introduced.
+  Grid does not follow that model: it is a static 2D composition
+  primitive, and the collection-driven surface in M3 is WrapPanel +
+  the iteration grammar, not Grid (see the "Downstream commitments
+  grounded in Phase 5" paragraph and [spec.md](../../requirements/spec.md)).
+  Grid generating children from data is neither a Phase 5 nor a Phase 7
+  concern; it is only a non-foreclosed post-M3 possibility.
 - **ZStack / overlay models.** Grid does not provide intentional
   overlay. Paint overflow may be visible if a child is larger than
   its cell, but two children may not deliberately occupy the same
@@ -1590,7 +1611,15 @@ Grid {
 
 Strength: Surface D keeps structural rows while declaring shared columns
 once. Cost: columns are parent-level while rows are structural, so the
-surface is intentionally asymmetric.
+surface is intentionally asymmetric. The asymmetry is load-bearing,
+not accidental: form / settings-pane use cases typically want shared
+columns fixed at design time while rows grow with data. Adding a
+parallel `rows:` attribute to Grid (a hypothetical "D-with-rows")
+does not refine Surface D — it collapses D into either Surface A2
+(if `Row` becomes ceremonial) or motivates Surface C (if both axes
+should be hoisted symmetrically). See the
+[Surface D asymmetry-is-intentional note](./surface-options/surface-d-grid-columns-structural-rows.md#asymmetry-is-intentional)
+for the full critical analysis.
 
 ### Surface C — definition nodes + structural rows
 
@@ -1942,8 +1971,11 @@ Grid {
 ```
 
 Each example exercises fixed tracks, star sizing, and spanning in a
-shape that later Phase 6 can overlay with ZStack and later Phase 7
-can populate through iteration. None expresses overlay inside Grid.
+shape that later Phase 6 can overlay with ZStack. The slice stays a
+fixed-child Grid: Grid is not an M3 iteration target (the thumbnail
+collection is WrapPanel-backed per [spec.md](../../requirements/spec.md)),
+so Phase 7 does not populate this Grid through iteration. None
+expresses overlay inside Grid.
 
 ### Invalid shapes — parallel across surfaces
 
@@ -2173,7 +2205,7 @@ star semantics.
 |---|---|---|
 | 2D gallery composition pressure | Visible-proof reference | FD-H; author-facing examples |
 | Future lightbox / overlay relationship | Downstream constraint | DD-M3-P5-003 conflict policy; FD-K (ZStack owns overlay) |
-| Future iteration-generated thumbnails | Downstream constraint | Acceptance restatement downstream paragraph; Phase 7 handoff note |
+| Future iteration-generated thumbnails | Routed to WrapPanel, not Grid | Acceptance restatement downstream paragraph: per [spec.md](../../requirements/spec.md) the thumbnail collection is WrapPanel-backed; Grid is not an M3 iteration target, so this is a foreclosure check (DD-M3-P5-001 axis 4), not a Grid surface driver |
 
 ### From [M3-Phase 3 decisions](../../phase-3/decisions/preamble.md)
 

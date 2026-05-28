@@ -279,7 +279,15 @@ Surface D は、**parent config + structural content** の最初の built-in pre
 
 ### Iteration
 
-Surface D で Phase 7 iteration を入れる場合、rows を生成する形が自然です。
+**前提**: Grid は M3 の iteration 対象ではありません。採択済み target-app
+pre-doc ([spec.md](../../../requirements/spec.md)) は collection-driven な「List 責務」を
+WrapPanel + ZStack + 繰り返し生成 grammar に分解し、Grid をそこに含めて
+いません。Phase 7 iteration の M3 対象は WrapPanel-backed な thumbnail
+collection であり、Phase 7 が Grid children を生成することはありません。
+以下は M3 では発火しない post-M3 の可能性として、surface 比較の foreclosure
+check(将来 iteration を構造的に塞がないか)の材料に留めます。
+
+post-M3 で仮に Surface D を iterate するなら、rows を生成する形が自然です。
 
 ```wasamo-ui
 Grid {
@@ -295,9 +303,9 @@ Grid {
 }
 ```
 
-Form / settings pane にはかなり相性が良いです。
-一方で thumbnail grid のように items を row-major に流し込みたい場合は、iteration が
-row chunking をどう表現するかが課題になります。
+form / settings pane 型には構造的に相性が良く、foreclosure check は pass
+します。一方で thumbnail grid のように items を row-major に流し込む形は、
+そもそも M3 では WrapPanel の責務であり、Grid に持ち込む設計ではありません。
 
 ### Track syntax
 
@@ -376,6 +384,63 @@ Grid {
   が一部削られる。
 - column-span が Surface D で軽く扱える分、row-span の cross-Row 問題は
   相対的に目立つ surface でもある。
+
+## Asymmetry is intentional
+
+Surface D は `Grid { columns: 180 1* }` と structural `Row { height: 48 }` を
+組み合わせる surface であり、`columns:` の対称形として `rows:` を Grid
+attribute に追加する変奏 ("D-with-rows") が考えられます。critically に
+評価すると、D-with-rows は Surface D の改良ではなく **別 surface への退化**
+であり、Surface D の identity を消します。
+
+### `rows:` を加えた場合の機械的帰結
+
+- `rows:` は row 数と row 高さの両方を declare するため、`Row { height: ... }`
+  の height は重複 declaration となり、`Row` から sizing が剥がれる。
+- `rows:` の長さと structural `Row` 数の整合性 check が新設される (Surface B
+  の shared-column reconciliation と同型の検証負債)。
+- `Row {}` は ceremonial container に縮退し、cells をくくる以上の役割を
+  持たなくなる。
+
+### 退化先
+
+D-with-rows は次のどちらかに収束します:
+
+- **(a) `Row` が ceremonial container として残る** → Surface A2 の劣化版。
+  A2 が持つ irregular placement (`row: 0 column: 2` のような飛ばし) は失われ、
+  redundant な `Row` grouping だけが増える。
+- **(b) `Row` を削る** → Surface A2 そのもの。
+
+どちらにせよ D-with-rows という独立した点は design space に存在しません。
+
+### 非対称性が運んでいるもの
+
+Surface D の `columns:` / `Row { height: ... }` という非対称には 2 つの
+正当化があり、M3 で load-bearing なのは ② の方です:
+
+- **① use-case 非対称(M3 では latent)** — columns は author 全体で共有
+  したい (forms の label / input 列幅、settings pane の左右 2 ペイン幅など
+  design-time の規約として固定)、rows は data 駆動で増減することが多い
+  (record ごとに 1 row、field 集合ごとに 1 row など runtime の data shape
+  に依存)。ただし Grid は M3 の iteration 対象ではない([spec.md](../../../requirements/spec.md)
+  の List 責務分解は WrapPanel + ZStack + 繰り返し生成 grammar で、Grid を
+  含まない)ため、この data 駆動 rows の正当化は **M3 では発火せず、post-M3
+  が Grid iteration を復活させた場合にのみ load-bearing になる latent な
+  advantage** です。
+- **② mechanical(iteration 非依存、M3 で load-bearing)** — `columns:` を
+  parent に置くことで Surface B の shared-column reconciliation (B-reject)
+  を構造的に回避できる。これは iteration の有無と無関係に成立し、Surface D
+  の M3 surface 決定を実際に支えているのはこちらです。
+
+`rows:` を Grid に置くと、①の data 駆動 rows を将来活かす余地(row 数 /
+高さを design-time に固定しない自由)を平坦化します。①が M3 で latent でも、
+post-M3 の保険として残す価値があるため、`rows:` 追加は②の利点(後述の退化
+議論)と合わせて二重に D の identity を損ないます。
+
+「rows / columns 両方を parent に hoist したい」が要件なら、Surface C
+(`ColumnDefs` / `RowDefs` で対称に hoist) が design-space-clean な選択肢
+です。Surface D に `rows:` を足すのは、D の identity と use-case fit の両方
+を失う方向であって、D の自然な拡張ではありません。
 
 ## 判断材料
 

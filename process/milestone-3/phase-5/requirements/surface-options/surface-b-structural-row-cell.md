@@ -314,7 +314,15 @@ Surface B は、**structural child node kind の最初の built-in precedent** �
 
 ### Iteration
 
-Surface B で Phase 7 iteration を入れる場合、生成単位が問題になります。
+**前提**: Grid は M3 の iteration 対象ではありません。採択済み target-app
+pre-doc ([spec.md](../../../requirements/spec.md)) は collection-driven な
+「List 責務」を WrapPanel + ZStack + 繰り返し生成 grammar に分解し、Grid を
+そこに含めていません。Phase 7 iteration の M3 対象は WrapPanel-backed な
+thumbnail collection であり、Phase 7 が Grid children を生成することは
+ありません。以下は M3 では発火しない post-M3 の可能性として、surface 比較の
+foreclosure check(将来 iteration を構造的に塞がないか)の材料に留めます。
+
+post-M3 で仮に Surface B を iterate するなら、生成単位が問題になります。
 
 Row を生成する例:
 
@@ -347,7 +355,8 @@ Grid {
 Surface B は structural iteration と相性が良い一方、shared track sizing の
 reconciliation と iteration が絡むと診断が難しくなる可能性があります。
 たとえば generated rows が互いに異なる `width` を出した時、どの時点で
-reject するのかを Phase 7 で考える必要があります。
+reject するのかは、post-M3 が Grid iteration を入れる場合に考える必要が
+あります(M3 では発生しません)。
 
 ### Track sizing
 

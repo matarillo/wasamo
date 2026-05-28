@@ -354,7 +354,15 @@ built-in precedent になります。
 
 ### Iteration
 
-Surface C で Phase 7 iteration を入れる場合、track definitions は固定し、content rows
+**前提**: Grid は M3 の iteration 対象ではありません。採択済み target-app
+pre-doc ([spec.md](../../../requirements/spec.md)) は collection-driven な
+「List 責務」を WrapPanel + ZStack + 繰り返し生成 grammar に分解し、Grid を
+そこに含めていません。Phase 7 iteration の M3 対象は WrapPanel-backed な
+thumbnail collection であり、Phase 7 が Grid children を生成することは
+ありません。以下は M3 では発火しない post-M3 の可能性として、surface 比較の
+foreclosure check(将来 iteration を構造的に塞がないか)の材料に留めます。
+
+post-M3 で仮に Surface C を iterate するなら、track definitions は固定し、content rows
 だけを生成できます。
 
 ```wasamo-ui
