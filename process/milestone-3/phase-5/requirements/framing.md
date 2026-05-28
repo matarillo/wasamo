@@ -1,15 +1,16 @@
 ---
 title: M3-Phase 5 framing — Grid layout primitive
-status: draft
+status: aligned
 created: 2026-05-26
+aligned: 2026-05-28
 restored-from: 15ea0e35e2a499744d166712b53a17c4d68c91ff
 target-phase: M3-Phase 5
 ---
 
 # M3-Phase 5 framing
 
-**Former status:** reviewed; pending owner alignment; input artefact for ADR drafting
-**Restored:** 2026-05-28 from commit `15ea0e35e2a499744d166712b53a17c4d68c91ff`
+**Status:** framing aligned with owner (2026-05-28); input artefact for ADR drafting
+**Former status:** reviewed; pending owner alignment (restored 2026-05-28 from commit `15ea0e35e2a499744d166712b53a17c4d68c91ff`)
 **Targets phase:** M3-Phase 5 (Grid layout primitive)
 
 Per the project's doc-driven workflow established at
@@ -50,6 +51,37 @@ rather than re-derives:
   split the final step's task-end retrospective from the
   phase-end retrospective from the start, per
   [constraints.md §5](./constraints.md#5-phase-最終-step-の-retrospective--progress-checklist-は-step-end-と-phase-end-を分割する).
+
+---
+
+## Owner alignment outcome (2026-05-28)
+
+Framing was aligned with the owner on 2026-05-28. Per the doc-driven
+workflow, only the decisions that branch the ADR's structure are settled
+here; the remaining sub-decisions are written into the ADR draft as the
+recommended direction and approved at `Status: Proposed` → `Accepted`
+review, not pre-approved at framing time.
+
+**Structurally branching decisions — settled:**
+
+| Decision | Outcome |
+|---|---|
+| DD-M3-P5-001 surface family | **Surface A2** (track-list + placed `Cell` wrapper) |
+| DD-M3-P5-002 `auto` / intrinsic track | **Defer with reserved slot** (Phase 5 = fixed + weighted-star only) |
+| DD-M3-P5-003 per-axis spanning | **Both axes admitted** (column-span + row-span); A2 is a coordinate family, so the two axes are symmetric |
+| DD-M3-P5-004 unbounded-parent star | **Grid-specific unbounded-star error** (Flutter-style; consistent with the Phase 4 ScrollView unbounded-axis precedent) |
+| DD-M3-P5-005 overflow | **Allow paint overflow between cells + Grid outer-bounds clip**; per-cell clip stays out of scope. A **z-order rule** (document order = paint order; no explicit z-index attribute) is required independently of the clip choice |
+| FD-E (R1 owning phase) | **M3-Phase 6** |
+| FD-D (non-root Shrink × Fill child) | **(1) keep existing convention** (no Grid-specific exception). The desire to *detect* this silent collapse during debugging is an orthogonal observability concern, carved out to [docs/notes/developer-debugging.md](../../../../docs/notes/developer-debugging.md) and out of Phase 5 thesis scope |
+
+**Deferred to ADR review (not pre-approved at framing time):** the
+Surface-A2 sub-decisions — `Cell` as a single-child wrapper, placement
+defaults (explicit `row` / `column` in a multi-`Cell` Grid; `(0, 0)`
+permitted for a one-`Cell` Grid), span defaults (`1`) and bounds,
+zero-based indexing at the `.ui` boundary, alignment carried on `Cell`,
+no intermediate Visual, and positive-integer star weights. These are
+fill-ins the ADR states with rationale; the owner approves them when the
+ADR is reviewed.
 
 ---
 
@@ -805,7 +837,8 @@ production parent shape.
 [constraints.md §2](./constraints.md#2-non-root-の-shrink-container-が-fill-子を持つ場合の挙動)
 requires Phase 5 to make this design space explicit.
 
-Draft recommendation: Phase 5 keeps the existing convention.
+Draft recommendation (owner-confirmed 2026-05-28): Phase 5 keeps the
+existing convention.
 Window-root `WidgetNode::run_layout_as_window_root` may force the
 root to Fill / Fill, but non-root Shrink containers with Fill children
 continue to follow the existing
@@ -821,8 +854,8 @@ recorded as a broader layout DD rather than hidden inside Grid.
 requires Phase 5 pre-doc framing to assign the owning phase for
 R1 — Gallery host Window title wiring.
 
-Draft recommendation: assign R1 to **M3-Phase 6 (ZStack +
-conditional rendering)**, not to Phase 5.
+Draft recommendation (owner-confirmed 2026-05-28): assign R1 to
+**M3-Phase 6 (ZStack + conditional rendering)**, not to Phase 5.
 
 Rationale:
 
