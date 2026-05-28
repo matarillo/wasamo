@@ -3,7 +3,7 @@
 **Status:** Pre-alpha; M2 Foundation shipped 2026-05-11; M3 DSL surface is next
 
 > This document describes why Wasamo exists, what it prioritizes, and where it's headed.
-> For implementation details see [docs/architecture.md](./docs/architecture.md); for phase-by-phase design decisions see [docs/decisions/](./docs/decisions/).
+> For implementation details see [docs/architecture.md](./docs/architecture.md); for phase-by-phase design decisions see the ADRs under [process/](./process/README.md).
 
 ## 1. TL;DR
 
@@ -33,7 +33,7 @@ Building a modern native UI app for Windows today forces a major sacrifice no ma
 - An external DSL means we don't depend on host-language syntax features, so every language gets the same declarative experience
 - A C ABI doesn't get in the way of third-party language bindings
 
-`.ui` is the canonical declarative form, but the C ABI also permits host languages to construct UI directly. Internal DSLs built on top of bindings — Rust macros, Swift result builders, and the like — are welcomed as derivative shapes that serve language-specific developer experience; they do not replace `.ui` as the canonical form. The conditions under which `.ui` and the C ABI evolve in response to such experiments are recorded in [docs/decisions/vision-internal-dsl-policy.md](./docs/decisions/vision-internal-dsl-policy.md).
+`.ui` is the canonical declarative form, but the C ABI also permits host languages to construct UI directly. Internal DSLs built on top of bindings — Rust macros, Swift result builders, and the like — are welcomed as derivative shapes that serve language-specific developer experience; they do not replace `.ui` as the canonical form. The conditions under which `.ui` and the C ABI evolve in response to such experiments are recorded in [process/cross-milestone/decisions/internal-dsl-policy.md](./process/cross-milestone/decisions/internal-dsl-policy.md).
 
 The project's purpose is to validate this hypothesis and carry the implementation to production-grade quality.
 
@@ -89,7 +89,7 @@ Principle 2 expands into a model that the rest of the framework is built around.
 
 Property observers — host-registered watchers on property changes — are post-commit pure effects: they observe a fully converged frozen state and perform external side effects (logging, telemetry, I/O) without mutating runtime state. State mutation **into the runtime** flows exclusively through user events (signal handlers) and reactive bindings (declarative property bindings). This makes the unidirectional model structurally enforced at the runtime boundary rather than merely conventional.
 
-Host-side state external to the runtime may be mutated freely; the constraint applies to the runtime's own state — Signals, properties, and the dependency graph — and to the channels that mutate it. Recorded as [DD-M2-P6-001](./docs/decisions/m2-phase-6-ui-lowering.md#dd-m2-p6-001--drain-transaction-semantics).
+Host-side state external to the runtime may be mutated freely; the constraint applies to the runtime's own state — Signals, properties, and the dependency graph — and to the channels that mutate it. Recorded as [DD-M2-P6-001](./process/milestone-2/phase-6/decisions/preamble.md).
 
 ## 5. Differentiators
 
@@ -148,9 +148,9 @@ For the full story, see [docs/architecture.md](./docs/architecture.md).
 Each milestone closes a single thesis — a hypothesis the milestone
 verifies — rather than a feature checklist. The goal is to keep
 verification scoped and avoid wishlist-style milestones.
-[ROADMAP.md](./ROADMAP.md) is the SSOT for acceptance criteria; the
+[process/_roadmap.md](./process/_roadmap.md) is the SSOT for acceptance criteria; the
 thesis summaries below are vision-level framing
-([DD-V-010](./docs/decisions/vision-doc-system.md#dd-v-010--acceptance-criteria-ssot)).
+([DD-V-010](./process/cross-milestone/decisions/doc-system.md#dd-v-010--acceptance-criteria-ssot)).
 
 - **M1 — Proof of concept** ✅ shipped 2026-05-01. Validated the core
   hypothesis (external DSL × C ABI × Visual Layer) end-to-end.
@@ -209,9 +209,9 @@ Why:
 
 ### 9.2 Decision-making
 
-**Pre-1.0 (M1–M6).** BDFL (Benevolent Dictator) model. Design coherence comes first. Implementation decisions are recorded as Architecture Decision Records (ADRs) in [docs/decisions/](./docs/decisions/) — one file per phase, plus vision ADRs for revisions that span phases.
+**Pre-1.0 (M1–M6).** BDFL (Benevolent Dictator) model. Design coherence comes first. Implementation decisions are recorded as Architecture Decision Records (ADRs) under [process/](./process/README.md) — one file per phase, plus vision decision records for revisions that span phases.
 
-**Post-1.0.** Fully open governance, with RFC-based consensus for substantial proposals. Community-facing RFCs will live in `docs/rfcs/`, with the template, lifecycle, and acceptance rule defined in a vision ADR at that time. We'll also consider establishing a Technical Steering Committee. The timing rationale is recorded in [docs/decisions/vision-governance-rfc-deferral.md](./docs/decisions/vision-governance-rfc-deferral.md).
+**Post-1.0.** Fully open governance, with RFC-based consensus for substantial proposals. Community-facing RFCs will live in `docs/rfcs/`, with the template, lifecycle, and acceptance rule defined in a vision decision record at that time. We'll also consider establishing a Technical Steering Committee. The timing rationale is recorded in [process/cross-milestone/decisions/governance-rfc-deferral.md](./process/cross-milestone/decisions/governance-rfc-deferral.md).
 
 ### 9.3 Code of conduct
 
@@ -227,7 +227,7 @@ The `.ui` DSL specification is maintained as a document — [docs/dsl_spec.md](.
 
 The C ABI header gets the same treatment once stabilized: a separate, normative specification document.
 
-`.ui` is canonical; internal DSLs built on host-language bindings (Rust macros, Swift result builders, Zig `comptime`, Go builders, …) are welcomed as derivative shapes that serve language-specific developer experience without claiming canonical status. The project does not commit to keeping `.ui` at feature parity with the most expressive internal DSL. `.ui` is extended only when a proposed feature is both motivated by an end-user product capability that cannot be provided through bindings or design-system components, and expressible across all officially supported bindings. C ABI changes follow the same review process as any other ABI proposal under the M4 stability commitment. Full rationale and gating conditions are recorded in [docs/decisions/vision-internal-dsl-policy.md](./docs/decisions/vision-internal-dsl-policy.md).
+`.ui` is canonical; internal DSLs built on host-language bindings (Rust macros, Swift result builders, Zig `comptime`, Go builders, …) are welcomed as derivative shapes that serve language-specific developer experience without claiming canonical status. The project does not commit to keeping `.ui` at feature parity with the most expressive internal DSL. `.ui` is extended only when a proposed feature is both motivated by an end-user product capability that cannot be provided through bindings or design-system components, and expressible across all officially supported bindings. C ABI changes follow the same review process as any other ABI proposal under the M4 stability commitment. Full rationale and gating conditions are recorded in [process/cross-milestone/decisions/internal-dsl-policy.md](./process/cross-milestone/decisions/internal-dsl-policy.md).
 
 ### 9.5 Trademark and naming
 
@@ -269,11 +269,11 @@ several ways.
 
 **Contribute code.** [Good first issues](https://github.com/matarillo/wasamo/issues?q=label%3A%22good+first+issue%22) on the current roadmap are a reasonable starting point.
 
-**Record a decision.** For pre-1.0 implementation decisions (M1 through M6), create an ADR in [docs/decisions/](./docs/decisions/) following the format in [docs/decisions/README.md](./docs/decisions/README.md). RFC-based consensus for substantial proposals begins post-1.0 alongside fully open governance (see [§9.2](#92-decision-making)).
+**Record a decision.** For pre-1.0 implementation decisions (M1 through M6), create an ADR under [process/](./process/README.md) following the format in [process/README.md](./process/README.md). RFC-based consensus for substantial proposals begins post-1.0 alongside fully open governance (see [§9.2](#92-decision-making)).
 
 **Documentation and samples.** Examples for each language, tutorials, and best practices are always needed.
 
-**Build a binding.** Official bindings are limited to C, Rust, and Zig (the three verified end-to-end in M1; their maturity is a 1.0 acceptance criterion in [ROADMAP.md](./ROADMAP.md)). For everything else (Swift, Go, Nim, Crystal, Odin, etc.), we encourage and support community-maintained bindings.
+**Build a binding.** Official bindings are limited to C, Rust, and Zig (the three verified end-to-end in M1; their maturity is a 1.0 acceptance criterion in [process/_roadmap.md](./process/_roadmap.md)). For everything else (Swift, Go, Nim, Crystal, Odin, etc.), we encourage and support community-maintained bindings.
 
 Channels:
 - GitHub Issues / Discussions — design, bugs, feature requests
@@ -307,8 +307,8 @@ Channels:
 - [README.md](./README.md) — Glanceable introduction
 - [docs/architecture.md](./docs/architecture.md) — Technical architecture in depth
 - [docs/dsl_spec.md](./docs/dsl_spec.md) — `.ui` DSL specification
-- [ROADMAP.md](./ROADMAP.md) — Detailed milestones
+- [process/_roadmap.md](./process/_roadmap.md) — Detailed milestones
 - [CHANGELOG.md](./CHANGELOG.md) — What has shipped
 - [CONTRIBUTING.md](./CONTRIBUTING.md) — Contribution guide
 - [CODE_OF_CONDUCT.md](./CODE_OF_CONDUCT.md) — Code of Conduct
-- [docs/decisions/](./docs/decisions/) — Architecture Decision Records (ADRs)
+- [process/](./process/README.md) — Architecture Decision Records (ADRs)

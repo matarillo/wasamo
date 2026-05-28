@@ -81,12 +81,12 @@ See [VISION.md](./VISION.md#5-differentiators) for a full discussion.
 the runtime through the M2 `wasamoc` -> IR -> `wasamo_load_ui` path, with
 reactive state propagation in the C, Rust, and Zig counter examples. See
 [CHANGELOG.md](./CHANGELOG.md#m2-foundation--shipped-2026-05-11) and
-[docs/plans/m2-plan.md](./docs/plans/m2-plan.md). Not ready for
+[process/milestone-2/plan.md](./process/milestone-2/plan.md). Not ready for
 production use. Design discussion and contributions to M3 are welcome.
 
-Future milestones live in [ROADMAP.md](./ROADMAP.md); shipped
-milestones in [CHANGELOG.md](./CHANGELOG.md); per-phase decisions
-in [docs/decisions/](./docs/decisions/).
+Future milestones live in [process/_roadmap.md](./process/_roadmap.md); shipped
+milestones in [CHANGELOG.md](./CHANGELOG.md); ADRs
+in [process/](./process/README.md).
 
 ## Requirements
 
@@ -125,10 +125,10 @@ The same counter is also available in Rust and Zig:
 - [VISION.md](./VISION.md) — Why this project exists, what it values, how it's governed
 - [docs/architecture.md](./docs/architecture.md) — Technical architecture in depth
 - [docs/dsl_spec.md](./docs/dsl_spec.md) — The `.ui` DSL language specification
-- [ROADMAP.md](./ROADMAP.md) — Future milestones and acceptance criteria
+- [process/_roadmap.md](./process/_roadmap.md) — Future milestones and acceptance criteria
 - [CHANGELOG.md](./CHANGELOG.md) — Shipped milestones
 - [CONTRIBUTING.md](./CONTRIBUTING.md) — How to contribute
-- [docs/decisions/](./docs/decisions/) — Architecture Decision Records (ADRs)
+- [process/](./process/README.md) — Architecture Decision Records (ADRs)
 
 ## License
 

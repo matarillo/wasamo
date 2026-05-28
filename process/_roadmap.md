@@ -2,26 +2,25 @@
 
 Milestones are defined by **acceptance criteria**, not dates. This
 file is the SSOT for those criteria
-([DD-V-010](./docs/decisions/vision-doc-system.md#dd-v-010--acceptance-criteria-ssot)).
+([DD-V-010](./cross-milestone/decisions/doc-system.md#dd-v-010--acceptance-criteria-ssot)).
 For thesis-level framing see [VISION.md §7](./VISION.md#7-roadmap).
 For shipped milestones see [CHANGELOG.md](./CHANGELOG.md). For the
 current state of work see the **Status** section of
 [README.md](./README.md).
 
-Phase structure for the active milestone lives in its plan under
-[docs/plans/](./docs/plans/), not here
-([DD-V-016](./docs/decisions/vision-doc-system.md#dd-v-016--plan--roadmap-commit-flow-redefinition)).
-Per-phase design decisions are recorded as ADRs in
-[docs/decisions/](./docs/decisions/); the pre-implementation
-discipline is described in
-[docs/decisions/README.md](./docs/decisions/README.md#pre-doc-discipline).
+Phase structure for the active milestone lives in its plan
+(`process/milestone-N/plan.md`), not here
+([DD-V-016](./cross-milestone/decisions/doc-system.md#dd-v-016--plan--roadmap-commit-flow-redefinition)).
+Design decisions are recorded as ADRs under each phase's
+`decisions/` directory; the document structure and pre-implementation
+discipline are described in [process/README.md](./README.md).
 
 ---
 
 ## M1: Proof of Concept ✅ shipped 2026-05-01 (v0.1.0)
 
 See [CHANGELOG entry](./CHANGELOG.md#v010--2026-05-01--m1-proof-of-concept)
-and [docs/decisions/](./docs/decisions/) for the per-ADRs.
+and the [ADRs](./milestone-1/).
 
 ## M2: Foundation ✅ shipped 2026-05-11
 
@@ -39,7 +38,7 @@ by hand through the experimental C ABI.
   plumbing: `count++` in the host updates the visible label
   through the M2 reactive path, not a manual `wasamo_set_property`
 - The cdylib / rlib filename collision flagged in
-  [DD-P7-002](./docs/decisions/phase-7-language-bindings.md) is
+  [DD-P7-002](./milestone-1/phase-7/decisions/preamble.md) is
   discharged
 - The C ABI gains the tree-mutation primitives required by the
   reactive engine; the experimental layer's all-at-once
@@ -57,7 +56,7 @@ by hand through the experimental C ABI.
   design is not silently `i32`-specialized
 
 See [CHANGELOG entry](./CHANGELOG.md#m2-foundation--shipped-2026-05-11)
-and [docs/plans/m2-plan.md](./docs/plans/m2-plan.md) for the completed
+and [process/milestone-2/plan.md](./milestone-2/plan.md) for the completed
 phase breakdown.
 
 ## M3: DSL surface
@@ -201,7 +200,7 @@ polished showcase ships, and SemVer applies.
   depends on the wasamoc output format chosen in M2-Phase 2
 - Higher-level animation DSL (the public property-change animation
   API deferred from Phase 5; see
-  [DD-V-001](./docs/decisions/vision-m1-acceptance-criteria.md))
+  [DD-V-001](./cross-milestone/decisions/m1-acceptance-criteria.md))
 - Advanced layout (LazyList, CollectionView)
 - System tray and notification integration
 - MSIX packaging integration
