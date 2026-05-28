@@ -101,13 +101,14 @@ ADR is reviewed.
   same resolved cell belongs to Phase 6 ZStack, not to Grid.
 
   The roadmap wording "row / column spanning" reads both axes as in
-  scope, but per-axis admission inside Phase 5 (column-span only,
-  row-span only, both, or one deferred while the attribute name is
-  reserved) is a DD-M3-P5-003 sub-issue, not a framing-time
-  commitment. Whichever choice the ADR settles, the surface-family
-  impact differs between coordinate and structural families; that
-  impact is recorded as a comparison axis (DD-M3-P5-001 axis 2 below)
-  so the ADR can weigh it independently of the M3 admission scope.
+  scope, and the 2026-05-28 alignment **admits both axes** (column-span
+  and row-span). The ADR records the spanning surface and conflict rule
+  for both axes; under the chosen Surface A2 (a coordinate family) the
+  two axes are symmetric and share one `(row, column, row-span,
+  column-span)` rectangle check. The original per-axis comparison
+  (DD-M3-P5-001 axis 2 below) is retained as rationale for why the
+  structural families would have made this asymmetric, but the M3
+  admission scope is settled: both axes.
 
 - **A11 (operational obligation).** `.ui`, `wasamo-ir`, `wasamoc`,
   `wasamo-runtime`, `docs/dsl_spec.md`, and the
@@ -334,12 +335,12 @@ Sub-issues:
      slot in `Row[i+1]`, which requires a separate rule for how
      `Row[i+1]` represents the consumed slot (implicit skip, as in
      HTML `rowspan`, vs explicit placeholder `Cell {}` carrying a
-     "covered from above" marker). Whether row-span is admitted in
-     Phase 5 or deferred is settled in DD-M3-P5-003; this axis still
-     records the surface impact in both cases, because deferral does
-     not erase the extension shape — admitting row-span later under a
-     structural surface re-opens the same implicit-vs-explicit
-     question.
+     "covered from above" marker). Row-span admission was originally a
+     DD-M3-P5-003 branch; the 2026-05-28 alignment settled it as **both
+     axes admitted**. This axis still records the structural surface
+     impact as rationale, because under a structural surface (not the
+     chosen A2) admitting row-span would have re-opened the same
+     implicit-vs-explicit question.
   3. **Shared track sizing** — whether column widths are shared across
      rows by construction (track-list, hybrid-column, and definition-node families) or
      must be reconciled across independent Row declarations (pure
@@ -369,14 +370,13 @@ Sub-issues:
 
   Implementation effort and parser diagnostics are secondary concerns
   and must not drive the surface selection.
-  **No surface recommendation is made at framing time.** A critical
-  recommendation would require choosing which tradeoff matters most:
-  A's irregular-layout power and metadata precedent, A2's wrapper-based
-  containment of Grid metadata, B's direct structural authoring with
-  reconciliation burden, D's hybrid parent-columns / structural-rows
-  split, or C's explicit shared tracks with an extra definition layer.
-  The current owner alignment goal is to compare those tradeoffs flatly
-  before the ADR selects one.
+  **Surface A2 was selected at the 2026-05-28 alignment** (track-list +
+  placed `Cell` wrapper): it keeps A's irregular-placement power and
+  automatic shared track sizing while containing Grid-specific metadata
+  on a `Cell` wrapper rather than on arbitrary content widgets. The flat
+  comparison of A / A2 / B / D / C below is retained as the rationale for
+  that choice; the ADR documents the A2 surface and its `Cell` contract,
+  not a re-comparison.
 - **Track declaration syntax.** The location of track sizing
   information depends on the selected surface, and the ADR must not
   presume one location:
@@ -572,17 +572,17 @@ that no family is presented as the implicit default.
   In every family a span must be positive and must not exceed the
   declared row / column count.
 
-- **Per-axis admission scope (column-span vs row-span).** The ADR
-  must decide whether Phase 5 admits column-span only, row-span only,
-  both axes, or both with one axis deferred while its attribute name
-  is reserved. The A2 roadmap wording reads both axes as in scope,
-  but per-axis deferral is a legitimate ADR choice for narrowing the
-  novel-normative-spec surface. This is a scope decision, not a
-  framing-time recommendation, and must be settled before
-  DD-M3-P5-004's algorithm and DD-M3-P5-005's arrange commit to
-  span-reconciliation behavior. The decision interacts with the
-  selected surface family; the ADR must record the interaction it
-  accepts rather than treating row-span as a pure scope variable:
+- **Per-axis admission scope (column-span vs row-span).** Settled at
+  the 2026-05-28 alignment: **both axes are admitted.** (The alternatives
+  considered — column-span only, row-span only, or one axis deferred with
+  its attribute name reserved — are retained below as rationale.) Under
+  the chosen Surface A2 (coordinate family) the two axes are symmetric, so
+  admitting both adds no new surface concept beyond the shared `(row,
+  column, row-span, column-span)` rectangle check; DD-M3-P5-004's
+  algorithm and DD-M3-P5-005's arrange must cover both-axis span
+  reconciliation. The structural-family asymmetry below is no longer a
+  live decision (A2 was selected) but is kept as the reason the axes are
+  not interchangeable in general:
   - **Surface A / A2 (coordinate).** The two axes are symmetric.
     Admitting row-span reuses the same `(row, column, row-span,
     column-span)` rectangle conflict check and adds no new surface
@@ -612,10 +612,11 @@ that no family is presented as the implicit default.
     the ADR to commit to one rule and reflect it in DD-M3-P5-006's
     structural validation surface.
 
-  This sub-issue is intentionally raised at framing time so the ADR
-  Options table can show row-span examples per surface (or explicitly
-  mark them deferred) instead of inheriting an implicit column-span-
-  only baseline from the framing's illustrative examples.
+  This sub-issue was raised at framing time so the ADR Options table
+  shows row-span examples explicitly rather than inheriting an implicit
+  column-span-only baseline. With both axes admitted (2026-05-28), the
+  ADR documents row-span and column-span examples for Surface A2; the
+  deferral branch is no longer live.
 - **Conflict policy.** Duplicate cell origins and overlapping spans
   are rejected in Phase 5. This preserves A2's "1 cell 1 child" rule
   and leaves overlay to Phase 6 ZStack. The conflict-detection input
@@ -738,16 +739,53 @@ shape explicit before treating the validation burden as equal.
 
 ---
 
+## Phase 5 scope
+
+Consolidated scope view for the aligned framing (2026-05-28). The
+acceptance criteria above (A2 / A11 / A12) state the obligations; this
+section closes them into in-scope / out-of-scope / acceptance-mapping
+form so the ADR draft does not have to re-derive them.
+
+### In scope
+
+- Grid IR node (per-kind tag) + **Surface A2** author surface
+  (`Grid` track-list + placed single-child `Cell` wrapper).
+- Fixed pixel tracks and weighted-star tracks (positive integer weights).
+- **Both-axis spanning** (column-span + row-span).
+- Child membership + "1 cell 1 child" conflict rejection.
+- Deterministic track-resolution algorithm (`f32`, no pixel snap),
+  including the **unbounded-star error** branch.
+- Arrange: stretch default + per-`Cell` alignment; no intermediate Visual.
+- **Grid outer-bounds clip** + **document-order z-order** (no
+  author-facing layering attribute).
+- IR-loader dual-gate invariants (`wasamoc check` + runtime `validate()`).
+- A11 gallery visible proof; A12 `docs/dsl_spec.md` §4.12 design-spec
+  draft.
+
+### Acceptance mapping
+
+| AC | In-scope realization |
+|---|---|
+| A2 | DD-M3-P5-001..006 — A2 surface, fixed / weighted-star tracks, both-axis spanning, 1-cell-1-child conflict, track-resolution, arrange, IR-loader invariants |
+| A11 | Grid advances `.ui` / `wasamo-ir` / `wasamoc` / `wasamo-runtime` / `docs/dsl_spec.md` plus an `examples/gallery/` slice in the real `.ui -> IR -> runtime` path |
+| A12 | New `docs/dsl_spec.md` §4.12 Grid chapter (Moment 1 design draft -> Moment 2 close), held to the external-reader bar at phase close |
+
 ### Out of scope (to be carried in the ADR's Out-of-scope section)
 
 - Same-cell overlap / overlay. Phase 6 ZStack owns overlay.
 - Responsive breakpoint grammar, media queries, and named areas.
 - General list / collection syntax beyond the minimum needed to
   express row and column tracks.
-- Grid-level clip attributes and per-cell clipping. A fixed Grid
-  outer-bounds clip is an ADR option for DD-M3-P5-005, but no
-  author-facing `clip:` attribute or per-cell clip surface is in
-  Phase 5 scope.
+- Per-cell clipping and any author-facing `clip:` attribute. Per the
+  2026-05-28 alignment a fixed **Grid outer-bounds clip is in scope**
+  for DD-M3-P5-005 (it is no longer merely an ADR option); per-cell
+  clipping and an author-facing `clip:` surface remain out of scope.
+- Explicit `z-index` / author-facing paint-order control. Paint order is
+  fixed to document order (DD-M3-P5-005 z-order rule); Phase 5 exposes
+  no layering attribute. Intentional overlay is Phase 6 ZStack.
+- `auto` / intrinsic track sizing. Deferred from Phase 5 with a reserved
+  algorithm slot (DD-M3-P5-002); Phase 5 admits fixed and weighted-star
+  tracks only.
 - Bindable Grid track definitions or bindable child placement.
   Phase 5 should keep Grid attributes constant-only unless owner
   explicitly expands scope, but DD-M3-P5-001 / 002 should note whether
@@ -766,8 +804,10 @@ shape explicit before treating the validation burden as equal.
 
 ## Owner-agreed framing decisions
 
-These are draft recommendations for owner review. Once aligned, this
-section becomes the owner-agreed agenda for the ADR draft.
+These were draft recommendations for owner review; as of the 2026-05-28
+alignment this section **is** the owner-agreed agenda for the ADR draft.
+FD-D and FD-E are owner-confirmed (see [Owner alignment outcome](#owner-alignment-outcome-2026-05-28));
+the remaining FDs stand as the agreed verification / process agenda.
 
 To avoid confusion with Surface D, framing-decision labels use the
 `FD-*` prefix in this section.
@@ -807,10 +847,17 @@ The ADR should therefore land with:
 
 Phase 5 verification should include:
 
-- pure layout tests for fixed tracks, weighted star tracks, spanning,
-  and unbounded-parent behavior;
+- pure layout tests for fixed tracks, weighted star tracks, **both-axis
+  spanning (column-span and row-span, per the DD-M3-P5-003 both-axes
+  decision)**, and unbounded-parent behavior — the unbounded-star case
+  must **assert that the Grid-specific unbounded-star error is raised**
+  (DD-M3-P5-004), not merely that some size results;
+- **DD-M3-P5-005 overflow / z-order tests**: that paint is clipped at the
+  Grid outer bounds while still overflowing between cells, and that
+  overlapping painted pixels follow document order (later child on top) —
+  this z-order rule is novel-normative, so it is its own evidence line;
 - `wasamoc check` tests for malformed track lists, out-of-range
-  placement, invalid spans, and overlap conflicts;
+  placement, invalid spans (**both axes**), and overlap conflicts;
 - runtime IR validation tests for the same invariant classes, so
   memory IR cannot bypass compiler checks;
 - at least one mock-free Windows integration test that constructs a
@@ -827,10 +874,41 @@ runtime-boundary sizing miss.
 Evidence items do not collapse just because they share helper
 infrastructure. A single fixture builder may be reused, but the ADR's
 verification closure should keep separate evidence lines for
-algorithmic layout, compiler diagnostics, runtime validation,
-Windows-runtime integration, and gallery visible proof. This preserves
-the Phase 4 lesson that a helper-compatible test can still miss a
-production parent shape.
+algorithmic layout, overflow / z-order behavior, compiler diagnostics,
+runtime validation, Windows-runtime integration, and gallery visible
+proof. This preserves the Phase 4 lesson that a helper-compatible test
+can still miss a production parent shape.
+
+**Verification mapping (DD / AC -> discharge).** The ADR's verification
+closure should make each DD and acceptance criterion discharge explicit;
+the framing fixes the intended mapping:
+
+| DD / AC | Discharged by |
+|---|---|
+| DD-M3-P5-001 (surface / IR) | `wasamoc` lowering tests (A2 `Grid` + `Cell` -> IR) + runtime construction; gallery `.ui` exercises the surface |
+| DD-M3-P5-002 (track forms) | pure layout tests for fixed + weighted-star; `wasamoc check` rejects `auto` token / non-positive star weights |
+| DD-M3-P5-003 (membership / spanning / conflict) | pure layout tests for **both-axis spans**; `wasamoc check` + runtime `validate()` for out-of-range placement, invalid spans, duplicate / overlap conflicts |
+| DD-M3-P5-004 (track resolution) | pure layout tests for fixed / star distribution, prefix boundaries, and the **unbounded-star error** branch |
+| DD-M3-P5-005 (arrange / overflow / z-order) | pure layout + paint tests: per-`Cell` alignment, outer-bounds clip with inter-cell overflow, document-order z-order on overlapping paint |
+| DD-M3-P5-006 (IR-loader invariants) | paired `wasamoc check` + runtime `validate()` tests for every row of the DD-006 gate table |
+| A2 | sum of DD-001..006 evidence above |
+| A11 | mock-free Windows integration test (Grid via runtime widget path, production root shape) + gallery visible proof |
+| A12 | `docs/dsl_spec.md` §4.12 chapter review against the external-reader bar at phase close |
+
+**CI run.** All test / example evidence above is collected by the
+existing workspace CI (`cargo build --release --workspace` +
+`cargo test --workspace`; Phase 5 adds no new language or build system,
+so no CI update per [CLAUDE.md §CI rules](../../../../CLAUDE.md#ci-rules)).
+Phase close confirms the suite green and leaves a CI pointer in the
+phase-end gate (FD-G).
+
+**Row-span vs visible proof (division of evidence).** The gallery
+visible proof (FD-H) exercises **column-span** in the real `.ui`;
+**row-span** is discharged by the pure layout + `wasamoc check` /
+runtime `validate()` tests above, not by the gallery slice. This split
+is recorded so the phase-end retrospective does not ask "where is the
+row-span evidence" — it lives in the algorithmic / validation evidence
+lines, by design, while the visible proof stays a column-span slice.
 
 ### FD-D. Non-root Shrink parent with Fill child
 
@@ -2268,33 +2346,30 @@ star semantics.
 
 ## Next session — handoff
 
-To move from this draft to ADR drafting:
+Framing alignment is **complete** (2026-05-28; see [Owner alignment
+outcome](#owner-alignment-outcome-2026-05-28)). The branching choices
+that previously gated ADR drafting are settled:
 
-1. Owner reviews FD-A through FD-K. The surface family choice in
-   DD-M3-P5-001 must come first because DD-002 / DD-003 / DD-005
-   sub-issues branch on it. Specifically:
-   - DD-M3-P5-001: Surface A (track-list + direct child placement) vs
-     Surface A2 (track-list + placed `Cell` wrapper) vs Surface B
-     (pure structural Row / Cell with B-reject shared sizing rule) vs
-     Surface D (Grid columns + structural rows) vs Surface C
-     (definition nodes + structural rows), compared on the five axes
-     (`.ui` taste, spanning, shared track sizing, future iteration,
-     component-extension-model).
-   - DD-M3-P5-002: `auto` defer-with-slot vs fully specified `auto`
-     now (orthogonal to surface).
-   - DD-M3-P5-003: membership, spanning, and conflict policy under
-     the selected surface.
-   - DD-M3-P5-004: zero-minimum unbounded star vs Grid-specific
-     layout error.
-   - DD-M3-P5-005: alignment-carrier location (depends on surface),
-     pure overflow vs Grid outer-bounds clipping.
-   - FD-E: R1 assigned to Phase 6.
-2. If aligned, draft `process/milestone-3/phase-5/decisions/preamble.md`
-   plus the six `dd-*.md` files as `Status: Proposed`.
-3. Draft the Moment 1 `docs/dsl_spec.md` Grid chapter and widget
-   registry row.
-4. Create `process/milestone-3/phase-5/implementation/preamble.md`
+- DD-M3-P5-001: **Surface A2** (track-list + placed `Cell` wrapper).
+- DD-M3-P5-002: **`auto` deferred** with a reserved algorithm slot.
+- DD-M3-P5-003: **both spanning axes admitted**; membership / conflict
+  policy under Surface A2.
+- DD-M3-P5-004: **Grid-specific unbounded-star error**.
+- DD-M3-P5-005: alignment carried on `Cell`; **paint overflow + Grid
+  outer-bounds clip**; document-order **z-order rule** (no explicit
+  z-index).
+- FD-E: R1 assigned to **Phase 6**. FD-D: **status quo**.
+
+Surface-A2 sub-decisions stay deferred to ADR `Proposed` → `Accepted`
+review (see [Owner alignment outcome](#owner-alignment-outcome-2026-05-28)).
+
+Remaining steps to ADR drafting:
+
+1. Draft `process/milestone-3/phase-5/decisions/preamble.md` plus the
+   six `dd-*.md` files as `Status: Proposed`.
+2. Draft the Moment 1 `docs/dsl_spec.md` §4.12 Grid chapter and §4.4
+   widget registry row.
+3. Create `process/milestone-3/phase-5/implementation/preamble.md`
    and `process/milestone-3/phase-5/implementation/plan.md` with the
    final-step retrospective split already represented.
-5. Update `process/milestone-3/plan.md` to assign R1 to Phase 6 if owner
-   accepts FD-E.
+4. Update `process/milestone-3/plan.md` to assign R1 to Phase 6 (FD-E).
