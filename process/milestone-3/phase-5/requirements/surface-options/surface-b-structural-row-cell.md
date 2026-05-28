@@ -366,6 +366,72 @@ Surface B は `columns:` を持たないため、track-list grammar を導入し
 - `auto`, `minmax`, bindable width を足す場合、各 `Cell` の value と
   shared track identity の関係を再確認する必要がある。
 
+## Row spanning consideration
+
+M3 で row-span を admit するかどうかは
+[framing.md DD-M3-P5-003 per-axis admission sub-issue](../framing.md)
+で決まる scope decision で、ここでは確定させません。Surface B は column-span
+は intra-`Row` の document order で自然に閉じますが、row-span は document
+tree を跨ぐため、coordinate family と違って per-surface の追加 rule が
+必要になります。
+
+`Cell { row-span: 2 }` を `Row[i]` に書くと、`Row[i+1]` の特定列が上から
+占有されます。次の `Row` の children をどう書くかで 2 つの rule があり、
+どちらも Surface B の核である "document structure mirrors visible structure"
+に異なる影響を与えます。
+
+**Option B-implicit (HTML rowspan-like skip):**
+
+```wasamo-ui
+Grid {
+  Row {
+    Cell { width: 180 row-span: 2 Box { fill: #243447ff Text { text: "Sidebar" } } }
+    Cell { width: 1* Text { text: "Header" } }
+  }
+  Row {
+    Cell { width: 1* Text { text: "Body" } }
+  }
+}
+```
+
+`Row[1]` の `Cell` は実は column 1 に着地します。`Row[1]` だけを読んでも
+visible 列位置がわからず、author / reader は上 row の row-span を把握する
+必要があります。
+
+**Option B-explicit (placeholder):**
+
+```wasamo-ui
+Grid {
+  Row {
+    Cell { width: 180 row-span: 2 Box { fill: #243447ff Text { text: "Sidebar" } } }
+    Cell { width: 1* Text { text: "Header" } }
+  }
+  Row {
+    Cell { covered }
+    Cell { width: 1* Text { text: "Body" } }
+  }
+}
+```
+
+local readability は保たれますが、author が上 row の coverage を手動で
+tracking する必要があります。iteration template が `Row` を生成する場合は
+template 側に coverage 計算を持つことになります。
+
+加えて、B-reject の canonical non-spanning row 推論が row-span と干渉します。
+row-span を持つ row は non-spanning 扱いしづらいため、canonical row の決定
+アルゴリズムは「column-span も row-span も持たない最初の row」へ複雑化
+します。
+
+含意:
+
+- M3 で defer する場合、Surface B の structural readability と canonical-row
+  推論の単純さは維持できる。
+- M3 で admit する場合、implicit / explicit のどちらの rule にも記述上の
+  コストがあり、Surface B の "document structure mirrors visible structure"
+  という強みは片側の料金を払う形になる。
+- deferral は問題を消すのではなく先送りする (将来 admit する時に同じ rule
+  choice が再浮上する)。
+
 ## 判断材料
 
 Surface B は、オーナーが示した `Grid { Row { Cell { ... } } }` の書き味に

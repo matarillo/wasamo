@@ -394,6 +394,81 @@ carrier になります。first-class track-list grammar は不要です。
 - content rows と definition rows の ordering rule を決める必要がある。
 - `RowDefs` と content `Row` が別物であることを author に理解させる必要がある。
 
+## Row spanning consideration
+
+M3 で row-span を admit するかどうかは
+[framing.md DD-M3-P5-003 per-axis admission sub-issue](../framing.md)
+で決まる scope decision で、ここでは確定させません。Surface C は
+`ColumnDefs` / `RowDefs` で tracks を hoist するため、row count も
+definition から確定します。これは Surface B / D の row-span 議論と次の差を
+もたらします:
+
+- shared column reconciliation 問題は Surface B / D と同じく無関係 (column
+  widths は `ColumnDefs` で確定)。
+- row-span の bound check (`row + row-span <= row count`) は `RowDefs` の
+  数と比較するだけで済むため、generated content rows の数に依存しない。
+  Surface B / D では content `Row` 数を数える必要があり、iteration 経由の
+  Grid では実行時依存になりやすい。
+
+implicit vs explicit の `.ui` 上の rule choice は Surface B / D と同じく
+必要です。
+
+**Option C-implicit:**
+
+```wasamo-ui
+Grid {
+  ColumnDefs {
+    ColumnDef { width: 180 }
+    ColumnDef { width: 1* }
+  }
+  RowDefs {
+    RowDef { height: 1* }
+    RowDef { height: 1* }
+  }
+
+  Row {
+    Cell { row-span: 2 Box { fill: #243447ff Text { text: "Sidebar" } } }
+    Cell { Text { text: "Header" } }
+  }
+  Row {
+    Cell { Text { text: "Body" } }
+  }
+}
+```
+
+**Option C-explicit:**
+
+```wasamo-ui
+Grid {
+  ColumnDefs {
+    ColumnDef { width: 180 }
+    ColumnDef { width: 1* }
+  }
+  RowDefs {
+    RowDef { height: 1* }
+    RowDef { height: 1* }
+  }
+
+  Row {
+    Cell { row-span: 2 Box { fill: #243447ff Text { text: "Sidebar" } } }
+    Cell { Text { text: "Header" } }
+  }
+  Row {
+    Cell { covered }
+    Cell { Text { text: "Body" } }
+  }
+}
+```
+
+含意:
+
+- M3 で defer する場合、Surface C の structural readability は維持できる。
+- M3 で admit する場合、implicit / explicit の rule choice は Surface B / D
+  と同じだが、bound check の declarative さは Surface C の方が強い
+  (`RowDefs` 数で静的に閉じる)。
+- definition nodes の boilerplate 負担を払う見返りに、row-span を含む
+  validation surface は他 structural surface より静的に閉じやすい。
+
 ## 判断材料
 
 Surface C は、shared track sizing を重視しつつ structural authoring も残したい場合の

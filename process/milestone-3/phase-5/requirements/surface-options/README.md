@@ -31,3 +31,12 @@ The same five axes used in `framing.md` should guide review:
 - shared track sizing
 - future iteration
 - component-extension-model impact
+
+The **spanning** axis splits into column-span and row-span. The two
+are symmetric under coordinate surfaces (A / A2) but not under
+structural surfaces (B / D / C), where row-span crosses the `Row`
+document boundary and forces an implicit-skip vs explicit-placeholder
+rule choice. Each surface file carries a `Row spanning consideration`
+section that records this per-surface; whether Phase 5 admits
+row-span at all is a scope decision settled by
+[../framing.md](../framing.md) DD-M3-P5-003, not by these notes.

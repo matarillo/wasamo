@@ -316,6 +316,67 @@ Surface D は `columns:` の first-class track-list grammar を使います。
 - row definitions を一元管理したい use case では C の方が整って見える。
 - `rows:` を将来足すと D が A2 / C に近づき、surface 境界が曖昧になる可能性がある。
 
+## Row spanning consideration
+
+M3 で row-span を admit するかどうかは
+[framing.md DD-M3-P5-003 per-axis admission sub-issue](../framing.md)
+で決まる scope decision で、ここでは確定させません。Surface D は columns を
+parent-level、rows を structural に置くため、column-span は intra-`Row` で
+自然に閉じる一方、row-span は cross-`Row` の問題を Surface B と同じ形で
+抱えます。
+
+Surface B との違いは canonical non-spanning row 推論を持たない (column
+widths は `columns:` で確定) ため、row-span が shared column reconciliation
+に干渉しないことです。それでも implicit vs explicit の `.ui` 上の rule
+choice は同じく必要になります。
+
+**Option D-implicit:**
+
+```wasamo-ui
+Grid {
+  columns: 180 1*
+
+  Row {
+    Cell { row-span: 2 Box { fill: #243447ff Text { text: "Sidebar" } } }
+    Cell { Text { text: "Header" } }
+  }
+  Row {
+    Cell { Text { text: "Body" } }
+  }
+}
+```
+
+`Row[1]` の `Cell` は column 1 に着地。上の row-span 情報を読まないと位置が
+わからない点は Surface B と同じです。
+
+**Option D-explicit:**
+
+```wasamo-ui
+Grid {
+  columns: 180 1*
+
+  Row {
+    Cell { row-span: 2 Box { fill: #243447ff Text { text: "Sidebar" } } }
+    Cell { Text { text: "Header" } }
+  }
+  Row {
+    Cell { covered }
+    Cell { Text { text: "Body" } }
+  }
+}
+```
+
+含意:
+
+- M3 で defer する場合、Surface D の structural readability は無傷。
+  "shared columns はそのまま、rows は読みやすく" という D の strength が
+  そのまま保てる。
+- M3 で admit する場合、implicit / explicit の rule choice は Surface B と
+  同じく必要。Surface D の strength の片側 (structural rows の読みやすさ)
+  が一部削られる。
+- column-span が Surface D で軽く扱える分、row-span の cross-Row 問題は
+  相対的に目立つ surface でもある。
+
 ## 判断材料
 
 Surface D は、Surface B の structural authoring を保ちつつ、shared column sizing の

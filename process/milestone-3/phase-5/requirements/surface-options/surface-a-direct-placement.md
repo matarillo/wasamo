@@ -355,6 +355,50 @@ string-encoded にすると、この拡張は string mini-language に積み上�
 v1.0 framework の tooling / diagnostics を重視するなら、first-class grammar の方が
 説明しやすいです。
 
+## Row spanning consideration
+
+M3 で row-span を admit するかどうかは
+[framing.md DD-M3-P5-003 per-axis admission sub-issue](../framing.md)
+で決まる scope decision で、ここでは確定させません。Surface A は coordinate
+based のため、column-span と row-span は完全に対称です。
+
+admit する場合の `.ui` 例:
+
+```wasamo-ui
+Grid {
+  columns: 180 1*
+  rows: 1* 1*
+
+  Box {
+    row: 0
+    column: 0
+    row-span: 2
+    fill: #243447ff
+    Text { text: "Sidebar" }
+  }
+
+  Text { row: 0 column: 1 text: "Header" }
+  Text { row: 1 column: 1 text: "Body" }
+}
+```
+
+`(row, column, row-span, column-span)` の rectangle conflict check が
+そのまま両軸に効きます。
+
+含意:
+
+- 新しい surface 概念は発生しない。column-span 用の validation / arrange
+  ロジックがそのまま row-span に転用できる。
+- M3 で defer する場合も、`row-span:` 属性名を予約し `wasamoc check` /
+  runtime validation で reject するだけで surface 構造は変わらない。
+- iteration template でも `row-span: {item.height}` のように child metadata
+  1 行で出せる。
+- 将来 named lines や `auto` row tracks を入れた場合も、span 処理は
+  axis-uniform に保てる。
+
+row-span 周りの追加 surface コストが coordinate family ではほぼゼロである
+ことが、structural family (B / D / C) との対比点になります。
+
 ## 判断材料
 
 Surface A は、irregular placement、spanning、shared track sizing の明快さでは

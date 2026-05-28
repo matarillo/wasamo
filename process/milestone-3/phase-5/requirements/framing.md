@@ -68,6 +68,15 @@ rather than re-derives:
   rectangle or one spanning rectangle; deliberate overlap in the
   same resolved cell belongs to Phase 6 ZStack, not to Grid.
 
+  The roadmap wording "row / column spanning" reads both axes as in
+  scope, but per-axis admission inside Phase 5 (column-span only,
+  row-span only, both, or one deferred while the attribute name is
+  reserved) is a DD-M3-P5-003 sub-issue, not a framing-time
+  commitment. Whichever choice the ADR settles, the surface-family
+  impact differs between coordinate and structural families; that
+  impact is recorded as a comparison axis (DD-M3-P5-001 axis 2 below)
+  so the ADR can weigh it independently of the M3 admission scope.
+
 - **A11 (operational obligation).** `.ui`, `wasamo-ir`, `wasamoc`,
   `wasamo-runtime`, `docs/dsl_spec.md`, and the
   `examples/gallery/` sub-screen all advance within Phase 5. Phase
@@ -272,7 +281,25 @@ Sub-issues:
   2. **Spanning** — whether rectangular row / column spans are
      expressible directly, how span declarations sit in the surface
      (child metadata vs `Cell` attribute), and how malformed spans
-     surface to authors.
+     surface to authors. The two axes are not symmetric across
+     surface families and the ADR must record the asymmetry rather
+     than treat "spanning" as one axis. Coordinate families (A / A2)
+     handle row-span and column-span uniformly because membership lives
+     in a single `(row, column, row-span, column-span)` tuple per child;
+     admitting or deferring either axis is a pure scope decision with
+     no surface restructure. Structural families (B / D / C) treat the
+     two axes differently: column-span is intra-`Row` (advance sibling
+     `Cell`s within document order) and falls out of the surface
+     naturally, while row-span causes a `Cell` in `Row[i]` to occupy a
+     slot in `Row[i+1]`, which requires a separate rule for how
+     `Row[i+1]` represents the consumed slot (implicit skip, as in
+     HTML `rowspan`, vs explicit placeholder `Cell {}` carrying a
+     "covered from above" marker). Whether row-span is admitted in
+     Phase 5 or deferred is settled in DD-M3-P5-003; this axis still
+     records the surface impact in both cases, because deferral does
+     not erase the extension shape — admitting row-span later under a
+     structural surface re-opens the same implicit-vs-explicit
+     question.
   3. **Shared track sizing** — whether column widths are shared across
      rows by construction (track-list, hybrid-column, and definition-node families) or
      must be reconciled across independent Row declarations (pure
@@ -487,15 +514,58 @@ that no family is presented as the implicit default.
   - **Pure structural / Surface D / definition-node families:** spans live on
     `Cell` (`Cell { column-span: 2 ... }`), never on the content widget.
     Omitted spans default to `1`. A spanning `Cell` consumes column
-    slots in document order; the ADR must define whether skipped columns
-    from a span are implicit (the next sibling `Cell` occupies column 3
-    after a `column-span: 2` Cell in column 0) or explicit (the author
-    must still write `Cell {}` placeholders). Recommended at this branch:
-    implicit — spans consume slots so sibling Cells advance to the next
-    free column.
+    slots in document order within its parent `Row`; the ADR must
+    define whether skipped columns from a span are implicit (the next
+    sibling `Cell` occupies column 3 after a `column-span: 2` Cell in
+    column 0) or explicit (the author must still write `Cell {}`
+    placeholders). Recommended at this branch: implicit — spans
+    consume slots so sibling Cells advance to the next free column.
 
   In every family a span must be positive and must not exceed the
   declared row / column count.
+
+- **Per-axis admission scope (column-span vs row-span).** The ADR
+  must decide whether Phase 5 admits column-span only, row-span only,
+  both axes, or both with one axis deferred while its attribute name
+  is reserved. The A2 roadmap wording reads both axes as in scope,
+  but per-axis deferral is a legitimate ADR choice for narrowing the
+  novel-normative-spec surface. This is a scope decision, not a
+  framing-time recommendation, and must be settled before
+  DD-M3-P5-004's algorithm and DD-M3-P5-005's arrange commit to
+  span-reconciliation behavior. The decision interacts with the
+  selected surface family; the ADR must record the interaction it
+  accepts rather than treating row-span as a pure scope variable:
+  - **Surface A / A2 (coordinate).** The two axes are symmetric.
+    Admitting row-span reuses the same `(row, column, row-span,
+    column-span)` rectangle conflict check and adds no new surface
+    concept. Deferring row-span requires reserving the attribute name
+    and rejecting it at `wasamoc check` / runtime validation until
+    admitted, but no surface restructure.
+  - **Surface B / D / C (structural).** The two axes are not
+    symmetric. Admitting row-span requires the ADR to commit to one
+    of two rules for `Row[i+1]` when `Row[i]` contains `Cell {
+    row-span: 2 ... }`:
+    - *implicit skip* — `Row[i+1]`'s `Cell` children silently
+      bypass the column occupied from above (HTML `rowspan`-like).
+      Reading `Row[i+1]` alone no longer yields its visible cell
+      sequence, which dilutes Surface B's "document structure mirrors
+      visible structure" claim and adds non-local context to
+      diagnostics.
+    - *explicit placeholder* — `Row[i+1]` must contain a `Cell {}`
+      (or a dedicated covered-from-above marker) for the occupied
+      column. Local readability is preserved, but authors hand-track
+      multi-row coverage and any iteration template that generates
+      `Row`s must emit consistent placeholders.
+
+    Deferring row-span from Phase 5 leaves this rule choice open for
+    a later phase but does not erase it; admitting row-span now forces
+    the ADR to commit to one rule and reflect it in DD-M3-P5-006's
+    structural validation surface.
+
+  This sub-issue is intentionally raised at framing time so the ADR
+  Options table can show row-span examples per surface (or explicitly
+  mark them deferred) instead of inheriting an implicit column-span-
+  only baseline from the framing's illustrative examples.
 - **Conflict policy.** Duplicate cell origins and overlapping spans
   are rejected in Phase 5. This preserves A2's "1 cell 1 child" rule
   and leaves overlay to Phase 6 ZStack. The conflict-detection input

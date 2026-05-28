@@ -327,6 +327,50 @@ Surface A2 は Surface A と同じく `columns:` / `rows:` の track-list gramma
 使います。first-class track-list value を採るなら、`auto`, `minmax`, named lines,
 bindable track pieces の将来拡張は Surface A と同じように扱えます。
 
+## Row spanning consideration
+
+M3 で row-span を admit するかどうかは
+[framing.md DD-M3-P5-003 per-axis admission sub-issue](../framing.md)
+で決まる scope decision で、ここでは確定させません。Surface A2 も Surface A と
+同じく coordinate based のため、column-span と row-span は対称です。違いは
+span metadata の carrier が content widget ではなく `Cell` wrapper である
+ことだけです。
+
+admit する場合の `.ui` 例:
+
+```wasamo-ui
+Grid {
+  columns: 180 1*
+  rows: 1* 1*
+
+  Cell {
+    row: 0
+    column: 0
+    row-span: 2
+    Box { fill: #243447ff Text { text: "Sidebar" } }
+  }
+
+  Cell { row: 0 column: 1 Text { text: "Header" } }
+  Cell { row: 1 column: 1 Text { text: "Body" } }
+}
+```
+
+`Cell` の rectangle が `(row, column, row-span, column-span)` で決まり、
+Surface A と同じ conflict check が再利用できます。
+
+含意:
+
+- 新しい surface 概念は発生しない。Surface A と同じく row-span 用の追加
+  rule は不要。
+- M3 で defer する場合も、`Cell` の `row-span:` を予約 + reject するだけで
+  surface 構造は無傷。
+- iteration template でも `Cell { row-span: ... ... }` の形で出せる。
+- content widget には引き続き Grid metadata が乗らないため、row-span 拡張が
+  content widget API へ波及することは Surface A 以上にない。
+
+structural family (B / D / C) と比べたとき、A2 は A と同等に row-span に
+対する surface restructure が不要な側に立ちます。
+
 ## 判断材料
 
 Surface A2 は、Surface A の shared track sizing と irregular placement の強さを
