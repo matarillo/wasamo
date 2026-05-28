@@ -1,6 +1,6 @@
 ### DD-M3-P5-003 — Child membership, spanning, and conflict policy
 
-**Status:** Proposed
+**Status:** Accepted
 
 **Context:** Grid children become members of resolved cells via the
 `Cell` wrapper carrying placement and span metadata (per DD-M3-P5-001

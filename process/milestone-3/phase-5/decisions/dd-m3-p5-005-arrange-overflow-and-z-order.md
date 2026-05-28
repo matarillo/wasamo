@@ -1,6 +1,6 @@
 ### DD-M3-P5-005 — Arrange algorithm, overflow, and z-order
 
-**Status:** Proposed
+**Status:** Accepted
 
 **Context:** Once DD-M3-P5-004 resolves per-axis tracks and per-`Cell`
 rectangles, the arrange pass places each `Cell`'s single content

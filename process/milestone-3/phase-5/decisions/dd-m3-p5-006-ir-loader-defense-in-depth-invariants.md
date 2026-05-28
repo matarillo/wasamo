@@ -1,6 +1,6 @@
 ### DD-M3-P5-006 — IR-loader defense-in-depth invariants
 
-**Status:** Proposed
+**Status:** Accepted
 
 **Context:** Phase 2 T7 surfaced the principle: IR-load → runtime-
 materialise invariants belong in pure-logic `validate()`, not in

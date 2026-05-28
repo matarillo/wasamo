@@ -1,6 +1,6 @@
 ### DD-M3-P5-001 — Grid IR node form and Surface A2 author surface
 
-**Status:** Proposed
+**Status:** Accepted
 
 **Context:** Grid is a new layout primitive in `wasamo-ir` and
 `wasamo-runtime`. Phase 5 must commit to (i) the IR node shape
@@ -379,8 +379,13 @@ min row / column count) read the kind payload.
 
 - **`auto` / intrinsic tracks (Post-Phase-5 hand-off item 1).**
   The `TrackSize` domain type is the extension point for a future
-  `Auto` variant; admitting it requires a measure-side demand pass
-  in DD-M3-P5-004 but no IR shape change here.
+  `Auto` variant. Future admission is a **vocabulary extension on
+  `TrackSize`**, not a structural change to Grid: Grid's per-kind
+  tag, the Surface A2 `Cell` wrapper contract, the kind-payload
+  carrier (c1), and `IrProp.value: IrLiteral` stay unchanged.
+  Admitting `auto` does require adding the `Auto` variant to
+  `TrackSize` and activating the measure-side demand pass that
+  DD-M3-P5-004 reserves before star distribution.
 - **Named lines / template areas (Post-Phase-5 hand-off item 2).**
   Surface A2's placement metadata on `Cell` does not foreclose a
   future area-name attribute (e.g. `Cell { area: "header" ... }`);

@@ -1,6 +1,6 @@
 ### DD-M3-P5-002 — Track sizing forms (fixed + weighted star)
 
-**Status:** Proposed
+**Status:** Accepted
 
 **Context:** Grid declares one track list per axis (`columns:` and
 `rows:` on `Grid`, per DD-M3-P5-001 Surface A2). Phase 5 must choose
@@ -30,10 +30,15 @@ and approved at ADR review.
   tokens; positive values only.
 - **Star tracks.** Unit star (`*`) and weighted star (`2*`, `3*`)
   with positive integer weights, capped at `1024` (per-weight
-  upper bound; see Recommendation below). The cap is recorded as a
-  DD-M3-P5-006 invariant so the validate surface is self-contained
-  rather than relying on "no practical author would write
-  this".
+  upper bound; see Recommendation below). The cap is **not
+  framing-settled** — owner alignment (2026-05-28) settled
+  weighted-star admission and the deferral of `auto`, but did
+  not specify a numeric upper bound. The cap is introduced here
+  as a deliberate Phase 5 safety limit so the per-axis weight
+  sum has a type-level bound (combined with DD-M3-P5-004's `u64`
+  accumulator), rather than relying on "no practical author would
+  write this". Recorded as a DD-M3-P5-006 invariant; a future
+  phase may raise or remove it if author demand surfaces.
 - **Auto / intrinsic tracks.** Owner-settled deferral; the
   `TrackSize` domain type reserves the slot.
 - **Track-list parser surface.** A narrow parser path for Grid
@@ -241,10 +246,14 @@ boundary:
 **Forward-compat exposure:**
 
 - **`auto` admission (Post-Phase-5 hand-off item 1).** Adding
-  `TrackSize::Auto` is additive at the IR level. DD-M3-P5-004
-  reserves the demand-distribution slot before star distribution;
-  the future phase that admits `auto` must specify auto-vs-span
-  demand reconciliation as the principal novel content.
+  `TrackSize::Auto` is a **vocabulary extension on the `TrackSize`
+  enum** — Grid's per-kind tag, the Surface A2 `Cell` contract,
+  the kind-payload carrier (c1), and `IrProp.value: IrLiteral`
+  stay unchanged. The future phase that admits `auto` adds the
+  `Auto` variant, activates the demand-distribution slot
+  DD-M3-P5-004 reserves before star distribution, and specifies
+  auto-vs-span demand reconciliation as the principal novel
+  content.
 - **`minmax(min, max)` and named lines (Post-Phase-5 hand-off item
   2).** Both are additive at the `TrackSize` level (`Minmax(min,
   max)`) or the track-list level (named line declarations between

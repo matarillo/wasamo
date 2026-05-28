@@ -1,6 +1,6 @@
 ### DD-M3-P5-004 — Track-resolution algorithm (novel normative star sizing)
 
-**Status:** Proposed
+**Status:** Accepted
 
 **Context:** This DD introduces the **central novel-normative spec
 content** of Phase 5. Grid is M3's *second* novel-normative-spec

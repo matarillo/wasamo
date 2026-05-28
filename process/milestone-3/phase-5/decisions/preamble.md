@@ -2,7 +2,7 @@
 
 **Phase:** M3-Phase 5 (Grid layout primitive)
 **Date:** 2026-05-28
-**Status:** Proposed
+**Status:** Accepted
 
 ## Context
 
@@ -374,11 +374,14 @@ point:
 
 1. **`auto` / intrinsic track sizing.** Tracks whose size is
    determined by content demand. DD-M3-P5-002 reserves the
-   algorithm slot before star distribution in DD-M3-P5-004; admitting
-   `auto` requires defining how spanning children distribute demand
-   across multiple auto tracks. No Phase 5 IR change is required to
-   accept `auto` later: the `TrackSize` domain type is the
-   extension point.
+   algorithm slot before star distribution in DD-M3-P5-004;
+   admitting `auto` requires defining how spanning children
+   distribute demand across multiple auto tracks. Future
+   admission is a **vocabulary extension on the `TrackSize`
+   domain type** (a new `Auto` variant) — Phase 5's Grid /
+   Cell structure, authoring surface, and `IrProp` machinery
+   stay unchanged; only the `TrackSize` enum grows and
+   DD-M3-P5-004's reserved demand pass becomes live.
 
 2. **Named lines and template-area surfaces.** CSS Grid-style named
    track lines and `grid-template-areas`-style 2D shorthand are
@@ -633,4 +636,5 @@ Cross-phase inputs:
 
 | Date | Change |
 |---|---|
+| 2026-05-28 | Status flipped to Accepted. DD-M3-P5-001 through DD-M3-P5-006 owner-accepted after multi-round codex review pass (Grid outer-rect rule across DD-004 / DD-005 / preamble; Cell is IR-only and not in `wasamo-runtime`'s widget catalog or `dsl_spec.md` §4.4; Cell placement-attribute presence lowering rule; star-weight cap `[1, 1024]` as deliberate Phase 5 safety limit closing the per-axis sum at the type level via DD-M3-P5-004's `u64` accumulator; `TrackSize` IR carrier c1 — Grid-specific kind payload on `IrNode`; `auto` future admission framed as `TrackSize` vocabulary extension rather than IR structural change). |
 | 2026-05-28 | Initial draft (Status: Proposed). All 6 DDs at Proposed pending owner review pass. Framing-level owner alignment confirmed on 2026-05-28 ([../requirements/framing.md §Owner alignment outcome](../requirements/framing.md#owner-alignment-outcome-2026-05-28)) settles DD-M3-P5-001..005 branching choices and FD-D / FD-E; Surface-A2 sub-decisions remain ADR-review approvals. |
