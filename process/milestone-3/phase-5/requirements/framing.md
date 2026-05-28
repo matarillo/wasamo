@@ -80,8 +80,8 @@ rather than re-derives:
   the M3 public `docs/dsl_spec.md` draft. Phase 5 should add new
   `docs/dsl_spec.md` §4.12 (Grid layout primitive) at Moment 1 and
   hold it to the external-reader bar at close: a reader with only
-  `docs/dsl_spec.md` should be able to reproduce Grid's track
-  declaration surface, placement attributes, star sizing, spanning,
+  `docs/dsl_spec.md` should be able to reproduce Grid's track /
+  membership surface, star sizing, spanning,
   validation, and overflow semantics against a hypothetical host.
 
 - **Second novel-normative-spec phase.** Phase 3 introduced the
@@ -107,11 +107,13 @@ rather than re-derives:
   a stable 2D layout. Phase 5 must therefore ship a fixed-child
   Grid gallery slice that later phases can grow rather than replace.
   Phase 7's iteration grammar is the first likely consumer that may
-  generate Grid children from a template; Phase 5 does not design
-  iteration, but it must keep child placement as ordinary child
-  attributes so a future iteration template can emit `row` /
-  `column` / span metadata without inventing a second placement
-  channel.
+  generate Grid children from a template. Phase 5 does not design
+  iteration, but it must choose a Grid surface that gives Phase 7 a
+  clear extension path: generated placed content children (Surface A),
+  generated placed `Cell` wrappers (Surface A2), generated structural
+  rows / cells with reconciled widths (Surface B), generated structural
+  rows against parent-level columns (Surface D), or generated structural
+  rows against definition nodes (Surface C).
 
 ---
 
@@ -120,19 +122,23 @@ rather than re-derives:
 Grid's DD chain is wider than Phase 4's ScrollView chain because the
 algorithm has two independent axes and a spanning phase. The chain is:
 
-- **DD-001 (IR shape and child placement surface).** Settles that
-  Grid is a new layout primitive, how rows / columns are declared,
-  how each child declares its `row`, `column`, `row-span`, and
-  `column-span`, and how malformed placement is rejected.
+- **DD-001 (IR shape and author-facing Grid surface).** Settles that
+  Grid is a new layout primitive and compares the author-facing
+  surface families without presuming the WPF / CSS Grid model:
+  track-list attributes plus placed content children, track-list
+  attributes plus placed `Cell` wrappers, structural `Row` / `Cell`
+  children, hybrid Grid columns plus structural rows, or definition-node
+  variants.
 - **DD-002 (track sizing forms and constants).** Settles which
   track sizing forms Phase 5 admits: fixed integer pixels, star
   weights, and whether an intrinsic / auto track exists in Phase 5.
   Track-list declaration syntax belongs to DD-001; DD-002 consumes
   that syntax and defines what each track token can mean.
 - **DD-003 (child membership and same-cell conflict policy).**
-  Settles the "1 cell 1 child" rule precisely: duplicate origin
-  cells, overlapping spans, default placement, and out-of-range
-  indices.
+  Settles the "1 cell 1 child" rule precisely for whichever DD-001
+  surface is chosen: duplicate coordinate claims in a placement
+  surface, malformed structural rows / cells in a structural surface,
+  overlapping spans, default placement, and out-of-range indices.
 - **DD-004 (track-resolution algorithm).** Consumes DD-001 through
   DD-003 to produce the pure-data measure pass: fixed tracks consume
   definite space, intrinsic tracks consume measured child demand if
@@ -179,13 +185,17 @@ mark non-recommended:
   string mini-language, the core DSL parser sees a string literal;
   track-list syntax errors are checked by `wasamoc check` and runtime
   validation after the string is parsed into Grid's domain type. The
-  updated recommendation asks owner to consider a Grid-specific
-  first-class track-list value instead so token-level diagnostics and
-  future extensions are not trapped inside a string.
-- **DD-003 = auto-placement admitted** with **DD-004 = no
-  document-order placement algorithm**. Auto-placement is not just a
-  default; it is a layout policy. The current recommendation avoids
-  this combination by not admitting auto-placement in Phase 5.
+  framing now asks owner to compare string encoding against Grid-specific
+  first-class track-list values (A / A2 / D where applicable),
+  structural `Row` / `Cell` surfaces, and definition-node surfaces so
+  token-level diagnostics and future extensions are not trapped inside a
+  string by default.
+- **DD-001 = explicit-coordinate surface (A / A2)** with **DD-003 =
+  auto-placement admitted** and **DD-004 = no document-order
+  placement algorithm**. Auto-placement is not just a default; it is a
+  layout policy. If DD-001 chooses structural membership (B / D / C),
+  row / cell membership supplies placement structurally and this invalid
+  combination does not apply.
 - **DD-003 = same-cell overlap allowed** with **A2 / DD-005 = Grid
   provides no overlay semantics**. Painting overflow may cross a cell
   boundary (DD-005), but deliberate occupancy overlap is rejected.
@@ -206,11 +216,14 @@ The Phase 5 ADR set
 (`process/milestone-3/phase-5/decisions/preamble.md` plus one
 `dd-*.md` file per DD) will carry the following six DDs.
 
-### DD-M3-P5-001 — Grid IR node form and row / column declaration surface
+### DD-M3-P5-001 — Grid IR node form and author-facing surface
 
 Grid is a new layout primitive in `wasamo-ir` and `wasamo-runtime`.
 Phase 5 must commit to the IR node shape and the author-facing syntax
-for declaring row and column tracks.
+for declaring tracks, membership, and cell content. Owner has not yet
+committed to the WPF / CSS Grid model where the parent declares tracks
+and children carry placement metadata, so the ADR must compare that
+model flatly against structural `Row` / `Cell` surfaces.
 
 Sub-issues:
 
@@ -218,47 +231,145 @@ Sub-issues:
   and `ScrollView`, vs a structural variant in `IrLayout`. Default:
   per-kind tag, continuing the M3 primitive pattern. Unlike Box /
   WrapPanel / ScrollView, Grid introduces variable-length
-  sub-structure: a `TrackSize` domain type (fixed / star now; auto
-  reserved for later) and per-child placement metadata. The ADR must
-  make those sub-types explicit rather than pretending Grid is only
-  another stringly widget tag.
-- **Track declaration syntax.** A compact attribute form such as
-  `columns: ...` / `rows: ...`, repeated declarations, or a nested
-  track-list child surface. Updated recommendation for owner review:
-  compact attributes whose RHS is a **Grid-specific first-class
-  track-list value** (for example `columns: 180 1* 2*`), not a
-  general collection grammar and not necessarily a string literal.
-  The ADR Options table should compare this with the earlier
-  string-encoded form (`columns: "180 1* 2*"`) and a nested
-  RowDefinition / ColumnDefinition-style surface. The first-class
-  value costs more parser work than a string, but preserves
-  token-level diagnostics, editor affordances, and a cleaner future
-  path for `auto`, `minmax`, named lines, and bindable track pieces
-  without committing Phase 5 to a general list / collection grammar.
+  sub-structure. The exact sub-types depend on the chosen surface:
+  track-list surfaces need `TrackSize` plus placement metadata (on the
+  content child in A, on `Cell` in A2); structural surfaces need row /
+  cell group structure plus any per-row / per-cell sizing metadata. The
+  ADR must make those sub-types explicit rather than pretending Grid is
+  only another stringly widget tag.
+- **Surface family.** Owner has explicitly required that Phase 5 not
+  treat the WPF / CSS Grid family (track-list + child placement) as
+  the default. The ADR must compare the following families flatly:
+  - **Surface A — track-list + direct child placement:** `Grid { columns: 180 1*; rows:
+    64 *; Text { row: 0; column: 1; ... } }`. Tracks are declared on
+    the Grid; placement is parent-scoped child metadata.
+  - **Surface A2 — track-list + placed Cell wrapper:** `Grid {
+    columns: 180 1*; rows: 64; Cell { row: 0; column: 1; Text { ... } }
+    }`. Tracks are declared on the Grid; placement metadata lives on
+    a layout-only `Cell` wrapper rather than on the content widget.
+  - **Structural row / cell (pure):** `Grid { Row { Cell { ... } Cell {
+    ... } } Row { ... } }`, with sizing metadata directly on `Row` /
+    `Cell`. Shared column widths across rows are emergent rather than
+    declared; see the shared-track-sizing axis below.
+  - **Surface D — Grid columns + structural rows:** `Grid { columns:
+    180 1*; Row { height: 48; Cell { ... } Cell { ... } } }`. Column
+    tracks are declared once on Grid, while row membership and row
+    heights are structural. This preserves row / cell readability while
+    avoiding the pure structural shared-column reconciliation problem.
+  - **Definition nodes + content rows:** explicit `ColumnDefs` /
+    `RowDefs` definition nodes plus structural content rows. A structural
+    variant that hoists track definitions to Grid level so column
+    widths are shared across rows by construction.
+  - **String-encoded track-list fallback:** `columns: "180 1*"`,
+    a degenerate placement-family variant preserved as a fallback
+    rather than a recommended option.
+
+  The comparison must use the five owner-specified axes, applied
+  symmetrically to every family above:
+
+  1. **`.ui` author taste** — verbosity, readability, and how natural
+     the surface feels for forms, gallery slices, and irregular layouts.
+  2. **Spanning** — whether rectangular row / column spans are
+     expressible directly, how span declarations sit in the surface
+     (child metadata vs `Cell` attribute), and how malformed spans
+     surface to authors.
+  3. **Shared track sizing** — whether column widths are shared across
+     rows by construction (track-list, hybrid-column, and definition-node families) or
+     must be reconciled across independent Row declarations (pure
+     structural). This axis is load-bearing: a structural surface that
+     allows per-row column widths is a different layout primitive than
+     Grid, not a stylistic variant.
+  4. **Future iteration** — what shape Phase 7 iteration must take to
+     generate Grid children: placed content children carrying `row` /
+     `column` metadata, placed `Cell` wrappers, structural rows generated
+     as templates against Grid-level columns, or `Cell` items generated
+     within a row template.
+  5. **Component-extension-model** — what each surface implies about
+     future custom layouts and their child contracts. Surface A
+     introduces parent-scoped metadata on arbitrary Grid children as a
+     first built-in precedent; Surface A2 contains that metadata in a
+     Grid-owned `Cell` wrapper; structural surfaces introduce new
+     structural child node kinds (`Row`, `Cell`) instead; Surface D
+     combines parent-owned column tracks with structural content rows.
+
+  Implementation effort and parser diagnostics are secondary concerns
+  and must not drive the surface selection.
+  **No surface recommendation is made at framing time.** A critical
+  recommendation would require choosing which tradeoff matters most:
+  A's irregular-layout power and metadata precedent, A2's wrapper-based
+  containment of Grid metadata, B's direct structural authoring with
+  reconciliation burden, D's hybrid parent-columns / structural-rows
+  split, or C's explicit shared tracks with an extra definition layer.
+  The current owner alignment goal is to compare those tradeoffs flatly
+  before the ADR selects one.
+- **Track declaration syntax.** The location of track sizing
+  information depends on the selected surface, and the ADR must not
+  presume one location:
+  - In the track-list families (A / A2), the preferred syntax is
+    compact attributes on `Grid` whose RHS is a **Grid-specific
+    first-class track-list value** (for example `columns: 180 1*
+    2*`); string-encoded fallback exists but is not the default.
+  - In the pure structural family, sizing lives on `Row` / `Cell`
+    constructs directly (`Row { height: 64 }`, `Cell { width: 180
+    }`), and the ADR must resolve how column widths reconcile across
+    rows (see shared track sizing axis).
+  - In Surface D, column sizing lives on `Grid.columns` while row sizing
+    lives on structural `Row { height: ... }`. This is intentionally
+    asymmetric: columns are shared by construction; rows remain visible
+    in document structure.
+  - In the definition-node family, sizing lives on hoisted
+    `ColumnDefs` / `RowDefs` definition children at Grid level, so
+    column widths are shared by construction at the cost of an extra
+    surface layer. These names intentionally avoid reusing content
+    `Row` for row definitions; if ADR chooses shorter names, it must
+    explain how parent-scoped meanings stay clear to authors.
+
+  In every case, Phase 5 must not open a general list / collection
+  grammar merely to express Grid.
 - **Minimum valid shape.** Empty rows / columns are malformed; a Grid
   needs at least one row and one column. Zero children are valid and
   produce an empty drawn subtree with a resolved outer size.
 - **Indexing convention.** Row and column indices are zero-based
-  internally; the ADR must decide whether the `.ui` surface exposes
-  zero-based values or a friendlier one-based author convention.
-  Default recommendation for consistency with runtime / tests:
-  zero-based, documented explicitly.
+  internally regardless of the chosen surface. Whether authors ever
+  see numeric indices depends on the surface family:
+  - Surface A makes indices author-visible on every placed content
+    child; Surface A2 makes them author-visible on every placed `Cell`.
+    ADR must decide zero-based vs one-based at the `.ui` boundary.
+    Recommended at that branch: zero-based for consistency with runtime /
+    tests.
+  - Pure structural and definition-node families make indices mostly
+    invisible — document order assigns membership. Indices may still
+    surface inside diagnostics (e.g. "row 2, cell 3 spans past the
+    declared column count") and the ADR should fix the convention
+    used there.
+  - Surface D also makes indices mostly diagnostic-only: row membership
+    is structural, and column membership is document order within each
+    `Row` against Grid-level columns.
 
 ### DD-M3-P5-002 — Track sizing forms and star sizing surface
 
 Phase 5 must choose the track sizing forms that are normative in
-`docs/dsl_spec.md`.
+`docs/dsl_spec.md`. The forms themselves are surface-independent (a
+  fixed pixel width is the same value whether it lives in a Grid
+attribute, a `Cell` attribute, or a `ColumnDef` definition); only the
+location and parsing differ.
 
 Sub-issues:
 
 - **Fixed tracks.** Integer pixel track sizes, likely reusing
   existing signed `IntLit` token plumbing but rejecting negative
-  values at `wasamoc check` / IR validation.
+  values at `wasamoc check` / IR validation. Carrier varies by
+  surface: `columns: 180 1*` (A / A2 track-list families),
+  `columns: 180 1*` plus `Row { height: ... }` (Surface D),
+  `Cell { width: 180 }` (pure structural), `ColumnDef { width: 180 }`
+  (definition-node).
 - **Star tracks.** Unit star (`*`) and weighted star (`2*`, `3*`,
   etc.) vs only unit star in Phase 5. Default: admit positive
   integer weights because star weighting is central to A2 and avoids
   a knowingly incomplete star surface. Star weights are parsed into
-  positive integers; zero and negative weights are malformed.
+  positive integers; zero and negative weights are malformed. The
+  star value form is identical across surfaces; only the attribute
+  carrying it changes.
 - **Auto / intrinsic tracks.** Admit `auto` now, defer it while
   reserving the algorithm slot, or emulate it through fixed / star
   only. Conservative draft recommendation: **defer `auto` from Phase
@@ -268,47 +379,130 @@ Sub-issues:
   be worse for v1.0 than a clearly deferred surface. Owner may instead
   choose the aggressive option: admit `auto` in Phase 5 and require
   DD-M3-P5-004 to fully specify auto-track demand, including spanning
-  children, before ADR Accepted.
-- **Track-list parser surface.** If DD-001 adopts the Grid-specific
-  first-class track-list value, Phase 5 adds a narrow parser path for
-  Grid track attributes without opening general list / collection
-  grammar. If owner keeps the string-encoded form, syntax diagnostics
-  move to Grid-specific `wasamoc check` and runtime validation.
+  children, before ADR Accepted. This decision is independent of the
+  DD-001 surface choice.
+- **Shared track sizing across rows.** Star and fixed forms above
+  describe per-track values; the surface choice from DD-001
+  determines whether column widths are shared across rows:
+  - In the track-list families (A / A2), `columns:` on Grid declares one
+    canonical column track list; sharing is automatic.
+  - In Surface D, `columns:` on Grid declares one canonical column track
+    list; sharing is automatic for columns, while `Row { height: ... }`
+    declares row heights structurally.
+  - In the definition-node family, `ColumnDefs { ColumnDef ... }` on
+    Grid plays the same role; sharing is automatic.
+  - In the pure structural family, `Cell { width: ... }` sits inside
+    each `Row`. The ADR must answer how the layout engine reconciles
+    different widths declared in different rows: reject as malformed
+    (rows must agree column-by-column), take the first row as
+    canonical and validate the rest, or treat each row as
+    independently sized (which is no longer Grid semantics and
+    should be rejected upfront). Without this rule, the pure
+    structural surface is underdefined.
+- **Track-list parser surface.** Parser exposure depends on the
+  surface:
+  - Track-list families with first-class track-list value: Phase 5 adds
+    a narrow parser path for Grid `rows:` / `columns:` attributes
+    without opening general list / collection grammar.
+  - Track-list families with string-encoded form: syntax diagnostics
+    move to Grid-specific `wasamoc check` and runtime validation.
+    Editor highlighting / completion / source location degrade.
+  - Surface D: same narrow parser path for Grid `columns:` as A / A2,
+    but rows are structural children using existing attribute plumbing.
+  - Pure structural and definition-node families: no compact
+    `rows:` / `columns:` track-list parser at all — `Row` / `Cell` /
+    `ColumnDef` / `RowDef` definition nodes are just structural children
+    of `Grid`, and their sizing attributes use existing widget attribute
+    plumbing.
+
   Semicolon member-separator acceptance remains a post-Phase-4 open
   question outside Phase 5 thesis scope. See the Phase 4 close
   disposition of T5 副次学び #3 in
   [m3-phase-4-progress.md](../../phase-4/implementation/plan.md#decisions-log).
 
-### DD-M3-P5-003 — Child placement, spanning, and conflict policy
+### DD-M3-P5-003 — Child membership, spanning, and conflict policy
 
-Grid children need per-child placement metadata.
+Grid children need a way to become members of resolved cells. That may
+be numeric child placement metadata on the content child, numeric
+placement metadata on a `Cell` wrapper, structural row / cell
+membership, or a hybrid. DD-M3-P5-003 must not presume one model before DD-M3-P5-001
+chooses the author-facing surface.
 
-Sub-issues:
+Sub-issues are organised in parallel paragraphs per surface family so
+that no family is presented as the implicit default.
 
-- **Placement attributes.** `row`, `column`, `row-span`, and
-  `column-span` as constant-only Grid-parent-scoped attributes on
-  direct Grid children vs wrapper nodes. Default: direct child
-  attributes, because the surface is local to placement and mirrors
-  common Grid models, but this is **not** a general widget-catalog
-  property. A `Text { row: 0 }` is meaningful when the Text is a
-  direct child of Grid; the same attribute outside a Grid-parent
-  context remains invalid / unknown. Treat this as the first built-in
-  precedent for **parent-scoped child metadata**, not as a one-off
-  Grid hack: it should leave room for a future
-  `component-extension-model.md` design where custom layout parents
-  can define scoped child metadata such as `slot`, `dock`, or `area`.
-- **Defaults.** Decide whether omitted `row` / `column` defaults to
-  `(0, 0)` or whether explicit placement is required. Default
-  recommendation: a single-child Grid may omit `row` / `column` and
-  default to `(0, 0)`; a Grid with two or more children requires
-  explicit `row` and `column` on every child. No auto-placement
-  policy exists in Phase 5.
-- **Span defaults and bounds.** Omitted `row-span` /
-  `column-span` default to `1`. A span must be positive and must not
-  exceed the declared row / column count.
+- **Membership surface.** The surface families differ on how a child
+  becomes a member of a resolved cell:
+  - **Surface A — direct placement:** numeric attributes (`row`, `column`,
+    `row-span`, `column-span`) on each Grid direct child. These are
+    parent-scoped child metadata read by the Grid parent, not
+    general widget catalog properties. The component-extension-model
+    implication (first built-in precedent for parent-scoped child
+    metadata) is recorded under FD-J.
+  - **Surface A2 — placed Cell wrapper:** numeric attributes (`row`,
+    `column`, `row-span`, `column-span`) on a Grid-owned `Cell` direct
+    child. The content widget is the single child of `Cell` and receives
+    no Grid-specific metadata. This keeps track-list sharing and
+    irregular placement from A while containing Grid-specific child
+    contract attributes inside a wrapper.
+  - **Pure structural family:** document structure assigns
+    membership. `Row` is a Grid direct child; `Cell` is a `Row`
+    direct child; the content widget is the (single) `Cell` direct
+    child. No widget receives `row` / `column` attributes.
+  - **Surface D — Grid columns + structural rows:** membership is
+    structural like B / C but with parent-owned columns. `Row` is a Grid direct child; `Cell` is a
+    `Row` direct child; each `Cell` advances through the Grid-level
+    column list in document order. No widget receives `row` / `column`
+    attributes, and no `Cell` carries explicit coordinates.
+  - **Definition-node family:** same membership rule as pure
+    structural for content rows. The hoisted `ColumnDefs` / `RowDefs`
+    definitions are siblings of content rows, not membership carriers.
+- **Defaults.** Per-surface:
+  - **Surface A:** decide whether omitted `row` / `column` on content
+    children defaults to `(0, 0)` or whether explicit placement is
+    required. Recommended at that branch: a single-child Grid may omit
+    `row` / `column` and default to `(0, 0)`; a Grid with two or more
+    children requires explicit `row` and `column` on every child. No
+    auto-placement policy exists in Phase 5 regardless of family.
+  - **Surface A2:** same placement default question as A, but the
+    attributes live on `Cell`. Recommended at that branch: every `Cell`
+    in a multi-Cell Grid must carry explicit `row` and `column`; if a
+    one-Cell Grid omits them, it may default to `(0, 0)`.
+  - **Pure structural / Surface D / definition-node families:** document
+    structure replaces placement defaults. Child order inside a
+    `Row` defines cell membership; missing `Cell` children inside a
+    `Row` are either malformed or implicit empty cells, and the ADR
+    must commit one rule. Recommended at this branch: missing cells
+    are malformed (an explicit empty `Cell {}` is required to skip a
+    column), so structural integrity is checked at `wasamoc check`
+    rather than papered over at layout time.
+- **Span defaults and bounds.** Per-surface:
+  - **Surface A:** omitted `row-span` / `column-span` default
+    to `1`; span attributes live on the content widget as
+    parent-scoped child metadata.
+  - **Surface A2:** omitted `row-span` / `column-span` default to `1`;
+    span attributes live on `Cell`. Because `row` / `column` are
+    explicit, the span does not consume sibling positions by document
+    order; conflict detection works over resolved `Cell` rectangles.
+  - **Pure structural / Surface D / definition-node families:** spans live on
+    `Cell` (`Cell { column-span: 2 ... }`), never on the content widget.
+    Omitted spans default to `1`. A spanning `Cell` consumes column
+    slots in document order; the ADR must define whether skipped columns
+    from a span are implicit (the next sibling `Cell` occupies column 3
+    after a `column-span: 2` Cell in column 0) or explicit (the author
+    must still write `Cell {}` placeholders). Recommended at this branch:
+    implicit — spans consume slots so sibling Cells advance to the next
+    free column.
+
+  In every family a span must be positive and must not exceed the
+  declared row / column count.
 - **Conflict policy.** Duplicate cell origins and overlapping spans
   are rejected in Phase 5. This preserves A2's "1 cell 1 child" rule
-  and leaves overlay to Phase 6 ZStack.
+  and leaves overlay to Phase 6 ZStack. The conflict-detection input
+  varies by surface (resolved `(row, column, row-span, column-span)` on
+  content children for Surface A; the same tuple on `Cell` wrappers for
+  Surface A2; resolved Cell-to-column mapping for the structural and
+  hybrid structural-row families) but the rejection rule is uniform.
 
 ### DD-M3-P5-004 — Track-resolution algorithm
 
@@ -357,18 +551,33 @@ Sub-issues:
 
 ### DD-M3-P5-005 — Arrange algorithm and visual-layer contract
 
-Grid arranges each child into the rectangle formed by its resolved
-row / column span.
+Grid arranges each logical cell child into the rectangle formed by its
+resolved row / column span. In Surface A, that span comes from
+parent-scoped metadata on the content child. In Surface A2, it comes
+from parent-scoped metadata on the `Cell` wrapper. In structural and
+hybrid structural-row surfaces, it comes from the surrounding `Row` /
+`Cell` structure and any span metadata on `Cell`.
 
 Sub-issues:
 
-- **Child alignment inside cell.** Stretch by default, with
-  per-child Grid-scoped overrides such as `h-align` / `v-align`
-  admitted in Phase 5 if owner accepts the additional surface. Updated
-  recommendation: include alignment overrides because practical Grid
-  layouts need centered text, right-aligned actions, and icon
-  placement without wrapper hacks. The defaults remain stretch /
-  stretch for stable cells.
+- **Child alignment inside cell.** Stretch by default in every
+  surface family. Recommended: admit per-child alignment overrides
+  (`h-align` / `v-align`) in Phase 5, because practical Grid layouts
+  need centered text, right-aligned actions, and icon placement
+  without wrapper hacks. The defaults remain stretch / stretch for
+  stable cells. Carrier varies by surface:
+  - **Surface A:** alignment is parent-scoped child metadata
+    on the content widget (`Text { h-align: center ... }`),
+    co-located with `row` / `column`.
+  - **Surface A2:** alignment lives on `Cell` (`Cell { row: 0
+    column: 1 h-align: center Text { ... } }`), keeping all Grid child
+    contract metadata on the wrapper and leaving content widgets clean.
+  - **Pure structural / Surface D / definition-node families:** alignment lives
+    on `Cell` (`Cell { h-align: center Text { ... } }`), not on the
+    content widget. This keeps `Cell` as the carrier of all
+    Grid-specific child contract attributes and avoids splitting
+    grid metadata between `Cell` (span) and content widget
+    (alignment).
 - **Overflow and clipping.** The ADR should separate three concepts:
   per-cell clipping, Grid outer-bounds clipping, and intentional
   overlay. Per-cell clipping is out of scope. Same-cell / span
@@ -393,11 +602,19 @@ The ADR must decide which Grid invariants are dual-gated by
 | Invariant | Gate |
 |---|---|
 | Grid has at least one row and at least one column | Structural; both `wasamoc check` and runtime `validate()` |
-| Track-list value parses / lowers successfully into a `TrackSize` sequence | **Phase 5 new track-list gate**; parser diagnostics are primary if owner accepts the first-class track-list value, while `wasamoc check` and runtime `validate()` remain defense-in-depth safety nets |
+| The chosen author surface lowers successfully into `TrackSize` sequences plus logical cell membership | **Phase 5 new Grid-surface gate**; parser diagnostics are primary where syntax permits, while `wasamoc check` and runtime `validate()` remain defense-in-depth safety nets |
 | Track sizes are positive where required; star weights are positive integers (`0*`, negative weights, and all-zero star sums are malformed) | Value range; both gates |
-| Child placement indices are in range of the declared track count | Cross-attribute value range; both gates |
-| Spans are positive and `origin + span <= track_count` | Cross-attribute value range; both gates |
+| Placement indices or structural row / cell membership are in range of the declared track count | Cross-attribute / structural value range; both gates |
+| Spans are positive and do not exceed declared track count | Cross-attribute / structural value range; both gates |
 | Same-cell conflicts / overlapping spans are rejected | Cross-child structural check; both gates |
+
+The second invariant intentionally hides different work per surface:
+Surface A lowers `columns:` plus per-content placement metadata; Surface
+A2 lowers `columns:` plus per-`Cell` placement metadata; Surface B lowers
+canonical-row inference plus structural Cells; Surface D lowers
+`columns:` plus structural Cell order; Surface C lowers `ColumnDefs` /
+`RowDefs` plus structural Cell order. The ADR should make that lowering
+shape explicit before treating the validation burden as equal.
 
 ---
 
@@ -414,7 +631,7 @@ The ADR must decide which Grid invariants are dual-gated by
 - Bindable Grid track definitions or bindable child placement.
   Phase 5 should keep Grid attributes constant-only unless owner
   explicitly expands scope, but DD-M3-P5-001 / 002 should note whether
-  the chosen track-list grammar leaves a future path for bindable
+  the chosen Grid surface leaves a future path for bindable
   track pieces.
 - Drag-resizable columns / rows, splitters, and any pointer-driven
   layout resize. These remain M4 or later input-handling work.
@@ -432,7 +649,10 @@ The ADR must decide which Grid invariants are dual-gated by
 These are draft recommendations for owner review. Once aligned, this
 section becomes the owner-agreed agenda for the ADR draft.
 
-### A. DD slate completeness
+To avoid confusion with Surface D, framing-decision labels use the
+`FD-*` prefix in this section.
+
+### FD-A. DD slate completeness
 
 The six-DD slate is complete if it answers:
 
@@ -448,7 +668,7 @@ No separate DD is proposed for C ABI because Phase 5 should not add a
 host-facing ABI surface if Grid uses constant-only attributes and the
 existing memory-IR loading path.
 
-### B. Pre-doc-discipline check
+### FD-B. Pre-doc-discipline check
 
 Phase 5 is one of the phases the M3 plan explicitly warns may bog
 down in spec complexity. The mitigation is to start the `dsl_spec.md`
@@ -463,7 +683,7 @@ The ADR should therefore land with:
 - a Moment 2 close checklist item that re-syncs the chapter against
   the implementation.
 
-### C. Verification strategy
+### FD-C. Verification strategy
 
 Phase 5 verification should include:
 
@@ -492,7 +712,7 @@ Windows-runtime integration, and gallery visible proof. This preserves
 the Phase 4 lesson that a helper-compatible test can still miss a
 production parent shape.
 
-### D. Non-root Shrink parent with Fill child
+### FD-D. Non-root Shrink parent with Fill child
 
 [constraints.md §2](./constraints.md#2-non-root-の-shrink-container-が-fill-子を持つ場合の挙動)
 requires Phase 5 to make this design space explicit.
@@ -507,7 +727,7 @@ not create a Grid-specific exception.
 If owner wants Grid to pierce that convention, the change should be
 recorded as a broader layout DD rather than hidden inside Grid.
 
-### E. R1 Window-title wiring owning phase
+### FD-E. R1 Window-title wiring owning phase
 
 [constraints.md §4](./constraints.md#4-r1-window-title-wiring-の-owning-phase-割当--phase-5-pre-doc-内で必須完了)
 requires Phase 5 pre-doc framing to assign the owning phase for
@@ -543,14 +763,14 @@ Required follow-through after owner alignment:
   or the Phase 5 implementation log, depending on the chosen commit
   shape.
 
-### F. Phase 4 residual scan — disposition
+### FD-F. Phase 4 residual scan — disposition
 
 The Phase 4 implementation plan's
 [Out-of-phase residuals](../../phase-4/implementation/plan.md#out-of-phase-residuals)
 contains one open residual at Phase 5 pre-doc time:
 
 - **R1 — Gallery host Window title wiring.** Disposition: assign to
-  M3-Phase 6 per framing decision E. Phase 5 records the assignment
+  M3-Phase 6 per FD-E. Phase 5 records the assignment
   but does not implement it.
 
 Related Phase 3 residual context:
@@ -565,7 +785,7 @@ If Grid implementation discovers real-but-out-of-scope issues, they
 must be recorded under the Phase 5 implementation log or handoff with owner phase,
 resolution condition, and deadline, following the R1 pattern.
 
-### G. Upstream-document revision timing (two sync moments)
+### FD-G. Upstream-document revision timing (two sync moments)
 
 Phase 5 follows the same two-moment document rule as Phases 2-4:
 
@@ -581,15 +801,18 @@ concern, not as a single "Moment 1" bundle:
   `Phase status: M3-Phase 5 design accepted; implementation
   pending`.
 - `docs/architecture.md` — expected to receive an entry for the Grid
-  IR variant, including the new `TrackSize` domain type and
-  Grid-parent-scoped child placement metadata, mirroring how Box /
-  WrapPanel / ScrollView are documented. It may also add a layout-
-  engine paragraph if the accepted track-resolution algorithm warrants
-  durable cross-phase commentary.
+  IR variant, including the new `TrackSize` domain type and the
+  accepted child-membership representation (parent-scoped placement
+  metadata on content children, placement metadata on `Cell` wrappers,
+  structural rows / cells, hybrid Grid columns with structural rows, or
+  definition-node-backed structural rows), mirroring how Box / WrapPanel
+  / ScrollView are documented. It may also add a layout-engine paragraph
+  if the accepted track-resolution algorithm warrants durable cross-phase
+  commentary.
 - `docs/abi_spec.md` — untouched in the recommended path. Grid adds
   no host-facing ABI surface and no `PropertyValue` tag.
 - `process/milestone-3/plan.md` — R1 owning-phase note on the Phase 6 row
-  if owner accepts framing decision E. This is a plan-note edit, not
+  if owner accepts FD-E. This is a plan-note edit, not
   part of the Grid thesis commit.
 - `process/milestone-3/phase-5/implementation/preamble.md` /
   `process/milestone-3/phase-5/implementation/plan.md` — implementation
@@ -613,7 +836,7 @@ concern, not as a single "Moment 1" bundle:
   `carry-forward` / `local-only` at Moment 2; no open
   `phase-sync` item survives phase close.
 
-### H. Phase 5 visible proof
+### FD-H. Phase 5 visible proof
 
 Phase 5 should grow `examples/gallery/gallery.ui` additively with a
 Grid-backed composition rather than replacing the existing Box /
@@ -632,7 +855,7 @@ children, matching the author-facing gallery-slice example below:
 one header child spanning all three columns, three middle-row children
 occupying separate columns, and one footer / metadata child spanning
 all three columns. This minimum exercises fixed tracks, at least one
-star track, explicit placement, and spanning without requiring
+star track, child membership, and spanning without requiring
 ScrollView / ZStack composition.
 
 Composition with existing primitives is allowed but not the central
@@ -642,7 +865,7 @@ accepted. If the implementation naturally includes such composition,
 it may be tested as an extra confidence check, but Phase 5's A2
 evidence is Grid track sizing / placement / spanning itself.
 
-### I. GUI smoke responsibility separation
+### FD-I. GUI smoke responsibility separation
 
 Phase 5 should preserve the Phase 4 lesson: automated build / launch
 evidence and owner-visible correctness are distinct gates.
@@ -654,7 +877,7 @@ mechanical close step should run only after that visible proof is
 green or an explicit owner fail observation has been recorded and
 resolved.
 
-### J. Live-note re-evaluation triggers — handling
+### FD-J. Live-note re-evaluation triggers — handling
 
 The `docs/notes/*` live notes are settled upfront so the ADR Inputs
 section can cite their disposition rather than re-deciding:
@@ -669,27 +892,56 @@ section can cite their disposition rather than re-deciding:
   in Phase 5. The 1,000-node threshold remains unfired because the
   gallery slice is fixed-child and well below that scale.
 - **[dsl-grammar.md](../../../../docs/notes/dsl-grammar.md) — fired narrowly.**
-  DD-M3-P5-001 now raises a Grid-specific first-class track-list
-  value as the preferred owner-call option. This is not general list /
-  collection grammar, but it is a deliberate parser-surface choice
-  made for diagnostics, editor affordances, and future track
-  extensions. Q1 widget ids, Q3 iteration grammar, and Q5 expression
-  grammar remain Phase 6 / Phase 7+ unless Grid implementation
-  unexpectedly needs them.
+  DD-M3-P5-001 now compares multiple Grid-specific surfaces:
+  first-class track-list values with direct child placement, placed
+  `Cell` wrappers, hybrid Grid columns + structural rows, structural
+  `Row` / `Cell`, and definition-node variants. None of these should
+  open general list /
+  collection grammar by accident, but each has parser implications.
+  Q1 widget ids, Q3 iteration grammar, and Q5 expression grammar
+  remain Phase 6 / Phase 7+ unless Grid implementation unexpectedly
+  needs them.
 - **[component-extension-model.md](../../../../docs/notes/component-extension-model.md) —
   partial fire.** Grid is built-in, not a user-defined layout
-  component, but DD-M3-P5-003 should treat `row` / `column` / span /
-  alignment as the first built-in parent-scoped child metadata
-  precedent so future custom layout components are not blocked by a
-  Grid-only hack.
+  component, but DD-M3-P5-001 / 003 now explicitly compare a
+  parent-scoped child metadata surface, a placed-`Cell` wrapper surface,
+  pure structural `Row` / `Cell`, hybrid Grid columns with structural
+  rows, and definition-node structural rows. The
+  component-extension-model implication differs by surface:
+  - If Surface A is selected, `row` / `column` / span /
+    alignment become the first built-in parent-scoped child metadata
+    precedent, foreshadowing a future attached-property-style
+    mechanism for custom layouts.
+  - If the placed-`Cell` wrapper family is selected, the precedent is
+    narrower: Grid-specific child contract attributes are contained in a
+    Grid-owned wrapper node while track sharing remains parent-level.
+    This avoids placing `row` / `column` on arbitrary widgets but still
+    leaves a path to parent-scoped wrappers for custom layouts.
+  - If Surface B is selected, the precedent set instead is
+    "custom layouts may introduce structural child node kinds with
+    their own attribute schemas" (analogous to how `Row` / `Cell`
+    have Grid-specific sizing and span attributes). This is a
+    different extension trajectory; neither is inherently better,
+    and the framing must not prejudge which one Phase 5 sets.
+  - If Surface D is selected, the precedent is mixed: a parent-owned
+    track declaration coexists with structural child nodes. Future
+    custom layouts could use this "parent config + structural content"
+    pattern without introducing explicit child coordinates.
+  - If Surface C is selected, it adds a second structural precedent:
+    custom containers may have non-visual definition nodes such as
+    `ColumnDefs` / `RowDefs` that declare container shape separately
+    from visible content rows.
 - **[typed-value-evaluator.md](../../../../docs/notes/typed-value-evaluator.md) —
   unfired for Phase 5 execution, noted for future compatibility.**
-  Grid track / placement attributes remain constant-only unless owner
-  explicitly expands scope. No item context, no bindable track
+  Grid track / membership attributes remain constant-only unless
+  owner explicitly expands scope. No item context, no bindable track
   definitions, and no new typed evaluator value are introduced in the
   recommended Phase 5 execution path, but DD-M3-P5-001 / 002 should
-  avoid choosing a track-list grammar that makes future bindable track
-  pieces unnatural. Phase 7 may reopen item-context pressure.
+  avoid choosing a surface that makes future bindable track pieces
+  unnatural — this applies to every surface family (bindable
+  `columns:` value in the track-list / hybrid-column families, bindable
+  `Cell { width: ... }` in pure structural, bindable `ColumnDef { width: ... }` in
+  definition-node). Phase 7 may reopen item-context pressure.
 - **[workspace-layout.md](../../../../docs/notes/workspace-layout.md) — unfired.** No new
   crate is expected.
 - **[verification-environments.md](../../../../docs/notes/verification-environments.md) /
@@ -702,17 +954,34 @@ section can cite their disposition rather than re-deciding:
 - **[release-distribution.md](../../../../docs/notes/release-distribution.md) — unfired.**
   Phase 5 introduces no release / packaging surface.
 
-### K. Grid mental model anchor in dsl_spec
+### FD-K. Grid mental model anchor in dsl_spec
 
 The Moment 1 `docs/dsl_spec.md` Grid chapter should start with a
-short mental-model anchor before the algorithm:
+short mental-model anchor before the algorithm. Until DD-M3-P5-001 is
+accepted, the framing should present five equally serious author
+models:
 
-- rows and columns define tracks;
+- rows and columns define tracks (their location depends on the surface);
 - fixed tracks take definite space first;
 - star tracks divide remaining bounded space by weight;
-- children occupy exactly one cell rectangle or one rectangular span;
-- parent-scoped child metadata can place and align the child within
-  that rectangle; and
+- in a **track-list + placement** surface, tracks are declared on
+  Grid and children carry parent-scoped metadata that places and
+  aligns them within resolved cells;
+- in a **track-list + placed Cell** surface, tracks are declared on
+  Grid and `Cell` wrappers carry placement / span / alignment metadata,
+  leaving content widgets free of Grid-specific attributes;
+- in a **pure structural Row / Cell** surface, document structure
+  assigns children to cells, sizing metadata lives on `Row` /
+  `Cell`, and the ADR must define how column widths are reconciled
+  across rows;
+- in a **Grid columns + structural rows** surface, Grid declares shared
+  columns once while `Row` / `Cell` document structure assigns content
+  to those columns and carries row heights;
+- in a **definition-node + structural rows** surface, hoisted
+  `ColumnDefs` / `RowDefs` definition children on Grid declare shared
+  track sizes, while content rows mirror the visible structure;
+- in every surface, children occupy exactly one cell rectangle or
+  one rectangular span; and
 - Grid arranges children into resolved rectangles and does not
   provide intentional overlay. Per-cell clipping is out of scope;
   outer-bounds clipping is an ADR option, not a framing-settled rule.
@@ -725,16 +994,38 @@ track-resolution details.
 several incompatible mental models:
 
 - **WPF `Grid`.** WPF uses `RowDefinition` / `ColumnDefinition` and
-  attached `Grid.Row` / `Grid.Column` properties. Wasamo adopts the
-  row / column placement semantics as parent-scoped child metadata
-  but does not introduce the full attached-property machinery in
-  Phase 5; rows / columns are compact Grid attributes and child
-  placement is the first built-in precedent for a lighter
-  parent-scoped metadata model.
+  attached `Grid.Row` / `Grid.Column` properties. This maps to the
+  track-list + direct child-placement family; the placed-`Cell` variant
+  keeps WPF-like coordinates but routes them through a wrapper instead
+  of an attached-property-like child metadata surface. Wasamo should not
+  assume either family just because WPF is familiar; if chosen, it
+  should be chosen for explicit placement and spanning power, not by
+  inertia.
 - **CSS Grid.** CSS Grid has named lines, template areas, auto-flow,
   fractional units, minmax, gap, and dense placement. Wasamo Phase 5
-  is narrower: fixed tracks, weighted star tracks, explicit placement,
-  rectangular spans, and no auto-placement / named areas.
+  can borrow the idea of tracks plus placed children, but CSS is not a
+  reason to reject a structural Row / Cell `.ui` if owner prefers a
+  table-like authoring model.
+- **Table / form builders.** Many UI builders expose rows and cells
+  structurally. This maps to the structural `Row` / `Cell` family:
+  it is more verbose for irregular placement but more direct for
+  forms, settings panes, and fixed gallery slices. The shared
+  track-sizing problem (column widths consistent across rows) is the
+  load-bearing tension here — pure structural surfaces leave it
+  emergent and must add reconciliation rules; definition-node
+  variants solve it by construction at the cost of an extra surface
+  layer. That tradeoff is not resolved in framing.
+- **Cell-wrapper builders.** Some APIs make an explicit item / cell
+  wrapper the carrier of layout metadata. This maps to Surface A2: it
+  preserves parent-level tracks while avoiding `row` / `column` on
+  arbitrary content widgets. The cost is an extra wrapper without the
+  row-structure readability of B / D / C.
+- **Form builders with shared columns.** Some form-oriented APIs keep
+  column definitions at the container level while rows remain structural.
+  This maps to Surface D: it moves shared columns to parent config while
+  keeping rows structural, but it is asymmetric (`columns:` on Grid,
+  `height:` on Row) and weaker for irregular coordinate placement than
+  A / A2.
 - **Jetpack Compose / SwiftUI grids.** Those ecosystems often model
   adaptive or lazy grids that generate children from data. Wasamo
   Phase 5 is not lazy and does not generate children; Phase 7
@@ -747,32 +1038,31 @@ several incompatible mental models:
 
 ---
 
-## Author-facing `.ui` examples under the current recommendations
+## Author-facing `.ui` surface options
 
 This section is illustrative input for owner alignment, not final
 grammar. It is intentionally present in the framing note because
-DD-M3-P5-001's track-list grammar choice is easier to review when
-owner can see the resulting author-facing `.ui` shape. The examples
-below show the updated preferred shape: compact `rows:` / `columns:`
-attributes with Grid-specific first-class track-list values. If owner
-chooses the fallback string-encoded form, the same examples would wrap
-each track list in quotes.
+owner has explicitly required Phase 5 not to treat the WPF / CSS Grid
+family as the default. The five surface families below are shown
+with parallel examples (sidebar + star, weighted star + alignment,
+spanning) so the ADR can compare them on the five owner-specified
+axes — `.ui` author taste, spanning, shared track sizing, future
+iteration, component-extension-model — symmetrically rather than
+through asymmetric coverage.
 
-- compact row / column declarations on `Grid`;
-- positive integer fixed tracks;
-- unit and weighted star tracks;
-- explicit child placement with `row` / `column`;
-- positive `row-span` / `column-span`;
-- optional `h-align` / `v-align` as Grid-scoped child metadata if
-  owner accepts DD-M3-P5-005's alignment recommendation;
-- no auto-placement;
-- no same-cell overlap; and
-- no ZStack-style overlay.
+Expanded owner-readable notes for each surface live in
+[surface-options/](./surface-options/README.md). Those files are
+supplemental requirements notes; this framing document remains the
+phase requirements SSOT.
 
-### Example 1 — fixed sidebar + star content
+### Surface A — track-list + placed children
 
-A two-column layout with a fixed navigation rail and a flexible content
-area:
+Tracks live on `Grid` as Grid-specific first-class track-list values.
+Each child carries parent-scoped placement metadata. Shared track
+sizing is automatic by construction: there is exactly one canonical
+`columns:` / `rows:` declaration.
+
+**Example A1 — fixed sidebar + star content:**
 
 ```wasamo-ui
 Grid {
@@ -799,10 +1089,7 @@ The fixed track receives 180 px. The star track receives the remaining
 bounded width. The two children occupy different cells, so this stays
 inside the "1 cell 1 child" rule.
 
-### Example 2 — weighted star columns
-
-A three-column gallery header where the center region gets twice the
-remaining width of each side region:
+**Example A2 — weighted star + alignment:**
 
 ```wasamo-ui
 Grid {
@@ -836,10 +1123,7 @@ If the Grid receives 800 px of width and no fixed columns exist, the
 resolved column widths are proportional to `1 : 2 : 1`. DD-M3-P5-004
 uses deterministic `f32` prefix boundaries and no integer pixel snap.
 
-### Example 3 — spanning without overlap
-
-A layout where a hero tile spans two columns, while smaller tiles sit
-below it:
+**Example A3 — spanning:**
 
 ```wasamo-ui
 Grid {
@@ -871,13 +1155,503 @@ Grid {
 ```
 
 The first child occupies the rectangular span `(row 0, columns 0..2)`.
-The two lower children occupy separate cells. This is valid because no
-resolved cell is claimed by more than one child.
+The two lower children occupy separate cells.
 
-### Example 4 — gallery slice candidate
+Strength: Surface A is the most compact explicit-coordinate surface and
+keeps shared tracks canonical on Grid. Cost: Grid-specific placement /
+alignment metadata appears on content widgets.
+
+### Surface A2 — track-list + placed Cell wrapper
+
+Tracks live on `Grid` as Grid-specific first-class track-list values,
+as in Surface A. Unlike Surface A, placement / span / alignment metadata
+lives on a Grid-owned `Cell` wrapper. The content widget is the single
+child of `Cell`.
+
+**Example A2.1 — fixed sidebar + star content:**
+
+```wasamo-ui
+Grid {
+  columns: 180 *
+  rows: *
+
+  Cell {
+    row: 0
+    column: 0
+    Box {
+      fill: #243447ff
+      Text { text: "Albums" }
+    }
+  }
+
+  Cell {
+    row: 0
+    column: 1
+    Box {
+      fill: #f5f7faff
+      Text { text: "Selected album" }
+    }
+  }
+}
+```
+
+The track-resolution semantics match Surface A. The authoring
+difference is that Grid metadata is isolated on `Cell`, not on `Box`.
+
+**Example A2.2 — weighted star + alignment:**
+
+```wasamo-ui
+Grid {
+  columns: 1* 2* 1*
+  rows: 72
+
+  Cell {
+    row: 0
+    column: 0
+    Text { text: "Back" }
+  }
+
+  Cell {
+    row: 0
+    column: 1
+    h-align: center
+    v-align: center
+    Text { text: "Summer Trip" }
+  }
+
+  Cell {
+    row: 0
+    column: 2
+    h-align: end
+    Text { text: "Share" }
+  }
+}
+```
+
+Alignment lives on `Cell`, so future content widgets do not need to
+learn Grid-specific alignment attributes merely because they appear
+inside Grid.
+
+**Example A2.3 — spanning:**
+
+```wasamo-ui
+Grid {
+  columns: 1* 1*
+  rows: 220 120
+
+  Cell {
+    row: 0
+    column: 0
+    column-span: 2
+    Box {
+      fill: #336699cc
+      Text { text: "Featured photo" }
+    }
+  }
+
+  Cell {
+    row: 1
+    column: 0
+    Box {
+      fill: #88aa55cc
+      Text { text: "Detail A" }
+    }
+  }
+
+  Cell {
+    row: 1
+    column: 1
+    Box {
+      fill: #aa6655cc
+      Text { text: "Detail B" }
+    }
+  }
+}
+```
+
+Strength: Surface A2 keeps A's irregular-placement power and automatic
+shared track sizing while containing Grid metadata on `Cell`. Cost: it
+adds a wrapper and still lacks B / D / C's row-structure readability.
+
+### Surface B — pure structural Row / Cell
+
+Document structure mirrors the visible rows and cells. Sizing
+metadata lives on `Row` / `Cell` directly. No widget receives `row` /
+`column` attributes.
+
+The load-bearing question for this family is **shared track sizing**:
+since each `Row` declares its own `Cell` widths, the ADR must commit
+to one of:
+
+- **B-reject:** widths declared in row 2+ must equal widths declared
+  by a canonical non-spanning row; mismatches are malformed. The
+  canonical row is the first row whose Cells cover the full column
+  count without spans. This handles header / footer rows that are only
+  spanning Cells.
+- **B-first:** widths are only read from the first row, even if that
+  row contains spans; later row widths are ignored or warned on. Less
+  safe and ambiguous when the first row is a spanning header.
+- **B-independent:** each row is sized independently. This is no
+  longer Grid semantics (it is a stack of HStacks) and should not be
+  considered a Grid surface; recorded here only to be rejected.
+
+The examples below assume **B-reject** only to make Surface B
+well-defined for comparison. This is not a recommendation for B; it is
+the minimum rule needed before B can be compared fairly with A, A2, D,
+and C.
+In these examples, non-spanning Cells in the canonical row carry
+`width`; spanning Cells omit `width` and are sized by the columns they
+span.
+
+**Example B1 — fixed sidebar + star content:**
+
+```wasamo-ui
+Grid {
+  Row {
+    height: *
+
+    Cell {
+      width: 180
+      Box {
+        fill: #243447ff
+        Text { text: "Albums" }
+      }
+    }
+
+    Cell {
+      width: 1*
+      Box {
+        fill: #f5f7faff
+        Text { text: "Selected album" }
+      }
+    }
+  }
+}
+```
+
+The first row is also the canonical non-spanning row, so it declares
+two columns (180 px, star). Any additional non-spanning row must
+declare the same two widths or be rejected by `wasamoc check`.
+
+**Example B2 — weighted star + alignment:**
+
+```wasamo-ui
+Grid {
+  Row {
+    height: 72
+
+    Cell {
+      width: 1*
+      Text { text: "Back" }
+    }
+
+    Cell {
+      width: 2*
+      h-align: center
+      v-align: center
+      Text { text: "Summer Trip" }
+    }
+
+    Cell {
+      width: 1*
+      h-align: end
+      Text { text: "Share" }
+    }
+  }
+}
+```
+
+Alignment lives on `Cell`, not on `Text`. This keeps Grid-specific
+child contract attributes consolidated on `Cell`.
+
+**Example B3 — spanning:**
+
+```wasamo-ui
+Grid {
+  Row {
+    height: 220
+
+    Cell {
+      column-span: 2
+      Box {
+        fill: #336699cc
+        Text { text: "Featured photo" }
+      }
+    }
+  }
+
+  Row {
+    height: 120
+
+    Cell {
+      width: 1*
+      Box {
+        fill: #88aa55cc
+        Text { text: "Detail A" }
+      }
+    }
+
+    Cell {
+      width: 1*
+      Box {
+        fill: #aa6655cc
+        Text { text: "Detail B" }
+      }
+    }
+  }
+}
+```
+
+The first row contains only a spanning Cell, so it cannot be the
+canonical width declaration. Under B-reject, the second row is the
+canonical non-spanning row and declares two `1*` columns; the first
+row's spanning Cell is sized and validated against that inferred
+column vector.
+This inference rule is the main fragility of Surface B in
+shared-track-sizing terms.
+
+Strength: Surface B is the closest to a pure table-like document
+structure. Cost: shared column sizing requires a reconciliation rule
+such as B-reject before it can behave as Grid rather than independent
+rows.
+
+### Surface D — Grid columns + structural rows
+
+Shared column tracks live on `Grid` as a first-class `columns:` value.
+Rows and cells remain structural. Row heights live on `Row`; cells do
+not carry `width` because they consume the Grid-level columns in
+document order.
+
+**Example D1 — fixed sidebar + star content:**
+
+```wasamo-ui
+Grid {
+  columns: 180 *
+
+  Row {
+    height: *
+
+    Cell {
+      Box {
+        fill: #243447ff
+        Text { text: "Albums" }
+      }
+    }
+
+    Cell {
+      Box {
+        fill: #f5f7faff
+        Text { text: "Selected album" }
+      }
+    }
+  }
+}
+```
+
+Column sharing comes from a canonical `columns:` declaration, while
+membership comes from structural rows and cells.
+
+**Example D2 — weighted star + alignment:**
+
+```wasamo-ui
+Grid {
+  columns: 1* 2* 1*
+
+  Row {
+    height: 72
+
+    Cell {
+      Text { text: "Back" }
+    }
+
+    Cell {
+      h-align: center
+      v-align: center
+      Text { text: "Summer Trip" }
+    }
+
+    Cell {
+      h-align: end
+      Text { text: "Share" }
+    }
+  }
+}
+```
+
+Alignment lives on `Cell`; column weights live on Grid.
+
+**Example D3 — spanning:**
+
+```wasamo-ui
+Grid {
+  columns: 1* 1*
+
+  Row {
+    height: 220
+
+    Cell {
+      column-span: 2
+      Box {
+        fill: #336699cc
+        Text { text: "Featured photo" }
+      }
+    }
+  }
+
+  Row {
+    height: 120
+
+    Cell {
+      Box {
+        fill: #88aa55cc
+        Text { text: "Detail A" }
+      }
+    }
+
+    Cell {
+      Box {
+        fill: #aa6655cc
+        Text { text: "Detail B" }
+      }
+    }
+  }
+}
+```
+
+Strength: Surface D keeps structural rows while declaring shared columns
+once. Cost: columns are parent-level while rows are structural, so the
+surface is intentionally asymmetric.
+
+### Surface C — definition nodes + structural rows
+
+Hoisted `ColumnDefs` / `RowDefs` definition children on Grid declare shared
+track sizes once. Content rows mirror the visible structure but carry
+no sizing. This is the only surface where shared track sizing is
+solved by construction without conflating row / column declarations
+with content.
+
+**Example C1 — fixed sidebar + star content:**
+
+```wasamo-ui
+Grid {
+  ColumnDefs {
+    ColumnDef { width: 180 }
+    ColumnDef { width: 1* }
+  }
+
+  RowDefs {
+    RowDef { height: 1* }
+  }
+
+  Row {
+    Cell {
+      Box {
+        fill: #243447ff
+        Text { text: "Albums" }
+      }
+    }
+
+    Cell {
+      Box {
+        fill: #f5f7faff
+        Text { text: "Selected album" }
+      }
+    }
+  }
+}
+```
+
+**Example C2 — weighted star + alignment:**
+
+```wasamo-ui
+Grid {
+  ColumnDefs {
+    ColumnDef { width: 1* }
+    ColumnDef { width: 2* }
+    ColumnDef { width: 1* }
+  }
+
+  RowDefs {
+    RowDef { height: 72 }
+  }
+
+  Row {
+    Cell {
+      Text { text: "Back" }
+    }
+
+    Cell {
+      h-align: center
+      v-align: center
+      Text { text: "Summer Trip" }
+    }
+
+    Cell {
+      h-align: end
+      Text { text: "Share" }
+    }
+  }
+}
+```
+
+**Example C3 — spanning:**
+
+```wasamo-ui
+Grid {
+  ColumnDefs {
+    ColumnDef { width: 1* }
+    ColumnDef { width: 1* }
+  }
+
+  RowDefs {
+    RowDef { height: 220 }
+    RowDef { height: 120 }
+  }
+
+  Row {
+    Cell {
+      column-span: 2
+      Box {
+        fill: #336699cc
+        Text { text: "Featured photo" }
+      }
+    }
+  }
+
+  Row {
+    Cell {
+      Box {
+        fill: #88aa55cc
+        Text { text: "Detail A" }
+      }
+    }
+
+    Cell {
+      Box {
+        fill: #aa6655cc
+        Text { text: "Detail B" }
+      }
+    }
+  }
+}
+```
+
+Track count is fixed by the `ColumnDefs` definition. Spans are validated
+against that fixed count regardless of which row contains them.
+
+Strength: Surface C gives rows and columns symmetrical explicit
+definition nodes and keeps content rows structural. Cost: it introduces
+the most boilerplate and a non-visual definition-node pattern.
+
+### Gallery slice candidate — parallel across surfaces
 
 A Phase 5 gallery proof could add a fixed-child Grid slice without
-replacing the existing Box / WrapPanel / ScrollView proof:
+replacing the existing Box / WrapPanel / ScrollView proof. The same
+visible result is shown below in all five surface families so the
+owner-facing decision is which `.ui` form should become the public
+surface, not which surface is even capable of expressing the proof.
+
+**Gallery slice in Surface A:**
 
 ```wasamo-ui
 Grid {
@@ -923,59 +1697,242 @@ Grid {
 }
 ```
 
-This example exercises fixed tracks, star sizing, and spanning in a
-shape that later Phase 6 can overlay with ZStack and later Phase 7 can
-populate through iteration. It deliberately does not express overlay
-inside Grid.
+**Gallery slice in Surface A2:**
 
-### Invalid shapes the recommendation rejects
+```wasamo-ui
+Grid {
+  columns: 96 1* 96
+  rows: 64 1* 120
 
-The current recommendation intentionally rejects the following shapes:
+  Cell {
+    row: 0
+    column: 0
+    column-span: 3
+    h-align: center
+    v-align: center
+    Text { text: "Gallery" }
+  }
+
+  Cell {
+    row: 1
+    column: 0
+    Box { fill: #2f4050ff Text { text: "Prev" } }
+  }
+
+  Cell {
+    row: 1
+    column: 1
+    Box { fill: #3f7caccc Text { text: "Preview" } }
+  }
+
+  Cell {
+    row: 1
+    column: 2
+    Box { fill: #2f4050ff Text { text: "Next" } }
+  }
+
+  Cell {
+    row: 2
+    column: 0
+    column-span: 3
+    Text { text: "Metadata and actions" }
+  }
+}
+```
+
+**Gallery slice in Surface B (B-reject variant):**
+
+```wasamo-ui
+Grid {
+  Row {
+    height: 64
+
+    Cell {
+      column-span: 3
+      h-align: center
+      v-align: center
+      Text { text: "Gallery" }
+    }
+  }
+
+  Row {
+    height: 1*
+
+    Cell {
+      width: 96
+      Box { fill: #2f4050ff Text { text: "Prev" } }
+    }
+
+    Cell {
+      width: 1*
+      Box { fill: #3f7caccc Text { text: "Preview" } }
+    }
+
+    Cell {
+      width: 96
+      Box { fill: #2f4050ff Text { text: "Next" } }
+    }
+  }
+
+  Row {
+    height: 120
+
+    Cell {
+      column-span: 3
+      Text { text: "Metadata and actions" }
+    }
+  }
+}
+```
+
+The shared track sizing fragility is visible: the column widths
+`96 1* 96` are declared by the middle row and adopted by the spanning
+header / footer rows. If any row's column widths disagree, `wasamoc
+check` must reject the Grid.
+This continues the B-reject assumption used only to make Surface B
+well-defined for comparison, not a framing-time recommendation.
+
+**Gallery slice in Surface D:**
+
+```wasamo-ui
+Grid {
+  columns: 96 1* 96
+
+  Row {
+    height: 64
+
+    Cell {
+      column-span: 3
+      h-align: center
+      v-align: center
+      Text { text: "Gallery" }
+    }
+  }
+
+  Row {
+    height: 1*
+
+    Cell { Box { fill: #2f4050ff Text { text: "Prev" } } }
+    Cell { Box { fill: #3f7caccc Text { text: "Preview" } } }
+    Cell { Box { fill: #2f4050ff Text { text: "Next" } } }
+  }
+
+  Row {
+    height: 120
+
+    Cell {
+      column-span: 3
+      Text { text: "Metadata and actions" }
+    }
+  }
+}
+```
+
+In Surface D, the column vector `96 1* 96` is declared once on Grid,
+while row membership remains structural.
+
+**Gallery slice in Surface C:**
+
+```wasamo-ui
+Grid {
+  ColumnDefs {
+    ColumnDef { width: 96 }
+    ColumnDef { width: 1* }
+    ColumnDef { width: 96 }
+  }
+
+  RowDefs {
+    RowDef { height: 64 }
+    RowDef { height: 1* }
+    RowDef { height: 120 }
+  }
+
+  Row {
+    Cell {
+      column-span: 3
+      h-align: center
+      v-align: center
+      Text { text: "Gallery" }
+    }
+  }
+
+  Row {
+    Cell { Box { fill: #2f4050ff Text { text: "Prev" } } }
+    Cell { Box { fill: #3f7caccc Text { text: "Preview" } } }
+    Cell { Box { fill: #2f4050ff Text { text: "Next" } } }
+  }
+
+  Row {
+    Cell {
+      column-span: 3
+      Text { text: "Metadata and actions" }
+    }
+  }
+}
+```
+
+Each example exercises fixed tracks, star sizing, and spanning in a
+shape that later Phase 6 can overlay with ZStack and later Phase 7
+can populate through iteration. None expresses overlay inside Grid.
+
+### Invalid shapes — parallel across surfaces
+
+Phase 5 must reject the same logical errors in every surface family.
+The shapes below show the same error class expressed in each surface
+so the ADR can compare diagnostic surfaces flatly.
+
+**Duplicate cell claim:**
+
+Surface A:
 
 ```wasamo-ui
 Grid {
   columns: 1*
   rows: 1*
 
-  Box {
-    row: 0
-    column: 0
-    fill: #336699cc
-  }
-
-  Box {
-    row: 0
-    column: 0
-    fill: #aa6655cc
-  }
+  Box { row: 0 column: 0 fill: #336699cc }
+  Box { row: 0 column: 0 fill: #aa6655cc }
 }
 ```
 
-Both children claim the same cell. Phase 5 treats this as a diagnostic,
-not as "last child wins" overlay.
+Surface A2: two widgets inside a placed `Cell` body. Unless `Cell` is
+defined as a single-child wrapper, this would need a child-stacking rule:
 
 ```wasamo-ui
 Grid {
-  columns: 1* 1*
+  columns: 1*
   rows: 1*
 
-  Box {
-    column: 0
-    fill: #336699cc
-  }
-
-  Box {
+  Cell {
     row: 0
-    column: 1
-    fill: #88aa55cc
+    column: 0
+    Box { fill: #336699cc }
+    Box { fill: #aa6655cc }
   }
 }
 ```
 
-The first child omits `row` in a multi-child Grid. Under the current
-recommendation, Phase 5 does not provide auto-placement; multi-child
-Grid authors spell `row` and `column` explicitly. A single-child Grid
-may omit both and default to `(0, 0)`.
+Surface B / D / C: the same single-`Cell` body problem appears inside a
+structural row:
+
+```wasamo-ui
+Grid {
+  Row {
+    Cell {
+      Box { fill: #336699cc }
+      Box { fill: #aa6655cc }
+    }
+  }
+}
+```
+
+Phase 5 should define `Cell` as single-child in A2 and the structural
+families, so this shape is rejected at parse time as "`Cell` accepts
+exactly one content child."
+
+**Span exceeds declared track count:**
+
+Surface A:
 
 ```wasamo-ui
 Grid {
@@ -991,13 +1948,129 @@ Grid {
 }
 ```
 
-This span exceeds the declared column count and is rejected by both
-`wasamoc check` and runtime IR validation.
+Surface A2:
+
+```wasamo-ui
+Grid {
+  columns: 1* 1*
+  rows: 1*
+
+  Cell {
+    row: 0
+    column: 1
+    column-span: 2
+    Box { fill: #336699cc }
+  }
+}
+```
+
+Surface B (B-reject):
+
+```wasamo-ui
+Grid {
+  Row {
+    Cell { width: 1* Box { fill: #2f4050ff } }
+    Cell { width: 1* column-span: 2 Box { fill: #336699cc } }
+  }
+}
+```
+
+Surface D:
+
+```wasamo-ui
+Grid {
+  columns: 1* 1*
+
+  Row {
+    Cell { Box { fill: #2f4050ff } }
+    Cell { column-span: 2 Box { fill: #336699cc } }
+  }
+}
+```
+
+Surface C:
+
+```wasamo-ui
+Grid {
+  ColumnDefs {
+    ColumnDef { width: 1* }
+    ColumnDef { width: 1* }
+  }
+  RowDefs {
+    RowDef { height: 1* }
+  }
+
+  Row {
+    Cell { Box { fill: #2f4050ff } }
+    Cell { column-span: 2 Box { fill: #336699cc } }
+  }
+}
+```
+
+All five are rejected by `wasamoc check` and runtime IR validation:
+the span consumes columns 1 and 2, but only columns 0 and 1 are
+declared.
+
+**Shared track sizing mismatch (Surface B only):**
+
+```wasamo-ui
+Grid {
+  Row {
+    Cell { width: 180 Box { fill: #2f4050ff } }
+    Cell { width: 1* Box { fill: #3f7caccc } }
+  }
+
+  Row {
+    Cell { width: 200 Box { fill: #88aa55cc } }
+    Cell { width: 1* Box { fill: #aa6655cc } }
+  }
+}
+```
+
+Under B-reject this is rejected because row 1 declares `180`-wide
+column 0 and row 2 declares `200`-wide column 0. Surface A, Surface A2,
+Surface D, and Surface C cannot express this error in the first place —
+`columns:` or `ColumnDefs { ... }` declares each column exactly once. This is a
+diagnostic and authoring distinction the ADR must weigh if the
+structural authoring model remains attractive.
+
+**Implicit placement under Surface A / A2 (degenerate omission):**
+
+```wasamo-ui
+Grid {
+  columns: 1* 1*
+  rows: 1*
+
+  Box { column: 0 fill: #336699cc }
+}
+```
+
+Surface A2:
+
+```wasamo-ui
+Grid {
+  columns: 1* 1*
+  rows: 1*
+
+  Cell {
+    column: 0
+    Box { fill: #336699cc }
+  }
+}
+```
+
+This is meaningful in Surface A and A2: a placed content child or placed
+`Cell` omits `row` in a multi-child Grid context. Phase 5 should not
+silently auto-place the child unless DD-M3-P5-003 also defines a
+document-order placement algorithm. Surfaces B, D, and C avoid this error
+by making membership explicit in the document tree.
 
 If owner accepts `auto` / intrinsic tracks in DD-M3-P5-002, a later
-draft can add an example such as a metadata column sized by content.
-The current recommendation defers `auto`, so the examples above stay
-within fixed + weighted-star semantics.
+draft can add an example such as a metadata column sized by content
+(`columns: auto 1*` in Surface A / A2 / D, `Cell { width: auto }` in B,
+or `ColumnDef { width: auto }` in C). The conservative recommendation
+defers `auto`, so the examples above stay within fixed + weighted-
+star semantics.
 
 ---
 
@@ -1007,10 +2080,10 @@ within fixed + weighted-star semantics.
 
 | Section | Disposition | Consumed at |
 |---|---|---|
-| §1 integration fixture parent shape must cover production root shape | Direct input | Framing decision C; DD-M3-P5-005 verification note |
-| §2 non-root Shrink container + Fill child design space | Design-space decision | Framing decision D; draft recommendation is status quo |
+| §1 integration fixture parent shape must cover production root shape | Direct input | FD-C; DD-M3-P5-005 verification note |
+| §2 non-root Shrink container + Fill child design space | Design-space decision | FD-D; draft recommendation is status quo |
 | §3 `scroll_y` Signal drift | Out of scope for Phase 5 | Out-of-scope section; M4 handoff only |
-| §4 R1 Window-title wiring owning phase | Required pre-doc assignment | Framing decision E; residual scan decision F; milestone plan Phase 6 note after owner alignment |
+| §4 R1 Window-title wiring owning phase | Required pre-doc assignment | FD-E; FD-F; milestone plan Phase 6 note after owner alignment |
 | §5 final-step retrospective split | Process rule | Opening assumptions; Phase 5 implementation plan template |
 
 ### From [process/milestone-3/plan.md](../../plan.md)
@@ -1018,18 +2091,18 @@ within fixed + weighted-star semantics.
 | Section | Disposition | Consumed at |
 |---|---|---|
 | §Acceptance criteria — A2 | Constraint | Acceptance restatement; DD-M3-P5-001..006 |
-| §Acceptance criteria — A11 | Operational rule | Acceptance restatement; framing decisions C / G / H |
-| §Acceptance criteria — A12 | Spec obligation | Acceptance restatement; framing decisions B / G / K; new `docs/dsl_spec.md` §4.12 |
-| Phase breakdown: star sizing is central algorithmic content | Algorithmic constraint | DD-M3-P5-004; framing decision B |
-| Same-cell overlap is ZStack responsibility | Scope boundary | Out-of-scope section; DD-M3-P5-003 conflict policy; framing decision K ecosystem contrast |
-| Risk: Grid measure-arrange spec complexity | Mitigation | Moment 1 spec drafting in framing decision G; mental-model anchor in framing decision K |
+| §Acceptance criteria — A11 | Operational rule | Acceptance restatement; FD-C / FD-G / FD-H |
+| §Acceptance criteria — A12 | Spec obligation | Acceptance restatement; FD-B / FD-G / FD-K; new `docs/dsl_spec.md` §4.12 |
+| Phase breakdown: star sizing is central algorithmic content | Algorithmic constraint | DD-M3-P5-004; FD-B |
+| Same-cell overlap is ZStack responsibility | Scope boundary | Out-of-scope section; DD-M3-P5-003 conflict policy; FD-K ecosystem contrast |
+| Risk: Grid measure-arrange spec complexity | Mitigation | Moment 1 spec drafting in FD-G; mental-model anchor in FD-K |
 
 ### From [m3-gallery-wireframe.html](../../requirements/gallery-wireframe.html)
 
 | Element | Disposition | Consumed at |
 |---|---|---|
-| 2D gallery composition pressure | Visible-proof reference | Framing decision H; author-facing examples |
-| Future lightbox / overlay relationship | Downstream constraint | DD-M3-P5-003 conflict policy; framing decision K (ZStack owns overlay) |
+| 2D gallery composition pressure | Visible-proof reference | FD-H; author-facing examples |
+| Future lightbox / overlay relationship | Downstream constraint | DD-M3-P5-003 conflict policy; FD-K (ZStack owns overlay) |
 | Future iteration-generated thumbnails | Downstream constraint | Acceptance restatement downstream paragraph; Phase 7 handoff note |
 
 ### From [M3-Phase 3 decisions](../../phase-3/decisions/preamble.md)
@@ -1037,24 +2110,24 @@ within fixed + weighted-star semantics.
 | DD / precedent | Disposition | Consumed at |
 |---|---|---|
 | DD-M3-P3-005 pure-data measure-arrange | Pattern reuse | DD-M3-P5-004 |
-| First novel-normative-spec phase discipline | Pattern reuse | Acceptance restatement; framing decisions B / G / K |
+| First novel-normative-spec phase discipline | Pattern reuse | Acceptance restatement; FD-B / FD-G / FD-K |
 | Paint overflow not clipped by layout primitive itself | Pattern reuse with Grid-specific clarification | DD-M3-P5-005 Options table must compare pure layout overflow with Grid outer-bounds clipping; occupancy overlap still invalid either way |
 
 ### From [M3-Phase 4 decisions](../../phase-4/decisions/preamble.md)
 
 | DD / precedent | Disposition | Consumed at |
 |---|---|---|
-| Runtime-boundary root-shape lesson | Direct input | Framing decision C; DD-M3-P5-005 verification note |
+| Runtime-boundary root-shape lesson | Direct input | FD-C; DD-M3-P5-005 verification note |
 | ScrollView intermediate Visual pattern | Negative precedent | DD-M3-P5-005 (Grid should not become a ScrollView-style viewport; outer-bounds clipping, if chosen, must be justified separately) |
-| Phase 4 R1 residual | Carry-forward assignment | Framing decisions E / F |
+| Phase 4 R1 residual | Carry-forward assignment | FD-E / FD-F |
 | Phase 4 `scroll_y` drift | Out of scope | Out-of-scope section; M4 handoff only |
 
 ### From [M2 handoff](../../../milestone-2/handoff.md)
 
 | Section | Disposition | Consumed at |
 |---|---|---|
-| §3 reactive drain residuals | Out of scope in recommended path | Live-note decision J; constant-only Grid attributes do not pressure drain residuals, but track-list grammar should not block future bindable tracks |
-| §4 `TypedValue` deferral | Discipline reminder | Live-note decision J; no bindable track / placement and no item context in Phase 5 unless owner explicitly expands scope |
+| §3 reactive drain residuals | Out of scope in recommended path | FD-J; constant-only Grid attributes do not pressure drain residuals, but the chosen Grid surface should not block future bindable tracks |
+| §4 `TypedValue` deferral | Discipline reminder | FD-J; no bindable track / membership and no item context in Phase 5 unless owner explicitly expands scope |
 
 ---
 
@@ -1062,14 +2135,25 @@ within fixed + weighted-star semantics.
 
 To move from this draft to ADR drafting:
 
-1. Owner reviews framing decisions A-K, especially DD-M3-P5-001 /
-   DD-M3-P5-002 (first-class track-list value vs string encoding, and
-   `auto` defer-with-slot vs fully specified `auto` now),
-   DD-M3-P5-003 (parent-scoped child metadata and explicit placement),
-   DD-M3-P5-004 (zero-minimum unbounded star vs Grid-specific layout
-   error), DD-M3-P5-005 (`h-align` / `v-align`, pure overflow vs
-   Grid outer-bounds clipping), and decision E (R1 assigned to Phase
-   6).
+1. Owner reviews FD-A through FD-K. The surface family choice in
+   DD-M3-P5-001 must come first because DD-002 / DD-003 / DD-005
+   sub-issues branch on it. Specifically:
+   - DD-M3-P5-001: Surface A (track-list + direct child placement) vs
+     Surface A2 (track-list + placed `Cell` wrapper) vs Surface B
+     (pure structural Row / Cell with B-reject shared sizing rule) vs
+     Surface D (Grid columns + structural rows) vs Surface C
+     (definition nodes + structural rows), compared on the five axes
+     (`.ui` taste, spanning, shared track sizing, future iteration,
+     component-extension-model).
+   - DD-M3-P5-002: `auto` defer-with-slot vs fully specified `auto`
+     now (orthogonal to surface).
+   - DD-M3-P5-003: membership, spanning, and conflict policy under
+     the selected surface.
+   - DD-M3-P5-004: zero-minimum unbounded star vs Grid-specific
+     layout error.
+   - DD-M3-P5-005: alignment-carrier location (depends on surface),
+     pure overflow vs Grid outer-bounds clipping.
+   - FD-E: R1 assigned to Phase 6.
 2. If aligned, draft `process/milestone-3/phase-5/decisions/preamble.md`
    plus the six `dd-*.md` files as `Status: Proposed`.
 3. Draft the Moment 1 `docs/dsl_spec.md` Grid chapter and widget
@@ -1078,4 +2162,4 @@ To move from this draft to ADR drafting:
    and `process/milestone-3/phase-5/implementation/plan.md` with the
    final-step retrospective split already represented.
 5. Update `process/milestone-3/plan.md` to assign R1 to Phase 6 if owner
-   accepts decision E.
+   accepts FD-E.
