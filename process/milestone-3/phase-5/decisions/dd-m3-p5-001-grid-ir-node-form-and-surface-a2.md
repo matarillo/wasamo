@@ -31,16 +31,28 @@ Recommendations and approved at ADR review.
 
 **Sub-issues:**
 
-- **IR node shape.** Per-kind tag parallel to `Box`, `WrapPanel`,
-  and `ScrollView`, vs a structural variant in `IrLayout`. Per-kind
-  tag continues the M3 primitive pattern. Grid additionally
-  introduces the `TrackSize` domain type (defined in DD-M3-P5-002)
-  and explicit `Cell` per-kind tag.
-- **Surface family.** Compared in framing across A / A2 / B / D / C.
-  Owner-settled at **Surface A2**.
+- **IR node shape.** Per-kind tag for Grid (parallel to `Box`,
+  `WrapPanel`, and `ScrollView`) vs a structural variant in
+  `IrLayout`. Per-kind tag continues the M3 primitive pattern.
+  Grid additionally introduces the `TrackSize` domain type
+  (defined in DD-M3-P5-002). `Cell` is a separate IR node kind
+  consumed by Grid's lowering — see the "`Cell` contract"
+  sub-issue below for the IR-vs-runtime distinction.
 - **`Cell` contract.** Grid-owned single-child layout wrapper
   carrying `row`, `column`, `row-span`, `column-span`, `h-align`,
-  `v-align`. Not a general-purpose widget; not usable outside Grid.
+  `v-align`. **`Cell` is an IR node kind only**: it appears in
+  `wasamo-ir` (so parsers / IR-loaders know about it) but is
+  **not registered as a runtime widget kind** in
+  `wasamo-runtime`'s widget catalog. Grid's lowering reads the
+  IR Cell subtrees directly to extract placement metadata and
+  arranges each Cell's single content child as the Grid's
+  effective layout child. At the WidgetNode / Visual layer,
+  `Cell` does not appear (1 WidgetNode = 1 Visual; each Cell's
+  content widget becomes a direct WidgetNode / Visual child of
+  Grid). `Cell` outside a `Grid` parent is rejected at
+  `wasamoc check` and `validate()`.
+- **Surface family.** Compared in framing across A / A2 / B / D / C.
+  Owner-settled at **Surface A2**.
 - **Indexing convention.** Zero-based at the `.ui` boundary and
   zero-based internally.
 - **Minimum valid shape.** Grid requires at least one row track and
@@ -53,22 +65,38 @@ Recommendations and approved at ADR review.
 
 **Options (IR node shape):**
 
-- **Option A — Per-kind tag with new `TrackSize` domain type +
-  per-kind `Cell` tag (recommended).** `Grid` appears as
-  `widget_type: "Grid"` and `Cell` appears as
-  `widget_type: "Cell"` on the generic `IrNode`, parallel to
-  Box / WrapPanel / ScrollView. Grid carries `columns:` and
-  `rows:` attributes whose values are a Grid-specific
-  `Vec<TrackSize>` domain type populated from existing `IntLit`
-  plus a Grid-only star-token shape. `Cell` carries `row`,
-  `column`, `row-span`, `column-span` as existing `i32` literals,
-  and `h-align` / `v-align` as identifier literals.
-  - What you gain: consistency with all prior layout primitives;
-    no new `IrType` or `IrLiteral` variant; the parser accepts
-    the generic shape unchanged except for the narrow track-list
-    parser path declared in DD-M3-P5-002.
-  - What you give up: nothing relative to the established
-    pattern.
+- **Option A — Per-kind Grid tag with new `TrackSize` domain
+  type + IR-only `Cell` tag (recommended).** `Grid` appears as
+  `widget_type: "Grid"` on the generic `IrNode`, parallel to
+  Box / WrapPanel / ScrollView, **and is registered as a runtime
+  widget kind in `wasamo-runtime`'s widget catalog**. `Cell`
+  appears as `widget_type: "Cell"` in the IR for parser /
+  IR-loader purposes but is **not** registered as a runtime
+  widget kind: Grid's lowering reads its IR Cell subtrees to
+  extract placement / span / alignment metadata, and arranges
+  each Cell's single content child as Grid's effective layout
+  child. The WidgetNode / Visual tree contains one node for Grid
+  and one node per Cell's content widget; Cell itself does not
+  materialise as a WidgetNode or Visual. Grid carries
+  `columns:` and `rows:` attributes whose values are a
+  Grid-specific `Vec<TrackSize>` domain type populated from
+  existing `IntLit` plus a Grid-only star-token shape. `Cell`
+  carries `row`, `column`, `row-span`, `column-span` as existing
+  `i32` literals, and `h-align` / `v-align` as identifier
+  literals.
+  - What you gain: consistency with all prior layout primitives at
+    the IR level (per-kind tag); no new `IrType` or `IrLiteral`
+    variant; the parser accepts the generic shape unchanged
+    except for the narrow track-list parser path declared in
+    DD-M3-P5-002; the runtime widget catalog gains exactly one
+    new entry (`Grid`); the WidgetNode / Visual tree stays under
+    the existing 1 WidgetNode = 1 Visual convention (per
+    DD-M3-P5-005 Visual ownership) — Cell does not add a layer.
+  - What you give up: Cell is a special-case IR shape that the
+    Grid widget knows about but no other widget can host;
+    `Cell` outside `Grid` is rejected at `wasamoc check` and
+    `validate()`. This is the structurally simplest disposition
+    consistent with A2's "Cell is a Grid-owned wrapper" framing.
 - Option B — Structural variant in `IrLayout`. Grid participates
   as a layout-flavour discriminator rather than a widget kind.
   - What you gain: arguably cleaner separation of "container that
@@ -157,10 +185,21 @@ row-structure readability than B / D / C.
 - **Option A — Explicit `row` and `column` required on every
   `Cell` in a multi-`Cell` Grid; a one-`Cell` Grid may default to
   `(0, 0)` (recommended).** Phase 5 has no auto-placement policy.
+  The defaulting is a compile-time-only lowering rule at
+  `wasamoc lower`: in a Grid with >= 2 Cells, missing `row` or
+  `column` is a `wasamoc check` diagnostic; in a Grid with
+  exactly 1 Cell, missing `row` and/or `column` lower to `0` in
+  the emitted IR. Memory IR therefore has explicit `row` /
+  `column` values after lowering (no "missing" representation at
+  the IR boundary); runtime `validate()` only range-checks them
+  (DD-M3-P5-006).
   - What you gain: every multi-`Cell` Grid is self-describing; no
     silent placement; the diagnostic surface for "Cell omitted
     row" is local and unambiguous; auto-placement is reserved as a
-    future surface decision rather than implicit.
+    future surface decision rather than implicit; the runtime
+    invariant surface (DD-M3-P5-006) stays uniform — every Cell
+    has explicit `row` / `column` at runtime regardless of source
+    omission.
   - What you give up: the smallest Grid examples write `row: 0
     column: 0` on a single `Cell` redundantly; the one-`Cell` Grid
     escape clause mitigates this for the smallest demo case.
@@ -265,6 +304,76 @@ row-structure readability than B / D / C.
 - Alignment carrier: **Option A** (on `Cell`).
 - Minimum valid Grid shape: **Option A** (`columns.len() >= 1` and
   `rows.len() >= 1`; zero `Cell` children allowed).
+
+**`TrackSize` carrier in IR (consequence of the IR shape Option A
++ "no new `IrLiteral`" constraint):**
+
+`TrackSize` is a Grid-specific domain type (see DD-M3-P5-002). The
+generic `IrProp.value` machinery in `wasamo-ir` carries only
+`IrLiteral` (`Int | Str | Ident | Bool | Ratio | Color` after
+M2 / M3-Phase 1..4) and Option A explicitly prohibits a new
+`IrLiteral` variant. The `Vec<TrackSize>` per-axis values
+therefore cannot live in a Grid `IrProp` whose value is a literal.
+Three carrier shapes are conceivable; the ADR commits to one so
+the implementation plan inherits a concrete target instead of
+discovering this at T1:
+
+- **Carrier c1 — Grid kind-specific payload on a still-generic
+  `IrNode` (recommended).** `IrNode` gains an optional kind-specific
+  payload field (e.g. `kind_payload: Option<KindPayload>`); for
+  `widget_type: "Grid"`, the payload is
+  `KindPayload::Grid { columns: Vec<TrackSize>, rows: Vec<TrackSize> }`.
+  The Grid `IrNode.props` does **not** carry `columns:` / `rows:`
+  entries; the narrow track-list parser path (DD-M3-P5-002)
+  populates the kind payload directly at parse / lower time.
+  Cell's `row` / `column` / `row-span` / `column-span` / `h-align`
+  / `v-align` continue to live in `IrProp.value: IrLiteral` (all
+  fit existing `Int` / `Ident` literals).
+  - What you gain: `IrProp` stays strictly literal-typed (preserves
+    the M2 / Phase 1..4 invariant); `IrProp` parsing / lowering /
+    `validate()` machinery is unchanged for every non-Grid kind;
+    future Grid extensions (`auto`, `minmax`, named lines,
+    bindable tracks — Post-Phase-5 hand-off items 1 / 2 / 3)
+    localise to `KindPayload::Grid` without touching `IrProp`;
+    Cell uses the existing `IrLiteral` machinery so DD-M3-P5-003
+    + DD-M3-P5-006 invariants reuse Phase 2 / 3 / 4 patterns.
+  - What you give up: introduces a new IR field (`kind_payload`)
+    that is `None` for every existing kind today; one allocation
+    per Grid for the `KindPayload` discriminant. Minor.
+- Carrier c2 — New non-`IrLiteral` `IrProp` value variant
+  (`IrProp.value` is extended with a Grid-specific
+  `TrackList(Vec<TrackSize>)` carrier alongside `IrLiteral`).
+  - What you gain: track lists live inside `IrNode.props`
+    uniformly with other attributes; no new `IrNode` field.
+  - What you give up: spreads non-literal carrier logic across
+    the generic `IrProp` parsing, lowering, and `validate()`
+    paths (every consumer of `IrProp.value` now has to handle a
+    second carrier shape); contradicts the spirit of "`IrLiteral`
+    is the only `IrProp` value carrier" without saying so
+    explicitly; widens the spec surface other kinds inherit by
+    accident.
+- Carrier c3 — Per-kind `IrNode` (variant struct). `IrNode`
+  becomes an enum where `Grid { columns, rows, cells }` is a
+  distinct variant from generic `IrNode::Other { kind, props,
+  children }`.
+  - What you gain: clean per-kind typing for Grid.
+  - What you give up: large structural rewrite of `IrNode` for
+    one kind's payload need; contradicts Phase 2 / 3 / 4
+    "generic `IrNode` with per-kind tag" precedent; would
+    pressure every other widget kind to follow at some
+    indeterminate later date.
+
+**Decision: Carrier c1** — kind-specific payload on a still-generic
+`IrNode`. The implementation plan's T1 / T2 settles the exact field
+name and the `KindPayload` enum shape; the design constraint
+recorded here is "Grid track lists live outside `IrProp`, in a
+Grid-specific payload on `IrNode`, and `IrProp.value` stays
+strictly `IrLiteral`."
+
+Memory IR consequence: a memory-IR consumer constructing a Grid
+populates the `KindPayload::Grid { columns, rows }` directly, not
+via `IrProp` entries. DD-M3-P5-006 invariants (track value range,
+min row / column count) read the kind payload.
 
 **Forward-compat exposure:**
 

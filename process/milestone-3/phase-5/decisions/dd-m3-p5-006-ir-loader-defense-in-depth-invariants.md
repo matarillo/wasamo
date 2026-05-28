@@ -44,11 +44,23 @@ half), preserving the two-gate defense-in-depth pattern that Phase
   the parser plus the narrow track-list parser path
   (DD-M3-P5-002); `wasamoc check` and runtime `validate()` are
   defense-in-depth safety nets.
-- **Track value range.** Fixed track values must be `> 0`; star
-  weights must be `>= 1`; the deferred `auto` token is rejected
-  with a reserved-future diagnostic (DD-M3-P5-002).
+- **Track value range.** Fixed track values must be `>= 1`; star
+  weights must satisfy `1 <= weight <= 1024`. The per-weight cap
+  (DD-M3-P5-002) combined with DD-M3-P5-004's `u64`
+  star-weight-sum accumulator bounds the per-axis sum at the type
+  level (no "realistic track count" assumption is required for
+  overflow safety). The deferred `auto` token is rejected with a
+  reserved-future diagnostic (DD-M3-P5-002).
 - **Cell child-count.** Each `Cell` accepts exactly one content
   child (DD-M3-P5-001).
+- **Cell placement-attribute presence (compile-time-only).** In a
+  Grid with >= 2 Cells, every Cell must declare both `row` and
+  `column`; in a Grid with exactly 1 Cell, missing `row` and/or
+  `column` lowers to `0` at `wasamoc lower` per
+  DD-M3-P5-001's placement-default Option A. Memory IR has
+  explicit values after lowering (no "missing" representation at
+  the IR boundary); runtime `validate()` therefore only checks
+  the range invariant below.
 - **Placement value range.** `Cell.row` in `[0, rows.len())` and
   `Cell.column` in `[0, columns.len())` (DD-M3-P5-003).
 - **Span value range.** `Cell.row-span >= 1`, `Cell.column-span
@@ -68,8 +80,9 @@ half), preserving the two-gate defense-in-depth pattern that Phase
 |---|---|---|---|
 | Grid has at least one row and at least one column | Reject | Reject | (n/a) |
 | Grid surface lowers successfully into `TrackSize` sequences + logical `Cell` membership tuples | Reject (parser primary) | Reject (defense-in-depth) | (n/a) |
+| Cell placement-attribute presence: in a Grid with >= 2 Cells, every Cell declares both `row` and `column`; in a Grid with exactly 1 Cell, missing `row` and/or `column` lowers to `0` | Reject if multi-Cell omission; lower-to-`0` if single-Cell omission | (n/a — memory IR has explicit `row` / `column` values after lowering; the range-check rows below cover post-lowering) | (n/a) |
 | Fixed track value `> 0` | Reject | Reject | (n/a) |
-| Star weight `>= 1` | Reject | Reject | (n/a) |
+| Star weight in `[1, 1024]` (per-weight cap; combined with DD-M3-P5-004's `u64` star-weight-sum accumulator, bounds the per-axis sum at the type level for any structurally feasible IR — see DD-M3-P5-002) | Reject | Reject | (n/a) |
 | `auto` token reserved-future | Reject (named diagnostic) | Reject | (n/a) |
 | `Cell` has exactly one content child | Reject | Reject | (n/a) |
 | `Cell.row` in `[0, rows.len())` | Reject | Reject | (n/a) |

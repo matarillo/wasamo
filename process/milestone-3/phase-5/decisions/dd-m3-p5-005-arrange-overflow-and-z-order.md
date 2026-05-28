@@ -111,10 +111,19 @@ ADR review.
 
 - **Option A — Grid outer-bounds clip on; Grid's own Visual
   carries `Visual.Clip = InsetClip{0,0,0,0}` (recommended; owner-
-  settled at framing).** Grid's resolved outer rectangle is the
-  Grid's `Visual` rectangle; the clip prevents paint from
-  escaping Grid's outer rectangle while still allowing inter-cell
-  paint overflow within that rectangle.
+  settled at framing).** Grid's outer rect on a **bounded** axis
+  equals the parent's allocation (per Phase 3 WrapPanel /
+  Phase 4 ScrollView precedent: Grid does not grow to accommodate
+  an oversized track-resolved extent — see DD-M3-P5-004 "Grid
+  outer rect"). On an **unbounded** axis (only reachable with no
+  star tracks per DD-M3-P5-004 unbounded-star branch), Grid's
+  outer rect equals the track-resolved `fixed_sum`. Grid's outer
+  rectangle is Grid's `Visual` rectangle; the
+  `Visual.Clip = InsetClip{0,0,0,0}` applies to that rectangle.
+  Cell rectangles inside Grid use the prefix boundaries from
+  DD-M3-P5-004; Cell rectangles that extend past the outer rect
+  (the `fixed_sum > bound` case) overflow and the clip cuts off
+  their paint.
   - What you gain: a Grid that does not fit its parent (e.g.
     fixed-track sum exceeds parent bound; oversized spanning
     child) does not bleed into sibling layout regions; the clip
@@ -339,9 +348,12 @@ overflow / z-order section:
 4. The content widget is **not** clipped by the cell rectangle;
    paint that exceeds the cell rectangle may paint into sibling
    regions within the Grid.
-5. Grid's resolved outer rectangle is clipped: `Visual.Clip =
-   InsetClip{0,0,0,0}` on Grid's own Visual prevents paint from
-   escaping Grid's overall rectangle.
+5. Grid's outer rect on a bounded axis equals the parent
+   allocation (Grid does not grow to accommodate oversized
+   track-resolved extent); on an unbounded axis (only reachable
+   with no star tracks), it equals `fixed_sum`. The
+   `Visual.Clip = InsetClip{0,0,0,0}` on Grid's own Visual applies
+   to this rectangle and prevents paint from escaping it.
 6. Paint order is document order: later `Cell`s in source paint on
    top of earlier `Cell`s when their paint regions overlap.
 7. Grid does not provide intentional overlay; same-cell occupancy

@@ -57,17 +57,30 @@ without breaking:
   | Str | Ident | Bool | Ratio | Color`. Phase 5 introduces **no
   new `IrType` and no new `IrLiteral` variant**. Grid's track-list
   values are a Grid-specific domain type (`TrackSize` per
-  DD-M3-P5-002) populated from existing `IntLit` plus a star-token
-  shape parsed inside Grid's narrow attribute path; placement
-  metadata (`row`, `column`, `row-span`, `column-span`) and
-  alignment (`h-align`, `v-align`) on `Cell` reuse existing `i32`
-  / ident plumbing per DD-M3-P5-001 / DD-M3-P5-003 /
-  DD-M3-P5-005.
+  DD-M3-P5-002) carried in a **Grid-specific kind payload on
+  `IrNode`** (carrier **c1** per DD-M3-P5-001) — not in
+  `IrProp.value`, which stays strictly `IrLiteral`. The track-list
+  values are populated from existing `IntLit` plus a star-token
+  shape parsed inside Grid's narrow attribute path (DD-M3-P5-002).
+  Placement metadata (`row`, `column`, `row-span`, `column-span`)
+  and alignment (`h-align`, `v-align`) on `Cell` continue to use
+  the existing `IrProp` machinery (`i32` / ident literals) per
+  DD-M3-P5-001 / DD-M3-P5-003 / DD-M3-P5-005.
 - `wasamo-runtime` widget catalog: `Rectangle | VStack | HStack |
   Text | Button | Box | WrapPanel | ScrollView` (Phase 4 added
-  `ScrollView`). Phase 5 adds **`Grid` and `Cell`** as per-kind
-  tags (DD-M3-P5-001). `Cell` is a Grid-owned single-child layout
-  wrapper, not a general-purpose widget.
+  `ScrollView`). Phase 5 adds **`Grid`** as a per-kind tag in
+  the runtime widget catalog (DD-M3-P5-001). `Cell` appears as
+  an IR node kind (`widget_type: "Cell"`) for parser / IR-loader
+  purposes but is **not** registered as a runtime widget kind;
+  Grid's lowering consumes Cell IR subtrees directly to extract
+  placement / span / alignment metadata and arranges each Cell's
+  single content child as the Grid's effective layout child.
+  Consequence: the WidgetNode / Visual tree contains one node
+  for Grid and one node per Cell's content widget; Cell itself
+  does not materialise as a WidgetNode or Visual (1 WidgetNode
+  = 1 Visual convention preserved per DD-M3-P5-005). `Cell`
+  outside a `Grid` parent is rejected at `wasamoc check` and
+  runtime `validate()` (DD-M3-P5-006).
 - Layout engine: pure-data `LayoutNode` / `measure` / `arrange`
   boundary, Win32/WinRT-free. Phase 2 introduced
   `LayoutError::{BoxAspectUnboundedBoth, BoxNoExtent}`; Phase 4
@@ -167,10 +180,10 @@ observed:
      DD-M3-P5-003.
    - **Track-list shape rejection** — `columns:` / `rows:` with
      non-integer fixed values, with `0*` / negative-weight star
-     tokens, with all-zero star sums, with the deferred `auto`
-     token, and with empty track lists each surface a `wasamoc
-     check` diagnostic naming the offending shape (per
-     DD-M3-P5-002).
+     tokens, with star weights `> 1024` (per-weight upper bound
+     per DD-M3-P5-002), with the deferred `auto` token, and
+     with empty track lists each surface a `wasamoc check`
+     diagnostic naming the offending shape (per DD-M3-P5-002).
    - **Placement / span value rejection** — `Cell` with non-`i32`
      `row` / `column`, with out-of-range `row` / `column`, with
      `row-span` / `column-span` `<= 0`, with span values that
@@ -243,9 +256,12 @@ observed:
    runtime half):
    - **Min row / column count** — Grid with empty `columns:` or
      empty `rows:` surfaces `WASAMO_ERR_IR_MALFORMED`.
-   - **Track value range** — fixed pixel values `<= 0` and star
-     weights `<= 0` surface `WASAMO_ERR_IR_MALFORMED` (all-zero
-     star sum is a special case of the same rule).
+   - **Track value range** — fixed pixel values `<= 0`, star
+     weights `<= 0`, and star weights `> 1024` (per-weight upper
+     bound per DD-M3-P5-002 / DD-M3-P5-006) surface
+     `WASAMO_ERR_IR_MALFORMED` (all-zero star sum is a special
+     case of the same rule and cannot arise once each individual
+     weight is `>= 1`).
    - **Placement value range** — `Cell` with `row < 0`,
      `column < 0`, `row >= rows.len()`, or
      `column >= columns.len()` surfaces `WASAMO_ERR_IR_MALFORMED`.
@@ -500,18 +516,29 @@ mirror of this list:
   Grid chapter as design-spec draft (DD-M3-P5-001 through
   DD-M3-P5-006 sub-issues as the chapter outline; the Grid mental-
   model anchor + ecosystem-contrast subsection per framing
-  decision FD-K). Plus the §4.4 widget registry rows for `Grid`
-  and `Cell`. Section marker: `Phase status: M3-Phase 5 design
-  accepted; implementation pending`.
+  decision FD-K). Plus a **§4.4 widget registry row for `Grid`
+  only** (Grid is the runtime widget kind). **`Cell` is defined
+  in §4.12 as a Grid-specific child wrapper construct, not a
+  §4.4 registry entry** — Cell is an IR node kind consumed by
+  Grid's lowering (per DD-M3-P5-001) and is rejected outside a
+  `Grid` parent (per DD-M3-P5-006); listing it in §4.4 would
+  imply free-standing widget status the DDs explicitly reject.
+  A short pointer from §4.4 to §4.12 names Cell as the Grid
+  child wrapper so external readers know where to find it.
+  Section marker: `Phase status: M3-Phase 5 design accepted;
+  implementation pending`.
 - [`docs/architecture.md`](../../../../docs/architecture.md) — Grid
   entry under the IR section, including the `TrackSize` domain
-  type and the Surface A2 child-membership representation
-  (`Cell`-wrapper with `row` / `column` / `row-span` /
-  `column-span` / `h-align` / `v-align`); layout-engine paragraph
-  for the Grid track-resolution algorithm (fixed-first + weighted-
-  star + unbounded-star error); no §6.5 sync-visuals change (Grid
-  uses the existing 1 WidgetNode = 1 Visual convention; the outer
-  clip lands on Grid's own Visual without an intermediate Visual).
+  type and the **Grid-specific kind payload on `IrNode`** (carrier
+  c1 per DD-M3-P5-001; `IrProp.value` stays strictly `IrLiteral`);
+  the Surface A2 child-membership representation (`Cell`-wrapper
+  with `row` / `column` / `row-span` / `column-span` / `h-align`
+  / `v-align` via existing `IrProp` machinery); layout-engine
+  paragraph for the Grid track-resolution algorithm (fixed-first
+  + weighted-star + unbounded-star error); no §6.5 sync-visuals
+  change (Grid uses the existing 1 WidgetNode = 1 Visual
+  convention; the outer clip lands on Grid's own Visual without
+  an intermediate Visual).
 - [`docs/abi_spec.md`](../../../../docs/abi_spec.md) — **no touch
   expected** per DD-M3-P5-001 / DD-M3-P5-006 (LayoutError stays
   internal; Grid adds no host-facing ABI surface and no

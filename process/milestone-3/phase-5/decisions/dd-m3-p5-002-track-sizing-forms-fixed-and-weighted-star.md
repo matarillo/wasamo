@@ -29,7 +29,11 @@ and approved at ADR review.
 - **Fixed tracks.** Integer pixel sizes carried as existing `IntLit`
   tokens; positive values only.
 - **Star tracks.** Unit star (`*`) and weighted star (`2*`, `3*`)
-  with positive integer weights.
+  with positive integer weights, capped at `1024` (per-weight
+  upper bound; see Recommendation below). The cap is recorded as a
+  DD-M3-P5-006 invariant so the validate surface is self-contained
+  rather than relying on "no practical author would write
+  this".
 - **Auto / intrinsic tracks.** Owner-settled deferral; the
   `TrackSize` domain type reserves the slot.
 - **Track-list parser surface.** A narrow parser path for Grid
@@ -44,8 +48,12 @@ shape):**
 ```rust
 // wasamo-ir
 pub enum TrackSize {
-    Fixed(i32),          // px; must be > 0
-    Star(u32),           // weight; must be >= 1
+    Fixed(i32),          // px; must satisfy 1 <= value
+    Star(u32),           // weight; must satisfy 1 <= weight <= 1024
+                         // (per-weight cap combined with DD-M3-P5-004's
+                         // u64 star-weight-sum accumulator closes
+                         // overflow at the type level — see DD-M3-P5-004
+                         // for the resolve_axis algorithm)
     // Auto reserved for a future phase (Post-Phase-5 hand-off
     // item 1). Adding this variant later is additive: existing
     // .ui that does not use `auto` lowers unchanged.
@@ -53,8 +61,11 @@ pub enum TrackSize {
 ```
 
 `Grid` IR node carries `columns: Vec<TrackSize>` and `rows:
-Vec<TrackSize>`. Both must be non-empty (DD-M3-P5-001 minimum-shape
-recommendation).
+Vec<TrackSize>` in the Grid-specific kind payload (`KindPayload::Grid`
+on `IrNode`, per DD-M3-P5-001 carrier decision **c1**) — not as
+`IrProp` entries, because `IrProp.value` stays strictly
+`IrLiteral`. Both `Vec`s must be non-empty (DD-M3-P5-001
+minimum-shape recommendation).
 
 **Options (fixed tracks):**
 
@@ -71,22 +82,34 @@ recommendation).
 
 **Options (star tracks):**
 
-- **Option A — Unit star + positive-integer weighted star
+- **Option A — Unit star + positive-integer weighted star (1..=1024)
   (recommended).** `*` is sugar for `1*`; weighted star tokens are
-  `n*` where `n >= 1`. `0*` and negative weights are rejected at
+  `n*` where `n` is a positive integer in `[1, 1024]`. `0*`,
+  negative weights, and weights `> 1024` are rejected at
   `wasamoc check` and `validate()` (DD-M3-P5-006). All-zero star
   sum (every star weight is `0`) cannot arise because each
   individual weight is `>= 1`; the layout-time arithmetic in
-  DD-M3-P5-004 therefore has a non-zero divisor.
+  DD-M3-P5-004 therefore has a non-zero divisor. The per-weight
+  upper bound `1024`, combined with the `u64` star-weight-sum
+  accumulator in DD-M3-P5-004's algorithm, closes the overflow
+  invariant at the type level: the sum is bounded by
+  `1024 * track_count`, and `u64` tolerates `track_count` up to
+  ~`1.8 × 10^16` — well beyond any structurally feasible IR
+  (allocating that many `TrackSize` values would already exceed
+  any conceivable memory budget). No "no practical author would
+  write this" gap remains.
   - What you gain: complete star surface (the central
     novel-normative-spec content of Phase 5); no half-baked unit-
     only star to deprecate in v1.0; deterministic measure-arrange
-    in DD-M3-P5-004; positive-integer weights mean star
-    distribution can use `f32 / total_weight` without overflow
-    concerns.
+    in DD-M3-P5-004; the per-weight cap plus `u64` sum close the
+    star-weight-sum invariant at the type level (the spec is not
+    dependent on "realistic track count" assumptions).
   - What you give up: positive **integer** weights only; floating-
     point weights like `1.5*` are deferred. Authors can express
-    `1.5 : 1` proportions as `3* 2*`.
+    `1.5 : 1` proportions as `3* 2*`. Ratios > 1024:1 between two
+    star tracks are not expressible in Phase 5 (a future phase
+    may raise or remove the cap if author demand surfaces; the
+    cap exists to bound the invariant, not as a UX statement).
 - Option B — Unit star only (`*`); no weighted star. Weighted
   star deferred to a later phase.
   - What you gain: smallest star surface.
@@ -207,10 +230,11 @@ boundary:
 
 | Token | Lowers to | Validation |
 |---|---|---|
-| `180` (or any positive `IntLit`) | `TrackSize::Fixed(180)` | `value > 0` at `wasamoc check` and `validate()` |
-| `*` | `TrackSize::Star(1)` | None beyond reserved-future check |
-| `n*` (where `n >= 1` integer) | `TrackSize::Star(n)` | `n >= 1` at `wasamoc check` and `validate()` |
+| `180` (or any positive `IntLit`) | `TrackSize::Fixed(180)` | `value >= 1` at `wasamoc check` and `validate()` |
+| `*` | `TrackSize::Star(1)` | `1 in [1, 1024]` (passes by construction) |
+| `n*` (where `n` is an integer in `[1, 1024]`) | `TrackSize::Star(n)` | `1 <= n <= 1024` at `wasamoc check` and `validate()` |
 | `0`, `-5`, `0*`, `-2*` | (rejected) | `wasamoc check` diagnostic; `validate()` `WASAMO_ERR_IR_MALFORMED` |
+| `n*` with `n > 1024` (e.g. `2048*`) | (rejected) | `wasamoc check` diagnostic naming the upper bound; `validate()` `WASAMO_ERR_IR_MALFORMED` |
 | `auto` | (rejected; reserved future) | `wasamoc check` diagnostic naming it reserved-future |
 | `1.5`, `1.5*` | (rejected; not valid in Phase 5) | `wasamoc check` diagnostic |
 

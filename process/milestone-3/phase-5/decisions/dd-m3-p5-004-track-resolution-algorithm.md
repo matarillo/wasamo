@@ -66,7 +66,13 @@ Algorithm:
 ```
 function resolve_axis(tracks, axis_bound) -> Result<Vec<f32>, LayoutError>:
     let fixed_sum: f32 = sum of TrackSize::Fixed(px) as f32 over fixed tracks
-    let star_weight_sum: u32 = sum of TrackSize::Star(w) over star tracks
+    let star_weight_sum: u64 = sum of (w as u64)
+                               for TrackSize::Star(w) over star tracks
+                               // u64 sum closes overflow at the spec level:
+                               // per-weight cap is 1024 (DD-M3-P5-002), and
+                               // u64::MAX / 1024 ≈ 1.8e16, which exceeds any
+                               // structurally feasible track count (each
+                               // TrackSize occupies memory).
     let has_star: bool = star_weight_sum > 0
 
     if has_star and axis_bound is Unbounded:
@@ -87,7 +93,16 @@ function resolve_axis(tracks, axis_bound) -> Result<Vec<f32>, LayoutError>:
 
     let resolved: Vec<f32> = tracks.map(|t| match t:
         Fixed(px) => px as f32
-        Star(weight) => remaining_after_fixed * (weight as f32 / star_weight_sum as f32)
+        Star(weight) => remaining_after_fixed
+                        * (weight as f32 / star_weight_sum as f32)
+                        // u64 -> f32 cast: f32 represents integers
+                        // exactly up to 2^24 (~1.67e7). Practical
+                        // star-weight sums sit in the 10^2 – 10^5
+                        // range, well within that. Larger sums
+                        // (>= 2^24) lose precision in the cast but
+                        // the proportional division still produces a
+                        // deterministic distribution; see Technical
+                        // risk re-evaluation below.
     )
 
     Ok(resolved)
@@ -99,10 +114,36 @@ DD-M3-P5-003 spanning reconciliation):
 ```
 boundary[0] = 0.0
 boundary[n] = boundary[n - 1] + resolved[n - 1]
-boundary[tracks.len()] = sum of resolved // Grid's resolved outer extent on this axis
+boundary[tracks.len()] = sum of resolved // total resolved track extent
+                                         // (NOT Grid's outer Visual rect; see
+                                         // "Grid outer rect" below)
 ```
 
 Both rows and columns invoke `resolve_axis` independently.
+
+**Grid outer rect (consequence):** The track-resolution algorithm's
+`boundary[tracks.len()]` is the **total resolved track extent**, not
+the Grid's outer Visual rect. Per the established M3 layout
+precedent (Phase 3 WrapPanel: "outer main-axis size does not grow
+to accommodate oversized children", per DD-M3-P3-005; Phase 4
+ScrollView: "ScrollView outer size = viewport size, regardless of
+content size", per DD-M3-P4-005), Grid's outer rect on a
+**bounded** axis equals the parent's allocation on that axis. On
+an **unbounded** axis (only reachable with no star tracks per the
+unbounded-star branch above), Grid's outer rect equals
+`fixed_sum` (the natural track-resolved extent). Cell rectangles
+use the prefix boundaries computed above and may extend past
+Grid's outer rect when `fixed_sum > bound` (the negative-remaining-
+space case below); those rectangles overflow Grid's outer rect and
+are clipped by DD-M3-P5-005's outer-bounds clip.
+
+| Axis bound | Grid outer extent | Cell rectangles relative to outer rect |
+|---|---|---|
+| `Bounded(b)` with star tracks | `b` (parent allocation) | Sum of resolved = `b`; Cells fit exactly |
+| `Bounded(b)`, fixed only, `fixed_sum <= b` | `b` (parent allocation) | Sum of resolved = `fixed_sum <= b`; trailing space inside Grid |
+| `Bounded(b)`, fixed only, `fixed_sum > b` | `b` (parent allocation) | Sum of resolved = `fixed_sum > b`; rightmost Cells overflow, clipped per DD-M3-P5-005 |
+| `Bounded(b)`, mixed fixed + star, `fixed_sum > b` | `b` (parent allocation) | Star tracks resolve to 0; sum of resolved = `fixed_sum > b`; rightmost Cells overflow, clipped per DD-M3-P5-005 |
+| `Unbounded` (no star tracks; star + unbounded errors above) | `fixed_sum` | Sum of resolved = `fixed_sum`; Cells fit exactly |
 
 **Spanning reconciliation (consumes per-axis resolution):**
 
@@ -205,18 +246,25 @@ rule.
   bound (recommended).** When `bound - fixed_sum <= 0`, the
   `remaining_after_fixed` clamps to `0.0` and every star track
   resolves to width `0`. The fixed tracks retain their declared
-  size; the Grid's resolved outer extent on this axis is
-  `fixed_sum`, not `bound`. Overflow handling is owned by
-  DD-M3-P5-005 (paint overflow + Grid outer-bounds clip).
+  size in the prefix boundaries (so Cell rectangles can be
+  computed deterministically). **Grid's outer rect on this axis
+  remains the parent allocation `bound`** — Grid does not grow to
+  accommodate oversized fixed tracks (Phase 3 WrapPanel / Phase 4
+  ScrollView precedent; see "Grid outer rect" above). Cell
+  rectangles whose prefix boundaries extend past `bound` overflow
+  Grid's outer rect and are clipped at the outer-bounds clip per
+  DD-M3-P5-005.
   - What you gain: deterministic behaviour for an over-tight
-    parent allocation; fixed tracks are honoured (the author
-    explicitly requested fixed pixels); star tracks degenerate
-    rather than negative-sizing.
-  - What you give up: a Grid that does not fit its parent
-    allocation may paint past its parent's expected rectangle if
-    the parent does not clip; this is the same situation as every
-    other layout primitive (Phase 3 WrapPanel similarly does not
-    grow the parent).
+    parent allocation; fixed tracks are honoured in the prefix
+    boundary (the author explicitly requested fixed pixels);
+    star tracks degenerate rather than negative-sizing; Grid's
+    outer rect stays inside the parent's slot so sibling layout
+    is never disturbed by an oversized Grid.
+  - What you give up: Cell rectangles past `bound` are clipped by
+    DD-M3-P5-005's outer-bounds clip — the author sees truncated
+    paint, not an error. Authors who need fixed-track-driven Grid
+    sizing must size the parent's allocation accordingly; Grid
+    does not grow its parent.
 - Option B — Reject at layout (raise
   `LayoutError::GridFixedExceedsBound`). Rejected because the
   parent allocation may legitimately shrink due to window resize
@@ -307,11 +355,22 @@ pure-logic tests.
 
 **Technical risk re-evaluation:**
 
-- **Star arithmetic precision.** Star distribution divides `f32`
-  remaining space by `u32 -> f32` weight sum. For practical Grid
-  sizes (under 10 tracks, weights under 100), precision is
-  trivially adequate. `f32` precision degrades only for `n` weights
-  approaching `10^7`; not a Phase 5 concern.
+- **Star arithmetic precision and overflow.** Star distribution
+  divides `f32` remaining space by the star-weight sum. The
+  per-weight cap `[1, 1024]` (DD-M3-P5-002 / DD-M3-P5-006) bounds
+  the per-axis weight sum at `1024 * track_count`. The sum is
+  accumulated in `u64`, which tolerates `track_count` up to
+  ~`1.8 × 10^16` before overflow — well beyond any structurally
+  feasible IR (each `TrackSize` allocates memory; a track count
+  approaching `2^32` would already require gigabytes of IR
+  storage, and the `u64` headroom is many orders of magnitude
+  beyond that). The Phase 5 spec therefore closes overflow at
+  the type level rather than at a "realistic input" assumption.
+  `f32` precision: the cast `star_weight_sum: u64 -> f32` is
+  exact up to `2^24` (~16.7M); practical sums sit in the `10^2`
+  – `10^5` range, far below the precision boundary, so
+  `weight as f32 / star_weight_sum as f32` is essentially exact
+  for any realistic Grid.
 - **Prefix-boundary determinism.** Cumulative `f32` sums are
   deterministic for fixed inputs (IEEE 754 addition is
   deterministic per-thread). Cross-thread or cross-platform
