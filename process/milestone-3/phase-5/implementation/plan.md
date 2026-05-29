@@ -154,9 +154,11 @@ the algorithm's `(input → output)` shape.
       arrange order; overflowing cells produce overlapping geometry
       in document order); the **visible paint-precedence** half of
       z-order (later child on top under overlap = Visual-tree
-      insertion order) is owned by the T6 smoke observation point
-      ("document-order paint order is observed when overlapping
-      content occurs"), not asserted in pure logic.
+      insertion order) stays **unobserved** in the gallery slice (no
+      sibling overlap is exercised — see T6) and is **not** asserted in
+      pure logic; T7 evidence aggregation records it as an acceptance
+      judgment on the layout-side substrate + Visual-tree
+      insertion-order assumption (no added visible fixture).
 - [x] All-zero star sum cannot arise after DD-M3-P5-002 /
       DD-M3-P5-006 validate-time rejection; the corresponding
       layout-time defensive panic per DD-M3-P5-004 is retained.
@@ -374,26 +376,89 @@ for the owner's visible-correctness judgment.
 
 ### T6 — Owner-manual GUI smoke and any visible-correctness fix
 
-Discharges the **visible-correctness portion** of ADR
-[verification closure evidence item (5)](../decisions/preamble.md#phase-5-verification-closure-what-counts-as-a2-evidence)
-and the A11 gallery-proof owner-acceptance half. This step exists so
-visible smoke is verified — and fixed if it fails — **before** any
-phase-close mechanical work (spec / plan status flips) lands in T7,
-matching the Phase 4 T5 / T6 split rationale.
+Discharges the **owner-visible smoke for observation points #1–#5** of
+ADR [verification closure evidence item (5)](../decisions/preamble.md#phase-5-verification-closure-what-counts-as-a2-evidence)
+and the A11 gallery-proof owner-acceptance half. Item (5) also names a
+visible document-order-paint observation (#6), which is **not
+exercisable in this gallery slice** (the only overflow leaves the Grid
+downward and is clipped, so no two Cells' content overlap); it is **not
+discharged here**. Rather than adding a visible verification task, T7
+evidence aggregation records #6 as an acceptance judgment — accepted on
+the T2 layout-side substrate + Visual-tree insertion-order assumption,
+noted as an exception to the ADR/plan "visible proof must observe
+document-order paint" framing. This step exists so visible smoke is
+verified — and fixed if it fails — **before** any phase-close mechanical
+work (spec / plan status flips) lands in T7, matching the Phase 4
+T5 / T6 split rationale.
 
-- [ ] Owner runs `target/release/gallery-rust.exe` (or builds-and-
-      runs `cargo run -p gallery-rust` if the T5 binary is no longer
-      on disk). Observation points:
-      - column tracks render at the declared widths (fixed and
-        proportional);
+- [x] Owner runs `target/release/gallery-rust.exe` (or builds-and-
+      runs `cargo run -p gallery-rust --release` if the T5 binary is no
+      longer on disk). The window title reads **"Wasamo"**, not the
+      `.ui` `title: "Gallery"`, because Window-title wiring is the
+      unresolved M3-Phase 4 R1 carried to Phase 6 (FD-E / `m3-plan.md`
+      Phase 6 row Notes) — a **known residual, NOT a Grid-smoke
+      pass/fail criterion**. The host is DPI-unaware on this
+      125%-scaled box (logical 800×600 bitmap-stretched to physical
+      1000×750); this affects only assistant screenshot tooling
+      (capture must be per-monitor-DPI-aware), not the owner's direct
+      on-screen viewing. Observation points:
+      - column tracks are fixed vs. variable — **resize observation
+        required** (a single launch size only shows the `C2`:`C1`
+        ratio, not that `C1` / `C2` are flexible star tracks; fixed
+        widths could coincidentally match the ratio):
+        - at launch: `C0` is the narrowest; `C2` ≈ 2× `C1`;
+        - widen / narrow the window: `C0` stays ≈120 logical px
+          (constant), while `C1` / `C2` grow / shrink with the slack
+          and keep `C2`:`C1` ≈ 2:1.
+        (Assistant baseline confirms: `C0` held ~150 physical px from
+        an 820→1500 px window while the stars absorbed the slack, and
+        the Photo WrapPanel reflowed 6→10 per row — real re-layout, not
+        a bitmap stretch.)
       - the spanning header `Cell` spans all three columns;
       - the three middle-row `Cell`s occupy separate columns;
       - the spanning footer `Cell` spans all three columns;
-      - Grid outer-bounds clip is visible when a Cell's content
-        intentionally overflows;
-      - document-order paint order is observed when overlapping
-        content occurs.
-- [ ] Owner explicitly accepts the smoke result, or records a fail
+      - Grid outer-bounds clip — verify against the `gallery.ui`
+        source, not merely "cut sharply" (clipped content is invisible,
+        so the criterion is what is MISSING): the footer `Cell` declares
+        `Box { aspect: 4:1 } + Text` spanning all three columns, whose
+        natural size is the full Grid width × (width / 4) ≈ a ~190
+        logical-px-tall pink rectangle carrying a centred label. On
+        screen the outer-bounds clip leaves only a **thin ~36 px
+        (one-footer-row) pink strip with NO visible text** — the centred
+        Text sits ~95 logical px down in the box, below the Grid's
+        bottom edge, and is removed by the clip — and the pink **does
+        not bleed into the gap / Photo row below**.
+        Positive control via resize: widening the window grows the 4:1
+        box's natural height, but the visible pink strip stays pinned at
+        the footer-row height (clipped to the Grid bottom) and never
+        grows downward over the Photos. (Assistant baseline: the strip
+        held ~45 physical px from an 820→1500 px window while the box's
+        natural height ~doubled, and the text never appeared.) The
+        definitive clip-PRESENCE proof is the T4 integration test (Grid
+        outer Visual has a non-null `InsetClip`) + T2 overflow geometry;
+        this owner-visible check corroborates it.
+      - document-order paint order under overlapping content is **not
+        exercisable in this gallery slice**, so it is **not an
+        owner-visible observation point here**. The slice's only
+        overflow (the footer) leaves the Grid *downward* and is removed
+        by the outer-bounds clip, so no two Cells' content overlap (the
+        nine grid cells are fully covered by the header span / three
+        middle Cells / footer span — no empty target, and per-cell clip
+        is absent per DD-M3-P5-005). The layout-side overlap-geometry ↔
+        document-order correspondence is covered by T2
+        (`grid_arrange_overflowing_cells_overlap_in_document_order`);
+        the **visible pixel paint-precedence stays unobserved**. Rather
+        than adding a visible verification task, T7 evidence aggregation
+        records this as an acceptance judgment — accepted on the
+        layout-side substrate + Visual-tree insertion-order assumption,
+        noted as an exception to the ADR/plan "visible proof must
+        observe document-order paint" framing (Codex review
+        2026-05-29). The T5 retro's
+        "中段/footer overlap" prediction was geometrically incorrect;
+        corrected in `t6.md`. Adding a dedicated overlap fixture (not
+        polluting the gallery slice) is the preferred path if a visible
+        demo is later wanted.
+- [x] Owner explicitly accepts the smoke result, or records a fail
       observation note. **If smoke fails:** the implementation fix
       lands additively on the T6 branch (new commits); the smoke
       checklist above is re-run to green before T6 closes. Fix scope
@@ -403,7 +468,7 @@ matching the Phase 4 T5 / T6 split rationale.
       Moment 2 (or, if unsuitable for Moment 2, a mid-ADR addendum).
       Fix iterations stay inside T6 until the smoke checklist is
       green.
-- [ ] T6 step-end retrospective recorded at
+- [x] T6 step-end retrospective recorded at
       `process/milestone-3/phase-5/retrospectives/t6.md`
       (retrospectives.md checklist items 1-11).
 
