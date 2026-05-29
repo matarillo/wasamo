@@ -320,7 +320,7 @@ gallery slice closes the positive-control half here). The visible-
 correctness portion of item (5) (owner-manual GUI smoke) is owned by
 T6 per FD-I; T5 stops at build / launch success.
 
-- [ ] Grow `examples/gallery/gallery.ui` **additively** with a
+- [x] Grow `examples/gallery/gallery.ui` **additively** with a
       sibling slice containing a Grid composition matching the FD-H
       minimum visible-proof shape: a 3-row × 3-column Grid with at
       least five Cells —
@@ -332,18 +332,29 @@ T6 per FD-I; T5 stops at build / launch success.
         by T2-T4 per FD-C).
       The Phase 3 standalone WrapPanel slice and Phase 4 ScrollView
       slice stay untouched.
-- [ ] Cell content uses `Box { fill: ... }` + `Text { text: ... }`
+      Grid sibling added at the top of the gallery VStack
+      (`columns: 120 1* 2*`, `rows: 48 1* 64`; header + footer
+      `column-span: 3`; three `row: 1` middle Cells in columns 0/1/2);
+      existing WrapPanel / ScrollView slices left byte-identical.
+- [x] Cell content uses `Box { fill: ... }` + `Text { text: ... }`
       per the Phase 2 DD-M3-P2-006 placeholder pattern. No Image
       widget (deferred to M4 per Phase 2).
-- [ ] Include at least one Cell whose content intentionally overflows
+- [x] Include at least one Cell whose content intentionally overflows
       its resolved rectangle (e.g. fixed-track sum exceeding Grid's
       bounded extent, or a Cell with content larger than its cell)
       so the **Grid outer-bounds clip is visibly observable** in T6
       smoke. Without this, the T6 clip-visibility observation point
       cannot be exercised on the live binary.
-- [ ] Build and run `examples/gallery-rust/`. Record `Start-Process`
+      Footer Cell uses `v-align: start` + a wide `aspect: 4:1` Box: the
+      aspect-derived height (cell width / 4) exceeds the fixed 64 px
+      footer row, overflowing below the last row = below the Grid outer
+      rectangle (see [log.md](./log.md) T5 entry).
+- [x] Build and run `examples/gallery-rust/`. Record `Start-Process`
       launch success by the assistant. C / Zig gallery hosts remain
       out of Phase 5 scope.
+      `wasamoc check` exit 0; `cargo build -p gallery-rust --release`
+      green; `Start-Process target/release/gallery-rust.exe` ran with no
+      early crash (assistant-stopped; visible smoke is T6 owner-owned).
 
 ### T6 — Owner-manual GUI smoke and any visible-correctness fix
 

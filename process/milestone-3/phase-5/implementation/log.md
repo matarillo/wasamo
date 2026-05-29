@@ -448,3 +448,42 @@
   Phase 5 re-confirmation that it fires (test FAILS, not skips) on the
   SSH dev box (`wasamo_init` → `0x80070005`) is the T4 checklist item-4
   owner/environment gate.
+
+- **T5 — End-to-end gallery `.ui` Grid slice + assistant build / launch
+  (2026-05-29).** Discharges the **assistant-automated portion** of ADR
+  [verification closure evidence item (5)](../decisions/preamble.md#phase-5-verification-closure-what-counts-as-a2-evidence)
+  and the **gallery positive-control half** of item (1) (the slice `.ui`
+  compiles cleanly through `wasamoc check`). `examples/gallery/gallery.ui`
+  grows **additively** with a Grid sibling at the top of the existing
+  VStack; the Phase 3 standalone WrapPanel slice and the Phase 4
+  ScrollView slice are left byte-identical. Slice shape (FD-H minimum
+  visible-proof):
+  - 3 rows × 3 columns, mixed fixed + weighted-star per axis
+    (`columns: 120 1* 2*`, `rows: 48 1* 64`);
+  - a header `Cell` (`row: 0 column: 0 column-span: 3`) and a footer
+    `Cell` (`row: 2 column: 0 column-span: 3`) each spanning all three
+    columns (column-span exercised in real `.ui`; row-span discharged by
+    T2–T4 per FD-C);
+  - three middle-row `Cell`s in separate columns (`row: 1`, columns 0/1/2);
+  - every Cell content is `Box { fill: … }` + `Text { text: … }` per the
+    Phase 2 DD-M3-P2-006 placeholder pattern (no Image; M4-deferred).
+  - **Overflow Cell for the T6 clip observation:** the footer Cell anchors
+    its content with `v-align: start` and uses a wide `aspect: 4:1` Box.
+    On the bounded width axis the Box stretches to the spanning cell width
+    (≈ full Grid width); `aspect: 4:1` then derives a height of
+    width / 4, which exceeds the fixed 64 px footer row, so the content
+    overflows **below** the footer cell — and, since row 2 is the last
+    row, below the Grid's outer rectangle. That overflow is the live
+    target the T6 owner smoke uses to observe the DD-M3-P5-005
+    outer-bounds clip on the real binary (per `arrange_grid`'s
+    non-stretch-axis natural-extent measure + `align_in_cell` no-clamp
+    behaviour, `layout.rs`). DSL has no comment syntax, so the rationale
+    lives here rather than inline in the `.ui`.
+
+  Verified `target/release/wasamoc.exe check examples/gallery/gallery.ui`
+  exits 0 (positive control), `cargo build -p gallery-rust --release`
+  green (only the pre-existing benign "wasamo provides no linkable target"
+  warning), and `Start-Process target/release/gallery-rust.exe` launches
+  and stays running with no early crash (stopped by the assistant; the
+  visible-correctness GUI smoke is owner-owned in T6 per FD-I). C / Zig
+  gallery hosts remain out of Phase 5 scope.
