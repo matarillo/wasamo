@@ -113,15 +113,24 @@ Per
 the layout engine is pure logic; tests are pure-logic unit tests on
 the algorithm's `(input → output)` shape.
 
-- [ ] **Mitigation for risk
+- [x] **Mitigation for risk
       [R-D](./preamble.md#technical-risks-planning-time-recon):**
       settle and record the Grid data shape across `WidgetData::Grid`
       → `LayoutNode` (`Vec<TrackSize>` × 2, `Vec<CellPlacement>`,
       arrange-result cache) before implementing arrange. Decide
       whether to extend the existing flat-struct `LayoutNode`
       pattern (Phase 5 default per ADR) or escalate; record the
-      chosen field shape in [log.md](./log.md).
-- [ ] Implement Grid measure / arrange in
+      chosen field shape in [log.md](./log.md). **Settled
+      2026-05-29** (see log.md T2 R-D entry): flat-struct extension
+      (`grid_columns` / `grid_rows: Vec<TrackSize>`,
+      `cell_placements: Vec<CellPlacement>`); **no** arrange-result
+      cache (per-child offsets written directly, re-derivable);
+      layout-engine-local mirror types per the `Ratio` precedent
+      (`layout::TrackSize` / `CellPlacement` reusing `Alignment` /
+      `AxisBound`); `GridUnboundedStarAxis` fires at arrange-time per
+      the ScrollView precedent. The `WidgetData::Grid` →
+      `LayoutNode::grid` build boundary lands in T3.
+- [x] Implement Grid measure / arrange in
       `wasamo-runtime/src/layout.rs` per DD-M3-P5-004 (per-axis
       fixed-first + weighted-star track resolution; `f32` prefix
       boundaries; spanning reconciliation; `LayoutError::GridUnboundedStarAxis`;
@@ -129,17 +138,28 @@ the algorithm's `(input → output)` shape.
       DD-M3-P5-002's `auto` deferral) and DD-M3-P5-005 (per-Cell
       `h-align` / `v-align` with stretch default; layout-side
       outer-bounds-rect invariant; document-order z-order).
-- [ ] Add pure-logic tests covering ADR evidence item (2). The
+      `resolve_axis_tracks` / `prefix_boundaries` / `measure_grid` /
+      `arrange_grid` / `align_in_cell` in `layout.rs`;
+      `WidgetKind::Grid` + `LayoutError::GridUnboundedStarAxis` added
+      (the latter also wired into `layout_error_to_winerr`).
+- [x] Add pure-logic tests covering ADR evidence item (2). The
       Visual-side clip-install assertion is T4's responsibility,
-      not T2's.
-- [ ] All-zero star sum cannot arise after DD-M3-P5-002 /
+      not T2's. 16 tests in `layout.rs` (fixed-only / weighted-star /
+      mixed / both-axis spanning / negative-remaining / unbounded
+      star-axis / per-Cell alignment incl. mixed / layout-side
+      outer-bounds-rect invariant / document-order correspondence /
+      prefix boundaries / `Star(0)` defensive panic).
+- [x] All-zero star sum cannot arise after DD-M3-P5-002 /
       DD-M3-P5-006 validate-time rejection; the corresponding
       layout-time defensive panic per DD-M3-P5-004 is retained.
-- [ ] Prefer pure free-function extraction. The test-module-only
+      `resolve_axis_tracks` panics on a `Star` arm with
+      `star_weight_sum == 0`; covered by the `should_panic` test.
+- [x] Prefer pure free-function extraction. The test-module-only
       mirror struct pattern is reserved per
       [CLAUDE.md §Testing rules](../../../../CLAUDE.md#testing-rules)
       and used only if entanglement with a Win32 / WinRT-bound type
-      prevents extraction.
+      prevents extraction. All Grid logic lives in free functions on
+      the Win32/WinRT-free `layout.rs`; no mirror struct was needed.
 
 ### T3 — IR loader / `validate()` invariant evidence
 

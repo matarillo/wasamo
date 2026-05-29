@@ -230,6 +230,9 @@ fn layout_error_to_winerr(err: LayoutError) -> windows::core::Error {
         LayoutError::ScrollViewUnboundedAxis => {
             "ScrollView has no bounded scroll-axis viewport (DD-M3-P4-002)"
         }
+        LayoutError::GridUnboundedStarAxis => {
+            "Grid has a star track on an unbounded parent axis (DD-M3-P5-004)"
+        }
     };
     Error::new(E_FAIL, msg)
 }
