@@ -1,6 +1,6 @@
 # Wasamo Architecture
 
-**Status:** M1 complete (Phases 0-8); M2 complete (Phases 1-7) — Foundation acceptance A1-A6 discharged; M3-Phase 1, M3-Phase 2, M3-Phase 3, and M3-Phase 4 complete.
+**Status:** M1 complete (Phases 0-8); M2 complete (Phases 1-7) — Foundation acceptance A1-A6 discharged; M3-Phase 1, M3-Phase 2, M3-Phase 3, and M3-Phase 4 complete; M3-Phase 5 design accepted (implementation pending).
 
 ---
 
@@ -929,6 +929,100 @@ algorithm remains a pure-data layout path in
 `wasamo-runtime/src/layout.rs`; Windows-runtime evidence is reserved
 for the Visual tree clip / offset integration and the Phase 3 R2
 relative-offset closure.
+
+**M3-Phase 5 (Grid layout primitive) does not extend the per-type
+writer seam, but it extends the IR node shape with a Grid-specific
+kind payload alongside the existing `IrProp` machinery.** Grid
+appears as another `widget_type: "Grid"` value on `IrNode`, with
+zero or more `Cell` children carrying placement / span / alignment
+metadata. The two load-bearing structural choices are:
+
+- **`TrackSize` domain type lives outside `IrProp`.** Grid's
+  `columns:` and `rows:` track lists carry sequences of a
+  Grid-specific `TrackSize` enum (`Fixed(i32)` plus
+  `Star(u32)` with weight in `[1, 1024]`; an `Auto` variant is
+  reserved for a future phase). The generic `IrProp.value` carrier
+  is `IrLiteral` (`Int | Str | Ident | Bool | Ratio | Color`),
+  which cannot hold a `Vec<TrackSize>` and would widen for every
+  consumer if extended with a Grid-specific carrier. Phase 5
+  resolves this by adding an optional **kind-specific payload
+  field** on `IrNode` (`KindPayload::Grid { columns: Vec<TrackSize>,
+  rows: Vec<TrackSize> }` for `widget_type: "Grid"`; `None` for
+  every other kind). Grid's `IrNode.props` does not carry
+  `columns:` / `rows:` entries; the narrow track-list parser path
+  populates the kind payload directly at parse / lower time. This
+  preserves the invariant that `IrProp.value` is strictly
+  `IrLiteral` and confines Grid-specific carrier logic to one
+  field; future Grid extensions (`auto`, `minmax`, named lines,
+  bindable tracks) localise to `KindPayload::Grid` without
+  pressuring `IrProp`.
+- **`Cell` is an IR-only wrapper, not a runtime widget kind.**
+  `Cell` appears in `wasamo-ir` as `widget_type: "Cell"` so the
+  parser and IR loader recognise it, but it is **not** registered
+  in the `wasamo-runtime` widget catalog. Grid's lowering reads
+  its IR Cell subtrees directly to extract `(row, column,
+  row-span, column-span, h-align, v-align)` per Cell, and arranges
+  each Cell's single content child as Grid's effective layout
+  child. The WidgetNode / Visual tree therefore contains one node
+  for Grid plus one node per Cell's content widget; `Cell` itself
+  does not materialise as a WidgetNode or Visual. `Cell` outside a
+  `Grid` parent is rejected at `wasamoc check` and at runtime
+  `validate()` (defense-in-depth per Phase 1 / Phase 2 T7 /
+  Phase 3 T6 / Phase 4 DD-M3-P4-006). Cell's placement / span /
+  alignment attributes live in standard `IrProp` entries using
+  existing `i32` and `Ident` literals — no new `IrLiteral` variant
+  is added.
+
+All Phase 5 Grid attributes are **constant-only**; no Grid or Cell
+attribute is bindable in Phase 5. No new `IrType`, `IrLiteral`, or
+`PropertyValue` variant is introduced, so the per-type writer seam
+discussed above is not pressured. The C ABI surface is unchanged:
+`Cell` placement and span are internal IR shape that does not
+appear in `PropertyValue`, and the new `LayoutError` variant below
+is host-internal. F5 (`TypedValue`) deferral is preserved.
+
+The runtime materialises Grid as a per-kind widget data shape
+holding the resolved track lists and the resolved per-Cell
+rectangles. The layout engine resolves each axis independently with
+a fixed-first / weighted-star distribution over `f32` prefix
+boundaries (no integer pixel snap), reports
+`LayoutError::GridUnboundedStarAxis` when star tracks meet an
+unbounded parent axis (consistent with Phase 4's
+`LayoutError::ScrollViewUnboundedAxis` precedent), and reserves a
+no-op demand-distribution slot before star distribution for a
+future `auto` admission. Negative remaining space (fixed-track sum
+exceeds parent bound) is **not** a fault — star tracks resolve to
+`0` and the rightmost cells overflow, contained by the Grid
+outer-bounds clip below. Placement / span / conflict invariants are
+**reject-at-validate**, not clamp-at-arrange; the only layout-time
+gate is the unbounded-star error. The
+`LayoutError::GridUnboundedStarAxis` variant is internal in Phase
+5: no new C ABI value tag or host-visible layout-error tag is
+added. See [abi_spec.md](./abi_spec.md) — Phase 5 ships **no** ABI
+changes.
+
+Phase 5 does **not** extend the §6.5 WidgetNode / Visual layer
+sync convention (unlike Phase 4 ScrollView, which introduced an
+intermediate content Visual for the scroll-offset translation).
+Grid uses the existing **1 WidgetNode = 1 Visual** convention:
+Grid's own Visual carries the outer-bounds clip
+(`Visual.Clip = InsetClip { 0, 0, 0, 0 }`); each Cell's content
+widget Visual is a direct child of Grid's Visual through the normal
+`sync_visuals()` path. Grid has no translation analog to
+ScrollView's scroll offset, so the intermediate-Visual pattern is
+not needed; admitting per-cell clipping later would be the right
+place to revisit Cell-owned Visuals, not Phase 5.
+
+The Phase 5 layout engine boundary remains Win32/WinRT-free: the
+Grid track-resolution algorithm and arrange pass operate on pure
+data (`wasamo-runtime/src/layout.rs`), composing structurally with
+Phase 2 Box, Phase 3 WrapPanel, and Phase 4 ScrollView measure-
+arrange. Mock-free Windows integration tests cover both the
+Grid-rooted parent shape and the `VStack { Grid { ... } }`
+production-root parent shape (Phase 4 T6 runtime-boundary
+carry-forward); algorithm-correctness evidence lives in pure-logic
+unit tests. See
+[dsl_spec.md §4.12 Grid chapter](./dsl_spec.md#412-grid-layout-primitive-m3-phase-5).
 
 #### 6.8.8 Forward-compatibility and out-of-scope
 
