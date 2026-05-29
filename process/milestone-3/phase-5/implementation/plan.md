@@ -144,11 +144,19 @@ the algorithm's `(input → output)` shape.
       (the latter also wired into `layout_error_to_winerr`).
 - [x] Add pure-logic tests covering ADR evidence item (2). The
       Visual-side clip-install assertion is T4's responsibility,
-      not T2's. 16 tests in `layout.rs` (fixed-only / weighted-star /
+      not T2's. 18 tests in `layout.rs` (fixed-only / weighted-star /
       mixed / both-axis spanning / negative-remaining / unbounded
-      star-axis / per-Cell alignment incl. mixed / layout-side
-      outer-bounds-rect invariant / document-order correspondence /
-      prefix boundaries / `Star(0)` defensive panic).
+      star-axis / per-Cell alignment incl. mixed / non-stretch-axis
+      natural-extent measure (aspect Box) / layout-side
+      outer-bounds-rect invariant / prefix boundaries / `Star(0)`
+      defensive panic). The **layout-side** document-order substrate
+      is covered (children/placement correspondence preserved in
+      arrange order; overflowing cells produce overlapping geometry
+      in document order); the **visible paint-precedence** half of
+      z-order (later child on top under overlap = Visual-tree
+      insertion order) is owned by the T6 smoke observation point
+      ("document-order paint order is observed when overlapping
+      content occurs"), not asserted in pure logic.
 - [x] All-zero star sum cannot arise after DD-M3-P5-002 /
       DD-M3-P5-006 validate-time rejection; the corresponding
       layout-time defensive panic per DD-M3-P5-004 is retained.
@@ -179,7 +187,12 @@ Discharges ADR
       c1 (`IrProp.value` stays strictly `IrLiteral`). Runtime loader
       parses the Phase-5 textual IR shape produced by `wasamoc` in
       T1 into the kind payload; the shared textual shape feeds the
-      T7 `dsl_spec.md` §8 fold.
+      T7 `dsl_spec.md` §8 fold. Wire the `WidgetData::Grid` →
+      `LayoutNode::grid` build boundary (`build_layout_tree`),
+      constructing `cell_placements` parallel to `children`
+      (log.md T2 R-D entry), and **remove the T2-era
+      `#[allow(dead_code)]` forward-pointers** on `LayoutNode::grid`
+      / `layout::TrackSize` once production has a caller.
 - [ ] `Cell` IR-loader path reads placement / span / alignment from
       standard `IrProp` entries (Int + Ident literals) and arranges
       each Cell's single content child as Grid's effective layout

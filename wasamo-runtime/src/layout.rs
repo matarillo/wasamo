@@ -1233,7 +1233,27 @@ fn arrange_grid(node: &mut LayoutNode, x: f32, y: f32, w: f32, h: f32) -> Result
         let cell_w = cell_right - cell_left;
         let cell_h = cell_bottom - cell_top;
 
-        let (desired_w, desired_h) = measure(child, cell_w, cell_h)?;
+        // DD-M3-P5-005 measure input is per-axis: a stretch axis (or a
+        // `Fill` content constraint, which `align_in_cell` also expands to
+        // the cell extent) measures the content against the cell extent on
+        // that axis; a non-stretch axis (`start` / `center` / `end`)
+        // measures the content at its **natural extent** (unbounded probe,
+        // the HStack/VStack idiom) so the spec'd natural-size anchoring —
+        // and the overflow it can produce — is honoured. Measuring a
+        // non-stretch axis against the cell extent would silently shrink a
+        // bound-dependent child (e.g. an aspect Box, or wrapping content) to
+        // the cell, weakening center / end / overflow vs the spec.
+        let measure_w = if cell_axis_is_stretchy(placement.h_align, &child.width) {
+            cell_w
+        } else {
+            f32::INFINITY
+        };
+        let measure_h = if cell_axis_is_stretchy(placement.v_align, &child.height) {
+            cell_h
+        } else {
+            f32::INFINITY
+        };
+        let (desired_w, desired_h) = measure(child, measure_w, measure_h)?;
         let (cx, cw) = align_in_cell(
             placement.h_align,
             &child.width,
@@ -1254,6 +1274,18 @@ fn arrange_grid(node: &mut LayoutNode, x: f32, y: f32, w: f32, h: f32) -> Result
     Ok(())
 }
 
+// DD-M3-P5-005: an axis behaves as "stretchy" (content fills the cell
+// extent on that axis) when its alignment is `Stretch` (the default) or the
+// content carries a `Fill` constraint on that axis. The `Fill`-as-stretch
+// rule mirrors the existing `cross_axis_position` convention (Fill and
+// Stretch both expand to the full inner extent); a `Fill` child has no
+// natural extent to anchor, so it fills the cell regardless of the
+// non-stretch alignment value. Shared by the `arrange_grid` measure-bound
+// selection and `align_in_cell` so the two stay in lockstep.
+fn cell_axis_is_stretchy(align: Alignment, constraint: &SizeConstraint) -> bool {
+    align == Alignment::Stretch || *constraint == SizeConstraint::Fill
+}
+
 // DD-M3-P5-005 per-axis alignment within a resolved cell rectangle.
 // Stretch alignment (the default) — or a `Fill` content constraint —
 // extends the content to the full cell extent. Non-stretch anchors the
@@ -1268,7 +1300,7 @@ fn align_in_cell(
     cell_start: f32,
     cell_extent: f32,
 ) -> (f32, f32) {
-    if align == Alignment::Stretch || *constraint == SizeConstraint::Fill {
+    if cell_axis_is_stretchy(align, constraint) {
         return (cell_start, cell_extent);
     }
     match align {
@@ -2678,5 +2710,77 @@ mod tests {
         // having a higher column index than child[1].
         assert_eq!(g.children[0].offset, (100.0, 0.0));
         assert_eq!(g.children[1].offset, (0.0, 0.0));
+    }
+
+    #[test]
+    fn grid_arrange_nonstretch_axis_measures_natural_extent() {
+        // DD-M3-P5-005: a non-stretch axis measures the content at its
+        // natural extent, not against the cell bound. An aspect Box is the
+        // representative bound-dependent content: in a 40-wide × 100-tall
+        // cell with h-align center (non-stretch) + v-align stretch, the
+        // square (1:1) Box derives its natural size from the *stretched*
+        // height (100) — width 100 — and overflows the narrow 40px column,
+        // centred. Measuring the non-stretch width against the cell (40)
+        // would instead shrink the Box to 40×40 (the pre-fix behaviour),
+        // so this asserts the natural-extent measure.
+        let mut g = LayoutNode::grid(
+            vec![TrackSize::Fixed(40)],
+            vec![TrackSize::Fixed(100)],
+            vec![cell(0, 0, 1, 1, Alignment::Center, Alignment::Stretch)],
+        );
+        g.children
+            .push(LayoutNode::box_(Some(Ratio { num: 1, den: 1 })));
+        run_layout(&mut g, 40.0, 100.0).unwrap();
+        // Natural square sized off the stretched height: 100×100.
+        assert_eq!(g.children[0].size, (100.0, 100.0));
+        // Centred horizontally in the 40px cell → x = (40 - 100) / 2 = -30
+        // (overflow past both cell edges); top-anchored by stretch-v at y=0.
+        assert_eq!(g.children[0].offset, (-30.0, 0.0));
+    }
+
+    #[test]
+    fn grid_arrange_overflowing_cells_overlap_in_document_order() {
+        // Layout-side substrate for the DD-M3-P5-005 document-order z-order:
+        // two adjacent cells whose centred natural content overflows into the
+        // neighbour produce overlapping rectangles, and the arrange loop
+        // emits them in declared order (children[0] before children[1]).
+        // The *paint precedence* (later child on top under overlap) is a
+        // Visual-tree insertion-order property asserted by the T6 smoke
+        // ("document-order paint order is observed when overlapping content
+        // occurs"); T2 only proves the layout produces the overlapping
+        // geometry in document order.
+        let mut g = LayoutNode::grid(
+            vec![TrackSize::Fixed(40), TrackSize::Fixed(40)],
+            vec![TrackSize::Fixed(40)],
+            vec![
+                cell(0, 0, 1, 1, Alignment::Center, Alignment::Center),
+                cell(0, 1, 1, 1, Alignment::Center, Alignment::Center),
+            ],
+        );
+        // Two 60-wide natural-size rects, each wider than its 40px cell.
+        g.children.push(LayoutNode::rectangle(
+            SizeConstraint::Fixed(60.0),
+            SizeConstraint::Fixed(20.0),
+        ));
+        g.children.push(LayoutNode::rectangle(
+            SizeConstraint::Fixed(60.0),
+            SizeConstraint::Fixed(20.0),
+        ));
+        run_layout(&mut g, 80.0, 40.0).unwrap();
+        // child[0] in column 0 cell (0..40), centred: x = (40-60)/2 = -10 → spans -10..50.
+        // child[1] in column 1 cell (40..80), centred: x = 40 + (40-60)/2 = 30 → spans 30..70.
+        let c0 = &g.children[0];
+        let c1 = &g.children[1];
+        assert_eq!(c0.offset.0, -10.0);
+        assert_eq!(c1.offset.0, 30.0);
+        // The two painted rectangles overlap horizontally (50 > 30).
+        let c0_right = c0.offset.0 + c0.size.0;
+        assert!(
+            c0_right > c1.offset.0,
+            "expected overflow overlap between cells"
+        );
+        // Document order is children-vector order (= sync_visuals paint order).
+        assert_eq!(c0.size, (60.0, 20.0));
+        assert_eq!(c1.size, (60.0, 20.0));
     }
 }
