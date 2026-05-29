@@ -2941,6 +2941,57 @@ mod tests {
     }
 
     #[test]
+    fn cell_non_integer_row_rejected() {
+        let errs = errors(
+            r#"component C inherits W { Grid { columns: 1* rows: 1* Cell { row: "top" column: 0 Text {} } } }"#,
+        );
+        assert!(
+            errs.iter()
+                .any(|e| e.contains("`Cell.row` must be a non-negative integer literal")),
+            "{:?}",
+            errs
+        );
+    }
+
+    #[test]
+    fn cell_non_integer_column_rejected() {
+        let errs = errors(
+            r#"component C inherits W { Grid { columns: 1* rows: 1* Cell { row: 0 column: true Text {} } } }"#,
+        );
+        assert!(
+            errs.iter()
+                .any(|e| e.contains("`Cell.column` must be a non-negative integer literal")),
+            "{:?}",
+            errs
+        );
+    }
+
+    #[test]
+    fn cell_row_out_of_range_rejected() {
+        let errs = errors(
+            r#"component C inherits W { Grid { columns: 1* rows: 1* Cell { row: 1 column: 0 Text {} } } }"#,
+        );
+        assert!(
+            errs.iter().any(|e| e.contains("row span exceeds the grid")),
+            "{:?}",
+            errs
+        );
+    }
+
+    #[test]
+    fn cell_column_out_of_range_rejected() {
+        let errs = errors(
+            r#"component C inherits W { Grid { columns: 1* rows: 1* Cell { row: 0 column: 1 Text {} } } }"#,
+        );
+        assert!(
+            errs.iter()
+                .any(|e| e.contains("column span exceeds the grid")),
+            "{:?}",
+            errs
+        );
+    }
+
+    #[test]
     fn cell_zero_span_rejected() {
         let errs = errors(
             r#"component C inherits W { Grid { columns: 1* rows: 1* Cell { row: 0 column: 0 column-span: 0 Text {} } } }"#,
@@ -2948,6 +2999,32 @@ mod tests {
         assert!(
             errs.iter()
                 .any(|e| e.contains("`Cell.column-span` must be a positive integer")),
+            "{:?}",
+            errs
+        );
+    }
+
+    #[test]
+    fn cell_non_integer_row_span_rejected() {
+        let errs = errors(
+            r#"component C inherits W { Grid { columns: 1* rows: 1* Cell { row: 0 column: 0 row-span: "two" Text {} } } }"#,
+        );
+        assert!(
+            errs.iter()
+                .any(|e| e.contains("`Cell.row-span` must be a positive integer literal")),
+            "{:?}",
+            errs
+        );
+    }
+
+    #[test]
+    fn cell_non_integer_column_span_rejected() {
+        let errs = errors(
+            r#"component C inherits W { Grid { columns: 1* rows: 1* Cell { row: 0 column: 0 column-span: false Text {} } } }"#,
+        );
+        assert!(
+            errs.iter()
+                .any(|e| e.contains("`Cell.column-span` must be a positive integer literal")),
             "{:?}",
             errs
         );
