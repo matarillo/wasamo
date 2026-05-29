@@ -407,9 +407,26 @@ matching the Phase 4 T5 / T6 split rationale.
       - the spanning header `Cell` spans all three columns;
       - the three middle-row `Cell`s occupy separate columns;
       - the spanning footer `Cell` spans all three columns;
-      - Grid outer-bounds clip is visible: the footer `aspect: 4:1`
-        Box (≈190 logical px tall) is cut at the Grid's bottom edge and
-        must **not** bleed into the gap / Photo row below.
+      - Grid outer-bounds clip — verify against the `gallery.ui`
+        source, not merely "cut sharply" (clipped content is invisible,
+        so the criterion is what is MISSING): the footer `Cell` declares
+        `Box { aspect: 4:1 } + Text` spanning all three columns, whose
+        natural size is the full Grid width × (width / 4) ≈ a ~190
+        logical-px-tall pink rectangle carrying a centred label. On
+        screen the outer-bounds clip leaves only a **thin ~36 px
+        (one-footer-row) pink strip with NO visible text** — the centred
+        Text sits ~95 logical px down in the box, below the Grid's
+        bottom edge, and is removed by the clip — and the pink **does
+        not bleed into the gap / Photo row below**.
+        Positive control via resize: widening the window grows the 4:1
+        box's natural height, but the visible pink strip stays pinned at
+        the footer-row height (clipped to the Grid bottom) and never
+        grows downward over the Photos. (Assistant baseline: the strip
+        held ~45 physical px from an 820→1500 px window while the box's
+        natural height ~doubled, and the text never appeared.) The
+        definitive clip-PRESENCE proof is the T4 integration test (Grid
+        outer Visual has a non-null `InsetClip`) + T2 overflow geometry;
+        this owner-visible check corroborates it.
       - document-order paint order under overlapping content is **not
         exercisable in this gallery slice**, so it is **not an
         owner-visible observation point here**. The slice's only
