@@ -11,11 +11,11 @@ use std::rc::Rc;
 
 use wasamo_ir::{
     CompoundOp, HandlerExpr, InterpolationPart, IrBinding, IrComponent, IrHandler, IrLiteral,
-    IrNode, IrProp, IrState, IrType,
+    IrNode, IrProp, IrState, IrType, KindPayload, TrackSize,
 };
 
 use crate::box_values;
-use crate::layout::Alignment;
+use crate::layout::{Alignment, CellPlacement, TrackSize as LayoutTrackSize};
 use crate::reactive::{
     register_binding, register_bool_binding, set_active_registry, BindingTarget, PropertyKey,
     Signal, SignalRegistry, WidgetId,
@@ -185,7 +185,21 @@ fn validate(comp: &IrComponent) -> Result<(), IrLoadError> {
     // bound `state.scroll_y` can legitimately transition through
     // negative / out-of-range intermediate values without becoming a
     // load-time error.
-    validate_phase4_node_invariants(&comp.root)
+    validate_phase4_node_invariants(&comp.root)?;
+    // M3-Phase 5 T3 defense-in-depth gate (DD-M3-P5-006). `wasamoc check`
+    // (T1) dual-gates every Grid / Cell structural invariant at compile
+    // time; this is the runtime gate for memory IR that reaches the
+    // loader via `wasamo_load_ui` without traversing `wasamoc`. All Grid
+    // invariants are reject-at-validate (no clamp-at-arrange — Grid has
+    // no runtime-clamp analogue to ScrollView's `offset-y`); the only
+    // Grid layout-time gate is `LayoutError::GridUnboundedStarAxis`
+    // (DD-M3-P5-004), which depends on the parent axis bound and so is
+    // not a `validate()`-time concern. A top-level / non-Grid-nested
+    // `Cell` is rejected as Cell-outside-Grid (the recursion descends
+    // into a Grid's Cell *content* children, never treating `Cell` as a
+    // standalone node, so a `Cell` reached by the generic walk is
+    // necessarily misplaced).
+    validate_phase5_node_invariants(&comp.root)
 }
 
 fn validate_phase2_node_invariants(node: &IrNode) -> Result<(), IrLoadError> {
@@ -287,6 +301,254 @@ fn validate_phase3_node_invariants(node: &IrNode) -> Result<(), IrLoadError> {
         validate_phase3_node_invariants(child)?;
     }
     Ok(())
+}
+
+// M3-Phase 5 T3 defense-in-depth (DD-M3-P5-006). Mirrors the
+// `wasamoc check` Grid / Cell gate (`wasamoc/src/check.rs`
+// `check_grid` / `check_cell`) against post-lowering memory IR. Routes
+// by widget kind: a `Grid` is validated as a unit (its `Cell` children
+// are validated here, not as standalone nodes), and recursion descends
+// only into each Cell's content child. A `Cell` reached by the generic
+// walk is therefore necessarily outside a `Grid` and is rejected.
+fn validate_phase5_node_invariants(node: &IrNode) -> Result<(), IrLoadError> {
+    match node.widget_type.as_str() {
+        "Grid" => {
+            validate_grid_invariants(node)?;
+            // Descend into each Cell's content child (the Cell wrapper
+            // itself is validated above and is IR-only). A bad child-count
+            // was already rejected by `validate_grid_invariants`.
+            for cell in &node.children {
+                for content in &cell.children {
+                    validate_phase5_node_invariants(content)?;
+                }
+            }
+        }
+        "Cell" => {
+            return Err(IrLoadError::Validate(
+                "`Cell` is only valid as a direct child of a `Grid` (DD-M3-P5-001)".into(),
+            ));
+        }
+        _ => {
+            for child in &node.children {
+                validate_phase5_node_invariants(child)?;
+            }
+        }
+    }
+    Ok(())
+}
+
+/// DD-M3-P5-002 star-weight cap (inclusive). Mirrors `wasamoc`'s
+/// `STAR_WEIGHT_MAX`.
+const GRID_STAR_WEIGHT_MAX: u32 = 1024;
+
+/// A resolved Cell rectangle in track coordinates, used for the pairwise
+/// overlap check. Built only after placement / span all validate.
+struct GridCellRect {
+    row: i64,
+    column: i64,
+    row_span: i64,
+    column_span: i64,
+}
+
+// Validate one `Grid` node's body (DD-M3-P5-006 invariant table). Track
+// value ranges, minimum row / column count, per-`Cell` child-count +
+// placement / span range + alignment vocabulary, and pairwise
+// same-cell / overlapping-rectangle conflict. All violations surface
+// `IrLoadError::Validate` → `WASAMO_ERR_IR_MALFORMED`.
+fn validate_grid_invariants(node: &IrNode) -> Result<(), IrLoadError> {
+    let (columns, rows) = match &node.kind_payload {
+        Some(KindPayload::Grid { columns, rows }) => (columns, rows),
+        None => {
+            return Err(IrLoadError::Validate(
+                "`Grid` requires `columns:` and `rows:` track lists (DD-M3-P5-001)".into(),
+            ));
+        }
+    };
+
+    // Minimum shape: at least one row and one column track (DD-M3-P5-001).
+    if columns.is_empty() {
+        return Err(IrLoadError::Validate(
+            "`Grid` requires at least one column track (DD-M3-P5-001)".into(),
+        ));
+    }
+    if rows.is_empty() {
+        return Err(IrLoadError::Validate(
+            "`Grid` requires at least one row track (DD-M3-P5-001)".into(),
+        ));
+    }
+
+    // Track value ranges (DD-M3-P5-002): fixed `>= 1`; star weight in
+    // `[1, 1024]`.
+    for axis in [columns, rows] {
+        for t in axis {
+            match t {
+                TrackSize::Fixed(v) => {
+                    if *v < 1 {
+                        return Err(IrLoadError::Validate(format!(
+                            "`Grid` fixed track size must be a positive integer, got {v} (DD-M3-P5-002)"
+                        )));
+                    }
+                }
+                TrackSize::Star(w) => {
+                    if *w < 1 || *w > GRID_STAR_WEIGHT_MAX {
+                        return Err(IrLoadError::Validate(format!(
+                            "`Grid` star weight must be in [1, {GRID_STAR_WEIGHT_MAX}], got {w} (DD-M3-P5-002)"
+                        )));
+                    }
+                }
+            }
+        }
+    }
+
+    let columns_len = columns.len() as i64;
+    let rows_len = rows.len() as i64;
+
+    // Per-Cell validation + rectangle collection (DD-M3-P5-003 /
+    // DD-M3-P5-005 / DD-M3-P5-006).
+    let mut rects: Vec<GridCellRect> = Vec::new();
+    for cell in &node.children {
+        if cell.widget_type != "Cell" {
+            return Err(IrLoadError::Validate(format!(
+                "`Grid` children must be wrapped in `Cell`, found `{}` (DD-M3-P5-001)",
+                cell.widget_type
+            )));
+        }
+        rects.push(validate_grid_cell(cell, columns_len, rows_len)?);
+    }
+
+    // Same-cell / overlapping-rectangle conflict (DD-M3-P5-003): no two
+    // Cells share any resolved cell. `O(n_cells^2)` pairwise (trivial for
+    // practical Grid sizes per DD-M3-P5-006).
+    for i in 0..rects.len() {
+        for j in (i + 1)..rects.len() {
+            if grid_rects_overlap(&rects[i], &rects[j]) {
+                return Err(IrLoadError::Validate(format!(
+                    "`Grid` Cell at (row {}, column {}) overlaps an earlier Cell's rectangle; same-cell and overlapping placements are rejected (DD-M3-P5-003)",
+                    rects[j].row, rects[j].column
+                )));
+            }
+        }
+    }
+
+    Ok(())
+}
+
+// Validate one `Cell` node's invariants and return its resolved
+// rectangle (DD-M3-P5-001 / DD-M3-P5-003 / DD-M3-P5-005 / DD-M3-P5-006).
+// Placement / span defaults match `extract_cell_placement` and
+// `wasamoc lower`'s placement-default Option A (`row` / `column` absent →
+// `0`; `row-span` / `column-span` absent → `1`). The multi-Cell
+// placement-presence rule is compile-time-only (DD-M3-P5-006 marks it
+// `(n/a)` at runtime); a multi-Cell Grid that omits placement is caught
+// by the overlap check (two Cells both defaulting to `(0, 0)`).
+fn validate_grid_cell(
+    cell: &IrNode,
+    columns_len: i64,
+    rows_len: i64,
+) -> Result<GridCellRect, IrLoadError> {
+    // Cell single content child (DD-M3-P5-001).
+    if cell.children.len() != 1 {
+        return Err(IrLoadError::Validate(format!(
+            "`Cell` requires exactly one content child, got {} (DD-M3-P5-001)",
+            cell.children.len()
+        )));
+    }
+
+    // Placement / span values (Int literal positions). `wasamoc lower`
+    // emits these as `IrLiteral::Int`; a non-Int literal is malformed.
+    let row = grid_cell_int(cell, "row", 0)?;
+    let column = grid_cell_int(cell, "column", 0)?;
+    let row_span = grid_cell_int(cell, "row-span", 1)?;
+    let column_span = grid_cell_int(cell, "column-span", 1)?;
+
+    // Alignment vocabulary (DD-M3-P5-005): `h-align` / `v-align`, when
+    // present, are idents in `{ start, center, end, stretch }`.
+    validate_cell_alignment(cell, "h-align")?;
+    validate_cell_alignment(cell, "v-align")?;
+
+    // Placement value range (DD-M3-P5-003): row in `[0, rows.len())`,
+    // column in `[0, columns.len())`.
+    if row < 0 || row >= rows_len {
+        return Err(IrLoadError::Validate(format!(
+            "`Cell.row` {row} is out of range [0, {rows_len}) (DD-M3-P5-003)"
+        )));
+    }
+    if column < 0 || column >= columns_len {
+        return Err(IrLoadError::Validate(format!(
+            "`Cell.column` {column} is out of range [0, {columns_len}) (DD-M3-P5-003)"
+        )));
+    }
+
+    // Span value range (DD-M3-P5-003): spans `>= 1` and the resolved
+    // rectangle fits within the declared track count.
+    if row_span < 1 {
+        return Err(IrLoadError::Validate(format!(
+            "`Cell.row-span` must be a positive integer (>= 1), got {row_span} (DD-M3-P5-003)"
+        )));
+    }
+    if column_span < 1 {
+        return Err(IrLoadError::Validate(format!(
+            "`Cell.column-span` must be a positive integer (>= 1), got {column_span} (DD-M3-P5-003)"
+        )));
+    }
+    if row + row_span > rows_len {
+        return Err(IrLoadError::Validate(format!(
+            "`Cell` row span exceeds the grid: row {row} + row-span {row_span} = {} > {rows_len} declared row tracks (DD-M3-P5-003)",
+            row + row_span
+        )));
+    }
+    if column + column_span > columns_len {
+        return Err(IrLoadError::Validate(format!(
+            "`Cell` column span exceeds the grid: column {column} + column-span {column_span} = {} > {columns_len} declared column tracks (DD-M3-P5-003)",
+            column + column_span
+        )));
+    }
+
+    Ok(GridCellRect {
+        row,
+        column,
+        row_span,
+        column_span,
+    })
+}
+
+/// Read a `Cell` placement / span attribute as an `i64`, defaulting when
+/// the prop is absent. A present-but-non-`Int` literal is malformed.
+fn grid_cell_int(cell: &IrNode, name: &str, default: i64) -> Result<i64, IrLoadError> {
+    match cell.props.iter().find(|p| p.name == name) {
+        Some(prop) => match &prop.value {
+            IrLiteral::Int(n) => Ok(*n as i64),
+            other => Err(IrLoadError::Validate(format!(
+                "`Cell.{name}` must be an integer literal, got {other:?} (DD-M3-P5-003)"
+            ))),
+        },
+        None => Ok(default),
+    }
+}
+
+/// Validate a `Cell` alignment attribute against the DD-M3-P5-005
+/// vocabulary when present. Absent is valid (defaults to `stretch`).
+fn validate_cell_alignment(cell: &IrNode, name: &str) -> Result<(), IrLoadError> {
+    let Some(prop) = cell.props.iter().find(|p| p.name == name) else {
+        return Ok(());
+    };
+    match &prop.value {
+        IrLiteral::Ident(v) if matches!(v.as_str(), "start" | "center" | "end" | "stretch") => {
+            Ok(())
+        }
+        other => Err(IrLoadError::Validate(format!(
+            "`Cell.{name}` must be one of start, center, end, stretch, got {other:?} (DD-M3-P5-005)"
+        ))),
+    }
+}
+
+/// Half-open rectangle overlap in track coordinates (DD-M3-P5-003).
+fn grid_rects_overlap(a: &GridCellRect, b: &GridCellRect) -> bool {
+    fn ranges_overlap(s1: i64, len1: i64, s2: i64, len2: i64) -> bool {
+        s1 < s2 + len2 && s2 < s1 + len1
+    }
+    ranges_overlap(a.row, a.row_span, b.row, b.row_span)
+        && ranges_overlap(a.column, a.column_span, b.column, b.column_span)
 }
 
 fn validate_node_references(
@@ -394,6 +656,14 @@ enum Token {
     // `HandlerExpr` variant per DD-M3-P2-004).
     Ratio { num: i32, den: i32 },
     Color(u32),
+    // M3-Phase 5 T3: payload-less star terminal for Grid `tracks` lines
+    // (DD-M3-P5-002). Mirrors `wasamoc`'s lexer decision (T1 R-A): the
+    // lexer learns nothing about track lists — `Star` is recombined with
+    // a preceding `Int` into a weighted-star track by `parse_track_list`.
+    // Only reached in `tracks <axis> = …` position; a bare `*` elsewhere
+    // surfaces a parser-level `expected …` diagnostic. `*=` stays
+    // `AssignOp(Mul)`.
+    Star,
 }
 
 fn tokenize(text: &str) -> Result<Vec<Token>, IrLoadError> {
@@ -467,11 +737,10 @@ fn tokenize(text: &str) -> Result<Vec<Token>, IrLoadError> {
                 i += 1;
                 tokens.push(Token::Str(s));
             }
-            '+' | '*' | '/' => {
+            '+' | '/' => {
                 if i + 1 < chars.len() && chars[i + 1] == '=' {
                     let op = match c {
                         '+' => CompoundOp::Add,
-                        '*' => CompoundOp::Mul,
                         '/' => CompoundOp::Div,
                         _ => unreachable!(),
                     };
@@ -479,6 +748,18 @@ fn tokenize(text: &str) -> Result<Vec<Token>, IrLoadError> {
                     i += 2;
                 } else {
                     return Err(IrLoadError::Parse(format!("unexpected character: '{c}'")));
+                }
+            }
+            // M3-Phase 5 T3: `*=` stays a compound-assign op; a bare `*`
+            // emits the payload-less `Token::Star` (Grid `tracks` star
+            // terminal, DD-M3-P5-002) instead of erroring.
+            '*' => {
+                if i + 1 < chars.len() && chars[i + 1] == '=' {
+                    tokens.push(Token::AssignOp(CompoundOp::Mul));
+                    i += 2;
+                } else {
+                    tokens.push(Token::Star);
+                    i += 1;
                 }
             }
             '-' => {
@@ -707,6 +988,11 @@ impl<'a> Parser<'a> {
         let mut bindings = Vec::new();
         let mut handlers = Vec::new();
         let mut children = Vec::new();
+        // M3-Phase 5 T3: Grid `tracks <axis> = …` lines lower into
+        // `KindPayload::Grid` (carrier c1), kept out of `props` so
+        // `IrProp.value` stays strictly `IrLiteral`.
+        let mut grid_columns: Option<Vec<TrackSize>> = None;
+        let mut grid_rows: Option<Vec<TrackSize>> = None;
 
         loop {
             match self.peek() {
@@ -718,6 +1004,24 @@ impl<'a> Parser<'a> {
                 Some(Token::Ident(s)) if s == "bind" => bindings.push(self.parse_binding()?),
                 Some(Token::Ident(s)) if s == "on" => handlers.push(self.parse_handler()?),
                 Some(Token::Ident(s)) if s == "node" => children.push(self.parse_node()?),
+                Some(Token::Ident(s)) if s == "tracks" => {
+                    let (axis, tracks) = self.parse_tracks_line()?;
+                    let slot = match axis.as_str() {
+                        "columns" => &mut grid_columns,
+                        "rows" => &mut grid_rows,
+                        other => {
+                            return Err(IrLoadError::Parse(format!(
+                                "unknown track axis `{other}` (expected `columns` or `rows`)"
+                            )));
+                        }
+                    };
+                    if slot.is_some() {
+                        return Err(IrLoadError::Parse(format!(
+                            "duplicate `tracks {axis}` line on node"
+                        )));
+                    }
+                    *slot = Some(tracks);
+                }
                 Some(other) => {
                     return Err(IrLoadError::Parse(format!(
                         "unexpected token in node body: {other:?}"
@@ -729,16 +1033,66 @@ impl<'a> Parser<'a> {
             }
         }
 
+        // The Grid `kind_payload` is present iff at least one `tracks`
+        // line was seen — i.e. iff this is a Grid node. A one-sided /
+        // empty track list is left for `validate()` to reject (memory IR
+        // reaching the loader via `wasamo_load_ui` is untrusted), unlike
+        // `wasamoc lower` which panics on a both-or-neither violation
+        // because `wasamoc check` has already guaranteed both lists.
+        let kind_payload = if grid_columns.is_some() || grid_rows.is_some() {
+            Some(KindPayload::Grid {
+                columns: grid_columns.unwrap_or_default(),
+                rows: grid_rows.unwrap_or_default(),
+            })
+        } else {
+            None
+        };
+
         Ok(IrNode {
             widget_type,
             props,
             bindings,
             handlers,
             children,
-            // Grid `tracks` lines are parsed into this payload in T3;
-            // the Phase-5-pre loader leaves it None for every kind.
-            kind_payload: None,
+            kind_payload,
         })
+    }
+
+    /// Parse a Grid `tracks <axis> = <track-list>` line (DD-M3-P5-002,
+    /// carrier c1). The runtime IR is the canonical machine format
+    /// emitted by `wasamoc` (`tracks columns = 180 1* 2*`), so the grammar
+    /// is whitespace-insensitive: an `Int` immediately preceding a `Star`
+    /// is a weighted-star track, a standalone `Int` is a fixed track, and
+    /// a standalone `Star` is a unit `Star(1)` (the `1*`-vs-`1 *`
+    /// author-surface adjacency distinction is already resolved at
+    /// `wasamoc` compile time — see log.md T3 R-B Decision 3). The
+    /// track-list reader stops at the next keyword / `RBrace`. Value
+    /// ranges are enforced by `validate()`, not here.
+    fn parse_tracks_line(&mut self) -> Result<(String, Vec<TrackSize>), IrLoadError> {
+        self.expect_keyword("tracks")?;
+        let axis = self.expect_ident()?;
+        self.expect(&Token::Eq)?;
+        let mut tracks = Vec::new();
+        loop {
+            match self.peek() {
+                Some(Token::Int(n)) => {
+                    let n = *n;
+                    self.advance();
+                    if matches!(self.peek(), Some(Token::Star)) {
+                        self.advance();
+                        tracks.push(TrackSize::Star(n as u32));
+                    } else {
+                        tracks.push(TrackSize::Fixed(n));
+                    }
+                }
+                Some(Token::Star) => {
+                    self.advance();
+                    tracks.push(TrackSize::Star(1));
+                }
+                _ => break,
+            }
+        }
+        Ok((axis, tracks))
     }
 
     fn parse_prop(&mut self) -> Result<IrProp, IrLoadError> {
@@ -1006,11 +1360,37 @@ fn build_node(
     }
 
     // Children: recurse and attach via the Phase 4 internal mutation API.
-    for child in &node.children {
-        let child_widget = build_node(child, compositor, renderer, registry)?;
-        widget
-            .append_child(child_widget)
-            .map_err(|e| IrLoadError::Build(format!("append_child failed: {e:?}")))?;
+    //
+    // M3-Phase 5 T3 (R-B): Grid bypasses the generic child loop. A Grid's
+    // IR children are `Cell` wrappers — IR-only nodes that never
+    // materialise as a `WidgetNode` (DD-M3-P5-001), so feeding them to
+    // `build_node` / `construct_widget` would `UnknownWidget`. Instead each
+    // Cell's single content child is built and appended directly, in
+    // document order, so `WidgetNode.children` stays parallel to the
+    // `cell_placements` that `construct_widget` extracted from the same
+    // `node.children` in the same order (log.md T3 R-B Decision 2). The
+    // single-content-child invariant was enforced by `validate()`
+    // (DD-M3-P5-006); the `first()` guard is the defensive fallback.
+    if node.widget_type == "Grid" {
+        for cell in &node.children {
+            let content = cell.children.first().ok_or_else(|| {
+                IrLoadError::Build(format!(
+                    "Grid `Cell` requires exactly one content child, got {}",
+                    cell.children.len()
+                ))
+            })?;
+            let content_widget = build_node(content, compositor, renderer, registry)?;
+            widget
+                .append_child(content_widget)
+                .map_err(|e| IrLoadError::Build(format!("append_child failed: {e:?}")))?;
+        }
+    } else {
+        for child in &node.children {
+            let child_widget = build_node(child, compositor, renderer, registry)?;
+            widget
+                .append_child(child_widget)
+                .map_err(|e| IrLoadError::Build(format!("append_child failed: {e:?}")))?;
+        }
     }
 
     Ok(widget)
@@ -1103,7 +1483,89 @@ fn construct_widget(
             WidgetNode::scroll_view(compositor, offset_y)
                 .map_err(|e| IrLoadError::Build(format!("scroll_view: {e}")))
         }
+        // M3-Phase 5 T3: Grid materialisation (DD-M3-P5-001 carrier c1).
+        // The track lists live on `node.kind_payload` (not `node.props` —
+        // `IrProp.value` stays strictly `IrLiteral`); the per-Cell
+        // placements are extracted from each `Cell` child's standard
+        // `IrProp` entries here, so `WidgetData::Grid` carries the
+        // layout-engine mirror types and `build_layout_tree` stays a
+        // structural copy (log.md T3 R-B Decision 1). `validate()` has
+        // already rejected malformed track lists / placements / overlaps
+        // before this arm runs (DD-M3-P5-006). The `Cell` flattening
+        // (appending each Cell's single content child) is the `build_node`
+        // special case; this arm only builds the shell + placement vector.
+        "Grid" => {
+            let (columns, rows) = match &node.kind_payload {
+                Some(KindPayload::Grid { columns, rows }) => (
+                    columns.iter().map(to_layout_track_size).collect(),
+                    rows.iter().map(to_layout_track_size).collect(),
+                ),
+                None => {
+                    return Err(IrLoadError::Build(
+                        "Grid node has no track-list payload (kind_payload)".into(),
+                    ));
+                }
+            };
+            let cell_placements = node.children.iter().map(extract_cell_placement).collect();
+            WidgetNode::grid(compositor, columns, rows, cell_placements)
+                .map_err(|e| IrLoadError::Build(format!("grid: {e}")))
+        }
         other => Err(IrLoadError::UnknownWidget(other.to_string())),
+    }
+}
+
+/// Convert an IR `TrackSize` (`wasamo_ir`) to the layout-engine mirror
+/// (`layout::TrackSize`). Structural one-to-one (log.md T3 R-B
+/// Decision 1); value ranges were already enforced by `validate()`.
+fn to_layout_track_size(t: &TrackSize) -> LayoutTrackSize {
+    match t {
+        TrackSize::Fixed(n) => LayoutTrackSize::Fixed(*n),
+        TrackSize::Star(w) => LayoutTrackSize::Star(*w),
+    }
+}
+
+/// Extract a `Cell` IR node's placement into the layout-engine
+/// `CellPlacement` (DD-M3-P5-003 / DD-M3-P5-005). Reads the standard
+/// `IrProp` entries (`row` / `column` Int; `row-span` / `column-span`
+/// Int; `h-align` / `v-align` Ident). Defaults match `wasamoc lower`'s
+/// placement-default Option A and the runtime `validate()` gate: `row` /
+/// `column` absent → `0`, `row-span` / `column-span` absent → `1`,
+/// alignment absent → `Stretch` (DD-M3-P5-005 stretch default). Negative
+/// / out-of-range values were already rejected by `validate()`; the
+/// `as u32` casts here are total over the validated accept set.
+fn extract_cell_placement(cell: &IrNode) -> CellPlacement {
+    CellPlacement {
+        row: extract_int_prop(&cell.props, "row").unwrap_or(0).max(0) as u32,
+        column: extract_int_prop(&cell.props, "column").unwrap_or(0).max(0) as u32,
+        row_span: extract_int_prop(&cell.props, "row-span")
+            .unwrap_or(1)
+            .max(1) as u32,
+        column_span: extract_int_prop(&cell.props, "column-span")
+            .unwrap_or(1)
+            .max(1) as u32,
+        h_align: extract_alignment_prop(&cell.props, "h-align"),
+        v_align: extract_alignment_prop(&cell.props, "v-align"),
+    }
+}
+
+/// Map a `Cell` alignment `IrProp` (`h-align` / `v-align`) to the layout
+/// `Alignment`, defaulting to `Stretch` when absent (DD-M3-P5-005). The
+/// vocabulary (`start` / `center` / `end` / `stretch`) was validated by
+/// `validate()`; an unrecognised ident here falls back to `Stretch`
+/// rather than failing, since this runs after the validate gate.
+fn extract_alignment_prop(props: &[IrProp], name: &str) -> Alignment {
+    let ident = props
+        .iter()
+        .find(|p| p.name == name)
+        .and_then(|p| match &p.value {
+            IrLiteral::Ident(id) => Some(id.as_str()),
+            _ => None,
+        });
+    match ident {
+        Some("start") => Alignment::Leading,
+        Some("center") => Alignment::Center,
+        Some("end") => Alignment::Trailing,
+        _ => Alignment::Stretch,
     }
 }
 
@@ -2454,5 +2916,327 @@ mod tests {
         );
         assert_eq!(c.states.len(), 1);
         assert_eq!(c.states[0].default, IrLiteral::Int(0));
+    }
+
+    // ── M3-Phase 5 T3: Grid `tracks` parse + validate() invariants ──────
+    //
+    // These cover ADR Phase 5 verification closure item (3) — the
+    // IR-loader `validate()` invariant evidence (DD-M3-P5-006). Pure
+    // logic: `parse_ir` tokenises the carrier-c1 textual IR (the
+    // `tracks <axis> = …` lines T1's `wasamoc emit` produces), parses
+    // into `KindPayload::Grid`, and runs the Phase 5 `validate()` gate,
+    // all without a `Compositor`.
+
+    fn assert_validate_err(src: &str, needle: &str) {
+        match parse_err(src) {
+            IrLoadError::Validate(msg) => assert!(
+                msg.contains(needle),
+                "validate message `{msg}` did not contain `{needle}`"
+            ),
+            other => panic!("expected Validate error, got {other:?}"),
+        }
+    }
+
+    // ── tracks parse (carrier c1) ───────────────────────────────────────
+
+    #[test]
+    fn grid_tracks_parse_into_kind_payload() {
+        // `tracks columns = 180 1* 2*` — fixed + two weighted stars;
+        // `tracks rows = 1* 1*`. Unit star arrives canonicalised as `1*`.
+        let c = parse_ok(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             node Grid {\n\
+               tracks columns = 180 1* 2*\n\
+               tracks rows = 1* 1*\n\
+               node Cell { prop row = 0 prop column = 0 node Text {} }\n\
+             }\n}",
+        );
+        assert_eq!(c.root.widget_type, "Grid");
+        match c.root.kind_payload.as_ref().expect("Grid kind_payload") {
+            KindPayload::Grid { columns, rows } => {
+                assert_eq!(
+                    columns,
+                    &[
+                        TrackSize::Fixed(180),
+                        TrackSize::Star(1),
+                        TrackSize::Star(2)
+                    ]
+                );
+                assert_eq!(rows, &[TrackSize::Star(1), TrackSize::Star(1)]);
+            }
+        }
+        // Track lists never leak into `props` (carrier-c1 invariant).
+        assert!(c
+            .root
+            .props
+            .iter()
+            .all(|p| p.name != "columns" && p.name != "rows"));
+    }
+
+    #[test]
+    fn grid_bare_star_parses_as_unit_weight() {
+        // A standalone `*` (no preceding integer) is a unit `Star(1)`.
+        let c = parse_ok(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             node Grid {\n\
+               tracks columns = *\n\
+               tracks rows = *\n\
+               node Cell { prop row = 0 prop column = 0 node Text {} }\n\
+             }\n}",
+        );
+        match c.root.kind_payload.as_ref().unwrap() {
+            KindPayload::Grid { columns, rows } => {
+                assert_eq!(columns, &[TrackSize::Star(1)]);
+                assert_eq!(rows, &[TrackSize::Star(1)]);
+            }
+        }
+    }
+
+    #[test]
+    fn non_grid_node_has_no_kind_payload() {
+        let c = parse_ok(";wasamo-ir v0\ncomponent C inherits W { node VStack {} }");
+        assert!(c.root.kind_payload.is_none());
+    }
+
+    #[test]
+    fn star_compound_assign_still_lexes() {
+        // `*=` must stay `AssignOp(Mul)` after the bare-`*` → `Token::Star`
+        // split, so handler bodies keep compiling.
+        let c = parse_ok(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             state count: i32 = 0\n\
+             node Button { on click { (compound-assign *= count 2) } }\n}",
+        );
+        assert_eq!(c.root.handlers.len(), 1);
+    }
+
+    // A minimal valid 2×2 Grid wrapper used as the positive control and
+    // the base for negative mutations.
+    fn valid_grid_src(cell_body: &str) -> String {
+        format!(
+            ";wasamo-ir v0\ncomponent C inherits W {{\n\
+             node Grid {{\n\
+               tracks columns = 1* 1*\n\
+               tracks rows = 1* 1*\n\
+               {cell_body}\n\
+             }}\n}}"
+        )
+    }
+
+    #[test]
+    fn grid_positive_control_validates() {
+        // Fixed + weighted-star tracks, a spanning Cell and three
+        // single-cell Cells — all placements distinct, all in range.
+        let c = parse_ok(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             node Grid {\n\
+               tracks columns = 180 1* 2*\n\
+               tracks rows = 1* 1*\n\
+               node Cell { prop row = 0 prop column = 0 prop column-span = 3 node Text {} }\n\
+               node Cell { prop row = 1 prop column = 0 node Text {} }\n\
+               node Cell { prop row = 1 prop column = 1 prop h-align = center node Text {} }\n\
+               node Cell { prop row = 1 prop column = 2 node Text {} }\n\
+             }\n}",
+        );
+        assert_eq!(c.root.children.len(), 4);
+    }
+
+    // ── min row / column count ──────────────────────────────────────────
+
+    #[test]
+    fn grid_missing_column_track_rejected() {
+        assert_validate_err(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             node Grid {\n\
+               tracks rows = 1*\n\
+               node Cell { prop row = 0 prop column = 0 node Text {} }\n\
+             }\n}",
+            "at least one column track",
+        );
+    }
+
+    #[test]
+    fn grid_missing_row_track_rejected() {
+        assert_validate_err(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             node Grid {\n\
+               tracks columns = 1*\n\
+               node Cell { prop row = 0 prop column = 0 node Text {} }\n\
+             }\n}",
+            "at least one row track",
+        );
+    }
+
+    // ── track value range ───────────────────────────────────────────────
+
+    #[test]
+    fn grid_zero_fixed_track_rejected() {
+        assert_validate_err(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             node Grid {\n\
+               tracks columns = 0\n\
+               tracks rows = 1*\n\
+               node Cell { prop row = 0 prop column = 0 node Text {} }\n\
+             }\n}",
+            "fixed track size must be a positive integer",
+        );
+    }
+
+    #[test]
+    fn grid_star_weight_over_cap_rejected() {
+        assert_validate_err(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             node Grid {\n\
+               tracks columns = 1025*\n\
+               tracks rows = 1*\n\
+               node Cell { prop row = 0 prop column = 0 node Text {} }\n\
+             }\n}",
+            "star weight must be in [1, 1024]",
+        );
+    }
+
+    // ── placement value range ───────────────────────────────────────────
+
+    #[test]
+    fn grid_cell_column_out_of_range_rejected() {
+        assert_validate_err(
+            &valid_grid_src("node Cell { prop row = 0 prop column = 2 node Text {} }"),
+            "`Cell.column` 2 is out of range [0, 2)",
+        );
+    }
+
+    #[test]
+    fn grid_cell_row_out_of_range_rejected() {
+        assert_validate_err(
+            &valid_grid_src("node Cell { prop row = 5 prop column = 0 node Text {} }"),
+            "`Cell.row` 5 is out of range [0, 2)",
+        );
+    }
+
+    // ── span value range ────────────────────────────────────────────────
+
+    #[test]
+    fn grid_cell_zero_span_rejected() {
+        assert_validate_err(
+            &valid_grid_src(
+                "node Cell { prop row = 0 prop column = 0 prop column-span = 0 node Text {} }",
+            ),
+            "`Cell.column-span` must be a positive integer",
+        );
+    }
+
+    #[test]
+    fn grid_cell_span_exceeds_grid_rejected() {
+        assert_validate_err(
+            &valid_grid_src(
+                "node Cell { prop row = 0 prop column = 1 prop column-span = 2 node Text {} }",
+            ),
+            "column span exceeds the grid",
+        );
+    }
+
+    // ── Cell child-count ────────────────────────────────────────────────
+
+    #[test]
+    fn grid_cell_zero_content_children_rejected() {
+        assert_validate_err(
+            &valid_grid_src("node Cell { prop row = 0 prop column = 0 }"),
+            "`Cell` requires exactly one content child, got 0",
+        );
+    }
+
+    #[test]
+    fn grid_cell_two_content_children_rejected() {
+        assert_validate_err(
+            &valid_grid_src("node Cell { prop row = 0 prop column = 0 node Text {} node Text {} }"),
+            "`Cell` requires exactly one content child, got 2",
+        );
+    }
+
+    // ── same-cell / overlapping-rectangle conflict ──────────────────────
+
+    #[test]
+    fn grid_same_cell_conflict_rejected() {
+        assert_validate_err(
+            &valid_grid_src(
+                "node Cell { prop row = 0 prop column = 0 node Text {} }\n\
+                 node Cell { prop row = 0 prop column = 0 node Text {} }",
+            ),
+            "overlaps an earlier Cell's rectangle",
+        );
+    }
+
+    #[test]
+    fn grid_overlapping_span_conflict_rejected() {
+        // A 1×2 spanning Cell at (0,0)-(0,1) overlaps a single Cell at
+        // (0,1).
+        assert_validate_err(
+            &valid_grid_src(
+                "node Cell { prop row = 0 prop column = 0 prop column-span = 2 node Text {} }\n\
+                 node Cell { prop row = 0 prop column = 1 node Text {} }",
+            ),
+            "overlaps an earlier Cell's rectangle",
+        );
+    }
+
+    #[test]
+    fn grid_multi_cell_omitted_placement_collides_at_origin() {
+        // Runtime validate() does not enforce the compile-time-only
+        // multi-Cell placement-presence rule; two Cells omitting `row` /
+        // `column` both default to (0, 0) and are caught by the overlap
+        // gate (DD-M3-P5-006 defense-in-depth).
+        assert_validate_err(
+            &valid_grid_src(
+                "node Cell { node Text {} }\n\
+                 node Cell { node Text {} }",
+            ),
+            "overlaps an earlier Cell's rectangle",
+        );
+    }
+
+    // ── alignment vocabulary ────────────────────────────────────────────
+
+    #[test]
+    fn grid_cell_unknown_alignment_rejected() {
+        assert_validate_err(
+            &valid_grid_src(
+                "node Cell { prop row = 0 prop column = 0 prop h-align = middle node Text {} }",
+            ),
+            "`Cell.h-align` must be one of start, center, end, stretch",
+        );
+    }
+
+    // ── non-Cell Grid child / Cell outside Grid ─────────────────────────
+
+    #[test]
+    fn grid_non_cell_child_rejected() {
+        assert_validate_err(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             node Grid {\n\
+               tracks columns = 1*\n\
+               tracks rows = 1*\n\
+               node Text {}\n\
+             }\n}",
+            "children must be wrapped in `Cell`",
+        );
+    }
+
+    #[test]
+    fn cell_outside_grid_rejected() {
+        assert_validate_err(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             node VStack { node Cell { prop row = 0 prop column = 0 node Text {} } }\n}",
+            "`Cell` is only valid as a direct child of a `Grid`",
+        );
+    }
+
+    #[test]
+    fn grid_node_without_tracks_rejected() {
+        // A `Grid` node with no `tracks` line carries no kind_payload and
+        // is rejected (min-shape defense-in-depth).
+        assert_validate_err(
+            ";wasamo-ir v0\ncomponent C inherits W { node Grid {} }",
+            "requires `columns:` and `rows:` track lists",
+        );
     }
 }

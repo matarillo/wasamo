@@ -190,7 +190,7 @@ Discharges ADR
       children; payload-less runtime `Token::Star` +
       whitespace-insensitive `tracks` parse; `validate_phase5` routes by
       kind and skips `Cell` as a standalone node.
-- [ ] Materialise `Grid` as a runtime widget kind backed by
+- [x] Materialise `Grid` as a runtime widget kind backed by
       `KindPayload::Grid { columns, rows }` per DD-M3-P5-001 carrier
       c1 (`IrProp.value` stays strictly `IrLiteral`). Runtime loader
       parses the Phase-5 textual IR shape produced by `wasamoc` in
@@ -201,12 +201,21 @@ Discharges ADR
       (log.md T2 R-D entry), and **remove the T2-era
       `#[allow(dead_code)]` forward-pointers** on `LayoutNode::grid`
       / `layout::TrackSize` once production has a caller.
-- [ ] `Cell` IR-loader path reads placement / span / alignment from
+      Runtime `tokenize` gained a payload-less `Token::Star` and
+      `parse_node` a `tracks <axis> = …` arm
+      (`parse_tracks_line`); `WidgetData::Grid` stores the layout
+      mirror types and `WidgetNode::grid` installs the outer-bounds
+      `InsetClip`; `build_layout_tree` Grid arm clones into
+      `LayoutNode::grid`; both `#[allow(dead_code)]` removed.
+- [x] `Cell` IR-loader path reads placement / span / alignment from
       standard `IrProp` entries (Int + Ident literals) and arranges
       each Cell's single content child as Grid's effective layout
       child. `Cell` is **not** registered in the runtime widget
-      catalog.
-- [ ] Implement runtime `validate()` defense-in-depth per
+      catalog. `extract_cell_placement` / `extract_alignment_prop`
+      build the per-Cell `CellPlacement`; `build_node` branches the
+      Grid child loop to flatten each Cell's single content child
+      (R-B Decision 2); `construct_widget` has no `Cell` arm.
+- [x] Implement runtime `validate()` defense-in-depth per
       DD-M3-P5-006 invariant table (track value range; placement /
       span value range; Cell single-content-child; same-cell /
       overlapping-rectangle conflict; alignment-value vocabulary;
@@ -215,7 +224,16 @@ Discharges ADR
       **reject-at-validate**, not clamp-at-arrange (the only
       layout-time gate is T2's `LayoutError::GridUnboundedStarAxis`).
       No `docs/abi_spec.md` change and no new ABI tag.
-- [ ] Add pure-logic tests covering ADR evidence item (3).
+      `validate_phase5_node_invariants` / `validate_grid_invariants`
+      / `validate_grid_cell` added and wired into `validate()`;
+      `docs/abi_spec.md` untouched.
+- [x] Add pure-logic tests covering ADR evidence item (3).
+      22 new `ir_loader` tests (tracks parse incl. bare-`*` + `*=`
+      regression; positive control; min row/col; track range;
+      placement range; span range; Cell child-count; same-cell /
+      overlapping-span conflict; multi-Cell omitted-placement
+      origin collision; alignment vocabulary; non-Cell Grid child;
+      Cell-outside-Grid; tracks-less Grid).
 
 ### T4 — Windows-runtime layout and Visual evidence
 
