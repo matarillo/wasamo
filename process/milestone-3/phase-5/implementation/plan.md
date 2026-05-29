@@ -382,17 +382,43 @@ phase-close mechanical work (spec / plan status flips) lands in T7,
 matching the Phase 4 T5 / T6 split rationale.
 
 - [ ] Owner runs `target/release/gallery-rust.exe` (or builds-and-
-      runs `cargo run -p gallery-rust` if the T5 binary is no longer
-      on disk). Observation points:
-      - column tracks render at the declared widths (fixed and
-        proportional);
+      runs `cargo run -p gallery-rust --release` if the T5 binary is no
+      longer on disk). The window title reads **"Wasamo"**, not the
+      `.ui` `title: "Gallery"`, because Window-title wiring is the
+      unresolved M3-Phase 4 R1 carried to Phase 6 (FD-E / `m3-plan.md`
+      Phase 6 row Notes) — a **known residual, NOT a Grid-smoke
+      pass/fail criterion**. The host is DPI-unaware on this
+      125%-scaled box (logical 800×600 bitmap-stretched to physical
+      1000×750); this affects only assistant screenshot tooling
+      (capture must be per-monitor-DPI-aware), not the owner's direct
+      on-screen viewing. Observation points:
+      - column tracks render at the declared widths (fixed `C0` ≈ half
+        the `C1` star width; `C2` star ≈ 2× `C1`);
       - the spanning header `Cell` spans all three columns;
       - the three middle-row `Cell`s occupy separate columns;
       - the spanning footer `Cell` spans all three columns;
-      - Grid outer-bounds clip is visible when a Cell's content
-        intentionally overflows;
-      - document-order paint order is observed when overlapping
-        content occurs.
+      - Grid outer-bounds clip is visible: the footer `aspect: 4:1`
+        Box (≈190 logical px tall) is cut at the Grid's bottom edge and
+        must **not** bleed into the gap / Photo row below.
+      - document-order paint order under overlapping content is **not
+        exercisable in this gallery slice**, so it is **not an
+        owner-visible observation point here**. The slice's only
+        overflow (the footer) leaves the Grid *downward* and is removed
+        by the outer-bounds clip, so no two Cells' content overlap (the
+        nine grid cells are fully covered by the header span / three
+        middle Cells / footer span — no empty target, and per-cell clip
+        is absent per DD-M3-P5-005). The layout-side overlap-geometry ↔
+        document-order correspondence is covered by T2
+        (`grid_arrange_overflowing_cells_overlap_in_document_order`);
+        the **visible pixel paint-precedence stays unobserved**,
+        accepted on the layout-side substrate + Visual-tree
+        insertion-order assumption. The divergence from the ADR/plan
+        "visible proof" framing is dispositioned in T7 evidence
+        aggregation (Codex review 2026-05-29). The T5 retro's
+        "中段/footer overlap" prediction was geometrically incorrect;
+        corrected in `t6.md`. Adding a dedicated overlap fixture (not
+        polluting the gallery slice) is the preferred path if a visible
+        demo is later wanted.
 - [ ] Owner explicitly accepts the smoke result, or records a fail
       observation note. **If smoke fails:** the implementation fix
       lands additively on the T6 branch (new commits); the smoke
