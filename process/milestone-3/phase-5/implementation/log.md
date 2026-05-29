@@ -459,7 +459,14 @@
   ScrollView slice are left byte-identical. Slice shape (FD-H minimum
   visible-proof):
   - 3 rows × 3 columns, mixed fixed + weighted-star per axis
-    (`columns: 120 1* 2*`, `rows: 48 1* 64`);
+    (`columns: 120 1* 2*`, `rows: 36 1* 36`). The row fixed tracks were
+    reduced from an initial `48 1* 64` to `36 1* 36` after Codex review #2
+    (Finding 1): under the gallery VStack's modest height allocation the
+    larger fixed rows starved the `1*` middle (star) row to a thin strip
+    with unreadable labels, weakening the FD-H "fixed and star tracks
+    visible in the real `.ui`" proof. Smaller fixed rows hand the
+    remaining vertical space to the star row so the middle-row Cells are
+    legibly sized in the screenshot;
   - a header `Cell` (`row: 0 column: 0 column-span: 3`) and a footer
     `Cell` (`row: 2 column: 0 column-span: 3`) each spanning all three
     columns (column-span exercised in real `.ui`; row-span discharged by
@@ -471,7 +478,7 @@
     its content with `v-align: start` and uses a wide `aspect: 4:1` Box.
     On the bounded width axis the Box stretches to the spanning cell width
     (≈ full Grid width); `aspect: 4:1` then derives a height of
-    width / 4, which exceeds the fixed 64 px footer row, so the content
+    width / 4, which exceeds the fixed 36 px footer row, so the content
     overflows **below** the footer cell — and, since row 2 is the last
     row, below the Grid's outer rectangle. That overflow is the live
     target the T6 owner smoke uses to observe the DD-M3-P5-005
@@ -496,21 +503,26 @@
   `MainWindowHandle`, bring the window foreground + topmost, then
   `Graphics.CopyFromScreen` over its `GetWindowRect` (CopyFromScreen, not
   `PrintWindow`, because the Visual-Layer / DirectComposition client area
-  reads back blank under `PrintWindow`). Artifact:
-  [artifacts/t5-gallery-grid-launch.png](./artifacts/t5-gallery-grid-launch.png)
-  (800×600 window capture). Assistant analysis of the image confirms:
+  reads back blank under `PrintWindow`). Artifact stored per workflow.md
+  §5.4 (`implementation/evidence/`, `tN-<purpose>.<ext>`):
+  [evidence/t5-gallery-grid-launch.png](./evidence/t5-gallery-grid-launch.png)
+  (800×600 window capture; re-captured after the Finding-1 row-track fix).
+  Assistant analysis of the image confirms:
   - the initial screen is **non-blank** (Composition rendering works);
   - the header `Cell` spans all three columns (the full-width band reads
     "Header (spans 3 columns)");
-  - the three middle-row `Cell`s render as three separate colour segments
-    (the `1*` star row is compressed thin inside the VStack-allocated Grid
-    height but the column separation is visible);
+  - the three middle-row `Cell`s render as three separate columns with
+    **legible** labels — "C0 fixed 120" (the narrow fixed 120 px column),
+    "C1 star 1*", and "C2 star 2*" with the `2*` column visibly ~2× the
+    width of the `1*` column, so the mixed fixed + weighted-star column
+    proof and the vertical star row are both clearly visible;
   - the footer `Cell` spans the full width (magenta band) and its
     `aspect: 4:1` content overflows downward, cut off where the WrapPanel
     begins — the **Grid outer-bounds clip baseline** for the T6 owner
     smoke;
   - the untouched Phase 3 WrapPanel slice ("Photo 1–10") and the buttons
-    still render.
+    still render. (The mica title bar shows the editor behind it — expected
+    `backdrop: mica` translucency, not the opaque client area.)
 
   This assistant analysis is a **pre-T6 automated baseline**, not a
   replacement for the owner's visible-correctness judgment (T6 per FD-I);

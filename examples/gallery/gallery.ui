@@ -11,7 +11,7 @@ component Gallery inherits Window {
 
         Grid {
             columns: 120 1* 2*
-            rows: 48 1* 64
+            rows: 36 1* 36
 
             Cell {
                 row: 0 column: 0 column-span: 3
@@ -25,21 +25,21 @@ component Gallery inherits Window {
                 row: 1 column: 0
                 Box {
                     fill: #336699cc
-                    Text { text: "R1 C0 (fixed 120)" }
+                    Text { text: "C0 fixed 120" }
                 }
             }
             Cell {
                 row: 1 column: 1
                 Box {
                     fill: #669933cc
-                    Text { text: "R1 C1 (1*)" }
+                    Text { text: "C1 star 1*" }
                 }
             }
             Cell {
                 row: 1 column: 2
                 Box {
                     fill: #996633cc
-                    Text { text: "R1 C2 (2*)" }
+                    Text { text: "C2 star 2*" }
                 }
             }
 
