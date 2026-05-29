@@ -1,8 +1,11 @@
-use crate::ast::{AssignOp, Block, ComponentDef, Expr, Member, Statement, StringPart, TypeName};
+use crate::ast::{
+    AssignOp, Block, ComponentDef, Expr, Member, Statement, StringPart, TrackAxis, TrackSize,
+    TypeName,
+};
 use crate::check::Namespace;
 use crate::ir::{
     CompoundOp, HandlerExpr, InterpolationPart, IrBinding, IrComponent, IrHandler, IrLiteral,
-    IrNode, IrProp, IrState, IrType,
+    IrNode, IrProp, IrState, IrType, KindPayload, TrackSize as IrTrackSize,
 };
 
 /// Lower a checked AST to the IR representation.
@@ -93,6 +96,10 @@ fn lower_node(widget_type: &str, members: &[Member], ns: &Namespace) -> IrNode {
     let mut bindings = Vec::new();
     let mut handlers = Vec::new();
     let mut children = Vec::new();
+    // Grid track lists (DD-M3-P5-001 carrier c1). Collected outside
+    // `props` so `IrProp.value` stays strictly `IrLiteral`.
+    let mut grid_columns: Option<Vec<IrTrackSize>> = None;
+    let mut grid_rows: Option<Vec<IrTrackSize>> = None;
 
     for member in members {
         match member {
@@ -119,9 +126,28 @@ fn lower_node(widget_type: &str, members: &[Member], ns: &Namespace) -> IrNode {
             } => {
                 children.push(lower_node(type_name, child_members, ns));
             }
+            Member::GridTracks { axis, tracks, .. } => {
+                let lowered = tracks.iter().map(lower_track_size).collect();
+                match axis {
+                    TrackAxis::Columns => grid_columns = Some(lowered),
+                    TrackAxis::Rows => grid_rows = Some(lowered),
+                }
+            }
             Member::StateMember { .. } | Member::PropertyDecl { .. } => {}
         }
     }
+
+    // A Grid has both track lists by the time lowering runs (`wasamoc
+    // check` rejects a Grid missing `columns:` or `rows:`). The payload
+    // is present iff at least one track list was seen — i.e. iff this is
+    // a Grid node.
+    let kind_payload = match (grid_columns, grid_rows) {
+        (Some(columns), Some(rows)) => Some(KindPayload::Grid { columns, rows }),
+        (None, None) => None,
+        // check guarantees both-or-neither; a one-sided shape reaching
+        // lowering is a check-layer bug.
+        _ => panic!("lower_node: Grid with only one track list (check should have rejected)"),
+    };
 
     IrNode {
         widget_type: widget_type.to_string(),
@@ -129,9 +155,24 @@ fn lower_node(widget_type: &str, members: &[Member], ns: &Namespace) -> IrNode {
         bindings,
         handlers,
         children,
-        // Grid populates this in the Member::GridTracks lowering path
-        // (DD-M3-P5-001 carrier c1); every other kind leaves it None.
-        kind_payload: None,
+        kind_payload,
+    }
+}
+
+/// Lower a checked AST `TrackSize` to its IR sibling. Reached only after
+/// `wasamoc check` has rejected every invalid form, so the `InvalidFloat`
+/// / `Word` arms are defense-in-depth panics (mirroring the FloatLit /
+/// Ratio handler-RHS panics elsewhere in this module).
+fn lower_track_size(t: &TrackSize) -> IrTrackSize {
+    match t {
+        TrackSize::Fixed { value, .. } => IrTrackSize::Fixed(*value as i32),
+        TrackSize::Star { weight, .. } => IrTrackSize::Star(*weight as u32),
+        TrackSize::InvalidFloat { .. } => {
+            panic!("lower_track_size: float track size (check should have rejected)")
+        }
+        TrackSize::Word { name, .. } => {
+            panic!("lower_track_size: word track size `{name}` (check should have rejected)")
+        }
     }
 }
 
@@ -757,6 +798,102 @@ mod tests {
         for child in &w.children {
             assert_eq!(child.widget_type, "Text");
         }
+    }
+
+    // --- M3-Phase 5 T1: Grid carrier c1 lowering (DD-M3-P5-001) ---------
+    //
+    // Grid track lists lower into `KindPayload::Grid` on the Grid IrNode
+    // (not into `IrProp`); Cell wrappers lower as ordinary child IrNodes
+    // (`widget_type: "Cell"`) carrying their placement props as
+    // `IrLiteral` entries. The runtime loader flattens Cell subtrees in
+    // T3; T1 only proves the carrier shape.
+
+    fn grid_payload(node: &IrNode) -> (&[IrTrackSize], &[IrTrackSize]) {
+        match node.kind_payload.as_ref() {
+            Some(KindPayload::Grid { columns, rows }) => (columns, rows),
+            other => panic!("expected Grid kind payload, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn grid_track_lists_lower_to_kind_payload() {
+        let comp = lower_src(
+            r#"component C inherits W {
+                Grid {
+                    columns: 180 1* 2*
+                    rows: 1* 1*
+                    Cell { row: 0 column: 0 Text { text: "x" } }
+                }
+            }"#,
+        );
+        let grid = &comp.root;
+        assert_eq!(grid.widget_type, "Grid");
+        let (columns, rows) = grid_payload(grid);
+        assert_eq!(
+            columns,
+            &[
+                IrTrackSize::Fixed(180),
+                IrTrackSize::Star(1),
+                IrTrackSize::Star(2)
+            ]
+        );
+        assert_eq!(rows, &[IrTrackSize::Star(1), IrTrackSize::Star(1)]);
+        // Track lists do NOT leak into props (IrProp stays IrLiteral-only).
+        assert!(
+            grid.props
+                .iter()
+                .all(|p| p.name != "columns" && p.name != "rows"),
+            "track lists must not appear as IrProp entries: {:?}",
+            grid.props
+        );
+    }
+
+    #[test]
+    fn grid_cell_lowers_as_child_node_with_placement_props() {
+        let comp = lower_src(
+            r#"component C inherits W {
+                Grid {
+                    columns: 1* 1*
+                    rows: 1*
+                    Cell { row: 0 column: 1 h-align: center Text { text: "x" } }
+                }
+            }"#,
+        );
+        let grid = &comp.root;
+        assert_eq!(grid.children.len(), 1);
+        let cell = &grid.children[0];
+        assert_eq!(cell.widget_type, "Cell");
+        assert!(cell.kind_payload.is_none());
+        assert_eq!(
+            cell.props
+                .iter()
+                .find(|p| p.name == "row")
+                .map(|p| &p.value),
+            Some(&IrLiteral::Int(0))
+        );
+        assert_eq!(
+            cell.props
+                .iter()
+                .find(|p| p.name == "column")
+                .map(|p| &p.value),
+            Some(&IrLiteral::Int(1))
+        );
+        assert_eq!(
+            cell.props
+                .iter()
+                .find(|p| p.name == "h-align")
+                .map(|p| &p.value),
+            Some(&IrLiteral::Ident("center".into()))
+        );
+        // The Cell's content widget is its single child node.
+        assert_eq!(cell.children.len(), 1);
+        assert_eq!(cell.children[0].widget_type, "Text");
+    }
+
+    #[test]
+    fn non_grid_node_has_no_kind_payload() {
+        let comp = lower_src("component C inherits W { VStack { Text {} } }");
+        assert!(comp.root.kind_payload.is_none());
     }
 
     #[test]

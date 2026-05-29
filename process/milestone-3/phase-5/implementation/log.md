@@ -111,5 +111,60 @@
   `wasamoc` emit bullet and the T3 runtime-loader bullet, not in this
   spike; the shared textual IR shape produced by T1 emit feeds the T7
   `dsl_spec.md` §8 fold per the plan.
+
+- **T1 — R-C construction-site discipline + carrier-c1 textual IR
+  shape (2026-05-29).** Settles the two items the R-A spike deferred
+  to the implementation bullets.
+
+  **R-C disposition: explicit field, no `Default`.** Adding
+  `IrNode.kind_payload: Option<KindPayload>` (DD-M3-P5-001 carrier c1)
+  touches 5 construction sites workspace-wide: 1 in `wasamoc` lowering
+  ([`wasamoc/src/lower.rs`](../../../../wasamoc/src/lower.rs) — the
+  Grid arm sets `Some(KindPayload::Grid { .. })`, every other kind
+  `None`), 1 production site + 3 round-trip-test sites in the runtime
+  loader ([`wasamo-runtime/src/ir_loader.rs`](../../../../wasamo-runtime/src/ir_loader.rs)
+  — all `None`; T3 sets the Grid payload). The IR types deliberately
+  derive **no** `Default` (matching the existing no-`Default` style —
+  no `..Default::default()` appears anywhere in the codebase today),
+  so the new field surfaces every site at compile time rather than
+  silently defaulting. The R-A spike risk-table option "derive
+  `Default` / add an `IrNode::new` builder" was rejected on that
+  consistency ground: a compile error at each site is the desired
+  forcing function for a structural IR change.
+
+  **Carrier-c1 textual IR shape (T7 §8 fold input).** `wasamoc emit`
+  writes Grid track lists as keyword-led lines at the top of the
+  Grid node body, parallel to the existing `prop` / `bind` / `on`
+  line forms:
+
+  ```text
+  node Grid {
+      tracks columns = 180 1* 2*
+      tracks rows = 1* 1*
+      node Cell {
+          prop row = 0
+          prop column = 0
+          node Text { prop text = "header" }
+      }
+  }
+  ```
+
+  - `tracks <axis> = <track-list>` where `<axis>` is `columns` /
+    `rows` and `<track-list>` is a space-separated sequence of fixed
+    integers and `<weight>*` star tokens. Unit star is canonicalised
+    to `1*` (the IR weight is explicit; mirrors the canonical
+    color-emit alpha normalisation). Track lists never appear as
+    `prop` entries — the carrier-c1 invariant (`IrProp.value` stays
+    strictly `IrLiteral`).
+  - `Cell` emits as an ordinary `node Cell { … }` subtree carrying
+    `prop row`/`column`/`row-span`/`column-span`/`h-align`/`v-align`
+    as standard `IrLiteral` entries (Int + Ident). The runtime loader
+    flattens Cell subtrees into Grid's effective children + per-Cell
+    placement in T3; T1 only fixes the emit shape.
+
+  This textual shape is the concrete target for the T3 runtime-loader
+  `tracks` parse and the T7 `dsl_spec.md` §8 grammar / AST fold (both
+  deferred from Moment 1 because the carrier's textual form pins at
+  implementation time).
 </content>
 </invoke>

@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::ast::{ComponentDef, Expr, Member, QualifiedName, Span, TypeName};
+use crate::ast::{ComponentDef, Expr, Member, QualifiedName, Span, TrackAxis, TrackSize, TypeName};
 use crate::diagnostic::Diagnostic;
 
 const KNOWN_WIDGET_TYPES: &[&str] = &[
@@ -12,7 +12,29 @@ const KNOWN_WIDGET_TYPES: &[&str] = &[
     "Box",
     "WrapPanel",
     "ScrollView",
+    "Grid",
 ];
+
+/// Attribute names a `Cell` may carry (DD-M3-P5-001 / DD-M3-P5-005).
+/// `row` / `column` are placement; `row-span` / `column-span` are span;
+/// `h-align` / `v-align` are per-cell alignment. Any other PropertyBind
+/// on a `Cell` is an unknown-attribute reject (DD-M3-P5-006).
+const CELL_ATTRS: &[&str] = &[
+    "row",
+    "column",
+    "row-span",
+    "column-span",
+    "h-align",
+    "v-align",
+];
+
+/// Alignment vocabulary for `Cell.h-align` / `Cell.v-align`
+/// (DD-M3-P5-005). `stretch` is the default; the other three position
+/// the content within the resolved cell rectangle.
+const ALIGN_VALUES: &[&str] = &["start", "center", "end", "stretch"];
+
+/// Per-axis weighted-star upper bound (DD-M3-P5-002 / DD-M3-P5-006).
+const STAR_WEIGHT_MAX: i64 = 1024;
 
 /// WrapPanel's three constant-only `i32` attributes per dsl_spec §4.10
 /// (DD-M3-P3-003 / DD-M3-P3-004). Listed in a single table so the
@@ -530,6 +552,523 @@ fn check_box_child_count(
     }
 }
 
+/// Reject a `Cell` that appears outside a `Grid` parent (DD-M3-P5-001 /
+/// DD-M3-P5-006). `Cell` is a Grid-owned IR-only wrapper with no
+/// general-purpose use; the diagnostic names the offending position.
+fn check_cell_outside_grid(
+    enclosing_widget: Option<&str>,
+    span: &Span,
+    filename: &str,
+    diags: &mut Vec<Diagnostic>,
+) {
+    let position = match enclosing_widget {
+        Some(w) => format!("inside `{}`", w),
+        None => "at component level".to_string(),
+    };
+    diags.push(error(
+        filename,
+        span,
+        format!(
+            "`Cell` is only valid as a direct child of a `Grid` (dsl_spec §4.12); found {}",
+            position
+        ),
+    ));
+}
+
+/// A resolved Cell rectangle in track coordinates, used for overlap
+/// detection. Populated only when placement and span all validate.
+struct CellRect {
+    row: i64,
+    column: i64,
+    row_span: i64,
+    column_span: i64,
+}
+
+/// Validate a `Grid` widget body (DD-M3-P5-001 .. DD-M3-P5-006). This is
+/// the Grid-level pass: Cell placement bounds depend on the declared
+/// track counts and overlap detection compares all cells, so every
+/// member is examined together. Per-cell intra-cell validation is
+/// dispatched from here too — `Cell` is only valid inside a `Grid`, so
+/// all Cell diagnostics live in one place.
+fn check_grid(members: &[Member], grid_span: &Span, filename: &str, diags: &mut Vec<Diagnostic>) {
+    // 1. Track lists — validate values; record declared track counts.
+    let mut columns_len: Option<usize> = None;
+    let mut rows_len: Option<usize> = None;
+    for m in members {
+        if let Member::GridTracks { axis, tracks, span } = m {
+            check_grid_track_list(tracks, filename, diags);
+            let slot = match axis {
+                TrackAxis::Columns => &mut columns_len,
+                TrackAxis::Rows => &mut rows_len,
+            };
+            if slot.is_some() {
+                diags.push(error(
+                    filename,
+                    span,
+                    format!("duplicate `{}:` track list on Grid", axis.attr_name()),
+                ));
+            } else {
+                *slot = Some(tracks.len());
+            }
+        }
+    }
+
+    // 2. Minimum shape — both track lists present (DD-M3-P5-001).
+    if columns_len.is_none() {
+        diags.push(error(
+            filename,
+            grid_span,
+            "`Grid` requires a `columns:` track list (dsl_spec §4.12)",
+        ));
+    }
+    if rows_len.is_none() {
+        diags.push(error(
+            filename,
+            grid_span,
+            "`Grid` requires a `rows:` track list (dsl_spec §4.12)",
+        ));
+    }
+
+    // 3. Collect Cells; reject any non-Cell / non-track member.
+    let mut cells: Vec<(&[Member], &Span)> = Vec::new();
+    for m in members {
+        match m {
+            Member::GridTracks { .. } => {}
+            Member::WidgetDecl {
+                type_name,
+                members: cm,
+                span,
+            } if type_name == "Cell" => {
+                cells.push((cm, span));
+            }
+            Member::WidgetDecl {
+                type_name, span, ..
+            } => {
+                diags.push(error(
+                    filename,
+                    span,
+                    format!(
+                        "Grid children must be wrapped in `Cell` (dsl_spec §4.12); found `{}`",
+                        type_name
+                    ),
+                ));
+            }
+            Member::PropertyBind { name, span, .. } => {
+                diags.push(error(
+                    filename,
+                    span,
+                    format!(
+                        "unknown Grid attribute `{}`; Grid declares only `columns:` and `rows:` (dsl_spec §4.12)",
+                        name
+                    ),
+                ));
+            }
+            Member::SignalHandler { span, .. } => {
+                diags.push(error(filename, span, "`Grid` takes no signal handlers"));
+            }
+            Member::StateMember { .. } | Member::PropertyDecl { .. } => {}
+        }
+    }
+
+    // 4. Per-cell validation + rectangle collection. The single-Cell
+    //    escape clause (DD-M3-P5-001 placement-default Option A) lets a
+    //    lone Cell omit `row:` / `column:`.
+    let single_cell = cells.len() == 1;
+    let mut rects: Vec<(CellRect, &Span)> = Vec::new();
+    for (cell_members, cell_span) in &cells {
+        if let Some(rect) = check_cell(
+            cell_members,
+            cell_span,
+            single_cell,
+            columns_len,
+            rows_len,
+            filename,
+            diags,
+        ) {
+            rects.push((rect, cell_span));
+        }
+    }
+
+    // 5. Same-cell / overlapping-rectangle conflict (DD-M3-P5-003).
+    check_cell_overlaps(&rects, filename, diags);
+}
+
+/// Validate one Grid track list's values (DD-M3-P5-002 / DD-M3-P5-006).
+/// Shape was settled by the parser; this pass enforces value ranges and
+/// rejects the reserved-future `auto`, floats, and unknown words.
+fn check_grid_track_list(tracks: &[TrackSize], filename: &str, diags: &mut Vec<Diagnostic>) {
+    for t in tracks {
+        match t {
+            TrackSize::Fixed { value, span } => {
+                if *value < 1 {
+                    diags.push(error(
+                        filename,
+                        span,
+                        format!(
+                            "fixed track size must be a positive integer (got {}); 0 and negative tracks are rejected (dsl_spec §4.12)",
+                            value
+                        ),
+                    ));
+                } else if *value > i32::MAX as i64 {
+                    diags.push(error(
+                        filename,
+                        span,
+                        format!("fixed track size {} is out of range", value),
+                    ));
+                }
+            }
+            TrackSize::Star { weight, span } => {
+                if *weight < 1 {
+                    diags.push(error(
+                        filename,
+                        span,
+                        format!(
+                            "star weight must be >= 1 (got {}); `0*` and negative weights are rejected (dsl_spec §4.12)",
+                            weight
+                        ),
+                    ));
+                } else if *weight > STAR_WEIGHT_MAX {
+                    diags.push(error(
+                        filename,
+                        span,
+                        format!(
+                            "star weight must not exceed {} (got {}); express larger proportions with additional tracks (dsl_spec §4.12)",
+                            STAR_WEIGHT_MAX, weight
+                        ),
+                    ));
+                }
+            }
+            TrackSize::InvalidFloat { span } => {
+                diags.push(error(
+                    filename,
+                    span,
+                    "floating-point track sizes are not valid in M3-Phase 5; use an integer (fixed px) or `n*` (weighted star) (dsl_spec §4.12)",
+                ));
+            }
+            TrackSize::Word { name, span } => {
+                if name == "auto" {
+                    diags.push(error(
+                        filename,
+                        span,
+                        "`auto` track sizing is reserved for a future phase and is not available in M3-Phase 5; use a fixed (integer px) or weighted-star (`n*`) track (dsl_spec §4.12)",
+                    ));
+                } else {
+                    diags.push(error(
+                        filename,
+                        span,
+                        format!(
+                            "unknown track size token `{}`; expected an integer (fixed px) or `n*` (weighted star) (dsl_spec §4.12)",
+                            name
+                        ),
+                    ));
+                }
+            }
+        }
+    }
+}
+
+/// Validate one `Cell` body (DD-M3-P5-001 / DD-M3-P5-003 / DD-M3-P5-005 /
+/// DD-M3-P5-006). Returns the resolved rectangle when placement and span
+/// all validate, so the Grid pass can detect overlaps.
+#[allow(clippy::too_many_arguments)]
+fn check_cell(
+    members: &[Member],
+    cell_span: &Span,
+    single_cell: bool,
+    columns_len: Option<usize>,
+    rows_len: Option<usize>,
+    filename: &str,
+    diags: &mut Vec<Diagnostic>,
+) -> Option<CellRect> {
+    // Single content child (DD-M3-P5-001).
+    let child_count = members
+        .iter()
+        .filter(|m| matches!(m, Member::WidgetDecl { .. }))
+        .count();
+    if child_count != 1 {
+        diags.push(error(
+            filename,
+            cell_span,
+            format!(
+                "`Cell` requires exactly one content child (found {}); wrap multiple widgets in a container such as `Cell {{ VStack {{ … }} }}` (dsl_spec §4.12)",
+                child_count
+            ),
+        ));
+    }
+
+    // Placement / span / alignment attributes; unknown attributes rejected.
+    let mut row_present = false;
+    let mut column_present = false;
+    let mut row: Option<i64> = None;
+    let mut column: Option<i64> = None;
+    let mut row_span: Option<i64> = Some(1);
+    let mut column_span: Option<i64> = Some(1);
+    for m in members {
+        if let Member::PropertyBind { name, value, span } = m {
+            match name.as_str() {
+                "row" => {
+                    row_present = true;
+                    row = check_cell_index(name, value, span, filename, diags);
+                }
+                "column" => {
+                    column_present = true;
+                    column = check_cell_index(name, value, span, filename, diags);
+                }
+                "row-span" => row_span = check_cell_span(name, value, span, filename, diags),
+                "column-span" => column_span = check_cell_span(name, value, span, filename, diags),
+                "h-align" | "v-align" => check_cell_align(name, value, span, filename, diags),
+                _ => diags.push(error(
+                    filename,
+                    span,
+                    format!(
+                        "unknown `Cell` attribute `{}`; valid attributes: {} (dsl_spec §4.12)",
+                        name,
+                        CELL_ATTRS.join(", ")
+                    ),
+                )),
+            }
+        }
+    }
+
+    // Placement presence (DD-M3-P5-001 placement-default Option A): a
+    // multi-Cell Grid requires explicit `row:` / `column:`; a single-Cell
+    // Grid defaults to (0, 0).
+    let resolved_row = resolve_placement(
+        row_present,
+        row,
+        single_cell,
+        "row",
+        cell_span,
+        filename,
+        diags,
+    );
+    let resolved_col = resolve_placement(
+        column_present,
+        column,
+        single_cell,
+        "column",
+        cell_span,
+        filename,
+        diags,
+    );
+
+    // Bound checks against declared track counts (DD-M3-P5-003): the
+    // half-open rectangle must lie within the track grid.
+    if let (Some(r), Some(rs), Some(rl)) = (resolved_row, row_span, rows_len) {
+        if r + rs > rl as i64 {
+            diags.push(error(
+                filename,
+                cell_span,
+                format!(
+                    "`Cell` row span exceeds the grid: row {} + row-span {} = {} > {} declared row tracks (dsl_spec §4.12)",
+                    r, rs, r + rs, rl
+                ),
+            ));
+        }
+    }
+    if let (Some(c), Some(cs), Some(cl)) = (resolved_col, column_span, columns_len) {
+        if c + cs > cl as i64 {
+            diags.push(error(
+                filename,
+                cell_span,
+                format!(
+                    "`Cell` column span exceeds the grid: column {} + column-span {} = {} > {} declared column tracks (dsl_spec §4.12)",
+                    c, cs, c + cs, cl
+                ),
+            ));
+        }
+    }
+
+    match (resolved_row, resolved_col, row_span, column_span) {
+        (Some(row), Some(column), Some(row_span), Some(column_span)) => Some(CellRect {
+            row,
+            column,
+            row_span,
+            column_span,
+        }),
+        _ => None,
+    }
+}
+
+/// Resolve a Cell's `row` / `column` placement, applying the single-Cell
+/// (0, 0) default and rejecting a missing placement in a multi-Cell Grid.
+/// Returns the resolved index only when it is present-and-valid or
+/// defaulted; a present-but-invalid value returns `None` without a
+/// redundant "must declare" diagnostic.
+fn resolve_placement(
+    present: bool,
+    value: Option<i64>,
+    single_cell: bool,
+    axis: &str,
+    cell_span: &Span,
+    filename: &str,
+    diags: &mut Vec<Diagnostic>,
+) -> Option<i64> {
+    if present {
+        value
+    } else if single_cell {
+        Some(0)
+    } else {
+        diags.push(error(
+            filename,
+            cell_span,
+            format!(
+                "`Cell` in a multi-cell Grid must declare `{}:` (dsl_spec §4.12); only a single-Cell Grid may omit placement",
+                axis
+            ),
+        ));
+        None
+    }
+}
+
+/// Validate a `Cell` placement index (`row` / `column`): a non-negative
+/// integer literal. Returns the value when valid.
+fn check_cell_index(
+    name: &str,
+    value: &Expr,
+    span: &Span,
+    filename: &str,
+    diags: &mut Vec<Diagnostic>,
+) -> Option<i64> {
+    match value {
+        Expr::IntLit { value: v, .. } => {
+            if *v < 0 {
+                diags.push(error(
+                    filename,
+                    span,
+                    format!(
+                        "`Cell.{}` must be a non-negative integer (got {}); placement is zero-based (dsl_spec §4.12)",
+                        name, v
+                    ),
+                ));
+                None
+            } else {
+                Some(*v)
+            }
+        }
+        _ => {
+            diags.push(error(
+                filename,
+                span,
+                format!(
+                    "`Cell.{}` must be a non-negative integer literal (dsl_spec §4.12)",
+                    name
+                ),
+            ));
+            None
+        }
+    }
+}
+
+/// Validate a `Cell` span (`row-span` / `column-span`): a positive
+/// integer literal (`>= 1`). Returns the value when valid.
+fn check_cell_span(
+    name: &str,
+    value: &Expr,
+    span: &Span,
+    filename: &str,
+    diags: &mut Vec<Diagnostic>,
+) -> Option<i64> {
+    match value {
+        Expr::IntLit { value: v, .. } => {
+            if *v < 1 {
+                diags.push(error(
+                    filename,
+                    span,
+                    format!(
+                        "`Cell.{}` must be a positive integer (>= 1) (got {}) (dsl_spec §4.12)",
+                        name, v
+                    ),
+                ));
+                None
+            } else {
+                Some(*v)
+            }
+        }
+        _ => {
+            diags.push(error(
+                filename,
+                span,
+                format!(
+                    "`Cell.{}` must be a positive integer literal (dsl_spec §4.12)",
+                    name
+                ),
+            ));
+            None
+        }
+    }
+}
+
+/// Validate a `Cell` alignment value (`h-align` / `v-align`): an
+/// identifier from the alignment vocabulary (DD-M3-P5-005).
+fn check_cell_align(
+    name: &str,
+    value: &Expr,
+    span: &Span,
+    filename: &str,
+    diags: &mut Vec<Diagnostic>,
+) {
+    match value {
+        Expr::Ident { name: v, .. } => {
+            if !ALIGN_VALUES.contains(&v.as_str()) {
+                diags.push(error(
+                    filename,
+                    span,
+                    format!(
+                        "`Cell.{}` must be one of {} (got `{}`) (dsl_spec §4.12)",
+                        name,
+                        ALIGN_VALUES.join(", "),
+                        v
+                    ),
+                ));
+            }
+        }
+        _ => {
+            diags.push(error(
+                filename,
+                span,
+                format!(
+                    "`Cell.{}` expects an alignment keyword ({}) (dsl_spec §4.12)",
+                    name,
+                    ALIGN_VALUES.join(", ")
+                ),
+            ));
+        }
+    }
+}
+
+/// Detect same-cell / overlapping-rectangle conflicts among a Grid's
+/// resolved Cell rectangles (DD-M3-P5-003). Intentional overlay is
+/// ZStack's responsibility (Phase 6), not Grid's.
+fn check_cell_overlaps(rects: &[(CellRect, &Span)], filename: &str, diags: &mut Vec<Diagnostic>) {
+    for i in 0..rects.len() {
+        for j in (i + 1)..rects.len() {
+            let (a, _) = &rects[i];
+            let (b, b_span) = &rects[j];
+            if rects_overlap(a, b) {
+                diags.push(error(
+                    filename,
+                    b_span,
+                    format!(
+                        "`Cell` at (row {}, column {}) overlaps an earlier Cell's rectangle; same-cell and overlapping placements are rejected — use `ZStack` for intentional overlay (dsl_spec §4.12)",
+                        b.row, b.column
+                    ),
+                ));
+            }
+        }
+    }
+}
+
+fn rects_overlap(a: &CellRect, b: &CellRect) -> bool {
+    ranges_overlap(a.row, a.row_span, b.row, b.row_span)
+        && ranges_overlap(a.column, a.column_span, b.column, b.column_span)
+}
+
+/// Half-open `[start, start + len)` interval overlap.
+fn ranges_overlap(s1: i64, len1: i64, s2: i64, len2: i64) -> bool {
+    s1 < s2 + len2 && s2 < s1 + len1
+}
+
 /// Second pass: validate widget types, property-bind types, and name references.
 fn check_members(members: &[Member], filename: &str, ns: &Namespace, diags: &mut Vec<Diagnostic>) {
     check_members_inner(members, None, filename, ns, diags);
@@ -625,28 +1164,49 @@ fn check_members_inner(
                 members: children,
                 span,
             } => {
-                if !KNOWN_WIDGET_TYPES.contains(&type_name.as_str()) {
-                    diags.push(Diagnostic::warning(
-                        filename,
-                        span.line,
-                        span.col,
-                        format!(
-                            "unknown widget type `{}`; known types: {}",
-                            type_name,
-                            KNOWN_WIDGET_TYPES.join(", ")
-                        ),
-                    ));
+                if type_name == "Cell" {
+                    // `Cell` is an IR-only Grid wrapper (DD-M3-P5-001): it
+                    // is not a runtime widget kind and is only valid as a
+                    // direct child of a `Grid`. Its intra-cell validation
+                    // (single child, placement / span / alignment, unknown
+                    // attributes) needs Grid context (track counts, cell
+                    // count) and is performed by the enclosing Grid's
+                    // `check_grid` pass; here we only reject a `Cell` that
+                    // appears outside a `Grid`. The unknown-widget warning
+                    // is intentionally skipped (Cell is known, just
+                    // IR-only). Recurse into the Cell's content so nested
+                    // widgets are still checked.
+                    if enclosing_widget != Some("Grid") {
+                        check_cell_outside_grid(enclosing_widget, span, filename, diags);
+                    }
+                    check_members_inner(children, Some("Cell"), filename, ns, diags);
+                } else {
+                    if !KNOWN_WIDGET_TYPES.contains(&type_name.as_str()) {
+                        diags.push(Diagnostic::warning(
+                            filename,
+                            span.line,
+                            span.col,
+                            format!(
+                                "unknown widget type `{}`; known types: {}",
+                                type_name,
+                                KNOWN_WIDGET_TYPES.join(", ")
+                            ),
+                        ));
+                    }
+                    if type_name == "Box" {
+                        check_box_child_count(children, span, filename, diags);
+                    }
+                    if type_name == "WrapPanel" {
+                        check_wrappanel_aspect_only_box_warning(children, span, filename, diags);
+                    }
+                    if type_name == "ScrollView" {
+                        check_scrollview_child_count(children, span, filename, diags);
+                    }
+                    if type_name == "Grid" {
+                        check_grid(children, span, filename, diags);
+                    }
+                    check_members_inner(children, Some(type_name), filename, ns, diags);
                 }
-                if type_name == "Box" {
-                    check_box_child_count(children, span, filename, diags);
-                }
-                if type_name == "WrapPanel" {
-                    check_wrappanel_aspect_only_box_warning(children, span, filename, diags);
-                }
-                if type_name == "ScrollView" {
-                    check_scrollview_child_count(children, span, filename, diags);
-                }
-                check_members_inner(children, Some(type_name), filename, ns, diags);
             }
 
             Member::SignalHandler { body, .. } => {
@@ -655,6 +1215,15 @@ fn check_members_inner(
                     check_expr_type(&stmt.value, &stmt.span, filename, ns, diags);
                 }
             }
+
+            // Grid track-list members are validated by the enclosing
+            // Grid's `check_grid` pass (which needs all of the Grid's
+            // members together — track counts feed Cell placement bounds).
+            // The narrow parser path only emits this variant inside a Grid
+            // body, so reaching it here during the generic recursion is
+            // always under `enclosing_widget == Some("Grid")` and is a
+            // no-op to avoid double diagnostics.
+            Member::GridTracks { .. } => {}
         }
     }
 }
@@ -2091,5 +2660,390 @@ mod tests {
             "{:?}",
             errs
         );
+    }
+
+    // --- M3-Phase 5 T1: Grid / Cell Surface A2 diagnostics ---------------
+    //
+    // ADR Phase 5 verification closure evidence item (1), representative-
+    // fixture / diagnostic half (DD-M3-P5-001 .. DD-M3-P5-006). Positive
+    // controls plus a reject case per diagnostic on the surface.
+
+    /// Representative valid Grid: mixed fixed + weighted-star tracks on
+    /// both axes, a column-spanning header cell, and three middle cells.
+    const VALID_GRID: &str = r#"component C inherits W {
+        Grid {
+            columns: 180 1* 2*
+            rows: 1* 1*
+            Cell { row: 0 column: 0 column-span: 3 Text { text: "header" } }
+            Cell { row: 1 column: 0 Box { fill: #cccccc } }
+            Cell { row: 1 column: 1 h-align: center v-align: end Text { text: "x" } }
+            Cell { row: 1 column: 2 Box { fill: #cccccc } }
+        }
+    }"#;
+
+    #[test]
+    fn grid_known_widget_no_warning() {
+        let result = check_src("component C inherits W { Grid { columns: 1* rows: 1* } }");
+        assert!(
+            warnings("component C inherits W { Grid { columns: 1* rows: 1* } }").is_empty(),
+            "Grid should be a known widget type, not warn"
+        );
+        assert!(!result.has_errors(), "{:?}", result.diagnostics);
+    }
+
+    #[test]
+    fn grid_representative_fixture_accepted() {
+        let result = check_src(VALID_GRID);
+        assert!(!result.has_errors(), "{:?}", result.diagnostics);
+    }
+
+    #[test]
+    fn grid_single_cell_omits_placement_accepted() {
+        // Single-Cell escape clause (DD-M3-P5-001): a lone Cell may omit
+        // row: / column:.
+        let result = check_src(
+            r#"component C inherits W { Grid { columns: 1* rows: 1* Cell { Text { text: "x" } } } }"#,
+        );
+        assert!(!result.has_errors(), "{:?}", result.diagnostics);
+    }
+
+    #[test]
+    fn grid_row_span_accepted() {
+        // Both-axis spanning positive control (DD-M3-P5-003).
+        let result = check_src(
+            r#"component C inherits W {
+                Grid {
+                    columns: 1* 1*
+                    rows: 1* 1*
+                    Cell { row: 0 column: 0 row-span: 2 Box { fill: #cccccc } }
+                    Cell { row: 0 column: 1 Text { text: "a" } }
+                    Cell { row: 1 column: 1 Text { text: "b" } }
+                }
+            }"#,
+        );
+        assert!(!result.has_errors(), "{:?}", result.diagnostics);
+    }
+
+    #[test]
+    fn grid_missing_columns_rejected() {
+        let errs = errors(r#"component C inherits W { Grid { rows: 1* Cell { Text {} } } }"#);
+        assert!(
+            errs.iter().any(|e| e.contains("requires a `columns:`")),
+            "{:?}",
+            errs
+        );
+    }
+
+    #[test]
+    fn grid_missing_rows_rejected() {
+        let errs = errors(r#"component C inherits W { Grid { columns: 1* Cell { Text {} } } }"#);
+        assert!(
+            errs.iter().any(|e| e.contains("requires a `rows:`")),
+            "{:?}",
+            errs
+        );
+    }
+
+    #[test]
+    fn grid_fixed_track_zero_rejected() {
+        let errs = errors("component C inherits W { Grid { columns: 0 rows: 1* } }");
+        assert!(
+            errs.iter().any(
+                |e| e.contains("fixed track size must be a positive integer")
+                    && e.contains("got 0")
+            ),
+            "{:?}",
+            errs
+        );
+    }
+
+    #[test]
+    fn grid_fixed_track_negative_rejected() {
+        let errs = errors("component C inherits W { Grid { columns: -5 rows: 1* } }");
+        assert!(
+            errs.iter()
+                .any(|e| e.contains("fixed track size must be a positive integer")),
+            "{:?}",
+            errs
+        );
+    }
+
+    #[test]
+    fn grid_star_weight_zero_rejected() {
+        let errs = errors("component C inherits W { Grid { columns: 0* rows: 1* } }");
+        assert!(
+            errs.iter()
+                .any(|e| e.contains("star weight must be >= 1") && e.contains("got 0")),
+            "{:?}",
+            errs
+        );
+    }
+
+    #[test]
+    fn grid_star_weight_over_cap_rejected() {
+        let errs = errors("component C inherits W { Grid { columns: 2048* rows: 1* } }");
+        assert!(
+            errs.iter()
+                .any(|e| e.contains("must not exceed 1024") && e.contains("got 2048")),
+            "{:?}",
+            errs
+        );
+    }
+
+    #[test]
+    fn grid_auto_track_reserved_future_diagnostic() {
+        // The `auto` diagnostic must name it reserved-future, not "unknown"
+        // (DD-M3-P5-002).
+        let errs = errors("component C inherits W { Grid { columns: auto rows: 1* } }");
+        assert!(
+            errs.iter()
+                .any(|e| e.contains("`auto`") && e.contains("reserved for a future phase")),
+            "{:?}",
+            errs
+        );
+    }
+
+    #[test]
+    fn grid_float_track_rejected() {
+        let errs = errors("component C inherits W { Grid { columns: 1.5 rows: 1* } }");
+        assert!(
+            errs.iter()
+                .any(|e| e.contains("floating-point track sizes are not valid")),
+            "{:?}",
+            errs
+        );
+    }
+
+    #[test]
+    fn grid_unknown_track_token_rejected() {
+        let errs = errors("component C inherits W { Grid { columns: wibble rows: 1* } }");
+        assert!(
+            errs.iter()
+                .any(|e| e.contains("unknown track size token `wibble`")),
+            "{:?}",
+            errs
+        );
+    }
+
+    #[test]
+    fn grid_unknown_attribute_rejected() {
+        let errs = errors(
+            r#"component C inherits W { Grid { columns: 1* rows: 1* gap: 4 Cell { Text {} } } }"#,
+        );
+        assert!(
+            errs.iter()
+                .any(|e| e.contains("unknown Grid attribute `gap`")),
+            "{:?}",
+            errs
+        );
+    }
+
+    #[test]
+    fn grid_non_cell_child_rejected() {
+        let errs = errors(
+            r#"component C inherits W { Grid { columns: 1* rows: 1* Text { text: "loose" } } }"#,
+        );
+        assert!(
+            errs.iter()
+                .any(|e| e.contains("must be wrapped in `Cell`") && e.contains("`Text`")),
+            "{:?}",
+            errs
+        );
+    }
+
+    #[test]
+    fn cell_outside_grid_rejected() {
+        let errs = errors(r#"component C inherits W { VStack { Cell { Text { text: "x" } } } }"#);
+        assert!(
+            errs.iter().any(
+                |e| e.contains("`Cell` is only valid as a direct child of a `Grid`")
+                    && e.contains("inside `VStack`")
+            ),
+            "{:?}",
+            errs
+        );
+    }
+
+    #[test]
+    fn cell_at_component_level_rejected() {
+        let errs = errors(r#"component C inherits W { Cell { Text { text: "x" } } }"#);
+        assert!(
+            errs.iter()
+                .any(|e| e.contains("`Cell` is only valid") && e.contains("at component level")),
+            "{:?}",
+            errs
+        );
+    }
+
+    #[test]
+    fn cell_zero_children_rejected() {
+        let errs = errors(
+            r#"component C inherits W { Grid { columns: 1* rows: 1* Cell { row: 0 column: 0 } } }"#,
+        );
+        assert!(
+            errs.iter()
+                .any(|e| e.contains("`Cell` requires exactly one content child")
+                    && e.contains("found 0")),
+            "{:?}",
+            errs
+        );
+    }
+
+    #[test]
+    fn cell_two_children_rejected() {
+        let errs = errors(
+            r#"component C inherits W { Grid { columns: 1* rows: 1* Cell { Text {} Text {} } } }"#,
+        );
+        assert!(
+            errs.iter()
+                .any(|e| e.contains("`Cell` requires exactly one content child")
+                    && e.contains("found 2")),
+            "{:?}",
+            errs
+        );
+    }
+
+    #[test]
+    fn cell_missing_placement_in_multi_cell_rejected() {
+        let errs = errors(
+            r#"component C inherits W {
+                Grid {
+                    columns: 1* 1* rows: 1*
+                    Cell { row: 0 column: 0 Text {} }
+                    Cell { Text {} }
+                }
+            }"#,
+        );
+        assert!(
+            errs.iter().any(|e| e.contains("must declare `row:`")),
+            "{:?}",
+            errs
+        );
+        assert!(
+            errs.iter().any(|e| e.contains("must declare `column:`")),
+            "{:?}",
+            errs
+        );
+    }
+
+    #[test]
+    fn cell_negative_row_rejected() {
+        let errs = errors(
+            r#"component C inherits W { Grid { columns: 1* rows: 1* Cell { row: -1 column: 0 Text {} } } }"#,
+        );
+        assert!(
+            errs.iter()
+                .any(|e| e.contains("`Cell.row` must be a non-negative integer")
+                    && e.contains("got -1")),
+            "{:?}",
+            errs
+        );
+    }
+
+    #[test]
+    fn cell_zero_span_rejected() {
+        let errs = errors(
+            r#"component C inherits W { Grid { columns: 1* rows: 1* Cell { row: 0 column: 0 column-span: 0 Text {} } } }"#,
+        );
+        assert!(
+            errs.iter()
+                .any(|e| e.contains("`Cell.column-span` must be a positive integer")),
+            "{:?}",
+            errs
+        );
+    }
+
+    #[test]
+    fn cell_span_exceeds_grid_rejected() {
+        // column 2 + column-span 2 = 4 > 3 declared column tracks.
+        let errs = errors(
+            r#"component C inherits W { Grid { columns: 1* 1* 1* rows: 1* Cell { row: 0 column: 2 column-span: 2 Text {} } } }"#,
+        );
+        assert!(
+            errs.iter()
+                .any(|e| e.contains("column span exceeds the grid")),
+            "{:?}",
+            errs
+        );
+    }
+
+    #[test]
+    fn cell_unknown_attribute_rejected() {
+        let errs = errors(
+            r#"component C inherits W { Grid { columns: 1* rows: 1* Cell { row: 0 column: 0 weight: 3 Text {} } } }"#,
+        );
+        assert!(
+            errs.iter()
+                .any(|e| e.contains("unknown `Cell` attribute `weight`")),
+            "{:?}",
+            errs
+        );
+    }
+
+    #[test]
+    fn cell_bad_alignment_value_rejected() {
+        let errs = errors(
+            r#"component C inherits W { Grid { columns: 1* rows: 1* Cell { row: 0 column: 0 h-align: middle Text {} } } }"#,
+        );
+        assert!(
+            errs.iter()
+                .any(|e| e.contains("`Cell.h-align` must be one of") && e.contains("`middle`")),
+            "{:?}",
+            errs
+        );
+    }
+
+    #[test]
+    fn cell_alignment_vocabulary_accepted() {
+        let result = check_src(
+            r#"component C inherits W { Grid { columns: 1* rows: 1* Cell { row: 0 column: 0 h-align: start v-align: stretch Text {} } } }"#,
+        );
+        assert!(!result.has_errors(), "{:?}", result.diagnostics);
+    }
+
+    #[test]
+    fn grid_same_cell_conflict_rejected() {
+        let errs = errors(
+            r#"component C inherits W {
+                Grid {
+                    columns: 1* 1* rows: 1*
+                    Cell { row: 0 column: 0 Text {} }
+                    Cell { row: 0 column: 0 Text {} }
+                }
+            }"#,
+        );
+        assert!(errs.iter().any(|e| e.contains("overlaps")), "{:?}", errs);
+    }
+
+    #[test]
+    fn grid_overlapping_span_rejected() {
+        // A column-spanning cell overlapping a single cell in one of its
+        // covered columns (DD-M3-P5-003).
+        let errs = errors(
+            r#"component C inherits W {
+                Grid {
+                    columns: 1* 1* rows: 1*
+                    Cell { row: 0 column: 0 column-span: 2 Text {} }
+                    Cell { row: 0 column: 1 Text {} }
+                }
+            }"#,
+        );
+        assert!(errs.iter().any(|e| e.contains("overlaps")), "{:?}", errs);
+    }
+
+    #[test]
+    fn grid_adjacent_non_overlapping_cells_accepted() {
+        // Regression guard: adjacent (touching) rectangles must NOT be
+        // reported as overlapping (half-open interval semantics).
+        let result = check_src(
+            r#"component C inherits W {
+                Grid {
+                    columns: 1* 1* rows: 1*
+                    Cell { row: 0 column: 0 Text {} }
+                    Cell { row: 0 column: 1 Text {} }
+                }
+            }"#,
+        );
+        assert!(!result.has_errors(), "{:?}", result.diagnostics);
     }
 }
