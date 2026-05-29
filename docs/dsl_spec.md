@@ -1,11 +1,10 @@
 # Wasamo DSL Specification
 
-**Document version:** 1.3
-**Last updated:** 2026-05-29
+**Document version:** 1.4
+**Last updated:** 2026-05-30
 **Status:** M3-Phase 2 closed (implementation-synced); M3-Phase 3
 closed (implementation-synced); M3-Phase 4 closed
-(implementation-synced); M3-Phase 5 design accepted (implementation
-pending).
+(implementation-synced); M3-Phase 5 closed (implementation-synced).
 Covers the M2 `.ui` surface, the `state` surface keyword
 retroactively, the M3-Phase 1 `bool` scalar binding additions, the
 M3-Phase 2 Box layout primitive (with `aspect` / `fill` literal
@@ -101,6 +100,7 @@ name segments). Using either in identifier position is a parse error.
 | `PlusEq`    | `+=`                                   |                              |
 | `MinusEq`   | `-=`                                   |                              |
 | `StarEq`    | `*=`                                   |                              |
+| `Star`      | `*` (not followed by `=`)              | `*` (M3-Phase 5; bare `*` inside a Grid `columns:` / `rows:` track list, §4.12; `2*` lexes as `IntLit(2)` + adjacent `Star`, not one token; a bare `*` outside a track list is a parse error) |
 | `SlashEq`   | `/=`                                   |                              |
 | `Eq`        | `=`                                    |                              |
 
@@ -152,6 +152,7 @@ member           ::= property_decl
                   |  widget_decl
                   |  signal_handler
                   |  state_decl
+                  |  grid_track_list_member   ; M3-Phase 5; Grid body only
 
 property_decl    ::= "in-out" "property" "<" type_name ">" IDENT
                      ":" expr
@@ -161,6 +162,21 @@ state_decl       ::= "state" IDENT ":" state_type "=" expr
 property_bind    ::= IDENT ":" expr
 
 widget_decl      ::= IDENT "{" member* "}"
+
+; M3-Phase 5. A Grid `columns:` / `rows:` track list. The parser routes
+; to this rule ONLY inside a `Grid` widget body (a widget_decl whose
+; IDENT is "Grid"); elsewhere `columns:` / `rows:` stay ordinary
+; property_binds. This is a narrow Grid-specific path, not a general
+; list grammar. The "*" must be ADJACENT to the INT for a weighted star:
+; "1*" is one weighted-star track, but "1 *" is Fixed(1) then a unit
+; star. Value-range checks (Fixed >= 1, weight in [1, 1024]) and the
+; reserved-future "auto" rejection are wasamoc check's job (§4.12).
+grid_track_list_member
+                 ::= ("columns" | "rows") ":" grid_track grid_track*
+
+grid_track       ::= INT_LIT "*"   ; weighted star (INT_LIT adjacent to "*")
+                  |  INT_LIT       ; fixed track
+                  |  "*"           ; unit star (= "1*")
 
 signal_handler   ::= IDENT "=>" block
 
@@ -210,6 +226,11 @@ Within `member`, a 2-token lookahead resolves the alternative:
 | `IDENT`     | `:`          | `property_bind`   |
 | `IDENT`     | `{`          | `widget_decl`     |
 | `IDENT`     | `=>`         | `signal_handler`  |
+
+Inside a `Grid` widget body (M3-Phase 5), a `columns:` / `rows:` member
+takes the `grid_track_list_member` rule instead of `property_bind`; the
+routing is by enclosing widget type (`Grid`), resolved in
+`wasamoc/src/parser.rs`, not by the 2-token lookahead above.
 
 ---
 
@@ -977,7 +998,7 @@ not carry the viewport clip.
 
 ### 4.12 Grid layout primitive (M3-Phase 5)
 
-**Phase status:** M3-Phase 5 design accepted; implementation pending.
+**Phase status:** M3-Phase 5 closed; implementation-synced.
 
 `Grid` is a 2D layout primitive that arranges children across a
 declared row × column track matrix. Tracks are declared once on
@@ -1490,6 +1511,22 @@ Member (enum) {
     WidgetDecl    { type_name: String, members: Vec<Member> },
     SignalHandler { signal: String, body: Block },
     StateMember   { name: String, ty: TypeName, default: Expr },  // M2
+    GridTracks    { axis: TrackAxis, tracks: Vec<TrackSize> },    // M3-Phase 5
+}
+
+TrackAxis (enum) { Columns, Rows }                  // M3-Phase 5
+
+// M3-Phase 5. Permissive parse shape: the Grid track-list parser records
+// the parsed token shape for every track position (including out-of-range
+// and reserved-future forms) so `wasamoc check` emits precise diagnostics.
+// Value-range validation (Fixed >= 1, Star weight 1..=1024) and the
+// reserved-future `auto` rejection are the check layer's job, not the
+// parser's; raw values are carried at the IntLit width (i64).
+TrackSize (enum) {
+    Fixed        { value: i64 },                    // bare integer (fixed px)
+    Star         { weight: i64 },                   // `n*` or bare `*` (unit star)
+    InvalidFloat { },                               // float in track position (1.5 / 1.5*)
+    Word         { name: String },                  // bare word; `auto` = reserved-future
 }
 
 StringPart (enum) {
@@ -1671,11 +1708,53 @@ state ready: bool = false
 ```
 widget_node ::= "node" IDENT "{" node_body "}"
 
-node_body   ::= (property_set | binding | handler | widget_node)*
+node_body   ::= (track_decl | property_set | binding | handler | widget_node)*
 ```
 
 `IDENT` is the widget type (e.g. `Window`, `VStack`, `Text`, `Button`).
 Children appear as nested `node` blocks in document order.
+
+**Grid track declarations (M3-Phase 5).** A `track_decl` carries a
+`Grid` node's `columns:` / `rows:` track lists. It is emitted only on
+`Grid` nodes; the loader rejects a `tracks` line on any non-`Grid`
+node (carrier c1 per DD-M3-P5-001 — track lists live in a
+Grid-specific kind payload on the IR node, never in a `prop` entry, so
+`IrLiteral` stays the sole `property_set` carrier):
+
+```
+track_decl ::= "tracks" axis "=" track_list
+axis       ::= "columns" | "rows"
+track_list ::= track ( track )*     ; whitespace-separated, >= 1 track
+track      ::= INT                  ; fixed track, INT >= 1
+             | INT "*"              ; weighted-star track, weight in [1, 1024]
+             | "*"                  ; unit star, sugar for "1*"
+```
+
+`wasamoc` emits each axis on its own line at the top of the Grid node
+body, before any `prop` / child `node`, with the unit star
+canonicalised to `1*`:
+
+```
+node Grid {
+    tracks columns = 180 1* 2*
+    tracks rows = 1* 1*
+    node Cell {
+        prop row = 0
+        prop column = 0
+        node Text { prop text = "header" }
+    }
+}
+```
+
+Unlike the author-surface DSL (§4.12), the runtime IR `tracks` grammar
+is **whitespace-insensitive**: `INT "*"` lowers to `Star(weight)`
+whether or not the `*` is adjacent, because the author-surface
+`1*`-vs-`1 *` distinction is resolved at `wasamoc` compile time and the
+canonical machine format always emits the explicit weight. `Cell`
+placement / span / alignment ride standard `prop` lines using existing
+`INT` and `IDENT` literals; `Cell` is an IR-only node consumed by
+Grid's lowering and is not a runtime widget kind (see
+[architecture.md §6.8.7](./architecture.md#687-binding-registration-api-after-m2-dd-m2-p5-005-dd-m2-p6-007-dd-m2-p6-011-dd-m3-p1-007)).
 
 ### 8.6 Property sets
 
@@ -2006,3 +2085,4 @@ future design item.
 | 1.1     | 2026-05-25 | M3-Phase 4 ADR-accepted design draft: added §4.11 ScrollView layout primitive chapter (Phase status marker; viewport/content/offset mental model with WPF / CSS `overflow: scroll` / SwiftUI ecosystem contrast; exactly-one-child contract; `offset-y` signed `i32` literal or read-only `i32` state binding; parent-supplied viewport with no `viewport-*` attributes; pure-data measure-arrange algorithm including inner unbounded vertical measure, offset clamp, `LayoutError::ScrollViewUnboundedAxis`, and rounding contract; Visual-layer contract for the ScrollView-owned intermediate content Visual carrying `Visual.Offset = (0, -applied_y, 0)`; common-pitfalls note). Added `ScrollView` row to the §4.4 widget registry. No new grammar tokens, AST variants, IR literal/type variants, or scalar value types — Phase 4 reuses existing `i32` plumbing plus a narrow ScrollView string-to-`i32` parse / write bridge. Pending implementation re-sync at Phase 4 close. |
 | 1.2     | 2026-05-25 | M3-Phase 4 close: flipped §4.11 Phase status marker and document status to implementation-synced after T1–T6 landed (including T6 window-root Fill/Fill fix bundle) and the T7 local clean-rebuild + GitHub Actions phase-end gates passed. Folded one Phase 4 close-time spec consistency fix: §4.9 Box examples switched from the `;`-separated single-line form (parser-invalid; surfaced by T5 first build) to the parser-accepted multi-line member-per-line form, with an adjacent notation note recording that **accepting `;` as an optional member separator remains a post-Phase-4 open question** — parser-accepted examples; semicolon member separator left as post-Phase-4 open question. §4.10 common-pitfalls example dropped its `; …` continuation to match the new multi-line convention. No other implementation / spec divergence found during the close re-sync. |
 | 1.3     | 2026-05-29 | M3-Phase 5 ADR-accepted design draft: added §4.12 Grid layout primitive chapter (Phase status marker; sizing mental model with six-fact anchor and WPF / CSS Grid / Compose-SwiftUI grids / ZStack-overlay ecosystem contrast per framing decision FD-K; `Cell` single-content-child wrapper with explicit zero-based placement, both-axis spanning, and per-cell `h-align` / `v-align`; `columns:` / `rows:` track lists carrying fixed integer pixels and weighted-star tokens `n*` with `n in [1, 1024]`, parsed by a Grid-specific narrow parser path; `auto` deferred with reserved-future diagnostic; pure-data track-resolution algorithm with fixed-first + weighted-star distribution over `f32` prefix boundaries, `LayoutError::GridUnboundedStarAxis` on unbounded-star, and a reserved no-op slot for a future `auto` demand pass; Grid outer-bounds clip on Grid's own Visual via `Visual.Clip = InsetClip{0,0,0,0}` preserving the 1 WidgetNode = 1 Visual convention; document-order paint with no `z-index`; reject-at-validate dual-gate for placement / span / conflict invariants; reserved-future / common-pitfalls subsections). Added `Grid` row to the §4.4 widget registry plus a §4.4 pointer noting that `Cell` is a Grid-owned child wrapper defined in §4.12 (not a free-standing registry entry). No new grammar tokens, AST variants, `IrType` / `IrLiteral` / `PropertyValue` variants, or C ABI value tags — Grid's `Vec<TrackSize>` lives in a Grid-specific kind payload on `IrNode` and `IrProp.value` stays strictly `IrLiteral`. Folded a retroactive §8.11 spec-gap fix at owner request (review of the Moment 1 §4.12 + §6.8.7 thesis draft on 2026-05-29): the §8.11 *Loader validation policy* table previously listed only the Phase 2 `Box` child-count and `RATIO` sign dual-gates; added the Phase 3 WrapPanel non-negative attribute range (DD-M3-P3-006), the Phase 4 ScrollView single-content-child rule (DD-M3-P4-006), and the Phase 5 Grid / Cell invariant rows (DD-M3-P5-006) so the §8.11 table is now the true runtime-loader policy aggregate for M3. Pending implementation re-sync at Phase 5 close. |
+| 1.4     | 2026-05-30 | M3-Phase 5 close: flipped the §4.12 Phase status marker and the document-level status to implementation-synced after T1–T6 landed and the T7 local clean-rebuild gate passed (`cargo fmt --all -- --check` zero exit; `cargo clean` → debug + release `--workspace` build green; `cargo test --workspace` green — wasamo-runtime lib 301 + wasamoc lib 282 + wasamo-ir 16 + `grid_layout_integration` 2, all suites green). Folded the Moment-1-deferred §8 textual-IR grammar for Grid carrier c1 into §8.5: added `track_decl` to `node_body` plus a Grid track-declaration grammar (`tracks <axis> = <track-list>`, whitespace-insensitive; fixed `INT >= 1` / weighted-star `INT "*"` with weight in `[1, 1024]` / unit `*` canonicalised to `1*`) matching the landed `wasamoc` emit (T1, `emit.rs`) and runtime loader parse (T3, `ir_loader.rs`) shapes — folded into §8.5 rather than a new §8.x subsection to avoid renumbering the widely-referenced §8.9 / §8.11 / §8.12. Also re-synced §5 (AST Structure) to the landed `wasamoc/src/ast.rs`: added the `Member::GridTracks { axis, tracks }` variant plus the `TrackAxis` and `TrackSize` author-AST enums that the narrow Grid track-list parser path produces (a Moment-1 spec gap in §5 surfaced during the close re-sync; folded here per the retroactive spec-gap minimum-fold pattern with owner confirmation). Re-synced §2.2 (Token types) to the landed author-surface lexer: added the bare `*` (`Star`) token row — `wasamoc/src/lexer.rs` emits `Star` for a bare `*` (distinct from `*=` = `StarEq`; `2*` lexes as `IntLit(2)` + adjacent `Star`, not a single token), used only inside a Grid track list. Re-synced §3 (Grammar) with a Grid-specific `grid_track_list_member` rule (`("columns" | "rows") ":" grid_track { grid_track }`, with weighted-star adjacency `INT "*"` vs `INT` then `"*"`) that `wasamoc/src/parser.rs` routes to only inside a `Grid` widget body — a narrow path, not a general list grammar (both §2.2 and §3 were Moment-1 spec gaps folded under the same retroactive spec-gap minimum-fold pattern). On the **IR grammar side** (§8) no new *named* token is introduced — the `*` in the `track` rule is a quoted literal terminal. No §4.12 design / implementation divergence found during the close re-sync; no new `IrType` / `IrLiteral` / `PropertyValue` variant or C ABI change (Grid's track lists ride the `KindPayload::Grid` carrier on `IrNode`, not `IrLiteral`; the new author-surface AST forms and the `Star` lexer token lower into that carrier). `docs/abi_spec.md` re-confirmed untouched (Grid adds no host-facing ABI surface; `LayoutError::GridUnboundedStarAxis` is runtime-internal). |

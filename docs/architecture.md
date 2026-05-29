@@ -1,6 +1,6 @@
 # Wasamo Architecture
 
-**Status:** M1 complete (Phases 0-8); M2 complete (Phases 1-7) — Foundation acceptance A1-A6 discharged; M3-Phase 1, M3-Phase 2, M3-Phase 3, and M3-Phase 4 complete; M3-Phase 5 design accepted (implementation pending).
+**Status:** M1 complete (Phases 0-8); M2 complete (Phases 1-7) — Foundation acceptance A1-A6 discharged; M3-Phase 1, M3-Phase 2, M3-Phase 3, M3-Phase 4, and M3-Phase 5 complete.
 
 ---
 
@@ -982,8 +982,15 @@ appear in `PropertyValue`, and the new `LayoutError` variant below
 is host-internal. F5 (`TypedValue`) deferral is preserved.
 
 The runtime materialises Grid as a per-kind widget data shape
-holding the resolved track lists and the resolved per-Cell
-rectangles. The layout engine resolves each axis independently with
+(`WidgetData::Grid { columns, rows, cell_placements }`) holding the
+declared track lists (`Vec<TrackSize>` per axis) and the per-Cell
+placement metadata (`cell_placements`, parallel to the content
+children). It does **not** cache resolved per-Cell rectangles:
+`arrange_grid` re-derives each axis's track resolution and writes the
+resolved offset / size directly onto each content child's
+`LayoutNode` every layout pass (no arrange-result cache, unlike Phase
+4 ScrollView's `applied_offset_y`). The layout engine resolves each
+axis independently with
 a fixed-first / weighted-star distribution over `f32` prefix
 boundaries (no integer pixel snap), reports
 `LayoutError::GridUnboundedStarAxis` when star tracks meet an
