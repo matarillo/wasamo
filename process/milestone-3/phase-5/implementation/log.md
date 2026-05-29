@@ -166,5 +166,89 @@
   `tracks` parse and the T7 `dsl_spec.md` §8 grammar / AST fold (both
   deferred from Moment 1 because the carrier's textual form pins at
   implementation time).
-</content>
-</invoke>
+
+- **T2 — R-D mitigation: Grid `LayoutNode` field shape (2026-05-29).**
+  Settles [preamble.md risk R-D](./preamble.md#technical-risks-planning-time-recon)
+  and the first
+  [plan.md T2 bullet](./plan.md#t2--layout-engine-grid-track-resolution-and-arrange)
+  before the arrange implementation opens. Spot-checked against
+  [`wasamo-runtime/src/layout.rs`](../../../../wasamo-runtime/src/layout.rs)
+  (`LayoutNode`, `WidgetKind`, the `Ratio` mirror precedent) and
+  [`wasamo-ir/src/lib.rs`](../../../../wasamo-ir/src/lib.rs)
+  (`TrackSize` / `KindPayload`) at HEAD `b896f2b`.
+
+  **Decision — extend the flat `LayoutNode` struct (R-D Option:
+  flat extension, not enum-shaped refactor).** Grid continues the
+  Phase 2–4 flat-struct pattern. Three new fields are added to
+  `LayoutNode`, populated only on `WidgetKind::Grid` nodes and left
+  empty (`Vec::new()`) on every other kind, mirroring how `aspect` /
+  `item_cross_size` / `offset_y` sit dormant off-kind:
+
+  - `grid_columns: Vec<TrackSize>` — per-axis column track list.
+  - `grid_rows: Vec<TrackSize>` — per-axis row track list.
+  - `cell_placements: Vec<CellPlacement>` — parallel to
+    `LayoutNode.children`; `cell_placements[i]` is the placement of
+    content child `children[i]`. Document order = children order =
+    paint / z-order (DD-M3-P5-005 Option A).
+
+  No arrange-result cache field is added. Unlike Phase 4 ScrollView
+  (whose `applied_offset_y` cache bridges a clamp computed at arrange
+  and read by `sync_visuals`) and Phase 3 WrapPanel (whose
+  `wrap_measured_cross_bound` cache keeps the measure / arrange line
+  break in step), Grid's per-Cell content offsets are written
+  directly onto each child's `LayoutNode.offset` / `.size` by
+  `arrange_grid`, and `sync_visuals` reads those existing fields. The
+  Grid outer Visual clip (DD-M3-P5-005) is a fixed
+  `InsetClip{0,0,0,0}` requiring no measure→arrange carrier. So the
+  R-D "likely an arrange-result cache" is **not** taken: track
+  resolution is cheap, deterministic, and re-derivable, and arrange
+  is the single resolution site.
+
+  **Layout-engine-local mirror types (the `Ratio` precedent).**
+  `layout.rs` imports nothing from `wasamo-ir`; every value type it
+  consumes (`SizeConstraint`, `Alignment`, `Ratio`) is layout-local,
+  and the `WidgetData` → `LayoutNode` build boundary performs the
+  conversion (the same shape as `box_values::Ratio` →
+  `layout::Ratio`). Phase 5 follows that style rather than coupling
+  the pure layout engine to the IR crate:
+
+  - `layout::TrackSize { Fixed(i32), Star(u32) }` — structural mirror
+    of `wasamo_ir::TrackSize`; `Fixed` promoted to `f32` only inside
+    `resolve_axis_tracks` per the DD-M3-P5-004 `f32` rounding
+    contract.
+  - `layout::CellPlacement { row, column, row_span, column_span:
+    u32; h_align, v_align: Alignment }` — reuses the existing
+    `Alignment` enum (`Leading`=`start`, `Center`, `Trailing`=`end`,
+    `Stretch`), so the six new alignment identifier-literals
+    (DD-M3-P5-005) need no new layout-engine enum.
+  - `layout::AxisBound { Bounded(f32), Unbounded }` — the
+    `resolve_axis_tracks` input the DD-M3-P5-004 pseudocode names;
+    `arrange_grid` derives it from `w.is_finite()` / `h.is_finite()`.
+
+  The `WidgetData::Grid` → `LayoutNode::grid(...)` build-boundary
+  conversion (i32/u32 IR fields → these mirror types) lands in **T3**
+  alongside Grid widget-kind materialisation, exactly as Phase 4
+  added `LayoutNode::scroll_view` in T2 and wired `build_layout_tree`
+  in T3. T2 ships the constructor and the measure / arrange algorithm.
+  The T2-era `LayoutNode::grid` constructor and `layout::TrackSize`
+  carry `#[allow(dead_code)]` until T3 supplies a production caller —
+  a release (non-test) build sees no constructor otherwise, mirroring
+  the Phase 4 `scroll_view` forward-pointer. The forward-pointers are
+  removed in T3 once `build_layout_tree` constructs Grid nodes.
+
+  **Unbounded-star error timing.** `LayoutError::GridUnboundedStarAxis`
+  fires inside `resolve_axis_tracks` (consumed by `arrange_grid`),
+  mirroring Phase 4's arrange-time `ScrollViewUnboundedAxis` gate
+  rather than a measure-time gate: a measure-time `avail = INFINITY`
+  is the standard "how big do you want to be" idiom parents pass on a
+  Shrink axis, so firing at measure would reject Grids that arrange
+  to a finite cell. The pure-logic tests call `resolve_axis_tracks`
+  with `AxisBound::Unbounded` directly to cover the error line (the
+  T4 runtime-fixture downgrade clause).
+
+  **Defensive panic retained.** `resolve_axis_tracks` panics if a
+  `Star` arm is reached with `star_weight_sum == 0` (only possible
+  via a `Star(0)` that DD-M3-P5-002 / DD-M3-P5-006 reject at
+  `wasamoc check` / `validate()`). The panic guards the
+  division-by-zero the DD-M3-P5-004 algorithm would otherwise hit;
+  it is unreachable for validated IR.
