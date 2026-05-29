@@ -381,7 +381,7 @@ visible smoke is verified — and fixed if it fails — **before** any
 phase-close mechanical work (spec / plan status flips) lands in T7,
 matching the Phase 4 T5 / T6 split rationale.
 
-- [ ] Owner runs `target/release/gallery-rust.exe` (or builds-and-
+- [x] Owner runs `target/release/gallery-rust.exe` (or builds-and-
       runs `cargo run -p gallery-rust --release` if the T5 binary is no
       longer on disk). The window title reads **"Wasamo"**, not the
       `.ui` `title: "Gallery"`, because Window-title wiring is the
@@ -446,7 +446,7 @@ matching the Phase 4 T5 / T6 split rationale.
         corrected in `t6.md`. Adding a dedicated overlap fixture (not
         polluting the gallery slice) is the preferred path if a visible
         demo is later wanted.
-- [ ] Owner explicitly accepts the smoke result, or records a fail
+- [x] Owner explicitly accepts the smoke result, or records a fail
       observation note. **If smoke fails:** the implementation fix
       lands additively on the T6 branch (new commits); the smoke
       checklist above is re-run to green before T6 closes. Fix scope
@@ -456,7 +456,7 @@ matching the Phase 4 T5 / T6 split rationale.
       Moment 2 (or, if unsuitable for Moment 2, a mid-ADR addendum).
       Fix iterations stay inside T6 until the smoke checklist is
       green.
-- [ ] T6 step-end retrospective recorded at
+- [x] T6 step-end retrospective recorded at
       `process/milestone-3/phase-5/retrospectives/t6.md`
       (retrospectives.md checklist items 1-11).
 
