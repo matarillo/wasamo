@@ -311,6 +311,12 @@ fn validate_phase3_node_invariants(node: &IrNode) -> Result<(), IrLoadError> {
 // only into each Cell's content child. A `Cell` reached by the generic
 // walk is therefore necessarily outside a `Grid` and is rejected.
 fn validate_phase5_node_invariants(node: &IrNode) -> Result<(), IrLoadError> {
+    // Grid `kind_payload` (carrier c1) is Grid-only — the wasamo-ir
+    // invariant is "non-Grid kind → kind_payload None" (DD-M3-P5-001).
+    // The textual parser already restricts `tracks` to Grid nodes; this
+    // is the defense-in-depth gate for IR constructed programmatically
+    // (e.g. directly via `IrNode { .. }` and handed to `validate`).
+    reject_non_grid_kind_payload(node)?;
     match node.widget_type.as_str() {
         "Grid" => {
             validate_grid_invariants(node)?;
@@ -333,6 +339,18 @@ fn validate_phase5_node_invariants(node: &IrNode) -> Result<(), IrLoadError> {
                 validate_phase5_node_invariants(child)?;
             }
         }
+    }
+    Ok(())
+}
+
+/// Reject a non-`Grid` node carrying a Grid `kind_payload` (carrier c1
+/// is Grid-only — DD-M3-P5-001; wasamo-ir "non-Grid → None" invariant).
+fn reject_non_grid_kind_payload(node: &IrNode) -> Result<(), IrLoadError> {
+    if node.widget_type != "Grid" && node.kind_payload.is_some() {
+        return Err(IrLoadError::Validate(format!(
+            "Grid track-list payload (`kind_payload`) is only valid on a `Grid` node, found on `{}` (DD-M3-P5-001)",
+            node.widget_type
+        )));
     }
     Ok(())
 }
@@ -413,6 +431,8 @@ fn validate_grid_invariants(node: &IrNode) -> Result<(), IrLoadError> {
                 cell.widget_type
             )));
         }
+        // A `Cell` is a non-Grid node and must not carry a Grid payload.
+        reject_non_grid_kind_payload(cell)?;
         rects.push(validate_grid_cell(cell, columns_len, rows_len)?);
     }
 
@@ -1005,6 +1025,19 @@ impl<'a> Parser<'a> {
                 Some(Token::Ident(s)) if s == "on" => handlers.push(self.parse_handler()?),
                 Some(Token::Ident(s)) if s == "node" => children.push(self.parse_node()?),
                 Some(Token::Ident(s)) if s == "tracks" => {
+                    // `tracks` lines are Grid-only (DD-M3-P5-001 carrier
+                    // c1 is a Grid-specific payload). Reject them on any
+                    // other node at parse time, so `kind_payload` can only
+                    // become `Some` on a `Grid` node — keeping the
+                    // wasamo-ir "non-Grid → kind_payload None" invariant
+                    // intact for textual IR. `validate()` is the
+                    // defense-in-depth gate for IR built programmatically
+                    // rather than parsed (see `validate_phase5`).
+                    if widget_type != "Grid" {
+                        return Err(IrLoadError::Parse(format!(
+                            "`tracks` track list is only valid on a `Grid` node, found on `{widget_type}`"
+                        )));
+                    }
                     let (axis, tracks) = self.parse_tracks_line()?;
                     let slot = match axis.as_str() {
                         "columns" => &mut grid_columns,
@@ -3238,5 +3271,112 @@ mod tests {
             ";wasamo-ir v0\ncomponent C inherits W { node Grid {} }",
             "requires `columns:` and `rows:` track lists",
         );
+    }
+
+    // ── non-Grid kind_payload invariant (carrier c1 is Grid-only) ───────
+
+    #[test]
+    fn tracks_on_non_grid_node_rejected_at_parse() {
+        // The textual parser restricts `tracks` to `Grid` nodes, so a
+        // `kind_payload` can never become `Some` on a non-Grid node via
+        // parsing (keeps the wasamo-ir "non-Grid → None" invariant).
+        let err = parse_err(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             node Text { tracks columns = 1* tracks rows = 1* }\n}",
+        );
+        match err {
+            IrLoadError::Parse(msg) => assert!(
+                msg.contains("`tracks` track list is only valid on a `Grid` node"),
+                "got: {msg}"
+            ),
+            other => panic!("expected Parse error, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn validate_rejects_non_grid_kind_payload() {
+        // Defense-in-depth gate for IR built programmatically rather than
+        // parsed: a non-Grid node carrying a Grid `kind_payload` violates
+        // the carrier-c1 invariant (DD-M3-P5-001) and `validate()` rejects
+        // it directly, independent of the textual parser's `tracks`
+        // restriction.
+        let comp = IrComponent {
+            name: "C".into(),
+            base: "W".into(),
+            states: vec![],
+            root: IrNode {
+                widget_type: "Text".into(),
+                props: vec![],
+                bindings: vec![],
+                handlers: vec![],
+                children: vec![],
+                kind_payload: Some(KindPayload::Grid {
+                    columns: vec![TrackSize::Star(1)],
+                    rows: vec![TrackSize::Star(1)],
+                }),
+            },
+        };
+        match validate(&comp) {
+            Err(IrLoadError::Validate(msg)) => {
+                assert!(msg.contains("only valid on a `Grid` node"), "got: {msg}")
+            }
+            other => panic!("expected Validate error, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn validate_rejects_cell_with_kind_payload() {
+        // A `Cell` is also a non-Grid node; a Grid payload on a Cell is
+        // rejected by the per-Cell defense-in-depth check inside
+        // `validate_grid_invariants`.
+        let cell = IrNode {
+            widget_type: "Cell".into(),
+            props: vec![
+                IrProp {
+                    name: "row".into(),
+                    value: IrLiteral::Int(0),
+                },
+                IrProp {
+                    name: "column".into(),
+                    value: IrLiteral::Int(0),
+                },
+            ],
+            bindings: vec![],
+            handlers: vec![],
+            children: vec![IrNode {
+                widget_type: "Text".into(),
+                props: vec![],
+                bindings: vec![],
+                handlers: vec![],
+                children: vec![],
+                kind_payload: None,
+            }],
+            kind_payload: Some(KindPayload::Grid {
+                columns: vec![TrackSize::Star(1)],
+                rows: vec![TrackSize::Star(1)],
+            }),
+        };
+        let comp = IrComponent {
+            name: "C".into(),
+            base: "W".into(),
+            states: vec![],
+            root: IrNode {
+                widget_type: "Grid".into(),
+                props: vec![],
+                bindings: vec![],
+                handlers: vec![],
+                children: vec![cell],
+                kind_payload: Some(KindPayload::Grid {
+                    columns: vec![TrackSize::Star(1)],
+                    rows: vec![TrackSize::Star(1)],
+                }),
+            },
+        };
+        match validate(&comp) {
+            Err(IrLoadError::Validate(msg)) => {
+                assert!(msg.contains("only valid on a `Grid` node"), "got: {msg}")
+            }
+            other => panic!("expected Validate error, got {other:?}"),
+        }
     }
 }
