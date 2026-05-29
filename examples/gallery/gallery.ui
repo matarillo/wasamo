@@ -9,6 +9,50 @@ component Gallery inherits Window {
         spacing: 12px
         padding: 12px
 
+        Grid {
+            columns: 120 1* 2*
+            rows: 36 1* 36
+
+            Cell {
+                row: 0 column: 0 column-span: 3
+                Box {
+                    fill: #224488cc
+                    Text { text: "Header (spans 3 columns)" }
+                }
+            }
+
+            Cell {
+                row: 1 column: 0
+                Box {
+                    fill: #336699cc
+                    Text { text: "C0 fixed 120" }
+                }
+            }
+            Cell {
+                row: 1 column: 1
+                Box {
+                    fill: #669933cc
+                    Text { text: "C1 star 1*" }
+                }
+            }
+            Cell {
+                row: 1 column: 2
+                Box {
+                    fill: #996633cc
+                    Text { text: "C2 star 2*" }
+                }
+            }
+
+            Cell {
+                row: 2 column: 0 column-span: 3 v-align: start
+                Box {
+                    aspect: 4:1
+                    fill: #cc3366cc
+                    Text { text: "Footer (overflows below, clipped at Grid bounds)" }
+                }
+            }
+        }
+
         WrapPanel {
             item-cross-size: 88
             item-spacing: 12

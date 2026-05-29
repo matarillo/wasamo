@@ -318,9 +318,13 @@ and the **gallery positive-control portion** of item (1) — the slice
 representative-fixture / diagnostic halves of item (1) earlier; the
 gallery slice closes the positive-control half here). The visible-
 correctness portion of item (5) (owner-manual GUI smoke) is owned by
-T6 per FD-I; T5 stops at build / launch success.
+T6 per FD-I. T5's assistant-automated evidence is **build + launch +
+launch-time screenshot capture + assistant analysis** (per Codex
+review #1); `Start-Process` survival is the supporting "no early crash"
+signal and the assistant analysis is a pre-T6 baseline, not a substitute
+for the owner's visible-correctness judgment.
 
-- [ ] Grow `examples/gallery/gallery.ui` **additively** with a
+- [x] Grow `examples/gallery/gallery.ui` **additively** with a
       sibling slice containing a Grid composition matching the FD-H
       minimum visible-proof shape: a 3-row × 3-column Grid with at
       least five Cells —
@@ -332,18 +336,41 @@ T6 per FD-I; T5 stops at build / launch success.
         by T2-T4 per FD-C).
       The Phase 3 standalone WrapPanel slice and Phase 4 ScrollView
       slice stay untouched.
-- [ ] Cell content uses `Box { fill: ... }` + `Text { text: ... }`
+      Grid sibling added at the top of the gallery VStack
+      (`columns: 120 1* 2*`, `rows: 36 1* 36`; header + footer
+      `column-span: 3`; three `row: 1` middle Cells in columns 0/1/2);
+      existing WrapPanel / ScrollView slices left byte-identical. (Row
+      fixed tracks reduced from `48 1* 64` to `36 1* 36` per Codex review
+      #2 Finding 1 so the `1*` middle/star row is legibly sized in the
+      screenshot.)
+- [x] Cell content uses `Box { fill: ... }` + `Text { text: ... }`
       per the Phase 2 DD-M3-P2-006 placeholder pattern. No Image
       widget (deferred to M4 per Phase 2).
-- [ ] Include at least one Cell whose content intentionally overflows
+- [x] Include at least one Cell whose content intentionally overflows
       its resolved rectangle (e.g. fixed-track sum exceeding Grid's
       bounded extent, or a Cell with content larger than its cell)
       so the **Grid outer-bounds clip is visibly observable** in T6
       smoke. Without this, the T6 clip-visibility observation point
       cannot be exercised on the live binary.
-- [ ] Build and run `examples/gallery-rust/`. Record `Start-Process`
-      launch success by the assistant. C / Zig gallery hosts remain
-      out of Phase 5 scope.
+      Footer Cell uses `v-align: start` + a wide `aspect: 4:1` Box: the
+      aspect-derived height (cell width / 4) exceeds the fixed 36 px
+      footer row, overflowing below the last row = below the Grid outer
+      rectangle (see [log.md](./log.md) T5 entry).
+- [x] Build and run `examples/gallery-rust/`. Record assistant-automated
+      visual evidence (launch + screenshot capture + assistant analysis,
+      per Codex review #1); `Start-Process` survival is the supporting
+      "no early crash" signal. C / Zig gallery hosts remain out of Phase 5
+      scope.
+      `wasamoc check` exit 0; `cargo build -p gallery-rust --release`
+      green; screenshot
+      [evidence/t5-gallery-grid-launch.png](./evidence/t5-gallery-grid-launch.png)
+      captured at launch and analysed by the assistant — non-blank screen,
+      header 3-col span, three separate middle-row columns with legible
+      labels ("C0 fixed 120" / "C1 star 1*" / "C2 star 2*", the 2* column
+      visibly ~2× the 1* column), footer span + outer-bounds clip baseline,
+      untouched WrapPanel/buttons (see [log.md](./log.md) T5 entry). Visible-correctness judgment is T6
+      owner-owned (the assistant analysis is a pre-T6 baseline, not a
+      substitute).
 
 ### T6 — Owner-manual GUI smoke and any visible-correctness fix
 

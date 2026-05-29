@@ -448,3 +448,83 @@
   Phase 5 re-confirmation that it fires (test FAILS, not skips) on the
   SSH dev box (`wasamo_init` → `0x80070005`) is the T4 checklist item-4
   owner/environment gate.
+
+- **T5 — End-to-end gallery `.ui` Grid slice + assistant build / launch
+  (2026-05-29).** Discharges the **assistant-automated portion** of ADR
+  [verification closure evidence item (5)](../decisions/preamble.md#phase-5-verification-closure-what-counts-as-a2-evidence)
+  and the **gallery positive-control half** of item (1) (the slice `.ui`
+  compiles cleanly through `wasamoc check`). `examples/gallery/gallery.ui`
+  grows **additively** with a Grid sibling at the top of the existing
+  VStack; the Phase 3 standalone WrapPanel slice and the Phase 4
+  ScrollView slice are left byte-identical. Slice shape (FD-H minimum
+  visible-proof):
+  - 3 rows × 3 columns, mixed fixed + weighted-star per axis
+    (`columns: 120 1* 2*`, `rows: 36 1* 36`). The row fixed tracks were
+    reduced from an initial `48 1* 64` to `36 1* 36` after Codex review #2
+    (Finding 1): under the gallery VStack's modest height allocation the
+    larger fixed rows starved the `1*` middle (star) row to a thin strip
+    with unreadable labels, weakening the FD-H "fixed and star tracks
+    visible in the real `.ui`" proof. Smaller fixed rows hand the
+    remaining vertical space to the star row so the middle-row Cells are
+    legibly sized in the screenshot;
+  - a header `Cell` (`row: 0 column: 0 column-span: 3`) and a footer
+    `Cell` (`row: 2 column: 0 column-span: 3`) each spanning all three
+    columns (column-span exercised in real `.ui`; row-span discharged by
+    T2–T4 per FD-C);
+  - three middle-row `Cell`s in separate columns (`row: 1`, columns 0/1/2);
+  - every Cell content is `Box { fill: … }` + `Text { text: … }` per the
+    Phase 2 DD-M3-P2-006 placeholder pattern (no Image; M4-deferred).
+  - **Overflow Cell for the T6 clip observation:** the footer Cell anchors
+    its content with `v-align: start` and uses a wide `aspect: 4:1` Box.
+    On the bounded width axis the Box stretches to the spanning cell width
+    (≈ full Grid width); `aspect: 4:1` then derives a height of
+    width / 4, which exceeds the fixed 36 px footer row, so the content
+    overflows **below** the footer cell — and, since row 2 is the last
+    row, below the Grid's outer rectangle. That overflow is the live
+    target the T6 owner smoke uses to observe the DD-M3-P5-005
+    outer-bounds clip on the real binary (per `arrange_grid`'s
+    non-stretch-axis natural-extent measure + `align_in_cell` no-clamp
+    behaviour, `layout.rs`). DSL has no comment syntax, so the rationale
+    lives here rather than inline in the `.ui`.
+
+  Verified `target/release/wasamoc.exe check examples/gallery/gallery.ui`
+  exits 0 (positive control) and `cargo build -p gallery-rust --release`
+  green (only the pre-existing benign "wasamo provides no linkable target"
+  warning).
+
+  **Assistant visual-evidence baseline (Codex review #1, 2026-05-29).**
+  Codex flagged that `Start-Process` survival alone cannot show the Grid
+  slice actually rendered, the initial screen is non-blank, or the
+  intended sub-screen is in the viewport. The assistant-automated evidence
+  for a GUI host is therefore strengthened to **launch + screenshot
+  capture + assistant analysis**; `Start-Process` "stays running" is
+  demoted to a supporting "no early crash" signal. Procedure used:
+  `Start-Process target/release/gallery-rust.exe`, poll for
+  `MainWindowHandle`, bring the window foreground + topmost, then
+  `Graphics.CopyFromScreen` over its `GetWindowRect` (CopyFromScreen, not
+  `PrintWindow`, because the Visual-Layer / DirectComposition client area
+  reads back blank under `PrintWindow`). Artifact stored per workflow.md
+  §5.4 (`implementation/evidence/`, `tN-<purpose>.<ext>`):
+  [evidence/t5-gallery-grid-launch.png](./evidence/t5-gallery-grid-launch.png)
+  (800×600 window capture; re-captured after the Finding-1 row-track fix).
+  Assistant analysis of the image confirms:
+  - the initial screen is **non-blank** (Composition rendering works);
+  - the header `Cell` spans all three columns (the full-width band reads
+    "Header (spans 3 columns)");
+  - the three middle-row `Cell`s render as three separate columns with
+    **legible** labels — "C0 fixed 120" (the narrow fixed 120 px column),
+    "C1 star 1*", and "C2 star 2*" with the `2*` column visibly ~2× the
+    width of the `1*` column, so the mixed fixed + weighted-star column
+    proof and the vertical star row are both clearly visible;
+  - the footer `Cell` spans the full width (magenta band) and its
+    `aspect: 4:1` content overflows downward, cut off where the WrapPanel
+    begins — the **Grid outer-bounds clip baseline** for the T6 owner
+    smoke;
+  - the untouched Phase 3 WrapPanel slice ("Photo 1–10") and the buttons
+    still render. (The mica title bar shows the editor behind it — expected
+    `backdrop: mica` translucency, not the opaque client area.)
+
+  This assistant analysis is a **pre-T6 automated baseline**, not a
+  replacement for the owner's visible-correctness judgment (T6 per FD-I);
+  it does not do pixel-level track-width verification or exact clip-edge
+  measurement. C / Zig gallery hosts remain out of Phase 5 scope.
