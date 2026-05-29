@@ -58,14 +58,18 @@ Grid slice positive control** half of item (1) closes at T5 (the
 slice's `.ui` compiles cleanly); the **evidence aggregation** for
 item (1) closes at T7 alongside the CI gates.
 
-- [ ] **Pre-implementation spike** for risk
+- [x] **Pre-implementation spike** for risk
       [R-A](./preamble.md#technical-risks-planning-time-recon):
       settle the grafting shape of the narrow Grid-specific
       track-list parser path against `parse_widget_decl` /
       `parse_property_bind` (widget-type context routing) and
       decide whether `n*` admits a new lexer token, before opening
       the bullets below. Record the chosen shape in
-      [log.md](./log.md).
+      [log.md](./log.md). **Settled 2026-05-29** (see log.md
+      T1 R-A entry): widget-type routing in `parse_widget_decl`;
+      payload-less `Token::Star` (no fused `n*` literal); `1*` vs
+      `1 *` distinguished by span adjacency; new `Member::GridTracks`
+      AST carrier.
 - [ ] Register `Grid` in `wasamoc`'s known widget registry / check
       surface; recognise `Cell` as a Grid-internal IR node kind
       that is rejected outside a `Grid` parent per DD-M3-P5-001 /
