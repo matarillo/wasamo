@@ -528,3 +528,67 @@
   replacement for the owner's visible-correctness judgment (T6 per FD-I);
   it does not do pixel-level track-width verification or exact clip-edge
   measurement. C / Zig gallery hosts remain out of Phase 5 scope.
+
+- **T7 — Moment 2 implementation-sync + phase-close gates
+  (2026-05-30).** Closes Phase 5's last step. Discharges the Moment 2
+  doc re-sync and the m3-plan phase-end progress flips; the on-CI
+  gates and the front-matter `active` → `closing` flip remain `[ ]`
+  pending the push gate (separate from merge per
+  [retrospectives.md §進行手順](../../../procedures/retrospectives.md)).
+  Target commits on `feat/m3-phase-5-t7`:
+  - `3bb1608 docs(m3-phase-5): T7 Moment 2 spec sync — Grid
+    implementation-synced` (dsl_spec v1.3 → v1.4: §4.12 + header status
+    → "closed; implementation-synced", §8.5 `track_decl` fold, §5/§2.2/§3
+    earlier-phase spec-gap folds with owner confirmation; architecture
+    top Status → "M3-Phase 5 complete" + §6.8.7 re-sync to the landed
+    `WidgetData::Grid { columns, rows, cell_placements }`; abi_spec
+    re-confirmed untouched). `Reviewed-by: codex`.
+  - progress-doc flips (this batch): `process/milestone-3/plan.md`
+    Phase 5 row Status → `complete` with the completed-row Notes
+    pattern; `phase-5/implementation/plan.md` T7 doc-status checkboxes
+    flipped (§4.12 / §8 / architecture / m3-plan row / abi_spec).
+  - retro batch: this `log.md` entry +
+    [retrospectives/t7.md](../retrospectives/t7.md) step-end retro.
+
+  **Plan revision — T7-list ownership correction (option A,
+  owner-approved 2026-05-30).** The T7 task list as frozen at T0
+  carried two bullets — phase-`sync` close (then "no open phase-sync
+  items survive past phase close") and the `handoff.md` carry-forward
+  write-up — as **T7** deliverables. This conflicts with
+  [retrospectives.md §15 / §6.3](../../../procedures/retrospectives.md),
+  which assign the final `carry-forward` close and the `handoff.md`
+  clean-up to the **phase-end** retro (item 15), and with the later
+  [T6 retro owner decision (2026-05-30)](../retrospectives/t6.md)
+  that the DPI carry-forward `handoff.md` entry lands at phase-end and
+  "plan.md T7 へ owning bullet は追記しない". The T0 plan list predated
+  that owner decision, so it carried stale ownership. Resolved in
+  favour of the procedure SSOT + later owner decision: both bullets
+  are re-tagged **NOT owned by T7** and stay `[ ]` at T7 close, like
+  the phase-end retro bullet. T7's own `phase-sync` dispositions are
+  recorded in the T7 step-end retro item 10; the phase-end retro
+  performs the final close + `handoff.md` clean-up. (Precedent for
+  recording an in-flight plan-list ownership correction in the log:
+  M3-Phase 4 "T5/T6 split for owner-manual GUI smoke".) The
+  `phase-5/implementation/plan.md` is the mutable phase plan
+  (CLAUDE.md "Mutable during the phase"), so this revise is in-rule;
+  the frozen milestone `plan.md` was touched only for the sanctioned
+  Moment-2 row Status flip.
+
+  **Post-commit clean rebuild (item 3 evidence).** Run on the T7
+  working tree; all T7 changes are doc-only (`docs/` + `process/`, no
+  Rust `src/` / `Cargo.toml` / `build.rs` / CI YAML), so the build /
+  test state is identical to committed `3bb1608` and the T6 HEAD:
+  - `cargo fmt --all -- --check` → exit 0;
+  - `cargo clean` (removed 3367 files, 1.1 GiB) →
+    `cargo build --workspace` (debug, 41.13s, green) →
+    `cargo build --release --workspace` (46.55s, green) →
+    `cargo test --workspace` → **627 passed / 0 failed** (16 wasamo-ir
+    + 301 wasamo-runtime lib + 282 wasamoc lib + 28 integration/
+    roundtrip; identical to T6's 627, +0, confirming the Moment-2 sync
+    is doc-only). No new warnings (pre-existing "wasamo provides no
+    linkable target" only).
+  - **On-CI** clean rebuild + the Windows-only integration evidence
+    (skip-guard verified per T4) are the phase-end gate (item 16),
+    run from `workflow_dispatch` on the phase branch **before merge**;
+    the local rebuild here is the proxy until then. CI YAML unchanged
+    (no new language / build system).
