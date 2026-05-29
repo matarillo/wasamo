@@ -129,6 +129,9 @@ fn lower_node(widget_type: &str, members: &[Member], ns: &Namespace) -> IrNode {
         bindings,
         handlers,
         children,
+        // Grid populates this in the Member::GridTracks lowering path
+        // (DD-M3-P5-001 carrier c1); every other kind leaves it None.
+        kind_payload: None,
     }
 }
 

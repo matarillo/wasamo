@@ -735,6 +735,9 @@ impl<'a> Parser<'a> {
             bindings,
             handlers,
             children,
+            // Grid `tracks` lines are parsed into this payload in T3;
+            // the Phase-5-pre loader leaves it None for every kind.
+            kind_payload: None,
         })
     }
 
@@ -1644,6 +1647,7 @@ mod tests {
                         }],
                         handlers: vec![],
                         children: vec![],
+                        kind_payload: None,
                     },
                     IrNode {
                         widget_type: "Button".into(),
@@ -1667,8 +1671,10 @@ mod tests {
                             },
                         }],
                         children: vec![],
+                        kind_payload: None,
                     },
                 ],
+                kind_payload: None,
             },
         };
 
