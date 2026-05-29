@@ -252,3 +252,125 @@
   `wasamoc check` / `validate()`). The panic guards the
   division-by-zero the DD-M3-P5-004 algorithm would otherwise hit;
   it is unreachable for validated IR.
+
+- **T3 — R-B pre-implementation spike: Grid `build_node` Cell-flatten
+  shape + runtime `tracks` IR-text parse (2026-05-29).** Settles
+  [preamble.md risk R-B](./preamble.md#technical-risks-planning-time-recon)
+  and the first
+  [plan.md T3 bullet](./plan.md#t3--ir-loader--validate-invariant-evidence)
+  before the implementation bullets open. Spot-checked against
+  [`wasamo-runtime/src/ir_loader.rs`](../../../../wasamo-runtime/src/ir_loader.rs)
+  (`tokenize`, `parse_node`, `build_node`, `construct_widget`),
+  [`wasamo-runtime/src/widget.rs`](../../../../wasamo-runtime/src/widget.rs)
+  (`WidgetData`, `WidgetNode::scroll_view`, `build_layout_tree`),
+  [`wasamo-runtime/src/layout.rs`](../../../../wasamo-runtime/src/layout.rs)
+  (`LayoutNode::grid`, `TrackSize` / `CellPlacement` / `Alignment`),
+  and the T1 emit shape ([log.md T1 R-C entry](#decisions-log)) at
+  HEAD `d91b14f`.
+
+  **Decision 1 — `WidgetData::Grid` stores layout-engine mirror types;
+  all IR→runtime conversion happens in the loader.** `WidgetData::Grid
+  { columns: Vec<layout::TrackSize>, rows: Vec<layout::TrackSize>,
+  cell_placements: Vec<layout::CellPlacement> }`. The
+  `wasamo_ir::TrackSize` → `layout::TrackSize` conversion and the
+  `Cell` `IrProp` → `layout::CellPlacement` extraction both run in
+  `ir_loader::construct_widget`'s Grid arm; `build_layout_tree` then
+  clones the three vectors straight into `LayoutNode::grid`. This is a
+  deliberate refinement of the R-D planning note ("the `WidgetData::Grid`
+  → `LayoutNode::grid` build-boundary conversion ... lands in T3"):
+  the *track-type* conversion is trivially placeable at either layer,
+  but the *placement* extraction (`find` the `row` / `column` /
+  `row-span` / `column-span` / `h-align` / `v-align` `IrProp`s, apply
+  defaults, map alignment idents) is irreducibly a loader concern —
+  the same shape as the existing `extract_ratio_prop` →
+  `box_values::Ratio` / `extract_color_prop` boundary. Splitting track
+  conversion (build_layout_tree) from placement conversion (loader)
+  across two layers would be strictly worse than keeping the loader the
+  single "IR → runtime domain type" translation site, so both land in
+  the loader and `build_layout_tree` stays a structural copy. A
+  consequence: `widget.rs` imports `layout::{TrackSize, CellPlacement}`
+  (already imports `layout::{self, Alignment, ...}`) and does **not**
+  import `wasamo_ir` — the IR crate coupling stays confined to
+  `ir_loader.rs`, matching the `box_values::Ratio` precedent.
+
+  **Decision 2 — Cell flattening is a `build_node`-layer special case;
+  `construct_widget` builds the shell *and* the placement vector.**
+  Two sites cooperate, both iterating `node.children` (the IR `Cell`
+  subtrees) in document order so `children[i]` stays parallel to
+  `cell_placements[i]` (the R-D invariant):
+
+  - `construct_widget`'s `"Grid"` arm reads `node.kind_payload` for the
+    track lists and walks `node.children` to extract each `Cell`'s
+    placement into `Vec<CellPlacement>`, then calls
+    `WidgetNode::grid(compositor, columns, rows, cell_placements)`. The
+    constructor creates the outer `SpriteVisual` and installs the
+    DD-M3-P5-005 outer-bounds clip (`Visual.Clip = InsetClip{0,0,0,0}`,
+    the same zero-inset auto-tracking clip ScrollView's outer Visual
+    uses) and stores `WidgetData::Grid`. No background brush (Grid is a
+    pure layout container).
+  - `build_node`'s child loop is branched: for a `"Grid"` node it does
+    **not** run the generic `for child in &node.children { build_node;
+    append_child }` loop (that would try to materialise `Cell` as a
+    widget — `construct_widget` has no `Cell` arm and would
+    `UnknownWidget`). Instead, for each `Cell` child it builds the
+    Cell's single content child (`cell.children.first()`) via
+    `build_node` and appends that content widget to the Grid. `Cell`
+    itself never reaches `construct_widget`, so it never materialises as
+    a `WidgetNode` or `Visual` (DD-M3-P5-001 "Cell is IR-only").
+
+  This is exactly the R-B-anticipated "`build_node` bypasses the
+  generic child append loop; `construct_widget`'s Grid arm only creates
+  the widget shell" — with the one refinement that the placement
+  *vector* is built in `construct_widget` (which already has `node` and
+  must hand `cell_placements` to the constructor), not pushed
+  incrementally from `build_node`. The two loops iterate the same
+  `node.children` in the same order, so parallelism holds without a
+  shared mutable cursor.
+
+  **Decision 3 — runtime `tracks` IR-text grammar: payload-less
+  `Token::Star`, whitespace-insensitive weighted star.** The runtime
+  IR tokenizer (`ir_loader::tokenize`) gains a payload-less
+  `Token::Star`: the `'*'` arm emits `Token::Star` when the next char
+  is not `=` instead of erroring (`*=` → `AssignOp(Mul)` is untouched;
+  `+` / `/` keep erroring on a bare occurrence). `parse_node` gains a
+  `tracks` arm (`tracks <axis> = <track-list>`), and a
+  `parse_track_list` greedily consumes `Int` / `Star` tokens into
+  `Vec<IrTrackSize>`: an `Int(n)` immediately followed by `Star` lowers
+  to `Star(n as u32)`, a standalone `Int(n)` to `Fixed(n)`, and a
+  standalone `Star` to `Star(1)`. The loop terminates at the next
+  non-`Int`/`Star` token (the next `tracks` / `node` / `prop` keyword
+  `Ident`, or `RBrace`), so no newline tracking is needed.
+
+  Unlike `wasamoc`'s author-surface lexer (T1 R-A Decision 3), the
+  runtime parser does **not** use byte-span adjacency to distinguish
+  `1*` from `1 *`: the runtime IR is the *canonical machine format*
+  emitted by `wasamoc` (T1 R-C: unit star canonicalised to `1*`, both
+  track lists always present), where the author-surface `1*`-vs-`1 *`
+  distinction has already been resolved at compile time. The runtime IR
+  `tracks` grammar is therefore whitespace-insensitive: `Int` + `Star`
+  (any spacing) = `Star(weight)`. The runtime tokenizer carries no
+  spans (it produces `Vec<Token>`), so adding adjacency would be a
+  disproportionate change for a distinction the machine format does not
+  express. This is the §8 grammar shape the T7 `dsl_spec.md` fold
+  records. `kind_payload` is set to `Some(KindPayload::Grid { .. })`
+  iff at least one `tracks` line was seen (one-sided / empty track
+  lists are left for `validate()` to reject, more lenient than
+  `lower.rs`'s both-or-neither panic, since memory IR via
+  `wasamo_load_ui` is untrusted).
+
+  **Decision 4 — `validate_phase5_node_invariants` recursion skips
+  `Cell` as a standalone node.** The pass mirrors the
+  `validate_phase{2,3,4}_node_invariants` shape but routes by kind: a
+  `"Grid"` node is validated as a unit (track ranges, min row/col
+  count, per-`Cell` child-count + placement/span range + alignment
+  vocabulary, pairwise rectangle overlap) and then recursion descends
+  only into each `Cell`'s content child; a `"Cell"` node reached by the
+  generic recursion (i.e. *not* as a Grid's direct child) is rejected
+  as `Cell`-outside-`Grid`. Placement defaults at validate-time match
+  the loader (`row` / `column` absent → `0`; `row-span` / `column-span`
+  absent → `1`; alignment absent → not checked), so a multi-`Cell` Grid
+  that omits placement is caught by the overlap check (two Cells both
+  defaulting to `(0,0)`), preserving defense-in-depth without
+  re-implementing the compile-time-only multi-Cell placement-presence
+  diagnostic (DD-M3-P5-006 marks that row `(n/a)` at runtime). All
+  violations surface `IrLoadError::Validate` → `WASAMO_ERR_IR_MALFORMED`.

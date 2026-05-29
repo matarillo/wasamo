@@ -174,7 +174,7 @@ the algorithm's `(input → output)` shape.
 Discharges ADR
 [verification closure evidence item (3)](../decisions/preamble.md#phase-5-verification-closure-what-counts-as-a2-evidence).
 
-- [ ] **Pre-implementation spike** for risk
+- [x] **Pre-implementation spike** for risk
       [R-B](./preamble.md#technical-risks-planning-time-recon):
       settle how the **Grid path in `build_node`** bypasses the
       generic child append loop so IR Cell subtrees flatten into
@@ -182,6 +182,14 @@ Discharges ADR
       `WidgetData::Grid` (`construct_widget`'s Grid arm only creates
       the Grid widget shell). Settle before opening the bullets
       below; record the chosen shape in [log.md](./log.md).
+      **Settled 2026-05-29** (see log.md T3 R-B entry):
+      `WidgetData::Grid` stores `layout` mirror types (loader does all
+      IR→runtime conversion; `build_layout_tree` is a structural copy);
+      `construct_widget` builds the shell + clip + placement vector and
+      `build_node` branches the Grid child loop to flatten Cell content
+      children; payload-less runtime `Token::Star` +
+      whitespace-insensitive `tracks` parse; `validate_phase5` routes by
+      kind and skips `Cell` as a standalone node.
 - [ ] Materialise `Grid` as a runtime widget kind backed by
       `KindPayload::Grid { columns, rows }` per DD-M3-P5-001 carrier
       c1 (`IrProp.value` stays strictly `IrLiteral`). Runtime loader
