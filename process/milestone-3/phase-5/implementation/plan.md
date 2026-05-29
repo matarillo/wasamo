@@ -228,12 +228,15 @@ Discharges ADR
       / `validate_grid_cell` added and wired into `validate()`;
       `docs/abi_spec.md` untouched.
 - [x] Add pure-logic tests covering ADR evidence item (3).
-      22 new `ir_loader` tests (tracks parse incl. bare-`*` + `*=`
+      25 new `ir_loader` tests (tracks parse incl. bare-`*` + `*=`
       regression; positive control; min row/col; track range;
       placement range; span range; Cell child-count; same-cell /
       overlapping-span conflict; multi-Cell omitted-placement
       origin collision; alignment vocabulary; non-Cell Grid child;
-      Cell-outside-Grid; tracks-less Grid).
+      Cell-outside-Grid; tracks-less Grid; and — per owner review #1 —
+      non-Grid `kind_payload` rejection at parse + `validate()` for
+      both a non-Grid node and a Cell, closing the carrier-c1
+      Grid-only invariant gap).
 
 ### T4 — Windows-runtime layout and Visual evidence
 
