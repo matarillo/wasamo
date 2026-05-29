@@ -1,8 +1,8 @@
 # Notes
 
 Owner-authored exploratory notes, sketches, and open questions that do not
-fit the formal structure of an ADR (`docs/decisions/`) or a milestone plan
-(`docs/plans/`).
+fit the formal structure of an ADR (`process/milestone-N/phase-M/decisions/`)
+or a milestone plan (`process/milestone-N/plan.md`).
 
 ## When to put something here
 
@@ -13,10 +13,11 @@ fit the formal structure of an ADR (`docs/decisions/`) or a milestone plan
 
 ## When NOT to use this folder
 
-- A concrete decision was reached → write it as an ADR in `docs/decisions/`
+- A concrete decision was reached → write it as an ADR under
+  `process/milestone-N/phase-M/decisions/`
 - The content is execution tracking for an active milestone → it belongs
-  in `docs/plans/` or `ROADMAP.md`
-- The information is captured by code, ADRs, ROADMAP, or git history
+  in `process/milestone-N/plan.md` or `process/_roadmap.md`
+- The information is captured by code, ADRs, the roadmap, or git history
 
 ## Language
 

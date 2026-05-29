@@ -1,18 +1,21 @@
 # Wasamo DSL Specification
 
-**Document version:** 1.2
-**Last updated:** 2026-05-25
+**Document version:** 1.3
+**Last updated:** 2026-05-29
 **Status:** M3-Phase 2 closed (implementation-synced); M3-Phase 3
 closed (implementation-synced); M3-Phase 4 closed
-(implementation-synced).
+(implementation-synced); M3-Phase 5 design accepted (implementation
+pending).
 Covers the M2 `.ui` surface, the `state` surface keyword
 retroactively, the M3-Phase 1 `bool` scalar binding additions, the
 M3-Phase 2 Box layout primitive (with `aspect` / `fill` literal
 attributes), the M3-Phase 3 WrapPanel layout primitive (with
 `item-cross-size` / `item-spacing` / `line-spacing` constant-only
 integer attributes), the M3-Phase 4 ScrollView layout primitive
-(vertical-only viewport + clip + `offset-y` binding), and
-`;wasamo-ir v0`.
+(vertical-only viewport + clip + `offset-y` binding), the M3-Phase 5
+Grid layout primitive (fixed + weighted-star track sizing, `Cell`
+wrapper with explicit placement / span / alignment, both-axis
+spanning, Grid outer-bounds clip), and `;wasamo-ir v0`.
 
 ---
 
@@ -279,6 +282,13 @@ Declares a child widget. Widget type names are PascalCase identifiers.
 | `Box`       | Layout container with optional `aspect` / `fill` (M3-Phase 2; see §4.9) |
 | `WrapPanel` | Wrapping layout container (M3-Phase 3; see §4.10) |
 | `ScrollView` | Vertical scroll viewport with exactly one content child (M3-Phase 4; see §4.11) |
+| `Grid`      | 2D layout container with declared track lists per axis; children are `Cell`-wrapped (M3-Phase 5; see §4.12) |
+
+`Cell` is **not** a free-standing widget registry entry. It is a
+Grid-specific child wrapper construct (one content child per `Cell`,
+carrying explicit placement / span / alignment metadata) consumed by
+Grid's lowering; `Cell` outside a `Grid` parent is rejected at
+`wasamoc check`. See §4.12.
 
 Unknown widget type names produce a warning (not an error) in M1,
 to allow forward-compatibility with user-defined components.
@@ -965,6 +975,502 @@ not carry the viewport clip.
    in-out write-back, and imperative scroll commands are M4 or later
    surfaces.
 
+### 4.12 Grid layout primitive (M3-Phase 5)
+
+**Phase status:** M3-Phase 5 design accepted; implementation pending.
+
+`Grid` is a 2D layout primitive that arranges children across a
+declared row × column track matrix. Tracks are declared once on
+`Grid` via the `columns:` and `rows:` attributes. Each child is
+wrapped in a `Cell` carrying explicit `row` / `column` placement,
+optional `row-span` / `column-span`, and optional per-cell `h-align`
+/ `v-align`. Content widgets inside a `Cell` carry no Grid-specific
+metadata.
+
+Grid admits **zero or more `Cell` children**. The minimum valid Grid
+shape is `columns.len() >= 1` and `rows.len() >= 1`; a Grid with no
+`Cell` children resolves to its outer rectangle with no drawn cell
+content.
+
+#### Sizing mental model
+
+Grid sizing follows six facts:
+
+1. **One track list per axis, declared on Grid.** `columns:` and
+   `rows:` carry whitespace-separated sequences of track-sizing
+   tokens. Track sharing across rows / columns is automatic; there
+   is no per-row column-width or per-column row-height surface.
+2. **Fixed tracks consume definite space first.** Each
+   `<integer>`-px track contributes its declared pixel size to the
+   axis's resolved extent.
+3. **Weighted-star tracks divide remaining bounded space by integer
+   weight.** `*` (sugar for `1*`) and `n*` (positive integer in
+   `[1, 1024]`) take fractional shares of the bounded space the
+   parent allocates after fixed tracks are honoured. `auto` /
+   intrinsic and floating-point weights are reserved for a future
+   phase (see *Reserved future surface* below).
+4. **Children go in `Cell` wrappers, not directly in Grid.** Each
+   `Cell` declares its placement as `row` + `column` (zero-based)
+   and optionally spans cells via `row-span` + `column-span`
+   (default `1`). Same-cell occupancy — two `Cell`s whose resolved
+   `(row, column, row-span, column-span)` rectangles share any
+   resolved cell — is rejected at `wasamoc check` and at runtime
+   `validate()`. Intentional overlay is not Grid's responsibility;
+   Phase 6 ZStack owns overlay.
+5. **Grid does not grow to fit its content.** On a bounded axis,
+   Grid's outer rectangle equals the parent's allocation on that
+   axis. Fixed-track sums that exceed the parent's allocation
+   produce paint overflow that is clipped at Grid's outer
+   rectangle (see *Arrange, overflow, and z-order* below). On an
+   unbounded axis with no star tracks, Grid's outer rectangle on
+   that axis equals the fixed-track sum.
+6. **Star tracks on an unbounded parent axis are an error.** A
+   Grid whose star direction meets an unbounded parent constraint
+   has no finite space to divide; the layout pass fails with
+   `LayoutError::GridUnboundedStarAxis`. This is consistent with
+   §4.11 ScrollView's `LayoutError::ScrollViewUnboundedAxis`
+   precedent.
+
+**Ecosystem contrast.** Readers arriving from WPF, CSS, or
+Compose/SwiftUI grids should note the following:
+
+- **WPF `Grid`.** WPF declares `RowDefinition` /
+  `ColumnDefinition` and routes child placement through attached
+  `Grid.Row` / `Grid.Column` properties on arbitrary content
+  widgets. Wasamo's Grid declares tracks the same way conceptually
+  but routes child placement through an explicit `Cell` wrapper
+  rather than attached properties on content widgets — content
+  widgets stay free of Grid-specific metadata. Star sizing,
+  spanning, and zero-based indexing match WPF.
+- **CSS Grid.** Wasamo's Phase 5 Grid borrows the *tracks +
+  placed children* shape but ships a deliberately narrower surface:
+  fixed pixels and weighted-star only (no `auto`, no `minmax`, no
+  `fr` unit, no named lines, no `grid-template-areas`, no
+  `auto-flow`, no `gap`). Placement is by explicit
+  `(row, column, row-span, column-span)` coordinates, not by line
+  names or area names. Same-cell overlap is rejected, not stacked.
+- **Jetpack Compose / SwiftUI grids.** Those ecosystems typically
+  model adaptive or data-driven grids (`LazyVerticalGrid`,
+  `LazyVGrid`). Wasamo's Phase 5 Grid is a **static 2D composition
+  primitive**: every `Cell` is explicit in the source, and Grid is
+  not an M3 iteration target. (M3's data-driven collection surface
+  is WrapPanel + the iteration grammar; see §4.10.) Iteration
+  generating `Cell`s is not foreclosed but is post-M3.
+- **ZStack / overlay models.** Grid does not provide intentional
+  overlay. A Cell whose content paints past the cell rectangle may
+  cross into a sibling cell's region — that is governed by the
+  document-order paint rule below — but two `Cell`s may not
+  deliberately occupy the same resolved cell. Phase 6 ZStack is the
+  surface for intentional overlay.
+
+#### Children
+
+Grid admits zero or more **`Cell`** children directly. `Cell` is a
+Grid-owned single-child layout wrapper:
+
+- Each `Cell` accepts **exactly one content child**. `wasamoc check`
+  rejects `Cell { }` (0 children) and `Cell { X Y }` (2+ children);
+  the runtime IR loader's `validate()` independently rejects
+  malformed memory IR through `WASAMO_ERR_IR_MALFORMED`. Authors
+  who want multiple widgets in one cell wrap them explicitly
+  (`Cell { VStack { Text { } Text { } } }`).
+- `Cell` outside a `Grid` parent is rejected at `wasamoc check` and
+  at `validate()`. `Cell` is not a free-standing widget; it has no
+  meaning outside Grid's lowering.
+- `Cell` itself does not materialise as a runtime widget Visual.
+  The Visual tree contains one Visual for Grid plus one Visual per
+  `Cell`'s content child — the existing **1 WidgetNode = 1 Visual**
+  convention from §6.5 of `architecture.md` is preserved.
+
+Non-`Cell` direct children of Grid are rejected at `wasamoc check`.
+
+#### Attributes
+
+**On `Grid`:**
+
+| Attribute  | Surface form        | Bindable in Phase 5 | Default |
+|------------|---------------------|---------------------|---------|
+| `columns:` | track-list (see below) | No                  | required |
+| `rows:`    | track-list (see below) | No                  | required |
+
+Both `columns:` and `rows:` are required and must declare at least
+one track. Grid has no `width` / `height` / `gap` / `auto-flow`
+attribute in Phase 5; unknown Grid attributes are rejected at
+`wasamoc check`.
+
+A **track-list** is a whitespace-separated sequence of track tokens
+parsed by a narrow Grid-specific parser path that does **not** open
+a general list / collection grammar; the sequence is terminated by
+the existing attribute-termination rule (`;` or newline).
+
+The track tokens admitted in Phase 5:
+
+| Token                      | Meaning                                  | Validation |
+|----------------------------|------------------------------------------|------------|
+| `<integer>` (positive)     | Fixed track of that pixel width / height | `value >= 1` at `wasamoc check` and `validate()` |
+| `*`                        | Weighted-star track with weight `1`      | (passes by construction) |
+| `<integer>*` (`1..=1024`)  | Weighted-star track with that integer weight | `1 <= weight <= 1024` at `wasamoc check` and `validate()` |
+
+Phase 5 rejects (with a `wasamoc check` diagnostic naming the
+offending shape, and `WASAMO_ERR_IR_MALFORMED` if the malformed
+shape reaches `validate()`):
+
+- non-positive fixed values (`0`, `-5`);
+- non-positive or out-of-range star weights (`0*`, `-2*`,
+  `2048*`);
+- `auto` — reserved for a future phase. The diagnostic names it
+  as a **reserved-future** token rather than as an unknown
+  identifier, so authors who try `auto` see a deferral hint rather
+  than a typo hint;
+- floating-point fixed values or weights (`1.5`, `1.5*`).
+
+Examples:
+
+```
+Grid {
+  columns: 180 1* 2*
+  rows: 64 1*
+  ...
+}
+```
+
+```
+Grid {
+  columns: 96 1* 96
+  rows: 64 1* 120
+  ...
+}
+```
+
+**On `Cell`:**
+
+| Attribute       | Type   | Default                              | Valid range                                | Violations |
+|-----------------|--------|--------------------------------------|--------------------------------------------|------------|
+| `row:`          | `i32`  | `0` (single-`Cell` Grid only; see below) | `[0, rows.len())`                          | `wasamoc check` + `validate()` reject |
+| `column:`       | `i32`  | `0` (single-`Cell` Grid only; see below) | `[0, columns.len())`                       | `wasamoc check` + `validate()` reject |
+| `row-span:`     | `i32`  | `1`                                  | `[1, rows.len() - row]`                    | `wasamoc check` + `validate()` reject |
+| `column-span:`  | `i32`  | `1`                                  | `[1, columns.len() - column]`              | `wasamoc check` + `validate()` reject |
+| `h-align:`      | ident  | `stretch`                            | `{ start, center, end, stretch }`          | `wasamoc check` + `validate()` reject |
+| `v-align:`      | ident  | `stretch`                            | `{ start, center, end, stretch }`          | `wasamoc check` + `validate()` reject |
+
+Unknown Cell attributes are rejected at `wasamoc check`. Phase 5
+has no `Cell` `clip:` / `z-index:` / `area:` surface.
+
+**Placement-attribute presence rule.** In a Grid with two or more
+`Cell` children, every `Cell` must declare both `row` and `column`
+explicitly; omitting either is a `wasamoc check` diagnostic. In a
+Grid with exactly one `Cell`, missing `row` and/or `column` is
+permitted and lowers to `0`. The single-Cell Grid escape clause
+exists for minimal demo cases; multi-Cell Grids are required to be
+self-describing so the diagnostic surface for "missed placement"
+stays local.
+
+**Same-cell / overlapping-rectangle conflict rejection.** For every
+pair of `Cell`s within a Grid, the algorithm checks whether their
+resolved `(row, column, row-span, column-span)` rectangles share
+any cell. Conflicts are rejected at `wasamoc check` and at
+`validate()`, with a diagnostic naming both conflicting `Cell`s
+and the shared resolved cell coordinate.
+
+**Indexing convention.** All `row` / `column` values are
+**zero-based** at the `.ui` boundary and zero-based internally.
+`row: 0` is the first row, `row: rows.len() - 1` is the last.
+
+**Constant-only.** Grid `columns:` / `rows:` and Cell placement /
+span / alignment attributes are constant-only literals in Phase 5;
+none of them are bindable. No new `IrType`, `IrLiteral`, or
+`PropertyValue` variant is introduced. A future phase may admit
+bindable track lists or bindable Cell placement; Phase 5 does not
+foreclose this but does not implement it.
+
+#### Track-resolution algorithm
+
+Track resolution operates on pure data
+(`wasamo-runtime/src/layout.rs`); the algorithm is Win32/WinRT-free.
+
+Per axis (rows and columns are symmetric), given a validated
+`tracks: &[TrackSize]` (non-empty; only `Fixed(>=1)` and
+`Star(1..=1024)` variants reach this point — `auto` is rejected at
+`wasamoc check` / `validate()` and does not appear) and an
+`axis_bound` that is either `Bounded(f32)` (the parent's available
+space on this axis) or `Unbounded`:
+
+```
+function resolve_axis(tracks, axis_bound) -> Result<Vec<f32>, LayoutError>:
+    fixed_sum: f32        = sum of declared px over fixed tracks
+    star_weight_sum: u64  = sum of (weight as u64) over star tracks
+    has_star: bool        = star_weight_sum > 0
+
+    if has_star and axis_bound is Unbounded:
+        return Err(LayoutError::GridUnboundedStarAxis)
+
+    // Reserved `auto` demand-distribution slot — no-op in Phase 5.
+    // A future phase that admits `auto` inserts a measure-side
+    // demand pass here that grows auto tracks to fit content;
+    // the pass must execute BEFORE star distribution so star
+    // tracks divide the space remaining after fixed + auto
+    // consumption.
+
+    bound: f32 = match axis_bound:
+        Bounded(b) => b
+        Unbounded  => fixed_sum   // unreachable with star tracks
+
+    remaining_after_fixed: f32 = max(0.0, bound - fixed_sum)
+
+    resolved: Vec<f32> = tracks.map(t =>
+        match t:
+            Fixed(px)     => px as f32
+            Star(weight)  => remaining_after_fixed
+                             * (weight as f32 / star_weight_sum as f32)
+    )
+
+    Ok(resolved)
+```
+
+The per-weight cap `[1, 1024]` (per the `Cell` and Grid attribute
+tables above) combined with the `u64` star-weight-sum accumulator
+bounds the per-axis sum at the type level: the sum is at most
+`1024 * track_count`, and `u64` tolerates any structurally feasible
+track count (each `TrackSize` allocates memory, so a count
+approaching `2^32` is structurally impossible). Star arithmetic is
+therefore overflow-safe without a "realistic input" assumption.
+
+**Prefix boundaries** consumed by the arrange pass and by spanning
+reconciliation:
+
+```
+boundary[0] = 0.0
+boundary[n] = boundary[n - 1] + resolved[n - 1]
+boundary[tracks.len()] = sum of resolved
+                         // = total resolved track extent;
+                         // NOT Grid's outer rect — see below
+```
+
+**Grid's outer rectangle.** Grid's outer extent on a **bounded**
+axis equals the parent's allocation, **not** `boundary[tracks.len()]`.
+This matches §4.10 WrapPanel ("outer main-axis size does not grow
+to accommodate oversized children") and §4.11 ScrollView ("outer
+size = viewport size, regardless of content size"). On an
+**unbounded** axis (only reachable with no star tracks per the
+unbounded-star branch above), Grid's outer extent equals
+`fixed_sum`. The following table summarises the relationship
+between the parent allocation, the track-resolved sum, and Grid's
+outer rectangle:
+
+| Axis bound | Tracks | Grid outer extent | Cell rectangles |
+|------------|--------|-------------------|-----------------|
+| `Bounded(b)` | mixed fixed + star | `b` | Sum of resolved = `b`; Cells fit exactly |
+| `Bounded(b)`, `fixed_sum <= b` | fixed only | `b` | Sum of resolved = `fixed_sum <= b`; trailing space inside Grid |
+| `Bounded(b)`, `fixed_sum > b` | fixed only | `b` | Sum of resolved = `fixed_sum > b`; rightmost Cells overflow, clipped by Grid's outer-bounds clip |
+| `Bounded(b)`, `fixed_sum > b` | mixed fixed + star | `b` | Star tracks resolve to `0`; sum of resolved = `fixed_sum > b`; rightmost Cells overflow, clipped by Grid's outer-bounds clip |
+| `Unbounded` | fixed only (star + unbounded is an error above) | `fixed_sum` | Sum of resolved = `fixed_sum`; Cells fit exactly |
+
+**Spanning reconciliation.** A `Cell` with
+`(row, column, row-span, column-span)` resolves to:
+
+```
+left   = column_boundary[column]
+right  = column_boundary[column + column-span]
+top    = row_boundary[row]
+bottom = row_boundary[row + row-span]
+```
+
+The cell rectangle is `(left, top, right - left, bottom - top)`.
+Spanning `Cell`s are measured against the combined resolved span
+extent; **the spanned tracks are not grown** to accommodate a
+larger child (there is no `auto`-style demand back-propagation in
+Phase 5). A spanning child that exceeds its combined span overflows
+its rectangle and is governed by the paint-overflow rule below.
+
+**Negative remaining space.** When fixed tracks alone exceed the
+parent's bound on an axis (`fixed_sum > bound`),
+`remaining_after_fixed` clamps to `0.0` and every star track on
+that axis resolves to width `0`. Fixed tracks retain their declared
+sizes in the prefix boundaries; this is not a fault. The resulting
+overflow is contained by Grid's outer-bounds clip below.
+
+**Rounding contract.** Track resolution operates in `f32` layout
+space; prefix boundaries are deterministic `f32` cumulative sums.
+No integer pixel snap. This matches §4.9 Box / §4.10 WrapPanel /
+§4.11 ScrollView.
+
+**`LayoutError` surface.** Phase 5 introduces one new variant:
+
+```
+LayoutError::GridUnboundedStarAxis
+```
+
+fired by the unbounded-star branch above. The variant is
+**runtime-internal** in Phase 5; no `WASAMO_LAYOUT_ERROR_*` C ABI
+tag is added, consistent with the Phase 4
+`LayoutError::ScrollViewUnboundedAxis` precedent.
+
+#### Arrange, overflow, and z-order
+
+After track resolution, each `Cell`'s resolved rectangle is placed
+relative to Grid. The content widget is then arranged inside that
+rectangle per `Cell`'s alignment attributes:
+
+- **`h-align: stretch` (default).** Content is measured with the
+  cell's resolved width as its horizontal bound; the content's
+  arranged horizontal extent equals the cell width.
+- **`h-align: start | center | end`.** Content is measured at its
+  natural horizontal extent and anchored at the start (leading
+  edge), center, or end (trailing edge) of the cell rectangle.
+- **`v-align: stretch` (default).** Symmetric on the vertical axis.
+- **`v-align: start | center | end`.** Symmetric on the vertical
+  axis with start = top, end = bottom.
+
+The default `stretch / stretch` makes a `Cell { Box { fill: ... } }`
+fill its resolved cell rectangle, which is the common pattern for
+visible composition slices.
+
+**Per-cell clipping is out of scope in Phase 5.** A `Cell`'s
+resolved rectangle is a measure-arrange rectangle, **not** a paint-
+clip rectangle. Content that exceeds the cell rectangle paints past
+the cell boundary and may be visible in a sibling cell's region if
+no later child paints over it. A future phase may admit a per-cell
+`clip:` attribute if author demand warrants; Phase 5 does not
+foreclose this.
+
+**Grid outer-bounds clip is on.** Grid's own Visual installs
+
+```
+Visual.Clip = InsetClip { 0, 0, 0, 0 }
+```
+
+applied to Grid's outer rectangle (per the table in *Track-
+resolution algorithm* above). A Cell rectangle that extends past
+Grid's outer rectangle (the `fixed_sum > bound` case) has its
+overflowing paint cut off at Grid's outer boundary, so the
+oversized Grid never bleeds into sibling layout regions. The clip
+is a structural commitment; there is no author-facing attribute to
+disable it.
+
+**Paint order is document order.** Children paint in source order:
+the first `Cell` paints first, the last paints last. When two
+`Cell`s have paint regions that incidentally overlap (a Cell's
+content overflowed past its rectangle and crossed into another
+Cell's region), the later `Cell` paints on top. There is no
+`z-index` attribute; intentional overlay is not Grid's
+responsibility — Phase 6 ZStack owns overlay, and same-cell
+occupancy is rejected at `wasamoc check` / `validate()` so the
+"paint order between deliberately-overlapping siblings" question
+does not arise.
+
+**Visual ownership.** Grid uses the existing **1 WidgetNode = 1
+Visual** convention. Grid's own Visual carries the outer-bounds
+clip; each Cell's content widget Visual is a direct child of Grid's
+Visual via the normal `sync_visuals()` path. Grid does **not**
+introduce an intermediate Visual (unlike §4.11 ScrollView, which
+extended the convention to carry a scroll-offset translation; Grid
+has no analogous translation).
+
+#### Loader rejection
+
+The runtime IR loader's `validate()` independently rejects malformed
+memory IR for every invariant the `wasamoc check` rules above
+enforce. The dual-gate pattern matches §4.9 Box (single content
+child + `RATIO` sign), §4.10 WrapPanel (negative-literal
+rejection), and §4.11 ScrollView (single content child).
+
+Phase 5 Grid invariants checked at `validate()`:
+
+| Invariant | On failure |
+|-----------|------------|
+| Grid declares at least one row and at least one column | `WASAMO_ERR_IR_MALFORMED` |
+| Each fixed track value `>= 1`; each star weight in `[1, 1024]` | `WASAMO_ERR_IR_MALFORMED` |
+| Each `Cell` has exactly one content child | `WASAMO_ERR_IR_MALFORMED` |
+| `Cell.row` in `[0, rows.len())`; `Cell.column` in `[0, columns.len())` | `WASAMO_ERR_IR_MALFORMED` |
+| `Cell.row-span >= 1`; `Cell.column-span >= 1`; `row + row-span <= rows.len()`; `column + column-span <= columns.len()` | `WASAMO_ERR_IR_MALFORMED` |
+| No two `Cell`s within a Grid share any resolved cell | `WASAMO_ERR_IR_MALFORMED` |
+| `Cell.h-align` and `Cell.v-align` values in `{ start, center, end, stretch }` | `WASAMO_ERR_IR_MALFORMED` |
+
+All Grid invariants are **reject-at-validate**, not clamp-at-arrange.
+Placement / span values have no defensible clamped interpretation: a
+silently-clamped `column: 5` in a 2-column Grid would displace a
+legitimately-placed Cell at `column: 1` and produce order-dependent
+layout. The only layout-time gate is the unbounded-star error
+above; negative-remaining-space is not a fault.
+
+#### Reserved future surface
+
+The following surfaces are explicitly **deferred** from Phase 5 and
+named here so authors who try them get spec-grounded diagnostics
+rather than "unknown token" / "unknown attribute" feedback:
+
+- **`auto` / intrinsic track sizing.** Reserved at the `TrackSize`
+  vocabulary level. The track-resolution algorithm above contains a
+  documented no-op slot before star distribution where the future
+  demand pass will execute.
+- **`minmax(min, max)` track sizing.** Additive at the `TrackSize`
+  vocabulary level.
+- **Floating-point star weights** (e.g. `1.5*`). Integer-weight
+  ratios cover the practical proportions (express `1.5 : 1` as
+  `3* 2*`); floating-point weights are a future generalisation.
+- **Named lines and `grid-template-areas`-style 2D shorthand.**
+  CSS Grid-style line names and area names are out of Phase 5
+  scope. The `Cell` placement surface does not foreclose a future
+  `area:` attribute; such an attribute would lower to the same
+  `(row, column, row-span, column-span)` rectangle.
+- **Bindable track lists / placement.** Phase 5 is constant-only.
+- **Iteration-template-generated `Cell`s** (e.g.
+  `for item in items { Cell { row: ... ... } }`). Grid is not an
+  M3 iteration target; the iteration grammar's M3 target is
+  WrapPanel-backed thumbnail collections. Future admission is
+  structurally possible because every `Cell` is explicit.
+- **Per-cell clipping** (`Cell { clip: true ... }`) and any
+  author-facing per-cell clip surface.
+- **Author-facing `z-index:` / paint-order attribute on `Cell`.**
+  Paint order is fixed to document order in Phase 5; intentional
+  overlay is Phase 6 ZStack's responsibility.
+- **`gap` / `column-gap` / `row-gap`.** No spacing surface on
+  Grid in Phase 5; tracks are touching.
+- **Drag-resizable splitters / pointer-driven column drag.**
+  Pointer-driven track resize is an M4+ input-handling concern.
+
+None of these deferrals require modifying Phase 5's IR shape,
+`Cell` contract, default behaviour, or measure-arrange algorithm;
+all are additive on top of the Phase 5 surface.
+
+#### Common pitfalls
+
+1. **Star tracks under an unbounded parent.** Placing a Grid with
+   star tracks inside a parent that does not bound the corresponding
+   axis (e.g. a Grid with `rows: 1*` directly inside a ScrollView's
+   scroll axis, or any intrinsic-measure context) fails layout with
+   `LayoutError::GridUnboundedStarAxis`. The fix is to bound the
+   axis at the parent — replace star tracks with fixed tracks, or
+   wrap the Grid in a sized parent.
+2. **Fixed-track sum exceeds parent bound.** When fixed tracks
+   alone exceed the parent's allocation, star tracks on that axis
+   resolve to `0` and the rightmost cells overflow Grid's outer
+   rectangle. The overflow is contained by the Grid outer-bounds
+   clip — paint is truncated, not propagated to siblings — but
+   trailing Cells become invisible. The fix is to reduce the
+   declared fixed widths or grow the parent's allocation.
+3. **Forgetting `row:` / `column:` in a multi-`Cell` Grid.** The
+   single-Cell escape clause does **not** apply once a Grid has
+   two or more `Cell`s. `wasamoc check` rejects the omission with
+   a local diagnostic; the fix is to add the missing placement
+   explicitly.
+4. **Two `Cell`s with overlapping rectangles.** Two Cells that
+   resolve to overlapping `(row, column, row-span, column-span)`
+   rectangles are rejected with a diagnostic naming both Cells and
+   the shared resolved cell. Intentional overlay is Phase 6
+   ZStack's responsibility; the fix is to relocate one Cell or
+   wait for ZStack.
+5. **Expecting per-cell clipping.** A Cell whose content paints
+   past the cell rectangle may cross into a sibling cell's region
+   (until Grid's outer-bounds clip cuts it off). The fix is to
+   wrap the oversized content in a clipping parent (e.g.
+   ScrollView).
+6. **Expecting Grid to grow with its tracks.** Grid's outer
+   rectangle equals the parent's allocation on each bounded axis,
+   not the sum of resolved track sizes. Authors who want a Grid
+   sized by its tracks must size the parent's allocation
+   accordingly.
+
 ---
 
 ## 5. AST Structure (M1)
@@ -1362,18 +1868,36 @@ defense-in-depth validation:
 | Every `prop-read` / `str-prop-read` / `assign` / `compound-assign` name resolves to a declared `state` | Yes | `WASAMO_ERR_IR_MALFORMED` |
 | `Box` node has at most one child (M3-Phase 2, DD-M3-P2-001) | Yes | `WASAMO_ERR_IR_MALFORMED` |
 | `RATIO` literal has `num > 0` and `den > 0` (M3-Phase 2) | Yes | `WASAMO_ERR_IR_MALFORMED` |
+| `WrapPanel` `item-cross-size`, `item-spacing`, and `line-spacing` are non-negative `i32` (M3-Phase 3, DD-M3-P3-006) | Yes | `WASAMO_ERR_IR_MALFORMED` |
+| `ScrollView` node has exactly one content child (M3-Phase 4, DD-M3-P4-006) | Yes | `WASAMO_ERR_IR_MALFORMED` |
+| `Grid` declares at least one row and at least one column; each fixed track value is `>= 1`; each star weight is in `[1, 1024]` (M3-Phase 5, DD-M3-P5-006) | Yes | `WASAMO_ERR_IR_MALFORMED` |
+| Each `Cell` has exactly one content child; `Cell.row` in `[0, rows.len())`; `Cell.column` in `[0, columns.len())`; `Cell.row-span`/`column-span >= 1` with resolved rectangle within declared track count; no two `Cell`s in the same Grid share any resolved cell; `h-align`/`v-align` in `{ start, center, end, stretch }` (M3-Phase 5, DD-M3-P5-006) | Yes | `WASAMO_ERR_IR_MALFORMED` |
 | Binding expression result type matches target property type | **No** (trusted from `wasamoc`) | Undefined behaviour |
 | Per-node emitter invariants (e.g. `on` only on signal-capable widgets) | **No** (trusted from `wasamoc`) | Undefined behaviour |
 
 The loader trusts type-level invariants established by `wasamoc`'s check pass.
 Type mismatches indicate a `wasamoc` bug, not a recoverable load-time error.
 
-The M3-Phase 2 rows (`Box` child count, `RATIO` sign) are explicitly
+The M3 rows above (Phase 2 `Box` child count, Phase 2 `RATIO` sign,
+Phase 3 WrapPanel non-negative attributes, Phase 4 ScrollView
+single-content-child rule, Phase 5 Grid structural / track / placement /
+span / conflict / alignment-vocabulary invariants) are explicitly
 dual-gated rather than trusted because `wasamo_load_ui`'s memory-IR
 entry point does not pass through `wasamoc`; the runtime gate is the
 last line of defence for these spec invariants. See §4.9 for the
-Box child-count rationale and §8.2 for the `RATIO` surface
-constraint that `wasamoc check` already enforces.
+Box child-count rationale, §8.2 for the `RATIO` surface constraint,
+§4.10 for the WrapPanel attribute range, §4.11 for the ScrollView
+child-count rule, and §4.12 for the full Grid / Cell invariant set —
+all of which `wasamoc check` already enforces.
+
+Phase 5 Grid invariants are **reject-at-validate**, not
+clamp-at-arrange: placement and span values have no defensible
+clamped interpretation (a silently-clamped Cell would displace
+legitimately-placed siblings and produce order-dependent layout).
+The only layout-time gate Phase 5 introduces is
+`LayoutError::GridUnboundedStarAxis` (§4.12), which is not a
+`validate()`-time concern because it depends on the parent's axis
+bound.
 
 ### 8.12 Scope out (post-M2)
 
@@ -1481,3 +2005,4 @@ future design item.
 | 1.0     | 2026-05-22 | M3-Phase 3 close: flipped §4.10 Phase status marker and document status to implementation-synced after T1–T9 landed and the local clean-rebuild gate passed. Folded the T1 Decisions-log lexer-surface item into §2.2: generalised the `Ident` lexical pattern to admit kebab-case continuations (`-[A-Za-z]`-prefixed segments) and the `IntLit` pattern to admit an optional leading `-`; added a one-line note that the negative-sign surface is `IntLit`-only (does not extend `FloatLit` / measurement / `RatioLit` and does not introduce a subtraction or unary-minus operator). `§5` AST shapes unchanged (`IntLit { value: i64 }` already holds the signed surface). No other implementation / spec divergence found during the close re-sync. |
 | 1.1     | 2026-05-25 | M3-Phase 4 ADR-accepted design draft: added §4.11 ScrollView layout primitive chapter (Phase status marker; viewport/content/offset mental model with WPF / CSS `overflow: scroll` / SwiftUI ecosystem contrast; exactly-one-child contract; `offset-y` signed `i32` literal or read-only `i32` state binding; parent-supplied viewport with no `viewport-*` attributes; pure-data measure-arrange algorithm including inner unbounded vertical measure, offset clamp, `LayoutError::ScrollViewUnboundedAxis`, and rounding contract; Visual-layer contract for the ScrollView-owned intermediate content Visual carrying `Visual.Offset = (0, -applied_y, 0)`; common-pitfalls note). Added `ScrollView` row to the §4.4 widget registry. No new grammar tokens, AST variants, IR literal/type variants, or scalar value types — Phase 4 reuses existing `i32` plumbing plus a narrow ScrollView string-to-`i32` parse / write bridge. Pending implementation re-sync at Phase 4 close. |
 | 1.2     | 2026-05-25 | M3-Phase 4 close: flipped §4.11 Phase status marker and document status to implementation-synced after T1–T6 landed (including T6 window-root Fill/Fill fix bundle) and the T7 local clean-rebuild + GitHub Actions phase-end gates passed. Folded one Phase 4 close-time spec consistency fix: §4.9 Box examples switched from the `;`-separated single-line form (parser-invalid; surfaced by T5 first build) to the parser-accepted multi-line member-per-line form, with an adjacent notation note recording that **accepting `;` as an optional member separator remains a post-Phase-4 open question** — parser-accepted examples; semicolon member separator left as post-Phase-4 open question. §4.10 common-pitfalls example dropped its `; …` continuation to match the new multi-line convention. No other implementation / spec divergence found during the close re-sync. |
+| 1.3     | 2026-05-29 | M3-Phase 5 ADR-accepted design draft: added §4.12 Grid layout primitive chapter (Phase status marker; sizing mental model with six-fact anchor and WPF / CSS Grid / Compose-SwiftUI grids / ZStack-overlay ecosystem contrast per framing decision FD-K; `Cell` single-content-child wrapper with explicit zero-based placement, both-axis spanning, and per-cell `h-align` / `v-align`; `columns:` / `rows:` track lists carrying fixed integer pixels and weighted-star tokens `n*` with `n in [1, 1024]`, parsed by a Grid-specific narrow parser path; `auto` deferred with reserved-future diagnostic; pure-data track-resolution algorithm with fixed-first + weighted-star distribution over `f32` prefix boundaries, `LayoutError::GridUnboundedStarAxis` on unbounded-star, and a reserved no-op slot for a future `auto` demand pass; Grid outer-bounds clip on Grid's own Visual via `Visual.Clip = InsetClip{0,0,0,0}` preserving the 1 WidgetNode = 1 Visual convention; document-order paint with no `z-index`; reject-at-validate dual-gate for placement / span / conflict invariants; reserved-future / common-pitfalls subsections). Added `Grid` row to the §4.4 widget registry plus a §4.4 pointer noting that `Cell` is a Grid-owned child wrapper defined in §4.12 (not a free-standing registry entry). No new grammar tokens, AST variants, `IrType` / `IrLiteral` / `PropertyValue` variants, or C ABI value tags — Grid's `Vec<TrackSize>` lives in a Grid-specific kind payload on `IrNode` and `IrProp.value` stays strictly `IrLiteral`. Folded a retroactive §8.11 spec-gap fix at owner request (review of the Moment 1 §4.12 + §6.8.7 thesis draft on 2026-05-29): the §8.11 *Loader validation policy* table previously listed only the Phase 2 `Box` child-count and `RATIO` sign dual-gates; added the Phase 3 WrapPanel non-negative attribute range (DD-M3-P3-006), the Phase 4 ScrollView single-content-child rule (DD-M3-P4-006), and the Phase 5 Grid / Cell invariant rows (DD-M3-P5-006) so the §8.11 table is now the true runtime-loader policy aggregate for M3. Pending implementation re-sync at Phase 5 close. |
