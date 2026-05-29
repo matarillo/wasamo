@@ -43,11 +43,10 @@ pub enum WidgetKind {
 /// `wasamoc check` / runtime `validate()`, not at this type). Unit star
 /// `*` lowers to `Star(1)`.
 //
-// `#[allow(dead_code)]`: the variants are constructed at the T3
-// `WidgetData::Grid` → `LayoutNode::grid` build boundary and by the
-// pure-logic T2 tests; production has no constructor until T3 (Phase 4
-// `scroll_view` forward-pointer precedent).
-#[allow(dead_code)]
+// T3 wired the production caller (`ir_loader::construct_widget` "Grid"
+// arm builds these from `wasamo_ir::TrackSize`, threaded through
+// `WidgetData::Grid` → `build_layout_tree` → `LayoutNode::grid`), so the
+// T2-era `#[allow(dead_code)]` forward-pointer is no longer needed.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TrackSize {
     Fixed(i32),
@@ -403,12 +402,10 @@ impl LayoutNode {
     // to the resolved `fixed_sum` (handled in `measure_grid` /
     // `arrange_grid`). `columns` / `rows` are the per-axis track lists and
     // `cell_placements` is parallel to `children` (set by the caller after
-    // construction). T3 wires the IR-loader / `build_layout_tree` path
-    // (`WidgetData::Grid` → this constructor); until then production has no
-    // caller, so the T2-era `#[allow(dead_code)]` forward-pointer mirrors
-    // the Phase 4 `scroll_view` constructor. The pure-logic T2 tests
-    // exercise it directly.
-    #[allow(dead_code)]
+    // construction). T3 wired the IR-loader / `build_layout_tree` path
+    // (`WidgetData::Grid` → this constructor), so the T2-era
+    // `#[allow(dead_code)]` forward-pointer is no longer needed; the
+    // pure-logic T2 tests also exercise it directly.
     pub fn grid(
         columns: Vec<TrackSize>,
         rows: Vec<TrackSize>,
