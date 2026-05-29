@@ -154,9 +154,11 @@ the algorithm's `(input → output)` shape.
       arrange order; overflowing cells produce overlapping geometry
       in document order); the **visible paint-precedence** half of
       z-order (later child on top under overlap = Visual-tree
-      insertion order) is owned by the T6 smoke observation point
-      ("document-order paint order is observed when overlapping
-      content occurs"), not asserted in pure logic.
+      insertion order) stays **unobserved** in the gallery slice (no
+      sibling overlap is exercised — see T6) and is **not** asserted in
+      pure logic; T7 evidence aggregation records it as an acceptance
+      judgment on the layout-side substrate + Visual-tree
+      insertion-order assumption (no added visible fixture).
 - [x] All-zero star sum cannot arise after DD-M3-P5-002 /
       DD-M3-P5-006 validate-time rejection; the corresponding
       layout-time defensive panic per DD-M3-P5-004 is retained.
@@ -374,12 +376,20 @@ for the owner's visible-correctness judgment.
 
 ### T6 — Owner-manual GUI smoke and any visible-correctness fix
 
-Discharges the **visible-correctness portion** of ADR
-[verification closure evidence item (5)](../decisions/preamble.md#phase-5-verification-closure-what-counts-as-a2-evidence)
-and the A11 gallery-proof owner-acceptance half. This step exists so
-visible smoke is verified — and fixed if it fails — **before** any
-phase-close mechanical work (spec / plan status flips) lands in T7,
-matching the Phase 4 T5 / T6 split rationale.
+Discharges the **owner-visible smoke for observation points #1–#5** of
+ADR [verification closure evidence item (5)](../decisions/preamble.md#phase-5-verification-closure-what-counts-as-a2-evidence)
+and the A11 gallery-proof owner-acceptance half. Item (5) also names a
+visible document-order-paint observation (#6), which is **not
+exercisable in this gallery slice** (the only overflow leaves the Grid
+downward and is clipped, so no two Cells' content overlap); it is **not
+discharged here**. Rather than adding a visible verification task, T7
+evidence aggregation records #6 as an acceptance judgment — accepted on
+the T2 layout-side substrate + Visual-tree insertion-order assumption,
+noted as an exception to the ADR/plan "visible proof must observe
+document-order paint" framing. This step exists so visible smoke is
+verified — and fixed if it fails — **before** any phase-close mechanical
+work (spec / plan status flips) lands in T7, matching the Phase 4
+T5 / T6 split rationale.
 
 - [x] Owner runs `target/release/gallery-rust.exe` (or builds-and-
       runs `cargo run -p gallery-rust --release` if the T5 binary is no
@@ -437,11 +447,13 @@ matching the Phase 4 T5 / T6 split rationale.
         is absent per DD-M3-P5-005). The layout-side overlap-geometry ↔
         document-order correspondence is covered by T2
         (`grid_arrange_overflowing_cells_overlap_in_document_order`);
-        the **visible pixel paint-precedence stays unobserved**,
-        accepted on the layout-side substrate + Visual-tree
-        insertion-order assumption. The divergence from the ADR/plan
-        "visible proof" framing is dispositioned in T7 evidence
-        aggregation (Codex review 2026-05-29). The T5 retro's
+        the **visible pixel paint-precedence stays unobserved**. Rather
+        than adding a visible verification task, T7 evidence aggregation
+        records this as an acceptance judgment — accepted on the
+        layout-side substrate + Visual-tree insertion-order assumption,
+        noted as an exception to the ADR/plan "visible proof must
+        observe document-order paint" framing (Codex review
+        2026-05-29). The T5 retro's
         "中段/footer overlap" prediction was geometrically incorrect;
         corrected in `t6.md`. Adding a dedicated overlap fixture (not
         polluting the gallery slice) is the preferred path if a visible

@@ -2742,10 +2742,14 @@ mod tests {
         // neighbour produce overlapping rectangles, and the arrange loop
         // emits them in declared order (children[0] before children[1]).
         // The *paint precedence* (later child on top under overlap) is a
-        // Visual-tree insertion-order property asserted by the T6 smoke
-        // ("document-order paint order is observed when overlapping content
-        // occurs"); T2 only proves the layout produces the overlapping
-        // geometry in document order.
+        // Visual-tree insertion-order property that stays UNOBSERVED in the
+        // Phase 5 gallery smoke: the slice exercises no sibling overlap (the
+        // only overflow leaves the Grid downward and is clipped), so #6 is not
+        // visible there. T7 evidence aggregation records this as an acceptance
+        // judgment (no added visible fixture; accepted on this layout-side
+        // substrate + the Visual-tree insertion-order assumption), not a
+        // further verification task. T2 only proves the layout produces the
+        // overlapping geometry in document order.
         let mut g = LayoutNode::grid(
             vec![TrackSize::Fixed(40), TrackSize::Fixed(40)],
             vec![TrackSize::Fixed(40)],
