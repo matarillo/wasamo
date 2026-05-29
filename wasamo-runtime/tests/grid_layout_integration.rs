@@ -375,6 +375,19 @@ fn grid_vstack_root_fixture_pins_production_root_shape() {
          drives a VStack-rooted fixture; got {gh}. A zero height indicates \
          the Shrink VStack root collapsed its Fill Grid child.",
     );
+    // The Grid spans from below the Button to the window's bottom edge:
+    // its outer height equals the *parent allocation* (window height minus
+    // the Button's font-derived height), not the resolved track sum
+    // (50 + 50 = 100). Pinning `gy + gh == VSTACK_GRID_H` — rather than a
+    // literal height — keeps the assertion font-metric independent while
+    // catching an `arrange_grid` regression that set the bounded-axis
+    // outer extent to the track sum instead of the parent allocation
+    // (`gh > 0` alone would pass such a regression).
+    assert_close(
+        gy + gh,
+        VSTACK_GRID_H,
+        "Grid bottom = window bottom (outer height = parent allocation, not track sum)",
+    );
 
     // Columns `100 1*` @ width 300 → boundaries [0, 100, 300].
     // Rows `50 50` (fixed) → boundaries [0, 50, 100], deterministic

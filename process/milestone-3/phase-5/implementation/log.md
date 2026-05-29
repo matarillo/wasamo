@@ -419,7 +419,8 @@
 
 - **T4 — Windows-runtime Grid layout / Visual evidence (2026-05-29).**
   Discharges ADR
-  [verification closure evidence item (4)](./preamble.md). Two
+  [verification closure evidence item (4)](../decisions/preamble.md#phase-5-verification-closure-what-counts-as-a2-evidence).
+  Two
   mock-free Windows-only integration fixtures land in
   `wasamo-runtime/tests/grid_layout_integration.rs`:
   - **`grid_rooted_fixture_lays_out_cells_through_visual_tree`** — Grid
