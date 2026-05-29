@@ -498,12 +498,12 @@ ADRs, CHANGELOG, notes, and git history, then deleted by default.
 
 | Phase | Status | Progress file | ADR | Notes |
 |---|---|---|---|---|
-| M3-Phase 1 — `bool` scalar binding | complete | [m3-phase-1-progress.md](progress/m3-phase-1-progress.md) | [m3-phase-1-bool-scalar.md](../decisions/m3-phase-1-bool-scalar.md) | ADR Accepted 2026-05-19; execution opened 2026-05-19; A9 discharged 2026-05-19 |
-| M3-Phase 2 — Box layout primitive | complete | [m3-phase-2-progress.md](progress/m3-phase-2-progress.md) | [m3-phase-2-box-layout.md](../decisions/m3-phase-2-box-layout.md) | ADR Accepted 2026-05-20; execution opened 2026-05-20; A6 discharged 2026-05-20 |
-| M3-Phase 3 — WrapPanel layout primitive | complete | [m3-phase-3-progress.md](progress/m3-phase-3-progress.md) | [m3-phase-3-wrap-panel.md](../decisions/m3-phase-3-wrap-panel.md) | ADR Accepted 2026-05-21; execution opened 2026-05-21; WrapPanel constituent of A3 discharged 2026-05-22; first novel-normative-spec phase |
-| M3-Phase 4 — ScrollView (minimal) | complete | [m3-phase-4-progress.md](progress/m3-phase-4-progress.md) | [m3-phase-4-scroll-view.md](../decisions/m3-phase-4-scroll-view.md) | ADR Accepted 2026-05-25; execution opened 2026-05-25; A5 discharged 2026-05-25; A11 gallery owner-acceptance 2026-05-25 |
-| M3-Phase 5 — Grid layout primitive | not started | — | — | Second novel-normative-spec phase; star sizing |
-| M3-Phase 6 — ZStack + conditional rendering | not started | — | — | First grammar surface; `bool` prereq |
+| M3-Phase 1 — `bool` scalar binding | complete | [plan.md](phase-1/implementation/plan.md) | [preamble.md](phase-1/decisions/preamble.md) | ADR Accepted 2026-05-19; execution opened 2026-05-19; A9 discharged 2026-05-19 |
+| M3-Phase 2 — Box layout primitive | complete | [plan.md](phase-2/implementation/plan.md) | [preamble.md](phase-2/decisions/preamble.md) | ADR Accepted 2026-05-20; execution opened 2026-05-20; A6 discharged 2026-05-20 |
+| M3-Phase 3 — WrapPanel layout primitive | complete | [plan.md](phase-3/implementation/plan.md) | [preamble.md](phase-3/decisions/preamble.md) | ADR Accepted 2026-05-21; execution opened 2026-05-21; WrapPanel constituent of A3 discharged 2026-05-22; first novel-normative-spec phase |
+| M3-Phase 4 — ScrollView (minimal) | complete | [plan.md](phase-4/implementation/plan.md) | [preamble.md](phase-4/decisions/preamble.md) | ADR Accepted 2026-05-25; execution opened 2026-05-25; A5 discharged 2026-05-25; A11 gallery owner-acceptance 2026-05-25 |
+| M3-Phase 5 — Grid layout primitive | in progress | [plan.md](phase-5/implementation/plan.md) | [preamble.md](phase-5/decisions/preamble.md) | ADR Accepted 2026-05-28; pre-doc Moment 1 in progress (dsl_spec §4.12 + architecture §6.8.7 landed 2026-05-29; implementation plan opens as the Moment 1 final commit); second novel-normative-spec phase; star sizing |
+| M3-Phase 6 — ZStack + conditional rendering | not started | — | — | First grammar surface; `bool` prereq; **M3-Phase 4 R1 (Window title wiring) owning phase** per M3-Phase 5 FD-E (R1 carries forward from Phase 4 to land alongside the first conditional-rendering / `bool`-driven property update slice) |
 | M3-Phase 7 — Iteration grammar | not started | — | — | `TypedValue` pressure check |
 | M3-Phase 8 — `selected` state + Gallery E2E + DSL spec public draft | not started | — | — | A1, A10, A12 discharge |
 
