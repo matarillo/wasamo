@@ -349,12 +349,20 @@ T6 per FD-I; T5 stops at build / launch success.
       aspect-derived height (cell width / 4) exceeds the fixed 64 px
       footer row, overflowing below the last row = below the Grid outer
       rectangle (see [log.md](./log.md) T5 entry).
-- [x] Build and run `examples/gallery-rust/`. Record `Start-Process`
-      launch success by the assistant. C / Zig gallery hosts remain
-      out of Phase 5 scope.
+- [x] Build and run `examples/gallery-rust/`. Record assistant-automated
+      visual evidence (launch + screenshot capture + assistant analysis,
+      per Codex review #1); `Start-Process` survival is the supporting
+      "no early crash" signal. C / Zig gallery hosts remain out of Phase 5
+      scope.
       `wasamoc check` exit 0; `cargo build -p gallery-rust --release`
-      green; `Start-Process target/release/gallery-rust.exe` ran with no
-      early crash (assistant-stopped; visible smoke is T6 owner-owned).
+      green; screenshot
+      [artifacts/t5-gallery-grid-launch.png](./artifacts/t5-gallery-grid-launch.png)
+      captured at launch and analysed by the assistant — non-blank screen,
+      header 3-col span, three separate middle-row columns, footer span +
+      outer-bounds clip baseline, untouched WrapPanel/buttons (see
+      [log.md](./log.md) T5 entry). Visible-correctness judgment is T6
+      owner-owned (the assistant analysis is a pre-T6 baseline, not a
+      substitute).
 
 ### T6 — Owner-manual GUI smoke and any visible-correctness fix
 

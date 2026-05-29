@@ -481,9 +481,38 @@
     lives here rather than inline in the `.ui`.
 
   Verified `target/release/wasamoc.exe check examples/gallery/gallery.ui`
-  exits 0 (positive control), `cargo build -p gallery-rust --release`
+  exits 0 (positive control) and `cargo build -p gallery-rust --release`
   green (only the pre-existing benign "wasamo provides no linkable target"
-  warning), and `Start-Process target/release/gallery-rust.exe` launches
-  and stays running with no early crash (stopped by the assistant; the
-  visible-correctness GUI smoke is owner-owned in T6 per FD-I). C / Zig
-  gallery hosts remain out of Phase 5 scope.
+  warning).
+
+  **Assistant visual-evidence baseline (Codex review #1, 2026-05-29).**
+  Codex flagged that `Start-Process` survival alone cannot show the Grid
+  slice actually rendered, the initial screen is non-blank, or the
+  intended sub-screen is in the viewport. The assistant-automated evidence
+  for a GUI host is therefore strengthened to **launch + screenshot
+  capture + assistant analysis**; `Start-Process` "stays running" is
+  demoted to a supporting "no early crash" signal. Procedure used:
+  `Start-Process target/release/gallery-rust.exe`, poll for
+  `MainWindowHandle`, bring the window foreground + topmost, then
+  `Graphics.CopyFromScreen` over its `GetWindowRect` (CopyFromScreen, not
+  `PrintWindow`, because the Visual-Layer / DirectComposition client area
+  reads back blank under `PrintWindow`). Artifact:
+  [artifacts/t5-gallery-grid-launch.png](./artifacts/t5-gallery-grid-launch.png)
+  (800×600 window capture). Assistant analysis of the image confirms:
+  - the initial screen is **non-blank** (Composition rendering works);
+  - the header `Cell` spans all three columns (the full-width band reads
+    "Header (spans 3 columns)");
+  - the three middle-row `Cell`s render as three separate colour segments
+    (the `1*` star row is compressed thin inside the VStack-allocated Grid
+    height but the column separation is visible);
+  - the footer `Cell` spans the full width (magenta band) and its
+    `aspect: 4:1` content overflows downward, cut off where the WrapPanel
+    begins — the **Grid outer-bounds clip baseline** for the T6 owner
+    smoke;
+  - the untouched Phase 3 WrapPanel slice ("Photo 1–10") and the buttons
+    still render.
+
+  This assistant analysis is a **pre-T6 automated baseline**, not a
+  replacement for the owner's visible-correctness judgment (T6 per FD-I);
+  it does not do pixel-level track-width verification or exact clip-edge
+  measurement. C / Zig gallery hosts remain out of Phase 5 scope.
