@@ -483,12 +483,28 @@ Per
 retrospective is **NOT owned by T7** and stays unchecked at T7 close
 — see the two retrospective bullets at the end of this list.
 
+**Phase-end-owned deliverables (revised 2026-05-30).** The
+`phase-sync` close and the `handoff.md` carry-forward write-up below
+were originally listed as T7 deliverables, but
+[retrospectives.md §15 / §6.3](../../../procedures/retrospectives.md)
+assign the final `carry-forward` close and the `handoff.md` clean-up
+to the **phase-end** retro (item 15), and the
+[T6 retro owner decision (2026-05-30)](../retrospectives/t6.md)
+explicitly states the DPI carry-forward `handoff.md` entry lands at
+phase-end and "plan.md T7 へ owning bullet は追記しない". To resolve
+the conflict in favour of the procedure SSOT + later owner decision
+(owner-approved 2026-05-30), the two bullets so tagged below are
+**NOT owned by T7** and stay `[ ]` at T7 close, like the phase-end
+retro bullet. T7's own `phase-sync` entries are still recorded in the
+T7 step-end retro item 10 (the task-retro's job per §10); the
+phase-end retro finalises them.
+
 - [ ] `cargo fmt --all -- --check` green locally and on CI.
 - [ ] `cargo build --release --workspace` green locally and on CI.
 - [ ] `cargo test --workspace` green locally and on CI.
 - [ ] Windows-only integration evidence green on CI (skip-guard
       verified per T4).
-- [ ] `docs/dsl_spec.md` §4.12 Phase status marker flips to
+- [x] `docs/dsl_spec.md` §4.12 Phase status marker flips to
       `M3-Phase 5 closed; implementation-synced`; document-level
       Status header updated to reflect Phase 5 closed
       (implementation-synced); revision history v1.4 entry recording
@@ -496,7 +512,7 @@ retrospective is **NOT owned by T7** and stays unchecked at T7 close
       any earlier-phase retroactive spec-gap fold surfaced during
       re-sync (owner-confirmation required per the retroactive
       spec-gap minimum-fold pattern).
-- [ ] `docs/dsl_spec.md` §8 textual IR grammar / AST shape folded
+- [x] `docs/dsl_spec.md` §8 textual IR grammar / AST shape folded
       to match the Phase 5 implementation shape of Grid carrier c1
       (`KindPayload::Grid { columns, rows }`) as landed by T1
       (wasamoc emit) and T3 (runtime loader parse). The §8 fold was
@@ -504,26 +520,42 @@ retrospective is **NOT owned by T7** and stays unchecked at T7 close
       pins at implementation time; per the retroactive spec-gap
       minimum-fold pattern this lands in the same revision-history
       v1.4 entry as the §4.12 status flip.
-- [ ] `docs/architecture.md` top Status flips to include
+- [x] `docs/architecture.md` top Status flips to include
       `M3-Phase 5 complete`; any implementation-divergent paragraphs
       in §6.8.7 re-synced to actual landed shape.
-- [ ] `process/milestone-3/plan.md` Phase 5 row Status flips to
+- [x] `process/milestone-3/plan.md` Phase 5 row Status flips to
       `complete`.
-- [ ] `docs/abi_spec.md` re-confirmed untouched (Grid added no
+- [x] `docs/abi_spec.md` re-confirmed untouched (Grid added no
       host-facing ABI surface; `LayoutError::GridUnboundedStarAxis`
       remained host-internal). Touch only if a Moment 2 surprise
       forced an ABI surface change, in which case escalate to ADR
       revision per the ADR preamble's three retrospectives.md
       §phase-sync ADR-touch cases.
-- [ ] `process/milestone-3/phase-5/decisions/preamble.md` /
+- [x] `process/milestone-3/phase-5/decisions/preamble.md` /
       `dd-m3-p5-*.md` touched **only** if one of the three
       retrospectives.md §phase-sync ADR-touch cases applies
       (AC discharged-vs-impl divergence; out-of-phase residual
       cross-reference; thesis-level finding). Otherwise the ADR
       set stays at its Moment 1 Accepted state.
+      **Scope clarification (2026-05-30):** this `[x]` records only
+      that **T7's Moment-2 sync itself touches no ADR** (case 1 — no
+      §4.12 divergence — and case 3 are closed at T7; the ADR stays at
+      Moment 1 Accepted). The **case-2** sub-decision — whether the DPI
+      out-of-phase residual warrants an ADR cross-reference to
+      `handoff.md` — is **NOT closed at T7**: since `handoff.md` is
+      written at phase-end (revise A above), that cross-ref
+      determination is a **phase-end** call (retro item 15, alongside
+      the handoff clean-up + item 14 README VDR). See
+      [t7.md item 6](../retrospectives/t7.md).
 - [ ] Step retro `phase-sync` items from T1-T7 close into
       `doc-folded` / `carry-forward` / `local-only` —
       **no open `phase-sync` items survive past phase close**.
+      **NOT owned by T7** (revised 2026-05-30; phase-end retro item 15
+      per [retrospectives.md §15](../../../procedures/retrospectives.md)).
+      Stays `[ ]` at T7 close. T7's own entries (the §8-fold
+      `doc-folded`; the T5/T6 verification-rule-placement and DPI
+      `carry-forward`s) are recorded in the T7 step-end retro item 10;
+      the phase-end retro performs the final close.
 - [ ] [log.md](./log.md) records the phase-close evidence pointer,
       CI run id, implementation summary distilled from T1-T6, and
       any final post-merge distillation.
@@ -533,11 +565,17 @@ retrospective is **NOT owned by T7** and stays unchecked at T7 close
       during gallery smoke; Phase 6 inputs including the R1 Window-
       title wiring assignment already cross-referenced in
       `m3-plan.md` Phase 6 row Notes).
+      **NOT owned by T7** (revised 2026-05-30; phase-end retro item 15
+      + §6.3 handoff clean-up per
+      [retrospectives.md §6.3/§15](../../../procedures/retrospectives.md),
+      and the [T6 retro owner decision](../retrospectives/t6.md) that
+      the DPI carry-forward `handoff.md` entry lands at phase-end).
+      Stays `[ ]` at T7 close.
 - [ ] Front-matter `status` flips from `active` to `closing` on this
       file in the same commit that flips T7's "all gates green"
       checkbox above. No further task checkboxes are added after
       this point.
-- [ ] **T7 step-end retrospective recorded** at
+- [x] **T7 step-end retrospective recorded** at
       `process/milestone-3/phase-5/retrospectives/t7.md`
       (retrospectives.md checklist items 1-11; step → phase merge
       gate; **owned by T7**, this is a T7 deliverable).
