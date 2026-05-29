@@ -392,8 +392,18 @@ matching the Phase 4 T5 / T6 split rationale.
       1000×750); this affects only assistant screenshot tooling
       (capture must be per-monitor-DPI-aware), not the owner's direct
       on-screen viewing. Observation points:
-      - column tracks render at the declared widths (fixed `C0` ≈ half
-        the `C1` star width; `C2` star ≈ 2× `C1`);
+      - column tracks are fixed vs. variable — **resize observation
+        required** (a single launch size only shows the `C2`:`C1`
+        ratio, not that `C1` / `C2` are flexible star tracks; fixed
+        widths could coincidentally match the ratio):
+        - at launch: `C0` is the narrowest; `C2` ≈ 2× `C1`;
+        - widen / narrow the window: `C0` stays ≈120 logical px
+          (constant), while `C1` / `C2` grow / shrink with the slack
+          and keep `C2`:`C1` ≈ 2:1.
+        (Assistant baseline confirms: `C0` held ~150 physical px from
+        an 820→1500 px window while the stars absorbed the slack, and
+        the Photo WrapPanel reflowed 6→10 per row — real re-layout, not
+        a bitmap stretch.)
       - the spanning header `Cell` spans all three columns;
       - the three middle-row `Cell`s occupy separate columns;
       - the spanning footer `Cell` spans all three columns;
