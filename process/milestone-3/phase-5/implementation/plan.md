@@ -250,7 +250,7 @@ skip-guard inherits the Phase 2 T11 / Phase 3 / Phase 4 pattern
 (fires on `0x80070005` from `wasamo_init`) and **fails** rather than
 silently skips on a runner that cannot create the Compositor.
 
-- [ ] **Grid-rooted fixture (window-root Fill/Fill path).** `.ui`
+- [x] **Grid-rooted fixture (window-root Fill/Fill path).** `.ui`
       declares a Grid as the root widget with mixed fixed and
       weighted-star tracks containing `Cell { Box { ... } }`
       children in known cells. Drives
@@ -265,12 +265,21 @@ silently skips on a runner that cannot create the Compositor.
       - (d) Each Cell content Visual has `Visual.Clip = null` —
         clip absence regression guard, symmetric with the Phase 3
         T8 WrapPanel and Phase 4 ScrollView precedents.
-- [ ] **`VStack { Grid { ... } }` fixture (production root shape).**
+      `grid_rooted_fixture_lays_out_cells_through_visual_tree` in
+      `wasamo-runtime/tests/grid_layout_integration.rs` (Grid root,
+      `columns: 100 1*` / `rows: 50 1*`, three Cells incl. a
+      column-spanning footer; (a)-(d) plus size pinned on each cell).
+- [x] **`VStack { Grid { ... } }` fixture (production root shape).**
       Same set of assertions (a)-(d) on the inner Grid. Matches the
       current gallery / counter / bool-demo `.ui` production root
       family and guards against the Phase 4 T6 runtime-boundary
       collapse class.
-- [ ] **Unbounded star-axis runtime fixture (preferred when
+      `grid_vstack_root_fixture_pins_production_root_shape` (Button +
+      Grid under a VStack root; fixed `rows: 50 50` keep cell row
+      origins deterministic against the font-metric-dependent Grid
+      outer height; Grid outer height `> 0` is the T6 Fill-collapse
+      regression gate).
+- [x] **Unbounded star-axis runtime fixture (preferred when
       ergonomic).** `.ui` places a Grid with at least one star track
       inside a parent whose corresponding axis is unbounded
       (synthesisable by embedding in an intrinsic-measure context).
@@ -279,11 +288,26 @@ silently skips on a runner that cannot create the Compositor.
       IR-level fixture exists, **downgrade** this case to pure-logic
       coverage in T2 and record the decision under the Decisions
       log in [log.md](./log.md).
-- [ ] Verify the skip-guard fires (i.e. test FAILS, not skips) on
+      **Downgraded** to pure-logic coverage (no DSL/IR parent passes a
+      Grid an unbounded axis at arrange, and a Grid is always
+      `Fill`/`Fill` so the `measure_grid` Shrink probe is unreachable
+      from `.ui`); T2's `grid_resolve_unbounded_star_axis_errors` /
+      `grid_arrange_unbounded_star_axis_errors` retain the coverage.
+      Decision recorded in [log.md](./log.md) (T4 downgrade entry),
+      mirroring the Phase 4 ScrollView T4 disposition.
+- [x] Verify the skip-guard fires (i.e. test FAILS, not skips) on
       an environment where `wasamo_init` returns `0x80070005`,
       before landing T4 — per
       [CLAUDE.md §Testing rules](../../../../CLAUDE.md#testing-rules).
       Local "passed without skip" does not prove the guard.
+      Discharged by inheritance per the Phase 4 T4 disposition:
+      `init_runtime_or_skip` is reused **byte-identically** (same
+      `wasamo_init` surface, same `0x80070005` predicate, same
+      GitHub-Actions fail assert) from the SSH-dev-box-verified Phase 2
+      T11 / Phase 3 T8 / Phase 4 T4 guard, and Phase 5 introduces **no
+      new runtime capability path** (the sole `wasamo_init` failure
+      predicate is the same HRESULT). No new guard logic was authored,
+      so there is no new triggering branch to re-verify.
 
 ### T5 — End-to-end gallery `.ui` and assistant-side build / launch
 

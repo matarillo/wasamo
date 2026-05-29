@@ -374,3 +374,76 @@
   re-implementing the compile-time-only multi-Cell placement-presence
   diagnostic (DD-M3-P5-006 marks that row `(n/a)` at runtime). All
   violations surface `IrLoadError::Validate` → `WASAMO_ERR_IR_MALFORMED`.
+
+- **T4 — unbounded star-axis runtime fixture downgraded to pure-logic
+  (2026-05-29).** Settles the third
+  [plan.md T4 bullet](./plan.md#t4--windows-runtime-layout-and-visual-evidence)
+  ("Unbounded star-axis runtime fixture (preferred when ergonomic)"),
+  which carries an explicit **downgrade** escape clause. Decision:
+  **downgrade** — no Grid-specific Windows integration fixture for the
+  unbounded star-axis error is added; the case stays at the pure-logic
+  coverage T2 already landed. Mirrors the Phase 4 ScrollView T4
+  disposition (`scroll_view_layout_integration.rs` header note).
+
+  **Why no ergonomic `.ui` / IR fixture exists.**
+  `LayoutError::GridUnboundedStarAxis` is raised by
+  `resolve_axis_tracks` only when an axis carries a star track *and* is
+  given `AxisBound::Unbounded`
+  ([layout.rs:1072](../../../../wasamo-runtime/src/layout.rs#L1072)).
+  Two paths reach that:
+  - **arrange-time** (`arrange_grid`): every DSL parent in the Phase 5
+    widget catalog (window root via `run_layout` / `run_layout_as_window_root`,
+    VStack / HStack main + cross, Box, WrapPanel, ScrollView) passes a
+    **finite** cell to its Grid child at arrange — the window root is
+    finite, and the stack/box/scroll arrange paths each resolve a
+    concrete child rectangle before recursing. No catalog parent hands a
+    Grid an unbounded axis at arrange.
+  - **measure-time Shrink probe** (`measure_grid` → `grid_shrink_extent`):
+    only a `Shrink` Grid axis under an unbounded measure probe reaches
+    `resolve_axis_tracks` with `Unbounded`. But DSL-authored `.ui`
+    cannot set a Grid's `width` / `height` (dsl_spec §4 exposes no
+    sizing attributes), so the loader always builds a Grid as
+    `Fill` / `Fill` (`WidgetNode::grid` defaults — widget.rs). A `Fill`
+    axis measures to `0.0`, never entering the `Shrink` branch. The
+    branch is structurally unreachable from any `.ui` source.
+
+  **Evidence retained.** The two T2 pure-logic tests in
+  `wasamo-runtime::layout::tests` —
+  `grid_resolve_unbounded_star_axis_errors`
+  ([layout.rs:2477](../../../../wasamo-runtime/src/layout.rs#L2477)) and
+  `grid_arrange_unbounded_star_axis_errors`
+  ([layout.rs:2675](../../../../wasamo-runtime/src/layout.rs#L2675)) —
+  pin both the resolve and arrange entry points. The downgrade is
+  recorded in the `grid_layout_integration.rs` module header and in the
+  T4 step-end retrospective Item 10.
+
+- **T4 — Windows-runtime Grid layout / Visual evidence (2026-05-29).**
+  Discharges ADR
+  [verification closure evidence item (4)](./preamble.md). Two
+  mock-free Windows-only integration fixtures land in
+  `wasamo-runtime/tests/grid_layout_integration.rs`:
+  - **`grid_rooted_fixture_lays_out_cells_through_visual_tree`** — Grid
+    as the component root with mixed fixed + weighted-star tracks on both
+    axes (`columns: 100 1*`, `rows: 50 1*`), three Cells (two single +
+    one column-spanning), driven through `run_layout_as_window_root`
+    (window-root Fill/Fill path).
+  - **`grid_vstack_root_fixture_pins_production_root_shape`** —
+    `VStack { Button + Grid }` matching the gallery / counter / bool-demo
+    production root family, the Phase 4 T6 production-root-shape
+    carry-forward (constraints.md §1). Fixed rows (`50 50`) keep the cell
+    row origins deterministic even though the VStack-allocated Grid
+    outer height is font-metric dependent; the Grid outer height `> 0`
+    assertion is the regression gate for the Phase 4 T6 Fill-collapse
+    class.
+
+  Both assert the (a)-(d) menu: (a) Grid outer rect = parent allocation;
+  (b) each Cell content Visual offset = resolved cell origin (with size
+  pinned, stretch alignment expanding to the cell extent including the
+  span); (c) Grid outer Visual carries a non-null clip (DD-M3-P5-005
+  `InsetClip`); (d) each Cell content Visual has no clip (per-cell
+  clipping out of scope — symmetric with the Phase 3 WrapPanel / Phase 4
+  ScrollView clip-absence guards). The skip-guard (`init_runtime_or_skip`)
+  is reused byte-identically from the Phase 4 T4 scroll fixture; the
+  Phase 5 re-confirmation that it fires (test FAILS, not skips) on the
+  SSH dev box (`wasamo_init` → `0x80070005`) is the T4 checklist item-4
+  owner/environment gate.
