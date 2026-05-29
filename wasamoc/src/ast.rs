@@ -92,6 +92,60 @@ impl Expr {
     }
 }
 
+/// Grid track-list axis (DD-M3-P5-001 / DD-M3-P5-002). Distinguishes the
+/// `columns:` and `rows:` track lists parsed by the narrow Grid-specific
+/// parser path.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TrackAxis {
+    Columns,
+    Rows,
+}
+
+impl TrackAxis {
+    pub fn attr_name(&self) -> &'static str {
+        match self {
+            TrackAxis::Columns => "columns",
+            TrackAxis::Rows => "rows",
+        }
+    }
+}
+
+/// A single track-size token captured by the Grid-specific track-list
+/// parser (DD-M3-P5-002, R-A spike Decision 4). The parser is permissive:
+/// it records the parsed *shape* (and span) for every token in track
+/// position, including the reserved-future `auto` word and out-of-range /
+/// invalid forms, so the **check layer** can emit precise diagnostics
+/// (range, reserved-future `auto`, float-not-valid, unknown token). Raw
+/// integer values are carried as `i64` (the `IntLit` width); value-range
+/// validation (`Fixed >= 1`, star weight in `[1, 1024]`) is the check
+/// layer's job, not the parser's.
+#[derive(Debug, Clone)]
+pub enum TrackSize {
+    /// Bare integer in track position (fixed pixels). `value` may be
+    /// out of range / non-positive; check rejects.
+    Fixed { value: i64, span: Span },
+    /// `n*` (weighted star) or bare `*` (unit star → `weight = 1`).
+    /// `weight` may be out of range; check rejects.
+    Star { weight: i64, span: Span },
+    /// A float in track position (`1.5`, `1.5*`) — never valid in
+    /// Phase 5; check rejects with a float-not-valid diagnostic.
+    InvalidFloat { span: Span },
+    /// A bare word in track position. `auto` is the reserved-future
+    /// token (DD-M3-P5-002); any other word is an unknown track token.
+    Word { name: String, span: Span },
+}
+
+impl TrackSize {
+    pub fn span(&self) -> &Span {
+        match self {
+            TrackSize::Fixed { span, .. }
+            | TrackSize::Star { span, .. }
+            | TrackSize::InvalidFloat { span }
+            | TrackSize::Word { span, .. } => span,
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub enum AssignOp {
     Eq,
@@ -142,6 +196,16 @@ pub enum Member {
     SignalHandler {
         signal: String,
         body: Block,
+        span: Span,
+    },
+    /// A Grid `columns:` / `rows:` track-list member (DD-M3-P5-002).
+    /// Produced only by the narrow Grid-specific parser path (routed on
+    /// `widget_type == "Grid"` in `parse_widget_decl`), so it never
+    /// appears outside a `Grid` widget body. Lowers to
+    /// `KindPayload::Grid` (carrier c1), never to an `IrProp`.
+    GridTracks {
+        axis: TrackAxis,
+        tracks: Vec<TrackSize>,
         span: Span,
     },
 }

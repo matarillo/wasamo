@@ -253,9 +253,21 @@ impl<'a> Parser<'a> {
         let (type_name, _) = self.expect_ident()?;
         self.expect_lbrace()?;
 
+        // Widget-type context routing (R-A spike Decision 1): only inside a
+        // `Grid` body do `columns:` / `rows:` route to the narrow
+        // track-list parser path (DD-M3-P5-002). Every other member — and
+        // every member of every non-Grid widget — stays on `parse_member`,
+        // so `parse_expr` / `parse_property_bind` are untouched and no
+        // general list grammar is opened.
+        let is_grid = type_name == "Grid";
+
         let mut members = Vec::new();
         while !matches!(self.peek(), Token::RBrace | Token::Eof) {
-            members.push(self.parse_member()?);
+            if is_grid && self.at_grid_track_attr() {
+                members.push(self.parse_grid_track_list()?);
+            } else {
+                members.push(self.parse_member()?);
+            }
         }
 
         let end_tok = self.expect_rbrace()?;
@@ -269,6 +281,142 @@ impl<'a> Parser<'a> {
                 col: start.col,
             },
         })
+    }
+
+    /// True when the upcoming tokens are a Grid track-list attribute
+    /// (`columns:` or `rows:`). Used only inside a Grid body.
+    fn at_grid_track_attr(&self) -> bool {
+        matches!(self.peek(), Token::Ident(name) if name == "columns" || name == "rows")
+            && matches!(self.peek_next(), Token::Colon)
+    }
+
+    /// Parse a Grid `columns:` / `rows:` track list (DD-M3-P5-002). A
+    /// track list is a whitespace-separated sequence of track-size tokens
+    /// terminated by the next member or the closing `}`. The parser is
+    /// permissive about value validity (range / `auto` / float) so the
+    /// check layer can name each problem precisely; here it only assembles
+    /// the typed `TrackSize` sequence and requires it be non-empty.
+    fn parse_grid_track_list(&mut self) -> Result<Member, Diagnostic> {
+        let start = self.current_span().clone();
+        let (name, _) = self.expect_ident()?;
+        let axis = match name.as_str() {
+            "columns" => TrackAxis::Columns,
+            "rows" => TrackAxis::Rows,
+            // `at_grid_track_attr` gates this call to exactly these names.
+            _ => unreachable!("parse_grid_track_list on non-track attribute"),
+        };
+        self.expect_colon()?;
+
+        let mut tracks = Vec::new();
+        let mut end = self.current_span().start;
+        loop {
+            match self.peek() {
+                Token::IntLit(v) => {
+                    let value = *v;
+                    let tok = self.advance();
+                    if self.star_adjacent_to(tok.span.end) {
+                        // `n*` — adjacent star marks a weighted-star track.
+                        let star = self.advance();
+                        end = star.span.end;
+                        tracks.push(TrackSize::Star {
+                            weight: value,
+                            span: Span {
+                                start: tok.span.start,
+                                end: star.span.end,
+                                line: tok.span.line,
+                                col: tok.span.col,
+                            },
+                        });
+                    } else {
+                        end = tok.span.end;
+                        tracks.push(TrackSize::Fixed {
+                            value,
+                            span: tok.span,
+                        });
+                    }
+                }
+                Token::FloatLit(_) => {
+                    let tok = self.advance();
+                    // `1.5*` — consume an adjacent star so the float forms
+                    // a single (invalid) track element rather than leaving
+                    // a spurious unit-star behind.
+                    let elem_end = if self.star_adjacent_to(tok.span.end) {
+                        self.advance().span.end
+                    } else {
+                        tok.span.end
+                    };
+                    end = elem_end;
+                    tracks.push(TrackSize::InvalidFloat {
+                        span: Span {
+                            start: tok.span.start,
+                            end: elem_end,
+                            line: tok.span.line,
+                            col: tok.span.col,
+                        },
+                    });
+                }
+                Token::Star => {
+                    // Standalone `*` — unit star (`weight = 1`).
+                    let tok = self.advance();
+                    end = tok.span.end;
+                    tracks.push(TrackSize::Star {
+                        weight: 1,
+                        span: tok.span,
+                    });
+                }
+                // A bare word in track position (`auto`, or any other
+                // ident) that does NOT begin a new member. An ident
+                // followed by `:` / `{` / `=>` is the next member and
+                // terminates the track list.
+                Token::Ident(_)
+                    if !matches!(
+                        self.peek_next(),
+                        Token::Colon | Token::LBrace | Token::Arrow
+                    ) =>
+                {
+                    let tok = self.advance();
+                    if let Token::Ident(name) = tok.token {
+                        end = tok.span.end;
+                        tracks.push(TrackSize::Word {
+                            name,
+                            span: tok.span,
+                        });
+                    } else {
+                        unreachable!()
+                    }
+                }
+                // Anything else (next member start, `}`, EOF, …) ends the
+                // track list.
+                _ => break,
+            }
+        }
+
+        if tracks.is_empty() {
+            return Err(self.error(format!(
+                "expected at least one track size after `{}:`; a Grid track list is a whitespace-separated sequence of integer (fixed px) or `n*` (weighted star) tokens",
+                axis.attr_name()
+            )));
+        }
+
+        Ok(Member::GridTracks {
+            axis,
+            tracks,
+            span: Span {
+                start: start.start,
+                end,
+                line: start.line,
+                col: start.col,
+            },
+        })
+    }
+
+    /// True when the current token is a `Star` immediately adjacent
+    /// (no intervening whitespace) to the byte offset `prev_end`. This
+    /// is the R-A spike Decision 3 mechanism distinguishing `1*` (one
+    /// weighted-star track) from `1 *` (a fixed track and a unit-star
+    /// track) — the same span-adjacency rule the lexer uses for ratios.
+    fn star_adjacent_to(&self, prev_end: usize) -> bool {
+        matches!(self.peek(), Token::Star) && self.current_span().start == prev_end
     }
 
     fn parse_signal_handler(&mut self) -> Result<Member, Diagnostic> {
@@ -897,5 +1045,152 @@ mod tests {
     fn error_trailing_tokens() {
         let msg = parse_err_msg("component Foo inherits Bar {} extra");
         assert!(msg.contains("end of file"), "message: {msg}");
+    }
+
+    // --- M3-Phase 5 T1: Grid track-list parser path (DD-M3-P5-002) ---
+
+    /// Pull the `members` of the first widget decl in the component body.
+    fn first_widget_members(def: &ComponentDef) -> &[Member] {
+        match &def.members[0] {
+            Member::WidgetDecl { members, .. } => members,
+            other => panic!("expected WidgetDecl, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn grid_track_list_fixed_and_weighted_star() {
+        let def = parse_ok("component C inherits W { Grid { columns: 180 1* 2* rows: 1* 1* } }");
+        let members = first_widget_members(&def);
+        let cols = members
+            .iter()
+            .find_map(|m| match m {
+                Member::GridTracks {
+                    axis: TrackAxis::Columns,
+                    tracks,
+                    ..
+                } => Some(tracks),
+                _ => None,
+            })
+            .expect("columns track list");
+        assert!(matches!(cols[0], TrackSize::Fixed { value: 180, .. }));
+        assert!(matches!(cols[1], TrackSize::Star { weight: 1, .. }));
+        assert!(matches!(cols[2], TrackSize::Star { weight: 2, .. }));
+        let rows = members
+            .iter()
+            .find_map(|m| match m {
+                Member::GridTracks {
+                    axis: TrackAxis::Rows,
+                    tracks,
+                    ..
+                } => Some(tracks),
+                _ => None,
+            })
+            .expect("rows track list");
+        assert_eq!(rows.len(), 2);
+        assert!(rows
+            .iter()
+            .all(|t| matches!(t, TrackSize::Star { weight: 1, .. })));
+    }
+
+    #[test]
+    fn grid_adjacent_star_is_one_weighted_track() {
+        // `1*` is a single weighted-star track.
+        let def = parse_ok("component C inherits W { Grid { columns: 1* rows: 1* } }");
+        let cols = grid_axis(&def, TrackAxis::Columns);
+        assert_eq!(cols.len(), 1);
+        assert!(matches!(cols[0], TrackSize::Star { weight: 1, .. }));
+    }
+
+    #[test]
+    fn grid_non_adjacent_star_is_fixed_then_unit_star() {
+        // `1 *` (whitespace) is a Fixed(1) track followed by a unit-star
+        // track — the R-A spike Decision 3 adjacency distinction.
+        let def = parse_ok("component C inherits W { Grid { columns: 1 * rows: 1* } }");
+        let cols = grid_axis(&def, TrackAxis::Columns);
+        assert_eq!(cols.len(), 2);
+        assert!(matches!(cols[0], TrackSize::Fixed { value: 1, .. }));
+        assert!(matches!(cols[1], TrackSize::Star { weight: 1, .. }));
+    }
+
+    #[test]
+    fn grid_bare_unit_star_track() {
+        let def = parse_ok("component C inherits W { Grid { columns: * rows: 1* } }");
+        let cols = grid_axis(&def, TrackAxis::Columns);
+        assert_eq!(cols.len(), 1);
+        assert!(matches!(cols[0], TrackSize::Star { weight: 1, .. }));
+    }
+
+    #[test]
+    fn grid_auto_word_captured_for_check_layer() {
+        // The parser captures `auto` as a Word token; the reserved-future
+        // diagnostic is the check layer's responsibility.
+        let def = parse_ok("component C inherits W { Grid { columns: auto rows: 1* } }");
+        let cols = grid_axis(&def, TrackAxis::Columns);
+        assert!(matches!(&cols[0], TrackSize::Word { name, .. } if name == "auto"));
+    }
+
+    #[test]
+    fn grid_float_track_captured_as_invalid_float() {
+        let def = parse_ok("component C inherits W { Grid { columns: 1.5 rows: 1* } }");
+        let cols = grid_axis(&def, TrackAxis::Columns);
+        assert!(matches!(cols[0], TrackSize::InvalidFloat { .. }));
+    }
+
+    #[test]
+    fn grid_empty_track_list_rejected_at_parse() {
+        let msg = parse_err_msg("component C inherits W { Grid { columns: rows: 1* } }");
+        assert!(
+            msg.contains("at least one track size") && msg.contains("columns"),
+            "message: {msg}"
+        );
+    }
+
+    #[test]
+    fn track_list_routing_only_inside_grid() {
+        // `columns:` on a non-Grid widget stays a generic PropertyBind —
+        // the track-list grammar never leaks outside Grid (R-A spike
+        // Decision 1). Here `columns: 5` is a single-int property bind.
+        let def = parse_ok("component C inherits W { VStack { columns: 5 } }");
+        let members = first_widget_members(&def);
+        assert!(matches!(
+            &members[0],
+            Member::PropertyBind { name, value: Expr::IntLit { value: 5, .. }, .. } if name == "columns"
+        ));
+    }
+
+    #[test]
+    fn grid_cell_children_parse_as_widget_decls() {
+        let def = parse_ok(
+            r#"component C inherits W {
+                Grid {
+                    columns: 1* rows: 1*
+                    Cell { row: 0 column: 0 Text { text: "x" } }
+                }
+            }"#,
+        );
+        let members = first_widget_members(&def);
+        let cell = members
+            .iter()
+            .find(|m| matches!(m, Member::WidgetDecl { type_name, .. } if type_name == "Cell"))
+            .expect("Cell widget decl");
+        if let Member::WidgetDecl { members: cm, .. } = cell {
+            assert!(cm
+                .iter()
+                .any(|m| matches!(m, Member::PropertyBind { name, .. } if name == "row")));
+            assert!(cm
+                .iter()
+                .any(|m| matches!(m, Member::WidgetDecl { type_name, .. } if type_name == "Text")));
+        }
+    }
+
+    /// Helper: the track list for a given axis of the first widget decl.
+    fn grid_axis(def: &ComponentDef, want: TrackAxis) -> &[TrackSize] {
+        first_widget_members(def)
+            .iter()
+            .find_map(|m| match m {
+                Member::GridTracks { axis, tracks, .. } if *axis == want => Some(tracks.as_slice()),
+                _ => None,
+            })
+            .expect("track list for axis")
     }
 }

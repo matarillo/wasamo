@@ -58,37 +58,51 @@ Grid slice positive control** half of item (1) closes at T5 (the
 slice's `.ui` compiles cleanly); the **evidence aggregation** for
 item (1) closes at T7 alongside the CI gates.
 
-- [ ] **Pre-implementation spike** for risk
+- [x] **Pre-implementation spike** for risk
       [R-A](./preamble.md#technical-risks-planning-time-recon):
       settle the grafting shape of the narrow Grid-specific
       track-list parser path against `parse_widget_decl` /
       `parse_property_bind` (widget-type context routing) and
       decide whether `n*` admits a new lexer token, before opening
       the bullets below. Record the chosen shape in
-      [log.md](./log.md).
-- [ ] Register `Grid` in `wasamoc`'s known widget registry / check
+      [log.md](./log.md). **Settled 2026-05-29** (see log.md
+      T1 R-A entry): widget-type routing in `parse_widget_decl`;
+      payload-less `Token::Star` (no fused `n*` literal); `1*` vs
+      `1 *` distinguished by span adjacency; new `Member::GridTracks`
+      AST carrier.
+- [x] Register `Grid` in `wasamoc`'s known widget registry / check
       surface; recognise `Cell` as a Grid-internal IR node kind
       that is rejected outside a `Grid` parent per DD-M3-P5-001 /
       DD-M3-P5-006. (Runtime widget-kind materialisation is T3.)
-- [ ] Add the narrow Grid-specific track-list parser path for
+      `Grid` added to `KNOWN_WIDGET_TYPES`; `Cell` special-cased in
+      the `check.rs` WidgetDecl arm (no unknown-widget warning;
+      `Cell`-outside-`Grid` rejected).
+- [x] Add the narrow Grid-specific track-list parser path for
       `columns:` / `rows:` per DD-M3-P5-002 (does not open a general
-      list / collection grammar).
-- [ ] Implement Surface A2 Grid / Cell check-side diagnostics per
+      list / collection grammar). Widget-type routing in
+      `parse_widget_decl` → `parse_grid_track_list`; payload-less
+      `Token::Star` (lexer) + span adjacency per the R-A spike.
+- [x] Implement Surface A2 Grid / Cell check-side diagnostics per
       DD-M3-P5-001 / DD-M3-P5-002 / DD-M3-P5-003 / DD-M3-P5-005 /
       DD-M3-P5-006 (track-list shape including reserved-future
       `auto` diagnostic; placement-attribute presence with the
       single-Cell escape clause; Cell single-child; placement / span
       value range; same-cell / overlapping-rectangle conflict;
       unknown-attribute rejection on Grid and Cell; alignment-value
-      vocabulary).
-- [ ] Add `wasamoc` positive / negative tests covering the
-      representative-fixture half of ADR evidence item (1).
-- [ ] `wasamoc` emits the Grid carrier c1 (per DD-M3-P5-001) to
+      vocabulary). `check_grid` / `check_cell` in `check.rs`.
+- [x] Add `wasamoc` positive / negative tests covering the
+      representative-fixture half of ADR evidence item (1). Positive
+      controls (fixed + weighted-star + spanning) and a reject case
+      per diagnostic land inline in `parser.rs` / `check.rs` /
+      `lower.rs` / `emit.rs` test modules.
+- [x] `wasamoc` emits the Grid carrier c1 (per DD-M3-P5-001) to
       textual IR in a Phase-5 implementation shape so that
       `IrProp.value` stays strictly `IrLiteral` and Grid's
       `columns:` / `rows:` track lists live in the Grid-specific
       kind payload, not in `IrProp` entries. The final textual
-      shape feeds the T7 `dsl_spec.md` §8 fold.
+      shape feeds the T7 `dsl_spec.md` §8 fold. Emitted as
+      `tracks <axis> = <track-list>` lines (`emit.rs`); unit star is
+      canonicalised to `1*`.
 
 ### T2 — Layout engine: Grid track-resolution and arrange
 

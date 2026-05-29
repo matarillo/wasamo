@@ -55,6 +55,15 @@ pub enum Token {
     StarEq,
     SlashEq,
     Eq,
+    /// Bare `*` (a `*` not followed by `=`). Introduced in M3-Phase 5
+    /// for the Grid track-list star token (DD-M3-P5-002). The lexer is
+    /// deliberately ignorant of track semantics: it emits a payload-less
+    /// `Star`, and the Grid-specific parser path reassembles `n*`
+    /// (weighted star) from an adjacent `IntLit` + `Star` and `*` (unit
+    /// star) from a standalone `Star`. Outside a Grid track list a bare
+    /// `*` reaches no accepting grammar rule and surfaces a parser-level
+    /// diagnostic. The `*=` compound-assign path is unchanged.
+    Star,
     Eof,
 }
 
@@ -94,6 +103,7 @@ impl Token {
             Token::StarEq => "`*=`",
             Token::SlashEq => "`/=`",
             Token::Eq => "`=`",
+            Token::Star => "`*`",
             Token::Eof => "end of file",
         }
     }
@@ -270,12 +280,11 @@ pub fn tokenize(src: &str, filename: &str) -> Result<Vec<SpannedToken>, Diagnost
                     c.advance();
                     Token::StarEq
                 } else {
-                    return Err(Diagnostic::error(
-                        filename,
-                        start.line,
-                        start.col,
-                        "unexpected `*`",
-                    ));
+                    // Bare `*` — the Grid track-list star token
+                    // (DD-M3-P5-002). Previously a lex error; M3-Phase 5
+                    // admits it as a payload-less `Star` and lets the
+                    // Grid-specific parser path decide its meaning.
+                    Token::Star
                 }
             }
             '/' => {
@@ -849,6 +858,63 @@ mod tests {
         assert!(matches!(&toks[1], Token::MinusEq));
         assert!(matches!(&toks[2], Token::StarEq));
         assert!(matches!(&toks[3], Token::SlashEq));
+    }
+
+    #[test]
+    fn bare_star_lexes_as_star_token() {
+        // M3-Phase 5: a `*` not followed by `=` is the Grid track-list
+        // star token, not a lex error (DD-M3-P5-002).
+        let toks = lex_ok("*");
+        assert!(matches!(&toks[0], Token::Star));
+        assert!(matches!(&toks[1], Token::Eof));
+    }
+
+    #[test]
+    fn star_eq_still_compound_assign() {
+        // The `*=` path is unchanged by the bare-`*` admission.
+        let toks = lex_ok("*=");
+        assert!(matches!(&toks[0], Token::StarEq));
+    }
+
+    #[test]
+    fn weighted_star_lexes_as_int_then_adjacent_star() {
+        // `2*` lexes as IntLit(2) immediately followed by Star. The
+        // weighted-star reassembly is the parser's job; the lexer only
+        // guarantees the two tokens and their byte-adjacency.
+        let tokens = tokenize("2*", "<test>").unwrap();
+        assert!(matches!(&tokens[0].token, Token::IntLit(2)));
+        assert!(matches!(&tokens[1].token, Token::Star));
+        // Adjacency: the Star starts exactly where the IntLit ends.
+        assert_eq!(tokens[0].span.end, tokens[1].span.start);
+    }
+
+    #[test]
+    fn fixed_then_unit_star_is_non_adjacent() {
+        // `1 *` (whitespace between) lexes as IntLit(1) and Star that are
+        // NOT byte-adjacent — the parser reads this as a Fixed(1) track
+        // followed by a unit-star track, distinct from `1*` (one
+        // weighted-star track). Same adjacency mechanism RatioLit uses.
+        let tokens = tokenize("1 *", "<test>").unwrap();
+        assert!(matches!(&tokens[0].token, Token::IntLit(1)));
+        assert!(matches!(&tokens[1].token, Token::Star));
+        assert!(tokens[0].span.end < tokens[1].span.start);
+    }
+
+    #[test]
+    fn track_list_sequence_lexes_to_int_and_star_tokens() {
+        // Representative track list `180 1* 2*` lexes to the flat token
+        // stream the Grid parser path consumes.
+        let tokens = tokenize("180 1* 2*", "<test>").unwrap();
+        let kinds: Vec<&Token> = tokens.iter().map(|t| &t.token).collect();
+        assert!(matches!(kinds[0], Token::IntLit(180)));
+        assert!(matches!(kinds[1], Token::IntLit(1)));
+        assert!(matches!(kinds[2], Token::Star));
+        assert!(matches!(kinds[3], Token::IntLit(2)));
+        assert!(matches!(kinds[4], Token::Star));
+        assert!(matches!(kinds[5], Token::Eof));
+        // The `1` and its `*` are adjacent; the `2` and its `*` are adjacent.
+        assert_eq!(tokens[1].span.end, tokens[2].span.start);
+        assert_eq!(tokens[3].span.end, tokens[4].span.start);
     }
 
     #[test]

@@ -96,6 +96,32 @@ pub struct IrProp {
     pub value: IrLiteral,
 }
 
+/// Grid track sizing form (DD-M3-P5-002). Phase 5 admits fixed integer
+/// pixels and weighted-star tracks only; `auto` / `minmax` / named lines
+/// are deferred — this enum is their additive extension point (adding a
+/// future `Auto` variant lowers existing star/fixed track lists
+/// unchanged). Value validity (`Fixed` `>= 1`; `Star` weight in
+/// `[1, 1024]`) is enforced at `wasamoc check` and runtime `validate()`,
+/// not at the variant. Unit star `*` lowers to `Star(1)`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum TrackSize {
+    Fixed(i32),
+    Star(u32),
+}
+
+/// Grid kind-specific payload carried on a still-generic `IrNode`
+/// (DD-M3-P5-001 carrier decision **c1**). Grid's `columns:` / `rows:`
+/// track lists live here rather than in `IrProp`, so `IrProp.value`
+/// stays strictly `IrLiteral` for every kind (the M2 / Phase 1..4
+/// invariant). `IrNode.kind_payload` is `None` for every non-Grid kind.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum KindPayload {
+    Grid {
+        columns: Vec<TrackSize>,
+        rows: Vec<TrackSize>,
+    },
+}
+
 /// A reactive binding (`bind name = expr`).
 #[derive(Debug, Clone, PartialEq)]
 pub struct IrBinding {
@@ -118,6 +144,12 @@ pub struct IrNode {
     pub bindings: Vec<IrBinding>,
     pub handlers: Vec<IrHandler>,
     pub children: Vec<IrNode>,
+    /// Grid kind-specific payload (DD-M3-P5-001 carrier c1); `None` for
+    /// every non-Grid widget kind. Set explicitly at each construction
+    /// site (the IR types deliberately derive no `Default`, so adding
+    /// this field surfaces every site at compile time — R-C
+    /// construction-site discipline).
+    pub kind_payload: Option<KindPayload>,
 }
 
 /// Top-level IR component.
@@ -251,6 +283,69 @@ mod tests {
             IrLiteral::Color(0xFFFFFFFF),
             IrLiteral::Ident("white".into())
         );
+    }
+
+    #[test]
+    fn track_size_variants_distinct() {
+        assert_ne!(TrackSize::Fixed(1), TrackSize::Star(1));
+        assert_ne!(TrackSize::Fixed(180), TrackSize::Fixed(181));
+        assert_ne!(TrackSize::Star(1), TrackSize::Star(2));
+        assert_eq!(TrackSize::Star(3), TrackSize::Star(3));
+    }
+
+    #[test]
+    fn kind_payload_grid_round_trip() {
+        let p = KindPayload::Grid {
+            columns: vec![
+                TrackSize::Fixed(180),
+                TrackSize::Star(1),
+                TrackSize::Star(2),
+            ],
+            rows: vec![TrackSize::Star(1), TrackSize::Star(1)],
+        };
+        match &p {
+            KindPayload::Grid { columns, rows } => {
+                assert_eq!(
+                    columns,
+                    &vec![
+                        TrackSize::Fixed(180),
+                        TrackSize::Star(1),
+                        TrackSize::Star(2)
+                    ]
+                );
+                assert_eq!(rows, &vec![TrackSize::Star(1), TrackSize::Star(1)]);
+            }
+        }
+        assert_eq!(p.clone(), p);
+    }
+
+    #[test]
+    fn ir_node_kind_payload_defaults_none_for_generic_kinds() {
+        let n = IrNode {
+            widget_type: "VStack".into(),
+            props: vec![],
+            bindings: vec![],
+            handlers: vec![],
+            children: vec![],
+            kind_payload: None,
+        };
+        assert_eq!(n.kind_payload, None);
+    }
+
+    #[test]
+    fn ir_node_carries_grid_kind_payload() {
+        let n = IrNode {
+            widget_type: "Grid".into(),
+            props: vec![],
+            bindings: vec![],
+            handlers: vec![],
+            children: vec![],
+            kind_payload: Some(KindPayload::Grid {
+                columns: vec![TrackSize::Fixed(180), TrackSize::Star(1)],
+                rows: vec![TrackSize::Star(1)],
+            }),
+        };
+        assert!(matches!(n.kind_payload, Some(KindPayload::Grid { .. })));
     }
 
     #[test]
