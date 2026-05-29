@@ -157,6 +157,12 @@ here.
 - AccessKit / UIA integration
 - Mica / Acrylic root-window backdrop; system accent color
   follow-through (initial — full theming surface is M5)
+- Per-monitor DPI awareness: declare process / window DPI awareness,
+  render crisply on high-DPI displays without DWM bitmap scaling, and
+  handle DPI changes across monitors (per
+  [DD-V-022](cross-milestone/decisions/dpi-awareness-m4-deferral.md);
+  the runtime is DPI-unaware as of M3 — a precondition for the
+  Mica/Acrylic identity showcase above)
 - First showcase application — sufficient to demonstrate Wasamo
   identity for contributor outreach, even if rough around
   polish-level details

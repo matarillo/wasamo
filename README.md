@@ -4,6 +4,8 @@
 
 Wasamo is a Windows-only declarative UI framework. You describe your UI in a `.ui` DSL and call into the runtime through a stable C ABI from any language. Rendering goes directly through Windows.UI.Composition (the Visual Layer), so Mica/Acrylic, system theming, and high-DPI composition all work out of the box.
 
+_Pre-1.0 note: some capabilities described here are roadmap targets rather than shipped guarantees; see [process/_roadmap.md](process/_roadmap.md)._
+
 ```
 ┌──────────────────────────────────────────────┐
 │  App (Rust / Swift / Zig / Go / C / ...)     │
