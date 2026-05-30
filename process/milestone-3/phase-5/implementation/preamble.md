@@ -1,7 +1,7 @@
 ---
 phase: M3-Phase 5
 title: Grid layout primitive
-status: closing
+status: retired
 adr: process/milestone-3/phase-5/decisions/preamble.md
 plan: process/milestone-3/plan.md
 opened: 2026-05-29

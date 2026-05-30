@@ -629,5 +629,14 @@
     verification-environments.md Obs 4, commits `b8b1f53` / `d83e446`);
     DPI `carry-forward` → M4 (handoff + VDR `2162867`); R1 residual →
     Phase 6; remainder `local-only`. No open `phase-sync` items survive.
-  - **Post-merge distillation.** _(appended after the main no-ff merge:
-    merge commit hash + post-merge main CI green re-confirmation.)_
+  - **Post-merge distillation (2026-05-30).** `feat/m3-phase-5` merged
+    into `main` by no-ff merge commit `53a2551`
+    (`Merge branch 'feat/m3-phase-5' — M3-Phase 5 Grid layout primitive`).
+    The merged `main` code tree equals the phase-branch CI-green state
+    `ca711bd` (the phase-end doc commits on top are doc-only), so the
+    item-16 merge-gate evidence (CI run `26683352589` success) carries to
+    `main` unchanged. The push to `origin/main` triggers `ci.yml` on
+    `main`; that push-triggered run is the step-7 final re-confirmation
+    (observed green after push). `implementation/preamble.md` front-matter
+    flipped `closing` → `retired` in this same post-merge distillation
+    commit; M3-Phase 5 is closed.
