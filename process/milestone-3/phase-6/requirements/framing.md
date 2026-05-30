@@ -1,13 +1,14 @@
 ---
 title: M3-Phase 6 framing — ZStack + 条件レンダリング
-status: draft
+status: aligned
 created: 2026-05-31
+aligned: 2026-05-31
 target-phase: M3-Phase 6
 ---
 
 # M3-Phase 6 framing
 
-**Status:** draft; pending owner alignment
+**Status:** framing aligned with owner (2026-05-31); input artefact for ADR drafting
 **Targets phase:** M3-Phase 6 (ZStack primitive + conditional rendering grammar)
 
 プロジェクトの開発プロセス（[workflow.md §2](../../../procedures/workflow.md)）に
@@ -46,14 +47,15 @@ target-phase: M3-Phase 6
 | ④ | **消えた subtree の中の binding の寿命**と **toggle 直後に画面状態を観測できる約束** | subtree が消えている間その中の binding をどう扱うか（止める/捨てる/再出現時に作り直す）の**最小ルールを Phase 6 で決める**。「切替えた直後に画面状態を観測できる」既存の約束は保つ | [FD-E](#fd-e-条件-subtree-の-binding-寿命と-toggle-直後の観測) |
 | ⑤ | **ZStack と条件レンダリングを一体で出荷するか** | **一体**。lightbox が両方を一組で要求し、「重ね合わせ（layout）＋出し分け（grammar）が実用画面で噛み合う」ことを 1 枚で示せる | [FD-F](#fd-f-zstack--条件レンダリングを-unit-として出荷) |
 
-**返事チェックリスト（これだけ埋めれば確定）:**
+**返事チェックリスト（2026-05-31 全項目承認済み。記録は下記
+[オーナー合意の記録](#オーナー合意の記録owner-alignment-outcome)）:**
 
-- ⓪ 条件レンダリングの思想: ☐ OK ／ ☐ 修正 → ____
-- ① 画面で見せる達成証拠（lightbox・text Button 切替・2 枚）: ☐ OK ／ ☐ 修正 → ____
-- ② 半透明 scrim 採用: ☐ OK ／ ☐ opaque で可
-- ③ 動的 title を評価対象に: ☐ 載せる（推奨）／ ☐ 静的のみで閉じる
-- ④ binding 寿命の最小ルールを Phase 6 で決める: ☐ 決める（推奨）／ ☐ carry-forward
-- ⑤ ZStack + 条件を一体出荷: ☐ OK ／ ☐ 分割
+- ⓪ 条件レンダリングの思想: ☑ OK
+- ① 画面で見せる達成証拠（lightbox・text Button 切替・2 枚）: ☑ OK
+- ② 半透明 scrim 採用: ☑ OK
+- ③ 動的 title を評価対象に: ☑ 載せる（推奨）
+- ④ binding 寿命の最小ルールを Phase 6 で決める: ☑ 決める（推奨）
+- ⑤ ZStack + 条件を一体出荷: ☑ OK
 
 > **合意不要（私が継承で進める機械的事項）:** FD-A（論点 6 件の過不足）/
 > FD-C（検証方針）/ FD-H（上流文書の反映タイミング）/ FD-I（最終 task の
@@ -63,8 +65,24 @@ target-phase: M3-Phase 6
 
 ## オーナー合意の記録（Owner alignment outcome）
 
-*（合意後にここへ ⓪〜⑤ の確定結果を記録し、status を `framing aligned` に
-更新する。未記入＝未合意。）*
+**2026-05-31 owner alignment 完了。** packet ⓪〜⑤ すべて推奨どおり承認。
+本 framing は `framing aligned` に確定し、ADR drafting（§3 設計判断）の
+agreed agenda となる。
+
+| ID | 決定 | 結果 |
+|---|---|---|
+| ⓪ | 条件レンダリングの思想（FD-CR）| **OK** — v1 = テンプレート + 独自構文型 / future = 言語構文型を塞がない / property 制御型は非中心 / structural control-flow grammar family の第一歩 |
+| ① | 画面で見せる達成証拠（FD-B）| **OK** — lightbox を thumbnail 上に overlay、text Button で `is_lightbox_open` 切替、出した／消した 2 枚で証明 |
+| ② | 半透明 scrim（FD-G）| **OK** — 既存 `fill: #RRGGBBAA` literal で半透明採用（新 alpha styling surface は不要） |
+| ③ | 動的 Window title（FD-D）| **載せる（推奨）** — 静的 title は必須、動的 title は DD-006 で評価対象（実装コミットはしない、defer 可） |
+| ④ | binding 寿命の最小ルール（FD-E / DD-005）| **決める（推奨）** — 条件 subtree の effect lifecycle 最小 policy を Phase 6 で明文化、同期 drain 観測契約は保持 |
+| ⑤ | ZStack + 条件を一体出荷（FD-F）| **OK** — lightbox が両者を unit として要求するため一体出荷 |
+
+継承・機械的事項（FD-A / FD-C / FD-H / FD-I）は owner 判断不要として確定。
+
+**次段階:** §3 設計判断（`decisions/preamble.md` + DD-M3-P6-001〜006 を一括
+draft、`Proposed` → owner review → `Accepted`）。本セッションでは着手せず、
+次セッションへ引き継ぐ。
 
 ---
 
@@ -329,9 +347,9 @@ binding が property → tree shape へ広がる phase なので、**`String` bi
 
 ## 合意事項の詳細（Owner-agreed framing decisions / FD-\*）
 
-上の「今回オーナーに決めてほしいこと」packet の根拠を置く節。draft
-recommendation で、**owner alignment session で確定**する。確定後に本
-セクションが ADR draft の agreed agenda になる。
+上の「今回オーナーに決めてほしいこと」packet の根拠を置く節。**2026-05-31 の
+owner alignment で確定済み**（[オーナー合意の記録](#オーナー合意の記録owner-alignment-outcome)）。
+本セクションが ADR draft の agreed agenda となる。
 
 **owner 判断が要る項目**（packet ⓪〜⑤）= FD-CR / FD-B / FD-G / FD-D /
 FD-E / FD-F。**継承・機械的で owner 判断不要な項目** = FD-A / FD-C /
@@ -534,9 +552,10 @@ task-end retro と phase-end retro を最初から別 bullet にする
 
 ## Next step
 
-1. owner は冒頭の **「今回オーナーに決めてほしいこと（Owner alignment
-   packet）」** の ⓪〜⑤ を判断する（この節だけで足りる）。
-2. 判断結果を **「オーナー合意の記録（Owner alignment outcome）」** 節に
-   記録し、status を `framing aligned` に更新。
-3. §3 設計判断: `decisions/preamble.md` + DD-M3-P6-001〜006 を一括 draft
-   （`Proposed` → owner review → `Accepted`）。
+1. ~~owner alignment packet の ⓪〜⑤ を判断~~ → **完了（2026-05-31、全項目
+   承認）。status = `aligned`。**
+2. **§3 設計判断（次セッションへ引き継ぎ）:** `decisions/preamble.md` +
+   DD-M3-P6-001〜006 を一括 draft（`Proposed` → owner review → `Accepted`）。
+   評価軸は本 framing の FD-CR / 設計 thesis（family 拡張性 + runtime
+   identity / 宣言 tree・実体 tree 分離）、DD ごとの 問い / sub-issues。
+   本セッションでは着手しない。
