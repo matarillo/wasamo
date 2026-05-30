@@ -1,6 +1,8 @@
 use crate::box_values;
 use crate::handler::{self, EvalContext, EvalError, HandlerExpr};
-use crate::layout::{self, Alignment, LayoutError, LayoutNode, SizeConstraint};
+use crate::layout::{
+    self, Alignment, CellPlacement, LayoutError, LayoutNode, SizeConstraint, TrackSize,
+};
 use crate::reactive::EffectHandle;
 use crate::text::{TextRenderer, TypographyStyle};
 use windows::{
@@ -145,6 +147,30 @@ enum WidgetData {
         offset_y: i32,
         content_visual: SpriteVisual,
     },
+    // M3-Phase 5 DD-M3-P5-001 per-kind tag for the Grid layout primitive.
+    // The track lists and per-Cell placements are stored as the
+    // layout-engine mirror types (`layout::TrackSize` / `CellPlacement`):
+    // the IR loader (`ir_loader::construct_widget` "Grid" arm) performs the
+    // `wasamo_ir::TrackSize` → `layout::TrackSize` conversion and the
+    // `Cell` `IrProp` → `CellPlacement` extraction, so `build_layout_tree`
+    // is a structural copy into `LayoutNode::grid` (log.md T3 R-B
+    // Decision 1). `Cell` is IR-only (DD-M3-P5-001) — it never
+    // materialises as a `WidgetData` variant; the loader flattens each
+    // Cell's single content child onto `WidgetNode.children`, kept
+    // parallel to `cell_placements` (`cell_placements[i]` places
+    // `children[i]`). No `PropertyValue` / binding / ABI path touches
+    // these fields (Phase 5 constant-only, DD-M3-P5-001 / DD-M3-P5-006).
+    //
+    // The outer Visual carries the DD-M3-P5-005 outer-bounds clip
+    // (`Visual.Clip = InsetClip{0,0,0,0}`, installed in `WidgetNode::grid`,
+    // the same zero-inset auto-tracking clip ScrollView's outer Visual
+    // uses); Grid paints no background brush (it is a pure layout
+    // container). T4 asserts the clip presence on the live Visual.
+    Grid {
+        columns: Vec<TrackSize>,
+        rows: Vec<TrackSize>,
+        cell_placements: Vec<CellPlacement>,
+    },
 }
 
 // ── Property dispatch (M1 experimental property IDs from wasamo.h §5) ─────────
@@ -229,6 +255,9 @@ fn layout_error_to_winerr(err: LayoutError) -> windows::core::Error {
         LayoutError::BoxNoExtent => "Box has no extent to resolve (DD-M3-P2-005)",
         LayoutError::ScrollViewUnboundedAxis => {
             "ScrollView has no bounded scroll-axis viewport (DD-M3-P4-002)"
+        }
+        LayoutError::GridUnboundedStarAxis => {
+            "Grid has a star track on an unbounded parent axis (DD-M3-P5-004)"
         }
     };
     Error::new(E_FAIL, msg)
@@ -536,6 +565,49 @@ impl WidgetNode {
             data: WidgetData::ScrollView {
                 offset_y,
                 content_visual,
+            },
+            width: SizeConstraint::Fill,
+            height: SizeConstraint::Fill,
+            visual,
+            children: Vec::new(),
+            inline_handlers: Vec::new(),
+            attached: false,
+            bindings: Vec::new(),
+        }))
+    }
+
+    // M3-Phase 5 T3: Grid constructor. The track lists and per-Cell
+    // placements arrive already converted to the layout-engine mirror
+    // types (`ir_loader::construct_widget` "Grid" arm performs the
+    // `wasamo_ir::TrackSize` → `layout::TrackSize` conversion and the
+    // `Cell` `IrProp` → `CellPlacement` extraction — log.md T3 R-B
+    // Decision 1). `cell_placements[i]` places the content child that the
+    // loader appends at `children[i]` (the Cell wrapper itself is
+    // IR-only). The constructor installs the DD-M3-P5-005 outer-bounds
+    // clip on the outer Visual (`Visual.Clip = InsetClip{0,0,0,0}`, the
+    // same zero-inset auto-tracking clip ScrollView's outer Visual uses,
+    // so the `sync_visuals` size write keeps the clipped region in sync
+    // with the Grid rect each layout pass). Grid paints no background
+    // brush. Width / height default to `Fill` / `Fill` (mirrors
+    // `LayoutNode::grid`); the child-count / placement invariants are
+    // enforced upstream by `wasamoc check` (T1) and `ir_loader::validate()`
+    // (T3), not by this data shape.
+    pub(crate) fn grid(
+        compositor: &Compositor,
+        columns: Vec<TrackSize>,
+        rows: Vec<TrackSize>,
+        cell_placements: Vec<CellPlacement>,
+    ) -> windows::core::Result<Box<Self>> {
+        use windows::core::Interface;
+        let visual = compositor.CreateSpriteVisual()?;
+        let clip: InsetClip = compositor.CreateInsetClip()?;
+        let outer_visual: Visual = visual.cast()?;
+        outer_visual.SetClip(&clip)?;
+        Ok(Box::new(Self {
+            data: WidgetData::Grid {
+                columns,
+                rows,
+                cell_placements,
             },
             width: SizeConstraint::Fill,
             height: SizeConstraint::Fill,
@@ -1427,6 +1499,33 @@ impl WidgetNode {
             // for clamp arithmetic per the rounding contract.
             WidgetData::ScrollView { offset_y, .. } => {
                 let mut node = LayoutNode::scroll_view(*offset_y);
+                node.width = self.width.clone();
+                node.height = self.height.clone();
+                node.children = self
+                    .children
+                    .iter()
+                    .map(|c| c.build_layout_tree())
+                    .collect();
+                node
+            }
+            // M3-Phase 5 T3: thread the Grid track lists + per-Cell
+            // placements into the pure-logic layout engine. The fields are
+            // already the layout-engine mirror types (the loader did the
+            // IR→layout conversion — log.md T3 R-B Decision 1), so this is
+            // a structural copy into `LayoutNode::grid`. `cell_placements`
+            // stays parallel to `children`: the loader appended each Cell's
+            // content child at the same index, so the layout tree's
+            // children order matches `cell_placements` order, which is the
+            // DD-M3-P5-005 document / paint order. `arrange_grid` writes
+            // each content child's resolved offset / size directly onto its
+            // `LayoutNode`, read back by `sync_visuals`.
+            WidgetData::Grid {
+                columns,
+                rows,
+                cell_placements,
+            } => {
+                let mut node =
+                    LayoutNode::grid(columns.clone(), rows.clone(), cell_placements.clone());
                 node.width = self.width.clone();
                 node.height = self.height.clone();
                 node.children = self

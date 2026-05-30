@@ -22,6 +22,61 @@ pub enum WidgetKind {
     // + offset clamp) lives in `measure_scroll_view` / `arrange_scroll_view`
     // below; the IR-loader / widget-catalog half lands in T3.
     ScrollView,
+    // M3-Phase 5 DD-M3-P5-001 per-kind tag for the Grid layout primitive.
+    // DD-M3-P5-004 track resolution + DD-M3-P5-005 arrange / alignment live
+    // in `resolve_axis_tracks` / `measure_grid` / `arrange_grid` below; the
+    // IR-loader / widget-catalog half (`WidgetData::Grid` →
+    // `LayoutNode::grid`) lands in T3. The track lists and per-Cell
+    // placements ride the flat-struct fields `grid_columns` / `grid_rows` /
+    // `cell_placements` (R-D mitigation, log.md T2 entry); `Cell` is IR-only
+    // and never materialises as its own `LayoutNode`.
+    Grid,
+}
+
+/// M3-Phase 5 DD-M3-P5-002 Grid track sizing form, layout-engine-local
+/// mirror of `wasamo_ir::TrackSize` (the `Ratio` mirror precedent — the
+/// pure layout engine imports no IR types; conversion happens at the
+/// `WidgetData::Grid` → `LayoutNode::grid` build boundary in T3). `Fixed`
+/// is integer DSL pixels promoted to `f32` only inside
+/// `resolve_axis_tracks` per the DD-M3-P5-004 `f32` rounding contract;
+/// `Star` carries a positive integer weight (validated to `[1, 1024]` at
+/// `wasamoc check` / runtime `validate()`, not at this type). Unit star
+/// `*` lowers to `Star(1)`.
+//
+// T3 wired the production caller (`ir_loader::construct_widget` "Grid"
+// arm builds these from `wasamo_ir::TrackSize`, threaded through
+// `WidgetData::Grid` → `build_layout_tree` → `LayoutNode::grid`), so the
+// T2-era `#[allow(dead_code)]` forward-pointer is no longer needed.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TrackSize {
+    Fixed(i32),
+    Star(u32),
+}
+
+/// M3-Phase 5 DD-M3-P5-003 / DD-M3-P5-005 per-`Cell` placement, parallel
+/// to `LayoutNode.children` (`cell_placements[i]` places content child
+/// `children[i]`). Zero-based `row` / `column`; `row_span` / `column_span`
+/// default to `1`; `h_align` / `v_align` default to `Stretch`. Defaults
+/// are applied at the T3 build boundary, not at this type. The existing
+/// `Alignment` enum is reused per-axis (`Leading` = `start`, `Center`,
+/// `Trailing` = `end`, `Stretch`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct CellPlacement {
+    pub row: u32,
+    pub column: u32,
+    pub row_span: u32,
+    pub column_span: u32,
+    pub h_align: Alignment,
+    pub v_align: Alignment,
+}
+
+/// M3-Phase 5 DD-M3-P5-004 per-axis bound input to `resolve_axis_tracks`.
+/// `arrange_grid` derives it from the arrange-time cell extent
+/// (`Bounded(w)` when `w.is_finite()`, else `Unbounded`).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum AxisBound {
+    Bounded(f32),
+    Unbounded,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -72,11 +127,21 @@ pub struct Ratio {
 //   fails per DD-M3-P4-002. The variant is **internal only** in Phase 4 —
 //   no `WASAMO_LAYOUT_ERROR_*` ABI tag is added (no host can meaningfully
 //   observe it; the C ABI for `wasamo_run_layout` does not yet exist).
+//
+// - `GridUnboundedStarAxis`: a Grid with at least one weighted-star track
+//   on an axis was given an unbounded parent bound on that axis
+//   (DD-M3-P5-004). Star tracks divide finite remaining space; an
+//   unbounded axis has no finite space to divide, so the layout pass fails
+//   (Flutter-style; consistent with the Phase 4 ScrollView unbounded-axis
+//   precedent). The variant is **internal only** in Phase 5 — no
+//   `WASAMO_LAYOUT_ERROR_*` ABI tag is added (Grid adds no host-facing ABI
+//   surface; no host observes layout-error variants meaningfully).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum LayoutError {
     BoxAspectUnboundedBoth,
     BoxNoExtent,
     ScrollViewUnboundedAxis,
+    GridUnboundedStarAxis,
 }
 
 #[derive(Debug, Clone)]
@@ -145,6 +210,18 @@ pub struct LayoutNode {
     /// `item_cross_size` (when `Some`) always overrides the cache,
     /// so the happy path of the gallery sub-screen is unaffected.
     pub(crate) wrap_measured_cross_bound: Cell<f32>,
+    /// DD-M3-P5-002 Grid column track list. Non-empty only on
+    /// `WidgetKind::Grid`; `Vec::new()` on every other kind (mirrors how
+    /// `aspect` / `offset_y` sit dormant off-kind — R-D flat-struct
+    /// extension, log.md T2 entry). Consumed by `resolve_axis_tracks`.
+    pub grid_columns: Vec<TrackSize>,
+    /// DD-M3-P5-002 Grid row track list. See `grid_columns`.
+    pub grid_rows: Vec<TrackSize>,
+    /// DD-M3-P5-003 / DD-M3-P5-005 per-Cell placements, parallel to
+    /// `children` (`cell_placements[i]` places `children[i]`). Empty on
+    /// every non-Grid kind. Document order = children order = paint /
+    /// z-order (DD-M3-P5-005 Option A).
+    pub cell_placements: Vec<CellPlacement>,
 }
 
 impl LayoutNode {
@@ -166,6 +243,9 @@ impl LayoutNode {
             size: (0.0, 0.0),
             applied_offset_y: Cell::new(0.0),
             wrap_measured_cross_bound: Cell::new(f32::NAN),
+            grid_columns: Vec::new(),
+            grid_rows: Vec::new(),
+            cell_placements: Vec::new(),
         }
     }
 
@@ -187,6 +267,9 @@ impl LayoutNode {
             size: (0.0, 0.0),
             applied_offset_y: Cell::new(0.0),
             wrap_measured_cross_bound: Cell::new(f32::NAN),
+            grid_columns: Vec::new(),
+            grid_rows: Vec::new(),
+            cell_placements: Vec::new(),
         }
     }
 
@@ -208,6 +291,9 @@ impl LayoutNode {
             size: (0.0, 0.0),
             applied_offset_y: Cell::new(0.0),
             wrap_measured_cross_bound: Cell::new(f32::NAN),
+            grid_columns: Vec::new(),
+            grid_rows: Vec::new(),
+            cell_placements: Vec::new(),
         }
     }
 
@@ -234,6 +320,9 @@ impl LayoutNode {
             size: (0.0, 0.0),
             applied_offset_y: Cell::new(0.0),
             wrap_measured_cross_bound: Cell::new(f32::NAN),
+            grid_columns: Vec::new(),
+            grid_rows: Vec::new(),
+            cell_placements: Vec::new(),
         }
     }
 
@@ -263,6 +352,9 @@ impl LayoutNode {
             size: (0.0, 0.0),
             applied_offset_y: Cell::new(0.0),
             wrap_measured_cross_bound: Cell::new(f32::NAN),
+            grid_columns: Vec::new(),
+            grid_rows: Vec::new(),
+            cell_placements: Vec::new(),
         }
     }
 
@@ -297,6 +389,48 @@ impl LayoutNode {
             size: (0.0, 0.0),
             applied_offset_y: Cell::new(0.0),
             wrap_measured_cross_bound: Cell::new(f32::NAN),
+            grid_columns: Vec::new(),
+            grid_rows: Vec::new(),
+            cell_placements: Vec::new(),
+        }
+    }
+
+    // M3-Phase 5 DD-M3-P5-001 / DD-M3-P5-004 / DD-M3-P5-005 Grid layout
+    // entry. Both axes default to `Fill` so Grid's outer rect tracks the
+    // parent allocation on a bounded axis (DD-M3-P5-004 "Grid outer rect");
+    // on an unbounded axis with fixed-only tracks the outer rect collapses
+    // to the resolved `fixed_sum` (handled in `measure_grid` /
+    // `arrange_grid`). `columns` / `rows` are the per-axis track lists and
+    // `cell_placements` is parallel to `children` (set by the caller after
+    // construction). T3 wired the IR-loader / `build_layout_tree` path
+    // (`WidgetData::Grid` → this constructor), so the T2-era
+    // `#[allow(dead_code)]` forward-pointer is no longer needed; the
+    // pure-logic T2 tests also exercise it directly.
+    pub fn grid(
+        columns: Vec<TrackSize>,
+        rows: Vec<TrackSize>,
+        cell_placements: Vec<CellPlacement>,
+    ) -> Self {
+        Self {
+            kind: WidgetKind::Grid,
+            width: SizeConstraint::Fill,
+            height: SizeConstraint::Fill,
+            spacing: 0.0,
+            padding: 0.0,
+            alignment: Alignment::Stretch,
+            aspect: None,
+            item_cross_size: None,
+            item_spacing: 0.0,
+            line_spacing: 0.0,
+            offset_y: 0,
+            children: Vec::new(),
+            offset: (0.0, 0.0),
+            size: (0.0, 0.0),
+            applied_offset_y: Cell::new(0.0),
+            wrap_measured_cross_bound: Cell::new(f32::NAN),
+            grid_columns: columns,
+            grid_rows: rows,
+            cell_placements,
         }
     }
 }
@@ -312,6 +446,7 @@ pub fn measure(node: &LayoutNode, avail_w: f32, avail_h: f32) -> Result<(f32, f3
         WidgetKind::Box => measure_box(node, avail_w, avail_h),
         WidgetKind::WrapPanel => measure_wrap_panel(node, avail_w, avail_h),
         WidgetKind::ScrollView => measure_scroll_view(node, avail_w, avail_h),
+        WidgetKind::Grid => measure_grid(node, avail_w, avail_h),
     }
 }
 
@@ -696,6 +831,7 @@ pub fn arrange(node: &mut LayoutNode, x: f32, y: f32, w: f32, h: f32) -> Result<
         WidgetKind::Box => arrange_box(node, x, y, w, h),
         WidgetKind::WrapPanel => arrange_wrap_panel(node, x, y, w, h),
         WidgetKind::ScrollView => arrange_scroll_view(node, x, y, w, h),
+        WidgetKind::Grid => arrange_grid(node, x, y, w, h),
     }
 }
 
@@ -891,6 +1027,285 @@ fn arrange_scroll_view(
     node.applied_offset_y.set(applied);
 
     arrange(child, x, y - applied, final_cw, final_ch)
+}
+
+// ── M3-Phase 5 Grid (DD-M3-P5-004 / DD-M3-P5-005) ──────────────────────────────
+
+// DD-M3-P5-004 per-axis track resolution: fixed tracks consume definite
+// space first; the remaining bounded space divides among star tracks by
+// positive integer weight, over `f32` prefix boundaries (no integer pixel
+// snap). Rows and columns invoke this independently.
+//
+// - **Unbounded-star branch**: any star track on an unbounded axis fires
+//   `LayoutError::GridUnboundedStarAxis` (there is no finite space to
+//   divide). Mirrors the Phase 4 ScrollView unbounded-axis gate.
+// - **Negative remaining**: when `fixed_sum >= bound`,
+//   `remaining_after_fixed` clamps to `0.0` and every star track resolves
+//   to width `0`; fixed tracks retain their declared size (Cell rectangles
+//   past `bound` overflow and are clipped at Grid's outer-bounds clip per
+//   DD-M3-P5-005).
+// - **`auto` slot**: reserved (no-op in Phase 5) between fixed-sum
+//   computation and star distribution per the DD-M3-P5-002 deferral.
+// - **Star weight sum** accumulates in `u64` (per-weight cap 1024 closes
+//   overflow at the type level); the `u64 -> f32` cast is exact for any
+//   realistic Grid (DD-M3-P5-004 precision note).
+fn resolve_axis_tracks(
+    tracks: &[TrackSize],
+    axis_bound: AxisBound,
+) -> Result<Vec<f32>, LayoutError> {
+    let fixed_sum: f32 = tracks
+        .iter()
+        .filter_map(|t| match t {
+            TrackSize::Fixed(px) => Some(*px as f32),
+            TrackSize::Star(_) => None,
+        })
+        .sum();
+    let star_weight_sum: u64 = tracks
+        .iter()
+        .map(|t| match t {
+            TrackSize::Star(w) => *w as u64,
+            TrackSize::Fixed(_) => 0,
+        })
+        .sum();
+    let has_star = star_weight_sum > 0;
+
+    if has_star && matches!(axis_bound, AxisBound::Unbounded) {
+        return Err(LayoutError::GridUnboundedStarAxis);
+    }
+
+    // Phase 5 `auto` pass reservation: no-op. A future phase admits
+    // `TrackSize::Auto` and inserts a demand pass here (before star
+    // distribution) per DD-M3-P5-004.
+
+    let bound = match axis_bound {
+        AxisBound::Bounded(b) => b,
+        // No star track exists on an unbounded axis (the branch above
+        // errored otherwise); the axis resolves to the fixed sum.
+        AxisBound::Unbounded => fixed_sum,
+    };
+    let remaining_after_fixed = (bound - fixed_sum).max(0.0);
+
+    let resolved = tracks
+        .iter()
+        .map(|t| match t {
+            TrackSize::Fixed(px) => *px as f32,
+            TrackSize::Star(weight) => {
+                // Defensive: a `Star` arm is only reachable when a star
+                // track exists, which forces `star_weight_sum >= 1` for
+                // validated IR (`Star` weight is in `[1, 1024]` per
+                // DD-M3-P5-002 / DD-M3-P5-006). A zero sum here means a
+                // `Star(0)` slipped past validate(); guard the divide.
+                if star_weight_sum == 0 {
+                    panic!(
+                        "Grid star track reached layout with zero total \
+                         star weight; DD-M3-P5-006 validate() must reject \
+                         Star(0) before arrange"
+                    );
+                }
+                remaining_after_fixed * (*weight as f32 / star_weight_sum as f32)
+            }
+        })
+        .collect();
+
+    Ok(resolved)
+}
+
+// DD-M3-P5-004 prefix boundaries: `boundary[0] = 0.0`, `boundary[n] =
+// boundary[n-1] + resolved[n-1]`, with a trailing `boundary[len]` equal to
+// the total resolved track extent. Consumed by cell-rectangle resolution
+// and (on an unbounded axis) by Grid's outer extent.
+fn prefix_boundaries(resolved: &[f32]) -> Vec<f32> {
+    let mut boundaries = Vec::with_capacity(resolved.len() + 1);
+    let mut acc = 0.0_f32;
+    boundaries.push(acc);
+    for &r in resolved {
+        acc += r;
+        boundaries.push(acc);
+    }
+    boundaries
+}
+
+// DD-M3-P5-004 measure: Grid's outer size follows its size constraints
+// (Fill default → 0.0, taking the parent allocation at arrange; Fixed → the
+// literal). Under `Shrink`, the axis resolves to the total track extent
+// against the available bound (star tracks fill the bound; fixed-only
+// collapses to `fixed_sum`). Track resolution proper — and the
+// unbounded-star gate on a Fill / Fixed axis — happen at arrange when the
+// concrete cell is known (mirrors ScrollView); only the `Shrink` desired
+// extent must resolve here.
+fn measure_grid(node: &LayoutNode, avail_w: f32, avail_h: f32) -> Result<(f32, f32), LayoutError> {
+    let desired_w = match &node.width {
+        SizeConstraint::Fixed(v) => *v,
+        SizeConstraint::Fill => 0.0,
+        SizeConstraint::Shrink => grid_shrink_extent(&node.grid_columns, avail_w)?,
+    };
+    let desired_h = match &node.height {
+        SizeConstraint::Fixed(v) => *v,
+        SizeConstraint::Fill => 0.0,
+        SizeConstraint::Shrink => grid_shrink_extent(&node.grid_rows, avail_h)?,
+    };
+    Ok((desired_w, desired_h))
+}
+
+// Shrink-axis desired extent = total resolved track extent against the
+// available bound. `avail` may be unbounded (a Shrink parent's "how big do
+// you want to be" probe); with star tracks that surfaces
+// `GridUnboundedStarAxis` (the intended outcome), with fixed-only it is the
+// `fixed_sum`.
+fn grid_shrink_extent(tracks: &[TrackSize], avail: f32) -> Result<f32, LayoutError> {
+    let bound = if avail.is_finite() {
+        AxisBound::Bounded(avail)
+    } else {
+        AxisBound::Unbounded
+    };
+    let resolved = resolve_axis_tracks(tracks, bound)?;
+    Ok(resolved.iter().sum())
+}
+
+// DD-M3-P5-004 / DD-M3-P5-005 arrange: resolve both axes against the
+// parent-allocated cell, compute prefix boundaries, then place each content
+// child within its Cell's resolved rectangle with per-Cell alignment.
+//
+// - **Grid outer rect** on a bounded axis equals the parent allocation
+//   (Grid does not grow to accommodate an oversized track-resolved extent —
+//   Phase 3 / Phase 4 precedent); on an unbounded axis (only reachable with
+//   no star tracks per the unbounded-star gate) it equals the resolved
+//   `fixed_sum` (the trailing prefix boundary).
+// - **Cell rectangle** spans `column_boundary[column ..= column+span]` ×
+//   `row_boundary[row ..= row+span]`; spanning Cells are measured against
+//   the combined resolved span (no demand back-propagation in Phase 5).
+// - **Alignment**: stretch (default) fills the cell on that axis;
+//   non-stretch anchors the content's natural measure at start / center /
+//   end. Per-cell clipping is out of scope (content overflow paints past
+//   the cell and is contained only by Grid's outer-bounds clip, installed
+//   on Grid's own Visual at sync_visuals time per DD-M3-P5-005).
+// - **Paint / z-order** is document order, preserved by iterating
+//   `children` (and the parallel `cell_placements`) in order.
+fn arrange_grid(node: &mut LayoutNode, x: f32, y: f32, w: f32, h: f32) -> Result<(), LayoutError> {
+    let col_bound = if w.is_finite() {
+        AxisBound::Bounded(w)
+    } else {
+        AxisBound::Unbounded
+    };
+    let row_bound = if h.is_finite() {
+        AxisBound::Bounded(h)
+    } else {
+        AxisBound::Unbounded
+    };
+
+    let col_sizes = resolve_axis_tracks(&node.grid_columns, col_bound)?;
+    let row_sizes = resolve_axis_tracks(&node.grid_rows, row_bound)?;
+    let col_b = prefix_boundaries(&col_sizes);
+    let row_b = prefix_boundaries(&row_sizes);
+
+    // Grid outer extent: bounded axis = parent allocation; unbounded axis =
+    // total resolved extent (the trailing prefix boundary).
+    let outer_w = if w.is_finite() {
+        w
+    } else {
+        *col_b.last().unwrap_or(&0.0)
+    };
+    let outer_h = if h.is_finite() {
+        h
+    } else {
+        *row_b.last().unwrap_or(&0.0)
+    };
+    node.offset = (x, y);
+    node.size = (outer_w, outer_h);
+
+    // `cell_placements` is parallel to `children`; `zip` borrows the two
+    // disjoint fields and stops at the shorter (validate() guarantees equal
+    // length, so a stray unplaced child is simply not arranged rather than
+    // indexing out of range).
+    for (child, placement) in node.children.iter_mut().zip(node.cell_placements.iter()) {
+        let col_start = placement.column as usize;
+        let col_end = (placement.column + placement.column_span) as usize;
+        let row_start = placement.row as usize;
+        let row_end = (placement.row + placement.row_span) as usize;
+
+        let cell_left = x + col_b[col_start];
+        let cell_right = x + col_b[col_end];
+        let cell_top = y + row_b[row_start];
+        let cell_bottom = y + row_b[row_end];
+        let cell_w = cell_right - cell_left;
+        let cell_h = cell_bottom - cell_top;
+
+        // DD-M3-P5-005 measure input is per-axis: a stretch axis (or a
+        // `Fill` content constraint, which `align_in_cell` also expands to
+        // the cell extent) measures the content against the cell extent on
+        // that axis; a non-stretch axis (`start` / `center` / `end`)
+        // measures the content at its **natural extent** (unbounded probe,
+        // the HStack/VStack idiom) so the spec'd natural-size anchoring —
+        // and the overflow it can produce — is honoured. Measuring a
+        // non-stretch axis against the cell extent would silently shrink a
+        // bound-dependent child (e.g. an aspect Box, or wrapping content) to
+        // the cell, weakening center / end / overflow vs the spec.
+        let measure_w = if cell_axis_is_stretchy(placement.h_align, &child.width) {
+            cell_w
+        } else {
+            f32::INFINITY
+        };
+        let measure_h = if cell_axis_is_stretchy(placement.v_align, &child.height) {
+            cell_h
+        } else {
+            f32::INFINITY
+        };
+        let (desired_w, desired_h) = measure(child, measure_w, measure_h)?;
+        let (cx, cw) = align_in_cell(
+            placement.h_align,
+            &child.width,
+            desired_w,
+            cell_left,
+            cell_w,
+        );
+        let (cy, ch) = align_in_cell(
+            placement.v_align,
+            &child.height,
+            desired_h,
+            cell_top,
+            cell_h,
+        );
+        arrange(child, cx, cy, cw, ch)?;
+    }
+
+    Ok(())
+}
+
+// DD-M3-P5-005: an axis behaves as "stretchy" (content fills the cell
+// extent on that axis) when its alignment is `Stretch` (the default) or the
+// content carries a `Fill` constraint on that axis. The `Fill`-as-stretch
+// rule mirrors the existing `cross_axis_position` convention (Fill and
+// Stretch both expand to the full inner extent); a `Fill` child has no
+// natural extent to anchor, so it fills the cell regardless of the
+// non-stretch alignment value. Shared by the `arrange_grid` measure-bound
+// selection and `align_in_cell` so the two stay in lockstep.
+fn cell_axis_is_stretchy(align: Alignment, constraint: &SizeConstraint) -> bool {
+    align == Alignment::Stretch || *constraint == SizeConstraint::Fill
+}
+
+// DD-M3-P5-005 per-axis alignment within a resolved cell rectangle.
+// Stretch alignment (the default) — or a `Fill` content constraint —
+// extends the content to the full cell extent. Non-stretch anchors the
+// content's natural measured extent at start (`Leading`) / center / end
+// (`Trailing`); the content is **not** clamped to the cell (per-cell
+// clipping is out of scope — overflow paints past the cell and is contained
+// only at Grid's outer-bounds clip).
+fn align_in_cell(
+    align: Alignment,
+    constraint: &SizeConstraint,
+    desired: f32,
+    cell_start: f32,
+    cell_extent: f32,
+) -> (f32, f32) {
+    if cell_axis_is_stretchy(align, constraint) {
+        return (cell_start, cell_extent);
+    }
+    match align {
+        Alignment::Leading => (cell_start, desired),
+        Alignment::Center => (cell_start + (cell_extent - desired) / 2.0, desired),
+        Alignment::Trailing => (cell_start + cell_extent - desired, desired),
+        Alignment::Stretch => unreachable!("stretch handled above"),
+    }
 }
 
 // DD-M3-P2-005 arrange: re-derive the Box's resolved rectangle from the
@@ -1961,5 +2376,412 @@ mod tests {
         run_layout(&mut sv, 200.0, 200.0).unwrap();
         assert_eq!(sv.applied_offset_y.get(), 33.0);
         assert_eq!(sv.children[0].offset, (0.0, -33.0));
+    }
+
+    // ── M3-Phase 5 Grid (DD-M3-P5-004 / DD-M3-P5-005) — ADR evidence (2) ───────
+
+    fn cell(
+        row: u32,
+        column: u32,
+        row_span: u32,
+        column_span: u32,
+        h_align: Alignment,
+        v_align: Alignment,
+    ) -> CellPlacement {
+        CellPlacement {
+            row,
+            column,
+            row_span,
+            column_span,
+            h_align,
+            v_align,
+        }
+    }
+
+    // Stretch/stretch placement (the DD-M3-P5-005 default) at a single cell.
+    fn stretch_cell(row: u32, column: u32, row_span: u32, column_span: u32) -> CellPlacement {
+        cell(
+            row,
+            column,
+            row_span,
+            column_span,
+            Alignment::Stretch,
+            Alignment::Stretch,
+        )
+    }
+
+    // A Fill/Fill content rectangle (stretches to the cell extent).
+    fn fill_child() -> LayoutNode {
+        LayoutNode::rectangle(SizeConstraint::Fill, SizeConstraint::Fill)
+    }
+
+    // ── Track resolution (DD-M3-P5-004 resolve_axis_tracks) ────────────────────
+
+    #[test]
+    fn grid_resolve_fixed_only() {
+        let resolved = resolve_axis_tracks(
+            &[TrackSize::Fixed(100), TrackSize::Fixed(200)],
+            AxisBound::Bounded(500.0),
+        )
+        .unwrap();
+        // Fixed tracks keep their declared size regardless of the bound;
+        // trailing space stays inside the Grid.
+        assert_eq!(resolved, vec![100.0, 200.0]);
+    }
+
+    #[test]
+    fn grid_resolve_weighted_star_proportional() {
+        // 1* : 2* over 300px → 100 : 200.
+        let resolved = resolve_axis_tracks(
+            &[TrackSize::Star(1), TrackSize::Star(2)],
+            AxisBound::Bounded(300.0),
+        )
+        .unwrap();
+        assert_eq!(resolved, vec![100.0, 200.0]);
+    }
+
+    #[test]
+    fn grid_resolve_mixed_fixed_first_then_star() {
+        // 180 1* 2* over 480px → fixed 180 consumed first, 300 remains,
+        // split 1:2 → 100 : 200.
+        let resolved = resolve_axis_tracks(
+            &[
+                TrackSize::Fixed(180),
+                TrackSize::Star(1),
+                TrackSize::Star(2),
+            ],
+            AxisBound::Bounded(480.0),
+        )
+        .unwrap();
+        assert_eq!(resolved, vec![180.0, 100.0, 200.0]);
+    }
+
+    #[test]
+    fn grid_resolve_negative_remaining_star_collapses_to_zero() {
+        // Fixed sum 400 exceeds bound 300; star tracks resolve to 0 while
+        // fixed tracks retain their declared size (DD-M3-P5-004 negative
+        // remaining).
+        let resolved = resolve_axis_tracks(
+            &[
+                TrackSize::Fixed(200),
+                TrackSize::Fixed(200),
+                TrackSize::Star(1),
+            ],
+            AxisBound::Bounded(300.0),
+        )
+        .unwrap();
+        assert_eq!(resolved, vec![200.0, 200.0, 0.0]);
+    }
+
+    #[test]
+    fn grid_resolve_unbounded_star_axis_errors() {
+        // A star track on an unbounded axis has no finite space to divide.
+        let err = resolve_axis_tracks(
+            &[TrackSize::Fixed(100), TrackSize::Star(1)],
+            AxisBound::Unbounded,
+        )
+        .unwrap_err();
+        assert_eq!(err, LayoutError::GridUnboundedStarAxis);
+    }
+
+    #[test]
+    fn grid_resolve_unbounded_fixed_only_resolves_to_fixed_sum() {
+        // No star track: an unbounded axis resolves each fixed track to its
+        // declared size (the axis extent is the fixed sum).
+        let resolved = resolve_axis_tracks(
+            &[TrackSize::Fixed(120), TrackSize::Fixed(80)],
+            AxisBound::Unbounded,
+        )
+        .unwrap();
+        assert_eq!(resolved, vec![120.0, 80.0]);
+    }
+
+    #[test]
+    #[should_panic(expected = "zero total")]
+    fn grid_resolve_star_zero_weight_panics_defensively() {
+        // `Star(0)` is rejected at wasamoc check / validate() (DD-M3-P5-006);
+        // reaching layout with it is a defended-against bug. The guard
+        // prevents a divide-by-zero in star distribution.
+        let _ = resolve_axis_tracks(&[TrackSize::Star(0)], AxisBound::Bounded(100.0));
+    }
+
+    #[test]
+    fn grid_prefix_boundaries_are_cumulative() {
+        let b = prefix_boundaries(&[100.0, 200.0, 50.0]);
+        assert_eq!(b, vec![0.0, 100.0, 300.0, 350.0]);
+        // Empty track list still yields the leading 0 boundary.
+        assert_eq!(prefix_boundaries(&[]), vec![0.0]);
+    }
+
+    // ── Arrange (DD-M3-P5-004 cell rects + DD-M3-P5-005 placement) ─────────────
+
+    #[test]
+    fn grid_arrange_outer_rect_is_parent_allocation() {
+        // DD-M3-P5-004 Grid outer rect on a bounded axis = parent allocation.
+        let mut g = LayoutNode::grid(
+            vec![TrackSize::Star(1)],
+            vec![TrackSize::Star(1)],
+            vec![stretch_cell(0, 0, 1, 1)],
+        );
+        g.children.push(fill_child());
+        run_layout(&mut g, 400.0, 250.0).unwrap();
+        assert_eq!(g.offset, (0.0, 0.0));
+        assert_eq!(g.size, (400.0, 250.0));
+    }
+
+    #[test]
+    fn grid_arrange_fixed_cell_rectangles() {
+        // 2×2 fixed grid; each stretch cell fills its track intersection.
+        let mut g = LayoutNode::grid(
+            vec![TrackSize::Fixed(100), TrackSize::Fixed(200)],
+            vec![TrackSize::Fixed(50), TrackSize::Fixed(80)],
+            vec![
+                stretch_cell(0, 0, 1, 1),
+                stretch_cell(0, 1, 1, 1),
+                stretch_cell(1, 0, 1, 1),
+                stretch_cell(1, 1, 1, 1),
+            ],
+        );
+        for _ in 0..4 {
+            g.children.push(fill_child());
+        }
+        run_layout(&mut g, 300.0, 130.0).unwrap();
+        assert_eq!(g.children[0].offset, (0.0, 0.0));
+        assert_eq!(g.children[0].size, (100.0, 50.0));
+        assert_eq!(g.children[1].offset, (100.0, 0.0));
+        assert_eq!(g.children[1].size, (200.0, 50.0));
+        assert_eq!(g.children[2].offset, (0.0, 50.0));
+        assert_eq!(g.children[2].size, (100.0, 80.0));
+        assert_eq!(g.children[3].offset, (100.0, 50.0));
+        assert_eq!(g.children[3].size, (200.0, 80.0));
+    }
+
+    #[test]
+    fn grid_arrange_weighted_star_cells() {
+        // columns 1* 2* over 300 → 100 : 200; single full-height row.
+        let mut g = LayoutNode::grid(
+            vec![TrackSize::Star(1), TrackSize::Star(2)],
+            vec![TrackSize::Star(1)],
+            vec![stretch_cell(0, 0, 1, 1), stretch_cell(0, 1, 1, 1)],
+        );
+        g.children.push(fill_child());
+        g.children.push(fill_child());
+        run_layout(&mut g, 300.0, 90.0).unwrap();
+        assert_eq!(g.children[0].offset, (0.0, 0.0));
+        assert_eq!(g.children[0].size, (100.0, 90.0));
+        assert_eq!(g.children[1].offset, (100.0, 0.0));
+        assert_eq!(g.children[1].size, (200.0, 90.0));
+    }
+
+    #[test]
+    fn grid_arrange_both_axis_spanning_cell() {
+        // 3×3 fixed grid; one cell spans (row 1, col 1) over 2×2 tracks.
+        let mut g = LayoutNode::grid(
+            vec![
+                TrackSize::Fixed(100),
+                TrackSize::Fixed(100),
+                TrackSize::Fixed(100),
+            ],
+            vec![
+                TrackSize::Fixed(50),
+                TrackSize::Fixed(50),
+                TrackSize::Fixed(50),
+            ],
+            vec![
+                stretch_cell(0, 0, 1, 3), // header spanning all columns
+                stretch_cell(1, 1, 2, 2), // 2×2 spanning block
+            ],
+        );
+        g.children.push(fill_child());
+        g.children.push(fill_child());
+        run_layout(&mut g, 300.0, 150.0).unwrap();
+        // Header: columns 0..3 → x 0..300, row 0..1 → y 0..50.
+        assert_eq!(g.children[0].offset, (0.0, 0.0));
+        assert_eq!(g.children[0].size, (300.0, 50.0));
+        // Spanning block: columns 1..3 → x 100..300, rows 1..3 → y 50..150.
+        assert_eq!(g.children[1].offset, (100.0, 50.0));
+        assert_eq!(g.children[1].size, (200.0, 100.0));
+    }
+
+    #[test]
+    fn grid_arrange_alignment_within_cell() {
+        // One 200×100 cell; a 50×40 fixed content rect under each alignment.
+        let run = |h: Alignment, v: Alignment| -> ((f32, f32), (f32, f32)) {
+            let mut g = LayoutNode::grid(
+                vec![TrackSize::Fixed(200)],
+                vec![TrackSize::Fixed(100)],
+                vec![cell(0, 0, 1, 1, h, v)],
+            );
+            g.children.push(LayoutNode::rectangle(
+                SizeConstraint::Fixed(50.0),
+                SizeConstraint::Fixed(40.0),
+            ));
+            run_layout(&mut g, 200.0, 100.0).unwrap();
+            (g.children[0].offset, g.children[0].size)
+        };
+
+        // start/start → anchored at the cell origin, natural size.
+        assert_eq!(
+            run(Alignment::Leading, Alignment::Leading),
+            ((0.0, 0.0), (50.0, 40.0))
+        );
+        // center/center → centred, natural size.
+        assert_eq!(
+            run(Alignment::Center, Alignment::Center),
+            ((75.0, 30.0), (50.0, 40.0))
+        );
+        // end/end → anchored at the far corner, natural size.
+        assert_eq!(
+            run(Alignment::Trailing, Alignment::Trailing),
+            ((150.0, 60.0), (50.0, 40.0))
+        );
+        // stretch/stretch → fills the whole cell.
+        assert_eq!(
+            run(Alignment::Stretch, Alignment::Stretch),
+            ((0.0, 0.0), (200.0, 100.0))
+        );
+        // mixed: center-h, stretch-v → centred horizontally, full height.
+        assert_eq!(
+            run(Alignment::Center, Alignment::Stretch),
+            ((75.0, 0.0), (50.0, 100.0))
+        );
+    }
+
+    #[test]
+    fn grid_arrange_negative_remaining_overflows_outer_rect() {
+        // Fixed columns 200+200 exceed the 300px parent allocation; Grid's
+        // outer rect stays at the parent allocation (300) and the second
+        // column's cell overflows past it (clipped at the outer-bounds clip
+        // in T4; here we only assert the layout-side overflow).
+        let mut g = LayoutNode::grid(
+            vec![TrackSize::Fixed(200), TrackSize::Fixed(200)],
+            vec![TrackSize::Fixed(100)],
+            vec![stretch_cell(0, 0, 1, 1), stretch_cell(0, 1, 1, 1)],
+        );
+        g.children.push(fill_child());
+        g.children.push(fill_child());
+        run_layout(&mut g, 300.0, 100.0).unwrap();
+        // Grid does not grow to 400; outer rect = parent allocation.
+        assert_eq!(g.size, (300.0, 100.0));
+        // Second cell starts at x=200 and extends to x=400 — past the outer
+        // rect's right edge (300).
+        assert_eq!(g.children[1].offset, (200.0, 0.0));
+        assert_eq!(g.children[1].size, (200.0, 100.0));
+        let right_edge = g.children[1].offset.0 + g.children[1].size.0;
+        assert!(right_edge > g.offset.0 + g.size.0);
+    }
+
+    #[test]
+    fn grid_arrange_unbounded_star_axis_errors() {
+        // A Grid with a star column arranged against an unbounded width
+        // surfaces the layout error (mirrors the ScrollView unbounded gate).
+        let mut g = LayoutNode::grid(
+            vec![TrackSize::Star(1)],
+            vec![TrackSize::Fixed(100)],
+            vec![stretch_cell(0, 0, 1, 1)],
+        );
+        g.children.push(fill_child());
+        let err = arrange(&mut g, 0.0, 0.0, f32::INFINITY, 100.0).unwrap_err();
+        assert_eq!(err, LayoutError::GridUnboundedStarAxis);
+    }
+
+    #[test]
+    fn grid_arrange_preserves_document_order() {
+        // `cell_placements[i]` always governs `children[i]`; the arrange loop
+        // visits children in declared (document) order, which is the
+        // DD-M3-P5-005 paint / z-order. Declare cells out of row-major order
+        // and assert each child lands in its own declared cell (not reordered
+        // by position).
+        let mut g = LayoutNode::grid(
+            vec![TrackSize::Fixed(100), TrackSize::Fixed(100)],
+            vec![TrackSize::Fixed(50)],
+            vec![
+                stretch_cell(0, 1, 1, 1), // first child → right column
+                stretch_cell(0, 0, 1, 1), // second child → left column
+            ],
+        );
+        g.children.push(fill_child());
+        g.children.push(fill_child());
+        run_layout(&mut g, 200.0, 50.0).unwrap();
+        // child[0] declared first → right column (x=100), regardless of
+        // having a higher column index than child[1].
+        assert_eq!(g.children[0].offset, (100.0, 0.0));
+        assert_eq!(g.children[1].offset, (0.0, 0.0));
+    }
+
+    #[test]
+    fn grid_arrange_nonstretch_axis_measures_natural_extent() {
+        // DD-M3-P5-005: a non-stretch axis measures the content at its
+        // natural extent, not against the cell bound. An aspect Box is the
+        // representative bound-dependent content: in a 40-wide × 100-tall
+        // cell with h-align center (non-stretch) + v-align stretch, the
+        // square (1:1) Box derives its natural size from the *stretched*
+        // height (100) — width 100 — and overflows the narrow 40px column,
+        // centred. Measuring the non-stretch width against the cell (40)
+        // would instead shrink the Box to 40×40 (the pre-fix behaviour),
+        // so this asserts the natural-extent measure.
+        let mut g = LayoutNode::grid(
+            vec![TrackSize::Fixed(40)],
+            vec![TrackSize::Fixed(100)],
+            vec![cell(0, 0, 1, 1, Alignment::Center, Alignment::Stretch)],
+        );
+        g.children
+            .push(LayoutNode::box_(Some(Ratio { num: 1, den: 1 })));
+        run_layout(&mut g, 40.0, 100.0).unwrap();
+        // Natural square sized off the stretched height: 100×100.
+        assert_eq!(g.children[0].size, (100.0, 100.0));
+        // Centred horizontally in the 40px cell → x = (40 - 100) / 2 = -30
+        // (overflow past both cell edges); top-anchored by stretch-v at y=0.
+        assert_eq!(g.children[0].offset, (-30.0, 0.0));
+    }
+
+    #[test]
+    fn grid_arrange_overflowing_cells_overlap_in_document_order() {
+        // Layout-side substrate for the DD-M3-P5-005 document-order z-order:
+        // two adjacent cells whose centred natural content overflows into the
+        // neighbour produce overlapping rectangles, and the arrange loop
+        // emits them in declared order (children[0] before children[1]).
+        // The *paint precedence* (later child on top under overlap) is a
+        // Visual-tree insertion-order property that stays UNOBSERVED in the
+        // Phase 5 gallery smoke: the slice exercises no sibling overlap (the
+        // only overflow leaves the Grid downward and is clipped), so #6 is not
+        // visible there. T7 evidence aggregation records this as an acceptance
+        // judgment (no added visible fixture; accepted on this layout-side
+        // substrate + the Visual-tree insertion-order assumption), not a
+        // further verification task. T2 only proves the layout produces the
+        // overlapping geometry in document order.
+        let mut g = LayoutNode::grid(
+            vec![TrackSize::Fixed(40), TrackSize::Fixed(40)],
+            vec![TrackSize::Fixed(40)],
+            vec![
+                cell(0, 0, 1, 1, Alignment::Center, Alignment::Center),
+                cell(0, 1, 1, 1, Alignment::Center, Alignment::Center),
+            ],
+        );
+        // Two 60-wide natural-size rects, each wider than its 40px cell.
+        g.children.push(LayoutNode::rectangle(
+            SizeConstraint::Fixed(60.0),
+            SizeConstraint::Fixed(20.0),
+        ));
+        g.children.push(LayoutNode::rectangle(
+            SizeConstraint::Fixed(60.0),
+            SizeConstraint::Fixed(20.0),
+        ));
+        run_layout(&mut g, 80.0, 40.0).unwrap();
+        // child[0] in column 0 cell (0..40), centred: x = (40-60)/2 = -10 → spans -10..50.
+        // child[1] in column 1 cell (40..80), centred: x = 40 + (40-60)/2 = 30 → spans 30..70.
+        let c0 = &g.children[0];
+        let c1 = &g.children[1];
+        assert_eq!(c0.offset.0, -10.0);
+        assert_eq!(c1.offset.0, 30.0);
+        // The two painted rectangles overlap horizontally (50 > 30).
+        let c0_right = c0.offset.0 + c0.size.0;
+        assert!(
+            c0_right > c1.offset.0,
+            "expected overflow overlap between cells"
+        );
+        // Document order is children-vector order (= sync_visuals paint order).
+        assert_eq!(c0.size, (60.0, 20.0));
+        assert_eq!(c1.size, (60.0, 20.0));
     }
 }

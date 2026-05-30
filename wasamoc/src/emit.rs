@@ -1,6 +1,6 @@
 use crate::ir::{
     CompoundOp, HandlerExpr, InterpolationPart, IrBinding, IrComponent, IrHandler, IrLiteral,
-    IrNode, IrProp, IrState, IrType,
+    IrNode, IrProp, IrState, IrType, KindPayload, TrackSize,
 };
 
 /// Serialise an IrComponent to the normative Wasamo IR text format (§8, DD-M2-P6-002).
@@ -47,6 +47,15 @@ fn emit_state(out: &mut String, state: &IrState, indent: usize) {
 fn emit_node(out: &mut String, node: &IrNode, indent: usize) {
     let i = ind(indent);
     out.push_str(&format!("{}node {} {{\n", i, node.widget_type));
+    // Grid kind payload (DD-M3-P5-001 carrier c1): the `columns:` /
+    // `rows:` track lists emit as `tracks <axis> = <track-list>` lines at
+    // the top of the node body, NOT as `prop` entries. This is the
+    // Phase-5 implementation textual shape the runtime loader parses in
+    // T3 and the dsl_spec §8 fold pins in T7.
+    if let Some(KindPayload::Grid { columns, rows }) = &node.kind_payload {
+        emit_track_list(out, "columns", columns, indent + 1);
+        emit_track_list(out, "rows", rows, indent + 1);
+    }
     for prop in &node.props {
         emit_prop(out, prop, indent + 1);
     }
@@ -60,6 +69,27 @@ fn emit_node(out: &mut String, node: &IrNode, indent: usize) {
         emit_node(out, child, indent + 1);
     }
     out.push_str(&format!("{}}}\n", i));
+}
+
+/// Emit a Grid track list as `tracks <axis> = <t0> <t1> …` (DD-M3-P5-002).
+/// Track elements use their surface forms: a fixed track is its integer,
+/// a star track is `<weight>*`. Unit star is written canonically as `1*`
+/// (the IR weight is explicit), mirroring the canonical color-emit policy.
+fn emit_track_list(out: &mut String, axis: &str, tracks: &[TrackSize], indent: usize) {
+    let rendered: Vec<String> = tracks.iter().map(emit_track_size).collect();
+    out.push_str(&format!(
+        "{}tracks {} = {}\n",
+        ind(indent),
+        axis,
+        rendered.join(" ")
+    ));
+}
+
+fn emit_track_size(t: &TrackSize) -> String {
+    match t {
+        TrackSize::Fixed(n) => n.to_string(),
+        TrackSize::Star(weight) => format!("{}*", weight),
+    }
 }
 
 fn emit_prop(out: &mut String, prop: &IrProp, indent: usize) {
@@ -498,6 +528,59 @@ mod tests {
         assert!(out.contains("prop item-cross-size = 0"), "got: {}", out);
         assert!(out.contains("prop item-spacing = 0"), "got: {}", out);
         assert!(out.contains("prop line-spacing = 0"), "got: {}", out);
+    }
+
+    // --- M3-Phase 5 T1: Grid carrier c1 IR text emit (DD-M3-P5-001) -----
+    //
+    // Grid track lists emit as `tracks <axis> = <track-list>` lines (NOT
+    // `prop` entries), preserving the carrier-c1 invariant. Cell wrappers
+    // emit as ordinary `node Cell { … }` subtrees with placement props.
+    // This is the Phase-5 implementation textual shape that feeds the
+    // runtime loader parse (T3) and the dsl_spec §8 fold (T7).
+
+    #[test]
+    fn grid_track_lists_emitted_as_tracks_lines() {
+        let out = emit_src(
+            r#"component C inherits W {
+                Grid {
+                    columns: 180 1* 2*
+                    rows: 1* 1*
+                    Cell { row: 0 column: 0 Text { text: "x" } }
+                }
+            }"#,
+        );
+        assert!(out.contains("node Grid {"), "got: {}", out);
+        assert!(out.contains("tracks columns = 180 1* 2*"), "got: {}", out);
+        assert!(out.contains("tracks rows = 1* 1*"), "got: {}", out);
+        // Track lists must NOT appear as prop entries (carrier c1).
+        assert!(!out.contains("prop columns"), "got: {}", out);
+        assert!(!out.contains("prop rows"), "got: {}", out);
+    }
+
+    #[test]
+    fn grid_unit_star_emitted_canonically_as_one_star() {
+        // Bare `*` lowers to Star(1) and emits canonically as `1*`.
+        let out = emit_src("component C inherits W { Grid { columns: * rows: * } }");
+        assert!(out.contains("tracks columns = 1*"), "got: {}", out);
+        assert!(out.contains("tracks rows = 1*"), "got: {}", out);
+    }
+
+    #[test]
+    fn grid_cell_emitted_as_node_with_placement_props() {
+        let out = emit_src(
+            r#"component C inherits W {
+                Grid {
+                    columns: 1* 1*
+                    rows: 1*
+                    Cell { row: 0 column: 1 h-align: center Text { text: "x" } }
+                }
+            }"#,
+        );
+        assert!(out.contains("node Cell {"), "got: {}", out);
+        assert!(out.contains("prop row = 0"), "got: {}", out);
+        assert!(out.contains("prop column = 1"), "got: {}", out);
+        assert!(out.contains("prop h-align = center"), "got: {}", out);
+        assert!(out.contains("node Text {"), "got: {}", out);
     }
 
     #[test]

@@ -71,6 +71,32 @@ Adding unit tests to a phase checklist is only warranted when that phase introdu
 
 When pure logic is entangled with a Win32/WinRT-bound type (e.g. a struct whose constructor requires a live `Compositor`), you **may** introduce a test-module-only mirror struct that replicates the index/state logic without the OS dependency. Use this sparingly — only when the logic is non-trivial enough to warrant a test and cannot be exercised through pure free functions. Prefer extracting the logic into a free function first; reach for the mirror pattern only when extraction would distort the production type's API.
 
+When a task's evidence is that a **GUI host actually rendered** (not just
+that pure logic or headless runtime state is correct), the assistant's
+automated evidence must be **launch + screenshot capture + assistant
+analysis of the captured image** — not merely that the launched process
+stays alive. `Start-Process` survival is a supporting "no early crash"
+signal only; it cannot show the screen rendered non-blank or that the
+intended sub-screen is in view. This assistant baseline is a pre-owner
+check and does **not** replace the owner's human-visible GUI smoke (see
+[docs/notes/human-visible-smoke.md](docs/notes/human-visible-smoke.md)).
+Capture mechanics and the environment requirement (visible desktop
+session; per-monitor-DPI-aware capture; `Graphics.CopyFromScreen`, not
+`PrintWindow`, because the DirectComposition client area reads back blank
+under `PrintWindow`) are recorded in
+[docs/notes/verification-environments.md](docs/notes/verification-environments.md).
+
+Visible verification — the assistant's screenshot analysis **or** the
+owner's human-visible smoke — must include a **positive control** that
+distinguishes the intended behavior from a coincidental look-alike. A
+single static frame a wrong implementation could equally produce is not
+evidence: prove a flexible (star/weighted) track is flexible by resizing
+and watching the ratio hold, not by one launch size a fixed width could
+match; prove a clip by checking against the source what is *missing*
+(clipped content is invisible), with resize as the positive control;
+prove conditional / stateful rendering by toggling the state, not by the
+initial state alone.
+
 ## Commit rules
 
 Default to one commit per task-list item in the active ADR / plan. This

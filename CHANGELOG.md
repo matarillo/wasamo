@@ -14,6 +14,59 @@ the **Status** section of [README.md](./README.md).
 
 ## [Unreleased] — M3: DSL surface (in progress)
 
+### M3-Phase 5 — Grid layout primitive (2026-05-30)
+
+Adds the `Grid` 2D layout primitive (one child per `Cell`; fixed and
+weighted-star track sizing; row / column spanning), discharging M3
+acceptance **A2** and the Phase 5 owner-acceptance slice of **A11**. A
+`Grid` declares `columns:` / `rows:` track lists and contains `Cell`
+children, each placing a single content child at a `(row, column)` with
+optional `row-span` / `column-span` and per-cell `h-align` / `v-align`.
+Same-cell overlap is rejected — overlay stays ZStack's responsibility.
+
+`wasamo-ir` stays on the generic node path: Grid's track lists ride a new
+`IrNode.kind_payload` carrier (`KindPayload::Grid { columns, rows }`,
+DD-M3-P5-001 carrier c1), so `IrProp.value` remains strictly `IrLiteral`
+for every kind, and `Cell` is an IR-only node flattened into Grid's
+effective children at load. No new `IrType`, `IrLiteral`, `PropertyValue`,
+`WASAMO_VALUE_*`, or `WASAMO_LAYOUT_ERROR_*` surface is added;
+`LayoutError::GridUnboundedStarAxis` is runtime-internal (Grid adds no
+host-facing ABI surface — `docs/abi_spec.md` re-confirmed untouched).
+
+`wasamoc` registers `Grid`, adds a narrow Grid-scoped track-list parser
+(a bare `*` lexer token; `columns: 120 1* 2*`) without opening a general
+list grammar, and rejects malformed track lists, out-of-range placement /
+span, multi-child or empty `Cell`, same-cell / overlapping-rectangle
+conflicts, unknown Grid / Cell attributes, and the deferred `auto` token.
+`wasamo-runtime` adds pure-data Grid measure / arrange (per-axis
+fixed-first + weighted-star resolution with `f32` prefix boundaries,
+spanning reconciliation, per-cell alignment with stretch default,
+document-order z-order), IR-loader materialisation with `validate()`
+defense-in-depth, and a Grid outer-bounds `InsetClip` Visual.
+
+Visible proof: `examples/gallery/gallery.ui` grows additively with a 3×3
+Grid slice (mixed fixed + weighted-star tracks, a column-spanning header
+and footer, three middle-row cells, and an overflowing footer that
+exercises the outer-bounds clip). Owner-manual GUI smoke on the rebuilt
+gallery host confirmed the spanning header / footer, the three separate
+star-sized columns (`C2` ≈ 2× `C1`, held across a resize positive
+control), and the outer-bounds clip (the footer's 4:1 box leaves only a
+thin clipped strip and never bleeds into the Photos below).
+
+Per-phase spec sync (A11): `docs/dsl_spec.md` 1.3 -> 1.4 flips §4.12 and
+the document status to `M3-Phase 5 closed; implementation-synced`, folds
+the Grid carrier-c1 textual IR grammar into §8.5 (`track_decl`), and
+re-syncs §5 / §2.2 / §3 to the landed author-surface AST / lexer / parser.
+`docs/architecture.md` top-level Status flips to include M3-Phase 5
+complete and §6.8.7 re-syncs to the landed `WidgetData::Grid`.
+
+Phase 5 surfaced a pre-existing runtime gap — the runtime is per-monitor
+DPI-unaware — deferred to M4 as a new acceptance criterion (DD-V-022 /
+DD-V-023); Grid itself computes correctly in logical pixels. Out-of-phase
+residual R1 (native Window-title wiring) carries forward to M3-Phase 6.
+
+Decisions: [DD-M3-P5-001..006](./process/milestone-3/phase-5/decisions/preamble.md).
+
 ### M3-Phase 4 — ScrollView primitive (minimal) (2026-05-25)
 
 Adds the vertical-only `ScrollView` layout primitive, discharging M3
