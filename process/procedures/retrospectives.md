@@ -165,6 +165,25 @@ ADR に補足 DD)。
 CI green: **必須**。clean rebuild は **必須** (incremental cache の嘘を
 main に持ち込まない)。
 
+## phase 最終 step の retrospective 分割 (複数 step phase)
+
+複数 step からなる phase の**最終 step**では、その step の progress
+checklist で **step-end retrospective (上記 checklist items 1-11)** と
+**phase-end retrospective (items 12-18)** を **別 bullet・別ファイル・別
+commit** に分割する:
+
+- **step-end retro (items 1-11)** は最終 step が所有し、step → phase
+  merge gate で `[x]` にできる。
+- **phase-end retro (items 12-18)** は phase → main merge gate が所有し、
+  最終 step を phase ブランチに merge した**後**に、別 commit で記録する。
+  最終 step close 時点では `[ ]` のままでよい。
+
+単一 bullet にすると所有者・タイミングの曖昧さで reviewer が混乱する
+(M3-Phase 4 T7 で検出、M3-Phase 5 が最初から分割運用して有効性を確認し、
+Phase 5 phase-end で本節に規範化)。1 task = 1 phase (単一 step が phase
+全体をカバー) の場合は §進行手順 の通り task → phase merge 後に続けて
+phase retrospective を回す形で足り、本分割は不要。
+
 ## phase-sync (実装同期 / Moment 2) で触る doc セット
 
 task retro item 10 で `phase-sync` 分類した制約は phase-end の
