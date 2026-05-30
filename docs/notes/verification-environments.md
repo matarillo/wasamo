@@ -20,6 +20,7 @@ mid-phase confusion (see *Observations* below).
 | Build | `cargo build` / `cargo check` succeeds | Any Rust toolchain (local, SSH dev box, CI runner). |
 | Link / static export | DLL exports the expected ABI symbols (e.g. `dumpbin /exports`) | MSVC toolchain. SSH dev box or local — both equivalent. |
 | Headless runtime with live Compositor | Runtime can initialize `wasamo_init`, DispatcherQueue, Compositor, TextRenderer / DirectWrite, build live `WidgetNode`s, and expose runtime property state without showing a window | Windows session with the required runtime compositor capability. GitHub Actions `windows-latest` has run this successfully; an SSH dev box may return `0x80070005` and should be classified as runtime-compositor-unavailable rather than GUI-capable. |
+| Assistant-visible capture (screenshot) | Assistant launches the host, captures the rendered window to an image, and analyses the pixels (did the screen render non-blank? is the intended sub-screen present?) — a pre-owner automated baseline, no human input | **Visible Windows desktop session required** (same as GUI/interactive). Capture must be **per-monitor-DPI-aware** and use `Graphics.CopyFromScreen` over the window's `GetWindowRect`; `PrintWindow` reads back blank for the DirectComposition client area. Does not replace owner human-visible smoke. |
 | GUI / interactive | Window opens; hover, click, key input, animation behave correctly | **Visible Windows desktop session required.** Local physical machine, or RDP/VNC into a dev box. Plain SSH is **not sufficient** because it provides no interactive desktop session for the spawned window. |
 
 ## Observations
@@ -62,6 +63,35 @@ kind. GitHub Actions `windows-latest` has run the test binary under
 this category should fail rather than silently skip when the required
 runtime capability is unavailable on GitHub Actions.
 
+### Observation 4 — Assistant-visible capture sits between headless and human
+
+M3-Phase 5 (Grid) surfaced a fourth kind during the T5 gallery slice
+evidence. `Start-Process` survival was originally offered as the
+assistant's automated GUI evidence, but it cannot show that the screen
+rendered non-blank or that the intended sub-screen is in view (Codex
+review #1). The assistant evidence was therefore strengthened to
+**launch + screenshot capture + assistant analysis** — a non-interactive
+but *visible* check that is stronger than headless-runtime verification
+(it observes pixels) yet weaker than human-visible smoke (no human
+judgment of correctness). Two mechanics pinned during Phase 5:
+
+- Use `Graphics.CopyFromScreen` over the window's `GetWindowRect`, not
+  `PrintWindow`: the DirectComposition / Visual-Layer client area reads
+  back **blank** under `PrintWindow`. Bring the window foreground +
+  topmost before capture.
+- The capture tooling must be **per-monitor-DPI-aware**. On the
+  M3-Phase 5 T6 box (125% scale) the host is DPI-unaware, so DWM
+  bitmap-stretches a logical 800×600 window to physical 1000×750; a
+  DPI-unaware capture would crop or mis-scale the readback. (The host's
+  own DPI-unawareness is a separate runtime gap deferred to M4 —
+  [process/cross-milestone/decisions/dpi-awareness-m4-deferral.md](../../process/cross-milestone/decisions/dpi-awareness-m4-deferral.md);
+  here it only constrains the *capture* tooling.)
+
+This assistant baseline is a pre-owner check; it does not substitute for
+the owner's human-visible smoke
+([human-visible-smoke.md](./human-visible-smoke.md)). CLAUDE.md
+`Testing rules` lifts the evidence standard into a project-wide rule.
+
 ### Implication for future ADRs
 
 When a future ADR (M2-Phase 4/5/6 or later) prescribes a verification
@@ -71,6 +101,9 @@ path, name the environment kind explicitly:
 - "link/export verification on SSH dev box" — same as DD-M2-P1-005
 - "headless runtime verification on a Windows runner with live
   Compositor capability" — no visible window, but stronger than build/link
+- "assistant-visible capture on a visible desktop" — launch + screenshot
+  + assistant analysis as a pre-owner baseline; no human input, but
+  observes rendered pixels (Observation 4)
 - "GUI/interactive verification on local or RDP-attached desktop" —
   required for any animation, hover, focus, IME, or DPI behaviour
 
