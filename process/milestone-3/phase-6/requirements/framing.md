@@ -140,10 +140,21 @@ SSOT は [process/_roadmap.md M3](../../../_roadmap.md) /
   effect は存在するのか / 止まるのか / 破棄か、再出現時に再利用か再生成か）
   → DD-005 で明文化。
 
+**runtime identity（実体 tree の同一性・寿命管理）の観点（Q6「ランタイム
+設計への含意」由来）:** この thesis は文法だけの問題ではなく
+**runtime identity の問題**でもある。Q6 が参照点とする
+Flutter の Widget / Element / RenderObject 分離のように、**軽量な「宣言 tree」
+（状態変化で再生成されてよい）と、寿命を持つ「実体 tree」（state / effect /
+layout 実体 / focus / 入力中の値などを identity で扱う）を分離**して考える。
+v1 の表面構文がテンプレート + 独自構文型であっても、runtime 内部でこの分離を
+保てば、将来 `.ui` 由来でも言語内 DSL 由来でも同じ runtime 機構に落とせる
+余地が残る。**この分離を DD-004 の設計評価軸にする**（packet には出さない、
+owner 判断でなく設計判断）。
+
 **実装スコープと設計スコープの分離:** Phase 6 の **実装**は `if <bool>` の
 最小単位で足りる（`else` / `switch` / loop を実装しない）。だが **設計
-判断**（DD-003 grammar / DD-004 IR・runtime）は、上記 family へ拡張可能か
-を評価軸に含める。実装を欲張らず、設計面積だけ広げる。
+判断**（DD-003 grammar / DD-004 IR・runtime）は、上記 family への拡張可能性と
+宣言 tree / 実体 tree 分離を評価軸に含める。実装を欲張らず、設計面積だけ広げる。
 
 ---
 
@@ -196,18 +207,29 @@ owner-agreed 方針（pre-doc）と、structural control-flow family の第一�
 ### DD-M3-P6-004 — 条件レンダリングの IR 表現 + runtime present/absent 機構
 **問い:** 条件 subtree を `wasamo-ir` でどう符号化し、`wasamo-runtime` が
 bool 変化時に subtree をどう insert/remove するか（Visual layer / WidgetNode
-への反映機構）。**設計 thesis の眼目:** `ConditionalSubtree` 専用の場当たり
-IR にすると Phase 7 iteration / 将来 `switch` で詰まる。**「structural
-control-flow node family（`if` / `for` / 将来 `switch`）に拡張できる IR/
-runtime か」を評価軸**にする。実装は `if bool` だけでよいが、設計はこの
-family 拡張性で評価する。
+への反映機構）。**設計 thesis の眼目（2 軸）:**
+- **(i) control-flow family 拡張性:** `ConditionalSubtree` 専用の場当たり
+  IR にすると Phase 7 iteration / 将来 `switch` で詰まる。**「structural
+  control-flow node family（`if` / `for` / 将来 `switch`）に拡張できる IR/
+  runtime か」を評価軸**にする。
+- **(ii) runtime identity / 宣言 tree と実体 tree の分離（Q6「ランタイム
+  設計への含意」由来）:** 軽量な「宣言 tree」（状態変化で再生成されてよい）と、
+  寿命を持つ「実体 tree」（state / effect / layout 実体 / focus / 入力中の値を
+  identity で扱う）を runtime 内部で分離できる設計か。Flutter の
+  Widget / Element / RenderObject 分離が参照点。
+
+実装は `if bool` だけでよいが、設計は上記 2 軸で評価する。
 **Phase 6 の問いである理由:** grammar surface の runtime 実体。binding が
 widget-tree shape を駆動する初の経路で、reactive 機構と接続する。Phase 7
-iteration が同じ family に乗るかは、ここの IR/runtime 設計で決まる。
+iteration が同じ family に乗るか、将来の言語内 DSL が同じ runtime に落とせるか
+は、ここの IR/runtime 設計で決まる。
 **sub-issues（中身は §3）:** IR node 形（control-flow family 拡張性）、
-present/absent の runtime 操作、state 保持/破棄、**IR loader / runtime が
-拒否すべき形の diagnostics**（DD-003 の grammar-level validation の
-runtime/loader 側対応）。**DD-M3-P6-005 と密結合。**
+**subtree identity（宣言 tree vs 寿命を持つ実体 tree の分離）**、
+present/absent の runtime 操作、**state / effect / layout 実体の寿命を
+表面構文から独立して扱えるか**、**IR loader / runtime が拒否すべき形の
+diagnostics**（DD-003 の grammar-level validation の runtime/loader 側対応）。
+**DD-M3-P6-005 と密結合**（effect lifetime は DD-005、実体 tree の identity 機構は
+DD-004）。
 
 ### DD-M3-P6-005 — 条件 subtree の effect lifecycle + reactive-drain proof 契約
 **問い:** 条件 subtree の present/absent が reactive 機構とどう接続するか。
@@ -333,7 +355,9 @@ FD-H / FD-I（packet の「合意不要」枠）。この区別を曖昧にし�
 
 この FD が DD-003（grammar）/ DD-004（IR・runtime）/ DD-005（effect
 lifecycle）/ A12（spec を structural rendering model の第一章として書く）を
-貫く。**実装スコープは `if <bool>` 最小、設計スコープは family 拡張性まで**。
+貫く。**実装スコープは `if <bool>` 最小、設計スコープは family 拡張性と
+runtime identity / 宣言 tree・実体 tree 分離まで**（後者は特に DD-004 の
+評価軸）。
 
 ### FD-A. 論点 slate の過不足（DD slate completeness）
 *合意不要（継承・機械的）。*
@@ -483,9 +507,12 @@ task-end retro と phase-end retro を最初から別 bullet にする
 - **[docs/notes/dsl-grammar.md Q6](../../../../docs/notes/dsl-grammar.md)** —
   **owner の条件レンダリング思想（最重要）**。3 アプローチ、v1 = approach 2 /
   future = approach 3 拡張可 / approach 1 非中心、structural control-flow
-  grammar family、effect 寿命の明文化 = **FD-CR / 設計 thesis / DD-003/004/005**
-  の原典。併せて **Q5**（条件式位置の expression grammar 拡張点 = DD-003）、
-  **Q2**（Window 由来 prop の runtime 配線 = R1 / DD-006）。
+  grammar family、effect 寿命の明文化、そして **Q6「ランタイム設計への含意」=
+  runtime identity の観点**（Flutter Widget/Element/RenderObject 参照点、
+  軽量な「宣言 tree」と寿命を持つ「実体 tree」の分離）= **FD-CR / 設計 thesis /
+  DD-003/004/005** の原典（runtime identity / 宣言 tree・実体 tree 分離は
+  特に DD-004 の設計評価軸）。併せて **Q5**（条件式位置の expression grammar
+  拡張点 = DD-003）、**Q2**（Window 由来 prop の runtime 配線 = R1 / DD-006）。
 - **[target-app pre-doc / spec.md](../../requirements/spec.md)** — 条件
   レンダリングを M3 で normative 化（M4 reservation せず、A12）、ZStack =
   overlay 専管・document order z-order。scrim の alpha *styling controls* は
