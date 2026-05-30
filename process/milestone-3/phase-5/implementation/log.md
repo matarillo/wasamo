@@ -592,3 +592,42 @@
     run from `workflow_dispatch` on the phase branch **before merge**;
     the local rebuild here is the proxy until then. CI YAML unchanged
     (no new language / build system).
+
+- **Phase-end close (2026-05-30).** Phase 5 phase-end gate per
+  [retrospectives.md items 12-18](../../../procedures/retrospectives.md),
+  recorded in
+  [retrospectives/phase-end.md](../retrospectives/phase-end.md).
+  - **CI evidence (item 16).** Phase-branch `feat/m3-phase-5`
+    (headSha `ca711bd`) `workflow_dispatch` run
+    [`26683352589`](https://github.com/matarillo/wasamo/actions/runs/26683352589)
+    conclusion **success** (~2m31s): `cargo fmt`/ debug + release build /
+    `cargo test` / C-ABI (cl + clang-cl) / CMake / Zig / counter-c/rust/zig
+    smoke all green. Local clean rebuild proxy (T7): 627 passed / 0 failed.
+    The phase-end doc commits after this CI run are doc-only, so the run
+    is the merge-gate ground truth.
+  - **Implementation summary (T1-T6).** `wasamoc` registers `Grid`,
+    parses `columns:` / `rows:` track lists through a narrow Grid-scoped
+    path (bare `*` token; `1*` vs `1 *` by span adjacency) and emits the
+    carrier-c1 `tracks <axis> = …` textual IR (T1). The pure-data layout
+    engine resolves per-axis fixed-first + weighted-star tracks with `f32`
+    prefix boundaries, reconciles spanning, and applies per-Cell alignment
+    in document order (T2). The runtime loader materialises
+    `KindPayload::Grid`, flattens each `Cell`'s content child into Grid's
+    effective children with a parallel `cell_placements` vector, installs
+    the outer-bounds `InsetClip`, and validates defense-in-depth (T3).
+    Two mock-free Windows-runtime fixtures pin the Grid Visual tree and
+    the production VStack-root shape (T4). The gallery `.ui` grew a 3×3
+    Grid slice (T5), owner-accepted in the T6 visible smoke with resize
+    positive controls. No new `IrType` / `IrLiteral` / `PropertyValue` /
+    `WASAMO_*` ABI surface — `docs/abi_spec.md` re-confirmed untouched at
+    phase-end (code-level: Grid's track lists ride the `KindPayload::Grid`
+    carrier on `IrNode`, `LayoutError::GridUnboundedStarAxis` is
+    runtime-internal, and no C-ABI export crate / bindings changed).
+  - **phase-sync dispositions closed (item 15).** #1 Grid §8 grammar
+    `doc-folded` (dsl_spec §8.5); #2 assistant-visible evidence + #4
+    positive-control `doc-folded` (CLAUDE.md §Testing rules +
+    verification-environments.md Obs 4, commits `b8b1f53` / `d83e446`);
+    DPI `carry-forward` → M4 (handoff + VDR `2162867`); R1 residual →
+    Phase 6; remainder `local-only`. No open `phase-sync` items survive.
+  - **Post-merge distillation.** _(appended after the main no-ff merge:
+    merge commit hash + post-merge main CI green re-confirmation.)_

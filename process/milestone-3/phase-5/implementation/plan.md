@@ -499,11 +499,18 @@ retro bullet. T7's own `phase-sync` entries are still recorded in the
 T7 step-end retro item 10 (the task-retro's job per §10); the
 phase-end retro finalises them.
 
-- [ ] `cargo fmt --all -- --check` green locally and on CI.
-- [ ] `cargo build --release --workspace` green locally and on CI.
-- [ ] `cargo test --workspace` green locally and on CI.
-- [ ] Windows-only integration evidence green on CI (skip-guard
+- [x] `cargo fmt --all -- --check` green locally and on CI.
+- [x] `cargo build --release --workspace` green locally and on CI.
+- [x] `cargo test --workspace` green locally and on CI.
+- [x] Windows-only integration evidence green on CI (skip-guard
       verified per T4).
+      All four landed at phase-end: phase-branch `workflow_dispatch` CI
+      run [`26683352589`](https://github.com/matarillo/wasamo/actions/runs/26683352589)
+      (headSha `ca711bd`) success — `cargo fmt` / debug + release build /
+      `cargo test` / C-ABI / CMake / Zig / counter smoke all green;
+      `grid_layout_integration` Windows-only tests ran under CI
+      `cargo test` (skip-guard from T4). Local clean rebuild proxy (T7):
+      627 passed / 0 failed.
 - [x] `docs/dsl_spec.md` §4.12 Phase status marker flips to
       `M3-Phase 5 closed; implementation-synced`; document-level
       Status header updated to reflect Phase 5 closed
@@ -547,19 +554,28 @@ phase-end retro finalises them.
       determination is a **phase-end** call (retro item 15, alongside
       the handoff clean-up + item 14 README VDR). See
       [t7.md item 6](../retrospectives/t7.md).
-- [ ] Step retro `phase-sync` items from T1-T7 close into
+- [x] Step retro `phase-sync` items from T1-T7 close into
       `doc-folded` / `carry-forward` / `local-only` —
       **no open `phase-sync` items survive past phase close**.
       **NOT owned by T7** (revised 2026-05-30; phase-end retro item 15
       per [retrospectives.md §15](../../../procedures/retrospectives.md)).
-      Stays `[ ]` at T7 close. T7's own entries (the §8-fold
+      Stayed `[ ]` at T7 close. T7's own entries (the §8-fold
       `doc-folded`; the T5/T6 verification-rule-placement and DPI
       `carry-forward`s) are recorded in the T7 step-end retro item 10;
       the phase-end retro performs the final close.
-- [ ] [log.md](./log.md) records the phase-close evidence pointer,
+      **Closed (phase-end, 2026-05-30):** #1 Grid §8 grammar `doc-folded`
+      (dsl_spec §8.5); #2 assistant-visible evidence + #4 positive-control
+      `doc-folded` (CLAUDE.md §Testing rules + verification-environments.md
+      Obs 4); DPI `carry-forward` → M4; R1 out-of-phase residual → Phase 6;
+      remainder `local-only`. See
+      [phase-end.md item 15](../retrospectives/phase-end.md).
+- [x] [log.md](./log.md) records the phase-close evidence pointer,
       CI run id, implementation summary distilled from T1-T6, and
-      any final post-merge distillation.
-- [ ] Carry-forward inputs to the next phase's pre-doc recorded
+      any final post-merge distillation. (Phase-end close entry landed:
+      CI run `26683352589` + T1-T6 impl summary + phase-sync
+      dispositions; the post-merge distillation slot is appended after
+      the main merge.)
+- [x] Carry-forward inputs to the next phase's pre-doc recorded
       under [handoff.md](./handoff.md) (covering at minimum: any
       residual surfaced during T2-T6; any out-of-phase R found
       during gallery smoke; Phase 6 inputs including the R1 Window-
@@ -570,24 +586,34 @@ phase-end retro finalises them.
       [retrospectives.md §6.3/§15](../../../procedures/retrospectives.md),
       and the [T6 retro owner decision](../retrospectives/t6.md) that
       the DPI carry-forward `handoff.md` entry lands at phase-end).
-      Stays `[ ]` at T7 close.
-- [ ] Front-matter `status` flips from `active` to `closing` on this
-      file in the same commit that flips T7's "all gates green"
-      checkbox above. No further task checkboxes are added after
-      this point.
+      Stayed `[ ]` at T7 close. **Landed (commit `ca711bd`):** DPI
+      `carry-forward` → M4, R1 residual → Phase 6, and the plan-revise-A
+      main learning, with `doc-folded` pointers (#1/#2/#4).
+- [x] Front-matter `status` flips from `active` to `closing` in the
+      same commit that flips the "all gates green" checkboxes above. No
+      further task checkboxes are added after this point. (The
+      front-matter lives on the sibling
+      [implementation/preamble.md](./preamble.md), not this `plan.md`;
+      flipped to `closing` in the phase-end batch — **not** at T7
+      step-close, since the on-CI gates are phase-end-owned and T7 merged
+      with `status: active`. The preamble.md Lifecycle paragraph is
+      revised in the same batch to record this actual operation.)
 - [x] **T7 step-end retrospective recorded** at
       `process/milestone-3/phase-5/retrospectives/t7.md`
       (retrospectives.md checklist items 1-11; step → phase merge
       gate; **owned by T7**, this is a T7 deliverable).
-- [ ] **Phase-end retrospective recorded** at
+- [x] **Phase-end retrospective recorded** at
       `process/milestone-3/phase-5/retrospectives/phase-end.md`
       (retrospectives.md checklist items 12-18; phase → main merge
       gate; **NOT owned by T7**, performed on the phase branch
       after T7 merges in by a separate retro commit per
       [../requirements/constraints.md §5](../requirements/constraints.md#5-phase-最終-step-の-retrospective--progress-checklist-は-step-end-と-phase-end-を分割する)).
-      **This bullet stays `[ ]` at T7 close**; the phase-end retro
+      **This bullet stayed `[ ]` at T7 close**; the phase-end retro
       commit on the phase branch flips it. Phase 5 phase-end retro
       additionally decides whether to promote constraints §5 into
       `process/procedures/retrospectives.md` as a project-wide rule
       based on the lived experience of running this split from the
       start.
+      **Landed:** [phase-end.md](../retrospectives/phase-end.md) records
+      items 12-18; the constraints §5 promotion decision = **yes**
+      (commit `09b6273`, based on the lived split experience).

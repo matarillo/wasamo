@@ -1,7 +1,7 @@
 ---
 phase: M3-Phase 5
 title: Grid layout primitive
-status: active
+status: closing
 adr: process/milestone-3/phase-5/decisions/preamble.md
 plan: process/milestone-3/plan.md
 opened: 2026-05-29
@@ -145,11 +145,20 @@ explicitly deferred to Phase 5 close and not pre-decided here.
 ## Lifecycle transition
 
 This implementation file opens at `status: active` and transitions
-to `status: closing` at T7 step-close in the same commit that flips
-T7's checkbox. The file remains mutable during the `closing` window
+to `status: closing` at the **phase-end batch commit** — the commit
+that flips the phase-end-owned "all gates green" checkboxes
+(`plan.md` items: `cargo fmt`/`build`/`test` + Windows integration on
+CI, phase-sync close, log.md, handoff, phase-end retro) — **not** at
+T7 step-close. (Actual operation, recorded per plan revise A: the
+on-CI gates are phase-end-owned and could not be verified until the
+phase branch ran `workflow_dispatch` CI after T7 merged, so T7 closed
+with `status: active`; the original "at T7 step-close" placement is
+superseded.) The file remains mutable during the `closing` window
 only for the phase-end retrospective evidence pointer, the CI run
 pointer, and any final post-merge distillation; no further task
-checkboxes are added once T7 closes. The phase-end retrospective
+checkboxes are added once the phase-end batch lands. The `closing` →
+`retired` transition belongs to the phase → main merge commit /
+post-merge distillation, not this batch. The phase-end retrospective
 itself is recorded under
 `process/milestone-3/phase-5/retrospectives/phase-end.md` (with
 sibling `tN.md` per-step retros under the same directory) and is a
