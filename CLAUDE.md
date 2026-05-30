@@ -86,6 +86,17 @@ session; per-monitor-DPI-aware capture; `Graphics.CopyFromScreen`, not
 under `PrintWindow`) are recorded in
 [docs/notes/verification-environments.md](docs/notes/verification-environments.md).
 
+Visible verification — the assistant's screenshot analysis **or** the
+owner's human-visible smoke — must include a **positive control** that
+distinguishes the intended behavior from a coincidental look-alike. A
+single static frame a wrong implementation could equally produce is not
+evidence: prove a flexible (star/weighted) track is flexible by resizing
+and watching the ratio hold, not by one launch size a fixed width could
+match; prove a clip by checking against the source what is *missing*
+(clipped content is invisible), with resize as the positive control;
+prove conditional / stateful rendering by toggling the state, not by the
+initial state alone.
+
 ## Commit rules
 
 Default to one commit per task-list item in the active ADR / plan. This

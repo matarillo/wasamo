@@ -92,6 +92,17 @@ the owner's human-visible smoke
 ([human-visible-smoke.md](./human-visible-smoke.md)). CLAUDE.md
 `Testing rules` lifts the evidence standard into a project-wide rule.
 
+Visible verification (assistant capture or owner smoke) must also carry a
+**positive control**: a single static frame that a coincidental
+look-alike could also produce is not evidence. The M3-Phase 5 T6 smoke pinned the concrete cases — a star
+track's flexibility is only proven by resizing (a fixed width can match
+the ratio at one size), and an outer-bounds clip is only proven by
+checking against the source *what is missing* (clipped content is
+invisible), with resize as the positive control. The same discipline
+generalises (e.g. conditional rendering is proven by toggling the state,
+not by the initial frame). CLAUDE.md `Testing rules` carries the
+project-wide statement.
+
 ### Implication for future ADRs
 
 When a future ADR (M2-Phase 4/5/6 or later) prescribes a verification
