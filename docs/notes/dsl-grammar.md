@@ -305,6 +305,26 @@ Wasamo の条件レンダリングは、まず **テンプレート + 独自構�
   なく、Wasamo DSL が tree shape を状態に従わせるための第一歩として理解
   できるようにする。
 
+**ランタイム設計への含意:**
+
+この方針は、条件レンダリング構文だけの問題ではない。将来、`.ui` DSL とは
+別に、言語内 DSL から UI tree を生成する可能性を考えると、runtime は特定の
+表面構文に依存しすぎない方がよい。
+
+この観点では、Flutter の Widget / Element / RenderObject の分離は重要な
+参照点になる。Widget に相当する軽量な宣言情報は、状態変化に応じて再生成
+されてもよい。一方で、state、effect、layout 実体、focus、入力中の値などの
+寿命は、runtime 側が identity に基づいて扱う必要がある。
+
+Wasamo でも、条件 subtree の present / absent を構文上は簡潔に書けるように
+しつつ、runtime 側では subtree identity、state scope、effect scope、
+loop key、再利用 / 再生成の規則を後から仕様化できる余地を残したい。
+
+つまり、v1 の表面構文がテンプレート + 独自構文・属性型であっても、runtime
+内部では「軽量な宣言 tree」と「寿命を持つ実体 tree」を分けて考える。この
+分離があると、将来 `if` / `switch` / loop をより言語構文型に近い形で扱う
+場合にも、同じ runtime 上へ落とし込みやすい。
+
 **この議論を再訪する契機:**
 
 - 条件レンダリング構文を仕様化するとき。
