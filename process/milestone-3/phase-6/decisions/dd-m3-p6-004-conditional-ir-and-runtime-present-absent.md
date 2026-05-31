@@ -264,6 +264,23 @@ phase, **O2 is the fallback** — it keeps the branch-list family-fit
 O3/O4/O5 are recorded as rejected: they model control flow as a widget
 or a property and force a later re-shape.
 
+**What `Accepted` selects (so the acceptance is unambiguous to later
+readers).** Flipping this DD to `Accepted` means the owner accepts
+**O1 as the design baseline**, and the O1-specific vocabulary
+elsewhere in the ADR — the preamble §Context member-level IR language,
+verification-closure item 3's "member-level control-flow construct",
+and the §Upstream `Vec<IrMember>` / `IrMember` schema wording — is read
+in its O1 form. The O1/O2 fork is **not** left open into the
+implementation plan by default. **If the owner instead selects O2**,
+the acceptance note says so explicitly, and that same O1-specific
+vocabulary is read in its O2 form: a distinguished branch-list
+control-flow node carried in `children: Vec<IrNode>` (not a re-typed
+`children`), accepting the bounded `Eq` drop on the carrying type.
+**R-1 and ID-1 are unaffected by the O1/O2 choice** — both options
+expose the same branch-list family-fit, the same
+`BindingTarget::ConditionalSubtree` runtime seam, and the same
+absent=destroy / opt-in-retention normative semantics.
+
 ### IR encoding (O1)
 
 - `IrNode.children` becomes `Vec<IrMember>` with `IrMember = Widget(IrNode)
@@ -318,6 +335,21 @@ or a property and force a later re-shape.
   conditional with static siblings on both sides, and the
   multi-conditional-sibling interaction is pinned by an integration
   test (verification closure item 4).
+- **Quiescent child-order invariant (normative; effect-/drain-order
+  independent).** Because each conditional's slot is derived from its
+  position in the **declared** member order, the parent's child order at
+  quiescence is a function of declared member order **alone** — it does
+  **not** depend on the order in which the condition Effects fire or
+  drain. Concretely: with multiple sibling / nested conditionals toggled
+  by the same or different signals, whichever ones are present at
+  quiescence appear among the static siblings in **declared document
+  order**, regardless of effect-evaluation order. This is the guarantee
+  that lets DD-M3-P6-005 adopt **SM-1** (no structural-ordering contract
+  on the drain) without leaving final child order implementation-defined:
+  drain *order* is unspecified, but quiescent *layout order* is fixed by
+  the declared tree. The integration test (verification closure item 4,
+  case (c) two sibling conditionals toggled independently) asserts this
+  invariant directly.
 
 ### Identity model (ID-1) — and its normative-semantics contract
 

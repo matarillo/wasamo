@@ -35,13 +35,23 @@ stay consistent with:
 
 ### Sizing policy
 
-- **S1 — Union (per-axis max) of children (recommended).** ZStack's
-  desired size on each axis = the **max** of its children's measured
-  desired sizes on that axis. A `Fill` child resolves to the parent
-  allocation (existing Fill rule), so a ZStack containing a Fill
-  scrim resolves to the parent allocation; a ZStack of only intrinsic
-  children sizes to the largest child. This is the SwiftUI ZStack
-  model.
+- **S1 — Union (per-axis max) of children, ZStack default constraint
+  `Fill/Fill` (recommended).** ZStack's *desired* size on an axis is
+  the **max** of its children's measured desired sizes (the union) —
+  but ZStack itself defaults to `Fill/Fill` (like Grid / ScrollView),
+  so on a **bounded** parent axis it takes the full parent allocation
+  and the union only governs the **Shrink / unbounded-axis** desired-
+  size report. A `Fill` child contributes **`0.0`** to the union (the
+  engine's `Fill` measure rule — [layout.rs:440](../../../../wasamo-runtime/src/layout.rs):
+  "Fill children return 0.0 — they take whatever the parent allocates
+  in arrange()") and fills its allocated rect in *arrange*, **not** by
+  inflating the union. So a ZStack of only intrinsic children sizes to
+  the largest child **on a Shrink/unbounded axis**; on a bounded axis
+  the `Fill/Fill` default fills the parent. SwiftUI's ZStack is the
+  union reference, but its full-screen-overlay-via-flexible-child
+  behaviour does **not** transfer (Wasamo `Fill` measures `0.0`, not
+  the offered size), so the lightbox's full-viewport scrim comes from
+  the **ZStack's own `Fill` default**, not from the child.
 - **S2 — Always Fill the parent allocation.** ZStack ignores child
   sizes and always consumes the full parent rectangle.
 - **S3 — Size to the first (or a designated) child.** ZStack tracks a
@@ -74,18 +84,37 @@ stay consistent with:
 
 ## Comparison
 
-**Sizing.** S2 (always Fill) is wrong for a general overlap primitive:
-a ZStack used to stack a few intrinsic badges over an icon should size
-to the icon, not to the whole parent. S3 (primary child) needs an
-author concept of "primary" that the surface (DD-001) does not have.
-S1 (union) is the standard, composes correctly with `Fill` (the
-lightbox scrim is `Box { fill … }` sized Fill/Fill, which drives the
-root ZStack to the parent allocation **through** the normal Fill rule,
-not through a ZStack special case), and needs no new vocabulary. S1
-also keeps ZStack's unbounded-axis behaviour identical to the existing
-conventions: a `Fill` child on an unbounded parent axis follows the
-same rule the engine already applies (no ZStack-specific
-`LayoutError`).
+**Sizing.** S2 (always Fill, ignoring children entirely) and S3
+(size to a "primary" child) are rejected as *sizing models*: S2
+discards the union desired-size the Shrink/unbounded axis needs, and
+S3 needs a "primary child" concept the surface (DD-001) does not have.
+S1 (union) is the standard desired-size policy and needs no new
+vocabulary. The load-bearing sub-decision S1 carries is **ZStack's own
+default size constraint**, because Wasamo's `Fill` measures **`0.0`**
+([layout.rs:440](../../../../wasamo-runtime/src/layout.rs)), not the
+offered size the way SwiftUI's flexible children do: a `Fill` scrim
+child therefore does **not** drive the ZStack's measured size up, so
+the lightbox's full-viewport scrim cannot arrive "through the union".
+It arrives because the **ZStack itself defaults to `Fill/Fill`**
+(matching Grid / ScrollView), taking the full parent allocation, with
+the scrim then filling that content rect in *arrange*.
+
+This is an **owner-visible trade-off, not a free choice.** Phase 6
+ships **no author-facing `width:`/`height:` size-constraint surface**
+(only `viewport-*` exists, and it is rejected at `wasamoc check` —
+[check.rs:2584](../../../../wasamoc/src/check.rs)), so an author
+**cannot** opt a ZStack back to intrinsic ("size to the largest
+child") sizing this phase. Choosing `Fill/Fill` therefore decides that
+**ZStack is an overlay-first container whose default is to fill its
+parent allocation**; the SwiftUI-style intrinsic ZStack (a few badges
+sized to the icon they overlay) is **weaker in the default experience
+until a per-widget size-constraint surface arrives** (a future
+additive phase). The owner accepts this because Phase 6's ZStack
+driver is the lightbox overlay (FD-B), for which fill-the-parent is
+exactly the wanted default. S1 also keeps ZStack's unbounded-axis
+behaviour identical to existing conventions: the union is the finite
+anchor on an unbounded axis (the Grid model), so no ZStack-specific
+`LayoutError` arises.
 
 **Alignment default.** The lightbox needs a **centered** photo over a
 **filling** scrim. Under AL1, the scrim (Fill/Fill) fills regardless
@@ -117,13 +146,24 @@ other M3 container.
 
 **S1 + AL1 + Z1 + C1.**
 
-- **Sizing (S1):** ZStack's desired size on each axis is the per-axis
-  **max** of its children's measured desired sizes. `Fill` children
-  resolve through the existing Fill rule (so a Fill child yields a
-  parent-allocation-sized ZStack). ZStack introduces **no new
-  `LayoutError`**: unbounded-axis behaviour is whatever the children's
-  own Fill / Shrink resolution already produces under the existing
-  conventions.
+- **Sizing (S1) + default constraint `Fill/Fill`:** ZStack defaults to
+  `Fill/Fill` (like Grid / ScrollView). On a **bounded** parent axis it
+  takes the full parent allocation; on a **Shrink / unbounded** axis its
+  desired size is the per-axis **max** of its children's measured desired
+  sizes (the union). A `Fill` child contributes **`0.0`** to that union
+  and fills its allocated rect in *arrange* — it does **not** inflate
+  the ZStack's measured size
+  ([layout.rs:440/673](../../../../wasamo-runtime/src/layout.rs)). The
+  lightbox's full-viewport scrim therefore comes from the **ZStack's own
+  `Fill` default** taking the parent allocation (then the scrim filling
+  that content rect), **not** from a Fill child driving the union. ZStack
+  introduces **no new `LayoutError`** and **no ZStack-specific Fill
+  special case**. **Owner-visible trade-off:** with no author
+  `width:`/`height:` surface in Phase 6, ZStack is an **overlay-first**
+  container — its default fills the parent, and an intrinsic ZStack
+  (sizing to its largest child on a bounded axis) is not expressible
+  until a future size-constraint surface; accepted because the lightbox
+  overlay is the Phase 6 driver.
 - **Arrange / alignment (AL1):** each child is measured against the
   ZStack content rect and anchored within it. Default `h-align` /
   `v-align` = **`center`**. `Stretch` alignment or a `Fill` constraint
@@ -159,6 +199,13 @@ the document-order z-order rule; the outer-bounds clip rule.
 - **Alignment vocabulary** — `start`/`center`/`end`/`stretch` reuses
   the existing `Alignment` enum; a future baseline/edge anchor would
   be an additive enum variant, no ZStack change.
+- **Per-widget size-constraint surface** (`width:`/`height:` =
+  `fill`/`shrink`/fixed) — not in Phase 6 (no widget exposes one). When
+  it lands, it is the path that lets an author override ZStack's
+  `Fill/Fill` default to an intrinsic (union-sized) ZStack, relaxing the
+  overlay-first default the Sizing comparison commits to. Additive; no
+  ZStack-shape change (the engine already resolves `Fill`/`Shrink`/
+  `Fixed` per axis — [layout.rs:83](../../../../wasamo-runtime/src/layout.rs)).
 
 ## Technical risk re-evaluation
 
@@ -173,12 +220,16 @@ the document-order z-order rule; the outer-bounds clip rule.
   Visual order, plus the assistant/owner visible positive control
   (scrim dim + over-painting on the open lightbox frame). Pure-logic
   tests cover sizing/arrange/alignment only.
-- **Fill-scrim interaction** is the one subtlety: the lightbox relies
-  on a Fill/Fill scrim driving the root ZStack to the parent
-  allocation. This is the existing Fill rule, not a ZStack special
-  case, so it is covered by the union-sizing + Fill-child unit test
-  rather than a bespoke path — lower risk than a ZStack-specific Fill
-  override would carry.
+- **Fill-scrim interaction** is the one subtlety, and an earlier draft
+  mis-stated its direction: a `Fill` child measures **`0.0`**
+  ([layout.rs:440](../../../../wasamo-runtime/src/layout.rs)), so it does
+  **not** drive the ZStack's size. The full-viewport scrim comes from the
+  **ZStack's own `Fill/Fill` default** taking the parent allocation,
+  after which the scrim fills the content rect in *arrange*. The
+  pure-logic test covers (i) union desired-size on a Shrink/unbounded
+  axis (a Fill child contributing `0.0`) and (ii) a Fill child filling
+  the ZStack content rect under a bounded allocation — no ZStack-specific
+  Fill override path.
 - **No intermediate Visual** keeps `sync_visuals` untouched (the
   ScrollView intermediate-Visual complexity is a negative precedent,
   deliberately not repeated), so the z-order/clip behaviour rides the

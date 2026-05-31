@@ -205,10 +205,36 @@ Concrete decisions:
   block's document position; when false they are absent (DD-M3-P6-004
   for the structural mechanism). An `if` block in a non-member
   position is a `wasamoc check` / parse error.
-- **`if` is a reserved keyword** (added to the keyword set,
-  dsl_spec §2.1), so `state if: …` and `IDENT == "if"` widget/prop
-  names are rejected — mirroring the `true`/`false` reservation
-  (DD-M3-P1-002) and the Q5 reserved-word rule.
+- **The structural control-flow family keywords are reserved now, not
+  just `if`.** Phase 6 adds **`if`, `else`, `switch`, `for`** to the
+  keyword set (dsl_spec §2.1), all four reserved by the lexer so they
+  may not appear as `state` / `property` / widget-type / qualified-name
+  identifiers — mirroring the `true`/`false` reservation (DD-M3-P1-002)
+  and the Q5 reserved-word rule. Using any of them in identifier
+  position is a `wasamoc check` / parse error.
+  - **Why reserve the whole family now (owner decision).** FD-CR makes
+    the structural control-flow family (`if` → `else` / `switch` → `for`)
+    a Phase-6 *design premise*, not a maybe. Reserving only `if` and
+    adding `else` / `switch` / `for` later would **source-break** any
+    `.ui` that meanwhile used them as identifiers; reserving the
+    committed family up front pays the (one-time, today-zero) cost now
+    so the family lands additively without a future break. This is the
+    keyword counterpart of the member-level IR being shaped for the
+    family in DD-M3-P6-004.
+  - **`else if` is not a keyword** — it is `else` followed by `if`
+    (two reserved keywords), no separate token.
+  - **Source-compat note:** no shipped `.ui` uses `if` / `else` /
+    `switch` / `for` as an identifier (greppable), so the reservation
+    breaks nothing today; it is recorded as a forward-compat note in
+    dsl_spec §2.1.
+  - **Scope of the reservation: family *block* keywords only.**
+    Contextual sub-tokens of not-yet-designed productions — `in`
+    (`for item in items`), `case` / `default` (`switch` arms) — are
+    **not** reserved this phase, because their grammar role is not yet
+    fixed (the `for` iteration syntax is Phase 7; `switch` arm syntax is
+    undrawn), and reserving a contextual token ahead of its production
+    would freeze syntax we have not designed. They are reserved when
+    their production is specified.
 - **Condition (E1):** `cond_expr` is a `BOOL_LIT` or an `IDENT`
   resolving to a `bool`-typed `state`. `wasamoc check` rejects:
   - a non-bool condition (`if count { … }` with `count: i32`;
@@ -223,9 +249,12 @@ Concrete decisions:
 - **`if true { … }` / `if false { … }`** are well-typed but
   degenerate (always present / always absent); permitted, not
   special-cased.
-- **No `else` this phase.** `else` / `else if` / `switch` are reserved
-  as future family members (forward-compat below); a bare `else` is a
-  parse error with a "not yet supported" diagnostic.
+- **No `else` this phase.** `else` / `else if` / `switch` / `for` are
+  reserved keywords (above) but have **no production yet**; a bare
+  `else` / `switch` / `for` block is a parse error with a "reserved /
+  not yet supported" diagnostic that names the construct (distinct from
+  the identifier-position rejection, which fires when one is used as a
+  name).
 
 A7 visible proof uses the single-`bool` form
 `if is_lightbox_open { ZStack { … } }`, driven by a text-Button click
@@ -268,20 +297,30 @@ reader can predict the family's growth from the `if` chapter alone
 
 ## Technical risk re-evaluation
 
-- **One new `member` alternative + one keyword** is a contained
-  grammar change; the parser's `member` dispatch gains an `if`-first-
-  token arm (no 2-token lookahead ambiguity — `if` is a keyword, not
-  an `IDENT`, so it does not collide with `property_bind` /
-  `widget_decl` / `signal_handler`). This is lower-risk than Phase 5's
-  Grid `grid_track_list_member` routing, which needed enclosing-type
-  context; `if` needs none.
+- **One new `member` alternative + four reserved family keywords** —
+  these are two separable changes with different blast radii. The
+  *grammar / parser* change is small: the `member` dispatch gains a
+  single `if`-first-token arm (no 2-token lookahead ambiguity — `if`
+  is a keyword, not an `IDENT`, so it does not collide with
+  `property_bind` / `widget_decl` / `signal_handler`), and `else` /
+  `switch` / `for` get only "reserved, no production yet" parse-error
+  arms — no new productions this phase. This is lower-risk than Phase
+  5's Grid `grid_track_list_member` routing, which needed enclosing-
+  type context; `if` needs none. The *lexer reservation* is the wider
+  surface: **four** identifiers (`if` / `else` / `switch` / `for`)
+  become reserved words, not one — the F4 family-pre-reservation
+  decision, whose source-compat cost (below) covers all four.
 - **No expression-grammar change** (E1) ⇒ no operator-precedence /
   short-circuit / coercion surface enters this phase; the Q5 deferral
   stays intact and is enforced by an explicit reject test, so the gap
   is recorded, not silent.
-- **Reserved-word addition** (`if`) is a source-compatibility note: an
-  existing `.ui` using `if` as an identifier would break, but no
-  shipped `.ui` does (greppable; `if` was not a prior identifier).
+- **Reserved-word addition** (`if` / `else` / `switch` / `for`) is a
+  source-compatibility note: an existing `.ui` using any of the four as
+  an identifier would break, but no shipped `.ui` does (greppable; none
+  was a prior identifier). Reserving the committed family now is cheaper
+  than a per-keyword break as each construct lands; the not-yet-fixed
+  contextual tokens (`in` / `case` / `default`) are deliberately left
+  unreserved until their production exists.
 - **Diagnostics carry the A12 weight** — the non-bool / operator /
   misplacement rejections are what make the public draft reproducible;
   they are pure-logic `wasamoc check` tests (verification closure

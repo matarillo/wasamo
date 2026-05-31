@@ -185,10 +185,20 @@ hazard in Phase 6:
    ordering.
 2. **Observability** of inter-Effect ordering is *already*
    implementation-defined for property Effects (item 2 was open before
-   conditional rendering); structural mutation does not make it newly
-   observable in Phase 6, because the lightbox's single conditional has
-   no sibling Effect writing to the same target, and item 4's
-   quiescence guarantee is what the verification actually depends on.
+   conditional rendering). The Phase-6 author surface **does** admit
+   multiple sibling / nested conditionals (DD-M3-P6-003 admits `if`
+   wherever `member*` is), so the honest question is not "the lightbox
+   has one conditional" but "what is observable when several toggle
+   together". The answer is bounded by the **quiescent child-order
+   invariant** (DD-M3-P6-004): whichever conditionals are present at
+   quiescence appear in **declared document order** among the static
+   siblings, *independent of effect-/drain-evaluation order*. So the
+   **final, observable layout** is fully specified by the declared tree;
+   what remains implementation-defined is only the **transient
+   drain order** of independent Effects — exactly as it already was for
+   property Effects, and not something conditional rendering makes newly
+   observable. Item 4's quiescence guarantee is what the verification
+   depends on.
 
 So SM-1 is safe **and** does not regress any existing contract. The
 cost of SM-2/SM-3 is committing a structural-ordering / transaction
@@ -247,6 +257,21 @@ inherits the decision rather than rediscovering it.
   (verification closure item 4): toggle open, assert (within the same
   synchronous return) that the subtree is present **and** its bound
   text/properties hold their evaluated values.
+- **Bound: "before quiescence" means "within `MUTATION_CAP`
+  iterations".** DB-1's same-drain initialisation guarantee holds **as
+  long as the drain reaches quiescence within the existing
+  `MUTATION_CAP` (16) budget**. An `if`-block body is arbitrary-size
+  (DD-M3-P6-003 admits `member*`), so a single insertion can in
+  principle fan out more fresh Effects than the cap allows before
+  quiescence. The observable behaviour at the cap is **not** silent
+  staleness: the existing `MUTATION_CAP` divergence guard fires (the
+  documented backstop — `drain_dirty_effects` stops and the runtime
+  surfaces the divergence per the established cap path), the same way it
+  does for any other Effect fan-out. Phase 6 does **not** add a separate
+  insertion budget (SM-4 declined, item 3 below); the cap stays the
+  single convergence guarantee, and DB-1 is stated as "initialised
+  before quiescence, for subtrees that reach quiescence within the cap",
+  not as an unconditional guarantee for unbounded subtrees.
 
 ### (c) structural-mutation ordering / items 1–3 disposition
 
@@ -266,20 +291,30 @@ obligation to decide **fix-or-carry** explicitly, each item:
 - **item 2 (ordering ties)** — **carry-forward, SM-2/SM-3 considered
   and declined.** SM-2 (normatise structural-after-property ordering)
   and SM-3 (transactional two-phase drain) were weighed; declined
-  because Phase 6 has no sibling Effect writing a target an inserted
-  subtree overlaps, so structural ordering is not newly observable
-  here, and the real driver (a keyed `for` reorder) belongs to Phase 7.
-  Inter-Effect ordering remains implementation-defined exactly as it
-  already was for property Effects; the named re-ignition points are
-  recorded for the `for` phase.
+  because the **quiescent child-order invariant** (DD-M3-P6-004) already
+  fixes the observable result — multiple sibling / nested conditionals
+  settle into **declared document order** regardless of drain order — so
+  structural ordering is not newly observable even though the surface
+  admits several conditionals. Only the transient inter-Effect drain
+  order stays implementation-defined, exactly as it already was for
+  property Effects. The real driver for a *contracted* mutation order
+  (a keyed `for` reorder, where present-set order is data-driven, not
+  declared) belongs to Phase 7; the named re-ignition points are
+  recorded for it.
 - **item 3 (fan-out × `MUTATION_CAP`)** — **carry-forward, SM-4
   considered and declined.** Inserting an N-binding subtree fans out N
   fresh Effects into the current drain; for the lightbox N ≪
   `MUTATION_CAP` (16). SM-4 (separate insertion budget) was weighed;
   declined because committing a budget scheme now guesses at the
   `for`-era requirement, and the existing cap remains a correct
-  convergence guarantee for Phase-6-scale subtrees. The
-  large-subtree-approaching-cap interaction is recorded as the
+  convergence guarantee for Phase-6-scale subtrees. **The cap-reaching
+  behaviour is specified, not left silent:** a subtree large enough to
+  exhaust the cap before quiescence trips the existing `MUTATION_CAP`
+  divergence guard (the documented backstop), so DB-1's same-drain
+  initialisation is the guarantee *up to the cap* and the divergence
+  path is the observable behaviour beyond it (see DB-1 above). The
+  large-subtree-approaching-cap interaction — and whether the `for`-era
+  family warrants SM-4's separate budget — is recorded as the
   re-ignition point.
 
 ## Forward-compat exposure

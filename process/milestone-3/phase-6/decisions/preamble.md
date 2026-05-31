@@ -124,11 +124,16 @@ The M2 / M3-Phase-1..5 shapes Phase 6 builds on:
   kind — like `Cell` it materialises no `WidgetNode` and no `Visual`;
   the runtime consumes it to build a conditional binding (DD-M3-P6-004).
 - **Layout engine**: pure-data `LayoutNode` / `measure` / `arrange`
-  boundary. ZStack measures to the **union (per-axis max) of its
-  children** and arranges each child within the ZStack content rect
-  by per-child alignment (DD-M3-P6-002). ZStack introduces **no new
-  `LayoutError`** — children's own Fill / Shrink rules and the
-  existing unbounded-axis conventions apply.
+  boundary. ZStack defaults to **`Fill/Fill`** (overlay-first; like
+  Grid / ScrollView), and its desired size on a **Shrink/unbounded**
+  axis is the **union (per-axis max) of its children**; each child is
+  arranged within the ZStack content rect by per-child alignment
+  (DD-M3-P6-002). A `Fill` child contributes `0.0` to the union and
+  fills its rect in *arrange* — the lightbox's full-viewport scrim
+  comes from the ZStack's own `Fill` default, not from a child driving
+  the union. ZStack introduces **no new `LayoutError`** — children's
+  own Fill / Shrink rules and the existing unbounded-axis conventions
+  apply.
 - **Reactive engine**: Signal / Effect two-layer primitive,
   per-widget Effect ownership with structural disposal
   ([../../../../docs/architecture.md §6.8.6](../../../../docs/architecture.md#686-effect-lifetime-dd-m2-p5-003--a)),
@@ -188,11 +193,11 @@ The Phase 6 ADR carries six DDs (framing DD slate → ADR numbering 1:1):
 
 | DD | Title | Recommendation summary |
 |---|---|---|
-| [DD-M3-P6-001](./dd-m3-p6-001-zstack-ir-node-form-and-surface.md) | ZStack IR node form and author surface | Per-kind tag `ZStack`; **direct children** (no `Cell`-style wrapper); **no `KindPayload`, no new `IrType`/`IrLiteral`**; author surface `ZStack { <child>… }`, document order = bottom-to-top z-order |
-| [DD-M3-P6-002](./dd-m3-p6-002-zstack-measure-arrange-zorder-clip.md) | ZStack measure / arrange + z-order + clip | **Union (per-axis max) sizing**; each child arranged in the ZStack content rect by per-child alignment (**default `center`**, `h-align`/`v-align` overrides); **document-order z-order** (no explicit `z-index`); **ZStack outer-bounds clip** on, per-child clip out; no new `LayoutError` |
+| [DD-M3-P6-001](./dd-m3-p6-001-zstack-ir-node-form-and-surface.md) | ZStack IR node form and author surface | Per-kind tag `ZStack`; **direct children** (no `Cell`-style wrapper); **no `KindPayload`, no new `IrType`/`IrLiteral`**; author surface `ZStack { <child>… }`, document order = bottom-to-top z-order; runtime **default size constraint `Fill/Fill`** (overlay-first; no Phase-6 override surface — DD-M3-P6-002) |
+| [DD-M3-P6-002](./dd-m3-p6-002-zstack-measure-arrange-zorder-clip.md) | ZStack measure / arrange + z-order + clip | **ZStack default constraint `Fill/Fill` (overlay-first)** — a `Fill` child contributes `0.0` to sizing, so the full-viewport scrim comes from the ZStack's own Fill default, not from the child; **union (per-axis max) sizing** is the Shrink/unbounded-axis desired-size policy. Owner-visible trade-off: **intrinsic (bounded) ZStack is not author-expressible until a future size-constraint surface**. Each child arranged in the content rect by per-child alignment (**default `center`**, `h-align`/`v-align` overrides); **document-order z-order** (no explicit `z-index`); **ZStack outer-bounds clip** on, per-child clip out; no new `LayoutError` |
 | [DD-M3-P6-003](./dd-m3-p6-003-conditional-rendering-grammar-surface.md) | Conditional rendering author-facing grammar surface | **Approach 2**; **`if <bool-expr> { <member>… }` block form** (family-extensible to `else`/`switch`/`for`, unlike a `when:` attribute); condition = **E1**, the narrow bool-expr already accepted by `Button.enabled`. Intermediates **E1.5 (`!`-only)** / **E1.75 (bool-only `&&`/`||`/`!`)** weighed and declined **for grammar uniformity** (operators should grow once across all `expr` positions per Q5, not in a condition-only pocket) — not for effort; non-bool / mis-placed `if` rejected at `wasamoc check` |
 | [DD-M3-P6-004](./dd-m3-p6-004-conditional-ir-and-runtime-present-absent.md) | Conditional IR representation + runtime present/absent | **Member-level structural IR (O1, recommended; O2 lighter fallback)** — `children: Vec<IrMember = Widget \| ControlFlow>` with a branch list so `else`/`switch`/`for` are same-family variants; IR-only (no runtime widget); Phase 6 ships the single-branch `ControlFlowNode::If`. Runtime fills **`BindingTarget::ConditionalSubtree`**; present/absent via `insert_child`/`remove_child`. **Phase 6 = full destroy+rebuild (ID-1)**; absent=fresh-on-return is **normative author-visible semantics**, future retention is **opt-in (keyed)** so the default never breaks. **Consequential owner-decision fork** (IR-schema change) |
-| [DD-M3-P6-005](./dd-m3-p6-005-conditional-effect-lifecycle-and-drain-contract.md) | Conditional effect lifecycle + reactive-drain proof contract | **(a)** absent subtree's Effects are **disposed** via the existing structural teardown; re-present **recreates** fresh widgets + Effects (no paused-effect state). **(b)** the M3-Phase 1 synchronous non-batched drain contract (item 4) is **preserved** — toggle-then-observe holds; newly-created subtree Effects run within the same drain. **(c)** structural-mutation ordering = **SM-1** (status quo); SM-2/3/4 (normatised ordering / two-phase drain / separate insertion budget) weighed and declined — **items 1–3** carried forward with owner-impact reasoning (safe + no regression; model frozen only when the `for`/multi-conditional family reveals requirements) |
+| [DD-M3-P6-005](./dd-m3-p6-005-conditional-effect-lifecycle-and-drain-contract.md) | Conditional effect lifecycle + reactive-drain proof contract | **(a)** absent subtree's Effects are **disposed** via the existing structural teardown; re-present **recreates** fresh widgets + Effects (no paused-effect state). **(b)** the M3-Phase 1 synchronous non-batched drain contract (item 4) is **preserved** — toggle-then-observe holds; newly-created subtree Effects run before quiescence **within the existing `MUTATION_CAP`**, and a cap-overflowing insertion uses the existing divergence path (documented backstop, not silent staleness). **(c)** structural-mutation ordering = **SM-1** (status quo) — multiple sibling/nested conditionals are kept observable by the **quiescent child-order invariant** (present conditionals settle into declared document order, drain-order-independent); SM-2/3/4 (normatised ordering / two-phase drain / separate insertion budget) weighed and declined — **items 1–3** carried forward with owner-impact reasoning (safe + no regression; model frozen only when the `for`/multi-conditional family reveals requirements) |
 | [DD-M3-P6-006](./dd-m3-p6-006-window-title-host-wiring.md) | Window-title host-wiring (R1) surface | **Static title required**: loader passes the component-level `title:` literal to `window::create` in place of `DEFAULT_WINDOW_TITLE` — **no new ABI export** (`abi_spec.md` no-touch). **Dynamic (`String`-binding) title evaluated and explicitly deferred** (FD-D): it needs a window-property binding seam overlapping M4 backdrop/theme wiring; the question is recorded, not closed |
 
 ## Phase 6 verification closure (what counts as A4 / A7 evidence)
@@ -205,12 +210,13 @@ plan inherits a concrete target. Per the framing constraint that
 every conditional and z-order proof is a **before/after pair**, never a
 single frame.
 
-Phase 6 closes only when **all six** of the following are observed.
-Per FD-C the evidence lines do not collapse even where they share
-helper infrastructure — `wasamoc check` diagnostics, pure-logic
-measure-arrange / presence-reducer tests, lowering / IR-roundtrip
-tests, and Windows-runtime integration tests each carry distinct
-evidence meaning.
+Phase 6 closes only when **all seven** of the following are observed.
+Items 1–6 are test / GUI evidence; item 7 is a non-test documentary
+closure gate (A12). Per FD-C the evidence lines do not collapse even
+where they share helper infrastructure — `wasamoc check` diagnostics,
+pure-logic measure-arrange / presence-reducer tests, lowering /
+IR-roundtrip tests, and Windows-runtime integration tests each carry
+distinct evidence meaning.
 
 1. **`wasamoc check` compile-time evidence (host-independent).**
    Pure-logic tests in the check / lower path cover:
@@ -241,7 +247,9 @@ evidence meaning.
      1, 2, and 3 children; each child arranged within the ZStack
      content rect; per-child alignment defaults (center) and
      `h-align` / `v-align` overrides anchor correctly; a Fill child
-     drives the ZStack to the parent allocation (DD-M3-P6-002).
+     contributes `0.0` to the union desired-size and fills the ZStack
+     content rect under a bounded allocation, while the ZStack's
+     `Fill/Fill` default takes the parent allocation (DD-M3-P6-002).
    - **ZStack document-order z-order** — overlapping painted children
      resolve later-child-on-top at the layout/paint-order layer
      (the real-Visual confirmation is item 4).
@@ -319,10 +327,40 @@ evidence meaning.
    **owner-manual GUI smoke** per FD-I, distinct from the assistant
    pre-check in item 5.
 
+7. **A12 spec-closure gate (non-test, external-reader).** Phase 6 does
+   not close until [`docs/dsl_spec.md`](../../../../docs/dsl_spec.md)
+   carries, at the external-reader bar (§Upstream document revisions
+   enumerates the exact section set; this item is the *close condition*
+   on it):
+   - the **ZStack chapter** (§4.13: union sizing, document-order
+     z-order, outer-bounds clip, per-child alignment) plus its §4.4
+     widget-registry row (DD-M3-P6-001 / DD-M3-P6-002);
+   - the **conditional-rendering chapter** (§4.14 + the §3 grammar
+     addition for the `if`-block member) written as the **first chapter
+     of Wasamo's structural rendering model**, such that an external
+     reader sees `if` as the first member of a structural control-flow
+     family (`else` / `switch` / `for` arriving in the same family),
+     including the **absent=fresh-on-return / opt-in-retention**
+     normative semantics (DD-M3-P6-004);
+   - **invalid examples / diagnostics** — the reader-facing rejected
+     shapes (non-bool condition, undeclared-name condition, operator
+     condition, misplaced `if`, disallowed ZStack attributes) match the
+     diagnostics exercised in items 1 / 3 (DD-M3-P6-003);
+   - the **Moment 1 → Moment 2 re-sync** completed — the
+     `M3-Phase 6 design accepted; implementation pending` markers
+     flipped to `closed; implementation-synced`, with any design-draft
+     ↔ implementation divergence corrected (§Upstream document
+     revisions, Moment 2).
+   This gate is documentary, not an automated test: it is the
+   external-reader-reproducibility check that lets the owner judge at
+   close that A12 is satisfied independently of the test evidence in
+   items 1–6.
+
 Items (1)–(4) are the automated A4 / A7 evidence set. Items (5)–(6)
-are required for Phase 6 close under A11. The corresponding
-implementation checklist (which crate / which test file / which
-fixture) belongs in the Phase 6 implementation plan, not here.
+are required for Phase 6 close under A11; item (7) is the non-test
+A12 spec-closure gate. The corresponding implementation checklist
+(which crate / which test file / which fixture) belongs in the Phase 6
+implementation plan, not here.
 
 ## Forward-compat exposure (anticipated future surfaces)
 
@@ -561,5 +599,5 @@ Cross-phase / source inputs:
 
 | Date | Change |
 |---|---|
-| 2026-05-31 | Stage-1 strategic-review revision (preamble + DD-003/004/005), still Status: Proposed. Owner review found the Options spaces converging onto "fill the existing seam" too fast. Revisions: **DD-004** IR options reframed around *the structural shape of control flow in the IR* — added member-level structural IR (O1, recommended; `Vec<IrMember>` + `ControlFlowNode` branch list) and a branch-list fallback (O2); the `Eq` constraint demoted from "blocker" to a weighed cost; added identity-anchor intermediate (ID-1.5); identity defer reframed as **normative author-visible semantics + opt-in (keyed) retention compat** (finding 4). **DD-005** added a structural-mutation ordering/transaction axis (SM-1..SM-4) and rewrote the items 1–3 carry-forward with owner-impact reasoning (named hazard + why deferral is safe), replacing the "lightbox is small" framing (finding 2). **DD-003** added intermediate condition-expression options (E1.5 `!`-only / E1.75 bool-only sub-grammar) and re-justified E1 on **grammar uniformity** rather than effort (finding 3). The member-level IR (O1) is flagged as the consequential owner-decision fork. |
+| 2026-05-31 | Review revisions folded (preamble + DD-001/002/003/004/005), still Status: Proposed. Reflects the strategic-design / owner-alignment review and the recommendation-choice review findings. |
 | 2026-05-31 | Initial draft (Status: Proposed). All 6 DDs at Proposed pending owner review pass. Framing-level owner alignment confirmed 2026-05-31 ([../requirements/framing.md §Owner alignment outcome](../requirements/framing.md#オーナー合意の記録owner-alignment-outcome)) settles FD-CR / FD-B / FD-D / FD-E / FD-F / FD-G; the remaining ZStack and conditional-grammar sub-decisions are ADR-review approvals. |

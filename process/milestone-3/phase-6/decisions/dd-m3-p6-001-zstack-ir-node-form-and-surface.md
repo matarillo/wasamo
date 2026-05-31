@@ -134,7 +134,10 @@ Concrete decisions:
   a ZStack attribute.
 - **Runtime catalog:** `ZStack` registers as a runtime widget kind
   (a pure layout container, no intermediate Visual — DD-M3-P6-002),
-  parallel to WrapPanel. It is **not** a `KindPayload` consumer.
+  parallel to WrapPanel. It is **not** a `KindPayload` consumer. Its
+  **default size constraint is `Fill/Fill`** (overlay-first; like Grid /
+  ScrollView), fixed and motivated in DD-M3-P6-002 — there is no Phase-6
+  author surface to override it.
 
 `Cell` has a dual nature in Grid (IR node kind + lowering consumer);
 ZStack has none of that — its children are real widgets that each
