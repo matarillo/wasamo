@@ -9,6 +9,8 @@ related-adrs:
   - docs/decisions/m3-phase-1-bool-scalar.md
 related-specs:
   - docs/dsl_spec.md
+related-notes:
+  - docs/notes/top-layer-overlays.md
 ---
 
 # DSL 文法 — 検討メモと未解決事項
@@ -332,3 +334,30 @@ loop key、再利用 / 再生成の規則を後から仕様化できる余地を
 - `else` / `switch` / nested structural scope を導入したくなったとき。
 - `.ui` DSL とは別に、Rust / Swift / Zig などの言語内 DSL を本格的に
   扱うとき。
+
+---
+
+### Q7. Top-layer overlay / popover surface
+
+**位置づけ:**
+
+M3-Phase 6 の ZStack は lightbox overlay のための layout primitive だが、
+親コンテンツの layout / clip 境界から隔離された popover / tooltip / dropdown /
+menu / modal top layer までは閉じない。これは文法だけでなく、widget identity、
+anchor resolution、coordinate conversion、clip、z-order、input / focus、
+accessibility、ABI / host boundary を横断する論点である。
+
+**このノートでの扱い:**
+
+`dsl-grammar.md` では、`.ui` surface と widget id / structural rendering に
+関係する入口だけを保持する。詳細な open question は
+[`top-layer-overlays.md`](./top-layer-overlays.md) を SSOT とする。
+
+**この議論を再訪する契機:**
+
+- M3-Phase 8 の full gallery E2E / public draft で、v1 に root lightbox 以上の
+  overlay が必要か判断するとき。
+- M4 input / focus model で click-away close、focus trap、keyboard dismissal を
+  仕様化するとき。
+- Widget id / anchor 参照 surface（Q1）を開くとき。
+- dropdown / menu / tooltip / popover が v1 必須に近づいたとき。
