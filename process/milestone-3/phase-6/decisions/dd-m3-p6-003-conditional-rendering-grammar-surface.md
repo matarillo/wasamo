@@ -96,9 +96,20 @@ but the choice itself is settled framing, not re-litigated here.
   exactly what `Button.enabled` admits today — a `BOOL_LIT` or an
   `IDENT` resolving to a `bool`-typed `state`. `!ready`, comparison,
   logical operators deferred (Q5).
-- **E2 — open the expression grammar now:** admit `!ready`,
-  comparison (`count > 0`), and logical operators (`a && b`) in the
-  condition position this phase.
+- **E1.5 — bool-only negation:** E1 plus a single prefix `!` on a bool
+  operand (`cond_expr ::= BOOL_LIT | IDENT | "!" (BOOL_LIT | IDENT)`).
+  Adds the one operator authors reach for most (`if !is_open`) without
+  comparison or binary logical operators, and without touching numeric
+  RHS positions.
+- **E1.75 — a bool-only `BoolExpr` sub-grammar:** a self-contained
+  boolean expression AST over **bool operands only** — `!`, `&&`, `||`,
+  parenthesisation — but no comparison operators (`>`, `==`) and no
+  coercion, so it stays inside the `bool` type without opening the
+  numeric/relational expression surface. Could be admitted in the
+  condition (and symmetrically in `bool` property RHS) this phase.
+- **E2 — open the full expression grammar now:** admit `!ready`,
+  comparison (`count > 0`), logical operators, and `root.x` qualified
+  reads in the condition position this phase.
 
 ## Comparison
 
@@ -107,7 +118,7 @@ but the choice itself is settled framing, not re-litigated here.
 | Axis | G1 (`if` block) | G2 (`when:` attr) | G3 (directive token) |
 |---|---|---|---|
 | Family extensibility (`else`/`switch`/`for`) | **natural** — `else { }` chains the block; `switch`/`for` are sibling block keywords; this is exactly the control-flow family the thesis names | poor — an attribute has no place to hang `else`; `switch` over attributes is unnatural; `for` cannot be an attribute | possible but the sigil family (`@else`?) reads as ad-hoc |
-| Approach-3 reachability | high — an `if` block is the same shape a host-language `if` lowers to; the IR `If` node (DD-004) is approach-neutral | low — `when:` is a property-flavoured surface, closer to approach 1 in feel | medium |
+| Approach-3 reachability | high — an `if` block is the same shape a host-language `if` lowers to; the member-level control-flow IR (DD-004) is approach-neutral | low — `when:` is a property-flavoured surface, closer to approach 1 in feel | medium |
 | Structural vs property feel | reads as **structure** (a block that exists or not) | reads as a **property** of a widget (drifts toward approach 1 framing) | reads as structure |
 | Grammar cost | one new `member` alternative + a block | a reserved attribute name + per-widget gating semantics | a new token class / sigil + directive grammar |
 | Single-widget ergonomics | wrap one widget in `if { }` (one extra block) | terse (`when:` inline) | sigil inline |
@@ -128,21 +139,44 @@ lower into (so approach 3 stays reachable — thesis requirement 3).
 
 ### Condition vocabulary
 
-E2 (open operators now) would expand the **expression grammar** — a
-cross-cutting surface (Q5) that affects every RHS position, not just
-the condition — inside a phase whose thesis is *structural* rendering,
-not expression richness. It would also create asymmetry: `if !ready`
-would work but `enabled: !ready` would still be rejected unless the
-extension is applied everywhere, and applying it everywhere is its own
-multi-DD surface (operator precedence, `&&`/`||` short-circuit,
-`root.x` qualified reads, coercion). E1 keeps the condition position
-**exactly** as expressive as the already-shipped `Button.enabled`
-bool-expr, so the conditional construct adds **structural** novelty
-without dragging in expression-grammar novelty. The single bool-state
-condition is sufficient for the lightbox (`if is_lightbox_open { … }`)
-and for the family seed; operators land later as a uniform
-expression-grammar extension (Q5), benefiting the condition position
-and every other RHS at once.
+The real axis is **not** "minimal vs everything" but **where the
+expression grammar should grow and whether it should grow uniformly.**
+The deciding principle is a Wasamo-design one, not an effort one: the
+condition position is just one `expr` position among many (every
+property RHS is an `expr`), and Q5 already frames operators as a
+**uniform expression-grammar extension** across all `expr` positions.
+
+| Option | What it buys | The asymmetry / cost it creates |
+|---|---|---|
+| E1 | structural novelty only; condition is exactly the shipped `Button.enabled` bool-expr | none — but no `if !x` ergonomics |
+| E1.5 | the single most-wanted operator (`!`) | `!` works in a condition but not in `enabled:` unless `!` is *also* added there; opens "why not `&&`?" immediately |
+| E1.75 | bool-only `&&`/`||`/`!` | a second, parallel boolean grammar that the eventual full `expr` extension (Q5) would then have to subsume or reconcile — two grammars for one position |
+| E2 | full expressiveness now | drags operator precedence, short-circuit, relational ops, qualified reads, coercion into a *structural-rendering* phase as a multi-DD surface |
+
+E1.5 and E1.75 are the tempting middles, and they are tempting for a
+**real** reason — `if !is_open` is genuinely ergonomic and authors will
+want it. The reason to still hold the line at E1 is **uniformity, not
+size**: admitting `!` (or a bool-only sub-grammar) *only* in the
+condition fragments the expression grammar — it makes the condition
+position more expressive than `enabled:` for no principled reason, and
+E1.75 in particular stands up a parallel boolean grammar that the
+later, uniform Q5 extension would have to reconcile or replace. The
+Wasamo-faithful path is to grow operators **once, across all `expr`
+positions together** (so `if !x` and `enabled: !x` arrive in the same
+breath), which is its own focused surface (precedence, short-circuit,
+coercion) rather than a corner of the conditional DD. E1 keeps the
+condition exactly as expressive as the shipped bool-expr; it is
+sufficient for the lightbox (`if is_lightbox_open { … }`) and for the
+family seed, and it does not pre-commit a fragment that the uniform
+extension would have to undo.
+
+This is the honest trade-off for the owner: **E1 costs the `!`
+ergonomic now** (authors invert by introducing a complementary `state`,
+or wait for the uniform extension), in exchange for **one coherent
+expression grammar** instead of a condition-only operator pocket. If
+the owner weights the `!` ergonomic above grammar uniformity, E1.5 is
+the smallest principled concession — but it should then be paired with
+admitting `!` in `bool` property RHS too, to avoid the asymmetry.
 
 ## Recommendation
 
@@ -213,22 +247,24 @@ reader can predict the family's growth from the `if` chapter alone
 
 - **`else` / `else if` / `switch`.** G1's block form chains naturally:
   `if c { … } else { … }`; `switch` is a sibling block keyword over a
-  non-bool discriminant. The `If` IR node (DD-M3-P6-004) is designed
-  to carry additional branches, so `else` is additive on the node, not
-  a new node kind.
+  non-bool discriminant. The lowering target — DD-M3-P6-004's
+  **member-level control-flow IR** (`ControlFlowNode` with a branch
+  list) — is designed to carry additional branches, so `else` lifts the
+  single-branch restriction and `switch` is a new `ControlFlowNode`
+  variant, neither needing an `IrMember` shape change.
 - **`for item in items { … }` (Phase 7).** A sibling
   `conditional_member`-like `iteration_member` block, the same
   family shape, reusing the structural-subtree runtime seam
   (DD-M3-P6-004). G1 makes this a parallel keyword, not a retrofit.
 - **Operator conditions** (`!ready`, comparison, logical) — a uniform
   expression-grammar extension (Q5) applied to the `cond_expr` (and
-  every other `expr`) position. The `if` grammar and the `If` node
-  are unaffected; only `cond_expr` widens.
+  every other `expr`) position. The `if` grammar and the control-flow
+  member (DD-004) are unaffected; only `cond_expr` widens.
 - **Approach 3 (host-language constructs).** Because the surface is a
-  structural `if` block lowering to an approach-neutral `If` IR node
-  (DD-M3-P6-004), a future language-internal DSL can lower its own
-  `if`/`switch`/loop into the **same** IR / runtime seam — the thesis
-  requirement that approach 3 stay reachable.
+  structural `if` block lowering to the approach-neutral **member-level
+  control-flow IR** (DD-M3-P6-004), a future language-internal DSL can
+  lower its own `if`/`switch`/loop into the **same** IR / runtime seam —
+  the thesis requirement that approach 3 stay reachable.
 
 ## Technical risk re-evaluation
 

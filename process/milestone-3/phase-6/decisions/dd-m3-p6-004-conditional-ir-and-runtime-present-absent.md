@@ -60,22 +60,69 @@ Relevant end-state shapes (preamble §Context):
 
 ### IR encoding of the conditional construct
 
-- **IR-1 — structural control-flow IR node kind `If` (recommended).**
-  A `widget_type: "If"` IR node, **IR-only** (like `Cell`): consumed
-  by the loader, never a runtime widget. Its **condition** rides a
-  single reserved `IrBinding` (`prop_name: "condition"`, `expr:
-  HandlerExpr`); its **conditional children** are the node's
-  `children`. `kind_payload: None`. Future `for` is a sibling IR-only
-  node kind (`widget_type: "For"`); future `else` is an additional
-  branch carried on the `If` node.
-- **IR-2 — `KindPayload::Conditional { condition }`.** Carry the
-  condition in a new `KindPayload` variant on a generic node.
-  **Blocked by a type constraint:** `KindPayload` derives `Eq`, but
-  `HandlerExpr` is `PartialEq` only, so a condition expression cannot
-  live in `KindPayload` without removing `Eq` from the enum
-  (a churn that touches Grid).
-- **IR-3 — presence binding on the gated widget.** No new node;
-  attach a reserved `IrBinding` ("present") to the single gated widget,
+The axis here is **not** "where do we stash the condition" but **what
+is the structural shape of control flow in the IR** — because the IR
+schema is what `else` / `switch` / `for` / a future host-language DSL
+will all have to fit. The options span from "change the IR schema so
+control flow is first-class" (O1/O2) to "reuse the existing widget-node
+slot" (O3) to "stash it on a generic node" (O4/O5). The `Eq` derive on
+`KindPayload` is treated as a **real cost to weigh**, not a blocker
+that auto-disqualifies a schema change.
+
+- **O1 — member-level structural IR (recommended).** Change `IrNode`'s
+  `children` from `Vec<IrNode>` to `Vec<IrMember>`, where
+
+  ```
+  enum IrMember {
+      Widget(IrNode),
+      ControlFlow(ControlFlowNode),
+  }
+  enum ControlFlowNode {
+      If { branches: Vec<Branch> },   // Phase 6: exactly one Branch, no else
+      // future: Switch { subject, arms }, For { binding, body }, …
+  }
+  struct Branch { condition: HandlerExpr, body: Vec<IrMember> }
+  ```
+
+  Control flow is a **first-class member-level construct**, not a
+  widget. `else` is an additional `Branch` (an `else` branch is a
+  `Branch` with a trivially-true / sentinel condition); `switch` is a
+  `ControlFlowNode` variant with arms; `for` is a variant with a body.
+  The condition rides `HandlerExpr` (no `IrProp`/`IrLiteral` change).
+  This is a **genuine IR-schema change** — every `children` construction
+  / traversal site moves to `IrMember` (surfaced at compile time by the
+  no-`Default` discipline) — and the textual IR grammar (§8.5) gains a
+  control-flow member production. Phase 6 ships only the single-`Branch`
+  `If` variant.
+
+- **O2 — distinct control-flow node carried in `children`, with a
+  branch-list payload.** Keep `children: Vec<IrNode>`, but represent
+  control flow as a distinguished IR node carrying a real `branches:
+  Vec<Branch>` structure (in a dedicated field or payload). Control
+  flow is still *shaped like* a node in the children vector, but it is
+  not a widget kind and it carries first-class branches. Cost: the
+  branch list holds `HandlerExpr`, so the carrying type cannot derive
+  `Eq` — dropping `Eq` from that type (or from `KindPayload` if reused)
+  is the real, bounded cost.
+
+- **O3 — `widget_type: "If"` reusing the generic `IrNode` (the easy
+  seam).** An IR-only node kind (like `Cell`): condition on a reserved
+  `IrBinding`, the one branch in `children`, `kind_payload: None`.
+  Minimal change, no schema edit. But a single `children: Vec<IrNode>`
+  has **no place for a second (`else`) branch or `switch` arms** — they
+  would need a hack (two children groups distinguished by convention),
+  so the family does not fit cleanly and a migration to O1/O2 is likely
+  when the family grows.
+
+- **O4 — `KindPayload::Conditional { condition }`.** Stash the
+  condition in a new `KindPayload` variant on a generic node. The `Eq`
+  derive on `KindPayload` is a cost (drop `Eq`, touching Grid), not a
+  hard blocker — but this option carries only the *condition*, not a
+  branch structure, so it is O3 with the condition relocated and shares
+  O3's family-fit problem.
+
+- **O5 — presence binding on the gated widget.** No new node; a
+  reserved `IrBinding` ("present") on the single gated widget,
   approach-1-flavoured. Cannot express a multi-widget conditional
   subtree without a wrapper, and reads as a property (against FD-CR).
 
@@ -95,12 +142,25 @@ Relevant end-state shapes (preamble §Context):
 
 ### Identity model on absent→present (the runtime-identity axis)
 
+This axis decides **author-visible semantics that go into the spec**:
+whether re-appearing a subtree restores prior state. It is not a pure
+implementation detail — once "absent = dispose" is normative,
+introducing retention later changes observable behaviour unless it is
+shaped as an opt-in (see Recommendation / forward-compat).
+
 - **ID-1 — full rebuild, no identity preservation (recommended for
   Phase 6).** Absent = the entity subtree is destroyed (Effects
   disposed, `WidgetNode`s + `Visual`s dropped). Present-again =
-  rebuilt fresh from the **declared tree** (the IR `If` node's
-  children, which is stable across the toggle). No state retention, no
-  keys.
+  rebuilt fresh from the **declared tree** (the control-flow member's
+  body, stable across the toggle). No state retention, no keys.
+  Author-visible semantics: re-appearing is a fresh subtree.
+- **ID-1.5 — runtime identity anchor now, no state retention yet.**
+  Keep a persistent runtime handle for the conditional subtree across
+  absent→present (an "anchor" the future reconciler attaches to), but
+  still destroy/rebuild the entity subtree and retain no state in Phase
+  6. The intent is to pre-install the identity seam so Phase 7 `for`
+  keys / state retention bolt on without touching the present/absent
+  path.
 - **ID-2 — Element-level reconciliation now.** Keep a persistent
   per-subtree identity ("Element") across absent→present, preserving
   in-progress state / focus / effect identity. Full Flutter-style
@@ -110,19 +170,44 @@ Relevant end-state shapes (preamble §Context):
 
 ### IR encoding
 
-IR-2 is **blocked**: putting `HandlerExpr` in `Eq`-deriving
-`KindPayload` would force dropping `Eq` from the enum, a gratuitous
-churn on Grid for no benefit. IR-3 cannot represent a multi-widget
-conditional subtree without a wrapper and frames presence as a widget
-property (against FD-CR's "structural, not property" stance). IR-1
-reuses the **exact** pattern Phase 5 validated for `Cell` — an IR-only
-node kind the runtime interprets, not renders — keeps `IrProp.value`
-strictly `IrLiteral`, carries the condition on the existing
-`IrBinding`/`HandlerExpr` machinery, and is the only option where the
-**family** (thesis axis i) reads cleanly: `If` today, `For` as a
-sibling node kind (Phase 7), `else` as an extra branch on `If`. The
-"control-flow node family" is literally a set of IR-only node kinds in
-the same shape — exactly what the thesis asks for.
+| Axis | O1 member-level | O2 branch-node in children | O3 widget-kind `If` | O4 KindPayload | O5 presence binding |
+|---|---|---|---|---|---|
+| Control flow is… | a first-class member-level operator | a distinguished node (not a widget) with branches | a widget-like node kind | a generic node + payload | a property on a widget |
+| `else` / `switch` fit | native (add a `Branch` / variant) | native (branch list) | poor (single `children`, needs a hack) | poor (no branch structure) | n/a |
+| `for` (next phase) fit | native (`ControlFlowNode` variant) | native (variant) | sibling node kind, but same single-`children` limit | poor | n/a |
+| approach-3 reachability | high (surface-agnostic member IR) | high | medium | low | low |
+| declared/entity clarity | explicit in the IR shape | explicit | implicit (control flow looks like a widget) | implicit | absent |
+| `IrProp.value=IrLiteral` invariant | preserved | preserved | preserved | preserved | preserved |
+| `Eq` impact | none (sum type, derive as needed) | drop `Eq` on the carrying type (bounded) | none | drop `Eq` on `KindPayload` (touches Grid) | none |
+| Change size | **large** (children → `Vec<IrMember>`, all sites) | medium | small | small | small |
+| Migration risk when family grows | none | low | **high** (re-shape to a branch model) | high | high |
+
+The honest trade-off is **change size now vs migration risk later**.
+O3 is the smallest change and the one the existing architecture invites
+(the `Cell` IR-only-node pattern, the reserved `BindingTarget` slot) —
+but it models control flow *as a widget kind* and gives a single
+`children` vector no room for a second branch, so `else` / `switch`
+force either a per-convention hack or exactly the O1/O2 migration we
+would be deferring. O4/O5 are O3's problems with the condition
+relocated or the construct demoted to a property (O5 also fails FD-CR's
+"structural, not property" stance). 
+
+O1 and O2 are the two options that make the **control-flow family
+first-class** (thesis axis i): both carry a real branch list, so
+`else` is a branch and `switch`/`for` are variants, not bolt-ons. O1
+goes further and removes the "control flow is a widget" category error
+entirely — children are a sum of `Widget | ControlFlow`, which states
+in the IR shape itself that control flow is a structural operator over
+members, and makes the declared/entity separation (axis ii) explicit
+at the schema level. O1's cost is real (it re-types `children` and
+touches every construction/traversal site), but it is paid **once**,
+**now**, while `if` is the only variant — exactly the
+"widen design area, hold implementation to `if`" posture the framing
+asks for — rather than as a migration when `for` (the very next phase)
+and `else`/`switch` arrive. O2 is the lighter structural fallback: it
+keeps `children: Vec<IrNode>` and accepts a bounded `Eq` drop, getting
+branch-list family-fit without the full re-type, at the price of
+leaving control flow shaped like a node in the children vector.
 
 ### Runtime mechanism
 
@@ -141,43 +226,71 @@ lightbox needs no state retention across close→open (the photo
 placeholder is stateless; reopening fresh is correct), and a
 reconciler is a large subsystem (keys, diffing, Element lifetimes) that
 M3 has no driver for. But the thesis is explicit that the *design* must
-not foreclose it. ID-1 satisfies this precisely **because the IR `If`
-node is the stable declared tree**: the declaration persists across the
-toggle (it is in the IR, never destroyed), and only the **entity
-subtree** (WidgetNodes/Visuals/Effects) is destroyed and rebuilt. That
-is the declared-tree / entity-tree separation in its base, un-keyed
-form — the Widget (declared) persists, the Element/RenderObject
-(entity) is recreated. A future reconciler adds an identity layer
-**between** the stable declared `If` node and the entity subtree
-(keys, state carry-over) **without changing the IR** — the exact
-forward path the thesis wants. So ID-1 is not a shortcut that blocks
-ID-2; it is ID-2's un-reconciled base case.
+not foreclose it, and finding-4 of the review is right that the choice
+is **author-visible normative semantics**, not an internal detail.
+
+ID-1.5 (install a runtime anchor now) is the tempting "pre-wire the
+seam" middle. The reason it earns nothing in Phase 6: **the stable
+identity anchor already exists — it is the declared tree.** Under O1/O2
+the control-flow member and its body persist in the IR across every
+toggle; only the entity subtree (WidgetNodes/Visuals/Effects) is
+destroyed and rebuilt. A future reconciler keys off the *declared*
+construct (and an author-supplied `key:` for `for` items), not off a
+separately-maintained runtime handle, so a Phase-6 runtime anchor would
+be dead weight that the eventual reconciler may not even use in the
+shape we guessed. ID-1.5 adds lifetime bookkeeping with no Phase-6
+observable benefit and a real chance of guessing the seam wrong.
+
+ID-1 satisfies the no-foreclosure requirement precisely **because the
+declared tree is the anchor**: declaration persists, entity is
+recreated — the declared/entity separation in its base, un-keyed form
+(the Widget persists, the Element/RenderObject is recreated). A future
+reconciler adds the identity layer **between** the stable declared
+construct and the entity subtree **without an IR change**. So ID-1 is
+not a shortcut that blocks ID-2; it is ID-2's un-reconciled base case.
+What makes the deferral safe is **shaping retention as opt-in** so the
+ID-1 default never silently changes (see Recommendation): destroy/
+recreate is the spec's baseline, and retention arrives as keyed /
+explicit opt-in semantics, not as a behavioural change to existing
+`if` blocks.
 
 ## Recommendation
 
-**IR-1 + R-1 + ID-1.**
+**O1 + R-1 + ID-1.** This is the consequential fork in the Phase 6
+ADR set: O1 is a genuine IR-schema change, so it needs explicit owner
+blessing. If the owner prefers to avoid re-typing `children` this
+phase, **O2 is the fallback** — it keeps the branch-list family-fit
+(so it does not fall into O3's migration trap) at a smaller change.
+O3/O4/O5 are recorded as rejected: they model control flow as a widget
+or a property and force a later re-shape.
 
-### IR encoding (IR-1)
+### IR encoding (O1)
 
-- The `if` construct lowers to an **IR-only node kind** `widget_type:
-  "If"`:
-  - `bindings`: exactly one reserved `IrBinding` with
-    `prop_name: "condition"` and `expr` = the lowered condition
-    (`HandlerExpr::BoolLit` or `HandlerExpr::BoolPropRead`, per
-    DD-M3-P6-003's E1 vocabulary);
-  - `children`: the conditional subtree (the members inside the
-    block), in document order;
-  - `props`: empty; `handlers`: empty; `kind_payload: None`.
-- The `If` node is **not** registered as a runtime widget kind — like
-  `Cell`, it materialises no `WidgetNode` and no `Visual`. The loader
-  consumes it to build the conditional binding (R-1).
-- The textual IR grammar (`dsl_spec.md` §8.5) gains an `If` node form
-  carrying its condition binding and children; emit/load roundtrips
-  preserve both (verification closure item 3).
+- `IrNode.children` becomes `Vec<IrMember>` with `IrMember = Widget(IrNode)
+  | ControlFlow(ControlFlowNode)`; `ControlFlowNode::If { branches:
+  Vec<Branch> }`; `Branch { condition: HandlerExpr, body: Vec<IrMember> }`.
+- **Phase 6 ships exactly one `Branch` and no `else`** — `branches` has
+  length 1, `condition` is the lowered `if` condition
+  (`HandlerExpr::BoolLit` or `HandlerExpr::BoolPropRead`, per
+  DD-M3-P6-003's E1 vocabulary), `body` is the block's members in
+  document order. The multi-`Branch` shape exists in the type but is
+  rejected at lowering / loader until `else` lands (forward-compat).
+- Control flow materialises **no `WidgetNode` and no `Visual`** (like
+  `Cell`, the runtime *interprets* it). The loader walks `IrMember`s,
+  emitting widgets for `Widget(_)` and building a conditional binding
+  for `ControlFlow(_)` (R-1).
+- `Cell` stays an `IrNode`-children construct (a Grid-specific layout
+  *child wrapper*); control flow is a *structural operator over
+  members* — the two are deliberately different categories, which the
+  `IrMember` sum makes explicit.
+- The textual IR grammar (`dsl_spec.md` §8.5) gains a control-flow
+  member production carrying the branch condition and body; emit/load
+  roundtrips preserve both (verification closure item 3).
 - Loader defense-in-depth (dual-gate with `wasamoc check`,
-  DD-M3-P6-003): an `If` node whose condition binding is missing,
-  non-bool, or unresolved, or that appears in a position where a
-  conditional child is not admitted, surfaces `WASAMO_ERR_IR_MALFORMED`.
+  DD-M3-P6-003): a control-flow member whose condition is missing,
+  non-bool, or unresolved, that carries more than one `Branch` (until
+  `else`), or that appears where a member is not admitted, surfaces
+  `WASAMO_ERR_IR_MALFORMED`.
 
 ### Runtime mechanism (R-1)
 
@@ -185,10 +298,10 @@ ID-2; it is ID-2's un-reconciled base case.
   ChildSlot }` (exact field set finalised in implementation; `slot`
   records the conditional block's stable position among the parent's
   members).
-- The loader, when it encounters an `If` node, **builds the
-  conditional children once** (resolving their own props/bindings into
-  a detached subtree builder keyed to the declared children) and
-  registers a **bool Effect** on the condition. On each evaluation:
+- The loader, when it encounters a control-flow member, **builds the
+  branch body once** (resolving its own props/bindings into a detached
+  subtree builder keyed to the declared body) and registers a **bool
+  Effect** on the branch condition. On each evaluation:
   - **false → true:** build a fresh entity subtree from the declared
     children and `insert_child` it at the recorded slot;
   - **true → false:** `remove_child` the subtree (dropping it, which
@@ -206,40 +319,56 @@ ID-2; it is ID-2's un-reconciled base case.
   multi-conditional-sibling interaction is pinned by an integration
   test (verification closure item 4).
 
-### Identity model (ID-1)
+### Identity model (ID-1) — and its normative-semantics contract
 
 - **Absent = destroyed, present = rebuilt.** No state retention across
   absent→present; no `key:` attribute; no Element-level identity layer
   in Phase 6.
-- The **declared tree is stable**: the IR `If` node and its children
-  description persist across every toggle; only the entity subtree is
-  recreated. This is documented in `architecture.md` §9 as the
-  declared-tree / entity-tree separation in its base un-keyed form, so
-  a future reconciler (keys, state carry-over, Phase 7 `for` item
-  identity) is an additive identity layer with **no IR change**
-  (forward-compat below).
+- This is **author-visible normative semantics**, stated as such in
+  `dsl_spec.md` §4.14: *a conditional subtree that goes absent and
+  returns is a **fresh** subtree; any state inside it resets.* Authors
+  who need persistence across toggles keep that state in a
+  component-level `state` (outside the conditional), which is the
+  established Wasamo pattern.
+- **Compatibility shape for future retention (so the deferral is
+  safe).** Destroy/recreate is the **baseline** that does not change.
+  Future state-retention arrives as **opt-in** semantics — a `key:` /
+  retention marker on the construct — so existing `if` blocks keep
+  destroy/recreate behaviour and retention never silently alters
+  observable behaviour. This makes ID-1 a forward-compatible default,
+  not a semantic we will have to break.
+- The **declared tree is the identity anchor**: the control-flow member
+  and its body persist in the IR across every toggle; only the entity
+  subtree is recreated. Documented in `architecture.md` §9 as the
+  declared/entity separation in its base un-keyed form, so the future
+  reconciler (keys, state carry-over, Phase 7 `for` item identity) is
+  an additive layer with **no IR change** (forward-compat below).
 
 ## Forward-compat exposure
 
-- **`else` / `switch`.** `else` is an additional branch carried on the
-  same `If` node (an additional `children` group + branch condition);
-  `switch` is a sibling IR-only node kind. Both reuse R-1's
-  insert/remove machinery — the present/absent of a branch is the same
-  operation as the present/absent of the whole `If`.
-- **`for` (Phase 7 iteration).** A sibling IR-only node kind
-  (`widget_type: "For"`) filling `BindingTarget::ForLoopSubtree`
+- **`else` / `switch`.** `else` is an additional `Branch` on the same
+  `ControlFlowNode::If` (the length-1 `branches` restriction lifts);
+  `switch` is a new `ControlFlowNode` variant (`Switch { subject, arms
+  }`). Both reuse R-1's insert/remove machinery — the present/absent of
+  a branch is the same operation as the present/absent of the whole
+  construct. No `IrMember` shape change.
+- **`for` (Phase 7 iteration).** A new `ControlFlowNode` variant
+  (`For { binding, body }`) filling `BindingTarget::ForLoopSubtree`
   (the other reserved slot). It needs **keyed identity** (item
   reorder / state retention), which is the first real driver for the
   Element-level identity layer ID-2 defers. Because the declared tree
-  (the `For` node + item template) is stable and ID-1 already
+  (the `For` member + item template) is stable and ID-1 already
   separates declared from entity, the identity layer lands between
-  them without an IR change.
+  them without an IR-shape change — only a new `ControlFlowNode`
+  variant and the additive `key:` / retention opt-in.
 - **Approach 3 (host-language constructs).** A future language-internal
-  DSL lowers its own `if`/`switch`/loop into the **same** IR-only
-  control-flow node kinds and the **same** `BindingTarget` structural
-  seam — the thesis requirement that approach 3 stay reachable. The
-  runtime mechanism is surface-agnostic by construction (it consumes
-  IR `If`/`For` nodes, not `.ui` syntax).
+  DSL lowers its own `if`/`switch`/loop into the **same**
+  `ControlFlowNode` variants and the **same** `BindingTarget`
+  structural seam — the thesis requirement that approach 3 stay
+  reachable. The runtime mechanism is surface-agnostic by construction
+  (it consumes `IrMember` control-flow members, not `.ui` syntax). This
+  is the payoff of O1 over O3/O4: a member-level structural IR is the
+  surface-neutral target an embedded DSL can also reach.
 - **Subtree-grain layout dirty.** Phase 6 inserts/removes whole
   subtrees, which dirties layout; this rides the existing
   whole-window dirty path (DD-P8-002), with subtree-grain invalidation
@@ -249,11 +378,20 @@ ID-2; it is ID-2's un-reconciled base case.
 
 ## Technical risk re-evaluation
 
-- **No new IR scalar/literal type**; the `If` node reuses the existing
-  `IrBinding`/`HandlerExpr` machinery and the `Cell`-style IR-only
-  node-kind pattern, so the `IrProp.value = IrLiteral` and
-  `KindPayload: Eq` invariants are untouched (IR-2's `Eq` problem is
-  avoided).
+- **O1 is the largest single change in the phase** — re-typing
+  `IrNode.children` to `Vec<IrMember>` touches every construction and
+  traversal site (`wasamoc` lowering, the IR loader's `build_widget_tree`
+  / `validate`, textual IR emit/parse, and tests). The mitigation is
+  the no-`Default` construction-site discipline: every site is surfaced
+  at compile time, so the change is mechanical and exhaustive rather
+  than a silent-omission hazard. The owner-impact of choosing O1 is
+  this up-front cost; the owner-impact of *not* choosing it (O3/O4) is a
+  re-shape migration when `for`/`else` arrive — and `for` is the very
+  next phase. O2 is the de-risking fallback if the up-front cost is
+  judged too high this phase. **No new IR scalar/literal type**; the
+  condition rides existing `HandlerExpr`, so `IrProp.value = IrLiteral`
+  is untouched and the `Eq` question only arises (and is a bounded,
+  deliberate cost) under O2.
 - **The reactive seam was pre-shaped** (`BindingTarget` reserved
   variant, structural Effect teardown §6.8.6/§6.8.8), so R-1 fills a
   documented slot rather than inventing a mechanism — the lowest-risk
@@ -273,5 +411,10 @@ ID-2; it is ID-2's un-reconciled base case.
 - **ID-1 vs ID-2 scope** — shipping the un-keyed base case avoids a
   large reconciler subsystem with no M3 driver, while the stable
   declared tree keeps ID-2 reachable; the risk of "painting into a
-  corner" is mitigated by the IR `If` node being approach- and
-  identity-neutral (it describes structure, not lifetime).
+  corner" is mitigated by the control-flow member being approach- and
+  identity-neutral (it describes structure, not lifetime) and by the
+  opt-in retention compatibility shape (the ID-1 default never has to
+  break). The residual risk is mis-guessing the future `key:` opt-in
+  surface — bounded, because retention attaches to the declared
+  construct (which is stable) rather than to a Phase-6-frozen runtime
+  handle.

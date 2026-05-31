@@ -84,6 +84,41 @@ Relevant end-state mechanics:
   presence is only guaranteed observable at a later explicit
   flush / next frame, and update the M3-Phase 1 contract accordingly.
 
+### (c) Structural-mutation ordering / transaction model (items 1–3)
+
+M2 handoff §3 asks M3 to *decide* — not silently carry — cycle
+detection (item 1), ordering ties (item 2), and fan-out × `MUTATION_CAP`
+(item 3). Structural rendering is the first feature where an Effect's
+side-effect is a **tree mutation** (insert/remove), not a property
+write, so the question is concretely: *what ordering / transaction
+guarantees does the runtime make about structural mutations relative to
+property writes and to each other?* The options are not "decide vs
+defer" but a spectrum of how much model to commit:
+
+- **SM-1 — status quo: structural Effects ride the same topological
+  drain, no special ordering contract.** Insert/remove happen wherever
+  the existing topological order places the condition Effect; observable
+  ordering ties between independent Effects stay implementation-defined,
+  exactly as they already are for property Effects. Safety against
+  use-after-free comes from the existing structural-disposal invariant
+  (§6.8.6: unregister ahead of teardown). This is the current
+  carry-forward.
+- **SM-2 — normatise ordering for structural targets only.** Define an
+  observable rule such as "structural mutations drain after all pending
+  property writes in the same drain" (so a subtree is never inserted
+  with half-applied sibling state), making *structural* ordering a
+  contract while leaving property–property ties implementation-defined.
+- **SM-3 — two-phase / transactional structural drain.** Split the
+  drain: property Effects settle, then structural mutations apply as a
+  batch, then re-drain for the newly-inserted subtree's Effects — a
+  transaction boundary around tree shape. Strongest guarantee; largest
+  reactive-architecture change.
+- **SM-4 — separate effect budget for subtree insertion.** Give the
+  fan-out from inserting an N-binding subtree its own budget rather than
+  charging it against the single `MUTATION_CAP`, so a large conditional
+  subtree cannot trip the divergence guard that exists to catch genuine
+  reactive loops.
+
 ## Comparison
 
 ### (a) lifecycle
@@ -134,6 +169,47 @@ pin with a test, and the one place a naive implementation could leave a
 freshly-inserted subtree with stale (uninitialised) bound properties
 for one frame.
 
+### (c) structural-mutation ordering / transaction model
+
+The genuine Phase-6 hazard is **not** "lightbox is small" — it is the
+interleaving of a structural mutation with a property write on an
+**overlapping target**: a property Effect could be poised to write a
+widget that a structural Effect is about to remove, or a subtree could
+be inserted before a sibling's state has settled. Two facts bound this
+hazard in Phase 6:
+
+1. **Safety is already covered** by the §6.8.6 disposal invariant
+   (binding disposal unregisters from every Signal's dependent set
+   *ahead* of teardown), so a captured-reference Effect cannot fire
+   against a half-torn-down widget — no use-after-free regardless of
+   ordering.
+2. **Observability** of inter-Effect ordering is *already*
+   implementation-defined for property Effects (item 2 was open before
+   conditional rendering); structural mutation does not make it newly
+   observable in Phase 6, because the lightbox's single conditional has
+   no sibling Effect writing to the same target, and item 4's
+   quiescence guarantee is what the verification actually depends on.
+
+So SM-1 is safe **and** does not regress any existing contract. The
+cost of SM-2/SM-3 is committing a structural-ordering / transaction
+model **before the family's full shape is known** — multiple sibling
+conditionals, nested control flow, and Phase 7 `for` are what generate
+real ordering requirements (e.g. a `for` that reorders keyed items
+needs a defined mutation order), and designing the transaction boundary
+against only the single-`if` case risks locking the wrong model. SM-3
+in particular is a large reactive-architecture change (a two-phase
+drain) with no Phase-6 driver. SM-4's budget split matters only when an
+inserted subtree's binding count approaches `MUTATION_CAP` (16), which
+the lightbox is far from; committing a budget scheme now would also be
+guessing at the `for`-era requirement.
+
+The **owner-impact** of carrying 1–3 forward is therefore: the owner is
+*not* leaving a safety gap (point 1) and *not* regressing observability
+(point 2); they are declining to freeze a structural-transaction model
+on insufficient evidence, with the named re-ignition points (multiple
+conditionals / `for` / large subtrees) recorded so the next phase
+inherits the decision rather than rediscovering it.
+
 ## Recommendation
 
 **(a) LA-1 + (b) DB-1.**
@@ -172,31 +248,39 @@ for one frame.
   synchronous return) that the subtree is present **and** its bound
   text/properties hold their evaluated values.
 
-### items 1–3 disposition (explicit, not silent)
+### (c) structural-mutation ordering / items 1–3 disposition
 
-Per the constraints §7 / M2 handoff §3 obligation to decide
-**fix-or-carry** explicitly:
+**Recommendation: SM-1** (status quo ordering; carry items 1–3
+forward), for the owner-impact reasons in the (c) comparison — SM-1 is
+safe (the §6.8.6 disposal invariant) and regresses no existing
+contract, while SM-2/SM-3/SM-4 would freeze a structural-transaction
+model before the family (`for`, multiple/nested conditionals) reveals
+its real requirements. Per the constraints §7 / M2 handoff §3
+obligation to decide **fix-or-carry** explicitly, each item:
 
-- **item 1 (cycle detection)** — **carry-forward.** A conditional
-  toggle does not introduce a Signal/Effect cycle by itself; the
+- **item 1 (cycle detection)** — **carry-forward (no SM change).** A
+  conditional toggle introduces no Signal/Effect cycle by itself; the
   condition Effect writes to the widget tree, not back to its own
   Signal. Cycle policy stays the open M3 question (§6.8.8); the
-  `MUTATION_CAP` divergence guard remains the backstop. Recorded as
-  carry-forward, not resolved.
-- **item 2 (ordering ties)** — **carry-forward.** The insert/remove
-  order of independent conditional Effects relative to other Effects
-  is whatever the existing topological drain order produces; Phase 6
-  does not make inter-Effect ordering an observable contract beyond
-  item 4's quiescence guarantee. Recorded as carry-forward.
-- **item 3 (fan-out × `MUTATION_CAP`)** — **touched, bounded, carried.**
-  Inserting a subtree with N bindings enqueues N fresh Effects — a
-  fan-out into the current drain. For realistic subtrees (the lightbox
-  overlay has a handful of bound props) N ≪ `MUTATION_CAP`; the
-  existing cap remains the convergence guarantee. Phase 6 does **not**
-  raise or per-shape the cap. The interaction is noted (a very large
-  conditional subtree could in principle approach the cap), and
-  resolution (cap enlargement / per-shape budget) is carried forward.
-  Recorded explicitly, not silent.
+  `MUTATION_CAP` divergence guard remains the backstop.
+- **item 2 (ordering ties)** — **carry-forward, SM-2/SM-3 considered
+  and declined.** SM-2 (normatise structural-after-property ordering)
+  and SM-3 (transactional two-phase drain) were weighed; declined
+  because Phase 6 has no sibling Effect writing a target an inserted
+  subtree overlaps, so structural ordering is not newly observable
+  here, and the real driver (a keyed `for` reorder) belongs to Phase 7.
+  Inter-Effect ordering remains implementation-defined exactly as it
+  already was for property Effects; the named re-ignition points are
+  recorded for the `for` phase.
+- **item 3 (fan-out × `MUTATION_CAP`)** — **carry-forward, SM-4
+  considered and declined.** Inserting an N-binding subtree fans out N
+  fresh Effects into the current drain; for the lightbox N ≪
+  `MUTATION_CAP` (16). SM-4 (separate insertion budget) was weighed;
+  declined because committing a budget scheme now guesses at the
+  `for`-era requirement, and the existing cap remains a correct
+  convergence guarantee for Phase-6-scale subtrees. The
+  large-subtree-approaching-cap interaction is recorded as the
+  re-ignition point.
 
 ## Forward-compat exposure
 
@@ -210,8 +294,10 @@ Per the constraints §7 / M2 handoff §3 obligation to decide
   primitives would refine, not replace.
 - **items 1–3 resolution** — cycle policy, ordering-tie contract, and
   fan-out cap strategy remain M3+/M4 open questions with named
-  carriers (§6.8.8); Phase 6's conditional construct does not force
-  them and does not foreclose any resolution.
+  carriers (§6.8.8); after the SM-1..SM-4 comparison, Phase 6 declines
+  to freeze a structural-transaction model and carries them forward
+  (their resolution is not forced in Phase 6), without foreclosing any
+  resolution.
 
 ## Technical risk re-evaluation
 
