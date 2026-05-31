@@ -171,6 +171,24 @@ other M3 container.
   rule, reused unchanged). `start` / `center` / `end` overrides anchor
   the child's measured size. All children share the **same** content
   rect (the overlap region) — that is the defining property of ZStack.
+- **Per-child alignment carrier (impl-readiness).** `h-align` /
+  `v-align` are authored as `IrProp` ident-literals on the ZStack child
+  (DD-M3-P6-001, no new IR vocabulary). At the runtime layout layer they
+  are carried as **parent-owned metadata parallel to `children`**,
+  mirroring Grid's `cell_placements`
+  ([layout.rs:224](../../../../wasamo-runtime/src/layout.rs)): a **lean**
+  per-child placement (h/v `Alignment` only — **not** Grid's
+  row/column/span `CellPlacement`) is extracted by `construct_widget`
+  from each child's `IrProp`s in document order, so `LayoutNode.children[i]`
+  is anchored by `placements[i]` and the arrange loop zips the two exactly
+  as Grid does ([layout.rs:1220](../../../../wasamo-runtime/src/layout.rs)).
+  The carrier is this parallel placement vector, **not** a generic
+  per-child alignment field added to `WidgetNode` / `LayoutNode`.
+  **Validation scope:** `h-align` / `v-align` are admitted only on a
+  **ZStack direct child** (and a Grid `Cell`); on any other widget they
+  are rejected at `wasamoc check` and runtime `validate()`. The exact
+  placement struct/field set is an implementation-task detail; the
+  contract is the carrier shape (parallel vector) and the admission scope.
 - **z-order (Z1):** paint order = document order; first child at the
   bottom, last child on top. No `z-index`. This is enforced by the
   existing document-order `sync_visuals` insertion; ZStack changes

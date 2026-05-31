@@ -307,7 +307,18 @@ absent=destroy / opt-in-retention normative semantics.
   DD-M3-P6-003): a control-flow member whose condition is missing,
   non-bool, or unresolved, that carries more than one `Branch` (until
   `else`), or that appears where a member is not admitted, surfaces
-  `WASAMO_ERR_IR_MALFORMED`.
+  `WASAMO_ERR_IR_MALFORMED`. **Impl-readiness:** enforcing the
+  **non-bool** rejection at the loader needs type information the current
+  `validate` lacks — it resolves declared **names** through a
+  `HashSet<&str>` ([ir_loader.rs:153](../../../../wasamo-runtime/src/ir_loader.rs)),
+  with `validate_expr_references` checking name presence only, never the
+  referent's `IrType`. Phase 6 extends the resolver to a
+  `declared: HashMap<&str, IrType>` so a control-flow condition is
+  admitted only as `HandlerExpr::BoolLit` or a **bool**-typed
+  `BoolPropRead`; a `PropRead` / `StrPropRead` / any non-bool target is a
+  `validate` error. This is the loader-rejection evidence in
+  [preamble §verification closure item 3](./preamble.md), making the
+  loader a real second gate rather than a name-only check.
 
 ### Runtime mechanism (R-1)
 
@@ -315,16 +326,50 @@ absent=destroy / opt-in-retention normative semantics.
   ChildSlot }` (exact field set finalised in implementation; `slot`
   records the conditional block's stable position among the parent's
   members).
-- The loader, when it encounters a control-flow member, **builds the
-  branch body once** (resolving its own props/bindings into a detached
-  subtree builder keyed to the declared body) and registers a **bool
-  Effect** on the branch condition. On each evaluation:
+- The loader, when it encounters a control-flow member, **captures the
+  branch body as a builder** — the declared `IrMember` body plus a
+  factory closure, **with no entity or Effect instantiated up front** (a
+  builder is not a built subtree; the body's props/bindings are *not*
+  resolved until the body is materialised on a present evaluation) — and
+  registers a **bool Effect** on the branch condition. On each
+  evaluation:
   - **false → true:** build a fresh entity subtree from the declared
     children and `insert_child` it at the recorded slot;
   - **true → false:** `remove_child` the subtree (dropping it, which
     disposes its Effects via the structural teardown — DD-M3-P6-005);
   - the first evaluation establishes the initial presence (a `false`
     initial condition inserts nothing).
+- **Builder vs build entry (impl-readiness).** Today's `build_node`
+  constructs the widget, registers its bindings (with each Effect's
+  initial run), and recurses its children in a single pass
+  ([ir_loader.rs:1344](../../../../wasamo-runtime/src/ir_loader.rs)), so
+  materialising a `false`-initial subtree through it would register
+  **live Effects on an absent subtree** — violating DD-M3-P6-005's
+  *absent subtree has no live effects*. The builder therefore holds the
+  declared body only; a dedicated build entry point (split out of
+  `build_node`, e.g. `build_members` / `build_widget_node`) is invoked
+  from the condition Effect's true-branch, so entities and Effects come
+  into existence **exactly when the subtree becomes present**. Splitting
+  `build_node` is the first implementation task this DD implies.
+- **Visual sibling order honours the slot (impl-readiness).**
+  `WidgetNode::insert_child(index, …)` must keep the parent's
+  `VisualCollection` sibling order consistent with `index`, not only the
+  `children` Vec. The current primitive inserts the `children` Vec at
+  `index` but always `InsertAtTop`s the Visual
+  ([widget.rs:1280](../../../../wasamo-runtime/src/widget.rs)) — correct
+  only for a top-slot insertion (the lightbox case), and **mis-ordering a
+  conditional re-inserted between static siblings**, which would break
+  both the quiescent child-order invariant below and, for a conditional
+  child of a ZStack, the document-order z-order (DD-M3-P6-002). Phase 6
+  therefore updates `insert_child` (and `replace_child`) so the child
+  Visual lands at the position matching `index`: reference the adjacent
+  already-attached sibling Visual and insert above/below it
+  (`InsertAbove` / `InsertBelow`), falling back to top/bottom at the
+  ends. The exact `VisualCollection` API selection is an
+  implementation-task detail; the **contract** is that `children` Vec
+  order and Visual sibling order agree after every structural mutation.
+  This is a runtime primitive that `else` / `switch` / `for` and
+  multiple sibling conditionals will all reuse, so it is paid in Phase 6.
 - **Slot bookkeeping:** the conditional subtree occupies a recorded
   position among the parent's children. Phase 6's minimal rule: the
   slot is computed from the count of preceding *materialised* siblings
@@ -338,9 +383,10 @@ absent=destroy / opt-in-retention normative semantics.
 - **Quiescent child-order invariant (normative; effect-/drain-order
   independent).** Because each conditional's slot is derived from its
   position in the **declared** member order, the parent's child order at
-  quiescence is a function of declared member order **alone** — it does
-  **not** depend on the order in which the condition Effects fire or
-  drain. Concretely: with multiple sibling / nested conditionals toggled
+  quiescence — **both** the `children` Vec **and** (with the Visual
+  sibling-order revision above) the parent's Visual sibling order — is a
+  function of declared member order **alone**; it does **not** depend on
+  the order in which the condition Effects fire or drain. Concretely: with multiple sibling / nested conditionals toggled
   by the same or different signals, whichever ones are present at
   quiescence appear among the static siblings in **declared document
   order**, regardless of effect-evaluation order. This is the guarantee

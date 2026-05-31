@@ -285,8 +285,11 @@ distinct evidence meaning.
    - **Conditional toggle insert/remove** — a live `WidgetNode` tree
      with an `if`-bound subtree: writing the `bool` true→false→true
      **inserts / removes** the subtree (and its Visuals) from the
-     parent (DD-M3-P6-004), and the absent subtree's Effects are
-     disposed / recreated (DD-M3-P6-005).
+     parent (DD-M3-P6-004) — with the re-inserted subtree's Visual
+     landing in **declared sibling order** (not merely on top) when
+     static siblings flank it, asserted for the siblings-on-both-sides
+     and two-sibling-conditional cases — and the absent subtree's
+     Effects are disposed / recreated (DD-M3-P6-005).
    - **Drain proof contract (item 4)** — with `BATCH_DEPTH == 0`, a
      write that toggles the condition drains before control returns
      (toggle-then-observe): immediately after the toggling call the
@@ -599,5 +602,5 @@ Cross-phase / source inputs:
 
 | Date | Change |
 |---|---|
-| 2026-05-31 | Review revisions folded (preamble + DD-001/002/003/004/005), still Status: Proposed. Reflects the strategic-design / owner-alignment review and the recommendation-choice review findings. |
+| 2026-05-31 | Review revisions folded (preamble + DD-001/002/003/004/005), still Status: Proposed. Reflects the strategic-design / owner-alignment review, the recommendation-choice review, and the implementation-readiness review findings. |
 | 2026-05-31 | Initial draft (Status: Proposed). All 6 DDs at Proposed pending owner review pass. Framing-level owner alignment confirmed 2026-05-31 ([../requirements/framing.md §Owner alignment outcome](../requirements/framing.md#オーナー合意の記録owner-alignment-outcome)) settles FD-CR / FD-B / FD-D / FD-E / FD-F / FD-G; the remaining ZStack and conditional-grammar sub-decisions are ADR-review approvals. |
