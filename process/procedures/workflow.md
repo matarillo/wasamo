@@ -258,6 +258,10 @@ ADR や決定に昇格して終了、または却下されて消化される。
 DD の構造：Context → Options（複数案） → Comparison → Recommendation →
 Forward-compat exposure → Technical risk re-evaluation。
 
+DD を Accepted に進める前の複数視点レビューには、おすすめ手順とプロンプト
+テンプレート集がある（強制ゲートではない）：
+[design-decision-review.md](./design-decision-review.md)。
+
 Accepted フリップのコミットに続けて **設計同期** を行う（次節参照）。
 
 ### 3.1 設計同期 (Moment 1)
