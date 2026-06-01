@@ -29,6 +29,6 @@
   or a focused test-coverage pass). Surfaced in
   [t9-step-end-retrospective.md](../../notes/m3-phase-3/t9-step-end-retrospective.md)
   Follow-Up R2. Architecture-level offset convention is now stated
-  in [docs/architecture.md §6.5](../../architecture.md) (folded in
+in [docs/architecture.md §6.5](../../../../docs/architecture.md) (folded in
   T10 as R3-A); this residual is the test-coverage half that is
   not folded.

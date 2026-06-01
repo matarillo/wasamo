@@ -71,7 +71,7 @@ mirrors.
 ### Acceptance criteria
 
 ROADMAP is the SSOT (see
-[ROADMAP.md §M3](../../ROADMAP.md#m3-dsl-surface)); mirrored here
+[process/_roadmap.md §M3](../_roadmap.md#m3-dsl-surface)); mirrored here
 with stable IDs for phase mapping:
 
 - **A1.** `examples/gallery/gallery.ui` drives the Photo Gallery
@@ -268,7 +268,7 @@ gallery and promotes the cumulative spec).
 
 Surfaces explicitly excluded by the M3 target-app pre-doc and the
 M3 start framing. Allocation to post-M3 milestones is recorded in
-[ROADMAP.md](../../ROADMAP.md) where ROADMAP commits to a specific
+[process/_roadmap.md](../_roadmap.md) where the roadmap commits to a specific
 milestone; where ROADMAP is silent, the pre-doc's "M4 以降" / "later"
 wording is preserved here as "M4 or later" rather than tightened:
 

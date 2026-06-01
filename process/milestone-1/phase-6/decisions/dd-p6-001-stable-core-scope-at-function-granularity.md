@@ -16,7 +16,7 @@ for component-declared signals.
 
 Option A — Five-area minimum (recommended)
 The core covers exactly the five areas listed in
-[ROADMAP Phase 6](../../ROADMAP.md#L128-L131):
+[process/_roadmap.md M1](../../../_roadmap.md#m1-proof-of-concept):
 1. **Runtime lifecycle:** `wasamo_init`, `wasamo_shutdown`.
 2. **Window + event loop:** `wasamo_window_create`, `wasamo_window_show`, `wasamo_window_destroy`, `wasamo_run`, `wasamo_quit`.
 3. **Property get/set:** `wasamo_get_property`, `wasamo_set_property` keyed by `(widget, property_id)`.

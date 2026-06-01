@@ -7,7 +7,7 @@
 ## Context
 
 M3 acceptance criterion **A3** (see
-[ROADMAP.md M3](../../ROADMAP.md#m3-dsl-surface),
+[process/_roadmap.md M3](../../../_roadmap.md#m3-dsl-surface),
 [m3-plan.md §Acceptance criteria](../plans/m3-plan.md#acceptance-criteria)):
 
 > WrapPanel layout primitive, demonstrating that DSL can express a
@@ -234,7 +234,7 @@ outside this ADR's scope are recorded under
   hygiene).
 - **R2** — `sync_visuals` ↔ pure-layout boundary test gap
   (post-Phase-3 test coverage; the architecture clarification half
-  was folded into [docs/architecture.md §6.5](../architecture.md)
+was folded into [docs/architecture.md §6.5](../../../../docs/architecture.md)
   in the T10 close).
 
 ## Owner-agreement checkpoints
@@ -383,7 +383,7 @@ pre-doc branch, scoped by review concern per
 [CLAUDE.md §Commit rules](../../CLAUDE.md#commit-rules):
 
 - **ADR `Status: Accepted` flip** — this file.
-- [docs/dsl_spec.md](../dsl_spec.md) — new **§4.10 WrapPanel chapter**
+- [docs/dsl_spec.md](../../../../docs/dsl_spec.md) — new **§4.10 WrapPanel chapter**
   alongside Phase 2's §4.9 Box chapter. The chapter contains:
   - The WrapPanel sizing mental-model subsection (framing decision H)
     — four-fact anchor + ecosystem-contrast block (WPF / Compose /
@@ -409,7 +409,7 @@ pre-doc branch, scoped by review concern per
   - Section marker
     `**Phase status:** M3-Phase 3 ADR-accepted design draft; pending
     implementation re-sync` at the chapter top.
-- [docs/architecture.md](../architecture.md) §6 — WrapPanel entry
+- [docs/architecture.md](../../../../docs/architecture.md) §6 — WrapPanel entry
   under the M2-revised IR section if structural placement warrants;
   short paragraph noting (a) WrapPanel's two-stage measure-arrange
   is the first M3 layout primitive with cross-axis line aggregation,
@@ -418,7 +418,7 @@ pre-doc branch, scoped by review concern per
   unpressured, and (c) layout engine boundary remains Win32/WinRT-
   free — the line breaker operates on pure data
   ([predoc-inputs.md §8](../notes/m3-phase-3/predoc-inputs.md)).
-- [docs/abi_spec.md](../abi_spec.md) — **no changes in Phase 3**.
+- [docs/abi_spec.md](../../../../docs/abi_spec.md) — **no changes in Phase 3**.
   No new ABI public function, no new `WASAMO_VALUE_*` tag, no new
   arms in `abi.rs`. All WrapPanel attributes are constant-only
   `i32` and stay on the WrapPanel-internal IR node; they do not

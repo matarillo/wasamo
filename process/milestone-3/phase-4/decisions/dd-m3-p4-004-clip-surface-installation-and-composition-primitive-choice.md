@@ -49,7 +49,7 @@ offset, and (iii) where in the Visual tree the clip sits.
   - What you gain: matches the existing M2 visual-layer
     convention (LayoutNode offsets → parent-relative
     `Visual.Offset` per
-    [architecture.md §6.5](../architecture.md#65-widgetnode-and-visual-layer-sync));
+[architecture.md §6.5](../../../../docs/architecture.md#65-widgetnode-and-visual-layer-sync));
     no new Composition primitive introduced; `i32` pixel offset
     + no animation makes the simpler primitive sufficient.
   - What you give up: fractional offsets and Composition-driven
@@ -87,7 +87,7 @@ offset, and (iii) where in the Visual tree the clip sits.
   (`Visual.Offset = (0, -offset_y, 0)` on the intermediate
   Visual) stays separated from the child widget's own
   layout-derived `Visual.Offset` written by `sync_visuals` per
-  [architecture.md §6.5](../architecture.md#65-widgetnode-and-visual-layer-sync).
+[architecture.md §6.5](../../../../docs/architecture.md#65-widgetnode-and-visual-layer-sync).
   This is a localised extension of the existing
   "1 WidgetNode = 1 Visual" convention §6.5 establishes —
   ScrollView is the first WidgetNode to own a second
@@ -115,7 +115,7 @@ offset path.
 surfaced a `sync_visuals` bug whose root cause was the implicit
 absolute-vs-parent-relative offset convention. The architecture
 fix landed in
-[architecture.md §6.5](../architecture.md#65-widgetnode-and-visual-layer-sync);
+[architecture.md §6.5](../../../../docs/architecture.md#65-widgetnode-and-visual-layer-sync);
 the test-coverage half was filed open as R2 (per
 [Phase 3 ADR Out-of-phase residuals](./m3-phase-3-wrap-panel.md)).
 Per Phase 4 framing decision F, R2 closes inside Phase 4 via the

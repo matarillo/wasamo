@@ -46,7 +46,7 @@ DD-M3-P3-003 / DD-M3-P3-004.
 - [x] Unit tests cover each row of the reject set + each accept
       shape from the ADR, including the accept-shape fixtures
       from
-      [dsl_spec §4.10](../../dsl_spec.md#410-wrappanel-layout-primitive-m3-phase-3)
+      [dsl_spec §4.10](../../../../docs/dsl_spec.md#410-wrappanel-layout-primitive-m3-phase-3)
       that traverse the generic parser unmodified.
 
 ### T2 — `wasamoc check`: aspect-only-Box warning
@@ -59,7 +59,7 @@ Discharges the DD-M3-P3-004 Recommendation companion judgement
       is **not** set on the WrapPanel, `wasamoc check` emits a
       **warning** (not error) suggesting the attribute. The warning
       text cross-references
-      [dsl_spec §4.10 Common pitfalls](../../dsl_spec.md#410-wrappanel-layout-primitive-m3-phase-3).
+      [dsl_spec §4.10 Common pitfalls](../../../../docs/dsl_spec.md#410-wrappanel-layout-primitive-m3-phase-3).
 - [x] Warning fires on direct-child Boxes only (does not scan into
       nested containers); narrow guard scope per DD-M3-P3-004
       "the warning does not classify all possible child shapes,
@@ -228,7 +228,7 @@ Discharges the m3-plan §Phase-end criteria checklist for Phase 3.
       phase-branch `workflow_dispatch` run as the previous bullet
       (<https://github.com/matarillo/wasamo/actions/runs/26256127948>).
 - [x] **Moment 2 spec re-sync.** Flipped
-      [dsl_spec.md §4.10](../../dsl_spec.md#410-wrappanel-layout-primitive-m3-phase-3)
+      [dsl_spec.md §4.10](../../../../docs/dsl_spec.md#410-wrappanel-layout-primitive-m3-phase-3)
       Phase status marker to
       `**Phase status:** M3-Phase 3 closed; implementation-synced`.
       Folded the T1 Decisions-log lexer-surface item per owner
@@ -238,7 +238,7 @@ Discharges the m3-plan §Phase-end criteria checklist for Phase 3.
       `IntLit`-only). Doc version 0.9 → 1.0 with a revision-history
       row describing the close.
 - [x] **Moment 2 architecture re-sync.** Flipped
-      [docs/architecture.md](../../architecture.md) top-level
+[docs/architecture.md](../../../../docs/architecture.md) top-level
       Status to `M3-Phase 1, M3-Phase 2, and M3-Phase 3 complete`.
       §6.8 WrapPanel paragraph already described the realised
       implementation (no wording reconciliation needed). §6.5

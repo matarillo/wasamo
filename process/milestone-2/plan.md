@@ -33,7 +33,7 @@ ScrollView / List / input / IME / AccessKit / VS Code / DSL spec
 public draft) into a **foundation milestone** whose acceptance is
 structural, not feature breadth. The Alpha-style feature work has
 been redistributed across M3–M6 (see
-[ROADMAP.md](../../ROADMAP.md) and
+[process/_roadmap.md](../_roadmap.md) and
 [docs/decisions/vision-post-m2-roadmap.md](../decisions/vision-post-m2-roadmap.md)).
 
 ### Phase numbering
@@ -171,7 +171,7 @@ hook; their outputs are ADR-shaped and feed M2-Phases 4 / 6.
 
 Items that originally appeared in the M2 Alpha paragraph but are
 **not** in M2-as-foundation. Allocation to post-M2 milestones is
-recorded in [ROADMAP.md](../../ROADMAP.md):
+recorded in [process/_roadmap.md](../_roadmap.md):
 
 - Grid / ScrollView / List layout primitives → M3
 - DSL spec public draft → M3
@@ -210,7 +210,7 @@ recorded in [ROADMAP.md](../../ROADMAP.md):
 
 The post-M2 questions raised alongside the M2 redefinition were
 resolved on 2026-05-02 and are now recorded in
-[ROADMAP.md](../../ROADMAP.md), [VISION.md §7](../../VISION.md#7-roadmap),
+[process/_roadmap.md](../_roadmap.md), [VISION.md §7](../../VISION.md#7-roadmap),
 and [docs/decisions/vision-post-m2-roadmap.md](../decisions/vision-post-m2-roadmap.md)
 (DD-V-005..009). Summary:
 
@@ -259,7 +259,7 @@ and [docs/decisions/vision-post-m2-roadmap.md](../decisions/vision-post-m2-roadm
   - DD-M2-P6-012 (`re-entrancy / safety-guard placement principle`)
     Accepted in [m2-phase-7-reactive-foundation.md](../decisions/m2-phase-7-reactive-foundation.md#dd-m2-p6-012--re-entrancy-and-safety-guard-placement-principle)
     — Option C (role-specified defense in depth). The principle is
-    recorded in [architecture.md](../architecture.md#684-runtime-safety-guard-placement)
+    recorded in [architecture.md](../../docs/architecture.md#674-runtime-safety-guard-placement)
     as a global runtime invariant. A5 now has both DDs accepted at
     design level; at this point the remaining A5 work was DD-012
     implementation alignment and focused guard-placement tests.

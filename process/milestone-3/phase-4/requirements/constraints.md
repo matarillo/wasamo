@@ -197,7 +197,7 @@ and ADR §Phase 3 verification closure item 4.
 Phase 3 T9 surfaced a `sync_visuals` bug whose root cause was the
 implicit absolute-vs-parent-relative offset convention at the
 layout-engine / Visual-Layer boundary. The architecture-side
-clarification was folded into [architecture.md §6.5](../../architecture.md)
+clarification was folded into [architecture.md §6.5](../../../../docs/architecture.md)
 at Phase 3 close (R3-A). The test-coverage half remains open as
 out-of-phase residual R2.
 

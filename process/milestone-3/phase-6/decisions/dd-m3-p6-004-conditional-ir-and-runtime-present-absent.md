@@ -45,12 +45,12 @@ Relevant end-state shapes (preamble §Context):
   `replace_child` — each moving both the `WidgetNode` and its `Visual`
   (and maintaining `attached`). Effects are owned by the hosting
   widget; subtree teardown disposes Effects structurally
-  ([architecture.md §6.8.6](../../../../docs/architecture.md#686-effect-lifetime-dd-m2-p5-003--a)).
+  ([architecture.md §6.7.6](../../../../docs/architecture.md#676-effect-lifetime)).
 - The reactive seam already anticipates this work:
   `BindingTarget { WidgetProperty { node, prop }, /* M3+ adds
   ConditionalSubtree, ForLoopSubtree, … */ }`
-  ([§6.8.7](../../../../docs/architecture.md#687-binding-registration-api-after-m2-dd-m2-p5-005-dd-m2-p6-007-dd-m2-p6-011-dd-m3-p1-007)),
-  and §6.8.8 records "structural bindings (conditional / for-loop /
+  ([§6.7.7](../../../../docs/architecture.md#677-binding-registration-api-after-m2)),
+  and §6.7.8 records "structural bindings (conditional / for-loop /
   list-rendered) add `BindingTarget` variants; subtree rebuilds Drop
   old Effects through the existing widget teardown path."
 - The Three-Layer Tree Model (§9): **DSL tree** (`wasamoc` AST) /
@@ -66,7 +66,7 @@ This DD sits in two cross-DD bundles (full phase map: preamble
   member-level `children: Vec<IrMember>`, recommended; **O2**
   branch-node fallback) is the schema DD-M3-P6-003's surface lowers
   into, DD-M3-P6-005's effect teardown rides, and dsl_spec §8.5 /
-  architecture §6.8/§9 document. This is the consequential
+  architecture §6.7/§9 document. This is the consequential
   owner-decision fork of the phase.
 - **Consequence-of — Conditional body shape (owned by DD-M3-P6-003).**
   The **Conditional insertion granularity** sub-issue here is the
@@ -313,7 +313,7 @@ IR encoding decisions (O1):
   - What you gain: uses the **already-reserved** `BindingTarget` slot
     and the **already-existing** `insert_child` / `remove_child` +
     structural Effect teardown — the architecture was pre-shaped for
-    exactly this (§6.8.7/§6.8.8); the minimal real structural mechanism.
+    exactly this (§6.7.7/§6.7.8); the minimal real structural mechanism.
   - What you give up: nothing material — it is the intended mechanism.
 
 - **R-2 — always build, toggle Visual visibility**
@@ -332,7 +332,7 @@ structural absence with visibility and leaves inner Effects running
 policy). R-1 uses the **already-reserved** `BindingTarget` slot and the
 **already-existing** `insert_child` / `remove_child` + structural
 Effect teardown — i.e. the architecture was pre-shaped for exactly this
-(§6.8.7/§6.8.8). It is the minimal real structural mechanism.
+(§6.7.7/§6.7.8). It is the minimal real structural mechanism.
 
 ### Recommendation
 
@@ -592,7 +592,7 @@ shaped as an opt-in (see Recommendation / forward-compat).
     from the **declared tree** (the control-flow member's body, stable
     across the toggle). No state retention, no keys.
   - What you gain: the minimal mechanism; matches architecture.md
-    §6.8.6's documented re-attach behaviour; the **declared tree is the
+    §6.7.6's documented re-attach behaviour; the **declared tree is the
     stable anchor**, so ID-2 stays reachable later **without an IR
     change**; the deferral is made safe by shaping retention as opt-in.
   - What you give up: no state retention across absent→present —
@@ -822,7 +822,7 @@ single-child body (verification closure item 3).
   is untouched and the `Eq` question only arises (and is a bounded,
   deliberate cost) under O2.
 - **The reactive seam was pre-shaped** (`BindingTarget` reserved
-  variant, structural Effect teardown §6.8.6/§6.8.8), so R-1 fills a
+  variant, structural Effect teardown §6.7.6/§6.7.8), so R-1 fills a
   documented slot rather than inventing a mechanism — the lowest-risk
   path, and the M2/Phase-5 architecture notes anticipated it.
 - **Slot bookkeeping is the real risk surface.** A conditional block

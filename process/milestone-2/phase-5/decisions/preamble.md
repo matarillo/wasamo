@@ -7,7 +7,7 @@
 ## Context
 
 M2 acceptance criterion **A2** ([m2-plan.md](../plans/m2-plan.md#acceptance-criteria),
-mirrored from [ROADMAP.md M2](../../ROADMAP.md#m2-foundation)):
+mirrored from [process/_roadmap.md M2](../../../_roadmap.md#m2-foundation)):
 
 > Reactive state propagation works without host-side property-set
 > plumbing: `count++` in the host updates the visible label through

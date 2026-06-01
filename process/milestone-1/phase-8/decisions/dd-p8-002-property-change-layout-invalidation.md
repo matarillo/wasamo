@@ -81,7 +81,7 @@ will be deprecated as soon as M2 internalises the call. Options C
 and D contort the example to hide the gap.
 
 **Architecture details (to be reflected in
-[`architecture.md` §6](../architecture.md#6-layout-engine-phase-3)):**
+[`architecture.md` §6](../../../../docs/architecture.md#6-layout-engine-phase-3)):**
 
 - `set_property` for `BUTTON_LABEL` / `TEXT_CONTENT` /
   `TEXT_STYLE` re-computes the widget's intrinsic size, then

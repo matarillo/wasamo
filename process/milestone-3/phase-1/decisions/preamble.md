@@ -7,7 +7,7 @@
 ## Context
 
 M3 acceptance criterion **A9** (see
-[ROADMAP.md M3](../../ROADMAP.md#m3-dsl-surface),
+[process/_roadmap.md M3](../../../_roadmap.md#m3-dsl-surface),
 [m3-plan.md](../plans/m3-plan.md#acceptance-criteria)):
 
 > `bool` admitted as the third scalar binding type alongside `i32` and
@@ -228,7 +228,7 @@ pointing at this progress file.
 When this ADR is accepted, the following docs change in the same Phase
 1 commit set (per A11 same-phase synchronisation):
 
-- [docs/dsl_spec.md](../dsl_spec.md) — extensions in two regions:
+- [docs/dsl_spec.md](../../../../docs/dsl_spec.md) — extensions in two regions:
   - **DSL surface** (§§ 2–4): `true` / `false` keyword reservation in
     §2.1; bool literal token in §2; `bool` type in §4.2 (`in-out
     property`) / state declarations; bool in §4.3 (property binding)
@@ -239,20 +239,20 @@ When this ADR is accepted, the following docs change in the same Phase
   - `Button.enabled` attribute documented in the widget catalog
     section (minimal disabled styling permitted in M3; no animation
     contract).
-- [docs/architecture.md](../architecture.md) — §6 SignalRegistry
-  snippet around [L717-L744](../architecture.md#L717-L744) updated:
+- [docs/architecture.md](../../../../docs/architecture.md) — §6.7.7 SignalRegistry
+  snippet updated:
   add `bools: HashMap<String, Signal<bool>>` alongside `i32s` and
   `strings`; the surrounding prose extends "M2 supports `i32` and
   `String` Signals" to include `bool` and notes that
   `HandlerExpr::BoolPropRead` evaluates through
   `BindingEvalContext::read_bool_tracked`. F5 deferral cross-reference
   is preserved. The binding write-seam description around
-  [L714](../architecture.md#L714) is also updated to reflect
+  [architecture.md §6.7.7](../../../../docs/architecture.md#677-binding-registration-api-after-m2) is also updated to reflect
   DD-M3-P1-007: `write_fn` is per-type at the call site rather than a
   single string-baked function pointer.
-- [docs/abi_spec.md](../abi_spec.md) — **no new ABI surface added.**
+- [docs/abi_spec.md](../../../../docs/abi_spec.md) — **no new ABI surface added.**
   `WASAMO_VALUE_BOOL = 3` and `v_bool` already exist
-  ([abi_spec.md §3.3](../abi_spec.md), [abi.rs L74-L90](../../wasamo-runtime/src/abi.rs#L74-L90))
+  ([abi_spec.md §3.3](../../../../docs/abi_spec.md), [abi.rs L74-L90](../../wasamo-runtime/src/abi.rs#L74-L90))
   from M2; Phase 1 only connects this existing tag through the
   property-write path that previously dropped it. Specifically,
   `read_property_value` / `write_property_value` and

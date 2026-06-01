@@ -10,7 +10,7 @@ and `widget_write_property(id, prop: u32, value: &str)`
 building `PropertyValue::String(value.to_string())` unconditionally
 before dispatching to the per-widget setter. The reactive seam
 declares its writer as `write_fn: fn(WidgetId, PropertyKey, &str)`
-([architecture.md L714](../architecture.md#L714)). The entire binding
+([architecture.md §6.7.7](../../../../docs/architecture.md#677-binding-registration-api-after-m2)). The entire binding
 write pipeline is string-baked.
 
 DD-M3-P1-003 / DD-M3-P1-005 add `BoolPropRead` and `Button.enabled:
@@ -33,7 +33,7 @@ Option A — Per-type binding evaluator + per-type writer (recommended)
   `Button.enabled`).
 - Extend the `register_binding` write-seam:
   `write_fn` becomes per-type at the call site
-  ([architecture.md L714](../architecture.md#L714)) — the loader
+  ([architecture.md §6.7.7](../../../../docs/architecture.md#677-binding-registration-api-after-m2)) — the loader
   picks the bool writer when the target property is bool-typed, the
   string writer otherwise. The reactive engine itself stays
   type-agnostic.

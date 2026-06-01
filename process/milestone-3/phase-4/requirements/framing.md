@@ -46,7 +46,7 @@ inherits rather than re-derives:
 
 ## Phase 4 acceptance criteria (restated)
 
-- **A5** (see [ROADMAP.md M3](../../../ROADMAP.md#m3-dsl-surface),
+- **A5** (see [process/_roadmap.md M3](../../../_roadmap.md#m3-dsl-surface),
   [m3-plan.md §Acceptance criteria](../../plans/m3-plan.md#acceptance-criteria)):
 
   > ScrollView primitive (minimal: inner unbounded measure +
@@ -93,7 +93,7 @@ inherits rather than re-derives:
   (`register_bool_binding_with_writer` + `widget_write_property_bool`).
   The typed-`i32` writer pair is the
   *explicitly-anticipated-but-not-yet-built third pair* called out in
-  [architecture.md §6.8 *Per-type seam* paragraph](../../architecture.md#68-reactive-engine-m2-phase-5)
+[architecture.md §6.7 *Per-type seam* paragraph](../../../../docs/architecture.md#67-reactive-engine-m2-phase-5)
   ("When a typed-i32 binding writer becomes warranted (no current
   catalog row needs it…), it lands as a third pair with the same
   shape — additive, not by widening `write_fn` into a value union").
@@ -167,7 +167,7 @@ layering is:
   offset is applied (`Visual.Offset` on the child container vs
   `Visual.TransformMatrix`). This is the Composition-side answer
   Phase 3 T9 surfaced via the absolute-vs-parent-relative
-  convention now in [architecture.md §6.5](../../architecture.md#65-widgetnode-and-visual-layer-sync).
+convention now in [architecture.md §6.5](../../../../docs/architecture.md#65-widgetnode-and-visual-layer-sync).
 - **DD-005 (measure-arrange algorithm).** Consumes DD-001 +
   DD-002 + DD-003 to produce the pure-data measure-arrange:
   content is measured against an unbounded scroll-axis and
@@ -538,7 +538,7 @@ Sub-issues:
   viewport (clipped), child Visual == scrollable canvas
   (translated). Verified compatible with the existing
   parent-relative `Visual.Offset` convention in
-  [architecture.md §6.5](../../architecture.md#65-widgetnode-and-visual-layer-sync).
+[architecture.md §6.5](../../../../docs/architecture.md#65-widgetnode-and-visual-layer-sync).
 - **Interaction with R2 (Phase 3 carry-over).** Phase 3 T9
   surfaced a `sync_visuals` bug whose root cause was the
   implicit absolute-vs-parent-relative offset convention.
@@ -800,7 +800,7 @@ it has cross-DD implications:
   writer-pair build as M4-Phase 1 (input handling) work; the pair
   built then will also unblock any later phase that needs to
   write back into an `i32`-bound attribute, additively per the
-  architecture.md §6.8 *Per-type seam* paragraph.
+  architecture.md §6.7 *Per-type seam* paragraph.
 - Phase 4 close cannot produce evidence of the writer working in
   a visually meaningful way; the closure item set
   (framing decision C) reflects this by not asking for writer
@@ -1042,7 +1042,7 @@ Phase 3 left two open residuals
 - **R2 — `sync_visuals` ↔ pure-layout boundary test coverage
   gap.** Phase 3 T9 surfaced the absolute-vs-parent-relative
   offset convention bug; the architecture fix landed
-  ([architecture.md §6.5](../../architecture.md#65-widgetnode-and-visual-layer-sync)),
+([architecture.md §6.5](../../../../docs/architecture.md#65-widgetnode-and-visual-layer-sync)),
   but the test-coverage half was not closed in Phase 3.
   Phase 4 touches the same boundary meaningfully (DD-004's
   Visual.Offset application on every scroll). Disposition:

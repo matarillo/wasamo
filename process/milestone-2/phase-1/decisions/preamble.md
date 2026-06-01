@@ -7,7 +7,7 @@
 ## Context
 
 M2 acceptance criterion **A3** (see
-[ROADMAP.md M2](../../ROADMAP.md#m2-foundation),
+[process/_roadmap.md M2](../../../_roadmap.md#m2-foundation),
 [m2-plan.md](../plans/m2-plan.md#frozen-agreement)):
 
 > `wasamo-runtime` and the `wasamo` safe wrapper no longer share an
@@ -15,7 +15,7 @@ M2 acceptance criterion **A3** (see
 > flagged in [DD-P7-002](./phase-7-language-bindings.md) is discharged.
 
 The post-M1 implementation note in DD-P7-002 records the symptom and
-the planned shape of the long-term fix. [`architecture.md §11.4`](../architecture.md)
+the planned shape of the long-term fix. [`architecture.md §11.4`](../../../../docs/architecture.md)
 sketches the same shape:
 
 > A cdylib-shim crate (`wasamo-dll`) that depends on `wasamo-runtime`

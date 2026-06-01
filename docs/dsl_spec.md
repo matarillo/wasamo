@@ -817,7 +817,7 @@ main-axis bound — the realistic context is an outer intrinsic-sizing
 measure pass — the line breaker has no boundary to compare against
 and WrapPanel **degenerates to one-line flow**: every child sits on
 a single line in document order. The line's cross-axis extent
-follows the same per-line rule above (DD-004-bound or passthrough).
+follows the same per-line rule above (fixed item cross-size or passthrough).
 The WrapPanel's outer main-axis size is the cumulative content
 extent (sum of children's intrinsic main-axis extents plus
 `item_spacing × (n − 1)`). This branch raises **no new
@@ -2265,7 +2265,7 @@ canonical machine format always emits the explicit weight. `Cell`
 placement / span / alignment ride standard `prop` lines using existing
 `INT` and `IDENT` literals; `Cell` is an IR-only node consumed by
 Grid's lowering and is not a runtime widget kind (see
-[architecture.md §6.8.7](./architecture.md#687-binding-registration-api-after-m2-dd-m2-p5-005-dd-m2-p6-007-dd-m2-p6-011-dd-m3-p1-007)).
+[architecture.md §6.7.7](./architecture.md#677-binding-registration-api-after-m2)).
 
 **Control-flow members (M3-Phase 6).** A `control_flow_member` encodes
 a structural control-flow construct in the node body. Phase 6 ships the
@@ -2611,75 +2611,9 @@ tagged scalar (`IrType::Bool`, `IrLiteral::Bool`, `HandlerExpr::BoolLit` /
 `BoolPropRead`) using the same type-suffixed variant pattern M2
 adopted for `i32` and `String`. It does not introduce
 a generic `TypedValue` value union; the per-type binding evaluator and
-per-type widget property writer (see `architecture.md` §6.8.7)
+per-type widget property writer (see `architecture.md` §6.7.7)
 are the structural form of that deferral. This deferral is recorded in
 [notes/m3/m3-start-framing.md §F5](./notes/m3/m3-start-framing.md#f5--typedvalue-は再評価候補だが開始時点の-m3-acceptance-ではない).
-
----
-
-## Appendix A: Design Decisions
-
-### DD-001 — `in-out` is a single keyword token
-
-**Decision:** The lexer emits a single `Token::InOut` for the literal string `in-out`.
-It does not split it into `Ident("in")`, `Minus`, `Ident("out")`.
-
-**Rationale:**
-The only property modifier in M1 is `in-out`. Treating it as a single token keeps the
-grammar unambiguous without context-sensitivity. The alternative (3-token split) would
-make `-` serve double duty as both an arithmetic operator and a keyword separator, which
-complicates the grammar as soon as expression syntax expands in M2.
-
-**Explicitly deferred:** `in` (read-only from outside) and `out` (write-only from outside)
-as standalone modifiers. These remain post-M2 scope.
-
-**Future impact:** When `in` and `out` are introduced as standalone modifiers, the
-lexer will need to be updated. Two viable paths at that point:
-
-- Promote `in` and `out` to separate keywords and keep `in-out` as a third compound keyword.
-- Drop the compound `InOut` token and instead have the parser recognize `In Minus Out`.
-
-The right choice depends on whether the future expression grammar also adds `-`
-inside property bindings. That decision belongs to the milestone that expands
-the DSL expression surface.
-
----
-
-### DD-002 — String interpolation is parsed structurally but not evaluated
-
-**Decision:** String literals that contain `\{…}` placeholders are stored in the AST as
-`Expr::StringLit(Vec<StringPart>)`, where `StringPart` is either `Text(String)` or
-`Interp(QualifiedName)`. The interpolation is parsed into structure at M1, but the
-resulting value is never computed — `Interp` nodes are inert data.
-
-**Rationale:**
-Three options were considered:
-
-| Option | AST type | M1 error detection | M2 compatibility |
-|--------|----------|--------------------|------------------|
-| Raw string | `String` | None — malformed `\{root.}` silently accepted | M2 must re-parse strings |
-| Structured (chosen) | `Vec<StringPart>` | Syntax errors in placeholders caught | M2 evaluates existing `Interp` nodes |
-| Raw string + validation pass | `String` | Caught, but via a second parse | M2 must still re-parse |
-
-Parsing the structure once at lex/parse time avoids re-parsing in M2 and catches obvious
-mistakes (e.g. `\{root.}`) early without adding significant complexity — the lexer merely
-switches to a mini-mode inside `\{…}` to tokenize a `qualified_name`.
-
-**Discharged in M2:** Reactive evaluation of `Interp` nodes for the Foundation
-counter surface. M2 consumes the structured interpolation nodes when lowering
-property bindings to IR.
-
-**M2 impact:** The M2 reactive engine consumes `StringPart::Interp(QualifiedName)`
-nodes directly. It resolves the `QualifiedName` against the component's property scope,
-subscribes to changes, and re-evaluates the concatenated string on each change. No AST
-schema change was required; M2 added lowering/evaluation logic, not a new source
-representation. String-typed interpolation lowers to `str-prop-read` in
-`;wasamo-ir v0`. M3-Phase 1 rejects `bool`-typed state interpolation
-at `wasamoc check` time rather than lowering it to a runtime
-`TypeMismatch`; an explicit formatting/display-conversion surface is a
-future design item.
-
----
 
 ## Revision history
 
@@ -2700,3 +2634,4 @@ future design item.
 | 1.3     | 2026-05-29 | M3-Phase 5 design draft: §4.12 Grid layout primitive (`Cell` placement/span/alignment, fixed + weighted-star tracks, track resolution, outer-bounds clip); reuses existing plumbing (track lists ride a Grid kind payload). Made §8.11 the full M3 loader-validation aggregate (added the Phase 3/4/5 rows). |
 | 1.4     | 2026-05-30 | M3-Phase 5 close: §4.12 implementation-synced; folded the deferred Grid textual-IR grammar (§8.5 `track_decl`) and re-synced §5 AST / §2.2 tokens / §3 grammar to the landed parser. `abi_spec.md` untouched. |
 | 1.5     | 2026-06-02 | M3-Phase 6 design draft (Moment 1): added §4.13 ZStack overlay primitive (union sizing + `Fill/Fill` default, document-order z-order, per-child alignment, outer-bounds clip) and §4.14 conditional rendering — the first chapter of the structural rendering model (`if` block, structural present/absent, absent=fresh-on-return with opt-in future retention). Supporting: §2.1 `if`/`else`/`switch`/`for` keyword reservation, §3 grammar, §5 AST, §8.5 control-flow member with textual + loaded IR examples, §8.11 validation rows. No new `IrType`/`IrLiteral`/`PropertyValue` or C ABI change; `abi_spec.md` untouched (the conditional + runtime-mechanism schema is normative in `architecture.md`). Also slimmed this revision history and applied the Living-spec vocabulary discipline retroactively — removed DD / option / process labels from the spec body and these notes, keeping the `M3-Phase N` identifiers (full provenance lives in the process documents). Pending implementation re-sync at Phase 6 close. |
+| 1.6     | 2026-06-02 | Moved the historical M1 lexical rationale appendix into `process/milestone-1/phase-1/decisions/`; this spec now keeps only the normative DSL surface. |

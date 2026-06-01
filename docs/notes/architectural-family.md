@@ -177,8 +177,8 @@ normally.
 
 ## References
 
-- Phase 5 ADR — [m2-phase-5-reactive-engine.md](../decisions/m2-phase-5-reactive-engine.md) (Accepted 2026-05-05)
+- Phase 5 ADR — [M2-Phase 5 reactive-engine decisions](../../process/milestone-2/phase-5/decisions/preamble.md) (Accepted 2026-05-05)
 - DSL × C ABI thesis — [VISION.md](../../VISION.md)
-- IR shape — [m2-phase-2-wasamoc-output-format.md](../decisions/m2-phase-2-wasamoc-output-format.md)
-- Stable-core C ABI — [phase-6-c-abi.md](../decisions/phase-6-c-abi.md)
-- Handler runtime location — [m2-phase-3-handler-exec-location.md](../decisions/m2-phase-3-handler-exec-location.md)
+- IR shape — [M2-Phase 2 wasamoc-output-format decisions](../../process/milestone-2/phase-2/decisions/preamble.md)
+- Stable-core C ABI — [M1-Phase 6 C ABI decisions](../../process/milestone-1/phase-6/decisions/preamble.md)
+- Handler runtime location — [M2-Phase 3 handler execution decisions](../../process/milestone-2/phase-3/decisions/preamble.md)

@@ -156,7 +156,7 @@ identity を扱う時、top-layer anchor 参照を開く時、または「state 
 
 **この議論を再訪する契機:**
 
-- M4 の Mica / Acrylic 導入（[ROADMAP.md](../../ROADMAP.md) の M4） — backdrop /
+- M4 の Mica / Acrylic 導入（[process/_roadmap.md](../../process/_roadmap.md) の M4） — backdrop /
   theme の実体実装に着手するタイミングで、static/dynamic title も含めた
   Window-prop binding / host effector / WindowConfig の形を見直す。
 - dynamic title が v1 必須または gallery proof に必要になった時 —

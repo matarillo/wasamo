@@ -7,7 +7,7 @@
 ## Context
 
 M2 acceptance criterion **A4** ([m2-plan.md](../plans/m2-plan.md#acceptance-criteria),
-mirrored from [ROADMAP.md M2](../../ROADMAP.md#m2-foundation)):
+mirrored from [process/_roadmap.md M2](../../../_roadmap.md#m2-foundation)):
 
 > The C ABI gains the tree-mutation primitives required by the reactive
 > engine; the experimental layer's all-at-once constructors remain

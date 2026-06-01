@@ -32,7 +32,7 @@ Discharges the surface-syntax halves of DD-M3-P2-002 and DD-M3-P2-003.
 - [x] Parser produces these AST nodes in `property_bind` RHS
       position.
 - [x] Unit tests covering the accept shapes from
-      [dsl_spec §4.9](../../dsl_spec.md#49-box-layout-primitive-m3-phase-2).
+      [dsl_spec §4.9](../../../../docs/dsl_spec.md#49-box-layout-primitive-m3-phase-2).
 
 Closed by commit `735a337 feat(wasamoc): lex Ratio / Color literals,
 add Expr variants (M3-Phase 2 T2)`. Step-end retrospective recorded
@@ -71,7 +71,7 @@ reject set (M3-Phase 2 T3)`. Step-end retrospective recorded in
 - [x] `Expr::RatioLit` → `IrLiteral::Ratio { num, den }`.
 - [x] `Expr::ColorLit` → `IrLiteral::Color(u32)`; packed `u32`
       layout per
-      [dsl_spec §8.2](../../dsl_spec.md#82-notation) `COLOR` token.
+      [dsl_spec §8.2](../../../../docs/dsl_spec.md#82-notation) `COLOR` token.
 - [x] Unit tests assert lowering of representative `Box { ... }`
       forms.
 
@@ -308,7 +308,7 @@ Discharges the m3-plan §Phase-end criteria checklist for Phase 2.
 - [x] Windows-only integration test (T11) green on CI (fail, not
       skip, if Compositor missing).
 - [x] Moment 2 spec re-sync: flip
-      [dsl_spec.md §4.9](../../dsl_spec.md#49-box-layout-primitive-m3-phase-2)
+      [dsl_spec.md §4.9](../../../../docs/dsl_spec.md#49-box-layout-primitive-m3-phase-2)
       Phase status marker to
       `**Phase status:** M3-Phase 2 closed; implementation-synced`,
       correcting any draft / impl divergence in the same commit.

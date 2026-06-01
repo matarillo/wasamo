@@ -59,7 +59,7 @@ wasamo/                         ← workspace root
 C ABI artifact name; changing it would break all
 downstream consumers. The deviation is confined to the shim crate and
 documented in `wasamo-dll/Cargo.toml` — see
-[the cdylib-shim crate-naming decision](./decisions/m2-phase-1-cdylib-shim.md#dd-m2-p1-002--naming-of-the-rlib-crate-and-the-shim-crate).
+[the cdylib-shim crate-naming decision](../process/milestone-2/phase-1/decisions/dd-m2-p1-002-naming-of-the-rlib-crate-and-the-shim-crate.md#dd-m2-p1-002-naming-of-the-rlib-crate-and-the-shim-crate).
 
 ### Inter-crate dependencies
 
@@ -120,7 +120,7 @@ build systems each invoking `wasamoc` — is acceptable while M2 has a single
 DSL example, but does not generalize:
 
 - **Hot reload** (post-1.0;
-  [`wasamoc`-output-format ADR](./decisions/m2-phase-2-wasamoc-output-format.md))
+  [`wasamoc`-output-format ADR](../process/milestone-2/phase-2/decisions/preamble.md))
   presumes IR can be loaded at runtime without re-linking the host. The
   build-time embed model in counter-{c,zig} is incompatible with that goal
   and would need to migrate to `WASAMO_LOAD_PATH` with a runtime-discovered
@@ -283,7 +283,7 @@ features = [
 
 ## 5. Visual Layer Integration (Phase 2)
 
-Full decision rationale: [`docs/decisions/phase-2-runtime-foundation.md`](./decisions/phase-2-runtime-foundation.md)
+Full decision rationale: [`process/milestone-1/phase-2/decisions/preamble.md`](../process/milestone-1/phase-2/decisions/preamble.md)
 
 ### 5.1 HWND host model
 
@@ -315,7 +315,7 @@ backdrop. `DwmExtendFrameIntoClientArea` is **not** called: with `DWMSBT_MAINWIN
 material covers the entire window automatically; calling it with `{-1,-1,-1,-1}` margins causes
 DWM to render the dark frame colour across the client area, covering Mica.
 
-### 5.4 `windows` crate feature additions for Phase 2
+### 5.3 `windows` crate feature additions for Phase 2
 
 ```toml
 "System",              # Windows::System::DispatcherQueueController
@@ -330,7 +330,7 @@ DWM to render the dark frame colour across the client area, covering Mica.
 
 ## 6. Layout Engine (Phase 3)
 
-Full decision rationale: [`docs/decisions/phase-3-layout-engine.md`](./decisions/phase-3-layout-engine.md)
+Full decision rationale: [`process/milestone-1/phase-3/decisions/preamble.md`](../process/milestone-1/phase-3/decisions/preamble.md)
 
 ### 6.1 Module structure
 
@@ -445,13 +445,13 @@ same rule: any Visual that translates its own subtree must shift
 `parent_abs_offset` by the inverse translation for its descendants.
 
 ScrollView is the only M3 primitive that adds an intermediate Visual.
-Grid (§6.9.4) and ZStack (§6.9.5) keep the `1 WidgetNode = 1 Visual`
+Grid (§6.8.4) and ZStack (§6.8.5) keep the `1 WidgetNode = 1 Visual`
 convention: each carries its outer-bounds clip on its **own** Visual
 (`Visual.Clip = InsetClip{0,0,0,0}`) with child Visuals attached
 through the normal document-order `sync_visuals()` path and
 `Visual.Clip = null`. M3-Phase 6 additionally tightens `sync_visuals()`
 / `insert_child` so that a structurally inserted or removed child (a
-conditional subtree, §6.8.9) lands at the Visual sibling position
+conditional subtree, §6.7.9) lands at the Visual sibling position
 matching its `children` Vec index, rather than always at the top —
 keeping Visual sibling order equal to child order after every
 structural mutation, which a ZStack conditional child relies on for
@@ -460,7 +460,7 @@ correct document-order z-order.
 The `LayoutNode` tree is rebuilt on each layout pass (O(n)).
 No persistent layout cache exists in M1.
 
-### 6.7 Layout invalidation on property change (Phase 8)
+### 6.6 Layout invalidation on property change (Phase 8)
 
 Before Phase 8, the only path that triggered a layout pass was `WM_SIZE`.
 `wasamo_set_property` for size-affecting properties (`BUTTON_LABEL`,
@@ -490,9 +490,9 @@ Window registration lifecycle:
 - `wasamo_window_destroy` calls `emit::unregister_window` before the box
   is dropped.
 
-### 6.8 Reactive engine (M2-Phase 5)
+### 6.7 Reactive engine (M2-Phase 5)
 
-Full decision rationale: [`docs/decisions/m2-phase-5-reactive-engine.md`](./decisions/m2-phase-5-reactive-engine.md).
+Full decision rationale: [`process/milestone-2/phase-5/decisions/preamble.md`](../process/milestone-2/phase-5/decisions/preamble.md).
 Architectural-family hypothesis (tree-with-bindings, working
 hypothesis only): [`docs/notes/architectural-family.md`](./notes/architectural-family.md).
 
@@ -502,7 +502,7 @@ acceptance A2 — `count++` in a host handler updates a bound
 sits entirely inside `wasamo-runtime` and is `pub(crate)`; no C
 ABI symbol is added.
 
-#### 6.8.1 Module placement
+#### 6.7.1 Module placement
 
 | Module | Responsibility |
 |---|---|
@@ -516,7 +516,7 @@ dirty-set drain, evaluator wiring — are unit-tested with
 side-effect-logger Effect closures; no
 test-only mirror of `WidgetNode` is introduced.
 
-#### 6.8.2 Two-layer primitive
+#### 6.7.2 Two-layer primitive
 
 ```
 Signal<T>   — observable storage cell
@@ -549,7 +549,7 @@ introduced in M2; it is shape-additive and lands with the M3 DSL
 spec when derivation grammar exists to align against. Same for
 `untrack` as a public escape hatch (out of scope).
 
-#### 6.8.3 Drain ordering inside `drain_if_outermost`
+#### 6.7.3 Drain ordering inside `drain_if_outermost`
 
 The reactive dispatch is **deferred**, not synchronous.
 `Signal::set()` writes the new value, marks dependent
@@ -649,7 +649,7 @@ to a `Diverged` terminal state, Phase 2 and Phase 3 are skipped
 for that frame, and every subsequent ABI call other than
 `wasamo_runtime_destroy` returns `WASAMO_ERR_REACTIVE_DIVERGED`.
 
-#### 6.8.4 Runtime safety guard placement
+#### 6.7.4 Runtime safety guard placement
 
 Guard placement is a global runtime invariant.
 Re-entrancy and lifecycle guards are enforced with
@@ -685,7 +685,7 @@ loop entry. M3+ entry paths inherit this split unless a later ADR
 reopens the guard-placement principle, most likely because typed guard
 tokens become worth their API cost.
 
-#### 6.8.5 Signal-dispatch ordering (signal-side runtime contract)
+#### 6.7.5 Signal-dispatch ordering (signal-side runtime contract)
 
 Independent of the reactive drain, when a `WasamoSignal` fires
 through `signal_emit`:
@@ -714,7 +714,7 @@ a `BindingEvalContext` variant: reads route through `Signal::get()`
 (binding bodies are pure-read; mutation only happens through the
 binding's bound write target).
 
-#### 6.8.6 Effect lifetime (DD-M2-P5-003 = A)
+#### 6.7.6 Effect lifetime
 
 Effects are owned by the widget that hosts the binding.
 
@@ -741,7 +741,7 @@ Re-attach (M3 conditional binding rebuilds at a different
 position) just creates fresh Effects on the new widgets; old
 widgets' Effects dispose through the same path. No explicit hook.
 
-#### 6.8.7 Binding registration API after M2 (DD-M2-P5-005, DD-M2-P6-007, DD-M2-P6-011, DD-M3-P1-007)
+#### 6.7.7 Binding registration API after M2
 
 ```rust
 // String-baked path (M2): used for i32 / String targets, which the
@@ -770,7 +770,7 @@ pub(crate) struct SignalRegistry {
 
 pub(crate) enum BindingTarget {
     WidgetProperty { node: WidgetId, prop: PropertyKey },
-    // M3-Phase 6 fills ConditionalSubtree (§6.8.9):
+    // M3-Phase 6 fills ConditionalSubtree (§6.7.9):
     ConditionalSubtree { parent: WidgetId, declared_member_index: usize },
     // M3+ adds ForLoopSubtree, …
 }
@@ -798,7 +798,7 @@ type-agnostic: it receives a monomorphic writer closure with the
 value type baked in, never branches on a runtime value tag. This is
 the structural form of the F5 (`TypedValue`) deferral — see
 [dsl_spec.md §8.12 F5 deferral](./dsl_spec.md#812-scope-out-post-m2)
-and [m3-phase-1-bool-scalar.md](./decisions/m3-phase-1-bool-scalar.md).
+and [M3-Phase 1 bool-scalar decisions](../process/milestone-3/phase-1/decisions/preamble.md).
 When a typed-i32 binding writer becomes warranted (no current
 catalog row needs it; `Button.style` / `Text.font` are enum i32s the
 setter parses from a lowered ident), it lands as a third pair with
@@ -824,13 +824,13 @@ evaluator/writer pair. ScrollView reuses the existing string-baked
 `i32` reader path for `offset-y`; the rest are constant-only. The
 per-kind runtime shape of each — IR node form, measure/arrange, Visual
 sync, ABI impact — now lives in
-[§6.9](#69-m3-layout-primitives-and-runtime-shape); this subsection
+[§6.8](#68-m3-layout-primitives-and-runtime-shape); this subsection
 covers only the registration / per-type writer seam.
 
-#### 6.8.8 Forward-compatibility and out-of-scope
+#### 6.7.8 Forward-compatibility and out-of-scope
 
 The reactive architecture is shape-compatible with the M3 extensions it
-defers (M3-Phase 6 fills the conditional seam — see §6.8.9):
+defers (M3-Phase 6 fills the conditional seam — see §6.7.9):
 
 - `Computed<T>` lands as a third layer between Signal and Effect;
   it inherits the M2 topological dirty-Effect walk. M3 still decides
@@ -839,7 +839,7 @@ defers (M3-Phase 6 fills the conditional seam — see §6.8.9):
 - Structural bindings add `BindingTarget` variants; subtree rebuilds
   Drop old Effects through the existing widget teardown path. M3-Phase
   6 realizes the conditional variant
-  (`BindingTarget::ConditionalSubtree`, §6.8.9); for-loop /
+  (`BindingTarget::ConditionalSubtree`, §6.7.9); for-loop /
   list-rendered remain deferred.
 - Subtree-grain layout dirty (open question in
   [layout-engine note §3.4](./notes/layout-engine.md)) is
@@ -852,7 +852,7 @@ whole-graph teardown disposes every Effect via root drop; the
 new graph's Effects re-run on first drain. No engine change is
 required.
 
-#### 6.8.9 Conditional rendering (M3-Phase 6)
+#### 6.7.9 Conditional rendering (M3-Phase 6)
 
 M3-Phase 6 adds the first structural-rendering construct:
 `if <bool> { <widget> }`, where a bound `bool` drives whether a subtree
@@ -904,7 +904,7 @@ first toggle to present. (Textual IR form in
 [dsl_spec.md §8.5](./dsl_spec.md#85-widget-nodes-and-control-flow-members).)
 
 **Present/absent mechanism (`BindingTarget::ConditionalSubtree`).** The
-reserved `BindingTarget` variant (§6.8.7) is now filled. When the
+reserved `BindingTarget` variant (§6.7.7) is now filled. When the
 loader encounters a control-flow member it captures the branch body as
 a **builder** — the declared body plus a factory, with no entity or
 Effect instantiated up front — and registers a bool Effect on the
@@ -940,7 +940,7 @@ effect state and no state retention across absent→present in Phase 6 —
 a subtree that goes absent and returns is a **fresh** subtree, and any
 state inside it resets (correct for the stateless lightbox; an author
 needing persistence keeps that state in a component-level `state`
-outside the conditional). This is the re-attach behaviour §6.8.6
+outside the conditional). This is the re-attach behaviour §6.7.6
 already describes, made normative. (Author-visible
 semantics in
 [dsl_spec.md §4.14](./dsl_spec.md#414-conditional-rendering-and-the-structural-rendering-model-m3-phase-6).)
@@ -953,7 +953,7 @@ handler) drains before control returns, so the present/absent change
 complete and observable when the toggling call returns. This rests on
 one guarantee: registering the inserted subtree's bindings enqueues
 their initial run into the current `drain_dirty_effects` loop (which
-re-scans `DIRTY_EFFECTS` each iteration, §6.8.3), so bound properties
+re-scans `DIRTY_EFFECTS` each iteration, §6.7.3), so bound properties
 initialise before quiescence — no one-frame-stale window. The guarantee
 holds up to the existing `MUTATION_CAP` (16); a subtree large enough to
 exhaust the cap before quiescence trips the existing divergence guard
@@ -962,7 +962,7 @@ rather than rendering silently stale.
 **Structural-mutation ordering: status-quo drain, quiescent layout
 fixed by declared order.** Structural Effects ride the same topological
 drain as property Effects, with no special structural-ordering
-contract. Safety against use-after-free is the §6.8.6 disposal
+contract. Safety against use-after-free is the §6.7.6 disposal
 invariant (binding disposal unregisters from every Signal's dependent
 set ahead of teardown), so a captured-reference Effect cannot fire
 against a half-torn-down widget regardless of order. The transient
@@ -972,13 +972,13 @@ function of declared member order alone**: whichever sibling or
 wrapper-descendant conditionals are present at quiescence appear among
 the static siblings in declared document order, independent of
 effect-evaluation order (and, for a conditional child of a ZStack, this
-is what fixes its document-order z-order, §6.9.5). The M2-handoff
+is what fixes its document-order z-order, §6.8.5). The M2-handoff
 structural-mutation residuals (cycle detection, ordering ties, fan-out
 × `MUTATION_CAP`) are carried forward — Phase 6 declines to freeze a
 structural-transaction model before `for` / multiple conditionals
 reveal the real requirements — rather than silently deferred.
 
-### 6.9 M3 layout primitives and runtime shape
+### 6.8 M3 layout primitives and runtime shape
 
 M3 adds five layout primitives beyond the M1 Rectangle / VStack /
 HStack / Text / Button set: Box (Phase 2), WrapPanel (Phase 3),
@@ -994,11 +994,11 @@ Visual`** mapping holds for every primitive except ScrollView (which
 adds one intermediate content Visual for the scroll translation, §6.5);
 each container clips to its outer bounds on its **own** Visual via
 `Visual.Clip = InsetClip{0,0,0,0}`; and none of them extends the
-per-type writer seam (§6.8.7). The subsections below record each
+per-type writer seam (§6.7.7). The subsections below record each
 primitive's IR node form, sizing/arrange contract, Visual sync, and ABI
 impact.
 
-#### 6.9.1 Box (M3-Phase 2)
+#### 6.8.1 Box (M3-Phase 2)
 
 **Box does not extend the per-type writer seam.**
 The Box widget's two literal attributes — `aspect: <num>:<den>` and
@@ -1015,7 +1015,7 @@ pressure on the per-type seam, and no widening of `write_fn` into a
 value union. The first phase that needs reactive aspect or fill
 opens the seam triple for that attribute at that point — Phase 2's
 literal plumbing is forward-compatible and is extended, not revised.
-See [m3-phase-2-box-layout.md](./decisions/m3-phase-2-box-layout.md)
+See [M3-Phase 2 Box layout decisions](../process/milestone-3/phase-2/decisions/preamble.md)
 and the
 [dsl_spec.md §4.9 Box chapter](./dsl_spec.md#49-box-layout-primitive-m3-phase-2).
 
@@ -1027,7 +1027,7 @@ Phase 2, and no `WASAMO_VALUE_RATIO` / `WASAMO_VALUE_COLOR` tag is
 added to the C ABI's value union. See
 [abi_spec.md](./abi_spec.md) — Phase 2 ships **no** ABI changes.
 
-#### 6.9.2 WrapPanel (M3-Phase 3)
+#### 6.8.2 WrapPanel (M3-Phase 3)
 
 **WrapPanel does not extend the per-type writer seam either.** WrapPanel
 is the first M3 layout primitive whose outer
@@ -1048,7 +1048,7 @@ properties currently dispatch to (`register_binding` +
 pair if that phase warrants it (the third per-type pair anticipated
 in the *Per-type seam* paragraph above). F5 (`TypedValue`) deferral
 is structurally unpressured by Phase 3.
-See [m3-phase-3-wrap-panel.md](./decisions/m3-phase-3-wrap-panel.md)
+See [M3-Phase 3 WrapPanel decisions](../process/milestone-3/phase-3/decisions/preamble.md)
 and the
 [dsl_spec.md §4.10 WrapPanel chapter](./dsl_spec.md#410-wrappanel-layout-primitive-m3-phase-3).
 
@@ -1071,7 +1071,7 @@ exercise the full pipeline through the live Compositor (per
 [CLAUDE.md §Testing rules](../CLAUDE.md#testing-rules)); the
 algorithm-correctness evidence lives in pure-logic unit tests.
 
-#### 6.9.3 ScrollView (M3-Phase 4)
+#### 6.8.3 ScrollView (M3-Phase 4)
 
 **ScrollView reuses the generic IR node form and the existing i32
 binding reader path, but deliberately avoids opening the general
@@ -1110,7 +1110,7 @@ algorithm remains a pure-data layout path in
 for the Visual tree clip / offset integration and the Phase 3 R2
 relative-offset closure.
 
-#### 6.9.4 Grid (M3-Phase 5)
+#### 6.8.4 Grid (M3-Phase 5)
 
 **Grid does not extend the per-type writer seam, but it extends the IR
 node shape with a Grid-specific kind payload alongside the existing
@@ -1212,7 +1212,7 @@ carry-forward); algorithm-correctness evidence lives in pure-logic
 unit tests. See
 [dsl_spec.md §4.12 Grid chapter](./dsl_spec.md#412-grid-layout-primitive-m3-phase-5).
 
-#### 6.9.5 ZStack (M3-Phase 6)
+#### 6.8.5 ZStack (M3-Phase 6)
 
 **ZStack is a pure overlap container that rides the generic `IrNode`
 machinery unchanged — no new IR vocabulary.** ZStack appears as another
@@ -1265,7 +1265,7 @@ accepted" failure modes.
 **z-order and clip.** Paint order is document order — first child at the
 bottom, last on top, no `z-index`. Static children ride the normal
 document-order `sync_visuals()` path; structural insertion is fixed in
-Phase 6 to honour the sibling index (§6.5 / §6.8.9), so a conditional
+Phase 6 to honour the sibling index (§6.5 / §6.7.9), so a conditional
 ZStack child re-inserted between static siblings keeps its document-order
 slot rather than jumping to the top. ZStack does **not**
 add an intermediate Visual (the negative ScrollView precedent is
@@ -1283,7 +1283,7 @@ ABI changes for Phase 6. See
 
 ## 7. Widget Implementation (Phase 4)
 
-Full decision rationale: [`docs/decisions/phase-4-widget-implementation.md`](./decisions/phase-4-widget-implementation.md)
+Full decision rationale: [`process/milestone-1/phase-4/decisions/preamble.md`](../process/milestone-1/phase-4/decisions/preamble.md)
 
 ### 7.1 New widget types
 
@@ -1373,7 +1373,7 @@ callback fields themselves are safe Rust types.
 
 ## 8. Animation (Phase 5)
 
-Full decision rationale: [`docs/decisions/phase-5-compositor-independence-check.md`](./decisions/phase-5-compositor-independence-check.md)
+Full decision rationale: [`process/milestone-1/phase-5/decisions/preamble.md`](../process/milestone-1/phase-5/decisions/preamble.md)
 
 ### 8.1 Compositor-thread independence
 
@@ -1452,11 +1452,11 @@ In M1 the host language constructed the view tree directly through the
 C ABI. The M2-onward DSL path instead materialises the view tree from
 the loaded IR (`wasamoc` → textual IR → runtime loader), but there is
 still no reconciler: the view tree is mutated in place — including the
-structural insert/remove of conditional subtrees (§6.8.9) — not diffed
+structural insert/remove of conditional subtrees (§6.7.9) — not diffed
 against a freshly computed tree.
 
 **Declared-tree / entity-tree separation (M3-Phase 6, nascent).** The
-conditional construct (§6.8.9) introduces, in nascent form, a
+conditional construct (§6.7.9) introduces, in nascent form, a
 distinction the three-layer table does not yet name: a **declared
 tree** — the IR control-flow member and its body, stable across every
 present/absent toggle — versus an **entity tree** — the runtime
@@ -1542,7 +1542,7 @@ invoke `wasamoc build`, then call `wasamo_load_ui` with the emitted
 
 ## 11. Language Bindings (Phase 7)
 
-Full decision rationale: [`docs/decisions/phase-7-language-bindings.md`](./decisions/phase-7-language-bindings.md)
+Full decision rationale: [`process/milestone-1/phase-7/decisions/preamble.md`](../process/milestone-1/phase-7/decisions/preamble.md)
 
 ### 11.1 Binding overview
 
@@ -1595,9 +1595,10 @@ eliminated by construction:
   could parallelise `counter-rust`'s link step ahead of the cdylib
   build, reproducing `LNK1181`. The `warning: no linkable target`
   (cargo#6313) that this edge causes is accepted as a known wart; see
-  [`docs/notes/cdylib-shim-build-graph.md`](./notes/cdylib-shim-build-graph.md).
+  [`docs/notes/workspace-layout.md`](./notes/workspace-layout.md) and
+  [`DD-M2-P1-006`](../process/milestone-2/phase-1/decisions/dd-m2-p1-006-build-order-edge-between-cdylib-shim-and-final-binaries.md).
 
-Full rationale: [`docs/decisions/m2-phase-1-cdylib-shim.md`](./decisions/m2-phase-1-cdylib-shim.md).
+Full rationale: [`process/milestone-2/phase-1/decisions/preamble.md`](../process/milestone-2/phase-1/decisions/preamble.md).
 Phase 2-5 examples can be re-introduced under a `wasamo-poc` workspace
 (experimental branch `exp/m2-p1-poc-examples`; not merged to main).
 
@@ -1621,6 +1622,8 @@ implementations.
 
 ---
 
+<a id="open-questions-1"></a>
+
 ## 12. Open Questions (to be resolved in later phases)
 
 The following are intentionally left open at this draft stage.
@@ -1628,7 +1631,7 @@ The following are intentionally left open at this draft stage.
 | Question | Resolution phase | Status |
 |---|---|---|
 | DPI scaling localization: whether the layout engine should operate in physical pixels and implications for DirectWrite hinting | M2+ | Open |
-| AccessKit / UIA sync: when and how layout results are propagated to the accessibility tree, and the performance impact | M4 | Open (re-scoped from M2 to M4 alongside the M2-as-foundation redefinition; see [docs/plans/m2-plan.md](./plans/m2-plan.md) Out-of-scope) |
+| AccessKit / UIA sync: when and how layout results are propagated to the accessibility tree, and the performance impact | M4 | Open (re-scoped from M2 to M4 alongside the M2-as-foundation redefinition; see [process/milestone-2/plan.md](../process/milestone-2/plan.md) Out-of-scope) |
 | Async measure: how to handle widgets whose size is unknown at measure time (e.g. image load pending) | M2+ | Open |
 | Cache invalidation granularity: strategy for detecting local property changes and recomputing only affected subtrees | M2+ | Open |
 | Custom layout extensibility: approach to layouts beyond built-in primitives — host-language callbacks, data-driven IR injection, or other | M2+ | Open |

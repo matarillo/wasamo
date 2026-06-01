@@ -136,12 +136,12 @@ The M2 / M3-Phase-1..5 shapes Phase 6 builds on:
   apply.
 - **Reactive engine**: Signal / Effect two-layer primitive,
   per-widget Effect ownership with structural disposal
-  ([../../../../docs/architecture.md §6.8.6](../../../../docs/architecture.md#686-effect-lifetime-dd-m2-p5-003--a)),
+  ([../../../../docs/architecture.md §6.7.6](../../../../docs/architecture.md#676-effect-lifetime)),
   `BATCH_DEPTH` / `MUTATION_CAP` drain
-  ([§6.8.3](../../../../docs/architecture.md#683-drain-ordering-inside-drain_if_outermost)),
+  ([§6.7.3](../../../../docs/architecture.md#673-drain-ordering-inside-drain_if_outermost)),
   and the `BindingTarget` enum whose `// M3+ adds ConditionalSubtree,
   ForLoopSubtree, …` slot
-  ([§6.8.7](../../../../docs/architecture.md#687-binding-registration-api-after-m2-dd-m2-p5-005-dd-m2-p6-007-dd-m2-p6-011-dd-m3-p1-007))
+  ([§6.7.7](../../../../docs/architecture.md#677-binding-registration-api-after-m2))
   Phase 6 now fills (DD-M3-P6-004). The M3-Phase 1 **synchronous
   non-batched drain proof contract** (item 4 of
   [../../../milestone-2/handoff.md §3](../../../milestone-2/handoff.md))
@@ -217,7 +217,7 @@ the binding alternatives themselves live in the owning DDs, not here.
 | Coupling (bundle) | Primary DD | Dependent DDs | Accepted / weighed bundle |
 |---|---|---|---|
 | **Conditional body shape** | DD-M3-P6-003 (`if` body cardinality + admitted member kinds) | DD-M3-P6-004 (insertion granularity), DD-M3-P6-005 (lifecycle grain), §verification closure (evidence) | **B1 single widget child (nested `if` deferred) → IG-1 single-slot `insert_child`/`remove_child` → single-subtree destroy/rebuild → strict-body diagnostics.** Alt: B2 sibling-range → IG-2 child-range. B3 (arbitrary `member*`) rejected as a bundle — opens conditional property/state/handler semantics across DD-003/004/005 |
-| **Control-flow IR shape** | DD-M3-P6-004 (IR encoding of control flow) | DD-M3-P6-003 (surface lowers into it), DD-M3-P6-005 (effect teardown rides it), dsl_spec §8.5, architecture §6.8/§9 | **O1 member-level IR** (`children: Vec<IrMember>`); O2 (branch-node in `children`, bounded `Eq` drop) is the lighter fallback. Consequential owner-decision fork |
+| **Control-flow IR shape** | DD-M3-P6-004 (IR encoding of control flow) | DD-M3-P6-003 (surface lowers into it), DD-M3-P6-005 (effect teardown rides it), dsl_spec §8.5, architecture §6.7/§9 | **O1 member-level IR** (`children: Vec<IrMember>`); O2 (branch-node in `children`, bounded `Eq` drop) is the lighter fallback. Consequential owner-decision fork |
 | **ZStack child alignment** | DD-M3-P6-002 (alignment default + parent-owned placement carrier) | DD-M3-P6-001 (author surface: `h-align`/`v-align` as child props), diagnostics / loader | **child placement props consumed by the parent (ZStack/Grid) context, admitted only on a ZStack direct child / Grid `Cell`, rejected elsewhere** |
 
 The per-DD **Decision dependency summary** sections restate each DD's
@@ -526,7 +526,7 @@ oversight (consolidated from
   fan-out × `MUTATION_CAP`) — DD-M3-P6-005 weighs a structural-mutation
   ordering/transaction model (SM-1..SM-4), adopts **SM-1** (status quo),
   and declines SM-2/SM-3/SM-4: structural mutation introduces **no
-  safety regression** (the §6.8.6 dispose-ahead-of-teardown invariant)
+  safety regression** (the §6.7.6 dispose-ahead-of-teardown invariant)
   and **no observability regression** (inter-Effect ties were already
   implementation-defined), so the items are carried forward to be
   re-evaluated when the family (`for`, multiple / nested conditionals,
@@ -652,7 +652,7 @@ phase-sync set is a related but distinct rule):
   architecture sections (**member-level `IrMember`/`ControlFlowNode`
   structural IR**, the consequential schema change of DD-M3-P6-004) and
   the reactive section (the `BindingTarget::ConditionalSubtree` variant
-  now filled in §6.8.7/§6.8.8; the present/absent insert/remove path;
+  now filled in §6.7.7/§6.7.8; the present/absent insert/remove path;
   the effect-lifecycle policy of DD-M3-P6-005; structural mutations
   riding the existing drain ordering with quiescent child order fixed by
   declared order). Add a note under §9 Three-Layer
@@ -728,8 +728,8 @@ Cross-phase / source inputs:
 | M3-Phase 5 DD-M3-P5-001 (`Cell` is an IR-only node kind consumed by lowering, not a runtime widget) | Pattern reuse (interpret-not-render posture) + deliberate contrast | DD-M3-P6-004 (control flow is a member-level construct, *not* an `IrNode`/widget kind like `Cell` — same IR-only posture, different category) |
 | M3-Phase 1 DD-M3-P1-002 (`bool` scalar; `true`/`false` keywords) | Prerequisite | DD-M3-P6-003 (condition type) |
 | M3-Phase 1 DD-M3-P1-007 (per-type writer seam) | Pattern reuse | DD-M3-P6-004 (conditional binding registration) |
-| architecture.md §6.8.6 (Effect lifetime: structural disposal; re-attach creates fresh Effects) | Direct input | DD-M3-P6-005 (a) |
-| architecture.md §6.8.7/§6.8.8 (`BindingTarget` ConditionalSubtree slot; structural bindings drop old Effects via teardown) | Direct input | DD-M3-P6-004 |
+| architecture.md §6.7.6 (Effect lifetime: structural disposal; re-attach creates fresh Effects) | Direct input | DD-M3-P6-005 (a) |
+| architecture.md §6.7.7/§6.7.8 (`BindingTarget` ConditionalSubtree slot; structural bindings drop old Effects via teardown) | Direct input | DD-M3-P6-004 |
 | M2 handoff §3 item 4 (synchronous non-batched drain proof contract) | Preserve, not revise | DD-M3-P6-005 (b) |
 | M2 handoff §3 items 1–3 (cycle / ties / fan-out) | Explicit carry-forward | DD-M3-P6-005; §Out of scope |
 | dsl-grammar.md Q5 (condition expression grammar extension point) | Deferral input | DD-M3-P6-003 |

@@ -50,7 +50,7 @@ other (recommended)
 - No pixel-snapping in Phase 2. The resolved rectangle stays in
   the `f32` layout coordinate space; rasterisation / DPI hinting
   remains an open question carried in
-  [architecture.md §Open questions](../architecture.md#open-questions-1).
+  [architecture.md §Open questions](../../../../docs/architecture.md#open-questions-1).
   DPI scaling localisation does not alter the DD-005 algorithm —
   it would re-define what `f32` parent bounds *are*, not how the
   projection is computed from them.

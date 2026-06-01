@@ -9,7 +9,7 @@ created: 2026-05-08
 Structural decisions that landed inside M2-Phase 6 implementation
 steps (rather than as standalone DDs), plus later addenda discovered
 during M3-Phase 1 close, that M3 DSL-extension work (Grid /
-ScrollView / List per [ROADMAP.md M3](../../ROADMAP.md#m3-dsl-surface)
+ScrollView / List per [process/_roadmap.md M3](../_roadmap.md#m3-dsl-surface)
 and the M3 DSL spec public-draft acceptance criterion) must inherit
 as design premises, not re-litigate.
 

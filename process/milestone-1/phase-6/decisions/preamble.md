@@ -14,7 +14,7 @@ C, Rust, and Zig at Phase 8. The header is *minimal*, not *frozen*:
 M4 is when ABI stability commitments begin.
 
 Two pre-pre-doc framing decisions (Accepted 2026-04-29, recorded in
-[../../ROADMAP.md §Phase 6](../../ROADMAP.md)) precede this ADR:
+[process/_roadmap.md M1](../../../_roadmap.md#m1-proof-of-concept)) precede this ADR:
 
 1. **Two-layer `abi_spec.md`.** The spec is partitioned into a
    **stable core** (M4 freeze candidate) and an **M1 experimental**
@@ -41,7 +41,7 @@ error convention, threading contract, and string-encoding rules
 need to be specified, not just inherited.
 
 The six decisions below correspond to the Phase 6 ROADMAP checklist
-([../../ROADMAP.md L122-L125](../../ROADMAP.md#L122-L125)):
+([process/_roadmap.md M1](../../../_roadmap.md#m1-proof-of-concept)):
 stable-core scope / signal model / callback contract /
 threading and re-entrancy / error convention / header generation
 method.

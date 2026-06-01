@@ -30,7 +30,7 @@ Relevant end-state mechanics:
   `EffectHandle::Drop` ([reactive.rs:269](../../../../wasamo-runtime/src/reactive.rs))
   removes the `EffectId` from every Signal's dependent set, so the
   reactive graph severs on drop alone
-  ([architecture.md §6.8.6](../../../../docs/architecture.md#686-effect-lifetime-dd-m2-p5-003--a)).
+  ([architecture.md §6.7.6](../../../../docs/architecture.md#676-effect-lifetime)).
   "Re-attach … just creates fresh Effects on the new widgets; old
   widgets' Effects dispose through the same path. No explicit hook."
   **But a full subtree teardown is `widget_destroy`, not bare drop:**
@@ -39,7 +39,7 @@ Relevant end-state mechanics:
   of teardown, so a captured-reference Effect cannot fire against a
   half-torn-down widget) **and** `registry::remove_for_widget` over the
   subtree (the widget-pointer registry sever that plain drop does **not**
-  perform). §6.8.6's "`remove_child` + drop" wording covers the reactive
+  perform). §6.7.6's "`remove_child` + drop" wording covers the reactive
   disposal; the registry sever is the part the conditional teardown must
   not skip — see (a) Recommendation.
 - The drain loop `drain_dirty_effects` runs up to `MUTATION_CAP` (16)
@@ -47,7 +47,7 @@ Relevant end-state mechanics:
   Effects enqueued *during* a drain are processed within the **same**
   outermost drain (until quiescence or the cap)
   ([reactive.rs](../../../../wasamo-runtime/src/reactive.rs),
-  [architecture.md §6.8.3](../../../../docs/architecture.md#683-drain-ordering-inside-drain_if_outermost)).
+  [architecture.md §6.7.3](../../../../docs/architecture.md#673-drain-ordering-inside-drain_if_outermost)).
 - M2 handoff §3 names four inherited obligations: **1** cycle
   detection, **2** ordering ties, **3** fan-out × `MUTATION_CAP`, **4**
   the synchronous non-batched drain proof contract, and flags that
@@ -102,7 +102,7 @@ sink for the two bundles above.
     dropped; its Effects dispose via the existing structural teardown.
     When it goes false→true, a **fresh** subtree is built and **fresh**
     Effects are registered. There is no "paused effect" state. This is
-    exactly the behaviour architecture.md §6.8.6 already describes for
+    exactly the behaviour architecture.md §6.7.6 already describes for
     re-attach.
   - What you gain: it is the policy the architecture **already
     documents**, the natural partner of DD-M3-P6-004's ID-1 (full
@@ -147,7 +147,7 @@ has no driver for state retention across close→open (the lightbox
 photo placeholder is stateless; reopening fresh is correct), and LA-2
 would smuggle in the identity layer through the back door.
 
-LA-1 is the policy the architecture **already documents** (§6.8.6
+LA-1 is the policy the architecture **already documents** (§6.7.6
 re-attach) and the natural partner of DD-M3-P6-004's ID-1 (full
 rebuild): absent destroys the entity subtree (Effects included),
 present rebuilds it fresh. It makes the lifecycle boundary
@@ -294,9 +294,9 @@ defer" but a spectrum of how much model to commit.
     the condition Effect; observable ordering ties between independent
     Effects stay implementation-defined, exactly as they already are for
     property Effects. Safety against use-after-free comes from the
-    existing structural-disposal invariant (§6.8.6: unregister ahead of
+    existing structural-disposal invariant (§6.7.6: unregister ahead of
     teardown).
-  - What you gain: **safe** (the §6.8.6 disposal invariant) and
+  - What you gain: **safe** (the §6.7.6 disposal invariant) and
     **regresses no existing contract**; does not freeze a
     structural-transaction model before the family's full shape is
     known; the quiescent child-order invariant (DD-M3-P6-004) already
@@ -348,7 +348,7 @@ widget that a structural Effect is about to remove, or a subtree could
 be inserted before a sibling's state has settled. Two facts bound this
 hazard in Phase 6:
 
-1. **Safety is already covered** by the §6.8.6 disposal invariant
+1. **Safety is already covered** by the §6.7.6 disposal invariant
    (binding disposal unregisters from every Signal's dependent set
    *ahead* of teardown), so a captured-reference Effect cannot fire
    against a half-torn-down widget — no use-after-free regardless of
@@ -395,7 +395,7 @@ inherits the decision rather than rediscovering it.
 ### Recommendation
 
 **SM-1** (status quo ordering; carry items 1–3 forward), for the
-owner-impact reasons in the Comparison — SM-1 is safe (the §6.8.6
+owner-impact reasons in the Comparison — SM-1 is safe (the §6.7.6
 disposal invariant) and regresses no existing contract, while
 SM-2/SM-3/SM-4 would freeze a structural-transaction model before the
 family (`for`, multiple sibling / wrapped-descendant conditionals) reveals its real
@@ -405,7 +405,7 @@ decide **fix-or-carry** explicitly, each item:
 - **item 1 (cycle detection)** — **carry-forward (no SM change).** A
   conditional toggle introduces no Signal/Effect cycle by itself; the
   condition Effect writes to the widget tree, not back to its own
-  Signal. Cycle policy stays the open M3 question (§6.8.8); the
+  Signal. Cycle policy stays the open M3 question (§6.7.8); the
   `MUTATION_CAP` divergence guard remains the backstop.
 - **item 2 (ordering ties)** — **carry-forward, SM-2/SM-3 considered
   and declined.** SM-2 (normatise structural-after-property ordering)
@@ -443,20 +443,20 @@ decide **fix-or-carry** explicitly, each item:
   with the Element-level identity layer (DD-M3-P6-004 ID-2 / Phase 7
   `for` keys), not before. The stable declared tree keeps it reachable
   without an IR change.
-- **`untrack` / explicit `engine.flush()`** (post-M2, §6.8.8) — if
+- **`untrack` / explicit `engine.flush()`** (post-M2, §6.7.8) — if
   ever added, they would give an author a way to opt out of the
   synchronous drain; Phase 6's DB-1 contract is the default that such
   primitives would refine, not replace.
 - **items 1–3 resolution** — cycle policy, ordering-tie contract, and
   fan-out cap strategy remain M3+/M4 open questions with named
-  carriers (§6.8.8); after the SM-1..SM-4 comparison, Phase 6 declines
+  carriers (§6.7.8); after the SM-1..SM-4 comparison, Phase 6 declines
   to freeze a structural-transaction model and carries them forward
   (their resolution is not forced in Phase 6), without foreclosing any
   resolution.
 
 ## Technical risk re-evaluation
 
-- **LA-1 reuses the documented re-attach behaviour** (§6.8.6), so the
+- **LA-1 reuses the documented re-attach behaviour** (§6.7.6), so the
   lifecycle policy is the architecture's existing shape made
   normative, not a new mechanism — low risk.
 - **The drain-ordering of freshly-inserted Effects is the load-bearing

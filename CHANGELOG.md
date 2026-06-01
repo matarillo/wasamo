@@ -9,7 +9,7 @@ Per-phase decisions live in
 [GitHub Releases](https://github.com/matarillo/wasamo/releases).
 
 This file records what has shipped. For what is planned, see
-[ROADMAP.md](./ROADMAP.md). For the current state of work, see
+[process/_roadmap.md](./process/_roadmap.md). For the current state of work, see
 the **Status** section of [README.md](./README.md).
 
 ## [Unreleased] — M3: DSL surface (in progress)
@@ -103,7 +103,7 @@ progressed. The T6 visible-smoke failure uncovered the window-root
 client rect, not the root container's declared shrink height, owns the
 top-level viewport.
 
-Per-phase spec sync ([A11](./ROADMAP.md#m3-dsl-surface)):
+Per-phase spec sync ([A11](./process/_roadmap.md#m3-dsl-surface)):
 `docs/dsl_spec.md` 1.1 -> 1.2 flips §4.11 to
 `M3-Phase 4 closed; implementation-synced`, records parser-accepted
 multi-line Box examples while leaving `;` as a post-Phase-4 member
@@ -167,7 +167,7 @@ attribute values (7+3 wrap on the default 800×600 window).
 GUI smoke confirmed the wrap and the post-fix non-zero-offset
 rendering.
 
-Per-phase spec sync ([A11](./ROADMAP.md#m3-dsl-surface)):
+Per-phase spec sync ([A11](./process/_roadmap.md#m3-dsl-surface)):
 `docs/dsl_spec.md` 0.9 -> 1.0 flips §4.10 to
 `M3-Phase 3 closed; implementation-synced` and folds the T1
 lexer-surface change into §2.2 (`Ident` admits kebab-case
@@ -208,7 +208,7 @@ through the same `.ui -> wasamoc -> IR text -> wasamo_load_ui` path as
 the M2/M3 Rust hosts. Owner-manual GUI smoke confirmed the blue
 16:9 Box fill and centred placeholder text.
 
-Per-phase spec sync ([A11](./ROADMAP.md#m3-dsl-surface)):
+Per-phase spec sync ([A11](./process/_roadmap.md#m3-dsl-surface)):
 `docs/dsl_spec.md` 0.7 -> 0.8 flips §4.9 to
 `M3-Phase 2 closed; implementation-synced`; no implementation/spec
 divergence was found during the close re-sync.
@@ -273,7 +273,7 @@ widget-setter path via `wasamo_set_property(PROP_BUTTON_ENABLED, …)`
 on a live `WidgetNode` (asserting both the `CompositionColorBrush`
 colour flip and click-callback suppression).
 
-Per-phase spec sync ([A11](./ROADMAP.md#m3-dsl-surface)):
+Per-phase spec sync ([A11](./process/_roadmap.md#m3-dsl-surface)):
 `docs/dsl_spec.md` 0.4 → 0.5 (§§2.1 / 2.2 / 3 / 4.3 / 4.6 / 4.7 /
 4.8 / 5 / 8.2 / 8.4 / 8.6 / 8.9 / 8.12; also folds in a minimal
 retroactive `state` surface entry for the M2-Phase 6 documentation
@@ -454,7 +454,7 @@ Release: [v0.1.0](https://github.com/matarillo/wasamo/releases/tag/v0.1.0).
 
 This project's document conventions changed on 2026-05-02 alongside
 M1 shipping. Acceptance criteria live in
-[ROADMAP.md](./ROADMAP.md), thesis-level framing in
+[process/_roadmap.md](./process/_roadmap.md), thesis-level framing in
 [VISION.md §7](./VISION.md#7-roadmap), shipped milestones here, and
 in-flight work in the active plan under
 [docs/plans/](./docs/plans/). Rationale:

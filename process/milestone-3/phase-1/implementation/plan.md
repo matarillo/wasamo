@@ -314,7 +314,7 @@ Discharges DD-M3-P1-007. **Landed in a9e93e4 + fa79336 (2026-05-19).**
       mirrors `register_binding`'s shape but pipes through
       `evaluate_bool_binding`; the per-type selection lives at the
       ir_loader call site
-      ([architecture.md L714](../../architecture.md#L714)).
+      ([architecture.md §6.7.7](../../../../docs/architecture.md#677-binding-registration-api-after-m2)).
 - [x] Unit tests cover dispatch selection:
       `evaluate_bool_binding`'s accept/reject set (handler.rs, 10
       tests); `register_bool_binding`'s initial-run + update path
@@ -389,7 +389,7 @@ See T6 Notes for why this landed inside T6.
 Discharges the per-phase spec sync acceptance criterion. **Landed in
 ed93d5e + b7f91ce (2026-05-19).**
 
-- [x] [docs/dsl_spec.md](../../dsl_spec.md) (ed93d5e): §2.1 `true` /
+- [x] [docs/dsl_spec.md](../../../../docs/dsl_spec.md) (ed93d5e): §2.1 `true` /
       `false` keyword reservation (and `state` added retroactively
       to fill the M2-Phase 6 surface-keyword gap, per owner
       agreement); §2.2 `BoolLit` token row; §3 grammar adds
@@ -414,7 +414,7 @@ ed93d5e + b7f91ce (2026-05-19).**
       §8.12 records F5 (`TypedValue`) deferral cross-reference and
       removes `bool` from the "expanded type set" pending entry.
       Document version bumped 0.4 → 0.5.
-- [x] [docs/architecture.md](../../architecture.md) (b7f91ce): §6.8.7
+- [x] [docs/architecture.md](../../../../docs/architecture.md) (b7f91ce): §6.8.7
       code block adds `register_bool_binding` alongside
       `register_binding` with per-type `write_fn` (string vs `bool`);
       `SignalRegistry` gains `bools: HashMap<String, Signal<bool>>`;

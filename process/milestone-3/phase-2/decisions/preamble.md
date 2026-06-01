@@ -7,7 +7,7 @@
 ## Context
 
 M3 acceptance criterion **A6** (see
-[ROADMAP.md M3](../../ROADMAP.md#m3-dsl-surface),
+[process/_roadmap.md M3](../../../_roadmap.md#m3-dsl-surface),
 [m3-plan.md §Acceptance criteria](../plans/m3-plan.md#acceptance-criteria)):
 
 > Box layout primitive (0+ child container; `aspect: <ratio>` attribute
@@ -277,7 +277,7 @@ When this ADR is Accepted, the following docs change in the
 **Moment 1** commit set (framing decision D — ADR-Accepted /
 design-spec draft):
 
-- [docs/dsl_spec.md](../dsl_spec.md) — extensions in three regions:
+- [docs/dsl_spec.md](../../../../docs/dsl_spec.md) — extensions in three regions:
   - **DSL surface** — new Box chapter under the widget catalog
     documenting the IR node, attributes (`aspect`, `fill`), child-
     layout contract (single-child, centred, clipped), and the
@@ -289,7 +289,7 @@ design-spec draft):
     literals.
   - **IR text grammar** (§8) — `IrLiteral::Ratio` and
     `IrLiteral::Color` productions.
-- [docs/architecture.md](../architecture.md) §6 — Box entry under
+- [docs/architecture.md](../../../../docs/architecture.md) §6 — Box entry under
   the M2-revised IR section if structural placement warrants;
   short paragraph noting the per-type binding seam is *not*
   extended by Phase 2 (`aspect` / `fill` constant-only) so the F5
@@ -297,7 +297,7 @@ design-spec draft):
   enter the runtime as Box-internal domain types only — not as
   `PropertyValue` variants — so the ABI surface remains unchanged
   through Phase 2.
-- [docs/abi_spec.md](../abi_spec.md) — **no changes in Phase 2**.
+- [docs/abi_spec.md](../../../../docs/abi_spec.md) — **no changes in Phase 2**.
   No new ABI public function, no new `WASAMO_VALUE_*` tag, no new
   arms in `abi.rs` (`read_property_value` / `write_property_value` /
   `property_value_to_owned`). The new `Ratio` and `Color` types are

@@ -2,7 +2,7 @@
 
 **Version:** M2 Foundation ABI surface (2026-05-11)
 **Status:** Accepted for M2 — finalised against the implemented `wasamo.h`; M3-Phase 1 in progress with no new ABI surface
-**Authoritative decisions:** [decisions/phase-6-c-abi.md](decisions/phase-6-c-abi.md) (DD-P6-001..007), M2 ADRs under [decisions/](decisions/)
+**Authoritative decisions:** [M1 Phase 6 C ABI decisions](../process/milestone-1/phase-6/decisions/preamble.md) and the [M2 plan](../process/milestone-2/plan.md)
 
 This document specifies the C ABI exposed by `wasamo.dll` via the
 `wasamo.h` header. It is the normative reference for binding
@@ -119,10 +119,10 @@ typedef int32_t WasamoStatus;
 #define WASAMO_ERR_RUNTIME             -2
 #define WASAMO_ERR_NOT_INITIALIZED     -3
 #define WASAMO_ERR_WRONG_THREAD        -4
-#define WASAMO_ERR_REENTRANT_LOAD      -5  /* DD-M2-P6-001 */
-#define WASAMO_ERR_REACTIVE_DIVERGED   -6  /* DD-M2-P6-001 / DD-M2-P6-006 */
-#define WASAMO_ERR_OBSERVER_MUTATION   -7  /* DD-M2-P6-001 */
-#define WASAMO_ERR_IR_MALFORMED        -8  /* DD-M2-P6-005 / DD-M2-P6-009 */
+#define WASAMO_ERR_REENTRANT_LOAD      -5
+#define WASAMO_ERR_REACTIVE_DIVERGED   -6
+#define WASAMO_ERR_OBSERVER_MUTATION   -7
+#define WASAMO_ERR_IR_MALFORMED        -8
 ```
 
 The status space is closed at M6. New codes added before M6 are
@@ -343,7 +343,7 @@ convenience for the former; it is not part of the stable core.
 
 ### 4.6 Tree mutation
 
-Added in M2-Phase 4 (DD-M2-P4-001/002/003 = Option A). Grows the stable
+Added in M2-Phase 4. Grows the stable
 core with a sixth area: index-based widget-tree mutation. Constructors
 (`wasamo_*_create`) remain in the M1 experimental layer (§5) until a later
 DSL/widget-surface milestone settles their parameter shapes.
@@ -377,7 +377,7 @@ WASAMO_EXPORT WasamoStatus WASAMO_API wasamo_widget_destroy(WasamoWidget* widget
 ```
 
 **Identifier scheme.** Children are addressed by zero-based index into the
-parent's ordered child list (DD-M2-P4-002 = Option A). `child_count` is
+parent's ordered child list. `child_count` is
 provided so hosts can construct loop bounds; no random-access `_get` is
 exposed (the returned handle's lifetime would be tied to the list position,
 which shifts under any subsequent `insert` or `remove`).
@@ -523,7 +523,7 @@ or when `wasamo_shutdown` is called, whichever comes first. The
 stable-core `wasamo_widget_destroy` (§4.6) handles destruction of
 detached widgets that have been removed from their parent.
 
-### 5.2 `wasamo_load_ui` (DD-M2-P6-005)
+### 5.2 `wasamo_load_ui`
 
 ```c
 typedef int32_t WasamoLoadType;
@@ -538,8 +538,8 @@ WasamoStatus wasamo_load_ui(
     WasamoWindow**  out_root);
 ```
 
-Single-function loader (Option α). The runtime parses the
-`.ui`-derived IR (DD-M2-P6-002), constructs the widget tree, opens a
+Single-function loader. The runtime parses the
+`.ui`-derived IR, constructs the widget tree, opens a
 default-sized window, installs the tree as the window's root, and
 returns the window handle through `*out_root`.
 
@@ -551,7 +551,7 @@ returns the window handle through `*out_root`.
   `(const char* utf8, size_t len)` convention used by every other
   string-bearing `wasamo_*` ABI.
 - `WASAMO_LOAD_MEMORY` — `data` is a `data_len`-byte in-memory IR
-  blob. M2 accepts only the IR text grammar (DD-M2-P6-002) and
+  blob. M2 accepts only the IR text grammar and
   rejects non-UTF-8 bytes with `WASAMO_ERR_IR_MALFORMED`. The byte
   layout is the canonical shape so a future binary IR can be added
   by sniffing a header magic without changing the function
@@ -568,9 +568,9 @@ modes; an unknown `type` is also `WASAMO_ERR_INVALID_ARG`.
 | `WASAMO_ERR_INVALID_ARG` | Null `data` / null `out_root`, `data_len == 0`, unknown `type`, or non-UTF-8 path bytes. |
 | `WASAMO_ERR_NOT_INITIALIZED` | `wasamo_init` has not been called. |
 | `WASAMO_ERR_WRONG_THREAD` | Caller is not the runtime's owning thread (§6). |
-| `WASAMO_ERR_IR_MALFORMED` | Header magic / version mismatch, parse error, unknown widget type, defense-in-depth validation failure (DD-M2-P6-009), or non-UTF-8 in-memory blob. |
+| `WASAMO_ERR_IR_MALFORMED` | Header magic / version mismatch, parse error, unknown widget type, defense-in-depth validation failure, or non-UTF-8 in-memory blob. |
 | `WASAMO_ERR_RUNTIME` | I/O failure while reading the path, or window/Compositor construction failed. |
-| `WASAMO_ERR_REENTRANT_LOAD` / `WASAMO_ERR_OBSERVER_MUTATION` / `WASAMO_ERR_REACTIVE_DIVERGED` | Standard structure-changing-ABI guards (DD-M2-P6-001 / DD-M2-P6-006). |
+| `WASAMO_ERR_REENTRANT_LOAD` / `WASAMO_ERR_OBSERVER_MUTATION` / `WASAMO_ERR_REACTIVE_DIVERGED` | Standard structure-changing-ABI guards. |
 
 On any non-OK return, `*out_root` is left as `NULL` (the function
 zeroes it on entry) and `wasamo_last_error_message` carries a
@@ -603,7 +603,7 @@ settles constructor shapes for the stable core.
 At M1, the shape above was deliberately the smallest experimental
 layer that let Phase 8 "Hello Counter" run while keeping the eventual
 M2 direction open. M2 later chose textual IR plus runtime
-interpretation (DD-M2-P2-001); this section remains as historical
+interpretation; this section remains as historical
 rationale for why the constructor conveniences are still experimental.
 
 **M1 experimental verifies:**
@@ -657,7 +657,7 @@ Wasamo follows strict UI-thread affinity:
   action and without modifying runtime state. Functions with a `void`
   return (`wasamo_shutdown`, `wasamo_run`, `wasamo_quit`) silently
   no-op on a wrong-thread call but still record the violation in the
-  thread-local last-error string. (DD-M2-P6-005.)
+  thread-local last-error string.
 - Calls before `wasamo_init` return `WASAMO_ERR_NOT_INITIALIZED`. The
   same `void`-return rule applies to lifecycle entry points.
 - `wasamo_last_error_message` is exempt from the thread check so a
@@ -676,7 +676,7 @@ the host obtains the window's HWND through a future
 message handler. A built-in `wasamo_post` is deferred to the phase
 that needs it; adding it later is purely additive.
 
-### M2 batching contract (DD-M2-P4-004 = Option A)
+### M2 batching contract
 
 The M2 batching contract is the existing queue-and-drain semantics
 described above; no host-visible batching API was added in M2-Phase 4.
@@ -692,7 +692,7 @@ observed `(widget, property_id)` pair, not N times.
 *This is the M2 batching contract.* A host-visible begin/commit
 transaction API — for cases where heterogeneous cross-widget operations
 must be batched as a single observable event — is deferred to M3+
-(DD-M2-P4-004 Out of scope). Adding it later is purely additive and does
+for M2. Adding it later is purely additive and does
 not break the existing queue-and-drain contract.
 
 ## 7. Header generation, distribution, and CI
@@ -714,20 +714,3 @@ both layers from the same header.
 
 `wasamo.h` lives under `bindings/c/`; the MSVC import library is emitted
 by the Rust build as `target/<profile>/wasamo.dll.lib`.
-
----
-
-## Appendix A. Summary of cross-references to ADR
-
-| Spec section | ADR decision |
-|---|---|
-| §1 conventions, §3.1 status, §4.1 last-error | DD-P6-005 |
-| §2.1 export, §2.2 calling convention, §2.3 ownership | DD-P6-007 |
-| §3.1 status codes (M2 additions) | DD-M2-P6-001, DD-M2-P6-005, DD-M2-P6-006 |
-| §3.3 `WasamoValue`, §4.5 signals | DD-P6-002 |
-| §3.4 callbacks, §4.4 observers, §4.5 signals (lifetime) | DD-P6-003 |
-| §4 stable core scope | DD-P6-001 |
-| §5 experimental layer | DD-P6-001 (experimental layer), framing |
-| §5.2 `wasamo_load_ui` | DD-M2-P6-005 |
-| §6 threading | DD-P6-004, DD-M2-P6-005 (init-time fix, error returns) |
-| §7 header generation | DD-P6-006 |

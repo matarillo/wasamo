@@ -17,7 +17,7 @@ into the ADR.
 
 ## Phase 2 acceptance criteria (restated)
 
-- **A6** (see [ROADMAP.md M3](../../../ROADMAP.md#m3-dsl-surface),
+- **A6** (see [process/_roadmap.md M3](../../../_roadmap.md#m3-dsl-surface),
   [m3-plan.md §Acceptance criteria](../../plans/m3-plan.md#acceptance-criteria)):
 
   > Box layout primitive (0+ child container; `aspect: <ratio>`

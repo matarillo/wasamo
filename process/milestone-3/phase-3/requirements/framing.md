@@ -34,7 +34,7 @@ rather than re-derives:
 
 ## Phase 3 acceptance criteria (restated)
 
-- **A3** (see [ROADMAP.md M3](../../../ROADMAP.md#m3-dsl-surface),
+- **A3** (see [process/_roadmap.md M3](../../../_roadmap.md#m3-dsl-surface),
   [m3-plan.md §Acceptance criteria](../../plans/m3-plan.md#acceptance-criteria)):
 
   > WrapPanel layout primitive, demonstrating that DSL can express

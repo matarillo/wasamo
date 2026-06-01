@@ -17,10 +17,14 @@ discipline are described in [process/README.md](./README.md).
 
 ---
 
+<a id="m1-proof-of-concept"></a>
+
 ## M1: Proof of Concept ✅ shipped 2026-05-01 (v0.1.0)
 
 See [CHANGELOG entry](./CHANGELOG.md#v010--2026-05-01--m1-proof-of-concept)
 and the [ADRs](./milestone-1/).
+
+<a id="m2-foundation"></a>
 
 ## M2: Foundation ✅ shipped 2026-05-11
 

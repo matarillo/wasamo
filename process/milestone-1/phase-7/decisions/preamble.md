@@ -8,14 +8,14 @@
 
 Phase 7's acceptance criterion is derived from
 [VISION §7 M1](../../VISION.md#7-roadmap--milestones) and
-[ROADMAP M1](../../ROADMAP.md#m1-proof-of-concept):
+[process/_roadmap.md M1](../../../_roadmap.md#m1-proof-of-concept):
 **"Hello Counter runs in three languages: C, Rust, and Zig."**
 Phase 7 produces the **bindings** that Phase 8 consumes; Phase 8 then
 writes the actual `counter` apps in each language.
 
 The C ABI is already shaped and shipped in Phase 6
 ([`bindings/c/wasamo.h`](../../bindings/c/wasamo.h),
-[`docs/abi_spec.md`](../abi_spec.md), Accepted). On the C side Phase 7
+[`docs/abi_spec.md`](../../../../docs/abi_spec.md), Accepted). On the C side Phase 7
 adds only sample-build infrastructure, not new ABI. The substantive
 work is on the Rust and Zig wrapper sides.
 
@@ -35,7 +35,7 @@ this ADR:
    code must construct trees by hand. But the rlib path has no
    experimental marker and no documented stability story.
 
-The ROADMAP Phase 7 task list ([../../ROADMAP.md L172-L180](../../ROADMAP.md#L172-L180))
+The roadmap Phase 7 task list ([process/_roadmap.md M1](../../../_roadmap.md#m1-proof-of-concept))
 has seven items. Per
 [Pre-doc discipline](./README.md#pre-doc-discipline) those are
 working hypotheses; this ADR revisits them against the acceptance
@@ -125,7 +125,7 @@ the runtime owns the storage, the closure borrows for its duration.
 ## Revised Phase 7 ROADMAP task list (proposed)
 
 If the above decisions are Accepted, the Phase 7 task list in
-[ROADMAP.md](../../ROADMAP.md#L172-L180) is revised to reflect the
+[process/_roadmap.md](../../../_roadmap.md#m1-proof-of-concept) is revised to reflect the
 crate rename and the scope split:
 
 - [ ] `docs/decisions/phase-7-language-bindings.md` — owner agreement (this doc)

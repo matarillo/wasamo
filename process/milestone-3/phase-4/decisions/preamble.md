@@ -7,7 +7,7 @@
 ## Context
 
 M3 acceptance criterion **A5** (see
-[ROADMAP.md M3](../../ROADMAP.md#m3-dsl-surface),
+[process/_roadmap.md M3](../../../_roadmap.md#m3-dsl-surface),
 [m3-plan.md §Acceptance criteria](../plans/m3-plan.md#acceptance-criteria)):
 
 > ScrollView primitive (minimal: inner unbounded measure + viewport
@@ -58,7 +58,7 @@ this phase extends without breaking:
   needed to land the value in ScrollView's `i32` `offset-y`
   field happens at ScrollView's per-widget `set_property` arm.
   No general typed-`i32` evaluator / writer pair is built (per
-  [architecture.md §6.8 *Per-type seam* paragraph](../architecture.md#68-reactive-engine-m2-phase-5);
+[architecture.md §6.7 *Per-type seam* paragraph](../../../../docs/architecture.md#67-reactive-engine-m2-phase-5);
   the "third pair" stays deferred — see §M4 hand-off item 2).
 - `wasamo-runtime` widget catalog
   ([wasamo-runtime/src/widget.rs](../../wasamo-runtime/src/widget.rs)):
@@ -82,7 +82,7 @@ this phase extends without breaking:
   `i32` `offset-y` field at ScrollView's per-widget
   `set_property` arm. **No general typed-`i32` evaluator /
   writer pair is built** — the anticipated "third pair" from
-  [architecture.md §6.8 *Per-type seam* paragraph](../architecture.md#68-reactive-engine-m2-phase-5)
+[architecture.md §6.7 *Per-type seam* paragraph](../../../../docs/architecture.md#67-reactive-engine-m2-phase-5)
   is deferred to M4 or later input-handling work (see §M4 hand-off
   below). F5 (`TypedValue` deferral) is held in force by
   construction.
@@ -94,7 +94,7 @@ this phase extends without breaking:
   existing diagnostic surface. ScrollView gains a child-count
   diagnostic (exactly 1 child) per DD-006.
 - Composition / Visual Layer:
-  ([architecture.md §6.5](../architecture.md#65-widgetnode-and-visual-layer-sync))
+([architecture.md §6.5](../../../../docs/architecture.md#65-widgetnode-and-visual-layer-sync))
   `LayoutNode` offsets are absolute (root-relative); `sync_visuals()`
   converts each child offset to parent-relative `Visual.Offset`
   before writing the Composition visual tree. The current
@@ -132,10 +132,10 @@ sub-screen content is Box + Text placeholders.
 The acceptance lens for this phase: A5 is satisfied when (i) `.ui`
 declares `ScrollView { offset-y: <i32-literal-or-state-ident>; <single
 content child> }` (where the state-ident form is a bare identifier RHS
-per [dsl_spec.md §4.3](../dsl_spec.md#43-property-binding) property-
+per [dsl_spec.md §4.3](../../../../docs/dsl_spec.md#43-property-binding) property-
 binding semantics, resolving to a component-scope
 `state scroll_y: i32 = 0` declaration per
-[dsl_spec.md §4.7](../dsl_spec.md#47-state-declarations-m2-surface-bool-added-in-m3-phase-1)
+[dsl_spec.md §4.7](../../../../docs/dsl_spec.md#47-state-declarations-m2-surface-bool-added-in-m3-phase-1)
 state-declaration grammar, **not** a `\{…}` interpolation — see
 Revision history 2026-05-25 erratum) and the shared crates lower →
 load → render it
@@ -199,7 +199,7 @@ observed:
      pattern explicitly does not apply here).
    - **`offset-y` binding admission** — `offset-y: scroll_y`
      (bare state identifier RHS per
-     [dsl_spec.md §4.3](../dsl_spec.md#43-property-binding))
+     [dsl_spec.md §4.3](../../../../docs/dsl_spec.md#43-property-binding))
      accepted when `scroll_y` is declared as
      `i32` in `state`; rejected when `scroll_y` is undeclared,
      `bool`, or `String`. Reuses the existing i32 reader /
@@ -303,7 +303,7 @@ observed:
      summing parent-relative offsets up the chain) equals the
      expected position given the scroll state — i.e. the
      absolute-vs-parent-relative convention from
-     [architecture.md §6.5](../architecture.md#65-widgetnode-and-visual-layer-sync)
+[architecture.md §6.5](../../../../docs/architecture.md#65-widgetnode-and-visual-layer-sync)
      is observed end-to-end with non-trivial nesting. This is
      the test-coverage half of R2 per Phase 4 framing decision
      F.
@@ -385,7 +385,7 @@ landing point:
    the runtime writes the new value back through the binding.
    Requires building the general typed-`i32` writer pair — the
    "third pair" anticipated in
-   [architecture.md §6.8 *Per-type seam* paragraph](../architecture.md#68-reactive-engine-m2-phase-5).
+   [architecture.md §6.7 *Per-type seam* paragraph](../../../../docs/architecture.md#67-reactive-engine-m2-phase-5).
    The Phase 4 surface (read-only binding) is forward-compatible:
    `offset-y: scroll_y` remains valid syntax when M4 or
    later work adds in-out direction; no IR change is required.
@@ -571,6 +571,6 @@ recommended Options of each DD here).
 
 | Date | Change |
 |---|---|
-| 2026-05-25 | Erratum: corrected `offset-y` binding surface notation. Earlier draft examples wrote the state-bound surface as `offset-y: \{state.scroll_y}`; the actual DSL property-bind surface is `offset-y: scroll_y` (bare state identifier) per existing [dsl_spec.md §4.3](../dsl_spec.md#43-property-binding) property-binding surface, with `state scroll_y: i32 = 0` declared at component scope per [dsl_spec.md §4.7](../dsl_spec.md#47-state-declarations-m2-surface-bool-added-in-m3-phase-1). The `\{…}` syntax is reserved for string interpolation inside string literals per [dsl_spec.md §2.4](../dsl_spec.md#24-string-literals). No design decision changes; the bindable read-only direction of DD-003 is unaffected. |
+| 2026-05-25 | Erratum: corrected `offset-y` binding surface notation. Earlier draft examples wrote the state-bound surface as `offset-y: \{state.scroll_y}`; the actual DSL property-bind surface is `offset-y: scroll_y` (bare state identifier) per existing [dsl_spec.md §4.3](../../../../docs/dsl_spec.md#43-property-binding) property-binding surface, with `state scroll_y: i32 = 0` declared at component scope per [dsl_spec.md §4.7](../../../../docs/dsl_spec.md#47-state-declarations-m2-surface-bool-added-in-m3-phase-1). The `\{…}` syntax is reserved for string interpolation inside string literals per [dsl_spec.md §2.4](../../../../docs/dsl_spec.md#24-string-literals). No design decision changes; the bindable read-only direction of DD-003 is unaffected. |
 | 2026-05-25 | Status flipped to Accepted. DD-001 through DD-006 owner-accepted after per-DD review, implementation-shape recheck against existing runtime code, and final Verification / Out of scope / Upstream revisions alignment. |
 | 2026-05-25 | Initial draft (Status: Proposed). All 6 DDs at Proposed pending owner review pass. Framing-level owner alignment confirmed in chat 2026-05-25 (commits `8f19c5f`, `234a0fa` for pre-doc-framing.md). |

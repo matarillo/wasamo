@@ -7,7 +7,7 @@
 ## Context
 
 M2 acceptance criteria **A1** and **A2** ([m2-plan.md](../plans/m2-plan.md#acceptance-criteria),
-mirrored from [ROADMAP.md M2](../../ROADMAP.md#m2-foundation)):
+mirrored from [process/_roadmap.md M2](../../../_roadmap.md#m2-foundation)):
 
 > **A1.** `examples/counter/counter.ui` drives the running Hello
 > Counter in C, Rust, and Zig — the M1 host-imperative trees in

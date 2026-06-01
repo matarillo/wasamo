@@ -52,7 +52,7 @@ Option A — Box-internal `Color(u32)` domain type; **not** added to
 - A new private domain type `Color(u32)` lives in `wasamo-runtime`
   (packed `u32` in `0xAARRGGBB` layout, alpha in the most
   significant byte; recorded in
-  [dsl_spec.md §8.2](../dsl_spec.md#82-notation) `COLOR` token).
+  [dsl_spec.md §8.2](../../../../docs/dsl_spec.md#82-notation) `COLOR` token).
   `WidgetData::Box` stores
   `fill: Option<Color>` as a Box-internal field. `IrLiteral::Color(u32)`
   parallel in `wasamo-ir`. `wasamoc` lexer accepts `#RRGGBB` (alpha
