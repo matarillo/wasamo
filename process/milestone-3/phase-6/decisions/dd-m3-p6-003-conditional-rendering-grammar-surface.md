@@ -1,6 +1,6 @@
 # DD-M3-P6-003 — Conditional rendering author-facing grammar surface
 
-**Status:** Proposed
+**Status:** Accepted
 **Phase:** M3-Phase 6
 **AC:** A7 (conditional rendering grammar — binding drives the present /
 absent state of a subtree)

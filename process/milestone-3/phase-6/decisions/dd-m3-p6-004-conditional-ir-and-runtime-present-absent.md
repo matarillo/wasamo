@@ -1,6 +1,6 @@
 # DD-M3-P6-004 — Conditional IR representation + runtime present/absent mechanism
 
-**Status:** Proposed
+**Status:** Accepted — **O1** selected (see §IR encoding of the conditional construct, "What `Accepted` selects"); R-1 / IG-1 / ID-1 as recommended.
 **Phase:** M3-Phase 6
 **AC:** A7 (conditional rendering grammar — binding drives the present /
 absent state of a subtree)

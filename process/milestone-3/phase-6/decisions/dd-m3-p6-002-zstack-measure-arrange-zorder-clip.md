@@ -1,6 +1,6 @@
 # DD-M3-P6-002 — ZStack measure / arrange + z-order + clip contract
 
-**Status:** Proposed
+**Status:** Accepted
 **Phase:** M3-Phase 6
 **AC:** A4 (ZStack layout primitive — sibling z-order by document order)
 

@@ -1,6 +1,6 @@
 # DD-M3-P6-006 — Window-title host-wiring (R1) surface
 
-**Status:** Proposed
+**Status:** Accepted
 **Phase:** M3-Phase 6
 **Carries:** R1 (Gallery host Window-title wiring), Phase 4 residual
 assigned to Phase 6 as owning phase (Phase 5 FD-E,
