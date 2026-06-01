@@ -195,10 +195,30 @@ The Phase 6 ADR carries six DDs (framing DD slate → ADR numbering 1:1):
 |---|---|---|
 | [DD-M3-P6-001](./dd-m3-p6-001-zstack-ir-node-form-and-surface.md) | ZStack IR node form and author surface | Per-kind tag `ZStack`; **direct children** (no `Cell`-style wrapper); **no `KindPayload`, no new `IrType`/`IrLiteral`**; author surface `ZStack { <child>… }`, document order = bottom-to-top z-order; runtime **default size constraint `Fill/Fill`** (overlay-first; no Phase-6 override surface — DD-M3-P6-002) |
 | [DD-M3-P6-002](./dd-m3-p6-002-zstack-measure-arrange-zorder-clip.md) | ZStack measure / arrange + z-order + clip | **ZStack default constraint `Fill/Fill` (overlay-first)** — a `Fill` child contributes `0.0` to sizing, so the full-viewport scrim comes from the ZStack's own Fill default, not from the child; **union (per-axis max) sizing** is the Shrink/unbounded-axis desired-size policy. Owner-visible trade-off: **intrinsic (bounded) ZStack is not author-expressible until a future size-constraint surface**. Each child arranged in the content rect by per-child alignment (**default `center`**, `h-align`/`v-align` overrides); **document-order z-order** (no explicit `z-index`); **ZStack outer-bounds clip** on, per-child clip out; no new `LayoutError` |
-| [DD-M3-P6-003](./dd-m3-p6-003-conditional-rendering-grammar-surface.md) | Conditional rendering author-facing grammar surface | **Approach 2**; **`if <bool-expr> { <member>… }` block form** (family-extensible to `else`/`switch`/`for`, unlike a `when:` attribute); condition = **E1**, the narrow bool-expr already accepted by `Button.enabled`. Intermediates **E1.5 (`!`-only)** / **E1.75 (bool-only `&&`/`||`/`!`)** weighed and declined **for grammar uniformity** (operators should grow once across all `expr` positions per Q5, not in a condition-only pocket) — not for effort; non-bool / mis-placed `if` rejected at `wasamoc check` |
-| [DD-M3-P6-004](./dd-m3-p6-004-conditional-ir-and-runtime-present-absent.md) | Conditional IR representation + runtime present/absent | **Member-level structural IR (O1, recommended; O2 lighter fallback)** — `children: Vec<IrMember = Widget \| ControlFlow>` with a branch list so `else`/`switch`/`for` are same-family variants; IR-only (no runtime widget); Phase 6 ships the single-branch `ControlFlowNode::If`. Runtime fills **`BindingTarget::ConditionalSubtree`**; present/absent via `insert_child`/`remove_child`. **Phase 6 = full destroy+rebuild (ID-1)**; absent=fresh-on-return is **normative author-visible semantics**, future retention is **opt-in (keyed)** so the default never breaks. **Consequential owner-decision fork** (IR-schema change) |
-| [DD-M3-P6-005](./dd-m3-p6-005-conditional-effect-lifecycle-and-drain-contract.md) | Conditional effect lifecycle + reactive-drain proof contract | **(a)** absent subtree's Effects are **disposed** via the existing structural teardown; re-present **recreates** fresh widgets + Effects (no paused-effect state). **(b)** the M3-Phase 1 synchronous non-batched drain contract (item 4) is **preserved** — toggle-then-observe holds; newly-created subtree Effects run before quiescence **within the existing `MUTATION_CAP`**, and a cap-overflowing insertion uses the existing divergence path (documented backstop, not silent staleness). **(c)** structural-mutation ordering = **SM-1** (status quo) — multiple sibling/nested conditionals are kept observable by the **quiescent child-order invariant** (present conditionals settle into declared document order, drain-order-independent); SM-2/3/4 (normatised ordering / two-phase drain / separate insertion budget) weighed and declined — **items 1–3** carried forward with owner-impact reasoning (safe + no regression; model frozen only when the `for`/multi-conditional family reveals requirements) |
+| [DD-M3-P6-003](./dd-m3-p6-003-conditional-rendering-grammar-surface.md) | Conditional rendering author-facing grammar surface | **Approach 2**; **`if <bool-expr> { <widget-child> }` block form** (family-extensible to `else`/`switch`/`for`, unlike a `when:` attribute); **Conditional body shape = B1, a single widget child** (recommended; `widget_decl` only — **nested `if` directly in the body deferred** with the family extension, reached meanwhile by wrapping; no property/bind/handler/state/track-list, no multiple children — a multi-widget or nested-conditional body wraps in a container). **B2** (multiple widget children, pairing with DD-M3-P6-004 IG-2 child-range) is the recorded alternative; **B3** (arbitrary `member*`) rejected — it would open property/state/handler conditionality. condition = **E1**, the narrow bool-expr already accepted by `Button.enabled`. Intermediates **E1.5 (`!`-only)** / **E1.75 (bool-only `&&`/`||`/`!`)** weighed and declined **for grammar uniformity** (operators should grow once across all `expr` positions per Q5, not in a condition-only pocket) — not for effort; non-bool / mis-placed `if` (including a **component-level `if`** that would gate/multiply the single root — admitted only inside a widget body) / non-widget, nested-conditional, or multi-child body rejected at `wasamoc check` |
+| [DD-M3-P6-004](./dd-m3-p6-004-conditional-ir-and-runtime-present-absent.md) | Conditional IR representation + runtime present/absent | **Member-level structural IR (O1, recommended; O2 lighter fallback)** — `children: Vec<IrMember = Widget \| ControlFlow>` with a branch list so `else`/`switch`/`for` are same-family variants; IR-only (no runtime widget); Phase 6 ships the single-branch `ControlFlowNode::If` with a **single `Widget`-child `body`** (length-1, `Widget(_)`-only — a nested `ControlFlow(_)` body deferred — enforced at lowering/loader), so present/absent is one **`insert_child`/`remove_child`** (**insertion granularity IG-1**, pairing with DD-M3-P6-003 B1; **IG-2** child-range is the alternative if B2 is selected, deferred to `for` otherwise). Runtime fills **`BindingTarget::ConditionalSubtree { parent, declared_member_index }`** — the materialised insertion index is **recomputed from declared order + live-presence** at each mutation, not cached. A **Phase 6 textual IR example** (`.ui → textual IR → loaded IR`, single-branch / single-child) is pinned in the DD §Spec content seed. **Phase 6 = full destroy+rebuild (ID-1)**; absent=fresh-on-return is **normative author-visible semantics**, future retention is **opt-in (keyed)** so the default never breaks. **Consequential owner-decision fork** (IR-schema change) |
+| [DD-M3-P6-005](./dd-m3-p6-005-conditional-effect-lifecycle-and-drain-contract.md) | Conditional effect lifecycle + reactive-drain proof contract | **(a)** absent subtree's Effects are **disposed** via the existing structural teardown; re-present **recreates** fresh widgets + Effects (no paused-effect state). **(b)** the M3-Phase 1 synchronous non-batched drain contract (item 4) is **preserved** — toggle-then-observe holds; newly-created subtree Effects run before quiescence **within the existing `MUTATION_CAP`**, and a cap-overflowing insertion uses the existing divergence path (documented backstop, not silent staleness). **(c)** structural-mutation ordering = **SM-1** (status quo) — multiple sibling / wrapped-descendant conditionals are kept observable by the **quiescent child-order invariant** (present conditionals settle into declared document order, drain-order-independent); SM-2/3/4 (normatised ordering / two-phase drain / separate insertion budget) weighed and declined — **items 1–3** carried forward with owner-impact reasoning (safe + no regression; model frozen only when the `for`/multi-conditional family reveals requirements) |
 | [DD-M3-P6-006](./dd-m3-p6-006-window-title-host-wiring.md) | Window-title host-wiring (R1) surface | **Static title required**: loader passes the component-level `title:` literal to `window::create` in place of `DEFAULT_WINDOW_TITLE` — **no new ABI export** (`abi_spec.md` no-touch). **Dynamic (`String`-binding) title evaluated and explicitly deferred** (FD-D): it needs a window-property binding seam overlapping M4 backdrop/theme wiring; the question is recorded, not closed |
+
+## Cross-DD decision dependencies
+
+Most DDs decide a self-contained question, but three decisions **couple
+across DDs**: choosing the primary option constrains what a dependent DD
+must do. This table is an **index / map** (where to read), not the
+argument — the named DD carries the Options / Comparison / Recommendation.
+Each coupling has one **primary** DD that owns the choice; the dependent
+DDs carry the *consequence* of that choice. Recommendations are the
+Phase-6-recommended bundle, **pending owner accept** (all DDs Proposed).
+
+| Coupling (bundle) | Primary DD | Dependent DDs | Recommended bundle |
+|---|---|---|---|
+| **Conditional body shape** | DD-M3-P6-003 (`if` body cardinality + admitted member kinds) | DD-M3-P6-004 (insertion granularity), DD-M3-P6-005 (lifecycle grain), §verification closure (evidence) | **B1 single widget child (nested `if` deferred) → IG-1 single-slot `insert_child`/`remove_child` → single-subtree destroy/rebuild → strict-body diagnostics.** Alt: B2 sibling-range → IG-2 child-range. B3 (arbitrary `member*`) rejected as a bundle — opens conditional property/state/handler semantics across DD-003/004/005 |
+| **Control-flow IR shape** | DD-M3-P6-004 (IR encoding of control flow) | DD-M3-P6-003 (surface lowers into it), DD-M3-P6-005 (effect teardown rides it), dsl_spec §8.5, architecture §6.8/§9 | **O1 member-level IR** (`children: Vec<IrMember>`); O2 (branch-node in `children`, bounded `Eq` drop) is the lighter fallback. Consequential owner-decision fork |
+| **ZStack child alignment** | DD-M3-P6-002 (alignment default + parent-owned placement carrier) | DD-M3-P6-001 (author surface: `h-align`/`v-align` as child props), diagnostics / loader | **child placement props consumed by the parent (ZStack/Grid) context, admitted only on a ZStack direct child / Grid `Cell`, rejected elsewhere** |
+
+The per-DD **Decision dependency summary** sections restate each DD's
+slice of these bundles locally; this table is the single phase-level
+map across them.
 
 ## Phase 6 verification closure (what counts as A4 / A7 evidence)
 
@@ -238,9 +258,26 @@ distinct evidence meaning.
      expression grammar) an operator condition (`if !ready { … }`)
      each surface a `wasamoc check` diagnostic naming the offending
      shape (DD-M3-P6-003).
+   - **Conditional body rejection** — an `if` body containing a
+     **non-structural member** (a property / bind / handler / `state` /
+     track-list directly in the body, e.g. `if open { fill: red }`), a
+     **nested `if`** directly in the body (`if a { if b { … } }`), or
+     **more than one child** (`if open { Box{} Text{} }`) surfaces a
+     `wasamoc check` diagnostic, and the loader re-checks it as
+     `WASAMO_ERR_IR_MALFORMED`: Phase 6 admits exactly **one widget
+     child** in an `if` body (DD-M3-P6-003 / DD-M3-P6-004). A
+     multi-widget or nested conditional is authored by wrapping (`if open {
+     VStack { … } }`).
    - **Conditional placement rejection** — an `if` block in a
      position where members are not admitted (per the grammar of
-     DD-M3-P6-003) surfaces a diagnostic.
+     DD-M3-P6-003) surfaces a diagnostic. This **includes a
+     component-level `if`** that would gate / multiply the single root
+     (`IrComponent.root`): although a component body is grammatically
+     `member*`, DD-M3-P6-003 admits `if` only **inside a widget body**
+     and rejects a component-level `if` at `wasamoc check`, because a
+     conditional root has no parent slot to insert/remove into
+     (DD-M3-P6-004's `BindingTarget::ConditionalSubtree { parent,
+     slot }` requires a parent). This rejection is a required test.
 
 2. **Pure-logic layout + presence-reducer evidence (host-independent).**
    - **ZStack measure-arrange** — union (per-axis max) sizing across
@@ -262,10 +299,13 @@ distinct evidence meaning.
    - **ZStack roundtrip** — emit → load of a ZStack subtree preserves
      child count and document order.
    - **Control-flow member roundtrip** — emit → load of an `if`
-     construct preserves the branch condition and body; the control-flow
+     construct (per the §Spec content seed textual-IR shape) preserves
+     the branch condition and the single-child body; the control-flow
      member materialises no runtime widget (DD-M3-P6-004).
    - **Loader rejection** — a control-flow member with a non-bool /
-     unresolved condition or more than one branch (until `else`), and a
+     unresolved condition, more than one branch (until `else`), or a
+     body that is empty / multi-child / non-structural / a nested
+     control-flow member (Phase 6 single-widget-child rule), and a
      ZStack with a malformed shape, surface `WASAMO_ERR_IR_MALFORMED`
      (DD-M3-P6-003 / DD-M3-P6-004 dual gate).
 
@@ -288,8 +328,15 @@ distinct evidence meaning.
      parent (DD-M3-P6-004) — with the re-inserted subtree's Visual
      landing in **declared sibling order** (not merely on top) when
      static siblings flank it, asserted for the siblings-on-both-sides
-     and two-sibling-conditional cases — and the absent subtree's
-     Effects are disposed / recreated (DD-M3-P6-005).
+     and two-sibling-conditional cases (the latter **including a
+     preceding-conditional removal while both are present**, so the
+     removal-index shift is exercised) — and the absent subtree's
+     Effects **and** widget-pointer registry entries are disposed via
+     `widget_destroy` / recreated on return (DD-M3-P6-005). A
+     **re-evaluation-to-same-state** case (true→true / false→false)
+     asserts the condition Effect is a **no-op** when presence is
+     unchanged — no duplicate insertion, no spurious removal
+     (DD-M3-P6-004 minimal-runtime-state idempotency).
    - **Drain proof contract (item 4)** — with `BATCH_DEPTH == 0`, a
      write that toggles the condition drains before control returns
      (toggle-then-observe): immediately after the toggling call the
@@ -378,6 +425,12 @@ additive.
    DD-M3-P6-004). `else` lifts the single-branch restriction (an extra
    `Branch`); `switch` is a new `ControlFlowNode` variant with the same
    present/absent runtime machinery — **no `IrMember` shape change**.
+   The same extension widens the `if` **body** to admit a nested
+   `conditional_member` (deferred this phase: B1 admits a single
+   `widget_decl`, and the `body: Vec<IrMember>` type already admits
+   `ControlFlow(_)`), so nested control flow lands additively — a
+   body-admission relaxation plus the 0/1-materialised-child grain
+   re-statement, **no `IrMember` shape change**.
 2. **Iteration (`for item in items { … }`, Phase 7).** A new
    `ControlFlowNode` variant reusing the
    `BindingTarget::ConditionalSubtree` → `ForLoopSubtree` runtime
@@ -423,6 +476,21 @@ oversight (consolidated from
   `visible` / `enabled` toggling of an always-built tree.
 - **`else` / `else if` / `switch`** — reserved family members, not
   implemented (forward-compat item 1).
+- **Nested control flow directly in an `if` body** (`if a { if b { … }
+  }`, no intervening widget) — Phase 6 admits a single `widget_decl`
+  child (B1); a bare nested `if` is deferred with the family extension
+  and reached meanwhile by wrapping the inner `if` in a widget
+  (DD-M3-P6-003 / DD-M3-P6-004 forward-compat). **This defers the
+  *immediate branch body* only, not nested-conditional semantics as a
+  whole.** The owner-facing three-way boundary (DD-M3-P6-003
+  §Conditional body shape Recommendation): (i) branch body admission is
+  `conditional_body ::= widget_decl` only; (ii) **deferred** = a bare
+  nested `if` *as the immediate body* (`if a { if b { … } }`); (iii)
+  **in scope** = **sibling** conditionals and **descendant** conditionals
+  nested inside the admitted widget subtree (`if a { VStack { if b { … }
+  } }`) — their present/absent, quiescent child-order invariant
+  (DD-M3-P6-004), and effect-lifecycle / SM-1 ordering (DD-M3-P6-005) are
+  Phase 6 runtime semantics.
 - **Identity preservation / state retention across absent→present,
   `key:` attributes** — DD-M3-P6-004 ships the full-rebuild base case
   (forward-compat item 4).
@@ -602,5 +670,6 @@ Cross-phase / source inputs:
 
 | Date | Change |
 |---|---|
+| 2026-06-01 | Review revisions folded: DD structure refactoring → Strategic / owner-alignment review → recommendation-choice review → implementation-readiness review. Status: Proposed. |
 | 2026-05-31 | Review revisions folded (preamble + DD-001/002/003/004/005), still Status: Proposed. Reflects the strategic-design / owner-alignment review, the recommendation-choice review, and the implementation-readiness review findings. |
 | 2026-05-31 | Initial draft (Status: Proposed). All 6 DDs at Proposed pending owner review pass. Framing-level owner alignment confirmed 2026-05-31 ([../requirements/framing.md §Owner alignment outcome](../requirements/framing.md#オーナー合意の記録owner-alignment-outcome)) settles FD-CR / FD-B / FD-D / FD-E / FD-F / FD-G; the remaining ZStack and conditional-grammar sub-decisions are ADR-review approvals. |

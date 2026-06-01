@@ -40,46 +40,61 @@ region). The question is whether ZStack nonetheless needs a payload,
 a wrapper, or any new IR vocabulary — or whether it rides the existing
 generic `IrNode` machinery unchanged.
 
+## Decision dependency summary
+
+This DD's decision — the ZStack IR node form (Option A: per-kind tag,
+direct children, no payload) — is largely self-contained: DD-M3-P6-002
+computes the layout / paint contract against the shape it fixes. It also
+carries the **author-surface arm** of the light **ZStack child
+alignment** bundle owned by DD-M3-P6-002 (full phase map: preamble
+§Cross-DD decision dependencies): `h-align` / `v-align` ride this DD's
+direct-child `IrProp` surface (Option A's no-new-vocabulary choice), and
+DD-M3-P6-002 consumes them as a parent-owned placement vector. No
+either/or fork crosses out of this DD.
+
 ## Options
 
-### Option A — Per-kind tag, direct children, no payload (recommended)
+- **Option A — Per-kind tag, direct children, no payload**
+  - ZStack is a new per-kind tag (`widget_type: "ZStack"`); its children
+    are the node's ordinary `children` in document order, exactly like
+    VStack / HStack / WrapPanel. **No `KindPayload` variant, no new
+    `IrType`, no new `IrLiteral`, no wrapper node.**
+  - Per-child alignment (DD-002) is optional `h-align` / `v-align`
+    attributes **directly on each child**, reusing the existing `IrProp`
+    ident-literal machinery. Author surface: `ZStack { Box{…} Box{…}
+    VStack{…} }`, document order = bottom-to-top z-order.
+  - What you gain: **zero** new IR vocabulary (no `IrProp.value` /
+    `KindPayload` churn); matches the existing pure-container shape
+    (children direct, like VStack); minimal author surface; future
+    `z-index` / per-child `clip:` slot in as additive child attributes
+    with no shape change.
+  - What you give up: nothing structural — the only "cost" is that
+    per-child placement rides plain `IrProp` ident-literals rather than
+    a typed wrapper, which is correct here because overlap needs no
+    structured placement data.
 
-ZStack is a new per-kind tag in the runtime widget catalog and a
-recognised `widget_type: "ZStack"` in the IR. Its children are the
-node's ordinary `children: Vec<IrNode>` in document order, exactly
-like VStack / HStack / WrapPanel. **No `KindPayload` variant, no new
-`IrType`, no new `IrLiteral`, no wrapper node.** Author surface:
+- **Option B — Per-kind tag with a `Cell`-style wrapper (`Layer`)**
+  - Mirror Grid: wrap each ZStack child in an IR-only `Layer` node kind
+    carrying per-child alignment / future z metadata
+    (`ZStack { Layer{ h-align: center; Box{…} } … }`).
+  - What you gain: a natural home for future per-child layering
+    metadata; structurally symmetric with Grid's `Cell`.
+  - What you give up: a whole new IR node kind **plus** its
+    "`Layer`-outside-`ZStack`" rejection rule, for a wrapper that
+    carries no data the child cannot hold itself — Grid earned its
+    wrapper (`row`/`column`/`span`), ZStack does not; the author surface
+    becomes verbose (one wrapper per child).
 
-```
-ZStack {
-    Box { fill: #00000080 }        // scrim (bottom)
-    Box { aspect: 4:3 Text { … } } // photo (above scrim)
-    VStack { … }                   // caption / nav (top)
-}
-```
-
-Document order = bottom-to-top z-order. Per-child alignment (DD-002)
-is expressed as **optional attributes directly on each ZStack child**
-(`h-align` / `v-align`), reusing the existing `IrProp` machinery
-(ident literals), not via a wrapper.
-
-### Option B — Per-kind tag with a `Cell`-style wrapper (`Layer`)
-
-Mirror Grid: wrap each ZStack child in an IR-only `Layer` node kind
-carrying per-child alignment / future z metadata. Author surface:
-
-```
-ZStack {
-    Layer { h-align: stretch; Box { fill: #00000080 } }
-    Layer { h-align: center; v-align: center; Box { … } }
-}
-```
-
-### Option C — Reuse `Box` with an overlap mode / new `KindPayload`
-
-No new widget kind; add an `overlap`/`stacking` mode to an existing
-container (e.g. `Box { stacking: z; … }`) or carry stacking config in
-a `KindPayload::ZStack { … }`.
+- **Option C — Reuse `Box` with an overlap mode / new `KindPayload`**
+  - No new widget kind: add an `overlap`/`stacking` mode to an existing
+    container (`Box { stacking: z; … }`) or carry stacking config in a
+    `KindPayload::ZStack { … }`.
+  - What you gain: no new widget kind tag.
+  - What you give up: overloads an existing widget's contract (the exact
+    anti-pattern the per-kind-tag catalog avoids); introduces either a
+    stacking-mode value to validate or a `KindPayload` variant that —
+    unlike Grid's — carries no real data; muddies the forward-compat
+    story for layering / clip.
 
 ## Comparison
 
