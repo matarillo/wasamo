@@ -541,6 +541,52 @@ per-review-concern rule
 Per FD-H the ADR makes an **explicit touch / no-touch judgment** for
 `architecture.md` and `abi_spec.md` (no "may touch" left ambiguous).
 
+**Documentation information architecture.** The Phase-6 doc sync must
+not blindly append to the current headings where those headings are
+already misleading. Two IA corrections are part of the design-spec
+draft:
+
+- [`docs/architecture.md`](../../../../docs/architecture.md): the
+  current M3 Box / WrapPanel / ScrollView / Grid architecture text sits
+  under `#### 6.8.7 Binding registration API after M2`, but much of
+  that text is not about binding registration at all — it covers IR
+  node form, layout algorithms, Visual sync / clip, and ABI impact.
+  That placement is a doc-structure bug. Phase 6 must not append
+  ZStack to the same misleading subsection; it should first split the
+  layout-primitive runtime-shape material out to a sibling layout
+  subsection (recommended: a new `### 6.9 M3 layout primitives and
+  runtime shape` under `## 6. Layout Engine`, with Box / WrapPanel /
+  ScrollView / Grid / ZStack as child subsections). `6.8.7` stays about
+  the reactive binding registration / per-type writer seam, with links
+  out to primitive sections only where a primitive deliberately does or
+  does not extend that seam.
+- [`docs/dsl_spec.md`](../../../../docs/dsl_spec.md): the current
+  structure is mostly serviceable, but several headings have drifted
+  from their content. `## 4. Semantics (M2 Surface, M3-Phase 1 /
+  Phase 2 Additions)` already contains M3-Phase 5 Grid, so its title
+  should be generalized before adding Phase 6. The new conditional
+  rendering chapter must sit beside, not inside, the widget primitive
+  catalog because `if` is **not** a widget. The IR chapter also needs
+  a control-flow-member home: Phase 6 should not bury
+  `ControlFlowNode::If` under a heading that promises only "Widget
+  nodes". Either add a sibling `Control-flow members` subsection (with
+  renumbering if accepted) or rename the existing node-body section so
+  it explicitly covers both widget nodes and structural members.
+
+**Living-spec vocabulary.** After the ADR set is accepted, DD option
+labels such as `S1`, `AL1`, `O1`, `R-1`, `ID-1`, `LA-1`, `DB-1`, or
+`SM-1` have only historical / review-trace meaning. They are useful
+inside DDs because they record the alternatives that were weighed, but
+they must not leak into living specification docs (`docs/dsl_spec.md`,
+`docs/architecture.md`, `docs/abi_spec.md`) as normative vocabulary.
+The spec docs should state the accepted contract directly — for example
+"ZStack defaults to `Fill/Fill` and uses union desired sizing on
+Shrink/unbounded axes", "conditional subtrees are destroyed when absent
+and rebuilt fresh when present", or "structural mutations ride the
+existing drain ordering" — without saying "Option S1", "ID-1", or
+"SM-1". ADR / DD links may be used for provenance, but option numbers
+remain in the process documents only.
+
 The dsl_spec section markers mirror the Phase 2/3/4/5 form:
 
 ```
@@ -563,31 +609,54 @@ phase-sync set is a related but distinct rule):
 - `process/milestone-3/phase-6/decisions/preamble.md` and
   `dd-m3-p6-*.md` (this directory) — ADR `Status: Accepted` flip.
 - [`docs/dsl_spec.md`](../../../../docs/dsl_spec.md) — **two new
-  chapters** as design-spec drafts: a **ZStack chapter** (new §4.13,
-  alongside §4.9 Box … §4.12 Grid) with the DD-M3-P6-001/002 sub-issues
-  as outline plus a §4.4 widget-registry row for `ZStack`; and a
+  chapters** as design-spec drafts, plus the IA cleanup above:
+  generalize the stale §4 title before adding new M3-Phase 6 material;
+  add a **ZStack chapter** (new §4.13, alongside §4.9 Box … §4.12 Grid)
+  with the DD-M3-P6-001/002 sub-issues as outline plus a §4.4
+  widget-registry row for `ZStack`; and add a
   **conditional-rendering / structural-rendering-model chapter** (new
-  §4.14 + a Grammar §3 addition for the `if`-block member and a §4.6
-  condition-expression note) written as the **first chapter of the
-  structural control-flow family** per A12 (DD-M3-P6-003/004/005
+  §4.14 + a Grammar §3 addition for the `if`-block member, a §2.1
+  keyword-reservation update for `if` / `else` / `switch` / `for`, and
+  a §4.6 condition-expression note) written as the **first chapter of
+  the structural control-flow family** per A12 (DD-M3-P6-003/004/005
   sub-issues as outline; the `if` construct defined as a structural
   control-flow construct, **not** a §4.4 registry widget — a pointer
   from §4.4 names it, mirroring the `Cell` treatment; the
   absent=fresh-on-return / opt-in-retention normative semantics stated
-  in §4.14). Section markers: `M3-Phase 6 design accepted;
+  in §4.14). The IR normative chapter is also updated in a
+  structure-aware way: the textual IR gains a control-flow member
+  production and loaded-IR example without hiding it under a
+  widget-only heading (add/rename a subsection for node-body members /
+  control-flow members, and update loader-validation policy for
+  malformed branches, non-bool conditions, and single-widget body
+  enforcement). The chapter text states accepted behaviour directly and
+  does **not** use DD option labels (`G1`, `B1`, `E1`, `O1`, etc.) as
+  spec vocabulary. Section markers: `M3-Phase 6 design accepted;
   implementation pending`.
 - [`docs/architecture.md`](../../../../docs/architecture.md) —
-  **touch (judged required).** ZStack entry under the layout-engine
-  section (union sizing + document-order z-order + outer-bounds clip,
-  no intermediate Visual); the conditional construct under the IR
-  section (**member-level `IrMember`/`ControlFlowNode` structural IR**,
-  the consequential schema change of DD-M3-P6-004) and the reactive
-  section (the `BindingTarget::ConditionalSubtree` variant now filled,
-  §6.8.7/§6.8.8; the present/absent insert/remove path; the effect-
-  lifecycle policy of DD-M3-P6-005; the SM-1 structural-ordering
-  disposition); and a note under §9 Three-Layer Tree Model on the
-  declared-tree / entity-tree separation that the conditional construct
-  introduces in nascent form (DD-M3-P6-004).
+  **touch (judged required), with IA cleanup.** Before adding Phase 6
+  text, split the existing M3 layout-primitive runtime-shape material
+  that currently lives under `6.8.7 Binding registration API after M2`
+  into a layout sibling subsection (recommended `### 6.9 M3 layout
+  primitives and runtime shape`), keeping `6.8.7` focused on
+  registration / writer seams. Add ZStack as the new Phase-6 primitive
+  there (union sizing + `Fill/Fill` default + parent-owned child
+  alignment vector + document-order z-order + outer-bounds clip + no
+  intermediate Visual + no new `LayoutError`), and keep the shared
+  Visual-sync summary in §6.5 coherent across ScrollView / Grid /
+  ZStack. Add the conditional construct under the IR / runtime
+  architecture sections (**member-level `IrMember`/`ControlFlowNode`
+  structural IR**, the consequential schema change of DD-M3-P6-004) and
+  the reactive section (the `BindingTarget::ConditionalSubtree` variant
+  now filled in §6.8.7/§6.8.8; the present/absent insert/remove path;
+  the effect-lifecycle policy of DD-M3-P6-005; structural mutations
+  riding the existing drain ordering with quiescent child order fixed by
+  declared order). Add a note under §9 Three-Layer
+  Tree Model on the declared-tree / entity-tree separation that the
+  conditional construct introduces in nascent form (DD-M3-P6-004).
+  As with `dsl_spec.md`, the living architecture prose names the
+  accepted runtime contracts directly and does **not** carry DD option
+  labels forward as normative terms.
 - [`docs/abi_spec.md`](../../../../docs/abi_spec.md) — **no touch
   (judged).** DD-M3-P6-006 routes the static title through the
   existing `wasamo_load_ui` → `window::create` internal path with **no
