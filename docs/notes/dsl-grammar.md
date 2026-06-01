@@ -2,7 +2,7 @@
 title: DSL 文法 — 検討メモと未解決事項
 status: live
 created: 2026-05-07
-last-updated: 2026-05-31
+last-updated: 2026-06-01
 related-adrs:
   - docs/decisions/m2-phase-2-wasamoc-output-format.md
   - docs/decisions/m2-phase-6-ir-loader.md
@@ -21,8 +21,9 @@ related-notes:
 
 特に M3 以降では、target app pre-doc / phase pre-doc / DD で直接扱う論点は
 そちらを本線とする。本ノートは、M3 の採用案からこぼれた選択肢、M3 では
-解かないことにした残余、または M3 完了時に再整理すべき open question の
-受け皿として使う。
+解かないことにした残余、または M4+ で再整理すべき open question の
+受け皿として使う。M3-Phase 6 ADR で確定した内容は、ここでは再決定せず、
+「吸収済み」と「残った再訪点」を分けて記録する。
 
 ---
 
@@ -30,7 +31,7 @@ related-notes:
 
 ### Q1. Widget 識別子の IR 表現
 
-**現状（M2-Phase 6 時点）:**
+**現状（M3-Phase 6 ADR 時点）:**
 
 - DSL の `widget_decl ::= IDENT "{" member* "}"` の `IDENT` は widget の
   **type** 名（`VStack`, `Button` など）であり、widget instance を一意に
@@ -38,6 +39,9 @@ related-notes:
 - バインディング/ハンドラから参照される `root.count` の `root` は
   component の base（暗黙の self）を指し、`count` は `state` 宣言名。
   すなわち現行 IR で名前解決の対象になりうるのは **`state` 宣言のみ**。
+- M3-Phase 5 Grid は `Cell` placement で足り、widget id は導入しなかった。
+  M3-Phase 6 conditional rendering も `declared_member_index` と
+  `ControlFlowNode` で slot を管理し、widget id は導入しない。
 
 **論点:**
 
@@ -51,12 +55,14 @@ related-notes:
 
 **候補シナリオ:**
 
-- M3 の Grid / List で per-item context を導入する場合
-  （[m2-plan.md](../plans/m2-plan.md) の M3 ロードマップでも binding 拡張
-  として言及されている）。
+- Phase 7 の `for` / iteration で per-item context、item identity、`key:`
+  を導入する場合。これは「任意 widget id」というより、generated subtree の
+  identity / item scope の問題として開く可能性が高い。
 - 兄弟 widget の状態を直接参照したいケース（例：チェックボックスの状態に
   応じて別 widget の `enabled` をバインド）。M2 では state を経由するため
   不要だが、ボイラープレートが過剰になれば再考対象。
+- top-layer / popover / anchor positioning で、anchor となる widget を参照したい
+  ケース。詳細は [`top-layer-overlays.md`](./top-layer-overlays.md) を SSOT とする。
 
 **未決:**
 
@@ -69,9 +75,9 @@ related-notes:
 
 **この議論を再訪する契機:**
 
-M3 の Grid / List 設計で per-item context が必要になった時、または、M2
-完了後の retrospective で「state 経由のみ」では表現力が足りない事例が
-出た時。
+Phase 7 iteration の pre-doc / DD で `item` / `index` / `key:` / retained
+identity を扱う時、top-layer anchor 参照を開く時、または「state 経由のみ」
+では表現力が足りない concrete app case が出た時。
 
 **M3 target app framing からの追記（2026-05-12）:**
 
@@ -86,81 +92,116 @@ M3 の Grid / List 設計で per-item context が必要になった時、また�
   phase pre-doc で直接扱う論点はそちらを本線とし、本ノートには M3 で未採用・
   defer・制限された選択肢だけを残す。
 
+**M3-Phase 6 ADR 後の整理（2026-06-01）:**
+
+- conditional rendering は widget id ではなく member-level structural IR で扱う
+  ことになった。Q1 は任意 widget id の導入問題としては未解決のままだが、
+  Phase 6 の `if` には不要。
+- 次の本命は Phase 7 iteration の item identity / key surface。ここで
+  widget id と item key を混同しないこと。
+
 ---
 
 ### Q2. Window 由来の component-level prop の runtime 配線
 
-**現状（M2-Phase 6 / DD-M2-P6-008 時点）:**
+**現状（M3-Phase 6 ADR 時点）:**
 
 - DSL では `component Counter inherits Window { title: "Counter"; backdrop: mica;
   theme: system; ... }` のように Window 由来 prop を component 直下に書ける。
 - wasamoc の lowering（[wasamoc/src/lower.rs](../../wasamoc/src/lower.rs) の
   `lower()`）は component-level の `PropertyBind` を root widget node の props に
   splice し、IR 上は root の `prop title = "Counter"` 等として正しく出力される。
-- しかし IR loader の `construct_widget`（[wasamo-runtime/src/ir_loader.rs:714](../../wasamo-runtime/src/ir_loader.rs#L714)）
-  は `VStack`/`HStack`/`Text`/`Button` の各 widget が認識する prop しか参照せず、
-  認識しない prop は黙って drop する（M3 diagnostic system 移送の予告コメントが
-  [ir_loader.rs:684-685](../../wasamo-runtime/src/ir_loader.rs#L684) にある）。
-- 加えて `wasamo_load_ui` は内部で `window::create("Wasamo", 800, 600)` を固定で
-  呼ぶため、DSL の `title` を window のタイトルバーに反映する経路が ABI 上存在
-  しない（[wasamo-runtime/src/abi.rs:1081-1083](../../wasamo-runtime/src/abi.rs#L1081)
-  の `DEFAULT_WINDOW_TITLE` / `DEFAULT_WINDOW_WIDTH` / `DEFAULT_WINDOW_HEIGHT`）。
+- M3-Phase 6 DD-M3-P6-006 は、static `title:` だけを R1 として回収する方針を
+  採った。`wasamo_load_ui` の ABI signature は変えず、root props から
+  `title` literal を読み、内部の `window::create(title, width, height)` に渡す。
+- `backdrop: mica` / `theme: system` / dynamic title / initial window size は、
+  Phase 6 では引き続き未配線または deferred。
 
-**結果として M2 で起きること:**
+**Phase 6 で閉じること / 閉じないこと:**
 
-- M1 の counter examples では `wasamo_window_create("Counter", ...)` でタイトルが
-  `"Counter"` だったが、DD-M2-P6-008 で `wasamo_load_ui` 経由に切り替わると
-  default の `"Wasamo"` になる。
-- `backdrop: mica` / `theme: system` も同様に未配線（M4 の Mica/Acrylic 導入で
-  まとめて扱う想定）。
-- これは A1/A2 acceptance（DSL drives / reactive propagation without host wiring）
-  には抵触しない（acceptance 文面はタイトル文言を要求していない）。
+- **閉じる:** `title: "Gallery"` のような static string literal は native window
+  title bar に反映する。absent / empty title は default fallback、non-string IR
+  title は malformed として reject する方針。
+- **閉じない:** `title: some_string_state` のような dynamic title は defer。
+  window は `WidgetNode` ではないため、`BindingTarget::WindowTitle` などの
+  window-property binding seam と host effector が必要になる。
+- **閉じない:** `backdrop` / `theme` は M4 の Mica / Acrylic / theme wiring で
+  title と同じ Window-prop family として再評価する。
 
-**意図的な未実装である理由:**
+**initial window size についての補足（M3-Phase 6 検討）:**
 
-- 配線するには ABI 拡張が必要（`wasamo_load_ui` への `WindowConfig` 引数追加か、
-  新規 `wasamo_window_set_title` などの導入）。これは Phase 6 のスコープ
-  「counter examples migration」を超え、abi_spec.md / wasamo.h / 新規 DD を
-  伴うため、Phase 6 に含めない判断とした。
-- 一方で wasamoc は正しく lowering しており、DSL surface としての記法は
-  既に確定している。ABI 配線が追いついていないだけ。
+- `wasamo_load_ui` は `DEFAULT_WINDOW_WIDTH` / `DEFAULT_WINDOW_HEIGHT`
+  で native window を作るため、`.ui` から initial window size を指定する
+  経路も現状はない。
+- 一見すると static `title:` と同じ creation-time Window prop として
+  `wasamo_load_ui` 内で読めそうだが、性質は少し違う。window size は
+  root layout viewport の初期条件であり、client size vs outer window size、
+  DPI、resize policy、将来の widget-level `width:` / `height:` size
+  constraint surface と混同しやすい。
+- そのため、M3-Phase 6 の R1 では **static title のみ**を回収し、
+  initial size は Window-prop / WindowConfig 設計の候補として後続へ送るのが
+  よい。もし先に surface を切るなら、一般 widget の `width:` / `height:` と
+  区別できる名前（例: `viewport-width:` / `viewport-height:`、または
+  `window-width:` / `window-height:`）を検討する。
+
+**意図的に Phase 6 へ入れない理由:**
+
+- static title は ABI 変更なしで閉じられるが、dynamic title / backdrop /
+  theme / size は Window-prop binding、WindowConfig、host effector、DPI、
+  client-size semantics と結びつく。これらを R1 に混ぜると Phase 6 の
+  ZStack / conditional rendering の主戦場がぼやける。
+- 一方で wasamoc は component-level props を root IR props に splice しており、
+  surface と IR carrier は既に存在する。後続はその carrier を window-property
+  seam としてどう解釈するかを決める段階。
 
 **この議論を再訪する契機:**
 
-- M3 の DSL spec drafting — Window 由来 prop の意味論を normative spec に
-  書き起こす際に、配線も含めて整理する。
-- M4 の Mica / Acrylic 導入（[ROADMAP.md](../../ROADMAP.md) の M4） — backdrop
-  prop の実体実装に着手するタイミングで title も含めて ABI 設計を見直す。
-- それより早く必要が生じた場合（counter 以外の demo で title が要件になる等）
-  は、独立 DD を切って `wasamo_load_ui` の signature 拡張または sibling ABI
-  追加を検討する。
+- M4 の Mica / Acrylic 導入（[ROADMAP.md](../../ROADMAP.md) の M4） — backdrop /
+  theme の実体実装に着手するタイミングで、static/dynamic title も含めた
+  Window-prop binding / host effector / WindowConfig の形を見直す。
+- dynamic title が v1 必須または gallery proof に必要になった時 —
+  `BindingTarget::WindowTitle` と `wasamo_window_set_title` 相当の effector を
+  独立 DD として切る。
+- initial window size を `.ui` で指定したくなった場合 — title と同じ
+  creation-time prop として扱うか、WindowConfig / viewport-size surface として
+  backdrop/theme とまとめるかを別 DD で決める。
+- multi-window / scene model を開く時 — component-level Window props が
+  component root に属するのか、Window entity / Scene entity に属するのかを
+  再整理する。
 
 ---
 
 ### Q3. M3 target app からこぼれうる文法残余
 
-**位置づけ:**
+**位置づけ（M3-Phase 6 ADR 後）:**
 
 M3 target app pre-doc / phase pre-doc / DD で直接扱う文法論点は、そちらを本線とする。
-本節は、M3 で採用しない、制限する、または M3 完了時に再整理すべき grammar 残余だけを
-短く残す。
+本節は、M3-Phase 6 までに採用しない、制限する、または M4+ / Phase 7 へ送った
+grammar 残余だけを短く残す。
 
 **候補残余:**
 
-- **繰り返し生成:** M3 が `List` 吸収 / Repeater 型 / `for` 構文のどれかを採る場合、
-  採らなかった形と rebuild / diff / invalidation の残余。
-- **条件表示:** M3 が `visible` prop / conditional child / 回避のどれかを採る場合、
-  採らなかった条件レンダリング方式と非表示 child semantics の残余。
-- **template-local scope:** M3 が一段 item context に制限する場合、nested template scope、
-  named context、List-owned selection model の残余。
-- **TypedValue / evaluator 接続:** M3 proof が bool / comparison / item context を
-  制限した場合の将来接続。
+- **繰り返し生成:** Phase 6 は `if` のみ。Phase 7 の `for` で、item context、
+  generated subtree identity、range insert/remove、keyed retention を決める。
+- **条件表示の不採用形:** Phase 6 は `visible:` / `when:` ではなく structural
+  `if` block を採った。`visible` 的な property toggling を将来入れる場合も、
+  structural `if` とは別 semantics として扱う。
+- **条件 body の制限:** Phase 6 の `if` body は single widget child。multi-widget
+  branch、bare nested control flow、`else` / `switch` は structural family extension
+  として後続で扱う。
+- **template-local scope:** Phase 7 `for` で `item`, `index`, named context,
+  nested template scope を決める。
+- **TypedValue / evaluator 接続:** Phase 6 conditional は narrow bool-expr のまま。
+  `!`, `&&`, comparison, qualified reads は uniform expression grammar extension として
+  後続で扱う。
 
 **この議論を再訪する契機:**
 
-- M3 target app pre-doc / phase pre-doc が grammar 採用案を確定した時。
-- M3 で制限・未採用にした形が M4+ で必要になった時。
-- M3 完了時に、採用案と残余選択肢をこのノートから整理し直す時。
+- Phase 7 iteration pre-doc / DD を開く時。
+- `else` / `switch` / bare nested structural scope を導入したくなった時。
+- expression grammar extension を開き、`if !ready` と `enabled: !ready` を同じ
+  grammar で扱う時。
+- M3 完了時に、この残余リストを Phase 7 / M4+ の note へ分配する時。
 
 ---
 
@@ -185,6 +226,8 @@ M3 target app pre-doc / phase pre-doc / DD で直接扱う文法論点は、そ�
 
 - M3 ではなく、custom component / package / native binding を扱う milestone に入る時。
 - M3 grammar が import 構文や component name resolution を予約する必要を持った時。
+- ZStack / Grid / ScrollView など built-in primitive と user-defined component の
+  境界を public DSL spec で説明する必要が出た時。
 
 ---
 
@@ -228,8 +271,9 @@ M3 target app pre-doc / phase pre-doc / DD で直接扱う文法論点は、そ�
 
 **この議論を再訪する契機:**
 
-- M3-Phase 6 conditional rendering で `if <expr>` / `enabled: !ready` /
-  comparison / logical operator を導入する時。
+- Phase 6 では operators を導入しない方針が採られたため、次の再訪点は
+  post-Phase-6 の uniform expression grammar extension。`if !ready` と
+  `enabled: !ready` を同じタイミングで扱う時。
 - `root.ready` のような qualified state reference を property RHS に許すかを
   決める時。
 - 文字列以外の属性値に template interpolation 風 syntax を導入したい強い
@@ -238,6 +282,17 @@ M3 target app pre-doc / phase pre-doc / DD で直接扱う文法論点は、そ�
 ---
 
 ### Q6. 条件レンダリング構文の思想
+
+**状態（M3-Phase 6 ADR 後）:**
+
+この節の思想は M3-Phase 6 ADR に吸収された。Phase 6 は
+`if <bool-expr> { <single-widget-child> }` を dedicated structural syntax として
+採り、`visible:` / `when:` 的な property gating ではなく、subtree の
+present / absent を runtime tree の insert/remove として扱う方針になった。
+
+したがって以下は、Phase 6 の決定を覆す open question ではなく、将来
+`else` / `switch` / `for` / keyed identity / host-language DSL を開くときの
+設計背景として残す。
 
 **背景:**
 
@@ -289,8 +344,8 @@ UI における「条件レンダリング」は、単に「表示する / 隠�
 **現時点の考え方:**
 
 Wasamo の条件レンダリングは、まず **テンプレート + 独自構文・属性型** を
-中心に考える。ただし、それは将来の **言語構文型に近い自由度** を諦める
-という意味ではない。
+中心にする方針で ADR 化された。ただし、それは将来の
+**言語構文型に近い自由度** を諦めるという意味ではない。
 
 少なくとも、次の方向性は守りたい。
 
@@ -329,9 +384,9 @@ loop key、再利用 / 再生成の規則を後から仕様化できる余地を
 
 **この議論を再訪する契機:**
 
-- 条件レンダリング構文を仕様化するとき。
 - 繰り返し生成構文を仕様化するとき。
 - `else` / `switch` / nested structural scope を導入したくなったとき。
+- `key:` / retained identity / Element-level reconciler を導入したくなったとき。
 - `.ui` DSL とは別に、Rust / Swift / Zig などの言語内 DSL を本格的に
   扱うとき。
 
@@ -360,4 +415,5 @@ accessibility、ABI / host boundary を横断する論点である。
 - M4 input / focus model で click-away close、focus trap、keyboard dismissal を
   仕様化するとき。
 - Widget id / anchor 参照 surface（Q1）を開くとき。
+- Window-level property / host-wiring / multi-window 設計（Q2）を開くとき。
 - dropdown / menu / tooltip / popover が v1 必須に近づいたとき。
