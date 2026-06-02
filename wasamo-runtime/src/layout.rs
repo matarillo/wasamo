@@ -31,6 +31,11 @@ pub enum WidgetKind {
     // `cell_placements` (R-D mitigation, log.md T2 entry); `Cell` is IR-only
     // and never materialises as its own `LayoutNode`.
     Grid,
+    // M3-Phase 6 DD-M3-P6-001 / DD-M3-P6-002 per-kind tag for the ZStack
+    // layout primitive. ZStack has direct children, defaults to `Fill/Fill`,
+    // sizes by the per-axis max child union on Shrink/unbounded axes, and
+    // carries per-child alignment in `zstack_placements`.
+    ZStack,
 }
 
 /// M3-Phase 5 DD-M3-P5-002 Grid track sizing form, layout-engine-local
@@ -68,6 +73,24 @@ pub struct CellPlacement {
     pub column_span: u32,
     pub h_align: Alignment,
     pub v_align: Alignment,
+}
+
+/// M3-Phase 6 DD-M3-P6-002 per-ZStack-child placement, parallel to
+/// `LayoutNode.children`. Defaults are `Center/Center` and are applied at
+/// the runtime build boundary; this type is only the layout-engine carrier.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ZStackPlacement {
+    pub h_align: Alignment,
+    pub v_align: Alignment,
+}
+
+impl ZStackPlacement {
+    pub fn centered() -> Self {
+        Self {
+            h_align: Alignment::Center,
+            v_align: Alignment::Center,
+        }
+    }
 }
 
 /// M3-Phase 5 DD-M3-P5-004 per-axis bound input to `resolve_axis_tracks`.
@@ -222,6 +245,11 @@ pub struct LayoutNode {
     /// every non-Grid kind. Document order = children order = paint /
     /// z-order (DD-M3-P5-005 Option A).
     pub cell_placements: Vec<CellPlacement>,
+    /// DD-M3-P6-002 per-ZStack-child placements, parallel to `children`.
+    /// Empty on every non-ZStack kind. Document order = children order =
+    /// layout-side z-order substrate; real paint precedence is verified at
+    /// the Visual layer in T3.
+    pub zstack_placements: Vec<ZStackPlacement>,
 }
 
 impl LayoutNode {
@@ -246,6 +274,7 @@ impl LayoutNode {
             grid_columns: Vec::new(),
             grid_rows: Vec::new(),
             cell_placements: Vec::new(),
+            zstack_placements: Vec::new(),
         }
     }
 
@@ -270,6 +299,7 @@ impl LayoutNode {
             grid_columns: Vec::new(),
             grid_rows: Vec::new(),
             cell_placements: Vec::new(),
+            zstack_placements: Vec::new(),
         }
     }
 
@@ -294,6 +324,7 @@ impl LayoutNode {
             grid_columns: Vec::new(),
             grid_rows: Vec::new(),
             cell_placements: Vec::new(),
+            zstack_placements: Vec::new(),
         }
     }
 
@@ -323,6 +354,7 @@ impl LayoutNode {
             grid_columns: Vec::new(),
             grid_rows: Vec::new(),
             cell_placements: Vec::new(),
+            zstack_placements: Vec::new(),
         }
     }
 
@@ -355,6 +387,7 @@ impl LayoutNode {
             grid_columns: Vec::new(),
             grid_rows: Vec::new(),
             cell_placements: Vec::new(),
+            zstack_placements: Vec::new(),
         }
     }
 
@@ -392,6 +425,7 @@ impl LayoutNode {
             grid_columns: Vec::new(),
             grid_rows: Vec::new(),
             cell_placements: Vec::new(),
+            zstack_placements: Vec::new(),
         }
     }
 
@@ -431,6 +465,39 @@ impl LayoutNode {
             grid_columns: columns,
             grid_rows: rows,
             cell_placements,
+            zstack_placements: Vec::new(),
+        }
+    }
+
+    // M3-Phase 6 DD-M3-P6-001 / DD-M3-P6-002 ZStack layout entry. Both axes
+    // default to `Fill` so overlay roots track the parent allocation on
+    // bounded axes; `measure_zstack` reports the child-union desired size on
+    // Shrink/unbounded axes. `zstack_placements` is parallel to `children`.
+    // T3 wires the runtime build boundary; T2 exercises this directly in
+    // pure-logic tests.
+    #[allow(dead_code)]
+    pub fn zstack(zstack_placements: Vec<ZStackPlacement>) -> Self {
+        Self {
+            kind: WidgetKind::ZStack,
+            width: SizeConstraint::Fill,
+            height: SizeConstraint::Fill,
+            spacing: 0.0,
+            padding: 0.0,
+            alignment: Alignment::Center,
+            aspect: None,
+            item_cross_size: None,
+            item_spacing: 0.0,
+            line_spacing: 0.0,
+            offset_y: 0,
+            children: Vec::new(),
+            offset: (0.0, 0.0),
+            size: (0.0, 0.0),
+            applied_offset_y: Cell::new(0.0),
+            wrap_measured_cross_bound: Cell::new(f32::NAN),
+            grid_columns: Vec::new(),
+            grid_rows: Vec::new(),
+            cell_placements: Vec::new(),
+            zstack_placements,
         }
     }
 }
@@ -447,6 +514,7 @@ pub fn measure(node: &LayoutNode, avail_w: f32, avail_h: f32) -> Result<(f32, f3
         WidgetKind::WrapPanel => measure_wrap_panel(node, avail_w, avail_h),
         WidgetKind::ScrollView => measure_scroll_view(node, avail_w, avail_h),
         WidgetKind::Grid => measure_grid(node, avail_w, avail_h),
+        WidgetKind::ZStack => measure_zstack(node, avail_w, avail_h),
     }
 }
 
@@ -832,6 +900,7 @@ pub fn arrange(node: &mut LayoutNode, x: f32, y: f32, w: f32, h: f32) -> Result<
         WidgetKind::WrapPanel => arrange_wrap_panel(node, x, y, w, h),
         WidgetKind::ScrollView => arrange_scroll_view(node, x, y, w, h),
         WidgetKind::Grid => arrange_grid(node, x, y, w, h),
+        WidgetKind::ZStack => arrange_zstack(node, x, y, w, h),
     }
 }
 
@@ -1147,6 +1216,43 @@ fn measure_grid(node: &LayoutNode, avail_w: f32, avail_h: f32) -> Result<(f32, f
     Ok((desired_w, desired_h))
 }
 
+// DD-M3-P6-002 measure: ZStack's desired size is the per-axis max of its
+// children on Shrink/unbounded axes. The default `Fill/Fill` reports 0.0,
+// then takes the parent allocation at arrange; a Fill child also contributes
+// 0.0 to the union and fills the overlap rect during arrange.
+fn measure_zstack(
+    node: &LayoutNode,
+    avail_w: f32,
+    avail_h: f32,
+) -> Result<(f32, f32), LayoutError> {
+    let child_desired: Vec<(f32, f32)> = node
+        .children
+        .iter()
+        .map(|child| measure(child, avail_w, avail_h))
+        .collect::<Result<Vec<_>, _>>()?;
+
+    let union_w = child_desired
+        .iter()
+        .map(|&(w, _)| w)
+        .fold(0.0_f32, f32::max);
+    let union_h = child_desired
+        .iter()
+        .map(|&(_, h)| h)
+        .fold(0.0_f32, f32::max);
+
+    let desired_w = match &node.width {
+        SizeConstraint::Fixed(v) => *v,
+        SizeConstraint::Fill => 0.0,
+        SizeConstraint::Shrink => union_w,
+    };
+    let desired_h = match &node.height {
+        SizeConstraint::Fixed(v) => *v,
+        SizeConstraint::Fill => 0.0,
+        SizeConstraint::Shrink => union_h,
+    };
+    Ok((desired_w, desired_h))
+}
+
 // Shrink-axis desired extent = total resolved track extent against the
 // available bound. `avail` may be unbounded (a Shrink parent's "how big do
 // you want to be" probe); with star tracks that surfaces
@@ -1240,25 +1346,25 @@ fn arrange_grid(node: &mut LayoutNode, x: f32, y: f32, w: f32, h: f32) -> Result
         // non-stretch axis against the cell extent would silently shrink a
         // bound-dependent child (e.g. an aspect Box, or wrapping content) to
         // the cell, weakening center / end / overflow vs the spec.
-        let measure_w = if cell_axis_is_stretchy(placement.h_align, &child.width) {
+        let measure_w = if axis_is_stretchy(placement.h_align, &child.width) {
             cell_w
         } else {
             f32::INFINITY
         };
-        let measure_h = if cell_axis_is_stretchy(placement.v_align, &child.height) {
+        let measure_h = if axis_is_stretchy(placement.v_align, &child.height) {
             cell_h
         } else {
             f32::INFINITY
         };
         let (desired_w, desired_h) = measure(child, measure_w, measure_h)?;
-        let (cx, cw) = align_in_cell(
+        let (cx, cw) = align_in_rect(
             placement.h_align,
             &child.width,
             desired_w,
             cell_left,
             cell_w,
         );
-        let (cy, ch) = align_in_cell(
+        let (cy, ch) = align_in_rect(
             placement.v_align,
             &child.height,
             desired_h,
@@ -1271,39 +1377,79 @@ fn arrange_grid(node: &mut LayoutNode, x: f32, y: f32, w: f32, h: f32) -> Result
     Ok(())
 }
 
-// DD-M3-P5-005: an axis behaves as "stretchy" (content fills the cell
-// extent on that axis) when its alignment is `Stretch` (the default) or the
-// content carries a `Fill` constraint on that axis. The `Fill`-as-stretch
-// rule mirrors the existing `cross_axis_position` convention (Fill and
-// Stretch both expand to the full inner extent); a `Fill` child has no
-// natural extent to anchor, so it fills the cell regardless of the
-// non-stretch alignment value. Shared by the `arrange_grid` measure-bound
-// selection and `align_in_cell` so the two stay in lockstep.
-fn cell_axis_is_stretchy(align: Alignment, constraint: &SizeConstraint) -> bool {
+// DD-M3-P6-002 arrange: every child shares the same overlap rect. Center is
+// the default placement; explicit start/center/end/stretch is carried by the
+// parallel `zstack_placements` vector. Iteration stays in children-vector
+// order, which is the layout-side substrate for document-order z-order.
+fn arrange_zstack(
+    node: &mut LayoutNode,
+    x: f32,
+    y: f32,
+    w: f32,
+    h: f32,
+) -> Result<(), LayoutError> {
+    let (desired_w, desired_h) = measure_zstack(node, w, h)?;
+    let outer_w = if w.is_finite() {
+        w
+    } else {
+        resolve_axis(&node.width, desired_w, w)
+    };
+    let outer_h = if h.is_finite() {
+        h
+    } else {
+        resolve_axis(&node.height, desired_h, h)
+    };
+    node.offset = (x, y);
+    node.size = (outer_w, outer_h);
+
+    let placements = node.zstack_placements.clone();
+    for (i, child) in node.children.iter_mut().enumerate() {
+        let placement = placements
+            .get(i)
+            .copied()
+            .unwrap_or_else(ZStackPlacement::centered);
+        let measure_w = if axis_is_stretchy(placement.h_align, &child.width) {
+            outer_w
+        } else {
+            f32::INFINITY
+        };
+        let measure_h = if axis_is_stretchy(placement.v_align, &child.height) {
+            outer_h
+        } else {
+            f32::INFINITY
+        };
+        let (desired_w, desired_h) = measure(child, measure_w, measure_h)?;
+        let (cx, cw) = align_in_rect(placement.h_align, &child.width, desired_w, x, outer_w);
+        let (cy, ch) = align_in_rect(placement.v_align, &child.height, desired_h, y, outer_h);
+        arrange(child, cx, cy, cw, ch)?;
+    }
+
+    Ok(())
+}
+
+// DD-M3-P5-005 / DD-M3-P6-002: an axis behaves as "stretchy" when its
+// alignment is `Stretch` or the content carries a `Fill` constraint.
+fn axis_is_stretchy(align: Alignment, constraint: &SizeConstraint) -> bool {
     align == Alignment::Stretch || *constraint == SizeConstraint::Fill
 }
 
-// DD-M3-P5-005 per-axis alignment within a resolved cell rectangle.
-// Stretch alignment (the default) — or a `Fill` content constraint —
-// extends the content to the full cell extent. Non-stretch anchors the
-// content's natural measured extent at start (`Leading`) / center / end
-// (`Trailing`); the content is **not** clamped to the cell (per-cell
-// clipping is out of scope — overflow paints past the cell and is contained
-// only at Grid's outer-bounds clip).
-fn align_in_cell(
+// DD-M3-P5-005 / DD-M3-P6-002 per-axis alignment within a resolved slot.
+// Stretch alignment or a `Fill` content constraint extends the content to
+// the full slot extent; non-stretch anchors the natural measured extent.
+fn align_in_rect(
     align: Alignment,
     constraint: &SizeConstraint,
     desired: f32,
-    cell_start: f32,
-    cell_extent: f32,
+    rect_start: f32,
+    rect_extent: f32,
 ) -> (f32, f32) {
-    if cell_axis_is_stretchy(align, constraint) {
-        return (cell_start, cell_extent);
+    if axis_is_stretchy(align, constraint) {
+        return (rect_start, rect_extent);
     }
     match align {
-        Alignment::Leading => (cell_start, desired),
-        Alignment::Center => (cell_start + (cell_extent - desired) / 2.0, desired),
-        Alignment::Trailing => (cell_start + cell_extent - desired, desired),
+        Alignment::Leading => (rect_start, desired),
+        Alignment::Center => (rect_start + (rect_extent - desired) / 2.0, desired),
+        Alignment::Trailing => (rect_start + rect_extent - desired, desired),
         Alignment::Stretch => unreachable!("stretch handled above"),
     }
 }
@@ -2783,5 +2929,133 @@ mod tests {
         // Document order is children-vector order (= sync_visuals paint order).
         assert_eq!(c0.size, (60.0, 20.0));
         assert_eq!(c1.size, (60.0, 20.0));
+    }
+
+    // ── M3-Phase 6 ZStack (DD-M3-P6-002) — ADR evidence (2) ─────────────────
+
+    fn zplace(h_align: Alignment, v_align: Alignment) -> ZStackPlacement {
+        ZStackPlacement { h_align, v_align }
+    }
+
+    #[test]
+    fn zstack_defaults_to_fill_fill_and_centers_children() {
+        let mut z = LayoutNode::zstack(vec![
+            ZStackPlacement::centered(),
+            ZStackPlacement::centered(),
+        ]);
+        z.children.push(LayoutNode::rectangle(
+            SizeConstraint::Fill,
+            SizeConstraint::Fill,
+        ));
+        z.children.push(LayoutNode::rectangle(
+            SizeConstraint::Fixed(50.0),
+            SizeConstraint::Fixed(40.0),
+        ));
+
+        assert_eq!(measure(&z, 300.0, 200.0).unwrap(), (0.0, 0.0));
+        run_layout(&mut z, 300.0, 200.0).unwrap();
+
+        assert_eq!(z.size, (300.0, 200.0));
+        assert_eq!(z.children[0].offset, (0.0, 0.0));
+        assert_eq!(z.children[0].size, (300.0, 200.0));
+        assert_eq!(z.children[1].offset, (125.0, 80.0));
+        assert_eq!(z.children[1].size, (50.0, 40.0));
+    }
+
+    #[test]
+    fn zstack_shrink_measure_uses_child_union_with_fill_child_zero() {
+        let mut z = LayoutNode::zstack(vec![
+            ZStackPlacement::centered(),
+            ZStackPlacement::centered(),
+            ZStackPlacement::centered(),
+        ]);
+        z.width = SizeConstraint::Shrink;
+        z.height = SizeConstraint::Shrink;
+        z.children.push(LayoutNode::rectangle(
+            SizeConstraint::Fixed(80.0),
+            SizeConstraint::Fixed(30.0),
+        ));
+        z.children.push(LayoutNode::rectangle(
+            SizeConstraint::Fixed(50.0),
+            SizeConstraint::Fixed(120.0),
+        ));
+        z.children.push(LayoutNode::rectangle(
+            SizeConstraint::Fill,
+            SizeConstraint::Fill,
+        ));
+
+        assert_eq!(
+            measure(&z, f32::INFINITY, f32::INFINITY).unwrap(),
+            (80.0, 120.0)
+        );
+        run_layout(&mut z, 500.0, 400.0).unwrap();
+
+        assert_eq!(z.size, (80.0, 120.0));
+        assert_eq!(z.children[2].offset, (0.0, 0.0));
+        assert_eq!(z.children[2].size, (80.0, 120.0));
+    }
+
+    #[test]
+    fn zstack_arrange_alignment_overrides() {
+        let mut z = LayoutNode::zstack(vec![
+            zplace(Alignment::Leading, Alignment::Leading),
+            zplace(Alignment::Trailing, Alignment::Trailing),
+            zplace(Alignment::Stretch, Alignment::Center),
+        ]);
+        z.children.push(LayoutNode::rectangle(
+            SizeConstraint::Fixed(30.0),
+            SizeConstraint::Fixed(20.0),
+        ));
+        z.children.push(LayoutNode::rectangle(
+            SizeConstraint::Fixed(40.0),
+            SizeConstraint::Fixed(50.0),
+        ));
+        z.children.push(LayoutNode::rectangle(
+            SizeConstraint::Fixed(25.0),
+            SizeConstraint::Fixed(10.0),
+        ));
+
+        run_layout(&mut z, 100.0, 80.0).unwrap();
+
+        assert_eq!(z.children[0].offset, (0.0, 0.0));
+        assert_eq!(z.children[0].size, (30.0, 20.0));
+        assert_eq!(z.children[1].offset, (60.0, 30.0));
+        assert_eq!(z.children[1].size, (40.0, 50.0));
+        assert_eq!(z.children[2].offset, (0.0, 35.0));
+        assert_eq!(z.children[2].size, (100.0, 10.0));
+    }
+
+    #[test]
+    fn zstack_arrange_preserves_document_order_substrate() {
+        let mut z = LayoutNode::zstack(vec![
+            ZStackPlacement::centered(),
+            ZStackPlacement::centered(),
+        ]);
+        z.children.push(LayoutNode::rectangle(
+            SizeConstraint::Fixed(80.0),
+            SizeConstraint::Fixed(60.0),
+        ));
+        z.children.push(LayoutNode::rectangle(
+            SizeConstraint::Fixed(60.0),
+            SizeConstraint::Fixed(80.0),
+        ));
+
+        run_layout(&mut z, 100.0, 100.0).unwrap();
+
+        let bottom = &z.children[0];
+        let top = &z.children[1];
+        assert_eq!(bottom.offset, (10.0, 20.0));
+        assert_eq!(top.offset, (20.0, 10.0));
+        assert_eq!(bottom.size, (80.0, 60.0));
+        assert_eq!(top.size, (60.0, 80.0));
+
+        let bottom_right = bottom.offset.0 + bottom.size.0;
+        let top_right = top.offset.0 + top.size.0;
+        let bottom_bottom = bottom.offset.1 + bottom.size.1;
+        let top_bottom = top.offset.1 + top.size.1;
+        assert!(bottom_right > top.offset.0 && top_right > bottom.offset.0);
+        assert!(bottom_bottom > top.offset.1 && top_bottom > bottom.offset.1);
+        // Pure layout pins declared child slots plus overlap geometry only.
+        // T3 verifies that the live Visual tree paints later children on top.
     }
 }

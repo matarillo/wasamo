@@ -125,16 +125,23 @@ Per [CLAUDE.md §Testing rules](../../../../CLAUDE.md#testing-rules) the
 layout engine is pure logic; tests are pure-logic unit tests on the
 algorithm's `(input → output)` shape.
 
-- [ ] Add `WidgetKind::ZStack` and implement `measure_zstack` /
+- [x] Add `WidgetKind::ZStack` and implement `measure_zstack` /
       `arrange_zstack` in `wasamo-runtime/src/layout.rs` per
       DD-M3-P6-002 (`Fill/Fill` default, union per-axis-max sizing,
       per-child alignment with `center` default + `h-align` / `v-align`
-      overrides, no new `LayoutError`).
-- [ ] Add pure-logic tests covering the ZStack half of ADR evidence
+      overrides, no new `LayoutError`). Implemented in
+      `wasamo-runtime/src/layout.rs` with `WidgetKind::ZStack`,
+      `ZStackPlacement`, `LayoutNode::zstack`, `measure_zstack`, and
+      `arrange_zstack`.
+- [x] Add pure-logic tests covering the ZStack half of ADR evidence
       item (2). Scope note: this covers the **layout-side** document-order
       substrate only; the **visible paint-precedence** half of z-order
       (later-child-on-top under overlap = real Visual insertion order) is
-      T3's, not asserted in pure logic.
+      T3's, not asserted in pure logic. Added
+      `zstack_defaults_to_fill_fill_and_centers_children`,
+      `zstack_shrink_measure_uses_child_union_with_fill_child_zero`,
+      `zstack_arrange_alignment_overrides`, and
+      `zstack_arrange_preserves_document_order_substrate`.
 
 ### T3 — ZStack: runtime loader + Windows-runtime Visual evidence
 
