@@ -87,6 +87,30 @@ fn build_bool_binding_ir() -> wasamo_ir::IrComponent {
     lower::lower(&ast, &result.namespace)
 }
 
+fn build_zstack_ir() -> wasamo_ir::IrComponent {
+    use wasamoc::{check, lexer, lower, parser};
+    let src = r#"component ZStackDemo inherits Window {
+    ZStack {
+        Box { fill: #336699cc }
+        Text {
+            h-align: end
+            v-align: start
+            text: "caption"
+        }
+        Box { fill: #993366cc }
+    }
+}"#;
+    let tokens = lexer::tokenize(src, "<zstack>").expect("lex failed");
+    let ast = parser::parse(&tokens, "<zstack>").expect("parse failed");
+    let result = check::check(&ast, "<zstack>");
+    assert!(
+        !result.has_errors(),
+        "check errors: {:?}",
+        result.diagnostics
+    );
+    lower::lower(&ast, &result.namespace)
+}
+
 #[test]
 fn counter_ui_emit_then_parse_yields_equal_ir() {
     let original = build_counter_ir();
@@ -200,6 +224,37 @@ fn bool_state_binding_emits_and_parses_bool_productions() {
             lhs: "ready".into(),
             rhs: Box::new(wasamo_ir::HandlerExpr::BoolLit(true)),
         }
+    );
+}
+
+#[test]
+fn zstack_emit_then_parse_preserves_direct_children_and_order() {
+    let original = build_zstack_ir();
+    let text = wasamoc::emit::emit(&original);
+    assert!(text.contains("node ZStack {"), "got: {text}");
+    assert!(
+        !text.contains("kind_payload"),
+        "ZStack must not emit a kind payload\n{text}"
+    );
+    let parsed = parse_ir(&text).expect("parse_ir failed");
+    assert_eq!(parsed, original, "round-trip mismatch\nIR text:\n{text}");
+
+    assert_eq!(parsed.root.widget_type, "ZStack");
+    assert_eq!(
+        parsed.root.children.len(),
+        3,
+        "ZStack direct child count must survive emit -> parse"
+    );
+    let child_types: Vec<_> = parsed
+        .root
+        .children
+        .iter()
+        .map(|child| child.widget_type.as_str())
+        .collect();
+    assert_eq!(
+        child_types,
+        ["Box", "Text", "Box"],
+        "ZStack document order must survive emit -> parse"
     );
 }
 

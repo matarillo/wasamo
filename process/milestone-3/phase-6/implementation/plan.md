@@ -153,18 +153,29 @@ skip-guard inherits the Phase 2 T11 / Phase 3 / 4 / 5 pattern (fires on
 `0x80070005` from `wasamo_init`) and **fails** rather than silently
 skips on a runner that cannot create the Compositor.
 
-- [ ] Materialise `ZStack` as a runtime widget kind: loader parses the
+- [x] Materialise `ZStack` as a runtime widget kind: loader parses the
       textual ZStack node, builds the `WidgetNode`, installs the
       **outer-bounds `InsetClip`** on the ZStack's own Visual, and wires
       the `WidgetData` → `LayoutNode` build boundary (per-child alignment
       vector parallel to `children`). Per-child clip stays absent
-      (DD-M3-P6-002). No `docs/abi_spec.md` change.
-- [ ] Runtime `validate()` defense-in-depth for ZStack malformed shapes
+      (DD-M3-P6-002). No `docs/abi_spec.md` change. Implemented in
+      `wasamo-runtime/src/widget.rs` (`WidgetData::ZStack`,
+      `WidgetNode::zstack`, `build_layout_tree`) and
+      `wasamo-runtime/src/ir_loader.rs` (`construct_widget`
+      `"ZStack"` arm + `extract_zstack_placement`).
+- [x] Runtime `validate()` defense-in-depth for ZStack malformed shapes
       surfaces `WASAMO_ERR_IR_MALFORMED` (dual gate with T1 `wasamoc
       check`); ZStack emit → load roundtrip preserves child count and
       document order (evidence item 3 ZStack half). Add pure-logic
-      loader tests.
-- [ ] **ZStack real-Visual z-order fixture** — a `.ui` with overlapping
+      loader tests. Implemented in `validate_phase6_zstack_node_invariants`
+      with tests `zstack_positive_control_validates_direct_children`,
+      `zstack_attribute_rejected_at_validate`,
+      `zstack_binding_rejected_at_validate`,
+      `zstack_child_unknown_alignment_rejected_at_validate`,
+      `placement_prop_outside_zstack_child_or_grid_cell_rejected_at_validate`,
+      and `validate_rejects_zstack_with_kind_payload`; roundtrip test
+      `zstack_emit_then_parse_preserves_direct_children_and_order`.
+- [x] **ZStack real-Visual z-order fixture** — a `.ui` with overlapping
       ZStack children asserts the child Visual order matches document
       order under the live Visual tree (z-order is **not** dischargeable
       by pure logic alone). Include both a ZStack-rooted fixture and a
@@ -178,16 +189,26 @@ skips on a runner that cannot create the Compositor.
       only overflow was clipped away downward, so no two cells
       overlapped); the lightbox closes it because the scrim sits under the
       photo / caption / nav and over the thumbnails by construction.
-- [ ] **ZStack outer-bounds clip fixture** — the ZStack Visual has a
+      Implemented in `wasamo-runtime/tests/zstack_layout_integration.rs`
+      with `zstack_rooted_fixture_preserves_live_visual_order_and_clip`
+      and `zstack_vstack_root_fixture_pins_production_root_shape`; the
+      fixture enables `windows` `Foundation_Collections` so
+      `VisualCollection` can be enumerated.
+- [x] **ZStack outer-bounds clip fixture** — the ZStack Visual has a
       non-null `Visual.Clip` (InsetClip); each child Visual has
       `Visual.Clip = null` (clip-absence regression guard, symmetric with
       the Grid / ScrollView / WrapPanel precedents) (DD-M3-P6-002,
-      evidence item 4 ZStack half).
-- [ ] Confirm the skip-guard fires (test **fails**, not skips) on an
+      evidence item 4 ZStack half). Covered by
+      `assert_zstack_visual_contract` in
+      `wasamo-runtime/tests/zstack_layout_integration.rs`.
+- [x] Confirm the skip-guard fires (test **fails**, not skips) on an
       environment where `wasamo_init` returns `0x80070005` before
       landing T3, or record the inheritance disposition (no new runtime
       capability path → `init_runtime_or_skip` reused byte-identically)
-      in [log.md](./log.md) per the Phase 4 / 5 pattern.
+      in [log.md](./log.md) per the Phase 4 / 5 pattern. Recorded in
+      `implementation/log.md`: T3 reuses the Phase 5
+      `init_runtime_or_skip` disposition; no new runtime capability path
+      was introduced.
 
 ### T4 — Conditional: IR schema, grammar, and static loader
 

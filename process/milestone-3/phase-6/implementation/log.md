@@ -1,7 +1,21 @@
 ## Decisions log
 
-(empty — record here mid-phase decisions that deviate from the ADR,
-refine task slicing, or close implementation-planning risks.)
+- **2026-06-03 / T3 skip-guard disposition:** ZStack live Visual
+  integration introduces no new runtime capability path beyond the
+  existing `wasamo_init` → Compositor creation surface. The
+  `init_runtime_or_skip` guard in
+  `wasamo-runtime/tests/zstack_layout_integration.rs` therefore reuses
+  the Phase 5 Grid pattern byte-for-byte in behavior: local
+  `0x80070005` returns `None` (developer-laptop skip), while GitHub
+  Actions fails rather than silently skipping. This records the
+  inheritance disposition requested by T3 instead of re-proving the
+  already inherited missing-Compositor path.
+- **2026-06-03 / T3 VisualCollection evidence seam:** The ZStack live
+  Visual-order fixture needs to enumerate `VisualCollection`; the
+  runtime crate's existing `windows` dependency now enables the
+  `Foundation_Collections` feature so the test can read the live child
+  collection directly. This is an API-feature enablement for the
+  existing dependency, not a new build system / CI surface.
 
 ---
 
@@ -55,3 +69,23 @@ refine task slicing, or close implementation-planning risks.)
   green; `cargo test --workspace` green. Existing Cargo warnings about
   the `wasamo` linkable target / `wasamo-sys` import-library ordering
   were observed.
+- **2026-06-03 / T3 local scoped:** `cargo fmt --all -- --check` —
+  green after formatting; `cargo test -p wasamo-runtime zstack` —
+  green. Covered runtime validate tests
+  `zstack_positive_control_validates_direct_children`,
+  `zstack_attribute_rejected_at_validate`,
+  `zstack_binding_rejected_at_validate`,
+  `zstack_child_unknown_alignment_rejected_at_validate`,
+  `placement_prop_outside_zstack_child_or_grid_cell_rejected_at_validate`,
+  and `validate_rejects_zstack_with_kind_payload`; roundtrip test
+  `zstack_emit_then_parse_preserves_direct_children_and_order`; live
+  Visual fixtures
+  `zstack_rooted_fixture_preserves_live_visual_order_and_clip` and
+  `zstack_vstack_root_fixture_pins_production_root_shape`.
+- **2026-06-03 / T3 local pre-commit:** `cargo test -p wasamo-runtime`
+  — green (included the new ZStack live Visual fixtures, plus existing
+  Grid / ScrollView / WrapPanel integration coverage); `cargo build
+  --release --workspace` — green; `cargo build --workspace` — green;
+  `cargo test --workspace` — green. Existing Cargo warnings about the
+  `wasamo` linkable target / `wasamo-sys` import-library ordering were
+  observed.
