@@ -4,7 +4,11 @@ status: in-progress
 roadmap-anchor: ROADMAP.md#m3-dsl-surface
 adrs:
   - process/milestone-3/phase-1/decisions/preamble.md  # Phase 1 (bool scalar)
-  - process/milestone-3/phase-2/decisions/preamble.md   # Phase 2 (Box layout primitive)
+  - process/milestone-3/phase-2/decisions/preamble.md  # Phase 2 (Box layout primitive)
+  - process/milestone-3/phase-3/decisions/preamble.md  # Phase 3 (WrapPanel layout primitive)
+  - process/milestone-3/phase-4/decisions/preamble.md  # Phase 4 (ScrollView minimal)
+  - process/milestone-3/phase-5/decisions/preamble.md  # Phase 5 (Grid layout primitive)
+  - process/milestone-3/phase-6/decisions/preamble.md  # Phase 6 (ZStack + conditional rendering)
 created: 2026-05-16
 agreed: 2026-05-16
 in-progress: 2026-05-19
@@ -503,7 +507,7 @@ ADRs, CHANGELOG, notes, and git history, then deleted by default.
 | M3-Phase 3 — WrapPanel layout primitive | complete | [plan.md](phase-3/implementation/plan.md) | [preamble.md](phase-3/decisions/preamble.md) | ADR Accepted 2026-05-21; execution opened 2026-05-21; WrapPanel constituent of A3 discharged 2026-05-22; first novel-normative-spec phase |
 | M3-Phase 4 — ScrollView (minimal) | complete | [plan.md](phase-4/implementation/plan.md) | [preamble.md](phase-4/decisions/preamble.md) | ADR Accepted 2026-05-25; execution opened 2026-05-25; A5 discharged 2026-05-25; A11 gallery owner-acceptance 2026-05-25 |
 | M3-Phase 5 — Grid layout primitive | complete | [plan.md](phase-5/implementation/plan.md) | [preamble.md](phase-5/decisions/preamble.md) | ADR Accepted 2026-05-28; execution opened 2026-05-29; A2 (Grid) discharged + A11 gallery owner-acceptance 2026-05-30; Moment-2 docs synced + phase-end CI green + merged to main 2026-05-30; second novel-normative-spec phase; star sizing |
-| M3-Phase 6 — ZStack + conditional rendering | not started | — | — | First grammar surface; `bool` prereq; **M3-Phase 4 R1 (Window title wiring) owning phase** per M3-Phase 5 FD-E (R1 carries forward from Phase 4 to land alongside the first conditional-rendering / `bool`-driven property update slice) |
+| M3-Phase 6 — ZStack + conditional rendering | in progress | [plan.md](phase-6/implementation/plan.md) | [preamble.md](phase-6/decisions/preamble.md) | ADR Accepted 2026-06-02; A4 + A7 owning phase; first grammar surface (binding drives subtree present/absent); `bool` prereq landed in Phase 1; **M3-Phase 4 R1 (Window-title wiring) owning phase** per M3-Phase 5 FD-E — static `title:` host-wiring required (DD-M3-P6-006) |
 | M3-Phase 7 — Iteration grammar | not started | — | — | `TypedValue` pressure check |
 | M3-Phase 8 — `selected` state + Gallery E2E + DSL spec public draft | not started | — | — | A1, A10, A12 discharge |
 
