@@ -1,7 +1,7 @@
-﻿### DD-M2-P6-010 — `dirty_effects` topological sort fidelity
+### DD-M2-P6-010 — `dirty_effects` topological sort fidelity
 
 **Status:** Accepted (2026-05-09) in
-[m2-phase-7-reactive-foundation.md](./m2-phase-7-reactive-foundation.md#dd-m2-p6-010--dirty_effects-topological-sort-fidelity)
+[m2-phase-7-reactive-foundation.md](../../phase-7/decisions/preamble.md#dd-m2-p6-010--dirty_effects-topological-sort-fidelity)
 (housing migrated 2026-05-08; resolved Option A — true topological
 walk in M2). The Phase 6 ADR's "Forward-compat carry-forward" entry
 for DD-010 (line above) refers to the resolved DD; the mandatory
@@ -13,7 +13,7 @@ are recorded in
 
 This DD was opened in the Phase 6 ADR's draft slate and deferred to
 M2-Phase 7 per the 2026-05-08 acceptance-criteria revision recorded in
-[m2-plan.md](../plans/m2-plan.md)'s Progress section. The full
+[m2-plan.md](../../plan.md)'s Progress section. The full
 Context / Options / Recommendation now lives in the Phase 7 ADR; this
 stub preserves the section anchor and the Phase 6 chronological record
 that the issue surfaced during the DD-M2-P6-001 implementation

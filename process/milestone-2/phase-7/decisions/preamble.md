@@ -1,4 +1,4 @@
-﻿# M2-Phase 7 — Reactive Foundation Hardening & Contract Finalization: Architecture Decisions
+# M2-Phase 7 — Reactive Foundation Hardening & Contract Finalization: Architecture Decisions
 
 **Phase:** M2-Phase 7 (Reactive Foundation Hardening & Contract Finalization)
 **Date:** 2026-05-08 (ADR opened; DDs remain Proposed pending per-DD pre-doc cycles); 2026-05-09 (DD-M2-P6-010 Accepted; DD-M2-P6-010 minor implementation clarification recorded); 2026-05-10 (DD-M2-P6-012 Accepted; DD-M2-P6-011 Accepted); 2026-05-11 (M2 completed)
@@ -9,7 +9,7 @@
 M2 acceptance criteria **A5** (Reactive Foundation Hardening) and **A6**
 (Type-Agnostic Reactive Binding) — added by the 2026-05-08 acceptance-
 criteria revision recorded in
-[m2-plan.md](../plans/m2-plan.md#progress) — are discharged by this
+[m2-plan.md](../../plan.md#progress) — are discharged by this
 phase. Phase 6 closed A1/A2 (counter `.ui` drives the running counter
 through the reactive path end-to-end); Phase 7 closes A5/A6 by
 upgrading the foundation guarantees that distinguish "the pipeline
@@ -38,7 +38,7 @@ git history.
 
 ### Order of work (agreed 2026-05-08)
 
-Per the Phase 7 entry in [m2-plan.md](../plans/m2-plan.md), the three
+Per the Phase 7 entry in [m2-plan.md](../../plan.md), the three
 DDs are processed sequentially as independent pre-doc cycles, in the
 order:
 
@@ -125,14 +125,14 @@ surfaces in M3.
 
 This ADR was opened on 2026-05-08 to house the three DDs that the
 Phase 6 ADR
-([m2-phase-6-ui-lowering.md](./m2-phase-6-ui-lowering.md)) carried in
+([m2-phase-6-ui-lowering.md](../../phase-6/decisions/preamble.md)) carried in
 its draft slate but did not Accept. The Phase 6 ADR retains stub
 entries at the DD section anchors that forward to this file; the
 Phase 6 ADR itself remains `Accepted` for DD-M2-P6-001..009.
 
 The acceptance-criteria revision that introduced A5/A6 and scoped them
 to Phase 7 is recorded in the Progress section of
-[m2-plan.md](../plans/m2-plan.md) under the 2026-05-08 entry; the
+[m2-plan.md](../../plan.md) under the 2026-05-08 entry; the
 Phase 7 entry there names this ADR as the housing for DD-010/011/012.
 
 ### Minor implementation clarifications

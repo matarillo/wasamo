@@ -1,4 +1,4 @@
-﻿# M3-Phase 1 — `bool` scalar binding: Architecture Decisions
+# M3-Phase 1 — `bool` scalar binding: Architecture Decisions
 
 **Phase:** M3-Phase 1 (`bool` scalar binding)
 **Date:** 2026-05-19
@@ -8,12 +8,12 @@
 
 M3 acceptance criterion **A9** (see
 [process/_roadmap.md M3](../../../_roadmap.md#m3-dsl-surface),
-[m3-plan.md](../plans/m3-plan.md#acceptance-criteria)):
+[m3-plan.md](../../plan.md#acceptance-criteria)):
 
 > `bool` admitted as the third scalar binding type alongside `i32` and
 > `String`. The `TypedValue` generic value union remains deferred.
 
-The M3 plan ([m3-plan.md §Phase breakdown](../plans/m3-plan.md#phase-breakdown))
+The M3 plan ([m3-plan.md §Phase breakdown](../../plan.md#phase-breakdown))
 places this as Phase 1 because it is the **hard prerequisite** for
 M3-Phase 6 (conditional rendering grammar A7 rides on a `bool` binding)
 and M3-Phase 8 (Button `selected` state A10 rides on a `bool` binding).
@@ -216,11 +216,11 @@ Implementation task list: belongs in the Phase 1 progress file
 `docs/plans/progress/m3-phase-1-progress.md` (created when this ADR
 is Accepted and Phase 1 starts execution); not in this ADR and not
 in `m3-plan.md` itself. See
-[plans/README.md §Scope rule (plan vs ADR)](../plans/README.md#scope-rule-plan-vs-adr)
-and [plans/README.md §Phase progress file lifecycle](../plans/README.md#phase-progress-file-lifecycle)
+[plans/README.md §Scope rule (plan vs ADR)](../../../README.md#scope-rule-plan-vs-adr)
+and [plans/README.md §Phase progress file lifecycle](../../../README.md#phase-progress-file-lifecycle)
 for the authoritative location and the `active → closing → retired`
 lifecycle the file follows. The Progress table in
-[m3-plan.md](../plans/m3-plan.md) carries only a one-row index entry
+[m3-plan.md](../../plan.md) carries only a one-row index entry
 pointing at this progress file.
 
 ## Spec impact preview (for owner agreement)
@@ -274,7 +274,7 @@ operationalises it.
 
 This section is not a DD — it records the agreed shape of the proof
 that closes Phase 1, so the implementation plan in
-[m3-plan.md Progress](../plans/m3-plan.md) inherits a concrete target
+[m3-plan.md Progress](../../plan.md) inherits a concrete target
 rather than re-litigating "what does live propagation mean here?".
 
 A9 (`bool` admitted as third scalar) is considered satisfied when

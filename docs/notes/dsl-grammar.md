@@ -4,9 +4,9 @@ status: live
 created: 2026-05-07
 last-updated: 2026-06-01
 related-adrs:
-  - docs/decisions/m2-phase-2-wasamoc-output-format.md
-  - docs/decisions/m2-phase-6-ir-loader.md
-  - docs/decisions/m3-phase-1-bool-scalar.md
+  - process/milestone-2/phase-2/decisions/preamble.md
+  - process/m2-phase-6-ir-loader.md
+  - process/milestone-3/phase-1/decisions/preamble.md
 related-specs:
   - docs/dsl_spec.md
 related-notes:

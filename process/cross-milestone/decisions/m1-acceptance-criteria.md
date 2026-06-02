@@ -12,7 +12,7 @@
 This is not a ADR. It records a vision/roadmap-level revision
 that took place outside any single phase's pre-implementation review,
 and is filed under the `vision-` naming convention defined in
-[README.md](./README.md).
+[README.md](../../README.md).
 
 The Phase 5 pre-implementation discussion surfaced two issues with
 VISION.md as previously written:

@@ -1,6 +1,6 @@
 # DD-M2-P6-XXX (draft) — Drain transaction semantics
 
-**Status:** Superseded — content folded into [DD-M2-P6-001](../decisions/m2-phase-6-ui-lowering.md#dd-m2-p6-001--drain-transaction-semantics) (Accepted, 2026-05-07). この note は draft 履歴として残置。最新仕様は ADR を参照。
+**Status:** Superseded — content folded into [DD-M2-P6-001](../decisions/preamble.md#dd-m2-p6-001--drain-transaction-semantics) (Accepted, 2026-05-07). この note は draft 履歴として残置。最新仕様は ADR を参照。
 **Date:** 2026-05-06
 **Targets phase:** M2-Phase 6 (`.ui → runtime` lowering の pre-doc サイクルで正式採用予定)
 **Affects:** DD-M2-P5-004 (drain stage 框組み, 部分 supersede), DD-P6-003 (queued emission, 不変), VISION §4 Principle 2 (任意で補足)

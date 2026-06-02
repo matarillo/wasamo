@@ -1,4 +1,4 @@
-﻿---
+---
 phase: M3-Phase 2
 title: Box layout primitive
 status: retired
@@ -11,7 +11,7 @@ opened: 2026-05-20
 
 This is the live task list and execution log for M3-Phase 2. The
 design decisions are frozen in
-[m3-phase-2-box-layout.md](../../decisions/m3-phase-2-box-layout.md);
+[m3-phase-2-box-layout.md](../decisions/preamble.md);
 this file is mutable per
 [plans/README.md §Phase progress file lifecycle](../README.md#phase-progress-file-lifecycle).
 
@@ -25,5 +25,5 @@ prediction.
 
 The four pieces of A6 evidence the phase closes against are
 enumerated in
-[m3-phase-2-box-layout.md §Phase 2 verification closure](../../decisions/m3-phase-2-box-layout.md#phase-2-verification-closure-what-counts-as-a6-evidence).
+[m3-phase-2-box-layout.md §Phase 2 verification closure](../decisions/preamble.md#phase-2-verification-closure-what-counts-as-a6-evidence).
 Each T below cites the evidence item it discharges.

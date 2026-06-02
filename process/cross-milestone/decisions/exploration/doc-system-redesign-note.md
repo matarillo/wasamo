@@ -17,7 +17,7 @@ related-adrs:
 
 M1 完了直後・M2 計画策定中の現時点で、プロジェクト文書群
 (`VISION.md` / `ROADMAP.md` / `README.md` / `docs/plans/` /
-`docs/decisions/` / `docs/notes/`) の役割分担と運用ルールを
+`process/` / `docs/notes/`) の役割分担と運用ルールを
 見直したい。本ノートは検討の出発点であり、合意に至った事項は
 vision decision record (DD-V-010 相当) に昇格させる。
 
@@ -50,7 +50,7 @@ Claude による批判的レビューで、上記に加えて以下が浮上し�
 
 ## 現状マッピング
 
-| 情報項目 | VISION §7 | ROADMAP | docs/plans/ | docs/decisions/ |
+| 情報項目 | VISION §7 | ROADMAP | docs/plans/ | process/ |
 |---|---|---|---|---|
 | M1 acceptance criteria | あり(要約) | あり(正本扱い) | — | DD-V-001 が補足 |
 | M2-M6 acceptance criteria | あり(要約) | あり(正本扱い) | M2 のみ詳細 | — |
@@ -166,7 +166,7 @@ phase チェックリスト自体が消えるので、自然に解決する。
 | `ROADMAP.md` | 全マイルストーンの **acceptance criteria のみ**。完了は数行+リンク |
 | `README.md` | エレベーターピッチ + **現在のステータス 1 行** + 主要文書への導線 |
 | `docs/plans/<M>-plan.md` | 進行前の合意 artifact。in-progress 中は「現在の作業」の SSOT。完了で archival policy 通り削除 |
-| `docs/decisions/` | 設計決定の SSOT(プロローグ散文も含めここに集約) |
+| `process/` | 設計決定の SSOT(プロローグ散文も含めここに集約) |
 | `docs/notes/` | 現状のまま(オーナーの探索記録) |
 
 ## 合意したい順序

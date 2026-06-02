@@ -68,6 +68,6 @@ the top-level past ~6 non-bindings/non-examples entries. At that point
 the cost of the migration is justified by the organisational gain.
 
 If a migration is decided, it should be its own commit (no other
-changes) with an ADR entry in `docs/decisions/` recording the rationale
+changes) with an ADR entry in `process/` recording the rationale
 (not merely "we wanted crates/"; specifically which organisational
 problem the migration solves).

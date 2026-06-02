@@ -15,7 +15,7 @@ retrospective ではなく、Phase 5 が Phase 4 の全 commit を読み直さ�
 
 入力源:
 
-- [docs/plans/progress/m3-phase-4-progress.md](../../plans/progress/m3-phase-4-progress.md)
+- [docs/plans/progress/m3-phase-4-progress.md](../../phase-4/implementation/log.md)
   の Decisions log 全体 (T4 fixture WrapPanel substitution / T5/T6
   split / T6 smoke failure mode A / T7 Q1/Q2/Q3 dispositions)。
 - [t4-step-end-retrospective.md](../m3-phase-4/t4-step-end-retrospective.md) /
@@ -103,7 +103,7 @@ M4 で `in-out offset-y` write-back が入れば Signal 側にも clamp 後値
 T7 Q2 disposition (2026-05-25 owner-confirmed framing)。
 
 Phase 4 close 時点で
-[m3-phase-4-progress.md §Out-of-phase residuals](../../plans/progress/m3-phase-4-progress.md#out-of-phase-residuals)
+[m3-phase-4-progress.md §Out-of-phase residuals](../../phase-4/implementation/handoff.md#out-of-phase-residuals)
 に **R1 — Gallery host Window title wiring** が登録された。
 
 - 観測: smoke 全 screenshot で `MainWindowTitle = "Wasamo"` (framework

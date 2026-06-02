@@ -1,4 +1,4 @@
-﻿---
+---
 phase: M3-Phase 4
 title: ScrollView primitive (minimal)
 status: closing
@@ -11,7 +11,7 @@ opened: 2026-05-25
 
 This is the live task list and execution log for M3-Phase 4. The
 design decisions are frozen in
-[m3-phase-4-scroll-view.md](../../decisions/m3-phase-4-scroll-view.md);
+[m3-phase-4-scroll-view.md](../decisions/preamble.md);
 this file is mutable per
 [plans/README.md §Phase progress file lifecycle](../README.md#phase-progress-file-lifecycle).
 
@@ -23,7 +23,7 @@ scrolling, and the general typed-`i32` writer pair are M4 or later.
 
 The automated A5 evidence set is verification items 1 through 4 in
 the ADR's
-[Phase 4 verification closure](../../decisions/m3-phase-4-scroll-view.md#phase-4-verification-closure-what-counts-as-a5-evidence).
+[Phase 4 verification closure](../decisions/preamble.md#phase-4-verification-closure-what-counts-as-a5-evidence).
 The phase-close / A11 gallery proof is item 5, including owner-manual
 GUI smoke.
 

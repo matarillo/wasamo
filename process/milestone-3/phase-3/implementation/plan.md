@@ -1,4 +1,4 @@
-﻿## Task list
+## Task list
 
 ### T1 — `wasamoc check`: WrapPanel validity and reject set
 
@@ -149,7 +149,7 @@ verification closure **evidence item 2**.
 
 - [x] Implement the pure-data WrapPanel measure/arrange path in
       `wasamo-runtime/src/layout.rs` per
-      [DD-M3-P3-005](../../decisions/m3-phase-3-wrap-panel.md#dd-m3-p3-005--measure-arrange-algorithm-novel-normative-spec).
+      [DD-M3-P3-005](../decisions/preamble.md#dd-m3-p3-005--measure-arrange-algorithm-novel-normative-spec).
       The layout boundary remains Win32/WinRT-free; the algorithm
       operates on `LayoutNode` / measure / arrange inputs only.
 - [x] Add the pure-logic test coverage enumerated under the
@@ -178,7 +178,7 @@ CI-execution evidence.
 
 - [x] Mock-free integration test on the Windows CI runner that
       exercises the two fixtures specified in the ADR's
-      [verification closure evidence item 4](../../decisions/m3-phase-3-wrap-panel.md#phase-3-verification-closure-what-counts-as-a3-evidence):
+      [verification closure evidence item 4](../decisions/preamble.md#phase-3-verification-closure-what-counts-as-a3-evidence):
       the wrap-path fixture (primary positive control) and the
       oversized-child fixture (visible-overflow regulation).
 - [x] Skip-guard matches Phase 1 T6 / T13 / Phase 2 T11: fail (not
@@ -194,7 +194,7 @@ CI-execution evidence.
 
 Discharges ADR verification closure **evidence item 5** (visible
 smoke) and the
-[m3-plan §Phase-end criteria item 5](../m3-plan.md#phase-end-criteria)
+[m3-plan §Phase-end criteria item 5](../../plan.md#phase-end-criteria)
 "gallery sub-screen per phase" obligation.
 
 - [x] `examples/gallery/gallery.ui` grows additively from Phase 2's
@@ -248,11 +248,11 @@ Discharges the m3-plan §Phase-end criteria checklist for Phase 3.
       as R3-A from T9 visible-smoke (a separate commit per review-
       concern).
 - [x] **Out-of-phase residuals filed** per
-      [m3-plan §Phase-end criteria item 6](../m3-plan.md#phase-end-criteria):
+      [m3-plan §Phase-end criteria item 6](../../plan.md#phase-end-criteria):
       R1 (`.gitignore` `*.uic` pattern) and R2 (`sync_visuals` ↔
       pure-layout boundary test gap) recorded in §Out-of-phase
       residuals below and cross-referenced from
-      [the ADR's Phase 3 implementation residuals subsection](../../decisions/m3-phase-3-wrap-panel.md).
+      [the ADR's Phase 3 implementation residuals subsection](../decisions/preamble.md).
       R3 (architecture §6.5 offset convention) was folded in T10
       as R3-A and is not a residual.
 - [x] Forward-distillation note for M3-Phase 4 authored within

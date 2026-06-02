@@ -18,7 +18,7 @@ into the ADR.
 ## Phase 2 acceptance criteria (restated)
 
 - **A6** (see [process/_roadmap.md M3](../../../_roadmap.md#m3-dsl-surface),
-  [m3-plan.md §Acceptance criteria](../../plans/m3-plan.md#acceptance-criteria)):
+  [m3-plan.md §Acceptance criteria](../../plan.md#acceptance-criteria)):
 
   > Box layout primitive (0+ child container; `aspect: <ratio>`
   > attribute subsumes a standalone AspectRatio; minimal
@@ -29,7 +29,7 @@ into the ADR.
   `wasamo-runtime`, `docs/dsl_spec.md`, and a sub-screen of
   `examples/gallery/` all advance within Phase 2. No side is left
   ahead of the others at phase close. Per
-  [m3-plan.md §Phase-end criteria item 5](../../plans/m3-plan.md#phase-end-criteria),
+  [m3-plan.md §Phase-end criteria item 5](../../plan.md#phase-end-criteria),
   the foundational-phase exception is scoped to Phase 1 only —
   Phase 2 is the first phase that seeds `examples/gallery/`, and
   every subsequent phase grows it. Framing decision F operationalises
@@ -47,7 +47,7 @@ into the ADR.
 ## Agreed DD slate (6 entries proposed)
 
 The Phase 2 ADR (working title
-`docs/decisions/m3-phase-2-box-layout.md`) will carry the following six
+`process/milestone-3/phase-2/decisions/preamble.md`) will carry the following six
 DDs.
 
 **Layering note for DD-001 and DD-005.** The two DDs that govern
@@ -276,7 +276,7 @@ time. Sub-issues:
   `bool_state_in_string_interp_rejected` discipline (T14): bad
   surface forms fail at the source-level diagnostic gate.
 - **Spec wording** in `docs/dsl_spec.md`.
-  [m3-plan.md §Phase breakdown](../../plans/m3-plan.md#phase-breakdown)
+  [m3-plan.md §Phase breakdown](../../plan.md#phase-breakdown)
   describes Phase 2 as "pure primitive — no novel measure-arrange
   algorithm". This DD nuances that claim: "no novel" refers to the
   absence of a new measure-arrange paradigm (vs WrapPanel's two-stage
@@ -307,7 +307,7 @@ Sub-issues:
 
 - Image widget surface, asset pipeline, icon font, image decoder
   (M4 or later;
-  [m3-plan.md §Out of scope](../../plans/m3-plan.md#out-of-scope-deferred-to-later-milestones),
+  [m3-plan.md §Out of scope](../../plan.md#out-of-scope-deferred-to-later-milestones),
   [m3-target-app-predoc.md 保留 2 closure](../m3/m3-target-app-predoc.md#保留-2-closure-image-widget-surface-の-m3-開封可否--不開封-m4-へ-defer)).
 - Button content other than text (M4 or later).
 - ZStack overlay primitive (Phase 6).
@@ -342,7 +342,7 @@ Out of scope.
 
 ### B. Pre-doc-discipline check
 
-Per [docs/decisions/README.md §Pre-doc discipline](../../decisions/README.md#pre-doc-discipline),
+Per [process/README.md §Pre-doc discipline](../../../README.md),
 the framing must verify that the proposed DD slate serves A6, not
 merely execute the m3-plan task description literally. Check:
 
@@ -360,7 +360,7 @@ merely execute the m3-plan task description literally. Check:
 
 ### C. Verification strategy
 
-Per [m3-plan.md §Verification strategy](../../plans/m3-plan.md#verification-strategy),
+Per [m3-plan.md §Verification strategy](../../plan.md#verification-strategy),
 Phase 2 chooses from the menu:
 
 - **Pure-logic unit tests** for the aspect measure-arrange resolver
@@ -532,7 +532,7 @@ Phase 8 assembles the full A1 proof.
 
 This commitment honors three converging constraints:
 
-- [m3-plan.md §Phase-end criteria item 5](../../plans/m3-plan.md#phase-end-criteria)
+- [m3-plan.md §Phase-end criteria item 5](../../plan.md#phase-end-criteria)
   requires the relevant slice of `examples/gallery/` for every phase
   from Phase 2 onward. The foundational-phase exception was scoped
   to Phase 1 only and is not available to Phase 2. Earlier framing
@@ -550,13 +550,13 @@ This commitment honors three converging constraints:
   The growth path is additive, not a per-phase scrap-and-rebuild.
 
 **C/Zig host parity for Box is not required in Phase 2.**
-[m3-plan.md §Phase-end criteria item 5](../../plans/m3-plan.md#phase-end-criteria)
+[m3-plan.md §Phase-end criteria item 5](../../plan.md#phase-end-criteria)
 calls for at least one host per phase; Phase 8 broadens the full
 gallery to all three. Phase 2 seeds `examples/gallery-rust/` only.
 
 **Phase 2's `examples/gallery/` is a partial gallery, not the A1
 proof.** A1 acceptance lives in Phase 8 per the
-[acceptance ↔ phase mapping](../../plans/m3-plan.md#acceptance--phase-mapping).
+[acceptance ↔ phase mapping](../../plan.md#acceptance--phase-mapping).
 Phase 2's slice is necessarily incomplete: it cannot exercise
 WrapPanel, ScrollView, Grid, ZStack, conditional rendering, iteration,
 or selected state, because those primitives do not yet exist. The
@@ -623,7 +623,7 @@ ADR's Out-of-scope section, not into any DD.
 | Out-of-scope §Value / type (Image, Button content, TypedValue) | Premise | Out-of-scope section of this framing |
 | Out-of-scope §Visual / styling (scrim alpha) | Premise | Out-of-scope section; affects DD-003's alpha sub-issue (the value-type layer admits or excludes alpha; styling is M3-out-of-scope either way) |
 
-### From [m3-plan.md](../../plans/m3-plan.md)
+### From [m3-plan.md](../../plan.md)
 
 | Section | Disposition | Consumed at |
 |---|---|---|
@@ -641,11 +641,11 @@ ADR's Out-of-scope section, not into any DD.
 
 Inputs are complete. The next session begins ADR drafting:
 
-1. Create `docs/decisions/m3-phase-2-box-layout.md` (working title) as
+1. Create `process/milestone-3/phase-2/decisions/preamble.md` (working title) as
    `Status: Proposed`, carrying the 6 DDs above with full Option
    tables, Recommendation prose, and the two-axis risk/exposure
    evaluation per DD (per
-   [docs/decisions/README.md §Risk evaluation](../../decisions/README.md#risk-evaluation)).
+   [process/README.md §Risk evaluation](../../../README.md)).
 2. Owner review pass.
 3. On `Status: Accepted` flip, the upstream document edits enumerated
    under **framing decision D Moment 1** bundle into the same commit:

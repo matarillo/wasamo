@@ -56,11 +56,11 @@ ADR は Option A を採用済みで、実装は次の形を満たす必要があ
 ## 蒸留先
 
 - 実装が ADR どおり進んだ場合: `docs/plans/progress/m2-phase-7-progress.md` の DD-M2-P6-010 実装チェックを更新する。
-- 実装中に ADR 条件からの逸脱が必要になった場合: `docs/decisions/m2-phase-7-reactive-foundation.md` の DD-010 へ戻すか、新しい pre-doc cycle を開く。
+- 実装中に ADR 条件からの逸脱が必要になった場合: `process/milestone-2/phase-7/decisions/preamble.md` の DD-010 へ戻すか、新しい pre-doc cycle を開く。
 - M3 に渡す確定済み残余が増えた場合: `docs/notes/m2-to-m3-handover.md` へ蒸留する。
 
 ## 蒸留結果
 
 - `docs/plans/progress/m2-phase-7-progress.md`: DD-M2-P6-010 の実装チェックを完了に更新済み。
-- `docs/decisions/m2-phase-7-reactive-foundation.md`: `ReactiveGraph::writes` が必要だった事実を DD-010 の minor implementation clarification として記録済み。
+- `process/milestone-2/phase-7/decisions/preamble.md`: `ReactiveGraph::writes` が必要だった事実を DD-010 の minor implementation clarification として記録済み。
 - `docs/notes/m2-to-m3-handover.md`: M3 が継承する premise を、`forward` / `back` / write-edge map / dirty set の topo walk として更新済み。

@@ -47,7 +47,7 @@ inherits rather than re-derives:
 ## Phase 4 acceptance criteria (restated)
 
 - **A5** (see [process/_roadmap.md M3](../../../_roadmap.md#m3-dsl-surface),
-  [m3-plan.md §Acceptance criteria](../../plans/m3-plan.md#acceptance-criteria)):
+  [m3-plan.md §Acceptance criteria](../../plan.md#acceptance-criteria)):
 
   > ScrollView primitive (minimal: inner unbounded measure +
   > viewport clip + content offset binding; scrollbar widget,
@@ -72,7 +72,7 @@ inherits rather than re-derives:
   Phase 3 was the first novel-normative-spec phase
   ([m3-phase-3 framing — first novel normative measure-arrange spec](../m3-phase-3/pre-doc-framing.md#phase-3-acceptance-criteria-restated));
   Phase 5 Grid retains the "second novel-normative-spec phase"
-  position per [m3-plan.md §Phase breakdown](../../plans/m3-plan.md#phase-breakdown)
+  position per [m3-plan.md §Phase breakdown](../../plan.md#phase-breakdown)
   (star sizing is the heavier algorithmic content). Phase 4 does
   not displace that ordering; rather, it introduces a **smaller
   novel normative surface** of its own — the
@@ -83,7 +83,7 @@ inherits rather than re-derives:
   not present anywhere in the M2 / Phase 1–3 dsl_spec.md) but
   smaller in *scope* than Phase 3's two-stage measure-arrange or
   Phase 5's star sizing. Acceptance for the spec text is the
-  [m3-plan.md §Milestone-end criteria item 5](../../plans/m3-plan.md#milestone-end-criteria)
+  [m3-plan.md §Milestone-end criteria item 5](../../plan.md#milestone-end-criteria)
   external-reader bar, applied at phase close.
 
 - **First M3 phase to pressure the typed-`i32` writer seam.** M2
@@ -108,11 +108,11 @@ inherits rather than re-derives:
 
 - **Downstream commitments grounded in Phase 4.** Phase 4 is the
   terminus of the Phase 2 → Phase 3 → Phase 4 thumbnail-strip
-  chain ([m3-plan.md §Phase dependencies](../../plans/m3-plan.md#phase-dependencies));
+  chain ([m3-plan.md §Phase dependencies](../../plan.md#phase-dependencies));
   Phase 5 (Grid), Phase 6 (ZStack + conditional), and Phase 7
   (iteration) do not depend on ScrollView at the IR / evaluator
   level. The narrow downstream commitment is to Phase 7: per
-  [m3-plan.md §Phase dependencies](../../plans/m3-plan.md#phase-dependencies)
+  [m3-plan.md §Phase dependencies](../../plan.md#phase-dependencies)
   ("Phase 7 … iteration grammar … its E2E proof (thumbnails
   generated from a collection) reuses the WrapPanel + ScrollView
   combination from Phase 4. Sequencing after Phase 4 keeps the
@@ -215,7 +215,7 @@ cells —
 ## Agreed DD slate (6 entries proposed)
 
 The Phase 4 ADR (working title
-`docs/decisions/m3-phase-4-scroll-view.md`) will carry the following
+`process/milestone-3/phase-4/decisions/preamble.md`) will carry the following
 six DDs.
 
 ### DD-M3-P4-001 — ScrollView IR node form, 1-child contract, and scroll-axis exposure
@@ -496,7 +496,7 @@ semantics belong in spec).
 
 A5 names "viewport clip" as a load-bearing component. Phase 3 T8
 established that **WrapPanel installs no clip surface**
-([m3-phase-3 ADR DD-005 oversized-line section](../../decisions/m3-phase-3-wrap-panel.md));
+([m3-phase-3 ADR DD-005 oversized-line section](../../phase-3/decisions/preamble.md));
 ScrollView is the **dual** — it must install a clip surface
 because the gallery's overflow state
 (`ScrollView { content … }`) is exactly where the
@@ -814,7 +814,7 @@ gains a writer-seam evidence item.
 
 ### B. DD slate completeness check
 
-Per [docs/decisions/README.md §Pre-doc discipline](../../decisions/README.md#pre-doc-discipline),
+Per [process/README.md §Pre-doc discipline](../../../README.md),
 the framing must verify that the proposed DD slate serves A5,
 not merely execute the m3-plan task description literally. Check:
 
@@ -838,7 +838,7 @@ not merely execute the m3-plan task description literally. Check:
 
 ### C. Verification strategy
 
-Per [m3-plan.md §Verification strategy](../../plans/m3-plan.md#verification-strategy),
+Per [m3-plan.md §Verification strategy](../../plan.md#verification-strategy),
 Phase 4 chooses from the menu:
 
 - **`wasamoc` check-side pure-logic tests** for compile-time
@@ -923,7 +923,7 @@ Moment 2 を対象とした規範であり、Moment 1 の draft set はその
 mirror として **直接同一視されるものではない**; Phase 4 が
 Moment 1 で触れる文書はここで明示的に列挙する):
 
-- `docs/decisions/m3-phase-4-scroll-view.md` — ADR
+- `process/milestone-3/phase-4/decisions/preamble.md` — ADR
   `Status: Accepted` flip.
 - `docs/dsl_spec.md` — new §4.11 ScrollView chapter as
   design-spec draft. No new tokens, grammar rules, or AST
@@ -960,7 +960,7 @@ constituent shape preserves review-concern separability under
   retrospective link, CI evidence pointer, impl summary.
 - `docs/plans/m3-plan.md` Progress row — Status flips to
   complete.
-- `docs/decisions/m3-phase-4-scroll-view.md` — touch only if
+- `process/milestone-3/phase-4/decisions/preamble.md` — touch only if
   one of the three retrospectives.md §phase-sync ADR-touch
   cases applies (AC discharged-vs-impl divergence; out-of-phase
   residual cross-ref; thesis-level finding).
@@ -986,7 +986,7 @@ The sibling sub-screen composition:
 
 - **Content shape.** The canonical `ScrollView { WrapPanel { Box
   × N } }` composition. Per
-  [m3-plan.md §Phase dependencies](../../plans/m3-plan.md#phase-dependencies),
+  [m3-plan.md §Phase dependencies](../../plan.md#phase-dependencies),
   the thumbnail-strip chain culminates at this composition, and
   Phase 7's iteration grammar proof is sequenced to *swap in*
   collection-driven generation of the same composition as a
@@ -1017,14 +1017,14 @@ The sibling sub-screen composition:
   fixed thumbnail children of the Phase 4 slice with an
   iteration grammar binding.
 - **Rust host only.** Per
-  [m3-plan.md §Phase-end criteria item 5](../../plans/m3-plan.md#phase-end-criteria),
+  [m3-plan.md §Phase-end criteria item 5](../../plan.md#phase-end-criteria),
   Phase 4 ships at least one host's gallery proof;
   `examples/gallery-rust/` is the canonical one. C and Zig host
   parity comes at Phase 8 with the full gallery.
 
 **`examples/gallery/` is still a partial gallery, not the A1
 proof.** A1 acceptance lives in Phase 8 per the
-[acceptance ↔ phase mapping](../../plans/m3-plan.md#acceptance--phase-mapping);
+[acceptance ↔ phase mapping](../../plan.md#acceptance--phase-mapping);
 Phase 4 grows the gallery from Phase 3's standalone WrapPanel
 slice into [standalone WrapPanel slice] + [ScrollView { WrapPanel
 { … } } slice].
@@ -1228,7 +1228,7 @@ recommended design implies.
 | §12 AskUserQuestion paused; fast-track removed; phase-end gates; retrospectives wording fold; item 10 vocabulary new | Process / discipline reminders | This framing follows the inline-options-in-chat pattern; the ADR / spec sync / progress doc commits land per-owner-approval per [retrospectives.md](../retrospectives.md); step retros from T1 onward use the item 10 disposition vocabulary; framing decision D Moment 1 / Moment 2 doc sets follow the [retrospectives.md phase-sync doc set](../retrospectives.md#phase-sync-moment-2-で触る-doc-セット) |
 | §13 docs/notes audit triggers | Direct input | Framing decision G (per-note disposition; layout-engine partial fire; typed-value conditional fire deferred; verification-environments fired with inherited skip-guard discipline) |
 
-### From [m3-plan.md](../../plans/m3-plan.md)
+### From [m3-plan.md](../../plan.md)
 
 | Section | Disposition | Consumed at |
 |---|---|---|
@@ -1248,7 +1248,7 @@ recommended design implies.
 | Overflow proof strip (vertical scroll) | Visible-proof reference | Framing decision E (Phase 4 gallery sub-screen demonstrates vertical scroll); DD-001 (vertical-only hardcode matches wireframe) |
 | Numbered callout for ScrollView (if present) | Premise | DD-001 (1-child container shape) |
 
-### From [docs/decisions/m3-phase-3-wrap-panel.md](../../decisions/m3-phase-3-wrap-panel.md)
+### From [process/milestone-3/phase-3/decisions/preamble.md](../../phase-3/decisions/preamble.md)
 
 | DD | Disposition | Consumed at |
 |---|---|---|
@@ -1260,7 +1260,7 @@ recommended design implies.
 | DD-M3-P3-006 (IR-loader defense-in-depth) | Pattern reuse | DD-006 (validate-vs-build_node placement; compound invariant shape distinguished from Phase 3's value-range shape per pre-doc-inputs §5) |
 | Phase 3 verification closure item 4 (WrapPanel no clip surface) | Direct input | DD-004 / framing decision C (ScrollView is the symmetric inverse — clip presence is the load-bearing assertion) |
 
-### From [docs/decisions/m3-phase-2-box-layout.md](../../decisions/m3-phase-2-box-layout.md)
+### From [process/milestone-3/phase-2/decisions/preamble.md](../../phase-2/decisions/preamble.md)
 
 | DD | Disposition | Consumed at |
 |---|---|---|
@@ -1282,11 +1282,11 @@ recommended design implies.
 
 Once framing is owner-aligned, the next session begins ADR drafting:
 
-1. Create `docs/decisions/m3-phase-4-scroll-view.md` (working title)
+1. Create `process/milestone-3/phase-4/decisions/preamble.md` (working title)
    as `Status: Proposed`, carrying the 6 DDs above with full Option
    tables, Recommendation prose, and the two-axis risk / exposure
    evaluation per DD (per
-   [docs/decisions/README.md §Risk evaluation](../../decisions/README.md#risk-evaluation)).
+   [process/README.md §Risk evaluation](../../../README.md)).
 2. Owner review pass.
 3. On `Status: Accepted` flip, the upstream document edits
    enumerated under **framing decision D Moment 1** land as

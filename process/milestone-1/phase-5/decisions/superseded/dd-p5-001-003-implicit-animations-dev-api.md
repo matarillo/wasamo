@@ -11,15 +11,15 @@
 > continuous ambient animation. The redirection is recorded in
 > [phase-5-compositor-independence-check.md](./phase-5-compositor-independence-check.md).
 > This file is preserved per the
-> [Revision rule](./README.md#revision-rule) as historical record
+> [Revision rule](../../../../README.md) as historical record
 > and as a worked example of the
-> [Pre-doc discipline](./README.md#pre-doc-discipline) introduced
+> [Pre-doc discipline](../../../../README.md) introduced
 > alongside the supersession.
 
 The vision decision driving this phase — that Wasamo's default
 property-change behavior is **instant**, with animation deferred to a
 public opt-in API in M5 — is recorded separately as
-[DD-V-001 in vision-m1-acceptance-criteria.md](./vision-m1-acceptance-criteria.md#dd-v-001--default-property-change-behavior-is-instant-animation-is-opt-in).
+[DD-V-001 in vision-m1-acceptance-criteria.md](../../../../cross-milestone/decisions/m1-acceptance-criteria.md#dd-v-001--default-property-change-behavior-is-instant-animation-is-opt-in).
 This ADR captures only the Phase 5 implementation decisions that
 follow from DD-V-001.
 
@@ -40,7 +40,7 @@ the Visual Layer is correctly engaged on the DWM compositor thread:
 
 This sanity check is not the differentiator of Wasamo — implicit
 animation is table stakes across modern declarative UI frameworks (see
-[DD-V-001](./vision-m1-acceptance-criteria.md#dd-v-001--default-property-change-behavior-is-instant-animation-is-opt-in)).
+[DD-V-001](../../../../cross-milestone/decisions/m1-acceptance-criteria.md#dd-v-001--default-property-change-behavior-is-instant-animation-is-opt-in)).
 It is the cheapest visible proof that the substrate is working.
 
 The question is how to expose the animation behavior so the

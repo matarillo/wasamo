@@ -313,6 +313,6 @@ Option C — Status quo
 - [process/cross-milestone/decisions/exploration/doc-system-redesign-note.md](./exploration/doc-system-redesign-note.md)
   — origin of these decisions; will be marked resolved once this
   ADR is filed.
-- [docs/decisions/vision-post-m2-roadmap.md](./vision-post-m2-roadmap.md)
+- [process/cross-milestone/decisions/post-m2-roadmap.md](post-m2-roadmap.md)
   — the previous vision decision record (DD-V-005..009); this ADR continues
   the V numbering.

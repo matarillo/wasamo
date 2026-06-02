@@ -15,7 +15,7 @@ decisions are in
 
 The core problem: process knowledge had drifted across `CLAUDE.md`,
 `docs/notes/retrospectives.md`, the per-folder READMEs under
-`docs/decisions/` and `docs/plans/`, and the vision decision records themselves.
+`process/` and `docs/plans/`, and the vision decision records themselves.
 The same rule sometimes appeared in two places with subtly different
 wording. There was no rule for *where* a new process rule should
 land, so additions accumulated wherever the moment suggested.
@@ -31,7 +31,7 @@ by category, and defines a lifecycle for changing process rules.
 After the `process/` restructure (DD-V-010..018 plus the unnumbered
 folder reorganisation of 2026-05-26), the natural homes for process
 knowledge have changed. `docs/plans/README.md` and
-`docs/decisions/README.md` were consolidated into `process/README.md`.
+`process/README.md` were consolidated into `process/README.md`.
 `docs/notes/doc-system-redesign.md` became
 `process/cross-milestone/decisions/exploration/doc-system-redesign-note.md` (a pre-decision
 note, kept outside `decisions/` as a historical record). The remaining

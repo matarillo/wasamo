@@ -3,14 +3,14 @@ milestone: M2
 status: completed
 roadmap-anchor: ROADMAP.md#m2-foundation
 adrs:
-  - docs/decisions/vision-post-m2-roadmap.md
-  - docs/decisions/m2-phase-1-cdylib-shim.md
-  - docs/decisions/m2-phase-2-wasamoc-output-format.md
-  - docs/decisions/m2-phase-3-handler-exec-location.md
-  - docs/decisions/m2-phase-4-tree-mutation-abi.md
-  - docs/decisions/m2-phase-5-reactive-engine.md
-  - docs/decisions/m2-phase-6-ui-lowering.md
-  - docs/decisions/m2-phase-7-reactive-foundation.md
+  - process/cross-milestone/decisions/post-m2-roadmap.md
+  - process/milestone-2/phase-1/decisions/preamble.md
+  - process/milestone-2/phase-2/decisions/preamble.md
+  - process/milestone-2/phase-3/decisions/preamble.md
+  - process/milestone-2/phase-4/decisions/preamble.md
+  - process/milestone-2/phase-5/decisions/preamble.md
+  - process/milestone-2/phase-6/decisions/preamble.md
+  - process/milestone-2/phase-7/decisions/preamble.md
 created: 2026-05-02
 ---
 
@@ -34,14 +34,14 @@ public draft) into a **foundation milestone** whose acceptance is
 structural, not feature breadth. The Alpha-style feature work has
 been redistributed across M3–M6 (see
 [process/_roadmap.md](../_roadmap.md) and
-[docs/decisions/vision-post-m2-roadmap.md](../decisions/vision-post-m2-roadmap.md)).
+[process/cross-milestone/decisions/post-m2-roadmap.md](../cross-milestone/decisions/post-m2-roadmap.md)).
 
 ### Phase numbering
 
 Phase numbers in this plan are **local to M2** (M2-Phase 1, 2, …).
 M1's global Phase 1–8 numbering is not continued. ADR identifiers
 from M2 onward use the scope `M<N>-P<n>` (e.g. `DD-M2-P2-001`); see
-[docs/decisions/README.md](../decisions/README.md#file-naming).
+[process/README.md](../README.md).
 M1 ADRs (`DD-P3-001` etc.) remain as historical records and
 are not renumbered.
 
@@ -60,7 +60,7 @@ ROADMAP is the SSOT; mirrored here for ergonomics:
 - **A3.** `wasamo-runtime` and the `wasamo` safe wrapper no longer
   share an rlib filename through the cdylib-shim split; the post-M1
   cleanup flagged in
-  [DD-P7-002](../decisions/phase-7-language-bindings.md) is
+  [DD-P7-002](../milestone-1/phase-7/decisions/preamble.md) is
   discharged.
 - **A4.** The C ABI gains the tree-mutation primitives required by
   the reactive engine; the experimental layer's all-at-once
@@ -90,13 +90,13 @@ ROADMAP is the SSOT; mirrored here for ergonomics:
 
 The phases below are working hypotheses; each one's design questions
 become a ADR at pre-doc time, per
-[the decisions README](../decisions/README.md).
+[the decisions README](../README.md).
 
 - **M2-Phase 1 — cdylib-shim cleanup.** Split DLL output from the
   rlib so `wasamo-runtime` can be renamed cleanly without the
   cargo#6313 filename collision. Pure infra; independent of the DSL
   track. Origin:
-  [DD-P7-002 post-M1 implementation note](../decisions/phase-7-language-bindings.md).
+  [DD-P7-002 post-M1 implementation note](../milestone-1/phase-7/decisions/preamble.md).
 
 - **M2-Phase 2 — wasamoc output format decision.** Resolve the
   question Phase 6 pre-doc explicitly deferred to M2: host-language
@@ -114,12 +114,12 @@ become a ADR at pre-doc time, per
   Promote the operations the reactive engine needs (insert / remove
   / replace child; property batching) from runtime-internal to the
   stable-core C ABI. M1 deliberately deferred this — see
-  [DD-P8 "Out of scope"](../decisions/phase-8-hello-counter.md).
+  [DD-P8 "Out of scope"](../milestone-1/phase-8/decisions/preamble.md).
 
 - **M2-Phase 5 — Reactive engine.** State change → invalidate →
   relayout → render path, building on the queued-emission machinery
   from Phase 6 and the layout invalidation hooks from
-  [DD-P8-002](../decisions/phase-8-hello-counter.md).
+  [DD-P8-002](../milestone-1/phase-8/decisions/preamble.md).
   Subtree-vs-root dirty granularity is in scope only insofar as M2
   acceptance demands; large-tree optimization stays an open question
   in [layout-engine note §3.4](../notes/layout-engine.md).
@@ -201,7 +201,7 @@ recorded in [process/_roadmap.md](../_roadmap.md):
   pre-doc indefinitely.
 
 - **Reactive engine coupling with layout invalidation.**
-  [DD-P8-002](../decisions/phase-8-hello-counter.md) installed a
+  [DD-P8-002](../milestone-1/phase-8/decisions/preamble.md) installed a
   coarse "whole-window dirty" path. If M2-Phase 5 demands finer
   granularity for correctness (not performance), the layout-engine
   changes ripple beyond M2-Phase 5's nominal scope.
@@ -211,7 +211,7 @@ recorded in [process/_roadmap.md](../_roadmap.md):
 The post-M2 questions raised alongside the M2 redefinition were
 resolved on 2026-05-02 and are now recorded in
 [process/_roadmap.md](../_roadmap.md), [VISION.md §7](../../VISION.md#7-roadmap),
-and [docs/decisions/vision-post-m2-roadmap.md](../decisions/vision-post-m2-roadmap.md)
+and [process/cross-milestone/decisions/post-m2-roadmap.md](../cross-milestone/decisions/post-m2-roadmap.md)
 (DD-V-005..009). Summary:
 
 - Grid / DSL spec public draft → M3
@@ -244,7 +244,7 @@ and [docs/decisions/vision-post-m2-roadmap.md](../decisions/vision-post-m2-roadm
 
 - **2026-05-09** — Phase 7 progress (no acceptance-criteria change).
   - DD-M2-P6-010 (`dirty_effects` topological sort fidelity)
-    Accepted in [m2-phase-7-reactive-foundation.md](../decisions/m2-phase-7-reactive-foundation.md#dd-m2-p6-010--dirty_effects-topological-sort-fidelity)
+    Accepted in [m2-phase-7-reactive-foundation.md](phase-7/decisions/preamble.md#dd-m2-p6-010--dirty_effects-topological-sort-fidelity)
     — Option A (true topological walk in M2; pure-logic unit tests
     on synthetic dependency graphs; single drain code path). M3
     residuals (cycle detection, ordering ties, fan-out × MUTATION_CAP)
@@ -257,14 +257,14 @@ and [docs/decisions/vision-post-m2-roadmap.md](../decisions/vision-post-m2-roadm
   - DD-M2-P6-010 implementation landed; the production dirty-Effect
     drain no longer relies on `EffectId` numeric order.
   - DD-M2-P6-012 (`re-entrancy / safety-guard placement principle`)
-    Accepted in [m2-phase-7-reactive-foundation.md](../decisions/m2-phase-7-reactive-foundation.md#dd-m2-p6-012--re-entrancy-and-safety-guard-placement-principle)
+    Accepted in [m2-phase-7-reactive-foundation.md](phase-7/decisions/preamble.md#dd-m2-p6-012--re-entrancy-and-safety-guard-placement-principle)
     — Option C (role-specified defense in depth). The principle is
     recorded in [architecture.md](../../docs/architecture.md#674-runtime-safety-guard-placement)
     as a global runtime invariant. A5 now has both DDs accepted at
     design level; at this point the remaining A5 work was DD-012
     implementation alignment and focused guard-placement tests.
   - DD-M2-P6-011 (`String`-typed property binding)
-    Accepted in [m2-phase-7-reactive-foundation.md](../decisions/m2-phase-7-reactive-foundation.md#dd-m2-p6-011--string-typed-property-binding)
+    Accepted in [m2-phase-7-reactive-foundation.md](phase-7/decisions/preamble.md#dd-m2-p6-011--string-typed-property-binding)
     — Option B (`StrPropRead`). A6 is accepted at design level;
     at this point the remaining A6 work was implementation: `.ui`
     String binding must propagate through runtime widget property state
@@ -291,13 +291,13 @@ history, then deleted by default.
 
 | Phase | Status | Progress file | ADR | Notes |
 |---|---|---|---|---|
-| M2-Phase 1 - cdylib-shim cleanup | completed | retired | [m2-phase-1-cdylib-shim.md](../decisions/m2-phase-1-cdylib-shim.md) | CHANGELOG entry added; residual notes in `docs/notes/workspace-layout.md` and `docs/notes/cdylib-shim-build-graph.md`. |
-| M2-Phase 2 - wasamoc output format decision | completed | retired | [m2-phase-2-wasamoc-output-format.md](../decisions/m2-phase-2-wasamoc-output-format.md) | Option B adopted after IR loader spike. |
-| M2-Phase 3 - Handler execution location | completed | retired | [m2-phase-3-handler-exec-location.md](../decisions/m2-phase-3-handler-exec-location.md) | Runtime-side interpreter path accepted; headless verification note filed. |
-| M2-Phase 4 - Tree-mutation ABI primitives | completed | retired | [m2-phase-4-tree-mutation-abi.md](../decisions/m2-phase-4-tree-mutation-abi.md) | Stable-core tree mutation ABI landed; CHANGELOG entry added. |
-| M2-Phase 5 - Reactive engine | completed | retired | [m2-phase-5-reactive-engine.md](../decisions/m2-phase-5-reactive-engine.md) | Reactive primitives and binding path landed; later drain refinements folded into Phase 6/7 records. |
-| M2-Phase 6 - `.ui -> runtime` lowering | completed | retired | [m2-phase-6-ui-lowering.md](../decisions/m2-phase-6-ui-lowering.md) | A1/A2 discharged by the C/Rust/Zig counter migration; CHANGELOG entry added. |
-| M2-Phase 7 - Reactive Foundation Hardening & Contract Finalization | completed | retired | [m2-phase-7-reactive-foundation.md](../decisions/m2-phase-7-reactive-foundation.md) | A5/A6 discharged by topological dirty-Effect drain, runtime guard-placement invariant, and String binding through live widget property state; phase-end retrospective recorded in `docs/notes/m2-phase-7/phase-end-retrospective.md`. |
+| M2-Phase 1 - cdylib-shim cleanup | completed | retired | [m2-phase-1-cdylib-shim.md](phase-1/decisions/preamble.md) | CHANGELOG entry added; residual notes in `docs/notes/workspace-layout.md` and `docs/notes/cdylib-shim-build-graph.md`. |
+| M2-Phase 2 - wasamoc output format decision | completed | retired | [m2-phase-2-wasamoc-output-format.md](phase-2/decisions/preamble.md) | Option B adopted after IR loader spike. |
+| M2-Phase 3 - Handler execution location | completed | retired | [m2-phase-3-handler-exec-location.md](phase-3/decisions/preamble.md) | Runtime-side interpreter path accepted; headless verification note filed. |
+| M2-Phase 4 - Tree-mutation ABI primitives | completed | retired | [m2-phase-4-tree-mutation-abi.md](phase-4/decisions/preamble.md) | Stable-core tree mutation ABI landed; CHANGELOG entry added. |
+| M2-Phase 5 - Reactive engine | completed | retired | [m2-phase-5-reactive-engine.md](phase-5/decisions/preamble.md) | Reactive primitives and binding path landed; later drain refinements folded into Phase 6/7 records. |
+| M2-Phase 6 - `.ui -> runtime` lowering | completed | retired | [m2-phase-6-ui-lowering.md](phase-6/decisions/preamble.md) | A1/A2 discharged by the C/Rust/Zig counter migration; CHANGELOG entry added. |
+| M2-Phase 7 - Reactive Foundation Hardening & Contract Finalization | completed | retired | [m2-phase-7-reactive-foundation.md](phase-7/decisions/preamble.md) | A5/A6 discharged by topological dirty-Effect drain, runtime guard-placement invariant, and String binding through live widget property state; phase-end retrospective recorded in `docs/notes/m2-phase-7/phase-end-retrospective.md`. |
 
 ### Owner-facing resume note
 

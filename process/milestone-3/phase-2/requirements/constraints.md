@@ -25,7 +25,7 @@ M3-Phase 1 close 内に確定している。**
 
 - [M3-Phase 1 phase-end retrospective](../m3-phase-1/phase-end-retrospective.md)
   §Main Learning #1–#3 が本ノートの一次蒸留元。
-- [M3-Phase 1 progress file](../../plans/progress/m3-phase-1-progress.md)
+- [M3-Phase 1 progress file](../../phase-1/implementation/plan.md)
   の T1–T12 タスクログと CI / verification log が二次蒸留元。
 - 個別の step-end retrospective
   ([t1](../m3-phase-1/t1-step-end-retrospective.md) –
@@ -45,7 +45,7 @@ fold された。CLAUDE.md §Commit rules の「implementation reveals a
 tighter ordering」適用例。
 
 **M3-Phase 2 への適用:** Box は仕様上 `aspect: <ratio>` と最小限の
-`fill: <color>` 属性を持つ ([m3-plan.md A6](../../plans/m3-plan.md#acceptance-criteria))。
+`fill: <color>` 属性を持つ ([m3-plan.md A6](../../plan.md#acceptance-criteria))。
 このうち、
 
 - `aspect: <ratio>` は値型として **新しい数値型** (float / rational) を

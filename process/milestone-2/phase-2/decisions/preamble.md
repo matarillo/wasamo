@@ -1,4 +1,4 @@
-﻿# M2-Phase 2 — wasamoc output format: Architecture Decisions
+# M2-Phase 2 — wasamoc output format: Architecture Decisions
 
 **Phase:** M2-Phase 2 (wasamoc output format decision)
 **Date:** 2026-05-03
@@ -6,7 +6,7 @@
 
 ## Context
 
-[Phase 6 ADR](./phase-6-c-abi.md) explicitly deferred two questions to
+[Phase 6 ADR](../../../milestone-1/phase-6/decisions/preamble.md) explicitly deferred two questions to
 M2 to keep the stable C ABI core neutral:
 
 > **(b)** `wasamoc`'s M2 output format — host-language codegen vs IR +
@@ -30,7 +30,7 @@ artifact a host can consume. M1 hosts therefore reproduce
 
 M2 acceptance criterion **A1** requires `counter.ui` itself to drive
 the running counter in all three host languages
-([m2-plan.md A1](../plans/m2-plan.md#acceptance-criteria)). Something
+([m2-plan.md A1](../../plan.md#acceptance-criteria)). Something
 must turn the `.ui` source into the runtime calls that build the tree
 and wire reactive bindings. **Where that translation happens, and what
 intermediate artifact (if any) it produces, is the question this ADR
@@ -47,11 +47,11 @@ answers.**
   the stable core or stay internal is a Phase 4 question, not this
   one.
 - **Phase 6 stable-core neutrality.** The five-area minimum from
-  [DD-P6-001](./phase-6-c-abi.md#dd-p6-001--stable-core-scope-at-function-granularity)
+  [DD-P6-001](../../../milestone-1/phase-6/decisions/preamble.md#dd-p6-001--stable-core-scope-at-function-granularity)
   was sized to survive either resolution of (b). This ADR must
   therefore not require the stable core to grow new shapes; growth
   is allowed only in M2-Phase 4 and only as a separate decision.
-- **Hot reload (post-1.0 deferral).** [m2-plan §Out of scope](../plans/m2-plan.md#out-of-scope-deferred-to-later-milestones)
+- **Hot reload (post-1.0 deferral).** [m2-plan §Out of scope](../../plan.md#out-of-scope-deferred-to-later-milestones)
   records hot reload as post-1.0 with feasibility "depending on
   M2-Phase 2's wasamoc output format decision". The decision below
   must not foreclose hot reload, though it is not required to enable
@@ -111,5 +111,5 @@ Pass criteria confirmed:
    → `Count: N` on click; hover/press animation intact.
 
 This ADR is now **Accepted**. M2-Phase 2 task list is written in
-[m2-plan.md Progress](../plans/m2-plan.md#progress) and M2-Phase 3
+[m2-plan.md Progress](../../plan.md#progress) and M2-Phase 3
 pre-doc is the next phase to enter.

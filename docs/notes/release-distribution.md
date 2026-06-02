@@ -5,7 +5,7 @@ created: 2026-05-22
 related:
   - docs/architecture.md
   - docs/abi_spec.md
-  - docs/decisions/m2-phase-2-wasamoc-output-format.md
+  - process/milestone-2/phase-2/decisions/preamble.md
 ---
 
 # Release distribution — open questions

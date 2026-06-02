@@ -1,4 +1,4 @@
-﻿### DD-M3-P1-006 — IR text grammar surface for `bool`
+### DD-M3-P1-006 — IR text grammar surface for `bool`
 
 **Status:** Accepted
 
@@ -32,7 +32,7 @@ agree on bool spelling; divergence would pay only in characters saved.
 This DD is kept independent rather than folded into DD-M3-P1-001..003
 because the IR text grammar is the **public spec surface** that A12
 (DSL public draft) commits to (see
-[m3-plan.md A12](../plans/m3-plan.md#acceptance-criteria) and
+[m3-plan.md A12](../../plan.md#acceptance-criteria) and
 [docs/dsl_spec.md §8](../../../../docs/dsl_spec.md#8-wasamo-ir-normative-specification-m2)).
 Even when an IR text change is mechanically derived from an in-memory
 IR change, the spec-surface decision deserves an explicit DD so that

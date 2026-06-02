@@ -1,4 +1,4 @@
-﻿## Task list
+## Task list
 
 ### T0 — Moment 1 document sync
 
@@ -149,7 +149,7 @@ for owner-manual GUI smoke (2026-05-25)"** for the rationale.
 - [x] **If smoke fails:** implementation fix lands additively on the
       T6 branch (new commits); the smoke checklist above is re-run to
       green before T6 closes. Fix scope stays inside the Phase 4 ADR
-      (`docs/decisions/m3-phase-4-scroll-view.md`) / dsl_spec §4.11 /
+      (`process/milestone-3/phase-4/decisions/preamble.md`) / dsl_spec §4.11 /
       architecture.md §6.5; any fix requiring a normative spec change
       escalates to T7 Moment 2 (or, if unsuitable for Moment 2, a
       mid-ADR addendum). Fix iterations stay inside T6 until the

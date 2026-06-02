@@ -29,7 +29,7 @@ it remains as an input artefact and is not promoted into the ADR.
 
 ## Agreed DD slate (9 entries)
 
-The Phase 6 ADR (`docs/decisions/m2-phase-6-ui-lowering.md`, working
+The Phase 6 ADR (`process/milestone-2/phase-6/decisions/preamble.md`, working
 title) will carry the following nine DDs.
 
 ### DD-M2-P6-001 — Drain transaction semantics
@@ -194,11 +194,11 @@ post-M2 search-path / resource-bundle extensions go to Out of scope.
 
 Inputs are complete. The next session begins ADR drafting:
 
-1. Create `docs/decisions/m2-phase-6-ui-lowering.md` (working title)
+1. Create `process/milestone-2/phase-6/decisions/preamble.md` (working title)
    as `Status: Proposed`, carrying the 9 DDs above with full Option
    tables, Recommendation prose, and the two-axis risk/exposure
    evaluation per DD (per
-   [docs/decisions/README.md](../decisions/README.md#risk-evaluation)).
+   [process/README.md](../../../README.md)).
 2. Owner review pass.
 3. On `Status: Accepted` flip, the upstream document edits enumerated
    under decision D above are bundled into the same commit.

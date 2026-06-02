@@ -1,9 +1,9 @@
-﻿### DD-M3-P1-005 — Phase 1 evidence: which widget attribute carries the `bool` binding?
+### DD-M3-P1-005 — Phase 1 evidence: which widget attribute carries the `bool` binding?
 
 **Status:** Accepted
 
 **Context:**
-The m3-plan ([§Phase 1](../plans/m3-plan.md#phase-breakdown)) requires
+The m3-plan ([§Phase 1](../../plan.md#phase-breakdown)) requires
 "live `WidgetNode` propagation of a `bool`-bound attribute on a trivial
 widget that already exists — no new layout primitive is required for
 the phase to close." This DD picks the attribute. The chosen attribute

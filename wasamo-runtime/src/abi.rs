@@ -1,5 +1,5 @@
 //! Wasamo C ABI surface. The canonical specification is `docs/abi_spec.md`;
-//! ADR `docs/decisions/phase-6-c-abi.md` records the decisions behind it.
+//! ADR `process/milestone-1/phase-6/decisions/preamble.md` records the decisions behind it.
 //!
 //! Layout invariants in this module must match `bindings/c/wasamo.h`. The
 //! CI smoke test (compile + link a TU including `wasamo.h` against

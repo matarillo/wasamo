@@ -1,4 +1,4 @@
-﻿# M3-Phase 4 — ScrollView primitive (minimal): Architecture Decisions
+# M3-Phase 4 — ScrollView primitive (minimal): Architecture Decisions
 
 **Phase:** M3-Phase 4 (ScrollView primitive — minimal)
 **Date:** 2026-05-25
@@ -8,7 +8,7 @@
 
 M3 acceptance criterion **A5** (see
 [process/_roadmap.md M3](../../../_roadmap.md#m3-dsl-surface),
-[m3-plan.md §Acceptance criteria](../plans/m3-plan.md#acceptance-criteria)):
+[m3-plan.md §Acceptance criteria](../../plan.md#acceptance-criteria)):
 
 > ScrollView primitive (minimal: inner unbounded measure + viewport
 > clip + content offset binding; scrollbar widget, wheel handler,
@@ -114,7 +114,7 @@ this phase extends without breaking:
 This ADR is framed against A5 and the m3-plan's "minimal: inner
 unbounded measure + viewport clip + content offset binding"
 phrasing
-([m3-plan.md §Acceptance criteria](../plans/m3-plan.md#acceptance-criteria)).
+([m3-plan.md §Acceptance criteria](../../plan.md#acceptance-criteria)).
 Phase 5 Grid remains the milestone's "second novel-normative-spec
 phase" proper (star sizing is the heavier algorithmic content);
 Phase 4 introduces **smaller novel normative content** of its own
@@ -142,7 +142,7 @@ load → render it
 with correct inner-unbounded measure + viewport clip + offset
 application, (ii) the ScrollView chapter lands in `docs/dsl_spec.md`
 §4.11 as a normative spec at the milestone-end-criteria bar
-([m3-plan.md §Milestone-end criteria item 5](../plans/m3-plan.md#milestone-end-criteria))
+([m3-plan.md §Milestone-end criteria item 5](../../plan.md#milestone-end-criteria))
 applied at phase close, and (iii) `examples/gallery/` +
 `examples/gallery-rust/` are grown additively with a sibling
 `ScrollView { WrapPanel { Box × 30–40 } }` slice (the Phase 3
@@ -154,7 +154,7 @@ advance together by phase close.
 The governance question Phase 3 ADR raised (M3-onward RFC wording
 in VISION §9.2 / decisions-README vs realised phase-ADR practice)
 was resolved upstream by
-[vision-governance-rfc-deferral.md (DD-V-018)](./vision-governance-rfc-deferral.md)
+[vision-governance-rfc-deferral.md (DD-V-018)](../../../cross-milestone/decisions/governance-rfc-deferral.md)
 on 2026-05-25 (commit `632a30b docs: apply DD-V-018 — defer RFC
 adoption to post-1.0`). VISION §9.2 / §11 and decisions-README
 now describe a two-stage governance policy: pre-1.0 BDFL + ADRs,
@@ -489,7 +489,7 @@ retrospectives.md §phase-sync で触る doc セット規定は phase-end
 Moment 2 を対象とした規範であり、Moment 1 の draft set は
 その mirror として **直接同一視されるものではない**:
 
-- `docs/decisions/m3-phase-4-scroll-view.md` — ADR
+- `process/milestone-3/phase-4/decisions/preamble.md` — ADR
   `Status: Accepted` flip (this file).
 - `docs/dsl_spec.md` — new §4.11 ScrollView chapter as design-
   spec draft (DD-005 sub-issues 1–10 as the chapter outline; the
@@ -531,7 +531,7 @@ Implementation begins only after these commits land.
   retired → archived` lifecycle.
 - `docs/plans/m3-plan.md` Progress row — Status flips to
   complete.
-- `docs/decisions/m3-phase-4-scroll-view.md` (this file) —
+- `process/milestone-3/phase-4/decisions/preamble.md` (this file) —
   touch only if one of the three retrospectives.md §phase-sync
   ADR-touch cases applies (AC discharged-vs-impl divergence;
   out-of-phase residual cross-ref; thesis-level finding).

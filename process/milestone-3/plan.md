@@ -3,8 +3,8 @@ milestone: M3
 status: in-progress
 roadmap-anchor: ROADMAP.md#m3-dsl-surface
 adrs:
-  - docs/decisions/m3-phase-1-bool-scalar.md  # Phase 1 (bool scalar)
-  - docs/decisions/m3-phase-2-box-layout.md   # Phase 2 (Box layout primitive)
+  - process/milestone-3/phase-1/decisions/preamble.md  # Phase 1 (bool scalar)
+  - process/milestone-3/phase-2/decisions/preamble.md   # Phase 2 (Box layout primitive)
 created: 2026-05-16
 agreed: 2026-05-16
 in-progress: 2026-05-19
@@ -59,7 +59,7 @@ Out-of-scope section.
 Phase numbers in this plan are **local to M3** (M3-Phase 1, 2, …),
 following the M2 convention. ADR identifiers use the scope
 `M3-P<n>` (e.g. `DD-M3-P2-001`); see
-[docs/decisions/README.md](../decisions/README.md#file-naming).
+[process/README.md](../README.md).
 
 A pre-plan **target-app framing** step was discharged before this
 plan opened, in
@@ -117,7 +117,7 @@ with stable IDs for phase mapping:
 
 The phases below are working hypotheses; each one's design
 questions become a ADR at pre-doc time, per
-[the decisions README](../decisions/README.md). Each phase ships
+[the decisions README](../README.md). Each phase ships
 one (or a tightly coupled pair of) surface(s) on the gallery
 target app, updates `docs/dsl_spec.md` for what it shipped, and
 exercises that surface in `examples/gallery/`.
@@ -349,7 +349,7 @@ permitted sparingly).
 
 A phase closes when **all** of the following hold:
 
-1. **ADR Accepted.** The ADR (`docs/decisions/m3-phase-N-*.md`)
+1. **ADR Accepted.** The ADR (`process/m3-phase-N-*.md`)
    has all its design decisions in `Accepted` status, with no
    `Proposed` DDs remaining open for the phase.
 2. **Implementation landed.** The surface the phase owns is
@@ -373,7 +373,7 @@ A phase closes when **all** of the following hold:
    three for the full gallery).
    *Foundational-phase exception:* Phase 1 closes before
    `examples/gallery/` exists, so per its ADR
-   ([m3-phase-1-bool-scalar.md §Verification closure item 4](../decisions/m3-phase-1-bool-scalar.md#phase-1-verification-closure-what-counts-as-a9-evidence)),
+   ([m3-phase-1-bool-scalar.md §Verification closure item 4](phase-1/decisions/preamble.md#phase-1-verification-closure-what-counts-as-a9-evidence)),
    a dedicated minimal example under `examples/` (Phase 1 chose
    `examples/bool-demo/` + `examples/bool-demo-rust/`) is
    acceptable as substitute. The exception is scoped to Phase 1
@@ -474,7 +474,7 @@ M3 is complete when **all** of the following hold:
 
 - **2026-05-21 — Phase-end criterion 7 wording aligned to
   Phase 1 / Phase 2 practice.** Routed under
-  [plans/README.md §Factual correction](../plans/README.md#factual-correction-in-progress-only).
+  [plans/README.md §Factual correction](../README.md).
   The original wording named `docs/notes/retrospectives.md` as
   the landing site for the per-phase retrospective entry. In
   practice, both Phase 1

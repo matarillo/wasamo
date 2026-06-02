@@ -35,7 +35,7 @@ rather than re-derives:
 ## Phase 3 acceptance criteria (restated)
 
 - **A3** (see [process/_roadmap.md M3](../../../_roadmap.md#m3-dsl-surface),
-  [m3-plan.md §Acceptance criteria](../../plans/m3-plan.md#acceptance-criteria)):
+  [m3-plan.md §Acceptance criteria](../../plan.md#acceptance-criteria)):
 
   > WrapPanel layout primitive, demonstrating that DSL can express
   > a two-stage measure-arrange — linear main-axis placement plus
@@ -53,7 +53,7 @@ rather than re-derives:
   WrapPanel of Boxes.
 
 - **First M3 phase with novel normative measure-arrange spec.**
-  [m3-plan.md §Phase breakdown](../../plans/m3-plan.md#phase-breakdown)
+  [m3-plan.md §Phase breakdown](../../plan.md#phase-breakdown)
   names Phase 3 as "the first M3 phase to introduce novel normative
   measure-arrange spec in `docs/dsl_spec.md`, so the spec-drafting
   discipline gets exercised early". Phase 2's DD-005 had non-trivial
@@ -62,7 +62,7 @@ rather than re-derives:
   novel paradigm is the **two-stage measure-arrange** itself
   (intrinsic child measure → line formation → cross-axis sum).
   Acceptance for the spec text is the
-  [m3-plan.md §Milestone-end criteria item 5](../../plans/m3-plan.md#milestone-end-criteria)
+  [m3-plan.md §Milestone-end criteria item 5](../../plan.md#milestone-end-criteria)
   bar — *could a reader of only `docs/dsl_spec.md` reproduce this
   surface against a hypothetical host that already provides the
   C ABI?* — applied at phase close rather than at milestone close.
@@ -81,7 +81,7 @@ rather than re-derives:
   this through Phase 4 unchanged). Phase 5 (Grid) is the second
   novel-normative-spec phase and explicitly benefits from
   WrapPanel's spec rehearsal, per the
-  [m3-plan.md §Risks](../../plans/m3-plan.md#risks) "WrapPanel /
+  [m3-plan.md §Risks](../../plan.md#risks) "WrapPanel /
   Grid measure-arrange spec complexity" mitigation.
 
 ---
@@ -147,7 +147,7 @@ cells —
 ## Agreed DD slate (6 entries proposed)
 
 The Phase 3 ADR (working title
-`docs/decisions/m3-phase-3-wrap-panel.md`) will carry the following
+`process/milestone-3/phase-3/decisions/preamble.md`) will carry the following
 six DDs.
 
 ### DD-M3-P3-001 — WrapPanel IR node form and N-child main-axis flow contract
@@ -237,7 +237,7 @@ Sub-issues:
   the phase that needs it. A bindable orientation is a layout-
   paradigm-switching binding with no Phase 3 sub-screen calling
   for it; the speculative-seam argument from
-  [m3-phase-2-box-layout.md DD-M3-P2-004](../../decisions/m3-phase-2-box-layout.md)
+  [m3-phase-2-box-layout.md DD-M3-P2-004](../../phase-2/decisions/preamble.md)
   applies symmetrically. Recommendation: if orientation is
   exposed at all in Phase 3, it is constant-only.
 
@@ -611,7 +611,7 @@ Sub-issues:
   The alternative options (layout-time runtime error on
   oversized child; silent skip; WrapPanel grows to fit; clip at
   WrapPanel boundary) were considered and rejected in the ADR
-  ([`docs/decisions/m3-phase-3-wrap-panel.md`](../../decisions/m3-phase-3-wrap-panel.md)
+  ([`process/milestone-3/phase-3/decisions/preamble.md`](../decisions/preamble.md)
   DD-005 "Options (oversized first-child of a line)" and
   "Options (oversized line — arrangement / paint clip)").
 - **Rounding contract.** Inherits Phase 2 DD-005's discipline:
@@ -751,7 +751,7 @@ remaining items map to framing decisions C–G.
 
 ### B. Pre-doc-discipline check
 
-Per [docs/decisions/README.md §Pre-doc discipline](../../decisions/README.md#pre-doc-discipline),
+Per [process/README.md §Pre-doc discipline](../../../README.md),
 the framing must verify that the proposed DD slate serves A3, not
 merely execute the m3-plan task description literally. Check:
 
@@ -781,7 +781,7 @@ merely execute the m3-plan task description literally. Check:
 
 ### C. Verification strategy
 
-Per [m3-plan.md §Verification strategy](../../plans/m3-plan.md#verification-strategy),
+Per [m3-plan.md §Verification strategy](../../plan.md#verification-strategy),
 Phase 3 chooses from the menu:
 
 - **`wasamoc` check-side pure-logic tests** for compile-time
@@ -866,7 +866,7 @@ two-stage cadence is the precedent.
 Constituent commits (each its own commit on the pre-doc branch,
 per CLAUDE.md §Commit rules):
 
-- `docs/decisions/m3-phase-3-wrap-panel.md` — ADR `Status: Accepted` flip.
+- `process/milestone-3/phase-3/decisions/preamble.md` — ADR `Status: Accepted` flip.
 - `docs/dsl_spec.md` — new §4.10 WrapPanel chapter as design-spec
   draft; IR notation in §8.x extended if the spacing literal form
   requires it (it doesn't, per DD-003 recommendation — `i32`
@@ -926,7 +926,7 @@ The thumbnail set composition question
   evidence is needed; Phase 3 sub-screen does not require it for
   A3 discharge.
 - **Rust host only.** Per
-  [m3-plan.md §Phase-end criteria item 5](../../plans/m3-plan.md#phase-end-criteria),
+  [m3-plan.md §Phase-end criteria item 5](../../plan.md#phase-end-criteria),
   Phase 3 ships at least one host's gallery proof;
   `examples/gallery-rust/` is the canonical one (already seeded by
   Phase 2 framing decision F). C and Zig host parity comes at
@@ -939,7 +939,7 @@ The thumbnail set composition question
 
 **`examples/gallery/` is still a partial gallery, not the A1
 proof.** A1 acceptance lives in Phase 8 per the
-[acceptance ↔ phase mapping](../../plans/m3-plan.md#acceptance--phase-mapping);
+[acceptance ↔ phase mapping](../../plan.md#acceptance--phase-mapping);
 Phase 3 grows the slice from Phase 2's Box rectangle into a
 wrapped grid of Box rectangles.
 
@@ -1130,7 +1130,7 @@ analogue and readers will mis-map it without an explicit anchor.
 | §15 layout-engine open questions selection | Direct input | Framing decision F (layout-engine bullet) |
 | §16 verification/process notes — evidence placement | Direct input | Framing decision F (process-rules-ssot Q6 bullet); framing decision C |
 
-### From [m3-plan.md](../../plans/m3-plan.md)
+### From [m3-plan.md](../../plan.md)
 
 | Section | Disposition | Consumed at |
 |---|---|---|
@@ -1154,7 +1154,7 @@ analogue and readers will mis-map it without an explicit anchor.
 | Narrow re-wrap proof strip (3-col wrap on width change) | Visible-proof reference | Framing decision C (Windows integration test fixture exercises a fixed main-axis bound, not viewport-resize) |
 | Overflow proof strip (vertical scroll) | Out of Phase 3 scope | Out-of-scope (Phase 4 ScrollView) |
 
-### From [docs/decisions/m3-phase-2-box-layout.md](../../decisions/m3-phase-2-box-layout.md)
+### From [process/milestone-3/phase-2/decisions/preamble.md](../../phase-2/decisions/preamble.md)
 
 | DD | Disposition | Consumed at |
 |---|---|---|
@@ -1179,11 +1179,11 @@ analogue and readers will mis-map it without an explicit anchor.
 
 Once framing is owner-aligned, the next session begins ADR drafting:
 
-1. Create `docs/decisions/m3-phase-3-wrap-panel.md` (working title)
+1. Create `process/milestone-3/phase-3/decisions/preamble.md` (working title)
    as `Status: Proposed`, carrying the 6 DDs above with full Option
    tables, Recommendation prose, and the two-axis risk / exposure
    evaluation per DD (per
-   [docs/decisions/README.md §Risk evaluation](../../decisions/README.md#risk-evaluation)).
+   [process/README.md §Risk evaluation](../../../README.md)).
 2. Owner review pass.
 3. On `Status: Accepted` flip, the upstream document edits
    enumerated under **framing decision D Moment 1** land as

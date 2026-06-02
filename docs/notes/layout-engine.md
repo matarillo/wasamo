@@ -4,13 +4,13 @@ status: live
 created: 2026-04-28
 last-updated: 2026-05-02
 related-adrs:
-  - docs/decisions/phase-3-layout-engine.md
+  - process/milestone-1/phase-3/decisions/preamble.md
 ---
 
 # レイアウトエンジン — 検討メモと未解決事項
 
 このノートはレイアウトエンジンに関するオーナーの検討記録の live note。
-M1 Phase 3 で確定した決定は ADR (`docs/decisions/phase-3-layout-engine.md`)
+M1 Phase 3 で確定した決定は ADR (`process/milestone-1/phase-3/decisions/preamble.md`)
 を参照。本ノートには **ADR に書かれなかった代替案の検討記録** と、
 **M2 以降の Open Questions** を残す。
 

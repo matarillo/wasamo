@@ -1,4 +1,4 @@
-﻿# M3-Phase 3 — WrapPanel layout primitive: Architecture Decisions
+# M3-Phase 3 — WrapPanel layout primitive: Architecture Decisions
 
 **Phase:** M3-Phase 3 (WrapPanel layout primitive)
 **Date:** 2026-05-21
@@ -8,7 +8,7 @@
 
 M3 acceptance criterion **A3** (see
 [process/_roadmap.md M3](../../../_roadmap.md#m3-dsl-surface),
-[m3-plan.md §Acceptance criteria](../plans/m3-plan.md#acceptance-criteria)):
+[m3-plan.md §Acceptance criteria](../../plan.md#acceptance-criteria)):
 
 > WrapPanel layout primitive, demonstrating that DSL can express a
 > two-stage measure-arrange — linear main-axis placement plus
@@ -65,7 +65,7 @@ without breaking:
 This ADR is framed against A3 and the m3-plan's "first M3 phase to
 introduce novel normative measure-arrange spec in `docs/dsl_spec.md`"
 designation
-([m3-plan.md §Phase breakdown](../plans/m3-plan.md#phase-breakdown)).
+([m3-plan.md §Phase breakdown](../../plan.md#phase-breakdown)).
 It does **not** re-open F5 (`TypedValue` deferral) — every attribute
 the WrapPanel exposes ships constant-only; bindable surface is
 deferred per attribute to the phase that first needs it. Image-widget
@@ -78,7 +78,7 @@ line-spacing: <i32>; <Box-children> }` and the shared crates lower →
 load → render it with correct two-stage measure-arrange, (ii) the
 WrapPanel chapter lands in `docs/dsl_spec.md` §4.10 as a normative
 spec at the milestone-end criteria bar
-([m3-plan.md §Milestone-end criteria item 5](../plans/m3-plan.md#milestone-end-criteria))
+([m3-plan.md §Milestone-end criteria item 5](../../plan.md#milestone-end-criteria))
 applied at phase close, and (iii) `examples/gallery/` +
 `examples/gallery-rust/` are grown additively from Phase 2's single-Box
 sub-screen into a WrapPanel of Box thumbnails. Per A11, all sides
@@ -89,13 +89,13 @@ advance together by phase close.
 [VISION.md §9.2](../../VISION.md#92-decision-making) describes a
 "gradual transition to RFC-based consensus" for M3 onward, with
 major changes discussed in `docs/rfcs/`.
-[docs/decisions/README.md §Scope and relation to RFCs](./README.md#scope-and-relation-to-rfcs)
+[process/README.md §Scope and relation to RFCs](../../../README.md)
 echoes the same wording. Both texts treat M1/M2 phase-ADR practice
 as the pre-transition baseline.
 
 In observed practice, M3 Phase 1
-([m3-phase-1-bool-scalar.md](./m3-phase-1-bool-scalar.md)) and
-M3 Phase 2 ([m3-phase-2-box-layout.md](./m3-phase-2-box-layout.md))
+([m3-phase-1-bool-scalar.md](../../phase-1/decisions/preamble.md)) and
+M3 Phase 2 ([m3-phase-2-box-layout.md](../../phase-2/decisions/preamble.md))
 both ran as ADRs without invoking the RFC process;
 `docs/rfcs/` does not yet exist in the repository, and the
 RFC-process content (template, lifecycle, acceptance rule) has not
@@ -121,7 +121,7 @@ flip blocks until the governance question is resolved upstream.
 
 **Resolution (post-hoc, 2026-05-25).** The upstream governance
 question was resolved by
-[vision-governance-rfc-deferral.md DD-V-018](./vision-governance-rfc-deferral.md#dd-v-018--defer-rfc-adoption-to-post-10),
+[vision-governance-rfc-deferral.md DD-V-018](../../../cross-milestone/decisions/governance-rfc-deferral.md#dd-v-018--defer-rfc-adoption-to-post-10),
 which collapsed the three-stage governance trajectory into two
 stages (pre-1.0 BDFL + ADRs, post-1.0 open governance + RFC
 machinery introduced together). The phase-ADR path was therefore
@@ -213,7 +213,7 @@ do not appear as recommended options —
   set to wrap within the default window (800×600); overflow handling
   arrives with Phase 4 ScrollView.
 - **C / Zig host parity for the WrapPanel sub-screen.**
-  [m3-plan.md §Phase-end criteria item 5](../plans/m3-plan.md#phase-end-criteria)
+  [m3-plan.md §Phase-end criteria item 5](../../plan.md#phase-end-criteria)
   calls for at least one host per phase; Phase 8 broadens the full
   gallery to all three. Phase 3 grows `examples/gallery-rust/` only.
 - **WrapPanel-specific layered diagnostics**
@@ -228,7 +228,7 @@ do not appear as recommended options —
 
 Implementation findings that surfaced during Phase 3 T1–T9 but fall
 outside this ADR's scope are recorded under
-[m3-phase-3-progress.md §Out-of-phase residuals](../plans/progress/m3-phase-3-progress.md#out-of-phase-residuals):
+[m3-phase-3-progress.md §Out-of-phase residuals](../implementation/handoff.md#out-of-phase-residuals):
 
 - **R1** — `.gitignore` `*.uic` pattern (cross-cutting build
   hygiene).
@@ -338,7 +338,7 @@ experience.
 ## Summary of decisions
 
 The **Forward-compat exposure** column rates the recommended option
-of each DD per [decisions README §Risk evaluation](./README.md#risk-evaluation).
+of each DD per [decisions README §Risk evaluation](../../../README.md).
 All six rate `Low` because every recommendation is structurally
 additive against the foreseeable future events catalogued in
 **Out of scope** above (Phase 4 ScrollView, Phase 5 Grid, Phase 6
@@ -367,11 +367,11 @@ Implementation task list: belongs in the Phase 3 progress file
 `docs/plans/progress/m3-phase-3-progress.md` (created when this ADR
 is Accepted and Phase 3 starts execution); not in this ADR and not
 in `m3-plan.md` itself. See
-[plans/README.md §Scope rule (plan vs ADR)](../plans/README.md#scope-rule-plan-vs-adr)
-and [plans/README.md §Phase progress file lifecycle](../plans/README.md#phase-progress-file-lifecycle)
+[plans/README.md §Scope rule (plan vs ADR)](../../../README.md#scope-rule-plan-vs-adr)
+and [plans/README.md §Phase progress file lifecycle](../../../README.md#phase-progress-file-lifecycle)
 for the authoritative location and the `active → closing → retired
 → archived` lifecycle the file follows. The Progress table in
-[m3-plan.md](../plans/m3-plan.md) carries only a one-row index entry
+[m3-plan.md](../../plan.md) carries only a one-row index entry
 pointing at this progress file.
 
 ## Spec impact preview (for owner agreement)
@@ -426,10 +426,10 @@ pre-doc branch, scoped by review concern per
   `WASAMO_LAYOUT_ERROR_*` extension — DD-005 Option A adds no
   variant, and the unbounded-cross case fires Phase 2's existing
   Box-side error.
-- [docs/plans/m3-plan.md](../plans/m3-plan.md) — Progress section's
+- [docs/plans/m3-plan.md](../../plan.md) — Progress section's
   Phase 3 row populated (Status: `in progress`; ADR link; progress
   file link).
-- [docs/plans/progress/m3-phase-3-progress.md](../plans/progress/) —
+- [docs/plans/progress/m3-phase-3-progress.md](../implementation/) —
   new file opened with task list mapped to this ADR's verification
   closure items below.
 - [docs/notes/retrospectives.md](../notes/retrospectives.md) —

@@ -3,7 +3,7 @@ title: ヘッドレス検証 — 必要性の批判的検討
 status: live
 created: 2026-05-04
 related-adrs:
-  - docs/decisions/m2-phase-3-handler-exec-location.md
+  - process/milestone-2/phase-3/decisions/preamble.md
 related-notes:
   - docs/notes/verification-environments.md
 ---

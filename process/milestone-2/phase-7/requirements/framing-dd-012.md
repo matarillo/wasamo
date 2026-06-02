@@ -5,7 +5,7 @@
 **Date:** 2026-05-10
 **Targets DD:** DD-M2-P6-012 - Re-entrancy and safety-guard placement principle
 **Targets phase:** M2-Phase 7 (Reactive Foundation Hardening & Contract Finalization)
-**ADR housing:** [docs/decisions/m2-phase-7-reactive-foundation.md](../../decisions/m2-phase-7-reactive-foundation.md)
+**ADR housing:** [process/milestone-2/phase-7/decisions/preamble.md](../decisions/preamble.md)
 **Progress tracker:** `docs/plans/progress/m2-phase-7-progress.md`
 (retired at M2 close; summary remains in `docs/plans/m2-plan.md`)
 
@@ -290,7 +290,7 @@ non-ABI entry も principle 上の guarded boundary として扱う必要があ�
 ## Post-framing outcome (2026-05-10)
 
 The framing above fed the ADR update for
-[DD-M2-P6-012](../../decisions/m2-phase-7-reactive-foundation.md#dd-m2-p6-012--re-entrancy-and-safety-guard-placement-principle).
+[DD-M2-P6-012](../decisions/preamble.md#dd-m2-p6-012--re-entrancy-and-safety-guard-placement-principle).
 Owner agreement selected **Option C - role-specified defense in depth**:
 ABI boundary owns caller-facing diagnostics; internal runtime boundary owns
 invariant enforcement for non-ABI entries; cleanup/destroy exceptions must be
@@ -303,7 +303,7 @@ Completed from this handoff:
    `lib.rs::run()` message-loop path, and destroy/cleanup exceptions を
    entry-path matrix として整理する。
 2. **ADR DD-012 revision.** In
-   [m2-phase-7-reactive-foundation.md](../../decisions/m2-phase-7-reactive-foundation.md):
+   [m2-phase-7-reactive-foundation.md](../decisions/preamble.md):
    - Replace the "To be settled" Recommendation with the agreed option.
    - Carry forward non-recommended options with their A5-discharge analysis.
    - Record how DD-010's accepted implementation changes the A5 baseline.

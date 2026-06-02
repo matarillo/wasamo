@@ -42,7 +42,7 @@ findings (1–4) はいずれも本 retrospective commit (および同 commit �
 owner の no-ff merge 明示承認であり、push はさらに別 gate**、である。
 
 owner-review findings の処理結果は [progress file §Owner-review follow-ups
-(closed at T12 phase-end)](../../plans/progress/m3-phase-1-progress.md#owner-review-follow-ups-closed-at-t12-phase-end)
+(closed at T12 phase-end)](../implementation/plan.md#owner-review-follow-ups-closed-at-t12-phase-end)
 に記録した。要点:
 
 - **Finding 1** (A9 evidence wording / ADR item 3 未達) → T13 を新設し
@@ -71,7 +71,7 @@ implicit-constraint review が surface した残り二項目 — Follow-up A
 (T13 proof が synchronous non-batched drain に依存している点) — は、
 T14 (bool string interpolation rejection) 完了後にいずれも documentation
 decision として close 済み。詳細は [progress file §Remaining
-implicit-constraint follow-ups (closed after T14)](../../plans/progress/m3-phase-1-progress.md#remaining-implicit-constraint-follow-ups-closed-after-t14)
+implicit-constraint follow-ups (closed after T14)](../implementation/plan.md#remaining-implicit-constraint-follow-ups-closed-after-t14)
 を参照。
 
 具体的には、
@@ -514,7 +514,7 @@ All local build/test commands completed successfully. GitHub Actions
 `workflow_dispatch` run
 [26094510225](https://github.com/matarillo/wasamo/actions/runs/26094510225)
 on `feat/m3-phase-1` is green, and the progress file's
-[§CI / verification log](../../plans/progress/m3-phase-1-progress.md#ci--verification-log)
+[§CI / verification log](../implementation/log.md#ci--verification-log)
 records that it includes both T6 `button_enabled` and T13
 `bool_binding_live_propagation`.
 

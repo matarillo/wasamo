@@ -101,7 +101,7 @@ phase progress に蒸留する。
 - 実装が ADR どおり進んだ場合: `docs/plans/progress/m2-phase-7-progress.md` の
   DD-M2-P6-012 実装チェックを更新する。
 - 実装中に Option C から逸脱する新しい guard placement rule が必要になった場合:
-  `docs/decisions/m2-phase-7-reactive-foundation.md` の DD-012 へ戻すか、新しい pre-doc
+  `process/milestone-2/phase-7/decisions/preamble.md` の DD-012 へ戻すか、新しい pre-doc
   cycle を開く。
 - Step-end gate の結果は `docs/notes/m2-phase-7/dd-012-step-end-retrospective.md` に記録する。
 

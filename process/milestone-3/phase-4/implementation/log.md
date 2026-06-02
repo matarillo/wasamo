@@ -1,4 +1,4 @@
-﻿## Decisions log
+## Decisions log
 
 - **T4 — unbounded-scroll-axis fixture disposition (2026-05-25).** ADR
   Phase 4 verification closure item 4's last sub-bullet permits
@@ -40,7 +40,7 @@
   inside its own branch; **T7 (= former T6)** runs the mechanical
   phase-close gates only once visible correctness is owner-accepted.
   Smoke gate is now explicit in the progress file rather than
-  inherited from `retrospectives.md` item 17. ADR (`docs/decisions/
+  inherited from `retrospectives.md` item 17. ADR (`process/
   m3-phase-4-scroll-view.md`) numbering is not affected — the ADR
   refers to verification closure **evidence item 5**, which now
   maps onto T5 + T6 jointly; m3-plan.md Phase 4 row does not list

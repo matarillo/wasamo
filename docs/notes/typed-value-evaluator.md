@@ -3,7 +3,7 @@ title: TypedValue evaluator unification — 検討メモと未解決事項
 status: live
 created: 2026-05-10
 related-adrs:
-  - docs/decisions/m2-phase-7-reactive-foundation.md
+  - process/milestone-2/phase-7/decisions/preamble.md
 related-notes:
   - docs/notes/m2-phase-7/dd-011-pre-doc-framing.md
   - docs/notes/m2-to-m3-handover.md

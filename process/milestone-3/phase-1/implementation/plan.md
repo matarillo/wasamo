@@ -1,4 +1,4 @@
-﻿## Task list
+## Task list
 
 ### T1 — `wasamo-ir`: add `bool` to the type / literal / handler surfaces
 
@@ -431,7 +431,7 @@ ed93d5e + b7f91ce (2026-05-19).**
 - [x] F5 (`TypedValue`) deferral cross-reference preserved in both
       docs (dsl_spec.md §8.12 and architecture.md §6.8.7 new
       per-type-seam paragraph; both link back to
-      [m3-phase-1-bool-scalar.md DD-M3-P1-007](../../decisions/m3-phase-1-bool-scalar.md)
+      [m3-phase-1-bool-scalar.md DD-M3-P1-007](../decisions/preamble.md)
       and the canonical F5 record in
       [notes/m3/m3-start-framing.md §F5](../../notes/m3/m3-start-framing.md)).
 - [x] External-implementor smoke check on the spec edits: the
@@ -525,7 +525,7 @@ Discharges the m3-plan §Phase-end criteria checklist.
       - **T13's bool binding live-propagation test (added during
         this phase-end review when owner observed the gap; see
         T13 below).** This is the test that ADR
-        [§Verification → item 3](../../decisions/m3-phase-1-bool-scalar.md#verification-strategy)
+        [§Verification → item 3](../decisions/preamble.md#verification-strategy)
         actually calls for.
       - Confirmed green in `workflow_dispatch` run
         [26094510225](https://github.com/matarillo/wasamo/actions/runs/26094510225)
@@ -560,7 +560,7 @@ Discharges the m3-plan §Phase-end criteria checklist.
 ### T13 — ADR item 3 live-propagation CI-gated Windows integration test
 
 Discharges
-[ADR §Verification → item 3](../../decisions/m3-phase-1-bool-scalar.md#verification-strategy):
+[ADR §Verification → item 3](../decisions/preamble.md#verification-strategy):
 a mock-free Windows-only integration test that loads the Phase 1
 `.ui` fixture (`state ready: bool = true; Button { enabled: ready;
 on click { ready = false } }`), invokes the button's click signal,

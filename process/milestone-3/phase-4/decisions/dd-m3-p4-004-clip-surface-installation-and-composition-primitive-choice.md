@@ -1,11 +1,11 @@
-﻿### DD-M3-P4-004 — Clip surface installation and Composition primitive choice
+### DD-M3-P4-004 — Clip surface installation and Composition primitive choice
 
 **Status:** Accepted
 
 **Context:** A5 names "viewport clip" as a load-bearing
 component. Phase 3 T8 established that **WrapPanel installs no
 clip surface** (see
-[Phase 3 ADR DD-005 oversized-line section](./m3-phase-3-wrap-panel.md));
+[Phase 3 ADR DD-005 oversized-line section](../../phase-3/decisions/preamble.md));
 ScrollView is the **dual** — it must install a clip surface
 because the gallery's overflow state (`ScrollView { … }`) is
 exactly where the "parent clips" contract Phase 3 deferred to
@@ -117,7 +117,7 @@ absolute-vs-parent-relative offset convention. The architecture
 fix landed in
 [architecture.md §6.5](../../../../docs/architecture.md#65-widgetnode-and-visual-layer-sync);
 the test-coverage half was filed open as R2 (per
-[Phase 3 ADR Out-of-phase residuals](./m3-phase-3-wrap-panel.md)).
+[Phase 3 ADR Out-of-phase residuals](../../phase-3/decisions/preamble.md)).
 Per Phase 4 framing decision F, R2 closes inside Phase 4 via the
 Windows integration test's three-level offset assertion
 (ScrollView Visual at parent offset X, ScrollView-owned

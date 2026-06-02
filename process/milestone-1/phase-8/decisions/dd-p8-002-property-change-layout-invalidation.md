@@ -1,4 +1,4 @@
-﻿### DD-P8-002 — Property-change layout invalidation
+### DD-P8-002 — Property-change layout invalidation
 
 **Status:** Accepted
 
@@ -105,7 +105,7 @@ and D contort the example to hide the gap.
   trees are small; the cost is invisible. Optimization belongs to
   M3 performance work.
 - Animating property-change transitions. Per
-  [DD-V-001](./vision-m1-acceptance-criteria.md), property-change
+  [DD-V-001](../../../cross-milestone/decisions/m1-acceptance-criteria.md), property-change
   animations are M5 scope. The relayout here is instant —
   consistent with SwiftUI / Compose / Flutter / CSS defaults.
 

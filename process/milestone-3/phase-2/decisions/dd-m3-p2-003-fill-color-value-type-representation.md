@@ -1,4 +1,4 @@
-﻿### DD-M3-P2-003 — `fill: <color>` value-type representation
+### DD-M3-P2-003 — `fill: <color>` value-type representation
 
 **Status:** Accepted
 
@@ -142,7 +142,7 @@ The Phase 2 styling commitment remains: *the value layer carries
 alpha; the M3 styling layer does not gain alpha-styling controls
 beyond the literal hex form*. Theming, palette, and dynamic alpha
 adjustment all remain M4+ work (per
-[m3-plan.md §Out of scope](../plans/m3-plan.md#out-of-scope-deferred-to-later-milestones)
+[m3-plan.md §Out of scope](../../plan.md#out-of-scope-deferred-to-later-milestones)
 and target-app pre-doc Visual / styling Out-of-scope).
 
 **Forward-compat exposure:** Option A (alpha-yes, Box-internal) is

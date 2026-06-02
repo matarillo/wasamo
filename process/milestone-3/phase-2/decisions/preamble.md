@@ -1,4 +1,4 @@
-﻿# M3-Phase 2 — Box layout primitive: Architecture Decisions
+# M3-Phase 2 — Box layout primitive: Architecture Decisions
 
 **Phase:** M3-Phase 2 (Box layout primitive)
 **Date:** 2026-05-20
@@ -8,7 +8,7 @@
 
 M3 acceptance criterion **A6** (see
 [process/_roadmap.md M3](../../../_roadmap.md#m3-dsl-surface),
-[m3-plan.md §Acceptance criteria](../plans/m3-plan.md#acceptance-criteria)):
+[m3-plan.md §Acceptance criteria](../../plan.md#acceptance-criteria)):
 
 > Box layout primitive (0+ child container; `aspect: <ratio>` attribute
 > subsumes a standalone AspectRatio; minimal `fill: <color>` attribute
@@ -106,7 +106,7 @@ dependency direction.
 
 - **Image widget surface, asset pipeline, icon font, image decoder.**
   M4 or later
-  ([m3-plan.md §Out of scope](../plans/m3-plan.md#out-of-scope-deferred-to-later-milestones),
+  ([m3-plan.md §Out of scope](../../plan.md#out-of-scope-deferred-to-later-milestones),
   [m3-target-app-predoc.md — 保留 2 closure](../notes/m3/m3-target-app-predoc.md#保留-2-closure-image-widget-surface-の-m3-開封可否--不開封-m4-へ-defer)).
   Phase 2 ships the structural bridge (DD-006); the Image widget
   itself ships when M4+ commits to it.
@@ -160,7 +160,7 @@ dependency direction.
   [predoc-inputs.md §7](../notes/m3-phase-2/predoc-inputs.md#7-f32--f64-を-irtype-に入れるかの再評価)'s
   default of "do not add" stands.
 - **C / Zig host parity for the Box sub-screen.**
-  [m3-plan.md §Phase-end criteria item 5](../plans/m3-plan.md#phase-end-criteria)
+  [m3-plan.md §Phase-end criteria item 5](../../plan.md#phase-end-criteria)
   calls for at least one host per phase; Phase 8 broadens the full
   gallery to all three. Phase 2 seeds `examples/gallery-rust/`
   only.
@@ -264,11 +264,11 @@ Implementation task list: belongs in the Phase 2 progress file
 `docs/plans/progress/m3-phase-2-progress.md` (created when this ADR
 is Accepted and Phase 2 starts execution); not in this ADR and not
 in `m3-plan.md` itself. See
-[plans/README.md §Scope rule (plan vs ADR)](../plans/README.md#scope-rule-plan-vs-adr)
-and [plans/README.md §Phase progress file lifecycle](../plans/README.md#phase-progress-file-lifecycle)
+[plans/README.md §Scope rule (plan vs ADR)](../../../README.md#scope-rule-plan-vs-adr)
+and [plans/README.md §Phase progress file lifecycle](../../../README.md#phase-progress-file-lifecycle)
 for the authoritative location and the `active → closing → retired
 → archived` lifecycle the file follows. The Progress table in
-[m3-plan.md](../plans/m3-plan.md) carries only a one-row index entry
+[m3-plan.md](../../plan.md) carries only a one-row index entry
 pointing at this progress file.
 
 ## Spec impact preview (for owner agreement)
@@ -313,7 +313,7 @@ design-spec draft):
   variants, `WASAMO_VALUE_COLOR` / `WASAMO_VALUE_RATIO` tags, and the
   corresponding `abi.rs` arms) land together in that phase per
   [predoc-inputs.md §1](../notes/m3-phase-2/predoc-inputs.md#1-box-が新規-propertyvalue-variant-を入れるなら-abi-value-conversion-arm-は同じ-step-に-fold-する).
-- [docs/plans/m3-plan.md](../plans/m3-plan.md) — Progress section's
+- [docs/plans/m3-plan.md](../../plan.md) — Progress section's
   Phase 2 row populated (Status: `in progress`; ADR link; progress
   file link).
 - [docs/notes/retrospectives.md](../notes/retrospectives.md) —

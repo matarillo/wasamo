@@ -1,4 +1,4 @@
-﻿# Phase 7 — Language Bindings: Architecture Decisions
+# Phase 7 — Language Bindings: Architecture Decisions
 
 **Phase:** 7 (Language bindings — C / Rust / Zig)
 **Date:** 2026-04-30
@@ -37,7 +37,7 @@ this ADR:
 
 The roadmap Phase 7 task list ([process/_roadmap.md M1](../../../_roadmap.md#m1-proof-of-concept))
 has seven items. Per
-[Pre-doc discipline](./README.md#pre-doc-discipline) those are
+[Pre-doc discipline](../../../README.md) those are
 working hypotheses; this ADR revisits them against the acceptance
 criterion. The decisions below are sequenced so that DD-P7-001
 (Rust binding architecture) determines the shape of the rest.
@@ -128,7 +128,7 @@ If the above decisions are Accepted, the Phase 7 task list in
 [process/_roadmap.md](../../../_roadmap.md#m1-proof-of-concept) is revised to reflect the
 crate rename and the scope split:
 
-- [ ] `docs/decisions/phase-7-language-bindings.md` — owner agreement (this doc)
+- [ ] `process/milestone-1/phase-7/decisions/preamble.md` — owner agreement (this doc)
 - [ ] Workspace: rename runtime crate `wasamo` → `wasamo-runtime`;
       `[lib].name = "wasamo"` keeps `wasamo.dll` / `wasamo.dll.lib`
       filenames stable. Update Phase 4/5 examples' `Cargo.toml` deps.

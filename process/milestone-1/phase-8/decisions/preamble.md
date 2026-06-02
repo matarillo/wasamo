@@ -1,4 +1,4 @@
-﻿# Phase 8 — Hello Counter Sample × 3 Languages: Architecture Decisions
+# Phase 8 — Hello Counter Sample × 3 Languages: Architecture Decisions
 
 **Phase:** 8 (Hello Counter sample × C / Rust / Zig — final M1 deliverable)
 **Date:** 2026-05-01
@@ -22,7 +22,7 @@ Phase 8 consumes them: each binding gets one host-language
 
 The roadmap Phase 8 task list ([process/_roadmap.md M1](../../../_roadmap.md#m1-proof-of-concept))
 has eight items. Per
-[Pre-doc discipline](./README.md#pre-doc-discipline) those are
+[Pre-doc discipline](../../../README.md) those are
 working hypotheses; this ADR revisits them against the acceptance
 criterion. Of the questions surfaced, two warrant ADR-level
 record:
@@ -50,7 +50,7 @@ that keeps the M2/M3/M4 = 0.2/0.3/1.0 mapping legible) — are not
 ADR-shaped. They are recorded in the Phase 8 ROADMAP entry, in
 PR descriptions, and in the affected docs (READMEs, `abi_spec.md`,
 CI workflow). See
-[Option enumeration discipline](./README.md) for why we keep
+[Option enumeration discipline](../../../README.md) for why we keep
 ADRs scoped to substantive choices rather than every Phase 8
 sub-task.
 

@@ -1,4 +1,4 @@
-﻿---
+---
 phase: M3-Phase 3
 title: WrapPanel layout primitive
 status: retired
@@ -11,7 +11,7 @@ opened: 2026-05-21
 
 This is the live task list and execution log for M3-Phase 3. The
 design decisions are frozen in
-[m3-phase-3-wrap-panel.md](../../decisions/m3-phase-3-wrap-panel.md);
+[m3-phase-3-wrap-panel.md](../decisions/preamble.md);
 this file is mutable per
 [plans/README.md §Phase progress file lifecycle](../README.md#phase-progress-file-lifecycle).
 
@@ -34,5 +34,5 @@ a frozen prediction.
 
 The five pieces of A3 evidence the phase closes against are
 enumerated in
-[m3-phase-3-wrap-panel.md §Phase 3 verification closure](../../decisions/m3-phase-3-wrap-panel.md#phase-3-verification-closure-what-counts-as-a3-evidence).
+[m3-phase-3-wrap-panel.md §Phase 3 verification closure](../decisions/preamble.md#phase-3-verification-closure-what-counts-as-a3-evidence).
 Each T below cites the evidence item it advances or discharges.

@@ -7,7 +7,7 @@ decision F below.
 **Date:** 2026-05-08
 **Targets DD:** DD-M2-P6-010 — `dirty_effects` topological sort fidelity
 **Targets phase:** M2-Phase 7 (Reactive Foundation Hardening)
-**ADR housing:** [docs/decisions/m2-phase-7-reactive-foundation.md](../decisions/m2-phase-7-reactive-foundation.md)
+**ADR housing:** [process/milestone-2/phase-7/decisions/preamble.md](../decisions/preamble.md)
 
 Per the project's doc-driven workflow, framing is aligned in chat first
 and recorded here as the input artefact for ADR drafting. Phase 7's
@@ -43,7 +43,7 @@ Phase 7 reopens the recommendation under **A5 framing** —
 ## A5 framing — what changed since the Phase 6 draft
 
 The 2026-05-08 acceptance-criteria revision added A5 to
-[m2-plan.md](../plans/m2-plan.md). Its operative clause for DD-010:
+[m2-plan.md](../../plan.md). Its operative clause for DD-010:
 
 > the implementation no longer relies on the counter case happening
 > to converge.
@@ -364,7 +364,7 @@ Inputs are complete. The next session begins ADR drafting:
    agreement; surface it at the start of the drafting session, not
    at review time.
 2. **ADR DD-010 section revision.** In
-   [m2-phase-7-reactive-foundation.md](../decisions/m2-phase-7-reactive-foundation.md):
+   [m2-phase-7-reactive-foundation.md](../decisions/preamble.md):
    - Replace the inherited Phase 6 Recommendation prose with the
      Phase 7 conclusion (Option A, with A5-literal-reading rationale).
    - Carry forward Options B / C / C-lite per decision C, each with

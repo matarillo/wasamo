@@ -196,7 +196,7 @@ M3-Phase 2 T10 で、phase progress file の完了済み checklist に
 
 ## 関連する既決事項
 
-[vision-doc-system.md](../vision-doc-system.md) DD-V-010..016
+[vision-doc-system.md](../doc-system.md) DD-V-010..016
 で確定済の周辺事項：
 
 - DD-V-013 ROADMAP は acceptance-criteria SSOT

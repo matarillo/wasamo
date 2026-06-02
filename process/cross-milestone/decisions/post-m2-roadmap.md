@@ -6,7 +6,7 @@
 
 This vision decision record records the decisions that rebalanced post-M2
 milestones after M2 was redefined as a Foundation milestone (see
-[docs/plans/m2-plan.md](../plans/m2-plan.md)). The redefinition moved
+[docs/plans/m2-plan.md](../../milestone-2/plan.md)). The redefinition moved
 the original M2 Alpha wishlist out of M2 without committing to where
 each item lands; this ADR settles that allocation and the structural
 questions surfaced alongside it.
@@ -205,5 +205,5 @@ choice that has nothing to do with ABI stability.
 
 **Decision (ADR identifier):** ADR identifier scope from M2 onward
 is `M<N>-P<n>` (e.g. `DD-M2-P2-001`); see
-[README.md](./README.md#file-naming). M1 ADRs remain
+[README.md](../../README.md). M1 ADRs remain
 `DD-P<N>-<seq>` as historical record and are not renumbered.

@@ -1,4 +1,4 @@
-﻿# M2-Phase 6 — `.ui` → runtime lowering: Architecture Decisions
+# M2-Phase 6 — `.ui` → runtime lowering: Architecture Decisions
 
 **Phase:** M2-Phase 6 (`.ui` → runtime lowering)
 **Date:** 2026-05-07
@@ -6,7 +6,7 @@
 
 ## Context
 
-M2 acceptance criteria **A1** and **A2** ([m2-plan.md](../plans/m2-plan.md#acceptance-criteria),
+M2 acceptance criteria **A1** and **A2** ([m2-plan.md](../../plan.md#acceptance-criteria),
 mirrored from [process/_roadmap.md M2](../../../_roadmap.md#m2-foundation)):
 
 > **A1.** `examples/counter/counter.ui` drives the running Hello
@@ -101,9 +101,9 @@ that note is archived together with the ADR's `Accepted` flip.
 | DD-M2-P6-007 | Final signature of `register_binding` | **Option B** — `SignalRegistry` per-type struct keyed by `wasamoc`-resolved names; supersedes DD-M2-P5-005 provisional `properties` shape only | Low | Low |
 | DD-M2-P6-008 | Counter examples migration shape | **α + (X)** — direct ABI calls; shared `examples/counter/counter.ui`; embedded for C/Zig, path for Rust | Low | Low |
 | DD-M2-P6-009 | IR loader malformed-input validation policy | **Option C** — defense-in-depth: header/version + reference resolution + top-level structure; trust emitter invariants including type integrity | Low | Low |
-| DD-M2-P6-010 | `dirty_effects` topological sort fidelity | Housing migrated to [m2-phase-7-reactive-foundation.md](./m2-phase-7-reactive-foundation.md#dd-m2-p6-010--dirty_effects-topological-sort-fidelity) | — | — |
-| DD-M2-P6-011 | String-typed property binding | Housing migrated to [m2-phase-7-reactive-foundation.md](./m2-phase-7-reactive-foundation.md#dd-m2-p6-011--string-typed-property-binding) | — | — |
-| DD-M2-P6-012 | Re-entrancy and safety-guard placement principle | Housing migrated to [m2-phase-7-reactive-foundation.md](./m2-phase-7-reactive-foundation.md#dd-m2-p6-012--re-entrancy-and-safety-guard-placement-principle) | — | — |
+| DD-M2-P6-010 | `dirty_effects` topological sort fidelity | Housing migrated to [m2-phase-7-reactive-foundation.md](../../phase-7/decisions/preamble.md#dd-m2-p6-010--dirty_effects-topological-sort-fidelity) | — | — |
+| DD-M2-P6-011 | String-typed property binding | Housing migrated to [m2-phase-7-reactive-foundation.md](../../phase-7/decisions/preamble.md#dd-m2-p6-011--string-typed-property-binding) | — | — |
+| DD-M2-P6-012 | Re-entrancy and safety-guard placement principle | Housing migrated to [m2-phase-7-reactive-foundation.md](../../phase-7/decisions/preamble.md#dd-m2-p6-012--re-entrancy-and-safety-guard-placement-principle) | — | — |
 
 **Aggregate impl-risk picture.** DD-M2-P6-001 and DD-M2-P6-005
 introduce the new ABI-surface error codes M2 ships
@@ -139,7 +139,7 @@ the M3-additive option. The named successor work for M3 is:
 - DD-M2-P6-008's idiomatic per-language helpers (paired with
   M3 wrapper-crate API design).
 - DD-M2-P6-009's validation-path reuse for hot reload.
-- DD-M2-P6-010, 011, 012 — successor work completed in M2-Phase 7; see [m2-phase-7-reactive-foundation.md](./m2-phase-7-reactive-foundation.md) for the accepted decisions and per-DD forward-compat treatment.
+- DD-M2-P6-010, 011, 012 — successor work completed in M2-Phase 7; see [m2-phase-7-reactive-foundation.md](../../phase-7/decisions/preamble.md) for the accepted decisions and per-DD forward-compat treatment.
 
 **Pre-doc validation spike.** Not required for this ADR. The
 Phase 2 spike already round-trips the IR through
@@ -225,11 +225,11 @@ the structural enforcement undocumented at vision level.
 ## Revisions
 
 - **2026-05-08.** DD-M2-P6-010, 011, 012 housing migrated to
-  [m2-phase-7-reactive-foundation.md](./m2-phase-7-reactive-foundation.md).
+  [m2-phase-7-reactive-foundation.md](../../phase-7/decisions/preamble.md).
   These DDs were drafted as part of this ADR's slate but never
   Accepted under it; they were carried as `Proposed` and explicitly
   deferred at Phase 6 closing per the 2026-05-08 acceptance-criteria
-  revision (recorded in [m2-plan.md](../plans/m2-plan.md)'s Progress
+  revision (recorded in [m2-plan.md](../../plan.md)'s Progress
   section, which also added A5/A6 and scoped Phase 7). The migration
   is a *housing move*, not a content rewrite: full DD bodies are
   preserved verbatim in the Phase 7 ADR, with explicit notes where

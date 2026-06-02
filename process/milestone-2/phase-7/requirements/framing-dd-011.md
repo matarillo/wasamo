@@ -4,7 +4,7 @@
 **Date:** 2026-05-10
 **Targets DD:** DD-M2-P6-011 - String-typed property binding
 **Targets phase:** M2-Phase 7 (Reactive Foundation Hardening & Contract Finalization)
-**ADR housing:** [docs/decisions/m2-phase-7-reactive-foundation.md](../../decisions/m2-phase-7-reactive-foundation.md)
+**ADR housing:** [process/milestone-2/phase-7/decisions/preamble.md](../decisions/preamble.md)
 **Progress tracker:** `docs/plans/progress/m2-phase-7-progress.md`
 (retired at M2 close; summary remains in `docs/plans/m2-plan.md`)
 

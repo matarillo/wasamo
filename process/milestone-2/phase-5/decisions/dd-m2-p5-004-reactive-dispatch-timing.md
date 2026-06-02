@@ -1,6 +1,6 @@
-﻿### DD-M2-P5-004 — Reactive dispatch timing
+### DD-M2-P5-004 — Reactive dispatch timing
 
-**Status:** Superseded in part by [DD-M2-P6-001](./m2-phase-6-ui-lowering.md#dd-m2-p6-001--drain-transaction-semantics) (drain stage framing). The deferred-dispatch trigger contract — `Signal::set` writes value + marks dirty, re-evaluation runs at the outermost-frame boundary — is preserved. The three-stage `observer → reactive → layout` framing is replaced by DD-M2-P6-001's three-phase + terminal form (Phase 1 mutation convergence loop / Phase 2 layout / Phase 3 post-commit observers).
+**Status:** Superseded in part by [DD-M2-P6-001](../../phase-6/decisions/preamble.md#dd-m2-p6-001--drain-transaction-semantics) (drain stage framing). The deferred-dispatch trigger contract — `Signal::set` writes value + marks dirty, re-evaluation runs at the outermost-frame boundary — is preserved. The three-stage `observer → reactive → layout` framing is replaced by DD-M2-P6-001's three-phase + terminal form (Phase 1 mutation convergence loop / Phase 2 layout / Phase 3 post-commit observers).
 
 **Context:**
 DD-P6-003 = A guarantees no callback fires while the host is inside

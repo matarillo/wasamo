@@ -3,10 +3,10 @@ title: Architectural family — current hypothesis status
 status: live
 created: 2026-05-05
 related-adrs:
-  - docs/decisions/m2-phase-5-reactive-engine.md
-  - docs/decisions/m2-phase-2-wasamoc-output-format.md
-  - docs/decisions/m2-phase-3-handler-exec-location.md
-  - docs/decisions/phase-6-c-abi.md
+  - process/milestone-2/phase-5/decisions/preamble.md
+  - process/milestone-2/phase-2/decisions/preamble.md
+  - process/milestone-2/phase-3/decisions/preamble.md
+  - process/milestone-1/phase-6/decisions/preamble.md
 related-notes:
   - docs/notes/headless-verification.md
 ---
@@ -170,8 +170,8 @@ the alignment table) when any of the following occur:
    revisit family-level direction, regardless of phase boundary.
 
 When upgrading: a vision decision record (DD-V-NNN scope) records the explicit
-family commitment; this note's status changes to `superseded by
-docs/decisions/vision-architectural-family.md`. When revising in
+family commitment; this note's status changes to `superseded by a
+future process/cross-milestone/decisions/ record`. When revising in
 place: update the alignment table and re-evaluation triggers; commit
 normally.
 

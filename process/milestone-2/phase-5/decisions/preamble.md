@@ -1,4 +1,4 @@
-﻿# M2-Phase 5 — Reactive engine: Architecture Decisions
+# M2-Phase 5 — Reactive engine: Architecture Decisions
 
 **Phase:** M2-Phase 5 (reactive state propagation engine)
 **Date:** 2026-05-05
@@ -6,7 +6,7 @@
 
 ## Context
 
-M2 acceptance criterion **A2** ([m2-plan.md](../plans/m2-plan.md#acceptance-criteria),
+M2 acceptance criterion **A2** ([m2-plan.md](../../plan.md#acceptance-criteria),
 mirrored from [process/_roadmap.md M2](../../../_roadmap.md#m2-foundation)):
 
 > Reactive state propagation works without host-side property-set
