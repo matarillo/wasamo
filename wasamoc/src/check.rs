@@ -575,9 +575,11 @@ fn check_child_placement_outside_parent(
     filename: &str,
     diags: &mut Vec<Diagnostic>,
 ) {
-    let position = enclosing_widget
-        .map(|widget| format!("inside `{}`", widget))
-        .unwrap_or_else(|| "at component level".to_string());
+    let position = match enclosing_widget {
+        Some("ZStack") => "on `ZStack` itself".to_string(),
+        Some(widget) => format!("inside `{}`", widget),
+        None => "at component level".to_string(),
+    };
     diags.push(error(
         filename,
         span,
@@ -3307,6 +3309,18 @@ mod tests {
                 .any(|e| e.contains("parent-owned child placement attribute")
                     && e.contains("ZStack direct child")
                     && e.contains("Grid `Cell`")),
+            "{:?}",
+            errs
+        );
+    }
+
+    #[test]
+    fn placement_attr_on_zstack_itself_rejected_with_container_position() {
+        let errs = errors(r#"component C inherits W { ZStack { h-align: center Text {} } }"#);
+        assert!(
+            errs.iter()
+                .any(|e| e.contains("parent-owned child placement attribute")
+                    && e.contains("on `ZStack` itself")),
             "{:?}",
             errs
         );
