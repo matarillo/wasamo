@@ -583,6 +583,31 @@ mod tests {
         assert!(out.contains("node Text {"), "got: {}", out);
     }
 
+    // --- M3-Phase 6 T1: ZStack textual IR emit (DD-M3-P6-001) ----------
+
+    #[test]
+    fn zstack_emitted_as_node_with_direct_children_in_order() {
+        let out = emit_src(
+            r#"component C inherits W {
+                ZStack {
+                    Box { fill: #00000080 }
+                    Text { h-align: center v-align: end text: "caption" }
+                }
+            }"#,
+        );
+
+        assert!(out.contains("node ZStack {"), "got: {}", out);
+        assert!(!out.contains("tracks columns"), "got: {}", out);
+        assert!(!out.contains("tracks rows"), "got: {}", out);
+        assert!(!out.contains("node Cell {"), "got: {}", out);
+        let box_pos = out.find("node Box {").expect("Box child emitted");
+        let text_pos = out.find("node Text {").expect("Text child emitted");
+        assert!(box_pos < text_pos, "got: {}", out);
+        assert!(out.contains("prop fill = #00000080"), "got: {}", out);
+        assert!(out.contains("prop h-align = center"), "got: {}", out);
+        assert!(out.contains("prop v-align = end"), "got: {}", out);
+    }
+
     #[test]
     fn full_counter_ir_roundtrip() {
         let src = r#"component Counter inherits Window {

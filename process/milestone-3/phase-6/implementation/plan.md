@@ -81,21 +81,41 @@ the **`wasamoc` emit half** of item (3) (ZStack roundtrip). The
 gallery-slice positive control half of item (1) closes at T7; runtime
 roundtrip / loader rejection is T3.
 
-- [ ] Register `ZStack` in `wasamoc`'s `KNOWN_WIDGET_TYPES` and check
+- [x] Register `ZStack` in `wasamoc`'s `KNOWN_WIDGET_TYPES` and check
       surface as a per-kind tag with **direct children** (no `Cell`-style
       wrapper, no `KindPayload`, no new `IrType` / `IrLiteral`) per
-      DD-M3-P6-001.
-- [ ] Implement ZStack check-side diagnostics per DD-M3-P6-001 /
+      DD-M3-P6-001. Implemented in `wasamoc/src/check.rs`
+      (`KNOWN_WIDGET_TYPES`), with
+      `zstack_known_widget_no_warning` and lower/emit tests pinning the
+      direct-child/no-payload shape.
+- [x] Implement ZStack check-side diagnostics per DD-M3-P6-001 /
       DD-M3-P6-002: admit `h-align` / `v-align` as child placement props
       consumed by the ZStack context (and rejected elsewhere, mirroring
       the Grid `Cell` placement-prop rule); **reject** attributes outside
       the documented ZStack surface (`z-index`, `spacing`, `columns`, …).
-- [ ] `wasamoc` emits the ZStack IR node (per-kind tag, direct children,
+      Implemented in `wasamoc/src/check.rs`
+      (`check_zstack_unknown_attr`, `check_zstack_child_align`,
+      `check_child_placement_outside_parent`, and parent-context
+      traversal in `check_members_inner`); tests cover valid direct-child
+      placement, bad alignment, misplaced placement, and ZStack-level
+      disallowed attributes.
+- [x] `wasamoc` emits the ZStack IR node (per-kind tag, direct children,
       document order preserved) to textual IR; `IrProp.value` stays
-      strictly `IrLiteral`.
-- [ ] Add `wasamoc` positive / negative tests covering the ZStack half
+      strictly `IrLiteral`. Implemented via the existing generic
+      `lower_node` / `emit_node` path, with
+      `zstack_lowers_as_direct_children_without_kind_payload` and
+      `zstack_emitted_as_node_with_direct_children_in_order`.
+- [x] Add `wasamoc` positive / negative tests covering the ZStack half
       of ADR evidence item (1) (surface-lowering positive controls +
-      disallowed-attribute / mis-placed-placement-prop rejection).
+      disallowed-attribute / mis-placed-placement-prop rejection). Added
+      check tests `zstack_known_widget_no_warning`,
+      `zstack_direct_child_alignment_accepted`,
+      `zstack_unknown_attribute_rejected`,
+      `zstack_reserved_layering_attribute_rejected`,
+      `zstack_grid_track_attribute_rejected`,
+      `zstack_child_bad_alignment_value_rejected`, and
+      `placement_attr_outside_zstack_child_or_cell_rejected`, plus the
+      lower/emit roundtrip-shape tests named above.
 
 ### T2 — ZStack: layout engine measure / arrange / z-order / clip
 
