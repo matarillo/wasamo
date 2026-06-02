@@ -7,7 +7,7 @@
 ## Context
 
 Phase 7's acceptance criterion is derived from
-[VISION §7 M1](../../VISION.md#7-roadmap--milestones) and
+[VISION §7 M1](../../../../VISION.md#7-roadmap--milestones) and
 [process/_roadmap.md M1](../../../_roadmap.md#m1-proof-of-concept):
 **"Hello Counter runs in three languages: C, Rust, and Zig."**
 Phase 7 produces the **bindings** that Phase 8 consumes; Phase 8 then

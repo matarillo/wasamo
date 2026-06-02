@@ -3,7 +3,7 @@
 **Date:** 2026-04-29
 **Status:** Accepted
 **Triggered by:** Pre-implementation review of Phase 5 (see
-[phase-5-implicit-animations-dev-api.md](./phase-5-implicit-animations-dev-api.md))
+[phase-5-implicit-animations-dev-api.md](../../milestone-1/phase-5/decisions/superseded/dd-p5-001-003-implicit-animations-dev-api.md))
 
 ---
 
@@ -40,7 +40,7 @@ VISION.md as previously written:
 
 This revision addresses both issues at the vision/roadmap level. The
 downstream Phase 5 implementation decisions are recorded separately in
-[phase-5-implicit-animations-dev-api.md](./phase-5-implicit-animations-dev-api.md).
+[phase-5-implicit-animations-dev-api.md](../../milestone-1/phase-5/decisions/superseded/dd-p5-001-003-implicit-animations-dev-api.md).
 
 ---
 
@@ -87,13 +87,13 @@ updated to make this explicit.
 | VISION.md §2.1 | Slint critique reframed: the parenthetical "(animations that keep running while the app thread is idle, vSync alignment with the OS, integration with system materials)" replaced with "independent compositor-thread rendering, vSync alignment with the OS, and integration with system materials are all properties Slint cannot easily inherit" | The architectural property of the Visual Layer is *independent compositor-thread rendering*. Animations that keep running are one downstream consequence of that property, not the property itself. The new wording puts the structural fact first. |
 | VISION.md §4, principle #1 | "smooth animation" removed from the default-behavior list. New sentence makes opt-in explicit and references industry conventions (SwiftUI, Jetpack Compose, Flutter, CSS) | Implements DD-V-001. The default-behavior list now contains only items that genuinely engage by default (Mica/Acrylic, theming, type ramp, accent). |
 | VISION.md §7, M1 acceptance | "Rendering through Visual Layer with implicit animations" → "Rendering through the Visual Layer (DWM compositing engaged, visual tree responsive on the compositor thread)" | The hypothesis Wasamo exists to test (per §2.2) is "external DSL × C ABI × Visual Layer". Implicit animations are not part of that hypothesis — they are one possible demonstration of it. The revised wording names the architectural property to be verified and leaves the choice of demonstration to the implementation phase. |
-| ROADMAP.md M1 | Synced with VISION.md §7. Phase 5 section rewritten to reflect dev-only sanity-check scope | Same rationale as §7. Phase 5 implementation specifics live in [phase-5-implicit-animations-dev-api.md](./phase-5-implicit-animations-dev-api.md). |
+| ROADMAP.md M1 | Synced with VISION.md §7. Phase 5 section rewritten to reflect dev-only sanity-check scope | Same rationale as §7. Phase 5 implementation specifics live in [phase-5-implicit-animations-dev-api.md](../../milestone-1/phase-5/decisions/superseded/dd-p5-001-003-implicit-animations-dev-api.md). |
 
 ---
 
 ## Relation to ADRs
 
-[phase-5-implicit-animations-dev-api.md](./phase-5-implicit-animations-dev-api.md)
+[phase-5-implicit-animations-dev-api.md](../../milestone-1/phase-5/decisions/superseded/dd-p5-001-003-implicit-animations-dev-api.md)
 records the Phase 5 implementation decisions that follow from DD-V-001:
 
 - A dev-only internal API (not exposed via C ABI) for sanity-checking
@@ -106,7 +106,7 @@ references this ADR rather than restating the default-behavior decision.
 
 **Update (2026-04-29):** The Phase 5 implementation ADR referenced
 above was itself superseded later the same day by
-[phase-5-compositor-independence-check.md](./phase-5-compositor-independence-check.md)
+[phase-5-compositor-independence-check.md](../../milestone-1/phase-5/decisions/preamble.md)
 (DD-P5-004..006), after a second pre-doc review found that its
 premise — verifying property-change animation via a dev-only toggle
 — contradicted DD-V-001. The redirection adopts widget-internal

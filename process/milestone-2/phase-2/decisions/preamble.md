@@ -57,7 +57,7 @@ answers.**
   must not foreclose hot reload, though it is not required to enable
   it in M2 itself.
 - **Binding workload scaling.** Official bindings at 1.0 are
-  C / Rust / Zig ([VISION §11](../../VISION.md)); Swift / Go are
+  C / Rust / Zig ([VISION §11](../../../../VISION.md)); Swift / Go are
   post-1.0 community track. The output format determines whether
   adding a new binding language is "wire up the C ABI"
   (mostly mechanical) or "wire up the C ABI **and** write a

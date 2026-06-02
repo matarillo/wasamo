@@ -18,7 +18,7 @@ this file is mutable per
 Task ordering follows the dependency direction
 `wasamoc → wasamo-runtime → tests → host/spec`, so each commit
 builds on a green workspace per
-[CLAUDE.md §Commit rules](../../../CLAUDE.md). Phase 3 introduces
+[CLAUDE.md §Commit rules](../../../../CLAUDE.md). Phase 3 introduces
 **no new parser grammar**: `wasamoc`'s parser already accepts the
 generic `IDENT "{" ... "}"` widget-declaration shape and the
 generic `IDENT ":" expr` property-bind shape, so WrapPanel and its

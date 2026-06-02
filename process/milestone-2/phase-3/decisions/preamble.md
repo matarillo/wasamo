@@ -66,7 +66,7 @@ this ADR answers.**
   reach the runtime through *some* path — direct calls if runtime-side,
   C ABI if host-side.
 - **Binding workload scaling** (recurring constraint from
-  [VISION §11](../../VISION.md), reused from DD-M2-P2-001 framing).
+  [VISION §11](../../../../VISION.md), reused from DD-M2-P2-001 framing).
   Anything that requires a per-binding-language code path increases
   the cost of adding a new binding; anything that lives once in
   `wasamo-runtime` is paid for once.

@@ -2,14 +2,14 @@
 
 **Phase:** 5 (Visual Layer integration sanity check)
 **Date:** 2026-04-29
-**Status:** Superseded by [phase-5-compositor-independence-check.md](./phase-5-compositor-independence-check.md)
+**Status:** Superseded by [phase-5-compositor-independence-check.md](../preamble.md)
 
 > **Note (added 2026-04-29):** This ADR's premise — that Phase 5
 > verifies property-change animation via a dev-only toggle — was
 > found in pre-implementation review to contradict DD-V-001 and to
 > provide a weaker signal of compositor independence than a
 > continuous ambient animation. The redirection is recorded in
-> [phase-5-compositor-independence-check.md](./phase-5-compositor-independence-check.md).
+> [phase-5-compositor-independence-check.md](../preamble.md).
 > This file is preserved per the
 > [Revision rule](../../../../README.md) as historical record
 > and as a worked example of the
@@ -27,7 +27,7 @@ follow from DD-V-001.
 
 ### DD-P5-001 — Phase 5 implements a dev-only internal API, not a public one
 
-**Status:** Superseded by DD-P5-004 ([phase-5-compositor-independence-check.md](./phase-5-compositor-independence-check.md))
+**Status:** Superseded by DD-P5-004 ([phase-5-compositor-independence-check.md](../preamble.md))
 
 **Context:**
 Given DD-V-001, Phase 5 cannot ship a public animation API — that work
@@ -95,7 +95,7 @@ helper.
 
 ### DD-P5-002 — Animation parameters and trigger properties
 
-**Status:** Superseded by DD-P5-006 ([phase-5-compositor-independence-check.md](./phase-5-compositor-independence-check.md))
+**Status:** Superseded by DD-P5-006 ([phase-5-compositor-independence-check.md](../preamble.md))
 
 **Context:**
 When the dev helper is enabled, which `Visual` properties animate, and
@@ -123,7 +123,7 @@ and carry no commitment for the public API designed in M5.
 
 ### DD-P5-003 — Removal plan for the dev helper
 
-**Status:** Superseded by DD-P5-006 ([phase-5-compositor-independence-check.md](./phase-5-compositor-independence-check.md))
+**Status:** Superseded by DD-P5-006 ([phase-5-compositor-independence-check.md](../preamble.md))
 
 **Context:**
 The dev helper is intentionally throwaway code. Without an explicit

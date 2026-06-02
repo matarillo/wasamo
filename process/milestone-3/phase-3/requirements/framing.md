@@ -24,7 +24,7 @@ rather than re-derives:
   affected `docs/dsl_spec.md` chapter. See
   [m3-phase-2 framing decision D](../../phase-2/requirements/framing.md#d-upstream-document-revision-timing-two-sync-moments).
 - The Moment-is-not-a-commit-unit rule, recorded in
-  [CLAUDE.md §Commit rules](../../../CLAUDE.md#commit-rules): each
+  [CLAUDE.md §Commit rules](../../../../CLAUDE.md#commit-rules): each
   constituent document lands as its own commit on the pre-doc
   branch, scoped by review concern, not by Moment. The Moment is
   "achieved" when every constituent commit has landed. Phase 3
@@ -221,7 +221,7 @@ vertical reserved for a later DD.
 Sub-issues:
 
 - **Exposure.** The Phase 3 gallery sub-screen uses horizontal
-  main-axis only ([m3-gallery-wireframe.html](../../references/m3-gallery-wireframe.html)
+  main-axis only ([m3-gallery-wireframe.html](../../requirements/gallery-wireframe.html)
   "thumbnail grid"). Exposing `orientation` in Phase 3 admits a
   vertical-main-axis WrapPanel that has no acceptance criterion
   calling for it. Hardcoding horizontal narrows the surface; a
@@ -276,7 +276,7 @@ Sub-issues:
 - **Scope question.** The Phase 3 sub-screen uses uniform
   thumbnails (DD-004); the wireframe shows a 12px gap between
   them in the wide state
-  ([m3-gallery-wireframe.html](../../references/m3-gallery-wireframe.html)).
+  ([m3-gallery-wireframe.html](../../requirements/gallery-wireframe.html)).
   If Phase 3 ships with zero spacing, the gallery sub-screen
   visually deviates from the wireframe (touching thumbnails); if
   Phase 3 ships item-spacing and line-spacing, that's two new
@@ -811,7 +811,7 @@ Phase 3 chooses from the menu:
   discipline.
 - **Mock-free Windows-only integration test** (CI-gated, fails
   rather than skips per
-  [CLAUDE.md §Testing rules](../../../CLAUDE.md)) for live
+  [CLAUDE.md §Testing rules](../../../../CLAUDE.md)) for live
   WrapPanel materialisation through `.ui → IR → runtime` on a
   real `WidgetNode`. The integration test verifies that the
   layout engine's line breaker / arrange output is consumed by
@@ -885,7 +885,7 @@ per CLAUDE.md §Commit rules):
 
 Implementation begins only after these commits land; the
 constituent shape preserves review-concern separability under
-[CLAUDE.md §Commit rules](../../../CLAUDE.md#commit-rules).
+[CLAUDE.md §Commit rules](../../../../CLAUDE.md#commit-rules).
 
 **Moment 2 — Phase close commit set (impl re-sync).**
 
@@ -1004,7 +1004,7 @@ rather than re-deciding:
   local-developer guard skips when `wasamo_init` returns
   `0x80070005`. Framing decision C already commits Phase 3 to
   this shape.
-- **[process-rules-ssot.md](../process-rules-ssot.md) Q6 — relevant.**
+- **[process-rules-ssot.md](../../../cross-milestone/decisions/exploration/process-rules-ssot.md) Q6 — relevant.**
   The 3-role boundary (execution log / step retrospective / phase
   acceptance evidence) decided informally in Phase 2 carries
   forward; Phase 3 does not introduce a new evidence document
@@ -1144,7 +1144,7 @@ analogue and readers will mis-map it without an explicit anchor.
 | §Risks — WrapPanel / Grid spec complexity | Adjacent risk | DD-005 (Phase 3 is the rehearsal that lowers Phase 5 Grid spec risk) |
 | §Risks — Spec-drafting drift | Mitigation | Framing decision D (Moment 1 lands design-spec draft; phase does not close with TODO spec text) |
 
-### From [m3-gallery-wireframe.html](../../references/m3-gallery-wireframe.html)
+### From [m3-gallery-wireframe.html](../../requirements/gallery-wireframe.html)
 
 | Element | Disposition | Consumed at |
 |---|---|---|
@@ -1189,7 +1189,7 @@ Once framing is owner-aligned, the next session begins ADR drafting:
    enumerated under **framing decision D Moment 1** land as
    **per-review-concern commits** on the pre-doc branch (not a
    single bundle), per
-   [CLAUDE.md §Commit rules](../../../CLAUDE.md#commit-rules).
+   [CLAUDE.md §Commit rules](../../../../CLAUDE.md#commit-rules).
 4. Phase progress file
    `docs/plans/progress/m3-phase-3-progress.md` opens with
    `Status: active`; the m3-plan.md Progress row flips from

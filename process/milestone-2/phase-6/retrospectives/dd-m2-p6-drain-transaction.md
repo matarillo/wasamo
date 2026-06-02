@@ -4,7 +4,7 @@
 **Date:** 2026-05-06
 **Targets phase:** M2-Phase 6 (`.ui → runtime` lowering の pre-doc サイクルで正式採用予定)
 **Affects:** DD-M2-P5-004 (drain stage 框組み, 部分 supersede), DD-P6-003 (queued emission, 不変), VISION §4 Principle 2 (任意で補足)
-**Background note:** [reactive-drain-cascade-policy.md](./reactive-drain-cascade-policy.md) (open question 側)
+**Background note:** [reactive-drain-cascade-policy.md](../requirements/framing-open-question.md) (open question 側)
 
 ---
 

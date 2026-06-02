@@ -86,7 +86,7 @@ advance together by phase close.
 
 ### Governance note (M3 phase-ADR vs RFC transition)
 
-[VISION.md §9.2](../../VISION.md#92-decision-making) describes a
+[VISION.md §9.2](../../../../VISION.md#92-decision-making) describes a
 "gradual transition to RFC-based consensus" for M3 onward, with
 major changes discussed in `docs/rfcs/`.
 [process/README.md §Scope and relation to RFCs](../../../README.md)
@@ -380,7 +380,7 @@ When this ADR is Accepted, the following docs change in the
 **Moment 1** commit set (framing decision D — ADR-Accepted /
 design-spec draft). Each constituent lands as its own commit on the
 pre-doc branch, scoped by review concern per
-[CLAUDE.md §Commit rules](../../CLAUDE.md#commit-rules):
+[CLAUDE.md §Commit rules](../../../../CLAUDE.md#commit-rules):
 
 - **ADR `Status: Accepted` flip** — this file.
 - [docs/dsl_spec.md](../../../../docs/dsl_spec.md) — new **§4.10 WrapPanel chapter**
@@ -529,7 +529,7 @@ considered satisfied when **all five** of the following are observed:
 
 4. **Windows-runtime layout evidence (CI-gated).** A mock-free
    integration test (per
-   [CLAUDE.md §Testing rules](../../CLAUDE.md#testing-rules)) on
+   [CLAUDE.md §Testing rules](../../../../CLAUDE.md#testing-rules)) on
    the Windows CI runner exercises two fixtures:
 
    - **Wrap-path fixture (primary).** A `.ui` declares a WrapPanel

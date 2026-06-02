@@ -3,8 +3,8 @@
 Milestones are defined by **acceptance criteria**, not dates. This
 file is the SSOT for those criteria
 ([DD-V-010](./cross-milestone/decisions/doc-system.md#dd-v-010--acceptance-criteria-ssot)).
-For thesis-level framing see [VISION.md §7](./VISION.md#7-roadmap).
-For shipped milestones see [CHANGELOG.md](./CHANGELOG.md). For the
+For thesis-level framing see [VISION.md §7](../VISION.md#7-roadmap).
+For shipped milestones see [CHANGELOG.md](../CHANGELOG.md). For the
 current state of work see the **Status** section of
 [README.md](./README.md).
 
@@ -21,7 +21,7 @@ discipline are described in [process/README.md](./README.md).
 
 ## M1: Proof of Concept ✅ shipped 2026-05-01 (v0.1.0)
 
-See [CHANGELOG entry](./CHANGELOG.md#v010--2026-05-01--m1-proof-of-concept)
+See [CHANGELOG entry](../CHANGELOG.md#v010--2026-05-01--m1-proof-of-concept)
 and the [ADRs](./milestone-1/).
 
 <a id="m2-foundation"></a>
@@ -59,7 +59,7 @@ by hand through the experimental C ABI.
   (`String`), proving the `EvalContext` / `HandlerExpr` / IR
   design is not silently `i32`-specialized
 
-See [CHANGELOG entry](./CHANGELOG.md#m2-foundation--shipped-2026-05-11)
+See [CHANGELOG entry](../CHANGELOG.md#m2-foundation--shipped-2026-05-11)
 and [process/milestone-2/plan.md](./milestone-2/plan.md) for the completed
 phase breakdown.
 
@@ -202,7 +202,7 @@ polished showcase ships, and SemVer applies.
   M4's contributor-outreach showcase)
 - C / Rust / Zig bindings mature. Swift and Go bindings are out of
   scope for 1.0; they are welcomed as community-prototyped
-  bindings post-1.0 (see [VISION §11](./VISION.md#11-how-to-contribute))
+  bindings post-1.0 (see [VISION §11](../VISION.md#11-how-to-contribute))
 
 ## Post-1.0
 

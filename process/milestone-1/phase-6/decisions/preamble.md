@@ -7,7 +7,7 @@
 ## Context
 
 Phase 6's acceptance criterion (from
-[VISION §7 M1](../../VISION.md#7-roadmap--milestones)) is:
+[VISION §7 M1](../../../../VISION.md#7-roadmap--milestones)) is:
 **"Minimal C ABI header"** sufficient to validate the core hypothesis
 (external DSL × C ABI × Visual Layer) by running "Hello Counter" in
 C, Rust, and Zig at Phase 8. The header is *minimal*, not *frozen*:

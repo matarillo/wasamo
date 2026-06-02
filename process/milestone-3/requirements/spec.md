@@ -269,7 +269,7 @@ Z 採択により、wireframe 上には存在するが M3 surface としては�
   `docs/dsl_spec.md` に反映済みであることを要求する。M3 最終 phase でまとめて spec を書く
   運用にしない。
 - **視覚 input**: M3 plan / phase pre-doc / dsl_spec drafting / E2E proof acceptance の視覚
-  input は [docs/references/m3-gallery-wireframe.html](../../references/m3-gallery-wireframe.html)
+  input は [docs/references/m3-gallery-wireframe.html](./gallery-wireframe.html)
   を参照する (採択済み Photo Gallery 視覚仕様を英語ラベルで固定した stable artifact)。元の
   探索アーティファクト [m3-target-app-wireframes.html](target-app-wireframes.html) は
   候補比較 / 加重判断記録 / 語彙批判的検討の歴史的記録として `docs/notes/` 配下に保持し、

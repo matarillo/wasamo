@@ -212,7 +212,7 @@ Notes:
   a550bd9). T9 below is marked `[x]` with this commit reference;
   no independent T9 commit will land. This is the
   "implementation reveals a tighter ordering" path permitted by
-  [CLAUDE.md §Commit rules](../../../CLAUDE.md).
+  [CLAUDE.md §Commit rules](../../../../CLAUDE.md).
 - **`SignalRegistry::bools` landed in T6 (part 2, commit
   36be13c)** even though the strict T6 acceptance bullets don't
   mention it. The bool registry is the natural pairing for the
@@ -606,7 +606,7 @@ headless assertion. T13 closes the gap.
 - [x] Skip-guard follows the established pattern: fail (not skip)
       on GitHub Actions when the runtime Compositor is unavailable
       (`0x80070005`), per
-      [CLAUDE.md §Testing rules](../../../CLAUDE.md) and the
+      [CLAUDE.md §Testing rules](../../../../CLAUDE.md) and the
       [verification-environments.md](../../../../docs/notes/verification-environments.md)
       taxonomy. T13's guard is the same shape as
       `button_enabled.rs` / `live_widgetnode_headless.rs` and

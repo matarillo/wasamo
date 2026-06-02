@@ -162,7 +162,7 @@ verification closure **evidence item 2**.
       `LayoutError::BoxAspectUnboundedBoth`).
 - [x] Prefer free-function extraction before the test-only
       mirror pattern (per
-      [CLAUDE.md §Testing rules](../../../CLAUDE.md)) when
+      [CLAUDE.md §Testing rules](../../../../CLAUDE.md)) when
       pure logic entangles a Win32/WinRT-bound type.
 - [x] Rounding contract inherits Phase 2 DD-M3-P2-005's
       discipline (no pixel-snapping in Phase 3).
@@ -267,5 +267,5 @@ Discharges the m3-plan §Phase-end criteria checklist for Phase 3.
       at the end of this T10 commit set, then `closing` →
       `status: retired` on the phase branch before the phase-end
       main-merge gate (matching the Phase 2 close pattern in
-      [m3-phase-2-progress.md](m3-phase-2-progress.md); per
+      [m3-phase-2-progress.md](../../phase-2/retrospectives/phase-end.md); per
       [plans/README.md §Phase progress file lifecycle](../README.md#phase-progress-file-lifecycle)).

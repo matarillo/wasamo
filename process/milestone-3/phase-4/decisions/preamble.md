@@ -37,7 +37,7 @@ and Phase 3's same-shape inheritance, the
 "Moment is not a commit unit" rule applies: each upstream-document
 edit in a Moment lands as its own commit on the pre-doc branch,
 scoped by review concern per
-[CLAUDE.md §Commit rules](../../CLAUDE.md#commit-rules) and the
+[CLAUDE.md §Commit rules](../../../../CLAUDE.md#commit-rules) and the
 doc set in
 [retrospectives.md §phase-sync (Moment 2) で触る doc セット](../../../procedures/retrospectives.md#phase-sync-moment-2-で触る-doc-セット).
 
@@ -257,7 +257,7 @@ observed:
 
 4. **Windows-runtime layout evidence (CI-gated, including R2
    closure).** A mock-free integration test (per
-   [CLAUDE.md §Testing rules](../../CLAUDE.md#testing-rules))
+   [CLAUDE.md §Testing rules](../../../../CLAUDE.md#testing-rules))
    on the Windows CI runner exercises:
 
    - **Scroll-path fixture (primary).** A `.ui` declares a
@@ -482,7 +482,7 @@ WrapPanel chapters).
 **Moment 1 — ADR Accepted commit set (design-spec draft).**
 Constituent commits, each landing as its own commit on the
 pre-doc branch per the per-review-concern rule in
-[CLAUDE.md §Commit rules](../../CLAUDE.md#commit-rules) and
+[CLAUDE.md §Commit rules](../../../../CLAUDE.md#commit-rules) and
 [retrospectives.md](../../../procedures/retrospectives.md). The draft-side
 doc set Phase 4 commits to at Moment 1 is enumerated below;
 retrospectives.md §phase-sync で触る doc セット規定は phase-end

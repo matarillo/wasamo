@@ -3,10 +3,10 @@
 **Phase:** 5 (Visual Layer integration sanity check)
 **Date:** 2026-04-29
 **Status:** Implemented
-**Supersedes:** [phase-5-implicit-animations-dev-api.md](./phase-5-implicit-animations-dev-api.md) (DD-P5-001..003)
+**Supersedes:** [phase-5-implicit-animations-dev-api.md](./superseded/dd-p5-001-003-implicit-animations-dev-api.md) (DD-P5-001..003)
 
 The original Phase 5 ADR
-([phase-5-implicit-animations-dev-api.md](./phase-5-implicit-animations-dev-api.md))
+([phase-5-implicit-animations-dev-api.md](./superseded/dd-p5-001-003-implicit-animations-dev-api.md))
 treated the ROADMAP task list — "ImplicitAnimationCollection animates
 Offset/Size/Opacity property changes" — as a fixed premise and
 deliberated only on how to expose a dev-only API for that behavior.

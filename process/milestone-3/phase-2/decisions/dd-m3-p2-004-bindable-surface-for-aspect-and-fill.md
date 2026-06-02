@@ -14,7 +14,7 @@ F5 (`TypedValue` deferral) is preserved by construction either way —
 the seam structurally enforces it.
 
 The decisive criterion is: does any wireframe surface in
-[docs/references/m3-gallery-wireframe.html](../references/m3-gallery-wireframe.html)
+[docs/references/m3-gallery-wireframe.html](../../requirements/gallery-wireframe.html)
 require Box's aspect or fill to vary reactively *within Phase 2's
 sub-screen*?
 

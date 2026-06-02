@@ -1,7 +1,7 @@
-﻿### DD-P5-006 — Verification synthetic visual in `phase5_visual_check.rs`
+### DD-P5-006 — Verification synthetic visual in `phase5_visual_check.rs`
 
 **Status:** Accepted
-**Supersedes:** DD-P5-002, DD-P5-003 ([phase-5-implicit-animations-dev-api.md](./phase-5-implicit-animations-dev-api.md))
+**Supersedes:** DD-P5-002, DD-P5-003 ([phase-5-implicit-animations-dev-api.md](./superseded/dd-p5-001-003-implicit-animations-dev-api.md))
 
 **Context:**
 To provide a strong, continuous signal of compositor-thread

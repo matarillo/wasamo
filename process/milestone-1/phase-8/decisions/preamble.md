@@ -7,7 +7,7 @@
 ## Context
 
 Phase 8's acceptance criterion comes directly from
-[VISION §7 M1](../../VISION.md#7-roadmap--milestones) and
+[VISION §7 M1](../../../../VISION.md#7-roadmap--milestones) and
 [process/_roadmap.md M1](../../../_roadmap.md#m1-proof-of-concept):
 **"Hello Counter example runs in three languages: C, Rust, and Zig."**
 
@@ -30,7 +30,7 @@ record:
 1. **DD-P8-001** — How `examples/counter/counter.ui` relates to the
    three host programs. The other M1 framing documents
 ([abi_spec §5.1](../../../../docs/abi_spec.md#51-what-m1-experimental-verifies-and-what-it-does-not),
-   [VISION §7 M1](../../VISION.md#7-roadmap--milestones)) already
+   [VISION §7 M1](../../../../VISION.md#7-roadmap--milestones)) already
    carve out the M1/M2 split; Phase 8 is where that split first
    becomes visible to end users, so the application warrants one
    explicit decision and a few small upstream wording adjustments.

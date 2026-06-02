@@ -28,7 +28,7 @@ inherits rather than re-derives:
   The doc set and commit shape are now living rule in
   [retrospectives.md §phase-sync (Moment 2) で触る doc セット](../../../procedures/retrospectives.md#phase-sync-moment-2-で触る-doc-セット).
 - **Moment-is-not-a-commit-unit rule**, recorded in
-  [CLAUDE.md §Commit rules](../../../CLAUDE.md#commit-rules): each
+  [CLAUDE.md §Commit rules](../../../../CLAUDE.md#commit-rules): each
   constituent document lands as its own commit on the pre-doc
   branch, scoped by review concern, not by Moment.
 - **No fast-track at step-end or phase-end** — every merge requires
@@ -248,7 +248,7 @@ Sub-issues:
   hardcodes vertical-only with horizontal reserved for a later
   DD. The Phase 4 gallery sub-screen scrolls vertically only
   (per the wireframe overflow strip:
-  [m3-gallery-wireframe.html](../../references/m3-gallery-wireframe.html)).
+  [m3-gallery-wireframe.html](../../requirements/gallery-wireframe.html)).
   Exposing scroll-axis admits configurations (horizontal-only,
   both-axes) with no acceptance criterion calling for them; the
   both-axes case in particular adds significant measure-arrange
@@ -859,7 +859,7 @@ Phase 4 chooses from the menu:
   child-count gate via `validate()`).
 - **Mock-free Windows-only integration test** (CI-gated, fails
   rather than skips per
-  [CLAUDE.md §Testing rules](../../../CLAUDE.md)) for live
+  [CLAUDE.md §Testing rules](../../../../CLAUDE.md)) for live
   ScrollView materialisation through `.ui → IR → runtime`. The
   integration test asserts:
   - clip **presence** on the ScrollView Visual (the
@@ -915,7 +915,7 @@ Moment 2 (phase close).
 **Moment 1 — ADR Accepted commit set (design-spec draft).**
 Constituent commits, each landing as its own commit on the
 pre-doc branch per the per-review-concern rule in
-[CLAUDE.md §Commit rules](../../../CLAUDE.md#commit-rules) and
+[CLAUDE.md §Commit rules](../../../../CLAUDE.md#commit-rules) and
 [retrospectives.md](../../../procedures/retrospectives.md). The draft-side doc
 set Phase 4 commits to at Moment 1 is enumerated below
 (retrospectives.md §phase-sync で触る doc セット規定は phase-end
@@ -945,7 +945,7 @@ Moment 1 で触れる文書はここで明示的に列挙する):
 
 Implementation begins only after these commits land; the
 constituent shape preserves review-concern separability under
-[CLAUDE.md §Commit rules](../../../CLAUDE.md#commit-rules).
+[CLAUDE.md §Commit rules](../../../../CLAUDE.md#commit-rules).
 
 **Moment 2 — Phase close commit set (impl re-sync).**
 
@@ -1109,7 +1109,7 @@ rather than re-deciding:
   Phase 4 inherits Phase 2 / Phase 3's skip-guard pattern
   verbatim. Framing decision C commits Phase 4 to the
   fail-rather-than-silently-skip discipline.
-- **[process-rules-ssot.md](../process-rules-ssot.md) Q6 — relevant.**
+- **[process-rules-ssot.md](../../../cross-milestone/decisions/exploration/process-rules-ssot.md) Q6 — relevant.**
   The 3-role boundary (execution log / step retrospective /
   phase acceptance evidence) inherited from Phase 2 / Phase 3.
   Phase 4 does not introduce a new evidence document type.
@@ -1241,7 +1241,7 @@ recommended design implies.
 | §Phase-end criteria item 5 (gallery sub-screen per phase) | Hard constraint | Framing decision E (Phase 4 grows with sibling sub-screen; Rust host only) |
 | §Risks — Spec-drafting drift | Mitigation | Framing decision D (Moment 1 lands design-spec draft; phase does not close with TODO spec text) |
 
-### From [m3-gallery-wireframe.html](../../references/m3-gallery-wireframe.html)
+### From [m3-gallery-wireframe.html](../../requirements/gallery-wireframe.html)
 
 | Element | Disposition | Consumed at |
 |---|---|---|
@@ -1292,7 +1292,7 @@ Once framing is owner-aligned, the next session begins ADR drafting:
    enumerated under **framing decision D Moment 1** land as
    **per-review-concern commits** on the pre-doc branch (not a
    single bundle), per
-   [CLAUDE.md §Commit rules](../../../CLAUDE.md#commit-rules).
+   [CLAUDE.md §Commit rules](../../../../CLAUDE.md#commit-rules).
 4. Phase progress file
    `docs/plans/progress/m3-phase-4-progress.md` opens with
    `Status: active`; the m3-plan.md Progress row flips from

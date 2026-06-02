@@ -218,7 +218,7 @@ Sub-issues:
   not be the phase that pressures `TypedValue` adoption. The seam
   pattern structurally protects this.
 - **Gallery use case driver.** Does any wireframe surface in
-  [docs/references/m3-gallery-wireframe.html](../../references/m3-gallery-wireframe.html)
+  [docs/references/m3-gallery-wireframe.html](../../requirements/gallery-wireframe.html)
   require Box's aspect or fill to vary reactively (e.g. lightbox
   theme, animated thumbnail size)? The answer shapes the
   cost/benefit of bindable-vs-constant.
@@ -367,7 +367,7 @@ Phase 2 chooses from the menu:
   (DD-005) and IR-loader handling of new value types (DD-002, DD-003).
   Both are decoupled from Compositor and exercise as free functions.
 - **Mock-free Windows-only integration test** (CI-gated, fails rather
-  than skips per [CLAUDE.md §Testing rules](../../../CLAUDE.md)) for
+  than skips per [CLAUDE.md §Testing rules](../../../../CLAUDE.md)) for
   live `.ui → IR → runtime` propagation through Box on a live
   `WidgetNode` — analogous in shape to the Phase 1 T13 test, scoped
   to whichever Box attribute DD-004 makes bindable (if any).
@@ -488,7 +488,7 @@ is a milestone label, not a commit unit. Constituent documents land
 as separate commits on the pre-doc branch; the commit shape follows
 review-concern boundaries, not the Moment boundary. The Moment is
 "achieved" when all constituent commits have landed. The general
-rule lives in [CLAUDE.md §Commit rules](../../../CLAUDE.md#commit-rules).
+rule lives in [CLAUDE.md §Commit rules](../../../../CLAUDE.md#commit-rules).
 
 The *list* of which documents belong to Moment 1 / Moment 2 above is
 not retracted by this Postmortem — only the commit shape used to
@@ -512,7 +512,7 @@ Two candidate remediations are proposed in
 
 **Recommended treatment:** **(a) only**, deferring (b). Reason: Phase 2
 does not introduce a new language or build system, so per
-[CLAUDE.md §CI rules](../../../CLAUDE.md) the CI YAML is off-limits
+[CLAUDE.md §CI rules](../../../../CLAUDE.md) the CI YAML is off-limits
 absent explicit owner agreement; (a) gives immediate prevention while
 (b) can be revisited as a standalone process change with its own
 agreement. The (a) amendment lands in the same spec-sync commit as

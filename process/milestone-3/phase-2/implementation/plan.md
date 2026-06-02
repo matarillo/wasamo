@@ -270,7 +270,7 @@ in
       `wasamo_get_property` (per DD-M3-P2-003 variant strategy).
 - [x] Skip-guard matches Phase 1 T6 / T13: fail (not skip) on CI
       when Compositor unavailable, per
-      [CLAUDE.md §Testing rules](../../../CLAUDE.md).
+      [CLAUDE.md §Testing rules](../../../../CLAUDE.md).
       Reuse T10's `0x80070005` skip pattern, already observed on an
       SSH dev box as a local skip/pass path.
 

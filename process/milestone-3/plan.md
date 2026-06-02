@@ -31,7 +31,7 @@ normative document to build against. Concretely, M3 ships:
 - The **Photo Gallery** target app
   ([docs/notes/m3/m3-target-app-predoc.md](requirements/spec.md),
   accepted 2026-05-16; visual contract in
-  [docs/references/m3-gallery-wireframe.html](../references/m3-gallery-wireframe.html))
+  [docs/references/m3-gallery-wireframe.html](./requirements/gallery-wireframe.html))
   as the visible proof and per-phase acceptance basis.
 - A layout primitive set (**Grid, WrapPanel, ZStack, ScrollView,
   Box**) sized to that target app, alongside the M2 linear
@@ -330,7 +330,7 @@ file:
   invoked from the example host. M3-Phase 8 assembles the full
   gallery from these sub-screens. Visual fidelity is judged
   against
-  [docs/references/m3-gallery-wireframe.html](../references/m3-gallery-wireframe.html).
+  [docs/references/m3-gallery-wireframe.html](./requirements/gallery-wireframe.html).
 - **Spec drafting** is verification of a different kind:
   `docs/dsl_spec.md` is updated within the same phase, and the
   phase-end check (below) asks whether the spec text would let an

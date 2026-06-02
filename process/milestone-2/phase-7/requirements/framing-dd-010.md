@@ -101,7 +101,7 @@ Carrying these forward into the option re-evaluation:
    Con on Option A — "correctness asserted by tests alone, with no
    GUI confirmation" — still holds. Pure-logic unit tests on a
    topo-sort routine are within the project's
-   [testing rules](../../CLAUDE.md#testing-rules) (no Win32/WinRT
+   [testing rules](../../../../CLAUDE.md#testing-rules) (no Win32/WinRT
    FFI dependency); GUI confirmation requires multi-binding stimulus
    that does not exist before M3.
 
@@ -324,7 +324,7 @@ Cheaper to implement; does not constrain M3's design space.
   Option A is the only entry that delivers one without spawning a
   release/debug correctness asymmetry. The walk extracts to a free
   function within the project's
-  [testing rules](../../CLAUDE.md#testing-rules) (no Win32/WinRT
+  [testing rules](../../../../CLAUDE.md#testing-rules) (no Win32/WinRT
   coupling), so the "ships unexercised" Phase 6 objection is
   mitigated by pure-logic unit tests that cover shapes M3 will
   introduce.

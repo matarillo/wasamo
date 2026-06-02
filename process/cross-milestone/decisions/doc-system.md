@@ -266,7 +266,7 @@ three cases:
    duplicates git log + ADRs.
 2. `docs/dsl_spec.md` — the normative `.ui` DSL specification, kept
    deliberately separate from the reference implementation
-   ([VISION §9.4](../../VISION.md#94-independence-of-the-core-specification))
+   ([VISION §9.4](../../../VISION.md#94-independence-of-the-core-specification))
    so future third-party implementations can target it. Same applies
    to the future `docs/abi_spec.md` after the M6 freeze.
 3. ADR-internal "Revision history" sections (e.g. `phase-8-hello-counter.md`)
@@ -302,7 +302,7 @@ Option C — Status quo
 - `docs/dsl_spec.md`, future `docs/abi_spec.md` — revision history
   retained. These are normative specifications maintained
   independently of the reference implementation
-  ([VISION §9.4](../../VISION.md#94-independence-of-the-core-specification)),
+  ([VISION §9.4](../../../VISION.md#94-independence-of-the-core-specification)),
   and external implementers need an in-spec version trail.
 - ADR-internal "Revision history" sections — out of scope for this
   decision; they serve a different purpose (single-ADR amendment

@@ -1,7 +1,7 @@
-﻿### DD-P5-004 — Verification approach: widget-internal state animation + continuous synthetic visual
+### DD-P5-004 — Verification approach: widget-internal state animation + continuous synthetic visual
 
 **Status:** Accepted
-**Supersedes:** DD-P5-001 ([phase-5-implicit-animations-dev-api.md](./phase-5-implicit-animations-dev-api.md))
+**Supersedes:** DD-P5-001 ([phase-5-implicit-animations-dev-api.md](./superseded/dd-p5-001-003-implicit-animations-dev-api.md))
 
 **Context:**
 The acceptance criterion Phase 5 must verify is "the Visual Layer is

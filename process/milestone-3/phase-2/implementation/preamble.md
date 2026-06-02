@@ -18,7 +18,7 @@ this file is mutable per
 Task ordering follows the dependency direction
 `wasamo-ir → wasamoc → wasamo-runtime → tests → host/spec`, so each
 commit builds on a green workspace per
-[CLAUDE.md §Commit rules](../../../CLAUDE.md). Items may be split,
+[CLAUDE.md §Commit rules](../../../../CLAUDE.md). Items may be split,
 reordered, or merged when implementation reveals a tighter ordering
 — this list is the record of what actually happens, not a frozen
 prediction.

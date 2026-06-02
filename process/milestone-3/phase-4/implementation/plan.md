@@ -141,7 +141,7 @@ for owner-manual GUI smoke (2026-05-25)"** for the rationale.
       Owner accepted on 2026-05-25 after the re-smoke pass on the
       rebuilt binary discharged all four observation points; smoke
       evidence at
-      [docs/references/m3-phase-4/](../../references/m3-phase-4/)
+      [docs/references/m3-phase-4/](./evidence/)
       (`t6-gallery-smoke-scroll-y-0.png`,
       `t6-gallery-smoke-scroll-y-100.png`,
       `t6-gallery-smoke-scroll-y-800.png`,
