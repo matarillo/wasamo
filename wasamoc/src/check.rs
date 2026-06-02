@@ -13,6 +13,7 @@ const KNOWN_WIDGET_TYPES: &[&str] = &[
     "WrapPanel",
     "ScrollView",
     "Grid",
+    "ZStack",
 ];
 
 /// Attribute names a `Cell` may carry (DD-M3-P5-001 / DD-M3-P5-005).
@@ -32,6 +33,10 @@ const CELL_ATTRS: &[&str] = &[
 /// (DD-M3-P5-005). `stretch` is the default; the other three position
 /// the content within the resolved cell rectangle.
 const ALIGN_VALUES: &[&str] = &["start", "center", "end", "stretch"];
+
+/// Parent-owned child-placement attributes (Grid `Cell` / ZStack direct
+/// children). They are consumed by the parent context, not by the child widget.
+const CHILD_PLACEMENT_ATTRS: &[&str] = &["h-align", "v-align"];
 
 /// Per-axis weighted-star upper bound (DD-M3-P5-002 / DD-M3-P5-006).
 const STAR_WEIGHT_MAX: i64 = 1024;
@@ -549,6 +554,75 @@ fn check_box_child_count(
                 child_count
             ),
         ));
+    }
+}
+
+fn check_zstack_unknown_attr(name: &str, span: &Span, filename: &str, diags: &mut Vec<Diagnostic>) {
+    diags.push(error(
+        filename,
+        span,
+        format!(
+            "unknown ZStack attribute `{}`; ZStack declares no Phase-6 attributes (dsl_spec §4.13)",
+            name
+        ),
+    ));
+}
+
+fn check_child_placement_outside_parent(
+    name: &str,
+    enclosing_widget: Option<&str>,
+    span: &Span,
+    filename: &str,
+    diags: &mut Vec<Diagnostic>,
+) {
+    let position = enclosing_widget
+        .map(|widget| format!("inside `{}`", widget))
+        .unwrap_or_else(|| "at component level".to_string());
+    diags.push(error(
+        filename,
+        span,
+        format!(
+            "`{}` is a parent-owned child placement attribute; it is only valid on a ZStack direct child or a Grid `Cell` (dsl_spec §4.13); found {}",
+            name, position
+        ),
+    ));
+}
+
+fn check_zstack_child_align(
+    name: &str,
+    value: &Expr,
+    span: &Span,
+    filename: &str,
+    diags: &mut Vec<Diagnostic>,
+) {
+    let allowed = ALIGN_VALUES
+        .iter()
+        .map(|v| format!("`{}`", v))
+        .collect::<Vec<_>>()
+        .join(", ");
+    match value {
+        Expr::Ident { name: value, .. } => {
+            if !ALIGN_VALUES.contains(&value.as_str()) {
+                diags.push(error(
+                    filename,
+                    span,
+                    format!(
+                        "ZStack child `{}` must be one of {} (got `{}`) (dsl_spec §4.13)",
+                        name, allowed, value
+                    ),
+                ));
+            }
+        }
+        _ => {
+            diags.push(error(
+                filename,
+                span,
+                format!(
+                    "ZStack child `{}` expects an alignment keyword ({}) (dsl_spec §4.13)",
+                    name, allowed
+                ),
+            ));
+        }
     }
 }
 
@@ -1071,12 +1145,13 @@ fn ranges_overlap(s1: i64, len1: i64, s2: i64, len2: i64) -> bool {
 
 /// Second pass: validate widget types, property-bind types, and name references.
 fn check_members(members: &[Member], filename: &str, ns: &Namespace, diags: &mut Vec<Diagnostic>) {
-    check_members_inner(members, None, filename, ns, diags);
+    check_members_inner(members, None, None, filename, ns, diags);
 }
 
 fn check_members_inner(
     members: &[Member],
     enclosing_widget: Option<&str>,
+    parent_widget: Option<&str>,
     filename: &str,
     ns: &Namespace,
     diags: &mut Vec<Diagnostic>,
@@ -1103,7 +1178,23 @@ fn check_members_inner(
                 // and skip the generic `check_expr_type` path, which would
                 // otherwise re-reject the literal positionally (the Ratio /
                 // Color arm rejects every appearance outside this site).
-                if enclosing_widget == Some("ScrollView") && name == "offset-y" {
+                if CHILD_PLACEMENT_ATTRS.contains(&name.as_str()) {
+                    if enclosing_widget == Some("Cell") {
+                        // Grid's enclosing pass validates Cell placement.
+                    } else if parent_widget == Some("ZStack") {
+                        check_zstack_child_align(name, value, span, filename, diags);
+                    } else {
+                        check_child_placement_outside_parent(
+                            name,
+                            enclosing_widget,
+                            span,
+                            filename,
+                            diags,
+                        );
+                    }
+                } else if enclosing_widget == Some("ZStack") {
+                    check_zstack_unknown_attr(name, span, filename, diags);
+                } else if enclosing_widget == Some("ScrollView") && name == "offset-y" {
                     // ScrollView's only Phase 4 attribute (DD-M3-P4-003):
                     // i32-literal-or-bare-i32-state-ident, validated by the
                     // ScrollView-specific helper to produce a diagnostic
@@ -1179,7 +1270,14 @@ fn check_members_inner(
                     if enclosing_widget != Some("Grid") {
                         check_cell_outside_grid(enclosing_widget, span, filename, diags);
                     }
-                    check_members_inner(children, Some("Cell"), filename, ns, diags);
+                    check_members_inner(
+                        children,
+                        Some("Cell"),
+                        enclosing_widget,
+                        filename,
+                        ns,
+                        diags,
+                    );
                 } else {
                     if !KNOWN_WIDGET_TYPES.contains(&type_name.as_str()) {
                         diags.push(Diagnostic::warning(
@@ -1205,7 +1303,14 @@ fn check_members_inner(
                     if type_name == "Grid" {
                         check_grid(children, span, filename, diags);
                     }
-                    check_members_inner(children, Some(type_name), filename, ns, diags);
+                    check_members_inner(
+                        children,
+                        Some(type_name),
+                        enclosing_widget,
+                        filename,
+                        ns,
+                        diags,
+                    );
                 }
             }
 
@@ -3122,5 +3227,88 @@ mod tests {
             }"#,
         );
         assert!(!result.has_errors(), "{:?}", result.diagnostics);
+    }
+
+    // --- M3-Phase 6 T1: ZStack check surface (DD-M3-P6-001 / 002) -------
+
+    #[test]
+    fn zstack_known_widget_no_warning() {
+        let result = check_src("component C inherits W { ZStack { Text {} Box {} } }");
+        assert!(
+            warnings("component C inherits W { ZStack { Text {} Box {} } }").is_empty(),
+            "ZStack should be a known widget type, not warn"
+        );
+        assert!(!result.has_errors(), "{:?}", result.diagnostics);
+    }
+
+    #[test]
+    fn zstack_direct_child_alignment_accepted() {
+        let result = check_src(
+            r#"component C inherits W {
+                ZStack {
+                    Box { fill: #00000080 }
+                    Text { h-align: center v-align: end text: "caption" }
+                }
+            }"#,
+        );
+        assert!(!result.has_errors(), "{:?}", result.diagnostics);
+    }
+
+    #[test]
+    fn zstack_unknown_attribute_rejected() {
+        let errs = errors(r#"component C inherits W { ZStack { spacing: 8 Text {} } }"#);
+        assert!(
+            errs.iter()
+                .any(|e| e.contains("unknown ZStack attribute `spacing`")),
+            "{:?}",
+            errs
+        );
+    }
+
+    #[test]
+    fn zstack_reserved_layering_attribute_rejected() {
+        let errs = errors(r#"component C inherits W { ZStack { z-index: 1 Text {} } }"#);
+        assert!(
+            errs.iter()
+                .any(|e| e.contains("unknown ZStack attribute `z-index`")),
+            "{:?}",
+            errs
+        );
+    }
+
+    #[test]
+    fn zstack_grid_track_attribute_rejected() {
+        let errs = errors(r#"component C inherits W { ZStack { columns: 1 Text {} } }"#);
+        assert!(
+            errs.iter()
+                .any(|e| e.contains("unknown ZStack attribute `columns`")),
+            "{:?}",
+            errs
+        );
+    }
+
+    #[test]
+    fn zstack_child_bad_alignment_value_rejected() {
+        let errs = errors(r#"component C inherits W { ZStack { Text { h-align: middle } } }"#);
+        assert!(
+            errs.iter()
+                .any(|e| e.contains("ZStack child `h-align` must be one of")
+                    && e.contains("`middle`")),
+            "{:?}",
+            errs
+        );
+    }
+
+    #[test]
+    fn placement_attr_outside_zstack_child_or_cell_rejected() {
+        let errs = errors(r#"component C inherits W { VStack { Text { h-align: center } } }"#);
+        assert!(
+            errs.iter()
+                .any(|e| e.contains("parent-owned child placement attribute")
+                    && e.contains("ZStack direct child")
+                    && e.contains("Grid `Cell`")),
+            "{:?}",
+            errs
+        );
     }
 }

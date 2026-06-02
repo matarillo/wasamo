@@ -911,4 +911,34 @@ mod tests {
         assert_eq!(find_prop(w, "item-spacing"), Some(&IrLiteral::Int(0)));
         assert_eq!(find_prop(w, "line-spacing"), Some(&IrLiteral::Int(0)));
     }
+
+    // --- M3-Phase 6 T1: ZStack direct-child lowering (DD-M3-P6-001) -----
+
+    #[test]
+    fn zstack_lowers_as_direct_children_without_kind_payload() {
+        let comp = lower_src(
+            r#"component C inherits W {
+                ZStack {
+                    Box { fill: #00000080 }
+                    Text { h-align: center v-align: end text: "caption" }
+                }
+            }"#,
+        );
+
+        let zstack = &comp.root;
+        assert_eq!(zstack.widget_type, "ZStack");
+        assert!(zstack.kind_payload.is_none());
+        assert!(zstack.props.is_empty());
+        assert_eq!(zstack.children.len(), 2);
+        assert_eq!(zstack.children[0].widget_type, "Box");
+        assert_eq!(zstack.children[1].widget_type, "Text");
+        assert_eq!(
+            find_prop(&zstack.children[1], "h-align"),
+            Some(&IrLiteral::Ident("center".into()))
+        );
+        assert_eq!(
+            find_prop(&zstack.children[1], "v-align"),
+            Some(&IrLiteral::Ident("end".into()))
+        );
+    }
 }
