@@ -43,3 +43,15 @@ refine task slicing, or close implementation-planning risks.)
   green; `cargo build --workspace` green; `cargo test --workspace`
   green. Existing Cargo warnings about the `wasamo` linkable target /
   `wasamo-sys` import-library ordering were observed.
+- **2026-06-02 / T2 review follow-up local:** tightened the
+  `zstack_arrange_preserves_document_order_substrate` evidence so the two
+  children have distinguishable overlapping geometry, corrected the T2
+  retrospective's limited helper-rename classification, and renamed
+  `align_in_rect` parameters from cell-specific to rect-specific names.
+  `cargo fmt --all -- --check` green; `cargo test -p wasamo-runtime
+  zstack` green (4 passed); `cargo build` green. Clean follow-up
+  verification: `cargo clean` completed (`3707 files, 1.1GiB` removed);
+  `cargo build --release --workspace` green; `cargo build --workspace`
+  green; `cargo test --workspace` green. Existing Cargo warnings about
+  the `wasamo` linkable target / `wasamo-sys` import-library ordering
+  were observed.

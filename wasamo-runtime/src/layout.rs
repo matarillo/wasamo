@@ -1440,16 +1440,16 @@ fn align_in_rect(
     align: Alignment,
     constraint: &SizeConstraint,
     desired: f32,
-    cell_start: f32,
-    cell_extent: f32,
+    rect_start: f32,
+    rect_extent: f32,
 ) -> (f32, f32) {
     if axis_is_stretchy(align, constraint) {
-        return (cell_start, cell_extent);
+        return (rect_start, rect_extent);
     }
     match align {
-        Alignment::Leading => (cell_start, desired),
-        Alignment::Center => (cell_start + (cell_extent - desired) / 2.0, desired),
-        Alignment::Trailing => (cell_start + cell_extent - desired, desired),
+        Alignment::Leading => (rect_start, desired),
+        Alignment::Center => (rect_start + (rect_extent - desired) / 2.0, desired),
+        Alignment::Trailing => (rect_start + rect_extent - desired, desired),
         Alignment::Stretch => unreachable!("stretch handled above"),
     }
 }
@@ -3033,10 +3033,10 @@ mod tests {
         ]);
         z.children.push(LayoutNode::rectangle(
             SizeConstraint::Fixed(80.0),
-            SizeConstraint::Fixed(80.0),
+            SizeConstraint::Fixed(60.0),
         ));
         z.children.push(LayoutNode::rectangle(
-            SizeConstraint::Fixed(80.0),
+            SizeConstraint::Fixed(60.0),
             SizeConstraint::Fixed(80.0),
         ));
 
@@ -3044,13 +3044,18 @@ mod tests {
 
         let bottom = &z.children[0];
         let top = &z.children[1];
-        assert_eq!(bottom.offset, (10.0, 10.0));
-        assert_eq!(top.offset, (10.0, 10.0));
-        assert_eq!(bottom.size, (80.0, 80.0));
-        assert_eq!(top.size, (80.0, 80.0));
-        // Layout keeps the overlapping layers in declared child-vector order.
+        assert_eq!(bottom.offset, (10.0, 20.0));
+        assert_eq!(top.offset, (20.0, 10.0));
+        assert_eq!(bottom.size, (80.0, 60.0));
+        assert_eq!(top.size, (60.0, 80.0));
+
+        let bottom_right = bottom.offset.0 + bottom.size.0;
+        let top_right = top.offset.0 + top.size.0;
+        let bottom_bottom = bottom.offset.1 + bottom.size.1;
+        let top_bottom = top.offset.1 + top.size.1;
+        assert!(bottom_right > top.offset.0 && top_right > bottom.offset.0);
+        assert!(bottom_bottom > top.offset.1 && top_bottom > bottom.offset.1);
+        // Pure layout pins declared child slots plus overlap geometry only.
         // T3 verifies that the live Visual tree paints later children on top.
-        assert_eq!(z.children[0].size, bottom.size);
-        assert_eq!(z.children[1].size, top.size);
     }
 }
