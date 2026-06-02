@@ -89,3 +89,9 @@
   `cargo test --workspace` — green. Existing Cargo warnings about the
   `wasamo` linkable target / `wasamo-sys` import-library ordering were
   observed.
+- **2026-06-03 / T3 task-end clean rebuild (post-commit
+  `63d6262`):** `cargo fmt --all -- --check` — green; `cargo clean`
+  completed (`7195 files, 2.2GiB` removed); `cargo build --release
+  --workspace` — green; `cargo build --workspace` — green; `cargo test
+  --workspace` — green. Existing Cargo warnings about the `wasamo`
+  linkable target and `wasamo-sys` import-library ordering were observed.
