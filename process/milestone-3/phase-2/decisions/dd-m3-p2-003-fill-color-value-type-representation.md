@@ -61,7 +61,7 @@ Option A — Box-internal `Color(u32)` domain type; **not** added to
   value never traverses `PropertyValue`-mediated paths.
   `PropertyValue` is **not** widened with a `Color` variant in Phase
   2, and `WASAMO_VALUE_COLOR` is **not** added. The
-  [predoc-inputs.md §1](../notes/m3-phase-2/predoc-inputs.md#1-box-が新規-propertyvalue-variant-を入れるなら-abi-value-conversion-arm-は同じ-step-に-fold-する)
+  [predoc-inputs.md §1](../requirements/constraints.md#1-box-が新規-propertyvalue-variant-を入れるなら-abi-value-conversion-arm-は同じ-step-に-fold-する)
   fold-in-same-step obligation triggers when `PropertyValue` gains a
   variant; Phase 2 satisfies it by not adding a variant. See DD-002's
   IR / runtime plumbing block for the symmetric `Ratio` treatment.
@@ -87,7 +87,7 @@ tag in Phase 2 (rejected)
   tag added to the C ABI's value union; `read_property_value` /
   `write_property_value` / `property_value_to_owned` arms folded into
   the same step per
-  [predoc-inputs.md §1](../notes/m3-phase-2/predoc-inputs.md#1-box-が新規-propertyvalue-variant-を入れるなら-abi-value-conversion-arm-は同じ-step-に-fold-する);
+  [predoc-inputs.md §1](../requirements/constraints.md#1-box-が新規-propertyvalue-variant-を入れるなら-abi-value-conversion-arm-は同じ-step-に-fold-する);
   `abi_spec.md` updated.
 
   - What you give up: Widens the public ABI surface ahead of the

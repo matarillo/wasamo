@@ -360,7 +360,7 @@ M3 の visible proof として置き、`.ui -> IR -> runtime` の path が M2 �
 各 primitive が検証する thesis、out-of-scope、spec / implementation / E2E proof の
 同期ルールを明示する。
 
-target app の候補は [m3-target-app-wireframes.html](m3-target-app-wireframes.html) に
+target app の候補は [m3-target-app-wireframes.html](target-app-wireframes.html) に
 4 案（Mail Reader / Music Player / Photo Gallery / File Explorer）のワイヤーフレームと
 layout surface の批判的検討を整理してある。target app pre-doc は本ファイルから候補を
 選定した上で起こす。

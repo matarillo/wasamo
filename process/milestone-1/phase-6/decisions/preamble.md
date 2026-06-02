@@ -1,4 +1,4 @@
-﻿# Phase 6 — C ABI Header: Architecture Decisions
+# Phase 6 — C ABI Header: Architecture Decisions
 
 **Phase:** 6 (C ABI header — `wasamo.h` + `docs/abi_spec.md`)
 **Date:** 2026-04-30
@@ -33,7 +33,7 @@ Two pre-pre-doc framing decisions (Accepted 2026-04-29, recorded in
    deliberately scoped down or pushed into the experimental layer.
 
 The current C ABI surface
-([wasamo/src/lib.rs:62-114](../../wasamo/src/lib.rs#L62-L114))
+([wasamo/src/lib.rs:62-114](../../../../wasamo-runtime/src/abi.rs#L62-L114))
 is five functions: `wasamo_init`, `wasamo_window_create`,
 `wasamo_window_show`, `wasamo_window_destroy`, `wasamo_run`. They
 are the seed for the stable core but predate this ADR's framing —

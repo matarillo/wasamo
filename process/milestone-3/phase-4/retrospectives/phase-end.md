@@ -174,7 +174,7 @@ gh run watch 26406065405 --exit-status
 ## フォローアップ
 
 - Phase 5 pre-doc は
-  [`docs/notes/m3-phase-5/predoc-inputs.md`](../m3-phase-5/predoc-inputs.md)
+  [`docs/notes/m3-phase-5/predoc-inputs.md`](../../phase-5/requirements/constraints.md)
   から開始する。
 - R1 Window-title wiring は Phase 4 内では closed しない。次 gate は
   M3-Phase 5 pre-doc framing で owning phase を assign すること。

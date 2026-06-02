@@ -29,7 +29,7 @@ downstream tooling tracks (M5 VS Code LSP in particular) have a
 normative document to build against. Concretely, M3 ships:
 
 - The **Photo Gallery** target app
-  ([docs/notes/m3/m3-target-app-predoc.md](../notes/m3/m3-target-app-predoc.md),
+  ([docs/notes/m3/m3-target-app-predoc.md](requirements/spec.md),
   accepted 2026-05-16; visual contract in
   [docs/references/m3-gallery-wireframe.html](../references/m3-gallery-wireframe.html))
   as the visible proof and per-phase acceptance basis.
@@ -50,7 +50,7 @@ M3 is explicitly **not** a feature-breadth milestone: input / focus
 model, IME, multi-window, AccessKit, Mica/Acrylic rendering
 semantics, full theming, VS Code LSP acceptance, hot reload, and
 C ABI freeze remain deferred to M4–M6 per
-[docs/notes/m3/m3-start-framing.md](../notes/m3/m3-start-framing.md)
+[docs/notes/m3/m3-start-framing.md](requirements/framing.md)
 §"M3 に入れないもの" and confirmed in the target-app pre-doc's
 Out-of-scope section.
 
@@ -63,7 +63,7 @@ following the M2 convention. ADR identifiers use the scope
 
 A pre-plan **target-app framing** step was discharged before this
 plan opened, in
-[docs/notes/m3/m3-target-app-predoc.md](../notes/m3/m3-target-app-predoc.md);
+[docs/notes/m3/m3-target-app-predoc.md](requirements/spec.md);
 it is not numbered as an M3 phase because it produced no
 implementation, only the agreed surface contract that this plan
 mirrors.
@@ -131,7 +131,7 @@ exercises that surface in `examples/gallery/`.
   (live `WidgetNode` propagation of a `bool`-bound attribute on a
   trivial widget that already exists — no new layout primitive is
   required for the phase to close). Origin:
-  [m3-target-app-predoc.md §Binding / value surface](../notes/m3/m3-target-app-predoc.md#binding--value-surface).
+  [m3-target-app-predoc.md §Binding / value surface](requirements/spec.md#binding--value-surface).
 
 - **M3-Phase 2 — Box layout primitive.** 0+ child container with
   `aspect: <ratio>` and minimal `fill: <color>` attributes. Pure
@@ -139,7 +139,7 @@ exercises that surface in `examples/gallery/`.
   constraint resolution and child layout. Establishes the
   placeholder pattern (Box + Text child) that carries the M3
   Image-widget deferral. Origin:
-  [m3-target-app-predoc.md — AspectRatio attribute and Image-widget deferral closures](../notes/m3/m3-target-app-predoc.md#保留点の決着).
+  [m3-target-app-predoc.md — AspectRatio attribute and Image-widget deferral closures](requirements/spec.md#保留点の決着).
 
 - **M3-Phase 3 — WrapPanel layout primitive.** Two-stage
   measure-arrange: linear main-axis placement plus cross-axis
@@ -173,7 +173,7 @@ exercises that surface in `examples/gallery/`.
   collection binding. The concrete shape of the per-item context
   (identifier naming such as `item` / `index`, whether it rides on
   the unified `HandlerExpr` enum per the M2-to-M3 handover
-  ([m2-to-m3-handover.md](../notes/m2-to-m3-handover.md) §2) or
+  ([m2-to-m3-handover.md](../milestone-2/handoff.md) §2) or
   requires a separate context type, and how the collection type
   is exposed) is settled in the ADR — the plan commits only
   to the surface identity, not the syntactic form. The same phase
@@ -196,7 +196,7 @@ exercises that surface in `examples/gallery/`.
   scratch. The framing-level permission to reserve syntax for
   M4 material in the public draft
   (per the framing's ROADMAP-acceptance discussion in
-  [m3-start-framing.md](../notes/m3/m3-start-framing.md),
+  [m3-start-framing.md](requirements/framing.md),
   owner-agreed 2026-05-11) is
   **not** carried as an M3 acceptance criterion; the Phase 8
   phase-ADR is where it is either exercised as an explicit DD
@@ -301,7 +301,7 @@ wording is preserved here as "M4 or later" rather than tightened:
 - Cycle detection / dependency-tie observable contract / fan-out ×
   `MUTATION_CAP` interaction in the reactive drain — residuals
   from DD-M2-P6-010, listed in
-  [m2-to-m3-handover.md §3](../notes/m2-to-m3-handover.md). Touched
+  [m2-to-m3-handover.md §3](../milestone-2/handoff.md). Touched
   by an M3 phase only if its multi-binding work surfaces a concrete
   failure; otherwise carried forward.
 
@@ -390,7 +390,7 @@ A phase closes when **all** of the following hold:
    practice) covering what the phase shipped, what slipped (if
    anything), and the merge / push gate per the *phase-end merge
    and push gating* discipline recorded in
-   [docs/notes/retrospectives.md](../notes/retrospectives.md)
+   [docs/notes/retrospectives.md](../procedures/retrospectives.md)
    (the procedure document; durable per-phase entries are filed
    under the phase's own `docs/notes/m3-phase-N/` directory, not
    appended to the procedure document itself).
@@ -435,7 +435,7 @@ M3 is complete when **all** of the following hold:
   closes with code green and spec text "to be written next phase",
   M3 silently turns into "implementation now, public draft at the
   end" — exactly the failure mode the framing rejected
-  ([m3-start-framing.md §F6](../notes/m3/m3-start-framing.md#f6--dsl-spec-draft-は各-phase-の副産物ではなく-acceptance-の一部)).
+  ([m3-start-framing.md §F6](requirements/framing.md#f6--dsl-spec-draft-は各-phase-の副産物ではなく-acceptance-の一部)).
   Mitigation: the phase-end criterion 4 ("spec synchronized") is a
   hard gate, not a soft one. A phase whose spec text is "TODO"
   does not close.
@@ -459,7 +459,7 @@ M3 is complete when **all** of the following hold:
   6 and 7 are the most likely to touch the dirty-Effect drain
   residuals (cycle detection, dependency ties, fan-out ×
   `MUTATION_CAP`). Mitigation: the phase pre-doc is required to
-  reference [m2-to-m3-handover.md §3](../notes/m2-to-m3-handover.md)
+  reference [m2-to-m3-handover.md §3](../milestone-2/handoff.md)
   and decide whether to fix or carry forward. Silent carry-forward
   is not acceptable.
 

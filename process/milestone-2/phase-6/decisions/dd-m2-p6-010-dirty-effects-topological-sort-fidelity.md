@@ -9,7 +9,7 @@ pre-condition for M3 multi-binding is **discharged at acceptance**
 (the walk lands in M2; M3 inherits the verified primitive). M3
 residuals (cycle detection, ordering ties, fan-out × `MUTATION_CAP`)
 are recorded in
-[docs/notes/m2-to-m3-handover.md](../notes/m2-to-m3-handover.md).
+[docs/notes/m2-to-m3-handover.md](../../handoff.md).
 
 This DD was opened in the Phase 6 ADR's draft slate and deferred to
 M2-Phase 7 per the 2026-05-08 acceptance-criteria revision recorded in

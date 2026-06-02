@@ -17,7 +17,7 @@ M3 acceptance criterion **A3** (see
 
 The pre-doc framing for this phase was aligned with the owner on
 2026-05-21 and is recorded in
-[docs/notes/m3-phase-3/pre-doc-framing.md](../notes/m3-phase-3/pre-doc-framing.md).
+[docs/notes/m3-phase-3/pre-doc-framing.md](../requirements/framing.md).
 That framing fixed the 6-DD slate carried below, the visible-proof
 location (framing decision E — grow Phase 2's `examples/gallery/` +
 `examples/gallery-rust/` sub-screen into a WrapPanel of Boxes), the
@@ -26,7 +26,7 @@ two upstream-document-revision moments inherited verbatim from
 Phase 2 (framing decision D).
 
 Per the M2-Phase 2 framing decision D postmortem
-([m3-phase-2 framing notes](../notes/m3-phase-2/m3-phase-2-pre-doc-framing.md)),
+([m3-phase-2 framing notes](../../phase-2/requirements/framing.md)),
 the "Moment is not a commit unit" rule applies from the start of
 Phase 3: each upstream-document edit in a Moment lands as its own
 commit on the pre-doc branch, scoped by review concern, not bundled.
@@ -34,7 +34,7 @@ commit on the pre-doc branch, scoped by review concern, not bundled.
 The M2/M3-Phase-1/M3-Phase-2 end-state shape that this phase extends
 without breaking:
 
-- `wasamo-ir` ([wasamo-ir/src/lib.rs](../../wasamo-ir/src/lib.rs)):
+- `wasamo-ir` ([wasamo-ir/src/lib.rs](../../../../wasamo-ir/src/lib.rs)):
   `IrType` is `I32 | Str | Bool`; `IrLiteral` is `Int | Str | Ident |
   Bool | Ratio | Color`. The `Ratio` / `Color` literals were added in
   Phase 2 (DD-M3-P2-002 / DD-M3-P2-003) as Box-internal domain types
@@ -42,12 +42,12 @@ without breaking:
   plumbing for all WrapPanel attributes; no new literal form is
   introduced.
 - `wasamo-runtime` widget catalog
-  ([wasamo-runtime/src/widget.rs](../../wasamo-runtime/src/widget.rs)):
+  ([wasamo-runtime/src/widget.rs](../../../../wasamo-runtime/src/widget.rs)):
   `Rectangle | VStack | HStack | Text | Button | Box`. `PropertyValue`
   enum is `I32(i32) | String(String) | Bool(bool)`; no new variant
   added in Phase 2. Phase 3 adds `WrapPanel` as a per-kind tag (DD-001).
 - Layout engine
-  ([wasamo-runtime/src/layout.rs](../../wasamo-runtime/src/layout.rs)):
+  ([wasamo-runtime/src/layout.rs](../../../../wasamo-runtime/src/layout.rs)):
   pure-data `LayoutNode` / `measure` / `arrange` boundary, Win32/WinRT-
   free. Phase 2 introduced `LayoutError::{BoxAspectUnboundedBoth,
   BoxNoExtent}`; Phase 3 inherits the error class and may extend it
@@ -56,7 +56,7 @@ without breaking:
   Phase 3 WrapPanel attributes are constant-only (per DD-002 / DD-003
   / DD-004 below), so no new seam triple is built. F5 (`TypedValue`
   deferral) is held in force by construction.
-- `wasamoc` ([wasamoc/src/check.rs](../../wasamoc/src/check.rs)):
+- `wasamoc` ([wasamoc/src/check.rs](../../../../wasamoc/src/check.rs)):
   state-name → declared-type table; identifier resolution lowers to
   typed `*PropRead` variants. Phase 3 adds no new value type; the
   WrapPanel attributes are integer literals and `wasamoc check` rejects
@@ -194,7 +194,7 @@ do not appear as recommended options —
 - **Image widget surface.** M4+; placeholder pattern from Phase 2
   DD-M3-P2-006 carries through unchanged.
 - **`TypedValue` generic value union.** F5 maintained
-  ([m2-to-m3-handover.md §4](../notes/m2-to-m3-handover.md)).
+  ([m2-to-m3-handover.md §4](../../../milestone-2/handoff.md)).
   DD-002 / DD-003 / DD-004's constant-only stances preserve the
   deferral structurally; no Phase 3 attribute pressures `TypedValue`.
 - **Bindable surface for any WrapPanel attribute** exposed by
@@ -417,7 +417,7 @@ pre-doc branch, scoped by review concern per
   WrapPanel attributes constant-only) so the F5 deferral is
   unpressured, and (c) layout engine boundary remains Win32/WinRT-
   free — the line breaker operates on pure data
-  ([predoc-inputs.md §8](../notes/m3-phase-3/predoc-inputs.md)).
+  ([predoc-inputs.md §8](../requirements/constraints.md)).
 - [docs/abi_spec.md](../../../../docs/abi_spec.md) — **no changes in Phase 3**.
   No new ABI public function, no new `WASAMO_VALUE_*` tag, no new
   arms in `abi.rs`. All WrapPanel attributes are constant-only
@@ -432,7 +432,7 @@ pre-doc branch, scoped by review concern per
 - [docs/plans/progress/m3-phase-3-progress.md](../implementation/) —
   new file opened with task list mapped to this ADR's verification
   closure items below.
-- [docs/notes/retrospectives.md](../notes/retrospectives.md) —
+- [docs/notes/retrospectives.md](../../../procedures/retrospectives.md) —
   **no Phase-3-specific amendment expected at framing time** per
   framing decision F's process-rules-ssot disposition. Phase 2's
   `cargo fmt` discipline tightening was a one-off; no analogous
@@ -588,7 +588,7 @@ WrapPanel sub-screen are explicitly **not** required in Phase 3
 (per framing decision E and the Out of scope list); Phase 8
 broadens the full gallery to all three.
 
-Per [predoc-inputs.md §10](../notes/m3-phase-3/predoc-inputs.md),
+Per [predoc-inputs.md §10](../requirements/constraints.md),
 evidence items (1)–(4) do not collapse into one even though they
 share helper infrastructure — the `wasamoc check` diagnostics, the
 line-breaker tests, the IR-load `validate()` gate tests, and the

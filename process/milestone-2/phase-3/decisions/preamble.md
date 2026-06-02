@@ -33,7 +33,7 @@ clicked => { root.count += 1; }
 ```
 
 attached to the Increment button. In the M1 AST
-([wasamoc/src/ast.rs:98](../../wasamoc/src/ast.rs#L98)) this is a
+([wasamoc/src/ast.rs:98](../../../../wasamoc/src/ast.rs#L98)) this is a
 `Member::SignalHandler { signal, body, span }` — a `Block` of
 statements that runs when the named signal fires on the enclosing
 widget. M2 acceptance criterion **A1** requires this construct to

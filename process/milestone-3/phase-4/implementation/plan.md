@@ -137,7 +137,7 @@ for owner-manual GUI smoke (2026-05-25)"** for the rationale.
       hidden; off-viewport thumbnails enter view as `scroll_y`
       progresses.
 - [x] Owner explicitly accepts the smoke result, or records a fail
-      observation note (per [human-visible GUI smoke](../../notes/human-visible-smoke.md)).
+      observation note (per [human-visible GUI smoke](../../../../docs/notes/human-visible-smoke.md)).
       Owner accepted on 2026-05-25 after the re-smoke pass on the
       rebuilt binary discharged all four observation points; smoke
       evidence at
@@ -186,7 +186,7 @@ for owner-manual GUI smoke (2026-05-25)"** for the rationale.
       (Alt+F4 / ×) crash-free.
 - [x] T6 step-end retrospective recorded under
       `docs/notes/m3-phase-4/`
-      ([t6-step-end-retrospective.md](../../notes/m3-phase-4/t6-step-end-retrospective.md)).
+      ([t6-step-end-retrospective.md](../retrospectives/t6.md)).
 
 ### T7 — Phase-end gates and Moment 2 re-sync
 

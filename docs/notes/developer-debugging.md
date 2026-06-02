@@ -163,11 +163,11 @@ unbounded、再レイアウト回数、star 解決結果、z-order 衝突など)
 
 ## 6. 関連ノート
 
-- [layout-engine.md](./layout-engine.md) — 2-pass measure/arrange、cache
+- [layout-engine.md](layout-engine.md) — 2-pass measure/arrange、cache
   invalidation、collapse 挙動の背景。
-- [dsl-grammar.md](./dsl-grammar.md) — diagnostics / source span を IR まで
+- [dsl-grammar.md](dsl-grammar.md) — diagnostics / source span を IR まで
   運ぶ論点 (OQ6)。
-- [human-visible-smoke.md](./human-visible-smoke.md) — 自動検証と owner-visible
+- [human-visible-smoke.md](human-visible-smoke.md) — 自動検証と owner-visible
   GUI smoke の分離。debug 支援が入っても両者の役割分担は残る。
 - [framing.md (M3-Phase 5)](../../process/milestone-3/phase-5/requirements/framing.md)
   — FD-D(non-root Shrink × Fill 子)と DD-M3-P5-004(unbounded-star error)。

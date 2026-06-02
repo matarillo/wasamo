@@ -34,26 +34,26 @@ grammar to align against.
 - **DD-M2-P3-001 = Option A** (runtime-side handler interpreter).
   Handler bodies mutate property storage through the internal
   `set_property` path
-  ([wasamo-runtime/src/widget.rs:334](../../wasamo-runtime/src/widget.rs#L334)).
+  ([wasamo-runtime/src/widget.rs:334](../../../../wasamo-runtime/src/widget.rs#L334)).
   The reactive engine observes those internal writes directly; no
   C ABI round-trip is involved. This is the load-bearing argument
   for runtime-side reactivity — see DD-M2-P3-001's reactive-integration
   paragraph.
 - **DD-M2-P3-002 = Option B** (separate inline-handler slot vs host
   listener list). The handler evaluator core
-  ([wasamo-runtime/src/handler.rs](../../wasamo-runtime/src/handler.rs))
+  ([wasamo-runtime/src/handler.rs](../../../../wasamo-runtime/src/handler.rs))
   is already factored as `HandlerExpr` + `EvalContext` trait +
   `evaluate()`. Phase 5 reuses this evaluator for binding-expression
   evaluation, with a read-only context variant — the binding evaluator
   is **not** a parallel implementation.
 - **DD-M2-P4-004 = Option A** (no host-visible batching ABI). The
   internal `with_batched_writes` helper
-  ([wasamo-runtime/src/reactive.rs:18](../../wasamo-runtime/src/reactive.rs#L18))
+  ([wasamo-runtime/src/reactive.rs:18](../../../../wasamo-runtime/src/reactive.rs#L18))
   is the runtime-internal coalescing primitive. Phase 5 implements it
   (Phase 4 shipped the skeleton).
 - **DD-P6-003 = Option A** (queued emission). The runtime guarantees
   no callback fires while the host is inside a `wasamo_*` call;
-  `emit::drain_if_outermost` ([wasamo-runtime/src/abi.rs:369](../../wasamo-runtime/src/abi.rs#L369))
+  `emit::drain_if_outermost` ([wasamo-runtime/src/abi.rs:369](../../../../wasamo-runtime/src/abi.rs#L369))
   runs at outermost-frame boundaries. Phase 5's reactive dispatch must
   compose with this rule, not bypass it.
 - **DD-P8-002** (size-affecting property writes invalidate layout).
@@ -63,8 +63,8 @@ grammar to align against.
   the same `set_property` path and inherit this behaviour. The
   whole-window dirty granularity is preserved; subtree-grain dirty is
   out of scope (open question in
-  [layout-engine note §3.4](../notes/layout-engine.md)).
-- **Pre-aligned design axes.** [docs/notes/m2-phase-5-design-axes.md](../notes/m2-phase-5-design-axes.md)
+  [layout-engine note §3.4](../../../../docs/notes/layout-engine.md)).
+- **Pre-aligned design axes.** [docs/notes/m2-phase-5-design-axes.md](../requirements/framing-draft.md)
   records owner direction (2026-05-05) on two axes before pre-doc:
   (a) intermediate dependency-tracker depth (Signal + Effect 2-layer,
   read-time auto-collection; Computed deferred to M3); (b) Option A
@@ -111,7 +111,7 @@ handler on internal `set_property`) currently fits the
 tree-with-bindings family best, but no accepted ADR names that
 selection as a long-term commitment.
 
-[docs/notes/architectural-family.md](../notes/architectural-family.md)
+[docs/notes/architectural-family.md](../../../../docs/notes/architectural-family.md)
 tracks the current hypothesis status, the family-neutral vs
 family-coupled split of the design, and the re-evaluation triggers
 (M3 DSL spec drafting; hot-reload work; binding shapes that don't fit
@@ -162,13 +162,13 @@ to the drain loop's pre-Effect topological pass, and to the
 reactive module — not as rewrites.
 
 **Pre-doc validation spike.** Not required. The handler evaluator
-([wasamo-runtime/src/handler.rs](../../wasamo-runtime/src/handler.rs))
+([wasamo-runtime/src/handler.rs](../../../../wasamo-runtime/src/handler.rs))
 is the pre-existing reference for the evaluator-with-context shape
 DD-M2-P5-005 = A reuses; the queued-emission drain
-([wasamo-runtime/src/abi.rs:369](../../wasamo-runtime/src/abi.rs#L369))
+([wasamo-runtime/src/abi.rs:369](../../../../wasamo-runtime/src/abi.rs#L369))
 is the pre-existing reference for the deferred-dispatch shape
 DD-M2-P5-004 = B extends; the `with_batched_writes` skeleton
-([wasamo-runtime/src/reactive.rs:18](../../wasamo-runtime/src/reactive.rs#L18))
+([wasamo-runtime/src/reactive.rs:18](../../../../wasamo-runtime/src/reactive.rs#L18))
 is the integration point already in place. The Solid.js / Vue ref
 prior art is broadly understood and exercised at scale; no spike is
 needed to validate the 2-layer auto-tracking premise.
@@ -187,7 +187,7 @@ needed to validate the 2-layer auto-tracking premise.
   registration API is unchanged.
 - **Subtree-grain layout dirty.** Phase 5 inherits DD-P8-002's
   whole-window dirty path; finer granularity remains the open
-  question in [layout-engine note §3.4](../notes/layout-engine.md)
+  question in [layout-engine note §3.4](../../../../docs/notes/layout-engine.md)
   and is revisited only if M2 acceptance demands it (it does not).
 - **Host-visible reactive API.** No C ABI symbol is added (per
   DD-M2-P4-004 = A). Hosts in M2 do not interact with the reactive
@@ -200,7 +200,7 @@ needed to validate the 2-layer auto-tracking premise.
   trigger remains the outermost-frame boundary (DD-M2-P5-004 = B).
   M3+ may revisit if a host-driven flush case appears.
 - **Headless / "no-Compositor" runtime mode.** Per DD-M2-P5-006 = A
-  and [headless-verification.md](../notes/headless-verification.md);
+  and [headless-verification.md](../../../../docs/notes/headless-verification.md);
   not built in M2. Re-evaluation triggers (post-1.0 hot reload CI;
   binding-conformance tests) remain as recorded in that note.
 - **Multi-threaded Signal access.** M2 is single-threaded; the

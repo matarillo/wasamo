@@ -17,7 +17,7 @@ DD-M3-P1-003. **Landed in 7cc52f4 (2026-05-19).**
       and equality of the new variants.
 
 Retrospective:
-[docs/notes/m3-phase-1/t1-step-end-retrospective.md](../../notes/m3-phase-1/t1-step-end-retrospective.md).
+[docs/notes/m3-phase-1/t1-step-end-retrospective.md](../retrospectives/t1.md).
 
 ### T2 — `wasamoc` lexer / parser: `true` / `false` keywords and bool literal
 
@@ -39,7 +39,7 @@ spelling). **Landed in 992e7e1 (2026-05-19).**
       names and as property-bind LHS.
 
 Retrospective:
-[docs/notes/m3-phase-1/t2-step-end-retrospective.md](../../notes/m3-phase-1/t2-step-end-retrospective.md).
+[docs/notes/m3-phase-1/t2-step-end-retrospective.md](../retrospectives/t2.md).
 
 ### T3 — `wasamoc` checker: state-type table and bool type-checking
 
@@ -65,7 +65,7 @@ Discharges DD-M3-P1-010. **Landed in 710eea8 + 3cbe257 (2026-05-19).**
 - [x] Unit tests cover every row of DD-M3-P1-010's table.
 
 Retrospective:
-[docs/notes/m3-phase-1/t3-step-end-retrospective.md](../../notes/m3-phase-1/t3-step-end-retrospective.md).
+[docs/notes/m3-phase-1/t3-step-end-retrospective.md](../retrospectives/t3.md).
 
 Notes:
 
@@ -105,7 +105,7 @@ lowering). **Landed in 5a5ba28 (2026-05-19).**
       paths.
 
 Retrospective:
-[docs/notes/m3-phase-1/t4-step-end-retrospective.md](../../notes/m3-phase-1/t4-step-end-retrospective.md).
+[docs/notes/m3-phase-1/t4-step-end-retrospective.md](../retrospectives/t4.md).
 
 Notes:
 
@@ -139,11 +139,11 @@ Discharges the IR-text-load half of DD-M3-P1-006. **Landed in
       reconstructs `IrState { ty: Bool, default: Bool(false) }` and
       `HandlerExpr::BoolPropRead { path: "ready" }`. Lives as
       `bool_state_binding_emits_and_parses_bool_productions` in
-      [wasamo-runtime/tests/ir_loader_roundtrip.rs](../../../wasamo-runtime/tests/ir_loader_roundtrip.rs)
+      [wasamo-runtime/tests/ir_loader_roundtrip.rs](../../../../wasamo-runtime/tests/ir_loader_roundtrip.rs)
       alongside the existing i32 / string round-trips.
 
 Retrospective:
-[docs/notes/m3-phase-1/t5-step-end-retrospective.md](../../notes/m3-phase-1/t5-step-end-retrospective.md).
+[docs/notes/m3-phase-1/t5-step-end-retrospective.md](../retrospectives/t5.md).
 
 Notes:
 
@@ -166,7 +166,7 @@ value-conversion arms) — see Notes. **Landed in a550bd9 + 36be13c +
 cf8467a (2026-05-19).**
 
 - [x] `PropertyValue::Bool(bool)` variant added in
-      [widget.rs L77-L81](../../../wasamo-runtime/src/widget.rs#L77-L81).
+      [widget.rs L77-L81](../../../../wasamo-runtime/src/widget.rs#L77-L81).
 - [x] `resolve_prop_key` widened to return `Option<(PropertyKey,
       IrType)>`; widget catalog rows carry `IrType` (M2 rows
       `Text.text`/`Text.font`/`Button.text`/`Button.style` retain
@@ -191,7 +191,7 @@ cf8467a (2026-05-19).**
       activation deferred to M4–M5 per ADR §Out of scope.
 - [x] Mock-free Windows-only integration test
       `button_enabled_property_flips_visual_and_suppresses_click`
-      in [wasamo-runtime/tests/button_enabled.rs](../../../wasamo-runtime/tests/button_enabled.rs);
+      in [wasamo-runtime/tests/button_enabled.rs](../../../../wasamo-runtime/tests/button_enabled.rs);
       drives `wasamo_set_property(PROP_BUTTON_ENABLED,
       WASAMO_VALUE_BOOL)` and asserts the
       `CompositionColorBrush::Color()` flip plus click-callback
@@ -199,7 +199,7 @@ cf8467a (2026-05-19).**
       runtime Compositor is unavailable.
 
 Retrospective:
-[docs/notes/m3-phase-1/t6-step-end-retrospective.md](../../notes/m3-phase-1/t6-step-end-retrospective.md).
+[docs/notes/m3-phase-1/t6-step-end-retrospective.md](../retrospectives/t6.md).
 
 Notes:
 
@@ -239,7 +239,7 @@ flip). **Landed in 46546a1 + 6d9217e (2026-05-19).**
       the M2 String shape (`UnknownProperty` for `get_bool` /
       `set_bool`; `read_bool_tracked` forwards to `get_bool`). Live
       impls follow in
-      [reactive.rs](../../../wasamo-runtime/src/reactive.rs):
+      [reactive.rs](../../../../wasamo-runtime/src/reactive.rs):
       `BindingEvalContext` reads via `registry.bools[path]` and
       rejects writes with `WriteInBindingContext`;
       `HandlerEvalContext` reads via `get_untracked()` and writes via
@@ -272,7 +272,7 @@ flip). **Landed in 46546a1 + 6d9217e (2026-05-19).**
       `handler_ctx_set_bool_unknown_path_errors`).
 
 Retrospective:
-[docs/notes/m3-phase-1/t7-step-end-retrospective.md](../../notes/m3-phase-1/t7-step-end-retrospective.md).
+[docs/notes/m3-phase-1/t7-step-end-retrospective.md](../retrospectives/t7.md).
 
 Notes:
 
@@ -294,13 +294,13 @@ Discharges DD-M3-P1-007. **Landed in a9e93e4 + fa79336 (2026-05-19).**
 
 - [x] `evaluate_bool_binding(expr, ctx) -> Result<bool,
       EvalError>` added in
-      [handler.rs](../../../wasamo-runtime/src/handler.rs); accepts
+      [handler.rs](../../../../wasamo-runtime/src/handler.rs); accepts
       `BoolLit` (returns literal) and `BoolPropRead` (reads via
       `ctx.read_bool_tracked`, so `BindingEvalContext` subscribes
       to the source `Signal<bool>`); rejects all other variants
       with `EvalError::TypeMismatch`.
 - [x] `widget_write_property_bool(id, prop, value: bool)` added in
-      [widget.rs](../../../wasamo-runtime/src/widget.rs);
+      [widget.rs](../../../../wasamo-runtime/src/widget.rs);
       constructs `PropertyValue::Bool(bool)` and dispatches to the
       per-widget setter (same `WidgetNode::set_property` match the
       string writer uses).
@@ -310,7 +310,7 @@ Discharges DD-M3-P1-007. **Landed in a9e93e4 + fa79336 (2026-05-19).**
       string-baked path until a typed-i32 writer's use case
       arrives). The reactive engine stays type-agnostic — a new
       `register_bool_binding` in
-      [reactive.rs](../../../wasamo-runtime/src/reactive.rs)
+      [reactive.rs](../../../../wasamo-runtime/src/reactive.rs)
       mirrors `register_binding`'s shape but pipes through
       `evaluate_bool_binding`; the per-type selection lives at the
       ir_loader call site
@@ -325,7 +325,7 @@ Discharges DD-M3-P1-007. **Landed in a9e93e4 + fa79336 (2026-05-19).**
       mock-free Windows-only `button_enabled_property_*` test.
 
 Retrospective:
-[docs/notes/m3-phase-1/t8-step-end-retrospective.md](../../notes/m3-phase-1/t8-step-end-retrospective.md).
+[docs/notes/m3-phase-1/t8-step-end-retrospective.md](../retrospectives/t8.md).
 
 Notes:
 
@@ -353,18 +353,18 @@ preview. **Folded into T6 part 1 (commit a550bd9, 2026-05-19).**
 
 - [x] `read_property_value` / `write_property_value` /
       `property_value_to_owned` in
-      [abi.rs](../../../wasamo-runtime/src/abi.rs) gained bool arms
+      [abi.rs](../../../../wasamo-runtime/src/abi.rs) gained bool arms
       threading `PropertyValue::Bool(bool)` ↔ `WasamoValue::v_bool`
       (existing `WASAMO_VALUE_BOOL = 3` tag).
 - [x] Property-observer payload conversion carries bool through:
       `OwnedArg::Bool(bool)` added in
-      [emit.rs](../../../wasamo-runtime/src/emit.rs); `owned_to_value`
+      [emit.rs](../../../../wasamo-runtime/src/emit.rs); `owned_to_value`
       builds the `WASAMO_VALUE_BOOL`-tagged `WasamoValue`.
 - [x] No new public ABI functions added (DD-M3-P1-008 Option B
       explicitly deferred to its own future ADR).
 
 Retrospective:
-[docs/notes/m3-phase-1/t9-step-end-retrospective.md](../../notes/m3-phase-1/t9-step-end-retrospective.md).
+[docs/notes/m3-phase-1/t9-step-end-retrospective.md](../retrospectives/t9.md).
 
 Notes:
 
@@ -433,7 +433,7 @@ ed93d5e + b7f91ce (2026-05-19).**
       per-type-seam paragraph; both link back to
       [m3-phase-1-bool-scalar.md DD-M3-P1-007](../decisions/preamble.md)
       and the canonical F5 record in
-      [notes/m3/m3-start-framing.md §F5](../../notes/m3/m3-start-framing.md)).
+      [notes/m3/m3-start-framing.md §F5](../../requirements/framing.md)).
 - [x] External-implementor smoke check on the spec edits: the
       bool-specific additions are sufficient for a reader to
       reproduce the Phase 1 surface against a hypothetical host
@@ -441,7 +441,7 @@ ed93d5e + b7f91ce (2026-05-19).**
       review).
 
 Retrospective:
-[docs/notes/m3-phase-1/t10-step-end-retrospective.md](../../notes/m3-phase-1/t10-step-end-retrospective.md).
+[docs/notes/m3-phase-1/t10-step-end-retrospective.md](../retrospectives/t10.md).
 
 Notes:
 
@@ -478,12 +478,12 @@ Discharges Phase 1 verification closure item (4) from the ADR.
 
 - [x] A `.ui` fixture declares the Phase 1 bool binding path and
       lives where the chosen host can load it:
-      [examples/bool-demo/bool-demo.ui](../../../examples/bool-demo/bool-demo.ui)
+      [examples/bool-demo/bool-demo.ui](../../../../examples/bool-demo/bool-demo.ui)
       defines `state ready: bool = true`, binds
       `Button.enabled: ready`, and runs
       `clicked => { root.ready = false; }`.
 - [x] Chosen host: add a minimal
-      [examples/bool-demo-rust/](../../../examples/bool-demo-rust/)
+      [examples/bool-demo-rust/](../../../../examples/bool-demo-rust/)
       host instead of extending `examples/counter-rust`, preserving
       the M2 counter as a stable reference while giving M3-Phase 1
       its own visible proof. The host mirrors the counter-rust
@@ -501,7 +501,7 @@ Discharges Phase 1 verification closure item (4) from the ADR.
       (`bool_demo_ui_contains_bool_binding_and_handler`).
 
 Retrospective:
-[docs/notes/m3-phase-1/t11-step-end-retrospective.md](../../notes/m3-phase-1/t11-step-end-retrospective.md).
+[docs/notes/m3-phase-1/t11-step-end-retrospective.md](../retrospectives/t11.md).
 
 ### T12 — Phase-end gates
 
@@ -532,23 +532,23 @@ Discharges the m3-plan §Phase-end criteria checklist.
         on `feat/m3-phase-1` (2026-05-19).
 - [x] Spec & architecture edits from T10 reviewed for
       external-implementor reproducibility.
-- [x] Residuals captured under [docs/notes/m3/](../../notes/m3/)
+- [x] Residuals captured under [process/milestone-3/requirements/](../../requirements/)
       if any surfaced during execution; ADR's residual
       section (if applicable) points at them. Phase 1 surfaced no
       new out-of-phase residuals beyond those already filed by the
       M2-to-M3 handover (cycle detection / dependency-tie /
       `MUTATION_CAP` × fan-out — carried forward unchanged per
-      [m2-to-m3-handover.md §3](../../notes/m2-to-m3-handover.md)).
+      [m2-to-m3-handover.md §3](../../../milestone-2/handoff.md)).
 - [x] Forward-distillation note for the next phase (M3-Phase 2)
       authored within this phase's close per
-      [docs/notes/retrospectives.md forward-carry rule](../../notes/retrospectives.md):
-      [docs/notes/m3-phase-2/predoc-inputs.md](../../notes/m3-phase-2/predoc-inputs.md)
+      [docs/notes/retrospectives.md forward-carry rule](../../../procedures/retrospectives.md):
+      [docs/notes/m3-phase-2/predoc-inputs.md](../../phase-2/requirements/constraints.md)
       (§1–§7 carry the phase-end retrospective Main Learnings into
       Phase 2 Box-primitive framing).
 - [x] Phase-end retrospective entry added in
-      [docs/notes/m3-phase-1/phase-end-retrospective.md](../../notes/m3-phase-1/phase-end-retrospective.md);
+      [docs/notes/m3-phase-1/phase-end-retrospective.md](../retrospectives/phase-end.md);
       merge & push gating handled per owner-facing protocol
-      ([docs/notes/retrospectives.md](../../notes/retrospectives.md)).
+      ([docs/notes/retrospectives.md](../../../procedures/retrospectives.md)).
       Retrospective was updated during phase close to anchor A9
       evidence to T13 (binding-pipeline-inclusive Windows live test)
       with T6 widget-setter slice as auxiliary evidence, add
@@ -570,7 +570,7 @@ observes `Signal<bool>::get_untracked()` flips, and observes that
 **Inserted retroactively at phase-end (2026-05-19) when owner review
 of T12 surfaced an evidence gap.** The original T6 acceptance bullet
 shipped
-[wasamo-runtime/tests/button_enabled.rs](../../../wasamo-runtime/tests/button_enabled.rs)
+[wasamo-runtime/tests/button_enabled.rs](../../../../wasamo-runtime/tests/button_enabled.rs)
 which **bypasses the binding pipeline** (file-level comment, L1–L13)
 and drives `wasamo_set_property(PROP_BUTTON_ENABLED, …)` directly to
 exercise the widget-setter / visual-flip / click-suppression slice.
@@ -582,7 +582,7 @@ headless assertion. T13 closes the gap.
 
 - [x] New mock-free Windows-only integration test under
       `wasamo-runtime/tests/`:
-      [bool_binding_live_propagation.rs](../../../wasamo-runtime/tests/bool_binding_live_propagation.rs)
+      [bool_binding_live_propagation.rs](../../../../wasamo-runtime/tests/bool_binding_live_propagation.rs)
       lowers a minimal in-test variant of
       `examples/bool-demo/bool-demo.ui` (`state ready: bool = true`
       + `Button { enabled: ready; clicked => { root.ready = false; } }`
@@ -607,7 +607,7 @@ headless assertion. T13 closes the gap.
       on GitHub Actions when the runtime Compositor is unavailable
       (`0x80070005`), per
       [CLAUDE.md §Testing rules](../../../CLAUDE.md) and the
-      [verification-environments.md](../../notes/verification-environments.md)
+      [verification-environments.md](../../../../docs/notes/verification-environments.md)
       taxonomy. T13's guard is the same shape as
       `button_enabled.rs` / `live_widgetnode_headless.rs` and
       inherits their SSH-class verification.
@@ -638,7 +638,7 @@ headless assertion. T13 closes the gap.
     `workflow_dispatch` run 26094510225).
 
 Retrospective:
-[docs/notes/m3-phase-1/t13-step-end-retrospective.md](../../notes/m3-phase-1/t13-step-end-retrospective.md).
+[docs/notes/m3-phase-1/t13-step-end-retrospective.md](../retrospectives/t13.md).
 
 Notes:
 
@@ -703,7 +703,7 @@ Notes:
   source before lowering.
 
 Retrospective:
-[docs/notes/m3-phase-1/t14-step-end-retrospective.md](../../notes/m3-phase-1/t14-step-end-retrospective.md).
+[docs/notes/m3-phase-1/t14-step-end-retrospective.md](../retrospectives/t14.md).
 
 ## Owner-review follow-ups (closed at T12 phase-end)
 

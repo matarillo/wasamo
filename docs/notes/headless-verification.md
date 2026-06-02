@@ -12,7 +12,7 @@ related-notes:
 
 ## 背景
 
-[verification-environments.md](./verification-environments.md) が整理した通り、
+[verification-environments.md](verification-environments.md) が整理した通り、
 wasamo の検証環境は 3 種類:
 
 | 種別 | 環境 |
@@ -144,7 +144,7 @@ phase 完了 close 条件が薄く感じる時に「test 環境の不足」と�
 
 ## 参考
 
-- [verification-environments.md](./verification-environments.md) —
+- [verification-environments.md](verification-environments.md) —
   3 種別 (build / link / GUI) の整理。本ノートはここに「ヘッドレス
   state-only」という第 4 種を足すかの検討。
 - [M2-Phase 3 handler execution decisions](../../process/milestone-2/phase-3/decisions/preamble.md) —

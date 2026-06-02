@@ -13,7 +13,7 @@ Per the project's doc-driven workflow, framing is aligned in chat first
 and recorded here as the input artefact for ADR drafting. Phase 7's
 three DDs (010 / 012 / 011) are processed as **independent** pre-doc
 cycles; this note covers DD-010 only. The Phase 6 framing precedent is
-[m2-phase-6-pre-doc-framing.md](../m2-phase-6/m2-phase-6-pre-doc-framing.md).
+[m2-phase-6-pre-doc-framing.md](../../phase-6/requirements/framing.md).
 
 ---
 
@@ -21,7 +21,7 @@ cycles; this note covers DD-010 only. The Phase 6 framing precedent is
 
 `drain_dirty_effects()` currently sorts the dirty Effect set by
 numeric `EffectId` (`v.sort_unstable()` in
-[wasamo-runtime/src/reactive.rs:126](../../wasamo-runtime/src/reactive.rs#L126)).
+[wasamo-runtime/src/reactive.rs:126](../../../../wasamo-runtime/src/reactive.rs#L126)).
 DD-M2-P6-001 = Option D specifies that ordering as
 "topological-by-dependency-graph". The numeric-ID sort approximates
 topological order only because, in the M2 counter shape, every
@@ -75,7 +75,7 @@ Carrying these forward into the option re-evaluation:
 
 1. **`ReactiveGraph::forward` / `back` are already maintained.**
    `reactive.rs` builds both directions during dependency tracking
-   ([reactive.rs:55-56](../../wasamo-runtime/src/reactive.rs#L55-L56)).
+   ([reactive.rs:55-56](../../../../wasamo-runtime/src/reactive.rs#L55-L56)).
    A topological walk has its inputs structurally available; the
    added cost is the walk itself, not graph instrumentation.
 
@@ -92,7 +92,7 @@ Carrying these forward into the option re-evaluation:
 
 3. **`DIRTY_EFFECTS` is a `HashSet`, drained per iteration.** Drain
    loop caps at `MUTATION_CAP = 16` iterations
-   ([reactive.rs:121-128](../../wasamo-runtime/src/reactive.rs#L121-L128)).
+   ([reactive.rs:121-128](../../../../wasamo-runtime/src/reactive.rs#L121-L128)).
    Per-iteration cost of a true topological walk is bounded by the
    dirty set size and the local out-degree in `forward`; M2 sizes
    are tiny.
@@ -381,7 +381,7 @@ Inputs are complete. The next session begins ADR drafting:
    A5 unchanged).
 5. **Implementation step.** Implement Option A on the active phase
    step branch per the
-   [step branch workflow](./retrospectives.md) — the topological
+   [step branch workflow](../../../procedures/retrospectives.md) — the topological
    walk extracted as a free function with pure-logic unit tests on
    synthetic dependency graphs.
 6. **Framing note disposition.** This note remains as input

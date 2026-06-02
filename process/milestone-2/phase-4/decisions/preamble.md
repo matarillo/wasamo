@@ -104,7 +104,7 @@ itself; Phase 4's work product is the same either way.
   needs a host-visible API.
 - **Existing internal builder.** `wasamo_runtime::widget::WidgetNode`
   exposes one mutation method today: `append_child(Box<WidgetNode>)`
-  ([wasamo-runtime/src/widget.rs:627](../../wasamo-runtime/src/widget.rs#L627)).
+  ([wasamo-runtime/src/widget.rs:627](../../../../wasamo-runtime/src/widget.rs#L627)).
   Insert-at-index, remove, replace, and widget destroy do not exist
   yet — neither at the Rust nor the ABI level. Phase 4 must design and
   implement them before any C ABI promotion is meaningful.
@@ -166,7 +166,7 @@ draft, where the design forces are visible.
 `append_child` exercises the same `Vec<Box<WidgetNode>>` mutation
 shape that the four new mutators extend; the
 `wasamo_window_destroy` path
-([wasamo-runtime/src/abi.rs:210](../../wasamo-runtime/src/abi.rs#L210))
+([wasamo-runtime/src/abi.rs:210](../../../../wasamo-runtime/src/abi.rs#L210))
 exercises the subtree-teardown shape that
 `wasamo_widget_destroy` reuses. The remaining Phase 4 implementation
 is bookkeeping (attached-state flag, index bounds checks, registry

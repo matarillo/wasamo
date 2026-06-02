@@ -242,7 +242,7 @@ implementation:
    divergence semantics; M3 inherits it.
 
 These items are recorded as a new section in
-[docs/notes/m2-to-m3-handover.md](../notes/m2-to-m3-handover.md) at
+[docs/notes/m2-to-m3-handover.md](../../handoff.md) at
 DD-010 acceptance time, alongside the existing carry-forwards
 (`wasamo-ir` crate split, `HandlerExpr` unification). The handover
 note's role is exactly this: surface design premises M3 must inherit

@@ -122,7 +122,7 @@ become a ADR at pre-doc time, per
   [DD-P8-002](../milestone-1/phase-8/decisions/preamble.md).
   Subtree-vs-root dirty granularity is in scope only insofar as M2
   acceptance demands; large-tree optimization stays an open question
-  in [layout-engine note §3.4](../notes/layout-engine.md).
+  in [layout-engine note §3.4](../../docs/notes/layout-engine.md).
 
 - **M2-Phase 6 — `.ui → runtime` lowering.** The end-to-end pipeline
   that consumes M2-Phases 2 / 3 / 5 and produces a running Hello
@@ -248,7 +248,7 @@ and [process/cross-milestone/decisions/post-m2-roadmap.md](../cross-milestone/de
     — Option A (true topological walk in M2; pure-logic unit tests
     on synthetic dependency graphs; single drain code path). M3
     residuals (cycle detection, ordering ties, fan-out × MUTATION_CAP)
-    recorded in [m2-to-m3-handover.md](../notes/m2-to-m3-handover.md)
+    recorded in [m2-to-m3-handover.md](handoff.md)
     §3. Implementation step pending; A5 first clause (DD-010 Accepted)
     discharged at design level; second clause (implementation
     reflects it) opens the next step.

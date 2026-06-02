@@ -14,7 +14,7 @@ created: 2026-05-31
 > 本ドキュメントは **guideline**（おすすめ手順）であり、守るかどうかは自由。
 > 実際のゲートは別にある：
 > - DD/ADR の確定は **owner の明示 accept**（[workflow.md §3](./workflow.md)）。
-> - merge は **retrospective + owner 明示承認**（[retrospectives.md](./retrospectives.md)）。
+> - merge は **retrospective + owner 明示承認**（[retrospectives.md](retrospectives.md)）。
 > - commit 形は [CLAUDE.md §Commit rules](../../CLAUDE.md#commit-rules)。
 >
 > 本手順はこれらのゲートを**置き換えない**。owner が accept 判断を下すための

@@ -1,4 +1,4 @@
-﻿## Task list
+## Task list
 
 ### T1 — `wasamo-ir`: add `Ratio` and `Color` literal variants
 
@@ -14,7 +14,7 @@ Discharges the IR-layer halves of DD-M3-P2-002 and DD-M3-P2-003.
 
 Closed by commit `3708bb2 feat(ir): add Ratio / Color literals to
 IrLiteral (M3-Phase 2 T1)`. Step-end retrospective recorded in
-[../../notes/m3-phase-2/t1-step-end-retrospective.md](../../notes/m3-phase-2/t1-step-end-retrospective.md).
+[../../notes/m3-phase-2/t1-step-end-retrospective.md](../retrospectives/t1.md).
 
 ### T2 — `wasamoc` lexer / parser: `RatioLit` and `ColorLit` tokens, AST variants
 
@@ -36,7 +36,7 @@ Discharges the surface-syntax halves of DD-M3-P2-002 and DD-M3-P2-003.
 
 Closed by commit `735a337 feat(wasamoc): lex Ratio / Color literals,
 add Expr variants (M3-Phase 2 T2)`. Step-end retrospective recorded
-in [../../notes/m3-phase-2/t2-step-end-retrospective.md](../../notes/m3-phase-2/t2-step-end-retrospective.md).
+in [../../notes/m3-phase-2/t2-step-end-retrospective.md](../retrospectives/t2.md).
 
 ### T3 — `wasamoc check`: validity and reject set
 
@@ -64,7 +64,7 @@ for `aspect` / `fill`), and the value-validity portion of DD-M3-P2-005.
 
 Closed by commit `f70424d feat(wasamoc): Box widget validity and
 reject set (M3-Phase 2 T3)`. Step-end retrospective recorded in
-[../../notes/m3-phase-2/t3-step-end-retrospective.md](../../notes/m3-phase-2/t3-step-end-retrospective.md).
+[../../notes/m3-phase-2/t3-step-end-retrospective.md](../retrospectives/t3.md).
 
 ### T4 — `wasamoc` lowering: AST → IR
 
@@ -77,7 +77,7 @@ reject set (M3-Phase 2 T3)`. Step-end retrospective recorded in
 
 Closed by commit `5be7df6 feat(wasamoc): lower Ratio / Color literals
 to IR (M3-Phase 2 T4)`. Step-end retrospective recorded in
-[../../notes/m3-phase-2/t4-step-end-retrospective.md](../../notes/m3-phase-2/t4-step-end-retrospective.md).
+[../../notes/m3-phase-2/t4-step-end-retrospective.md](../retrospectives/t4.md).
 
 ### T5 — `wasamoc` IR text emit
 
@@ -101,7 +101,7 @@ Discharges the IR-text-spelling halves of DD-M3-P2-002 and DD-M3-P2-003.
 
 Closed by commit `935b5d0 feat(wasamoc): IR text emit for Ratio /
 Color literals (M3-Phase 2 T5)`. Step-end retrospective recorded in
-[../../notes/m3-phase-2/t5-step-end-retrospective.md](../../notes/m3-phase-2/t5-step-end-retrospective.md).
+[../../notes/m3-phase-2/t5-step-end-retrospective.md](../retrospectives/t5.md).
 
 ### T6 — `wasamo-runtime` widget catalog: Box
 
@@ -126,7 +126,7 @@ Discharges DD-M3-P2-001 (IR node shape / per-kind tag).
 
 Closed by commit `b4dff5d feat(wasamo-runtime): add Box widget
 catalog (M3-Phase 2 T6)`. Step-end retrospective recorded in
-[../../notes/m3-phase-2/t6-step-end-retrospective.md](../../notes/m3-phase-2/t6-step-end-retrospective.md).
+[../../notes/m3-phase-2/t6-step-end-retrospective.md](../retrospectives/t6.md).
 
 ### T7 — `wasamo-runtime` IR loader: parse new literal terminals and Box widget
 
@@ -168,7 +168,7 @@ catalog (M3-Phase 2 T6)`. Step-end retrospective recorded in
 Closed by commit `5169c99 feat(wasamo-runtime): IR loader for Ratio /
 Color literals and Box widget (M3-Phase 2 T7)`. Step-end retrospective
 recorded in
-[../../notes/m3-phase-2/t7-step-end-retrospective.md](../../notes/m3-phase-2/t7-step-end-retrospective.md).
+[../../notes/m3-phase-2/t7-step-end-retrospective.md](../retrospectives/t7.md).
 
 ### T8 — `wasamo-runtime` layout: aspect measure-arrange
 
@@ -195,7 +195,7 @@ Discharges DD-M3-P2-005 and the child-layout portion of DD-M3-P2-001.
 
 Closed by commit `5021936 feat(wasamo-runtime): Box aspect
 measure-arrange (M3-Phase 2 T8)`. Step-end retrospective recorded in
-[../../notes/m3-phase-2/t8-step-end-retrospective.md](../../notes/m3-phase-2/t8-step-end-retrospective.md).
+[../../notes/m3-phase-2/t8-step-end-retrospective.md](../retrospectives/t8.md).
 
 ### T9 — Pure-logic unit tests (ADR §Phase 2 verification closure item 1)
 
@@ -229,7 +229,7 @@ the M3-Phase 2 DSL surface) and is therefore not exercised here.
 Closed by commit `1e42d85 docs(m3-phase-2): T9 pure-logic test
 inventory and checklist close (M3-Phase 2 T9)`. Step-end
 retrospective recorded in
-[../../notes/m3-phase-2/t9-step-end-retrospective.md](../../notes/m3-phase-2/t9-step-end-retrospective.md).
+[../../notes/m3-phase-2/t9-step-end-retrospective.md](../retrospectives/t9.md).
 
 ### T10 — IR text round-trip evidence (ADR §Phase 2 verification closure item 2)
 
@@ -257,7 +257,7 @@ retrospective recorded in
 Closed by commit `8d12f66 feat(wasamo-runtime): IR text round-trip
 evidence for Box (M3-Phase 2 T10)`. Step-end retrospective recorded
 in
-[../../notes/m3-phase-2/t10-step-end-retrospective.md](../../notes/m3-phase-2/t10-step-end-retrospective.md).
+[../../notes/m3-phase-2/t10-step-end-retrospective.md](../retrospectives/t10.md).
 
 ### T11 — Windows-runtime layout integration test (ADR §Phase 2 verification closure item 3, CI-gated)
 
@@ -277,7 +277,7 @@ in
 Closed by commit `216cb5e test(wasamo-runtime): add Box layout
 integration evidence (M3-Phase 2 T11)`. Step-end retrospective
 recorded in
-[../../notes/m3-phase-2/t11-step-end-retrospective.md](../../notes/m3-phase-2/t11-step-end-retrospective.md).
+[../../notes/m3-phase-2/t11-step-end-retrospective.md](../retrospectives/t11.md).
 
 ### T12 — Seed `examples/gallery/` + `examples/gallery-rust/` (ADR §Phase 2 verification closure item 4)
 
@@ -294,14 +294,14 @@ recorded in
 
 Closed by commit `83126b7 feat(examples): seed M3 Phase 2 gallery
 host`. Step-end retrospective recorded in
-[../../notes/m3-phase-2/t12-step-end-retrospective.md](../../notes/m3-phase-2/t12-step-end-retrospective.md).
+[../../notes/m3-phase-2/t12-step-end-retrospective.md](../retrospectives/t12.md).
 
 ### T13 — Phase-end gates
 
 Discharges the m3-plan §Phase-end criteria checklist for Phase 2.
 
 - [x] `cargo fmt --all -- --check` green (per
-      [retrospectives.md item 3 amendment](../../notes/retrospectives.md)
+      [retrospectives.md item 3 amendment](../../../procedures/retrospectives.md)
       landed in Moment 1).
 - [x] `cargo build --release --workspace` and `cargo test
       --workspace` green locally and on CI (`workflow_dispatch`).
@@ -313,11 +313,11 @@ Discharges the m3-plan §Phase-end criteria checklist for Phase 2.
       `**Phase status:** M3-Phase 2 closed; implementation-synced`,
       correcting any draft / impl divergence in the same commit.
       Earlier-phase spec gaps may fold per
-      [predoc-inputs.md §6](../../notes/m3-phase-2/predoc-inputs.md#6-retroactive-spec-gap-fold-は最小範囲で同じ-phase-に折り込む)
+      [predoc-inputs.md §6](../requirements/constraints.md#6-retroactive-spec-gap-fold-は最小範囲で同じ-phase-に折り込む)
       with explicit owner confirmation.
 - [x] Forward-distillation note for M3-Phase 3 authored within
       this phase's close (per
-      [retrospectives.md forward-carry rule](../../notes/retrospectives.md)):
+      [retrospectives.md forward-carry rule](../../../procedures/retrospectives.md)):
       `docs/notes/m3-phase-3/predoc-inputs.md` (or phase-named
       pre-doc candidate file).
 - [x] Phase-end retrospective entry in

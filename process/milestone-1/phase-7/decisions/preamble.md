@@ -14,7 +14,7 @@ Phase 7 produces the **bindings** that Phase 8 consumes; Phase 8 then
 writes the actual `counter` apps in each language.
 
 The C ABI is already shaped and shipped in Phase 6
-([`bindings/c/wasamo.h`](../../bindings/c/wasamo.h),
+([`bindings/c/wasamo.h`](../../../../bindings/c/wasamo.h),
 [`docs/abi_spec.md`](../../../../docs/abi_spec.md), Accepted). On the C side Phase 7
 adds only sample-build infrastructure, not new ABI. The substantive
 work is on the Rust and Zig wrapper sides.
@@ -23,7 +23,7 @@ Two pre-existing facts complicate the Rust side and motivate most of
 this ADR:
 
 1. The `wasamo` crate is configured `crate-type = ["cdylib", "rlib"]`
-   ([`wasamo/Cargo.toml`](../../wasamo/Cargo.toml#L7)). Phase 4/5
+   ([`wasamo/Cargo.toml`](../../../../wasamo-runtime/Cargo.toml#L7)). Phase 4/5
    examples (`phase4_visual_check`, `phase5_visual_check`) consume the
    `wasamo` rlib **directly**, calling `Runtime`, `Window`, `Button`,
    etc. as Rust types. Those names overlap with what a host-side

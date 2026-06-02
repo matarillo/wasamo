@@ -5,9 +5,9 @@
 **Targets phase:** M3-Phase 3 (WrapPanel layout primitive)
 
 Per the project's doc-driven workflow established at
-[M2-Phase 6 pre-doc framing](../m2-phase-6/m2-phase-6-pre-doc-framing.md)
+[M2-Phase 6 pre-doc framing](../../../milestone-2/phase-6/requirements/framing.md)
 and continued through
-[M3-Phase 2 pre-doc framing](../m3-phase-2/m3-phase-2-pre-doc-framing.md),
+[M3-Phase 2 pre-doc framing](../../phase-2/requirements/framing.md),
 individual DDs are not negotiated one-by-one in chat — framing is
 aligned first, then the full ADR is drafted in one pass as
 `Status: Proposed`, reviewed, and flipped to `Status: Accepted`.
@@ -22,7 +22,7 @@ rather than re-derives:
   ADR-Accepted commit; Moment 2 implementation re-sync at phase
   close), with section-level `**Phase status:**` markers in the
   affected `docs/dsl_spec.md` chapter. See
-  [m3-phase-2 framing decision D](../m3-phase-2/m3-phase-2-pre-doc-framing.md#d-upstream-document-revision-timing-two-sync-moments).
+  [m3-phase-2 framing decision D](../../phase-2/requirements/framing.md#d-upstream-document-revision-timing-two-sync-moments).
 - The Moment-is-not-a-commit-unit rule, recorded in
   [CLAUDE.md §Commit rules](../../../CLAUDE.md#commit-rules): each
   constituent document lands as its own commit on the pre-doc
@@ -204,11 +204,11 @@ axis constraint" is the input to DD-005's line formation. Any
 Option in DD-001 that gives children a slot-sized main-axis
 constraint contradicts DD-005's intrinsic-driven line formation.
 
-**Inputs consumed.** [predoc-inputs.md §1](./predoc-inputs.md)
+**Inputs consumed.** [predoc-inputs.md §1](constraints.md)
 (WrapPanel must consume Box intrinsic sizing rather than redefine
 it; the question of "fixed slot vs max constraint vs unbounded"
 maps onto the child-measure-input sub-issue above);
-[predoc-inputs.md §3](./predoc-inputs.md) (multi-child overlap is
+[predoc-inputs.md §3](constraints.md) (multi-child overlap is
 out of WrapPanel scope; Phase 3 does not add an item-stacking
 mode).
 
@@ -231,7 +231,7 @@ Sub-issues:
   `orientation: horizontal` / `orientation: vertical`, vs
   per-axis boolean (`vertical: true`), vs reused token form. The
   enum-keyword form mirrors the M2 `theme: system` / `backdrop:
-  mica` precedent in [examples/gallery/gallery.ui](../../../examples/gallery/gallery.ui).
+  mica` precedent in [examples/gallery/gallery.ui](../../../../examples/gallery/gallery.ui).
 - **Bindable surface (if attribute exposed).** Inherits the
   Phase 1 / Phase 2 seam-building discipline: build the seam in
   the phase that needs it. A bindable orientation is a layout-
@@ -251,7 +251,7 @@ wraps-main-axis swap, which is real additional spec content with
 no gallery-proof justification. The bindable sub-issue then
 collapses: no attribute, no bindable question.
 
-**Inputs consumed.** [predoc-inputs.md §5](./predoc-inputs.md)
+**Inputs consumed.** [predoc-inputs.md §5](constraints.md)
 (constant-only value boundary preserved); F5 (`TypedValue`
 deferral) structurally protected by not exposing the attribute
 at all.
@@ -319,9 +319,9 @@ change. An alternative is to ship Phase 3 with zero spacing and
 accept touching thumbnails in the sub-screen; the framing records
 both as options and asks for the owner call.
 
-**Inputs consumed.** [predoc-inputs.md §5](./predoc-inputs.md)
+**Inputs consumed.** [predoc-inputs.md §5](constraints.md)
 (constant-only boundary by default);
-[predoc-inputs.md §12](./predoc-inputs.md) (do not reach for
+[predoc-inputs.md §12](constraints.md) (do not reach for
 Box's future `width` / `height` to set thumbnail size — spacing
 is a WrapPanel-level attribute about gaps, item size is DD-004's
 question about cross-axis bound).
@@ -441,11 +441,11 @@ formation:
   passthrough cross-axis, can be the full parent cross-axis —
   consistent with the "huge thumbnail" footgun).
 
-**Inputs consumed.** [predoc-inputs.md §1](./predoc-inputs.md)
+**Inputs consumed.** [predoc-inputs.md §1](constraints.md)
 (WrapPanel consumes Box intrinsic sizing without redefining it;
 the consume direction is "cross-axis bound from WrapPanel →
 main-axis derived in Box per Phase 2 DD-005");
-[predoc-inputs.md §12](./predoc-inputs.md) (do not reach for Box
+[predoc-inputs.md §12](constraints.md) (do not reach for Box
 `width` / `height` to solve thumbnail sizing — the bound lives
 at WrapPanel level, not item level).
 
@@ -625,7 +625,7 @@ Sub-issues:
   Phase 3 chooses Option (b) above (runtime error on unbounded
   main-axis), a new `LayoutError::WrapPanelUnboundedMain` variant
   is added; ABI / host-visible surface remains internal per
-  [predoc-inputs.md §9](./predoc-inputs.md). If the framing
+  [predoc-inputs.md §9](constraints.md). If the framing
   picks Option (a) (one-line flow), no new variant is needed.
 
 **Layering with DD-001 / DD-004.** DD-005's algorithm assumes
@@ -641,16 +641,16 @@ expected runtime surface. Any Option in DD-005 that re-measures
 children with a different constraint contradicts DD-001 /
 DD-004.
 
-**Inputs consumed.** [predoc-inputs.md §4](./predoc-inputs.md)
+**Inputs consumed.** [predoc-inputs.md §4](constraints.md)
 (spec-drafting bar; Phase 3's spec outline must include line
 formation I/O, main-axis overflow behaviour, cross-axis line
 sizing, spacing / padding treatment or out-of-scope statement,
 and unbounded-parent behaviour);
-[predoc-inputs.md §1](./predoc-inputs.md) (WrapPanel consumes
+[predoc-inputs.md §1](constraints.md) (WrapPanel consumes
 Box intrinsic sizing; do not redefine);
-[predoc-inputs.md §8](./predoc-inputs.md) (layout engine stays
+[predoc-inputs.md §8](constraints.md) (layout engine stays
 Win32/WinRT-free; the algorithm operates on pure data);
-[predoc-inputs.md §9](./predoc-inputs.md) (LayoutError extension
+[predoc-inputs.md §9](constraints.md) (LayoutError extension
 permitted; ABI surface deferred unless host observes the error).
 
 ### DD-M3-P3-006 — IR-loader defense-in-depth invariants
@@ -701,7 +701,7 @@ Sub-issues:
   `WASAMO_ERR_IR_MALFORMED`, consistent with Phase 2's
   `Box`-child-count rejection.
 
-**Inputs consumed.** [predoc-inputs.md §7](./predoc-inputs.md)
+**Inputs consumed.** [predoc-inputs.md §7](constraints.md)
 (defense-in-depth gate is pure validation, not WinRT-bound
 materialisation).
 
@@ -743,7 +743,7 @@ materialisation).
 ### A. DD slate completeness
 
 The 6 DDs above are proposed as the cut.
-[predoc-inputs.md](./predoc-inputs.md) item-by-item disposition
+[predoc-inputs.md](constraints.md) item-by-item disposition
 appears in **Inputs absorbed** below. The mapping is densest at
 DD-005 because most of the predoc-inputs items concern algorithm
 shape; DD-003 (spacing) absorbs the visible-proof tension; the
@@ -795,7 +795,7 @@ Phase 3 chooses from the menu:
   warning pick are first-class spec commitments that need
   evidence on the `wasamoc` side, not just on the runtime side.
 - **Pure-logic unit tests** for the line breaker and arrange pass
-  (DD-005). Per [predoc-inputs.md §6](./predoc-inputs.md), this is
+  (DD-005). Per [predoc-inputs.md §6](constraints.md), this is
   the primary evidence shape for the novel algorithm. The line
   breaker is a pure function (line input → line output) and
   exercises the bounded / unbounded main-axis branches,
@@ -827,7 +827,7 @@ Phase 3 chooses from the menu:
   `examples/gallery/` + `examples/gallery-rust/` (framing
   decision E) for owner-manual GUI smoke (framing decision G).
 
-Per [predoc-inputs.md §10](./predoc-inputs.md), evidence items
+Per [predoc-inputs.md §10](constraints.md), evidence items
 do not collapse just because they share helper infrastructure —
 the `wasamoc` check-side tests, in-crate line-breaker / arrange
 tests, IR-load `validate()` gate tests, and Windows integration
@@ -839,7 +839,7 @@ visible-overflow regulation).
 ### D. Upstream-document revision timing (two sync moments)
 
 Phase 3 inherits the two-moment structure from
-[m3-phase-2 framing decision D](../m3-phase-2/m3-phase-2-pre-doc-framing.md#d-upstream-document-revision-timing-two-sync-moments)
+[m3-phase-2 framing decision D](../../phase-2/requirements/framing.md#d-upstream-document-revision-timing-two-sync-moments)
 **without modification**, except that the Postmortem rule
 (Moment-is-not-a-commit-unit; per-review-concern commits) applies
 from the start rather than being learned mid-phase. The Phase 3
@@ -874,7 +874,7 @@ per CLAUDE.md §Commit rules):
 - `docs/architecture.md` — WrapPanel entry under the M2-revised
   IR section if structural placement warrants; layout engine
   section updated for the new pure-data layout types per
-  [predoc-inputs.md §8](./predoc-inputs.md).
+  [predoc-inputs.md §8](constraints.md).
 - `docs/plans/m3-plan.md` — Progress section's Phase 3 row
   populated (Status: in progress; Progress file link; ADR link).
 - `docs/plans/progress/m3-phase-3-progress.md` — new file opened
@@ -891,7 +891,7 @@ constituent shape preserves review-concern separability under
 
 - `docs/dsl_spec.md` §4.10 — corrections required because the
   design draft and implementation diverged (per
-  [predoc-inputs.md §6 / retroactive spec-gap fold](./predoc-inputs.md)
+  [predoc-inputs.md §6 / retroactive spec-gap fold](constraints.md)
   inherited from Phase 2 — earlier-phase spec gaps surfaced
   during the re-sync may fold into the same commit with explicit
   owner confirmation). Section marker flips to "closed;
@@ -904,14 +904,14 @@ constituent shape preserves review-concern separability under
 ### E. Phase 3 visible proof — grow Phase 2's gallery sub-screen
 
 The Phase 3 visible proof grows
-[examples/gallery/gallery.ui](../../../examples/gallery/gallery.ui)
+[examples/gallery/gallery.ui](../../../../examples/gallery/gallery.ui)
 from Phase 2's single `Box { aspect: 16:9; fill: ...; Text { ... } }`
 into a **WrapPanel of Box thumbnails**. The growth path is
 additive, not a scrap-and-rebuild, per
-[predoc-inputs.md §11](./predoc-inputs.md).
+[predoc-inputs.md §11](constraints.md).
 
 The thumbnail set composition question
-([predoc-inputs.md §2](./predoc-inputs.md)) is settled as follows:
+([predoc-inputs.md §2](constraints.md)) is settled as follows:
 
 - **Uniform 1:1 placeholders.** A fixed set of square thumbnails
   (5–10 items, label-only Box + Text children) populates the
@@ -935,7 +935,7 @@ The thumbnail set composition question
   in `.ui`; iteration grammar is Phase 7's job. The set is sized
   to wrap within the default window (800×600 per the M2-set
   `DEFAULT_WINDOW_WIDTH` / `DEFAULT_WINDOW_HEIGHT` —
-  [wasamo-runtime/src/abi.rs](../../../wasamo-runtime/src/abi.rs)).
+  [wasamo-runtime/src/abi.rs](../../../../wasamo-runtime/src/abi.rs)).
 
 **`examples/gallery/` is still a partial gallery, not the A1
 proof.** A1 acceptance lives in Phase 8 per the
@@ -945,12 +945,12 @@ wrapped grid of Box rectangles.
 
 ### F. Live-note re-evaluation triggers — handling
 
-[predoc-inputs.md §13–§16](./predoc-inputs.md) flag specific
+[predoc-inputs.md §13–§16](constraints.md) flag specific
 `docs/notes/*` audit items. The framing settles their disposition
 upfront so the ADR Inputs section can cite settled handling
 rather than re-deciding:
 
-- **[architectural-family.md](../architectural-family.md) — trigger #1 already fired in Phase 1 / Phase 2.**
+- **[architectural-family.md](../../../../docs/notes/architectural-family.md) — trigger #1 already fired in Phase 1 / Phase 2.**
   The trigger ("M3 DSL spec drafting begins") was first met when
   Phase 1's `bool` scalar ADR and Phase 2's Box chapter began
   writing `docs/dsl_spec.md`; Phase 3 is not the first firing.
@@ -961,7 +961,7 @@ rather than re-deciding:
   child-list layout primitive. Disposition: "re-read and confirm
   hypothesis still holds"; no vision decision record. Recorded
   in DD-001's Inputs list as a consumed input.
-- **[layout-engine.md](../layout-engine.md) — partial fire.**
+- **[layout-engine.md](../../../../docs/notes/layout-engine.md) — partial fire.**
   WrapPanel is the first M3 phase whose layout work is non-trivial
   per the layout-engine open question 3.x set. Specific dispositions:
   - 3.1 DPI scaling — defer. Phase 3 stays in logical-pixel `f32`
@@ -983,22 +983,22 @@ rather than re-deciding:
     threshold is met. Subtree-dirty is not in Phase 3 scope.
   - 3.5 user-defined layout — not applicable. WrapPanel is a
     built-in primitive.
-- **[dsl-grammar.md](../dsl-grammar.md) — mostly unfired.** Phase 3
+- **[dsl-grammar.md](../../../../docs/notes/dsl-grammar.md) — mostly unfired.** Phase 3
   ships a hand-written thumbnail set; no template-local scope, no
   iteration, no qualified state reference. Q1 / Q3 remain deferred
   to Phase 7. Q4 (component extension) remains M4+. Q5 (template
   interpolation) remains M3-Phase-6+.
-- **[component-extension-model.md](../component-extension-model.md) — unfired.**
+- **[component-extension-model.md](../../../../docs/notes/component-extension-model.md) — unfired.**
   WrapPanel is a built-in component; custom layout / import /
   registry is M3-out-of-scope.
-- **[typed-value-evaluator.md](../typed-value-evaluator.md) — conditional
+- **[typed-value-evaluator.md](../../../../docs/notes/typed-value-evaluator.md) — conditional
   fire deferred.** DD-002 / DD-003 / DD-004 each settle constant-
   only for the WrapPanel attributes they admit, so the
   `TypedValue` deferral is not pressured in Phase 3.
-- **[workspace-layout.md](../workspace-layout.md) — unfired.** Phase 3
+- **[workspace-layout.md](../../../../docs/notes/workspace-layout.md) — unfired.** Phase 3
   adds no new crate.
-- **[verification-environments.md](../verification-environments.md) /
-  [headless-verification.md](../headless-verification.md).**
+- **[verification-environments.md](../../../../docs/notes/verification-environments.md) /
+  [headless-verification.md](../../../../docs/notes/headless-verification.md).**
   Phase 3 inherits Phase 2's skip-guard pattern verbatim: GitHub
   Actions integration test fails rather than silently skips;
   local-developer guard skips when `wasamo_init` returns
@@ -1015,7 +1015,7 @@ rather than re-deciding:
 
 ### G. GUI smoke responsibility separation
 
-Inherits [m3-phase-2 framing decision G](../m3-phase-2/m3-phase-2-pre-doc-framing.md#g-gui-smoke-responsibility-separation-predoc-inputs-5).
+Inherits [m3-phase-2 framing decision G](../../phase-2/requirements/framing.md#g-gui-smoke-responsibility-separation-predoc-inputs-5).
 Visual correctness of WrapPanel rendering (lines wrap correctly at
 the expected main-axis budget; line-spacing produces the expected
 cross-axis gaps; item-spacing produces the expected main-axis gaps;
@@ -1109,7 +1109,7 @@ analogue and readers will mis-map it without an explicit anchor.
 
 ## Inputs absorbed
 
-### From [predoc-inputs.md](./predoc-inputs.md)
+### From [predoc-inputs.md](constraints.md)
 
 | Section | Disposition | Consumed at |
 |---|---|---|
@@ -1164,7 +1164,7 @@ analogue and readers will mis-map it without an explicit anchor.
 | DD-M3-P2-005 (aspect measure-arrange + LayoutError) | Pattern reuse | DD-005 (rounding contract reused; LayoutError extension pattern reused conditionally; aspect-in-intrinsic-sizing-context rule cited by DD-005's cross-axis line sizing sub-issue when DD-004 sets `item-cross-size`) |
 | DD-M3-P2-006 (Box + Text placeholder canonicalization) | Premise | Framing decision E (sub-screen uses the canonical pattern); DD-004 (the pattern's *shape* is normative; the *size* comes from WrapPanel `item-cross-size`) |
 
-### From [m2-to-m3-handover.md](../m2-to-m3-handover.md)
+### From [m2-to-m3-handover.md](../../../milestone-2/handoff.md)
 
 | Section | Disposition | Consumed at |
 |---|---|---|
@@ -1201,5 +1201,5 @@ Once framing is owner-aligned, the next session begins ADR drafting:
    the *retro forward distillation* discipline (Main Learning
    forwarded to a Phase 4 pre-doc input note within the same
    phase close — see
-   [docs/notes/retrospectives.md §Retrospective Main Learning の前送り](../retrospectives.md)
+   [docs/notes/retrospectives.md §Retrospective Main Learning の前送り](../../../procedures/retrospectives.md)
    for the in-repo policy text).

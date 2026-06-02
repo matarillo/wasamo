@@ -5,7 +5,7 @@
 **Targets phase:** M3-Phase 2 (Box layout primitive)
 
 Per the project's doc-driven workflow established at
-[M2-Phase 6 pre-doc framing](../m2-phase-6/m2-phase-6-pre-doc-framing.md),
+[M2-Phase 6 pre-doc framing](../../../milestone-2/phase-6/requirements/framing.md),
 individual DDs are not negotiated one-by-one in chat — instead, framing
 is aligned first, then the full ADR is drafted in one pass as
 `Status: Proposed`, reviewed, and flipped to `Status: Accepted`. This
@@ -131,10 +131,10 @@ Sub-issues:
   stacks visually, ZStack's primitive contribution narrows to z-order
   declaration, not the visual stacking itself.
 
-**Inputs consumed.** [m2-to-m3-handover.md §1](../m2-to-m3-handover.md)
+**Inputs consumed.** [m2-to-m3-handover.md §1](../../../milestone-2/handoff.md)
 (new IR form = grammar production + `wasamo-ir` variant + loader
 wiring triple);
-[m3-target-app-predoc.md "必要 surface" Box row](../m3/m3-target-app-predoc.md#layout-primitive)
+[m3-target-app-predoc.md "必要 surface" Box row](../../requirements/spec.md#layout-primitive)
 and the Grid / ZStack 責務境界 paragraph (Box's orthogonality
 extension of the same principle).
 
@@ -147,15 +147,15 @@ Box's `aspect` attribute requires a new value type threaded through
   (`aspect: 16:9`), compile-time-parsed string (`aspect: "16:9"`), or
   twin i32 attributes (`aspect-width: 16`, `aspect-height: 9`).
 - **`f32`/`f64` re-evaluation.**
-  [predoc-inputs.md §7](./predoc-inputs.md#7-f32--f64-を-irtype-に入れるかの再評価)
+  [predoc-inputs.md §7](constraints.md#7-f32--f64-を-irtype-に入れるかの再評価)
   applies directly. If float is chosen, `IrType::F32` / `IrLiteral::F32` /
   `HandlerExpr::F32Lit` extend the Phase 1 type-suffix pattern.
 - **ABI value-conversion arms.**
-  [predoc-inputs.md §1](./predoc-inputs.md#1-box-が新規-propertyvalue-variant-を入れるなら-abi-value-conversion-arm-は同じ-step-に-fold-する)
+  [predoc-inputs.md §1](constraints.md#1-box-が新規-propertyvalue-variant-を入れるなら-abi-value-conversion-arm-は同じ-step-に-fold-する)
   mandates folding any new `PropertyValue` variant's exhaustive-match
   ABI arms into the same step.
 - **`HandlerExpr` extension.** Per
-  [m2-to-m3-handover.md §2](../m2-to-m3-handover.md), the new literal
+  [m2-to-m3-handover.md §2](../../../milestone-2/handoff.md), the new literal
   goes into the single unified enum, type-suffixed (`F32Lit` /
   `RatioLit` per chosen option).
 - **IR text grammar wording** in `docs/dsl_spec.md`.
@@ -194,7 +194,7 @@ downstream of it.
   semi-transparent values; a Str-with-parse path forces theming to
   redesign value plumbing later.
 - ABI value-conversion arms per
-  [predoc-inputs.md §1](./predoc-inputs.md#1-box-が新規-propertyvalue-variant-を入れるなら-abi-value-conversion-arm-は同じ-step-に-fold-する),
+  [predoc-inputs.md §1](constraints.md#1-box-が新規-propertyvalue-variant-を入れるなら-abi-value-conversion-arm-は同じ-step-に-fold-する),
   symmetrically with DD-002.
 
 ### DD-M3-P2-004 — Bindable surface for `aspect` and `fill`
@@ -206,15 +206,15 @@ independently.
 Sub-issues:
 
 - **Per-type writer seam.** Per
-  [predoc-inputs.md §2](./predoc-inputs.md#2-新しい-bindable-property-は-per-type-writer-seam-を-ir_loader-call-site-で選ぶ)
+  [predoc-inputs.md §2](constraints.md#2-新しい-bindable-property-は-per-type-writer-seam-を-ir_loader-call-site-で選ぶ)
   and the Phase 1 DD-M3-P1-007 precedent, any bindable new type adds
   an `evaluate_<T>_binding` + `widget_write_property_<T>` +
   `register_<T>_binding` triple selected at the
   `ir_loader::build_node` call site. The reactive engine itself
   remains type-agnostic.
 - **F5 (`TypedValue` deferral) preservation.** Per
-  [m2-to-m3-handover.md §4](../m2-to-m3-handover.md) and
-  [m3-start-framing.md §F5](../m3/m3-start-framing.md), Phase 2 must
+  [m2-to-m3-handover.md §4](../../../milestone-2/handoff.md) and
+  [m3-start-framing.md §F5](../../requirements/framing.md), Phase 2 must
   not be the phase that pressures `TypedValue` adoption. The seam
   pattern structurally protects this.
 - **Gallery use case driver.** Does any wireframe surface in
@@ -285,7 +285,7 @@ time. Sub-issues:
 
 ### DD-M3-P2-006 — Placeholder pattern (Box + Text child) canonicalization
 
-[m3-target-app-predoc.md 保留 2 closure](../m3/m3-target-app-predoc.md#保留-2-closure-image-widget-surface-の-m3-開封可否--不開封-m4-へ-defer)
+[m3-target-app-predoc.md 保留 2 closure](../../requirements/spec.md#保留-2-closure-image-widget-surface-の-m3-開封可否--不開封-m4-へ-defer)
 establishes that Box + Text-child substitutes for Image during M3.
 Phase 2 settles how this pattern is canonicalized.
 
@@ -308,25 +308,25 @@ Sub-issues:
 - Image widget surface, asset pipeline, icon font, image decoder
   (M4 or later;
   [m3-plan.md §Out of scope](../../plan.md#out-of-scope-deferred-to-later-milestones),
-  [m3-target-app-predoc.md 保留 2 closure](../m3/m3-target-app-predoc.md#保留-2-closure-image-widget-surface-の-m3-開封可否--不開封-m4-へ-defer)).
+  [m3-target-app-predoc.md 保留 2 closure](../../requirements/spec.md#保留-2-closure-image-widget-surface-の-m3-開封可否--不開封-m4-へ-defer)).
 - Button content other than text (M4 or later).
 - ZStack overlay primitive (Phase 6).
 - `TypedValue` generic value union
-  ([m3-start-framing.md §F5](../m3/m3-start-framing.md) maintained;
-  [m2-to-m3-handover.md §4](../m2-to-m3-handover.md)).
+  ([m3-start-framing.md §F5](../../requirements/framing.md) maintained;
+  [m2-to-m3-handover.md §4](../../../milestone-2/handoff.md)).
 - `bool` string-interpolation surface (Phase 6+ formatting work —
-  [predoc-inputs.md §8](./predoc-inputs.md#8-bool-の-display-conversion-は明示-surface-ができるまで禁止)).
+  [predoc-inputs.md §8](constraints.md#8-bool-の-display-conversion-は明示-surface-ができるまで禁止)).
 - Synchronous non-batched drain proof contract — cross-phase reactive
   premise carried in
-  [m2-to-m3-handover.md §3 item 4](../m2-to-m3-handover.md). Box does
+  [m2-to-m3-handover.md §3 item 4](../../../milestone-2/handoff.md). Box does
   not introduce batching, so Phase 2 does not alter this contract;
-  [predoc-inputs.md §9](./predoc-inputs.md#9-bool-live-proof-は現行の同期-non-batched-drain-に依存している)
+  [predoc-inputs.md §9](constraints.md#9-bool-live-proof-は現行の同期-non-batched-drain-に依存している)
   is a back-pointer.
 - Cycle detection / ordering ties / `MUTATION_CAP` × fan-out residuals
-  ([m2-to-m3-handover.md §3 items 1–3](../m2-to-m3-handover.md)) —
+  ([m2-to-m3-handover.md §3 items 1–3](../../../milestone-2/handoff.md)) —
   Phase 6/7 work.
 - Scrim alpha styling, theme system, multi-color named-palette resolution
-  ([m3-target-app-predoc.md Out-of-scope §Visual / styling](../m3/m3-target-app-predoc.md#visual--styling)).
+  ([m3-target-app-predoc.md Out-of-scope §Visual / styling](../../requirements/spec.md#visual--styling)).
 
 ---
 
@@ -335,7 +335,7 @@ Sub-issues:
 ### A. DD slate completeness
 
 The 6 DDs above are proposed as the cut.
-[predoc-inputs.md](./predoc-inputs.md) §1 / §2 / §6 / §7 are absorbed
+[predoc-inputs.md](constraints.md) §1 / §2 / §6 / §7 are absorbed
 as sub-issues within these DDs (see "Inputs absorbed" mapping below).
 §3 is lifted to framing decision E; §4 to F; §5 to G. §8 and §9 are
 Out of scope.
@@ -445,7 +445,7 @@ Re-syncs spec text to the implementation's actual surface:
 
 - `docs/dsl_spec.md` — any corrections required because the design
   draft and implementation diverged (per
-  [predoc-inputs.md §6](./predoc-inputs.md#6-retroactive-spec-gap-fold-は最小範囲で同じ-phase-に折り込む)
+  [predoc-inputs.md §6](constraints.md#6-retroactive-spec-gap-fold-は最小範囲で同じ-phase-に折り込む)
   retroactive fold discipline). The Box-chapter section marker
   flips to "M3-Phase 2 closed; implementation-synced".
   Earlier-phase (Phase 1 / M2) spec gaps surfaced during this
@@ -500,15 +500,15 @@ land that list. Moment 2 will be authored under the new rule
 The M3-Phase 1 phase-end retrospective surfaced that step-end
 "`cargo fmt` — green" notes did not catch drift across step commits.
 Two candidate remediations are proposed in
-[predoc-inputs.md §3](./predoc-inputs.md#3-cargo-fmt-process-gap--step-checklist-改訂--ci-強制-のどちらを選ぶか):
+[predoc-inputs.md §3](constraints.md#3-cargo-fmt-process-gap--step-checklist-改訂--ci-強制-のどちらを選ぶか):
 
 - **(a)** Amend the step retrospective checklist in
-  [docs/notes/retrospectives.md](../retrospectives.md) item 3 (clean
+  [docs/notes/retrospectives.md](../../../procedures/retrospectives.md) item 3 (clean
   rebuild) to require `cargo fmt --all -- --check` against the
   post-commit state explicitly, with "green" interpreted as the
   `--check` form, not just `cargo fmt`'s exit code.
 - **(b)** Add `cargo fmt --all -- --check` to
-  [.github/workflows/ci.yml](../../../.github/workflows/ci.yml).
+  [.github/workflows/ci.yml](../../../../.github/workflows/ci.yml).
 
 **Recommended treatment:** **(a) only**, deferring (b). Reason: Phase 2
 does not introduce a new language or build system, so per
@@ -540,7 +540,7 @@ This commitment honors three converging constraints:
   sibling-example substitute; that path would constitute an unrecorded
   re-extension of the Phase 1 exception, not a framing-level decision,
   and is rejected.
-- [predoc-inputs.md §4](./predoc-inputs.md#4-可視-proof-は既存-canonical-example-を太らせず-sibling-example-を立てる)
+- [predoc-inputs.md §4](constraints.md#4-可視-proof-は既存-canonical-example-を太らせず-sibling-example-を立てる)
   forbids extending existing canonical examples (`counter-*`,
   `bool-demo-*`). Creating fresh `examples/gallery/` + `examples/gallery-rust/`
   directories satisfies this rule by construction — the gallery
@@ -586,7 +586,7 @@ Phase 2 framing artifact (DD or framing decision) consumed which
 input section. Rows marked **Out of scope** carry through to the
 ADR's Out-of-scope section, not into any DD.
 
-### From [m2-to-m3-handover.md](../m2-to-m3-handover.md)
+### From [m2-to-m3-handover.md](../../../milestone-2/handoff.md)
 
 | Section | Disposition | Consumed at |
 |---|---|---|
@@ -598,7 +598,7 @@ ADR's Out-of-scope section, not into any DD.
 | §3 item 4 — synchronous non-batched drain proof contract | Out of scope (carries) | Out-of-scope section. Box introduces no batching; the contract is unaffected by Phase 2. predoc-inputs §9 is the back-pointer. |
 | §4 `TypedValue` evaluator unification — open question | Discipline reminder | DD-004 sub-issue. F5 deferral preserved by routing bindable types through the per-type writer seam at `ir_loader::build_node`, not by extending the reactive engine with type dispatch |
 
-### From [predoc-inputs.md](./predoc-inputs.md)
+### From [predoc-inputs.md](constraints.md)
 
 | Section | Disposition | Consumed at |
 |---|---|---|
@@ -612,7 +612,7 @@ ADR's Out-of-scope section, not into any DD.
 | §8 `bool` display conversion forbidden until explicit surface | Out of scope | Out-of-scope section. Phase 2 introduces no formatting surface; the rule continues without Phase 2 action. Phase 6+ inherits |
 | §9 Bool live proof depends on synchronous non-batched drain | Out of scope | Out-of-scope section, as a back-pointer to m2-to-m3-handover §3 item 4. Phase 2 does not touch event/input batching, layout scheduling, or proof boundaries |
 
-### From [m3-target-app-predoc.md](../m3/m3-target-app-predoc.md) (carryover context)
+### From [m3-target-app-predoc.md](../../requirements/spec.md) (carryover context)
 
 | Section | Disposition | Consumed at |
 |---|---|---|
@@ -661,6 +661,6 @@ Inputs are complete. The next session begins ADR drafting:
    D Moment 2** lands: `docs/dsl_spec.md` re-synced to impl with
    frontmatter flipped from "ADR-accepted design draft" to
    "Phase 2 closed; impl-synced", any earlier-phase spec gaps folded
-   per [predoc-inputs.md §6](./predoc-inputs.md#6-retroactive-spec-gap-fold-は最小範囲で同じ-phase-に折り込む),
+   per [predoc-inputs.md §6](constraints.md#6-retroactive-spec-gap-fold-は最小範囲で同じ-phase-に折り込む),
    phase progress file retired per the standard `active → closing →
    retired → archived` lifecycle.

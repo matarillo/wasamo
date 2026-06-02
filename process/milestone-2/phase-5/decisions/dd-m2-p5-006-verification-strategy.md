@@ -1,9 +1,9 @@
-﻿### DD-M2-P5-006 — Verification strategy
+### DD-M2-P5-006 — Verification strategy
 
 **Status:** Accepted
 
 **Context:**
-[docs/notes/headless-verification.md](../notes/headless-verification.md)
+[docs/notes/headless-verification.md](../../../../docs/notes/headless-verification.md)
 records the M2 stance: do not build a general-purpose headless
 backend; cover pure-logic surfaces with phase-specific test fixtures;
 GUI-observable behaviour is verified by manual exercise on a visible
@@ -78,7 +78,7 @@ Option B — Extend the Phase 4 mirror pattern to cover bound widget property wr
   to prefer extracting free functions over mirrors.
 
 Option C — Build a "no-Compositor" runtime mode and integration-test through it
-- Per [headless-verification.md (ii)](../notes/headless-verification.md):
+- Per [headless-verification.md (ii)](../../../../docs/notes/headless-verification.md):
   introduce a runtime mode where `WidgetNode` is fully constructed
   but no Compositor / Visual / DirectWrite is created. Tests
   exercise full property write → reactive drain → property store
@@ -88,7 +88,7 @@ Option C — Build a "no-Compositor" runtime mode and integration-test through i
   CI (modulo the actual rendering bit).
 - What you give up: A "Visual on / Visual off" two-mode runtime
   is exactly what
-  [headless-verification.md](../notes/headless-verification.md)'s
+  [headless-verification.md](../../../../docs/notes/headless-verification.md)'s
   long-form analysis rejected for M2 — DD-V-001-era posture
   (no abstraction over Visual Layer) and infrastructure cost.
   Building it as a Phase 5 sub-task expands scope significantly

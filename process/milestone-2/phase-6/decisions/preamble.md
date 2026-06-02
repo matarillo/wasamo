@@ -22,8 +22,8 @@ mirrored from [process/_roadmap.md M2](../../../_roadmap.md#m2-foundation)):
 Phase 5 closed A2 *partially*: the reactive engine is verified through
 a runtime-internal spike harness that wires a `Signal<i32>` to a `Text`
 widget by hand
-([wasamoc/src/main.rs `dump-ir`](../../wasamoc/src/main.rs),
-[wasamo-runtime/src/experimental_ir_loader.rs](../../wasamo-runtime/src/experimental_ir_loader.rs)).
+([wasamoc/src/main.rs `dump-ir`](../../../../wasamoc/src/main.rs),
+[wasamo-runtime/src/ir_loader.rs](../../../../wasamo-runtime/src/ir_loader.rs)).
 Phase 6 closes both A1 and A2 permanently by routing reactive
 propagation through the `.ui` source path end-to-end. Every other M2
 phase contributed structure (Phase 1 cdylib-shim split), the textual
@@ -80,10 +80,10 @@ to `Status: Accepted`.
 
 The owner-aligned framing of this ADR's slate, scope, and
 upstream-document update bundling is recorded in
-[docs/notes/m2-phase-6/m2-phase-6-pre-doc-framing.md](../notes/m2-phase-6/m2-phase-6-pre-doc-framing.md).
+[docs/notes/m2-phase-6/m2-phase-6-pre-doc-framing.md](../requirements/framing.md).
 The drain DD's mature draft analysis is folded into DD-M2-P6-001
 below, replacing
-[docs/notes/m2-phase-6/dd-m2-p6-drain-transaction.md](../notes/m2-phase-6/dd-m2-p6-drain-transaction.md);
+[docs/notes/m2-phase-6/dd-m2-p6-drain-transaction.md](../retrospectives/dd-m2-p6-drain-transaction.md);
 that note is archived together with the ADR's `Accepted` flip.
 
 ---

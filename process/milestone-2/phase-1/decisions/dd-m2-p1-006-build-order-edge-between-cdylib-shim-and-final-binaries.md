@@ -1,4 +1,4 @@
-﻿### DD-M2-P1-006 — Build-order edge between cdylib shim and final binaries
+### DD-M2-P1-006 — Build-order edge between cdylib shim and final binaries
 
 **Status:** Accepted (2026-05-03)
 
@@ -27,7 +27,7 @@ Option A — Add `wasamo-dll` to `[dependencies]` of `bindings/rust-sys/Cargo.to
   provides no linkable target` (rust-lang/cargo#6313) for every
   build, because a cdylib has no Rust-linkable surface and `rust-sys`
   is a normal Rust crate. Accepted as a deferred / open issue —
-  recorded in [`docs/notes/cdylib-shim-build-graph.md`](../notes/cdylib-shim-build-graph.md)
+  recorded in [`docs/notes/cdylib-shim-build-graph.md`](dd-m2-p1-006-build-order-edge-between-cdylib-shim-and-final-binaries.md)
   with explicit re-evaluation triggers.
 
 Option B — `[build-dependencies] wasamo-dll` or `artifact = "cdylib"`

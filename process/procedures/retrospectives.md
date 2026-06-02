@@ -157,7 +157,7 @@ ADR に補足 DD)。
 17. human-visible GUI smoke — 必要/不要。runtime / ABI / binding /
     wasamoc lowering / examples 等、ユーザー可視の挙動に影響しうる
     phase では必要。必要な場合は
-    [human-visible GUI smoke](./human-visible-smoke.md) に従い、
+    [human-visible GUI smoke](../../docs/notes/human-visible-smoke.md) に従い、
     `counter-c`, `counter-rust`, `counter-zig` を確認する。
 18. CI YAML 変更要否の sanity check — 本 phase で新言語/新ビルド系を
     追加していれば CI 更新済みであること (CLAUDE.md の CI rules)

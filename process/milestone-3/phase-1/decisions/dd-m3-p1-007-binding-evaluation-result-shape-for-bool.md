@@ -1,12 +1,12 @@
-﻿### DD-M3-P1-007 — Binding evaluation result shape for `bool`
+### DD-M3-P1-007 — Binding evaluation result shape for `bool`
 
 **Status:** Accepted
 
 **Context:**
 M2 ended with `evaluate_binding()` returning `Result<String, EvalError>`
-([wasamo-runtime/src/handler.rs L220-L223](../../wasamo-runtime/src/handler.rs#L220-L223)),
+([wasamo-runtime/src/handler.rs L220-L223](../../../../wasamo-runtime/src/handler.rs#L220-L223)),
 and `widget_write_property(id, prop: u32, value: &str)`
-([wasamo-runtime/src/widget.rs L937](../../wasamo-runtime/src/widget.rs#L937))
+([wasamo-runtime/src/widget.rs L937](../../../../wasamo-runtime/src/widget.rs#L937))
 building `PropertyValue::String(value.to_string())` unconditionally
 before dispatching to the per-widget setter. The reactive seam
 declares its writer as `write_fn: fn(WidgetId, PropertyKey, &str)`
@@ -92,7 +92,7 @@ fence. The exposure is asymmetric — Option A survives F5 staying or
 reversing; Option B implicitly commits to reversing F5.
 
 **Recommendation:** Option A. The owner's pre-doc-review note
-([m3-target-app-predoc — Tabs / Button selected-state surface closure (Reservation 3)](../notes/m3/m3-target-app-predoc.md#保留-3-closure-tabs--button-選択状態-surface--採用-bool-を-3-つ目の-scalar-として導入))
+([m3-target-app-predoc — Tabs / Button selected-state surface closure (Reservation 3)](../../requirements/spec.md#保留-3-closure-tabs--button-選択状態-surface--採用-bool-を-3-つ目の-scalar-として導入))
 explicitly maintained F5 deferral as the condition for admitting
 `bool`; the per-type seam is what makes that condition mechanically
 enforceable.

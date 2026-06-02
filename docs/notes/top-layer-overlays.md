@@ -32,7 +32,7 @@ root に置いた ZStack なら window 全体の lightbox overlay は表現で�
 - click-away close、keyboard close、focus trap などの具体的な M4 UX 要求は
   [`m4-interaction-intake.md`](./m4-interaction-intake.md) が受ける。
 - `.ui` 文法入口、widget id / anchor 参照、structural rendering family との関係は
-  [`dsl-grammar.md`](./dsl-grammar.md) Q1 / Q7 が受ける。
+  [`dsl-grammar.md`](dsl-grammar.md) Q1 / Q7 が受ける。
 - Benchmark framework の一般比較は private survey または将来の
   `docs/notes/interaction-surface-survey.md` / `layout-surface-survey.md` に蒸留する。
 

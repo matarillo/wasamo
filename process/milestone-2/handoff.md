@@ -167,7 +167,7 @@ widget. M2 does **not** require the evaluator API to be fully
 generalized behind a `TypedValue` enum before closure.
 
 The broader `TypedValue` question is tracked separately in
-[typed-value-evaluator.md](./typed-value-evaluator.md). M3 is the
+[typed-value-evaluator.md](../../docs/notes/typed-value-evaluator.md). M3 is the
 earliest plausible pressure point because Grid / ScrollView / List and
 the public DSL spec draft may introduce new expression contexts or
 typed binding values. But `TypedValue` is not an M3 acceptance

@@ -16,7 +16,7 @@ M3 acceptance criterion **A5** (see
 
 The pre-doc framing for this phase was aligned with the owner on
 2026-05-25 and is recorded in
-[docs/notes/m3-phase-4/pre-doc-framing.md](../notes/m3-phase-4/pre-doc-framing.md)
+[docs/notes/m3-phase-4/pre-doc-framing.md](../requirements/framing.md)
 (commit `8f19c5f` for the initial framing draft + `234a0fa` for the
 owner-requested scoping-intent clarification). That framing fixed
 the 6-DD slate carried below, the visible-proof composition
@@ -32,19 +32,19 @@ model, not the only one (framing decision A + DD-003 scoping
 paragraph).
 
 Per the M2-Phase 2 framing decision D postmortem
-([m3-phase-2 framing notes](../notes/m3-phase-2/m3-phase-2-pre-doc-framing.md))
+([m3-phase-2 framing notes](../../phase-2/requirements/framing.md))
 and Phase 3's same-shape inheritance, the
 "Moment is not a commit unit" rule applies: each upstream-document
 edit in a Moment lands as its own commit on the pre-doc branch,
 scoped by review concern per
 [CLAUDE.md §Commit rules](../../CLAUDE.md#commit-rules) and the
 doc set in
-[retrospectives.md §phase-sync (Moment 2) で触る doc セット](../notes/retrospectives.md#phase-sync-moment-2-で触る-doc-セット).
+[retrospectives.md §phase-sync (Moment 2) で触る doc セット](../../../procedures/retrospectives.md#phase-sync-moment-2-で触る-doc-セット).
 
 The M2 / M3-Phase-1 / M3-Phase-2 / M3-Phase-3 end-state shape that
 this phase extends without breaking:
 
-- `wasamo-ir` ([wasamo-ir/src/lib.rs](../../wasamo-ir/src/lib.rs)):
+- `wasamo-ir` ([wasamo-ir/src/lib.rs](../../../../wasamo-ir/src/lib.rs)):
   `IrType` is `I32 | Str | Bool`; `IrLiteral` is `Int | Str | Ident
   | Bool | Ratio | Color`. Phase 3 reused existing `i32` plumbing
   for all WrapPanel attributes without widening either enum.
@@ -61,12 +61,12 @@ this phase extends without breaking:
 [architecture.md §6.7 *Per-type seam* paragraph](../../../../docs/architecture.md#67-reactive-engine-m2-phase-5);
   the "third pair" stays deferred — see §M4 hand-off item 2).
 - `wasamo-runtime` widget catalog
-  ([wasamo-runtime/src/widget.rs](../../wasamo-runtime/src/widget.rs)):
+  ([wasamo-runtime/src/widget.rs](../../../../wasamo-runtime/src/widget.rs)):
   `Rectangle | VStack | HStack | Text | Button | Box | WrapPanel`
   (Phase 3 added `WrapPanel`). Phase 4 adds `ScrollView` as a
   per-kind tag (DD-001).
 - Layout engine
-  ([wasamo-runtime/src/layout.rs](../../wasamo-runtime/src/layout.rs)):
+  ([wasamo-runtime/src/layout.rs](../../../../wasamo-runtime/src/layout.rs)):
   pure-data `LayoutNode` / `measure` / `arrange` boundary,
   Win32/WinRT-free. Phase 2 introduced
   `LayoutError::{BoxAspectUnboundedBoth, BoxNoExtent}`; Phase 3
@@ -86,7 +86,7 @@ this phase extends without breaking:
   is deferred to M4 or later input-handling work (see §M4 hand-off
   below). F5 (`TypedValue` deferral) is held in force by
   construction.
-- `wasamoc` ([wasamoc/src/check.rs](../../wasamoc/src/check.rs)):
+- `wasamoc` ([wasamoc/src/check.rs](../../../../wasamoc/src/check.rs)):
   state-name → declared-type table; identifier resolution lowers
   to typed `*PropRead` variants. Phase 4 adds no new value type;
   ScrollView's `offset-y` is an `i32` literal (or `i32` binding)
@@ -227,7 +227,7 @@ observed:
    - **Unbounded scroll-axis parent** — fires
      `LayoutError::ScrollViewUnboundedAxis` (reject test;
      pins the DD-002 / DD-005 branch per
-     [m3-phase-4 pre-doc-inputs §6](../notes/m3-phase-4/pre-doc-inputs.md)).
+     [m3-phase-4 pre-doc-inputs §6](../requirements/constraints.md)).
    - **Content smaller than viewport** — content paints at its
      measured size at top-leading corner; offset clamped to 0.
    - **Content equal to viewport** — boundary case; offset
@@ -352,7 +352,7 @@ explicitly **not** required in Phase 4 (per framing decision E
 and the Out of scope list); Phase 8 broadens the full gallery to
 all three.
 
-Per [m3-phase-4 pre-doc-inputs §10](../notes/m3-phase-4/pre-doc-inputs.md),
+Per [m3-phase-4 pre-doc-inputs §10](../requirements/constraints.md),
 evidence items (1)–(4) do not collapse into one even though they
 share helper infrastructure — the `wasamoc check` diagnostics,
 the measure-arrange tests, the IR-load `validate()` gate tests,
@@ -456,10 +456,10 @@ deferred to a later phase / milestone:
 ## Upstream document revisions (Moment 1 / Moment 2)
 
 Phase 4 inherits the two-moment structure from
-[m3-phase-2 framing decision D](../notes/m3-phase-2/m3-phase-2-pre-doc-framing.md#d-upstream-document-revision-timing-two-sync-moments)
+[m3-phase-2 framing decision D](../../phase-2/requirements/framing.md#d-upstream-document-revision-timing-two-sync-moments)
 and Phase 3's same-shape inheritance, per Phase 4 pre-doc framing
 decision D. Doc set and commit shape follow the living rule in
-[retrospectives.md](../notes/retrospectives.md) (framings inherit
+[retrospectives.md](../../../procedures/retrospectives.md) (framings inherit
 the *structure*, not the historical doc list verbatim — see the
 operational note at retrospectives.md §phase-sync). The Phase 4
 `dsl_spec.md` section marker mirrors the Phase 2 / Phase 3 form:
@@ -483,7 +483,7 @@ WrapPanel chapters).
 Constituent commits, each landing as its own commit on the
 pre-doc branch per the per-review-concern rule in
 [CLAUDE.md §Commit rules](../../CLAUDE.md#commit-rules) and
-[retrospectives.md](../notes/retrospectives.md). The draft-side
+[retrospectives.md](../../../procedures/retrospectives.md). The draft-side
 doc set Phase 4 commits to at Moment 1 is enumerated below;
 retrospectives.md §phase-sync で触る doc セット規定は phase-end
 Moment 2 を対象とした規範であり、Moment 1 の draft set は
@@ -519,7 +519,7 @@ Implementation begins only after these commits land.
   design draft and implementation diverged (marker flip is
   required regardless of divergence; corrections are conditional
   on what re-sync surfaces). Per
-  [m3-phase-4 pre-doc-inputs §10 / retroactive spec-gap fold](../notes/m3-phase-4/pre-doc-inputs.md)
+  [m3-phase-4 pre-doc-inputs §10 / retroactive spec-gap fold](../requirements/constraints.md)
   inherited from Phase 2 / Phase 3, earlier-phase spec gaps
   surfaced during the re-sync may fold into the same commit with
   explicit owner confirmation.
@@ -536,7 +536,7 @@ Implementation begins only after these commits land.
   ADR-touch cases applies (AC discharged-vs-impl divergence;
   out-of-phase residual cross-ref; thesis-level finding).
 - Step retro `phase-sync` items (per
-  [retrospectives.md item 10](../notes/retrospectives.md#step-end-固有-merge--phase-ブランチ))
+  [retrospectives.md item 10](../../../procedures/retrospectives.md#step-end-固有-merge--phase-ブランチ))
   must all close into `doc-folded` / `carry-forward` /
   `local-only` at Moment 2 — no open `phase-sync` items survive
   past phase close. Phase 4 is the first phase to use the item
@@ -547,7 +547,7 @@ ADR operationalises it.
 
 ## Inputs absorbed
 
-Mapping from [pre-doc-framing.md](../notes/m3-phase-4/pre-doc-framing.md)
+Mapping from [pre-doc-framing.md](../requirements/framing.md)
 framing decisions to DDs and ADR sections:
 
 | Framing decision | Disposition | Consumed at |
@@ -562,7 +562,7 @@ framing decisions to DDs and ADR sections:
 | H — Live-note re-evaluation triggers | Disposition table | (No direct ADR section — the framing's per-note disposition feeds DD layering and §Out of scope; the live notes themselves are not modified by Phase 4 unless framing decision F's R2-related architecture.md update warrants it) |
 | I — ScrollView mental model + ecosystem contrast subsection | Spec content | DD-005 §Spec content seed item 10; the subsection lands in dsl_spec.md §4.11 at Moment 1 |
 
-Mapping from [pre-doc-framing.md](../notes/m3-phase-4/pre-doc-framing.md)
+Mapping from [pre-doc-framing.md](../requirements/framing.md)
 DD slate to this ADR's DD numbering: 1:1 (DD-001 → DD-M3-P4-001
 etc.; the framing's recommendation directions are consumed as the
 recommended Options of each DD here).

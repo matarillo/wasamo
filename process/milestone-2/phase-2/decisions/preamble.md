@@ -18,15 +18,15 @@ two is recorded in DD-M2-P2-004 below.
 
 ### What is "the output format"?
 
-M1 `wasamoc` is parser-only ([wasamoc/src/main.rs](../../wasamoc/src/main.rs):
+M1 `wasamoc` is parser-only ([wasamoc/src/main.rs](../../../../wasamoc/src/main.rs):
 `check` subcommand only). It builds an AST
-([wasamoc/src/ast.rs](../../wasamoc/src/ast.rs)) and runs static checks
-([wasamoc/src/check.rs](../../wasamoc/src/check.rs)) but produces no
+([wasamoc/src/ast.rs](../../../../wasamoc/src/ast.rs)) and runs static checks
+([wasamoc/src/check.rs](../../../../wasamoc/src/check.rs)) but produces no
 artifact a host can consume. M1 hosts therefore reproduce
 `counter.ui`'s tree by hand against the experimental C ABI
-([examples/counter-rust/](../../examples/counter-rust/),
-[examples/counter-c/](../../examples/counter-c/),
-[examples/counter-zig/](../../examples/counter-zig/)).
+([examples/counter-rust/](../../../../examples/counter-rust/),
+[examples/counter-c/](../../../../examples/counter-c/),
+[examples/counter-zig/](../../../../examples/counter-zig/)).
 
 M2 acceptance criterion **A1** requires `counter.ui` itself to drive
 the running counter in all three host languages

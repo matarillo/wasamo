@@ -5,11 +5,11 @@
 **Targets phase:** M3-Phase 4 (ScrollView primitive — minimal)
 
 Per the project's doc-driven workflow established at
-[M2-Phase 6 pre-doc framing](../m2-phase-6/m2-phase-6-pre-doc-framing.md)
+[M2-Phase 6 pre-doc framing](../../../milestone-2/phase-6/requirements/framing.md)
 and continued through
-[M3-Phase 2 pre-doc framing](../m3-phase-2/m3-phase-2-pre-doc-framing.md)
+[M3-Phase 2 pre-doc framing](../../phase-2/requirements/framing.md)
 and
-[M3-Phase 3 pre-doc framing](../m3-phase-3/pre-doc-framing.md),
+[M3-Phase 3 pre-doc framing](../../phase-3/requirements/framing.md),
 individual DDs are not negotiated one-by-one in chat — framing is
 aligned first, then the full ADR is drafted in one pass as
 `Status: Proposed`, reviewed, and flipped to `Status: Accepted`.
@@ -24,9 +24,9 @@ inherits rather than re-derives:
   ADR-Accepted commit; Moment 2 implementation re-sync at phase
   close), with section-level `**Phase status:**` markers in the
   affected `docs/dsl_spec.md` chapter. See
-  [m3-phase-2 framing decision D](../m3-phase-2/m3-phase-2-pre-doc-framing.md#d-upstream-document-revision-timing-two-sync-moments).
+  [m3-phase-2 framing decision D](../../phase-2/requirements/framing.md#d-upstream-document-revision-timing-two-sync-moments).
   The doc set and commit shape are now living rule in
-  [retrospectives.md §phase-sync (Moment 2) で触る doc セット](../retrospectives.md#phase-sync-moment-2-で触る-doc-セット).
+  [retrospectives.md §phase-sync (Moment 2) で触る doc セット](../../../procedures/retrospectives.md#phase-sync-moment-2-で触る-doc-セット).
 - **Moment-is-not-a-commit-unit rule**, recorded in
   [CLAUDE.md §Commit rules](../../../CLAUDE.md#commit-rules): each
   constituent document lands as its own commit on the pre-doc
@@ -70,7 +70,7 @@ inherits rather than re-derives:
 
 - **Normative viewport / content / offset semantics required.**
   Phase 3 was the first novel-normative-spec phase
-  ([m3-phase-3 framing — first novel normative measure-arrange spec](../m3-phase-3/pre-doc-framing.md#phase-3-acceptance-criteria-restated));
+  ([m3-phase-3 framing — first novel normative measure-arrange spec](../../phase-3/requirements/framing.md#phase-3-acceptance-criteria-restated));
   Phase 5 Grid retains the "second novel-normative-spec phase"
   position per [m3-plan.md §Phase breakdown](../../plan.md#phase-breakdown)
   (star sizing is the heavier algorithmic content). Phase 4 does
@@ -279,11 +279,11 @@ contradicts the spec's normative requirement that scroll axis is
 a static IR property — that contradiction is structural, unlike
 the N>1 case.
 
-**Inputs consumed.** [pre-doc-inputs.md §1](./pre-doc-inputs.md)
+**Inputs consumed.** [pre-doc-inputs.md §1](constraints.md)
 (no lexer-surface extension — `scroll-axis` would have been a
 kebab-case `Ident` already accepted by the post-Phase-3 lexer; the
 hardcode recommendation makes this moot);
-[pre-doc-inputs.md §3](./pre-doc-inputs.md) (no new `IrNode`
+[pre-doc-inputs.md §3](constraints.md) (no new `IrNode`
 variant — generic IR shape with `WidgetKind::ScrollView` tag, per
 Phase 3 reuse pattern).
 
@@ -347,10 +347,10 @@ runtime-derivable). The runtime-error sub-issue stays in scope
 even with Option (a) because the unbounded-parent case is still
 reachable (Phase 5 Grid star sizing's intrinsic measure pass).
 
-**Inputs consumed.** [pre-doc-inputs.md §2](./pre-doc-inputs.md)
+**Inputs consumed.** [pre-doc-inputs.md §2](constraints.md)
 (viewport-sized minimal ScrollView, pin explicitly; default-bound
 source as Phase 4 ADR question);
-[pre-doc-inputs.md §3](./pre-doc-inputs.md)
+[pre-doc-inputs.md §3](constraints.md)
 (`LayoutError::ScrollViewUnboundedAxis` candidate addition,
 runtime-only — host-visible ABI stays internal until a host
 observes it).
@@ -422,7 +422,7 @@ Sub-issues:
   (top of content visible). Applied at the widget-catalog
   constructor layer, not the IR loader's `unwrap_or` —
   inheriting Phase 3 T5's discipline
-  ([pre-doc-inputs.md §4](./pre-doc-inputs.md)).
+  ([pre-doc-inputs.md §4](constraints.md)).
 
 **Recommendation direction (for framing alignment):** ship
 **Option (b) — bindable read-only `i32` offset** as the Phase 4
@@ -483,12 +483,12 @@ and is the framing recommendation. DD-005's per-pass arithmetic
 re-applies the clamp on every layout pass (window resize, content
 size change, programmatic state mutation via the binding).
 
-**Inputs consumed.** [pre-doc-inputs.md §3](./pre-doc-inputs.md)
+**Inputs consumed.** [pre-doc-inputs.md §3](constraints.md)
 (per-type writer seam pressure; `i32` reuses existing plumbing,
 `f64` ratio would not; binding direction read-only vs in-out
 called out as a Phase 4 ADR question);
-[pre-doc-inputs.md §4](./pre-doc-inputs.md) (default at widget-
-catalog constructor); [pre-doc-inputs.md §10](./pre-doc-inputs.md)
+[pre-doc-inputs.md §4](constraints.md) (default at widget-
+catalog constructor); [pre-doc-inputs.md §10](constraints.md)
 (offset binding direction belongs in spec / ADR; clamping
 semantics belong in spec).
 
@@ -543,7 +543,7 @@ Sub-issues:
   surfaced a `sync_visuals` bug whose root cause was the
   implicit absolute-vs-parent-relative offset convention.
   R2 (test-coverage half) was filed as open
-  ([pre-doc-inputs.md §8](./pre-doc-inputs.md), [§9](./pre-doc-inputs.md)).
+  ([pre-doc-inputs.md §8](constraints.md), [§9](constraints.md)).
   Phase 4 touches the same boundary meaningfully: the content
   offset changes at runtime, so the relative-offset translation
   is exercised on every scroll. Framing decision F below settles
@@ -560,12 +560,12 @@ inner content's WrapPanel / Box Visual (symmetric inverse of
 Phase 3 T8 — the assertion shape is the same code with `assert!`
 inverted).
 
-**Inputs consumed.** [pre-doc-inputs.md §7](./pre-doc-inputs.md)
+**Inputs consumed.** [pre-doc-inputs.md §7](constraints.md)
 (clip presence as positive evidence — the inverse of Phase 3 T8);
-[pre-doc-inputs.md §8](./pre-doc-inputs.md) (re-read §6.5 before
+[pre-doc-inputs.md §8](constraints.md) (re-read §6.5 before
 deciding Visual.Offset vs Visual.TransformMatrix; recommendation
 is Visual.Offset for Phase 4);
-[pre-doc-inputs.md §9](./pre-doc-inputs.md) (R2 in-or-out
+[pre-doc-inputs.md §9](constraints.md) (R2 in-or-out
 disposition — settled by framing decision F).
 
 ### DD-M3-P4-005 — Measure-arrange algorithm (novel normative viewport / content / offset semantics)
@@ -639,7 +639,7 @@ Sub-issues:
 - **LayoutError surface.** New
   `LayoutError::ScrollViewUnboundedAxis` variant per DD-002
   recommendation. ABI / host-visible surface stays internal
-  per [pre-doc-inputs.md §3](./pre-doc-inputs.md) — no
+  per [pre-doc-inputs.md §3](constraints.md) — no
   `WASAMO_LAYOUT_ERROR_*` ABI tag added unless a host can
   meaningfully observe the new variant (it cannot in Phase 4;
   the host receives layout failure as opaque).
@@ -659,7 +659,7 @@ with a *bounded* scroll-axis constraint (to "fit" content into
 viewport) contradicts A5's "inner unbounded measure" load-bearing
 phrasing.
 
-**Inputs consumed.** [pre-doc-inputs.md §2](./pre-doc-inputs.md)
+**Inputs consumed.** [pre-doc-inputs.md §2](constraints.md)
 (ScrollView pairing contract with WrapPanel is already in Phase 3
 ADR DD-M3-P3-005; Phase 4 confirms ScrollView passes "unbounded"
 through cleanly to its content's cross-axis input — for a
@@ -668,10 +668,10 @@ vertical-only direction means WrapPanel receives bounded main =
 viewport width and unbounded cross axis, consistent with Phase 3
 DD-004's parent-passthrough default plus the gallery's explicit
 `item-cross-size: 88` settling the actual child bound);
-[pre-doc-inputs.md §6](./pre-doc-inputs.md) (bounded-vs-unbounded
+[pre-doc-inputs.md §6](constraints.md) (bounded-vs-unbounded
 fork in measure-arrange; pin both branches with reject tests —
 the framing decision C verification mix below names this);
-[pre-doc-inputs.md §10](./pre-doc-inputs.md) (spec-drafting bar
+[pre-doc-inputs.md §10](constraints.md) (spec-drafting bar
 applied to viewport / content / offset spec items).
 
 ### DD-M3-P4-006 — IR-loader defense-in-depth invariants
@@ -682,7 +682,7 @@ invariants belong in pure-logic `validate()`, not in WinRT-bound
 range invariants. Phase 4 extends it with ScrollView's invariants,
 which are a **different shape** than either Phase 2 (structural
 placement) or Phase 3 (value range) —
-[pre-doc-inputs.md §5](./pre-doc-inputs.md) names this explicitly.
+[pre-doc-inputs.md §5](constraints.md) names this explicitly.
 
 Sub-issues:
 
@@ -715,7 +715,7 @@ Sub-issues:
   as `WASAMO_ERR_IR_MALFORMED`, consistent with Phase 2 / Phase
   3 precedent.
 
-**Inputs consumed.** [pre-doc-inputs.md §5](./pre-doc-inputs.md)
+**Inputs consumed.** [pre-doc-inputs.md §5](constraints.md)
 (runtime-gate scope follows the phase's invariant shape; not
 inherited from Phase 3's value-range pattern by default —
 ScrollView is *compound* in this sense: structural child-count
@@ -852,7 +852,7 @@ Phase 4 chooses from the menu:
   branch, the clamp arithmetic, and the unbounded-scroll-axis
   `LayoutError::ScrollViewUnboundedAxis` are exercised.
   **Pin both bounded and unbounded branches with reject tests**
-  per [pre-doc-inputs.md §6](./pre-doc-inputs.md) — the bounded-
+  per [pre-doc-inputs.md §6](constraints.md) — the bounded-
   vs-unbounded fork in ScrollView is the viewport-bounded
   cross-axis vs content-unbounded scroll-axis.
 - **Pure-logic unit tests** for IR-loader invariants (DD-006
@@ -875,7 +875,7 @@ Phase 4 chooses from the menu:
   `examples/gallery/` + `examples/gallery-rust/` (framing
   decision E) for owner-manual GUI smoke (framing decision G).
 
-Per [pre-doc-inputs.md §10](./pre-doc-inputs.md), evidence items
+Per [pre-doc-inputs.md §10](constraints.md), evidence items
 do not collapse just because they share helper infrastructure —
 the `wasamoc` check-side tests, in-crate measure-arrange tests,
 IR-load `validate()` gate tests, and Windows integration tests
@@ -884,10 +884,10 @@ each have distinct evidence meanings.
 ### D. Upstream-document revision timing (two sync moments)
 
 Phase 4 inherits the two-moment structure from
-[m3-phase-2 framing decision D](../m3-phase-2/m3-phase-2-pre-doc-framing.md#d-upstream-document-revision-timing-two-sync-moments)
+[m3-phase-2 framing decision D](../../phase-2/requirements/framing.md#d-upstream-document-revision-timing-two-sync-moments)
 and Phase 3's same-shape inheritance, but follows the current
 living-rule doc set and commit shape in
-[retrospectives.md](../retrospectives.md) (per its operational
+[retrospectives.md](../../../procedures/retrospectives.md) (per its operational
 note: doc set and commit shape have been updated after Phase 2 /
 Phase 3 実運用, and retrospectives.md is the living rule for
 phase-end execution; framing decisions inherit the *structure*,
@@ -916,7 +916,7 @@ Moment 2 (phase close).
 Constituent commits, each landing as its own commit on the
 pre-doc branch per the per-review-concern rule in
 [CLAUDE.md §Commit rules](../../../CLAUDE.md#commit-rules) and
-[retrospectives.md](../retrospectives.md). The draft-side doc
+[retrospectives.md](../../../procedures/retrospectives.md). The draft-side doc
 set Phase 4 commits to at Moment 1 is enumerated below
 (retrospectives.md §phase-sync で触る doc セット規定は phase-end
 Moment 2 を対象とした規範であり、Moment 1 の draft set はその
@@ -965,7 +965,7 @@ constituent shape preserves review-concern separability under
   cases applies (AC discharged-vs-impl divergence; out-of-phase
   residual cross-ref; thesis-level finding).
 - Step retro `phase-sync` items (per
-  [retrospectives.md item 10](../retrospectives.md#step-end-固有-merge--phase-ブランチ))
+  [retrospectives.md item 10](../../../procedures/retrospectives.md#step-end-固有-merge--phase-ブランチ))
   must all close into `doc-folded` / `carry-forward` /
   `local-only` at Moment 2 — no open `phase-sync` items
   survive past phase close.
@@ -973,12 +973,12 @@ constituent shape preserves review-concern separability under
 ### E. Phase 4 visible proof — sibling `ScrollView { WrapPanel { … } }` slice with fixed thumbnails
 
 The Phase 4 visible proof grows
-[examples/gallery/gallery.ui](../../../examples/gallery/gallery.ui)
+[examples/gallery/gallery.ui](../../../../examples/gallery/gallery.ui)
 by **adding a sibling section that wraps a fixed thumbnail set
 inside the canonical `ScrollView { WrapPanel { Box × N } }`
 composition**. The existing Phase 3 standalone WrapPanel slice
 **stays in place unchanged** — per
-[pre-doc-inputs.md §11](./pre-doc-inputs.md) and Phase 3 framing
+[pre-doc-inputs.md §11](constraints.md) and Phase 3 framing
 decision E's "sub-screen per phase" principle, modifying the
 Phase 3 slice would obscure its standalone wrap evidence.
 
@@ -995,7 +995,7 @@ The sibling sub-screen composition:
   initial composition proof.
 - **Item count.** Enough to require **both wrap and vertical
   scroll** on the default 800×600 window. Per
-  [pre-doc-inputs.md §11](./pre-doc-inputs.md), Phase 3's 88×88
+  [pre-doc-inputs.md §11](constraints.md), Phase 3's 88×88
   thumbnails with 12px spacing wrap 7-per-row at the default
   client width; a ~400px-tall ScrollView viewport fits ~4 rows.
   Total content needs > 4 rows for scroll to be visible.
@@ -1032,7 +1032,7 @@ slice into [standalone WrapPanel slice] + [ScrollView { WrapPanel
 ### F. Phase 3 carry-over residuals — disposition
 
 Phase 3 left two open residuals
-([pre-doc-inputs.md §9](./pre-doc-inputs.md)):
+([pre-doc-inputs.md §9](constraints.md)):
 
 - **R1 — `.gitignore` `*.uic` addition.** Cross-cutting hygiene
   unrelated to ScrollView. Phase 4 does not touch build hygiene
@@ -1062,16 +1062,16 @@ Phase 3 left two open residuals
 
 ### G. Live-note re-evaluation triggers — handling
 
-[pre-doc-inputs.md §13](./pre-doc-inputs.md) flags the
+[pre-doc-inputs.md §13](constraints.md) flags the
 `docs/notes/*` audit items. The framing settles their disposition
 upfront so the ADR Inputs section can cite settled handling
 rather than re-deciding:
 
-- **[architectural-family.md](../architectural-family.md) — stays
+- **[architectural-family.md](../../../../docs/notes/architectural-family.md) — stays
   consumed.** ScrollView is a built-in primitive in the
   tree-with-bindings family, no re-evaluation needed. Phase 1 /
   Phase 2 / Phase 3 framings already established this.
-- **[layout-engine.md](../layout-engine.md) — partial fire.**
+- **[layout-engine.md](../../../../docs/notes/layout-engine.md) — partial fire.**
   ScrollView's measure-arrange is the next M3 phase exercising
   the layout engine's pure-data surface non-trivially (Phase 2
   Box and Phase 3 WrapPanel each touched it in their own ways;
@@ -1089,23 +1089,23 @@ rather than re-deciding:
     sub-screen (tens of thumbnails — Phase 3 standalone slice's
     10 + Phase 4 sibling slice's 30–40, well under 1,000).
   - 3.5 user-defined layout — not applicable.
-- **[dsl-grammar.md](../dsl-grammar.md) — mostly unfired.**
+- **[dsl-grammar.md](../../../../docs/notes/dsl-grammar.md) — mostly unfired.**
   Phase 4 ships no template-local scope, no iteration, no
   qualified state reference beyond what Phase 1 / Phase 2 /
   Phase 3 already exercise. Q1 / Q3 / Q5 remain Phase 7+.
-- **[component-extension-model.md](../component-extension-model.md) — unfired.**
+- **[component-extension-model.md](../../../../docs/notes/component-extension-model.md) — unfired.**
   ScrollView is a built-in component.
-- **[typed-value-evaluator.md](../typed-value-evaluator.md) —
+- **[typed-value-evaluator.md](../../../../docs/notes/typed-value-evaluator.md) —
   conditional fire deferred.** DD-003 recommendation (b) read-
   only `i32` binding reuses Phase 1 / Phase 2 / Phase 3 i32
   plumbing; no new `IrType` / `PropertyValue` variant. F5
   (`TypedValue` deferral) remains. If framing alignment reverses
   DD-003 to (c) in-out, the writer seam is built — still no new
   TypedValue; the seam is per-type for i32.
-- **[workspace-layout.md](../workspace-layout.md) — unfired.**
+- **[workspace-layout.md](../../../../docs/notes/workspace-layout.md) — unfired.**
   Phase 4 adds no new crate.
-- **[verification-environments.md](../verification-environments.md) /
-  [headless-verification.md](../headless-verification.md).**
+- **[verification-environments.md](../../../../docs/notes/verification-environments.md) /
+  [headless-verification.md](../../../../docs/notes/headless-verification.md).**
   Phase 4 inherits Phase 2 / Phase 3's skip-guard pattern
   verbatim. Framing decision C commits Phase 4 to the
   fail-rather-than-silently-skip discipline.
@@ -1113,12 +1113,12 @@ rather than re-deciding:
   The 3-role boundary (execution log / step retrospective /
   phase acceptance evidence) inherited from Phase 2 / Phase 3.
   Phase 4 does not introduce a new evidence document type.
-- **[release-distribution.md](../release-distribution.md) —
+- **[release-distribution.md](../../../../docs/notes/release-distribution.md) —
   unfired.** Phase 4 introduces no release / packaging surface.
 
 ### H. GUI smoke responsibility separation
 
-Inherits [m3-phase-2 framing decision G](../m3-phase-2/m3-phase-2-pre-doc-framing.md#g-gui-smoke-responsibility-separation-predoc-inputs-5)
+Inherits [m3-phase-2 framing decision G](../../phase-2/requirements/framing.md#g-gui-smoke-responsibility-separation-predoc-inputs-5)
 and Phase 3's same-shape inheritance. Visual correctness of
 ScrollView rendering (viewport clips correctly; content below
 viewport bottom is invisible; programmatic scroll button moves
@@ -1210,7 +1210,7 @@ recommended design implies.
 
 ## Inputs absorbed
 
-### From [pre-doc-inputs.md](./pre-doc-inputs.md)
+### From [pre-doc-inputs.md](constraints.md)
 
 | Section | Disposition | Consumed at |
 |---|---|---|
@@ -1225,7 +1225,7 @@ recommended design implies.
 | §9 R2 in-scope candidate | Direct input | Framing decision F (close R2 inside Phase 4 as part of the Windows integration test); R1 deferred |
 | §10 Spec drafting bar — viewport / measure / offset semantics / binding direction / clip / content < viewport | Constraint | DD-005 (algorithm sub-issues map 1:1 with the spec coverage list); DD-003 (binding direction = ADR DD); DD-004 (clip as normative requirement); §4.11 chapter outline in framing decision D |
 | §11 Gallery sub-screen growth — sibling vs wrap | Direct input | Framing decision E (sibling sub-screen with the canonical `ScrollView { WrapPanel { Box × 30–40 } }` composition using fixed thumbnails; Phase 7 iteration grammar later swaps fixed children for collection-driven generation as a strict superset) |
-| §12 AskUserQuestion paused; fast-track removed; phase-end gates; retrospectives wording fold; item 10 vocabulary new | Process / discipline reminders | This framing follows the inline-options-in-chat pattern; the ADR / spec sync / progress doc commits land per-owner-approval per [retrospectives.md](../retrospectives.md); step retros from T1 onward use the item 10 disposition vocabulary; framing decision D Moment 1 / Moment 2 doc sets follow the [retrospectives.md phase-sync doc set](../retrospectives.md#phase-sync-moment-2-で触る-doc-セット) |
+| §12 AskUserQuestion paused; fast-track removed; phase-end gates; retrospectives wording fold; item 10 vocabulary new | Process / discipline reminders | This framing follows the inline-options-in-chat pattern; the ADR / spec sync / progress doc commits land per-owner-approval per [retrospectives.md](../../../procedures/retrospectives.md); step retros from T1 onward use the item 10 disposition vocabulary; framing decision D Moment 1 / Moment 2 doc sets follow the [retrospectives.md phase-sync doc set](../../../procedures/retrospectives.md#phase-sync-moment-2-で触る-doc-セット) |
 | §13 docs/notes audit triggers | Direct input | Framing decision G (per-note disposition; layout-engine partial fire; typed-value conditional fire deferred; verification-environments fired with inherited skip-guard discipline) |
 
 ### From [m3-plan.md](../../plan.md)
@@ -1267,7 +1267,7 @@ recommended design implies.
 | DD-M3-P2-005 (aspect measure-arrange + LayoutError) | Pattern reuse | DD-005 (rounding contract reused; LayoutError extension pattern reused for `ScrollViewUnboundedAxis`); DD-002 (unbounded-parent → runtime error parallels Phase 2's `BoxNoExtent`) |
 | Phase 2 T7 IR-load `validate()` introduction (not a DD; surfaced during impl, later abstracted as Phase 3 DD-M3-P3-006) | Pattern reuse | DD-006 (IR-loader defense-in-depth) |
 
-### From [m2-to-m3-handover.md](../m2-to-m3-handover.md)
+### From [m2-to-m3-handover.md](../../../milestone-2/handoff.md)
 
 | Section | Disposition | Consumed at |
 |---|---|---|
@@ -1298,7 +1298,7 @@ Once framing is owner-aligned, the next session begins ADR drafting:
    `Status: active`; the m3-plan.md Progress row flips from
    `not started` to `in progress`.
 5. Implementation phase proceeds. From T1 onward, step retros
-   apply [retrospectives.md item 10](../retrospectives.md#step-end-固有-merge--phase-ブランチ)
+   apply [retrospectives.md item 10](../../../procedures/retrospectives.md#step-end-固有-merge--phase-ブランチ)
    vocabulary (Phase 4 is the first phase to use it from day 1).
    At phase close, **framing decision D Moment 2** lands
    per-review-concern: `docs/dsl_spec.md` §4.11 re-sync,

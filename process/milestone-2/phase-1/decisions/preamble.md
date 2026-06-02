@@ -50,7 +50,7 @@ Phase 2-5 examples) is treated as out-of-scope unless A3 demands it.
   preserved by construction.
 - **Adding new ABI symbols.** A4 (M2-Phase 4) territory.
 - **Workspace-wide `crates/` reorganisation.** Recorded as an open
-  question in [`docs/notes/workspace-layout.md`](../notes/workspace-layout.md).
+  question in [`docs/notes/workspace-layout.md`](../../../../docs/notes/workspace-layout.md).
 
 ## Summary of Accepted decisions
 

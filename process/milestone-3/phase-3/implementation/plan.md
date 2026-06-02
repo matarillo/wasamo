@@ -186,7 +186,7 @@ CI-execution evidence.
       `0x80070005` from `wasamo_init`.
 - [x] Skip-guard verified on an SSH dev box (or equivalent
       environment per
-      [verification-environments.md](../../notes/verification-environments.md))
+      [verification-environments.md](../../../../docs/notes/verification-environments.md))
       before landing — local "passed without skip" does not prove
       the guard works.
 
@@ -257,12 +257,12 @@ Discharges the m3-plan §Phase-end criteria checklist for Phase 3.
       as R3-A and is not a residual.
 - [x] Forward-distillation note for M3-Phase 4 authored within
       this phase's close (per
-      [retrospectives.md forward-carry rule](../../notes/retrospectives.md)):
-      [`docs/notes/m3-phase-4/pre-doc-inputs.md`](../../notes/m3-phase-4/pre-doc-inputs.md).
+      [retrospectives.md forward-carry rule](../../../procedures/retrospectives.md)):
+      [`docs/notes/m3-phase-4/pre-doc-inputs.md`](../../phase-4/requirements/constraints.md).
 - [x] Phase-end retrospective entry recorded per the
-      [docs/notes/retrospectives.md](../../notes/retrospectives.md)
+      [docs/notes/retrospectives.md](../../../procedures/retrospectives.md)
       procedure, with the durable entry at
-      [`docs/notes/m3-phase-3/phase-end-retrospective.md`](../../notes/m3-phase-3/phase-end-retrospective.md).
+      [`docs/notes/m3-phase-3/phase-end-retrospective.md`](../retrospectives/phase-end.md).
 - [x] Progress file lifecycle: `status: active` → `status: closing`
       at the end of this T10 commit set, then `closing` →
       `status: retired` on the phase branch before the phase-end

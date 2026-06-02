@@ -110,7 +110,7 @@ represented by the current parallel typed read methods. If M3's Grid /
 ScrollView / List and public spec draft do not create that pressure, the
 revisit should remain open for M4/M5/post-1.0 rather than being forced into
 M3 merely because it is the next milestone. The live open question is tracked
-in [docs/notes/typed-value-evaluator.md](../typed-value-evaluator.md).
+in [docs/notes/typed-value-evaluator.md](../../../../docs/notes/typed-value-evaluator.md).
 
 ### F2 - The accepted option must cover the `.ui` path, not only pure logic
 
@@ -152,7 +152,7 @@ Consequence: the ADR should compare Option C honestly as the future-friendly
 shape, but should not recommend it solely because its name sounds more
 "type-agnostic." The ADR should instead recommend Option B for M2, while
 recording `TypedValue` as the post-M2 open question tracked in
-[docs/notes/typed-value-evaluator.md](../typed-value-evaluator.md).
+[docs/notes/typed-value-evaluator.md](../../../../docs/notes/typed-value-evaluator.md).
 
 F2 still constrains Option B: a hand-written `StrPropRead` unit test is not
 enough. The implementation must include a `.ui` / emitted-IR path that reaches

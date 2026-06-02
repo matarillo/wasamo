@@ -24,29 +24,29 @@ grammar surfaces that consume `bool` are out of this phase.
 
 The M2 end-state shape that this phase must extend without breaking:
 
-- `wasamo-ir` ([wasamo-ir/src/lib.rs](../../wasamo-ir/src/lib.rs)):
+- `wasamo-ir` ([wasamo-ir/src/lib.rs](../../../../wasamo-ir/src/lib.rs)):
   `IrType` has two variants `I32 | Str`; `IrLiteral` has
   `Int | Str | Ident`; `HandlerExpr` uses **type-suffixed variants**
   (`IntLit` / `StrLit` / `PropRead` / `StrPropRead`) rather than a
   unified typed value.
 - `EvalContext`
-  ([wasamo-runtime/src/handler.rs](../../wasamo-runtime/src/handler.rs)):
+  ([wasamo-runtime/src/handler.rs](../../../../wasamo-runtime/src/handler.rs)):
   type-suffixed methods (`get_i32` / `get_string` /
   `read_i32_tracked` / `read_string_tracked` / `set_i32`). `set_string`
   is **absent** — strings are read-only in M2 because no handler writes
   to them. `evaluate()` returns `Result<i32, EvalError>`; binding-side
   evaluation has a separate string-typed path.
 - Widget catalog
-  ([wasamo-runtime/src/widget.rs](../../wasamo-runtime/src/widget.rs)):
+  ([wasamo-runtime/src/widget.rs](../../../../wasamo-runtime/src/widget.rs)):
   `Rectangle | VStack | HStack | Text | Button`; `PropertyValue` enum is
   `I32(i32) | String(String)`; per-widget per-attribute `PROP_*` u32
-  IDs in [ir_loader.rs](../../wasamo-runtime/src/ir_loader.rs) lines
+  IDs in [ir_loader.rs](../../../../wasamo-runtime/src/ir_loader.rs) lines
   799–802.
 
 This ADR is framed against A9 and the M2 type-suffix pattern. It does
 **not** re-open F5 (`TypedValue` deferral) — adding `bool` as a third
 scalar is a different question, as recorded in
-[m3-target-app-predoc.md — Tabs / Button selected-state surface closure (Reservation 3)](../notes/m3/m3-target-app-predoc.md#保留-3-closure-tabs--button-選択状態-surface--採用-bool-を-3-つ目の-scalar-として導入).
+[m3-target-app-predoc.md — Tabs / Button selected-state surface closure (Reservation 3)](../../requirements/spec.md#保留-3-closure-tabs--button-選択状態-surface--採用-bool-を-3-つ目の-scalar-として導入).
 
 The acceptance lens for this phase is narrow: A9 is satisfied when
 `bool` reads through the live `.ui → IR → runtime` path on one widget
@@ -106,7 +106,7 @@ are explicitly out of scope here.
   in M3-Phase 6 ADR; DD-M3-P1-005 rejects Option B to keep this
   decoupled.
 - **`TypedValue` generic value union.** F5 deferral is preserved
-  ([m3-start-framing.md §F5](../notes/m3/m3-start-framing.md#l335)).
+  ([m3-start-framing.md §F5](../../requirements/framing.md#l335)).
   Adding `bool` as a third tagged scalar is not the same decision as
   introducing a typed value union.
 - **Per-symbol IR text grammar rename** (`PropRead` →
@@ -252,17 +252,17 @@ When this ADR is accepted, the following docs change in the same Phase
   single string-baked function pointer.
 - [docs/abi_spec.md](../../../../docs/abi_spec.md) — **no new ABI surface added.**
   `WASAMO_VALUE_BOOL = 3` and `v_bool` already exist
-  ([abi_spec.md §3.3](../../../../docs/abi_spec.md), [abi.rs L74-L90](../../wasamo-runtime/src/abi.rs#L74-L90))
+  ([abi_spec.md §3.3](../../../../docs/abi_spec.md), [abi.rs L74-L90](../../../../wasamo-runtime/src/abi.rs#L74-L90))
   from M2; Phase 1 only connects this existing tag through the
   property-write path that previously dropped it. Specifically,
   `read_property_value` / `write_property_value` and
-  `property_value_to_owned` ([abi.rs L745-L749](../../wasamo-runtime/src/abi.rs#L745-L749))
-  gain bool arms; `PropertyValue` ([widget.rs L77-L80](../../wasamo-runtime/src/widget.rs#L77-L80))
+  `property_value_to_owned` ([abi.rs L745-L749](../../../../wasamo-runtime/src/abi.rs#L745-L749))
+  gain bool arms; `PropertyValue` ([widget.rs L77-L80](../../../../wasamo-runtime/src/widget.rs#L77-L80))
   gains `Bool(bool)`; the property observer payload conversion
   carries bool through to `WasamoValue::v_bool`. Existing ABI
   function signatures and value-tag numeric assignments are
   untouched (M6 freeze scope unchanged; this phase is pre-freeze).
-- [wasamoc/src/check.rs](../../wasamoc/src/check.rs) and adjacent
+- [wasamoc/src/check.rs](../../../../wasamoc/src/check.rs) and adjacent
   lowering — per DD-M3-P1-010: state-name → declared-type table
   built at parse, used to lower identifiers to typed `*PropRead`
   variants and to type-check `bind` LHS / RHS pairings.

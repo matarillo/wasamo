@@ -1,10 +1,10 @@
-﻿### DD-M3-P1-010 — `wasamoc` type-checker scope for `bool`
+### DD-M3-P1-010 — `wasamoc` type-checker scope for `bool`
 
 **Status:** Accepted
 
 **Context:**
 Phase 1 introduces a new scalar type. The `wasamoc` checker
-([wasamoc/src/check.rs](../../wasamoc/src/check.rs))
+([wasamoc/src/check.rs](../../../../wasamoc/src/check.rs))
 has to decide which type combinations to accept and reject. The
 question is well-bounded: which of the following do we want to be
 *compile-time errors* (caught by `wasamoc check`), and which are

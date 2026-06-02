@@ -1,9 +1,9 @@
-﻿### DD-P8-001 — `counter.ui` positioning in Hello Counter
+### DD-P8-001 — `counter.ui` positioning in Hello Counter
 
 **Status:** Accepted
 
 **Context:**
-[`examples/counter/counter.ui`](../../examples/counter/counter.ui)
+[`examples/counter/counter.ui`](../../../../examples/counter/counter.ui)
 already exists from Phase 1 as the canonical reference example for
 the `.ui` DSL. Phase 8's three host programs need to satisfy
 "Hello Counter runs in three languages." How they should relate to

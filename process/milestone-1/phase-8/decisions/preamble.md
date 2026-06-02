@@ -11,14 +11,14 @@ Phase 8's acceptance criterion comes directly from
 [process/_roadmap.md M1](../../../_roadmap.md#m1-proof-of-concept):
 **"Hello Counter example runs in three languages: C, Rust, and Zig."**
 
-The runtime ([`wasamo-runtime`](../../wasamo/)), the C ABI
-([`bindings/c/wasamo.h`](../../bindings/c/wasamo.h),
+The runtime ([`wasamo-runtime`](../../../../wasamo-runtime/)), the C ABI
+([`bindings/c/wasamo.h`](../../../../bindings/c/wasamo.h),
 [`docs/abi_spec.md`](../../../../docs/abi_spec.md)), and the three bindings
-([`bindings/c/`](../../bindings/c/),
-[`bindings/rust/`](../../bindings/rust/),
-[`bindings/zig/`](../../bindings/zig/)) all landed in Phases 6–7.
+([`bindings/c/`](../../../../bindings/c/),
+[`bindings/rust/`](../../../../bindings/rust/),
+[`bindings/zig/`](../../../../bindings/zig/)) all landed in Phases 6–7.
 Phase 8 consumes them: each binding gets one host-language
-"counter" program that reproduces [`examples/counter/counter.ui`](../../examples/counter/counter.ui).
+"counter" program that reproduces [`examples/counter/counter.ui`](../../../../examples/counter/counter.ui).
 
 The roadmap Phase 8 task list ([process/_roadmap.md M1](../../../_roadmap.md#m1-proof-of-concept))
 has eight items. Per

@@ -1,4 +1,4 @@
-﻿## Out-of-phase residuals
+## Out-of-phase residuals
 
 - **(R1) `.gitignore` `*.uic` pattern.** During T9, an ad-hoc debug
   invocation `wasamoc build examples\gallery\gallery.ui
@@ -11,7 +11,7 @@
   Phase 3 scope did not include build-hygiene changes, so this is
   not folded here; tracked for any future cross-cutting hygiene
   pass. Surfaced in
-  [t9-step-end-retrospective.md](../../notes/m3-phase-3/t9-step-end-retrospective.md)
+  [t9-step-end-retrospective.md](../retrospectives/t9.md)
   Follow-Up R1.
 
 - **(R2) `sync_visuals` ↔ pure-layout boundary test gap.** The
@@ -27,7 +27,7 @@
   smoke. Belongs to whichever later phase first revisits the
   `WidgetNode` / Visual-Layer sync seam (likely Phase 4 ScrollView
   or a focused test-coverage pass). Surfaced in
-  [t9-step-end-retrospective.md](../../notes/m3-phase-3/t9-step-end-retrospective.md)
+  [t9-step-end-retrospective.md](../retrospectives/t9.md)
   Follow-Up R2. Architecture-level offset convention is now stated
 in [docs/architecture.md §6.5](../../../../docs/architecture.md) (folded in
   T10 as R3-A); this residual is the test-coverage half that is

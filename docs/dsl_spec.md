@@ -2613,7 +2613,7 @@ adopted for `i32` and `String`. It does not introduce
 a generic `TypedValue` value union; the per-type binding evaluator and
 per-type widget property writer (see `architecture.md` §6.7.7)
 are the structural form of that deferral. This deferral is recorded in
-[notes/m3/m3-start-framing.md §F5](./notes/m3/m3-start-framing.md#f5--typedvalue-は再評価候補だが開始時点の-m3-acceptance-ではない).
+[notes/m3/m3-start-framing.md §F5](../process/milestone-3/requirements/framing.md#f5--typedvalue-は再評価候補だが開始時点の-m3-acceptance-ではない).
 
 ## Revision history
 

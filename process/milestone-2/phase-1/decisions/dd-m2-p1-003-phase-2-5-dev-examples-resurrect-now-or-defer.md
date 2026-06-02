@@ -1,4 +1,4 @@
-﻿### DD-M2-P1-003 — Phase 2-5 dev examples: resurrect now, or defer?
+### DD-M2-P1-003 — Phase 2-5 dev examples: resurrect now, or defer?
 
 **Status:** Accepted
 
@@ -42,6 +42,6 @@ app thread) all pass on a local Windows 11 desktop. A side
 observation about which environments are appropriate for which kinds
 of verification (and why "SSH dev box" in DD-M2-P1-005 is not
 interchangeable with GUI verification) is recorded in
-[`docs/notes/verification-environments.md`](../notes/verification-environments.md).
+[`docs/notes/verification-environments.md`](../../../../docs/notes/verification-environments.md).
 
 ---

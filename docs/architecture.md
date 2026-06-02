@@ -494,7 +494,7 @@ Window registration lifecycle:
 
 Full decision rationale: [`process/milestone-2/phase-5/decisions/preamble.md`](../process/milestone-2/phase-5/decisions/preamble.md).
 Architectural-family hypothesis (tree-with-bindings, working
-hypothesis only): [`docs/notes/architectural-family.md`](./notes/architectural-family.md).
+hypothesis only): [`docs/notes/architectural-family.md`](notes/architectural-family.md).
 
 The reactive engine is the M2 thesis-validation surface for
 acceptance A2 — `count++` in a host handler updates a bound
@@ -842,7 +842,7 @@ defers (M3-Phase 6 fills the conditional seam — see §6.7.9):
   (`BindingTarget::ConditionalSubtree`, §6.7.9); for-loop /
   list-rendered remain deferred.
 - Subtree-grain layout dirty (open question in
-  [layout-engine note §3.4](./notes/layout-engine.md)) is
+  [layout-engine note §3.4](notes/layout-engine.md)) is
   unaffected; the engine inherits the Phase 8 whole-window dirty path.
 - `untrack` / explicit `engine.flush()` / multi-threaded Signal
   access are post-M2 and have no M2 driver.
@@ -1595,7 +1595,7 @@ eliminated by construction:
   could parallelise `counter-rust`'s link step ahead of the cdylib
   build, reproducing `LNK1181`. The `warning: no linkable target`
   (cargo#6313) that this edge causes is accepted as a known wart; see
-  [`docs/notes/workspace-layout.md`](./notes/workspace-layout.md) and
+  [`docs/notes/workspace-layout.md`](notes/workspace-layout.md) and
   [`DD-M2-P1-006`](../process/milestone-2/phase-1/decisions/dd-m2-p1-006-build-order-edge-between-cdylib-shim-and-final-binaries.md).
 
 Full rationale: [`process/milestone-2/phase-1/decisions/preamble.md`](../process/milestone-2/phase-1/decisions/preamble.md).

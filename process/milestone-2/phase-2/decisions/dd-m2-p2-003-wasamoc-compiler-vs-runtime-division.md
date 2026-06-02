@@ -1,4 +1,4 @@
-﻿### DD-M2-P2-003 — wasamoc 責務境界 (compiler vs runtime division)
+### DD-M2-P2-003 — wasamoc 責務境界 (compiler vs runtime division)
 
 **Status:** Accepted
 
@@ -65,7 +65,7 @@ interpreter is a pure evaluator over a known-good IR.
   layering, not a downside; calling it out for visibility.)
 - **Technical risk: Medium.** This option forces the **DSL type
   system to be formalized for the first time**. M1's `TypeName`
-  ([wasamoc/src/ast.rs](../../wasamoc/src/ast.rs)) covers only
+  ([wasamoc/src/ast.rs](../../../../wasamoc/src/ast.rs)) covers only
   Int / Str / Float / Bool, and no rules currently exist for:
   interpolated strings (`"Count: \{root.count}"` — int→string
   coercion), assignment-operator semantics (`+=` `-=` `*=` `/=`

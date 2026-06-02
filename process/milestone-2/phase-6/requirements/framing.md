@@ -35,7 +35,7 @@ title) will carry the following nine DDs.
 ### DD-M2-P6-001 — Drain transaction semantics
 
 The draft DD in
-[dd-m2-p6-drain-transaction.md](./dd-m2-p6-drain-transaction.md) is
+[dd-m2-p6-drain-transaction.md](../retrospectives/dd-m2-p6-drain-transaction.md) is
 already mature: 4 design axes, 6 options (A–F), drafter's
 recommendation Option D (with F as the standard extension path in
 M3). This DD is folded into the Phase 6 ADR as its opening entry.
@@ -167,7 +167,7 @@ post-M2 search-path / resource-bundle extensions go to Out of scope.
   (with a cross-reference from DD-005). Final slate: 9 DDs.
 
 - **B. Drain DD integration.** The existing
-  [dd-m2-p6-drain-transaction.md](./dd-m2-p6-drain-transaction.md)
+  [dd-m2-p6-drain-transaction.md](../retrospectives/dd-m2-p6-drain-transaction.md)
   is folded into the Phase 6 ADR as DD-M2-P6-001 essentially as-is
   (6-option comparison + Option D recommendation + §11 supplements).
   The VISION §4 P2 supplement is treated as inseparable from the ADR

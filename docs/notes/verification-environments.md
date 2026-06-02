@@ -89,7 +89,7 @@ judgment of correctness). Two mechanics pinned during Phase 5:
 
 This assistant baseline is a pre-owner check; it does not substitute for
 the owner's human-visible smoke
-([human-visible-smoke.md](./human-visible-smoke.md)). CLAUDE.md
+([human-visible-smoke.md](human-visible-smoke.md)). CLAUDE.md
 `Testing rules` lifts the evidence standard into a project-wide rule.
 
 Visible verification (assistant capture or owner smoke) must also carry a
