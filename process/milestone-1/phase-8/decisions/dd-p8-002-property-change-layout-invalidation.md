@@ -1,4 +1,4 @@
-﻿### DD-P8-002 — Property-change layout invalidation
+### DD-P8-002 — Property-change layout invalidation
 
 **Status:** Accepted
 
@@ -8,7 +8,7 @@ inside `wasamo_set_property` for size-affecting properties
 (`BUTTON_LABEL`, `TEXT_CONTENT`, `TEXT_STYLE`) but does not
 trigger a re-layout pass. The only path that drives
 `run_layout()` is `WM_SIZE` handling
-([`wasamo/src/window.rs`](../../wasamo/src/window.rs)). Hello
+([`wasamo/src/window.rs`](../../../../wasamo-runtime/src/window.rs)). Hello
 Counter's `Text { text: "Count: \{root.count}" }` becomes visually
 stale as `count` grows past one digit: the underlying drawing
 surface re-renders, but the parent VStack doesn't re-arrange to
@@ -81,7 +81,7 @@ will be deprecated as soon as M2 internalises the call. Options C
 and D contort the example to hide the gap.
 
 **Architecture details (to be reflected in
-[`architecture.md` §6](../architecture.md#6-layout-engine-phase-3)):**
+[`architecture.md` §6](../../../../docs/architecture.md#6-layout-engine-phase-3)):**
 
 - `set_property` for `BUTTON_LABEL` / `TEXT_CONTENT` /
   `TEXT_STYLE` re-computes the widget's intrinsic size, then
@@ -90,7 +90,7 @@ and D contort the example to hide the gap.
   message-loop tick (queued, not synchronous, to coalesce
   multiple property changes in the same emission drain). The
   existing queued-emission machinery (`emit.rs`,
-  [Phase 6 commit `4de8e7f`](../../wasamo/src/emit.rs)) is the
+  [Phase 6 commit `4de8e7f`](../../../../wasamo-runtime/src/emit.rs)) is the
   right place to drain layout invalidations: after the signal
   queue empties, any marked window runs one layout pass.
 - Widgets without an owning window (unattached, pre-`set_root`)
@@ -105,7 +105,7 @@ and D contort the example to hide the gap.
   trees are small; the cost is invisible. Optimization belongs to
   M3 performance work.
 - Animating property-change transitions. Per
-  [DD-V-001](./vision-m1-acceptance-criteria.md), property-change
+  [DD-V-001](../../../cross-milestone/decisions/m1-acceptance-criteria.md), property-change
   animations are M5 scope. The relayout here is instant —
   consistent with SwiftUI / Compose / Flutter / CSS defaults.
 

@@ -8,7 +8,7 @@ detached widget handles via `WasamoWidget** out_removed` /
 `out_old`. Today no `wasamo_*` function returns a free-standing widget
 handle: every widget reaches the host as part of a subtree owned by
 its eventual `wasamo_window_set_root` target ([abi_spec.md §5
-"Ownership transfer"](../abi_spec.md#5-m1-experimental-layer)).
+"Ownership transfer"](../../../../docs/abi_spec.md#5-m1-experimental-layer)).
 After detach, the widget is owned by neither a parent nor a window —
 ownership state new to the ABI. This DD decides what the host can do
 with it and how it ultimately gets freed.

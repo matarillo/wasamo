@@ -1,6 +1,6 @@
-﻿### DD-M2-P5-005 — Phase 6 binding registration API surface
+### DD-M2-P5-005 — Phase 6 binding registration API surface
 
-**Status:** Superseded in part by [DD-M2-P6-007](./m2-phase-6-ui-lowering.md#dd-m2-p6-007--signalregistry-per-type-struct) (the `properties: Rc<HashMap<String, Signal<i32>>>` parameter shape is replaced by per-type `SignalRegistry { i32s, strings }`). The registration API itself — one generic `register_binding(target: BindingTarget, expr: HandlerExpr)` with `BindingTarget::WidgetProperty { node, prop }` as the sole M2 variant — is preserved.
+**Status:** Superseded in part by [DD-M2-P6-007](../../phase-6/decisions/preamble.md#dd-m2-p6-007--signalregistry-per-type-struct) (the `properties: Rc<HashMap<String, Signal<i32>>>` parameter shape is replaced by per-type `SignalRegistry { i32s, strings }`). The registration API itself — one generic `register_binding(target: BindingTarget, expr: HandlerExpr)` with `BindingTarget::WidgetProperty { node, prop }` as the sole M2 variant — is preserved.
 
 **Context:**
 Phase 6 (`.ui → runtime` lowering) consumes the textual IR and

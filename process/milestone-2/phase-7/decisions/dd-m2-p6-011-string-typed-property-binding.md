@@ -1,4 +1,4 @@
-﻿### DD-M2-P6-011 — String-typed property binding
+### DD-M2-P6-011 — String-typed property binding
 
 **Status: Accepted (2026-05-10)**
 
@@ -106,6 +106,6 @@ requirement: if later DSL or tooling work introduces a third scalar property
 type, typed item/context binding, non-string binding result values, or a
 normative expression type system, the project must revisit whether parallel
 typed reads are still appropriate. That open question is tracked in
-[docs/notes/typed-value-evaluator.md](../notes/typed-value-evaluator.md).
+[docs/notes/typed-value-evaluator.md](../../../../docs/notes/typed-value-evaluator.md).
 
 ---

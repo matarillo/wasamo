@@ -1,4 +1,4 @@
-﻿## Out-of-phase residuals
+## Out-of-phase residuals
 
 - **R1 — Gallery host Window title wiring (2026-05-25).** Phase 4
   smoke recorded `MainWindowTitle = "Wasamo"` (framework default)
@@ -17,7 +17,7 @@
       M3 phase (1-2 candidates narrowed; full assignment must
       complete before Phase 5 ADR is Accepted). Pre-doc input note
       filed at
-      [docs/notes/m3-phase-5/predoc-inputs.md §4](../../notes/m3-phase-5/predoc-inputs.md#4-r1-window-title-wiring-の-owning-phase-割当--phase-5-pre-doc-内で必須完了).
+      [docs/notes/m3-phase-5/predoc-inputs.md §4](../../phase-5/requirements/constraints.md#4-r1-window-title-wiring-の-owning-phase-割当--phase-5-pre-doc-内で必須完了).
     - **Implementation deadline:** no later than **M3-Phase 8
       Gallery E2E close**.
     - **Natural candidate phase:** Phase 6 (ZStack + conditional

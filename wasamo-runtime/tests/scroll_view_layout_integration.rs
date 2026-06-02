@@ -8,7 +8,7 @@
 //! back from the resulting Composition Visual tree.
 //!
 //! Discharges ADR Phase 4 verification closure **evidence item 4** —
-//! see `docs/decisions/m3-phase-4-scroll-view.md` §Phase 4 verification
+//! see `process/milestone-3/phase-4/decisions/preamble.md` §Phase 4 verification
 //! closure for the (a)–(g) assertion menu, and §DD-M3-P4-004 R2-closure
 //! paragraph for the three-level Visual nesting assertion (Phase 3 R2
 //! carry-over per Phase 4 framing decision F).

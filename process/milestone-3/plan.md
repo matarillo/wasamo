@@ -3,8 +3,12 @@ milestone: M3
 status: in-progress
 roadmap-anchor: ROADMAP.md#m3-dsl-surface
 adrs:
-  - docs/decisions/m3-phase-1-bool-scalar.md  # Phase 1 (bool scalar)
-  - docs/decisions/m3-phase-2-box-layout.md   # Phase 2 (Box layout primitive)
+  - process/milestone-3/phase-1/decisions/preamble.md  # Phase 1 (bool scalar)
+  - process/milestone-3/phase-2/decisions/preamble.md  # Phase 2 (Box layout primitive)
+  - process/milestone-3/phase-3/decisions/preamble.md  # Phase 3 (WrapPanel layout primitive)
+  - process/milestone-3/phase-4/decisions/preamble.md  # Phase 4 (ScrollView minimal)
+  - process/milestone-3/phase-5/decisions/preamble.md  # Phase 5 (Grid layout primitive)
+  - process/milestone-3/phase-6/decisions/preamble.md  # Phase 6 (ZStack + conditional rendering)
 created: 2026-05-16
 agreed: 2026-05-16
 in-progress: 2026-05-19
@@ -29,9 +33,9 @@ downstream tooling tracks (M5 VS Code LSP in particular) have a
 normative document to build against. Concretely, M3 ships:
 
 - The **Photo Gallery** target app
-  ([docs/notes/m3/m3-target-app-predoc.md](../notes/m3/m3-target-app-predoc.md),
+  ([docs/notes/m3/m3-target-app-predoc.md](requirements/spec.md),
   accepted 2026-05-16; visual contract in
-  [docs/references/m3-gallery-wireframe.html](../references/m3-gallery-wireframe.html))
+  [docs/references/m3-gallery-wireframe.html](./requirements/gallery-wireframe.html))
   as the visible proof and per-phase acceptance basis.
 - A layout primitive set (**Grid, WrapPanel, ZStack, ScrollView,
   Box**) sized to that target app, alongside the M2 linear
@@ -50,7 +54,7 @@ M3 is explicitly **not** a feature-breadth milestone: input / focus
 model, IME, multi-window, AccessKit, Mica/Acrylic rendering
 semantics, full theming, VS Code LSP acceptance, hot reload, and
 C ABI freeze remain deferred to M4–M6 per
-[docs/notes/m3/m3-start-framing.md](../notes/m3/m3-start-framing.md)
+[docs/notes/m3/m3-start-framing.md](requirements/framing.md)
 §"M3 に入れないもの" and confirmed in the target-app pre-doc's
 Out-of-scope section.
 
@@ -59,11 +63,11 @@ Out-of-scope section.
 Phase numbers in this plan are **local to M3** (M3-Phase 1, 2, …),
 following the M2 convention. ADR identifiers use the scope
 `M3-P<n>` (e.g. `DD-M3-P2-001`); see
-[docs/decisions/README.md](../decisions/README.md#file-naming).
+[process/README.md](../README.md).
 
 A pre-plan **target-app framing** step was discharged before this
 plan opened, in
-[docs/notes/m3/m3-target-app-predoc.md](../notes/m3/m3-target-app-predoc.md);
+[docs/notes/m3/m3-target-app-predoc.md](requirements/spec.md);
 it is not numbered as an M3 phase because it produced no
 implementation, only the agreed surface contract that this plan
 mirrors.
@@ -71,7 +75,7 @@ mirrors.
 ### Acceptance criteria
 
 ROADMAP is the SSOT (see
-[ROADMAP.md §M3](../../ROADMAP.md#m3-dsl-surface)); mirrored here
+[process/_roadmap.md §M3](../_roadmap.md#m3-dsl-surface)); mirrored here
 with stable IDs for phase mapping:
 
 - **A1.** `examples/gallery/gallery.ui` drives the Photo Gallery
@@ -117,7 +121,7 @@ with stable IDs for phase mapping:
 
 The phases below are working hypotheses; each one's design
 questions become a ADR at pre-doc time, per
-[the decisions README](../decisions/README.md). Each phase ships
+[the decisions README](../README.md). Each phase ships
 one (or a tightly coupled pair of) surface(s) on the gallery
 target app, updates `docs/dsl_spec.md` for what it shipped, and
 exercises that surface in `examples/gallery/`.
@@ -131,7 +135,7 @@ exercises that surface in `examples/gallery/`.
   (live `WidgetNode` propagation of a `bool`-bound attribute on a
   trivial widget that already exists — no new layout primitive is
   required for the phase to close). Origin:
-  [m3-target-app-predoc.md §Binding / value surface](../notes/m3/m3-target-app-predoc.md#binding--value-surface).
+  [m3-target-app-predoc.md §Binding / value surface](requirements/spec.md#binding--value-surface).
 
 - **M3-Phase 2 — Box layout primitive.** 0+ child container with
   `aspect: <ratio>` and minimal `fill: <color>` attributes. Pure
@@ -139,7 +143,7 @@ exercises that surface in `examples/gallery/`.
   constraint resolution and child layout. Establishes the
   placeholder pattern (Box + Text child) that carries the M3
   Image-widget deferral. Origin:
-  [m3-target-app-predoc.md — AspectRatio attribute and Image-widget deferral closures](../notes/m3/m3-target-app-predoc.md#保留点の決着).
+  [m3-target-app-predoc.md — AspectRatio attribute and Image-widget deferral closures](requirements/spec.md#保留点の決着).
 
 - **M3-Phase 3 — WrapPanel layout primitive.** Two-stage
   measure-arrange: linear main-axis placement plus cross-axis
@@ -173,7 +177,7 @@ exercises that surface in `examples/gallery/`.
   collection binding. The concrete shape of the per-item context
   (identifier naming such as `item` / `index`, whether it rides on
   the unified `HandlerExpr` enum per the M2-to-M3 handover
-  ([m2-to-m3-handover.md](../notes/m2-to-m3-handover.md) §2) or
+  ([m2-to-m3-handover.md](../milestone-2/handoff.md) §2) or
   requires a separate context type, and how the collection type
   is exposed) is settled in the ADR — the plan commits only
   to the surface identity, not the syntactic form. The same phase
@@ -196,7 +200,7 @@ exercises that surface in `examples/gallery/`.
   scratch. The framing-level permission to reserve syntax for
   M4 material in the public draft
   (per the framing's ROADMAP-acceptance discussion in
-  [m3-start-framing.md](../notes/m3/m3-start-framing.md),
+  [m3-start-framing.md](requirements/framing.md),
   owner-agreed 2026-05-11) is
   **not** carried as an M3 acceptance criterion; the Phase 8
   phase-ADR is where it is either exercised as an explicit DD
@@ -268,7 +272,7 @@ gallery and promotes the cumulative spec).
 
 Surfaces explicitly excluded by the M3 target-app pre-doc and the
 M3 start framing. Allocation to post-M3 milestones is recorded in
-[ROADMAP.md](../../ROADMAP.md) where ROADMAP commits to a specific
+[process/_roadmap.md](../_roadmap.md) where the roadmap commits to a specific
 milestone; where ROADMAP is silent, the pre-doc's "M4 以降" / "later"
 wording is preserved here as "M4 or later" rather than tightened:
 
@@ -301,7 +305,7 @@ wording is preserved here as "M4 or later" rather than tightened:
 - Cycle detection / dependency-tie observable contract / fan-out ×
   `MUTATION_CAP` interaction in the reactive drain — residuals
   from DD-M2-P6-010, listed in
-  [m2-to-m3-handover.md §3](../notes/m2-to-m3-handover.md). Touched
+  [m2-to-m3-handover.md §3](../milestone-2/handoff.md). Touched
   by an M3 phase only if its multi-binding work surfaces a concrete
   failure; otherwise carried forward.
 
@@ -330,7 +334,7 @@ file:
   invoked from the example host. M3-Phase 8 assembles the full
   gallery from these sub-screens. Visual fidelity is judged
   against
-  [docs/references/m3-gallery-wireframe.html](../references/m3-gallery-wireframe.html).
+  [docs/references/m3-gallery-wireframe.html](./requirements/gallery-wireframe.html).
 - **Spec drafting** is verification of a different kind:
   `docs/dsl_spec.md` is updated within the same phase, and the
   phase-end check (below) asks whether the spec text would let an
@@ -349,7 +353,7 @@ permitted sparingly).
 
 A phase closes when **all** of the following hold:
 
-1. **ADR Accepted.** The ADR (`docs/decisions/m3-phase-N-*.md`)
+1. **ADR Accepted.** The ADR (`process/m3-phase-N-*.md`)
    has all its design decisions in `Accepted` status, with no
    `Proposed` DDs remaining open for the phase.
 2. **Implementation landed.** The surface the phase owns is
@@ -373,7 +377,7 @@ A phase closes when **all** of the following hold:
    three for the full gallery).
    *Foundational-phase exception:* Phase 1 closes before
    `examples/gallery/` exists, so per its ADR
-   ([m3-phase-1-bool-scalar.md §Verification closure item 4](../decisions/m3-phase-1-bool-scalar.md#phase-1-verification-closure-what-counts-as-a9-evidence)),
+   ([m3-phase-1-bool-scalar.md §Verification closure item 4](phase-1/decisions/preamble.md#phase-1-verification-closure-what-counts-as-a9-evidence)),
    a dedicated minimal example under `examples/` (Phase 1 chose
    `examples/bool-demo/` + `examples/bool-demo-rust/`) is
    acceptable as substitute. The exception is scoped to Phase 1
@@ -390,7 +394,7 @@ A phase closes when **all** of the following hold:
    practice) covering what the phase shipped, what slipped (if
    anything), and the merge / push gate per the *phase-end merge
    and push gating* discipline recorded in
-   [docs/notes/retrospectives.md](../notes/retrospectives.md)
+   [docs/notes/retrospectives.md](../procedures/retrospectives.md)
    (the procedure document; durable per-phase entries are filed
    under the phase's own `docs/notes/m3-phase-N/` directory, not
    appended to the procedure document itself).
@@ -435,7 +439,7 @@ M3 is complete when **all** of the following hold:
   closes with code green and spec text "to be written next phase",
   M3 silently turns into "implementation now, public draft at the
   end" — exactly the failure mode the framing rejected
-  ([m3-start-framing.md §F6](../notes/m3/m3-start-framing.md#f6--dsl-spec-draft-は各-phase-の副産物ではなく-acceptance-の一部)).
+  ([m3-start-framing.md §F6](requirements/framing.md#f6--dsl-spec-draft-は各-phase-の副産物ではなく-acceptance-の一部)).
   Mitigation: the phase-end criterion 4 ("spec synchronized") is a
   hard gate, not a soft one. A phase whose spec text is "TODO"
   does not close.
@@ -459,7 +463,7 @@ M3 is complete when **all** of the following hold:
   6 and 7 are the most likely to touch the dirty-Effect drain
   residuals (cycle detection, dependency ties, fan-out ×
   `MUTATION_CAP`). Mitigation: the phase pre-doc is required to
-  reference [m2-to-m3-handover.md §3](../notes/m2-to-m3-handover.md)
+  reference [m2-to-m3-handover.md §3](../milestone-2/handoff.md)
   and decide whether to fix or carry forward. Silent carry-forward
   is not acceptable.
 
@@ -474,7 +478,7 @@ M3 is complete when **all** of the following hold:
 
 - **2026-05-21 — Phase-end criterion 7 wording aligned to
   Phase 1 / Phase 2 practice.** Routed under
-  [plans/README.md §Factual correction](../plans/README.md#factual-correction-in-progress-only).
+  [plans/README.md §Factual correction](../README.md).
   The original wording named `docs/notes/retrospectives.md` as
   the landing site for the per-phase retrospective entry. In
   practice, both Phase 1
@@ -503,7 +507,7 @@ ADRs, CHANGELOG, notes, and git history, then deleted by default.
 | M3-Phase 3 — WrapPanel layout primitive | complete | [plan.md](phase-3/implementation/plan.md) | [preamble.md](phase-3/decisions/preamble.md) | ADR Accepted 2026-05-21; execution opened 2026-05-21; WrapPanel constituent of A3 discharged 2026-05-22; first novel-normative-spec phase |
 | M3-Phase 4 — ScrollView (minimal) | complete | [plan.md](phase-4/implementation/plan.md) | [preamble.md](phase-4/decisions/preamble.md) | ADR Accepted 2026-05-25; execution opened 2026-05-25; A5 discharged 2026-05-25; A11 gallery owner-acceptance 2026-05-25 |
 | M3-Phase 5 — Grid layout primitive | complete | [plan.md](phase-5/implementation/plan.md) | [preamble.md](phase-5/decisions/preamble.md) | ADR Accepted 2026-05-28; execution opened 2026-05-29; A2 (Grid) discharged + A11 gallery owner-acceptance 2026-05-30; Moment-2 docs synced + phase-end CI green + merged to main 2026-05-30; second novel-normative-spec phase; star sizing |
-| M3-Phase 6 — ZStack + conditional rendering | not started | — | — | First grammar surface; `bool` prereq; **M3-Phase 4 R1 (Window title wiring) owning phase** per M3-Phase 5 FD-E (R1 carries forward from Phase 4 to land alongside the first conditional-rendering / `bool`-driven property update slice) |
+| M3-Phase 6 — ZStack + conditional rendering | in progress | [plan.md](phase-6/implementation/plan.md) | [preamble.md](phase-6/decisions/preamble.md) | ADR Accepted 2026-06-02; A4 + A7 owning phase; first grammar surface (binding drives subtree present/absent); `bool` prereq landed in Phase 1; **M3-Phase 4 R1 (Window-title wiring) owning phase** per M3-Phase 5 FD-E — static `title:` host-wiring required (DD-M3-P6-006) |
 | M3-Phase 7 — Iteration grammar | not started | — | — | `TypedValue` pressure check |
 | M3-Phase 8 — `selected` state + Gallery E2E + DSL spec public draft | not started | — | — | A1, A10, A12 discharge |
 

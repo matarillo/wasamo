@@ -8,7 +8,7 @@
 //!
 //! Two fixtures discharge ADR verification closure evidence item 4
 //! (CI-gated Compositor pipeline) — see
-//! `docs/decisions/m3-phase-3-wrap-panel.md §Phase 3 verification
+//! `process/milestone-3/phase-3/decisions/preamble.md §Phase 3 verification
 //! closure`:
 //!
 //! - **wrap_path_fixture_lays_out_multi_line_thumbnails** — primary

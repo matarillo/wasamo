@@ -1,15 +1,15 @@
-﻿### DD-P8-001 — `counter.ui` positioning in Hello Counter
+### DD-P8-001 — `counter.ui` positioning in Hello Counter
 
 **Status:** Accepted
 
 **Context:**
-[`examples/counter/counter.ui`](../../examples/counter/counter.ui)
+[`examples/counter/counter.ui`](../../../../examples/counter/counter.ui)
 already exists from Phase 1 as the canonical reference example for
 the `.ui` DSL. Phase 8's three host programs need to satisfy
 "Hello Counter runs in three languages." How they should relate to
 `counter.ui` is not free of choices.
 
-[abi_spec §5.1](../abi_spec.md#51-what-m1-experimental-verifies-and-what-it-does-not)
+[abi_spec §5.1](../../../../docs/abi_spec.md#51-what-m1-experimental-verifies-and-what-it-does-not)
 already states the principle: "M1 wasamoc is parser-only by design;
 host code constructs the equivalent tree directly through the
 experimental layer. The lowering itself is M2 scope." This ADR

@@ -1,4 +1,4 @@
-﻿### DD-M3-P4-006 — IR-loader defense-in-depth invariants
+### DD-M3-P4-006 — IR-loader defense-in-depth invariants
 
 **Status:** Accepted
 
@@ -13,7 +13,7 @@ invariants, which are a **different shape** than either Phase 2
 **compound** shape combining structural child-count rejection
 (Phase-2-flavour) with runtime-clamp for the offset value (which
 is *not* a validate-time reject) per
-[m3-phase-4 pre-doc-inputs §5](../notes/m3-phase-4/pre-doc-inputs.md).
+[m3-phase-4 pre-doc-inputs §5](../requirements/constraints.md).
 
 **Sub-issues:**
 

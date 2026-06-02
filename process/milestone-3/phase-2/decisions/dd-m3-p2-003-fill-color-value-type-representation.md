@@ -1,4 +1,4 @@
-﻿### DD-M3-P2-003 — `fill: <color>` value-type representation
+### DD-M3-P2-003 — `fill: <color>` value-type representation
 
 **Status:** Accepted
 
@@ -52,7 +52,7 @@ Option A — Box-internal `Color(u32)` domain type; **not** added to
 - A new private domain type `Color(u32)` lives in `wasamo-runtime`
   (packed `u32` in `0xAARRGGBB` layout, alpha in the most
   significant byte; recorded in
-  [dsl_spec.md §8.2](../dsl_spec.md#82-notation) `COLOR` token).
+  [dsl_spec.md §8.2](../../../../docs/dsl_spec.md#82-notation) `COLOR` token).
   `WidgetData::Box` stores
   `fill: Option<Color>` as a Box-internal field. `IrLiteral::Color(u32)`
   parallel in `wasamo-ir`. `wasamoc` lexer accepts `#RRGGBB` (alpha
@@ -61,7 +61,7 @@ Option A — Box-internal `Color(u32)` domain type; **not** added to
   value never traverses `PropertyValue`-mediated paths.
   `PropertyValue` is **not** widened with a `Color` variant in Phase
   2, and `WASAMO_VALUE_COLOR` is **not** added. The
-  [predoc-inputs.md §1](../notes/m3-phase-2/predoc-inputs.md#1-box-が新規-propertyvalue-variant-を入れるなら-abi-value-conversion-arm-は同じ-step-に-fold-する)
+  [predoc-inputs.md §1](../requirements/constraints.md#1-box-が新規-propertyvalue-variant-を入れるなら-abi-value-conversion-arm-は同じ-step-に-fold-する)
   fold-in-same-step obligation triggers when `PropertyValue` gains a
   variant; Phase 2 satisfies it by not adding a variant. See DD-002's
   IR / runtime plumbing block for the symmetric `Ratio` treatment.
@@ -87,7 +87,7 @@ tag in Phase 2 (rejected)
   tag added to the C ABI's value union; `read_property_value` /
   `write_property_value` / `property_value_to_owned` arms folded into
   the same step per
-  [predoc-inputs.md §1](../notes/m3-phase-2/predoc-inputs.md#1-box-が新規-propertyvalue-variant-を入れるなら-abi-value-conversion-arm-は同じ-step-に-fold-する);
+  [predoc-inputs.md §1](../requirements/constraints.md#1-box-が新規-propertyvalue-variant-を入れるなら-abi-value-conversion-arm-は同じ-step-に-fold-する);
   `abi_spec.md` updated.
 
   - What you give up: Widens the public ABI surface ahead of the
@@ -142,7 +142,7 @@ The Phase 2 styling commitment remains: *the value layer carries
 alpha; the M3 styling layer does not gain alpha-styling controls
 beyond the literal hex form*. Theming, palette, and dynamic alpha
 adjustment all remain M4+ work (per
-[m3-plan.md §Out of scope](../plans/m3-plan.md#out-of-scope-deferred-to-later-milestones)
+[m3-plan.md §Out of scope](../../plan.md#out-of-scope-deferred-to-later-milestones)
 and target-app pre-doc Visual / styling Out-of-scope).
 
 **Forward-compat exposure:** Option A (alpha-yes, Box-internal) is

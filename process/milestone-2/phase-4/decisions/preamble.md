@@ -1,4 +1,4 @@
-﻿# M2-Phase 4 — Tree-mutation ABI primitives: Architecture Decisions
+# M2-Phase 4 — Tree-mutation ABI primitives: Architecture Decisions
 
 **Phase:** M2-Phase 4 (tree-mutation primitives at the stable C ABI)
 **Date:** 2026-05-04
@@ -6,18 +6,18 @@
 
 ## Context
 
-M2 acceptance criterion **A4** ([m2-plan.md](../plans/m2-plan.md#acceptance-criteria),
-mirrored from [ROADMAP.md M2](../../ROADMAP.md#m2-foundation)):
+M2 acceptance criterion **A4** ([m2-plan.md](../../plan.md#acceptance-criteria),
+mirrored from [process/_roadmap.md M2](../../../_roadmap.md#m2-foundation)):
 
 > The C ABI gains the tree-mutation primitives required by the reactive
 > engine; the experimental layer's all-at-once constructors remain
 > available but are no longer the only way to construct UI.
 
-[DD-P6-001](./phase-6-c-abi.md#dd-p6-001--stable-core-scope-at-function-granularity)
+[DD-P6-001](../../../milestone-1/phase-6/decisions/preamble.md#dd-p6-001--stable-core-scope-at-function-granularity)
 deliberately excluded tree construction from the M1 stable core: the
 five-area minimum was sized assuming M2 codegen (or IR) would build the
 widget tree, leaving no need for host-callable construction primitives.
-[DD-P8 "Out of scope"](./phase-8-hello-counter.md) recorded the
+[DD-P8 "Out of scope"](../../../milestone-1/phase-8/decisions/preamble.md) recorded the
 matching exclusion at the runtime level — incremental
 `append_child`, widget destroy of unattached subtrees, and reparenting
 were all out of M1 scope. M1 in fact ships only one mutation primitive
@@ -32,7 +32,7 @@ stable-core C ABI versus left as internal Rust API.
 
 A4's literal phrasing — "primitives **required by the reactive
 engine**" — was written before
-[M2-Phase 3 Accepted DD-M2-P3-001 = Option A](./m2-phase-3-handler-exec-location.md#dd-m2-p3-001--where-dsl-inline-handler-bodies-execute)
+[M2-Phase 3 Accepted DD-M2-P3-001 = Option A](../../phase-3/decisions/preamble.md#dd-m2-p3-001--where-dsl-inline-handler-bodies-execute)
 (runtime-side handler interpreter). Under Option A, handler bodies
 mutate property storage via the **internal** `set_property` path, not
 across the C ABI boundary (this is the load-bearing argument behind
@@ -104,7 +104,7 @@ itself; Phase 4's work product is the same either way.
   needs a host-visible API.
 - **Existing internal builder.** `wasamo_runtime::widget::WidgetNode`
   exposes one mutation method today: `append_child(Box<WidgetNode>)`
-  ([wasamo-runtime/src/widget.rs:627](../../wasamo-runtime/src/widget.rs#L627)).
+  ([wasamo-runtime/src/widget.rs:627](../../../../wasamo-runtime/src/widget.rs#L627)).
   Insert-at-index, remove, replace, and widget destroy do not exist
   yet — neither at the Rust nor the ABI level. Phase 4 must design and
   implement them before any C ABI promotion is meaningful.
@@ -166,7 +166,7 @@ draft, where the design forces are visible.
 `append_child` exercises the same `Vec<Box<WidgetNode>>` mutation
 shape that the four new mutators extend; the
 `wasamo_window_destroy` path
-([wasamo-runtime/src/abi.rs:210](../../wasamo-runtime/src/abi.rs#L210))
+([wasamo-runtime/src/abi.rs:210](../../../../wasamo-runtime/src/abi.rs#L210))
 exercises the subtree-teardown shape that
 `wasamo_widget_destroy` reuses. The remaining Phase 4 implementation
 is bookkeeping (attached-state flag, index bounds checks, registry

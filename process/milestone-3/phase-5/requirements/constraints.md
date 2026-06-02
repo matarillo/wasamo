@@ -15,12 +15,12 @@ retrospective ではなく、Phase 5 が Phase 4 の全 commit を読み直さ�
 
 入力源:
 
-- [docs/plans/progress/m3-phase-4-progress.md](../../plans/progress/m3-phase-4-progress.md)
+- [docs/plans/progress/m3-phase-4-progress.md](../../phase-4/implementation/log.md)
   の Decisions log 全体 (T4 fixture WrapPanel substitution / T5/T6
   split / T6 smoke failure mode A / T7 Q1/Q2/Q3 dispositions)。
-- [t4-step-end-retrospective.md](../m3-phase-4/t4-step-end-retrospective.md) /
-  [t5-step-end-retrospective.md](../m3-phase-4/t5-step-end-retrospective.md) /
-  [t6-step-end-retrospective.md](../m3-phase-4/t6-step-end-retrospective.md) の
+- [t4-step-end-retrospective.md](../../phase-4/retrospectives/t4.md) /
+  [t5-step-end-retrospective.md](../../phase-4/retrospectives/t5.md) /
+  [t6-step-end-retrospective.md](../../phase-4/retrospectives/t6.md) の
   Item 10 と Follow-Up 群。
 - T7 progress doc Decisions log entry "T7 Moment 2 dispositions for
   follow-up bullets (2026-05-25)"。
@@ -38,7 +38,7 @@ owner-manual GUI smoke で **failure mode A** (`scroll_y = 0` で
 ScrollView 領域が完全に空、`+100/-100` で画面変化なし) として顕在
 化し、`WidgetNode::run_layout_as_window_root` 新 entry point + 1 件の
 runtime integration test 追加で resolve した
-([t6-step-end-retrospective.md](../m3-phase-4/t6-step-end-retrospective.md))。
+([t6-step-end-retrospective.md](../../phase-4/retrospectives/t6.md))。
 
 具体的な Phase 5 pre-doc 反映:
 
@@ -103,7 +103,7 @@ M4 で `in-out offset-y` write-back が入れば Signal 側にも clamp 後値
 T7 Q2 disposition (2026-05-25 owner-confirmed framing)。
 
 Phase 4 close 時点で
-[m3-phase-4-progress.md §Out-of-phase residuals](../../plans/progress/m3-phase-4-progress.md#out-of-phase-residuals)
+[m3-phase-4-progress.md §Out-of-phase residuals](../../phase-4/implementation/handoff.md#out-of-phase-residuals)
 に **R1 — Gallery host Window title wiring** が登録された。
 
 - 観測: smoke 全 screenshot で `MainWindowTitle = "Wasamo"` (framework

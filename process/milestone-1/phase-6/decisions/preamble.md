@@ -1,4 +1,4 @@
-﻿# Phase 6 — C ABI Header: Architecture Decisions
+# Phase 6 — C ABI Header: Architecture Decisions
 
 **Phase:** 6 (C ABI header — `wasamo.h` + `docs/abi_spec.md`)
 **Date:** 2026-04-30
@@ -7,14 +7,14 @@
 ## Context
 
 Phase 6's acceptance criterion (from
-[VISION §7 M1](../../VISION.md#7-roadmap--milestones)) is:
+[VISION §7 M1](../../../../VISION.md#7-roadmap--milestones)) is:
 **"Minimal C ABI header"** sufficient to validate the core hypothesis
 (external DSL × C ABI × Visual Layer) by running "Hello Counter" in
 C, Rust, and Zig at Phase 8. The header is *minimal*, not *frozen*:
 M4 is when ABI stability commitments begin.
 
 Two pre-pre-doc framing decisions (Accepted 2026-04-29, recorded in
-[../../ROADMAP.md §Phase 6](../../ROADMAP.md)) precede this ADR:
+[process/_roadmap.md M1](../../../_roadmap.md#m1-proof-of-concept)) precede this ADR:
 
 1. **Two-layer `abi_spec.md`.** The spec is partitioned into a
    **stable core** (M4 freeze candidate) and an **M1 experimental**
@@ -33,7 +33,7 @@ Two pre-pre-doc framing decisions (Accepted 2026-04-29, recorded in
    deliberately scoped down or pushed into the experimental layer.
 
 The current C ABI surface
-([wasamo/src/lib.rs:62-114](../../wasamo/src/lib.rs#L62-L114))
+([wasamo/src/lib.rs:62-114](../../../../wasamo-runtime/src/abi.rs#L62-L114))
 is five functions: `wasamo_init`, `wasamo_window_create`,
 `wasamo_window_show`, `wasamo_window_destroy`, `wasamo_run`. They
 are the seed for the stable core but predate this ADR's framing —
@@ -41,7 +41,7 @@ error convention, threading contract, and string-encoding rules
 need to be specified, not just inherited.
 
 The six decisions below correspond to the Phase 6 ROADMAP checklist
-([../../ROADMAP.md L122-L125](../../ROADMAP.md#L122-L125)):
+([process/_roadmap.md M1](../../../_roadmap.md#m1-proof-of-concept)):
 stable-core scope / signal model / callback contract /
 threading and re-entrancy / error convention / header generation
 method.

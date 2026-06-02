@@ -310,5 +310,5 @@ Channels:
 - [process/_roadmap.md](./process/_roadmap.md) — Detailed milestones
 - [CHANGELOG.md](./CHANGELOG.md) — What has shipped
 - [CONTRIBUTING.md](./CONTRIBUTING.md) — Contribution guide
-- [CODE_OF_CONDUCT.md](./CODE_OF_CONDUCT.md) — Code of Conduct
+- [Contributor Covenant](https://www.contributor-covenant.org/) — Code of Conduct
 - [process/](./process/README.md) — Architecture Decision Records (ADRs)

@@ -1,10 +1,11 @@
 # Wasamo DSL Specification
 
-**Document version:** 1.4
-**Last updated:** 2026-05-30
+**Document version:** 1.5
+**Last updated:** 2026-06-02
 **Status:** M3-Phase 2 closed (implementation-synced); M3-Phase 3
 closed (implementation-synced); M3-Phase 4 closed
-(implementation-synced); M3-Phase 5 closed (implementation-synced).
+(implementation-synced); M3-Phase 5 closed (implementation-synced);
+M3-Phase 6 design accepted, implementation pending.
 Covers the M2 `.ui` surface, the `state` surface keyword
 retroactively, the M3-Phase 1 `bool` scalar binding additions, the
 M3-Phase 2 Box layout primitive (with `aspect` / `fill` literal
@@ -14,7 +15,11 @@ integer attributes), the M3-Phase 4 ScrollView layout primitive
 (vertical-only viewport + clip + `offset-y` binding), the M3-Phase 5
 Grid layout primitive (fixed + weighted-star track sizing, `Cell`
 wrapper with explicit placement / span / alignment, both-axis
-spanning, Grid outer-bounds clip), and `;wasamo-ir v0`.
+spanning, Grid outer-bounds clip), the M3-Phase 6 ZStack overlay
+primitive (union sizing with `Fill/Fill` default, document-order
+z-order, per-child alignment, outer-bounds clip) and conditional
+rendering (the `if` structural control-flow member — the first chapter
+of Wasamo's structural rendering model), and `;wasamo-ir v0`.
 
 ---
 
@@ -69,12 +74,31 @@ component Counter inherits Window {
 | `state`     | Starts a state declaration (see §4.7)    |
 | `true`      | Bool literal — reserved identifier (M3-Phase 1) |
 | `false`     | Bool literal — reserved identifier (M3-Phase 1) |
+| `if`        | Conditional rendering block (M3-Phase 6; see §4.14) |
+| `else`      | Reserved control-flow keyword — no production yet (M3-Phase 6) |
+| `switch`    | Reserved control-flow keyword — no production yet (M3-Phase 6) |
+| `for`       | Reserved control-flow keyword — no production yet (M3-Phase 6) |
 
 `in-out` is lexed as a **single keyword token** (not `in`, `-`, `out`).
 
 `true` and `false` are reserved by the lexer and may not appear as
 identifiers (state names, property names, widget type names, qualified-
 name segments). Using either in identifier position is a parse error.
+
+**Structural control-flow family reservation (M3-Phase 6).** `if`,
+`else`, `switch`, and `for` are reserved by the lexer and may not appear
+as identifiers, mirroring the `true` / `false` reservation. Only `if`
+has a production this phase (§3, §4.14); `else` / `switch` / `for` are
+reserved ahead of their productions so the structural control-flow
+family (§4.14) lands additively without a future source break. Using
+any of the four in identifier position is a parse error; a bare `else` /
+`switch` / `for` **block** in member position is a separate
+"reserved / not yet supported" parse error that names the construct.
+No shipped `.ui` uses any of the four as an identifier, so the
+reservation breaks nothing today. Contextual sub-tokens of not-yet-
+designed productions — `in` (`for item in items`), `case` / `default`
+(`switch` arms) — are **not** reserved this phase; each is reserved when
+its production is specified.
 
 ### 2.2 Token types
 
@@ -153,6 +177,7 @@ member           ::= property_decl
                   |  signal_handler
                   |  state_decl
                   |  grid_track_list_member   ; M3-Phase 5; Grid body only
+                  |  conditional_member        ; M3-Phase 6; see §4.14
 
 property_decl    ::= "in-out" "property" "<" type_name ">" IDENT
                      ":" expr
@@ -177,6 +202,21 @@ grid_track_list_member
 grid_track       ::= INT_LIT "*"   ; weighted star (INT_LIT adjacent to "*")
                   |  INT_LIT       ; fixed track
                   |  "*"           ; unit star (= "1*")
+
+; M3-Phase 6. A conditional rendering block (§4.14). The body admits
+; EXACTLY ONE widget child this phase — no property/bind/handler/state/
+; track-list member, no nested conditional_member, no multiple children.
+; The grammar admits conditional_member wherever `member` appears, but
+; `wasamoc check` restricts it semantically to INSIDE a widget body (a
+; component-level `if` gating/multiplying the single root is rejected).
+; The condition is the same narrow bool-expr as Button.enabled.
+conditional_member
+                 ::= "if" cond_expr "{" conditional_body "}"
+
+conditional_body ::= widget_decl                ; M3-Phase 6: exactly one widget child
+
+cond_expr        ::= BOOL_LIT | IDENT           ; M3-Phase 6: bool literal, or an
+                                                ; IDENT resolving to a bool-typed state
 
 signal_handler   ::= IDENT "=>" block
 
@@ -219,13 +259,21 @@ state_type       ::= "i32" | "string" | "bool"
 
 Within `member`, a 2-token lookahead resolves the alternative:
 
-| First token | Second token | Rule matched      |
-|-------------|--------------|-------------------|
-| `in-out`    | `property`   | `property_decl`   |
-| `state`     | `IDENT`      | `state_decl`      |
-| `IDENT`     | `:`          | `property_bind`   |
-| `IDENT`     | `{`          | `widget_decl`     |
-| `IDENT`     | `=>`         | `signal_handler`  |
+| First token | Second token | Rule matched         |
+|-------------|--------------|----------------------|
+| `in-out`    | `property`   | `property_decl`      |
+| `state`     | `IDENT`      | `state_decl`         |
+| `if`        | (keyword)    | `conditional_member` |
+| `IDENT`     | `:`          | `property_bind`      |
+| `IDENT`     | `{`          | `widget_decl`        |
+| `IDENT`     | `=>`         | `signal_handler`     |
+
+`if` is a keyword (M3-Phase 6), not an `IDENT`, so the `member` dispatch
+resolves a leading `if` to `conditional_member` on the first token alone
+— there is no collision with `property_bind` / `widget_decl` /
+`signal_handler` (all of which begin with an `IDENT`). A leading `else`
+/ `switch` / `for` keyword is a "reserved / not yet supported" parse
+error (no production yet, §4.14).
 
 Inside a `Grid` widget body (M3-Phase 5), a `columns:` / `rows:` member
 takes the `grid_track_list_member` rule instead of `property_bind`; the
@@ -234,7 +282,7 @@ routing is by enclosing widget type (`Grid`), resolved in
 
 ---
 
-## 4. Semantics (M2 Surface, M3-Phase 1 / Phase 2 Additions)
+## 4. Semantics (M2 Surface and M3 Additions)
 
 ### 4.1 `component` declaration
 
@@ -247,6 +295,17 @@ is performed in M1.
 
 Each `.ui` file contains exactly **one** top-level `component` declaration.
 Multiple components per file are M2 scope.
+
+**Window `title:` (M3-Phase 6).** A component-level `title:` on a
+`Window`-derived component is a static string literal that **reaches the
+native window title bar** — the loader passes it through to window
+creation in place of the default title (M3-Phase 6). It must be a
+string literal this phase; a **dynamic** (`String`-binding-driven) title
+is **deferred** (it needs a window-property binding seam introduced with
+the later backdrop / theme wiring). An absent or empty `title:` falls
+back to the default window title; a non-string `title:` is a
+`wasamoc check` error (and `WASAMO_ERR_IR_MALFORMED` at the loader,
+§8.11). `backdrop` / `theme` remain unwired this phase.
 
 ### 4.2 `in-out property` declaration
 
@@ -304,12 +363,21 @@ Declares a child widget. Widget type names are PascalCase identifiers.
 | `WrapPanel` | Wrapping layout container (M3-Phase 3; see §4.10) |
 | `ScrollView` | Vertical scroll viewport with exactly one content child (M3-Phase 4; see §4.11) |
 | `Grid`      | 2D layout container with declared track lists per axis; children are `Cell`-wrapped (M3-Phase 5; see §4.12) |
+| `ZStack`    | Overlay layout container; children overlap and paint back-to-front in document order (M3-Phase 6; see §4.13) |
 
 `Cell` is **not** a free-standing widget registry entry. It is a
 Grid-specific child wrapper construct (one content child per `Cell`,
 carrying explicit placement / span / alignment metadata) consumed by
 Grid's lowering; `Cell` outside a `Grid` parent is rejected at
 `wasamoc check`. See §4.12.
+
+`if` is **not** a widget registry entry either. It is a **structural
+control-flow construct** (the first member of Wasamo's structural
+rendering model), not a widget — it materialises no widget of its own;
+it makes its body subtree present or absent. It is defined in §4.14,
+not here. (This mirrors the `Cell` treatment: a construct the toolchain
+*interprets* rather than *renders* is kept out of the registry and
+specified in its own section, with only a pointer from here.)
 
 Unknown widget type names produce a warning (not an error) in M1,
 to allow forward-compatibility with user-defined components.
@@ -346,6 +414,15 @@ The only recognized signal name in M1 is `clicked`.
 (`+=`, `-=`, `*=`, `/=`) is **not** defined over `bool` and is
 rejected by `wasamoc check`.
 
+**Condition expressions (M3-Phase 6).** The condition of an `if` block
+(§4.14) is an expression position with the **same narrow bool-expr** as
+`Button.enabled`: a `BOOL_LIT` or an identifier resolving to a
+`bool`-typed `state`. It admits **no operators** — `!ready`,
+comparisons, and logical operators are not in the `expr` grammar and are
+rejected in the condition with a diagnostic pointing at the deferred,
+uniform expression-grammar extension (it grows across all `expr`
+positions at once, not condition-only). See §4.14.
+
 ### 4.7 State declarations (M2 surface; bool added in M3-Phase 1)
 
 ```
@@ -353,7 +430,7 @@ state <name>: <state_type> = <default>
 ```
 
 Declares a per-component reactive `Signal<T>` whose value is owned by
-the `.ui` source (DD-M2-P6-004). `state` declarations are a
+the `.ui` source. `state` declarations are a
 component-level member, parallel to `in-out property`. Multiple
 `state` declarations may appear in any order; names share a flat
 namespace within the component.
@@ -388,8 +465,7 @@ Per-widget typed property entries that may be bound (`prop: <expr>`
 or reactively from a `state` declaration). M2 widget properties
 remain bindable through the M2 string-baked path; the entries below
 are the ones whose declared type is checked at `wasamoc check` and
-dispatched through a per-type binding writer at the runtime loader
-(DD-M3-P1-007, DD-M3-P1-009).
+dispatched through a per-type binding writer at the runtime loader.
 
 | Widget | Property  | Type   | Default | Notes |
 |--------|-----------|--------|---------|-------|
@@ -418,8 +494,8 @@ superseded by it.
 
 **Phase status:** M3-Phase 2 closed; implementation-synced.
 
-`Box` is a layout container that admits **zero or one child**
-(DD-M3-P2-001). Multi-child overlap is ZStack's responsibility
+`Box` is a layout container that admits **zero or one child**.
+Multi-child overlap is ZStack's responsibility
 (Phase 6, not yet shipped); a Box declared with two or more children
 is rejected at compile time by `wasamoc check` **and** independently
 rejected by the runtime IR loader (`wasamo-runtime/src/ir_loader.rs`)
@@ -435,7 +511,7 @@ spec invariant.
 | `aspect`  | `<num>:<den>` (`RATIO_LIT`) | No                  | absent (no aspect constraint)      |
 | `fill`    | `#RRGGBB` or `#RRGGBBAA` (`COLOR_LIT`) | No       | absent (transparent rectangle)     |
 
-Both attributes are constant-only in M3-Phase 2 (DD-M3-P2-004);
+Both attributes are constant-only in M3-Phase 2;
 `wasamoc check` rejects any non-literal RHS for `aspect` or `fill`
 — including state-backed bindings such as `aspect: <state-ident>`
 or `fill: <state-ident>` — with a diagnostic naming the rejected
@@ -446,8 +522,7 @@ only accepted as the RHS of `Box.aspect` and `Box.fill` respectively;
 with a diagnostic naming the offending position. The first phase
 to need a reactive aspect or fill opens the per-type writer seam
 triple at that point — Phase 2's literal plumbing is
-forward-compatible and is not revised, only extended (see
-[m3-phase-2-box-layout.md DD-M3-P2-004](./decisions/m3-phase-2-box-layout.md)).
+forward-compatible and is not revised, only extended.
 
 **`aspect` literal form.** `<num>:<den>` with both sides positive
 integer literals. `wasamoc check` rejects `num <= 0` or `den <= 0`
@@ -472,7 +547,7 @@ filled with `fill` (or transparent if `fill` is absent). The
 shape (`Box { fill: <color> }`) and the placeholder-shape subsection
 below.
 
-When Box has a single child (DD-M3-P2-001):
+When Box has a single child:
 
 - **Measure pass.** Box's resolved outer bounds are passed through
   to the child as the child's measure constraint, unchanged.
@@ -487,7 +562,7 @@ When Box has a single child (DD-M3-P2-001):
   (ScrollView's contribution is the *viewport*, not the clipping
   primitive — Box clips already).
 
-#### Aspect-constraint measure-arrange (DD-M3-P2-005)
+#### Aspect-constraint measure-arrange
 
 When Box carries `aspect`, its outer bounds are resolved from parent
 bounds via **inscribed fit**: Box's resolved rectangle is the largest
@@ -523,7 +598,7 @@ when those attributes are introduced by a later phase, explicit
 dimensions win and `aspect` becomes informational (with a
 `wasamoc check` warning landed by that phase, not by Phase 2).
 
-#### Image placeholder pattern (M3, DD-M3-P2-006)
+#### Image placeholder pattern (M3)
 
 The Box + Text-child shape is the **normative** M3 substitute for the
 deferred Image widget surface. Phase 3 (WrapPanel of thumbnails) and
@@ -585,8 +660,7 @@ when it ships).
 the next child does not fit within the parent-supplied main-axis
 bound. In M3-Phase 3 the main axis is **horizontal** unconditionally;
 a `vertical` orientation is reserved for a later additive phase
-(no `orientation` attribute is exposed in Phase 3, see
-[m3-phase-3-wrap-panel.md DD-M3-P3-002](./decisions/m3-phase-3-wrap-panel.md)).
+(no `orientation` attribute is exposed in Phase 3).
 
 WrapPanel admits **zero or more children**; the IR loader and
 `wasamoc check` impose no child-count restriction. The line-formation
@@ -642,8 +716,7 @@ note the following:
 | `item-spacing`    | `<i32>` literal  | No                  | `0` (touching items on the main axis) |
 | `line-spacing`    | `<i32>` literal  | No                  | `0` (touching lines on the cross axis) |
 
-All three attributes are constant-only integer literals in M3-Phase 3
-([m3-phase-3-wrap-panel.md DD-M3-P3-003 / DD-M3-P3-004](./decisions/m3-phase-3-wrap-panel.md)).
+All three attributes are constant-only integer literals in M3-Phase 3.
 The values are pixel extents in the layout coordinate system; they
 reuse the existing `i32` literal plumbing from M2 (no new `IrType`,
 no new `IrLiteral` variant, no new `PropertyValue` variant).
@@ -652,7 +725,7 @@ no new `IrLiteral` variant, no new `PropertyValue` variant).
 **non-negative** integer values. `wasamoc check` rejects a negative
 literal at compile time, naming the rejected attribute; the runtime
 IR loader's `validate()` independently rejects negative IR
-(DD-M3-P3-006 two-gate defense, mirroring Phase 2's `RATIO_LIT`
+(two-gate defense, mirroring Phase 2's `RATIO_LIT`
 rejection). Both gates are required because `wasamo_load_ui`'s
 memory-IR entry point does not pass through `wasamoc`.
 
@@ -744,7 +817,7 @@ main-axis bound — the realistic context is an outer intrinsic-sizing
 measure pass — the line breaker has no boundary to compare against
 and WrapPanel **degenerates to one-line flow**: every child sits on
 a single line in document order. The line's cross-axis extent
-follows the same per-line rule above (DD-004-bound or passthrough).
+follows the same per-line rule above (fixed item cross-size or passthrough).
 The WrapPanel's outer main-axis size is the cumulative content
 extent (sum of children's intrinsic main-axis extents plus
 `item_spacing × (n − 1)`). This branch raises **no new
@@ -1492,6 +1565,421 @@ all are additive on top of the Phase 5 surface.
    sized by its tracks must size the parent's allocation
    accordingly.
 
+### 4.13 ZStack layout primitive (M3-Phase 6)
+
+**Phase status:** M3-Phase 6 design accepted; implementation pending.
+
+`ZStack` is an **overlay-dedicated** layout container: its children
+occupy the **same** overlap region and paint **back-to-front** in
+document order (the first child at the bottom, the last on top). It is
+the surface for intentional overlay that Grid deliberately does not
+provide — "same-cell overlap is ZStack's responsibility" (§4.12). The
+lightbox (a scrim, a centered photo, a caption, and nav buttons stacked
+over a thumbnail gallery) is the motivating composition.
+
+ZStack admits **zero or more children**, each a widget declared
+directly in the ZStack body (no wrapper construct — unlike Grid's
+`Cell`):
+
+```
+ZStack {
+    Box { fill: #00000080 }       // scrim (bottom)
+    Box {                         // photo (on top)
+        aspect: 4:3
+        Text { text: "photo" }
+    }
+}
+```
+
+#### Mental model
+
+ZStack is **stacked, centered, back-to-front, clipped to bounds**:
+
+1. **Stacked / overlap.** Every child is arranged within the **same**
+   ZStack content rect — that is the defining property of the
+   primitive. Children do not flow or tile; they overlap.
+2. **Centered by default.** Each child is anchored at `center` on both
+   axes unless it sets `h-align` / `v-align` (see *Attributes*). A
+   ZStack layer is an overlay that should sit at its natural size, so
+   `center` — not `stretch` — is the right default.
+3. **Back-to-front in document order.** Paint order = document order;
+   the later child paints on top. There is no `z-index` (*Out of
+   scope*).
+4. **Clipped to bounds.** ZStack installs an outer-bounds clip on its
+   own Visual; a child that overflows the ZStack rect is cut off at the
+   ZStack boundary.
+
+**Ecosystem contrast.** Readers arriving from SwiftUI or WPF should
+note:
+
+- **SwiftUI `ZStack`.** The overlap + center-default + back-to-front
+  model matches. **One behaviour does not transfer:** SwiftUI's
+  full-screen overlay via a flexible child does not apply here, because
+  Wasamo's `Fill` measures `0.0` (it does not report the offered size).
+  A full-viewport scrim therefore comes from the **ZStack's own
+  `Fill/Fill` default** taking the parent allocation, not from a `Fill`
+  child inflating the stack (see *Sizing*).
+- **WPF overlapping `Grid` children / a bare `Panel`.** WPF stacks by
+  placing children in the same cell. Wasamo gives overlay its own
+  primitive (`ZStack`) rather than overloading Grid; document-order
+  paint matches.
+
+#### Sizing
+
+ZStack's **default size constraint is `Fill/Fill`** (overlay-first,
+like Grid / ScrollView):
+
+- On a **bounded** parent axis, ZStack takes the full parent
+  allocation.
+- On a **Shrink / unbounded** axis, ZStack's desired size is the
+  **union** — the per-axis **max** of its children's measured desired
+  sizes.
+
+A `Fill` child contributes **`0.0`** to the union (the engine's `Fill`
+measure rule) and fills its allocated rect during *arrange*; it does
+**not** inflate the ZStack's measured size. So a ZStack of only
+intrinsic children sizes to its largest child on a Shrink / unbounded
+axis, while on a bounded axis the `Fill/Fill` default fills the parent.
+The lightbox's full-viewport scrim (`Box { fill: #00000080 }`, a `Fill`
+child) is visible because the **ZStack itself** fills the parent
+allocation and the scrim then fills that content rect — not because the
+scrim drives the stack's size.
+
+ZStack introduces **no new `LayoutError`**: it has no intrinsic sizing
+pass that diverges on an unbounded axis (it defers entirely to each
+child's Fill / Shrink resolution), so the unbounded-axis errors that
+Grid (`LayoutError::GridUnboundedStarAxis`) and ScrollView
+(`LayoutError::ScrollViewUnboundedAxis`) raise do not recur for ZStack.
+
+**Owner-visible trade-off.** Phase 6 ships **no author-facing
+`width:` / `height:` size-constraint surface**, so an author cannot opt
+a ZStack back to **intrinsic** sizing (size-to-largest-child on a
+bounded axis) this phase. ZStack is therefore an **overlay-first**
+container: its default fills the parent, and the SwiftUI-style intrinsic
+ZStack (badges sized to the icon they overlay) is weaker in the default
+experience until a future per-widget size-constraint surface lands.
+This is a deliberate trade-off, accepted because the Phase 6 driver is
+the lightbox overlay, for which fill-the-parent is the wanted default.
+
+#### Attributes
+
+ZStack admits **no ZStack-level attributes** in Phase 6 — no `spacing`,
+`padding`, `z-index`, `columns` / `rows`, or background `fill`. Unknown
+ZStack attributes are rejected at `wasamoc check` and at runtime
+`validate()`. The scrim is a child `Box { fill: #RRGGBBAA }` (§4.9),
+not a ZStack attribute.
+
+**Per-child alignment.** Each ZStack **direct child** may carry
+`h-align` and `v-align`:
+
+| Attribute  | Type  | Default  | Valid range                       |
+|------------|-------|----------|-----------------------------------|
+| `h-align:` | ident | `center` | `{ start, center, end, stretch }` |
+| `v-align:` | ident | `center` | `{ start, center, end, stretch }` |
+
+The default is **`center`** on both axes (contrast Grid's `Cell`, which
+defaults to `stretch` because a grid cell is a *slot* the content
+fills; a ZStack layer is an *overlay* that sits at its natural size).
+`stretch` (or a `Fill` size constraint on the child) expands the child
+to the full content rect; `start` / `center` / `end` anchor the child's
+measured size within the content rect.
+
+`h-align` / `v-align` are **placement annotations the parent consumes**,
+admitted only on a **ZStack direct child** (and a Grid `Cell`, §4.12);
+on any other widget they are rejected at `wasamoc check` and
+`validate()`. The ZStack (or Grid) context reads them as child-placement
+metadata *before* the child's own attribute check, so the child's normal
+unknown-attribute rejection never sees them.
+
+#### Measure-arrange and Visual contract
+
+ZStack's measure-arrange operates on pure data
+(`wasamo-runtime/src/layout.rs`); the algorithm is Win32/WinRT-free.
+After ZStack resolves its outer rect (per *Sizing*), each child is
+measured against the ZStack content rect and anchored within it by its
+`h-align` / `v-align`. All children share the **same** content rect —
+the overlap region.
+
+**Paint order is document order.** The first child paints first
+(bottom), the last paints last (top). This rides the existing
+document-order `sync_visuals` insertion — ZStack adds no separate
+z-order mechanism.
+
+**Outer-bounds clip on, per-child clip out.** ZStack's own Visual
+installs `Visual.Clip = InsetClip { 0, 0, 0, 0 }` applied to its outer
+rect; each child Visual has `Visual.Clip = null` (clip-absence
+regression guard, symmetric with WrapPanel / ScrollView / Grid). An
+overflowing overlay child is cut off at the ZStack boundary. ZStack uses
+the existing **1 WidgetNode = 1 Visual** convention — it introduces
+**no intermediate Visual** (unlike §4.11 ScrollView, which added one to
+carry a scroll translation; ZStack has no analogous translation).
+
+#### Out of scope (Phase 6)
+
+- **Explicit `z-index` / author-facing layering** — paint order is
+  fixed to document order.
+- **Per-child `clip:` surface** — only the ZStack outer-bounds clip
+  ships; per-child clip is a future additive child attribute.
+- **ZStack background `fill`** — the scrim is a child `Box`; a future
+  ZStack-level `fill` would grow the attribute allow-list additively.
+- **Author-facing `width:` / `height:` size constraint** — see the
+  *Sizing* owner-visible trade-off; until it lands, ZStack's
+  `Fill/Fill` default cannot be overridden to intrinsic sizing.
+- **Iteration-generated children** — a `for` block as a ZStack member
+  is Phase 7 (reusing the structural control-flow family, §4.14).
+
+### 4.14 Conditional rendering and the structural rendering model (M3-Phase 6)
+
+**Phase status:** M3-Phase 6 design accepted; implementation pending.
+
+This chapter introduces **conditional rendering** — a `binding` that
+drives the **present / absent state of a subtree** rather than a
+property value. It is the **first chapter of Wasamo's structural
+rendering model**: `if` is the first member of a **structural
+control-flow grammar family** whose later members — `else` / `else if`
+(more branches), `switch` (more discriminants), and `for` (iteration,
+Phase 7) — arrive in the **same** family with the **same** present /
+absent runtime machinery. An external reader should be able to predict
+the family's growth from this chapter alone.
+
+#### Why a structural directive, not a presence property
+
+There are three ways a UI language could express conditionality; Wasamo
+chooses the second deliberately:
+
+1. **Property toggling** — an always-built subtree with a `visible:` /
+   `enabled:` property that hides it. This proves *property toggling*,
+   not structural presence; the subtree, its widgets, and its effects
+   all still exist while "hidden". Wasamo does **not** use this model
+   for conditional rendering.
+2. **A dedicated structural directive** (Wasamo's choice) — a template
+   construct (`if`) that makes a subtree **genuinely present or
+   absent**. When absent, the subtree's widgets, Visuals, and effects
+   do not exist. This is the model that can host the `if` → `else` /
+   `switch` / `for` family.
+3. **Host-language control flow** — `if` / `switch` embedded in a
+   general-purpose host language. This is more than M3 needs and is
+   **not** the v1 surface, but Wasamo's IR is shaped so a future
+   language-construct surface could lower into the **same** structural
+   construct — approach 3 is not foreclosed.
+
+`if` is a structural directive (model 2). It reads as structure — a
+block that exists or does not — not as a property of a widget.
+
+#### The `if` block
+
+```
+if <cond-expr> {
+    <widget>
+}
+```
+
+`if` is a new **member** form (§3), admitted wherever a widget body's
+members appear. When `<cond-expr>` is true the body is **present** as a
+child of the enclosing widget at the block's document position; when
+false it is **absent**. `if true { … }` and `if false { … }` are
+well-typed but degenerate (always present / always absent) — permitted,
+not special-cased.
+
+The visible-proof shape is the lightbox toggle:
+
+```
+state is_lightbox_open: bool = false
+…
+if is_lightbox_open {
+    ZStack { /* scrim + photo + caption + nav */ }
+}
+```
+
+driven by a text-Button click handler that writes `is_lightbox_open`.
+
+`if`, `else`, `switch`, and `for` are **all reserved keywords** as of
+M3-Phase 6 (§2.1), even though only `if` has a production this phase —
+see *The structural control-flow family* below.
+
+#### Condition expressions
+
+The `if` condition admits **exactly the narrow bool-expr that
+`Button.enabled` already accepts** (§4.8): a `BOOL_LIT` (`true` /
+`false`) or an identifier that resolves to a `bool`-typed `state`
+declaration. There are **no operators** — `!ready`, comparisons
+(`count > 0`), and logical operators (`a && b`) are **not** admitted in
+the condition this phase.
+
+This is a uniformity choice, not a size one: the condition position is
+one `expr` position among many (every property RHS is an `expr`), and
+operators are reserved to grow **uniformly across all `expr` positions
+at once** (a future expression-grammar extension), rather than as a
+condition-only pocket. Until then, an author inverts a condition by
+introducing a complementary `bool` state. `wasamoc check` rejects an
+operator condition with a diagnostic that points at the deferred
+extension — a *recorded deferral*, not a silent gap.
+
+#### Conditional body — a single widget child
+
+In Phase 6 the `if` body admits **exactly one widget child** — one
+`widget_decl`, nothing else:
+
+- **no** property / bind / handler / `state` / track-list member
+  directly in the body (the body is structural, not a place to apply
+  conditional properties or scope branch-local state);
+- **no** second child;
+- **no** nested `if` directly in the body.
+
+A multi-widget or nested-conditional body is authored by **wrapping** in
+a container the author usually wants anyway:
+
+```
+if open { VStack { Text { … } Text { … } } }   // multi-widget → wrap
+if a    { VStack { if b { … } } }               // nested if → wrap
+```
+
+The single-widget body always materialises **exactly one** widget,
+which is what lets present / absent be a single subtree insert / remove
+(the multi-child range form is the Phase 7 `for` driver; nested control
+flow directly in a body lands with the family extension).
+
+**What is and is not in scope here, precisely:** what an `if` *body*
+admits is one `widget_decl`. But **sibling** conditionals (`if a { … }
+if b { … }` under one parent) and **descendant** conditionals nested
+inside the wrapped widget (`if a { VStack { if b { … } } }`) are fully
+in scope — they are ordinary `if` members at a deeper position, and
+their present / absent, child ordering, and effect lifecycle are all
+Phase 6 runtime semantics.
+
+#### Placement — inside a widget body only
+
+An `if` block is admitted only **inside a widget body**. A
+**component-level `if`** — one that would gate or multiply the single
+component root — is rejected at `wasamoc check`: the runtime makes a
+subtree present / absent by inserting / removing it into a **parent**,
+and a conditional root has no parent slot. (A conditional / multiplexed
+root is a distinct design not opened this phase.) The lightbox `if`
+sits inside the root container, the in-scope shape.
+
+#### Present / absent is structural
+
+When the condition becomes true, the runtime **builds a fresh subtree**
+from the declared body and **inserts** it into the parent at the block's
+position. When the condition becomes false, the runtime **removes and
+destroys** the subtree — its widgets and Visuals are dropped and its
+effects disposed. This is genuine structural mutation, not visibility
+toggling: an absent subtree does not exist in the widget tree.
+
+The conditional re-inserts at the position matching its **declared**
+document order, so when a conditional has static siblings on either
+side, its subtree lands in the correct sibling order (and, inside a
+ZStack, the correct document-order z-order), not merely on top.
+
+#### Identity: an absent subtree returns fresh
+
+**A conditional subtree that goes absent and returns is a _fresh_
+subtree; any state inside it resets.** This is **normative
+author-visible semantics**, not an implementation detail. The lightbox
+photo is stateless, so reopening fresh is correct; an author who needs
+state to persist across toggles keeps that state in a **component-level
+`state`** (declared outside the conditional), the established Wasamo
+pattern.
+
+Future **state retention** across absent → present (preserving
+in-progress input, focus, or scroll position) will arrive as **opt-in**
+semantics — a `key:` / retention marker on the construct — so existing
+`if` blocks keep destroy-and-recreate behaviour and retention never
+silently alters observable behaviour. Destroy-and-recreate is the
+baseline that does not change. (Internally, the declared `if` construct
+is the stable identity anchor across toggles; only the materialised
+subtree is recreated — see [architecture.md §9](./architecture.md).)
+
+#### Effect lifecycle and the toggle-then-observe contract
+
+The effect lifecycle inside a conditional subtree is the one-line rule:
+**an absent subtree has no live effects; a present subtree's effects are
+freshly created and run.** On absent, the subtree's reactive effects are
+disposed through the structural teardown (and every hit-test target's
+widget-pointer registry entry is severed); on present, fresh effects are
+registered on the fresh widgets. There is no "paused effect" state.
+
+The **toggle-then-observe** contract holds: a condition write outside a
+batch (for example inside a Button click handler) **drains before
+control returns**, so immediately after the toggling call the subtree's
+present / absent change is complete **and** the freshly-inserted
+subtree's bound properties have been initialised — no one-frame-stale
+window. This preserves the synchronous non-batched drain contract
+established in M3-Phase 1. (For an inserted subtree large enough that its
+fresh effects exhaust the drain's convergence budget before quiescence,
+the existing divergence backstop fires — the same behaviour as any other
+effect fan-out, not silent staleness.)
+
+#### Child order with multiple conditionals
+
+When several sibling or wrapped-descendant conditionals are present at
+the same time, the parent's child order at quiescence is a function of
+**declared document order alone** — whichever conditionals are present
+appear among the static siblings in declared order, **independent of the
+order in which the condition effects evaluate**. The transient
+evaluation order of independent effects is unspecified (as it already is
+for property bindings), but the final, observable layout is fully fixed
+by the declared tree.
+
+#### The structural control-flow family
+
+`if` is the first member of a family that grows additively:
+
+- **`else` / `else if`** — chains the `if` block (`if c { … } else { …
+  }`); additional branches on the same construct.
+- **`switch`** — a sibling block keyword over a non-bool discriminant.
+- **`for item in items { … }`** (Phase 7) — iteration as a sibling
+  block keyword, reusing the same structural-subtree machinery; it is
+  the first construct to need keyed identity / state retention.
+- **operator conditions** (`!ready`, comparisons, logical operators) —
+  arrive through the uniform expression-grammar extension that widens
+  every `expr` position, including `cond-expr`.
+
+All four family keywords (`if` / `else` / `switch` / `for`) are reserved
+now (§2.1) so the family lands without a future source break. Contextual
+sub-tokens of not-yet-designed productions (`in` for `for`, `case` /
+`default` for `switch`) are **not** reserved yet — they are reserved
+when their production is specified. `else if` is `else` followed by `if`
+(two keywords), not a separate token.
+
+#### Diagnostics (rejected shapes)
+
+`wasamoc check` rejects each of the following, and the runtime IR loader
+independently re-checks them (`WASAMO_ERR_IR_MALFORMED`, §8.11) because
+the memory-IR entry point does not pass through `wasamoc`:
+
+| Rejected shape | Example | Diagnostic |
+|---|---|---|
+| Non-bool condition | `if count { … }` (`count: i32`); `if "x" { … }` | type error |
+| Undeclared condition name | `if missing { … }` | name-resolution error |
+| Operator condition | `if !ready { … }`; `if a && b { … }`; `if count > 0 { … }` | "operators in conditions are not yet supported" (points at the deferred expression-grammar extension) |
+| Non-structural body member | `if open { fill: red }`; `if open { state x: bool = true }` | "an `if` body admits a single widget child" |
+| Nested `if` directly in body | `if a { if b { … } }` | "an `if` body admits a single widget child" (wrap the inner `if`) |
+| Multiple children in body | `if open { Box{} Text{} }` | "an `if` body admits a single widget child" (wrap in a container) |
+| Component-level `if` | an `if` at component body level | "`if` is admitted only inside a widget body" (a conditional root has no parent slot) |
+| Bare `else` / `switch` / `for` | `else { … }`; `switch x { … }`; `for … { … }` | "reserved / not yet supported" (names the construct) |
+
+The reserved-but-unsupported diagnostic for `else` / `switch` / `for`
+(a *block* in member position) is distinct from the identifier-position
+rejection that fires when one of the four keywords is used as a name
+(§2.1).
+
+#### Out of scope (Phase 6)
+
+- **`else` / `else if` / `switch`** — reserved family members, not yet
+  implemented.
+- **`for` / iteration** — Phase 7.
+- **Nested control flow directly in an `if` body** (`if a { if b { … }
+  }`) — reached meanwhile by wrapping the inner `if` in a widget; lands
+  with the family extension.
+- **Operators in the condition** — deferred to the uniform
+  expression-grammar extension.
+- **State retention / `key:` across absent → present** — Phase 6 ships
+  the fresh-on-return base case; retention is future opt-in.
+- **Property / state / handler conditionality** — the body is
+  structural only; conditional property application, branch-local
+  state, and conditional handlers are not opened by A7.
+
 ---
 
 ## 5. AST Structure (M1)
@@ -1512,6 +2000,7 @@ Member (enum) {
     SignalHandler { signal: String, body: Block },
     StateMember   { name: String, ty: TypeName, default: Expr },  // M2
     GridTracks    { axis: TrackAxis, tracks: Vec<TrackSize> },    // M3-Phase 5
+    Conditional   { condition: Expr, body: Box<Member /* WidgetDecl only */> }, // M3-Phase 6; `if` (§4.14)
 }
 
 TrackAxis (enum) { Columns, Rows }                  // M3-Phase 5
@@ -1562,6 +2051,16 @@ QualifiedName { segments: Vec<String> }
 AssignOp (enum) { Eq, PlusEq, MinusEq, MulEq, DivEq }
 ```
 
+The `Member::Conditional` variant (M3-Phase 6) holds the `if` block: its
+`condition` is restricted at `wasamoc check` to the narrow bool-expr
+(`Expr::BoolLit` or an `Expr::Ident` resolving to a `bool`-typed state,
+§4.14), and its `body` is a single `Member::WidgetDecl` (the exactly-one-
+widget-child rule — a non-structural, multi-child, or nested-conditional
+body is rejected). This is the M3-Phase 6 design-draft shape; the exact
+field set is finalised at implementation, and `else` / `switch` / `for`
+extend it additively (a branch list / sibling variants) without
+re-shaping the existing members.
+
 All AST nodes carry a `span: Span` field (byte offset, line, col) for error reporting.
 
 ---
@@ -1605,7 +2104,8 @@ The following are explicitly **out of scope for M1**:
 | Multiple components per file                        | M2          |
 | Import / module system                              | M2          |
 | Code generation (runtime call emission)             | M2          |
-| Conditional widgets (`if`, `for`)                   | M2+         |
+| Conditional rendering (`if`)                        | Landed M3-Phase 6 as structural rendering (§4.14) |
+| Iteration (`for`)                                   | M3-Phase 7  |
 
 ---
 
@@ -1615,7 +2115,7 @@ The following are explicitly **out of scope for M1**:
 
 The **Wasamo IR** is the textual file format emitted by `wasamoc` and consumed
 by the `wasamo-runtime` loader.  It is the contract between the two tools;
-this chapter specifies it normatively (DD-M2-P6-002 = Option B).
+this chapter specifies it normatively.
 
 The IR is not intended for hand-authoring.  Its surface form is optimised for
 diff-readability and machine parsability, not ergonomics.
@@ -1678,13 +2178,12 @@ component_def  ::= "component" IDENT "inherits" IDENT
 component_body ::= state_decl* widget_node
 ```
 
-One `component_def` per IR file (matches the M2 single-component restriction
-from DD-M2-P6-004).
+One `component_def` per IR file (matches the M2 single-component restriction).
 
 ### 8.4 State declarations
 
-`state` declarations encode the Signal ownership transferred from the DSL
-(DD-M2-P6-004 = B).  The runtime allocates a `Signal<T>` for each one.
+`state` declarations encode the Signal ownership transferred from the DSL.
+The runtime allocates a `Signal<T>` for each one.
 
 ```
 state_decl ::= "state" IDENT ":" type_name "=" literal
@@ -1703,21 +2202,33 @@ state count: i32 = 0
 state ready: bool = false
 ```
 
-### 8.5 Widget nodes
+### 8.5 Widget nodes and control-flow members
+
+A `node_body` holds two kinds of structural member: **widget nodes**
+(`node` blocks, which materialise a runtime widget) and, from
+M3-Phase 6, **control-flow members** (the `if` construct, which the
+runtime *interprets* rather than *renders* — it materialises no widget).
 
 ```
 widget_node ::= "node" IDENT "{" node_body "}"
 
-node_body   ::= (track_decl | property_set | binding | handler | widget_node)*
+node_body   ::= ( track_decl
+                | property_set
+                | binding
+                | handler
+                | widget_node
+                | control_flow_member )*       ; control_flow_member is M3-Phase 6
 ```
 
 `IDENT` is the widget type (e.g. `Window`, `VStack`, `Text`, `Button`).
-Children appear as nested `node` blocks in document order.
+Children appear as nested `node` blocks in document order. A
+`control_flow_member` is **not** a `node` — it is a structural operator
+over members (see *Control-flow members* below).
 
 **Grid track declarations (M3-Phase 5).** A `track_decl` carries a
 `Grid` node's `columns:` / `rows:` track lists. It is emitted only on
 `Grid` nodes; the loader rejects a `tracks` line on any non-`Grid`
-node (carrier c1 per DD-M3-P5-001 — track lists live in a
+node (track lists live in a
 Grid-specific kind payload on the IR node, never in a `prop` entry, so
 `IrLiteral` stays the sole `property_set` carrier):
 
@@ -1754,7 +2265,101 @@ canonical machine format always emits the explicit weight. `Cell`
 placement / span / alignment ride standard `prop` lines using existing
 `INT` and `IDENT` literals; `Cell` is an IR-only node consumed by
 Grid's lowering and is not a runtime widget kind (see
-[architecture.md §6.8.7](./architecture.md#687-binding-registration-api-after-m2-dd-m2-p5-005-dd-m2-p6-007-dd-m2-p6-011-dd-m3-p1-007)).
+[architecture.md §6.7.7](./architecture.md#677-binding-registration-api-after-m2)).
+
+**Control-flow members (M3-Phase 6).** A `control_flow_member` encodes
+a structural control-flow construct in the node body. Phase 6 ships the
+single-branch `if`:
+
+```
+control_flow_member ::= "if" cond "{" widget_node "}"   ; Phase 6: exactly one
+                                                        ; widget node — no else,
+                                                        ; no nested control flow
+cond                ::= BOOL | IDENT   ; BOOL → bool-literal condition
+                                       ; IDENT → bool-typed state read
+```
+
+The control-flow member is **IR-only**: like `Cell` it materialises no
+runtime widget and no Visual — the loader *interprets* it to build a
+conditional binding that makes the body subtree present / absent when
+the condition Signal changes (the reactive mechanism is normative in
+[architecture.md](./architecture.md)). Its condition rides the existing
+`HandlerExpr` machinery (`BoolLit` for a literal, `BoolPropRead` for a
+bool-typed state read, §8.9), so `IrProp.value` stays strictly
+`IrLiteral`. In the loaded IR the control-flow member sits **alongside**
+widget members in the parent's ordered child list — control flow is a
+first-class structural member, not a widget node — carrying its branch
+condition and its single-widget body; the schema shape is in
+[architecture.md](./architecture.md). The construct is designed to carry
+a branch list so `else` / `switch` (more branches) and `for` (Phase 7
+iteration) are same-family additions; Phase 6 emits and loads **exactly
+one branch** with a **single-widget body**.
+
+Worked example — `.ui` → textual IR for the lightbox slice
+(`if is_lightbox_open { ZStack { … } }`):
+
+`.ui`:
+
+```
+component Gallery inherits Window {
+    state is_lightbox_open: bool = false
+    title: "Gallery"
+    WrapPanel { /* thumbnails */ }
+    if is_lightbox_open {
+        ZStack {
+            Box { fill: #00000080 }
+            Box {
+                aspect: 4:3
+                Text { text: "photo" }
+            }
+        }
+    }
+}
+```
+
+textual IR (`wasamoc` emit):
+
+```
+node Window {
+    prop title = "Gallery"
+    node WrapPanel { /* … */ }
+    if is_lightbox_open {
+        node ZStack {
+            node Box { prop fill = #00000080 }
+            node Box {
+                prop aspect = 4:3
+                node Text { prop text = "photo" }
+            }
+        }
+    }
+}
+```
+
+loaded IR (the runtime carries control flow as a member-level construct
+alongside widget members in the parent's ordered child list — the
+normative schema is in [architecture.md](./architecture.md)):
+
+```
+IrNode { widget_type: "Window", children: [
+    Widget(IrNode { widget_type: "WrapPanel", … }),
+    ControlFlow(ControlFlowNode::If { branches: [
+        Branch {
+            condition: HandlerExpr::BoolPropRead("is_lightbox_open"),
+            body: [ Widget(IrNode { widget_type: "ZStack", … }) ],   // exactly one
+        },
+    ] }),
+] }
+```
+
+The `if` member appears at the same document position inside the parent
+node body as it does in the `.ui` source, between the static
+`node WrapPanel` and the end of the `Window` body — in the loaded IR, as
+the `ControlFlow(…)` member between the `Widget(WrapPanel)` member and
+the end of `Window`'s child list. `wasamoc` emit and the runtime loader
+both preserve the branch condition and the single-widget body across an
+emit → load roundtrip. Loader validation of malformed control-flow
+members (multi-branch, multi-child / non-structural / nested-control-flow
+body, non-bool / unresolved condition) is in §8.11.
 
 ### 8.6 Property sets
 
@@ -1786,8 +2391,7 @@ ABI surface (`read_property_value` / `write_property_value` /
 `property_value_to_owned` and the `WASAMO_VALUE_*` tag space) is
 untouched. When a later phase opens bindable `aspect` or `fill`,
 the corresponding `PropertyValue` variants, `WASAMO_VALUE_*` tags,
-and `abi.rs` arms land together in that phase
-(DD-M3-P2-002 / DD-M3-P2-003 / DD-M3-P2-004).
+and `abi.rs` arms land together in that phase.
 
 Examples:
 
@@ -1843,7 +2447,7 @@ on clicked {
 ### 8.9 Expressions (`HandlerExpr` tagged-value form)
 
 Expressions are written in a parenthesised prefix form.  Each form maps
-1-to-1 to a `HandlerExpr` variant (DD-M2-P6-003 = Option A).
+1-to-1 to a `HandlerExpr` variant.
 
 **Bare-literal shorthand.** Where the position is unambiguous (i.e. the
 parser expects an expression and the next token is `INT` or `STRING`), a
@@ -1902,7 +2506,7 @@ The following is the full IR for `examples/counter/counter.ui`:
 ;wasamo-ir v0
 
 component Counter inherits Window {
-    ; Signal declarations (DD-M2-P6-004 = B: state ownership in .ui)
+    ; Signal declarations: state ownership in .ui
     state count: i32 = 0
 
     ; Root window node — static properties only
@@ -1935,7 +2539,7 @@ component Counter inherits Window {
 }
 ```
 
-### 8.11 Loader validation policy (DD-M2-P6-009 = C)
+### 8.11 Loader validation policy
 
 The runtime loader (`wasamo-runtime/src/ir_loader.rs`) applies
 defense-in-depth validation:
@@ -1945,12 +2549,15 @@ defense-in-depth validation:
 | Header line matches `;wasamo-ir v0` | Yes | `WASAMO_ERR_IR_MALFORMED` |
 | Top-level structure is `component_def` | Yes | `WASAMO_ERR_IR_MALFORMED` |
 | Every `prop-read` / `str-prop-read` / `assign` / `compound-assign` name resolves to a declared `state` | Yes | `WASAMO_ERR_IR_MALFORMED` |
-| `Box` node has at most one child (M3-Phase 2, DD-M3-P2-001) | Yes | `WASAMO_ERR_IR_MALFORMED` |
+| `Box` node has at most one child (M3-Phase 2) | Yes | `WASAMO_ERR_IR_MALFORMED` |
 | `RATIO` literal has `num > 0` and `den > 0` (M3-Phase 2) | Yes | `WASAMO_ERR_IR_MALFORMED` |
-| `WrapPanel` `item-cross-size`, `item-spacing`, and `line-spacing` are non-negative `i32` (M3-Phase 3, DD-M3-P3-006) | Yes | `WASAMO_ERR_IR_MALFORMED` |
-| `ScrollView` node has exactly one content child (M3-Phase 4, DD-M3-P4-006) | Yes | `WASAMO_ERR_IR_MALFORMED` |
-| `Grid` declares at least one row and at least one column; each fixed track value is `>= 1`; each star weight is in `[1, 1024]` (M3-Phase 5, DD-M3-P5-006) | Yes | `WASAMO_ERR_IR_MALFORMED` |
-| Each `Cell` has exactly one content child; `Cell.row` in `[0, rows.len())`; `Cell.column` in `[0, columns.len())`; `Cell.row-span`/`column-span >= 1` with resolved rectangle within declared track count; no two `Cell`s in the same Grid share any resolved cell; `h-align`/`v-align` in `{ start, center, end, stretch }` (M3-Phase 5, DD-M3-P5-006) | Yes | `WASAMO_ERR_IR_MALFORMED` |
+| `WrapPanel` `item-cross-size`, `item-spacing`, and `line-spacing` are non-negative `i32` (M3-Phase 3) | Yes | `WASAMO_ERR_IR_MALFORMED` |
+| `ScrollView` node has exactly one content child (M3-Phase 4) | Yes | `WASAMO_ERR_IR_MALFORMED` |
+| `Grid` declares at least one row and at least one column; each fixed track value is `>= 1`; each star weight is in `[1, 1024]` (M3-Phase 5) | Yes | `WASAMO_ERR_IR_MALFORMED` |
+| Each `Cell` has exactly one content child; `Cell.row` in `[0, rows.len())`; `Cell.column` in `[0, columns.len())`; `Cell.row-span`/`column-span >= 1` with resolved rectangle within declared track count; no two `Cell`s in the same Grid share any resolved cell; `h-align`/`v-align` in `{ start, center, end, stretch }` (M3-Phase 5) | Yes | `WASAMO_ERR_IR_MALFORMED` |
+| `ZStack` declares no ZStack-level attributes; `h-align`/`v-align` appear only on a `ZStack` direct child or a Grid `Cell` and are in `{ start, center, end, stretch }` (M3-Phase 6) | Yes | `WASAMO_ERR_IR_MALFORMED` |
+| A control-flow (`if`) member carries **exactly one branch** (no `else` until specified), a **single-widget body** (not empty, not multiple children, no non-structural body member, no nested control-flow member), and a **bool-typed, resolved** condition; an `if` appears only where a member is admitted inside a widget body (not at component level) (M3-Phase 6) | Yes | `WASAMO_ERR_IR_MALFORMED` |
+| A component root's `title` prop, when present, is an `IrLiteral::Str` (a **non-string** `title` literal is malformed; an absent or empty `title` falls back to the default and is **not** an error) (M3-Phase 6) | Yes | `WASAMO_ERR_IR_MALFORMED` |
 | Binding expression result type matches target property type | **No** (trusted from `wasamoc`) | Undefined behaviour |
 | Per-node emitter invariants (e.g. `on` only on signal-capable widgets) | **No** (trusted from `wasamoc`) | Undefined behaviour |
 
@@ -1960,14 +2567,21 @@ Type mismatches indicate a `wasamoc` bug, not a recoverable load-time error.
 The M3 rows above (Phase 2 `Box` child count, Phase 2 `RATIO` sign,
 Phase 3 WrapPanel non-negative attributes, Phase 4 ScrollView
 single-content-child rule, Phase 5 Grid structural / track / placement /
-span / conflict / alignment-vocabulary invariants) are explicitly
-dual-gated rather than trusted because `wasamo_load_ui`'s memory-IR
-entry point does not pass through `wasamoc`; the runtime gate is the
-last line of defence for these spec invariants. See §4.9 for the
-Box child-count rationale, §8.2 for the `RATIO` surface constraint,
-§4.10 for the WrapPanel attribute range, §4.11 for the ScrollView
-child-count rule, and §4.12 for the full Grid / Cell invariant set —
-all of which `wasamoc check` already enforces.
+span / conflict / alignment-vocabulary invariants, Phase 6 ZStack
+attribute / alignment-placement invariants, Phase 6 control-flow
+(`if`) branch / body / condition invariants, and Phase 6 root `title`
+type) are explicitly dual-gated rather than trusted because
+`wasamo_load_ui`'s memory-IR entry point does not pass through
+`wasamoc`; the runtime gate is the last line of defence for these spec
+invariants. See §4.9 for the Box child-count rationale, §8.2 for the
+`RATIO` surface constraint, §4.10 for the WrapPanel attribute range,
+§4.11 for the ScrollView child-count rule, §4.12 for the full Grid /
+Cell invariant set, §4.13 for the ZStack attribute / alignment-placement
+rules, and §4.14 for the conditional `if` branch / body / condition
+rules — all of which `wasamoc check` already enforces. (The non-string
+`title` rule guards the direct-IR-loader entry only; `wasamoc check`
+rejects a non-string `title` earlier, so `.ui` authors never reach the
+malformed-title path.)
 
 Phase 5 Grid invariants are **reject-at-validate**, not
 clamp-at-arrange: placement and span values have no defensible
@@ -1983,90 +2597,23 @@ bound.
 | Feature | Deferred to |
 |---|---|
 | `(computed ...)` expression form | M3 |
-| `(if ...)` / `(for ...)` binding forms | M3+ |
+| Conditional rendering | **Landed M3-Phase 6** — not as an `(if …)` expression / binding form, but as a structural **control-flow member** in the node body (§8.5; `if` only, single branch, single-widget body). `else` / `switch` are reserved family members and `for` iteration is Phase 7 |
 | M3 expanded type set (`float`, user types; `bool` landed in M3-Phase 1) | M3 |
-| Generic `TypedValue` value union (F5 deferral) | Post-M3 |
+| Generic `TypedValue` value union | Post-M3 |
 | Bindable surface for Box `aspect` / `fill` (M3-Phase 2 admits the literals only) | Future phase that first needs reactive aspect or fill |
 | `IrType::Ratio` / `IrType::Color` (M3-Phase 2 stores them Box-internal, not as `PropertyValue` variants) | Same future phase as above |
 | Binary IR format | Post-M2 |
 | Grammar version `v1` (first incompatible change) | When required |
-| `(post-event ...)` escape hatch for observer callbacks | M3 (DD-M2-P6-001 Option F) |
+| `(post-event ...)` escape hatch for observer callbacks | M3 |
 
-**F5 (`TypedValue`) deferral.** M3-Phase 1 admits `bool` as a third
+**`TypedValue` deferral.** M3-Phase 1 admits `bool` as a third
 tagged scalar (`IrType::Bool`, `IrLiteral::Bool`, `HandlerExpr::BoolLit` /
 `BoolPropRead`) using the same type-suffixed variant pattern M2
-adopted for `i32` and `String` (DD-M2-P6-003). It does not introduce
+adopted for `i32` and `String`. It does not introduce
 a generic `TypedValue` value union; the per-type binding evaluator and
-per-type widget property writer (see `architecture.md` §6.8.7 and
-[m3-phase-1-bool-scalar.md DD-M3-P1-007](./decisions/m3-phase-1-bool-scalar.md))
-are the structural form of that deferral. F5 is recorded in
-[notes/m3/m3-start-framing.md §F5](./notes/m3/m3-start-framing.md#f5--typedvalue-は再評価候補だが開始時点の-m3-acceptance-ではない).
-
----
-
-## Appendix A: Design Decisions
-
-### DD-001 — `in-out` is a single keyword token
-
-**Decision:** The lexer emits a single `Token::InOut` for the literal string `in-out`.
-It does not split it into `Ident("in")`, `Minus`, `Ident("out")`.
-
-**Rationale:**
-The only property modifier in M1 is `in-out`. Treating it as a single token keeps the
-grammar unambiguous without context-sensitivity. The alternative (3-token split) would
-make `-` serve double duty as both an arithmetic operator and a keyword separator, which
-complicates the grammar as soon as expression syntax expands in M2.
-
-**Explicitly deferred:** `in` (read-only from outside) and `out` (write-only from outside)
-as standalone modifiers. These remain post-M2 scope.
-
-**Future impact:** When `in` and `out` are introduced as standalone modifiers, the
-lexer will need to be updated. Two viable paths at that point:
-
-- Promote `in` and `out` to separate keywords and keep `in-out` as a third compound keyword.
-- Drop the compound `InOut` token and instead have the parser recognize `In Minus Out`.
-
-The right choice depends on whether the future expression grammar also adds `-`
-inside property bindings. That decision belongs to the milestone that expands
-the DSL expression surface.
-
----
-
-### DD-002 — String interpolation is parsed structurally but not evaluated
-
-**Decision:** String literals that contain `\{…}` placeholders are stored in the AST as
-`Expr::StringLit(Vec<StringPart>)`, where `StringPart` is either `Text(String)` or
-`Interp(QualifiedName)`. The interpolation is parsed into structure at M1, but the
-resulting value is never computed — `Interp` nodes are inert data.
-
-**Rationale:**
-Three options were considered:
-
-| Option | AST type | M1 error detection | M2 compatibility |
-|--------|----------|--------------------|------------------|
-| Raw string | `String` | None — malformed `\{root.}` silently accepted | M2 must re-parse strings |
-| Structured (chosen) | `Vec<StringPart>` | Syntax errors in placeholders caught | M2 evaluates existing `Interp` nodes |
-| Raw string + validation pass | `String` | Caught, but via a second parse | M2 must still re-parse |
-
-Parsing the structure once at lex/parse time avoids re-parsing in M2 and catches obvious
-mistakes (e.g. `\{root.}`) early without adding significant complexity — the lexer merely
-switches to a mini-mode inside `\{…}` to tokenize a `qualified_name`.
-
-**Discharged in M2:** Reactive evaluation of `Interp` nodes for the Foundation
-counter surface. M2 consumes the structured interpolation nodes when lowering
-property bindings to IR.
-
-**M2 impact:** The M2 reactive engine consumes `StringPart::Interp(QualifiedName)`
-nodes directly. It resolves the `QualifiedName` against the component's property scope,
-subscribes to changes, and re-evaluates the concatenated string on each change. No AST
-schema change was required; M2 added lowering/evaluation logic, not a new source
-representation. String-typed interpolation lowers to `str-prop-read` in
-`;wasamo-ir v0`. M3-Phase 1 rejects `bool`-typed state interpolation
-at `wasamoc check` time rather than lowering it to a runtime
-`TypeMismatch`; an explicit formatting/display-conversion surface is a
-future design item.
-
----
+per-type widget property writer (see `architecture.md` §6.7.7)
+are the structural form of that deferral. This deferral is recorded in
+[notes/m3/m3-start-framing.md §F5](../process/milestone-3/requirements/framing.md#f5--typedvalue-は再評価候補だが開始時点の-m3-acceptance-ではない).
 
 ## Revision history
 
@@ -2074,15 +2621,17 @@ future design item.
 |---------|------------|-----------------------------------------------------------------------------------|
 | 0.1     | 2026-04-27 | Initial draft (Phase 1, pending owner agreement)                                  |
 | 0.2     | 2026-04-27 | Phase 1 Accepted; added missing tokens (MinusEq/StarEq/SlashEq); corrected AST types (StringLit → Vec<StringPart>, Statement as struct); corrected error output format |
-| 0.3     | 2026-05-07 | M2-Phase 6 Accepted; added §8 Wasamo IR normative spec (DD-M2-P6-002 + DD-M2-P6-003) |
-| 0.4     | 2026-05-11 | M2 complete; added `str-prop-read` IR form from DD-M2-P6-011 and updated M2/post-M2 status language |
-| 0.5     | 2026-05-19 | M3-Phase 1 (`bool` scalar binding): added `true`/`false` keywords, `BoolLit` token, `BoolLit`/`BoolPropRead` IR expression forms, `bool` to `state_decl` type set, `Button.enabled` widget-catalog entry, and `state` surface declaration §4.7 (retroactive M2 gap); recorded F5 (`TypedValue`) deferral in §8.12 |
-| 0.6     | 2026-05-19 | M3-Phase 1 T14: documented that string interpolation over `bool`-typed state is rejected until an explicit formatting/display-conversion surface exists |
-| 0.7     | 2026-05-20 | M3-Phase 2 ADR-accepted design draft: added §4.9 Box layout primitive chapter (Phase status marker; `aspect` / `fill` attribute surface; single-child centred-and-clipped layout contract; aspect inscribed-fit measure-arrange with edge cases; image placeholder pattern subsection per DD-M3-P2-006); added `RatioLit` / `ColorLit` tokens (§2.2), grammar rules (§3), AST variants (§5), §8.2 terminals, and §8.6 literal alternatives + Box-internal materialisation note. Pending implementation re-sync at Phase 2 close. |
-| 0.8     | 2026-05-20 | M3-Phase 2 close: flipped §4.9 Phase status marker and document status to implementation-synced after T1-T13 landed and local / CI phase-end gates passed. No implementation/spec divergence was found during the close re-sync. |
-| 0.9     | 2026-05-21 | M3-Phase 3 ADR-accepted design draft: added §4.10 WrapPanel layout primitive chapter (Phase status marker; sizing mental-model subsection with four-fact anchor and WPF / Compose / CSS ecosystem contrast per framing decision H; `item-cross-size` / `item-spacing` / `line-spacing` constant-only `i32` attribute surface; two-stage measure-arrange algorithm with bounded happy path, unbounded-main-axis one-line-flow branch, and unbounded-cross-axis-with-aspect-child propagation to Phase 2's `LayoutError::BoxAspectUnboundedBoth`; oversized-first-child + visible-overflow subsection; common-pitfalls note); added `WrapPanel` row to the §4.4 widget registry and dropped the stale `M1` qualifier from the registry's lead-in (the registry grew beyond M1 once `Box` landed in Phase 2; folded into this commit as a minimal retroactive fix with owner confirmation). No new tokens, grammar rules, AST variants, or IR forms — Phase 3 reuses existing `i32` plumbing. Pending implementation re-sync at Phase 3 close. |
-| 1.0     | 2026-05-22 | M3-Phase 3 close: flipped §4.10 Phase status marker and document status to implementation-synced after T1–T9 landed and the local clean-rebuild gate passed. Folded the T1 Decisions-log lexer-surface item into §2.2: generalised the `Ident` lexical pattern to admit kebab-case continuations (`-[A-Za-z]`-prefixed segments) and the `IntLit` pattern to admit an optional leading `-`; added a one-line note that the negative-sign surface is `IntLit`-only (does not extend `FloatLit` / measurement / `RatioLit` and does not introduce a subtraction or unary-minus operator). `§5` AST shapes unchanged (`IntLit { value: i64 }` already holds the signed surface). No other implementation / spec divergence found during the close re-sync. |
-| 1.1     | 2026-05-25 | M3-Phase 4 ADR-accepted design draft: added §4.11 ScrollView layout primitive chapter (Phase status marker; viewport/content/offset mental model with WPF / CSS `overflow: scroll` / SwiftUI ecosystem contrast; exactly-one-child contract; `offset-y` signed `i32` literal or read-only `i32` state binding; parent-supplied viewport with no `viewport-*` attributes; pure-data measure-arrange algorithm including inner unbounded vertical measure, offset clamp, `LayoutError::ScrollViewUnboundedAxis`, and rounding contract; Visual-layer contract for the ScrollView-owned intermediate content Visual carrying `Visual.Offset = (0, -applied_y, 0)`; common-pitfalls note). Added `ScrollView` row to the §4.4 widget registry. No new grammar tokens, AST variants, IR literal/type variants, or scalar value types — Phase 4 reuses existing `i32` plumbing plus a narrow ScrollView string-to-`i32` parse / write bridge. Pending implementation re-sync at Phase 4 close. |
-| 1.2     | 2026-05-25 | M3-Phase 4 close: flipped §4.11 Phase status marker and document status to implementation-synced after T1–T6 landed (including T6 window-root Fill/Fill fix bundle) and the T7 local clean-rebuild + GitHub Actions phase-end gates passed. Folded one Phase 4 close-time spec consistency fix: §4.9 Box examples switched from the `;`-separated single-line form (parser-invalid; surfaced by T5 first build) to the parser-accepted multi-line member-per-line form, with an adjacent notation note recording that **accepting `;` as an optional member separator remains a post-Phase-4 open question** — parser-accepted examples; semicolon member separator left as post-Phase-4 open question. §4.10 common-pitfalls example dropped its `; …` continuation to match the new multi-line convention. No other implementation / spec divergence found during the close re-sync. |
-| 1.3     | 2026-05-29 | M3-Phase 5 ADR-accepted design draft: added §4.12 Grid layout primitive chapter (Phase status marker; sizing mental model with six-fact anchor and WPF / CSS Grid / Compose-SwiftUI grids / ZStack-overlay ecosystem contrast per framing decision FD-K; `Cell` single-content-child wrapper with explicit zero-based placement, both-axis spanning, and per-cell `h-align` / `v-align`; `columns:` / `rows:` track lists carrying fixed integer pixels and weighted-star tokens `n*` with `n in [1, 1024]`, parsed by a Grid-specific narrow parser path; `auto` deferred with reserved-future diagnostic; pure-data track-resolution algorithm with fixed-first + weighted-star distribution over `f32` prefix boundaries, `LayoutError::GridUnboundedStarAxis` on unbounded-star, and a reserved no-op slot for a future `auto` demand pass; Grid outer-bounds clip on Grid's own Visual via `Visual.Clip = InsetClip{0,0,0,0}` preserving the 1 WidgetNode = 1 Visual convention; document-order paint with no `z-index`; reject-at-validate dual-gate for placement / span / conflict invariants; reserved-future / common-pitfalls subsections). Added `Grid` row to the §4.4 widget registry plus a §4.4 pointer noting that `Cell` is a Grid-owned child wrapper defined in §4.12 (not a free-standing registry entry). No new grammar tokens, AST variants, `IrType` / `IrLiteral` / `PropertyValue` variants, or C ABI value tags — Grid's `Vec<TrackSize>` lives in a Grid-specific kind payload on `IrNode` and `IrProp.value` stays strictly `IrLiteral`. Folded a retroactive §8.11 spec-gap fix at owner request (review of the Moment 1 §4.12 + §6.8.7 thesis draft on 2026-05-29): the §8.11 *Loader validation policy* table previously listed only the Phase 2 `Box` child-count and `RATIO` sign dual-gates; added the Phase 3 WrapPanel non-negative attribute range (DD-M3-P3-006), the Phase 4 ScrollView single-content-child rule (DD-M3-P4-006), and the Phase 5 Grid / Cell invariant rows (DD-M3-P5-006) so the §8.11 table is now the true runtime-loader policy aggregate for M3. Pending implementation re-sync at Phase 5 close. |
-| 1.4     | 2026-05-30 | M3-Phase 5 close: flipped the §4.12 Phase status marker and the document-level status to implementation-synced after T1–T6 landed and the T7 local clean-rebuild gate passed (`cargo fmt --all -- --check` zero exit; `cargo clean` → debug + release `--workspace` build green; `cargo test --workspace` green — wasamo-runtime lib 301 + wasamoc lib 282 + wasamo-ir 16 + `grid_layout_integration` 2, all suites green). Folded the Moment-1-deferred §8 textual-IR grammar for Grid carrier c1 into §8.5: added `track_decl` to `node_body` plus a Grid track-declaration grammar (`tracks <axis> = <track-list>`, whitespace-insensitive; fixed `INT >= 1` / weighted-star `INT "*"` with weight in `[1, 1024]` / unit `*` canonicalised to `1*`) matching the landed `wasamoc` emit (T1, `emit.rs`) and runtime loader parse (T3, `ir_loader.rs`) shapes — folded into §8.5 rather than a new §8.x subsection to avoid renumbering the widely-referenced §8.9 / §8.11 / §8.12. Also re-synced §5 (AST Structure) to the landed `wasamoc/src/ast.rs`: added the `Member::GridTracks { axis, tracks }` variant plus the `TrackAxis` and `TrackSize` author-AST enums that the narrow Grid track-list parser path produces (a Moment-1 spec gap in §5 surfaced during the close re-sync; folded here per the retroactive spec-gap minimum-fold pattern with owner confirmation). Re-synced §2.2 (Token types) to the landed author-surface lexer: added the bare `*` (`Star`) token row — `wasamoc/src/lexer.rs` emits `Star` for a bare `*` (distinct from `*=` = `StarEq`; `2*` lexes as `IntLit(2)` + adjacent `Star`, not a single token), used only inside a Grid track list. Re-synced §3 (Grammar) with a Grid-specific `grid_track_list_member` rule (`("columns" | "rows") ":" grid_track { grid_track }`, with weighted-star adjacency `INT "*"` vs `INT` then `"*"`) that `wasamoc/src/parser.rs` routes to only inside a `Grid` widget body — a narrow path, not a general list grammar (both §2.2 and §3 were Moment-1 spec gaps folded under the same retroactive spec-gap minimum-fold pattern). On the **IR grammar side** (§8) no new *named* token is introduced — the `*` in the `track` rule is a quoted literal terminal. No §4.12 design / implementation divergence found during the close re-sync; no new `IrType` / `IrLiteral` / `PropertyValue` variant or C ABI change (Grid's track lists ride the `KindPayload::Grid` carrier on `IrNode`, not `IrLiteral`; the new author-surface AST forms and the `Star` lexer token lower into that carrier). `docs/abi_spec.md` re-confirmed untouched (Grid adds no host-facing ABI surface; `LayoutError::GridUnboundedStarAxis` is runtime-internal). |
+| 0.3     | 2026-05-07 | M2-Phase 6 Accepted; added the §8 Wasamo IR normative spec. |
+| 0.4     | 2026-05-11 | M2 complete; added the `str-prop-read` IR form and finalised M2 status language. |
+| 0.5     | 2026-05-19 | M3-Phase 1: `bool` scalar binding — `true`/`false` keywords, bool IR forms, `bool` state type, the `Button.enabled` entry, and the retroactive `state` surface (§4.7); recorded the `TypedValue` deferral (§8.12). |
+| 0.6     | 2026-05-19 | M3-Phase 1: documented that bool-typed state interpolation is rejected until a display-conversion surface exists. |
+| 0.7     | 2026-05-20 | M3-Phase 2 design draft: §4.9 Box layout primitive (`aspect`/`fill`, single-child centred-and-clipped, aspect inscribed-fit) plus the `RatioLit`/`ColorLit` token, grammar, AST, and IR additions. |
+| 0.8     | 2026-05-20 | M3-Phase 2 close: §4.9 implementation-synced; no divergence found. |
+| 0.9     | 2026-05-21 | M3-Phase 3 design draft: §4.10 WrapPanel layout primitive (line-flow measure-arrange; `item-cross-size`/`item-spacing`/`line-spacing`); reuses existing `i32` plumbing. Dropped the stale `M1` qualifier from the §4.4 registry lead-in. |
+| 1.0     | 2026-05-22 | M3-Phase 3 close: §4.10 implementation-synced; folded the §2.2 lexer surface (kebab-case `Ident`, optional leading `-` on `IntLit`). |
+| 1.1     | 2026-05-25 | M3-Phase 4 design draft: §4.11 ScrollView layout primitive (parent-supplied viewport, clip, `offset-y`, intermediate content Visual); reuses existing `i32` plumbing. |
+| 1.2     | 2026-05-25 | M3-Phase 4 close: §4.11 implementation-synced; fixed the §4.9 Box examples to the parser-accepted member-per-line form (semicolon member separator left as an open question). |
+| 1.3     | 2026-05-29 | M3-Phase 5 design draft: §4.12 Grid layout primitive (`Cell` placement/span/alignment, fixed + weighted-star tracks, track resolution, outer-bounds clip); reuses existing plumbing (track lists ride a Grid kind payload). Made §8.11 the full M3 loader-validation aggregate (added the Phase 3/4/5 rows). |
+| 1.4     | 2026-05-30 | M3-Phase 5 close: §4.12 implementation-synced; folded the deferred Grid textual-IR grammar (§8.5 `track_decl`) and re-synced §5 AST / §2.2 tokens / §3 grammar to the landed parser. `abi_spec.md` untouched. |
+| 1.5     | 2026-06-02 | M3-Phase 6 design draft (Moment 1): added §4.13 ZStack overlay primitive (union sizing + `Fill/Fill` default, document-order z-order, per-child alignment, outer-bounds clip) and §4.14 conditional rendering — the first chapter of the structural rendering model (`if` block, structural present/absent, absent=fresh-on-return with opt-in future retention). Supporting: §2.1 `if`/`else`/`switch`/`for` keyword reservation, §3 grammar, §5 AST, §8.5 control-flow member with textual + loaded IR examples, §8.11 validation rows. No new `IrType`/`IrLiteral`/`PropertyValue` or C ABI change; `abi_spec.md` untouched (the conditional + runtime-mechanism schema is normative in `architecture.md`). Also slimmed this revision history and applied the Living-spec vocabulary discipline retroactively — removed DD / option / process labels from the spec body and these notes, keeping the `M3-Phase N` identifiers (full provenance lives in the process documents). Pending implementation re-sync at Phase 6 close. |
+| 1.6     | 2026-06-02 | Moved the historical M1 lexical rationale appendix into `process/milestone-1/phase-1/decisions/`; this spec now keeps only the normative DSL surface. |

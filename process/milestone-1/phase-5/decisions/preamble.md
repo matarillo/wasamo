@@ -1,21 +1,21 @@
-﻿# Phase 5 — Compositor Independence Check: Architecture Decisions
+# Phase 5 — Compositor Independence Check: Architecture Decisions
 
 **Phase:** 5 (Visual Layer integration sanity check)
 **Date:** 2026-04-29
 **Status:** Implemented
-**Supersedes:** [phase-5-implicit-animations-dev-api.md](./phase-5-implicit-animations-dev-api.md) (DD-P5-001..003)
+**Supersedes:** [phase-5-implicit-animations-dev-api.md](./superseded/dd-p5-001-003-implicit-animations-dev-api.md) (DD-P5-001..003)
 
 The original Phase 5 ADR
-([phase-5-implicit-animations-dev-api.md](./phase-5-implicit-animations-dev-api.md))
+([phase-5-implicit-animations-dev-api.md](./superseded/dd-p5-001-003-implicit-animations-dev-api.md))
 treated the ROADMAP task list — "ImplicitAnimationCollection animates
 Offset/Size/Opacity property changes" — as a fixed premise and
 deliberated only on how to expose a dev-only API for that behavior.
 Pre-doc review (the kind described in
-[README.md "Pre-doc discipline"](./README.md#pre-doc-discipline))
+[README.md "Pre-doc discipline"](../../../README.md))
 surfaced three problems with that premise:
 
 1. Property-change animation is exactly the behavior
-   [DD-V-001 in vision-m1-acceptance-criteria.md](./vision-m1-acceptance-criteria.md#dd-v-001--default-property-change-behavior-is-instant-animation-is-opt-in)
+   [DD-V-001 in vision-m1-acceptance-criteria.md](../../../cross-milestone/decisions/m1-acceptance-criteria.md#dd-v-001--default-property-change-behavior-is-instant-animation-is-opt-in)
    defines as **opt-in, not default**. Verifying it as if it were
    default would embed a contradicting expectation into M1 itself,
    even when gated behind a dev API.

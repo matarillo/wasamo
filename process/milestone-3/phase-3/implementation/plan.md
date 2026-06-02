@@ -1,4 +1,4 @@
-﻿## Task list
+## Task list
 
 ### T1 — `wasamoc check`: WrapPanel validity and reject set
 
@@ -46,7 +46,7 @@ DD-M3-P3-003 / DD-M3-P3-004.
 - [x] Unit tests cover each row of the reject set + each accept
       shape from the ADR, including the accept-shape fixtures
       from
-      [dsl_spec §4.10](../../dsl_spec.md#410-wrappanel-layout-primitive-m3-phase-3)
+      [dsl_spec §4.10](../../../../docs/dsl_spec.md#410-wrappanel-layout-primitive-m3-phase-3)
       that traverse the generic parser unmodified.
 
 ### T2 — `wasamoc check`: aspect-only-Box warning
@@ -59,7 +59,7 @@ Discharges the DD-M3-P3-004 Recommendation companion judgement
       is **not** set on the WrapPanel, `wasamoc check` emits a
       **warning** (not error) suggesting the attribute. The warning
       text cross-references
-      [dsl_spec §4.10 Common pitfalls](../../dsl_spec.md#410-wrappanel-layout-primitive-m3-phase-3).
+      [dsl_spec §4.10 Common pitfalls](../../../../docs/dsl_spec.md#410-wrappanel-layout-primitive-m3-phase-3).
 - [x] Warning fires on direct-child Boxes only (does not scan into
       nested containers); narrow guard scope per DD-M3-P3-004
       "the warning does not classify all possible child shapes,
@@ -149,7 +149,7 @@ verification closure **evidence item 2**.
 
 - [x] Implement the pure-data WrapPanel measure/arrange path in
       `wasamo-runtime/src/layout.rs` per
-      [DD-M3-P3-005](../../decisions/m3-phase-3-wrap-panel.md#dd-m3-p3-005--measure-arrange-algorithm-novel-normative-spec).
+      [DD-M3-P3-005](../decisions/preamble.md#dd-m3-p3-005--measure-arrange-algorithm-novel-normative-spec).
       The layout boundary remains Win32/WinRT-free; the algorithm
       operates on `LayoutNode` / measure / arrange inputs only.
 - [x] Add the pure-logic test coverage enumerated under the
@@ -162,7 +162,7 @@ verification closure **evidence item 2**.
       `LayoutError::BoxAspectUnboundedBoth`).
 - [x] Prefer free-function extraction before the test-only
       mirror pattern (per
-      [CLAUDE.md §Testing rules](../../../CLAUDE.md)) when
+      [CLAUDE.md §Testing rules](../../../../CLAUDE.md)) when
       pure logic entangles a Win32/WinRT-bound type.
 - [x] Rounding contract inherits Phase 2 DD-M3-P2-005's
       discipline (no pixel-snapping in Phase 3).
@@ -178,7 +178,7 @@ CI-execution evidence.
 
 - [x] Mock-free integration test on the Windows CI runner that
       exercises the two fixtures specified in the ADR's
-      [verification closure evidence item 4](../../decisions/m3-phase-3-wrap-panel.md#phase-3-verification-closure-what-counts-as-a3-evidence):
+      [verification closure evidence item 4](../decisions/preamble.md#phase-3-verification-closure-what-counts-as-a3-evidence):
       the wrap-path fixture (primary positive control) and the
       oversized-child fixture (visible-overflow regulation).
 - [x] Skip-guard matches Phase 1 T6 / T13 / Phase 2 T11: fail (not
@@ -186,7 +186,7 @@ CI-execution evidence.
       `0x80070005` from `wasamo_init`.
 - [x] Skip-guard verified on an SSH dev box (or equivalent
       environment per
-      [verification-environments.md](../../notes/verification-environments.md))
+      [verification-environments.md](../../../../docs/notes/verification-environments.md))
       before landing — local "passed without skip" does not prove
       the guard works.
 
@@ -194,7 +194,7 @@ CI-execution evidence.
 
 Discharges ADR verification closure **evidence item 5** (visible
 smoke) and the
-[m3-plan §Phase-end criteria item 5](../m3-plan.md#phase-end-criteria)
+[m3-plan §Phase-end criteria item 5](../../plan.md#phase-end-criteria)
 "gallery sub-screen per phase" obligation.
 
 - [x] `examples/gallery/gallery.ui` grows additively from Phase 2's
@@ -228,7 +228,7 @@ Discharges the m3-plan §Phase-end criteria checklist for Phase 3.
       phase-branch `workflow_dispatch` run as the previous bullet
       (<https://github.com/matarillo/wasamo/actions/runs/26256127948>).
 - [x] **Moment 2 spec re-sync.** Flipped
-      [dsl_spec.md §4.10](../../dsl_spec.md#410-wrappanel-layout-primitive-m3-phase-3)
+      [dsl_spec.md §4.10](../../../../docs/dsl_spec.md#410-wrappanel-layout-primitive-m3-phase-3)
       Phase status marker to
       `**Phase status:** M3-Phase 3 closed; implementation-synced`.
       Folded the T1 Decisions-log lexer-surface item per owner
@@ -238,7 +238,7 @@ Discharges the m3-plan §Phase-end criteria checklist for Phase 3.
       `IntLit`-only). Doc version 0.9 → 1.0 with a revision-history
       row describing the close.
 - [x] **Moment 2 architecture re-sync.** Flipped
-      [docs/architecture.md](../../architecture.md) top-level
+[docs/architecture.md](../../../../docs/architecture.md) top-level
       Status to `M3-Phase 1, M3-Phase 2, and M3-Phase 3 complete`.
       §6.8 WrapPanel paragraph already described the realised
       implementation (no wording reconciliation needed). §6.5
@@ -248,24 +248,24 @@ Discharges the m3-plan §Phase-end criteria checklist for Phase 3.
       as R3-A from T9 visible-smoke (a separate commit per review-
       concern).
 - [x] **Out-of-phase residuals filed** per
-      [m3-plan §Phase-end criteria item 6](../m3-plan.md#phase-end-criteria):
+      [m3-plan §Phase-end criteria item 6](../../plan.md#phase-end-criteria):
       R1 (`.gitignore` `*.uic` pattern) and R2 (`sync_visuals` ↔
       pure-layout boundary test gap) recorded in §Out-of-phase
       residuals below and cross-referenced from
-      [the ADR's Phase 3 implementation residuals subsection](../../decisions/m3-phase-3-wrap-panel.md).
+      [the ADR's Phase 3 implementation residuals subsection](../decisions/preamble.md).
       R3 (architecture §6.5 offset convention) was folded in T10
       as R3-A and is not a residual.
 - [x] Forward-distillation note for M3-Phase 4 authored within
       this phase's close (per
-      [retrospectives.md forward-carry rule](../../notes/retrospectives.md)):
-      [`docs/notes/m3-phase-4/pre-doc-inputs.md`](../../notes/m3-phase-4/pre-doc-inputs.md).
+      [retrospectives.md forward-carry rule](../../../procedures/retrospectives.md)):
+      [`docs/notes/m3-phase-4/pre-doc-inputs.md`](../../phase-4/requirements/constraints.md).
 - [x] Phase-end retrospective entry recorded per the
-      [docs/notes/retrospectives.md](../../notes/retrospectives.md)
+      [docs/notes/retrospectives.md](../../../procedures/retrospectives.md)
       procedure, with the durable entry at
-      [`docs/notes/m3-phase-3/phase-end-retrospective.md`](../../notes/m3-phase-3/phase-end-retrospective.md).
+      [`docs/notes/m3-phase-3/phase-end-retrospective.md`](../retrospectives/phase-end.md).
 - [x] Progress file lifecycle: `status: active` → `status: closing`
       at the end of this T10 commit set, then `closing` →
       `status: retired` on the phase branch before the phase-end
       main-merge gate (matching the Phase 2 close pattern in
-      [m3-phase-2-progress.md](m3-phase-2-progress.md); per
+      [m3-phase-2-progress.md](../../phase-2/retrospectives/phase-end.md); per
       [plans/README.md §Phase progress file lifecycle](../README.md#phase-progress-file-lifecycle)).

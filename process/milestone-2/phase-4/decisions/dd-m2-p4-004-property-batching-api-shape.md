@@ -1,4 +1,4 @@
-﻿### DD-M2-P4-004 — Property batching API shape
+### DD-M2-P4-004 — Property batching API shape
 
 **Status:** Accepted
 
@@ -12,7 +12,7 @@ sees a partially-applied state.
 Two pieces of existing machinery need to be considered before adding
 new ABI surface:
 
-1. **`emit::drain_if_outermost`** ([wasamo-runtime/src/abi.rs:369](../../wasamo-runtime/src/abi.rs#L369)).
+1. **`emit::drain_if_outermost`** ([wasamo-runtime/src/abi.rs:369](../../../../wasamo-runtime/src/abi.rs#L369)).
    `wasamo_set_property` enqueues observer notifications and drains
    them only at the outermost call frame. A host loop calling
    `wasamo_set_property` 10× already gets observer batching for free

@@ -1,4 +1,4 @@
-﻿## Decisions log
+## Decisions log
 
 - **T4 — unbounded-scroll-axis fixture disposition (2026-05-25).** ADR
   Phase 4 verification closure item 4's last sub-bullet permits
@@ -28,7 +28,7 @@
   that actually owns its execution** — the smoke could only happen
   after owner review of T5, but T5 was being merged. The original
   T6 (phase-end / Moment 2 re-sync) made the smoke verification
-  implicit via [retrospectives.md item 17](../../notes/retrospectives.md#phase-end-固有-merge--main),
+  implicit via [retrospectives.md item 17](../../../procedures/retrospectives.md#phase-end-固有-merge--main),
   which would have meant interleaving spec / plan marker flips with
   smoke verification in a single step. If smoke had failed mid-T6,
   the phase branch would carry half-flipped spec markers while a
@@ -40,7 +40,7 @@
   inside its own branch; **T7 (= former T6)** runs the mechanical
   phase-close gates only once visible correctness is owner-accepted.
   Smoke gate is now explicit in the progress file rather than
-  inherited from `retrospectives.md` item 17. ADR (`docs/decisions/
+  inherited from `retrospectives.md` item 17. ADR (`process/
   m3-phase-4-scroll-view.md`) numbering is not affected — the ADR
   refers to verification closure **evidence item 5**, which now
   maps onto T5 + T6 jointly; m3-plan.md Phase 4 row does not list
@@ -188,7 +188,7 @@
   - **Q3 — T7 retrospective scope.** T7's original last bullet
     "Phase-end retrospective recorded under `docs/notes/m3-phase-4/`"
     conflated two distinct retrospectives in
-    [retrospectives.md](../../notes/retrospectives.md) §進行手順:
+    [retrospectives.md](../../../procedures/retrospectives.md) §進行手順:
     step-end retro (items 1-11; step → phase merge gate) and
     phase-end retro (items 12-18; phase → main merge gate). The
     bullet is split into two: T7 owns the **step-end** retrospective

@@ -13,12 +13,12 @@ related:
 # M3 target app pre-doc — Photo Gallery (案 Z)
 
 このノートは M3 の最初の設計対象である **target app / E2E proof** を確定する
-owner-agreed pre-doc である。[m3-start-framing.md](m3-start-framing.md) §F2 / F7
+owner-agreed pre-doc である。[m3-start-framing.md](framing.md) §F2 / F7
 に従い、M3 plan drafting と ROADMAP acceptance の見直しに先立って、
 M3 で作る画面・必要 surface・out-of-scope・spec 同期ルールを固定する。
 
 候補比較とワイヤーフレームの一次資料は
-[m3-target-app-wireframes.html](m3-target-app-wireframes.html) に置く。
+[m3-target-app-wireframes.html](target-app-wireframes.html) に置く。
 本 pre-doc は HTML を視覚 input として参照し、HTML が exploratory artifact
 として持つ「均等加重時の素読み」「オーナー加重を反映した素読み」の上に立つ
 「採択」を本ファイル側で明文化する役割を持つ。
@@ -41,7 +41,7 @@ W (Explorer) は backup ではなく、本採択により候補集合から外�
 
 ### 1. 加重判断レイヤ — Z は加重後の素読みで単独首位
 
-[m3-target-app-wireframes.html](m3-target-app-wireframes.html) の「オーナー加重を反映した
+[m3-target-app-wireframes.html](target-app-wireframes.html) の「オーナー加重を反映した
 素読み」節に記録した加重後の比較結果より、Z は次の構造で単独首位となる。
 
 - 重み付けが軽い軸（軸 2 執筆量 / 軸 4 射程 / 軸 5 漏出）が Z の固有弱点と一致しており減点されない。
@@ -55,18 +55,18 @@ W (Explorer) は backup ではなく、本採択により候補集合から外�
 
 ### 2. Framing レイヤ — 「実用的な画面構造」を優先する立場の明示
 
-[m3-start-framing.md](m3-start-framing.md#L41) は M3 を **DSL surface milestone** と読む
+[m3-start-framing.md](framing.md#L41) は M3 を **DSL surface milestone** と読む
 立場を取り、その thesis を「実用的な画面構造を DSL で書けるだけの surface を増やし、
 その surface を外部読者が参照できる public draft として文書化すること」と置く。
 本採択はこの framing に直結する次の立場を表明する:
 
 - 「**実用的な画面構造**」を優先する。Z は WrapPanel + ZStack + 条件レンダリング +
   繰り返し生成 という構成で、現実の photo gallery アプリの骨格を提供する。これは
-  Hello Counter を超え、複数 surface が同時に成立する実用画面である ([m3-start-framing.md](m3-start-framing.md#L348) §F7)。
+  Hello Counter を超え、複数 surface が同時に成立する実用画面である ([m3-start-framing.md](framing.md#L348) §F7)。
 - Z 固有の弱点であった「**grammar surface（条件レンダリング・繰り返し生成）を M3 で
   前倒し public spec 化する含意**」を許容する。これは加重判断とは独立した、framing 上の
   立場表明である（加重では消えない構造的論点として
-  [HTML](m3-target-app-wireframes.html) 加重節末尾に明記）。
+  [HTML](target-app-wireframes.html) 加重節末尾に明記）。
 
 ### 3. 結論レイヤ — Z 採用の含意
 
@@ -76,7 +76,7 @@ W (Explorer) は backup ではなく、本採択により候補集合から外�
   単一の primitive list ではなく、layout primitive と grammar surface が同居する DSL を
   M3 で公開する。
 - 現 ROADMAP の M3 AC（Grid / ScrollView / List / DSL public draft）は本採択により
-  見直し対象となる ([m3-start-framing.md](m3-start-framing.md#L315) §F2「ROADMAP revision を起こす」)。
+  見直し対象となる ([m3-start-framing.md](framing.md#L315) §F2「ROADMAP revision を起こす」)。
   ROADMAP revision の単位と内容は本 pre-doc 末尾「ROADMAP との同期」節で扱う。
 
 ---
@@ -84,7 +84,7 @@ W (Explorer) は backup ではなく、本採択により候補集合から外�
 ## 必要 surface
 
 Z の wireframe から逆算した M3 surface は次のとおり。各項目は
-[m3-start-framing.md](m3-start-framing.md#L60) の「M3 pre-doc 成果物 2 / 3 項」に対応する。
+[m3-start-framing.md](framing.md#L60) の「M3 pre-doc 成果物 2 / 3 項」に対応する。
 
 状態列の凡例:
 
@@ -108,7 +108,7 @@ primitive とせず Box の `aspect: <ratio>` attribute として畳む。thumbn
 Box 上で表現する。
 
 WrapPanel と Grid の measure-arrange 仕様は novel な normative 執筆を要求する。これは
-[m3-target-app-wireframes.html](m3-target-app-wireframes.html) の軸 2 評価で「重」と評価された
+[m3-target-app-wireframes.html](target-app-wireframes.html) の軸 2 評価で「重」と評価された
 内訳の主要部分であり、本 pre-doc 採択時点で許容済み（採用理由 §2 参照）。M3 を「DSL surface
 milestone + first public spec draft」と framing する以上、spec 執筆量自体はコストではなく
 成果物。
@@ -119,7 +119,7 @@ XAML / WPF が Grid に same-cell overlap を許す慣習は採用しない（XA
 modern Grid (1 cell 1 child) と Compose の Box (= ZStack) の分離方針と整合する。
 
 **ZStack を Grid same-cell overlap で代替する案は不採用**: HTML 整理
-[L928, L1011](m3-target-app-wireframes.html#L928) の「Grid 同一セル overlap で ZStack を代替」
+[L928, L1011](target-app-wireframes.html#L928) の「Grid 同一セル overlap で ZStack を代替」
 は star sizing と same-cell overlap という Grid の独立 2 機能を conflate した記述で、論理的
 には独立。overlay 表現は ZStack 専管とし、Grid spec は z-order を扱わない。
 
@@ -155,7 +155,7 @@ lightbox photo / scrim 等の「写真らしき領域」は Box + Text 子要素
   切替) および Button selected state surface の自然な台座となる。bool を入れない場合の
   代替 (String 等価比較 / Option / int truthy / コレクション empty 判定 等) はいずれも
   bool より重く非直交になるため、bool 採用が最小コストの選択肢。
-- bool 採用は [m3-start-framing.md](m3-start-framing.md#L335) §F5 (`TypedValue` 無条件
+- bool 採用は [m3-start-framing.md](framing.md#L335) §F5 (`TypedValue` 無条件
   導入 defer) を覆さない。`TypedValue` は generic value union 機構であり、bool を 3 つ目
   の scalar として追加することは別議論として扱う。`TypedValue` defer は維持する
   (Out-of-scope §Value / type 参照)。
@@ -189,7 +189,7 @@ lightbox photo / scrim 等の「写真らしき領域」は Box + Text 子要素
   を成立させる構造の双方を proof する。
 - **条件レンダリング** — binding が widget tree の構造そのもの（subtree の存否）を駆動できる
   ことを示す。M2 の binding は property 値の駆動のみだったため、本構文は M2 不可能性として
-  ([m3-target-app-wireframes.html](m3-target-app-wireframes.html) 軸 3 評価で「離散 / 高」)
+  ([m3-target-app-wireframes.html](target-app-wireframes.html) 軸 3 評価で「離散 / 高」)
   明確に観察される。
 - **繰り返し生成** — binding が widget tree の **数** そのものを駆動できることを示す。
   コレクション binding の M3 plan に直結し、後続 M4 以降の動的 UI surface
@@ -205,7 +205,7 @@ lightbox photo / scrim 等の「写真らしき領域」は Box + Text 子要素
 ## Out-of-scope
 
 Z 採択により、wireframe 上には存在するが M3 surface としては明示的に扱わない項目を
-固定する。[m3-target-app-wireframes.html](m3-target-app-wireframes.html) 軸 5（M4–M5 漏出）
+固定する。[m3-target-app-wireframes.html](target-app-wireframes.html) 軸 5（M4–M5 漏出）
 評価で「回避可」とした項目を中心に出す。
 
 ### Visual / styling
@@ -226,14 +226,14 @@ Z 採択により、wireframe 上には存在するが M3 surface としては�
 - **lightbox の close / prev / next ジェスチャ** — 該当 interaction は Button click の handler
   binding で表現する。swipe / pinch / keyboard shortcut は M3 では扱わない。
 - **hit-testing / focus capture / modal focus trap** — lightbox は構造上 modal-ish だが、
-  M3 では focus model に踏み込まない（[m3-start-framing.md](m3-start-framing.md#L264) §「M3 に入れないもの」
+  M3 では focus model に踏み込まない（[m3-start-framing.md](framing.md#L264) §「M3 に入れないもの」
   の input / focus model defer と整合）。
 
 ### Value / type
 
 - **第四 scalar 以降 / generic value union (`TypedValue`)** — bool は M3 で採用する
   (「必要 surface」§Binding / value surface 参照) が、`TypedValue` 機構 (generic value
-  union) の無条件導入は M3 では行わない ([m3-start-framing.md](m3-start-framing.md#L335)
+  union) の無条件導入は M3 では行わない ([m3-start-framing.md](framing.md#L335)
   §F5)。本 target app は `TypedValue` 圧力を構造的に避ける設計に寄せる。
 - **Image widget surface** — 画像 / アイコン用の widget primitive は M3 では開けない
   (「保留点の決着」§保留 2 参照)。thumbnail / lightbox photo / scrim 等の「写真らしき
@@ -246,15 +246,15 @@ Z 採択により、wireframe 上には存在するが M3 surface としては�
 ### Platform
 
 - **focus / AccessKit / multi-window / hot reload / C ABI** — いずれも Z は要求しない
-  ([m3-target-app-wireframes.html](m3-target-app-wireframes.html) 軸 5 platform 漏出評価より）。
-  これらは [m3-start-framing.md](m3-start-framing.md#L255) §「M3 に入れないもの」で
+  ([m3-target-app-wireframes.html](target-app-wireframes.html) 軸 5 platform 漏出評価より）。
+  これらは [m3-start-framing.md](framing.md#L255) §「M3 に入れないもの」で
   既に defer されている。
 
 ---
 
 ## spec / implementation / E2E proof の同期ルール
 
-[m3-start-framing.md](m3-start-framing.md#L341) §F6 に従い、本 target app の実装過程では
+[m3-start-framing.md](framing.md#L341) §F6 に従い、本 target app の実装過程では
 次の同期規律を維持する。
 
 - **同一 phase 内同期**: 各 M3 phase で、`.ui` （DSL）、`wasamo-ir`、`wasamoc` emitter、
@@ -269,9 +269,9 @@ Z 採択により、wireframe 上には存在するが M3 surface としては�
   `docs/dsl_spec.md` に反映済みであることを要求する。M3 最終 phase でまとめて spec を書く
   運用にしない。
 - **視覚 input**: M3 plan / phase pre-doc / dsl_spec drafting / E2E proof acceptance の視覚
-  input は [docs/references/m3-gallery-wireframe.html](../../references/m3-gallery-wireframe.html)
+  input は [docs/references/m3-gallery-wireframe.html](./gallery-wireframe.html)
   を参照する (採択済み Photo Gallery 視覚仕様を英語ラベルで固定した stable artifact)。元の
-  探索アーティファクト [m3-target-app-wireframes.html](m3-target-app-wireframes.html) は
+  探索アーティファクト [m3-target-app-wireframes.html](target-app-wireframes.html) は
   候補比較 / 加重判断記録 / 語彙批判的検討の歴史的記録として `docs/notes/` 配下に保持し、
   抽出版から "Source exploratory note" pointer で参照される。詳細は本ファイル末尾
   「視覚 artifacts との参照関係」節を参照。
@@ -281,7 +281,7 @@ Z 採択により、wireframe 上には存在するが M3 surface としては�
 ## ROADMAP との同期
 
 本採択により、現 ROADMAP の M3 acceptance criteria（Grid / ScrollView / List /
-DSL public draft）は見直し対象となる。[m3-start-framing.md](m3-start-framing.md#L315) §F2
+DSL public draft）は見直し対象となる。[m3-start-framing.md](framing.md#L315) §F2
 の「必要なら ROADMAP revision を起こす」がここで具体化する。
 
 ### 現 ROADMAP M3 AC と Z 採択の差分
@@ -322,9 +322,9 @@ ROADMAP revision は次の単位で起こす想定:
 
 1. 上表の差分そのものを M3 AC の revision として記述する。
 2. revision の根拠として本 pre-doc と
-   [m3-target-app-wireframes.html](m3-target-app-wireframes.html) を参照する。
+   [m3-target-app-wireframes.html](target-app-wireframes.html) を参照する。
 3. revision の意思決定単位は vision decision に届くか pre-doc レベルで閉じるかを別途判断する
-   ([m3-start-framing.md](m3-start-framing.md#L322) §F3 の判定基準: public draft 誠実性 /
+   ([m3-start-framing.md](framing.md#L322) §F3 の判定基準: public draft 誠実性 /
    visible proof 必要性 / grammar・IR 破壊的変更リスクのいずれか）。
 
 ROADMAP revision の具体的執筆作業は本 pre-doc の owner approval を経た後に着手する。
@@ -354,7 +354,7 @@ ROADMAP revision の具体的執筆作業は本 pre-doc の owner approval を�
 - **exploratory artifact**（候補比較 X/Y/Z/W + 4 wireframe + 語彙批判的検討 + 加重判断記録）
   として `docs/notes/` 配下に維持する。本 pre-doc 採択により内容を縮小再構成しない。
 - 本 pre-doc の採択により、HTML 末尾「位置づけと将来再構成トリガー」節
-  ([m3-target-app-wireframes.html L1470-L1490](m3-target-app-wireframes.html#L1470-L1490)) で
+  ([m3-target-app-wireframes.html L1470-L1490](target-app-wireframes.html#L1470-L1490)) で
   予告されていた再構成 trigger が **発火する**。発火形は予告された「wireframe-only + 語彙整理
   markdown 抽出」全面再構成ではなく、採択された Z (Gallery) wireframe のみを `docs/references/`
   へ抽出する **部分的再構成** とする。X / Y / W wireframe および候補比較 / 加重判断記録 / 語彙

@@ -12,7 +12,7 @@ phase: M3-Phase 1
 
 M3-Phase 1 (`bool` scalar binding) の phase-end retrospective。対象は
 `feat/m3-phase-1` から `main` への no-ff merge 前判定であり、
-[docs/notes/retrospectives.md](../retrospectives.md) の phase-end
+[docs/notes/retrospectives.md](../../../procedures/retrospectives.md) の phase-end
 checklist に沿って、A9 の達成、上位文書との整合、CI、次 phase
 (M3-Phase 6 / M3-Phase 8 を含む `bool` 依存 phase) への送り込み材料を
 確認する。
@@ -42,12 +42,12 @@ findings (1–4) はいずれも本 retrospective commit (および同 commit �
 owner の no-ff merge 明示承認であり、push はさらに別 gate**、である。
 
 owner-review findings の処理結果は [progress file §Owner-review follow-ups
-(closed at T12 phase-end)](../../plans/progress/m3-phase-1-progress.md#owner-review-follow-ups-closed-at-t12-phase-end)
+(closed at T12 phase-end)](../implementation/plan.md#owner-review-follow-ups-closed-at-t12-phase-end)
 に記録した。要点:
 
 - **Finding 1** (A9 evidence wording / ADR item 3 未達) → T13 を新設し
   binding-pipeline-inclusive な mock-free Windows-only integration test
-  ([wasamo-runtime/tests/bool_binding_live_propagation.rs](../../../wasamo-runtime/tests/bool_binding_live_propagation.rs))
+  ([wasamo-runtime/tests/bool_binding_live_propagation.rs](../../../../wasamo-runtime/tests/bool_binding_live_propagation.rs))
   で discharge。本 retrospective §Checklist 11 の A9 evidence 表現も
   T13 を main anchor、T6 widget-setter slice を補助 evidence として
   訂正済み。
@@ -71,7 +71,7 @@ implicit-constraint review が surface した残り二項目 — Follow-up A
 (T13 proof が synchronous non-batched drain に依存している点) — は、
 T14 (bool string interpolation rejection) 完了後にいずれも documentation
 decision として close 済み。詳細は [progress file §Remaining
-implicit-constraint follow-ups (closed after T14)](../../plans/progress/m3-phase-1-progress.md#remaining-implicit-constraint-follow-ups-closed-after-t14)
+implicit-constraint follow-ups (closed after T14)](../implementation/plan.md#remaining-implicit-constraint-follow-ups-closed-after-t14)
 を参照。
 
 具体的には、
@@ -81,15 +81,15 @@ implicit-constraint follow-ups (closed after T14)](../../plans/progress/m3-phase
   - ADR §Verification item 3 (unified `.ui → load → click → state →
     bound widget property` chain) は T13 の mock-free Windows-only
     integration test
-    ([wasamo-runtime/tests/bool_binding_live_propagation.rs](../../../wasamo-runtime/tests/bool_binding_live_propagation.rs))
+    ([wasamo-runtime/tests/bool_binding_live_propagation.rs](../../../../wasamo-runtime/tests/bool_binding_live_propagation.rs))
     で証拠化。
   - T6 の widget-setter slice
-    ([wasamo-runtime/tests/button_enabled.rs](../../../wasamo-runtime/tests/button_enabled.rs))
+    ([wasamo-runtime/tests/button_enabled.rs](../../../../wasamo-runtime/tests/button_enabled.rs))
     は file-level comment 通り binding pipeline を bypass する slice
     test で、DD-M3-P1-005 (`PROP_BUTTON_ENABLED` ABI dispatch + visual
     flip + click suppression) の補助 evidence。
   - visible-window proof は `.ui`-driven
-    [examples/bool-demo-rust/](../../../examples/bool-demo-rust/)
+    [examples/bool-demo-rust/](../../../../examples/bool-demo-rust/)
     の owner-manual smoke でカバー。
 - `TypedValue` (F5) は本 phase でも引き続き deferred。DD-M3-P1-007 は
   「per-type evaluator/writer pair を ir_loader の call site で選ぶ」
@@ -320,13 +320,13 @@ retroactive fill) と process correction (GUI smoke は owner 領域)
      click → state → bound widget property` chain) は T13 の mock-free
      Windows-only integration test
      `bool_binding_propagates_state_write_through_inline_handler_to_widget_property`
-     ([wasamo-runtime/tests/bool_binding_live_propagation.rs](../../../wasamo-runtime/tests/bool_binding_live_propagation.rs))
+     ([wasamo-runtime/tests/bool_binding_live_propagation.rs](../../../../wasamo-runtime/tests/bool_binding_live_propagation.rs))
      で discharge。T6 の `button_enabled_property_flips_visual_and_
-     suppresses_click` ([wasamo-runtime/tests/button_enabled.rs](../../../wasamo-runtime/tests/button_enabled.rs))
+     suppresses_click` ([wasamo-runtime/tests/button_enabled.rs](../../../../wasamo-runtime/tests/button_enabled.rs))
      は file-level comment 通り binding pipeline を bypass する
      widget-setter slice であり、DD-M3-P1-005 の補助 evidence。
      visible-window proof は `.ui`-driven
-     [examples/bool-demo-rust/](../../../examples/bool-demo-rust/)
+     [examples/bool-demo-rust/](../../../../examples/bool-demo-rust/)
      の owner-manual smoke。
    - A11 (per-phase spec sync): T10 で `dsl_spec.md` / `architecture.md`
      が同 phase 内に更新済み。
@@ -356,7 +356,7 @@ retroactive fill) と process correction (GUI smoke は owner 領域)
      retrospective `docs/notes/m3-phase-1/t1-…/t11-*.md` 11 本は
      execution-level の細部を引き続き保持する。
    - **次 phase pre-doc input の書き起こし (本 phase close 内で完了):**
-     [docs/notes/m3-phase-2/predoc-inputs.md](../m3-phase-2/predoc-inputs.md)
+     [docs/notes/m3-phase-2/predoc-inputs.md](../../phase-2/requirements/constraints.md)
      に M3-Phase 2 (Box layout primitive) 視点で書き起こし済み。
      §1–§9 が以下を網羅:
      - §1: 新規 `PropertyValue` variant 追加 = ABI value-conversion
@@ -382,7 +382,7 @@ retroactive fill) と process correction (GUI smoke は owner 領域)
        `m2-to-m3-handover.md` §3 item 4 に本体を置き、ここでは
        back-pointer として残す (Follow-up B)。
    - これは
-     [docs/notes/retrospectives.md §Retrospective Main Learning の前送り](../retrospectives.md#retrospective-main-learning-の前送り)
+     [docs/notes/retrospectives.md §Retrospective Main Learning の前送り](../../../procedures/retrospectives.md#retrospective-main-learning-の前送り)
      の「phase close 内で書き起こす」要件への適合。次 phase pre-doc
      起草時は M3-Phase 2 owner-agreed framing に合わせて §1–§9 を
      取り込む / 並べ替える / 削減することは Phase 2 内の判断だが、
@@ -418,7 +418,7 @@ retroactive fill) と process correction (GUI smoke は owner 領域)
      wasamoc lowering / examples 等、ユーザー可視の挙動に影響しうる
      phase では必要」と定めている。Phase 1 はそのすべてに該当する
      ので、本来は `counter-c` / `counter-rust` / `counter-zig` を
-     [human-visible GUI smoke](../human-visible-smoke.md) に従って
+     [human-visible GUI smoke](../../../../docs/notes/human-visible-smoke.md) に従って
      確認すべき位置にある。
    - **実施済み判定の根拠:** Phase 1 の新 surface の人間可視領域は
      次の三層でカバー済み。
@@ -454,7 +454,7 @@ retroactive fill) と process correction (GUI smoke は owner 領域)
 **Merge readiness:** ready for owner no-ff merge approval. GitHub
 Actions CI green has been confirmed on `feat/m3-phase-1`; push remains
 a separate owner-approved gate per
-[docs/notes/retrospectives.md](../retrospectives.md) と
+[docs/notes/retrospectives.md](../../../procedures/retrospectives.md) と
 `feedback_phase_end_merge` memory。
 
 phase-end retrospective としては、以下を owner に報告する。
@@ -478,7 +478,7 @@ phase-end retrospective としては、以下を owner に報告する。
 Phase 1 内で新たに発生した out-of-phase residual はなし [T12
 phase-end 時点]。M2-to-M3 の引き継ぎ residual (cycle detection /
 dependency-tie observable contract / `MUTATION_CAP` × fan-out
-interaction) は [m2-to-m3-handover.md §3](../m2-to-m3-handover.md)
+interaction) は [m2-to-m3-handover.md §3](../../../milestone-2/handoff.md)
 に既記載のままで、本 phase は触れていない。
 
 §Main Learning #3 の `cargo fmt` process gap は M3-Phase 1 内で応急
@@ -488,7 +488,7 @@ interaction) は [m2-to-m3-handover.md §3](../m2-to-m3-handover.md)
 
 **T12 phase-end 後追記 (2026-05-19):** 本 phase close 中に Follow-up B
 (T13 proof の synchronous non-batched drain 依存) を新規 cross-phase
-前提として [m2-to-m3-handover.md §3 item 4](../m2-to-m3-handover.md)
+前提として [m2-to-m3-handover.md §3 item 4](../../../milestone-2/handoff.md)
 に M3-Phase 1 addendum として登録した。これは「本 phase 中に新規発生
 した cross-phase residual を handover に追加した」例であり、上記の
 既存 M2-to-M3 residual とは出自が異なる。Follow-up A
@@ -514,7 +514,7 @@ All local build/test commands completed successfully. GitHub Actions
 `workflow_dispatch` run
 [26094510225](https://github.com/matarillo/wasamo/actions/runs/26094510225)
 on `feat/m3-phase-1` is green, and the progress file's
-[§CI / verification log](../../plans/progress/m3-phase-1-progress.md#ci--verification-log)
+[§CI / verification log](../implementation/log.md#ci--verification-log)
 records that it includes both T6 `button_enabled` and T13
 `bool_binding_live_propagation`.
 

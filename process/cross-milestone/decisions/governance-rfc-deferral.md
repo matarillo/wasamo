@@ -2,15 +2,15 @@
 
 **Status:** Accepted 2026-05-25
 
-**Scope:** VISION.md §9.2 and §11; docs/decisions/README.md §Scope and
+**Scope:** VISION.md §9.2 and §11; process/README.md §Scope and
 relation to RFCs; cross-references in docs/notes/m2-to-m3-handover.md,
 docs/notes/m3/m3-start-framing.md, and docs/notes/typed-value-evaluator.md.
 
 This vision decision record resolves the governance drift flagged in
-[m3-phase-3-wrap-panel.md §Governance note](./m3-phase-3-wrap-panel.md#governance-note-m3-phase-adr-vs-rfc-transition).
+[m3-phase-3-wrap-panel.md §Governance note](../../milestone-3/phase-3/decisions/preamble.md#governance-note-m3-phase-adr-vs-rfc-transition).
 The original VISION text — "M3 onward. Gradual transition to RFC-based
 consensus" — predates the post-M2 roadmap restructuring
-([vision-post-m2-roadmap.md](./vision-post-m2-roadmap.md), 2026-05-02)
+([vision-post-m2-roadmap.md](post-m2-roadmap.md), 2026-05-02)
 that redefined M3 as the *DSL surface* milestone and pushed 1.0 out
 to M6. Under the original milestone scheme (M2 Alpha / M3 Beta /
 M4 1.0) the M3 transition pointed at a near-1.0 maturity boundary;
@@ -129,7 +129,7 @@ DD.
 |---|---|---|
 | VISION.md §9.2 | Replace the three-bullet trajectory with a two-bullet one: "Pre-1.0 (M1–M6)" BDFL + ADRs; "Post-1.0" fully open governance + RFC machinery introduced together | Implements DD-V-018 |
 | VISION.md §11 | Drop the "From M3 onward, substantial feature proposals follow the RFC process in `docs/rfcs/`" sentence; replace with pre-1.0 ADR guidance and a forward-tense note that RFC process begins post-1.0 | Removes the dead `docs/rfcs/` link and matches DD-V-018 |
-| docs/decisions/README.md §Scope and relation to RFCs | Rewrite the "From M3 onward" sentence to "From post-1.0 onward"; keep the ADR-as-authoritative-record framing for the entire pre-1.0 period | Matches DD-V-018; aligns with realised M1–M3 phase-ADR flow |
+| process/README.md §Scope and relation to RFCs | Rewrite the "From M3 onward" sentence to "From post-1.0 onward"; keep the ADR-as-authoritative-record framing for the entire pre-1.0 period | Matches DD-V-018; aligns with realised M1–M3 phase-ADR flow |
 | docs/notes/m2-to-m3-handover.md line ~193 | "binding ADR or RFC" → "binding ADR" (pre-1.0 timeframe) | Consistency with DD-V-018 |
 | docs/notes/m3/m3-start-framing.md lines 15–16, 167 | "ADR / RFC" enumeration and "M3-era RFC" mention → ADR-only framing; M3 is pre-1.0 so no RFC process is in effect | Consistency with DD-V-018 |
 | docs/notes/typed-value-evaluator.md line ~90 | "ADR または RFC" → "ADR" (note is owner-authored Japanese; RFC reference is pre-1.0 so collapses to ADR per DD-V-018) | Consistency with DD-V-018 |

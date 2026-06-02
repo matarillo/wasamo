@@ -1,4 +1,4 @@
-﻿## Task list
+## Task list
 
 ### T0 — Moment 1 document sync
 
@@ -137,11 +137,11 @@ for owner-manual GUI smoke (2026-05-25)"** for the rationale.
       hidden; off-viewport thumbnails enter view as `scroll_y`
       progresses.
 - [x] Owner explicitly accepts the smoke result, or records a fail
-      observation note (per [human-visible GUI smoke](../../notes/human-visible-smoke.md)).
+      observation note (per [human-visible GUI smoke](../../../../docs/notes/human-visible-smoke.md)).
       Owner accepted on 2026-05-25 after the re-smoke pass on the
       rebuilt binary discharged all four observation points; smoke
       evidence at
-      [docs/references/m3-phase-4/](../../references/m3-phase-4/)
+      [docs/references/m3-phase-4/](./evidence/)
       (`t6-gallery-smoke-scroll-y-0.png`,
       `t6-gallery-smoke-scroll-y-100.png`,
       `t6-gallery-smoke-scroll-y-800.png`,
@@ -149,7 +149,7 @@ for owner-manual GUI smoke (2026-05-25)"** for the rationale.
 - [x] **If smoke fails:** implementation fix lands additively on the
       T6 branch (new commits); the smoke checklist above is re-run to
       green before T6 closes. Fix scope stays inside the Phase 4 ADR
-      (`docs/decisions/m3-phase-4-scroll-view.md`) / dsl_spec §4.11 /
+      (`process/milestone-3/phase-4/decisions/preamble.md`) / dsl_spec §4.11 /
       architecture.md §6.5; any fix requiring a normative spec change
       escalates to T7 Moment 2 (or, if unsuitable for Moment 2, a
       mid-ADR addendum). Fix iterations stay inside T6 until the
@@ -186,7 +186,7 @@ for owner-manual GUI smoke (2026-05-25)"** for the rationale.
       (Alt+F4 / ×) crash-free.
 - [x] T6 step-end retrospective recorded under
       `docs/notes/m3-phase-4/`
-      ([t6-step-end-retrospective.md](../../notes/m3-phase-4/t6-step-end-retrospective.md)).
+      ([t6-step-end-retrospective.md](../retrospectives/t6.md)).
 
 ### T7 — Phase-end gates and Moment 2 re-sync
 

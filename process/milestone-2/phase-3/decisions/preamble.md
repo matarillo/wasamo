@@ -1,4 +1,4 @@
-﻿# M2-Phase 3 — Handler execution location: Architecture Decisions
+# M2-Phase 3 — Handler execution location: Architecture Decisions
 
 **Phase:** M2-Phase 3 (DSL inline handler execution location)
 **Date:** 2026-05-04
@@ -6,13 +6,13 @@
 
 ## Context
 
-[Phase 6 ADR](./phase-6-c-abi.md) explicitly deferred two questions to
+[Phase 6 ADR](../../../milestone-1/phase-6/decisions/preamble.md) explicitly deferred two questions to
 M2 to keep the stable C ABI core neutral:
 
 > **(a)** Where DSL inline handler bodies (`clicked => { … }`) execute
 > — host-side trampoline vs runtime-side interpreter.
 
-This ADR resolves question (a). [M2-Phase 2 ADR](./m2-phase-2-wasamoc-output-format.md)
+This ADR resolves question (a). [M2-Phase 2 ADR](../../phase-2/decisions/preamble.md)
 resolved (b) by Accepting Option B (compile to IR + runtime interpreter
 inside `wasamo-runtime`), with feasibility verified by the
 `exp/m2-p2-ir-loader-spike` branch.
@@ -33,7 +33,7 @@ clicked => { root.count += 1; }
 ```
 
 attached to the Increment button. In the M1 AST
-([wasamoc/src/ast.rs:98](../../wasamoc/src/ast.rs#L98)) this is a
+([wasamoc/src/ast.rs:98](../../../../wasamoc/src/ast.rs#L98)) this is a
 `Member::SignalHandler { signal, body, span }` — a `Block` of
 statements that runs when the named signal fires on the enclosing
 widget. M2 acceptance criterion **A1** requires this construct to
@@ -66,12 +66,12 @@ this ADR answers.**
   reach the runtime through *some* path — direct calls if runtime-side,
   C ABI if host-side.
 - **Binding workload scaling** (recurring constraint from
-  [VISION §11](../../VISION.md), reused from DD-M2-P2-001 framing).
+  [VISION §11](../../../../VISION.md), reused from DD-M2-P2-001 framing).
   Anything that requires a per-binding-language code path increases
   the cost of adding a new binding; anything that lives once in
   `wasamo-runtime` is paid for once.
 - **Pre-existing experimental setter.** The M1 experimental layer's
-  `wasamo_button_set_clicked` ([phase-6-c-abi.md DD-P6-002](./phase-6-c-abi.md#dd-p6-002--signal-model))
+  `wasamo_button_set_clicked` ([phase-6-c-abi.md DD-P6-002](../../../milestone-1/phase-6/decisions/preamble.md#dd-p6-002--signal-model))
   is a per-widget typed setter, not an inline-handler mechanism. It
   is preserved as-is for M1 hosts and is not in scope here.
 
@@ -88,7 +88,7 @@ this ADR answers.**
 
 The Impl-risk column reads the same as prior ADRs: feasibility within
 this phase. The Forward-compat exposure column is new from this ADR
-onwards (see [decisions/README.md](./README.md)) and rates how much
+onwards (see [decisions/README.md](../../../README.md)) and rates how much
 the recommended option is exposed to revision when post-M2 DSL or
 C ABI extensions land. A per-DD `**Forward-compat exposure**`
 paragraph is written only where options differ on this axis;

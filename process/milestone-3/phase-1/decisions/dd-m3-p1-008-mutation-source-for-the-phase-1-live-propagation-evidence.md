@@ -1,4 +1,4 @@
-﻿### DD-M3-P1-008 — Mutation source for the Phase 1 live-propagation evidence
+### DD-M3-P1-008 — Mutation source for the Phase 1 live-propagation evidence
 
 **Status:** Accepted
 
@@ -10,10 +10,10 @@ the evidence. The remaining question: *what changes the bound
 
 The previous draft of this DD assumed "host-side via existing C ABI
 write path" using `wasamo_set_property`. That assumption is false:
-[`wasamo_set_property` (abi.rs L711)](../../wasamo-runtime/src/abi.rs#L711)
+[`wasamo_set_property` (abi.rs L711)](../../../../wasamo-runtime/src/abi.rs#L711)
 writes a **widget property** by `(widget*, property_id)`. State
 signals live in
-[`SignalRegistry` (reactive.rs L389)](../../wasamo-runtime/src/reactive.rs#L389)
+[`SignalRegistry` (reactive.rs L389)](../../../../wasamo-runtime/src/reactive.rs#L389)
 keyed by state name; the C ABI surface has no `(state_name) →
 WasamoValue` entry point. So "host-side mutation of `ready`" is not
 something the M2 ABI grants for free — it has to be built.
@@ -56,7 +56,7 @@ Option B — Introduce a new C ABI entry point for state writes
 - A permanent, public ABI primitive: "host sets a named state
   signal." The host fixture would call this with `WASAMO_VALUE_BOOL`
   to drive `ready`. The bool tag (`WASAMO_VALUE_BOOL = 3` and
-  `v_bool` in [abi.rs L74-90](../../wasamo-runtime/src/abi.rs#L74-L90))
+  `v_bool` in [abi.rs L74-90](../../../../wasamo-runtime/src/abi.rs#L74-L90))
   is already in the ABI; only the dispatch arm in
   `wasamo_set_state` would be new.
 

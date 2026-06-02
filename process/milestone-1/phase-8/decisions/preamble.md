@@ -1,4 +1,4 @@
-﻿# Phase 8 — Hello Counter Sample × 3 Languages: Architecture Decisions
+# Phase 8 — Hello Counter Sample × 3 Languages: Architecture Decisions
 
 **Phase:** 8 (Hello Counter sample × C / Rust / Zig — final M1 deliverable)
 **Date:** 2026-05-01
@@ -7,30 +7,30 @@
 ## Context
 
 Phase 8's acceptance criterion comes directly from
-[VISION §7 M1](../../VISION.md#7-roadmap--milestones) and
-[ROADMAP M1](../../ROADMAP.md#m1-proof-of-concept):
+[VISION §7 M1](../../../../VISION.md#7-roadmap--milestones) and
+[process/_roadmap.md M1](../../../_roadmap.md#m1-proof-of-concept):
 **"Hello Counter example runs in three languages: C, Rust, and Zig."**
 
-The runtime ([`wasamo-runtime`](../../wasamo/)), the C ABI
-([`bindings/c/wasamo.h`](../../bindings/c/wasamo.h),
-[`docs/abi_spec.md`](../abi_spec.md)), and the three bindings
-([`bindings/c/`](../../bindings/c/),
-[`bindings/rust/`](../../bindings/rust/),
-[`bindings/zig/`](../../bindings/zig/)) all landed in Phases 6–7.
+The runtime ([`wasamo-runtime`](../../../../wasamo-runtime/)), the C ABI
+([`bindings/c/wasamo.h`](../../../../bindings/c/wasamo.h),
+[`docs/abi_spec.md`](../../../../docs/abi_spec.md)), and the three bindings
+([`bindings/c/`](../../../../bindings/c/),
+[`bindings/rust/`](../../../../bindings/rust/),
+[`bindings/zig/`](../../../../bindings/zig/)) all landed in Phases 6–7.
 Phase 8 consumes them: each binding gets one host-language
-"counter" program that reproduces [`examples/counter/counter.ui`](../../examples/counter/counter.ui).
+"counter" program that reproduces [`examples/counter/counter.ui`](../../../../examples/counter/counter.ui).
 
-The ROADMAP Phase 8 task list ([../../ROADMAP.md L224-L233](../../ROADMAP.md#L224-L233))
+The roadmap Phase 8 task list ([process/_roadmap.md M1](../../../_roadmap.md#m1-proof-of-concept))
 has eight items. Per
-[Pre-doc discipline](./README.md#pre-doc-discipline) those are
+[Pre-doc discipline](../../../README.md) those are
 working hypotheses; this ADR revisits them against the acceptance
 criterion. Of the questions surfaced, two warrant ADR-level
 record:
 
 1. **DD-P8-001** — How `examples/counter/counter.ui` relates to the
    three host programs. The other M1 framing documents
-   ([abi_spec §5.1](../abi_spec.md#51-what-m1-experimental-verifies-and-what-it-does-not),
-   [VISION §7 M1](../../VISION.md#7-roadmap--milestones)) already
+([abi_spec §5.1](../../../../docs/abi_spec.md#51-what-m1-experimental-verifies-and-what-it-does-not),
+   [VISION §7 M1](../../../../VISION.md#7-roadmap--milestones)) already
    carve out the M1/M2 split; Phase 8 is where that split first
    becomes visible to end users, so the application warrants one
    explicit decision and a few small upstream wording adjustments.
@@ -50,7 +50,7 @@ that keeps the M2/M3/M4 = 0.2/0.3/1.0 mapping legible) — are not
 ADR-shaped. They are recorded in the Phase 8 ROADMAP entry, in
 PR descriptions, and in the affected docs (READMEs, `abi_spec.md`,
 CI workflow). See
-[Option enumeration discipline](./README.md) for why we keep
+[Option enumeration discipline](../../../README.md) for why we keep
 ADRs scoped to substantive choices rather than every Phase 8
 sub-task.
 

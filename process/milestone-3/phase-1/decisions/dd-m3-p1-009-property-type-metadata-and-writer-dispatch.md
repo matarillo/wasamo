@@ -1,4 +1,4 @@
-﻿### DD-M3-P1-009 — Property type metadata and writer dispatch
+### DD-M3-P1-009 — Property type metadata and writer dispatch
 
 **Status:** Accepted
 
@@ -10,10 +10,10 @@ target is `Button.enabled: bool`, the `(widget_type, prop_name) →
 PropertyKey` lookup needs to also carry the property's type.
 
 Today,
-[`resolve_prop_key` (ir_loader.rs L797)](../../wasamo-runtime/src/ir_loader.rs#L797)
+[`resolve_prop_key` (ir_loader.rs L797)](../../../../wasamo-runtime/src/ir_loader.rs#L797)
 returns `Option<PropertyKey>` (= `Option<u32>`); the property's type
 is implicit in the per-widget setter's `match` on the `PROP_*` id
-([widget.rs L375 onwards](../../wasamo-runtime/src/widget.rs#L375)).
+([widget.rs L375 onwards](../../../../wasamo-runtime/src/widget.rs#L375)).
 That works for M2 (i32 and String dispatched by the setter), but the
 *binding loader* doesn't see the type — it just hands the string-baked
 writer to `register_binding`. To select a typed writer at binding
@@ -59,7 +59,7 @@ type tag)
 
   - What you give up: Opaque encoding for a problem better solved
     by a struct field. The ABI exposes `property_id: u32`
-    ([abi_spec §3.3 + abi.rs L711](../../wasamo-runtime/src/abi.rs#L711));
+    ([abi_spec §3.3 + abi.rs L711](../../../../wasamo-runtime/src/abi.rs#L711));
     leaking type bits into ABI identifiers is a long-term
     maintenance liability.
 

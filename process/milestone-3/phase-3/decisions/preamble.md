@@ -1,4 +1,4 @@
-﻿# M3-Phase 3 — WrapPanel layout primitive: Architecture Decisions
+# M3-Phase 3 — WrapPanel layout primitive: Architecture Decisions
 
 **Phase:** M3-Phase 3 (WrapPanel layout primitive)
 **Date:** 2026-05-21
@@ -7,8 +7,8 @@
 ## Context
 
 M3 acceptance criterion **A3** (see
-[ROADMAP.md M3](../../ROADMAP.md#m3-dsl-surface),
-[m3-plan.md §Acceptance criteria](../plans/m3-plan.md#acceptance-criteria)):
+[process/_roadmap.md M3](../../../_roadmap.md#m3-dsl-surface),
+[m3-plan.md §Acceptance criteria](../../plan.md#acceptance-criteria)):
 
 > WrapPanel layout primitive, demonstrating that DSL can express a
 > two-stage measure-arrange — linear main-axis placement plus
@@ -17,7 +17,7 @@ M3 acceptance criterion **A3** (see
 
 The pre-doc framing for this phase was aligned with the owner on
 2026-05-21 and is recorded in
-[docs/notes/m3-phase-3/pre-doc-framing.md](../notes/m3-phase-3/pre-doc-framing.md).
+[docs/notes/m3-phase-3/pre-doc-framing.md](../requirements/framing.md).
 That framing fixed the 6-DD slate carried below, the visible-proof
 location (framing decision E — grow Phase 2's `examples/gallery/` +
 `examples/gallery-rust/` sub-screen into a WrapPanel of Boxes), the
@@ -26,7 +26,7 @@ two upstream-document-revision moments inherited verbatim from
 Phase 2 (framing decision D).
 
 Per the M2-Phase 2 framing decision D postmortem
-([m3-phase-2 framing notes](../notes/m3-phase-2/m3-phase-2-pre-doc-framing.md)),
+([m3-phase-2 framing notes](../../phase-2/requirements/framing.md)),
 the "Moment is not a commit unit" rule applies from the start of
 Phase 3: each upstream-document edit in a Moment lands as its own
 commit on the pre-doc branch, scoped by review concern, not bundled.
@@ -34,7 +34,7 @@ commit on the pre-doc branch, scoped by review concern, not bundled.
 The M2/M3-Phase-1/M3-Phase-2 end-state shape that this phase extends
 without breaking:
 
-- `wasamo-ir` ([wasamo-ir/src/lib.rs](../../wasamo-ir/src/lib.rs)):
+- `wasamo-ir` ([wasamo-ir/src/lib.rs](../../../../wasamo-ir/src/lib.rs)):
   `IrType` is `I32 | Str | Bool`; `IrLiteral` is `Int | Str | Ident |
   Bool | Ratio | Color`. The `Ratio` / `Color` literals were added in
   Phase 2 (DD-M3-P2-002 / DD-M3-P2-003) as Box-internal domain types
@@ -42,12 +42,12 @@ without breaking:
   plumbing for all WrapPanel attributes; no new literal form is
   introduced.
 - `wasamo-runtime` widget catalog
-  ([wasamo-runtime/src/widget.rs](../../wasamo-runtime/src/widget.rs)):
+  ([wasamo-runtime/src/widget.rs](../../../../wasamo-runtime/src/widget.rs)):
   `Rectangle | VStack | HStack | Text | Button | Box`. `PropertyValue`
   enum is `I32(i32) | String(String) | Bool(bool)`; no new variant
   added in Phase 2. Phase 3 adds `WrapPanel` as a per-kind tag (DD-001).
 - Layout engine
-  ([wasamo-runtime/src/layout.rs](../../wasamo-runtime/src/layout.rs)):
+  ([wasamo-runtime/src/layout.rs](../../../../wasamo-runtime/src/layout.rs)):
   pure-data `LayoutNode` / `measure` / `arrange` boundary, Win32/WinRT-
   free. Phase 2 introduced `LayoutError::{BoxAspectUnboundedBoth,
   BoxNoExtent}`; Phase 3 inherits the error class and may extend it
@@ -56,7 +56,7 @@ without breaking:
   Phase 3 WrapPanel attributes are constant-only (per DD-002 / DD-003
   / DD-004 below), so no new seam triple is built. F5 (`TypedValue`
   deferral) is held in force by construction.
-- `wasamoc` ([wasamoc/src/check.rs](../../wasamoc/src/check.rs)):
+- `wasamoc` ([wasamoc/src/check.rs](../../../../wasamoc/src/check.rs)):
   state-name → declared-type table; identifier resolution lowers to
   typed `*PropRead` variants. Phase 3 adds no new value type; the
   WrapPanel attributes are integer literals and `wasamoc check` rejects
@@ -65,7 +65,7 @@ without breaking:
 This ADR is framed against A3 and the m3-plan's "first M3 phase to
 introduce novel normative measure-arrange spec in `docs/dsl_spec.md`"
 designation
-([m3-plan.md §Phase breakdown](../plans/m3-plan.md#phase-breakdown)).
+([m3-plan.md §Phase breakdown](../../plan.md#phase-breakdown)).
 It does **not** re-open F5 (`TypedValue` deferral) — every attribute
 the WrapPanel exposes ships constant-only; bindable surface is
 deferred per attribute to the phase that first needs it. Image-widget
@@ -78,7 +78,7 @@ line-spacing: <i32>; <Box-children> }` and the shared crates lower →
 load → render it with correct two-stage measure-arrange, (ii) the
 WrapPanel chapter lands in `docs/dsl_spec.md` §4.10 as a normative
 spec at the milestone-end criteria bar
-([m3-plan.md §Milestone-end criteria item 5](../plans/m3-plan.md#milestone-end-criteria))
+([m3-plan.md §Milestone-end criteria item 5](../../plan.md#milestone-end-criteria))
 applied at phase close, and (iii) `examples/gallery/` +
 `examples/gallery-rust/` are grown additively from Phase 2's single-Box
 sub-screen into a WrapPanel of Box thumbnails. Per A11, all sides
@@ -86,16 +86,16 @@ advance together by phase close.
 
 ### Governance note (M3 phase-ADR vs RFC transition)
 
-[VISION.md §9.2](../../VISION.md#92-decision-making) describes a
+[VISION.md §9.2](../../../../VISION.md#92-decision-making) describes a
 "gradual transition to RFC-based consensus" for M3 onward, with
 major changes discussed in `docs/rfcs/`.
-[docs/decisions/README.md §Scope and relation to RFCs](./README.md#scope-and-relation-to-rfcs)
+[process/README.md §Scope and relation to RFCs](../../../README.md)
 echoes the same wording. Both texts treat M1/M2 phase-ADR practice
 as the pre-transition baseline.
 
 In observed practice, M3 Phase 1
-([m3-phase-1-bool-scalar.md](./m3-phase-1-bool-scalar.md)) and
-M3 Phase 2 ([m3-phase-2-box-layout.md](./m3-phase-2-box-layout.md))
+([m3-phase-1-bool-scalar.md](../../phase-1/decisions/preamble.md)) and
+M3 Phase 2 ([m3-phase-2-box-layout.md](../../phase-2/decisions/preamble.md))
 both ran as ADRs without invoking the RFC process;
 `docs/rfcs/` does not yet exist in the repository, and the
 RFC-process content (template, lifecycle, acceptance rule) has not
@@ -121,7 +121,7 @@ flip blocks until the governance question is resolved upstream.
 
 **Resolution (post-hoc, 2026-05-25).** The upstream governance
 question was resolved by
-[vision-governance-rfc-deferral.md DD-V-018](./vision-governance-rfc-deferral.md#dd-v-018--defer-rfc-adoption-to-post-10),
+[vision-governance-rfc-deferral.md DD-V-018](../../../cross-milestone/decisions/governance-rfc-deferral.md#dd-v-018--defer-rfc-adoption-to-post-10),
 which collapsed the three-stage governance trajectory into two
 stages (pre-1.0 BDFL + ADRs, post-1.0 open governance + RFC
 machinery introduced together). The phase-ADR path was therefore
@@ -194,7 +194,7 @@ do not appear as recommended options —
 - **Image widget surface.** M4+; placeholder pattern from Phase 2
   DD-M3-P2-006 carries through unchanged.
 - **`TypedValue` generic value union.** F5 maintained
-  ([m2-to-m3-handover.md §4](../notes/m2-to-m3-handover.md)).
+  ([m2-to-m3-handover.md §4](../../../milestone-2/handoff.md)).
   DD-002 / DD-003 / DD-004's constant-only stances preserve the
   deferral structurally; no Phase 3 attribute pressures `TypedValue`.
 - **Bindable surface for any WrapPanel attribute** exposed by
@@ -213,7 +213,7 @@ do not appear as recommended options —
   set to wrap within the default window (800×600); overflow handling
   arrives with Phase 4 ScrollView.
 - **C / Zig host parity for the WrapPanel sub-screen.**
-  [m3-plan.md §Phase-end criteria item 5](../plans/m3-plan.md#phase-end-criteria)
+  [m3-plan.md §Phase-end criteria item 5](../../plan.md#phase-end-criteria)
   calls for at least one host per phase; Phase 8 broadens the full
   gallery to all three. Phase 3 grows `examples/gallery-rust/` only.
 - **WrapPanel-specific layered diagnostics**
@@ -228,13 +228,13 @@ do not appear as recommended options —
 
 Implementation findings that surfaced during Phase 3 T1–T9 but fall
 outside this ADR's scope are recorded under
-[m3-phase-3-progress.md §Out-of-phase residuals](../plans/progress/m3-phase-3-progress.md#out-of-phase-residuals):
+[m3-phase-3-progress.md §Out-of-phase residuals](../implementation/handoff.md#out-of-phase-residuals):
 
 - **R1** — `.gitignore` `*.uic` pattern (cross-cutting build
   hygiene).
 - **R2** — `sync_visuals` ↔ pure-layout boundary test gap
   (post-Phase-3 test coverage; the architecture clarification half
-  was folded into [docs/architecture.md §6.5](../architecture.md)
+was folded into [docs/architecture.md §6.5](../../../../docs/architecture.md)
   in the T10 close).
 
 ## Owner-agreement checkpoints
@@ -338,7 +338,7 @@ experience.
 ## Summary of decisions
 
 The **Forward-compat exposure** column rates the recommended option
-of each DD per [decisions README §Risk evaluation](./README.md#risk-evaluation).
+of each DD per [decisions README §Risk evaluation](../../../README.md).
 All six rate `Low` because every recommendation is structurally
 additive against the foreseeable future events catalogued in
 **Out of scope** above (Phase 4 ScrollView, Phase 5 Grid, Phase 6
@@ -367,11 +367,11 @@ Implementation task list: belongs in the Phase 3 progress file
 `docs/plans/progress/m3-phase-3-progress.md` (created when this ADR
 is Accepted and Phase 3 starts execution); not in this ADR and not
 in `m3-plan.md` itself. See
-[plans/README.md §Scope rule (plan vs ADR)](../plans/README.md#scope-rule-plan-vs-adr)
-and [plans/README.md §Phase progress file lifecycle](../plans/README.md#phase-progress-file-lifecycle)
+[plans/README.md §Scope rule (plan vs ADR)](../../../README.md#scope-rule-plan-vs-adr)
+and [plans/README.md §Phase progress file lifecycle](../../../README.md#phase-progress-file-lifecycle)
 for the authoritative location and the `active → closing → retired
 → archived` lifecycle the file follows. The Progress table in
-[m3-plan.md](../plans/m3-plan.md) carries only a one-row index entry
+[m3-plan.md](../../plan.md) carries only a one-row index entry
 pointing at this progress file.
 
 ## Spec impact preview (for owner agreement)
@@ -380,10 +380,10 @@ When this ADR is Accepted, the following docs change in the
 **Moment 1** commit set (framing decision D — ADR-Accepted /
 design-spec draft). Each constituent lands as its own commit on the
 pre-doc branch, scoped by review concern per
-[CLAUDE.md §Commit rules](../../CLAUDE.md#commit-rules):
+[CLAUDE.md §Commit rules](../../../../CLAUDE.md#commit-rules):
 
 - **ADR `Status: Accepted` flip** — this file.
-- [docs/dsl_spec.md](../dsl_spec.md) — new **§4.10 WrapPanel chapter**
+- [docs/dsl_spec.md](../../../../docs/dsl_spec.md) — new **§4.10 WrapPanel chapter**
   alongside Phase 2's §4.9 Box chapter. The chapter contains:
   - The WrapPanel sizing mental-model subsection (framing decision H)
     — four-fact anchor + ecosystem-contrast block (WPF / Compose /
@@ -409,7 +409,7 @@ pre-doc branch, scoped by review concern per
   - Section marker
     `**Phase status:** M3-Phase 3 ADR-accepted design draft; pending
     implementation re-sync` at the chapter top.
-- [docs/architecture.md](../architecture.md) §6 — WrapPanel entry
+- [docs/architecture.md](../../../../docs/architecture.md) §6 — WrapPanel entry
   under the M2-revised IR section if structural placement warrants;
   short paragraph noting (a) WrapPanel's two-stage measure-arrange
   is the first M3 layout primitive with cross-axis line aggregation,
@@ -417,8 +417,8 @@ pre-doc branch, scoped by review concern per
   WrapPanel attributes constant-only) so the F5 deferral is
   unpressured, and (c) layout engine boundary remains Win32/WinRT-
   free — the line breaker operates on pure data
-  ([predoc-inputs.md §8](../notes/m3-phase-3/predoc-inputs.md)).
-- [docs/abi_spec.md](../abi_spec.md) — **no changes in Phase 3**.
+  ([predoc-inputs.md §8](../requirements/constraints.md)).
+- [docs/abi_spec.md](../../../../docs/abi_spec.md) — **no changes in Phase 3**.
   No new ABI public function, no new `WASAMO_VALUE_*` tag, no new
   arms in `abi.rs`. All WrapPanel attributes are constant-only
   `i32` and stay on the WrapPanel-internal IR node; they do not
@@ -426,13 +426,13 @@ pre-doc branch, scoped by review concern per
   `WASAMO_LAYOUT_ERROR_*` extension — DD-005 Option A adds no
   variant, and the unbounded-cross case fires Phase 2's existing
   Box-side error.
-- [docs/plans/m3-plan.md](../plans/m3-plan.md) — Progress section's
+- [docs/plans/m3-plan.md](../../plan.md) — Progress section's
   Phase 3 row populated (Status: `in progress`; ADR link; progress
   file link).
-- [docs/plans/progress/m3-phase-3-progress.md](../plans/progress/) —
+- [docs/plans/progress/m3-phase-3-progress.md](../implementation/) —
   new file opened with task list mapped to this ADR's verification
   closure items below.
-- [docs/notes/retrospectives.md](../notes/retrospectives.md) —
+- [docs/notes/retrospectives.md](../../../procedures/retrospectives.md) —
   **no Phase-3-specific amendment expected at framing time** per
   framing decision F's process-rules-ssot disposition. Phase 2's
   `cargo fmt` discipline tightening was a one-off; no analogous
@@ -529,7 +529,7 @@ considered satisfied when **all five** of the following are observed:
 
 4. **Windows-runtime layout evidence (CI-gated).** A mock-free
    integration test (per
-   [CLAUDE.md §Testing rules](../../CLAUDE.md#testing-rules)) on
+   [CLAUDE.md §Testing rules](../../../../CLAUDE.md#testing-rules)) on
    the Windows CI runner exercises two fixtures:
 
    - **Wrap-path fixture (primary).** A `.ui` declares a WrapPanel
@@ -588,7 +588,7 @@ WrapPanel sub-screen are explicitly **not** required in Phase 3
 (per framing decision E and the Out of scope list); Phase 8
 broadens the full gallery to all three.
 
-Per [predoc-inputs.md §10](../notes/m3-phase-3/predoc-inputs.md),
+Per [predoc-inputs.md §10](../requirements/constraints.md),
 evidence items (1)–(4) do not collapse into one even though they
 share helper infrastructure — the `wasamoc check` diagnostics, the
 line-breaker tests, the IR-load `validate()` gate tests, and the

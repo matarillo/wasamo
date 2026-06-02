@@ -1,4 +1,4 @@
-﻿## Decisions log
+## Decisions log
 
 - **T11 host choice (2026-05-19):** Added a dedicated
   `examples/bool-demo-rust/` host instead of extending
@@ -10,7 +10,7 @@
 - **T13 retroactive insertion (2026-05-19):** Owner review at T12
   phase-end surfaced that the original T6 acceptance bullet had been
   reading the
-  [m3-phase-1-bool-scalar.md ADR §Verification item 3](../../decisions/m3-phase-1-bool-scalar.md#verification-strategy)
+  [m3-phase-1-bool-scalar.md ADR §Verification item 3](../decisions/preamble.md#verification-strategy)
   as discharged by `button_enabled.rs`, but that test bypasses the
   binding pipeline by design. T13 was added to discharge the actual
   `.ui → load → click → state → bound widget property` chain that

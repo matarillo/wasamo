@@ -1,4 +1,4 @@
-﻿### DD-M3-P3-003 — Spacing attributes (item-spacing, line-spacing, padding)
+### DD-M3-P3-003 — Spacing attributes (item-spacing, line-spacing, padding)
 
 **Status:** Accepted
 
@@ -10,7 +10,7 @@ within a line), line spacing (cross-axis gap between lines), padding
 Spacing is the *gap between* items, not the *size of* items. The
 item-size source is DD-004's question; once items have a size, spacing
 decides what visible gap separates them. The wireframe's 12px gap
-(see [docs/references/m3-gallery-wireframe.html](../references/m3-gallery-wireframe.html))
+(see [docs/references/m3-gallery-wireframe.html](../../requirements/gallery-wireframe.html))
 is therefore a DD-003 question conditional on DD-004 settling the
 88×88 thumbnail extent. If DD-004 ships zero item-sizing attribute,
 DD-003's spacing has no thumbnails to space.

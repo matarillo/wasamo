@@ -1,9 +1,9 @@
-﻿### DD-M2-P5-006 — Verification strategy
+### DD-M2-P5-006 — Verification strategy
 
 **Status:** Accepted
 
 **Context:**
-[docs/notes/headless-verification.md](../notes/headless-verification.md)
+[docs/notes/headless-verification.md](../../../../docs/notes/headless-verification.md)
 records the M2 stance: do not build a general-purpose headless
 backend; cover pure-logic surfaces with phase-specific test fixtures;
 GUI-observable behaviour is verified by manual exercise on a visible
@@ -15,7 +15,7 @@ The reactive engine has a large pure-logic surface (Signal storage,
 dependency tracker, dirty-set, drain loop, evaluator wiring) and a
 small Visual-Layer-bound surface (the bound widget actually renders
 the new text). Phase 4 established a precedent (Slot/Children mirror
-test pattern, [CLAUDE.md](../../CLAUDE.md) testing rule's optional
+test pattern, [CLAUDE.md](../../../../CLAUDE.md) testing rule's optional
 mirror clause); this DD decides how far to lean on it for Phase 5.
 
 **Options:**
@@ -41,7 +41,7 @@ Option A — Pure-logic only; no new mirrors; GUI manual confirms end-to-end (re
   m2-plan; A2 acceptance is fully confirmed at Phase 6 close
   (counter.ui-driven).
 
-- What you gain: Stays inside [CLAUDE.md](../../CLAUDE.md) testing
+- What you gain: Stays inside [CLAUDE.md](../../../../CLAUDE.md) testing
   rules without further interpretation. Test fixtures are narrow
   and phase-local. No mirror struct to maintain. The pure-logic
   surface is large enough that a "binding evaluator over Signal +
@@ -74,11 +74,11 @@ Option B — Extend the Phase 4 mirror pattern to cover bound widget property wr
   reactive engine. Diminishing-returns — the bridging code is one
   line per binding (Effect's closure is ~3 lines).
 - **Technical risk: Low–medium.** The risk is mirror drift, the
-  same issue that motivates the [CLAUDE.md](../../CLAUDE.md) rule
+  same issue that motivates the [CLAUDE.md](../../../../CLAUDE.md) rule
   to prefer extracting free functions over mirrors.
 
 Option C — Build a "no-Compositor" runtime mode and integration-test through it
-- Per [headless-verification.md (ii)](../notes/headless-verification.md):
+- Per [headless-verification.md (ii)](../../../../docs/notes/headless-verification.md):
   introduce a runtime mode where `WidgetNode` is fully constructed
   but no Compositor / Visual / DirectWrite is created. Tests
   exercise full property write → reactive drain → property store
@@ -88,7 +88,7 @@ Option C — Build a "no-Compositor" runtime mode and integration-test through i
   CI (modulo the actual rendering bit).
 - What you give up: A "Visual on / Visual off" two-mode runtime
   is exactly what
-  [headless-verification.md](../notes/headless-verification.md)'s
+  [headless-verification.md](../../../../docs/notes/headless-verification.md)'s
   long-form analysis rejected for M2 — DD-V-001-era posture
   (no abstraction over Visual Layer) and infrastructure cost.
   Building it as a Phase 5 sub-task expands scope significantly
@@ -102,7 +102,7 @@ Option C — Build a "no-Compositor" runtime mode and integration-test through i
 **Recommendation:** **Option A.**
 
 Pure-logic test fixtures are sufficient for the engine surface and
-align with [CLAUDE.md](../../CLAUDE.md) testing rules without
+align with [CLAUDE.md](../../../../CLAUDE.md) testing rules without
 further reinterpretation. The Phase 4 mirror pattern was used
 sparingly (Slot/Children — small enough state to mirror without
 drift risk); Phase 5 does not present a target small enough to

@@ -1,4 +1,4 @@
-﻿### DD-M3-P2-004 — Bindable surface for `aspect` and `fill`
+### DD-M3-P2-004 — Bindable surface for `aspect` and `fill`
 
 **Status:** Accepted
 
@@ -9,12 +9,12 @@ independently. Either bindable path requires the per-type writer
 seam — a new `evaluate_<T>_binding` + `widget_write_property_<T>` +
 `register_<T>_binding` triple selected at `ir_loader::build_node`
 (DD-M3-P1-007 pattern;
-[predoc-inputs.md §2](../notes/m3-phase-2/predoc-inputs.md#2-新しい-bindable-property-は-per-type-writer-seam-を-ir_loader-call-site-で選ぶ)).
+[predoc-inputs.md §2](../requirements/constraints.md#2-新しい-bindable-property-は-per-type-writer-seam-を-ir_loader-call-site-で選ぶ)).
 F5 (`TypedValue` deferral) is preserved by construction either way —
 the seam structurally enforces it.
 
 The decisive criterion is: does any wireframe surface in
-[docs/references/m3-gallery-wireframe.html](../references/m3-gallery-wireframe.html)
+[docs/references/m3-gallery-wireframe.html](../../requirements/gallery-wireframe.html)
 require Box's aspect or fill to vary reactively *within Phase 2's
 sub-screen*?
 
@@ -96,7 +96,7 @@ a future bindable surface. When that phase lands, the additions are:
   the corresponding `read_property_value` / `write_property_value` /
   `property_value_to_owned` arms in `abi.rs`, folded into the same
   step per
-  [predoc-inputs.md §1](../notes/m3-phase-2/predoc-inputs.md#1-box-が新規-propertyvalue-variant-を入れるなら-abi-value-conversion-arm-は同じ-step-に-fold-する).
+  [predoc-inputs.md §1](../requirements/constraints.md#1-box-が新規-propertyvalue-variant-を入れるなら-abi-value-conversion-arm-は同じ-step-に-fold-する).
 - `abi_spec.md` updated to record the new tags.
 - Widget-catalog `IrType` for the relevant `PROP_*` ids becomes
   `IrType::Ratio` / `IrType::Color`.

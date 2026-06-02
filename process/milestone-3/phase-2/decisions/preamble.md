@@ -1,4 +1,4 @@
-﻿# M3-Phase 2 — Box layout primitive: Architecture Decisions
+# M3-Phase 2 — Box layout primitive: Architecture Decisions
 
 **Phase:** M3-Phase 2 (Box layout primitive)
 **Date:** 2026-05-20
@@ -7,8 +7,8 @@
 ## Context
 
 M3 acceptance criterion **A6** (see
-[ROADMAP.md M3](../../ROADMAP.md#m3-dsl-surface),
-[m3-plan.md §Acceptance criteria](../plans/m3-plan.md#acceptance-criteria)):
+[process/_roadmap.md M3](../../../_roadmap.md#m3-dsl-surface),
+[m3-plan.md §Acceptance criteria](../../plan.md#acceptance-criteria)):
 
 > Box layout primitive (0+ child container; `aspect: <ratio>` attribute
 > subsumes a standalone AspectRatio; minimal `fill: <color>` attribute
@@ -17,7 +17,7 @@ M3 acceptance criterion **A6** (see
 
 The pre-doc framing for this phase was aligned with the owner on
 2026-05-20 and is recorded in
-[docs/notes/m3-phase-2/m3-phase-2-pre-doc-framing.md](../notes/m3-phase-2/m3-phase-2-pre-doc-framing.md).
+[docs/notes/m3-phase-2/m3-phase-2-pre-doc-framing.md](../requirements/framing.md).
 That framing fixed the 6-DD slate carried below, the visible-proof
 location (framing decision F — seed `examples/gallery/` +
 `examples/gallery-rust/`), the verification-strategy menu picks
@@ -29,26 +29,26 @@ Moment 2 implementation re-sync at phase close).
 The M2/M3-Phase 1 end-state shape that this phase extends without
 breaking:
 
-- `wasamo-ir` ([wasamo-ir/src/lib.rs](../../wasamo-ir/src/lib.rs)):
+- `wasamo-ir` ([wasamo-ir/src/lib.rs](../../../../wasamo-ir/src/lib.rs)):
   `IrType` is `I32 | Str | Bool`; `IrLiteral` is `Int | Str | Ident |
   Bool`. `HandlerExpr` uses the unified-but-type-suffixed pattern
   (`IntLit` / `StrLit` / `BoolLit` / `PropRead` / `StrPropRead` /
   `BoolPropRead`). Adding new primitive types follows the same
   type-suffix discipline (DD-M2-P6-003 / DD-M3-P1-003).
 - `wasamo-runtime` widget catalog
-  ([wasamo-runtime/src/widget.rs](../../wasamo-runtime/src/widget.rs)):
+  ([wasamo-runtime/src/widget.rs](../../../../wasamo-runtime/src/widget.rs)):
   `Rectangle | VStack | HStack | Text | Button`; `PropertyValue` enum
   is `I32(i32) | String(String) | Bool(bool)`. Per-widget per-attribute
   `PROP_*` u32 IDs; `resolve_prop_key` returns `(PropertyKey, IrType)`
   (DD-M3-P1-009).
 - Binding pipeline
-  ([wasamo-runtime/src/handler.rs](../../wasamo-runtime/src/handler.rs),
-  [wasamo-runtime/src/ir_loader.rs](../../wasamo-runtime/src/ir_loader.rs)):
+  ([wasamo-runtime/src/handler.rs](../../../../wasamo-runtime/src/handler.rs),
+  [wasamo-runtime/src/ir_loader.rs](../../../../wasamo-runtime/src/ir_loader.rs)):
   per-type binding evaluator + per-type widget writer, dispatched at
   `ir_loader::build_node` by the property's `IrType` (DD-M3-P1-007).
   The reactive engine itself remains type-agnostic. F5
   (`TypedValue` deferral) is held in force by this seam pattern.
-- `wasamoc` ([wasamoc/src/check.rs](../../wasamoc/src/check.rs)):
+- `wasamoc` ([wasamoc/src/check.rs](../../../../wasamoc/src/check.rs)):
   state-name → declared-type table; identifier resolution lowers to
   typed `*PropRead` variants; `bind` LHS / RHS type pairings are
   diagnosed at compile time (DD-M3-P1-010). `TypeName::Float` already
@@ -106,8 +106,8 @@ dependency direction.
 
 - **Image widget surface, asset pipeline, icon font, image decoder.**
   M4 or later
-  ([m3-plan.md §Out of scope](../plans/m3-plan.md#out-of-scope-deferred-to-later-milestones),
-  [m3-target-app-predoc.md — 保留 2 closure](../notes/m3/m3-target-app-predoc.md#保留-2-closure-image-widget-surface-の-m3-開封可否--不開封-m4-へ-defer)).
+  ([m3-plan.md §Out of scope](../../plan.md#out-of-scope-deferred-to-later-milestones),
+  [m3-target-app-predoc.md — 保留 2 closure](../../requirements/spec.md#保留-2-closure-image-widget-surface-の-m3-開封可否--不開封-m4-へ-defer)).
   Phase 2 ships the structural bridge (DD-006); the Image widget
   itself ships when M4+ commits to it.
 - **Button content other than text** (e.g. Image inside Button).
@@ -116,33 +116,33 @@ dependency direction.
   Phase 6. DD-001 Option A's single-child-only Box is the
   structural defence against pre-empting ZStack's contract.
 - **`TypedValue` generic value union.** F5 deferral maintained
-  ([m3-start-framing.md §F5](../notes/m3/m3-start-framing.md);
-  [m2-to-m3-handover.md §4](../notes/m2-to-m3-handover.md)).
+  ([m3-start-framing.md §F5](../../requirements/framing.md);
+  [m2-to-m3-handover.md §4](../../../milestone-2/handoff.md)).
   DD-004's both-attributes-constant-only stance preserves the
   deferral structurally; the per-type writer seam pattern remains
   available for the phase that first opens a new bindable type.
 - **`bool` string-interpolation surface** and any generic
   display-conversion surface. Phase 6+ formatting work
-  ([predoc-inputs.md §8](../notes/m3-phase-2/predoc-inputs.md#8-bool-の-display-conversion-は明示-surface-ができるまで禁止)).
+  ([predoc-inputs.md §8](../requirements/constraints.md#8-bool-の-display-conversion-は明示-surface-ができるまで禁止)).
   Phase 2 introduces no formatting surface; the rule from
   Phase 1's T14 (no implicit `bool` → string) continues without
   Phase 2 action.
 - **Synchronous non-batched drain proof contract.** Cross-phase
   reactive premise carried in
-  [m2-to-m3-handover.md §3 item 4](../notes/m2-to-m3-handover.md).
+  [m2-to-m3-handover.md §3 item 4](../../../milestone-2/handoff.md).
   Box introduces no event / input batching, no layout scheduling,
   and no headless proof boundary changes; Phase 2 does not alter
   this contract
-  ([predoc-inputs.md §9](../notes/m3-phase-2/predoc-inputs.md#9-bool-live-proof-は現行の同期-non-batched-drain-に依存している)
+  ([predoc-inputs.md §9](../requirements/constraints.md#9-bool-live-proof-は現行の同期-non-batched-drain-に依存している)
   is a back-pointer).
 - **Cycle detection / ordering ties / `MUTATION_CAP` × fan-out
   residuals.**
-  [m2-to-m3-handover.md §3 items 1–3](../notes/m2-to-m3-handover.md).
+  [m2-to-m3-handover.md §3 items 1–3](../../../milestone-2/handoff.md).
   Phase 6/7 work — Phase 2 does not exercise the reactive engine
   beyond the constant-load path.
 - **Scrim alpha styling, theme system, multi-color named palette
   resolution.** M4+ (per
-  [m3-target-app-predoc.md Out-of-scope §Visual / styling](../notes/m3/m3-target-app-predoc.md)).
+  [m3-target-app-predoc.md Out-of-scope §Visual / styling](../../requirements/spec.md)).
   DD-003's alpha-yes decision is at the *value-type* layer; the
   *styling* layer (theme palette, dynamic alpha control) remains
   M4+ work.
@@ -157,10 +157,10 @@ dependency direction.
 - **`f32` / `f64` numeric scalar in `IrType`.** Deferred per
   DD-002 Option A (rational-pair aspect) closing the float surface
   for Phase 2.
-  [predoc-inputs.md §7](../notes/m3-phase-2/predoc-inputs.md#7-f32--f64-を-irtype-に入れるかの再評価)'s
+  [predoc-inputs.md §7](../requirements/constraints.md#7-f32--f64-を-irtype-に入れるかの再評価)'s
   default of "do not add" stands.
 - **C / Zig host parity for the Box sub-screen.**
-  [m3-plan.md §Phase-end criteria item 5](../plans/m3-plan.md#phase-end-criteria)
+  [m3-plan.md §Phase-end criteria item 5](../../plan.md#phase-end-criteria)
   calls for at least one host per phase; Phase 8 broadens the full
   gallery to all three. Phase 2 seeds `examples/gallery-rust/`
   only.
@@ -264,11 +264,11 @@ Implementation task list: belongs in the Phase 2 progress file
 `docs/plans/progress/m3-phase-2-progress.md` (created when this ADR
 is Accepted and Phase 2 starts execution); not in this ADR and not
 in `m3-plan.md` itself. See
-[plans/README.md §Scope rule (plan vs ADR)](../plans/README.md#scope-rule-plan-vs-adr)
-and [plans/README.md §Phase progress file lifecycle](../plans/README.md#phase-progress-file-lifecycle)
+[plans/README.md §Scope rule (plan vs ADR)](../../../README.md#scope-rule-plan-vs-adr)
+and [plans/README.md §Phase progress file lifecycle](../../../README.md#phase-progress-file-lifecycle)
 for the authoritative location and the `active → closing → retired
 → archived` lifecycle the file follows. The Progress table in
-[m3-plan.md](../plans/m3-plan.md) carries only a one-row index entry
+[m3-plan.md](../../plan.md) carries only a one-row index entry
 pointing at this progress file.
 
 ## Spec impact preview (for owner agreement)
@@ -277,7 +277,7 @@ When this ADR is Accepted, the following docs change in the
 **Moment 1** commit set (framing decision D — ADR-Accepted /
 design-spec draft):
 
-- [docs/dsl_spec.md](../dsl_spec.md) — extensions in three regions:
+- [docs/dsl_spec.md](../../../../docs/dsl_spec.md) — extensions in three regions:
   - **DSL surface** — new Box chapter under the widget catalog
     documenting the IR node, attributes (`aspect`, `fill`), child-
     layout contract (single-child, centred, clipped), and the
@@ -289,7 +289,7 @@ design-spec draft):
     literals.
   - **IR text grammar** (§8) — `IrLiteral::Ratio` and
     `IrLiteral::Color` productions.
-- [docs/architecture.md](../architecture.md) §6 — Box entry under
+- [docs/architecture.md](../../../../docs/architecture.md) §6 — Box entry under
   the M2-revised IR section if structural placement warrants;
   short paragraph noting the per-type binding seam is *not*
   extended by Phase 2 (`aspect` / `fill` constant-only) so the F5
@@ -297,7 +297,7 @@ design-spec draft):
   enter the runtime as Box-internal domain types only — not as
   `PropertyValue` variants — so the ABI surface remains unchanged
   through Phase 2.
-- [docs/abi_spec.md](../abi_spec.md) — **no changes in Phase 2**.
+- [docs/abi_spec.md](../../../../docs/abi_spec.md) — **no changes in Phase 2**.
   No new ABI public function, no new `WASAMO_VALUE_*` tag, no new
   arms in `abi.rs` (`read_property_value` / `write_property_value` /
   `property_value_to_owned`). The new `Ratio` and `Color` types are
@@ -312,11 +312,11 @@ design-spec draft):
   (`PropertyValue::Color(Color)` / `PropertyValue::Ratio(Ratio)`
   variants, `WASAMO_VALUE_COLOR` / `WASAMO_VALUE_RATIO` tags, and the
   corresponding `abi.rs` arms) land together in that phase per
-  [predoc-inputs.md §1](../notes/m3-phase-2/predoc-inputs.md#1-box-が新規-propertyvalue-variant-を入れるなら-abi-value-conversion-arm-は同じ-step-に-fold-する).
-- [docs/plans/m3-plan.md](../plans/m3-plan.md) — Progress section's
+  [predoc-inputs.md §1](../requirements/constraints.md#1-box-が新規-propertyvalue-variant-を入れるなら-abi-value-conversion-arm-は同じ-step-に-fold-する).
+- [docs/plans/m3-plan.md](../../plan.md) — Progress section's
   Phase 2 row populated (Status: `in progress`; ADR link; progress
   file link).
-- [docs/notes/retrospectives.md](../notes/retrospectives.md) —
+- [docs/notes/retrospectives.md](../../../procedures/retrospectives.md) —
   per framing decision E (a), the step-retrospective checklist's
   item 3 (clean rebuild) is amended to require `cargo fmt --all --
   --check` against the post-commit state explicitly, with "green"
@@ -331,7 +331,7 @@ marker flips to
 divergence between the design-spec draft and the implementation is
 corrected in the same commit, and earlier-phase spec gaps surfaced
 during re-sync may fold per
-[predoc-inputs.md §6](../notes/m3-phase-2/predoc-inputs.md#6-retroactive-spec-gap-fold-は最小範囲で同じ-phase-に折り込む)
+[predoc-inputs.md §6](../requirements/constraints.md#6-retroactive-spec-gap-fold-は最小範囲で同じ-phase-に折り込む)
 with owner confirmation. The Phase 2 progress file is retired in
 the same commit per the standard `active → closing → retired →
 archived` lifecycle.

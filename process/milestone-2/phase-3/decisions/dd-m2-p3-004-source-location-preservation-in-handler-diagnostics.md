@@ -1,4 +1,4 @@
-﻿### DD-M2-P3-004 — Source location preservation in handler diagnostics
+### DD-M2-P3-004 — Source location preservation in handler diagnostics
 
 **Status:** Accepted
 
@@ -7,7 +7,7 @@ DD-M2-P3-003 commits the runtime to logging handler errors. The
 quality of those logs depends on whether IR carries source
 positions back to `.ui` line:column.
 
-M1 `wasamoc` ([wasamoc/src/ast.rs](../../wasamoc/src/ast.rs))
+M1 `wasamoc` ([wasamoc/src/ast.rs](../../../../wasamoc/src/ast.rs))
 already tracks `Span` on every AST node. The IR (DD-M2-P2-002 = B,
 textual) can carry an optional `(span L:C)` annotation per
 expression at modest cost. The question is whether M2 *uses* those

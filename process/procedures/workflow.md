@@ -12,7 +12,7 @@ created: 2026-05-27
 
 - フォルダ構造・命名規約 → [process/README.md](../README.md)
 - 強制力のあるルール（テスト・コミット・CI 等） → [CLAUDE.md](../../CLAUDE.md)
-- レトロスペクティブとマージゲート → [process/procedures/retrospectives.md](./retrospectives.md)
+- レトロスペクティブとマージゲート → [process/procedures/retrospectives.md](retrospectives.md)
 - プロセスルールの SSOT 分散と変更ライフサイクル → [process/cross-milestone/decisions/process-rule-ssot.md](../cross-milestone/decisions/process-rule-ssot.md)
 
 ---
@@ -258,6 +258,10 @@ ADR や決定に昇格して終了、または却下されて消化される。
 DD の構造：Context → Options（複数案） → Comparison → Recommendation →
 Forward-compat exposure → Technical risk re-evaluation。
 
+DD を Accepted に進める前の複数視点レビューには、おすすめ手順とプロンプト
+テンプレート集がある（強制ゲートではない）：
+[design-decision-review.md](./design-decision-review.md)。
+
 Accepted フリップのコミットに続けて **設計同期** を行う（次節参照）。
 
 ### 3.1 設計同期 (Moment 1)
@@ -310,7 +314,7 @@ bundling が必要な場合（中間状態が build を壊す等）は plan を�
 ### 5.2 task retrospective
 
 各 task の完了時に task-end retrospective を回す。手順は
-[process/procedures/retrospectives.md](./retrospectives.md) 参照。
+[process/procedures/retrospectives.md](retrospectives.md) 参照。
 
 - **アウトプット**:
   - `retrospectives/tN.md` — task N の振り返り（または `dd-NNN.md` 形式）
@@ -341,7 +345,7 @@ no-ff merge する。
 task retrospective の項目 10 で蓄積した `carry-forward` 候補を一覧し、
 `doc-folded` 相当 / `carry-forward` / `local-only` の最終分類もここで
 確定する。確定した handoff 対象は §6.3 で清書する。
-手順は [process/procedures/retrospectives.md](./retrospectives.md) 参照。
+手順は [process/procedures/retrospectives.md](retrospectives.md) 参照。
 
 - **アウトプット**:
   - `retrospectives/phase-end.md`
@@ -372,7 +376,7 @@ out-of-scope items だけでなく、次 phase に効く Main Learning、未決�
 引き継ぎ制約を含む。主な内容源は task retrospective の項目 10 に記録
 された `carry-forward` 候補と、phase-end retrospective で最終的に
 `carry-forward` と確定した設計制約
-（→ [retrospectives.md §Main Learning と設計制約の前送り](./retrospectives.md)）。
+（→ [retrospectives.md §Main Learning と設計制約の前送り](retrospectives.md)）。
 
 清書では、複数 task に分散した同種の制約を統合し、次 phase の §2.1
 制約引き継ぎで読みやすい構造に整える。`doc-folded` 相当または
@@ -388,7 +392,7 @@ out-of-scope items だけでなく、次 phase に効く Main Learning、未決�
 ### 6.4 phase branch のマージ
 
 phase retrospective の通過とオーナー承認で phase branch を main に no-ff
-merge する。push は別ゲート（→ [retrospectives.md](./retrospectives.md)）。
+merge する。push は別ゲート（→ [retrospectives.md](retrospectives.md)）。
 
 ---
 

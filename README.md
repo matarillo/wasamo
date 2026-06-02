@@ -134,10 +134,10 @@ The same counter is also available in Rust and Zig:
 
 ## License
 
-Dual-licensed under MIT or Apache-2.0, at your option. See [LICENSE-MIT](./LICENSE-MIT) and [LICENSE-APACHE](./LICENSE-APACHE).
+Dual-licensed under MIT or Apache-2.0, at your option. See the [MIT License](https://opensource.org/license/mit) and [Apache License 2.0](https://www.apache.org/licenses/LICENSE-2.0).
 
 ## Community
 
 - GitHub Discussions — design discussion, use cases
 - Issue Tracker — bug reports, feature requests
-- Code of Conduct — we follow the [Contributor Covenant](./CODE_OF_CONDUCT.md)
+- Code of Conduct — we follow the [Contributor Covenant](https://www.contributor-covenant.org/)

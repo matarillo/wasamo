@@ -3,7 +3,7 @@ title: ヘッドレス検証 — 必要性の批判的検討
 status: live
 created: 2026-05-04
 related-adrs:
-  - docs/decisions/m2-phase-3-handler-exec-location.md
+  - process/milestone-2/phase-3/decisions/preamble.md
 related-notes:
   - docs/notes/verification-environments.md
 ---
@@ -12,7 +12,7 @@ related-notes:
 
 ## 背景
 
-[verification-environments.md](./verification-environments.md) が整理した通り、
+[verification-environments.md](verification-environments.md) が整理した通り、
 wasamo の検証環境は 3 種類:
 
 | 種別 | 環境 |
@@ -144,10 +144,10 @@ phase 完了 close 条件が薄く感じる時に「test 環境の不足」と�
 
 ## 参考
 
-- [verification-environments.md](./verification-environments.md) —
+- [verification-environments.md](verification-environments.md) —
   3 種別 (build / link / GUI) の整理。本ノートはここに「ヘッドレス
   state-only」という第 4 種を足すかの検討。
-- [m2-phase-3-handler-exec-location.md](../decisions/m2-phase-3-handler-exec-location.md) —
+- [M2-Phase 3 handler execution decisions](../../process/milestone-2/phase-3/decisions/preamble.md) —
   検討の発端となった ADR。Phase 3 verification gap を契機に本ノート起草。
 - [CLAUDE.md](../../CLAUDE.md) Testing rules — Win32/WinRT mock 禁止の
   根拠。

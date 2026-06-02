@@ -3,13 +3,13 @@
 All notable shipped milestones for Wasamo. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) at
 milestone granularity (see
-[DD-V-013](./docs/decisions/vision-doc-system.md#dd-v-013--changelog-granularity-and-length-control)).
-Per-phase decisions live in
-[docs/decisions/](./docs/decisions/); per-release notes live in
+[DD-V-013](./process/cross-milestone/decisions/doc-system.md#dd-v-013--changelog-granularity-and-length-control)).
+Per-phase decision records live under
+[process/](./process/); per-release notes live in
 [GitHub Releases](https://github.com/matarillo/wasamo/releases).
 
 This file records what has shipped. For what is planned, see
-[ROADMAP.md](./ROADMAP.md). For the current state of work, see
+[process/_roadmap.md](./process/_roadmap.md). For the current state of work, see
 the **Status** section of [README.md](./README.md).
 
 ## [Unreleased] — M3: DSL surface (in progress)
@@ -103,7 +103,7 @@ progressed. The T6 visible-smoke failure uncovered the window-root
 client rect, not the root container's declared shrink height, owns the
 top-level viewport.
 
-Per-phase spec sync ([A11](./ROADMAP.md#m3-dsl-surface)):
+Per-phase spec sync ([A11](./process/_roadmap.md#m3-dsl-surface)):
 `docs/dsl_spec.md` 1.1 -> 1.2 flips §4.11 to
 `M3-Phase 4 closed; implementation-synced`, records parser-accepted
 multi-line Box examples while leaving `;` as a post-Phase-4 member
@@ -117,7 +117,7 @@ must eventually drive the native Window title; owning M3 phase is to
 be assigned during M3-Phase 5 pre-doc framing, with implementation due
 no later than M3-Phase 8 Gallery E2E close.
 
-Decisions: [DD-M3-P4-001..006](./docs/decisions/m3-phase-4-scroll-view.md).
+Decisions: [DD-M3-P4-001..006](./process/milestone-3/phase-4/decisions/preamble.md).
 
 ### M3-Phase 3 — WrapPanel layout primitive (2026-05-22)
 
@@ -167,7 +167,7 @@ attribute values (7+3 wrap on the default 800×600 window).
 GUI smoke confirmed the wrap and the post-fix non-zero-offset
 rendering.
 
-Per-phase spec sync ([A11](./ROADMAP.md#m3-dsl-surface)):
+Per-phase spec sync ([A11](./process/_roadmap.md#m3-dsl-surface)):
 `docs/dsl_spec.md` 0.9 -> 1.0 flips §4.10 to
 `M3-Phase 3 closed; implementation-synced` and folds the T1
 lexer-surface change into §2.2 (`Ident` admits kebab-case
@@ -179,7 +179,7 @@ note that the negative-sign surface is `IntLit`-only).
 of the absolute vs. parent-relative offset convention discovered
 via T9 visible-smoke.
 
-Decisions: [DD-M3-P3-001..006](./docs/decisions/m3-phase-3-wrap-panel.md).
+Decisions: [DD-M3-P3-001..006](./process/milestone-3/phase-3/decisions/preamble.md).
 
 ### M3-Phase 2 — Box layout primitive (2026-05-20)
 
@@ -208,12 +208,12 @@ through the same `.ui -> wasamoc -> IR text -> wasamo_load_ui` path as
 the M2/M3 Rust hosts. Owner-manual GUI smoke confirmed the blue
 16:9 Box fill and centred placeholder text.
 
-Per-phase spec sync ([A11](./ROADMAP.md#m3-dsl-surface)):
+Per-phase spec sync ([A11](./process/_roadmap.md#m3-dsl-surface)):
 `docs/dsl_spec.md` 0.7 -> 0.8 flips §4.9 to
 `M3-Phase 2 closed; implementation-synced`; no implementation/spec
 divergence was found during the close re-sync.
 
-Decisions: [DD-M3-P2-001..006](./docs/decisions/m3-phase-2-box-layout.md).
+Decisions: [DD-M3-P2-001..006](./process/milestone-3/phase-2/decisions/preamble.md).
 
 ### M3-Phase 1 — `bool` scalar binding (2026-05-19)
 
@@ -273,7 +273,7 @@ widget-setter path via `wasamo_set_property(PROP_BUTTON_ENABLED, …)`
 on a live `WidgetNode` (asserting both the `CompositionColorBrush`
 colour flip and click-callback suppression).
 
-Per-phase spec sync ([A11](./ROADMAP.md#m3-dsl-surface)):
+Per-phase spec sync ([A11](./process/_roadmap.md#m3-dsl-surface)):
 `docs/dsl_spec.md` 0.4 → 0.5 (§§2.1 / 2.2 / 3 / 4.3 / 4.6 / 4.7 /
 4.8 / 5 / 8.2 / 8.4 / 8.6 / 8.9 / 8.12; also folds in a minimal
 retroactive `state` surface entry for the M2-Phase 6 documentation
@@ -282,7 +282,7 @@ documents the bool path through `register_bool_binding`,
 `SignalRegistry::bools`, `widget_write_property_bool`, and the
 DD-M3-P1-007 per-type seam.
 
-Decisions: [DD-M3-P1-001..010](./docs/decisions/m3-phase-1-bool-scalar.md).
+Decisions: [DD-M3-P1-001..010](./process/milestone-3/phase-1/decisions/preamble.md).
 
 ## [v0.2.0] — 2026-05-11 — M2: Foundation
 
@@ -324,7 +324,7 @@ binding path. A Windows-only headless integration test proves `.ui`
 String binding reaches live `WidgetNode` property state; GitHub Actions
 green is evidence that the live path ran rather than skipped.
 
-Decisions: [DD-M2-P6-010..012](./docs/decisions/m2-phase-7-reactive-foundation.md).
+Decisions: [DD-M2-P6-010..012](./process/milestone-2/phase-7/decisions/preamble.md).
 
 ### M2-Phase 6 — `.ui` → runtime lowering (2026-05-08)
 
@@ -376,7 +376,7 @@ safety-guard placement principle) — remain `Proposed` and are scoped to
 M2-Phase 7 alongside acceptance criteria A5 / A6 (added by the
 2026-05-08 plan revision).
 
-Decisions: [DD-M2-P6-001..009](./docs/decisions/m2-phase-6-ui-lowering.md);
+Decisions: [DD-M2-P6-001..009](./process/milestone-2/phase-6/decisions/preamble.md);
 DD-M2-P6-010..012 deferred to M2-Phase 7.
 
 ### M2-Phase 5 — Reactive engine (2026-05-06)
@@ -401,7 +401,7 @@ checkpoint (`exp/m2-p5-reactive-checkpoint`, commit `fdc1545`)
 confirms click → label update through the reactive path on real
 hardware. A2 fully discharged at Phase 6 close (counter.ui-driven).
 
-Decisions: [DD-M2-P5-001..006](./docs/decisions/m2-phase-5-reactive-engine.md).
+Decisions: [DD-M2-P5-001..006](./process/milestone-2/phase-5/decisions/preamble.md).
 
 ### M2-Phase 4 — Tree-mutation ABI primitives (2026-05-05)
 
@@ -418,7 +418,7 @@ documented in `abi_spec.md §6`). `reactive.rs` skeleton provides
 `with_batched_writes` (internal-only; Phase 5 fills the body).
 Acceptance criterion A4 of M2 discharged.
 
-Decisions: [DD-M2-P4-001..004](./docs/decisions/m2-phase-4-tree-mutation-abi.md).
+Decisions: [DD-M2-P4-001..004](./process/milestone-2/phase-4/decisions/preamble.md).
 
 ### M2-Phase 1 — cdylib-shim cleanup (2026-05-03)
 
@@ -430,7 +430,7 @@ symbols via MSVC `/WHOLEARCHIVE`. `wasamo.dll` filename and all 20
 `wasamo_*` ABI symbols are preserved. Acceptance criterion A3 of M2
 discharged.
 
-Decisions: [DD-M2-P1-001..006](./docs/decisions/m2-phase-1-cdylib-shim.md).
+Decisions: [DD-M2-P1-001..006](./process/milestone-2/phase-1/decisions/preamble.md).
 
 Release: [v0.2.0](https://github.com/matarillo/wasamo/releases/tag/v0.2.0).
 
@@ -445,8 +445,8 @@ minimal C ABI (`wasamo.h`) is shaped as a stable core plus an M1
 experimental layer, and Hello Counter runs end-to-end in C, Rust,
 and Zig (host-imperative; the `.ui → runtime` lowering is M2).
 
-Decisions: Phase 0–8 ADRs in
-[docs/decisions/](./docs/decisions/) (`DD-P2-*` … `DD-P8-*`,
+Decisions: Phase 0–8 ADRs under
+[process/](./process/) (`DD-P2-*` … `DD-P8-*`,
 `DD-V-001` … `DD-V-004`).
 Release: [v0.1.0](https://github.com/matarillo/wasamo/releases/tag/v0.1.0).
 
@@ -454,8 +454,8 @@ Release: [v0.1.0](https://github.com/matarillo/wasamo/releases/tag/v0.1.0).
 
 This project's document conventions changed on 2026-05-02 alongside
 M1 shipping. Acceptance criteria live in
-[ROADMAP.md](./ROADMAP.md), thesis-level framing in
+[process/_roadmap.md](./process/_roadmap.md), thesis-level framing in
 [VISION.md §7](./VISION.md#7-roadmap), shipped milestones here, and
-in-flight work in the active plan under
-[docs/plans/](./docs/plans/). Rationale:
-[DD-V-010..016](./docs/decisions/vision-doc-system.md).
+in-flight work in the active process tree under
+[process/](./process/). Rationale:
+[DD-V-010..016](./process/cross-milestone/decisions/doc-system.md).

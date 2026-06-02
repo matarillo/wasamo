@@ -1,4 +1,4 @@
-﻿### DD-M2-P5-003 — Effect lifetime and disposal
+### DD-M2-P5-003 — Effect lifetime and disposal
 
 **Status:** Accepted
 
@@ -23,7 +23,7 @@ threaded through the existing widget lifecycle.
 
 Option A — Effects are owned by the widget that hosts the binding (recommended)
 - Each `WidgetNode` gains a `bindings: Vec<EffectHandle>` field
-  ([wasamo-runtime/src/widget.rs](../../wasamo-runtime/src/widget.rs)).
+  ([wasamo-runtime/src/widget.rs](../../../../wasamo-runtime/src/widget.rs)).
   Phase 6's IR loader, when it lowers `Text { content: "..." }`,
   creates an `Effect` and pushes its handle onto the widget's
   `bindings`.

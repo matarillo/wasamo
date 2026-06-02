@@ -2,7 +2,7 @@
  * wasamo.h — Wasamo C ABI
  *
  * Canonical specification: ../../docs/abi_spec.md
- * Authoritative decisions: ../../docs/decisions/phase-6-c-abi.md
+ * Authoritative decisions: ../../process/milestone-1/phase-6/decisions/preamble.md
  *
  * This header defines a two-layer C ABI:
  *   - Stable core: candidate for the M4 ABI freeze.

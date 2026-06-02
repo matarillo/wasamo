@@ -1,4 +1,4 @@
-﻿### DD-M2-P3-001 — Where DSL inline handler bodies execute
+### DD-M2-P3-001 — Where DSL inline handler bodies execute
 
 **Status:** Accepted
 
@@ -26,7 +26,7 @@ Option A — Runtime-side interpreter (recommended)
 - Hosts do not need to register a callback for inline-handler
   bodies; they appear from the host's perspective as state changes
   observable through the existing property-observer mechanism
-  ([DD-P6-001 area 4](./phase-6-c-abi.md#dd-p6-001--stable-core-scope-at-function-granularity)).
+  ([DD-P6-001 area 4](../../../milestone-1/phase-6/decisions/preamble.md#dd-p6-001--stable-core-scope-at-function-granularity)).
 
 - What you gain: One evaluator (in `wasamo-runtime`) serves all
   bindings — adding a new binding language is "wire up the C ABI",
@@ -91,7 +91,7 @@ Option B — Host-side trampoline (synthetic signal)
   DD-M2-P2-001 carried, paid here at the handler-body granularity
   rather than the whole-tree granularity. Re-entrancy of
   `set_property` during a signal dispatch is a known soft spot
-  ([DD-P6-003 / DD-P6-004](./phase-6-c-abi.md#dd-p6-003--callback-contract-lifetime-destroy_fn-re-entrancy));
+  ([DD-P6-003 / DD-P6-004](../../../milestone-1/phase-6/decisions/preamble.md#dd-p6-003--callback-contract-lifetime-destroy_fn-re-entrancy));
   inline handlers as host callbacks would be the highest-frequency
   re-entrant path in normal use, where the runtime today only has to
   worry about programmer-written observer callbacks.

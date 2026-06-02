@@ -11,12 +11,12 @@ target-phase: M3-Phase 4
 Forward-distillation of M3-Phase 3 (WrapPanel) learnings into
 actionable inputs for M3-Phase 4 (ScrollView primitive — minimal).
 Same shape as
-[m3-phase-3/predoc-inputs.md](../m3-phase-3/predoc-inputs.md): each
+[m3-phase-3/predoc-inputs.md](../../phase-3/requirements/constraints.md): each
 section names a Phase 3 finding, frames it as a constraint or
 question for the Phase 4 ADR / progress doc, and points to the
 underlying step retrospective(s) so the chain is auditable.
 
-Per [retrospectives.md forward-carry rule](../retrospectives.md), the
+Per [retrospectives.md forward-carry rule](../../../procedures/retrospectives.md), the
 Phase 3 Main Learnings must be present in this file before the
 Phase 3 phase-end merge gate.
 
@@ -38,7 +38,7 @@ Pre-doc question for Phase 4:
   or does any literal need a sign / unit / quoting form that is not
   already in §2.2?
 
-See [t1-step-end-retrospective.md](../m3-phase-3/t1-step-end-retrospective.md).
+See [t1-step-end-retrospective.md](../../phase-3/retrospectives/t1.md).
 
 ## 2. ScrollView is the next novel-normative measure-arrange — but the structural framing already exists
 
@@ -67,7 +67,7 @@ Pre-doc questions for Phase 4:
   inherit from parent? The default-bound source decision belongs in
   the Phase 4 ADR's Spec impact preview.
 
-See [t7-step-end-retrospective.md](../m3-phase-3/t7-step-end-retrospective.md)
+See [t7-step-end-retrospective.md](../../phase-3/retrospectives/t7.md)
 and ADR DD-M3-P3-005.
 
 ## 3. "No new IR variant" must be a test fixture, not a promise
@@ -103,8 +103,8 @@ is the central reactive value). Pre-doc questions:
   used: extend ABI only when host code can observe the new value /
   error; otherwise hold the surface internal.
 
-See [t3-step-end-retrospective.md](../m3-phase-3/t3-step-end-retrospective.md)
-and [t4-step-end-retrospective.md](../m3-phase-3/t4-step-end-retrospective.md).
+See [t3-step-end-retrospective.md](../../phase-3/retrospectives/t3.md)
+and [t4-step-end-retrospective.md](../../phase-3/retrospectives/t4.md).
 
 ## 4. Defaults belong at the runtime widget catalog, not the IR layer
 
@@ -125,7 +125,7 @@ Pre-doc question for Phase 4:
   analogue will add); use the IR loader's `unwrap_or` shape only when
   the attribute has no widget-catalog field at all.
 
-See [t5-step-end-retrospective.md](../m3-phase-3/t5-step-end-retrospective.md).
+See [t5-step-end-retrospective.md](../../phase-3/retrospectives/t5.md).
 
 ## 5. Runtime-gate scope follows the current phase's progress doc, not Phase N-1's pattern
 
@@ -145,7 +145,7 @@ Pre-doc question for Phase 4:
   Choose the validate-path shape from the invariant shape; do not
   inherit Phase 3's value-range pattern by default.
 
-See [t6-step-end-retrospective.md](../m3-phase-3/t6-step-end-retrospective.md).
+See [t6-step-end-retrospective.md](../../phase-3/retrospectives/t6.md).
 
 ## 6. Free-function extraction does not auto-prove call-site correctness
 
@@ -166,7 +166,7 @@ Pre-doc question for Phase 4:
   both branches with reject tests; do not rely on incidental
   shared-helper coverage.
 
-See [t7-step-end-retrospective.md](../m3-phase-3/t7-step-end-retrospective.md).
+See [t7-step-end-retrospective.md](../../phase-3/retrospectives/t7.md).
 
 ## 7. ScrollView is a clip-installing widget — the inverse of WrapPanel
 
@@ -189,7 +189,7 @@ Pre-doc question for Phase 4:
   on the inner WrapPanel — the symmetric inverse of Phase 3 T8's
   assertion.
 
-See [t8-step-end-retrospective.md](../m3-phase-3/t8-step-end-retrospective.md)
+See [t8-step-end-retrospective.md](../../phase-3/retrospectives/t8.md)
 and ADR §Phase 3 verification closure item 4.
 
 ## 8. Pure-layout absolute offset vs. Composition parent-relative offset is now stated in architecture
@@ -197,7 +197,7 @@ and ADR §Phase 3 verification closure item 4.
 Phase 3 T9 surfaced a `sync_visuals` bug whose root cause was the
 implicit absolute-vs-parent-relative offset convention at the
 layout-engine / Visual-Layer boundary. The architecture-side
-clarification was folded into [architecture.md §6.5](../../architecture.md)
+clarification was folded into [architecture.md §6.5](../../../../docs/architecture.md)
 at Phase 3 close (R3-A). The test-coverage half remains open as
 out-of-phase residual R2.
 
@@ -217,7 +217,7 @@ Pre-doc questions for Phase 4:
   whether to land R2 inside Phase 4 or to forward it to a later
   test-coverage pass.
 
-See [t9-step-end-retrospective.md](../m3-phase-3/t9-step-end-retrospective.md)
+See [t9-step-end-retrospective.md](../../phase-3/retrospectives/t9.md)
 and Phase 3 progress doc §Out-of-phase residuals R2.
 
 ## 9. Outstanding Phase 3 residual that pertains to Phase 4's scope
@@ -334,7 +334,7 @@ Pre-doc questions:
 ## 13. `docs/notes` audit triggers for Phase 4
 
 Re-read the same live-note set Phase 3 audited
-([m3-phase-3/predoc-inputs.md §13](../m3-phase-3/predoc-inputs.md)),
+([m3-phase-3/predoc-inputs.md §13](../../phase-3/requirements/constraints.md)),
 re-classifying each as fired / partially fired / not fired for
 ScrollView. Notably:
 

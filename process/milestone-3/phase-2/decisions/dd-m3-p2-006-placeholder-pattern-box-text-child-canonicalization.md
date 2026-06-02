@@ -1,9 +1,9 @@
-﻿### DD-M3-P2-006 — Placeholder pattern (Box + Text child) canonicalization
+### DD-M3-P2-006 — Placeholder pattern (Box + Text child) canonicalization
 
 **Status:** Accepted
 
 **Context:**
-[m3-target-app-predoc.md — 保留 2 closure](../notes/m3/m3-target-app-predoc.md#保留-2-closure-image-widget-surface-の-m3-開封可否--不開封-m4-へ-defer)
+[m3-target-app-predoc.md — 保留 2 closure](../../requirements/spec.md#保留-2-closure-image-widget-surface-の-m3-開封可否--不開封-m4-へ-defer)
 establishes that the M3 Image-widget deferral is carried by a
 **Box + Text-child** placeholder. Phase 2 settles how this pattern is
 canonicalized: where it lives in the spec, how it appears in the

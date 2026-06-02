@@ -3,7 +3,7 @@
 **Status:** Accepted
 
 **Context:**
-[abi_spec.md §5](../abi_spec.md) marks roughly half the C ABI surface
+[abi_spec.md §5](../../../../docs/abi_spec.md) marks roughly half the C ABI surface
 `WASAMO_EXPERIMENTAL` (the all-at-once widget constructors and
 `wasamo_button_set_clicked`). Bindings must propagate this marker
 in language-idiomatic ways, otherwise hosts learn the experimental

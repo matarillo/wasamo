@@ -1,4 +1,4 @@
-﻿# M3-Phase 1 — `bool` scalar binding: Architecture Decisions
+# M3-Phase 1 — `bool` scalar binding: Architecture Decisions
 
 **Phase:** M3-Phase 1 (`bool` scalar binding)
 **Date:** 2026-05-19
@@ -7,13 +7,13 @@
 ## Context
 
 M3 acceptance criterion **A9** (see
-[ROADMAP.md M3](../../ROADMAP.md#m3-dsl-surface),
-[m3-plan.md](../plans/m3-plan.md#acceptance-criteria)):
+[process/_roadmap.md M3](../../../_roadmap.md#m3-dsl-surface),
+[m3-plan.md](../../plan.md#acceptance-criteria)):
 
 > `bool` admitted as the third scalar binding type alongside `i32` and
 > `String`. The `TypedValue` generic value union remains deferred.
 
-The M3 plan ([m3-plan.md §Phase breakdown](../plans/m3-plan.md#phase-breakdown))
+The M3 plan ([m3-plan.md §Phase breakdown](../../plan.md#phase-breakdown))
 places this as Phase 1 because it is the **hard prerequisite** for
 M3-Phase 6 (conditional rendering grammar A7 rides on a `bool` binding)
 and M3-Phase 8 (Button `selected` state A10 rides on a `bool` binding).
@@ -24,29 +24,29 @@ grammar surfaces that consume `bool` are out of this phase.
 
 The M2 end-state shape that this phase must extend without breaking:
 
-- `wasamo-ir` ([wasamo-ir/src/lib.rs](../../wasamo-ir/src/lib.rs)):
+- `wasamo-ir` ([wasamo-ir/src/lib.rs](../../../../wasamo-ir/src/lib.rs)):
   `IrType` has two variants `I32 | Str`; `IrLiteral` has
   `Int | Str | Ident`; `HandlerExpr` uses **type-suffixed variants**
   (`IntLit` / `StrLit` / `PropRead` / `StrPropRead`) rather than a
   unified typed value.
 - `EvalContext`
-  ([wasamo-runtime/src/handler.rs](../../wasamo-runtime/src/handler.rs)):
+  ([wasamo-runtime/src/handler.rs](../../../../wasamo-runtime/src/handler.rs)):
   type-suffixed methods (`get_i32` / `get_string` /
   `read_i32_tracked` / `read_string_tracked` / `set_i32`). `set_string`
   is **absent** — strings are read-only in M2 because no handler writes
   to them. `evaluate()` returns `Result<i32, EvalError>`; binding-side
   evaluation has a separate string-typed path.
 - Widget catalog
-  ([wasamo-runtime/src/widget.rs](../../wasamo-runtime/src/widget.rs)):
+  ([wasamo-runtime/src/widget.rs](../../../../wasamo-runtime/src/widget.rs)):
   `Rectangle | VStack | HStack | Text | Button`; `PropertyValue` enum is
   `I32(i32) | String(String)`; per-widget per-attribute `PROP_*` u32
-  IDs in [ir_loader.rs](../../wasamo-runtime/src/ir_loader.rs) lines
+  IDs in [ir_loader.rs](../../../../wasamo-runtime/src/ir_loader.rs) lines
   799–802.
 
 This ADR is framed against A9 and the M2 type-suffix pattern. It does
 **not** re-open F5 (`TypedValue` deferral) — adding `bool` as a third
 scalar is a different question, as recorded in
-[m3-target-app-predoc.md — Tabs / Button selected-state surface closure (Reservation 3)](../notes/m3/m3-target-app-predoc.md#保留-3-closure-tabs--button-選択状態-surface--採用-bool-を-3-つ目の-scalar-として導入).
+[m3-target-app-predoc.md — Tabs / Button selected-state surface closure (Reservation 3)](../../requirements/spec.md#保留-3-closure-tabs--button-選択状態-surface--採用-bool-を-3-つ目の-scalar-として導入).
 
 The acceptance lens for this phase is narrow: A9 is satisfied when
 `bool` reads through the live `.ui → IR → runtime` path on one widget
@@ -106,7 +106,7 @@ are explicitly out of scope here.
   in M3-Phase 6 ADR; DD-M3-P1-005 rejects Option B to keep this
   decoupled.
 - **`TypedValue` generic value union.** F5 deferral is preserved
-  ([m3-start-framing.md §F5](../notes/m3/m3-start-framing.md#l335)).
+  ([m3-start-framing.md §F5](../../requirements/framing.md#l335)).
   Adding `bool` as a third tagged scalar is not the same decision as
   introducing a typed value union.
 - **Per-symbol IR text grammar rename** (`PropRead` →
@@ -216,11 +216,11 @@ Implementation task list: belongs in the Phase 1 progress file
 `docs/plans/progress/m3-phase-1-progress.md` (created when this ADR
 is Accepted and Phase 1 starts execution); not in this ADR and not
 in `m3-plan.md` itself. See
-[plans/README.md §Scope rule (plan vs ADR)](../plans/README.md#scope-rule-plan-vs-adr)
-and [plans/README.md §Phase progress file lifecycle](../plans/README.md#phase-progress-file-lifecycle)
+[plans/README.md §Scope rule (plan vs ADR)](../../../README.md#scope-rule-plan-vs-adr)
+and [plans/README.md §Phase progress file lifecycle](../../../README.md#phase-progress-file-lifecycle)
 for the authoritative location and the `active → closing → retired`
 lifecycle the file follows. The Progress table in
-[m3-plan.md](../plans/m3-plan.md) carries only a one-row index entry
+[m3-plan.md](../../plan.md) carries only a one-row index entry
 pointing at this progress file.
 
 ## Spec impact preview (for owner agreement)
@@ -228,7 +228,7 @@ pointing at this progress file.
 When this ADR is accepted, the following docs change in the same Phase
 1 commit set (per A11 same-phase synchronisation):
 
-- [docs/dsl_spec.md](../dsl_spec.md) — extensions in two regions:
+- [docs/dsl_spec.md](../../../../docs/dsl_spec.md) — extensions in two regions:
   - **DSL surface** (§§ 2–4): `true` / `false` keyword reservation in
     §2.1; bool literal token in §2; `bool` type in §4.2 (`in-out
     property`) / state declarations; bool in §4.3 (property binding)
@@ -239,30 +239,30 @@ When this ADR is accepted, the following docs change in the same Phase
   - `Button.enabled` attribute documented in the widget catalog
     section (minimal disabled styling permitted in M3; no animation
     contract).
-- [docs/architecture.md](../architecture.md) — §6 SignalRegistry
-  snippet around [L717-L744](../architecture.md#L717-L744) updated:
+- [docs/architecture.md](../../../../docs/architecture.md) — §6.7.7 SignalRegistry
+  snippet updated:
   add `bools: HashMap<String, Signal<bool>>` alongside `i32s` and
   `strings`; the surrounding prose extends "M2 supports `i32` and
   `String` Signals" to include `bool` and notes that
   `HandlerExpr::BoolPropRead` evaluates through
   `BindingEvalContext::read_bool_tracked`. F5 deferral cross-reference
   is preserved. The binding write-seam description around
-  [L714](../architecture.md#L714) is also updated to reflect
+  [architecture.md §6.7.7](../../../../docs/architecture.md#677-binding-registration-api-after-m2) is also updated to reflect
   DD-M3-P1-007: `write_fn` is per-type at the call site rather than a
   single string-baked function pointer.
-- [docs/abi_spec.md](../abi_spec.md) — **no new ABI surface added.**
+- [docs/abi_spec.md](../../../../docs/abi_spec.md) — **no new ABI surface added.**
   `WASAMO_VALUE_BOOL = 3` and `v_bool` already exist
-  ([abi_spec.md §3.3](../abi_spec.md), [abi.rs L74-L90](../../wasamo-runtime/src/abi.rs#L74-L90))
+  ([abi_spec.md §3.3](../../../../docs/abi_spec.md), [abi.rs L74-L90](../../../../wasamo-runtime/src/abi.rs#L74-L90))
   from M2; Phase 1 only connects this existing tag through the
   property-write path that previously dropped it. Specifically,
   `read_property_value` / `write_property_value` and
-  `property_value_to_owned` ([abi.rs L745-L749](../../wasamo-runtime/src/abi.rs#L745-L749))
-  gain bool arms; `PropertyValue` ([widget.rs L77-L80](../../wasamo-runtime/src/widget.rs#L77-L80))
+  `property_value_to_owned` ([abi.rs L745-L749](../../../../wasamo-runtime/src/abi.rs#L745-L749))
+  gain bool arms; `PropertyValue` ([widget.rs L77-L80](../../../../wasamo-runtime/src/widget.rs#L77-L80))
   gains `Bool(bool)`; the property observer payload conversion
   carries bool through to `WasamoValue::v_bool`. Existing ABI
   function signatures and value-tag numeric assignments are
   untouched (M6 freeze scope unchanged; this phase is pre-freeze).
-- [wasamoc/src/check.rs](../../wasamoc/src/check.rs) and adjacent
+- [wasamoc/src/check.rs](../../../../wasamoc/src/check.rs) and adjacent
   lowering — per DD-M3-P1-010: state-name → declared-type table
   built at parse, used to lower identifiers to typed `*PropRead`
   variants and to type-check `bind` LHS / RHS pairings.
@@ -274,7 +274,7 @@ operationalises it.
 
 This section is not a DD — it records the agreed shape of the proof
 that closes Phase 1, so the implementation plan in
-[m3-plan.md Progress](../plans/m3-plan.md) inherits a concrete target
+[m3-plan.md Progress](../../plan.md) inherits a concrete target
 rather than re-litigating "what does live propagation mean here?".
 
 A9 (`bool` admitted as third scalar) is considered satisfied when

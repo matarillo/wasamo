@@ -3,12 +3,12 @@ title: Reactive drain cascade policy — open question
 status: superseded
 created: 2026-05-06
 superseded: 2026-05-07
-superseded-by: docs/decisions/m2-phase-6-ui-lowering.md#dd-m2-p6-001--drain-transaction-semantics
+superseded-by: process/milestone-2/phase-6/decisions/preamble.md#dd-m2-p6-001--drain-transaction-semantics
 related-plans:
   - docs/plans/m2-plan.md (DD-M2-P5-004 = B)
 related-decisions:
-  - docs/decisions/m2-phase-5-reactive-engine.md
-  - docs/decisions/m2-phase-6-ui-lowering.md (DD-M2-P6-001 = D, resolves this question)
+  - process/milestone-2/phase-5/decisions/preamble.md
+  - process/milestone-2/phase-6/decisions/preamble.md (DD-M2-P6-001 = D, resolves this question)
 ---
 
 > **Resolution (2026-05-07)**: DD-M2-P6-001 = Option D により本問は解決。observer は post-commit pure effect として再定義され、reactive Effect 起源の `set_property` から発生する observer 通知は同じ outermost cycle の Phase 3 で消化される (経路非対称性なし)。Phase 1 (mutation 収束) → Phase 2 (layout) → Phase 3 (post-commit observers, mutation 不可) の 3-phase + terminal 構造。詳細は ADR 参照。以下は問いが立った時点の記録として残置。
@@ -79,7 +79,7 @@ DD-M2-P5-004 実装（wip/step）では **案 2** を採用する。
   Phase 5 close は現在の暫定実装 (案 2 = 直列 1 回) のまま実施する。
 - 本問題は「案 1 vs 案 2」の二択ではなく **drain pipeline の設計軸そのもの** に関する
   問題であることが判明 (経路非対称性、observer の意味論、収束レイヤ分離 など)。
-  これを反映したドラフト DD を [dd-m2-p6-drain-transaction.md](./m2-phase-6/dd-m2-p6-drain-transaction.md)
+  これを反映したドラフト DD を [dd-m2-p6-drain-transaction.md](../retrospectives/dd-m2-p6-drain-transaction.md)
   に作成済。Phase 6 pre-doc サイクルで正式採用予定 (DD 番号は Phase 6 ADR 起草時に確定)。
 - 採択候補は 6 option (A〜F)、起草者推奨は **Option D**
   (declarative transaction + post-commit pure observer)。本ノートはオーナー判断後に

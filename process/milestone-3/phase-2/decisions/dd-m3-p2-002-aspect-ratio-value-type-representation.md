@@ -1,4 +1,4 @@
-﻿### DD-M3-P2-002 — `aspect: <ratio>` value-type representation
+### DD-M3-P2-002 — `aspect: <ratio>` value-type representation
 
 **Status:** Accepted
 
@@ -39,7 +39,7 @@ unsigned integer literals (recommended)
 Option B — Float literal `aspect: 1.7778`
 - Adds `IrType::F32` / `IrLiteral::F32` / `HandlerExpr::F32Lit` to
   the type-suffix chain (per Phase 1 pattern;
-  [predoc-inputs.md §7](../notes/m3-phase-2/predoc-inputs.md#7-f32--f64-を-irtype-に入れるかの再評価)).
+  [predoc-inputs.md §7](../requirements/constraints.md#7-f32--f64-を-irtype-に入れるかの再評価)).
 
   - What you gain: One numeric form for all aspect surfaces.
     `TypeName::Float` already exists in `wasamoc`'s AST, so the lex /
@@ -64,7 +64,7 @@ Option C — Compile-time-parsed string `aspect: "16:9"`
 
   - What you give up: Cosmetic inconsistency with non-string ratio
     literals across DSL ancestry (CSS, XAML use bare 16:9). Per
-    [predoc-inputs.md §1](../notes/m3-phase-2/predoc-inputs.md#1-box-が新規-propertyvalue-variant-を入れるなら-abi-value-conversion-arm-は同じ-step-に-fold-する),
+    [predoc-inputs.md §1](../requirements/constraints.md#1-box-が新規-propertyvalue-variant-を入れるなら-abi-value-conversion-arm-は同じ-step-に-fold-する),
     parse failure becomes a `wasamoc check` diagnostic, not a runtime
     fallback — same as Option A — so the strictness is identical;
     only the surface form differs. The lexer save (no new token form)
@@ -114,7 +114,7 @@ deliberately not extended):**
   `HandlerExpr::RatioLit` / `RatioPropRead` +
   `WASAMO_VALUE_RATIO` tag + `abi.rs` arms together as one coherent
   bindable-surface step. See
-  [predoc-inputs.md §1](../notes/m3-phase-2/predoc-inputs.md#1-box-が新規-propertyvalue-variant-を入れるなら-abi-value-conversion-arm-は同じ-step-に-fold-する):
+  [predoc-inputs.md §1](../requirements/constraints.md#1-box-が新規-propertyvalue-variant-を入れるなら-abi-value-conversion-arm-は同じ-step-に-fold-する):
   the fold-in-same-step obligation triggers when `PropertyValue` does
   gain a variant; Phase 2 satisfies it by not adding a variant.
 

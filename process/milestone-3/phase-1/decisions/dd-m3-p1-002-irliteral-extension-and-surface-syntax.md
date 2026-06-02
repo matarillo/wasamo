@@ -1,4 +1,4 @@
-﻿### DD-M3-P1-002 — `IrLiteral` extension and surface syntax
+### DD-M3-P1-002 — `IrLiteral` extension and surface syntax
 
 **Status:** Accepted
 
@@ -39,7 +39,7 @@ Option A — `true` / `false` keywords (recommended)
     constants in nearly every reasonable target language a `.ui` author
     is also literate in), so the reservation is essentially free.
   - **Technical risk:** Low. Lexer additions are localised in
-    [wasamoc/src/lexer.rs](../../wasamoc/src/lexer.rs).
+    [wasamoc/src/lexer.rs](../../../../wasamoc/src/lexer.rs).
 
 Option B — Reuse integer literals (`0` / `1`) with type coercion
 - No new lexer tokens; `state foo: bool = 1` parses.

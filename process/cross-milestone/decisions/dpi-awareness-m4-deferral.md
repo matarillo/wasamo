@@ -164,7 +164,7 @@ added below the `README.md` lead. Final form (owner + Codex review,
 pre-commit), verbatim from `README.md`:
 
 ```md
-_Pre-1.0 note: some capabilities described here are roadmap targets rather than shipped guarantees; see [process/_roadmap.md](process/_roadmap.md)._
+_Pre-1.0 note: some capabilities described here are roadmap targets rather than shipped guarantees; see [process/_roadmap.md](../../_roadmap.md)._
 ```
 
 Three points fixed in review: (1) it is rendered as an **italic line,

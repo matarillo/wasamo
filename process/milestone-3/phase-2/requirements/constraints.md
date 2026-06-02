@@ -11,7 +11,7 @@ related:
 # M3-Phase 2 pre-doc inputs
 
 このノートは M3-Phase 1 (`bool` scalar binding) の close 時点で
-[docs/notes/retrospectives.md §Retrospective Main Learning の前送り](../retrospectives.md#retrospective-main-learning-の前送り)
+[docs/notes/retrospectives.md §Retrospective Main Learning の前送り](../../../procedures/retrospectives.md#retrospective-main-learning-の前送り)
 に従って書き起こした、**M3-Phase 2 (Box layout primitive) の
 pre-doc が input section として取り込むべき材料**である。
 
@@ -23,13 +23,13 @@ M3-Phase 1 close 内に確定している。**
 
 参照元:
 
-- [M3-Phase 1 phase-end retrospective](../m3-phase-1/phase-end-retrospective.md)
+- [M3-Phase 1 phase-end retrospective](../../phase-1/retrospectives/phase-end.md)
   §Main Learning #1–#3 が本ノートの一次蒸留元。
-- [M3-Phase 1 progress file](../../plans/progress/m3-phase-1-progress.md)
+- [M3-Phase 1 progress file](../../phase-1/implementation/plan.md)
   の T1–T12 タスクログと CI / verification log が二次蒸留元。
 - 個別の step-end retrospective
-  ([t1](../m3-phase-1/t1-step-end-retrospective.md) –
-  [t11](../m3-phase-1/t11-step-end-retrospective.md)) は本ノートが
+  ([t1](../../phase-1/retrospectives/t1.md) –
+  [t11](../../phase-1/retrospectives/t11.md)) は本ノートが
   要約した内容の execution-level 細部を保持する。
 
 ---
@@ -45,7 +45,7 @@ fold された。CLAUDE.md §Commit rules の「implementation reveals a
 tighter ordering」適用例。
 
 **M3-Phase 2 への適用:** Box は仕様上 `aspect: <ratio>` と最小限の
-`fill: <color>` 属性を持つ ([m3-plan.md A6](../../plans/m3-plan.md#acceptance-criteria))。
+`fill: <color>` 属性を持つ ([m3-plan.md A6](../../plan.md#acceptance-criteria))。
 このうち、
 
 - `aspect: <ratio>` は値型として **新しい数値型** (float / rational) を
@@ -105,11 +105,11 @@ commit `1129aea` (fmt-only) で済ませた。
 の最初の協議材料として、以下のどちらか (または両方) を owner と
 決める。
 
-- **(a)** [docs/notes/retrospectives.md](../retrospectives.md) checklist
+- **(a)** [docs/notes/retrospectives.md](../../../procedures/retrospectives.md) checklist
   項目 3 (clean rebuild) を、`cargo fmt --all -- --check` 単独の
   green 確認を含む形に改訂する。step retrospective の "green" 表記が
   「commit 後の状態に対する `--check` の green」を意味することを明示。
-- **(b)** [.github/workflows/ci.yml](../../../.github/workflows/ci.yml)
+- **(b)** [.github/workflows/ci.yml](../../../../.github/workflows/ci.yml)
   に `cargo fmt --all -- --check` の step を追加する。CLAUDE.md
   §CI rules の「Rust コードを既存 crate に追加する phase は CI 更新
   不要」原則の例外で、owner agreement が必要。
@@ -218,7 +218,7 @@ surface が広がる時、または target app 側で status text が必要に�
 ## 9. Bool live proof は現行の同期 non-batched drain に依存している
 
 この項目の本体は M3 横断の reactive/drain 前提なので、
-[docs/notes/m2-to-m3-handover.md](../m2-to-m3-handover.md) §3 item 4
+[docs/notes/m2-to-m3-handover.md](../../../milestone-2/handoff.md) §3 item 4
 に移した。M3-Phase 2 の Box layout primitive は通常この前提を直接
 触らないが、Phase 2 pre-doc が event/input batching、layout scheduling、
 または headless integration proof の boundary を扱う場合は、handover

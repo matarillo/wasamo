@@ -1,4 +1,4 @@
-﻿### DD-M2-P1-004 — Workspace location of the shim crate
+### DD-M2-P1-004 — Workspace location of the shim crate
 
 **Status:** Accepted
 
@@ -43,7 +43,7 @@ Option C — `crates/wasamo-dll/`
 migrated together. That is a separate workspace-layout decision,
 not part of this phase. The open question — whether a future
 `crates/` reorganisation is warranted — is recorded in
-[`docs/notes/workspace-layout.md`](../notes/workspace-layout.md)
+[`docs/notes/workspace-layout.md`](../../../../docs/notes/workspace-layout.md)
 as a live note. If the project reaches the point where it decides to
 adopt `crates/`, M2-Phase 1's placement of `wasamo-dll/` can be
 addressed in the same migration commit.

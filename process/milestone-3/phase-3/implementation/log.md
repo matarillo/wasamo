@@ -1,4 +1,4 @@
-﻿## Decisions log
+## Decisions log
 
 ### 2026-05-21 — Lexer prerequisite for kebab-case attribute names and negative integer literals (T1)
 
@@ -84,9 +84,9 @@ Initial T9 landing (commit `d1e5ba6`) used
 (≈ 784 px client width), the ADR-canonical `88 / 12 / 12` with
 8 thumbs produces a `7 + 1` wrap which is visually unbalanced. The
 deviation was un-documented at landing time; owner review
-([t9-step-end-retrospective.md rev 2](../../notes/m3-phase-3/t9-step-end-retrospective.md))
+([t9-step-end-retrospective.md rev 2](../retrospectives/t9.md))
 flagged that the ADR
-[§Phase 3 verification closure item 1 (sub-screen positive control)](../../decisions/m3-phase-3-wrap-panel.md#phase-3-verification-closure-what-counts-as-a3-evidence)
+[§Phase 3 verification closure item 1 (sub-screen positive control)](../decisions/preamble.md#phase-3-verification-closure-what-counts-as-a3-evidence)
 and item 4 (CI integration fixture) both reference `88` as the
 canonical example, so the implementation should match unless the
 deviation is recorded.

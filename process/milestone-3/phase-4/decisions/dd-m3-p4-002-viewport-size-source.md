@@ -1,4 +1,4 @@
-﻿### DD-M3-P4-002 — Viewport size source
+### DD-M3-P4-002 — Viewport size source
 
 **Status:** Accepted
 
@@ -89,7 +89,7 @@ any) would ride DD-003's offset writer pair anyway.
 A (unbounded scroll-axis parent → `LayoutError::ScrollViewUnboundedAxis`).
 The new `LayoutError` variant is **internal only**; no
 `WASAMO_LAYOUT_ERROR_*` ABI tag is added per
-[m3-phase-4 pre-doc-inputs §3](../notes/m3-phase-4/pre-doc-inputs.md)
+[m3-phase-4 pre-doc-inputs §3](../requirements/constraints.md)
 (the host receives layout failure as opaque in Phase 4 — no host
 code can meaningfully observe the new variant).
 

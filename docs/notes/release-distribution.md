@@ -5,7 +5,7 @@ created: 2026-05-22
 related:
   - docs/architecture.md
   - docs/abi_spec.md
-  - docs/decisions/m2-phase-2-wasamoc-output-format.md
+  - process/milestone-2/phase-2/decisions/preamble.md
 ---
 
 # Release distribution — open questions
@@ -69,7 +69,7 @@ artifact と downstream consumer 経路まで対象を広げた question invento
 17. このノートを 決定 / ADR 化する trigger は何か。候補：
     - first external user の発生
     - M4 = 1.0 cut の準備
-    - hot reload 着手（post-1.0、[../decisions/m2-phase-2-wasamoc-output-format.md](../decisions/m2-phase-2-wasamoc-output-format.md) 参照）
+    - hot reload 着手（post-1.0、[M2-Phase 2 wasamoc-output-format decisions](../../process/milestone-2/phase-2/decisions/preamble.md) 参照）
     - multi-`.ui` host の登場（[../architecture.md §1](../architecture.md#dsl-build-pipeline-m2-phase-6-onward) 既存 trigger）
     - 上記のいずれが先か、複数の組合せで起動するかは未決
 

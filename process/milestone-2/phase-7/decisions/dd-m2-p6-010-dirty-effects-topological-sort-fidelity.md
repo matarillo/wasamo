@@ -1,4 +1,4 @@
-﻿### DD-M2-P6-010 — `dirty_effects` topological sort fidelity
+### DD-M2-P6-010 — `dirty_effects` topological sort fidelity
 
 **Status: Accepted (2026-05-09)**
 
@@ -242,14 +242,14 @@ implementation:
    divergence semantics; M3 inherits it.
 
 These items are recorded as a new section in
-[docs/notes/m2-to-m3-handover.md](../notes/m2-to-m3-handover.md) at
+[docs/notes/m2-to-m3-handover.md](../../handoff.md) at
 DD-010 acceptance time, alongside the existing carry-forwards
 (`wasamo-ir` crate split, `HandlerExpr` unification). The handover
 note's role is exactly this: surface design premises M3 must inherit
 that are not derivable from the codebase or from the Phase 6 ADR's
 Accepted DDs. The handover update lands in the same commit that
 flips DD-010 to `Accepted`. ROADMAP.md and
-[vision-post-m2-roadmap.md](./vision-post-m2-roadmap.md) are not
+[vision-post-m2-roadmap.md](../../../cross-milestone/decisions/post-m2-roadmap.md) are not
 edited here; M3's pre-doc cycle is responsible for translating the
 handover note into specific acceptance criteria when M3 opens.
 

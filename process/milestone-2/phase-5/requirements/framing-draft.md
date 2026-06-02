@@ -2,7 +2,7 @@
 title: M2-Phase 5 (Reactive engine) — 設計の 2 軸
 status: superseded
 created: 2026-05-05
-superseded-by: docs/decisions/m2-phase-5-reactive-engine.md
+superseded-by: process/milestone-2/phase-5/decisions/preamble.md
 superseded-on: 2026-05-05
 related-plans:
   - docs/plans/m2-plan.md
@@ -13,7 +13,7 @@ related-notes:
 # M2-Phase 5 — 設計の 2 軸
 
 > **Superseded 2026-05-05.** 本ノートで擦り合わせた 2 軸は
-> [docs/decisions/m2-phase-5-reactive-engine.md](../decisions/m2-phase-5-reactive-engine.md)
+> [process/milestone-2/phase-5/decisions/preamble.md](../decisions/preamble.md)
 > (DD-M2-P5-001/002/006, Accepted 2026-05-05) として確定済み。本ファイルは
 > pre-doc 入力の経緯記録として残す。
 
@@ -63,7 +63,7 @@ Reactive engine は pure logic 部分が大きいので unit test の余地が�
 - **Con**: Mirror が production 型と乖離するリスク
 
 ### Option C — Headless verification 環境を整える
-- [headless-verification.md](./headless-verification.md) で議論中
+- [headless-verification.md](../../../../docs/notes/headless-verification.md) で議論中
 - runtime を起こして state transition だけ観察する中間層を整備
 - **Pro**: Phase 5 以降ずっと使える基盤になる
 - **Con**: Phase 5 のスコープ外に膨らむ。別 ADR を先に切る必要

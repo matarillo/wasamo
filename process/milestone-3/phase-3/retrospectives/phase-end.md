@@ -62,7 +62,7 @@ T8 は実装着手時に何を assert すれば close できるかが既に定�
 
 1. **本作業の主要な学び:** あり。
    - 上記「主な学び」3 点。Phase 4 pre-doc input への前送り済み
-     ([m3-phase-4/pre-doc-inputs.md](../m3-phase-4/pre-doc-inputs.md))。
+     ([m3-phase-4/pre-doc-inputs.md](../../phase-4/requirements/constraints.md))。
 
 2. **仕様文書 (`abi_spec.md` / `architecture.md` / `dsl_spec.md`) の変更:**
    **あり**
@@ -194,7 +194,7 @@ cargo test --workspace
 ## フォローアップ
 
 - M3-Phase 4 (ScrollView minimal) は
-  [`docs/notes/m3-phase-4/pre-doc-inputs.md`](../m3-phase-4/pre-doc-inputs.md)
+  [`docs/notes/m3-phase-4/pre-doc-inputs.md`](../../phase-4/requirements/constraints.md)
   から開始する。
 - Phase 3 progress file (`docs/plans/progress/m3-phase-3-progress.md`)
   は T10 commit set で `status: active` → `closing` に進めた後、

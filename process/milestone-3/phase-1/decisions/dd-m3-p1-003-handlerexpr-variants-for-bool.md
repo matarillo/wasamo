@@ -1,9 +1,9 @@
-﻿### DD-M3-P1-003 — `HandlerExpr` variants for `bool`
+### DD-M3-P1-003 — `HandlerExpr` variants for `bool`
 
 **Status:** Accepted
 
 **Context:**
-`HandlerExpr` is the shared IR ([wasamo-ir/src/lib.rs L28–L49](../../wasamo-ir/src/lib.rs#L28-L49))
+`HandlerExpr` is the shared IR ([wasamo-ir/src/lib.rs L28–L49](../../../../wasamo-ir/src/lib.rs#L28-L49))
 between `wasamoc::lower`/`emit` and the runtime evaluator. M2 chose the
 type-suffix pattern (DD-M2-P6-003 = Option A): `IntLit` / `StrLit` for
 literals, `PropRead` (i32) / `StrPropRead` (string) for property reads.

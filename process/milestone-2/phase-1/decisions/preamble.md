@@ -1,4 +1,4 @@
-﻿# M2-Phase 1 — cdylib-shim cleanup: Architecture Decisions
+# M2-Phase 1 — cdylib-shim cleanup: Architecture Decisions
 
 **Phase:** M2-Phase 1 (cdylib-shim cleanup)
 **Date:** 2026-05-03
@@ -7,15 +7,15 @@
 ## Context
 
 M2 acceptance criterion **A3** (see
-[ROADMAP.md M2](../../ROADMAP.md#m2-foundation),
-[m2-plan.md](../plans/m2-plan.md#frozen-agreement)):
+[process/_roadmap.md M2](../../../_roadmap.md#m2-foundation),
+[m2-plan.md](../../plan.md#frozen-agreement)):
 
 > `wasamo-runtime` and the `wasamo` safe wrapper no longer share an
 > rlib filename through the cdylib-shim split; the post-M1 cleanup
-> flagged in [DD-P7-002](./phase-7-language-bindings.md) is discharged.
+> flagged in [DD-P7-002](../../../milestone-1/phase-7/decisions/preamble.md) is discharged.
 
 The post-M1 implementation note in DD-P7-002 records the symptom and
-the planned shape of the long-term fix. [`architecture.md §11.4`](../architecture.md)
+the planned shape of the long-term fix. [`architecture.md §11.4`](../../../../docs/architecture.md)
 sketches the same shape:
 
 > A cdylib-shim crate (`wasamo-dll`) that depends on `wasamo-runtime`
@@ -50,7 +50,7 @@ Phase 2-5 examples) is treated as out-of-scope unless A3 demands it.
   preserved by construction.
 - **Adding new ABI symbols.** A4 (M2-Phase 4) territory.
 - **Workspace-wide `crates/` reorganisation.** Recorded as an open
-  question in [`docs/notes/workspace-layout.md`](../notes/workspace-layout.md).
+  question in [`docs/notes/workspace-layout.md`](../../../../docs/notes/workspace-layout.md).
 
 ## Summary of Accepted decisions
 
@@ -64,4 +64,4 @@ Phase 2-5 examples) is treated as out-of-scope unless A3 demands it.
 | DD-M2-P1-006 | Build-order edge for cdylib consumers | Option A — add `wasamo-dll` to `[dependencies]` of `bindings/rust-sys/Cargo.toml`; `no linkable target` warning accepted as deferred (see `docs/notes/cdylib-shim-build-graph.md`) |
 
 Implementation task list: see
-[`docs/plans/m2-plan.md` — M2-Phase 1 Progress](../plans/m2-plan.md#m2-phase-1--cdylib-shim-cleanup).
+[`docs/plans/m2-plan.md` — M2-Phase 1 Progress](../../plan.md#m2-phase-1--cdylib-shim-cleanup).

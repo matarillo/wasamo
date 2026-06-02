@@ -9,8 +9,8 @@ pixels vs `f64` ratio), (ii) the binding direction (constant-only
 vs bindable read-only vs bindable in-out), (iii) clamping
 semantics, and (iv) where the absent-attribute default is
 materialised. This DD is also the **load-bearing question for
-the typed-`i32` writer pair decision** ([architecture.md §6.8
-*Per-type seam* paragraph](../architecture.md#68-reactive-engine-m2-phase-5)'s
+the typed-`i32` writer pair decision** ([architecture.md §6.7
+*Per-type seam* paragraph](../../../../docs/architecture.md#67-reactive-engine-m2-phase-5)'s
 "third pair" that has been anticipated but not yet built).
 
 **Options (literal shape):**
@@ -53,10 +53,10 @@ the typed-`i32` writer pair decision** ([architecture.md §6.8
     binding" wording becomes hard to satisfy.
 - **Option B — Bindable read-only (recommended).** `offset-y:
   scroll_y` admitted (bare state identifier RHS per
-  [dsl_spec.md §4.3](../dsl_spec.md#43-property-binding) property-
+  [dsl_spec.md §4.3](../../../../docs/dsl_spec.md#43-property-binding) property-
   binding semantics, with `state scroll_y: i32 = 0` declared at
   component scope per
-  [dsl_spec.md §4.7](../dsl_spec.md#47-state-declarations-m2-surface-bool-added-in-m3-phase-1));
+  [dsl_spec.md §4.7](../../../../docs/dsl_spec.md#47-state-declarations-m2-surface-bool-added-in-m3-phase-1));
   runtime reads the bound state on
   each update and applies the offset; **no writer direction**
   (the runtime does not write back to the bound state when the
@@ -137,7 +137,7 @@ the typed-`i32` writer pair decision** ([architecture.md §6.8
 **Decision:** Option A (`i32` pixels) + Option B (bindable read-
 only) + Option A (silent clamp) + Option A (default at widget
 catalog). The typed-`i32` writer pair from
-[architecture.md §6.8 *Per-type seam* paragraph](../architecture.md#68-reactive-engine-m2-phase-5)
+[architecture.md §6.7 *Per-type seam* paragraph](../../../../docs/architecture.md#67-reactive-engine-m2-phase-5)
 is **deferred to M4 or later**; see §M4 hand-off below for the
 explicit enumeration of additive M4+ scroll-model surfaces.
 

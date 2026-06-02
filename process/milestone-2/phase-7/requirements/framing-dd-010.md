@@ -7,13 +7,13 @@ decision F below.
 **Date:** 2026-05-08
 **Targets DD:** DD-M2-P6-010 — `dirty_effects` topological sort fidelity
 **Targets phase:** M2-Phase 7 (Reactive Foundation Hardening)
-**ADR housing:** [docs/decisions/m2-phase-7-reactive-foundation.md](../decisions/m2-phase-7-reactive-foundation.md)
+**ADR housing:** [process/milestone-2/phase-7/decisions/preamble.md](../decisions/preamble.md)
 
 Per the project's doc-driven workflow, framing is aligned in chat first
 and recorded here as the input artefact for ADR drafting. Phase 7's
 three DDs (010 / 012 / 011) are processed as **independent** pre-doc
 cycles; this note covers DD-010 only. The Phase 6 framing precedent is
-[m2-phase-6-pre-doc-framing.md](../m2-phase-6/m2-phase-6-pre-doc-framing.md).
+[m2-phase-6-pre-doc-framing.md](../../phase-6/requirements/framing.md).
 
 ---
 
@@ -21,7 +21,7 @@ cycles; this note covers DD-010 only. The Phase 6 framing precedent is
 
 `drain_dirty_effects()` currently sorts the dirty Effect set by
 numeric `EffectId` (`v.sort_unstable()` in
-[wasamo-runtime/src/reactive.rs:126](../../wasamo-runtime/src/reactive.rs#L126)).
+[wasamo-runtime/src/reactive.rs:126](../../../../wasamo-runtime/src/reactive.rs#L126)).
 DD-M2-P6-001 = Option D specifies that ordering as
 "topological-by-dependency-graph". The numeric-ID sort approximates
 topological order only because, in the M2 counter shape, every
@@ -43,7 +43,7 @@ Phase 7 reopens the recommendation under **A5 framing** —
 ## A5 framing — what changed since the Phase 6 draft
 
 The 2026-05-08 acceptance-criteria revision added A5 to
-[m2-plan.md](../plans/m2-plan.md). Its operative clause for DD-010:
+[m2-plan.md](../../plan.md). Its operative clause for DD-010:
 
 > the implementation no longer relies on the counter case happening
 > to converge.
@@ -75,7 +75,7 @@ Carrying these forward into the option re-evaluation:
 
 1. **`ReactiveGraph::forward` / `back` are already maintained.**
    `reactive.rs` builds both directions during dependency tracking
-   ([reactive.rs:55-56](../../wasamo-runtime/src/reactive.rs#L55-L56)).
+   ([reactive.rs:55-56](../../../../wasamo-runtime/src/reactive.rs#L55-L56)).
    A topological walk has its inputs structurally available; the
    added cost is the walk itself, not graph instrumentation.
 
@@ -92,7 +92,7 @@ Carrying these forward into the option re-evaluation:
 
 3. **`DIRTY_EFFECTS` is a `HashSet`, drained per iteration.** Drain
    loop caps at `MUTATION_CAP = 16` iterations
-   ([reactive.rs:121-128](../../wasamo-runtime/src/reactive.rs#L121-L128)).
+   ([reactive.rs:121-128](../../../../wasamo-runtime/src/reactive.rs#L121-L128)).
    Per-iteration cost of a true topological walk is bounded by the
    dirty set size and the local out-degree in `forward`; M2 sizes
    are tiny.
@@ -101,7 +101,7 @@ Carrying these forward into the option re-evaluation:
    Con on Option A — "correctness asserted by tests alone, with no
    GUI confirmation" — still holds. Pure-logic unit tests on a
    topo-sort routine are within the project's
-   [testing rules](../../CLAUDE.md#testing-rules) (no Win32/WinRT
+   [testing rules](../../../../CLAUDE.md#testing-rules) (no Win32/WinRT
    FFI dependency); GUI confirmation requires multi-binding stimulus
    that does not exist before M3.
 
@@ -324,7 +324,7 @@ Cheaper to implement; does not constrain M3's design space.
   Option A is the only entry that delivers one without spawning a
   release/debug correctness asymmetry. The walk extracts to a free
   function within the project's
-  [testing rules](../../CLAUDE.md#testing-rules) (no Win32/WinRT
+  [testing rules](../../../../CLAUDE.md#testing-rules) (no Win32/WinRT
   coupling), so the "ships unexercised" Phase 6 objection is
   mitigated by pure-logic unit tests that cover shapes M3 will
   introduce.
@@ -364,7 +364,7 @@ Inputs are complete. The next session begins ADR drafting:
    agreement; surface it at the start of the drafting session, not
    at review time.
 2. **ADR DD-010 section revision.** In
-   [m2-phase-7-reactive-foundation.md](../decisions/m2-phase-7-reactive-foundation.md):
+   [m2-phase-7-reactive-foundation.md](../decisions/preamble.md):
    - Replace the inherited Phase 6 Recommendation prose with the
      Phase 7 conclusion (Option A, with A5-literal-reading rationale).
    - Carry forward Options B / C / C-lite per decision C, each with
@@ -381,7 +381,7 @@ Inputs are complete. The next session begins ADR drafting:
    A5 unchanged).
 5. **Implementation step.** Implement Option A on the active phase
    step branch per the
-   [step branch workflow](./retrospectives.md) — the topological
+   [step branch workflow](../../../procedures/retrospectives.md) — the topological
    walk extracted as a free function with pure-logic unit tests on
    synthetic dependency graphs.
 6. **Framing note disposition.** This note remains as input

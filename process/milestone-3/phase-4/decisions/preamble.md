@@ -1,4 +1,4 @@
-﻿# M3-Phase 4 — ScrollView primitive (minimal): Architecture Decisions
+# M3-Phase 4 — ScrollView primitive (minimal): Architecture Decisions
 
 **Phase:** M3-Phase 4 (ScrollView primitive — minimal)
 **Date:** 2026-05-25
@@ -7,8 +7,8 @@
 ## Context
 
 M3 acceptance criterion **A5** (see
-[ROADMAP.md M3](../../ROADMAP.md#m3-dsl-surface),
-[m3-plan.md §Acceptance criteria](../plans/m3-plan.md#acceptance-criteria)):
+[process/_roadmap.md M3](../../../_roadmap.md#m3-dsl-surface),
+[m3-plan.md §Acceptance criteria](../../plan.md#acceptance-criteria)):
 
 > ScrollView primitive (minimal: inner unbounded measure + viewport
 > clip + content offset binding; scrollbar widget, wheel handler,
@@ -16,7 +16,7 @@ M3 acceptance criterion **A5** (see
 
 The pre-doc framing for this phase was aligned with the owner on
 2026-05-25 and is recorded in
-[docs/notes/m3-phase-4/pre-doc-framing.md](../notes/m3-phase-4/pre-doc-framing.md)
+[docs/notes/m3-phase-4/pre-doc-framing.md](../requirements/framing.md)
 (commit `8f19c5f` for the initial framing draft + `234a0fa` for the
 owner-requested scoping-intent clarification). That framing fixed
 the 6-DD slate carried below, the visible-proof composition
@@ -32,19 +32,19 @@ model, not the only one (framing decision A + DD-003 scoping
 paragraph).
 
 Per the M2-Phase 2 framing decision D postmortem
-([m3-phase-2 framing notes](../notes/m3-phase-2/m3-phase-2-pre-doc-framing.md))
+([m3-phase-2 framing notes](../../phase-2/requirements/framing.md))
 and Phase 3's same-shape inheritance, the
 "Moment is not a commit unit" rule applies: each upstream-document
 edit in a Moment lands as its own commit on the pre-doc branch,
 scoped by review concern per
-[CLAUDE.md §Commit rules](../../CLAUDE.md#commit-rules) and the
+[CLAUDE.md §Commit rules](../../../../CLAUDE.md#commit-rules) and the
 doc set in
-[retrospectives.md §phase-sync (Moment 2) で触る doc セット](../notes/retrospectives.md#phase-sync-moment-2-で触る-doc-セット).
+[retrospectives.md §phase-sync (Moment 2) で触る doc セット](../../../procedures/retrospectives.md#phase-sync-moment-2-で触る-doc-セット).
 
 The M2 / M3-Phase-1 / M3-Phase-2 / M3-Phase-3 end-state shape that
 this phase extends without breaking:
 
-- `wasamo-ir` ([wasamo-ir/src/lib.rs](../../wasamo-ir/src/lib.rs)):
+- `wasamo-ir` ([wasamo-ir/src/lib.rs](../../../../wasamo-ir/src/lib.rs)):
   `IrType` is `I32 | Str | Bool`; `IrLiteral` is `Int | Str | Ident
   | Bool | Ratio | Color`. Phase 3 reused existing `i32` plumbing
   for all WrapPanel attributes without widening either enum.
@@ -58,15 +58,15 @@ this phase extends without breaking:
   needed to land the value in ScrollView's `i32` `offset-y`
   field happens at ScrollView's per-widget `set_property` arm.
   No general typed-`i32` evaluator / writer pair is built (per
-  [architecture.md §6.8 *Per-type seam* paragraph](../architecture.md#68-reactive-engine-m2-phase-5);
+[architecture.md §6.7 *Per-type seam* paragraph](../../../../docs/architecture.md#67-reactive-engine-m2-phase-5);
   the "third pair" stays deferred — see §M4 hand-off item 2).
 - `wasamo-runtime` widget catalog
-  ([wasamo-runtime/src/widget.rs](../../wasamo-runtime/src/widget.rs)):
+  ([wasamo-runtime/src/widget.rs](../../../../wasamo-runtime/src/widget.rs)):
   `Rectangle | VStack | HStack | Text | Button | Box | WrapPanel`
   (Phase 3 added `WrapPanel`). Phase 4 adds `ScrollView` as a
   per-kind tag (DD-001).
 - Layout engine
-  ([wasamo-runtime/src/layout.rs](../../wasamo-runtime/src/layout.rs)):
+  ([wasamo-runtime/src/layout.rs](../../../../wasamo-runtime/src/layout.rs)):
   pure-data `LayoutNode` / `measure` / `arrange` boundary,
   Win32/WinRT-free. Phase 2 introduced
   `LayoutError::{BoxAspectUnboundedBoth, BoxNoExtent}`; Phase 3
@@ -82,11 +82,11 @@ this phase extends without breaking:
   `i32` `offset-y` field at ScrollView's per-widget
   `set_property` arm. **No general typed-`i32` evaluator /
   writer pair is built** — the anticipated "third pair" from
-  [architecture.md §6.8 *Per-type seam* paragraph](../architecture.md#68-reactive-engine-m2-phase-5)
+[architecture.md §6.7 *Per-type seam* paragraph](../../../../docs/architecture.md#67-reactive-engine-m2-phase-5)
   is deferred to M4 or later input-handling work (see §M4 hand-off
   below). F5 (`TypedValue` deferral) is held in force by
   construction.
-- `wasamoc` ([wasamoc/src/check.rs](../../wasamoc/src/check.rs)):
+- `wasamoc` ([wasamoc/src/check.rs](../../../../wasamoc/src/check.rs)):
   state-name → declared-type table; identifier resolution lowers
   to typed `*PropRead` variants. Phase 4 adds no new value type;
   ScrollView's `offset-y` is an `i32` literal (or `i32` binding)
@@ -94,7 +94,7 @@ this phase extends without breaking:
   existing diagnostic surface. ScrollView gains a child-count
   diagnostic (exactly 1 child) per DD-006.
 - Composition / Visual Layer:
-  ([architecture.md §6.5](../architecture.md#65-widgetnode-and-visual-layer-sync))
+([architecture.md §6.5](../../../../docs/architecture.md#65-widgetnode-and-visual-layer-sync))
   `LayoutNode` offsets are absolute (root-relative); `sync_visuals()`
   converts each child offset to parent-relative `Visual.Offset`
   before writing the Composition visual tree. The current
@@ -114,7 +114,7 @@ this phase extends without breaking:
 This ADR is framed against A5 and the m3-plan's "minimal: inner
 unbounded measure + viewport clip + content offset binding"
 phrasing
-([m3-plan.md §Acceptance criteria](../plans/m3-plan.md#acceptance-criteria)).
+([m3-plan.md §Acceptance criteria](../../plan.md#acceptance-criteria)).
 Phase 5 Grid remains the milestone's "second novel-normative-spec
 phase" proper (star sizing is the heavier algorithmic content);
 Phase 4 introduces **smaller novel normative content** of its own
@@ -132,17 +132,17 @@ sub-screen content is Box + Text placeholders.
 The acceptance lens for this phase: A5 is satisfied when (i) `.ui`
 declares `ScrollView { offset-y: <i32-literal-or-state-ident>; <single
 content child> }` (where the state-ident form is a bare identifier RHS
-per [dsl_spec.md §4.3](../dsl_spec.md#43-property-binding) property-
+per [dsl_spec.md §4.3](../../../../docs/dsl_spec.md#43-property-binding) property-
 binding semantics, resolving to a component-scope
 `state scroll_y: i32 = 0` declaration per
-[dsl_spec.md §4.7](../dsl_spec.md#47-state-declarations-m2-surface-bool-added-in-m3-phase-1)
+[dsl_spec.md §4.7](../../../../docs/dsl_spec.md#47-state-declarations-m2-surface-bool-added-in-m3-phase-1)
 state-declaration grammar, **not** a `\{…}` interpolation — see
 Revision history 2026-05-25 erratum) and the shared crates lower →
 load → render it
 with correct inner-unbounded measure + viewport clip + offset
 application, (ii) the ScrollView chapter lands in `docs/dsl_spec.md`
 §4.11 as a normative spec at the milestone-end-criteria bar
-([m3-plan.md §Milestone-end criteria item 5](../plans/m3-plan.md#milestone-end-criteria))
+([m3-plan.md §Milestone-end criteria item 5](../../plan.md#milestone-end-criteria))
 applied at phase close, and (iii) `examples/gallery/` +
 `examples/gallery-rust/` are grown additively with a sibling
 `ScrollView { WrapPanel { Box × 30–40 } }` slice (the Phase 3
@@ -154,7 +154,7 @@ advance together by phase close.
 The governance question Phase 3 ADR raised (M3-onward RFC wording
 in VISION §9.2 / decisions-README vs realised phase-ADR practice)
 was resolved upstream by
-[vision-governance-rfc-deferral.md (DD-V-018)](./vision-governance-rfc-deferral.md)
+[vision-governance-rfc-deferral.md (DD-V-018)](../../../cross-milestone/decisions/governance-rfc-deferral.md)
 on 2026-05-25 (commit `632a30b docs: apply DD-V-018 — defer RFC
 adoption to post-1.0`). VISION §9.2 / §11 and decisions-README
 now describe a two-stage governance policy: pre-1.0 BDFL + ADRs,
@@ -199,7 +199,7 @@ observed:
      pattern explicitly does not apply here).
    - **`offset-y` binding admission** — `offset-y: scroll_y`
      (bare state identifier RHS per
-     [dsl_spec.md §4.3](../dsl_spec.md#43-property-binding))
+     [dsl_spec.md §4.3](../../../../docs/dsl_spec.md#43-property-binding))
      accepted when `scroll_y` is declared as
      `i32` in `state`; rejected when `scroll_y` is undeclared,
      `bool`, or `String`. Reuses the existing i32 reader /
@@ -227,7 +227,7 @@ observed:
    - **Unbounded scroll-axis parent** — fires
      `LayoutError::ScrollViewUnboundedAxis` (reject test;
      pins the DD-002 / DD-005 branch per
-     [m3-phase-4 pre-doc-inputs §6](../notes/m3-phase-4/pre-doc-inputs.md)).
+     [m3-phase-4 pre-doc-inputs §6](../requirements/constraints.md)).
    - **Content smaller than viewport** — content paints at its
      measured size at top-leading corner; offset clamped to 0.
    - **Content equal to viewport** — boundary case; offset
@@ -257,7 +257,7 @@ observed:
 
 4. **Windows-runtime layout evidence (CI-gated, including R2
    closure).** A mock-free integration test (per
-   [CLAUDE.md §Testing rules](../../CLAUDE.md#testing-rules))
+   [CLAUDE.md §Testing rules](../../../../CLAUDE.md#testing-rules))
    on the Windows CI runner exercises:
 
    - **Scroll-path fixture (primary).** A `.ui` declares a
@@ -303,7 +303,7 @@ observed:
      summing parent-relative offsets up the chain) equals the
      expected position given the scroll state — i.e. the
      absolute-vs-parent-relative convention from
-     [architecture.md §6.5](../architecture.md#65-widgetnode-and-visual-layer-sync)
+[architecture.md §6.5](../../../../docs/architecture.md#65-widgetnode-and-visual-layer-sync)
      is observed end-to-end with non-trivial nesting. This is
      the test-coverage half of R2 per Phase 4 framing decision
      F.
@@ -352,7 +352,7 @@ explicitly **not** required in Phase 4 (per framing decision E
 and the Out of scope list); Phase 8 broadens the full gallery to
 all three.
 
-Per [m3-phase-4 pre-doc-inputs §10](../notes/m3-phase-4/pre-doc-inputs.md),
+Per [m3-phase-4 pre-doc-inputs §10](../requirements/constraints.md),
 evidence items (1)–(4) do not collapse into one even though they
 share helper infrastructure — the `wasamoc check` diagnostics,
 the measure-arrange tests, the IR-load `validate()` gate tests,
@@ -385,7 +385,7 @@ landing point:
    the runtime writes the new value back through the binding.
    Requires building the general typed-`i32` writer pair — the
    "third pair" anticipated in
-   [architecture.md §6.8 *Per-type seam* paragraph](../architecture.md#68-reactive-engine-m2-phase-5).
+   [architecture.md §6.7 *Per-type seam* paragraph](../../../../docs/architecture.md#67-reactive-engine-m2-phase-5).
    The Phase 4 surface (read-only binding) is forward-compatible:
    `offset-y: scroll_y` remains valid syntax when M4 or
    later work adds in-out direction; no IR change is required.
@@ -456,10 +456,10 @@ deferred to a later phase / milestone:
 ## Upstream document revisions (Moment 1 / Moment 2)
 
 Phase 4 inherits the two-moment structure from
-[m3-phase-2 framing decision D](../notes/m3-phase-2/m3-phase-2-pre-doc-framing.md#d-upstream-document-revision-timing-two-sync-moments)
+[m3-phase-2 framing decision D](../../phase-2/requirements/framing.md#d-upstream-document-revision-timing-two-sync-moments)
 and Phase 3's same-shape inheritance, per Phase 4 pre-doc framing
 decision D. Doc set and commit shape follow the living rule in
-[retrospectives.md](../notes/retrospectives.md) (framings inherit
+[retrospectives.md](../../../procedures/retrospectives.md) (framings inherit
 the *structure*, not the historical doc list verbatim — see the
 operational note at retrospectives.md §phase-sync). The Phase 4
 `dsl_spec.md` section marker mirrors the Phase 2 / Phase 3 form:
@@ -482,14 +482,14 @@ WrapPanel chapters).
 **Moment 1 — ADR Accepted commit set (design-spec draft).**
 Constituent commits, each landing as its own commit on the
 pre-doc branch per the per-review-concern rule in
-[CLAUDE.md §Commit rules](../../CLAUDE.md#commit-rules) and
-[retrospectives.md](../notes/retrospectives.md). The draft-side
+[CLAUDE.md §Commit rules](../../../../CLAUDE.md#commit-rules) and
+[retrospectives.md](../../../procedures/retrospectives.md). The draft-side
 doc set Phase 4 commits to at Moment 1 is enumerated below;
 retrospectives.md §phase-sync で触る doc セット規定は phase-end
 Moment 2 を対象とした規範であり、Moment 1 の draft set は
 その mirror として **直接同一視されるものではない**:
 
-- `docs/decisions/m3-phase-4-scroll-view.md` — ADR
+- `process/milestone-3/phase-4/decisions/preamble.md` — ADR
   `Status: Accepted` flip (this file).
 - `docs/dsl_spec.md` — new §4.11 ScrollView chapter as design-
   spec draft (DD-005 sub-issues 1–10 as the chapter outline; the
@@ -519,7 +519,7 @@ Implementation begins only after these commits land.
   design draft and implementation diverged (marker flip is
   required regardless of divergence; corrections are conditional
   on what re-sync surfaces). Per
-  [m3-phase-4 pre-doc-inputs §10 / retroactive spec-gap fold](../notes/m3-phase-4/pre-doc-inputs.md)
+  [m3-phase-4 pre-doc-inputs §10 / retroactive spec-gap fold](../requirements/constraints.md)
   inherited from Phase 2 / Phase 3, earlier-phase spec gaps
   surfaced during the re-sync may fold into the same commit with
   explicit owner confirmation.
@@ -531,12 +531,12 @@ Implementation begins only after these commits land.
   retired → archived` lifecycle.
 - `docs/plans/m3-plan.md` Progress row — Status flips to
   complete.
-- `docs/decisions/m3-phase-4-scroll-view.md` (this file) —
+- `process/milestone-3/phase-4/decisions/preamble.md` (this file) —
   touch only if one of the three retrospectives.md §phase-sync
   ADR-touch cases applies (AC discharged-vs-impl divergence;
   out-of-phase residual cross-ref; thesis-level finding).
 - Step retro `phase-sync` items (per
-  [retrospectives.md item 10](../notes/retrospectives.md#step-end-固有-merge--phase-ブランチ))
+  [retrospectives.md item 10](../../../procedures/retrospectives.md#step-end-固有-merge--phase-ブランチ))
   must all close into `doc-folded` / `carry-forward` /
   `local-only` at Moment 2 — no open `phase-sync` items survive
   past phase close. Phase 4 is the first phase to use the item
@@ -547,7 +547,7 @@ ADR operationalises it.
 
 ## Inputs absorbed
 
-Mapping from [pre-doc-framing.md](../notes/m3-phase-4/pre-doc-framing.md)
+Mapping from [pre-doc-framing.md](../requirements/framing.md)
 framing decisions to DDs and ADR sections:
 
 | Framing decision | Disposition | Consumed at |
@@ -562,7 +562,7 @@ framing decisions to DDs and ADR sections:
 | H — Live-note re-evaluation triggers | Disposition table | (No direct ADR section — the framing's per-note disposition feeds DD layering and §Out of scope; the live notes themselves are not modified by Phase 4 unless framing decision F's R2-related architecture.md update warrants it) |
 | I — ScrollView mental model + ecosystem contrast subsection | Spec content | DD-005 §Spec content seed item 10; the subsection lands in dsl_spec.md §4.11 at Moment 1 |
 
-Mapping from [pre-doc-framing.md](../notes/m3-phase-4/pre-doc-framing.md)
+Mapping from [pre-doc-framing.md](../requirements/framing.md)
 DD slate to this ADR's DD numbering: 1:1 (DD-001 → DD-M3-P4-001
 etc.; the framing's recommendation directions are consumed as the
 recommended Options of each DD here).
@@ -571,6 +571,6 @@ recommended Options of each DD here).
 
 | Date | Change |
 |---|---|
-| 2026-05-25 | Erratum: corrected `offset-y` binding surface notation. Earlier draft examples wrote the state-bound surface as `offset-y: \{state.scroll_y}`; the actual DSL property-bind surface is `offset-y: scroll_y` (bare state identifier) per existing [dsl_spec.md §4.3](../dsl_spec.md#43-property-binding) property-binding surface, with `state scroll_y: i32 = 0` declared at component scope per [dsl_spec.md §4.7](../dsl_spec.md#47-state-declarations-m2-surface-bool-added-in-m3-phase-1). The `\{…}` syntax is reserved for string interpolation inside string literals per [dsl_spec.md §2.4](../dsl_spec.md#24-string-literals). No design decision changes; the bindable read-only direction of DD-003 is unaffected. |
+| 2026-05-25 | Erratum: corrected `offset-y` binding surface notation. Earlier draft examples wrote the state-bound surface as `offset-y: \{state.scroll_y}`; the actual DSL property-bind surface is `offset-y: scroll_y` (bare state identifier) per existing [dsl_spec.md §4.3](../../../../docs/dsl_spec.md#43-property-binding) property-binding surface, with `state scroll_y: i32 = 0` declared at component scope per [dsl_spec.md §4.7](../../../../docs/dsl_spec.md#47-state-declarations-m2-surface-bool-added-in-m3-phase-1). The `\{…}` syntax is reserved for string interpolation inside string literals per [dsl_spec.md §2.4](../../../../docs/dsl_spec.md#24-string-literals). No design decision changes; the bindable read-only direction of DD-003 is unaffected. |
 | 2026-05-25 | Status flipped to Accepted. DD-001 through DD-006 owner-accepted after per-DD review, implementation-shape recheck against existing runtime code, and final Verification / Out of scope / Upstream revisions alignment. |
 | 2026-05-25 | Initial draft (Status: Proposed). All 6 DDs at Proposed pending owner review pass. Framing-level owner alignment confirmed in chat 2026-05-25 (commits `8f19c5f`, `234a0fa` for pre-doc-framing.md). |

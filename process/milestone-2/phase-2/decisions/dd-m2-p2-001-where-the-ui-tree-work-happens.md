@@ -1,4 +1,4 @@
-﻿### DD-M2-P2-001 — Where the .ui→tree work happens
+### DD-M2-P2-001 — Where the .ui→tree work happens
 
 **Status:** Accepted
 
@@ -133,7 +133,7 @@ Three independent reasons:
    we have explicitly scheduled to discuss is bad sequencing.
 
 3. **Hot reload.** Hot reload is post-1.0, not M2 — but the
-   constraint stated in [m2-plan §Out of scope](../plans/m2-plan.md#out-of-scope-deferred-to-later-milestones)
+   constraint stated in [m2-plan §Out of scope](../../plan.md#out-of-scope-deferred-to-later-milestones)
    is "feasibility depends on M2-Phase 2". Option A forecloses it;
    Option B enables it cleanly; Option C makes it the default. We
    should pick the lowest option on this axis that doesn't lose on

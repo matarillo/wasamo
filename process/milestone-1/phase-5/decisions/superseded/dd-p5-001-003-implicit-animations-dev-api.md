@@ -2,24 +2,24 @@
 
 **Phase:** 5 (Visual Layer integration sanity check)
 **Date:** 2026-04-29
-**Status:** Superseded by [phase-5-compositor-independence-check.md](./phase-5-compositor-independence-check.md)
+**Status:** Superseded by [phase-5-compositor-independence-check.md](../preamble.md)
 
 > **Note (added 2026-04-29):** This ADR's premise — that Phase 5
 > verifies property-change animation via a dev-only toggle — was
 > found in pre-implementation review to contradict DD-V-001 and to
 > provide a weaker signal of compositor independence than a
 > continuous ambient animation. The redirection is recorded in
-> [phase-5-compositor-independence-check.md](./phase-5-compositor-independence-check.md).
+> [phase-5-compositor-independence-check.md](../preamble.md).
 > This file is preserved per the
-> [Revision rule](./README.md#revision-rule) as historical record
+> [Revision rule](../../../../README.md) as historical record
 > and as a worked example of the
-> [Pre-doc discipline](./README.md#pre-doc-discipline) introduced
+> [Pre-doc discipline](../../../../README.md) introduced
 > alongside the supersession.
 
 The vision decision driving this phase — that Wasamo's default
 property-change behavior is **instant**, with animation deferred to a
 public opt-in API in M5 — is recorded separately as
-[DD-V-001 in vision-m1-acceptance-criteria.md](./vision-m1-acceptance-criteria.md#dd-v-001--default-property-change-behavior-is-instant-animation-is-opt-in).
+[DD-V-001 in vision-m1-acceptance-criteria.md](../../../../cross-milestone/decisions/m1-acceptance-criteria.md#dd-v-001--default-property-change-behavior-is-instant-animation-is-opt-in).
 This ADR captures only the Phase 5 implementation decisions that
 follow from DD-V-001.
 
@@ -27,7 +27,7 @@ follow from DD-V-001.
 
 ### DD-P5-001 — Phase 5 implements a dev-only internal API, not a public one
 
-**Status:** Superseded by DD-P5-004 ([phase-5-compositor-independence-check.md](./phase-5-compositor-independence-check.md))
+**Status:** Superseded by DD-P5-004 ([phase-5-compositor-independence-check.md](../preamble.md))
 
 **Context:**
 Given DD-V-001, Phase 5 cannot ship a public animation API — that work
@@ -40,7 +40,7 @@ the Visual Layer is correctly engaged on the DWM compositor thread:
 
 This sanity check is not the differentiator of Wasamo — implicit
 animation is table stakes across modern declarative UI frameworks (see
-[DD-V-001](./vision-m1-acceptance-criteria.md#dd-v-001--default-property-change-behavior-is-instant-animation-is-opt-in)).
+[DD-V-001](../../../../cross-milestone/decisions/m1-acceptance-criteria.md#dd-v-001--default-property-change-behavior-is-instant-animation-is-opt-in)).
 It is the cheapest visible proof that the substrate is working.
 
 The question is how to expose the animation behavior so the
@@ -95,7 +95,7 @@ helper.
 
 ### DD-P5-002 — Animation parameters and trigger properties
 
-**Status:** Superseded by DD-P5-006 ([phase-5-compositor-independence-check.md](./phase-5-compositor-independence-check.md))
+**Status:** Superseded by DD-P5-006 ([phase-5-compositor-independence-check.md](../preamble.md))
 
 **Context:**
 When the dev helper is enabled, which `Visual` properties animate, and
@@ -123,7 +123,7 @@ and carry no commitment for the public API designed in M5.
 
 ### DD-P5-003 — Removal plan for the dev helper
 
-**Status:** Superseded by DD-P5-006 ([phase-5-compositor-independence-check.md](./phase-5-compositor-independence-check.md))
+**Status:** Superseded by DD-P5-006 ([phase-5-compositor-independence-check.md](../preamble.md))
 
 **Context:**
 The dev helper is intentionally throwaway code. Without an explicit

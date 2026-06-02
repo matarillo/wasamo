@@ -1,9 +1,9 @@
-﻿### DD-M2-P2-004 — Sequencing relative to M2-Phase 3
+### DD-M2-P2-004 — Sequencing relative to M2-Phase 3
 
 **Status:** Accepted
 
 **Context:**
-[m2-plan phase dependencies](../plans/m2-plan.md#phase-dependencies)
+[m2-plan phase dependencies](../../plan.md#phase-dependencies)
 says M2-Phase 2 and M2-Phase 3 are parallelizable decision phases,
 both gating M2-Phase 4. In practice the two interact:
 
@@ -63,7 +63,7 @@ To insulate the sequential path against a Phase 3 surprise, the
 following table records each Phase 2 option's downstream Phase 3
 implication. If a future Phase 3 outcome is incompatible with the
 Phase 2 option Accepted here, this ADR is reopened (per
-[docs/decisions/README.md supersede policy](./README.md)) rather
+[process/README.md supersede policy](../../../README.md)) rather
 than Phase 3 silently working around it.
 
 | DD-M2-P2-001 outcome | DD-M2-P3 (handler exec) implication |
