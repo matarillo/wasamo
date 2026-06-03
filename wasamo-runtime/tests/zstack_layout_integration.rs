@@ -168,6 +168,17 @@ fn assert_zstack_visual_contract(zstack: &WidgetNode, label: &str) {
             "{label}: ZStack child {i} Visual must not carry a per-child clip"
         );
     }
+
+    // The third child carries `h-align: end; v-align: start` in both
+    // fixtures. Read the live Visual offset so the T3 runtime
+    // WidgetData -> LayoutNode placement boundary is exercised end-to-end,
+    // not only by T2's pure layout tests.
+    let (zw, _) = visual_size(&z_visual);
+    let top_visual = visual_of(&zstack.children[2]);
+    let (tx, ty) = visual_offset(&top_visual);
+    let (tw, _) = visual_size(&top_visual);
+    assert_close(tx, zw - tw, &format!("{label}: h-align end child x offset"));
+    assert_close(ty, 0.0, &format!("{label}: v-align start child y offset"));
 }
 
 const ZSTACK_ROOT_SRC: &str = r#"component ZStackRoot inherits Window {

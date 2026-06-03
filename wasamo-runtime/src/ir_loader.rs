@@ -3506,6 +3506,13 @@ mod tests {
     }
 
     #[test]
+    fn zstack_zero_children_validates() {
+        let c = parse_ok(";wasamo-ir v0\ncomponent C inherits W { node ZStack {} }");
+        assert_eq!(c.root.widget_type, "ZStack");
+        assert!(c.root.children.is_empty());
+    }
+
+    #[test]
     fn zstack_attribute_rejected_at_validate() {
         assert_validate_err(
             ";wasamo-ir v0\ncomponent C inherits W {\n\

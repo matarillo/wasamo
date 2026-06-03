@@ -95,3 +95,10 @@
   --workspace` — green; `cargo build --workspace` — green; `cargo test
   --workspace` — green. Existing Cargo warnings about the `wasamo`
   linkable target and `wasamo-sys` import-library ordering were observed.
+- **2026-06-03 / T3 review follow-up local:** pinned empty ZStack as a
+  valid runtime shape (`zstack_zero_children_validates`) and strengthened
+  the live Visual fixture so the aligned child's `Visual.Offset` proves
+  `h-align: end` / `v-align: start` through the runtime
+  `WidgetData::ZStack` → `LayoutNode::zstack` boundary. `cargo fmt
+  --all -- --check` passed after formatting; `cargo test -p
+  wasamo-runtime zstack` — green.

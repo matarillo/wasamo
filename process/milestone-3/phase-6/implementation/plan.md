@@ -173,7 +173,8 @@ skips on a runner that cannot create the Compositor.
       `zstack_binding_rejected_at_validate`,
       `zstack_child_unknown_alignment_rejected_at_validate`,
       `placement_prop_outside_zstack_child_or_grid_cell_rejected_at_validate`,
-      and `validate_rejects_zstack_with_kind_payload`; roundtrip test
+      `validate_rejects_zstack_with_kind_payload`, and
+      `zstack_zero_children_validates`; roundtrip test
       `zstack_emit_then_parse_preserves_direct_children_and_order`.
 - [x] **ZStack real-Visual z-order fixture** — a `.ui` with overlapping
       ZStack children asserts the child Visual order matches document
@@ -193,7 +194,9 @@ skips on a runner that cannot create the Compositor.
       with `zstack_rooted_fixture_preserves_live_visual_order_and_clip`
       and `zstack_vstack_root_fixture_pins_production_root_shape`; the
       fixture enables `windows` `Foundation_Collections` so
-      `VisualCollection` can be enumerated.
+      `VisualCollection` can be enumerated; review follow-up also reads
+      the aligned child `Visual.Offset` so `h-align: end` /
+      `v-align: start` is proven through the live runtime boundary.
 - [x] **ZStack outer-bounds clip fixture** — the ZStack Visual has a
       non-null `Visual.Clip` (InsetClip); each child Visual has
       `Visual.Clip = null` (clip-absence regression guard, symmetric with
