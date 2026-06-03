@@ -3302,6 +3302,20 @@ mod tests {
     }
 
     #[test]
+    fn zstack_child_non_keyword_alignment_value_rejected() {
+        // A non-identifier value (here an integer literal) must hit the
+        // `expects an alignment keyword` arm of `check_zstack_child_align`,
+        // distinct from the bad-identifier arm above.
+        let errs = errors(r#"component C inherits W { ZStack { Text { h-align: 3 } } }"#);
+        assert!(
+            errs.iter()
+                .any(|e| e.contains("ZStack child `h-align` expects an alignment keyword")),
+            "{:?}",
+            errs
+        );
+    }
+
+    #[test]
     fn placement_attr_outside_zstack_child_or_cell_rejected() {
         let errs = errors(r#"component C inherits W { VStack { Text { h-align: center } } }"#);
         assert!(
