@@ -46,6 +46,14 @@
   `cargo test --workspace` — green; `cargo test -p wasamo-runtime`
   — green (runtime lib 322 plus integration tests). Existing Cargo
   warnings about the `wasamo` linkable target were observed.
+- **2026-06-03 / T4 task-end clean rebuild (post-commit
+  `774b567`):** `cargo fmt --all -- --check` — green; `cargo clean`
+  completed (`4862 files, 1.3GiB` removed); `cargo build --release
+  --workspace` — green; `cargo build --workspace` — green;
+  `cargo test --workspace` — green; `cargo test -p wasamo-runtime`
+  — green (runtime lib 322 plus integration tests). Existing Cargo
+  warnings about the `wasamo` linkable target / `wasamo-sys`
+  import-library ordering were observed.
 - **2026-06-02 / T1 local:** `cargo fmt --all -- --check` — green.
 - **2026-06-02 / T1 local:** `cargo test -p wasamoc` — green;
   covered the ZStack check / lower / emit evidence with tests including
