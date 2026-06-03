@@ -108,3 +108,23 @@
   --workspace` — green; `cargo build --workspace` — green; `cargo test
   --workspace` — green. Existing Cargo warnings about the `wasamo`
   linkable target and `wasamo-sys` import-library ordering were observed.
+- **2026-06-03 / T1+T2 cross-task review follow-up clean rebuild
+  (post-commit `4616e48`):** a T1/T2 re-review on the test-breadth and
+  cross-phase-constraint lenses pinned three deliberate diagnostic/size
+  branches that had no test —
+  `zstack_child_non_keyword_alignment_value_rejected` (T1 `wasamoc`
+  `check_zstack_child_align` non-identifier arm),
+  `zstack_handler_rejected_at_validate` (T3 runtime `validate` ZStack
+  handler arm), and
+  `zstack_fixed_size_measure_reports_declared_extent_not_child_union`
+  (T2 `measure_zstack` `Fixed` size arm) — and corrected t1.md item 5 /
+  10 and t2.md item 10 to record the placement/alignment constraint as a
+  single `carry-forward` with three implementation sites. `cargo fmt
+  --all -- --check` — green; `cargo clean` completed (`4935 files,
+  1.3GiB` removed); `cargo build --release --workspace` — green
+  (39.27s); `cargo build --workspace` — green (35.80s); `cargo test
+  --workspace` — green (`wasamoc` 293, `wasamo-runtime` lib 314).
+  Existing Cargo warnings about the `wasamo` linkable target and
+  `wasamo-sys` import-library ordering were observed. This is the single
+  SSOT record for the follow-up verification; the t1 / t2 / t3 retro
+  item-3 sections stay scoped to their own original commits.
