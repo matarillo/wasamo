@@ -102,3 +102,9 @@
   `WidgetData::ZStack` → `LayoutNode::zstack` boundary. `cargo fmt
   --all -- --check` passed after formatting; `cargo test -p
   wasamo-runtime zstack` — green.
+- **2026-06-03 / T3 review follow-up clean rebuild (post-commit
+  `395da0f`):** `cargo fmt --all -- --check` — green; `cargo clean`
+  completed (`3755 files, 1.2GiB` removed); `cargo build --release
+  --workspace` — green; `cargo build --workspace` — green; `cargo test
+  --workspace` — green. Existing Cargo warnings about the `wasamo`
+  linkable target and `wasamo-sys` import-library ordering were observed.
