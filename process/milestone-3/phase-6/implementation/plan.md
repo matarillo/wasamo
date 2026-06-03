@@ -276,12 +276,15 @@ load-time value and does not yet register the toggle binding.
       `conditional_bool_state_accepted`,
       `conditional_bool_literal_accepted`,
       `conditional_non_bool_condition_rejected`,
+      `conditional_literal_condition_rejected`,
       `conditional_undeclared_condition_rejected`,
       `conditional_operator_condition_rejected`,
       `conditional_non_structural_body_rejected`,
       `conditional_direct_nested_if_body_rejected`,
       `conditional_multi_child_body_rejected`, and
-      `conditional_component_level_rejected`.
+      `conditional_component_level_rejected`; review follow-up added
+      `conditional_direct_grid_child_rejected` to pin the Grid-placement
+      diagnostic branch.
 - [x] `wasamoc` lower → `ControlFlowNode::If` + textual-IR emit (the
       §Spec content seed shape, DD-M3-P6-004); the member materialises no
       runtime widget. Implemented in `wasamoc/src/lower.rs`
@@ -301,15 +304,21 @@ load-time value and does not yet register the toggle binding.
       `wasamo-runtime/src/ir_loader.rs` (`parse_if_member`,
       `validate_phase6_control_flow_invariants`,
       `validate_condition_expr`, `append_static_member`,
-      `evaluate_static_condition`) with tests
+      `evaluate_static_condition`, and
+      `collect_static_zstack_placements`) with tests
       `control_flow_if_parses_as_member_with_single_widget_body`,
       `control_flow_roundtrip_preserves_condition_and_body`,
       `static_condition_reducer_maps_bool_to_presence`,
+      `zstack_static_placements_follow_materialized_member_order`,
       `validate_rejects_if_with_non_bool_condition`,
+      `validate_rejects_if_with_bool_read_resolving_to_non_bool_state`,
       `validate_rejects_if_with_unresolved_condition`,
       `validate_rejects_if_with_empty_body`,
-      `validate_rejects_if_with_multi_child_body`, and
-      `validate_rejects_if_with_nested_control_flow_body`.
+      `validate_rejects_if_with_multi_child_body`,
+      `validate_rejects_if_with_nested_control_flow_body`,
+      `validate_rejects_invalid_subtree_inside_if_body`,
+      `validate_rejects_direct_conditional_grid_member`, and
+      `validate_rejects_direct_conditional_cell_member`.
 - [x] Tests: `wasamoc` positive controls (`if <bool-state> { … }` /
       `if true { … }`) + a reject case per diagnostic (item 1); the
       pure-function presence reducer `bool → present/absent` (item 2);

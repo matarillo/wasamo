@@ -3389,6 +3389,16 @@ mod tests {
     }
 
     #[test]
+    fn conditional_literal_condition_rejected() {
+        let errs = errors("component C inherits W { VStack { if 3 { Text {} } } }");
+        assert!(
+            errs.iter()
+                .any(|e| e.contains("condition must be a bool literal or declared bool state")),
+            "{errs:?}"
+        );
+    }
+
+    #[test]
     fn conditional_undeclared_condition_rejected() {
         let errs = errors("component C inherits W { VStack { if missing { Text {} } } }");
         assert!(errs.iter().any(|e| e.contains("not declared")), "{errs:?}");
@@ -3439,6 +3449,18 @@ mod tests {
         let errs = errors("component C inherits W { VStack { if true { if false { Text {} } } } }");
         assert!(
             errs.iter().any(|e| e.contains("bare nested `if`")),
+            "{errs:?}"
+        );
+    }
+
+    #[test]
+    fn conditional_direct_grid_child_rejected() {
+        let errs = errors(
+            "component C inherits W { Grid { columns: 1* rows: 1* if true { Cell { Text {} } } } }",
+        );
+        assert!(
+            errs.iter()
+                .any(|e| e.contains("conditional members may appear inside a Cell content widget")),
             "{errs:?}"
         );
     }
