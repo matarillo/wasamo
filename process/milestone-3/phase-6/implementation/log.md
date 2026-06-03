@@ -83,6 +83,14 @@
   green; `cargo test -p wasamo-runtime` — green (runtime lib 327 plus
   integration tests). Existing Cargo warnings about the `wasamo`
   linkable target were observed.
+- **2026-06-03 / T4 Cell conditional check follow-up local:**
+  added the source-level dual gate for `Cell { <widget> if ... }`,
+  matching the runtime `validate_rejects_direct_conditional_cell_member`
+  defense-in-depth rejection. `cargo test -p wasamoc --lib
+  check::tests::conditional_cell_sibling_rejected` — green; `cargo test
+  -p wasamoc --lib check::tests::conditional` — green (12 tests);
+  `cargo test -p wasamoc --lib` — green (311 tests); `cargo fmt --all
+  -- --check` — green.
 - **2026-06-02 / T1 local:** `cargo fmt --all -- --check` — green.
 - **2026-06-02 / T1 local:** `cargo test -p wasamoc` — green;
   covered the ZStack check / lower / emit evidence with tests including

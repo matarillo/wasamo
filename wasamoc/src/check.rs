@@ -960,8 +960,8 @@ fn check_cell(
     let mut row_span: Option<i64> = Some(1);
     let mut column_span: Option<i64> = Some(1);
     for m in members {
-        if let Member::PropertyBind { name, value, span } = m {
-            match name.as_str() {
+        match m {
+            Member::PropertyBind { name, value, span } => match name.as_str() {
                 "row" => {
                     row_present = true;
                     row = check_cell_index(name, value, span, filename, diags);
@@ -982,7 +982,13 @@ fn check_cell(
                         CELL_ATTRS.join(", ")
                     ),
                 )),
-            }
+            },
+            Member::Conditional { span, .. } => diags.push(error(
+                filename,
+                span,
+                "`Cell` admits exactly one direct widget content child; put conditional members inside that content widget",
+            )),
+            _ => {}
         }
     }
 
@@ -3461,6 +3467,18 @@ mod tests {
         assert!(
             errs.iter()
                 .any(|e| e.contains("conditional members may appear inside a Cell content widget")),
+            "{errs:?}"
+        );
+    }
+
+    #[test]
+    fn conditional_cell_sibling_rejected() {
+        let errs = errors(
+            "component C inherits W { Grid { columns: 1* rows: 1* Cell { VStack {} if true { Text {} } } } }",
+        );
+        assert!(
+            errs.iter()
+                .any(|e| e.contains("put conditional members inside that content widget")),
             "{errs:?}"
         );
     }

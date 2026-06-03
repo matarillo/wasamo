@@ -284,7 +284,9 @@ load-time value and does not yet register the toggle binding.
       `conditional_multi_child_body_rejected`, and
       `conditional_component_level_rejected`; review follow-up added
       `conditional_direct_grid_child_rejected` to pin the Grid-placement
-      diagnostic branch.
+      diagnostic branch, and `conditional_cell_sibling_rejected` to keep
+      the `Cell { <widget> if ... }` source diagnostic symmetric with the
+      runtime Grid/Cell direct-ControlFlow rejection.
 - [x] `wasamoc` lower → `ControlFlowNode::If` + textual-IR emit (the
       §Spec content seed shape, DD-M3-P6-004); the member materialises no
       runtime widget. Implemented in `wasamoc/src/lower.rs`
