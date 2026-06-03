@@ -328,6 +328,53 @@ load-time value and does not yet register the toggle binding.
       in the bullets above; scoped verification green:
       `cargo test -p wasamo-ir`, `cargo test -p wasamoc --lib`, and
       `cargo test -p wasamo-runtime --lib`.
+- [x] **Review follow-up** (`fix/m3-phase-6-t4-review-followup`):
+      semantic-migration audit of the `Vec<IrMember>` traversal contracts
+      (recorded in [log.md](./log.md)). Closed two under-count defects the
+      migration left: the **Box** at-most-one (`Box { Content  if c { … } }`
+      → reject) and **ScrollView** exactly-one (`ScrollView { Content
+      if c { … } }` → reject) single-child gates counted widget children
+      only and so missed a conditional sibling. Fixed at `wasamoc check` +
+      runtime `validate()` with tests `box_widget_and_conditional_sibling_rejected`,
+      `box_conditional_only_child_accepted`,
+      `box_multiple_conditional_siblings_rejected`,
+      `scrollview_conditional_member_rejected`,
+      `scrollview_conditional_only_member_rejected`,
+      `validate_rejects_box_with_widget_and_conditional_sibling`,
+      `validate_accepts_box_with_conditional_only_child`,
+      `validate_rejects_box_with_multiple_conditional_siblings`,
+      `validate_rejects_scrollview_with_conditional_member`, and
+      `validate_rejects_scrollview_with_conditional_only_member`. The
+      conditional-only ScrollView case (`ScrollView { if c { … } }`) stays
+      rejected as a **conservative interim** pinned by the
+      `*_conditional_only_member_rejected` tests, pending **T4b /
+      DD-M3-P6-007** (the `if c`-alone case is exactly the value a (b)
+      relaxation would flip — Codex review-flagged provenance).
+
+### T4b — ScrollView conditional-content policy (DD-M3-P6-007)
+
+Owns the ScrollView × conditional cardinality decision surfaced by the T4
+review semantic-migration audit — a Phase 6 responsibility (defining the
+new `if` construct's interaction with each container's cardinality
+invariant). Inserted with a non-integer label (no renumber): the task is
+**conditional** — its weight depends on the deliberation outcome. A
+non-integer label is used rather than a renumber so that an (a) outcome
+(near-no-op) leaves no churn in the T5–T9 references; a (b) outcome may
+promote it to a full numbered task at that point. Deliberation should land
+**before T5 closes** (a (b) outcome's reactive-empty evidence folds into
+T5).
+
+- [ ] Deliberate [DD-M3-P6-007](../decisions/dd-m3-p6-007-scrollview-conditional-content-policy.md)
+      ((a) reject conditional-only content vs (b) allow conditionally-empty)
+      and flip it to `Accepted` with owner comparison.
+- [ ] If **(a)**: confirm the T4-follow-up interim is the final rule; the
+      `ScrollView { if c { … } }` rejection already carries an
+      intent-revealing diagnostic. No prior-DD touch; preamble §Decisions +
+      Revisions updated on acceptance.
+- [ ] If **(b)**: relax the ScrollView gate to at-most-one-materialised;
+      fold DD-M3-P4-003 + dsl_spec / architecture; add reactive
+      toggle-to-empty Windows-runtime evidence (coordinate with T5). Promote
+      this task to a numbered slot if it grows to full implementation.
 
 ### T5 — Conditional: reactive toggle and Windows-runtime evidence
 

@@ -27,6 +27,55 @@
   traversal that affects validation or positional metadata must dispatch
   `IrMember`; widget-only helpers are valid only when dropping
   `ControlFlow` is explicitly part of the invariant.
+- **2026-06-03 / T4 review follow-up #2 — `Vec<IrMember>` traversal
+  call-site audit (semantic-migration audit):** a second review pass
+  produced the explicit traversal-contract audit the original migration
+  should have carried. Each production `IrMember`-bearing traversal was
+  classified `must-dispatch` / `ignore-OK (+ proof)` /
+  `defer-with-approval`; every `ignore-OK` carries a reject test or an
+  impossibility note (the bar that makes the no-constraint claim
+  falsifiable).
+  - **`must-dispatch ✓` (already correct):** control-flow shape
+    (`validate_phase6_control_flow_invariants`); the Phase 2/3/4/5/ZStack
+    validator `*_member_invariants` body recursions; `validate_node_references`
+    → `validate_member_references` (condition validation); the non-Grid
+    build append (`append_static_member`); ZStack placements
+    (`collect_static_zstack_placements`); `wasamoc` `lower` / `emit`
+    member dispatch. Evidence: `validate_rejects_*`,
+    `zstack_static_placements_follow_materialized_member_order`,
+    `conditional_lowers/emitted_*`.
+  - **`ignore-OK` (ControlFlow legitimately dropped):** Grid/Cell build
+    + validate widget-only iterations — proof: `Grid`/`Cell` reject all
+    direct `ControlFlow` upstream (`validate_rejects_direct_conditional_{grid,cell}_member`),
+    so no `ControlFlow` reaches those sites. `WidgetNode.children` walks
+    in `widget.rs` — impossibility note: the materialised widget tree has
+    no `ControlFlow` variant (it is expanded at build).
+  - **FINDING (was mis-classified `ignore-OK`, corrected to
+    `must-dispatch`):** the **Box at-most-one** and **ScrollView
+    exactly-one** child-count gates counted `widget_children()` only, so a
+    conditional sibling (`Box { Content  if c }` / `ScrollView { Content
+    if c }`) under-counted and slipped past **both** `wasamoc check` and
+    runtime `validate()`, materialising two children. This is the same
+    widget-only-vs-materialised root as the review-#1 findings; review #1
+    fixed validator *descent* but left the *count basis* widget-only.
+    Fixed: Box counts every child member (`node.children.len()`;
+    `WidgetDecl | Conditional` at check); ScrollView rejects any direct
+    conditional member (interim, symmetric with Cell). The
+    conditional-only ScrollView case (`ScrollView { if c { … } }`) is left
+    rejected pending **DD-M3-P6-007** (the conditionally-empty-container
+    relaxation is a Phase 6 design decision, owner-gated).
+  - **Rule candidate (carry-forward, not yet ruled):** "any traversal
+    that validates declared structure, computes positional metadata, or
+    materialises declared members must dispatch on `IrMember` unless it
+    has a documented, tested widget-only invariant; prefer compile-error-
+    forcing mechanisms (exhaustive `match`, no `Default`) over
+    silent-absorb helpers (filtering iterators)." Precedent: the
+    `kind_payload` migration (DD-M3-P5-001) used no-`Default` to force
+    construction-site compile errors (success); the `IrMember` filtering
+    helper bypassed that discipline (this failure). Recorded as a
+    handoff carry-forward; rule-ification (workflow.md / retrospectives.md
+    + a vision decision record) deferred to the next semantic migration so
+    the rule is designed against ≥ 2 samples, not over-fit to one.
 - **2026-06-03 / T3 skip-guard disposition:** ZStack live Visual
   integration introduces no new runtime capability path beyond the
   existing `wasamo_init` → Compositor creation surface. The
@@ -91,6 +140,41 @@
   -p wasamoc --lib check::tests::conditional` — green (12 tests);
   `cargo test -p wasamoc --lib` — green (311 tests); `cargo fmt --all
   -- --check` — green.
+- **2026-06-03 / T4 review follow-up #2 — Box/ScrollView count fix
+  (clean rebuild):** the `Vec<IrMember>` traversal call-site audit fix.
+  Box (`node.children.len()`; `WidgetDecl | Conditional` at check) and
+  ScrollView (reject direct conditional member, interim) single-child
+  gates now count a conditional sibling at both `wasamoc check` and
+  runtime `validate()`. Added tests
+  `box_widget_and_conditional_sibling_rejected`,
+  `box_conditional_only_child_accepted`,
+  `scrollview_conditional_member_rejected` (`wasamoc`),
+  `validate_rejects_box_with_widget_and_conditional_sibling`,
+  `validate_accepts_box_with_conditional_only_child`, and
+  `validate_rejects_scrollview_with_conditional_member` (runtime).
+  `cargo fmt --all -- --check` — green; `cargo clean` completed
+  (`5038 files, 1.3GiB` removed); `cargo build --release --workspace`
+  — green (46.84s); `cargo build --workspace` — green (41.02s);
+  `cargo test --workspace` — green (`wasamoc` 314, `wasamo-runtime` lib
+  330, `wasamo-ir` 17, integration suites all green, 0 failed). Existing
+  Cargo warnings about the `wasamo` linkable target / `wasamo-sys`
+  import-library ordering were observed.
+- **2026-06-03 / T4 review follow-up #2 — Codex review additions (clean
+  rebuild):** Codex re-review returned no blocker; one should-fix (pin the
+  DD-M3-P6-007 centre case `ScrollView { if c { … } }` directly) and one
+  nit (a multiple-conditional-sibling Box reject as the shortest
+  `children.len()` count-basis proof). Added
+  `scrollview_conditional_only_member_rejected`,
+  `box_multiple_conditional_siblings_rejected` (`wasamoc`),
+  `validate_rejects_scrollview_with_conditional_only_member`, and
+  `validate_rejects_box_with_multiple_conditional_siblings` (runtime).
+  `cargo fmt --all -- --check` — green; `cargo clean` completed
+  (`3150 files, 1.1GiB` removed); `cargo build --release --workspace`
+  — green (44.08s); `cargo build --workspace` — green (35.29s);
+  `cargo test --workspace` — green (`wasamoc` 316, `wasamo-runtime` lib
+  332, `wasamo-ir` 17, integration suites all green, 0 failed). Existing
+  Cargo warnings about the `wasamo` linkable target / `wasamo-sys`
+  import-library ordering were observed.
 - **2026-06-02 / T1 local:** `cargo fmt --all -- --check` — green.
 - **2026-06-02 / T1 local:** `cargo test -p wasamoc` — green;
   covered the ZStack check / lower / emit evidence with tests including
