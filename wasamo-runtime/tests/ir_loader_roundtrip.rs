@@ -140,8 +140,7 @@ fn parsed_counter_has_text_binding_and_clicked_handler() {
     assert_eq!(vstack.widget_type, "VStack");
 
     let text_node = vstack
-        .children
-        .iter()
+        .widget_children()
         .find(|c| c.widget_type == "Text")
         .expect("counter root must contain a Text child");
     assert!(
@@ -150,8 +149,7 @@ fn parsed_counter_has_text_binding_and_clicked_handler() {
     );
 
     let button_node = vstack
-        .children
-        .iter()
+        .widget_children()
         .find(|c| c.widget_type == "Button")
         .expect("counter root must contain a Button child");
     let clicked = button_node
@@ -247,8 +245,7 @@ fn zstack_emit_then_parse_preserves_direct_children_and_order() {
     );
     let child_types: Vec<_> = parsed
         .root
-        .children
-        .iter()
+        .widget_children()
         .map(|child| child.widget_type.as_str())
         .collect();
     assert_eq!(
@@ -313,8 +310,7 @@ fn string_state_binding_emits_and_parses_str_prop_read() {
 
     let text_node = parsed
         .root
-        .children
-        .iter()
+        .widget_children()
         .find(|c| c.widget_type == "Text")
         .unwrap();
     let binding = text_node

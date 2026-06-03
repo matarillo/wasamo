@@ -159,7 +159,7 @@ fn expr_static_type(expr: &Expr, ns: &Namespace) -> Option<TypeName> {
         // and value validity for these literals are checked at the
         // property-bind layer (T3), not via the state-type compatibility
         // table.
-        Expr::RatioLit { .. } | Expr::ColorLit { .. } => None,
+        Expr::RatioLit { .. } | Expr::ColorLit { .. } | Expr::UnsupportedOperator { .. } => None,
     }
 }
 
@@ -628,6 +628,83 @@ fn check_zstack_child_align(
     }
 }
 
+fn check_if_condition(
+    condition: &Expr,
+    filename: &str,
+    ns: &Namespace,
+    diags: &mut Vec<Diagnostic>,
+) {
+    match condition {
+        Expr::BoolLit { .. } => {}
+        Expr::Ident { name, span } => match ns.get(name) {
+            Some(TypeName::Bool) => {}
+            Some(other) => diags.push(error(
+                filename,
+                span,
+                format!(
+                    "`if` condition must be `bool`; state `{}` is declared `{}` (dsl_spec §4.14)",
+                    name,
+                    type_name_display(other)
+                ),
+            )),
+            None => diags.push(error(
+                filename,
+                span,
+                format!(
+                    "`if` condition identifier `{}` is not declared; declare it as `state {}: bool = false`",
+                    name, name
+                ),
+            )),
+        },
+        Expr::UnsupportedOperator { op, span } => diags.push(error(
+            filename,
+            span,
+            format!(
+                "operators in `if` conditions are not yet supported in M3-Phase 6 (got {}); use a bool literal or declared bool state",
+                op
+            ),
+        )),
+        _ => diags.push(error(
+            filename,
+            condition.span(),
+            "`if` condition must be a bool literal or declared bool state identifier (dsl_spec §4.14)",
+        )),
+    }
+}
+
+fn check_if_body(body: &[Member], span: &Span, filename: &str, diags: &mut Vec<Diagnostic>) {
+    let widget_count = body
+        .iter()
+        .filter(|m| matches!(m, Member::WidgetDecl { .. }))
+        .count();
+    if body.len() != 1 || widget_count != 1 {
+        diags.push(error(
+            filename,
+            span,
+            "`if` body admits exactly one widget child in M3-Phase 6; wrap multiple widgets or nested control flow in a container",
+        ));
+    }
+    for member in body {
+        match member {
+            Member::WidgetDecl { .. } => {}
+            Member::Conditional { span, .. } => diags.push(error(
+                filename,
+                span,
+                "a bare nested `if` is not admitted directly in an `if` body in M3-Phase 6; wrap it in a widget container",
+            )),
+            Member::PropertyBind { span, .. }
+            | Member::PropertyDecl { span, .. }
+            | Member::SignalHandler { span, .. }
+            | Member::StateMember { span, .. }
+            | Member::GridTracks { span, .. } => diags.push(error(
+                filename,
+                span,
+                "`if` body admits only a single widget child; properties, bindings, handlers, state declarations, and track lists are not structural body members",
+            )),
+        }
+    }
+}
+
 /// Reject a `Cell` that appears outside a `Grid` parent (DD-M3-P5-001 /
 /// DD-M3-P5-006). `Cell` is a Grid-owned IR-only wrapper with no
 /// general-purpose use; the diagnostic names the offending position.
@@ -741,6 +818,9 @@ fn check_grid(members: &[Member], grid_span: &Span, filename: &str, diags: &mut 
             }
             Member::SignalHandler { span, .. } => {
                 diags.push(error(filename, span, "`Grid` takes no signal handlers"));
+            }
+            Member::Conditional { span, .. } => {
+                diags.push(error(filename, span, "`Grid` children must be wrapped in `Cell`; conditional members may appear inside a Cell content widget, not directly in Grid"));
             }
             Member::StateMember { .. } | Member::PropertyDecl { .. } => {}
         }
@@ -1323,6 +1403,23 @@ fn check_members_inner(
                 }
             }
 
+            Member::Conditional {
+                condition,
+                body,
+                span,
+            } => {
+                if enclosing_widget.is_none() {
+                    diags.push(error(
+                        filename,
+                        span,
+                        "component-level `if` is not supported in M3-Phase 6; put the `if` inside a widget body",
+                    ));
+                }
+                check_if_condition(condition, filename, ns, diags);
+                check_if_body(body, span, filename, diags);
+                check_members_inner(body, enclosing_widget, parent_widget, filename, ns, diags);
+            }
+
             // Grid track-list members are validated by the enclosing
             // Grid's `check_grid` pass (which needs all of the Grid's
             // members together — track counts feed Cell placement bounds).
@@ -1442,6 +1539,16 @@ fn check_expr_type(
                 filename,
                 span,
                 "color literal is only valid as the RHS of `Box.fill` in M3-Phase 2",
+            ));
+        }
+        Expr::UnsupportedOperator { op, span } => {
+            diags.push(error(
+                filename,
+                span,
+                format!(
+                    "operator {} is not part of the M3-Phase 6 expression surface",
+                    op
+                ),
             ));
         }
     }
@@ -3254,6 +3361,86 @@ mod tests {
             }"#,
         );
         assert!(!result.has_errors(), "{:?}", result.diagnostics);
+    }
+
+    #[test]
+    fn conditional_bool_state_accepted() {
+        let result = check_src(
+            "component C inherits W { state ready: bool = true VStack { if ready { Text {} } } }",
+        );
+        assert!(!result.has_errors(), "{:?}", result.diagnostics);
+    }
+
+    #[test]
+    fn conditional_bool_literal_accepted() {
+        let result = check_src("component C inherits W { VStack { if true { Text {} } } }");
+        assert!(!result.has_errors(), "{:?}", result.diagnostics);
+    }
+
+    #[test]
+    fn conditional_non_bool_condition_rejected() {
+        let errs = errors(
+            "component C inherits W { state count: i32 = 0 VStack { if count { Text {} } } }",
+        );
+        assert!(
+            errs.iter().any(|e| e.contains("condition must be `bool`")),
+            "{errs:?}"
+        );
+    }
+
+    #[test]
+    fn conditional_undeclared_condition_rejected() {
+        let errs = errors("component C inherits W { VStack { if missing { Text {} } } }");
+        assert!(errs.iter().any(|e| e.contains("not declared")), "{errs:?}");
+    }
+
+    #[test]
+    fn conditional_operator_condition_rejected() {
+        let errs = errors(
+            "component C inherits W { state ready: bool = true VStack { if ! ready { Text {} } } }",
+        );
+        assert!(
+            errs.iter()
+                .any(|e| e.contains("operators in `if` conditions")),
+            "{errs:?}"
+        );
+    }
+
+    #[test]
+    fn conditional_component_level_rejected() {
+        let errs = errors("component C inherits W { if true { Text {} } }");
+        assert!(
+            errs.iter().any(|e| e.contains("component-level `if`")),
+            "{errs:?}"
+        );
+    }
+
+    #[test]
+    fn conditional_non_structural_body_rejected() {
+        let errs = errors("component C inherits W { VStack { if true { text: \"x\" } } }");
+        assert!(
+            errs.iter()
+                .any(|e| e.contains("body admits only a single widget child")),
+            "{errs:?}"
+        );
+    }
+
+    #[test]
+    fn conditional_multi_child_body_rejected() {
+        let errs = errors("component C inherits W { VStack { if true { Text {} Button {} } } }");
+        assert!(
+            errs.iter().any(|e| e.contains("exactly one widget child")),
+            "{errs:?}"
+        );
+    }
+
+    #[test]
+    fn conditional_direct_nested_if_body_rejected() {
+        let errs = errors("component C inherits W { VStack { if true { if false { Text {} } } } }");
+        assert!(
+            errs.iter().any(|e| e.contains("bare nested `if`")),
+            "{errs:?}"
+        );
     }
 
     #[test]

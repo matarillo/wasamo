@@ -226,7 +226,7 @@ toggle (binding, mutation, Visual ordering) is **T5**, not here: T4's
 loader builds a conditional's *initial* presence from the condition's
 load-time value and does not yet register the toggle binding.
 
-- [ ] **Pre-implementation spike** for [R-A](./preamble.md#technical-risks-planning-time-recon)
+- [x] **Pre-implementation spike** for [R-A](./preamble.md#technical-risks-planning-time-recon)
       / [R-B](./preamble.md#technical-risks-planning-time-recon): settle the
       `IrMember = Widget(IrNode) | ControlFlow(ControlFlowNode)` shape
       (DD-M3-P6-004 O1, branch-list-ready), the `ControlFlowNode::If`
@@ -235,11 +235,18 @@ load-time value and does not yet register the toggle binding.
       `wasamoc` emit / lower, the loader, and the test corpus. Fix the
       commit-bundling boundary so the workspace builds at the
       schema-change commit. Record in [log.md](./log.md) before opening
-      the bullets below.
-- [ ] `wasamo-ir`: `IrNode.children` → `Vec<IrMember>`, add
+      the bullets below. Settled as direct DD-M3-P6-004 O1 with
+      `IrNode::widget_children()` as the widget-only traversal helper and
+      explicit `IrMember` dispatch in lowering / emit / parse / validate /
+      static append; recorded in `implementation/log.md` (2026-06-03
+      T4 IrMember schema migration).
+- [x] `wasamo-ir`: `IrNode.children` → `Vec<IrMember>`, add
       `ControlFlowNode` (DD-M3-P6-004); migrate construction sites; IR-type
-      unit tests cover the member encoding.
-- [ ] `wasamoc` lexer: reserve the **whole control-flow family** —
+      unit tests cover the member encoding. Implemented in
+      `wasamo-ir/src/lib.rs` with `IrMember`, `ControlFlowNode`,
+      `ControlFlowBranch`, `IrNode::widget_children()`, and
+      `ir_member_encodes_widget_and_control_flow`.
+- [x] `wasamoc` lexer: reserve the **whole control-flow family** —
       `if` / `else` / `switch` / `for` — as keywords now, not just `if`
       (DD-M3-P6-003 reserves the family this phase; the current `Keyword`
       enum + `scan_ident` table stop at `true` / `false` and have none of
@@ -250,29 +257,66 @@ load-time value and does not yet register the toggle binding.
       surface a **reserved / not-yet-supported** `wasamoc check`
       diagnostic (parse + check tests), so the family is locked at the
       lexer without opening the grammar (mirrors the dsl_spec §2.1
-      keyword-reservation update landed at Moment 1).
-- [ ] `wasamoc` parser: the `if <bool-expr> { <widget-child> }` block
-      (DD-M3-P6-003).
-- [ ] `wasamoc check` diagnostics (DD-M3-P6-003) — **reject** non-bool /
+      keyword-reservation update landed at Moment 1). Implemented in
+      `wasamoc/src/lexer.rs` (`Keyword::{If,Else,Switch,For}` +
+      `scan_ident`) with tests `control_flow_family_keywords_reserved`
+      and `reserved_control_flow_keywords_without_production_rejected`.
+- [x] `wasamoc` parser: the `if <bool-expr> { <widget-child> }` block
+      (DD-M3-P6-003). Implemented in `wasamoc/src/ast.rs` /
+      `wasamoc/src/parser.rs` as `Member::Conditional`,
+      `parse_conditional_member`, and `parse_condition_expr`; covered by
+      `conditional_member_parses_inside_widget_body`.
+- [x] `wasamoc check` diagnostics (DD-M3-P6-003) — **reject** non-bool /
       undeclared-name / operator condition, a non-structural body member,
       a nested `if` directly in the body, a multi-child body, and a
       **mis-placed `if`** including a **component-level `if`** (admitted
-      only inside a widget body; required test).
-- [ ] `wasamoc` lower → `ControlFlowNode::If` + textual-IR emit (the
+      only inside a widget body; required test). Implemented in
+      `wasamoc/src/check.rs` (`check_if_condition`, `check_if_body`, and
+      `Member::Conditional` traversal) with tests
+      `conditional_bool_state_accepted`,
+      `conditional_bool_literal_accepted`,
+      `conditional_non_bool_condition_rejected`,
+      `conditional_undeclared_condition_rejected`,
+      `conditional_operator_condition_rejected`,
+      `conditional_non_structural_body_rejected`,
+      `conditional_direct_nested_if_body_rejected`,
+      `conditional_multi_child_body_rejected`, and
+      `conditional_component_level_rejected`.
+- [x] `wasamoc` lower → `ControlFlowNode::If` + textual-IR emit (the
       §Spec content seed shape, DD-M3-P6-004); the member materialises no
-      runtime widget.
-- [ ] **Loader (static):** `build_node` iterates `Vec<IrMember>` and
+      runtime widget. Implemented in `wasamoc/src/lower.rs`
+      (`lower_condition_expr`, `lower_widget_body_member`) and
+      `wasamoc/src/emit.rs` (`emit_member`); covered by
+      `conditional_lowers_to_control_flow_member`,
+      `conditional_bool_literal_lowers_to_bool_lit_condition`, and
+      `conditional_emitted_as_control_flow_member`.
+- [x] **Loader (static):** `build_node` iterates `Vec<IrMember>` and
       dispatches `Widget(_)` vs `ControlFlow(_)` (R-B); a `ControlFlow`
       builds its body present/absent from the **load-time** condition
       value (no toggle binding yet). `validate()` dual-gates (with
       `wasamoc check`) a non-bool / unresolved condition, >1 branch (until
       `else`), or an empty / multi-child / non-structural / nested-control-
       flow body → `WASAMO_ERR_IR_MALFORMED`. Control-flow roundtrip
-      preserves condition + single-child body.
-- [ ] Tests: `wasamoc` positive controls (`if <bool-state> { … }` /
+      preserves condition + single-child body. Implemented in
+      `wasamo-runtime/src/ir_loader.rs` (`parse_if_member`,
+      `validate_phase6_control_flow_invariants`,
+      `validate_condition_expr`, `append_static_member`,
+      `evaluate_static_condition`) with tests
+      `control_flow_if_parses_as_member_with_single_widget_body`,
+      `control_flow_roundtrip_preserves_condition_and_body`,
+      `static_condition_reducer_maps_bool_to_presence`,
+      `validate_rejects_if_with_non_bool_condition`,
+      `validate_rejects_if_with_unresolved_condition`,
+      `validate_rejects_if_with_empty_body`,
+      `validate_rejects_if_with_multi_child_body`, and
+      `validate_rejects_if_with_nested_control_flow_body`.
+- [x] Tests: `wasamoc` positive controls (`if <bool-state> { … }` /
       `if true { … }`) + a reject case per diagnostic (item 1); the
       pure-function presence reducer `bool → present/absent` (item 2);
-      loader roundtrip + rejection (item 3).
+      loader roundtrip + rejection (item 3). Added the test sets named
+      in the bullets above; scoped verification green:
+      `cargo test -p wasamo-ir`, `cargo test -p wasamoc --lib`, and
+      `cargo test -p wasamo-runtime --lib`.
 
 ### T5 — Conditional: reactive toggle and Windows-runtime evidence
 

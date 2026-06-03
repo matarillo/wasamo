@@ -1,5 +1,17 @@
 ## Decisions log
 
+- **2026-06-03 / T4 IrMember schema migration:** T4 landed the accepted
+  DD-M3-P6-004 O1 shape directly: `IrNode.children` is now
+  `Vec<IrMember>`, with `IrMember::Widget(IrNode)` and
+  `IrMember::ControlFlow(ControlFlowNode::If { branches })`.
+  Construction-site migration used a narrow helper discipline rather than
+  a broad abstraction: production walkers use `IrNode::widget_children()`
+  when an invariant is widget-child-only, and explicit
+  `IrMember` dispatch where control flow is semantically relevant
+  (`wasamoc` lower / emit; runtime parse / validate / static member
+  append). The schema change, `wasamoc` emit/lower, textual IR parser,
+  validators, and static load-time presence reducer were bundled in one
+  buildable implementation commit per the T4 R-A/R-B risk note.
 - **2026-06-03 / T3 skip-guard disposition:** ZStack live Visual
   integration introduces no new runtime capability path beyond the
   existing `wasamo_init` → Compositor creation surface. The
@@ -21,6 +33,19 @@
 
 ## CI / verification log
 
+- **2026-06-03 / T4 local scoped:** `cargo fmt --all -- --check`
+  — green; `cargo test -p wasamo-ir` — green (17 tests);
+  `cargo test -p wasamoc --lib` — green (308 tests);
+  `cargo test -p wasamo-runtime --lib` — green (322 tests).
+  Covered `IrMember` schema encoding, control-flow keyword / parser /
+  check / lower / emit diagnostics, runtime textual IR parsing /
+  roundtrip, and static conditional presence / validator rejection
+  evidence.
+- **2026-06-03 / T4 local pre-commit:** `cargo build --release
+  --workspace` — green; `cargo build --workspace` — green;
+  `cargo test --workspace` — green; `cargo test -p wasamo-runtime`
+  — green (runtime lib 322 plus integration tests). Existing Cargo
+  warnings about the `wasamo` linkable target were observed.
 - **2026-06-02 / T1 local:** `cargo fmt --all -- --check` — green.
 - **2026-06-02 / T1 local:** `cargo test -p wasamoc` — green;
   covered the ZStack check / lower / emit evidence with tests including

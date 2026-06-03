@@ -157,6 +157,21 @@ impl<'a> Parser<'a> {
             return self.parse_state_member();
         }
 
+        if self.peek().is_kw(&Keyword::If) {
+            return self.parse_conditional_member();
+        }
+
+        if self.peek().is_kw(&Keyword::Else)
+            || self.peek().is_kw(&Keyword::Switch)
+            || self.peek().is_kw(&Keyword::For)
+        {
+            let desc = self.peek().description();
+            return Err(self.error(format!(
+                "{} is reserved for the structural control-flow family but is not yet supported in M3-Phase 6",
+                desc
+            )));
+        }
+
         if matches!(self.peek(), Token::Ident(_)) {
             let next_colon = matches!(self.peek_next(), Token::Colon);
             let next_lbrace = matches!(self.peek_next(), Token::LBrace);
@@ -176,6 +191,55 @@ impl<'a> Parser<'a> {
 
         let desc = self.peek().description();
         Err(self.error(format!("expected member, found {}", desc)))
+    }
+
+    fn parse_conditional_member(&mut self) -> Result<Member, Diagnostic> {
+        let start = self.current_span().clone();
+        self.expect_kw(Keyword::If)?;
+        let condition = self.parse_condition_expr()?;
+        self.expect_lbrace()?;
+
+        let mut body = Vec::new();
+        while !matches!(self.peek(), Token::RBrace | Token::Eof) {
+            body.push(self.parse_member()?);
+        }
+
+        let end_tok = self.expect_rbrace()?;
+        Ok(Member::Conditional {
+            condition,
+            body,
+            span: Span {
+                start: start.start,
+                end: end_tok.span.end,
+                line: start.line,
+                col: start.col,
+            },
+        })
+    }
+
+    fn parse_condition_expr(&mut self) -> Result<Expr, Diagnostic> {
+        if matches!(self.peek(), Token::Bang) {
+            let tok = self.advance();
+            if matches!(
+                self.peek(),
+                Token::StringLit(_)
+                    | Token::IntLit(_)
+                    | Token::FloatLit(_)
+                    | Token::Measurement(_, _)
+                    | Token::Ident(_)
+                    | Token::Kw(Keyword::True)
+                    | Token::Kw(Keyword::False)
+                    | Token::RatioLit(_, _)
+                    | Token::ColorLit(_)
+            ) {
+                let _ = self.parse_expr()?;
+            }
+            return Ok(Expr::UnsupportedOperator {
+                op: tok.token.description().to_string(),
+                span: tok.span,
+            });
+        }
+        self.parse_expr()
     }
 
     fn parse_state_member(&mut self) -> Result<Member, Diagnostic> {
@@ -882,6 +946,25 @@ mod tests {
         } else {
             panic!("expected VStack WidgetDecl");
         }
+    }
+
+    #[test]
+    fn conditional_member_parses_inside_widget_body() {
+        let def = parse_ok("component C inherits W { VStack { if ready { Text {} } } }");
+        if let Member::WidgetDecl { members, .. } = &def.members[0] {
+            assert!(matches!(&members[0], Member::Conditional { body, .. } if body.len() == 1));
+        } else {
+            panic!("expected root widget");
+        }
+    }
+
+    #[test]
+    fn reserved_control_flow_keywords_without_production_rejected() {
+        let msg = parse_err_msg("component C inherits W { VStack { else { Text {} } } }");
+        assert!(
+            msg.contains("reserved") && msg.contains("not yet supported"),
+            "message: {msg}"
+        );
     }
 
     #[test]
