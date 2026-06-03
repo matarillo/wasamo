@@ -264,11 +264,18 @@ fn validate_phase2_node_invariants(node: &IrNode) -> Result<(), IrLoadError> {
     // Box single-child invariant (DD-M3-P2-001). wasamoc check (T3)
     // diagnoses the same condition at compile time; this is the runtime
     // defense for IR not produced by wasamoc.
-    let widget_child_count = node.widget_children().count();
-    if node.widget_type == "Box" && widget_child_count > 1 {
+    //
+    // T4 review follow-up: count every member that can materialise a
+    // child, not widget children only. A conditional member materialises
+    // at most one child, so a conditional sibling counts toward the limit
+    // (`Box { Text  if c { … } }` could become two children). The prior
+    // `widget_children()` count under-counted the conditional sibling and
+    // let it slip past both gates (see log.md T4 migration audit).
+    let child_member_count = node.children.len();
+    if node.widget_type == "Box" && child_member_count > 1 {
         return Err(IrLoadError::Validate(format!(
             "`Box` node accepts at most one child, got {} (use `VStack` / `HStack` / `ZStack` for multi-child layouts)",
-            widget_child_count
+            child_member_count
         )));
     }
     // Ratio / Color literal placement (DD-M3-P2-002 / DD-M3-P2-003,
@@ -324,12 +331,32 @@ fn validate_phase2_node_invariants(node: &IrNode) -> Result<(), IrLoadError> {
 // arrange-time clamp is the runtime gate so bindings can transition
 // through negative / out-of-range intermediates.
 fn validate_phase4_node_invariants(node: &IrNode) -> Result<(), IrLoadError> {
-    let widget_child_count = node.widget_children().count();
-    if node.widget_type == "ScrollView" && widget_child_count != 1 {
-        return Err(IrLoadError::Validate(format!(
-            "`ScrollView` requires exactly one content child, got {}",
-            widget_child_count
-        )));
+    if node.widget_type == "ScrollView" {
+        // T4 review follow-up / DD-M3-P6-007 (interim, conservative): a
+        // conditional is not a valid *direct* ScrollView content member —
+        // its presence is dynamic, so it cannot satisfy "exactly one
+        // content child" (`ScrollView { Content  if c { … } }` could
+        // become two; `ScrollView { if c { … } }` could become zero).
+        // Wrap it in the content widget (`ScrollView { Box { if c { … } } }`).
+        // Whether a ScrollView may instead be *conditionally empty* is the
+        // open DD-M3-P6-007 relaxation; until that is decided this stays
+        // rejected (symmetric with the Cell direct-conditional rejection).
+        if node
+            .children
+            .iter()
+            .any(|m| matches!(m, IrMember::ControlFlow(_)))
+        {
+            return Err(IrLoadError::Validate(
+                "`ScrollView` content child must be a single widget; a conditional member is not valid directly in ScrollView (wrap it in the content widget) — see DD-M3-P6-007".into(),
+            ));
+        }
+        let widget_child_count = node.widget_children().count();
+        if widget_child_count != 1 {
+            return Err(IrLoadError::Validate(format!(
+                "`ScrollView` requires exactly one content child, got {}",
+                widget_child_count
+            )));
+        }
     }
     for member in &node.children {
         validate_phase4_member_invariants(member)?;
@@ -4031,6 +4058,70 @@ mod tests {
              node Grid { tracks columns = 1* tracks rows = 1* node Cell { node VStack {} if true { node Text {} } } }\n\
              }",
             "put conditional members inside that content widget",
+        );
+    }
+
+    // T4 review follow-up: single-child container counts must include a
+    // conditional sibling (it materialises at most one child). Box's
+    // at-most-one and ScrollView's exactly-one gates previously counted
+    // widget children only and let `Box { Content  if c }` /
+    // `ScrollView { Content  if c }` slip through (see log.md T4 audit +
+    // DD-M3-P6-007).
+    #[test]
+    fn validate_rejects_box_with_widget_and_conditional_sibling() {
+        assert_validate_err(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             node Box { node Text {} if true { node Text {} } }\n\
+             }",
+            "`Box` node accepts at most one child",
+        );
+    }
+
+    #[test]
+    fn validate_accepts_box_with_conditional_only_child() {
+        // A lone conditional is one potential child (≤ 1) — valid.
+        let c = parse_ok(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             state c: bool = true\n\
+             node Box { if (bool-prop-read c) { node Text {} } }\n\
+             }",
+        );
+        assert_eq!(c.root.widget_type, "Box");
+        assert_eq!(c.root.children.len(), 1);
+    }
+
+    #[test]
+    fn validate_rejects_box_with_multiple_conditional_siblings() {
+        // Two conditionals = two potential children: the shortest reject
+        // proving `node.children.len()` counts conditionals, not just a
+        // widget+conditional pair.
+        assert_validate_err(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             node Box { if true { node Text {} } if true { node Button {} } }\n\
+             }",
+            "`Box` node accepts at most one child",
+        );
+    }
+
+    #[test]
+    fn validate_rejects_scrollview_with_conditional_member() {
+        assert_validate_err(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             node ScrollView { node Box {} if true { node Text {} } }\n\
+             }",
+            "a conditional member is not valid directly in ScrollView",
+        );
+    }
+
+    #[test]
+    fn validate_rejects_scrollview_with_conditional_only_member() {
+        // DD-M3-P6-007 centre case: conditional-only ScrollView content is
+        // the interim (a) rejection — pins the value a (b) relaxation flips.
+        assert_validate_err(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             node ScrollView { if true { node Text {} } }\n\
+             }",
+            "a conditional member is not valid directly in ScrollView",
         );
     }
 

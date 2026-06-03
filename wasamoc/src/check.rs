@@ -515,6 +515,27 @@ fn check_scrollview_child_count(
     filename: &str,
     diags: &mut Vec<Diagnostic>,
 ) {
+    // T4 review follow-up / DD-M3-P6-007 (interim): a conditional is not a
+    // valid direct ScrollView content member (its presence is dynamic, so
+    // it cannot satisfy "exactly one content child"). Wrap it in the
+    // content widget. The conditionally-empty relaxation is the open
+    // DD-M3-P6-007 question; until decided this stays rejected. Reported as
+    // the primary diagnostic so a conditional sibling (`ScrollView {
+    // Content  if c { … } }`) does not slip past the widget-only count.
+    let mut has_conditional = false;
+    for m in members {
+        if let Member::Conditional { span, .. } = m {
+            has_conditional = true;
+            diags.push(error(
+                filename,
+                span,
+                "`ScrollView` content child must be a single widget; a conditional member is not valid directly in ScrollView (wrap it in the content widget) — see DD-M3-P6-007",
+            ));
+        }
+    }
+    if has_conditional {
+        return;
+    }
     let child_count = members
         .iter()
         .filter(|m| matches!(m, Member::WidgetDecl { .. }))
@@ -541,9 +562,16 @@ fn check_box_child_count(
     filename: &str,
     diags: &mut Vec<Diagnostic>,
 ) {
+    // T4 review follow-up: count every member that can materialise a child,
+    // not widget declarations only. An `if` member materialises at most one
+    // child, so a conditional sibling counts toward the at-most-one limit
+    // (`Box { Text  if c { … } }` could become two children). A lone
+    // conditional (`Box { if c { … } }`) is one potential child and stays
+    // valid. The prior widget-only count under-counted the sibling (see
+    // log.md T4 migration audit).
     let child_count = members
         .iter()
-        .filter(|m| matches!(m, Member::WidgetDecl { .. }))
+        .filter(|m| matches!(m, Member::WidgetDecl { .. } | Member::Conditional { .. }))
         .count();
     if child_count > 1 {
         diags.push(error(
@@ -3479,6 +3507,64 @@ mod tests {
         assert!(
             errs.iter()
                 .any(|e| e.contains("put conditional members inside that content widget")),
+            "{errs:?}"
+        );
+    }
+
+    // T4 review follow-up: single-child container child-count gates must
+    // count a conditional sibling (it materialises at most one child), or a
+    // `Box { Content if c }` / `ScrollView { Content if c }` slips past the
+    // widget-only count. See log.md T4 migration audit + DD-M3-P6-007.
+    #[test]
+    fn box_widget_and_conditional_sibling_rejected() {
+        let errs = errors("component C inherits W { Box { Text {} if true { Text {} } } }");
+        assert!(
+            errs.iter()
+                .any(|e| e.contains("`Box` admits at most one child")),
+            "{errs:?}"
+        );
+    }
+
+    #[test]
+    fn box_conditional_only_child_accepted() {
+        // A lone conditional is one potential child (≤ 1), so it is valid.
+        let result =
+            check_src("component C inherits W { state c: bool = true Box { if c { Text {} } } }");
+        assert!(!result.has_errors(), "{:?}", result.diagnostics);
+    }
+
+    #[test]
+    fn box_multiple_conditional_siblings_rejected() {
+        // Two conditionals are two potential children — the shortest proof
+        // that the count counts conditionals, not just widget+conditional.
+        let errs =
+            errors("component C inherits W { Box { if true { Text {} } if true { Button {} } } }");
+        assert!(
+            errs.iter()
+                .any(|e| e.contains("`Box` admits at most one child")),
+            "{errs:?}"
+        );
+    }
+
+    #[test]
+    fn scrollview_conditional_member_rejected() {
+        let errs = errors("component C inherits W { ScrollView { Box {} if true { Text {} } } }");
+        assert!(
+            errs.iter()
+                .any(|e| e.contains("a conditional member is not valid directly in ScrollView")),
+            "{errs:?}"
+        );
+    }
+
+    #[test]
+    fn scrollview_conditional_only_member_rejected() {
+        // DD-M3-P6-007 centre case: a conditional-only ScrollView content
+        // (`ScrollView { if c { … } }`) is the interim (a) rejection — pins
+        // the current value a future DD-M3-P6-007 (b) relaxation would flip.
+        let errs = errors("component C inherits W { ScrollView { if true { Text {} } } }");
+        assert!(
+            errs.iter()
+                .any(|e| e.contains("a conditional member is not valid directly in ScrollView")),
             "{errs:?}"
         );
     }
