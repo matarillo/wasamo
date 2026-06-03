@@ -3532,6 +3532,19 @@ mod tests {
     }
 
     #[test]
+    fn zstack_handler_rejected_at_validate() {
+        // The handler-rejection arm of the Phase-6 ZStack gate is distinct
+        // from the binding arm above; pin it so a ZStack carrying an inline
+        // `on` handler surfaces the dedicated diagnostic.
+        assert_validate_err(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             state ready: bool = true\n\
+             node ZStack { on clicked { (assign ready false) } node Text {} }\n}",
+            "`ZStack` accepts no Phase-6 handlers",
+        );
+    }
+
+    #[test]
     fn zstack_child_unknown_alignment_rejected_at_validate() {
         assert_validate_err(
             ";wasamo-ir v0\ncomponent C inherits W {\n\

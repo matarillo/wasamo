@@ -3058,4 +3058,26 @@ mod tests {
         // Pure layout pins declared child slots plus overlap geometry only.
         // T3 verifies that the live Visual tree paints later children on top.
     }
+
+    #[test]
+    fn zstack_fixed_size_measure_reports_declared_extent_not_child_union() {
+        // Exercises the `SizeConstraint::Fixed` arm of `measure_zstack`,
+        // the only size arm the Fill/Fill and Shrink tests above leave
+        // unexercised. A wrong arm would report the child union (200x50)
+        // under Shrink or (0,0) under Fill; only Fixed reports (150,90),
+        // and it must be independent of the available bound.
+        let mut z = LayoutNode::zstack(vec![ZStackPlacement::centered()]);
+        z.width = SizeConstraint::Fixed(150.0);
+        z.height = SizeConstraint::Fixed(90.0);
+        z.children.push(LayoutNode::rectangle(
+            SizeConstraint::Fixed(200.0),
+            SizeConstraint::Fixed(50.0),
+        ));
+
+        assert_eq!(measure(&z, 300.0, 200.0).unwrap(), (150.0, 90.0));
+        assert_eq!(
+            measure(&z, f32::INFINITY, f32::INFINITY).unwrap(),
+            (150.0, 90.0)
+        );
+    }
 }
