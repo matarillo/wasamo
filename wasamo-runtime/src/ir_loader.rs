@@ -15,7 +15,7 @@ use wasamo_ir::{
 };
 
 use crate::box_values;
-use crate::layout::{Alignment, CellPlacement, TrackSize as LayoutTrackSize};
+use crate::layout::{Alignment, CellPlacement, TrackSize as LayoutTrackSize, ZStackPlacement};
 use crate::reactive::{
     register_binding, register_bool_binding, set_active_registry, BindingTarget, PropertyKey,
     Signal, SignalRegistry, WidgetId,
@@ -199,7 +199,14 @@ fn validate(comp: &IrComponent) -> Result<(), IrLoadError> {
     // into a Grid's Cell *content* children, never treating `Cell` as a
     // standalone node, so a `Cell` reached by the generic walk is
     // necessarily misplaced).
-    validate_phase5_node_invariants(&comp.root)
+    validate_phase5_node_invariants(&comp.root)?;
+    // M3-Phase 6 T3 defense-in-depth gate (DD-M3-P6-001 /
+    // DD-M3-P6-002). `wasamoc check` (T1) rejects the same malformed
+    // ZStack surface before emit; this gate covers memory/textual IR that
+    // reaches the runtime loader directly. ZStack has no kind payload, no
+    // ZStack-level attrs, no bindings/handlers, and only its direct children
+    // may carry `h-align` / `v-align` placement annotations.
+    validate_phase6_zstack_node_invariants(&comp.root, ParentKind::Root)
 }
 
 fn validate_phase2_node_invariants(node: &IrNode) -> Result<(), IrLoadError> {
@@ -341,6 +348,92 @@ fn validate_phase5_node_invariants(node: &IrNode) -> Result<(), IrLoadError> {
         }
     }
     Ok(())
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum ParentKind {
+    Root,
+    Grid,
+    Cell,
+    ZStack,
+    Other,
+}
+
+fn parent_kind_for(node: &IrNode) -> ParentKind {
+    match node.widget_type.as_str() {
+        "Grid" => ParentKind::Grid,
+        "Cell" => ParentKind::Cell,
+        "ZStack" => ParentKind::ZStack,
+        _ => ParentKind::Other,
+    }
+}
+
+// M3-Phase 6 T3 defense-in-depth (DD-M3-P6-001 / DD-M3-P6-002). Mirrors
+// the ZStack surface from `wasamoc check`: ZStack is a direct-child
+// container with no `KindPayload`, no ZStack-level props, and no bindable
+// properties; `h-align` / `v-align` are parent-owned placement props valid
+// only on a ZStack direct child (or Grid Cell, owned by Phase 5).
+fn validate_phase6_zstack_node_invariants(
+    node: &IrNode,
+    parent: ParentKind,
+) -> Result<(), IrLoadError> {
+    if node.widget_type == "ZStack" {
+        if node.kind_payload.is_some() {
+            return Err(IrLoadError::Validate(
+                "`ZStack` must not carry a `kind_payload` (DD-M3-P6-001)".into(),
+            ));
+        }
+        if !node.props.is_empty() {
+            return Err(IrLoadError::Validate(format!(
+                "`ZStack` accepts no Phase-6 attributes; found `{}`",
+                node.props[0].name
+            )));
+        }
+        if !node.bindings.is_empty() {
+            return Err(IrLoadError::Validate(
+                "`ZStack` accepts no Phase-6 bindings".into(),
+            ));
+        }
+        if !node.handlers.is_empty() {
+            return Err(IrLoadError::Validate(
+                "`ZStack` accepts no Phase-6 handlers".into(),
+            ));
+        }
+    }
+
+    for prop in &node.props {
+        if matches!(prop.name.as_str(), "h-align" | "v-align") {
+            let allowed = parent == ParentKind::ZStack
+                || (parent == ParentKind::Grid && node.widget_type == "Cell");
+            if !allowed {
+                return Err(IrLoadError::Validate(format!(
+                    "`{}` is valid only on a ZStack direct child or Grid `Cell`",
+                    prop.name
+                )));
+            }
+            validate_alignment_literal(
+                &prop.value,
+                &format!("{}.{}", node.widget_type, prop.name),
+            )?;
+        }
+    }
+
+    let current = parent_kind_for(node);
+    for child in &node.children {
+        validate_phase6_zstack_node_invariants(child, current)?;
+    }
+    Ok(())
+}
+
+fn validate_alignment_literal(value: &IrLiteral, label: &str) -> Result<(), IrLoadError> {
+    match value {
+        IrLiteral::Ident(id) if matches!(id.as_str(), "start" | "center" | "end" | "stretch") => {
+            Ok(())
+        }
+        _ => Err(IrLoadError::Validate(format!(
+            "`{label}` must be one of start, center, end, stretch"
+        ))),
+    }
 }
 
 /// Reject a non-`Grid` node carrying a Grid `kind_payload` (carrier c1
@@ -1543,6 +1636,15 @@ fn construct_widget(
             WidgetNode::grid(compositor, columns, rows, cell_placements)
                 .map_err(|e| IrLoadError::Build(format!("grid: {e}")))
         }
+        // M3-Phase 6 T3: ZStack materialisation. Per-child placement
+        // annotations are parent-owned and carried as a vector parallel to
+        // direct children; document order is preserved by the generic child
+        // append loop below.
+        "ZStack" => {
+            let placements = node.children.iter().map(extract_zstack_placement).collect();
+            WidgetNode::zstack(compositor, placements)
+                .map_err(|e| IrLoadError::Build(format!("zstack: {e}")))
+        }
         other => Err(IrLoadError::UnknownWidget(other.to_string())),
     }
 }
@@ -1576,8 +1678,15 @@ fn extract_cell_placement(cell: &IrNode) -> CellPlacement {
         column_span: extract_int_prop(&cell.props, "column-span")
             .unwrap_or(1)
             .max(1) as u32,
-        h_align: extract_alignment_prop(&cell.props, "h-align"),
-        v_align: extract_alignment_prop(&cell.props, "v-align"),
+        h_align: extract_alignment_prop_or(&cell.props, "h-align", Alignment::Stretch),
+        v_align: extract_alignment_prop_or(&cell.props, "v-align", Alignment::Stretch),
+    }
+}
+
+fn extract_zstack_placement(child: &IrNode) -> ZStackPlacement {
+    ZStackPlacement {
+        h_align: extract_alignment_prop_or(&child.props, "h-align", Alignment::Center),
+        v_align: extract_alignment_prop_or(&child.props, "v-align", Alignment::Center),
     }
 }
 
@@ -1586,7 +1695,7 @@ fn extract_cell_placement(cell: &IrNode) -> CellPlacement {
 /// vocabulary (`start` / `center` / `end` / `stretch`) was validated by
 /// `validate()`; an unrecognised ident here falls back to `Stretch`
 /// rather than failing, since this runs after the validate gate.
-fn extract_alignment_prop(props: &[IrProp], name: &str) -> Alignment {
+fn extract_alignment_prop_or(props: &[IrProp], name: &str, default: Alignment) -> Alignment {
     let ident = props
         .iter()
         .find(|p| p.name == name)
@@ -1598,7 +1707,8 @@ fn extract_alignment_prop(props: &[IrProp], name: &str) -> Alignment {
         Some("start") => Alignment::Leading,
         Some("center") => Alignment::Center,
         Some("end") => Alignment::Trailing,
-        _ => Alignment::Stretch,
+        Some("stretch") => Alignment::Stretch,
+        _ => default,
     }
 }
 
@@ -3366,6 +3476,91 @@ mod tests {
                 bindings: vec![],
                 handlers: vec![],
                 children: vec![cell],
+                kind_payload: Some(KindPayload::Grid {
+                    columns: vec![TrackSize::Star(1)],
+                    rows: vec![TrackSize::Star(1)],
+                }),
+            },
+        };
+        match validate(&comp) {
+            Err(IrLoadError::Validate(msg)) => {
+                assert!(msg.contains("only valid on a `Grid` node"), "got: {msg}")
+            }
+            other => panic!("expected Validate error, got {other:?}"),
+        }
+    }
+
+    // ── M3-Phase 6 T3: ZStack validate() defense-in-depth ──────────────
+
+    #[test]
+    fn zstack_positive_control_validates_direct_children() {
+        let c = parse_ok(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             node ZStack {\n\
+               node Box { prop fill = #336699cc }\n\
+               node Text { prop h-align = end prop v-align = start prop text = \"caption\" }\n\
+             }\n}",
+        );
+        assert_eq!(c.root.widget_type, "ZStack");
+        assert_eq!(c.root.children.len(), 2);
+    }
+
+    #[test]
+    fn zstack_zero_children_validates() {
+        let c = parse_ok(";wasamo-ir v0\ncomponent C inherits W { node ZStack {} }");
+        assert_eq!(c.root.widget_type, "ZStack");
+        assert!(c.root.children.is_empty());
+    }
+
+    #[test]
+    fn zstack_attribute_rejected_at_validate() {
+        assert_validate_err(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             node ZStack { prop spacing = 8 node Text {} }\n}",
+            "`ZStack` accepts no Phase-6 attributes",
+        );
+    }
+
+    #[test]
+    fn zstack_binding_rejected_at_validate() {
+        assert_validate_err(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             state ready: bool = true\n\
+             node ZStack { bind h-align = (bool-prop-read ready) node Text {} }\n}",
+            "`ZStack` accepts no Phase-6 bindings",
+        );
+    }
+
+    #[test]
+    fn zstack_child_unknown_alignment_rejected_at_validate() {
+        assert_validate_err(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             node ZStack { node Text { prop h-align = middle } }\n}",
+            "`Text.h-align` must be one of start, center, end, stretch",
+        );
+    }
+
+    #[test]
+    fn placement_prop_outside_zstack_child_or_grid_cell_rejected_at_validate() {
+        assert_validate_err(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             node VStack { node Text { prop h-align = center } }\n}",
+            "valid only on a ZStack direct child or Grid `Cell`",
+        );
+    }
+
+    #[test]
+    fn validate_rejects_zstack_with_kind_payload() {
+        let comp = IrComponent {
+            name: "C".into(),
+            base: "W".into(),
+            states: vec![],
+            root: IrNode {
+                widget_type: "ZStack".into(),
+                props: vec![],
+                bindings: vec![],
+                handlers: vec![],
+                children: vec![],
                 kind_payload: Some(KindPayload::Grid {
                     columns: vec![TrackSize::Star(1)],
                     rows: vec![TrackSize::Star(1)],

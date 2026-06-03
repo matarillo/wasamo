@@ -2,6 +2,7 @@ use crate::box_values;
 use crate::handler::{self, EvalContext, EvalError, HandlerExpr};
 use crate::layout::{
     self, Alignment, CellPlacement, LayoutError, LayoutNode, SizeConstraint, TrackSize,
+    ZStackPlacement,
 };
 use crate::reactive::EffectHandle;
 use crate::text::{TextRenderer, TypographyStyle};
@@ -170,6 +171,15 @@ enum WidgetData {
         columns: Vec<TrackSize>,
         rows: Vec<TrackSize>,
         cell_placements: Vec<CellPlacement>,
+    },
+    // M3-Phase 6 DD-M3-P6-001 / DD-M3-P6-002 per-kind tag for the ZStack
+    // layout primitive. Children are direct real widgets in document order
+    // (first = bottom, last = top); per-child `h-align` / `v-align`
+    // annotations are stored as a layout-engine mirror vector parallel to
+    // `children`. The outer Visual carries the zero-inset clip; children
+    // deliberately do not get per-child clips.
+    ZStack {
+        zstack_placements: Vec<ZStackPlacement>,
     },
 }
 
@@ -609,6 +619,31 @@ impl WidgetNode {
                 rows,
                 cell_placements,
             },
+            width: SizeConstraint::Fill,
+            height: SizeConstraint::Fill,
+            visual,
+            children: Vec::new(),
+            inline_handlers: Vec::new(),
+            attached: false,
+            bindings: Vec::new(),
+        }))
+    }
+
+    // M3-Phase 6 T3: ZStack materialisation. The loader extracts the
+    // parent-owned child placement annotations in document order and passes
+    // them here so `build_layout_tree` can hand them to `LayoutNode::zstack`
+    // unchanged. Width / height default to Fill / Fill (overlay-first).
+    pub(crate) fn zstack(
+        compositor: &Compositor,
+        zstack_placements: Vec<ZStackPlacement>,
+    ) -> windows::core::Result<Box<Self>> {
+        use windows::core::Interface;
+        let visual = compositor.CreateSpriteVisual()?;
+        let clip: InsetClip = compositor.CreateInsetClip()?;
+        let outer_visual: Visual = visual.cast()?;
+        outer_visual.SetClip(&clip)?;
+        Ok(Box::new(Self {
+            data: WidgetData::ZStack { zstack_placements },
             width: SizeConstraint::Fill,
             height: SizeConstraint::Fill,
             visual,
@@ -1526,6 +1561,17 @@ impl WidgetNode {
             } => {
                 let mut node =
                     LayoutNode::grid(columns.clone(), rows.clone(), cell_placements.clone());
+                node.width = self.width.clone();
+                node.height = self.height.clone();
+                node.children = self
+                    .children
+                    .iter()
+                    .map(|c| c.build_layout_tree())
+                    .collect();
+                node
+            }
+            WidgetData::ZStack { zstack_placements } => {
+                let mut node = LayoutNode::zstack(zstack_placements.clone());
                 node.width = self.width.clone();
                 node.height = self.height.clone();
                 node.children = self
