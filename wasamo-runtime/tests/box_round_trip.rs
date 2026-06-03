@@ -31,7 +31,7 @@
 
 use std::ffi::CStr;
 
-use wasamo_ir::{IrComponent, IrLiteral};
+use wasamo_ir::{IrComponent, IrLiteral, IrMember};
 use wasamo_runtime::ffi;
 use wasamo_runtime::ir_loader::{build_widget_tree, parse_ir, IrLoadError};
 
@@ -86,7 +86,10 @@ fn box_phase2_emit_parses_back_to_ir_literal_variants() {
     assert_eq!(fill.value, IrLiteral::Color(0x80_00_00_00));
 
     assert_eq!(comp.root.children.len(), 1);
-    assert_eq!(comp.root.children[0].widget_type, "Text");
+    assert!(matches!(
+        &comp.root.children[0],
+        IrMember::Widget(node) if node.widget_type == "Text"
+    ));
 }
 
 /// Defense-in-depth: DD-M3-P2-001 requires `ir_loader` to reject a Box with

@@ -75,6 +75,10 @@ pub enum Expr {
         value: u32,
         span: Span,
     },
+    UnsupportedOperator {
+        op: String,
+        span: Span,
+    },
 }
 
 impl Expr {
@@ -87,7 +91,8 @@ impl Expr {
             | Expr::Measurement { span, .. }
             | Expr::Ident { span, .. }
             | Expr::RatioLit { span, .. }
-            | Expr::ColorLit { span, .. } => span,
+            | Expr::ColorLit { span, .. }
+            | Expr::UnsupportedOperator { span, .. } => span,
         }
     }
 }
@@ -206,6 +211,11 @@ pub enum Member {
     GridTracks {
         axis: TrackAxis,
         tracks: Vec<TrackSize>,
+        span: Span,
+    },
+    Conditional {
+        condition: Expr,
+        body: Vec<Member>,
         span: Span,
     },
 }

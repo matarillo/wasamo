@@ -1,6 +1,6 @@
 use crate::ir::{
-    CompoundOp, HandlerExpr, InterpolationPart, IrBinding, IrComponent, IrHandler, IrLiteral,
-    IrNode, IrProp, IrState, IrType, KindPayload, TrackSize,
+    CompoundOp, ControlFlowNode, HandlerExpr, InterpolationPart, IrBinding, IrComponent, IrHandler,
+    IrLiteral, IrMember, IrNode, IrProp, IrState, IrType, KindPayload, TrackSize,
 };
 
 /// Serialise an IrComponent to the normative Wasamo IR text format (§8, DD-M2-P6-002).
@@ -66,9 +66,25 @@ fn emit_node(out: &mut String, node: &IrNode, indent: usize) {
         emit_handler(out, handler, indent + 1);
     }
     for child in &node.children {
-        emit_node(out, child, indent + 1);
+        emit_member(out, child, indent + 1);
     }
     out.push_str(&format!("{}}}\n", i));
+}
+
+fn emit_member(out: &mut String, member: &IrMember, indent: usize) {
+    match member {
+        IrMember::Widget(node) => emit_node(out, node, indent),
+        IrMember::ControlFlow(ControlFlowNode::If { branches }) => {
+            let i = ind(indent);
+            for branch in branches {
+                out.push_str(&format!("{}if {} {{\n", i, emit_expr(&branch.condition)));
+                for body_member in &branch.body {
+                    emit_member(out, body_member, indent + 1);
+                }
+                out.push_str(&format!("{}}}\n", i));
+            }
+        }
+    }
 }
 
 /// Emit a Grid track list as `tracks <axis> = <t0> <t1> …` (DD-M3-P5-002).
@@ -397,7 +413,10 @@ mod tests {
         assert_eq!(*aspect, IrLiteral::Ratio { num: 16, den: 9 });
         assert_eq!(*fill, IrLiteral::Color(0x80_00_00_00));
         assert_eq!(b.children.len(), 1);
-        assert_eq!(b.children[0].widget_type, "Text");
+        assert!(matches!(
+            &b.children[0],
+            IrMember::Widget(child) if child.widget_type == "Text"
+        ));
 
         let out = emit(&comp);
         assert!(out.starts_with(";wasamo-ir v0\n"), "got: {}", out);
@@ -606,6 +625,18 @@ mod tests {
         assert!(out.contains("prop fill = #00000080"), "got: {}", out);
         assert!(out.contains("prop h-align = center"), "got: {}", out);
         assert!(out.contains("prop v-align = end"), "got: {}", out);
+    }
+
+    #[test]
+    fn conditional_emitted_as_control_flow_member() {
+        let out = emit_src(
+            "component C inherits W { state ready: bool = true VStack { if ready { Text { text: \"Shown\" } } } }",
+        );
+        assert!(out.contains("if (bool-prop-read ready) {"), "got: {}", out);
+        assert!(out.contains("node Text {"), "got: {}", out);
+        let if_pos = out.find("if (bool-prop-read ready) {").expect("if emitted");
+        let text_pos = out.find("node Text {").expect("Text emitted");
+        assert!(if_pos < text_pos, "got: {}", out);
     }
 
     #[test]

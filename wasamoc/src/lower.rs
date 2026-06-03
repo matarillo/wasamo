@@ -4,8 +4,9 @@ use crate::ast::{
 };
 use crate::check::Namespace;
 use crate::ir::{
-    CompoundOp, HandlerExpr, InterpolationPart, IrBinding, IrComponent, IrHandler, IrLiteral,
-    IrNode, IrProp, IrState, IrType, KindPayload, TrackSize as IrTrackSize,
+    CompoundOp, ControlFlowBranch, ControlFlowNode, HandlerExpr, InterpolationPart, IrBinding,
+    IrComponent, IrHandler, IrLiteral, IrMember, IrNode, IrProp, IrState, IrType, KindPayload,
+    TrackSize as IrTrackSize,
 };
 
 /// Lower a checked AST to the IR representation.
@@ -49,7 +50,7 @@ pub fn lower(ast: &ComponentDef, ns: &Namespace) -> IrComponent {
             } => {
                 root_opt = Some(lower_node(type_name, members, ns));
             }
-            Member::SignalHandler { .. } => {}
+            Member::SignalHandler { .. } | Member::Conditional { .. } => {}
             _ => {}
         }
     }
@@ -124,7 +125,20 @@ fn lower_node(widget_type: &str, members: &[Member], ns: &Namespace) -> IrNode {
                 members: child_members,
                 ..
             } => {
-                children.push(lower_node(type_name, child_members, ns));
+                children.push(IrMember::Widget(lower_node(type_name, child_members, ns)));
+            }
+            Member::Conditional {
+                condition, body, ..
+            } => {
+                children.push(IrMember::ControlFlow(ControlFlowNode::If {
+                    branches: vec![ControlFlowBranch {
+                        condition: lower_condition_expr(condition, ns),
+                        body: body
+                            .iter()
+                            .map(|m| lower_widget_body_member(m, ns))
+                            .collect(),
+                    }],
+                }));
             }
             Member::GridTracks { axis, tracks, .. } => {
                 let lowered = tracks.iter().map(lower_track_size).collect();
@@ -156,6 +170,26 @@ fn lower_node(widget_type: &str, members: &[Member], ns: &Namespace) -> IrNode {
         handlers,
         children,
         kind_payload,
+    }
+}
+
+fn lower_widget_body_member(member: &Member, ns: &Namespace) -> IrMember {
+    match member {
+        Member::WidgetDecl {
+            type_name, members, ..
+        } => IrMember::Widget(lower_node(type_name, members, ns)),
+        _ => panic!("lower_widget_body_member: non-widget body (check should have rejected)"),
+    }
+}
+
+fn lower_condition_expr(expr: &Expr, ns: &Namespace) -> HandlerExpr {
+    match expr {
+        Expr::BoolLit { value, .. } => HandlerExpr::BoolLit(*value),
+        Expr::Ident { name, .. } => match ns.get(name) {
+            Some(TypeName::Bool) => HandlerExpr::BoolPropRead { path: name.clone() },
+            _ => panic!("lower_condition_expr: non-bool condition (check should have rejected)"),
+        },
+        _ => panic!("lower_condition_expr: unsupported condition (check should have rejected)"),
     }
 }
 
@@ -226,6 +260,9 @@ fn lower_expr(expr: &Expr, ns: &Namespace) -> LoweredExpr {
             den: *den,
         }),
         Expr::ColorLit { value, .. } => LoweredExpr::Static(IrLiteral::Color(*value)),
+        Expr::UnsupportedOperator { .. } => {
+            panic!("lower_expr: unsupported operator (check should have rejected this)")
+        }
     }
 }
 
@@ -336,6 +373,9 @@ fn lower_rhs_expr(expr: &Expr, ns: &Namespace) -> HandlerExpr {
         Expr::ColorLit { .. } => {
             panic!("lower_rhs_expr: color literal in handler RHS (check should have rejected)")
         }
+        Expr::UnsupportedOperator { .. } => {
+            panic!("lower_rhs_expr: unsupported operator (check should have rejected)")
+        }
     }
 }
 
@@ -356,6 +396,13 @@ mod tests {
             result.diagnostics
         );
         lower(&ast, &result.namespace)
+    }
+
+    fn child_widget<'a>(node: &'a IrNode, index: usize) -> &'a IrNode {
+        match &node.children[index] {
+            IrMember::Widget(child) => child,
+            other => panic!("expected widget child at {index}, got {other:?}"),
+        }
     }
 
     #[test]
@@ -601,8 +648,8 @@ mod tests {
         let comp = lower_src("component C inherits W { VStack { Text {} Button {} } }");
         let vstack = &comp.root;
         assert_eq!(vstack.children.len(), 2);
-        assert_eq!(vstack.children[0].widget_type, "Text");
-        assert_eq!(vstack.children[1].widget_type, "Button");
+        assert_eq!(child_widget(vstack, 0).widget_type, "Text");
+        assert_eq!(child_widget(vstack, 1).widget_type, "Button");
     }
 
     // --- T4: Box ratio / color literal lowering -------------------------
@@ -688,7 +735,7 @@ mod tests {
             Some(&IrLiteral::Color(0xFF_CC_CC_CC))
         );
         assert_eq!(b.children.len(), 1);
-        let child = &b.children[0];
+        let child = child_widget(b, 0);
         assert_eq!(child.widget_type, "Text");
         assert_eq!(child.props.len(), 1);
         assert_eq!(child.props[0].name, "text");
@@ -737,9 +784,9 @@ mod tests {
         assert_eq!(w.props[0].name, "item-cross-size");
         assert_eq!(w.props[0].value, IrLiteral::Int(88));
         assert_eq!(w.children.len(), 1);
-        assert_eq!(w.children[0].widget_type, "Box");
+        assert_eq!(child_widget(w, 0).widget_type, "Box");
         assert_eq!(
-            find_prop(&w.children[0], "aspect"),
+            find_prop(child_widget(w, 0), "aspect"),
             Some(&IrLiteral::Ratio { num: 1, den: 1 })
         );
     }
@@ -755,7 +802,7 @@ mod tests {
         assert_eq!(find_prop(w, "item-spacing"), Some(&IrLiteral::Int(8)));
         assert_eq!(find_prop(w, "line-spacing"), Some(&IrLiteral::Int(12)));
         assert_eq!(w.children.len(), 3);
-        for child in &w.children {
+        for child in w.widget_children() {
             assert_eq!(child.widget_type, "Box");
         }
     }
@@ -795,7 +842,7 @@ mod tests {
         assert!(w.props.is_empty());
         assert!(w.bindings.is_empty());
         assert_eq!(w.children.len(), 3);
-        for child in &w.children {
+        for child in w.widget_children() {
             assert_eq!(child.widget_type, "Text");
         }
     }
@@ -861,7 +908,7 @@ mod tests {
         );
         let grid = &comp.root;
         assert_eq!(grid.children.len(), 1);
-        let cell = &grid.children[0];
+        let cell = child_widget(grid, 0);
         assert_eq!(cell.widget_type, "Cell");
         assert!(cell.kind_payload.is_none());
         assert_eq!(
@@ -887,7 +934,7 @@ mod tests {
         );
         // The Cell's content widget is its single child node.
         assert_eq!(cell.children.len(), 1);
-        assert_eq!(cell.children[0].widget_type, "Text");
+        assert_eq!(child_widget(cell, 0).widget_type, "Text");
     }
 
     #[test]
@@ -930,15 +977,55 @@ mod tests {
         assert!(zstack.kind_payload.is_none());
         assert!(zstack.props.is_empty());
         assert_eq!(zstack.children.len(), 2);
-        assert_eq!(zstack.children[0].widget_type, "Box");
-        assert_eq!(zstack.children[1].widget_type, "Text");
+        assert_eq!(child_widget(zstack, 0).widget_type, "Box");
+        assert_eq!(child_widget(zstack, 1).widget_type, "Text");
         assert_eq!(
-            find_prop(&zstack.children[1], "h-align"),
+            find_prop(child_widget(zstack, 1), "h-align"),
             Some(&IrLiteral::Ident("center".into()))
         );
         assert_eq!(
-            find_prop(&zstack.children[1], "v-align"),
+            find_prop(child_widget(zstack, 1), "v-align"),
             Some(&IrLiteral::Ident("end".into()))
         );
+    }
+
+    #[test]
+    fn conditional_lowers_to_control_flow_member() {
+        let comp = lower_src(
+            "component C inherits W { state ready: bool = true VStack { if ready { Text {} } } }",
+        );
+        let root = &comp.root;
+        assert_eq!(root.children.len(), 1);
+        match &root.children[0] {
+            IrMember::ControlFlow(ControlFlowNode::If { branches }) => {
+                assert_eq!(branches.len(), 1);
+                assert_eq!(
+                    branches[0].condition,
+                    HandlerExpr::BoolPropRead {
+                        path: "ready".into()
+                    }
+                );
+                assert_eq!(branches[0].body.len(), 1);
+                assert_eq!(
+                    match &branches[0].body[0] {
+                        IrMember::Widget(node) => node.widget_type.as_str(),
+                        other => panic!("expected widget body, got {other:?}"),
+                    },
+                    "Text"
+                );
+            }
+            other => panic!("expected control-flow child, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn conditional_bool_literal_lowers_to_bool_lit_condition() {
+        let comp = lower_src("component C inherits W { VStack { if true { Text {} } } }");
+        match &comp.root.children[0] {
+            IrMember::ControlFlow(ControlFlowNode::If { branches }) => {
+                assert_eq!(branches[0].condition, HandlerExpr::BoolLit(true));
+            }
+            other => panic!("expected control-flow child, got {other:?}"),
+        }
     }
 }

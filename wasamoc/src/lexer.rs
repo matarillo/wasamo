@@ -10,6 +10,10 @@ pub enum Keyword {
     State,
     True,
     False,
+    If,
+    Else,
+    Switch,
+    For,
 }
 
 impl Keyword {
@@ -22,6 +26,10 @@ impl Keyword {
             Keyword::State => "`state`",
             Keyword::True => "`true`",
             Keyword::False => "`false`",
+            Keyword::If => "`if`",
+            Keyword::Else => "`else`",
+            Keyword::Switch => "`switch`",
+            Keyword::For => "`for`",
         }
     }
 }
@@ -55,6 +63,7 @@ pub enum Token {
     StarEq,
     SlashEq,
     Eq,
+    Bang,
     /// Bare `*` (a `*` not followed by `=`). Introduced in M3-Phase 5
     /// for the Grid track-list star token (DD-M3-P5-002). The lexer is
     /// deliberately ignorant of track semantics: it emits a payload-less
@@ -103,6 +112,7 @@ impl Token {
             Token::StarEq => "`*=`",
             Token::SlashEq => "`/=`",
             Token::Eq => "`=`",
+            Token::Bang => "`!`",
             Token::Star => "`*`",
             Token::Eof => "end of file",
         }
@@ -230,6 +240,10 @@ pub fn tokenize(src: &str, filename: &str) -> Result<Vec<SpannedToken>, Diagnost
                 } else {
                     Token::Eq
                 }
+            }
+            '!' => {
+                c.advance();
+                Token::Bang
             }
             '+' => {
                 c.advance();
@@ -365,6 +379,10 @@ fn scan_ident(c: &mut Cursor) -> Token {
         "state" => Token::Kw(Keyword::State),
         "true" => Token::Kw(Keyword::True),
         "false" => Token::Kw(Keyword::False),
+        "if" => Token::Kw(Keyword::If),
+        "else" => Token::Kw(Keyword::Else),
+        "switch" => Token::Kw(Keyword::Switch),
+        "for" => Token::Kw(Keyword::For),
         _ => Token::Ident(s),
     }
 }
@@ -783,6 +801,15 @@ mod tests {
         let toks = lex_ok("true false");
         assert!(matches!(&toks[0], Token::Kw(Keyword::True)));
         assert!(matches!(&toks[1], Token::Kw(Keyword::False)));
+    }
+
+    #[test]
+    fn control_flow_family_keywords_reserved() {
+        let toks = lex_ok("if else switch for");
+        assert!(matches!(&toks[0], Token::Kw(Keyword::If)));
+        assert!(matches!(&toks[1], Token::Kw(Keyword::Else)));
+        assert!(matches!(&toks[2], Token::Kw(Keyword::Switch)));
+        assert!(matches!(&toks[3], Token::Kw(Keyword::For)));
     }
 
     #[test]
