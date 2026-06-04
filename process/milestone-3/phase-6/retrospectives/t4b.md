@@ -55,8 +55,9 @@ Refs:
    independent normative content. No `abi_spec.md` / `architecture.md` edit.
 3. **Post-commit verification:** green. `cargo fmt --all -- --check` clean;
    clean rebuild (release + debug) + `cargo test --workspace` green. The
-   task touches no Rust — the tree is byte-identical to the phase tip
-   `732afe2`, whose dual-gate evidence (`scrollview_conditional_member_*` /
+   task touches no Rust — the **code tree** is byte-identical to the phase
+   tip `732afe2` (only docs/process changed), whose dual-gate evidence
+   (`scrollview_conditional_member_*` /
    `validate_rejects_scrollview_with_conditional_*`) already passes. (CI log
    updated in [log.md](../implementation/log.md).)
 4. **Design decisions / trade-offs for the PO:** **yes — resolved.** The
