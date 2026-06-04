@@ -370,11 +370,18 @@ T5).
 - [ ] If **(a)**: confirm the T4-follow-up interim is the final rule; the
       `ScrollView { if c { … } }` rejection already carries an
       intent-revealing diagnostic. No prior-DD touch; preamble §Decisions +
-      Revisions updated on acceptance.
+      Revisions updated on acceptance; **`docs/dsl_spec.md` §4.11 (ScrollView:
+      any direct conditional member rejected — wrap inside the content
+      widget) + §4.14 diagnostics-list entry synced**. No code/test change
+      (the interim already ships the dual-gate evidence — see the DD
+      §Implementation handoff if (a)).
 - [ ] If **(b)**: relax the ScrollView gate to at-most-one-materialised;
-      fold DD-M3-P4-003 + dsl_spec / architecture; add reactive
-      toggle-to-empty Windows-runtime evidence (coordinate with T5). Promote
-      this task to a numbered slot if it grows to full implementation.
+      reopen DD-M3-P4-001's exact-one invariant (loader gate DD-M3-P4-006)
+      + dependent content-size/clamp in DD-M3-P4-003/005 + dsl_spec /
+      architecture (not DD-M3-P4-003's offset-y / binding-direction surface);
+      add reactive toggle-to-empty Windows-runtime evidence (coordinate with
+      T5). Promote this task to a numbered slot if it grows to full
+      implementation.
 
 ### T5 — Conditional: reactive toggle and Windows-runtime evidence
 
