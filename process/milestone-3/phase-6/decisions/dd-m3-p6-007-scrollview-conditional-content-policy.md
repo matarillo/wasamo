@@ -1,6 +1,6 @@
 # DD-M3-P6-007 — ScrollView conditional-content policy
 
-**Status:** Proposed
+**Status:** Accepted
 **Phase:** M3-Phase 6
 **Surfaced by:** T4 review follow-up semantic-migration audit
 (`fix/m3-phase-6-t4-review-followup`); the conditional × exact-one
@@ -154,10 +154,9 @@ question is the author-facing and typing model, not the Phase-6 IR shape.
 
 ## Recommendation
 
-**Pending deliberation.** Status stays `Proposed` — do not flip to
-`Accepted` without the owner's comparison. Tentative lean: **(a)** for
-Phase 6 — rejecting the direct-conditional form for ScrollView, **not**
-rejecting conditionally-empty scroll content as a semantic direction.
+**Accepted: (a)** (owner comparison 2026-06-04). For Phase 6, ScrollView
+rejects the direct-conditional form — **not** rejecting conditionally-empty
+scroll content as a semantic direction.
 Reconsideration of (b) should be tied to the DSL's broader
 conditional-content model rather than treated as a ScrollView-only
 ergonomics tweak: the DSL should first decide whether conditional content
@@ -274,3 +273,6 @@ All review passes kept `Status: Proposed`.
   error-mapping citation.
 - Implementation-readiness review #3: reconciled plan.md T4b (named the
   dsl_spec sync; fixed the (b) prior-DD reference).
+- **Accepted (a)** — owner comparison 2026-06-04; `Status: Proposed →
+  Accepted`. Synced `docs/dsl_spec.md` §4.11 / §4.14, preamble §Decisions +
+  Revisions, and plan.md T4b.
