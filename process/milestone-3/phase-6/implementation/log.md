@@ -107,6 +107,14 @@
   `IrLoadError::Validate` → `WASAMO_ERR_IR_MALFORMED`) are the final
   evidence. The review found and corrected a stub citation error
   (ScrollView exact-one = DD-M3-P4-001, not DD-M3-P4-003).
+  - *Deferred (low harm, not a checklist item):* `ir_loader.rs`
+    `validate_phase4_node_invariants` still narrates the rejection as the
+    "interim / open DD-M3-P6-007 ... until that is decided" state. Refresh
+    that provenance comment to "accepted (a); conditionally-empty direction
+    deferred" at the **next `ir_loader.rs` touch (T5)** or phase-end — left
+    now to keep T4b a code-no-touch close; harm is low (the comment still
+    links DD-M3-P6-007, and behaviour / diagnostic / public spec are
+    correct).
 
 ---
 
