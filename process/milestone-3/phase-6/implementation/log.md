@@ -92,6 +92,21 @@
   `Foundation_Collections` feature so the test can read the live child
   collection directly. This is an API-feature enablement for the
   existing dependency, not a new build system / CI surface.
+- **2026-06-04 / T4b DD-M3-P6-007 accepted (a):** the open ScrollView
+  conditional-content question closed **(a) — reject a direct conditional
+  member; defer conditionally-empty content**, after a multi-pass
+  design-decision review (strategic / recommendation-choice /
+  implementation-readiness). Doc/process only: DD-007 `Proposed → Accepted`,
+  preamble §Decisions index (+ Revisions), `docs/dsl_spec.md` §4.11 sentence
+  + §4.14 diagnostics row, plan.md T4b. **No code change** — the T4
+  review-follow-up interim is the final rule, so the existing dual-gate
+  tests (`scrollview_conditional_member_rejected` /
+  `scrollview_conditional_only_member_rejected`;
+  `validate_rejects_scrollview_with_conditional_member` /
+  `validate_rejects_scrollview_with_conditional_only_member`,
+  `IrLoadError::Validate` → `WASAMO_ERR_IR_MALFORMED`) are the final
+  evidence. The review found and corrected a stub citation error
+  (ScrollView exact-one = DD-M3-P4-001, not DD-M3-P4-003).
 
 ---
 

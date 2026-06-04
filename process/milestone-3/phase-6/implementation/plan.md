@@ -364,18 +364,21 @@ promote it to a full numbered task at that point. Deliberation should land
 **before T5 closes** (a (b) outcome's reactive-empty evidence folds into
 T5).
 
-- [ ] Deliberate [DD-M3-P6-007](../decisions/dd-m3-p6-007-scrollview-conditional-content-policy.md)
+- [x] Deliberate [DD-M3-P6-007](../decisions/dd-m3-p6-007-scrollview-conditional-content-policy.md)
       ((a) reject conditional-only content vs (b) allow conditionally-empty)
-      and flip it to `Accepted` with owner comparison.
-- [ ] If **(a)**: confirm the T4-follow-up interim is the final rule; the
-      `ScrollView { if c { … } }` rejection already carries an
-      intent-revealing diagnostic. No prior-DD touch; preamble §Decisions +
-      Revisions updated on acceptance; **`docs/dsl_spec.md` §4.11 (ScrollView:
-      any direct conditional member rejected — wrap inside the content
-      widget) + §4.14 diagnostics-list entry synced**. No code/test change
-      (the interim already ships the dual-gate evidence — see the DD
-      §Implementation handoff if (a)).
-- [ ] If **(b)**: relax the ScrollView gate to at-most-one-materialised;
+      and flip it to `Accepted` with owner comparison. **Outcome: (a)**
+      (owner 2026-06-04, after a multi-pass design-decision review).
+- [x] **(a) selected**: T4-follow-up interim confirmed as the final rule —
+      the `ScrollView { if c { … } }` rejection carries an intent-revealing
+      diagnostic. No prior-DD touch; preamble §Decisions + Revisions updated;
+      `docs/dsl_spec.md` §4.11 (any direct conditional member rejected — wrap
+      inside the content widget) + §4.14 diagnostics-list entry synced. No
+      code/test change (the interim already ships the dual-gate evidence —
+      see the DD §Implementation handoff if (a)).
+- [ ] ~~If **(b)**~~ — **not selected**; conditionally-empty ScrollView is
+      deferred (DD-007 §Deferred design space). The work below was the (b)
+      branch and is not taken this phase: relax the ScrollView gate to
+      at-most-one-materialised;
       reopen DD-M3-P4-001's exact-one invariant (loader gate DD-M3-P4-006)
       + dependent content-size/clamp in DD-M3-P4-003/005 + dsl_spec /
       architecture (not DD-M3-P4-003's offset-y / binding-direction surface);
