@@ -973,6 +973,16 @@ loader's `validate()` independently rejects malformed memory IR with
 0 or more than 1 child. The runtime rejection uses the existing
 `WASAMO_ERR_IR_MALFORMED` surface.
 
+A **direct conditional member** under ScrollView — `ScrollView { if c { …
+} }`, or an `if` beside the content child — is rejected at both gates: a
+conditional's presence is dynamic, so it cannot satisfy the
+exactly-one-content-child contract (it could materialize zero or two
+children). Wrap the conditional inside the single content widget instead
+(`ScrollView { Box { if c { … } } }`). This is symmetric with the `Cell`
+direct-conditional rejection (§4.12); a conditionally-empty ScrollView is a
+deferred future direction, not a supported Phase-6 shape (M3-Phase 6,
+DD-M3-P6-007).
+
 #### Attributes
 
 | Attribute | Surface form | Bindable in Phase 4 | Default |
@@ -1957,6 +1967,7 @@ the memory-IR entry point does not pass through `wasamoc`:
 | Nested `if` directly in body | `if a { if b { … } }` | "an `if` body admits a single widget child" (wrap the inner `if`) |
 | Multiple children in body | `if open { Box{} Text{} }` | "an `if` body admits a single widget child" (wrap in a container) |
 | Component-level `if` | an `if` at component body level | "`if` is admitted only inside a widget body" (a conditional root has no parent slot) |
+| Direct conditional under an exact-one container | `ScrollView { if c { … } }`; `ScrollView { Content  if c { … } }` | "a conditional member is not valid directly in ScrollView (wrap it in the content widget)" — the exactly-one-content-child cardinality cannot absorb a dynamic member (DD-M3-P6-007; parallels the `Cell` direct-conditional rejection, §4.12) |
 | Bare `else` / `switch` / `for` | `else { … }`; `switch x { … }`; `for … { … }` | "reserved / not yet supported" (names the construct) |
 
 The reserved-but-unsupported diagnostic for `else` / `switch` / `for`
