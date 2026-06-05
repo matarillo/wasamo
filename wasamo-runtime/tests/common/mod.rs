@@ -1,8 +1,8 @@
-//! Shared runtime bootstrap for the mock-free, Windows-only integration
-//! tests that drive a live Compositor.
+//! Shared runtime bootstrap + executor for the mock-free, Windows-only
+//! integration tests that drive a live Compositor.
 //!
 //! This comment is intentionally self-contained: you should not need to open
-//! any `.md` to understand why the helper exists or when to use it. Full
+//! any `.md` to understand why the helper exists or how to use it. Full
 //! provenance / evidence is `docs/notes/verification-environments.md`
 //! Observation 5, but it is not required reading.
 //!
@@ -27,54 +27,60 @@
 //! `STATUS_ACCESS_VIOLATION` (`0xC0000005`) — *after* the first test already
 //! printed `ok`.
 //!
-//! This helper instead initializes the runtime on a **dedicated thread that
-//! parks forever and never exits**, so the Compositor's apartment (and
-//! `dcomp.dll`) stay resident for the entire test binary. The cached
-//! Compositor therefore remains valid across every test in the binary.
-//! Individual tests still build and drive their widget trees on their own
-//! libtest threads; those calls are technically cross-apartment, but they do
-//! not fault while `dcomp.dll` is held resident by the parked thread.
+//! This helper instead runs the runtime on a **single dedicated owning
+//! thread that never exits**. That thread initializes the Compositor and
+//! then serves as a work-queue executor: every test body that touches the
+//! Compositor is shipped to it via [`run_on_owning_runtime_thread_or_skip`]
+//! and runs *there*, one at a time. So the Compositor is created and used on
+//! one and the same thread for the entire test binary — its apartment (and
+//! `dcomp.dll`) stay resident, and no test ever touches it cross-apartment.
+//! This mirrors production, where a host owns the Compositor on its single
+//! UI thread for the whole process lifetime.
+//!
+//! (Historically this was a two-step remediation. Step 2 merely *parked* the
+//! owning thread to keep the apartment resident while each test still called
+//! the Compositor from its own libtest thread — crash-free, but technically
+//! cross-apartment and safe only while `dcomp.dll` stayed loaded. Step 1,
+//! implemented here, turns the parked thread into the executor above, so the
+//! cross-apartment calls are gone, not merely tolerated.)
 //!
 //! # Which tests MUST use this helper
 //!
 //! Any single test binary (one `tests/<name>.rs` file) that contains **two
 //! or more tests that build a live widget tree / touch the Compositor**.
-//! With two such tests, the first test's thread death unloads `dcomp.dll`
-//! and the second test faults. Route *every* Compositor test in such a file
-//! through [`init_runtime_or_skip`] so the apartment is owned by the parked
-//! thread rather than by any one test thread.
+//! With two such tests, per-test inline init would let the first test's
+//! thread death unload `dcomp.dll` and the second test fault. Route *every*
+//! Compositor test body in such a file through
+//! [`run_on_owning_runtime_thread_or_skip`] so the Compositor is owned and
+//! used by the executor thread rather than by any one test thread.
 //!
 //! # Which tests do NOT need this helper
 //!
 //! - **Binaries with at most one Compositor test.** A lone test initializes
-//!   and uses the Compositor on its own thread, then the process exits;
-//!   there is no *second* test to reuse a stale Compositor, so the crash
-//!   cannot occur. Such tests may keep their own inline `RoInitialize` +
-//!   `wasamo_init`. (Cargo compiles each `tests/<name>.rs` into its own
-//!   binary and runs it as a separate process, so "one Compositor test per
-//!   file" is what matters, not the total across the suite.)
+//!   *and* uses the Compositor on its own thread, then the process exits:
+//!   one apartment throughout (so no cross-apartment access), and no
+//!   *second* test to reuse a torn-down one (so no crash). Such tests may
+//!   keep their own inline `RoInitialize` + `wasamo_init`. (Cargo compiles
+//!   each `tests/<name>.rs` into its own binary and runs it as a separate
+//!   process, so "one Compositor test per file" is what matters, not the
+//!   total across the suite.)
 //! - **Tests that never stand up the Compositor** (pure IR / parser /
 //!   layout-math tests) — they do not call `wasamo_init` at all.
 //!
 //! # When this helper can be deleted
 //!
-//! Remove it once *either* condition holds:
-//!
-//! 1. **Remediation step 1 lands.** When all Compositor operations are
-//!    marshalled onto the single owning thread (tests dispatch closures to
-//!    the runtime thread instead of calling the Compositor from their own
-//!    threads), no test touches the Compositor cross-thread and the parked
-//!    thread becomes the marshalling thread — this keep-alive-only form is
-//!    then superseded by that harness.
-//! 2. **The harness stops creating the precondition.** e.g. the suite moves
-//!    to a process-per-test runner (each `#[test]` in its own process, as
-//!    `cargo nextest` does), or libtest stops spawning a fresh thread per
-//!    test. Either removes the "second test reuses a torn-down apartment"
-//!    sequence, making per-test inline init safe again.
+//! Remove it once **the harness stops creating the precondition** — e.g. the
+//! suite moves to a process-per-test runner (each `#[test]` in its own
+//! process, as `cargo nextest` does), or libtest stops spawning a fresh
+//! thread per test. Either removes the "second test reuses a torn-down
+//! apartment" sequence, making per-test inline init safe again. (The earlier
+//! "delete once remediation step 1 lands" condition is discharged: step 1
+//! *is* this executor.)
 
 #![cfg(windows)]
 
 use std::ffi::CStr;
+use std::panic::{catch_unwind, resume_unwind, AssertUnwindSafe};
 use std::sync::mpsc;
 use std::sync::OnceLock;
 
@@ -102,20 +108,28 @@ fn github_actions() -> bool {
     std::env::var_os("GITHUB_ACTIONS").is_some()
 }
 
-#[derive(Clone, Copy)]
-enum InitOutcome {
-    Ready,
+/// A test body, boxed for delivery to the owning runtime thread.
+type RuntimeJob = Box<dyn FnOnce() + Send>;
+
+/// The process-global runtime state, established once on the owning thread.
+enum Runtime {
+    /// The Compositor is live; send jobs here to run them on the owning
+    /// thread.
+    Ready(mpsc::Sender<RuntimeJob>),
+    /// The Compositor is unavailable on this machine (a dev laptop without a
+    /// usable session); Compositor tests skip locally and fail on CI.
     CompositorUnavailable,
 }
 
-/// Initialize the runtime exactly once per process, on a parked keep-alive
-/// thread that owns the Compositor's apartment for the whole binary.
-fn ensure_runtime() -> InitOutcome {
-    static INIT: OnceLock<InitOutcome> = OnceLock::new();
-    *INIT.get_or_init(|| {
-        let (tx, rx) = mpsc::channel();
+/// Bring the runtime up exactly once per process, on a dedicated owning
+/// thread that initializes the Compositor and then runs queued test bodies
+/// forever. Returns a handle to that thread (or the unavailable verdict).
+fn ensure_runtime() -> &'static Runtime {
+    static RUNTIME: OnceLock<Runtime> = OnceLock::new();
+    RUNTIME.get_or_init(|| {
+        let (outcome_tx, outcome_rx) = mpsc::channel();
         std::thread::Builder::new()
-            .name("wasamo-test-runtime-keepalive".to_owned())
+            .name("wasamo-test-runtime-owner".to_owned())
             .spawn(move || {
                 let _ = unsafe {
                     windows::Win32::System::WinRT::RoInitialize(
@@ -123,61 +137,105 @@ fn ensure_runtime() -> InitOutcome {
                     )
                 };
                 let status = ffi::wasamo_init();
-                let outcome = if status == ffi::WASAMO_ERR_RUNTIME
+                if status == ffi::WASAMO_ERR_RUNTIME
                     && runtime_compositor_unavailable(last_error().as_deref())
                 {
-                    InitOutcome::CompositorUnavailable
-                } else {
-                    assert_eq!(
-                        status,
-                        ffi::WASAMO_OK,
-                        "wasamo_init failed: {:?}",
-                        last_error()
-                    );
-                    InitOutcome::Ready
-                };
-                tx.send(outcome).expect("send runtime init outcome");
-                // Park forever: keep this thread's STA apartment (and the
-                // `dcomp.dll` server backing the Compositor) resident for the
-                // lifetime of the test process.
-                loop {
-                    std::thread::park();
+                    outcome_tx.send(None).expect("send runtime init outcome");
+                    return;
+                }
+                assert_eq!(
+                    status,
+                    ffi::WASAMO_OK,
+                    "wasamo_init failed: {:?}",
+                    last_error()
+                );
+                let (job_tx, job_rx) = mpsc::channel::<RuntimeJob>();
+                outcome_tx
+                    .send(Some(job_tx))
+                    .expect("send runtime init outcome");
+                // Own the Compositor's apartment for the whole process and
+                // act as the marshalling executor: run each test body that
+                // touches the Compositor here, one at a time, and never exit.
+                // `recv` blocks between tests and ends only when every sender
+                // (every test binary thread) is gone, i.e. at process exit.
+                while let Ok(job) = job_rx.recv() {
+                    job();
                 }
             })
-            .expect("spawn keep-alive runtime thread");
-        rx.recv().expect("receive runtime init outcome")
+            .expect("spawn owning runtime thread");
+        match outcome_rx.recv().expect("receive runtime init outcome") {
+            Some(job_tx) => Runtime::Ready(job_tx),
+            None => Runtime::CompositorUnavailable,
+        }
     })
 }
 
-/// Initialize the runtime (once per process, on the parked keep-alive
-/// thread) and prepare the calling test thread to issue COM calls against
-/// the Compositor.
+/// Run a Compositor-touching test body on the single runtime-owning thread,
+/// or skip it when the Compositor is locally unavailable.
 ///
-/// Returns `Some(())` when the runtime is ready, or `None` when the
-/// Compositor is locally unavailable (the caller should `return`, skipping
-/// the test). Fails — does not skip — on GitHub Actions, where a missing
-/// Compositor must surface as a failure per CLAUDE.md §Testing rules; the
-/// skip is a developer-laptop convenience only.
-pub fn init_runtime_or_skip(test_name: &str) -> Option<()> {
-    // The calling libtest thread issues the Compositor / Visual calls, so it
-    // needs COM initialized too. The Compositor objects live in the
-    // keep-alive apartment; these calls are cross-apartment but safe while
-    // `dcomp.dll` stays resident (Observation 5, remediation step 2).
-    let _ = unsafe {
-        windows::Win32::System::WinRT::RoInitialize(
-            windows::Win32::System::WinRT::RO_INIT_SINGLETHREADED,
-        )
-    };
+/// # Why one entry point bundles init + skip + marshalling + panic relay
+///
+/// This deliberately folds four things together: (1) one-time runtime init
+/// on the owning thread, (2) the skip policy (skip on a dev laptop, *fail*
+/// on GitHub Actions — CLAUDE.md §Testing rules), (3) marshalling the test
+/// body onto that owning thread, and (4) relaying a panic (a failed
+/// assertion) back across the thread boundary so `#[test]` still reports it.
+///
+/// These are *not* one responsibility in the strict SRP sense: their change
+/// drivers differ — the skip rule answers to CI/testing policy, the
+/// marshalling to the COM apartment model, the panic relay to test-framework
+/// integration. The justification for a single entry point is not "one
+/// responsibility" but **shared change/deletion locality plus coupling
+/// avoidance**:
+///
+/// - All four exist solely to run a Compositor test body under libtest's
+///   per-test-thread spawning + the Compositor's STA-apartment affinity.
+///   They are added, changed, and *deleted together*: the moment that
+///   precondition goes away (a process-per-test runner like `cargo nextest`,
+///   or libtest no longer spawning a thread per test) the whole helper is
+///   removed at once — see "When this helper can be deleted" above.
+/// - Splitting the skip check back out to each caller re-introduces a real
+///   coupling: the caller's skip check and this function both depend on the
+///   same process-global init outcome, so the two calls would have to agree
+///   to be correct — and the skip branch must live here anyway, since the
+///   body cannot run when the Compositor is unavailable. Splitting buys no
+///   independence and would leave a now-vestigial COM init on the test
+///   thread, which step 1 exists to eliminate.
+///
+/// On panic the body's payload is caught on the owning thread and re-raised
+/// here via `resume_unwind`, so the failure surfaces on the calling libtest
+/// thread exactly as an inline `assert!` would.
+pub fn run_on_owning_runtime_thread_or_skip<F>(test_name: &str, body: F)
+where
+    F: FnOnce() + Send + 'static,
+{
     match ensure_runtime() {
-        InitOutcome::Ready => Some(()),
-        InitOutcome::CompositorUnavailable => {
+        Runtime::Ready(job_tx) => {
+            let (done_tx, done_rx) = mpsc::channel();
+            job_tx
+                .send(Box::new(move || {
+                    // Catch the body's panic on the owning thread so the
+                    // executor loop survives it, then hand the payload back
+                    // to the waiting test thread to re-raise.
+                    let outcome = catch_unwind(AssertUnwindSafe(body));
+                    let _ = done_tx.send(outcome);
+                }))
+                .expect("owning runtime thread has stopped accepting jobs");
+            match done_rx
+                .recv()
+                .expect("owning runtime thread dropped the test body without reporting")
+            {
+                Ok(()) => {}
+                Err(payload) => resume_unwind(payload),
+            }
+        }
+        Runtime::CompositorUnavailable => {
             assert!(
                 !github_actions(),
                 "{test_name} cannot skip on GitHub Actions: \
                  runtime compositor unavailable"
             );
             eprintln!("skipping {test_name}: runtime compositor unavailable");
-            None
         }
     }
 }
