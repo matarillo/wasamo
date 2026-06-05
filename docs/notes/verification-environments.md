@@ -196,46 +196,43 @@ of the process-global Compositor across libtest's per-test threads**; the
 remediation belongs in **test infrastructure**, not the runtime teardown
 path.
 
-**Remediation status.** Two-step, by owner direction:
+**Remediation status.** Two steps, by owner direction — **both now DONE**.
 
 - **Step 2 — keep-alive apartment — DONE (committed).** A shared
-  `wasamo-runtime/tests/common/mod.rs` initializes the runtime on a
-  dedicated thread that parks for the process lifetime, so the Compositor's
-  apartment and `dcomp.dll` stay resident for the whole test binary. The
-  five integration binaries with two or more Compositor tests (`scroll_view`,
-  `conditional_toggle`, `zstack`, `wrap_panel`, `grid`) route through it.
-  Result: the full `wasamo-runtime` suite (333 unit + all integration tests)
-  is green under `--test-threads=1`, where `scroll_view` / `wrap_panel` /
-  `grid` previously crashed deterministically. This makes CI reliably green
-  and is the safe point to merge.
-- **Step 1 — marshal Compositor work onto the owning thread — DEFERRED
-  (owner-scheduled).** Step 2 leaves the test bodies still calling the
-  Compositor from their own libtest threads — i.e. cross-apartment access to
-  non-agile Composition objects without marshalling. This works only while
-  `dcomp.dll` is held resident and is **not guaranteed by the COM apartment
-  contract** (UB-adjacent), though it is **test-harness-only** (production is
-  unaffected — see the disposition above). Step 1 runs each Compositor test
-  body on the single owning thread (the parked thread becomes a work-queue
-  executor), eliminating the cross-thread access and matching production's
-  single-UI-thread model. Whether and when to do it is an owner decision,
-  taken separately.
+  `wasamo-runtime/tests/common/mod.rs` first initialized the runtime on a
+  dedicated thread that *parked* for the process lifetime, keeping the
+  Compositor's apartment and `dcomp.dll` resident for the whole test binary.
+  The five integration binaries with two or more Compositor tests
+  (`scroll_view`, `conditional_toggle`, `zstack`, `wrap_panel`, `grid`) route
+  through it. This made the full `wasamo-runtime` suite (333 unit + all
+  integration tests) green under `--test-threads=1`, where `scroll_view` /
+  `wrap_panel` / `grid` previously crashed deterministically — the safe point
+  to merge CI green. Step 1 below then superseded the "merely parked" form.
+- **Step 1 — marshal Compositor work onto the owning thread — DONE
+  (committed).** Step 2 still left the test bodies calling the Compositor from
+  their own libtest threads — cross-apartment access to non-agile Composition
+  objects, safe only while `dcomp.dll` stayed resident and **not guaranteed by
+  the COM apartment contract** (UB-adjacent, though **test-harness-only**;
+  production unaffected — see the disposition above). Step 1 turns the parked
+  thread into a **work-queue executor**: `run_on_owning_runtime_thread_or_skip`
+  (replacing `init_runtime_or_skip`) ships each Compositor test body to that
+  one owning thread, where the Compositor is created *and used*, catching the
+  body's panic and re-raising it on the libtest thread so `#[test]` still
+  reports failures. The cross-apartment access is **eliminated, not merely
+  tolerated**, matching production's single-UI-thread model. Verified: full
+  suite green under `--test-threads=1`; a thread-identity probe confirmed test
+  bodies run on `wasamo-test-runtime-owner`, not the libtest thread; clean
+  rebuild green; and GitHub Actions CI (run 27014203528, commit `4d2cb3e`,
+  `cargo test --workspace`) green on the windows-latest runner.
 
-  *No hard deadline* (e.g. "before v1") is attached, because none is
-  justified: the residual is test-only, does not gate the release artifact
-  (`wasamo.dll` / the compiler are shipped, the tests are not), does not
-  reduce the tests' evidentiary value (they still exercise the real
-  Compositor and assert real runtime state — only the harness plumbing is
-  cross-apartment), and fails loudly and diagnosably (the same `0xC0000005`)
-  rather than silently if the reliance ever breaks. Instead, revisit Step 1
-  when any of these **triggers** fires:
-  - the cross-apartment path actually breaks again (a new access violation is
-    observed despite Step 2);
-  - the suite moves to a process-per-test runner (e.g. `cargo nextest`),
-    which would also let Step 2's keep-alive helper be deleted;
-  - a new test binary with two or more Compositor tests is added and wants
-    the canonical pattern;
-  - M4+ introduces interactive GUI tests (hover / click / animation) that
-    intrinsically require the owning thread and a message pump.
+The keep-alive/executor helper can be **deleted entirely** once the harness
+stops creating the precondition — a process-per-test runner (e.g.
+`cargo nextest`, each `#[test]` in its own process) or libtest no longer
+spawning a thread per test; either makes per-test inline init safe again. (The
+earlier list of step-1 revisit triggers is discharged: step 1 is done.) Two
+forward notes remain: a new test binary with two or more Compositor tests
+should adopt the same helper, and M4+ interactive GUI tests (hover / click /
+animation) will need this owning thread plus a message pump.
 
 **Regenerating the evidence (preferred over storing the binary dump).**
 The crash is 100% reproducible, so the dump is not retained in git (a

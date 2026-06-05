@@ -9,7 +9,7 @@
 #![cfg(windows)]
 
 mod common;
-use common::init_runtime_or_skip;
+use common::run_on_owning_runtime_thread_or_skip;
 
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Mutex, OnceLock};
@@ -152,76 +152,78 @@ const ORDER_SRC: &str = r#"component ConditionalOrder inherits Window {
 
 #[test]
 fn conditional_toggle_preserves_declared_visual_order_and_disposes_registry() {
-    let _guard = test_lock().lock().expect("test lock poisoned");
-    // Shared keep-alive init (this binary has multiple Compositor tests): the
-    // Compositor must outlive any single test thread. See tests/common/mod.rs.
-    if init_runtime_or_skip("conditional declared-order integration test").is_none() {
-        return;
-    }
-    DESTROY_COUNT.store(0, Ordering::SeqCst);
+    // Marshalled onto the runtime-owning thread (Observation 5 step 1): the
+    // Compositor is created and used on one thread. See tests/common/mod.rs.
+    run_on_owning_runtime_thread_or_skip(
+        "conditional declared-order integration test",
+        move || {
+            let _guard = test_lock().lock().expect("test lock poisoned");
+            DESTROY_COUNT.store(0, Ordering::SeqCst);
 
-    let ir = lower_ui_to_ir(ORDER_SRC);
-    let component = parse_ir(&ir).expect("parse_ir failed");
-    let compositor = wasamo_runtime::get_compositor();
-    let text_renderer = wasamo_runtime::get_text_renderer();
-    let mut built =
-        build_widget_tree(&component, compositor, text_renderer).expect("build_widget_tree failed");
+            let ir = lower_ui_to_ir(ORDER_SRC);
+            let component = parse_ir(&ir).expect("parse_ir failed");
+            let compositor = wasamo_runtime::get_compositor();
+            let text_renderer = wasamo_runtime::get_text_renderer();
+            let mut built = build_widget_tree(&component, compositor, text_renderer)
+                .expect("build_widget_tree failed");
 
-    assert_order(
-        &built.root,
-        &["bottom", "first", "second", "top"],
-        "initial both-present state",
-    );
+            assert_order(
+                &built.root,
+                &["bottom", "first", "second", "top"],
+                "initial both-present state",
+            );
 
-    let first_token = connect_destroy_counted_signal(&mut built.root.children[1]);
-    assert!(first_token != 0, "signal token must be non-zero");
-    assert_eq!(
-        ffi::__signal_tokens_for_test(
-            built.root.children[1].as_mut() as *mut WidgetNode as *mut ffi::WasamoWidget,
-            "clicked",
-        ),
-        vec![first_token],
-        "test registration must be visible before subtree removal"
-    );
+            let first_token = connect_destroy_counted_signal(&mut built.root.children[1]);
+            assert!(first_token != 0, "signal token must be non-zero");
+            assert_eq!(
+                ffi::__signal_tokens_for_test(
+                    built.root.children[1].as_mut() as *mut WidgetNode as *mut ffi::WasamoWidget,
+                    "clicked",
+                ),
+                vec![first_token],
+                "test registration must be visible before subtree removal"
+            );
 
-    assert!(built.__set_bool_state_for_test("first", false));
-    assert_order(
-        &built.root,
-        &["bottom", "second", "top"],
-        "preceding conditional removed while following conditional remains",
-    );
-    assert_eq!(
-        DESTROY_COUNT.load(Ordering::SeqCst),
-        1,
-        "widget_destroy must sever registry entries in the absent subtree"
-    );
+            assert!(built.__set_bool_state_for_test("first", false));
+            assert_order(
+                &built.root,
+                &["bottom", "second", "top"],
+                "preceding conditional removed while following conditional remains",
+            );
+            assert_eq!(
+                DESTROY_COUNT.load(Ordering::SeqCst),
+                1,
+                "widget_destroy must sever registry entries in the absent subtree"
+            );
 
-    assert!(built.__set_bool_state_for_test("first", false));
-    assert_order(
-        &built.root,
-        &["bottom", "second", "top"],
-        "false-to-false re-evaluation is a no-op",
-    );
+            assert!(built.__set_bool_state_for_test("first", false));
+            assert_order(
+                &built.root,
+                &["bottom", "second", "top"],
+                "false-to-false re-evaluation is a no-op",
+            );
 
-    assert!(built.__set_bool_state_for_test("first", true));
-    assert_order(
-        &built.root,
-        &["bottom", "first", "second", "top"],
-        "re-presented preceding conditional returns to declared slot",
-    );
+            assert!(built.__set_bool_state_for_test("first", true));
+            assert_order(
+                &built.root,
+                &["bottom", "first", "second", "top"],
+                "re-presented preceding conditional returns to declared slot",
+            );
 
-    assert!(built.__set_bool_state_for_test("first", true));
-    assert_order(
-        &built.root,
-        &["bottom", "first", "second", "top"],
-        "true-to-true re-evaluation is a no-op",
-    );
+            assert!(built.__set_bool_state_for_test("first", true));
+            assert_order(
+                &built.root,
+                &["bottom", "first", "second", "top"],
+                "true-to-true re-evaluation is a no-op",
+            );
 
-    assert!(built.__set_bool_state_for_test("second", false));
-    assert_order(
-        &built.root,
-        &["bottom", "first", "top"],
-        "following conditional removed after preceding conditional is present",
+            assert!(built.__set_bool_state_for_test("second", false));
+            assert_order(
+                &built.root,
+                &["bottom", "first", "top"],
+                "following conditional removed after preceding conditional is present",
+            );
+        },
     );
 }
 
@@ -241,68 +243,70 @@ const ZSTACK_PLACEMENT_SRC: &str = r#"component ConditionalZStackPlacement inher
 
 #[test]
 fn conditional_zstack_reinsert_uses_declared_placement_metadata() {
-    let _guard = test_lock().lock().expect("test lock poisoned");
-    // Shared keep-alive init (this binary has multiple Compositor tests): the
-    // Compositor must outlive any single test thread. See tests/common/mod.rs.
-    if init_runtime_or_skip("conditional ZStack placement integration test").is_none() {
-        return;
-    }
+    // Marshalled onto the runtime-owning thread (Observation 5 step 1): the
+    // Compositor is created and used on one thread. See tests/common/mod.rs.
+    run_on_owning_runtime_thread_or_skip(
+        "conditional ZStack placement integration test",
+        move || {
+            let _guard = test_lock().lock().expect("test lock poisoned");
 
-    let ir = lower_ui_to_ir(ZSTACK_PLACEMENT_SRC);
-    let component = parse_ir(&ir).expect("parse_ir failed");
-    let compositor = wasamo_runtime::get_compositor();
-    let text_renderer = wasamo_runtime::get_text_renderer();
-    let mut built =
-        build_widget_tree(&component, compositor, text_renderer).expect("build_widget_tree failed");
+            let ir = lower_ui_to_ir(ZSTACK_PLACEMENT_SRC);
+            let component = parse_ir(&ir).expect("parse_ir failed");
+            let compositor = wasamo_runtime::get_compositor();
+            let text_renderer = wasamo_runtime::get_text_renderer();
+            let mut built = build_widget_tree(&component, compositor, text_renderer)
+                .expect("build_widget_tree failed");
 
-    built
-        .root
-        .run_layout_as_window_root(300.0, 200.0)
-        .expect("initial run_layout_as_window_root failed");
-    assert_eq!(
-        built.root.children.len(),
-        1,
-        "initial false condition must not materialise the aligned child"
-    );
+            built
+                .root
+                .run_layout_as_window_root(300.0, 200.0)
+                .expect("initial run_layout_as_window_root failed");
+            assert_eq!(
+                built.root.children.len(),
+                1,
+                "initial false condition must not materialise the aligned child"
+            );
 
-    assert!(built.__set_bool_state_for_test("open", true));
-    built
-        .root
-        .run_layout_as_window_root(300.0, 200.0)
-        .expect("open run_layout_as_window_root failed");
-    assert_eq!(
-        built.root.children.len(),
-        2,
-        "open=true must insert the aligned child"
-    );
-    let edge = visual_of(&built.root.children[1]);
-    let (x, y) = visual_offset(&edge);
-    let (w, h) = visual_size(&edge);
-    assert!(
-        w > 0.0 && h > 0.0,
-        "aligned child must have a non-zero measured size; got ({w}, {h})"
-    );
-    assert_close(y, 0.0, "dynamic ZStack v-align=start offset");
-    assert_close(
-        x + w,
-        300.0,
-        "dynamic ZStack h-align=end right edge after insert",
-    );
+            assert!(built.__set_bool_state_for_test("open", true));
+            built
+                .root
+                .run_layout_as_window_root(300.0, 200.0)
+                .expect("open run_layout_as_window_root failed");
+            assert_eq!(
+                built.root.children.len(),
+                2,
+                "open=true must insert the aligned child"
+            );
+            let edge = visual_of(&built.root.children[1]);
+            let (x, y) = visual_offset(&edge);
+            let (w, h) = visual_size(&edge);
+            assert!(
+                w > 0.0 && h > 0.0,
+                "aligned child must have a non-zero measured size; got ({w}, {h})"
+            );
+            assert_close(y, 0.0, "dynamic ZStack v-align=start offset");
+            assert_close(
+                x + w,
+                300.0,
+                "dynamic ZStack h-align=end right edge after insert",
+            );
 
-    assert!(built.__set_bool_state_for_test("open", false));
-    assert!(built.__set_bool_state_for_test("open", true));
-    built
-        .root
-        .run_layout_as_window_root(300.0, 200.0)
-        .expect("re-open run_layout_as_window_root failed");
-    let edge = visual_of(&built.root.children[1]);
-    let (x, y) = visual_offset(&edge);
-    let (w, _) = visual_size(&edge);
-    assert_close(y, 0.0, "dynamic ZStack v-align=start offset after reinsert");
-    assert_close(
-        x + w,
-        300.0,
-        "dynamic ZStack h-align=end right edge after reinsert",
+            assert!(built.__set_bool_state_for_test("open", false));
+            assert!(built.__set_bool_state_for_test("open", true));
+            built
+                .root
+                .run_layout_as_window_root(300.0, 200.0)
+                .expect("re-open run_layout_as_window_root failed");
+            let edge = visual_of(&built.root.children[1]);
+            let (x, y) = visual_offset(&edge);
+            let (w, _) = visual_size(&edge);
+            assert_close(y, 0.0, "dynamic ZStack v-align=start offset after reinsert");
+            assert_close(
+                x + w,
+                300.0,
+                "dynamic ZStack h-align=end right edge after reinsert",
+            );
+        },
     );
 }
 
@@ -329,54 +333,53 @@ fn read_button_enabled(button: &WidgetNode) -> bool {
 
 #[test]
 fn conditional_toggle_drains_fresh_subtree_effects_before_return() {
-    let _guard = test_lock().lock().expect("test lock poisoned");
-    // Shared keep-alive init (this binary has multiple Compositor tests): the
-    // Compositor must outlive any single test thread. See tests/common/mod.rs.
-    if init_runtime_or_skip("conditional drain integration test").is_none() {
-        return;
-    }
+    // Marshalled onto the runtime-owning thread (Observation 5 step 1): the
+    // Compositor is created and used on one thread. See tests/common/mod.rs.
+    run_on_owning_runtime_thread_or_skip("conditional drain integration test", move || {
+        let _guard = test_lock().lock().expect("test lock poisoned");
 
-    let ir = lower_ui_to_ir(DRAIN_SRC);
-    let component = parse_ir(&ir).expect("parse_ir failed");
-    let compositor = wasamo_runtime::get_compositor();
-    let text_renderer = wasamo_runtime::get_text_renderer();
-    let built =
-        build_widget_tree(&component, compositor, text_renderer).expect("build_widget_tree failed");
+        let ir = lower_ui_to_ir(DRAIN_SRC);
+        let component = parse_ir(&ir).expect("parse_ir failed");
+        let compositor = wasamo_runtime::get_compositor();
+        let text_renderer = wasamo_runtime::get_text_renderer();
+        let built = build_widget_tree(&component, compositor, text_renderer)
+            .expect("build_widget_tree failed");
 
-    assert_eq!(
-        built.root.children.len(),
-        2,
-        "initial false condition must not materialise the Button subtree"
-    );
+        assert_eq!(
+            built.root.children.len(),
+            2,
+            "initial false condition must not materialise the Button subtree"
+        );
 
-    assert!(built.__set_bool_state_for_test("open", true));
-    assert_eq!(
-        built.root.children.len(),
-        3,
-        "open=true must synchronously insert the conditional Button"
-    );
-    assert!(
-        read_button_enabled(&built.root.children[1]),
-        "fresh Button.enabled binding must run before the open setter returns"
-    );
+        assert!(built.__set_bool_state_for_test("open", true));
+        assert_eq!(
+            built.root.children.len(),
+            3,
+            "open=true must synchronously insert the conditional Button"
+        );
+        assert!(
+            read_button_enabled(&built.root.children[1]),
+            "fresh Button.enabled binding must run before the open setter returns"
+        );
 
-    assert!(built.__set_bool_state_for_test("open", false));
-    assert_eq!(
-        built.root.children.len(),
-        2,
-        "open=false must synchronously remove the conditional Button"
-    );
+        assert!(built.__set_bool_state_for_test("open", false));
+        assert_eq!(
+            built.root.children.len(),
+            2,
+            "open=false must synchronously remove the conditional Button"
+        );
 
-    assert!(built.__set_bool_state_for_test("enabled_state", false));
-    assert!(built.__set_bool_state_for_test("open", true));
-    assert_eq!(
-        built.root.children.len(),
-        3,
-        "re-open must rebuild the conditional Button"
-    );
-    assert!(
-        !read_button_enabled(&built.root.children[1]),
-        "freshly rebuilt Button must observe the latest enabled_state \
+        assert!(built.__set_bool_state_for_test("enabled_state", false));
+        assert!(built.__set_bool_state_for_test("open", true));
+        assert_eq!(
+            built.root.children.len(),
+            3,
+            "re-open must rebuild the conditional Button"
+        );
+        assert!(
+            !read_button_enabled(&built.root.children[1]),
+            "freshly rebuilt Button must observe the latest enabled_state \
          before the open setter returns"
-    );
+        );
+    });
 }

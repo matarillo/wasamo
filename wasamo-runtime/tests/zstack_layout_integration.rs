@@ -14,7 +14,7 @@
 #![cfg(windows)]
 
 mod common;
-use common::init_runtime_or_skip;
+use common::run_on_owning_runtime_thread_or_skip;
 
 use wasamo_runtime::ir_loader::{build_widget_tree, parse_ir};
 use wasamo_runtime::WidgetNode;
@@ -161,79 +161,78 @@ const VSTACK_ZSTACK_SRC: &str = r#"component VStackZStackRoot inherits Window {
 
 #[test]
 fn zstack_rooted_fixture_preserves_live_visual_order_and_clip() {
-    // Shared keep-alive init (this binary has multiple Compositor tests): the
-    // Compositor must outlive any single test thread. See tests/common/mod.rs.
-    if init_runtime_or_skip("ZStack-rooted layout integration test").is_none() {
-        return;
-    }
+    // Marshalled onto the runtime-owning thread (Observation 5 step 1): the
+    // Compositor is created and used on one thread. See tests/common/mod.rs.
+    run_on_owning_runtime_thread_or_skip("ZStack-rooted layout integration test", move || {
+        let ir = lower_ui_to_ir(ZSTACK_ROOT_SRC);
+        let component = parse_ir(&ir).expect("parse_ir failed");
+        let compositor = wasamo_runtime::get_compositor();
+        let text_renderer = wasamo_runtime::get_text_renderer();
+        let mut built = build_widget_tree(&component, compositor, text_renderer)
+            .expect("build_widget_tree failed");
 
-    let ir = lower_ui_to_ir(ZSTACK_ROOT_SRC);
-    let component = parse_ir(&ir).expect("parse_ir failed");
-    let compositor = wasamo_runtime::get_compositor();
-    let text_renderer = wasamo_runtime::get_text_renderer();
-    let mut built =
-        build_widget_tree(&component, compositor, text_renderer).expect("build_widget_tree failed");
+        built
+            .root
+            .run_layout_as_window_root(300.0, 200.0)
+            .expect("run_layout_as_window_root failed");
 
-    built
-        .root
-        .run_layout_as_window_root(300.0, 200.0)
-        .expect("run_layout_as_window_root failed");
-
-    let root = built.root.as_ref();
-    let z_visual = visual_of(root);
-    let (zx, zy) = visual_offset(&z_visual);
-    let (zw, zh) = visual_size(&z_visual);
-    assert_close(zx, 0.0, "ZStack root x");
-    assert_close(zy, 0.0, "ZStack root y");
-    assert_close(zw, 300.0, "ZStack root width");
-    assert_close(zh, 200.0, "ZStack root height");
-    assert_zstack_visual_contract(root, "ZStack-rooted fixture");
+        let root = built.root.as_ref();
+        let z_visual = visual_of(root);
+        let (zx, zy) = visual_offset(&z_visual);
+        let (zw, zh) = visual_size(&z_visual);
+        assert_close(zx, 0.0, "ZStack root x");
+        assert_close(zy, 0.0, "ZStack root y");
+        assert_close(zw, 300.0, "ZStack root width");
+        assert_close(zh, 200.0, "ZStack root height");
+        assert_zstack_visual_contract(root, "ZStack-rooted fixture");
+    });
 }
 
 #[test]
 fn zstack_vstack_root_fixture_pins_production_root_shape() {
-    // Shared keep-alive init (this binary has multiple Compositor tests): the
-    // Compositor must outlive any single test thread. See tests/common/mod.rs.
-    if init_runtime_or_skip("VStack-rooted ZStack layout integration test").is_none() {
-        return;
-    }
+    // Marshalled onto the runtime-owning thread (Observation 5 step 1): the
+    // Compositor is created and used on one thread. See tests/common/mod.rs.
+    run_on_owning_runtime_thread_or_skip(
+        "VStack-rooted ZStack layout integration test",
+        move || {
+            let ir = lower_ui_to_ir(VSTACK_ZSTACK_SRC);
+            let component = parse_ir(&ir).expect("parse_ir failed");
+            let compositor = wasamo_runtime::get_compositor();
+            let text_renderer = wasamo_runtime::get_text_renderer();
+            let mut built = build_widget_tree(&component, compositor, text_renderer)
+                .expect("build_widget_tree failed");
 
-    let ir = lower_ui_to_ir(VSTACK_ZSTACK_SRC);
-    let component = parse_ir(&ir).expect("parse_ir failed");
-    let compositor = wasamo_runtime::get_compositor();
-    let text_renderer = wasamo_runtime::get_text_renderer();
-    let mut built =
-        build_widget_tree(&component, compositor, text_renderer).expect("build_widget_tree failed");
+            assert_eq!(
+                built.root.children.len(),
+                2,
+                "VStack root must have two children (Button + ZStack)"
+            );
 
-    assert_eq!(
-        built.root.children.len(),
-        2,
-        "VStack root must have two children (Button + ZStack)"
-    );
+            built
+                .root
+                .run_layout_as_window_root(300.0, 200.0)
+                .expect("run_layout_as_window_root failed");
 
-    built
-        .root
-        .run_layout_as_window_root(300.0, 200.0)
-        .expect("run_layout_as_window_root failed");
-
-    let zstack = &built.root.children[1];
-    let z_visual = visual_of(zstack);
-    let (zx, zy) = visual_offset(&z_visual);
-    let (zw, zh) = visual_size(&z_visual);
-    assert_close(zx, 0.0, "ZStack offset x within VStack");
-    assert!(
-        zy > 0.0,
-        "ZStack must sit below the Button within the VStack; got offset y {zy}"
+            let zstack = &built.root.children[1];
+            let z_visual = visual_of(zstack);
+            let (zx, zy) = visual_offset(&z_visual);
+            let (zw, zh) = visual_size(&z_visual);
+            assert_close(zx, 0.0, "ZStack offset x within VStack");
+            assert!(
+                zy > 0.0,
+                "ZStack must sit below the Button within the VStack; got offset y {zy}"
+            );
+            assert_close(zw, 300.0, "ZStack width = VStack allocation");
+            assert!(
+                zh > 0.0,
+                "ZStack outer Visual height must be > 0 in the production root shape; got {zh}"
+            );
+            assert_close(
+                zy + zh,
+                200.0,
+                "ZStack bottom = window bottom (Fill/Fill child receives remaining height)",
+            );
+            assert_zstack_visual_contract(zstack, "VStack-rooted fixture");
+        },
     );
-    assert_close(zw, 300.0, "ZStack width = VStack allocation");
-    assert!(
-        zh > 0.0,
-        "ZStack outer Visual height must be > 0 in the production root shape; got {zh}"
-    );
-    assert_close(
-        zy + zh,
-        200.0,
-        "ZStack bottom = window bottom (Fill/Fill child receives remaining height)",
-    );
-    assert_zstack_visual_contract(zstack, "VStack-rooted fixture");
 }

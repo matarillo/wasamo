@@ -35,7 +35,7 @@
 //!       regression guard, symmetric with the Phase 3 T8 WrapPanel and
 //!       Phase 4 ScrollView precedents.
 //!
-//! Skip-guard (`init_runtime_or_skip`) is reused verbatim from the
+//! Skip-guard (now `run_on_owning_runtime_thread_or_skip`) keeps the
 //! Phase 2 T11 / Phase 3 T8 / Phase 4 T4 pattern: fail (not skip) on the
 //! GitHub Actions runner; locally skip on `0x80070005` (E_ACCESSDENIED)
 //! from `wasamo_init`. Phase 5 introduces no separate runtime capability
@@ -65,7 +65,7 @@
 #![cfg(windows)]
 
 mod common;
-use common::init_runtime_or_skip;
+use common::run_on_owning_runtime_thread_or_skip;
 
 use wasamo_runtime::ir_loader::{build_widget_tree, parse_ir};
 use wasamo_runtime::WidgetNode;
@@ -201,44 +201,42 @@ const GRID_ROOT_H: f32 = 200.0;
 
 #[test]
 fn grid_rooted_fixture_lays_out_cells_through_visual_tree() {
-    // Shared keep-alive init (this binary has multiple Compositor tests): the
-    // Compositor must outlive any single test thread. See tests/common/mod.rs.
-    if init_runtime_or_skip("Grid-rooted layout integration test").is_none() {
-        return;
-    }
+    // Marshalled onto the runtime-owning thread (Observation 5 step 1): the
+    // Compositor is created and used on one thread. See tests/common/mod.rs.
+    run_on_owning_runtime_thread_or_skip("Grid-rooted layout integration test", move || {
+        let ir = lower_ui_to_ir(GRID_ROOT_SRC);
+        let component = parse_ir(&ir).expect("parse_ir failed");
+        let compositor = wasamo_runtime::get_compositor();
+        let text_renderer = wasamo_runtime::get_text_renderer();
+        let mut built = build_widget_tree(&component, compositor, text_renderer)
+            .expect("build_widget_tree failed");
 
-    let ir = lower_ui_to_ir(GRID_ROOT_SRC);
-    let component = parse_ir(&ir).expect("parse_ir failed");
-    let compositor = wasamo_runtime::get_compositor();
-    let text_renderer = wasamo_runtime::get_text_renderer();
-    let mut built =
-        build_widget_tree(&component, compositor, text_renderer).expect("build_widget_tree failed");
+        // Drive the production window-root entry point (Phase 4 T6).
+        built
+            .root
+            .run_layout_as_window_root(GRID_ROOT_W, GRID_ROOT_H)
+            .expect("run_layout_as_window_root failed");
 
-    // Drive the production window-root entry point (Phase 4 T6).
-    built
-        .root
-        .run_layout_as_window_root(GRID_ROOT_W, GRID_ROOT_H)
-        .expect("run_layout_as_window_root failed");
+        let root = built.root.as_ref();
 
-    let root = built.root.as_ref();
+        // (a) Grid's resolved rectangle equals the window allocation.
+        let grid_visual = visual_of(root);
+        let (gx, gy) = visual_offset(&grid_visual);
+        let (gw, gh) = visual_size(&grid_visual);
+        assert_close(gx, 0.0, "Grid outer x");
+        assert_close(gy, 0.0, "Grid outer y");
+        assert_close(gw, GRID_ROOT_W, "Grid outer width = window allocation");
+        assert_close(gh, GRID_ROOT_H, "Grid outer height = window allocation");
 
-    // (a) Grid's resolved rectangle equals the window allocation.
-    let grid_visual = visual_of(root);
-    let (gx, gy) = visual_offset(&grid_visual);
-    let (gw, gh) = visual_size(&grid_visual);
-    assert_close(gx, 0.0, "Grid outer x");
-    assert_close(gy, 0.0, "Grid outer y");
-    assert_close(gw, GRID_ROOT_W, "Grid outer width = window allocation");
-    assert_close(gh, GRID_ROOT_H, "Grid outer height = window allocation");
-
-    // Columns `100 1*` @ width 300 → [100, 200]; boundaries [0, 100, 300].
-    // Rows    `50 1*`  @ height 200 → [50, 150]; boundaries [0, 50, 200].
-    let expected = [
-        (0.0, 0.0, 100.0, 50.0),   // cell 0: (row 0, col 0)
-        (100.0, 0.0, 200.0, 50.0), // cell 1: (row 0, col 1)
-        (0.0, 50.0, 300.0, 150.0), // cell 2: (row 1, col 0, col-span 2)
-    ];
-    assert_grid_cells(root, &expected);
+        // Columns `100 1*` @ width 300 → [100, 200]; boundaries [0, 100, 300].
+        // Rows    `50 1*`  @ height 200 → [50, 150]; boundaries [0, 50, 200].
+        let expected = [
+            (0.0, 0.0, 100.0, 50.0),   // cell 0: (row 0, col 0)
+            (100.0, 0.0, 200.0, 50.0), // cell 1: (row 0, col 1)
+            (0.0, 50.0, 300.0, 150.0), // cell 2: (row 1, col 0, col-span 2)
+        ];
+        assert_grid_cells(root, &expected);
+    });
 }
 
 // ── Fixture 2: VStack { Button + Grid } (production root shape) ──────────────
@@ -265,85 +263,83 @@ const VSTACK_GRID_H: f32 = 200.0;
 
 #[test]
 fn grid_vstack_root_fixture_pins_production_root_shape() {
-    // Shared keep-alive init (this binary has multiple Compositor tests): the
-    // Compositor must outlive any single test thread. See tests/common/mod.rs.
-    if init_runtime_or_skip("VStack-rooted Grid layout integration test").is_none() {
-        return;
-    }
+    // Marshalled onto the runtime-owning thread (Observation 5 step 1): the
+    // Compositor is created and used on one thread. See tests/common/mod.rs.
+    run_on_owning_runtime_thread_or_skip("VStack-rooted Grid layout integration test", move || {
+        let ir = lower_ui_to_ir(VSTACK_GRID_SRC);
+        let component = parse_ir(&ir).expect("parse_ir failed");
+        let compositor = wasamo_runtime::get_compositor();
+        let text_renderer = wasamo_runtime::get_text_renderer();
+        let mut built = build_widget_tree(&component, compositor, text_renderer)
+            .expect("build_widget_tree failed");
 
-    let ir = lower_ui_to_ir(VSTACK_GRID_SRC);
-    let component = parse_ir(&ir).expect("parse_ir failed");
-    let compositor = wasamo_runtime::get_compositor();
-    let text_renderer = wasamo_runtime::get_text_renderer();
-    let mut built =
-        build_widget_tree(&component, compositor, text_renderer).expect("build_widget_tree failed");
+        {
+            let root = built.root.as_mut();
+            assert_eq!(
+                root.children.len(),
+                2,
+                "VStack root must have two children (Button + Grid)"
+            );
+        }
 
-    {
-        let root = built.root.as_mut();
-        assert_eq!(
-            root.children.len(),
-            2,
-            "VStack root must have two children (Button + Grid)"
+        // Drive the production WinRT-bound window-root entry point. Prior to
+        // the Phase 4 T6 fix a Fill Grid child of a Shrink VStack root would
+        // collapse to a zero-extent outer Visual; `run_layout_as_window_root`
+        // forces the VStack root Fill/Fill so the Grid receives the remaining
+        // viewport height after the Button's Fixed height.
+        built
+            .root
+            .run_layout_as_window_root(VSTACK_GRID_W, VSTACK_GRID_H)
+            .expect("run_layout_as_window_root failed");
+
+        let grid = &built.root.children[1];
+
+        // (a) Grid's resolved rectangle matches the VStack allocation: full
+        // width, and a non-zero remaining height (the regression gate for
+        // the Phase 4 T6 collapse class — a zero height would mean the Shrink
+        // VStack root collapsed its Fill Grid child).
+        let grid_visual = visual_of(grid);
+        let (gx, gy) = visual_offset(&grid_visual);
+        let (gw, gh) = visual_size(&grid_visual);
+        assert_close(gx, 0.0, "Grid offset x within VStack");
+        assert!(
+            gy > 0.0,
+            "Grid must sit below the Button within the VStack; got offset y {gy}"
         );
-    }
-
-    // Drive the production WinRT-bound window-root entry point. Prior to
-    // the Phase 4 T6 fix a Fill Grid child of a Shrink VStack root would
-    // collapse to a zero-extent outer Visual; `run_layout_as_window_root`
-    // forces the VStack root Fill/Fill so the Grid receives the remaining
-    // viewport height after the Button's Fixed height.
-    built
-        .root
-        .run_layout_as_window_root(VSTACK_GRID_W, VSTACK_GRID_H)
-        .expect("run_layout_as_window_root failed");
-
-    let grid = &built.root.children[1];
-
-    // (a) Grid's resolved rectangle matches the VStack allocation: full
-    // width, and a non-zero remaining height (the regression gate for
-    // the Phase 4 T6 collapse class — a zero height would mean the Shrink
-    // VStack root collapsed its Fill Grid child).
-    let grid_visual = visual_of(grid);
-    let (gx, gy) = visual_offset(&grid_visual);
-    let (gw, gh) = visual_size(&grid_visual);
-    assert_close(gx, 0.0, "Grid offset x within VStack");
-    assert!(
-        gy > 0.0,
-        "Grid must sit below the Button within the VStack; got offset y {gy}"
-    );
-    assert_close(
-        gw,
-        VSTACK_GRID_W,
-        "Grid width = VStack allocation (full width)",
-    );
-    assert!(
-        gh > 0.0,
-        "regression gate (Phase 4 T6 fix class): Grid outer Visual height \
+        assert_close(
+            gw,
+            VSTACK_GRID_W,
+            "Grid width = VStack allocation (full width)",
+        );
+        assert!(
+            gh > 0.0,
+            "regression gate (Phase 4 T6 fix class): Grid outer Visual height \
          must be > 0 when the production WidgetNode::run_layout_as_window_root \
          drives a VStack-rooted fixture; got {gh}. A zero height indicates \
          the Shrink VStack root collapsed its Fill Grid child.",
-    );
-    // The Grid spans from below the Button to the window's bottom edge:
-    // its outer height equals the *parent allocation* (window height minus
-    // the Button's font-derived height), not the resolved track sum
-    // (50 + 50 = 100). Pinning `gy + gh == VSTACK_GRID_H` — rather than a
-    // literal height — keeps the assertion font-metric independent while
-    // catching an `arrange_grid` regression that set the bounded-axis
-    // outer extent to the track sum instead of the parent allocation
-    // (`gh > 0` alone would pass such a regression).
-    assert_close(
-        gy + gh,
-        VSTACK_GRID_H,
-        "Grid bottom = window bottom (outer height = parent allocation, not track sum)",
-    );
+        );
+        // The Grid spans from below the Button to the window's bottom edge:
+        // its outer height equals the *parent allocation* (window height minus
+        // the Button's font-derived height), not the resolved track sum
+        // (50 + 50 = 100). Pinning `gy + gh == VSTACK_GRID_H` — rather than a
+        // literal height — keeps the assertion font-metric independent while
+        // catching an `arrange_grid` regression that set the bounded-axis
+        // outer extent to the track sum instead of the parent allocation
+        // (`gh > 0` alone would pass such a regression).
+        assert_close(
+            gy + gh,
+            VSTACK_GRID_H,
+            "Grid bottom = window bottom (outer height = parent allocation, not track sum)",
+        );
 
-    // Columns `100 1*` @ width 300 → boundaries [0, 100, 300].
-    // Rows `50 50` (fixed) → boundaries [0, 50, 100], deterministic
-    // regardless of the variable Grid outer height the VStack allocates.
-    let expected = [
-        (0.0, 0.0, 100.0, 50.0),   // cell 0: (row 0, col 0)
-        (100.0, 0.0, 200.0, 50.0), // cell 1: (row 0, col 1)
-        (0.0, 50.0, 300.0, 50.0),  // cell 2: (row 1, col 0, col-span 2)
-    ];
-    assert_grid_cells(grid, &expected);
+        // Columns `100 1*` @ width 300 → boundaries [0, 100, 300].
+        // Rows `50 50` (fixed) → boundaries [0, 50, 100], deterministic
+        // regardless of the variable Grid outer height the VStack allocates.
+        let expected = [
+            (0.0, 0.0, 100.0, 50.0),   // cell 0: (row 0, col 0)
+            (100.0, 0.0, 200.0, 50.0), // cell 1: (row 0, col 1)
+            (0.0, 50.0, 300.0, 50.0),  // cell 2: (row 1, col 0, col-span 2)
+        ];
+        assert_grid_cells(grid, &expected);
+    });
 }
