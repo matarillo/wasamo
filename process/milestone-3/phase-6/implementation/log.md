@@ -228,6 +228,18 @@
 
 ## CI / verification log
 
+- **2026-06-05 / T5 follow-up clean rebuild (post-commits `cc5d130`,
+  `35c2d88`, `f7a2281`):** `cargo clean` completed (`5311 files,
+  1.4GiB` removed); `cargo fmt --all -- --check` — green;
+  `cargo build --release --workspace` — green (57.88s);
+  `cargo build --workspace` — green (47.89s). First
+  `cargo test --workspace` run hit a `scroll_view_layout_integration`
+  process-exit access violation after individual assertions had passed;
+  the three ScrollView integration tests were rerun individually and were
+  green, and the subsequent `cargo test --workspace` rerun was green
+  (`wasamo-runtime` lib 333, `wasamoc` 316, `wasamo-ir` 17, integration
+  suites all green, 0 failed). Existing Cargo warnings about the `wasamo`
+  linkable target / `wasamo-sys` import-library ordering were observed.
 - **2026-06-05 / T5 local scoped:** `cargo test -p wasamo-runtime --test
   conditional_toggle_integration` — green (2 tests). Added
   `conditional_toggle_preserves_declared_visual_order_and_disposes_registry`
