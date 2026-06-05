@@ -337,6 +337,16 @@ pub enum MutationError {
     AlreadyAttached,
 }
 
+fn mutation_error_to_winerr(err: MutationError) -> windows::core::Error {
+    use windows::core::{Error, HRESULT};
+    const E_FAIL: HRESULT = HRESULT(0x80004005_u32 as i32);
+    let msg = match err {
+        MutationError::IndexOutOfBounds => "Widget child mutation index out of bounds",
+        MutationError::AlreadyAttached => "Widget child is already attached",
+    };
+    Error::new(E_FAIL, msg)
+}
+
 impl WidgetNode {
     // ── Constructors ──────────────────────────────────────────────────────────
 
@@ -1273,17 +1283,9 @@ impl WidgetNode {
         }
     }
 
-    pub fn append_child(&mut self, mut child: Box<WidgetNode>) -> windows::core::Result<()> {
-        use windows::core::Interface;
-        // For ScrollView, route the child into the intermediate content
-        // Visual instead of the outer clipped Visual (DD-M3-P4-004
-        // Option A). Every other widget routes into `self.visual`.
-        let parent_container: ContainerVisual = self.content_container_visual().cast()?;
-        let child_visual: Visual = child.visual.cast()?;
-        parent_container.Children()?.InsertAtTop(&child_visual)?;
-        child.attached = true;
-        self.children.push(child);
-        Ok(())
+    pub fn append_child(&mut self, child: Box<WidgetNode>) -> windows::core::Result<()> {
+        self.insert_child_inner(self.children.len(), child, None)
+            .map_err(mutation_error_to_winerr)
     }
 
     // ── Tree-mutation primitives (DD-M2-P4-001/002 = Option A) ───────────────
@@ -1292,10 +1294,48 @@ impl WidgetNode {
         self.children.len()
     }
 
+    #[doc(hidden)]
+    pub fn __text_content_for_test(&self) -> Option<&str> {
+        match &self.data {
+            WidgetData::Text { content, .. } => Some(content.as_str()),
+            _ => None,
+        }
+    }
+
+    #[doc(hidden)]
+    pub fn __button_enabled_for_test(&self) -> Option<bool> {
+        match &self.data {
+            WidgetData::Button(button) => Some(button.enabled),
+            _ => None,
+        }
+    }
+
+    pub(crate) fn is_zstack(&self) -> bool {
+        matches!(self.data, WidgetData::ZStack { .. })
+    }
+
     pub fn insert_child(
         &mut self,
         index: usize,
+        child: Box<WidgetNode>,
+    ) -> Result<(), MutationError> {
+        self.insert_child_inner(index, child, None)
+    }
+
+    pub(crate) fn insert_child_with_zstack_placement(
+        &mut self,
+        index: usize,
+        child: Box<WidgetNode>,
+        placement: ZStackPlacement,
+    ) -> Result<(), MutationError> {
+        self.insert_child_inner(index, child, Some(placement))
+    }
+
+    fn insert_child_inner(
+        &mut self,
+        index: usize,
         mut child: Box<WidgetNode>,
+        zstack_placement: Option<ZStackPlacement>,
     ) -> Result<(), MutationError> {
         if index > self.children.len() {
             return Err(MutationError::IndexOutOfBounds);
@@ -1312,12 +1352,30 @@ impl WidgetNode {
             .visual
             .cast()
             .map_err(|_| MutationError::IndexOutOfBounds)?;
-        parent_container
+        let children_col = parent_container
             .Children()
-            .and_then(|c| c.InsertAtTop(&child_visual))
             .map_err(|_| MutationError::IndexOutOfBounds)?;
+        if index == self.children.len() {
+            children_col
+                .InsertAtTop(&child_visual)
+                .map_err(|_| MutationError::IndexOutOfBounds)?;
+        } else {
+            let sibling_visual: Visual = self.children[index]
+                .visual
+                .cast()
+                .map_err(|_| MutationError::IndexOutOfBounds)?;
+            children_col
+                .InsertBelow(&child_visual, &sibling_visual)
+                .map_err(|_| MutationError::IndexOutOfBounds)?;
+        }
         child.attached = true;
         self.children.insert(index, child);
+        if let WidgetData::ZStack { zstack_placements } = &mut self.data {
+            zstack_placements.insert(
+                index,
+                zstack_placement.unwrap_or(ZStackPlacement::centered()),
+            );
+        }
         Ok(())
     }
 
@@ -1339,6 +1397,9 @@ impl WidgetNode {
             .and_then(|c| c.Remove(&child_visual))
             .map_err(|_| MutationError::IndexOutOfBounds)?;
         let mut removed = self.children.remove(index);
+        if let WidgetData::ZStack { zstack_placements } = &mut self.data {
+            zstack_placements.remove(index);
+        }
         removed.attached = false;
         Ok(removed)
     }

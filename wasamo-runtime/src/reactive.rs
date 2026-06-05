@@ -585,6 +585,11 @@ pub(crate) type PropertyKey = u32;
 pub(crate) enum BindingTarget {
     /// Write to a widget property identified by its node pointer and property id.
     WidgetProperty { node: WidgetId, prop: PropertyKey },
+    /// Structurally insert/remove one conditional subtree under a parent.
+    ConditionalSubtree {
+        parent: WidgetId,
+        declared_member_index: usize,
+    },
 }
 
 /// Register a reactive binding that evaluates `expr` against `registry` and calls
@@ -599,7 +604,9 @@ pub(crate) fn register_binding(
     registry: Rc<SignalRegistry>,
     write_fn: fn(WidgetId, PropertyKey, &str),
 ) -> EffectHandle {
-    let BindingTarget::WidgetProperty { node, prop } = target;
+    let BindingTarget::WidgetProperty { node, prop } = target else {
+        panic!("register_binding called with non-property target");
+    };
     register_binding_with_writer(
         Box::new(move |value: String| write_fn(node, prop, &value)),
         expr,
@@ -637,7 +644,9 @@ pub(crate) fn register_bool_binding(
     registry: Rc<SignalRegistry>,
     write_fn: fn(WidgetId, PropertyKey, bool),
 ) -> EffectHandle {
-    let BindingTarget::WidgetProperty { node, prop } = target;
+    let BindingTarget::WidgetProperty { node, prop } = target else {
+        panic!("register_bool_binding called with non-property target");
+    };
     register_bool_binding_with_writer(
         Box::new(move |value: bool| write_fn(node, prop, value)),
         expr,
@@ -658,6 +667,28 @@ fn register_bool_binding_with_writer(
         match evaluate_bool_binding(&expr, &mut ctx) {
             Ok(value) => writer(value),
             Err(e) => eprintln!("wasamo: binding eval error: {e}"),
+        }
+    })
+}
+
+pub(crate) fn register_conditional_binding(
+    target: BindingTarget,
+    expr: HandlerExpr,
+    registry: Rc<SignalRegistry>,
+    mut mutate_fn: impl FnMut(WidgetId, usize, bool) + 'static,
+) -> EffectHandle {
+    let BindingTarget::ConditionalSubtree {
+        parent,
+        declared_member_index,
+    } = target
+    else {
+        panic!("register_conditional_binding called with non-conditional target");
+    };
+    EffectHandle::new(move || {
+        let mut ctx = BindingEvalContext::new(&registry);
+        match evaluate_bool_binding(&expr, &mut ctx) {
+            Ok(value) => mutate_fn(parent, declared_member_index, value),
+            Err(e) => eprintln!("wasamo: conditional binding eval error: {e}"),
         }
     })
 }

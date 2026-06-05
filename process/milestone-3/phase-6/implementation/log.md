@@ -1,5 +1,130 @@
 ## Decisions log
 
+- **2026-06-05 / T5 conditional reactive runtime:** T5 fills the
+  DD-M3-P6-004 / 005 structural binding seam without adding any IR / ABI /
+  grammar or host-facing error surface. `BindingTarget::ConditionalSubtree { parent,
+  declared_member_index }` is registered through a new
+  `register_conditional_binding` wrapper over `EffectHandle::new`; property
+  binding entry points now destructure `BindingTarget` refutably. The
+  runtime tracks each parent's declared member slots as
+  `DeclaredMemberSlot::{Widget, Conditional(state)}` while iterating
+  `IrMember` in declared order; the materialised insertion/removal index is
+  recomputed from preceding declared slots and each conditional's live
+  presence bit on every mutation. This closes the T4 carry-forward
+  constraint for T5's positional path: the traversal that materialises
+  conditionals and computes positional metadata dispatches on `IrMember`,
+  not `widget_children()`.
+- **2026-06-05 / T5 positional Visual + ZStack placement update:** The
+  `WidgetNode::insert_child` Visual operation is now index-aware: append
+  still uses `InsertAtTop`, while mid-list insertion uses `InsertBelow`
+  relative to the current child at the target index so live Visual sibling
+  order matches `WidgetNode.children`. Because ZStack stores
+  parent-owned child placement metadata parallel to materialised children,
+  dynamic insert/remove also updates the ZStack placement vector at the same
+  index (`insert_child_with_zstack_placement` / `remove_child`). This is the
+  T5 R-F closure and preserves the T4 traversal-audit rule for positional
+  metadata.
+- **2026-06-05 / T5 ZStack placement construction refactor:** The T5
+  positional-mutation fix also moved static ZStack placement construction
+  from a precomputed `collect_static_zstack_placements` vector to the same
+  per-child insertion path used for dynamic members:
+  `append_static_member` calls `insert_child_with_zstack_placement` whenever
+  the parent is ZStack. The old static reducer helpers
+  (`evaluate_static_condition`, `collect_static_zstack_placements`) are now
+  `#[cfg(test)]`; their unit tests still pin reducer logic and are now
+  commented as such, but no longer guard a production call-site directly.
+  The new load-bearing index reducer
+  `materialized_index_for_declared_member` has headless unit coverage in
+  `materialized_index_counts_preceding_widgets_and_live_conditionals`,
+  including the preceding-conditional removal shift. Production placement
+  evidence is covered by the ZStack Windows integration fixtures and T5's
+  `conditional_zstack_reinsert_uses_declared_placement_metadata`.
+- **2026-06-05 / T5 parent-owned metadata mutation constraint:** The
+  ZStack placement-vector fix surfaced a future-structural constraint:
+  under the current SoA model, any structural mutation primitive that changes
+  a materialised child list under a container with parent-owned positional
+  metadata must update that metadata atomically with `WidgetNode.children`
+  and the live Visual sibling order. T5 implements the single-child case for
+  conditional insert/remove, but this invariant is a cost of the current
+  parallel-vector representation, not a law that Phase 7 must preserve.
+  Phase 7 must decide the placement storage model before `ForLoopSubtree`:
+  keep SoA parallel vectors (affirm DD-M3-P6-002's implementation shape),
+  move placement onto child nodes / child records (AoS, superseding the
+  current shape), or use a `WidgetId`-keyed metadata map. Children ↔ Visual
+  order synchronisation is unavoidable in every model; the reducible
+  parallel structure is the placement vector itself, and the value of
+  removing it grows linearly with future parent-owned per-child metadata
+  kinds. T5 is sample 1 for dynamic parallel-vector sync; `ForLoopSubtree`
+  would be sample 2, so the ≥2-sample discipline makes Phase 7 the decision
+  point. T5's `append_child` consolidation is a local guard and remains
+  subordinate to that Phase 7 storage-model decision.
+- **2026-06-05 / T5 structural-binding handover constraints:** Conditional
+  initial presence is now established by `EffectHandle::new`'s eager initial
+  run; a future reactive-engine change that delays initial Effects must
+  preserve this loader materialisation contract or add an explicit
+  initialisation path. ZStack-aligned structural insertion must use the
+  placement-carrying API; T5 guards the former two-path footgun by making
+  `append_child` delegate to `insert_child_inner(len, child, None)`, so the
+  centered ZStack default is concentrated in one insertion primitive.
+  Conditional mutation build / insert / remove / slot-missing failures
+  remain log-only (`eprintln!`) and are not surfaced through runtime health;
+  Phase 7 range mutation should re-check whether log-only structural failure
+  remains sufficient for multi-child edits. The final API consolidation shape
+  remains dependent on the Phase 7 placement-storage model decision.
+- **2026-06-05 / T5 self-review layout invalidation fix:** The initial T5
+  implementation inserted/removed conditional children synchronously but did
+  not mark the owning window layout-dirty on structural success. Self-review
+  classified that as T5-owned, because a conditionally-present subtree can
+  affect parent measurement/allocation even when no size-affecting property
+  write occurs. `mutate_conditional_subtree` now marks dirty via the parent
+  widget after successful insert/remove. The same pass added
+  `conditional_zstack_reinsert_uses_declared_placement_metadata`, which
+  drives conditional insert/reinsert under `ZStack` through
+  `run_layout_as_window_root` and asserts the dynamic child's declared
+  `h-align` / `v-align` placement.
+- **2026-06-05 / T5 follow-on classification for dirty-layout evidence:**
+  This is **not** a Phase 7 carry-forward. T5 fixed the structural mutation
+  primitive, but the full real-window path (`mark_layout_dirty_for` →
+  `drain_if_outermost` → `flush_layout` under `WindowState`) must be pinned
+  by Phase 6 GUI evidence. T7 now owns the assistant screenshot before/after
+  pair captured immediately after the click-driven lightbox toggle, without
+  relying on resize; T8 owns the same owner-visible smoke criterion and the
+  Phase 6 fix slot if the path fails. T9 Moment 2 architecture sync must
+  include `docs/architecture.md` §6.6 so layout invalidation is no longer
+  documented as property-change-only.
+- **2026-06-05 / T5 closes T4b DD-M3-P6-007 comment handoff:** T4b left a
+  narrow source-comment follow-up for the next `ir_loader.rs` touch: refresh
+  `validate_phase4_node_invariants` from the "interim / open DD-007" wording
+  to the accepted-(a) ScrollView direct-conditional rejection. T5 performed
+  that refresh; the handoff is closed without reopening DD-M3-P6-007.
+- **2026-06-05 / T5 reactive-drain items 1–3 disposition:** T5 implements
+  the DD-M3-P6-005 DB-1 item-4 proof and does **not** revise the inherited
+  reactive-drain items 1–3. Cycle detection, ordering ties, and fan-out ×
+  `MUTATION_CAP` remain the DD-M3-P6-005 SM-1 carry-forward exactly as the
+  ADR records: the conditional insertion Effect writes the widget tree, not
+  its own Signal; quiescent child order is fixed by declared member order;
+  and large-subtree cap strategy is deferred until the structural family
+  (`for` / larger repeated subtrees) reveals the real budget requirement.
+  This entry covers only the reactive-drain items 1–3 disposition; the
+  separate parent-owned metadata mutation constraint above is the T5-specific
+  carry-forward candidate.
+- **2026-06-05 / T5 surfaced known issue — ScrollView teardown AV (carry-forward):**
+  T5's follow-up clean rebuild re-observed the `scroll_view_layout_integration`
+  process-exit access violation (see the CI/verification entry below). It is
+  diff-independent (same fault recorded in Phase 5 T1 with a `wasamoc`-only
+  diff) and therefore **not** a T5 regression, so it does not gate the T5
+  merge. It is **not** settled as benign either: the fault is in COM/Compositor
+  teardown at process exit and a real runtime teardown defect (hypothesis B)
+  is not excluded. Disposition recorded as
+  [docs/notes/verification-environments.md Observation 5](../../../../docs/notes/verification-environments.md)
+  (hypotheses A/B; "capture a minidump on the next occurrence rather than
+  re-rolling to green"; the faulting module decides the fix). **Carry-forward:
+  promote this into the phase-end `handoff.md` (T9) as a Phase 7 / runtime
+  investigation item** — root-cause the teardown AV from a captured dump and
+  decide the permanent fix (never-dropped global Compositor + no
+  `RoUninitialize`, vs a `widget_destroy` teardown-order fix). This has now
+  recurred ≥2 times, so by the project's ≥2-sample discipline it graduates
+  from "transient" to a tracked known issue.
 - **2026-06-03 / T4 IrMember schema migration:** T4 landed the accepted
   DD-M3-P6-004 O1 shape directly: `IrNode.children` is now
   `Vec<IrMember>`, with `IrMember::Widget(IrNode)` and
@@ -120,6 +245,48 @@
 
 ## CI / verification log
 
+- **2026-06-05 / T5 follow-up clean rebuild (post-commits `cc5d130`,
+  `35c2d88`, `f7a2281`):** `cargo clean` completed (`5311 files,
+  1.4GiB` removed); `cargo fmt --all -- --check` — green;
+  `cargo build --release --workspace` — green (57.88s);
+  `cargo build --workspace` — green (47.89s). First
+  `cargo test --workspace` run hit a `scroll_view_layout_integration`
+  process-exit access violation **after individual assertions had passed**
+  (the fault is in COM/Compositor teardown at process exit, not in the
+  asserted ScrollView behaviour); the three ScrollView integration tests
+  were rerun individually and were green, and the subsequent
+  `cargo test --workspace` rerun was green (`wasamo-runtime` lib 333,
+  `wasamoc` 316, `wasamo-ir` 17, integration suites all green, 0 failed).
+  This matches the **same teardown AV recorded in Phase 5 T1**
+  ([phase-5/t1.md](../../phase-5/retrospectives/t1.md)), where the diff was
+  `wasamoc`-only and never touched the insertion path — so it is
+  diff-independent and not a T5 regression (T5's `append_child` delegation
+  is behaviour-identical for ScrollView). It is **not** dismissed as a mere
+  flake: the known-issue disposition (hypotheses + "capture a minidump on
+  next occurrence rather than re-rolling"; production teardown defect not
+  yet excluded) is recorded as
+  [docs/notes/verification-environments.md Observation 5](../../../../docs/notes/verification-environments.md)
+  and carried forward below. Existing Cargo warnings about the `wasamo`
+  linkable target / `wasamo-sys` import-library ordering were observed.
+- **2026-06-05 / T5 local scoped:** `cargo test -p wasamo-runtime --test
+  conditional_toggle_integration` — green (2 tests). Added
+  `conditional_toggle_preserves_declared_visual_order_and_disposes_registry`
+  for declared sibling order, two sibling conditionals, preceding removal
+  index shift, true→true / false→false no-op, live VisualCollection order,
+  and registry teardown through `widget_destroy`; added
+  `conditional_toggle_drains_fresh_subtree_effects_before_return` for
+  same-drain present/absent observation and freshly-created subtree Effects
+  observing the latest state before the toggling setter returns.
+- **2026-06-05 / T5 local scoped runtime:** `cargo test -p wasamo-runtime
+  --lib ir_loader::tests` — green (127 tests);
+  `cargo test -p wasamo-runtime --lib reactive::tests` — green (39 tests);
+  `cargo test -p wasamo-runtime` — green (runtime lib 332 plus all
+  integration suites, including the new conditional toggle fixture).
+- **2026-06-05 / T5 local pre-retro:** `cargo fmt --all -- --check` —
+  green; `cargo build --release --workspace` — green; `cargo build
+  --workspace` — green; `cargo test --workspace` — green; `cargo test -p
+  wasamo-runtime` — green. Existing Cargo warnings about the `wasamo`
+  linkable target / `wasamo-sys` import-library ordering were observed.
 - **2026-06-03 / T4 local scoped:** `cargo fmt --all -- --check`
   — green; `cargo test -p wasamo-ir` — green (17 tests);
   `cargo test -p wasamoc --lib` — green (308 tests);
