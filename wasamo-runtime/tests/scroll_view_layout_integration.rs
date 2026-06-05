@@ -42,9 +42,9 @@
 
 #![cfg(windows)]
 
-use std::ffi::CStr;
+mod common;
+use common::init_runtime_or_skip;
 
-use wasamo_runtime::ffi;
 use wasamo_runtime::ir_loader::{build_widget_tree, parse_ir};
 use wasamo_runtime::WidgetNode;
 
@@ -67,28 +67,6 @@ fn lower_ui_to_ir(src: &str) -> String {
     emit::emit(&lower::lower(&ast, &checked.namespace))
 }
 
-fn last_error() -> Option<String> {
-    let ptr = ffi::wasamo_last_error_message();
-    if ptr.is_null() {
-        None
-    } else {
-        Some(
-            unsafe { CStr::from_ptr(ptr) }
-                .to_str()
-                .expect("last-error must be UTF-8")
-                .to_owned(),
-        )
-    }
-}
-
-fn runtime_compositor_unavailable(msg: Option<&str>) -> bool {
-    msg.is_some_and(|m| m.contains("0x80070005"))
-}
-
-fn github_actions() -> bool {
-    std::env::var_os("GITHUB_ACTIONS").is_some()
-}
-
 fn visual_offset(v: &Visual) -> (f32, f32) {
     let off = v.Offset().unwrap_or(Vector3 {
         X: 0.0,
@@ -109,40 +87,6 @@ fn assert_close(actual: f32, expected: f32, label: &str) {
         delta <= 0.01,
         "{label}: expected {expected}, got {actual} (delta {delta})"
     );
-}
-
-/// Initialise the runtime; return `Some(())` on success, `None` if the
-/// Compositor is locally unavailable (in which case the caller returns
-/// from the test, skipping it). Fails the test on GitHub Actions —
-/// CI must surface a missing Compositor as a failure per CLAUDE.md
-/// §Testing rules; the skip is a developer-laptop convenience only.
-fn init_runtime_or_skip(test_name: &str) -> Option<()> {
-    let _ = unsafe {
-        windows::Win32::System::WinRT::RoInitialize(
-            windows::Win32::System::WinRT::RO_INIT_SINGLETHREADED,
-        )
-    };
-
-    let status = ffi::wasamo_init();
-    if status == ffi::WASAMO_ERR_RUNTIME {
-        let msg = last_error();
-        if runtime_compositor_unavailable(msg.as_deref()) {
-            assert!(
-                !github_actions(),
-                "{test_name} cannot skip on GitHub Actions: \
-                 runtime compositor unavailable ({msg:?})"
-            );
-            eprintln!("skipping {test_name}: runtime compositor unavailable ({msg:?})");
-            return None;
-        }
-    }
-    assert_eq!(
-        status,
-        ffi::WASAMO_OK,
-        "wasamo_init failed: {:?}",
-        last_error()
-    );
-    Some(())
 }
 
 const FIXTURE_SRC: &str = r#"component ScrollFixture inherits Window {
@@ -182,6 +126,8 @@ fn intermediate_as_visual(scroll_view: &WidgetNode) -> Visual {
 
 #[test]
 fn scroll_path_fixture_layouts_and_scrolls_through_visual_tree() {
+    // Shared keep-alive init (this binary has multiple Compositor tests): the
+    // Compositor must outlive any single test thread. See tests/common/mod.rs.
     if init_runtime_or_skip("ScrollView scroll-path integration test").is_none() {
         return;
     }
@@ -294,6 +240,8 @@ fn scroll_path_fixture_layouts_and_scrolls_through_visual_tree() {
 
 #[test]
 fn scroll_path_fixture_r2_three_level_visual_nesting_root_relative_math() {
+    // Shared keep-alive init (this binary has multiple Compositor tests): the
+    // Compositor must outlive any single test thread. See tests/common/mod.rs.
     if init_runtime_or_skip("ScrollView R2 three-level nesting test").is_none() {
         return;
     }
@@ -434,6 +382,8 @@ const VSTACK_ROOT_WINDOW_H: f32 = 200.0;
 
 #[test]
 fn scroll_path_vstack_root_fixture_pins_window_root_fill_override() {
+    // Shared keep-alive init (this binary has multiple Compositor tests): the
+    // Compositor must outlive any single test thread. See tests/common/mod.rs.
     if init_runtime_or_skip("VStack-rooted ScrollView scroll-path integration test").is_none() {
         return;
     }

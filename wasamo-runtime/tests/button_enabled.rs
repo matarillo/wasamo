@@ -71,6 +71,9 @@ fn make_bool_value(b: bool) -> ffi::WasamoValue {
 
 #[test]
 fn button_enabled_property_flips_visual_and_suppresses_click() {
+    // No shared keep-alive helper needed: this binary has a single Compositor
+    // test, so no later test can reuse a Compositor whose apartment was torn
+    // down — the crash tests/common/mod.rs guards against cannot occur here.
     let _ = unsafe {
         windows::Win32::System::WinRT::RoInitialize(
             windows::Win32::System::WinRT::RO_INIT_SINGLETHREADED,

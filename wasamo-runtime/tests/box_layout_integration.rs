@@ -93,6 +93,9 @@ fn assert_close(actual: f32, expected: f32, label: &str) {
 
 #[test]
 fn aspect_box_with_text_child_lays_out_and_paints_fill() {
+    // No shared keep-alive helper needed: this binary has a single Compositor
+    // test, so no later test can reuse a Compositor whose apartment was torn
+    // down — the crash tests/common/mod.rs guards against cannot occur here.
     let _ = unsafe {
         windows::Win32::System::WinRT::RoInitialize(
             windows::Win32::System::WinRT::RO_INIT_SINGLETHREADED,

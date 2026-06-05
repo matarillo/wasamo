@@ -152,6 +152,9 @@ fn github_actions() -> bool {
 #[cfg(windows)]
 #[test]
 fn box_phase2_build_node_materialises_box_internal_state() {
+    // No shared keep-alive helper needed: this binary has a single Compositor
+    // test, so no later test can reuse a Compositor whose apartment was torn
+    // down — the crash tests/common/mod.rs guards against cannot occur here.
     let _ = unsafe {
         windows::Win32::System::WinRT::RoInitialize(
             windows::Win32::System::WinRT::RO_INIT_SINGLETHREADED,

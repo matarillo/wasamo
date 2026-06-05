@@ -89,6 +89,9 @@ unsafe fn read_bool_property(widget: *mut ffi::WasamoWidget, property_id: u32) -
 
 #[test]
 fn bool_binding_propagates_state_write_through_inline_handler_to_widget_property() {
+    // No shared keep-alive helper needed: this binary has a single Compositor
+    // test, so no later test can reuse a Compositor whose apartment was torn
+    // down — the crash tests/common/mod.rs guards against cannot occur here.
     let _ = unsafe {
         windows::Win32::System::WinRT::RoInitialize(
             windows::Win32::System::WinRT::RO_INIT_SINGLETHREADED,

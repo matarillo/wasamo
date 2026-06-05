@@ -1,5 +1,45 @@
 ## Decisions log
 
+- **2026-06-05 / Observation 5 teardown-AV investigation — abbreviated
+  retrospective (branch `investigate/obs5-scrollview-teardown-av` →
+  `feat/m3-phase-6`):** an out-of-band investigation, not a numbered plan
+  task, so it gets an abbreviated retro folded here rather than a
+  `retrospectives/tN.md` file (no task slot to invent). The clean-rebuild
+  gate is in the CI/verification log above (green, first run, no AV).
+  Per the task-end checklist (retrospectives.md items 1–11):
+  - **Main learning:** the original symptom framing can be wrong — the AV
+    was filed for two phases as a "process-exit teardown" fault on the
+    assumption that a printed `... ok` meant the crash was in teardown. A
+    minidump (`procdump -e -ma` + `cdb`) showed it is in the *next* test's
+    `build_widget_tree` → `CreateSpriteVisual`, dispatching through a vtable
+    in an unloaded `dcomp.dll`. The diff-independent recurrence plus the
+    "capture the dump, don't re-roll" standing rule is what eventually
+    forced the correct diagnosis. Method (repro matrix → minidump → faulting
+    module) generalises to future native-COM AVs.
+  - **Items 2 / 6 / 7 / 8 = none:** no spec-doc (`abi_spec` / `architecture`
+    / `dsl_spec`) change; no new or promoted DD / ADR; no milestone-AC or
+    phase-structure change. Changes are limited to `docs/notes/` and the
+    test harness.
+  - **Item 9 (carry-forward):** remediation **step 1** (marshal Compositor
+    work onto the owning thread) is deferred to a separate owner decision —
+    *no hard deadline*, with revisit triggers — recorded in
+    [docs/notes/verification-environments.md Observation 5](../../../../docs/notes/verification-environments.md)
+    §Remediation status. The residual it addresses (test bodies calling
+    non-agile Composition objects cross-apartment, benign only while
+    `dcomp.dll` is held resident) is UB-adjacent but test-harness-only;
+    production is unaffected (hypothesis A confirmed, B excluded).
+  - **Item 10 (cross-task constraint), `doc-folded`:** Compositor
+    integration binaries with two or more Compositor tests must initialize
+    the runtime on a process-lifetime thread via the shared
+    `wasamo-runtime/tests/common/mod.rs` keep-alive helper, so the
+    Compositor's apartment is not torn down between tests. Folded into
+    Observation 5 and the helper module's own doc comment (which states the
+    rationale, when the helper is/ isn't required, and its deletion
+    conditions); pointer only here.
+  - **Item 11 (ownership):** the phase plan's Phase 7 handoff bullet for the
+    teardown-AV investigation is revised in the same change to reflect
+    root-cause-done + step 2 landed + step 1 owner-deferred (no hanging
+    `[ ]` left implicit).
 - **2026-06-05 / T5 conditional reactive runtime:** T5 fills the
   DD-M3-P6-004 / 005 structural binding seam without adding any IR / ABI /
   grammar or host-facing error surface. `BindingTarget::ConditionalSubtree { parent,
@@ -245,6 +285,22 @@
 
 ## CI / verification log
 
+- **2026-06-05 / Observation 5 remediation step 2 — task-end clean rebuild
+  (branch `investigate/obs5-scrollview-teardown-av`, post-commits
+  `02ff614`, `a304dc5`, `83aadb7`):** `cargo fmt --all -- --check` — green
+  (post-commit state); `cargo clean` completed (`5067 files, 1.4GiB`
+  removed); `cargo build --release --workspace` — green (44.4s);
+  `cargo build --workspace` — green (41.3s); `cargo test --workspace` —
+  green on the **first** run (23s; `wasamo-runtime` lib 333, `wasamoc` 316,
+  `wasamo-ir` 17, all integration suites, 0 failed). The process-exit
+  access violation that forced a `--workspace` rerun at the T5 follow-up
+  clean rebuild did **not** recur: the keep-alive apartment helper
+  (`wasamo-runtime/tests/common/mod.rs`) keeps `dcomp.dll` resident for the
+  whole test binary. Positive control: before the fix, `scroll_view` /
+  `wrap_panel` / `grid` crashed 5/5 · 3/3 · 3/3 under `--test-threads=1`;
+  after, the full `wasamo-runtime` suite is green under `--test-threads=1`
+  as well. Existing Cargo warnings about the `wasamo` linkable target /
+  `wasamo-sys` import-library ordering were observed.
 - **2026-06-05 / T5 follow-up clean rebuild (post-commits `cc5d130`,
   `35c2d88`, `f7a2281`):** `cargo clean` completed (`5311 files,
   1.4GiB` removed); `cargo fmt --all -- --check` — green;
