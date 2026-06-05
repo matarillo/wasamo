@@ -1,5 +1,42 @@
 ## Decisions log
 
+- **2026-06-05 / Observation 5 remediation step 1 — marshal onto owning
+  thread + abbreviated retro (branch `test/obs5-step1-marshal-owning-thread`
+  → `feat/m3-phase-6`):** step 1 — owner-scheduled at the step-2 close — is
+  now done. The keep-alive `tests/common/mod.rs` park thread became a
+  work-queue executor; `run_on_owning_runtime_thread_or_skip` replaces
+  `init_runtime_or_skip` and runs each Compositor test body on the single
+  owning thread (panic caught there + re-raised on the libtest thread so
+  `#[test]` still fails correctly). The five ≥2-Compositor binaries wrap
+  their bodies in the helper closure. This eliminates the cross-apartment
+  residual step 2 only tolerated. Abbreviated retro (out-of-band step, no
+  numbered task slot → folded here, not a `tN.md`), per retrospectives.md
+  items 1–11:
+  - **Main learning:** the "does this one helper hold too many
+    responsibilities?" question resolved not to *one responsibility* but to
+    **shared change/deletion locality + coupling avoidance** — init, skip
+    policy, marshalling, and panic-relay have *different* change drivers yet
+    are added and deleted together, and splitting the skip check back to the
+    callers would re-introduce a two-calls-must-agree coupling on the same
+    process-global init outcome. Recorded in the helper's own rationale
+    comment so the design intent travels with the code.
+  - **Items 2 / 6 / 7 / 8 = none:** no spec-doc (`abi_spec` / `architecture`
+    / `dsl_spec`) change; no new or promoted DD / ADR; no milestone-AC or
+    phase-structure change. Changes are limited to the test harness and
+    `docs/notes/`.
+  - **Item 9 (carry-forward):** none new — step 1 *was* the carry-forward
+    from the step-2 close and is now discharged. The helper's only remaining
+    lifecycle is its deletion condition (process-per-test runner, e.g.
+    `cargo nextest`, or libtest ceasing per-test thread spawn), documented in
+    [docs/notes/verification-environments.md Observation 5](../../../../docs/notes/verification-environments.md)
+    §Remediation status and the helper module doc.
+  - **Item 10 (cross-task constraint), `doc-folded`:** unchanged in substance
+    — ≥2-Compositor binaries route through the shared helper; the helper now
+    additionally *executes* bodies on the owning thread rather than only
+    keeping the apartment alive. Folded into Observation 5 and the helper's
+    module doc; pointer only here.
+  - **Item 11 (ownership):** Observation 5 §Remediation status flips step 1
+    to DONE in the same change; no open `[ ]` left implicit.
 - **2026-06-05 / Observation 5 teardown-AV investigation — abbreviated
   retrospective (branch `investigate/obs5-scrollview-teardown-av` →
   `feat/m3-phase-6`):** an out-of-band investigation, not a numbered plan
@@ -285,6 +322,30 @@
 
 ## CI / verification log
 
+- **2026-06-05 / Observation 5 remediation step 1 — local gate + GitHub
+  Actions CI (branch `test/obs5-step1-marshal-owning-thread`, commit
+  `4d2cb3e`):** local clean-rebuild gate green — `cargo fmt --all -- --check`
+  green; `cargo clean` (3764 files, 1.2GiB removed); `cargo build --release
+  --workspace` green (40.6s); `cargo build --workspace` green;
+  `cargo test --workspace` green. (A direct `cargo test --workspace` straight
+  from `cargo clean` first hit the known LNK1356 `wasamo-sys → wasamo-dll`
+  `/WHOLEARCHIVE` ordering race (DD-M2-P1-006); building the workspace first,
+  as CI does, then testing was green — not a regression from this change.)
+  Targeted: full `wasamo-runtime` suite (333 unit + all integration) green
+  under `--test-threads=1`, the form that previously crashed deterministically
+  with `0xC0000005`. **Positive control:** a temporary thread-identity probe
+  showed the marshalled test body running on `wasamo-test-runtime-owner` while
+  its caller ran on the libtest thread named after the test — distinguishing
+  real owning-thread execution from a no-op wrapper (which would have printed
+  the same name twice); the probe was reverted before commit. **GitHub Actions
+  CI:** run
+  [27014203528](https://github.com/matarillo/wasamo/actions/runs/27014203528)
+  (`workflow_dispatch` on the branch, headSha `4d2cb3e`) — conclusion
+  **success** (~3m8s); `Test (workspace)` and all binding / example smoke
+  steps green on the windows-latest runner, confirming the executor-thread
+  marshalling works on the actual CI runner (default multi-threaded
+  `cargo test --workspace`). Existing Cargo warnings about the `wasamo`
+  linkable target / `wasamo-sys` import-library ordering were observed.
 - **2026-06-05 / Observation 5 remediation step 2 — task-end clean rebuild
   (branch `investigate/obs5-scrollview-teardown-av`, post-commits
   `02ff614`, `a304dc5`, `83aadb7`):** `cargo fmt --all -- --check` — green
