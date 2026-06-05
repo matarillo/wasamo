@@ -8,7 +8,9 @@
 
 #![cfg(windows)]
 
-use std::ffi::CStr;
+mod common;
+use common::init_runtime_or_skip;
+
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Mutex, OnceLock};
 
@@ -39,58 +41,6 @@ fn lower_ui_to_ir(src: &str) -> String {
         checked.diagnostics
     );
     emit::emit(&lower::lower(&ast, &checked.namespace))
-}
-
-fn last_error() -> Option<String> {
-    let ptr = ffi::wasamo_last_error_message();
-    if ptr.is_null() {
-        None
-    } else {
-        Some(
-            unsafe { CStr::from_ptr(ptr) }
-                .to_str()
-                .expect("last-error must be UTF-8")
-                .to_owned(),
-        )
-    }
-}
-
-fn runtime_compositor_unavailable(msg: Option<&str>) -> bool {
-    msg.is_some_and(|m| m.contains("0x80070005"))
-}
-
-fn github_actions() -> bool {
-    std::env::var_os("GITHUB_ACTIONS").is_some()
-}
-
-fn init_runtime_or_skip(test_name: &str) -> Option<()> {
-    let _ = unsafe {
-        windows::Win32::System::WinRT::RoInitialize(
-            windows::Win32::System::WinRT::RO_INIT_SINGLETHREADED,
-        )
-    };
-
-    let status = ffi::wasamo_init();
-    if status == ffi::WASAMO_ERR_RUNTIME {
-        let msg = last_error();
-        if runtime_compositor_unavailable(msg.as_deref()) {
-            assert!(
-                !github_actions(),
-                "{test_name} cannot skip on GitHub Actions: \
-                 runtime compositor unavailable ({msg:?})"
-            );
-            eprintln!("skipping {test_name}: runtime compositor unavailable ({msg:?})");
-            return None;
-        }
-    }
-    assert_eq!(
-        status,
-        ffi::WASAMO_OK,
-        "wasamo_init failed: {:?}",
-        last_error()
-    );
-    ffi::__install_owning_thread_for_test();
-    Some(())
 }
 
 fn visual_of(widget: &WidgetNode) -> Visual {
@@ -203,6 +153,8 @@ const ORDER_SRC: &str = r#"component ConditionalOrder inherits Window {
 #[test]
 fn conditional_toggle_preserves_declared_visual_order_and_disposes_registry() {
     let _guard = test_lock().lock().expect("test lock poisoned");
+    // Shared keep-alive init (this binary has multiple Compositor tests): the
+    // Compositor must outlive any single test thread. See tests/common/mod.rs.
     if init_runtime_or_skip("conditional declared-order integration test").is_none() {
         return;
     }
@@ -290,6 +242,8 @@ const ZSTACK_PLACEMENT_SRC: &str = r#"component ConditionalZStackPlacement inher
 #[test]
 fn conditional_zstack_reinsert_uses_declared_placement_metadata() {
     let _guard = test_lock().lock().expect("test lock poisoned");
+    // Shared keep-alive init (this binary has multiple Compositor tests): the
+    // Compositor must outlive any single test thread. See tests/common/mod.rs.
     if init_runtime_or_skip("conditional ZStack placement integration test").is_none() {
         return;
     }
@@ -376,6 +330,8 @@ fn read_button_enabled(button: &WidgetNode) -> bool {
 #[test]
 fn conditional_toggle_drains_fresh_subtree_effects_before_return() {
     let _guard = test_lock().lock().expect("test lock poisoned");
+    // Shared keep-alive init (this binary has multiple Compositor tests): the
+    // Compositor must outlive any single test thread. See tests/common/mod.rs.
     if init_runtime_or_skip("conditional drain integration test").is_none() {
         return;
     }
