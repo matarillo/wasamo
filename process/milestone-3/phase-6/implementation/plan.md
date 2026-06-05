@@ -640,8 +640,12 @@ mid-phase owner decisions and revise the mutable plan where they diverge
       `switch` / iteration; the `BindingTarget::ConditionalSubtree` →
       `ForLoopSubtree` seam; the declared-tree / entity-tree identity /
       `key:` retention deferral; the dynamic Window-title deferral; the
-      reactive-drain items 1–3 carry-forward; any residual surfaced during
-      T2–T8). **NOT owned by T9** (phase-end retro item 15 per
+      reactive-drain items 1–3 carry-forward; the placement storage-model
+      decision (SoA vs AoS vs keyed map, per the T5 retro item 10); the
+      `scroll_view_layout_integration` teardown-AV investigation
+      (docs/notes/verification-environments.md Observation 5 — root-cause
+      from a captured dump and decide the permanent fix); any residual
+      surfaced during T2–T8). **NOT owned by T9** (phase-end retro item 15 per
       [retrospectives.md §6.3/§15](../../../procedures/retrospectives.md));
       stays `[ ]` at T9 close.
 - [ ] Front-matter `status` (on the sibling

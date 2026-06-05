@@ -108,6 +108,23 @@
   This entry covers only the reactive-drain items 1–3 disposition; the
   separate parent-owned metadata mutation constraint above is the T5-specific
   carry-forward candidate.
+- **2026-06-05 / T5 surfaced known issue — ScrollView teardown AV (carry-forward):**
+  T5's follow-up clean rebuild re-observed the `scroll_view_layout_integration`
+  process-exit access violation (see the CI/verification entry below). It is
+  diff-independent (same fault recorded in Phase 5 T1 with a `wasamoc`-only
+  diff) and therefore **not** a T5 regression, so it does not gate the T5
+  merge. It is **not** settled as benign either: the fault is in COM/Compositor
+  teardown at process exit and a real runtime teardown defect (hypothesis B)
+  is not excluded. Disposition recorded as
+  [docs/notes/verification-environments.md Observation 5](../../../../docs/notes/verification-environments.md)
+  (hypotheses A/B; "capture a minidump on the next occurrence rather than
+  re-rolling to green"; the faulting module decides the fix). **Carry-forward:
+  promote this into the phase-end `handoff.md` (T9) as a Phase 7 / runtime
+  investigation item** — root-cause the teardown AV from a captured dump and
+  decide the permanent fix (never-dropped global Compositor + no
+  `RoUninitialize`, vs a `widget_destroy` teardown-order fix). This has now
+  recurred ≥2 times, so by the project's ≥2-sample discipline it graduates
+  from "transient" to a tracked known issue.
 - **2026-06-03 / T4 IrMember schema migration:** T4 landed the accepted
   DD-M3-P6-004 O1 shape directly: `IrNode.children` is now
   `Vec<IrMember>`, with `IrMember::Widget(IrNode)` and
@@ -234,11 +251,22 @@
   `cargo build --release --workspace` — green (57.88s);
   `cargo build --workspace` — green (47.89s). First
   `cargo test --workspace` run hit a `scroll_view_layout_integration`
-  process-exit access violation after individual assertions had passed;
-  the three ScrollView integration tests were rerun individually and were
-  green, and the subsequent `cargo test --workspace` rerun was green
-  (`wasamo-runtime` lib 333, `wasamoc` 316, `wasamo-ir` 17, integration
-  suites all green, 0 failed). Existing Cargo warnings about the `wasamo`
+  process-exit access violation **after individual assertions had passed**
+  (the fault is in COM/Compositor teardown at process exit, not in the
+  asserted ScrollView behaviour); the three ScrollView integration tests
+  were rerun individually and were green, and the subsequent
+  `cargo test --workspace` rerun was green (`wasamo-runtime` lib 333,
+  `wasamoc` 316, `wasamo-ir` 17, integration suites all green, 0 failed).
+  This matches the **same teardown AV recorded in Phase 5 T1**
+  ([phase-5/t1.md](../../phase-5/retrospectives/t1.md)), where the diff was
+  `wasamoc`-only and never touched the insertion path — so it is
+  diff-independent and not a T5 regression (T5's `append_child` delegation
+  is behaviour-identical for ScrollView). It is **not** dismissed as a mere
+  flake: the known-issue disposition (hypotheses + "capture a minidump on
+  next occurrence rather than re-rolling"; production teardown defect not
+  yet excluded) is recorded as
+  [docs/notes/verification-environments.md Observation 5](../../../../docs/notes/verification-environments.md)
+  and carried forward below. Existing Cargo warnings about the `wasamo`
   linkable target / `wasamo-sys` import-library ordering were observed.
 - **2026-06-05 / T5 local scoped:** `cargo test -p wasamo-runtime --test
   conditional_toggle_integration` — green (2 tests). Added

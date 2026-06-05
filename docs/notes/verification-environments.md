@@ -103,6 +103,55 @@ generalises (e.g. conditional rendering is proven by toggling the state,
 not by the initial frame). CLAUDE.md `Testing rules` carries the
 project-wide statement.
 
+### Observation 5 — `scroll_view_layout_integration` can crash at process exit (teardown access violation)
+
+On a full `cargo test --workspace` run, the
+`scroll_view_layout_integration` suite has been observed to exit with a
+`STATUS_ACCESS_VIOLATION` (`0xC0000005`) **after all in-test assertions
+have already passed** — i.e. the fault is in COM / Compositor teardown at
+process exit, not in the ScrollView behaviour the test asserts. Rerunning
+the suite individually, and rerunning the whole workspace, both come back
+green.
+
+This has recurred independently of the code under change:
+
+- Phase 5 T1 (diff was `wasamoc` check tests only — no widget / insertion
+  path touched), recorded in
+  [process/milestone-3/phase-5/retrospectives/t1.md](../../process/milestone-3/phase-5/retrospectives/t1.md).
+- Phase 6 T5 (after the `append_child` → `insert_child_inner` refactor,
+  which is behaviour-identical for ScrollView), recorded in
+  [process/milestone-3/phase-6/implementation/log.md](../../process/milestone-3/phase-6/implementation/log.md).
+
+Because it reproduces with diffs that do not touch the insertion path, it
+is most consistent with a teardown-ordering artifact rather than a
+regression in the task under review — but **the two hypotheses are not yet
+distinguished by evidence**:
+
+- **(A) test-harness teardown artifact** — a Visual / Compositor is
+  released after the apartment is torn down (or on the wrong thread) at
+  static-destructor time; harmless to production hosts. ScrollView is the
+  only widget carrying an intermediate content Visual + `InsetClip`
+  (DD-M3-P4-004), so its drop chain is one layer deeper than others, which
+  fits a teardown-order race.
+- **(B) a real runtime teardown defect** — `widget_destroy` / Compositor
+  drop order has a latent fault the test honestly exposes, in which case a
+  production host could fault on shutdown too.
+
+**Disposition.** This is *not* a regression gate for the task that happens
+to observe it (the asserted behaviour passed; the recurrence is
+diff-independent). It is also *not* settled as benign: hypothesis (B) is
+not excluded. The standing rule is therefore: **on the next occurrence,
+capture the faulting stack instead of re-rolling to green.** `RUST_BACKTRACE`
+does not help for a native COM access violation — use a minidump
+(WER LocalDumps, `procdump -e -ma <test exe>`, or `cdb -g -G cargo test …`).
+The faulting module decides the fix: if it is `Windows.UI.Composition.dll` /
+`dcomp.dll` Release during static destruction, the fix is to stop dropping
+the process-global Compositor at exit (store it in a never-dropped `static`
+rather than a `thread_local!`, and do not `RoUninitialize`); if it is our
+own `layout.rs` / `widget.rs`, it is a teardown-contract defect to fix in
+the runtime. Until the dump is captured, prefer recording the occurrence
+over silently re-rolling.
+
 ### Implication for future ADRs
 
 When a future ADR (M2-Phase 4/5/6 or later) prescribes a verification
