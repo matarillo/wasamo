@@ -31,9 +31,13 @@
   `append_static_member` calls `insert_child_with_zstack_placement` whenever
   the parent is ZStack. The old static reducer helpers
   (`evaluate_static_condition`, `collect_static_zstack_placements`) are now
-  `#[cfg(test)]`; their unit tests still pin reducer logic but no longer
-  guard a production call-site directly. Production placement evidence is
-  covered by the ZStack Windows integration fixtures and T5's
+  `#[cfg(test)]`; their unit tests still pin reducer logic and are now
+  commented as such, but no longer guard a production call-site directly.
+  The new load-bearing index reducer
+  `materialized_index_for_declared_member` has headless unit coverage in
+  `materialized_index_counts_preceding_widgets_and_live_conditionals`,
+  including the preceding-conditional removal shift. Production placement
+  evidence is covered by the ZStack Windows integration fixtures and T5's
   `conditional_zstack_reinsert_uses_declared_placement_metadata`.
 - **2026-06-05 / T5 parent-owned metadata mutation constraint:** The
   ZStack placement-vector fix surfaced a future-structural constraint:

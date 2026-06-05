@@ -2328,8 +2328,57 @@ mod tests {
         assert_eq!(ty, IrType::I32);
     }
 
+    fn conditional_slot(live_child: bool) -> DeclaredMemberSlot {
+        DeclaredMemberSlot::Conditional(Rc::new(RefCell::new(ConditionalRuntimeState {
+            live_child,
+        })))
+    }
+
+    #[test]
+    fn materialized_index_counts_preceding_widgets_and_live_conditionals() {
+        let toggled = Rc::new(RefCell::new(ConditionalRuntimeState { live_child: true }));
+        let slots = vec![
+            DeclaredMemberSlot::Widget,
+            DeclaredMemberSlot::Widget,
+            conditional_slot(false),
+            DeclaredMemberSlot::Conditional(Rc::clone(&toggled)),
+            DeclaredMemberSlot::Widget,
+        ];
+
+        assert_eq!(
+            materialized_index_for_declared_member(2, &slots),
+            2,
+            "preceding widgets contribute one materialised child each"
+        );
+        assert_eq!(
+            materialized_index_for_declared_member(3, &slots),
+            2,
+            "absent preceding conditional contributes no materialised child"
+        );
+        assert_eq!(
+            materialized_index_for_declared_member(4, &slots),
+            3,
+            "present preceding conditional contributes one materialised child"
+        );
+        assert_eq!(
+            materialized_index_for_declared_member(5, &slots),
+            4,
+            "mixed widget / absent conditional / present conditional prefix"
+        );
+
+        toggled.borrow_mut().live_child = false;
+        assert_eq!(
+            materialized_index_for_declared_member(4, &slots),
+            2,
+            "removing a preceding conditional shifts later materialised indices"
+        );
+    }
+
     #[test]
     fn static_condition_reducer_maps_bool_to_presence() {
+        // Reducer logic pin only: after T5, production initial presence is
+        // materialised by the same eager conditional Effect used for dynamic
+        // toggles, not by this helper.
         let mut registry = SignalRegistry::new();
         registry.bools.insert("open".into(), Signal::new(true));
         assert_eq!(
@@ -2349,6 +2398,8 @@ mod tests {
 
     #[test]
     fn zstack_static_placements_follow_materialized_member_order() {
+        // Reducer logic pin only: after T5, production ZStack placement is
+        // accumulated through append_static_member's per-child insert path.
         fn text_with_align(h_align: &str, v_align: &str) -> IrNode {
             IrNode {
                 widget_type: "Text".into(),
