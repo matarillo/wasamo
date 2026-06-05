@@ -41,12 +41,23 @@
   `conditional_zstack_reinsert_uses_declared_placement_metadata`.
 - **2026-06-05 / T5 parent-owned metadata mutation constraint:** The
   ZStack placement-vector fix surfaced a future-structural constraint:
-  any structural mutation primitive that changes a materialised child list
-  under a container with parent-owned positional metadata must update that
-  metadata atomically with `WidgetNode.children` and the live Visual sibling
-  order. T5 implements the single-child case for conditional insert/remove;
-  Phase 7's `ForLoopSubtree` / range mutation design must carry the same
-  invariant rather than treating child insertion as a widget-only operation.
+  under the current SoA model, any structural mutation primitive that changes
+  a materialised child list under a container with parent-owned positional
+  metadata must update that metadata atomically with `WidgetNode.children`
+  and the live Visual sibling order. T5 implements the single-child case for
+  conditional insert/remove, but this invariant is a cost of the current
+  parallel-vector representation, not a law that Phase 7 must preserve.
+  Phase 7 must decide the placement storage model before `ForLoopSubtree`:
+  keep SoA parallel vectors (affirm DD-M3-P6-002's implementation shape),
+  move placement onto child nodes / child records (AoS, superseding the
+  current shape), or use a `WidgetId`-keyed metadata map. Children ↔ Visual
+  order synchronisation is unavoidable in every model; the reducible
+  parallel structure is the placement vector itself, and the value of
+  removing it grows linearly with future parent-owned per-child metadata
+  kinds. T5 is sample 1 for dynamic parallel-vector sync; `ForLoopSubtree`
+  would be sample 2, so the ≥2-sample discipline makes Phase 7 the decision
+  point. T5's `append_child` consolidation is a local guard and remains
+  subordinate to that Phase 7 storage-model decision.
 - **2026-06-05 / T5 structural-binding handover constraints:** Conditional
   initial presence is now established by `EffectHandle::new`'s eager initial
   run; a future reactive-engine change that delays initial Effects must
