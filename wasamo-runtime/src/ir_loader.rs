@@ -7,6 +7,7 @@
 //! (`wasamo_load_ui`) is wired in DD-M2-P6-005 — this module exposes the
 //! Rust-level entry points only.
 
+use std::cell::RefCell;
 use std::rc::Rc;
 
 use wasamo_ir::{
@@ -18,8 +19,8 @@ use wasamo_ir::{
 use crate::box_values;
 use crate::layout::{Alignment, CellPlacement, TrackSize as LayoutTrackSize, ZStackPlacement};
 use crate::reactive::{
-    register_binding, register_bool_binding, set_active_registry, BindingTarget, PropertyKey,
-    Signal, SignalRegistry, WidgetId,
+    register_binding, register_bool_binding, register_conditional_binding, set_active_registry,
+    BindingTarget, PropertyKey, Signal, SignalRegistry, WidgetId,
 };
 use crate::text::{TextRenderer, TypographyStyle};
 use crate::widget::{
@@ -87,6 +88,16 @@ pub struct BuiltUi {
     pub(crate) registry: Rc<SignalRegistry>,
 }
 
+#[derive(Clone)]
+enum DeclaredMemberSlot {
+    Widget,
+    Conditional(Rc<RefCell<ConditionalRuntimeState>>),
+}
+
+struct ConditionalRuntimeState {
+    live_child: bool,
+}
+
 impl BuiltUi {
     /// Test-only mutator for an `i32`-typed state declared on the
     /// component (per `state <name>: i32 = <default>`). Writes through
@@ -104,6 +115,17 @@ impl BuiltUi {
     #[doc(hidden)]
     pub fn __set_i32_state_for_test(&self, name: &str, value: i32) -> bool {
         match self.registry.i32s.get(name) {
+            Some(signal) => {
+                signal.set(value);
+                true
+            }
+            None => false,
+        }
+    }
+
+    #[doc(hidden)]
+    pub fn __set_bool_state_for_test(&self, name: &str, value: bool) -> bool {
+        match self.registry.bools.get(name) {
             Some(signal) => {
                 signal.set(value);
                 true
@@ -332,15 +354,12 @@ fn validate_phase2_node_invariants(node: &IrNode) -> Result<(), IrLoadError> {
 // through negative / out-of-range intermediates.
 fn validate_phase4_node_invariants(node: &IrNode) -> Result<(), IrLoadError> {
     if node.widget_type == "ScrollView" {
-        // T4 review follow-up / DD-M3-P6-007 (interim, conservative): a
-        // conditional is not a valid *direct* ScrollView content member —
-        // its presence is dynamic, so it cannot satisfy "exactly one
-        // content child" (`ScrollView { Content  if c { … } }` could
-        // become two; `ScrollView { if c { … } }` could become zero).
-        // Wrap it in the content widget (`ScrollView { Box { if c { … } } }`).
-        // Whether a ScrollView may instead be *conditionally empty* is the
-        // open DD-M3-P6-007 relaxation; until that is decided this stays
-        // rejected (symmetric with the Cell direct-conditional rejection).
+        // DD-M3-P6-007 accepted (a): a conditional is not a valid *direct*
+        // ScrollView content member. Its presence is dynamic, so it cannot
+        // satisfy "exactly one content child" (`ScrollView { Content if c }`
+        // could become two; `ScrollView { if c { ... } }` could become zero).
+        // Wrap it in the content widget (`ScrollView { Box { if c { ... } } }`).
+        // The conditionally-empty direction is deferred, not rejected.
         if node
             .children
             .iter()
@@ -1748,8 +1767,17 @@ fn build_node(
                 .map_err(|e| IrLoadError::Build(format!("append_child failed: {e:?}")))?;
         }
     } else {
-        for member in &node.children {
-            append_static_member(member, &mut widget, compositor, renderer, registry)?;
+        let declared_slots = Rc::new(RefCell::new(Vec::with_capacity(node.children.len())));
+        for (declared_member_index, member) in node.children.iter().enumerate() {
+            append_static_member(
+                member,
+                declared_member_index,
+                Rc::clone(&declared_slots),
+                &mut widget,
+                compositor,
+                renderer,
+                registry,
+            )?;
         }
     }
 
@@ -1758,6 +1786,8 @@ fn build_node(
 
 fn append_static_member(
     member: &IrMember,
+    declared_member_index: usize,
+    declared_slots: Rc<RefCell<Vec<DeclaredMemberSlot>>>,
     parent: &mut WidgetNode,
     compositor: &Compositor,
     renderer: &TextRenderer,
@@ -1765,34 +1795,153 @@ fn append_static_member(
 ) -> Result<(), IrLoadError> {
     match member {
         IrMember::Widget(child) => {
+            declared_slots.borrow_mut().push(DeclaredMemberSlot::Widget);
             let child_widget = build_node(child, compositor, renderer, registry)?;
-            parent
-                .append_child(child_widget)
-                .map_err(|e| IrLoadError::Build(format!("append_child failed: {e:?}")))?;
-        }
-        IrMember::ControlFlow(ControlFlowNode::If { branches }) => {
-            let branch = branches
-                .first()
-                .ok_or_else(|| IrLoadError::Build("`if` control flow has no branch".into()))?;
-            if evaluate_static_condition(&branch.condition, registry)? {
-                let body = match branch.body.first() {
-                    Some(IrMember::Widget(node)) => node,
-                    _ => {
-                        return Err(IrLoadError::Build(
-                            "`if` body must contain one widget member".into(),
-                        ));
-                    }
-                };
-                let child_widget = build_node(body, compositor, renderer, registry)?;
+            if parent.is_zstack() {
+                parent
+                    .insert_child_with_zstack_placement(
+                        parent.child_count(),
+                        child_widget,
+                        extract_zstack_placement(child),
+                    )
+                    .map_err(|e| IrLoadError::Build(format!("insert_child failed: {e:?}")))?;
+            } else {
                 parent
                     .append_child(child_widget)
                     .map_err(|e| IrLoadError::Build(format!("append_child failed: {e:?}")))?;
             }
         }
+        IrMember::ControlFlow(ControlFlowNode::If { branches }) => {
+            let branch = branches
+                .first()
+                .ok_or_else(|| IrLoadError::Build("`if` control flow has no branch".into()))?;
+            let body = match branch.body.first() {
+                Some(IrMember::Widget(node)) => node.clone(),
+                _ => {
+                    return Err(IrLoadError::Build(
+                        "`if` body must contain one widget member".into(),
+                    ));
+                }
+            };
+            let state = Rc::new(RefCell::new(ConditionalRuntimeState { live_child: false }));
+            declared_slots
+                .borrow_mut()
+                .push(DeclaredMemberSlot::Conditional(Rc::clone(&state)));
+            let parent_id = WidgetId(parent as *mut WidgetNode as *mut ());
+            let target = BindingTarget::ConditionalSubtree {
+                parent: parent_id,
+                declared_member_index,
+            };
+            let slots_for_effect = Rc::clone(&declared_slots);
+            let registry_for_effect = Rc::clone(registry);
+            let handle = register_conditional_binding(
+                target,
+                branch.condition.clone(),
+                Rc::clone(registry),
+                move |parent_id, declared_member_index, present| {
+                    mutate_conditional_subtree(
+                        parent_id,
+                        declared_member_index,
+                        present,
+                        &body,
+                        &slots_for_effect,
+                        &registry_for_effect,
+                    );
+                },
+            );
+            parent.bindings.push(handle);
+        }
     }
     Ok(())
 }
 
+fn materialized_index_for_declared_member(
+    declared_member_index: usize,
+    declared_slots: &[DeclaredMemberSlot],
+) -> usize {
+    declared_slots
+        .iter()
+        .take(declared_member_index)
+        .map(|slot| match slot {
+            DeclaredMemberSlot::Widget => 1,
+            DeclaredMemberSlot::Conditional(state) => usize::from(state.borrow().live_child),
+        })
+        .sum()
+}
+
+fn mutate_conditional_subtree(
+    parent_id: WidgetId,
+    declared_member_index: usize,
+    present: bool,
+    body: &IrNode,
+    declared_slots: &Rc<RefCell<Vec<DeclaredMemberSlot>>>,
+    registry: &Rc<SignalRegistry>,
+) {
+    let parent_ptr = parent_id.0 as *mut WidgetNode;
+    if parent_ptr.is_null() {
+        return;
+    }
+    let state = {
+        let slots = declared_slots.borrow();
+        match slots.get(declared_member_index) {
+            Some(DeclaredMemberSlot::Conditional(state)) => Rc::clone(state),
+            _ => {
+                eprintln!(
+                    "wasamo: conditional binding declared slot {declared_member_index} is missing"
+                );
+                return;
+            }
+        }
+    };
+    let currently_present = state.borrow().live_child;
+    if present == currently_present {
+        return;
+    }
+    let live_index = {
+        let slots = declared_slots.borrow();
+        materialized_index_for_declared_member(declared_member_index, &slots)
+    };
+    unsafe {
+        let parent = &mut *parent_ptr;
+        if present {
+            let compositor = crate::get_compositor();
+            let renderer = crate::get_text_renderer();
+            match build_node(body, compositor, renderer, registry) {
+                Ok(child) => {
+                    let result = match zstack_placement_for_parent(parent, body) {
+                        Some(placement) => {
+                            parent.insert_child_with_zstack_placement(live_index, child, placement)
+                        }
+                        None => parent.insert_child(live_index, child),
+                    };
+                    match result {
+                        Ok(()) => {
+                            state.borrow_mut().live_child = true;
+                            crate::emit::mark_layout_dirty_for(parent_ptr);
+                        }
+                        Err(e) => eprintln!("wasamo: conditional insert_child failed: {e:?}"),
+                    }
+                }
+                Err(e) => eprintln!("wasamo: conditional subtree build failed: {e}"),
+            }
+        } else {
+            match parent.remove_child(live_index) {
+                Ok(removed) => {
+                    crate::widget::widget_destroy(removed);
+                    state.borrow_mut().live_child = false;
+                    crate::emit::mark_layout_dirty_for(parent_ptr);
+                }
+                Err(e) => eprintln!("wasamo: conditional remove_child failed: {e:?}"),
+            }
+        }
+    }
+}
+
+fn zstack_placement_for_parent(parent: &WidgetNode, body: &IrNode) -> Option<ZStackPlacement> {
+    parent.is_zstack().then(|| extract_zstack_placement(body))
+}
+
+#[cfg(test)]
 fn evaluate_static_condition(
     expr: &HandlerExpr,
     registry: &SignalRegistry,
@@ -1814,7 +1963,7 @@ fn construct_widget(
     node: &IrNode,
     compositor: &Compositor,
     renderer: &TextRenderer,
-    registry: &SignalRegistry,
+    _registry: &SignalRegistry,
 ) -> Result<Box<WidgetNode>, IrLoadError> {
     match node.widget_type.as_str() {
         "VStack" => {
@@ -1929,11 +2078,8 @@ fn construct_widget(
         // annotations are parent-owned and carried as a vector parallel to
         // direct children; document order is preserved by the generic child
         // append loop below.
-        "ZStack" => {
-            let placements = collect_static_zstack_placements(&node.children, registry)?;
-            WidgetNode::zstack(compositor, placements)
-                .map_err(|e| IrLoadError::Build(format!("zstack: {e}")))
-        }
+        "ZStack" => WidgetNode::zstack(compositor, Vec::new())
+            .map_err(|e| IrLoadError::Build(format!("zstack: {e}"))),
         other => Err(IrLoadError::UnknownWidget(other.to_string())),
     }
 }
@@ -1979,6 +2125,7 @@ fn extract_zstack_placement(child: &IrNode) -> ZStackPlacement {
     }
 }
 
+#[cfg(test)]
 fn collect_static_zstack_placements(
     members: &[IrMember],
     registry: &SignalRegistry,

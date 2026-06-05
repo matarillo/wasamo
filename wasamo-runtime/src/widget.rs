@@ -1283,6 +1283,9 @@ impl WidgetNode {
         parent_container.Children()?.InsertAtTop(&child_visual)?;
         child.attached = true;
         self.children.push(child);
+        if let WidgetData::ZStack { zstack_placements } = &mut self.data {
+            zstack_placements.push(ZStackPlacement::centered());
+        }
         Ok(())
     }
 
@@ -1292,10 +1295,48 @@ impl WidgetNode {
         self.children.len()
     }
 
+    #[doc(hidden)]
+    pub fn __text_content_for_test(&self) -> Option<&str> {
+        match &self.data {
+            WidgetData::Text { content, .. } => Some(content.as_str()),
+            _ => None,
+        }
+    }
+
+    #[doc(hidden)]
+    pub fn __button_enabled_for_test(&self) -> Option<bool> {
+        match &self.data {
+            WidgetData::Button(button) => Some(button.enabled),
+            _ => None,
+        }
+    }
+
+    pub(crate) fn is_zstack(&self) -> bool {
+        matches!(self.data, WidgetData::ZStack { .. })
+    }
+
     pub fn insert_child(
         &mut self,
         index: usize,
+        child: Box<WidgetNode>,
+    ) -> Result<(), MutationError> {
+        self.insert_child_inner(index, child, None)
+    }
+
+    pub(crate) fn insert_child_with_zstack_placement(
+        &mut self,
+        index: usize,
+        child: Box<WidgetNode>,
+        placement: ZStackPlacement,
+    ) -> Result<(), MutationError> {
+        self.insert_child_inner(index, child, Some(placement))
+    }
+
+    fn insert_child_inner(
+        &mut self,
+        index: usize,
         mut child: Box<WidgetNode>,
+        zstack_placement: Option<ZStackPlacement>,
     ) -> Result<(), MutationError> {
         if index > self.children.len() {
             return Err(MutationError::IndexOutOfBounds);
@@ -1312,12 +1353,30 @@ impl WidgetNode {
             .visual
             .cast()
             .map_err(|_| MutationError::IndexOutOfBounds)?;
-        parent_container
+        let children_col = parent_container
             .Children()
-            .and_then(|c| c.InsertAtTop(&child_visual))
             .map_err(|_| MutationError::IndexOutOfBounds)?;
+        if index == self.children.len() {
+            children_col
+                .InsertAtTop(&child_visual)
+                .map_err(|_| MutationError::IndexOutOfBounds)?;
+        } else {
+            let sibling_visual: Visual = self.children[index]
+                .visual
+                .cast()
+                .map_err(|_| MutationError::IndexOutOfBounds)?;
+            children_col
+                .InsertBelow(&child_visual, &sibling_visual)
+                .map_err(|_| MutationError::IndexOutOfBounds)?;
+        }
         child.attached = true;
         self.children.insert(index, child);
+        if let WidgetData::ZStack { zstack_placements } = &mut self.data {
+            zstack_placements.insert(
+                index,
+                zstack_placement.unwrap_or(ZStackPlacement::centered()),
+            );
+        }
         Ok(())
     }
 
@@ -1339,6 +1398,9 @@ impl WidgetNode {
             .and_then(|c| c.Remove(&child_visual))
             .map_err(|_| MutationError::IndexOutOfBounds)?;
         let mut removed = self.children.remove(index);
+        if let WidgetData::ZStack { zstack_placements } = &mut self.data {
+            zstack_placements.remove(index);
+        }
         removed.attached = false;
         Ok(removed)
     }

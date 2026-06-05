@@ -396,15 +396,19 @@ is the novel-runtime task — it adds the `BindingTarget` variant, fixes
 the Visual-ordering primitive (R-F), and wires structural disposal
 (R-E).
 
-- [ ] **`insert_child` positional Visual insert** (risk
+- [x] **`insert_child` positional Visual insert** (risk
       [R-F](./preamble.md#technical-risks-planning-time-recon),
       pre-implementation spike): `insert_child` / `append_child` currently
       `InsertAtTop` unconditionally, so a subtree re-inserted between
       static siblings lands on top rather than in declared sibling order.
       Give `insert_child` an `InsertAbove` / `InsertBelow`-relative
       positional Visual insert keyed to the recomputed index. The T5
-      declared-sibling-order fixture is its regression gate.
-- [ ] **`BindingTarget::ConditionalSubtree`** (risk
+      declared-sibling-order fixture is its regression gate. Implemented in
+      `wasamo-runtime/src/widget.rs` (`insert_child_inner` with
+      `InsertBelow` for mid-list insert; ZStack placement-vector
+      insert/remove kept parallel) and pinned by
+      `conditional_toggle_preserves_declared_visual_order_and_disposes_registry`.
+- [x] **`BindingTarget::ConditionalSubtree`** (risk
       [R-C](./preamble.md#technical-risks-planning-time-recon)): add the
       variant `{ parent, declared_member_index }`; convert the
       `register_binding` / `register_bool_binding` irrefutable `let`
@@ -412,28 +416,51 @@ the Visual-ordering primitive (R-F), and wires structural disposal
       `EffectHandle::new` seam (an insert/remove closure, not a property
       writer). The materialised insertion index is **recomputed from
       declared order + live presence** at each mutation, not cached.
-- [ ] **Present/absent mutation + Effect disposal** (risk
+      Implemented in `wasamo-runtime/src/reactive.rs`
+      (`BindingTarget::ConditionalSubtree`,
+      `register_conditional_binding`) and
+      `wasamo-runtime/src/ir_loader.rs` (`DeclaredMemberSlot`,
+      `materialized_index_for_declared_member`,
+      `mutate_conditional_subtree`); property binding registration now uses
+      refutable `let ... else` destructures.
+- [x] **Present/absent mutation + Effect disposal** (risk
       [R-E](./preamble.md#technical-risks-planning-time-recon)): toggle
       true ⇒ `insert_child` the freshly-built subtree at the recomputed
       index; false ⇒ `remove_child` then `widget_destroy` so the subtree's
       Effects **and** `WidgetId`-keyed registry entries are disposed
       (DD-M3-P6-005 (a)). Re-present recreates fresh widgets + Effects.
-- [ ] **Toggle integration fixture** (item 4) — `bool` true → false → true
+      Implemented in `mutate_conditional_subtree` (`build_node` on
+      present; `remove_child` → `widget_destroy` on absent; successful
+      structural mutation marks the owning window layout-dirty via the
+      parent widget); verified by registry destroy-count and fresh
+      `Button.enabled` binding assertions in
+      `conditional_toggle_integration.rs`.
+- [x] **Toggle integration fixture** (item 4) — `bool` true → false → true
       inserts / removes the subtree + its Visuals; assert **declared
       sibling order** for siblings-on-both-sides and two-sibling-
       conditional (the latter including a **preceding-conditional removal
       while both present** so the removal-index shift is exercised); a
       **re-evaluation-to-same-state** case (true→true / false→false)
       asserts a **no-op** (no duplicate insertion, no spurious removal);
-      Effects + registry entries disposed on absence.
-- [ ] **Drain proof fixture** (item 4 / DD-M3-P6-005 (b)) — with
+      Effects + registry entries disposed on absence. Added
+      `wasamo-runtime/tests/conditional_toggle_integration.rs` test
+      `conditional_toggle_preserves_declared_visual_order_and_disposes_registry`;
+      self-review added
+      `conditional_zstack_reinsert_uses_declared_placement_metadata` to pin
+      dynamic ZStack placement metadata through layout after insert/reinsert.
+- [x] **Drain proof fixture** (item 4 / DD-M3-P6-005 (b)) — with
       `BATCH_DEPTH == 0`, a toggling write drains before control returns
       (toggle-then-observe): presence is observable and freshly-inserted
       Effects have run, within the existing `MUTATION_CAP`. Pins the
       M3-Phase 1 synchronous-drain contract under structural mutation.
       Record the reactive-drain items 1–3 fix-or-carry disposition
       (carried forward per DD-M3-P6-005 / constraints §7) in
-      [log.md](./log.md).
+      [log.md](./log.md). Added
+      `conditional_toggle_drains_fresh_subtree_effects_before_return`
+      (`open` false→true observed immediately; absent state mutation then
+      re-open proves fresh subtree Effects observe latest state before the
+      setter returns). Reactive-drain items 1–3 disposition recorded in
+      `implementation/log.md` under the T5 verification entry.
 
 ### T6 — R1 Window-title host-wiring
 
@@ -496,11 +523,14 @@ judgment.
       visual evidence as a **before/after toggle pair** (lightbox closed
       vs open) — launch + `Graphics.CopyFromScreen` screenshot
       (per-monitor-DPI-aware) + assistant analysis confirming: the
-      overlay appears on open and is gone on close (positive control =
-      state toggle, not a single frame); the photo / caption / nav are
-      painted **over** the scrim and the scrim **dims** (does not replace)
-      the thumbnails behind it (z-order read off the open frame); the
-      window title bar reads `"Gallery"` (T6 corroboration). C / Zig
+      overlay appears on open and is gone on close **immediately after the
+      click-driven toggle, without relying on a resize** (positive control =
+      state toggle, not a single frame; pins the real `WindowState`
+      dirty-layout path `mark_layout_dirty_for` → `drain_if_outermost` →
+      `flush_layout` for the conditional subtree); the photo / caption /
+      nav are painted **over** the scrim and the scrim **dims** (does not
+      replace) the thumbnails behind it (z-order read off the open frame);
+      the window title bar reads `"Gallery"` (T6 corroboration). C / Zig
       gallery hosts remain out of Phase 6 scope. Screenshots land under
       [evidence/](./evidence/). **This is the real-pixel paint-precedence
       observation** the Phase 5 gallery slice could not provide — the
@@ -520,8 +550,9 @@ matching the Phase 4 T5 / T6 and Phase 5 T5 / T6 split rationale.
 - [ ] Owner runs `examples/gallery-rust/` and observes, with the
       **positive control = `is_lightbox_open` toggled** (constraints §3):
       - **closed → open toggle:** the lightbox overlay appears on open and
-        is gone on close (proves structural present/absent, not a hidden
-        always-built subtree);
+        is gone on close **without a resize before the observation** (proves
+        structural present/absent, not a hidden always-built subtree, and
+        owner-checks the real `WindowState` dirty-layout path);
       - **z-order:** photo / caption / nav painted over the scrim; the
         half-transparent scrim **dims** the thumbnails behind it rather
         than replacing them (proves document-order = paint-order overlay,
@@ -583,7 +614,9 @@ mid-phase owner decisions and revise the mutable plan where they diverge
       match the diagnostics exercised in T1 / T4 / T5, at the
       external-reader-reproducibility bar.
 - [ ] `docs/architecture.md` top Status flips to include `M3-Phase 6
-      complete`; any implementation-divergent paragraphs in §6.9 /
+      complete`; any implementation-divergent paragraphs in §6.6
+      (layout invalidation: structural conditional mutation now marks
+      layout dirty in addition to size-affecting property writes), §6.9 /
       §6.7 / §9 re-synced to the actual landed shape.
 - [ ] `process/milestone-3/plan.md` Phase 6 row Status flips to
       `complete`.

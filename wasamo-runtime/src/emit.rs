@@ -14,8 +14,8 @@
 //!     `WASAMO_ERR_REENTRANT_LOAD`.  The `IN_DRAIN` TLS flag guards this phase.
 //!
 //!   Phase 2 — Layout pass (terminal, read-only).
-//!     One layout pass per dirty window; coalesces all property changes from
-//!     Phase 1.
+//!     One layout pass per dirty window; coalesces all layout invalidations
+//!     from Phase 1.
 //!
 //!   Phase 3 — Post-commit observer drain.
 //!     Queued observer/signal callbacks fire under the `IN_OBSERVER_CALLBACK`
@@ -69,7 +69,8 @@ thread_local! {
     // Raw pointers to all live WindowState allocations on this thread.
     // Populated by window::create; removed by wasamo_window_destroy.
     static WINDOWS: RefCell<Vec<*mut WindowState>> = const { RefCell::new(Vec::new()) };
-    // Windows marked dirty by a size-affecting set_property call.
+    // Windows marked dirty by size-affecting property writes or structural
+    // subtree mutations.
     // Holds raw pointers that are always a subset of WINDOWS.
     static DIRTY: RefCell<HashSet<*mut WindowState>> = RefCell::new(HashSet::new());
 }
@@ -95,7 +96,7 @@ pub fn unregister_window(window: *mut WindowState) {
     });
 }
 
-/// Called from set_property when a size-affecting property changes.
+/// Called when a size-affecting property changes or a live subtree mutates.
 /// Marks the window that owns `widget` as needing a layout pass.
 /// If `widget` is not yet attached to any window, this is a no-op;
 /// layout will run when the widget enters a window via `set_root`.
@@ -202,7 +203,7 @@ pub fn drain_if_outermost() {
     IN_DRAIN.with(|f| f.set(false));
 
     // Phase 2 — layout pass (terminal, read-only).
-    // Coalesces all property changes from Phase 1 into a single pass per window.
+    // Coalesces all layout invalidations from Phase 1 into a single pass per window.
     flush_layout();
 
     // Phase 3 — post-commit observer drain.

@@ -1,5 +1,96 @@
 ## Decisions log
 
+- **2026-06-05 / T5 conditional reactive runtime:** T5 fills the
+  DD-M3-P6-004 / 005 structural binding seam without adding any IR / ABI /
+  grammar or host-facing error surface. `BindingTarget::ConditionalSubtree { parent,
+  declared_member_index }` is registered through a new
+  `register_conditional_binding` wrapper over `EffectHandle::new`; property
+  binding entry points now destructure `BindingTarget` refutably. The
+  runtime tracks each parent's declared member slots as
+  `DeclaredMemberSlot::{Widget, Conditional(state)}` while iterating
+  `IrMember` in declared order; the materialised insertion/removal index is
+  recomputed from preceding declared slots and each conditional's live
+  presence bit on every mutation. This closes the T4 carry-forward
+  constraint for T5's positional path: the traversal that materialises
+  conditionals and computes positional metadata dispatches on `IrMember`,
+  not `widget_children()`.
+- **2026-06-05 / T5 positional Visual + ZStack placement update:** The
+  `WidgetNode::insert_child` Visual operation is now index-aware: append
+  still uses `InsertAtTop`, while mid-list insertion uses `InsertBelow`
+  relative to the current child at the target index so live Visual sibling
+  order matches `WidgetNode.children`. Because ZStack stores
+  parent-owned child placement metadata parallel to materialised children,
+  dynamic insert/remove also updates the ZStack placement vector at the same
+  index (`insert_child_with_zstack_placement` / `remove_child`). This is the
+  T5 R-F closure and preserves the T4 traversal-audit rule for positional
+  metadata.
+- **2026-06-05 / T5 ZStack placement construction refactor:** The T5
+  positional-mutation fix also moved static ZStack placement construction
+  from a precomputed `collect_static_zstack_placements` vector to the same
+  per-child insertion path used for dynamic members:
+  `append_static_member` calls `insert_child_with_zstack_placement` whenever
+  the parent is ZStack. The old static reducer helpers
+  (`evaluate_static_condition`, `collect_static_zstack_placements`) are now
+  `#[cfg(test)]`; their unit tests still pin reducer logic but no longer
+  guard a production call-site directly. Production placement evidence is
+  covered by the ZStack Windows integration fixtures and T5's
+  `conditional_zstack_reinsert_uses_declared_placement_metadata`.
+- **2026-06-05 / T5 parent-owned metadata mutation constraint:** The
+  ZStack placement-vector fix surfaced a future-structural constraint:
+  any structural mutation primitive that changes a materialised child list
+  under a container with parent-owned positional metadata must update that
+  metadata atomically with `WidgetNode.children` and the live Visual sibling
+  order. T5 implements the single-child case for conditional insert/remove;
+  Phase 7's `ForLoopSubtree` / range mutation design must carry the same
+  invariant rather than treating child insertion as a widget-only operation.
+- **2026-06-05 / T5 structural-binding handover constraints:** Conditional
+  initial presence is now established by `EffectHandle::new`'s eager initial
+  run; a future reactive-engine change that delays initial Effects must
+  preserve this loader materialisation contract or add an explicit
+  initialisation path. ZStack-aligned structural insertion must use the
+  placement-carrying API; plain `append_child` supplies a centered default
+  only to keep ZStack's placement vector length-synchronised. Conditional
+  mutation build / insert / remove / slot-missing failures remain log-only
+  (`eprintln!`) and are not surfaced through runtime health; Phase 7 range
+  mutation should re-check whether log-only structural failure remains
+  sufficient for multi-child edits.
+- **2026-06-05 / T5 self-review layout invalidation fix:** The initial T5
+  implementation inserted/removed conditional children synchronously but did
+  not mark the owning window layout-dirty on structural success. Self-review
+  classified that as T5-owned, because a conditionally-present subtree can
+  affect parent measurement/allocation even when no size-affecting property
+  write occurs. `mutate_conditional_subtree` now marks dirty via the parent
+  widget after successful insert/remove. The same pass added
+  `conditional_zstack_reinsert_uses_declared_placement_metadata`, which
+  drives conditional insert/reinsert under `ZStack` through
+  `run_layout_as_window_root` and asserts the dynamic child's declared
+  `h-align` / `v-align` placement.
+- **2026-06-05 / T5 follow-on classification for dirty-layout evidence:**
+  This is **not** a Phase 7 carry-forward. T5 fixed the structural mutation
+  primitive, but the full real-window path (`mark_layout_dirty_for` →
+  `drain_if_outermost` → `flush_layout` under `WindowState`) must be pinned
+  by Phase 6 GUI evidence. T7 now owns the assistant screenshot before/after
+  pair captured immediately after the click-driven lightbox toggle, without
+  relying on resize; T8 owns the same owner-visible smoke criterion and the
+  Phase 6 fix slot if the path fails. T9 Moment 2 architecture sync must
+  include `docs/architecture.md` §6.6 so layout invalidation is no longer
+  documented as property-change-only.
+- **2026-06-05 / T5 closes T4b DD-M3-P6-007 comment handoff:** T4b left a
+  narrow source-comment follow-up for the next `ir_loader.rs` touch: refresh
+  `validate_phase4_node_invariants` from the "interim / open DD-007" wording
+  to the accepted-(a) ScrollView direct-conditional rejection. T5 performed
+  that refresh; the handoff is closed without reopening DD-M3-P6-007.
+- **2026-06-05 / T5 reactive-drain items 1–3 disposition:** T5 implements
+  the DD-M3-P6-005 DB-1 item-4 proof and does **not** revise the inherited
+  reactive-drain items 1–3. Cycle detection, ordering ties, and fan-out ×
+  `MUTATION_CAP` remain the DD-M3-P6-005 SM-1 carry-forward exactly as the
+  ADR records: the conditional insertion Effect writes the widget tree, not
+  its own Signal; quiescent child order is fixed by declared member order;
+  and large-subtree cap strategy is deferred until the structural family
+  (`for` / larger repeated subtrees) reveals the real budget requirement.
+  This entry covers only the reactive-drain items 1–3 disposition; the
+  separate parent-owned metadata mutation constraint above is the T5-specific
+  carry-forward candidate.
 - **2026-06-03 / T4 IrMember schema migration:** T4 landed the accepted
   DD-M3-P6-004 O1 shape directly: `IrNode.children` is now
   `Vec<IrMember>`, with `IrMember::Widget(IrNode)` and
@@ -120,6 +211,25 @@
 
 ## CI / verification log
 
+- **2026-06-05 / T5 local scoped:** `cargo test -p wasamo-runtime --test
+  conditional_toggle_integration` — green (2 tests). Added
+  `conditional_toggle_preserves_declared_visual_order_and_disposes_registry`
+  for declared sibling order, two sibling conditionals, preceding removal
+  index shift, true→true / false→false no-op, live VisualCollection order,
+  and registry teardown through `widget_destroy`; added
+  `conditional_toggle_drains_fresh_subtree_effects_before_return` for
+  same-drain present/absent observation and freshly-created subtree Effects
+  observing the latest state before the toggling setter returns.
+- **2026-06-05 / T5 local scoped runtime:** `cargo test -p wasamo-runtime
+  --lib ir_loader::tests` — green (127 tests);
+  `cargo test -p wasamo-runtime --lib reactive::tests` — green (39 tests);
+  `cargo test -p wasamo-runtime` — green (runtime lib 332 plus all
+  integration suites, including the new conditional toggle fixture).
+- **2026-06-05 / T5 local pre-retro:** `cargo fmt --all -- --check` —
+  green; `cargo build --release --workspace` — green; `cargo build
+  --workspace` — green; `cargo test --workspace` — green; `cargo test -p
+  wasamo-runtime` — green. Existing Cargo warnings about the `wasamo`
+  linkable target / `wasamo-sys` import-library ordering were observed.
 - **2026-06-03 / T4 local scoped:** `cargo fmt --all -- --check`
   — green; `cargo test -p wasamo-ir` — green (17 tests);
   `cargo test -p wasamoc --lib` — green (308 tests);
