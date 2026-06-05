@@ -52,12 +52,14 @@
   run; a future reactive-engine change that delays initial Effects must
   preserve this loader materialisation contract or add an explicit
   initialisation path. ZStack-aligned structural insertion must use the
-  placement-carrying API; plain `append_child` supplies a centered default
-  only to keep ZStack's placement vector length-synchronised. Conditional
-  mutation build / insert / remove / slot-missing failures remain log-only
-  (`eprintln!`) and are not surfaced through runtime health; Phase 7 range
-  mutation should re-check whether log-only structural failure remains
-  sufficient for multi-child edits.
+  placement-carrying API; T5 guards the former two-path footgun by making
+  `append_child` delegate to `insert_child_inner(len, child, None)`, so the
+  centered ZStack default is concentrated in one insertion primitive.
+  Conditional mutation build / insert / remove / slot-missing failures
+  remain log-only (`eprintln!`) and are not surfaced through runtime health;
+  Phase 7 range mutation should re-check whether log-only structural failure
+  remains sufficient for multi-child edits. The final API consolidation shape
+  remains dependent on the Phase 7 placement-storage model decision.
 - **2026-06-05 / T5 self-review layout invalidation fix:** The initial T5
   implementation inserted/removed conditional children synchronously but did
   not mark the owning window layout-dirty on structural success. Self-review

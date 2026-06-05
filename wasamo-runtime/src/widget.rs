@@ -337,6 +337,16 @@ pub enum MutationError {
     AlreadyAttached,
 }
 
+fn mutation_error_to_winerr(err: MutationError) -> windows::core::Error {
+    use windows::core::{Error, HRESULT};
+    const E_FAIL: HRESULT = HRESULT(0x80004005_u32 as i32);
+    let msg = match err {
+        MutationError::IndexOutOfBounds => "Widget child mutation index out of bounds",
+        MutationError::AlreadyAttached => "Widget child is already attached",
+    };
+    Error::new(E_FAIL, msg)
+}
+
 impl WidgetNode {
     // ── Constructors ──────────────────────────────────────────────────────────
 
@@ -1273,20 +1283,9 @@ impl WidgetNode {
         }
     }
 
-    pub fn append_child(&mut self, mut child: Box<WidgetNode>) -> windows::core::Result<()> {
-        use windows::core::Interface;
-        // For ScrollView, route the child into the intermediate content
-        // Visual instead of the outer clipped Visual (DD-M3-P4-004
-        // Option A). Every other widget routes into `self.visual`.
-        let parent_container: ContainerVisual = self.content_container_visual().cast()?;
-        let child_visual: Visual = child.visual.cast()?;
-        parent_container.Children()?.InsertAtTop(&child_visual)?;
-        child.attached = true;
-        self.children.push(child);
-        if let WidgetData::ZStack { zstack_placements } = &mut self.data {
-            zstack_placements.push(ZStackPlacement::centered());
-        }
-        Ok(())
+    pub fn append_child(&mut self, child: Box<WidgetNode>) -> windows::core::Result<()> {
+        self.insert_child_inner(self.children.len(), child, None)
+            .map_err(mutation_error_to_winerr)
     }
 
     // ── Tree-mutation primitives (DD-M2-P4-001/002 = Option A) ───────────────
