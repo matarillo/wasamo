@@ -642,10 +642,16 @@ mid-phase owner decisions and revise the mutable plan where they diverge
       `key:` retention deferral; the dynamic Window-title deferral; the
       reactive-drain items 1–3 carry-forward; the placement storage-model
       decision (SoA vs AoS vs keyed map, per the T5 retro item 10); the
-      `scroll_view_layout_integration` teardown-AV investigation
-      (docs/notes/verification-environments.md Observation 5 — root-cause
-      from a captured dump and decide the permanent fix); any residual
-      surfaced during T2–T8). **NOT owned by T9** (phase-end retro item 15 per
+      `scroll_view_layout_integration` "teardown-AV" — **root-caused and
+      step-2-fixed** on branch `investigate/obs5-scrollview-teardown-av`
+      (cross-apartment Compositor reuse across libtest's per-test threads,
+      not a teardown fault; production-safe; keep-alive helper landed). Only
+      remediation **step 1** (marshal Compositor work onto the owning thread)
+      remains, **owner-deferred with no hard deadline + revisit triggers**
+      per docs/notes/verification-environments.md Observation 5 §Remediation
+      status — carry it forward as that owner-scheduled item, not as an open
+      investigation; any residual surfaced during T2–T8). **NOT owned by T9**
+      (phase-end retro item 15 per
       [retrospectives.md §6.3/§15](../../../procedures/retrospectives.md));
       stays `[ ]` at T9 close.
 - [ ] Front-matter `status` (on the sibling
