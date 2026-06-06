@@ -1,4 +1,4 @@
-# Wasamo — Project Conventions for Claude
+# Wasamo — Project Conventions for Agents
 
 ## Language rules
 
@@ -96,6 +96,21 @@ match; prove a clip by checking against the source what is *missing*
 (clipped content is invisible), with resize as the positive control;
 prove conditional / stateful rendering by toggling the state, not by the
 initial state alone.
+
+## Implementation task gates
+
+Agent implementation tasks run through
+[process/procedures/implementation-gates.md](process/procedures/implementation-gates.md)
+at **both task start and task close**: read it at start to pick **and
+record** the relevant failure-mode gates — with reasons for those judged
+non-applicable — *before* choosing an approach (the recorded selection is
+itself auditable), and close it with the
+required auditable artifacts (call-site audit table, structural
+side-effect enumeration, deterministic-failure rerun/disposition, GUI
+evidence). Review before merge: high-risk changes — schema / IR migration,
+runtime structural change, GUI-render evidence — require a full
+independent review; diagnostic / reject / size branch additions require a
+narrower branch/test-focused review (not "no review").
 
 ## Commit rules
 
