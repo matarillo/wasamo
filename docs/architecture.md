@@ -112,7 +112,7 @@ Each host's build system invokes `wasamoc` directly:
 This means **every host build depends on `wasamoc` having been built first**.
 For Rust, `cargo build -p counter-rust` resolves this via the workspace and
 `build.rs`'s `cargo:rerun-if-changed` directive; for the C and Zig hosts,
-`cargo build -p wasamoc` must precede the host build. See `CLAUDE.md` §
+`cargo build -p wasamoc` must precede the host build. See `AGENTS.md` §
 "Build ordering requirements" for the operational rule.
 
 **This pipeline is provisional.** The current shape — three independent
@@ -988,7 +988,7 @@ per-kind tag in the `wasamo-runtime` widget catalog with a pure-data
 [`wasamo-runtime/src/layout.rs`](../wasamo-runtime/src/layout.rs), so
 the layout engine stays Win32/WinRT-free and is exercised by pure-logic
 unit tests plus mock-free Windows integration tests through the live
-Compositor ([CLAUDE.md §Testing rules](../CLAUDE.md#testing-rules)).
+Compositor ([AGENTS.md §Testing rules](../AGENTS.md#testing-rules)).
 Three conventions are shared across the family: the **`1 WidgetNode = 1
 Visual`** mapping holds for every primitive except ScrollView (which
 adds one intermediate content Visual for the scroll translation, §6.5);
@@ -1068,7 +1068,7 @@ WrapPanel line breaker and arrange pass operate on pure data
 (`wasamo-runtime/src/layout.rs`), composing structurally with the
 Phase 2 Box measure-arrange. Mock-free Windows integration tests
 exercise the full pipeline through the live Compositor (per
-[CLAUDE.md §Testing rules](../CLAUDE.md#testing-rules)); the
+[AGENTS.md §Testing rules](../AGENTS.md#testing-rules)); the
 algorithm-correctness evidence lives in pure-logic unit tests.
 
 #### 6.8.3 ScrollView (M3-Phase 4)

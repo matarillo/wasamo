@@ -50,7 +50,7 @@ Process knowledge is split across five homes by category. Each home owns its cat
 
 | SSOT | Owns |
 |---|---|
-| [`CLAUDE.md`](../CLAUDE.md) | Enforceable rules: language, testing, commit, CI, build order |
+| [`AGENTS.md`](../AGENTS.md) (with `CLAUDE.md` as its Claude-Code `@AGENTS.md` import shim) | Enforceable rules: language, testing, commit, CI, build order, rule-enforcement tiers |
 | `process/README.md` (this file) | Structural conventions: folders, lifecycle, mutability |
 | [`process/procedures/workflow.md`](./procedures/workflow.md) | Development workflow (milestone/phase stages, document lifecycle, glossary) |
 | [`process/procedures/retrospectives.md`](procedures/retrospectives.md) | Retrospective procedure (task/phase retro, merge gate) |
