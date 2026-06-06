@@ -82,7 +82,7 @@ check and does **not** replace the owner's human-visible GUI smoke (see
 [docs/notes/human-visible-smoke.md](docs/notes/human-visible-smoke.md)).
 Capture mechanics and the environment requirement are recorded in
 [docs/notes/verification-environments.md](docs/notes/verification-environments.md)
-§Observation 4 (their SSOT), not duplicated here.
+§Observation 4, not duplicated here.
 
 Visible verification — the assistant's screenshot analysis **or** the
 owner's human-visible smoke — must include a **positive control** that
