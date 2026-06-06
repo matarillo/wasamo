@@ -303,3 +303,21 @@ resurrection experiment on branch `exp/m2-p1-poc-examples`
 local Windows 11 machine; an SSH-only approach would not have
 produced any of the observations the ADR's verification target
 requires.
+
+## Open questions
+
+- **Is `docs/notes/` the right home for an enforceable SSOT?**
+  Observation 4's capture mechanics currently act as the SSOT for *how to
+  capture GUI evidence*: the normative core lives in
+  [AGENTS.md](../../AGENTS.md) §Testing rules, the mechanics here (the
+  M3-Phase 5 phase-end split), and
+  [process/procedures/implementation-gates.md](../../process/procedures/implementation-gates.md)
+  close-gate #7 links here. But `docs/notes/` is defined as *exploratory,
+  owner-authored notes*, not a process SSOT — so an operational,
+  enforceable rule living in an exploratory note is a category mismatch.
+  If these mechanics are genuinely a process SSOT, the cleaner placement
+  is to carve the mechanics out into `process/procedures/` (a proper
+  procedure home). That move would supersede the M3-Phase 5 placement
+  decision, so it is a **structural change to settle with a vision
+  decision record**, not an in-place edit. Recorded as an open question,
+  not yet decided.

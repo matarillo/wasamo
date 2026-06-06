@@ -15,14 +15,14 @@ created: 2026-05-31
 > 実際のゲートは別にある：
 > - DD/ADR の確定は **owner の明示 accept**（[workflow.md §3](./workflow.md)）。
 > - merge は **retrospective + owner 明示承認**（[retrospectives.md](retrospectives.md)）。
-> - commit 形は [CLAUDE.md §Commit rules](../../CLAUDE.md#commit-rules)。
+> - commit 形は [AGENTS.md §Commit rules](../../AGENTS.md#commit-rules)。
 >
 > 本手順はこれらのゲートを**置き換えない**。owner が accept 判断を下すための
 > **input（より良く練れた DD と、論点の見える化）を整える**ための対話補助である。
 > したがって本ドキュメントは process-rule の SSOT ではなく、設計判断段階の SSOT
 > である [workflow.md §3](./workflow.md) に従属する。新たな強制ルールを足したく
 > なった場合は、ここを編集するのではなく
-> [CLAUDE.md §Process rule lifecycle](../../CLAUDE.md#process-rule-lifecycle) の
+> [AGENTS.md §Process rule lifecycle](../../AGENTS.md#process-rule-lifecycle) の
 > 構造的変更フロー（vision decision record）に乗せること。
 
 主な対象読者は **AI エージェント**だが、reviewer も reviewee も AI エージェントに
