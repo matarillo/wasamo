@@ -11,9 +11,9 @@ created: 2026-05-27
 個別のルールや手順は他の SSOT を参照する：
 
 - フォルダ構造・命名規約 → [process/README.md](../README.md)
-- 強制力のあるルール（テスト・コミット・CI 等） → [CLAUDE.md](../../CLAUDE.md)
+- 強制力のあるルール（テスト・コミット・CI 等） → [AGENTS.md](../../AGENTS.md)
 - レトロスペクティブとマージゲート → [process/procedures/retrospectives.md](retrospectives.md)
-- プロセスルールの SSOT 分散と変更ライフサイクル → [process/cross-milestone/decisions/process-rule-ssot.md](../cross-milestone/decisions/process-rule-ssot.md)
+- プロセスルールの変更ライフサイクル（規範） → [AGENTS.md §Process rule lifecycle](../../AGENTS.md#process-rule-lifecycle)。SSOT 分散と由来 → [process/cross-milestone/decisions/process-rule-ssot.md](../cross-milestone/decisions/process-rule-ssot.md)
 
 ---
 
@@ -129,7 +129,7 @@ ADR や決定に昇格して終了、または却下されて消化される。
 ## このフローからの逸脱
 
 以下の場合は本ワークフローから逸脱する判断がありうる。逸脱する場合は
-[CLAUDE.md §Process rule lifecycle](../../CLAUDE.md#process-rule-lifecycle)
+[AGENTS.md §Process rule lifecycle](../../AGENTS.md#process-rule-lifecycle)
 の構造的変更フローに従い、vision decision record を立てて記録する：
 
 - 新しい段階の追加（例：フェーズ内に design exploration 段階を独立させる）
@@ -278,7 +278,7 @@ ADR が Accepted になったタイミングで、上流文書を ADR の決定�
 同期対象の文書群は review concern 単位で分割し、**1 つの review concern を
 共有する文書は 1 commit にまとめる**（review concern が異なる文書は別
 commit）。doc-side commit のルールは
-[CLAUDE.md §Commit rules](../../CLAUDE.md#commit-rules) 参照。
+[AGENTS.md §Commit rules](../../AGENTS.md#commit-rules) 参照。
 
 Accepted + 設計同期完了後、§4 実装計画に進む。
 
@@ -293,7 +293,7 @@ Accepted + 設計同期完了後、§4 実装計画に進む。
   - `implementation/plan.md` — task list（チェックリスト形式）
 
 task 順序は依存方向に従って組み、各 task が green workspace を維持する
-（→ [CLAUDE.md §Commit rules](../../CLAUDE.md#commit-rules) の 1 commit per
+（→ [AGENTS.md §Commit rules](../../AGENTS.md#commit-rules) の 1 commit per
 task-list item 原則）。
 
 実装計画段階の成果物 `plan.md` は **mutable**。実装中に task の分割・追加・
@@ -307,7 +307,7 @@ task-list item 原則）。
 
 ### 5.1 task 実行
 
-各 task を 1 commit にまとめるのが基本（→ [CLAUDE.md §Commit rules](../../CLAUDE.md#commit-rules)）。
+各 task を 1 commit にまとめるのが基本（→ [AGENTS.md §Commit rules](../../AGENTS.md#commit-rules)）。
 bundling が必要な場合（中間状態が build を壊す等）は plan を更新したうえで
 合理化する。
 

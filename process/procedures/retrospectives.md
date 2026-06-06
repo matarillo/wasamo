@@ -160,7 +160,7 @@ ADR に補足 DD)。
     [human-visible GUI smoke](../../docs/notes/human-visible-smoke.md) に従い、
     `counter-c`, `counter-rust`, `counter-zig` を確認する。
 18. CI YAML 変更要否の sanity check — 本 phase で新言語/新ビルド系を
-    追加していれば CI 更新済みであること (CLAUDE.md の CI rules)
+    追加していれば CI 更新済みであること (AGENTS.md の CI rules)
 
 CI green: **必須**。clean rebuild は **必須** (incremental cache の嘘を
 main に持ち込まない)。
@@ -221,7 +221,7 @@ ADR への substantive 追加・修正 (新 DD 追加、Proposed → Accepted
 phase-end は上記 3 ケースの整合 touch に限定される。
 
 commit shape は per-review-concern
-([CLAUDE.md §Commit rules](../../CLAUDE.md#commit-rules))、Moment は
+([AGENTS.md §Commit rules](../../AGENTS.md#commit-rules))、Moment は
 milestone label であって commit unit ではない。earlier-phase spec gap
 の同 commit fold は owner 明示確認の上で最小範囲のみ。
 
