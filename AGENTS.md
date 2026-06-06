@@ -80,11 +80,9 @@ signal only; it cannot show the screen rendered non-blank or that the
 intended sub-screen is in view. This assistant baseline is a pre-owner
 check and does **not** replace the owner's human-visible GUI smoke (see
 [docs/notes/human-visible-smoke.md](docs/notes/human-visible-smoke.md)).
-Capture mechanics and the environment requirement (visible desktop
-session; per-monitor-DPI-aware capture; `Graphics.CopyFromScreen`, not
-`PrintWindow`, because the DirectComposition client area reads back blank
-under `PrintWindow`) are recorded in
-[docs/notes/verification-environments.md](docs/notes/verification-environments.md).
+Capture mechanics and the environment requirement are recorded in
+[docs/notes/verification-environments.md](docs/notes/verification-environments.md)
+§Observation 4 (their SSOT), not duplicated here.
 
 Visible verification — the assistant's screenshot analysis **or** the
 owner's human-visible smoke — must include a **positive control** that

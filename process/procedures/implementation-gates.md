@@ -90,7 +90,10 @@ report.
 - **#7 GUI evidence** — screenshot, analysis, and a **positive control**
   (resize and watch a ratio hold / check the source for what is missing /
   toggle the state — an action that distinguishes the intended behavior
-  from a look-alike).
+  from a look-alike). Capture mechanics (CopyFromScreen not PrintWindow,
+  per-monitor DPI, visible desktop) are in
+  [docs/notes/verification-environments.md](../../docs/notes/verification-environments.md)
+  §Observation 4.
 
 ---
 
