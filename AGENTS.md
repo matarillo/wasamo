@@ -160,6 +160,24 @@ Changes flow as:
 Boundary test: a change is *structural* if it requires touching another
 SSOT or supersedes a prior decision. If both are no, edit in place.
 
+For a structural change, the vision decision record must also record
+**how the rule is enforced**, not only what it says — assign the
+strongest feasible **enforcement tier**:
+
+- **Hard** — a hook or CI check that blocks the action regardless of the
+  agent's choice (the only true enforcement).
+- **Forcing** — an *auditable artifact* a reviewer, owner, or CI can
+  check against ground truth (a table, an enumeration, a screenshot — not
+  a bare "checked: yes", which an agent can fabricate).
+- **Soft** — standing prose, for irreducible judgment only: back it with
+  an independent review or escalation, arm it *before* the design
+  decision (not only at completion), and keep bulky soft material on a
+  triggered surface rather than inline here, to protect the always-loaded
+  context budget.
+
+Rationale and the M3-Phase 6 origin:
+[rule-enforcement discipline](process/cross-milestone/decisions/agents-md-and-rule-enforcement.md).
+
 ## CI rules
 
 Add a "update CI" checklist item only when a phase introduces a **new language or build system** (e.g. Zig, CMake/C). Phases that add Rust code to existing crates need no CI update — `cargo build --release --workspace` and `cargo test --workspace` already cover them.
