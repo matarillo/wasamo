@@ -13,7 +13,7 @@ created: 2026-05-27
 - フォルダ構造・命名規約 → [process/README.md](../README.md)
 - 強制力のあるルール（テスト・コミット・CI 等） → [AGENTS.md](../../AGENTS.md)
 - レトロスペクティブとマージゲート → [process/procedures/retrospectives.md](retrospectives.md)
-- プロセスルールの SSOT 分散と変更ライフサイクル → [process/cross-milestone/decisions/process-rule-ssot.md](../cross-milestone/decisions/process-rule-ssot.md)
+- プロセスルールの変更ライフサイクル（規範） → [AGENTS.md §Process rule lifecycle](../../AGENTS.md#process-rule-lifecycle)。SSOT 分散と由来 → [process/cross-milestone/decisions/process-rule-ssot.md](../cross-milestone/decisions/process-rule-ssot.md)
 
 ---
 

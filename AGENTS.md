@@ -86,14 +86,12 @@ Capture mechanics and the environment requirement are recorded in
 
 Visible verification — the assistant's screenshot analysis **or** the
 owner's human-visible smoke — must include a **positive control** that
-distinguishes the intended behavior from a coincidental look-alike. A
+distinguishes the intended behavior from a coincidental look-alike: a
 single static frame a wrong implementation could equally produce is not
-evidence: prove a flexible (star/weighted) track is flexible by resizing
-and watching the ratio hold, not by one launch size a fixed width could
-match; prove a clip by checking against the source what is *missing*
-(clipped content is invisible), with resize as the positive control;
-prove conditional / stateful rendering by toggling the state, not by the
-initial state alone.
+evidence. Concrete cases (flexible-track resize, clip-vs-source,
+conditional toggle) are in
+[docs/notes/verification-environments.md](docs/notes/verification-environments.md)
+§Observation 4, not duplicated here.
 
 ## Implementation task gates
 
@@ -160,7 +158,7 @@ Full procedure (checklist, doc-set, forward-carry discipline):
 
 ## Process rule lifecycle
 
-Process knowledge has four SSOTs ([process/README.md §SSOT distribution](process/README.md#ssot-distribution)).
+Process knowledge is split across SSOTs by category ([process/README.md §SSOT distribution](process/README.md#ssot-distribution)).
 Changes flow as:
 
 - **Minor edits** (wording, additional examples, clarifications) — edit
