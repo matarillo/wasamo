@@ -1,5 +1,32 @@
 ## Decisions log
 
+- **2026-06-07 / T7 review follow-up — component-root window-attribute
+  boundary (DD-M3-P6-008) + interim pins:** the T7 review found that the
+  two validator-fix branches were the visible symptom of a deeper
+  divergence: component **window** attributes are spliced onto the **root
+  widget's** `props` / `bindings` ([`wasamoc/src/lower.rs`](../../../../wasamoc/src/lower.rs#L59)),
+  so `wasamoc check` (pre-splice AST, accepts any component-level name) and
+  the runtime loader (post-splice IR, ZStack root rejects outside a
+  three-name allowlist) disagree. The scope is broader than props — a
+  component-level dynamic bind (`bind title = …`, FD-D) hits the same
+  unconditional ZStack binding rejection. The ZStack-child-of-ZStack
+  placement branch was separately a **T3 validator coverage gap** (`wasamoc
+  check` already accepted it). Disposition: raised as **DD-M3-P6-008
+  (Proposed)** with options A (IR-schema separation) / D (compiler-owned
+  catalog mirrored by runtime) / C (rejected); tracked at **plan.md T7b**,
+  time-boxed before phase close. Interim runtime behavior (reject outside the
+  allowlist) is pinned by `nested_zstack_rejects_component_window_prop`,
+  `root_zstack_rejects_non_window_component_prop`,
+  `root_zstack_rejects_placement_prop`, and `zstack_binding_rejected_at_validate`.
+  Also recorded: the T7 commit was amended to add the missing
+  `Co-Authored-By: codex` trailer (codex authored the T7 implementation);
+  the "existing slices byte-identical" item carries the caveat that the
+  VStack gained `h-align`/`v-align: stretch` to fill the new root ZStack
+  (structural wrapping, not a content change); a geometry positive-control
+  observation (photo `aspect: 4:3` / centre-column width, caption-row fit)
+  was added to T8 since the assistant analysis covered z-order / dimming but
+  not geometry; and the wrapped VStack block was re-indented under the root
+  ZStack (whitespace-only).
 - **2026-06-07 / T7 start gate — gallery lightbox slice + assistant GUI evidence:**
   selected implementation-gate traps before editing. Applies: **#2 missed
   side effects** (the authored slice must wire the visible `Open lightbox` /

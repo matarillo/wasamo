@@ -547,6 +547,45 @@ judgment.
       thumbnails), so the occlusion is genuinely exercised rather than
       left as a Visual-insertion-order assumption.
 
+**Implementation deviations (recorded per the commit-rules revise-not-freeze
+discipline):**
+
+- **Unplanned runtime validator fix.** The root-ZStack gallery shape could
+  not launch until `validate_phase6_zstack_node_invariants` was taught to
+  (1) not treat spliced component-root window props (`title` / `backdrop` /
+  `theme`) as ZStack widget attributes at the root, and (2) admit
+  `h-align` / `v-align` when a ZStack direct child is itself a ZStack (a T3
+  validator coverage gap — `wasamoc check` already accepted both). This was a
+  runtime-correctness fix folded into T7 because the slice depended on it;
+  the residual boundary is surfaced as **DD-M3-P6-008** and tracked at T7b.
+- **"Existing gallery slices byte-identical" caveat.** The existing VStack
+  gained `h-align: stretch` / `v-align: stretch` so it fills the new root
+  ZStack — a structural-wrapping change, not a content change; the
+  thumbnail / Grid / ScrollView demonstrations are otherwise unchanged.
+
+### T7b — Component-root window-attribute boundary (DD-M3-P6-008)
+
+Owns the component-root window-attribute / widget-attribute boundary
+surfaced by the T7 review: window attributes are spliced onto the root
+widget's `props` / `bindings`, so `wasamoc check` (pre-splice AST) and the
+runtime loader (post-splice IR) diverge on a ZStack root. Inserted with a
+non-integer label (no renumber) because its weight depends on the
+deliberation outcome (A schema separation vs D compiler-owned catalog;
+C rejected). The runtime interim is **reject** outside the narrow allowlist,
+pinned by `nested_zstack_rejects_component_window_prop`,
+`root_zstack_rejects_non_window_component_prop`,
+`root_zstack_rejects_placement_prop`, and (binding facet)
+`zstack_binding_rejected_at_validate`. Deliberation should land **before
+Phase 6 closes** (T8 fix-container or a promoted numbered slot).
+
+- [ ] Deliberate [DD-M3-P6-008](../decisions/dd-m3-p6-008-component-root-window-attribute-boundary.md)
+      ((A) IR-schema separation vs (D) compiler-owned catalog mirrored by the
+      runtime; (C) runtime-accept-all rejected) and flip it to `Accepted`
+      with owner comparison. Cover both the prop and binding facets.
+- [ ] Land the chosen option's code + spec sync (or confirm the interim as
+      final, as T4b did for DD-007), and reconcile this T7b bullet + the
+      preamble §Decisions index to the outcome.
+
 ### T8 — Owner-manual GUI smoke and any visible-correctness fix
 
 Discharges the **owner-visible smoke** for ADR
@@ -571,6 +610,15 @@ matching the Phase 4 T5 / T6 and Phase 5 T5 / T6 split rationale.
         window grows, not a fixed rect);
       - **Window title bar reads `"Gallery"`** (R1 / DD-M3-P6-006), not
         `"Wasamo"`.
+      - **geometry (T7 review carry):** the assistant screenshot analysis
+        confirmed z-order / dimming but did **not** include a geometry
+        positive control. Owner-check that the photo `Box` honours
+        `aspect: 4:3` within the `1* 400 1*` centre column (the open frame's
+        photo box appeared wider than the declared 400 px), and that the
+        caption `VStack` is not visibly clipped/overlapping the nav row (its
+        Grid row is `32`, short for two text lines — Grid does not clip, so
+        overflow would show). If either is wrong, fix additively on the T8
+        branch per the bullet below.
       The DPI blur on a high-DPI box is a **known M4 residual**
       (constraints §5), noted during analysis, not a smoke pass/fail
       criterion.

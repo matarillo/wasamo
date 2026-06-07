@@ -4437,6 +4437,57 @@ mod tests {
         validate(&c).expect("ZStack direct-child placement applies even when the child is ZStack");
     }
 
+    // ── DD-M3-P6-008 interim pins ───────────────────────────────────────
+    // T7 surfaced that component-root window attributes (`title` / `backdrop`
+    // / `theme`) are spliced onto the root widget's `props` (wasamoc
+    // `lower.rs`), and component-level bindings onto its `bindings`, so the
+    // strict ZStack validator — the only widget validator that rejects
+    // unknown props/bindings — sees them only when the root widget is a
+    // ZStack. `wasamoc check` never sees them as widget attributes (they are
+    // component-level in the AST, before the splice), so the two gates
+    // diverge: the compiler accepts *any* component-level prop/binding, while
+    // the runtime ZStack root accepts only the three-name window allowlist.
+    // The tests below pin the current (interim) runtime behavior so the
+    // divergence is explicit and auditable until DD-M3-P6-008 settles the
+    // boundary. The binding side of the same divergence is already pinned by
+    // `zstack_binding_rejected_at_validate` (the ZStack binding gate is
+    // unconditional, so it also rejects a spliced component-level binding).
+
+    #[test]
+    fn nested_zstack_rejects_component_window_prop() {
+        // The window-prop exemption is root-only: a `title` on a non-root
+        // (nested) ZStack is still a widget attribute and is rejected.
+        assert_validate_err(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             node ZStack { node ZStack { prop title = \"x\" node Text {} } }\n}",
+            "`ZStack` accepts no Phase-6 attributes; found `title`",
+        );
+    }
+
+    #[test]
+    fn root_zstack_rejects_non_window_component_prop() {
+        // DD-M3-P6-008 interim divergence: `wasamoc check` passes an
+        // arbitrary component-level prop (no component-prop catalog), but the
+        // runtime ZStack root rejects anything outside the title/backdrop/
+        // theme allowlist. Pinned so a future relaxation is a deliberate flip.
+        assert_validate_err(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             node ZStack { prop foo = bar node Text {} }\n}",
+            "`ZStack` accepts no Phase-6 attributes; found `foo`",
+        );
+    }
+
+    #[test]
+    fn root_zstack_rejects_placement_prop() {
+        // A placement prop has no meaning on a root widget (no parent
+        // placement context); the root ZStack rejects `h-align`.
+        assert_validate_err(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             node ZStack { prop h-align = stretch node Text {} }\n}",
+            "`ZStack` accepts no Phase-6 attributes; found `h-align`",
+        );
+    }
+
     #[test]
     fn zstack_binding_rejected_at_validate() {
         assert_validate_err(
