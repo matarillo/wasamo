@@ -1890,6 +1890,21 @@ mod tests {
     }
 
     #[test]
+    fn zstack_root_component_window_attrs_accepted() {
+        // DD-M3-P6-008 divergence — compiler (accept) side. Component-level
+        // window attributes pass `wasamoc check` even on a ZStack root: an
+        // arbitrary prop (`foo: bar`, no component-prop catalog) and a dynamic
+        // `title: <state>` bind. These splice onto the root node and the
+        // runtime ZStack validator rejects them (see the runtime
+        // `root_zstack_rejects_*` tests) — the divergence DD-M3-P6-008 settles.
+        // Pinned on both gates so a future alignment visibly flips exactly one.
+        let result = check_src(
+            r#"component C inherits W { state s: string = "x" foo: bar title: s ZStack { Text {} } }"#,
+        );
+        assert!(!result.has_errors(), "{:?}", result.diagnostics);
+    }
+
+    #[test]
     fn bind_string_target_string_literal_accepted() {
         let result = check_src(r#"component C inherits W { Button { text: "Click" } }"#);
         assert!(!result.has_errors(), "{:?}", result.diagnostics);

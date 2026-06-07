@@ -515,7 +515,7 @@ supporting "no early crash" signal only and the assistant analysis is a
 pre-T8 baseline, not a substitute for the owner's visible-correctness
 judgment.
 
-- [ ] Grow `examples/gallery/gallery.ui` **additively** with the
+- [x] Grow `examples/gallery/gallery.ui` **additively** with the
       lightbox slice (FD-B): a thumbnail-gallery background (WrapPanel /
       ScrollView slice, Phase 3/4) with a `bool`-toggled
       (`is_lightbox_open`) ZStack overlay = scrim (`Box { fill:
@@ -526,19 +526,23 @@ judgment.
       **event handler → `bool` state → conditional subtree** (FD-C).
       Existing gallery slices stay byte-identical. (Thumbnail-click-to-open
       is out of scope — Box hit-testing / image Button is M4.)
-- [ ] Lightbox photo uses `Box { aspect: 4:3 }` + `Text` per the Phase 2
+- [x] Lightbox photo uses `Box { aspect: 4:3 }` + `Text` per the Phase 2
       DD-M3-P2-006 placeholder pattern. No Image widget (M4).
-- [ ] Build and run `examples/gallery-rust/`. Record assistant-automated
+- [x] Build and run `examples/gallery-rust/`. Record assistant-automated
       visual evidence as a **before/after toggle pair** (lightbox closed
       vs open) — launch + `Graphics.CopyFromScreen` screenshot
       (per-monitor-DPI-aware) + assistant analysis confirming: the
       overlay appears on open and is gone on close **immediately after the
-      click-driven toggle, without relying on a resize** (positive control =
-      state toggle, not a single frame; pins the real `WindowState`
-      dirty-layout path `mark_layout_dirty_for` → `drain_if_outermost` →
-      `flush_layout` for the conditional subtree); the photo / caption /
+      click-driven toggle, without relying on a resize**; the photo / caption /
       nav are painted **over** the scrim and the scrim **dims** (does not
-      replace) the thumbnails behind it (z-order read off the open frame);
+      replace) the thumbnails behind it (z-order read off the open frame).
+      **Scope of this positive control:** it is the **z-order / dimming**
+      (a flat opaque panel could not dim the thumbnails) — it does *not* by
+      itself distinguish structural present/absent from an always-built,
+      opacity-hidden subtree; the structural insertion / disposal and the
+      `WindowState` dirty-layout path (`mark_layout_dirty_for` →
+      `drain_if_outermost` → `flush_layout`) are proven by **T5's headless
+      integration tests**, which this screenshot corroborates;
       the window title bar reads `"Gallery"` (T6 corroboration). C / Zig
       gallery hosts remain out of Phase 6 scope. Screenshots land under
       [evidence/](./evidence/). **This is the real-pixel paint-precedence
@@ -546,6 +550,48 @@ judgment.
       lightbox overlaps by construction (scrim under photo/nav, over
       thumbnails), so the occlusion is genuinely exercised rather than
       left as a Visual-insertion-order assumption.
+
+**Implementation deviations (recorded per the commit-rules revise-not-freeze
+discipline):**
+
+- **Unplanned runtime validator fix.** The root-ZStack gallery shape could
+  not launch until `validate_phase6_zstack_node_invariants` was taught to
+  (1) not treat spliced component-root window props (`title` / `backdrop` /
+  `theme`) as ZStack widget attributes at the root, and (2) admit
+  `h-align` / `v-align` when a ZStack direct child is itself a ZStack (a T3
+  validator coverage gap — `wasamoc check` already accepted both). This was a
+  runtime-correctness fix folded into T7 because the slice depended on it;
+  the residual boundary is surfaced as **DD-M3-P6-008** and tracked at T7b.
+- **"Existing gallery slices byte-identical" caveat.** The existing VStack
+  gained `h-align: stretch` / `v-align: stretch` so it fills the new root
+  ZStack — a structural-wrapping change, not a content change; the
+  thumbnail / Grid / ScrollView demonstrations are otherwise unchanged.
+
+### T7b — Component-root window-attribute boundary (DD-M3-P6-008)
+
+Owns the component-root window-attribute / widget-attribute boundary
+surfaced by the T7 review: window attributes are spliced onto the root
+widget's `props` / `bindings`, so `wasamoc check` (pre-splice AST) and the
+runtime loader (post-splice IR) diverge on a ZStack root. Inserted with a
+non-integer label (no renumber) because its weight depends on the
+deliberation outcome (A schema separation vs D compiler-owned catalog;
+C rejected). The interim is pinned on **both gates**: the accept side in
+`wasamoc` (`zstack_root_component_window_attrs_accepted`) and the reject side
+in the runtime (`nested_zstack_rejects_component_window_prop`,
+`root_zstack_rejects_non_window_component_prop`,
+`root_zstack_rejects_placement_prop`, and the faithful binding pin
+`root_zstack_rejects_spliced_component_window_binding`). Deliberation should
+land **before Phase 6 closes**, and **before T8's owner smoke** so the smoke
+observes the final validator / gallery behavior (T8 fix-container or a
+promoted numbered slot).
+
+- [ ] Deliberate [DD-M3-P6-008](../decisions/dd-m3-p6-008-component-root-window-attribute-boundary.md)
+      ((A) IR-schema separation vs (D) compiler-owned catalog mirrored by the
+      runtime; (C) runtime-accept-all rejected) and flip it to `Accepted`
+      with owner comparison. Cover both the prop and binding facets.
+- [ ] Land the chosen option's code + spec sync (or confirm the interim as
+      final, as T4b did for DD-007), and reconcile this T7b bullet + the
+      preamble §Decisions index to the outcome.
 
 ### T8 — Owner-manual GUI smoke and any visible-correctness fix
 
@@ -555,6 +601,10 @@ and the A11 gallery-proof owner-acceptance half. This step exists so
 visible smoke is verified — and fixed if it fails — **before** any
 phase-close mechanical work (spec / plan status flips) lands in T9,
 matching the Phase 4 T5 / T6 and Phase 5 T5 / T6 split rationale.
+
+**Precondition:** runs **after T7b (DD-M3-P6-008) resolves**, since an (A)/(D)
+outcome can change the validator and the gallery shape; the smoke must
+observe the final behavior.
 
 - [ ] Owner runs `examples/gallery-rust/` and observes, with the
       **positive control = `is_lightbox_open` toggled** (constraints §3):
@@ -571,6 +621,15 @@ matching the Phase 4 T5 / T6 and Phase 5 T5 / T6 split rationale.
         window grows, not a fixed rect);
       - **Window title bar reads `"Gallery"`** (R1 / DD-M3-P6-006), not
         `"Wasamo"`.
+      - **geometry (T7 review carry):** the assistant screenshot analysis
+        confirmed z-order / dimming but did **not** include a geometry
+        positive control. Owner-check that the photo `Box` honours
+        `aspect: 4:3` within the `1* 400 1*` centre column (the open frame's
+        photo box appeared wider than the declared 400 px), and that the
+        caption `VStack` is not visibly clipped/overlapping the nav row (its
+        Grid row is `32`, short for two text lines — Grid does not clip, so
+        overflow would show). If either is wrong, fix additively on the T8
+        branch per the bullet below.
       The DPI blur on a high-DPI box is a **known M4 residual**
       (constraints §5), noted during analysis, not a smoke pass/fail
       criterion.
