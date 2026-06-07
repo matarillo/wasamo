@@ -533,12 +533,16 @@ judgment.
       vs open) — launch + `Graphics.CopyFromScreen` screenshot
       (per-monitor-DPI-aware) + assistant analysis confirming: the
       overlay appears on open and is gone on close **immediately after the
-      click-driven toggle, without relying on a resize** (positive control =
-      state toggle, not a single frame; pins the real `WindowState`
-      dirty-layout path `mark_layout_dirty_for` → `drain_if_outermost` →
-      `flush_layout` for the conditional subtree); the photo / caption /
+      click-driven toggle, without relying on a resize**; the photo / caption /
       nav are painted **over** the scrim and the scrim **dims** (does not
-      replace) the thumbnails behind it (z-order read off the open frame);
+      replace) the thumbnails behind it (z-order read off the open frame).
+      **Scope of this positive control:** it is the **z-order / dimming**
+      (a flat opaque panel could not dim the thumbnails) — it does *not* by
+      itself distinguish structural present/absent from an always-built,
+      opacity-hidden subtree; the structural insertion / disposal and the
+      `WindowState` dirty-layout path (`mark_layout_dirty_for` →
+      `drain_if_outermost` → `flush_layout`) are proven by **T5's headless
+      integration tests**, which this screenshot corroborates;
       the window title bar reads `"Gallery"` (T6 corroboration). C / Zig
       gallery hosts remain out of Phase 6 scope. Screenshots land under
       [evidence/](./evidence/). **This is the real-pixel paint-precedence
@@ -571,12 +575,15 @@ widget's `props` / `bindings`, so `wasamoc check` (pre-splice AST) and the
 runtime loader (post-splice IR) diverge on a ZStack root. Inserted with a
 non-integer label (no renumber) because its weight depends on the
 deliberation outcome (A schema separation vs D compiler-owned catalog;
-C rejected). The runtime interim is **reject** outside the narrow allowlist,
-pinned by `nested_zstack_rejects_component_window_prop`,
+C rejected). The interim is pinned on **both gates**: the accept side in
+`wasamoc` (`zstack_root_component_window_attrs_accepted`) and the reject side
+in the runtime (`nested_zstack_rejects_component_window_prop`,
 `root_zstack_rejects_non_window_component_prop`,
-`root_zstack_rejects_placement_prop`, and (binding facet)
-`zstack_binding_rejected_at_validate`. Deliberation should land **before
-Phase 6 closes** (T8 fix-container or a promoted numbered slot).
+`root_zstack_rejects_placement_prop`, and the faithful binding pin
+`root_zstack_rejects_spliced_component_window_binding`). Deliberation should
+land **before Phase 6 closes**, and **before T8's owner smoke** so the smoke
+observes the final validator / gallery behavior (T8 fix-container or a
+promoted numbered slot).
 
 - [ ] Deliberate [DD-M3-P6-008](../decisions/dd-m3-p6-008-component-root-window-attribute-boundary.md)
       ((A) IR-schema separation vs (D) compiler-owned catalog mirrored by the
@@ -594,6 +601,10 @@ and the A11 gallery-proof owner-acceptance half. This step exists so
 visible smoke is verified — and fixed if it fails — **before** any
 phase-close mechanical work (spec / plan status flips) lands in T9,
 matching the Phase 4 T5 / T6 and Phase 5 T5 / T6 split rationale.
+
+**Precondition:** runs **after T7b (DD-M3-P6-008) resolves**, since an (A)/(D)
+outcome can change the validator and the gallery shape; the smoke must
+observe the final behavior.
 
 - [ ] Owner runs `examples/gallery-rust/` and observes, with the
       **positive control = `is_lightbox_open` toggled** (constraints §3):

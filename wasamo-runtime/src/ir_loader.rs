@@ -4447,11 +4447,15 @@ mod tests {
     // component-level in the AST, before the splice), so the two gates
     // diverge: the compiler accepts *any* component-level prop/binding, while
     // the runtime ZStack root accepts only the three-name window allowlist.
-    // The tests below pin the current (interim) runtime behavior so the
-    // divergence is explicit and auditable until DD-M3-P6-008 settles the
-    // boundary. The binding side of the same divergence is already pinned by
-    // `zstack_binding_rejected_at_validate` (the ZStack binding gate is
-    // unconditional, so it also rejects a spliced component-level binding).
+    // The tests below pin the current (interim) runtime behavior (the
+    // reject side) so the divergence is explicit and auditable until
+    // DD-M3-P6-008 settles the boundary. The compiler (accept) side is pinned
+    // in `wasamoc` by `zstack_root_component_window_attrs_accepted`, so a
+    // future alignment visibly flips exactly one gate.
+    // `root_zstack_rejects_spliced_component_window_binding` below pins the
+    // binding facet with the *exact* IR `wasamoc` emits for a component-level
+    // dynamic `title:` (`bind title = (str-prop-read s)`), rather than the
+    // proxy widget binding in `zstack_binding_rejected_at_validate`.
 
     #[test]
     fn nested_zstack_rejects_component_window_prop() {
@@ -4485,6 +4489,22 @@ mod tests {
             ";wasamo-ir v0\ncomponent C inherits W {\n\
              node ZStack { prop h-align = stretch node Text {} }\n}",
             "`ZStack` accepts no Phase-6 attributes; found `h-align`",
+        );
+    }
+
+    #[test]
+    fn root_zstack_rejects_spliced_component_window_binding() {
+        // DD-M3-P6-008 binding facet, faithful shape: a component-level
+        // dynamic `title: <state>` lowers to `bind title = (str-prop-read s)`
+        // on the root node (verified: `wasamoc build` emits exactly this for a
+        // ZStack root and `wasamoc check` accepts it). On a ZStack root the
+        // runtime rejects it, so the two gates diverge on the *exact* IR the
+        // compiler produces — not just on a proxy widget binding.
+        assert_validate_err(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             state s: string = \"x\"\n\
+             node ZStack { bind title = (str-prop-read s) node Text {} }\n}",
+            "`ZStack` accepts no Phase-6 bindings",
         );
     }
 

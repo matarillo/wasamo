@@ -1,5 +1,23 @@
 ## Decisions log
 
+- **2026-06-07 / T7 review round 2 (third-party re-review corrections):**
+  (1) The binding facet of the DD-M3-P6-008 divergence was **empirically
+  verified**, not just inferred — `wasamoc build` emits `bind title =
+  (str-prop-read s)` on a ZStack root and `wasamoc check` accepts it (exit 0),
+  while the runtime rejects the same IR. (2) Pinned the divergence on **both
+  gates**: accept side `zstack_root_component_window_attrs_accepted`
+  (`wasamoc`), reject side now includes the faithful binding pin
+  `root_zstack_rejects_spliced_component_window_binding` (exact emitted IR)
+  rather than only the proxy `zstack_binding_rejected_at_validate`. (3)
+  **Corrected a false commit message**: the reindent commit had claimed "CRLF
+  normalization", but the repo has no `.gitattributes`, `core.autocrlf=true`,
+  and the gallery.ui blob is LF — the working-tree "mixed endings" was a
+  checkout artifact, not a committed defect; the message was amended to
+  reindent-only. (4) retro/plan: clarified the screenshot positive control is
+  **z-order / dimming only** (structural present/absent + dirty-layout path
+  are proven by T5's headless tests, corroborated — not proven — by the
+  screenshot); made **T8 smoke run after T7b**; refreshed `Refs` and
+  `Merge Readiness` to record the shipped interim + open DD-M3-P6-008.
 - **2026-06-07 / T7 review follow-up — component-root window-attribute
   boundary (DD-M3-P6-008) + interim pins:** the T7 review found that the
   two validator-fix branches were the visible symptom of a deeper

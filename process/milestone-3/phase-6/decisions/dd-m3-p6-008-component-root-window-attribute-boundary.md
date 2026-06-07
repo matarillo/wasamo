@@ -141,8 +141,19 @@ a T6 reopen, because T6 had no ZStack-root example to exercise the boundary.
 
 ## Interim (currently shipped, pinned by tests)
 
-Until this DD is decided, the runtime behavior is **reject** outside the
-narrow allowlist, pinned so any relaxation is a deliberate flip:
+The divergence is pinned on **both gates** so a future alignment visibly
+flips exactly one side, not silently both.
+
+**Compiler (accept) side — `wasamoc`:**
+
+- `zstack_root_component_window_attrs_accepted` — an arbitrary component prop
+  (`foo: bar`) and a dynamic `title: <state>` bind pass `wasamoc check` on a
+  ZStack root (no component-prop catalog).
+- `bind_component_level_no_type_check` (pre-existing) — static `title:` /
+  `backdrop:` pass through.
+
+**Runtime (reject) side — `wasamo-runtime`:** the loader rejects outside the
+narrow allowlist:
 
 - `nested_zstack_rejects_component_window_prop` — window-prop exemption is
   root-only.
@@ -153,8 +164,11 @@ narrow allowlist, pinned so any relaxation is a deliberate flip:
 - `root_zstack_accepts_component_window_props` /
   `root_zstack_still_rejects_widget_attribute` (T7) — the three-name
   allowlist and the widget-attr rejection it sits beside.
-- `zstack_binding_rejected_at_validate` — the binding facet (unconditional
-  ZStack binding rejection also rejects a spliced component-level bind).
+- `root_zstack_rejects_spliced_component_window_binding` — the binding facet
+  with the **exact** IR `wasamoc` emits for a dynamic `title:`
+  (`bind title = (str-prop-read s)`), verified against `wasamoc build`
+  output; `zstack_binding_rejected_at_validate` is the proxy widget-binding
+  variant of the same gate.
 
 ## Preamble integration
 
