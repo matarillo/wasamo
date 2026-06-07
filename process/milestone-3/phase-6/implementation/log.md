@@ -1,5 +1,50 @@
 ## Decisions log
 
+- **2026-06-07 / T6 start gate — R1 Window-title host-wiring:** selected
+  implementation-gate traps before coding. Applies: **#2 missed side
+  effects** (the static component-level `title` must affect native window
+  creation, while dynamic `bind title` remains deferred); **#4 untested
+  authored branch** (the loader adds a non-`Str` `title` rejection branch and
+  the absent / empty fallback branch must be pinned); **#7 positive-control
+  discipline for visible state** (T6's CI-gated evidence is live HWND title
+  state, while screenshot / assistant analysis of the title bar is owned by
+  T7 and owner-visible corroboration by T8). Not applicable: **#1 semantic
+  migration** (no enum / IR schema variant or field is added); **#3 parallel
+  data drift** (no parallel vector / map / index is introduced or mutated);
+  **#6 root cause** (no recurring failure observed at task start). **#5
+  carry-forward was reclassified during review follow-up**: dynamic title was
+  already ADR-deferred, but T6 did add a title-specific loader invariant that
+  should inform the later Window-prop seam. Review lane: **full independent
+  review** because the task includes Windows-runtime evidence, with the trap
+  #4 branch/test check folded into that review.
+- **2026-06-07 / T6 R1 static Window-title host-wiring:** T6 confirms the
+  R-D extraction point: the static component-level `title:` has already been
+  spliced onto `component.root.props`, while a dynamic `bind title = ...`
+  remains in `root.bindings` and is still the DD-M3-P6-006 deferred
+  window-property-binding seam. The runtime now validates that any root
+  `title` prop is an `IrLiteral::Str`, resolves an absent or empty title to
+  `DEFAULT_WINDOW_TITLE`, and passes the non-empty string literal to
+  `window::create` in `wasamo_load_ui`. The malformed-title rejection is
+  intentionally single-sourced in `validate_static_window_title`;
+  `resolve_static_window_title` is a crate-local infallible projection over a
+  validated component. No ABI signature, export, `PropertyValue` tag, or
+  `docs/abi_spec.md` text changed. The stale counter example README notes
+  that said DSL titles were still dropped were refreshed to match the
+  implemented host path.
+  - **Close-gate artifacts:** #2 side effects — static `title` now affects
+    native window creation; dynamic title remains deliberately deferred and
+    unwired; `backdrop` / `theme` remain untouched. #4 branch tests —
+    `static_window_title_resolves_string_or_default` pins absent / empty /
+    string resolution, `static_window_title_rejects_non_string_root_prop`
+    pins the loader rejection branch, and `abi_load_ui` pins
+    `WASAMO_ERR_IR_MALFORMED` at the ABI boundary. #5 carry-forward — later
+    Window-derived props should reuse this validate-then-resolve split rather
+    than adding silent fallback for wrong-typed direct IR. #7 Windows-runtime
+    state evidence — `static_component_title_reaches_native_window` lowers a
+    `.ui` declaring `title: "Gallery"`, loads it through `wasamo_load_ui`,
+    then reads the live HWND title via `GetWindowTextW`; the positive control
+    is `"Gallery"` rather than the prior `"Wasamo"` default. T7/T8 still own
+    the screenshot / human-visible title-bar corroboration.
 - **2026-06-05 / Observation 5 remediation step 1 — marshal onto owning
   thread + abbreviated retro (branch `test/obs5-step1-marshal-owning-thread`
   → `feat/m3-phase-6`):** step 1 — owner-scheduled at the step-2 close — is
@@ -322,6 +367,48 @@
 
 ## CI / verification log
 
+- **2026-06-07 / T6 local verification:** scoped checks green —
+  `cargo test -p wasamo-runtime --lib static_window_title` (2 tests),
+  `cargo test -p wasamo-runtime --test abi_load_ui` (1 test), and
+  `cargo test -p wasamo-runtime --test window_title_integration` (1 test).
+  Final clean-rebuild gate green: `cargo fmt --all -- --check`;
+  `cargo clean` (`4329 files, 1.4GiB` removed);
+  `cargo build --release --workspace` (37.12s);
+  `cargo build --workspace` (35.67s); `cargo test --workspace` (included the
+  new `window_title_integration` fixture). Existing Cargo warnings about the
+  `wasamo` linkable target / `wasamo-sys` import-library ordering were
+  observed.
+- **2026-06-07 / T6 skip-guard inheritance disposition (review follow-up):**
+  the new `window_title_integration` Windows-runtime fixture reuses the
+  shared `run_on_owning_runtime_thread_or_skip` entry point byte-identically;
+  it introduces **no new runtime-capability path**. That helper enforces the
+  CI skip-guard policy itself: on `Runtime::CompositorUnavailable` it asserts
+  `!github_actions()`, so the test **fails on GitHub Actions** when the
+  Compositor cannot be created and only skips on a local dev box without a
+  usable session (`wasamo_init` → `0x80070005`). This inherits the T3 / T5
+  disposition (Phase 4 / 5 pattern) — no separate skip-guard verification was
+  needed because the fail-on-CI branch lives in the reused helper, not in a
+  T6-authored guard.
+- **2026-06-07 / T6 example-host title observation (review follow-up):** the
+  T6 runtime change flips every host's window title from the
+  `DEFAULT_WINDOW_TITLE` (`"Wasamo"`) to the DSL-declared
+  `title: "Counter"`, so the three counter example READMEs were re-asserted
+  as a positive observable rather than left as the prior "title is dropped"
+  caveat. All three were built and launched and their live window title read
+  back (`Process.MainWindowTitle` / Win32 `GetWindowTextW` on the launched
+  process's HWND): **counter-rust** (`cargo build -p counter-rust`),
+  **counter-c** (CMake / MSVC 19.51, Release, `wasamoc.exe` custom build
+  step), and **counter-zig** (`zig build` 0.16.0, ReleaseSafe, `@embedFile`)
+  each reported `"Counter"` (not `"Wasamo"`) with a live HWND. The three
+  build paths differ but share the runtime `wasamo_load_ui` →
+  `resolve_static_window_title` → `window::create` seam. No dedicated
+  positive control was required: the observed value `"Counter"` directly
+  falsifies the only realistic wrong-implementation output (`"Wasamo"`), and
+  the mechanism's input-varied discrimination was already proven by the
+  `static_component_title_reaches_native_window` Gallery fixture
+  (`"Gallery"` ≠ `"Wasamo"`). This is a title-bar (DWM / HWND-state)
+  observation only; in-window content smoke remains T7 (assistant
+  screenshot) / T8 (owner) on the gallery slice.
 - **2026-06-05 / Observation 5 remediation step 1 — local gate + GitHub
   Actions CI (branch `test/obs5-step1-marshal-owning-thread`, commit
   `4d2cb3e`):** local clean-rebuild gate green — `cargo fmt --all -- --check`

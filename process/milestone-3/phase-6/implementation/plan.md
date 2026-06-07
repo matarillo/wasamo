@@ -469,12 +469,15 @@ Discharges ADR
 and the carry-forward residual **R1** (DD-M3-P6-006,
 [../requirements/constraints.md §1](../requirements/constraints.md)).
 
-- [ ] **Pre-implementation spike** for risk
+- [x] **Pre-implementation spike** for risk
       [R-D](./preamble.md#technical-risks-planning-time-recon): settle the
       static-title extraction point (component root props per Q2) and
       confirm `build_widget_tree` / the loader exposes the static literal
       separately from a dropped binding. Record in [log.md](./log.md).
-- [ ] Route the **static** component-level `title:` literal to
+      Settled in [log.md](./log.md): static `title` is read from
+      `component.root.props` by `resolve_static_window_title`; dynamic
+      `bind title` remains in `root.bindings` and is not implemented.
+- [x] Route the **static** component-level `title:` literal to
       `window::create` in place of `DEFAULT_WINDOW_TITLE` in
       `wasamo_load_ui` ([`abi.rs:1220`](../../../../wasamo-runtime/src/abi.rs#L1220)),
       reading the `"title"` `IrProp` from `component.root.props`. Per
@@ -485,13 +488,19 @@ and the carry-forward residual **R1** (DD-M3-P6-006,
       `docs/abi_spec.md` untouched. The dynamic (`String`-binding) title
       (a `bind title = …` landing in `root.bindings`) stays
       evaluated-and-deferred (FD-D) — no implementation.
-- [ ] **Loader-level title gate test** (DD-M3-P6-006) — a hand-written
+- [x] **Loader-level title gate test** (DD-M3-P6-006) — a hand-written
       IR with a non-`Str` `title` prop surfaces `WASAMO_ERR_IR_MALFORMED`;
       absent / empty `title` falls back to the default. Host-independent
-      defense-in-depth, distinct from the GUI fixture below.
-- [ ] **R1 static title integration fixture** — a `.ui` whose component
+      defense-in-depth, distinct from the GUI fixture below. Covered by
+      `static_window_title_resolves_string_or_default`,
+      `static_window_title_rejects_non_string_root_prop`, and the
+      `abi_load_ui` non-string title status assertion.
+- [x] **R1 static title integration fixture** — a `.ui` whose component
       declares `title: "Gallery"` produces a native window whose title bar
-      reads `"Gallery"`, not `"Wasamo"` (evidence item 4 R1 line).
+      reads `"Gallery"`, not `"Wasamo"` (evidence item 4 R1 line). Covered by
+      `static_component_title_reaches_native_window`, which lowers `.ui` to
+      IR, calls `wasamo_load_ui`, and reads the live HWND title text via
+      `GetWindowTextW`.
 
 ### T7 — End-to-end gallery lightbox slice + assistant-side build / launch
 

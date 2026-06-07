@@ -150,6 +150,22 @@ fn dd_m2_p6_005_wasamo_load_ui_and_thread_affinity() {
     };
     assert_eq!(status, ffi::WASAMO_ERR_IR_MALFORMED);
 
+    let non_string_title = b";wasamo-ir v0\ncomponent C inherits W {\n\
+        node VStack {\n\
+          prop title = 3\n\
+        }\n\
+    }";
+    let status = unsafe {
+        ffi::wasamo_load_ui(
+            ffi::WASAMO_LOAD_MEMORY,
+            non_string_title.as_ptr() as *const c_void,
+            non_string_title.len(),
+            &mut out as *mut *mut ffi::WasamoWindow,
+        )
+    };
+    assert_eq!(status, ffi::WASAMO_ERR_IR_MALFORMED);
+    assert!(out.is_null());
+
     // ── 5. wasamo_last_error_message round-trips a description ────────────
     let msg_ptr = ffi::wasamo_last_error_message();
     assert!(!msg_ptr.is_null(), "last-error message should be populated");
