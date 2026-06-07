@@ -1,5 +1,71 @@
 ## Decisions log
 
+- **2026-06-07 / T7 start gate — gallery lightbox slice + assistant GUI evidence:**
+  selected implementation-gate traps before editing. Applies: **#2 missed
+  side effects** (the authored slice must wire the visible `Open lightbox` /
+  `x` Buttons through `is_lightbox_open`, materialise the conditional
+  subtree, preserve overlay z-order, and corroborate the static `"Gallery"`
+  title in the launched host); **#5 carry-forward underweighted** (only if
+  the GUI proof or additive gallery growth surfaces a later-task invariant,
+  in which case it must be recorded with evidence and a re-trigger criterion);
+  **#7 weak GUI evidence** (T7's deliverable is GUI rendering, so close
+  evidence must include launch + `Graphics.CopyFromScreen` screenshots +
+  assistant analysis with the closed/open toggle pair as positive control).
+  Not applicable: **#1 semantic migration** (no enum / IR / schema variant or
+  field is added); **#3 parallel data drift** (no parallel vector / map /
+  index is introduced or mutated by this task); **#4 untested authored branch**
+  (no new diagnostic / reject / size branch is authored; existing compiler and
+  runtime branches are exercised through the gallery positive control);
+  **#6 root cause** (no recurring or vanished failure observed at task start).
+  Review lane: **full independent review** because the task closes
+  GUI-render evidence.
+- **2026-06-07 / T7 gallery lightbox slice + assistant GUI evidence:** T7
+  grows `examples/gallery/gallery.ui` with a root `ZStack` whose first child
+  is the existing gallery content and whose second child is a
+  `bool`-controlled `if is_lightbox_open { ZStack { ... } }` overlay.
+  `Open lightbox` and `x` are plain text Buttons that write
+  `root.is_lightbox_open`, proving the event handler → bool state →
+  conditional subtree path. The overlay uses a full-viewport scrim
+  (`Box.fill = #10182099`) below a centered lightbox panel with a
+  `Box { aspect: 4:3 }` + `Text` photo placeholder, caption text, and
+  `<` / `>` / `x` nav Buttons. The assistant-visible screenshots are:
+  `implementation/evidence/t7-lightbox-closed.png`,
+  `implementation/evidence/t7-lightbox-open.png`, and
+  `implementation/evidence/t7-lightbox-closed-after-click.png`; the capture
+  helper is `implementation/evidence/capture-lightbox.ps1`.
+  - **Close-gate artifacts:** #2 side effects — the visible Button writes
+    materialise and remove the conditional subtree without resize; the open
+    frame shows the overlay above the thumbnail gallery, and the close-after
+    frame shows the overlay gone. The `"Gallery"` title bar is visible in all
+    frames, corroborating T6's static-title host path. #4 branch tests
+    (surfaced during implementation) — `root_zstack_accepts_component_window_props`
+    pins that component-root window props (`title` / `backdrop` / `theme`)
+    do not count as ZStack widget attributes when the root widget is ZStack;
+    `root_zstack_still_rejects_widget_attribute` keeps ordinary ZStack attrs
+    rejected at the root; `zstack_child_zstack_accepts_placement_props` pins
+    that `h-align` / `v-align` remain legal parent-owned placement props when
+    the ZStack direct child is itself a ZStack. #5 carry-forward — none new;
+    the surfaced invariants are T7-owned validator bugs now fixed and pinned
+    by tests rather than deferred. #6 deterministic-failure disposition —
+    first launch failed deterministically with `wasamo_load_ui: IR validation
+    error: ZStack accepts no Phase-6 attributes; found title`; after fixing
+    the root window-prop boundary, the next deterministic failure was the same
+    validator class for `h-align` on a ZStack direct-child ZStack. Both were
+    root-caused to the Phase 6 ZStack validator conflating widget attributes
+    with wrapper-carried root/window props or parent-owned placement props,
+    fixed in `validate_phase6_zstack_node_invariants`, and rerun through the
+    gallery launch path to green. A separate assistant capture failure
+    (`Graphics.CopyFromScreen` / `BitBlt` returned "The handle is invalid")
+    was isolated to sandboxed capture, not runtime rendering: the owner
+    reported PID 13748 visibly displayed Gallery, and the same
+    `CopyFromScreen` capture succeeded when rerun with GUI escalation. #7 GUI
+    evidence — escalated `CopyFromScreen` over the visible `"Gallery"` HWND
+    captured the closed/open/closed-after-click positive-control triplet at
+    800x600. Assistant analysis: closed frame shows the gallery thumbnails and
+    `Open lightbox`; open frame shows the scrim dimming (not replacing) the
+    thumbnails, the photo placeholder / caption / nav painted over the scrim,
+    and the `"Gallery"` title bar; close-after-click shows the overlay gone
+    immediately after the `x` click, without a resize.
 - **2026-06-07 / T6 start gate — R1 Window-title host-wiring:** selected
   implementation-gate traps before coding. Applies: **#2 missed side
   effects** (the static component-level `title` must affect native window
@@ -409,6 +475,32 @@
   (`"Gallery"` ≠ `"Wasamo"`). This is a title-bar (DWM / HWND-state)
   observation only; in-window content smoke remains T7 (assistant
   screenshot) / T8 (owner) on the gallery slice.
+- **2026-06-07 / T7 local verification:** `cargo run -p wasamoc -- check
+  examples\gallery\gallery.ui` — green; `cargo build --release -p
+  gallery-rust` — green; escalated assistant GUI capture
+  `process\milestone-3\phase-6\implementation\evidence\capture-lightbox.ps1`
+  — green, saving the closed/open/closed-after-click triplet under
+  `implementation/evidence/`. Targeted runtime: `cargo fmt --all --
+  --check` — green; `cargo test -p wasamo-runtime --lib zstack` — green
+  (17 tests, including the new root-ZStack/window-prop and child-ZStack
+  placement validator tests); `cargo build --release --workspace` — green.
+  First `cargo test --workspace` hit the known debug import-library ordering
+  race (`wasamo-sys` warning followed by `wasamo-dll` LNK1356:
+  `target\debug\libwasamo_runtime.rlib` missing). Disposition: this matches
+  the pre-existing DD-M2-P1-006 ordering race already recorded in prior Phase
+  6 clean rebuilds, not a T7 regression; after `cargo build --workspace`
+  created the debug import library, `cargo test --workspace` reran green
+  (wasamo-runtime 338 unit tests, wasamoc 316 unit tests, wasamo-ir 17, all
+  integration suites and doc-tests green). Existing Cargo warnings about the
+  `wasamo` linkable target / `wasamo-sys` import-library ordering were
+  observed.
+- **2026-06-07 / T7 task-end clean rebuild:** `cargo fmt --all -- --check`
+  — green; `cargo clean` completed (`3090 files, 1.1GiB` removed);
+  `cargo build --release --workspace` — green; `cargo build --workspace` —
+  green; `cargo test --workspace` — green (wasamo-runtime 338 unit tests,
+  wasamoc 316 unit tests, wasamo-ir 17, all integration suites and doc-tests
+  green). Existing Cargo warnings about the `wasamo` linkable target /
+  `wasamo-sys` import-library ordering were observed.
 - **2026-06-05 / Observation 5 remediation step 1 — local gate + GitHub
   Actions CI (branch `test/obs5-step1-marshal-owning-thread`, commit
   `4d2cb3e`):** local clean-rebuild gate green — `cargo fmt --all -- --check`

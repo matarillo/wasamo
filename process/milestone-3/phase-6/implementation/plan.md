@@ -515,7 +515,7 @@ supporting "no early crash" signal only and the assistant analysis is a
 pre-T8 baseline, not a substitute for the owner's visible-correctness
 judgment.
 
-- [ ] Grow `examples/gallery/gallery.ui` **additively** with the
+- [x] Grow `examples/gallery/gallery.ui` **additively** with the
       lightbox slice (FD-B): a thumbnail-gallery background (WrapPanel /
       ScrollView slice, Phase 3/4) with a `bool`-toggled
       (`is_lightbox_open`) ZStack overlay = scrim (`Box { fill:
@@ -526,9 +526,9 @@ judgment.
       **event handler → `bool` state → conditional subtree** (FD-C).
       Existing gallery slices stay byte-identical. (Thumbnail-click-to-open
       is out of scope — Box hit-testing / image Button is M4.)
-- [ ] Lightbox photo uses `Box { aspect: 4:3 }` + `Text` per the Phase 2
+- [x] Lightbox photo uses `Box { aspect: 4:3 }` + `Text` per the Phase 2
       DD-M3-P2-006 placeholder pattern. No Image widget (M4).
-- [ ] Build and run `examples/gallery-rust/`. Record assistant-automated
+- [x] Build and run `examples/gallery-rust/`. Record assistant-automated
       visual evidence as a **before/after toggle pair** (lightbox closed
       vs open) — launch + `Graphics.CopyFromScreen` screenshot
       (per-monitor-DPI-aware) + assistant analysis confirming: the

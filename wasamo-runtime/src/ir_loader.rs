@@ -261,6 +261,14 @@ pub(crate) fn resolve_static_window_title<'a>(
     }
 }
 
+fn is_component_root_window_prop(name: &str) -> bool {
+    matches!(name, "title" | "backdrop" | "theme")
+}
+
+fn is_child_placement_prop(name: &str) -> bool {
+    matches!(name, "h-align" | "v-align")
+}
+
 fn validate_phase6_control_flow_invariants(node: &IrNode) -> Result<(), IrLoadError> {
     for member in &node.children {
         match member {
@@ -549,10 +557,14 @@ fn validate_phase6_zstack_node_invariants(
                 "`ZStack` must not carry a `kind_payload` (DD-M3-P6-001)".into(),
             ));
         }
-        if !node.props.is_empty() {
+        let zstack_widget_prop = node.props.iter().find(|prop| {
+            !(parent == ParentKind::Root && is_component_root_window_prop(&prop.name))
+                && !(parent == ParentKind::ZStack && is_child_placement_prop(&prop.name))
+        });
+        if let Some(prop) = zstack_widget_prop {
             return Err(IrLoadError::Validate(format!(
                 "`ZStack` accepts no Phase-6 attributes; found `{}`",
-                node.props[0].name
+                prop.name
             )));
         }
         if !node.bindings.is_empty() {
@@ -4393,6 +4405,36 @@ mod tests {
              node ZStack { prop spacing = 8 node Text {} }\n}",
             "`ZStack` accepts no Phase-6 attributes",
         );
+    }
+
+    #[test]
+    fn root_zstack_accepts_component_window_props() {
+        let c = parse_ok(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             node ZStack { prop title = \"Gallery\" prop backdrop = mica prop theme = system node Text {} }\n\
+             }",
+        );
+        validate(&c).expect("component root window props should not be ZStack widget attrs");
+        assert_eq!(resolve_static_window_title(&c, "Wasamo"), "Gallery");
+    }
+
+    #[test]
+    fn root_zstack_still_rejects_widget_attribute() {
+        assert_validate_err(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             node ZStack { prop title = \"Gallery\" prop spacing = 8 node Text {} }\n}",
+            "`ZStack` accepts no Phase-6 attributes; found `spacing`",
+        );
+    }
+
+    #[test]
+    fn zstack_child_zstack_accepts_placement_props() {
+        let c = parse_ok(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             node ZStack { node ZStack { prop h-align = stretch prop v-align = stretch node Text {} } }\n\
+             }",
+        );
+        validate(&c).expect("ZStack direct-child placement applies even when the child is ZStack");
     }
 
     #[test]

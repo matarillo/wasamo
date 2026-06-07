@@ -4,8 +4,12 @@ component Gallery inherits Window {
     theme: system
 
     state scroll_y: i32 = 0
+    state is_lightbox_open: bool = false
 
+    ZStack {
     VStack {
+        h-align: stretch
+        v-align: stretch
         spacing: 12px
         padding: 12px
 
@@ -108,6 +112,12 @@ component Gallery inherits Window {
                 fill: #66cc99cc
                 Text { text: "Photo 10" }
             }
+        }
+
+        Button {
+            text: "Open lightbox"
+            style: accent
+            clicked => { root.is_lightbox_open = true; }
         }
 
         Button {
@@ -287,6 +297,57 @@ component Gallery inherits Window {
                     aspect: 1:1
                     fill: #663366cc
                     Text { text: "S32" }
+                }
+            }
+        }
+    }
+
+        if is_lightbox_open {
+            ZStack {
+                h-align: stretch
+                v-align: stretch
+
+                Box {
+                    h-align: stretch
+                    v-align: stretch
+                    fill: #10182099
+                }
+
+                Grid {
+                    columns: 1* 400 1*
+                    rows: 1* 300 32 44 1*
+
+                    Cell {
+                        row: 1 column: 1
+                        Box {
+                            aspect: 4:3
+                            fill: #e6eef8ff
+                            Text { text: "Lightbox photo placeholder" }
+                        }
+                    }
+
+                    Cell {
+                        row: 2 column: 1
+                        VStack {
+                            spacing: 4px
+                            Text { text: "Gallery image 01" }
+                            Text { text: "Box 4:3 placeholder; Image widget lands in M4" }
+                        }
+                    }
+
+                    Cell {
+                        row: 3 column: 1 h-align: center
+                        HStack {
+                            spacing: 8px
+
+                            Button { text: "<" }
+                            Button { text: ">" }
+                            Button {
+                                text: "x"
+                                clicked => { root.is_lightbox_open = false; }
+                            }
+                        }
+                    }
                 }
             }
         }
