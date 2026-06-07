@@ -7,300 +7,300 @@ component Gallery inherits Window {
     state is_lightbox_open: bool = false
 
     ZStack {
-    VStack {
-        h-align: stretch
-        v-align: stretch
-        spacing: 12px
-        padding: 12px
+        VStack {
+            h-align: stretch
+            v-align: stretch
+            spacing: 12px
+            padding: 12px
 
-        Grid {
-            columns: 120 1* 2*
-            rows: 36 1* 36
+            Grid {
+                columns: 120 1* 2*
+                rows: 36 1* 36
 
-            Cell {
-                row: 0 column: 0 column-span: 3
-                Box {
-                    fill: #224488cc
-                    Text { text: "Header (spans 3 columns)" }
+                Cell {
+                    row: 0 column: 0 column-span: 3
+                    Box {
+                        fill: #224488cc
+                        Text { text: "Header (spans 3 columns)" }
+                    }
+                }
+
+                Cell {
+                    row: 1 column: 0
+                    Box {
+                        fill: #336699cc
+                        Text { text: "C0 fixed 120" }
+                    }
+                }
+                Cell {
+                    row: 1 column: 1
+                    Box {
+                        fill: #669933cc
+                        Text { text: "C1 star 1*" }
+                    }
+                }
+                Cell {
+                    row: 1 column: 2
+                    Box {
+                        fill: #996633cc
+                        Text { text: "C2 star 2*" }
+                    }
+                }
+
+                Cell {
+                    row: 2 column: 0 column-span: 3 v-align: start
+                    Box {
+                        aspect: 4:1
+                        fill: #cc3366cc
+                        Text { text: "Footer (overflows below, clipped at Grid bounds)" }
+                    }
                 }
             }
-
-            Cell {
-                row: 1 column: 0
-                Box {
-                    fill: #336699cc
-                    Text { text: "C0 fixed 120" }
-                }
-            }
-            Cell {
-                row: 1 column: 1
-                Box {
-                    fill: #669933cc
-                    Text { text: "C1 star 1*" }
-                }
-            }
-            Cell {
-                row: 1 column: 2
-                Box {
-                    fill: #996633cc
-                    Text { text: "C2 star 2*" }
-                }
-            }
-
-            Cell {
-                row: 2 column: 0 column-span: 3 v-align: start
-                Box {
-                    aspect: 4:1
-                    fill: #cc3366cc
-                    Text { text: "Footer (overflows below, clipped at Grid bounds)" }
-                }
-            }
-        }
-
-        WrapPanel {
-            item-cross-size: 88
-            item-spacing: 12
-            line-spacing: 12
-
-            Box {
-                aspect: 1:1
-                fill: #336699cc
-                Text { text: "Photo 1" }
-            }
-            Box {
-                aspect: 1:1
-                fill: #663366cc
-                Text { text: "Photo 2" }
-            }
-            Box {
-                aspect: 1:1
-                fill: #669933cc
-                Text { text: "Photo 3" }
-            }
-            Box {
-                aspect: 1:1
-                fill: #996633cc
-                Text { text: "Photo 4" }
-            }
-            Box {
-                aspect: 1:1
-                fill: #339966cc
-                Text { text: "Photo 5" }
-            }
-            Box {
-                aspect: 1:1
-                fill: #996699cc
-                Text { text: "Photo 6" }
-            }
-            Box {
-                aspect: 1:1
-                fill: #cc9933cc
-                Text { text: "Photo 7" }
-            }
-            Box {
-                aspect: 1:1
-                fill: #3399cccc
-                Text { text: "Photo 8" }
-            }
-            Box {
-                aspect: 1:1
-                fill: #cc6699cc
-                Text { text: "Photo 9" }
-            }
-            Box {
-                aspect: 1:1
-                fill: #66cc99cc
-                Text { text: "Photo 10" }
-            }
-        }
-
-        Button {
-            text: "Open lightbox"
-            style: accent
-            clicked => { root.is_lightbox_open = true; }
-        }
-
-        Button {
-            text: "Scroll down (+100)"
-            style: accent
-            clicked => { root.scroll_y += 100; }
-        }
-        Button {
-            text: "Scroll up (-100)"
-            clicked => { root.scroll_y -= 100; }
-        }
-
-        ScrollView {
-            offset-y: scroll_y
 
             WrapPanel {
-                item-cross-size: 128
-                item-spacing: 8
-                line-spacing: 8
+                item-cross-size: 88
+                item-spacing: 12
+                line-spacing: 12
 
                 Box {
                     aspect: 1:1
                     fill: #336699cc
-                    Text { text: "S01" }
+                    Text { text: "Photo 1" }
                 }
                 Box {
                     aspect: 1:1
                     fill: #663366cc
-                    Text { text: "S02" }
+                    Text { text: "Photo 2" }
                 }
                 Box {
                     aspect: 1:1
                     fill: #669933cc
-                    Text { text: "S03" }
+                    Text { text: "Photo 3" }
                 }
                 Box {
                     aspect: 1:1
                     fill: #996633cc
-                    Text { text: "S04" }
+                    Text { text: "Photo 4" }
                 }
                 Box {
                     aspect: 1:1
                     fill: #339966cc
-                    Text { text: "S05" }
+                    Text { text: "Photo 5" }
                 }
                 Box {
                     aspect: 1:1
                     fill: #996699cc
-                    Text { text: "S06" }
+                    Text { text: "Photo 6" }
                 }
                 Box {
                     aspect: 1:1
                     fill: #cc9933cc
-                    Text { text: "S07" }
+                    Text { text: "Photo 7" }
                 }
                 Box {
                     aspect: 1:1
                     fill: #3399cccc
-                    Text { text: "S08" }
+                    Text { text: "Photo 8" }
                 }
                 Box {
                     aspect: 1:1
                     fill: #cc6699cc
-                    Text { text: "S09" }
+                    Text { text: "Photo 9" }
                 }
                 Box {
                     aspect: 1:1
                     fill: #66cc99cc
-                    Text { text: "S10" }
+                    Text { text: "Photo 10" }
                 }
-                Box {
-                    aspect: 1:1
-                    fill: #336699cc
-                    Text { text: "S11" }
-                }
-                Box {
-                    aspect: 1:1
-                    fill: #663366cc
-                    Text { text: "S12" }
-                }
-                Box {
-                    aspect: 1:1
-                    fill: #669933cc
-                    Text { text: "S13" }
-                }
-                Box {
-                    aspect: 1:1
-                    fill: #996633cc
-                    Text { text: "S14" }
-                }
-                Box {
-                    aspect: 1:1
-                    fill: #339966cc
-                    Text { text: "S15" }
-                }
-                Box {
-                    aspect: 1:1
-                    fill: #996699cc
-                    Text { text: "S16" }
-                }
-                Box {
-                    aspect: 1:1
-                    fill: #cc9933cc
-                    Text { text: "S17" }
-                }
-                Box {
-                    aspect: 1:1
-                    fill: #3399cccc
-                    Text { text: "S18" }
-                }
-                Box {
-                    aspect: 1:1
-                    fill: #cc6699cc
-                    Text { text: "S19" }
-                }
-                Box {
-                    aspect: 1:1
-                    fill: #66cc99cc
-                    Text { text: "S20" }
-                }
-                Box {
-                    aspect: 1:1
-                    fill: #336699cc
-                    Text { text: "S21" }
-                }
-                Box {
-                    aspect: 1:1
-                    fill: #663366cc
-                    Text { text: "S22" }
-                }
-                Box {
-                    aspect: 1:1
-                    fill: #669933cc
-                    Text { text: "S23" }
-                }
-                Box {
-                    aspect: 1:1
-                    fill: #996633cc
-                    Text { text: "S24" }
-                }
-                Box {
-                    aspect: 1:1
-                    fill: #339966cc
-                    Text { text: "S25" }
-                }
-                Box {
-                    aspect: 1:1
-                    fill: #996699cc
-                    Text { text: "S26" }
-                }
-                Box {
-                    aspect: 1:1
-                    fill: #cc9933cc
-                    Text { text: "S27" }
-                }
-                Box {
-                    aspect: 1:1
-                    fill: #3399cccc
-                    Text { text: "S28" }
-                }
-                Box {
-                    aspect: 1:1
-                    fill: #cc6699cc
-                    Text { text: "S29" }
-                }
-                Box {
-                    aspect: 1:1
-                    fill: #66cc99cc
-                    Text { text: "S30" }
-                }
-                Box {
-                    aspect: 1:1
-                    fill: #336699cc
-                    Text { text: "S31" }
-                }
-                Box {
-                    aspect: 1:1
-                    fill: #663366cc
-                    Text { text: "S32" }
+            }
+
+            Button {
+                text: "Open lightbox"
+                style: accent
+                clicked => { root.is_lightbox_open = true; }
+            }
+
+            Button {
+                text: "Scroll down (+100)"
+                style: accent
+                clicked => { root.scroll_y += 100; }
+            }
+            Button {
+                text: "Scroll up (-100)"
+                clicked => { root.scroll_y -= 100; }
+            }
+
+            ScrollView {
+                offset-y: scroll_y
+
+                WrapPanel {
+                    item-cross-size: 128
+                    item-spacing: 8
+                    line-spacing: 8
+
+                    Box {
+                        aspect: 1:1
+                        fill: #336699cc
+                        Text { text: "S01" }
+                    }
+                    Box {
+                        aspect: 1:1
+                        fill: #663366cc
+                        Text { text: "S02" }
+                    }
+                    Box {
+                        aspect: 1:1
+                        fill: #669933cc
+                        Text { text: "S03" }
+                    }
+                    Box {
+                        aspect: 1:1
+                        fill: #996633cc
+                        Text { text: "S04" }
+                    }
+                    Box {
+                        aspect: 1:1
+                        fill: #339966cc
+                        Text { text: "S05" }
+                    }
+                    Box {
+                        aspect: 1:1
+                        fill: #996699cc
+                        Text { text: "S06" }
+                    }
+                    Box {
+                        aspect: 1:1
+                        fill: #cc9933cc
+                        Text { text: "S07" }
+                    }
+                    Box {
+                        aspect: 1:1
+                        fill: #3399cccc
+                        Text { text: "S08" }
+                    }
+                    Box {
+                        aspect: 1:1
+                        fill: #cc6699cc
+                        Text { text: "S09" }
+                    }
+                    Box {
+                        aspect: 1:1
+                        fill: #66cc99cc
+                        Text { text: "S10" }
+                    }
+                    Box {
+                        aspect: 1:1
+                        fill: #336699cc
+                        Text { text: "S11" }
+                    }
+                    Box {
+                        aspect: 1:1
+                        fill: #663366cc
+                        Text { text: "S12" }
+                    }
+                    Box {
+                        aspect: 1:1
+                        fill: #669933cc
+                        Text { text: "S13" }
+                    }
+                    Box {
+                        aspect: 1:1
+                        fill: #996633cc
+                        Text { text: "S14" }
+                    }
+                    Box {
+                        aspect: 1:1
+                        fill: #339966cc
+                        Text { text: "S15" }
+                    }
+                    Box {
+                        aspect: 1:1
+                        fill: #996699cc
+                        Text { text: "S16" }
+                    }
+                    Box {
+                        aspect: 1:1
+                        fill: #cc9933cc
+                        Text { text: "S17" }
+                    }
+                    Box {
+                        aspect: 1:1
+                        fill: #3399cccc
+                        Text { text: "S18" }
+                    }
+                    Box {
+                        aspect: 1:1
+                        fill: #cc6699cc
+                        Text { text: "S19" }
+                    }
+                    Box {
+                        aspect: 1:1
+                        fill: #66cc99cc
+                        Text { text: "S20" }
+                    }
+                    Box {
+                        aspect: 1:1
+                        fill: #336699cc
+                        Text { text: "S21" }
+                    }
+                    Box {
+                        aspect: 1:1
+                        fill: #663366cc
+                        Text { text: "S22" }
+                    }
+                    Box {
+                        aspect: 1:1
+                        fill: #669933cc
+                        Text { text: "S23" }
+                    }
+                    Box {
+                        aspect: 1:1
+                        fill: #996633cc
+                        Text { text: "S24" }
+                    }
+                    Box {
+                        aspect: 1:1
+                        fill: #339966cc
+                        Text { text: "S25" }
+                    }
+                    Box {
+                        aspect: 1:1
+                        fill: #996699cc
+                        Text { text: "S26" }
+                    }
+                    Box {
+                        aspect: 1:1
+                        fill: #cc9933cc
+                        Text { text: "S27" }
+                    }
+                    Box {
+                        aspect: 1:1
+                        fill: #3399cccc
+                        Text { text: "S28" }
+                    }
+                    Box {
+                        aspect: 1:1
+                        fill: #cc6699cc
+                        Text { text: "S29" }
+                    }
+                    Box {
+                        aspect: 1:1
+                        fill: #66cc99cc
+                        Text { text: "S30" }
+                    }
+                    Box {
+                        aspect: 1:1
+                        fill: #336699cc
+                        Text { text: "S31" }
+                    }
+                    Box {
+                        aspect: 1:1
+                        fill: #663366cc
+                        Text { text: "S32" }
+                    }
                 }
             }
         }
-    }
 
         if is_lightbox_open {
             ZStack {
