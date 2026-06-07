@@ -378,6 +378,37 @@
   new `window_title_integration` fixture). Existing Cargo warnings about the
   `wasamo` linkable target / `wasamo-sys` import-library ordering were
   observed.
+- **2026-06-07 / T6 skip-guard inheritance disposition (review follow-up):**
+  the new `window_title_integration` Windows-runtime fixture reuses the
+  shared `run_on_owning_runtime_thread_or_skip` entry point byte-identically;
+  it introduces **no new runtime-capability path**. That helper enforces the
+  CI skip-guard policy itself: on `Runtime::CompositorUnavailable` it asserts
+  `!github_actions()`, so the test **fails on GitHub Actions** when the
+  Compositor cannot be created and only skips on a local dev box without a
+  usable session (`wasamo_init` → `0x80070005`). This inherits the T3 / T5
+  disposition (Phase 4 / 5 pattern) — no separate skip-guard verification was
+  needed because the fail-on-CI branch lives in the reused helper, not in a
+  T6-authored guard.
+- **2026-06-07 / T6 example-host title observation (review follow-up):** the
+  T6 runtime change flips every host's window title from the
+  `DEFAULT_WINDOW_TITLE` (`"Wasamo"`) to the DSL-declared
+  `title: "Counter"`, so the three counter example READMEs were re-asserted
+  as a positive observable rather than left as the prior "title is dropped"
+  caveat. All three were built and launched and their live window title read
+  back (`Process.MainWindowTitle` / Win32 `GetWindowTextW` on the launched
+  process's HWND): **counter-rust** (`cargo build -p counter-rust`),
+  **counter-c** (CMake / MSVC 19.51, Release, `wasamoc.exe` custom build
+  step), and **counter-zig** (`zig build` 0.16.0, ReleaseSafe, `@embedFile`)
+  each reported `"Counter"` (not `"Wasamo"`) with a live HWND. The three
+  build paths differ but share the runtime `wasamo_load_ui` →
+  `resolve_static_window_title` → `window::create` seam. No dedicated
+  positive control was required: the observed value `"Counter"` directly
+  falsifies the only realistic wrong-implementation output (`"Wasamo"`), and
+  the mechanism's input-varied discrimination was already proven by the
+  `static_component_title_reaches_native_window` Gallery fixture
+  (`"Gallery"` ≠ `"Wasamo"`). This is a title-bar (DWM / HWND-state)
+  observation only; in-window content smoke remains T7 (assistant
+  screenshot) / T8 (owner) on the gallery slice.
 - **2026-06-05 / Observation 5 remediation step 1 — local gate + GitHub
   Actions CI (branch `test/obs5-step1-marshal-owning-thread`, commit
   `4d2cb3e`):** local clean-rebuild gate green — `cargo fmt --all -- --check`
