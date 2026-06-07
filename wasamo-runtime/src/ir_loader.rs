@@ -185,6 +185,7 @@ fn validate(comp: &IrComponent) -> Result<(), IrLoadError> {
             )));
         }
     }
+    validate_static_window_title(comp)?;
     validate_node_references(&comp.root, &declared)?;
     // M3-Phase 2 T7 defense-in-depth gates (DD-M3-P2-001 / DD-M3-P2-002 /
     // DD-M3-P2-003). The shared mapping at the C ABI boundary is
@@ -234,6 +235,30 @@ fn validate(comp: &IrComponent) -> Result<(), IrLoadError> {
     // may carry `h-align` / `v-align` placement annotations.
     validate_phase6_zstack_node_invariants(&comp.root, ParentKind::Root)?;
     validate_phase6_control_flow_invariants(&comp.root)
+}
+
+fn validate_static_window_title(comp: &IrComponent) -> Result<(), IrLoadError> {
+    for prop in comp.root.props.iter().filter(|prop| prop.name == "title") {
+        if !matches!(prop.value, IrLiteral::Str(_)) {
+            return Err(IrLoadError::Validate(
+                "component root `title` prop must be a string literal".into(),
+            ));
+        }
+    }
+    Ok(())
+}
+
+pub(crate) fn resolve_static_window_title<'a>(
+    comp: &'a IrComponent,
+    default_title: &'a str,
+) -> &'a str {
+    let Some(prop) = comp.root.props.iter().find(|prop| prop.name == "title") else {
+        return default_title;
+    };
+    match &prop.value {
+        IrLiteral::Str(title) if !title.is_empty() => title.as_str(),
+        _ => default_title,
+    }
 }
 
 fn validate_phase6_control_flow_invariants(node: &IrNode) -> Result<(), IrLoadError> {
@@ -2574,6 +2599,44 @@ mod tests {
                 name: "title".into(),
                 value: IrLiteral::Str("Hi".into())
             }
+        );
+    }
+
+    #[test]
+    fn static_window_title_resolves_string_or_default() {
+        let absent = parse_ok(";wasamo-ir v0\ncomponent C inherits W {\nnode V {}\n}");
+        assert_eq!(resolve_static_window_title(&absent, "Wasamo"), "Wasamo");
+
+        let empty = parse_ok(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             node V {\n\
+               prop title = \"\"\n\
+             }\n}",
+        );
+        assert_eq!(resolve_static_window_title(&empty, "Wasamo"), "Wasamo");
+
+        let custom = parse_ok(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             node V {\n\
+               prop title = \"Gallery\"\n\
+             }\n}",
+        );
+        assert_eq!(resolve_static_window_title(&custom, "Wasamo"), "Gallery");
+    }
+
+    #[test]
+    fn static_window_title_rejects_non_string_root_prop() {
+        let err = parse_ir(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             node V {\n\
+               prop title = 3\n\
+             }\n}",
+        )
+        .unwrap_err();
+        assert!(matches!(err, IrLoadError::Validate(_)));
+        assert!(
+            err.to_string().contains("`title` prop must be a string"),
+            "{err}"
         );
     }
 

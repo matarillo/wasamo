@@ -12,9 +12,8 @@ satisfied.
 
 ## What it does
 
-- Opens an 800 × 600 window (default title "Wasamo" — DSL-side
-  `title: "Counter"` is currently dropped by the runtime; tracked in
-  [docs/notes/dsl-grammar.md Q2](../../docs/notes/dsl-grammar.md)).
+- Opens an 800 × 600 window titled "Counter" from the DSL-side
+  `title: "Counter"` declaration.
 - Displays a title-size text label reading "Count: 0".
 - Shows an accent-style "Increment" button below the label.
 - Clicking Increment updates the label to "Count: N" via the reactive
