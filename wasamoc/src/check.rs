@@ -534,7 +534,7 @@ fn check_scrollview_child_count(
             diags.push(error(
                 filename,
                 span,
-                "`ScrollView` content child must be a single widget; a conditional member is not valid directly in ScrollView (wrap it in the content widget) — see DD-M3-P6-007",
+                "`ScrollView` content child must be a single widget; a conditional member is not valid directly in ScrollView (wrap it in the content widget)",
             ));
         }
     }
@@ -3676,6 +3676,7 @@ mod tests {
                 .any(|e| e.contains("a conditional member is not valid directly in ScrollView")),
             "{errs:?}"
         );
+        assert!(!errs.iter().any(|e| e.contains("DD-M3-P6-007")), "{errs:?}");
     }
 
     #[test]
@@ -3689,6 +3690,7 @@ mod tests {
                 .any(|e| e.contains("a conditional member is not valid directly in ScrollView")),
             "{errs:?}"
         );
+        assert!(!errs.iter().any(|e| e.contains("DD-M3-P6-007")), "{errs:?}");
     }
 
     #[test]

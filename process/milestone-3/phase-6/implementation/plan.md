@@ -696,7 +696,7 @@ mid-phase owner decisions and revise the mutable plan where they diverge
 - [ ] Windows-only integration evidence green on CI (skip-guard verified
       per T3): ZStack z-order + clip (T3), conditional toggle insert/remove
       + drain proof (T5), R1 static title (T6).
-- [ ] `docs/dsl_spec.md` ZStack + conditional chapters' Phase status
+- [x] `docs/dsl_spec.md` ZStack + conditional chapters' Phase status
       markers flip to `M3-Phase 6 closed; implementation-synced`;
       document-level Status header updated; revision-history entry
       recording the Moment 2 close, any impl/spec divergence corrections,
@@ -711,7 +711,7 @@ mid-phase owner decisions and revise the mutable plan where they diverge
       beside the control-flow-member production, and state the Window
       host-attribute catalog + the host-binding rejection rule (no DD/option
       labels in the spec prose per the living-spec vocabulary rule).
-- [ ] **A12 spec-closure gate (evidence item 7)** — confirm the ZStack
+- [x] **A12 spec-closure gate (evidence item 7)** — confirm the ZStack
       chapter, the conditional-rendering (structural-rendering-model)
       chapter (`if` as the first member of a structural control-flow
       family; absent=fresh-on-return / opt-in-retention normative

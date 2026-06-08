@@ -1,5 +1,15 @@
 ## Decisions log
 
+- **2026-06-08 / T9 A12 diagnostic follow-up — ScrollView conditional
+  rejection wording:** the A12 spec-closure check found that the live
+  ScrollView direct-conditional diagnostics still exposed the internal
+  `DD-M3-P6-007` id, while the living spec now records the reader-facing
+  wording without decision labels. Updated the T9 gate selection in-flight:
+  **#4 untested authored branch applies narrowly** to this diagnostic wording
+  branch, even though the accept/reject set is unchanged; close artifact is the
+  tightened compiler / loader tests that fire the branch and assert the DD id is
+  absent. **#1 semantic migration remains not applicable** because no enum, IR
+  field, schema variant, textual-IR grammar, or traversal behavior changes.
 - **2026-06-08 / T9 start gate — phase-close doc sync and Moment 2 re-sync:**
   selected implementation-gate traps before drafting the spec / architecture
   sync. Applies: **#5 carry-forward underweighted** because T9 must fold the

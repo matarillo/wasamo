@@ -1970,12 +1970,12 @@ the memory-IR entry point does not pass through `wasamoc`:
 |---|---|---|
 | Non-bool condition | `if count { … }` (`count: i32`); `if "x" { … }` | type error |
 | Undeclared condition name | `if missing { … }` | name-resolution error |
-| Operator condition | `if !ready { … }`; `if a && b { … }`; `if count > 0 { … }` | "operators in conditions are not yet supported" (points at the deferred expression-grammar extension) |
-| Non-structural body member | `if open { fill: red }`; `if open { state x: bool = true }` | "an `if` body admits a single widget child" |
-| Nested `if` directly in body | `if a { if b { … } }` | "an `if` body admits a single widget child" (wrap the inner `if`) |
-| Multiple children in body | `if open { Box{} Text{} }` | "an `if` body admits a single widget child" (wrap in a container) |
-| Component-level `if` | an `if` at component body level | "`if` is admitted only inside a widget body" (a root-level conditional has no parent slot) |
-| Direct conditional under ScrollView | `ScrollView { if c { … } }`; `ScrollView { Content  if c { … } }` | "a conditional member is not valid directly in ScrollView (wrap it in the content widget)" — the exactly-one-content-child cardinality cannot absorb a dynamic member; parallels the `Cell` direct-conditional rejection (§4.12) |
+| Operator condition | `if !ready { … }`; `if a && b { … }`; `if count > 0 { … }` | "operators in `if` conditions are not yet supported in M3-Phase 6" (points at the deferred expression-grammar extension) |
+| Non-structural body member | `if open { fill: red }`; `if open { state x: bool = true }` | "`if` body admits only a single widget child; properties, bindings, handlers, state declarations, and track lists are not structural body members" |
+| Nested `if` directly in body | `if a { if b { … } }` | "a bare nested `if` is not admitted directly in an `if` body in M3-Phase 6; wrap it in a widget container" |
+| Multiple children in body | `if open { Box{} Text{} }` | "`if` body admits exactly one widget child in M3-Phase 6; wrap multiple widgets or nested control flow in a container" |
+| Component-level `if` | an `if` at component body level | "component-level `if` is not supported in M3-Phase 6; put the `if` inside a widget body" (a root-level conditional has no parent slot) |
+| Direct conditional under ScrollView | `ScrollView { if c { … } }`; `ScrollView { Content  if c { … } }` | "`ScrollView` content child must be a single widget; a conditional member is not valid directly in ScrollView (wrap it in the content widget)" — the exactly-one-content-child cardinality cannot absorb a dynamic member; parallels the `Cell` direct-conditional rejection (§4.12) |
 | Bare `else` / `switch` / `for` | `else { … }`; `switch x { … }`; `for … { … }` | "reserved / not yet supported" (names the construct) |
 
 The reserved-but-unsupported diagnostic for `else` / `switch` / `for`

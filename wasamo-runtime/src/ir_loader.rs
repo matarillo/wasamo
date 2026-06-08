@@ -459,7 +459,7 @@ fn validate_phase4_node_invariants(node: &IrNode) -> Result<(), IrLoadError> {
             .any(|m| matches!(m, IrMember::ControlFlow(_)))
         {
             return Err(IrLoadError::Validate(
-                "`ScrollView` content child must be a single widget; a conditional member is not valid directly in ScrollView (wrap it in the content widget) — see DD-M3-P6-007".into(),
+                "`ScrollView` content child must be a single widget; a conditional member is not valid directly in ScrollView (wrap it in the content widget)".into(),
             ));
         }
         let widget_child_count = node.widget_children().count();
@@ -3927,6 +3927,16 @@ mod tests {
         }
     }
 
+    fn assert_validate_err_not_contains(src: &str, needle: &str) {
+        match parse_err(src) {
+            IrLoadError::Validate(msg) => assert!(
+                !msg.contains(needle),
+                "validate message `{msg}` unexpectedly contained `{needle}`"
+            ),
+            other => panic!("expected Validate error, got {other:?}"),
+        }
+    }
+
     // ── tracks parse (carrier c1) ───────────────────────────────────────
 
     #[test]
@@ -4505,6 +4515,12 @@ mod tests {
              }",
             "a conditional member is not valid directly in ScrollView",
         );
+        assert_validate_err_not_contains(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             node ScrollView { node Box {} if true { node Text {} } }\n\
+             }",
+            "DD-M3-P6-007",
+        );
     }
 
     #[test]
@@ -4516,6 +4532,12 @@ mod tests {
              node ScrollView { if true { node Text {} } }\n\
              }",
             "a conditional member is not valid directly in ScrollView",
+        );
+        assert_validate_err_not_contains(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             node ScrollView { if true { node Text {} } }\n\
+             }",
+            "DD-M3-P6-007",
         );
     }
 
