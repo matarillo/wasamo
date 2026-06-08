@@ -40,9 +40,9 @@
 
 #![cfg(windows)]
 
-use std::ffi::CStr;
+mod common;
+use common::run_on_owning_runtime_thread_or_skip;
 
-use wasamo_runtime::ffi;
 use wasamo_runtime::ir_loader::{build_widget_tree, parse_ir};
 use wasamo_runtime::WidgetNode;
 
@@ -65,28 +65,6 @@ fn lower_ui_to_ir(src: &str) -> String {
     emit::emit(&lower::lower(&ast, &checked.namespace))
 }
 
-fn last_error() -> Option<String> {
-    let ptr = ffi::wasamo_last_error_message();
-    if ptr.is_null() {
-        None
-    } else {
-        Some(
-            unsafe { CStr::from_ptr(ptr) }
-                .to_str()
-                .expect("last-error must be UTF-8")
-                .to_owned(),
-        )
-    }
-}
-
-fn runtime_compositor_unavailable(msg: Option<&str>) -> bool {
-    msg.is_some_and(|m| m.contains("0x80070005"))
-}
-
-fn github_actions() -> bool {
-    std::env::var_os("GITHUB_ACTIONS").is_some()
-}
-
 fn visual_rect(widget: &WidgetNode) -> (f32, f32, f32, f32) {
     let visual: Visual = widget.visual.cast().expect("cast SpriteVisual to Visual");
     let offset = visual.Offset().unwrap_or(Vector3 {
@@ -106,52 +84,17 @@ fn assert_close(actual: f32, expected: f32, label: &str) {
     );
 }
 
-/// Initialise the runtime; return `Some(...)` on success, `None` if the
-/// Compositor is locally unavailable (in which case the caller returns
-/// from the test, skipping it). Fails the test on GitHub Actions —
-/// CI must surface a missing Compositor as a failure per
-/// CLAUDE.md §Testing rules.
-fn init_runtime_or_skip(test_name: &str) -> Option<()> {
-    let _ = unsafe {
-        windows::Win32::System::WinRT::RoInitialize(
-            windows::Win32::System::WinRT::RO_INIT_SINGLETHREADED,
-        )
-    };
-
-    let status = ffi::wasamo_init();
-    if status == ffi::WASAMO_ERR_RUNTIME {
-        let msg = last_error();
-        if runtime_compositor_unavailable(msg.as_deref()) {
-            assert!(
-                !github_actions(),
-                "{test_name} cannot skip on GitHub Actions: \
-                 runtime compositor unavailable ({msg:?})"
-            );
-            eprintln!("skipping {test_name}: runtime compositor unavailable ({msg:?})");
-            return None;
-        }
-    }
-    assert_eq!(
-        status,
-        ffi::WASAMO_OK,
-        "wasamo_init failed: {:?}",
-        last_error()
-    );
-    Some(())
-}
-
 #[test]
 fn wrap_path_fixture_lays_out_multi_line_thumbnails() {
-    if init_runtime_or_skip("WrapPanel wrap-path integration test").is_none() {
-        return;
-    }
-
-    // Six 1:1 Boxes with item-cross-size: 88 → each child measures 88×88.
-    // Parent main-axis bound = 300; with item-spacing: 12 three boxes
-    // fit per line (88×3 + 12×2 = 288 ≤ 300) and a fourth would exceed
-    // the bound (288 + 12 + 88 = 388). Two lines of three with
-    // line-spacing: 12 → outer cross = 88×2 + 12 = 188.
-    let src = r#"component WrapLayout inherits Window {
+    // Marshalled onto the runtime-owning thread (Observation 5 step 1): the
+    // Compositor is created and used on one thread. See tests/common/mod.rs.
+    run_on_owning_runtime_thread_or_skip("WrapPanel wrap-path integration test", move || {
+        // Six 1:1 Boxes with item-cross-size: 88 → each child measures 88×88.
+        // Parent main-axis bound = 300; with item-spacing: 12 three boxes
+        // fit per line (88×3 + 12×2 = 288 ≤ 300) and a fourth would exceed
+        // the bound (288 + 12 + 88 = 388). Two lines of three with
+        // line-spacing: 12 → outer cross = 88×2 + 12 = 188.
+        let src = r#"component WrapLayout inherits Window {
     WrapPanel {
         item-cross-size: 88
         item-spacing: 12
@@ -189,56 +132,56 @@ fn wrap_path_fixture_lays_out_multi_line_thumbnails() {
     }
 }"#;
 
-    let ir = lower_ui_to_ir(src);
-    let component = parse_ir(&ir).expect("parse_ir failed");
-    let compositor = wasamo_runtime::get_compositor();
-    let text_renderer = wasamo_runtime::get_text_renderer();
-    let mut built =
-        build_widget_tree(&component, compositor, text_renderer).expect("build_widget_tree failed");
+        let ir = lower_ui_to_ir(src);
+        let component = parse_ir(&ir).expect("parse_ir failed");
+        let compositor = wasamo_runtime::get_compositor();
+        let text_renderer = wasamo_runtime::get_text_renderer();
+        let mut built = build_widget_tree(&component, compositor, text_renderer)
+            .expect("build_widget_tree failed");
 
-    let root = built.root.as_mut();
-    assert_eq!(root.children.len(), 6, "WrapPanel must have six children");
+        let root = built.root.as_mut();
+        assert_eq!(root.children.len(), 6, "WrapPanel must have six children");
 
-    // Parent extent: 300 main × 400 cross. Two lines × 88 + 12 = 188 cross
-    // fits within 400; main axis is bounded by the parent (Fill-width
-    // WrapPanel resolves to the parent's main bound = 300).
-    root.run_layout(300.0, 400.0).expect("run_layout failed");
+        // Parent extent: 300 main × 400 cross. Two lines × 88 + 12 = 188 cross
+        // fits within 400; main axis is bounded by the parent (Fill-width
+        // WrapPanel resolves to the parent's main bound = 300).
+        root.run_layout(300.0, 400.0).expect("run_layout failed");
 
-    let (wp_x, wp_y, wp_w, wp_h) = visual_rect(root);
-    assert_close(wp_x, 0.0, "WrapPanel visual x");
-    assert_close(wp_y, 0.0, "WrapPanel visual y");
-    assert_close(wp_w, 300.0, "WrapPanel outer main (parent bound)");
-    assert_close(wp_h, 188.0, "WrapPanel outer cross (2 lines × 88 + 12)");
+        let (wp_x, wp_y, wp_w, wp_h) = visual_rect(root);
+        assert_close(wp_x, 0.0, "WrapPanel visual x");
+        assert_close(wp_y, 0.0, "WrapPanel visual y");
+        assert_close(wp_w, 300.0, "WrapPanel outer main (parent bound)");
+        assert_close(wp_h, 188.0, "WrapPanel outer cross (2 lines × 88 + 12)");
 
-    let expected = [
-        // (x, y) per child — line 0: column 0/1/2; line 1: column 0/1/2.
-        (0.0_f32, 0.0_f32),     // child 0: col 0, line 0
-        (100.0_f32, 0.0_f32),   // child 1: col 1 (88 + 12)
-        (200.0_f32, 0.0_f32),   // child 2: col 2 (88 + 12 + 88 + 12)
-        (0.0_f32, 100.0_f32),   // child 3: col 0, line 1 (88 + 12)
-        (100.0_f32, 100.0_f32), // child 4: col 1, line 1
-        (200.0_f32, 100.0_f32), // child 5: col 2, line 1
-    ];
+        let expected = [
+            // (x, y) per child — line 0: column 0/1/2; line 1: column 0/1/2.
+            (0.0_f32, 0.0_f32),     // child 0: col 0, line 0
+            (100.0_f32, 0.0_f32),   // child 1: col 1 (88 + 12)
+            (200.0_f32, 0.0_f32),   // child 2: col 2 (88 + 12 + 88 + 12)
+            (0.0_f32, 100.0_f32),   // child 3: col 0, line 1 (88 + 12)
+            (100.0_f32, 100.0_f32), // child 4: col 1, line 1
+            (200.0_f32, 100.0_f32), // child 5: col 2, line 1
+        ];
 
-    for (i, &(ex, ey)) in expected.iter().enumerate() {
-        let (cx, cy, cw, ch) = visual_rect(&root.children[i]);
-        assert_close(cw, 88.0, &format!("child {i} width"));
-        assert_close(ch, 88.0, &format!("child {i} height"));
-        assert_close(cx, ex, &format!("child {i} x"));
-        assert_close(cy, ey, &format!("child {i} y"));
-    }
+        for (i, &(ex, ey)) in expected.iter().enumerate() {
+            let (cx, cy, cw, ch) = visual_rect(&root.children[i]);
+            assert_close(cw, 88.0, &format!("child {i} width"));
+            assert_close(ch, 88.0, &format!("child {i} height"));
+            assert_close(cx, ex, &format!("child {i} x"));
+            assert_close(cy, ey, &format!("child {i} y"));
+        }
+    });
 }
 
 #[test]
 fn oversized_child_fixture_paints_visible_overflow() {
-    if init_runtime_or_skip("WrapPanel oversized-child integration test").is_none() {
-        return;
-    }
-
-    // One Box with aspect 4:1 and item-cross-size: 50 → intrinsic
-    // (200, 50). Parent main-axis bound = 100; per DD-M3-P3-005
-    // oversized-line Option A the WrapPanel does not grow to fit.
-    let src = r#"component WrapOverflow inherits Window {
+    // Marshalled onto the runtime-owning thread (Observation 5 step 1): the
+    // Compositor is created and used on one thread. See tests/common/mod.rs.
+    run_on_owning_runtime_thread_or_skip("WrapPanel oversized-child integration test", move || {
+        // One Box with aspect 4:1 and item-cross-size: 50 → intrinsic
+        // (200, 50). Parent main-axis bound = 100; per DD-M3-P3-005
+        // oversized-line Option A the WrapPanel does not grow to fit.
+        let src = r#"component WrapOverflow inherits Window {
     WrapPanel {
         item-cross-size: 50
         Box {
@@ -248,42 +191,43 @@ fn oversized_child_fixture_paints_visible_overflow() {
     }
 }"#;
 
-    let ir = lower_ui_to_ir(src);
-    let component = parse_ir(&ir).expect("parse_ir failed");
-    let compositor = wasamo_runtime::get_compositor();
-    let text_renderer = wasamo_runtime::get_text_renderer();
-    let mut built =
-        build_widget_tree(&component, compositor, text_renderer).expect("build_widget_tree failed");
+        let ir = lower_ui_to_ir(src);
+        let component = parse_ir(&ir).expect("parse_ir failed");
+        let compositor = wasamo_runtime::get_compositor();
+        let text_renderer = wasamo_runtime::get_text_renderer();
+        let mut built = build_widget_tree(&component, compositor, text_renderer)
+            .expect("build_widget_tree failed");
 
-    let root = built.root.as_mut();
-    assert_eq!(root.children.len(), 1, "WrapPanel must have one child");
+        let root = built.root.as_mut();
+        assert_eq!(root.children.len(), 1, "WrapPanel must have one child");
 
-    // Parent extent: 100 main × 200 cross. The oversized child does not
-    // expand the WrapPanel main axis.
-    root.run_layout(100.0, 200.0).expect("run_layout failed");
+        // Parent extent: 100 main × 200 cross. The oversized child does not
+        // expand the WrapPanel main axis.
+        root.run_layout(100.0, 200.0).expect("run_layout failed");
 
-    let (_, _, wp_w, wp_h) = visual_rect(root);
-    assert_close(wp_w, 100.0, "WrapPanel main stays at parent bound");
-    assert_close(wp_h, 50.0, "WrapPanel cross == single line × 50");
+        let (_, _, wp_w, wp_h) = visual_rect(root);
+        assert_close(wp_w, 100.0, "WrapPanel main stays at parent bound");
+        assert_close(wp_h, 50.0, "WrapPanel cross == single line × 50");
 
-    let (cx, _, cw, ch) = visual_rect(&root.children[0]);
-    assert_close(cw, 200.0, "oversized child width (aspect 4:1 × 50)");
-    assert_close(ch, 50.0, "oversized child height (item-cross-size)");
-    assert!(
-        cx + cw > wp_w,
-        "expected visible overflow: child end {} should exceed WrapPanel end {}",
-        cx + cw,
-        wp_w
-    );
+        let (cx, _, cw, ch) = visual_rect(&root.children[0]);
+        assert_close(cw, 200.0, "oversized child width (aspect 4:1 × 50)");
+        assert_close(ch, 50.0, "oversized child height (item-cross-size)");
+        assert!(
+            cx + cw > wp_w,
+            "expected visible overflow: child end {} should exceed WrapPanel end {}",
+            cx + cw,
+            wp_w
+        );
 
-    // Phase 3 installs no clip surface on the WrapPanel's visual —
-    // the spec'd "visible overflow, parent clips" convention is
-    // preserved through to the Visual tree. `Visual::Clip()` returns
-    // an error when no clip is installed; an Ok(_) here would mean
-    // Phase 3 code accidentally set one.
-    let visual: Visual = root.visual.cast().expect("cast SpriteVisual to Visual");
-    assert!(
-        visual.Clip().is_err(),
-        "WrapPanel must not install a clip surface (Phase 3 visible-overflow rule)"
-    );
+        // Phase 3 installs no clip surface on the WrapPanel's visual —
+        // the spec'd "visible overflow, parent clips" convention is
+        // preserved through to the Visual tree. `Visual::Clip()` returns
+        // an error when no clip is installed; an Ok(_) here would mean
+        // Phase 3 code accidentally set one.
+        let visual: Visual = root.visual.cast().expect("cast SpriteVisual to Visual");
+        assert!(
+            visual.Clip().is_err(),
+            "WrapPanel must not install a clip surface (Phase 3 visible-overflow rule)"
+        );
+    });
 }

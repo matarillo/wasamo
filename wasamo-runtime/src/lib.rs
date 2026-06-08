@@ -25,6 +25,22 @@ pub mod ffi {
     pub fn __install_owning_thread_for_test() {
         crate::runtime::__install_owning_thread_for_test();
     }
+
+    #[doc(hidden)]
+    pub unsafe fn __add_signal_registration_for_test(
+        widget: *mut WasamoWidget,
+        name: &str,
+        callback: WasamoSignalHandlerFn,
+        user_data: *mut std::ffi::c_void,
+        destroy_fn: WasamoDestroyFn,
+    ) -> u64 {
+        crate::registry::add_signal(widget, name.to_owned(), callback, user_data, destroy_fn)
+    }
+
+    #[doc(hidden)]
+    pub fn __signal_tokens_for_test(widget: *mut WasamoWidget, name: &str) -> Vec<u64> {
+        crate::registry::signal_tokens_for(widget, name)
+    }
 }
 
 pub use layout::{Alignment, SizeConstraint, WidgetKind};

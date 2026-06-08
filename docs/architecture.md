@@ -1,6 +1,6 @@
 # Wasamo Architecture
 
-**Status:** M1 complete (Phases 0-8); M2 complete (Phases 1-7) — Foundation acceptance A1-A6 discharged; M3-Phase 1, M3-Phase 2, M3-Phase 3, M3-Phase 4, and M3-Phase 5 complete. M3-Phase 6 (ZStack + conditional rendering) design accepted; implementation pending.
+**Status:** M1 complete (Phases 0-8); M2 complete (Phases 1-7) — Foundation acceptance A1-A6 discharged; M3-Phase 1, M3-Phase 2, M3-Phase 3, M3-Phase 4, and M3-Phase 5 complete. M3-Phase 6 closed (implementation-synced): ZStack, conditional rendering, and the component host surface are documented to match the landed implementation.
 
 ---
 
@@ -460,7 +460,7 @@ correct document-order z-order.
 The `LayoutNode` tree is rebuilt on each layout pass (O(n)).
 No persistent layout cache exists in M1.
 
-### 6.6 Layout invalidation on property change (Phase 8)
+### 6.6 Layout invalidation on property and structural change (M1-Phase 8; M3-Phase 6)
 
 Before Phase 8, the only path that triggered a layout pass was `WM_SIZE`.
 `wasamo_set_property` for size-affecting properties (`BUTTON_LABEL`,
@@ -483,6 +483,15 @@ Before Phase 8, the only path that triggered a layout pass was `WM_SIZE`.
   runs when they enter a window via `wasamo_window_set_root`.
 - `BUTTON_STYLE` does not affect intrinsic size in M1 (Default and
   Accent share the same metrics); it remains a pure visual refresh.
+
+M3-Phase 6 extends the same dirty-window path to structural conditional
+mutation. A successful conditional subtree insert or remove calls
+`mark_layout_dirty_for` through the parent widget after the tree mutation
+lands. This is required even when no size-affecting property write
+occurs: a newly-present or newly-absent subtree can change parent
+measurement, placement, clip contents, and ZStack document-order visual
+composition. The phase keeps the existing whole-window dirty granularity;
+subtree-grain invalidation remains a later optimization question.
 
 Window registration lifecycle:
 - `window::create` calls `emit::register_window` after `Box<WindowState>` is
@@ -921,6 +930,11 @@ condition Effect re-firing for an unrelated dependency is safe):
   explicit `widget_destroy` is required to avoid stale hit-test registry
   pointers (e.g. the lightbox `< > x` Buttons) lingering in the absent
   subtree.
+
+Each successful transition marks the containing window layout-dirty via
+the parent widget (§6.6). Structural presence can affect measurement,
+placement, and ZStack visual order even when the transition did not
+write a size-affecting property.
 
 The conditional stores its stable **declared member index**; the
 materialised insert/remove index is **recomputed at each mutation**
@@ -1454,6 +1468,29 @@ the loaded IR (`wasamoc` → textual IR → runtime loader), but there is
 still no reconciler: the view tree is mutated in place — including the
 structural insert/remove of conditional subtrees (§6.7.9) — not diffed
 against a freshly computed tree.
+
+**Component host surface (M3-Phase 6).** Loaded IR is rooted at an
+`IrComponent`, not directly at the content widget. The component owns
+three categories of data:
+
+- `states`: per-component Signals;
+- `host_props` / `host_bindings`: host-owned attributes for the
+  containing Window surface;
+- `root`: the single content-root widget.
+
+The host surface is deliberately separate from the content root. Window
+attributes such as `title`, `backdrop`, and `theme` are represented as
+component `host_props`, never as `root.props`; dynamic host bindings are
+represented by `host_bindings` in the textual IR surface but rejected in
+M3-Phase 6. The runtime mirrors the compiler's Window host catalog,
+resolves the static window title from `host_props`, rejects host
+bindings, and rejects legacy IR that squats host attributes or bindings
+on the content root. Future host/base modelling may replace this carrier
+with a richer window descriptor, but it must preserve the invariant that
+host-owned attributes do not become properties of the rendered content
+root. Because this is an internal compiler/textual-IR/runtime-loader
+shape, it adds no C ABI export; the host still calls `wasamo_load_ui`
+with the emitted IR payload.
 
 **Declared-tree / entity-tree separation (M3-Phase 6, nascent).** The
 conditional construct (§6.7.9) introduces, in nascent form, a

@@ -7,18 +7,20 @@
 //! (`wasamo_load_ui`) is wired in DD-M2-P6-005 — this module exposes the
 //! Rust-level entry points only.
 
+use std::cell::RefCell;
 use std::rc::Rc;
 
 use wasamo_ir::{
-    CompoundOp, HandlerExpr, InterpolationPart, IrBinding, IrComponent, IrHandler, IrLiteral,
-    IrNode, IrProp, IrState, IrType, KindPayload, TrackSize,
+    CompoundOp, ControlFlowBranch, ControlFlowNode, HandlerExpr, InterpolationPart, IrBinding,
+    IrComponent, IrHandler, IrLiteral, IrMember, IrNode, IrProp, IrState, IrType, KindPayload,
+    TrackSize,
 };
 
 use crate::box_values;
-use crate::layout::{Alignment, CellPlacement, TrackSize as LayoutTrackSize};
+use crate::layout::{Alignment, CellPlacement, TrackSize as LayoutTrackSize, ZStackPlacement};
 use crate::reactive::{
-    register_binding, register_bool_binding, set_active_registry, BindingTarget, PropertyKey,
-    Signal, SignalRegistry, WidgetId,
+    register_binding, register_bool_binding, register_conditional_binding, set_active_registry,
+    BindingTarget, PropertyKey, Signal, SignalRegistry, WidgetId,
 };
 use crate::text::{TextRenderer, TypographyStyle};
 use crate::widget::{
@@ -86,6 +88,16 @@ pub struct BuiltUi {
     pub(crate) registry: Rc<SignalRegistry>,
 }
 
+#[derive(Clone)]
+enum DeclaredMemberSlot {
+    Widget,
+    Conditional(Rc<RefCell<ConditionalRuntimeState>>),
+}
+
+struct ConditionalRuntimeState {
+    live_child: bool,
+}
+
 impl BuiltUi {
     /// Test-only mutator for an `i32`-typed state declared on the
     /// component (per `state <name>: i32 = <default>`). Writes through
@@ -103,6 +115,17 @@ impl BuiltUi {
     #[doc(hidden)]
     pub fn __set_i32_state_for_test(&self, name: &str, value: i32) -> bool {
         match self.registry.i32s.get(name) {
+            Some(signal) => {
+                signal.set(value);
+                true
+            }
+            None => false,
+        }
+    }
+
+    #[doc(hidden)]
+    pub fn __set_bool_state_for_test(&self, name: &str, value: bool) -> bool {
+        match self.registry.bools.get(name) {
             Some(signal) => {
                 signal.set(value);
                 true
@@ -150,15 +173,20 @@ pub fn parse_ir(text: &str) -> Result<IrComponent, IrLoadError> {
 ///    a declared `state`. Widget-instance references are not yet part of
 ///    the IR — see `docs/notes/dsl-grammar.md` Q1 for the open question.
 fn validate(comp: &IrComponent) -> Result<(), IrLoadError> {
-    let mut declared = std::collections::HashSet::new();
+    let mut declared = std::collections::HashMap::new();
     for state in &comp.states {
-        if !declared.insert(state.name.as_str()) {
+        if declared
+            .insert(state.name.as_str(), state.ty.clone())
+            .is_some()
+        {
             return Err(IrLoadError::Validate(format!(
                 "duplicate `state` name: `{}`",
                 state.name
             )));
         }
     }
+    validate_host_surface(comp)?;
+    reject_root_squatted_host_attrs(comp)?;
     validate_node_references(&comp.root, &declared)?;
     // M3-Phase 2 T7 defense-in-depth gates (DD-M3-P2-001 / DD-M3-P2-002 /
     // DD-M3-P2-003). The shared mapping at the C ABI boundary is
@@ -199,17 +227,170 @@ fn validate(comp: &IrComponent) -> Result<(), IrLoadError> {
     // into a Grid's Cell *content* children, never treating `Cell` as a
     // standalone node, so a `Cell` reached by the generic walk is
     // necessarily misplaced).
-    validate_phase5_node_invariants(&comp.root)
+    validate_phase5_node_invariants(&comp.root)?;
+    // M3-Phase 6 T3 defense-in-depth gate (DD-M3-P6-001 /
+    // DD-M3-P6-002). `wasamoc check` (T1) rejects the same malformed
+    // ZStack surface before emit; this gate covers memory/textual IR that
+    // reaches the runtime loader directly. ZStack has no kind payload, no
+    // ZStack-level attrs, no bindings/handlers, and only its direct children
+    // may carry `h-align` / `v-align` placement annotations.
+    validate_phase6_zstack_node_invariants(&comp.root, ParentKind::Root)?;
+    validate_phase6_control_flow_invariants(&comp.root)
+}
+
+const HOST_STATIC_ATTRS: &[&str] = &["title", "backdrop", "theme"];
+
+fn validate_host_surface(comp: &IrComponent) -> Result<(), IrLoadError> {
+    // The runtime is a *defensive reader* of textual IR (DD-M3-P6-008), so it
+    // mirrors the compiler host catalog on both the attribute *name* and the
+    // per-attribute *value shape* — not just the name. `wasamoc check` rejects
+    // a non-string `title` and a typed-scalar literal on `backdrop` / `theme`
+    // (those take a keyword identifier such as `mica` / `system`), so a
+    // hand-crafted textual IR that skips the compiler must be rejected here
+    // identically rather than leaving a direct-textual-IR hole.
+    for prop in &comp.host_props {
+        match prop.name.as_str() {
+            "title" => {
+                if !matches!(prop.value, IrLiteral::Str(_)) {
+                    return Err(IrLoadError::Validate(
+                        "host `title` prop must be a string literal".into(),
+                    ));
+                }
+            }
+            "backdrop" | "theme" => {
+                if matches!(
+                    prop.value,
+                    IrLiteral::Int(_) | IrLiteral::Str(_) | IrLiteral::Bool(_)
+                ) {
+                    return Err(IrLoadError::Validate(format!(
+                        "host `{}` prop must be a keyword identifier, not a typed literal",
+                        prop.name
+                    )));
+                }
+            }
+            _ => {
+                return Err(IrLoadError::Validate(format!(
+                    "unknown host attribute `{}`; M3-Phase 6 host attributes are: {}",
+                    prop.name,
+                    HOST_STATIC_ATTRS.join(", ")
+                )));
+            }
+        }
+    }
+    if let Some(binding) = comp.host_bindings.first() {
+        return Err(IrLoadError::Validate(format!(
+            "host attribute `{}` is not bindable in M3-Phase 6",
+            binding.prop_name
+        )));
+    }
+    Ok(())
+}
+
+fn reject_root_squatted_host_attrs(comp: &IrComponent) -> Result<(), IrLoadError> {
+    if let Some(prop) = comp
+        .root
+        .props
+        .iter()
+        .find(|prop| HOST_STATIC_ATTRS.contains(&prop.name.as_str()))
+    {
+        return Err(IrLoadError::Validate(format!(
+            "host attribute `{}` must live on `host_props`, not on the content root",
+            prop.name
+        )));
+    }
+    if let Some(binding) = comp
+        .root
+        .bindings
+        .iter()
+        .find(|binding| HOST_STATIC_ATTRS.contains(&binding.prop_name.as_str()))
+    {
+        return Err(IrLoadError::Validate(format!(
+            "host attribute `{}` must live on `host_bindings`, not on the content root",
+            binding.prop_name
+        )));
+    }
+    Ok(())
+}
+
+pub(crate) fn resolve_static_window_title<'a>(
+    comp: &'a IrComponent,
+    default_title: &'a str,
+) -> &'a str {
+    let Some(prop) = comp.host_props.iter().find(|prop| prop.name == "title") else {
+        return default_title;
+    };
+    match &prop.value {
+        IrLiteral::Str(title) if !title.is_empty() => title.as_str(),
+        _ => default_title,
+    }
+}
+
+fn is_child_placement_prop(name: &str) -> bool {
+    matches!(name, "h-align" | "v-align")
+}
+
+fn validate_phase6_control_flow_invariants(node: &IrNode) -> Result<(), IrLoadError> {
+    for member in &node.children {
+        match member {
+            IrMember::Widget(child) => validate_phase6_control_flow_invariants(child)?,
+            IrMember::ControlFlow(ControlFlowNode::If { branches }) => {
+                if branches.len() != 1 {
+                    return Err(IrLoadError::Validate(format!(
+                        "`if` control flow supports exactly one branch in M3-Phase 6, got {}",
+                        branches.len()
+                    )));
+                }
+                let branch = &branches[0];
+                if branch.body.len() != 1 {
+                    return Err(IrLoadError::Validate(format!(
+                        "`if` body supports exactly one widget member in M3-Phase 6, got {}",
+                        branch.body.len()
+                    )));
+                }
+                match &branch.body[0] {
+                    IrMember::Widget(body) => validate_phase6_control_flow_invariants(body)?,
+                    IrMember::ControlFlow(_) => {
+                        return Err(IrLoadError::Validate(
+                            "a nested control-flow member is not valid directly in an `if` body in M3-Phase 6".into(),
+                        ));
+                    }
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
+fn validate_phase2_member_invariants(member: &IrMember) -> Result<(), IrLoadError> {
+    match member {
+        IrMember::Widget(child) => validate_phase2_node_invariants(child),
+        IrMember::ControlFlow(ControlFlowNode::If { branches }) => {
+            for branch in branches {
+                for body_member in &branch.body {
+                    validate_phase2_member_invariants(body_member)?;
+                }
+            }
+            Ok(())
+        }
+    }
 }
 
 fn validate_phase2_node_invariants(node: &IrNode) -> Result<(), IrLoadError> {
     // Box single-child invariant (DD-M3-P2-001). wasamoc check (T3)
     // diagnoses the same condition at compile time; this is the runtime
     // defense for IR not produced by wasamoc.
-    if node.widget_type == "Box" && node.children.len() > 1 {
+    //
+    // T4 review follow-up: count every member that can materialise a
+    // child, not widget children only. A conditional member materialises
+    // at most one child, so a conditional sibling counts toward the limit
+    // (`Box { Text  if c { … } }` could become two children). The prior
+    // `widget_children()` count under-counted the conditional sibling and
+    // let it slip past both gates (see log.md T4 migration audit).
+    let child_member_count = node.children.len();
+    if node.widget_type == "Box" && child_member_count > 1 {
         return Err(IrLoadError::Validate(format!(
             "`Box` node accepts at most one child, got {} (use `VStack` / `HStack` / `ZStack` for multi-child layouts)",
-            node.children.len()
+            child_member_count
         )));
     }
     // Ratio / Color literal placement (DD-M3-P2-002 / DD-M3-P2-003,
@@ -241,8 +422,8 @@ fn validate_phase2_node_invariants(node: &IrNode) -> Result<(), IrLoadError> {
             _ => {}
         }
     }
-    for child in &node.children {
-        validate_phase2_node_invariants(child)?;
+    for member in &node.children {
+        validate_phase2_member_invariants(member)?;
     }
     Ok(())
 }
@@ -265,16 +446,48 @@ fn validate_phase2_node_invariants(node: &IrNode) -> Result<(), IrLoadError> {
 // arrange-time clamp is the runtime gate so bindings can transition
 // through negative / out-of-range intermediates.
 fn validate_phase4_node_invariants(node: &IrNode) -> Result<(), IrLoadError> {
-    if node.widget_type == "ScrollView" && node.children.len() != 1 {
-        return Err(IrLoadError::Validate(format!(
-            "`ScrollView` requires exactly one content child, got {}",
-            node.children.len()
-        )));
+    if node.widget_type == "ScrollView" {
+        // DD-M3-P6-007 accepted (a): a conditional is not a valid *direct*
+        // ScrollView content member. Its presence is dynamic, so it cannot
+        // satisfy "exactly one content child" (`ScrollView { Content if c }`
+        // could become two; `ScrollView { if c { ... } }` could become zero).
+        // Wrap it in the content widget (`ScrollView { Box { if c { ... } } }`).
+        // The conditionally-empty direction is deferred, not rejected.
+        if node
+            .children
+            .iter()
+            .any(|m| matches!(m, IrMember::ControlFlow(_)))
+        {
+            return Err(IrLoadError::Validate(
+                "`ScrollView` content child must be a single widget; a conditional member is not valid directly in ScrollView (wrap it in the content widget)".into(),
+            ));
+        }
+        let widget_child_count = node.widget_children().count();
+        if widget_child_count != 1 {
+            return Err(IrLoadError::Validate(format!(
+                "`ScrollView` requires exactly one content child, got {}",
+                widget_child_count
+            )));
+        }
     }
-    for child in &node.children {
-        validate_phase4_node_invariants(child)?;
+    for member in &node.children {
+        validate_phase4_member_invariants(member)?;
     }
     Ok(())
+}
+
+fn validate_phase4_member_invariants(member: &IrMember) -> Result<(), IrLoadError> {
+    match member {
+        IrMember::Widget(child) => validate_phase4_node_invariants(child),
+        IrMember::ControlFlow(ControlFlowNode::If { branches }) => {
+            for branch in branches {
+                for body_member in &branch.body {
+                    validate_phase4_member_invariants(body_member)?;
+                }
+            }
+            Ok(())
+        }
+    }
 }
 
 fn validate_phase3_node_invariants(node: &IrNode) -> Result<(), IrLoadError> {
@@ -297,10 +510,24 @@ fn validate_phase3_node_invariants(node: &IrNode) -> Result<(), IrLoadError> {
             }
         }
     }
-    for child in &node.children {
-        validate_phase3_node_invariants(child)?;
+    for member in &node.children {
+        validate_phase3_member_invariants(member)?;
     }
     Ok(())
+}
+
+fn validate_phase3_member_invariants(member: &IrMember) -> Result<(), IrLoadError> {
+    match member {
+        IrMember::Widget(child) => validate_phase3_node_invariants(child),
+        IrMember::ControlFlow(ControlFlowNode::If { branches }) => {
+            for branch in branches {
+                for body_member in &branch.body {
+                    validate_phase3_member_invariants(body_member)?;
+                }
+            }
+            Ok(())
+        }
+    }
 }
 
 // M3-Phase 5 T3 defense-in-depth (DD-M3-P5-006). Mirrors the
@@ -323,9 +550,9 @@ fn validate_phase5_node_invariants(node: &IrNode) -> Result<(), IrLoadError> {
             // Descend into each Cell's content child (the Cell wrapper
             // itself is validated above and is IR-only). A bad child-count
             // was already rejected by `validate_grid_invariants`.
-            for cell in &node.children {
-                for content in &cell.children {
-                    validate_phase5_node_invariants(content)?;
+            for cell in node.widget_children() {
+                for member in &cell.children {
+                    validate_phase5_member_invariants(member)?;
                 }
             }
         }
@@ -335,12 +562,133 @@ fn validate_phase5_node_invariants(node: &IrNode) -> Result<(), IrLoadError> {
             ));
         }
         _ => {
-            for child in &node.children {
-                validate_phase5_node_invariants(child)?;
+            for member in &node.children {
+                validate_phase5_member_invariants(member)?;
             }
         }
     }
     Ok(())
+}
+
+fn validate_phase5_member_invariants(member: &IrMember) -> Result<(), IrLoadError> {
+    match member {
+        IrMember::Widget(child) => validate_phase5_node_invariants(child),
+        IrMember::ControlFlow(ControlFlowNode::If { branches }) => {
+            for branch in branches {
+                for body_member in &branch.body {
+                    validate_phase5_member_invariants(body_member)?;
+                }
+            }
+            Ok(())
+        }
+    }
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum ParentKind {
+    Root,
+    Grid,
+    Cell,
+    ZStack,
+    Other,
+}
+
+fn parent_kind_for(node: &IrNode) -> ParentKind {
+    match node.widget_type.as_str() {
+        "Grid" => ParentKind::Grid,
+        "Cell" => ParentKind::Cell,
+        "ZStack" => ParentKind::ZStack,
+        _ => ParentKind::Other,
+    }
+}
+
+// M3-Phase 6 T3 defense-in-depth (DD-M3-P6-001 / DD-M3-P6-002). Mirrors
+// the ZStack surface from `wasamoc check`: ZStack is a direct-child
+// container with no `KindPayload`, no ZStack-level props, and no bindable
+// properties; `h-align` / `v-align` are parent-owned placement props valid
+// only on a ZStack direct child (or Grid Cell, owned by Phase 5).
+fn validate_phase6_zstack_node_invariants(
+    node: &IrNode,
+    parent: ParentKind,
+) -> Result<(), IrLoadError> {
+    if node.widget_type == "ZStack" {
+        if node.kind_payload.is_some() {
+            return Err(IrLoadError::Validate(
+                "`ZStack` must not carry a `kind_payload` (DD-M3-P6-001)".into(),
+            ));
+        }
+        let zstack_widget_prop = node
+            .props
+            .iter()
+            .find(|prop| !(parent == ParentKind::ZStack && is_child_placement_prop(&prop.name)));
+        if let Some(prop) = zstack_widget_prop {
+            return Err(IrLoadError::Validate(format!(
+                "`ZStack` accepts no Phase-6 attributes; found `{}`",
+                prop.name
+            )));
+        }
+        if !node.bindings.is_empty() {
+            return Err(IrLoadError::Validate(
+                "`ZStack` accepts no Phase-6 bindings".into(),
+            ));
+        }
+        if !node.handlers.is_empty() {
+            return Err(IrLoadError::Validate(
+                "`ZStack` accepts no Phase-6 handlers".into(),
+            ));
+        }
+    }
+
+    for prop in &node.props {
+        if matches!(prop.name.as_str(), "h-align" | "v-align") {
+            let allowed = parent == ParentKind::ZStack
+                || (parent == ParentKind::Grid && node.widget_type == "Cell");
+            if !allowed {
+                return Err(IrLoadError::Validate(format!(
+                    "`{}` is valid only on a ZStack direct child or Grid `Cell`",
+                    prop.name
+                )));
+            }
+            validate_alignment_literal(
+                &prop.value,
+                &format!("{}.{}", node.widget_type, prop.name),
+            )?;
+        }
+    }
+
+    let current = parent_kind_for(node);
+    for member in &node.children {
+        validate_phase6_zstack_member_invariants(member, current)?;
+    }
+    Ok(())
+}
+
+fn validate_phase6_zstack_member_invariants(
+    member: &IrMember,
+    parent: ParentKind,
+) -> Result<(), IrLoadError> {
+    match member {
+        IrMember::Widget(child) => validate_phase6_zstack_node_invariants(child, parent),
+        IrMember::ControlFlow(ControlFlowNode::If { branches }) => {
+            for branch in branches {
+                for body_member in &branch.body {
+                    validate_phase6_zstack_member_invariants(body_member, parent)?;
+                }
+            }
+            Ok(())
+        }
+    }
+}
+
+fn validate_alignment_literal(value: &IrLiteral, label: &str) -> Result<(), IrLoadError> {
+    match value {
+        IrLiteral::Ident(id) if matches!(id.as_str(), "start" | "center" | "end" | "stretch") => {
+            Ok(())
+        }
+        _ => Err(IrLoadError::Validate(format!(
+            "`{label}` must be one of start, center, end, stretch"
+        ))),
+    }
 }
 
 /// Reject a non-`Grid` node carrying a Grid `kind_payload` (carrier c1
@@ -424,16 +772,25 @@ fn validate_grid_invariants(node: &IrNode) -> Result<(), IrLoadError> {
     // Per-Cell validation + rectangle collection (DD-M3-P5-003 /
     // DD-M3-P5-005 / DD-M3-P5-006).
     let mut rects: Vec<GridCellRect> = Vec::new();
-    for cell in &node.children {
-        if cell.widget_type != "Cell" {
-            return Err(IrLoadError::Validate(format!(
-                "`Grid` children must be wrapped in `Cell`, found `{}` (DD-M3-P5-001)",
-                cell.widget_type
-            )));
+    for member in &node.children {
+        match member {
+            IrMember::Widget(cell) if cell.widget_type == "Cell" => {
+                // A `Cell` is a non-Grid node and must not carry a Grid payload.
+                reject_non_grid_kind_payload(cell)?;
+                rects.push(validate_grid_cell(cell, columns_len, rows_len)?);
+            }
+            IrMember::Widget(child) => {
+                return Err(IrLoadError::Validate(format!(
+                    "`Grid` children must be wrapped in `Cell`, found `{}` (DD-M3-P5-001)",
+                    child.widget_type
+                )));
+            }
+            IrMember::ControlFlow(_) => {
+                return Err(IrLoadError::Validate(
+                    "`Grid` children must be wrapped in `Cell`; conditional members are not valid directly in runtime Grid IR".into(),
+                ));
+            }
         }
-        // A `Cell` is a non-Grid node and must not carry a Grid payload.
-        reject_non_grid_kind_payload(cell)?;
-        rects.push(validate_grid_cell(cell, columns_len, rows_len)?);
     }
 
     // Same-cell / overlapping-rectangle conflict (DD-M3-P5-003): no two
@@ -467,11 +824,21 @@ fn validate_grid_cell(
     rows_len: i64,
 ) -> Result<GridCellRect, IrLoadError> {
     // Cell single content child (DD-M3-P5-001).
-    if cell.children.len() != 1 {
+    let widget_child_count = cell.widget_children().count();
+    if widget_child_count != 1 {
         return Err(IrLoadError::Validate(format!(
             "`Cell` requires exactly one content child, got {} (DD-M3-P5-001)",
-            cell.children.len()
+            widget_child_count
         )));
+    }
+    if cell
+        .children
+        .iter()
+        .any(|m| matches!(m, IrMember::ControlFlow(_)))
+    {
+        return Err(IrLoadError::Validate(
+            "`Cell` admits exactly one direct widget content child; put conditional members inside that content widget".into(),
+        ));
     }
 
     // Placement / span values (Int literal positions). `wasamoc lower`
@@ -573,7 +940,7 @@ fn grid_rects_overlap(a: &GridCellRect, b: &GridCellRect) -> bool {
 
 fn validate_node_references(
     node: &IrNode,
-    declared: &std::collections::HashSet<&str>,
+    declared: &std::collections::HashMap<&str, IrType>,
 ) -> Result<(), IrLoadError> {
     for binding in &node.bindings {
         validate_expr_references(&binding.expr, declared, &|name| {
@@ -591,15 +958,33 @@ fn validate_node_references(
             )
         })?;
     }
-    for child in &node.children {
-        validate_node_references(child, declared)?;
+    for member in &node.children {
+        validate_member_references(member, declared)?;
     }
     Ok(())
 }
 
+fn validate_member_references(
+    member: &IrMember,
+    declared: &std::collections::HashMap<&str, IrType>,
+) -> Result<(), IrLoadError> {
+    match member {
+        IrMember::Widget(node) => validate_node_references(node, declared),
+        IrMember::ControlFlow(ControlFlowNode::If { branches }) => {
+            for branch in branches {
+                validate_condition_expr(&branch.condition, declared)?;
+                for body_member in &branch.body {
+                    validate_member_references(body_member, declared)?;
+                }
+            }
+            Ok(())
+        }
+    }
+}
+
 fn validate_expr_references(
     expr: &HandlerExpr,
-    declared: &std::collections::HashSet<&str>,
+    declared: &std::collections::HashMap<&str, IrType>,
     err_msg: &dyn Fn(&str) -> String,
 ) -> Result<(), IrLoadError> {
     match expr {
@@ -607,20 +992,20 @@ fn validate_expr_references(
         HandlerExpr::PropRead { path }
         | HandlerExpr::StrPropRead { path }
         | HandlerExpr::BoolPropRead { path } => {
-            if !declared.contains(path.as_str()) {
+            if !declared.contains_key(path.as_str()) {
                 Err(IrLoadError::Validate(err_msg(path)))
             } else {
                 Ok(())
             }
         }
         HandlerExpr::Assign { lhs, rhs } => {
-            if !declared.contains(lhs.as_str()) {
+            if !declared.contains_key(lhs.as_str()) {
                 return Err(IrLoadError::Validate(err_msg(lhs)));
             }
             validate_expr_references(rhs, declared, err_msg)
         }
         HandlerExpr::CompoundAssign { lhs, rhs, .. } => {
-            if !declared.contains(lhs.as_str()) {
+            if !declared.contains_key(lhs.as_str()) {
                 return Err(IrLoadError::Validate(err_msg(lhs)));
             }
             validate_expr_references(rhs, declared, err_msg)
@@ -639,6 +1024,32 @@ fn validate_expr_references(
             }
             Ok(())
         }
+    }
+}
+
+fn validate_condition_expr(
+    expr: &HandlerExpr,
+    declared: &std::collections::HashMap<&str, IrType>,
+) -> Result<(), IrLoadError> {
+    match expr {
+        HandlerExpr::BoolLit(_) => Ok(()),
+        HandlerExpr::BoolPropRead { path } => match declared.get(path.as_str()) {
+            Some(IrType::Bool) => Ok(()),
+            Some(other) => Err(IrLoadError::Validate(format!(
+                "`if` condition `{path}` must resolve to bool, got {other:?}"
+            ))),
+            None => Err(IrLoadError::Validate(format!(
+                "`if` condition references undeclared name `{path}`"
+            ))),
+        },
+        HandlerExpr::PropRead { path } | HandlerExpr::StrPropRead { path } => {
+            Err(IrLoadError::Validate(format!(
+                "`if` condition `{path}` must use a bool condition expression"
+            )))
+        }
+        other => Err(IrLoadError::Validate(format!(
+            "`if` condition must be a bool literal or bool state read, got {other:?}"
+        ))),
     }
 }
 
@@ -939,6 +1350,8 @@ impl<'a> Parser<'a> {
         let base = self.expect_ident()?;
         self.expect(&Token::LBrace)?;
 
+        let mut host_props = Vec::new();
+        let mut host_bindings = Vec::new();
         let mut states = Vec::new();
         let mut root: Option<IrNode> = None;
 
@@ -950,6 +1363,11 @@ impl<'a> Parser<'a> {
                 }
                 Some(Token::Ident(s)) if s == "state" => {
                     states.push(self.parse_state()?);
+                }
+                Some(Token::Ident(s)) if s == "host" => {
+                    let (props, bindings) = self.parse_host_member()?;
+                    host_props.extend(props);
+                    host_bindings.extend(bindings);
                 }
                 Some(Token::Ident(s)) if s == "node" => {
                     if root.is_some() {
@@ -976,9 +1394,22 @@ impl<'a> Parser<'a> {
         Ok(IrComponent {
             name,
             base,
+            host_props,
+            host_bindings,
             states,
             root,
         })
+    }
+
+    fn parse_host_member(&mut self) -> Result<(Vec<IrProp>, Vec<IrBinding>), IrLoadError> {
+        self.expect_keyword("host")?;
+        match self.peek() {
+            Some(Token::Ident(s)) if s == "prop" => Ok((vec![self.parse_prop()?], Vec::new())),
+            Some(Token::Ident(s)) if s == "bind" => Ok((Vec::new(), vec![self.parse_binding()?])),
+            other => Err(IrLoadError::Parse(format!(
+                "expected `host prop` or `host bind`, got {other:?}"
+            ))),
+        }
     }
 
     fn parse_state(&mut self) -> Result<IrState, IrLoadError> {
@@ -1023,7 +1454,12 @@ impl<'a> Parser<'a> {
                 Some(Token::Ident(s)) if s == "prop" => props.push(self.parse_prop()?),
                 Some(Token::Ident(s)) if s == "bind" => bindings.push(self.parse_binding()?),
                 Some(Token::Ident(s)) if s == "on" => handlers.push(self.parse_handler()?),
-                Some(Token::Ident(s)) if s == "node" => children.push(self.parse_node()?),
+                Some(Token::Ident(s)) if s == "node" => {
+                    children.push(IrMember::Widget(self.parse_node()?))
+                }
+                Some(Token::Ident(s)) if s == "if" => {
+                    children.push(IrMember::ControlFlow(self.parse_if_member()?))
+                }
                 Some(Token::Ident(s)) if s == "tracks" => {
                     // `tracks` lines are Grid-only (DD-M3-P5-001 carrier
                     // c1 is a Grid-specific payload). Reject them on any
@@ -1088,6 +1524,36 @@ impl<'a> Parser<'a> {
             handlers,
             children,
             kind_payload,
+        })
+    }
+
+    fn parse_if_member(&mut self) -> Result<ControlFlowNode, IrLoadError> {
+        self.expect_keyword("if")?;
+        let condition = self.parse_expr()?;
+        self.expect(&Token::LBrace)?;
+        let mut body = Vec::new();
+        loop {
+            match self.peek() {
+                Some(Token::RBrace) => {
+                    self.advance();
+                    break;
+                }
+                Some(Token::Ident(s)) if s == "node" => {
+                    body.push(IrMember::Widget(self.parse_node()?));
+                }
+                Some(Token::Ident(s)) if s == "if" => {
+                    body.push(IrMember::ControlFlow(self.parse_if_member()?));
+                }
+                Some(other) => {
+                    return Err(IrLoadError::Parse(format!(
+                        "unexpected token in if body: {other:?}"
+                    )));
+                }
+                None => return Err(IrLoadError::Parse("unexpected EOF in if body".into())),
+            }
+        }
+        Ok(ControlFlowNode::If {
+            branches: vec![ControlFlowBranch { condition, body }],
         })
     }
 
@@ -1347,7 +1813,7 @@ fn build_node(
     renderer: &TextRenderer,
     registry: &Rc<SignalRegistry>,
 ) -> Result<Box<WidgetNode>, IrLoadError> {
-    let mut widget = construct_widget(node, compositor, renderer)?;
+    let mut widget = construct_widget(node, compositor, renderer, registry)?;
 
     // Bindings: register each `bind` as a reactive Effect targeting the widget property.
     for binding in &node.bindings {
@@ -1405,11 +1871,11 @@ fn build_node(
     // single-content-child invariant was enforced by `validate()`
     // (DD-M3-P5-006); the `first()` guard is the defensive fallback.
     if node.widget_type == "Grid" {
-        for cell in &node.children {
-            let content = cell.children.first().ok_or_else(|| {
+        for cell in node.widget_children() {
+            let content = cell.widget_children().next().ok_or_else(|| {
                 IrLoadError::Build(format!(
                     "Grid `Cell` requires exactly one content child, got {}",
-                    cell.children.len()
+                    cell.widget_children().count()
                 ))
             })?;
             let content_widget = build_node(content, compositor, renderer, registry)?;
@@ -1418,21 +1884,203 @@ fn build_node(
                 .map_err(|e| IrLoadError::Build(format!("append_child failed: {e:?}")))?;
         }
     } else {
-        for child in &node.children {
-            let child_widget = build_node(child, compositor, renderer, registry)?;
-            widget
-                .append_child(child_widget)
-                .map_err(|e| IrLoadError::Build(format!("append_child failed: {e:?}")))?;
+        let declared_slots = Rc::new(RefCell::new(Vec::with_capacity(node.children.len())));
+        for (declared_member_index, member) in node.children.iter().enumerate() {
+            append_static_member(
+                member,
+                declared_member_index,
+                Rc::clone(&declared_slots),
+                &mut widget,
+                compositor,
+                renderer,
+                registry,
+            )?;
         }
     }
 
     Ok(widget)
 }
 
+fn append_static_member(
+    member: &IrMember,
+    declared_member_index: usize,
+    declared_slots: Rc<RefCell<Vec<DeclaredMemberSlot>>>,
+    parent: &mut WidgetNode,
+    compositor: &Compositor,
+    renderer: &TextRenderer,
+    registry: &Rc<SignalRegistry>,
+) -> Result<(), IrLoadError> {
+    match member {
+        IrMember::Widget(child) => {
+            declared_slots.borrow_mut().push(DeclaredMemberSlot::Widget);
+            let child_widget = build_node(child, compositor, renderer, registry)?;
+            if parent.is_zstack() {
+                parent
+                    .insert_child_with_zstack_placement(
+                        parent.child_count(),
+                        child_widget,
+                        extract_zstack_placement(child),
+                    )
+                    .map_err(|e| IrLoadError::Build(format!("insert_child failed: {e:?}")))?;
+            } else {
+                parent
+                    .append_child(child_widget)
+                    .map_err(|e| IrLoadError::Build(format!("append_child failed: {e:?}")))?;
+            }
+        }
+        IrMember::ControlFlow(ControlFlowNode::If { branches }) => {
+            let branch = branches
+                .first()
+                .ok_or_else(|| IrLoadError::Build("`if` control flow has no branch".into()))?;
+            let body = match branch.body.first() {
+                Some(IrMember::Widget(node)) => node.clone(),
+                _ => {
+                    return Err(IrLoadError::Build(
+                        "`if` body must contain one widget member".into(),
+                    ));
+                }
+            };
+            let state = Rc::new(RefCell::new(ConditionalRuntimeState { live_child: false }));
+            declared_slots
+                .borrow_mut()
+                .push(DeclaredMemberSlot::Conditional(Rc::clone(&state)));
+            let parent_id = WidgetId(parent as *mut WidgetNode as *mut ());
+            let target = BindingTarget::ConditionalSubtree {
+                parent: parent_id,
+                declared_member_index,
+            };
+            let slots_for_effect = Rc::clone(&declared_slots);
+            let registry_for_effect = Rc::clone(registry);
+            let handle = register_conditional_binding(
+                target,
+                branch.condition.clone(),
+                Rc::clone(registry),
+                move |parent_id, declared_member_index, present| {
+                    mutate_conditional_subtree(
+                        parent_id,
+                        declared_member_index,
+                        present,
+                        &body,
+                        &slots_for_effect,
+                        &registry_for_effect,
+                    );
+                },
+            );
+            parent.bindings.push(handle);
+        }
+    }
+    Ok(())
+}
+
+fn materialized_index_for_declared_member(
+    declared_member_index: usize,
+    declared_slots: &[DeclaredMemberSlot],
+) -> usize {
+    declared_slots
+        .iter()
+        .take(declared_member_index)
+        .map(|slot| match slot {
+            DeclaredMemberSlot::Widget => 1,
+            DeclaredMemberSlot::Conditional(state) => usize::from(state.borrow().live_child),
+        })
+        .sum()
+}
+
+fn mutate_conditional_subtree(
+    parent_id: WidgetId,
+    declared_member_index: usize,
+    present: bool,
+    body: &IrNode,
+    declared_slots: &Rc<RefCell<Vec<DeclaredMemberSlot>>>,
+    registry: &Rc<SignalRegistry>,
+) {
+    let parent_ptr = parent_id.0 as *mut WidgetNode;
+    if parent_ptr.is_null() {
+        return;
+    }
+    let state = {
+        let slots = declared_slots.borrow();
+        match slots.get(declared_member_index) {
+            Some(DeclaredMemberSlot::Conditional(state)) => Rc::clone(state),
+            _ => {
+                eprintln!(
+                    "wasamo: conditional binding declared slot {declared_member_index} is missing"
+                );
+                return;
+            }
+        }
+    };
+    let currently_present = state.borrow().live_child;
+    if present == currently_present {
+        return;
+    }
+    let live_index = {
+        let slots = declared_slots.borrow();
+        materialized_index_for_declared_member(declared_member_index, &slots)
+    };
+    unsafe {
+        let parent = &mut *parent_ptr;
+        if present {
+            let compositor = crate::get_compositor();
+            let renderer = crate::get_text_renderer();
+            match build_node(body, compositor, renderer, registry) {
+                Ok(child) => {
+                    let result = match zstack_placement_for_parent(parent, body) {
+                        Some(placement) => {
+                            parent.insert_child_with_zstack_placement(live_index, child, placement)
+                        }
+                        None => parent.insert_child(live_index, child),
+                    };
+                    match result {
+                        Ok(()) => {
+                            state.borrow_mut().live_child = true;
+                            crate::emit::mark_layout_dirty_for(parent_ptr);
+                        }
+                        Err(e) => eprintln!("wasamo: conditional insert_child failed: {e:?}"),
+                    }
+                }
+                Err(e) => eprintln!("wasamo: conditional subtree build failed: {e}"),
+            }
+        } else {
+            match parent.remove_child(live_index) {
+                Ok(removed) => {
+                    crate::widget::widget_destroy(removed);
+                    state.borrow_mut().live_child = false;
+                    crate::emit::mark_layout_dirty_for(parent_ptr);
+                }
+                Err(e) => eprintln!("wasamo: conditional remove_child failed: {e:?}"),
+            }
+        }
+    }
+}
+
+fn zstack_placement_for_parent(parent: &WidgetNode, body: &IrNode) -> Option<ZStackPlacement> {
+    parent.is_zstack().then(|| extract_zstack_placement(body))
+}
+
+#[cfg(test)]
+fn evaluate_static_condition(
+    expr: &HandlerExpr,
+    registry: &SignalRegistry,
+) -> Result<bool, IrLoadError> {
+    match expr {
+        HandlerExpr::BoolLit(value) => Ok(*value),
+        HandlerExpr::BoolPropRead { path } => registry
+            .bools
+            .get(path)
+            .map(|signal| signal.get())
+            .ok_or_else(|| IrLoadError::Build(format!("unknown bool state `{path}`"))),
+        other => Err(IrLoadError::Build(format!(
+            "`if` condition must be bool at build time, got {other:?}"
+        ))),
+    }
+}
+
 fn construct_widget(
     node: &IrNode,
     compositor: &Compositor,
     renderer: &TextRenderer,
+    _registry: &SignalRegistry,
 ) -> Result<Box<WidgetNode>, IrLoadError> {
     match node.widget_type.as_str() {
         "VStack" => {
@@ -1539,10 +2187,16 @@ fn construct_widget(
                     ));
                 }
             };
-            let cell_placements = node.children.iter().map(extract_cell_placement).collect();
+            let cell_placements = node.widget_children().map(extract_cell_placement).collect();
             WidgetNode::grid(compositor, columns, rows, cell_placements)
                 .map_err(|e| IrLoadError::Build(format!("grid: {e}")))
         }
+        // M3-Phase 6 T3: ZStack materialisation. Per-child placement
+        // annotations are parent-owned and carried as a vector parallel to
+        // direct children; document order is preserved by the generic child
+        // append loop below.
+        "ZStack" => WidgetNode::zstack(compositor, Vec::new())
+            .map_err(|e| IrLoadError::Build(format!("zstack: {e}"))),
         other => Err(IrLoadError::UnknownWidget(other.to_string())),
     }
 }
@@ -1576,9 +2230,46 @@ fn extract_cell_placement(cell: &IrNode) -> CellPlacement {
         column_span: extract_int_prop(&cell.props, "column-span")
             .unwrap_or(1)
             .max(1) as u32,
-        h_align: extract_alignment_prop(&cell.props, "h-align"),
-        v_align: extract_alignment_prop(&cell.props, "v-align"),
+        h_align: extract_alignment_prop_or(&cell.props, "h-align", Alignment::Stretch),
+        v_align: extract_alignment_prop_or(&cell.props, "v-align", Alignment::Stretch),
     }
+}
+
+fn extract_zstack_placement(child: &IrNode) -> ZStackPlacement {
+    ZStackPlacement {
+        h_align: extract_alignment_prop_or(&child.props, "h-align", Alignment::Center),
+        v_align: extract_alignment_prop_or(&child.props, "v-align", Alignment::Center),
+    }
+}
+
+#[cfg(test)]
+fn collect_static_zstack_placements(
+    members: &[IrMember],
+    registry: &SignalRegistry,
+) -> Result<Vec<ZStackPlacement>, IrLoadError> {
+    let mut placements = Vec::new();
+    for member in members {
+        match member {
+            IrMember::Widget(child) => placements.push(extract_zstack_placement(child)),
+            IrMember::ControlFlow(ControlFlowNode::If { branches }) => {
+                let branch = branches
+                    .first()
+                    .ok_or_else(|| IrLoadError::Build("`if` control flow has no branch".into()))?;
+                if evaluate_static_condition(&branch.condition, registry)? {
+                    let body = match branch.body.first() {
+                        Some(IrMember::Widget(node)) => node,
+                        _ => {
+                            return Err(IrLoadError::Build(
+                                "`if` body must contain one widget member".into(),
+                            ));
+                        }
+                    };
+                    placements.push(extract_zstack_placement(body));
+                }
+            }
+        }
+    }
+    Ok(placements)
 }
 
 /// Map a `Cell` alignment `IrProp` (`h-align` / `v-align`) to the layout
@@ -1586,7 +2277,7 @@ fn extract_cell_placement(cell: &IrNode) -> CellPlacement {
 /// vocabulary (`start` / `center` / `end` / `stretch`) was validated by
 /// `validate()`; an unrecognised ident here falls back to `Stretch`
 /// rather than failing, since this runs after the validate gate.
-fn extract_alignment_prop(props: &[IrProp], name: &str) -> Alignment {
+fn extract_alignment_prop_or(props: &[IrProp], name: &str, default: Alignment) -> Alignment {
     let ident = props
         .iter()
         .find(|p| p.name == name)
@@ -1598,7 +2289,8 @@ fn extract_alignment_prop(props: &[IrProp], name: &str) -> Alignment {
         Some("start") => Alignment::Leading,
         Some("center") => Alignment::Center,
         Some("end") => Alignment::Trailing,
-        _ => Alignment::Stretch,
+        Some("stretch") => Alignment::Stretch,
+        _ => default,
     }
 }
 
@@ -1753,6 +2445,132 @@ mod tests {
         assert_eq!(ty, IrType::I32);
     }
 
+    fn conditional_slot(live_child: bool) -> DeclaredMemberSlot {
+        DeclaredMemberSlot::Conditional(Rc::new(RefCell::new(ConditionalRuntimeState {
+            live_child,
+        })))
+    }
+
+    #[test]
+    fn materialized_index_counts_preceding_widgets_and_live_conditionals() {
+        let toggled = Rc::new(RefCell::new(ConditionalRuntimeState { live_child: true }));
+        let slots = vec![
+            DeclaredMemberSlot::Widget,
+            DeclaredMemberSlot::Widget,
+            conditional_slot(false),
+            DeclaredMemberSlot::Conditional(Rc::clone(&toggled)),
+            DeclaredMemberSlot::Widget,
+        ];
+
+        assert_eq!(
+            materialized_index_for_declared_member(2, &slots),
+            2,
+            "preceding widgets contribute one materialised child each"
+        );
+        assert_eq!(
+            materialized_index_for_declared_member(3, &slots),
+            2,
+            "absent preceding conditional contributes no materialised child"
+        );
+        assert_eq!(
+            materialized_index_for_declared_member(4, &slots),
+            3,
+            "present preceding conditional contributes one materialised child"
+        );
+        assert_eq!(
+            materialized_index_for_declared_member(5, &slots),
+            4,
+            "mixed widget / absent conditional / present conditional prefix"
+        );
+
+        toggled.borrow_mut().live_child = false;
+        assert_eq!(
+            materialized_index_for_declared_member(4, &slots),
+            2,
+            "removing a preceding conditional shifts later materialised indices"
+        );
+    }
+
+    #[test]
+    fn static_condition_reducer_maps_bool_to_presence() {
+        // Reducer logic pin only: after T5, production initial presence is
+        // materialised by the same eager conditional Effect used for dynamic
+        // toggles, not by this helper.
+        let mut registry = SignalRegistry::new();
+        registry.bools.insert("open".into(), Signal::new(true));
+        assert_eq!(
+            evaluate_static_condition(
+                &HandlerExpr::BoolPropRead {
+                    path: "open".into()
+                },
+                &registry,
+            ),
+            Ok(true)
+        );
+        assert_eq!(
+            evaluate_static_condition(&HandlerExpr::BoolLit(false), &registry),
+            Ok(false)
+        );
+    }
+
+    #[test]
+    fn zstack_static_placements_follow_materialized_member_order() {
+        // Reducer logic pin only: after T5, production ZStack placement is
+        // accumulated through append_static_member's per-child insert path.
+        fn text_with_align(h_align: &str, v_align: &str) -> IrNode {
+            IrNode {
+                widget_type: "Text".into(),
+                props: vec![
+                    IrProp {
+                        name: "h-align".into(),
+                        value: IrLiteral::Ident(h_align.into()),
+                    },
+                    IrProp {
+                        name: "v-align".into(),
+                        value: IrLiteral::Ident(v_align.into()),
+                    },
+                ],
+                bindings: vec![],
+                handlers: vec![],
+                children: vec![],
+                kind_payload: None,
+            }
+        }
+
+        let mut registry = SignalRegistry::new();
+        registry.bools.insert("open".into(), Signal::new(true));
+        registry.bools.insert("closed".into(), Signal::new(false));
+        let members = vec![
+            IrMember::Widget(text_with_align("start", "start")),
+            IrMember::ControlFlow(ControlFlowNode::If {
+                branches: vec![ControlFlowBranch {
+                    condition: HandlerExpr::BoolPropRead {
+                        path: "open".into(),
+                    },
+                    body: vec![IrMember::Widget(text_with_align("end", "stretch"))],
+                }],
+            }),
+            IrMember::ControlFlow(ControlFlowNode::If {
+                branches: vec![ControlFlowBranch {
+                    condition: HandlerExpr::BoolPropRead {
+                        path: "closed".into(),
+                    },
+                    body: vec![IrMember::Widget(text_with_align("stretch", "end"))],
+                }],
+            }),
+            IrMember::Widget(text_with_align("center", "center")),
+        ];
+
+        let placements = collect_static_zstack_placements(&members, &registry).unwrap();
+        assert_eq!(placements.len(), 3);
+        assert_eq!(placements[0].h_align, Alignment::Leading);
+        assert_eq!(placements[0].v_align, Alignment::Leading);
+        assert_eq!(placements[1].h_align, Alignment::Trailing);
+        assert_eq!(placements[1].v_align, Alignment::Stretch);
+        assert_eq!(placements[2].h_align, Alignment::Center);
+        assert_eq!(placements[2].v_align, Alignment::Center);
+    }
+
     // M3-Phase 4 T4 / DD-M3-P4-003: ScrollView's `offset-y` is `i32`.
     // The `I32` selection routes the binding through the string-baked
     // `register_binding` + `widget_write_property` pair (the `IrType::I32
@@ -1786,6 +2604,13 @@ mod tests {
         match parse_ir(src) {
             Ok(c) => c,
             Err(e) => panic!("parse failed: {e}\nsrc:\n{src}"),
+        }
+    }
+
+    fn child_widget<'a>(node: &'a IrNode, index: usize) -> &'a IrNode {
+        match &node.children[index] {
+            IrMember::Widget(child) => child,
+            other => panic!("expected widget child at {index}, got {other:?}"),
         }
     }
 
@@ -1840,8 +2665,8 @@ mod tests {
             ";wasamo-ir v0\ncomponent C inherits W {\n\
              node V {\n\
                prop spacing = 12\n\
-               prop theme = system\n\
-               prop title = \"Hi\"\n\
+               prop style = system\n\
+               prop font = \"Hi\"\n\
              }\n}",
         );
         let props = &c.root.props;
@@ -1856,16 +2681,72 @@ mod tests {
         assert_eq!(
             props[1],
             IrProp {
-                name: "theme".into(),
+                name: "style".into(),
                 value: IrLiteral::Ident("system".into())
             }
         );
         assert_eq!(
             props[2],
             IrProp {
-                name: "title".into(),
+                name: "font".into(),
                 value: IrLiteral::Str("Hi".into())
             }
+        );
+    }
+
+    #[test]
+    fn host_prop_parses_on_component_surface() {
+        let c = parse_ok(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             host prop title = \"Hi\"\n\
+             host prop backdrop = mica\n\
+             node V {}\n}",
+        );
+        assert!(c.root.props.is_empty());
+        assert_eq!(c.host_props.len(), 2);
+        assert_eq!(c.host_props[0].name, "title");
+        assert_eq!(c.host_props[0].value, IrLiteral::Str("Hi".into()));
+        assert_eq!(resolve_static_window_title(&c, "Wasamo"), "Hi");
+    }
+
+    #[test]
+    fn host_attribute_catalog_mirrors_wasamoc() {
+        assert_eq!(HOST_STATIC_ATTRS, wasamoc::check::HOST_STATIC_ATTRS);
+    }
+
+    #[test]
+    fn static_window_title_resolves_string_or_default() {
+        let absent = parse_ok(";wasamo-ir v0\ncomponent C inherits W {\nnode V {}\n}");
+        assert_eq!(resolve_static_window_title(&absent, "Wasamo"), "Wasamo");
+
+        let empty = parse_ok(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             host prop title = \"\"\n\
+             node V {}\n}",
+        );
+        assert_eq!(resolve_static_window_title(&empty, "Wasamo"), "Wasamo");
+
+        let custom = parse_ok(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             host prop title = \"Gallery\"\n\
+             node V {}\n}",
+        );
+        assert_eq!(resolve_static_window_title(&custom, "Wasamo"), "Gallery");
+    }
+
+    #[test]
+    fn static_window_title_rejects_non_string_host_prop() {
+        let err = parse_ir(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             host prop title = 3\n\
+             node V {}\n}",
+        )
+        .unwrap_err();
+        assert!(matches!(err, IrLoadError::Validate(_)));
+        assert!(
+            err.to_string()
+                .contains("host `title` prop must be a string"),
+            "{err}"
         );
     }
 
@@ -1880,8 +2761,51 @@ mod tests {
         );
         assert_eq!(c.root.widget_type, "V");
         assert_eq!(c.root.children.len(), 2);
-        assert_eq!(c.root.children[0].widget_type, "Text");
-        assert_eq!(c.root.children[1].widget_type, "Button");
+        assert_eq!(child_widget(&c.root, 0).widget_type, "Text");
+        assert_eq!(child_widget(&c.root, 1).widget_type, "Button");
+    }
+
+    #[test]
+    fn control_flow_if_parses_as_member_with_single_widget_body() {
+        let c = parse_ok(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             state ready: bool = true\n\
+             node VStack {\n\
+               if (bool-prop-read ready) { node Text { prop text = \"Shown\" } }\n\
+             }\n}",
+        );
+        match &c.root.children[0] {
+            IrMember::ControlFlow(ControlFlowNode::If { branches }) => {
+                assert_eq!(branches.len(), 1);
+                assert_eq!(
+                    branches[0].condition,
+                    HandlerExpr::BoolPropRead {
+                        path: "ready".into()
+                    }
+                );
+                assert_eq!(branches[0].body.len(), 1);
+                assert_eq!(
+                    match &branches[0].body[0] {
+                        IrMember::Widget(node) => node.widget_type.as_str(),
+                        other => panic!("expected widget body, got {other:?}"),
+                    },
+                    "Text"
+                );
+            }
+            other => panic!("expected control-flow member, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn control_flow_roundtrip_preserves_condition_and_body() {
+        let original = parse_ok(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             state ready: bool = false\n\
+             node VStack { if (bool-prop-read ready) { node Text {} } }\n\
+             }",
+        );
+        let reparsed = parse_ok(&render(&original));
+        assert_eq!(reparsed, original);
     }
 
     #[test]
@@ -2105,6 +3029,11 @@ mod tests {
         let original = IrComponent {
             name: "Counter".into(),
             base: "Window".into(),
+            host_props: vec![IrProp {
+                name: "title".into(),
+                value: IrLiteral::Str("Counter".into()),
+            }],
+            host_bindings: vec![],
             states: vec![IrState {
                 name: "count".into(),
                 ty: IrType::I32,
@@ -2125,7 +3054,7 @@ mod tests {
                 bindings: vec![],
                 handlers: vec![],
                 children: vec![
-                    IrNode {
+                    IrMember::Widget(IrNode {
                         widget_type: "Text".into(),
                         props: vec![IrProp {
                             name: "font".into(),
@@ -2143,8 +3072,8 @@ mod tests {
                         handlers: vec![],
                         children: vec![],
                         kind_payload: None,
-                    },
-                    IrNode {
+                    }),
+                    IrMember::Widget(IrNode {
                         widget_type: "Button".into(),
                         props: vec![
                             IrProp {
@@ -2167,7 +3096,7 @@ mod tests {
                         }],
                         children: vec![],
                         kind_payload: None,
-                    },
+                    }),
                 ],
                 kind_payload: None,
             },
@@ -2200,7 +3129,21 @@ mod tests {
                 render_lit(&s.default)
             ));
         }
-        if !c.states.is_empty() {
+        for p in &c.host_props {
+            out.push_str(&format!(
+                "    host prop {} = {}\n",
+                p.name,
+                render_lit(&p.value)
+            ));
+        }
+        for b in &c.host_bindings {
+            out.push_str(&format!(
+                "    host bind {} = {}\n",
+                b.prop_name,
+                render_expr(&b.expr)
+            ));
+        }
+        if !c.states.is_empty() || !c.host_props.is_empty() || !c.host_bindings.is_empty() {
             out.push('\n');
         }
         render_node(&mut out, &c.root, 1);
@@ -2231,7 +3174,21 @@ mod tests {
             out.push_str(&format!("{i}    }}\n"));
         }
         for child in &n.children {
-            render_node(out, child, depth + 1);
+            match child {
+                IrMember::Widget(node) => render_node(out, node, depth + 1),
+                IrMember::ControlFlow(ControlFlowNode::If { branches }) => {
+                    let i = "  ".repeat(depth + 1);
+                    for branch in branches {
+                        out.push_str(&format!("{}if {} {{\n", i, render_expr(&branch.condition)));
+                        for body_member in &branch.body {
+                            if let IrMember::Widget(node) = body_member {
+                                render_node(out, node, depth + 2);
+                            }
+                        }
+                        out.push_str(&format!("{}}}\n", i));
+                    }
+                }
+            }
         }
         out.push_str(&format!("{i}}}\n"));
     }
@@ -2551,7 +3508,7 @@ mod tests {
         assert_eq!(aspect.value, IrLiteral::Ratio { num: 16, den: 9 });
         assert_eq!(fill.value, IrLiteral::Color(0x80_00_00_00));
         assert_eq!(c.root.children.len(), 1);
-        assert_eq!(c.root.children[0].widget_type, "Text");
+        assert_eq!(child_widget(&c.root, 0).widget_type, "Text");
     }
 
     #[test]
@@ -2660,7 +3617,7 @@ mod tests {
              node Box { node Text { prop text = \"hi\" } }\n}",
         );
         assert_eq!(c.root.children.len(), 1);
-        assert_eq!(c.root.children[0].widget_type, "Text");
+        assert_eq!(child_widget(&c.root, 0).widget_type, "Text");
     }
 
     // ── M3-Phase 3 T6: WrapPanel validate() defense-in-depth ─────────────
@@ -2690,7 +3647,7 @@ mod tests {
              node WrapPanel { node Text { prop text = \"hi\" } }\n}",
         );
         assert_eq!(c.root.children.len(), 1);
-        assert_eq!(c.root.children[0].widget_type, "Text");
+        assert_eq!(child_widget(&c.root, 0).widget_type, "Text");
     }
 
     #[test]
@@ -2822,7 +3779,7 @@ mod tests {
         );
         assert_eq!(c.root.widget_type, "ScrollView");
         assert_eq!(c.root.children.len(), 1);
-        assert_eq!(c.root.children[0].widget_type, "Box");
+        assert_eq!(child_widget(&c.root, 0).widget_type, "Box");
     }
 
     #[test]
@@ -2965,6 +3922,16 @@ mod tests {
             IrLoadError::Validate(msg) => assert!(
                 msg.contains(needle),
                 "validate message `{msg}` did not contain `{needle}`"
+            ),
+            other => panic!("expected Validate error, got {other:?}"),
+        }
+    }
+
+    fn assert_validate_err_not_contains(src: &str, needle: &str) {
+        match parse_err(src) {
+            IrLoadError::Validate(msg) => assert!(
+                !msg.contains(needle),
+                "validate message `{msg}` unexpectedly contained `{needle}`"
             ),
             other => panic!("expected Validate error, got {other:?}"),
         }
@@ -3303,6 +4270,8 @@ mod tests {
         let comp = IrComponent {
             name: "C".into(),
             base: "W".into(),
+            host_props: vec![],
+            host_bindings: vec![],
             states: vec![],
             root: IrNode {
                 widget_type: "Text".into(),
@@ -3343,14 +4312,14 @@ mod tests {
             ],
             bindings: vec![],
             handlers: vec![],
-            children: vec![IrNode {
+            children: vec![IrMember::Widget(IrNode {
                 widget_type: "Text".into(),
                 props: vec![],
                 bindings: vec![],
                 handlers: vec![],
                 children: vec![],
                 kind_payload: None,
-            }],
+            })],
             kind_payload: Some(KindPayload::Grid {
                 columns: vec![TrackSize::Star(1)],
                 rows: vec![TrackSize::Star(1)],
@@ -3359,13 +4328,422 @@ mod tests {
         let comp = IrComponent {
             name: "C".into(),
             base: "W".into(),
+            host_props: vec![],
+            host_bindings: vec![],
             states: vec![],
             root: IrNode {
                 widget_type: "Grid".into(),
                 props: vec![],
                 bindings: vec![],
                 handlers: vec![],
-                children: vec![cell],
+                children: vec![IrMember::Widget(cell)],
+                kind_payload: Some(KindPayload::Grid {
+                    columns: vec![TrackSize::Star(1)],
+                    rows: vec![TrackSize::Star(1)],
+                }),
+            },
+        };
+        match validate(&comp) {
+            Err(IrLoadError::Validate(msg)) => {
+                assert!(msg.contains("only valid on a `Grid` node"), "got: {msg}")
+            }
+            other => panic!("expected Validate error, got {other:?}"),
+        }
+    }
+
+    // ── M3-Phase 6 T3: ZStack validate() defense-in-depth ──────────────
+
+    #[test]
+    fn zstack_positive_control_validates_direct_children() {
+        let c = parse_ok(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             node ZStack {\n\
+               node Box { prop fill = #336699cc }\n\
+               node Text { prop h-align = end prop v-align = start prop text = \"caption\" }\n\
+             }\n}",
+        );
+        assert_eq!(c.root.widget_type, "ZStack");
+        assert_eq!(c.root.children.len(), 2);
+    }
+
+    #[test]
+    fn zstack_zero_children_validates() {
+        let c = parse_ok(";wasamo-ir v0\ncomponent C inherits W { node ZStack {} }");
+        assert_eq!(c.root.widget_type, "ZStack");
+        assert!(c.root.children.is_empty());
+    }
+
+    #[test]
+    fn validate_rejects_if_with_non_bool_condition() {
+        assert_validate_err(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             state count: i32 = 0\n\
+             node VStack { if (prop-read count) { node Text {} } }\n\
+             }",
+            "must use a bool condition",
+        );
+    }
+
+    #[test]
+    fn validate_rejects_if_with_bool_read_resolving_to_non_bool_state() {
+        assert_validate_err(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             state count: i32 = 0\n\
+             node VStack { if (bool-prop-read count) { node Text {} } }\n\
+             }",
+            "must resolve to bool",
+        );
+    }
+
+    #[test]
+    fn validate_rejects_if_with_unresolved_condition() {
+        assert_validate_err(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             node VStack { if (bool-prop-read missing) { node Text {} } }\n\
+             }",
+            "undeclared name",
+        );
+    }
+
+    #[test]
+    fn validate_rejects_if_with_empty_body() {
+        assert_validate_err(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             node VStack { if true { } }\n\
+             }",
+            "exactly one widget member",
+        );
+    }
+
+    #[test]
+    fn validate_rejects_if_with_multi_child_body() {
+        assert_validate_err(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             node VStack { if true { node Text {} node Button {} } }\n\
+             }",
+            "exactly one widget member",
+        );
+    }
+
+    #[test]
+    fn validate_rejects_if_with_nested_control_flow_body() {
+        assert_validate_err(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             node VStack { if true { if false { node Text {} } } }\n\
+             }",
+            "nested control-flow",
+        );
+    }
+
+    #[test]
+    fn validate_rejects_invalid_subtree_inside_if_body() {
+        assert_validate_err(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             node VStack { if true { node Box { node Text {} node Text {} } } }\n\
+             }",
+            "`Box` node accepts at most one child",
+        );
+    }
+
+    #[test]
+    fn validate_rejects_direct_conditional_grid_member() {
+        assert_validate_err(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             node Grid { tracks columns = 1* tracks rows = 1* if true { node Cell { node Text {} } } }\n\
+             }",
+            "conditional members are not valid directly in runtime Grid IR",
+        );
+    }
+
+    #[test]
+    fn validate_rejects_direct_conditional_cell_member() {
+        assert_validate_err(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             node Grid { tracks columns = 1* tracks rows = 1* node Cell { node VStack {} if true { node Text {} } } }\n\
+             }",
+            "put conditional members inside that content widget",
+        );
+    }
+
+    // T4 review follow-up: single-child container counts must include a
+    // conditional sibling (it materialises at most one child). Box's
+    // at-most-one and ScrollView's exactly-one gates previously counted
+    // widget children only and let `Box { Content  if c }` /
+    // `ScrollView { Content  if c }` slip through (see log.md T4 audit +
+    // DD-M3-P6-007).
+    #[test]
+    fn validate_rejects_box_with_widget_and_conditional_sibling() {
+        assert_validate_err(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             node Box { node Text {} if true { node Text {} } }\n\
+             }",
+            "`Box` node accepts at most one child",
+        );
+    }
+
+    #[test]
+    fn validate_accepts_box_with_conditional_only_child() {
+        // A lone conditional is one potential child (≤ 1) — valid.
+        let c = parse_ok(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             state c: bool = true\n\
+             node Box { if (bool-prop-read c) { node Text {} } }\n\
+             }",
+        );
+        assert_eq!(c.root.widget_type, "Box");
+        assert_eq!(c.root.children.len(), 1);
+    }
+
+    #[test]
+    fn validate_rejects_box_with_multiple_conditional_siblings() {
+        // Two conditionals = two potential children: the shortest reject
+        // proving `node.children.len()` counts conditionals, not just a
+        // widget+conditional pair.
+        assert_validate_err(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             node Box { if true { node Text {} } if true { node Button {} } }\n\
+             }",
+            "`Box` node accepts at most one child",
+        );
+    }
+
+    #[test]
+    fn validate_rejects_scrollview_with_conditional_member() {
+        assert_validate_err(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             node ScrollView { node Box {} if true { node Text {} } }\n\
+             }",
+            "a conditional member is not valid directly in ScrollView",
+        );
+        assert_validate_err_not_contains(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             node ScrollView { node Box {} if true { node Text {} } }\n\
+             }",
+            "DD-M3-P6-007",
+        );
+    }
+
+    #[test]
+    fn validate_rejects_scrollview_with_conditional_only_member() {
+        // DD-M3-P6-007 centre case: conditional-only ScrollView content is
+        // the interim (a) rejection — pins the value a (b) relaxation flips.
+        assert_validate_err(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             node ScrollView { if true { node Text {} } }\n\
+             }",
+            "a conditional member is not valid directly in ScrollView",
+        );
+        assert_validate_err_not_contains(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             node ScrollView { if true { node Text {} } }\n\
+             }",
+            "DD-M3-P6-007",
+        );
+    }
+
+    #[test]
+    fn zstack_attribute_rejected_at_validate() {
+        assert_validate_err(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             node ZStack { prop spacing = 8 node Text {} }\n}",
+            "`ZStack` accepts no Phase-6 attributes",
+        );
+    }
+
+    #[test]
+    fn root_zstack_accepts_host_props_on_component_surface() {
+        let c = parse_ok(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             host prop title = \"Gallery\"\n\
+             host prop backdrop = mica\n\
+             host prop theme = system\n\
+             node ZStack { node Text {} }\n\
+             }",
+        );
+        validate(&c).expect("host props are separate from the ZStack content root");
+        assert_eq!(resolve_static_window_title(&c, "Wasamo"), "Gallery");
+    }
+
+    #[test]
+    fn root_zstack_still_rejects_widget_attribute() {
+        assert_validate_err(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             host prop title = \"Gallery\"\n\
+             node ZStack { prop spacing = 8 node Text {} }\n}",
+            "`ZStack` accepts no Phase-6 attributes; found `spacing`",
+        );
+    }
+
+    #[test]
+    fn zstack_child_zstack_accepts_placement_props() {
+        let c = parse_ok(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             node ZStack { node ZStack { prop h-align = stretch prop v-align = stretch node Text {} } }\n\
+             }",
+        );
+        validate(&c).expect("ZStack direct-child placement applies even when the child is ZStack");
+    }
+
+    // ── DD-M3-P6-008 A2a canonical host surface ─────────────────────────
+    // Host attributes now live on `IrComponent.host_props` / `host_bindings`;
+    // the content root is pure widget content again. The runtime remains a
+    // defensive textual-IR reader, so it validates the host catalog and
+    // rejects old root-squatted host attributes rather than silently accepting
+    // both shapes.
+
+    #[test]
+    fn nested_zstack_rejects_component_window_prop() {
+        assert_validate_err(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             node ZStack { node ZStack { prop title = \"x\" node Text {} } }\n}",
+            "`ZStack` accepts no Phase-6 attributes; found `title`",
+        );
+    }
+
+    #[test]
+    fn host_surface_rejects_unknown_host_prop() {
+        assert_validate_err(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             host prop foo = bar\n\
+             node ZStack { node Text {} }\n}",
+            "unknown host attribute `foo`",
+        );
+    }
+
+    #[test]
+    fn host_surface_rejects_typed_literal_backdrop() {
+        // Defensive-reader mirror of `wasamoc check`: `backdrop` / `theme`
+        // take a keyword identifier (e.g. `mica` / `system`), so a typed
+        // scalar literal in hand-crafted textual IR must be rejected at the
+        // runtime catalog too — not left as a direct-textual-IR hole.
+        assert_validate_err(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             host prop backdrop = 3\n\
+             node ZStack { node Text {} }\n}",
+            "host `backdrop` prop must be a keyword identifier",
+        );
+    }
+
+    #[test]
+    fn host_surface_rejects_typed_literal_theme() {
+        assert_validate_err(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             host prop theme = 3\n\
+             node ZStack { node Text {} }\n}",
+            "host `theme` prop must be a keyword identifier",
+        );
+    }
+
+    #[test]
+    fn host_surface_accepts_keyword_backdrop_and_theme() {
+        // Positive control: the keyword-identifier forms the compiler emits
+        // (`mica` / `system`) validate, so the typed-literal rejection above
+        // is not blanket-rejecting `backdrop` / `theme`.
+        let c = parse_ok(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             host prop backdrop = mica\n\
+             host prop theme = system\n\
+             node ZStack { node Text {} }\n}",
+        );
+        validate(&c).expect("keyword-identifier backdrop/theme must validate");
+    }
+
+    #[test]
+    fn root_zstack_rejects_placement_prop() {
+        // A placement prop has no meaning on a root widget (no parent
+        // placement context); the root ZStack rejects `h-align`.
+        assert_validate_err(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             node ZStack { prop h-align = stretch node Text {} }\n}",
+            "`ZStack` accepts no Phase-6 attributes; found `h-align`",
+        );
+    }
+
+    #[test]
+    fn host_surface_rejects_host_binding() {
+        assert_validate_err(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             state s: string = \"x\"\n\
+             host bind title = (str-prop-read s)\n\
+             node ZStack { node Text {} }\n}",
+            "host attribute `title` is not bindable in M3-Phase 6",
+        );
+    }
+
+    #[test]
+    fn old_root_squatted_host_prop_rejected() {
+        assert_validate_err(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             node ZStack { prop title = \"Gallery\" node Text {} }\n}",
+            "host attribute `title` must live on `host_props`",
+        );
+    }
+
+    #[test]
+    fn old_root_squatted_host_binding_rejected() {
+        assert_validate_err(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             state s: string = \"x\"\n\
+             node ZStack { bind title = (str-prop-read s) node Text {} }\n}",
+            "host attribute `title` must live on `host_bindings`",
+        );
+    }
+
+    #[test]
+    fn zstack_binding_rejected_at_validate() {
+        assert_validate_err(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             state ready: bool = true\n\
+             node ZStack { bind h-align = (bool-prop-read ready) node Text {} }\n}",
+            "`ZStack` accepts no Phase-6 bindings",
+        );
+    }
+
+    #[test]
+    fn zstack_handler_rejected_at_validate() {
+        // The handler-rejection arm of the Phase-6 ZStack gate is distinct
+        // from the binding arm above; pin it so a ZStack carrying an inline
+        // `on` handler surfaces the dedicated diagnostic.
+        assert_validate_err(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             state ready: bool = true\n\
+             node ZStack { on clicked { (assign ready false) } node Text {} }\n}",
+            "`ZStack` accepts no Phase-6 handlers",
+        );
+    }
+
+    #[test]
+    fn zstack_child_unknown_alignment_rejected_at_validate() {
+        assert_validate_err(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             node ZStack { node Text { prop h-align = middle } }\n}",
+            "`Text.h-align` must be one of start, center, end, stretch",
+        );
+    }
+
+    #[test]
+    fn placement_prop_outside_zstack_child_or_grid_cell_rejected_at_validate() {
+        assert_validate_err(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             node VStack { node Text { prop h-align = center } }\n}",
+            "valid only on a ZStack direct child or Grid `Cell`",
+        );
+    }
+
+    #[test]
+    fn validate_rejects_zstack_with_kind_payload() {
+        let comp = IrComponent {
+            name: "C".into(),
+            base: "W".into(),
+            host_props: vec![],
+            host_bindings: vec![],
+            states: vec![],
+            root: IrNode {
+                widget_type: "ZStack".into(),
+                props: vec![],
+                bindings: vec![],
+                handlers: vec![],
+                children: vec![],
                 kind_payload: Some(KindPayload::Grid {
                     columns: vec![TrackSize::Star(1)],
                     rows: vec![TrackSize::Star(1)],

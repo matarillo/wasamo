@@ -48,6 +48,29 @@ fn emit_counter_ir() -> String {
     emit::emit(&build_counter_ir())
 }
 
+fn gallery_ui() -> PathBuf {
+    workspace_root()
+        .join("examples")
+        .join("gallery")
+        .join("gallery.ui")
+}
+
+fn build_gallery_ir() -> wasamo_ir::IrComponent {
+    use wasamoc::{check, lexer, lower, parser};
+    let path = gallery_ui();
+    let src = std::fs::read_to_string(&path).expect("gallery.ui not found");
+    let path_str = path.to_string_lossy().to_string();
+    let tokens = lexer::tokenize(&src, &path_str).expect("lex failed");
+    let ast = parser::parse(&tokens, &path_str).expect("parse failed");
+    let result = check::check(&ast, &path_str);
+    assert!(
+        !result.has_errors(),
+        "check errors: {:?}",
+        result.diagnostics
+    );
+    lower::lower(&ast, &result.namespace)
+}
+
 fn build_string_binding_ir() -> wasamo_ir::IrComponent {
     use wasamoc::{check, lexer, lower, parser};
     let src = r#"component StringBinding inherits Window {
@@ -87,12 +110,62 @@ fn build_bool_binding_ir() -> wasamo_ir::IrComponent {
     lower::lower(&ast, &result.namespace)
 }
 
+fn build_zstack_ir() -> wasamo_ir::IrComponent {
+    use wasamoc::{check, lexer, lower, parser};
+    let src = r#"component ZStackDemo inherits Window {
+    ZStack {
+        Box { fill: #336699cc }
+        Text {
+            h-align: end
+            v-align: start
+            text: "caption"
+        }
+        Box { fill: #993366cc }
+    }
+}"#;
+    let tokens = lexer::tokenize(src, "<zstack>").expect("lex failed");
+    let ast = parser::parse(&tokens, "<zstack>").expect("parse failed");
+    let result = check::check(&ast, "<zstack>");
+    assert!(
+        !result.has_errors(),
+        "check errors: {:?}",
+        result.diagnostics
+    );
+    lower::lower(&ast, &result.namespace)
+}
+
 #[test]
 fn counter_ui_emit_then_parse_yields_equal_ir() {
     let original = build_counter_ir();
     let text = emit_counter_ir();
     let parsed = parse_ir(&text).expect("parse_ir failed");
     assert_eq!(parsed, original, "round-trip mismatch\nIR text:\n{text}");
+}
+
+#[test]
+fn gallery_ui_emits_and_validates_through_runtime_loader() {
+    // DD-M3-P6-008 T7b re-verification: the host-surface migration rewrote the
+    // runtime validator / loader that T7's GUI screenshot depended on. This
+    // exercises the *real* gallery IR (root ZStack + lightbox conditional +
+    // WrapPanel/ScrollView slices) through `parse_ir`, whose `validate()` pass
+    // is exactly the surface T7b changed — proving the gallery still *loads*
+    // at the validate level headlessly, not merely that it compiles. The Win32
+    // GUI smoke (live Compositor render) remains T8's owner-visible step.
+    let original = build_gallery_ir();
+    let text = wasamoc::emit::emit(&original);
+    let parsed =
+        parse_ir(&text).expect("gallery IR must parse and validate through the runtime loader");
+    assert_eq!(
+        parsed, original,
+        "gallery round-trip mismatch\nIR text:\n{text}"
+    );
+    // Host attributes live on the host surface, never squatted on the root.
+    assert!(parsed.host_props.iter().any(|p| p.name == "title"));
+    assert!(!parsed
+        .root
+        .props
+        .iter()
+        .any(|p| matches!(p.name.as_str(), "title" | "backdrop" | "theme")));
 }
 
 #[test]
@@ -111,13 +184,14 @@ fn parsed_counter_has_text_binding_and_clicked_handler() {
 
     // Walk the tree to find the Text node's binding and the Button's
     // clicked handler. The tree shape is VStack { Text {...}, Button {...} }
-    // (component-level props live on the VStack root after lowering).
+    // while component-level host props live on IrComponent.host_props.
+    assert!(parsed.host_props.iter().any(|p| p.name == "title"));
     let vstack = &parsed.root;
     assert_eq!(vstack.widget_type, "VStack");
+    assert!(!vstack.props.iter().any(|p| p.name == "title"));
 
     let text_node = vstack
-        .children
-        .iter()
+        .widget_children()
         .find(|c| c.widget_type == "Text")
         .expect("counter root must contain a Text child");
     assert!(
@@ -126,8 +200,7 @@ fn parsed_counter_has_text_binding_and_clicked_handler() {
     );
 
     let button_node = vstack
-        .children
-        .iter()
+        .widget_children()
         .find(|c| c.widget_type == "Button")
         .expect("counter root must contain a Button child");
     let clicked = button_node
@@ -203,6 +276,36 @@ fn bool_state_binding_emits_and_parses_bool_productions() {
     );
 }
 
+#[test]
+fn zstack_emit_then_parse_preserves_direct_children_and_order() {
+    let original = build_zstack_ir();
+    let text = wasamoc::emit::emit(&original);
+    assert!(text.contains("node ZStack {"), "got: {text}");
+    assert!(
+        !text.contains("kind_payload"),
+        "ZStack must not emit a kind payload\n{text}"
+    );
+    let parsed = parse_ir(&text).expect("parse_ir failed");
+    assert_eq!(parsed, original, "round-trip mismatch\nIR text:\n{text}");
+
+    assert_eq!(parsed.root.widget_type, "ZStack");
+    assert_eq!(
+        parsed.root.children.len(),
+        3,
+        "ZStack direct child count must survive emit -> parse"
+    );
+    let child_types: Vec<_> = parsed
+        .root
+        .widget_children()
+        .map(|child| child.widget_type.as_str())
+        .collect();
+    assert_eq!(
+        child_types,
+        ["Box", "Text", "Box"],
+        "ZStack document order must survive emit -> parse"
+    );
+}
+
 fn build_wrap_panel_ir() -> wasamo_ir::IrComponent {
     use wasamoc::{check, lexer, lower, parser};
     let src = r#"component WrapDemo inherits Window {
@@ -258,8 +361,7 @@ fn string_state_binding_emits_and_parses_str_prop_read() {
 
     let text_node = parsed
         .root
-        .children
-        .iter()
+        .widget_children()
         .find(|c| c.widget_type == "Text")
         .unwrap();
     let binding = text_node

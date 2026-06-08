@@ -31,7 +31,7 @@
 
 use std::ffi::CStr;
 
-use wasamo_ir::{IrComponent, IrLiteral};
+use wasamo_ir::{IrComponent, IrLiteral, IrMember};
 use wasamo_runtime::ffi;
 use wasamo_runtime::ir_loader::{build_widget_tree, parse_ir, IrLoadError};
 
@@ -86,7 +86,10 @@ fn box_phase2_emit_parses_back_to_ir_literal_variants() {
     assert_eq!(fill.value, IrLiteral::Color(0x80_00_00_00));
 
     assert_eq!(comp.root.children.len(), 1);
-    assert_eq!(comp.root.children[0].widget_type, "Text");
+    assert!(matches!(
+        &comp.root.children[0],
+        IrMember::Widget(node) if node.widget_type == "Text"
+    ));
 }
 
 /// Defense-in-depth: DD-M3-P2-001 requires `ir_loader` to reject a Box with
@@ -149,6 +152,9 @@ fn github_actions() -> bool {
 #[cfg(windows)]
 #[test]
 fn box_phase2_build_node_materialises_box_internal_state() {
+    // No shared keep-alive helper needed: this binary has a single Compositor
+    // test, so no later test can reuse a Compositor whose apartment was torn
+    // down — the crash tests/common/mod.rs guards against cannot occur here.
     let _ = unsafe {
         windows::Win32::System::WinRT::RoInitialize(
             windows::Win32::System::WinRT::RO_INIT_SINGLETHREADED,

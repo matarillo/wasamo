@@ -103,6 +103,155 @@ generalises (e.g. conditional rendering is proven by toggling the state,
 not by the initial frame). CLAUDE.md `Testing rules` carries the
 project-wide statement.
 
+### Observation 5 — `scroll_view_layout_integration` access violation when a second test reuses the process-global Compositor (root-caused; originally filed as the "teardown AV")
+
+A `cargo test` run of the `scroll_view_layout_integration` suite has been
+observed to exit with a `STATUS_ACCESS_VIOLATION` (`0xC0000005`). It was
+originally filed here as a **process-exit teardown** fault on the
+assumption that, because the first test's `... ok` line had printed, the
+crash must be in COM / Compositor teardown. A 2026-06-05 minidump capture
+**disproved that framing**: the fault is **not** at teardown or process
+exit — it is in the **setup of the *next* test** (`build_widget_tree` →
+`Compositor::CreateSpriteVisual`), calling through a COM vtable that lives
+in an **already-unloaded `dcomp.dll`**.
+
+This first surfaced as a recurring, diff-independent crash:
+
+- Phase 5 T1 (diff was `wasamoc` check tests only — no widget / insertion
+  path touched), recorded in
+  [process/milestone-3/phase-5/retrospectives/t1.md](../../process/milestone-3/phase-5/retrospectives/t1.md).
+- Phase 6 T5 (after the `append_child` → `insert_child_inner` refactor,
+  which is behaviour-identical for ScrollView), recorded in
+  [process/milestone-3/phase-6/implementation/log.md](../../process/milestone-3/phase-6/implementation/log.md).
+
+Diff-independence was the first clue it was not a regression in the task
+under review. The 2026-06-05 investigation (dedicated branch
+`investigate/obs5-scrollview-teardown-av`) settled it by evidence.
+
+**Reproduction (100% deterministic).** The recurrence was never random —
+it is a function of libtest's thread scheduling:
+
+| Run form | Result |
+|---|---|
+| `--test-threads=1` (sequential; libtest spawns a fresh thread per test) | 5/5 access violation |
+| default (multi-threaded) | green |
+| each test in isolation (`--exact`) | green |
+
+A single test in isolation mirrors the production lifecycle (init once →
+build → use → drop → thread exit → process exit) and is **green** — the
+crash strictly requires a *second* test.
+
+**Root cause (confirmed by minidump).** Symbolicated faulting stack:
+
+```
+windows::UI::Composition::Compositor::CreateSpriteVisual   ← faults reading the vtable slot
+wasamo_runtime::widget::WidgetNode::scroll_view
+wasamo_runtime::ir_loader::{construct_widget, build_node, build_widget_tree}
+scroll_view_layout_integration::scroll_path_fixture_r2_three_level_visual_nesting...   ← the SECOND test
+```
+
+The faulting read targets a vtable pointer inside the address range
+`dcomp.dll` occupied before it was unloaded (`dcomp.dll` appears in the
+debugger's *unloaded* module list). Mechanism:
+
+1. libtest spawns a **dedicated thread per test even under
+   `--test-threads=1`** (panic isolation).
+2. The first test to run creates the process-global Compositor via
+   `wasamo_init` (`static OnceLock<Runtime>` in `runtime.rs`). That
+   Compositor has **STA-apartment affinity to the creating thread**.
+3. When that test ends, its thread — and therefore its STA apartment —
+   is torn down, and the in-proc COM server `dcomp.dll` is **unloaded**
+   from that apartment.
+4. The next test, on a different thread/apartment, fetches the **stale
+   cached Compositor** via `get_compositor()` and calls `CreateSpriteVisual`
+   → the object's vtable now points into the unloaded `dcomp.dll` →
+   access violation. ScrollView is incidental: any widget built by the
+   first test to touch the stale Compositor would fault; the intermediate
+   Visual / `InsetClip` (DD-M3-P4-004) are **not** involved.
+
+**Disposition — hypothesis (A) confirmed, (B) excluded.** This is a
+**test-harness artifact and is production-safe**:
+
+- Production hosts call `wasamo_init` once on the main thread, which owns
+  the apartment for the whole process; `dcomp.dll` stays loaded while the
+  Compositor lives, and there is never a second apartment. The
+  `static RUNTIME` is leaked (never dropped) at exit, so no teardown code
+  runs against the Compositor.
+- The ABI thread-affinity guard (DD-M2-P6-005: `OWNING_THREAD` /
+  `is_owning_thread()`) forbids cross-thread ABI use, protecting
+  production hosts. The integration tests reach **past** that guard into
+  the internal Rust API (`get_compositor()` / `build_widget_tree`), which
+  is where the foreign-thread reuse slips in.
+- The earlier (B) "production could fault on shutdown" risk is therefore
+  excluded; the single-test-in-isolation green result is the empirical
+  confirmation.
+
+The prior "next occurrence: capture the faulting stack" standing rule is
+**discharged** (the dump was captured). The earlier fix dichotomy
+("if `dcomp.dll` → never-dropped `static`; if our `layout.rs`/`widget.rs`
+→ teardown-contract defect") does **not** apply: the Compositor is
+already in a never-dropped `static` with no explicit `RoUninitialize`, and
+the fault is not at teardown. The real defect is **cross-apartment reuse
+of the process-global Compositor across libtest's per-test threads**; the
+remediation belongs in **test infrastructure**, not the runtime teardown
+path.
+
+**Remediation status.** Two steps, by owner direction — **both now DONE**.
+
+- **Step 2 — keep-alive apartment — DONE (committed).** A shared
+  `wasamo-runtime/tests/common/mod.rs` first initialized the runtime on a
+  dedicated thread that *parked* for the process lifetime, keeping the
+  Compositor's apartment and `dcomp.dll` resident for the whole test binary.
+  The five integration binaries with two or more Compositor tests
+  (`scroll_view`, `conditional_toggle`, `zstack`, `wrap_panel`, `grid`) route
+  through it. This made the full `wasamo-runtime` suite (333 unit + all
+  integration tests) green under `--test-threads=1`, where `scroll_view` /
+  `wrap_panel` / `grid` previously crashed deterministically — the safe point
+  to merge CI green. Step 1 below then superseded the "merely parked" form.
+- **Step 1 — marshal Compositor work onto the owning thread — DONE
+  (committed).** Step 2 still left the test bodies calling the Compositor from
+  their own libtest threads — cross-apartment access to non-agile Composition
+  objects, safe only while `dcomp.dll` stayed resident and **not guaranteed by
+  the COM apartment contract** (UB-adjacent, though **test-harness-only**;
+  production unaffected — see the disposition above). Step 1 turns the parked
+  thread into a **work-queue executor**: `run_on_owning_runtime_thread_or_skip`
+  (replacing `init_runtime_or_skip`) ships each Compositor test body to that
+  one owning thread, where the Compositor is created *and used*, catching the
+  body's panic and re-raising it on the libtest thread so `#[test]` still
+  reports failures. The cross-apartment access is **eliminated, not merely
+  tolerated**, matching production's single-UI-thread model. Verified: full
+  suite green under `--test-threads=1`; a thread-identity probe confirmed test
+  bodies run on `wasamo-test-runtime-owner`, not the libtest thread; clean
+  rebuild green; and GitHub Actions CI (run 27014203528, commit `4d2cb3e`,
+  `cargo test --workspace`) green on the windows-latest runner.
+
+The keep-alive/executor helper can be **deleted entirely** once the harness
+stops creating the precondition — a process-per-test runner (e.g.
+`cargo nextest`, each `#[test]` in its own process) or libtest no longer
+spawning a thread per test; either makes per-test inline init safe again. (The
+earlier list of step-1 revisit triggers is discharged: step 1 is done.) Two
+forward notes remain: a new test binary with two or more Compositor tests
+should adopt the same helper, and M4+ interactive GUI tests (hover / click /
+animation) will need this owning thread plus a message pump.
+
+**Regenerating the evidence (preferred over storing the binary dump).**
+The crash is 100% reproducible, so the dump is not retained in git (a
+57 MB full-memory dump would also leak process memory); the textual proof
+above plus this recipe is the durable record:
+
+```
+# capture (Sysinternals procdump + the prebuilt test exe)
+procdump -accepteula -e -ma -x <out-dir> \
+  target/debug/deps/scroll_view_layout_integration-*.exe --test-threads=1
+# analyse (Debugging Tools for Windows)
+cdb -z <dump.dmp> -c ".reload /f; .ecxr; kn; lm; q"
+#   _NT_SYMBOL_PATH must include target/debug/deps for Rust frame symbols.
+```
+
+The captured dump and the full analysis note live in `private/`
+(git-ignored), consistent with how binary verification artifacts
+(screenshots) are kept out of the repo.
+
 ### Implication for future ADRs
 
 When a future ADR (M2-Phase 4/5/6 or later) prescribes a verification

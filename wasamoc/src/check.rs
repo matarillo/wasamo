@@ -13,6 +13,7 @@ const KNOWN_WIDGET_TYPES: &[&str] = &[
     "WrapPanel",
     "ScrollView",
     "Grid",
+    "ZStack",
 ];
 
 /// Attribute names a `Cell` may carry (DD-M3-P5-001 / DD-M3-P5-005).
@@ -33,6 +34,10 @@ const CELL_ATTRS: &[&str] = &[
 /// the content within the resolved cell rectangle.
 const ALIGN_VALUES: &[&str] = &["start", "center", "end", "stretch"];
 
+/// Parent-owned child-placement attributes (Grid `Cell` / ZStack direct
+/// children). They are consumed by the parent context, not by the child widget.
+const CHILD_PLACEMENT_ATTRS: &[&str] = &["h-align", "v-align"];
+
 /// Per-axis weighted-star upper bound (DD-M3-P5-002 / DD-M3-P5-006).
 const STAR_WEIGHT_MAX: i64 = 1024;
 
@@ -41,6 +46,11 @@ const STAR_WEIGHT_MAX: i64 = 1024;
 /// rejection paths (`bind`-style state-ident, non-`IntLit` literal,
 /// attribute-outside-WrapPanel) share one source of truth.
 const WRAPPANEL_INT_ATTRS: &[&str] = &["item-cross-size", "item-spacing", "line-spacing"];
+
+/// Host-owned attributes admitted at component level in M3-Phase 6.
+/// The catalog is host-general in shape but contains only the Window entry
+/// this phase (DD-M3-P6-008 A2a).
+pub const HOST_STATIC_ATTRS: &[&str] = &["title", "backdrop", "theme"];
 
 /// Flat namespace of declared state names → their types.
 pub type Namespace = HashMap<String, TypeName>;
@@ -154,7 +164,7 @@ fn expr_static_type(expr: &Expr, ns: &Namespace) -> Option<TypeName> {
         // and value validity for these literals are checked at the
         // property-bind layer (T3), not via the state-type compatibility
         // table.
-        Expr::RatioLit { .. } | Expr::ColorLit { .. } => None,
+        Expr::RatioLit { .. } | Expr::ColorLit { .. } | Expr::UnsupportedOperator { .. } => None,
     }
 }
 
@@ -510,6 +520,27 @@ fn check_scrollview_child_count(
     filename: &str,
     diags: &mut Vec<Diagnostic>,
 ) {
+    // T4 review follow-up / DD-M3-P6-007 (interim): a conditional is not a
+    // valid direct ScrollView content member (its presence is dynamic, so
+    // it cannot satisfy "exactly one content child"). Wrap it in the
+    // content widget. The conditionally-empty relaxation is the open
+    // DD-M3-P6-007 question; until decided this stays rejected. Reported as
+    // the primary diagnostic so a conditional sibling (`ScrollView {
+    // Content  if c { … } }`) does not slip past the widget-only count.
+    let mut has_conditional = false;
+    for m in members {
+        if let Member::Conditional { span, .. } = m {
+            has_conditional = true;
+            diags.push(error(
+                filename,
+                span,
+                "`ScrollView` content child must be a single widget; a conditional member is not valid directly in ScrollView (wrap it in the content widget)",
+            ));
+        }
+    }
+    if has_conditional {
+        return;
+    }
     let child_count = members
         .iter()
         .filter(|m| matches!(m, Member::WidgetDecl { .. }))
@@ -536,9 +567,16 @@ fn check_box_child_count(
     filename: &str,
     diags: &mut Vec<Diagnostic>,
 ) {
+    // T4 review follow-up: count every member that can materialise a child,
+    // not widget declarations only. An `if` member materialises at most one
+    // child, so a conditional sibling counts toward the at-most-one limit
+    // (`Box { Text  if c { … } }` could become two children). A lone
+    // conditional (`Box { if c { … } }`) is one potential child and stays
+    // valid. The prior widget-only count under-counted the sibling (see
+    // log.md T4 migration audit).
     let child_count = members
         .iter()
-        .filter(|m| matches!(m, Member::WidgetDecl { .. }))
+        .filter(|m| matches!(m, Member::WidgetDecl { .. } | Member::Conditional { .. }))
         .count();
     if child_count > 1 {
         diags.push(error(
@@ -549,6 +587,217 @@ fn check_box_child_count(
                 child_count
             ),
         ));
+    }
+}
+
+fn check_zstack_unknown_attr(name: &str, span: &Span, filename: &str, diags: &mut Vec<Diagnostic>) {
+    diags.push(error(
+        filename,
+        span,
+        format!(
+            "unknown ZStack attribute `{}`; ZStack declares no Phase-6 attributes (dsl_spec §4.13)",
+            name
+        ),
+    ));
+}
+
+fn check_child_placement_outside_parent(
+    name: &str,
+    enclosing_widget: Option<&str>,
+    span: &Span,
+    filename: &str,
+    diags: &mut Vec<Diagnostic>,
+) {
+    let position = match enclosing_widget {
+        Some("ZStack") => "on `ZStack` itself".to_string(),
+        Some(widget) => format!("inside `{}`", widget),
+        None => "at component level".to_string(),
+    };
+    diags.push(error(
+        filename,
+        span,
+        format!(
+            "`{}` is a parent-owned child placement attribute; it is only valid on a ZStack direct child or a Grid `Cell` (dsl_spec §4.13); found {}",
+            name, position
+        ),
+    ));
+}
+
+fn check_zstack_child_align(
+    name: &str,
+    value: &Expr,
+    span: &Span,
+    filename: &str,
+    diags: &mut Vec<Diagnostic>,
+) {
+    let allowed = ALIGN_VALUES
+        .iter()
+        .map(|v| format!("`{}`", v))
+        .collect::<Vec<_>>()
+        .join(", ");
+    match value {
+        Expr::Ident { name: value, .. } => {
+            if !ALIGN_VALUES.contains(&value.as_str()) {
+                diags.push(error(
+                    filename,
+                    span,
+                    format!(
+                        "ZStack child `{}` must be one of {} (got `{}`) (dsl_spec §4.13)",
+                        name, allowed, value
+                    ),
+                ));
+            }
+        }
+        _ => {
+            diags.push(error(
+                filename,
+                span,
+                format!(
+                    "ZStack child `{}` expects an alignment keyword ({}) (dsl_spec §4.13)",
+                    name, allowed
+                ),
+            ));
+        }
+    }
+}
+
+fn check_host_property_bind(
+    name: &str,
+    value: &Expr,
+    span: &Span,
+    filename: &str,
+    ns: &Namespace,
+    diags: &mut Vec<Diagnostic>,
+) {
+    if !HOST_STATIC_ATTRS.contains(&name) {
+        diags.push(error(
+            filename,
+            span,
+            format!(
+                "unknown host attribute `{}`; M3-Phase 6 host attributes are: {}",
+                name,
+                HOST_STATIC_ATTRS.join(", ")
+            ),
+        ));
+        return;
+    }
+
+    // A state-backed identifier is a *dynamic* host binding. Dynamic host
+    // attributes are deferred this phase (FD-D), so reject them with a
+    // binding-specific message — distinct from a wrong-typed static literal,
+    // which is a different mistake with a different fix.
+    if matches!(value, Expr::Ident { name: ident, .. } if ns.contains_key(ident)) {
+        diags.push(error(
+            filename,
+            span,
+            format!(
+                "host attribute `{}` is not bindable in M3-Phase 6; dynamic host attributes are deferred",
+                name
+            ),
+        ));
+        return;
+    }
+
+    if name == "title" {
+        if !matches!(value, Expr::StringLit { .. }) {
+            diags.push(error(
+                filename,
+                span,
+                "host attribute `title` must be a string literal in M3-Phase 6",
+            ));
+        }
+        return;
+    }
+
+    // `backdrop` / `theme` take keyword/enum identifiers this phase
+    // (e.g. `mica`, `system`), which carry no static `TypeName`. A concrete
+    // typed literal (int / float / bool / string) is not a valid host value.
+    if expr_static_type(value, ns).is_some() {
+        diags.push(error(
+            filename,
+            span,
+            format!(
+                "host attribute `{}` does not accept a literal value in M3-Phase 6; use a keyword (e.g. `mica`, `system`)",
+                name
+            ),
+        ));
+    }
+}
+
+fn check_if_condition(
+    condition: &Expr,
+    filename: &str,
+    ns: &Namespace,
+    diags: &mut Vec<Diagnostic>,
+) {
+    match condition {
+        Expr::BoolLit { .. } => {}
+        Expr::Ident { name, span } => match ns.get(name) {
+            Some(TypeName::Bool) => {}
+            Some(other) => diags.push(error(
+                filename,
+                span,
+                format!(
+                    "`if` condition must be `bool`; state `{}` is declared `{}` (dsl_spec §4.14)",
+                    name,
+                    type_name_display(other)
+                ),
+            )),
+            None => diags.push(error(
+                filename,
+                span,
+                format!(
+                    "`if` condition identifier `{}` is not declared; declare it as `state {}: bool = false`",
+                    name, name
+                ),
+            )),
+        },
+        Expr::UnsupportedOperator { op, span } => diags.push(error(
+            filename,
+            span,
+            format!(
+                "operators in `if` conditions are not yet supported in M3-Phase 6 (got {}); use a bool literal or declared bool state",
+                op
+            ),
+        )),
+        _ => diags.push(error(
+            filename,
+            condition.span(),
+            "`if` condition must be a bool literal or declared bool state identifier (dsl_spec §4.14)",
+        )),
+    }
+}
+
+fn check_if_body(body: &[Member], span: &Span, filename: &str, diags: &mut Vec<Diagnostic>) {
+    let widget_count = body
+        .iter()
+        .filter(|m| matches!(m, Member::WidgetDecl { .. }))
+        .count();
+    if body.len() != 1 || widget_count != 1 {
+        diags.push(error(
+            filename,
+            span,
+            "`if` body admits exactly one widget child in M3-Phase 6; wrap multiple widgets or nested control flow in a container",
+        ));
+    }
+    for member in body {
+        match member {
+            Member::WidgetDecl { .. } => {}
+            Member::Conditional { span, .. } => diags.push(error(
+                filename,
+                span,
+                "a bare nested `if` is not admitted directly in an `if` body in M3-Phase 6; wrap it in a widget container",
+            )),
+            Member::PropertyBind { span, .. }
+            | Member::PropertyDecl { span, .. }
+            | Member::SignalHandler { span, .. }
+            | Member::StateMember { span, .. }
+            | Member::GridTracks { span, .. } => diags.push(error(
+                filename,
+                span,
+                "`if` body admits only a single widget child; properties, bindings, handlers, state declarations, and track lists are not structural body members",
+            )),
+        }
     }
 }
 
@@ -665,6 +914,9 @@ fn check_grid(members: &[Member], grid_span: &Span, filename: &str, diags: &mut 
             }
             Member::SignalHandler { span, .. } => {
                 diags.push(error(filename, span, "`Grid` takes no signal handlers"));
+            }
+            Member::Conditional { span, .. } => {
+                diags.push(error(filename, span, "`Grid` children must be wrapped in `Cell`; conditional members may appear inside a Cell content widget, not directly in Grid"));
             }
             Member::StateMember { .. } | Member::PropertyDecl { .. } => {}
         }
@@ -804,8 +1056,8 @@ fn check_cell(
     let mut row_span: Option<i64> = Some(1);
     let mut column_span: Option<i64> = Some(1);
     for m in members {
-        if let Member::PropertyBind { name, value, span } = m {
-            match name.as_str() {
+        match m {
+            Member::PropertyBind { name, value, span } => match name.as_str() {
                 "row" => {
                     row_present = true;
                     row = check_cell_index(name, value, span, filename, diags);
@@ -826,7 +1078,13 @@ fn check_cell(
                         CELL_ATTRS.join(", ")
                     ),
                 )),
-            }
+            },
+            Member::Conditional { span, .. } => diags.push(error(
+                filename,
+                span,
+                "`Cell` admits exactly one direct widget content child; put conditional members inside that content widget",
+            )),
+            _ => {}
         }
     }
 
@@ -1071,12 +1329,13 @@ fn ranges_overlap(s1: i64, len1: i64, s2: i64, len2: i64) -> bool {
 
 /// Second pass: validate widget types, property-bind types, and name references.
 fn check_members(members: &[Member], filename: &str, ns: &Namespace, diags: &mut Vec<Diagnostic>) {
-    check_members_inner(members, None, filename, ns, diags);
+    check_members_inner(members, None, None, filename, ns, diags);
 }
 
 fn check_members_inner(
     members: &[Member],
     enclosing_widget: Option<&str>,
+    parent_widget: Option<&str>,
     filename: &str,
     ns: &Namespace,
     diags: &mut Vec<Diagnostic>,
@@ -1097,13 +1356,33 @@ fn check_members_inner(
             }
 
             Member::PropertyBind { name, value, span } => {
+                if enclosing_widget.is_none() {
+                    check_host_property_bind(name, value, span, filename, ns, diags);
+                    continue;
+                }
                 // Box.aspect and Box.fill are constant-only per DD-M3-P2-004:
                 // the RHS must be the matching literal kind, not a state-
                 // backed ident or any other expression form. Validate here
                 // and skip the generic `check_expr_type` path, which would
                 // otherwise re-reject the literal positionally (the Ratio /
                 // Color arm rejects every appearance outside this site).
-                if enclosing_widget == Some("ScrollView") && name == "offset-y" {
+                if CHILD_PLACEMENT_ATTRS.contains(&name.as_str()) {
+                    if enclosing_widget == Some("Cell") {
+                        // Grid's enclosing pass validates Cell placement.
+                    } else if parent_widget == Some("ZStack") {
+                        check_zstack_child_align(name, value, span, filename, diags);
+                    } else {
+                        check_child_placement_outside_parent(
+                            name,
+                            enclosing_widget,
+                            span,
+                            filename,
+                            diags,
+                        );
+                    }
+                } else if enclosing_widget == Some("ZStack") {
+                    check_zstack_unknown_attr(name, span, filename, diags);
+                } else if enclosing_widget == Some("ScrollView") && name == "offset-y" {
                     // ScrollView's only Phase 4 attribute (DD-M3-P4-003):
                     // i32-literal-or-bare-i32-state-ident, validated by the
                     // ScrollView-specific helper to produce a diagnostic
@@ -1179,7 +1458,14 @@ fn check_members_inner(
                     if enclosing_widget != Some("Grid") {
                         check_cell_outside_grid(enclosing_widget, span, filename, diags);
                     }
-                    check_members_inner(children, Some("Cell"), filename, ns, diags);
+                    check_members_inner(
+                        children,
+                        Some("Cell"),
+                        enclosing_widget,
+                        filename,
+                        ns,
+                        diags,
+                    );
                 } else {
                     if !KNOWN_WIDGET_TYPES.contains(&type_name.as_str()) {
                         diags.push(Diagnostic::warning(
@@ -1205,7 +1491,14 @@ fn check_members_inner(
                     if type_name == "Grid" {
                         check_grid(children, span, filename, diags);
                     }
-                    check_members_inner(children, Some(type_name), filename, ns, diags);
+                    check_members_inner(
+                        children,
+                        Some(type_name),
+                        enclosing_widget,
+                        filename,
+                        ns,
+                        diags,
+                    );
                 }
             }
 
@@ -1214,6 +1507,23 @@ fn check_members_inner(
                     check_qualified_name(&stmt.target, filename, ns, diags);
                     check_expr_type(&stmt.value, &stmt.span, filename, ns, diags);
                 }
+            }
+
+            Member::Conditional {
+                condition,
+                body,
+                span,
+            } => {
+                if enclosing_widget.is_none() {
+                    diags.push(error(
+                        filename,
+                        span,
+                        "component-level `if` is not supported in M3-Phase 6; put the `if` inside a widget body",
+                    ));
+                }
+                check_if_condition(condition, filename, ns, diags);
+                check_if_body(body, span, filename, diags);
+                check_members_inner(body, enclosing_widget, parent_widget, filename, ns, diags);
             }
 
             // Grid track-list members are validated by the enclosing
@@ -1335,6 +1645,16 @@ fn check_expr_type(
                 filename,
                 span,
                 "color literal is only valid as the RHS of `Box.fill` in M3-Phase 2",
+            ));
+        }
+        Expr::UnsupportedOperator { op, span } => {
+            diags.push(error(
+                filename,
+                span,
+                format!(
+                    "operator {} is not part of the M3-Phase 6 expression surface",
+                    op
+                ),
             ));
         }
     }
@@ -1633,12 +1953,63 @@ mod tests {
     }
 
     #[test]
-    fn bind_component_level_no_type_check() {
-        // Component-level prop binds (`title:`, `backdrop:`) have no
-        // enclosing widget catalog — pass through.
+    fn component_level_host_attrs_accepted() {
+        // Component-level host attributes are validated through the
+        // host-attribute catalog, then lower to `IrComponent.host_props`.
         let result =
             check_src(r#"component C inherits W { title: "Counter" backdrop: mica VStack {} }"#);
         assert!(!result.has_errors(), "{:?}", result.diagnostics);
+    }
+
+    #[test]
+    fn component_level_unknown_host_attr_rejected() {
+        let errs = errors(r#"component C inherits W { foo: bar ZStack { Text {} } }"#);
+        assert_eq!(errs.len(), 1, "{:?}", errs);
+        assert!(
+            errs[0].contains("unknown host attribute `foo`"),
+            "{:?}",
+            errs
+        );
+    }
+
+    #[test]
+    fn component_level_host_binding_rejected() {
+        let errs = errors(r#"component C inherits W { state s: string = "x" title: s ZStack {} }"#);
+        assert_eq!(errs.len(), 1, "{:?}", errs);
+        assert!(
+            errs[0].contains("host attribute `title` is not bindable"),
+            "{:?}",
+            errs
+        );
+    }
+
+    #[test]
+    fn component_level_host_title_non_string_literal_reports_string_requirement() {
+        // A wrong-typed *static literal* on `title` is a different mistake
+        // from a dynamic bind: it must report the string-literal requirement,
+        // not the "not bindable" (dynamic-deferred) diagnostic.
+        let errs = errors(r#"component C inherits W { title: 42 ZStack {} }"#);
+        assert_eq!(errs.len(), 1, "{:?}", errs);
+        assert!(
+            errs[0].contains("`title` must be a string literal")
+                && !errs[0].contains("not bindable"),
+            "{:?}",
+            errs
+        );
+    }
+
+    #[test]
+    fn component_level_host_backdrop_typed_literal_rejected() {
+        // `backdrop` / `theme` take keyword/enum identifiers; a concrete typed
+        // literal is rejected as a non-keyword value (not as a binding).
+        let errs = errors(r#"component C inherits W { backdrop: 42 ZStack {} }"#);
+        assert_eq!(errs.len(), 1, "{:?}", errs);
+        assert!(
+            errs[0].contains("does not accept a literal value")
+                && !errs[0].contains("not bindable"),
+            "{:?}",
+            errs
+        );
     }
 
     #[test]
@@ -2655,8 +3026,7 @@ mod tests {
         let errs = errors("component C inherits W { line-spacing: 12 WrapPanel {} }");
         assert_eq!(errs.len(), 1, "{:?}", errs);
         assert!(
-            errs[0].contains("`line-spacing` is a WrapPanel attribute")
-                && errs[0].contains("component-level property"),
+            errs[0].contains("unknown host attribute `line-spacing`"),
             "{:?}",
             errs
         );
@@ -3122,5 +3492,288 @@ mod tests {
             }"#,
         );
         assert!(!result.has_errors(), "{:?}", result.diagnostics);
+    }
+
+    // --- M3-Phase 6 T1: ZStack check surface (DD-M3-P6-001 / 002) -------
+
+    #[test]
+    fn zstack_known_widget_no_warning() {
+        let result = check_src("component C inherits W { ZStack { Text {} Box {} } }");
+        assert!(
+            warnings("component C inherits W { ZStack { Text {} Box {} } }").is_empty(),
+            "ZStack should be a known widget type, not warn"
+        );
+        assert!(!result.has_errors(), "{:?}", result.diagnostics);
+    }
+
+    #[test]
+    fn zstack_direct_child_alignment_accepted() {
+        let result = check_src(
+            r#"component C inherits W {
+                ZStack {
+                    Box { fill: #00000080 }
+                    Text { h-align: center v-align: end text: "caption" }
+                }
+            }"#,
+        );
+        assert!(!result.has_errors(), "{:?}", result.diagnostics);
+    }
+
+    #[test]
+    fn conditional_bool_state_accepted() {
+        let result = check_src(
+            "component C inherits W { state ready: bool = true VStack { if ready { Text {} } } }",
+        );
+        assert!(!result.has_errors(), "{:?}", result.diagnostics);
+    }
+
+    #[test]
+    fn conditional_bool_literal_accepted() {
+        let result = check_src("component C inherits W { VStack { if true { Text {} } } }");
+        assert!(!result.has_errors(), "{:?}", result.diagnostics);
+    }
+
+    #[test]
+    fn conditional_non_bool_condition_rejected() {
+        let errs = errors(
+            "component C inherits W { state count: i32 = 0 VStack { if count { Text {} } } }",
+        );
+        assert!(
+            errs.iter().any(|e| e.contains("condition must be `bool`")),
+            "{errs:?}"
+        );
+    }
+
+    #[test]
+    fn conditional_literal_condition_rejected() {
+        let errs = errors("component C inherits W { VStack { if 3 { Text {} } } }");
+        assert!(
+            errs.iter()
+                .any(|e| e.contains("condition must be a bool literal or declared bool state")),
+            "{errs:?}"
+        );
+    }
+
+    #[test]
+    fn conditional_undeclared_condition_rejected() {
+        let errs = errors("component C inherits W { VStack { if missing { Text {} } } }");
+        assert!(errs.iter().any(|e| e.contains("not declared")), "{errs:?}");
+    }
+
+    #[test]
+    fn conditional_operator_condition_rejected() {
+        let errs = errors(
+            "component C inherits W { state ready: bool = true VStack { if ! ready { Text {} } } }",
+        );
+        assert!(
+            errs.iter()
+                .any(|e| e.contains("operators in `if` conditions")),
+            "{errs:?}"
+        );
+    }
+
+    #[test]
+    fn conditional_component_level_rejected() {
+        let errs = errors("component C inherits W { if true { Text {} } }");
+        assert!(
+            errs.iter().any(|e| e.contains("component-level `if`")),
+            "{errs:?}"
+        );
+    }
+
+    #[test]
+    fn conditional_non_structural_body_rejected() {
+        let errs = errors("component C inherits W { VStack { if true { text: \"x\" } } }");
+        assert!(
+            errs.iter()
+                .any(|e| e.contains("body admits only a single widget child")),
+            "{errs:?}"
+        );
+    }
+
+    #[test]
+    fn conditional_multi_child_body_rejected() {
+        let errs = errors("component C inherits W { VStack { if true { Text {} Button {} } } }");
+        assert!(
+            errs.iter().any(|e| e.contains("exactly one widget child")),
+            "{errs:?}"
+        );
+    }
+
+    #[test]
+    fn conditional_direct_nested_if_body_rejected() {
+        let errs = errors("component C inherits W { VStack { if true { if false { Text {} } } } }");
+        assert!(
+            errs.iter().any(|e| e.contains("bare nested `if`")),
+            "{errs:?}"
+        );
+    }
+
+    #[test]
+    fn conditional_direct_grid_child_rejected() {
+        let errs = errors(
+            "component C inherits W { Grid { columns: 1* rows: 1* if true { Cell { Text {} } } } }",
+        );
+        assert!(
+            errs.iter()
+                .any(|e| e.contains("conditional members may appear inside a Cell content widget")),
+            "{errs:?}"
+        );
+    }
+
+    #[test]
+    fn conditional_cell_sibling_rejected() {
+        let errs = errors(
+            "component C inherits W { Grid { columns: 1* rows: 1* Cell { VStack {} if true { Text {} } } } }",
+        );
+        assert!(
+            errs.iter()
+                .any(|e| e.contains("put conditional members inside that content widget")),
+            "{errs:?}"
+        );
+    }
+
+    // T4 review follow-up: single-child container child-count gates must
+    // count a conditional sibling (it materialises at most one child), or a
+    // `Box { Content if c }` / `ScrollView { Content if c }` slips past the
+    // widget-only count. See log.md T4 migration audit + DD-M3-P6-007.
+    #[test]
+    fn box_widget_and_conditional_sibling_rejected() {
+        let errs = errors("component C inherits W { Box { Text {} if true { Text {} } } }");
+        assert!(
+            errs.iter()
+                .any(|e| e.contains("`Box` admits at most one child")),
+            "{errs:?}"
+        );
+    }
+
+    #[test]
+    fn box_conditional_only_child_accepted() {
+        // A lone conditional is one potential child (≤ 1), so it is valid.
+        let result =
+            check_src("component C inherits W { state c: bool = true Box { if c { Text {} } } }");
+        assert!(!result.has_errors(), "{:?}", result.diagnostics);
+    }
+
+    #[test]
+    fn box_multiple_conditional_siblings_rejected() {
+        // Two conditionals are two potential children — the shortest proof
+        // that the count counts conditionals, not just widget+conditional.
+        let errs =
+            errors("component C inherits W { Box { if true { Text {} } if true { Button {} } } }");
+        assert!(
+            errs.iter()
+                .any(|e| e.contains("`Box` admits at most one child")),
+            "{errs:?}"
+        );
+    }
+
+    #[test]
+    fn scrollview_conditional_member_rejected() {
+        let errs = errors("component C inherits W { ScrollView { Box {} if true { Text {} } } }");
+        assert!(
+            errs.iter()
+                .any(|e| e.contains("a conditional member is not valid directly in ScrollView")),
+            "{errs:?}"
+        );
+        assert!(!errs.iter().any(|e| e.contains("DD-M3-P6-007")), "{errs:?}");
+    }
+
+    #[test]
+    fn scrollview_conditional_only_member_rejected() {
+        // DD-M3-P6-007 centre case: a conditional-only ScrollView content
+        // (`ScrollView { if c { … } }`) is the interim (a) rejection — pins
+        // the current value a future DD-M3-P6-007 (b) relaxation would flip.
+        let errs = errors("component C inherits W { ScrollView { if true { Text {} } } }");
+        assert!(
+            errs.iter()
+                .any(|e| e.contains("a conditional member is not valid directly in ScrollView")),
+            "{errs:?}"
+        );
+        assert!(!errs.iter().any(|e| e.contains("DD-M3-P6-007")), "{errs:?}");
+    }
+
+    #[test]
+    fn zstack_unknown_attribute_rejected() {
+        let errs = errors(r#"component C inherits W { ZStack { spacing: 8 Text {} } }"#);
+        assert!(
+            errs.iter()
+                .any(|e| e.contains("unknown ZStack attribute `spacing`")),
+            "{:?}",
+            errs
+        );
+    }
+
+    #[test]
+    fn zstack_reserved_layering_attribute_rejected() {
+        let errs = errors(r#"component C inherits W { ZStack { z-index: 1 Text {} } }"#);
+        assert!(
+            errs.iter()
+                .any(|e| e.contains("unknown ZStack attribute `z-index`")),
+            "{:?}",
+            errs
+        );
+    }
+
+    #[test]
+    fn zstack_grid_track_attribute_rejected() {
+        let errs = errors(r#"component C inherits W { ZStack { columns: 1 Text {} } }"#);
+        assert!(
+            errs.iter()
+                .any(|e| e.contains("unknown ZStack attribute `columns`")),
+            "{:?}",
+            errs
+        );
+    }
+
+    #[test]
+    fn zstack_child_bad_alignment_value_rejected() {
+        let errs = errors(r#"component C inherits W { ZStack { Text { h-align: middle } } }"#);
+        assert!(
+            errs.iter()
+                .any(|e| e.contains("ZStack child `h-align` must be one of")
+                    && e.contains("`middle`")),
+            "{:?}",
+            errs
+        );
+    }
+
+    #[test]
+    fn zstack_child_non_keyword_alignment_value_rejected() {
+        // A non-identifier value (here an integer literal) must hit the
+        // `expects an alignment keyword` arm of `check_zstack_child_align`,
+        // distinct from the bad-identifier arm above.
+        let errs = errors(r#"component C inherits W { ZStack { Text { h-align: 3 } } }"#);
+        assert!(
+            errs.iter()
+                .any(|e| e.contains("ZStack child `h-align` expects an alignment keyword")),
+            "{:?}",
+            errs
+        );
+    }
+
+    #[test]
+    fn placement_attr_outside_zstack_child_or_cell_rejected() {
+        let errs = errors(r#"component C inherits W { VStack { Text { h-align: center } } }"#);
+        assert!(
+            errs.iter()
+                .any(|e| e.contains("parent-owned child placement attribute")
+                    && e.contains("ZStack direct child")
+                    && e.contains("Grid `Cell`")),
+            "{:?}",
+            errs
+        );
+    }
+
+    #[test]
+    fn placement_attr_on_zstack_itself_rejected_with_container_position() {
+        let errs = errors(r#"component C inherits W { ZStack { h-align: center Text {} } }"#);
+        assert!(
+            errs.iter()
+                .any(|e| e.contains("parent-owned child placement attribute")
+                    && e.contains("on `ZStack` itself")),
+            "{:?}",
+            errs
+        );
     }
 }

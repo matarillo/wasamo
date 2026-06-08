@@ -150,6 +150,40 @@ fn dd_m2_p6_005_wasamo_load_ui_and_thread_affinity() {
     };
     assert_eq!(status, ffi::WASAMO_ERR_IR_MALFORMED);
 
+    let non_string_title = b";wasamo-ir v0\ncomponent C inherits W {\n\
+        host prop title = 3\n\
+        node VStack {}\n\
+    }";
+    let status = unsafe {
+        ffi::wasamo_load_ui(
+            ffi::WASAMO_LOAD_MEMORY,
+            non_string_title.as_ptr() as *const c_void,
+            non_string_title.len(),
+            &mut out as *mut *mut ffi::WasamoWindow,
+        )
+    };
+    assert_eq!(status, ffi::WASAMO_ERR_IR_MALFORMED);
+    assert!(out.is_null());
+
+    // DD-M3-P6-008: the runtime mirrors the compiler host catalog on value
+    // shape too — a typed-scalar literal on `backdrop` / `theme` (which take a
+    // keyword identifier) is malformed at the ABI boundary, not silently
+    // accepted from hand-crafted textual IR.
+    let typed_literal_backdrop = b";wasamo-ir v0\ncomponent C inherits W {\n\
+        host prop backdrop = 3\n\
+        node VStack {}\n\
+    }";
+    let status = unsafe {
+        ffi::wasamo_load_ui(
+            ffi::WASAMO_LOAD_MEMORY,
+            typed_literal_backdrop.as_ptr() as *const c_void,
+            typed_literal_backdrop.len(),
+            &mut out as *mut *mut ffi::WasamoWindow,
+        )
+    };
+    assert_eq!(status, ffi::WASAMO_ERR_IR_MALFORMED);
+    assert!(out.is_null());
+
     // ── 5. wasamo_last_error_message round-trips a description ────────────
     let msg_ptr = ffi::wasamo_last_error_message();
     assert!(!msg_ptr.is_null(), "last-error message should be populated");

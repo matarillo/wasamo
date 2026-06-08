@@ -81,21 +81,41 @@ the **`wasamoc` emit half** of item (3) (ZStack roundtrip). The
 gallery-slice positive control half of item (1) closes at T7; runtime
 roundtrip / loader rejection is T3.
 
-- [ ] Register `ZStack` in `wasamoc`'s `KNOWN_WIDGET_TYPES` and check
+- [x] Register `ZStack` in `wasamoc`'s `KNOWN_WIDGET_TYPES` and check
       surface as a per-kind tag with **direct children** (no `Cell`-style
       wrapper, no `KindPayload`, no new `IrType` / `IrLiteral`) per
-      DD-M3-P6-001.
-- [ ] Implement ZStack check-side diagnostics per DD-M3-P6-001 /
+      DD-M3-P6-001. Implemented in `wasamoc/src/check.rs`
+      (`KNOWN_WIDGET_TYPES`), with
+      `zstack_known_widget_no_warning` and lower/emit tests pinning the
+      direct-child/no-payload shape.
+- [x] Implement ZStack check-side diagnostics per DD-M3-P6-001 /
       DD-M3-P6-002: admit `h-align` / `v-align` as child placement props
       consumed by the ZStack context (and rejected elsewhere, mirroring
       the Grid `Cell` placement-prop rule); **reject** attributes outside
       the documented ZStack surface (`z-index`, `spacing`, `columns`, …).
-- [ ] `wasamoc` emits the ZStack IR node (per-kind tag, direct children,
+      Implemented in `wasamoc/src/check.rs`
+      (`check_zstack_unknown_attr`, `check_zstack_child_align`,
+      `check_child_placement_outside_parent`, and parent-context
+      traversal in `check_members_inner`); tests cover valid direct-child
+      placement, bad alignment, misplaced placement, and ZStack-level
+      disallowed attributes.
+- [x] `wasamoc` emits the ZStack IR node (per-kind tag, direct children,
       document order preserved) to textual IR; `IrProp.value` stays
-      strictly `IrLiteral`.
-- [ ] Add `wasamoc` positive / negative tests covering the ZStack half
+      strictly `IrLiteral`. Implemented via the existing generic
+      `lower_node` / `emit_node` path, with
+      `zstack_lowers_as_direct_children_without_kind_payload` and
+      `zstack_emitted_as_node_with_direct_children_in_order`.
+- [x] Add `wasamoc` positive / negative tests covering the ZStack half
       of ADR evidence item (1) (surface-lowering positive controls +
-      disallowed-attribute / mis-placed-placement-prop rejection).
+      disallowed-attribute / mis-placed-placement-prop rejection). Added
+      check tests `zstack_known_widget_no_warning`,
+      `zstack_direct_child_alignment_accepted`,
+      `zstack_unknown_attribute_rejected`,
+      `zstack_reserved_layering_attribute_rejected`,
+      `zstack_grid_track_attribute_rejected`,
+      `zstack_child_bad_alignment_value_rejected`, and
+      `placement_attr_outside_zstack_child_or_cell_rejected`, plus the
+      lower/emit roundtrip-shape tests named above.
 
 ### T2 — ZStack: layout engine measure / arrange / z-order / clip
 
@@ -105,16 +125,23 @@ Per [CLAUDE.md §Testing rules](../../../../CLAUDE.md#testing-rules) the
 layout engine is pure logic; tests are pure-logic unit tests on the
 algorithm's `(input → output)` shape.
 
-- [ ] Add `WidgetKind::ZStack` and implement `measure_zstack` /
+- [x] Add `WidgetKind::ZStack` and implement `measure_zstack` /
       `arrange_zstack` in `wasamo-runtime/src/layout.rs` per
       DD-M3-P6-002 (`Fill/Fill` default, union per-axis-max sizing,
       per-child alignment with `center` default + `h-align` / `v-align`
-      overrides, no new `LayoutError`).
-- [ ] Add pure-logic tests covering the ZStack half of ADR evidence
+      overrides, no new `LayoutError`). Implemented in
+      `wasamo-runtime/src/layout.rs` with `WidgetKind::ZStack`,
+      `ZStackPlacement`, `LayoutNode::zstack`, `measure_zstack`, and
+      `arrange_zstack`.
+- [x] Add pure-logic tests covering the ZStack half of ADR evidence
       item (2). Scope note: this covers the **layout-side** document-order
       substrate only; the **visible paint-precedence** half of z-order
       (later-child-on-top under overlap = real Visual insertion order) is
-      T3's, not asserted in pure logic.
+      T3's, not asserted in pure logic. Added
+      `zstack_defaults_to_fill_fill_and_centers_children`,
+      `zstack_shrink_measure_uses_child_union_with_fill_child_zero`,
+      `zstack_arrange_alignment_overrides`, and
+      `zstack_arrange_preserves_document_order_substrate`.
 
 ### T3 — ZStack: runtime loader + Windows-runtime Visual evidence
 
@@ -126,18 +153,30 @@ skip-guard inherits the Phase 2 T11 / Phase 3 / 4 / 5 pattern (fires on
 `0x80070005` from `wasamo_init`) and **fails** rather than silently
 skips on a runner that cannot create the Compositor.
 
-- [ ] Materialise `ZStack` as a runtime widget kind: loader parses the
+- [x] Materialise `ZStack` as a runtime widget kind: loader parses the
       textual ZStack node, builds the `WidgetNode`, installs the
       **outer-bounds `InsetClip`** on the ZStack's own Visual, and wires
       the `WidgetData` → `LayoutNode` build boundary (per-child alignment
       vector parallel to `children`). Per-child clip stays absent
-      (DD-M3-P6-002). No `docs/abi_spec.md` change.
-- [ ] Runtime `validate()` defense-in-depth for ZStack malformed shapes
+      (DD-M3-P6-002). No `docs/abi_spec.md` change. Implemented in
+      `wasamo-runtime/src/widget.rs` (`WidgetData::ZStack`,
+      `WidgetNode::zstack`, `build_layout_tree`) and
+      `wasamo-runtime/src/ir_loader.rs` (`construct_widget`
+      `"ZStack"` arm + `extract_zstack_placement`).
+- [x] Runtime `validate()` defense-in-depth for ZStack malformed shapes
       surfaces `WASAMO_ERR_IR_MALFORMED` (dual gate with T1 `wasamoc
       check`); ZStack emit → load roundtrip preserves child count and
       document order (evidence item 3 ZStack half). Add pure-logic
-      loader tests.
-- [ ] **ZStack real-Visual z-order fixture** — a `.ui` with overlapping
+      loader tests. Implemented in `validate_phase6_zstack_node_invariants`
+      with tests `zstack_positive_control_validates_direct_children`,
+      `zstack_attribute_rejected_at_validate`,
+      `zstack_binding_rejected_at_validate`,
+      `zstack_child_unknown_alignment_rejected_at_validate`,
+      `placement_prop_outside_zstack_child_or_grid_cell_rejected_at_validate`,
+      `validate_rejects_zstack_with_kind_payload`, and
+      `zstack_zero_children_validates`; roundtrip test
+      `zstack_emit_then_parse_preserves_direct_children_and_order`.
+- [x] **ZStack real-Visual z-order fixture** — a `.ui` with overlapping
       ZStack children asserts the child Visual order matches document
       order under the live Visual tree (z-order is **not** dischargeable
       by pure logic alone). Include both a ZStack-rooted fixture and a
@@ -151,16 +190,28 @@ skips on a runner that cannot create the Compositor.
       only overflow was clipped away downward, so no two cells
       overlapped); the lightbox closes it because the scrim sits under the
       photo / caption / nav and over the thumbnails by construction.
-- [ ] **ZStack outer-bounds clip fixture** — the ZStack Visual has a
+      Implemented in `wasamo-runtime/tests/zstack_layout_integration.rs`
+      with `zstack_rooted_fixture_preserves_live_visual_order_and_clip`
+      and `zstack_vstack_root_fixture_pins_production_root_shape`; the
+      fixture enables `windows` `Foundation_Collections` so
+      `VisualCollection` can be enumerated; review follow-up also reads
+      the aligned child `Visual.Offset` so `h-align: end` /
+      `v-align: start` is proven through the live runtime boundary.
+- [x] **ZStack outer-bounds clip fixture** — the ZStack Visual has a
       non-null `Visual.Clip` (InsetClip); each child Visual has
       `Visual.Clip = null` (clip-absence regression guard, symmetric with
       the Grid / ScrollView / WrapPanel precedents) (DD-M3-P6-002,
-      evidence item 4 ZStack half).
-- [ ] Confirm the skip-guard fires (test **fails**, not skips) on an
+      evidence item 4 ZStack half). Covered by
+      `assert_zstack_visual_contract` in
+      `wasamo-runtime/tests/zstack_layout_integration.rs`.
+- [x] Confirm the skip-guard fires (test **fails**, not skips) on an
       environment where `wasamo_init` returns `0x80070005` before
       landing T3, or record the inheritance disposition (no new runtime
       capability path → `init_runtime_or_skip` reused byte-identically)
-      in [log.md](./log.md) per the Phase 4 / 5 pattern.
+      in [log.md](./log.md) per the Phase 4 / 5 pattern. Recorded in
+      `implementation/log.md`: T3 reuses the Phase 5
+      `init_runtime_or_skip` disposition; no new runtime capability path
+      was introduced.
 
 ### T4 — Conditional: IR schema, grammar, and static loader
 
@@ -175,7 +226,7 @@ toggle (binding, mutation, Visual ordering) is **T5**, not here: T4's
 loader builds a conditional's *initial* presence from the condition's
 load-time value and does not yet register the toggle binding.
 
-- [ ] **Pre-implementation spike** for [R-A](./preamble.md#technical-risks-planning-time-recon)
+- [x] **Pre-implementation spike** for [R-A](./preamble.md#technical-risks-planning-time-recon)
       / [R-B](./preamble.md#technical-risks-planning-time-recon): settle the
       `IrMember = Widget(IrNode) | ControlFlow(ControlFlowNode)` shape
       (DD-M3-P6-004 O1, branch-list-ready), the `ControlFlowNode::If`
@@ -184,11 +235,18 @@ load-time value and does not yet register the toggle binding.
       `wasamoc` emit / lower, the loader, and the test corpus. Fix the
       commit-bundling boundary so the workspace builds at the
       schema-change commit. Record in [log.md](./log.md) before opening
-      the bullets below.
-- [ ] `wasamo-ir`: `IrNode.children` → `Vec<IrMember>`, add
+      the bullets below. Settled as direct DD-M3-P6-004 O1 with
+      `IrNode::widget_children()` as the widget-only traversal helper and
+      explicit `IrMember` dispatch in lowering / emit / parse / validate /
+      static append; recorded in `implementation/log.md` (2026-06-03
+      T4 IrMember schema migration).
+- [x] `wasamo-ir`: `IrNode.children` → `Vec<IrMember>`, add
       `ControlFlowNode` (DD-M3-P6-004); migrate construction sites; IR-type
-      unit tests cover the member encoding.
-- [ ] `wasamoc` lexer: reserve the **whole control-flow family** —
+      unit tests cover the member encoding. Implemented in
+      `wasamo-ir/src/lib.rs` with `IrMember`, `ControlFlowNode`,
+      `ControlFlowBranch`, `IrNode::widget_children()`, and
+      `ir_member_encodes_widget_and_control_flow`.
+- [x] `wasamoc` lexer: reserve the **whole control-flow family** —
       `if` / `else` / `switch` / `for` — as keywords now, not just `if`
       (DD-M3-P6-003 reserves the family this phase; the current `Keyword`
       enum + `scan_ident` table stop at `true` / `false` and have none of
@@ -199,29 +257,134 @@ load-time value and does not yet register the toggle binding.
       surface a **reserved / not-yet-supported** `wasamoc check`
       diagnostic (parse + check tests), so the family is locked at the
       lexer without opening the grammar (mirrors the dsl_spec §2.1
-      keyword-reservation update landed at Moment 1).
-- [ ] `wasamoc` parser: the `if <bool-expr> { <widget-child> }` block
-      (DD-M3-P6-003).
-- [ ] `wasamoc check` diagnostics (DD-M3-P6-003) — **reject** non-bool /
+      keyword-reservation update landed at Moment 1). Implemented in
+      `wasamoc/src/lexer.rs` (`Keyword::{If,Else,Switch,For}` +
+      `scan_ident`) with tests `control_flow_family_keywords_reserved`
+      and `reserved_control_flow_keywords_without_production_rejected`.
+- [x] `wasamoc` parser: the `if <bool-expr> { <widget-child> }` block
+      (DD-M3-P6-003). Implemented in `wasamoc/src/ast.rs` /
+      `wasamoc/src/parser.rs` as `Member::Conditional`,
+      `parse_conditional_member`, and `parse_condition_expr`; covered by
+      `conditional_member_parses_inside_widget_body`.
+- [x] `wasamoc check` diagnostics (DD-M3-P6-003) — **reject** non-bool /
       undeclared-name / operator condition, a non-structural body member,
       a nested `if` directly in the body, a multi-child body, and a
       **mis-placed `if`** including a **component-level `if`** (admitted
-      only inside a widget body; required test).
-- [ ] `wasamoc` lower → `ControlFlowNode::If` + textual-IR emit (the
+      only inside a widget body; required test). Implemented in
+      `wasamoc/src/check.rs` (`check_if_condition`, `check_if_body`, and
+      `Member::Conditional` traversal) with tests
+      `conditional_bool_state_accepted`,
+      `conditional_bool_literal_accepted`,
+      `conditional_non_bool_condition_rejected`,
+      `conditional_literal_condition_rejected`,
+      `conditional_undeclared_condition_rejected`,
+      `conditional_operator_condition_rejected`,
+      `conditional_non_structural_body_rejected`,
+      `conditional_direct_nested_if_body_rejected`,
+      `conditional_multi_child_body_rejected`, and
+      `conditional_component_level_rejected`; review follow-up added
+      `conditional_direct_grid_child_rejected` to pin the Grid-placement
+      diagnostic branch, and `conditional_cell_sibling_rejected` to keep
+      the `Cell { <widget> if ... }` source diagnostic symmetric with the
+      runtime Grid/Cell direct-ControlFlow rejection.
+- [x] `wasamoc` lower → `ControlFlowNode::If` + textual-IR emit (the
       §Spec content seed shape, DD-M3-P6-004); the member materialises no
-      runtime widget.
-- [ ] **Loader (static):** `build_node` iterates `Vec<IrMember>` and
+      runtime widget. Implemented in `wasamoc/src/lower.rs`
+      (`lower_condition_expr`, `lower_widget_body_member`) and
+      `wasamoc/src/emit.rs` (`emit_member`); covered by
+      `conditional_lowers_to_control_flow_member`,
+      `conditional_bool_literal_lowers_to_bool_lit_condition`, and
+      `conditional_emitted_as_control_flow_member`.
+- [x] **Loader (static):** `build_node` iterates `Vec<IrMember>` and
       dispatches `Widget(_)` vs `ControlFlow(_)` (R-B); a `ControlFlow`
       builds its body present/absent from the **load-time** condition
       value (no toggle binding yet). `validate()` dual-gates (with
       `wasamoc check`) a non-bool / unresolved condition, >1 branch (until
       `else`), or an empty / multi-child / non-structural / nested-control-
       flow body → `WASAMO_ERR_IR_MALFORMED`. Control-flow roundtrip
-      preserves condition + single-child body.
-- [ ] Tests: `wasamoc` positive controls (`if <bool-state> { … }` /
+      preserves condition + single-child body. Implemented in
+      `wasamo-runtime/src/ir_loader.rs` (`parse_if_member`,
+      `validate_phase6_control_flow_invariants`,
+      `validate_condition_expr`, `append_static_member`,
+      `evaluate_static_condition`, and
+      `collect_static_zstack_placements`) with tests
+      `control_flow_if_parses_as_member_with_single_widget_body`,
+      `control_flow_roundtrip_preserves_condition_and_body`,
+      `static_condition_reducer_maps_bool_to_presence`,
+      `zstack_static_placements_follow_materialized_member_order`,
+      `validate_rejects_if_with_non_bool_condition`,
+      `validate_rejects_if_with_bool_read_resolving_to_non_bool_state`,
+      `validate_rejects_if_with_unresolved_condition`,
+      `validate_rejects_if_with_empty_body`,
+      `validate_rejects_if_with_multi_child_body`,
+      `validate_rejects_if_with_nested_control_flow_body`,
+      `validate_rejects_invalid_subtree_inside_if_body`,
+      `validate_rejects_direct_conditional_grid_member`, and
+      `validate_rejects_direct_conditional_cell_member`.
+- [x] Tests: `wasamoc` positive controls (`if <bool-state> { … }` /
       `if true { … }`) + a reject case per diagnostic (item 1); the
       pure-function presence reducer `bool → present/absent` (item 2);
-      loader roundtrip + rejection (item 3).
+      loader roundtrip + rejection (item 3). Added the test sets named
+      in the bullets above; scoped verification green:
+      `cargo test -p wasamo-ir`, `cargo test -p wasamoc --lib`, and
+      `cargo test -p wasamo-runtime --lib`.
+- [x] **Review follow-up** (`fix/m3-phase-6-t4-review-followup`):
+      semantic-migration audit of the `Vec<IrMember>` traversal contracts
+      (recorded in [log.md](./log.md)). Closed two under-count defects the
+      migration left: the **Box** at-most-one (`Box { Content  if c { … } }`
+      → reject) and **ScrollView** exactly-one (`ScrollView { Content
+      if c { … } }` → reject) single-child gates counted widget children
+      only and so missed a conditional sibling. Fixed at `wasamoc check` +
+      runtime `validate()` with tests `box_widget_and_conditional_sibling_rejected`,
+      `box_conditional_only_child_accepted`,
+      `box_multiple_conditional_siblings_rejected`,
+      `scrollview_conditional_member_rejected`,
+      `scrollview_conditional_only_member_rejected`,
+      `validate_rejects_box_with_widget_and_conditional_sibling`,
+      `validate_accepts_box_with_conditional_only_child`,
+      `validate_rejects_box_with_multiple_conditional_siblings`,
+      `validate_rejects_scrollview_with_conditional_member`, and
+      `validate_rejects_scrollview_with_conditional_only_member`. The
+      conditional-only ScrollView case (`ScrollView { if c { … } }`) stays
+      rejected as a **conservative interim** pinned by the
+      `*_conditional_only_member_rejected` tests, pending **T4b /
+      DD-M3-P6-007** (the `if c`-alone case is exactly the value a (b)
+      relaxation would flip — Codex review-flagged provenance).
+
+### T4b — ScrollView conditional-content policy (DD-M3-P6-007)
+
+Owns the ScrollView × conditional cardinality decision surfaced by the T4
+review semantic-migration audit — a Phase 6 responsibility (defining the
+new `if` construct's interaction with each container's cardinality
+invariant). Inserted with a non-integer label (no renumber): the task is
+**conditional** — its weight depends on the deliberation outcome. A
+non-integer label is used rather than a renumber so that an (a) outcome
+(near-no-op) leaves no churn in the T5–T9 references; a (b) outcome may
+promote it to a full numbered task at that point. Deliberation should land
+**before T5 closes** (a (b) outcome's reactive-empty evidence folds into
+T5).
+
+- [x] Deliberate [DD-M3-P6-007](../decisions/dd-m3-p6-007-scrollview-conditional-content-policy.md)
+      ((a) reject conditional-only content vs (b) allow conditionally-empty)
+      and flip it to `Accepted` with owner comparison. **Outcome: (a)**
+      (owner 2026-06-04, after a multi-pass design-decision review).
+- [x] **(a) selected**: T4-follow-up interim confirmed as the final rule —
+      the `ScrollView { if c { … } }` rejection carries an intent-revealing
+      diagnostic. No prior-DD touch; preamble §Decisions + Revisions updated;
+      `docs/dsl_spec.md` §4.11 (any direct conditional member rejected — wrap
+      inside the content widget) + §4.14 diagnostics-list entry synced. No
+      code/test change (the interim already ships the dual-gate evidence —
+      see the DD §Implementation handoff if (a)).
+- [ ] ~~If **(b)**~~ — **not selected**; conditionally-empty ScrollView is
+      deferred (DD-007 §Deferred design space). The work below was the (b)
+      branch and is not taken this phase: relax the ScrollView gate to
+      at-most-one-materialised;
+      reopen DD-M3-P4-001's exact-one invariant (loader gate DD-M3-P4-006)
+      + dependent content-size/clamp in DD-M3-P4-003/005 + dsl_spec /
+      architecture (not DD-M3-P4-003's offset-y / binding-direction surface);
+      add reactive toggle-to-empty Windows-runtime evidence (coordinate with
+      T5). Promote this task to a numbered slot if it grows to full
+      implementation.
 
 ### T5 — Conditional: reactive toggle and Windows-runtime evidence
 
@@ -233,15 +396,19 @@ is the novel-runtime task — it adds the `BindingTarget` variant, fixes
 the Visual-ordering primitive (R-F), and wires structural disposal
 (R-E).
 
-- [ ] **`insert_child` positional Visual insert** (risk
+- [x] **`insert_child` positional Visual insert** (risk
       [R-F](./preamble.md#technical-risks-planning-time-recon),
       pre-implementation spike): `insert_child` / `append_child` currently
       `InsertAtTop` unconditionally, so a subtree re-inserted between
       static siblings lands on top rather than in declared sibling order.
       Give `insert_child` an `InsertAbove` / `InsertBelow`-relative
       positional Visual insert keyed to the recomputed index. The T5
-      declared-sibling-order fixture is its regression gate.
-- [ ] **`BindingTarget::ConditionalSubtree`** (risk
+      declared-sibling-order fixture is its regression gate. Implemented in
+      `wasamo-runtime/src/widget.rs` (`insert_child_inner` with
+      `InsertBelow` for mid-list insert; ZStack placement-vector
+      insert/remove kept parallel) and pinned by
+      `conditional_toggle_preserves_declared_visual_order_and_disposes_registry`.
+- [x] **`BindingTarget::ConditionalSubtree`** (risk
       [R-C](./preamble.md#technical-risks-planning-time-recon)): add the
       variant `{ parent, declared_member_index }`; convert the
       `register_binding` / `register_bool_binding` irrefutable `let`
@@ -249,28 +416,51 @@ the Visual-ordering primitive (R-F), and wires structural disposal
       `EffectHandle::new` seam (an insert/remove closure, not a property
       writer). The materialised insertion index is **recomputed from
       declared order + live presence** at each mutation, not cached.
-- [ ] **Present/absent mutation + Effect disposal** (risk
+      Implemented in `wasamo-runtime/src/reactive.rs`
+      (`BindingTarget::ConditionalSubtree`,
+      `register_conditional_binding`) and
+      `wasamo-runtime/src/ir_loader.rs` (`DeclaredMemberSlot`,
+      `materialized_index_for_declared_member`,
+      `mutate_conditional_subtree`); property binding registration now uses
+      refutable `let ... else` destructures.
+- [x] **Present/absent mutation + Effect disposal** (risk
       [R-E](./preamble.md#technical-risks-planning-time-recon)): toggle
       true ⇒ `insert_child` the freshly-built subtree at the recomputed
       index; false ⇒ `remove_child` then `widget_destroy` so the subtree's
       Effects **and** `WidgetId`-keyed registry entries are disposed
       (DD-M3-P6-005 (a)). Re-present recreates fresh widgets + Effects.
-- [ ] **Toggle integration fixture** (item 4) — `bool` true → false → true
+      Implemented in `mutate_conditional_subtree` (`build_node` on
+      present; `remove_child` → `widget_destroy` on absent; successful
+      structural mutation marks the owning window layout-dirty via the
+      parent widget); verified by registry destroy-count and fresh
+      `Button.enabled` binding assertions in
+      `conditional_toggle_integration.rs`.
+- [x] **Toggle integration fixture** (item 4) — `bool` true → false → true
       inserts / removes the subtree + its Visuals; assert **declared
       sibling order** for siblings-on-both-sides and two-sibling-
       conditional (the latter including a **preceding-conditional removal
       while both present** so the removal-index shift is exercised); a
       **re-evaluation-to-same-state** case (true→true / false→false)
       asserts a **no-op** (no duplicate insertion, no spurious removal);
-      Effects + registry entries disposed on absence.
-- [ ] **Drain proof fixture** (item 4 / DD-M3-P6-005 (b)) — with
+      Effects + registry entries disposed on absence. Added
+      `wasamo-runtime/tests/conditional_toggle_integration.rs` test
+      `conditional_toggle_preserves_declared_visual_order_and_disposes_registry`;
+      self-review added
+      `conditional_zstack_reinsert_uses_declared_placement_metadata` to pin
+      dynamic ZStack placement metadata through layout after insert/reinsert.
+- [x] **Drain proof fixture** (item 4 / DD-M3-P6-005 (b)) — with
       `BATCH_DEPTH == 0`, a toggling write drains before control returns
       (toggle-then-observe): presence is observable and freshly-inserted
       Effects have run, within the existing `MUTATION_CAP`. Pins the
       M3-Phase 1 synchronous-drain contract under structural mutation.
       Record the reactive-drain items 1–3 fix-or-carry disposition
       (carried forward per DD-M3-P6-005 / constraints §7) in
-      [log.md](./log.md).
+      [log.md](./log.md). Added
+      `conditional_toggle_drains_fresh_subtree_effects_before_return`
+      (`open` false→true observed immediately; absent state mutation then
+      re-open proves fresh subtree Effects observe latest state before the
+      setter returns). Reactive-drain items 1–3 disposition recorded in
+      `implementation/log.md` under the T5 verification entry.
 
 ### T6 — R1 Window-title host-wiring
 
@@ -279,12 +469,15 @@ Discharges ADR
 and the carry-forward residual **R1** (DD-M3-P6-006,
 [../requirements/constraints.md §1](../requirements/constraints.md)).
 
-- [ ] **Pre-implementation spike** for risk
+- [x] **Pre-implementation spike** for risk
       [R-D](./preamble.md#technical-risks-planning-time-recon): settle the
       static-title extraction point (component root props per Q2) and
       confirm `build_widget_tree` / the loader exposes the static literal
       separately from a dropped binding. Record in [log.md](./log.md).
-- [ ] Route the **static** component-level `title:` literal to
+      Settled in [log.md](./log.md): static `title` is read from
+      `component.root.props` by `resolve_static_window_title`; dynamic
+      `bind title` remains in `root.bindings` and is not implemented.
+- [x] Route the **static** component-level `title:` literal to
       `window::create` in place of `DEFAULT_WINDOW_TITLE` in
       `wasamo_load_ui` ([`abi.rs:1220`](../../../../wasamo-runtime/src/abi.rs#L1220)),
       reading the `"title"` `IrProp` from `component.root.props`. Per
@@ -295,13 +488,19 @@ and the carry-forward residual **R1** (DD-M3-P6-006,
       `docs/abi_spec.md` untouched. The dynamic (`String`-binding) title
       (a `bind title = …` landing in `root.bindings`) stays
       evaluated-and-deferred (FD-D) — no implementation.
-- [ ] **Loader-level title gate test** (DD-M3-P6-006) — a hand-written
+- [x] **Loader-level title gate test** (DD-M3-P6-006) — a hand-written
       IR with a non-`Str` `title` prop surfaces `WASAMO_ERR_IR_MALFORMED`;
       absent / empty `title` falls back to the default. Host-independent
-      defense-in-depth, distinct from the GUI fixture below.
-- [ ] **R1 static title integration fixture** — a `.ui` whose component
+      defense-in-depth, distinct from the GUI fixture below. Covered by
+      `static_window_title_resolves_string_or_default`,
+      `static_window_title_rejects_non_string_root_prop`, and the
+      `abi_load_ui` non-string title status assertion.
+- [x] **R1 static title integration fixture** — a `.ui` whose component
       declares `title: "Gallery"` produces a native window whose title bar
-      reads `"Gallery"`, not `"Wasamo"` (evidence item 4 R1 line).
+      reads `"Gallery"`, not `"Wasamo"` (evidence item 4 R1 line). Covered by
+      `static_component_title_reaches_native_window`, which lowers `.ui` to
+      IR, calls `wasamo_load_ui`, and reads the live HWND title text via
+      `GetWindowTextW`.
 
 ### T7 — End-to-end gallery lightbox slice + assistant-side build / launch
 
@@ -316,7 +515,7 @@ supporting "no early crash" signal only and the assistant analysis is a
 pre-T8 baseline, not a substitute for the owner's visible-correctness
 judgment.
 
-- [ ] Grow `examples/gallery/gallery.ui` **additively** with the
+- [x] Grow `examples/gallery/gallery.ui` **additively** with the
       lightbox slice (FD-B): a thumbnail-gallery background (WrapPanel /
       ScrollView slice, Phase 3/4) with a `bool`-toggled
       (`is_lightbox_open`) ZStack overlay = scrim (`Box { fill:
@@ -327,23 +526,95 @@ judgment.
       **event handler → `bool` state → conditional subtree** (FD-C).
       Existing gallery slices stay byte-identical. (Thumbnail-click-to-open
       is out of scope — Box hit-testing / image Button is M4.)
-- [ ] Lightbox photo uses `Box { aspect: 4:3 }` + `Text` per the Phase 2
+- [x] Lightbox photo uses `Box { aspect: 4:3 }` + `Text` per the Phase 2
       DD-M3-P2-006 placeholder pattern. No Image widget (M4).
-- [ ] Build and run `examples/gallery-rust/`. Record assistant-automated
+- [x] Build and run `examples/gallery-rust/`. Record assistant-automated
       visual evidence as a **before/after toggle pair** (lightbox closed
       vs open) — launch + `Graphics.CopyFromScreen` screenshot
       (per-monitor-DPI-aware) + assistant analysis confirming: the
-      overlay appears on open and is gone on close (positive control =
-      state toggle, not a single frame); the photo / caption / nav are
-      painted **over** the scrim and the scrim **dims** (does not replace)
-      the thumbnails behind it (z-order read off the open frame); the
-      window title bar reads `"Gallery"` (T6 corroboration). C / Zig
+      overlay appears on open and is gone on close **immediately after the
+      click-driven toggle, without relying on a resize**; the photo / caption /
+      nav are painted **over** the scrim and the scrim **dims** (does not
+      replace) the thumbnails behind it (z-order read off the open frame).
+      **Scope of this positive control:** it is the **z-order / dimming**
+      (a flat opaque panel could not dim the thumbnails) — it does *not* by
+      itself distinguish structural present/absent from an always-built,
+      opacity-hidden subtree; the structural insertion / disposal and the
+      `WindowState` dirty-layout path (`mark_layout_dirty_for` →
+      `drain_if_outermost` → `flush_layout`) are proven by **T5's headless
+      integration tests**, which this screenshot corroborates;
+      the window title bar reads `"Gallery"` (T6 corroboration). C / Zig
       gallery hosts remain out of Phase 6 scope. Screenshots land under
       [evidence/](./evidence/). **This is the real-pixel paint-precedence
       observation** the Phase 5 gallery slice could not provide — the
       lightbox overlaps by construction (scrim under photo/nav, over
       thumbnails), so the occlusion is genuinely exercised rather than
       left as a Visual-insertion-order assumption.
+
+**Implementation deviations (recorded per the commit-rules revise-not-freeze
+discipline):**
+
+- **Unplanned runtime validator fix.** The root-ZStack gallery shape could
+  not launch until `validate_phase6_zstack_node_invariants` was taught to
+  (1) not treat spliced component-root window props (`title` / `backdrop` /
+  `theme`) as ZStack widget attributes at the root, and (2) admit
+  `h-align` / `v-align` when a ZStack direct child is itself a ZStack (a T3
+  validator coverage gap — `wasamoc check` already accepted both). This was a
+  runtime-correctness fix folded into T7 because the slice depended on it;
+  the residual boundary is surfaced as **DD-M3-P6-008** and tracked at T7b.
+- **"Existing gallery slices byte-identical" caveat.** The existing VStack
+  gained `h-align: stretch` / `v-align: stretch` so it fills the new root
+  ZStack — a structural-wrapping change, not a content change; the
+  thumbnail / Grid / ScrollView demonstrations are otherwise unchanged.
+
+### T7b — Component-root window-attribute boundary (DD-M3-P6-008)
+
+Owns the component-root window-attribute / widget-attribute boundary
+surfaced by the T7 review: window attributes are spliced onto the root
+widget's `props` / `bindings`, so `wasamoc check` (pre-splice AST) and the
+runtime loader (post-splice IR) diverge on a ZStack root. Inserted with a
+non-integer label (no renumber) because its weight depends on the
+deliberation outcome (A schema separation vs D compiler-owned catalog;
+C rejected). The interim is pinned on **both gates**: the accept side in
+`wasamoc` (`zstack_root_component_window_attrs_accepted`) and the reject side
+in the runtime (`nested_zstack_rejects_component_window_prop`,
+`root_zstack_rejects_non_window_component_prop`,
+`root_zstack_rejects_placement_prop`, and the faithful binding pin
+`root_zstack_rejects_spliced_component_window_binding`). Deliberation should
+land **before Phase 6 closes**, and **before T8's owner smoke** so the smoke
+observes the final validator / gallery behavior (T8 fix-container or a
+promoted numbered slot).
+
+- [x] Deliberate [DD-M3-P6-008](../decisions/dd-m3-p6-008-component-root-window-attribute-boundary.md)
+      ((A) IR-schema separation vs (D) compiler-owned catalog mirrored by the
+      runtime; (C) runtime-accept-all rejected) and flip it to `Accepted`
+      with owner comparison. Cover both the prop and binding facets.
+      **Outcome: (A2a)** — host-owned `host_props` / `host_bindings` surface
+      (`base: String` kept, no `inherits` semantics) + a host-general
+      attribute catalog with the Window entry only; **scope = in-phase
+      Phase 6 implementation** as an IR-schema / textual-IR migration (owner
+      2026-06-08). (D) the fallback-not-taken; (C) rejected. The preamble
+      §Decisions index gained an eighth row and a Revision-history entry.
+- [x] Land the **A2a** code per the DD
+      [Implementation handoff](../decisions/dd-m3-p6-008-component-root-window-attribute-boundary.md#implementation-handoff-if-a2a-accepted)
+      (9-step order: `host_props` / `host_bindings` on `IrComponent`; textual-IR
+      emit/parse round-trip; `wasamoc` lowering stops splicing onto `root`;
+      host-attribute catalog (Window entry); `wasamoc check` + runtime
+      validation through the catalog; `resolve_static_window_title` moves to
+      the new surface; old root-squatted shape rejected/warned; new shape
+      canonical in tests). **Host-binding policy (DD-008 acceptance):**
+      `host_bindings` ships as a **structural** surface that round-trips
+      canonically, but the Window catalog entry admits **no** bindable host
+      attributes this phase (dynamic title deferred, FD-D), so a
+      component-level host binding is **rejected** — the binding facet of the
+      dual-gate divergence is closed by rejection, not by opening any bindable
+      host attribute. This is **schema/IR-migration review tier** (full
+      independent review) + implementation-gates (read at start, record the
+      gate selection before choosing an approach). `docs/dsl_spec.md` /
+      `docs/architecture.md` sync folds at **T9 Moment 2** (DD handoff step 9),
+      **not** a mid-phase Moment 1 — so this bullet lands code + tests only.
+      Per the T8 precondition this must land **before T8's owner smoke** so the
+      smoke observes the final validator / gallery behavior.
 
 ### T8 — Owner-manual GUI smoke and any visible-correctness fix
 
@@ -354,11 +625,16 @@ visible smoke is verified — and fixed if it fails — **before** any
 phase-close mechanical work (spec / plan status flips) lands in T9,
 matching the Phase 4 T5 / T6 and Phase 5 T5 / T6 split rationale.
 
-- [ ] Owner runs `examples/gallery-rust/` and observes, with the
+**Precondition:** runs **after T7b (DD-M3-P6-008) resolves**, since an (A)/(D)
+outcome can change the validator and the gallery shape; the smoke must
+observe the final behavior.
+
+- [x] Owner runs `examples/gallery-rust/` and observes, with the
       **positive control = `is_lightbox_open` toggled** (constraints §3):
       - **closed → open toggle:** the lightbox overlay appears on open and
-        is gone on close (proves structural present/absent, not a hidden
-        always-built subtree);
+        is gone on close **without a resize before the observation** (proves
+        structural present/absent, not a hidden always-built subtree, and
+        owner-checks the real `WindowState` dirty-layout path);
       - **z-order:** photo / caption / nav painted over the scrim; the
         half-transparent scrim **dims** the thumbnails behind it rather
         than replacing them (proves document-order = paint-order overlay,
@@ -368,17 +644,34 @@ matching the Phase 4 T5 / T6 and Phase 5 T5 / T6 split rationale.
         window grows, not a fixed rect);
       - **Window title bar reads `"Gallery"`** (R1 / DD-M3-P6-006), not
         `"Wasamo"`.
+      - **geometry (T7 review carry):** the assistant screenshot analysis
+        confirmed z-order / dimming but did **not** include a geometry
+        positive control. Owner-check that the photo `Box` honours
+        `aspect: 4:3` within the `1* 400 1*` centre column (the open frame's
+        photo box appeared wider than the declared 400 px), and that the
+        caption `VStack` is not visibly clipped/overlapping the nav row (its
+        Grid row is `32`, short for two text lines — Grid does not clip, so
+        overflow would show). T8 fixed the caption/nav spacing additively by
+        increasing that row from `32` to `64`, then the owner confirmed the
+        geometry check passed.
       The DPI blur on a high-DPI box is a **known M4 residual**
       (constraints §5), noted during analysis, not a smoke pass/fail
       criterion.
-- [ ] Owner explicitly accepts the smoke result, or records a fail
+- [x] Owner explicitly accepts the smoke result, or records a fail
       observation note. **If smoke fails:** the implementation fix lands
       additively on the T8 branch (new commits); the smoke checklist is
       re-run to green before T8 closes. Fix scope stays inside the Phase 6
       ADR / `docs/dsl_spec.md` / `docs/architecture.md`; any fix requiring
       a normative spec change escalates to T9 Moment 2 (or a mid-ADR
-      addendum if unsuitable for Moment 2).
-- [ ] T8 step-end retrospective recorded at
+      addendum if unsuitable for Moment 2). Owner also observed that the
+      thumbnail screen behind the scrim can still receive clicks through gaps
+      while the lightbox is open; this is recorded as an M4 input / modal
+      focus residual, not a T8 smoke failure, because hit-testing / focus
+      capture / modal focus trap is explicitly out of Phase 6 scope. T8 review
+      also recorded the `64` caption row as a current text-metrics /
+      logical-pixel dependency to re-check during M4 DPI / font / lightbox
+      input work.
+- [x] T8 step-end retrospective recorded at
       `process/milestone-3/phase-6/retrospectives/t8.md`
       (retrospectives.md checklist items 1–11).
 
@@ -397,13 +690,27 @@ Before closing, cross-check this T0-frozen task list against any
 mid-phase owner decisions and revise the mutable plan where they diverge
 (constraints §6 — revise, do not work around).
 
-- [ ] `cargo fmt --all -- --check` green locally and on CI.
-- [ ] `cargo build --release --workspace` green locally and on CI.
-- [ ] `cargo test --workspace` green locally and on CI.
-- [ ] Windows-only integration evidence green on CI (skip-guard verified
+- [x] `cargo fmt --all -- --check` green locally. **T9 local post-A12
+      gate is green** (recorded in [log.md](./log.md)); the current CI
+      workflow does not include a fmt step, so fmt evidence remains the local
+      ground truth.
+- [x] `cargo build --release --workspace` green locally and on CI. **T9
+      local post-A12 gate is green** (recorded in [log.md](./log.md));
+      phase-branch CI run
+      [27149254110](https://github.com/matarillo/wasamo/actions/runs/27149254110)
+      is green at head `2b4f80f`.
+- [x] `cargo test --workspace` green locally and on CI. **T9 local
+      post-A12 gate is green** (recorded in [log.md](./log.md));
+      phase-branch CI run
+      [27149254110](https://github.com/matarillo/wasamo/actions/runs/27149254110)
+      is green at head `2b4f80f`.
+- [x] Windows-only integration evidence green on CI (skip-guard verified
       per T3): ZStack z-order + clip (T3), conditional toggle insert/remove
-      + drain proof (T5), R1 static title (T6).
-- [ ] `docs/dsl_spec.md` ZStack + conditional chapters' Phase status
+      + drain proof (T5), R1 static title (T6). Covered by phase-branch CI
+      run
+      [27149254110](https://github.com/matarillo/wasamo/actions/runs/27149254110)
+      (`workflow_dispatch`, conclusion `success`).
+- [x] `docs/dsl_spec.md` ZStack + conditional chapters' Phase status
       markers flip to `M3-Phase 6 closed; implementation-synced`;
       document-level Status header updated; revision-history entry
       recording the Moment 2 close, any impl/spec divergence corrections,
@@ -411,62 +718,89 @@ mid-phase owner decisions and revise the mutable plan where they diverge
       re-sync (owner-confirmation required per the retroactive spec-gap
       minimum-fold pattern). The textual-IR `§8` control-flow-member
       production is folded to match the landed `ControlFlowNode` shape if
-      it pinned at implementation time.
-- [ ] **A12 spec-closure gate (evidence item 7)** — confirm the ZStack
+      it pinned at implementation time. **DD-M3-P6-008 (A2a) fold:**
+      document the component-level host attributes (`title` / `backdrop` /
+      `theme`) as living on a **host surface separate from the content
+      root**, add the textual-IR `host_props` / `host_bindings` production
+      beside the control-flow-member production, and state the Window
+      host-attribute catalog + the host-binding rejection rule (no DD/option
+      labels in the spec prose per the living-spec vocabulary rule).
+- [x] **A12 spec-closure gate (evidence item 7)** — confirm the ZStack
       chapter, the conditional-rendering (structural-rendering-model)
       chapter (`if` as the first member of a structural control-flow
       family; absent=fresh-on-return / opt-in-retention normative
       semantics), and the reader-facing invalid examples / diagnostics
       match the diagnostics exercised in T1 / T4 / T5, at the
       external-reader-reproducibility bar.
-- [ ] `docs/architecture.md` top Status flips to include `M3-Phase 6
-      complete`; any implementation-divergent paragraphs in §6.9 /
-      §6.7 / §9 re-synced to the actual landed shape.
-- [ ] `process/milestone-3/plan.md` Phase 6 row Status flips to
+- [x] `docs/architecture.md` top Status flips to include `M3-Phase 6
+      closed (implementation-synced)`; any implementation-divergent paragraphs in §6.6
+      (layout invalidation: structural conditional mutation now marks
+      layout dirty in addition to size-affecting property writes), §6.9 /
+      §6.7 / §9 re-synced to the actual landed shape. **DD-M3-P6-008 (A2a)
+      fold:** the `IrComponent` host-attribute surface (`host_props` /
+      `host_bindings`) and the **host-owned-attributes vs content-root
+      separation** it establishes (the canonical invariant carried to M4),
+      so the IR / component description no longer shows window attributes
+      squatting on the content root.
+- [x] `process/milestone-3/plan.md` Phase 6 row Status flips to
       `complete`.
-- [ ] `docs/abi_spec.md` re-confirmed untouched (static title rode the
+- [x] `docs/abi_spec.md` re-confirmed untouched (static title rode the
       existing `wasamo_load_ui` → `window::create` internal path; no new
-      ABI export). Touch only if a Moment 2 surprise forced an ABI surface
-      change, in which case escalate per the ADR preamble's three
-      retrospectives.md §phase-sync ADR-touch cases.
-- [ ] `process/milestone-3/phase-6/decisions/preamble.md` /
+      ABI export; the **DD-M3-P6-008 (A2a)** `host_props` / `host_bindings`
+      change is an **internal compiler-IR / textual-IR** representation
+      change, **not** an ABI-facing window descriptor — that descriptor is
+      M4-owned — so it adds no C ABI surface). Touch only if a Moment 2
+      surprise forced an ABI surface change, in which case escalate per the
+      ADR preamble's three retrospectives.md §phase-sync ADR-touch cases.
+- [x] `process/milestone-3/phase-6/decisions/preamble.md` /
       `dd-m3-p6-*.md` touched **only** if one of the three
       retrospectives.md §phase-sync ADR-touch cases applies (AC
       discharged-vs-impl divergence; out-of-phase residual cross-reference;
       thesis-level finding). Otherwise the ADR set stays at its Moment 1
       Accepted state.
-- [ ] [log.md](./log.md) records the phase-close evidence pointer, CI run
-      id, implementation summary distilled from T1–T8, and any final
-      post-merge distillation.
-- [ ] Carry-forward inputs to Phase 7's pre-doc recorded under
+- [x] [log.md](./log.md) records the phase-close evidence pointer, CI run
+      id, implementation summary distilled from T1–T8, and the remaining
+      post-main-merge distillation boundary.
+- [x] Carry-forward inputs to Phase 7's pre-doc recorded under
       [handoff.md](./handoff.md) (at minimum: the `IrMember` /
       `ControlFlowNode` family-extension landing point for `else` /
       `switch` / iteration; the `BindingTarget::ConditionalSubtree` →
       `ForLoopSubtree` seam; the declared-tree / entity-tree identity /
       `key:` retention deferral; the dynamic Window-title deferral; the
-      reactive-drain items 1–3 carry-forward; any residual surfaced during
-      T2–T8). **NOT owned by T9** (phase-end retro item 15 per
+      reactive-drain items 1–3 carry-forward; the placement storage-model
+      decision (SoA vs AoS vs keyed map, per the T5 retro item 10); the
+      `scroll_view_layout_integration` "teardown-AV" — **root-caused and
+      step-1/step-2-fixed** (cross-apartment Compositor reuse across libtest's
+      per-test threads, not a teardown fault; production-safe; Compositor work
+      now marshals onto the owning runtime thread, and the keep-alive helper
+      keeps the apartment alive for the test binary). Per
+      docs/notes/verification-environments.md Observation 5 §Remediation
+      status, both remediation steps are **DONE / committed**, so there is no
+      remaining Observation 5 remediation carry-forward; any M4 reuse of the
+      owning-thread + message-pump helper is ordinary test-harness input, not
+      an open Phase 6 residual. **NOT owned by T9**
+      (phase-end retro item 15 per
       [retrospectives.md §6.3/§15](../../../procedures/retrospectives.md));
-      stays `[ ]` at T9 close.
-- [ ] Front-matter `status` (on the sibling
+      stayed `[ ]` at T9 close and is checked when the phase-end handoff lands.
+- [x] Front-matter `status` (on the sibling
       [implementation/preamble.md](./preamble.md)) flips `active` →
       `closing` at the **phase-end batch commit** — the phase-branch
-      commit that lands the CI-verified gates (fmt / build / test /
-      Windows integration) + the spec / architecture / plan status flips
-      + log.md + handoff — **not at T9 step-close**. Per the Phase 5
+      commit that lands the CI-verified gates (local fmt plus CI build /
+      test / Windows integration) + the spec / architecture / plan status
+      flips + log.md — **not at T9 step-close**. Per the Phase 5
       actual-operation correction the on-CI gates are phase-end-owned
       (verified only after the phase branch runs `workflow_dispatch` CI),
       so **T9 step-close itself leaves `status: active`**; the
       [preamble Lifecycle](./preamble.md#lifecycle-transition) is the SSOT
-      for this timing. **NOT owned by T9** — like the handoff and
+      for this timing. **NOT owned by T9** — like the other
       phase-end-retro bullets, this **stays `[ ]` at T9 close** and is
       checked by the phase-end batch commit on the phase branch. No
       further task checkboxes are added after the phase-end batch.
-- [ ] **T9 step-end retrospective recorded** at
+- [x] **T9 step-end retrospective recorded** at
       `process/milestone-3/phase-6/retrospectives/t9.md`
       (retrospectives.md checklist items 1–11; step → phase merge gate;
       **owned by T9**, this is a T9 deliverable).
-- [ ] **Phase-end retrospective recorded** at
+- [x] **Phase-end retrospective recorded** at
       `process/milestone-3/phase-6/retrospectives/phase-end.md`
       (retrospectives.md checklist items 12–18; phase → main merge gate;
       **NOT owned by T9**, performed on the phase branch after T9 merges

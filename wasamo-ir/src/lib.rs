@@ -136,6 +136,26 @@ pub struct IrHandler {
     pub expr: HandlerExpr,
 }
 
+/// A member in a widget node body.
+#[derive(Debug, Clone, PartialEq)]
+pub enum IrMember {
+    Widget(IrNode),
+    ControlFlow(ControlFlowNode),
+}
+
+/// Structural control-flow member. Phase 6 ships only the single-branch
+/// `If` form; the branch list is the family extension point for `else`.
+#[derive(Debug, Clone, PartialEq)]
+pub enum ControlFlowNode {
+    If { branches: Vec<ControlFlowBranch> },
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct ControlFlowBranch {
+    pub condition: HandlerExpr,
+    pub body: Vec<IrMember>,
+}
+
 /// A widget node in the IR tree.
 #[derive(Debug, Clone, PartialEq)]
 pub struct IrNode {
@@ -143,7 +163,7 @@ pub struct IrNode {
     pub props: Vec<IrProp>,
     pub bindings: Vec<IrBinding>,
     pub handlers: Vec<IrHandler>,
-    pub children: Vec<IrNode>,
+    pub children: Vec<IrMember>,
     /// Grid kind-specific payload (DD-M3-P5-001 carrier c1); `None` for
     /// every non-Grid widget kind. Set explicitly at each construction
     /// site (the IR types deliberately derive no `Default`, so adding
@@ -152,11 +172,22 @@ pub struct IrNode {
     pub kind_payload: Option<KindPayload>,
 }
 
+impl IrNode {
+    pub fn widget_children(&self) -> impl Iterator<Item = &IrNode> {
+        self.children.iter().filter_map(|member| match member {
+            IrMember::Widget(node) => Some(node),
+            IrMember::ControlFlow(_) => None,
+        })
+    }
+}
+
 /// Top-level IR component.
 #[derive(Debug, Clone, PartialEq)]
 pub struct IrComponent {
     pub name: String,
     pub base: String,
+    pub host_props: Vec<IrProp>,
+    pub host_bindings: Vec<IrBinding>,
     pub states: Vec<IrState>,
     pub root: IrNode,
 }
@@ -330,6 +361,55 @@ mod tests {
             kind_payload: None,
         };
         assert_eq!(n.kind_payload, None);
+    }
+
+    #[test]
+    fn ir_member_encodes_widget_and_control_flow() {
+        let text = IrNode {
+            widget_type: "Text".into(),
+            props: vec![],
+            bindings: vec![],
+            handlers: vec![],
+            children: vec![],
+            kind_payload: None,
+        };
+        let control = ControlFlowNode::If {
+            branches: vec![ControlFlowBranch {
+                condition: HandlerExpr::BoolLit(true),
+                body: vec![IrMember::Widget(text.clone())],
+            }],
+        };
+
+        assert!(matches!(IrMember::Widget(text), IrMember::Widget(_)));
+        assert!(matches!(
+            IrMember::ControlFlow(control),
+            IrMember::ControlFlow(ControlFlowNode::If { .. })
+        ));
+    }
+
+    #[test]
+    fn ir_component_separates_host_surface_from_content_root() {
+        let component = IrComponent {
+            name: "C".into(),
+            base: "Window".into(),
+            host_props: vec![IrProp {
+                name: "title".into(),
+                value: IrLiteral::Str("Counter".into()),
+            }],
+            host_bindings: vec![],
+            states: vec![],
+            root: IrNode {
+                widget_type: "ZStack".into(),
+                props: vec![],
+                bindings: vec![],
+                handlers: vec![],
+                children: vec![],
+                kind_payload: None,
+            },
+        };
+
+        assert_eq!(component.host_props[0].name, "title");
+        assert!(component.root.props.is_empty());
     }
 
     #[test]

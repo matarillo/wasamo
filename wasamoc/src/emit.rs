@@ -1,6 +1,6 @@
 use crate::ir::{
-    CompoundOp, HandlerExpr, InterpolationPart, IrBinding, IrComponent, IrHandler, IrLiteral,
-    IrNode, IrProp, IrState, IrType, KindPayload, TrackSize,
+    CompoundOp, ControlFlowNode, HandlerExpr, InterpolationPart, IrBinding, IrComponent, IrHandler,
+    IrLiteral, IrMember, IrNode, IrProp, IrState, IrType, KindPayload, TrackSize,
 };
 
 /// Serialise an IrComponent to the normative Wasamo IR text format (§8, DD-M2-P6-002).
@@ -21,7 +21,13 @@ fn emit_component(out: &mut String, comp: &IrComponent, indent: usize) {
     for state in &comp.states {
         emit_state(out, state, indent + 1);
     }
-    if !comp.states.is_empty() {
+    for prop in &comp.host_props {
+        emit_host_prop(out, prop, indent + 1);
+    }
+    for binding in &comp.host_bindings {
+        emit_host_binding(out, binding, indent + 1);
+    }
+    if !comp.states.is_empty() || !comp.host_props.is_empty() || !comp.host_bindings.is_empty() {
         out.push('\n');
     }
     emit_node(out, &comp.root, indent + 1);
@@ -66,9 +72,25 @@ fn emit_node(out: &mut String, node: &IrNode, indent: usize) {
         emit_handler(out, handler, indent + 1);
     }
     for child in &node.children {
-        emit_node(out, child, indent + 1);
+        emit_member(out, child, indent + 1);
     }
     out.push_str(&format!("{}}}\n", i));
+}
+
+fn emit_member(out: &mut String, member: &IrMember, indent: usize) {
+    match member {
+        IrMember::Widget(node) => emit_node(out, node, indent),
+        IrMember::ControlFlow(ControlFlowNode::If { branches }) => {
+            let i = ind(indent);
+            for branch in branches {
+                out.push_str(&format!("{}if {} {{\n", i, emit_expr(&branch.condition)));
+                for body_member in &branch.body {
+                    emit_member(out, body_member, indent + 1);
+                }
+                out.push_str(&format!("{}}}\n", i));
+            }
+        }
+    }
 }
 
 /// Emit a Grid track list as `tracks <axis> = <t0> <t1> …` (DD-M3-P5-002).
@@ -101,9 +123,27 @@ fn emit_prop(out: &mut String, prop: &IrProp, indent: usize) {
     ));
 }
 
+fn emit_host_prop(out: &mut String, prop: &IrProp, indent: usize) {
+    out.push_str(&format!(
+        "{}host prop {} = {}\n",
+        ind(indent),
+        prop.name,
+        emit_literal(&prop.value)
+    ));
+}
+
 fn emit_binding(out: &mut String, binding: &IrBinding, indent: usize) {
     out.push_str(&format!(
         "{}bind {} = {}\n",
+        ind(indent),
+        binding.prop_name,
+        emit_expr(&binding.expr)
+    ));
+}
+
+fn emit_host_binding(out: &mut String, binding: &IrBinding, indent: usize) {
+    out.push_str(&format!(
+        "{}host bind {} = {}\n",
         ind(indent),
         binding.prop_name,
         emit_expr(&binding.expr)
@@ -397,7 +437,10 @@ mod tests {
         assert_eq!(*aspect, IrLiteral::Ratio { num: 16, den: 9 });
         assert_eq!(*fill, IrLiteral::Color(0x80_00_00_00));
         assert_eq!(b.children.len(), 1);
-        assert_eq!(b.children[0].widget_type, "Text");
+        assert!(matches!(
+            &b.children[0],
+            IrMember::Widget(child) if child.widget_type == "Text"
+        ));
 
         let out = emit(&comp);
         assert!(out.starts_with(";wasamo-ir v0\n"), "got: {}", out);
@@ -583,6 +626,43 @@ mod tests {
         assert!(out.contains("node Text {"), "got: {}", out);
     }
 
+    // --- M3-Phase 6 T1: ZStack textual IR emit (DD-M3-P6-001) ----------
+
+    #[test]
+    fn zstack_emitted_as_node_with_direct_children_in_order() {
+        let out = emit_src(
+            r#"component C inherits W {
+                ZStack {
+                    Box { fill: #00000080 }
+                    Text { h-align: center v-align: end text: "caption" }
+                }
+            }"#,
+        );
+
+        assert!(out.contains("node ZStack {"), "got: {}", out);
+        assert!(!out.contains("tracks columns"), "got: {}", out);
+        assert!(!out.contains("tracks rows"), "got: {}", out);
+        assert!(!out.contains("node Cell {"), "got: {}", out);
+        let box_pos = out.find("node Box {").expect("Box child emitted");
+        let text_pos = out.find("node Text {").expect("Text child emitted");
+        assert!(box_pos < text_pos, "got: {}", out);
+        assert!(out.contains("prop fill = #00000080"), "got: {}", out);
+        assert!(out.contains("prop h-align = center"), "got: {}", out);
+        assert!(out.contains("prop v-align = end"), "got: {}", out);
+    }
+
+    #[test]
+    fn conditional_emitted_as_control_flow_member() {
+        let out = emit_src(
+            "component C inherits W { state ready: bool = true VStack { if ready { Text { text: \"Shown\" } } } }",
+        );
+        assert!(out.contains("if (bool-prop-read ready) {"), "got: {}", out);
+        assert!(out.contains("node Text {"), "got: {}", out);
+        let if_pos = out.find("if (bool-prop-read ready) {").expect("if emitted");
+        let text_pos = out.find("node Text {").expect("Text emitted");
+        assert!(if_pos < text_pos, "got: {}", out);
+    }
+
     #[test]
     fn full_counter_ir_roundtrip() {
         let src = r#"component Counter inherits Window {
@@ -611,10 +691,10 @@ mod tests {
         assert!(out.contains("component Counter inherits Window {"));
         // State
         assert!(out.contains("state count: i32 = 0"));
-        // Root node static props
-        assert!(out.contains("prop title = \"Counter\""));
-        assert!(out.contains("prop backdrop = mica"));
-        assert!(out.contains("prop theme = system"));
+        // Host static props
+        assert!(out.contains("host prop title = \"Counter\""));
+        assert!(out.contains("host prop backdrop = mica"));
+        assert!(out.contains("host prop theme = system"));
         // VStack children
         assert!(out.contains("node VStack {"));
         assert!(out.contains("prop spacing = 12"));
@@ -627,5 +707,43 @@ mod tests {
         assert!(out.contains("node Button {"));
         assert!(out.contains("on clicked {"));
         assert!(out.contains("compound-assign += count 1"));
+    }
+
+    #[test]
+    fn host_binding_emitted_on_component_surface() {
+        // `host_bindings` is a *structural* surface this phase: the Phase-6
+        // catalog admits no bindable host attribute (the runtime `validate()`
+        // rejects any host binding), but the surface must still round-trip
+        // canonically. This pins the emit half — `host bind ...`, on the
+        // component surface, never spliced onto the content root. The parse
+        // half is covered by `wasamo-runtime`'s
+        // `host_surface_rejects_host_binding`, which reaches `validate()`
+        // (proving the parser populated `host_bindings`) before rejecting.
+        use crate::ir::{HandlerExpr, IrBinding, IrComponent, IrNode};
+        let comp = IrComponent {
+            name: "C".into(),
+            base: "W".into(),
+            host_props: vec![],
+            host_bindings: vec![IrBinding {
+                prop_name: "title".into(),
+                expr: HandlerExpr::StrPropRead { path: "s".into() },
+            }],
+            states: vec![],
+            root: IrNode {
+                widget_type: "V".into(),
+                props: vec![],
+                bindings: vec![],
+                handlers: vec![],
+                children: vec![],
+                kind_payload: None,
+            },
+        };
+        let out = emit(&comp);
+        assert!(
+            out.contains("host bind title = (str-prop-read s)"),
+            "got: {out}"
+        );
+        // Never on the content root.
+        assert!(!out.contains("node V {\n    bind"), "got: {out}");
     }
 }

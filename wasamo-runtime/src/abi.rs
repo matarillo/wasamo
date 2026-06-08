@@ -1217,17 +1217,17 @@ pub unsafe extern "C" fn wasamo_load_ui(
             }
         };
 
-    let mut window = match crate::window::create(
-        DEFAULT_WINDOW_TITLE,
-        DEFAULT_WINDOW_WIDTH,
-        DEFAULT_WINDOW_HEIGHT,
-    ) {
-        Ok(w) => w,
-        Err(e) => {
-            set_last_error(format!("wasamo_load_ui: window_create: {e}"));
-            return WASAMO_ERR_RUNTIME;
-        }
-    };
+    let window_title =
+        crate::ir_loader::resolve_static_window_title(&component, DEFAULT_WINDOW_TITLE);
+
+    let mut window =
+        match crate::window::create(window_title, DEFAULT_WINDOW_WIDTH, DEFAULT_WINDOW_HEIGHT) {
+            Ok(w) => w,
+            Err(e) => {
+                set_last_error(format!("wasamo_load_ui: window_create: {e}"));
+                return WASAMO_ERR_RUNTIME;
+            }
+        };
 
     if let Err(e) = crate::window::set_root(&mut window, built.root) {
         set_last_error(format!("wasamo_load_ui: window_set_root: {e}"));
