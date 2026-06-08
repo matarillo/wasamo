@@ -1,7 +1,7 @@
 ---
 phase: M3-Phase 6
 title: ZStack + conditional rendering
-status: active
+status: closing
 adr: process/milestone-3/phase-6/decisions/preamble.md
 plan: process/milestone-3/plan.md
 opened: 2026-06-02
@@ -117,20 +117,20 @@ decisions and the mutable phase plan is revised where they diverge
 
 This implementation file opens at `status: active` and transitions to
 `status: closing` at the **phase-end batch commit** — the phase-branch
-commit that lands the CI-verified gates (`cargo fmt` / `build` / `test`
-+ Windows integration on CI) plus the spec / architecture / plan status
-flips + log.md + handoff — **not** at T9 step-close. The on-CI gates
+commit that lands the CI-verified gates (local `cargo fmt`, plus CI
+`build` / `test` / Windows integration) and the spec / architecture /
+plan status flips + log.md — **not** at T9 step-close. The on-CI gates
 are phase-end-owned and verified only after the phase branch runs
 `workflow_dispatch` CI (Phase 5 actual-operation correction), so
-**T9 step-close itself leaves `status: active`**. The phase-end
+**T9 step-close itself leaves `status: active`**. The handoff may land as
+a separate phase-end review concern before this batch. The phase-end
 retrospective is a **separate commit in the same phase-end cluster**
 (not folded into the closing-flip commit). The file remains mutable
 during the `closing` window only for the phase-end retrospective
-evidence pointer, the CI run pointer, and any final post-merge
-distillation; no further task checkboxes are
-added once the phase-end batch lands. The `closing` → `retired`
-transition belongs to the phase → main merge commit / post-merge
-distillation, not this batch. The phase-end retrospective itself is
+evidence pointer and any final post-merge distillation; no further task
+checkboxes are added once the phase-end batch lands. The `closing` →
+`retired` transition belongs to the phase → main merge commit /
+post-merge distillation, not this batch. The phase-end retrospective itself is
 recorded under
 `process/milestone-3/phase-6/retrospectives/phase-end.md` (with sibling
 `tN.md` per-step retros under the same directory) and is a separate

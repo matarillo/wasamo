@@ -690,18 +690,26 @@ Before closing, cross-check this T0-frozen task list against any
 mid-phase owner decisions and revise the mutable plan where they diverge
 (constraints §6 — revise, do not work around).
 
-- [ ] `cargo fmt --all -- --check` green locally and on CI. **T9 local
-      post-A12 gate is green** (recorded in [log.md](./log.md)); the checkbox
-      stays `[ ]` until the phase-end-owned CI gate is green.
-- [ ] `cargo build --release --workspace` green locally and on CI. **T9 local
-      post-A12 gate is green** (recorded in [log.md](./log.md)); the checkbox
-      stays `[ ]` until the phase-end-owned CI gate is green.
-- [ ] `cargo test --workspace` green locally and on CI. **T9 local
-      post-A12 gate is green** (recorded in [log.md](./log.md)); the checkbox
-      stays `[ ]` until the phase-end-owned CI gate is green.
-- [ ] Windows-only integration evidence green on CI (skip-guard verified
+- [x] `cargo fmt --all -- --check` green locally. **T9 local post-A12
+      gate is green** (recorded in [log.md](./log.md)); the current CI
+      workflow does not include a fmt step, so fmt evidence remains the local
+      ground truth.
+- [x] `cargo build --release --workspace` green locally and on CI. **T9
+      local post-A12 gate is green** (recorded in [log.md](./log.md));
+      phase-branch CI run
+      [27149254110](https://github.com/matarillo/wasamo/actions/runs/27149254110)
+      is green at head `2b4f80f`.
+- [x] `cargo test --workspace` green locally and on CI. **T9 local
+      post-A12 gate is green** (recorded in [log.md](./log.md));
+      phase-branch CI run
+      [27149254110](https://github.com/matarillo/wasamo/actions/runs/27149254110)
+      is green at head `2b4f80f`.
+- [x] Windows-only integration evidence green on CI (skip-guard verified
       per T3): ZStack z-order + clip (T3), conditional toggle insert/remove
-      + drain proof (T5), R1 static title (T6).
+      + drain proof (T5), R1 static title (T6). Covered by phase-branch CI
+      run
+      [27149254110](https://github.com/matarillo/wasamo/actions/runs/27149254110)
+      (`workflow_dispatch`, conclusion `success`).
 - [x] `docs/dsl_spec.md` ZStack + conditional chapters' Phase status
       markers flip to `M3-Phase 6 closed; implementation-synced`;
       document-level Status header updated; revision-history entry
@@ -734,7 +742,7 @@ mid-phase owner decisions and revise the mutable plan where they diverge
       separation** it establishes (the canonical invariant carried to M4),
       so the IR / component description no longer shows window attributes
       squatting on the content root.
-- [ ] `process/milestone-3/plan.md` Phase 6 row Status flips to
+- [x] `process/milestone-3/plan.md` Phase 6 row Status flips to
       `complete`.
 - [x] `docs/abi_spec.md` re-confirmed untouched (static title rode the
       existing `wasamo_load_ui` → `window::create` internal path; no new
@@ -750,9 +758,9 @@ mid-phase owner decisions and revise the mutable plan where they diverge
       discharged-vs-impl divergence; out-of-phase residual cross-reference;
       thesis-level finding). Otherwise the ADR set stays at its Moment 1
       Accepted state.
-- [ ] [log.md](./log.md) records the phase-close evidence pointer, CI run
-      id, implementation summary distilled from T1–T8, and any final
-      post-merge distillation.
+- [x] [log.md](./log.md) records the phase-close evidence pointer, CI run
+      id, implementation summary distilled from T1–T8, and the remaining
+      post-main-merge distillation boundary.
 - [x] Carry-forward inputs to Phase 7's pre-doc recorded under
       [handoff.md](./handoff.md) (at minimum: the `IrMember` /
       `ControlFlowNode` family-extension landing point for `else` /
@@ -774,12 +782,12 @@ mid-phase owner decisions and revise the mutable plan where they diverge
       (phase-end retro item 15 per
       [retrospectives.md §6.3/§15](../../../procedures/retrospectives.md));
       stayed `[ ]` at T9 close and is checked when the phase-end handoff lands.
-- [ ] Front-matter `status` (on the sibling
+- [x] Front-matter `status` (on the sibling
       [implementation/preamble.md](./preamble.md)) flips `active` →
       `closing` at the **phase-end batch commit** — the phase-branch
-      commit that lands the CI-verified gates (fmt / build / test /
-      Windows integration) + the spec / architecture / plan status flips
-      + log.md — **not at T9 step-close**. Per the Phase 5
+      commit that lands the CI-verified gates (local fmt plus CI build /
+      test / Windows integration) + the spec / architecture / plan status
+      flips + log.md — **not at T9 step-close**. Per the Phase 5
       actual-operation correction the on-CI gates are phase-end-owned
       (verified only after the phase branch runs `workflow_dispatch` CI),
       so **T9 step-close itself leaves `status: active`**; the

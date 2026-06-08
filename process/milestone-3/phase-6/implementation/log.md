@@ -1,5 +1,43 @@
 ## Decisions log
 
+- **2026-06-09 / Phase-end close — phase-branch CI green and closing
+  batch:** after `feat/m3-phase-6` was pushed at handoff head `2b4f80f`, the
+  phase-end-owned GitHub Actions gate was run through `workflow_dispatch`.
+  CI run
+  [27149254110](https://github.com/matarillo/wasamo/actions/runs/27149254110)
+  completed with conclusion **success** for workflow `CI`, event
+  `workflow_dispatch`, headSha
+  `2b4f80f69bcdd62054fc37d55e04c282bba78cfb` (`2b4f80f`), created at
+  `2026-06-08T15:43:27Z` and updated at `2026-06-08T15:46:37Z`
+  (~3m10s wall-clock; `gh run watch` reported the `cargo build` job at
+  ~3m4s). The build / test state is the same code state as the pushed phase
+  branch; this closing batch is doc-only.
+  - CI green steps: release workspace build, debug workspace build for tests,
+    workspace tests, MSVC setup, C ABI smoke (`cl` and `clang-cl`), CMake smoke,
+    Zig binding smoke, `counter-c`, `counter-rust`, `counter-zig`, and
+    `wasamoc check counter.ui`.
+  - Windows-runtime integration evidence is therefore phase-branch green for
+    the T3 ZStack z-order / clip fixtures, the T5 conditional toggle /
+    drain fixtures, and the T6 R1 static-title fixture as part of
+    `cargo test --workspace`.
+  - The workflow does not currently run `cargo fmt --all -- --check`; fmt
+    evidence remains the T9 post-A12 local green recorded immediately below.
+  - CI annotations were non-failing notices only: `mlugg/setup-zig@v2` uses a
+    deprecated Node.js 20 action runtime, and `windows-latest` was redirected
+    by GitHub Actions. No test/build failure or skip was observed.
+  - Phase-close evidence pointer: implementation evidence remains distributed
+    across the task retrospectives
+    ([t1](../retrospectives/t1.md), [t2](../retrospectives/t2.md),
+    [t3](../retrospectives/t3.md), [t4](../retrospectives/t4.md),
+    [t4b](../retrospectives/t4b.md), [t5](../retrospectives/t5.md),
+    [t6](../retrospectives/t6.md), [t7](../retrospectives/t7.md),
+    [t7b](../retrospectives/t7b.md), [t8](../retrospectives/t8.md),
+    [t9](../retrospectives/t9.md)), the assistant GUI artifacts under
+    [evidence/](./evidence/), the phase-end handoff
+    ([handoff.md](./handoff.md)), and the phase-end retrospective
+    ([phase-end.md](../retrospectives/phase-end.md)). The remaining
+    post-main-merge distillation is limited to the `closing` -> `retired`
+    transition and any post-merge CI pointer required by the merge gate.
 - **2026-06-08 / T9 local clean rebuild after A12 code follow-up:** the A12
   diagnostic wording follow-up touched production Rust in `wasamoc/src/check.rs`
   and `wasamo-runtime/src/ir_loader.rs`, so the local step-end gate is

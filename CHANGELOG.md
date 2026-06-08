@@ -14,6 +14,44 @@ the **Status** section of [README.md](./README.md).
 
 ## [Unreleased] — M3: DSL surface (in progress)
 
+### M3-Phase 6 — ZStack + conditional rendering (2026-06-09)
+
+Adds the `ZStack` overlay primitive and the first structural grammar surface,
+`if <bool-expr> { <widget-child> }`, discharging M3 acceptance **A4** and
+**A7**. `ZStack` uses direct children, parent-owned `h-align` / `v-align`,
+union sizing, document-order z-order, and an outer-bounds clip without adding
+a new ABI surface. Conditional rendering lands as an `IrMember` /
+`ControlFlowNode` surface rather than a widget, with load-time presence,
+reactive present / absent mutation, subtree disposal, fresh-on-return
+semantics, declared Visual order, and same-drain effect observation.
+
+The phase also closes the Phase 4 residual **R1**: static component
+`title: "..."` now reaches the native window through the existing
+`wasamo_load_ui` -> `window::create` path. DD-M3-P6-008 then moves host-owned
+component attributes (`title`, `backdrop`, `theme`) to `IrComponent.host_props`
+/ `host_bindings`, preserving the content-root separation and keeping dynamic
+host bindings and ABI-facing window descriptors deferred.
+
+Visible proof: `examples/gallery/gallery.ui` grows a root `ZStack` lightbox
+slice driven by `is_lightbox_open`, with a scrim, centered 4:3 photo
+placeholder, caption, nav, and the native `"Gallery"` title. Assistant
+screenshot evidence proves closed / open / closed toggle behavior, z-order,
+dimming, and title corroboration; owner-manual smoke confirmed toggle,
+resize-fill positive control, title, photo geometry, and caption/nav fit after
+the additive caption-row correction.
+
+Per-phase spec sync (A11 / A12): `docs/dsl_spec.md` and
+`docs/architecture.md` are implementation-synced for ZStack, structural
+conditional semantics, textual IR control-flow members, component host
+surfaces, and layout-dirty structural mutation. Direct conditional members
+under `ScrollView` remain rejected in Phase 6; future conditionally-empty
+ScrollView behavior must reopen that policy. Phase 7 carries the control-flow
+family extension, placement storage-model decision, declared/entity identity,
+and semantic-migration audit rule-ification; M4 carries modal input, dynamic
+host bindings, DPI / text-metric sensitivity, and real image behavior.
+
+Decisions: [DD-M3-P6-001..008](./process/milestone-3/phase-6/decisions/preamble.md).
+
 ### M3-Phase 5 — Grid layout primitive (2026-05-30)
 
 Adds the `Grid` 2D layout primitive (one child per `Cell`; fixed and
