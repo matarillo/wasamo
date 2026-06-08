@@ -186,6 +186,8 @@ impl IrNode {
 pub struct IrComponent {
     pub name: String,
     pub base: String,
+    pub host_props: Vec<IrProp>,
+    pub host_bindings: Vec<IrBinding>,
     pub states: Vec<IrState>,
     pub root: IrNode,
 }
@@ -383,6 +385,31 @@ mod tests {
             IrMember::ControlFlow(control),
             IrMember::ControlFlow(ControlFlowNode::If { .. })
         ));
+    }
+
+    #[test]
+    fn ir_component_separates_host_surface_from_content_root() {
+        let component = IrComponent {
+            name: "C".into(),
+            base: "Window".into(),
+            host_props: vec![IrProp {
+                name: "title".into(),
+                value: IrLiteral::Str("Counter".into()),
+            }],
+            host_bindings: vec![],
+            states: vec![],
+            root: IrNode {
+                widget_type: "ZStack".into(),
+                props: vec![],
+                bindings: vec![],
+                handlers: vec![],
+                children: vec![],
+                kind_payload: None,
+            },
+        };
+
+        assert_eq!(component.host_props[0].name, "title");
+        assert!(component.root.props.is_empty());
     }
 
     #[test]

@@ -185,7 +185,8 @@ fn validate(comp: &IrComponent) -> Result<(), IrLoadError> {
             )));
         }
     }
-    validate_static_window_title(comp)?;
+    validate_host_surface(comp)?;
+    reject_root_squatted_host_attrs(comp)?;
     validate_node_references(&comp.root, &declared)?;
     // M3-Phase 2 T7 defense-in-depth gates (DD-M3-P2-001 / DD-M3-P2-002 /
     // DD-M3-P2-003). The shared mapping at the C ABI boundary is
@@ -237,13 +238,76 @@ fn validate(comp: &IrComponent) -> Result<(), IrLoadError> {
     validate_phase6_control_flow_invariants(&comp.root)
 }
 
-fn validate_static_window_title(comp: &IrComponent) -> Result<(), IrLoadError> {
-    for prop in comp.root.props.iter().filter(|prop| prop.name == "title") {
-        if !matches!(prop.value, IrLiteral::Str(_)) {
-            return Err(IrLoadError::Validate(
-                "component root `title` prop must be a string literal".into(),
-            ));
+const HOST_STATIC_ATTRS: &[&str] = &["title", "backdrop", "theme"];
+
+fn validate_host_surface(comp: &IrComponent) -> Result<(), IrLoadError> {
+    // The runtime is a *defensive reader* of textual IR (DD-M3-P6-008), so it
+    // mirrors the compiler host catalog on both the attribute *name* and the
+    // per-attribute *value shape* — not just the name. `wasamoc check` rejects
+    // a non-string `title` and a typed-scalar literal on `backdrop` / `theme`
+    // (those take a keyword identifier such as `mica` / `system`), so a
+    // hand-crafted textual IR that skips the compiler must be rejected here
+    // identically rather than leaving a direct-textual-IR hole.
+    for prop in &comp.host_props {
+        match prop.name.as_str() {
+            "title" => {
+                if !matches!(prop.value, IrLiteral::Str(_)) {
+                    return Err(IrLoadError::Validate(
+                        "host `title` prop must be a string literal".into(),
+                    ));
+                }
+            }
+            "backdrop" | "theme" => {
+                if matches!(
+                    prop.value,
+                    IrLiteral::Int(_) | IrLiteral::Str(_) | IrLiteral::Bool(_)
+                ) {
+                    return Err(IrLoadError::Validate(format!(
+                        "host `{}` prop must be a keyword identifier, not a typed literal",
+                        prop.name
+                    )));
+                }
+            }
+            _ => {
+                return Err(IrLoadError::Validate(format!(
+                    "unknown host attribute `{}`; M3-Phase 6 host attributes are: {}",
+                    prop.name,
+                    HOST_STATIC_ATTRS.join(", ")
+                )));
+            }
         }
+    }
+    if let Some(binding) = comp.host_bindings.first() {
+        return Err(IrLoadError::Validate(format!(
+            "host attribute `{}` is not bindable in M3-Phase 6",
+            binding.prop_name
+        )));
+    }
+    Ok(())
+}
+
+fn reject_root_squatted_host_attrs(comp: &IrComponent) -> Result<(), IrLoadError> {
+    if let Some(prop) = comp
+        .root
+        .props
+        .iter()
+        .find(|prop| HOST_STATIC_ATTRS.contains(&prop.name.as_str()))
+    {
+        return Err(IrLoadError::Validate(format!(
+            "host attribute `{}` must live on `host_props`, not on the content root",
+            prop.name
+        )));
+    }
+    if let Some(binding) = comp
+        .root
+        .bindings
+        .iter()
+        .find(|binding| HOST_STATIC_ATTRS.contains(&binding.prop_name.as_str()))
+    {
+        return Err(IrLoadError::Validate(format!(
+            "host attribute `{}` must live on `host_bindings`, not on the content root",
+            binding.prop_name
+        )));
     }
     Ok(())
 }
@@ -252,17 +316,13 @@ pub(crate) fn resolve_static_window_title<'a>(
     comp: &'a IrComponent,
     default_title: &'a str,
 ) -> &'a str {
-    let Some(prop) = comp.root.props.iter().find(|prop| prop.name == "title") else {
+    let Some(prop) = comp.host_props.iter().find(|prop| prop.name == "title") else {
         return default_title;
     };
     match &prop.value {
         IrLiteral::Str(title) if !title.is_empty() => title.as_str(),
         _ => default_title,
     }
-}
-
-fn is_component_root_window_prop(name: &str) -> bool {
-    matches!(name, "title" | "backdrop" | "theme")
 }
 
 fn is_child_placement_prop(name: &str) -> bool {
@@ -557,10 +617,10 @@ fn validate_phase6_zstack_node_invariants(
                 "`ZStack` must not carry a `kind_payload` (DD-M3-P6-001)".into(),
             ));
         }
-        let zstack_widget_prop = node.props.iter().find(|prop| {
-            !(parent == ParentKind::Root && is_component_root_window_prop(&prop.name))
-                && !(parent == ParentKind::ZStack && is_child_placement_prop(&prop.name))
-        });
+        let zstack_widget_prop = node
+            .props
+            .iter()
+            .find(|prop| !(parent == ParentKind::ZStack && is_child_placement_prop(&prop.name)));
         if let Some(prop) = zstack_widget_prop {
             return Err(IrLoadError::Validate(format!(
                 "`ZStack` accepts no Phase-6 attributes; found `{}`",
@@ -1290,6 +1350,8 @@ impl<'a> Parser<'a> {
         let base = self.expect_ident()?;
         self.expect(&Token::LBrace)?;
 
+        let mut host_props = Vec::new();
+        let mut host_bindings = Vec::new();
         let mut states = Vec::new();
         let mut root: Option<IrNode> = None;
 
@@ -1301,6 +1363,11 @@ impl<'a> Parser<'a> {
                 }
                 Some(Token::Ident(s)) if s == "state" => {
                     states.push(self.parse_state()?);
+                }
+                Some(Token::Ident(s)) if s == "host" => {
+                    let (props, bindings) = self.parse_host_member()?;
+                    host_props.extend(props);
+                    host_bindings.extend(bindings);
                 }
                 Some(Token::Ident(s)) if s == "node" => {
                     if root.is_some() {
@@ -1327,9 +1394,22 @@ impl<'a> Parser<'a> {
         Ok(IrComponent {
             name,
             base,
+            host_props,
+            host_bindings,
             states,
             root,
         })
+    }
+
+    fn parse_host_member(&mut self) -> Result<(Vec<IrProp>, Vec<IrBinding>), IrLoadError> {
+        self.expect_keyword("host")?;
+        match self.peek() {
+            Some(Token::Ident(s)) if s == "prop" => Ok((vec![self.parse_prop()?], Vec::new())),
+            Some(Token::Ident(s)) if s == "bind" => Ok((Vec::new(), vec![self.parse_binding()?])),
+            other => Err(IrLoadError::Parse(format!(
+                "expected `host prop` or `host bind`, got {other:?}"
+            ))),
+        }
     }
 
     fn parse_state(&mut self) -> Result<IrState, IrLoadError> {
@@ -2585,8 +2665,8 @@ mod tests {
             ";wasamo-ir v0\ncomponent C inherits W {\n\
              node V {\n\
                prop spacing = 12\n\
-               prop theme = system\n\
-               prop title = \"Hi\"\n\
+               prop style = system\n\
+               prop font = \"Hi\"\n\
              }\n}",
         );
         let props = &c.root.props;
@@ -2601,17 +2681,37 @@ mod tests {
         assert_eq!(
             props[1],
             IrProp {
-                name: "theme".into(),
+                name: "style".into(),
                 value: IrLiteral::Ident("system".into())
             }
         );
         assert_eq!(
             props[2],
             IrProp {
-                name: "title".into(),
+                name: "font".into(),
                 value: IrLiteral::Str("Hi".into())
             }
         );
+    }
+
+    #[test]
+    fn host_prop_parses_on_component_surface() {
+        let c = parse_ok(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             host prop title = \"Hi\"\n\
+             host prop backdrop = mica\n\
+             node V {}\n}",
+        );
+        assert!(c.root.props.is_empty());
+        assert_eq!(c.host_props.len(), 2);
+        assert_eq!(c.host_props[0].name, "title");
+        assert_eq!(c.host_props[0].value, IrLiteral::Str("Hi".into()));
+        assert_eq!(resolve_static_window_title(&c, "Wasamo"), "Hi");
+    }
+
+    #[test]
+    fn host_attribute_catalog_mirrors_wasamoc() {
+        assert_eq!(HOST_STATIC_ATTRS, wasamoc::check::HOST_STATIC_ATTRS);
     }
 
     #[test]
@@ -2621,33 +2721,31 @@ mod tests {
 
         let empty = parse_ok(
             ";wasamo-ir v0\ncomponent C inherits W {\n\
-             node V {\n\
-               prop title = \"\"\n\
-             }\n}",
+             host prop title = \"\"\n\
+             node V {}\n}",
         );
         assert_eq!(resolve_static_window_title(&empty, "Wasamo"), "Wasamo");
 
         let custom = parse_ok(
             ";wasamo-ir v0\ncomponent C inherits W {\n\
-             node V {\n\
-               prop title = \"Gallery\"\n\
-             }\n}",
+             host prop title = \"Gallery\"\n\
+             node V {}\n}",
         );
         assert_eq!(resolve_static_window_title(&custom, "Wasamo"), "Gallery");
     }
 
     #[test]
-    fn static_window_title_rejects_non_string_root_prop() {
+    fn static_window_title_rejects_non_string_host_prop() {
         let err = parse_ir(
             ";wasamo-ir v0\ncomponent C inherits W {\n\
-             node V {\n\
-               prop title = 3\n\
-             }\n}",
+             host prop title = 3\n\
+             node V {}\n}",
         )
         .unwrap_err();
         assert!(matches!(err, IrLoadError::Validate(_)));
         assert!(
-            err.to_string().contains("`title` prop must be a string"),
+            err.to_string()
+                .contains("host `title` prop must be a string"),
             "{err}"
         );
     }
@@ -2931,6 +3029,11 @@ mod tests {
         let original = IrComponent {
             name: "Counter".into(),
             base: "Window".into(),
+            host_props: vec![IrProp {
+                name: "title".into(),
+                value: IrLiteral::Str("Counter".into()),
+            }],
+            host_bindings: vec![],
             states: vec![IrState {
                 name: "count".into(),
                 ty: IrType::I32,
@@ -3026,7 +3129,21 @@ mod tests {
                 render_lit(&s.default)
             ));
         }
-        if !c.states.is_empty() {
+        for p in &c.host_props {
+            out.push_str(&format!(
+                "    host prop {} = {}\n",
+                p.name,
+                render_lit(&p.value)
+            ));
+        }
+        for b in &c.host_bindings {
+            out.push_str(&format!(
+                "    host bind {} = {}\n",
+                b.prop_name,
+                render_expr(&b.expr)
+            ));
+        }
+        if !c.states.is_empty() || !c.host_props.is_empty() || !c.host_bindings.is_empty() {
             out.push('\n');
         }
         render_node(&mut out, &c.root, 1);
@@ -4143,6 +4260,8 @@ mod tests {
         let comp = IrComponent {
             name: "C".into(),
             base: "W".into(),
+            host_props: vec![],
+            host_bindings: vec![],
             states: vec![],
             root: IrNode {
                 widget_type: "Text".into(),
@@ -4199,6 +4318,8 @@ mod tests {
         let comp = IrComponent {
             name: "C".into(),
             base: "W".into(),
+            host_props: vec![],
+            host_bindings: vec![],
             states: vec![],
             root: IrNode {
                 widget_type: "Grid".into(),
@@ -4408,13 +4529,16 @@ mod tests {
     }
 
     #[test]
-    fn root_zstack_accepts_component_window_props() {
+    fn root_zstack_accepts_host_props_on_component_surface() {
         let c = parse_ok(
             ";wasamo-ir v0\ncomponent C inherits W {\n\
-             node ZStack { prop title = \"Gallery\" prop backdrop = mica prop theme = system node Text {} }\n\
+             host prop title = \"Gallery\"\n\
+             host prop backdrop = mica\n\
+             host prop theme = system\n\
+             node ZStack { node Text {} }\n\
              }",
         );
-        validate(&c).expect("component root window props should not be ZStack widget attrs");
+        validate(&c).expect("host props are separate from the ZStack content root");
         assert_eq!(resolve_static_window_title(&c, "Wasamo"), "Gallery");
     }
 
@@ -4422,7 +4546,8 @@ mod tests {
     fn root_zstack_still_rejects_widget_attribute() {
         assert_validate_err(
             ";wasamo-ir v0\ncomponent C inherits W {\n\
-             node ZStack { prop title = \"Gallery\" prop spacing = 8 node Text {} }\n}",
+             host prop title = \"Gallery\"\n\
+             node ZStack { prop spacing = 8 node Text {} }\n}",
             "`ZStack` accepts no Phase-6 attributes; found `spacing`",
         );
     }
@@ -4437,30 +4562,15 @@ mod tests {
         validate(&c).expect("ZStack direct-child placement applies even when the child is ZStack");
     }
 
-    // ── DD-M3-P6-008 interim pins ───────────────────────────────────────
-    // T7 surfaced that component-root window attributes (`title` / `backdrop`
-    // / `theme`) are spliced onto the root widget's `props` (wasamoc
-    // `lower.rs`), and component-level bindings onto its `bindings`, so the
-    // strict ZStack validator — the only widget validator that rejects
-    // unknown props/bindings — sees them only when the root widget is a
-    // ZStack. `wasamoc check` never sees them as widget attributes (they are
-    // component-level in the AST, before the splice), so the two gates
-    // diverge: the compiler accepts *any* component-level prop/binding, while
-    // the runtime ZStack root accepts only the three-name window allowlist.
-    // The tests below pin the current (interim) runtime behavior (the
-    // reject side) so the divergence is explicit and auditable until
-    // DD-M3-P6-008 settles the boundary. The compiler (accept) side is pinned
-    // in `wasamoc` by `zstack_root_component_window_attrs_accepted`, so a
-    // future alignment visibly flips exactly one gate.
-    // `root_zstack_rejects_spliced_component_window_binding` below pins the
-    // binding facet with the *exact* IR `wasamoc` emits for a component-level
-    // dynamic `title:` (`bind title = (str-prop-read s)`), rather than the
-    // proxy widget binding in `zstack_binding_rejected_at_validate`.
+    // ── DD-M3-P6-008 A2a canonical host surface ─────────────────────────
+    // Host attributes now live on `IrComponent.host_props` / `host_bindings`;
+    // the content root is pure widget content again. The runtime remains a
+    // defensive textual-IR reader, so it validates the host catalog and
+    // rejects old root-squatted host attributes rather than silently accepting
+    // both shapes.
 
     #[test]
     fn nested_zstack_rejects_component_window_prop() {
-        // The window-prop exemption is root-only: a `title` on a non-root
-        // (nested) ZStack is still a widget attribute and is rejected.
         assert_validate_err(
             ";wasamo-ir v0\ncomponent C inherits W {\n\
              node ZStack { node ZStack { prop title = \"x\" node Text {} } }\n}",
@@ -4469,16 +4579,51 @@ mod tests {
     }
 
     #[test]
-    fn root_zstack_rejects_non_window_component_prop() {
-        // DD-M3-P6-008 interim divergence: `wasamoc check` passes an
-        // arbitrary component-level prop (no component-prop catalog), but the
-        // runtime ZStack root rejects anything outside the title/backdrop/
-        // theme allowlist. Pinned so a future relaxation is a deliberate flip.
+    fn host_surface_rejects_unknown_host_prop() {
         assert_validate_err(
             ";wasamo-ir v0\ncomponent C inherits W {\n\
-             node ZStack { prop foo = bar node Text {} }\n}",
-            "`ZStack` accepts no Phase-6 attributes; found `foo`",
+             host prop foo = bar\n\
+             node ZStack { node Text {} }\n}",
+            "unknown host attribute `foo`",
         );
+    }
+
+    #[test]
+    fn host_surface_rejects_typed_literal_backdrop() {
+        // Defensive-reader mirror of `wasamoc check`: `backdrop` / `theme`
+        // take a keyword identifier (e.g. `mica` / `system`), so a typed
+        // scalar literal in hand-crafted textual IR must be rejected at the
+        // runtime catalog too — not left as a direct-textual-IR hole.
+        assert_validate_err(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             host prop backdrop = 3\n\
+             node ZStack { node Text {} }\n}",
+            "host `backdrop` prop must be a keyword identifier",
+        );
+    }
+
+    #[test]
+    fn host_surface_rejects_typed_literal_theme() {
+        assert_validate_err(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             host prop theme = 3\n\
+             node ZStack { node Text {} }\n}",
+            "host `theme` prop must be a keyword identifier",
+        );
+    }
+
+    #[test]
+    fn host_surface_accepts_keyword_backdrop_and_theme() {
+        // Positive control: the keyword-identifier forms the compiler emits
+        // (`mica` / `system`) validate, so the typed-literal rejection above
+        // is not blanket-rejecting `backdrop` / `theme`.
+        let c = parse_ok(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             host prop backdrop = mica\n\
+             host prop theme = system\n\
+             node ZStack { node Text {} }\n}",
+        );
+        validate(&c).expect("keyword-identifier backdrop/theme must validate");
     }
 
     #[test]
@@ -4493,18 +4638,32 @@ mod tests {
     }
 
     #[test]
-    fn root_zstack_rejects_spliced_component_window_binding() {
-        // DD-M3-P6-008 binding facet, faithful shape: a component-level
-        // dynamic `title: <state>` lowers to `bind title = (str-prop-read s)`
-        // on the root node (verified: `wasamoc build` emits exactly this for a
-        // ZStack root and `wasamoc check` accepts it). On a ZStack root the
-        // runtime rejects it, so the two gates diverge on the *exact* IR the
-        // compiler produces — not just on a proxy widget binding.
+    fn host_surface_rejects_host_binding() {
+        assert_validate_err(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             state s: string = \"x\"\n\
+             host bind title = (str-prop-read s)\n\
+             node ZStack { node Text {} }\n}",
+            "host attribute `title` is not bindable in M3-Phase 6",
+        );
+    }
+
+    #[test]
+    fn old_root_squatted_host_prop_rejected() {
+        assert_validate_err(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             node ZStack { prop title = \"Gallery\" node Text {} }\n}",
+            "host attribute `title` must live on `host_props`",
+        );
+    }
+
+    #[test]
+    fn old_root_squatted_host_binding_rejected() {
         assert_validate_err(
             ";wasamo-ir v0\ncomponent C inherits W {\n\
              state s: string = \"x\"\n\
              node ZStack { bind title = (str-prop-read s) node Text {} }\n}",
-            "`ZStack` accepts no Phase-6 bindings",
+            "host attribute `title` must live on `host_bindings`",
         );
     }
 
@@ -4554,6 +4713,8 @@ mod tests {
         let comp = IrComponent {
             name: "C".into(),
             base: "W".into(),
+            host_props: vec![],
+            host_bindings: vec![],
             states: vec![],
             root: IrNode {
                 widget_type: "ZStack".into(),

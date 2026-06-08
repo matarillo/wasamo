@@ -47,6 +47,11 @@ const STAR_WEIGHT_MAX: i64 = 1024;
 /// attribute-outside-WrapPanel) share one source of truth.
 const WRAPPANEL_INT_ATTRS: &[&str] = &["item-cross-size", "item-spacing", "line-spacing"];
 
+/// Host-owned attributes admitted at component level in M3-Phase 6.
+/// The catalog is host-general in shape but contains only the Window entry
+/// this phase (DD-M3-P6-008 A2a).
+pub const HOST_STATIC_ATTRS: &[&str] = &["title", "backdrop", "theme"];
+
 /// Flat namespace of declared state names → their types.
 pub type Namespace = HashMap<String, TypeName>;
 
@@ -653,6 +658,69 @@ fn check_zstack_child_align(
                 ),
             ));
         }
+    }
+}
+
+fn check_host_property_bind(
+    name: &str,
+    value: &Expr,
+    span: &Span,
+    filename: &str,
+    ns: &Namespace,
+    diags: &mut Vec<Diagnostic>,
+) {
+    if !HOST_STATIC_ATTRS.contains(&name) {
+        diags.push(error(
+            filename,
+            span,
+            format!(
+                "unknown host attribute `{}`; M3-Phase 6 host attributes are: {}",
+                name,
+                HOST_STATIC_ATTRS.join(", ")
+            ),
+        ));
+        return;
+    }
+
+    // A state-backed identifier is a *dynamic* host binding. Dynamic host
+    // attributes are deferred this phase (FD-D), so reject them with a
+    // binding-specific message — distinct from a wrong-typed static literal,
+    // which is a different mistake with a different fix.
+    if matches!(value, Expr::Ident { name: ident, .. } if ns.contains_key(ident)) {
+        diags.push(error(
+            filename,
+            span,
+            format!(
+                "host attribute `{}` is not bindable in M3-Phase 6; dynamic host attributes are deferred",
+                name
+            ),
+        ));
+        return;
+    }
+
+    if name == "title" {
+        if !matches!(value, Expr::StringLit { .. }) {
+            diags.push(error(
+                filename,
+                span,
+                "host attribute `title` must be a string literal in M3-Phase 6",
+            ));
+        }
+        return;
+    }
+
+    // `backdrop` / `theme` take keyword/enum identifiers this phase
+    // (e.g. `mica`, `system`), which carry no static `TypeName`. A concrete
+    // typed literal (int / float / bool / string) is not a valid host value.
+    if expr_static_type(value, ns).is_some() {
+        diags.push(error(
+            filename,
+            span,
+            format!(
+                "host attribute `{}` does not accept a literal value in M3-Phase 6; use a keyword (e.g. `mica`, `system`)",
+                name
+            ),
+        ));
     }
 }
 
@@ -1288,6 +1356,10 @@ fn check_members_inner(
             }
 
             Member::PropertyBind { name, value, span } => {
+                if enclosing_widget.is_none() {
+                    check_host_property_bind(name, value, span, filename, ns, diags);
+                    continue;
+                }
                 // Box.aspect and Box.fill are constant-only per DD-M3-P2-004:
                 // the RHS must be the matching literal kind, not a state-
                 // backed ident or any other expression form. Validate here
@@ -1881,27 +1953,63 @@ mod tests {
     }
 
     #[test]
-    fn bind_component_level_no_type_check() {
-        // Component-level prop binds (`title:`, `backdrop:`) have no
-        // enclosing widget catalog — pass through.
+    fn component_level_host_attrs_accepted() {
+        // Component-level host attributes are validated through the
+        // host-attribute catalog, then lower to `IrComponent.host_props`.
         let result =
             check_src(r#"component C inherits W { title: "Counter" backdrop: mica VStack {} }"#);
         assert!(!result.has_errors(), "{:?}", result.diagnostics);
     }
 
     #[test]
-    fn zstack_root_component_window_attrs_accepted() {
-        // DD-M3-P6-008 divergence — compiler (accept) side. Component-level
-        // window attributes pass `wasamoc check` even on a ZStack root: an
-        // arbitrary prop (`foo: bar`, no component-prop catalog) and a dynamic
-        // `title: <state>` bind. These splice onto the root node and the
-        // runtime ZStack validator rejects them (see the runtime
-        // `root_zstack_rejects_*` tests) — the divergence DD-M3-P6-008 settles.
-        // Pinned on both gates so a future alignment visibly flips exactly one.
-        let result = check_src(
-            r#"component C inherits W { state s: string = "x" foo: bar title: s ZStack { Text {} } }"#,
+    fn component_level_unknown_host_attr_rejected() {
+        let errs = errors(r#"component C inherits W { foo: bar ZStack { Text {} } }"#);
+        assert_eq!(errs.len(), 1, "{:?}", errs);
+        assert!(
+            errs[0].contains("unknown host attribute `foo`"),
+            "{:?}",
+            errs
         );
-        assert!(!result.has_errors(), "{:?}", result.diagnostics);
+    }
+
+    #[test]
+    fn component_level_host_binding_rejected() {
+        let errs = errors(r#"component C inherits W { state s: string = "x" title: s ZStack {} }"#);
+        assert_eq!(errs.len(), 1, "{:?}", errs);
+        assert!(
+            errs[0].contains("host attribute `title` is not bindable"),
+            "{:?}",
+            errs
+        );
+    }
+
+    #[test]
+    fn component_level_host_title_non_string_literal_reports_string_requirement() {
+        // A wrong-typed *static literal* on `title` is a different mistake
+        // from a dynamic bind: it must report the string-literal requirement,
+        // not the "not bindable" (dynamic-deferred) diagnostic.
+        let errs = errors(r#"component C inherits W { title: 42 ZStack {} }"#);
+        assert_eq!(errs.len(), 1, "{:?}", errs);
+        assert!(
+            errs[0].contains("`title` must be a string literal")
+                && !errs[0].contains("not bindable"),
+            "{:?}",
+            errs
+        );
+    }
+
+    #[test]
+    fn component_level_host_backdrop_typed_literal_rejected() {
+        // `backdrop` / `theme` take keyword/enum identifiers; a concrete typed
+        // literal is rejected as a non-keyword value (not as a binding).
+        let errs = errors(r#"component C inherits W { backdrop: 42 ZStack {} }"#);
+        assert_eq!(errs.len(), 1, "{:?}", errs);
+        assert!(
+            errs[0].contains("does not accept a literal value")
+                && !errs[0].contains("not bindable"),
+            "{:?}",
+            errs
+        );
     }
 
     #[test]
@@ -2918,8 +3026,7 @@ mod tests {
         let errs = errors("component C inherits W { line-spacing: 12 WrapPanel {} }");
         assert_eq!(errs.len(), 1, "{:?}", errs);
         assert!(
-            errs[0].contains("`line-spacing` is a WrapPanel attribute")
-                && errs[0].contains("component-level property"),
+            errs[0].contains("unknown host attribute `line-spacing`"),
             "{:?}",
             errs
         );

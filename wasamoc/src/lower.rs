@@ -55,14 +55,13 @@ pub fn lower(ast: &ComponentDef, ns: &Namespace) -> IrComponent {
         }
     }
 
-    let mut root = root_opt.expect("component must contain a root widget node");
-    // Component-level props/bindings (e.g. title, backdrop) belong on the root node.
-    root.props.splice(0..0, comp_props);
-    root.bindings.splice(0..0, comp_bindings);
+    let root = root_opt.expect("component must contain a root widget node");
 
     IrComponent {
         name: ast.name.clone(),
         base: ast.base.clone(),
+        host_props: comp_props,
+        host_bindings: comp_bindings,
         states,
         root,
     }
@@ -426,6 +425,15 @@ mod tests {
         assert_eq!(root_child.props.len(), 1);
         assert_eq!(root_child.props[0].name, "spacing");
         assert_eq!(root_child.props[0].value, IrLiteral::Int(12));
+    }
+
+    #[test]
+    fn component_host_prop_lowers_to_host_surface() {
+        let comp = lower_src(r#"component C inherits W { title: "Counter" VStack {} }"#);
+        assert!(comp.root.props.is_empty());
+        assert_eq!(comp.host_props.len(), 1);
+        assert_eq!(comp.host_props[0].name, "title");
+        assert_eq!(comp.host_props[0].value, IrLiteral::Str("Counter".into()));
     }
 
     #[test]

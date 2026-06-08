@@ -21,7 +21,13 @@ fn emit_component(out: &mut String, comp: &IrComponent, indent: usize) {
     for state in &comp.states {
         emit_state(out, state, indent + 1);
     }
-    if !comp.states.is_empty() {
+    for prop in &comp.host_props {
+        emit_host_prop(out, prop, indent + 1);
+    }
+    for binding in &comp.host_bindings {
+        emit_host_binding(out, binding, indent + 1);
+    }
+    if !comp.states.is_empty() || !comp.host_props.is_empty() || !comp.host_bindings.is_empty() {
         out.push('\n');
     }
     emit_node(out, &comp.root, indent + 1);
@@ -117,9 +123,27 @@ fn emit_prop(out: &mut String, prop: &IrProp, indent: usize) {
     ));
 }
 
+fn emit_host_prop(out: &mut String, prop: &IrProp, indent: usize) {
+    out.push_str(&format!(
+        "{}host prop {} = {}\n",
+        ind(indent),
+        prop.name,
+        emit_literal(&prop.value)
+    ));
+}
+
 fn emit_binding(out: &mut String, binding: &IrBinding, indent: usize) {
     out.push_str(&format!(
         "{}bind {} = {}\n",
+        ind(indent),
+        binding.prop_name,
+        emit_expr(&binding.expr)
+    ));
+}
+
+fn emit_host_binding(out: &mut String, binding: &IrBinding, indent: usize) {
+    out.push_str(&format!(
+        "{}host bind {} = {}\n",
         ind(indent),
         binding.prop_name,
         emit_expr(&binding.expr)
@@ -667,10 +691,10 @@ mod tests {
         assert!(out.contains("component Counter inherits Window {"));
         // State
         assert!(out.contains("state count: i32 = 0"));
-        // Root node static props
-        assert!(out.contains("prop title = \"Counter\""));
-        assert!(out.contains("prop backdrop = mica"));
-        assert!(out.contains("prop theme = system"));
+        // Host static props
+        assert!(out.contains("host prop title = \"Counter\""));
+        assert!(out.contains("host prop backdrop = mica"));
+        assert!(out.contains("host prop theme = system"));
         // VStack children
         assert!(out.contains("node VStack {"));
         assert!(out.contains("prop spacing = 12"));
@@ -683,5 +707,43 @@ mod tests {
         assert!(out.contains("node Button {"));
         assert!(out.contains("on clicked {"));
         assert!(out.contains("compound-assign += count 1"));
+    }
+
+    #[test]
+    fn host_binding_emitted_on_component_surface() {
+        // `host_bindings` is a *structural* surface this phase: the Phase-6
+        // catalog admits no bindable host attribute (the runtime `validate()`
+        // rejects any host binding), but the surface must still round-trip
+        // canonically. This pins the emit half — `host bind ...`, on the
+        // component surface, never spliced onto the content root. The parse
+        // half is covered by `wasamo-runtime`'s
+        // `host_surface_rejects_host_binding`, which reaches `validate()`
+        // (proving the parser populated `host_bindings`) before rejecting.
+        use crate::ir::{HandlerExpr, IrBinding, IrComponent, IrNode};
+        let comp = IrComponent {
+            name: "C".into(),
+            base: "W".into(),
+            host_props: vec![],
+            host_bindings: vec![IrBinding {
+                prop_name: "title".into(),
+                expr: HandlerExpr::StrPropRead { path: "s".into() },
+            }],
+            states: vec![],
+            root: IrNode {
+                widget_type: "V".into(),
+                props: vec![],
+                bindings: vec![],
+                handlers: vec![],
+                children: vec![],
+                kind_payload: None,
+            },
+        };
+        let out = emit(&comp);
+        assert!(
+            out.contains("host bind title = (str-prop-read s)"),
+            "got: {out}"
+        );
+        // Never on the content root.
+        assert!(!out.contains("node V {\n    bind"), "got: {out}");
     }
 }
