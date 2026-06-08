@@ -1,5 +1,20 @@
 ## Decisions log
 
+- **2026-06-08 / T8 evidence rebuild — resize same-size positive control:**
+  rebuilt the assistant resize evidence as a SAME-SIZE open-vs-closed positive
+  control (`evidence/t8-resize-positive-control/`: closed/open at 800x600, then
+  open and closed at 1399x993 via `capture-lightbox.ps1 -ResizeTo 1399x993
+  -ResizeCloseAt 762,738`). **Correction:** an earlier across-size read (open at
+  1399 vs references at 800x600) mistakenly suggested the scrim failed to refill
+  on resize; judged against a closed frame at the **identical** 1399x993 size,
+  the open frame is uniformly dimmed across the whole viewport — including the
+  regions only exposed by the enlargement — so the scrim holds `Fill/Fill` on
+  resize. Confirmed under both programmatic and owner-interactive resize. The
+  scrim alpha (`#10182099`) is subtle, so a same-size reference is required to
+  read dim vs no-dim; an across-size comparison is not a valid positive control.
+  False-alarm and owner-collaborative scratch frames were deleted; the caption
+  before/after pair lives in `evidence/t8-caption-fix/`. Resize smoke item
+  stands **pass**, now backed by a committed same-size assistant artifact.
 - **2026-06-08 / T8 start gate — owner-manual gallery GUI smoke and visible-correctness fix container:**
   selected implementation-gate traps before choosing any fix approach.
   Applies: **#7 weak GUI evidence** (T8's deliverable is owner-visible GUI
