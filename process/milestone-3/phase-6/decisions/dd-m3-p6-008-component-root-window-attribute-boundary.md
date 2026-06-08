@@ -1,10 +1,25 @@
 # DD-M3-P6-008 — Component-root window-attribute / widget-attribute boundary
 
-**Status:** Proposed
+**Status:** Accepted
 **Phase:** M3-Phase 6
 **Surfaced by:** T7 (gallery lightbox slice) — the first example with a
 **ZStack root**, which made the latent boundary fail deterministically at
 `wasamo_load_ui`.
+
+**Selected option (owner, 2026-06-08):** **(A2a)** — a host-owned attribute
+surface (`host_props` / `host_bindings`, generic-list; `base: String` kept,
+no `inherits` semantics added) plus a host-general attribute catalog holding
+only the Window entry this phase. **Scope: in-phase Phase 6 implementation**
+(an IR-schema / textual-IR migration, taken now rather than carried forward —
+the Time-box working assumption is honoured by implementing, not by
+downgrading to (D)). (D) is the fallback that was *not* taken; (C) rejected.
+The Recommendation below is therefore the accepted direction; the
+[If (A) is chosen](#if-a-is-chosen--acceptance-criteria-direction-here-details-in-impl)
+acceptance-criteria items and the (if-A2a-accepted) Technical-risk /
+Forward-compat / Implementation-handoff sections are now binding inputs to the
+T7b implementation, with `docs/dsl_spec.md` / `docs/architecture.md` sync
+folded to **T9 Moment 2** (Implementation handoff step 9), not a mid-phase
+Moment 1.
 
 ## Context
 
@@ -628,10 +643,14 @@ narrow allowlist:
 
 ## Preamble integration
 
-Not indexed in [preamble.md](./preamble.md) §Decisions while `Proposed`
-(the preamble records accepted decisions only). On acceptance, add to the
-§Decisions index and a Revisions entry recording the mid-phase addition
-surfaced by the T7 review, and reconcile plan.md T7b to the chosen option.
+Indexed in [preamble.md](./preamble.md) §Decisions on acceptance
+(2026-06-08): the §Decisions table gained an eighth row, a Revision-history
+entry records the mid-phase addition surfaced by the T7 review, and
+[plan.md](../implementation/plan.md) T7b is reconciled to the chosen option
+(A2a, in-phase Phase 6 implementation). Living-spec sync (`docs/dsl_spec.md`,
+`docs/architecture.md`) is **not** done at acceptance — it folds into the
+phase T9 Moment 2 with the landed implementation (Implementation handoff
+step 9), consistent with the T4 `IrMember` migration precedent.
 
 ## Revision history
 
@@ -652,3 +671,10 @@ surfaced by the T7 review, and reconcile plan.md T7b to the chosen option.
 - **Proposed (revision, 2026-06-08)** — added (if-A2a-accepted) Technical risk
   re-evaluation, Forward-compat exposure, and Implementation handoff sections,
   role-separated from the acceptance-criteria list. Still `Proposed`.
+- **Accepted (2026-06-08)** — owner selected **(A2a)** (host-owned
+  `host_props` / `host_bindings` surface + host-general catalog with the
+  Window entry only; `base: String` kept) with **scope = in-phase Phase 6
+  implementation** as an IR-schema / textual-IR migration. (D) explicitly the
+  fallback-not-taken; (C) rejected. Indexed in preamble §Decisions (eighth
+  row); plan.md T7b first bullet closed and the implementation bullet
+  reconciled to the A2a migration. Living-spec sync deferred to T9 Moment 2.

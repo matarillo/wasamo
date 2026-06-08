@@ -585,13 +585,30 @@ land **before Phase 6 closes**, and **before T8's owner smoke** so the smoke
 observes the final validator / gallery behavior (T8 fix-container or a
 promoted numbered slot).
 
-- [ ] Deliberate [DD-M3-P6-008](../decisions/dd-m3-p6-008-component-root-window-attribute-boundary.md)
+- [x] Deliberate [DD-M3-P6-008](../decisions/dd-m3-p6-008-component-root-window-attribute-boundary.md)
       ((A) IR-schema separation vs (D) compiler-owned catalog mirrored by the
       runtime; (C) runtime-accept-all rejected) and flip it to `Accepted`
       with owner comparison. Cover both the prop and binding facets.
-- [ ] Land the chosen option's code + spec sync (or confirm the interim as
-      final, as T4b did for DD-007), and reconcile this T7b bullet + the
-      preamble §Decisions index to the outcome.
+      **Outcome: (A2a)** — host-owned `host_props` / `host_bindings` surface
+      (`base: String` kept, no `inherits` semantics) + a host-general
+      attribute catalog with the Window entry only; **scope = in-phase
+      Phase 6 implementation** as an IR-schema / textual-IR migration (owner
+      2026-06-08). (D) the fallback-not-taken; (C) rejected. The preamble
+      §Decisions index gained an eighth row and a Revision-history entry.
+- [ ] Land the **A2a** code per the DD
+      [Implementation handoff](../decisions/dd-m3-p6-008-component-root-window-attribute-boundary.md#implementation-handoff-if-a2a-accepted)
+      (9-step order: `host_props` / `host_bindings` on `IrComponent`; textual-IR
+      emit/parse round-trip; `wasamoc` lowering stops splicing onto `root`;
+      host-attribute catalog (Window entry); `wasamoc check` + runtime
+      validation through the catalog; `resolve_static_window_title` moves to
+      the new surface; old root-squatted shape rejected/warned; new shape
+      canonical in tests). This is **schema/IR-migration review tier** (full
+      independent review) + implementation-gates (read at start, record the
+      gate selection before choosing an approach). `docs/dsl_spec.md` /
+      `docs/architecture.md` sync folds at **T9 Moment 2** (DD handoff step 9),
+      **not** a mid-phase Moment 1 — so this bullet lands code + tests only.
+      Per the T8 precondition this must land **before T8's owner smoke** so the
+      smoke observes the final validator / gallery behavior.
 
 ### T8 — Owner-manual GUI smoke and any visible-correctness fix
 
