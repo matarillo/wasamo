@@ -1,11 +1,11 @@
 # Wasamo DSL Specification
 
-**Document version:** 1.5
-**Last updated:** 2026-06-02
+**Document version:** 1.7
+**Last updated:** 2026-06-08
 **Status:** M3-Phase 2 closed (implementation-synced); M3-Phase 3
 closed (implementation-synced); M3-Phase 4 closed
 (implementation-synced); M3-Phase 5 closed (implementation-synced);
-M3-Phase 6 design accepted, implementation pending.
+M3-Phase 6 closed (implementation-synced).
 Covers the M2 `.ui` surface, the `state` surface keyword
 retroactively, the M3-Phase 1 `bool` scalar binding additions, the
 M3-Phase 2 Box layout primitive (with `aspect` / `fill` literal
@@ -19,7 +19,8 @@ spanning, Grid outer-bounds clip), the M3-Phase 6 ZStack overlay
 primitive (union sizing with `Fill/Fill` default, document-order
 z-order, per-child alignment, outer-bounds clip) and conditional
 rendering (the `if` structural control-flow member — the first chapter
-of Wasamo's structural rendering model), and `;wasamo-ir v0`.
+of Wasamo's structural rendering model), the M3-Phase 6 component host
+attribute surface, and `;wasamo-ir v0`.
 
 ---
 
@@ -208,7 +209,7 @@ grid_track       ::= INT_LIT "*"   ; weighted star (INT_LIT adjacent to "*")
 ; track-list member, no nested conditional_member, no multiple children.
 ; The grammar admits conditional_member wherever `member` appears, but
 ; `wasamoc check` restricts it semantically to INSIDE a widget body (a
-; component-level `if` gating/multiplying the single root is rejected).
+; component-level `if` gating/multiplying the single content root is rejected).
 ; The condition is the same narrow bool-expr as Button.enabled.
 conditional_member
                  ::= "if" cond_expr "{" conditional_body "}"
@@ -296,16 +297,21 @@ is performed in M1.
 Each `.ui` file contains exactly **one** top-level `component` declaration.
 Multiple components per file are M2 scope.
 
-**Window `title:` (M3-Phase 6).** A component-level `title:` on a
-`Window`-derived component is a static string literal that **reaches the
-native window title bar** — the loader passes it through to window
-creation in place of the default title (M3-Phase 6). It must be a
-string literal this phase; a **dynamic** (`String`-binding-driven) title
-is **deferred** (it needs a window-property binding seam introduced with
-the later backdrop / theme wiring). An absent or empty `title:` falls
-back to the default window title; a non-string `title:` is a
-`wasamoc check` error (and `WASAMO_ERR_IR_MALFORMED` at the loader,
-§8.11). `backdrop` / `theme` remain unwired this phase.
+**Window host attributes (M3-Phase 6).** The component-level `title:`,
+`backdrop:`, and `theme:` attributes on a `Window`-derived component
+belong to the **host surface**, not to the content root widget. In
+textual IR they are emitted as `host prop` entries on the component
+(§8.3) and are never stored as `prop` entries on the root `node Window`.
+
+`title:` is a static string literal that **reaches the native window
+title bar** — the loader passes it through to window creation in place
+of the default title. An absent or empty `title:` falls back to the
+default window title; a non-string `title:` is a `wasamoc check` error
+(and `WASAMO_ERR_IR_MALFORMED` at the loader, §8.11). `backdrop:` and
+`theme:` are catalogued static host attributes this phase and lower to
+the same host surface. Dynamic host attributes are rejected in M3-Phase
+6; the first dynamic Window host attribute opens the host-binding seam
+additively.
 
 ### 4.2 `in-out property` declaration
 
@@ -983,8 +989,7 @@ materializes 1 or 2 — neither is guaranteed-exactly-one. Wrap the
 conditional inside the single content widget instead
 (`ScrollView { Box { if c { … } } }`). This is symmetric with the `Cell`
 direct-conditional rejection (§4.12); a conditionally-empty ScrollView is a
-deferred future direction, not a supported Phase-6 shape (M3-Phase 6,
-DD-M3-P6-007).
+deferred future direction, not a supported Phase 6 shape.
 
 #### Attributes
 
@@ -1580,7 +1585,7 @@ all are additive on top of the Phase 5 surface.
 
 ### 4.13 ZStack layout primitive (M3-Phase 6)
 
-**Phase status:** M3-Phase 6 design accepted; implementation pending.
+**Phase status:** M3-Phase 6 closed; implementation-synced.
 
 `ZStack` is an **overlay-dedicated** layout container: its children
 occupy the **same** overlap region and paint **back-to-front** in
@@ -1743,7 +1748,7 @@ carry a scroll translation; ZStack has no analogous translation).
 
 ### 4.14 Conditional rendering and the structural rendering model (M3-Phase 6)
 
-**Phase status:** M3-Phase 6 design accepted; implementation pending.
+**Phase status:** M3-Phase 6 closed; implementation-synced.
 
 This chapter introduces **conditional rendering** — a `binding` that
 drives the **present / absent state of a subtree** rather than a
@@ -1864,11 +1869,11 @@ Phase 6 runtime semantics.
 
 An `if` block is admitted only **inside a widget body**. A
 **component-level `if`** — one that would gate or multiply the single
-component root — is rejected at `wasamoc check`: the runtime makes a
+content root — is rejected at `wasamoc check`: the runtime makes a
 subtree present / absent by inserting / removing it into a **parent**,
-and a conditional root has no parent slot. (A conditional / multiplexed
-root is a distinct design not opened this phase.) The lightbox `if`
-sits inside the root container, the in-scope shape.
+and a root-level conditional has no parent slot. (A conditional /
+multiplexed content root is a distinct design not opened this phase.)
+The lightbox `if` sits inside the root container, the in-scope shape.
 
 #### Present / absent is structural
 
@@ -1965,12 +1970,12 @@ the memory-IR entry point does not pass through `wasamoc`:
 |---|---|---|
 | Non-bool condition | `if count { … }` (`count: i32`); `if "x" { … }` | type error |
 | Undeclared condition name | `if missing { … }` | name-resolution error |
-| Operator condition | `if !ready { … }`; `if a && b { … }`; `if count > 0 { … }` | "operators in conditions are not yet supported" (points at the deferred expression-grammar extension) |
-| Non-structural body member | `if open { fill: red }`; `if open { state x: bool = true }` | "an `if` body admits a single widget child" |
-| Nested `if` directly in body | `if a { if b { … } }` | "an `if` body admits a single widget child" (wrap the inner `if`) |
-| Multiple children in body | `if open { Box{} Text{} }` | "an `if` body admits a single widget child" (wrap in a container) |
-| Component-level `if` | an `if` at component body level | "`if` is admitted only inside a widget body" (a conditional root has no parent slot) |
-| Direct conditional under ScrollView | `ScrollView { if c { … } }`; `ScrollView { Content  if c { … } }` | "a conditional member is not valid directly in ScrollView (wrap it in the content widget)" — the exactly-one-content-child cardinality cannot absorb a dynamic member (DD-M3-P6-007; parallels the `Cell` direct-conditional rejection, §4.12) |
+| Operator condition | `if !ready { … }`; `if a && b { … }`; `if count > 0 { … }` | "operators in `if` conditions are not yet supported in M3-Phase 6" (points at the deferred expression-grammar extension) |
+| Non-structural body member | `if open { fill: red }`; `if open { state x: bool = true }` | "`if` body admits only a single widget child; properties, bindings, handlers, state declarations, and track lists are not structural body members" |
+| Nested `if` directly in body | `if a { if b { … } }` | "a bare nested `if` is not admitted directly in an `if` body in M3-Phase 6; wrap it in a widget container" |
+| Multiple children in body | `if open { Box{} Text{} }` | "`if` body admits exactly one widget child in M3-Phase 6; wrap multiple widgets or nested control flow in a container" |
+| Component-level `if` | an `if` at component body level | "component-level `if` is not supported in M3-Phase 6; put the `if` inside a widget body" (a root-level conditional has no parent slot) |
+| Direct conditional under ScrollView | `ScrollView { if c { … } }`; `ScrollView { Content  if c { … } }` | "`ScrollView` content child must be a single widget; a conditional member is not valid directly in ScrollView (wrap it in the content widget)" — the exactly-one-content-child cardinality cannot absorb a dynamic member; parallels the `Cell` direct-conditional rejection (§4.12) |
 | Bare `else` / `switch` / `for` | `else { … }`; `switch x { … }`; `for … { … }` | "reserved / not yet supported" (names the construct) |
 
 The reserved-but-unsupported diagnostic for `else` / `switch` / `for`
@@ -2189,10 +2194,27 @@ header         ::= ";wasamo-ir v0" NEWLINE
 component_def  ::= "component" IDENT "inherits" IDENT
                    "{" component_body "}"
 
-component_body ::= state_decl* widget_node
+component_body ::= component_member*
+component_member ::= state_decl | host_property_set | host_binding | widget_node
 ```
 
 One `component_def` per IR file (matches the M2 single-component restriction).
+Exactly one top-level `widget_node` is admitted; it is the **content
+root**. Component-level host attributes live beside it on the component
+host surface; they are not children or properties of the content root.
+`wasamoc` emits states first, host entries next, and the content root
+last.
+
+```
+host_property_set ::= "host" "prop" IDENT "=" literal
+host_binding      ::= "host" "bind" IDENT "=" expr
+```
+
+In M3-Phase 6 the Window host-attribute catalog is `title`, `backdrop`,
+and `theme`. `title` must be a string literal; `backdrop` and `theme`
+must be keyword identifiers. `host bind` is part of the structural IR
+surface so the component host surface is explicit, but every host
+binding is rejected in M3-Phase 6 (`WASAMO_ERR_IR_MALFORMED`, §8.11).
 
 ### 8.4 State declarations
 
@@ -2334,15 +2356,21 @@ component Gallery inherits Window {
 textual IR (`wasamoc` emit):
 
 ```
-node Window {
-    prop title = "Gallery"
-    node WrapPanel { /* … */ }
-    if is_lightbox_open {
-        node ZStack {
-            node Box { prop fill = #00000080 }
-            node Box {
-                prop aspect = 4:3
-                node Text { prop text = "photo" }
+component Gallery inherits Window {
+    state is_lightbox_open: bool = false
+    host prop title = "Gallery"
+    host prop backdrop = mica
+    host prop theme = system
+
+    node Window {
+        node WrapPanel { /* … */ }
+        if is_lightbox_open {
+            node ZStack {
+                node Box { prop fill = #00000080 }
+                node Box {
+                    prop aspect = 4:3
+                    node Text { prop text = "photo" }
+                }
             }
         }
     }
@@ -2410,10 +2438,9 @@ and `abi.rs` arms land together in that phase.
 Examples:
 
 ```
-prop title = "Counter"
-prop backdrop = mica
 prop spacing = 12
 prop padding = 24
+prop text = "Counter"
 ```
 
 ### 8.7 Reactive bindings
@@ -2523,12 +2550,13 @@ component Counter inherits Window {
     ; Signal declarations: state ownership in .ui
     state count: i32 = 0
 
-    ; Root window node — static properties only
-    node Window {
-        prop title = "Counter"
-        prop backdrop = mica
-        prop theme = system
+    ; Host-owned component attributes
+    host prop title = "Counter"
+    host prop backdrop = mica
+    host prop theme = system
 
+    ; Content root node
+    node Window {
         node VStack {
             prop spacing = 12
             prop padding = 24
@@ -2571,7 +2599,7 @@ defense-in-depth validation:
 | Each `Cell` has exactly one content child; `Cell.row` in `[0, rows.len())`; `Cell.column` in `[0, columns.len())`; `Cell.row-span`/`column-span >= 1` with resolved rectangle within declared track count; no two `Cell`s in the same Grid share any resolved cell; `h-align`/`v-align` in `{ start, center, end, stretch }` (M3-Phase 5) | Yes | `WASAMO_ERR_IR_MALFORMED` |
 | `ZStack` declares no ZStack-level attributes; `h-align`/`v-align` appear only on a `ZStack` direct child or a Grid `Cell` and are in `{ start, center, end, stretch }` (M3-Phase 6) | Yes | `WASAMO_ERR_IR_MALFORMED` |
 | A control-flow (`if`) member carries **exactly one branch** (no `else` until specified), a **single-widget body** (not empty, not multiple children, no non-structural body member, no nested control-flow member), and a **bool-typed, resolved** condition; an `if` appears only where a member is admitted inside a widget body (not at component level) (M3-Phase 6) | Yes | `WASAMO_ERR_IR_MALFORMED` |
-| A component root's `title` prop, when present, is an `IrLiteral::Str` (a **non-string** `title` literal is malformed; an absent or empty `title` falls back to the default and is **not** an error) (M3-Phase 6) | Yes | `WASAMO_ERR_IR_MALFORMED` |
+| Component host attributes are only `title`, `backdrop`, and `theme`; `title` must be a string literal; `backdrop` and `theme` must be keyword identifiers; host bindings are rejected; the same names are rejected if squatted as props or bindings on the content root (M3-Phase 6) | Yes | `WASAMO_ERR_IR_MALFORMED` |
 | Binding expression result type matches target property type | **No** (trusted from `wasamoc`) | Undefined behaviour |
 | Per-node emitter invariants (e.g. `on` only on signal-capable widgets) | **No** (trusted from `wasamoc`) | Undefined behaviour |
 
@@ -2583,8 +2611,9 @@ Phase 3 WrapPanel non-negative attributes, Phase 4 ScrollView
 single-content-child rule, Phase 5 Grid structural / track / placement /
 span / conflict / alignment-vocabulary invariants, Phase 6 ZStack
 attribute / alignment-placement invariants, Phase 6 control-flow
-(`if`) branch / body / condition invariants, and Phase 6 root `title`
-type) are explicitly dual-gated rather than trusted because
+(`if`) branch / body / condition invariants, and Phase 6 host-surface
+catalog / value-shape / binding / content-root-separation invariants)
+are explicitly dual-gated rather than trusted because
 `wasamo_load_ui`'s memory-IR entry point does not pass through
 `wasamoc`; the runtime gate is the last line of defence for these spec
 invariants. See §4.9 for the Box child-count rationale, §8.2 for the
@@ -2592,10 +2621,10 @@ invariants. See §4.9 for the Box child-count rationale, §8.2 for the
 §4.11 for the ScrollView child-count rule, §4.12 for the full Grid /
 Cell invariant set, §4.13 for the ZStack attribute / alignment-placement
 rules, and §4.14 for the conditional `if` branch / body / condition
-rules — all of which `wasamoc check` already enforces. (The non-string
-`title` rule guards the direct-IR-loader entry only; `wasamoc check`
-rejects a non-string `title` earlier, so `.ui` authors never reach the
-malformed-title path.)
+rules — all of which `wasamoc check` already enforces. The host-surface
+rules guard the direct-IR-loader entry as well as `.ui` lowering: `.ui`
+authors see the compiler diagnostics first, while hand-authored textual
+IR reaches the same malformed-IR boundary.
 
 Phase 5 Grid invariants are **reject-at-validate**, not
 clamp-at-arrange: placement and span values have no defensible
@@ -2649,3 +2678,4 @@ are the structural form of that deferral. This deferral is recorded in
 | 1.4     | 2026-05-30 | M3-Phase 5 close: §4.12 implementation-synced; folded the deferred Grid textual-IR grammar (§8.5 `track_decl`) and re-synced §5 AST / §2.2 tokens / §3 grammar to the landed parser. `abi_spec.md` untouched. |
 | 1.5     | 2026-06-02 | M3-Phase 6 design draft (Moment 1): added §4.13 ZStack overlay primitive (union sizing + `Fill/Fill` default, document-order z-order, per-child alignment, outer-bounds clip) and §4.14 conditional rendering — the first chapter of the structural rendering model (`if` block, structural present/absent, absent=fresh-on-return with opt-in future retention). Supporting: §2.1 `if`/`else`/`switch`/`for` keyword reservation, §3 grammar, §5 AST, §8.5 control-flow member with textual + loaded IR examples, §8.11 validation rows. No new `IrType`/`IrLiteral`/`PropertyValue` or C ABI change; `abi_spec.md` untouched (the conditional + runtime-mechanism schema is normative in `architecture.md`). Also slimmed this revision history and applied the Living-spec vocabulary discipline retroactively — removed DD / option / process labels from the spec body and these notes, keeping the `M3-Phase N` identifiers (full provenance lives in the process documents). Pending implementation re-sync at Phase 6 close. |
 | 1.6     | 2026-06-02 | Moved the historical M1 lexical rationale appendix into `process/milestone-1/phase-1/decisions/`; this spec now keeps only the normative DSL surface. |
+| 1.7     | 2026-06-08 | M3-Phase 6 close: §4.13 and §4.14 marked implementation-synced; textual IR re-synced to the landed control-flow member and component host surface. Component-level Window host attributes (`title` / `backdrop` / `theme`) now lower to `host prop` entries beside the content root, host bindings are rejected, and the old shape that placed host attributes on the content root is malformed IR. |

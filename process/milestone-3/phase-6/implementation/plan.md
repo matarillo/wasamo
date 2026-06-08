@@ -690,13 +690,19 @@ Before closing, cross-check this T0-frozen task list against any
 mid-phase owner decisions and revise the mutable plan where they diverge
 (constraints §6 — revise, do not work around).
 
-- [ ] `cargo fmt --all -- --check` green locally and on CI.
-- [ ] `cargo build --release --workspace` green locally and on CI.
-- [ ] `cargo test --workspace` green locally and on CI.
+- [ ] `cargo fmt --all -- --check` green locally and on CI. **T9 local
+      post-A12 gate is green** (recorded in [log.md](./log.md)); the checkbox
+      stays `[ ]` until the phase-end-owned CI gate is green.
+- [ ] `cargo build --release --workspace` green locally and on CI. **T9 local
+      post-A12 gate is green** (recorded in [log.md](./log.md)); the checkbox
+      stays `[ ]` until the phase-end-owned CI gate is green.
+- [ ] `cargo test --workspace` green locally and on CI. **T9 local
+      post-A12 gate is green** (recorded in [log.md](./log.md)); the checkbox
+      stays `[ ]` until the phase-end-owned CI gate is green.
 - [ ] Windows-only integration evidence green on CI (skip-guard verified
       per T3): ZStack z-order + clip (T3), conditional toggle insert/remove
       + drain proof (T5), R1 static title (T6).
-- [ ] `docs/dsl_spec.md` ZStack + conditional chapters' Phase status
+- [x] `docs/dsl_spec.md` ZStack + conditional chapters' Phase status
       markers flip to `M3-Phase 6 closed; implementation-synced`;
       document-level Status header updated; revision-history entry
       recording the Moment 2 close, any impl/spec divergence corrections,
@@ -711,15 +717,15 @@ mid-phase owner decisions and revise the mutable plan where they diverge
       beside the control-flow-member production, and state the Window
       host-attribute catalog + the host-binding rejection rule (no DD/option
       labels in the spec prose per the living-spec vocabulary rule).
-- [ ] **A12 spec-closure gate (evidence item 7)** — confirm the ZStack
+- [x] **A12 spec-closure gate (evidence item 7)** — confirm the ZStack
       chapter, the conditional-rendering (structural-rendering-model)
       chapter (`if` as the first member of a structural control-flow
       family; absent=fresh-on-return / opt-in-retention normative
       semantics), and the reader-facing invalid examples / diagnostics
       match the diagnostics exercised in T1 / T4 / T5, at the
       external-reader-reproducibility bar.
-- [ ] `docs/architecture.md` top Status flips to include `M3-Phase 6
-      complete`; any implementation-divergent paragraphs in §6.6
+- [x] `docs/architecture.md` top Status flips to include `M3-Phase 6
+      closed (implementation-synced)`; any implementation-divergent paragraphs in §6.6
       (layout invalidation: structural conditional mutation now marks
       layout dirty in addition to size-affecting property writes), §6.9 /
       §6.7 / §9 re-synced to the actual landed shape. **DD-M3-P6-008 (A2a)
@@ -730,7 +736,7 @@ mid-phase owner decisions and revise the mutable plan where they diverge
       squatting on the content root.
 - [ ] `process/milestone-3/plan.md` Phase 6 row Status flips to
       `complete`.
-- [ ] `docs/abi_spec.md` re-confirmed untouched (static title rode the
+- [x] `docs/abi_spec.md` re-confirmed untouched (static title rode the
       existing `wasamo_load_ui` → `window::create` internal path; no new
       ABI export; the **DD-M3-P6-008 (A2a)** `host_props` / `host_bindings`
       change is an **internal compiler-IR / textual-IR** representation
@@ -738,7 +744,7 @@ mid-phase owner decisions and revise the mutable plan where they diverge
       M4-owned — so it adds no C ABI surface). Touch only if a Moment 2
       surprise forced an ABI surface change, in which case escalate per the
       ADR preamble's three retrospectives.md §phase-sync ADR-touch cases.
-- [ ] `process/milestone-3/phase-6/decisions/preamble.md` /
+- [x] `process/milestone-3/phase-6/decisions/preamble.md` /
       `dd-m3-p6-*.md` touched **only** if one of the three
       retrospectives.md §phase-sync ADR-touch cases applies (AC
       discharged-vs-impl divergence; out-of-phase residual cross-reference;
@@ -756,14 +762,15 @@ mid-phase owner decisions and revise the mutable plan where they diverge
       reactive-drain items 1–3 carry-forward; the placement storage-model
       decision (SoA vs AoS vs keyed map, per the T5 retro item 10); the
       `scroll_view_layout_integration` "teardown-AV" — **root-caused and
-      step-2-fixed** on branch `investigate/obs5-scrollview-teardown-av`
-      (cross-apartment Compositor reuse across libtest's per-test threads,
-      not a teardown fault; production-safe; keep-alive helper landed). Only
-      remediation **step 1** (marshal Compositor work onto the owning thread)
-      remains, **owner-deferred with no hard deadline + revisit triggers**
-      per docs/notes/verification-environments.md Observation 5 §Remediation
-      status — carry it forward as that owner-scheduled item, not as an open
-      investigation; any residual surfaced during T2–T8). **NOT owned by T9**
+      step-1/step-2-fixed** (cross-apartment Compositor reuse across libtest's
+      per-test threads, not a teardown fault; production-safe; Compositor work
+      now marshals onto the owning runtime thread, and the keep-alive helper
+      keeps the apartment alive for the test binary). Per
+      docs/notes/verification-environments.md Observation 5 §Remediation
+      status, both remediation steps are **DONE / committed**, so there is no
+      remaining Observation 5 remediation carry-forward; any M4 reuse of the
+      owning-thread + message-pump helper is ordinary test-harness input, not
+      an open Phase 6 residual. **NOT owned by T9**
       (phase-end retro item 15 per
       [retrospectives.md §6.3/§15](../../../procedures/retrospectives.md));
       stays `[ ]` at T9 close.
@@ -781,7 +788,7 @@ mid-phase owner decisions and revise the mutable plan where they diverge
       phase-end-retro bullets, this **stays `[ ]` at T9 close** and is
       checked by the phase-end batch commit on the phase branch. No
       further task checkboxes are added after the phase-end batch.
-- [ ] **T9 step-end retrospective recorded** at
+- [x] **T9 step-end retrospective recorded** at
       `process/milestone-3/phase-6/retrospectives/t9.md`
       (retrospectives.md checklist items 1–11; step → phase merge gate;
       **owned by T9**, this is a T9 deliverable).

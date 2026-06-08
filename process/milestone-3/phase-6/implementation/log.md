@@ -1,5 +1,144 @@
 ## Decisions log
 
+- **2026-06-08 / T9 local clean rebuild after A12 code follow-up:** the A12
+  diagnostic wording follow-up touched production Rust in `wasamoc/src/check.rs`
+  and `wasamo-runtime/src/ir_loader.rs`, so the local step-end gate is
+  T9-owned even though the phase-branch CI run id remains phase-end-owned.
+  Post-A12 local ground truth:
+  - `cargo fmt --all -- --check` — green.
+  - `cargo clean` — completed (`5699 files, 1.5GiB` removed).
+  - `cargo build --release --workspace` — green (existing Cargo warnings:
+    `wasamo` provides no linkable target; `wasamo-sys` import library not found
+    before the runtime import library is produced).
+  - `cargo build --workspace` — green (same existing Cargo warnings).
+  - `cargo test --workspace` — green (`wasamo-ir` 18, `wasamo-runtime` 349,
+    `wasamoc` 322, `wasamoc` roundtrip 6, all integration suites and doc-tests
+    green). Existing Cargo warnings about the `wasamo` linkable target were
+    observed.
+  The remaining phase-end evidence is the GitHub Actions `workflow_dispatch`
+  run id / CI Windows integration gate, which can only be recorded after the
+  phase branch runs CI.
+- **2026-06-08 / T9 Moment 2 implementation-sync summary and phase-close
+  evidence pointer:** T9's log close records the implementation summary
+  distilled from the task retrospectives and the Phase 5 timing precedent for
+  CI evidence. In Phase 5, the final `workflow_dispatch` run id was added by
+  the separate **Phase-end close** entry after the phase branch existed and the
+  phase-end CI gate had run; the T7 step-close entry recorded the Moment 2
+  sync and local proxy only. Phase 6 follows the same ownership boundary:
+  T9 records the step-close implementation summary and evidence pointers here,
+  while the actual phase-branch CI run id is **pending the phase-end-owned CI
+  gate** and is not fabricated or pre-filled at T9 close.
+
+  **Phase-close evidence pointer at T9 step-close:** implementation evidence is
+  distributed across the task retrospectives
+  ([t1](../retrospectives/t1.md), [t2](../retrospectives/t2.md),
+  [t3](../retrospectives/t3.md), [t4](../retrospectives/t4.md),
+  [t4b](../retrospectives/t4b.md), [t5](../retrospectives/t5.md),
+  [t6](../retrospectives/t6.md), [t7](../retrospectives/t7.md),
+  [t7b](../retrospectives/t7b.md), [t8](../retrospectives/t8.md)),
+  the assistant GUI artifacts under [evidence/](./evidence/), and the T9
+  Moment 2 spec / architecture sync recorded in the T9 plan bullets. The T9
+  step-end retrospective is still the owning close artifact for
+  retrospectives.md items 1-11; phase-end CI, handoff consolidation,
+  `implementation/preamble.md` status flip, and `retrospectives/phase-end.md`
+  remain phase-branch-owned and stay open at T9 close.
+
+  **Implementation summary (T1-T8).** Phase 6 adds `ZStack` end to end:
+  `wasamoc` accepts the widget with direct children, ZStack-scoped
+  `h-align` / `v-align`, and rejection for unsupported container /
+  placement attributes (T1); the pure layout engine measures by per-axis
+  child-union, arranges parent-owned child alignment with `Fill/Fill` and
+  `center` defaults, and preserves document order as the z-order substrate
+  (T2); the runtime loader materialises `WidgetData::ZStack`, installs the
+  outer `InsetClip`, keeps children unclipped, validates malformed ZStack IR,
+  and proves live Visual child order / clip shape with Windows integration
+  fixtures (T3).
+
+  Conditional rendering ships as a structural `IrMember` / `ControlFlowNode`
+  surface rather than a widget. The compiler reserves the control-flow keyword
+  family, parses and checks the Phase-6 `if` subset, lowers / emits textual IR
+  control-flow members, and the static loader evaluates load-time presence
+  while rejecting malformed conditions / bodies (T4). The ScrollView
+  conditional-content policy was deliberately resolved as a conservative
+  reject for Phase 6 (T4b / DD-M3-P6-007), with the living-spec wording folded
+  at T9 and the diagnostic tests tightened so reader-facing errors do not leak
+  decision ids. Reactive conditionals then wire
+  `BindingTarget::ConditionalSubtree`, declared-member insertion slots,
+  subtree disposal, fresh-on-return rebuild semantics, same-drain effect
+  flushing, and layout-dirty propagation for structural present/absent changes
+  (T5).
+
+  R1's static Window title rides the existing `wasamo_load_ui` ->
+  `window::create` path with no new ABI export (T6), and the later
+  DD-M3-P6-008 A2a migration separates component host attributes from the
+  content root via `IrComponent.host_props` / `host_bindings`; textual IR,
+  `wasamoc`, and the runtime loader all mirror the Window host catalog, reject
+  host bindings this phase, and reject old root-squatted host attributes
+  (T7b). The gallery lightbox slice exercises the feature stack in a real host:
+  a ZStack overlay, alpha scrim, click-driven bool conditional subtree,
+  centered 4:3 photo placeholder, caption / nav, and native title `"Gallery"`.
+  Assistant screenshots prove nonblank rendering, closed/open/closed toggle,
+  z-order / dimming, and title corroboration (T7); owner smoke then confirmed
+  toggle-without-resize, full-viewport scrim after resize using same-size
+  positive control, title, photo geometry, and caption/nav fit after the
+  additive `32` -> `64` caption-row fix (T8).
+
+  **Carry-forward disposition at T9 step-close:** items that were foldable into
+  the living specs have been folded by the T9 Moment 2 sync: structural
+  conditional semantics, host-owned attributes vs content-root separation, and
+  the layout-dirty implication of conditional subtree mutation. Remaining
+  forward inputs are phase-end-handoff-owned, not T9-owned: control-flow family
+  extension points (`else` / `switch` / iteration), declared-tree / entity-tree
+  identity and `key:` retention, dynamic Window title / host bindings, modal
+  lightbox input / focus capture, text metrics / DPI sensitivity around the
+  lightbox caption row, reactive-drain items 1-3, and placement storage-model
+  reconsideration. Observation 5's ScrollView integration teardown issue is no
+  longer a remaining carry-forward: remediation step 1 (marshal Compositor work
+  onto the owning runtime thread) and step 2 (keep the apartment alive for the
+  test binary) are both DONE / committed, and all integration fixtures now use
+  the owning-thread helper.
+- **2026-06-08 / T9 A12 diagnostic follow-up — ScrollView conditional
+  rejection wording:** the A12 spec-closure check found that the live
+  ScrollView direct-conditional diagnostics still exposed the internal
+  `DD-M3-P6-007` id, while the living spec now records the reader-facing
+  wording without decision labels. Updated the T9 gate selection in-flight:
+  **#4 untested authored branch applies narrowly** to this diagnostic wording
+  branch, even though the accept/reject set is unchanged; close artifact is the
+  tightened compiler / loader tests that fire the branch and assert the DD id is
+  absent. **#1 semantic migration remains not applicable** because no enum, IR
+  field, schema variant, textual-IR grammar, or traversal behavior changes.
+- **2026-06-08 / T9 start gate — phase-close doc sync and Moment 2 re-sync:**
+  selected implementation-gate traps before drafting the spec / architecture
+  sync. Applies: **#5 carry-forward underweighted** because T9 must fold the
+  T1–T8 phase-sync items into the living specs or classify them for phase-end
+  carry-forward / local-only treatment, with explicit re-trigger criteria where
+  a later phase can trip the invariant. T9's doc-sync fidelity gates are the
+  A12 spec-closure check, the living-spec vocabulary rule (ADR provenance by
+  link only; no DD / option labels or decision-summary prose in normative
+  text), and owner review-before-commit for the new / revised `docs/dsl_spec.md`
+  and `docs/architecture.md` prose. Not applicable at task start: **#1
+  semantic migration** (T9 does not add an enum, IR field, schema variant, or
+  textual-IR reader behavior; if the spec draft reveals a code/schema gap, stop
+  and revise before editing code); **#2 missed side effects** (no runtime state
+  or structure mutation is planned); **#3 parallel data drift** (no parallel
+  vector, derived index, or cache is changed); **#4 untested authored branch**
+  (no diagnostic, reject, size, or layout branch is added); **#6 deterministic
+  failure disposition** is armed only if a local verification failure recurs or
+  vanishes on retry; **#7 weak GUI evidence** is not a T9 deliverable because
+  GUI evidence closed in T7 / T8 and phase-end CI evidence is explicitly owned
+  after the T9 merge on the phase branch. Review lane: owner review-before-commit
+  for `dsl_spec` and `architecture` as separate review concerns; no code
+  independent-review lane is triggered unless T9 unexpectedly changes schema,
+  runtime structure, GUI evidence, or a branch/test surface. T0-frozen task-list
+  cross-check against mid-phase owner decisions: **no mutable-plan revision
+  needed**. DD-M3-P6-007 is represented by T4b and the T9 A12 / spec-sync
+  bullets; DD-M3-P6-008(A2a) is represented by T7b and the T9 `host_props` /
+  `host_bindings` spec + architecture folds; T8's resize evidence correction is
+  already reflected as a same-size positive-control pass in log / retrospective
+  records. The roadmap Phase 6 `complete` flip, CI gates, handoff,
+  `implementation/preamble.md` status flip, and phase-end retrospective remain
+  deferred until their owning close point rather than being folded into the
+  start-gate commit.
 - **2026-06-08 / T8 evidence rebuild — resize same-size positive control:**
   rebuilt the assistant resize evidence as a SAME-SIZE open-vs-closed positive
   control (`evidence/t8-resize-positive-control/`: closed/open at 800x600, then
