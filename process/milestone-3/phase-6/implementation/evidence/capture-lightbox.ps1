@@ -5,7 +5,8 @@
 # pick a small helper HWND for this host, which is not the render target.
 param(
   [int]$ProcessId = 0,
-  [string]$OutDir = $PSScriptRoot
+  [string]$OutDir = $PSScriptRoot,
+  [string]$OutputPrefix = "t7-lightbox"
 )
 
 if (-not ('WinLightboxCap' -as [type])) {
@@ -107,18 +108,18 @@ try {
 
   $r = Window-Rect $h
   Write-Host "Gallery HWND=$h title=Gallery rect=($($r.Left),$($r.Top)) $($r.Right - $r.Left)x$($r.Bottom - $r.Top)"
-  Capture-Window $h "t7-lightbox-closed.png"
+  Capture-Window $h "$OutputPrefix-closed.png"
 
   # The Open button is placed between the top thumbnail strip and the scroll
   # view, near the left edge of the default 800x600 window.
   Click-WindowPoint $h 400 382
   Start-Sleep -Milliseconds 900
-  Capture-Window $h "t7-lightbox-open.png"
+  Capture-Window $h "$OutputPrefix-open.png"
 
   # The close button is the rightmost nav button in the centered lightbox.
   Click-WindowPoint $h 462 523
   Start-Sleep -Milliseconds 900
-  Capture-Window $h "t7-lightbox-closed-after-click.png"
+  Capture-Window $h "$OutputPrefix-closed-after-click.png"
 } finally {
   if ($launched) {
     Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue

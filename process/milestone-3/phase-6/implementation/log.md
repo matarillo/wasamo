@@ -58,6 +58,20 @@
   `wasamoc` 322, all integration suites and doc-tests green). Existing Cargo
   warnings about the `wasamo` linkable target / `wasamo-sys` import-library
   ordering were observed.
+- **2026-06-08 / T8 review follow-up — evidence reproducibility and
+  carry-forward precision:** Claude review found three evidence-record issues
+  and one missed carry-forward candidate. Disposition: accepted. The capture
+  helper now accepts `-OutputPrefix` while preserving the T7 default, so the
+  committed T8 triplet is reproducible with
+  `capture-lightbox.ps1 -OutDir implementation\evidence\t8-precheck
+  -OutputPrefix t8-lightbox` instead of relying on manual renames. The T8
+  retrospective now states the assistant screenshots are **post-fix** only;
+  no committed pre-fix screenshot records the caption/nav crowding; and the
+  resize positive control is owner-manual evidence rather than an assistant
+  second-size screenshot. The retrospective also records the caption row's
+  `64` logical-px height as a current-text-metrics dependency and M4
+  carry-forward candidate (re-trigger: DPI handling, text metrics, Grid row
+  semantics, lightbox copy, or nav layout changes).
 - **2026-06-08 / T7b start gate — A2a `IrComponent` host surface IR migration:**
   selected implementation-gate traps before choosing the approach. Applies:
   **#1 semantic migration** (`IrComponent` gains `host_props` /

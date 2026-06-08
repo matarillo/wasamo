@@ -667,7 +667,10 @@ observe the final behavior.
       thumbnail screen behind the scrim can still receive clicks through gaps
       while the lightbox is open; this is recorded as an M4 input / modal
       focus residual, not a T8 smoke failure, because hit-testing / focus
-      capture / modal focus trap is explicitly out of Phase 6 scope.
+      capture / modal focus trap is explicitly out of Phase 6 scope. T8 review
+      also recorded the `64` caption row as a current text-metrics /
+      logical-pixel dependency to re-check during M4 DPI / font / lightbox
+      input work.
 - [x] T8 step-end retrospective recorded at
       `process/milestone-3/phase-6/retrospectives/t8.md`
       (retrospectives.md checklist items 1–11).
