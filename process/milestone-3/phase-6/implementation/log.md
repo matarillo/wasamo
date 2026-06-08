@@ -1,5 +1,92 @@
 ## Decisions log
 
+- **2026-06-08 / T8 evidence rebuild — resize same-size positive control:**
+  rebuilt the assistant resize evidence as a SAME-SIZE open-vs-closed positive
+  control (`evidence/t8-resize-positive-control/`: closed/open at 800x600, then
+  open and closed at 1399x993 via `capture-lightbox.ps1 -ResizeTo 1399x993
+  -ResizeCloseAt 762,738`). **Correction:** an earlier across-size read (open at
+  1399 vs references at 800x600) mistakenly suggested the scrim failed to refill
+  on resize; judged against a closed frame at the **identical** 1399x993 size,
+  the open frame is uniformly dimmed across the whole viewport — including the
+  regions only exposed by the enlargement — so the scrim holds `Fill/Fill` on
+  resize. Confirmed under both programmatic and owner-interactive resize. The
+  scrim alpha (`#10182099`) is subtle, so a same-size reference is required to
+  read dim vs no-dim; an across-size comparison is not a valid positive control.
+  False-alarm and owner-collaborative scratch frames were deleted; the caption
+  before/after pair lives in `evidence/t8-caption-fix/`. Resize smoke item
+  stands **pass**, now backed by a committed same-size assistant artifact.
+- **2026-06-08 / T8 start gate — owner-manual gallery GUI smoke and visible-correctness fix container:**
+  selected implementation-gate traps before choosing any fix approach.
+  Applies: **#7 weak GUI evidence** (T8's deliverable is owner-visible GUI
+  smoke, so the evidence must be a positive-control observation: closed/open/
+  close toggle, resize scrim fill, z-order/dimming, title bar, and geometry
+  checks); **#2 missed side effects** is armed if the smoke fails and any
+  additive visible-correctness fix is made (the fix must enumerate layout,
+  Visual order, title, conditional dirty-layout, and gallery-source effects);
+  **#4 untested authored branch** is armed if a fix adds any diagnostic,
+  reject, size, or layout branch; **#5 carry-forward underweighted** is armed
+  if the smoke exposes a new cross-task invariant or residual; **#6
+  deterministic-failure disposition** is armed for any recurring launch,
+  click, resize, capture, crash, or vanished-on-retry failure. Not applicable
+  at task start: **#1 semantic migration** (T8 is not expected to add an enum,
+  IR, schema field, or variant; if a fix does, this selection must be revised
+  before editing); **#3 parallel data drift** (no parallel vector, derived
+  index, or cache is expected unless a fix changes runtime structural storage).
+  Review lane: **full independent review** if a code/runtime fix lands or if
+  the task closes GUI-render evidence; branch/test-focused review composes if
+  any #4 branch is added. Merge remains owner-gated by the retrospective
+  procedure.
+- **2026-06-08 / T8 pre-owner visible-correctness fix:** prechecked the
+  post-T7b gallery by launching the release `gallery-rust` host and capturing
+  a closed/open/closed-after-click triplet under
+  `implementation/evidence/t8-precheck/`. The open frame showed the photo box
+  at the expected 4:3 ratio (400x300 logical, observed as roughly 500x375
+  physical on the current high-DPI desktop) and confirmed `"Gallery"` in the
+  native title bar, but the two-line caption was too close to the nav row.
+  Fixed additively in `examples/gallery/gallery.ui` by increasing the lightbox
+  Grid caption row from `32` to `64`; no Rust / IR / schema behavior changed.
+  Verification after the fix: `cargo run -p wasamoc -- check
+  examples\gallery\gallery.ui` — green; `cargo run -p wasamoc -- build
+  examples\gallery\gallery.ui` — green; `cargo build --release -p
+  gallery-rust` — green; escalated `capture-lightbox.ps1 -OutDir
+  implementation\evidence\t8-precheck` — green. Owner-visible smoke remains
+  the T8 close gate; this assistant precheck does not replace owner
+  acceptance.
+- **2026-06-08 / T8 owner-visible smoke:** owner confirmed all seven requested
+  visual-smoke items passed on `examples/gallery-rust/`: closed→open toggle,
+  close without resize, z-order (photo / caption / nav over scrim), scrim
+  dimming rather than replacing thumbnails, full-viewport scrim after resize,
+  native title bar `"Gallery"`, photo 4:3 geometry, and caption/nav
+  non-overlap after the T8 row-height fix. Owner also observed that the
+  thumbnail screen behind the scrim remains interactive while the lightbox is
+  open: clicking through gaps between photo / caption / nav can trigger the
+  underlying `Scroll up` / `Scroll down` buttons and change the ScrollView
+  viewport. Disposition: **not a T8 failure** and no Phase 6 fix — the Phase 6
+  lightbox proves structural presence / z-order / scrim rendering, while
+  lightbox hit-testing / focus capture / modal focus trap is explicitly M4
+  input scope in the ADR preamble. Record as an owner-observed M4 residual for
+  the T8 retrospective / phase-end handoff consideration.
+- **2026-06-08 / T8 local verification:** `cargo fmt --all -- --check` —
+  green; `cargo clean` completed (`5798 files, 1.5GiB` removed); `cargo build
+  --release --workspace` — green; `cargo build --workspace` — green; `cargo
+  test --workspace` — green (`wasamo-ir` 18, `wasamo-runtime` 349,
+  `wasamoc` 322, all integration suites and doc-tests green). Existing Cargo
+  warnings about the `wasamo` linkable target / `wasamo-sys` import-library
+  ordering were observed.
+- **2026-06-08 / T8 review follow-up — evidence reproducibility and
+  carry-forward precision:** Claude review found three evidence-record issues
+  and one missed carry-forward candidate. Disposition: accepted. The capture
+  helper now accepts `-OutputPrefix` while preserving the T7 default, so the
+  committed T8 triplet is reproducible with
+  `capture-lightbox.ps1 -OutDir implementation\evidence\t8-precheck
+  -OutputPrefix t8-lightbox` instead of relying on manual renames. The T8
+  retrospective now states the assistant screenshots are **post-fix** only;
+  no committed pre-fix screenshot records the caption/nav crowding; and the
+  resize positive control is owner-manual evidence rather than an assistant
+  second-size screenshot. The retrospective also records the caption row's
+  `64` logical-px height as a current-text-metrics dependency and M4
+  carry-forward candidate (re-trigger: DPI handling, text metrics, Grid row
+  semantics, lightbox copy, or nav layout changes).
 - **2026-06-08 / T7b start gate — A2a `IrComponent` host surface IR migration:**
   selected implementation-gate traps before choosing the approach. Applies:
   **#1 semantic migration** (`IrComponent` gains `host_props` /
