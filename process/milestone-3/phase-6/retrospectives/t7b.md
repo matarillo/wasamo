@@ -20,7 +20,7 @@ Refs (branch `feat/m3-phase-6-T7b`):
 - `c361a3a` — review-response: host diagnostic precision (compiler) +
   `host_bindings` emit pin + gallery validate-through-loader + audit table
   (**claude**).
-- (this branch tip) — full-independent-review (Codex) response: runtime host
+- `9a0652f` — full-independent-review (Codex) response: runtime host
   catalog **value-shape mirror** (`backdrop` / `theme` typed-literal reject +
   ABI malformed coverage) and review-gate disposition (**claude**).
 
