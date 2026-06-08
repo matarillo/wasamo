@@ -595,7 +595,7 @@ promoted numbered slot).
       Phase 6 implementation** as an IR-schema / textual-IR migration (owner
       2026-06-08). (D) the fallback-not-taken; (C) rejected. The preamble
       §Decisions index gained an eighth row and a Revision-history entry.
-- [ ] Land the **A2a** code per the DD
+- [x] Land the **A2a** code per the DD
       [Implementation handoff](../decisions/dd-m3-p6-008-component-root-window-attribute-boundary.md#implementation-handoff-if-a2a-accepted)
       (9-step order: `host_props` / `host_bindings` on `IrComponent`; textual-IR
       emit/parse round-trip; `wasamoc` lowering stops splicing onto `root`;

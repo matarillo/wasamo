@@ -151,9 +151,8 @@ fn dd_m2_p6_005_wasamo_load_ui_and_thread_affinity() {
     assert_eq!(status, ffi::WASAMO_ERR_IR_MALFORMED);
 
     let non_string_title = b";wasamo-ir v0\ncomponent C inherits W {\n\
-        node VStack {\n\
-          prop title = 3\n\
-        }\n\
+        host prop title = 3\n\
+        node VStack {}\n\
     }";
     let status = unsafe {
         ffi::wasamo_load_ui(

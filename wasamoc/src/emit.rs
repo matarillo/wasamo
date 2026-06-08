@@ -21,7 +21,13 @@ fn emit_component(out: &mut String, comp: &IrComponent, indent: usize) {
     for state in &comp.states {
         emit_state(out, state, indent + 1);
     }
-    if !comp.states.is_empty() {
+    for prop in &comp.host_props {
+        emit_host_prop(out, prop, indent + 1);
+    }
+    for binding in &comp.host_bindings {
+        emit_host_binding(out, binding, indent + 1);
+    }
+    if !comp.states.is_empty() || !comp.host_props.is_empty() || !comp.host_bindings.is_empty() {
         out.push('\n');
     }
     emit_node(out, &comp.root, indent + 1);
@@ -117,9 +123,27 @@ fn emit_prop(out: &mut String, prop: &IrProp, indent: usize) {
     ));
 }
 
+fn emit_host_prop(out: &mut String, prop: &IrProp, indent: usize) {
+    out.push_str(&format!(
+        "{}host prop {} = {}\n",
+        ind(indent),
+        prop.name,
+        emit_literal(&prop.value)
+    ));
+}
+
 fn emit_binding(out: &mut String, binding: &IrBinding, indent: usize) {
     out.push_str(&format!(
         "{}bind {} = {}\n",
+        ind(indent),
+        binding.prop_name,
+        emit_expr(&binding.expr)
+    ));
+}
+
+fn emit_host_binding(out: &mut String, binding: &IrBinding, indent: usize) {
+    out.push_str(&format!(
+        "{}host bind {} = {}\n",
         ind(indent),
         binding.prop_name,
         emit_expr(&binding.expr)
@@ -667,10 +691,10 @@ mod tests {
         assert!(out.contains("component Counter inherits Window {"));
         // State
         assert!(out.contains("state count: i32 = 0"));
-        // Root node static props
-        assert!(out.contains("prop title = \"Counter\""));
-        assert!(out.contains("prop backdrop = mica"));
-        assert!(out.contains("prop theme = system"));
+        // Host static props
+        assert!(out.contains("host prop title = \"Counter\""));
+        assert!(out.contains("host prop backdrop = mica"));
+        assert!(out.contains("host prop theme = system"));
         // VStack children
         assert!(out.contains("node VStack {"));
         assert!(out.contains("prop spacing = 12"));

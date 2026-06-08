@@ -1,5 +1,57 @@
 ## Decisions log
 
+- **2026-06-08 / T7b start gate — A2a `IrComponent` host surface IR migration:**
+  selected implementation-gate traps before choosing the approach. Applies:
+  **#1 semantic migration** (`IrComponent` gains `host_props` /
+  `host_bindings`; every component construction, textual-IR parse / emit,
+  traversal, validation, title-resolution, and test fixture site must be
+  audited); **#2 missed side effects** (component-level host attributes must
+  stop contaminating the content root, the static title path must move to the
+  new surface, ZStack root exemptions must be removed, old root-squatted IR
+  must be rejected, and the gallery/counter examples must still lower and
+  load); **#4 untested authored branch** (new catalog rejects for unknown
+  host props / all host bindings, non-string title validation, and old
+  root-squatted title/binding rejection branches require tests that fire
+  them); **#5 carry-forward underweighted** (the host-owned-attribute /
+  content-root separation is an M4-facing invariant and must be recorded with
+  evidence and a re-trigger criterion if not fully folded into the T9 Moment 2
+  sync). **#6 deterministic-failure disposition** is armed if a failure
+  recurs or vanishes on retry during migration. Not applicable: **#3 parallel
+  data drift** (the migration adds component-owned lists but no derived index,
+  cache, or parallel vector whose source must be atomically mutated); **#7 GUI
+  positive control** (T7b changes IR / validation / loader behavior; T8 owns
+  the owner-visible GUI smoke after this lands). Review lane: **full
+  independent review** because this is a schema / textual-IR migration.
+- **2026-06-08 / T7b A2a `IrComponent` host surface IR migration:** landed
+  DD-M3-P6-008's A2a code path. `IrComponent` now owns
+  `host_props` / `host_bindings`; `wasamoc` lowering stores component-level
+  host attributes there instead of splicing them onto the content root;
+  textual IR emits / parses `host prop ...` and `host bind ...`; `wasamoc
+  check` validates component-level host attributes through the Window-only
+  Phase-6 host catalog (`title` / `backdrop` / `theme`) and rejects host
+  bindings; the runtime validates the mirrored catalog, resolves the static
+  title from `host_props`, rejects host bindings, and rejects old
+  root-squatted host props / bindings. The ZStack root no longer carries the
+  temporary window-prop exemption from T7.
+  - **Close-gate #1 call-site audit:** `rg "struct IrComponent|IrComponent|root\\.props|root\\.bindings|resolve_static_window_title|validate_phase6_zstack_node_invariants|title|host_props|host_bindings" wasamo-ir wasamoc wasamo-runtime examples -n` and `rg "IrComponent \\{" -n` were used to classify migration sites. `wasamo-ir/src/lib.rs` = must-dispatch schema owner; added fields and a host/content-root separation unit test. `wasamoc/src/lower.rs` = must-dispatch construction site; component-level static/dynamic attrs now lower to `host_props` / `host_bindings`, not `root`. `wasamoc/src/emit.rs` = must-dispatch textual writer; emits `host prop` / `host bind` before the root node. `wasamoc/src/check.rs` = must-dispatch compiler gate; added `HOST_STATIC_ATTRS`, known-host accept, unknown-host reject, and host-binding reject. `wasamo-runtime/src/ir_loader.rs` = must-dispatch parser / validator / title / ZStack gate; parses host members, validates the runtime mirror, moves title resolution to `host_props`, rejects old root-squatted host attrs, and removes the ZStack root exemption. `wasamo-runtime/tests/abi_load_ui.rs` and `wasamo-runtime/tests/ir_loader_roundtrip.rs` = must-dispatch external seam tests; updated to canonical `host prop` shape. `examples/*/*.ui` = ignore-OK source surface; unchanged because A2a is internal IR lowering, verified by `wasamoc check` / build / roundtrip.
+  - **Close-gate #2 structural side effects:** content roots are pure widget roots again; static window-title resolution moved from `component.root.props` to `component.host_props`; ZStack validation now treats any root `title` / `backdrop` / `theme` prop as malformed old IR rather than a root-only exemption; ABI `wasamo_load_ui` still calls `resolve_static_window_title` with the same signature and no new ABI surface.
+  - **Close-gate #4 branch tests:** `component_level_host_attrs_accepted`, `component_level_unknown_host_attr_rejected`, and `component_level_host_binding_rejected` pin compiler catalog behavior; `component_host_prop_lowers_to_host_surface` pins no-splice lowering; `full_counter_ir_roundtrip` and `ir_loader_roundtrip::counter_ui_emit_then_parse_yields_equal_ir` pin canonical emit/parse; `host_prop_parses_on_component_surface`, `host_attribute_catalog_mirrors_wasamoc`, `host_surface_rejects_unknown_host_prop`, `host_surface_rejects_host_binding`, `static_window_title_rejects_non_string_host_prop`, `root_zstack_accepts_host_props_on_component_surface`, `old_root_squatted_host_prop_rejected`, and `old_root_squatted_host_binding_rejected` pin runtime parsing / mirror / title / old-shape rejection; `abi_load_ui` pins the malformed canonical host-title shape at the ABI boundary.
+  - **Close-gate #5 carry-forward:** the new cross-task invariant is "host-owned attributes stay separated from the content root; future host/base modeling may replace the carrier but must preserve the separation." It is already in DD-M3-P6-008 and the T9 Moment 2 plan bullets; re-trigger criterion: any M4/M5 work that adds host/base attributes, dynamic host bindings, base-name validation, or an ABI-facing window descriptor must re-check that it does not put host attributes back on the content root. T7b retro item 10 classifies this as `phase-sync`.
+  - **Close-gate #6 disposition:** no deterministic runtime / native failure recurred. Expected migration-test failures from old assertions (`root.props` / interim divergence pins) were fixed by updating those tests to the A2a canonical shape; no failure was re-rolled to green without a code or expectation change.
+- **2026-06-08 / T7b local verification:** `cargo check --workspace` —
+  green; `cargo test -p wasamo-ir` — green (18 tests); `cargo test -p
+  wasamoc --lib` — green (319 tests); `cargo test -p wasamo-runtime --lib
+  ir_loader::tests` — green (141 tests); `cargo test -p wasamo-runtime
+  --test ir_loader_roundtrip` — green (7 tests); `cargo test -p
+  wasamo-runtime --test abi_load_ui` — green; `cargo run -p wasamoc --
+  check examples\gallery\gallery.ui` — green; `cargo run -p wasamoc --
+  build examples\gallery\gallery.ui` — green; `cargo fmt --all --
+  --check` — green; post-commit `cargo clean` completed (`5603 files,
+  1.5GiB` removed); `cargo build --release --workspace` — green; `cargo
+  build --workspace` — green; `cargo test --workspace` — green (workspace
+  unit / integration / doc tests). Existing Cargo warnings about the
+  `wasamo` linkable target / `wasamo-sys` import-library ordering were
+  observed.
 - **2026-06-07 / T7 review round 2 (third-party re-review corrections):**
   (1) The binding facet of the DD-M3-P6-008 divergence was **empirically
   verified**, not just inferred — `wasamoc build` emits `bind title =

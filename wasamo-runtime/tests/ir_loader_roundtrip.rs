@@ -135,9 +135,11 @@ fn parsed_counter_has_text_binding_and_clicked_handler() {
 
     // Walk the tree to find the Text node's binding and the Button's
     // clicked handler. The tree shape is VStack { Text {...}, Button {...} }
-    // (component-level props live on the VStack root after lowering).
+    // while component-level host props live on IrComponent.host_props.
+    assert!(parsed.host_props.iter().any(|p| p.name == "title"));
     let vstack = &parsed.root;
     assert_eq!(vstack.widget_type, "VStack");
+    assert!(!vstack.props.iter().any(|p| p.name == "title"));
 
     let text_node = vstack
         .widget_children()
