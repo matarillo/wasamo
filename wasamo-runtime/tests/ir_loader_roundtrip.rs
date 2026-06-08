@@ -48,6 +48,29 @@ fn emit_counter_ir() -> String {
     emit::emit(&build_counter_ir())
 }
 
+fn gallery_ui() -> PathBuf {
+    workspace_root()
+        .join("examples")
+        .join("gallery")
+        .join("gallery.ui")
+}
+
+fn build_gallery_ir() -> wasamo_ir::IrComponent {
+    use wasamoc::{check, lexer, lower, parser};
+    let path = gallery_ui();
+    let src = std::fs::read_to_string(&path).expect("gallery.ui not found");
+    let path_str = path.to_string_lossy().to_string();
+    let tokens = lexer::tokenize(&src, &path_str).expect("lex failed");
+    let ast = parser::parse(&tokens, &path_str).expect("parse failed");
+    let result = check::check(&ast, &path_str);
+    assert!(
+        !result.has_errors(),
+        "check errors: {:?}",
+        result.diagnostics
+    );
+    lower::lower(&ast, &result.namespace)
+}
+
 fn build_string_binding_ir() -> wasamo_ir::IrComponent {
     use wasamoc::{check, lexer, lower, parser};
     let src = r#"component StringBinding inherits Window {
@@ -117,6 +140,32 @@ fn counter_ui_emit_then_parse_yields_equal_ir() {
     let text = emit_counter_ir();
     let parsed = parse_ir(&text).expect("parse_ir failed");
     assert_eq!(parsed, original, "round-trip mismatch\nIR text:\n{text}");
+}
+
+#[test]
+fn gallery_ui_emits_and_validates_through_runtime_loader() {
+    // DD-M3-P6-008 T7b re-verification: the host-surface migration rewrote the
+    // runtime validator / loader that T7's GUI screenshot depended on. This
+    // exercises the *real* gallery IR (root ZStack + lightbox conditional +
+    // WrapPanel/ScrollView slices) through `parse_ir`, whose `validate()` pass
+    // is exactly the surface T7b changed — proving the gallery still *loads*
+    // at the validate level headlessly, not merely that it compiles. The Win32
+    // GUI smoke (live Compositor render) remains T8's owner-visible step.
+    let original = build_gallery_ir();
+    let text = wasamoc::emit::emit(&original);
+    let parsed =
+        parse_ir(&text).expect("gallery IR must parse and validate through the runtime loader");
+    assert_eq!(
+        parsed, original,
+        "gallery round-trip mismatch\nIR text:\n{text}"
+    );
+    // Host attributes live on the host surface, never squatted on the root.
+    assert!(parsed.host_props.iter().any(|p| p.name == "title"));
+    assert!(!parsed
+        .root
+        .props
+        .iter()
+        .any(|p| matches!(p.name.as_str(), "title" | "backdrop" | "theme")));
 }
 
 #[test]

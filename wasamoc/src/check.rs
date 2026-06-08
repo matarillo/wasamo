@@ -682,23 +682,44 @@ fn check_host_property_bind(
         return;
     }
 
-    if expr_static_type(value, ns).is_some() && !matches!(value, Expr::StringLit { .. }) {
+    // A state-backed identifier is a *dynamic* host binding. Dynamic host
+    // attributes are deferred this phase (FD-D), so reject them with a
+    // binding-specific message — distinct from a wrong-typed static literal,
+    // which is a different mistake with a different fix.
+    if matches!(value, Expr::Ident { name: ident, .. } if ns.contains_key(ident)) {
         diags.push(error(
             filename,
             span,
             format!(
-                "host attribute `{}` is not bindable in M3-Phase 6; use a static host attribute literal",
+                "host attribute `{}` is not bindable in M3-Phase 6; dynamic host attributes are deferred",
                 name
             ),
         ));
         return;
     }
 
-    if name == "title" && !matches!(value, Expr::StringLit { .. }) {
+    if name == "title" {
+        if !matches!(value, Expr::StringLit { .. }) {
+            diags.push(error(
+                filename,
+                span,
+                "host attribute `title` must be a string literal in M3-Phase 6",
+            ));
+        }
+        return;
+    }
+
+    // `backdrop` / `theme` take keyword/enum identifiers this phase
+    // (e.g. `mica`, `system`), which carry no static `TypeName`. A concrete
+    // typed literal (int / float / bool / string) is not a valid host value.
+    if expr_static_type(value, ns).is_some() {
         diags.push(error(
             filename,
             span,
-            "host attribute `title` must be a string literal in M3-Phase 6",
+            format!(
+                "host attribute `{}` does not accept a literal value in M3-Phase 6; use a keyword (e.g. `mica`, `system`)",
+                name
+            ),
         ));
     }
 }
@@ -1957,6 +1978,35 @@ mod tests {
         assert_eq!(errs.len(), 1, "{:?}", errs);
         assert!(
             errs[0].contains("host attribute `title` is not bindable"),
+            "{:?}",
+            errs
+        );
+    }
+
+    #[test]
+    fn component_level_host_title_non_string_literal_reports_string_requirement() {
+        // A wrong-typed *static literal* on `title` is a different mistake
+        // from a dynamic bind: it must report the string-literal requirement,
+        // not the "not bindable" (dynamic-deferred) diagnostic.
+        let errs = errors(r#"component C inherits W { title: 42 ZStack {} }"#);
+        assert_eq!(errs.len(), 1, "{:?}", errs);
+        assert!(
+            errs[0].contains("`title` must be a string literal")
+                && !errs[0].contains("not bindable"),
+            "{:?}",
+            errs
+        );
+    }
+
+    #[test]
+    fn component_level_host_backdrop_typed_literal_rejected() {
+        // `backdrop` / `theme` take keyword/enum identifiers; a concrete typed
+        // literal is rejected as a non-keyword value (not as a binding).
+        let errs = errors(r#"component C inherits W { backdrop: 42 ZStack {} }"#);
+        assert_eq!(errs.len(), 1, "{:?}", errs);
+        assert!(
+            errs[0].contains("does not accept a literal value")
+                && !errs[0].contains("not bindable"),
             "{:?}",
             errs
         );

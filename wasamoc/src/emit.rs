@@ -708,4 +708,42 @@ mod tests {
         assert!(out.contains("on clicked {"));
         assert!(out.contains("compound-assign += count 1"));
     }
+
+    #[test]
+    fn host_binding_emitted_on_component_surface() {
+        // `host_bindings` is a *structural* surface this phase: the Phase-6
+        // catalog admits no bindable host attribute (the runtime `validate()`
+        // rejects any host binding), but the surface must still round-trip
+        // canonically. This pins the emit half — `host bind ...`, on the
+        // component surface, never spliced onto the content root. The parse
+        // half is covered by `wasamo-runtime`'s
+        // `host_surface_rejects_host_binding`, which reaches `validate()`
+        // (proving the parser populated `host_bindings`) before rejecting.
+        use crate::ir::{HandlerExpr, IrBinding, IrComponent, IrNode};
+        let comp = IrComponent {
+            name: "C".into(),
+            base: "W".into(),
+            host_props: vec![],
+            host_bindings: vec![IrBinding {
+                prop_name: "title".into(),
+                expr: HandlerExpr::StrPropRead { path: "s".into() },
+            }],
+            states: vec![],
+            root: IrNode {
+                widget_type: "V".into(),
+                props: vec![],
+                bindings: vec![],
+                handlers: vec![],
+                children: vec![],
+                kind_payload: None,
+            },
+        };
+        let out = emit(&comp);
+        assert!(
+            out.contains("host bind title = (str-prop-read s)"),
+            "got: {out}"
+        );
+        // Never on the content root.
+        assert!(!out.contains("node V {\n    bind"), "got: {out}");
+    }
 }

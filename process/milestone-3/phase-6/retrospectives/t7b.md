@@ -98,7 +98,16 @@ Refs (branch `feat/m3-phase-6-T7b`; hash omitted until commit lands):
   host-binding reject, lower no-splice, emit/parse canonical shape, runtime
   catalog mirror, unknown host prop, host binding, non-string host title,
   old root-squatted prop/binding rejection, and ABI malformed canonical
-  host-title cases are all directly tested.
+  host-title cases are all directly tested. Review-response additions
+  (narrow branch/test tier): a wrong-typed static literal on a host attribute
+  now reports a literal-type diagnostic distinct from the dynamic
+  "not bindable" one (`component_level_host_title_non_string_literal_reports_string_requirement`,
+  `component_level_host_backdrop_typed_literal_rejected`); the `host_bindings`
+  emit half is pinned (`host_binding_emitted_on_component_surface`); and the
+  real gallery IR is re-validated through the runtime loader headlessly
+  (`gallery_ui_emits_and_validates_through_runtime_loader`) since T7b rewrote
+  the validator T7's GUI evidence depended on. See
+  [log.md](../implementation/log.md) 2026-06-08 review-response entry.
 - **#5 carry-forward:** item 10 records the M4-facing separation invariant as
   `phase-sync`; T9 Moment 2 is the owning fold point.
 - **#6 deterministic-failure disposition:** no recurring or vanished runtime
