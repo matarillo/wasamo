@@ -800,7 +800,7 @@ mid-phase owner decisions and revise the mutable plan where they diverge
       `process/milestone-3/phase-6/retrospectives/t9.md`
       (retrospectives.md checklist items 1–11; step → phase merge gate;
       **owned by T9**, this is a T9 deliverable).
-- [ ] **Phase-end retrospective recorded** at
+- [x] **Phase-end retrospective recorded** at
       `process/milestone-3/phase-6/retrospectives/phase-end.md`
       (retrospectives.md checklist items 12–18; phase → main merge gate;
       **NOT owned by T9**, performed on the phase branch after T9 merges
