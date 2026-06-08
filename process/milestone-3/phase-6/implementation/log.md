@@ -1,5 +1,37 @@
 ## Decisions log
 
+- **2026-06-08 / T9 start gate — phase-close doc sync and Moment 2 re-sync:**
+  selected implementation-gate traps before drafting the spec / architecture
+  sync. Applies: **#5 carry-forward underweighted** because T9 must fold the
+  T1–T8 phase-sync items into the living specs or classify them for phase-end
+  carry-forward / local-only treatment, with explicit re-trigger criteria where
+  a later phase can trip the invariant. T9's doc-sync fidelity gates are the
+  A12 spec-closure check, the living-spec vocabulary rule (ADR provenance by
+  link only; no DD / option labels or decision-summary prose in normative
+  text), and owner review-before-commit for the new / revised `docs/dsl_spec.md`
+  and `docs/architecture.md` prose. Not applicable at task start: **#1
+  semantic migration** (T9 does not add an enum, IR field, schema variant, or
+  textual-IR reader behavior; if the spec draft reveals a code/schema gap, stop
+  and revise before editing code); **#2 missed side effects** (no runtime state
+  or structure mutation is planned); **#3 parallel data drift** (no parallel
+  vector, derived index, or cache is changed); **#4 untested authored branch**
+  (no diagnostic, reject, size, or layout branch is added); **#6 deterministic
+  failure disposition** is armed only if a local verification failure recurs or
+  vanishes on retry; **#7 weak GUI evidence** is not a T9 deliverable because
+  GUI evidence closed in T7 / T8 and phase-end CI evidence is explicitly owned
+  after the T9 merge on the phase branch. Review lane: owner review-before-commit
+  for `dsl_spec` and `architecture` as separate review concerns; no code
+  independent-review lane is triggered unless T9 unexpectedly changes schema,
+  runtime structure, GUI evidence, or a branch/test surface. T0-frozen task-list
+  cross-check against mid-phase owner decisions: **no mutable-plan revision
+  needed**. DD-M3-P6-007 is represented by T4b and the T9 A12 / spec-sync
+  bullets; DD-M3-P6-008(A2a) is represented by T7b and the T9 `host_props` /
+  `host_bindings` spec + architecture folds; T8's resize evidence correction is
+  already reflected as a same-size positive-control pass in log / retrospective
+  records. The roadmap Phase 6 `complete` flip, CI gates, handoff,
+  `implementation/preamble.md` status flip, and phase-end retrospective remain
+  deferred until their owning close point rather than being folded into the
+  start-gate commit.
 - **2026-06-08 / T8 evidence rebuild — resize same-size positive control:**
   rebuilt the assistant resize evidence as a SAME-SIZE open-vs-closed positive
   control (`evidence/t8-resize-positive-control/`: closed/open at 800x600, then
