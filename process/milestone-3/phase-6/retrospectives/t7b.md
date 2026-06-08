@@ -12,11 +12,17 @@ merge_target: feat/m3-phase-6
 Task branch: `feat/m3-phase-6-T7b` (to be merged to
 `feat/m3-phase-6` after explicit owner approval).
 
-Refs (branch `feat/m3-phase-6-T7b`; hash omitted until commit lands):
+Refs (branch `feat/m3-phase-6-T7b`):
 
-- T7b A2a `IrComponent.host_props` / `host_bindings` migration, compiler
-  host catalog, runtime mirror validation, old root-squatted IR rejection,
-  and canonical tests (**codex**).
+- `22dd09e` — T7b A2a `IrComponent.host_props` / `host_bindings` migration,
+  compiler host catalog, runtime mirror validation, old root-squatted IR
+  rejection, and canonical tests (**codex**).
+- `c361a3a` — review-response: host diagnostic precision (compiler) +
+  `host_bindings` emit pin + gallery validate-through-loader + audit table
+  (**claude**).
+- (this branch tip) — full-independent-review (Codex) response: runtime host
+  catalog **value-shape mirror** (`backdrop` / `theme` typed-literal reject +
+  ABI malformed coverage) and review-gate disposition (**claude**).
 
 ## Checklist (task-end, items 1-11)
 
@@ -93,7 +99,11 @@ Refs (branch `feat/m3-phase-6-T7b`; hash omitted until commit lands):
 - **#2 missed side effects:** static title resolution now reads
   `host_props`; root-squatted host props / bindings are rejected; the ZStack
   root no longer has a Window-attribute exemption; ABI signatures stayed
-  unchanged.
+  unchanged. **Review-found side effect (F1, fixed):** the runtime defensive
+  mirror must mirror the catalog's *value shape*, not only its attribute-name
+  set — `validate_host_surface` now rejects a typed-scalar literal on
+  `backdrop` / `theme` (keyword identifiers only), closing the
+  `host prop backdrop = 3` direct-textual-IR hole the first cut left open.
 - **#4 branch tests:** compiler host accept / unknown-host reject /
   host-binding reject, lower no-splice, emit/parse canonical shape, runtime
   catalog mirror, unknown host prop, host binding, non-string host title,
@@ -108,14 +118,25 @@ Refs (branch `feat/m3-phase-6-T7b`; hash omitted until commit lands):
   (`gallery_ui_emits_and_validates_through_runtime_loader`) since T7b rewrote
   the validator T7's GUI evidence depended on. See
   [log.md](../implementation/log.md) 2026-06-08 review-response entry.
+  Full-independent-review (Codex) addition: runtime value-shape mirror reject
+  (`host_surface_rejects_typed_literal_backdrop` / `..._theme`), its positive
+  control (`host_surface_accepts_keyword_backdrop_and_theme`), and the ABI
+  malformed `host prop backdrop = 3` case.
 - **#5 carry-forward:** item 10 records the M4-facing separation invariant as
   `phase-sync`; T9 Moment 2 is the owning fold point.
 - **#6 deterministic-failure disposition:** no recurring or vanished runtime
   failure occurred. Expected red tests from old assertions were updated to
   the A2a canonical shape rather than re-run to green.
 
-Review lane remains **full independent review** before merge because this is
-a schema / textual-IR migration.
+**Review lane — full independent review, performed.** Because this is a
+schema / textual-IR migration the lane is full independent review. It was
+performed by **Codex** (independent agent) plus the in-session Claude review;
+disposition recorded in [log.md](../implementation/log.md) under
+"2026-06-08 / T7b full independent review (Codex) — disposition" (finding F1
+runtime value-shape mirror fixed in-task; F2 gate-closure made explicit; F3
+Refs updated). The "narrow branch/test review tier" noted earlier applied
+only to the diagnostic/test delta, not to the migration. Merge remains
+gated on explicit owner approval.
 
 ## Evidence Pointers
 

@@ -241,18 +241,40 @@ fn validate(comp: &IrComponent) -> Result<(), IrLoadError> {
 const HOST_STATIC_ATTRS: &[&str] = &["title", "backdrop", "theme"];
 
 fn validate_host_surface(comp: &IrComponent) -> Result<(), IrLoadError> {
+    // The runtime is a *defensive reader* of textual IR (DD-M3-P6-008), so it
+    // mirrors the compiler host catalog on both the attribute *name* and the
+    // per-attribute *value shape* — not just the name. `wasamoc check` rejects
+    // a non-string `title` and a typed-scalar literal on `backdrop` / `theme`
+    // (those take a keyword identifier such as `mica` / `system`), so a
+    // hand-crafted textual IR that skips the compiler must be rejected here
+    // identically rather than leaving a direct-textual-IR hole.
     for prop in &comp.host_props {
-        if !HOST_STATIC_ATTRS.contains(&prop.name.as_str()) {
-            return Err(IrLoadError::Validate(format!(
-                "unknown host attribute `{}`; M3-Phase 6 host attributes are: {}",
-                prop.name,
-                HOST_STATIC_ATTRS.join(", ")
-            )));
-        }
-        if prop.name == "title" && !matches!(prop.value, IrLiteral::Str(_)) {
-            return Err(IrLoadError::Validate(
-                "host `title` prop must be a string literal".into(),
-            ));
+        match prop.name.as_str() {
+            "title" => {
+                if !matches!(prop.value, IrLiteral::Str(_)) {
+                    return Err(IrLoadError::Validate(
+                        "host `title` prop must be a string literal".into(),
+                    ));
+                }
+            }
+            "backdrop" | "theme" => {
+                if matches!(
+                    prop.value,
+                    IrLiteral::Int(_) | IrLiteral::Str(_) | IrLiteral::Bool(_)
+                ) {
+                    return Err(IrLoadError::Validate(format!(
+                        "host `{}` prop must be a keyword identifier, not a typed literal",
+                        prop.name
+                    )));
+                }
+            }
+            _ => {
+                return Err(IrLoadError::Validate(format!(
+                    "unknown host attribute `{}`; M3-Phase 6 host attributes are: {}",
+                    prop.name,
+                    HOST_STATIC_ATTRS.join(", ")
+                )));
+            }
         }
     }
     if let Some(binding) = comp.host_bindings.first() {
@@ -4564,6 +4586,44 @@ mod tests {
              node ZStack { node Text {} }\n}",
             "unknown host attribute `foo`",
         );
+    }
+
+    #[test]
+    fn host_surface_rejects_typed_literal_backdrop() {
+        // Defensive-reader mirror of `wasamoc check`: `backdrop` / `theme`
+        // take a keyword identifier (e.g. `mica` / `system`), so a typed
+        // scalar literal in hand-crafted textual IR must be rejected at the
+        // runtime catalog too — not left as a direct-textual-IR hole.
+        assert_validate_err(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             host prop backdrop = 3\n\
+             node ZStack { node Text {} }\n}",
+            "host `backdrop` prop must be a keyword identifier",
+        );
+    }
+
+    #[test]
+    fn host_surface_rejects_typed_literal_theme() {
+        assert_validate_err(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             host prop theme = 3\n\
+             node ZStack { node Text {} }\n}",
+            "host `theme` prop must be a keyword identifier",
+        );
+    }
+
+    #[test]
+    fn host_surface_accepts_keyword_backdrop_and_theme() {
+        // Positive control: the keyword-identifier forms the compiler emits
+        // (`mica` / `system`) validate, so the typed-literal rejection above
+        // is not blanket-rejecting `backdrop` / `theme`.
+        let c = parse_ok(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             host prop backdrop = mica\n\
+             host prop theme = system\n\
+             node ZStack { node Text {} }\n}",
+        );
+        validate(&c).expect("keyword-identifier backdrop/theme must validate");
     }
 
     #[test]

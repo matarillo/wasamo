@@ -47,7 +47,7 @@
     | `wasamoc/src/lower.rs` | must-dispatch construction site | component-level static/dynamic attrs lower to `host_props` / `host_bindings`, not spliced onto `root` |
     | `wasamoc/src/emit.rs` | must-dispatch textual writer | emits `host prop` / `host bind` before the root node |
     | `wasamoc/src/check.rs` | must-dispatch compiler gate | `HOST_STATIC_ATTRS`, known-host accept, unknown-host reject, dynamic-bind reject, typed-literal reject |
-    | `wasamo-runtime/src/ir_loader.rs` | must-dispatch parser / validator / title / ZStack gate | parses `host` members, validates the mirrored catalog, moves title resolution to `host_props`, rejects old root-squatted host attrs, removes the ZStack root exemption |
+    | `wasamo-runtime/src/ir_loader.rs` | must-dispatch parser / validator / title / ZStack gate | parses `host` members, validates the mirrored catalog **on name and per-attribute value shape** (see review F1), moves title resolution to `host_props`, rejects old root-squatted host attrs, removes the ZStack root exemption |
     | `wasamo-runtime/tests/abi_load_ui.rs`, `…/tests/ir_loader_roundtrip.rs` | must-dispatch external seam tests | updated to canonical `host prop` shape; gallery validate-through-loader added |
     | `examples/*/*.ui` | ignore-OK source surface | unchanged — A2a is internal IR lowering, verified by `wasamoc check` / build / roundtrip |
   - **Close-gate #2 structural side effects:** content roots are pure widget roots again; static window-title resolution moved from `component.root.props` to `component.host_props`; ZStack validation now treats any root `title` / `backdrop` / `theme` prop as malformed old IR rather than a root-only exemption; ABI `wasamo_load_ui` still calls `resolve_static_window_title` with the same signature and no new ABI surface.
@@ -86,6 +86,41 @@
   - Verification: `cargo test -p wasamoc --lib` — green (322); `cargo test -p
     wasamo-runtime --test ir_loader_roundtrip` — green (8). The audit table
     above (Close-gate #1) replaces the earlier prose enumeration.
+- **2026-06-08 / T7b full independent review (Codex) — disposition.** The
+  schema / textual-IR migration's required **full independent review** was
+  performed by **Codex** (independent agent) in addition to the in-session
+  Claude review; this closes the "Review lane: full independent review" gate
+  recorded at task start. Scope: the A2a migration commit (`22dd09e`) + the
+  review-response commit (`c361a3a`). Findings and dispositions:
+  - **F1 — runtime host catalog mirror was incomplete (fixed in-task).** The
+    compiler rejected a typed-scalar literal on `backdrop` / `theme`
+    (`backdrop: 3`) but the runtime `validate_host_surface` mirrored only the
+    attribute *name* and `title`'s string shape, leaving a direct-textual-IR
+    hole (`host prop backdrop = 3` accepted). This is a **T7b** responsibility
+    (DD-M3-P6-008 makes the runtime a *defensive reader* mirroring the
+    compiler catalog), **not** an M4 item — the earlier review under-deferred
+    it. `validate_host_surface` is now a per-attribute mirror that rejects a
+    typed-scalar literal on `backdrop` / `theme` (keyword identifiers only),
+    pinned by `host_surface_rejects_typed_literal_backdrop` /
+    `..._theme`, the positive control `host_surface_accepts_keyword_backdrop_and_theme`,
+    and an ABI-boundary malformed case (`host prop backdrop = 3` →
+    `WASAMO_ERR_IR_MALFORMED`) in `abi_load_ui`. **Structural finding (now
+    reported):** the runtime mirror must mirror the catalog's *value shape*,
+    not only its attribute-name set.
+  - **F2 — full-review gate closure made explicit (this entry).** The task
+    start gate recorded "full independent review"; the earlier review-response
+    entry's "narrow branch/test review tier" applied only to that delta
+    (diagnostics + tests), not to the migration. This entry records the
+    migration's full independent review (reviewers: Codex + Claude), its scope,
+    and findings. Merge remains owner-gated.
+  - **F3 — retrospective Refs updated** to the landed hashes (`22dd09e`
+    migration, `c361a3a` review-response, plus this F1/F3 commit) instead of
+    "hash omitted until commit lands".
+  - Verification: `cargo test -p wasamo-runtime --lib ir_loader::tests` —
+    green (144); `cargo test -p wasamo-runtime --test abi_load_ui` — green;
+    `cargo test -p wasamo-runtime --test ir_loader_roundtrip` — green (8);
+    `cargo test -p wasamoc --lib` — green (322); `cargo fmt --all -- --check`
+    — green.
 - **2026-06-08 / T7b local verification:** `cargo check --workspace` —
   green; `cargo test -p wasamo-ir` — green (18 tests); `cargo test -p
   wasamoc --lib` — green (319 tests); `cargo test -p wasamo-runtime --lib
