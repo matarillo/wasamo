@@ -602,7 +602,13 @@ promoted numbered slot).
       host-attribute catalog (Window entry); `wasamoc check` + runtime
       validation through the catalog; `resolve_static_window_title` moves to
       the new surface; old root-squatted shape rejected/warned; new shape
-      canonical in tests). This is **schema/IR-migration review tier** (full
+      canonical in tests). **Host-binding policy (DD-008 acceptance):**
+      `host_bindings` ships as a **structural** surface that round-trips
+      canonically, but the Window catalog entry admits **no** bindable host
+      attributes this phase (dynamic title deferred, FD-D), so a
+      component-level host binding is **rejected** — the binding facet of the
+      dual-gate divergence is closed by rejection, not by opening any bindable
+      host attribute. This is **schema/IR-migration review tier** (full
       independent review) + implementation-gates (read at start, record the
       gate selection before choosing an approach). `docs/dsl_spec.md` /
       `docs/architecture.md` sync folds at **T9 Moment 2** (DD handoff step 9),
@@ -690,7 +696,13 @@ mid-phase owner decisions and revise the mutable plan where they diverge
       re-sync (owner-confirmation required per the retroactive spec-gap
       minimum-fold pattern). The textual-IR `§8` control-flow-member
       production is folded to match the landed `ControlFlowNode` shape if
-      it pinned at implementation time.
+      it pinned at implementation time. **DD-M3-P6-008 (A2a) fold:**
+      document the component-level host attributes (`title` / `backdrop` /
+      `theme`) as living on a **host surface separate from the content
+      root**, add the textual-IR `host_props` / `host_bindings` production
+      beside the control-flow-member production, and state the Window
+      host-attribute catalog + the host-binding rejection rule (no DD/option
+      labels in the spec prose per the living-spec vocabulary rule).
 - [ ] **A12 spec-closure gate (evidence item 7)** — confirm the ZStack
       chapter, the conditional-rendering (structural-rendering-model)
       chapter (`if` as the first member of a structural control-flow
@@ -702,14 +714,22 @@ mid-phase owner decisions and revise the mutable plan where they diverge
       complete`; any implementation-divergent paragraphs in §6.6
       (layout invalidation: structural conditional mutation now marks
       layout dirty in addition to size-affecting property writes), §6.9 /
-      §6.7 / §9 re-synced to the actual landed shape.
+      §6.7 / §9 re-synced to the actual landed shape. **DD-M3-P6-008 (A2a)
+      fold:** the `IrComponent` host-attribute surface (`host_props` /
+      `host_bindings`) and the **host-owned-attributes vs content-root
+      separation** it establishes (the canonical invariant carried to M4),
+      so the IR / component description no longer shows window attributes
+      squatting on the content root.
 - [ ] `process/milestone-3/plan.md` Phase 6 row Status flips to
       `complete`.
 - [ ] `docs/abi_spec.md` re-confirmed untouched (static title rode the
       existing `wasamo_load_ui` → `window::create` internal path; no new
-      ABI export). Touch only if a Moment 2 surprise forced an ABI surface
-      change, in which case escalate per the ADR preamble's three
-      retrospectives.md §phase-sync ADR-touch cases.
+      ABI export; the **DD-M3-P6-008 (A2a)** `host_props` / `host_bindings`
+      change is an **internal compiler-IR / textual-IR** representation
+      change, **not** an ABI-facing window descriptor — that descriptor is
+      M4-owned — so it adds no C ABI surface). Touch only if a Moment 2
+      surprise forced an ABI surface change, in which case escalate per the
+      ADR preamble's three retrospectives.md §phase-sync ADR-touch cases.
 - [ ] `process/milestone-3/phase-6/decisions/preamble.md` /
       `dd-m3-p6-*.md` touched **only** if one of the three
       retrospectives.md §phase-sync ADR-touch cases applies (AC
