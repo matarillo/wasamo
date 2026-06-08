@@ -162,6 +162,33 @@ This is the complete form the other options approximate.
   IR, runtime, and spec. Listed to **anchor the end-state; not proposed for
   Phase 6.**
 
+**Where (B) is essentially owned — M4, not a vague "later."** Three M4
+acceptance criteria ([`_roadmap.md` §M4](../../../_roadmap.md#m4-interaction-stack))
+converge to force base-type modeling, so M4 is its real home, not an
+open-ended deferral:
+
+- **`backdrop` / `theme` are M4 deliverables.** Today only static `title` is
+  wired (T6); `backdrop: mica` (Mica/Acrylic) and `theme: system` (accent
+  follow-through) are M4 criteria. The moment M4 wires them from the DSL, it
+  cannot leave them squatted on the content root — it forces window
+  attributes a real home.
+- **Multi-window makes `Window` a real type.** `IrComponent.base` can stay an
+  inert string only while there is one implicit singleton window that the
+  runtime treats the component *as*. M4 multi-window instantiates windows as
+  addressable entities with per-window state and focus — the structural point
+  where "model the base type" becomes load-bearing.
+- **The multi-window ABI is pre-freeze.** The roadmap pulls multi-window
+  pre-1.0 precisely because its ABI surface cannot be appended post-freeze
+  (M6); a window-attribute representation that crosses the ABI must settle in
+  M4, where that ABI is designed.
+
+The full **diagnostic** surface (rich editor diagnostics for the typo hole)
+is **M5** (VS Code LSP), and additional host types (`Dialog` / `Popover` /
+`Page`) stretch M4→M5 — but the **core Window base-type modeling is M4's
+responsibility.** This pins the consequence for (A) below: an in-phase (A)
+must be **forward-compatible with M4's window-entity model**, or M3 buys a
+surface M4 has to migrate again.
+
 ### (A) IR structural separation — the minimal step toward (B)
 
 Stop splicing onto the root; give the component a dedicated attribute surface
@@ -180,7 +207,10 @@ structural home. Two sub-choices on **abstraction level**:
     `IrComponent`; `base: String` kept as-is. This only *separates*
     host-owned attributes from the content root; it adds no `inherits`
     semantics. `host_props` matches the "a Window / Dialog / Page *hosts* a
-    content subtree" reading — the meaning actually needed now.
+    content subtree" reading — the meaning actually needed now. It is an
+    **internal IR improvement, not an ABI-facing window descriptor**: the
+    host-facing handle / descriptor a multi-window ABI needs is M4's to
+    design, and `host_props` deliberately does not fix it.
   - **(A2b) Structured base object** — fold `base: String` into `base:
     IrBase { name, props, bindings }`. This puts "the base *owns* attributes"
     into the IR and is materially closer to (B); it begins carrying
@@ -189,6 +219,30 @@ structural home. Two sub-choices on **abstraction level**:
   A2a is the lighter step (an IR separation); A2b is a down-payment on the
   base-type system. Picking "A2" without picking the depth is the blur to
   avoid.
+
+**Why A2b is not taken in Phase 6 — a two-sided read, not a dismissal.** Now
+that (B) is established as an M4 responsibility, the natural counter-argument
+is "if B is unavoidable at M4, why not pay down A2b now?" A2b is genuinely
+weaker *both* ways it can be defined:
+
+- **If `IrBase` is merely `base: String` plus `props` / `bindings` grouped
+  into a struct**, its difference from A2a is small — it stops the same root
+  contamination — while it *adds* a schema migration. More churn for the same
+  separation.
+- **If `IrBase` is more than grouping** — if it actually means "the base
+  *owns* attributes" — it begins deciding base-type semantics: known-base
+  validation, unknown-base handling, an attribute catalog keyed by base, the
+  relationship between a component's `base` and M4's window *instances*, where
+  attributes live under multi-window, and the mapping to an ABI-facing window
+  descriptor. Those are exactly M4's questions (multi-window identity, window
+  entity, ABI shape — see the (B) milestone note). Deciding them as a side
+  effect of a Phase-6 ZStack boundary fix would pre-empt M4's design with no
+  multi-window example to test it against.
+
+So A2b is either too light to be worth the migration or too heavy to settle
+outside M4. A2a isolates the collision that is actually broken now — host
+attributes vs content root — **without choosing the carrier for the future
+base-type system.**
 
 A **representation** sub-choice is orthogonal to A1/A2: the surface may be
 **generic lists** (`Vec<IrProp>` / `Vec<IrBinding>`, like widget props) or
@@ -267,7 +321,9 @@ Evaluate the carried options against these axes, in roughly priority order:
    (B, A) or only reconcile the gates (D, C)?
 2. **Namespace generality** — does it close Window-only (A1, D) or open to
    future base types (A2, B)?
-3. **Phase-locality** — sized for Phase 6 (A, D) or M4+ (B, E)?
+3. **Phase-locality** — sized for Phase 6 (A, D), or owned by **M4** (B — see
+   its milestone-ownership note) with the diagnostic surface in M5 (E
+   likewise M4→M5)?
 4. **Migration reversibility** — how costly is the *next* step after this
    one? D→A re-pins tests and user expectations; A1→A2 is another schema
    move; A2→B is mostly additive. This favors not stopping at A1 or D.
@@ -292,18 +348,47 @@ implemented (they need not all be resolved at acceptance):
 - **Depth: A1 vs A2a vs A2b** (Window-specific `window_props` / host-general
   `host_props` keeping `base: String` / structured `IrBase`) and the surface
   name.
+- **M4 forward-compatibility** — the chosen surface must promote cleanly into
+  M4's window-entity model (multi-window makes the component's host surface
+  *one window instance among many*; see the (B) milestone-ownership note).
+  This is the concrete reason `host_props` (A2a) is preferred over
+  `window_props` (A1): when M4 instantiates `window` as a real entity, an A1
+  `window_props` surface is *more likely to need reinterpretation or renaming*
+  as the model distinguishes component-level host defaults from concrete
+  window instances (not that it necessarily collides — a `window_props`
+  "component-level defaults" reading is conceivable), whereas `host_props`
+  stays at the weaker "this host's attributes" level. The surface should not
+  bake in assumptions a multi-window M4 would have to undo.
 - **Generic-list vs typed-field** representation.
 - **Catalog owner abstraction** — Window-specific, host-general, or a
   base-type registry entry. Keep it aligned with the IR depth: a host-general
   IR surface (A2a) with a Window-only catalog drifts back toward a latent
   re-divergence (IR general, validation specific), so prefer a host-attribute
   catalog with a Window entry today.
-- Whether an attribute surface is admitted **only when `base == "Window"`**
-  (or for any base) — i.e. is a surface on a non-Window component an error?
+- **Catalog lookup key** — decided at implementation: the `base` string, a
+  future host-kind enum, or just the `"Window"` literal while Window is the
+  only entry. The DD does not fix this; it only requires the key not bake in
+  Window-exclusivity (so a second host entry is additive).
+- **Mirror sync mechanism** — if the runtime mirrors the compiler catalog
+  (per the trust-boundary stance), how the two are held in lockstep: a shared
+  constant, a mirrored unit test, or a golden test (cf. the `STAR_WEIGHT_MAX`
+  precedent). Without a sync mechanism the mirror is a fresh drift source.
+- Non-Window base handling — keep two checks separate. *Base-name validation*
+  (is `inherits Dialog` a known base?) is **carried to B / M4**; A2a keeps
+  `base: String` and does not validate the name. What Phase 6 gates is the
+  *host attributes*: the Recommendation proposes the **catalog as the gate**
+  (`host_props` accepts only catalogued attributes), so an uncatalogued
+  attribute is rejected regardless of base, while a non-Window base with an
+  *empty* `host_props` (e.g. `inherits Dialog { ZStack { … } }`) is **not**
+  rejected by this gate. Confirm at acceptance.
 - Whether the **catalog / diagnostic lands with (A)** or as a follow-up
   (without it, the typo hole stays open even after the structural fix).
-- **Dynamic-binding policy:** which attributes may be bound (intersects FD-D
-  dynamic title).
+- **Dynamic-binding policy** — which attributes may be bound (intersects FD-D
+  dynamic title). Provisional stance: since dynamic title is deferred (FD-D),
+  Phase 6 likely ships `host_bindings` as a *structural* surface that the
+  catalog admits **none** of yet — host bindings are parked / rejected and
+  only static `host_props` are handled — rather than opening any bindable
+  host attribute this phase. Confirm at acceptance.
 - Does `resolve_static_window_title` read the **new surface only**, or keep a
   `root.props` fallback during transition?
 - **Old root-squatted shape (strengthened):** new emit **must never** splice
@@ -356,7 +441,29 @@ catalog (a Window entry today) shipped alongside**:
   Window-only catalog is a latent re-divergence. A full base-type *registry*
   catalog is (B), deferred.
 
-(B) is the end-state to grow toward; A2b is the step beyond Phase 6. (D) is a
+For Phase 6 the catalog is **host-general in shape but holds only the Window
+entry.** An attribute on the host surface with no catalog entry is rejected;
+since only Window is catalogued this phase, a non-Window base's *host
+attributes* have no entries yet and are rejected — but the base *name* itself
+is not validated (that is carried to M4 / B), so an empty host surface on a
+non-Window base is not rejected. The provisional rule is "`host_props`
+accepts only attributes the host catalog knows" rather than "`host_props`
+accepts only when `base` is `Window`" — the catalog, not the base name, is
+the gate.
+
+(B) is the end-state to grow toward, **owned by M4** (multi-window +
+backdrop/theme force base-type modeling there — see the (B) milestone note).
+A2a is chosen **not to avoid (B)** but to leave M4 the room to design (B)
+correctly while Phase 6 fixes *only* the contamination it actually exposed:
+it stops the splice and gives host attributes a home, but it does not choose
+the base-type carrier, the ABI-facing window descriptor, or the multi-window
+attribute-ownership model — all M4's to settle. A2a is therefore a
+**stepping stone, not a final shape**: M4 may promote or re-place it as the
+window-entity model takes form, and that is expected, not a failure of A2a.
+The **canonical invariant A2a preserves for M4 is not the field name
+`host_props`** but the **separation between host-owned attributes and the
+content root**; M4 may replace the carrier, but it should preserve that
+separation. A2b is the step beyond Phase 6. (D) is a
 fallback if an IR migration genuinely cannot land — but the Phase-6 boundary
 that would force that is an *assumption*, not a hard constraint (see
 Time-box): if (A) is the right design and does not fit the remaining budget,
@@ -384,7 +491,7 @@ inconsistent or leaking the divergence to M4 is a Phase-6 gap — is itself a
 hypothesis, not a fixed boundary. It argues for resolving before Phase 6
 closes (T8 fix-container or a dedicated task — see plan.md T7b), and against
 a T6 reopen (T6 had no ZStack-root example to exercise the boundary). But if
-the right design (e.g. A2) does not fit the remaining Phase-6 budget, the
+the right design (e.g. A2a) does not fit the remaining Phase-6 budget, the
 correct response is to **revise the assumption by proper means** — re-scope
 the phase, carry the structural fix forward with the interim explicitly held,
 or split (A) — *not* to downgrade the design to (D) solely to honour an
@@ -441,6 +548,9 @@ surfaced by the T7 review, and reconcile plan.md T7b to the chosen option.
   the dual-gate symptom to the **unmodeled base type** (`inherits Window` is
   an inert string), so the component-level namespace is undifferentiated.
 - **Proposed (revision, 2026-06-08)** — design-space widening: mapped the
-  option spectrum (end-state B; A1 / A2a / A2b; D / C / E), softened the
+  option spectrum (end-state B; A1 / A2a / A2b; D / C / E / D+), softened the
   Phase-6 time-box to a working assumption, and sharpened the recommendation
   to A2a + a host-attribute catalog. Still `Proposed` — no option selected.
+- **Proposed (revision, 2026-06-08)** — M4 ownership + A2b rejection: pinned
+  (B) as an **M4** responsibility and hardened A2a over A2b (too light → thin
+  gain; too heavy → pre-empts M4) and over A1. Still `Proposed`.
