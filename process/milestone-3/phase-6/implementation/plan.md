@@ -753,7 +753,7 @@ mid-phase owner decisions and revise the mutable plan where they diverge
 - [ ] [log.md](./log.md) records the phase-close evidence pointer, CI run
       id, implementation summary distilled from T1–T8, and any final
       post-merge distillation.
-- [ ] Carry-forward inputs to Phase 7's pre-doc recorded under
+- [x] Carry-forward inputs to Phase 7's pre-doc recorded under
       [handoff.md](./handoff.md) (at minimum: the `IrMember` /
       `ControlFlowNode` family-extension landing point for `else` /
       `switch` / iteration; the `BindingTarget::ConditionalSubtree` →
@@ -773,18 +773,18 @@ mid-phase owner decisions and revise the mutable plan where they diverge
       an open Phase 6 residual. **NOT owned by T9**
       (phase-end retro item 15 per
       [retrospectives.md §6.3/§15](../../../procedures/retrospectives.md));
-      stays `[ ]` at T9 close.
+      stayed `[ ]` at T9 close and is checked when the phase-end handoff lands.
 - [ ] Front-matter `status` (on the sibling
       [implementation/preamble.md](./preamble.md)) flips `active` →
       `closing` at the **phase-end batch commit** — the phase-branch
       commit that lands the CI-verified gates (fmt / build / test /
       Windows integration) + the spec / architecture / plan status flips
-      + log.md + handoff — **not at T9 step-close**. Per the Phase 5
+      + log.md — **not at T9 step-close**. Per the Phase 5
       actual-operation correction the on-CI gates are phase-end-owned
       (verified only after the phase branch runs `workflow_dispatch` CI),
       so **T9 step-close itself leaves `status: active`**; the
       [preamble Lifecycle](./preamble.md#lifecycle-transition) is the SSOT
-      for this timing. **NOT owned by T9** — like the handoff and
+      for this timing. **NOT owned by T9** — like the other
       phase-end-retro bullets, this **stays `[ ]` at T9 close** and is
       checked by the phase-end batch commit on the phase branch. No
       further task checkboxes are added after the phase-end batch.
