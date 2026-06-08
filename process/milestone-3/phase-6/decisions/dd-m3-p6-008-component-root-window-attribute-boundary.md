@@ -500,6 +500,101 @@ the divergence can be carried safely if the schedule is revised. (Per the
 project's revise-don't-work-around discipline: the plan is a hypothesis;
 when it does not fit, revise it rather than bend the design to it.)
 
+The three sections below assume the recommended **A2a** is accepted; they do
+not pre-empt the owner's choice. Their roles are distinct from
+[If (A) is chosen](#if-a-is-chosen--acceptance-criteria-direction-here-details-in-impl):
+that section lists *what to decide at acceptance*; these list the *residual
+risk*, the *forward-compat exposure*, and the *implementation order* that
+follow from the decision.
+
+## Technical risk re-evaluation (if A2a accepted)
+
+Accepting A2a raises the risk class from a localized runtime / compiler
+allowlist fix to an **IR-schema / textual-IR migration**. The risk is
+justified — it removes the root contamination rather than institutionalizing
+it (the (D) failure mode) — but the migration must be treated as high-risk
+and reviewed independently (the schema/IR-migration review tier). The main
+risk points:
+
+- `wasamo-ir` schema and the textual-IR parser / emitter must change
+  **together** (a half-migrated textual IR fails to round-trip).
+- `wasamoc` lowering must **stop** splicing component-level host attributes
+  onto `root.props` / `root.bindings` — the splice site that started this DD.
+- runtime loading must read the new host surface **and** reject or explicitly
+  warn on the old root-squatted shape (no silent dual acceptance).
+- the compiler and runtime host-attribute catalogs must stay synchronized
+  (the mirror-drift risk — see the mirror-sync acceptance item).
+- `resolve_static_window_title` must move to the new surface; any `root.props`
+  fallback must be transitional and removal-triggered.
+- host bindings need an explicit Phase-6 policy, or `host_bindings` becomes a
+  structural promise with no validation semantics.
+
+**Residual risk (intentional):** A2a does *not* complete base-type modeling.
+It deliberately leaves `base: String` inert and carries full base-name
+validation / window-entity semantics to M4. The only invariant accepted here
+is the **separation of host-owned attributes from the content root**.
+
+## Forward-compat exposure (if A2a accepted)
+
+A2a is forward-compatible with one specific invariant — host-owned attributes
+are separated from the content root — and does **not** commit M4 to keep the
+exact `host_props` / `host_bindings` carrier.
+
+**Opened (kept forward-compatible):**
+
+- the content root no longer receives host attributes, so future strict-root
+  widgets need no root-only exemption;
+- the surface is host-general, not Window-specific, so `Dialog` / `Page` /
+  `Scene` *can* reuse the same conceptual slot once they are catalogued /
+  modeled later (the slot is opened, not the host types themselves);
+- M4 may promote the surface into a real window/base-entity model without
+  preserving the field name.
+
+**Exposed (not yet closed):**
+
+- `base: String` stays semantically inert until M4 / (B);
+- base-name validation is not solved this phase;
+- non-Window host types stay uncatalogued unless added explicitly;
+- host bindings exist structurally only to the extent the accepted
+  dynamic-binding policy permits;
+- ABI-facing window descriptors / handles remain M4-owned and must **not** be
+  inferred from `host_props`.
+
+**Forward-compat rule:** M4 may replace the carrier, but should preserve the
+host-attribute / content-root separation.
+
+## Implementation handoff (if A2a accepted)
+
+Implement as a **structural migration**, not a runtime-only ZStack exemption.
+Expected order:
+
+1. Add `host_props` / `host_bindings` to `IrComponent` (same generic-list
+   representation as widget props / bindings).
+2. Update textual-IR emit / parse to round-trip the new surface.
+3. Update `wasamoc` lowering so component-level host attributes emit to
+   `host_props` / `host_bindings`, **never** spliced onto `root`.
+4. Add a host-attribute catalog — host-general in shape, Window-only entry for
+   Phase 6 (subject to the acceptance decisions above: catalog lookup key,
+   catalog-with-(A)-or-follow-up, dynamic-binding policy).
+5. Update `wasamoc check` to validate component-level host attributes through
+   the catalog and reject unknown ones (`titlee:`).
+6. Update runtime loading to consume the new surface, validate it via the
+   runtime mirror of the catalog, and reject / warn on the old root-squatted
+   shape.
+7. Move `resolve_static_window_title` to the new surface; any `root.props`
+   fallback transitional and removal-triggered.
+8. Make the new shape **canonical** in tests: compiler rejects unknown host
+   attrs; runtime rejects (or deprecation-warns) old root-squatted attrs; the
+   ZStack root needs no window-attribute exemption; catalog mirror-drift is
+   detected.
+9. Sync `docs/dsl_spec.md`, `docs/architecture.md`, and the preamble /
+   decision index **after** acceptance (Moment 2).
+
+**Do not** implement this as: "root ZStack accepts more attributes"; a
+Window-only `window_props` surface (unless the owner rejects A2a); or
+`IrBase` / base-type validation (unless scope is deliberately expanded toward
+(B)).
+
 ## Interim (currently shipped, pinned by tests)
 
 The divergence is pinned on **both gates** so a future alignment visibly
@@ -554,3 +649,6 @@ surfaced by the T7 review, and reconcile plan.md T7b to the chosen option.
 - **Proposed (revision, 2026-06-08)** — M4 ownership + A2b rejection: pinned
   (B) as an **M4** responsibility and hardened A2a over A2b (too light → thin
   gain; too heavy → pre-empts M4) and over A1. Still `Proposed`.
+- **Proposed (revision, 2026-06-08)** — added (if-A2a-accepted) Technical risk
+  re-evaluation, Forward-compat exposure, and Implementation handoff sections,
+  role-separated from the acceptance-criteria list. Still `Proposed`.
