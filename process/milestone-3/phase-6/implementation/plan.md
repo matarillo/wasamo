@@ -718,8 +718,8 @@ mid-phase owner decisions and revise the mutable plan where they diverge
       semantics), and the reader-facing invalid examples / diagnostics
       match the diagnostics exercised in T1 / T4 / T5, at the
       external-reader-reproducibility bar.
-- [ ] `docs/architecture.md` top Status flips to include `M3-Phase 6
-      complete`; any implementation-divergent paragraphs in §6.6
+- [x] `docs/architecture.md` top Status flips to include `M3-Phase 6
+      closed (implementation-synced)`; any implementation-divergent paragraphs in §6.6
       (layout invalidation: structural conditional mutation now marks
       layout dirty in addition to size-affecting property writes), §6.9 /
       §6.7 / §9 re-synced to the actual landed shape. **DD-M3-P6-008 (A2a)
@@ -730,7 +730,7 @@ mid-phase owner decisions and revise the mutable plan where they diverge
       squatting on the content root.
 - [ ] `process/milestone-3/plan.md` Phase 6 row Status flips to
       `complete`.
-- [ ] `docs/abi_spec.md` re-confirmed untouched (static title rode the
+- [x] `docs/abi_spec.md` re-confirmed untouched (static title rode the
       existing `wasamo_load_ui` → `window::create` internal path; no new
       ABI export; the **DD-M3-P6-008 (A2a)** `host_props` / `host_bindings`
       change is an **internal compiler-IR / textual-IR** representation
@@ -738,7 +738,7 @@ mid-phase owner decisions and revise the mutable plan where they diverge
       M4-owned — so it adds no C ABI surface). Touch only if a Moment 2
       surprise forced an ABI surface change, in which case escalate per the
       ADR preamble's three retrospectives.md §phase-sync ADR-touch cases.
-- [ ] `process/milestone-3/phase-6/decisions/preamble.md` /
+- [x] `process/milestone-3/phase-6/decisions/preamble.md` /
       `dd-m3-p6-*.md` touched **only** if one of the three
       retrospectives.md §phase-sync ADR-touch cases applies (AC
       discharged-vs-impl divergence; out-of-phase residual cross-reference;
