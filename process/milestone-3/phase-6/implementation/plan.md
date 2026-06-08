@@ -629,7 +629,7 @@ matching the Phase 4 T5 / T6 and Phase 5 T5 / T6 split rationale.
 outcome can change the validator and the gallery shape; the smoke must
 observe the final behavior.
 
-- [ ] Owner runs `examples/gallery-rust/` and observes, with the
+- [x] Owner runs `examples/gallery-rust/` and observes, with the
       **positive control = `is_lightbox_open` toggled** (constraints §3):
       - **closed → open toggle:** the lightbox overlay appears on open and
         is gone on close **without a resize before the observation** (proves
@@ -651,19 +651,24 @@ observe the final behavior.
         photo box appeared wider than the declared 400 px), and that the
         caption `VStack` is not visibly clipped/overlapping the nav row (its
         Grid row is `32`, short for two text lines — Grid does not clip, so
-        overflow would show). If either is wrong, fix additively on the T8
-        branch per the bullet below.
+        overflow would show). T8 fixed the caption/nav spacing additively by
+        increasing that row from `32` to `64`, then the owner confirmed the
+        geometry check passed.
       The DPI blur on a high-DPI box is a **known M4 residual**
       (constraints §5), noted during analysis, not a smoke pass/fail
       criterion.
-- [ ] Owner explicitly accepts the smoke result, or records a fail
+- [x] Owner explicitly accepts the smoke result, or records a fail
       observation note. **If smoke fails:** the implementation fix lands
       additively on the T8 branch (new commits); the smoke checklist is
       re-run to green before T8 closes. Fix scope stays inside the Phase 6
       ADR / `docs/dsl_spec.md` / `docs/architecture.md`; any fix requiring
       a normative spec change escalates to T9 Moment 2 (or a mid-ADR
-      addendum if unsuitable for Moment 2).
-- [ ] T8 step-end retrospective recorded at
+      addendum if unsuitable for Moment 2). Owner also observed that the
+      thumbnail screen behind the scrim can still receive clicks through gaps
+      while the lightbox is open; this is recorded as an M4 input / modal
+      focus residual, not a T8 smoke failure, because hit-testing / focus
+      capture / modal focus trap is explicitly out of Phase 6 scope.
+- [x] T8 step-end retrospective recorded at
       `process/milestone-3/phase-6/retrospectives/t8.md`
       (retrospectives.md checklist items 1–11).
 

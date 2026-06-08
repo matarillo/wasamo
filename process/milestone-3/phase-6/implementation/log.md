@@ -1,5 +1,63 @@
 ## Decisions log
 
+- **2026-06-08 / T8 start gate — owner-manual gallery GUI smoke and visible-correctness fix container:**
+  selected implementation-gate traps before choosing any fix approach.
+  Applies: **#7 weak GUI evidence** (T8's deliverable is owner-visible GUI
+  smoke, so the evidence must be a positive-control observation: closed/open/
+  close toggle, resize scrim fill, z-order/dimming, title bar, and geometry
+  checks); **#2 missed side effects** is armed if the smoke fails and any
+  additive visible-correctness fix is made (the fix must enumerate layout,
+  Visual order, title, conditional dirty-layout, and gallery-source effects);
+  **#4 untested authored branch** is armed if a fix adds any diagnostic,
+  reject, size, or layout branch; **#5 carry-forward underweighted** is armed
+  if the smoke exposes a new cross-task invariant or residual; **#6
+  deterministic-failure disposition** is armed for any recurring launch,
+  click, resize, capture, crash, or vanished-on-retry failure. Not applicable
+  at task start: **#1 semantic migration** (T8 is not expected to add an enum,
+  IR, schema field, or variant; if a fix does, this selection must be revised
+  before editing); **#3 parallel data drift** (no parallel vector, derived
+  index, or cache is expected unless a fix changes runtime structural storage).
+  Review lane: **full independent review** if a code/runtime fix lands or if
+  the task closes GUI-render evidence; branch/test-focused review composes if
+  any #4 branch is added. Merge remains owner-gated by the retrospective
+  procedure.
+- **2026-06-08 / T8 pre-owner visible-correctness fix:** prechecked the
+  post-T7b gallery by launching the release `gallery-rust` host and capturing
+  a closed/open/closed-after-click triplet under
+  `implementation/evidence/t8-precheck/`. The open frame showed the photo box
+  at the expected 4:3 ratio (400x300 logical, observed as roughly 500x375
+  physical on the current high-DPI desktop) and confirmed `"Gallery"` in the
+  native title bar, but the two-line caption was too close to the nav row.
+  Fixed additively in `examples/gallery/gallery.ui` by increasing the lightbox
+  Grid caption row from `32` to `64`; no Rust / IR / schema behavior changed.
+  Verification after the fix: `cargo run -p wasamoc -- check
+  examples\gallery\gallery.ui` — green; `cargo run -p wasamoc -- build
+  examples\gallery\gallery.ui` — green; `cargo build --release -p
+  gallery-rust` — green; escalated `capture-lightbox.ps1 -OutDir
+  implementation\evidence\t8-precheck` — green. Owner-visible smoke remains
+  the T8 close gate; this assistant precheck does not replace owner
+  acceptance.
+- **2026-06-08 / T8 owner-visible smoke:** owner confirmed all seven requested
+  visual-smoke items passed on `examples/gallery-rust/`: closed→open toggle,
+  close without resize, z-order (photo / caption / nav over scrim), scrim
+  dimming rather than replacing thumbnails, full-viewport scrim after resize,
+  native title bar `"Gallery"`, photo 4:3 geometry, and caption/nav
+  non-overlap after the T8 row-height fix. Owner also observed that the
+  thumbnail screen behind the scrim remains interactive while the lightbox is
+  open: clicking through gaps between photo / caption / nav can trigger the
+  underlying `Scroll up` / `Scroll down` buttons and change the ScrollView
+  viewport. Disposition: **not a T8 failure** and no Phase 6 fix — the Phase 6
+  lightbox proves structural presence / z-order / scrim rendering, while
+  lightbox hit-testing / focus capture / modal focus trap is explicitly M4
+  input scope in the ADR preamble. Record as an owner-observed M4 residual for
+  the T8 retrospective / phase-end handoff consideration.
+- **2026-06-08 / T8 local verification:** `cargo fmt --all -- --check` —
+  green; `cargo clean` completed (`5798 files, 1.5GiB` removed); `cargo build
+  --release --workspace` — green; `cargo build --workspace` — green; `cargo
+  test --workspace` — green (`wasamo-ir` 18, `wasamo-runtime` 349,
+  `wasamoc` 322, all integration suites and doc-tests green). Existing Cargo
+  warnings about the `wasamo` linkable target / `wasamo-sys` import-library
+  ordering were observed.
 - **2026-06-08 / T7b start gate — A2a `IrComponent` host surface IR migration:**
   selected implementation-gate traps before choosing the approach. Applies:
   **#1 semantic migration** (`IrComponent` gains `host_props` /

@@ -315,7 +315,7 @@ component Gallery inherits Window {
 
                 Grid {
                     columns: 1* 400 1*
-                    rows: 1* 300 32 44 1*
+                    rows: 1* 300 64 44 1*
 
                     Cell {
                         row: 1 column: 1
