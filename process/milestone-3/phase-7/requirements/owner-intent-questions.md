@@ -72,9 +72,9 @@ target-phase: M3-Phase 7
 | 期待 | 記録 | 注意 |
 |---|---|---|
 | 「Phase 7 = keyed identity を足す」 | [DD-004 forward-compat 2](../../phase-6/decisions/dd-m3-p6-004-conditional-ir-and-runtime-present-absent.md):「Phase 7 adds keyed identity / state retention」 | [constraints §3](./constraints.md) が「positional / keyed / fresh のどれかを**決めなければならない**」と open DD に正しく降格済み。→ **Q2** |
-| 「`for` が ID-2 reconciler の first real driver」 | [DD-004](../../phase-6/decisions/dd-m3-p6-004-conditional-ir-and-runtime-present-absent.md) | `for` が何を**必要とするか**の予測。v1 が実際にそれを必要とするかは open |
-| 「data-driven reorder は Phase 7 の ordering-contract driver」 | [DD-005 (c) item 2](../../phase-6/decisions/dd-m3-p6-005-conditional-effect-lifecycle-and-drain-contract.md):「a keyed `for` reorder, where present-set order is data-driven, not declared」 | SM-2/SM-3 を Phase 6 が defer した条件付き予測。v1 が reorder を許すかが再点火条件。→ **Q3** |
-| 「iteration の M3 target は WrapPanel-backed thumbnail collections」 | [dsl_spec §4.12 deferral](../../../../docs/dsl_spec.md) | E2E target は固いが、**scale の v1 commitment** は未確定。→ **Q4** |
+| 「`for` が ID-2 reconciler の first real driver」 | [DD-004](../../phase-6/decisions/dd-m3-p6-004-conditional-ir-and-runtime-present-absent.md) | `for` が何を**必要とするか**の予測。初回surface が実際にそれを必要とするかは open |
+| 「data-driven reorder は Phase 7 の ordering-contract driver」 | [DD-005 (c) item 2](../../phase-6/decisions/dd-m3-p6-005-conditional-effect-lifecycle-and-drain-contract.md):「a keyed `for` reorder, where present-set order is data-driven, not declared」 | SM-2/SM-3 を Phase 6 が defer した条件付き予測。初回surface が reorder を許すかが再点火条件。→ **Q3** |
+| 「iteration の M3 target は WrapPanel-backed thumbnail collections」 | [dsl_spec §4.12 deferral](../../../../docs/dsl_spec.md) | E2E target は固いが、**scale の 初回surface commitment** は未確定。→ **Q4** |
 | member emission を canonize しない留保 | [DD-007 Deferred design space](../../phase-6/decisions/dd-m3-p6-007-scrollview-conditional-content-policy.md) | `for` の 0..N emission が「imperative member emission を content model として確定する」方向へ押す。態度決定は §2.2 slate（付録）へ |
 
 ---
@@ -96,12 +96,12 @@ merit で却下する判断の **tie-breaker** に留める（独立軸ではな
 **Q3**（reorder 可否）→ **Q2**（identity; Q3 と結合）→ **Q4 / Q5a / Q5b / Q6**
 （scale / doctrine / 露出 / scope）。Q4 (i) は Q1=(ii)/(iii) を前提にする。
 
-### Q1. v1 の「collection」とは何か — 静的反復か、実行時可変か（**最優先・基底**）
+### Q1. 初回surface の「collection」とは何か — 静的反復か、実行時可変か（**最優先・基底**）
 
-- **問い.** v1 イテレーションが回す「collection」は、ソースに書かれた固定長を
-  単に展開する**コンパイル時固定の反復**か、それとも cardinality が実行時に
-  変わる**reactive な可変 collection**か。これは phase 全体の野心を決める基底
-  の分岐。
+- **問い.** 初回surface の iteration が回す「collection」は、ソースに書かれた
+  固定長を単に展開する**コンパイル時固定の反復**か、それとも cardinality が
+  実行時に変わる**reactive な可変 collection**か。これは phase 全体の野心を決める
+  基底の分岐。
 - **gate.** collection-surface DD（型・初期値・要素型・変更手段）のスコープ全体
   （constraints の thesis bullet「collection 型の露出方法は ADR で確定」）;
   検証方針 [§2.4 / §9](./constraints.md)。
@@ -116,11 +116,11 @@ merit で却下する判断の **tie-breaker** に留める（独立軸ではな
   `TypedValue` 不要」。
 - **選択肢空間と含意.**
   - (i) **静的反復のみ**（固定 literal collection を展開）— 買うもの: 機構が
-    小さく、collection 型・変更経路・identity を v1 で開かない。諦める／要求する
+    小さく、collection 型・変更経路・identity を 初回surface で開かない。諦める／要求する
     もの: **凍結済み acceptance A8 の文言「collection *binding* drives
     widget-tree generation」と正面から緊張する** — binding を介さないコンパイル時
     固定展開は A8 と Phase 7 thesis（「cardinality 駆動へ拡張」）が要求する
-    性質を v1 で証明しない。整合には (1) A8 を改訂する（[plan.md A8](../../plan.md);
+    性質を 初回surface で証明しない。整合には (1) A8 を改訂する（[plan.md A8](../../plan.md);
     README acceptance-revision exception 経由 — 中立の手続き注記）か、(2) §9 陽性
     対照を改訂する（constraints.md は status: accepted の §2.1 成果物につき
     workflow §2.1 revisions 規律で理由を残す。陽性対照原理自体は
@@ -130,7 +130,7 @@ merit で却下する判断の **tie-breaker** に留める（独立軸ではな
     要件の AC 昇格）改訂も対称に開いている。
   - (ii) **実行時可変 collection + 最小変更経路**（Q7 の mutation path と連動）—
     買うもの: §9 陽性対照と A8「binding drives」に直接乗る; 実用 UI の collection
-    は実行時に変わるという性質を v1 で証明する。要求するもの: collection 型 +
+    は実行時に変わるという性質を 初回surface で証明する。要求するもの: collection 型 +
     初期値 + 要素型（→ Q5b）+ 変更手段（→ Q7）の surface を新設。
   - (iii) **full collection 演算**（任意挿入/削除/reorder）— 買うもの: sort /
     filter / 並べ替えまで含む実用 collection UI の表現力。開くもの:
@@ -138,10 +138,10 @@ merit で却下する判断の **tie-breaker** に留める（独立軸ではな
 - **分類.** 【pre-framing 必須】。phase の scope ambition そのもの。A8 / §9 の
   どちらをどう動かすかは owner 判断。
 
-### Q2. identity の confirm-or-revise — keyed か、fresh/positional v1 か
+### Q2. identity の confirm-or-revise — keyed か、fresh/positional 初回surface か
 
 - **問い.** 先行記録の「Phase 7 = keyed identity」期待を **confirm** するか、
-  明示的に **revise** して v1 を fresh/positional（Phase 6 base case の
+  明示的に **revise** して 初回surface を fresh/positional（Phase 6 base case の
   collection 一般化）とし、keyed retention を defer するか。**silent な乖離は
   禁止**（confirm でも revise でも明文化する）。
 - **gate.** identity DD [constraints §3](./constraints.md); 検証方針（identity が
@@ -152,12 +152,12 @@ merit で却下する判断の **tie-breaker** に留める（独立軸ではな
   reconciler は **IR 変更なし**で後付け可能。つまり「keyed を今やる」技術的
   強制力はなく、期待は予測に留まる。
 - **選択肢空間と含意.**
-  - (i) **fresh/positional v1**（key なし、collection 変化で full rebuild）—
+  - (i) **fresh/positional 初回surface**（key なし、collection 変化で full rebuild）—
     買うもの: Phase 6 base の素直な一般化、IR 変更なし、最小機構。諦めるもの:
     item ごとの in-progress state / focus / scroll / 入力中の値は absent→present
-    で保持されない（M3 placeholder regimen では item は stateless なので v1 の
+    で保持されない（M3 placeholder regimen では item は stateless なので 初回surface の
     痛みは小さいが、実用 list UI では効く）。
-  - (ii) **keyed identity v1**（`key:` + retention + reconciler）— 買うもの:
+  - (ii) **keyed identity 初回surface**（`key:` + retention + reconciler）— 買うもの:
     実用 list UI が要する **item 単位の state / focus / 入力保持**; SwiftUI /
     Flutter / Slint が揃って key/identity を持つのはこの実需による。data 再評価で
     item が「同じもの」として残る（reorder 時の入力欄が消えない等）。開く／要求
@@ -171,9 +171,9 @@ merit で却下する判断の **tie-breaker** に留める（独立軸ではな
 - **分類.** 【pre-framing 必須】（confirm-or-revise を明示する義務、silent 乖離
   禁止）。
 
-### Q3. v1 で data-driven reorder を許すか
+### Q3. 初回surface で data-driven reorder を許すか
 
-- **問い.** v1 collection 変化が **item の順序変更**（append/truncate を超えた
+- **問い.** 初回surface の collection 変化が **item の順序変更**（append/truncate を超えた
   中間挿入・並べ替え）を含むか。reorder を許すと、Phase 6 が defer した
   structural-ordering contract（SM-2/SM-3）の再点火条件に触れる。
 - **gate.** reactive-drain residual DD [constraints §6 item 2](./constraints.md)
@@ -185,22 +185,22 @@ merit で却下する判断の **tie-breaker** に留める（独立軸ではな
   になる keyed reorder こそ contracted mutation order の real driver で Phase 7
   に属す」と明記済み（条件付き予測）。
 - **選択肢空間と含意.**
-  - (i) **append/truncate-only v1**（順序 = collection 順、中間 reorder なし）—
+  - (i) **append/truncate-only 初回surface**（順序 = collection 順、中間 reorder なし）—
     買うもの: SM-1 status quo を維持できる公算、機構が小さい。諦めるもの:
-    並べ替えを伴う操作は v1 で表現不能。
+    並べ替えを伴う操作は 初回surface で表現不能。
   - (ii) **任意 reorder** — 買うもの: **sort / filter / 並べ替えという collection
-    UI の基本操作**を v1 で表現できる。要求するもの: ordering contract（Phase 6
+    UI の基本操作**を 初回surface で表現できる。要求するもの: ordering contract（Phase 6
     が defer した SM-2/SM-3 の再評価。drain 順とは独立に観測可能な順序保証）+
     keyed identity（Q2 (ii); reorder は key がないと「同一 item の移動」を
     表せない）。
 - **分類.** 【pre-framing 必須】（Q2 identity と §6 drain を結合する分岐）。
 
-### Q4. v1 の iteration はどの規模で「実用」と言えるか（cap は従属変数）
+### Q4. 初回surface の iteration はどの規模で「実用」と言えるか（cap は従属変数）
 
-- **問い.** 主問は「v1 iteration が実用と言える **target 規模**は何か」。cap を
+- **問い.** 主問は「初回surface の iteration が実用と言える **target 規模**は何か」。cap を
   carry できるかは従属変数として扱う（規模 commitment が cap 機構の要否を決める、
   逆ではない）。gallery 規模（[gallery-wireframe.html](../../requirements/gallery-wireframe.html)
-  の status 行 "218 photos"、grid 可視 ~18 枚）を v1 commitment とするか、v1 は
+  の status 行 "218 photos"、grid 可視 ~18 枚）を 初回surface commitment とするか、初回surface は
   機構を小 N で証明し大 N を documented backstop に留めるか。
 - **gate.** fan-out × `MUTATION_CAP` [constraints §6 item 3](./constraints.md)
   （Phase 7 直撃と明記）; structural failure observability
@@ -216,12 +216,12 @@ merit で却下する判断の **tie-breaker** に留める（独立軸ではな
   挿入が 1 mutation でどう数えられるか）の検証を framing / DD の **必須確認事項**
   とする（数値が分かるまで (i)/(ii) の実コストは確定しない）。
 - **選択肢空間と含意.**
-  - (i) **gallery-scale を v1 commitment** — 買うもの: 実用 photo gallery として
+  - (i) **gallery-scale を 初回surface commitment** — 買うもの: 実用 photo gallery として
     通る規模。要求するもの: cap 成長 / SM-4 budget の再評価、性能・収束保証を本
     phase の設計対象に（Q1=(ii)/(iii) を前提）。
   - (ii) **小 N で機構証明、cap は carry** — 買うもの: 機構の正しさを最小コストで
     証明（§9 は枚数でなく「変化」を要求）。諦めるもの: 大 N は divergence
-    backstop 任せで、実用規模の収束は v1 では未保証。cap interaction は named
+    backstop 任せで、実用規模の収束は 初回surface では未保証。cap interaction は named
     re-ignition point として次へ。
 - **分類.** 【packet 可】（推奨つき FD として provisional 化しうる。ただし cap
   機構の検証結果次第で pre-framing へ昇格しうる — 上記接地懸念参照）。
@@ -247,7 +247,7 @@ merit で却下する判断の **tie-breaker** に留める（独立軸ではな
     一段下がる（loop-local binding という第二の名前種を導入）。handler 位置でも
     読めるかは別途決める。
   - (ii) **handler 位置では `item` 不可、式位置のみ**（中間）— 将来の
-    select-this-item 等を v1 では開かない（Phase 6 FD-D 型の「問いを閉じない」
+    select-this-item 等を 初回surface では開かない（Phase 6 FD-D 型の「問いを閉じない」
     defer も可）。
 - **分類.** 【pre-framing 必須】（doctrine。state 経由主義の境界を引く）。
 
@@ -264,7 +264,7 @@ merit で却下する判断の **tie-breaker** に留める（独立軸ではな
 - **選択肢空間と含意.**
   - (i) **scalar item のみ**（String/i32）— 買うもの: `TypedValue` 圧力 surface
     せず plan working assumption を維持。諦めるもの: caption fields は item から
-    直接表現不能（placeholder regimen が thumbnail を Box+Text に留めるため v1
+    直接表現不能（placeholder regimen が thumbnail を Box+Text に留めるため 初回surface
     E2E は回避可能）。
   - (ii) **structured item（fields）** — 買うもの: `item.filename` 等の実用的な
     per-item データアクセス。開くもの: collection 要素型が複合になり `TypedValue`
@@ -276,7 +276,7 @@ merit で却下する判断の **tie-breaker** に留める（独立軸ではな
 
 - **問い.** `item` / `index` が state 名と衝突したとき、`for` が `for` の内側に
   nest したときの名前解決規則は何か。shadowing 許容 / error / scoped のどれか。
-  nesting を v1 で許すか。
+  nesting を 初回surface で許すか。
 - **gate.** per-item context DD（constraints thesis bullet）; 名前解決
   （[dsl-grammar Q1](../../../../docs/notes/dsl-grammar.md) の未決「名前解決スコープ
   — component-local フラットか、ネスト可能か」）。
@@ -285,7 +285,7 @@ merit で却下する判断の **tie-breaker** に留める（独立軸ではな
   for-in-for は iteration analog。現 resolver は `HashMap<&str, IrType>` で名前→型
   を引く（[DD-004 loader 拡張](../../phase-6/decisions/dd-m3-p6-004-conditional-ir-and-runtime-present-absent.md)）。
 - **選択肢空間と含意.**
-  - (i) **flat / 衝突 = error / v1 nesting なし** — 最小。`item` 名固定、state 名
+  - (i) **flat / 衝突 = error / 初回surface nesting なし** — 最小。`item` 名固定、state 名
     と衝突を reject。
   - (ii) **lexical scope + shadowing + nesting 許容** — 表現力高いが、scope 解決を
     resolver に持ち込む（inner `item` が outer を shadow）。
@@ -330,9 +330,9 @@ owner プロンプトの種リスト (a)–(f/g) に対し、上記 §2 の独�
 
 | 種 | §2 での扱い | 増減と理由 |
 |---|---|---|
-| **(a)** collection 変化モデル（特に v1 で data-driven reorder を許すか、DD-005 item 2 再点火条件との対応） | **Q1 + Q3** に分割 | **分割**。現行 §9 陽性対照は「実行時に cardinality が変わる経路」を押す（Q1）が、reorder までは押さない（Q3）。両者は gate する DD が異なる（Q1=collection-surface 全体 / Q3=§6 ordering + §3 identity）ため product-fork で切り出した。DD-005 item 2 の再点火条件は Q3 に明示対応 |
-| **(b)** identity（「Phase 7=keyed」期待を confirm するか、明示 revise して fresh/positional v1 とするか。silent 乖離禁止） | **Q2** | **一致**。期待→confirm-or-revise への変換を保持 |
-| **(c)** scale 期待（gallery 規模を v1 commitment とし cap を carry するか） | **Q4** | **一致** |
+| **(a)** collection 変化モデル（特に 初回surface で data-driven reorder を許すか、DD-005 item 2 再点火条件との対応） | **Q1 + Q3** に分割 | **分割**。現行 §9 陽性対照は「実行時に cardinality が変わる経路」を押す（Q1）が、reorder までは押さない（Q3）。両者は gate する DD が異なる（Q1=collection-surface 全体 / Q3=§6 ordering + §3 identity）ため product-fork で切り出した。DD-005 item 2 の再点火条件は Q3 に明示対応 |
+| **(b)** identity（「Phase 7=keyed」期待を confirm するか、明示 revise して fresh/positional 初回surface とするか。silent 乖離禁止） | **Q2** | **一致**。期待→confirm-or-revise への変換を保持 |
+| **(c)** scale 期待（gallery 規模を 初回surface commitment とし cap を carry するか） | **Q4** | **一致** |
 | **(d+g)** collection surface 一式（型・初期値・要素型 TypedValue 圧力・変更手段。陽性対照が変更経路を前提にする点） | **Q1（型・実行時可変）/ Q5b（要素型・TypedValue）/ Q7（変更手段）** に分散 | **分散（落とさず）**。monolithic な「collection surface」1 問にせず、product-level fork ごとに gate 先の異なる 3 問へ展開。陽性対照が変更経路を前提にする点は Q7 と Q1 に明示。初期値の構文は §2.2 slate（付録）へ送る機構寄り項目 |
 | **(e)** per-item context の名前解決・スコープ（衝突・shadowing・ネスト、全参照 state 経由主義との関係。HandlerExpr 搭載は premise） | **Q5a（主義・式/handler 位置）+ Q5b（露出型）+ Q6（shadowing/nesting/衝突）** に分割 | **分割**。doctrine（state 経由主義の例外可否 = Q5a, pre-framing 必須）/ 露出型（Q5b, packet 可）/ mechanics（衝突規則 = Q6, packet 可）は分類が異なるため切り分け。HandlerExpr 搭載 premise は再審議せず明記。**設計レベルで 1 件追加**: `for` body 内 handler の admission と handler 内 `item` 可読性（下記 §3 末尾・付録 8 参照） |
 | **(f)** E2E 達成証拠の形（陽性対照の見せ方、(d+g) 変更経路の選択と連動） | **Q7** | **一致**。mutation-path との連動を明示し、Phase 6 の bool-toggle analog として接地 |
@@ -384,7 +384,7 @@ body 形状の単数/range）は **owner 問いに昇格させず**付録の §2
    handler を持ちうる。handler を `for` body に admit するか、handler 本体から
    `item` を参照できるか（将来の select-this-item 等）は Q5a の式露出とは **別の
    admission 判断**で、spec が明示しないと A12 external-reader bar に響く。owner の
-   実用性志向の下では v1 で実装しなくても **設計評価には載せる**（Phase 6 FD-D の
+   実用性志向の下では 初回surface で実装しなくても **設計評価には載せる**（Phase 6 FD-D の
    「問いを閉じない」型）価値がある。Q5a に式位置/handler 位置の分離問いとして
    1 本足済み; ここは body admission（handler を body に許すか）側の機構論点。
 
