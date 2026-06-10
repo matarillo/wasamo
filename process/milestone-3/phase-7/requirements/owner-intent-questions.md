@@ -12,9 +12,16 @@ target-phase: M3-Phase 7
 > DD slate）**ではない**。§2.2 に入る前段の **elicitation 作業文書**である。
 > イテレーションが新規に提起するオーナー意図の問いのうち、既存文書がまだ
 > 答えていないものを抽出し、各問いを「pre-framing で潰すべきか / packet で
-> provisional FD として運べるか」に分類する。**ここでは自答・推奨をしない**
-> （§3 の選択肢空間は含意の見える化であって推奨ではない）。framing.md /
-> dsl-grammar.md への書き込みもしない。
+> provisional FD として運べるか」に分類する。初稿時（pre-answer）の制約として
+> **自答・推奨をしない**（§3 の選択肢空間は含意の見える化であって推奨ではない）、
+> **framing.md / dsl-grammar.md への書き込みもしない**、を置いていた。
+>
+> **（owner 回答後の追記 2026-06-10）.** owner 回答受領後、本文書は
+> 「post-answer annotated elicitation」になった: §1b に結着列を書き戻し（§5-1）、
+> 耐久部分を dsl-grammar.md Q1 追記 / 新 Q8 へ蒸留済み（§5-2、
+> [owner-intent-answers §5](./owner-intent-answers.md)）。**§2 の問い本体は初稿の
+> まま**で自答を加えていない（追記は §1b 結着列と上記蒸留先に限る）。回答の原典は
+> [owner-intent-answers](./owner-intent-answers.md)。
 >
 > 既決 premise（For variant / `ForLoopSubtree`、fresh 規範 + opt-in 形状、
 > `HandlerExpr` 統一、式 grammar 一斉拡張規律、`for` 予約）は §1 にマップし、
@@ -69,13 +76,17 @@ target-phase: M3-Phase 7
 
 ### 1b. 先行 phase が記録した「期待」（決定ではない → §2 で confirm-or-revise）
 
-| 期待 | 記録 | 注意 |
-|---|---|---|
-| 「Phase 7 = keyed identity を足す」 | [DD-004 forward-compat 2](../../phase-6/decisions/dd-m3-p6-004-conditional-ir-and-runtime-present-absent.md):「Phase 7 adds keyed identity / state retention」 | [constraints §3](./constraints.md) が「positional / keyed / fresh のどれかを**決めなければならない**」と open DD に正しく降格済み。→ **Q2** |
-| 「`for` が ID-2 reconciler の first real driver」 | [DD-004](../../phase-6/decisions/dd-m3-p6-004-conditional-ir-and-runtime-present-absent.md) | `for` が何を**必要とするか**の予測。初回surface が実際にそれを必要とするかは open |
-| 「data-driven reorder は Phase 7 の ordering-contract driver」 | [DD-005 (c) item 2](../../phase-6/decisions/dd-m3-p6-005-conditional-effect-lifecycle-and-drain-contract.md):「a keyed `for` reorder, where present-set order is data-driven, not declared」 | SM-2/SM-3 を Phase 6 が defer した条件付き予測。初回surface が reorder を許すかが再点火条件。→ **Q3** |
-| 「iteration の M3 target は WrapPanel-backed thumbnail collections」 | [dsl_spec §4.12 deferral](../../../../docs/dsl_spec.md) | E2E target は固いが、**scale の 初回surface commitment** は未確定。→ **Q4** |
-| member emission を canonize しない留保 | [DD-007 Deferred design space](../../phase-6/decisions/dd-m3-p6-007-scrollview-conditional-content-policy.md) | `for` の 0..N emission が「imperative member emission を content model として確定する」方向へ押す。態度決定は §2.2 slate（付録）へ |
+**結着列は owner 回答（[owner-intent-answers.md §5-1](./owner-intent-answers.md)、
+2026-06-10）の書き戻し。** silent 乖離禁止のため confirm / revise を明記する。
+revise した期待は live 文書 sync で正文化する（answers §5-3、Phase 7 Moment 2）。
+
+| 期待 | 記録 | 注意 | 結着（owner 2026-06-10） |
+|---|---|---|---|
+| 「Phase 7 = keyed identity を足す」 | [DD-004 forward-compat 2](../../phase-6/decisions/dd-m3-p6-004-conditional-ir-and-runtime-present-absent.md):「Phase 7 adds keyed identity / state retention」 | [constraints §3](./constraints.md) が「positional / keyed / fresh のどれかを**決めなければならない**」と open DD に正しく降格済み。→ **Q2** | **revise** — Phase 7 は un-keyed base（fresh/positional）を collection へ一般化。keyed は activation trigger 付き defer（answers §4） |
+| 「`for` が ID-2 reconciler の first real driver」 | [DD-004](../../phase-6/decisions/dd-m3-p6-004-conditional-ir-and-runtime-present-absent.md) | `for` が何を**必要とするか**の予測。初回surface が実際にそれを必要とするかは open | **revise** — first driver は M4 input 系の per-item state（focus / 入力 / selected）へ移る。`for` 単独では駆動しない |
+| 「data-driven reorder は Phase 7 の ordering-contract driver」 | [DD-005 (c) item 2](../../phase-6/decisions/dd-m3-p6-005-conditional-effect-lifecycle-and-drain-contract.md):「a keyed `for` reorder, where present-set order is data-driven, not declared」 | SM-2/SM-3 を Phase 6 が defer した条件付き予測。初回surface が reorder を許すかが再点火条件。→ **Q3** | **confirm** — 条件付き予測を維持。Phase 7 は append/truncate-only につき再点火せず、trigger を M5 / collection UX DD に精密化（answers §4） |
+| 「iteration の M3 target は WrapPanel-backed thumbnail collections」 | [dsl_spec §4.12 deferral](../../../../docs/dsl_spec.md) | E2E target は固いが、**scale の 初回surface commitment** は未確定。→ **Q4** | **confirm** — target は WrapPanel-backed。scale は小 N で機構証明、cap は会計確定後に fix-or-carry 明示記録（answers §3 注記 3） |
+| member emission を canonize しない留保 | [DD-007 Deferred design space](../../phase-6/decisions/dd-m3-p6-007-scrollview-conditional-content-policy.md) | `for` の 0..N emission が「imperative member emission を content model として確定する」方向へ押す。態度決定は §2.2 slate（付録）へ | **slate へ** — 態度は §2.2 DD で裁く（本回答は決めない、answers §3-4） |
 
 ---
 
