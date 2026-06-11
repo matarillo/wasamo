@@ -1,13 +1,14 @@
 ---
 title: M3-Phase 7 framing — イテレーション grammar
-status: draft
+status: aligned
 created: 2026-06-11
+aligned: 2026-06-11
 target-phase: M3-Phase 7
 ---
 
 # M3-Phase 7 framing
 
-**Status:** draft; pending owner alignment  
+**Status:** aligned (owner alignment 2026-06-11; ⓪〜⑧ 全項目 OK)  
 **Targets phase:** M3-Phase 7 (iteration grammar / collection-driven widget-tree generation)
 
 プロジェクトの開発プロセス（[workflow.md §2](../../../procedures/workflow.md)）に従い、
@@ -50,24 +51,28 @@ Phase 7 scope とし、どこからを trigger 付きで後続へ送るのか、
 | ⑦ | **DD slate の粒度** | Phase 7 ADR は 7 DD を予約する。grammar surface、collection value / mutation / TypedValue、item context / scope、IR / textual IR、runtime identity / range mutation、placement storage、validation / diagnostics / reactive-drain cap を分ける。 | [FD-G](#fd-g-dd-slate-粒度7-dd-予約) |
 | ⑧ | **Deferred items の正本** | owner-intent answers §4 の deferred table は、本 framing の scope / out-of-scope 節を正本にする。dsl-grammar.md には思想と trigger だけを置き、責務先は framing / ADR / handoff に置く。 | [FD-F](#fd-f-deferred-items-の正本は本-framing-scope-節に置く) |
 
-**返事チェックリスト（draft — 未承認）:**
+**返事チェックリスト（owner 回答 2026-06-11）:**
 
-- ⓪ 比較軸 prior: ☐ OK / 要変更
-- ① architectural-family trigger confirm-or-strain: ☐ OK / 要変更
-- ② Phase 7 thesis: ☐ OK / 要変更
-- ③ visible proof: ☐ OK / 要変更
-- ④ 初回 surface 境界: ☐ OK / 要変更
-- ⑤ `item` / `index` の扱い: ☐ OK / 要変更
-- ⑥ keyed expectation の revise: ☐ OK / 要変更
-- ⑦ DD slate 粒度: ☐ OK / 要変更
-- ⑧ Deferred items 正本: ☐ OK / 要変更
+- ⓪ 比較軸 prior: ☑ OK
+- ① architectural-family trigger confirm-or-strain: ☑ OK
+- ② Phase 7 thesis: ☑ OK
+- ③ visible proof: ☑ OK
+- ④ 初回 surface 境界: ☑ OK
+- ⑤ `item` / `index` の扱い: ☑ OK
+- ⑥ keyed expectation の revise: ☑ OK
+- ⑦ DD slate 粒度: ☑ OK
+- ⑧ Deferred items 正本: ☑ OK
 
 ---
 
 ## オーナー合意の記録（Owner alignment outcome）
 
-**未実施。** 本 draft の owner alignment が完了したら、ここに結果を記録し、
-frontmatter `status` を `aligned` に更新する。
+**2026-06-11 完了。** Owner は alignment packet ⓪〜⑧ の全項目を推奨どおり
+承認した（変更指示なし）。これにより FD-P / FD-Q / FD-A / FD-B / FD-C /
+FD-D / FD-E / FD-G / FD-F は **owner-agreed framing decisions** として確定し、
+DD slate（DD-M3-P7-001〜007 の 7 DD 予約）、scope / out-of-scope（deferred
+items 正本テーブルを含む）、verification strategy が ADR drafting の入力と
+して凍結された。次段階は Phase 7 ADR set の draft（§Next session — handoff）。
 
 ---
 
@@ -405,7 +410,7 @@ Phase 7 以降の DD 比較では、product merit / thesis 整合を主軸にす
 
 M3 の他 AC、特に Phase 8 / public draft を脅かす場合は、DD comparison table ではなく framing / plan の schedule risk として扱う。
 
-**Status:** pending owner alignment.
+**Status:** owner-aligned (2026-06-11).
 
 ### FD-Q. Architectural-family トリガーの confirm-or-strain
 
@@ -417,7 +422,7 @@ Phase 7 では architectural-family.md の trigger 1（M3 DSL spec drafting begi
 
 この confirm は framing にのみ留めず、SSOT へ反映する。Phase 7 Moment 2 で `architectural-family.md` の alignment table / re-evaluation triggers に「Phase 7（M3 DSL spec drafting）で trigger 1 / 3 を再読し、family (1) 内に収まると confirm、新規 VDR 不要」を revise-in-place で追記する（同 note 自身の「revising in place の場合は alignment table と re-evaluation triggers を更新」指示に従う）。これにより、次に同 note を読む者が trigger 1 を未処理と誤認しない。
 
-**Status:** pending owner alignment.
+**Status:** owner-aligned (2026-06-11).
 
 ### FD-A. Phase 7 thesis（collection binding が cardinality を駆動する）
 
@@ -425,7 +430,7 @@ Phase 7 は static template expansion ではなく、runtime-mutable collection 
 
 これは A8 の “collection binding drives widget-tree generation” と整合するため、acceptance revision は不要である。
 
-**Status:** pending owner alignment.
+**Status:** owner-aligned (2026-06-11).
 
 ### FD-B. Visible proof（固定 N ではなく増減 2 frame で証明する）
 
@@ -433,7 +438,7 @@ Fixed N thumbnails の単発 screenshot は、hardcoded tree と区別できな�
 
 Mutation は body 外の Button でよく、per-item handler は proof には不要である。基本線は runtime-owned collection state を `.ui` / runtime 内で変化させる proof であり、host から collection 全体を set / replace する public API は Phase 7 の必須 proof path にしない。
 
-**Status:** pending owner alignment.
+**Status:** owner-aligned (2026-06-11).
 
 ### FD-C. 初回 surface の境界（un-keyed / append-truncate / scalar / flat）
 
@@ -445,7 +450,7 @@ Host-supplied initial state、host replace / host write、in-out write-back は 
 
 Keyed retention、reorder、structured fields、`f64[]`、host state boundary、large-N performance は肯定的に残す。ただし、Phase 7 では silently 先送りせず、activation trigger 付きで後続へ送る。
 
-**Status:** pending owner alignment.
+**Status:** owner-aligned (2026-06-11).
 
 ### FD-D. `item` / `index` は loop-local read-only binding
 
@@ -453,7 +458,7 @@ Keyed retention、reorder、structured fields、`f64[]`、host state boundary、
 
 これは state 経由主義への限定的例外である。Handler 位置から読めるかどうかは、別の admission 判断とする。
 
-**Status:** pending owner alignment.
+**Status:** owner-aligned (2026-06-11).
 
 ### FD-E. 先行 phase の keyed 期待は revise として扱う
 
@@ -461,7 +466,7 @@ Phase 6 の forward-compat expectation は、Phase 7 framing で revise とし�
 
 Accepted ADR は遡及編集しない。Phase 7 framing / ADR / live-document sync によって stale expectation を正す。
 
-**Status:** pending owner alignment.
+**Status:** owner-aligned (2026-06-11).
 
 ### FD-G. DD slate 粒度（7 DD 予約）
 
@@ -469,7 +474,7 @@ Phase 7 ADR は 7 DD を予約する。DD-001 は author-facing grammar、DD-002
 
 この粒度は、owner alignment packet の判断項目として扱う。ADR drafting 中に統合・分割が必要になった場合は、owner に「どの FD を更新するか」が分かる形で framing revision または ADR preamble に理由を記録する。
 
-**Status:** pending owner alignment.
+**Status:** owner-aligned (2026-06-11).
 
 ### FD-F. Deferred items の正本は本 framing scope 節に置く
 
@@ -477,7 +482,7 @@ owner-intent answers §4 の deferred items は、本 framing の scope / out-of
 
 `dsl-grammar.md` には思想と condition-based trigger だけを残し、責務先は framing / ADR / handoff へ流す。
 
-**Status:** pending owner alignment.
+**Status:** owner-aligned (2026-06-11).
 
 ---
 
