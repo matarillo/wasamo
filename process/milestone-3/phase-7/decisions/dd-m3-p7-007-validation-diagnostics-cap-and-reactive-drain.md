@@ -57,6 +57,9 @@ Owning DD in parentheses; every row is a test.
 - `for` over anything but an `IDENT` (literal, operator expr) —
   "collection expressions not yet supported" recorded deferral
   (DD-001 / Q5).
+- qualified collection reference after `in` (`for x in root.xs`) —
+  "loop collection must be a local state name" diagnostic, naming the
+  DD-001 reference-shape deferral.
 - binder = declared state name; element binder = index binder;
   `in` / `for` / family keywords in identifier position (DD-003 /
   DD-001).
@@ -196,6 +199,23 @@ accepted contract.
 - The carry rows' re-triggers above are the standing reactive-engine
   reopening conditions; they ride the implementation handoff into the
   next phase's constraints sweep.
+
+## Strategic review disposition
+
+- **Review F13 folded.** Added the qualified collection-reference row on
+  the `for` header side so the matrix names the same DD-001
+  reference-shape deferral that mutation LHS diagnostics name for
+  `root.xs.append(...)`.
+- **Review confirmation recorded.** No strategic change was requested
+  for cap accounting, breadth-vs-depth charging, empty-collection
+  legality, or the reactive-drain carry table.
+
+## Revision history
+
+- Strategic owner-alignment review fold: added the qualified
+  post-`in` collection-reference reject row and recorded that cap /
+  empty-collection / reactive-drain judgments remain unchanged; status
+  remains Proposed.
 
 ## Technical risk re-evaluation
 

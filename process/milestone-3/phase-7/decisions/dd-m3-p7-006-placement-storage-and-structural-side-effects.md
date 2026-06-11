@@ -63,15 +63,37 @@ DD-M3-P7-005's plans execute through. Close artifacts: gates traps
     discipline (a Forcing-tier artifact at best) where a structural
     fix is available.
 
+- **ST1' — encapsulated SoA + splice-only mutation**
+  - Keep the SoA representation, but move `children` and the parallel
+    placement vector behind a dedicated module boundary with private
+    fields; all structural mutation must enter through a splice
+    primitive that updates both vectors.
+  - What you gain: structural enforcement by language visibility for
+    the specific "touch `children` and forget placement" drift class,
+    with zero data-model migration; new call paths cannot bypass the
+    primitive from outside the owning module.
+  - What you give up: the authored model still says placement is written
+    on the child and interpreted by the parent, while storage remains a
+    separate parent vector; staged subtrees must still carry placement
+    beside children until commit; the splice primitive's signature must
+    preserve parallel-vector bookkeeping. This is a real structural
+    improvement over ST1, but it preserves the representational split
+    that Phase 7's range staging and future reorder/key work would keep
+    paying for.
+
 - **ST2 — child-carried placement**
-  - The placement annotation moves onto the child slot: `children`
-    becomes the single source, each entry carrying the node plus its
-    optional parent-interpreted placement (concretely: a placement
-    field on the child entry / `WidgetNode`, `None` for children of
-    placement-free containers). The author surface already *writes*
-    placement on the child (`h-align:` / `v-align:` are child props
-    interpreted by the parent — DD-M3-P6-002); ST2 makes storage match
-    the authored model.
+  - The placement annotation moves onto the parent-child edge: the child
+    slot carries the node plus its optional parent-interpreted placement
+    kind (`None` for placement-free containers). The author surface
+    already *writes* placement on the child (`h-align:` / `v-align:` are
+    child props interpreted by the parent — DD-M3-P6-002); ST2 makes
+    storage match the authored model without making placement an
+    intrinsic widget property.
+  - The concrete value space stays open for implementation: either one
+    enum over placement-bearing containers or per-container child-entry
+    types can satisfy the contract. What is settled here is the
+    parent-interpreted, child-slot-carried shape, not a global
+    placement enum.
   - What you gain: **the drift class is removed by construction** —
     a child and its placement are one record, so no insert, remove,
     range splice, or future reorder can desynchronise them; the splice
@@ -97,19 +119,26 @@ DD-M3-P7-005's plans execute through. Close artifacts: gates traps
 
 ### Comparison
 
-ST1 vs ST2 is discipline vs structure for an invariant whose violation
-has already been observed once. Under FD-P, ST2's migration cost is a
+ST1 is discipline vs structure for an invariant whose violation has
+already been observed once. ST1' is the fair structural SoA alternative:
+module visibility can remove the bypass class without migrating stored
+shape. ST2 is still stronger on its own merits: it aligns storage with
+the authored, parent-interpreted placement model; it lets staged
+subtrees carry placement as ordinary child-slot data through
+staging → commit (DD-005 PF2); and it removes parallel-vector
+bookkeeping from the splice primitive's signature instead of merely
+centralising that bookkeeping. Under FD-P, ST2's migration cost is a
 tie-breaker, not a counter-argument — and it is bounded: ZStack's
-arrange loop and the loader's extraction site, both with existing
-Phase 6 fixtures as regressions. ST2 also simplifies exactly the new
-code Phase 7 must write (the range splice), rather than complicating
-it with parallel range arithmetic.
+arrange loop and the loader's extraction site, both with existing Phase
+6 fixtures as regressions.
 
 ### Recommendation
 
 **ST2 — child-carried placement.** The structural invariant ("a child
-and its parent-interpreted placement are one record") is stated in
-architecture.md as the accepted contract.
+slot and its parent-interpreted placement are one record") is stated in
+architecture.md as the accepted contract. ST1' is rejected on merit, not
+ignored: it enforces mutation entry but keeps the storage / staging /
+splice-signature split that ST2 removes.
 
 ## Migration scope
 
@@ -117,14 +146,16 @@ architecture.md as the accepted contract.
   (DD-001 sweep) and was the observed drift site.
 - **Grid: defer with trigger.** Grid rejects direct `for` this phase
   (children are `Cell`-mediated), so `cell_placements` sees no range
-  mutation; migrating it now would widen the change surface of a
-  thesis it does not serve. **Trigger:** Grid admitting structural
-  mutation under it (direct `for` of `Cell`s, conditional `Cell`s, or
-  any second parent-owned per-child metadata kind arriving) ⇒ migrate
-  `cell_placements` to the same child-carried model **before** that
-  mutation path is built (this DD's rule applied recursively). Until
-  then the Grid path is static-only and the SoA comment in `widget.rs`
-  gains a pointer to this DD.
+  mutation. On merit / proportionality, migrating a storage path that no
+  admitted mutation crosses would not protect an invariant this phase;
+  the recursive trigger below preserves the guarantee by migrating
+  before any Grid mutation path exists. **Trigger:** Grid admitting
+  structural mutation under it (direct `for` of `Cell`s, conditional
+  `Cell`s, or any second parent-owned per-child metadata kind arriving)
+  ⇒ migrate `cell_placements` to the same child-carried model **before**
+  that mutation path is built (this DD's rule applied recursively).
+  Until then the Grid path is static-only and the SoA comment in
+  `widget.rs` gains a pointer to this DD.
 - **WrapPanel / VStack / HStack / ScrollView / Box:** no per-child
   placement — the no-placement path stays free of placement logic
   (carried field `None`), asserted by the container sweep tests.
@@ -169,10 +200,11 @@ the problem, the single primitive removes the multi-call-site copy.
 
 architecture.md (§6.9 layout-primitives section + structural-mutation
 text): child-carried placement stated as the storage contract (ZStack
-now, Grid on its trigger); the splice primitive's side-effect set as
-the accepted structural-mutation contract. dsl_spec is **not**
-touched by this DD (storage is not author-visible; the author surface
-`h-align` / `v-align` is unchanged).
+now, Grid on its trigger), explicitly as parent-interpreted
+per-container placement carried by the child slot; the splice
+primitive's side-effect set as the accepted structural-mutation
+contract. dsl_spec is **not** touched by this DD (storage is not
+author-visible; the author surface `h-align` / `v-align` is unchanged).
 
 ## Forward-compat exposure
 
@@ -182,9 +214,30 @@ touched by this DD (storage is not author-visible; the author surface
   records.
 - **Member-range bodies** — splice already takes ranges; arity changes
   only the staged list length.
-- **New placement-bearing containers** — must adopt child-carried
-  storage from birth (the contract sentence in architecture.md is
-  written container-generic).
+- **New placement-bearing containers** — must adopt child-slot-carried,
+  parent-interpreted placement from birth; their concrete placement
+  value space may be per-container unless / until a shared enum has
+  implementation merit.
+
+## Strategic review disposition
+
+- **Review F9 folded.** Added ST1' (encapsulated SoA) as the structural
+  SoA alternative and selected ST2 on its authored-model, staging, and
+  splice-signature merits rather than on a false discipline/structure
+  binary.
+- **Review F11 folded.** The child-carried contract now says
+  parent-interpreted placement lives on the child slot, while the
+  concrete value space (shared enum vs per-container type) remains open.
+- **Review F12 folded.** Grid migration deferral is now framed as
+  proportionality / invariant merit with the recursive trigger, not as a
+  change-surface cost objection.
+
+## Revision history
+
+- Strategic owner-alignment review fold: added ST1' as the steel-man SoA
+  option; clarified child-slot carried placement and open value-space;
+  reframed Grid defer on proportionality / trigger grounds; status
+  remains Proposed.
 
 ## Technical risk re-evaluation
 

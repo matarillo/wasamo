@@ -88,6 +88,13 @@ the common case (DD-001 H3). No third slot exists. The index is a
 contract of DD-005), not an identity handle — the Q1 discipline
 restated.
 
+Admitting the index binder does not rely on an in-phase numbering /
+alternation driver. FD-D / framing thesis 4 already aligns `item` and
+`index` as loop-local bindings; the index is read-only, expression-only,
+and complete as part of the A12 external-reader surface. The "no driver
+this phase" bar used below applies to surfaces that entangle deferred
+identity / lifecycle theses, not to this aligned local value binding.
+
 ## Read positions
 
 ### Options
@@ -166,13 +173,20 @@ members — and if so, may handler expressions read the binders?
     normatively (A12) would freeze a half-contract.
 
 - **HA3 — admit handlers with binder reads.**
+  - What you gain: the future per-item interaction surface is admitted
+    now; M4 select-this-item / delete-this-item work can consume an
+    already-normative handler-position loop-read contract instead of
+    reopening handler admission.
   - What you give up: this *is* the per-item interaction surface —
-    handler-position loop reads break FD-D's codified
-    expression-position-only boundary, and the value-vs-live-position
-    question (does the handler see the index at creation or at click
-    time?) is exactly the identity question deferred with keyed
-    retention. Out of the aligned framing boundary; reopening it is an
-    owner decision, not a DD recommendation.
+    handler-position loop reads widen the expression-position-only
+    surface at the open question FD-D delegated here, and the
+    value-vs-live-position question (does the handler see the index at
+    creation or at click time?) is exactly the identity question
+    deferred with keyed retention. HA3 is within this DD's delegated
+    admission space, but its real driver arrives with M4 input; deciding
+    it there lets the handler-read contract, registration lifecycle, and
+    identity posture be designed against the use case that actually
+    needs them.
 
 ### Recommendation
 
@@ -180,9 +194,11 @@ members — and if so, may handler expressions read the binders?
 "per-item handler / handler 内 `item` 参照"): per-item interaction UI
 (select / delete-this-item), arriving naturally with M4 input ⇒ the
 admission DD designs handler-position reads, registration lifecycle,
-and their identity interaction together. The reject diagnostic names
-the deferral explicitly (a *recorded* deferral, not a silent gap —
-same posture as the Phase 6 operator-condition reject).
+and their identity interaction together. This is a merit deferral inside
+the owner-delegated admission judgment, not a claim that HA3 is outside
+the framing boundary. The reject diagnostic names the deferral
+explicitly (a *recorded* deferral, not a silent gap — same posture as
+the Phase 6 operator-condition reject).
 
 ## Spec content seed
 
@@ -205,6 +221,23 @@ binder, binder in handler, handler in body, nested `for`.
 - **Author-facing `key:`** — explicitly *not* a binder concern; lands
   with keyed identity (DD-005 forward-compat) as a widget-id-distinct
   surface per Q1.
+
+## Strategic review disposition
+
+- **Review F8 folded.** HA3 is now presented as an admissible option in
+  the owner-delegated handler-admission space, with its gain stated; HA1
+  remains recommended on driver / identity-thesis sequencing grounds.
+- **Review F10 folded.** Index-binder admission now records why a
+  read-only, expression-position aligned local binding can ship without
+  an in-phase numbering driver, while handler admission is deferred
+  because it entangles identity and lifecycle theses.
+
+## Revision history
+
+- Strategic owner-alignment review fold: fairly stated HA3 and moved
+  its reject ground from framing-boundary exclusion to M4/identity
+  sequencing; clarified index-binder admission despite no in-phase
+  numbering driver; status remains Proposed.
 
 ## Technical risk re-evaluation
 
