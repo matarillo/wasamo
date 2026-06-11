@@ -265,7 +265,9 @@ authoring errors rather than normal runtime boundary states. It also
 avoids adding an undriven failure path to the proof, but that is a
 secondary verification benefit, not the primary reason. Both lower to
 new `HandlerExpr` statement variants evaluated by the runtime as
-read-modify-write on the whole-value signal. `append` / `pop` are
+read-modify-write on the whole-value signal when the collection value
+changes. Empty-`pop` therefore performs no signal write and produces no
+dirty effects; it is not a same-value set. `append` / `pop` are
 **contextual** names (valid only in this production), not reserved
 keywords — they remain usable as state / widget identifiers because
 parse disambiguation does not require a global reservation. Statements
@@ -361,6 +363,12 @@ examples per DD-007.
   constrains elements by nonterminal rather than comment only; DD-M3-P7-007
   owns the matching non-literal element reject row.
 
+## Implementation-readiness review disposition
+
+- **Finding 3 folded.** Empty-`pop` no-op now forbids a same-value
+  collection-signal write; the direct runtime test pins no dirty-effect
+  re-run.
+
 ## Revision history
 
 - Strategic owner-alignment review fold: clarified contextual method
@@ -369,6 +377,8 @@ examples per DD-007.
 - Recommendation-choice review fold: changed the collection-literal
   seed from `expr` elements to scalar-literal elements and aligned the
   reject matrix; status remains Proposed.
+- Implementation-readiness review fold: specified empty-`pop` as no
+  signal write / no dirty effects; status remains Proposed.
 
 ## Technical risk re-evaluation
 
@@ -383,7 +393,8 @@ examples per DD-007.
   "contextual, not reserved" rule needs a positive test (a state named
   `append` still parses).
 - **Empty-`pop` no-op** is an authored-behaviour contract; it gets a
-  direct runtime test, not just a spec sentence (trap #4).
+  direct runtime test that also proves no dependent effect re-runs, not
+  just a spec sentence (trap #4).
 - **No ABI surface** is touched; divergence from this would trip the
   preamble's abi_spec no-touch judgment and requires owner sign-off at
   Moment 2.

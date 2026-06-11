@@ -163,6 +163,25 @@ ADR numbering 1:1, FD-G):
   now an explicit owner confirmation item before the Accepted flip; no
   DD recommendation changes.
 
+## Implementation-readiness review disposition
+
+- **Finding 1 folded.** DD-005 defines the removed-item `ItemRead`
+  guard and DD-007 adds the direct `pop` test row.
+- **Finding 2 folded.** DD-007's cap-accounting mechanism now matches
+  source behaviour while preserving the breadth-not-depth conclusion.
+- **Finding 3 folded.** DD-002 specifies empty-`pop` as no signal write
+  and the verification closure pins no dirty re-run.
+- **Finding 4 deferred.** Implementation-plan first task: design the
+  instantiation context type (element tag, signal reference, position,
+  live/out-of-range guard); DD variant spelling remains intentionally
+  adjustable.
+- **Finding 5 deferred.** Implementation-plan sequencing concern:
+  order C1, ST2, splice, and `for` work so intermediate commits remain
+  bisectable.
+- **Finding 6 deferred.** Implementation-plan test refinement: load
+  path must prove static materialisation plus initial `for` effect does
+  not double-create children.
+
 ## Cross-DD decision dependencies
 
 Three couplings span DDs; the primary DD owns the choice, dependents
@@ -195,7 +214,9 @@ seven are observed:
    planner (old length → new length ⇒ tail insert / remove plan,
    declared-slot insertion index via the canonized prefix-sum seam) is
    exercised as free functions without WinRT, including interleaved
-   `if` / `for` siblings and 0-length cases.
+   `if` / `for` siblings, 0-length cases, and load-time
+   materialisation where the `for` effect's initial run does not create
+   duplicate children.
 3. **Lowering / textual-IR roundtrip / loader evidence.** Emit → load
    preserves the `for` member (binders, collection ref, body); loader
    rejects malformed `for` shapes (`WASAMO_ERR_IR_MALFORMED` dual
@@ -209,8 +230,10 @@ seven are observed:
    retention positive control); disposed tail subtrees release effects
    and registry entries; handler-return drain observability (item 4)
    holds — immediately after the mutating call the new subtrees'
-   bound properties are written; ZStack-path range mutation updates
-   child-carried placement and Visual order in one splice. Fixtures
+   bound properties are written; empty-`pop` produces no dirty re-run;
+   a same-batch dirty removed-item binding skips its out-of-range read;
+   ZStack-path range mutation updates child-carried placement and
+   Visual order in one splice. Fixtures
    fail (not skip) where the Compositor is unavailable; multi-test
    binaries reuse the Phase 6 keep-alive apartment helper.
 5. **Assistant-visible GUI evidence.** Launch + DPI-aware screenshot +
@@ -363,3 +386,4 @@ per the split.
 |---|---|
 | 2026-06-11 | Initial draft (Status: Proposed). All 7 DDs at Proposed pending owner review. Framing-level owner alignment confirmed 2026-06-11 ([../requirements/framing.md](../requirements/framing.md) §Owner alignment outcome). |
 | 2026-06-11 | Recommendation-choice review fold: recorded owner confirmation for placeholder `item` / `index`, reflected binder-in-`if` and non-literal collection-element rejects, synced the framing FD-F trigger, and kept status Proposed. |
+| 2026-06-11 | Implementation-readiness review fold: closed the removed-item read guard, corrected cap accounting, specified empty-`pop` no-dirty behaviour, and deferred plan-only sequencing/context/load-test findings; status remains Proposed. |

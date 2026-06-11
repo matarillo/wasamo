@@ -137,6 +137,15 @@ materialisation, or read live?
   values, write idempotently); breadth is bounded by N and consumes
   no cap depth (DD-007 accounting).
 
+  `ItemRead` evaluation is guarded: if its fixed position is outside
+  the collection's current length, the binding writes nothing. This is
+  the defined same-batch removal case: a `pop` can dirty the removed
+  tail item's binding before the `for` effect disposes that subtree, so
+  the doomed effect must be a well-defined no-op rather than an
+  out-of-range read. The guard is not an author-visible stale-value
+  contract; at quiescence DD-006/this DD have disposed the removed
+  subtree.
+
 **Recommendation: V2.** The recompute breadth at gallery N is trivial,
 and V2 is what makes W2 a *kept* promise rather than a coincidence of
 the current mutation set. (The index binder reads its instantiation
@@ -254,6 +263,12 @@ contracts only, no option labels.
   property-binding notation (`label: thumb`) rather than textual-IR
   `bind` notation; no recommendation change.
 
+## Implementation-readiness review disposition
+
+- **Finding 1 folded.** V2 now defines out-of-range `ItemRead` during
+  same-batch tail removal as a skipped property write, closing the
+  doomed-binding read before implementation planning.
+
 ## Revision history
 
 - Strategic owner-alignment review fold: scoped all-or-unchanged to
@@ -261,6 +276,9 @@ contracts only, no option labels.
   status remains Proposed.
 - Recommendation-choice review fold: aligned the binder-read example
   with `.ui` property-binding surface notation; status remains Proposed.
+- Implementation-readiness review fold: specified the V2 out-of-range
+  positional-read guard for doomed tail bindings; status remains
+  Proposed.
 
 ## Technical risk re-evaluation
 
@@ -279,3 +297,6 @@ contracts only, no option labels.
   Phase 6 conditional teardown tests generalised to ranges.
 - **The no-op (N == M) branch** is tested explicitly (idempotency
   mirror).
+- **The pop-doomed binding branch** is directly fired: after a tail
+  `pop`, a removed item's binding may be dirty in the same drain batch;
+  the test proves the guarded `ItemRead` skips instead of panicking.

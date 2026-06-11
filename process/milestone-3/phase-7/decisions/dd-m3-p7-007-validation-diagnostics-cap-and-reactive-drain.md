@@ -134,19 +134,23 @@ Phase 7 design:
   iteration 1 runs the dirty set, including the `for` effect, which
   executes the whole tail edit (stage + commit, all N' subtrees) as
   **one effect run**;
-- effects created for the staged subtrees (per-item bindings, V2) and
-  any prefix re-runs (V2 breadth) are enqueued and run in iteration 2
-  as **one batch regardless of N**;
+- effects created for newly staged subtrees run synchronously when
+  their `EffectHandle`s are created inside the `for` effect; existing
+  prefix item bindings dirtied by the same collection write are part of
+  the same iteration-1 dirty batch (their tie order is
+  implementation-defined);
 - a further iteration occurs only if those bindings *write signals* —
   which Phase 7 item bindings never do (they write widget
   properties).
 
-So an authored collection mutation consumes **≈ 2 of 16 iterations,
-independent of collection size** — breadth (N) is charged zero depth.
-What *does* consume depth is effect→signal→effect chaining, which
-iteration does not introduce (item bindings are signal-to-property).
-**N-item materialisation is counted as: 1 structural effect run + 1
-batched binding iteration — not N anything.**
+So an authored collection mutation normally consumes **one non-empty
+drain iteration, independent of collection size**; breadth (N) is
+charged zero depth. What *does* consume depth is
+effect→signal→effect chaining, which iteration does not introduce
+(item bindings are signal-to-property). **N-item materialisation is
+counted as: one structural effect run, synchronous initial runs for new
+bindings, and same-batch prefix binding re-runs — not N drain
+iterations.**
 
 **Evidence obligation (verification closure):** a Windows-headless
 fixture asserts a representative `append` at gallery scale (and a
@@ -159,6 +163,11 @@ cardinality either by issuing many appends in one handler batch or by a
 headless direct signal setup before the observed drain; the fixture
 must state which path it uses.
 
+A second directly-firing fixture covers `pop` with a dirty removed-item
+binding in the same batch: DD-005 owns the out-of-range `ItemRead`
+guard, and this DD owns the test row proving the drain tie order cannot
+turn tail removal into a panic.
+
 ## Reactive-drain residual disposition (fix-or-carry, explicit)
 
 M2 handoff §3, re-judged on the range path — accounting settled
@@ -167,7 +176,7 @@ above, so the carry is now *permitted* to be judged:
 | Item | Disposition | Grounds / re-trigger |
 |---|---|---|
 | 1. cycle detection policy | **Carry** | iteration adds no effect→signal edge (item bindings write properties, not signals; mutation statements run in handlers, not effects) — no new cycle shape exists to detect. Re-trigger: any surface letting a generated subtree's effect write state. |
-| 2. ordering ties | **Carry** | inter-effect tie order stays implementation-defined; observability is protected by the **quiescent order invariant** (DD-005: declared order × live cardinality, drain-order-independent), generalised from Phase 6 and tested with `for`/`if` interleavings. Re-trigger: an observable contract requiring inter-effect order. |
+| 2. ordering ties | **Carry** | inter-effect tie order stays implementation-defined; observability is protected by the **quiescent order invariant** (DD-005: declared order × live cardinality, drain-order-independent), generalised from Phase 6 and tested with `for`/`if` interleavings. The non-observational doomed-binding read is not carried: DD-005 defines the out-of-range guard and this DD requires its direct test. Re-trigger: an observable contract requiring inter-effect order. |
 | 3. fan-out × `MUTATION_CAP` | **Carry, with the accounting fixed above as the recorded ground** | fan-out is breadth; the cap charges depth; the ≫N fixture is the standing evidence. Re-trigger: any charging change to the drain loop; effect-to-signal writes; acceptance demanding N where *per-iteration batch cost* (time, not cap) matters — that is the M5+ LazyList/performance thesis. |
 | 4. synchronous non-batched drain contract | **Preserved (not carried — held)** | DD-005 keeps toggle-then-observe under range mutation; the handler-return assertion is verification-closure item 4. |
 
@@ -230,6 +239,14 @@ accepted contract.
   cardinality is reached despite append/pop being the only authored
   mutations.
 
+## Implementation-readiness review disposition
+
+- **Finding 1 folded.** Added the doomed-binding `pop` test obligation
+  and tied the semantic guard to DD-M3-P7-005.
+- **Finding 2 folded.** Corrected cap accounting to match source
+  behaviour: new effects run synchronously at creation and prefix
+  re-runs share the current dirty batch.
+
 ## Revision history
 
 - Strategic owner-alignment review fold: added the qualified
@@ -239,6 +256,9 @@ accepted contract.
 - Recommendation-choice review fold: added binder-in-`if` and
   non-literal collection-element reject rows, plus the >N fixture setup
   note; status remains Proposed.
+- Implementation-readiness review fold: corrected the drain-iteration
+  mechanism and added the doomed-binding `pop` test row; status remains
+  Proposed.
 
 ## Technical risk re-evaluation
 
