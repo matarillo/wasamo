@@ -149,7 +149,7 @@ ADR numbering 1:1, FD-G):
 | [DD-M3-P7-004](./dd-m3-p7-004-ir-textual-ir-and-structural-traversal.md) | IR / textual IR representation + structural traversal | **`ControlFlowNode::For { binder, index_binder, collection, body }`** — a same-family variant beside `If`, body single-`Widget`-child (length-1) like Phase 6. Textual IR gains a `(for …)` member production; roundtrip preserves binders / collection ref / body. **Member-expansion is canonized**: one shared "declared members → materialised children" seam (prefix-sum index math over per-member live cardinality 0/1 for `If`, 0..N for `For`) used by both static load and reactive mutation — resolving the Phase 6 DD-007 reservation in the canonize direction. Runtime fills **`BindingTarget::ForLoopSubtree { parent, declared_member_index }`**. Semantic-migration call-site audit (gates trap #1) on every `IrMember` / `ControlFlowNode` match site. |
 | [DD-M3-P7-005](./dd-m3-p7-005-runtime-identity-and-range-mutation-semantics.md) | Runtime identity baseline + range mutation semantics | Normative wording = **positional, un-keyed**: a generated subtree's identity is its position; **append materialises only the new tail items; `pop` disposes only the removed tail item; prefix subtrees are retained, not rebuilt** (per-item bindings are reactive positional reads, so the contract survives a future whole-value host replace). Keyed retention stays opt-in-future (never a silent default change). Range mutation is **stage-then-commit**: all fallible construction happens before any tree splice; a staging failure aborts the whole mutation observably unchanged (+ diagnostic). Disposal order: effects disposed ahead of teardown, tail-first. The setter-return drain contract (M3-Phase 1 item 4) is **preserved**: on handler return the new subtrees' effects have run. |
 | [DD-M3-P7-006](./dd-m3-p7-006-placement-storage-and-structural-side-effects.md) | Placement storage model + structural side-effect atomicity | **Child-carried placement**: ZStack per-child placement moves from the parallel `zstack_placements` vector onto the child slot, so a child and its placement cannot drift (the trap-#3 class is removed structurally for every `for` / `if`-touched path, not policed by helper discipline). Grid `cell_placements` migration is **deferred with a trigger** (Grid rejects direct `for` this phase). One **range-splice primitive** owns the full side-effect set: child list, placement, layout dirty, Visual sibling order, registry, effects (gates traps #2 / #3 close artifacts mandatory). |
-| [DD-M3-P7-007](./dd-m3-p7-007-validation-diagnostics-cap-and-reactive-drain.md) | Validation, diagnostics, cap accounting, reactive-drain disposition | Full reject matrix at `wasamoc check`, re-checked by the loader (`WASAMO_ERR_IR_MALFORMED`): non-collection `for` target, binder collisions, disallowed containers, component-level `for`, nested `for`, handler-in-body, bad body shape, heterogeneous / non-scalar literals, mutation statements on non-collections, element-type mismatches, whole-collection assignment. Empty collection ⇒ 0 generated children is **legal** in admitted containers. **Cap accounting fixed: `MUTATION_CAP` counts drain-loop iterations (cascade depth), so N-item breadth does not consume cap** — evidence required that the gallery proof stays ≪ 16. Reactive-drain residual items 1–3 **carried** with explicit record (no new failure mode surfaced; breadth ≠ depth); item 4 preserved. Every new reject branch gets a direct failure-path test (trap #4). |
+| [DD-M3-P7-007](./dd-m3-p7-007-validation-diagnostics-cap-and-reactive-drain.md) | Validation, diagnostics, cap accounting, reactive-drain disposition | Full reject matrix at `wasamoc check`, re-checked by the loader (`WASAMO_ERR_IR_MALFORMED`): non-collection `for` target, binder collisions, disallowed containers, component-level `for`, nested `for`, handler-in-body, bad body shape, heterogeneous / non-scalar literals, mutation statements on non-collections, element-type mismatches, qualified collection mutation LHS, whole-collection assignment. Empty collection ⇒ 0 generated children is **legal** in admitted containers. **Cap accounting fixed: `MUTATION_CAP` counts drain-loop iterations (cascade depth), so N-item breadth does not consume cap** — evidence required that the gallery proof stays ≪ 16. Reactive-drain residual items 1–3 **carried** with explicit record (no new failure mode surfaced; breadth ≠ depth); item 4 preserved. Every new reject branch gets a direct failure-path test (trap #4). |
 
 ## Cross-DD decision dependencies
 
@@ -241,17 +241,20 @@ this list names the ADR-side landing points only:
    replace, write-back) — M4 host bindings / M6 ABI-freeze wave;
    DD-002 records the representation constraints (whole-value set,
    positional identity, value-semantic copy) that keep it unblocked.
-6. **Per-item handlers / `item` in handler position** — rejected this
+6. **Loop-external collection reads** (`length`, empty checks, element
+   index reads) — Q5 uniform expression / reference extension; DD-002
+   records the deferral, DD-007 owns the reject diagnostic until then.
+7. **Per-item handlers / `item` in handler position** — rejected this
    phase (DD-003); lands with M4 per-item interaction.
-7. **Nested `for` / template scope & shadowing** — with the next
+8. **Nested `for` / template scope & shadowing** — with the next
    structural control-flow extension (`else` / `switch` / bare nesting).
-8. **Member-range `for` body / multiple members per iteration** — the
+9. **Member-range `for` body / multiple members per iteration** — the
    deferred body generalisation (DD-001); lands on the canonized
    expansion seam without IR reshaping.
-9. **Grid placement migration to child-carried storage** — DD-006
+10. **Grid placement migration to child-carried storage** — DD-006
    trigger: Grid admitting structural mutation (direct `for` /
    conditional Cells).
-10. **LazyList / large-N performance** — M5+; small-N machinery proof
+11. **LazyList / large-N performance** — M5+; small-N machinery proof
     is deliberate (FD-C).
 
 ## Out of scope
@@ -262,11 +265,12 @@ responsibility landings) is the framing scope table
 this ADR does not duplicate it. Out of A8 scope this phase, by
 decision: keyed identity / retained state; data-driven reorder;
 structured item fields / `TypedValue`; `f64[]`; host state boundary
-(initial state / replace / write-back); per-item handlers and handler
-position `item` reads; nested `for` / template scope; member-range
-bodies; whole-collection assignment in handlers; Grid / Box /
-ScrollView direct-`for`; large-N performance; Image widget (thumbnails
-remain Box + Text placeholders); per-monitor DPI (M4).
+(initial state / replace / write-back); loop-external collection reads;
+per-item handlers and handler position `item` reads; nested `for` /
+template scope; member-range bodies; whole-collection assignment in
+handlers; Grid / Box / ScrollView direct-`for`; large-N performance;
+Image widget (thumbnails remain Box + Text placeholders); per-monitor
+DPI (M4).
 
 ## Upstream document revisions (Moment 1 / Moment 2)
 

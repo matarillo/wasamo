@@ -82,12 +82,18 @@ Owning DD in parentheses; every row is a test.
 - nested collection types (`i32[][]`); heterogeneous or
   element-type-mismatched list literal; list literal as a scalar
   state's default and vice versa.
+- loop-external collection reads (`xs.length`, `xs[0]`, empty checks
+  outside the `for` header / loop-local binder path) — "collection
+  reads outside iteration not yet supported" recorded deferral
+  (DD-002 / Q5).
 
 **Mutation statements (DD-002):**
 - `append` / `pop` on a scalar or undeclared LHS; `append` element
-  type mismatch; `append()` arity; `pop(expr)`; whole-collection
-  assignment (`xs = [..]` / `xs = ys`) — "collection assignment not
-  yet supported" recorded deferral.
+  type mismatch; `append()` arity; `pop(expr)`; qualified collection
+  LHS (`root.xs.append(...)`) — "collection mutation requires a local
+  state name" diagnostic; whole-collection assignment (`xs = [..]` /
+  `xs = ys`) — "collection assignment not yet supported" recorded
+  deferral.
 
 **Runtime validation (load + mutation time):**
 - loader re-checks of all structural rows above (DD-004);

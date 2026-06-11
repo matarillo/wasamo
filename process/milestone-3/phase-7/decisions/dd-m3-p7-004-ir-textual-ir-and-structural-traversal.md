@@ -221,10 +221,25 @@ the accepted contract, no option labels.
   shape unchanged.
 - **Keyed identity** — the declared slot stays the anchor; a keyed
   reconciler changes *which* materialised child maps to *which*
-  element, not the slot/offset model — no IR change (the Phase 6
-  promise, preserved).
+  element, not the slot/offset model — no IR **reshaping** of the
+  expansion model. A future opt-in `key:`-like surface may add a field
+  to the `For` variant to carry the key selector; that additive field
+  is the expected keyed-retention cost and does not disturb the
+  declared-slot / prefix-sum contract.
 - **Approach 3** — a host-language loop lowers to the same `For`
   member; the IR stays approach-neutral.
+
+## Strategic review disposition
+
+- **Review F7 folded.** The keyed forward-compat note now distinguishes
+  no expansion-model reshaping from a possible additive key-selector IR
+  field; no recommendation change.
+
+## Revision history
+
+- Strategic owner-alignment review fold: narrowed keyed
+  forward-compat from "no IR change" to "no IR reshaping, additive key
+  field possible"; status remains Proposed.
 
 ## Technical risk re-evaluation
 

@@ -74,6 +74,9 @@ DD slate（DD-M3-P7-001〜007 の 7 DD 予約）、scope / out-of-scope（deferr
 items 正本テーブルを含む）、verification strategy が ADR drafting の入力と
 して凍結された。次段階は Phase 7 ADR set の draft（§Next session — handoff）。
 
+追記: 2026-06-11 ADR strategic review fold により、loop-external collection reads 行を
+FD-F の正本テーブルへ追加した。
+
 ---
 
 ## Phase 7 acceptance criteria (restated)
@@ -295,6 +298,7 @@ Phase 7 で扱う範囲は次のとおり。ここでは、具体的な options 
 | data-driven reorder | 原則として **M5 / collection UX DD** に送る。Phase 7 で reorder を入れる判断をするなら、その時点で即時に開く | sort / filter / drag reorder / user-authored order mutation / keyed diff を要求する UI | Reorder は input stack ではなく、collection UX / reconciler / ordering contract の問題である。Phase 7 の cardinality proof とは別 thesis に属する |
 | structured item fields / `TypedValue` | **Phase 7 ADR で明示判断**する。不要と判断する場合は、trigger 付きで **M4 showcase spec または M5 widget/data-surface DD** へ carry する | `item.filename`、caption fields、image metadata、record-like state、scalar で足りない concrete app case | Plan は Phase 7 を `TypedValue` 圧力の最有力点と名指ししている。「不要」とする場合でも、再評価 trigger を残す |
 | host state boundary（host-supplied initial state / host replace / in-out write-back） | **M4 input / TextField / focus model、dynamic Window title / host bindings、または M6 ABI freeze 前**に再評価する。M3 中に collection state を host から初期化・差し替えたくなった場合は即時に開く | host が `.ui` state に initial value を渡す、表示中に state を set / replace する、TextField / ScrollView offset / selection など runtime-origin value を host 側へ write-back する | これは collection 専用ではなく general host state boundary の問題であり、iteration cardinality proof とは別 thesis に属する。単値 state にすら host write channel が無いことは、その一般性を示す傍証である。M4 input / host bindings / M6 ABI freeze と同じ波で開く方が設計判断の質が上がる。ただし collection state の型、copy / ownership、element identity、batching、reactive drain との関係は将来 host replace と矛盾しないよう ADR に記録する |
+| loop-external collection reads（length / empty check / element index read） | **DD-002 forward-compat と DD-007 diagnostics**に deferral / reject を置き、正本として本表に追加する（FD-F 正本テーブル追記） | gallery caption の `N items`、Remove disable の empty check、body 外の element access、host/state expression で collection を読む concrete app case | Phase 7 の collection read は `for` header と loop-local binder 経由に限る。外側の read surface は Q5 の uniform expression/reference extension と一緒に開く方が、参照形と operator pocket を分裂させない |
 | `f64[]` / 第四 scalar collection element | **DD-002 の element-scalar-set 判断で defer を明示**し、必要なら **M5 value-surface DD または `TypedValue` / scalar expansion DD** へ送る | 座標、比率、metrics、opacity、animation value、image metadata など、`f64` 要素を要する concrete app case が出た時 | `f64[]` は structured fields ではないが、第四 scalar / value-surface 拡張である。Phase 7 の cardinality proof は `i32[]` / `bool[]` / `string[]` の homogeneous scalar collection で足りるため、`f64[]` は肯定的に残しつつ trigger 付きで defer する |
 | per-item handler / handler 内 `item` 参照 | **Phase 7 ADR で admission を明示判断**する。Reject するなら trigger 付き defer として記録する | select-this-item / delete-this-item 等の per-item interaction が要る UI。自然には M4 input で到来する | Q5a の例外は式（binding）位置だけである。`for` body 内の handler 持ち widget を許すか、handler から `item` を読めるかは別判断である |
 | nested template scope / shadowing | **次に nested structural control flow を開く phase** に送る（暫定 M4+ grammar residual） | nested `for`、`else` / `switch`、bare nested control flow、template-local named scope が必要になった時 | Scope 規則は、structural control-flow family の拡張と一緒に設計する方が一貫する |

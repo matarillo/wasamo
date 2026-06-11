@@ -141,9 +141,19 @@ iteration_member ::= "for" IDENT ("," IDENT)? "in" IDENT
   computed collections) are not admitted this phase — the expression
   grammar has no operators, and a collection-literal-in-place has no
   driver; the position widens with the uniform Q5 expression extension.
+- The post-`in` state reference is intentionally **bare state name
+  only**, not a qualified name. New Phase 7 collection-reference
+  positions use local component state by name; cross-component or
+  `root.`-qualified collection references are deferred to the same
+  uniform expression/reference expansion that would also govern
+  collection reads outside loop headers (DD-M3-P7-002). This records
+  the reference-shape boundary rather than letting the grammar spelling
+  decide it implicitly.
 - **`in` becomes a reserved keyword** (dsl_spec §2.1). Phase 6
   explicitly deferred this reservation until the production existed;
-  it now does. Source-compat: no shipped `.ui` uses `in` as an
+  it now does because the header needs a non-ambiguous separator token
+  between binder slots and the collection reference. Source-compat: no
+  shipped `.ui` uses `in` as an
   identifier (greppable); the existing `in-out` property token is a
   distinct hyphenated lexeme and is unaffected.
 
@@ -265,6 +275,18 @@ body-range generalisation are named as future same-family members.
   placement-migration trigger.
 - **Approach 3** — a host-language loop lowers into the same
   member-level `For` IR; the block surface keeps that path open.
+
+## Strategic review disposition
+
+- **Review F2 folded.** The header recommendation now records the
+  bare-state reference boundary and its relationship to the existing
+  qualified-name surfaces; no recommendation change.
+
+## Revision history
+
+- Strategic owner-alignment review fold: clarified the post-`in`
+  reference-shape boundary and the reservation rationale; status remains
+  Proposed.
 
 ## Technical risk re-evaluation
 

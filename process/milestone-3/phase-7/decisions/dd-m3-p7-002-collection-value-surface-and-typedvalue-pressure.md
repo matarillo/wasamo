@@ -179,7 +179,11 @@ positional** (consistent with DD-005's un-keyed baseline), and the
 only whole-collection write operation is a full-value set — the
 shape a host replace API would call. Batching and drain interaction:
 a collection write is one signal write riding the existing
-`BATCH_DEPTH` / drain machinery, nothing bespoke.
+`BATCH_DEPTH` / drain machinery, nothing bespoke. The per-element-type
+registry seam is accepted deliberately because the registry is already
+per scalar type; replacing it with a type-erased cell is a registry
+redesign with no Phase 7 driver, and the `TypedValue` trigger below is
+the point that would reopen that asymmetry.
 
 ## Mutation surface
 
@@ -215,8 +219,20 @@ pocket.
     future statements (`insert`, `remove-at`, `clear`) without touching
     `expr`.
   - What you give up: `.`-method syntax is new in statement position
-    (the lexer already handles `.` in qualified reads); two reserved
+    (the lexer already handles `.` in qualified reads); two
     *contextual* method names.
+
+- **M4 — reserve `append` / `pop` as ordinary keywords**
+  - What you gain: the reserved-keyword table stays the single
+    vocabulary category; future collection methods would be easy to
+    explain as globally reserved words.
+  - What you give up: two common identifier spellings are removed from
+    the author namespace even though parsing does not require it. Unlike
+    `in`, which separates binder slots from the collection reference in
+    the loop header, `append` / `pop` occur after `IDENT "." IDENT "("`
+    and can be recognized without a global reservation. Reserving them
+    would make the public vocabulary simpler by making the DSL less
+    hospitable to author names.
 
 - **M3 — whole-collection assignment** (`thumbs = [1, 2, 3];`)
   - What you give up as the *only* path: the proof mutation (append
@@ -230,7 +246,9 @@ pocket.
 
 M1 is rejected on the uniformity principle (it is the operator pocket
 in disguise). M3 cannot serve the proof and is deferred as a surface.
-M2 makes the statement-vs-expression boundary *visible in the
+M4 is rejected on namespace merit: parse disambiguation does not need a
+global keyword, so the cost would be paid only by authors. M2 makes the
+statement-vs-expression boundary *visible in the
 grammar* — which is precisely what note 2 requires to be recorded —
 and stays inside the family of effectful handler statements the DSL
 already has.
@@ -238,17 +256,29 @@ already has.
 ### Recommendation
 
 **M2.** `append(expr)` — element-type-checked against the collection;
-`pop()` — removes the last element, no-op on an empty collection
-(observable contract; an error variant has no driver and would add a
-failure path the proof cannot exercise deterministically). Both lower
-to new `HandlerExpr` statement variants evaluated by the runtime as
+`pop()` — removes the last element, no-op on an empty collection. The
+empty-`pop` no-op is an author-facing product contract: a boundary
+Remove action can be idempotent, while diagnostics stay reserved for
+authoring errors rather than normal runtime boundary states. It also
+avoids adding an undriven failure path to the proof, but that is a
+secondary verification benefit, not the primary reason. Both lower to
+new `HandlerExpr` statement variants evaluated by the runtime as
 read-modify-write on the whole-value signal. `append` / `pop` are
 **contextual** names (valid only in this production), not reserved
-keywords — they remain usable as state / widget identifiers, mirroring
-the Phase 6 decision to reserve only what has a production. Statements
+keywords — they remain usable as state / widget identifiers because
+parse disambiguation does not require a global reservation. Statements
 on a scalar LHS, `append` arity / type mismatches, `pop(expr)`, and
 whole-collection assignment are all `wasamoc check` rejects
 (DD-M3-P7-007 matrix).
+
+Reference-shape rule: the statement LHS is intentionally a **bare
+state name** (`thumbs.append(...)`), not a qualified name. This matches
+the Phase 7 loop-header collection reference (DD-M3-P7-001) and keeps
+new collection mutation scoped to local component state. Qualified
+forms such as `root.thumbs.append(...)` are rejected with a diagnostic
+rather than being parsed as a three-segment qualified assignment; the
+uniform expression/reference expansion is the trigger that would
+reopen this boundary.
 
 ## `TypedValue` pressure (explicit judgment)
 
@@ -282,7 +312,10 @@ default; §3 gains `collection_literal` and `collection_stmt`; the
 handler-statement section documents `append` / `pop` semantics
 (including empty-`pop` no-op) and states the category explicitly:
 *collection mutations are handler statements, not expressions; the
-expression grammar is unchanged*. Textual IR: collection state-type
+expression grammar is unchanged*. The keyword / handler-statement text
+also states that `append` / `pop` are contextual method names, not
+reserved keywords, so `append` remains a valid state / widget
+identifier outside `collection_stmt`. Textual IR: collection state-type
 tokens, `(list …)` literal, `(list-prop-read …)`, `(list-append …)` /
 `(list-pop …)` statement forms, loader validation policy. Invalid
 examples per DD-007.
@@ -300,6 +333,31 @@ examples per DD-007.
   the collection-UX wave.
 - **Collection expressions** (literals in handler RHS, slices) — Q5
   uniform extension territory.
+- **Loop-external collection reads** (`length`, empty checks, element
+  index reads) — deferred to the Q5 uniform expression/reference
+  extension; the trigger is the first concrete gallery or host-state
+  case that needs to read a collection outside the `for` header or its
+  loop-local binders.
+
+## Strategic review disposition
+
+- **Review F1 folded.** Added the reserved-keyword vs contextual-name
+  option comparison and restated the reservation rule as
+  parse-necessity plus author-namespace merit.
+- **Review F2 folded.** Recorded the bare-state collection statement
+  LHS and the qualified-form diagnostic boundary.
+- **Review F3 folded.** Added a trigger-backed deferral for
+  loop-external collection reads.
+- **Review F4 folded.** Reframed empty-`pop` no-op around author-facing
+  idempotence, leaving verification cost as secondary.
+- **Review F5 folded.** Recorded why the runtime registry keeps its
+  per-type seam until the `TypedValue` trigger.
+
+## Revision history
+
+- Strategic owner-alignment review fold: clarified contextual method
+  names, collection reference shape, loop-external reads, empty-`pop`
+  merit, and registry seam asymmetry; status remains Proposed.
 
 ## Technical risk re-evaluation
 

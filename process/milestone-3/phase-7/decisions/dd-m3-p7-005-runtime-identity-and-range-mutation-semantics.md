@@ -184,8 +184,13 @@ building before splicing — which the natural implementation does
 anyway — and upgrades observability with range-scoped diagnostics
 (DD-007 surfaces them). The observable contract: **a collection
 mutation either takes effect entirely or leaves the materialised tree
-unchanged, in both cases with the drain contract holding on return.**
-PF3 / PF4 are declined on proportionality grounds with this recorded
+unchanged before the first insertion commit, in both cases with the
+drain contract holding on return.** Removal is already a commit-stage
+operation: if an OS-level failure is ever observed while disposing
+effects, releasing registry entries, or removing Visuals, it is logged
+with range context like a commit-stage WinRT parenting failure, not
+promised as undoable. PF3 / PF4 are declined on proportionality grounds
+with this recorded
 re-trigger: if commit-stage WinRT failures are ever observed in
 CI / the field, the contract is re-opened (constraints §5's "may need
 a stronger story" honoured as a trigger, not pre-built).
@@ -216,7 +221,8 @@ dsl_spec iteration chapter, normative: the W2 identity sentence + the
 explicit keyed non-promise; mutation timing (on handler return the
 tree reflects the mutation — toggle-then-observe generalised);
 empty-collection behaviour (zero children, slot live); the
-all-or-unchanged mutation contract. architecture.md: the range
+all-or-unchanged insertion-construction contract plus the logged
+commit-stage removal/WinRT-failure posture. architecture.md: the range
 mutation path (stage-then-commit, dispose-ahead, seam-computed
 offsets) in the reactive / structural-mutation sections — accepted
 contracts only, no option labels.
@@ -234,6 +240,19 @@ contracts only, no option labels.
   UX).
 - **Member-range bodies** — the plan's "one subtree per position"
   becomes "one range per position"; PF2 staging and the seam absorb it.
+
+## Strategic review disposition
+
+- **Review F6 folded.** Scoped the all-or-unchanged promise to the
+  construction / pre-insert window and recorded the
+  removal/commit-stage failure posture with range-context logging; no
+  recommendation change.
+
+## Revision history
+
+- Strategic owner-alignment review fold: scoped all-or-unchanged to
+  staged insertion and documented removal/commit-stage failure posture;
+  status remains Proposed.
 
 ## Technical risk re-evaluation
 
