@@ -157,30 +157,21 @@ ADR numbering 1:1, FD-G):
   wording for author-named binders, not as fixed magic names; `item` and
   `index` remain valid conventional binder names.
 
-## Recommendation-choice review disposition
+## Obligations carried to the implementation plan
 
-- **Finding 2 folded.** The placeholder-vs-fixed-name interpretation is
-  now an explicit owner confirmation item before the Accepted flip; no
-  DD recommendation changes.
+`implementation/plan.md` opens only after the Accepted flip; it
+absorbs these review-sourced obligations on opening:
 
-## Implementation-readiness review disposition
-
-- **Finding 1 folded.** DD-005 defines the removed-item `ItemRead`
-  guard and DD-007 adds the direct `pop` test row.
-- **Finding 2 folded.** DD-007's cap-accounting mechanism now matches
-  source behaviour while preserving the breadth-not-depth conclusion.
-- **Finding 3 folded.** DD-002 specifies empty-`pop` as no signal write
-  and the verification closure pins no dirty re-run.
-- **Finding 4 deferred.** Implementation-plan first task: design the
+- **First task: instantiation-context design.** Design the
   instantiation context type (element tag, signal reference, position,
-  live/out-of-range guard); DD variant spelling remains intentionally
-  adjustable.
-- **Finding 5 deferred.** Implementation-plan sequencing concern:
-  order C1, ST2, splice, and `for` work so intermediate commits remain
+  live/out-of-range guard); the DD variant spelling remains
+  intentionally adjustable.
+- **Sequencing for bisectability.** Order C1, ST2, the splice
+  primitive, and the `for` work so intermediate commits remain
   bisectable.
-- **Finding 6 deferred.** Implementation-plan test refinement: load
-  path must prove static materialisation plus initial `for` effect does
-  not double-create children.
+- **Load-path test refinement.** The load path must prove static
+  materialisation plus the initial `for` effect does not double-create
+  children.
 
 ## Cross-DD decision dependencies
 
@@ -363,7 +354,8 @@ judgments are explicit:
   revise-in-place.
 - [`../../plan.md`](../../plan.md) — Phase 7 row populated.
 - `implementation/preamble.md` / `plan.md` — opened after acceptance,
-  with the final-task ownership split represented from the start.
+  with the final-task ownership split and the §Obligations carried to
+  the implementation plan represented from the start.
 
 **FD-E live-doc-sync timing (judged):** answers §5-3 places the
 stale-reference sync at Moment 2. It is front-loaded to Moment 1
@@ -410,3 +402,4 @@ per the split.
 | 2026-06-11 | Recommendation-choice review fold: recorded owner confirmation for placeholder `item` / `index`, reflected binder-in-`if` and non-literal collection-element rejects, synced the framing FD-F trigger, and kept status Proposed. |
 | 2026-06-11 | Implementation-readiness review fold: closed the removed-item read guard, corrected cap accounting, specified empty-`pop` no-dirty behaviour, and deferred plan-only sequencing/context/load-test findings; status remains Proposed. |
 | 2026-06-11 | Doc-sync completeness review fold: added the dsl_spec §4.14 `for` forward-reference staleness sweep (answers §5-3) to the Moment 1 dsl_spec touch, and recorded the judged Moment 1 front-load of the FD-E live-doc sync with Moment 2 re-verification; status remains Proposed. |
+| 2026-06-11 | Per-finding "folded" review-disposition bookkeeping removed from this preamble and from all seven DDs (owner-directed: per-finding multi-stage review records are excess detail; the folded content is authoritative inline and each document's revision history keeps the one-line fold record). The three deferred implementation-readiness findings are retained as §Obligations carried to the implementation plan (forward-carry content, not bookkeeping). |

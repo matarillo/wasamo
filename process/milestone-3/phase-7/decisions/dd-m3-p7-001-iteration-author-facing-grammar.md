@@ -279,12 +279,6 @@ body-range generalisation are named as future same-family members.
 - **Approach 3** — a host-language loop lowers into the same
   member-level `For` IR; the block surface keeps that path open.
 
-## Strategic review disposition
-
-- **Review F2 folded.** The header recommendation now records the
-  bare-state reference boundary and its relationship to the existing
-  qualified-name surfaces; no recommendation change.
-
 ## Revision history
 
 - Strategic owner-alignment review fold: clarified the post-`in`

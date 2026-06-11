@@ -343,32 +343,6 @@ examples per DD-007.
   case that needs to read a collection outside the `for` header or its
   loop-local binders.
 
-## Strategic review disposition
-
-- **Review F1 folded.** Added the reserved-keyword vs contextual-name
-  option comparison and restated the reservation rule as
-  parse-necessity plus author-namespace merit.
-- **Review F2 folded.** Recorded the bare-state collection statement
-  LHS and the qualified-form diagnostic boundary.
-- **Review F3 folded.** Added a trigger-backed deferral for
-  loop-external collection reads.
-- **Review F4 folded.** Reframed empty-`pop` no-op around author-facing
-  idempotence, leaving verification cost as secondary.
-- **Review F5 folded.** Recorded why the runtime registry keeps its
-  per-type seam until the `TypedValue` trigger.
-
-## Recommendation-choice review disposition
-
-- **Finding 3 folded.** The collection-literal grammar seed now
-  constrains elements by nonterminal rather than comment only; DD-M3-P7-007
-  owns the matching non-literal element reject row.
-
-## Implementation-readiness review disposition
-
-- **Finding 3 folded.** Empty-`pop` no-op now forbids a same-value
-  collection-signal write; the direct runtime test pins no dirty-effect
-  re-run.
-
 ## Revision history
 
 - Strategic owner-alignment review fold: clarified contextual method

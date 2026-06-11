@@ -219,19 +219,6 @@ author-visible; the author surface `h-align` / `v-align` is unchanged).
   value space may be per-container unless / until a shared enum has
   implementation merit.
 
-## Strategic review disposition
-
-- **Review F9 folded.** Added ST1' (encapsulated SoA) as the structural
-  SoA alternative and selected ST2 on its authored-model, staging, and
-  splice-signature merits rather than on a false discipline/structure
-  binary.
-- **Review F11 folded.** The child-carried contract now says
-  parent-interpreted placement lives on the child slot, while the
-  concrete value space (shared enum vs per-container type) remains open.
-- **Review F12 folded.** Grid migration deferral is now framed as
-  proportionality / invariant merit with the recursive trigger, not as a
-  change-surface cost objection.
-
 ## Revision history
 
 - Strategic owner-alignment review fold: added ST1' as the steel-man SoA

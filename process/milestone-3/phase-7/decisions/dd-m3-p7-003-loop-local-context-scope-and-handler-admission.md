@@ -247,23 +247,6 @@ binder in handler, handler in body, nested `for`.
   with keyed identity (DD-005 forward-compat) as a widget-id-distinct
   surface per Q1.
 
-## Strategic review disposition
-
-- **Review F8 folded.** HA3 is now presented as an admissible option in
-  the owner-delegated handler-admission space, with its gain stated; HA1
-  remains recommended on driver / identity-thesis sequencing grounds.
-- **Review F10 folded.** Index-binder admission now records why a
-  read-only, expression-position aligned local binding can ship without
-  an in-phase numbering driver, while handler admission is deferred
-  because it entangles identity and lifecycle theses.
-
-## Recommendation-choice review disposition
-
-- **Finding 1 folded.** The read-position recommendation now explicitly
-  rejects loop-local binder reads in `if` conditions as a recorded
-  per-item conditional-presence deferral in the framing FD-F scope
-  table; descendant `if` remains admitted only with state conditions.
-
 ## Revision history
 
 - Strategic owner-alignment review fold: fairly stated HA3 and moved

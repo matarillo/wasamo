@@ -229,12 +229,6 @@ the accepted contract, no option labels.
 - **Approach 3** — a host-language loop lowers to the same `For`
   member; the IR stays approach-neutral.
 
-## Strategic review disposition
-
-- **Review F7 folded.** The keyed forward-compat note now distinguishes
-  no expansion-model reshaping from a possible additive key-selector IR
-  field; no recommendation change.
-
 ## Revision history
 
 - Strategic owner-alignment review fold: narrowed keyed

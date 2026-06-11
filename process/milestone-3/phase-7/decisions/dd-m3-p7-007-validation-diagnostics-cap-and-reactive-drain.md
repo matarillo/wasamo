@@ -218,35 +218,6 @@ accepted contract.
   reopening conditions; they ride the implementation handoff into the
   next phase's constraints sweep.
 
-## Strategic review disposition
-
-- **Review F13 folded.** Added the qualified collection-reference row on
-  the `for` header side so the matrix names the same DD-001
-  reference-shape deferral that mutation LHS diagnostics name for
-  `root.xs.append(...)`.
-- **Review confirmation recorded.** No strategic change was requested
-  for cap accounting, breadth-vs-depth charging, empty-collection
-  legality, or the reactive-drain carry table.
-
-## Recommendation-choice review disposition
-
-- **Finding 1 folded.** Added the binder-in-`if`-condition reject row
-  and tied it to DD-M3-P7-003's per-item conditional-presence deferral.
-- **Finding 3 folded.** Added the non-literal collection element reject
-  row so DD-M3-P7-002's scalar-literal grammar seed has a matrix-backed
-  diagnostic and invalid example.
-- **Minor note folded.** The >N cap fixture now records how the large
-  cardinality is reached despite append/pop being the only authored
-  mutations.
-
-## Implementation-readiness review disposition
-
-- **Finding 1 folded.** Added the doomed-binding `pop` test obligation
-  and tied the semantic guard to DD-M3-P7-005.
-- **Finding 2 folded.** Corrected cap accounting to match source
-  behaviour: new effects run synchronously at creation and prefix
-  re-runs share the current dirty batch.
-
 ## Revision history
 
 - Strategic owner-alignment review fold: added the qualified

@@ -250,25 +250,6 @@ contracts only, no option labels.
 - **Member-range bodies** — the plan's "one subtree per position"
   becomes "one range per position"; PF2 staging and the seam absorb it.
 
-## Strategic review disposition
-
-- **Review F6 folded.** Scoped the all-or-unchanged promise to the
-  construction / pre-insert window and recorded the
-  removal/commit-stage failure posture with range-context logging; no
-  recommendation change.
-
-## Recommendation-choice review disposition
-
-- **Minor note folded.** The per-item binding example now uses `.ui`
-  property-binding notation (`label: thumb`) rather than textual-IR
-  `bind` notation; no recommendation change.
-
-## Implementation-readiness review disposition
-
-- **Finding 1 folded.** V2 now defines out-of-range `ItemRead` during
-  same-batch tail removal as a skipped property write, closing the
-  doomed-binding read before implementation planning.
-
 ## Revision history
 
 - Strategic owner-alignment review fold: scoped all-or-unchanged to
