@@ -332,7 +332,17 @@ judgments are explicit:
   `for` now has a production); §state-decl section gains collection
   types; textual-IR chapter gains the `(for …)` member, list-literal,
   collection-read and mutation-statement productions plus loader
-  validation policy; invalid examples per DD-007. No DD option labels
+  validation policy; invalid examples per DD-007. Existing `for`
+  forward references are **swept for staleness** in the same touch
+  (FD-E / answers §5-3 — the dsl_spec side of the same live-doc-sync
+  lane as the architecture §9 revision below). Two are known stale at
+  drafting time, both in §4.14: the single-widget-body note's "the
+  multi-child range form is the Phase 7 `for` driver" (DD-001 ships
+  the single-widget body; the member-range form is deferred to the
+  family extension, not chosen) and the structural-control-flow family
+  list's "`for` … is the first construct to need keyed identity /
+  state retention" (DD-005 ships the un-keyed positional baseline;
+  keyed is opt-in future, M4-input-triggered). No DD option labels
   in spec prose. Marker: `M3-Phase 7 design accepted; implementation
   pending`.
 - [`docs/architecture.md`](../../../../docs/architecture.md) —
@@ -355,6 +365,18 @@ judgments are explicit:
 - `implementation/preamble.md` / `plan.md` — opened after acceptance,
   with the final-task ownership split represented from the start.
 
+**FD-E live-doc-sync timing (judged):** answers §5-3 places the
+stale-reference sync at Moment 2. It is front-loaded to Moment 1
+because the staleness is created by the **Accepted flip itself** —
+from that commit until phase close, architecture §9 and the two
+dsl_spec §4.14 forward references would contradict accepted DDs
+(DD-001 / DD-005) in normative docs — and because the affected
+sections are already rewritten in the Moment 1 design-sync commit, so
+the revisions share its review concern. The revision is not duplicated
+at Moment 2: the Moment 2 divergence-correction pass re-verifies the
+revised sentences against the implementation like every other synced
+statement.
+
 **Moment 2 — Phase close commit set (impl re-sync):** dsl_spec /
 architecture markers flip to `closed; implementation-synced` with
 divergence corrections; `architectural-family.md` confirm entry lands;
@@ -371,7 +393,7 @@ per the split.
 | FD-B — 2+ frame mutation proof, runtime-owned state, body-external Button | Constraint | §Verification closure items 4–6 |
 | FD-C — un-keyed / append-truncate / scalar / flat boundary; host boundary deferred with future-compat record | Settled framing | DD-002 / 003 / 005; §Out of scope |
 | FD-D — loop-locals = expression-position read-only exception | Settled framing | DD-003 |
-| FD-E — keyed expectation revised via live-doc sync, no retroactive ADR edits | Discipline | §Upstream revisions (architecture §9) |
+| FD-E — keyed expectation revised via live-doc sync, no retroactive ADR edits | Discipline | §Upstream revisions (architecture §9 + dsl_spec §4.14 `for` forward references) |
 | FD-G — 7-DD slate | Structure | §Decisions |
 | FD-F — deferred-items 正本 in framing | Discipline | §Out of scope / §Forward-compat |
 | constraints.md §1–§10 | Constraint set | DD-004 (§1, §8), DD-005 (§2, §3, §5), DD-006 (§4), DD-007 (§6), DD-002 (§7), verification (§9), process (§10) |
@@ -387,3 +409,4 @@ per the split.
 | 2026-06-11 | Initial draft (Status: Proposed). All 7 DDs at Proposed pending owner review. Framing-level owner alignment confirmed 2026-06-11 ([../requirements/framing.md](../requirements/framing.md) §Owner alignment outcome). |
 | 2026-06-11 | Recommendation-choice review fold: recorded owner confirmation for placeholder `item` / `index`, reflected binder-in-`if` and non-literal collection-element rejects, synced the framing FD-F trigger, and kept status Proposed. |
 | 2026-06-11 | Implementation-readiness review fold: closed the removed-item read guard, corrected cap accounting, specified empty-`pop` no-dirty behaviour, and deferred plan-only sequencing/context/load-test findings; status remains Proposed. |
+| 2026-06-11 | Doc-sync completeness review fold: added the dsl_spec §4.14 `for` forward-reference staleness sweep (answers §5-3) to the Moment 1 dsl_spec touch, and recorded the judged Moment 1 front-load of the FD-E live-doc sync with Moment 2 re-verification; status remains Proposed. |
