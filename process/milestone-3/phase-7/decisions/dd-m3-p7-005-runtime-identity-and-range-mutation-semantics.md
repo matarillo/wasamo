@@ -117,7 +117,7 @@ the W2 sentence, not this inference, is the durable contract).
 
 ## Per-item binding reactivity
 
-How does `bind label = thumb` get its value — captured at
+How does `label: thumb` get its value — captured at
 materialisation, or read live?
 
 - **V1 — frozen capture:** the element value is copied into the
@@ -248,11 +248,19 @@ contracts only, no option labels.
   removal/commit-stage failure posture with range-context logging; no
   recommendation change.
 
+## Recommendation-choice review disposition
+
+- **Minor note folded.** The per-item binding example now uses `.ui`
+  property-binding notation (`label: thumb`) rather than textual-IR
+  `bind` notation; no recommendation change.
+
 ## Revision history
 
 - Strategic owner-alignment review fold: scoped all-or-unchanged to
   staged insertion and documented removal/commit-stage failure posture;
   status remains Proposed.
+- Recommendation-choice review fold: aligned the binder-read example
+  with `.ui` property-binding surface notation; status remains Proposed.
 
 ## Technical risk re-evaluation
 

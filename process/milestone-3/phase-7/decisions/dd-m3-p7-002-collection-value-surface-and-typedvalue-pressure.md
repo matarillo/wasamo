@@ -87,9 +87,11 @@ type at `wasamoc check`.
 ```
 state_type         ::= "i32" | "string" | "bool"
                     |  "i32[]" | "string[]" | "bool[]"   ; M3-Phase 7
-collection_literal ::= "[" (expr ("," expr)*)? "]"
-                       ; elements: scalar literals of the declared
-                       ; element type (no idents/operators this phase)
+collection_literal ::= "[" (collection_scalar_literal
+                       ("," collection_scalar_literal)*)? "]"
+collection_scalar_literal ::= INT_LIT | STRING_LIT | BOOL_LIT
+                       ; each literal must match the declared element
+                       ; type; no idents/operators this phase
 ```
 
 ## IR carrier
@@ -353,11 +355,20 @@ examples per DD-007.
 - **Review F5 folded.** Recorded why the runtime registry keeps its
   per-type seam until the `TypedValue` trigger.
 
+## Recommendation-choice review disposition
+
+- **Finding 3 folded.** The collection-literal grammar seed now
+  constrains elements by nonterminal rather than comment only; DD-M3-P7-007
+  owns the matching non-literal element reject row.
+
 ## Revision history
 
 - Strategic owner-alignment review fold: clarified contextual method
   names, collection reference shape, loop-external reads, empty-`pop`
   merit, and registry seam asymmetry; status remains Proposed.
+- Recommendation-choice review fold: changed the collection-literal
+  seed from `expr` elements to scalar-literal elements and aligned the
+  reject matrix; status remains Proposed.
 
 ## Technical risk re-evaluation
 

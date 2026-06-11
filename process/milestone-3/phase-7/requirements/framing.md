@@ -77,6 +77,9 @@ items 正本テーブルを含む）、verification strategy が ADR drafting �
 追記: 2026-06-11 ADR strategic review fold により、loop-external collection reads 行を
 FD-F の正本テーブルへ追加した。
 
+追記: 2026-06-11 recommendation-choice review fold により、per-item conditional
+presence 行を FD-F の正本テーブルへ追加した。
+
 ---
 
 ## Phase 7 acceptance criteria (restated)
@@ -301,6 +304,7 @@ Phase 7 で扱う範囲は次のとおり。ここでは、具体的な options 
 | loop-external collection reads（length / empty check / element index read） | **DD-002 forward-compat と DD-007 diagnostics**に deferral / reject を置き、正本として本表に追加する（FD-F 正本テーブル追記） | gallery caption の `N items`、Remove disable の empty check、body 外の element access、host/state expression で collection を読む concrete app case | Phase 7 の collection read は `for` header と loop-local binder 経由に限る。外側の read surface は Q5 の uniform expression/reference extension と一緒に開く方が、参照形と operator pocket を分裂させない |
 | `f64[]` / 第四 scalar collection element | **DD-002 の element-scalar-set 判断で defer を明示**し、必要なら **M5 value-surface DD または `TypedValue` / scalar expansion DD** へ送る | 座標、比率、metrics、opacity、animation value、image metadata など、`f64` 要素を要する concrete app case が出た時 | `f64[]` は structured fields ではないが、第四 scalar / value-surface 拡張である。Phase 7 の cardinality proof は `i32[]` / `bool[]` / `string[]` の homogeneous scalar collection で足りるため、`f64[]` は肯定的に残しつつ trigger 付きで defer する |
 | per-item handler / handler 内 `item` 参照 | **Phase 7 ADR で admission を明示判断**する。Reject するなら trigger 付き defer として記録する | select-this-item / delete-this-item 等の per-item interaction が要る UI。自然には M4 input で到来する | Q5a の例外は式（binding）位置だけである。`for` body 内の handler 持ち widget を許すか、handler から `item` を読めるかは別判断である |
+| per-item conditional presence（loop-local binder in `if` condition） | **DD-003 read-position deferral と DD-007 diagnostics**に deferral / reject を置き、正本として本表に追加する（FD-F 正本テーブル追記） | `bool` 要素で per-item の表示 / 状態分岐を要する concrete UI case。自然には M4 input の per-item interaction、または次の structural control-flow 拡張のどちらか早い方で再評価する | Phase 7 の `if` 条件 identifier は bool state のみへ解決する。loop-local binder を許すと per-item presence が instantiation context と C1 expansion seam に入るため、read-position widening として明示的に開く |
 | nested template scope / shadowing | **次に nested structural control flow を開く phase** に送る（暫定 M4+ grammar residual） | nested `for`、`else` / `switch`、bare nested control flow、template-local named scope が必要になった時 | Scope 規則は、structural control-flow family の拡張と一緒に設計する方が一貫する |
 | gallery-scale / cap / fan-out | **Phase 7 framing §Risks + reactive-drain residual carry** で扱う。大規模化は **M5+ LazyList / performance DD** に送る | N item 生成が `MUTATION_CAP` に触れる。Visible list が数十〜数百 item を acceptance として要求する。CI / E2E で convergence failure が出る | Constraints §6 は fan-out × cap を Phase 7 直撃の論点とし、fix-or-carry の明示記録を義務化している。Silent carry-forward は不可 |
 | item key と widget id の境界 | **Phase 7 ADR で確定的に記録**する。Widget id 自体は top-layer / anchor / concrete app case まで carry する | `key:` 導入、top-layer anchor 参照、state 経由では表現力が足りない concrete case | Widget id と item key を混同しない規律をここで明文化する |

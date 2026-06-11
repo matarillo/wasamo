@@ -8,7 +8,7 @@
 
 Iteration introduces the DSL's first **template-local names**: inside a
 `for` body, the element (and optionally its index) must be readable so
-generated subtrees can differ per item (`bind label = thumb`). Until
+generated subtrees can differ per item (`label: thumb`). Until
 now every dynamic reference in a binding resolved to a component
 `state`; FD-D codifies loop locals as the **first explicit exception**
 to that rule — a *loop-local read-only binding* — and confines the
@@ -100,17 +100,39 @@ identity / lifecycle theses, not to this aligned local value binding.
 ### Options
 
 - **P1 — binding expressions inside the body template only.** A binder
-  is readable wherever a binding expression (`bind … = …`,
-  interpolation parts) is evaluated within the `for` body's widget
-  subtree. Not in handler position, not in property *literal* position
-  (which is static by definition), not outside the body.
+  is readable wherever a binding expression (property binding
+  `name: expr`, interpolation parts) is evaluated within the `for`
+  body's widget subtree. Not in handler position, not in an `if`
+  condition, not in property *literal* position (which is static by
+  definition), not outside the body. The `if` condition remains the Phase 6 narrow
+  bool-expr whose identifier resolves to a `bool`-typed `state`;
+  admitting loop-local bool binders there would widen condition-name
+  resolution and make per-item conditional presence a separate
+  structural surface.
+- **P1a — also in descendant `if` conditions.** A bool element binder
+  could drive per-item conditional presence (`for t in flags { Box {
+  if t { … } } }`).
+  - What you gain: the most natural use of `bool[]` items in structure.
+  - What you give up: the condition resolver stops being state-only;
+    `ConditionalSubtree` presence would depend on a loop instantiation
+    context and compose into the DD-M3-P7-004 expansion seam. That is a
+    real per-item presence surface, adjacent to the HA1 per-item
+    interaction deferral and the nested-scope family trigger.
 - **P2 — also in handler position** — folded into the handler-admission
   judgment below; cannot be decided independently of whether body
   handlers exist at all.
 
 ### Recommendation
 
-**P1**, per FD-D's codified exception boundary. Lowering: a binder read
+**P1**, per FD-D's codified exception boundary. Binder reads are
+limited to property-binding / interpolation expression positions in the
+body widget subtree; descendant `if` members remain admitted only when
+their conditions read `bool` state, not loop-local binders. Per-item
+conditional presence is a recorded deferral in the framing FD-F
+scope table: it reopens on the first concrete UI case needing per-item
+display / state branching from `bool` elements, naturally at M4 input
+per-item interaction or the next structural control-flow extension,
+whichever comes first. Lowering: a binder read
 becomes a typed loop-local read in the unified `HandlerExpr`
 (`ItemRead { binder }` / `IndexRead { binder }`; one enum, no per-item
 side enum — settled premise). `wasamoc` types the read from the
@@ -178,8 +200,8 @@ members — and if so, may handler expressions read the binders?
     already-normative handler-position loop-read contract instead of
     reopening handler admission.
   - What you give up: this *is* the per-item interaction surface —
-    handler-position loop reads widen the expression-position-only
-    surface at the open question FD-D delegated here, and the
+    handler-position loop reads widen the property-binding /
+    interpolation-only surface at the open question FD-D delegated here, and the
     value-vs-live-position question (does the handler see the index at
     creation or at click time?) is exactly the identity question
     deferred with keyed retention. HA3 is within this DD's delegated
@@ -203,13 +225,16 @@ the Phase 6 operator-condition reject).
 ## Spec content seed
 
 The iteration chapter's scope section states normatively: binders are
-author-named, read-only, expression-position-only; their types (element
-type / `i32`); the flat-scope visibility window; the collision errors;
+author-named, read-only, property-binding / interpolation-position-only;
+their types (element type / `i32`); the flat-scope visibility window;
+the collision errors;
 the no-nesting and no-handler rules **as designed rejections with named
-triggers**; and the Q1 boundary sentence — *a binder is not a widget id
-and not an item key; generated subtrees have positional identity
-(§identity baseline)*. Invalid examples: state-collision, undeclared
-binder, binder in handler, handler in body, nested `for`.
+triggers**; the `if` condition boundary (`cond_expr` identifiers
+resolve to state only, not loop-local binders); and the Q1 boundary
+sentence — *a binder is not a widget id and not an item key; generated
+subtrees have positional identity (§identity baseline)*. Invalid
+examples: state-collision, undeclared binder, binder in `if` condition,
+binder in handler, handler in body, nested `for`.
 
 ## Forward-compat exposure
 
@@ -232,12 +257,23 @@ binder, binder in handler, handler in body, nested `for`.
   an in-phase numbering driver, while handler admission is deferred
   because it entangles identity and lifecycle theses.
 
+## Recommendation-choice review disposition
+
+- **Finding 1 folded.** The read-position recommendation now explicitly
+  rejects loop-local binder reads in `if` conditions as a recorded
+  per-item conditional-presence deferral in the framing FD-F scope
+  table; descendant `if` remains admitted only with state conditions.
+
 ## Revision history
 
 - Strategic owner-alignment review fold: fairly stated HA3 and moved
   its reject ground from framing-boundary exclusion to M4/identity
   sequencing; clarified index-binder admission despite no in-phase
   numbering driver; status remains Proposed.
+- Recommendation-choice review fold: clarified that loop-local binders
+  are not readable in `if` conditions and recorded per-item conditional
+  presence as a framing FD-F 正本 deferral; tightened read-position
+  wording; status remains Proposed.
 
 ## Technical risk re-evaluation
 

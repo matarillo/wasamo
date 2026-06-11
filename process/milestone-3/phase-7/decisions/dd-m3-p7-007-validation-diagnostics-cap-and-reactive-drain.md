@@ -79,12 +79,17 @@ Owning DD in parentheses; every row is a test.
 
 **Binder reads:**
 - binder read outside its `for` body; undeclared binder; binder read
-  in handler position (DD-003).
+  in handler position; binder read in an `if` condition — `cond_expr`
+  identifiers resolve to `bool` state only, and per-item conditional
+  presence is a recorded deferral (DD-003).
 
 **Collection declarations / literals (DD-002):**
 - nested collection types (`i32[][]`); heterogeneous or
   element-type-mismatched list literal; list literal as a scalar
   state's default and vice versa.
+- non-literal collection element (`state xs: i32[] = [a, b]`) —
+  "collection literal elements must be scalar literals; collection
+  expressions are not yet supported" recorded deferral (DD-002 / Q5).
 - loop-external collection reads (`xs.length`, `xs[0]`, empty checks
   outside the `for` header / loop-local binder path) — "collection
   reads outside iteration not yet supported" recorded deferral
@@ -148,7 +153,11 @@ fixture asserts a representative `append` at gallery scale (and a
 deliberately larger N, e.g. 64 > `MUTATION_CAP`) converges without
 divergence — positively demonstrating that breadth does not approach
 the cap, so the proof's passing is by design, not by small-N luck
-(the framing R3 risk discharged).
+(the framing R3 risk discharged). Because the authored mutation surface
+is only `append(expr)` / `pop()`, the >N fixture reaches the large
+cardinality either by issuing many appends in one handler batch or by a
+headless direct signal setup before the observed drain; the fixture
+must state which path it uses.
 
 ## Reactive-drain residual disposition (fix-or-carry, explicit)
 
@@ -210,12 +219,26 @@ accepted contract.
   for cap accounting, breadth-vs-depth charging, empty-collection
   legality, or the reactive-drain carry table.
 
+## Recommendation-choice review disposition
+
+- **Finding 1 folded.** Added the binder-in-`if`-condition reject row
+  and tied it to DD-M3-P7-003's per-item conditional-presence deferral.
+- **Finding 3 folded.** Added the non-literal collection element reject
+  row so DD-M3-P7-002's scalar-literal grammar seed has a matrix-backed
+  diagnostic and invalid example.
+- **Minor note folded.** The >N cap fixture now records how the large
+  cardinality is reached despite append/pop being the only authored
+  mutations.
+
 ## Revision history
 
 - Strategic owner-alignment review fold: added the qualified
   post-`in` collection-reference reject row and recorded that cap /
   empty-collection / reactive-drain judgments remain unchanged; status
   remains Proposed.
+- Recommendation-choice review fold: added binder-in-`if` and
+  non-literal collection-element reject rows, plus the >N fixture setup
+  note; status remains Proposed.
 
 ## Technical risk re-evaluation
 

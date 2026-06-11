@@ -221,7 +221,10 @@ not a silent gap.
 - **Admitted inside the body's widget subtree:** descendant `if`
   members (`for t in thumbs { Box { if flag { … } } }`) — `if` adds no
   scope, and its presence math composes through the canonized expansion
-  seam (DD-004).
+  seam (DD-004). This admission covers the existing Phase 6 condition
+  surface: the condition identifier resolves to `bool` state. A
+  loop-local binder in that condition is not admitted by this grammar
+  decision; DD-M3-P7-003 records it as a read-position deferral.
 - **Rejected this phase:** a `for` member **anywhere inside a `for`
   body template** — not only as the immediate body but at any depth
   (`for a in xs { VStack { for b in ys { … } } }` is rejected). This is
@@ -287,6 +290,9 @@ body-range generalisation are named as future same-family members.
 - Strategic owner-alignment review fold: clarified the post-`in`
   reference-shape boundary and the reservation rationale; status remains
   Proposed.
+- Recommendation-choice review fold: clarified that descendant `if`
+  admission under a `for` template does not admit loop-local binder
+  reads in the `if` condition; status remains Proposed.
 
 ## Technical risk re-evaluation
 
