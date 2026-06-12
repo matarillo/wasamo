@@ -1,6 +1,6 @@
 # DD-M3-P7-003 — Loop-local context, scope, and handler admission
 
-**Status:** Proposed
+**Status:** Accepted
 **Phase:** M3-Phase 7
 **AC:** A8; A12 (the scope rules are external-reader-bar spec content)
 

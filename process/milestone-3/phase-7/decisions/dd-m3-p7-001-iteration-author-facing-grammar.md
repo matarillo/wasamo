@@ -1,6 +1,6 @@
 # DD-M3-P7-001 — Iteration author-facing grammar surface
 
-**Status:** Proposed
+**Status:** Accepted
 **Phase:** M3-Phase 7
 **AC:** A8 (iteration grammar — collection binding drives widget-tree
 generation)

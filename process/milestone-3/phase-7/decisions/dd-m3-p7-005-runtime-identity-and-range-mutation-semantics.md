@@ -1,6 +1,6 @@
 # DD-M3-P7-005 — Runtime identity baseline and range mutation semantics
 
-**Status:** Proposed
+**Status:** Accepted
 **Phase:** M3-Phase 7
 **AC:** A8 (runtime cardinality tracking); A12 (the identity baseline
 is normative author-visible spec text)

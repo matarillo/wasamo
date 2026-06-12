@@ -1,6 +1,6 @@
 # DD-M3-P7-002 — Collection value surface, mutation surface, and `TypedValue` pressure
 
-**Status:** Proposed
+**Status:** Accepted
 **Phase:** M3-Phase 7
 **AC:** A8 (collection binding); plan-level obligation: explicit
 `TypedValue` pressure judgment
@@ -359,8 +359,8 @@ notes, not options):
 
 ### Recommendation (vocabulary)
 
-**V4 — `append` / `drop-last`** (confirmation item: preamble §Owner
-confirmation). Contextual names (valid only inside
+**V4 — `append` / `drop-last`** (owner-confirmed at the Accepted flip:
+preamble §Owner confirmations). Contextual names (valid only inside
 `collection_expr`), not reserved keywords — a state named `append` or
 `drop-last` still parses (positive test).
 

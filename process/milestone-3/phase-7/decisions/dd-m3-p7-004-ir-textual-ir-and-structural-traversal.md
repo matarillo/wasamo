@@ -1,6 +1,6 @@
 # DD-M3-P7-004 — IR / textual IR representation and structural traversal model
 
-**Status:** Proposed
+**Status:** Accepted
 **Phase:** M3-Phase 7
 **AC:** A8; A11 (IR / loader / roundtrip advance in lockstep)
 

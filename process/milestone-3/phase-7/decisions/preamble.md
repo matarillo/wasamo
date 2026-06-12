@@ -2,7 +2,7 @@
 
 **Phase:** M3-Phase 7 (iteration grammar / collection-driven widget-tree generation)
 **Date:** 2026-06-11
-**Status:** Proposed
+**Status:** Accepted
 
 ## Context
 
@@ -45,8 +45,9 @@ The pre-doc framing for this phase was aligned with the owner on
 [../requirements/framing.md](../requirements/framing.md) ("Owner
 alignment outcome"). That alignment settled the framing decisions
 FD-P / FD-Q / FD-A / FD-B / FD-C / FD-D / FD-E / FD-G / FD-F; the
-remaining sub-decisions are recorded below as ADR `Recommendation`
-directions for the `Status: Proposed` → `Accepted` review pass.
+remaining sub-decisions were recorded below as ADR `Recommendation`
+directions and approved at the `Status: Proposed` → `Accepted` review
+pass (2026-06-13).
 
 ### The owner prior governing comparisons (FD-P)
 
@@ -141,7 +142,7 @@ drafting time):
 The Phase 7 ADR carries the seven framing-slate DDs (framing DD slate →
 ADR numbering 1:1, FD-G):
 
-| DD | Title | Decision summary (Proposed) |
+| DD | Title | Decision summary (Accepted) |
 |---|---|---|
 | [DD-M3-P7-001](./dd-m3-p7-001-iteration-author-facing-grammar.md) | Iteration author-facing grammar surface | **`for`-block member** `for <binder> ("," <index-binder>)? in <collection> { <one widget child> }` — the same family shape as the Phase 6 `if` block. `in` becomes a reserved keyword (its production now exists). Body = **exactly one widget child per iteration** (mirror of B1; multi-member range deferred). Direct `for` admitted under **VStack / HStack / WrapPanel / ZStack**; rejected under **ScrollView** (one-content contract, symmetric with DD-M3-P6-007), **Box** (at-most-one), **Grid** (Cell-mediated children; `for`-of-`Cell` deferred), and at **component level** (no parent slot). |
 | [DD-M3-P7-002](./dd-m3-p7-002-collection-value-surface-and-typedvalue-pressure.md) | Collection value surface, mutation surface, `TypedValue` pressure | Collection state types **`i32[]` / `string[]` / `bool[]`** with literal `[a, b, …]` / `[]`; IR carries `IrStateType::Scalar(IrType) \| Collection(IrType)` (a compile-error-forcing schema change) + `IrLiteral::List`. **Runtime-owned whole-value collection signals** (per-element-type seam; no `TypedValue`). Mutation = **whole-value assignment** `xs = xs.append(expr)` / `xs = xs.drop-last()` (pure expressions — purity carried by the assignment form; vocabulary criteria + V1–V4 comparison in §Method vocabulary) plus **static-literal reset / clear** `xs = [..]` (M3b — a recorded FD-C boundary extension) — assignment stays the only statement form; the new expressions are type-driven, operators stay absent, so the Q5 uniformity rule is untouched (`;` scope unchanged: handler statements only). `TypedValue` **judged and not adopted** (trigger-backed defer); `f64[]` deferred; host-replace future-compat constraints recorded (whole-value set; positional element identity; value-semantic copy). |
@@ -151,13 +152,13 @@ ADR numbering 1:1, FD-G):
 | [DD-M3-P7-006](./dd-m3-p7-006-placement-storage-and-structural-side-effects.md) | Placement storage model + structural side-effect atomicity | **Child-carried placement**: ZStack per-child placement moves from the parallel `zstack_placements` vector onto the child slot, so a child and its placement cannot drift (the trap-#3 class is removed structurally for every `for` / `if`-touched path, not policed by helper discipline). Grid `cell_placements` migration is **deferred with a trigger** (Grid rejects direct `for` this phase). One **range-splice primitive** owns the full side-effect set: child list, placement, layout dirty, Visual sibling order, registry, effects (gates traps #2 / #3 close artifacts mandatory). |
 | [DD-M3-P7-007](./dd-m3-p7-007-validation-diagnostics-cap-and-reactive-drain.md) | Validation, diagnostics, cap accounting, reactive-drain disposition | Full reject matrix at `wasamoc check`, re-checked by the loader (`WASAMO_ERR_IR_MALFORMED`): non-collection `for` target, binder collisions, disallowed containers, component-level `for`, nested `for`, handler-in-body, binder-in-`if` condition, bad body shape, heterogeneous / non-scalar literals, non-literal collection elements, collection assignment on non-collections, element-type mismatches, qualified collection-assignment LHS / receiver, non-tail-edit assignment RHS and bare collection statements. Empty collection ⇒ 0 generated children is **legal** in admitted containers. **Cap accounting fixed: `MUTATION_CAP` counts drain-loop iterations (cascade depth), so N-item breadth does not consume cap** — evidence required that the gallery proof stays ≪ 16. Reactive-drain residual items 1–3 **carried** with explicit record (no new failure mode surfaced; breadth ≠ depth); item 4 preserved. Every new reject branch gets a direct failure-path test (trap #4). |
 
-## Owner confirmation before Accepted
+## Owner confirmations (resolved at the Accepted flip, 2026-06-13)
 
-- The framing's `item` / `index` vocabulary is accepted as placeholder
-  wording for author-named binders, not as fixed magic names; `item` and
-  `index` remain valid conventional binder names.
-- DD-002 method vocabulary: confirm **`append` / `drop-last`**
-  (§Method vocabulary V4) at the Accepted flip.
+- **Confirmed.** The framing's `item` / `index` vocabulary is accepted
+  as placeholder wording for author-named binders, not as fixed magic
+  names; `item` and `index` remain valid conventional binder names.
+- **Confirmed.** DD-002 method vocabulary is fixed at
+  **`append` / `drop-last`** (§Method vocabulary V4).
 
 ## Obligations carried to the implementation plan
 
@@ -417,3 +418,4 @@ per the split.
 | 2026-06-12 | Mutation-surface review fold (second pass — options space): the vocabulary axis split from the form axis, `append` / `pop` adopted as pure expression names (false-friend risk recorded); M3b static-literal RHS admitted (FD-C boundary extension recorded); a clarifying note added on the statement-terminator scope (`;` terminates handler-block statements only; member positions carry none); DD-005 / DD-007 synced; status remains Proposed. |
 | 2026-06-12 | Vocabulary review fold: the removal expression renamed `pop` → `init` on Haskell / Scala immutable-collection precedent; totality divergence recorded; contracts unchanged; DD-005 / DD-007 synced; status remains Proposed. |
 | 2026-06-12 | Vocabulary review fold (second pass) + provenance cleanup: DD-002 §Method vocabulary restructured to explicit criteria + four option classes (V1–V4, symmetric variants compressed as notes); recommendation moved to `append` / `drop-last` (V4 — editing-lineage pair, precedented, total-on-empty in source, no false friend), added to §Owner confirmation; authority-attribution wording removed from DD bodies and these records (decisions stand on recorded grounds; provenance lives in this history); DD-005 / DD-007 synced; status remains Proposed. |
+| 2026-06-13 | Accepted flip. Owner confirmed both §Owner confirmations items (the `item` / `index` placeholder interpretation; the `append` / `drop-last` vocabulary). Preamble + DD-001 through DD-007 flipped `Status: Proposed` → `Accepted`. |

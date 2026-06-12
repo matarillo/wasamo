@@ -1,6 +1,6 @@
 # DD-M3-P7-007 — Validation, diagnostics, cap accounting, and reactive-drain residual disposition
 
-**Status:** Proposed
+**Status:** Accepted
 **Phase:** M3-Phase 7
 **AC:** A8 / A12 (diagnostics are public-draft content); plan-level
 obligation: reactive-drain fix-or-carry with **cap accounting settled

@@ -1,6 +1,6 @@
 # DD-M3-P7-006 — Placement storage model and structural side-effect atomicity
 
-**Status:** Proposed
+**Status:** Accepted
 **Phase:** M3-Phase 7
 **AC:** A8 (range mutation correctness); named by the Phase 6 handoff
 as "a Phase 7 decision **before** range mutation grows" (constraints §4)
