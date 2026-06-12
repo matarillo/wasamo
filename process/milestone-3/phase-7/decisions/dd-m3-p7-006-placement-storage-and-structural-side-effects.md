@@ -160,21 +160,37 @@ splice-signature split that ST2 removes.
   placement — the no-placement path stays free of placement logic
   (carried field `None`), asserted by the container sweep tests.
 
-## The splice primitive
+## The splice primitive (semantic contract)
 
-One entry point owns every structural child mutation on the
-materialised tree (conditional 0/1 — migrated via DD-004's C1 seam
-work — and `for` ranges alike):
+What this DD fixes is the **invariant, not an API**: every structural
+child mutation on the materialised tree (conditional 0/1 — migrated
+via DD-004's C1 seam work — and `for` ranges alike) enters **one
+placement-aware mutation seam** that performs the full side-effect
+bundle enumerated below as one composed operation. No structural edit
+reaches `children` around the seam — in particular not through a
+placement-blind route (the trap-#3 shape). Failure behaviour *inside*
+the operation is DD-005's PF2 contract, not a stronger transactional
+promise.
+
+"Splice primitive" is this ADR's expository label for that seam, and
+the following sketch is illustrative:
 
 ```
 splice_children(parent, declared_slot, materialised_range, staged_new_children)
 ```
 
-semantics: replace `materialised_range` (possibly empty) under
-`parent` with `staged_new_children` (possibly empty), at offsets
-computed through the C1 seam. Its **side-effect enumeration** (gates
-trap #2 close artifact — listed here so the implementation audits
-against it, not from memory):
+— replace `materialised_range` (possibly empty) under `parent` with
+`staged_new_children` (possibly empty), at offsets computed through
+the C1 seam. As with DD-002's variant spellings and DD-004's textual
+IR tokens, the concrete name, signature, and module shape (one
+function, a module with private fields, or an equivalent internal
+abstraction) may be chosen at implementation without reopening this
+DD, provided the invariant holds and the close-gate artifact
+enumerates the side effects the seam updates.
+
+The **side-effect enumeration** (gates trap #2 close artifact —
+listed here so the implementation audits against it, not from
+memory):
 
 1. `children` vector splice (placements ride along — ST2);
 2. **Visual sibling order**: removed children's Visuals detached;
@@ -192,9 +208,9 @@ against it, not from memory):
    ST2 for the admitted containers — asserted, and re-checked by the
    sweep if a future container adds one (the trigger above).
 
-All six happen inside the primitive; no caller composes them. This is
+All six happen inside the seam; no caller composes them. This is
 the trap-#3 structural complement: ST2 removes the placement copy of
-the problem, the single primitive removes the multi-call-site copy.
+the problem, the single seam removes the multi-call-site copy.
 
 ## Spec content seed
 
@@ -225,6 +241,12 @@ author-visible; the author surface `h-align` / `v-align` is unchanged).
   option; clarified child-slot carried placement and open value-space;
   reframed Grid defer on proportionality / trigger grounds; status
   remains Proposed.
+- Splice-seam contract fold (2026-06-12): the single-seam decision
+  restated as a semantic invariant — the side-effect bundle and the
+  single-entry rule are normative; the `splice_children` name /
+  signature / module shape are expository and adjustable at
+  implementation (the DD-002 / DD-004 spelling convention); atomicity
+  wording deferred to DD-005 PF2; status remains Proposed.
 
 ## Technical risk re-evaluation
 
