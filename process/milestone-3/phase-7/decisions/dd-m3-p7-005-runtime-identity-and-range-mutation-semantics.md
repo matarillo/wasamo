@@ -40,7 +40,7 @@ DD-M3-P7-007.
 ## Sub-issues
 
 - **Normative identity wording** — fresh vs positional.
-- **Mutation execution plan** — what append / pop do mechanically.
+- **Mutation execution plan** — what a tail append / removal does mechanically.
 - **Per-item binding reactivity** — frozen capture vs live positional
   read.
 - **Partial-failure contract** — log-only vs stage-then-commit vs
@@ -104,16 +104,22 @@ C1 seam / live subtree list):
   splice them at materialised offsets `[offset(slot)+M, …)` in order.
 - **N < M (pop / truncate):** dispose subtrees at positions N..M−1,
   tail-first.
-- **N == M:** no-op (the idempotency mirror of Phase 6's
-  same-state-toggle test; with append/pop as the only writers, element
-  values at retained positions cannot have changed — but the no-op
-  branch is tested, not assumed).
+- **N == M:** no *structural* edit (the idempotency mirror of Phase
+  6's same-state-toggle test). Under DD-002's M3b a same-length
+  static-literal reset can change values at retained positions; those
+  updates ride the V2 positional reads (item-binding effects
+  re-evaluate; equal values write idempotently) — the structural no-op
+  branch is tested, not assumed.
 
-Because authored mutations are exactly `append` / `pop` (DD-002), a
-length diff fully determines the edit this phase. A future replace /
-reorder breaks that inference — recorded as the explicit limit of this
-plan (the trigger lands with the collection-UX / host-boundary waves;
-the W2 sentence, not this inference, is the durable contract).
+Because element identity is positional and authored mutations are the
+self-receiver tail-edit / static-literal assignments (DD-002), a
+length diff fully determines the *structural* edit this phase — under
+positional identity a whole-value replace's structural delta is
+exactly its length delta, with retained-position value changes riding
+the V2 reads. A future reorder (keyed diff) breaks that inference —
+recorded as the explicit limit of this plan (the trigger lands with
+the collection-UX wave; the W2 sentence, not this inference, is the
+durable contract).
 
 ## Per-item binding reactivity
 
@@ -128,10 +134,11 @@ materialisation, or read live?
   W2's "bound properties re-evaluate") and force rewiring.
 - **V2 — live positional read:** `ItemRead` lowers to an effect read
   of `collection[i]` on the whole-value signal (the position `i` fixed
-  per instantiation; the *value* read live). Under append/pop-only the
-  observable behaviour is identical to V1 (prefix values can't
-  change); under a future whole-value replace, retained positions
-  re-evaluate automatically — W2 holds with no rewiring. Cost: every
+  per instantiation; the *value* read live). Under tail-edit
+  mutation the observable behaviour is identical to V1 (prefix values can't
+  change); under a whole-value replace — present this phase as the
+  DD-002 M3b static-literal reset — retained positions re-evaluate
+  automatically — W2 holds with no rewiring. Cost: every
   per-item binding subscribes to the collection signal, so a tail
   append re-runs prefix item bindings (they recompute, produce equal
   values, write idempotently); breadth is bounded by N and consumes
@@ -139,8 +146,9 @@ materialisation, or read live?
 
   `ItemRead` evaluation is guarded: if its fixed position is outside
   the collection's current length, the binding writes nothing. This is
-  the defined same-batch removal case: a `pop` can dirty the removed
-  tail item's binding before the `for` effect disposes that subtree, so
+  the defined same-batch removal case: a tail removal can dirty the
+  removed tail item's binding before the `for` effect disposes that
+  subtree, so
   the doomed effect must be a well-defined no-op rather than an
   out-of-range read. The guard is not an author-visible stale-value
   contract; at quiescence DD-006/this DD have disposed the removed
@@ -214,9 +222,10 @@ a stronger story" honoured as a trigger, not pre-built).
 - **Insertion:** staged subtrees are spliced in declared order;
   their per-item binding effects (V2) are created at commit and run
   before the mutating call returns — the **M3-Phase 1 item-4
-  synchronous drain contract is preserved, not revised**: after
-  `append`, the caller observes the new child with its bound
-  properties written; after `pop`, the child is gone. This is the
+  synchronous drain contract is preserved, not revised**: after a
+  tail-append assignment, the caller observes the new child with its
+  bound properties written; after a tail-remove, the child is gone.
+  This is the
   Windows-runtime integration assertion (verification closure item 4).
 - **Quiescent order invariant (generalised):** at quiescence,
   materialised children = declared members expanded by live
@@ -260,6 +269,15 @@ contracts only, no option labels.
 - Implementation-readiness review fold: specified the V2 out-of-range
   positional-read guard for doomed tail bindings; status remains
   Proposed.
+- Owner-direction fold (2026-06-12): authored-mutation wording synced
+  to DD-002's assignment surface (self-receiver tail-edit assignments
+  as the only writers); no semantic change — the execution plan, V2,
+  PF2, and the drain contract are unchanged; status remains Proposed.
+- Owner-review fold (2026-06-12, second pass): DD-002 M3b makes the
+  static whole-value replace author-reachable — the length-diff
+  inference is restated as structural-only (value changes at retained
+  positions ride V2; reorder, not replace, is what breaks the
+  inference); status remains Proposed.
 
 ## Technical risk re-evaluation
 

@@ -30,7 +30,7 @@ signals), not effect count, not structural edit count.
 ## Decision dependency summary
 
 Consumes every other DD's reject branches (DD-001 sweep & body,
-DD-002 type / literal / statement, DD-003 binder / handler, DD-004
+DD-002 type / literal / assignment, DD-003 binder / handler, DD-004
 loader, DD-005 failure diagnostics) and fixes their diagnostic /
 test discipline. The cap judgment consumes DD-005's V2 (per-item
 bindings re-run as breadth) and the E2E proof scale (FD-B).
@@ -95,13 +95,21 @@ Owning DD in parentheses; every row is a test.
   reads outside iteration not yet supported" recorded deferral
   (DD-002 / Q5).
 
-**Mutation statements (DD-002):**
-- `append` / `pop` on a scalar or undeclared LHS; `append` element
-  type mismatch; `append()` arity; `pop(expr)`; qualified collection
-  LHS (`root.xs.append(...)`) — "collection mutation requires a local
-  state name" diagnostic; whole-collection assignment (`xs = [..]` /
-  `xs = ys`) — "collection assignment not yet supported" recorded
-  deferral.
+**Collection assignment (DD-002):**
+- collection RHS on a scalar / undeclared LHS, and a scalar RHS on a
+  collection LHS; compound assign ops (`+=` …) on a collection LHS;
+  `append` element type mismatch / arity; `pop(expr)`; literal-RHS
+  typing violations (heterogeneous / element-type mismatch / nested —
+  the state-default literal rules applied in assignment position); a
+  bare collection expression as a statement (`xs.append(a);` — the
+  diagnostic points at the assignment form); a `collection_expr`
+  outside collection-assignment RHS; qualified LHS or receiver
+  (`root.xs = root.xs.append(...)`) — "collection mutation requires a
+  local state name" diagnostic; any RHS other than a single
+  self-receiver tail-edit application or a static collection literal
+  (bare state copy `xs = ys`, other-state receiver, chained
+  applications, identifiers inside a literal) — "general collection
+  expressions not yet supported" recorded deferral.
 
 **Runtime validation (load + mutation time):**
 - loader re-checks of all structural rows above (DD-004);
@@ -130,7 +138,7 @@ by this phase.
 depth**. Charging for one authored collection mutation under the
 Phase 7 design:
 
-- the handler's `append` / `pop` is one signal write → drain
+- the handler's collection assignment is one signal write → drain
   iteration 1 runs the dirty set, including the `for` effect, which
   executes the whole tail edit (stage + commit, all N' subtrees) as
   **one effect run**;
@@ -153,17 +161,18 @@ bindings, and same-batch prefix binding re-runs — not N drain
 iterations.**
 
 **Evidence obligation (verification closure):** a Windows-headless
-fixture asserts a representative `append` at gallery scale (and a
+fixture asserts a representative tail-append assignment at gallery scale (and a
 deliberately larger N, e.g. 64 > `MUTATION_CAP`) converges without
 divergence — positively demonstrating that breadth does not approach
 the cap, so the proof's passing is by design, not by small-N luck
 (the framing R3 risk discharged). Because the authored mutation surface
-is only `append(expr)` / `pop()`, the >N fixture reaches the large
-cardinality either by issuing many appends in one handler batch or by a
+is only the self-receiver tail-edit assignments, the >N fixture
+reaches the large cardinality either by issuing many tail-append
+assignments in one handler batch or by a
 headless direct signal setup before the observed drain; the fixture
 must state which path it uses.
 
-A second directly-firing fixture covers `pop` with a dirty removed-item
+A second directly-firing fixture covers a tail-remove assignment with a dirty removed-item
 binding in the same batch: DD-005 owns the out-of-range `ItemRead`
 guard, and this DD owns the test row proving the drain tie order cannot
 turn tail removal into a panic.
@@ -175,7 +184,7 @@ above, so the carry is now *permitted* to be judged:
 
 | Item | Disposition | Grounds / re-trigger |
 |---|---|---|
-| 1. cycle detection policy | **Carry** | iteration adds no effect→signal edge (item bindings write properties, not signals; mutation statements run in handlers, not effects) — no new cycle shape exists to detect. Re-trigger: any surface letting a generated subtree's effect write state. |
+| 1. cycle detection policy | **Carry** | iteration adds no effect→signal edge (item bindings write properties, not signals; collection assignments run in handlers, not effects) — no new cycle shape exists to detect. Re-trigger: any surface letting a generated subtree's effect write state. |
 | 2. ordering ties | **Carry** | inter-effect tie order stays implementation-defined; observability is protected by the **quiescent order invariant** (DD-005: declared order × live cardinality, drain-order-independent), generalised from Phase 6 and tested with `for`/`if` interleavings. The non-observational doomed-binding read is not carried: DD-005 defines the out-of-range guard and this DD requires its direct test. Re-trigger: an observable contract requiring inter-effect order. |
 | 3. fan-out × `MUTATION_CAP` | **Carry, with the accounting fixed above as the recorded ground** | fan-out is breadth; the cap charges depth; the ≫N fixture is the standing evidence. Re-trigger: any charging change to the drain loop; effect-to-signal writes; acceptance demanding N where *per-iteration batch cost* (time, not cap) matters — that is the M5+ LazyList/performance thesis. |
 | 4. synchronous non-batched drain contract | **Preserved (not carried — held)** | DD-005 keeps toggle-then-observe under range mutation; the handler-return assertion is verification-closure item 4. |
@@ -212,7 +221,8 @@ accepted contract.
 
 - Each *recorded deferral* reject converts to an admission when its
   surface lands (collection expressions — Q5; collection assignment —
-  host replace / Q5; per-item handlers — M4 input; nested `for` —
+  host replace / Q5 (general collection expressions / whole-value
+  replacement); per-item handlers — M4 input; nested `for` —
   family extension), lifting a reject rather than reshaping grammar.
 - The carry rows' re-triggers above are the standing reactive-engine
   reopening conditions; they ride the implementation handoff into the
@@ -230,6 +240,13 @@ accepted contract.
 - Implementation-readiness review fold: corrected the drain-iteration
   mechanism and added the doomed-binding `pop` test row; status remains
   Proposed.
+- Owner-direction fold (2026-06-12): mutation-statement matrix rows
+  replaced with the DD-002 collection-assignment rows (self-receiver
+  tail-edit restriction, bare-statement reject); cap / fixture wording
+  synced; status remains Proposed.
+- Owner-review fold (2026-06-12, second pass): vocabulary rows moved
+  to `append` / `pop`; static-literal RHS admitted (M3b) with its
+  typing rows; status remains Proposed.
 
 ## Technical risk re-evaluation
 

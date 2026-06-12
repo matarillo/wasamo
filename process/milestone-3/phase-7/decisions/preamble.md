@@ -144,18 +144,23 @@ ADR numbering 1:1, FD-G):
 | DD | Title | Decision summary (Proposed) |
 |---|---|---|
 | [DD-M3-P7-001](./dd-m3-p7-001-iteration-author-facing-grammar.md) | Iteration author-facing grammar surface | **`for`-block member** `for <binder> ("," <index-binder>)? in <collection> { <one widget child> }` — the same family shape as the Phase 6 `if` block. `in` becomes a reserved keyword (its production now exists). Body = **exactly one widget child per iteration** (mirror of B1; multi-member range deferred). Direct `for` admitted under **VStack / HStack / WrapPanel / ZStack**; rejected under **ScrollView** (one-content contract, symmetric with DD-M3-P6-007), **Box** (at-most-one), **Grid** (Cell-mediated children; `for`-of-`Cell` deferred), and at **component level** (no parent slot). |
-| [DD-M3-P7-002](./dd-m3-p7-002-collection-value-surface-and-typedvalue-pressure.md) | Collection value surface, mutation statements, `TypedValue` pressure | Collection state types **`i32[]` / `string[]` / `bool[]`** with literal `[a, b, …]` / `[]`; IR carries `IrStateType::Scalar(IrType) \| Collection(IrType)` (a compile-error-forcing schema change) + `IrLiteral::List`. **Runtime-owned whole-value collection signals** (per-element-type seam; no `TypedValue`). Mutation = **handler statements** `xs.append(expr)` / `xs.pop()` — explicitly *statements*, not expressions, so the Q5 operator-uniformity rule is untouched. `TypedValue` **judged and not adopted** (trigger-backed defer); `f64[]` deferred; host-replace future-compat constraints recorded (whole-value set; positional element identity; value-semantic copy). |
+| [DD-M3-P7-002](./dd-m3-p7-002-collection-value-surface-and-typedvalue-pressure.md) | Collection value surface, mutation surface, `TypedValue` pressure | Collection state types **`i32[]` / `string[]` / `bool[]`** with literal `[a, b, …]` / `[]`; IR carries `IrStateType::Scalar(IrType) \| Collection(IrType)` (a compile-error-forcing schema change) + `IrLiteral::List`. **Runtime-owned whole-value collection signals** (per-element-type seam; no `TypedValue`). Mutation = **whole-value assignment** `xs = xs.append(expr)` / `xs = xs.pop()` (pure expressions — purity carried by the assignment form; vocabulary owner-directed) plus **static-literal reset / clear** `xs = [..]` (M3b — owner-directed FD-C extension) — assignment stays the only statement form; the new expressions are type-driven, operators stay absent, so the Q5 uniformity rule is untouched (`;` scope unchanged: handler statements only). `TypedValue` **judged and not adopted** (trigger-backed defer); `f64[]` deferred; host-replace future-compat constraints recorded (whole-value set; positional element identity; value-semantic copy). |
 | [DD-M3-P7-003](./dd-m3-p7-003-loop-local-context-scope-and-handler-admission.md) | Loop-local context, scope, handler admission | **Author-named binders** (no fixed magic `item` / `index` names); optional second binder = index (`i32`, read-only). Loop locals are **loop-local read-only bindings readable in binding-expression positions only** (FD-D — the first codified exception to all-references-via-state); they are **not** readable in `if` conditions, whose identifiers remain state-only this phase. Flat scope; binder ↔ state and binder ↔ binder collisions are errors; nested `for` anywhere inside a `for` body template is rejected (nested template scope deferred). **Per-item handlers rejected this phase** — a `signal_handler` member inside a `for` body template is a check error; admission deferred with the M4-input trigger. |
 | [DD-M3-P7-004](./dd-m3-p7-004-ir-textual-ir-and-structural-traversal.md) | IR / textual IR representation + structural traversal | **`ControlFlowNode::For { binder, index_binder, collection, body }`** — a same-family variant beside `If`, body single-`Widget`-child (length-1) like Phase 6. Textual IR gains a `(for …)` member production; roundtrip preserves binders / collection ref / body. **Member-expansion is canonized**: one shared "declared members → materialised children" seam (prefix-sum index math over per-member live cardinality 0/1 for `If`, 0..N for `For`) used by both static load and reactive mutation — resolving the Phase 6 DD-007 reservation in the canonize direction. Runtime fills **`BindingTarget::ForLoopSubtree { parent, declared_member_index }`**. Semantic-migration call-site audit (gates trap #1) on every `IrMember` / `ControlFlowNode` match site. |
-| [DD-M3-P7-005](./dd-m3-p7-005-runtime-identity-and-range-mutation-semantics.md) | Runtime identity baseline + range mutation semantics | Normative wording = **positional, un-keyed**: a generated subtree's identity is its position; **append materialises only the new tail items; `pop` disposes only the removed tail item; prefix subtrees are retained, not rebuilt** (per-item bindings are reactive positional reads, so the contract survives a future whole-value host replace). Keyed retention stays opt-in-future (never a silent default change). Range mutation is **stage-then-commit**: all fallible construction happens before any tree splice; a staging failure aborts the whole mutation observably unchanged (+ diagnostic). Disposal order: effects disposed ahead of teardown, tail-first. The setter-return drain contract (M3-Phase 1 item 4) is **preserved**: on handler return the new subtrees' effects have run. |
+| [DD-M3-P7-005](./dd-m3-p7-005-runtime-identity-and-range-mutation-semantics.md) | Runtime identity baseline + range mutation semantics | Normative wording = **positional, un-keyed**: a generated subtree's identity is its position; **a tail append materialises only the new tail items; a tail removal disposes only the removed tail item; prefix subtrees are retained, not rebuilt** (per-item bindings are reactive positional reads, so the contract survives a future whole-value host replace). Keyed retention stays opt-in-future (never a silent default change). Range mutation is **stage-then-commit**: all fallible construction happens before any tree splice; a staging failure aborts the whole mutation observably unchanged (+ diagnostic). Disposal order: effects disposed ahead of teardown, tail-first. The setter-return drain contract (M3-Phase 1 item 4) is **preserved**: on handler return the new subtrees' effects have run. |
 | [DD-M3-P7-006](./dd-m3-p7-006-placement-storage-and-structural-side-effects.md) | Placement storage model + structural side-effect atomicity | **Child-carried placement**: ZStack per-child placement moves from the parallel `zstack_placements` vector onto the child slot, so a child and its placement cannot drift (the trap-#3 class is removed structurally for every `for` / `if`-touched path, not policed by helper discipline). Grid `cell_placements` migration is **deferred with a trigger** (Grid rejects direct `for` this phase). One **range-splice primitive** owns the full side-effect set: child list, placement, layout dirty, Visual sibling order, registry, effects (gates traps #2 / #3 close artifacts mandatory). |
-| [DD-M3-P7-007](./dd-m3-p7-007-validation-diagnostics-cap-and-reactive-drain.md) | Validation, diagnostics, cap accounting, reactive-drain disposition | Full reject matrix at `wasamoc check`, re-checked by the loader (`WASAMO_ERR_IR_MALFORMED`): non-collection `for` target, binder collisions, disallowed containers, component-level `for`, nested `for`, handler-in-body, binder-in-`if` condition, bad body shape, heterogeneous / non-scalar literals, non-literal collection elements, mutation statements on non-collections, element-type mismatches, qualified collection mutation LHS, whole-collection assignment. Empty collection ⇒ 0 generated children is **legal** in admitted containers. **Cap accounting fixed: `MUTATION_CAP` counts drain-loop iterations (cascade depth), so N-item breadth does not consume cap** — evidence required that the gallery proof stays ≪ 16. Reactive-drain residual items 1–3 **carried** with explicit record (no new failure mode surfaced; breadth ≠ depth); item 4 preserved. Every new reject branch gets a direct failure-path test (trap #4). |
+| [DD-M3-P7-007](./dd-m3-p7-007-validation-diagnostics-cap-and-reactive-drain.md) | Validation, diagnostics, cap accounting, reactive-drain disposition | Full reject matrix at `wasamoc check`, re-checked by the loader (`WASAMO_ERR_IR_MALFORMED`): non-collection `for` target, binder collisions, disallowed containers, component-level `for`, nested `for`, handler-in-body, binder-in-`if` condition, bad body shape, heterogeneous / non-scalar literals, non-literal collection elements, collection assignment on non-collections, element-type mismatches, qualified collection-assignment LHS / receiver, non-tail-edit assignment RHS and bare collection statements. Empty collection ⇒ 0 generated children is **legal** in admitted containers. **Cap accounting fixed: `MUTATION_CAP` counts drain-loop iterations (cascade depth), so N-item breadth does not consume cap** — evidence required that the gallery proof stays ≪ 16. Reactive-drain residual items 1–3 **carried** with explicit record (no new failure mode surfaced; breadth ≠ depth); item 4 preserved. Every new reject branch gets a direct failure-path test (trap #4). |
 
 ## Owner confirmation before Accepted
 
 - The framing's `item` / `index` vocabulary is accepted as placeholder
   wording for author-named binders, not as fixed magic names; `item` and
   `index` remain valid conventional binder names.
+- The 2026-06-12 mutation-surface corrections (declarative model →
+  M3; vocabulary axis → **`append` / `pop`** as pure expression names;
+  **M3b** static-literal RHS, an owner-directed FD-C boundary
+  extension) are folded as DD-002's Recommendation; no residual
+  confirmation remains on the mutation surface.
 
 ## Obligations carried to the implementation plan
 
@@ -181,7 +186,7 @@ carry the consequence (index only — arguments live in the owning DDs):
 | Coupling (bundle) | Primary DD | Dependent DDs | Proposed bundle |
 |---|---|---|---|
 | **Iteration body shape** | DD-M3-P7-001 (one widget child per iteration) | DD-M3-P7-004 (body template length-1), DD-M3-P7-005 (per-item subtree grain), DD-M3-P7-007 (body-shape rejects) | one `widget_decl` per iteration → each item materialises exactly one child → tail splice adds/removes whole single-child subtrees. The member-range alternative shifts all three and is deferred, not chosen. |
-| **Collection value representation** | DD-M3-P7-002 (whole-value per-type signals; statements not expressions) | DD-M3-P7-005 (positional reactive item reads), DD-M3-P7-003 (binder read lowering), DD-M3-P7-007 (mutation-statement rejects) | whole-value signal → for-effect computes cardinality diff → item binders lower to positional collection reads → append/pop are the only authored mutations. |
+| **Collection value representation** | DD-M3-P7-002 (whole-value per-type signals; assignment-only mutation) | DD-M3-P7-005 (positional reactive item reads), DD-M3-P7-003 (binder read lowering), DD-M3-P7-007 (collection-assignment rejects) | whole-value signal → for-effect computes cardinality diff → item binders lower to positional collection reads → self-receiver tail-edit / static-literal assignments are the only authored mutations. |
 | **Member-expansion canonization** | DD-M3-P7-004 (shared declared→materialised seam) | DD-M3-P7-005 (insertion index math), DD-M3-P7-006 (splice primitive call shape) | one prefix-sum seam shared by static load and reactive mutation; `If` becomes the 0/1 special case of the same math. |
 
 ## Phase 7 verification closure (what counts as A8 evidence)
@@ -199,7 +204,7 @@ seven are observed:
    collision, disallowed container, component-level `for`, nested
    `for`, handler-in-body, binder-in-`if` condition, multi-child /
    non-widget body, bad literal, non-literal collection element, bad
-   mutation statement, element-type mismatch, `in` / `for` used as
+   collection assignment, element-type mismatch, `in` / `for` used as
    identifiers).
 2. **Pure-logic reducer / planner evidence.** The cardinality diff
    planner (old length → new length ⇒ tail insert / remove plan,
@@ -213,15 +218,19 @@ seven are observed:
    rejects malformed `for` shapes (`WASAMO_ERR_IR_MALFORMED` dual
    gate); collection state declarations and list literals roundtrip.
 4. **Windows-runtime integration evidence (mock-free, CI-gated,
-   fail-not-skip).** Live `WidgetNode` / Visual assertions: after
-   `append` the child count and Visual sibling order reflect the new
-   cardinality, in declared order with static siblings and `if`
-   members flanking the `for` slot; after `pop` likewise; prefix
+   fail-not-skip).** Live `WidgetNode` / Visual assertions: after a
+   tail-append assignment the child count and Visual sibling order
+   reflect the new cardinality, in declared order with static siblings
+   and `if` members flanking the `for` slot; after a tail-remove
+   likewise; prefix
    subtree pointers are **unchanged** across a tail append (positional
    retention positive control); disposed tail subtrees release effects
    and registry entries; handler-return drain observability (item 4)
    holds — immediately after the mutating call the new subtrees'
-   bound properties are written; empty-`pop` produces no dirty re-run;
+   bound properties are written; a remove on an empty collection
+   writes an equal value and produces no dirty re-run; a same-length
+   static-literal reset re-evaluates item bindings in place with no
+   structural edit and prefix subtree pointers unchanged;
    a same-batch dirty removed-item binding skips its out-of-range read;
    ZStack-path range mutation updates child-carried placement and
    Visual order in one splice. Fixtures
@@ -235,11 +244,12 @@ seven are observed:
 6. **End-to-end host evidence (visible smoke).**
    `examples/gallery/gallery.ui` grows additively: the thumbnail set is
    generated by `for` over a collection `state`, with `Add` / `Remove`
-   text Buttons outside the body driving `append` / `pop`. Owner
+   text Buttons outside the body driving the tail-append / tail-remove
+   assignments. Owner
    human-visible smoke is a separate gate from item 5.
 7. **A12 spec-closure gate (non-test).** `docs/dsl_spec.md` carries the
    iteration chapter at the external-reader bar — grammar, collection
-   types / literals / mutation statements, binder scope rules, the
+   types / literals / assignment forms, binder scope rules, the
    positional un-keyed identity baseline stated normatively, runtime
    mutation timing, validation / invalid examples matching items 1 / 3
    — with the Moment 1 → Moment 2 marker flip completed.
@@ -301,8 +311,10 @@ structured item fields / `TypedValue`; `f64[]`; host state boundary
 (initial state / replace / write-back); loop-external collection reads;
 per-item handlers and handler position `item` reads; loop-local binder
 reads in `if` conditions / per-item conditional presence; nested `for`
-/ template scope; member-range bodies; whole-collection assignment in
-handlers; Grid / Box / ScrollView direct-`for`; large-N performance;
+/ template scope; member-range bodies; general collection expressions
+/ dynamic whole-value replacement in handlers (static-literal
+assignment is admitted; `xs = ys` and computed lists remain deferred);
+Grid / Box / ScrollView direct-`for`; large-N performance;
 Image widget (thumbnails remain Box + Text placeholders); per-monitor
 DPI (M4).
 
@@ -319,10 +331,10 @@ judgments are explicit:
   iteration chapter beside §4.14 (conditional rendering), continuing
   the structural-rendering-model family story; §3 grammar additions
   (`iteration_member`, collection `state_type`, list literal,
-  `collection_stmt`); §2.1 keyword table adds **`in`** (and notes
+  `collection_expr` collection assignment); §2.1 keyword table adds **`in`** (and notes
   `for` now has a production); §state-decl section gains collection
   types; textual-IR chapter gains the `(for …)` member, list-literal,
-  collection-read and mutation-statement productions plus loader
+  collection-read and collection-assignment productions plus loader
   validation policy; invalid examples per DD-007. Existing `for`
   forward references are **swept for staleness** in the same touch
   (FD-E / answers §5-3 — the dsl_spec side of the same live-doc-sync
@@ -389,7 +401,8 @@ per the split.
 | FD-G — 7-DD slate | Structure | §Decisions |
 | FD-F — deferred-items 正本 in framing | Discipline | §Out of scope / §Forward-compat |
 | constraints.md §1–§10 | Constraint set | DD-004 (§1, §8), DD-005 (§2, §3, §5), DD-006 (§4), DD-007 (§6), DD-002 (§7), verification (§9), process (§10) |
-| owner-intent-answers §3 notes 1–3 | Obligations | DD-005 (normative wording explicit), DD-002 (statement-vs-expression line), DD-007 (cap accounting before carry) |
+| owner-intent-answers §3 notes 1–3 | Obligations | DD-005 (normative wording explicit), DD-002 (Q5 adjudication of the mutation form; the anticipated statement line superseded by the 2026-06-12 owner correction), DD-007 (cap accounting before carry) |
+| Owner corrections 2026-06-12 — VISION §4.1 declarative model precludes method-statement mutation (M3); vocabulary axis split (`append` / `pop` as pure names); static-literal RHS (M3b, FD-C boundary extended); semicolon scope clarified (handler statements only) | Direction | DD-002 §Mutation surface; DD-007 matrix |
 | host-state-boundary.md | Boundary input | DD-002 future-compat record |
 | dsl-grammar.md Q1 / Q5 / Q6 / Q8 | Thesis inputs | DD-001 (family form), DD-002 (uniformity line), DD-003 (id ≠ key) |
 | Phase 6 DD-M3-P6-003/004/005/007 | Pattern reuse + family base | DD-001 / 004 / 005 / 007 |
@@ -403,3 +416,5 @@ per the split.
 | 2026-06-11 | Implementation-readiness review fold: closed the removed-item read guard, corrected cap accounting, specified empty-`pop` no-dirty behaviour, and deferred plan-only sequencing/context/load-test findings; status remains Proposed. |
 | 2026-06-11 | Doc-sync completeness review fold: added the dsl_spec §4.14 `for` forward-reference staleness sweep (answers §5-3) to the Moment 1 dsl_spec touch, and recorded the judged Moment 1 front-load of the FD-E live-doc sync with Moment 2 re-verification; status remains Proposed. |
 | 2026-06-11 | Per-finding "folded" review-disposition bookkeeping removed from this preamble and from all seven DDs (owner-directed: per-finding multi-stage review records are excess detail; the folded content is authoritative inline and each document's revision history keeps the one-line fold record). The three deferred implementation-readiness findings are retained as §Obligations carried to the implementation plan (forward-carry content, not bookkeeping). |
+| 2026-06-12 | Owner-direction fold (mutation surface): DD-002's recommendation moved from M2 method statements to M3 whole-value assignment over self-receiver pure tail-edit expressions (`with` / `without-last`), grounded in the VISION §4.1 declarative unidirectional model; DD-005 / DD-007 wording and the reject matrix synced; residual spellings and the self-receiver restriction added to §Owner confirmation; status remains Proposed. |
+| 2026-06-12 | Owner-review fold (second pass — options space): the vocabulary axis split from the form axis, `append` / `pop` adopted as pure expression names (false-friend risk recorded); M3b static-literal RHS admitted (FD-C boundary extension recorded); a clarifying note added on the statement-terminator scope (`;` terminates handler-block statements only; member positions carry none); DD-005 / DD-007 synced; status remains Proposed. |
