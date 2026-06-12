@@ -102,8 +102,8 @@ C1 seam / live subtree list):
 
 - **N > M (append):** instantiate body templates for positions M..N−1,
   splice them at materialised offsets `[offset(slot)+M, …)` in order.
-- **N < M (pop / truncate):** dispose subtrees at positions N..M−1,
-  tail-first.
+- **N < M (tail removal / truncate):** dispose subtrees at positions
+  N..M−1, tail-first.
 - **N == M:** no *structural* edit (the idempotency mirror of Phase
   6's same-state-toggle test). Under DD-002's M3b a same-length
   static-literal reset can change values at retained positions; those
@@ -214,7 +214,7 @@ a stronger story" honoured as a trigger, not pre-built).
 
 ## Disposal & drain ordering
 
-- **Removal (pop / truncate):** per removed subtree, tail-first:
+- **Removal (tail removal / truncate):** per removed subtree, tail-first:
   effects disposed ahead of structural teardown (the §6.7.6
   dispose-ahead invariant, unchanged), widget-registry entries
   released via the existing destroy path, Visual removed — all inside
@@ -269,15 +269,22 @@ contracts only, no option labels.
 - Implementation-readiness review fold: specified the V2 out-of-range
   positional-read guard for doomed tail bindings; status remains
   Proposed.
-- Owner-direction fold (2026-06-12): authored-mutation wording synced
-  to DD-002's assignment surface (self-receiver tail-edit assignments
-  as the only writers); no semantic change — the execution plan, V2,
-  PF2, and the drain contract are unchanged; status remains Proposed.
-- Owner-review fold (2026-06-12, second pass): DD-002 M3b makes the
+- Mutation-surface review fold (2026-06-12): authored-mutation wording
+  synced to DD-002's assignment surface (self-receiver tail-edit
+  assignments as the only writers); no semantic change — the execution
+  plan, V2, PF2, and the drain contract are unchanged; status remains
+  Proposed.
+- Mutation-surface review fold (2026-06-12, second pass): DD-002 M3b makes the
   static whole-value replace author-reachable — the length-diff
   inference is restated as structural-only (value changes at retained
   positions ride V2; reorder, not replace, is what breaks the
   inference); status remains Proposed.
+- Vocabulary sync (2026-06-12): `pop` wording renamed to `init` /
+  tail-removal per DD-002; no semantic change; status remains
+  Proposed.
+- Vocabulary sync (2026-06-12, second pass): removal-expression
+  wording updated to `drop-last` per DD-002 V4; no semantic change;
+  status remains Proposed.
 
 ## Technical risk re-evaluation
 
@@ -296,6 +303,7 @@ contracts only, no option labels.
   Phase 6 conditional teardown tests generalised to ranges.
 - **The no-op (N == M) branch** is tested explicitly (idempotency
   mirror).
-- **The pop-doomed binding branch** is directly fired: after a tail
-  `pop`, a removed item's binding may be dirty in the same drain batch;
+- **The removal-doomed binding branch** is directly fired: after a
+  tail remove (`drop-last`), a removed item's binding may be dirty in the
+  same drain batch;
   the test proves the guarded `ItemRead` skips instead of panicking.

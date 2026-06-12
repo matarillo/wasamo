@@ -98,7 +98,7 @@ Owning DD in parentheses; every row is a test.
 **Collection assignment (DD-002):**
 - collection RHS on a scalar / undeclared LHS, and a scalar RHS on a
   collection LHS; compound assign ops (`+=` …) on a collection LHS;
-  `append` element type mismatch / arity; `pop(expr)`; literal-RHS
+  `append` element type mismatch / arity; `drop-last(expr)`; literal-RHS
   typing violations (heterogeneous / element-type mismatch / nested —
   the state-default literal rules applied in assignment position); a
   bare collection expression as a statement (`xs.append(a);` — the
@@ -240,13 +240,15 @@ accepted contract.
 - Implementation-readiness review fold: corrected the drain-iteration
   mechanism and added the doomed-binding `pop` test row; status remains
   Proposed.
-- Owner-direction fold (2026-06-12): mutation-statement matrix rows
-  replaced with the DD-002 collection-assignment rows (self-receiver
-  tail-edit restriction, bare-statement reject); cap / fixture wording
-  synced; status remains Proposed.
-- Owner-review fold (2026-06-12, second pass): vocabulary rows moved
-  to `append` / `pop`; static-literal RHS admitted (M3b) with its
-  typing rows; status remains Proposed.
+- Mutation-surface review fold (2026-06-12): mutation-statement matrix
+  rows replaced with the DD-002 collection-assignment rows
+  (self-receiver tail-edit restriction, bare-statement reject); cap /
+  fixture wording synced; status remains Proposed.
+- Mutation-surface review fold (2026-06-12, second pass): vocabulary
+  rows moved to `append` / `pop`; static-literal RHS admitted (M3b)
+  with its typing rows; status remains Proposed.
+- Vocabulary review fold (2026-06-12): `pop` rows renamed to `init`,
+  then to `drop-last` per DD-002 V4; status remains Proposed.
 
 ## Technical risk re-evaluation
 

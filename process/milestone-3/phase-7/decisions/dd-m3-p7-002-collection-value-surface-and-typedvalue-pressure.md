@@ -19,9 +19,8 @@ literal syntax, the IR carrier, the runtime value representation, the
 authored mutation path, and the two explicit judgments the plan and
 framing demand — **`TypedValue` adopt-or-defer** and the **Q5
 adjudication of the authored mutation form** (owner-intent answers §3
-note 2; the form itself is owner-directed as of 2026-06-12 — the
-VISION §4.1 declarative model rules out a method-statement surface,
-see §Mutation surface).
+note 2; the VISION §4.1 declarative model rules out a
+method-statement surface — §Mutation surface).
 
 Boundary fixed by FD-C / host-state-boundary.md: the collection is
 **runtime-owned state**. Host-supplied initial values, host set /
@@ -167,7 +166,7 @@ provided the enum stays single.
 - **R2 — per-element signals** (a signal per index)
   - What you gain: element-granular invalidation.
   - What you give up: signal lifecycle now tracks cardinality (create /
-    dispose signals on append / pop), ordering identity gets entangled
+    dispose signals on tail edits), ordering identity gets entangled
     with reactive identity, and a future host replace must reconcile a
     signal *set* — machinery proportionate to keyed identity and
     large-N performance, both explicitly deferred theses. Premature on
@@ -195,15 +194,13 @@ The gallery proof needs an authored append and an authored remove
 (FD-B). Owner-intent answers §3 note 2 obliges this DD to adjudicate
 the form against the Q5 rule: **operators grow uniformly across all
 expression positions or not at all** — no collection-only operator
-pocket. An owner correction (2026-06-12) directs the choice within
-that rule: the VISION §4.1 declarative unidirectional model
-(`view = f(state)`) wants a handler statement to read as **assigning
-the state its next value**, not as an imperative in-place operation on
-a data structure — among the options below, M3 is preferred. A second
-owner review (same date) widened the space further: the
-method-vocabulary axis is separated from the form axis (§Method
-vocabulary), the static-literal RHS is added as **M3b** (§RHS extent),
-and a clarifying note records where `;` is and is not required
+pocket. The VISION §4.1 declarative unidirectional model
+(`view = f(state)`) further constrains the form within that rule: a
+handler statement should read as **assigning the state its next
+value**, not as an imperative in-place operation on a data structure.
+The decision decomposes into the statement form (the options below),
+the method vocabulary (§Method vocabulary), the RHS extent
+(§RHS extent), and a clarifying note on where `;` is required
 (§Statement terminator).
 
 ### Options
@@ -233,15 +230,14 @@ and a clarifying note records where `;` is and is not required
     a data structure, and shipping it at the DSL's first collection
     surface would fix that imperative idiom into the public grammar
     (A12 makes it normative immediately).
-  - Rejected on owner thesis (2026-06-12 correction, VISION §4.1): the
-    declarative model outweighs the convenience of leaving `expr`
-    untouched; the cost is paid instead as a small typed expression
-    surface (M3).
+  - Rejected on the declarative-model thesis (VISION §4.1): it
+    outweighs the convenience of leaving `expr` untouched; the cost is
+    paid instead as a small typed expression surface (M3).
 
 - **M3 — whole-value assignment over pure collection expressions**
   - ```
     add_thumb    => { thumbs = thumbs.append(next_id); }
-    remove_thumb => { thumbs = thumbs.pop(); }
+    remove_thumb => { thumbs = thumbs.drop-last(); }
     ```
     `assign_stmt` extends to a collection LHS with `=` only; the RHS
     admits the pure tail-edit expressions on the assigned state itself
@@ -250,7 +246,7 @@ and a clarifying note records where `;` is and is not required
     assign_stmt     ::= IDENT assign_op expr          ; scalar (unchanged)
                      |  IDENT "=" collection_expr     ; M3-Phase 7
     collection_expr ::= IDENT "." "append" "(" expr ")"
-                     |  IDENT "." "pop" "(" ")"
+                     |  IDENT "." "drop-last" "(" ")"
                      |  collection_literal            ; M3b — reset / clear
                      ; method receiver IDENT = the assigned state
     ```
@@ -259,7 +255,7 @@ and a clarifying note records where `;` is and is not required
     survives its first collection surface; the authored operation *is*
     the whole-value set R1 implements and a future host replace will
     perform, so surface, runtime model, and ABI future all say the
-    same thing; the method expressions are pure (`pop` on an empty
+    same thing; the method expressions are pure (`drop-last` on an empty
     collection is the identity — a boundary Remove is idempotent by
     *function semantics*, not by a statement special case); compound
     ops never gain a collection meaning.
@@ -300,41 +296,78 @@ statement grammar pure assignment and moves the novelty into typed,
 pure expressions whose admission is type-driven; the authored extent
 (self-receiver tail edits + static literals) is fixed in §RHS extent.
 
-### Method vocabulary (sub-axis, owner-directed)
+### Method vocabulary (sub-axis)
 
-The first fold of this DD chose `with` / `without-last` to make purity
-visible in the name. The owner's second review separates the axes:
-**purity is carried by the assignment form, not by the spelling** —
-once the only admitted use is `xs = xs.append(e)`, the expression is
-structurally pure whatever it is called — and the invented names carry
-a real demerit of their own.
+A preliminary: **purity is carried by the assignment form, not by the
+spelling** — once the only admitted use is `xs = xs.append(e)`, the
+expression is structurally pure whatever it is called. The vocabulary
+is therefore judged on these criteria (one option per distinct
+trade-off class; spelling variants within a class are comparison
+notes, not options):
 
-- **V1 — `with` / `without-last`:** descriptive-pure; nobody misreads
-  them as in-place ops. Cost: vocabulary no host-language audience
-  recognises, a hyphenated method name, and redundancy once the form
-  itself is pure.
-- **V2 — `append` / `pop` (owner-directed):** the vocabulary every
-  C / Rust / Zig / Swift / Go reader knows, and the wording the
-  framing / answers / Phase 6 handoff already use. `xs = xs.append(e)`
-  has precedent in exactly this shape (Go's value-returning
-  `xs = append(xs, e)`), and a *pure* `pop` returning the remaining
-  collection has persistent-collection precedent (Clojure). Recorded
-  risk — the cross-language false friend: in most languages `pop`
-  returns the removed *element*. Mitigations: the misread that wants
-  the element (`x = xs.pop()`) is already a type error (collection RHS
-  on a scalar LHS); the spec states normatively that `pop()` evaluates
-  to the collection minus its last element; and the bare-statement
-  reject (`xs.append(a);`) points imperative-habit authors at the
-  assignment form.
+1. **Pair-lineage coherence** — both names from the same vocabulary
+   family (editing vs projection/decomposition).
+2. **Idiomaticity** — recognisable to the C / Rust / Zig / Swift / Go
+   host audience; no invented words.
+3. **False-friend risk** — an element-returning reading (`pop` in
+   mutable APIs) or an "initialize" reading (`init`).
+4. **Totality match** — the source language's empty-collection
+   behaviour vs Wasamo's identity-on-empty contract (a mismatch costs
+   a normative divergence note).
+5. **No pleonasm** — position qualifiers only where the verb is
+   actually ambiguous.
 
-**Chosen: V2 — `append` / `pop`.** Contextual names (valid only inside
-`collection_expr`), not reserved keywords — a state named `append`
-still parses (positive test).
+- **V1 — `with` / `without-last`:** descriptive-pure invented names;
+  nobody misreads them as in-place ops. Fails criterion 2 (vocabulary
+  no host-language audience recognises) and is redundant once the
+  form itself is pure.
+- **V2 — `append` / `pop`:** mutable vocabulary borrowed with pure
+  semantics — a recognised immutable-collection convention (Clojure
+  persistent vectors pair `conj` / `pop`, with `pop` returning the
+  remaining vector; Immutable.js `push` / `pop` likewise), and
+  `xs = xs.append(e)` matches Go's value-returning
+  `xs = append(xs, e)`. Fails criterion 3 against *mutable* APIs
+  (Python / JS `pop` returns the element) and criterion 4 (Clojure's
+  `pop` throws on empty).
+- **V3 — `append` / `init`:** `init` (all elements but the last) is
+  established FP vocabulary (Haskell `init`, Scala `List.init`) —
+  but it is **projection vocabulary**: its dual is `last`
+  (`head`/`tail`/`init`/`last` is the decomposition quartet), not
+  `append`, so the pair mixes lineages (criterion 1); Haskell /
+  Scala `init` is partial — errors on empty — so criterion 4 costs a
+  divergence note; and `init` invites an "initialize" misread
+  (criterion 3, mild).
+- **V4 — `append` / `drop-last`:** an **editing-lineage pair**:
+  `append` (universal; Go shape as above) + `drop-last` (Swift
+  `dropLast()`, Kotlin `dropLast`, Scala `dropRight(1)`). No
+  element-returning or "initialize" reading exists for either name
+  (criterion 3 clean). The source semantics of `dropLast` is already
+  **total — empty in, empty out** — so Wasamo's identity-on-empty
+  matches the precedent exactly and **no divergence note is needed**
+  (criterion 4 clean, uniquely among the options). The suffix
+  asymmetry (`append` carries no `-last`) mirrors the semantic
+  asymmetry: `append` has exactly one meaning, `drop` genuinely needs
+  the qualifier (criterion 5).
+  - Symmetric variants considered and folded here, not promoted to
+    options: `add-last` / `remove-last` (Java / Kotlin Deque
+    precedent, but `removeLast` returns the *element* — criterion 3
+    re-imported — and the lineage is mutable-API);
+    `append-last` / `drop-last` (maximal symmetry, but `append-last`
+    is a precedent-less pleonasm — criteria 2 and 5); `snoc` /
+    `unsnoc` (the true FP editing pair, but unknown to the host
+    audience and `unsnoc` returns a pair — criterion 2).
+
+### Recommendation (vocabulary)
+
+**V4 — `append` / `drop-last`** (confirmation item: preamble §Owner
+confirmation). Contextual names (valid only inside
+`collection_expr`), not reserved keywords — a state named `append` or
+`drop-last` still parses (positive test).
 
 ### RHS extent (sub-axis): M3b — static collection literals
 
-Owner-directed addition: the assignment RHS also admits a **static
-collection literal**, giving authored clear / reset:
+The assignment RHS also admits a **static collection literal**, giving
+authored clear / reset:
 
 ```
 clear_thumbs => { thumbs = []; }
@@ -351,14 +384,15 @@ reset_thumbs => { thumbs = [101, 102, 103]; }
   from the LHS, no nesting, no identifiers inside.
 - **FD-C boundary note (recorded).** M3b extends the authored
   capability beyond FD-C's append/truncate-only baseline to include
-  the static whole-value set — an owner-directed boundary extension.
-  The theses FD-C protects are untouched: no keyed diff (identity
+  the static whole-value set — an explicit, recorded boundary
+  extension (preamble §Inputs absorbed). The theses FD-C protects are
+  untouched: no keyed diff (identity
   stays positional), no ordering contract (a replace has no reorder
   semantics under positional identity), no dynamic collection
   expressions (the literal is compile-time static).
 - The equal-value no-dirty rule covers the new forms for free: a reset
-  to the identical current value, like a `pop` on empty, writes an
-  equal value and produces no dirty effects.
+  to the identical current value, like a `drop-last` on empty, writes
+  an equal value and produces no dirty effects.
 
 ### Statement terminator (`;`) — clarifying note
 
@@ -374,9 +408,9 @@ none.
 
 ### Recommendation
 
-**M3 + M3b, with `append` / `pop`.** `xs = xs.append(expr)` — a new
+**M3 + M3b, with `append` / `drop-last`.** `xs = xs.append(expr)` — a new
 collection with one element appended, element-type-checked;
-`xs = xs.pop()` — the collection minus its last element, the
+`xs = xs.drop-last()` — the collection minus its last element, the
 **identity on an empty collection** (a boundary Remove action is
 idempotent by function semantics; diagnostics stay reserved for
 authoring errors rather than normal runtime boundary states);
@@ -393,7 +427,7 @@ Restrictions, each a `wasamoc check` reject (DD-M3-P7-007 matrix):
 - **`=` only on a collection LHS** — compound assign ops have no
   collection meaning.
 - Collection RHS on a scalar LHS and vice versa; `append` arity /
-  element-type mismatch; `pop(expr)`; literal-RHS typing violations
+  element-type mismatch; `drop-last(expr)`; literal-RHS typing violations
   (the state-default rules applied in assignment position); a
   `collection_expr` outside collection-assignment RHS; a bare
   collection expression as a statement (`xs.append(a);` — the
@@ -407,9 +441,10 @@ whole-value set) on the whole-value signal — R1, drain, and the
 DD-007 cap accounting are unchanged. **A collection assignment whose
 new value equals the current value performs no dirty propagation**
 (value-equality check on the signal set; `Vec` equality is O(N), a
-non-axis at gallery N). This generalises the former empty-`pop`
-special case: `xs = xs.pop()` on an empty collection writes an equal
-value and produces no dirty effects — pinned by a direct runtime test.
+non-axis at gallery N). This generalises the former empty-remove
+special case: `xs = xs.drop-last()` on an empty collection writes an
+equal value and produces no dirty effects — pinned by a direct
+runtime test.
 
 Reference-shape rule: the assignment LHS and the method receiver are
 intentionally **bare state names**, matching the Phase 7 loop-header
@@ -447,21 +482,21 @@ dsl_spec: §state-decl gains the three collection types + list-literal
 default; §3 gains `collection_literal` and the collection-assignment
 extension of `assign_stmt` (`collection_expr`, including the literal
 alternative); the handler-statement section documents the collection
-assignment — the pure `append` / `pop` expressions, **stating
-normatively that `pop()` evaluates to the remaining collection, not
-the removed element** (the cross-language false friend), the
-static-literal reset / clear, the `pop`-on-empty identity, and the
-equal-value no-dirty rule — and states the category explicitly:
+assignment — the pure `append` / `drop-last` expressions, **stating
+normatively that `drop-last()` evaluates to the collection minus its
+last element and is total — the identity on the empty collection,
+matching the Swift / Kotlin `dropLast` precedent** — the
+static-literal reset / clear, and the equal-value no-dirty rule — and states the category explicitly:
 *collection mutation is whole-value assignment; the method forms are
 pure expressions; assignment remains the only statement; the
 expression grammar gains no operators*. The keyword / handler-statement
-text also states that `append` / `pop` are contextual method names,
+text also states that `append` / `drop-last` are contextual method names,
 not reserved keywords, so they remain valid state / widget identifiers
 outside `collection_expr`. The handler-statement section states the
 terminator scope plainly: `;` terminates handler-block statements
 only; member positions (state declarations, property settings) carry
 none. Textual IR: collection state-type tokens, `(list …)` literal,
-`(list-prop-read …)`, `(list-append …)` / `(list-pop …)` expression
+`(list-prop-read …)`, `(list-append …)` / `(list-drop-last …)` expression
 forms inside the assignment, loader validation policy. Invalid
 examples per DD-007.
 
@@ -495,19 +530,30 @@ examples per DD-007.
   reject matrix; status remains Proposed.
 - Implementation-readiness review fold: specified empty-`pop` as no
   signal write / no dirty effects; status remains Proposed.
-- Owner-direction fold (2026-06-12, declarative mutation surface):
+- Mutation-surface review fold (2026-06-12, declarative form):
   recommendation moved from M2 method statements to M3 whole-value
   assignment over self-receiver pure tail-edit expressions (`with` /
   `without-last`), grounded in the VISION §4.1 declarative
   unidirectional model; the empty-remove no-dirty contract is preserved
   as an equal-value write-suppression rule; status remains Proposed.
-- Owner-review fold (2026-06-12, second pass — options-space widening):
-  vocabulary axis split from the form axis and moved to `append` /
-  `pop` as pure expression names (false-friend risk recorded);
-  static-literal RHS admitted as M3b (FD-C boundary extension
-  recorded); clarifying note added on the statement-terminator scope
-  (`;` terminates handler-block statements only); status remains
-  Proposed.
+- Mutation-surface review fold (2026-06-12, second pass —
+  options-space widening): vocabulary axis split from the form axis
+  and moved to `append` / `pop` as pure expression names (false-friend
+  risk recorded); static-literal RHS admitted as M3b (FD-C boundary
+  extension recorded); clarifying note added on the
+  statement-terminator scope (`;` terminates handler-block statements
+  only); status remains Proposed.
+- Vocabulary review fold (2026-06-12): the removal expression renamed
+  `pop` → `init` on Haskell / Scala immutable-collection precedent;
+  contracts unchanged; status remains Proposed.
+- Vocabulary review fold (2026-06-12, second pass): §Method vocabulary
+  restructured to explicit criteria + four option classes (V1–V4,
+  symmetric variants compressed as notes); recommendation moved to
+  `append` / `drop-last` (V4 — editing-lineage pair, precedented,
+  total-on-empty in source, no false friend), recorded as a preamble
+  §Owner confirmation item; authority-attribution wording removed from
+  the decision body (decisions stand on recorded grounds; provenance
+  lives in this history); status remains Proposed.
 
 ## Technical risk re-evaluation
 
@@ -516,14 +562,14 @@ examples per DD-007.
   emitter/loader, and the runtime registry breaks at compile time —
   intended (forcing), but it makes this DD's landing a full-review-lane
   schema change with a call-site audit artifact (trap #1).
-- **Two contextual method names** (`append` / `pop`) introduce
+- **Two contextual method names** (`append` / `drop-last`) introduce
   the DSL's first method-call *expression* syntax, admitted only in
   collection-assignment RHS; the parse is unambiguous (the RHS shape
   `IDENT "." IDENT "("` follows `=` on a collection-typed LHS) but the
   "contextual, not reserved" rule needs a positive test (a state named
-  `append` still parses). The `pop`-returns-collection semantics is a
-  documented false friend; the spec sentence and the scalar-LHS type
-  reject are the guardrails.
+  `append` or `drop-last` still parses). `drop-last`'s identity-on-empty
+  matches its Swift / Kotlin precedent, so the spec sentence carries
+  no divergence note.
 - **The equal-value no-dirty rule** (a remove on an empty collection
   writes an equal value) is an authored-behaviour contract; it gets a
   direct runtime test that also proves no dependent effect re-runs, not
