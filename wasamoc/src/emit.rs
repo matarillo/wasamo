@@ -1,6 +1,6 @@
 use crate::ir::{
     CompoundOp, ControlFlowNode, HandlerExpr, InterpolationPart, IrBinding, IrComponent, IrHandler,
-    IrLiteral, IrMember, IrNode, IrProp, IrState, IrType, KindPayload, TrackSize,
+    IrLiteral, IrMember, IrNode, IrProp, IrState, IrStateType, IrType, KindPayload, TrackSize,
 };
 
 /// Serialise an IrComponent to the normative Wasamo IR text format (§8, DD-M2-P6-002).
@@ -35,11 +35,7 @@ fn emit_component(out: &mut String, comp: &IrComponent, indent: usize) {
 }
 
 fn emit_state(out: &mut String, state: &IrState, indent: usize) {
-    let type_str = match state.ty {
-        IrType::I32 => "i32",
-        IrType::Str => "string",
-        IrType::Bool => "bool",
-    };
+    let type_str = emit_state_type(&state.ty);
     let default_str = emit_literal(&state.default);
     out.push_str(&format!(
         "{}state {}: {} = {}\n",
@@ -48,6 +44,17 @@ fn emit_state(out: &mut String, state: &IrState, indent: usize) {
         type_str,
         default_str
     ));
+}
+
+fn emit_state_type(ty: &IrStateType) -> &'static str {
+    match ty {
+        IrStateType::Scalar(IrType::I32) => "i32",
+        IrStateType::Scalar(IrType::Str) => "string",
+        IrStateType::Scalar(IrType::Bool) => "bool",
+        IrStateType::Collection(IrType::I32) => "i32[]",
+        IrStateType::Collection(IrType::Str) => "string[]",
+        IrStateType::Collection(IrType::Bool) => "bool[]",
+    }
 }
 
 fn emit_node(out: &mut String, node: &IrNode, indent: usize) {
@@ -89,6 +96,30 @@ fn emit_member(out: &mut String, member: &IrMember, indent: usize) {
                 }
                 out.push_str(&format!("{}}}\n", i));
             }
+        }
+        IrMember::ControlFlow(ControlFlowNode::For {
+            binder,
+            index_binder,
+            collection,
+            body,
+        }) => {
+            let i = ind(indent);
+            let collection_name = match collection {
+                HandlerExpr::ListPropRead { path, .. } => path.as_str(),
+                _ => "<invalid-for-collection>",
+            };
+            match index_binder {
+                Some(index) => {
+                    out.push_str(&format!(
+                        "{i}for {binder}, {index} in {collection_name} {{\n"
+                    ));
+                }
+                None => out.push_str(&format!("{i}for {binder} in {collection_name} {{\n")),
+            }
+            for body_member in body {
+                emit_member(out, body_member, indent + 1);
+            }
+            out.push_str(&format!("{}}}\n", i));
         }
     }
 }
@@ -163,6 +194,10 @@ fn emit_literal(lit: &IrLiteral) -> String {
         IrLiteral::Str(s) => format!("\"{}\"", escape_string(s)),
         IrLiteral::Ident(id) => id.clone(),
         IrLiteral::Bool(b) => (if *b { "true" } else { "false" }).to_string(),
+        IrLiteral::List(items) => {
+            let rendered: Vec<String> = items.iter().map(emit_literal).collect();
+            format!("[{}]", rendered.join(", "))
+        }
         IrLiteral::Ratio { num, den } => format!("{}:{}", num, den),
         IrLiteral::Color(value) => emit_color_lit(*value),
     }
@@ -200,6 +235,17 @@ fn emit_expr(expr: &HandlerExpr) -> String {
         HandlerExpr::PropRead { path } => format!("(prop-read {})", path),
         HandlerExpr::StrPropRead { path } => format!("(str-prop-read {})", path),
         HandlerExpr::BoolPropRead { path } => format!("(bool-prop-read {})", path),
+        HandlerExpr::ListPropRead { path, .. } => format!("(list-prop-read {})", path),
+        HandlerExpr::ItemRead { binder } => format!("(item-read {})", binder),
+        HandlerExpr::IndexRead { binder } => format!("(index-read {})", binder),
+        HandlerExpr::ListAppend { path, value, .. } => {
+            format!("(list-append {} {})", path, emit_expr(value))
+        }
+        HandlerExpr::ListDropLast { path, .. } => format!("(list-drop-last {})", path),
+        HandlerExpr::ListLit(items) => {
+            let rendered: Vec<String> = items.iter().map(emit_literal).collect();
+            format!("[{}]", rendered.join(", "))
+        }
         HandlerExpr::Assign { lhs, rhs } => {
             format!("(assign {} {})", lhs, emit_expr(rhs))
         }
@@ -745,5 +791,92 @@ mod tests {
         );
         // Never on the content root.
         assert!(!out.contains("node V {\n    bind"), "got: {out}");
+    }
+
+    #[test]
+    fn collection_state_and_for_member_emit_in_textual_ir_shape() {
+        use crate::ir::{
+            ControlFlowNode, HandlerExpr, IrComponent, IrLiteral, IrMember, IrNode, IrState,
+            IrStateType, IrType,
+        };
+
+        let comp = IrComponent {
+            name: "Gallery".into(),
+            base: "Window".into(),
+            host_props: vec![],
+            host_bindings: vec![],
+            states: vec![IrState {
+                name: "thumbs".into(),
+                ty: IrStateType::Collection(IrType::I32),
+                default: IrLiteral::List(vec![IrLiteral::Int(1), IrLiteral::Int(2)]),
+            }],
+            root: IrNode {
+                widget_type: "WrapPanel".into(),
+                props: vec![],
+                bindings: vec![],
+                handlers: vec![],
+                children: vec![IrMember::ControlFlow(ControlFlowNode::For {
+                    binder: "thumb".into(),
+                    index_binder: Some("i".into()),
+                    collection: HandlerExpr::ListPropRead {
+                        path: "thumbs".into(),
+                        elem: IrType::I32,
+                    },
+                    body: vec![IrMember::Widget(IrNode {
+                        widget_type: "Text".into(),
+                        props: vec![],
+                        bindings: vec![],
+                        handlers: vec![],
+                        children: vec![],
+                        kind_payload: None,
+                    })],
+                })],
+                kind_payload: None,
+            },
+        };
+
+        let out = emit(&comp);
+        assert!(out.contains("state thumbs: i32[] = [1, 2]"), "got: {out}");
+        assert!(out.contains("for thumb, i in thumbs {"), "got: {out}");
+        assert!(out.contains("node Text {"), "got: {out}");
+    }
+
+    #[test]
+    fn collection_state_emit_covers_string_and_bool_spellings() {
+        use crate::ir::{IrComponent, IrLiteral, IrNode, IrState, IrStateType, IrType};
+
+        let comp = IrComponent {
+            name: "C".into(),
+            base: "Window".into(),
+            host_props: vec![],
+            host_bindings: vec![],
+            states: vec![
+                IrState {
+                    name: "labels".into(),
+                    ty: IrStateType::Collection(IrType::Str),
+                    default: IrLiteral::List(vec![IrLiteral::Str("a".into())]),
+                },
+                IrState {
+                    name: "flags".into(),
+                    ty: IrStateType::Collection(IrType::Bool),
+                    default: IrLiteral::List(vec![IrLiteral::Bool(true)]),
+                },
+            ],
+            root: IrNode {
+                widget_type: "V".into(),
+                props: vec![],
+                bindings: vec![],
+                handlers: vec![],
+                children: vec![],
+                kind_payload: None,
+            },
+        };
+
+        let out = emit(&comp);
+        assert!(
+            out.contains("state labels: string[] = [\"a\"]"),
+            "got: {out}"
+        );
+        assert!(out.contains("state flags: bool[] = [true]"), "got: {out}");
     }
 }

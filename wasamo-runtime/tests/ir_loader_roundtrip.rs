@@ -174,7 +174,7 @@ fn parsed_counter_has_state_count_i32_zero() {
     assert_eq!(parsed.states.len(), 1);
     let s = &parsed.states[0];
     assert_eq!(s.name, "count");
-    assert_eq!(s.ty, wasamo_ir::IrType::I32);
+    assert_eq!(s.ty, wasamo_ir::IrStateType::Scalar(wasamo_ir::IrType::I32));
     assert_eq!(s.default, wasamo_ir::IrLiteral::Int(0));
 }
 
@@ -244,7 +244,10 @@ fn bool_state_binding_emits_and_parses_bool_productions() {
     assert_eq!(parsed.states.len(), 1);
     let state = &parsed.states[0];
     assert_eq!(state.name, "ready");
-    assert_eq!(state.ty, wasamo_ir::IrType::Bool);
+    assert_eq!(
+        state.ty,
+        wasamo_ir::IrStateType::Scalar(wasamo_ir::IrType::Bool)
+    );
     assert_eq!(state.default, wasamo_ir::IrLiteral::Bool(false));
 
     let button = &parsed.root;

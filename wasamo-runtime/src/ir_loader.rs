@@ -12,8 +12,8 @@ use std::rc::Rc;
 
 use wasamo_ir::{
     CompoundOp, ControlFlowBranch, ControlFlowNode, HandlerExpr, InterpolationPart, IrBinding,
-    IrComponent, IrHandler, IrLiteral, IrMember, IrNode, IrProp, IrState, IrType, KindPayload,
-    TrackSize,
+    IrComponent, IrHandler, IrLiteral, IrMember, IrNode, IrProp, IrState, IrStateType, IrType,
+    KindPayload, TrackSize,
 };
 
 use crate::box_values;
@@ -153,13 +153,14 @@ pub fn parse_ir(text: &str) -> Result<IrComponent, IrLoadError> {
         tokens: &tokens,
         pos: 0,
     };
-    let comp = p.parse_component()?;
+    let mut comp = p.parse_component()?;
     if p.pos < p.tokens.len() {
         return Err(IrLoadError::Parse(format!(
             "unexpected trailing tokens after component (token #{})",
             p.pos
         )));
     }
+    annotate_collection_expr_types(&mut comp)?;
     validate(&comp)?;
     Ok(comp)
 }
@@ -184,6 +185,7 @@ fn validate(comp: &IrComponent) -> Result<(), IrLoadError> {
                 state.name
             )));
         }
+        validate_state_default(state)?;
     }
     validate_host_surface(comp)?;
     reject_root_squatted_host_attrs(comp)?;
@@ -236,6 +238,158 @@ fn validate(comp: &IrComponent) -> Result<(), IrLoadError> {
     // may carry `h-align` / `v-align` placement annotations.
     validate_phase6_zstack_node_invariants(&comp.root, ParentKind::Root)?;
     validate_phase6_control_flow_invariants(&comp.root)
+}
+
+fn validate_state_default(state: &IrState) -> Result<(), IrLoadError> {
+    match (&state.ty, &state.default) {
+        (IrStateType::Scalar(IrType::I32), IrLiteral::Int(_))
+        | (IrStateType::Scalar(IrType::Str), IrLiteral::Str(_))
+        | (IrStateType::Scalar(IrType::Bool), IrLiteral::Bool(_)) => Ok(()),
+        (IrStateType::Collection(elem), IrLiteral::List(items)) => {
+            for item in items {
+                validate_list_literal_item(elem, item).map_err(|msg| {
+                    IrLoadError::Validate(format!(
+                        "collection state `{}` default {}",
+                        state.name, msg
+                    ))
+                })?;
+            }
+            Ok(())
+        }
+        (IrStateType::Scalar(_), IrLiteral::List(_)) => Err(IrLoadError::Validate(format!(
+            "scalar state `{}` cannot use a list literal default",
+            state.name
+        ))),
+        (IrStateType::Collection(_), other) => Err(IrLoadError::Validate(format!(
+            "collection state `{}` default must be a list literal, got {other:?}",
+            state.name
+        ))),
+        (expected, other) => Err(IrLoadError::Validate(format!(
+            "state `{}` default does not match declared type {expected:?}: {other:?}",
+            state.name
+        ))),
+    }
+}
+
+fn validate_list_literal_item(elem: &IrType, item: &IrLiteral) -> Result<(), String> {
+    match (elem, item) {
+        (IrType::I32, IrLiteral::Int(_))
+        | (IrType::Str, IrLiteral::Str(_))
+        | (IrType::Bool, IrLiteral::Bool(_)) => Ok(()),
+        (_, IrLiteral::List(_)) => Err("cannot contain a nested list literal".into()),
+        (expected, other) => Err(format!(
+            "element must match `{}`, got {other:?}",
+            scalar_type_name(expected)
+        )),
+    }
+}
+
+fn scalar_type_name(ty: &IrType) -> &'static str {
+    match ty {
+        IrType::I32 => "i32",
+        IrType::Str => "string",
+        IrType::Bool => "bool",
+    }
+}
+
+fn annotate_collection_expr_types(comp: &mut IrComponent) -> Result<(), IrLoadError> {
+    let declared: std::collections::HashMap<String, IrStateType> = comp
+        .states
+        .iter()
+        .map(|state| (state.name.clone(), state.ty.clone()))
+        .collect();
+    annotate_node_collection_expr_types(&mut comp.root, &declared)
+}
+
+fn annotate_node_collection_expr_types(
+    node: &mut IrNode,
+    declared: &std::collections::HashMap<String, IrStateType>,
+) -> Result<(), IrLoadError> {
+    for binding in &mut node.bindings {
+        annotate_expr_collection_types(&mut binding.expr, declared)?;
+    }
+    for handler in &mut node.handlers {
+        annotate_expr_collection_types(&mut handler.expr, declared)?;
+    }
+    for member in &mut node.children {
+        annotate_member_collection_expr_types(member, declared)?;
+    }
+    Ok(())
+}
+
+fn annotate_member_collection_expr_types(
+    member: &mut IrMember,
+    declared: &std::collections::HashMap<String, IrStateType>,
+) -> Result<(), IrLoadError> {
+    match member {
+        IrMember::Widget(node) => annotate_node_collection_expr_types(node, declared),
+        IrMember::ControlFlow(ControlFlowNode::If { branches }) => {
+            for branch in branches {
+                annotate_expr_collection_types(&mut branch.condition, declared)?;
+                for body_member in &mut branch.body {
+                    annotate_member_collection_expr_types(body_member, declared)?;
+                }
+            }
+            Ok(())
+        }
+        IrMember::ControlFlow(ControlFlowNode::For {
+            collection, body, ..
+        }) => {
+            annotate_expr_collection_types(collection, declared)?;
+            for body_member in body {
+                annotate_member_collection_expr_types(body_member, declared)?;
+            }
+            Ok(())
+        }
+    }
+}
+
+fn annotate_expr_collection_types(
+    expr: &mut HandlerExpr,
+    declared: &std::collections::HashMap<String, IrStateType>,
+) -> Result<(), IrLoadError> {
+    match expr {
+        HandlerExpr::ListPropRead { path, elem }
+        | HandlerExpr::ListAppend { path, elem, .. }
+        | HandlerExpr::ListDropLast { path, elem } => {
+            if let Some(IrStateType::Collection(found)) = declared.get(path) {
+                *elem = found.clone();
+            }
+        }
+        _ => {}
+    }
+    match expr {
+        HandlerExpr::Assign { rhs, .. } | HandlerExpr::CompoundAssign { rhs, .. } => {
+            annotate_expr_collection_types(rhs, declared)?;
+        }
+        HandlerExpr::ListAppend { value, .. } => {
+            annotate_expr_collection_types(value, declared)?;
+        }
+        HandlerExpr::Interpolation(parts) => {
+            for part in parts {
+                if let InterpolationPart::Expr(inner) = part {
+                    annotate_expr_collection_types(inner, declared)?;
+                }
+            }
+        }
+        HandlerExpr::Block(exprs) => {
+            for inner in exprs {
+                annotate_expr_collection_types(inner, declared)?;
+            }
+        }
+        HandlerExpr::IntLit(_)
+        | HandlerExpr::StrLit(_)
+        | HandlerExpr::BoolLit(_)
+        | HandlerExpr::PropRead { .. }
+        | HandlerExpr::StrPropRead { .. }
+        | HandlerExpr::BoolPropRead { .. }
+        | HandlerExpr::ListPropRead { .. }
+        | HandlerExpr::ItemRead { .. }
+        | HandlerExpr::IndexRead { .. }
+        | HandlerExpr::ListDropLast { .. }
+        | HandlerExpr::ListLit(_) => {}
+    }
+    Ok(())
 }
 
 const HOST_STATIC_ATTRS: &[&str] = &["title", "backdrop", "theme"];
@@ -356,6 +510,22 @@ fn validate_phase6_control_flow_invariants(node: &IrNode) -> Result<(), IrLoadEr
                     }
                 }
             }
+            IrMember::ControlFlow(ControlFlowNode::For { body, .. }) => {
+                if body.len() != 1 {
+                    return Err(IrLoadError::Validate(format!(
+                        "`for` body supports exactly one widget member in M3-Phase 7, got {}",
+                        body.len()
+                    )));
+                }
+                match &body[0] {
+                    IrMember::Widget(body) => validate_phase6_control_flow_invariants(body)?,
+                    IrMember::ControlFlow(_) => {
+                        return Err(IrLoadError::Validate(
+                            "a nested control-flow member is not valid directly in a `for` body in M3-Phase 7".into(),
+                        ));
+                    }
+                }
+            }
         }
     }
     Ok(())
@@ -369,6 +539,12 @@ fn validate_phase2_member_invariants(member: &IrMember) -> Result<(), IrLoadErro
                 for body_member in &branch.body {
                     validate_phase2_member_invariants(body_member)?;
                 }
+            }
+            Ok(())
+        }
+        IrMember::ControlFlow(ControlFlowNode::For { body, .. }) => {
+            for body_member in body {
+                validate_phase2_member_invariants(body_member)?;
             }
             Ok(())
         }
@@ -487,6 +663,12 @@ fn validate_phase4_member_invariants(member: &IrMember) -> Result<(), IrLoadErro
             }
             Ok(())
         }
+        IrMember::ControlFlow(ControlFlowNode::For { body, .. }) => {
+            for body_member in body {
+                validate_phase4_member_invariants(body_member)?;
+            }
+            Ok(())
+        }
     }
 }
 
@@ -524,6 +706,12 @@ fn validate_phase3_member_invariants(member: &IrMember) -> Result<(), IrLoadErro
                 for body_member in &branch.body {
                     validate_phase3_member_invariants(body_member)?;
                 }
+            }
+            Ok(())
+        }
+        IrMember::ControlFlow(ControlFlowNode::For { body, .. }) => {
+            for body_member in body {
+                validate_phase3_member_invariants(body_member)?;
             }
             Ok(())
         }
@@ -578,6 +766,12 @@ fn validate_phase5_member_invariants(member: &IrMember) -> Result<(), IrLoadErro
                 for body_member in &branch.body {
                     validate_phase5_member_invariants(body_member)?;
                 }
+            }
+            Ok(())
+        }
+        IrMember::ControlFlow(ControlFlowNode::For { body, .. }) => {
+            for body_member in body {
+                validate_phase5_member_invariants(body_member)?;
             }
             Ok(())
         }
@@ -674,6 +868,12 @@ fn validate_phase6_zstack_member_invariants(
                 for body_member in &branch.body {
                     validate_phase6_zstack_member_invariants(body_member, parent)?;
                 }
+            }
+            Ok(())
+        }
+        IrMember::ControlFlow(ControlFlowNode::For { body, .. }) => {
+            for body_member in body {
+                validate_phase6_zstack_member_invariants(body_member, parent)?;
             }
             Ok(())
         }
@@ -940,7 +1140,7 @@ fn grid_rects_overlap(a: &GridCellRect, b: &GridCellRect) -> bool {
 
 fn validate_node_references(
     node: &IrNode,
-    declared: &std::collections::HashMap<&str, IrType>,
+    declared: &std::collections::HashMap<&str, IrStateType>,
 ) -> Result<(), IrLoadError> {
     for binding in &node.bindings {
         validate_expr_references(&binding.expr, declared, &|name| {
@@ -966,7 +1166,7 @@ fn validate_node_references(
 
 fn validate_member_references(
     member: &IrMember,
-    declared: &std::collections::HashMap<&str, IrType>,
+    declared: &std::collections::HashMap<&str, IrStateType>,
 ) -> Result<(), IrLoadError> {
     match member {
         IrMember::Widget(node) => validate_node_references(node, declared),
@@ -979,37 +1179,64 @@ fn validate_member_references(
             }
             Ok(())
         }
+        IrMember::ControlFlow(ControlFlowNode::For {
+            binder,
+            index_binder,
+            collection,
+            body,
+        }) => {
+            validate_for_header(binder, index_binder.as_deref(), collection, declared)?;
+            for body_member in body {
+                validate_member_references(body_member, declared)?;
+            }
+            Ok(())
+        }
     }
 }
 
 fn validate_expr_references(
     expr: &HandlerExpr,
-    declared: &std::collections::HashMap<&str, IrType>,
+    declared: &std::collections::HashMap<&str, IrStateType>,
     err_msg: &dyn Fn(&str) -> String,
 ) -> Result<(), IrLoadError> {
     match expr {
-        HandlerExpr::IntLit(_) | HandlerExpr::StrLit(_) | HandlerExpr::BoolLit(_) => Ok(()),
+        HandlerExpr::IntLit(_)
+        | HandlerExpr::StrLit(_)
+        | HandlerExpr::BoolLit(_)
+        | HandlerExpr::ItemRead { .. }
+        | HandlerExpr::IndexRead { .. } => Ok(()),
         HandlerExpr::PropRead { path }
         | HandlerExpr::StrPropRead { path }
-        | HandlerExpr::BoolPropRead { path } => {
-            if !declared.contains_key(path.as_str()) {
-                Err(IrLoadError::Validate(err_msg(path)))
-            } else {
-                Ok(())
-            }
-        }
+        | HandlerExpr::BoolPropRead { path } => validate_scalar_read_path(path, declared, err_msg),
+        HandlerExpr::ListPropRead { .. } => Err(IrLoadError::Validate(
+            "collection reads are valid only as a `for` collection header in M3-Phase 7".into(),
+        )),
         HandlerExpr::Assign { lhs, rhs } => {
-            if !declared.contains_key(lhs.as_str()) {
-                return Err(IrLoadError::Validate(err_msg(lhs)));
+            match declared.get(lhs.as_str()) {
+                Some(IrStateType::Scalar(_)) => validate_expr_references(rhs, declared, err_msg),
+                Some(IrStateType::Collection(_)) => {
+                    validate_collection_assignment_rhs(lhs, rhs, declared, err_msg)
+                }
+                None => Err(IrLoadError::Validate(err_msg(lhs))),
             }
-            validate_expr_references(rhs, declared, err_msg)
         }
         HandlerExpr::CompoundAssign { lhs, rhs, .. } => {
-            if !declared.contains_key(lhs.as_str()) {
-                return Err(IrLoadError::Validate(err_msg(lhs)));
+            match declared.get(lhs.as_str()) {
+                Some(IrStateType::Scalar(_)) => validate_expr_references(rhs, declared, err_msg),
+                Some(IrStateType::Collection(_)) => Err(IrLoadError::Validate(format!(
+                    "collection state `{lhs}` cannot use compound assignment"
+                ))),
+                None => Err(IrLoadError::Validate(err_msg(lhs))),
             }
-            validate_expr_references(rhs, declared, err_msg)
         }
+        HandlerExpr::ListAppend { .. } | HandlerExpr::ListDropLast { .. } => {
+            Err(IrLoadError::Validate(
+                "collection edit expressions are valid only as a collection assignment RHS in M3-Phase 7".into(),
+            ))
+        }
+        HandlerExpr::ListLit(_) => Err(IrLoadError::Validate(
+            "list literals are valid only as collection state defaults or collection assignment RHS in M3-Phase 7".into(),
+        )),
         HandlerExpr::Interpolation(parts) => {
             for part in parts {
                 if let InterpolationPart::Expr(inner) = part {
@@ -1029,12 +1256,12 @@ fn validate_expr_references(
 
 fn validate_condition_expr(
     expr: &HandlerExpr,
-    declared: &std::collections::HashMap<&str, IrType>,
+    declared: &std::collections::HashMap<&str, IrStateType>,
 ) -> Result<(), IrLoadError> {
     match expr {
         HandlerExpr::BoolLit(_) => Ok(()),
         HandlerExpr::BoolPropRead { path } => match declared.get(path.as_str()) {
-            Some(IrType::Bool) => Ok(()),
+            Some(IrStateType::Scalar(IrType::Bool)) => Ok(()),
             Some(other) => Err(IrLoadError::Validate(format!(
                 "`if` condition `{path}` must resolve to bool, got {other:?}"
             ))),
@@ -1049,6 +1276,185 @@ fn validate_condition_expr(
         }
         other => Err(IrLoadError::Validate(format!(
             "`if` condition must be a bool literal or bool state read, got {other:?}"
+        ))),
+    }
+}
+
+fn validate_scalar_read_path(
+    path: &str,
+    declared: &std::collections::HashMap<&str, IrStateType>,
+    err_msg: &dyn Fn(&str) -> String,
+) -> Result<(), IrLoadError> {
+    match declared.get(path) {
+        Some(IrStateType::Scalar(_)) => Ok(()),
+        Some(IrStateType::Collection(_)) => Err(IrLoadError::Validate(format!(
+            "scalar expression references collection state `{path}`"
+        ))),
+        None => Err(IrLoadError::Validate(err_msg(path))),
+    }
+}
+
+fn validate_collection_read_path(
+    path: &str,
+    elem: &IrType,
+    declared: &std::collections::HashMap<&str, IrStateType>,
+    err_msg: &dyn Fn(&str) -> String,
+) -> Result<(), IrLoadError> {
+    match declared.get(path) {
+        Some(IrStateType::Collection(found)) if found == elem => Ok(()),
+        Some(IrStateType::Collection(found)) => Err(IrLoadError::Validate(format!(
+            "collection read `{path}` has element tag `{}`, but state is `{}`",
+            scalar_type_name(elem),
+            scalar_type_name(found)
+        ))),
+        Some(IrStateType::Scalar(_)) => Err(IrLoadError::Validate(format!(
+            "collection expression references scalar state `{path}`"
+        ))),
+        None => Err(IrLoadError::Validate(err_msg(path))),
+    }
+}
+
+fn validate_collection_assignment_rhs(
+    lhs: &str,
+    rhs: &HandlerExpr,
+    declared: &std::collections::HashMap<&str, IrStateType>,
+    err_msg: &dyn Fn(&str) -> String,
+) -> Result<(), IrLoadError> {
+    let elem = match declared.get(lhs) {
+        Some(IrStateType::Collection(elem)) => elem,
+        _ => return Err(IrLoadError::Validate(err_msg(lhs))),
+    };
+    match rhs {
+        HandlerExpr::ListAppend {
+            path,
+            elem: rhs_elem,
+            value,
+        } if path == lhs && rhs_elem == elem => {
+            validate_collection_element_expr(lhs, elem, value, declared, err_msg)?;
+            Ok(())
+        }
+        HandlerExpr::ListDropLast {
+            path,
+            elem: rhs_elem,
+        } if path == lhs && rhs_elem == elem => Ok(()),
+        HandlerExpr::ListLit(items) => {
+            for item in items {
+                validate_list_literal_item(elem, item).map_err(IrLoadError::Validate)?;
+            }
+            Ok(())
+        }
+        HandlerExpr::ListAppend { path, .. } | HandlerExpr::ListDropLast { path, .. } => {
+            Err(IrLoadError::Validate(format!(
+                "collection assignment `{lhs}` RHS must use `{lhs}` as its receiver, got `{path}`"
+            )))
+        }
+        other => Err(IrLoadError::Validate(format!(
+            "collection assignment `{lhs}` requires list-append, list-drop-last, or list literal RHS, got {other:?}"
+        ))),
+    }
+}
+
+fn validate_collection_element_expr(
+    lhs: &str,
+    elem: &IrType,
+    value: &HandlerExpr,
+    declared: &std::collections::HashMap<&str, IrStateType>,
+    err_msg: &dyn Fn(&str) -> String,
+) -> Result<(), IrLoadError> {
+    match (elem, value) {
+        (IrType::I32, HandlerExpr::IntLit(_))
+        | (IrType::Str, HandlerExpr::StrLit(_))
+        | (IrType::Bool, HandlerExpr::BoolLit(_)) => Ok(()),
+        (IrType::I32, HandlerExpr::PropRead { path }) => {
+            validate_scalar_value_read(lhs, elem, path, declared, err_msg)
+        }
+        (IrType::Str, HandlerExpr::StrPropRead { path }) => {
+            validate_scalar_value_read(lhs, elem, path, declared, err_msg)
+        }
+        (IrType::Bool, HandlerExpr::BoolPropRead { path }) => {
+            validate_scalar_value_read(lhs, elem, path, declared, err_msg)
+        }
+        (
+            _,
+            HandlerExpr::PropRead { path }
+            | HandlerExpr::StrPropRead { path }
+            | HandlerExpr::BoolPropRead { path },
+        ) => validate_scalar_value_read(lhs, elem, path, declared, err_msg),
+        (IrType::Str, HandlerExpr::Interpolation(_)) => {
+            validate_expr_references(value, declared, err_msg)
+        }
+        (_, HandlerExpr::ItemRead { .. } | HandlerExpr::IndexRead { .. }) => {
+            validate_expr_references(value, declared, err_msg)
+        }
+        _ => Err(IrLoadError::Validate(format!(
+            "collection assignment `{lhs}` appends a value that does not match element type `{}`",
+            scalar_type_name(elem)
+        ))),
+    }
+}
+
+fn validate_scalar_value_read(
+    lhs: &str,
+    elem: &IrType,
+    path: &str,
+    declared: &std::collections::HashMap<&str, IrStateType>,
+    err_msg: &dyn Fn(&str) -> String,
+) -> Result<(), IrLoadError> {
+    match declared.get(path) {
+        Some(IrStateType::Scalar(found)) if found == elem => Ok(()),
+        Some(IrStateType::Scalar(found)) => Err(IrLoadError::Validate(format!(
+            "collection assignment `{lhs}` appends `{path}` with type `{}`, expected `{}`",
+            scalar_type_name(found),
+            scalar_type_name(elem)
+        ))),
+        Some(IrStateType::Collection(_)) => Err(IrLoadError::Validate(format!(
+            "collection assignment `{lhs}` cannot append collection state `{path}` as one element"
+        ))),
+        None => Err(IrLoadError::Validate(err_msg(path))),
+    }
+}
+
+fn validate_for_header(
+    binder: &str,
+    index_binder: Option<&str>,
+    collection: &HandlerExpr,
+    declared: &std::collections::HashMap<&str, IrStateType>,
+) -> Result<(), IrLoadError> {
+    if binder.is_empty() {
+        return Err(IrLoadError::Validate(
+            "`for` binder must not be empty".into(),
+        ));
+    }
+    if declared.contains_key(binder) {
+        return Err(IrLoadError::Validate(format!(
+            "`for` binder `{binder}` collides with a declared state"
+        )));
+    }
+    if let Some(index) = index_binder {
+        if index.is_empty() {
+            return Err(IrLoadError::Validate(
+                "`for` index binder must not be empty".into(),
+            ));
+        }
+        if index == binder {
+            return Err(IrLoadError::Validate(
+                "`for` binder and index binder must be distinct".into(),
+            ));
+        }
+        if declared.contains_key(index) {
+            return Err(IrLoadError::Validate(format!(
+                "`for` index binder `{index}` collides with a declared state"
+            )));
+        }
+    }
+    match collection {
+        HandlerExpr::ListPropRead { path, elem } => {
+            validate_collection_read_path(path, elem, declared, &|name| {
+                format!("`for` references undeclared collection `{name}`")
+            })
+        }
+        other => Err(IrLoadError::Validate(format!(
+            "`for` collection must be a collection state read, got {other:?}"
         ))),
     }
 }
@@ -1075,6 +1481,9 @@ enum Token {
     RBrace,
     LParen,
     RParen,
+    LBracket,
+    RBracket,
+    Comma,
     Eq,
     Colon,
     Ident(String),
@@ -1128,6 +1537,18 @@ fn tokenize(text: &str) -> Result<Vec<Token>, IrLoadError> {
             }
             ')' => {
                 tokens.push(Token::RParen);
+                i += 1;
+            }
+            '[' => {
+                tokens.push(Token::LBracket);
+                i += 1;
+            }
+            ']' => {
+                tokens.push(Token::RBracket);
+                i += 1;
+            }
+            ',' => {
+                tokens.push(Token::Comma);
                 i += 1;
             }
             '=' => {
@@ -1417,13 +1838,20 @@ impl<'a> Parser<'a> {
         let name = self.expect_ident()?;
         self.expect(&Token::Colon)?;
         let ty_str = self.expect_ident()?;
-        let ty = match ty_str.as_str() {
+        let elem = match ty_str.as_str() {
             "i32" => IrType::I32,
             "string" => IrType::Str,
             "bool" => IrType::Bool,
             other => {
                 return Err(IrLoadError::Parse(format!("unknown state type: {other}")));
             }
+        };
+        let ty = if matches!(self.peek(), Some(Token::LBracket)) {
+            self.advance();
+            self.expect(&Token::RBracket)?;
+            IrStateType::Collection(elem)
+        } else {
+            IrStateType::Scalar(elem)
         };
         self.expect(&Token::Eq)?;
         let default = self.parse_literal()?;
@@ -1459,6 +1887,9 @@ impl<'a> Parser<'a> {
                 }
                 Some(Token::Ident(s)) if s == "if" => {
                     children.push(IrMember::ControlFlow(self.parse_if_member()?))
+                }
+                Some(Token::Ident(s)) if s == "for" => {
+                    children.push(IrMember::ControlFlow(self.parse_for_member()?))
                 }
                 Some(Token::Ident(s)) if s == "tracks" => {
                     // `tracks` lines are Grid-only (DD-M3-P5-001 carrier
@@ -1544,6 +1975,9 @@ impl<'a> Parser<'a> {
                 Some(Token::Ident(s)) if s == "if" => {
                     body.push(IrMember::ControlFlow(self.parse_if_member()?));
                 }
+                Some(Token::Ident(s)) if s == "for" => {
+                    body.push(IrMember::ControlFlow(self.parse_for_member()?));
+                }
                 Some(other) => {
                     return Err(IrLoadError::Parse(format!(
                         "unexpected token in if body: {other:?}"
@@ -1554,6 +1988,53 @@ impl<'a> Parser<'a> {
         }
         Ok(ControlFlowNode::If {
             branches: vec![ControlFlowBranch { condition, body }],
+        })
+    }
+
+    fn parse_for_member(&mut self) -> Result<ControlFlowNode, IrLoadError> {
+        self.expect_keyword("for")?;
+        let binder = self.expect_ident()?;
+        let index_binder = if matches!(self.peek(), Some(Token::Comma)) {
+            self.advance();
+            Some(self.expect_ident()?)
+        } else {
+            None
+        };
+        self.expect_keyword("in")?;
+        let collection_name = self.expect_ident()?;
+        self.expect(&Token::LBrace)?;
+        let mut body = Vec::new();
+        loop {
+            match self.peek() {
+                Some(Token::RBrace) => {
+                    self.advance();
+                    break;
+                }
+                Some(Token::Ident(s)) if s == "node" => {
+                    body.push(IrMember::Widget(self.parse_node()?));
+                }
+                Some(Token::Ident(s)) if s == "if" => {
+                    body.push(IrMember::ControlFlow(self.parse_if_member()?));
+                }
+                Some(Token::Ident(s)) if s == "for" => {
+                    body.push(IrMember::ControlFlow(self.parse_for_member()?));
+                }
+                Some(other) => {
+                    return Err(IrLoadError::Parse(format!(
+                        "unexpected token in for body: {other:?}"
+                    )));
+                }
+                None => return Err(IrLoadError::Parse("unexpected EOF in for body".into())),
+            }
+        }
+        Ok(ControlFlowNode::For {
+            binder,
+            index_binder,
+            collection: HandlerExpr::ListPropRead {
+                path: collection_name,
+                elem: IrType::I32,
+            },
+            body,
         })
     }
 
@@ -1620,6 +2101,10 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_literal(&mut self) -> Result<IrLiteral, IrLoadError> {
+        match self.peek() {
+            Some(Token::LBracket) => return self.parse_list_literal(),
+            _ => {}
+        }
         match self.advance() {
             Some(Token::Int(n)) => Ok(IrLiteral::Int(*n)),
             Some(Token::Str(s)) => Ok(IrLiteral::Str(s.clone())),
@@ -1642,6 +2127,44 @@ impl<'a> Parser<'a> {
         }
     }
 
+    fn parse_list_literal(&mut self) -> Result<IrLiteral, IrLoadError> {
+        self.expect(&Token::LBracket)?;
+        let mut items = Vec::new();
+        if matches!(self.peek(), Some(Token::RBracket)) {
+            self.advance();
+            return Ok(IrLiteral::List(items));
+        }
+        loop {
+            let item = match self.advance() {
+                Some(Token::Int(n)) => IrLiteral::Int(*n),
+                Some(Token::Str(s)) => IrLiteral::Str(s.clone()),
+                Some(Token::Ident(s)) if s == "true" => IrLiteral::Bool(true),
+                Some(Token::Ident(s)) if s == "false" => IrLiteral::Bool(false),
+                other => {
+                    return Err(IrLoadError::Parse(format!(
+                        "expected scalar list literal element, got {other:?}"
+                    )));
+                }
+            };
+            items.push(item);
+            match self.peek() {
+                Some(Token::Comma) => {
+                    self.advance();
+                }
+                Some(Token::RBracket) => {
+                    self.advance();
+                    break;
+                }
+                other => {
+                    return Err(IrLoadError::Parse(format!(
+                        "expected `,` or `]` in list literal, got {other:?}"
+                    )));
+                }
+            }
+        }
+        Ok(IrLiteral::List(items))
+    }
+
     fn parse_expr(&mut self) -> Result<HandlerExpr, IrLoadError> {
         match self.peek() {
             Some(Token::Int(n)) => {
@@ -1662,6 +2185,10 @@ impl<'a> Parser<'a> {
                 self.advance();
                 Ok(HandlerExpr::BoolLit(false))
             }
+            Some(Token::LBracket) => match self.parse_list_literal()? {
+                IrLiteral::List(items) => Ok(HandlerExpr::ListLit(items)),
+                _ => unreachable!(),
+            },
             Some(Token::LParen) => self.parse_sexpr(),
             other => Err(IrLoadError::Parse(format!(
                 "expected expression, got {other:?}"
@@ -1684,6 +2211,37 @@ impl<'a> Parser<'a> {
             "bool-prop-read" => {
                 let path = self.expect_ident()?;
                 HandlerExpr::BoolPropRead { path }
+            }
+            "list-prop-read" => {
+                let path = self.expect_ident()?;
+                HandlerExpr::ListPropRead {
+                    path,
+                    elem: IrType::I32,
+                }
+            }
+            "item-read" => {
+                let binder = self.expect_ident()?;
+                HandlerExpr::ItemRead { binder }
+            }
+            "index-read" => {
+                let binder = self.expect_ident()?;
+                HandlerExpr::IndexRead { binder }
+            }
+            "list-append" => {
+                let path = self.expect_ident()?;
+                let value = self.parse_expr()?;
+                HandlerExpr::ListAppend {
+                    path,
+                    elem: IrType::I32,
+                    value: Box::new(value),
+                }
+            }
+            "list-drop-last" => {
+                let path = self.expect_ident()?;
+                HandlerExpr::ListDropLast {
+                    path,
+                    elem: IrType::I32,
+                }
             }
             "assign" => {
                 let lhs = self.expect_ident()?;
@@ -1774,8 +2332,8 @@ pub fn build_widget_tree(
 fn build_signal_registry(states: &[IrState]) -> SignalRegistry {
     let mut registry = SignalRegistry::new();
     for state in states {
-        match state.ty {
-            IrType::I32 => {
+        match &state.ty {
+            IrStateType::Scalar(IrType::I32) => {
                 let initial = match &state.default {
                     IrLiteral::Int(n) => *n,
                     _ => 0,
@@ -1784,7 +2342,7 @@ fn build_signal_registry(states: &[IrState]) -> SignalRegistry {
                     .i32s
                     .insert(state.name.clone(), Signal::new(initial));
             }
-            IrType::Str => {
+            IrStateType::Scalar(IrType::Str) => {
                 let initial = match &state.default {
                     IrLiteral::Str(s) => s.clone(),
                     _ => String::new(),
@@ -1793,13 +2351,58 @@ fn build_signal_registry(states: &[IrState]) -> SignalRegistry {
                     .strings
                     .insert(state.name.clone(), Signal::new(initial));
             }
-            IrType::Bool => {
+            IrStateType::Scalar(IrType::Bool) => {
                 let initial = match &state.default {
                     IrLiteral::Bool(b) => *b,
                     _ => false,
                 };
                 registry
                     .bools
+                    .insert(state.name.clone(), Signal::new(initial));
+            }
+            IrStateType::Collection(IrType::I32) => {
+                let initial = match &state.default {
+                    IrLiteral::List(items) => items
+                        .iter()
+                        .filter_map(|item| match item {
+                            IrLiteral::Int(n) => Some(*n),
+                            _ => None,
+                        })
+                        .collect(),
+                    _ => Vec::new(),
+                };
+                registry
+                    .i32_lists
+                    .insert(state.name.clone(), Signal::new(initial));
+            }
+            IrStateType::Collection(IrType::Str) => {
+                let initial = match &state.default {
+                    IrLiteral::List(items) => items
+                        .iter()
+                        .filter_map(|item| match item {
+                            IrLiteral::Str(s) => Some(s.clone()),
+                            _ => None,
+                        })
+                        .collect(),
+                    _ => Vec::new(),
+                };
+                registry
+                    .string_lists
+                    .insert(state.name.clone(), Signal::new(initial));
+            }
+            IrStateType::Collection(IrType::Bool) => {
+                let initial = match &state.default {
+                    IrLiteral::List(items) => items
+                        .iter()
+                        .filter_map(|item| match item {
+                            IrLiteral::Bool(b) => Some(*b),
+                            _ => None,
+                        })
+                        .collect(),
+                    _ => Vec::new(),
+                };
+                registry
+                    .bool_lists
                     .insert(state.name.clone(), Signal::new(initial));
             }
         }
@@ -1967,6 +2570,11 @@ fn append_static_member(
                 },
             );
             parent.bindings.push(handle);
+        }
+        IrMember::ControlFlow(ControlFlowNode::For { .. }) => {
+            return Err(IrLoadError::Build(
+                "`for` control flow is parsed and validated in T2, but static materialisation is owned by T6".into(),
+            ));
         }
     }
     Ok(())
@@ -2267,6 +2875,11 @@ fn collect_static_zstack_placements(
                     placements.push(extract_zstack_placement(body));
                 }
             }
+            IrMember::ControlFlow(ControlFlowNode::For { .. }) => {
+                return Err(IrLoadError::Build(
+                    "`for` control flow placement is materialised in T6".into(),
+                ));
+            }
         }
     }
     Ok(placements)
@@ -2514,6 +3127,40 @@ mod tests {
     }
 
     #[test]
+    fn collection_signal_registry_populates_all_collection_types() {
+        let registry = build_signal_registry(&[
+            IrState {
+                name: "ints".into(),
+                ty: IrStateType::Collection(IrType::I32),
+                default: IrLiteral::List(vec![IrLiteral::Int(1), IrLiteral::Int(2)]),
+            },
+            IrState {
+                name: "labels".into(),
+                ty: IrStateType::Collection(IrType::Str),
+                default: IrLiteral::List(vec![
+                    IrLiteral::Str("a".into()),
+                    IrLiteral::Str("b".into()),
+                ]),
+            },
+            IrState {
+                name: "flags".into(),
+                ty: IrStateType::Collection(IrType::Bool),
+                default: IrLiteral::List(vec![IrLiteral::Bool(true), IrLiteral::Bool(false)]),
+            },
+        ]);
+
+        assert_eq!(registry.i32_lists["ints"].get_untracked(), vec![1, 2],);
+        assert_eq!(
+            registry.string_lists["labels"].get_untracked(),
+            vec!["a".to_string(), "b".to_string()],
+        );
+        assert_eq!(
+            registry.bool_lists["flags"].get_untracked(),
+            vec![true, false],
+        );
+    }
+
+    #[test]
     fn zstack_static_placements_follow_materialized_member_order() {
         // Reducer logic pin only: after T5, production ZStack placement is
         // accumulated through append_static_member's per-child insert path.
@@ -2569,6 +3216,33 @@ mod tests {
         assert_eq!(placements[1].v_align, Alignment::Stretch);
         assert_eq!(placements[2].h_align, Alignment::Center);
         assert_eq!(placements[2].v_align, Alignment::Center);
+    }
+
+    #[test]
+    fn zstack_static_placement_rejects_for_until_static_materialization_lands() {
+        let registry = SignalRegistry::new();
+        let members = vec![IrMember::ControlFlow(ControlFlowNode::For {
+            binder: "x".into(),
+            index_binder: None,
+            collection: HandlerExpr::ListPropRead {
+                path: "xs".into(),
+                elem: IrType::I32,
+            },
+            body: vec![IrMember::Widget(IrNode {
+                widget_type: "Text".into(),
+                props: vec![],
+                bindings: vec![],
+                handlers: vec![],
+                children: vec![],
+                kind_payload: None,
+            })],
+        })];
+
+        let err = collect_static_zstack_placements(&members, &registry).unwrap_err();
+        assert!(
+            matches!(err, IrLoadError::Build(ref m) if m.contains("materialised in T6")),
+            "{err:?}"
+        );
     }
 
     // M3-Phase 4 T4 / DD-M3-P4-003: ScrollView's `offset-y` is `i32`.
@@ -2644,7 +3318,7 @@ mod tests {
         );
         assert_eq!(c.states.len(), 1);
         assert_eq!(c.states[0].name, "count");
-        assert_eq!(c.states[0].ty, IrType::I32);
+        assert_eq!(c.states[0].ty, IrStateType::Scalar(IrType::I32));
         assert_eq!(c.states[0].default, IrLiteral::Int(0));
     }
 
@@ -2655,8 +3329,413 @@ mod tests {
              state msg: string = \"hi\"\n\
              node V {}\n}",
         );
-        assert_eq!(c.states[0].ty, IrType::Str);
+        assert_eq!(c.states[0].ty, IrStateType::Scalar(IrType::Str));
         assert_eq!(c.states[0].default, IrLiteral::Str("hi".into()));
+    }
+
+    #[test]
+    fn collection_state_i32_list_default_parses() {
+        let c = parse_ok(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             state thumbs: i32[] = [1, 2, 3]\n\
+             node V {}\n}",
+        );
+        assert_eq!(c.states[0].ty, IrStateType::Collection(IrType::I32));
+        assert_eq!(
+            c.states[0].default,
+            IrLiteral::List(vec![
+                IrLiteral::Int(1),
+                IrLiteral::Int(2),
+                IrLiteral::Int(3)
+            ])
+        );
+    }
+
+    #[test]
+    fn collection_state_string_and_bool_list_defaults_parse() {
+        let c = parse_ok(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             state labels: string[] = [\"a\", \"b\"]\n\
+             state flags: bool[] = [true, false]\n\
+             node V {}\n}",
+        );
+        assert_eq!(c.states[0].ty, IrStateType::Collection(IrType::Str));
+        assert_eq!(
+            c.states[0].default,
+            IrLiteral::List(vec![IrLiteral::Str("a".into()), IrLiteral::Str("b".into())])
+        );
+        assert_eq!(c.states[1].ty, IrStateType::Collection(IrType::Bool));
+        assert_eq!(
+            c.states[1].default,
+            IrLiteral::List(vec![IrLiteral::Bool(true), IrLiteral::Bool(false)])
+        );
+    }
+
+    #[test]
+    fn collection_state_rejects_mismatched_list_element() {
+        let err = parse_ir(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             state thumbs: i32[] = [1, \"two\"]\n\
+             node V {}\n}",
+        )
+        .unwrap_err();
+        assert!(
+            matches!(err, IrLoadError::Validate(ref m) if m.contains("element must match `i32`")),
+            "{err:?}"
+        );
+    }
+
+    #[test]
+    fn collection_state_rejects_nested_list_default() {
+        let state = IrState {
+            name: "nested".into(),
+            ty: IrStateType::Collection(IrType::I32),
+            default: IrLiteral::List(vec![IrLiteral::List(vec![IrLiteral::Int(1)])]),
+        };
+        let err = validate_state_default(&state).unwrap_err();
+        assert!(
+            matches!(err, IrLoadError::Validate(ref m) if m.contains("cannot contain a nested list literal")),
+            "{err:?}"
+        );
+    }
+
+    #[test]
+    fn scalar_state_rejects_list_default() {
+        let err = parse_ir(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             state count: i32 = [1]\n\
+             node V {}\n}",
+        )
+        .unwrap_err();
+        assert!(
+            matches!(err, IrLoadError::Validate(ref m) if m.contains("scalar state `count` cannot use a list literal default")),
+            "{err:?}"
+        );
+    }
+
+    #[test]
+    fn for_member_parses_binders_collection_and_body() {
+        let c = parse_ok(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             state thumbs: i32[] = [1, 2]\n\
+             node WrapPanel {\n\
+               for thumb, i in thumbs {\n\
+                 node Text { bind text = (interp \"#\" ((index-read i)) \":\" ((item-read thumb))) }\n\
+               }\n\
+             }\n}",
+        );
+        match &c.root.children[0] {
+            IrMember::ControlFlow(ControlFlowNode::For {
+                binder,
+                index_binder,
+                collection,
+                body,
+            }) => {
+                assert_eq!(binder, "thumb");
+                assert_eq!(index_binder.as_deref(), Some("i"));
+                assert_eq!(
+                    *collection,
+                    HandlerExpr::ListPropRead {
+                        path: "thumbs".into(),
+                        elem: IrType::I32,
+                    }
+                );
+                assert_eq!(body.len(), 1);
+            }
+            other => panic!("expected for member, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn for_member_rejects_scalar_collection_target() {
+        let err = parse_ir(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             state count: i32 = 0\n\
+             node WrapPanel { for x in count { node Text {} } }\n}",
+        )
+        .unwrap_err();
+        assert!(
+            matches!(err, IrLoadError::Validate(ref m) if m.contains("collection expression references scalar state `count`")),
+            "{err:?}"
+        );
+    }
+
+    #[test]
+    fn for_member_rejects_undeclared_collection_target() {
+        let err = parse_ir(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             node WrapPanel { for x in missing { node Text {} } }\n}",
+        )
+        .unwrap_err();
+        assert!(
+            matches!(err, IrLoadError::Validate(ref m) if m.contains("undeclared collection `missing`")),
+            "{err:?}"
+        );
+    }
+
+    #[test]
+    fn for_member_rejects_binder_state_collision() {
+        let err = parse_ir(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             state x: i32 = 0\n\
+             state xs: i32[] = []\n\
+             node WrapPanel { for x in xs { node Text {} } }\n}",
+        )
+        .unwrap_err();
+        assert!(
+            matches!(err, IrLoadError::Validate(ref m) if m.contains("binder `x` collides")),
+            "{err:?}"
+        );
+    }
+
+    #[test]
+    fn for_member_rejects_same_binder_and_index() {
+        let err = parse_ir(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             state xs: i32[] = []\n\
+             node WrapPanel { for x, x in xs { node Text {} } }\n}",
+        )
+        .unwrap_err();
+        assert!(
+            matches!(err, IrLoadError::Validate(ref m) if m.contains("binder and index binder must be distinct")),
+            "{err:?}"
+        );
+    }
+
+    #[test]
+    fn for_member_rejects_index_state_collision() {
+        let err = parse_ir(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             state i: i32 = 0\n\
+             state xs: i32[] = []\n\
+             node WrapPanel { for x, i in xs { node Text {} } }\n}",
+        )
+        .unwrap_err();
+        assert!(
+            matches!(err, IrLoadError::Validate(ref m) if m.contains("index binder `i` collides")),
+            "{err:?}"
+        );
+    }
+
+    #[test]
+    fn for_member_rejects_multi_child_body() {
+        let err = parse_ir(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             state xs: i32[] = []\n\
+             node WrapPanel { for x in xs { node Text {} node Text {} } }\n}",
+        )
+        .unwrap_err();
+        assert!(
+            matches!(err, IrLoadError::Validate(ref m) if m.contains("`for` body supports exactly one widget member")),
+            "{err:?}"
+        );
+    }
+
+    #[test]
+    fn for_member_rejects_nested_control_flow_body() {
+        let err = parse_ir(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             state xs: i32[] = []\n\
+             node WrapPanel { for x in xs { if true { node Text {} } } }\n}",
+        )
+        .unwrap_err();
+        assert!(
+            matches!(err, IrLoadError::Validate(ref m) if m.contains("nested control-flow")),
+            "{err:?}"
+        );
+    }
+
+    #[test]
+    fn collection_assignment_drop_last_rhs_parses_and_validates() {
+        let c = parse_ok(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             state thumbs: i32[] = [1]\n\
+             node Button { on clicked { (assign thumbs (list-drop-last thumbs)) } }\n}",
+        );
+        let handler = &c.root.handlers[0];
+        assert_eq!(
+            handler.expr,
+            HandlerExpr::Assign {
+                lhs: "thumbs".into(),
+                rhs: Box::new(HandlerExpr::ListDropLast {
+                    path: "thumbs".into(),
+                    elem: IrType::I32,
+                }),
+            }
+        );
+    }
+
+    #[test]
+    fn collection_assignment_append_rhs_parses_and_validates() {
+        let c = parse_ok(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             state thumbs: i32[] = [1]\n\
+             state next: i32 = 2\n\
+             node Button { on clicked { (assign thumbs (list-append thumbs (prop-read next))) } }\n}",
+        );
+        let handler = &c.root.handlers[0];
+        assert_eq!(
+            handler.expr,
+            HandlerExpr::Assign {
+                lhs: "thumbs".into(),
+                rhs: Box::new(HandlerExpr::ListAppend {
+                    path: "thumbs".into(),
+                    elem: IrType::I32,
+                    value: Box::new(HandlerExpr::PropRead {
+                        path: "next".into(),
+                    }),
+                }),
+            }
+        );
+    }
+
+    #[test]
+    fn collection_assignment_append_literal_type_mismatch_rejected() {
+        let err = parse_ir(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             state xs: i32[] = []\n\
+             node Button { on clicked { (assign xs (list-append xs \"bad\")) } }\n}",
+        )
+        .unwrap_err();
+        assert!(
+            matches!(err, IrLoadError::Validate(ref m) if m.contains("does not match element type `i32`")),
+            "{err:?}"
+        );
+    }
+
+    #[test]
+    fn collection_assignment_append_scalar_read_type_mismatch_rejected() {
+        let err = parse_ir(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             state xs: i32[] = []\n\
+             state label: string = \"bad\"\n\
+             node Button { on clicked { (assign xs (list-append xs (str-prop-read label))) } }\n}",
+        )
+        .unwrap_err();
+        assert!(
+            matches!(err, IrLoadError::Validate(ref m) if m.contains("appends `label` with type `string`, expected `i32`")),
+            "{err:?}"
+        );
+    }
+
+    #[test]
+    fn collection_assignment_list_literal_rhs_parses_and_validates() {
+        let c = parse_ok(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             state thumbs: i32[] = [1]\n\
+             node Button { on clicked { (assign thumbs [2, 3]) } }\n}",
+        );
+        let handler = &c.root.handlers[0];
+        assert_eq!(
+            handler.expr,
+            HandlerExpr::Assign {
+                lhs: "thumbs".into(),
+                rhs: Box::new(HandlerExpr::ListLit(vec![
+                    IrLiteral::Int(2),
+                    IrLiteral::Int(3)
+                ])),
+            }
+        );
+    }
+
+    #[test]
+    fn collection_state_rejects_scalar_default() {
+        let err = parse_ir(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             state xs: i32[] = 1\n\
+             node V {}\n}",
+        )
+        .unwrap_err();
+        assert!(
+            matches!(err, IrLoadError::Validate(ref m) if m.contains("default must be a list literal")),
+            "{err:?}"
+        );
+    }
+
+    #[test]
+    fn collection_compound_assignment_rejected() {
+        let err = parse_ir(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             state xs: i32[] = []\n\
+             node Button { on clicked { (compound-assign += xs 1) } }\n}",
+        )
+        .unwrap_err();
+        assert!(
+            matches!(err, IrLoadError::Validate(ref m) if m.contains("cannot use compound assignment")),
+            "{err:?}"
+        );
+    }
+
+    #[test]
+    fn collection_edit_outside_assignment_rhs_rejected() {
+        let err = parse_ir(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             state xs: i32[] = []\n\
+             node Button { on clicked { (list-drop-last xs) } }\n}",
+        )
+        .unwrap_err();
+        assert!(
+            matches!(err, IrLoadError::Validate(ref m) if m.contains("collection edit expressions are valid only")),
+            "{err:?}"
+        );
+    }
+
+    #[test]
+    fn collection_assignment_wrong_rhs_kind_rejected() {
+        let err = parse_ir(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             state xs: i32[] = []\n\
+             state n: i32 = 1\n\
+             node Button { on clicked { (assign xs (prop-read n)) } }\n}",
+        )
+        .unwrap_err();
+        assert!(
+            matches!(err, IrLoadError::Validate(ref m) if m.contains("requires list-append, list-drop-last, or list literal RHS")),
+            "{err:?}"
+        );
+    }
+
+    #[test]
+    fn collection_assignment_wrong_receiver_rejected() {
+        let err = parse_ir(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             state xs: i32[] = []\n\
+             state ys: i32[] = []\n\
+             node Button { on clicked { (assign xs (list-drop-last ys)) } }\n}",
+        )
+        .unwrap_err();
+        assert!(
+            matches!(err, IrLoadError::Validate(ref m) if m.contains("RHS must use `xs` as its receiver")),
+            "{err:?}"
+        );
+    }
+
+    #[test]
+    fn scalar_assignment_list_rhs_rejected() {
+        let err = parse_ir(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             state count: i32 = 0\n\
+             node Button { on clicked { (assign count [1]) } }\n}",
+        )
+        .unwrap_err();
+        assert!(
+            matches!(err, IrLoadError::Validate(ref m) if m.contains("list literals are valid only")),
+            "{err:?}"
+        );
+    }
+
+    #[test]
+    fn bare_collection_read_outside_for_header_rejected() {
+        let err = parse_ir(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             state xs: i32[] = []\n\
+             node Text { bind text = (list-prop-read xs) }\n}",
+        )
+        .unwrap_err();
+        assert!(
+            matches!(err, IrLoadError::Validate(ref m) if m.contains("collection reads are valid only")),
+            "{err:?}"
+        );
     }
 
     #[test]
@@ -2914,7 +3993,7 @@ mod tests {
         );
         assert_eq!(c.states.len(), 1);
         assert_eq!(c.states[0].name, "ready");
-        assert_eq!(c.states[0].ty, IrType::Bool);
+        assert_eq!(c.states[0].ty, IrStateType::Scalar(IrType::Bool));
         assert_eq!(c.states[0].default, IrLiteral::Bool(false));
     }
 
@@ -2925,7 +4004,7 @@ mod tests {
              state ready: bool = true\n\
              node V {}\n}",
         );
-        assert_eq!(c.states[0].ty, IrType::Bool);
+        assert_eq!(c.states[0].ty, IrStateType::Scalar(IrType::Bool));
         assert_eq!(c.states[0].default, IrLiteral::Bool(true));
     }
 
@@ -3036,7 +4115,7 @@ mod tests {
             host_bindings: vec![],
             states: vec![IrState {
                 name: "count".into(),
-                ty: IrType::I32,
+                ty: IrStateType::Scalar(IrType::I32),
                 default: IrLiteral::Int(0),
             }],
             root: IrNode {
@@ -3117,10 +4196,13 @@ mod tests {
         out.push_str(";wasamo-ir v0\n\n");
         out.push_str(&format!("component {} inherits {} {{\n", c.name, c.base));
         for s in &c.states {
-            let ty = match s.ty {
-                IrType::I32 => "i32",
-                IrType::Str => "string",
-                IrType::Bool => "bool",
+            let ty = match &s.ty {
+                IrStateType::Scalar(IrType::I32) => "i32",
+                IrStateType::Scalar(IrType::Str) => "string",
+                IrStateType::Scalar(IrType::Bool) => "bool",
+                IrStateType::Collection(IrType::I32) => "i32[]",
+                IrStateType::Collection(IrType::Str) => "string[]",
+                IrStateType::Collection(IrType::Bool) => "bool[]",
             };
             out.push_str(&format!(
                 "    state {}: {} = {}\n",
@@ -3188,6 +4270,30 @@ mod tests {
                         out.push_str(&format!("{}}}\n", i));
                     }
                 }
+                IrMember::ControlFlow(ControlFlowNode::For {
+                    binder,
+                    index_binder,
+                    collection,
+                    body,
+                }) => {
+                    let i = "  ".repeat(depth + 1);
+                    let collection_name = match collection {
+                        HandlerExpr::ListPropRead { path, .. } => path.as_str(),
+                        _ => "<invalid-for-collection>",
+                    };
+                    match index_binder {
+                        Some(index) => out.push_str(&format!(
+                            "{i}for {binder}, {index} in {collection_name} {{\n"
+                        )),
+                        None => out.push_str(&format!("{i}for {binder} in {collection_name} {{\n")),
+                    }
+                    for body_member in body {
+                        if let IrMember::Widget(node) = body_member {
+                            render_node(out, node, depth + 2);
+                        }
+                    }
+                    out.push_str(&format!("{}}}\n", i));
+                }
             }
         }
         out.push_str(&format!("{i}}}\n"));
@@ -3199,6 +4305,10 @@ mod tests {
             IrLiteral::Str(s) => format!("\"{}\"", s.replace('\\', "\\\\").replace('"', "\\\"")),
             IrLiteral::Ident(id) => id.clone(),
             IrLiteral::Bool(b) => (if *b { "true" } else { "false" }).to_string(),
+            IrLiteral::List(items) => {
+                let inner: Vec<String> = items.iter().map(render_lit).collect();
+                format!("[{}]", inner.join(", "))
+            }
             IrLiteral::Ratio { num, den } => format!("{}:{}", num, den),
             IrLiteral::Color(value) => {
                 let alpha = (*value >> 24) & 0xFF;
@@ -3220,6 +4330,17 @@ mod tests {
             HandlerExpr::PropRead { path } => format!("(prop-read {})", path),
             HandlerExpr::StrPropRead { path } => format!("(str-prop-read {})", path),
             HandlerExpr::BoolPropRead { path } => format!("(bool-prop-read {})", path),
+            HandlerExpr::ListPropRead { path, .. } => format!("(list-prop-read {})", path),
+            HandlerExpr::ItemRead { binder } => format!("(item-read {})", binder),
+            HandlerExpr::IndexRead { binder } => format!("(index-read {})", binder),
+            HandlerExpr::ListAppend { path, value, .. } => {
+                format!("(list-append {} {})", path, render_expr(value))
+            }
+            HandlerExpr::ListDropLast { path, .. } => format!("(list-drop-last {})", path),
+            HandlerExpr::ListLit(items) => {
+                let inner: Vec<String> = items.iter().map(render_lit).collect();
+                format!("[{}]", inner.join(", "))
+            }
             HandlerExpr::Assign { lhs, rhs } => format!("(assign {} {})", lhs, render_expr(rhs)),
             HandlerExpr::CompoundAssign { lhs, op, rhs } => {
                 let op_str = match op {

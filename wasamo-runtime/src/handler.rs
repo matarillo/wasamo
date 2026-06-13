@@ -98,8 +98,14 @@ pub fn evaluate(expr: &HandlerExpr, ctx: &mut dyn EvalContext) -> Result<i32, Ev
         // String-typed forms are only valid in binding context.
         HandlerExpr::StrLit(_)
         | HandlerExpr::StrPropRead { .. }
+        | HandlerExpr::ListPropRead { .. }
+        | HandlerExpr::ItemRead { .. }
+        | HandlerExpr::IndexRead { .. }
+        | HandlerExpr::ListAppend { .. }
+        | HandlerExpr::ListDropLast { .. }
+        | HandlerExpr::ListLit(_)
         | HandlerExpr::Interpolation(_) => Err(EvalError::TypeMismatch {
-            path: "<string expression in integer context>".into(),
+            path: "<non-integer expression in integer context>".into(),
         }),
 
         // A bare bool literal / bool property-read in integer context is a
@@ -360,6 +366,12 @@ fn evaluate_tracked(expr: &HandlerExpr, ctx: &mut dyn EvalContext) -> Result<i32
 
         HandlerExpr::StrLit(_)
         | HandlerExpr::StrPropRead { .. }
+        | HandlerExpr::ListPropRead { .. }
+        | HandlerExpr::ItemRead { .. }
+        | HandlerExpr::IndexRead { .. }
+        | HandlerExpr::ListAppend { .. }
+        | HandlerExpr::ListDropLast { .. }
+        | HandlerExpr::ListLit(_)
         | HandlerExpr::Interpolation(_) => Err(EvalError::TypeMismatch {
             path: "<string expression in integer context>".into(),
         }),
@@ -885,6 +897,38 @@ mod tests {
             evaluate(&expr, &mut ctx),
             Err(EvalError::TypeMismatch { .. })
         ));
+    }
+
+    #[test]
+    fn evaluate_rejects_collection_forms_until_t7_writer_lands() {
+        let mut ctx = MapCtx::new(&[]);
+        let exprs = [
+            HandlerExpr::ListPropRead {
+                path: "xs".into(),
+                elem: wasamo_ir::IrType::I32,
+            },
+            HandlerExpr::ItemRead {
+                binder: "item".into(),
+            },
+            HandlerExpr::IndexRead { binder: "i".into() },
+            HandlerExpr::ListAppend {
+                path: "xs".into(),
+                elem: wasamo_ir::IrType::I32,
+                value: Box::new(HandlerExpr::IntLit(1)),
+            },
+            HandlerExpr::ListDropLast {
+                path: "xs".into(),
+                elem: wasamo_ir::IrType::I32,
+            },
+            HandlerExpr::ListLit(vec![wasamo_ir::IrLiteral::Int(1)]),
+        ];
+
+        for expr in exprs {
+            assert!(matches!(
+                evaluate(&expr, &mut ctx),
+                Err(EvalError::TypeMismatch { .. })
+            ));
+        }
     }
 
     // ── Bool surface tests (M3-Phase 1 T7) ───────────────────────────────────

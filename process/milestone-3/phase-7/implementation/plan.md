@@ -105,7 +105,7 @@ The **schema / IR-migration full-review-lane** task (gates trap #1).
 Lands `wasamo-ir` + `wasamoc` emit/lower + textual-IR parse + runtime
 loader/registry migration as one buildable commit bundle (risk R-A).
 
-- [ ] `wasamo-ir`: `IrState.ty` → `IrStateType::Scalar(IrType) |
+- [x] `wasamo-ir`: `IrState.ty` → `IrStateType::Scalar(IrType) |
       Collection(IrType)` (compile-error-forcing; `Collection` cannot
       nest); `IrLiteral::List(Vec<IrLiteral>)`
       (scalar-homogeneous, enforced at check / loader);
@@ -116,14 +116,14 @@ loader/registry migration as one buildable commit bundle (risk R-A).
       carrying the element tag), the loop-local reads, and the
       collection-assignment forms (single unified enum; exact
       spellings per T1).
-- [ ] Migrate every construction / match site across `wasamoc`, the
+- [x] Migrate every construction / match site across `wasamoc`, the
       textual-IR emitter / loader, validators, and the runtime
       registry so the workspace builds; `SignalRegistry` gains the
       three whole-value collection signal maps with a value-equality
       check on set (equal-value writes mark nothing dirty).
-- [ ] IR-type unit tests cover the state-typing encoding, the list
+- [x] IR-type unit tests cover the state-typing encoding, the list
       literal, and the `For` member encoding.
-- [ ] **Close artifact (trap #1):** the `rg`-enumerated call-site
+- [x] **Close artifact (trap #1):** the `rg`-enumerated call-site
       audit table over `IrState` / `IrMember` / `ControlFlowNode` /
       `HandlerExpr` (+ `BindingTarget` pre-audit for T7), each site
       classified (extended / correctly unaffected / deliberately
@@ -234,6 +234,8 @@ for the reject branches.
       rows (`WASAMO_ERR_IR_MALFORMED`): non-collection / unresolved
       collection read, bad body shape, bad binders, disallowed
       container / component level, nested `for`, handler-in-body,
+      loop-local `item-read` / `index-read` position and scope
+      violations exposed through textual IR,
       collection-declaration and collection-assignment violations —
       each with a direct test (trap #4).
 

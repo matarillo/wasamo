@@ -74,7 +74,11 @@ report.
 
 - **#1 call-site audit table** — the `rg` query used, the files covered,
   each call-site's classification (must-dispatch / ignore-OK) and **its
-  reason**, and the tests added or deliberately not added.
+  reason**, and the tests added or deliberately not added. Prefer
+  compile-error-forcing shapes for semantic migrations where Rust can
+  enumerate the breakage (for example, adding a non-exhaustively matched
+  enum variant or changing a field type), but still grep for wildcard /
+  filtering helpers that can silently absorb the new case.
 - **#2 structural side-effect enumeration** — the derived state touched
   (layout dirty / Visual order / parent metadata / …) and how each was
   updated.

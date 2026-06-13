@@ -16,6 +16,10 @@ pub enum IrLiteral {
     Str(String),
     Ident(String),
     Bool(bool),
+    /// Homogeneous collection literal used only for collection state defaults
+    /// and collection-assignment RHS forms. Element type compatibility is
+    /// enforced by wasamoc check and by the runtime IR loader.
+    List(Vec<IrLiteral>),
     /// Ratio literal — surface form `<num>:<den>`, both sides positive
     /// integer literals (DD-M3-P2-002). Phase 2 admits this literal only
     /// as the RHS of `Box.aspect`; value-validity (`num > 0`, `den > 0`)
@@ -54,6 +58,26 @@ pub enum HandlerExpr {
     BoolPropRead {
         path: String,
     },
+    ListPropRead {
+        path: String,
+        elem: IrType,
+    },
+    ItemRead {
+        binder: String,
+    },
+    IndexRead {
+        binder: String,
+    },
+    ListAppend {
+        path: String,
+        elem: IrType,
+        value: Box<HandlerExpr>,
+    },
+    ListDropLast {
+        path: String,
+        elem: IrType,
+    },
+    ListLit(Vec<IrLiteral>),
     Assign {
         lhs: String,
         rhs: Box<HandlerExpr>,
@@ -85,8 +109,14 @@ pub enum InterpolationPart {
 #[derive(Debug, Clone, PartialEq)]
 pub struct IrState {
     pub name: String,
-    pub ty: IrType,
+    pub ty: IrStateType,
     pub default: IrLiteral,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum IrStateType {
+    Scalar(IrType),
+    Collection(IrType),
 }
 
 /// A static property set (`prop name = value`).
@@ -147,7 +177,15 @@ pub enum IrMember {
 /// `If` form; the branch list is the family extension point for `else`.
 #[derive(Debug, Clone, PartialEq)]
 pub enum ControlFlowNode {
-    If { branches: Vec<ControlFlowBranch> },
+    If {
+        branches: Vec<ControlFlowBranch>,
+    },
+    For {
+        binder: String,
+        index_binder: Option<String>,
+        collection: HandlerExpr,
+        body: Vec<IrMember>,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -388,6 +426,142 @@ mod tests {
     }
 
     #[test]
+    fn ir_state_type_distinguishes_scalar_and_collection() {
+        assert_eq!(
+            IrStateType::Scalar(IrType::I32),
+            IrStateType::Scalar(IrType::I32)
+        );
+        assert_ne!(
+            IrStateType::Scalar(IrType::I32),
+            IrStateType::Collection(IrType::I32)
+        );
+        assert_ne!(
+            IrStateType::Collection(IrType::I32),
+            IrStateType::Collection(IrType::Str)
+        );
+    }
+
+    #[test]
+    fn ir_literal_list_round_trip_values() {
+        let lit = IrLiteral::List(vec![IrLiteral::Int(1), IrLiteral::Int(2)]);
+        match &lit {
+            IrLiteral::List(items) => {
+                assert_eq!(items, &vec![IrLiteral::Int(1), IrLiteral::Int(2)]);
+            }
+            _ => panic!("expected List"),
+        }
+        assert_eq!(
+            lit.clone(),
+            IrLiteral::List(vec![IrLiteral::Int(1), IrLiteral::Int(2)])
+        );
+    }
+
+    #[test]
+    fn handler_expr_iteration_variants_carry_bindings_and_types() {
+        let collection = HandlerExpr::ListPropRead {
+            path: "thumbs".into(),
+            elem: IrType::I32,
+        };
+        let item = HandlerExpr::ItemRead {
+            binder: "thumb".into(),
+        };
+        let index = HandlerExpr::IndexRead { binder: "i".into() };
+        let append = HandlerExpr::ListAppend {
+            path: "thumbs".into(),
+            elem: IrType::I32,
+            value: Box::new(HandlerExpr::IntLit(3)),
+        };
+        let drop_last = HandlerExpr::ListDropLast {
+            path: "thumbs".into(),
+            elem: IrType::I32,
+        };
+
+        assert!(matches!(collection, HandlerExpr::ListPropRead { .. }));
+        assert!(matches!(item, HandlerExpr::ItemRead { .. }));
+        assert!(matches!(index, HandlerExpr::IndexRead { .. }));
+        assert!(matches!(append, HandlerExpr::ListAppend { .. }));
+        assert!(matches!(drop_last, HandlerExpr::ListDropLast { .. }));
+    }
+
+    #[test]
+    fn control_flow_for_encodes_binders_collection_and_body() {
+        let body = IrMember::Widget(IrNode {
+            widget_type: "Text".into(),
+            props: vec![],
+            bindings: vec![],
+            handlers: vec![],
+            children: vec![],
+            kind_payload: None,
+        });
+        let flow = ControlFlowNode::For {
+            binder: "thumb".into(),
+            index_binder: Some("i".into()),
+            collection: HandlerExpr::ListPropRead {
+                path: "thumbs".into(),
+                elem: IrType::I32,
+            },
+            body: vec![body],
+        };
+
+        match flow {
+            ControlFlowNode::For {
+                binder,
+                index_binder,
+                collection,
+                body,
+            } => {
+                assert_eq!(binder, "thumb");
+                assert_eq!(index_binder.as_deref(), Some("i"));
+                assert!(matches!(collection, HandlerExpr::ListPropRead { .. }));
+                assert_eq!(body.len(), 1);
+            }
+            _ => panic!("expected For"),
+        }
+    }
+
+    #[test]
+    fn widget_children_excludes_for_body_widgets() {
+        let direct = IrNode {
+            widget_type: "Button".into(),
+            props: vec![],
+            bindings: vec![],
+            handlers: vec![],
+            children: vec![],
+            kind_payload: None,
+        };
+        let repeated = IrNode {
+            widget_type: "Text".into(),
+            props: vec![],
+            bindings: vec![],
+            handlers: vec![],
+            children: vec![],
+            kind_payload: None,
+        };
+        let parent = IrNode {
+            widget_type: "WrapPanel".into(),
+            props: vec![],
+            bindings: vec![],
+            handlers: vec![],
+            children: vec![
+                IrMember::Widget(direct.clone()),
+                IrMember::ControlFlow(ControlFlowNode::For {
+                    binder: "item".into(),
+                    index_binder: None,
+                    collection: HandlerExpr::ListPropRead {
+                        path: "items".into(),
+                        elem: IrType::I32,
+                    },
+                    body: vec![IrMember::Widget(repeated)],
+                }),
+            ],
+            kind_payload: None,
+        };
+
+        let children: Vec<&IrNode> = parent.widget_children().collect();
+        assert_eq!(children, vec![&direct]);
+    }
+
+    #[test]
     fn ir_component_separates_host_surface_from_content_root() {
         let component = IrComponent {
             name: "C".into(),
@@ -432,10 +606,10 @@ mod tests {
     fn ir_state_bool_declaration() {
         let s = IrState {
             name: "ready".into(),
-            ty: IrType::Bool,
+            ty: IrStateType::Scalar(IrType::Bool),
             default: IrLiteral::Bool(false),
         };
-        assert_eq!(s.ty, IrType::Bool);
+        assert_eq!(s.ty, IrStateType::Scalar(IrType::Bool));
         assert_eq!(s.default, IrLiteral::Bool(false));
     }
 }
