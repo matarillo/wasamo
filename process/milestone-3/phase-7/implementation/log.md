@@ -119,6 +119,128 @@
   rejects until T7; `widget_children()` excluding `For` body widgets; and
   string/bool collection state emission.
 
+- **2026-06-14 / T2 merge-prep addendum — implemented-branch test map
+  made forcing.** A merge-readiness review found that the retrospective's
+  "Implemented-branch test map" corrective had been recorded as prose but
+  not applied as a mechanical reconciliation artifact. The concrete miss:
+  three T2-owned `IrLoadError::Validate` branches were implemented but had
+  no direct firing test. Added
+  `scalar_state_rejects_type_mismatched_default`,
+  `scalar_read_of_collection_state_rejected`, and
+  `append_collection_state_as_element_rejected`. This closes the three
+  missing branches and upgrades the close condition: `cargo test` green is
+  supporting evidence only; the branch map below is the forcing artifact.
+
+  Command used for the reconciliation:
+  `rg -n 'IrLoadError::Validate' wasamo-runtime/src/ir_loader.rs`.
+  Non-production hits for `Display`, comments, and test assertions are not
+  branch arms. Production arms are mapped below by current line number.
+
+  | Line(s) | Reject branch | Direct test / owner |
+  |---|---|---|
+  | 183 | duplicate state name | `malformed_duplicate_state_name` |
+  | 251 | collection default list item mismatch / nested list | `collection_state_rejects_mismatched_list_element`; `collection_state_rejects_nested_list_default` |
+  | 259 | scalar state uses list default | `scalar_state_rejects_list_default` |
+  | 263 | collection state default is not a list | `collection_state_rejects_scalar_default` |
+  | 267 | scalar state default type mismatch catch-all | `scalar_state_rejects_type_mismatched_default` |
+  | 409 | host `title` is not string | `static_window_title_rejects_non_string_host_prop` |
+  | 419 | host `backdrop` / `theme` typed literal | `host_surface_rejects_typed_literal_backdrop`; `host_surface_rejects_typed_literal_theme` |
+  | 426 | unknown host attribute | `host_surface_rejects_unknown_host_prop` |
+  | 435 | host binding | `host_surface_rejects_host_binding` |
+  | 450 | root-squatted host prop | `old_root_squatted_host_prop_rejected` |
+  | 461 | root-squatted host binding | `old_root_squatted_host_binding_rejected` |
+  | 492 | `if` has more than one branch in memory IR | Prior Phase 6 invariant; not T2-owned. Existing direct textual IR cannot construct multi-branch `if`; owner remains prior Phase 6 memory-IR defense. |
+  | 499 | `if` body not exactly one member | `validate_rejects_if_with_empty_body`; `validate_rejects_if_with_multi_child_body` |
+  | 507 | nested control-flow directly in `if` body | `validate_rejects_if_with_nested_control_flow_body` |
+  | 515 | `for` body not exactly one member | `for_member_rejects_multi_child_body` |
+  | 523 | nested control-flow directly in `for` body | `for_member_rejects_nested_control_flow_body` |
+  | 567 | Box more than one child/member | `malformed_box_with_two_children`; `validate_rejects_box_with_multiple_conditional_siblings`; `validate_rejects_box_with_widget_and_conditional_sibling` |
+  | 583 | ratio literal outside `Box.aspect` | `malformed_ratio_outside_box_aspect_on_vstack`; `malformed_ratio_on_box_wrong_prop_name`; `malformed_ratio_in_nested_node` |
+  | 592 | color literal outside `Box.fill` | `malformed_color_outside_box_fill_on_text`; `malformed_color_on_box_wrong_prop_name` |
+  | 637 | direct control-flow in ScrollView content | `validate_rejects_scrollview_with_conditional_member`; `validate_rejects_scrollview_with_conditional_only_member` |
+  | 643 | ScrollView child count not exactly one | `scroll_view_with_zero_children_rejected`; `scroll_view_with_two_children_rejected`; `scroll_view_with_three_children_rejected`; `scroll_view_nested_zero_child_is_rejected` |
+  | 687 | WrapPanel negative item/layout attributes | `wrap_panel_rejects_negative_item_cross_size`; `wrap_panel_rejects_negative_item_spacing`; `wrap_panel_rejects_negative_line_spacing` |
+  | 748 | `Cell` outside `Grid` | `cell_outside_grid_rejected` |
+  | 810 | `ZStack` kind payload | `validate_rejects_zstack_with_kind_payload` |
+  | 819 | `ZStack` attributes | `zstack_attribute_rejected_at_validate` |
+  | 825 | `ZStack` binding | `zstack_binding_rejected_at_validate` |
+  | 830 | `ZStack` handler | `zstack_handler_rejected_at_validate` |
+  | 841 | placement prop outside ZStack child / Grid Cell | `placement_prop_outside_zstack_child_or_grid_cell_rejected_at_validate` |
+  | 888 | invalid placement alignment literal | `zstack_child_unknown_alignment_rejected_at_validate`; `grid_cell_unknown_alignment_rejected` |
+  | 898 | non-Grid node carries Grid payload | `validate_rejects_non_grid_kind_payload` |
+  | 928 | Grid missing track payload | `grid_node_without_tracks_rejected` |
+  | 936 | Grid missing columns | `grid_missing_column_track_rejected` |
+  | 941 | Grid missing rows | `grid_missing_row_track_rejected` |
+  | 953 | Grid fixed track below 1 | `grid_zero_fixed_track_rejected` |
+  | 960 | Grid star weight outside range | `grid_star_weight_over_cap_rejected`; the `< 1` subcase is prior Phase 5 memory-IR defense and not T2-owned. |
+  | 983 | Grid direct non-Cell widget | `grid_non_cell_child_rejected` |
+  | 989 | Grid direct control-flow member | `validate_rejects_direct_conditional_grid_member` |
+  | 1002 | Grid cell overlap | `grid_same_cell_conflict_rejected`; `grid_overlapping_span_conflict_rejected`; `grid_multi_cell_omitted_placement_collides_at_origin` |
+  | 1029 | Cell content child count | `grid_cell_zero_content_children_rejected`; `grid_cell_two_content_children_rejected` |
+  | 1039 | Cell direct control-flow content | `validate_rejects_direct_conditional_cell_member` |
+  | 1059 | Cell row out of range | `grid_cell_row_out_of_range_rejected` |
+  | 1064 | Cell column out of range | `grid_cell_column_out_of_range_rejected` |
+  | 1072, 1077 | Cell span below 1 | `grid_cell_zero_span_rejected` |
+  | 1082, 1088 | Cell span exceeds Grid | `grid_cell_span_exceeds_grid_rejected` |
+  | 1108 | Cell placement/span non-integer literal | Prior Phase 5 memory-IR defense; not T2-owned. No new T2 test required. |
+  | 1126 | Cell alignment vocabulary | `grid_cell_unknown_alignment_rejected` |
+  | 1211 | collection read outside `for` header | `bare_collection_read_outside_for_header_rejected` |
+  | 1220 | assignment to undeclared lhs | `malformed_assign_undeclared` |
+  | 1226 | collection state uses compound assignment | `collection_compound_assignment_rejected` |
+  | 1229 | compound assignment to undeclared lhs | `malformed_compound_assign_undeclared` |
+  | 1233 | collection edit expression outside assignment RHS | `collection_edit_outside_assignment_rhs_rejected` |
+  | 1237 | list literal outside collection default/assignment RHS | `scalar_assignment_list_rhs_rejected` |
+  | 1265 | `if` condition resolves to non-bool | `validate_rejects_if_with_bool_read_resolving_to_non_bool_state` |
+  | 1268 | `if` condition undeclared | `validate_rejects_if_with_unresolved_condition` |
+  | 1273 | `if` condition is scalar read form | `validate_rejects_if_with_non_bool_condition` |
+  | 1277 | `if` condition other invalid expression | `validate_rejects_if_with_non_bool_condition` |
+  | 1290 | scalar expression reads collection state | `scalar_read_of_collection_state_rejected` |
+  | 1293 | scalar expression reads undeclared state | `malformed_propread_undeclared`; `malformed_undeclared_inside_interpolation`; `malformed_undeclared_inside_block` |
+  | 1305 | collection read elem tag mismatches state elem | T2 annotation makes textual IR path non-observable after `annotate_collection_expr_types`; direct memory-IR owner is T6/T7 if they construct collection expressions outside the parser. |
+  | 1310 | collection expression references scalar state | `for_member_rejects_scalar_collection_target` |
+  | 1313 | collection expression references undeclared state | `for_member_rejects_undeclared_collection_target` |
+  | 1325 | collection assignment lhs no longer collection | Defensive branch after caller dispatch; not T2-owned beyond `collection_assignment_wrong_receiver_rejected`. Owner T7 if runtime constructs assignment RHS without loader dispatch. |
+  | 1342 | collection assignment list literal item mismatch | `collection_assignment_append_literal_type_mismatch_rejected`; `collection_state_rejects_mismatched_list_element` covers helper message shape for defaults |
+  | 1347 | collection assignment wrong receiver | `collection_assignment_wrong_receiver_rejected` |
+  | 1351 | collection assignment wrong RHS kind | `collection_assignment_wrong_rhs_kind_rejected` |
+  | 1389 | append value wrong literal / unsupported expression kind | `collection_assignment_append_literal_type_mismatch_rejected` |
+  | 1405 | append scalar read type mismatch | `collection_assignment_append_scalar_read_type_mismatch_rejected` |
+  | 1410 | append collection state as one element | `append_collection_state_as_element_rejected` |
+  | 1413 | append undeclared read | `malformed_undeclared_inside_block` covers handler read; T7 owns runtime collection-assignment eval diagnostics if this is constructed outside textual IR. |
+  | 1424 | empty `for` binder | Textual parser cannot emit empty binder; direct memory-IR owner T6/T7 if they construct headers outside parser. |
+  | 1429 | `for` binder collides with state | `for_member_rejects_binder_state_collision` |
+  | 1435 | empty `for` index binder | Textual parser cannot emit empty index binder; direct memory-IR owner T6/T7 if they construct headers outside parser. |
+  | 1440 | `for` binder/index same | `for_member_rejects_same_binder_and_index` |
+  | 1445 | `for` index binder collides with state | `for_member_rejects_index_state_collision` |
+  | 1456 | `for` collection expression is not collection read | Textual parser's `for IDENT in IDENT` cannot emit this; direct memory-IR owner T6/T7 if alternate construction appears. |
+
+  **Carry-forward additions surfaced by this audit.**
+
+  | Residual | Owner / impact |
+  |---|---|
+  | Collection `HandlerExpr.elem` is not serialized in textual IR. `list-prop-read`, `list-append`, and `list-drop-last` parse with a placeholder element type, then `annotate_collection_expr_types` re-derives the authoritative element type from state declarations. | **T7**, with T6 awareness. Invariant: a collection `HandlerExpr.elem` is authoritative only after annotation has run. Re-trigger when T7 builds or evaluates collection `HandlerExpr` through any path other than `parse_ir`'s parse → annotate → validate sequence. |
+  | Loader scalar defaults are now strictly type-checked. `state count: i32 = true` and analogous scalar/scalar mismatches are rejected instead of flowing through as malformed-but-loaded textual IR. | **T3/T6 phase-sync awareness.** This is an observable direct-textual-IR strictness change, pinned by `scalar_state_rejects_type_mismatched_default`; author syntax should already reject through T3's typed defaults, and T6 must preserve the stricter loader gate. |
+
+  Collection `elem` serialization decision: T2 chose **not** to put the
+  element tag into textual spellings for `list-prop-read` /
+  `list-append` / `list-drop-last`; the parser accepts the compact state
+  reference and re-derives the tag from the declared collection state in
+  `annotate_collection_expr_types`. The alternative was to serialize the
+  element tag with every collection read/edit form. T2 rejected that
+  because the state declaration is the single source of truth and a
+  second textual tag would create an avoidable mismatch mode; the cost is
+  the invariant above, which T7 must respect when it starts evaluating or
+  constructing collection handlers outside the loader path. T1 §1 covered
+  marker-like `item-read` / `index-read`, but did not record this
+  `list-prop-read` serialization decision, so it is carried explicitly
+  here.
+
+  **Merge-prep validation.** `cargo fmt --all -- --check` passed;
+  `cargo build --workspace` passed with the existing `wasamo` linkable
+  target warning; `cargo test --workspace` passed. The targeted
+  `wasamo-runtime --lib` run passed 381 tests, including the three new
+  reject pins named above.
+
 - **2026-06-13 / T2 start gate — IR schema migration traps selected
   before production edits.** Re-read
   [implementation-gates.md](../../../procedures/implementation-gates.md),

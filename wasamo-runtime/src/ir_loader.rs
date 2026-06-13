@@ -3414,6 +3414,20 @@ mod tests {
     }
 
     #[test]
+    fn scalar_state_rejects_type_mismatched_default() {
+        let err = parse_ir(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             state count: i32 = true\n\
+             node V {}\n}",
+        )
+        .unwrap_err();
+        assert!(
+            matches!(err, IrLoadError::Validate(ref m) if m.contains("default does not match declared type")),
+            "{err:?}"
+        );
+    }
+
+    #[test]
     fn for_member_parses_binders_collection_and_body() {
         let c = parse_ok(
             ";wasamo-ir v0\ncomponent C inherits W {\n\
@@ -3619,6 +3633,21 @@ mod tests {
     }
 
     #[test]
+    fn append_collection_state_as_element_rejected() {
+        let err = parse_ir(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             state xs: i32[] = []\n\
+             state ys: i32[] = []\n\
+             node Button { on clicked { (assign xs (list-append xs (prop-read ys))) } }\n}",
+        )
+        .unwrap_err();
+        assert!(
+            matches!(err, IrLoadError::Validate(ref m) if m.contains("cannot append collection state")),
+            "{err:?}"
+        );
+    }
+
+    #[test]
     fn collection_assignment_list_literal_rhs_parses_and_validates() {
         let c = parse_ok(
             ";wasamo-ir v0\ncomponent C inherits W {\n\
@@ -3720,6 +3749,20 @@ mod tests {
         .unwrap_err();
         assert!(
             matches!(err, IrLoadError::Validate(ref m) if m.contains("list literals are valid only")),
+            "{err:?}"
+        );
+    }
+
+    #[test]
+    fn scalar_read_of_collection_state_rejected() {
+        let err = parse_ir(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             state xs: i32[] = []\n\
+             node Text { bind text = (prop-read xs) }\n}",
+        )
+        .unwrap_err();
+        assert!(
+            matches!(err, IrLoadError::Validate(ref m) if m.contains("scalar expression references collection state")),
             "{err:?}"
         );
     }
@@ -4279,7 +4322,7 @@ mod tests {
                     let i = "  ".repeat(depth + 1);
                     let collection_name = match collection {
                         HandlerExpr::ListPropRead { path, .. } => path.as_str(),
-                        _ => "<invalid-for-collection>",
+                        other => unreachable!("For.collection must be ListPropRead, got {other:?}"),
                     };
                     match index_binder {
                         Some(index) => out.push_str(&format!(

@@ -106,7 +106,7 @@ fn emit_member(out: &mut String, member: &IrMember, indent: usize) {
             let i = ind(indent);
             let collection_name = match collection {
                 HandlerExpr::ListPropRead { path, .. } => path.as_str(),
-                _ => "<invalid-for-collection>",
+                other => unreachable!("For.collection must be ListPropRead, got {other:?}"),
             };
             match index_binder {
                 Some(index) => {

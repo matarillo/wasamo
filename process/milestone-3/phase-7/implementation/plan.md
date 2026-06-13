@@ -237,7 +237,9 @@ for the reject branches.
       loop-local `item-read` / `index-read` position and scope
       violations exposed through textual IR,
       collection-declaration and collection-assignment violations —
-      each with a direct test (trap #4).
+      each with a direct test (trap #4). Preserve T2's stricter
+      scalar-default gate: scalar/scalar default mismatches such as
+      `state count: i32 = true` remain loader rejects.
 
 ### T7 — Reactive range mutation: splice seam + `for` effect
 
@@ -255,8 +257,11 @@ evidence); gates traps #1 (BindingTarget/HandlerExpr sites), #2
       whole-value collection signal. This is the **writer** the `for`
       effect (below) reacts to; the equal-value no-dirty rule (CF-5)
       applies. Without it the mutation fixtures cannot drive a signal
-      change. Trap #1 (new evaluator arm) + trap #4 (the equal-value
-      and bad-RHS runtime paths each fired).
+      change. Collection `HandlerExpr.elem` is authoritative only after
+      the loader's annotation pass; if T7 constructs collection handlers
+      outside `parse_ir`, it must re-derive or otherwise prove the same
+      element type before evaluation. Trap #1 (new evaluator arm) + trap
+      #4 (the equal-value and bad-RHS runtime paths each fired).
 - [ ] **Splice seam (DD-M3-P7-006):** one placement-aware mutation
       seam owning the six-item side-effect bundle (children splice
       with carried placement, Visual sibling order at seam-computed
