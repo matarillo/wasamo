@@ -76,18 +76,28 @@ Discharges ADR obligations 1 and 2
 No production code lands; outputs are recorded decisions in
 [log.md](./log.md) plus any revision of this plan.
 
-- [ ] Design the **instantiation context type** — element type tag,
+- [x] Design the **instantiation context type** — element type tag,
       collection signal reference, fixed position, live /
       out-of-range guard — against the current `reactive.rs` /
       `ir_loader.rs` source; record the chosen shape (DD variant
-      spellings remain adjustable without reopening the DDs).
-- [ ] Fix and record the **bisectable sequencing** of I2 (T2), the
+      spellings remain adjustable without reopening the DDs). Recorded
+      in [log.md](./log.md) §1 (`ForItemContext { collection, elem,
+      position }` runtime carrier + bare loop-local read markers +
+      guarded out-of-range read).
+- [x] Fix and record the **bisectable sequencing** of I2 (T2), the
       wasamoc surface (T3), C1 (T4), ST2 (T5), the loader static path
       (T6), and the splice primitive + `for` effect (T7); revise this
-      plan if the default order changes.
-- [ ] Sharpen the preamble §Technical risks table against the current
+      plan if the default order changes. **Default order kept**; the
+      three inter-task seams (Seam A: T2 deferred-load `For` reject;
+      Seam B: T4 `ForLoop` slot dead until T6; Seam C: T6 no-op initial
+      reconcile, T7 fills the effect body) are recorded in
+      [log.md](./log.md) §2 with the CF-1..CF-5 carry table.
+- [x] Sharpen the preamble §Technical risks table against the current
       source (pin file/line hotspots for R-A / R-B / R-C); record the
-      implementation-gates selection for T2 before opening it.
+      implementation-gates selection for T2 before opening it. Pinned
+      hotspots + T2 gate selection (full-review lane; traps #1/#4/#5
+      apply, #2/#3/#7 non-applicable with reasons) in
+      [log.md](./log.md) §3.
 
 ### T2 — IR schema migration: collection state typing + `For` variant
 
@@ -234,14 +244,30 @@ independent review (runtime structural change + GUI-adjacent
 evidence); gates traps #1 (BindingTarget/HandlerExpr sites), #2
 (side-effect enumeration), #4 (mutation-time reject/diagnostic paths).
 
+- [ ] **Handler-side collection-assignment evaluation (T1 addendum
+      CF-6):** the authored `xs = xs.append(e)` / `xs = xs.drop-last()` /
+      `xs = [..]` runs inside a handler — extend `HandlerEvalContext`
+      with a whole-value collection read-modify-write method and add the
+      collection-assignment `HandlerExpr` arm to the handler evaluator
+      (`invoke_handler` / `evaluate`), driving `Signal::set` on the
+      whole-value collection signal. This is the **writer** the `for`
+      effect (below) reacts to; the equal-value no-dirty rule (CF-5)
+      applies. Without it the mutation fixtures cannot drive a signal
+      change. Trap #1 (new evaluator arm) + trap #4 (the equal-value
+      and bad-RHS runtime paths each fired).
 - [ ] **Splice seam (DD-M3-P7-006):** one placement-aware mutation
       seam owning the six-item side-effect bundle (children splice
       with carried placement, Visual sibling order at seam-computed
       positions, layout invalidation, registry release/registration,
       effect disposal-ahead-of-teardown / attach-at-commit, no other
       parent-owned metadata); the Phase 6 conditional mutation routes
-      through it. **Close artifact (trap #2):** the bundle checked off
-      per change.
+      through it. **Reuse (T1 addendum 2 F-2):** side-effects #4
+      (registry release) and #5-removal (effects disposed ahead of
+      teardown) already exist as `widget_destroy` →
+      `dispose_subtree_bindings` (bindings → registry → drop, recursive);
+      the removal path reuses it per removed subtree, tail-first, rather
+      than re-implementing #4/#5. **Close artifact (trap #2):** the
+      bundle checked off per change, marking #4/#5-removal *reused*.
 - [ ] **`BindingTarget::ForLoopSubtree` + `for` effect:** reads the
       whole-value signal, computes the tail plan via the T4 seam,
       executes **stage-then-commit** (DD-M3-P7-005 PF2): all fallible
@@ -251,8 +277,22 @@ evidence); gates traps #1 (BindingTarget/HandlerExpr sites), #2
       (pure-logic staging planner test; fault-injected construction if
       feasible mock-free, else disposition recorded in log.md).
 - [ ] **Per-item bindings:** loop-local reads evaluate as live
-      positional reads through the instantiation context (T1 shape);
-      the **out-of-range guard** writes nothing.
+      positional reads through the instantiation context (T1 shape — a
+      `BindingEvalContext`-style impl carrying `position`, resolving
+      loop-local reads via new tracked `EvalContext` methods); the
+      **out-of-range guard** writes nothing. **Registration shape
+      (T1 addendum 3 G-1):** the existing binding closures build
+      `BindingEvalContext::new(&registry)` *internally* and write
+      unconditionally, so per-item reads need **new registration entry
+      points (×3 element types)** whose closure builds a
+      `ForItemEvalContext { registry, collection, elem, position }` and
+      is guarded (`Some(v) => write`, `None => skip`) — not a reuse of
+      `register_binding`. **Effect ownership (T1 addendum 2 F-1):** per-item value/index effects are owned by
+      the **generated child subtree's** `bindings`, **not** the parent
+      (unlike the Phase 6 conditional effect) — so `widget_destroy` on
+      tail-removal disposes them; the `ForLoopSubtree` structural effect
+      stays on the parent. A parent-parked per-item effect would leak on
+      removal.
 - [ ] **Windows-runtime fixtures (CI-gated, fail-not-skip):** after a
       tail-append assignment — child count + Visual sibling order
       reflect the new cardinality in declared order with static and
@@ -282,14 +322,45 @@ owner-visible portion of item (6) is T9's per the split. Assistant
 evidence is **launch + DPI-aware screenshot capture + assistant
 analysis**; `Start-Process` survival is a supporting signal only.
 
-- [ ] Grow `examples/gallery/gallery.ui` **additively**: the thumbnail
-      set inside the existing `ScrollView { WrapPanel { … } }` becomes
-      `for`-generated from a collection `state` (Box + Text
-      placeholders per the §4.9 image-placeholder pattern), with
-      `Add` / `Remove` **text Buttons outside the `for` body** driving
-      the tail-append / tail-remove assignments. Existing gallery
-      slices stay byte-identical except where the slice composition
-      requires otherwise (record any deviation).
+- [ ] **Structured-item trigger decision with the owner (T1 addendum 3
+      G-2 / T1 addendum 4) — first T8 subtask, before authoring the
+      `.ui`.** The current thumbnails vary **two** per-item attributes
+      (distinct `fill` colour + label `S0N`) — i.e. **record-like
+      per-item data** ({image/colour, id}). A scalar-item `for`
+      (`i32[]` / `string[]` / `bool[]`) binds **one** value per item, so
+      this is **the first concrete surfacing of the DD-M3-P7-002
+      structured-item / `TypedValue` deferral trigger** ("a concrete app
+      case where scalar items cannot express the data") — which
+      DD-M3-P7-002 says **cannot be smuggled**: silently picking one
+      attribute would consume the trigger without the named
+      acceptance-revision path. So this is **not** a casual demo-look
+      choice; surface it to the owner as the trigger firing, with the
+      recommendation and record the decision in [log.md](./log.md)
+      before authoring:
+      - **Recommended — reduce to a single varying attribute for Phase 7**
+        (the label/id from the collection, static `fill`; simplest, and
+        keeps the append/remove prefix-undisturbed positive control
+        legible). The trigger routes to **M4/M5** (reopening structured
+        items now is against FD-C thesis-sequencing and would revise M3
+        acceptance — DD-M3-P7-002); record the trigger observation in
+        the **T10 handoff**.
+      - Alternative the owner may pick: bind a per-item colour with a
+        static label; or treat the gallery as the trigger to reopen
+        structured items (scope expansion — explicitly against the
+        recommendation).
+      Lightweight options-plus-recommendation check, not a DD/ADR; the
+      owner-confirm gate applies because it is owner-visible demo
+      composition **and** a recorded-deferral-trigger event, not a
+      delegated implementation detail.
+- [ ] Grow `examples/gallery/gallery.ui` **additively** per the owner's
+      composition decision above: the thumbnail set inside the existing
+      `ScrollView { WrapPanel { … } }` becomes `for`-generated from a
+      collection `state` (Box + Text placeholders per the §4.9
+      image-placeholder pattern), with `Add` / `Remove` **text Buttons
+      outside the `for` body** driving the tail-append / tail-remove
+      assignments. Existing gallery slices stay byte-identical except
+      where the slice composition requires otherwise (record the
+      decided deviation).
 - [ ] Build and run `examples/gallery-rust/`. Record assistant
       evidence as **2+ frames**: initial N → after `Add` (N+1
       thumbnails, prefix visually undisturbed) → after `Remove` —
@@ -363,8 +434,11 @@ against mid-phase owner decisions and revise where they diverge.
       per-item-condition / nested-`for` / member-range /
       loop-external-read deferrals with their framing-正本 triggers;
       the Grid placement-migration trigger; the host-state-boundary
-      future-compat record). **NOT owned by T10**; stays `[ ]` at T10
-      close.
+      future-compat record; **the structured-item / `TypedValue`
+      trigger observation the gallery surfaced at T8 (G-2) — the first
+      concrete app case where scalar items cannot express the per-item
+      data, routed to M4/M5 per DD-M3-P7-002**). **NOT owned by T10**;
+      stays `[ ]` at T10 close.
 - [ ] Front-matter `status` on [preamble.md](./preamble.md) flips
       `active` → `closing` at the **phase-end batch commit**, not at
       T10 step-close. **NOT owned by T10**; stays `[ ]` at T10 close.
