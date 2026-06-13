@@ -214,6 +214,10 @@
   | 1445 | `for` index binder collides with state | `for_member_rejects_index_state_collision` |
   | 1456 | `for` collection expression is not collection read | Textual parser's `for IDENT in IDENT` cannot emit this; direct memory-IR owner T6/T7 if alternate construction appears. |
 
+  Line numbers above are a point-in-time reconciliation as of this commit;
+  T3/T6/T7 edits to `ir_loader.rs` will drift them. Future readers should
+  match on the arm description + test name, not the line number.
+
   **Carry-forward additions surfaced by this audit.**
 
   | Residual | Owner / impact |
