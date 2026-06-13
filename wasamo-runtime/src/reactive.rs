@@ -244,6 +244,17 @@ impl<T: Clone + 'static> Signal<T> {
     }
 }
 
+impl<T: Clone + PartialEq + 'static> Signal<T> {
+    #[allow(dead_code)] // T2 lands the collection signal contract; T7 wires the first writer.
+    pub(crate) fn set_if_changed(&self, value: T) -> bool {
+        if *self.value.borrow() == value {
+            return false;
+        }
+        self.set(value);
+        true
+    }
+}
+
 pub(crate) struct EffectHandle {
     id: EffectId,
     _closure: Rc<RefCell<Box<dyn FnMut()>>>,
@@ -392,6 +403,9 @@ pub(crate) struct SignalRegistry {
     pub(crate) i32s: HashMap<String, Signal<i32>>,
     pub(crate) strings: HashMap<String, Signal<String>>,
     pub(crate) bools: HashMap<String, Signal<bool>>,
+    pub(crate) i32_lists: HashMap<String, Signal<Vec<i32>>>,
+    pub(crate) string_lists: HashMap<String, Signal<Vec<String>>>,
+    pub(crate) bool_lists: HashMap<String, Signal<Vec<bool>>>,
 }
 
 impl SignalRegistry {
@@ -400,6 +414,9 @@ impl SignalRegistry {
             i32s: HashMap::new(),
             strings: HashMap::new(),
             bools: HashMap::new(),
+            i32_lists: HashMap::new(),
+            string_lists: HashMap::new(),
+            bool_lists: HashMap::new(),
         }
     }
 }
@@ -1458,6 +1475,29 @@ mod tests {
 
         sig.set("b".to_string());
         assert_eq!(*log.borrow(), vec!["a", "b"]);
+    }
+
+    #[test]
+    fn signal_set_if_changed_skips_equal_value_dirtying() {
+        let sig = Signal::new(vec![1, 2]);
+        let log: Rc<RefCell<Vec<Vec<i32>>>> = Rc::new(RefCell::new(Vec::new()));
+        let log_c = Rc::clone(&log);
+        let sig_c = sig.clone();
+
+        let _h = EffectHandle::new(move || {
+            log_c.borrow_mut().push(sig_c.get());
+        });
+        assert_eq!(*log.borrow(), vec![vec![1, 2]]);
+
+        assert!(!sig.set_if_changed(vec![1, 2]));
+        assert_eq!(
+            *log.borrow(),
+            vec![vec![1, 2]],
+            "equal collection write must not dirty dependents"
+        );
+
+        assert!(sig.set_if_changed(vec![1, 2, 3]));
+        assert_eq!(*log.borrow(), vec![vec![1, 2], vec![1, 2, 3]]);
     }
 
     // ── drain ordering tests (DD-M2-P5-004) ──────────────────────────────────

@@ -1,5 +1,295 @@
 ## Decisions log
 
+- **2026-06-13 / T2 post-close critical re-check — plan hypothesis
+  challenged against the preamble.** Re-read the implementation
+  preamble, the mutable task plan, constraints §8, T2 code diff, and the
+  T2 carry-forward rows as if `plan.md` were only a hypothesis. A second
+  subagent pass was also delegated to challenge the boundary. Result:
+  no additional T2 implementation work is required. T2's bounded goal is
+  the schema/parser/registry/audit foundation, not the full Phase 7
+  iteration runtime.
+
+  | Question challenged | Disposition |
+  |---|---|
+  | Does T2 need to finish the author surface or full DD-007 matrix? | No. T3 owns author parser/check/lower/emit and the compile-time matrix; T6 owns loader dual-gate rows. |
+  | Does T2 need to materialise `for` in the runtime? | No. T2's build-time `For` reject is the intentional Seam A. T6 replaces it with static materialisation and proves no double-create. |
+  | Does T2 need `BindingTarget::ForLoopSubtree` or handler-side collection writes? | No. T7 owns the runtime target, collection assignment evaluation, and first production `set_if_changed` use. |
+  | Is `Signal::set_if_changed` sufficiently enforced? | Bounded carry. T2 lands the contract and tests it, but the collection maps remain plain `Signal<Vec<_>>`; T7 must use the contract and fire the empty-`drop-last` no-dirty fixture. |
+  | Are `item-read` / `index-read` fully scoped in T2? | Bounded carry. T2 carries IR/textual forms and runtime rejects evaluation. T3 owns author-scope diagnostics; T6/T7 own loader/runtime context. To make this ownership auditable on the task list, the T6 loader dual-gate bullet was revised to explicitly name textual-IR loop-local read position/scope violations. |
+  | Does constraints §8 require anything else? | Closed. Start gate, close audit, full independent review, and the compile-error-forcing preference minor edit are all recorded. |
+
+- **2026-06-13 / T2 close gate — IR schema migration landed; residuals
+  assigned.** Implemented the shared IR migration bundle as one buildable
+  change: `IrStateType::{Scalar, Collection}`, `IrLiteral::List`,
+  `ControlFlowNode::For`, collection/loop-local `HandlerExpr` forms,
+  textual-IR emit/load support, loader validation/annotation, collection
+  signal maps, and `Signal::set_if_changed`. Critical re-check outcome:
+  T2 is still only the schema/parser/registry seam. Author syntax and
+  compile-time matrix remain T3; static materialisation remains T6;
+  loop-local binding evaluation, `ForLoopSubtree`, and handler-side
+  collection assignment evaluation remain T7.
+
+  **Trap #1 call-site audit (`rg`-enumerated).** Commands run:
+  `rg -n "IrStateType|IrState \\{|\\.ty|state\\.ty" wasamo-ir wasamoc wasamo-runtime`;
+  `rg -n "ControlFlowNode::|IrMember::ControlFlow|widget_children\\(|children\\.iter\\(\\).*filter_map|filter_map\\(IrNode::widget_children" wasamo-ir wasamoc wasamo-runtime`;
+  `rg -n "HandlerExpr::(ListPropRead|ItemRead|IndexRead|ListAppend|ListDropLast|ListLit)|ListPropRead|ItemRead|IndexRead|ListAppend|ListDropLast|ListLit" wasamo-ir wasamoc wasamo-runtime`;
+  `rg -n "BindingTarget|ForLoopSubtree|ConditionalSubtree|register_binding|register_bool_binding|register_conditional_binding" wasamo-runtime wasamo-ir wasamoc`.
+
+  | Surface | Sites classified | Disposition |
+  |---|---|---|
+  | `IrState.ty` / `IrStateType` | `wasamo-ir/src/lib.rs`; `wasamoc/src/lower.rs`; `wasamoc/src/emit.rs`; `wasamo-runtime/src/ir_loader.rs`; `wasamo-runtime/tests/ir_loader_roundtrip.rs` | **Extended.** Scalar lowering now wraps existing types in `Scalar`; emitter/parser/loader handle `i32[]` / `string[]` / `bool[]`; registry builds scalar and collection maps. Loader rejects list-on-scalar, scalar-default-on-list, mismatched list elements, and nested list literals. |
+  | `IrLiteral::List` | `wasamo-ir/src/lib.rs`; `wasamoc/src/emit.rs`; `wasamo-runtime/src/ir_loader.rs` parser / renderer / validation | **Extended with context restrictions.** List literals are valid only for collection defaults or collection assignment RHS. Bare scalar assignment list RHS is a direct reject. |
+  | `ControlFlowNode` / `IrMember::ControlFlow` | `wasamo-ir/src/lib.rs`; `wasamoc/src/lower.rs` and `emit.rs`; `wasamo-runtime/src/ir_loader.rs` annotation / validation / parser / static-build paths / test renderer | **Extended or deliberately rejected.** `For` is emitted/parsed/validated as a one-widget body. Static runtime materialisation is a T6-owned deferred reject in `append_static_member` and ZStack placement collection, with tests. Existing `If` lowering remains correctly unaffected by author-surface ownership (T3 lowers `for`). |
+  | `IrNode::widget_children()` | `wasamo-ir/src/lib.rs` | **Correctly unaffected widget-only filter.** It must continue to return only concrete `IrMember::Widget` children; control-flow bodies are structural members, not direct static widget children. Callers that need to recurse through `If`/`For` do so explicitly in loader validators. |
+  | Widget-only / direct-control-flow filters | `wasamo-runtime/src/ir_loader.rs` ScrollView, Grid cell, placement contexts, `matches!(m, IrMember::ControlFlow(_))` guards | **Classified, not missed.** Direct control flow remains invalid in the existing widget-only contexts, so wildcard `ControlFlow(_)` guards are correct rejects for both `If` and `For` there. **Box is not in this reject class at T2:** the existing Box gate permits a single control-flow member (e.g. conditional-only body), and `for`-under-Box loader dual-gating remains T6-owned with the broader disallowed-container matrix. Structural invariant walkers that must enter bodies gained explicit `For` recursion. |
+  | `HandlerExpr` collection and loop-local variants | `wasamo-ir/src/lib.rs`; `wasamoc/src/emit.rs`; `wasamo-runtime/src/handler.rs`; `wasamo-runtime/src/ir_loader.rs` | **Extended with deliberate runtime rejects.** Emit/load round-trip the forms. Loader permits collection reads only in `for` headers and collection edits/list literals only as collection assignment RHS; it also rejects obvious `list-append` element type mismatches. `handler.rs` rejects the new forms until T7 wires actual collection mutation and loop-local evaluation. |
+  | `BindingTarget` pre-audit | `wasamo-runtime/src/reactive.rs`; call sites in `wasamo-runtime/src/ir_loader.rs` | **Deliberately unchanged.** Current targets are `WidgetProperty` and `ConditionalSubtree`; `register_binding`, `register_bool_binding`, and `register_conditional_binding` still panic on wrong target class. `ForLoopSubtree` is not a T2 type: it is T7-owned per CF-6 / T1 correction. |
+
+  **Trap #4 direct branch tests.** Added/updated tests cover
+  `IrStateType` scalar-vs-collection encoding, list literal storage,
+  handler iteration variants, `ControlFlowNode::For` shape, textual emit
+  of collection state + `for`, loader parsing/rejects for collection
+  defaults, list-on-scalar, mismatched/nested list elements, `for` over
+  scalar or undeclared target, `for` binder/index collisions,
+  multi-child and nested-control-flow body rejects, collection
+  assignment `append` / `drop-last` / literal RHS restrictions, wrong
+  receiver, wrong RHS kind, compound assignment, collection edit outside
+  assignment RHS, append value type mismatch, bare collection read
+  outside a `for` header, and the T6-owned static materialisation
+  reject. Added `Signal::set_if_changed` test for equal-value no-dirty
+  semantics, a collection-map initialisation test for all three
+  collection types, a handler-evaluator reject test for collection forms
+  until T7, and a unit pin that `IrNode::widget_children()` does not
+  recurse into `For` bodies.
+
+  **Trap #5 carry-forward / ownership after T2.**
+
+  | Residual | Owner / impact |
+  |---|---|
+  | `For` static materialisation is still a loader build reject | **T6.** Replaces the reject with static construction and declared-slot plumbing; current reject prevents accidental partial rendering. |
+  | Loop-local binder scope/type matrix (`item-read`, `index-read`) | **T3** for author check rows, **T6/T7** for loader/runtime evaluation context. T2 carries variants and syntax only. |
+  | `BindingTarget::ForLoopSubtree` and per-item binding registration | **T7.** T2 pre-audit confirms no current target can represent it. |
+  | Handler-side collection assignment evaluation (`append`, `drop-last`, list literal whole-value write) | **T7.** T2 adds IR/load validation; `handler.rs` intentionally rejects evaluation until the collection write path and signal dirtying are wired together. |
+  | `Signal::set_if_changed` has no production caller yet | **T7.** This is the CF-5 contract; the `#[allow(dead_code)]` is intentional and must close when the first collection writer lands. |
+  | Full DD-M3-P7-007 negative matrix | **T3/T6.** T2 only covers schema-level and static-loader seam rejects needed to keep the migration buildable. |
+
+  **Trap #6 disposition.** No deterministic implementation failure was
+  rerun as a flake. Two local `collection_assignment_append` test
+  failures were fixed as root causes: first the test used invalid textual
+  IR (`next` / `label` instead of `(prop-read next)` /
+  `(str-prop-read label)`), then the diagnostic path for mismatched
+  scalar reads was sharpened. The final targeted run passed.
+
+  **Trap #2 / #3 / #7 close confirmation.** No materialised widget-tree
+  side-effect bundle was added (#2), no child-parallel placement vector
+  was migrated (#3), and no GUI-visible behavior exists in T2 (#7).
+
+  **Verification evidence.** `cargo test -p wasamo-runtime
+  collection_assignment_append --lib` passed after the targeted fixes.
+  Full workspace verification and clean-rebuild evidence are recorded in
+  the T2 retrospective. **Review lane was full independent review**; the
+  review disposition is recorded in the entry immediately below.
+
+- **2026-06-13 / T2 independent review disposition.** Full independent
+  review was delegated after owner approval. Review result: no high- or
+  medium-severity code issue found in the T2 schema migration. One low
+  documentation finding was accepted: the T2 close audit over-classified
+  Box as a direct-control-flow reject context. The audit row above was
+  corrected to state that Box currently permits single control-flow
+  content and that `for`-under-Box loader dual-gating is T6-owned. One
+  test-gap suggestion was also accepted: added a direct
+  `build_signal_registry` test proving `i32[]`, `string[]`, and `bool[]`
+  defaults populate the three collection signal maps. The Phase 7
+  constraints §8 residual about compile-error-forcing preference was
+  closed as a minor edit to
+  [implementation-gates.md](../../../procedures/implementation-gates.md)
+  trap #1 close-artifact guidance.
+
+- **2026-06-14 / T2 test-depth addendum — trap #4 branch pins widened.**
+  A dedicated test-coverage review challenged whether the tests were
+  deep enough for the behavior T2 itself already implements. Accepted
+  result: T2 was not missing implementation, but several T2-owned reject
+  branches were only documented, not directly fired. Added tests for:
+  `For` undeclared collection, binder/index state collisions,
+  same binder/index, multi-child body, nested-control-flow body;
+  collection state scalar default, collection compound assignment,
+  collection edit outside assignment RHS, collection assignment wrong RHS
+  kind; string/bool collection defaults; collection assignment list
+  literal RHS; nested-list default validation; collection-form evaluator
+  rejects until T7; `widget_children()` excluding `For` body widgets; and
+  string/bool collection state emission.
+
+- **2026-06-14 / T2 merge-prep addendum — implemented-branch test map
+  made forcing.** A merge-readiness review found that the retrospective's
+  "Implemented-branch test map" corrective had been recorded as prose but
+  not applied as a mechanical reconciliation artifact. The concrete miss:
+  three T2-owned `IrLoadError::Validate` branches were implemented but had
+  no direct firing test. Added
+  `scalar_state_rejects_type_mismatched_default`,
+  `scalar_read_of_collection_state_rejected`, and
+  `append_collection_state_as_element_rejected`. This closes the three
+  missing branches and upgrades the close condition: `cargo test` green is
+  supporting evidence only; the branch map below is the forcing artifact.
+
+  Command used for the reconciliation:
+  `rg -n 'IrLoadError::Validate' wasamo-runtime/src/ir_loader.rs`.
+  Non-production hits for `Display`, comments, and test assertions are not
+  branch arms. Production arms are mapped below by current line number.
+
+  | Line(s) | Reject branch | Direct test / owner |
+  |---|---|---|
+  | 183 | duplicate state name | `malformed_duplicate_state_name` |
+  | 251 | collection default list item mismatch / nested list | `collection_state_rejects_mismatched_list_element`; `collection_state_rejects_nested_list_default` |
+  | 259 | scalar state uses list default | `scalar_state_rejects_list_default` |
+  | 263 | collection state default is not a list | `collection_state_rejects_scalar_default` |
+  | 267 | scalar state default type mismatch catch-all | `scalar_state_rejects_type_mismatched_default` |
+  | 409 | host `title` is not string | `static_window_title_rejects_non_string_host_prop` |
+  | 419 | host `backdrop` / `theme` typed literal | `host_surface_rejects_typed_literal_backdrop`; `host_surface_rejects_typed_literal_theme` |
+  | 426 | unknown host attribute | `host_surface_rejects_unknown_host_prop` |
+  | 435 | host binding | `host_surface_rejects_host_binding` |
+  | 450 | root-squatted host prop | `old_root_squatted_host_prop_rejected` |
+  | 461 | root-squatted host binding | `old_root_squatted_host_binding_rejected` |
+  | 492 | `if` has more than one branch in memory IR | Prior Phase 6 invariant; not T2-owned. Existing direct textual IR cannot construct multi-branch `if`; owner remains prior Phase 6 memory-IR defense. |
+  | 499 | `if` body not exactly one member | `validate_rejects_if_with_empty_body`; `validate_rejects_if_with_multi_child_body` |
+  | 507 | nested control-flow directly in `if` body | `validate_rejects_if_with_nested_control_flow_body` |
+  | 515 | `for` body not exactly one member | `for_member_rejects_multi_child_body` |
+  | 523 | nested control-flow directly in `for` body | `for_member_rejects_nested_control_flow_body` |
+  | 567 | Box more than one child/member | `malformed_box_with_two_children`; `validate_rejects_box_with_multiple_conditional_siblings`; `validate_rejects_box_with_widget_and_conditional_sibling` |
+  | 583 | ratio literal outside `Box.aspect` | `malformed_ratio_outside_box_aspect_on_vstack`; `malformed_ratio_on_box_wrong_prop_name`; `malformed_ratio_in_nested_node` |
+  | 592 | color literal outside `Box.fill` | `malformed_color_outside_box_fill_on_text`; `malformed_color_on_box_wrong_prop_name` |
+  | 637 | direct control-flow in ScrollView content | `validate_rejects_scrollview_with_conditional_member`; `validate_rejects_scrollview_with_conditional_only_member` |
+  | 643 | ScrollView child count not exactly one | `scroll_view_with_zero_children_rejected`; `scroll_view_with_two_children_rejected`; `scroll_view_with_three_children_rejected`; `scroll_view_nested_zero_child_is_rejected` |
+  | 687 | WrapPanel negative item/layout attributes | `wrap_panel_rejects_negative_item_cross_size`; `wrap_panel_rejects_negative_item_spacing`; `wrap_panel_rejects_negative_line_spacing` |
+  | 748 | `Cell` outside `Grid` | `cell_outside_grid_rejected` |
+  | 810 | `ZStack` kind payload | `validate_rejects_zstack_with_kind_payload` |
+  | 819 | `ZStack` attributes | `zstack_attribute_rejected_at_validate` |
+  | 825 | `ZStack` binding | `zstack_binding_rejected_at_validate` |
+  | 830 | `ZStack` handler | `zstack_handler_rejected_at_validate` |
+  | 841 | placement prop outside ZStack child / Grid Cell | `placement_prop_outside_zstack_child_or_grid_cell_rejected_at_validate` |
+  | 888 | invalid placement alignment literal | `zstack_child_unknown_alignment_rejected_at_validate`; `grid_cell_unknown_alignment_rejected` |
+  | 898 | non-Grid node carries Grid payload | `validate_rejects_non_grid_kind_payload` |
+  | 928 | Grid missing track payload | `grid_node_without_tracks_rejected` |
+  | 936 | Grid missing columns | `grid_missing_column_track_rejected` |
+  | 941 | Grid missing rows | `grid_missing_row_track_rejected` |
+  | 953 | Grid fixed track below 1 | `grid_zero_fixed_track_rejected` |
+  | 960 | Grid star weight outside range | `grid_star_weight_over_cap_rejected`; the `< 1` subcase is prior Phase 5 memory-IR defense and not T2-owned. |
+  | 983 | Grid direct non-Cell widget | `grid_non_cell_child_rejected` |
+  | 989 | Grid direct control-flow member | `validate_rejects_direct_conditional_grid_member` |
+  | 1002 | Grid cell overlap | `grid_same_cell_conflict_rejected`; `grid_overlapping_span_conflict_rejected`; `grid_multi_cell_omitted_placement_collides_at_origin` |
+  | 1029 | Cell content child count | `grid_cell_zero_content_children_rejected`; `grid_cell_two_content_children_rejected` |
+  | 1039 | Cell direct control-flow content | `validate_rejects_direct_conditional_cell_member` |
+  | 1059 | Cell row out of range | `grid_cell_row_out_of_range_rejected` |
+  | 1064 | Cell column out of range | `grid_cell_column_out_of_range_rejected` |
+  | 1072, 1077 | Cell span below 1 | `grid_cell_zero_span_rejected` |
+  | 1082, 1088 | Cell span exceeds Grid | `grid_cell_span_exceeds_grid_rejected` |
+  | 1108 | Cell placement/span non-integer literal | Prior Phase 5 memory-IR defense; not T2-owned. No new T2 test required. |
+  | 1126 | Cell alignment vocabulary | `grid_cell_unknown_alignment_rejected` |
+  | 1211 | collection read outside `for` header | `bare_collection_read_outside_for_header_rejected` |
+  | 1220 | assignment to undeclared lhs | `malformed_assign_undeclared` |
+  | 1226 | collection state uses compound assignment | `collection_compound_assignment_rejected` |
+  | 1229 | compound assignment to undeclared lhs | `malformed_compound_assign_undeclared` |
+  | 1233 | collection edit expression outside assignment RHS | `collection_edit_outside_assignment_rhs_rejected` |
+  | 1237 | list literal outside collection default/assignment RHS | `scalar_assignment_list_rhs_rejected` |
+  | 1265 | `if` condition resolves to non-bool | `validate_rejects_if_with_bool_read_resolving_to_non_bool_state` |
+  | 1268 | `if` condition undeclared | `validate_rejects_if_with_unresolved_condition` |
+  | 1273 | `if` condition is scalar read form | `validate_rejects_if_with_non_bool_condition` |
+  | 1277 | `if` condition other invalid expression | `validate_rejects_if_with_non_bool_condition` |
+  | 1290 | scalar expression reads collection state | `scalar_read_of_collection_state_rejected` |
+  | 1293 | scalar expression reads undeclared state | `malformed_propread_undeclared`; `malformed_undeclared_inside_interpolation`; `malformed_undeclared_inside_block` |
+  | 1305 | collection read elem tag mismatches state elem | T2 annotation makes textual IR path non-observable after `annotate_collection_expr_types`; direct memory-IR owner is T6/T7 if they construct collection expressions outside the parser. |
+  | 1310 | collection expression references scalar state | `for_member_rejects_scalar_collection_target` |
+  | 1313 | collection expression references undeclared state | `for_member_rejects_undeclared_collection_target` |
+  | 1325 | collection assignment lhs no longer collection | Defensive branch after caller dispatch; not T2-owned beyond `collection_assignment_wrong_receiver_rejected`. Owner T7 if runtime constructs assignment RHS without loader dispatch. |
+  | 1342 | collection assignment list literal item mismatch | `collection_assignment_append_literal_type_mismatch_rejected`; `collection_state_rejects_mismatched_list_element` covers helper message shape for defaults |
+  | 1347 | collection assignment wrong receiver | `collection_assignment_wrong_receiver_rejected` |
+  | 1351 | collection assignment wrong RHS kind | `collection_assignment_wrong_rhs_kind_rejected` |
+  | 1389 | append value wrong literal / unsupported expression kind | `collection_assignment_append_literal_type_mismatch_rejected` |
+  | 1405 | append scalar read type mismatch | `collection_assignment_append_scalar_read_type_mismatch_rejected` |
+  | 1410 | append collection state as one element | `append_collection_state_as_element_rejected` |
+  | 1413 | append undeclared read | `malformed_undeclared_inside_block` covers handler read; T7 owns runtime collection-assignment eval diagnostics if this is constructed outside textual IR. |
+  | 1424 | empty `for` binder | Textual parser cannot emit empty binder; direct memory-IR owner T6/T7 if they construct headers outside parser. |
+  | 1429 | `for` binder collides with state | `for_member_rejects_binder_state_collision` |
+  | 1435 | empty `for` index binder | Textual parser cannot emit empty index binder; direct memory-IR owner T6/T7 if they construct headers outside parser. |
+  | 1440 | `for` binder/index same | `for_member_rejects_same_binder_and_index` |
+  | 1445 | `for` index binder collides with state | `for_member_rejects_index_state_collision` |
+  | 1456 | `for` collection expression is not collection read | Textual parser's `for IDENT in IDENT` cannot emit this; direct memory-IR owner T6/T7 if alternate construction appears. |
+
+  Line numbers above are a point-in-time reconciliation as of this commit;
+  T3/T6/T7 edits to `ir_loader.rs` will drift them. Future readers should
+  match on the arm description + test name, not the line number.
+
+  **Carry-forward additions surfaced by this audit.**
+
+  | Residual | Owner / impact |
+  |---|---|
+  | Collection `HandlerExpr.elem` is not serialized in textual IR. `list-prop-read`, `list-append`, and `list-drop-last` parse with a placeholder element type, then `annotate_collection_expr_types` re-derives the authoritative element type from state declarations. | **T7**, with T6 awareness. Invariant: a collection `HandlerExpr.elem` is authoritative only after annotation has run. Re-trigger when T7 builds or evaluates collection `HandlerExpr` through any path other than `parse_ir`'s parse → annotate → validate sequence. |
+  | Loader scalar defaults are now strictly type-checked. `state count: i32 = true` and analogous scalar/scalar mismatches are rejected instead of flowing through as malformed-but-loaded textual IR. | **T3/T6 phase-sync awareness.** This is an observable direct-textual-IR strictness change, pinned by `scalar_state_rejects_type_mismatched_default`; author syntax should already reject through T3's typed defaults, and T6 must preserve the stricter loader gate. |
+
+  Collection `elem` serialization decision: T2 chose **not** to put the
+  element tag into textual spellings for `list-prop-read` /
+  `list-append` / `list-drop-last`; the parser accepts the compact state
+  reference and re-derives the tag from the declared collection state in
+  `annotate_collection_expr_types`. The alternative was to serialize the
+  element tag with every collection read/edit form. T2 rejected that
+  because the state declaration is the single source of truth and a
+  second textual tag would create an avoidable mismatch mode; the cost is
+  the invariant above, which T7 must respect when it starts evaluating or
+  constructing collection handlers outside the loader path. T1 §1 covered
+  marker-like `item-read` / `index-read`, but did not record this
+  `list-prop-read` serialization decision, so it is carried explicitly
+  here.
+
+  **Merge-prep validation.** `cargo fmt --all -- --check` passed;
+  `cargo build --workspace` passed with the existing `wasamo` linkable
+  target warning; `cargo test --workspace` passed. The targeted
+  `wasamo-runtime --lib` run passed 381 tests, including the three new
+  reject pins named above.
+
+- **2026-06-13 / T2 start gate — IR schema migration traps selected
+  before production edits.** Re-read
+  [implementation-gates.md](../../../procedures/implementation-gates.md),
+  the T1 carry-over rows, and the current source surfaces for
+  `IrState`, `IrLiteral`, `ControlFlowNode`, `HandlerExpr`,
+  `SignalRegistry`, and the textual-IR emit / load path. Critical
+  re-check of the plan hypothesis: T2 remains the right buildable bundle
+  boundary because `IrStateType`, `IrLiteral::List`, and
+  `ControlFlowNode::For` break shared IR, `wasamoc` emit/lower/check,
+  textual-IR parsing, runtime validation, and registry setup together;
+  splitting would create an intentionally non-building intermediate
+  state. No additional owner consult is needed at T2 start: the schema
+  shapes and vocabulary are settled by the Accepted DDs, while the
+  owner-visible structured-item trigger remains correctly owned by T8.
+
+  **Selected traps and reasons:**
+
+  - **#1 semantic migration — applies.** T2 widens IR/schema enums and
+    fields. Close artifact: an `rg`-enumerated table over `IrState`,
+    `IrMember`, `ControlFlowNode`, `HandlerExpr`, and a `BindingTarget`
+    pre-audit, including compiler-silent wildcard filters such as
+    `IrNode::widget_children()`.
+  - **#2 side effects — not applicable.** T2 adds schema and signal
+    storage only; it does not splice materialised widget children or
+    mutate Visual/layout structure.
+  - **#3 parallel data drift — not applicable.** T2 introduces registry
+    maps keyed by state name, not a parallel vector/index coupled to a
+    child list. Placement drift is T5-owned.
+  - **#4 untested branch — applies narrowly.** The deferred-load
+    `ControlFlowNode::For` branch and any loader-side list/state-type
+    validation branches that T2 lands must have direct tests. The full
+    author-surface / loader reject matrix remains T3/T6.
+  - **#5 carry-forward — applies.** T2 establishes collection registry
+    maps and equal-value no-dirty semantics relied on by T7; the
+    deferred-load `For` rejection is CF-1 owned by T6.
+  - **#6 root cause — standing.** If a deterministic or recurring failure
+    appears during build/test, rerun only to diagnose and record the
+    disposition, not to flake-roll.
+  - **#7 GUI evidence — not applicable.** T2 has no GUI-rendering
+    deliverable.
+
+  **Review lane:** full independent review, because this is the phase's
+  schema / IR migration task; the full review includes the trap-#4
+  branch-test check.
+
 - **2026-06-13 / T1 addendum 5 — compile-experiment: the trap-#1
   surface, compiler-verified (premise test).** To test the premise that
   the T2 migration surface is "enumerable by grep/reasoning" (my F-3),

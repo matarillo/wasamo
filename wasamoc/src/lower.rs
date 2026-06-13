@@ -5,8 +5,8 @@ use crate::ast::{
 use crate::check::Namespace;
 use crate::ir::{
     CompoundOp, ControlFlowBranch, ControlFlowNode, HandlerExpr, InterpolationPart, IrBinding,
-    IrComponent, IrHandler, IrLiteral, IrMember, IrNode, IrProp, IrState, IrType, KindPayload,
-    TrackSize as IrTrackSize,
+    IrComponent, IrHandler, IrLiteral, IrMember, IrNode, IrProp, IrState, IrStateType, IrType,
+    KindPayload, TrackSize as IrTrackSize,
 };
 
 /// Lower a checked AST to the IR representation.
@@ -86,7 +86,7 @@ fn lower_state(name: &str, ty: &TypeName, default: &Expr) -> IrState {
     };
     IrState {
         name: name.to_string(),
-        ty: ir_type,
+        ty: IrStateType::Scalar(ir_type),
         default: ir_default,
     }
 }
@@ -412,7 +412,7 @@ mod tests {
             comp.states[0],
             IrState {
                 name: "count".into(),
-                ty: IrType::I32,
+                ty: IrStateType::Scalar(IrType::I32),
                 default: IrLiteral::Int(0)
             }
         );
@@ -511,7 +511,7 @@ mod tests {
             comp.states[0],
             IrState {
                 name: "ready".into(),
-                ty: IrType::Bool,
+                ty: IrStateType::Scalar(IrType::Bool),
                 default: IrLiteral::Bool(false),
             }
         );
