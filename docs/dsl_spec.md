@@ -1,11 +1,12 @@
 # Wasamo DSL Specification
 
-**Document version:** 1.7
-**Last updated:** 2026-06-08
+**Document version:** 1.8
+**Last updated:** 2026-06-13
 **Status:** M3-Phase 2 closed (implementation-synced); M3-Phase 3
 closed (implementation-synced); M3-Phase 4 closed
 (implementation-synced); M3-Phase 5 closed (implementation-synced);
-M3-Phase 6 closed (implementation-synced).
+M3-Phase 6 closed (implementation-synced); M3-Phase 7 design accepted
+(implementation pending).
 Covers the M2 `.ui` surface, the `state` surface keyword
 retroactively, the M3-Phase 1 `bool` scalar binding additions, the
 M3-Phase 2 Box layout primitive (with `aspect` / `fill` literal
@@ -20,7 +21,11 @@ primitive (union sizing with `Fill/Fill` default, document-order
 z-order, per-child alignment, outer-bounds clip) and conditional
 rendering (the `if` structural control-flow member — the first chapter
 of Wasamo's structural rendering model), the M3-Phase 6 component host
-attribute surface, and `;wasamo-ir v0`.
+attribute surface, the M3-Phase 7 iteration grammar (the `for`
+structural control-flow member — the second chapter of the structural
+rendering model — with collection state types `i32[]` / `string[]` /
+`bool[]`, list literals, whole-value collection assignment, and
+author-named loop-local binders; see §4.15), and `;wasamo-ir v0`.
 
 ---
 
@@ -78,7 +83,8 @@ component Counter inherits Window {
 | `if`        | Conditional rendering block (M3-Phase 6; see §4.14) |
 | `else`      | Reserved control-flow keyword — no production yet (M3-Phase 6) |
 | `switch`    | Reserved control-flow keyword — no production yet (M3-Phase 6) |
-| `for`       | Reserved control-flow keyword — no production yet (M3-Phase 6) |
+| `for`       | Iteration block (reserved M3-Phase 6; production M3-Phase 7; see §4.15) |
+| `in`        | Iteration-header separator between binders and the collection reference (M3-Phase 7; see §4.15) |
 
 `in-out` is lexed as a **single keyword token** (not `in`, `-`, `out`).
 
@@ -88,18 +94,28 @@ name segments). Using either in identifier position is a parse error.
 
 **Structural control-flow family reservation (M3-Phase 6).** `if`,
 `else`, `switch`, and `for` are reserved by the lexer and may not appear
-as identifiers, mirroring the `true` / `false` reservation. Only `if`
-has a production this phase (§3, §4.14); `else` / `switch` / `for` are
-reserved ahead of their productions so the structural control-flow
-family (§4.14) lands additively without a future source break. Using
-any of the four in identifier position is a parse error; a bare `else` /
-`switch` / `for` **block** in member position is a separate
-"reserved / not yet supported" parse error that names the construct.
-No shipped `.ui` uses any of the four as an identifier, so the
-reservation breaks nothing today. Contextual sub-tokens of not-yet-
-designed productions — `in` (`for item in items`), `case` / `default`
-(`switch` arms) — are **not** reserved this phase; each is reserved when
-its production is specified.
+as identifiers, mirroring the `true` / `false` reservation. `if`
+(M3-Phase 6, §4.14) and `for` (M3-Phase 7, §4.15) have productions;
+`else` / `switch` remain reserved ahead of their productions so the
+structural control-flow family (§4.14) lands additively without a
+future source break. Using any of the four in identifier position is a
+parse error; a bare `else` / `switch` **block** in member position is a
+separate "reserved / not yet supported" parse error that names the
+construct.
+
+**`in` reservation (M3-Phase 7).** `in` is reserved by the lexer when
+its production lands: the iteration header (§4.15) needs a
+non-ambiguous separator token between the binder slots and the
+collection reference. `in` may no longer appear as an identifier
+(state, property, widget, or binder name). The existing `in-out`
+property token is a distinct single hyphenated lexeme and is
+unaffected. No shipped `.ui` uses `in` as an identifier, so the
+reservation breaks nothing today. Contextual sub-tokens of
+not-yet-designed productions — `case` / `default` (`switch` arms) —
+are still **not** reserved; each is reserved when its production is
+specified. The collection method names `append` / `drop-last` (§4.15)
+are **contextual names**, not reserved keywords — they remain valid
+identifiers outside a collection-assignment right-hand side.
 
 ### 2.2 Token types
 
@@ -128,6 +144,11 @@ its production is specified.
 | `Star`      | `*` (not followed by `=`)              | `*` (M3-Phase 5; bare `*` inside a Grid `columns:` / `rows:` track list, §4.12; `2*` lexes as `IntLit(2)` + adjacent `Star`, not one token; a bare `*` outside a track list is a parse error) |
 | `SlashEq`   | `/=`                                   |                              |
 | `Eq`        | `=`                                    |                              |
+| `LBracket`  | `[` (M3-Phase 7; collection type suffix `i32[]` and list literal `[1, 2]`, §4.15) |  |
+| `RBracket`  | `]` (M3-Phase 7)                       |                              |
+| `LParen`    | `(` (M3-Phase 7; collection method-call expression `xs.append(e)` / `xs.drop-last()`, §4.15) |  |
+| `RParen`    | `)` (M3-Phase 7)                       |                              |
+| `Comma`     | `,` (M3-Phase 7; iteration-header binder separator and list-literal element separator, §4.15) |  |
 
 A leading `-` is part of the `IntLit` token only; it does not extend
 the `FloatLit`, measurement, or `RatioLit` surfaces, and the DSL does
@@ -179,11 +200,15 @@ member           ::= property_decl
                   |  state_decl
                   |  grid_track_list_member   ; M3-Phase 5; Grid body only
                   |  conditional_member        ; M3-Phase 6; see §4.14
+                  |  iteration_member          ; M3-Phase 7; see §4.15
 
 property_decl    ::= "in-out" "property" "<" type_name ">" IDENT
                      ":" expr
 
-state_decl       ::= "state" IDENT ":" state_type "=" expr
+state_decl       ::= "state" IDENT ":" state_type "="
+                     (expr | collection_literal)
+                     ; collection_literal is M3-Phase 7 and is valid
+                     ; only when state_type is a collection type (§4.7)
 
 property_bind    ::= IDENT ":" expr
 
@@ -218,6 +243,23 @@ conditional_body ::= widget_decl                ; M3-Phase 6: exactly one widget
 
 cond_expr        ::= BOOL_LIT | IDENT           ; M3-Phase 6: bool literal, or an
                                                 ; IDENT resolving to a bool-typed state
+                                                ; (loop-local binders are NOT admitted
+                                                ; here — §4.15)
+
+; M3-Phase 7. An iteration block (§4.15). The first IDENT is the
+; author-named element binder; the optional second IDENT is the
+; author-named index binder. The post-`in` IDENT must resolve to a
+; collection-typed state declared in the same component (bare state
+; name only; collection expressions are not admitted in this position).
+; The body admits EXACTLY ONE widget child per iteration. `wasamoc
+; check` restricts placement semantically: admitted under VStack /
+; HStack / WrapPanel / ZStack; rejected under ScrollView / Box / Grid
+; and at component level (§4.15).
+iteration_member ::= "for" IDENT ("," IDENT)? "in" IDENT
+                     "{" iteration_body "}"
+
+iteration_body   ::= widget_decl                ; M3-Phase 7: exactly one widget
+                                                ; child per iteration
 
 signal_handler   ::= IDENT "=>" block
 
@@ -226,8 +268,24 @@ block            ::= "{" statement* "}"
 statement        ::= assign_stmt ";"
 
 assign_stmt      ::= qualified_name assign_op expr
+                  |  IDENT "=" collection_expr  ; M3-Phase 7; collection-typed
+                                                ; LHS, "=" only; see §4.15
 
 assign_op        ::= "+=" | "-=" | "*=" | "/=" | "="
+
+; M3-Phase 7. The collection-assignment RHS (§4.15). The method
+; receiver IDENT must be the assigned state itself; `append` and
+; `drop-last` are contextual names, not keywords.
+collection_expr  ::= IDENT "." "append" "(" expr ")"
+                  |  IDENT "." "drop-last" "(" ")"
+                  |  collection_literal         ; static reset / clear
+
+collection_literal ::= "[" (collection_scalar_literal
+                       ("," collection_scalar_literal)*)? "]"
+
+collection_scalar_literal ::= INT_LIT | STRING_LIT | BOOL_LIT
+                       ; each element literal must match the declared
+                       ; element type; no idents / operators / nesting
 
 qualified_name   ::= IDENT ("." IDENT)*
 
@@ -254,6 +312,7 @@ UNIT             ::= "px"
 type_name        ::= "int" | "string" | "float" | "bool"
 
 state_type       ::= "i32" | "string" | "bool"
+                  |  "i32[]" | "string[]" | "bool[]"   ; M3-Phase 7; see §4.7
 ```
 
 ### Disambiguation
@@ -265,15 +324,18 @@ Within `member`, a 2-token lookahead resolves the alternative:
 | `in-out`    | `property`   | `property_decl`      |
 | `state`     | `IDENT`      | `state_decl`         |
 | `if`        | (keyword)    | `conditional_member` |
+| `for`       | (keyword)    | `iteration_member`   |
 | `IDENT`     | `:`          | `property_bind`      |
 | `IDENT`     | `{`          | `widget_decl`        |
 | `IDENT`     | `=>`         | `signal_handler`     |
 
-`if` is a keyword (M3-Phase 6), not an `IDENT`, so the `member` dispatch
-resolves a leading `if` to `conditional_member` on the first token alone
-— there is no collision with `property_bind` / `widget_decl` /
-`signal_handler` (all of which begin with an `IDENT`). A leading `else`
-/ `switch` / `for` keyword is a "reserved / not yet supported" parse
+`if` (M3-Phase 6) and `for` (M3-Phase 7) are keywords, not `IDENT`s, so
+the `member` dispatch resolves a leading `if` / `for` on the first
+token alone — there is no collision with `property_bind` /
+`widget_decl` / `signal_handler` (all of which begin with an `IDENT`).
+Within the iteration header, the comma-optional second binder is
+resolved with one token of lookahead after the first `IDENT`. A leading
+`else` / `switch` keyword is a "reserved / not yet supported" parse
 error (no production yet, §4.14).
 
 Inside a `Grid` widget body (M3-Phase 5), a `columns:` / `rows:` member
@@ -429,7 +491,26 @@ rejected in the condition with a diagnostic pointing at the deferred,
 uniform expression-grammar extension (it grows across all `expr`
 positions at once, not condition-only). See §4.14.
 
-### 4.7 State declarations (M2 surface; bool added in M3-Phase 1)
+**Loop-local binder reads (M3-Phase 7).** Inside a `for` body (§4.15),
+an identifier in a property-binding or interpolation expression
+position may resolve to a **loop-local binder** declared by the
+enclosing iteration header — the first names in the DSL that do not
+resolve to a component `state`. Binder reads are admitted **only** in
+those expression positions within the body's widget subtree; they are
+not admitted in handler position, in `if` conditions (whose identifiers
+remain state-only), or outside the body. See §4.15.
+
+**Collection-valued expressions (M3-Phase 7).** The expression grammar
+gains its first collection-valued forms — the pure `append` /
+`drop-last` method-call expressions and the static collection literal —
+admitted **type-driven, not positional**: a collection-valued
+expression is valid only where a collection value is expected, and the
+only such author-reachable position this phase is the
+collection-assignment RHS (§4.15). State defaults stay literal-only;
+the `for` header takes a bare state name. Operators remain absent from
+every `expr` position.
+
+### 4.7 State declarations (M2 surface; bool added in M3-Phase 1; collections added in M3-Phase 7)
 
 ```
 state <name>: <state_type> = <default>
@@ -448,6 +529,9 @@ Supported `state_type`s:
 | `i32`        | `Signal<i32>` — integer reactive value   |
 | `string`     | `Signal<String>` — string reactive value |
 | `bool`       | `Signal<bool>` — bool reactive value (M3-Phase 1) |
+| `i32[]`      | `Signal<Vec<i32>>` — whole-value integer collection (M3-Phase 7) |
+| `string[]`   | `Signal<Vec<String>>` — whole-value string collection (M3-Phase 7) |
+| `bool[]`     | `Signal<Vec<bool>>` — whole-value bool collection (M3-Phase 7) |
 
 The `<default>` expression must be a literal of the matching type:
 `INT_LIT` for `i32`, `STRING_LIT` for `string`, `BOOL_LIT` for
@@ -462,6 +546,33 @@ state count: i32 = 0
 state label: string = "Click me"
 state ready: bool = true
 ```
+
+**Collection state types (M3-Phase 7).** The three collection types are
+the postfix-array forms of the existing scalars; elements are
+**homogeneous and scalar-only**. The default value is a **collection
+literal**: `[` scalar literals, comma-separated, possibly empty `]`.
+Each element literal must match the declared element type; the empty
+literal `[]` types itself from the declaration. Element expressions —
+identifiers, operators, nested lists — are rejected: collection-literal
+elements must be scalar literals (collection expressions are a recorded
+deferral, §4.15). Nested collection types (`i32[][]`) are rejected with
+a named diagnostic. `f64[]` is deferred until a concrete
+`f64`-element case arrives; it is an additive fourth element type, not
+a shape change.
+
+```
+state thumbs: i32[] = [101, 102, 103]
+state captions: string[] = []
+state flags: bool[] = [true, false]
+```
+
+A collection `state` is one **whole-value** reactive signal: any change
+to the collection — the authored whole-value assignments of §4.15 —
+replaces the whole value and marks the one signal dirty. There is no
+per-element signal and no element identity beyond position (§4.15,
+identity baseline). Collection values are value-semantic; a collection
+assignment whose new value equals the current value performs no dirty
+propagation (§4.15).
 
 State declarations lower to the IR `state_decl` form (§8.4).
 
@@ -1166,7 +1277,7 @@ Compose/SwiftUI grids should note the following:
   `LazyVGrid`). Wasamo's Phase 5 Grid is a **static 2D composition
   primitive**: every `Cell` is explicit in the source, and Grid is
   not an M3 iteration target. (M3's data-driven collection surface
-  is WrapPanel + the iteration grammar; see §4.10.) Iteration
+  is WrapPanel + the iteration grammar; see §4.10 and §4.15.) Iteration
   generating `Cell`s is not foreclosed but is post-M3.
 - **ZStack / overlay models.** Grid does not provide intentional
   overlay. A Cell whose content paints past the cell rectangle may
@@ -1528,7 +1639,8 @@ rather than "unknown token" / "unknown attribute" feedback:
 - **Bindable track lists / placement.** Phase 5 is constant-only.
 - **Iteration-template-generated `Cell`s** (e.g.
   `for item in items { Cell { row: ... ... } }`). Grid is not an
-  M3 iteration target; the iteration grammar's M3 target is
+  M3 iteration target — M3-Phase 7's `for` member rejects a Grid
+  parent as a recorded deferral (§4.15); the iteration grammar's M3 target is
   WrapPanel-backed thumbnail collections. Future admission is
   structurally possible because every `Cell` is explicit.
 - **Per-cell clipping** (`Cell { clip: true ... }`) and any
@@ -1743,8 +1855,9 @@ carry a scroll translation; ZStack has no analogous translation).
 - **Author-facing `width:` / `height:` size constraint** — see the
   *Sizing* owner-visible trade-off; until it lands, ZStack's
   `Fill/Fill` default cannot be overridden to intrinsic sizing.
-- **Iteration-generated children** — a `for` block as a ZStack member
-  is Phase 7 (reusing the structural control-flow family, §4.14).
+- **Iteration-generated children** — landed in M3-Phase 7: a `for`
+  block is admitted as a ZStack direct member (§4.15), with per-child
+  placement handled by the runtime's child-carried placement storage.
 
 ### 4.14 Conditional rendering and the structural rendering model (M3-Phase 6)
 
@@ -1755,10 +1868,10 @@ drives the **present / absent state of a subtree** rather than a
 property value. It is the **first chapter of Wasamo's structural
 rendering model**: `if` is the first member of a **structural
 control-flow grammar family** whose later members — `else` / `else if`
-(more branches), `switch` (more discriminants), and `for` (iteration,
-Phase 7) — arrive in the **same** family with the **same** present /
-absent runtime machinery. An external reader should be able to predict
-the family's growth from this chapter alone.
+(more branches), `switch` (more discriminants), and `for` (iteration —
+landed M3-Phase 7, §4.15) — arrive in the **same** family with the
+**same** structural runtime machinery. An external reader should be
+able to predict the family's growth from this chapter alone.
 
 #### Why a structural directive, not a presence property
 
@@ -1853,9 +1966,11 @@ if a    { VStack { if b { … } } }               // nested if → wrap
 ```
 
 The single-widget body always materialises **exactly one** widget,
-which is what lets present / absent be a single subtree insert / remove
-(the multi-child range form is the Phase 7 `for` driver; nested control
-flow directly in a body lands with the family extension).
+which is what lets present / absent be a single subtree insert / remove.
+This single-widget body discipline is shared by the whole structural
+family — the M3-Phase 7 `for` body carries the same rule (§4.15); the
+multi-member range body is a deferred family-wide generalisation, and
+nested control flow directly in a body lands with the family extension.
 
 **What is and is not in scope here, precisely:** what an `if` *body*
 admits is one `widget_decl`. But **sibling** conditionals (`if a { … }
@@ -1946,18 +2061,22 @@ by the declared tree.
 - **`else` / `else if`** — chains the `if` block (`if c { … } else { …
   }`); additional branches on the same construct.
 - **`switch`** — a sibling block keyword over a non-bool discriminant.
-- **`for item in items { … }`** (Phase 7) — iteration as a sibling
-  block keyword, reusing the same structural-subtree machinery; it is
-  the first construct to need keyed identity / state retention.
+- **`for <binder> in <collection> { … }`** — landed in M3-Phase 7
+  (§4.15): iteration as a sibling block keyword, reusing the same
+  structural-subtree machinery generalised from presence (0/1) to
+  cardinality (0..N). Its identity baseline is **positional and
+  un-keyed**; keyed identity / state retention is a future opt-in
+  surface, not something `for` ships (§4.15, identity baseline).
 - **operator conditions** (`!ready`, comparisons, logical operators) —
   arrive through the uniform expression-grammar extension that widens
   every `expr` position, including `cond-expr`.
 
 All four family keywords (`if` / `else` / `switch` / `for`) are reserved
-now (§2.1) so the family lands without a future source break. Contextual
-sub-tokens of not-yet-designed productions (`in` for `for`, `case` /
-`default` for `switch`) are **not** reserved yet — they are reserved
-when their production is specified. `else if` is `else` followed by `if`
+now (§2.1) so the family lands without a future source break. `in` is
+reserved as of M3-Phase 7, when its production landed (§2.1, §4.15);
+contextual sub-tokens of still-undesigned productions (`case` /
+`default` for `switch`) are **not** reserved yet — each is reserved
+when its production is specified. `else if` is `else` followed by `if`
 (two keywords), not a separate token.
 
 #### Diagnostics (rejected shapes)
@@ -1976,18 +2095,20 @@ the memory-IR entry point does not pass through `wasamoc`:
 | Multiple children in body | `if open { Box{} Text{} }` | "`if` body admits exactly one widget child in M3-Phase 6; wrap multiple widgets or nested control flow in a container" |
 | Component-level `if` | an `if` at component body level | "component-level `if` is not supported in M3-Phase 6; put the `if` inside a widget body" (a root-level conditional has no parent slot) |
 | Direct conditional under ScrollView | `ScrollView { if c { … } }`; `ScrollView { Content  if c { … } }` | "`ScrollView` content child must be a single widget; a conditional member is not valid directly in ScrollView (wrap it in the content widget)" — the exactly-one-content-child cardinality cannot absorb a dynamic member; parallels the `Cell` direct-conditional rejection (§4.12) |
-| Bare `else` / `switch` / `for` | `else { … }`; `switch x { … }`; `for … { … }` | "reserved / not yet supported" (names the construct) |
+| Bare `else` / `switch` | `else { … }`; `switch x { … }` | "reserved / not yet supported" (names the construct) |
 
-The reserved-but-unsupported diagnostic for `else` / `switch` / `for`
+The reserved-but-unsupported diagnostic for `else` / `switch`
 (a *block* in member position) is distinct from the identifier-position
-rejection that fires when one of the four keywords is used as a name
-(§2.1).
+rejection that fires when one of the four family keywords is used as a
+name (§2.1). A `for` block is no longer in this class — it has a
+production as of M3-Phase 7 (§4.15) and is rejected only where §4.15's
+placement / shape rules reject it.
 
 #### Out of scope (Phase 6)
 
 - **`else` / `else if` / `switch`** — reserved family members, not yet
   implemented.
-- **`for` / iteration** — Phase 7.
+- **`for` / iteration** — landed M3-Phase 7 (§4.15).
 - **Nested control flow directly in an `if` body** (`if a { if b { … }
   }`) — reached meanwhile by wrapping the inner `if` in a widget; lands
   with the family extension.
@@ -1998,6 +2119,334 @@ rejection that fires when one of the four keywords is used as a name
 - **Property / state / handler conditionality** — the body is
   structural only; conditional property application, branch-local
   state, and conditional handlers are not opened by A7.
+
+### 4.15 Iteration and collection-driven generation (M3-Phase 7)
+
+**Phase status:** M3-Phase 7 design accepted; implementation pending.
+
+This chapter introduces **iteration** — a collection binding that
+drives the **number of generated widget subtrees**. It is the **second
+chapter of Wasamo's structural rendering model** (§4.14): `if` makes a
+binding drive a subtree's presence (0/1); `for` makes a binding drive a
+subtree count (0..N). Both are member-level structural control-flow
+constructs of the same grammar family, with the same expansion model —
+declared members expand to materialised children in document order,
+each member contributing its live cardinality (a widget contributes 1,
+an `if` contributes 0 or 1, a `for` contributes the current collection
+length).
+
+This is **not static template expansion**: the collection is a
+runtime-mutable `state`, and mutating it at runtime inserts / removes
+generated subtrees while the rest of the tree is retained.
+
+#### The `for` block
+
+```
+for <binder> in <collection> { <widget> }
+for <binder>, <index-binder> in <collection> { <widget> }
+```
+
+`for` is a **member** form (§3 `iteration_member`), admitted wherever a
+widget body's members appear (subject to the per-container admission
+rules below). Per element of the collection, the body instantiates as a
+child of the enclosing container at the block's document position:
+
+```
+state thumbs: i32[] = [101, 102, 103]
+…
+WrapPanel {
+    for thumb in thumbs {
+        Box {
+            aspect: 1:1
+            fill: #cccccc
+            Text { text: "Photo \{thumb}" }
+        }
+    }
+}
+```
+
+- The first `IDENT` is the **element binder**; the optional second
+  `IDENT` after a comma is the **index binder**. Both are
+  **author-named** — there are no fixed magic names. `item` and `index`
+  are perfectly good conventional *choices* of binder name; they are
+  not keywords and never enter scope implicitly.
+- The post-`in` position must be a **bare identifier resolving to a
+  collection-typed `state`** declared in the same component (§4.7).
+  Collection *expressions* in this position (literals, slices, computed
+  collections) are not admitted this phase; the position widens with
+  the uniform expression-grammar extension. Qualified references
+  (`for x in root.xs`) are likewise rejected — new collection-reference
+  positions use local component state by name.
+- An **empty collection is legal**: the `for` member stays live and
+  materialises zero children. The admitted containers all tolerate zero
+  children.
+
+#### Iteration body — a single widget child per iteration
+
+The `for` body admits **exactly one widget child** — one `widget_decl`,
+nothing else — the same body discipline as the `if` body (§4.14):
+
+- **no** property / bind / `state` / track-list member directly in the
+  body;
+- **no** second child;
+- **no** bare control-flow member as the immediate body;
+- **no** `signal_handler` anywhere inside the body template (see
+  *Handlers inside a `for` body* below);
+- **no** `for` member at **any depth** inside a `for` body template
+  (see *Nested control flow* below).
+
+Multi-widget items wrap in a container the author usually wants anyway
+(`for t in xs { VStack { Box { … } Text { … } } }`). N elements
+materialise exactly N children — the cardinality contract this grammar
+exists to provide.
+
+**Nested control flow.** A descendant `if` member inside the body's
+widget subtree is admitted (`for t in thumbs { Box { if flag { … } } }`)
+— its condition resolves to `bool` state exactly as in §4.14; a
+loop-local binder is **not** admitted in that condition (see *Loop-local
+binders*). A `for` member anywhere inside a `for` body template is
+rejected: a descendant `for` introduces nested template scope (outer
+binders visible inside an inner template), and scope nesting /
+shadowing is deferred to the phase that opens the next structural
+control-flow extension. A `for` nested inside an `if` body's widget
+subtree is admitted when that `if` is not itself inside a `for`
+template.
+
+#### Loop-local binders
+
+Iteration introduces the DSL's first **template-local names**. Inside a
+`for` body, the element binder (and the index binder, when declared) is
+readable so generated subtrees can differ per item.
+
+- **Types.** The element binder has the collection's element type
+  (`i32` / `string` / `bool`); the index binder is **`i32`, read-only,
+  zero-based**.
+- **Read positions.** A binder is readable **only in property-binding
+  and interpolation expression positions** within the `for` body's
+  widget subtree (`text: thumb`, `text: "Photo \{thumb}"`). It is
+  **not** readable in handler position, in an `if` condition (condition
+  identifiers resolve to `bool` state only), in property *literal*
+  positions, or anywhere outside the body. This is the first — and
+  only — codified exception to the rule that every dynamic reference in
+  a binding resolves to a component `state`.
+- **Scope.** Flat: binders are visible from the `{` to the matching `}`
+  of their `for` body, in the admitted read positions only.
+- **Collisions are errors** at `wasamoc check`: a binder may not share
+  a name with any declared `state` (collection or scalar); the element
+  binder may not equal the index binder; reserved keywords are not
+  valid binder names.
+- **No shadowing rule is defined** — nothing can nest this phase
+  (nested `for` is rejected at any template depth), so no shadowing
+  semantics ships. This absence is by design, not undefined behaviour:
+  nested template scope and shadowing are specified together with the
+  next structural control-flow extension.
+- **A binder is not a widget id and not an item key.** It names a value
+  in scope during template instantiation; it confers no identity on the
+  generated subtree (identity is positional — see *Identity baseline*)
+  and no addressable handle on any widget.
+
+A binder read evaluates as a **live positional read** of the collection
+signal: the position is fixed per instantiation, the *value* is read
+from the current collection. Under a same-length whole-value reset
+(below), retained positions re-evaluate their bound properties in
+place.
+
+#### Collection mutation — whole-value assignment
+
+Collection mutation is **whole-value assignment**: a handler statement
+assigns the collection state its next value. Assignment remains the
+**only** statement form in the DSL — there are no method-call
+statements — and the expression grammar gains no operators. The
+assignment RHS admits exactly three forms (§3 `collection_expr`):
+
+```
+add_thumb    => { thumbs = thumbs.append(next_id); }
+remove_thumb => { thumbs = thumbs.drop-last(); }
+clear_thumbs => { thumbs = []; }
+reset_thumbs => { thumbs = [101, 102, 103]; }
+```
+
+- **`xs.append(expr)`** — a pure expression evaluating to a new
+  collection with one element appended; the element expression is
+  type-checked against the declared element type.
+- **`xs.drop-last()`** — a pure expression evaluating to the collection
+  minus its last element. **`drop-last` is total: on an empty
+  collection it evaluates to the empty collection (the identity)** —
+  matching the Swift / Kotlin `dropLast` precedent exactly. A boundary
+  Remove action is therefore idempotent by function semantics, not by a
+  statement special case.
+- **A static collection literal** — whole-value reset / clear. Element
+  typing follows the state-default rules (§4.7): homogeneous,
+  element-type-checked against the LHS, `[]` typed from the LHS, no
+  nesting, no identifiers inside.
+
+Restrictions, each rejected at `wasamoc check` (and re-checked at the
+loader):
+
+- The method **receiver must be the assigned state itself**:
+  `xs = ys.append(a)`, chained applications
+  (`xs = xs.append(a).append(b)`), and a bare state copy (`xs = ys`)
+  are rejected with a diagnostic naming the deferred general
+  collection-expression surface.
+- **`=` only** on a collection LHS — compound assignment operators have
+  no collection meaning.
+- The LHS and the receiver are **bare state names**; qualified forms
+  (`root.xs = …`) are rejected.
+- A bare collection expression as a statement (`xs.append(a);`) is
+  rejected — the diagnostic points at the assignment form.
+- A `collection_expr` outside a collection-assignment RHS is rejected.
+
+`append` and `drop-last` are **contextual method names**, not reserved
+keywords: a state or widget named `append` or `drop-last` still parses.
+`;` placement is unchanged — `;` terminates handler-block statements
+only (the collection assignment is an `assign_stmt` alternative);
+member positions (state declarations, property settings) carry none.
+
+**Equal-value writes propagate nothing.** A collection assignment whose
+new value equals the current value performs no dirty propagation — a
+`drop-last()` on an empty collection, or a reset to the identical
+current value, writes an equal value and re-runs no effects.
+
+#### Identity baseline: positional, un-keyed
+
+**A generated subtree's identity is its position in the collection. A
+tail append materialises only the new tail subtrees; a tail removal
+disposes only the removed tail subtrees; subtrees at retained positions
+are retained — their bound properties re-evaluate; they are not
+rebuilt.** This is normative author-visible semantics: appending item
+N+1 does not disturb items 0..N.
+
+The explicit non-promise beside it: **positions confer no
+element-tracking identity; no state is preserved across removal; keyed
+retention is a future opt-in surface.** When keyed identity arrives (an
+opt-in `key:`-like marker), it changes which materialised subtree maps
+to which *element*; it never silently changes this positional baseline.
+
+A whole-value reset (`xs = [..]`) follows the same rule: its structural
+delta is exactly its length delta; value changes at retained positions
+flow through the live positional binder reads (a same-length reset
+re-evaluates item bindings in place with no structural edit).
+
+#### Runtime mutation timing and failure contract
+
+- **Mutation-then-observe.** A collection assignment outside a batch
+  (for example inside a Button click handler) drains before control
+  returns: immediately after the mutating call, the new subtrees exist
+  with their bound properties written (or the removed subtrees are
+  gone). This generalises §4.14's toggle-then-observe contract to range
+  mutation; the synchronous non-batched drain contract established in
+  M3-Phase 1 is preserved.
+- **Insertion is all-or-unchanged.** All fallible construction for a
+  range insert happens before any tree mutation (subtrees are staged
+  fully, then committed). A staging failure aborts the whole mutation
+  with the materialised tree observably unchanged, plus a range-scoped
+  diagnostic. A failure in the commit stage itself (an OS-level
+  inconsistency) is logged with range context rather than promised as
+  undoable.
+- **Disposal order.** Removed subtrees dispose tail-first; their
+  reactive effects are disposed ahead of structural teardown, and their
+  widget-registry entries are released — the same lifecycle rule as
+  §4.14's absent subtree, applied per removed item.
+- **Quiescent order.** At quiescence, the parent's children are the
+  declared members expanded by live cardinality in document order —
+  static siblings, `if` members, and `for` members interleave by
+  declared position, independent of effect evaluation order.
+
+#### Where a `for` member is admitted
+
+| Container | Direct `for` child | Reason |
+|---|---|---|
+| `VStack` / `HStack` / `WrapPanel` | **admitted** | arbitrary-children contract |
+| `ZStack` | **admitted** | arbitrary-children contract; per-child placement rides the child |
+| `ScrollView` | **rejected** | exactly-one-content-child contract (§4.11); wrap the `for` inside the single content widget — `ScrollView { WrapPanel { for … } }` is the canonical gallery shape |
+| `Box` | **rejected** | at-most-one-child contract (§4.9); a `for` can produce more than one |
+| `Grid` | **rejected** | children are `Cell`-mediated (§4.12); `for`-of-`Cell`s is a recorded deferral |
+| component level | **rejected** | no parent slot for a 0..N root, same ground as the component-level `if` reject |
+
+Each rejection is a named diagnostic, not a silent gap; the ScrollView
+/ Grid rejections record deferrals (a conditionally-/ iteratively-
+shaped ScrollView content model, `for`-generated `Cell`s), not
+permanent exclusions.
+
+#### Diagnostics (rejected shapes)
+
+`wasamoc check` rejects each of the following, and the runtime IR
+loader independently re-checks the structural rows
+(`WASAMO_ERR_IR_MALFORMED`, §8.11):
+
+| Rejected shape | Example | Diagnostic |
+|---|---|---|
+| `for` over a non-collection | `for x in count { … }` (`count: i32`); `for x in missing { … }` | type / name-resolution error |
+| `for` over a non-identifier | `for x in [1, 2] { … }` | "collection expressions are not yet supported" (recorded deferral) |
+| Qualified collection reference | `for x in root.xs { … }` | "the loop collection must be a local state name" |
+| Binder collides with a state | `state thumb: i32 = 0 … for thumb in xs { … }` | name-collision error |
+| Element binder = index binder | `for a, a in xs { … }` | name-collision error |
+| Keyword in binder position | `for in in xs { … }`; `for if in xs { … }` | parse error (§2.1) |
+| Disallowed container | `ScrollView { for … }`; `Box { for … }`; `Grid { for … }` | names the container contract |
+| Component-level `for` | a `for` at component body level | "component-level `for` is not supported; put the `for` inside a widget body" |
+| Non-widget body member | `for t in xs { fill: red }` | "`for` body admits only a single widget child per iteration" |
+| Multiple body children | `for t in xs { Box{} Text{} }` | same — wrap in a container |
+| Bare control flow as immediate body | `for t in xs { if c { … } }` | wrap rule, same as §4.14 |
+| Nested `for` at any depth | `for a in xs { VStack { for b in ys { … } } }` | "nested `for` is not yet supported" (nested-template-scope deferral) |
+| Handler inside a `for` body | `for t in xs { Button { clicked => { … } } }` | "handlers inside a `for` body are not yet supported" (per-item interaction deferral) |
+| Binder read in handler position | — | "loop-local binders are not readable in handlers" (same deferral) |
+| Binder read in an `if` condition | `for t in flags { Box { if t { … } } }` | "`if` conditions resolve to `bool` state only" (per-item conditional presence deferral) |
+| Binder read outside its body; undeclared binder | `text: thumb` outside the `for` | name-resolution error |
+| Nested collection type | `state xs: i32[][] = []` | "nested collection types are not supported" |
+| Heterogeneous / mismatched literal | `state xs: i32[] = [1, "a"]`; `xs = [true]` on `i32[]` | element-type error |
+| Non-literal collection element | `state xs: i32[] = [a, b]` | "collection literal elements must be scalar literals" (recorded deferral) |
+| List literal on a scalar state (and vice versa) | `state n: i32 = []`; `state xs: i32[] = 0` | type error |
+| Collection assignment on a non-collection LHS (and vice versa) | `count = count.append(1);`; `xs = 0;` | type error |
+| Compound assign on a collection | `xs += 1;` | "compound assignment is not defined over collections" |
+| Wrong receiver / chained / bare copy | `xs = ys.append(a);`; `xs = xs.append(a).append(b);`; `xs = ys;` | "general collection expressions are not yet supported" (recorded deferral) |
+| `append` arity / `drop-last(expr)` | `xs = xs.append();`; `xs = xs.drop-last(1);` | arity error |
+| Bare collection statement | `xs.append(a);` | "collection mutation is written as assignment: `xs = xs.append(…)`" |
+| Qualified LHS / receiver | `root.xs = root.xs.append(1);` | "collection mutation requires a local state name" |
+| Loop-external collection read | `text: "\{xs}"`; length / element reads outside the loop | "collection reads outside iteration are not yet supported" (recorded deferral) |
+
+#### Handlers inside a `for` body (explicit deferral)
+
+A `signal_handler` member anywhere inside a `for` body template is
+rejected this phase. Admitting handlers without binder reads would ship
+per-item widgets whose handlers can only mutate global state — a
+half-surface the spec would have to explain away; admitting binder
+reads in handlers *is* the per-item interaction surface
+(select-this-item / delete-this-item), whose real driver arrives with
+input work. Handler admission, handler-position binder reads,
+registration lifecycle, and their identity interaction are designed
+together at that point. Until then, the mutation Buttons that drive a
+collection live **outside** the `for` body.
+
+#### Out of scope (Phase 7)
+
+- **Keyed identity / retained state** — future opt-in over the same
+  declared-slot anchor; the positional baseline above is the cited
+  contract it must not silently change.
+- **Data-driven reorder** — excluded by construction (the authored
+  mutations are tail edits and static resets); reorder arrives with an
+  ordering contract + keyed diff.
+- **Structured item fields** (`item.field`, record-like elements) —
+  elements are scalars this phase.
+- **`f64[]`** — additive fourth element type, deferred.
+- **Host-supplied initial collections / host replace / write-back** —
+  collection state is runtime-owned; the host state boundary is a
+  separate deferred surface (the whole-value representation keeps it
+  unblocked).
+- **Loop-external collection reads** (`length`, emptiness, element
+  index reads) — with the uniform expression / reference extension.
+- **Per-item handlers and handler-position binder reads** — see above.
+- **Per-item conditional presence** (a loop-local `bool` binder in an
+  `if` condition) — reopens with the first concrete per-item branching
+  case.
+- **Nested `for` / template scope and shadowing** — with the next
+  structural control-flow extension.
+- **Member-range bodies** (multiple members per iteration) — the
+  deferred family-wide body generalisation.
+- **General collection expressions** (computed lists, `xs = ys`,
+  slices) — the static literal is the only whole-value RHS.
+- **Grid / Box / ScrollView direct `for`** — see the admission table.
+- **Large-N performance / lazy materialisation** — deliberately out of
+  scope at gallery N.
 
 ---
 
@@ -2020,6 +2469,9 @@ Member (enum) {
     StateMember   { name: String, ty: TypeName, default: Expr },  // M2
     GridTracks    { axis: TrackAxis, tracks: Vec<TrackSize> },    // M3-Phase 5
     Conditional   { condition: Expr, body: Box<Member /* WidgetDecl only */> }, // M3-Phase 6; `if` (§4.14)
+    Iteration     { binder: String, index_binder: Option<String>,
+                    collection: String,
+                    body: Box<Member /* WidgetDecl only */> },    // M3-Phase 7; `for` (§4.15)
 }
 
 TrackAxis (enum) { Columns, Rows }                  // M3-Phase 5
@@ -2080,6 +2532,14 @@ field set is finalised at implementation, and `else` / `switch` / `for`
 extend it additively (a branch list / sibling variants) without
 re-shaping the existing members.
 
+The `Member::Iteration` variant (M3-Phase 7) holds the `for` block: the
+author-named binders, the collection state name, and a single
+`Member::WidgetDecl` body (§4.15). The collection literal (state
+defaults and assignment RHS) and the `append` / `drop-last` method-call
+expressions are companion design-draft AST additions; like the
+`Conditional` shape, the exact field / variant set is finalised at
+implementation without changing the §3 / §4.15 author surface.
+
 All AST nodes carry a `span: Span` field (byte offset, line, col) for error reporting.
 
 ---
@@ -2124,7 +2584,7 @@ The following are explicitly **out of scope for M1**:
 | Import / module system                              | M2          |
 | Code generation (runtime call emission)             | M2          |
 | Conditional rendering (`if`)                        | Landed M3-Phase 6 as structural rendering (§4.14) |
-| Iteration (`for`)                                   | M3-Phase 7  |
+| Iteration (`for`)                                   | Landed M3-Phase 7 as structural rendering (§4.15) |
 
 ---
 
@@ -2222,21 +2682,34 @@ binding is rejected in M3-Phase 6 (`WASAMO_ERR_IR_MALFORMED`, §8.11).
 The runtime allocates a `Signal<T>` for each one.
 
 ```
-state_decl ::= "state" IDENT ":" type_name "=" literal
+state_decl   ::= "state" IDENT ":" type_name "=" (literal | list_literal)
+
+list_literal ::= "[" (literal ("," literal)*)? "]"    ; M3-Phase 7
 ```
 
 | Element     | Meaning                                          |
 |-------------|--------------------------------------------------|
 | `IDENT`     | Signal name; unique within the component (flat namespace) |
-| `type_name` | `"i32"`, `"string"`, or `"bool"` (M3-Phase 1 adds `bool`) |
+| `type_name` | `"i32"`, `"string"`, `"bool"` (M3-Phase 1 adds `bool`), or `"i32[]"` / `"string[]"` / `"bool[]"` (M3-Phase 7) |
 | `literal`   | Default value: `INT` for `i32`; `STRING` for string; `BOOL` (`true`/`false`) for `bool` |
+| `list_literal` | Collection default (M3-Phase 7): scalar literals matching the declared element type; possibly empty; no nesting, no idents |
 
 Examples:
 
 ```
 state count: i32 = 0
 state ready: bool = false
+state thumbs: i32[] = [101, 102, 103]
+state captions: string[] = []
 ```
+
+The M3-Phase 7 collection forms are design-draft shapes (exact token
+spellings finalised at implementation re-sync); the normative
+properties are: collection state declarations and list-literal defaults
+**roundtrip losslessly** through emit → load, and the loader rejects an
+element-type mismatch, a nested list, a list default on a scalar state,
+and a scalar default on a collection state as
+`WASAMO_ERR_IR_MALFORMED` (§8.11).
 
 ### 8.5 Widget nodes and control-flow members
 
@@ -2303,14 +2776,21 @@ placement / span / alignment ride standard `prop` lines using existing
 Grid's lowering and is not a runtime widget kind (see
 [architecture.md §6.7.7](./architecture.md#677-binding-registration-api-after-m2)).
 
-**Control-flow members (M3-Phase 6).** A `control_flow_member` encodes
-a structural control-flow construct in the node body. Phase 6 ships the
-single-branch `if`:
+**Control-flow members (M3-Phase 6; `for` added M3-Phase 7).** A
+`control_flow_member` encodes a structural control-flow construct in
+the node body. Phase 6 ships the single-branch `if`; Phase 7 adds the
+`for` member:
 
 ```
 control_flow_member ::= "if" cond "{" widget_node "}"   ; Phase 6: exactly one
                                                         ; widget node — no else,
                                                         ; no nested control flow
+                     |  "for" IDENT ("," IDENT)? "in" IDENT
+                        "{" widget_node "}"             ; M3-Phase 7: element
+                                                        ; binder, optional index
+                                                        ; binder, collection
+                                                        ; state; exactly one
+                                                        ; widget node
 cond                ::= BOOL | IDENT   ; BOOL → bool-literal condition
                                        ; IDENT → bool-typed state read
 ```
@@ -2327,9 +2807,10 @@ widget members in the parent's ordered child list — control flow is a
 first-class structural member, not a widget node — carrying its branch
 condition and its single-widget body; the schema shape is in
 [architecture.md](./architecture.md). The construct is designed to carry
-a branch list so `else` / `switch` (more branches) and `for` (Phase 7
-iteration) are same-family additions; Phase 6 emits and loads **exactly
-one branch** with a **single-widget body**.
+a branch list so `else` / `switch` (more branches) are same-family
+additions; `for` landed in M3-Phase 7 as the second control-flow member
+(its own sibling variant — see *The `for` member* below). Phase 6 emits
+and loads **exactly one branch** with a **single-widget body**.
 
 Worked example — `.ui` → textual IR for the lightbox slice
 (`if is_lightbox_open { ZStack { … } }`):
@@ -2402,6 +2883,97 @@ both preserve the branch condition and the single-widget body across an
 emit → load roundtrip. Loader validation of malformed control-flow
 members (multi-branch, multi-child / non-structural / nested-control-flow
 body, non-bool / unresolved condition) is in §8.11.
+
+**The `for` member (M3-Phase 7).** Like the `if` member, a `for` member
+is IR-only: it materialises no widget and no Visual of its own — the
+loader interprets it. The exact token spelling is a design-draft shape
+(finalised at implementation re-sync); the normative properties are:
+
+- the **binders, the collection reference, and the body roundtrip
+  losslessly** through emit → load;
+- the loader enforces — the post-`in` reference resolves to a declared
+  **collection-typed state**; the body is **exactly one widget node**;
+  the binders are well-formed (non-empty, distinct, not colliding with
+  a state name) — each violation `WASAMO_ERR_IR_MALFORMED` (§8.11), the
+  dual gate with `wasamoc check`;
+- a `for` member's **declared slot is present at load time** with its
+  initial cardinality materialised from the collection's initial value
+  (0..N children at load). The empty-initial case materialises **zero
+  children with the member still live** — it must not be conflated with
+  "member absent".
+
+Worked example — `.ui` → textual IR → loaded IR, with an `if` sibling
+so declared-slot offsets are exemplified:
+
+`.ui`:
+
+```
+component Gallery inherits Window {
+    state thumbs: i32[] = [101, 102]
+    state show_footer: bool = true
+
+    VStack {
+        Text { text: "Header" }
+        for thumb in thumbs {
+            Box { Text { text: "Photo \{thumb}" } }
+        }
+        if show_footer {
+            Text { text: "Footer" }
+        }
+    }
+}
+```
+
+textual IR (`wasamoc` emit):
+
+```
+component Gallery inherits Window {
+    state thumbs: i32[] = [101, 102]
+    state show_footer: bool = true
+    host prop backdrop = mica
+    host prop theme = system
+
+    node Window {
+        node VStack {
+            node Text { prop text = "Header" }
+            for thumb in thumbs {
+                node Box {
+                    node Text { bind text = (interp "Photo " (item-read thumb)) }
+                }
+            }
+            if show_footer {
+                node Text { prop text = "Footer" }
+            }
+        }
+    }
+}
+```
+
+loaded IR (schema shape normative in
+[architecture.md](./architecture.md)):
+
+```
+IrNode { widget_type: "VStack", children: [
+    Widget(IrNode { widget_type: "Text", … }),                 // declared slot 0
+    ControlFlow(ControlFlowNode::For {                          // declared slot 1
+        binder: "thumb",
+        index_binder: None,
+        collection: HandlerExpr::ListPropRead { path: "thumbs", elem: I32 },
+        body: [ Widget(IrNode { widget_type: "Box", … }) ],     // exactly one
+    }),
+    ControlFlow(ControlFlowNode::If { … }),                     // declared slot 2
+] }
+```
+
+At load, the VStack materialises "Header" at offset 0, two `Box`
+subtrees at offsets 1..2 (the `for` slot's initial cardinality is the
+initial collection length, 2), and — `show_footer` being true —
+"Footer" at offset 3. The materialised offset of each declared slot is
+the sum of the live cardinalities of the declared members before it
+(widget = 1, `if` = 0/1, `for` = current collection length), recomputed
+at every structural mutation, never cached: after
+`thumbs = thumbs.append(103);` the `for` slot covers offsets 1..3 and
+"Footer" sits at offset 4.
 
 ### 8.6 Property sets
 
@@ -2502,6 +3074,12 @@ expr  ::= atom
         | "(" "prop-read"       IDENT ")"
         | "(" "str-prop-read"   IDENT ")"
         | "(" "bool-prop-read"  IDENT ")"     ; M3-Phase 1
+        | "(" "list-prop-read"  IDENT ")"     ; M3-Phase 7
+        | "(" "item-read"       IDENT ")"     ; M3-Phase 7
+        | "(" "index-read"      IDENT ")"     ; M3-Phase 7
+        | "(" "list-append"     IDENT expr ")"  ; M3-Phase 7
+        | "(" "list-drop-last"  IDENT ")"     ; M3-Phase 7
+        | list_literal                        ; M3-Phase 7 (§8.4)
         | "(" "assign"          IDENT expr ")"
         | "(" "compound-assign" compound_op IDENT expr ")"
         | "(" "interp"          interp_part+ ")"
@@ -2527,10 +3105,24 @@ interp_part ::= STRING         ; literal text fragment
 | `(prop-read NAME)` | `PropRead { path }` | `NAME` is the Signal name from `state` |
 | `(str-prop-read NAME)` | `StrPropRead { path }` | String-typed binding read; `NAME` is the Signal name from `state` |
 | `(bool-prop-read NAME)` | `BoolPropRead { path }` | M3-Phase 1. Bool-typed binding read; `NAME` is the Signal name from `state` |
-| `(assign NAME expr)` | `Assign { lhs, rhs }` | Handler-only. M3-Phase 1: `rhs` may now be `BoolLit` or `BoolPropRead` when the LHS state is `bool`-typed |
-| `(compound-assign OP NAME expr)` | `CompoundAssign { lhs, op, rhs }` | Handler-only. **Not defined over `bool`** — no `CompoundOp` is naturally bool-typed |
+| `(assign NAME expr)` | `Assign { lhs, rhs }` | Handler-only. M3-Phase 1: `rhs` may now be `BoolLit` or `BoolPropRead` when the LHS state is `bool`-typed. M3-Phase 7: when the LHS state is collection-typed, `rhs` is exactly one of `(list-append …)` / `(list-drop-last …)` (receiver = the LHS state) or a `list_literal` |
+| `(compound-assign OP NAME expr)` | `CompoundAssign { lhs, op, rhs }` | Handler-only. **Not defined over `bool`** — no `CompoundOp` is naturally bool-typed. **Not defined over collections** (M3-Phase 7) |
 | `(interp part+)` | `Interpolation(Vec<InterpolationPart>)` | Binding-only |
 | `(block expr*)` | `Block(Vec<HandlerExpr>)` | Empty block evaluates to `0` |
+| `(list-prop-read NAME)` | `ListPropRead { path, elem }` | M3-Phase 7. Whole-value collection read carrying the element type tag; the `for` member's collection reference |
+| `(item-read NAME)` | `ItemRead { binder }` | M3-Phase 7. Loop-local element-binder read; binding / interpolation positions inside a `for` body only. Evaluates as a live positional read of the collection signal at the subtree's instantiation position; an out-of-range position writes nothing (the defined same-batch-removal case) |
+| `(index-read NAME)` | `IndexRead { binder }` | M3-Phase 7. Loop-local index-binder read (`i32`, zero-based); same positions as `item-read` |
+| `(list-append NAME expr)` | collection tail-append expression | M3-Phase 7. Pure: evaluates to a new collection with one element appended; collection-assignment RHS only |
+| `(list-drop-last NAME)` | collection tail-removal expression | M3-Phase 7. Pure and total: the collection minus its last element; identity on empty; collection-assignment RHS only |
+| `list_literal` | static collection value | M3-Phase 7. State defaults (§8.4) and collection-assignment RHS (whole-value reset / clear) |
+
+The M3-Phase 7 rows are design-draft shapes — exact form spellings and
+`HandlerExpr` variant names are finalised at implementation re-sync,
+within the single unified `HandlerExpr` enum (no side enum). A
+collection assignment evaluates as read-modify-write (or, for the
+literal, a direct whole-value set) on the whole-value collection
+signal; an assignment whose new value equals the current value performs
+no dirty propagation (§4.15).
 
 **`interp_part` mapping:**
 
@@ -2600,6 +3192,9 @@ defense-in-depth validation:
 | `ZStack` declares no ZStack-level attributes; `h-align`/`v-align` appear only on a `ZStack` direct child or a Grid `Cell` and are in `{ start, center, end, stretch }` (M3-Phase 6) | Yes | `WASAMO_ERR_IR_MALFORMED` |
 | A control-flow (`if`) member carries **exactly one branch** (no `else` until specified), a **single-widget body** (not empty, not multiple children, no non-structural body member, no nested control-flow member), and a **bool-typed, resolved** condition; an `if` appears only where a member is admitted inside a widget body (not at component level) (M3-Phase 6) | Yes | `WASAMO_ERR_IR_MALFORMED` |
 | Component host attributes are only `title`, `backdrop`, and `theme`; `title` must be a string literal; `backdrop` and `theme` must be keyword identifiers; host bindings are rejected; the same names are rejected if squatted as props or bindings on the content root (M3-Phase 6) | Yes | `WASAMO_ERR_IR_MALFORMED` |
+| Collection state declarations: a list default appears only on a collection-typed state (and a scalar default only on a scalar state); list elements are scalar literals matching the declared element type; no nested lists (M3-Phase 7) | Yes | `WASAMO_ERR_IR_MALFORMED` |
+| A `for` member carries a collection read resolving to a declared collection-typed state, a **single-widget body**, and well-formed binders (non-empty, distinct, not colliding with a state name); a `for` appears only under VStack / HStack / WrapPanel / ZStack (not ScrollView / Box / Grid, not at component level); no `for` member at any depth inside a `for` body; no handler member inside a `for` body (M3-Phase 7) | Yes | `WASAMO_ERR_IR_MALFORMED` |
+| Collection assignment: `=` only on a collection-typed LHS; the RHS is a single self-receiver tail-edit form or a static list literal with matching element types; loop-local reads (`item-read` / `index-read`) appear only in binding positions inside the owning `for` body (M3-Phase 7) | Yes | `WASAMO_ERR_IR_MALFORMED` |
 | Binding expression result type matches target property type | **No** (trusted from `wasamoc`) | Undefined behaviour |
 | Per-node emitter invariants (e.g. `on` only on signal-capable widgets) | **No** (trusted from `wasamoc`) | Undefined behaviour |
 
@@ -2611,9 +3206,10 @@ Phase 3 WrapPanel non-negative attributes, Phase 4 ScrollView
 single-content-child rule, Phase 5 Grid structural / track / placement /
 span / conflict / alignment-vocabulary invariants, Phase 6 ZStack
 attribute / alignment-placement invariants, Phase 6 control-flow
-(`if`) branch / body / condition invariants, and Phase 6 host-surface
-catalog / value-shape / binding / content-root-separation invariants)
-are explicitly dual-gated rather than trusted because
+(`if`) branch / body / condition invariants, Phase 6 host-surface
+catalog / value-shape / binding / content-root-separation invariants,
+and Phase 7 collection-state / `for`-member / collection-assignment
+invariants) are explicitly dual-gated rather than trusted because
 `wasamo_load_ui`'s memory-IR entry point does not pass through
 `wasamoc`; the runtime gate is the last line of defence for these spec
 invariants. See §4.9 for the Box child-count rationale, §8.2 for the
@@ -2640,7 +3236,7 @@ bound.
 | Feature | Deferred to |
 |---|---|
 | `(computed ...)` expression form | M3 |
-| Conditional rendering | **Landed M3-Phase 6** — not as an `(if …)` expression / binding form, but as a structural **control-flow member** in the node body (§8.5; `if` only, single branch, single-widget body). `else` / `switch` are reserved family members and `for` iteration is Phase 7 |
+| Conditional rendering | **Landed M3-Phase 6** — not as an `(if …)` expression / binding form, but as a structural **control-flow member** in the node body (§8.5; `if` only, single branch, single-widget body). `else` / `switch` are reserved family members; `for` iteration **landed M3-Phase 7** as the second control-flow member (§8.5) |
 | M3 expanded type set (`float`, user types; `bool` landed in M3-Phase 1) | M3 |
 | Generic `TypedValue` value union | Post-M3 |
 | Bindable surface for Box `aspect` / `fill` (M3-Phase 2 admits the literals only) | Future phase that first needs reactive aspect or fill |
@@ -2657,6 +3253,13 @@ a generic `TypedValue` value union; the per-type binding evaluator and
 per-type widget property writer (see `architecture.md` §6.7.7)
 are the structural form of that deferral. This deferral is recorded in
 [notes/m3/m3-start-framing.md §F5](../process/milestone-3/requirements/framing.md#f5--typedvalue-は再評価候補だが開始時点の-m3-acceptance-ではない).
+M3-Phase 7 re-judged the deferral at the collection surface and did not
+adopt: collection elements are the existing three scalars, every value
+position stays monomorphic at lowering time, and element typing rides
+type tags (a single typed collection read carrying its element tag),
+not a runtime union. The genuine `TypedValue` driver — structured item
+fields (`item.field`, record-like values) — is out of the Phase 7
+surface.
 
 ## Revision history
 
@@ -2679,3 +3282,4 @@ are the structural form of that deferral. This deferral is recorded in
 | 1.5     | 2026-06-02 | M3-Phase 6 design draft (Moment 1): added §4.13 ZStack overlay primitive (union sizing + `Fill/Fill` default, document-order z-order, per-child alignment, outer-bounds clip) and §4.14 conditional rendering — the first chapter of the structural rendering model (`if` block, structural present/absent, absent=fresh-on-return with opt-in future retention). Supporting: §2.1 `if`/`else`/`switch`/`for` keyword reservation, §3 grammar, §5 AST, §8.5 control-flow member with textual + loaded IR examples, §8.11 validation rows. No new `IrType`/`IrLiteral`/`PropertyValue` or C ABI change; `abi_spec.md` untouched (the conditional + runtime-mechanism schema is normative in `architecture.md`). Also slimmed this revision history and applied the Living-spec vocabulary discipline retroactively — removed DD / option / process labels from the spec body and these notes, keeping the `M3-Phase N` identifiers (full provenance lives in the process documents). Pending implementation re-sync at Phase 6 close. |
 | 1.6     | 2026-06-02 | Moved the historical M1 lexical rationale appendix into `process/milestone-1/phase-1/decisions/`; this spec now keeps only the normative DSL surface. |
 | 1.7     | 2026-06-08 | M3-Phase 6 close: §4.13 and §4.14 marked implementation-synced; textual IR re-synced to the landed control-flow member and component host surface. Component-level Window host attributes (`title` / `backdrop` / `theme`) now lower to `host prop` entries beside the content root, host bindings are rejected, and the old shape that placed host attributes on the content root is malformed IR. |
+| 1.8     | 2026-06-13 | M3-Phase 7 design draft (Moment 1): added §4.15 iteration — the second chapter of the structural rendering model (`for` block with author-named binders; collection state types `i32[]` / `string[]` / `bool[]` with list-literal defaults; whole-value collection assignment over pure `append` / `drop-last` expressions and static-literal reset / clear; positional un-keyed identity baseline with the keyed non-promise; mutation-then-observe timing; all-or-unchanged insertion; per-container admission; diagnostics matrix). Supporting: §2.1 `in` reservation (`for` now has a production), §2.2 bracket / paren / comma tokens, §3 grammar, §4.6 / §4.7 binder-read and collection-state notes, §5 AST, §8.4 / §8.5 / §8.9 textual-IR collection and `for` forms with a worked offsets example, §8.11 validation rows. Swept the stale §4.14 `for` forward references (the `for` body ships single-widget, not member-range; the identity baseline ships positional un-keyed, with keyed as future opt-in) per the live-doc-sync rule. No ABI change; `abi_spec.md` untouched. Pending implementation re-sync at Phase 7 close. |
