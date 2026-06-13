@@ -1,6 +1,6 @@
 # Wasamo Architecture
 
-**Status:** M1 complete (Phases 0-8); M2 complete (Phases 1-7) — Foundation acceptance A1-A6 discharged; M3-Phase 1, M3-Phase 2, M3-Phase 3, M3-Phase 4, and M3-Phase 5 complete. M3-Phase 6 closed (implementation-synced): ZStack, conditional rendering, and the component host surface are documented to match the landed implementation.
+**Status:** M1 complete (Phases 0-8); M2 complete (Phases 1-7) — Foundation acceptance A1-A6 discharged; M3-Phase 1, M3-Phase 2, M3-Phase 3, M3-Phase 4, and M3-Phase 5 complete. M3-Phase 6 closed (implementation-synced): ZStack, conditional rendering, and the component host surface are documented to match the landed implementation. M3-Phase 7 design accepted (implementation pending): iteration — `ControlFlowNode::For` / `BindingTarget::ForLoopSubtree`, the canonized member-expansion seam, stage-then-commit range mutation, and child-carried ZStack placement (§6.7.10, §6.8.5) are documented as accepted design ahead of implementation.
 
 ---
 
@@ -775,13 +775,18 @@ pub(crate) struct SignalRegistry {
     i32s:    HashMap<String, Signal<i32>>,
     strings: HashMap<String, Signal<String>>,
     bools:   HashMap<String, Signal<bool>>,   // M3-Phase 1
+    // M3-Phase 7 adds whole-value collection signals per element
+    // type (Signal<Vec<i32>> / Signal<Vec<String>> / Signal<Vec<bool>>)
+    // on the same per-type seam — one reactive cell per collection
+    // state, no per-element signals (§6.7.10).
 }
 
 pub(crate) enum BindingTarget {
     WidgetProperty { node: WidgetId, prop: PropertyKey },
     // M3-Phase 6 fills ConditionalSubtree (§6.7.9):
     ConditionalSubtree { parent: WidgetId, declared_member_index: usize },
-    // M3+ adds ForLoopSubtree, …
+    // M3-Phase 7 fills ForLoopSubtree (§6.7.10):
+    ForLoopSubtree { parent: WidgetId, declared_member_index: usize },
 }
 ```
 
@@ -821,9 +826,11 @@ IR loader. M2 supports `i32` and `String` Signals; M3-Phase 1 adds
 `BindingEvalContext::read_string_tracked`), and bool reads use
 `HandlerExpr::BoolPropRead` (evaluating through
 `BindingEvalContext::read_bool_tracked`). The broader pattern
-survives: M3 binding shapes (Computed, conditional, for-loop) add
-`BindingTarget` variants and may expand `SignalRegistry` further
-without disturbing the per-type widget-write seam.
+survives: M3 binding shapes add `BindingTarget` variants and expand
+`SignalRegistry` further without disturbing the per-type widget-write
+seam — M3-Phase 6 realized the conditional variant (§6.7.9), M3-Phase 7
+the for-loop variant and the whole-value collection signals (§6.7.10);
+`Computed` remains deferred.
 
 **M3 layout primitives and the writer seam.** None of the M3 layout
 primitives (Box, WrapPanel, ScrollView, Grid, ZStack) extends this
@@ -839,7 +846,8 @@ covers only the registration / per-type writer seam.
 #### 6.7.8 Forward-compatibility and out-of-scope
 
 The reactive architecture is shape-compatible with the M3 extensions it
-defers (M3-Phase 6 fills the conditional seam — see §6.7.9):
+defers (M3-Phase 6 fills the conditional seam — §6.7.9; M3-Phase 7
+fills the iteration seam — §6.7.10):
 
 - `Computed<T>` lands as a third layer between Signal and Effect;
   it inherits the M2 topological dirty-Effect walk. M3 still decides
@@ -848,8 +856,8 @@ defers (M3-Phase 6 fills the conditional seam — see §6.7.9):
 - Structural bindings add `BindingTarget` variants; subtree rebuilds
   Drop old Effects through the existing widget teardown path. M3-Phase
   6 realizes the conditional variant
-  (`BindingTarget::ConditionalSubtree`, §6.7.9); for-loop /
-  list-rendered remain deferred.
+  (`BindingTarget::ConditionalSubtree`, §6.7.9); M3-Phase 7 realizes
+  the for-loop variant (`BindingTarget::ForLoopSubtree`, §6.7.10).
 - Subtree-grain layout dirty (open question in
   [layout-engine note §3.4](notes/layout-engine.md)) is
   unaffected; the engine inherits the Phase 8 whole-window dirty path.
@@ -866,9 +874,9 @@ required.
 M3-Phase 6 adds the first structural-rendering construct:
 `if <bool> { <widget> }`, where a bound `bool` drives whether a subtree
 is **present or absent** in the live tree — not merely shown or hidden.
-It is the first member of a structural control-flow family (`else` /
-`switch` / `for` follow in later phases), and is verified visually by
-the lightbox overlay slice.
+It is the first member of a structural control-flow family (`for`
+landed in M3-Phase 7, §6.7.10; `else` / `switch` follow in later
+phases), and is verified visually by the lightbox overlay slice.
 
 **Member-level structural IR.** Control flow is encoded as a
 first-class **member**, not a widget. `IrNode.children` is
@@ -881,7 +889,14 @@ enum IrMember {
 }
 enum ControlFlowNode {
     If { branches: Vec<Branch> },   // Phase 6: exactly one Branch, no else
-    // future: Switch { subject, arms }, For { binding, body }, …
+    // M3-Phase 7 adds the sibling iteration variant (§6.7.10):
+    For {
+        binder: String,
+        index_binder: Option<String>,
+        collection: HandlerExpr,    // typed whole-value collection read
+        body: Vec<IrMember>,        // length-1, Widget-only (enforced)
+    },
+    // future: Switch { subject, arms }, …
 }
 struct Branch { condition: HandlerExpr, body: Vec<IrMember> }
 ```
@@ -895,8 +910,9 @@ member (an empty body, more than one member, or a non-widget member
 such as a textual `prop` / `binding` / `handler` line or a nested
 `ControlFlow(_)`), or a second `Branch`, is `WASAMO_ERR_IR_MALFORMED` —
 while the wider `Vec` shapes already exist
-in the type for forward-compat (`else` adds a `Branch`; `switch` /
-`for` add `ControlFlowNode` variants) with no future schema migration.
+in the type for forward-compat (`else` adds a `Branch`; `switch` adds a
+`ControlFlowNode` variant; `for` did exactly that in M3-Phase 7) with
+no future schema migration.
 Re-typing `children` is the largest single change of the phase; the
 no-`Default` construction discipline surfaces every
 construction/traversal site at compile time, so the change is
@@ -991,6 +1007,133 @@ structural-mutation residuals (cycle detection, ordering ties, fan-out
 × `MUTATION_CAP`) are carried forward — Phase 6 declines to freeze a
 structural-transaction model before `for` / multiple conditionals
 reveal the real requirements — rather than silently deferred.
+
+#### 6.7.10 Iteration (M3-Phase 7)
+
+**Phase status:** M3-Phase 7 design accepted; implementation pending.
+
+M3-Phase 7 generalises the structural control-flow machinery from
+presence (0/1) to **cardinality (0..N)**: a runtime-mutable collection
+`state` drives the number of generated widget subtrees. The IR carrier
+is the sibling `ControlFlowNode::For` variant (§6.7.9 sketch) — one
+enum, one dispatch point, so every `match` over `ControlFlowNode` is
+forced by the compiler to confront `For`. State typing splits into
+`IrStateType::Scalar(IrType) | Collection(IrType)` (scalar positions
+cannot type-admit a collection by construction; `Collection(IrType)`
+cannot nest), `IrLiteral` gains a list form for initial values, and the
+unified `HandlerExpr` gains the typed whole-value collection read, the
+loop-local `ItemRead` / `IndexRead` forms, and the collection-assignment
+expressions — no second expression enum, no `TypedValue` (judged and
+not adopted: every value position stays monomorphic at lowering time).
+Author-visible semantics are normative in
+[dsl_spec.md §4.15](./dsl_spec.md#415-iteration-and-collection-driven-generation-m3-phase-7).
+
+**Whole-value collection signals.** A collection `state` is **one**
+signal holding the whole value (`Signal<Vec<i32>>` /
+`Signal<Vec<String>>` / `Signal<Vec<bool>>`, per-element-type like the
+existing registry seam). Any authored mutation — the self-receiver
+tail-edit assignments and the static-literal reset — is a whole-value
+set on that one cell; a set whose new value equals the current value
+marks nothing dirty. There are no per-element signals: element identity
+is positional, values are value-semantic, and the only
+whole-collection write operation is a full-value set — exactly the
+shape a future host replace API would call, so the host state boundary
+stays unblocked by construction.
+
+**The canonized member-expansion seam.** Phase 7 canonizes "declared
+members → materialised children" as **one shared seam** used by both
+static load and reactive structural mutation, resolving the Phase 6
+reservation in the canonize direction. Per declared member a **live
+cardinality** (widget = 1; `If` = 0/1; `For` = current collection
+length); the materialised insertion offset of declared slot `k` is the
+prefix sum of the cardinalities of declared members before `k`. Static
+load materialises by walking the seam — a `for` slot's initial
+cardinality comes from the collection's initial value (the
+empty-initial case materialises zero children with the member live);
+every reactive mutation (conditional toggle, range insert / remove)
+recomputes its indices through the **same** functions, never cached.
+The Phase 6 conditional path migrates onto the seam as the 0/1 special
+case; the seam is pure logic, unit-testable without WinRT. The scope is
+structural member expansion only — containers keep their own
+child-shape contracts (the per-container `for` admission sweep is
+grammar-level, dsl_spec §4.15).
+
+**`BindingTarget::ForLoopSubtree`.** The loader registers a structural
+effect per `for` member, anchored on the stable declared slot
+(`{ parent, declared_member_index }`, the shape `ConditionalSubtree`
+reserved). The effect reads the collection signal, compares the new
+length N with the materialised count M, and executes a tail plan:
+N > M materialises body instances for positions M..N−1 and splices
+them at seam-computed offsets; N < M disposes positions N..M−1
+tail-first; N == M performs no structural edit (a same-length
+whole-value reset re-evaluates item bindings in place through the
+positional reads below).
+
+**Per-item bindings are live positional reads.** An `ItemRead` lowers
+to an effect read of element `i` of the whole-value signal — the
+position fixed per instantiation, the value read live. This is what
+makes the positional-identity contract a kept promise: under a
+whole-value reset, retained positions re-evaluate automatically.
+Prefix item bindings dirtied by a tail edit recompute, produce equal
+values, and write idempotently — breadth, not cascade depth. The read
+is **guarded**: a position outside the collection's current length
+writes nothing. That is the defined same-batch-removal case — a tail
+removal can dirty the removed item's binding in the same drain batch
+before the `for` effect disposes that subtree, so the doomed effect is
+a well-defined no-op rather than an out-of-range read; at quiescence
+the removed subtree is gone.
+
+**Stage-then-commit range mutation.** All fallible construction for a
+range insert (widget construction, Visual creation) happens **before**
+the first tree mutation: every new subtree is staged fully, unparented.
+Any staging failure disposes the staged work, logs a range-scoped
+diagnostic (declared slot, positions, failed stage — the log surface
+upgraded from Phase 6's single-child line), and aborts the whole
+mutation with the tree observably unchanged. The commit then performs
+the splice; a WinRT failure inside commit is an OS-level inconsistency
+logged with range context, not a designed state. Rollback and
+terminal-error postures were declined on proportionality; the recorded
+re-trigger is an observed commit-stage failure in CI or the field.
+
+**One placement-aware splice seam owns the structural side-effect
+set.** Every structural child mutation on the materialised tree —
+conditional 0/1 and `for` ranges alike — enters one mutation seam that
+performs, as one composed operation: (1) the `children` splice
+(child-carried placement rides along, §6.8.5); (2) Visual sibling-order
+updates (removed Visuals detached, staged Visuals inserted at the
+correct sibling positions — declared order with live cardinalities,
+never just on top); (3) parent layout invalidation (§6.6); (4)
+widget-pointer registry release / registration; (5) effect disposal
+ahead of teardown (§6.7.6) and staged-effect attachment at commit. No
+caller composes these around the seam; no structural edit reaches
+`children` through a placement-blind route.
+
+**Disposal and drain.** Removed subtrees dispose tail-first, effects
+ahead of structural teardown, registry entries through the existing
+destroy path. The M3-Phase 1 synchronous non-batched drain contract is
+preserved under range mutation: staged subtrees' per-item binding
+effects are created at commit and run before the mutating call
+returns — after a tail-append assignment the caller observes the new
+children with bound properties written; after a tail-remove they are
+gone. The quiescent order invariant generalises: at quiescence,
+materialised children = declared members expanded by live cardinality
+in document order, drain-order-independent.
+
+**Cap charging model (structural mutation).** `MUTATION_CAP` counts
+**drain-loop iterations — cascade depth — not effect count and not
+structural edit count**. One authored collection mutation is one signal
+write: drain iteration 1 runs the dirty set including the `for` effect,
+which executes the whole tail edit (stage + commit, all new subtrees)
+as one effect run; new subtrees' binding effects run synchronously at
+creation, and dirtied prefix bindings are part of the same iteration's
+batch. A further iteration occurs only if effects write signals — which
+Phase 7 item bindings never do (they write widget properties). N-item
+breadth therefore consumes **zero cap depth**; the cap continues to
+bound effect→signal→effect chaining, which iteration does not
+introduce. The M2-handoff reactive-drain residuals (cycle detection,
+ordering ties, fan-out × cap) are carried forward with this accounting
+recorded as the ground; the synchronous drain contract (item 4) is
+held, not carried.
 
 ### 6.8 M3 layout primitives and runtime shape
 
@@ -1180,7 +1323,13 @@ The runtime materialises Grid as a per-kind widget data shape
 (`WidgetData::Grid { columns, rows, cell_placements }`) holding the
 declared track lists (`Vec<TrackSize>` per axis) and the per-Cell
 placement metadata (`cell_placements`, parallel to the content
-children). It does **not** cache resolved per-Cell rectangles:
+children). The parallel-vector shape survives M3-Phase 7's
+child-carried placement migration (§6.8.5) because the Grid path is
+**static-only** — Grid rejects a direct `for` member and admits no
+structural mutation under it; the recorded trigger is that any Grid
+structural-mutation path (a `for` of `Cell`s, conditional `Cell`s)
+migrates `cell_placements` to the child-carried model **before** that
+path is built. It does **not** cache resolved per-Cell rectangles:
 `arrange_grid` re-derives each axis's track resolution and writes the
 resolved offset / size directly onto each content child's
 `LayoutNode` every layout pass (no arrange-result cache, unlike Phase
@@ -1257,18 +1406,28 @@ special case. Owner-visible trade-off: with no author-facing
 intrinsic ("size to the largest child" on a bounded axis) ZStack is not
 expressible until a future size-constraint surface.
 
-**Per-child alignment.** Each child is measured against the ZStack
-content rect and anchored within it; the default `h-align` / `v-align`
-is **`center`** (a `Stretch` alignment or a `Fill` constraint expands
-the child to the full content rect via the existing cross-axis rule).
-All children share the same content rect — the defining property of the
-overlap. The alignment is authored as ordinary child `IrProp`
-ident-literals and carried at the layout layer as
-**parent-owned metadata parallel to `children`**, mirroring Grid's
-`cell_placements` ([layout.rs:224](../wasamo-runtime/src/layout.rs)) —
-a lean per-child placement (h/v `Alignment` only, not Grid's
-row/column/span), extracted by `construct_widget` so the arrange loop
-zips `children[i]` with `placements[i]`. `h-align` / `v-align` are
+**Per-child alignment — child-carried placement (storage contract
+revised in M3-Phase 7; design accepted, implementation pending).** Each
+child is measured against the ZStack content rect and anchored within
+it; the default `h-align` / `v-align` is **`center`** (a `Stretch`
+alignment or a `Fill` constraint expands the child to the full content
+rect via the existing cross-axis rule). All children share the same
+content rect — the defining property of the overlap. The alignment is
+authored as ordinary child `IrProp` ident-literals; the storage
+contract is **child-carried placement**: a child slot carries the node
+plus its optional **parent-interpreted** placement (`None` for
+placement-free containers), so a child and its placement are one
+record that no insert, remove, range splice, or future reorder can
+desynchronise. This replaces the Phase 6 shape — a parent-owned
+`zstack_placements` vector kept parallel to `children`, whose
+parallel-vector invariant had to be policed by paired insert / remove
+helpers and drifted in practice — with a structural guarantee, ahead of
+the M3-Phase 7 range mutations that cross ZStack (a `for` member is
+admitted under ZStack). Placement does not thereby become an intrinsic
+widget property: the author surface is unchanged, and the parent still
+interprets the carried value. Generated subtrees carry their
+per-item-instantiated placement through staging → commit as ordinary
+child-slot data (§6.7.10). `h-align` / `v-align` are
 admitted only on a **ZStack direct child** (and a Grid `Cell`); the
 parent context consumes them as placement annotations before the
 child's own unknown-prop check and excludes them from the child's prop
@@ -1466,8 +1625,9 @@ In M1 the host language constructed the view tree directly through the
 C ABI. The M2-onward DSL path instead materialises the view tree from
 the loaded IR (`wasamoc` → textual IR → runtime loader), but there is
 still no reconciler: the view tree is mutated in place — including the
-structural insert/remove of conditional subtrees (§6.7.9) — not diffed
-against a freshly computed tree.
+structural insert/remove of conditional subtrees (§6.7.9) and the
+M3-Phase 7 range insert/remove of iteration subtrees (§6.7.10) — not
+diffed against a freshly computed tree.
 
 **Component host surface (M3-Phase 6).** Loaded IR is rooted at an
 `IrComponent`, not directly at the content widget. The component owns
@@ -1492,7 +1652,8 @@ root. Because this is an internal compiler/textual-IR/runtime-loader
 shape, it adds no C ABI export; the host still calls `wasamo_load_ui`
 with the emitted IR payload.
 
-**Declared-tree / entity-tree separation (M3-Phase 6, nascent).** The
+**Declared-tree / entity-tree separation (M3-Phase 6, nascent;
+generalised by M3-Phase 7).** The
 conditional construct (§6.7.9) introduces, in nascent form, a
 distinction the three-layer table does not yet name: a **declared
 tree** — the IR control-flow member and its body, stable across every
@@ -1501,15 +1662,20 @@ present/absent toggle — versus an **entity tree** — the runtime
 is destroyed when the condition is absent and rebuilt fresh when it
 returns. Today the declared tree *is* the loaded IR and
 the entity tree *is* the view tree, so the separation is observable
-only at a conditional boundary; there is still no reconciler. It is
-recorded here because it is the stable anchor a future identity layer
-attaches to: keyed item identity and state retention (the Phase 7 `for`
-driver, Flutter's Widget / Element / RenderObject split as reference)
-land **between** the stable declared construct and the recreated entity
-subtree, as an additive layer with no IR-shape change. The Phase 6
-default — absent destroys, present rebuilds fresh — is the un-keyed
-base case of that separation, and retention will arrive as an opt-in
-(`key:` / retention marker) so the default never silently changes.
+only at a structural control-flow boundary; there is still no
+reconciler. M3-Phase 7's `for` member (§6.7.10) **generalises the
+un-keyed base case** of that separation: the declared `for` member is
+the stable anchor, the generated subtrees are entities with
+**positional, un-keyed identity** (a tail append materialises only the
+new tail; retained positions are retained, not rebuilt). Keyed item
+identity and state retention are **not** what iteration ships: they
+remain a future opt-in surface (a `key:` / retention marker over the
+same declared-slot anchor — Flutter's Widget / Element / RenderObject
+split as reference), triggered by input / focus / per-item-state work,
+landing as an additive layer with no IR reshaping. Phase 6's
+fresh-on-return conditional default and Phase 7's positional iteration
+baseline are the un-keyed base cases retention must never silently
+change.
 
 ---
 
