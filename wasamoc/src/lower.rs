@@ -1,6 +1,6 @@
 use crate::ast::{
-    AssignOp, Block, ComponentDef, Expr, Member, Statement, StringPart, TrackAxis, TrackSize,
-    TypeName,
+    AssignOp, Block, BlockStatement, CollectionElemType, ComponentDef, Expr, Member, Statement,
+    StringPart, TrackAxis, TrackSize, TypeName,
 };
 use crate::check::Namespace;
 use crate::ir::{
@@ -35,7 +35,7 @@ pub fn lower(ast: &ComponentDef, ns: &Namespace) -> IrComponent {
 
     for member in &widget_members {
         match member {
-            Member::PropertyBind { name, value, .. } => match lower_expr(value, ns) {
+            Member::PropertyBind { name, value, .. } => match lower_expr(value, ns, None) {
                 LoweredExpr::Static(lit) => comp_props.push(IrProp {
                     name: name.clone(),
                     value: lit,
@@ -68,16 +68,28 @@ pub fn lower(ast: &ComponentDef, ns: &Namespace) -> IrComponent {
 }
 
 fn lower_state(name: &str, ty: &TypeName, default: &Expr) -> IrState {
-    let ir_type = match ty {
-        TypeName::Int => IrType::I32,
-        TypeName::Str => IrType::Str,
-        TypeName::Bool => IrType::Bool,
-        _ => panic!("lower_state: unsupported type (check should have rejected this)"),
+    let (ir_state_type, elem_type) = match ty {
+        TypeName::Int => (IrStateType::Scalar(IrType::I32), IrType::I32),
+        TypeName::Str => (IrStateType::Scalar(IrType::Str), IrType::Str),
+        TypeName::Bool => (IrStateType::Scalar(IrType::Bool), IrType::Bool),
+        TypeName::Collection(elem) => {
+            let elem_type = lower_collection_elem_type(*elem);
+            (IrStateType::Collection(elem_type.clone()), elem_type)
+        }
+        TypeName::Float => {
+            panic!("lower_state: unsupported type (check should have rejected this)")
+        }
     };
-    let ir_default = match default {
-        Expr::IntLit { value, .. } => IrLiteral::Int(*value as i32),
-        Expr::StringLit { parts, .. } => IrLiteral::Str(string_parts_to_static(parts)),
-        Expr::BoolLit { value, .. } => IrLiteral::Bool(*value),
+    let ir_default = match (ty, default) {
+        (TypeName::Collection(_), Expr::ListLit { items, .. }) => IrLiteral::List(
+            items
+                .iter()
+                .map(|item| lower_scalar_literal(item, &elem_type))
+                .collect(),
+        ),
+        (_, Expr::IntLit { value, .. }) => IrLiteral::Int(*value as i32),
+        (_, Expr::StringLit { parts, .. }) => IrLiteral::Str(string_parts_to_static(parts)),
+        (_, Expr::BoolLit { value, .. }) => IrLiteral::Bool(*value),
         // Ratio / Color literals in a `state` default are a positional
         // error rejected by `wasamoc check` (DD-M3-P2-002 / 003 confine
         // them to `Box.aspect` / `Box.fill` RHS); they fall through to
@@ -86,12 +98,54 @@ fn lower_state(name: &str, ty: &TypeName, default: &Expr) -> IrState {
     };
     IrState {
         name: name.to_string(),
-        ty: IrStateType::Scalar(ir_type),
+        ty: ir_state_type,
         default: ir_default,
     }
 }
 
+fn lower_collection_elem_type(elem: CollectionElemType) -> IrType {
+    match elem {
+        CollectionElemType::Int => IrType::I32,
+        CollectionElemType::Str => IrType::Str,
+        CollectionElemType::Bool => IrType::Bool,
+    }
+}
+
+fn lower_scalar_literal(expr: &Expr, elem: &IrType) -> IrLiteral {
+    match (elem, expr) {
+        (IrType::I32, Expr::IntLit { value, .. }) => IrLiteral::Int(*value as i32),
+        (IrType::Str, Expr::StringLit { parts, .. }) => {
+            IrLiteral::Str(string_parts_to_static(parts))
+        }
+        (IrType::Bool, Expr::BoolLit { value, .. }) => IrLiteral::Bool(*value),
+        _ => panic!("lower_scalar_literal: wrong element type (check should have rejected)"),
+    }
+}
+
+fn lower_any_scalar_literal(expr: &Expr) -> IrLiteral {
+    match expr {
+        Expr::IntLit { value, .. } => IrLiteral::Int(*value as i32),
+        Expr::StringLit { parts, .. } => IrLiteral::Str(string_parts_to_static(parts)),
+        Expr::BoolLit { value, .. } => IrLiteral::Bool(*value),
+        _ => panic!("lower_any_scalar_literal: non-literal list item (check should have rejected)"),
+    }
+}
+
 fn lower_node(widget_type: &str, members: &[Member], ns: &Namespace) -> IrNode {
+    lower_node_with_loop(widget_type, members, ns, None)
+}
+
+struct LowerLoopContext<'a> {
+    binder: &'a str,
+    index_binder: Option<&'a str>,
+}
+
+fn lower_node_with_loop(
+    widget_type: &str,
+    members: &[Member],
+    ns: &Namespace,
+    loop_ctx: Option<&LowerLoopContext<'_>>,
+) -> IrNode {
     let mut props = Vec::new();
     let mut bindings = Vec::new();
     let mut handlers = Vec::new();
@@ -103,7 +157,7 @@ fn lower_node(widget_type: &str, members: &[Member], ns: &Namespace) -> IrNode {
 
     for member in members {
         match member {
-            Member::PropertyBind { name, value, .. } => match lower_expr(value, ns) {
+            Member::PropertyBind { name, value, .. } => match lower_expr(value, ns, loop_ctx) {
                 LoweredExpr::Static(lit) => props.push(IrProp {
                     name: name.clone(),
                     value: lit,
@@ -116,7 +170,7 @@ fn lower_node(widget_type: &str, members: &[Member], ns: &Namespace) -> IrNode {
             Member::SignalHandler { signal, body, .. } => {
                 handlers.push(IrHandler {
                     signal: signal.clone(),
-                    expr: lower_block(body, ns),
+                    expr: lower_block(body, ns, loop_ctx),
                 });
             }
             Member::WidgetDecl {
@@ -124,7 +178,12 @@ fn lower_node(widget_type: &str, members: &[Member], ns: &Namespace) -> IrNode {
                 members: child_members,
                 ..
             } => {
-                children.push(IrMember::Widget(lower_node(type_name, child_members, ns)));
+                children.push(IrMember::Widget(lower_node_with_loop(
+                    type_name,
+                    child_members,
+                    ns,
+                    loop_ctx,
+                )));
             }
             Member::Conditional {
                 condition, body, ..
@@ -134,9 +193,42 @@ fn lower_node(widget_type: &str, members: &[Member], ns: &Namespace) -> IrNode {
                         condition: lower_condition_expr(condition, ns),
                         body: body
                             .iter()
-                            .map(|m| lower_widget_body_member(m, ns))
+                            .map(|m| lower_widget_body_member(m, ns, loop_ctx))
                             .collect(),
                     }],
+                }));
+            }
+            Member::For {
+                binder,
+                index_binder,
+                collection,
+                body,
+                ..
+            } => {
+                let Expr::Ident { name, .. } = collection else {
+                    panic!("lower_node: invalid for collection (check should have rejected)");
+                };
+                let elem = match ns.get(name) {
+                    Some(TypeName::Collection(elem)) => lower_collection_elem_type(*elem),
+                    _ => {
+                        panic!("lower_node: non-collection for target (check should have rejected)")
+                    }
+                };
+                let child_loop = LowerLoopContext {
+                    binder,
+                    index_binder: index_binder.as_deref(),
+                };
+                children.push(IrMember::ControlFlow(ControlFlowNode::For {
+                    binder: binder.clone(),
+                    index_binder: index_binder.clone(),
+                    collection: HandlerExpr::ListPropRead {
+                        path: name.clone(),
+                        elem,
+                    },
+                    body: body
+                        .iter()
+                        .map(|m| lower_widget_body_member(m, ns, Some(&child_loop)))
+                        .collect(),
                 }));
             }
             Member::GridTracks { axis, tracks, .. } => {
@@ -172,11 +264,15 @@ fn lower_node(widget_type: &str, members: &[Member], ns: &Namespace) -> IrNode {
     }
 }
 
-fn lower_widget_body_member(member: &Member, ns: &Namespace) -> IrMember {
+fn lower_widget_body_member(
+    member: &Member,
+    ns: &Namespace,
+    loop_ctx: Option<&LowerLoopContext<'_>>,
+) -> IrMember {
     match member {
         Member::WidgetDecl {
             type_name, members, ..
-        } => IrMember::Widget(lower_node(type_name, members, ns)),
+        } => IrMember::Widget(lower_node_with_loop(type_name, members, ns, loop_ctx)),
         _ => panic!("lower_widget_body_member: non-widget body (check should have rejected)"),
     }
 }
@@ -214,11 +310,23 @@ enum LoweredExpr {
     Dynamic(HandlerExpr),
 }
 
-fn lower_expr(expr: &Expr, ns: &Namespace) -> LoweredExpr {
+fn lower_expr(expr: &Expr, ns: &Namespace, loop_ctx: Option<&LowerLoopContext<'_>>) -> LoweredExpr {
     match expr {
         Expr::IntLit { value, .. } => LoweredExpr::Static(IrLiteral::Int(*value as i32)),
         Expr::BoolLit { value, .. } => LoweredExpr::Static(IrLiteral::Bool(*value)),
         Expr::Ident { name, .. } => {
+            if let Some(ctx) = loop_ctx {
+                if name == ctx.binder {
+                    return LoweredExpr::Dynamic(HandlerExpr::ItemRead {
+                        binder: name.clone(),
+                    });
+                }
+                if ctx.index_binder == Some(name.as_str()) {
+                    return LoweredExpr::Dynamic(HandlerExpr::IndexRead {
+                        binder: name.clone(),
+                    });
+                }
+            }
             // Per DD-M3-P1-010: identifier resolution at lowering time
             // consults the state-type table. A name that matches a declared
             // `state` becomes a typed `*PropRead` (reactive binding). Names
@@ -234,7 +342,9 @@ fn lower_expr(expr: &Expr, ns: &Namespace) -> LoweredExpr {
                 Some(TypeName::Int) => {
                     LoweredExpr::Dynamic(HandlerExpr::PropRead { path: name.clone() })
                 }
-                Some(TypeName::Float) | None => LoweredExpr::Static(IrLiteral::Ident(name.clone())),
+                Some(TypeName::Float) | Some(TypeName::Collection(_)) | None => {
+                    LoweredExpr::Static(IrLiteral::Ident(name.clone()))
+                }
             }
         }
         Expr::Measurement { value, .. } => LoweredExpr::Static(IrLiteral::Int(*value as i32)),
@@ -242,8 +352,26 @@ fn lower_expr(expr: &Expr, ns: &Namespace) -> LoweredExpr {
             if is_static_string(parts) {
                 LoweredExpr::Static(IrLiteral::Str(string_parts_to_static(parts)))
             } else {
-                LoweredExpr::Dynamic(HandlerExpr::Interpolation(lower_string_parts(parts, ns)))
+                LoweredExpr::Dynamic(HandlerExpr::Interpolation(lower_string_parts(
+                    parts, ns, loop_ctx,
+                )))
             }
+        }
+        Expr::QualifiedRef { name } => {
+            let path = name.segments.last().cloned().unwrap_or_default();
+            match ns.get(&path) {
+                Some(TypeName::Bool) => LoweredExpr::Dynamic(HandlerExpr::BoolPropRead { path }),
+                Some(TypeName::Str) => LoweredExpr::Dynamic(HandlerExpr::StrPropRead { path }),
+                Some(TypeName::Int) => LoweredExpr::Dynamic(HandlerExpr::PropRead { path }),
+                Some(TypeName::Collection(_)) | Some(TypeName::Float) | None => {
+                    LoweredExpr::Static(IrLiteral::Ident(path))
+                }
+            }
+        }
+        Expr::ListLit { .. } | Expr::CollectionCall { .. } => {
+            panic!(
+                "lower_expr: collection expression in prop position (check should have rejected)"
+            )
         }
         Expr::FloatLit { .. } => {
             panic!("lower_expr: float not supported (check should have rejected this)");
@@ -279,17 +407,27 @@ fn string_parts_to_static(parts: &[StringPart]) -> String {
         .collect()
 }
 
-fn lower_string_parts(parts: &[StringPart], ns: &Namespace) -> Vec<InterpolationPart> {
+fn lower_string_parts(
+    parts: &[StringPart],
+    ns: &Namespace,
+    loop_ctx: Option<&LowerLoopContext<'_>>,
+) -> Vec<InterpolationPart> {
     parts
         .iter()
         .map(|p| match p {
             StringPart::Text(s) => InterpolationPart::Literal(s.clone()),
             StringPart::Interp(qn) => {
                 let path = qn.segments.last().cloned().unwrap_or_default();
-                let expr = match ns.get(&path) {
-                    Some(TypeName::Str) => HandlerExpr::StrPropRead { path },
-                    Some(TypeName::Bool) => HandlerExpr::BoolPropRead { path },
-                    _ => HandlerExpr::PropRead { path },
+                let expr = if let Some(ctx) = loop_ctx {
+                    if path == ctx.binder {
+                        HandlerExpr::ItemRead { binder: path }
+                    } else if ctx.index_binder == Some(path.as_str()) {
+                        HandlerExpr::IndexRead { binder: path }
+                    } else {
+                        lower_interp_state_read(path, ns)
+                    }
+                } else {
+                    lower_interp_state_read(path, ns)
                 };
                 InterpolationPart::Expr(expr)
             }
@@ -297,11 +435,23 @@ fn lower_string_parts(parts: &[StringPart], ns: &Namespace) -> Vec<Interpolation
         .collect()
 }
 
-fn lower_block(block: &Block, ns: &Namespace) -> HandlerExpr {
+fn lower_interp_state_read(path: String, ns: &Namespace) -> HandlerExpr {
+    match ns.get(&path) {
+        Some(TypeName::Str) => HandlerExpr::StrPropRead { path },
+        Some(TypeName::Bool) => HandlerExpr::BoolPropRead { path },
+        _ => HandlerExpr::PropRead { path },
+    }
+}
+
+fn lower_block(
+    block: &Block,
+    ns: &Namespace,
+    loop_ctx: Option<&LowerLoopContext<'_>>,
+) -> HandlerExpr {
     let mut exprs: Vec<HandlerExpr> = block
         .statements
         .iter()
-        .map(|s| lower_statement(s, ns))
+        .map(|s| lower_block_statement(s, ns, loop_ctx))
         .collect();
     if exprs.len() == 1 {
         exprs.remove(0)
@@ -310,9 +460,26 @@ fn lower_block(block: &Block, ns: &Namespace) -> HandlerExpr {
     }
 }
 
-fn lower_statement(stmt: &Statement, ns: &Namespace) -> HandlerExpr {
+fn lower_block_statement(
+    stmt: &BlockStatement,
+    ns: &Namespace,
+    loop_ctx: Option<&LowerLoopContext<'_>>,
+) -> HandlerExpr {
+    match stmt {
+        BlockStatement::Assignment(stmt) => lower_statement(stmt, ns, loop_ctx),
+        BlockStatement::Expr(_) => {
+            panic!("lower_block_statement: expression statement (check should have rejected)")
+        }
+    }
+}
+
+fn lower_statement(
+    stmt: &Statement,
+    ns: &Namespace,
+    loop_ctx: Option<&LowerLoopContext<'_>>,
+) -> HandlerExpr {
     let lhs = stmt.target.segments.last().cloned().unwrap_or_default();
-    let rhs = Box::new(lower_rhs_expr(&stmt.value, ns));
+    let rhs = Box::new(lower_rhs_expr(&stmt.value, ns, loop_ctx));
     match stmt.op {
         AssignOp::Eq => HandlerExpr::Assign { lhs, rhs },
         AssignOp::PlusEq => HandlerExpr::CompoundAssign {
@@ -338,7 +505,11 @@ fn lower_statement(stmt: &Statement, ns: &Namespace) -> HandlerExpr {
     }
 }
 
-fn lower_rhs_expr(expr: &Expr, ns: &Namespace) -> HandlerExpr {
+fn lower_rhs_expr(
+    expr: &Expr,
+    ns: &Namespace,
+    loop_ctx: Option<&LowerLoopContext<'_>>,
+) -> HandlerExpr {
     match expr {
         Expr::IntLit { value, .. } => HandlerExpr::IntLit(*value as i32),
         Expr::BoolLit { value, .. } => HandlerExpr::BoolLit(*value),
@@ -346,7 +517,7 @@ fn lower_rhs_expr(expr: &Expr, ns: &Namespace) -> HandlerExpr {
             if is_static_string(parts) {
                 HandlerExpr::StrLit(string_parts_to_static(parts))
             } else {
-                HandlerExpr::Interpolation(lower_string_parts(parts, ns))
+                HandlerExpr::Interpolation(lower_string_parts(parts, ns, loop_ctx))
             }
         }
         // Per DD-M3-P1-010: identifier resolution in handler RHS consults
@@ -354,12 +525,58 @@ fn lower_rhs_expr(expr: &Expr, ns: &Namespace) -> HandlerExpr {
         // `StrPropRead`, `i32` → `PropRead`. An ident not in `ns` keeps the
         // M2 i32-implicit `PropRead` shape (runtime will reject if the
         // surrounding assignment is bool-typed).
-        Expr::Ident { name, .. } => match ns.get(name) {
-            Some(TypeName::Bool) => HandlerExpr::BoolPropRead { path: name.clone() },
-            Some(TypeName::Str) => HandlerExpr::StrPropRead { path: name.clone() },
-            _ => HandlerExpr::PropRead { path: name.clone() },
-        },
+        Expr::Ident { name, .. } => {
+            if let Some(ctx) = loop_ctx {
+                if name == ctx.binder {
+                    return HandlerExpr::ItemRead {
+                        binder: name.clone(),
+                    };
+                }
+                if ctx.index_binder == Some(name.as_str()) {
+                    return HandlerExpr::IndexRead {
+                        binder: name.clone(),
+                    };
+                }
+            }
+            match ns.get(name) {
+                Some(TypeName::Bool) => HandlerExpr::BoolPropRead { path: name.clone() },
+                Some(TypeName::Str) => HandlerExpr::StrPropRead { path: name.clone() },
+                _ => HandlerExpr::PropRead { path: name.clone() },
+            }
+        }
         Expr::Measurement { value, .. } => HandlerExpr::IntLit(*value as i32),
+        Expr::QualifiedRef { name } => {
+            let path = name.segments.last().cloned().unwrap_or_default();
+            match ns.get(&path) {
+                Some(TypeName::Bool) => HandlerExpr::BoolPropRead { path },
+                Some(TypeName::Str) => HandlerExpr::StrPropRead { path },
+                _ => HandlerExpr::PropRead { path },
+            }
+        }
+        Expr::ListLit { items, .. } => {
+            HandlerExpr::ListLit(items.iter().map(lower_any_scalar_literal).collect())
+        }
+        Expr::CollectionCall {
+            receiver,
+            method,
+            args,
+            ..
+        } => {
+            let path = receiver.segments.last().cloned().unwrap_or_default();
+            let elem = match ns.get(&path) {
+                Some(TypeName::Collection(elem)) => lower_collection_elem_type(*elem),
+                _ => panic!("lower_rhs_expr: collection call receiver not collection"),
+            };
+            match method.as_str() {
+                "append" => HandlerExpr::ListAppend {
+                    path,
+                    elem,
+                    value: Box::new(lower_rhs_expr(&args[0], ns, loop_ctx)),
+                },
+                "drop-last" => HandlerExpr::ListDropLast { path, elem },
+                _ => panic!("lower_rhs_expr: unknown collection method"),
+            }
+        }
         Expr::FloatLit { .. } => panic!("lower_rhs_expr: float not supported"),
         // Ratio / Color literals in handler RHS position are positional
         // errors rejected by `wasamoc check` (DD-M3-P2-002 / 003 confine
@@ -1035,5 +1252,111 @@ mod tests {
             }
             other => panic!("expected control-flow child, got {other:?}"),
         }
+    }
+
+    #[test]
+    fn collection_state_and_for_loop_lower_to_ir() {
+        let comp = lower_src(
+            r#"component C inherits W {
+                state labels: string[] = ["a", "b"]
+                WrapPanel { for label, i in labels { Text { text: label } } }
+            }"#,
+        );
+        assert_eq!(
+            comp.states[0],
+            IrState {
+                name: "labels".into(),
+                ty: IrStateType::Collection(IrType::Str),
+                default: IrLiteral::List(vec![
+                    IrLiteral::Str("a".into()),
+                    IrLiteral::Str("b".into())
+                ]),
+            }
+        );
+        match &comp.root.children[0] {
+            IrMember::ControlFlow(ControlFlowNode::For {
+                binder,
+                index_binder,
+                collection,
+                body,
+            }) => {
+                assert_eq!(binder, "label");
+                assert_eq!(index_binder.as_deref(), Some("i"));
+                assert_eq!(
+                    collection,
+                    &HandlerExpr::ListPropRead {
+                        path: "labels".into(),
+                        elem: IrType::Str,
+                    }
+                );
+                let IrMember::Widget(text) = &body[0] else {
+                    panic!("expected Text body");
+                };
+                assert_eq!(
+                    text.bindings[0].expr,
+                    HandlerExpr::ItemRead {
+                        binder: "label".into()
+                    }
+                );
+            }
+            other => panic!("expected For control-flow, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn for_index_binder_lowers_to_index_read() {
+        let comp = lower_src(
+            r#"component C inherits W {
+                state xs: i32[] = [1]
+                WrapPanel { for x, i in xs { VStack { spacing: i } } }
+            }"#,
+        );
+        match &comp.root.children[0] {
+            IrMember::ControlFlow(ControlFlowNode::For { body, .. }) => {
+                let IrMember::Widget(vstack) = &body[0] else {
+                    panic!("expected VStack body");
+                };
+                assert_eq!(
+                    vstack.bindings[0].expr,
+                    HandlerExpr::IndexRead { binder: "i".into() }
+                );
+            }
+            other => panic!("expected For control-flow, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn collection_assignment_lowers_to_handler_exprs() {
+        let comp = lower_src(
+            r#"component C inherits W {
+                state xs: i32[] = [1]
+                Button { clicked => { xs = xs.append(2); xs = xs.drop-last(); xs = [3]; } }
+            }"#,
+        );
+        let h = &comp.root.handlers[0];
+        let HandlerExpr::Block(exprs) = &h.expr else {
+            panic!("expected block");
+        };
+        assert!(matches!(
+            &exprs[0],
+            HandlerExpr::Assign {
+                lhs,
+                rhs,
+            } if lhs == "xs" && matches!(rhs.as_ref(), HandlerExpr::ListAppend { path, elem: IrType::I32, value } if path == "xs" && matches!(value.as_ref(), HandlerExpr::IntLit(2)))
+        ));
+        assert!(matches!(
+            &exprs[1],
+            HandlerExpr::Assign {
+                lhs,
+                rhs,
+            } if lhs == "xs" && matches!(rhs.as_ref(), HandlerExpr::ListDropLast { path, elem: IrType::I32 } if path == "xs")
+        ));
+        assert!(matches!(
+            &exprs[2],
+            HandlerExpr::Assign {
+                lhs,
+                rhs,
+            } if lhs == "xs" && matches!(rhs.as_ref(), HandlerExpr::ListLit(items) if items == &vec![IrLiteral::Int(3)])
+        ));
     }
 }

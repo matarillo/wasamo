@@ -135,20 +135,26 @@ loader/registry migration as one buildable commit bundle (risk R-A).
 Discharges ADR evidence item (1) (compile-time positive + negative
 controls) and the emit half of item (3). Branch/test-focused review
 tier for the reject branches; every matrix row fires a direct test
-(trap #4).
+(trap #4). T3 owns the author-reachable grammar and diagnostics only:
+loader dual-gate rejections stay T6-owned, and runtime guarded reads /
+collection writes stay T7-owned.
 
-- [ ] Lexer: reserve **`in`** (keyword enum + `scan_ident`); reject it
+- [x] Lexer: reserve **`in`** (keyword enum + `scan_ident`); reject it
       at identifier positions; regression test pins `in-out` as an
       unaffected single hyphenated lexeme. Bracket / paren / comma
       tokens as needed by the grammar below.
-- [ ] Parser: the `for` member (`for IDENT ("," IDENT)? in IDENT {
+- [x] AST + parser: collection-aware `TypeName` / list-literal /
+      collection-expression shapes; loop-local identifier expressions
+      that can be resolved only under a `for` body; the `for` member
+      (`for IDENT ("," IDENT)? in IDENT {
       iteration_body }`, LL(1) after the first IDENT); collection
       state types (`i32[]` / `string[]` / `bool[]`) + collection
       literal defaults; the collection-assignment statement
       (`IDENT "=" collection_expr` with `append` / `drop-last` /
       literal RHS; contextual method names — a state named `append` or
       `drop-last` still parses, positive test).
-- [ ] `wasamoc check`: the full DD-M3-P7-007 compile-time matrix —
+- [x] `wasamoc check`: the full author-reachable DD-M3-P7-007
+      compile-time matrix —
       header/target rows (non-collection target, non-IDENT target,
       qualified reference, binder collisions, keywords as binders),
       placement rows (ScrollView / Box / Grid / component-level),
@@ -161,12 +167,13 @@ tier for the reject branches; every matrix row fires a direct test
       compound ops, arity, wrong receiver / chained / bare copy, bare
       statement, qualified LHS / receiver, `collection_expr` outside
       RHS). Each diagnostic names its deferral where the row is a
-      recorded deferral.
-- [ ] Lower → `ControlFlowNode::For` + collection state / literal /
+      recorded deferral. Rows that only exist in textual IR or runtime
+      evaluation are explicitly mapped to T6/T7 in the close branch map.
+- [x] Lower → `ControlFlowNode::For` + collection state / literal /
       assignment forms; textual-IR emit per dsl_spec §8.4 / §8.5 /
       §8.9; binder reads in body bindings lower to the typed
       loop-local reads.
-- [ ] Tests: positive controls (representative `for` fixtures + the
+- [x] Tests: positive controls (representative `for` fixtures + the
       gallery shape compile and lower with declared binders /
       collection / single-child body; index-binder form; empty
       initial value) + one reject test per matrix row; emit roundtrip

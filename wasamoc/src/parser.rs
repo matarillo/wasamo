@@ -36,6 +36,13 @@ impl<'a> Parser<'a> {
             .unwrap_or(&Token::Eof)
     }
 
+    fn peek_n(&self, n: usize) -> &Token {
+        self.tokens
+            .get(self.pos + n)
+            .map(|t| &t.token)
+            .unwrap_or(&Token::Eof)
+    }
+
     fn current_span(&self) -> &Span {
         &self.tokens[self.pos].span
     }
@@ -78,6 +85,42 @@ impl<'a> Parser<'a> {
             Ok(self.advance())
         } else {
             Err(self.error(format!("expected `}}`, found {}", desc)))
+        }
+    }
+
+    fn expect_lparen(&mut self) -> Result<SpannedToken, Diagnostic> {
+        let desc = self.peek().description();
+        if matches!(self.peek(), Token::LParen) {
+            Ok(self.advance())
+        } else {
+            Err(self.error(format!("expected `(`, found {}", desc)))
+        }
+    }
+
+    fn expect_rparen(&mut self) -> Result<SpannedToken, Diagnostic> {
+        let desc = self.peek().description();
+        if matches!(self.peek(), Token::RParen) {
+            Ok(self.advance())
+        } else {
+            Err(self.error(format!("expected `)`, found {}", desc)))
+        }
+    }
+
+    fn expect_lbracket(&mut self) -> Result<SpannedToken, Diagnostic> {
+        let desc = self.peek().description();
+        if matches!(self.peek(), Token::LBracket) {
+            Ok(self.advance())
+        } else {
+            Err(self.error(format!("expected `[`, found {}", desc)))
+        }
+    }
+
+    fn expect_rbracket(&mut self) -> Result<SpannedToken, Diagnostic> {
+        let desc = self.peek().description();
+        if matches!(self.peek(), Token::RBracket) {
+            Ok(self.advance())
+        } else {
+            Err(self.error(format!("expected `]`, found {}", desc)))
         }
     }
 
@@ -161,13 +204,17 @@ impl<'a> Parser<'a> {
             return self.parse_conditional_member();
         }
 
+        if self.peek().is_kw(&Keyword::For) {
+            return self.parse_for_member();
+        }
+
         if self.peek().is_kw(&Keyword::Else)
             || self.peek().is_kw(&Keyword::Switch)
-            || self.peek().is_kw(&Keyword::For)
+            || self.peek().is_kw(&Keyword::In)
         {
             let desc = self.peek().description();
             return Err(self.error(format!(
-                "{} is reserved for the structural control-flow family but is not yet supported in M3-Phase 6",
+                "{} is reserved for the structural control-flow family but is not yet supported as a member",
                 desc
             )));
         }
@@ -207,6 +254,41 @@ impl<'a> Parser<'a> {
         let end_tok = self.expect_rbrace()?;
         Ok(Member::Conditional {
             condition,
+            body,
+            span: Span {
+                start: start.start,
+                end: end_tok.span.end,
+                line: start.line,
+                col: start.col,
+            },
+        })
+    }
+
+    fn parse_for_member(&mut self) -> Result<Member, Diagnostic> {
+        let start = self.current_span().clone();
+        self.expect_kw(Keyword::For)?;
+        let (binder, _) = self.expect_ident()?;
+        let index_binder = if matches!(self.peek(), Token::Comma) {
+            self.advance();
+            let (index, _) = self.expect_ident()?;
+            Some(index)
+        } else {
+            None
+        };
+        self.expect_kw(Keyword::In)?;
+        let collection = self.parse_expr()?;
+        self.expect_lbrace()?;
+
+        let mut body = Vec::new();
+        while !matches!(self.peek(), Token::RBrace | Token::Eof) {
+            body.push(self.parse_member()?);
+        }
+
+        let end_tok = self.expect_rbrace()?;
+        Ok(Member::For {
+            binder,
+            index_binder,
+            collection,
             body,
             span: Span {
                 start: start.start,
@@ -528,8 +610,26 @@ impl<'a> Parser<'a> {
         })
     }
 
-    fn parse_statement(&mut self) -> Result<Statement, Diagnostic> {
+    fn parse_statement(&mut self) -> Result<BlockStatement, Diagnostic> {
         let start = self.current_span().clone();
+        if self.starts_collection_call_expr() || matches!(self.peek(), Token::LBracket) {
+            let value = self.parse_expr()?;
+            let semi_desc = self.peek().description();
+            if !matches!(self.peek(), Token::Semicolon) {
+                return Err(self.error(format!("expected `;`, found {}", semi_desc)));
+            }
+            let semi = self.advance();
+            return Ok(BlockStatement::Expr(ExprStatement {
+                value,
+                span: Span {
+                    start: start.start,
+                    end: semi.span.end,
+                    line: start.line,
+                    col: start.col,
+                },
+            }));
+        }
+
         let target = self.parse_qualified_name()?;
         let op = self.parse_assign_op()?;
         let value = self.parse_expr()?;
@@ -539,7 +639,7 @@ impl<'a> Parser<'a> {
             return Err(self.error(format!("expected `;`, found {}", semi_desc)));
         }
         let semi = self.advance();
-        Ok(Statement {
+        Ok(BlockStatement::Assignment(Statement {
             target,
             op,
             value,
@@ -549,7 +649,24 @@ impl<'a> Parser<'a> {
                 line: start.line,
                 col: start.col,
             },
-        })
+        }))
+    }
+
+    fn starts_collection_call_expr(&self) -> bool {
+        if !matches!(self.peek(), Token::Ident(_)) {
+            return false;
+        }
+        let mut i = 1;
+        while matches!(self.peek_n(i), Token::Dot) {
+            if !matches!(self.peek_n(i + 1), Token::Ident(_)) {
+                return false;
+            }
+            if matches!(self.peek_n(i + 2), Token::LParen) {
+                return true;
+            }
+            i += 2;
+        }
+        false
     }
 
     fn parse_assign_op(&mut self) -> Result<AssignOp, Diagnostic> {
@@ -598,6 +715,7 @@ impl<'a> Parser<'a> {
                 | Token::FloatLit(_)
                 | Token::Measurement(_, _)
                 | Token::Ident(_)
+                | Token::LBracket
                 | Token::Kw(Keyword::True)
                 | Token::Kw(Keyword::False)
                 | Token::RatioLit(_, _)
@@ -606,6 +724,12 @@ impl<'a> Parser<'a> {
         if !is_valid {
             let desc = self.peek().description();
             return Err(self.error(format!("expected expression, found {}", desc)));
+        }
+        if matches!(self.peek(), Token::LBracket) {
+            return self.parse_list_lit();
+        }
+        if matches!(self.peek(), Token::Ident(_)) {
+            return self.parse_ident_expr();
         }
         let tok = self.advance();
         match tok.token {
@@ -624,10 +748,6 @@ impl<'a> Parser<'a> {
             Token::Measurement(v, u) => Ok(Expr::Measurement {
                 value: v,
                 unit: u,
-                span: tok.span,
-            }),
-            Token::Ident(name) => Ok(Expr::Ident {
-                name,
                 span: tok.span,
             }),
             Token::Kw(Keyword::True) => Ok(Expr::BoolLit {
@@ -651,33 +771,158 @@ impl<'a> Parser<'a> {
         }
     }
 
+    fn parse_ident_expr(&mut self) -> Result<Expr, Diagnostic> {
+        let start = self.current_span().clone();
+        let (first, first_span) = self.expect_ident()?;
+        let mut segments = vec![first];
+        let mut last_end = first_span.end;
+
+        while matches!(self.peek(), Token::Dot) {
+            if matches!(self.peek_n(1), Token::Ident(_)) && matches!(self.peek_n(2), Token::LParen)
+            {
+                self.advance(); // dot
+                let (method, _) = self.expect_ident()?;
+                self.expect_lparen()?;
+                let mut args = Vec::new();
+                if !matches!(self.peek(), Token::RParen) {
+                    loop {
+                        args.push(self.parse_expr()?);
+                        if matches!(self.peek(), Token::Comma) {
+                            self.advance();
+                            continue;
+                        }
+                        break;
+                    }
+                }
+                let end_tok = self.expect_rparen()?;
+                return Ok(Expr::CollectionCall {
+                    receiver: QualifiedName {
+                        segments,
+                        span: Span {
+                            start: start.start,
+                            end: last_end,
+                            line: start.line,
+                            col: start.col,
+                        },
+                    },
+                    method,
+                    args,
+                    span: Span {
+                        start: start.start,
+                        end: end_tok.span.end,
+                        line: start.line,
+                        col: start.col,
+                    },
+                });
+            }
+
+            self.advance(); // dot
+            let (seg, seg_span) = self.expect_ident()?;
+            last_end = seg_span.end;
+            segments.push(seg);
+        }
+
+        if segments.len() == 1 {
+            Ok(Expr::Ident {
+                name: segments.remove(0),
+                span: Span {
+                    start: start.start,
+                    end: last_end,
+                    line: start.line,
+                    col: start.col,
+                },
+            })
+        } else {
+            Ok(Expr::QualifiedRef {
+                name: QualifiedName {
+                    segments,
+                    span: Span {
+                        start: start.start,
+                        end: last_end,
+                        line: start.line,
+                        col: start.col,
+                    },
+                },
+            })
+        }
+    }
+
+    fn parse_list_lit(&mut self) -> Result<Expr, Diagnostic> {
+        let start = self.current_span().clone();
+        self.expect_lbracket()?;
+        let mut items = Vec::new();
+        if !matches!(self.peek(), Token::RBracket) {
+            loop {
+                items.push(self.parse_expr()?);
+                if matches!(self.peek(), Token::Comma) {
+                    self.advance();
+                    continue;
+                }
+                break;
+            }
+        }
+        let end_tok = self.expect_rbracket()?;
+        Ok(Expr::ListLit {
+            items,
+            span: Span {
+                start: start.start,
+                end: end_tok.span.end,
+                line: start.line,
+                col: start.col,
+            },
+        })
+    }
+
     fn parse_type_name(&mut self) -> Result<TypeName, Diagnostic> {
         let ident = self.peek().as_ident().map(|s| s.to_string());
-        match ident.as_deref() {
+        let scalar = match ident.as_deref() {
             Some("int") | Some("i32") => {
                 self.advance();
-                Ok(TypeName::Int)
+                TypeName::Int
             }
             Some("string") => {
                 self.advance();
-                Ok(TypeName::Str)
+                TypeName::Str
             }
             Some("float") => {
                 self.advance();
-                Ok(TypeName::Float)
+                TypeName::Float
             }
             Some("bool") => {
                 self.advance();
-                Ok(TypeName::Bool)
+                TypeName::Bool
             }
             Some(other) => {
                 let msg = format!("unknown type `{}`; expected i32, string, or bool", other);
-                Err(self.error(msg))
+                return Err(self.error(msg));
             }
             None => {
                 let desc = self.peek().description();
-                Err(self.error(format!("expected type name, found {}", desc)))
+                return Err(self.error(format!("expected type name, found {}", desc)));
             }
+        };
+
+        if matches!(self.peek(), Token::LBracket) {
+            self.advance();
+            self.expect_rbracket()?;
+            if matches!(self.peek(), Token::LBracket) {
+                return Err(self.error(
+                    "nested collection types are not supported in M3-Phase 7; collection state types are i32[], string[], or bool[]",
+                ));
+            }
+            let elem = match scalar {
+                TypeName::Int => CollectionElemType::Int,
+                TypeName::Str => CollectionElemType::Str,
+                TypeName::Bool => CollectionElemType::Bool,
+                TypeName::Float | TypeName::Collection(_) => {
+                    return Err(self.error(
+                        "collection state types are limited to i32[], string[], and bool[] in M3-Phase 7",
+                    ));
+                }
+            };
+            Ok(TypeName::Collection(elem))
+        } else {
+            Ok(scalar)
         }
     }
 }
@@ -919,7 +1164,9 @@ mod tests {
         if let Member::SignalHandler { signal, body, .. } = &def.members[0] {
             assert_eq!(signal, "clicked");
             assert_eq!(body.statements.len(), 1);
-            let stmt = &body.statements[0];
+            let BlockStatement::Assignment(stmt) = &body.statements[0] else {
+                panic!("expected assignment statement");
+            };
             assert_eq!(stmt.target.segments, vec!["root", "count"]);
             assert!(matches!(stmt.op, AssignOp::PlusEq));
             assert!(matches!(stmt.value, Expr::IntLit { value: 1, .. }));
@@ -956,6 +1203,87 @@ mod tests {
         } else {
             panic!("expected root widget");
         }
+    }
+
+    #[test]
+    fn collection_state_and_for_member_parse() {
+        let def = parse_ok(
+            r#"component C inherits W {
+                state labels: string[] = ["a", "b"]
+                WrapPanel { for label, i in labels { Text { text: label } } }
+            }"#,
+        );
+        assert!(matches!(
+            &def.members[0],
+            Member::StateMember {
+                ty: TypeName::Collection(CollectionElemType::Str),
+                default: Expr::ListLit { items, .. },
+                ..
+            } if items.len() == 2
+        ));
+        let Member::WidgetDecl { members, .. } = &def.members[1] else {
+            panic!("expected WrapPanel");
+        };
+        assert!(matches!(
+            &members[0],
+            Member::For {
+                binder,
+                index_binder: Some(index),
+                collection: Expr::Ident { name, .. },
+                body,
+                ..
+            } if binder == "label" && index == "i" && name == "labels" && body.len() == 1
+        ));
+    }
+
+    #[test]
+    fn collection_assignment_contextual_methods_parse() {
+        let def = parse_ok(
+            "component C inherits W { state append: i32[] = [] Button { clicked => { append = append.append(1); append = append.drop-last(); } } }",
+        );
+        let Member::WidgetDecl { members, .. } = &def.members[1] else {
+            panic!("expected Button");
+        };
+        let Member::SignalHandler { body, .. } = &members[0] else {
+            panic!("expected handler");
+        };
+        assert_eq!(body.statements.len(), 2);
+        let BlockStatement::Assignment(first) = &body.statements[0] else {
+            panic!("expected assignment");
+        };
+        assert!(matches!(
+            &first.value,
+            Expr::CollectionCall { receiver, method, args, .. }
+                if receiver.segments == ["append"] && method == "append" && args.len() == 1
+        ));
+    }
+
+    #[test]
+    fn for_keyword_binder_rejected_at_identifier_position() {
+        let msg = parse_err_msg(
+            "component C inherits W { state xs: i32[] = [] WrapPanel { for in in xs { Text {} } } }",
+        );
+        assert!(
+            msg.contains("expected identifier") && msg.contains("`in`"),
+            "message: {msg}"
+        );
+    }
+
+    #[test]
+    fn nested_collection_type_rejected_at_parse() {
+        let msg = parse_err_msg("component C inherits W { state xs: i32[][] = [] VStack {} }");
+        assert!(msg.contains("nested collection types"), "message: {msg}");
+    }
+
+    #[test]
+    fn chained_collection_call_rejected_at_parse() {
+        let msg = parse_err_msg(
+            "component C inherits W { state xs: i32[] = [] Button { clicked => { xs = xs.append(1).append(2); } } }",
+        );
+        assert!(
+            msg.contains("expected") && msg.contains(";") && msg.contains("."),
+            "message: {msg}"
+        );
     }
 
     #[test]
