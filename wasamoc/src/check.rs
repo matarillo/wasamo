@@ -1937,6 +1937,13 @@ fn check_property_bind_target_in_context(
     if matches!(source_ty, TypeName::Float) {
         return;
     }
+    if matches!(source_ty, TypeName::Collection(_)) {
+        // A collection in a scalar property position is the loop-external
+        // read deferral; `check_expr_type[_in_loop_context]` owns that
+        // diagnostic. Avoid emitting a redundant type-mismatch for the same
+        // expression.
+        return;
+    }
     if !types_compatible(&target_ty, &source_ty) {
         diags.push(error(
             filename,
@@ -2046,6 +2053,26 @@ fn is_collection_expr(expr: &Expr) -> bool {
     matches!(expr, Expr::ListLit { .. } | Expr::CollectionCall { .. })
 }
 
+fn names_collection_state(name: &str, ns: &Namespace) -> bool {
+    matches!(ns.get(name), Some(TypeName::Collection(_)))
+}
+
+/// DD-M3-P7-007 loop-external read row: a read that navigates a collection
+/// state outside the `for` header / loop-local binder path (bare name,
+/// whole-value qualified read, or member navigation such as `xs.length`) is a
+/// recorded deferral, not a scalar read. Returns the offending collection
+/// segment if any segment of the qualified name resolves to a collection
+/// state. The `for` header collection and the collection-assignment RHS are
+/// validated on their own paths and never reach this helper.
+fn collection_external_read_segment<'a>(qn: &'a QualifiedName, ns: &Namespace) -> Option<&'a str> {
+    qn.segments
+        .iter()
+        .map(String::as_str)
+        .find(|seg| names_collection_state(seg, ns))
+}
+
+const COLLECTION_EXTERNAL_READ_HINT: &str = "collection reads outside iteration not yet supported";
+
 #[allow(clippy::too_many_arguments)]
 fn check_collection_assignment_rhs(
     lhs_name: &str,
@@ -2152,15 +2179,23 @@ fn check_expr_type(
         | Expr::BoolLit { .. }
         | Expr::Ident { .. } => {
             if let Expr::Ident { name, span } = expr {
-                // Keyword-valued idents (e.g. mica, system, accent, title) are not state refs.
-                // State refs must resolve; plain keyword values pass through.
-                // We treat single-segment idents that are NOT in the namespace as widget property
-                // keyword values (e.g. `mica`, `system`). Only flag if it looks like a state ref
-                // (i.e. matches a declared name or fails to match anything known).
-                // Conservative: only reject if the namespace is non-empty and the name is
-                // clearly a reference (starts with `root.` etc.). Plain single idents are
-                // ambiguous (could be enum/keyword value); we don't reject them here.
-                let _ = (name, span);
+                // A bare collection-state read outside the `for` header /
+                // loop-local binder path is the DD-M3-P7-007 loop-external
+                // read deferral, not a scalar keyword value (DD-002 / Q5).
+                if names_collection_state(name, ns) {
+                    diags.push(error(
+                        filename,
+                        span,
+                        format!(
+                            "{COLLECTION_EXTERNAL_READ_HINT}; `{}` is a collection — read its elements through a `for` binder",
+                            name
+                        ),
+                    ));
+                }
+                // Otherwise: keyword-valued idents (e.g. mica, system, accent,
+                // title) are not state refs and pass through. Plain single
+                // idents are ambiguous (could be an enum/keyword value); we do
+                // not reject them here.
             }
             // String interpolation parts: check that Interp segments resolve
             // to declared state and stay within the currently supported
@@ -2168,6 +2203,17 @@ fn check_expr_type(
             if let Expr::StringLit { parts, .. } = expr {
                 for part in parts {
                     if let crate::ast::StringPart::Interp(qn) = part {
+                        if let Some(seg) = collection_external_read_segment(qn, ns) {
+                            diags.push(error(
+                                filename,
+                                &qn.span,
+                                format!(
+                                    "{COLLECTION_EXTERNAL_READ_HINT}; `{}` is a collection — read its elements through a `for` binder",
+                                    seg
+                                ),
+                            ));
+                            continue;
+                        }
                         check_qualified_name(qn, filename, ns, diags);
                         check_string_interpolation_type(qn, filename, ns, diags);
                     }
@@ -2186,6 +2232,17 @@ fn check_expr_type(
             let _ = (ctx_span, span);
         }
         Expr::QualifiedRef { name } => {
+            if let Some(seg) = collection_external_read_segment(name, ns) {
+                diags.push(error(
+                    filename,
+                    &name.span,
+                    format!(
+                        "{COLLECTION_EXTERNAL_READ_HINT}; `{}` is a collection — read its elements through a `for` binder",
+                        seg
+                    ),
+                ));
+                return;
+            }
             check_qualified_name(name, filename, ns, diags);
         }
         Expr::ListLit { span, .. } | Expr::CollectionCall { span, .. } => {
@@ -2275,6 +2332,17 @@ fn check_expr_type_in_loop_context(
                 ));
                 return;
             }
+            if let Some(seg) = collection_external_read_segment(name, ns) {
+                diags.push(error(
+                    filename,
+                    &name.span,
+                    format!(
+                        "{COLLECTION_EXTERNAL_READ_HINT}; `{}` is a collection — read its elements through a `for` binder",
+                        seg
+                    ),
+                ));
+                return;
+            }
             check_qualified_name(name, filename, ns, diags);
         }
         Expr::StringLit { parts, .. } => {
@@ -2294,9 +2362,38 @@ fn check_expr_type_in_loop_context(
                     }
                     let state_name = qn.segments.last().map(String::as_str).unwrap_or("");
                     if let Some(ctx) = loop_ctx {
-                        if state_name == ctx.binder || ctx.index_binder == Some(state_name) {
+                        if state_name == ctx.binder {
+                            // A bool element rendered through interpolation has
+                            // no defined display conversion, mirroring the
+                            // scalar bool-in-interpolation reject. The index
+                            // binder is always `i32` and stays admissible.
+                            if ctx.elem == CollectionElemType::Bool {
+                                diags.push(error(
+                                    filename,
+                                    &qn.span,
+                                    format!(
+                                        "bool loop binder `{}` cannot be used in string interpolation; \
+                                         bool formatting/display conversion is not defined in M3-Phase 7",
+                                        state_name
+                                    ),
+                                ));
+                            }
                             continue;
                         }
+                        if ctx.index_binder == Some(state_name) {
+                            continue;
+                        }
+                    }
+                    if let Some(seg) = collection_external_read_segment(qn, ns) {
+                        diags.push(error(
+                            filename,
+                            &qn.span,
+                            format!(
+                                "{COLLECTION_EXTERNAL_READ_HINT}; `{}` is a collection — read its elements through a `for` binder",
+                                seg
+                            ),
+                        ));
+                        continue;
                     }
                     check_qualified_name(qn, filename, ns, diags);
                     check_string_interpolation_type(qn, filename, ns, diags);
@@ -2879,6 +2976,62 @@ mod tests {
                 "{errs:?}"
             );
         }
+    }
+
+    #[test]
+    fn loop_external_collection_reads_rejected() {
+        // DD-M3-P7-007 loop-external read row: bare name, whole-value
+        // qualified read, member navigation, and a collection read in a
+        // scalar assignment all reject with the named deferral instead of
+        // being silently accepted or surfaced as a misleading "undefined
+        // state" / type-mismatch diagnostic.
+        let cases = [
+            // bare collection ident in an (untyped) property position
+            "component C inherits W { state xs: i32[] = [] Foo { bar: xs } }",
+            // bare collection ident in a typed property position
+            "component C inherits W { state xs: i32[] = [] Text { text: xs } }",
+            // member navigation (`xs.length`) — previously "undefined state"
+            "component C inherits W { state xs: i32[] = [] Text { text: xs.length } }",
+            // whole-value qualified read (`root.xs`)
+            "component C inherits W { state xs: i32[] = [] Text { text: root.xs } }",
+            // bare collection ident inside string interpolation
+            r#"component C inherits W { state xs: i32[] = [] Text { text: "\{xs}" } }"#,
+            // member navigation inside string interpolation
+            r#"component C inherits W { state xs: i32[] = [] Text { text: "\{xs.length}" } }"#,
+            // collection read as a scalar handler RHS
+            "component C inherits W { state n: i32 = 0 state xs: i32[] = [] Button { clicked => { n = xs; } } }",
+            // loop-external read of the *iterated* collection inside the body
+            "component C inherits W { state xs: i32[] = [] WrapPanel { for x in xs { Text { text: xs } } } }",
+        ];
+        for src in cases {
+            let errs = errors(src);
+            assert!(
+                errs.iter()
+                    .any(|e| e.contains("collection reads outside iteration")),
+                "{src}: {errs:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn bool_loop_binder_in_interpolation_rejected() {
+        // A bool element rendered through interpolation has no defined display
+        // conversion — the same contract scalar bool states get, applied to
+        // the loop binder so the bool surface cannot be smuggled in.
+        let errs = errors(
+            r#"component C inherits W { state flags: bool[] = [] WrapPanel { for f in flags { Text { text: "v=\{f}" } } } }"#,
+        );
+        assert!(
+            errs.iter()
+                .any(|e| e.contains("bool loop binder") && e.contains("bool formatting")),
+            "{errs:?}"
+        );
+        // Positive controls: a string element and the i32 index binder both
+        // remain admissible in interpolation.
+        let ok = check_src(
+            r#"component C inherits W { state labels: string[] = [] WrapPanel { for label, i in labels { Text { text: "\{label} #\{i}" } } } }"#,
+        );
+        assert!(!ok.has_errors(), "{:?}", ok.diagnostics);
     }
 
     #[test]

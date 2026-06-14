@@ -832,6 +832,18 @@ impl<'a> Parser<'a> {
             segments.push(seg);
         }
 
+        // Indexed collection reads (`xs[i]`) have no grammar in M3-Phase 7;
+        // an Ident immediately followed by `[` is the loop-external indexed
+        // read deferral (DD-M3-P7-007). Reject with a named diagnostic rather
+        // than the generic "expected member" fallthrough. A list literal `[…]`
+        // is parsed before this path is reached, so a `[` here is always a
+        // post-ident index.
+        if matches!(self.peek(), Token::LBracket) {
+            return Err(self.error(
+                "collection reads outside iteration not yet supported; indexed reads (`xs[i]`) are deferred in M3-Phase 7 — read elements through a `for` binder",
+            ));
+        }
+
         if segments.len() == 1 {
             Ok(Expr::Ident {
                 name: segments.remove(0),
@@ -1296,6 +1308,18 @@ mod tests {
         );
         assert!(
             msg.contains("chained collection expressions are deferred"),
+            "message: {msg}"
+        );
+    }
+
+    #[test]
+    fn indexed_collection_read_rejected_at_parse() {
+        // `xs[0]` has no grammar; reject with the named loop-external read
+        // deferral rather than a generic "expected member" fallthrough.
+        let msg =
+            parse_err_msg("component C inherits W { state xs: i32[] = [] Text { text: xs[0] } }");
+        assert!(
+            msg.contains("collection reads outside iteration") && msg.contains("indexed reads"),
             "message: {msg}"
         );
     }
