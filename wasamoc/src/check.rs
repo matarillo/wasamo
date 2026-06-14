@@ -1,6 +1,9 @@
 use std::collections::HashMap;
 
-use crate::ast::{ComponentDef, Expr, Member, QualifiedName, Span, TrackAxis, TrackSize, TypeName};
+use crate::ast::{
+    BlockStatement, CollectionElemType, ComponentDef, Expr, Member, QualifiedName, Span, TrackAxis,
+    TrackSize, TypeName,
+};
 use crate::diagnostic::Diagnostic;
 
 const KNOWN_WIDGET_TYPES: &[&str] = &[
@@ -54,6 +57,31 @@ pub const HOST_STATIC_ATTRS: &[&str] = &["title", "backdrop", "theme"];
 
 /// Flat namespace of declared state names → their types.
 pub type Namespace = HashMap<String, TypeName>;
+
+struct LoopContext<'a> {
+    binder: &'a str,
+    index_binder: Option<&'a str>,
+    elem: CollectionElemType,
+}
+
+fn is_loop_local_ident(name: &str, loop_ctx: Option<&LoopContext<'_>>) -> bool {
+    loop_ctx
+        .map(|ctx| name == ctx.binder || ctx.index_binder == Some(name))
+        .unwrap_or(false)
+}
+
+fn qualified_loop_local_segment<'a>(
+    qn: &'a QualifiedName,
+    loop_ctx: Option<&LoopContext<'_>>,
+) -> Option<&'a str> {
+    if qn.segments.len() <= 1 {
+        return None;
+    }
+    qn.segments
+        .iter()
+        .map(String::as_str)
+        .find(|segment| is_loop_local_ident(segment, loop_ctx))
+}
 
 pub struct CheckResult {
     pub diagnostics: Vec<Diagnostic>,
@@ -119,6 +147,22 @@ fn check_state_defaults(
             span,
         } = member
         {
+            if let TypeName::Collection(elem) = ty {
+                check_collection_literal(default, *elem, span, filename, "state default", diags);
+                continue;
+            }
+            if matches!(default, Expr::ListLit { .. }) {
+                diags.push(error(
+                    filename,
+                    default.span(),
+                    format!(
+                        "list literal default is only valid for collection states; scalar state `{}` is declared `{}`",
+                        name,
+                        type_name_display(ty),
+                    ),
+                ));
+                continue;
+            }
             // Validate the expression form first (rejects FloatLit, plus
             // positional Ratio / Color literals per dsl_spec §4.9). The
             // type-compatibility check below operates on the static type
@@ -153,12 +197,108 @@ fn check_state_defaults(
 /// determined here (e.g. an identifier that does not resolve to a declared
 /// state name — treated as a widget-property keyword value).
 fn expr_static_type(expr: &Expr, ns: &Namespace) -> Option<TypeName> {
+    expr_static_type_in_context(expr, ns, None)
+}
+
+fn check_collection_literal(
+    expr: &Expr,
+    elem: CollectionElemType,
+    ctx_span: &Span,
+    filename: &str,
+    position: &str,
+    diags: &mut Vec<Diagnostic>,
+) {
+    let Expr::ListLit { items, .. } = expr else {
+        diags.push(error(
+            filename,
+            ctx_span,
+            format!(
+                "collection {} for `{}` must be a list literal of `{}` elements",
+                position,
+                type_name_display(&TypeName::Collection(elem)),
+                collection_elem_display(elem)
+            ),
+        ));
+        return;
+    };
+
+    for item in items {
+        match (elem, item) {
+            (CollectionElemType::Int, Expr::IntLit { .. })
+            | (CollectionElemType::Str, Expr::StringLit { .. })
+            | (CollectionElemType::Bool, Expr::BoolLit { .. }) => {}
+            (_, Expr::ListLit { .. }) => diags.push(error(
+                filename,
+                item.span(),
+                "nested list literals are not supported in M3-Phase 7 collection values",
+            )),
+            (_, Expr::Ident { .. } | Expr::QualifiedRef { .. } | Expr::CollectionCall { .. }) => {
+                diags.push(error(
+                    filename,
+                    item.span(),
+                    "collection literal elements must be scalar literals; collection expressions are not yet supported",
+                ));
+            }
+            _ => diags.push(error(
+                filename,
+                item.span(),
+                format!(
+                    "collection literal element type mismatch: expected `{}`, got `{}`",
+                    collection_elem_display(elem),
+                    expr_type_name_for_diagnostic(item)
+                ),
+            )),
+        }
+    }
+}
+
+fn expr_type_name_for_diagnostic(expr: &Expr) -> &'static str {
+    match expr {
+        Expr::IntLit { .. } | Expr::Measurement { .. } => "i32",
+        Expr::StringLit { .. } => "string",
+        Expr::BoolLit { .. } => "bool",
+        Expr::FloatLit { .. } => "float",
+        Expr::ListLit { .. } => "list",
+        Expr::RatioLit { .. } => "ratio",
+        Expr::ColorLit { .. } => "color",
+        Expr::Ident { .. } | Expr::QualifiedRef { .. } | Expr::CollectionCall { .. } => {
+            "expression"
+        }
+        Expr::UnsupportedOperator { .. } => "operator",
+    }
+}
+
+fn expr_static_type_in_context(
+    expr: &Expr,
+    ns: &Namespace,
+    loop_ctx: Option<&LoopContext<'_>>,
+) -> Option<TypeName> {
     match expr {
         Expr::IntLit { .. } | Expr::Measurement { .. } => Some(TypeName::Int),
         Expr::FloatLit { .. } => Some(TypeName::Float),
         Expr::StringLit { .. } => Some(TypeName::Str),
         Expr::BoolLit { .. } => Some(TypeName::Bool),
-        Expr::Ident { name, .. } => ns.get(name).cloned(),
+        Expr::Ident { name, .. } => {
+            if let Some(ctx) = loop_ctx {
+                if name == ctx.binder {
+                    return Some(collection_elem_as_type(ctx.elem));
+                }
+                if ctx.index_binder == Some(name.as_str()) {
+                    return Some(TypeName::Int);
+                }
+            }
+            ns.get(name).cloned()
+        }
+        Expr::QualifiedRef { name } => name
+            .segments
+            .last()
+            .and_then(|state| ns.get(state).cloned()),
+        Expr::ListLit { items, .. } => infer_list_type(items, ns, loop_ctx),
+        Expr::CollectionCall { receiver, .. } => receiver
+            .segments
+            .last()
+            .and_then(|state| ns.get(state).cloned())
+            .filter(|ty| matches!(ty, TypeName::Collection(_))),
         // Ratio / Color are Box-internal value types (DD-M3-P2-002 /
         // DD-M3-P2-003 Option A); they have no `TypeName` entry. Position
         // and value validity for these literals are checked at the
@@ -168,6 +308,31 @@ fn expr_static_type(expr: &Expr, ns: &Namespace) -> Option<TypeName> {
     }
 }
 
+fn infer_list_type(
+    items: &[Expr],
+    ns: &Namespace,
+    loop_ctx: Option<&LoopContext<'_>>,
+) -> Option<TypeName> {
+    let mut elem_ty: Option<TypeName> = None;
+    for item in items {
+        let ty = expr_static_type_in_context(item, ns, loop_ctx)?;
+        if matches!(ty, TypeName::Collection(_)) {
+            return None;
+        }
+        match &elem_ty {
+            Some(existing) if !types_compatible(existing, &ty) => return None,
+            None => elem_ty = Some(ty),
+            _ => {}
+        }
+    }
+    elem_ty.and_then(|ty| match ty {
+        TypeName::Int => Some(TypeName::Collection(CollectionElemType::Int)),
+        TypeName::Str => Some(TypeName::Collection(CollectionElemType::Str)),
+        TypeName::Bool => Some(TypeName::Collection(CollectionElemType::Bool)),
+        TypeName::Float | TypeName::Collection(_) => None,
+    })
+}
+
 fn types_compatible(a: &TypeName, b: &TypeName) -> bool {
     matches!(
         (a, b),
@@ -175,15 +340,44 @@ fn types_compatible(a: &TypeName, b: &TypeName) -> bool {
             | (TypeName::Str, TypeName::Str)
             | (TypeName::Bool, TypeName::Bool)
             | (TypeName::Float, TypeName::Float)
+            | (
+                TypeName::Collection(CollectionElemType::Int),
+                TypeName::Collection(CollectionElemType::Int)
+            )
+            | (
+                TypeName::Collection(CollectionElemType::Str),
+                TypeName::Collection(CollectionElemType::Str)
+            )
+            | (
+                TypeName::Collection(CollectionElemType::Bool),
+                TypeName::Collection(CollectionElemType::Bool)
+            )
     )
 }
 
-fn type_name_display(ty: &TypeName) -> &'static str {
+fn collection_elem_as_type(elem: CollectionElemType) -> TypeName {
+    match elem {
+        CollectionElemType::Int => TypeName::Int,
+        CollectionElemType::Str => TypeName::Str,
+        CollectionElemType::Bool => TypeName::Bool,
+    }
+}
+
+fn collection_elem_display(elem: CollectionElemType) -> &'static str {
+    match elem {
+        CollectionElemType::Int => "i32",
+        CollectionElemType::Str => "string",
+        CollectionElemType::Bool => "bool",
+    }
+}
+
+fn type_name_display(ty: &TypeName) -> String {
     match ty {
-        TypeName::Int => "i32",
-        TypeName::Str => "string",
-        TypeName::Float => "float",
-        TypeName::Bool => "bool",
+        TypeName::Int => "i32".to_string(),
+        TypeName::Str => "string".to_string(),
+        TypeName::Float => "float".to_string(),
+        TypeName::Bool => "bool".to_string(),
+        TypeName::Collection(elem) => format!("{}[]", collection_elem_display(*elem)),
     }
 }
 
@@ -529,13 +723,24 @@ fn check_scrollview_child_count(
     // Content  if c { … } }`) does not slip past the widget-only count.
     let mut has_conditional = false;
     for m in members {
-        if let Member::Conditional { span, .. } = m {
-            has_conditional = true;
-            diags.push(error(
-                filename,
-                span,
-                "`ScrollView` content child must be a single widget; a conditional member is not valid directly in ScrollView (wrap it in the content widget)",
-            ));
+        match m {
+            Member::Conditional { span, .. } => {
+                has_conditional = true;
+                diags.push(error(
+                    filename,
+                    span,
+                    "`ScrollView` content child must be a single widget; a conditional member is not valid directly in ScrollView (wrap it in the content widget)",
+                ));
+            }
+            Member::For { span, .. } => {
+                has_conditional = true;
+                diags.push(error(
+                    filename,
+                    span,
+                    "`ScrollView` content child must be a single widget; a `for` member is not valid directly in ScrollView (wrap it in the content widget)",
+                ));
+            }
+            _ => {}
         }
     }
     if has_conditional {
@@ -576,7 +781,12 @@ fn check_box_child_count(
     // log.md T4 migration audit).
     let child_count = members
         .iter()
-        .filter(|m| matches!(m, Member::WidgetDecl { .. } | Member::Conditional { .. }))
+        .filter(|m| {
+            matches!(
+                m,
+                Member::WidgetDecl { .. } | Member::Conditional { .. } | Member::For { .. }
+            )
+        })
         .count();
     if child_count > 1 {
         diags.push(error(
@@ -728,30 +938,47 @@ fn check_if_condition(
     condition: &Expr,
     filename: &str,
     ns: &Namespace,
+    loop_ctx: Option<&LoopContext<'_>>,
     diags: &mut Vec<Diagnostic>,
 ) {
     match condition {
         Expr::BoolLit { .. } => {}
-        Expr::Ident { name, span } => match ns.get(name) {
-            Some(TypeName::Bool) => {}
-            Some(other) => diags.push(error(
-                filename,
-                span,
-                format!(
-                    "`if` condition must be `bool`; state `{}` is declared `{}` (dsl_spec §4.14)",
-                    name,
-                    type_name_display(other)
-                ),
-            )),
-            None => diags.push(error(
-                filename,
-                span,
-                format!(
-                    "`if` condition identifier `{}` is not declared; declare it as `state {}: bool = false`",
-                    name, name
-                ),
-            )),
-        },
+        Expr::Ident { name, span } => {
+            if loop_ctx
+                .map(|ctx| name == ctx.binder || ctx.index_binder == Some(name.as_str()))
+                .unwrap_or(false)
+            {
+                diags.push(error(
+                    filename,
+                    span,
+                    "loop binders in `if` conditions are deferred in M3-Phase 7; conditions resolve only to bool state",
+                ));
+                return;
+            }
+            match ns.get(name) {
+                Some(TypeName::Bool) => {}
+                Some(other) => diags.push(error(
+                    filename,
+                    span,
+                    format!(
+                        "`if` condition must be `bool`; state `{}` is declared `{}` (dsl_spec §4.14)",
+                        name,
+                        type_name_display(other)
+                    ),
+                )),
+                None => diags.push(error(
+                    filename,
+                    span,
+                    format!(
+                        "`if` condition identifier `{}` is not declared; declare it as `state {}: bool = false`",
+                        name, name
+                    ),
+                )),
+            }
+        }
+        Expr::QualifiedRef { name } => {
+            check_qualified_name(name, filename, ns, diags);
+        }
         Expr::UnsupportedOperator { op, span } => diags.push(error(
             filename,
             span,
@@ -760,11 +987,13 @@ fn check_if_condition(
                 op
             ),
         )),
-        _ => diags.push(error(
-            filename,
-            condition.span(),
-            "`if` condition must be a bool literal or declared bool state identifier (dsl_spec §4.14)",
-        )),
+        _ => {
+            diags.push(error(
+                filename,
+                condition.span(),
+                "`if` condition must be a bool literal or declared bool state identifier (dsl_spec §4.14)",
+            ));
+        }
     }
 }
 
@@ -787,6 +1016,11 @@ fn check_if_body(body: &[Member], span: &Span, filename: &str, diags: &mut Vec<D
                 filename,
                 span,
                 "a bare nested `if` is not admitted directly in an `if` body in M3-Phase 6; wrap it in a widget container",
+            )),
+            Member::For { span, .. } => diags.push(error(
+                filename,
+                span,
+                "a bare nested `for` is not admitted directly in an `if` body in M3-Phase 7; wrap it in a widget container",
             )),
             Member::PropertyBind { span, .. }
             | Member::PropertyDecl { span, .. }
@@ -917,6 +1151,13 @@ fn check_grid(members: &[Member], grid_span: &Span, filename: &str, diags: &mut 
             }
             Member::Conditional { span, .. } => {
                 diags.push(error(filename, span, "`Grid` children must be wrapped in `Cell`; conditional members may appear inside a Cell content widget, not directly in Grid"));
+            }
+            Member::For { span, .. } => {
+                diags.push(error(
+                    filename,
+                    span,
+                    "`Grid` children must be wrapped in `Cell`; direct `for` members are not valid in Grid",
+                ));
             }
             Member::StateMember { .. } | Member::PropertyDecl { .. } => {}
         }
@@ -1083,6 +1324,11 @@ fn check_cell(
                 filename,
                 span,
                 "`Cell` admits exactly one direct widget content child; put conditional members inside that content widget",
+            )),
+            Member::For { span, .. } => diags.push(error(
+                filename,
+                span,
+                "`Cell` admits exactly one direct widget content child; direct `for` members are not valid in Grid placement contexts",
             )),
             _ => {}
         }
@@ -1329,7 +1575,43 @@ fn ranges_overlap(s1: i64, len1: i64, s2: i64, len2: i64) -> bool {
 
 /// Second pass: validate widget types, property-bind types, and name references.
 fn check_members(members: &[Member], filename: &str, ns: &Namespace, diags: &mut Vec<Diagnostic>) {
-    check_members_inner(members, None, None, filename, ns, diags);
+    let loop_binders = collect_loop_binders(members);
+    check_members_inner(
+        members,
+        None,
+        None,
+        filename,
+        ns,
+        diags,
+        None,
+        false,
+        &loop_binders,
+    );
+}
+
+fn collect_loop_binders(members: &[Member]) -> Vec<String> {
+    let mut binders = Vec::new();
+    for member in members {
+        match member {
+            Member::For {
+                binder,
+                index_binder,
+                body,
+                ..
+            } => {
+                binders.push(binder.clone());
+                if let Some(index) = index_binder {
+                    binders.push(index.clone());
+                }
+                binders.extend(collect_loop_binders(body));
+            }
+            Member::WidgetDecl { members, .. } | Member::Conditional { body: members, .. } => {
+                binders.extend(collect_loop_binders(members));
+            }
+            _ => {}
+        }
+    }
+    binders
 }
 
 fn check_members_inner(
@@ -1339,6 +1621,9 @@ fn check_members_inner(
     filename: &str,
     ns: &Namespace,
     diags: &mut Vec<Diagnostic>,
+    loop_ctx: Option<&LoopContext<'_>>,
+    inside_for_template: bool,
+    all_loop_binders: &[String],
 ) {
     for member in members {
         match member {
@@ -1425,14 +1710,25 @@ fn check_members_inner(
                         );
                     }
                 } else {
-                    check_expr_type(value, span, filename, ns, diags);
-                    check_property_bind_target(
+                    check_expr_type_in_loop_context(
+                        value,
+                        span,
+                        filename,
+                        ns,
+                        loop_ctx,
+                        inside_for_template,
+                        all_loop_binders,
+                        diags,
+                    );
+                    check_property_bind_target_in_context(
                         enclosing_widget,
                         name,
                         value,
                         span,
                         filename,
                         ns,
+                        loop_ctx,
+                        inside_for_template,
                         diags,
                     );
                 }
@@ -1465,6 +1761,9 @@ fn check_members_inner(
                         filename,
                         ns,
                         diags,
+                        loop_ctx,
+                        inside_for_template,
+                        all_loop_binders,
                     );
                 } else {
                     if !KNOWN_WIDGET_TYPES.contains(&type_name.as_str()) {
@@ -1498,14 +1797,23 @@ fn check_members_inner(
                         filename,
                         ns,
                         diags,
+                        loop_ctx,
+                        inside_for_template,
+                        all_loop_binders,
                     );
                 }
             }
 
-            Member::SignalHandler { body, .. } => {
+            Member::SignalHandler { body, span, .. } => {
+                if inside_for_template {
+                    diags.push(error(
+                        filename,
+                        span,
+                        "handlers inside a `for` body template are deferred in M3-Phase 7; put mutation handlers outside the `for` body",
+                    ));
+                }
                 for stmt in &body.statements {
-                    check_qualified_name(&stmt.target, filename, ns, diags);
-                    check_expr_type(&stmt.value, &stmt.span, filename, ns, diags);
+                    check_block_statement(stmt, filename, ns, diags, loop_ctx, all_loop_binders);
                 }
             }
 
@@ -1521,9 +1829,63 @@ fn check_members_inner(
                         "component-level `if` is not supported in M3-Phase 6; put the `if` inside a widget body",
                     ));
                 }
-                check_if_condition(condition, filename, ns, diags);
+                check_if_condition(condition, filename, ns, loop_ctx, diags);
                 check_if_body(body, span, filename, diags);
-                check_members_inner(body, enclosing_widget, parent_widget, filename, ns, diags);
+                check_members_inner(
+                    body,
+                    enclosing_widget,
+                    parent_widget,
+                    filename,
+                    ns,
+                    diags,
+                    loop_ctx,
+                    inside_for_template,
+                    all_loop_binders,
+                );
+            }
+
+            Member::For {
+                binder,
+                index_binder,
+                collection,
+                body,
+                span,
+            } => {
+                check_for_member(
+                    binder,
+                    index_binder.as_deref(),
+                    collection,
+                    body,
+                    span,
+                    enclosing_widget,
+                    filename,
+                    ns,
+                    diags,
+                    inside_for_template,
+                );
+                let elem = match collection {
+                    Expr::Ident { name, .. } => match ns.get(name) {
+                        Some(TypeName::Collection(elem)) => *elem,
+                        _ => CollectionElemType::Int,
+                    },
+                    _ => CollectionElemType::Int,
+                };
+                let child_ctx = LoopContext {
+                    binder,
+                    index_binder: index_binder.as_deref(),
+                    elem,
+                };
+                check_members_inner(
+                    body,
+                    enclosing_widget,
+                    parent_widget,
+                    filename,
+                    ns,
+                    diags,
+                    Some(&child_ctx),
+                    true,
+                    all_loop_binders,
+                );
             }
 
             // Grid track-list members are validated by the enclosing
@@ -1538,16 +1900,15 @@ fn check_members_inner(
     }
 }
 
-/// Type-check a property binding's RHS against the target property's
-/// declared type (if known via the widget catalog). Soft when either the
-/// enclosing widget context or the property entry is unknown.
-fn check_property_bind_target(
+fn check_property_bind_target_in_context(
     enclosing_widget: Option<&str>,
     prop_name: &str,
     value: &Expr,
     span: &Span,
     filename: &str,
     ns: &Namespace,
+    loop_ctx: Option<&LoopContext<'_>>,
+    inside_for_template: bool,
     diags: &mut Vec<Diagnostic>,
 ) {
     let Some(widget) = enclosing_widget else {
@@ -1556,11 +1917,31 @@ fn check_property_bind_target(
     let Some(target_ty) = widget_prop_type(widget, prop_name) else {
         return;
     };
-    let Some(source_ty) = expr_static_type(value, ns) else {
+    let Some(source_ty) = expr_static_type_in_context(value, ns, loop_ctx) else {
+        if inside_for_template {
+            if let Expr::Ident { name, span } = value {
+                if !is_loop_local_ident(name, loop_ctx) && !ns.contains_key(name) {
+                    diags.push(error(
+                        filename,
+                        span,
+                        format!(
+                            "identifier `{}` is not a declared state or loop binder in this `for` body",
+                            name
+                        ),
+                    ));
+                }
+            }
+        }
         return;
     };
     if matches!(source_ty, TypeName::Float) {
-        // FloatLit is rejected separately; avoid the redundant mismatch.
+        return;
+    }
+    if matches!(source_ty, TypeName::Collection(_)) {
+        // A collection in a scalar property position is the loop-external
+        // read deferral; `check_expr_type[_in_loop_context]` owns that
+        // diagnostic. Avoid emitting a redundant type-mismatch for the same
+        // expression.
         return;
     }
     if !types_compatible(&target_ty, &source_ty) {
@@ -1578,6 +1959,212 @@ fn check_property_bind_target(
     }
 }
 
+fn check_block_statement(
+    stmt: &BlockStatement,
+    filename: &str,
+    ns: &Namespace,
+    diags: &mut Vec<Diagnostic>,
+    loop_ctx: Option<&LoopContext<'_>>,
+    all_loop_binders: &[String],
+) {
+    match stmt {
+        BlockStatement::Assignment(stmt) => {
+            check_qualified_name(&stmt.target, filename, ns, diags);
+            let lhs_name = stmt
+                .target
+                .segments
+                .last()
+                .map(String::as_str)
+                .unwrap_or("");
+            match ns.get(lhs_name) {
+                Some(TypeName::Collection(elem)) => {
+                    if stmt.target.segments.len() != 1 {
+                        diags.push(error(
+                            filename,
+                            &stmt.target.span,
+                            "collection mutation requires a local state name; qualified collection assignment is deferred",
+                        ));
+                    }
+                    if !matches!(stmt.op, crate::ast::AssignOp::Eq) {
+                        diags.push(error(
+                            filename,
+                            &stmt.span,
+                            "compound assignment on collection states is not supported in M3-Phase 7; use `xs = xs.append(value)` or `xs = xs.drop-last()`",
+                        ));
+                        return;
+                    }
+                    check_collection_assignment_rhs(
+                        lhs_name,
+                        *elem,
+                        &stmt.value,
+                        &stmt.span,
+                        filename,
+                        ns,
+                        loop_ctx,
+                        diags,
+                    );
+                }
+                Some(_) | None => {
+                    if is_collection_expr(&stmt.value) {
+                        diags.push(error(
+                            filename,
+                            stmt.value.span(),
+                            "collection expressions are valid only as the RHS of an assignment to a collection state",
+                        ));
+                    } else {
+                        check_expr_type_in_loop_context(
+                            &stmt.value,
+                            &stmt.span,
+                            filename,
+                            ns,
+                            loop_ctx,
+                            false,
+                            all_loop_binders,
+                            diags,
+                        );
+                    }
+                }
+            }
+        }
+        BlockStatement::Expr(expr_stmt) => {
+            if is_collection_expr(&expr_stmt.value) {
+                diags.push(error(
+                    filename,
+                    &expr_stmt.span,
+                    "collection expressions are not statements in M3-Phase 7; assign them back to the collection state",
+                ));
+            } else {
+                check_expr_type_in_loop_context(
+                    &expr_stmt.value,
+                    &expr_stmt.span,
+                    filename,
+                    ns,
+                    loop_ctx,
+                    false,
+                    all_loop_binders,
+                    diags,
+                );
+            }
+        }
+    }
+}
+
+fn is_collection_expr(expr: &Expr) -> bool {
+    matches!(expr, Expr::ListLit { .. } | Expr::CollectionCall { .. })
+}
+
+fn names_collection_state(name: &str, ns: &Namespace) -> bool {
+    matches!(ns.get(name), Some(TypeName::Collection(_)))
+}
+
+/// DD-M3-P7-007 loop-external read row: a read that navigates a collection
+/// state outside the `for` header / loop-local binder path (bare name,
+/// whole-value qualified read, or member navigation such as `xs.length`) is a
+/// recorded deferral, not a scalar read. Returns the offending collection
+/// segment if any segment of the qualified name resolves to a collection
+/// state. The `for` header collection and the collection-assignment RHS are
+/// validated on their own paths and never reach this helper.
+fn collection_external_read_segment<'a>(qn: &'a QualifiedName, ns: &Namespace) -> Option<&'a str> {
+    qn.segments
+        .iter()
+        .map(String::as_str)
+        .find(|seg| names_collection_state(seg, ns))
+}
+
+const COLLECTION_EXTERNAL_READ_HINT: &str = "collection reads outside iteration not yet supported";
+
+#[allow(clippy::too_many_arguments)]
+fn check_collection_assignment_rhs(
+    lhs_name: &str,
+    elem: CollectionElemType,
+    rhs: &Expr,
+    span: &Span,
+    filename: &str,
+    ns: &Namespace,
+    loop_ctx: Option<&LoopContext<'_>>,
+    diags: &mut Vec<Diagnostic>,
+) {
+    match rhs {
+        Expr::ListLit { .. } => {
+            check_collection_literal(rhs, elem, span, filename, "assignment RHS", diags);
+        }
+        Expr::CollectionCall {
+            receiver,
+            method,
+            args,
+            ..
+        } => {
+            if receiver.segments.len() != 1 || receiver.segments[0] != lhs_name {
+                diags.push(error(
+                    filename,
+                    &receiver.span,
+                    "collection assignment RHS must use the same local collection as its receiver; general collection expressions are deferred",
+                ));
+                return;
+            }
+            match method.as_str() {
+                "append" => {
+                    if args.len() != 1 {
+                        diags.push(error(
+                            filename,
+                            rhs.span(),
+                            "`append` takes exactly one element argument",
+                        ));
+                        return;
+                    }
+                    let Some(arg_ty) = expr_static_type_in_context(&args[0], ns, loop_ctx) else {
+                        diags.push(error(
+                            filename,
+                            args[0].span(),
+                            "append element must be a scalar expression with a known type",
+                        ));
+                        return;
+                    };
+                    if !types_compatible(&collection_elem_as_type(elem), &arg_ty) {
+                        diags.push(error(
+                            filename,
+                            args[0].span(),
+                            format!(
+                                "`append` element type mismatch: collection `{}` expects `{}`, got `{}`",
+                                lhs_name,
+                                collection_elem_display(elem),
+                                type_name_display(&arg_ty),
+                            ),
+                        ));
+                    }
+                }
+                "drop-last" => {
+                    if !args.is_empty() {
+                        diags.push(error(
+                            filename,
+                            rhs.span(),
+                            "`drop-last` takes no arguments in M3-Phase 7",
+                        ));
+                    }
+                }
+                _ => diags.push(error(
+                    filename,
+                    rhs.span(),
+                    format!(
+                        "unknown collection method `{}`; M3-Phase 7 supports `append` and `drop-last` only",
+                        method
+                    ),
+                )),
+            }
+        }
+        Expr::Ident { .. } | Expr::QualifiedRef { .. } => diags.push(error(
+            filename,
+            rhs.span(),
+            "bare collection copies are deferred; collection assignment RHS must be a self-receiver `append` / `drop-last` call or a static list literal",
+        )),
+        _ => diags.push(error(
+            filename,
+            rhs.span(),
+            "collection state assignment requires a collection expression RHS",
+        )),
+    }
+}
+
 /// Validate expression: reject unsupported types; resolve name references against namespace.
 fn check_expr_type(
     expr: &Expr,
@@ -1592,15 +2179,23 @@ fn check_expr_type(
         | Expr::BoolLit { .. }
         | Expr::Ident { .. } => {
             if let Expr::Ident { name, span } = expr {
-                // Keyword-valued idents (e.g. mica, system, accent, title) are not state refs.
-                // State refs must resolve; plain keyword values pass through.
-                // We treat single-segment idents that are NOT in the namespace as widget property
-                // keyword values (e.g. `mica`, `system`). Only flag if it looks like a state ref
-                // (i.e. matches a declared name or fails to match anything known).
-                // Conservative: only reject if the namespace is non-empty and the name is
-                // clearly a reference (starts with `root.` etc.). Plain single idents are
-                // ambiguous (could be enum/keyword value); we don't reject them here.
-                let _ = (name, span);
+                // A bare collection-state read outside the `for` header /
+                // loop-local binder path is the DD-M3-P7-007 loop-external
+                // read deferral, not a scalar keyword value (DD-002 / Q5).
+                if names_collection_state(name, ns) {
+                    diags.push(error(
+                        filename,
+                        span,
+                        format!(
+                            "{COLLECTION_EXTERNAL_READ_HINT}; `{}` is a collection — read its elements through a `for` binder",
+                            name
+                        ),
+                    ));
+                }
+                // Otherwise: keyword-valued idents (e.g. mica, system, accent,
+                // title) are not state refs and pass through. Plain single
+                // idents are ambiguous (could be an enum/keyword value); we do
+                // not reject them here.
             }
             // String interpolation parts: check that Interp segments resolve
             // to declared state and stay within the currently supported
@@ -1608,6 +2203,17 @@ fn check_expr_type(
             if let Expr::StringLit { parts, .. } = expr {
                 for part in parts {
                     if let crate::ast::StringPart::Interp(qn) = part {
+                        if let Some(seg) = collection_external_read_segment(qn, ns) {
+                            diags.push(error(
+                                filename,
+                                &qn.span,
+                                format!(
+                                    "{COLLECTION_EXTERNAL_READ_HINT}; `{}` is a collection — read its elements through a `for` binder",
+                                    seg
+                                ),
+                            ));
+                            continue;
+                        }
                         check_qualified_name(qn, filename, ns, diags);
                         check_string_interpolation_type(qn, filename, ns, diags);
                     }
@@ -1624,6 +2230,27 @@ fn check_expr_type(
         Expr::Measurement { span, .. } => {
             // Measurements (e.g. 12px) are static property values, not typed state — allowed.
             let _ = (ctx_span, span);
+        }
+        Expr::QualifiedRef { name } => {
+            if let Some(seg) = collection_external_read_segment(name, ns) {
+                diags.push(error(
+                    filename,
+                    &name.span,
+                    format!(
+                        "{COLLECTION_EXTERNAL_READ_HINT}; `{}` is a collection — read its elements through a `for` binder",
+                        seg
+                    ),
+                ));
+                return;
+            }
+            check_qualified_name(name, filename, ns, diags);
+        }
+        Expr::ListLit { span, .. } | Expr::CollectionCall { span, .. } => {
+            diags.push(error(
+                filename,
+                span,
+                "collection expressions are valid only in collection state defaults or collection-assignment RHS positions",
+            ));
         }
         // Ratio / Color literals are only valid as `Box.aspect` / `Box.fill`
         // RHS (dsl_spec §4.9). Every other syntactic position — state
@@ -1656,6 +2283,270 @@ fn check_expr_type(
                     op
                 ),
             ));
+        }
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+fn check_expr_type_in_loop_context(
+    expr: &Expr,
+    ctx_span: &Span,
+    filename: &str,
+    ns: &Namespace,
+    loop_ctx: Option<&LoopContext<'_>>,
+    inside_for_template: bool,
+    all_loop_binders: &[String],
+    diags: &mut Vec<Diagnostic>,
+) {
+    match expr {
+        Expr::Ident { name, span } => {
+            if let Some(ctx) = loop_ctx {
+                if name == ctx.binder || ctx.index_binder == Some(name.as_str()) {
+                    return;
+                }
+            }
+            if all_loop_binders.iter().any(|binder| binder == name) {
+                diags.push(error(
+                    filename,
+                    span,
+                    format!(
+                        "loop binder `{}` may be read only inside its `for` body expression bindings",
+                        name
+                    ),
+                ));
+                return;
+            }
+            let _ = inside_for_template;
+            check_expr_type(expr, ctx_span, filename, ns, diags);
+        }
+        Expr::QualifiedRef { name } => {
+            if let Some(segment) = qualified_loop_local_segment(name, loop_ctx) {
+                diags.push(error(
+                    filename,
+                    &name.span,
+                    format!(
+                        "qualified loop-local binder read `{}` is deferred in M3-Phase 7; `{}` is a scalar loop value, not a structured item field",
+                        name.segments.join("."),
+                        segment
+                    ),
+                ));
+                return;
+            }
+            if let Some(seg) = collection_external_read_segment(name, ns) {
+                diags.push(error(
+                    filename,
+                    &name.span,
+                    format!(
+                        "{COLLECTION_EXTERNAL_READ_HINT}; `{}` is a collection — read its elements through a `for` binder",
+                        seg
+                    ),
+                ));
+                return;
+            }
+            check_qualified_name(name, filename, ns, diags);
+        }
+        Expr::StringLit { parts, .. } => {
+            for part in parts {
+                if let crate::ast::StringPart::Interp(qn) = part {
+                    if let Some(segment) = qualified_loop_local_segment(qn, loop_ctx) {
+                        diags.push(error(
+                            filename,
+                            &qn.span,
+                            format!(
+                                "qualified loop-local binder read `{}` is deferred in M3-Phase 7; `{}` is a scalar loop value, not a structured item field",
+                                qn.segments.join("."),
+                                segment
+                            ),
+                        ));
+                        continue;
+                    }
+                    let state_name = qn.segments.last().map(String::as_str).unwrap_or("");
+                    if let Some(ctx) = loop_ctx {
+                        if state_name == ctx.binder {
+                            // A bool element rendered through interpolation has
+                            // no defined display conversion, mirroring the
+                            // scalar bool-in-interpolation reject. The index
+                            // binder is always `i32` and stays admissible.
+                            if ctx.elem == CollectionElemType::Bool {
+                                diags.push(error(
+                                    filename,
+                                    &qn.span,
+                                    format!(
+                                        "bool loop binder `{}` cannot be used in string interpolation; \
+                                         bool formatting/display conversion is not defined in M3-Phase 7",
+                                        state_name
+                                    ),
+                                ));
+                            }
+                            continue;
+                        }
+                        if ctx.index_binder == Some(state_name) {
+                            continue;
+                        }
+                    }
+                    if let Some(seg) = collection_external_read_segment(qn, ns) {
+                        diags.push(error(
+                            filename,
+                            &qn.span,
+                            format!(
+                                "{COLLECTION_EXTERNAL_READ_HINT}; `{}` is a collection — read its elements through a `for` binder",
+                                seg
+                            ),
+                        ));
+                        continue;
+                    }
+                    check_qualified_name(qn, filename, ns, diags);
+                    check_string_interpolation_type(qn, filename, ns, diags);
+                }
+            }
+        }
+        Expr::ListLit { .. } | Expr::CollectionCall { .. } => {
+            diags.push(error(
+                filename,
+                expr.span(),
+                "collection expressions are valid only in collection state defaults or collection-assignment RHS positions",
+            ));
+        }
+        _ => check_expr_type(expr, ctx_span, filename, ns, diags),
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+fn check_for_member(
+    binder: &str,
+    index_binder: Option<&str>,
+    collection: &Expr,
+    body: &[Member],
+    span: &Span,
+    enclosing_widget: Option<&str>,
+    filename: &str,
+    ns: &Namespace,
+    diags: &mut Vec<Diagnostic>,
+    inside_for_template: bool,
+) {
+    if inside_for_template {
+        diags.push(error(
+            filename,
+            span,
+            "nested `for` is deferred in M3-Phase 7; wrap or flatten the iteration source in a later phase",
+        ));
+    }
+    match enclosing_widget {
+        None => diags.push(error(
+            filename,
+            span,
+            "component-level `for` is not admitted in M3-Phase 7; place it inside an admitted widget container",
+        )),
+        Some("ScrollView") => diags.push(error(
+            filename,
+            span,
+            "direct `for` is not valid in ScrollView; wrap it in a content widget such as `WrapPanel`",
+        )),
+        Some("Box") => diags.push(error(
+            filename,
+            span,
+            "direct `for` is not valid in Box because Box admits at most one child",
+        )),
+        Some("Grid") | Some("Cell") => diags.push(error(
+            filename,
+            span,
+            "direct `for` is not valid in Grid placement contexts in M3-Phase 7",
+        )),
+        _ => {}
+    }
+
+    if ns.contains_key(binder) {
+        diags.push(error(
+            filename,
+            span,
+            format!(
+                "loop binder `{}` collides with a declared state name",
+                binder
+            ),
+        ));
+    }
+    if let Some(index) = index_binder {
+        if index == binder {
+            diags.push(error(
+                filename,
+                span,
+                "loop element binder and index binder must be distinct",
+            ));
+        }
+        if ns.contains_key(index) {
+            diags.push(error(
+                filename,
+                span,
+                format!(
+                    "loop index binder `{}` collides with a declared state name",
+                    index
+                ),
+            ));
+        }
+    }
+
+    match collection {
+        Expr::Ident { name, span } => match ns.get(name) {
+            Some(TypeName::Collection(_)) => {}
+            Some(other) => diags.push(error(
+                filename,
+                span,
+                format!(
+                    "`for` target `{}` must be a collection state; it is declared `{}`",
+                    name,
+                    type_name_display(other)
+                ),
+            )),
+            None => diags.push(error(
+                filename,
+                span,
+                format!("`for` target `{}` is not declared as a collection state", name),
+            )),
+        },
+        Expr::QualifiedRef { name } => diags.push(error(
+            filename,
+            &name.span,
+            "`for` collection must be a local state name; qualified collection references are deferred",
+        )),
+        _ => diags.push(error(
+            filename,
+            collection.span(),
+            "`for` collection expressions are not yet supported; use a local collection state name after `in`",
+        )),
+    }
+
+    check_for_body(body, span, filename, diags);
+}
+
+fn check_for_body(body: &[Member], span: &Span, filename: &str, diags: &mut Vec<Diagnostic>) {
+    let widget_count = body
+        .iter()
+        .filter(|m| matches!(m, Member::WidgetDecl { .. }))
+        .count();
+    if body.len() != 1 || widget_count != 1 {
+        diags.push(error(
+            filename,
+            span,
+            "`for` body admits exactly one widget child in M3-Phase 7; wrap multiple widgets or control flow in a container",
+        ));
+    }
+    for member in body {
+        match member {
+            Member::WidgetDecl { .. } => {}
+            Member::Conditional { span, .. } | Member::For { span, .. } => diags.push(error(
+                filename,
+                span,
+                "bare control flow is not admitted directly as a `for` body; wrap it in a widget container",
+            )),
+            Member::PropertyBind { span, .. }
+            | Member::PropertyDecl { span, .. }
+            | Member::SignalHandler { span, .. }
+            | Member::StateMember { span, .. }
+            | Member::GridTracks { span, .. } => diags.push(error(
+                filename,
+                span,
+                "`for` body admits only a single widget child; properties, handlers, state declarations, and track lists are not structural body members",
+            )),
         }
     }
 }
@@ -1797,6 +2688,456 @@ mod tests {
             r#"component C inherits W { state count: i32 = 0 VStack { text: "x: \{root.count}" } }"#,
         );
         assert!(!result.has_errors(), "{:?}", result.diagnostics);
+    }
+
+    #[test]
+    fn collection_state_default_and_for_body_accepted() {
+        let result = check_src(
+            r#"component C inherits W {
+                state labels: string[] = ["a", "b"]
+                WrapPanel { for label, i in labels { Text { text: label } } }
+            }"#,
+        );
+        assert!(!result.has_errors(), "{:?}", result.diagnostics);
+    }
+
+    #[test]
+    fn collection_assignment_forms_accepted() {
+        let result = check_src(
+            r#"component C inherits W {
+                state xs: i32[] = []
+                state flags: bool[] = []
+                Button { clicked => { xs = xs.append(2); xs = xs.drop-last(); xs = []; flags = []; } }
+            }"#,
+        );
+        assert!(!result.has_errors(), "{:?}", result.diagnostics);
+    }
+
+    #[test]
+    fn gallery_like_for_shape_and_body_external_handlers_accepted() {
+        let result = check_src(
+            r##"component C inherits W {
+                state labels: string[] = ["S01", "S02"]
+                VStack {
+                    ScrollView {
+                        WrapPanel {
+                            for label, i in labels {
+                                Box { aspect: 1:1 fill: #334455 Text { text: "Thumb \{label} #\{i}" } }
+                            }
+                        }
+                    }
+                    Button { text: "Add" clicked => { labels = labels.append("S03"); } }
+                    Button { text: "Remove" clicked => { labels = labels.drop-last(); } }
+                }
+            }"##,
+        );
+        assert!(!result.has_errors(), "{:?}", result.diagnostics);
+    }
+
+    #[test]
+    fn for_target_must_be_collection_state() {
+        let errs = errors(
+            "component C inherits W { state count: i32 = 0 WrapPanel { for x in count { Text {} } } }",
+        );
+        assert!(
+            errs.iter()
+                .any(|e| e.contains("must be a collection state")),
+            "{errs:?}"
+        );
+    }
+
+    #[test]
+    fn for_target_must_be_declared() {
+        let errs = errors("component C inherits W { WrapPanel { for x in missing { Text {} } } }");
+        assert!(
+            errs.iter()
+                .any(|e| e.contains("not declared as a collection")),
+            "{errs:?}"
+        );
+    }
+
+    #[test]
+    fn for_target_rejects_qualified_reference() {
+        let errs = errors(
+            "component C inherits W { state xs: i32[] = [] WrapPanel { for x in root.xs { Text {} } } }",
+        );
+        assert!(
+            errs.iter()
+                .any(|e| e.contains("local state name") && e.contains("qualified")),
+            "{errs:?}"
+        );
+    }
+
+    #[test]
+    fn for_target_rejects_collection_expression() {
+        let cases = [
+            "component C inherits W { state xs: i32[] = [] WrapPanel { for x in xs.append(1) { Text {} } } }",
+            "component C inherits W { WrapPanel { for x in [1] { Text {} } } }",
+        ];
+        for src in cases {
+            let errs = errors(src);
+            assert!(
+                errs.iter()
+                    .any(|e| e.contains("collection expressions are not yet supported")),
+                "{errs:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn for_binder_collisions_rejected() {
+        let errs = errors(
+            "component C inherits W { state xs: i32[] = [] state x: i32 = 0 WrapPanel { for x, x in xs { Text {} } } }",
+        );
+        assert!(
+            errs.iter()
+                .any(|e| e.contains("collides with a declared state")),
+            "{errs:?}"
+        );
+        assert!(
+            errs.iter().any(|e| e.contains("must be distinct")),
+            "{errs:?}"
+        );
+
+        let index_state = errors(
+            "component C inherits W { state xs: i32[] = [] state i: i32 = 0 WrapPanel { for x, i in xs { Text {} } } }",
+        );
+        assert!(
+            index_state
+                .iter()
+                .any(|e| e.contains("loop index binder") && e.contains("collides")),
+            "{index_state:?}"
+        );
+    }
+
+    #[test]
+    fn for_component_level_rejected() {
+        let errs =
+            errors("component C inherits W { state xs: i32[] = [] for x in xs { Text {} } }");
+        assert!(
+            errs.iter().any(|e| e.contains("component-level `for`")),
+            "{errs:?}"
+        );
+    }
+
+    #[test]
+    fn for_disallowed_direct_containers_rejected() {
+        let cases = [
+            (
+                "component C inherits W { state xs: i32[] = [] ScrollView { for x in xs { Text {} } } }",
+                "ScrollView",
+            ),
+            (
+                "component C inherits W { state xs: i32[] = [] Box { for x in xs { Text {} } } }",
+                "Box",
+            ),
+            (
+                "component C inherits W { state xs: i32[] = [] Grid { columns: 1* rows: 1* for x in xs { Cell { Text {} } } } }",
+                "Grid",
+            ),
+            (
+                "component C inherits W { state xs: i32[] = [] Grid { columns: 1* rows: 1* Cell { row: 0 column: 0 for x in xs { Text {} } } } }",
+                "Grid placement contexts",
+            ),
+        ];
+        for (src, needle) in cases {
+            let errs = errors(src);
+            assert!(
+                errs.iter().any(|e| e.contains(needle)),
+                "{needle}: {errs:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn for_is_admitted_inside_cell_descendant_container() {
+        let result = check_src(
+            "component C inherits W { state xs: i32[] = [] Grid { columns: 1* rows: 1* Cell { row: 0 column: 0 WrapPanel { for x in xs { Text {} } } } } }",
+        );
+        assert!(!result.has_errors(), "{:?}", result.diagnostics);
+    }
+
+    #[test]
+    fn for_body_shape_rejects_non_widget_multi_child_and_bare_control_flow() {
+        let cases = [
+            (
+                "component C inherits W { state xs: i32[] = [] WrapPanel { for x in xs { text: \"x\" } } }",
+                "only a single widget child",
+            ),
+            (
+                "component C inherits W { state xs: i32[] = [] WrapPanel { for x in xs { Text {} Button {} } } }",
+                "exactly one widget child",
+            ),
+            (
+                "component C inherits W { state xs: i32[] = [] WrapPanel { for x in xs { if true { Text {} } } } }",
+                "bare control flow",
+            ),
+        ];
+        for (src, needle) in cases {
+            let errs = errors(src);
+            assert!(
+                errs.iter().any(|e| e.contains(needle)),
+                "{needle}: {errs:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn for_body_rejects_handler_and_nested_for_at_any_depth() {
+        let handler_errs = errors(
+            "component C inherits W { state xs: i32[] = [] WrapPanel { for x in xs { Button { clicked => { root.missing = 1; } } } } }",
+        );
+        assert!(
+            handler_errs
+                .iter()
+                .any(|e| e.contains("handlers inside a `for` body")),
+            "{handler_errs:?}"
+        );
+        let nested_errs = errors(
+            "component C inherits W { state xs: i32[] = [] WrapPanel { for x in xs { VStack { for y in xs { Text {} } } } } }",
+        );
+        assert!(
+            nested_errs.iter().any(|e| e.contains("nested `for`")),
+            "{nested_errs:?}"
+        );
+    }
+
+    #[test]
+    fn loop_binder_reads_rejected_outside_handler_and_if_condition() {
+        let outside = errors(
+            "component C inherits W { state xs: i32[] = [] WrapPanel { for x in xs { Text {} } Text { text: x } } }",
+        );
+        assert!(
+            outside
+                .iter()
+                .any(|e| e.contains("may be read only inside")),
+            "{outside:?}"
+        );
+        let handler = errors(
+            "component C inherits W { state xs: i32[] = [] Button { clicked => { root.count = x; } } WrapPanel { for x in xs { Text {} } } }",
+        );
+        assert!(
+            handler
+                .iter()
+                .any(|e| e.contains("may be read only inside")),
+            "{handler:?}"
+        );
+        let cond = errors(
+            "component C inherits W { state xs: bool[] = [] WrapPanel { for x in xs { VStack { if x { Text {} } } } } }",
+        );
+        assert!(
+            cond.iter()
+                .any(|e| e.contains("loop binders in `if` conditions")),
+            "{cond:?}"
+        );
+    }
+
+    #[test]
+    fn for_body_rejects_unknown_typed_binding_but_keeps_untyped_keyword_values() {
+        let unknown = errors(
+            "component C inherits W { state xs: string[] = [] WrapPanel { for x in xs { Text { text: missing } } } }",
+        );
+        assert!(
+            unknown
+                .iter()
+                .any(|e| e.contains("not a declared state or loop binder")),
+            "{unknown:?}"
+        );
+
+        let keyword_like = check_src(
+            "component C inherits W { state xs: string[] = [] WrapPanel { for x in xs { Text { font: title text: x } } } }",
+        );
+        assert!(!keyword_like.has_errors(), "{:?}", keyword_like.diagnostics);
+    }
+
+    #[test]
+    fn qualified_loop_local_reads_rejected_as_structured_item_deferral() {
+        let cases = [
+            r#"component C inherits W {
+                state labels: string[] = []
+                state field: string = ""
+                WrapPanel { for label in labels { Text { text: label.field } } }
+            }"#,
+            r#"component C inherits W {
+                state labels: string[] = []
+                state field: string = ""
+                WrapPanel { for label in labels { Text { text: "\{label.field}" } } }
+            }"#,
+            r#"component C inherits W {
+                state labels: string[] = []
+                WrapPanel { for label, i in labels { Text { text: "\{root.i}" } } }
+            }"#,
+        ];
+        for src in cases {
+            let errs = errors(src);
+            assert!(
+                errs.iter()
+                    .any(|e| e.contains("qualified loop-local binder read")),
+                "{errs:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn loop_external_collection_reads_rejected() {
+        // DD-M3-P7-007 loop-external read row: bare name, whole-value
+        // qualified read, member navigation, and a collection read in a
+        // scalar assignment all reject with the named deferral instead of
+        // being silently accepted or surfaced as a misleading "undefined
+        // state" / type-mismatch diagnostic.
+        let cases = [
+            // bare collection ident in an (untyped) property position
+            "component C inherits W { state xs: i32[] = [] Foo { bar: xs } }",
+            // bare collection ident in a typed property position
+            "component C inherits W { state xs: i32[] = [] Text { text: xs } }",
+            // member navigation (`xs.length`) — previously "undefined state"
+            "component C inherits W { state xs: i32[] = [] Text { text: xs.length } }",
+            // whole-value qualified read (`root.xs`)
+            "component C inherits W { state xs: i32[] = [] Text { text: root.xs } }",
+            // bare collection ident inside string interpolation
+            r#"component C inherits W { state xs: i32[] = [] Text { text: "\{xs}" } }"#,
+            // member navigation inside string interpolation
+            r#"component C inherits W { state xs: i32[] = [] Text { text: "\{xs.length}" } }"#,
+            // collection read as a scalar handler RHS
+            "component C inherits W { state n: i32 = 0 state xs: i32[] = [] Button { clicked => { n = xs; } } }",
+            // loop-external read of the *iterated* collection inside the body
+            "component C inherits W { state xs: i32[] = [] WrapPanel { for x in xs { Text { text: xs } } } }",
+        ];
+        for src in cases {
+            let errs = errors(src);
+            assert!(
+                errs.iter()
+                    .any(|e| e.contains("collection reads outside iteration")),
+                "{src}: {errs:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn bool_loop_binder_in_interpolation_rejected() {
+        // A bool element rendered through interpolation has no defined display
+        // conversion — the same contract scalar bool states get, applied to
+        // the loop binder so the bool surface cannot be smuggled in.
+        let errs = errors(
+            r#"component C inherits W { state flags: bool[] = [] WrapPanel { for f in flags { Text { text: "v=\{f}" } } } }"#,
+        );
+        assert!(
+            errs.iter()
+                .any(|e| e.contains("bool loop binder") && e.contains("bool formatting")),
+            "{errs:?}"
+        );
+        // Positive controls: a string element and the i32 index binder both
+        // remain admissible in interpolation.
+        let ok = check_src(
+            r#"component C inherits W { state labels: string[] = [] WrapPanel { for label, i in labels { Text { text: "\{label} #\{i}" } } } }"#,
+        );
+        assert!(!ok.has_errors(), "{:?}", ok.diagnostics);
+    }
+
+    #[test]
+    fn collection_declaration_literal_rejects_bad_shapes() {
+        let cases = [
+            (
+                "component C inherits W { state xs: i32[] = 1 VStack {} }",
+                "must be a list literal",
+            ),
+            (
+                "component C inherits W { state x: i32 = [1] VStack {} }",
+                "scalar state",
+            ),
+            (
+                "component C inherits W { state xs: i32[] = [1, \"two\"] VStack {} }",
+                "element type mismatch",
+            ),
+            (
+                "component C inherits W { state xs: i32[] = [a] VStack {} }",
+                "must be scalar literals",
+            ),
+            (
+                "component C inherits W { state xs: i32[] = [[1]] VStack {} }",
+                "nested list",
+            ),
+        ];
+        for (src, needle) in cases {
+            let errs = errors(src);
+            assert!(
+                errs.iter().any(|e| e.contains(needle)),
+                "{needle}: {errs:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn collection_assignment_rejects_bad_shapes() {
+        let cases = [
+            (
+                "component C inherits W { state xs: i32[] = [] Button { clicked => { root.xs = xs.append(1); } } }",
+                "local state name",
+            ),
+            (
+                "component C inherits W { state xs: i32[] = [] Button { clicked => { xs += 1; } } }",
+                "compound assignment",
+            ),
+            (
+                "component C inherits W { state x: i32 = 0 Button { clicked => { x = [1]; } } }",
+                "collection expressions are valid only",
+            ),
+            (
+                "component C inherits W { state xs: i32[] = [] Button { clicked => { missing = xs.append(1); } } }",
+                "collection expressions are valid only",
+            ),
+            (
+                "component C inherits W { state xs: i32[] = [] Button { clicked => { xs = 1; } } }",
+                "requires a collection expression RHS",
+            ),
+            (
+                "component C inherits W { state xs: i32[] = [] Text { text: xs.append(1) } }",
+                "collection expressions are valid only",
+            ),
+            (
+                "component C inherits W { state xs: i32[] = [] Button { clicked => { xs.append(1); } } }",
+                "not statements",
+            ),
+            (
+                "component C inherits W { state xs: i32[] = [] Button { clicked => { xs = xs.append(); } } }",
+                "exactly one",
+            ),
+            (
+                "component C inherits W { state xs: i32[] = [] Button { clicked => { xs = xs.append(missing); } } }",
+                "known type",
+            ),
+            (
+                "component C inherits W { state xs: i32[] = [] Button { clicked => { xs = xs.append(\"bad\"); } } }",
+                "element type mismatch",
+            ),
+            (
+                "component C inherits W { state xs: i32[] = [] Button { clicked => { xs = xs.drop-last(1); } } }",
+                "takes no arguments",
+            ),
+            (
+                "component C inherits W { state xs: i32[] = [] Button { clicked => { xs = xs.clear(); } } }",
+                "unknown collection method",
+            ),
+            (
+                "component C inherits W { state xs: i32[] = [] state ys: i32[] = [] Button { clicked => { xs = ys.append(1); } } }",
+                "same local collection",
+            ),
+            (
+                "component C inherits W { state xs: i32[] = [] Button { clicked => { xs = root.xs.append(1); } } }",
+                "same local collection",
+            ),
+            (
+                "component C inherits W { state xs: i32[] = [] state ys: i32[] = [] Button { clicked => { xs = ys; } } }",
+                "bare collection copies",
+            ),
+        ];
+        for (src, needle) in cases {
+            let errs = errors(src);
+            assert!(
+                errs.iter().any(|e| e.contains(needle)),
+                "{needle}: {errs:?}"
+            );
+        }
     }
 
     #[test]

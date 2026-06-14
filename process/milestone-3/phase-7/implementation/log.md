@@ -1,5 +1,275 @@
 ## Decisions log
 
+- **2026-06-14 / T3 start gate — author surface responsibility
+  re-challenged before implementation.** Read the T2 close/carry rows,
+  the T2 implemented-branch addendum, T1 carry-forward rows, the Phase 7
+  preamble/plan, DD-M3-P7-007, and
+  [implementation-gates.md](../../../procedures/implementation-gates.md)
+  before editing code. The T3 plan was revised because the previous
+  wording under-specified the AST and binder-scope threading needed to
+  make the author surface auditable. T3 owns only author-reachable
+  parser/check/lower/emit behavior; textual-IR-only loader dual gates
+  remain T6-owned, and runtime guarded reads / collection writers remain
+  T7-owned.
+
+  **Carry-over checked from prior tasks.**
+
+  | Carry-over | T3 disposition |
+  |---|---|
+  | Author parser/check/lower/emit and full DD-007 compile-time matrix were not finished by T2. | **T3 owns.** Implement the author grammar, diagnostics, lowering, and emit pins. |
+  | Loop-local `item-read` / `index-read` scoping is only represented in IR/textual forms after T2. | **T3 owns author-scope diagnostics.** T6/T7 keep loader/runtime context ownership. |
+  | Loader scalar defaults became stricter in T2 (`state count: i32 = true` rejects in textual IR). | **T3 awareness.** Author collection/default checks must not weaken the scalar-default expectation. T6 preserves loader gate. |
+  | Static `For` materialisation reject, `ForLoopSubtree`, guarded out-of-range runtime read, collection writer, and `set_if_changed` production use. | **Not T3.** Owners remain T6/T7 per CF-1..CF-6. |
+
+  **T3 start-gate selection.**
+
+  | Trap | Applies? | Reason / close artifact |
+  |---|---|---|
+  | #1 semantic migration | **Applies.** | T3 widens the `wasamoc` AST/expression/member/type surface and threads loop-local scope through check/lower. Close with `rg`-enumerated call-site audit over `TypeName`, `Expr`, `Member`, `Statement`, `HandlerExpr`, and `ControlFlowNode` construction/lowering sites. |
+  | #2 side effects | Not applicable. | T3 performs no materialised widget-tree mutation and no runtime structural side effects. |
+  | #3 parallel data drift | Not applicable. | T3 adds no parallel vectors, placement arrays, caches, or derived indices. |
+  | #4 untested authored branch | **Applies.** | Every T3-owned reject / diagnostic / semantic branch gets a directly firing test or is mapped to owner T6/T7 in the implemented-branch test map. |
+  | #5 carry-forward | **Applies.** | Any behavior/invariant discovered while authoring (for example loader-only rows or syntax that creates observable textual IR) must be recorded with owner, scope, impact, and re-trigger. |
+  | #6 root cause | Standing. | Any deterministic failure is root-caused and recorded rather than retried to green. |
+  | #7 GUI evidence | Not applicable. | T3 has no GUI-render evidence deliverable. |
+
+  **Review lane:** branch/test-focused review. T3 is diagnostic /
+  reject-branch heavy but does not perform a schema migration in the
+  shared IR crate or runtime structural change.
+
+- **2026-06-14 / T3 close gate — author surface implemented and branch
+  map reconciled.** Implemented the `wasamoc` author surface for
+  M3-Phase 7 iteration: `in` reservation, collection state types and
+  literals, `for` members, loop-local expression reads in `for` bodies,
+  collection assignment RHS forms, check-time matrix diagnostics,
+  lowering to the T2 IR forms, and textual-IR emit pins. Loader-only
+  structural re-validation and runtime mutation semantics remain
+  deliberately outside T3.
+
+  **Trap #1 call-site audit (`rg`-enumerated).** Commands run:
+
+  ```text
+  rg -n "TypeName|CollectionElemType|Expr::(QualifiedRef|ListLit|CollectionCall|Ident)|Member::For|BlockStatement|HandlerExpr::(ItemRead|IndexRead|ListAppend|ListDropLast|ListLit)|ControlFlowNode::For|Keyword::In|Token::(LParen|RParen|LBracket|RBracket|Comma)" wasamoc\src
+  rg -n "collection|for`|loop binder|append|drop-last|nested `for`|component-level `for`|local state name|collection expressions|list literal|handler.*`for`|exactly one widget child|bare control flow|not a declared state or loop binder" wasamoc\src\check.rs wasamoc\src\parser.rs
+  ```
+
+  | Surface | Sites classified | Disposition |
+  |---|---|---|
+  | Lexer keywords / punctuation | `wasamoc/src/lexer.rs` keyword display, scanner punctuation, `scan_ident`, tests | **Extended.** `in` is a keyword; `in-out` / `in-outx` behavior is explicitly pinned as unaffected. |
+  | AST / parser type and expression surface | `ast.rs`; `parser.rs` `parse_for_member`, `parse_statement`, `parse_expr`, `parse_type_name` | **Extended.** The author AST now carries collection types, list literals, qualified refs, collection calls, expression statements for reject-only collection calls, and `Member::For`. Chained collection calls reject at parse because T3 admits only one contextual method call. |
+  | Check matrix | `check.rs` state defaults, property binds, handler statements, `for` placement/body/header/binder checks, loop-context expression checks | **Extended with direct diagnostics.** Author-reachable DD-007 rows are checked in `wasamoc`; textual-IR-only dual gates are mapped to T6. During double-loop review, the unknown-ident-in-`for` branch was narrowed to typed property targets so untyped keyword-like property values remain compatible with the existing DSL surface. |
+  | Lowering / emit | `lower.rs` state lowering, member lowering, binding lowering, handler RHS lowering; `emit.rs` existing T2 IR emit arms plus authored-surface test | **Extended.** Authored collection defaults, `for`, `item-read` / `index-read`, `list-append`, `list-drop-last`, and `list-lit` lower and emit through the T2 IR forms. |
+  | Runtime loader / evaluation | `wasamo-runtime` intentionally not touched | **Owned by T6/T7.** T3 emits IR shapes but does not materialise `For`, validate textual-IR-only scope rows, evaluate collection writes, or implement guarded loop-local runtime reads. |
+
+  **Implemented-branch test map.** Source enumeration was the two `rg`
+  commands above plus the named test inventory from `cargo test
+  --workspace`. `cargo test` green is supporting evidence only; the rows
+  below are the forcing map.
+
+  | Branch / semantic pin | Direct test / owner |
+  |---|---|
+  | `in` reserved; punctuation admitted; `in-out` remains one hyphenated keyword | `lexer::tests::control_flow_family_keywords_reserved`; `lexer::tests::punctuation`; `lexer::tests::in_out_unaffected_by_in_keyword`; `lexer::tests::in_outx_lexes_as_kebab_ident` |
+  | Collection state type / list literal / `for` parse; contextual `append` / `drop-last`; keyword binder reject; nested collection type reject; chained call parse reject | `parser::tests::collection_state_and_for_member_parse`; `parser::tests::collection_assignment_contextual_methods_parse`; `parser::tests::for_keyword_binder_rejected_at_identifier_position`; `parser::tests::nested_collection_type_rejected_at_parse`; `parser::tests::chained_collection_call_rejected_at_parse` |
+  | Positive author collection default, empty initial value, `for` body loop-local read, and collection assignment forms | `check::tests::collection_state_default_and_for_body_accepted`; `check::tests::collection_assignment_forms_accepted`; lower/emit pins below |
+  | `for` target reject rows: scalar target, undeclared target, qualified target, non-identifier / collection-expression target | `check::tests::for_target_must_be_collection_state`; `check::tests::for_target_must_be_declared`; `check::tests::for_target_rejects_qualified_reference`; `check::tests::for_target_rejects_collection_expression` |
+  | Binder reject rows: binder state collision and value/index same name; keyword-as-binder parser reject | `check::tests::for_binder_collisions_rejected`; `parser::tests::for_keyword_binder_rejected_at_identifier_position` |
+  | Placement reject rows: component-level, ScrollView, Box, Grid / Cell placement contexts | `check::tests::for_component_level_rejected`; `check::tests::for_disallowed_direct_containers_rejected` |
+  | Body reject rows: non-widget member, multi-child body, bare control-flow body, nested `for` at any depth, handler inside `for` body | `check::tests::for_body_shape_rejects_non_widget_multi_child_and_bare_control_flow`; `check::tests::for_body_rejects_handler_and_nested_for_at_any_depth` |
+  | Binder-read rows: outside body, handler position, `if` condition, undeclared typed binding inside body, and untyped keyword positive control | `check::tests::loop_binder_reads_rejected_outside_handler_and_if_condition`; `check::tests::for_body_rejects_unknown_typed_binding_but_keeps_untyped_keyword_values` |
+  | Collection declaration / literal reject rows: collection requires list default, list-on-scalar, hetero / mismatched element, non-literal element, nested list | `check::tests::collection_declaration_literal_rejects_bad_shapes` |
+  | Collection-assignment reject rows: qualified LHS, compound op, scalar LHS, collection expr outside RHS / as statement / property binding, arity, wrong receiver, qualified receiver, append element mismatch, drop-last arity, bare copy | `check::tests::collection_assignment_rejects_bad_shapes`; `parser::tests::chained_collection_call_rejected_at_parse` for chained-call syntax |
+  | Lower semantic pins: collection state, `ControlFlowNode::For`, `ItemRead`, `IndexRead`, `ListAppend`, `ListDropLast`, `ListLit` | `lower::tests::collection_state_and_for_loop_lower_to_ir`; `lower::tests::for_index_binder_lowers_to_index_read`; `lower::tests::collection_assignment_lowers_to_handler_exprs` |
+  | Emit semantic pins for authored `for` and collection assignment surface | `emit::tests::authored_for_surface_emits_loop_local_reads_and_collection_assignment`; existing T2 `emit::tests::collection_state_and_for_member_emit_in_textual_ir_shape` / string-bool spellings remain green |
+  | Textual-IR loader dual-gates: malformed `For`, textual loop-local read position/scope, textual collection declaration/assignment validation beyond author syntax | **Owner = T6.** T3 only emits author-valid IR; T6 re-validates the loader surface. |
+  | Runtime guarded reads, `ForLoopSubtree`, collection writer evaluation, equal-value no-dirty production use, splice/materialisation effects | **Owner = T7.** T3 only lowers handler expressions to IR. |
+
+  **Single-loop / double-loop self-check.**
+
+  | Check | Result |
+  |---|---|
+  | Past-task carry-over processed? | Yes. T2/T1 carry rows were read first; T3 closed author parser/check/lower/emit and left T6/T7 rows explicitly mapped. |
+  | Audit table created? | Yes. Trap #1 audit table above is `rg`-enumerated; implemented branches are mapped to direct tests or owners. |
+  | Unit-test breadth/depth sufficient for T3 pins? | Yes after widening: direct tests now cover non-identifier `for` targets, qualified receivers, property-position collection expressions, chained calls, and the unknown-typed-binding vs untyped-keyword distinction. |
+  | Plan hypothesis challenged? | The starting plan was too implicit about AST ownership and T6/T7 boundaries; plan was revised before implementation. A later double-loop pass found the unknown-ident-in-`for` reject was too broad and corrected it. |
+  | T3 behavior incorrectly pushed later? | No author-reachable parser/check/lower/emit row remains unowned. Loader-only textual IR and runtime mutation rows are correctly T6/T7, with scope and impact below. |
+
+  **Plan-hypothesis challenge row.**
+
+  | Hypothesis challenged | Refuted | Not refuted | Ownership moved / unresolved |
+  |---|---|---|---|
+  | T3 is "just parser/check/lower/emit" and can avoid AST changes. | Refuted: author evidence needs AST shapes for collection calls, list literals, block expression statements, and `Member::For`. | The bounded owner remains `wasamoc`; no runtime code needed. | None. |
+  | The DD-007 matrix can be proven by broad happy-path tests plus `cargo test`. | Refuted: branch map found missing direct pins for chained call, qualified receiver, and collection expressions in property position. | Direct branch tests are now sufficient for T3-owned rows. | None. |
+  | Unknown identifiers in a `for` body should all be rejected as undeclared binders. | Refuted: that would reject existing untyped keyword-like property values. | Typed property targets still reject undeclared loop-local reads. | T10 should sync this nuance into the spec if the external-reader text is ambiguous. |
+  | Loader/runtime rows belong in T3 because T3 can emit the syntax. | Not refuted: emission alone does not prove loader static materialisation or runtime evaluation. | T6/T7 ownership remains correct. | T6/T7 carry rows preserved. |
+
+  **Owner-correction count.** `0` at T3 close before owner report. The
+  next task must revise this signal if owner feedback after this report
+  causes extra implementation, extra tests, or plan-ownership correction.
+
+  **Two-key exit check.**
+
+  | Key | Status |
+  |---|---|
+  | Carry-forward key | Satisfied. Remaining unresolved work is assigned: T6 owns textual-IR loader dual gates and static `for` materialisation; T7 owns runtime guarded loop-local reads, collection writer evaluation, equal-value no-dirty production use, `ForLoopSubtree`, and splice effects; T10 owns spec sync for landed author nuances. Scope and impact are listed in the carry scan below. |
+  | Proof key | Satisfied. Every T3-implemented branch / semantic pin is mapped to a direct test in the implemented-branch test map; no row relies on workspace green alone. |
+
+  **Behavior / invariant carry scan.**
+
+  | Behavior / invariant discovered or created | Owner / scope / impact |
+  |---|---|
+  | `in` is now reserved in the author lexer, while `in-out` and `in-outx` remain unaffected. | **T10 spec sync.** Ensure §2.1 / token examples match the landed boundary behavior. |
+  | Author grammar admits collection defaults, list literals, `for`, and collection assignment syntax; chained collection methods are rejected by the parser, not by check. | **T10 spec sync.** External text should not imply chained calls reach semantic validation. |
+  | Unknown identifiers in typed property binds inside a `for` body reject as undeclared state/binder, but untyped keyword-like property values still pass. | **T10 spec sync.** Prevents accidental overstatement of loop-body identifier strictness. |
+  | Textual IR emitted by T3 may contain `list-append` / `list-drop-last` handler expressions before runtime evaluation exists. | **T7.** Runtime handler evaluation still deliberately rejects these forms until the collection writer lands; authored gallery mutation must wait for T7/T8. |
+  | Loader must not trust author-only checks for `for` body shape, scope, container placement, or collection-assignment well-formedness. | **T6.** Textual IR remains an independent input surface and needs its dual-gate matrix. |
+
+  **Trap #6 disposition.** No deterministic failure was rerun as a
+  flake. The known implementation-time failure was a test fixture issue
+  in `for_index_binder_lowers_to_index_read` using a string-typed target
+  for an index read; the fixture was corrected to an integer property
+  target. During close self-check, an over-broad unknown-identifier
+  reject in `for` bodies was found and narrowed before final test
+  evidence.
+
+  **Trap #2 / #3 / #7 close confirmation.** T3 added no runtime
+  materialised-tree side-effect bundle (#2), no child-parallel placement
+  vector or cache (#3), and no GUI-render evidence deliverable (#7).
+
+  **Verification evidence.** `cargo fmt --all -- --check` passed.
+  `cargo test -p wasamoc` passed (349 unit tests + 6 roundtrip tests).
+  `cargo test --workspace` passed. **Review lane remains
+  branch/test-focused** because this task added diagnostics and author
+  semantic branches but no shared IR schema migration or runtime
+  structural change.
+
+- **2026-06-14 / T3 owner-follow-up audit addendum — constraints and
+  branch pins widened.** After the initial T3 completion report, the
+  owner requested a critical re-check against
+  [requirements/constraints.md](../requirements/constraints.md) and a
+  deeper test-width review. Two read-only subagent audits were delegated:
+  one for constraints/T3-boundary ownership, one for branch/test depth.
+  Result: T6/T7 ownership remained correct, but the original T3 proof map
+  over-claimed coverage for several author-reachable branches. This
+  increments **Owner-correction count to `1`** for T3.
+
+  **Constraints re-check result.** `constraints.md` items §1, §7, and
+  §8 are the T3-relevant constraints: iteration must stay in the
+  control-flow family, `TypedValue` / structured item pressure must not
+  be smuggled, and semantic-migration proof must be a forcing artifact.
+  Runtime ownership constraints (§2, §4, §5, §6, §9) remain T4–T9-owned.
+  The concrete T3 miss was that qualified loop-local-looking reads such
+  as `label.field` or `\{label.field}` could be resolved as ordinary
+  state reads when `field` was a state, silently resembling structured
+  item access. T3 now rejects qualified loop-local reads directly and
+  records the structured-item / `TypedValue` deferral at author check.
+
+  **Implemented-branch test map addendum.**
+
+  | Branch / semantic pin added after follow-up | Direct test |
+  |---|---|
+  | Qualified loop-local reads (`label.field`, `\{label.field}`, `root.i`) reject as structured-item / loop-local qualification deferral | `check::tests::qualified_loop_local_reads_rejected_as_structured_item_deferral` |
+  | Gallery-like author shape: `ScrollView { WrapPanel { for ... { Box { Text { ... } } } } }` plus body-external Add/Remove handlers compiles | `check::tests::gallery_like_for_shape_and_body_external_handlers_accepted` |
+  | Gallery-like shape lowers to one Box body, interpolation `ItemRead` + `IndexRead`, and external collection mutation handler expressions | `lower::tests::gallery_like_for_shape_lowers_single_box_body_and_external_mutations` |
+  | Empty list defaults / assignments accepted in typed collection contexts, including bool collection | `check::tests::collection_assignment_forms_accepted` |
+  | Index binder colliding with a state name is directly fired, not only value-binder / same-name collision | `check::tests::for_binder_collisions_rejected` |
+  | Direct `for` under `Cell` rejects, while a `for` inside a descendant `WrapPanel` under `Cell` is admitted | `check::tests::for_disallowed_direct_containers_rejected`; `check::tests::for_is_admitted_inside_cell_descendant_container` |
+  | Collection assignment reject rows for undeclared LHS + collection RHS, collection LHS + scalar RHS, unknown method, and append element with unknown type | `check::tests::collection_assignment_rejects_bad_shapes` |
+  | Keyword in index-binder position rejects at parse, not only keyword in element-binder position | `parser::tests::for_keyword_binder_rejected_at_identifier_position` |
+  | Chained collection call now gets a named deferral diagnostic rather than a generic `expected ';'` parse error | `parser::tests::chained_collection_call_rejected_at_parse` |
+  | Emit pin includes both `(item-read label)` and `(index-read i)` from authored interpolation | `emit::tests::authored_for_surface_emits_loop_local_reads_and_collection_assignment` |
+
+  **Plan-hypothesis correction.** The plan's "gallery shape compile and
+  lower" positive control was not sufficiently discharged by the
+  minimal `Text { text: label }` fixture; T3 now has a gallery-like
+  Box/Text/ScrollView/WrapPanel fixture with body-external mutation
+  handlers. The earlier "every matrix row" proof row was also too coarse:
+  collection-assignment and placement-context rows needed more direct
+  sub-branch pins.
+
+  **Verification evidence.** `cargo fmt --all -- --check` passed.
+  `cargo test -p wasamoc` passed after the addendum (353 unit tests + 6
+  roundtrip tests). Workspace verification is recorded in the updated
+  T3 retrospective.
+
+- **2026-06-14 / T3 in-task review remediation — loop-external read and
+  bool-binder interpolation rows closed (commit `fccd277`).** A critical
+  in-session review (assistant reviewer, distinct from the implementing
+  pass) re-ran the DD-M3-P7-007 author matrix row-by-row against the
+  shipped diagnostics and found **two author-reachable rows the close map
+  had over-claimed as covered** — both confirmed by throwaway probe tests
+  against the built compiler, not by inspection. Remediated inside T3
+  rather than carried, per owner direction (close author-surface holes in
+  the owning task). This increments **Owner-correction count to `2`** for
+  T3.
+
+  **Root failure (single-loop).** The `t3.md` corrective tests
+  *Branch-map granularity* and *Smuggle scan*, written at the owner
+  follow-up, were **recorded but not actually executed against every
+  DD-007 row**. The loop-external collection-read row never appeared in
+  the plan's prose enumeration, so it was absent from the branch map; the
+  bool element interpolation contract was applied to scalar bool states
+  but not to bool loop binders.
+
+  **Rows closed.**
+
+  | Author-reachable row (DD-007) | Pre-fix behavior (probed) | Post-fix behavior |
+  |---|---|---|
+  | bare collection ident in a property position (`bar: xs`) | **silently accepted**, lowered to `IrLiteral::Ident` | named "collection reads outside iteration not yet supported" deferral |
+  | collection member navigation (`xs.length`) | misleading `undefined state \`length\`` | named loop-external read deferral |
+  | whole-value qualified read (`root.xs`) | accepted (untyped prop) / type-mismatch only (typed prop) | named loop-external read deferral |
+  | collection ident / navigation in interpolation (`\{xs}`, `\{xs.length}`) | accepted, lowered to `PropRead` | named loop-external read deferral |
+  | collection read as scalar assignment RHS (`n = xs`) | silently accepted | named loop-external read deferral |
+  | indexed read (`xs[i]`) | raw `expected member`/`expected ;` parse error | named deferral at parse |
+  | bool loop binder in interpolation (`\{f}`, `f: bool[]` elem) | accepted, lowered to `ItemRead` | rejected, mirroring the scalar bool-in-interp contract |
+
+  **Implemented-branch test map addendum (this remediation).**
+
+  | Branch / semantic pin added | Direct test |
+  |---|---|
+  | Loop-external collection reads (bare, qualified whole-value, member navigation, interpolation, scalar-RHS, in-body read of the iterated collection) | `check::tests::loop_external_collection_reads_rejected` |
+  | Indexed collection read deferral at parse | `parser::tests::indexed_collection_read_rejected_at_parse` |
+  | Bool loop binder rejected in interpolation; string binder + i32 index positive control | `check::tests::bool_loop_binder_in_interpolation_rejected` |
+  | No duplicate type-mismatch for a collection source in a typed property | covered by `loop_external_collection_reads_rejected` (`Text { text: xs }` asserts the single named diagnostic) |
+
+  **Plan-hypothesis challenge row (this remediation).**
+
+  | Hypothesis challenged | Refuted | Not refuted | Ownership moved / unresolved |
+  |---|---|---|---|
+  | The owner-follow-up widening made the T3 author matrix complete. | Refuted: two DD-007 author rows were still uncovered and silently/misleadingly handled. | The T6/T7 runtime/loader boundary stays correct; no runtime row was wrongly pulled forward. | None — both rows closed in T3. |
+  | "Loop-external collection reads" can rely on existing scalar diagnostics (undefined-state / type-mismatch). | Refuted: bare and interpolated collection reads produced *no* diagnostic; `xs.length` produced the wrong one. | Indexed reads were always rejected — but as a generic parse error, not the named deferral. | None. |
+
+  **Two-key exit check (this remediation).**
+
+  | Key | Status |
+  |---|---|
+  | Carry-forward key | Satisfied. The named loop-external read deferral is now the T3 author surface; T6 must add the **textual-IR loader dual-gate** for the same rows (a `for`-external `list-prop-read` / member navigation in textual IR) — recorded in the carry scan below. No new unowned point. |
+  | Proof key | Satisfied. Every newly closed branch fires a direct test; the silent-acceptance cases are asserted to now emit exactly the named diagnostic. |
+
+  **Behavior / invariant carry scan (this remediation).**
+
+  | Behavior / invariant created | Owner / scope / impact |
+  |---|---|
+  | `wasamoc check` now rejects every author-reachable loop-external collection read with one named deferral; the bool-element interpolation reject extends to loop binders. | **T10 spec sync.** The §4.15 invalid-examples / binder-scope text must list the loop-external read deferral and the bool-binder interpolation reject so the external-reader matrix matches the shipped diagnostics. |
+  | Indexed reads (`xs[i]`) are a **parse-time** reject (no index grammar); all other loop-external reads are **check-time**. | **T6 loader dual-gate.** Textual IR has no `[i]` surface, but it *can* carry a `for`-external `list-prop-read`; T6 must re-reject that independently (the loader does not trust author checks). |
+  | A collection source in a typed scalar property emits the loop-external read diagnostic only (type-mismatch suppressed). | T3-local; no carry. Prevents double diagnostics. |
+
+  **Findings judged out of scope / not changed.** (a) `check_for_body`
+  emits two diagnostics for a single non-widget body member — harmless
+  redundancy, both true, left as-is. (b) The admitted-container set for
+  `for` is a denylist (reject ScrollView/Box/Grid/Cell, admit the rest),
+  mirroring the Phase 6 `if` family pattern, so a `for` under a non-layout
+  leaf widget is admitted at check; this is a **family-level** behavior,
+  not T3-specific, and is recorded as a Phase 8 / spec carry rather than
+  changed under T3 (changing it would touch the shared `if` admission
+  contract). Both are recorded here so they are not silently dropped.
+
+  **Verification evidence.** `cargo fmt --all -- --check` passed (clean).
+  `cargo test -p wasamoc` passed (356 unit tests + 6 roundtrip).
+  `cargo test --workspace` passed (`wasamo-runtime` 381, `wasamo-ir` 23,
+  `wasamoc` 356). No production behavior outside `wasamoc check` / parse
+  diagnostics changed; lowering and emit are unaffected (the rejected
+  inputs never reach lowering).
+
 - **2026-06-13 / T2 post-close critical re-check — plan hypothesis
   challenged against the preamble.** Re-read the implementation
   preamble, the mutable task plan, constraints §8, T2 code diff, and the

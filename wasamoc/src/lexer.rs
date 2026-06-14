@@ -14,6 +14,7 @@ pub enum Keyword {
     Else,
     Switch,
     For,
+    In,
 }
 
 impl Keyword {
@@ -30,6 +31,7 @@ impl Keyword {
             Keyword::Else => "`else`",
             Keyword::Switch => "`switch`",
             Keyword::For => "`for`",
+            Keyword::In => "`in`",
         }
     }
 }
@@ -52,9 +54,14 @@ pub enum Token {
     ColorLit(u32),
     LBrace,
     RBrace,
+    LParen,
+    RParen,
+    LBracket,
+    RBracket,
     LAngle,
     RAngle,
     Colon,
+    Comma,
     Arrow,
     Dot,
     Semicolon,
@@ -101,9 +108,14 @@ impl Token {
             Token::ColorLit(_) => "color literal",
             Token::LBrace => "`{`",
             Token::RBrace => "`}`",
+            Token::LParen => "`(`",
+            Token::RParen => "`)`",
+            Token::LBracket => "`[`",
+            Token::RBracket => "`]`",
             Token::LAngle => "`<`",
             Token::RAngle => "`>`",
             Token::Colon => "`:`",
+            Token::Comma => "`,`",
             Token::Arrow => "`=>`",
             Token::Dot => "`.`",
             Token::Semicolon => "`;`",
@@ -212,6 +224,22 @@ pub fn tokenize(src: &str, filename: &str) -> Result<Vec<SpannedToken>, Diagnost
                 c.advance();
                 Token::RBrace
             }
+            '(' => {
+                c.advance();
+                Token::LParen
+            }
+            ')' => {
+                c.advance();
+                Token::RParen
+            }
+            '[' => {
+                c.advance();
+                Token::LBracket
+            }
+            ']' => {
+                c.advance();
+                Token::RBracket
+            }
             '<' => {
                 c.advance();
                 Token::LAngle
@@ -223,6 +251,10 @@ pub fn tokenize(src: &str, filename: &str) -> Result<Vec<SpannedToken>, Diagnost
             ':' => {
                 c.advance();
                 Token::Colon
+            }
+            ',' => {
+                c.advance();
+                Token::Comma
             }
             '.' => {
                 c.advance();
@@ -383,6 +415,7 @@ fn scan_ident(c: &mut Cursor) -> Token {
         "else" => Token::Kw(Keyword::Else),
         "switch" => Token::Kw(Keyword::Switch),
         "for" => Token::Kw(Keyword::For),
+        "in" => Token::Kw(Keyword::In),
         _ => Token::Ident(s),
     }
 }
@@ -805,11 +838,20 @@ mod tests {
 
     #[test]
     fn control_flow_family_keywords_reserved() {
-        let toks = lex_ok("if else switch for");
+        let toks = lex_ok("if else switch for in");
         assert!(matches!(&toks[0], Token::Kw(Keyword::If)));
         assert!(matches!(&toks[1], Token::Kw(Keyword::Else)));
         assert!(matches!(&toks[2], Token::Kw(Keyword::Switch)));
         assert!(matches!(&toks[3], Token::Kw(Keyword::For)));
+        assert!(matches!(&toks[4], Token::Kw(Keyword::In)));
+    }
+
+    #[test]
+    fn in_out_unaffected_by_in_keyword() {
+        let toks = lex_ok("in in-out in-outx");
+        assert!(matches!(&toks[0], Token::Kw(Keyword::In)));
+        assert!(matches!(&toks[1], Token::Kw(Keyword::InOut)));
+        assert!(matches!(&toks[2], Token::Ident(s) if s == "in-outx"));
     }
 
     #[test]
@@ -861,14 +903,19 @@ mod tests {
 
     #[test]
     fn punctuation() {
-        let toks = lex_ok("{ } < > : . ;");
+        let toks = lex_ok("{ } ( ) [ ] < > : , . ;");
         assert!(matches!(&toks[0], Token::LBrace));
         assert!(matches!(&toks[1], Token::RBrace));
-        assert!(matches!(&toks[2], Token::LAngle));
-        assert!(matches!(&toks[3], Token::RAngle));
-        assert!(matches!(&toks[4], Token::Colon));
-        assert!(matches!(&toks[5], Token::Dot));
-        assert!(matches!(&toks[6], Token::Semicolon));
+        assert!(matches!(&toks[2], Token::LParen));
+        assert!(matches!(&toks[3], Token::RParen));
+        assert!(matches!(&toks[4], Token::LBracket));
+        assert!(matches!(&toks[5], Token::RBracket));
+        assert!(matches!(&toks[6], Token::LAngle));
+        assert!(matches!(&toks[7], Token::RAngle));
+        assert!(matches!(&toks[8], Token::Colon));
+        assert!(matches!(&toks[9], Token::Comma));
+        assert!(matches!(&toks[10], Token::Dot));
+        assert!(matches!(&toks[11], Token::Semicolon));
     }
 
     #[test]

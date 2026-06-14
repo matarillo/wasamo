@@ -879,4 +879,26 @@ mod tests {
         );
         assert!(out.contains("state flags: bool[] = [true]"), "got: {out}");
     }
+
+    #[test]
+    fn authored_for_surface_emits_loop_local_reads_and_collection_assignment() {
+        let out = emit_src(
+            r#"component C inherits W {
+                state labels: string[] = ["a"]
+                WrapPanel {
+                    for label, i in labels { Text { text: "label=\{label} #\{i}" } }
+                    Button { clicked => { labels = labels.append("b"); labels = labels.drop-last(); } }
+                }
+            }"#,
+        );
+        assert!(
+            out.contains("state labels: string[] = [\"a\"]"),
+            "got: {out}"
+        );
+        assert!(out.contains("for label, i in labels {"), "got: {out}");
+        assert!(out.contains("(item-read label)"), "got: {out}");
+        assert!(out.contains("(index-read i)"), "got: {out}");
+        assert!(out.contains("(list-append labels \"b\")"), "got: {out}");
+        assert!(out.contains("(list-drop-last labels)"), "got: {out}");
+    }
 }
