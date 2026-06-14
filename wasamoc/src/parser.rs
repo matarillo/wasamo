@@ -614,6 +614,11 @@ impl<'a> Parser<'a> {
         let start = self.current_span().clone();
         if self.starts_collection_call_expr() || matches!(self.peek(), Token::LBracket) {
             let value = self.parse_expr()?;
+            if matches!(value, Expr::CollectionCall { .. }) && matches!(self.peek(), Token::Dot) {
+                return Err(self.error(
+                    "chained collection expressions are deferred in M3-Phase 7; assign a single `append` / `drop-last` call or a static list literal",
+                ));
+            }
             let semi_desc = self.peek().description();
             if !matches!(self.peek(), Token::Semicolon) {
                 return Err(self.error(format!("expected `;`, found {}", semi_desc)));
@@ -633,6 +638,11 @@ impl<'a> Parser<'a> {
         let target = self.parse_qualified_name()?;
         let op = self.parse_assign_op()?;
         let value = self.parse_expr()?;
+        if matches!(value, Expr::CollectionCall { .. }) && matches!(self.peek(), Token::Dot) {
+            return Err(self.error(
+                "chained collection expressions are deferred in M3-Phase 7; assign a single `append` / `drop-last` call or a static list literal",
+            ));
+        }
 
         let semi_desc = self.peek().description();
         if !matches!(self.peek(), Token::Semicolon) {
@@ -1260,13 +1270,17 @@ mod tests {
 
     #[test]
     fn for_keyword_binder_rejected_at_identifier_position() {
-        let msg = parse_err_msg(
+        let cases = [
             "component C inherits W { state xs: i32[] = [] WrapPanel { for in in xs { Text {} } } }",
-        );
-        assert!(
-            msg.contains("expected identifier") && msg.contains("`in`"),
-            "message: {msg}"
-        );
+            "component C inherits W { state xs: i32[] = [] WrapPanel { for x, in in xs { Text {} } } }",
+        ];
+        for src in cases {
+            let msg = parse_err_msg(src);
+            assert!(
+                msg.contains("expected identifier") && msg.contains("`in`"),
+                "message: {msg}"
+            );
+        }
     }
 
     #[test]
@@ -1281,7 +1295,7 @@ mod tests {
             "component C inherits W { state xs: i32[] = [] Button { clicked => { xs = xs.append(1).append(2); } } }",
         );
         assert!(
-            msg.contains("expected") && msg.contains(";") && msg.contains("."),
+            msg.contains("chained collection expressions are deferred"),
             "message: {msg}"
         );
     }

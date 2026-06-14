@@ -70,6 +70,19 @@ fn is_loop_local_ident(name: &str, loop_ctx: Option<&LoopContext<'_>>) -> bool {
         .unwrap_or(false)
 }
 
+fn qualified_loop_local_segment<'a>(
+    qn: &'a QualifiedName,
+    loop_ctx: Option<&LoopContext<'_>>,
+) -> Option<&'a str> {
+    if qn.segments.len() <= 1 {
+        return None;
+    }
+    qn.segments
+        .iter()
+        .map(String::as_str)
+        .find(|segment| is_loop_local_ident(segment, loop_ctx))
+}
+
 pub struct CheckResult {
     pub diagnostics: Vec<Diagnostic>,
     pub namespace: Namespace,
@@ -2250,11 +2263,35 @@ fn check_expr_type_in_loop_context(
             check_expr_type(expr, ctx_span, filename, ns, diags);
         }
         Expr::QualifiedRef { name } => {
+            if let Some(segment) = qualified_loop_local_segment(name, loop_ctx) {
+                diags.push(error(
+                    filename,
+                    &name.span,
+                    format!(
+                        "qualified loop-local binder read `{}` is deferred in M3-Phase 7; `{}` is a scalar loop value, not a structured item field",
+                        name.segments.join("."),
+                        segment
+                    ),
+                ));
+                return;
+            }
             check_qualified_name(name, filename, ns, diags);
         }
         Expr::StringLit { parts, .. } => {
             for part in parts {
                 if let crate::ast::StringPart::Interp(qn) = part {
+                    if let Some(segment) = qualified_loop_local_segment(qn, loop_ctx) {
+                        diags.push(error(
+                            filename,
+                            &qn.span,
+                            format!(
+                                "qualified loop-local binder read `{}` is deferred in M3-Phase 7; `{}` is a scalar loop value, not a structured item field",
+                                qn.segments.join("."),
+                                segment
+                            ),
+                        ));
+                        continue;
+                    }
                     let state_name = qn.segments.last().map(String::as_str).unwrap_or("");
                     if let Some(ctx) = loop_ctx {
                         if state_name == ctx.binder || ctx.index_binder == Some(state_name) {
@@ -2571,9 +2608,31 @@ mod tests {
     fn collection_assignment_forms_accepted() {
         let result = check_src(
             r#"component C inherits W {
-                state xs: i32[] = [1]
-                Button { clicked => { xs = xs.append(2); xs = xs.drop-last(); xs = [3, 4]; } }
+                state xs: i32[] = []
+                state flags: bool[] = []
+                Button { clicked => { xs = xs.append(2); xs = xs.drop-last(); xs = []; flags = []; } }
             }"#,
+        );
+        assert!(!result.has_errors(), "{:?}", result.diagnostics);
+    }
+
+    #[test]
+    fn gallery_like_for_shape_and_body_external_handlers_accepted() {
+        let result = check_src(
+            r##"component C inherits W {
+                state labels: string[] = ["S01", "S02"]
+                VStack {
+                    ScrollView {
+                        WrapPanel {
+                            for label, i in labels {
+                                Box { aspect: 1:1 fill: #334455 Text { text: "Thumb \{label} #\{i}" } }
+                            }
+                        }
+                    }
+                    Button { text: "Add" clicked => { labels = labels.append("S03"); } }
+                    Button { text: "Remove" clicked => { labels = labels.drop-last(); } }
+                }
+            }"##,
         );
         assert!(!result.has_errors(), "{:?}", result.diagnostics);
     }
@@ -2642,6 +2701,16 @@ mod tests {
             errs.iter().any(|e| e.contains("must be distinct")),
             "{errs:?}"
         );
+
+        let index_state = errors(
+            "component C inherits W { state xs: i32[] = [] state i: i32 = 0 WrapPanel { for x, i in xs { Text {} } } }",
+        );
+        assert!(
+            index_state
+                .iter()
+                .any(|e| e.contains("loop index binder") && e.contains("collides")),
+            "{index_state:?}"
+        );
     }
 
     #[test]
@@ -2669,6 +2738,10 @@ mod tests {
                 "component C inherits W { state xs: i32[] = [] Grid { columns: 1* rows: 1* for x in xs { Cell { Text {} } } } }",
                 "Grid",
             ),
+            (
+                "component C inherits W { state xs: i32[] = [] Grid { columns: 1* rows: 1* Cell { row: 0 column: 0 for x in xs { Text {} } } } }",
+                "Grid placement contexts",
+            ),
         ];
         for (src, needle) in cases {
             let errs = errors(src);
@@ -2677,6 +2750,14 @@ mod tests {
                 "{needle}: {errs:?}"
             );
         }
+    }
+
+    #[test]
+    fn for_is_admitted_inside_cell_descendant_container() {
+        let result = check_src(
+            "component C inherits W { state xs: i32[] = [] Grid { columns: 1* rows: 1* Cell { row: 0 column: 0 WrapPanel { for x in xs { Text {} } } } } }",
+        );
+        assert!(!result.has_errors(), "{:?}", result.diagnostics);
     }
 
     #[test]
@@ -2773,6 +2854,34 @@ mod tests {
     }
 
     #[test]
+    fn qualified_loop_local_reads_rejected_as_structured_item_deferral() {
+        let cases = [
+            r#"component C inherits W {
+                state labels: string[] = []
+                state field: string = ""
+                WrapPanel { for label in labels { Text { text: label.field } } }
+            }"#,
+            r#"component C inherits W {
+                state labels: string[] = []
+                state field: string = ""
+                WrapPanel { for label in labels { Text { text: "\{label.field}" } } }
+            }"#,
+            r#"component C inherits W {
+                state labels: string[] = []
+                WrapPanel { for label, i in labels { Text { text: "\{root.i}" } } }
+            }"#,
+        ];
+        for src in cases {
+            let errs = errors(src);
+            assert!(
+                errs.iter()
+                    .any(|e| e.contains("qualified loop-local binder read")),
+                "{errs:?}"
+            );
+        }
+    }
+
+    #[test]
     fn collection_declaration_literal_rejects_bad_shapes() {
         let cases = [
             (
@@ -2821,6 +2930,14 @@ mod tests {
                 "collection expressions are valid only",
             ),
             (
+                "component C inherits W { state xs: i32[] = [] Button { clicked => { missing = xs.append(1); } } }",
+                "collection expressions are valid only",
+            ),
+            (
+                "component C inherits W { state xs: i32[] = [] Button { clicked => { xs = 1; } } }",
+                "requires a collection expression RHS",
+            ),
+            (
                 "component C inherits W { state xs: i32[] = [] Text { text: xs.append(1) } }",
                 "collection expressions are valid only",
             ),
@@ -2833,12 +2950,20 @@ mod tests {
                 "exactly one",
             ),
             (
+                "component C inherits W { state xs: i32[] = [] Button { clicked => { xs = xs.append(missing); } } }",
+                "known type",
+            ),
+            (
                 "component C inherits W { state xs: i32[] = [] Button { clicked => { xs = xs.append(\"bad\"); } } }",
                 "element type mismatch",
             ),
             (
                 "component C inherits W { state xs: i32[] = [] Button { clicked => { xs = xs.drop-last(1); } } }",
                 "takes no arguments",
+            ),
+            (
+                "component C inherits W { state xs: i32[] = [] Button { clicked => { xs = xs.clear(); } } }",
+                "unknown collection method",
             ),
             (
                 "component C inherits W { state xs: i32[] = [] state ys: i32[] = [] Button { clicked => { xs = ys.append(1); } } }",

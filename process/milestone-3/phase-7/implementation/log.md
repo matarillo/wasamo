@@ -142,6 +142,55 @@
   semantic branches but no shared IR schema migration or runtime
   structural change.
 
+- **2026-06-14 / T3 owner-follow-up audit addendum — constraints and
+  branch pins widened.** After the initial T3 completion report, the
+  owner requested a critical re-check against
+  [requirements/constraints.md](../requirements/constraints.md) and a
+  deeper test-width review. Two read-only subagent audits were delegated:
+  one for constraints/T3-boundary ownership, one for branch/test depth.
+  Result: T6/T7 ownership remained correct, but the original T3 proof map
+  over-claimed coverage for several author-reachable branches. This
+  increments **Owner-correction count to `1`** for T3.
+
+  **Constraints re-check result.** `constraints.md` items §1, §7, and
+  §8 are the T3-relevant constraints: iteration must stay in the
+  control-flow family, `TypedValue` / structured item pressure must not
+  be smuggled, and semantic-migration proof must be a forcing artifact.
+  Runtime ownership constraints (§2, §4, §5, §6, §9) remain T4–T9-owned.
+  The concrete T3 miss was that qualified loop-local-looking reads such
+  as `label.field` or `\{label.field}` could be resolved as ordinary
+  state reads when `field` was a state, silently resembling structured
+  item access. T3 now rejects qualified loop-local reads directly and
+  records the structured-item / `TypedValue` deferral at author check.
+
+  **Implemented-branch test map addendum.**
+
+  | Branch / semantic pin added after follow-up | Direct test |
+  |---|---|
+  | Qualified loop-local reads (`label.field`, `\{label.field}`, `root.i`) reject as structured-item / loop-local qualification deferral | `check::tests::qualified_loop_local_reads_rejected_as_structured_item_deferral` |
+  | Gallery-like author shape: `ScrollView { WrapPanel { for ... { Box { Text { ... } } } } }` plus body-external Add/Remove handlers compiles | `check::tests::gallery_like_for_shape_and_body_external_handlers_accepted` |
+  | Gallery-like shape lowers to one Box body, interpolation `ItemRead` + `IndexRead`, and external collection mutation handler expressions | `lower::tests::gallery_like_for_shape_lowers_single_box_body_and_external_mutations` |
+  | Empty list defaults / assignments accepted in typed collection contexts, including bool collection | `check::tests::collection_assignment_forms_accepted` |
+  | Index binder colliding with a state name is directly fired, not only value-binder / same-name collision | `check::tests::for_binder_collisions_rejected` |
+  | Direct `for` under `Cell` rejects, while a `for` inside a descendant `WrapPanel` under `Cell` is admitted | `check::tests::for_disallowed_direct_containers_rejected`; `check::tests::for_is_admitted_inside_cell_descendant_container` |
+  | Collection assignment reject rows for undeclared LHS + collection RHS, collection LHS + scalar RHS, unknown method, and append element with unknown type | `check::tests::collection_assignment_rejects_bad_shapes` |
+  | Keyword in index-binder position rejects at parse, not only keyword in element-binder position | `parser::tests::for_keyword_binder_rejected_at_identifier_position` |
+  | Chained collection call now gets a named deferral diagnostic rather than a generic `expected ';'` parse error | `parser::tests::chained_collection_call_rejected_at_parse` |
+  | Emit pin includes both `(item-read label)` and `(index-read i)` from authored interpolation | `emit::tests::authored_for_surface_emits_loop_local_reads_and_collection_assignment` |
+
+  **Plan-hypothesis correction.** The plan's "gallery shape compile and
+  lower" positive control was not sufficiently discharged by the
+  minimal `Text { text: label }` fixture; T3 now has a gallery-like
+  Box/Text/ScrollView/WrapPanel fixture with body-external mutation
+  handlers. The earlier "every matrix row" proof row was also too coarse:
+  collection-assignment and placement-context rows needed more direct
+  sub-branch pins.
+
+  **Verification evidence.** `cargo fmt --all -- --check` passed.
+  `cargo test -p wasamoc` passed after the addendum (353 unit tests + 6
+  roundtrip tests). Workspace verification is recorded in the updated
+  T3 retrospective.
+
 - **2026-06-13 / T2 post-close critical re-check — plan hypothesis
   challenged against the preamble.** Re-read the implementation
   preamble, the mutable task plan, constraints §8, T2 code diff, and the

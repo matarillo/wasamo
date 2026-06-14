@@ -1304,6 +1304,89 @@ mod tests {
     }
 
     #[test]
+    fn gallery_like_for_shape_lowers_single_box_body_and_external_mutations() {
+        let comp = lower_src(
+            r##"component C inherits W {
+                state labels: string[] = ["S01", "S02"]
+                VStack {
+                    ScrollView {
+                        WrapPanel {
+                            for label, i in labels {
+                                Box { aspect: 1:1 fill: #334455 Text { text: "Thumb \{label} #\{i}" } }
+                            }
+                        }
+                    }
+                    Button { text: "Add" clicked => { labels = labels.append("S03"); } }
+                    Button { text: "Remove" clicked => { labels = labels.drop-last(); } }
+                }
+            }"##,
+        );
+
+        let vstack = &comp.root;
+        assert_eq!(vstack.widget_type, "VStack");
+        let scroll = child_widget(vstack, 0);
+        assert_eq!(scroll.widget_type, "ScrollView");
+        let wrap = child_widget(scroll, 0);
+        assert_eq!(wrap.widget_type, "WrapPanel");
+        match &wrap.children[0] {
+            IrMember::ControlFlow(ControlFlowNode::For {
+                binder,
+                index_binder,
+                collection,
+                body,
+            }) => {
+                assert_eq!(binder, "label");
+                assert_eq!(index_binder.as_deref(), Some("i"));
+                assert_eq!(
+                    collection,
+                    &HandlerExpr::ListPropRead {
+                        path: "labels".into(),
+                        elem: IrType::Str,
+                    }
+                );
+                let IrMember::Widget(box_node) = &body[0] else {
+                    panic!("expected Box body");
+                };
+                assert_eq!(box_node.widget_type, "Box");
+                assert_eq!(box_node.children.len(), 1);
+                let text = child_widget(box_node, 0);
+                let HandlerExpr::Interpolation(parts) = &text.bindings[0].expr else {
+                    panic!("expected interpolation binding");
+                };
+                assert!(matches!(
+                    &parts[1],
+                    InterpolationPart::Expr(HandlerExpr::ItemRead { binder }) if binder == "label"
+                ));
+                assert!(matches!(
+                    &parts[3],
+                    InterpolationPart::Expr(HandlerExpr::IndexRead { binder }) if binder == "i"
+                ));
+            }
+            other => panic!("expected For control-flow, got {other:?}"),
+        }
+
+        let add = child_widget(vstack, 1);
+        let HandlerExpr::Assign { lhs, rhs } = &add.handlers[0].expr else {
+            panic!("expected Add assignment handler");
+        };
+        assert_eq!(lhs, "labels");
+        assert!(matches!(
+            rhs.as_ref(),
+            HandlerExpr::ListAppend { path, elem: IrType::Str, value }
+                if path == "labels" && matches!(value.as_ref(), HandlerExpr::StrLit(v) if v == "S03")
+        ));
+        let remove = child_widget(vstack, 2);
+        let HandlerExpr::Assign { lhs, rhs } = &remove.handlers[0].expr else {
+            panic!("expected Remove assignment handler");
+        };
+        assert_eq!(lhs, "labels");
+        assert!(matches!(
+            rhs.as_ref(),
+            HandlerExpr::ListDropLast { path, elem: IrType::Str } if path == "labels"
+        ));
+    }
+
+    #[test]
     fn for_index_binder_lowers_to_index_read() {
         let comp = lower_src(
             r#"component C inherits W {
