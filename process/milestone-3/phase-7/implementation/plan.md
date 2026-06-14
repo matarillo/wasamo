@@ -163,12 +163,18 @@ collection writes stay T7-owned.
       (outside body, undeclared, handler position, `if` condition),
       collection declaration/literal rows (nested types,
       heterogeneous / mismatched / non-literal elements, list-on-scalar
-      and vice versa), and collection-assignment rows (scalar LHS,
+      and vice versa), collection-assignment rows (scalar LHS,
       compound ops, arity, wrong receiver / chained / bare copy, bare
       statement, qualified LHS / receiver, `collection_expr` outside
-      RHS). Each diagnostic names its deferral where the row is a
-      recorded deferral. Rows that only exist in textual IR or runtime
-      evaluation are explicitly mapped to T6/T7 in the close branch map.
+      RHS), **loop-external collection-read rows (bare name / whole-value
+      qualified read / member navigation / interpolation / scalar-RHS at
+      check, indexed read at parse)**, and the **bool-element loop-binder
+      interpolation reject**. Each diagnostic names its deferral where the
+      row is a recorded deferral. Rows that only exist in textual IR or
+      runtime evaluation are explicitly mapped to T6/T7 in the close
+      branch map. (The two bolded rows were added in the in-task review
+      remediation `fccd277`; the loader dual-gate for textual-IR
+      `for`-external reads is carried to T6.)
 - [x] Lower → `ControlFlowNode::For` + collection state / literal /
       assignment forms; textual-IR emit per dsl_spec §8.4 / §8.5 /
       §8.9; binder reads in body bindings lower to the typed
@@ -243,7 +249,11 @@ for the reject branches.
       container / component level, nested `for`, handler-in-body,
       loop-local `item-read` / `index-read` position and scope
       violations exposed through textual IR,
-      collection-declaration and collection-assignment violations —
+      collection-declaration and collection-assignment violations,
+      **`for`-external collection reads exposed through textual IR (a
+      `list-prop-read` or member navigation outside a `for` body — the
+      loader counterpart of the T3 loop-external read reject closed in
+      `fccd277`)** —
       each with a direct test (trap #4). Preserve T2's stricter
       scalar-default gate: scalar/scalar default mismatches such as
       `state count: i32 = true` remain loader rejects.

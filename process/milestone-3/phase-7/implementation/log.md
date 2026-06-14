@@ -191,6 +191,85 @@
   roundtrip tests). Workspace verification is recorded in the updated
   T3 retrospective.
 
+- **2026-06-14 / T3 in-task review remediation — loop-external read and
+  bool-binder interpolation rows closed (commit `fccd277`).** A critical
+  in-session review (assistant reviewer, distinct from the implementing
+  pass) re-ran the DD-M3-P7-007 author matrix row-by-row against the
+  shipped diagnostics and found **two author-reachable rows the close map
+  had over-claimed as covered** — both confirmed by throwaway probe tests
+  against the built compiler, not by inspection. Remediated inside T3
+  rather than carried, per owner direction (close author-surface holes in
+  the owning task). This increments **Owner-correction count to `2`** for
+  T3.
+
+  **Root failure (single-loop).** The `t3.md` corrective tests
+  *Branch-map granularity* and *Smuggle scan*, written at the owner
+  follow-up, were **recorded but not actually executed against every
+  DD-007 row**. The loop-external collection-read row never appeared in
+  the plan's prose enumeration, so it was absent from the branch map; the
+  bool element interpolation contract was applied to scalar bool states
+  but not to bool loop binders.
+
+  **Rows closed.**
+
+  | Author-reachable row (DD-007) | Pre-fix behavior (probed) | Post-fix behavior |
+  |---|---|---|
+  | bare collection ident in a property position (`bar: xs`) | **silently accepted**, lowered to `IrLiteral::Ident` | named "collection reads outside iteration not yet supported" deferral |
+  | collection member navigation (`xs.length`) | misleading `undefined state \`length\`` | named loop-external read deferral |
+  | whole-value qualified read (`root.xs`) | accepted (untyped prop) / type-mismatch only (typed prop) | named loop-external read deferral |
+  | collection ident / navigation in interpolation (`\{xs}`, `\{xs.length}`) | accepted, lowered to `PropRead` | named loop-external read deferral |
+  | collection read as scalar assignment RHS (`n = xs`) | silently accepted | named loop-external read deferral |
+  | indexed read (`xs[i]`) | raw `expected member`/`expected ;` parse error | named deferral at parse |
+  | bool loop binder in interpolation (`\{f}`, `f: bool[]` elem) | accepted, lowered to `ItemRead` | rejected, mirroring the scalar bool-in-interp contract |
+
+  **Implemented-branch test map addendum (this remediation).**
+
+  | Branch / semantic pin added | Direct test |
+  |---|---|
+  | Loop-external collection reads (bare, qualified whole-value, member navigation, interpolation, scalar-RHS, in-body read of the iterated collection) | `check::tests::loop_external_collection_reads_rejected` |
+  | Indexed collection read deferral at parse | `parser::tests::indexed_collection_read_rejected_at_parse` |
+  | Bool loop binder rejected in interpolation; string binder + i32 index positive control | `check::tests::bool_loop_binder_in_interpolation_rejected` |
+  | No duplicate type-mismatch for a collection source in a typed property | covered by `loop_external_collection_reads_rejected` (`Text { text: xs }` asserts the single named diagnostic) |
+
+  **Plan-hypothesis challenge row (this remediation).**
+
+  | Hypothesis challenged | Refuted | Not refuted | Ownership moved / unresolved |
+  |---|---|---|---|
+  | The owner-follow-up widening made the T3 author matrix complete. | Refuted: two DD-007 author rows were still uncovered and silently/misleadingly handled. | The T6/T7 runtime/loader boundary stays correct; no runtime row was wrongly pulled forward. | None — both rows closed in T3. |
+  | "Loop-external collection reads" can rely on existing scalar diagnostics (undefined-state / type-mismatch). | Refuted: bare and interpolated collection reads produced *no* diagnostic; `xs.length` produced the wrong one. | Indexed reads were always rejected — but as a generic parse error, not the named deferral. | None. |
+
+  **Two-key exit check (this remediation).**
+
+  | Key | Status |
+  |---|---|
+  | Carry-forward key | Satisfied. The named loop-external read deferral is now the T3 author surface; T6 must add the **textual-IR loader dual-gate** for the same rows (a `for`-external `list-prop-read` / member navigation in textual IR) — recorded in the carry scan below. No new unowned point. |
+  | Proof key | Satisfied. Every newly closed branch fires a direct test; the silent-acceptance cases are asserted to now emit exactly the named diagnostic. |
+
+  **Behavior / invariant carry scan (this remediation).**
+
+  | Behavior / invariant created | Owner / scope / impact |
+  |---|---|
+  | `wasamoc check` now rejects every author-reachable loop-external collection read with one named deferral; the bool-element interpolation reject extends to loop binders. | **T10 spec sync.** The §4.15 invalid-examples / binder-scope text must list the loop-external read deferral and the bool-binder interpolation reject so the external-reader matrix matches the shipped diagnostics. |
+  | Indexed reads (`xs[i]`) are a **parse-time** reject (no index grammar); all other loop-external reads are **check-time**. | **T6 loader dual-gate.** Textual IR has no `[i]` surface, but it *can* carry a `for`-external `list-prop-read`; T6 must re-reject that independently (the loader does not trust author checks). |
+  | A collection source in a typed scalar property emits the loop-external read diagnostic only (type-mismatch suppressed). | T3-local; no carry. Prevents double diagnostics. |
+
+  **Findings judged out of scope / not changed.** (a) `check_for_body`
+  emits two diagnostics for a single non-widget body member — harmless
+  redundancy, both true, left as-is. (b) The admitted-container set for
+  `for` is a denylist (reject ScrollView/Box/Grid/Cell, admit the rest),
+  mirroring the Phase 6 `if` family pattern, so a `for` under a non-layout
+  leaf widget is admitted at check; this is a **family-level** behavior,
+  not T3-specific, and is recorded as a Phase 8 / spec carry rather than
+  changed under T3 (changing it would touch the shared `if` admission
+  contract). Both are recorded here so they are not silently dropped.
+
+  **Verification evidence.** `cargo fmt --all -- --check` passed (clean).
+  `cargo test -p wasamoc` passed (356 unit tests + 6 roundtrip).
+  `cargo test --workspace` passed (`wasamo-runtime` 381, `wasamo-ir` 23,
+  `wasamoc` 356). No production behavior outside `wasamoc check` / parse
+  diagnostics changed; lowering and emit are unaffected (the rejected
+  inputs never reach lowering).
+
 - **2026-06-13 / T2 post-close critical re-check — plan hypothesis
   challenged against the preamble.** Re-read the implementation
   preamble, the mutable task plan, constraints §8, T2 code diff, and the
