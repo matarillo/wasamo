@@ -1,5 +1,178 @@
 ## Decisions log
 
+- **2026-06-14 / T4 start gate — C1 seam responsibility
+  re-challenged before implementation.** Read the T3 close/carry rows,
+  the T3 owner-follow-up addendum, the T2 carry-forward rows, the T1
+  Seam B record, the Phase 7 constraints/preamble/plan, and
+  [implementation-gates.md](../../../procedures/implementation-gates.md)
+  before editing runtime code. The T4 plan was revised before
+  implementation: T4 owns the pure declared-slot expansion seam and the
+  Phase 6 conditional migration onto that seam; it does **not** own
+  textual-IR `for` load/materialisation (T6), `ForLoopSubtree` effects
+  or collection writers (T7), ZStack placement migration (T5), or GUI
+  evidence (T8/T9).
+
+  **Carry-over checked from prior tasks.**
+
+  | Carry-over | T4 disposition |
+  |---|---|
+  | T1 Seam B: `DeclaredMemberSlot::ForLoop` must exist before T6 so the C1 seam can prove `For` cardinality in pure logic, but production loader construction remains T6-owned. | **T4 owns the variant + test-only construction.** Record the dead-production allowance as carry-forward to T6. |
+  | T1/T3/T2 carry rows for static `for` materialisation, textual-IR loader dual gates, guarded loop-local reads, `ForLoopSubtree`, collection writer evaluation, and `set_if_changed` production use. | **Not T4.** Owners remain T6/T7. T4 only computes offsets/counts/plans from already-known slot cardinalities. |
+  | R-B: C1 touches the shipped Phase 6 conditional path. | **T4 owns.** Migrate conditional insertion/removal index calculation onto the shared seam and run the Phase 6 declared-order regression fixture unchanged. |
+  | R-C / ST2 placement storage migration. | **Not T4.** T5 owns child-carried placement; T4 must preserve the existing ZStack conditional placement call path while only changing index calculation. |
+
+  **T4 responsibility re-check.**
+
+  | Plan hypothesis | T4 decision |
+  |---|---|
+  | "Per-member live cardinality (For = collection length)" might imply T4 should read collection signals or materialise `for` children. | Refuted. T4 accepts cardinality as runtime slot state; T6/T7 own deriving that cardinality from collection signals and constructing/destroying subtrees. |
+  | Tail insert/remove plan derivation could belong to T7 with the splice primitive. | Partially refuted. T7 owns executing the plan and side effects, but T4 owns the pure old-length/new-length range plan so T7 consumes a tested seam. |
+  | The conditional path can keep using a bespoke materialised-index helper. | Refuted. C1 is the canonized seam; the existing conditional 0/1 path migrates now so later `ForLoop` does not fork offset logic. The old thin wrapper was removed in the review follow-up. |
+
+  **T4 start-gate selection.**
+
+  | Trap | Applies? | Reason / planned close artifact |
+  |---|---|---|
+  | #1 semantic migration | **Applies.** | T4 adds `DeclaredMemberSlot::ForLoop` and replaces bespoke offset math with a declared-slot expansion seam. Close with an `rg`-enumerated call-site table over `DeclaredMemberSlot`, `materialized_offset_for_declared_slot`, range-planner helpers, and conditional mutation call sites. |
+  | #2 side effects | **Applies.** | The shipped conditional insert/remove path is a tree-structure mutation. T4 intends to change only offset calculation, but must enumerate the preserved derived effects: child insert/remove, ZStack placement lookup, widget_destroy/registry/effect teardown, layout dirty, and Visual sibling order through the existing widget primitive. |
+  | #3 parallel data drift | Not applicable. | T4 does not add or migrate parent-owned parallel placement metadata, derived indices, or caches; ZStack placement remains T5-owned and current metadata paths are preserved. |
+  | #4 untested authored branch | **Applies.** | T4 adds pure size/range branches: widget / conditional / for cardinality, boundary offsets, total count, tail insert, tail remove, and no-op/equal-length plans. Each branch must have a directly firing unit test. |
+  | #5 carry-forward | **Applies.** | `ForLoop` remains unconstructed in production until T6; T7 consumes the tail plan but owns splice side effects. Both must be recorded with owner, scope, impact, and re-trigger. |
+  | #6 root cause | Standing. | Any deterministic or recurring failure during the T4 regression runs must be root-caused and recorded rather than retried to green. |
+  | #7 GUI evidence | Not applicable. | T4 has no GUI-host rendering deliverable; Windows integration fixtures are regression tests, not assistant screenshot evidence. |
+
+  **Review lane:** full independent review. T4 is a runtime structural
+  refactor of the shipped conditional path, even though its new seam is
+  pure logic and adds no GUI deliverable.
+
+  **Planned proof obligations (implementation-time hypotheses).**
+
+  | Branch / behavior to prove | Category | Planned proof |
+  |---|---|---|
+  | Declared-slot live cardinality: widget = 1, absent/present `If` = 0/1, `ForLoop` = current length | size / semantic branch | Pure unit tests with interleaved static / conditional / `ForLoop` slots. |
+  | Prefix materialised offsets and total count recompute from current slot state, with no cached offset | size / invariant | Pure unit tests mutate conditional/for slot cardinality and re-query offsets/counts. |
+  | Tail plan: old < new inserts `[old, new)`, old > new removes `[new, old)` tail-first, old == new no-op | size / semantic branch | Direct pure unit tests for insert/remove/no-op and boundary zero-length cases. |
+  | Phase 6 conditional insertion/removal still computes declared-order live index through the seam | observable behavior / invariant | Existing Phase 6 declared-order Windows fixture runs unchanged; pure unit covers conditional 0/1 offset. |
+  | T2 deferred `for` load reject remains until T6 | reject branch / owner boundary | Existing loader reject tests remain green; no T4 code should construct production `ForLoop` slots. |
+
+  **Known carry-forward candidates before implementation.**
+
+  | Carry-forward candidate | Owner / scope / impact / close condition |
+  |---|---|
+  | `DeclaredMemberSlot::ForLoop` is test-constructed only after T4. | **Owner = T6.** Scope: loader static materialisation. Impact: production `for` remains deferred-load reject until T6. Close when T6 constructs `ForLoop` slots from textual-IR `for` members and removes/justifies the dead-production allowance. |
+  | Tail range plan is pure only; it does not splice children or update Visual/layout/registry/effects. | **Owner = T7.** Scope: splice seam + `ForLoopSubtree` effect. Impact: no runtime range mutation yet. Close when T7 consumes the plan in the placement-aware stage-then-commit splice and records trap #2 side-effect proof. |
+  | ZStack placement storage remains parent-owned parallel data during T4. | **Owner = T5.** Scope: ST2 child-carried placement migration. Impact: T4 must preserve existing conditional placement behavior, but does not solve range placement drift. Close when T5 deletes/migrates `zstack_placements` per its trap #3 artifact. |
+
+- **2026-06-14 / T4 close gate — C1 seam canonized and conditional
+  path migrated.** Implemented the runtime declared-slot expansion seam
+  in `wasamo-runtime/src/ir_loader.rs`: `DeclaredMemberSlot::ForLoop`
+  plus `ForLoopRuntimeState`, live cardinality dispatch, prefix
+  materialised offsets, total materialised child count, and pure
+  old-length/new-length tail range planning. The existing Phase 6
+  conditional mutation path now reaches its live insertion/removal index
+  through the seam. Production `for` construction remains T6-owned and
+  production range splicing remains T7-owned.
+
+  **Source enumeration used for close artifacts.**
+
+  ```text
+  git diff -- process\milestone-3\phase-7\implementation\plan.md process\milestone-3\phase-7\implementation\log.md wasamo-runtime\src\ir_loader.rs
+  rg -n "DeclaredMemberSlot|ForLoopRuntimeState|TailRangePlan|declared_slot_live_cardinality|materialized_offset_for_declared_slot|total_materialized_children|plan_tail_range_change|mutate_conditional_subtree|insert_child_with_zstack_placement|remove_child|widget_destroy|mark_layout_dirty_for" wasamo-runtime\src\ir_loader.rs
+  rg -n "expansion_seam_|tail_range_plan_|conditional_toggle_preserves_declared_visual_order|conditional_zstack_reinsert" wasamo-runtime\src wasamo-runtime\tests
+  rg -n "ControlFlowNode::For \{ .. \}|static materialisation is owned by T6|materialised in T6|ForLoopSubtree|zstack_placements|cell_placements" wasamo-runtime\src wasamo-runtime\tests process\milestone-3\phase-7\implementation\plan.md
+  ```
+
+  **Trap #1 call-site audit (`rg`-enumerated).**
+
+  | Surface | Sites classified | Disposition |
+  |---|---|---|
+  | `DeclaredMemberSlot` variants | enum definition, `append_static_member` pushes (`Widget`, `Conditional`), `mutate_conditional_subtree` lookup, pure tests | **Extended.** Added `ForLoop` and a live-cardinality arm. Production pushes are deliberately still `Widget` / `Conditional` only; T6 owns first production `ForLoop` construction. |
+  | Offset calculation | `mutate_conditional_subtree` calls `materialized_offset_for_declared_slot` directly | **Migrated.** The shipped conditional path uses the shared seam as the 0/1 case; the old thin wrapper was removed after independent-review follow-up. |
+  | Cardinality / count / tail planner helpers | `declared_slot_live_cardinality`, `total_materialized_children`, `plan_tail_range_change` | **Added.** Pure seam covers widget / conditional / for cardinality, total count, and tail insert/remove/no-op plan derivation. `total_materialized_children` and `plan_tail_range_change` are unused by production until T6/T7 and carry a bounded dead-code allowance. |
+  | Runtime `For` load arm | `append_static_member` `ControlFlowNode::For { .. }` build reject; `collect_static_zstack_placements` reject | **Correctly unaffected.** T4 does not static-materialise `for`; existing T2/T3 reject tests remain green. |
+  | Placement metadata | `zstack_placements` / `cell_placements` hits in `widget.rs`, `layout.rs`, `ir_loader.rs` | **Correctly unaffected.** T4 does not migrate placement storage; T5 remains owner. |
+
+  **Trap #2 structural side-effect enumeration.**
+
+  | Conditional mutation derived effect | T4 disposition |
+  |---|---|
+  | Materialised child insertion/removal index | **Changed only through seam.** `mutate_conditional_subtree` still computes `live_index` immediately before mutation, now directly via `materialized_offset_for_declared_slot`. |
+  | Visual sibling order | **Preserved.** Existing `WidgetNode::insert_child` / `insert_child_with_zstack_placement` / `remove_child` calls are unchanged; Phase 6 declared-order fixture remains green. |
+  | ZStack placement lookup | **Preserved.** Existing `zstack_placement_for_parent(parent, body)` branch is unchanged; T5 owns storage migration. |
+  | Registry/effect teardown on removal | **Preserved.** Existing `crate::widget::widget_destroy(removed)` call is unchanged. |
+  | Layout invalidation | **Preserved.** Existing `crate::emit::mark_layout_dirty_for(parent_ptr)` calls after successful insert/remove are unchanged. |
+  | Parent-owned parallel placement metadata | **Not changed in T4.** Existing ZStack parallel vector path remains, with owner T5. |
+
+  **Implemented-branch test map.**
+
+  | Implemented branch / behavior | Category | Source query / diff cue | Direct test or owner |
+  |---|---|---|---|
+  | `DeclaredMemberSlot::Widget` live cardinality = 1 | size branch | `rg` hit: `DeclaredMemberSlot::Widget => 1`; diff adds `declared_slot_live_cardinality` | `ir_loader::tests::expansion_seam_counts_interleaved_widgets_conditionals_and_for_loops`; `ir_loader::tests::expansion_seam_handles_boundaries_and_total_count` |
+  | `DeclaredMemberSlot::Conditional` live cardinality = 0/1 and recomputes after state mutation | size branch / invariant | `rg` hit: `Conditional(state) => usize::from(state.borrow().live_child)`; test mutates `toggled.borrow_mut().live_child` | `ir_loader::tests::expansion_seam_counts_interleaved_widgets_conditionals_and_for_loops` |
+  | `DeclaredMemberSlot::ForLoop` live cardinality = `live_children`, including zero-cardinality | size branch / invariant | `rg` hits: `ForLoopRuntimeState`, `DeclaredMemberSlot::ForLoop`, `state.borrow().live_children`; diff adds test-only construction | `ir_loader::tests::expansion_seam_counts_interleaved_widgets_conditionals_and_for_loops`; `ir_loader::tests::expansion_seam_handles_boundaries_and_total_count` |
+  | Prefix materialised offsets over interleaved static / absent-if / present-if / for slots | semantic branch | `rg` hit: `materialized_offset_for_declared_slot`; diff shows `mutate_conditional_subtree` calls it directly | `ir_loader::tests::expansion_seam_counts_interleaved_widgets_conditionals_and_for_loops` |
+  | Boundary offsets: first slot, leading zero-cardinality slot, offset after final declared slot | size branch | `rg` hits: test name `expansion_seam_handles_boundaries_and_total_count`; diff adds offset assertions for indices `0`, `1`, `4` | `ir_loader::tests::expansion_seam_handles_boundaries_and_total_count` |
+  | Total materialised child count from current slot state | size branch / invariant | `rg` hit: `total_materialized_children`; diff adds assertions before/after for-loop cardinality mutation | `ir_loader::tests::expansion_seam_counts_interleaved_widgets_conditionals_and_for_loops`; `ir_loader::tests::expansion_seam_handles_boundaries_and_total_count` |
+  | Tail growth plan: old < new inserts the new suffix | size / semantic branch | `rg` hit: `TailRangePlan::Insert`; diff cue `plan_tail_range_change(2, 5)` and `plan_tail_range_change(0, 1)` | `ir_loader::tests::tail_range_plan_derives_insert_remove_and_noop_cases` |
+  | Tail shrink plan: old > new removes retained-boundary suffix tail-first | size / semantic branch | `rg` hit: `tail_first_indices: (new_len..old_len).rev().collect()`; diff cue `plan_tail_range_change(5, 2)` and `plan_tail_range_change(1, 0)` | `ir_loader::tests::tail_range_plan_derives_insert_remove_and_noop_cases` |
+  | Same-length / empty no-op range plan | size / semantic branch | `rg` hit: `TailRangePlan::NoOp`; diff cue `plan_tail_range_change(3, 3)` and `plan_tail_range_change(0, 0)` | `ir_loader::tests::tail_range_plan_derives_insert_remove_and_noop_cases` |
+  | For-slot absolute insertion index composes declared-slot base offset with for-local tail plan | semantic branch / invariant | `rg` hit: `expansion_seam_composes_for_slot_offset_with_tail_plan`; diff cue `[Widget, ForLoop(2), Widget]` + `Insert { start: 2, count: 1 }` | `ir_loader::tests::expansion_seam_composes_for_slot_offset_with_tail_plan` |
+  | Existing conditional mutation computes declared-order live index through the seam and preserves behavior | observable behavior / invariant | `rg` hits: `mutate_conditional_subtree`, `materialized_offset_for_declared_slot`, `conditional_toggle_preserves_declared_visual_order`, `conditional_zstack_reinsert` | `conditional_toggle_preserves_declared_visual_order_and_disposes_registry`; `conditional_zstack_reinsert_uses_declared_placement_metadata`; also covered by `cargo test -p wasamo-runtime` integration run |
+  | Production textual-IR `for` static materialisation remains deferred | reject / owner boundary | `rg` hits: `ControlFlowNode::For { .. }`, `"static materialisation is owned by T6"`, `"materialised in T6"` | `ir_loader::tests::zstack_static_placement_rejects_for_until_static_materialization_lands`; production construction owner = T6 |
+  | Production range splice side effects from the tail plan | not implemented in T4 | `rg` hits in plan: `ForLoopSubtree`; diff adds pure `TailRangePlan` only | **Owner = T7.** Scope: splice seam + `ForLoopSubtree`; impact: no runtime collection mutation yet; close when T7 consumes the plan and records trap #2 side-effect proof. |
+  | ZStack child-carried placement migration / parallel-vector deletion | not implemented in T4 | `rg` hits: `zstack_placements`, `cell_placements`; no diff changes these paths | **Owner = T5.** Scope: ST2 placement migration; impact: current placement metadata remains parallel until T5; close when T5 trap #3 artifact lands. |
+
+  **Behavior / invariant carry scan.**
+
+  | Behavior / invariant discovered or created | Disposition |
+  |---|---|
+  | Declared slot offsets are now a runtime seam over slot cardinality, not a bespoke conditional-only helper. | **Closed in T4** for pure offset/count behavior; T6/T7 must consume the seam rather than reintroducing parallel offset math. |
+  | `DeclaredMemberSlot::ForLoop` and `ForLoopRuntimeState` exist but are production-dead until loader static materialisation. | **Owner = T6.** Scope: textual-IR `for` load + static materialisation. Impact: dead-production allowance is intentional; close when T6 constructs `ForLoop` slots and proves empty-initial zero-child member-live behavior. |
+  | Tail range planning is pure and does not mutate the tree or Visual/layout/registry/effects. | **Owner = T7.** Scope: splice seam + `ForLoopSubtree` effect. Impact: T4 proves the plan behavior and a minimal enum shape only; close when T7 either consumes this shape or deliberately replaces it with an equivalent seam while preserving the T4 branch tests. |
+  | T4 preserved existing conditional ZStack placement calls while placement metadata remains parallel. | **Owner = T5.** Scope: child-carried placement migration. Impact: range placement drift is not solved by T4; close when T5 migrates/deletes `zstack_placements` on mutated paths. |
+  | Production `for` build reject remains after T4. | **Owner = T6.** Scope: replace deferred-load reject with static materialisation. Impact: authored/IR `for` still cannot build a runtime tree until T6. |
+
+  **Carry-forward ownership.**
+
+  | Open point | Owner task | Scope | Impact | Close condition |
+  |---|---|---|---|---|
+  | First production construction of `DeclaredMemberSlot::ForLoop` | T6 | Runtime loader static path | `ForLoop` variant is dead outside tests after T4 | T6 constructs it from validated textual-IR `for` members and removes/updates the dead-code allowance. |
+  | Static `for` materialisation and empty-initial zero-child member-live proof | T6 | Loader static materialisation | Runtime still rejects `for` build | T6 replaces the deferred reject and proves static materialisation without double-creation. |
+  | Tail plan execution and side-effect bundle | T7 | Splice seam + `ForLoopSubtree` effect | T4 has no runtime range mutation | T7 consumes `plan_tail_range_change` or an equivalent seam, confirms/replaces the minimal `TailRangePlan` shape, and records structural side effects. |
+  | ZStack child-carried placement | T5 | ST2 placement storage | Parent-owned `zstack_placements` remains | T5 migration lands with trap #3 greppable artifact. |
+
+  **Independent-review follow-up disposition.** The non-blocking review
+  found no implementation defect and requested two minor cleanups plus
+  one optional depth pin. T4 follow-up addressed all three:
+
+  | Review point | Disposition |
+  |---|---|
+  | Optional depth: compose for-slot base offset with local tail plan. | **Closed.** Added `ir_loader::tests::expansion_seam_composes_for_slot_offset_with_tail_plan`, pinning `[Widget, ForLoop(2), Widget]` + `Insert { start: 2, count: 1 }` → absolute index `3`. |
+  | Minor contract: `TailRangePlan` carried redundant `Remove.start` and `NoOp.len`. | **Closed for T4 shape.** Simplified to `Remove { tail_first_indices }` and `NoOp`; T7 still owns confirming or replacing the exact consumer-facing shape when it implements the splice. |
+  | Minor cruft: `materialized_index_for_declared_member` was a thin pass-through. | **Closed.** Removed the wrapper and pointed `mutate_conditional_subtree` plus tests directly at `materialized_offset_for_declared_slot`. |
+
+  **Trap #6 disposition.** One deterministic failure occurred on the
+  first `cargo test -p wasamo-runtime` run:
+  `ir_loader::tests::expansion_seam_counts_interleaved_widgets_conditionals_and_for_loops`
+  expected offset `4` after setting the preceding `ForLoop` cardinality
+  to zero. Root cause: fixture arithmetic, not implementation behavior;
+  the correct prefix is `1 + 1 + 0 + 1 + 0 = 3`. The test expectation was
+  corrected and the test suite was rerun to green; no retry was treated
+  as a flake.
+
+  **Trap #3 / #7 close confirmation.** T4 added no parallel vector,
+  derived index cache, or placement metadata migration (#3), and has no
+  GUI-render screenshot deliverable (#7).
+
+  **Verification evidence.** `cargo fmt --all -- --check` passed.
+  `cargo test -p wasamo-runtime` passed (384 unit tests plus the runtime
+  integration fixtures, including
+  `conditional_toggle_preserves_declared_visual_order_and_disposes_registry`
+  and `conditional_zstack_reinsert_uses_declared_placement_metadata`).
+  `cargo test --workspace` passed. **Review lane remains full
+  independent review** because T4 refactors the shipped runtime
+  structural conditional path.
+
 - **2026-06-14 / T3 start gate — author surface responsibility
   re-challenged before implementation.** Read the T2 close/carry rows,
   the T2 implemented-branch addendum, T1 carry-forward rows, the Phase 7

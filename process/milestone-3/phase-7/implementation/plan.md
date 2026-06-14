@@ -191,18 +191,27 @@ Discharges ADR evidence item (2). The riskiest refactor of the phase
 (risk R-B): touches the shipped Phase 6 conditional path. Own task,
 own commit, full independent review (runtime structural change).
 
-- [ ] Implement the shared "declared members → materialised children"
-      seam as pure logic: per-member live cardinality (widget = 1,
-      `If` = 0/1, `For` = collection length) and prefix-sum
-      materialised offsets; no caching (recompute per mutation).
-- [ ] Migrate the Phase 6 conditional path
-      (`materialized_index_for_declared_member` and friends) onto the
-      seam as the 0/1 special case.
-- [ ] Pure-logic unit suite: interleaved `if` / `for` / static
+- [x] Introduce the shared **declared slot expansion** seam as pure
+      logic over runtime slot cardinalities: widget = 1, `If` = 0/1,
+      `ForLoop` = current collection length. The seam owns prefix-sum
+      materialised offsets, total materialised child count, and tail
+      range plan derivation from old length → new length. It does **not**
+      build `for` children, evaluate collection reads, or cache offsets;
+      those remain T6/T7-owned.
+- [x] Add the bounded `DeclaredMemberSlot::ForLoop` representation now,
+      ahead of first production construction (Seam B from T1). It is
+      test-constructed only in T4 so the pure seam can prove interleaved
+      `if` / `for` / static siblings; T6 closes the dead-production
+      allowance by constructing it from loader `for` members.
+- [x] Migrate the Phase 6 conditional path
+      onto `materialized_offset_for_declared_slot` as the canonical
+      seam's 0/1 special case, preserving the shipped conditional
+      insertion / removal behavior.
+- [x] Pure-logic unit suite: interleaved `if` / `for` / static
       siblings, zero-cardinality slots, boundary slots, tail
-      insert/remove plan derivation (old length → new length), and
+      insert/remove/no-op plan derivation (old length → new length), and
       load-time materialisation counts.
-- [ ] Phase 6 declared-order Windows fixtures run unchanged as the
+- [x] Phase 6 declared-order Windows fixtures run unchanged as the
       regression gate.
 
 ### T5 — ST2: ZStack child-carried placement migration

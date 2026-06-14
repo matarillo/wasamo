@@ -92,10 +92,24 @@ pub struct BuiltUi {
 enum DeclaredMemberSlot {
     Widget,
     Conditional(Rc<RefCell<ConditionalRuntimeState>>),
+    #[allow(dead_code)]
+    ForLoop(Rc<RefCell<ForLoopRuntimeState>>),
 }
 
 struct ConditionalRuntimeState {
     live_child: bool,
+}
+
+#[allow(dead_code)]
+struct ForLoopRuntimeState {
+    live_children: usize,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum TailRangePlan {
+    Insert { start: usize, count: usize },
+    Remove { tail_first_indices: Vec<usize> },
+    NoOp,
 }
 
 impl BuiltUi {
@@ -2580,18 +2594,47 @@ fn append_static_member(
     Ok(())
 }
 
-fn materialized_index_for_declared_member(
+fn declared_slot_live_cardinality(slot: &DeclaredMemberSlot) -> usize {
+    match slot {
+        DeclaredMemberSlot::Widget => 1,
+        DeclaredMemberSlot::Conditional(state) => usize::from(state.borrow().live_child),
+        DeclaredMemberSlot::ForLoop(state) => state.borrow().live_children,
+    }
+}
+
+fn materialized_offset_for_declared_slot(
     declared_member_index: usize,
     declared_slots: &[DeclaredMemberSlot],
 ) -> usize {
     declared_slots
         .iter()
         .take(declared_member_index)
-        .map(|slot| match slot {
-            DeclaredMemberSlot::Widget => 1,
-            DeclaredMemberSlot::Conditional(state) => usize::from(state.borrow().live_child),
-        })
+        .map(declared_slot_live_cardinality)
         .sum()
+}
+
+#[allow(dead_code)]
+fn total_materialized_children(declared_slots: &[DeclaredMemberSlot]) -> usize {
+    declared_slots
+        .iter()
+        .map(declared_slot_live_cardinality)
+        .sum()
+}
+
+#[allow(dead_code)]
+fn plan_tail_range_change(old_len: usize, new_len: usize) -> TailRangePlan {
+    if new_len > old_len {
+        TailRangePlan::Insert {
+            start: old_len,
+            count: new_len - old_len,
+        }
+    } else if new_len < old_len {
+        TailRangePlan::Remove {
+            tail_first_indices: (new_len..old_len).rev().collect(),
+        }
+    } else {
+        TailRangePlan::NoOp
+    }
 }
 
 fn mutate_conditional_subtree(
@@ -2624,7 +2667,7 @@ fn mutate_conditional_subtree(
     }
     let live_index = {
         let slots = declared_slots.borrow();
-        materialized_index_for_declared_member(declared_member_index, &slots)
+        materialized_offset_for_declared_slot(declared_member_index, &slots)
     };
     unsafe {
         let parent = &mut *parent_ptr;
@@ -3064,43 +3107,157 @@ mod tests {
         })))
     }
 
+    fn for_loop_slot(live_children: usize) -> DeclaredMemberSlot {
+        DeclaredMemberSlot::ForLoop(Rc::new(RefCell::new(ForLoopRuntimeState { live_children })))
+    }
+
     #[test]
-    fn materialized_index_counts_preceding_widgets_and_live_conditionals() {
+    fn expansion_seam_counts_interleaved_widgets_conditionals_and_for_loops() {
         let toggled = Rc::new(RefCell::new(ConditionalRuntimeState { live_child: true }));
+        let generated = Rc::new(RefCell::new(ForLoopRuntimeState { live_children: 3 }));
         let slots = vec![
             DeclaredMemberSlot::Widget,
             DeclaredMemberSlot::Widget,
             conditional_slot(false),
             DeclaredMemberSlot::Conditional(Rc::clone(&toggled)),
+            DeclaredMemberSlot::ForLoop(Rc::clone(&generated)),
             DeclaredMemberSlot::Widget,
         ];
 
         assert_eq!(
-            materialized_index_for_declared_member(2, &slots),
+            materialized_offset_for_declared_slot(2, &slots),
             2,
             "preceding widgets contribute one materialised child each"
         );
         assert_eq!(
-            materialized_index_for_declared_member(3, &slots),
+            materialized_offset_for_declared_slot(3, &slots),
             2,
             "absent preceding conditional contributes no materialised child"
         );
         assert_eq!(
-            materialized_index_for_declared_member(4, &slots),
+            materialized_offset_for_declared_slot(4, &slots),
             3,
             "present preceding conditional contributes one materialised child"
         );
         assert_eq!(
-            materialized_index_for_declared_member(5, &slots),
+            materialized_offset_for_declared_slot(5, &slots),
+            6,
+            "preceding for-loop contributes its live cardinality"
+        );
+        assert_eq!(
+            materialized_offset_for_declared_slot(6, &slots),
+            7,
+            "mixed widget / absent conditional / present conditional / for-loop prefix"
+        );
+        assert_eq!(
+            total_materialized_children(&slots),
+            7,
+            "total materialised count is the sum of live slot cardinalities"
+        );
+
+        generated.borrow_mut().live_children = 0;
+        assert_eq!(
+            materialized_offset_for_declared_slot(5, &slots),
+            3,
+            "zero-cardinality for-loop contributes no materialised children"
+        );
+        assert_eq!(
+            total_materialized_children(&slots),
             4,
-            "mixed widget / absent conditional / present conditional prefix"
+            "total count recomputes after for-loop cardinality changes"
         );
 
         toggled.borrow_mut().live_child = false;
         assert_eq!(
-            materialized_index_for_declared_member(4, &slots),
+            materialized_offset_for_declared_slot(4, &slots),
             2,
             "removing a preceding conditional shifts later materialised indices"
+        );
+    }
+
+    #[test]
+    fn expansion_seam_handles_boundaries_and_total_count() {
+        let slots = vec![
+            for_loop_slot(0),
+            DeclaredMemberSlot::Widget,
+            conditional_slot(true),
+            for_loop_slot(2),
+        ];
+
+        assert_eq!(
+            materialized_offset_for_declared_slot(0, &slots),
+            0,
+            "first declared slot starts at materialised offset zero"
+        );
+        assert_eq!(
+            materialized_offset_for_declared_slot(1, &slots),
+            0,
+            "leading zero-cardinality slot does not move the offset"
+        );
+        assert_eq!(
+            materialized_offset_for_declared_slot(4, &slots),
+            4,
+            "offset after the final declared slot equals total materialised children"
+        );
+        assert_eq!(total_materialized_children(&slots), 4);
+    }
+
+    #[test]
+    fn tail_range_plan_derives_insert_remove_and_noop_cases() {
+        assert_eq!(
+            plan_tail_range_change(2, 5),
+            TailRangePlan::Insert { start: 2, count: 3 },
+            "tail growth inserts the new suffix"
+        );
+        assert_eq!(
+            plan_tail_range_change(5, 2),
+            TailRangePlan::Remove {
+                tail_first_indices: vec![4, 3, 2],
+            },
+            "tail shrink removes from the old tail toward the retained prefix"
+        );
+        assert_eq!(
+            plan_tail_range_change(3, 3),
+            TailRangePlan::NoOp,
+            "same-length reset is a no-op for structural range planning"
+        );
+        assert_eq!(
+            plan_tail_range_change(0, 0),
+            TailRangePlan::NoOp,
+            "empty boundary is stable"
+        );
+        assert_eq!(
+            plan_tail_range_change(0, 1),
+            TailRangePlan::Insert { start: 0, count: 1 },
+            "empty-to-one inserts at the beginning of the range"
+        );
+        assert_eq!(
+            plan_tail_range_change(1, 0),
+            TailRangePlan::Remove {
+                tail_first_indices: vec![0],
+            },
+            "one-to-empty removes the only materialised child"
+        );
+    }
+
+    #[test]
+    fn expansion_seam_composes_for_slot_offset_with_tail_plan() {
+        let slots = vec![
+            DeclaredMemberSlot::Widget,
+            for_loop_slot(2),
+            DeclaredMemberSlot::Widget,
+        ];
+        let for_slot_base = materialized_offset_for_declared_slot(1, &slots);
+
+        let insert_start = match plan_tail_range_change(2, 3) {
+            TailRangePlan::Insert { start, count: 1 } => start,
+            other => panic!("expected single tail insert, got {other:?}"),
+        };
+
+        assert_eq!(
+            for_slot_base + insert_start,
+            3,
+            "absolute insertion index composes declared-slot base offset with for-local tail plan"
         );
     }
 
