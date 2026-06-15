@@ -195,10 +195,11 @@ Known phase-wide gate load (from the ADR):
   remain on mutated paths" (greppable) + the Grid static-only pointer.
 - **Trap #4 (untested reject branch)** — every DD-007 matrix row
   fires a direct test (T3 / T6 / T7).
-- **Review tiers** — T2 (schema / IR migration) and T5 / T7 (runtime
-  structural change) take the full independent review; diagnostic /
-  reject-branch additions (T3, T6) take the branch/test-focused
-  review.
+- **Review tiers** — T2 (schema / IR migration) and T5 / T6 / T7
+  (runtime structural change) take the full independent review; T3
+  takes the branch/test-focused review. If a full-review task also adds
+  diagnostic / reject branches, the full review includes the trap #4
+  branch/test check.
 
 ## Technical risks (planning-time recon)
 

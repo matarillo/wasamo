@@ -1,5 +1,286 @@
 ## Decisions log
 
+- **2026-06-15 / T6 rereview closure — residual placement rows
+  classified.** The second independent review found no merge blocker
+  and left two low-priority questions. Both were re-checked against
+  DD-M3-P7-007 and `docs/dsl_spec.md` §4.15 before close.
+
+  **Source enumeration used for this closure.**
+
+  ```text
+  rg -n "for_member_rejects_component_body_surface_at_parse|validate_rejects_if_with_nested_control_flow_body|for_member_parses_binders_collection_and_body|for_member_rejects_direct_disallowed_containers|unexpected token in component body|validate_direct_for_parent" wasamo-runtime\src\ir_loader.rs
+  ```
+
+  **Rereview residual disposition.**
+
+  | Residual | Disposition |
+  |---|---|
+  | `for` nested through `if` under Box/ScrollView might bypass the direct-container reject | **Closed in T6 by existing loader gate, now explicitly pinned.** Phase 6 validation rejects a control-flow member directly inside an `if` body before Box/ScrollView materialisation; `validate_rejects_if_with_nested_control_flow_body` now includes `node Box { if true { for x in xs { ... } } }` as a direct `nested control-flow` subcase. |
+  | Root / component-level `for` admit-vs-reject ambiguity | **Classified, with a direct parse test.** Component body-level `for` remains rejected by the textual-IR component parser (`unexpected token in component body`) and is pinned by `for_member_rejects_component_body_surface_at_parse`. A `for` inside the root widget's body (for example `node WrapPanel { for ... }`) is not component-level and remains admitted; this is pinned by `for_member_parses_binders_collection_and_body`. |
+
+  **Deterministic-failure root cause / disposition.** During this
+  closure pass, a too-broad attempted fix treated `ParentKind::Root` as
+  component-level and rejected every direct `for` inside the root
+  widget. That failed `for_member_parses_binders_collection_and_body`
+  and the Box/ScrollView reject test. Root cause: in runtime textual IR
+  the component has exactly one root node; `ParentKind::Root` describes
+  that node's parent, not a component-body member slot. The attempted
+  reject was reverted, and the actual component-body surface is covered
+  as a parse reject instead.
+
+  **Implemented-branch test map addendum.**
+
+  | Implemented branch / behavior | Category | Source query / diff cue | Direct test or owner |
+  |---|---|---|---|
+  | Component body-level `for` cannot appear in textual IR | reject / diagnostic branch | `rg` hits: `unexpected token in component body`, `for_member_rejects_component_body_surface_at_parse` | `ir_loader::tests::for_member_rejects_component_body_surface_at_parse` |
+  | Root widget body-level `for` under an admitted container is not component-level | semantic / owner-boundary branch | `rg` hit: `for_member_parses_binders_collection_and_body` | `ir_loader::tests::for_member_parses_binders_collection_and_body` |
+  | `if` body cannot directly contain `for`, including inside Box | reject / diagnostic branch | `rg` hit: `validate_rejects_if_with_nested_control_flow_body` | `ir_loader::tests::validate_rejects_if_with_nested_control_flow_body` subcase `node Box { if true { for ... } }` |
+
+  **Verification run after rereview closure.**
+
+  ```text
+  cargo fmt --all
+  cargo test -p wasamo-runtime
+  ```
+
+  Both completed successfully on 2026-06-15.
+
+- **2026-06-15 / T6 review remediation — i32 item-read proof gap
+  closed.** Claude's independent review found one real T6 defect and a
+  matching close-gate hole: `HandlerExpr::ItemRead` in string/interp
+  binding evaluation always used the string item reader, so `for n in
+  nums { Text { text: "\{n}" } }` validated but failed at runtime with
+  an i32 item. T6 now dispatches string-like item binding reads through
+  `read_item_binding_tracked`, which stringifies i32 loop items, keeps
+  string loop items as strings, and still rejects bool loop items in
+  string display contexts.
+
+  **Source enumeration used for this review remediation.**
+
+  ```text
+  rg -n "read_item_binding_tracked|register_for_item_binding_stringifies_i32_item_value|static_for_materialises_i32_item_and_index_bindings|static_for_composes_with_preceding_conditional_slot_offsets|static_for_under_zstack_preserves_child_carried_placement|loop_local_reads_are_scoped_to_for_body|bare_collection_read_outside_for_header_rejected|static_for_materialises_initial_children_and_loop_local_bindings|static_for_empty_initial_collection_materialises_zero_children" wasamo-runtime\src wasamo-runtime\tests
+  git diff -- wasamo-runtime\src\handler.rs wasamo-runtime\src\reactive.rs wasamo-runtime\src\ir_loader.rs wasamo-runtime\tests\ir_loader_roundtrip.rs wasamo-runtime\tests\iteration_static_integration.rs
+  ```
+
+  **Review finding disposition.**
+
+  | Finding | Disposition |
+  |---|---|
+  | A: i32 collection item read was broken and untested | **Fixed.** `EvalContext::read_item_binding_tracked` is now the string-like item-read entry point, and `ForItemEvalContext` dispatches by `IrType`. Direct tests: `reactive::tests::register_for_item_binding_stringifies_i32_item_value` and `iteration_static_integration::static_for_materialises_i32_item_and_index_bindings`. |
+  | B: start gate planned string / i32 but close only proved string | **Fixed by this addendum.** The close map below is supplemented with explicit i32 runtime/unit rows; the original T6 close entry should be read together with this remediation entry. |
+  | C: missing `validate_loop_local_binding_type` sub-branches | **Fixed.** `ir_loader::tests::loop_local_reads_are_scoped_to_for_body` now directly fires string item -> i32 target and index binder -> bool target rejects. |
+  | D: missing production `if` + `for` adjacent slot-offset fixture | **Fixed.** `iteration_static_integration::static_for_composes_with_preceding_conditional_slot_offsets` exercises preceding conditional true/false plus a following static sibling. |
+  | E: missing production ZStack + `for` child-carried placement fixture | **Fixed.** `iteration_static_integration::static_for_under_zstack_preserves_child_carried_placement` builds through wasamoc -> textual IR -> runtime loader and checks child text plus layout offsets. |
+  | Minor: dead `validate_direct_for_parent` root arm / mostly unused parent | **Fixed.** The unused parent parameter and dead root arm were removed; `cargo test -p wasamo-runtime` is warning-clean. |
+  | Minor: close traceability for for-external `list-prop-read` | **Clarified.** Existing direct loader test is `ir_loader::tests::bare_collection_read_outside_for_header_rejected`; the source enumeration above includes it. |
+
+  **Implemented-branch test map addendum.**
+
+  | Implemented branch / behavior | Category | Source query / diff cue | Direct test or owner |
+  |---|---|---|---|
+  | String-like `item-read` dispatch stringifies i32 loop items instead of forcing the string reader | semantic branch / defect fix | `rg` hits: `read_item_binding_tracked` in `handler.rs` and `reactive.rs`; diff cue: `HandlerExpr::ItemRead` now calls `ctx.read_item_binding_tracked` | `reactive::tests::register_for_item_binding_stringifies_i32_item_value`; `iteration_static_integration::static_for_materialises_i32_item_and_index_bindings` |
+  | String item cannot bind to an i32 target property | reject / diagnostic branch | `rg` hit: `loop_local_reads_are_scoped_to_for_body`; diff cue: `element type \`string\`, not \`i32\`` | `ir_loader::tests::loop_local_reads_are_scoped_to_for_body` subcase `string_item_to_i32_target` |
+  | Index binder cannot bind to a bool target property | reject / diagnostic branch | `rg` hit: `loop_local_reads_are_scoped_to_for_body`; diff cue: `index binder cannot be used in a bool binding` | `ir_loader::tests::loop_local_reads_are_scoped_to_for_body` subcase `index_read_to_bool_target` |
+  | Static `for` composes with preceding `if` slot offsets for both true and false condition branches | size / semantic branch | `rg` hit: `static_for_composes_with_preceding_conditional_slot_offsets` | `iteration_static_integration::static_for_composes_with_preceding_conditional_slot_offsets` |
+  | Static generated ZStack children preserve child-carried `h-align:end` / `v-align:start` placement through production loader and layout | observable behavior / invariant | `rg` hit: `static_for_under_zstack_preserves_child_carried_placement` | `iteration_static_integration::static_for_under_zstack_preserves_child_carried_placement` |
+  | Textual-IR loop-external collection read remains a loader dual-gate reject | reject / owner-boundary branch | `rg` hit: `bare_collection_read_outside_for_header_rejected` | `ir_loader::tests::bare_collection_read_outside_for_header_rejected` |
+
+  **Behavior / invariant carry scan after remediation.**
+
+  | Behavior / invariant | Disposition |
+  |---|---|
+  | i32 loop items are display-formattable only in string-like binding contexts; bool loop items still are not display-formattable in T6. | **Closed in T6** for static generated children; T7 reuses the same evaluator for tail-inserted children. |
+  | Slot-offset composition across `if` and static `for` is now production-observable before mutation effects exist. | **Closed in T6** for static load; T7 owns mutation-time range updates over the same seam. |
+  | ZStack generated children use child-carried placement in production, not just in the static placement reducer. | **Closed in T6** for static load; T7 owns mutation-time ZStack range insertion/removal. |
+  | No new unresolved owner-less item was created by the remediation. | Existing carry-forward ownership remains: T7 for structural `ForLoopSubtree`, handler collection writers, tail mutation / disposal / cap fixtures; T8 for assistant-visible gallery screenshots. |
+
+  **Verification run after remediation.**
+
+  ```text
+  cargo fmt --all
+  cargo test -p wasamo-runtime
+  cargo fmt --all -- --check
+  cargo test --workspace
+  ```
+
+  All four completed successfully on 2026-06-15. `cargo test
+  --workspace` still emits the pre-existing package `wasamo` linkable
+  target warning; no test failed.
+
+- **2026-06-15 / T6 close gate — loader `for` static
+  materialisation landed.** Replaced the deferred runtime-loader
+  `ControlFlowNode::For` build reject with static materialisation:
+  `append_static_member` now constructs the first production
+  `DeclaredMemberSlot::ForLoop`, derives initial cardinality from the
+  whole-value collection signal, builds one generated child per initial
+  item through the T4 prefix-sum seam, and attaches per-item bindings
+  through `ForItemEvalContext`. No `BindingTarget::ForLoopSubtree`
+  structural effect or collection writer landed in T6; those remain
+  T7-owned per the start-gate split.
+
+  **Source enumeration used for close artifacts.**
+
+  ```text
+  git status --short
+  git diff -- process\milestone-3\phase-7\implementation\preamble.md process\milestone-3\phase-7\implementation\plan.md process\milestone-3\phase-7\implementation\log.md wasamo-runtime\src\handler.rs wasamo-runtime\src\reactive.rs wasamo-runtime\src\ir_loader.rs wasamo-runtime\tests\ir_loader_roundtrip.rs
+  rg -n "ForItemContext|ForItemEvalContext|register_for_item|evaluate_binding_optional|evaluate_bool_binding_optional|evaluate_tracked_optional|static_collection_cardinality|DeclaredMemberSlot::ForLoop|ForLoopRuntimeState|ControlFlowNode::For|validate_phase7_iteration|validate_loop_local_binding_type|loop-local|nested `for`|direct `for`|bool loop binder|iteration_emit_then_parse|static_for_|zstack_static_placement_reducer" wasamo-runtime\src wasamo-runtime\tests process\milestone-3\phase-7\implementation\plan.md process\milestone-3\phase-7\implementation\log.md
+  rg -n "register_for_item_binding_writes_item_index_and_skips_out_of_range|register_for_item_bool_binding_tracks_bool_item_value|for_member_rejects_direct_disallowed_containers|for_member_rejects_handler_and_nested_for_inside_template|loop_local_reads_are_scoped_to_for_body|for_member_parses_binders_collection_and_body|for_member_rejects_scalar_collection_target|for_member_rejects_undeclared_collection_target|for_member_rejects_multi_child_body|for_member_rejects_nested_control_flow_body|zstack_static_placement_reducer_expands_for_cardinality_after_t6|iteration_emit_then_parse_preserves_for_member_and_collection_state|static_for_materialises_initial_children_and_loop_local_bindings|static_for_empty_initial_collection_materialises_zero_children" wasamo-runtime\src wasamo-runtime\tests
+  ```
+
+  **Trap #1 call-site audit table.**
+
+  | Surface / call-site class | Source query / diff cue | Classification |
+  |---|---|---|
+  | `ControlFlowNode::For` parse / annotation / validation / render sites | `rg -n "ControlFlowNode::For" wasamo-runtime\src\ir_loader.rs wasamo-runtime\tests` | **Extended / already extended.** Parser and annotation already existed; T6 added the remaining runtime-load behavior and extra validation gates. Test renderer and cross-crate roundtrip preserve the textual shape. |
+  | `append_static_member` `ControlFlowNode::For` arm | diff cue: removed deferred build reject; `rg` hits `static_collection_cardinality`, `ForLoopRuntimeState`, `DeclaredMemberSlot::ForLoop` | **Extended.** First production construction and static generated child insertion now live here. |
+  | `DeclaredMemberSlot::ForLoop` / `ForLoopRuntimeState` | `rg -n "DeclaredMemberSlot::ForLoop|ForLoopRuntimeState" wasamo-runtime\src\ir_loader.rs` | **Extended.** No longer test-only / production-dead; `live_children` is set from initial collection cardinality at load. |
+  | Loop-local `HandlerExpr::ItemRead` / `IndexRead` in validation | `rg -n "LoopReadScope|validate_loop_local_binding_type|loop-local|bool loop binder" wasamo-runtime\src\ir_loader.rs` | **Extended.** Loader now scopes loop-local reads to the current `for` body, rejects missing index binders, and rejects bool item interpolation. |
+  | Loop-local runtime evaluation | `rg -n "ForItemContext|ForItemEvalContext|register_for_item|evaluate_.*optional" wasamo-runtime\src` | **Extended for static children.** New guarded optional evaluators and for-item registration entry points cover T6 static-load bindings. |
+  | `BindingTarget::ForLoopSubtree` | `rg -n "ForLoopSubtree|BindingTarget" wasamo-runtime\src process\milestone-3\phase-7\implementation\plan.md` | **Deliberately not extended in T6.** Owner remains T7; plan was revised so T7 owns the structural effect and its initial-run no-double-create proof. |
+  | Widget-only filters such as `IrNode::widget_children()` | `rg -n "widget_children\\(|ControlFlow\\(_\\)" wasamo-runtime\src wasamo-ir\src` (carried from T2/T4 audit) | **Correctly unaffected.** T6 materialises through `append_static_member`; widget-only filters continue to exclude control-flow bodies unless a validator explicitly recurses. |
+
+  **Trap #2 structural side-effect enumeration.**
+
+  | Derived effect / path | T6 disposition |
+  |---|---|
+  | Runtime child insertion at static load | **Implemented.** For each initial item, `append_static_member` builds the body with a `ForItemContext` and inserts at `base_index + position`, where `base_index` comes from `materialized_offset_for_declared_slot`. |
+  | Visual sibling order | **Preserved.** Generated children use the existing `insert_child` / `insert_child_with_zstack_placement` paths, so the VisualCollection order follows the same child-vector insertion order as static widgets / conditionals. |
+  | ZStack placement | **Preserved through child-carried placement.** Generated ZStack children call `insert_child_with_zstack_placement(..., extract_zstack_placement(body))`; no parent-owned ZStack placement vector was reintroduced. |
+  | Layout dirty behavior | **No new static-load dirty mark.** Like existing static child construction, initial build establishes the tree before any layout pass; mutation-time invalidation remains T7's splice-seam responsibility. |
+  | Binding ownership | **Implemented for static generated children.** Per-item EffectHandles are pushed into the generated child widget's own `bindings` during `build_node_with_loop_context`; parent-owned structural effect remains absent until T7. |
+  | Registry / teardown | **No new teardown path in T6.** Static generated children use the same registry references and child-owned EffectHandles as normal bindings. Tail removal / disposal is T7-owned. |
+
+  **Trap #3 parallel / derived-data sync artifact.**
+
+  | Parallel / derived structure | Source query / result | Disposition |
+  |---|---|---|
+  | `declared_slots` vs generated child range | `rg` hits: `push(DeclaredMemberSlot::ForLoop(...))`, `materialized_offset_for_declared_slot(declared_member_index, &slots)`, `for position in 0..live_children` | **Closed for static load.** The slot is pushed once with `live_children = initial len`, then exactly that many children are inserted at the seam-derived base range. |
+  | Collection signal cardinality vs `ForLoopRuntimeState.live_children` | `rg` hit: `static_collection_cardinality(collection, registry)` | **Closed for T6.** The count is read from the typed whole-value collection map at load. Mutation-time count changes remain T7. |
+  | Child-carried placement vs generated ZStack children | `rg` hits: `insert_child_with_zstack_placement` in the `For` arm and no `zstack_placements` hits in runtime source | **Closed for T6.** Generated children reuse T5's child-carried placement path. |
+  | For-item effect ownership vs generated child subtree | `rg` hits: `register_for_item_binding`, `register_for_item_bool_binding`, `widget.bindings.push(handle)` inside `build_node_with_loop_context` | **Closed for static load.** Generated child roots own their own per-item binding handles. T7 owns removal disposal proof. |
+
+  **Implemented-branch test map.**
+
+  | Implemented branch / behavior | Category | Source query / diff cue | Direct test or owner |
+  |---|---|---|---|
+  | Textual IR `for` parse/emit/load preserves binder, optional index binder, collection read, body, collection state, and loop-local reads | semantic branch | `rg` hits: `parse_for_member`, `render_node` `ControlFlowNode::For`, `iteration_emit_then_parse_preserves_for_member_and_collection_state` | `ir_loader::tests::for_member_parses_binders_collection_and_body`; `iteration_emit_then_parse_preserves_for_member_and_collection_state` |
+  | Static nonempty collection materialises N generated children in declared order with static siblings | size / semantic branch | diff cue: `for position in 0..live_children`; test cue `static_for_materialises_initial_children_and_loop_local_bindings` | `iteration_static_integration::static_for_materialises_initial_children_and_loop_local_bindings` |
+  | Empty initial collection materialises zero children and keeps surrounding siblings | size / invariant | diff cue: `ForLoopRuntimeState { live_children }`; test cue `static_for_empty_initial_collection_materialises_zero_children` | `iteration_static_integration::static_for_empty_initial_collection_materialises_zero_children` |
+  | First production `DeclaredMemberSlot::ForLoop` construction closes the T4 dead-production allowance | semantic / owner-boundary branch | `rg` hits: `push(DeclaredMemberSlot::ForLoop(Rc::clone(&state)))` | Covered by the two `iteration_static_integration` build fixtures and existing T4 seam unit tests. |
+  | Per-item string item + index reads write initial generated Text content | semantic branch | `rg` hits: `ForItemContext`, `ForItemEvalContext`, `register_for_item_binding` | `iteration_static_integration::static_for_materialises_initial_children_and_loop_local_bindings`; `reactive::tests::register_for_item_binding_writes_item_index_and_skips_out_of_range` |
+  | Guarded out-of-range per-item read skips the write | semantic branch / invariant | `rg` hits: `Ok(None) => {}` in for-item registration | `reactive::tests::register_for_item_binding_writes_item_index_and_skips_out_of_range`; mutation-time same-batch removed item remains owner = T7 |
+  | Bool item binding evaluates through the bool for-item registration path | semantic branch | `rg` hits: `register_for_item_bool_binding`, `read_item_bool_tracked` | `reactive::tests::register_for_item_bool_binding_tracks_bool_item_value` |
+  | Direct `for` under ScrollView / Box / Grid is rejected by loader dual-gate | reject branch | `rg` hits: `validate_direct_for_parent`; test name cue | `ir_loader::tests::for_member_rejects_direct_disallowed_containers` |
+  | Handler inside a `for` body and nested `for` inside the template are rejected by loader dual-gate | reject branch | `rg` hits: `handlers inside a \`for\` body`, `nested \`for\`` | `ir_loader::tests::for_member_rejects_handler_and_nested_for_inside_template` |
+  | Loop-local reads outside body, missing index binder, and bool item interpolation are rejected by loader dual-gate | reject / diagnostic branch | `rg` hits: `LoopReadScope`, `validate_loop_local_binding_type`, `bool loop binder` | `ir_loader::tests::loop_local_reads_are_scoped_to_for_body` |
+  | Existing collection/header/body reject rows remain direct | reject branch | `rg` hits: `for_member_rejects_scalar_collection_target`, `for_member_rejects_undeclared_collection_target`, `for_member_rejects_multi_child_body`, `for_member_rejects_nested_control_flow_body`, collection assignment tests | Existing `ir_loader::tests::*` rows listed by the source query above. |
+  | Static ZStack placement reducer expands `for` cardinality after T6 | observable behavior / invariant | `rg` hit: `zstack_static_placement_reducer_expands_for_cardinality_after_t6` | `ir_loader::tests::zstack_static_placement_reducer_expands_for_cardinality_after_t6`; production ZStack placement path is exercised by the static insertion code path and T5 regressions. |
+  | `BindingTarget::ForLoopSubtree` structural effect initial run / no double-create after effect registration | not implemented in T6 | Plan/log cue: T6 split; `rg` has no production `ForLoopSubtree` variant | **Owner = T7.** Scope: structural effect + initial reconcile + mutation; impact: T6 proves only pre-effect static single-pass load. |
+  | Handler-side collection assignment writer | not implemented in T6 | Plan/log cue: T7 CF-6 bullet; handler evaluator still rejects collection forms | **Owner = T7.** Scope: authored `append` / `drop-last` / literal reset in handlers; impact: T6 static fixtures use defaults, not handler-driven cardinality change. |
+  | Tail append/remove, same-length reset, same-batch doomed-binding, cap convergence | not implemented in T6 | Plan/log cue: T7 Windows-runtime and cap fixtures | **Owner = T7.** Scope: reactive range mutation; impact: static load works, but collection changes do not yet change cardinality. |
+
+  **Behavior / invariant carry scan.**
+
+  | Behavior / invariant discovered or created | Disposition |
+  |---|---|
+  | Static materialisation is now a single-pass loader operation, and no structural `for` effect exists in T6. | **Closed / carried split.** T6 closes pre-effect double-create by construction and integration tests; **T7** must prove no double-create when the structural effect is added. |
+  | `ForItemEvalContext` is the static-load per-item binding seam and returns `Ok(None)` for out-of-range items. | **Closed for T6 static load.** **T7** reuses it for tail-inserted children and directly fires the same-batch removed-item guard. |
+  | Generated child roots own their per-item binding EffectHandles. | **Closed for T6 static generated children.** **T7** must preserve the ownership on staged tail inserts and prove tail-removal disposal. |
+  | Direct `for` admission is loader-gated independently of `wasamoc check`: ScrollView / Box / Grid / Cell reject; normal layout containers admit. | **Closed in T6** with direct parse tests for the reject side and integration build tests for the admitted side. |
+  | Static generated ZStack children consume placement as child-carried metadata. | **Closed in T6** at the loader insertion/reducer level; **T7** must prove the mutation-time ZStack splice fixture. |
+  | Handler-side collection assignment remains a deliberate runtime reject / non-feature until T7. | **Owner = T7.** Scope: collection writer evaluation; impact: no author Button can mutate cardinality yet; close when T7 handler-driven fixtures pass. |
+  | GUI-visible collection cardinality proof is not produced by T6. | **Owner = T8.** Scope: gallery N → append → remove screenshot positive controls; impact: T6 proves headless runtime structure only. |
+
+  **Carry-forward ownership.**
+
+  | Carry-forward | Owner task | Scope | Impact | Close condition |
+  |---|---|---|---|---|
+  | Structural `ForLoopSubtree` effect and initial-effect no-double-create proof | T7 | Binding target + stage-then-commit tail mutation | Cardinality is static-only until T7 | T7 adds the effect, preserves T6's static children on initial run, and records branch/side-effect proof. |
+  | Handler collection writes | T7 | `HandlerEvalContext` / evaluator assignment arm | Add/Remove Buttons cannot drive collection changes yet | T7 direct handler fixtures mutate whole-value collection signals. |
+  | Mutation-time per-item guard / disposal | T7 | tail remove / same-length reset / same-batch removed binding | T6 guard is proven at registration level only | T7 Windows fixtures fire same-batch skip and child-owned effect disposal. |
+  | Assistant-visible positive control | T8 | Gallery screenshots | No visual proof in T6 | T8 records 2+ frames showing collection-driven N changes. |
+
+  **Verification run.**
+
+  ```text
+  cargo fmt --all -- --check
+  cargo test -p wasamo-runtime
+  cargo test --workspace
+  ```
+
+  All three completed successfully on 2026-06-15. `cargo test
+  --workspace` emitted the existing warning that package `wasamo`
+  provides no linkable target; no test failed.
+
+- **2026-06-15 / T6 start gate — loader static materialisation
+  responsibility re-challenged before implementation.** Checked the
+  prior carry-over rows in this log, then re-read the Phase 7
+  constraints, implementation preamble / plan, and
+  [implementation-gates.md](../../../procedures/implementation-gates.md)
+  before editing runtime code. The T6 plan was revised before
+  implementation: T6 owns textual-IR `for` load, loader dual-gates,
+  first production `DeclaredMemberSlot::ForLoop` construction, static
+  initial materialisation, and initial per-item binding registration for
+  generated children. T6 does **not** own `BindingTarget::ForLoopSubtree`,
+  collection handler writes, tail append/remove mutation, cap fixtures,
+  or GUI evidence; those remain T7/T8.
+
+  **Carry-over checked from prior tasks.**
+
+  | Carry-over | T6 disposition |
+  |---|---|
+  | T1 CF-1 / T2 close: loader `ControlFlowNode::For` is a deferred build reject. | **T6 owns.** Replace the reject in `append_static_member` with static materialisation and direct tests. |
+  | T1 CF-2 / T4 close: `DeclaredMemberSlot::ForLoop` and `ForLoopRuntimeState` are production-dead until T6. | **T6 owns.** First production construction closes the bounded dead-production allowance. |
+  | T1 CF-3: the original plan spoke about a no-op `ForLoopSubtree` effect, but T1 addendum corrected `BindingTarget::ForLoopSubtree` to T7 where it first has a meaningful mutation body. | **Plan revised.** T6 proves static materialisation is single-pass before the structural effect exists; T7 proves no double-create again when the effect lands. |
+  | T1 CF-4 / addendum G-1: loop-local reads require new guarded per-item binding registration entry points, not reuse of `register_binding`. | **T6 owns the static-load half.** Initial generated children must resolve `item-read` / `index-read` through `{ collection, elem, position }`; T7 owns same-batch doomed-binding mutation coverage. |
+  | T3 close/remediation: textual-IR loop-external `list-prop-read` / member-navigation rows remain loader dual-gates. | **T6 owns.** Direct `parse_ir` validation tests cover the textual-IR surface independent of `wasamoc check`. |
+  | T5 close: ZStack placement is child-carried; the old test-only static placement reducer rejected `for` until T6. | **T6 owns.** Static generated children under ZStack must carry placement through the existing `insert_child_with_zstack_placement` path; no parent-owned ZStack vector may reappear. |
+
+  **Responsibility re-check.**
+
+  | Plan hypothesis | T6 decision |
+  |---|---|
+  | T6 should register a no-op `ForLoopSubtree` effect to satisfy the double-create wording. | Refuted. A dead structural effect adds a runtime target before its first meaningful behavior. T6 closes the static-load half; T7 owns the effect-initial-run half when it introduces `BindingTarget::ForLoopSubtree`. |
+  | Per-item binding registration can wait entirely for T7. | Refuted. Static materialisation with `bind text = (item-read item)` cannot be correct unless the initially generated children can evaluate loop-local reads. T6 owns the static registration path; T7 reuses/extends it for mutation. |
+  | T6 is only diagnostic / reject work, so branch-focused review is enough. | Refuted. Replacing a build reject with runtime tree materialisation is a runtime structural change. T6 takes full independent review, with the trap #4 branch/test check included. |
+
+  **T6 start-gate selection.**
+
+  | Trap | Applies? | Reason / planned close artifact |
+  |---|---|---|
+  | #1 semantic migration | **Applies.** | No new enum variant is added, but T6 changes the existing `ControlFlowNode::For` loader classification from deliberate reject to materialised control-flow member. Close with an `rg`-enumerated call-site table over `ControlFlowNode::For`, `DeclaredMemberSlot::ForLoop`, `ForLoopRuntimeState`, loop-local read expressions, and widget-only / control-flow filters. |
+  | #2 side effects | **Applies.** | Static load now inserts 0..N generated child subtrees, with Visual order, ZStack child-carried placement, layout dirtiness at initial build, and child-owned binding handles. Close with a structural side-effect enumeration for static append paths and the no-mutation boundary. |
+  | #3 parallel data drift | **Applies.** | `declared_slots` / `ForLoopRuntimeState.live_children` must stay in sync with the generated child range and the T4 prefix-sum seam; ZStack placement must remain child-carried. Close with a sync table showing where the slot is pushed and where generated children are appended. |
+  | #4 untested authored branch | **Applies.** | T6 adds loader reject branches and semantic/size branches: nonempty initial materialisation, empty initial zero-child live slot, per-element collection cardinality reads, loop-local item/index reads, out-of-range guarded skip, and textual-IR dual-gate rejects. Each needs a direct test or explicit later owner. |
+  | #5 carry-forward | **Applies.** | T7 inherits the structural effect / mutation body, collection writers, same-batch doomed-binding guard, cap fixtures, and the effect-initial-run no-double-create proof. Record owner/scope/impact/close condition. |
+  | #6 root cause | Standing. | Any deterministic or recurring failure during T6 test runs must be root-caused and recorded rather than retried to green. |
+  | #7 GUI evidence | Not applicable. | T6 has no GUI-host rendering deliverable. Mock-free Windows loader/build fixtures may be used as runtime evidence, but screenshot evidence belongs to T8. |
+
+  **Review lane:** full independent review. T6 is a runtime structural
+  load-path change, and the full review must include the trap #4
+  branch/test-focused check for the loader rejects.
+
+  **Planned proof obligations (implementation-time hypotheses).**
+
+  | Branch / behavior to prove | Category | Planned proof |
+  |---|---|---|
+  | Textual IR `for` parse/emit/load preserves binder, optional index binder, collection read, and single-widget body. | semantic branch | Existing parser tests plus cross-crate emit → parse roundtrip for authored `for`. |
+  | Static nonempty collection materialises exactly N generated children at the declared slot, preserving static sibling order. | size / semantic branch | Mock-free Windows runtime build fixture over static / `for` / static siblings. |
+  | Empty initial collection materialises zero children while still constructing a live `ForLoop` slot. | size / invariant | Pure seam/unit assertion if exposed; otherwise build fixture proves zero generated children and no build reject. |
+  | Initial generated children resolve loop-local item and index reads from their fixed positions. | semantic branch | Mock-free Windows build fixture reads generated Text content for string / i32 item and index cases. |
+  | Guarded out-of-range item read writes nothing. | semantic branch / invariant | Direct registration-level unit test or a T7-owned carry if only observable under same-batch removal. |
+  | Loader re-rejects textual-IR-only malformed `for` / collection / loop-local rows independently of `wasamoc check`. | reject / diagnostic branch | Direct `parse_ir` negative tests per row/subcase. |
+  | ZStack generated static children consume child-carried placement and preserve Visual order. | observable behavior / invariant | Existing placement path plus a direct loader/build fixture if the code path is distinct enough from T5. |
+
+  **Known carry-forward candidates before implementation.**
+
+  | Carry-forward candidate | Owner / scope / impact / close condition |
+  |---|---|
+  | `BindingTarget::ForLoopSubtree` and the structural `for` effect are not implemented by T6. | **Owner = T7.** Scope: tail insert/remove effect, stage-then-commit, structural diagnostics. Impact: static initial render works, but collection changes do not yet change cardinality. Close when T7 routes collection signal changes through the splice seam and proves no initial double-create. |
+  | Handler-side collection assignment evaluation is still absent. | **Owner = T7.** Scope: `xs = xs.append(e)` / `drop-last` / literal reset in handlers. Impact: T6 tests may set registry state only through test hooks or static defaults, not authored Button mutation. Close when T7 fires handler-driven mutation fixtures. |
+  | Same-batch removed-item guarded read and empty-`drop-last` no-dirty behavior are mutation-time cases. | **Owner = T7.** Scope: runtime mutation fixtures. Impact: T6 can prove initial loop-local reads but not doomed-binding behavior under removal. Close when T7 directly fires those branches. |
+  | Assistant-visible collection cardinality proof is not T6 evidence. | **Owner = T8.** Scope: gallery N → append → remove screenshots. Impact: T6 build tests prove runtime structure, not human-visible rendering. Close with T8 screenshot positive controls. |
+
 - **2026-06-15 / T5 start gate — ST2 placement migration
   responsibility re-challenged before implementation.** Read the T4
   close/carry rows, the T1 sequencing addendum, the T3 carry-forward
