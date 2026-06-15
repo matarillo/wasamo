@@ -220,16 +220,20 @@ The placement-storage decision executed **before** the range primitive
 (DD-M3-P7-006; risk R-C). Own commit preceding T7; full independent
 review (runtime structural change).
 
-- [ ] Move ZStack per-child placement from the parallel
-      `zstack_placements` vector onto the child slot
-      (parent-interpreted placement carried with the node; `None` for
-      placement-free containers); arrange iterates children and reads
-      the carried placement; the loader's placement extraction
-      re-targets.
-- [ ] Grid `cell_placements` stays parallel-vector and static-only;
+- [x] Move ZStack per-child placement from the parent-owned parallel
+      `zstack_placements` vector onto the child slot across all three
+      runtime faces: `WidgetNode` mutation/storage, `LayoutNode`
+      arrange/build-tree transfer, and the loader's static /
+      conditional insertion paths. The parent still interprets the
+      placement: ZStack children carry `Some(explicit-or-default
+      placement)`, placement-free parent insertions normalize the
+      child slot to `None`, and the existing conditional-under-ZStack
+      path stays behaviorally green before T7 introduces the unified
+      splice seam.
+- [x] Grid `cell_placements` stays parallel-vector and static-only;
       the SoA comment in `widget.rs` gains the DD-M3-P7-006 trigger
       pointer.
-- [ ] **Close artifact (trap #3):** no parallel placement vectors
+- [x] **Close artifact (trap #3):** no parallel placement vectors
       remain on mutated paths (`zstack_placements` deleted —
       greppable); Phase 6 ZStack fixtures (union sizing, alignment
       defaults / overrides, conditional-under-ZStack placement) green

@@ -2842,12 +2842,12 @@ fn construct_widget(
             WidgetNode::grid(compositor, columns, rows, cell_placements)
                 .map_err(|e| IrLoadError::Build(format!("grid: {e}")))
         }
-        // M3-Phase 6 T3: ZStack materialisation. Per-child placement
-        // annotations are parent-owned and carried as a vector parallel to
-        // direct children; document order is preserved by the generic child
-        // append loop below.
-        "ZStack" => WidgetNode::zstack(compositor, Vec::new())
-            .map_err(|e| IrLoadError::Build(format!("zstack: {e}"))),
+        // M3-Phase 6 T3 / M3-Phase 7 T5: ZStack materialisation. Per-child
+        // placement annotations are carried on child slots; document order
+        // is preserved by the generic child append loop below.
+        "ZStack" => {
+            WidgetNode::zstack(compositor).map_err(|e| IrLoadError::Build(format!("zstack: {e}")))
+        }
         other => Err(IrLoadError::UnknownWidget(other.to_string())),
     }
 }
@@ -2894,7 +2894,7 @@ fn extract_zstack_placement(child: &IrNode) -> ZStackPlacement {
 }
 
 #[cfg(test)]
-fn collect_static_zstack_placements(
+fn collect_static_zstack_child_placement_slots(
     members: &[IrMember],
     registry: &SignalRegistry,
 ) -> Result<Vec<ZStackPlacement>, IrLoadError> {
@@ -3365,7 +3365,7 @@ mod tests {
             IrMember::Widget(text_with_align("center", "center")),
         ];
 
-        let placements = collect_static_zstack_placements(&members, &registry).unwrap();
+        let placements = collect_static_zstack_child_placement_slots(&members, &registry).unwrap();
         assert_eq!(placements.len(), 3);
         assert_eq!(placements[0].h_align, Alignment::Leading);
         assert_eq!(placements[0].v_align, Alignment::Leading);
@@ -3395,7 +3395,7 @@ mod tests {
             })],
         })];
 
-        let err = collect_static_zstack_placements(&members, &registry).unwrap_err();
+        let err = collect_static_zstack_child_placement_slots(&members, &registry).unwrap_err();
         assert!(
             matches!(err, IrLoadError::Build(ref m) if m.contains("materialised in T6")),
             "{err:?}"
