@@ -242,21 +242,32 @@ review (runtime structural change).
 ### T6 — Runtime loader: `for` member load + static materialisation
 
 Discharges the loader half of ADR evidence item (3) and ADR
-obligation 3 (load-path test refinement). Branch/test-focused review
-for the reject branches.
+obligation 3's static-load half (load-path test refinement). Because
+this task changes `for` from a build-time reject into runtime tree
+materialisation, it takes the full independent review; its loader
+reject additions also receive the branch/test-focused check.
 
-- [ ] Loader parses the textual-IR `for` member (binders, collection
+- [x] Loader parses the textual-IR `for` member (binders, collection
       read, single-widget body) and the collection state declarations
       / list-literal defaults; emit → load roundtrip preserves all of
       them.
-- [ ] Static load materialises the `for` slot's initial cardinality
+- [x] Static load materialises the `for` slot's initial cardinality
       from the collection's initial value through the T4 seam —
       including the **empty-initial case (zero children, member
-      live)** — and registers the `ForLoopSubtree` binding.
-- [ ] **Load-path test (obligation 3):** static materialisation plus
-      the `for` effect's initial run does **not** double-create
-      children.
-- [ ] Loader `validate()` dual-gate re-checks of the structural matrix
+      live)** — and constructs the first production
+      `DeclaredMemberSlot::ForLoop`.
+- [x] Initial per-item bindings for statically materialised `for`
+      children evaluate through `ForItemEvalContext`-style registration
+      entry points: value and index loop-local reads are supplied from
+      `{ collection, elem, position }`, guarded out-of-range reads write
+      nothing, and the generated child's own `bindings` owns the
+      EffectHandle.
+- [x] **Load-path test (obligation 3 split):** T6 proves static
+      materialisation is single-pass and does not double-create
+      children before any structural `for` effect exists. T7 owns the
+      complementary proof after `BindingTarget::ForLoopSubtree` and its
+      initial effect run land.
+- [x] Loader `validate()` dual-gate re-checks of the structural matrix
       rows (`WASAMO_ERR_IR_MALFORMED`): non-collection / unresolved
       collection read, bad body shape, bad binders, disallowed
       container / component level, nested `for`, handler-in-body,
@@ -307,29 +318,26 @@ evidence); gates traps #1 (BindingTarget/HandlerExpr sites), #2
       bundle checked off per change, marking #4/#5-removal *reused*.
 - [ ] **`BindingTarget::ForLoopSubtree` + `for` effect:** reads the
       whole-value signal, computes the tail plan via the T4 seam,
+      preserves T6's static-load result on its initial run (no
+      double-create),
       executes **stage-then-commit** (DD-M3-P7-005 PF2): all fallible
       construction before any tree mutation; staging failure disposes
       staged work, logs a **range-scoped** diagnostic, leaves the tree
       observably unchanged. Staged-disposal branch directly fired
       (pure-logic staging planner test; fault-injected construction if
       feasible mock-free, else disposition recorded in log.md).
-- [ ] **Per-item bindings:** loop-local reads evaluate as live
-      positional reads through the instantiation context (T1 shape — a
-      `BindingEvalContext`-style impl carrying `position`, resolving
-      loop-local reads via new tracked `EvalContext` methods); the
-      **out-of-range guard** writes nothing. **Registration shape
-      (T1 addendum 3 G-1):** the existing binding closures build
-      `BindingEvalContext::new(&registry)` *internally* and write
-      unconditionally, so per-item reads need **new registration entry
-      points (×3 element types)** whose closure builds a
-      `ForItemEvalContext { registry, collection, elem, position }` and
-      is guarded (`Some(v) => write`, `None => skip`) — not a reuse of
-      `register_binding`. **Effect ownership (T1 addendum 2 F-1):** per-item value/index effects are owned by
-      the **generated child subtree's** `bindings`, **not** the parent
-      (unlike the Phase 6 conditional effect) — so `widget_destroy` on
-      tail-removal disposes them; the `ForLoopSubtree` structural effect
-      stays on the parent. A parent-parked per-item effect would leak on
-      removal.
+- [ ] **Mutation-time per-item bindings:** reuse the T6
+      `ForItemEvalContext` / guarded registration entry points for
+      staged tail-inserted children, and directly prove the
+      mutation-time branches T6 cannot observe: same-batch
+      out-of-range read skips, same-length reset updates retained
+      positions, and tail-removal disposes child-owned effects.
+      **Effect ownership (T1 addendum 2 F-1):** per-item value/index
+      effects are owned by the **generated child subtree's** `bindings`,
+      **not** the parent (unlike the Phase 6 conditional effect) — so
+      `widget_destroy` on tail-removal disposes them; the
+      `ForLoopSubtree` structural effect stays on the parent. A
+      parent-parked per-item effect would leak on removal.
 - [ ] **Windows-runtime fixtures (CI-gated, fail-not-skip):** after a
       tail-append assignment — child count + Visual sibling order
       reflect the new cardinality in declared order with static and

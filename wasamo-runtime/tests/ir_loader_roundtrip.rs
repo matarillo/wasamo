@@ -134,6 +134,27 @@ fn build_zstack_ir() -> wasamo_ir::IrComponent {
     lower::lower(&ast, &result.namespace)
 }
 
+fn build_iteration_ir() -> wasamo_ir::IrComponent {
+    use wasamoc::{check, lexer, lower, parser};
+    let src = r#"component IterationDemo inherits Window {
+    state labels: string[] = ["S01", "S02"]
+    WrapPanel {
+        for label, i in labels {
+            Text { text: "\{label} #\{i}" }
+        }
+    }
+}"#;
+    let tokens = lexer::tokenize(src, "<iteration>").expect("lex failed");
+    let ast = parser::parse(&tokens, "<iteration>").expect("parse failed");
+    let result = check::check(&ast, "<iteration>");
+    assert!(
+        !result.has_errors(),
+        "check errors: {:?}",
+        result.diagnostics
+    );
+    lower::lower(&ast, &result.namespace)
+}
+
 #[test]
 fn counter_ui_emit_then_parse_yields_equal_ir() {
     let original = build_counter_ir();
@@ -307,6 +328,19 @@ fn zstack_emit_then_parse_preserves_direct_children_and_order() {
         ["Box", "Text", "Box"],
         "ZStack document order must survive emit -> parse"
     );
+}
+
+#[test]
+fn iteration_emit_then_parse_preserves_for_member_and_collection_state() {
+    let original = build_iteration_ir();
+    let text = wasamoc::emit::emit(&original);
+    assert!(text.contains("state labels: string[] = [\"S01\", \"S02\"]"));
+    assert!(text.contains("for label, i in labels"));
+    assert!(text.contains("(item-read label)"));
+    assert!(text.contains("(index-read i)"));
+
+    let parsed = parse_ir(&text).expect("parse_ir failed");
+    assert_eq!(parsed, original, "round-trip mismatch\nIR text:\n{text}");
 }
 
 fn build_wrap_panel_ir() -> wasamo_ir::IrComponent {

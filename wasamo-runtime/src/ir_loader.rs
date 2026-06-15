@@ -19,8 +19,9 @@ use wasamo_ir::{
 use crate::box_values;
 use crate::layout::{Alignment, CellPlacement, TrackSize as LayoutTrackSize, ZStackPlacement};
 use crate::reactive::{
-    register_binding, register_bool_binding, register_conditional_binding, set_active_registry,
-    BindingTarget, PropertyKey, Signal, SignalRegistry, WidgetId,
+    register_binding, register_bool_binding, register_conditional_binding,
+    register_for_item_binding, register_for_item_bool_binding, set_active_registry, BindingTarget,
+    ForItemContext, PropertyKey, Signal, SignalRegistry, WidgetId,
 };
 use crate::text::{TextRenderer, TypographyStyle};
 use crate::widget::{
@@ -251,7 +252,8 @@ fn validate(comp: &IrComponent) -> Result<(), IrLoadError> {
     // ZStack-level attrs, no bindings/handlers, and only its direct children
     // may carry `h-align` / `v-align` placement annotations.
     validate_phase6_zstack_node_invariants(&comp.root, ParentKind::Root)?;
-    validate_phase6_control_flow_invariants(&comp.root)
+    validate_phase6_control_flow_invariants(&comp.root)?;
+    validate_phase7_iteration_invariants(&comp.root, false)
 }
 
 fn validate_state_default(state: &IrState) -> Result<(), IrLoadError> {
@@ -543,6 +545,114 @@ fn validate_phase6_control_flow_invariants(node: &IrNode) -> Result<(), IrLoadEr
         }
     }
     Ok(())
+}
+
+fn validate_phase7_iteration_invariants(
+    node: &IrNode,
+    inside_for_template: bool,
+) -> Result<(), IrLoadError> {
+    if inside_for_template && !node.handlers.is_empty() {
+        return Err(IrLoadError::Validate(
+            "handlers inside a `for` body template are deferred in M3-Phase 7".into(),
+        ));
+    }
+
+    let current = parent_kind_for(node);
+    for member in &node.children {
+        match member {
+            IrMember::Widget(child) => {
+                validate_phase7_iteration_invariants(child, inside_for_template)?;
+            }
+            IrMember::ControlFlow(ControlFlowNode::If { branches }) => {
+                for branch in branches {
+                    for body_member in &branch.body {
+                        validate_phase7_iteration_member_invariants(
+                            body_member,
+                            current,
+                            inside_for_template,
+                        )?;
+                    }
+                }
+            }
+            IrMember::ControlFlow(ControlFlowNode::For { body, .. }) => {
+                validate_direct_for_parent(node)?;
+                if inside_for_template {
+                    return Err(IrLoadError::Validate(
+                        "nested `for` is deferred in M3-Phase 7".into(),
+                    ));
+                }
+                if body.len() != 1 || !matches!(body.first(), Some(IrMember::Widget(_))) {
+                    return Err(IrLoadError::Validate(
+                        "`for` body admits exactly one widget child in M3-Phase 7".into(),
+                    ));
+                }
+                if let Some(IrMember::Widget(body_node)) = body.first() {
+                    validate_phase7_iteration_invariants(body_node, true)?;
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
+fn validate_phase7_iteration_member_invariants(
+    member: &IrMember,
+    parent: ParentKind,
+    inside_for_template: bool,
+) -> Result<(), IrLoadError> {
+    match member {
+        IrMember::Widget(child) => validate_phase7_iteration_invariants(child, inside_for_template),
+        IrMember::ControlFlow(ControlFlowNode::If { branches }) => {
+            for branch in branches {
+                for body_member in &branch.body {
+                    validate_phase7_iteration_member_invariants(
+                        body_member,
+                        parent,
+                        inside_for_template,
+                    )?;
+                }
+            }
+            Ok(())
+        }
+        IrMember::ControlFlow(ControlFlowNode::For { body, .. }) => {
+            if inside_for_template {
+                return Err(IrLoadError::Validate(
+                    "nested `for` is deferred in M3-Phase 7".into(),
+                ));
+            }
+            match parent {
+                ParentKind::Grid | ParentKind::Cell => Err(IrLoadError::Validate(
+                    "direct `for` is not valid in Grid placement contexts in M3-Phase 7".into(),
+                )),
+                _ => {
+                    if body.len() != 1 || !matches!(body.first(), Some(IrMember::Widget(_))) {
+                        return Err(IrLoadError::Validate(
+                            "`for` body admits exactly one widget child in M3-Phase 7".into(),
+                        ));
+                    }
+                    if let Some(IrMember::Widget(body_node)) = body.first() {
+                        validate_phase7_iteration_invariants(body_node, true)?;
+                    }
+                    Ok(())
+                }
+            }
+        }
+    }
+}
+
+fn validate_direct_for_parent(parent_node: &IrNode) -> Result<(), IrLoadError> {
+    match parent_node.widget_type.as_str() {
+        "ScrollView" => Err(IrLoadError::Validate(
+            "direct `for` is not valid in ScrollView; wrap it in a content widget such as `WrapPanel`".into(),
+        )),
+        "Box" => Err(IrLoadError::Validate(
+            "direct `for` is not valid in Box because Box admits at most one child".into(),
+        )),
+        "Grid" | "Cell" => Err(IrLoadError::Validate(
+            "direct `for` is not valid in Grid placement contexts in M3-Phase 7".into(),
+        )),
+        _ => Ok(()),
+    }
 }
 
 fn validate_phase2_member_invariants(member: &IrMember) -> Result<(), IrLoadError> {
@@ -1152,12 +1262,33 @@ fn grid_rects_overlap(a: &GridCellRect, b: &GridCellRect) -> bool {
         && ranges_overlap(a.column, a.column_span, b.column, b.column_span)
 }
 
+#[derive(Clone, Copy)]
+struct LoopReadScope<'a> {
+    binder: &'a str,
+    index_binder: Option<&'a str>,
+    elem: &'a IrType,
+}
+
 fn validate_node_references(
     node: &IrNode,
     declared: &std::collections::HashMap<&str, IrStateType>,
 ) -> Result<(), IrLoadError> {
+    validate_node_references_in_scope(node, declared, None, false)
+}
+
+fn validate_node_references_in_scope(
+    node: &IrNode,
+    declared: &std::collections::HashMap<&str, IrStateType>,
+    loop_scope: Option<LoopReadScope<'_>>,
+    inside_for_template: bool,
+) -> Result<(), IrLoadError> {
     for binding in &node.bindings {
-        validate_expr_references(&binding.expr, declared, &|name| {
+        if let Some(scope) = loop_scope {
+            if let Some((_, target_ty)) = resolve_prop_key(&node.widget_type, &binding.prop_name) {
+                validate_loop_local_binding_type(&binding.expr, &target_ty, scope)?;
+            }
+        }
+        validate_expr_references(&binding.expr, declared, loop_scope, &|name| {
             format!(
                 "binding `{}` references undeclared name `{}`",
                 binding.prop_name, name
@@ -1165,7 +1296,12 @@ fn validate_node_references(
         })?;
     }
     for handler in &node.handlers {
-        validate_expr_references(&handler.expr, declared, &|name| {
+        if inside_for_template {
+            return Err(IrLoadError::Validate(
+                "handlers inside a `for` body template are deferred in M3-Phase 7".into(),
+            ));
+        }
+        validate_expr_references(&handler.expr, declared, None, &|name| {
             format!(
                 "handler `on {}` references undeclared name `{}`",
                 handler.signal, name
@@ -1173,7 +1309,7 @@ fn validate_node_references(
         })?;
     }
     for member in &node.children {
-        validate_member_references(member, declared)?;
+        validate_member_references(member, declared, loop_scope, inside_for_template)?;
     }
     Ok(())
 }
@@ -1181,14 +1317,23 @@ fn validate_node_references(
 fn validate_member_references(
     member: &IrMember,
     declared: &std::collections::HashMap<&str, IrStateType>,
+    loop_scope: Option<LoopReadScope<'_>>,
+    inside_for_template: bool,
 ) -> Result<(), IrLoadError> {
     match member {
-        IrMember::Widget(node) => validate_node_references(node, declared),
+        IrMember::Widget(node) => {
+            validate_node_references_in_scope(node, declared, loop_scope, inside_for_template)
+        }
         IrMember::ControlFlow(ControlFlowNode::If { branches }) => {
             for branch in branches {
                 validate_condition_expr(&branch.condition, declared)?;
                 for body_member in &branch.body {
-                    validate_member_references(body_member, declared)?;
+                    validate_member_references(
+                        body_member,
+                        declared,
+                        loop_scope,
+                        inside_for_template,
+                    )?;
                 }
             }
             Ok(())
@@ -1200,25 +1345,104 @@ fn validate_member_references(
             body,
         }) => {
             validate_for_header(binder, index_binder.as_deref(), collection, declared)?;
+            if inside_for_template {
+                return Err(IrLoadError::Validate(
+                    "nested `for` is deferred in M3-Phase 7".into(),
+                ));
+            }
+            let child_scope = LoopReadScope {
+                binder,
+                index_binder: index_binder.as_deref(),
+                elem: match collection {
+                    HandlerExpr::ListPropRead { elem, .. } => elem,
+                    _ => &IrType::I32,
+                },
+            };
             for body_member in body {
-                validate_member_references(body_member, declared)?;
+                validate_member_references(body_member, declared, Some(child_scope), true)?;
             }
             Ok(())
         }
     }
 }
 
+fn validate_loop_local_binding_type(
+    expr: &HandlerExpr,
+    target_ty: &IrType,
+    loop_scope: LoopReadScope<'_>,
+) -> Result<(), IrLoadError> {
+    match expr {
+        HandlerExpr::ItemRead { binder } if binder == loop_scope.binder => {
+            match (target_ty, loop_scope.elem) {
+                (IrType::Str, IrType::Bool) => Err(IrLoadError::Validate(
+                    "bool loop binder cannot be used in string binding; bool formatting/display conversion is not defined in M3-Phase 7".into(),
+                )),
+                (IrType::I32, IrType::I32) | (IrType::Str, IrType::I32 | IrType::Str) | (IrType::Bool, IrType::Bool) => Ok(()),
+                (expected, found) => Err(IrLoadError::Validate(format!(
+                    "loop binder `{binder}` has element type `{}`, not `{}`",
+                    scalar_type_name(found),
+                    scalar_type_name(expected)
+                ))),
+            }
+        }
+        HandlerExpr::IndexRead { binder } if loop_scope.index_binder == Some(binder.as_str()) => {
+            match target_ty {
+                IrType::I32 | IrType::Str => Ok(()),
+                IrType::Bool => Err(IrLoadError::Validate(
+                    "loop index binder cannot be used in a bool binding".into(),
+                )),
+            }
+        }
+        HandlerExpr::Interpolation(parts) => {
+            for part in parts {
+                if let InterpolationPart::Expr(inner) = part {
+                    validate_loop_local_binding_type(inner, &IrType::Str, loop_scope)?;
+                }
+            }
+            Ok(())
+        }
+        HandlerExpr::Block(exprs) => {
+            for inner in exprs {
+                validate_loop_local_binding_type(inner, target_ty, loop_scope)?;
+            }
+            Ok(())
+        }
+        HandlerExpr::Assign { rhs, .. } | HandlerExpr::CompoundAssign { rhs, .. } => {
+            validate_loop_local_binding_type(rhs, target_ty, loop_scope)
+        }
+        HandlerExpr::ListAppend { value, .. } => {
+            validate_loop_local_binding_type(value, target_ty, loop_scope)
+        }
+        _ => Ok(()),
+    }
+}
+
 fn validate_expr_references(
     expr: &HandlerExpr,
     declared: &std::collections::HashMap<&str, IrStateType>,
+    loop_scope: Option<LoopReadScope<'_>>,
     err_msg: &dyn Fn(&str) -> String,
 ) -> Result<(), IrLoadError> {
     match expr {
-        HandlerExpr::IntLit(_)
-        | HandlerExpr::StrLit(_)
-        | HandlerExpr::BoolLit(_)
-        | HandlerExpr::ItemRead { .. }
-        | HandlerExpr::IndexRead { .. } => Ok(()),
+        HandlerExpr::IntLit(_) | HandlerExpr::StrLit(_) | HandlerExpr::BoolLit(_) => Ok(()),
+        HandlerExpr::ItemRead { binder } => match loop_scope {
+            Some(scope) if binder == scope.binder => Ok(()),
+            Some(_) => Err(IrLoadError::Validate(format!(
+                "`item-read {binder}` is not in scope for the current `for` body"
+            ))),
+            None => Err(IrLoadError::Validate(format!(
+                "loop-local binder `{binder}` may be read only inside its `for` body"
+            ))),
+        },
+        HandlerExpr::IndexRead { binder } => match loop_scope.and_then(|scope| scope.index_binder) {
+            Some(index) if binder == index => Ok(()),
+            Some(_) => Err(IrLoadError::Validate(format!(
+                "`index-read {binder}` is not in scope for the current `for` body"
+            ))),
+            None => Err(IrLoadError::Validate(format!(
+                "loop-local index binder `{binder}` may be read only inside its `for` body"
+            ))),
+        },
         HandlerExpr::PropRead { path }
         | HandlerExpr::StrPropRead { path }
         | HandlerExpr::BoolPropRead { path } => validate_scalar_read_path(path, declared, err_msg),
@@ -1227,7 +1451,9 @@ fn validate_expr_references(
         )),
         HandlerExpr::Assign { lhs, rhs } => {
             match declared.get(lhs.as_str()) {
-                Some(IrStateType::Scalar(_)) => validate_expr_references(rhs, declared, err_msg),
+                Some(IrStateType::Scalar(_)) => {
+                    validate_expr_references(rhs, declared, loop_scope, err_msg)
+                }
                 Some(IrStateType::Collection(_)) => {
                     validate_collection_assignment_rhs(lhs, rhs, declared, err_msg)
                 }
@@ -1236,7 +1462,9 @@ fn validate_expr_references(
         }
         HandlerExpr::CompoundAssign { lhs, rhs, .. } => {
             match declared.get(lhs.as_str()) {
-                Some(IrStateType::Scalar(_)) => validate_expr_references(rhs, declared, err_msg),
+                Some(IrStateType::Scalar(_)) => {
+                    validate_expr_references(rhs, declared, loop_scope, err_msg)
+                }
                 Some(IrStateType::Collection(_)) => Err(IrLoadError::Validate(format!(
                     "collection state `{lhs}` cannot use compound assignment"
                 ))),
@@ -1254,14 +1482,14 @@ fn validate_expr_references(
         HandlerExpr::Interpolation(parts) => {
             for part in parts {
                 if let InterpolationPart::Expr(inner) = part {
-                    validate_expr_references(inner, declared, err_msg)?;
+                    validate_expr_references(inner, declared, loop_scope, err_msg)?;
                 }
             }
             Ok(())
         }
         HandlerExpr::Block(exprs) => {
             for inner in exprs {
-                validate_expr_references(inner, declared, err_msg)?;
+                validate_expr_references(inner, declared, loop_scope, err_msg)?;
             }
             Ok(())
         }
@@ -1395,10 +1623,10 @@ fn validate_collection_element_expr(
             | HandlerExpr::BoolPropRead { path },
         ) => validate_scalar_value_read(lhs, elem, path, declared, err_msg),
         (IrType::Str, HandlerExpr::Interpolation(_)) => {
-            validate_expr_references(value, declared, err_msg)
+            validate_expr_references(value, declared, None, err_msg)
         }
         (_, HandlerExpr::ItemRead { .. } | HandlerExpr::IndexRead { .. }) => {
-            validate_expr_references(value, declared, err_msg)
+            validate_expr_references(value, declared, None, err_msg)
         }
         _ => Err(IrLoadError::Validate(format!(
             "collection assignment `{lhs}` appends a value that does not match element type `{}`",
@@ -2430,6 +2658,16 @@ fn build_node(
     renderer: &TextRenderer,
     registry: &Rc<SignalRegistry>,
 ) -> Result<Box<WidgetNode>, IrLoadError> {
+    build_node_with_loop_context(node, compositor, renderer, registry, None)
+}
+
+fn build_node_with_loop_context(
+    node: &IrNode,
+    compositor: &Compositor,
+    renderer: &TextRenderer,
+    registry: &Rc<SignalRegistry>,
+    loop_context: Option<&ForItemContext>,
+) -> Result<Box<WidgetNode>, IrLoadError> {
     let mut widget = construct_widget(node, compositor, renderer, registry)?;
 
     // Bindings: register each `bind` as a reactive Effect targeting the widget property.
@@ -2449,8 +2687,15 @@ fn build_node(
         // the loader selects the evaluator/writer pair matching the target
         // property's declared `IrType`. The reactive engine itself stays
         // type-agnostic; the seam lives here at the call site.
-        let handle = match prop_ty {
-            IrType::Bool => register_bool_binding(
+        let handle = match (prop_ty, loop_context) {
+            (IrType::Bool, Some(item)) => register_for_item_bool_binding(
+                target,
+                binding.expr.clone(),
+                Rc::clone(registry),
+                item.clone(),
+                widget_write_property_bool,
+            ),
+            (IrType::Bool, None) => register_bool_binding(
                 target,
                 binding.expr.clone(),
                 Rc::clone(registry),
@@ -2460,7 +2705,14 @@ fn build_node(
             // writer (stringified by `evaluate_binding`, parsed at the
             // per-widget setter — typed-i32 writer lands when its use case
             // arrives).
-            IrType::I32 | IrType::Str => register_binding(
+            (IrType::I32 | IrType::Str, Some(item)) => register_for_item_binding(
+                target,
+                binding.expr.clone(),
+                Rc::clone(registry),
+                item.clone(),
+                widget_write_property,
+            ),
+            (IrType::I32 | IrType::Str, None) => register_binding(
                 target,
                 binding.expr.clone(),
                 Rc::clone(registry),
@@ -2495,7 +2747,13 @@ fn build_node(
                     cell.widget_children().count()
                 ))
             })?;
-            let content_widget = build_node(content, compositor, renderer, registry)?;
+            let content_widget = build_node_with_loop_context(
+                content,
+                compositor,
+                renderer,
+                registry,
+                loop_context,
+            )?;
             widget
                 .append_child(content_widget)
                 .map_err(|e| IrLoadError::Build(format!("append_child failed: {e:?}")))?;
@@ -2511,6 +2769,7 @@ fn build_node(
                 compositor,
                 renderer,
                 registry,
+                loop_context,
             )?;
         }
     }
@@ -2526,11 +2785,13 @@ fn append_static_member(
     compositor: &Compositor,
     renderer: &TextRenderer,
     registry: &Rc<SignalRegistry>,
+    loop_context: Option<&ForItemContext>,
 ) -> Result<(), IrLoadError> {
     match member {
         IrMember::Widget(child) => {
             declared_slots.borrow_mut().push(DeclaredMemberSlot::Widget);
-            let child_widget = build_node(child, compositor, renderer, registry)?;
+            let child_widget =
+                build_node_with_loop_context(child, compositor, renderer, registry, loop_context)?;
             if parent.is_zstack() {
                 parent
                     .insert_child_with_zstack_placement(
@@ -2585,13 +2846,95 @@ fn append_static_member(
             );
             parent.bindings.push(handle);
         }
-        IrMember::ControlFlow(ControlFlowNode::For { .. }) => {
-            return Err(IrLoadError::Build(
-                "`for` control flow is parsed and validated in T2, but static materialisation is owned by T6".into(),
-            ));
+        IrMember::ControlFlow(ControlFlowNode::For {
+            binder,
+            index_binder,
+            collection,
+            body,
+        }) => {
+            let (collection_name, elem, live_children) =
+                static_collection_cardinality(collection, registry)?;
+            let state = Rc::new(RefCell::new(ForLoopRuntimeState { live_children }));
+            declared_slots
+                .borrow_mut()
+                .push(DeclaredMemberSlot::ForLoop(Rc::clone(&state)));
+            let body = match body.first() {
+                Some(IrMember::Widget(node)) => node,
+                _ => {
+                    return Err(IrLoadError::Build(
+                        "`for` body must contain one widget member".into(),
+                    ));
+                }
+            };
+            let base_index = {
+                let slots = declared_slots.borrow();
+                materialized_offset_for_declared_slot(declared_member_index, &slots)
+            };
+            for position in 0..live_children {
+                let item_context = ForItemContext {
+                    collection: collection_name.clone(),
+                    elem: elem.clone(),
+                    binder: binder.clone(),
+                    index_binder: index_binder.clone(),
+                    position,
+                };
+                let child_widget = build_node_with_loop_context(
+                    body,
+                    compositor,
+                    renderer,
+                    registry,
+                    Some(&item_context),
+                )?;
+                let insert_index = base_index + position;
+                if parent.is_zstack() {
+                    parent
+                        .insert_child_with_zstack_placement(
+                            insert_index,
+                            child_widget,
+                            extract_zstack_placement(body),
+                        )
+                        .map_err(|e| IrLoadError::Build(format!("insert_child failed: {e:?}")))?;
+                } else {
+                    parent
+                        .insert_child(insert_index, child_widget)
+                        .map_err(|e| IrLoadError::Build(format!("insert_child failed: {e:?}")))?;
+                }
+            }
         }
     }
     Ok(())
+}
+
+fn static_collection_cardinality(
+    collection: &HandlerExpr,
+    registry: &SignalRegistry,
+) -> Result<(String, IrType, usize), IrLoadError> {
+    let HandlerExpr::ListPropRead { path, elem } = collection else {
+        return Err(IrLoadError::Build(format!(
+            "`for` collection must be a collection state read, got {collection:?}"
+        )));
+    };
+    let len = match elem {
+        IrType::I32 => registry
+            .i32_lists
+            .get(path)
+            .ok_or_else(|| IrLoadError::Build(format!("unknown i32 collection `{path}`")))?
+            .get_untracked()
+            .len(),
+        IrType::Str => registry
+            .string_lists
+            .get(path)
+            .ok_or_else(|| IrLoadError::Build(format!("unknown string collection `{path}`")))?
+            .get_untracked()
+            .len(),
+        IrType::Bool => registry
+            .bool_lists
+            .get(path)
+            .ok_or_else(|| IrLoadError::Build(format!("unknown bool collection `{path}`")))?
+            .get_untracked()
+            .len(),
+    };
+    Ok((path.clone(), elem.clone(), len))
 }
 
 fn declared_slot_live_cardinality(slot: &DeclaredMemberSlot) -> usize {
@@ -2918,10 +3261,21 @@ fn collect_static_zstack_child_placement_slots(
                     placements.push(extract_zstack_placement(body));
                 }
             }
-            IrMember::ControlFlow(ControlFlowNode::For { .. }) => {
-                return Err(IrLoadError::Build(
-                    "`for` control flow placement is materialised in T6".into(),
-                ));
+            IrMember::ControlFlow(ControlFlowNode::For {
+                collection, body, ..
+            }) => {
+                let (_, _, live_children) = static_collection_cardinality(collection, registry)?;
+                let body = match body.first() {
+                    Some(IrMember::Widget(node)) => node,
+                    _ => {
+                        return Err(IrLoadError::Build(
+                            "`for` body must contain one widget member".into(),
+                        ));
+                    }
+                };
+                for _ in 0..live_children {
+                    placements.push(extract_zstack_placement(body));
+                }
             }
         }
     }
@@ -3376,8 +3730,11 @@ mod tests {
     }
 
     #[test]
-    fn zstack_static_placement_rejects_for_until_static_materialization_lands() {
-        let registry = SignalRegistry::new();
+    fn zstack_static_placement_reducer_expands_for_cardinality_after_t6() {
+        let mut registry = SignalRegistry::new();
+        registry
+            .i32_lists
+            .insert("xs".into(), Signal::new(vec![1, 2, 3]));
         let members = vec![IrMember::ControlFlow(ControlFlowNode::For {
             binder: "x".into(),
             index_binder: None,
@@ -3395,11 +3752,12 @@ mod tests {
             })],
         })];
 
-        let err = collect_static_zstack_child_placement_slots(&members, &registry).unwrap_err();
-        assert!(
-            matches!(err, IrLoadError::Build(ref m) if m.contains("materialised in T6")),
-            "{err:?}"
-        );
+        let placements = collect_static_zstack_child_placement_slots(&members, &registry).unwrap();
+        assert_eq!(placements.len(), 3);
+        assert!(placements
+            .iter()
+            .all(|placement| placement.h_align == Alignment::Center
+                && placement.v_align == Alignment::Center));
     }
 
     // M3-Phase 4 T4 / DD-M3-P4-003: ScrollView's `offset-y` is `i32`.
@@ -3713,6 +4071,135 @@ mod tests {
         assert!(
             matches!(err, IrLoadError::Validate(ref m) if m.contains("nested control-flow")),
             "{err:?}"
+        );
+    }
+
+    #[test]
+    fn for_member_rejects_direct_disallowed_containers() {
+        let cases = [
+            (
+                ";wasamo-ir v0\ncomponent C inherits W {\n\
+                 state xs: i32[] = []\n\
+                 node ScrollView { for x in xs { node Text {} } }\n}",
+                "ScrollView",
+            ),
+            (
+                ";wasamo-ir v0\ncomponent C inherits W {\n\
+                 state xs: i32[] = []\n\
+                 node Box { for x in xs { node Text {} } }\n}",
+                "Box",
+            ),
+            (
+                ";wasamo-ir v0\ncomponent C inherits W {\n\
+                 state xs: i32[] = []\n\
+                 node Grid { tracks columns = 1* tracks rows = 1* for x in xs { node Cell { node Text {} } } }\n}",
+                "Grid",
+            ),
+        ];
+        for (src, needle) in cases {
+            let err = parse_ir(src).unwrap_err();
+            assert!(
+                matches!(err, IrLoadError::Validate(ref m) if m.contains(needle)),
+                "{needle}: {err:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn for_member_rejects_component_body_surface_at_parse() {
+        let err = parse_ir(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             state xs: i32[] = []\n\
+             for x in xs { node Text {} }\n\
+             node Window {}\n}",
+        )
+        .unwrap_err();
+        assert!(
+            matches!(err, IrLoadError::Parse(ref m) if m.contains("unexpected token in component body")),
+            "{err:?}"
+        );
+    }
+
+    #[test]
+    fn for_member_rejects_handler_and_nested_for_inside_template() {
+        let handler = parse_ir(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             state xs: i32[] = []\n\
+             node WrapPanel { for x in xs { node Button { on clicked { 1 } } } }\n}",
+        )
+        .unwrap_err();
+        assert!(
+            matches!(handler, IrLoadError::Validate(ref m) if m.contains("handlers inside a `for` body")),
+            "{handler:?}"
+        );
+
+        let nested = parse_ir(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             state xs: i32[] = []\n\
+             node WrapPanel { for x in xs { node VStack { for y in xs { node Text {} } } } }\n}",
+        )
+        .unwrap_err();
+        assert!(
+            matches!(nested, IrLoadError::Validate(ref m) if m.contains("nested `for`")),
+            "{nested:?}"
+        );
+    }
+
+    #[test]
+    fn loop_local_reads_are_scoped_to_for_body() {
+        let outside_item = parse_ir(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             state xs: string[] = []\n\
+             node VStack { node Text { bind text = (item-read x) } }\n}",
+        )
+        .unwrap_err();
+        assert!(
+            matches!(outside_item, IrLoadError::Validate(ref m) if m.contains("may be read only inside")),
+            "{outside_item:?}"
+        );
+
+        let missing_index = parse_ir(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             state xs: string[] = []\n\
+             node WrapPanel { for x in xs { node Text { bind text = (index-read i) } } }\n}",
+        )
+        .unwrap_err();
+        assert!(
+            matches!(missing_index, IrLoadError::Validate(ref m) if m.contains("may be read only inside")),
+            "{missing_index:?}"
+        );
+
+        let bool_interp = parse_ir(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             state flags: bool[] = []\n\
+             node WrapPanel { for flag in flags { node Text { bind text = (interp \"v=\" ((item-read flag))) } } }\n}",
+        )
+        .unwrap_err();
+        assert!(
+            matches!(bool_interp, IrLoadError::Validate(ref m) if m.contains("bool loop binder")),
+            "{bool_interp:?}"
+        );
+
+        let string_item_to_i32_target = parse_ir(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             state labels: string[] = []\n\
+             node WrapPanel { for label in labels { node Text { bind font = (item-read label) } } }\n}",
+        )
+        .unwrap_err();
+        assert!(
+            matches!(string_item_to_i32_target, IrLoadError::Validate(ref m) if m.contains("element type `string`, not `i32`")),
+            "{string_item_to_i32_target:?}"
+        );
+
+        let index_read_to_bool_target = parse_ir(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             state nums: i32[] = []\n\
+             node WrapPanel { for n, i in nums { node Button { bind enabled = (index-read i) } } }\n}",
+        )
+        .unwrap_err();
+        assert!(
+            matches!(index_read_to_bool_target, IrLoadError::Validate(ref m) if m.contains("index binder cannot be used in a bool binding")),
+            "{index_read_to_bool_target:?}"
         );
     }
 
@@ -5751,6 +6238,13 @@ mod tests {
         assert_validate_err(
             ";wasamo-ir v0\ncomponent C inherits W {\n\
              node VStack { if true { if false { node Text {} } } }\n\
+             }",
+            "nested control-flow",
+        );
+        assert_validate_err(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             state xs: i32[] = []\n\
+             node Box { if true { for x in xs { node Text {} } } }\n\
              }",
             "nested control-flow",
         );

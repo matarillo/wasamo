@@ -50,6 +50,36 @@ pub trait EvalContext {
         self.get_bool(path)
     }
 
+    /// Read the current `for` item as an integer value. Returns `Ok(None)`
+    /// when the item position is no longer live.
+    fn read_item_i32_tracked(&self, binder: &str) -> Result<Option<i32>, EvalError> {
+        Err(EvalError::UnknownProperty(binder.to_string()))
+    }
+
+    /// Read the current `for` item as a string value. Returns `Ok(None)`
+    /// when the item position is no longer live.
+    fn read_item_string_tracked(&self, binder: &str) -> Result<Option<String>, EvalError> {
+        Err(EvalError::UnknownProperty(binder.to_string()))
+    }
+
+    /// Read the current `for` item as a bool value. Returns `Ok(None)`
+    /// when the item position is no longer live.
+    fn read_item_bool_tracked(&self, binder: &str) -> Result<Option<bool>, EvalError> {
+        Err(EvalError::UnknownProperty(binder.to_string()))
+    }
+
+    /// Read the current `for` item for a string-like binding context.
+    /// Numeric items are stringified by the context; bool items deliberately
+    /// remain a type error unless a later phase defines display formatting.
+    fn read_item_binding_tracked(&self, binder: &str) -> Result<Option<String>, EvalError> {
+        self.read_item_string_tracked(binder)
+    }
+
+    /// Read the current `for` index binder as an integer value.
+    fn read_index_tracked(&self, binder: &str) -> Result<Option<i32>, EvalError> {
+        Err(EvalError::UnknownProperty(binder.to_string()))
+    }
+
     /// Write a bool property by dot-separated path. Default impl returns
     /// `UnknownProperty`; live impls (the runtime's `HandlerEvalContext`)
     /// override this to drive `Signal<bool>::set`.
@@ -300,6 +330,34 @@ pub fn evaluate_binding(
     }
 }
 
+pub(crate) fn evaluate_binding_optional(
+    expr: &HandlerExpr,
+    ctx: &mut dyn EvalContext,
+) -> Result<Option<String>, EvalError> {
+    match expr {
+        HandlerExpr::StrLit(s) => Ok(Some(s.clone())),
+        HandlerExpr::Interpolation(parts) => {
+            let mut out = String::new();
+            for part in parts {
+                match part {
+                    InterpolationPart::Literal(s) => out.push_str(s),
+                    InterpolationPart::Expr(e) => match evaluate_binding_part_optional(e, ctx)? {
+                        Some(value) => out.push_str(&value),
+                        None => return Ok(None),
+                    },
+                }
+            }
+            Ok(Some(out))
+        }
+        HandlerExpr::StrPropRead { path } => ctx.read_string_tracked(path).map(Some),
+        HandlerExpr::ItemRead { binder } => ctx.read_item_binding_tracked(binder),
+        HandlerExpr::IndexRead { binder } => ctx
+            .read_index_tracked(binder)
+            .map(|value| value.map(|index| index.to_string())),
+        _ => evaluate_tracked_optional(expr, ctx).map(|value| value.map(|v| v.to_string())),
+    }
+}
+
 fn evaluate_binding_part(
     expr: &HandlerExpr,
     ctx: &mut dyn EvalContext,
@@ -307,6 +365,20 @@ fn evaluate_binding_part(
     match expr {
         HandlerExpr::StrPropRead { path } => ctx.read_string_tracked(path),
         _ => evaluate_tracked(expr, ctx).map(|v| v.to_string()),
+    }
+}
+
+fn evaluate_binding_part_optional(
+    expr: &HandlerExpr,
+    ctx: &mut dyn EvalContext,
+) -> Result<Option<String>, EvalError> {
+    match expr {
+        HandlerExpr::StrPropRead { path } => ctx.read_string_tracked(path).map(Some),
+        HandlerExpr::ItemRead { binder } => ctx.read_item_binding_tracked(binder),
+        HandlerExpr::IndexRead { binder } => ctx
+            .read_index_tracked(binder)
+            .map(|value| value.map(|index| index.to_string())),
+        _ => evaluate_tracked_optional(expr, ctx).map(|value| value.map(|v| v.to_string())),
     }
 }
 
@@ -334,6 +406,20 @@ pub fn evaluate_bool_binding(
     match expr {
         HandlerExpr::BoolLit(b) => Ok(*b),
         HandlerExpr::BoolPropRead { path } => ctx.read_bool_tracked(path),
+        _ => Err(EvalError::TypeMismatch {
+            path: "<non-bool expression in bool binding context>".into(),
+        }),
+    }
+}
+
+pub(crate) fn evaluate_bool_binding_optional(
+    expr: &HandlerExpr,
+    ctx: &mut dyn EvalContext,
+) -> Result<Option<bool>, EvalError> {
+    match expr {
+        HandlerExpr::BoolLit(b) => Ok(Some(*b)),
+        HandlerExpr::BoolPropRead { path } => ctx.read_bool_tracked(path).map(Some),
+        HandlerExpr::ItemRead { binder } => ctx.read_item_bool_tracked(binder),
         _ => Err(EvalError::TypeMismatch {
             path: "<non-bool expression in bool binding context>".into(),
         }),
@@ -379,6 +465,50 @@ fn evaluate_tracked(expr: &HandlerExpr, ctx: &mut dyn EvalContext) -> Result<i32
         // M3-Phase 1 T7 / T8 will provide a bool-typed binding evaluator
         // (`evaluate_bool_binding`); until that lands, a bool expression in
         // integer binding context is a type mismatch.
+        HandlerExpr::BoolLit(_) | HandlerExpr::BoolPropRead { .. } => {
+            Err(EvalError::TypeMismatch {
+                path: "<bool expression in integer context>".into(),
+            })
+        }
+    }
+}
+
+fn evaluate_tracked_optional(
+    expr: &HandlerExpr,
+    ctx: &mut dyn EvalContext,
+) -> Result<Option<i32>, EvalError> {
+    match expr {
+        HandlerExpr::IntLit(v) => Ok(Some(*v)),
+
+        HandlerExpr::PropRead { path } => ctx.read_i32_tracked(path).map(Some),
+        HandlerExpr::ItemRead { binder } => ctx.read_item_i32_tracked(binder),
+        HandlerExpr::IndexRead { binder } => ctx.read_index_tracked(binder),
+
+        HandlerExpr::Assign { lhs, .. } | HandlerExpr::CompoundAssign { lhs, .. } => {
+            Err(EvalError::WriteInBindingContext { path: lhs.clone() })
+        }
+
+        HandlerExpr::Block(stmts) => {
+            let mut last = Some(0i32);
+            for stmt in stmts {
+                last = evaluate_tracked_optional(stmt, ctx)?;
+                if last.is_none() {
+                    return Ok(None);
+                }
+            }
+            Ok(last)
+        }
+
+        HandlerExpr::StrLit(_)
+        | HandlerExpr::StrPropRead { .. }
+        | HandlerExpr::ListPropRead { .. }
+        | HandlerExpr::ListAppend { .. }
+        | HandlerExpr::ListDropLast { .. }
+        | HandlerExpr::ListLit(_)
+        | HandlerExpr::Interpolation(_) => Err(EvalError::TypeMismatch {
+            path: "<string expression in integer context>".into(),
+        }),
+
         HandlerExpr::BoolLit(_) | HandlerExpr::BoolPropRead { .. } => {
             Err(EvalError::TypeMismatch {
                 path: "<bool expression in integer context>".into(),

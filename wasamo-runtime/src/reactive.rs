@@ -4,8 +4,10 @@ use std::rc::{Rc, Weak};
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use crate::handler::{
-    evaluate_binding, evaluate_bool_binding, EvalContext, EvalError, HandlerExpr,
+    evaluate_binding, evaluate_binding_optional, evaluate_bool_binding,
+    evaluate_bool_binding_optional, EvalContext, EvalError, HandlerExpr,
 };
+use wasamo_ir::IrType;
 
 const MUTATION_CAP: usize = 16;
 
@@ -563,6 +565,125 @@ impl<'a> EvalContext for HandlerEvalContext<'a> {
     }
 }
 
+#[derive(Clone)]
+pub(crate) struct ForItemContext {
+    pub(crate) collection: String,
+    pub(crate) elem: IrType,
+    pub(crate) binder: String,
+    pub(crate) index_binder: Option<String>,
+    pub(crate) position: usize,
+}
+
+pub(crate) struct ForItemEvalContext<'a> {
+    registry: &'a SignalRegistry,
+    item: &'a ForItemContext,
+}
+
+impl<'a> ForItemEvalContext<'a> {
+    pub(crate) fn new(registry: &'a SignalRegistry, item: &'a ForItemContext) -> Self {
+        Self { registry, item }
+    }
+
+    fn ensure_item_binder(&self, binder: &str, expected: IrType) -> Result<(), EvalError> {
+        if binder != self.item.binder {
+            return Err(EvalError::UnknownProperty(binder.to_string()));
+        }
+        if self.item.elem != expected {
+            return Err(EvalError::TypeMismatch {
+                path: binder.to_string(),
+            });
+        }
+        Ok(())
+    }
+}
+
+impl<'a> EvalContext for ForItemEvalContext<'a> {
+    fn get_i32(&self, path: &str) -> Result<i32, EvalError> {
+        BindingEvalContext::new(self.registry).get_i32(path)
+    }
+
+    fn get_string(&self, path: &str) -> Result<String, EvalError> {
+        BindingEvalContext::new(self.registry).get_string(path)
+    }
+
+    fn get_bool(&self, path: &str) -> Result<bool, EvalError> {
+        BindingEvalContext::new(self.registry).get_bool(path)
+    }
+
+    fn set_i32(&mut self, path: &str, _value: i32) -> Result<(), EvalError> {
+        Err(EvalError::WriteInBindingContext {
+            path: path.to_string(),
+        })
+    }
+
+    fn set_bool(&mut self, path: &str, _value: bool) -> Result<(), EvalError> {
+        Err(EvalError::WriteInBindingContext {
+            path: path.to_string(),
+        })
+    }
+
+    fn read_i32_tracked(&self, path: &str) -> Result<i32, EvalError> {
+        BindingEvalContext::new(self.registry).read_i32_tracked(path)
+    }
+
+    fn read_string_tracked(&self, path: &str) -> Result<String, EvalError> {
+        BindingEvalContext::new(self.registry).read_string_tracked(path)
+    }
+
+    fn read_bool_tracked(&self, path: &str) -> Result<bool, EvalError> {
+        BindingEvalContext::new(self.registry).read_bool_tracked(path)
+    }
+
+    fn read_item_i32_tracked(&self, binder: &str) -> Result<Option<i32>, EvalError> {
+        self.ensure_item_binder(binder, IrType::I32)?;
+        let signal = self
+            .registry
+            .i32_lists
+            .get(&self.item.collection)
+            .ok_or_else(|| EvalError::UnknownProperty(self.item.collection.clone()))?;
+        Ok(signal.get().get(self.item.position).copied())
+    }
+
+    fn read_item_string_tracked(&self, binder: &str) -> Result<Option<String>, EvalError> {
+        self.ensure_item_binder(binder, IrType::Str)?;
+        let signal = self
+            .registry
+            .string_lists
+            .get(&self.item.collection)
+            .ok_or_else(|| EvalError::UnknownProperty(self.item.collection.clone()))?;
+        Ok(signal.get().get(self.item.position).cloned())
+    }
+
+    fn read_item_bool_tracked(&self, binder: &str) -> Result<Option<bool>, EvalError> {
+        self.ensure_item_binder(binder, IrType::Bool)?;
+        let signal = self
+            .registry
+            .bool_lists
+            .get(&self.item.collection)
+            .ok_or_else(|| EvalError::UnknownProperty(self.item.collection.clone()))?;
+        Ok(signal.get().get(self.item.position).copied())
+    }
+
+    fn read_item_binding_tracked(&self, binder: &str) -> Result<Option<String>, EvalError> {
+        match self.item.elem {
+            IrType::I32 => self
+                .read_item_i32_tracked(binder)
+                .map(|v| v.map(|n| n.to_string())),
+            IrType::Str => self.read_item_string_tracked(binder),
+            IrType::Bool => Err(EvalError::TypeMismatch {
+                path: binder.to_string(),
+            }),
+        }
+    }
+
+    fn read_index_tracked(&self, binder: &str) -> Result<Option<i32>, EvalError> {
+        match self.item.index_binder.as_deref() {
+            Some(index) if index == binder => Ok(Some(self.item.position as i32)),
+            _ => Err(EvalError::UnknownProperty(binder.to_string())),
+        }
+    }
+}
+
 // ── Active SignalRegistry handoff (DD-M2-P6-006) ────────────────────────────
 //
 // The IR loader (`ir_loader::build_widget_tree`) installs the per-component
@@ -684,6 +805,48 @@ fn register_bool_binding_with_writer(
         match evaluate_bool_binding(&expr, &mut ctx) {
             Ok(value) => writer(value),
             Err(e) => eprintln!("wasamo: binding eval error: {e}"),
+        }
+    })
+}
+
+pub(crate) fn register_for_item_binding(
+    target: BindingTarget,
+    expr: HandlerExpr,
+    registry: Rc<SignalRegistry>,
+    item: ForItemContext,
+    write_fn: fn(WidgetId, PropertyKey, &str),
+) -> EffectHandle {
+    let BindingTarget::WidgetProperty { node, prop } = target else {
+        panic!("register_for_item_binding called with non-property target");
+    };
+    let writer = move |value: String| write_fn(node, prop, &value);
+    EffectHandle::new(move || {
+        let mut ctx = ForItemEvalContext::new(&registry, &item);
+        match evaluate_binding_optional(&expr, &mut ctx) {
+            Ok(Some(value)) => writer(value),
+            Ok(None) => {}
+            Err(e) => eprintln!("wasamo: for-item binding eval error: {e}"),
+        }
+    })
+}
+
+pub(crate) fn register_for_item_bool_binding(
+    target: BindingTarget,
+    expr: HandlerExpr,
+    registry: Rc<SignalRegistry>,
+    item: ForItemContext,
+    write_fn: fn(WidgetId, PropertyKey, bool),
+) -> EffectHandle {
+    let BindingTarget::WidgetProperty { node, prop } = target else {
+        panic!("register_for_item_bool_binding called with non-property target");
+    };
+    let writer = move |value: bool| write_fn(node, prop, value);
+    EffectHandle::new(move || {
+        let mut ctx = ForItemEvalContext::new(&registry, &item);
+        match evaluate_bool_binding_optional(&expr, &mut ctx) {
+            Ok(Some(value)) => writer(value),
+            Ok(None) => {}
+            Err(e) => eprintln!("wasamo: for-item binding eval error: {e}"),
         }
     })
 }
@@ -1307,6 +1470,148 @@ mod tests {
     }
 
     // ── register_binding tests (DD-M2-P5-005) ────────────────────────────────
+
+    thread_local! {
+        static FOR_ITEM_STRING_WRITES: RefCell<Vec<String>> = const { RefCell::new(Vec::new()) };
+        static FOR_ITEM_BOOL_WRITES: RefCell<Vec<bool>> = const { RefCell::new(Vec::new()) };
+    }
+
+    fn record_for_item_string(_node: WidgetId, _prop: PropertyKey, value: &str) {
+        FOR_ITEM_STRING_WRITES.with(|writes| writes.borrow_mut().push(value.to_string()));
+    }
+
+    fn record_for_item_bool(_node: WidgetId, _prop: PropertyKey, value: bool) {
+        FOR_ITEM_BOOL_WRITES.with(|writes| writes.borrow_mut().push(value));
+    }
+
+    #[test]
+    fn register_for_item_binding_writes_item_index_and_skips_out_of_range() {
+        use crate::handler::{HandlerExpr, InterpolationPart};
+
+        FOR_ITEM_STRING_WRITES.with(|writes| writes.borrow_mut().clear());
+
+        let labels = Signal::new(vec!["a".to_string(), "b".to_string()]);
+        let mut registry = SignalRegistry::new();
+        registry
+            .string_lists
+            .insert("labels".to_string(), labels.clone());
+        let registry = Rc::new(registry);
+
+        let item = ForItemContext {
+            collection: "labels".into(),
+            elem: IrType::Str,
+            binder: "label".into(),
+            index_binder: Some("i".into()),
+            position: 1,
+        };
+        let expr = HandlerExpr::Interpolation(vec![
+            InterpolationPart::Expr(HandlerExpr::ItemRead {
+                binder: "label".into(),
+            }),
+            InterpolationPart::Literal("#".into()),
+            InterpolationPart::Expr(HandlerExpr::IndexRead { binder: "i".into() }),
+        ]);
+
+        let _h = register_for_item_binding(
+            BindingTarget::WidgetProperty {
+                node: WidgetId(std::ptr::null_mut()),
+                prop: 0,
+            },
+            expr,
+            Rc::clone(&registry),
+            item,
+            record_for_item_string,
+        );
+        FOR_ITEM_STRING_WRITES.with(|writes| {
+            assert_eq!(&*writes.borrow(), &["b#1".to_string()]);
+        });
+
+        labels.set(vec!["a".to_string()]);
+        FOR_ITEM_STRING_WRITES.with(|writes| {
+            assert_eq!(
+                &*writes.borrow(),
+                &["b#1".to_string()],
+                "out-of-range item read must skip the write"
+            );
+        });
+    }
+
+    #[test]
+    fn register_for_item_bool_binding_tracks_bool_item_value() {
+        use crate::handler::HandlerExpr;
+
+        FOR_ITEM_BOOL_WRITES.with(|writes| writes.borrow_mut().clear());
+
+        let flags = Signal::new(vec![true]);
+        let mut registry = SignalRegistry::new();
+        registry
+            .bool_lists
+            .insert("flags".to_string(), flags.clone());
+        let registry = Rc::new(registry);
+
+        let item = ForItemContext {
+            collection: "flags".into(),
+            elem: IrType::Bool,
+            binder: "flag".into(),
+            index_binder: None,
+            position: 0,
+        };
+
+        let _h = register_for_item_bool_binding(
+            BindingTarget::WidgetProperty {
+                node: WidgetId(std::ptr::null_mut()),
+                prop: 0,
+            },
+            HandlerExpr::ItemRead {
+                binder: "flag".into(),
+            },
+            Rc::clone(&registry),
+            item,
+            record_for_item_bool,
+        );
+        FOR_ITEM_BOOL_WRITES.with(|writes| assert_eq!(&*writes.borrow(), &[true]));
+
+        flags.set(vec![false]);
+        FOR_ITEM_BOOL_WRITES.with(|writes| assert_eq!(&*writes.borrow(), &[true, false]));
+    }
+
+    #[test]
+    fn register_for_item_binding_stringifies_i32_item_value() {
+        use crate::handler::{HandlerExpr, InterpolationPart};
+
+        FOR_ITEM_STRING_WRITES.with(|writes| writes.borrow_mut().clear());
+
+        let nums = Signal::new(vec![10, 20]);
+        let mut registry = SignalRegistry::new();
+        registry.i32_lists.insert("nums".to_string(), nums.clone());
+        let registry = Rc::new(registry);
+
+        let item = ForItemContext {
+            collection: "nums".into(),
+            elem: IrType::I32,
+            binder: "n".into(),
+            index_binder: Some("i".into()),
+            position: 1,
+        };
+        let expr = HandlerExpr::Interpolation(vec![
+            InterpolationPart::Expr(HandlerExpr::ItemRead { binder: "n".into() }),
+            InterpolationPart::Literal("@".into()),
+            InterpolationPart::Expr(HandlerExpr::IndexRead { binder: "i".into() }),
+        ]);
+
+        let _h = register_for_item_binding(
+            BindingTarget::WidgetProperty {
+                node: WidgetId(std::ptr::null_mut()),
+                prop: 0,
+            },
+            expr,
+            Rc::clone(&registry),
+            item,
+            record_for_item_string,
+        );
+
+        FOR_ITEM_STRING_WRITES.with(|writes| assert_eq!(&*writes.borrow(), &["20@1"]));
+    }
 
     #[test]
     fn register_binding_writes_initial_and_updates() {
