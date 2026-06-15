@@ -159,8 +159,11 @@ enum WidgetData {
     // materialises as a `WidgetData` variant; the loader flattens each
     // Cell's single content child onto `WidgetNode.children`, kept
     // parallel to `cell_placements` (`cell_placements[i]` places
-    // `children[i]`). No `PropertyValue` / binding / ABI path touches
-    // these fields (Phase 5 constant-only, DD-M3-P5-001 / DD-M3-P5-006).
+    // `children[i]`). DD-M3-P7-006 keeps Grid static-only in Phase 7;
+    // migrate `cell_placements` to child-carried storage before any Grid
+    // structural mutation path lands. No `PropertyValue` / binding / ABI
+    // path touches these fields (Phase 5 constant-only, DD-M3-P5-001 /
+    // DD-M3-P5-006).
     //
     // The outer Visual carries the DD-M3-P5-005 outer-bounds clip
     // (`Visual.Clip = InsetClip{0,0,0,0}`, installed in `WidgetNode::grid`,
@@ -174,13 +177,13 @@ enum WidgetData {
     },
     // M3-Phase 6 DD-M3-P6-001 / DD-M3-P6-002 per-kind tag for the ZStack
     // layout primitive. Children are direct real widgets in document order
-    // (first = bottom, last = top); per-child `h-align` / `v-align`
-    // annotations are stored as a layout-engine mirror vector parallel to
-    // `children`. The outer Visual carries the zero-inset clip; children
+    // (first = bottom, last = top). M3-Phase 7 DD-M3-P7-006 moved per-child
+    // `h-align` / `v-align` storage onto the child slot (`WidgetNode`
+    // `zstack_placement`) so placement travels with the child through
+    // mutation and staging instead of living in a parent-owned parallel
+    // vector. The outer Visual carries the zero-inset clip; children
     // deliberately do not get per-child clips.
-    ZStack {
-        zstack_placements: Vec<ZStackPlacement>,
-    },
+    ZStack,
 }
 
 // ── Property dispatch (M1 experimental property IDs from wasamo.h §5) ─────────
@@ -218,6 +221,24 @@ impl From<windows::core::Error> for PropertyError {
     fn from(e: windows::core::Error) -> Self {
         PropertyError::Runtime(format!("{e}"))
     }
+}
+
+fn child_slot_zstack_placement(
+    is_zstack_parent: bool,
+    zstack_placement: Option<ZStackPlacement>,
+) -> Option<ZStackPlacement> {
+    is_zstack_parent.then(|| zstack_placement.unwrap_or_else(ZStackPlacement::centered))
+}
+
+fn replacement_child_zstack_placement(
+    is_zstack_parent: bool,
+    existing_slot_placement: Option<ZStackPlacement>,
+) -> Option<ZStackPlacement> {
+    child_slot_zstack_placement(is_zstack_parent, existing_slot_placement)
+}
+
+fn clear_detached_child_zstack_placement(zstack_placement: &mut Option<ZStackPlacement>) {
+    *zstack_placement = None;
 }
 
 // M3-Phase 3 T5: WrapPanel absent-to-default mapping (DD-M3-P3-003 /
@@ -324,6 +345,10 @@ pub struct WidgetNode {
     /// `replace_child`, and `window::set_root`. Used by `widget_destroy`
     /// to reject destruction of still-attached widgets (DD-M2-P4-003).
     pub attached: bool,
+    /// Parent-interpreted ZStack child placement carried on this child slot
+    /// (DD-M3-P7-006). Set to `Some` only while the node is attached under a
+    /// ZStack parent; placement-free parent insertions normalize it to `None`.
+    zstack_placement: Option<ZStackPlacement>,
     /// Reactive bindings owned by this node. Dropping an EffectHandle
     /// removes it from the dependency graph (DD-M2-P5-003).
     pub(crate) bindings: Vec<EffectHandle>,
@@ -364,6 +389,7 @@ impl WidgetNode {
             children: Vec::new(),
             inline_handlers: Vec::new(),
             attached: false,
+            zstack_placement: None,
             bindings: Vec::new(),
         }))
     }
@@ -387,6 +413,7 @@ impl WidgetNode {
             children: Vec::new(),
             inline_handlers: Vec::new(),
             attached: false,
+            zstack_placement: None,
             bindings: Vec::new(),
         }))
     }
@@ -410,6 +437,7 @@ impl WidgetNode {
             children: Vec::new(),
             inline_handlers: Vec::new(),
             attached: false,
+            zstack_placement: None,
             bindings: Vec::new(),
         }))
     }
@@ -448,6 +476,7 @@ impl WidgetNode {
             children: Vec::new(),
             inline_handlers: Vec::new(),
             attached: false,
+            zstack_placement: None,
             bindings: Vec::new(),
         }))
     }
@@ -494,6 +523,7 @@ impl WidgetNode {
             children: Vec::new(),
             inline_handlers: Vec::new(),
             attached: false,
+            zstack_placement: None,
             bindings: Vec::new(),
         }))
     }
@@ -535,6 +565,7 @@ impl WidgetNode {
             children: Vec::new(),
             inline_handlers: Vec::new(),
             attached: false,
+            zstack_placement: None,
             bindings: Vec::new(),
         }))
     }
@@ -592,6 +623,7 @@ impl WidgetNode {
             children: Vec::new(),
             inline_handlers: Vec::new(),
             attached: false,
+            zstack_placement: None,
             bindings: Vec::new(),
         }))
     }
@@ -635,31 +667,30 @@ impl WidgetNode {
             children: Vec::new(),
             inline_handlers: Vec::new(),
             attached: false,
+            zstack_placement: None,
             bindings: Vec::new(),
         }))
     }
 
-    // M3-Phase 6 T3: ZStack materialisation. The loader extracts the
-    // parent-owned child placement annotations in document order and passes
-    // them here so `build_layout_tree` can hand them to `LayoutNode::zstack`
-    // unchanged. Width / height default to Fill / Fill (overlay-first).
-    pub(crate) fn zstack(
-        compositor: &Compositor,
-        zstack_placements: Vec<ZStackPlacement>,
-    ) -> windows::core::Result<Box<Self>> {
+    // M3-Phase 6 T3 / M3-Phase 7 T5: ZStack materialisation. Width /
+    // height default to Fill / Fill (overlay-first). Per-child placement is
+    // carried by each child slot and consumed by the ZStack parent during
+    // layout (DD-M3-P7-006), so the container stores no parallel metadata.
+    pub(crate) fn zstack(compositor: &Compositor) -> windows::core::Result<Box<Self>> {
         use windows::core::Interface;
         let visual = compositor.CreateSpriteVisual()?;
         let clip: InsetClip = compositor.CreateInsetClip()?;
         let outer_visual: Visual = visual.cast()?;
         outer_visual.SetClip(&clip)?;
         Ok(Box::new(Self {
-            data: WidgetData::ZStack { zstack_placements },
+            data: WidgetData::ZStack,
             width: SizeConstraint::Fill,
             height: SizeConstraint::Fill,
             visual,
             children: Vec::new(),
             inline_handlers: Vec::new(),
             attached: false,
+            zstack_placement: None,
             bindings: Vec::new(),
         }))
     }
@@ -791,6 +822,7 @@ impl WidgetNode {
             children: Vec::new(),
             inline_handlers: Vec::new(),
             attached: false,
+            zstack_placement: None,
             bindings: Vec::new(),
         }))
     }
@@ -1311,7 +1343,7 @@ impl WidgetNode {
     }
 
     pub(crate) fn is_zstack(&self) -> bool {
-        matches!(self.data, WidgetData::ZStack { .. })
+        matches!(self.data, WidgetData::ZStack)
     }
 
     pub fn insert_child(
@@ -1343,6 +1375,7 @@ impl WidgetNode {
         if child.attached {
             return Err(MutationError::AlreadyAttached);
         }
+        child.zstack_placement = child_slot_zstack_placement(self.is_zstack(), zstack_placement);
         use windows::core::Interface;
         let parent_container: ContainerVisual = self
             .content_container_visual()
@@ -1370,12 +1403,6 @@ impl WidgetNode {
         }
         child.attached = true;
         self.children.insert(index, child);
-        if let WidgetData::ZStack { zstack_placements } = &mut self.data {
-            zstack_placements.insert(
-                index,
-                zstack_placement.unwrap_or(ZStackPlacement::centered()),
-            );
-        }
         Ok(())
     }
 
@@ -1397,10 +1424,8 @@ impl WidgetNode {
             .and_then(|c| c.Remove(&child_visual))
             .map_err(|_| MutationError::IndexOutOfBounds)?;
         let mut removed = self.children.remove(index);
-        if let WidgetData::ZStack { zstack_placements } = &mut self.data {
-            zstack_placements.remove(index);
-        }
         removed.attached = false;
+        clear_detached_child_zstack_placement(&mut removed.zstack_placement);
         Ok(removed)
     }
 
@@ -1415,6 +1440,11 @@ impl WidgetNode {
         if new_child.attached {
             return Err(MutationError::AlreadyAttached);
         }
+        let replacement_placement = replacement_child_zstack_placement(
+            self.is_zstack(),
+            self.children[index].zstack_placement,
+        );
+        new_child.zstack_placement = replacement_placement;
         use windows::core::Interface;
         let old_visual: Visual = self.children[index]
             .visual
@@ -1440,6 +1470,7 @@ impl WidgetNode {
         new_child.attached = true;
         let mut old = std::mem::replace(&mut self.children[index], new_child);
         old.attached = false;
+        clear_detached_child_zstack_placement(&mut old.zstack_placement);
         Ok(old)
     }
 
@@ -1503,7 +1534,7 @@ impl WidgetNode {
     }
 
     fn build_layout_tree(&self) -> LayoutNode {
-        match &self.data {
+        let mut layout_node = match &self.data {
             WidgetData::Rectangle | WidgetData::Text { .. } | WidgetData::Button(_) => {
                 LayoutNode::rectangle(self.width.clone(), self.height.clone())
             }
@@ -1631,8 +1662,8 @@ impl WidgetNode {
                     .collect();
                 node
             }
-            WidgetData::ZStack { zstack_placements } => {
-                let mut node = LayoutNode::zstack(zstack_placements.clone());
+            WidgetData::ZStack => {
+                let mut node = LayoutNode::zstack();
                 node.width = self.width.clone();
                 node.height = self.height.clone();
                 node.children = self
@@ -1642,7 +1673,9 @@ impl WidgetNode {
                     .collect();
                 node
             }
-        }
+        };
+        layout_node.zstack_placement = self.zstack_placement;
+        layout_node
     }
 
     // `computed.offset` is the absolute offset the layout engine assigns in
@@ -1929,7 +1962,11 @@ fn read_accent_color() -> Color {
 
 #[cfg(test)]
 mod tests {
-    use super::MutationError;
+    use super::{
+        child_slot_zstack_placement, clear_detached_child_zstack_placement,
+        replacement_child_zstack_placement, MutationError,
+    };
+    use crate::layout::{Alignment, ZStackPlacement};
 
     // Minimal stand-in for WidgetNode used only to verify index-check and
     // attached-flag logic, without requiring a Win32/WinRT environment.
@@ -1988,6 +2025,10 @@ mod tests {
             old.attached = false;
             Ok(old)
         }
+    }
+
+    fn zplace(h_align: Alignment, v_align: Alignment) -> ZStackPlacement {
+        ZStackPlacement { h_align, v_align }
     }
 
     #[test]
@@ -2118,6 +2159,67 @@ mod tests {
         ch.insert(0, Slot::new()).unwrap();
         let already = Slot { attached: true };
         assert_eq!(ch.insert(0, already), Err(MutationError::AlreadyAttached));
+    }
+
+    #[test]
+    fn zstack_insert_default_placement_is_centered_on_production_logic() {
+        assert_eq!(
+            child_slot_zstack_placement(true, None),
+            Some(ZStackPlacement::centered())
+        );
+    }
+
+    #[test]
+    fn zstack_insert_explicit_placement_is_preserved_on_production_logic() {
+        assert_eq!(
+            child_slot_zstack_placement(
+                true,
+                Some(zplace(Alignment::Trailing, Alignment::Stretch))
+            ),
+            Some(zplace(Alignment::Trailing, Alignment::Stretch))
+        );
+    }
+
+    #[test]
+    fn non_zstack_insert_normalizes_child_slot_placement_to_none() {
+        assert_eq!(
+            child_slot_zstack_placement(
+                false,
+                Some(zplace(Alignment::Trailing, Alignment::Stretch))
+            ),
+            None
+        );
+    }
+
+    #[test]
+    fn zstack_remove_detaches_and_clears_child_slot_placement() {
+        let mut placement = Some(zplace(Alignment::Leading, Alignment::Center));
+
+        clear_detached_child_zstack_placement(&mut placement);
+
+        assert_eq!(placement, None);
+    }
+
+    #[test]
+    fn zstack_replace_preserves_existing_slot_placement_on_new_child() {
+        assert_eq!(
+            replacement_child_zstack_placement(
+                true,
+                Some(zplace(Alignment::Leading, Alignment::Stretch))
+            ),
+            Some(zplace(Alignment::Leading, Alignment::Stretch))
+        );
+    }
+
+    #[test]
+    fn non_zstack_replace_normalizes_replacement_placement_to_none() {
+        assert_eq!(
+            replacement_child_zstack_placement(
+                false,
+                Some(zplace(Alignment::Leading, Alignment::Stretch))
+            ),
+            None
+        );
     }
 
     // ── Binding disposal mirror ───────────────────────────────────────────────

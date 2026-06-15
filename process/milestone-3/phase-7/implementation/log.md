@@ -1,5 +1,170 @@
 ## Decisions log
 
+- **2026-06-15 / T5 start gate — ST2 placement migration
+  responsibility re-challenged before implementation.** Read the T4
+  close/carry rows, the T1 sequencing addendum, the T3 carry-forward
+  rows touching T5, the Phase 7 constraints/preamble/plan, DD-M3-P7-006,
+  and
+  [implementation-gates.md](../../../procedures/implementation-gates.md)
+  before editing runtime code. The T5 plan was revised before
+  implementation: T5 owns the ZStack child-carried placement migration
+  across `WidgetNode` storage/mutation, `LayoutNode` arrange/build-tree
+  transfer, and loader static/conditional insertion. It does **not** own
+  the T7 unified splice primitive, `ForLoopSubtree`, collection writes,
+  or GUI evidence.
+
+  **Carry-over checked from prior tasks.**
+
+  | Carry-over | T5 disposition |
+  |---|---|
+  | T4 close: ZStack placement storage remains parent-owned parallel data, with owner T5. | **T5 owns.** Delete/migrate the `zstack_placements` storage path and close the trap #3 greppable artifact. |
+  | T1 sequencing: T5 must keep the conditional mutation path green under child-carried placement before the unified splice seam exists. | **T5 owns.** Preserve the existing conditional-under-ZStack behavior while changing the storage carrier. |
+  | T3/T4 rows for textual-IR `for`, static materialisation, `ForLoopSubtree`, collection writers, guarded reads, and range side effects. | **Not T5.** Owners remain T6/T7. T5 only changes how existing ZStack child placement rides through current static and conditional child mutations. |
+  | Grid placement migration trigger from DD-M3-P7-006. | **T5 records but does not migrate.** Grid `cell_placements` stays parallel and static-only with the DD trigger pointer. |
+
+  **T5 responsibility re-check.**
+
+  | Plan hypothesis | T5 decision |
+  |---|---|
+  | "Move ZStack placement onto the child slot" might imply implementing the T7 splice seam now. | Refuted. T5 changes the carrier and current insert/remove/replace semantics only; the single splice seam and range side-effect bundle remain T7-owned. |
+  | Child-carried placement could live only in the layout tree. | Refuted. That would leave runtime mutation and staging still needing a parallel carrier before layout. T5 must carry placement on the runtime child slot and transfer it into `LayoutNode`. |
+  | Grid should migrate at the same time for consistency. | Refuted by DD-M3-P7-006. Grid rejects direct structural mutation in Phase 7; `cell_placements` remains static-only and gains the trigger pointer. |
+
+  **T5 start-gate selection.**
+
+  | Trap | Applies? | Reason / planned close artifact |
+  |---|---|---|
+  | #1 semantic migration | Not applicable. | T5 does not add an IR/schema enum variant or field, nor widen a semantic traversal surface. It changes runtime storage fields and call sites already enumerated by R-C. |
+  | #2 side effects | **Applies.** | T5 changes tree mutation storage semantics on the shipped ZStack path. Close with a structural side-effect table for child insertion/removal/replacement, Visual sibling order, layout-tree transfer, layout dirty behavior, and conditional mutation preservation. |
+  | #3 parallel data drift | **Applies.** | This is T5's core: remove ZStack's parent-owned parallel placement vector from mutated paths. Close with an `rg`-enumerated table showing `zstack_placements` removed from runtime source and `cell_placements` intentionally static-only with the DD trigger pointer. |
+  | #4 untested authored branch | **Applies.** | T5 adds/changes size/semantic branches: ZStack insert with explicit placement, ZStack default placement on placement-free insert, non-ZStack normalization to `None`, ZStack replace preserving placement, and layout arrange reading child-carried placement. Each needs a direct pure or existing Windows regression test owner. |
+  | #5 carry-forward | **Applies.** | The T7 splice seam must consume child-carried placement and not reintroduce parallel metadata; Grid's deferred migration trigger remains open. Record owner/scope/impact/close condition. |
+  | #6 root cause | Standing. | Any deterministic or recurring failure during T5 regression runs must be root-caused and recorded rather than retried to green. |
+  | #7 GUI evidence | Not applicable. | T5 has no GUI-host rendering deliverable; Windows integration fixtures are regression tests, not assistant screenshot evidence. |
+
+  **Review lane:** full independent review. T5 is a runtime structural
+  change touching shipped ZStack arrange / loader / conditional mutation
+  behavior, and includes the trap #4 branch/test check.
+
+  **Planned proof obligations (implementation-time hypotheses).**
+
+  | Branch / behavior to prove | Category | Planned proof |
+  |---|---|---|
+  | Runtime child slots carry ZStack placement as ordinary child data, and placement-free parent insertions normalize the carrier to `None`. | semantic branch / invariant | Pure test-module mirror for child-slot mutation state, avoiding WinRT construction. |
+  | ZStack insert/appended child default placement is `Center/Center`; explicit loader/conditional placement overrides are preserved. | size / semantic branch | Pure mirror tests plus existing ZStack layout and conditional-under-ZStack Windows regressions. |
+  | ZStack removal returns a detached child with no parent-interpreted placement left behind. | semantic branch / invariant | Pure mirror test. |
+  | ZStack replacement preserves the old slot's placement on the new child, matching the old parent-owned-vector behavior. | semantic branch / invariant | Pure mirror test. |
+  | Layout arrange reads placement from each child rather than a parallel vector. | observable behavior / invariant | Pure `layout.rs` ZStack unit tests updated to set child-carried placements and keep alignment/default branch assertions direct. |
+  | Grid `cell_placements` remains parallel and static-only with the DD-M3-P7-006 trigger pointer. | owner boundary / carry-forward | Greppable source audit; existing Grid tests remain green. |
+  | Conditional-under-ZStack insertion/removal still applies declared child placement. | observable behavior / invariant | Existing `conditional_zstack_reinsert_uses_declared_placement_metadata` Windows regression. |
+
+  **Known carry-forward candidates before implementation.**
+
+  | Carry-forward candidate | Owner / scope / impact / close condition |
+  |---|---|
+  | The unified placement-aware splice seam is not implemented by T5. | **Owner = T7.** Scope: splice primitive + `ForLoopSubtree` range mutation. Impact: current conditional path still uses direct insert/remove calls, though those now carry placement structurally. Close when T7 routes structural mutation through one seam and records trap #2 side effects. |
+  | T7 must not reintroduce parent-owned ZStack placement metadata while staging generated range children. | **Owner = T7.** Scope: staged generated children and commit. Impact: range mutation correctness depends on carrying placement with staged children. Close when T7 consumes child-carried placement in the splice tests, including the ZStack range fixture. |
+  | Grid `cell_placements` remains a parallel vector. | **Owner = future Grid structural-mutation task (triggered by DD-M3-P7-006).** Scope: direct `for` of `Cell`s, conditional `Cell`s, or another parent-owned per-child metadata kind. Impact: safe in Phase 7 because Grid rejects direct `for`; close when the trigger task migrates Grid before admitting structural mutation. |
+
+- **2026-06-15 / T5 close gate — ZStack placement is child-carried.**
+  Migrated ZStack placement storage from parent-owned parallel metadata
+  to child-slot-carried placement in `wasamo-runtime`: `WidgetNode`
+  now carries `Option<ZStackPlacement>` on each child slot,
+  `WidgetData::ZStack` stores no placement vector, `build_layout_tree`
+  transfers the child carrier into `LayoutNode`, and `arrange_zstack`
+  reads each child carrier with `Center/Center` as the default. Loader
+  static and conditional ZStack insertion continue to extract placement
+  from the authored child and pass it through the existing insertion
+  path. Grid remains static-only with its `cell_placements` trigger
+  pointer.
+
+  **Source enumeration used for close artifacts.**
+
+  ```text
+  git diff -- process\milestone-3\phase-7\implementation\plan.md process\milestone-3\phase-7\implementation\log.md wasamo-runtime\src\widget.rs wasamo-runtime\src\layout.rs wasamo-runtime\src\ir_loader.rs
+  rg -n "zstack_placement|child_slot_zstack_placement|replacement_child_zstack_placement|clear_detached_child_zstack_placement|insert_child_with_zstack_placement|remove_child|replace_child|WidgetData::ZStack|LayoutNode::zstack|collect_static_zstack_child_placement_slots|cell_placements|DD-M3-P7-006" wasamo-runtime\src\widget.rs wasamo-runtime\src\layout.rs wasamo-runtime\src\ir_loader.rs
+  rg -n "zstack_insert_default_placement_is_centered_on_production_logic|zstack_insert_explicit_placement_is_preserved_on_production_logic|non_zstack_insert_normalizes_child_slot_placement_to_none|zstack_remove_detaches_and_clears_child_slot_placement|zstack_replace_preserves_existing_slot_placement_on_new_child|non_zstack_replace_normalizes_replacement_placement_to_none|zstack_arrange_alignment_overrides|zstack_defaults_to_fill_fill_and_centers_children|conditional_zstack_reinsert_uses_declared_placement_metadata|zstack_rooted_fixture_preserves_live_visual_order_and_clip|zstack_static_placements_follow_materialized_member_order|zstack_static_placement_rejects_for_until_static_materialization_lands" wasamo-runtime\src wasamo-runtime\tests
+  rg -n "zstack_placements" wasamo-runtime\src wasamo-runtime\tests
+  ```
+
+  **Trap #2 structural side-effect enumeration.**
+
+  | Derived effect / path | T5 disposition |
+  |---|---|
+  | Runtime child insertion | **Changed storage carrier only.** `insert_child_inner` now sets the incoming child's `zstack_placement` through `child_slot_zstack_placement(is_zstack_parent, placement)`: `Some(explicit-or-centered)` for ZStack parents and `None` otherwise before inserting into `children`. Visual insertion order remains the existing `InsertAtTop` / `InsertBelow` logic. |
+  | Runtime child removal | **Changed storage carrier only.** `remove_child` still detaches the child's Visual and removes from `children`; it now clears the removed child's parent-interpreted placement through `clear_detached_child_zstack_placement` instead of removing a parent vector entry. |
+  | Runtime child replacement | **Changed storage carrier only.** `replace_child` preserves the old child slot's placement on the new child for ZStack parents through `replacement_child_zstack_placement`, preserving the prior parent-vector behavior; it clears the removed child's carrier. Existing Visual replacement behavior is unchanged. |
+  | Layout-tree transfer | **Changed.** `WidgetNode::build_layout_tree` transfers each widget child's carried placement into the corresponding `LayoutNode`; `WidgetData::ZStack` no longer supplies a placement vector. |
+  | ZStack arrange | **Changed.** `arrange_zstack` reads `child.zstack_placement.unwrap_or_else(ZStackPlacement::centered)` for each direct child. |
+  | Conditional-under-ZStack mutation | **Preserved.** The loader/effect path still calls `insert_child_with_zstack_placement` for ZStack parents and `remove_child` for removal; the existing regression stayed green. |
+  | Layout dirty / registry / effect teardown | **Preserved.** T5 did not change the conditional mutation site's `mark_layout_dirty_for`, `widget_destroy`, or effect/registry disposal sequence; T7 owns the unified splice side-effect bundle. |
+
+  **Trap #3 parallel-data sync artifact.**
+
+  | Parallel / derived structure | Source query / result | Disposition |
+  |---|---|---|
+  | ZStack parent-owned placement vector | `rg -n "zstack_placements" wasamo-runtime\src wasamo-runtime\tests` returned no hits after the migration. | **Closed for T5.** No ZStack parallel placement vector remains on runtime source/test paths. |
+  | ZStack child-carried replacement | `rg` hits: `WidgetNode::zstack` stores `WidgetData::ZStack`; `WidgetNode::zstack_placement`; `LayoutNode::zstack_placement`; `arrange_zstack` child read; loader `insert_child_with_zstack_placement` call sites. | **Closed for T5.** Placement now rides with each child slot from runtime mutation into layout. |
+  | Grid `cell_placements` | `rg` hits remain in `widget.rs`, `layout.rs`, and `ir_loader.rs`; comments include `DD-M3-P7-006` trigger pointer on the static-only path. | **Intentionally open with owner trigger.** Grid rejects direct structural mutation in Phase 7; migrate before any Grid structural mutation path lands. |
+
+  **Implemented-branch test map.**
+
+  | Implemented branch / behavior | Category | Source query / diff cue | Direct test or owner |
+  |---|---|---|---|
+  | ZStack child insertion with no explicit placement defaults to `Center/Center` | size / semantic branch | `rg` hits: production helper `child_slot_zstack_placement`; production call `child.zstack_placement = child_slot_zstack_placement(self.is_zstack(), zstack_placement)` | `widget::tests::zstack_insert_default_placement_is_centered_on_production_logic`; arrange-site fallback separately covered by `layout::tests::zstack_defaults_to_fill_fill_and_centers_children` |
+  | ZStack child insertion with explicit placement stores that placement on the child slot | semantic branch | `rg` hits: `insert_child_with_zstack_placement`; production helper `child_slot_zstack_placement(true, Some(...))` | `widget::tests::zstack_insert_explicit_placement_is_preserved_on_production_logic`; production build/layout path covered by `zstack_rooted_fixture_preserves_live_visual_order_and_clip` |
+  | Placement-free parent insertion normalizes the child carrier to `None` even if a placement value is supplied internally | semantic branch / invariant | `rg` hit: production helper `child_slot_zstack_placement(false, Some(...))` | `widget::tests::non_zstack_insert_normalizes_child_slot_placement_to_none` |
+  | ZStack removal clears the removed child's parent-interpreted placement | semantic branch / invariant | `rg` hits: production helper `clear_detached_child_zstack_placement`; production calls in `remove_child` and old-child half of `replace_child` | `widget::tests::zstack_remove_detaches_and_clears_child_slot_placement`; conditional removal behavior covered by `conditional_zstack_reinsert_uses_declared_placement_metadata` |
+  | ZStack replacement preserves old slot placement on the new child and clears the old child | semantic branch / invariant | `rg` hits: production helper `replacement_child_zstack_placement`; production call `new_child.zstack_placement = replacement_placement`; clear helper for old child | `widget::tests::zstack_replace_preserves_existing_slot_placement_on_new_child`; `widget::tests::non_zstack_replace_normalizes_replacement_placement_to_none` |
+  | Widget layout-tree transfer copies child-carried placement into `LayoutNode` | semantic branch / invariant | `rg` hit: `layout_node.zstack_placement = self.zstack_placement`; diff cue removes `LayoutNode::zstack(vec![...])` construction | Production transfer is covered by `conditional_zstack_reinsert_uses_declared_placement_metadata` and `zstack_rooted_fixture_preserves_live_visual_order_and_clip`; `layout::tests::zstack_arrange_alignment_overrides` covers arrange read only. |
+  | ZStack arrange reads placement from the child slot and defaults missing placement to centered | observable behavior / invariant | `rg` hit: `child.zstack_placement.unwrap_or_else(ZStackPlacement::centered)` in `arrange_zstack` | `layout::tests::zstack_arrange_alignment_overrides`; `layout::tests::zstack_defaults_to_fill_fill_and_centers_children`; `layout::tests::zstack_shrink_measure_uses_child_union_with_fill_child_zero` |
+  | Loader static ZStack child placement extraction still follows materialized member order | observable behavior / invariant | `rg` hit: test-only reducer `collect_static_zstack_child_placement_slots`; production static path is the `append_static_member` + `insert_child_with_zstack_placement` path | Reducer branch: `ir_loader::tests::zstack_static_placements_follow_materialized_member_order`; production integration: `zstack_rooted_fixture_preserves_live_visual_order_and_clip` |
+  | Loader static placement still rejects `for` until T6 materialisation | reject / owner boundary | `rg` hit: `ControlFlowNode::For { .. }` branch in the test-only reducer; production loader still rejects `for` materialisation before this placement path per the T2/T4 boundary | `ir_loader::tests::zstack_static_placement_rejects_for_until_static_materialization_lands`; owner for production `for` load remains T6 |
+  | Conditional-under-ZStack insertion/removal still applies declared placement after storage migration | observable behavior / invariant | `rg` hits: `zstack_placement_for_parent`; `insert_child_with_zstack_placement`; `remove_child` | `conditional_zstack_reinsert_uses_declared_placement_metadata`; also covered by `cargo test -p wasamo-runtime` integration run |
+  | Unified placement-aware splice seam and range mutation side-effect bundle | not implemented in T5 | Plan/log source cue: T5 explicitly does not own `ForLoopSubtree` or splice primitive | **Owner = T7.** Scope: splice primitive + `ForLoopSubtree`; impact: current conditional path still uses direct insert/remove calls; close when T7 routes structural mutation through one seam and records trap #2. |
+  | Grid child-carried placement migration | not implemented in T5 | `rg` hits: `cell_placements`; DD-M3-P7-006 trigger pointer in comments | **Owner = future Grid structural-mutation task.** Scope: direct `for` of `Cell`s / conditional `Cell`s / new parent-owned metadata; impact: safe while Grid is static-only; close before any Grid structural mutation path lands. |
+
+  **Behavior / invariant carry scan.**
+
+  | Behavior / invariant discovered or created | Disposition |
+  |---|---|
+  | ZStack no longer has a parent-owned placement vector; child placement is part of the child slot and is cleared on detach. | **Closed in T5** for current static, conditional, layout, and mutation paths. |
+  | `replace_child` under ZStack preserves the old slot's placement on the replacement child. | **Closed in T5.** This preserves the previous parent-vector behavior even though no current ZStack production path depends on replacement. |
+  | Placement-free parents normalize child-carried ZStack placement to `None`. | **Closed in T5.** Prevents stale parent-interpreted placement from riding through non-ZStack attachment. |
+  | Default placement is now applied at two layers: insertion normalizes ZStack child slots to `Some(Center/Center)`, while `arrange_zstack` still defaults `None` to centered. | **Closed / recorded in T5.** The insertion default is the production ZStack child path and has direct helper tests; the arrange fallback is defensive for manually constructed `LayoutNode`s and is covered by layout tests. |
+  | DD-M3-P7-006's open value space was narrowed to a per-container optional child field: `zstack_placement: Option<ZStackPlacement>`, not a shared placement enum. | **Closed / recorded in T5.** This is the chosen implementation shape for ZStack. Future Grid migration may reuse the pattern but must still make its own triggered migration decision before admitting structural mutation. |
+  | `build_layout_tree` copies `zstack_placement` on every widget node, but the field is parent-interpreted and meaningful only for direct children of a ZStack parent. | **Closed / recorded in T5.** The invariant is documented on `WidgetNode` / `LayoutNode`; placement-free parents normalize the runtime field to `None`, and non-ZStack layout code ignores the layout field. |
+  | T7 staging must carry placement as ordinary child data and must not recreate ZStack parent metadata. | **Owner = T7.** Scope: staged range children + splice commit. Impact: reintroducing parallel metadata would reopen trap #3; close when T7's ZStack range mutation fixture proves placement and Visual order through the splice. |
+  | Grid remains SoA/static-only with `cell_placements`. | **Owner = future Grid structural-mutation trigger task.** Scope: Grid admitting structural mutation. Impact: no Phase 7 range mutation crosses Grid; close condition is migration before the trigger path is built. |
+  | The unified splice seam is still absent after T5. | **Owner = T7.** Scope: single structural mutation seam and six side effects. Impact: existing conditional path remains direct insert/remove until T7; close when the conditional path and `for` ranges route through the seam. |
+
+  **Carry-forward ownership.**
+
+  | Open point | Owner task | Scope | Impact | Close condition |
+  |---|---|---|---|---|
+  | T7 splice seam must consume child-carried placement | T7 | Structural splice + `ForLoopSubtree` | Range mutation depends on placement riding with staged children | T7 implements the seam without parent-owned ZStack metadata and proves the ZStack range fixture. |
+  | Conditional path still uses direct insert/remove calls | T7 | Structural side-effect consolidation | Current behavior is green, but side effects are not yet centralized | T7 routes conditional and `for` mutation through the single seam and records the DD-006 side-effect table. |
+  | Grid `cell_placements` is still parallel | Future Grid structural-mutation trigger task | Direct `for` of `Cell`s, conditional `Cell`s, or new parent-owned child metadata | Safe in Phase 7 because Grid is static-only; would drift if mutation is admitted first | Trigger task migrates Grid to child-carried placement before building the mutation path. |
+
+  **Verification.** `cargo fmt --all`, `cargo fmt --all -- --check`,
+  `cargo test -p wasamo-runtime`, and `cargo test --workspace` were
+  green. The workspace run emitted the existing `wasamo` linkable-target
+  warning but no failures. No deterministic or recurring failure was
+  observed, so trap #6 required no rerun disposition.
+
+  **Independent-review follow-up disposition.** The review found no
+  defect in the ST2 storage migration itself, but flagged insufficient
+  proof structure and over-broad branch-map ownership. T5 follow-up
+  addressed the review points:
+
+  | Review point | Disposition |
+  |---|---|
+  | Mirror tests duplicated the placement state logic instead of testing production logic. | **Closed.** Extracted `child_slot_zstack_placement`, `replacement_child_zstack_placement`, and `clear_detached_child_zstack_placement`; production code and unit tests now call the same helpers. Removed the placement mirror structs. |
+  | Insert-time default placement was not directly pinned. | **Closed.** Added `widget::tests::zstack_insert_default_placement_is_centered_on_production_logic` and split explicit placement into `widget::tests::zstack_insert_explicit_placement_is_preserved_on_production_logic`. |
+  | Branch map credited `layout::tests::zstack_arrange_alignment_overrides` for layout-tree transfer, but that test constructs `LayoutNode` directly. | **Closed.** Branch map now assigns transfer proof to `conditional_zstack_reinsert_uses_declared_placement_metadata` and `zstack_rooted_fixture_preserves_live_visual_order_and_clip`; the layout unit is listed only for arrange read. |
+  | Test-only static placement reducer was not distinguished from production loader coverage. | **Closed.** Branch map now labels `collect_static_zstack_child_placement_slots` as a test-only reducer and separately names production integration coverage. |
+  | Double default site and per-container field choice were not recorded. | **Closed.** Behavior / invariant carry scan now records insertion-default vs arrange fallback and the chosen per-container `zstack_placement` field shape. |
+
 - **2026-06-14 / T4 start gate — C1 seam responsibility
   re-challenged before implementation.** Read the T3 close/carry rows,
   the T3 owner-follow-up addendum, the T2 carry-forward rows, the T1
