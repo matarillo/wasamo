@@ -20,8 +20,9 @@ use crate::box_values;
 use crate::layout::{Alignment, CellPlacement, TrackSize as LayoutTrackSize, ZStackPlacement};
 use crate::reactive::{
     register_binding, register_bool_binding, register_conditional_binding,
-    register_for_item_binding, register_for_item_bool_binding, set_active_registry, BindingTarget,
-    ForItemContext, PropertyKey, Signal, SignalRegistry, WidgetId,
+    register_for_item_binding, register_for_item_bool_binding, register_for_loop_binding,
+    set_active_registry, BindingTarget, ForItemContext, PropertyKey, Signal, SignalRegistry,
+    WidgetId,
 };
 use crate::text::{TextRenderer, TypographyStyle};
 use crate::widget::{
@@ -93,7 +94,6 @@ pub struct BuiltUi {
 enum DeclaredMemberSlot {
     Widget,
     Conditional(Rc<RefCell<ConditionalRuntimeState>>),
-    #[allow(dead_code)]
     ForLoop(Rc<RefCell<ForLoopRuntimeState>>),
 }
 
@@ -101,7 +101,6 @@ struct ConditionalRuntimeState {
     live_child: bool,
 }
 
-#[allow(dead_code)]
 struct ForLoopRuntimeState {
     live_children: usize,
 }
@@ -145,6 +144,30 @@ impl BuiltUi {
                 signal.set(value);
                 true
             }
+            None => false,
+        }
+    }
+
+    #[doc(hidden)]
+    pub fn __set_string_list_state_for_test(&self, name: &str, value: Vec<String>) -> bool {
+        match self.registry.string_lists.get(name) {
+            Some(signal) => signal.set_if_changed(value),
+            None => false,
+        }
+    }
+
+    #[doc(hidden)]
+    pub fn __set_i32_list_state_for_test(&self, name: &str, value: Vec<i32>) -> bool {
+        match self.registry.i32_lists.get(name) {
+            Some(signal) => signal.set_if_changed(value),
+            None => false,
+        }
+    }
+
+    #[doc(hidden)]
+    pub fn __set_bool_list_state_for_test(&self, name: &str, value: Vec<bool>) -> bool {
+        match self.registry.bool_lists.get(name) {
+            Some(signal) => signal.set_if_changed(value),
             None => false,
         }
     }
@@ -2900,6 +2923,38 @@ fn append_static_member(
                         .map_err(|e| IrLoadError::Build(format!("insert_child failed: {e:?}")))?;
                 }
             }
+            let parent_id = WidgetId(parent as *mut WidgetNode as *mut ());
+            let target = BindingTarget::ForLoopSubtree {
+                parent: parent_id,
+                declared_member_index,
+            };
+            let slots_for_effect = Rc::clone(&declared_slots);
+            let registry_for_effect = Rc::clone(registry);
+            let body_for_effect = body.clone();
+            let binder_for_effect = binder.clone();
+            let index_binder_for_effect = index_binder.clone();
+            let collection_for_effect = collection_name.clone();
+            let elem_for_effect = elem.clone();
+            let handle = register_for_loop_binding(
+                target,
+                collection.clone(),
+                Rc::clone(registry),
+                move |parent_id, declared_member_index, new_len| {
+                    mutate_for_loop_subtree(
+                        parent_id,
+                        declared_member_index,
+                        new_len,
+                        &body_for_effect,
+                        &binder_for_effect,
+                        &index_binder_for_effect,
+                        &collection_for_effect,
+                        &elem_for_effect,
+                        &slots_for_effect,
+                        &registry_for_effect,
+                    );
+                },
+            );
+            parent.bindings.push(handle);
         }
     }
     Ok(())
@@ -2964,7 +3019,6 @@ fn total_materialized_children(declared_slots: &[DeclaredMemberSlot]) -> usize {
         .sum()
 }
 
-#[allow(dead_code)]
 fn plan_tail_range_change(old_len: usize, new_len: usize) -> TailRangePlan {
     if new_len > old_len {
         TailRangePlan::Insert {
@@ -3019,12 +3073,12 @@ fn mutate_conditional_subtree(
             let renderer = crate::get_text_renderer();
             match build_node(body, compositor, renderer, registry) {
                 Ok(child) => {
-                    let result = match zstack_placement_for_parent(parent, body) {
-                        Some(placement) => {
-                            parent.insert_child_with_zstack_placement(live_index, child, placement)
-                        }
-                        None => parent.insert_child(live_index, child),
-                    };
+                    let result = insert_structural_child(
+                        parent,
+                        live_index,
+                        child,
+                        zstack_placement_for_parent(parent, body),
+                    );
                     match result {
                         Ok(()) => {
                             state.borrow_mut().live_child = true;
@@ -3036,7 +3090,7 @@ fn mutate_conditional_subtree(
                 Err(e) => eprintln!("wasamo: conditional subtree build failed: {e}"),
             }
         } else {
-            match parent.remove_child(live_index) {
+            match remove_structural_child(parent, live_index) {
                 Ok(removed) => {
                     crate::widget::widget_destroy(removed);
                     state.borrow_mut().live_child = false;
@@ -3046,6 +3100,135 @@ fn mutate_conditional_subtree(
             }
         }
     }
+}
+
+#[allow(clippy::too_many_arguments)]
+fn mutate_for_loop_subtree(
+    parent_id: WidgetId,
+    declared_member_index: usize,
+    new_len: usize,
+    body: &IrNode,
+    binder: &str,
+    index_binder: &Option<String>,
+    collection_name: &str,
+    elem: &IrType,
+    declared_slots: &Rc<RefCell<Vec<DeclaredMemberSlot>>>,
+    registry: &Rc<SignalRegistry>,
+) {
+    let parent_ptr = parent_id.0 as *mut WidgetNode;
+    if parent_ptr.is_null() {
+        return;
+    }
+    let state = {
+        let slots = declared_slots.borrow();
+        match slots.get(declared_member_index) {
+            Some(DeclaredMemberSlot::ForLoop(state)) => Rc::clone(state),
+            _ => {
+                eprintln!("wasamo: for binding declared slot {declared_member_index} is missing");
+                return;
+            }
+        }
+    };
+    let old_len = state.borrow().live_children;
+    if old_len == new_len {
+        return;
+    }
+    let live_index = {
+        let slots = declared_slots.borrow();
+        materialized_offset_for_declared_slot(declared_member_index, &slots)
+    };
+    let plan = plan_tail_range_change(old_len, new_len);
+    unsafe {
+        let parent = &mut *parent_ptr;
+        match plan {
+            TailRangePlan::Insert { start, count } => {
+                let compositor = crate::get_compositor();
+                let renderer = crate::get_text_renderer();
+                let mut staged = Vec::with_capacity(count);
+                for position in start..(start + count) {
+                    let item_context = ForItemContext {
+                        collection: collection_name.to_string(),
+                        elem: elem.clone(),
+                        binder: binder.to_string(),
+                        index_binder: index_binder.clone(),
+                        position,
+                    };
+                    match build_node_with_loop_context(
+                        body,
+                        compositor,
+                        renderer,
+                        registry,
+                        Some(&item_context),
+                    ) {
+                        Ok(child) => staged.push(child),
+                        Err(e) => {
+                            for child in staged {
+                                crate::widget::widget_destroy(child);
+                            }
+                            eprintln!(
+                                "wasamo: for range insert build failed at position {position}: {e}"
+                            );
+                            return;
+                        }
+                    }
+                }
+                let placement = zstack_placement_for_parent(parent, body);
+                let mut inserted = 0usize;
+                for (offset, child) in staged.into_iter().enumerate() {
+                    let insert_index = live_index + start + offset;
+                    match insert_structural_child(parent, insert_index, child, placement) {
+                        Ok(()) => inserted += 1,
+                        Err(e) => {
+                            for rollback in (0..inserted).rev() {
+                                if let Ok(removed) =
+                                    remove_structural_child(parent, live_index + start + rollback)
+                                {
+                                    crate::widget::widget_destroy(removed);
+                                }
+                            }
+                            eprintln!("wasamo: for range insert_child failed: {e:?}");
+                            return;
+                        }
+                    }
+                }
+                state.borrow_mut().live_children = new_len;
+                crate::emit::mark_layout_dirty_for(parent_ptr);
+            }
+            TailRangePlan::Remove { tail_first_indices } => {
+                for position in tail_first_indices {
+                    match remove_structural_child(parent, live_index + position) {
+                        Ok(removed) => crate::widget::widget_destroy(removed),
+                        Err(e) => {
+                            eprintln!("wasamo: for range remove_child failed: {e:?}");
+                            return;
+                        }
+                    }
+                }
+                state.borrow_mut().live_children = new_len;
+                crate::emit::mark_layout_dirty_for(parent_ptr);
+            }
+            TailRangePlan::NoOp => {}
+        }
+    }
+}
+
+fn insert_structural_child(
+    parent: &mut WidgetNode,
+    index: usize,
+    child: Box<WidgetNode>,
+    zstack_placement: Option<ZStackPlacement>,
+) -> Result<(), crate::widget::MutationError> {
+    match zstack_placement {
+        Some(placement) => parent.insert_child_with_zstack_placement(index, child, placement),
+        None => parent.insert_child(index, child),
+    }
+}
+
+fn remove_structural_child(
+    parent: &mut WidgetNode,
+    index: usize,
+) -> Result<Box<WidgetNode>, crate::widget::MutationError> {
+    parent.remove_child(index)
 }
 
 fn zstack_placement_for_parent(parent: &WidgetNode, body: &IrNode) -> Option<ZStackPlacement> {
