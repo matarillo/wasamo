@@ -7,6 +7,7 @@
 //! evaluator, error types, and diagnostic-location helpers.
 
 pub use wasamo_ir::{CompoundOp, HandlerExpr, InterpolationPart};
+use wasamo_ir::{IrLiteral, IrType};
 
 /// Evaluation context: property read / write access for a specific component.
 pub trait EvalContext {
@@ -86,6 +87,34 @@ pub trait EvalContext {
     fn set_bool(&mut self, path: &str, _value: bool) -> Result<(), EvalError> {
         Err(EvalError::UnknownProperty(path.to_string()))
     }
+
+    fn collection_element_type(&self, path: &str) -> Result<IrType, EvalError> {
+        Err(EvalError::UnknownProperty(path.to_string()))
+    }
+
+    fn get_i32_list(&self, path: &str) -> Result<Vec<i32>, EvalError> {
+        Err(EvalError::UnknownProperty(path.to_string()))
+    }
+
+    fn set_i32_list(&mut self, path: &str, _value: Vec<i32>) -> Result<bool, EvalError> {
+        Err(EvalError::UnknownProperty(path.to_string()))
+    }
+
+    fn get_string_list(&self, path: &str) -> Result<Vec<String>, EvalError> {
+        Err(EvalError::UnknownProperty(path.to_string()))
+    }
+
+    fn set_string_list(&mut self, path: &str, _value: Vec<String>) -> Result<bool, EvalError> {
+        Err(EvalError::UnknownProperty(path.to_string()))
+    }
+
+    fn get_bool_list(&self, path: &str) -> Result<Vec<bool>, EvalError> {
+        Err(EvalError::UnknownProperty(path.to_string()))
+    }
+
+    fn set_bool_list(&mut self, path: &str, _value: Vec<bool>) -> Result<bool, EvalError> {
+        Err(EvalError::UnknownProperty(path.to_string()))
+    }
 }
 
 /// Errors that the evaluator can produce.
@@ -159,6 +188,11 @@ pub fn evaluate(expr: &HandlerExpr, ctx: &mut dyn EvalContext) -> Result<i32, Ev
         // returning 0 keeps `evaluate()`'s `Result<i32, _>` contract
         // without implicit bool→i32 coercion (DD-M3-P1-001 Option B
         // explicitly rejected).
+        HandlerExpr::Assign { lhs, rhs } if is_collection_expr(rhs) => {
+            evaluate_collection_assignment(lhs, rhs, ctx)?;
+            Ok(0)
+        }
+
         HandlerExpr::Assign { lhs, rhs } => match rhs.as_ref() {
             HandlerExpr::BoolLit(b) => {
                 ctx.set_bool(lhs, *b)?;
@@ -202,6 +236,150 @@ pub fn evaluate(expr: &HandlerExpr, ctx: &mut dyn EvalContext) -> Result<i32, Ev
             Ok(last)
         }
     }
+}
+
+fn is_collection_expr(expr: &HandlerExpr) -> bool {
+    matches!(
+        expr,
+        HandlerExpr::ListAppend { .. } | HandlerExpr::ListDropLast { .. } | HandlerExpr::ListLit(_)
+    )
+}
+
+fn evaluate_collection_assignment(
+    lhs: &str,
+    rhs: &HandlerExpr,
+    ctx: &mut dyn EvalContext,
+) -> Result<(), EvalError> {
+    match rhs {
+        HandlerExpr::ListAppend { path, elem, value } => {
+            ensure_collection_assignment_target(lhs, path, elem, ctx)?;
+            match elem {
+                IrType::I32 => {
+                    let mut list = ctx.get_i32_list(path)?;
+                    list.push(evaluate(value, ctx)?);
+                    ctx.set_i32_list(lhs, list)?;
+                }
+                IrType::Str => {
+                    let mut list = ctx.get_string_list(path)?;
+                    list.push(evaluate_binding(value, ctx)?);
+                    ctx.set_string_list(lhs, list)?;
+                }
+                IrType::Bool => {
+                    let mut list = ctx.get_bool_list(path)?;
+                    list.push(evaluate_bool_assignment_value(value, ctx)?);
+                    ctx.set_bool_list(lhs, list)?;
+                }
+            }
+            Ok(())
+        }
+        HandlerExpr::ListDropLast { path, elem } => {
+            ensure_collection_assignment_target(lhs, path, elem, ctx)?;
+            match elem {
+                IrType::I32 => {
+                    let mut list = ctx.get_i32_list(path)?;
+                    list.pop();
+                    ctx.set_i32_list(lhs, list)?;
+                }
+                IrType::Str => {
+                    let mut list = ctx.get_string_list(path)?;
+                    list.pop();
+                    ctx.set_string_list(lhs, list)?;
+                }
+                IrType::Bool => {
+                    let mut list = ctx.get_bool_list(path)?;
+                    list.pop();
+                    ctx.set_bool_list(lhs, list)?;
+                }
+            }
+            Ok(())
+        }
+        HandlerExpr::ListLit(items) => {
+            match ctx.collection_element_type(lhs)? {
+                IrType::I32 => {
+                    ctx.set_i32_list(lhs, list_literal_i32(lhs, items)?)?;
+                }
+                IrType::Str => {
+                    ctx.set_string_list(lhs, list_literal_string(lhs, items)?)?;
+                }
+                IrType::Bool => {
+                    ctx.set_bool_list(lhs, list_literal_bool(lhs, items)?)?;
+                }
+            }
+            Ok(())
+        }
+        _ => Err(EvalError::TypeMismatch {
+            path: lhs.to_string(),
+        }),
+    }
+}
+
+fn ensure_collection_assignment_target(
+    lhs: &str,
+    source: &str,
+    elem: &IrType,
+    ctx: &dyn EvalContext,
+) -> Result<(), EvalError> {
+    if lhs != source {
+        return Err(EvalError::TypeMismatch {
+            path: lhs.to_string(),
+        });
+    }
+    let actual = ctx.collection_element_type(lhs)?;
+    if &actual != elem {
+        return Err(EvalError::TypeMismatch {
+            path: lhs.to_string(),
+        });
+    }
+    Ok(())
+}
+
+fn evaluate_bool_assignment_value(
+    expr: &HandlerExpr,
+    ctx: &mut dyn EvalContext,
+) -> Result<bool, EvalError> {
+    match expr {
+        HandlerExpr::BoolLit(value) => Ok(*value),
+        HandlerExpr::BoolPropRead { path } => ctx.get_bool(path),
+        _ => Err(EvalError::TypeMismatch {
+            path: "<non-bool expression in bool list append>".into(),
+        }),
+    }
+}
+
+fn list_literal_i32(path: &str, items: &[IrLiteral]) -> Result<Vec<i32>, EvalError> {
+    items
+        .iter()
+        .map(|item| match item {
+            IrLiteral::Int(value) => Ok(*value),
+            _ => Err(EvalError::TypeMismatch {
+                path: path.to_string(),
+            }),
+        })
+        .collect()
+}
+
+fn list_literal_string(path: &str, items: &[IrLiteral]) -> Result<Vec<String>, EvalError> {
+    items
+        .iter()
+        .map(|item| match item {
+            IrLiteral::Str(value) => Ok(value.clone()),
+            _ => Err(EvalError::TypeMismatch {
+                path: path.to_string(),
+            }),
+        })
+        .collect()
+}
+
+fn list_literal_bool(path: &str, items: &[IrLiteral]) -> Result<Vec<bool>, EvalError> {
+    items
+        .iter()
+        .map(|item| match item {
+            IrLiteral::Bool(value) => Ok(*value),
+            _ => Err(EvalError::TypeMismatch {
+                path: path.to_string(),
+            }),
+        })
+        .collect()
 }
 
 /// Format the coarse handler-location identifier used in diagnostic messages
@@ -529,6 +707,9 @@ mod tests {
         i32s: HashMap<String, i32>,
         strings: HashMap<String, String>,
         bools: HashMap<String, bool>,
+        i32_lists: HashMap<String, Vec<i32>>,
+        string_lists: HashMap<String, Vec<String>>,
+        bool_lists: HashMap<String, Vec<bool>>,
     }
 
     impl MapCtx {
@@ -537,6 +718,9 @@ mod tests {
                 i32s: pairs.iter().map(|(k, v)| (k.to_string(), *v)).collect(),
                 strings: HashMap::new(),
                 bools: HashMap::new(),
+                i32_lists: HashMap::new(),
+                string_lists: HashMap::new(),
+                bool_lists: HashMap::new(),
             }
         }
         fn with_strings(mut self, pairs: &[(&str, &str)]) -> Self {
@@ -548,6 +732,32 @@ mod tests {
         }
         fn with_bools(mut self, pairs: &[(&str, bool)]) -> Self {
             self.bools = pairs.iter().map(|(k, v)| (k.to_string(), *v)).collect();
+            self
+        }
+        fn with_i32_lists(mut self, pairs: &[(&str, &[i32])]) -> Self {
+            self.i32_lists = pairs
+                .iter()
+                .map(|(k, v)| (k.to_string(), v.to_vec()))
+                .collect();
+            self
+        }
+        fn with_string_lists(mut self, pairs: &[(&str, &[&str])]) -> Self {
+            self.string_lists = pairs
+                .iter()
+                .map(|(k, v)| {
+                    (
+                        k.to_string(),
+                        v.iter().map(|value| value.to_string()).collect(),
+                    )
+                })
+                .collect();
+            self
+        }
+        fn with_bool_lists(mut self, pairs: &[(&str, &[bool])]) -> Self {
+            self.bool_lists = pairs
+                .iter()
+                .map(|(k, v)| (k.to_string(), v.to_vec()))
+                .collect();
             self
         }
         fn get(&self, key: &str) -> i32 {
@@ -584,6 +794,50 @@ mod tests {
         fn set_bool(&mut self, path: &str, value: bool) -> Result<(), EvalError> {
             self.bools.insert(path.to_string(), value);
             Ok(())
+        }
+        fn collection_element_type(&self, path: &str) -> Result<IrType, EvalError> {
+            if self.i32_lists.contains_key(path) {
+                Ok(IrType::I32)
+            } else if self.string_lists.contains_key(path) {
+                Ok(IrType::Str)
+            } else if self.bool_lists.contains_key(path) {
+                Ok(IrType::Bool)
+            } else {
+                Err(EvalError::UnknownProperty(path.to_string()))
+            }
+        }
+        fn get_i32_list(&self, path: &str) -> Result<Vec<i32>, EvalError> {
+            self.i32_lists
+                .get(path)
+                .cloned()
+                .ok_or_else(|| EvalError::UnknownProperty(path.to_string()))
+        }
+        fn set_i32_list(&mut self, path: &str, value: Vec<i32>) -> Result<bool, EvalError> {
+            let changed = self.i32_lists.get(path) != Some(&value);
+            self.i32_lists.insert(path.to_string(), value);
+            Ok(changed)
+        }
+        fn get_string_list(&self, path: &str) -> Result<Vec<String>, EvalError> {
+            self.string_lists
+                .get(path)
+                .cloned()
+                .ok_or_else(|| EvalError::UnknownProperty(path.to_string()))
+        }
+        fn set_string_list(&mut self, path: &str, value: Vec<String>) -> Result<bool, EvalError> {
+            let changed = self.string_lists.get(path) != Some(&value);
+            self.string_lists.insert(path.to_string(), value);
+            Ok(changed)
+        }
+        fn get_bool_list(&self, path: &str) -> Result<Vec<bool>, EvalError> {
+            self.bool_lists
+                .get(path)
+                .cloned()
+                .ok_or_else(|| EvalError::UnknownProperty(path.to_string()))
+        }
+        fn set_bool_list(&mut self, path: &str, value: Vec<bool>) -> Result<bool, EvalError> {
+            let changed = self.bool_lists.get(path) != Some(&value);
+            self.bool_lists.insert(path.to_string(), value);
+            Ok(changed)
         }
     }
 
@@ -1030,7 +1284,7 @@ mod tests {
     }
 
     #[test]
-    fn evaluate_rejects_collection_forms_until_t7_writer_lands() {
+    fn evaluate_rejects_bare_collection_forms_in_integer_context() {
         let mut ctx = MapCtx::new(&[]);
         let exprs = [
             HandlerExpr::ListPropRead {
@@ -1059,6 +1313,158 @@ mod tests {
                 Err(EvalError::TypeMismatch { .. })
             ));
         }
+    }
+
+    #[test]
+    fn collection_assignment_append_drop_last_and_literal_reset_i32() {
+        let mut ctx = MapCtx::new(&[]).with_i32_lists(&[("xs", &[1, 2])]);
+        let append = HandlerExpr::Assign {
+            lhs: "xs".into(),
+            rhs: Box::new(HandlerExpr::ListAppend {
+                path: "xs".into(),
+                elem: IrType::I32,
+                value: Box::new(HandlerExpr::IntLit(3)),
+            }),
+        };
+        assert_eq!(evaluate(&append, &mut ctx), Ok(0));
+        assert_eq!(ctx.i32_lists["xs"], vec![1, 2, 3]);
+
+        let drop_last = HandlerExpr::Assign {
+            lhs: "xs".into(),
+            rhs: Box::new(HandlerExpr::ListDropLast {
+                path: "xs".into(),
+                elem: IrType::I32,
+            }),
+        };
+        assert_eq!(evaluate(&drop_last, &mut ctx), Ok(0));
+        assert_eq!(ctx.i32_lists["xs"], vec![1, 2]);
+
+        let reset = HandlerExpr::Assign {
+            lhs: "xs".into(),
+            rhs: Box::new(HandlerExpr::ListLit(vec![IrLiteral::Int(9)])),
+        };
+        assert_eq!(evaluate(&reset, &mut ctx), Ok(0));
+        assert_eq!(ctx.i32_lists["xs"], vec![9]);
+    }
+
+    #[test]
+    fn collection_assignment_supports_string_and_bool_items() {
+        let mut ctx = MapCtx::new(&[])
+            .with_strings(&[("next", "B")])
+            .with_bools(&[("flag", true)])
+            .with_string_lists(&[("labels", &["A"])])
+            .with_bool_lists(&[("flags", &[false])]);
+
+        let append_string = HandlerExpr::Assign {
+            lhs: "labels".into(),
+            rhs: Box::new(HandlerExpr::ListAppend {
+                path: "labels".into(),
+                elem: IrType::Str,
+                value: Box::new(HandlerExpr::StrPropRead {
+                    path: "next".into(),
+                }),
+            }),
+        };
+        assert_eq!(evaluate(&append_string, &mut ctx), Ok(0));
+        assert_eq!(ctx.string_lists["labels"], vec!["A", "B"]);
+
+        let append_bool = HandlerExpr::Assign {
+            lhs: "flags".into(),
+            rhs: Box::new(HandlerExpr::ListAppend {
+                path: "flags".into(),
+                elem: IrType::Bool,
+                value: Box::new(HandlerExpr::BoolPropRead {
+                    path: "flag".into(),
+                }),
+            }),
+        };
+        assert_eq!(evaluate(&append_bool, &mut ctx), Ok(0));
+        assert_eq!(ctx.bool_lists["flags"], vec![false, true]);
+    }
+
+    #[test]
+    fn collection_assignment_string_bool_drop_last_and_literal_reset() {
+        let mut ctx = MapCtx::new(&[])
+            .with_string_lists(&[("labels", &["A", "B"])])
+            .with_bool_lists(&[("flags", &[false, true])]);
+
+        let drop_string = HandlerExpr::Assign {
+            lhs: "labels".into(),
+            rhs: Box::new(HandlerExpr::ListDropLast {
+                path: "labels".into(),
+                elem: IrType::Str,
+            }),
+        };
+        assert_eq!(evaluate(&drop_string, &mut ctx), Ok(0));
+        assert_eq!(ctx.string_lists["labels"], vec!["A"]);
+
+        let drop_bool = HandlerExpr::Assign {
+            lhs: "flags".into(),
+            rhs: Box::new(HandlerExpr::ListDropLast {
+                path: "flags".into(),
+                elem: IrType::Bool,
+            }),
+        };
+        assert_eq!(evaluate(&drop_bool, &mut ctx), Ok(0));
+        assert_eq!(ctx.bool_lists["flags"], vec![false]);
+
+        let reset_string = HandlerExpr::Assign {
+            lhs: "labels".into(),
+            rhs: Box::new(HandlerExpr::ListLit(vec![
+                IrLiteral::Str("X".into()),
+                IrLiteral::Str("Y".into()),
+            ])),
+        };
+        assert_eq!(evaluate(&reset_string, &mut ctx), Ok(0));
+        assert_eq!(ctx.string_lists["labels"], vec!["X", "Y"]);
+
+        let reset_bool = HandlerExpr::Assign {
+            lhs: "flags".into(),
+            rhs: Box::new(HandlerExpr::ListLit(vec![
+                IrLiteral::Bool(true),
+                IrLiteral::Bool(false),
+            ])),
+        };
+        assert_eq!(evaluate(&reset_bool, &mut ctx), Ok(0));
+        assert_eq!(ctx.bool_lists["flags"], vec![true, false]);
+    }
+
+    #[test]
+    fn collection_assignment_rejects_wrong_lhs_at_runtime() {
+        let mut ctx = MapCtx::new(&[]).with_i32_lists(&[("xs", &[1]), ("ys", &[])]);
+        let expr = HandlerExpr::Assign {
+            lhs: "ys".into(),
+            rhs: Box::new(HandlerExpr::ListAppend {
+                path: "xs".into(),
+                elem: IrType::I32,
+                value: Box::new(HandlerExpr::IntLit(2)),
+            }),
+        };
+
+        assert_eq!(
+            evaluate(&expr, &mut ctx),
+            Err(EvalError::TypeMismatch { path: "ys".into() })
+        );
+        assert_eq!(ctx.i32_lists["xs"], vec![1]);
+        assert_eq!(ctx.i32_lists["ys"], Vec::<i32>::new());
+    }
+
+    #[test]
+    fn collection_assignment_rejects_bare_collection_copy_at_runtime() {
+        let mut ctx = MapCtx::new(&[]).with_i32_lists(&[("xs", &[1]), ("ys", &[])]);
+        let expr = HandlerExpr::Assign {
+            lhs: "ys".into(),
+            rhs: Box::new(HandlerExpr::ListPropRead {
+                path: "xs".into(),
+                elem: IrType::I32,
+            }),
+        };
+
+        assert!(matches!(
+            evaluate(&expr, &mut ctx),
+            Err(EvalError::TypeMismatch { .. })
+        ));
+        assert_eq!(ctx.i32_lists["ys"], Vec::<i32>::new());
     }
 
     // ── Bool surface tests (M3-Phase 1 T7) ───────────────────────────────────

@@ -247,7 +247,6 @@ impl<T: Clone + 'static> Signal<T> {
 }
 
 impl<T: Clone + PartialEq + 'static> Signal<T> {
-    #[allow(dead_code)] // T2 lands the collection signal contract; T7 wires the first writer.
     pub(crate) fn set_if_changed(&self, value: T) -> bool {
         if *self.value.borrow() == value {
             return false;
@@ -563,6 +562,69 @@ impl<'a> EvalContext for HandlerEvalContext<'a> {
         sig.set(value);
         Ok(())
     }
+
+    fn collection_element_type(&self, path: &str) -> Result<IrType, EvalError> {
+        if self.registry.i32_lists.contains_key(path) {
+            Ok(IrType::I32)
+        } else if self.registry.string_lists.contains_key(path) {
+            Ok(IrType::Str)
+        } else if self.registry.bool_lists.contains_key(path) {
+            Ok(IrType::Bool)
+        } else {
+            Err(EvalError::UnknownProperty(path.to_string()))
+        }
+    }
+
+    fn get_i32_list(&self, path: &str) -> Result<Vec<i32>, EvalError> {
+        self.registry
+            .i32_lists
+            .get(path)
+            .ok_or_else(|| EvalError::UnknownProperty(path.to_string()))
+            .map(|s| s.get_untracked())
+    }
+
+    fn set_i32_list(&mut self, path: &str, value: Vec<i32>) -> Result<bool, EvalError> {
+        let sig = self
+            .registry
+            .i32_lists
+            .get(path)
+            .ok_or_else(|| EvalError::UnknownProperty(path.to_string()))?;
+        Ok(sig.set_if_changed(value))
+    }
+
+    fn get_string_list(&self, path: &str) -> Result<Vec<String>, EvalError> {
+        self.registry
+            .string_lists
+            .get(path)
+            .ok_or_else(|| EvalError::UnknownProperty(path.to_string()))
+            .map(|s| s.get_untracked())
+    }
+
+    fn set_string_list(&mut self, path: &str, value: Vec<String>) -> Result<bool, EvalError> {
+        let sig = self
+            .registry
+            .string_lists
+            .get(path)
+            .ok_or_else(|| EvalError::UnknownProperty(path.to_string()))?;
+        Ok(sig.set_if_changed(value))
+    }
+
+    fn get_bool_list(&self, path: &str) -> Result<Vec<bool>, EvalError> {
+        self.registry
+            .bool_lists
+            .get(path)
+            .ok_or_else(|| EvalError::UnknownProperty(path.to_string()))
+            .map(|s| s.get_untracked())
+    }
+
+    fn set_bool_list(&mut self, path: &str, value: Vec<bool>) -> Result<bool, EvalError> {
+        let sig = self
+            .registry
+            .bool_lists
+            .get(path)
+            .ok_or_else(|| EvalError::UnknownProperty(path.to_string()))?;
+        Ok(sig.set_if_changed(value))
+    }
 }
 
 #[derive(Clone)]
@@ -728,6 +790,11 @@ pub(crate) enum BindingTarget {
         parent: WidgetId,
         declared_member_index: usize,
     },
+    /// Structurally reconcile the generated range under one `for` slot.
+    ForLoopSubtree {
+        parent: WidgetId,
+        declared_member_index: usize,
+    },
 }
 
 /// Register a reactive binding that evaluates `expr` against `registry` and calls
@@ -871,6 +938,55 @@ pub(crate) fn register_conditional_binding(
             Err(e) => eprintln!("wasamo: conditional binding eval error: {e}"),
         }
     })
+}
+
+pub(crate) fn register_for_loop_binding(
+    target: BindingTarget,
+    collection: HandlerExpr,
+    registry: Rc<SignalRegistry>,
+    mut mutate_fn: impl FnMut(WidgetId, usize, usize) + 'static,
+) -> EffectHandle {
+    let BindingTarget::ForLoopSubtree {
+        parent,
+        declared_member_index,
+    } = target
+    else {
+        panic!("register_for_loop_binding called with non-for-loop target");
+    };
+    EffectHandle::new(
+        move || match collection_len_tracked(&collection, &registry) {
+            Ok(len) => mutate_fn(parent, declared_member_index, len),
+            Err(e) => eprintln!("wasamo: for-loop binding eval error: {e}"),
+        },
+    )
+}
+
+fn collection_len_tracked(
+    collection: &HandlerExpr,
+    registry: &SignalRegistry,
+) -> Result<usize, EvalError> {
+    let HandlerExpr::ListPropRead { path, elem } = collection else {
+        return Err(EvalError::TypeMismatch {
+            path: "<non-list expression in for-loop binding>".into(),
+        });
+    };
+    match elem {
+        IrType::I32 => registry
+            .i32_lists
+            .get(path)
+            .ok_or_else(|| EvalError::UnknownProperty(path.clone()))
+            .map(|signal| signal.get().len()),
+        IrType::Str => registry
+            .string_lists
+            .get(path)
+            .ok_or_else(|| EvalError::UnknownProperty(path.clone()))
+            .map(|signal| signal.get().len()),
+        IrType::Bool => registry
+            .bool_lists
+            .get(path)
+            .ok_or_else(|| EvalError::UnknownProperty(path.clone()))
+            .map(|signal| signal.get().len()),
+    }
 }
 
 #[cfg(test)]

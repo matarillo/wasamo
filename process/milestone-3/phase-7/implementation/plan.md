@@ -285,11 +285,15 @@ reject additions also receive the branch/test-focused check.
 ### T7 — Reactive range mutation: splice seam + `for` effect
 
 Discharges ADR evidence item (4) — the novel-runtime task. Full
-independent review (runtime structural change + GUI-adjacent
-evidence); gates traps #1 (BindingTarget/HandlerExpr sites), #2
-(side-effect enumeration), #4 (mutation-time reject/diagnostic paths).
+independent review (runtime structural change + mock-free Windows
+runtime evidence, not assistant-visible screenshot evidence); gates
+traps #1 (BindingTarget/HandlerExpr sites), #2 (side-effect
+enumeration), #3 (parallel/derived state sync for declared slots and
+child-carried placement), #4 (mutation-time reject/diagnostic paths),
+and #5 (carry-forward ownership). T7 does not own the gallery
+composition or screenshot positive controls; those remain T8-owned.
 
-- [ ] **Handler-side collection-assignment evaluation (T1 addendum
+- [x] **Handler-side collection-assignment evaluation (T1 addendum
       CF-6):** the authored `xs = xs.append(e)` / `xs = xs.drop-last()` /
       `xs = [..]` runs inside a handler — extend `HandlerEvalContext`
       with a whole-value collection read-modify-write method and add the
@@ -303,7 +307,7 @@ evidence); gates traps #1 (BindingTarget/HandlerExpr sites), #2
       outside `parse_ir`, it must re-derive or otherwise prove the same
       element type before evaluation. Trap #1 (new evaluator arm) + trap
       #4 (the equal-value and bad-RHS runtime paths each fired).
-- [ ] **Splice seam (DD-M3-P7-006):** one placement-aware mutation
+- [x] **Splice seam (DD-M3-P7-006):** one placement-aware mutation
       seam owning the six-item side-effect bundle (children splice
       with carried placement, Visual sibling order at seam-computed
       positions, layout invalidation, registry release/registration,
@@ -316,7 +320,7 @@ evidence); gates traps #1 (BindingTarget/HandlerExpr sites), #2
       the removal path reuses it per removed subtree, tail-first, rather
       than re-implementing #4/#5. **Close artifact (trap #2):** the
       bundle checked off per change, marking #4/#5-removal *reused*.
-- [ ] **`BindingTarget::ForLoopSubtree` + `for` effect:** reads the
+- [x] **`BindingTarget::ForLoopSubtree` + `for` effect:** reads the
       whole-value signal, computes the tail plan via the T4 seam,
       preserves T6's static-load result on its initial run (no
       double-create),
@@ -326,7 +330,7 @@ evidence); gates traps #1 (BindingTarget/HandlerExpr sites), #2
       observably unchanged. Staged-disposal branch directly fired
       (pure-logic staging planner test; fault-injected construction if
       feasible mock-free, else disposition recorded in log.md).
-- [ ] **Mutation-time per-item bindings:** reuse the T6
+- [x] **Mutation-time per-item bindings:** reuse the T6
       `ForItemEvalContext` / guarded registration entry points for
       staged tail-inserted children, and directly prove the
       mutation-time branches T6 cannot observe: same-batch
@@ -338,7 +342,7 @@ evidence); gates traps #1 (BindingTarget/HandlerExpr sites), #2
       `widget_destroy` on tail-removal disposes them; the
       `ForLoopSubtree` structural effect stays on the parent. A
       parent-parked per-item effect would leak on removal.
-- [ ] **Windows-runtime fixtures (CI-gated, fail-not-skip):** after a
+- [x] **Windows-runtime fixtures (CI-gated, fail-not-skip):** after a
       tail-append assignment — child count + Visual sibling order
       reflect the new cardinality in declared order with static and
       `if` siblings flanking the `for` slot; **prefix subtree pointers
@@ -352,7 +356,7 @@ evidence); gates traps #1 (BindingTarget/HandlerExpr sites), #2
       removed-item binding** skips its out-of-range read (no panic);
       ZStack-path range mutation updates child-carried placement and
       Visual order in one splice.
-- [ ] **Cap fixtures (DD-M3-P7-007):** a representative tail-append at
+- [x] **Cap fixtures (DD-M3-P7-007):** a representative tail-append at
       gallery scale and a deliberately larger N (e.g. 64 >
       `MUTATION_CAP`) converge without divergence — breadth consumes
       no cap depth; the fixture states which setup path it uses.

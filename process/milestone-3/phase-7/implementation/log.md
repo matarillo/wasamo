@@ -1,5 +1,250 @@
 ## Decisions log
 
+- **2026-06-16 / T7 review remediation — branch proof gaps closed.**
+  A second-agent review accepted the core T7 implementation but found two
+  proof gaps before merge: string/bool collection assignment sub-branches
+  were over-grouped under append-only evidence, and the breadth fixture did
+  not directly observe non-divergence. T7 remains open until this remediation
+  and its verification are green.
+
+  **Source enumeration used for this remediation.**
+
+  ```text
+  rg -n "collection_assignment_append_drop_last_and_literal_reset_i32|collection_assignment_supports_string_and_bool_items|collection_assignment_string_bool_drop_last_and_literal_reset" wasamo-runtime\src\handler.rs
+  rg -n "__runtime_health_for_test|__reactive_divergence_diagnostics_present_for_test|large_breadth_tail_append_converges_beyond_mutation_cap|after conditional removal through splice seam|after conditional reinsert through splice seam" wasamo-runtime\src\lib.rs wasamo-runtime\tests\iteration_mutation_integration.rs
+  rg -n "for rollback in \(0\.\.inserted\)\.rev\(\)|plan_tail_range_change" wasamo-runtime\src\ir_loader.rs
+  ```
+
+  **Review finding disposition.**
+
+  | Finding | Disposition |
+  |---|---|
+  | `string[]` / `bool[]` drop-last and literal-reset branches were not directly fired. | **Closed in T7 remediation.** Added `handler::tests::collection_assignment_string_bool_drop_last_and_literal_reset`, firing `ListDropLast` for both element types and `ListLit` through `list_literal_string` / `list_literal_bool`. |
+  | Breadth/cap fixture only observed materialized child count and tail text. | **Closed in T7 remediation.** `large_breadth_tail_append_converges_beyond_mutation_cap` now performs a gallery-scale `0 -> 8` write and a larger `8 -> 64` write, and asserts runtime health is `Healthy` with no divergence diagnostics after each step. |
+  | Conditional path now depends on the shared structural splice seam but T7 did not directly toggle a conditional fixture. | **Closed in T7 remediation.** `reactive_for_tail_append_reset_remove_preserves_order_and_prefix_identity` now toggles `show` false/true after range mutation and asserts child text order plus VisualCollection order. |
+  | `plan_tail_range_change` still carried stale `#[allow(dead_code)]`. | **Closed in T7 remediation.** Removed the stale attribute; the function is production-live through `mutate_for_loop_subtree`. |
+  | Insert partial-failure rollback branch was not listed in the close gate. | **Carried with owner below.** The branch is defensive after successful staging but before all child insertions complete. Current mock-free fixtures have no natural way to fault `WidgetNode::insert_child` after a prefix insert without mocking WinRT/VisualCollection or corrupting indices outside authored/runtime paths. |
+  | Other loader-guarded defensive branches (`ensure_collection_assignment_target` element-type mismatch, `collection_len_tracked` non-list lookup, missing-slot / null-parent structural diagnostics) remain untested. | **Non-blocking defensive note.** These are unreachable through validated authored DSL under the current loader contracts or require corrupted runtime state; they are lower risk than the carried insert partial-failure rollback branch and do not add a merge-blocking owner. Re-trigger trap #1/#2 if a future task opens a production-like path to any of them. |
+
+  **Implemented-branch test map addendum.**
+
+  | Implemented branch / behavior | Category | Source query / diff cue | Direct test or owner |
+  |---|---|---|---|
+  | Handler `string[]` drop-last | semantic branch | `rg` hit: `collection_assignment_string_bool_drop_last_and_literal_reset`; subcase `ListDropLast { elem: IrType::Str }` | `handler::tests::collection_assignment_string_bool_drop_last_and_literal_reset` |
+  | Handler `bool[]` drop-last | semantic branch | `rg` hit: `collection_assignment_string_bool_drop_last_and_literal_reset`; subcase `ListDropLast { elem: IrType::Bool }` | `handler::tests::collection_assignment_string_bool_drop_last_and_literal_reset` |
+  | Handler `string[]` literal reset through `list_literal_string` | semantic branch | `rg` hits: `collection_assignment_string_bool_drop_last_and_literal_reset`, `IrLiteral::Str("X")`, `IrLiteral::Str("Y")` | `handler::tests::collection_assignment_string_bool_drop_last_and_literal_reset` |
+  | Handler `bool[]` literal reset through `list_literal_bool` | semantic branch | `rg` hits: `collection_assignment_string_bool_drop_last_and_literal_reset`, `IrLiteral::Bool(true)`, `IrLiteral::Bool(false)` | `handler::tests::collection_assignment_string_bool_drop_last_and_literal_reset` |
+  | Breadth fixture non-divergence at gallery scale and larger-than-cap scale | size / scheduler invariant | `rg` hits: `large_breadth_tail_append_converges_beyond_mutation_cap`, `__runtime_health_for_test`, `__reactive_divergence_diagnostics_present_for_test` | `iteration_mutation_integration::large_breadth_tail_append_converges_beyond_mutation_cap` |
+  | Conditional removal/reinsert uses the shared structural splice seam after range mutation | semantic / observable behavior | `rg` hits: `after conditional removal through splice seam`, `after conditional reinsert through splice seam` | `iteration_mutation_integration::reactive_for_tail_append_reset_remove_preserves_order_and_prefix_identity` |
+  | Insert partial-failure rollback after a prefix of staged children has committed | defensive invariant | `rg` hit: `for rollback in (0..inserted).rev()` | **Owner = T10 / phase handoff carry.** Scope: future mock-free fault surface or explicit fault-injection design for `WidgetNode::insert_child` after partial success. Impact: current authored paths still stage before commit and use valid indices; missing direct proof only affects the defensive cleanup branch if WinRT insertion fails mid-batch. Close condition: add a direct test when a production-like fault surface exists, or record an accepted infeasibility decision with review sign-off. |
+
+  **Carry-forward ownership addendum.**
+
+  | Carry-forward | Owner task | Scope | Impact | Close condition |
+  |---|---|---|---|---|
+  | Insert partial-failure rollback proof for `for rollback in (0..inserted).rev()` | T10 / phase handoff carry | Defensive cleanup branch after successful staging and partial child insertion | A future fallible insertion surface must not silently leave an orphaned prefix committed after later insertion failure | T10 records the carry in handoff unless this task gains a mock-free direct fault surface before merge; future owner closes with direct branch test or reviewed infeasibility disposition. |
+
+  **Verification runs for this remediation.**
+
+  ```text
+  cargo test -p wasamo-runtime collection_assignment
+  cargo fmt --all -- --check
+  cargo test -p wasamo-runtime --test iteration_mutation_integration
+  git diff --check
+  cargo test -p wasamo-runtime
+  cargo test --workspace
+  ```
+
+  All completed successfully on 2026-06-16. The first
+  `cargo fmt --all -- --check` attempt failed only on formatting in
+  `iteration_mutation_integration.rs`; `cargo fmt --all` was run and the
+  final format check passed. `git diff --check` reported only the existing
+  Windows line-ending warnings, not whitespace errors. `cargo test
+  --workspace` still emits the pre-existing package `wasamo` linkable-target
+  warning; no test failed.
+
+- **2026-06-16 / T7 close gate — reactive range mutation landed.**
+  Implemented the runtime half of iteration cardinality: handler-side
+  collection writes, `BindingTarget::ForLoopSubtree`, the placement-aware
+  structural splice seam used by conditional and `for` mutation paths,
+  tail insert/remove reconciliation, mutation-time per-item binding reuse,
+  and mock-free Windows runtime fixtures. T8 remains the owner of
+  assistant-visible gallery screenshot evidence.
+
+  **Source enumeration used for close artifacts.**
+
+  ```text
+  git status --short
+  git diff --name-only
+  rg -n "ForLoopSubtree|register_for_loop_binding|mutate_for_loop_subtree|insert_structural_child|remove_structural_child|ForLoopRuntimeState|DeclaredMemberSlot::ForLoop|set_if_changed|collection_element_type|set_.*_list" wasamo-runtime\src wasamo-runtime\tests\iteration_mutation_integration.rs
+  rg -n "collection_assignment_append_drop_last_and_literal_reset_i32|collection_assignment_supports_string_and_bool_items|collection_assignment_rejects_wrong_lhs_at_runtime|collection_assignment_rejects_bare_collection_copy_at_runtime|evaluate_rejects_bare_collection_forms_in_integer_context|reactive_for_tail_append_reset_remove_preserves_order_and_prefix_identity|handler_collection_append_is_observable_before_click_returns|empty_drop_last_is_equal_value_and_does_not_dirty_range|reactive_for_zstack_tail_append_uses_child_carried_placement|large_breadth_tail_append_converges_beyond_mutation_cap|staged_for_insert_build_failure_leaves_tree_unchanged" wasamo-runtime\src\handler.rs wasamo-runtime\tests\iteration_mutation_integration.rs
+  ```
+
+  `git status --short` also shows the new untracked test file
+  `wasamo-runtime/tests/iteration_mutation_integration.rs`; `git
+  diff --name-only` lists only tracked-file edits, as expected.
+
+  **Trap #1 call-site audit table.**
+
+  | Surface / call-site class | Source query / diff cue | Classification |
+  |---|---|---|
+  | `BindingTarget` | `rg` hits: `ForLoopSubtree` in `reactive.rs`, construction in `ir_loader.rs` | **Extended.** Added `ForLoopSubtree { parent, declared_member_index }` and `register_for_loop_binding`; existing `register_binding` / `register_bool_binding` / `register_for_item_*` / `register_conditional_binding` still destructure only their target class and panic on wrong class. |
+  | `HandlerExpr::ListAppend` / `ListDropLast` / `ListLit` in handler evaluation | `rg` hits: `collection_element_type`, `set_i32_list`, `set_string_list`, `set_bool_list`, handler tests | **Extended under `Assign` only.** Runtime handler evaluation now performs whole-value read-modify-write for append/drop-last/literal reset and uses `set_if_changed`. Bare collection forms still reject in integer context. |
+  | `HandlerExpr::ListPropRead` copy | diff cue: `is_collection_expr` excludes `ListPropRead`; test `collection_assignment_rejects_bare_collection_copy_at_runtime` | **Deliberately rejects.** Author/loader bare-copy deferral remains closed; T7 did not reopen whole-list copy semantics. |
+  | `DeclaredMemberSlot::ForLoop` / `ForLoopRuntimeState.live_children` | `rg` hits: static construction, `declared_slot_live_cardinality`, `mutate_for_loop_subtree` | **Extended.** T6's static live cardinality is now reconciled by the structural effect on collection changes. |
+  | Widget-only filters (`IrNode::widget_children()` and runtime traversal helpers) | No T7 diff in `wasamo-ir`; runtime mutation uses declared-slot index + body template, not widget-only child filters | **Correctly unaffected.** T7 consumes already-validated `ControlFlowNode::For` bodies and does not add a new widget-only traversal. |
+
+  **Trap #2 structural side-effect enumeration.**
+
+  | DD-M3-P7-006 side effect | T7 disposition |
+  |---|---|
+  | Child splice with carried placement | **Implemented.** `insert_structural_child` / `remove_structural_child` are the single mutation seam; `for` tail insertion computes seam offsets through `materialized_offset_for_declared_slot`. |
+  | Visual sibling order at seam-computed positions | **Implemented / tested.** The seam delegates to `WidgetNode::insert_child` / `insert_child_with_zstack_placement` / `remove_child`, whose VisualCollection order is asserted by `reactive_for_tail_append_reset_remove_preserves_order_and_prefix_identity` and `reactive_for_zstack_tail_append_uses_child_carried_placement`. |
+  | Layout invalidation | **Implemented.** Conditional and `for` mutation mark `mark_layout_dirty_for(parent_ptr)` after successful structural change only; same-length reset and empty equal write perform no structural invalidation. |
+  | Registry release / registration | **Reused for removal; existing registration for inserts.** Removed subtrees go through `widget_destroy`; `reactive_for_tail_append_reset_remove_preserves_order_and_prefix_identity` registers destroy callbacks on generated children and observes release. Newly built inserted children use the existing build/registry path. |
+  | Effect disposal ahead of teardown / attach timing | **Reused + guarded.** Per-item effects remain child-owned; tail removal calls `widget_destroy` tail-first, disposing child bindings before the subtree is dropped. Staged inserted children are built before tree mutation; if staging fails, the staged children are destroyed before return (`staged_for_insert_build_failure_leaves_tree_unchanged`). |
+  | No other parent-owned metadata | **Preserved.** ZStack placement remains child-carried; no parent-owned ZStack vector was reintroduced. Grid `cell_placements` remains static-only and untouched by T7. |
+
+  **Trap #3 parallel / derived-data sync artifact.**
+
+  | Parallel / derived structure | Source query / result | Disposition |
+  |---|---|---|
+  | `ForLoopRuntimeState.live_children` vs materialised generated range | `rg` hits: `state.borrow().live_children`, `plan_tail_range_change(old_len, new_len)`, state update after insert/remove | **Closed.** Count is read before mutation, tail plan executes, and `live_children` updates only after successful insert/remove; initial effect run sees old == new and is a no-op. |
+  | `declared_slots` vs seam offset | `rg` hits: `materialized_offset_for_declared_slot(declared_member_index, &slots)` in static load and mutation | **Closed.** T7 reuses the T4 seam; static/conditional siblings around the `for` slot are asserted in `reactive_for_tail_append_reset_remove_preserves_order_and_prefix_identity`. |
+  | Collection signal equality vs dirty effects | `rg` hits: `set_if_changed` production callers in `HandlerEvalContext` and test setters | **Closed.** Collection writes use `set_if_changed`; empty equal write returns false and leaves child pointers unchanged. |
+  | Child-carried placement vs ZStack range insertion | `rg` hits: `insert_structural_child(..., placement)`, `reactive_for_zstack_tail_append_uses_child_carried_placement` | **Closed.** Mutation-time ZStack generated children carry explicit placement and layout at `h-align:end` / `v-align:start`. |
+  | Per-item child-owned effects vs tail removal | `rg` hits: `register_for_item_*`, `widget_destroy(removed)`, destroy-log fixture | **Closed.** Tail removal destroys generated children tail-first; child-owned binding effects leave with the subtree. |
+
+  **Implemented-branch test map.**
+
+  | Implemented branch / behavior | Category | Source query / diff cue | Direct test or owner |
+  |---|---|---|---|
+  | Handler collection append / drop-last / literal reset evaluate under `Assign` for `i32[]` | semantic branch | `rg` hits: `ListAppend`, `ListDropLast`, `ListLit`, `collection_assignment_append_drop_last_and_literal_reset_i32` | `handler::tests::collection_assignment_append_drop_last_and_literal_reset_i32` |
+  | Handler collection append supports `string[]` and `bool[]` values | semantic branch | `rg` hit: `collection_assignment_supports_string_and_bool_items` | `handler::tests::collection_assignment_supports_string_and_bool_items` |
+  | Runtime collection assignment rejects wrong LHS / source mismatch | reject branch | `rg` hit: `collection_assignment_rejects_wrong_lhs_at_runtime` | `handler::tests::collection_assignment_rejects_wrong_lhs_at_runtime` |
+  | Bare collection copy remains rejected at runtime | reject / owner-boundary branch | `rg` hit: `collection_assignment_rejects_bare_collection_copy_at_runtime`; diff cue: `is_collection_expr` excludes `ListPropRead` | `handler::tests::collection_assignment_rejects_bare_collection_copy_at_runtime` |
+  | Bare collection forms still reject in integer handler context | reject branch | `rg` hit: `evaluate_rejects_bare_collection_forms_in_integer_context` | `handler::tests::evaluate_rejects_bare_collection_forms_in_integer_context` |
+  | `ForLoopSubtree` initial run does not double-create T6 static children | size / semantic branch | `rg` hits: `register_for_loop_binding`, `old_len == new_len`; fixture starts with `["A", "B"]` and observes exactly two generated children before mutation | `iteration_mutation_integration::reactive_for_tail_append_reset_remove_preserves_order_and_prefix_identity` initial assertion |
+  | Tail append inserts generated child before following static sibling and preserves prefix pointers | size / observable behavior | `rg` hit: `reactive_for_tail_append_reset_remove_preserves_order_and_prefix_identity`; diff cue: `TailRangePlan::Insert` | `iteration_mutation_integration::reactive_for_tail_append_reset_remove_preserves_order_and_prefix_identity` |
+  | Same-length reset updates retained item bindings in place, no structural edit | semantic / invariant | fixture subcase `["A","B","C"] -> ["X","Y","Q"]`; prefix pointer checks include generated children | `iteration_mutation_integration::reactive_for_tail_append_reset_remove_preserves_order_and_prefix_identity` |
+  | Tail removal disposes generated subtrees tail-first and releases registry entries | semantic / invariant | destroy-count + destroy-log subcase; diff cue: `TailRangePlan::Remove { tail_first_indices }` | `iteration_mutation_integration::reactive_for_tail_append_reset_remove_preserves_order_and_prefix_identity` subcase destroy log `[4, 3]` |
+  | Same-batch removed-item binding guard skips out-of-range reads without panic | semantic branch | same fixture shrinks collection while item effects and structural effect are dirtied by the same signal; T6 registration guard remains the source branch | `iteration_mutation_integration::reactive_for_tail_append_reset_remove_preserves_order_and_prefix_identity`; T6 unit `reactive::tests::register_for_item_binding_writes_item_index_and_skips_out_of_range` remains the direct guard unit |
+  | Authored handler append is observable before click returns | semantic / drain item 4 | `rg` hit: `handler_collection_append_is_observable_before_click_returns`; diff cue: `HandlerEvalContext` list setters call `set_if_changed` | `iteration_mutation_integration::handler_collection_append_is_observable_before_click_returns` |
+  | Empty equal collection write produces no dirty range mutation | semantic / invariant | `rg` hit: `empty_drop_last_is_equal_value_and_does_not_dirty_range`; diff cue: `set_if_changed` false branch | `iteration_mutation_integration::empty_drop_last_is_equal_value_and_does_not_dirty_range`; `reactive::tests::signal_set_if_changed_skips_equal_value_dirtying` |
+  | ZStack range append preserves child-carried placement and Visual order | observable behavior | `rg` hit: `reactive_for_zstack_tail_append_uses_child_carried_placement` | `iteration_mutation_integration::reactive_for_zstack_tail_append_uses_child_carried_placement` |
+  | Breadth-heavy append larger than `MUTATION_CAP` converges | size / scheduler invariant | `rg` hit: `large_breadth_tail_append_converges_beyond_mutation_cap` | `iteration_mutation_integration::large_breadth_tail_append_converges_beyond_mutation_cap` (64 generated children from one collection write) |
+  | Stage-then-commit build failure leaves tree unchanged and logs range-scoped diagnostic | diagnostic / invariant | `rg` hit: `staged_for_insert_build_failure_leaves_tree_unchanged`; diff cue: `for range insert build failed at position` | `iteration_mutation_integration::staged_for_insert_build_failure_leaves_tree_unchanged` (memory-IR invalid body, initial len 0, append faults staging) |
+
+  **Deterministic-failure rerun / disposition.**
+
+  | Failure | Root cause | Disposition |
+  |---|---|---|
+  | Initial integration test run failed 4/5 and poisoned the test lock. | Author-DSL handler syntax in the fixture used textual-IR-like `on clicked`; real DSL syntax is `clicked => { ...; }`. | Fixed fixture syntax; reran targeted handler test and full `iteration_mutation_integration` to green. |
+  | Handler append fixture still failed after syntax fix. | Click coordinate `(4,4)` did not necessarily hit the laid-out Button. | Fixture now reads Button Visual offset/size and clicks its center; targeted test green. |
+  | `cargo fmt --all -- --check` failed. | Import ordering in the new integration file. | Ran `cargo fmt --all`; final `cargo fmt --all -- --check` green. |
+
+  **Behavior / invariant carry scan.**
+
+  | Behavior / invariant | Disposition |
+  |---|---|
+  | Positional un-keyed identity is now observable under mutation: retained generated child pointers survive tail append and same-length reset. | **Closed in T7** for tail-only mutation. Reorder/keyed identity remains out of scope per ADR and framing; no new owner needed. |
+  | Handler collection assignment is whole-value only and excludes bare collection copy. | **Closed in T7.** Runtime evaluator mirrors the T3/T6 deferral; whole-list copy remains deferred to the framing owner, not silently opened. |
+  | Stage-then-commit currently builds child-owned effects during staging, then either commits the staged child or destroys it on staging failure. | **Closed for T7 behavior.** No owner-less residual: if a later task introduces more fallible staging after partial commit, re-trigger trap #2/#6 and add rollback proof. |
+  | Reactive-drain residuals 1-3 (cycle detection policy, ordering ties, fan-out x cap) remain broader scheduler policy. | **Carried with owner.** T7 closes item 4 (synchronous non-batched drain proof for range mutation) and records breadth > cap convergence; T10/phase handoff carries DD-M3-P7-007 residual rows verbatim with their triggers. |
+  | Assistant-visible cardinality proof is still absent. | **Owner = T8.** Scope: gallery N -> append -> remove screenshots; T7 only supplies runtime/headless evidence. |
+  | Owner human-visible smoke is still absent. | **Owner = T9.** Scope: manual gallery smoke after T8. |
+
+  **Carry-forward ownership.**
+
+  | Carry-forward | Owner task | Scope | Impact | Close condition |
+  |---|---|---|---|---|
+  | DD-M3-P7-007 reactive-drain residuals 1-3 | T10 / phase handoff | Scheduler policy beyond T7's preserved synchronous drain and breadth fixture | Future structural fan-out work must not silently reinterpret scheduler policy | T10 records the verbatim carry rows and triggers in `handoff.md` / phase-close log. |
+  | Assistant-visible collection-cardinality positive control | T8 | Gallery `.ui`, build/launch, screenshots | Runtime mutation is implemented but not yet human-visible evidence | T8 records 2+ frame screenshot evidence. |
+  | Owner manual GUI smoke | T9 | Owner-run gallery smoke | Assistant evidence does not replace owner-visible check | T9 records owner acceptance or failure observation. |
+  | Phase-end spec/architecture re-sync | T10 | Moment 2 docs | Implementation details such as runtime list setter names and landed diagnostics need final doc check | T10 re-syncs docs or records no divergence. |
+
+  **Verification runs.**
+
+  ```text
+  cargo test -p wasamo-runtime --test iteration_mutation_integration
+  cargo test -p wasamo-runtime
+  cargo fmt --all -- --check
+  cargo test --workspace
+  ```
+
+  All completed successfully on 2026-06-16. `cargo test --workspace`
+  still emits the pre-existing package `wasamo` linkable-target warning;
+  no test failed.
+
+- **2026-06-16 / T7 start gate — reactive range mutation opened.**
+  Started by reading the prior carry-forward rows in this log before
+  treating [plan.md](./plan.md) as a hypothesis. T6 closed static
+  materialisation and per-item binding registration, but deliberately
+  left the structural `ForLoopSubtree` effect, handler-side collection
+  writes, mutation-time guard/disposal, and cap convergence to T7. T8
+  remains the owner of assistant-visible gallery screenshots; T7 owns
+  mock-free Windows runtime evidence only.
+
+  **Carry-over checked from prior tasks.**
+
+  | Carry-over | T7 disposition hypothesis |
+  |---|---|
+  | T1 CF-3 / T6 carry: `BindingTarget::ForLoopSubtree` and the structural `for` effect do not exist yet. | **T7 owns.** Add the target/effect, preserve static children on the initial effect run, and execute tail insert/remove on later collection changes. |
+  | T1 CF-4 / T6 carry: guarded loop-local reads are proven for static registration but not same-batch doomed bindings. | **T7 owns mutation-time proof.** Reuse `ForItemEvalContext` for staged inserted children and fire the out-of-range skip under removal. |
+  | T1 CF-5 / T2 carry: collection equal-value no-dirty semantics have no production caller. | **T7 owns.** Handler collection writes must use `Signal::set_if_changed`; empty `drop-last` and same-value literal reset must return no change / no dirty rerun. |
+  | T1 CF-6 / T3 carry: `xs = xs.append(e)` / `xs = xs.drop-last()` / list literal collection assignment still runtime-rejects. | **T7 owns.** Extend `HandlerEvalContext` / handler evaluator so authored handlers can mutate whole-value collection signals. |
+  | T5/T6 carry: child-carried ZStack placement exists for static generated children, but mutation-time range splice is unproven. | **T7 owns.** Staged range children must carry placement as child metadata and preserve Visual sibling order through the splice. |
+  | T6 carry: GUI-visible cardinality proof absent. | **Not T7.** Owner remains **T8**; T7 records headless/runtime evidence only. |
+
+  **Critical responsibility re-check.**
+
+  | Candidate responsibility | Decision before implementation |
+  |---|---|
+  | Collection handler writer | **In T7.** The structural effect needs a real authored writer to drive collection signals; deferring it would make T7 rely on test-only state mutation and leave Add/Remove impossible. |
+  | Unified splice seam including conditional routing | **In T7, but conservative.** Route both conditional and `for` through one insertion/removal helper for side-effect ownership. Keep conditional observable behavior unchanged. |
+  | Static `for` materialisation | **Out of T7.** Closed in T6; T7 only proves the new effect's initial run is a no-op against that already-materialised count. |
+  | Gallery `.ui` and screenshot positive controls | **Out of T7.** Owner remains T8, including the structured-item trigger decision and 2+ frame evidence. |
+  | New language/spec sync | **Out of T7.** T10 owns Moment 2 spec/architecture sync unless T7 uncovers an implementation divergence that must be carried. |
+
+  **Selected traps and non-applicable reasons.**
+
+  | Trap | Applies? | Reason / close artifact hypothesis |
+  |---|---|---|
+  | #1 semantic migration | **Applies.** | `BindingTarget` gains `ForLoopSubtree`; `HandlerExpr` collection assignment/list expressions stop being unconditional runtime rejects. Close with an `rg`-enumerated call-site audit for `BindingTarget`, `ForLoopSubtree`, `HandlerExpr::List*`, collection signals, and widget-only/control-flow filters touched by runtime mutation. |
+  | #2 side effects | **Applies.** | T7 mutates the live widget tree. Close with the DD-M3-P7-006 six-item side-effect bundle: child splice, Visual sibling order, layout invalidation, registry release/registration, effect disposal/attach timing, and no other parent-owned metadata. |
+  | #3 parallel / derived data drift | **Applies.** | `ForLoopRuntimeState.live_children`, `declared_slots`, materialised child range, dirty effect dependencies, and child-carried placement must move atomically with the splice. Close with a sync table. |
+  | #4 untested authored branch | **Applies.** | T7 adds semantic / size / diagnostic branches: append, drop-last empty no-op, same-length reset, tail insert/remove, same-batch out-of-range skip, cap breadth, staging failure disposition if feasible. Each branch needs a direct test or explicit owner/disposition. |
+  | #5 carry-forward | **Applies.** | Known residuals include reactive-drain items 1-3 and possible fault-injection infeasibility. Close with owner/scope/impact/close condition for every remaining item. |
+  | #6 deterministic failure | **Standing, not pre-selected.** | No recurring failure exists before implementation. If a deterministic or >=2x recurring failure appears, rerun/root-cause/disposition becomes required before close. |
+  | #7 weak GUI evidence | **Not applicable to T7.** | T7's deliverable is runtime/headless structural behavior. Assistant-visible screenshot + positive-control evidence is T8-owned. |
+
+  **Review lane.** Full independent review. Reason: T7 is a runtime
+  structural change and also adds semantic/diagnostic branches, so the
+  full review must include the branch/test-focused trap-#4 check.
+
+  **Planned proof obligations before implementation.**
+
+  | Planned branch / behavior | Category | Hypothesis before implementation |
+  |---|---|---|
+  | Handler `Assign` to collection LHS with `ListAppend` mutates the matching whole-value collection signal. | semantic branch | Direct unit/integration test fires authored handler evaluation and observes collection change. |
+  | Handler `Assign` to collection LHS with `ListDropLast` on empty collection is equal-value and does not dirty dependents. | semantic / invariant branch | Direct fixture counts no structural rerun / unchanged child pointers. |
+  | Handler literal reset with same length re-evaluates retained item bindings in place and preserves prefix pointers. | semantic / observable invariant | Direct runtime fixture changes text values without structural child replacement. |
+  | `ForLoopSubtree` initial effect run preserves T6 static children. | size / semantic branch | Load fixture proves no double-create after registering the structural effect. |
+  | Tail append inserts generated children at the seam-computed offset with static / `if` siblings in declared order. | size / observable behavior | Windows runtime fixture checks child text order + Visual order. |
+  | Tail removal disposes removed subtrees tail-first and releases registry/effect ownership. | semantic / invariant | Runtime fixture uses destroy-counted signal registration and/or effect-observable stale writes. |
+  | Same-batch dirty removed-item binding reads out-of-range and skips without panic/write. | semantic branch | Direct fixture dirties a doomed item binding before tail removal in the same batch. |
+  | ZStack range mutation preserves child-carried placement and Visual order. | observable behavior | Runtime fixture runs layout after append and checks aligned generated child offsets. |
+  | Gallery-scale and >`MUTATION_CAP` breadth converge without divergence. | size / scheduler invariant | Cap fixture appends many items through one collection write and verifies runtime remains healthy. |
+  | Stage-then-commit construction failure leaves the tree unchanged. | diagnostic / invariant | Attempt mock-free fault injection if feasible; otherwise record why no direct production branch can be fired yet and assign an owner/disposition. |
+
+  **Known carry-forward candidates before implementation.**
+
+  | Candidate | Owner / scope / impact / close condition |
+  |---|---|
+  | Reactive-drain residuals 1-3 from DD-M3-P7-007. | **T7 records carry.** Scope: scheduler policy beyond the preserved synchronous drain item 4. Impact: not fully solved by range mutation. Close condition: copied with triggers to the T7 close record / phase handoff owner. |
+  | Stage-failure branch may be hard to fault-inject without mocking WinRT construction. | **T7 determines.** Scope: PF2 rollback evidence. Impact: missing direct production failure proof if no natural fault surface exists. Close condition: either direct test, pure planner test + explicit infeasibility disposition, or owner-confirmed follow-up. |
+  | Assistant-visible cardinality proof. | **T8.** Scope: gallery screenshot positive controls. Impact: T7 runtime evidence is not human-visible proof. Close condition: T8 screenshots and analysis. |
+
 - **2026-06-15 / T6 rereview closure — residual placement rows
   classified.** The second independent review found no merge blocker
   and left two low-priority questions. Both were re-checked against
@@ -534,7 +779,7 @@
   |---|---|---|
   | `DeclaredMemberSlot` variants | enum definition, `append_static_member` pushes (`Widget`, `Conditional`), `mutate_conditional_subtree` lookup, pure tests | **Extended.** Added `ForLoop` and a live-cardinality arm. Production pushes are deliberately still `Widget` / `Conditional` only; T6 owns first production `ForLoop` construction. |
   | Offset calculation | `mutate_conditional_subtree` calls `materialized_offset_for_declared_slot` directly | **Migrated.** The shipped conditional path uses the shared seam as the 0/1 case; the old thin wrapper was removed after independent-review follow-up. |
-  | Cardinality / count / tail planner helpers | `declared_slot_live_cardinality`, `total_materialized_children`, `plan_tail_range_change` | **Added.** Pure seam covers widget / conditional / for cardinality, total count, and tail insert/remove/no-op plan derivation. `total_materialized_children` and `plan_tail_range_change` are unused by production until T6/T7 and carry a bounded dead-code allowance. |
+  | Cardinality / count / tail planner helpers | `declared_slot_live_cardinality`, `total_materialized_children`, `plan_tail_range_change` | **Added.** Pure seam covers widget / conditional / for cardinality, total count, and tail insert/remove/no-op plan derivation. At T4, `total_materialized_children` and `plan_tail_range_change` were unused by production until T6/T7 and carried bounded dead-code allowances; T7 made `plan_tail_range_change` production-live and removed its stale allowance. |
   | Runtime `For` load arm | `append_static_member` `ControlFlowNode::For { .. }` build reject; `collect_static_zstack_placements` reject | **Correctly unaffected.** T4 does not static-materialise `for`; existing T2/T3 reject tests remain green. |
   | Placement metadata | `zstack_placements` / `cell_placements` hits in `widget.rs`, `layout.rs`, `ir_loader.rs` | **Correctly unaffected.** T4 does not migrate placement storage; T5 remains owner. |
 
