@@ -1,5 +1,75 @@
 ## Decisions log
 
+- **2026-06-17 / T9 review remediation 2 — finding #4 (commit-failure
+  rollback registry leak) fixed.** Re-reviewing R-2, the second agent
+  found a **production bug** the new rollback test exposed: the
+  commit-stage failure branch in `mutate_for_loop_subtree`
+  (`ir_loader.rs`) cleaned up only the **committed** prefix and `return`ed,
+  leaving the **not-yet-committed** staged children (and, in production,
+  the faulting child) to a bare `drop`. `WidgetNode` has **no** `Drop`
+  impl (verified: `rg` 0 hits) — registry/binding release is
+  `widget_destroy → dispose_subtree_bindings` + `registry::remove_for_widget`,
+  call-site-only — so a bare drop leaks. The sibling **staging**-failure
+  branch already disposes correctly (`for child in staged { widget_destroy }`);
+  the commit-failure branch was asymmetric. The original R-2 test did not
+  catch it (it observed only tree shape + retained prefix).
+
+  **Fix (production).** In the Err branch, after rolling back + destroying
+  the committed prefix tail-first, also `widget_destroy` the remaining
+  un-committed staged children (mirrors the staging-failure branch). The
+  loop is now `while let … = staged_iter.next()` so the staged iterator
+  stays usable in the failure arm. The **faulting child** itself is
+  consumed either by `widget_destroy` (test seam) or by `insert_child`'s
+  by-value contract (production, on a near-unreachable WinRT failure —
+  index always valid, child fresh-unattached); recovering the production
+  faulting child would require changing `insert_child`'s signature across
+  the conditional / ABI / static callers (a cross-cutting runtime-
+  structural change), so it is documented in-code, not done here.
+
+  **Fix (test).** `staged_for_insert_commit_failure_rolls_back_partial_inserts`
+  now appends 5 (C…G) and faults the 2nd commit, so **3** children are
+  left un-committed (the disposal loop runs over several). Added a
+  registry-baseline assert via a new benign read helper
+  `ffi::__registry_entry_count_for_test()` (→ `registry::__entry_count_for_test`):
+  a fully-rolled-back failed write must leave the registry at its
+  pre-write baseline. **Observability limit (honest disposition):** the
+  generated `for`-body children are handler-free `Text` (a `for` body
+  cannot author a handler — DD-M3-P7-003), so they carry no registry
+  entry of their own; the baseline assert therefore guards retained-prefix
+  integrity + any entry-bearing child directly, while the leftover-`Text`
+  disposal rests on code symmetry with the proven staging-failure branch.
+
+  **Source enumeration.**
+
+  ```text
+  rg -n "impl Drop for WidgetNode" wasamo-runtime/src            # 0 hits (no Drop)
+  rg -n "for \(_, leftover\) in staged_iter|while let Some\(\(offset, child\)\)|__entry_count_for_test|__registry_entry_count_for_test" wasamo-runtime/src wasamo-runtime/tests/iteration_mutation_integration.rs
+  ```
+
+  **Implemented-branch test map (addendum).**
+
+  | Implemented branch / behaviour | Category | Source query / diff cue | Direct test |
+  |---|---|---|---|
+  | Commit-failure rollback disposes the committed prefix **and** the un-committed leftover staged (no registry leak) | defensive invariant (finding #4) | diff cue `for (_, leftover) in staged_iter.by_ref()` + registry baseline | `staged_for_insert_commit_failure_rolls_back_partial_inserts` (5 appended, fault at 2nd commit, registry == baseline) |
+  | Registry entry-count observability | test helper | `rg` hit `__registry_entry_count_for_test` / `registry::__entry_count_for_test` | used by the rollback test's baseline assert |
+
+  **Carry note.** Faulting-child recovery in production (insert_child
+  by-value consume-on-failure) is a **narrow, near-unreachable** residual
+  documented in-code; it is *not* a new T10 carry by itself, but if a
+  future task makes `insert_child` failure reachable on a valid child (or
+  changes its signature) it should dispose the faulting child there. No
+  owner-less open item.
+
+  **Verification.**
+
+  ```text
+  cargo test -p wasamo-runtime --test iteration_mutation_integration   # 8 passed
+  cargo test -p wasamo-runtime --lib                                    # 403 passed
+  cargo fmt --all -- --check                                            # clean
+  cargo test --workspace                                                # green
+  cargo build --release -p wasamo-runtime                               # green (fix in non-gated path; seam still cfg-stripped)
+  ```
+
 - **2026-06-17 / T9 review remediation — #2 rollback / #3 Clear closed
   in-phase.** A second-agent review of the T9 end gate found two minor
   proof gaps (recorded in the T9 end-gate entry below as findings ① / ②
