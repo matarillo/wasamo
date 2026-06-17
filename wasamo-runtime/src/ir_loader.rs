@@ -3201,11 +3201,17 @@ fn mutate_for_loop_subtree(
                     match insert_result {
                         Ok(()) => inserted += 1,
                         Err(e) => {
-                            // Roll back so the tree AND the registry return to the
-                            // pre-write baseline (review finding #4 — `WidgetNode`
-                            // has no `Drop`, so a bare drop leaks registry/binding
-                            // entries; the cleanup must mirror the staging-failure
-                            // branch above):
+                            // Roll back so the tree and registry return to the
+                            // pre-write baseline (review finding #4). `WidgetNode`
+                            // has no `Drop`, so a bare drop skips `widget_destroy`'s
+                            // `remove_for_widget`; any child holding a `registry`
+                            // entry would leak. Today's handler-free `for`-body
+                            // children hold none (per-item `EffectHandle`s
+                            // self-dispose on `Drop`), so this branch's disposal is
+                            // a *defensive* symmetry with the staging-failure branch
+                            // and the no-`Drop` ⇒ explicit-disposal invariant — not
+                            // an active leak fix for current bodies, but required
+                            // for any future body shape that registers entries.
                             //   (a) remove + destroy the committed prefix, tail-first;
                             for rollback in (0..inserted).rev() {
                                 if let Ok(removed) =

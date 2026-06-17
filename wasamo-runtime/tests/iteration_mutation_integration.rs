@@ -631,16 +631,19 @@ fn staged_for_insert_commit_failure_rolls_back_partial_inserts() {
             "rollback must not destroy the retained prefix"
         );
 
-        // (2b) registry returns to its pre-write baseline (review finding #4):
-        // a fully-rolled-back failed write must not leak registry entries for
-        // the committed-then-removed prefix or the disposed leftover staged
-        // children, and must not over-remove the retained prefix's entries.
-        // NOTE: the generated `for`-body children here are handler-free `Text`
-        // (a `for` body cannot author a handler — DD-M3-P7-003), so they carry
-        // no registry entry of their own; this assert therefore guards the
-        // retained-prefix integrity and any entry-bearing child directly, while
-        // the leftover-`Text` disposal itself rests on code symmetry with the
-        // proven staging-failure branch (`for child in staged { widget_destroy }`).
+        // (2b) registry returns to its pre-write baseline (review finding #4).
+        // SCOPE (do not over-claim): this assert guards the *retained prefix*
+        // against over-removal. It does NOT observe the leftover-staged
+        // disposal: the generated `for`-body children are handler-free `Text`
+        // (a `for` body cannot author a handler — DD-M3-P7-003), so they hold
+        // no `registry` entry, and their per-item `EffectHandle`s self-dispose
+        // on `Drop` — i.e. a bare drop of a leftover child leaks nothing
+        // observable here. Verified empirically: reverting the leftover-disposal
+        // loop leaves this test green. The disposal is therefore a defensive
+        // symmetry with the proven staging-failure branch
+        // (`for child in staged { widget_destroy }`); a fixture that could
+        // falsify it would need a body child holding a `registry` entry, which
+        // authored `for` bodies cannot have.
         assert_eq!(
             ffi::__registry_entry_count_for_test(),
             registry_baseline,
