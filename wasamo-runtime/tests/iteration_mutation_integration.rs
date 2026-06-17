@@ -583,16 +583,27 @@ fn staged_for_insert_commit_failure_rolls_back_partial_inserts() {
         // (assert_visual_order checks VisualCollection count == children.len()).
         connect_destroy_counted_signal(&mut built.root.children[1]); // A
         connect_destroy_counted_signal(&mut built.root.children[2]); // B
+        let registry_baseline = ffi::__registry_entry_count_for_test();
 
-        // Append 3 (C, D, E) but arm the 2nd committed insert (D, at
+        // Append 5 (C, D, E, F, G) but arm the 2nd committed insert (D, at
         // inserted==1) to fail: C commits, D faults, the rollback branch
-        // removes the committed C, E is never committed. Disarm immediately
-        // after the write so a later assertion panic cannot leak the armed
-        // state onto the reused runtime thread.
+        // removes the committed C and disposes the *not-yet-committed* tail
+        // (E, F, G) — review finding #4 needs >=2 leftover staged children so
+        // that disposal loop runs over several items. Disarm immediately after
+        // the write so a later assertion panic cannot leak the armed state onto
+        // the reused runtime thread.
         wasamo_runtime::ir_loader::__arm_structural_insert_fault_for_test(1);
         let changed = built.__set_string_list_state_for_test(
             "labels",
-            vec!["A".into(), "B".into(), "C".into(), "D".into(), "E".into()],
+            vec![
+                "A".into(),
+                "B".into(),
+                "C".into(),
+                "D".into(),
+                "E".into(),
+                "F".into(),
+                "G".into(),
+            ],
         );
         wasamo_runtime::ir_loader::__disarm_structural_insert_fault_for_test();
         assert!(
@@ -618,6 +629,22 @@ fn staged_for_insert_commit_failure_rolls_back_partial_inserts() {
             DESTROY_COUNT.load(Ordering::SeqCst),
             0,
             "rollback must not destroy the retained prefix"
+        );
+
+        // (2b) registry returns to its pre-write baseline (review finding #4):
+        // a fully-rolled-back failed write must not leak registry entries for
+        // the committed-then-removed prefix or the disposed leftover staged
+        // children, and must not over-remove the retained prefix's entries.
+        // NOTE: the generated `for`-body children here are handler-free `Text`
+        // (a `for` body cannot author a handler — DD-M3-P7-003), so they carry
+        // no registry entry of their own; this assert therefore guards the
+        // retained-prefix integrity and any entry-bearing child directly, while
+        // the leftover-`Text` disposal itself rests on code symmetry with the
+        // proven staging-failure branch (`for child in staged { widget_destroy }`).
+        assert_eq!(
+            ffi::__registry_entry_count_for_test(),
+            registry_baseline,
+            "a fully-rolled-back failed write must leave the registry at baseline"
         );
 
         // (3)+(4) `live_children` was NOT advanced to new_len: a later

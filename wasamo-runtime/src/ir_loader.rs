@@ -3174,7 +3174,11 @@ fn mutate_for_loop_subtree(
                 }
                 let placement = zstack_placement_for_parent(parent, body);
                 let mut inserted = 0usize;
-                for (offset, child) in staged.into_iter().enumerate() {
+                // `while let` (not `for`) so the staged iterator stays usable
+                // inside the failure branch to dispose the not-yet-committed
+                // remainder.
+                let mut staged_iter = staged.into_iter().enumerate();
+                while let Some((offset, child)) = staged_iter.next() {
                     let insert_index = live_index + start + offset;
                     // Production inserts directly. A `debug_assertions`-gated
                     // test-only fault seam (see `__arm_structural_insert_fault_for_test`;
@@ -3184,8 +3188,8 @@ fn mutate_for_loop_subtree(
                     #[cfg(debug_assertions)]
                     let insert_result = if structural_insert_fault_armed(inserted) {
                         // The staged child is not inserted; dispose it (mirrors a
-                        // real insert failure consuming the child) and report the
-                        // error to drive rollback of the committed prefix.
+                        // real insert failure, where `insert_child` consumes the
+                        // child) and report the error to drive rollback.
                         crate::widget::widget_destroy(child);
                         Err(crate::widget::MutationError::IndexOutOfBounds)
                     } else {
@@ -3197,6 +3201,12 @@ fn mutate_for_loop_subtree(
                     match insert_result {
                         Ok(()) => inserted += 1,
                         Err(e) => {
+                            // Roll back so the tree AND the registry return to the
+                            // pre-write baseline (review finding #4 — `WidgetNode`
+                            // has no `Drop`, so a bare drop leaks registry/binding
+                            // entries; the cleanup must mirror the staging-failure
+                            // branch above):
+                            //   (a) remove + destroy the committed prefix, tail-first;
                             for rollback in (0..inserted).rev() {
                                 if let Ok(removed) =
                                     remove_structural_child(parent, live_index + start + rollback)
@@ -3204,6 +3214,18 @@ fn mutate_for_loop_subtree(
                                     crate::widget::widget_destroy(removed);
                                 }
                             }
+                            //   (b) destroy the staged children not yet committed.
+                            for (_, leftover) in staged_iter.by_ref() {
+                                crate::widget::widget_destroy(leftover);
+                            }
+                            // The faulting child itself was already consumed: by
+                            // `widget_destroy` in the test seam, or by `insert_child`
+                            // in production (its by-value contract drops the child on
+                            // a WinRT failure — a near-unreachable path here, as the
+                            // index is always valid and the child freshly unattached;
+                            // recovering it would mean changing `insert_child`'s
+                            // signature across the conditional / ABI / static callers,
+                            // which is out of this task's scope).
                             eprintln!("wasamo: for range insert_child failed: {e:?}");
                             return;
                         }

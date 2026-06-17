@@ -43,6 +43,11 @@ pub mod ffi {
     }
 
     #[doc(hidden)]
+    pub fn __registry_entry_count_for_test() -> usize {
+        crate::registry::__entry_count_for_test()
+    }
+
+    #[doc(hidden)]
     pub fn __runtime_health_for_test() -> &'static str {
         match crate::reactive::runtime_health() {
             crate::reactive::RuntimeHealth::Healthy => "Healthy",
