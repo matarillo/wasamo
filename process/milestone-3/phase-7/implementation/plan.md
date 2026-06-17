@@ -371,7 +371,7 @@ owner-visible portion of item (6) is T9's per the split. Assistant
 evidence is **launch + DPI-aware screenshot capture + assistant
 analysis**; `Start-Process` survival is a supporting signal only.
 
-- [ ] **Structured-item trigger decision with the owner (T1 addendum 3
+- [x] **Structured-item trigger decision with the owner (T1 addendum 3
       G-2 / T1 addendum 4) — first T8 subtask, before authoring the
       `.ui`.** The current thumbnails vary **two** per-item attributes
       (distinct `fill` colour + label `S0N`) — i.e. **record-like
@@ -401,23 +401,52 @@ analysis**; `Start-Process` survival is a supporting signal only.
       owner-confirm gate applies because it is owner-visible demo
       composition **and** a recorded-deferral-trigger event, not a
       delegated implementation detail.
-- [ ] Grow `examples/gallery/gallery.ui` **additively** per the owner's
-      composition decision above: the thumbnail set inside the existing
-      `ScrollView { WrapPanel { … } }` becomes `for`-generated from a
-      collection `state` (Box + Text placeholders per the §4.9
-      image-placeholder pattern), with `Add` / `Remove` **text Buttons
-      outside the `for` body** driving the tail-append / tail-remove
-      assignments. Existing gallery slices stay byte-identical except
-      where the slice composition requires otherwise (record the
-      decided deviation).
-- [ ] Build and run `examples/gallery-rust/`. Record assistant
-      evidence as **2+ frames**: initial N → after `Add` (N+1
-      thumbnails, prefix visually undisturbed) → after `Remove` —
-      the item count visibly tracks the mutation driven by the
-      body-external Buttons (the FD-B positive control; a single
-      static frame is not evidence). DPI blur noted as the known M4
-      residual, not a Phase 7 failure. Screenshots under
-      [evidence/](./evidence/).
+- [x] Grow `examples/gallery/gallery.ui` **additively** per the owner's
+      composition decision above: the **ScrollView-backed thumbnail set**
+      (the `ScrollView { offset-y: scroll_y; WrapPanel { … } }` `S01…`
+      grid at [gallery.ui:133](../../../../examples/gallery/gallery.ui#L133)
+      — the A1 slice named in §Phase 7 scope, **not** the upper static
+      `Photo …` WrapPanel, which stays byte-identical) becomes
+      `for`-generated from a collection `state` (Box + Text placeholders
+      per the §4.9 image-placeholder pattern; the single varying
+      per-item attribute the owner picks above — default label/id from
+      the collection, static `fill`), with `Add` / `Remove` / `Clear` /
+      `Reset` **text Buttons outside the `for` body** driving all four
+      DD-M3-P7-002 mutation forms — tail-append, tail-drop-last,
+      empty-literal clear (`labels = []`), and static-literal reset
+      (`labels = [ … ]`); the clear/reset pair lands on owner request to
+      demonstrate the literal-assignment forms alongside the method tail
+      edits. **Append-value mechanics (record the
+      chosen form):** the tail-append RHS needs a next value — either a
+      constant (visually duplicate thumbnails, still a valid cardinality
+      proof) or a monotonic scalar `state` counter incremented in the
+      same handler (`next = next + 1; thumbs = thumbs.append(next);` —
+      distinct labels, more legible prefix-undisturbed control); the DD
+      admits a scalar expr as the `append` argument. The Grid, the upper
+      `Photo` WrapPanel, the scroll Buttons, and the lightbox stay
+      byte-identical; the new collection `state`, the `for` rewrite of
+      the `S01…` set, and the `Add` / `Remove` / `Clear` / `Reset`
+      Buttons are the recorded additive deviation.
+- [x] Build and run `examples/gallery-rust/`. **Capture mechanics —
+      reuse the proven Phase 6 pattern**
+      ([capture-lightbox.ps1](../../phase-6/implementation/evidence/capture-lightbox.ps1)):
+      per-monitor-DPI-aware (`SetProcessDpiAwarenessContext`), enumerate
+      the top-level `Gallery` HWND by title, drive the body-external
+      `Add` / `Remove` Buttons with `SetCursorPos` + `mouse_event` at
+      window-relative coordinates, and `CopyFromScreen` over
+      `GetWindowRect` (not `PrintWindow`, which reads back blank under
+      DirectComposition). **Viewport-visibility constraint:** the
+      `for`-generated set lives inside a `ScrollView` deep in the VStack,
+      so size/arrange the window (and, if needed, scroll or place `Add` /
+      `Remove` near the generated set) such that **both the generated
+      thumbnails and the driving Buttons fall in the captured frame** —
+      a positive control no one can read is not evidence. Record assistant
+      evidence as **2+ frames**: initial N → after `Add` (N+1 thumbnails,
+      prefix visually undisturbed) → after `Remove` — the item count
+      visibly tracks the mutation driven by the body-external Buttons (the
+      FD-B positive control; a single static frame is not evidence). DPI
+      blur noted as the known M4 residual, not a Phase 7 failure.
+      Screenshots under [evidence/](./evidence/).
 
 ### T9 — Owner-manual GUI smoke
 
