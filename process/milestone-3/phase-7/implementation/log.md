@@ -1,5 +1,275 @@
 ## Decisions log
 
+- **2026-06-17 / T8 start gate — gallery thumbnail slice + assistant
+  build/launch opened.** Started by reading the prior carry-forward rows
+  in this log before treating [plan.md](./plan.md) T8 as a hypothesis.
+  T7 closed the runtime range mutation and explicitly left two items to
+  T8: the **assistant-visible cardinality positive control** (gallery
+  `.ui` → for-generated, 2+ frame screenshots) and the **structured-item
+  / `TypedValue` deferral-trigger owner consult** (G-2 / T1 addendum 4).
+  T9 owns the owner human-visible smoke; T10 owns Moment 2 spec re-sync
+  and the handoff carry rows. Critical re-think of T8's responsibility
+  kept the plan's three-part structure (owner consult → additive `.ui`
+  growth → build/launch/2+ frame evidence) and **sharpened two
+  under-specified load-bearing points** into plan T8: the GUI
+  input-injection mechanism (the plan said "launch + screenshot" but not
+  how `Add`/`Remove` are clicked — pinned to the proven Phase 6
+  `capture-lightbox.ps1` `SetCursorPos`+`mouse_event` pattern) and the
+  viewport-visibility constraint (the for-set lives inside a deep
+  `ScrollView`, so the generated thumbnails *and* the driving Buttons
+  must both fall in the captured frame). Append-value mechanics recorded
+  as a composition input.
+
+  **Carry-over checked from prior tasks.**
+
+  | Carry-over | T8 disposition hypothesis |
+  |---|---|
+  | T7 carry: assistant-visible collection-cardinality positive control absent. | **T8 owns.** Grow the ScrollView-backed `S01…` WrapPanel into a `for`-generated set driven by body-external `Add`/`Remove` Buttons; record 2+ frame N → append → remove evidence. |
+  | T1 addendum 4 / G-2: the gallery thumbnail varies **two** per-item attributes (`fill` colour + label) — record-like data a scalar `for` cannot express; the DD-M3-P7-002 structured-item / `TypedValue` trigger that **cannot be smuggled**. | **T8 owns the owner consult** (mandatory, owner-confirm-gated). First subtask before authoring: tell the owner the trigger fired, recommend **reduce-to-single-attribute for Phase 7** (label/id from the collection, static `fill`), route the trigger to M4/M5 (reopening structured items is against FD-C thesis-sequencing and revises M3 acceptance), record the decision here and queue the observation for the **T10 handoff**. Per memory, the consult is **plain Japanese chat, not `AskUserQuestion`**. |
+  | T7 carry: owner human-visible GUI smoke absent. | **Not T8.** Owner remains **T9**; T8 supplies the assistant baseline only (Start-Process survival is a supporting signal, not the deliverable). |
+  | T6/T7 carry: phase-end spec/architecture re-sync, DD-007 drain residuals 1-3, insert partial-failure rollback proof. | **Not T8.** Owner remains **T10 / phase handoff**; T8 does not close them. |
+
+  **Selected traps and non-applicable reasons.**
+
+  | Trap | Applies? | Reason / close artifact hypothesis |
+  |---|---|---|
+  | #1 semantic migration | **Non-applicable.** | T8 adds no enum / IR / schema variant. It authors a `.ui` and a capture script and consumes the already-landed T2–T7 for/collection pipeline; there is no traversal call-site to audit. |
+  | #2 side effects | **Non-applicable.** | T8 writes no production runtime code. The structural splice side-effects are T7-owned and tested; T8 only triggers them through an authored handler. |
+  | #3 parallel / derived data drift | **Non-applicable.** | No new parallel vector / derived index / cache is introduced by an authored `.ui` or a PowerShell capture script. |
+  | #4 untested authored branch | **Non-applicable to T8 code, armed-as-carry.** | T8 adds no new reject / diagnostic / size branch in Rust. But T8 is the **first real end-to-end exercise** of the for-gallery pipeline through `gallery-rust/build.rs` (`wasamoc` check/lower/emit + loader + runtime); if it surfaces a gap, that re-triggers trap #1/#4/#6 on the **owning** surface (T3 check / T6 loader / T7 runtime) and is carried, not worked around in the `.ui`. |
+  | #5 carry-forward | **Applies.** | T8 produces the structured-item / `TypedValue` trigger observation that **must** land in the T10 handoff (smuggle-forbidden), plus the T9 smoke handoff and any integration gap surfaced by the first real build. Close with owner / scope / impact / close-condition rows. |
+  | #6 deterministic failure | **Standing, not pre-selected.** | No recurring failure exists before implementation. Known mechanics hazards (blank `PrintWindow` readback, wrong-HWND `MainWindowHandle`, click-coordinate miss, a deterministic gallery build/check failure) are root-caused, not re-rolled, if they appear. Obs-5-class teardown AV does **not** apply (single-process GUI host, not a multi-test Compositor binary). |
+  | #7 weak GUI evidence | **Applies — the central trap of T8.** | The deliverable is GUI-host rendering. Close with screenshot + assistant analysis + a **positive control**: the 2+ frame N → `Add` (N+1, prefix undisturbed) → `Remove` mutation pair driven by body-external Buttons; a single static frame a hardcoded tree could equally produce is not evidence. Does not replace the T9 owner smoke. |
+
+  **Review lane.** **Full independent review** (the GUI-render-evidence
+  high-risk class, [implementation-gates.md §4](../../../procedures/implementation-gates.md)).
+  Reason: T8's deliverable is assistant-visible GUI evidence (#7); the
+  review must verify the positive control genuinely distinguishes
+  collection-driven cardinality from a hardcoded look-alike, and that the
+  structured-item trigger observation is correctly surfaced and routed
+  (not smuggled). T8 adds no diagnostic / reject / size code branch, so
+  the trap-#4 branch/test lane does not compose in.
+
+  **Planned proof obligations before implementation.**
+
+  | Planned branch / behaviour | Category | Hypothesis before implementation |
+  |---|---|---|
+  | The for-generated `gallery.ui` compiles and loads through the real host build. | integration smoke (item 3-adjacent) | `cargo build -p gallery-rust` runs `wasamoc` tokenize/parse/check/lower/emit on the rewritten `.ui` and the loader materialises the `for` slot — the first end-to-end exercise of the T2–T7 surfaces on a real multi-construct `.ui`. Proof: build green; a failure root-causes to the owning surface, not a `.ui` workaround. |
+  | Assistant-visible 2+ frame mutation pair. | GUI evidence (item 5) + FD-B positive control | Launch `gallery-rust.exe`, capture initial N → click `Add` → N+1 (prefix thumbnails visually undisturbed) → click `Remove` → N; DPI-aware `CopyFromScreen`, title-enum HWND, `SetCursorPos`+`mouse_event` clicks. Assistant analyses pixels for the count delta and prefix stability. |
+  | The captured region is legible. | GUI evidence prerequisite | Window sized / arranged so the ScrollView-backed generated set **and** the `Add`/`Remove` Buttons both fall in the captured frame; otherwise the positive control is unreadable. |
+  | Structured-item trigger surfaced, decided, recorded. | carry-forward (#5) | Owner consult done in Japanese chat; the chosen single-attribute composition recorded here; the trigger observation queued for the T10 handoff. |
+  | Assistant baseline ≠ owner smoke. | evidence-standard invariant | `Start-Process` survival is a supporting "no early crash" signal only; the owner human-visible smoke is T9's and is not discharged by T8. |
+
+  **Known carry-forward candidates before implementation.**
+
+  | Candidate | Owner / scope / impact / close condition |
+  |---|---|
+  | Structured-item / `TypedValue` trigger observation (G-2). | **Owner = T10 handoff** (recorded by T8 here). Scope: the gallery is the first concrete app case where scalar items cannot express per-item {colour, label}; routed to M4/M5 per DD-M3-P7-002. Impact: a `TypedValue` adoption revises M3 acceptance and cannot be smuggled. Close: owner decision recorded in this log at T8; T10 records the observation + re-trigger in `handoff.md`. |
+  | Owner human-visible GUI smoke. | **Owner = T9.** Scope: owner runs `gallery-rust` and observes `Add`/`Remove` with the collection-mutated positive control. Impact: the assistant baseline does not substitute for owner judgment. Close: T9 records owner acceptance or a fail observation. |
+  | Any integration gap surfaced by the first real for-gallery build. | **Owner = the surfaced surface (T3 check / T6 loader / T7 runtime).** Scope: a check/loader/runtime defect the `.ui` exposes. Impact: must be fixed on the owning surface, not papered over in the `.ui`. Close: defect fixed with a direct test on the owning surface, or an explicit disposition recorded here. |
+  | DPI blur in the capture. | **Owner = M4** ([DD-V-022/023](../../../cross-milestone/decisions/dpi-awareness-m4-deferral.md)). Scope: host DPI-unawareness. Impact: a known cosmetic residual, not a Phase 7 failure. Close: M4 DPI work; T8 only notes it in the evidence analysis. |
+  | Append-value composition form (constant vs counter `state`). | **Resolved at T8 authoring**, not a cross-task carry. Record the chosen form; the DD admits a scalar expr as the `append` argument. |
+
+  **Owner reservation (2026-06-17) — routing is provisional, not
+  settled.** During the T8 owner consult the owner examined a proposed
+  parallel-collection / index-indirection composition
+  (`for label, index in labels { Box { fill: colors[index]; Text { text:
+  label } } }`). This is **not authorable in Phase 7**: `colors` read in
+  the body is a loop-external collection read (rejected by
+  `check::collection_external_read_segment` /
+  `loop_external_collection_reads_rejected`, hint *"collection reads
+  outside iteration not yet supported"*) and the `[index]` subscript is a
+  deferred indexed-read syntax. It is the struct-of-arrays form of the
+  same per-item record need; it routes to the FD-F正本
+  **loop-external collection reads** row (Q5 uniform expression/reference
+  extension), a different deferral axis from the structured-item /
+  `TypedValue` row. Under the **current** plan both axes land **M4 or
+  later** (M3's only remaining phase is Phase 8, which is editorial /
+  assembly with no new grammar surface;
+  [framing.md FD-F正本](../requirements/framing.md) routes loop-external
+  reads to the Q5 expression extension, which has no M3 acceptance
+  criterion). **The owner explicitly reserves the option to insert a new
+  M3-Phase 7b** — ADR drafting + design judgment — to bring one or both
+  of these capabilities into M3 instead of M4+. So the two trigger rows
+  above carry an **"M4+ unless the owner exercises the reserved Phase 7b"**
+  qualifier. This reservation does **not** block T8: T8 proceeds with the
+  single-attribute reduction now, and the gallery composition would be
+  revisited only if Phase 7b is actually opened. Phase 7b, if opened,
+  would be its own task with its own start gate / ADR / review lane (not
+  smuggled into T8). The T10 handoff records both trigger observations
+  **with this reservation**, so the M4+ routing is not stated as settled.
+
+  **Owner consult outcome (2026-06-17) — single-attribute reduction
+  confirmed.** The owner explored three "vary the thumbnail fill /
+  per-item record" compositions during the consult; each is blocked by a
+  **distinct** deferred axis (verified in source, not asserted), and the
+  owner accepted the reduction. Recorded for the T10 handoff as **three
+  observation axes**, all carrying the Phase 7b reservation above:
+
+  | # | Proposed composition | Blocker (source-verified) | Deferred axis / routing |
+  |---|---|---|---|
+  | 1 | per-item `{fill colour, label}` record | a scalar `for` item binds one value | structured-item / `TypedValue` (DD-M3-P7-002 §pressure → M4 showcase-spec / M5 data-surface) |
+  | 2 | `for label, index in labels { fill: colors[index] }` | `colors` body read is a loop-external collection read (`check::loop_external_collection_reads_rejected`, *"collection reads outside iteration not yet supported"*); `[index]` is deferred indexed-read syntax | loop-external collection reads (FD-F正本 → Q5 uniform expression/reference extension) |
+  | 3 | `for color, index in colors { fill: color }` | `Box.fill` is **constant-only** (DD-M3-P2-004; `check::box_fill_state_ident_rejected`, hint *"`Box.fill` is constant-only"* / `"Color"`); also no `Color[]` element type (DD-002 element set is `i32`/`string`/`bool`) | bindable `Box.fill` (DD-M3-P2-004; dynamic styling naturally M5 theming) |
+
+  **Root insight recorded for the handoff:** the real root constraint
+  behind "vary the thumbnail fill per item" is **not** the iteration
+  grammar — it is that `Box.fill` is constant-only (DD-M3-P2-004). Every
+  collection-side workaround still ends in a dynamic bind into `fill`,
+  which is closed in M3. So the per-item-colour desire is recorded as the
+  **bindable-`fill` trigger**, distinct from the two collection-read
+  triggers.
+
+  **Settled T8 composition (the authored gallery slice):**
+
+  - `state labels: string[] = ["S01", … ]` (a modest initial N for a
+    legible tail; the original 32 static `S01…S32` boxes are reduced to a
+    `for`-generated set — the recorded additive deviation).
+  - `ScrollView { offset-y: scroll_y; WrapPanel { for label, index in
+    labels { Box { aspect: 1:1; fill: #336699cc; Text { text:
+    "\{label} #\{index}" } } } } }` — single varying attribute (the
+    `label` from the collection plus the positional `index`); **static
+    uniform `fill`**; descriptive binder name `index` for the public
+    example (the bind *shape* is the `wasamoc check` positive control
+    `"\{label} #\{i}"`). Display reads `S01 #0`, `S02 #1`, … for
+    owner-requested continuity.
+  - **Body-external** text Buttons driving all four authored mutation
+    forms (DD-M3-P7-002): `Add` → `labels = labels.append("NEW")`,
+    `Remove` → `labels = labels.drop-last()`, `Clear` → `labels = []`
+    (empty-literal whole-value set), `Reset` →
+    `labels = ["S01", … , "S06"]` (static-literal reset). `append` /
+    `drop-last` are the only contextual *methods*; clear / reset are
+    *literal assignment*, not methods (the ADR deliberately kept the
+    method vocabulary to two — DD-M3-P7-002 §RHS extent M3b). The `index`
+    suffix makes appended items (`NEW #6`, …) visibly distinct without a
+    counter `state`, so the prior append-value composition question is
+    closed by the index display.
+
+- **2026-06-17 / T8 end gate — gallery iteration slice landed +
+  assistant-visible positive control captured.** Grew
+  [examples/gallery/gallery.ui](../../../../examples/gallery/gallery.ui)
+  additively into a `for`-generated thumbnail set and produced the
+  6-frame assistant evidence (2 sequences × 3). T8 added **no Rust
+  code**; it exercises the landed
+  T2–T7 for/collection pipeline through the real host build and supplies
+  the GUI positive control. T9 (owner human-visible smoke) and T10
+  (Moment 2 spec re-sync + handoff carry rows) remain their owners.
+
+  **Source enumeration used for close artifacts.**
+
+  ```text
+  git status --short
+  git diff --name-only -- "*.rs"
+  git diff --stat -- examples/gallery/gallery.ui
+  cargo build -p gallery-rust --release
+  ```
+
+  `git diff --name-only -- "*.rs"` is **empty** (T8 adds no Rust branch);
+  `git diff --stat` on `gallery.ui` shows 25 insertions / 159 deletions
+  (the 32 static `S01…S32` boxes collapse to one `for`-generated `Box`,
+  plus the four body-external mutation Buttons). The new untracked
+  `process/milestone-3/phase-7/evidence/` holds the capture script, a
+  README, and 6 PNG frames (2 sequences × 3).
+
+  **Implemented-branch / behaviour map.**
+
+  | Implemented branch / behaviour | Category | Source query / diff cue | Direct test or owner |
+  |---|---|---|---|
+  | The `for`-generated `gallery.ui` compiles + loads through the real host build | integration smoke | `cargo build -p gallery-rust --release` green; diff cue `for label, index in labels` | `gallery-rust/build.rs` runs `wasamoc` tokenize/parse/check/lower/emit; shape pinned by `check::tests::gallery_like_for_shape_and_body_external_handlers_accepted` + `lower::tests::gallery_like_for_shape_lowers_single_box_body_and_external_mutations` (T3); runtime mutation by `wasamo-runtime/tests/iteration_mutation_integration.rs` (T7) |
+  | Assistant-visible collection-cardinality positive control (ADR item 5) | GUI evidence | evidence PNGs `t8-iteration-{init,add,remove}.png` (append/remove) + `t8-clearreset-{init,clear,reset}.png` (clear/reset) | **this task** — screenshots + analysis below |
+  | No new reject / diagnostic / size / semantic **Rust** branch | n/a | `git diff --name-only -- "*.rs"` empty | the for/collection branches are T2–T7-owned and tested there; T8 does not add or alter one |
+
+  **GUI evidence (trap #7 close artifact).**
+
+  - **Capture mechanics:** per-monitor-DPI-aware
+    (`SetProcessDpiAwarenessContext(-4)`), enumerate the top-level
+    `Gallery` HWND by title, drive the body-external `Add` / `Remove`
+    Buttons with `SetCursorPos` + `mouse_event` at window-relative
+    coordinates, `CopyFromScreen` over `GetWindowRect` (not `PrintWindow`).
+    Script:
+    [evidence/capture-iteration.ps1](../evidence/capture-iteration.ps1)
+    (adapted from the Phase 6 `capture-lightbox.ps1`). Window sized
+    1280×1316 so the ScrollView-backed `for` set **and** the four
+    body-external Buttons fall in one frame (the viewport-visibility
+    constraint; the wider window keeps the appended items on a
+    fully-visible row).
+  - **Sequence A — append / remove (`t8-iteration-*.png`):** `init` = 6
+    (`S01 #0` … `S06 #5`) → `add` = 7 (`+ NEW #6`, **fully legible on the
+    same row** — 7 items per row at 1280 wide) → `remove` = 6 (the named
+    `NEW #6` is **gone**, tail back to `S06 #5`). The sequence is held at
+    ≤ 7 items so no item wraps below the fold: the drop-last "named item
+    disappears" step is crisply readable (the T8-review-① fix; the
+    earlier 4-frame `add2 = 8 / NEW #7` capture clipped the 8th item on a
+    wrapped row and is replaced).
+  - **Sequence B — clear / reset (`t8-clearreset-*.png`):** `init` = 6 →
+    `clear` = **0** (the `for` slot materialises zero children; the
+    thumbnail area is empty, member still live) → `reset` = 6
+    (`S01 #0` … `S06 #5` restored from the static literal).
+  - **Positive control (both sequences):** the item count **tracks the
+    body-external Button clicks** (6 → 7 → 6, and 6 → 0 → 6); the prefix
+    thumbnails `S01 #0`…`S06 #5` stay **visually stable** across the tail
+    edits (the strict pointer-retention *invariant* is proven separately
+    by T7's
+    `iteration_mutation_integration::reactive_for_tail_append_reset_remove_preserves_order_and_prefix_identity`,
+    not claimed from pixels — the screenshot shows visual stability, the
+    unit test shows identity); the `index` binder **re-derives** the
+    position for the appended item (`NEW #6`); the empty `clear` case is
+    well-behaved (zero children, no crash); and the upper static slices
+    (Grid, `Photo 1`…`Photo 10`) stay byte-identical frame-to-frame. A
+    hardcoded tree cannot make the count track the click — this
+    distinguishes collection-driven cardinality from a static look-alike
+    (FD-B positive control). `Start-Process` survival is a supporting "no
+    early crash" signal only and does **not** substitute for the T9 owner
+    human-visible smoke.
+  - **DPI:** the capture is DPI-aware; any residual host-side blur is the
+    known M4 residual ([DD-V-022/023](../../../cross-milestone/decisions/dpi-awareness-m4-deferral.md)),
+    not a Phase 7 failure.
+
+  **Recorded additive deviation (plan T8 "record the decided
+  deviation").** The original 32 static `S01…S32` boxes (6 cycling
+  `fill` colours) are reduced to a single `for`-generated `Box` over
+  `state labels: string[]` with initial N = 6 and a **uniform static
+  `fill`** (`#336699cc`); four body-external text Buttons (`Add`,
+  `Remove`, `Clear`, `Reset`) are inserted before the `ScrollView`,
+  exercising all four DD-M3-P7-002 mutation forms (`append` /
+  `drop-last` / empty-literal clear / static-literal reset). The Grid,
+  the upper `Photo` WrapPanel, the scroll Buttons, and the lightbox
+  subtree are byte-identical.
+
+  **Behaviour / invariant carry scan.**
+
+  | Behaviour / invariant | Disposition |
+  |---|---|
+  | The gallery now mutates widget-tree cardinality through authored body-external handlers (`labels.append` / `labels.drop-last`). | **Closed in T8** as visible evidence; the runtime contract itself is T7-owned and tested. |
+  | Three deferral-trigger observations surfaced at the gallery (structured-item / `TypedValue`; loop-external indexed read; bindable-`fill`). | **Carried to T10 handoff**, each with the Phase 7b owner reservation. Recorded in the consult-outcome table above. |
+  | Owner human-visible smoke. | **Owner = T9.** Not discharged by the assistant baseline. |
+  | DPI blur. | **Owner = M4.** Known residual; noted in the evidence analysis only. |
+
+  **Carry-forward ownership.**
+
+  | Carry-forward | Owner task | Scope | Impact | Close condition |
+  |---|---|---|---|---|
+  | Structured-item / `TypedValue`, loop-external indexed read, and bindable-`fill` trigger observations | T10 handoff (Phase 7b reservation held by owner) | Three deferred axes the gallery surfaced; routed M4+ unless Phase 7b is opened | The per-item-richer gallery is deferred; M3 ships the single-attribute slice | T10 records all three observations + re-triggers + the Phase 7b reservation in `handoff.md`; or the owner opens Phase 7b as its own task |
+  | Owner human-visible GUI smoke | T9 | Owner runs `gallery-rust`, observes Add/Remove with the collection-mutated positive control | Assistant baseline does not substitute for owner judgment | T9 records owner acceptance or a fail observation |
+  | Phase-end spec/architecture re-sync (runtime list-setter names, landed diagnostics, gallery slice) | T10 | Moment 2 docs | Implementation details need a final doc check | T10 re-syncs or records no divergence |
+
+  **Verification runs.**
+
+  ```text
+  cargo build -p gallery-rust --release   # green (for-gallery pipeline end-to-end)
+  pwsh evidence/capture-iteration.ps1 ...  # Sequence A (init,add,remove)
+  pwsh evidence/capture-iteration.ps1 ...  # Sequence B (init,clear,reset)
+  ```
+
+  The exact window size + click coordinates for both runs are recorded in
+  [evidence/README.md](../evidence/README.md) so a third party can
+  reproduce them without re-deriving the Button coordinates (T8-review-②).
+
+  No Rust changed, so `cargo fmt` / workspace test ownership stays with
+  T10's phase-end gates; the for-gallery **build** going green is the
+  integration proof this task owns. The pre-existing `wasamo`
+  linkable-target warning is unchanged.
+
 - **2026-06-16 / T7 review remediation — branch proof gaps closed.**
   A second-agent review accepted the core T7 implementation but found two
   proof gaps before merge: string/bool collection assignment sub-branches
