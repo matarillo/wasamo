@@ -3174,11 +3174,45 @@ fn mutate_for_loop_subtree(
                 }
                 let placement = zstack_placement_for_parent(parent, body);
                 let mut inserted = 0usize;
-                for (offset, child) in staged.into_iter().enumerate() {
+                // `while let` (not `for`) so the staged iterator stays usable
+                // inside the failure branch to dispose the not-yet-committed
+                // remainder.
+                let mut staged_iter = staged.into_iter().enumerate();
+                while let Some((offset, child)) = staged_iter.next() {
                     let insert_index = live_index + start + offset;
-                    match insert_structural_child(parent, insert_index, child, placement) {
+                    // Production inserts directly. A `debug_assertions`-gated
+                    // test-only fault seam (see `__arm_structural_insert_fault_for_test`;
+                    // Rust-side fault injection, NOT a WinRT mock) can force the
+                    // Nth commit insert to fail so the rollback branch below is
+                    // directly exercised. Absent from release builds.
+                    #[cfg(debug_assertions)]
+                    let insert_result = if structural_insert_fault_armed(inserted) {
+                        // The staged child is not inserted; dispose it (mirrors a
+                        // real insert failure, where `insert_child` consumes the
+                        // child) and report the error to drive rollback.
+                        crate::widget::widget_destroy(child);
+                        Err(crate::widget::MutationError::IndexOutOfBounds)
+                    } else {
+                        insert_structural_child(parent, insert_index, child, placement)
+                    };
+                    #[cfg(not(debug_assertions))]
+                    let insert_result =
+                        insert_structural_child(parent, insert_index, child, placement);
+                    match insert_result {
                         Ok(()) => inserted += 1,
                         Err(e) => {
+                            // Roll back so the tree and registry return to the
+                            // pre-write baseline (review finding #4). `WidgetNode`
+                            // has no `Drop`, so a bare drop skips `widget_destroy`'s
+                            // `remove_for_widget`; any child holding a `registry`
+                            // entry would leak. Today's handler-free `for`-body
+                            // children hold none (per-item `EffectHandle`s
+                            // self-dispose on `Drop`), so this branch's disposal is
+                            // a *defensive* symmetry with the staging-failure branch
+                            // and the no-`Drop` ⇒ explicit-disposal invariant — not
+                            // an active leak fix for current bodies, but required
+                            // for any future body shape that registers entries.
+                            //   (a) remove + destroy the committed prefix, tail-first;
                             for rollback in (0..inserted).rev() {
                                 if let Ok(removed) =
                                     remove_structural_child(parent, live_index + start + rollback)
@@ -3186,6 +3220,18 @@ fn mutate_for_loop_subtree(
                                     crate::widget::widget_destroy(removed);
                                 }
                             }
+                            //   (b) destroy the staged children not yet committed.
+                            for (_, leftover) in staged_iter.by_ref() {
+                                crate::widget::widget_destroy(leftover);
+                            }
+                            // The faulting child itself was already consumed: by
+                            // `widget_destroy` in the test seam, or by `insert_child`
+                            // in production (its by-value contract drops the child on
+                            // a WinRT failure — a near-unreachable path here, as the
+                            // index is always valid and the child freshly unattached;
+                            // recovering it would mean changing `insert_child`'s
+                            // signature across the conditional / ABI / static callers,
+                            // which is out of this task's scope).
                             eprintln!("wasamo: for range insert_child failed: {e:?}");
                             return;
                         }
@@ -3229,6 +3275,43 @@ fn remove_structural_child(
     index: usize,
 ) -> Result<Box<WidgetNode>, crate::widget::MutationError> {
     parent.remove_child(index)
+}
+
+// ── Test-only structural-insert fault seam (review finding #2) ──────────────
+//
+// Rust-side fault injection — NOT a WinRT/OS API mock — that forces the Nth
+// commit-stage `insert_structural_child` in `mutate_for_loop_subtree` to fail,
+// so the partial-insert rollback branch is directly exercised by a mock-free
+// Windows integration test. Gated on `debug_assertions`, so the seam, the arm
+// helpers, and the cost of the per-insert check are all absent from release
+// builds (`cargo build --release` disables `debug_assertions`); the project's
+// CI runs `cargo test` in the dev profile, where `debug_assertions` is on.
+#[cfg(debug_assertions)]
+thread_local! {
+    static FAIL_STRUCTURAL_INSERT_AT: std::cell::Cell<Option<usize>> =
+        std::cell::Cell::new(None);
+}
+
+#[cfg(debug_assertions)]
+fn structural_insert_fault_armed(inserted_so_far: usize) -> bool {
+    FAIL_STRUCTURAL_INSERT_AT.with(|cell| cell.get() == Some(inserted_so_far))
+}
+
+/// Arm the for-range commit loop to fail its `inserted_index`-th structural
+/// insert (0-based count of successful inserts so far). Test-only; absent from
+/// release. Call under the integration `test_lock` and disarm before any
+/// assertion that may panic, to avoid leaking the armed state onto the
+/// reused runtime thread.
+#[cfg(debug_assertions)]
+#[doc(hidden)]
+pub fn __arm_structural_insert_fault_for_test(inserted_index: usize) {
+    FAIL_STRUCTURAL_INSERT_AT.with(|cell| cell.set(Some(inserted_index)));
+}
+
+#[cfg(debug_assertions)]
+#[doc(hidden)]
+pub fn __disarm_structural_insert_fault_for_test() {
+    FAIL_STRUCTURAL_INSERT_AT.with(|cell| cell.set(None));
 }
 
 fn zstack_placement_for_parent(parent: &WidgetNode, body: &IrNode) -> Option<ZStackPlacement> {

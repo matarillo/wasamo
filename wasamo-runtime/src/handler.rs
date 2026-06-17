@@ -1348,6 +1348,33 @@ mod tests {
     }
 
     #[test]
+    fn collection_assignment_empty_literal_clear() {
+        // The shipping `Clear` button lowers `labels = []` to
+        // `Assign { rhs: ListLit(vec![]) }` (review finding #3). The other
+        // collection tests only ever evaluate a *non-empty* `ListLit`, so
+        // this pins the empty-literal evaluation atom directly. The `i32[]`
+        // case suffices: element handling for string/bool literal reset is
+        // already type-crossed by
+        // `collection_assignment_string_bool_drop_last_and_literal_reset`.
+        let mut ctx = MapCtx::new(&[]).with_i32_lists(&[("xs", &[1, 2, 3])]);
+        let clear = HandlerExpr::Assign {
+            lhs: "xs".into(),
+            rhs: Box::new(HandlerExpr::ListLit(Vec::new())),
+        };
+        // (1) the empty-literal assignment evaluates Ok ...
+        assert_eq!(evaluate(&clear, &mut ctx), Ok(0));
+        // (2) ... and empties the whole-value collection.
+        assert!(ctx.i32_lists["xs"].is_empty());
+        // (3) non-empty -> empty is not an equal write, so the whole-value
+        // set dirties. `evaluate` discards the changed flag, so the
+        // equality contract is pinned directly on the setter; the runtime
+        // shrink-to-zero this drives is proven end-to-end in the
+        // integration `reactive_for_empty_literal_clear_removes_all_then_regrows`.
+        ctx.i32_lists.insert("xs".into(), vec![1, 2, 3]);
+        assert_eq!(ctx.set_i32_list("xs", Vec::new()), Ok(true));
+    }
+
+    #[test]
     fn collection_assignment_supports_string_and_bool_items() {
         let mut ctx = MapCtx::new(&[])
             .with_strings(&[("next", "B")])

@@ -116,6 +116,15 @@ pub fn remove(token: u64) -> bool {
     }
 }
 
+/// Total live registration count on this thread. Test-only observability
+/// (a benign read, like the other `__*_for_test` helpers) used to assert a
+/// fully-rolled-back structural mutation leaves the registry at its
+/// pre-write baseline (M3-Phase 7 T9, review finding #4).
+#[doc(hidden)]
+pub fn __entry_count_for_test() -> usize {
+    REG.with(|r| r.borrow().entries.len())
+}
+
 /// Sever every registration owned by `widget`. Used by widget-destroy
 /// hooks (`wasamo_window_destroy`, `window::set_root` when replacing
 /// the previous root).

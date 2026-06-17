@@ -372,6 +372,83 @@ fn empty_drop_last_is_equal_value_and_does_not_dirty_range() {
 }
 
 #[test]
+fn reactive_for_empty_literal_clear_removes_all_then_regrows() {
+    run_on_owning_runtime_thread_or_skip("iteration empty-literal clear", move || {
+        let _guard = test_lock().lock().expect("test lock poisoned");
+        DESTROY_COUNT.store(0, Ordering::SeqCst);
+
+        // Mirror of owner smoke frames 4 -> 5 (review finding #3). The
+        // shipping `Clear` button is `labels = []`: a non-empty -> empty
+        // shrink-to-zero. Existing coverage only reaches `3 -> 1` removal
+        // and `plan_tail_range_change(1, 0)` as a planner unit; neither
+        // drives the `>1 -> 0` structural removal end-to-end, nor the
+        // member-stays-live grow-from-empty regrow. This does both.
+        let src = r#"component IterEmptyClear inherits Window {
+    state show: bool = true
+    state labels: string[] = ["A", "B", "C"]
+    VStack {
+        Text { text: "before" }
+        if show {
+            Text { text: "maybe" }
+        }
+        for label in labels {
+            Text { text: label }
+        }
+        Text { text: "after" }
+    }
+}"#;
+        let mut built = build(src);
+        assert_eq!(
+            text_children(&built.root),
+            ["before", "maybe", "A", "B", "C", "after"]
+        );
+        assert_visual_order(&built.root, "initial");
+        let before_ptr = child_ptr(&built.root, 0);
+        let maybe_ptr = child_ptr(&built.root, 1);
+        let after_ptr = child_ptr(&built.root, 5);
+        connect_destroy_counted_signal(&mut built.root.children[2]); // A
+        connect_destroy_counted_signal(&mut built.root.children[3]); // B
+        connect_destroy_counted_signal(&mut built.root.children[4]); // C
+
+        // (1) non-empty -> empty clear removes every generated child and is
+        // a real (dirtying) write; the static siblings are untouched.
+        assert!(
+            built.__set_string_list_state_for_test("labels", Vec::new()),
+            "non-empty -> empty clear must be a real (dirtying) write"
+        );
+        assert_eq!(
+            text_children(&built.root),
+            ["before", "maybe", "after"],
+            "empty-literal clear must remove all generated children"
+        );
+        assert_visual_order(&built.root, "after clear");
+        assert_eq!(
+            DESTROY_COUNT.load(Ordering::SeqCst),
+            3,
+            "clear must dispose every generated subtree's registry entries"
+        );
+        assert_eq!(child_ptr(&built.root, 0), before_ptr);
+        assert_eq!(child_ptr(&built.root, 1), maybe_ptr);
+        assert_eq!(child_ptr(&built.root, 2), after_ptr);
+
+        // (2) grow-from-empty: the member is still live. Exactly one
+        // generated child reappears -- a stale for-slot live count would
+        // mis-plan this `0 -> 1` insert as a removal, so the clean regrow
+        // is the observable proof that the clear reset the count to 0.
+        assert!(built.__set_string_list_state_for_test("labels", vec!["Z".into()]));
+        assert_eq!(
+            text_children(&built.root),
+            ["before", "maybe", "Z", "after"],
+            "member must stay live: a grow-from-empty re-append regenerates"
+        );
+        assert_visual_order(&built.root, "after regrow");
+        assert_eq!(child_ptr(&built.root, 0), before_ptr);
+        assert_eq!(child_ptr(&built.root, 1), maybe_ptr);
+        assert_eq!(child_ptr(&built.root, 3), after_ptr);
+    });
+}
+
+#[test]
 fn reactive_for_zstack_tail_append_uses_child_carried_placement() {
     run_on_owning_runtime_thread_or_skip("iteration reactive ZStack range mutation", move || {
         let _guard = test_lock().lock().expect("test lock poisoned");
@@ -465,6 +542,129 @@ fn large_breadth_tail_append_converges_beyond_mutation_cap() {
             !ffi::__reactive_divergence_diagnostics_present_for_test(),
             "breadth-heavy write must not trip divergence diagnostics"
         );
+    });
+}
+
+// Review finding #2: directly exercise the partial-insert rollback branch
+// (`for rollback in (0..inserted).rev()`) — the *commit*-stage failure, not the
+// staging-stage failure above. Uses the `debug_assertions`-gated Rust-side fault
+// seam (`__arm_structural_insert_fault_for_test`), so this test is itself gated
+// (the seam symbol is absent from release builds).
+#[cfg(debug_assertions)]
+#[test]
+fn staged_for_insert_commit_failure_rolls_back_partial_inserts() {
+    run_on_owning_runtime_thread_or_skip("iteration commit-failure rollback", move || {
+        let _guard = test_lock().lock().expect("test lock poisoned");
+        DESTROY_COUNT.store(0, Ordering::SeqCst);
+
+        // Initial N>1, with static siblings flanking the for-slot.
+        let src = r#"component IterCommitRollback inherits Window {
+    state labels: string[] = ["A", "B"]
+    VStack {
+        Text { text: "before" }
+        for label in labels {
+            Text { text: label }
+        }
+        Text { text: "after" }
+    }
+}"#;
+        let mut built = build(src);
+        assert_eq!(text_children(&built.root), ["before", "A", "B", "after"]);
+        assert_visual_order(&built.root, "initial");
+        let before_ptr = child_ptr(&built.root, 0);
+        let a_ptr = child_ptr(&built.root, 1);
+        let b_ptr = child_ptr(&built.root, 2);
+        let after_ptr = child_ptr(&built.root, 3);
+        // Destroy-counted on the *retained* prefix (A, B). The children rolled
+        // back by a mid-commit failure are generated and destroyed within the
+        // single failing write, so they have no attach window for a callback;
+        // instead we prove the rollback (i) does NOT touch the retained
+        // children (DESTROY_COUNT stays 0) and (ii) leaves no orphaned Visual
+        // (assert_visual_order checks VisualCollection count == children.len()).
+        connect_destroy_counted_signal(&mut built.root.children[1]); // A
+        connect_destroy_counted_signal(&mut built.root.children[2]); // B
+        let registry_baseline = ffi::__registry_entry_count_for_test();
+
+        // Append 5 (C, D, E, F, G) but arm the 2nd committed insert (D, at
+        // inserted==1) to fail: C commits, D faults, the rollback branch
+        // removes the committed C and disposes the *not-yet-committed* tail
+        // (E, F, G) — review finding #4 needs >=2 leftover staged children so
+        // that disposal loop runs over several items. Disarm immediately after
+        // the write so a later assertion panic cannot leak the armed state onto
+        // the reused runtime thread.
+        wasamo_runtime::ir_loader::__arm_structural_insert_fault_for_test(1);
+        let changed = built.__set_string_list_state_for_test(
+            "labels",
+            vec![
+                "A".into(),
+                "B".into(),
+                "C".into(),
+                "D".into(),
+                "E".into(),
+                "F".into(),
+                "G".into(),
+            ],
+        );
+        wasamo_runtime::ir_loader::__disarm_structural_insert_fault_for_test();
+        assert!(
+            changed,
+            "the whole-value collection write itself is a real change"
+        );
+
+        // (1) tree observably unchanged from before the failed write.
+        assert_eq!(
+            text_children(&built.root),
+            ["before", "A", "B", "after"],
+            "commit-failure rollback must leave the tree as before the write"
+        );
+        assert_visual_order(&built.root, "after commit-failure rollback");
+        assert_eq!(child_ptr(&built.root, 0), before_ptr);
+        assert_eq!(child_ptr(&built.root, 1), a_ptr);
+        assert_eq!(child_ptr(&built.root, 2), b_ptr);
+        assert_eq!(child_ptr(&built.root, 3), after_ptr);
+
+        // (2) the rollback removed only the failing write's committed insert;
+        // the retained prefix A, B is not destroyed.
+        assert_eq!(
+            DESTROY_COUNT.load(Ordering::SeqCst),
+            0,
+            "rollback must not destroy the retained prefix"
+        );
+
+        // (2b) registry returns to its pre-write baseline (review finding #4).
+        // SCOPE (do not over-claim): this assert guards the *retained prefix*
+        // against over-removal. It does NOT observe the leftover-staged
+        // disposal: the generated `for`-body children are handler-free `Text`
+        // (a `for` body cannot author a handler — DD-M3-P7-003), so they hold
+        // no `registry` entry, and their per-item `EffectHandle`s self-dispose
+        // on `Drop` — i.e. a bare drop of a leftover child leaks nothing
+        // observable here. Verified empirically: reverting the leftover-disposal
+        // loop leaves this test green. The disposal is therefore a defensive
+        // symmetry with the proven staging-failure branch
+        // (`for child in staged { widget_destroy }`); a fixture that could
+        // falsify it would need a body child holding a `registry` entry, which
+        // authored `for` bodies cannot have.
+        assert_eq!(
+            ffi::__registry_entry_count_for_test(),
+            registry_baseline,
+            "a fully-rolled-back failed write must leave the registry at baseline"
+        );
+
+        // (3)+(4) `live_children` was NOT advanced to new_len: a later
+        // (disarmed) append plans off the old length 2, so exactly one child
+        // appears. A stale `live_children == 5` would mis-plan this 3-element
+        // write as a removal.
+        assert!(built
+            .__set_string_list_state_for_test("labels", vec!["A".into(), "B".into(), "C".into()]));
+        assert_eq!(
+            text_children(&built.root),
+            ["before", "A", "B", "C", "after"],
+            "after a rolled-back failure the for-slot must still append cleanly off old_len"
+        );
+        assert_visual_order(&built.root, "after recovery append");
+        assert_eq!(child_ptr(&built.root, 0), before_ptr);
+        assert_eq!(child_ptr(&built.root, 1), a_ptr);
+        assert_eq!(child_ptr(&built.root, 2), b_ptr);
     });
 }
 
