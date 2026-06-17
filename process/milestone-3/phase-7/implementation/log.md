@@ -1,5 +1,256 @@
 ## Decisions log
 
+- **2026-06-17 / T9 review remediation — #2 rollback / #3 Clear closed
+  in-phase.** A second-agent review of the T9 end gate found two minor
+  proof gaps (recorded in the T9 end-gate entry below as findings ① / ②
+  before this remediation). The owner ruled both **closed in-phase on the
+  T9 branch** (2026-06-17): both are *runtime* test additions that T10
+  (doc-close) cannot discharge, so they land here. This updates the
+  "T9 adds no Rust" premise — T9 now adds **test-only Rust** (two
+  collection tests + a `debug_assertions`-gated fault seam). Production
+  semantics are unchanged.
+
+  **Implementation-gates (start + close).** Review lane =
+  **branch/test-focused** ([implementation-gates.md §4](../../../procedures/implementation-gates.md);
+  trap #4 = directly fire the untested branch). Traps #1/#2/#3 remain
+  non-applicable: no enum/IR/schema variant, no new production runtime
+  branch (the seam is `#[cfg(debug_assertions)]` test-only and the
+  production commit-loop arm is byte-identical), no new parallel/derived
+  data. Trap #6 standing. The rollback **contract** (prefix removed /
+  tree unchanged / `live_children` not advanced / subsequent append
+  succeeds) is held, not relaxed.
+
+  **Source enumeration used for close artifacts.**
+
+  ```text
+  git diff --stat -- wasamo-runtime/src/handler.rs wasamo-runtime/src/ir_loader.rs wasamo-runtime/tests/iteration_mutation_integration.rs
+  rg -n "collection_assignment_empty_literal_clear|reactive_for_empty_literal_clear_removes_all_then_regrows|staged_for_insert_commit_failure_rolls_back_partial_inserts|__arm_structural_insert_fault_for_test|structural_insert_fault_armed|cfg\(debug_assertions\)" wasamo-runtime/src/handler.rs wasamo-runtime/src/ir_loader.rs wasamo-runtime/tests/iteration_mutation_integration.rs
+  ```
+
+  **Implemented-branch test map.**
+
+  | Implemented branch / behaviour | Category | Source query / diff cue | Direct test |
+  |---|---|---|---|
+  | Empty-literal clear handler atom (`Assign { rhs: ListLit(vec![]) }`) evaluates Ok, empties the collection, and non-empty→empty dirties | semantic branch (R-1a, finding ③) | `rg` hit `collection_assignment_empty_literal_clear`; subcase `ListLit(Vec::new())` + `set_i32_list(.., Vec::new()) == Ok(true)` | `handler::tests::collection_assignment_empty_literal_clear` |
+  | `>1 → 0` structural shrink-to-zero (`labels = []`) removes every generated child + releases registry, then grow-from-empty regrows (member live) | size / semantic branch (R-1b, finding ③) | `rg` hit `reactive_for_empty_literal_clear_removes_all_then_regrows`; DESTROY_COUNT==3 then `0 → 1` regrow | `iteration_mutation_integration::reactive_for_empty_literal_clear_removes_all_then_regrows` |
+  | Partial-insert rollback: commit-stage failure removes the committed prefix, leaves the tree unchanged, does not advance `live_children`, and recovers | defensive invariant (R-2, finding ①/#2) | `rg` hit `staged_for_insert_commit_failure_rolls_back_partial_inserts`; seam `__arm_structural_insert_fault_for_test`; production branch `for rollback in (0..inserted).rev()` | `iteration_mutation_integration::staged_for_insert_commit_failure_rolls_back_partial_inserts` |
+
+  **Rollback contract — the four asserts (review condition c).**
+  (1) tree unchanged: `text_children == ["before","A","B","after"]` +
+  `assert_visual_order` (VisualCollection count == children → no orphaned
+  Visual) + static-sibling pointers unchanged. (2) prefix removed: the
+  committed `C` is gone from children and the VisualCollection;
+  `DESTROY_COUNT == 0` proves the retained prefix `A`/`B` is **not**
+  destroyed (the within-write-generated rolled-back child has no
+  pre-attach window for its own destroy callback, so "no orphan" is
+  proven via VisualCollection-count consistency rather than a per-child
+  counter — noted for re-review). (3) `live_children` not advanced: a
+  later disarmed append plans off `old_len == 2`, yielding exactly one
+  child. (4) recovery: the subsequent append succeeds.
+
+  **Seam release-absence evidence (review condition b/c).** The seam
+  (`structural_insert_fault_armed`, `FAIL_STRUCTURAL_INSERT_AT`,
+  `__arm/__disarm_structural_insert_fault_for_test`) and the rollback
+  test are all `#[cfg(debug_assertions)]`. Verified absent from release
+  by **compiler check** (spike discipline — a throwaway non-gated probe
+  referencing the seam, built then reverted):
+  `cargo build -p wasamo-runtime` (dev) compiled the probe;
+  `cargo build --release -p wasamo-runtime` failed with
+  `error[E0425]: cannot find function __arm_structural_insert_fault_for_test`
+  / `__disarm_...` — proving the symbols are cfg-stripped from release.
+  Corroborated by `cargo rustc --release -p wasamo-runtime --lib --
+  --print cfg` emitting **no** `debug_assertions` and no `[profile.release]`
+  / `.cargo/config` override. (A raw `grep` over the release `.rlib`
+  *does* match the name in embedded `.rmeta` metadata, but `nm`/object
+  symbols and the compiler probe confirm no codegen.) The production
+  commit loop's `#[cfg(not(debug_assertions))]` arm is byte-identical to
+  the prior direct `insert_structural_child` call.
+
+  **Carry closure (R-3, revise-don't-workaround).** Both carries are now
+  **closed**, not deferred: the T9 end-gate carry rows below and the
+  earlier T7-remediation rollback rows are updated to point here.
+  `plan.md` T10 no longer carries the rollback proof / clear fixture, and
+  `t9.md` item 9 is corrected to in-phase close.
+
+  **Verification runs.**
+
+  ```text
+  cargo test -p wasamo-runtime --lib                      # 403 passed
+  cargo test -p wasamo-runtime --test iteration_mutation_integration   # 8 passed (incl. the 2 new)
+  cargo fmt --all -- --check                              # clean
+  cargo test --workspace                                  # green
+  cargo build --release -p wasamo-runtime                 # green (production path intact)
+  ```
+
+  All green on 2026-06-17; the pre-existing `wasamo` linkable-target
+  warning is unchanged.
+
+- **2026-06-17 / T9 end gate — owner-manual GUI smoke accepted.** The
+  owner ran `target/release/gallery-rust.exe` and captured an 8-frame
+  sequence under [evidence/](../evidence/) (`t9-owner-smoke-1-init` …
+  `t9-owner-smoke-8-scrolldown`). The owner reported the smoke as
+  successful; the assistant independently analysed each frame against the
+  per-step claim (the T8-retro GUI-evidence self-falsification step) and
+  the positive control holds. T9 adds **no Rust**; the deliverable was
+  the runnable host + the owner observation script (in chat) + the plan
+  revision. T10 / phase handoff still owns Moment 2 spec re-sync and the
+  three deferral-trigger rows; none of those close at T9. (The insert
+  partial-failure rollback proof and the empty-`Clear` direct fixture
+  were initially carried here as findings ① / #2-#3, then **closed
+  in-phase** — see the 2026-06-17 T9 review-remediation entry above.)
+
+  **Source enumeration used for close artifacts.**
+
+  ```text
+  git status --short
+  git diff --name-only -- "*.rs"        # empty — no Rust branch
+  ls process/milestone-3/phase-7/evidence/t9-owner-smoke-*.png   # 8 frames
+  ```
+
+  **Owner-observed positive control (frame-by-frame, claim ↔ pixel).**
+
+  | Frame | Action | Pixel observation | Verdict |
+  |---|---|---|---|
+  | 1 `init` | — | 6 thumbnails `S01 #0`…`S06 #5` | pass |
+  | 2 `add-3times` | `Add` ×3 | 9 thumbnails; prefix `S01 #0`…`S06 #5` unmoved + tail `NEW #6` `NEW #7` `NEW #8` (wrap to row 2) | pass — count tracks click, prefix undisturbed |
+  | 3 `remove-4times` | `Remove` ×4 | 5 thumbnails `S01 #0`…`S05 #4`; `NEW #6/7/8` and `S06 #5` gone from the tail | pass — tail-first removal |
+  | 4 `clear` | `Clear` | 0 thumbnails; generated area empty; no crash | pass — empty-case invariant |
+  | 5 `add` | `Add` after clear | 1 thumbnail `NEW #0` (index re-derives from empty) | pass — member still live after clear (strong positive control) |
+  | 6 `reset` | `Reset` | 6 thumbnails `S01 #0`…`S06 #5` restored | pass — static-literal reset |
+  | 7 `narrowing` | shrink width | Photo WrapPanel reflows 10→5+5; `for`-set reflows to 4/row | pass — WrapPanel reflow |
+  | 8 `scrolldown` | `Scroll down (+100)` | `for`-set content scrolls up; top-row labels clip past the ScrollView top; `S05 #4` `S06 #5` become fully visible at the bottom | pass — ScrollView behaviour around the generated set |
+
+  Count trajectory 6 → 9 → 5 → 0 → 1 → 6 tracks every Button click; a
+  hardcoded tree cannot make the count follow the click, so this
+  distinguishes collection-driven cardinality from a static look-alike
+  (the FD-B / ADR item-6 positive control). DPI is acceptable (no
+  concerning blur); residual host DPI is the known M4 item, not a Phase 7
+  failure.
+
+  **Implemented-branch test map (item 5).**
+
+  | Implemented branch / behaviour | Category | Source query / diff cue | Direct test or owner |
+  |---|---|---|---|
+  | No new reject / diagnostic / size / semantic **Rust** branch | n/a | `git diff --name-only -- "*.rs"` empty | T9 adds no branch; the for/collection branches are T2–T7-owned and tested there |
+  | Owner human-visible GUI smoke (ADR evidence item 6) | GUI evidence (owner-observed) | `evidence/t9-owner-smoke-*.png` (8 frames) | **this task** — owner ran + accepted; assistant frame analysis above |
+  | `append` / `drop-last` / static-literal reset render their cardinality change | observable behaviour (owner-visible) | frames 2/3/6; `gallery.ui` handlers `labels.append` / `labels.drop-last` / `labels = ["S01"…]` | runtime contract proven by `wasamo-runtime/tests/iteration_mutation_integration.rs` (T7: `reactive_for_tail_append_reset_remove_preserves_order_and_prefix_identity`); owner smoke shows it human-visibly |
+  | **empty-literal `Clear` (`labels = []`, non-empty → empty shrink-to-zero)** | observable behaviour (owner-visible) + direct tests | frame 4; `gallery.ui` handler `labels = []` | **Closed in-phase** (review finding #3): owner frame 4 end-to-end **plus** the now-landed direct tests `handler::tests::collection_assignment_empty_literal_clear` (empty `ListLit` atom) and `iteration_mutation_integration::reactive_for_empty_literal_clear_removes_all_then_regrows` (`>1 → 0` shrink + grow-from-empty). See the 2026-06-17 review-remediation entry above. |
+  | WrapPanel reflow + ScrollView behaviour around the generated set | layout invariant (owner-visible) | frames 7/8 | owner observation; underlying WrapPanel / ScrollView are Phase 3/4-owned, unchanged this phase |
+
+  **Behaviour / invariant carry scan (item 6).**
+
+  | Behaviour / invariant | Disposition |
+  |---|---|
+  | Owner human-visible smoke for collection-driven cardinality. | **Closed in T9.** ADR evidence item (6) owner half discharged; assistant baseline (T8) + owner smoke (T9) both green. |
+  | Three deferral-trigger observations (structured-item / `TypedValue`; loop-external indexed read; bindable-`fill`) + Phase 7b owner reservation. | **Carried to T10 handoff.** Not touched by T9. |
+  | Insert partial-failure rollback proof (`for rollback in (0..inserted).rev()`). | **Closed in-phase** (R-2; review-remediation entry above). `staged_for_insert_commit_failure_rolls_back_partial_inserts` fires it directly via the `debug_assertions`-gated fault seam. No longer a T10 carry. |
+  | **Empty-literal `Clear` direct runtime fixture** (review finding #3). | **Closed in-phase** (R-1; review-remediation entry above). Direct unit (`collection_assignment_empty_literal_clear`) + integration (`reactive_for_empty_literal_clear_removes_all_then_regrows`) tests landed. No longer a T7/T10 carry. |
+  | Moment 2 spec/architecture re-sync (gallery slice, four mutation forms, landed diagnostics). | **Owner = T10.** |
+  | DPI blur. | **Owner = M4.** Known residual; not a fail criterion. |
+
+  **Carry-forward ownership (item 7).**
+
+  | Carry-forward | Owner task | Scope | Impact | Close condition |
+  |---|---|---|---|---|
+  | Three deferral-trigger observations + Phase 7b reservation | T10 handoff | Three deferred axes the gallery surfaced; routed M4+ unless Phase 7b is opened | M3 ships the single-attribute slice | T10 records all three + re-triggers + the reservation in `handoff.md` |
+  | Insert partial-failure rollback proof | **Closed in-phase (R-2)** | Commit-stage failure rollback branch `for rollback in (0..inserted).rev()` | Was the only defensive branch lacking direct proof | **Done:** `staged_for_insert_commit_failure_rolls_back_partial_inserts` via the `debug_assertions`-gated fault seam (review-remediation entry above) |
+  | Empty-literal `Clear` direct runtime fixture (review finding #3) | **Closed in-phase (R-1)** | `collection_assignment_empty_literal_clear` (empty `ListLit` atom) + `reactive_for_empty_literal_clear_removes_all_then_regrows` (`>1 → 0 → re-append`) | Was compositional + owner-smoke only | **Done:** both direct tests landed (review-remediation entry above) |
+  | Moment 2 spec/architecture re-sync | T10 | Moment 2 docs | Final doc check for the landed gallery slice + four mutation forms | T10 re-syncs or records no divergence |
+  | DPI blur | M4 ([DD-V-022/023](../../../cross-milestone/decisions/dpi-awareness-m4-deferral.md)) | Host DPI-unawareness | Cosmetic residual | M4 DPI work |
+
+  No owner-less residual remains; T9's checklist is green pending the
+  owner's explicit merge-gate approval after the retrospective.
+
+  **Verification.** No Rust changed (`git diff --name-only -- "*.rs"`
+  empty), so `cargo fmt` / workspace test ownership stays with T10's
+  phase-end gates. The host build was re-confirmed green
+  (`cargo build -p gallery-rust --release`) before the owner run; the
+  pre-existing `wasamo` linkable-target warning is unchanged.
+
+- **2026-06-17 / T9 start gate — owner-manual GUI smoke opened.**
+  Started by reading the prior carry-forward rows in this log before
+  treating [plan.md](./plan.md) T9 as a hypothesis. T8 closed the
+  assistant-visible baseline (6-frame positive control) and explicitly
+  left **one** item to T9: the **owner human-visible GUI smoke** — the
+  separate gate ADR evidence item (6) names, which the assistant
+  screenshot baseline does **not** replace ([CLAUDE.md §Testing
+  rules](../../../../AGENTS.md)). T10 owns Moment 2 spec re-sync and the
+  three deferral-trigger handoff rows; those do **not** close at T9.
+
+  **Critical re-think of T9's responsibility (plan revised).** T9 is not
+  an assistant implementation task: the assistant writes no production
+  Rust. Its load-bearing deliverable is (a) a runnable host and (b) a
+  detailed owner observation script that **arms the positive control**,
+  so the owner can run the smoke and accept or fail it. The one T0-frozen
+  divergence found by cross-checking the plan against the mid-phase T8
+  owner decision: T8 grew the gallery to **four** body-external mutation
+  Buttons (`Add` / `Remove` / `Clear` / `Reset`) on owner request, but
+  the T0 plan T9 bullet only named `Add` / `Remove` + "the empty case."
+  Revised plan T9 to cover all four authored mutation forms and to fold
+  the T8-retro capture-mechanics carry (keep the mutated count legible —
+  wider window, count on one row, avoid wrap-fold clip). Verified the
+  host builds green (`cargo build -p gallery-rust --release`,
+  `target/release/gallery-rust.exe` present).
+
+  **Carry-over checked from prior tasks.**
+
+  | Carry-over | T9 disposition hypothesis |
+  |---|---|
+  | T7/T8 carry: owner human-visible GUI smoke absent. | **T9 owns.** Owner runs `gallery-rust`, observes the four mutation forms with the collection-mutated positive control, and records acceptance or a fail. |
+  | T8 retro → T9 capture-mechanics carry: the `for`-set sits deep in a non-scroll tall VStack inside a `ScrollView`; legible evidence needs a wide window and the mutated count on one row; Button y-coords are member-order-dependent. | **T9 folds into the owner script.** Reuse the 1280-wide window; tell the owner where the four Buttons and the generated set are; capture-script coords re-derive from a recon frame if member order changed (it has not since T8). |
+  | T8 carry: three deferral-trigger observations (structured-item / `TypedValue`; loop-external indexed read; bindable-`fill`) with the Phase 7b owner reservation. | **Not T9.** Owner remains **T10 handoff**; T9 does not record or close them. |
+  | T7 carry: insert partial-failure rollback proof (`for rollback in (0..inserted).rev()`). | **Not T9.** Owner remains **T10 / phase handoff**; the owner GUI smoke does not exercise this defensive branch. |
+  | T6/T7/T8 carry: Moment 2 spec/architecture re-sync, DD-007 drain residuals 1-3. | **Not T9.** Owner remains **T10 / phase handoff**. |
+
+  **Selected traps and non-applicable reasons.**
+
+  | Trap | Applies? | Reason / close artifact hypothesis |
+  |---|---|---|
+  | #1 semantic migration | **Non-applicable.** | T9 adds no enum / IR / schema variant and no production Rust. It runs the already-landed T2–T8 pipeline and writes an observation script + a plan revision; there is no traversal call-site to audit. |
+  | #2 side effects | **Non-applicable.** | T9 writes no production runtime code. The structural splice side-effects are T7-owned and tested; the owner only triggers them through the landed body-external handlers. |
+  | #3 parallel / derived data drift | **Non-applicable.** | No new parallel vector / derived index / cache. |
+  | #4 untested reject branch | **Non-applicable to T9 code, armed-as-carry.** | T9 adds no new reject / diagnostic / size branch in Rust. If the owner smoke surfaces a defect, it re-triggers trap #1/#4/#6 on the **owning** surface (T3 check / T6 loader / T7 runtime) and a fix lands there with a direct test — **not** worked around in the `.ui`; the T9 checklist re-runs to green before close. |
+  | #5 carry-forward | **Applies.** | The gating open item is **owner acceptance**, which the assistant cannot self-certify. Close with owner / scope / impact / close-condition rows; the three trigger observations + the partial-failure rollback proof stay their existing owners (T10 / phase handoff), not T9. |
+  | #6 deterministic failure | **Standing, not pre-selected.** | No recurring failure exists before the owner run. Known mechanics hazards (wrong-HWND, click-coordinate miss, member-order coord drift) are documented in the owner script, not re-rolled. |
+  | #7 weak GUI evidence | **Applies — but discharged by owner observation, not an assistant screenshot.** | T9 **is** the owner human-visible smoke the assistant baseline cannot replace. The assistant does not produce new screenshot evidence here (that was T8 #7); the assistant's obligation is to **arm the positive control in the owner script**: the owner must see the item count *track each click* (not a static look-alike), across all four mutation forms, plus WrapPanel reflow / ScrollView behaviour. Optionally the owner captures frames as an audit artifact. |
+
+  **Review lane.** **No special independent code-review lane for the
+  assistant-side prep** (T9 adds no Rust, no new branch; the deliverable
+  is a doc-side plan revision + an owner observation script). The
+  standing review re-arms **only if** the owner smoke surfaces a defect
+  and a fix lands on the T9 branch — that fix takes the review tier of
+  its **owning** surface (full independent review for a T7 runtime
+  fix / a T6 loader fix; branch/test-focused for a T3 check fix), per
+  [implementation-gates.md §4](../../../procedures/implementation-gates.md).
+  The user-initiated second-agent review of this T9 entry verifies (a)
+  the plan revision faithfully reflects the four-mutation-form T8
+  divergence, (b) the owner script arms the positive control across all
+  four forms + WrapPanel/ScrollView, and (c) carry-forward ownership is
+  intact (triggers / rollback proof not silently absorbed into T9).
+
+  **Planned proof obligations before the owner runs (hypotheses).** T9
+  proves nothing in code; the "proof" is the owner's human-visible
+  observation. Expected observations, each a positive control the owner
+  confirms or fails:
+
+  | Planned observation | Category | Hypothesis before the owner run |
+  |---|---|---|
+  | `Add` → N+1, prefix thumbnails visually undisturbed | cardinality / positional-identity positive control | The appended `NEW #N` thumbnail appears at the tail; `S01 #0`…prefix unchanged. Count tracks the click. |
+  | `Remove` → N-1, named tail item gone | cardinality positive control | `drop-last` removes the last thumbnail; the named tail item disappears. |
+  | `Clear` → 0 children, member live, no crash | empty-case invariant | The `for` slot materialises zero children; the thumbnail area is empty; the app does not crash and the member stays live (later `Reset`/`Add` work). |
+  | `Reset` → restored to the static-literal N | static-literal reset positive control | `labels = ["S01"…"S06"]` restores six thumbnails `S01 #0`…`S06 #5`. |
+  | WrapPanel reflow / ScrollView behaviour stay correct across mutations | layout invariant around the generated set | As the count changes, the WrapPanel reflows without corrupting the surrounding static slices; the ScrollView scrolls the generated set correctly. |
+
+  **Known carry-forward candidates before the owner runs.**
+
+  | Candidate | Owner / scope / impact / close condition |
+  |---|---|
+  | Owner acceptance of the GUI smoke. | **Owner = the project owner, recorded at T9 close.** Scope: owner runs `gallery-rust` and observes the four mutation forms + the positive control. Impact: the assistant baseline does not substitute for owner judgment (ADR item 6). Close: owner records acceptance, or a fail observation that re-runs the checklist to green. |
+  | A defect the owner smoke surfaces. | **Owner = the surfaced surface (T3 check / T6 loader / T7 runtime).** Scope: a check/loader/runtime defect. Impact: must be fixed on the owning surface with a direct test, not papered over in the `.ui`; the T9 checklist re-runs to green. Close: fix lands on the owning surface, or an explicit disposition recorded here. |
+  | Three deferral-trigger observations (structured-item / `TypedValue`; loop-external indexed read; bindable-`fill`) + Phase 7b reservation. | **Owner = T10 handoff.** Not recorded or closed by T9. |
+  | Insert partial-failure rollback proof. | **Owner = T10 / phase handoff** (T7 carry). The owner GUI smoke does not exercise this defensive branch. |
+  | DPI blur. | **Owner = M4** ([DD-V-022/023](../../../cross-milestone/decisions/dpi-awareness-m4-deferral.md)). A known cosmetic residual, not a Phase 7 failure; noted to the owner, not a fail criterion. |
+
 - **2026-06-17 / T8 start gate — gallery thumbnail slice + assistant
   build/launch opened.** Started by reading the prior carry-forward rows
   in this log before treating [plan.md](./plan.md) T8 as a hypothesis.
@@ -313,6 +564,15 @@
   | Carry-forward | Owner task | Scope | Impact | Close condition |
   |---|---|---|---|---|
   | Insert partial-failure rollback proof for `for rollback in (0..inserted).rev()` | T10 / phase handoff carry | Defensive cleanup branch after successful staging and partial child insertion | A future fallible insertion surface must not silently leave an orphaned prefix committed after later insertion failure | T10 records the carry in handoff unless this task gains a mock-free direct fault surface before merge; future owner closes with direct branch test or reviewed infeasibility disposition. |
+
+  > **2026-06-17 addendum (supersede, not rewrite):** the owner ruled this
+  > carry **closed in-phase on the T9 branch** rather than deferred to T10.
+  > The rollback branch now has a direct test
+  > (`staged_for_insert_commit_failure_rolls_back_partial_inserts`) driven by
+  > a `debug_assertions`-gated Rust-side fault seam (the "no mock-free fault
+  > surface" obstacle above was resolved by adding such a seam, gated out of
+  > release). See the 2026-06-17 T9 review-remediation entry at the top of
+  > this log. This row is retained as history; the carry no longer reaches T10.
 
   **Verification runs for this remediation.**
 

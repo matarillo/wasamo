@@ -451,18 +451,34 @@ analysis**; `Start-Process` survival is a supporting signal only.
 ### T9 — Owner-manual GUI smoke
 
 Discharges the owner-visible smoke for ADR evidence item (6); a
-separate gate from T8's assistant baseline.
+separate gate from T8's assistant baseline. T8 grew the gallery to
+**four** body-external mutation Buttons (`Add` / `Remove` / `Clear` /
+`Reset`) on owner request, so the smoke covers all four authored
+mutation forms — not the `Add` / `Remove` pair the T0 plan predicted
+(revised per the mid-phase T8 owner decision; see [log.md](./log.md)
+T8 entries). The assistant prepares the runnable host + the detailed
+owner observation script; the smoke itself is owner-performed and
+cannot be discharged by the assistant baseline.
 
-- [ ] Owner runs `examples/gallery-rust/` and observes, with the
-      **positive control = the collection mutated**: `Add` appends a
-      thumbnail (existing thumbnails undisturbed), `Remove` removes
-      the last one, the empty case is well-behaved, and WrapPanel
-      reflow / ScrollView behaviour stay correct around the generated
-      set.
-- [ ] Owner explicitly accepts the smoke result, or records a fail
+- [x] Owner runs `examples/gallery-rust/` and observes, with the
+      **positive control = the collection mutated** (the visible item
+      count tracks each Button click; a single static frame a hardcoded
+      tree could equally produce is not evidence): `Add` appends a
+      thumbnail with the prefix thumbnails visually undisturbed,
+      `Remove` drops the last one, `Clear` empties the `for` slot (zero
+      children, member still live), `Reset` restores the static-literal
+      set, and **WrapPanel reflow / ScrollView behaviour stay correct**
+      around the generated set across the mutations (the T8 retro
+      capture-mechanics carry: keep the mutated count legible — a wider
+      window and the count on one row avoid wrap-fold clip). Owner
+      captured 8 frames (`evidence/t9-owner-smoke-1-init` …
+      `-8-scrolldown`); count trajectory 6→9→5→0→1→6 tracks the clicks
+      ([log.md](./log.md) T9 end gate).
+- [x] Owner explicitly accepts the smoke result, or records a fail
       observation; fixes land additively on the T9 branch and the
-      checklist re-runs to green before T9 closes.
-- [ ] T9 step-end retrospective recorded at
+      checklist re-runs to green before T9 closes. **Owner accepted
+      (2026-06-17); no fail observation; no fix needed.**
+- [x] T9 step-end retrospective recorded at
       `process/milestone-3/phase-7/retrospectives/t9.md`.
 
 ### T10 — Phase-end gates and Moment 2 re-sync
