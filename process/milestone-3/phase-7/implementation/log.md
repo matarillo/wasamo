@@ -70,6 +70,32 @@
   cargo build --release -p wasamo-runtime                               # green (fix in non-gated path; seam still cfg-stripped)
   ```
 
+  **Correction (2026-06-18, post-re-review of the corrective test).** A
+  follow-up review noted the registry-baseline assert does **not** falsify
+  the leftover-staged disposal, and re-analysis confirms a sharper truth:
+  for **current** handler-free `for`-body children there is **no active
+  leak** to fix. `node.bindings` are `EffectHandle`s whose `Drop`
+  (`reactive.rs`) removes the effect from the GRAPH (closures / writes /
+  dependency edges), so a bare drop self-unsubscribes; and a `Text` child
+  holds **no** `crate::registry` entry, so `widget_destroy`'s only added
+  step (`remove_for_widget`) is a no-op for it. Hence
+  `widget_destroy(child) ≡ drop(child)` for these children — **verified
+  empirically**: reverting the leftover-disposal loop leaves
+  `staged_for_insert_commit_failure_rolls_back_partial_inserts` green.
+  So finding #4's leftover-disposal is **latent / defensive**, not an
+  active leak fix: it enforces the no-`Drop` ⇒ explicit-disposal invariant
+  (item 10) and the staging/commit-branch symmetry, protecting any future
+  body shape that registers entries — but no authored-DSL fixture can
+  falsify it today (the only state `widget_destroy` adds, a `registry`
+  entry, cannot exist on a handler-banned `for`-body child — DD-M3-P7-003).
+  The retained-prefix over-removal guard the baseline assert **does**
+  provide is kept. The fix stays (correct + cheap + future-proofing);
+  the earlier "production bug / leak" framing above is narrowed to
+  "latent defensive asymmetry" by this correction. A truly-falsifying
+  probe would have to count reactive effect-handles / signal
+  subscriptions, not `registry` entries — recorded as the structural
+  observation limit, not pursued (no current leak to catch).
+
 - **2026-06-17 / T9 review remediation — #2 rollback / #3 Clear closed
   in-phase.** A second-agent review of the T9 end gate found two minor
   proof gaps (recorded in the T9 end-gate entry below as findings ① / ②
