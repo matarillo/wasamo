@@ -1,7 +1,7 @@
 ---
 phase: M3-Phase 7
 title: Iteration grammar
-status: active
+status: closing
 adr: process/milestone-3/phase-7/decisions/preamble.md
 plan: process/milestone-3/plan.md
 opened: 2026-06-13

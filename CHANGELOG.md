@@ -14,6 +14,42 @@ the **Status** section of [README.md](./README.md).
 
 ## [Unreleased] — M3: DSL surface (in progress)
 
+### M3-Phase 7 — Iteration grammar (2026-06-18)
+
+Adds the iteration grammar, discharging M3 acceptance **A8**. The author
+surface is `for <binder> in <collection> { <one widget child> }` with an
+optional index binder, over scalar collection state (`i32[]`, `string[]`,
+`bool[]`). Collection mutations are expressed by the shipped whole-value
+assignment forms: append, drop-last, clear, and static-literal reset.
+
+`wasamo-ir` gains collection state types, list literals, loop-local item /
+index reads, and `ControlFlowNode::For`. `wasamoc` reserves and implements
+the `for` control-flow member, rejects unsupported placements and scopes,
+emits the landed textual IR spellings, and keeps structured item values /
+`TypedValue` out of Phase 7. `wasamo-runtime` materialises static iteration,
+adds reactive `ForLoopSubtree` mutation with positional un-keyed identity,
+stage-then-commit insertion, tail-first disposal, same-return drain behavior,
+depth-based mutation-cap accounting, and rollback / cleanup coverage for
+commit failures. No new C ABI surface is added.
+
+Visible proof: `examples/gallery/gallery.ui` grows a collection-driven
+thumbnail slice in the Rust gallery host. Assistant evidence and owner-manual
+smoke cover Add / Remove / Clear / Reset cardinality changes with positive
+controls, including a visible count trajectory proving that the generated set
+tracks collection mutation rather than a hardcoded tree.
+
+Per-phase spec sync (A11 / A12): `docs/dsl_spec.md` and
+`docs/architecture.md` are implementation-synced for iteration grammar,
+collection literals / assignment forms, textual IR spellings, positional
+identity, runtime mutation timing, validation, child-carried ZStack placement,
+and explicit deferrals. Phase 8 carries the positional baseline into the full
+gallery assembly; per-item handlers / conditionals, keyed identity, nested
+`for`, member-range bodies, loop-external collection reads, dynamic styling,
+host collection APIs, and the per-item richness / `TypedValue` cluster remain
+deferred unless the owner opens Phase 7b.
+
+Decisions: [DD-M3-P7-001..007](./process/milestone-3/phase-7/decisions/preamble.md).
+
 ### M3-Phase 6 — ZStack + conditional rendering (2026-06-09)
 
 Adds the `ZStack` overlay primitive and the first structural grammar surface,

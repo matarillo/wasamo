@@ -1,5 +1,63 @@
 ## Decisions log
 
+- **2026-06-18 / Phase-end documentation batch opened — handoff and
+  retrospective drafted, CI pending.** After T10 merged into
+  `feat/m3-phase-7`, the phase-end-owned close work was re-scoped against
+  `retrospectives.md` items 12-18 rather than treating the T10 task plan as
+  authority. The close batch is process/documentation-only: final
+  `implementation/handoff.md`, `retrospectives/phase-end.md`,
+  `implementation/preamble.md` `active -> closing`, `CHANGELOG.md`, and
+  `process/milestone-3/plan.md` status/frontmatter updates.
+
+  **Critical phase-end responsibility split.**
+
+  | Surface | Phase-end disposition |
+  |---|---|
+  | `docs/dsl_spec.md` / `docs/architecture.md` | No new edit. T10 already synced the landed Phase 7 implementation at Moment 2; phase-end re-checked that no additional normative spec delta exists. |
+  | `docs/abi_spec.md` | No touch. Phase 7 still added no host-facing C ABI surface. |
+  | `process/_roadmap.md` | No touch. It is the acceptance-criteria SSOT; A8 / A11 / A12 wording still matches the shipped scope. |
+  | `CHANGELOG.md` | Phase 7 shipped-state entry added under Unreleased. |
+  | `process/milestone-3/plan.md` | Phase 7 row moved from `implementation complete; phase-end pending` to `closing; CI pending`; ADR frontmatter list gained the Phase 7 ADR set. It must flip to `complete` only after phase-branch CI goes green. |
+  | `implementation/handoff.md` | Final phase-close handoff authored from the T10 candidate ledger plus retrospective sweep. |
+  | `implementation/preamble.md` | Frontmatter status flipped to `closing`. |
+  | `retrospectives/phase-end.md` | Phase-end retrospective drafted for checklist items 12-18. Item 16 remains pending until `workflow_dispatch` CI green is recorded. |
+
+  **Phase-sync dispositions.**
+
+  | Prior candidate | Phase-end disposition |
+  |---|---|
+  | DD-M3-P7-007 reactive-drain residuals 1-3 | Carry-forward in `handoff.md` with re-triggers. |
+  | Synchronous non-batched drain contract | Closed by T7; not carried open. |
+  | Per-item richness cluster + owner Phase 7b reservation | Carry-forward in `handoff.md`; not assigned to M4+ as settled. |
+  | Keyed identity, per-item handlers, per-item conditional, nested `for`, member-range bodies, loop-external reads | Carry-forward in `handoff.md` with framing triggers. |
+  | Grid placement migration | Carry-forward in `handoff.md`; trigger remains structural mutation under Grid. |
+  | Host-state-boundary future compatibility | Carry-forward in `handoff.md`. |
+  | Structural mutation cleanup invariant | Doc-folded and summarized as a future warning: built children not retained by the final tree must go through `widget_destroy`, not an unannotated drop. |
+  | T9 partial-insert rollback proof carry | Closed before phase end by T9; not carried open. |
+  | GUI evidence / assertion self-falsification learning | Carried as process learning for future GUI evidence or defensive assertion remediation; no immediate process-rule edit in this batch because the current rule already requires positive controls, and a broader enforcement change would need its own process decision if made structural. |
+  | DPI blur / DPI awareness | M4-owned residual; not a Phase 7 failure. |
+
+  **Pending gate.** The remaining phase-end evidence is the GitHub Actions
+  `workflow_dispatch` run id / CI Windows integration gate. After the CI
+  run succeeds, update this log, `retrospectives/phase-end.md`, and the
+  M3 plan Phase 7 row from `closing; CI pending` to `complete`.
+
+  **Local verification (phase-end documentation state).**
+
+  ```text
+  cargo fmt --all -- --check        # green
+  cargo clean                       # removed 3304 files / 1.3 GiB
+  cargo build --release --workspace # green; existing wasamo linkable-target / wasamo-sys import-library ordering warnings only
+  cargo build --workspace           # green; same existing warnings
+  cargo test --workspace            # green, 0 failed
+  ```
+
+  Representative test counts observed in the workspace test run:
+  `wasamo-ir` 23, `wasamo-runtime` 403, `wasamoc --lib` 356, and
+  examples roundtrip 6. The Windows integration binaries, including
+  `iteration_mutation_integration` and `iteration_static_integration`,
+  were invoked by the workspace run with no failures reported.
+
 - **2026-06-18 / T10 Moment 2 sync + local verification.** T10
   completed the step-owned document sync and local clean rebuild. This
   entry is the close artifact for trap #5 (carry-forward

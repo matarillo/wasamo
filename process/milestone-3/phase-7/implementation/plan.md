@@ -545,7 +545,7 @@ the inputs so phase-end cannot lose them", not as T10 finalizing
       placement migration trigger; host-state-boundary future-compat
       record; structural-mutation failure cleanup invariant; and the
       GUI/assertion self-falsification process-codify candidate.
-- [ ] Carry-forward inputs to the Phase 8 pre-doc recorded under
+- [x] Carry-forward inputs to the Phase 8 pre-doc recorded under
       [handoff.md](./handoff.md) (at minimum: the DD-M3-P7-007 carry
       rows + re-triggers; the keyed-identity / per-item-handler /
       per-item-condition / nested-`for` / member-range /
@@ -554,19 +554,19 @@ the inputs so phase-end cannot lose them", not as T10 finalizing
       future-compat record; **the structured-item / `TypedValue`
       trigger observation the gallery surfaced at T8 (G-2) — the first
       concrete app case where scalar items cannot express the per-item
-      data, routed to M4/M5 per DD-M3-P7-002**). **NOT owned by T10**;
-      stays `[ ]` at T10 close. The preceding `log.md` ledger is T10's
-      auditable input to this phase-end-owned handoff.
-- [ ] Front-matter `status` on [preamble.md](./preamble.md) flips
+      data, with the owner Phase 7b reservation preserved**). Completed
+      by the phase-end handoff, not by T10.
+- [x] Front-matter `status` on [preamble.md](./preamble.md) flips
       `active` → `closing` at the **phase-end batch commit**, not at
-      T10 step-close. **NOT owned by T10**; stays `[ ]` at T10 close.
+      T10 step-close. Completed by the phase-end documentation batch.
 - [x] **T10 step-end retrospective recorded** at
       `process/milestone-3/phase-7/retrospectives/t10.md` (items 1–11;
       **owned by T10**).
-- [ ] **Phase-end retrospective recorded** at
+- [x] **Phase-end retrospective recorded** at
       `process/milestone-3/phase-7/retrospectives/phase-end.md` (items
-      12–18; **NOT owned by T10**; separate retro commit on the phase
-      branch after T10 merges in). Step retro `phase-sync` items from
+      12–18; **NOT owned by T10**; separate retro work on the phase
+      branch after T10 merged in). Step retro `phase-sync` items from
       T1–T10 close into `doc-folded` / `carry-forward` / `local-only`
       at the phase-end retro — no open `phase-sync` items survive past
-      phase close.
+      phase close. CI run id is recorded by the phase-end log / retro
+      update after the `workflow_dispatch` gate goes green.
