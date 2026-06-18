@@ -1,5 +1,37 @@
 ## Decisions log
 
+- **2026-06-18 / Phase-end close — phase-branch CI green and closing
+  batch:** after `feat/m3-phase-7` was pushed at phase-end head `6ac07a7`,
+  the phase-end-owned GitHub Actions gate was run through
+  `workflow_dispatch`. CI run
+  [27731815476](https://github.com/matarillo/wasamo/actions/runs/27731815476)
+  completed with conclusion **success** for workflow `CI`, event
+  `workflow_dispatch`, headSha
+  `6ac07a75365d0e46bac1fef3e277d34bd7fc745c` (`6ac07a7`), created at
+  `2026-06-18T02:00:53Z` and updated at `2026-06-18T02:04:29Z`
+  (~3m36s wall-clock; `gh run watch` reported the `cargo build` job at
+  3m31s).
+  - CI green steps: release workspace build, debug workspace build for tests,
+    workspace tests, MSVC setup, C ABI smoke (`cl` and `clang-cl`), CMake
+    smoke, Zig binding smoke, `counter-c`, `counter-rust`, `counter-zig`, and
+    `wasamoc check counter.ui`.
+  - Windows-runtime integration evidence is therefore phase-branch green for
+    the Phase 7 iteration static / mutation fixtures as part of
+    `cargo test --workspace`, along with the existing M3 runtime integration
+    suites.
+  - The workflow does not currently run `cargo fmt --all -- --check`; fmt
+    evidence remains the phase-end local green recorded below.
+  - CI annotations were non-failing notices only: `mlugg/setup-zig@v2` uses a
+    deprecated Node.js 20 action runtime forced onto Node.js 24 by GitHub
+    Actions. No test/build failure or skip was observed.
+  - Phase-close evidence pointer: implementation evidence remains distributed
+    across task retrospectives, assistant/owner GUI evidence under
+    [evidence/](./evidence/), the phase-end handoff ([handoff.md](./handoff.md)),
+    and the phase-end retrospective
+    ([phase-end.md](../retrospectives/phase-end.md)). The remaining
+    post-main-merge distillation is limited to the `closing` -> `retired`
+    transition and any post-merge CI pointer required by the merge gate.
+
 - **2026-06-18 / Phase-end documentation batch opened — handoff and
   retrospective drafted, CI pending.** After T10 merged into
   `feat/m3-phase-7`, the phase-end-owned close work was re-scoped against
@@ -17,7 +49,7 @@
   | `docs/abi_spec.md` | No touch. Phase 7 still added no host-facing C ABI surface. |
   | `process/_roadmap.md` | No touch. It is the acceptance-criteria SSOT; A8 / A11 / A12 wording still matches the shipped scope. |
   | `CHANGELOG.md` | Phase 7 shipped-state entry added under Unreleased. |
-  | `process/milestone-3/plan.md` | Phase 7 row moved from `implementation complete; phase-end pending` to `closing; CI pending`; ADR frontmatter list gained the Phase 7 ADR set. It must flip to `complete` only after phase-branch CI goes green. |
+  | `process/milestone-3/plan.md` | Phase 7 row moved from `implementation complete; phase-end pending` to `complete` after phase-branch CI green; ADR frontmatter list gained the Phase 7 ADR set. |
   | `implementation/handoff.md` | Final phase-close handoff authored from the T10 candidate ledger plus retrospective sweep. |
   | `implementation/preamble.md` | Frontmatter status flipped to `closing`. |
   | `retrospectives/phase-end.md` | Phase-end retrospective drafted for checklist items 12-18. Item 16 remains pending until `workflow_dispatch` CI green is recorded. |
@@ -38,10 +70,8 @@
   | GUI evidence / assertion self-falsification learning | Split in `handoff.md`: GUI positive-control discipline is partly covered by the current rule, but assertion-revert falsifiability is not. The assertion half is carried as a process VDR candidate with a likely Forcing artifact, not dismissed by the GUI rule. |
   | DPI blur / DPI awareness | M4-owned residual; not a Phase 7 failure. |
 
-  **Pending gate.** The remaining phase-end evidence is the GitHub Actions
-  `workflow_dispatch` run id / CI Windows integration gate. After the CI
-  run succeeds, update this log, `retrospectives/phase-end.md`, and the
-  M3 plan Phase 7 row from `closing; CI pending` to `complete`.
+  **CI gate disposition.** The GitHub Actions `workflow_dispatch` run id /
+  CI Windows integration gate is recorded in the phase-end close entry above.
 
   **Local verification (phase-end documentation state).**
 

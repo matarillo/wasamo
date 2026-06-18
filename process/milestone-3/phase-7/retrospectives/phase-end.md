@@ -66,8 +66,7 @@ as a process VDR candidate rather than silently treated as covered.
     - `process/_roadmap.md` remains unchanged: it is the acceptance-criteria
       SSOT, and A8 / A11 / A12 wording still matches the shipped Phase 7
       scope. Phase status lives in `process/milestone-3/plan.md`, whose
-      Phase 7 row is `closing; CI pending` until the phase-branch
-      `workflow_dispatch` gate goes green.
+      Phase 7 row is now `complete`.
 
 14. **`VISION.md` / thesis-level claim impact:** **no direct update**
     - Phase 7 strengthens the M3 thesis by proving that binding can drive
@@ -98,9 +97,17 @@ as a process VDR candidate rather than silently treated as covered.
       iteration grammar, collection types, runtime mutation, textual IR,
       positional identity, and child-carried ZStack placement.
 
-16. **CI green:** **pending**
-    - Phase branch `feat/m3-phase-7` CI will be run via GitHub Actions
-      `workflow_dispatch` after this phase-end documentation batch lands.
+16. **CI green:** **green**
+    - Phase branch `feat/m3-phase-7` was pushed at head
+      `6ac07a75365d0e46bac1fef3e277d34bd7fc745c`.
+    - GitHub Actions workflow `CI`, event `workflow_dispatch`, run
+      [27731815476](https://github.com/matarillo/wasamo/actions/runs/27731815476)
+      concluded **success** (`2026-06-18T02:00:53Z` ->
+      `2026-06-18T02:04:29Z`).
+    - Green CI steps: release workspace build, debug workspace build for
+      tests, workspace tests, C ABI smoke (`cl` / `clang-cl`), CMake smoke,
+      Zig binding smoke, `counter-c`, `counter-rust`, `counter-zig`, and
+      `wasamoc check counter.ui`.
     - Phase-end local clean rebuild ground truth is recorded in
       `implementation/log.md`: `cargo fmt --all -- --check`, `cargo clean`
       (3304 files / 1.3 GiB), release workspace build, debug workspace
@@ -130,10 +137,8 @@ as a process VDR candidate rather than silently treated as covered.
 
 ## Merge Readiness
 
-Checklist items 12-15, 17, and 18 are recorded, and
-`implementation/preamble.md` is in `status: closing`. Checklist item 16 is
-pending until the phase branch CI gate runs and the run id is recorded. Per
-the retrospective procedure, this record is evidence for the phase -> main
-merge gate after CI goes green; it is not itself merge authorization. The
-phase -> main no-ff merge still requires explicit owner approval, and push
-remains a separate gate.
+Checklist items 12-18 are recorded, the phase branch CI gate is green, and
+`implementation/preamble.md` is in `status: closing`. Per the retrospective
+procedure, this record is evidence for the phase -> main merge gate; it is
+not itself merge authorization. The phase -> main no-ff merge still requires
+explicit owner approval, and push remains a separate gate.
