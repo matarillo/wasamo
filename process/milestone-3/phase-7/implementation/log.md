@@ -1,5 +1,125 @@
 ## Decisions log
 
+- **2026-06-18 / T10 Moment 2 sync + local verification.** T10
+  completed the step-owned document sync and local clean rebuild. This
+  entry is the close artifact for trap #5 (carry-forward
+  underweighted): concrete candidate rows are recorded here so the
+  phase-end retrospective can decide final `handoff.md` content without
+  rereading the whole phase history.
+
+  **Moment 2 document sync.**
+
+  | File | T10 disposition |
+  |---|---|
+  | `docs/dsl_spec.md` | Version `1.9`, date `2026-06-18`; document status and §4.15 marker flipped to `M3-Phase 7 closed; implementation-synced`; design-draft wording for Phase 7 textual IR / `HandlerExpr` spellings replaced with landed spellings; gallery slice example added with `Add` / `Remove` / `Clear` / `Reset`; per-item richness deferrals recorded without making M4+ routing settled. |
+  | `docs/architecture.md` | Top status and §6.7.10 marker flipped to implementation-synced; landed textual-IR forms noted; stage-then-commit wording synced to the T9 rollback / cleanup reality; structural failure cleanup invariant folded; §6.8.5 child-carried placement marker updated to implementation-synced. |
+  | `docs/notes/architectural-family.md` | FD-Q Moment 2 write-back landed: Phase 7 trigger-1 / trigger-3 re-read confirms the current tree-with-bindings fit through `ControlFlowNode::For` + `BindingTarget::ForLoopSubtree`; no VDR opened; strain triggers remain live. |
+  | `docs/abi_spec.md` | Re-confirmed untouched. Phase 7 added runtime-owned collection state and internal IR / runtime machinery only; no host-facing C ABI surface was forced. |
+  | `process/milestone-3/plan.md` | Phase 7 progress row flipped to `implementation complete; phase-end pending` for implementation / A8 / A11 / A12, with phase-branch CI run-id / final handoff / phase-end retro explicitly left phase-end-owned. |
+  | ADR set | Untouched. No retrospective phase-sync ADR-touch case applied: no AC/implementation divergence, no substantive new DD, and no ADR residual cross-reference needed before phase-end handoff. |
+
+  **A12 external-reader closure check.**
+
+  | Required content | Location / disposition |
+  |---|---|
+  | Grammar: `for` syntax and admission | `docs/dsl_spec.md` §3 / §4.15 / §8.5; ScrollView / Box / Grid / component-level rejects listed. |
+  | Collection types / literals / assignment forms | §4.7 and §4.15; textual IR spellings in §8.4 / §8.9; gallery example covers all four authored forms. |
+  | Binder scope rules | §4.6 / §4.15; diagnostics table includes outside-body, handler-position, and `if`-condition rejects. |
+  | Positional un-keyed identity baseline | §4.15; architecture §6.7.10 records live positional reads and same-length reset semantics. |
+  | Runtime mutation timing / failure contract | §4.15; architecture §6.7.10 records stage-then-commit, splice side effects, drain timing, cap charging, and cleanup invariant. |
+  | Validation / invalid examples | §4.15 diagnostics table and §8.11 loader validation rows match the shipped diagnostic matrix from T3 / T6 / T7. |
+  | Public-draft deferral clarity | §4.15 out-of-scope and §8.12 preserve keyed identity, per-item handlers/conditions, nested `for`, member-range bodies, loop-external reads, host state boundary, `TypedValue`, `f64[]`, and direct Grid / Box / ScrollView `for` deferrals. |
+
+  **Phase-end handoff candidate ledger (T10 input, not final handoff).**
+
+  | Candidate | Owner / routing | Re-trigger / close condition |
+  |---|---|---|
+  | DD-M3-P7-007 residual 1: cycle detection policy | Phase-end handoff candidate; future reactive-engine owner | Re-trigger: any surface letting a generated subtree's effect write state. |
+  | DD-M3-P7-007 residual 2: ordering ties | Phase-end handoff candidate; future reactive-engine owner | Re-trigger: an observable contract requiring inter-effect order. Current quiescent order invariant remains drain-order-independent. |
+  | DD-M3-P7-007 residual 3: fan-out × `MUTATION_CAP` | Phase-end handoff candidate; future scheduler / performance owner | Re-trigger: drain-loop charging change; effect-to-signal writes; or acceptance demanding N where per-iteration batch cost matters (M5+ LazyList / performance thesis). |
+  | Synchronous non-batched drain contract | **Not carried** | Preserved by T7 handler-return assertions; record as held, not open. |
+  | Per-item richness trigger cluster | Phase-end handoff candidate; owner reserved possible Phase 7b, otherwise M4/M5 | Three axes surfaced by T8: structured item fields / `TypedValue`; loop-external indexed collection read; bindable `Box.fill` / dynamic styling. Root insight: the visible colour ask ultimately hits constant-only `Box.fill`. Do not write M4+ as settled because owner reserved Phase 7b. |
+  | Keyed identity / retained state | Phase-end handoff candidate from ADR / framing | Re-trigger: `key:` syntax, reorder, focus/input retained-state case, or state preservation across removal. |
+  | Per-item handlers and handler-position binder reads | Phase-end handoff candidate | Re-trigger: M4 input / per-item interaction (`select/delete this item`). |
+  | Per-item conditional presence (`if` over loop-local bool) | Phase-end handoff candidate | Re-trigger: first concrete per-item branching case; likely M4 input or next structural control-flow extension. |
+  | Nested `for` / nested template scope / shadowing | Phase-end handoff candidate | Re-trigger: nested structural control-flow extension (`else` / `switch` / nested `for`). |
+  | Member-range bodies | Phase-end handoff candidate | Re-trigger: first UI needing multiple sibling members per collection item without a wrapper container. |
+  | Loop-external collection reads | Phase-end handoff candidate | Re-trigger: `length`, empty checks, element index reads, or cross-collection indexed composition such as `colors[index]`. |
+  | Grid placement migration | Phase-end handoff candidate | Re-trigger: Grid admitting structural mutation (`for` of `Cell`s, conditional Cells); migrate `cell_placements` to child-carried storage before that path. |
+  | Host-state-boundary future compatibility | Phase-end handoff candidate | Re-trigger: host-supplied initial collections, host replace, or write-back API; Phase 7's whole-value set / positional identity keeps it unblocked. |
+  | Structural mutation failure cleanup invariant | Folded into `docs/architecture.md`; phase-end may also carry as future-task warning | Re-trigger: any new structural mutation target or generated body form carrying registry entries; built children not retained by the final tree must go through `widget_destroy`. |
+  | GUI evidence self-falsification / assertion falsifying check | Phase-end process-codify candidate, not T10 implementation work | Phase-end decides whether to minor-edit implementation-gates trap #7 / close artifacts (or open a VDR if judged structural). |
+  | DPI blur / DPI awareness | M4-owned residual | Re-trigger: M4 DPI work; not a Phase 7 failure. |
+
+  **Local verification (post-sync, clean rebuild).**
+
+  ```text
+  cargo fmt --all -- --check        # green
+  cargo clean                       # removed 5019 files / 1.6 GiB
+  cargo build --release --workspace # green; existing wasamo linkable-target / wasamo-sys import-library ordering warnings only
+  cargo build --workspace           # green; same existing warnings
+  cargo test --workspace            # green, 0 failed
+  ```
+
+  Representative test counts observed in the workspace test run:
+  `wasamo-ir` 23, `wasamo-runtime` 403, `wasamoc --lib` 356, and
+  examples roundtrip 6. The Windows integration binaries, including
+  `iteration_mutation_integration` and `iteration_static_integration`,
+  were invoked by the workspace run with no failures reported.
+
+- **2026-06-18 / T10 start gate — phase-close document sync opened.**
+  Started by checking prior carry-over from this log and all existing
+  Phase 7 task retrospectives (`t1.md` through `t9.md`) before touching
+  the T10 plan. The T0 plan wording is treated as a hypothesis, not as
+  authority.
+
+  **Carry-over checked from prior tasks.**
+
+  | Carry-over | T10 disposition hypothesis |
+  |---|---|
+  | Moment 2 `docs/dsl_spec.md` / `docs/architecture.md` implementation sync, including landed token spellings, runtime semantics, gallery slice, and the four visible mutation forms. | **T10 owns.** This is the A12 / A11 document-sync half of Phase 7 close. |
+  | `docs/notes/architectural-family.md` FD-Q trigger-1/-3 confirm entry. | **T10 owns.** This was explicitly Moment 2-owned by the ADR preamble. |
+  | `docs/abi_spec.md` no-touch confirmation. | **T10 owns the re-confirmation only.** No ABI surface was added; any forced ABI change would require owner escalation, but none is expected. |
+  | `process/milestone-3/plan.md` Phase 7 progress row. | **T10 owns the row update.** Phase-branch CI run-id remains phase-end-owned, so the row should not claim CI evidence that does not exist yet. |
+  | T8/T9 deferral-trigger cluster: structured-item / `TypedValue`, loop-external indexed read, bindable `Box.fill`, plus the owner's Phase 7b reservation. | **T10 owns an auditable candidate ledger, not final handoff.md.** Per `retrospectives.md`, final `implementation/handoff.md` content is selected by the phase-end retro item 15 after T10 merges. T10 must make the inputs hard to lose and avoid writing M4+ as settled. |
+  | DD-M3-P7-007 reactive-drain residual rows 1-3 and re-triggers. | **T10 owns an auditable candidate ledger / doc-sync pointer, not final handoff.md.** The residuals stay open; breadth-vs-depth was proven, not the scheduler policy residuals. |
+  | T7's partial insert rollback proof carry. | **Closed before T10.** T9 review remediation added the direct fault-seam test; T9 retrospective and the 2026-06-18 log correction narrow finding #4 to latent / defensive. No T10 carry remains. |
+  | T9 item-10 invariant: structural mutation failure paths must dispose all built children symmetrically with `widget_destroy`; current active leak absent, but the invariant protects future registry-entry-bearing generated bodies. | **T10 owns architecture sync candidate.** Fold into the structural mutation / stage-then-commit architecture wording if it fits the touched Phase 7 sections. |
+  | T8/T9 process learning: GUI evidence and remediation assertions need self-falsification against ground truth. | **Phase-end process-codify candidate, not T10 implementation work.** T10 records it for phase-end consideration; any process-rule edit belongs to the phase-end retrospective / process lifecycle decision. |
+  | Owner human-visible GUI smoke evidence item 6. | **Closed in T9.** T10 may cite the 8-frame evidence as implementation-sync input but does not rerun the smoke. |
+  | DPI blur / runtime DPI awareness. | **M4-owned.** T10 should not treat it as a Phase 7 failure. |
+
+  **Critical re-think of T10 responsibility.** T10 should be a
+  **document-sync and step-close task**, not a phase-close task. It owns
+  local verification, A12 external-reader sync, architecture sync,
+  architectural-family write-back, ABI no-touch confirmation, the M3
+  plan progress row, a log summary / carry-candidate ledger, and the
+  T10 step-end retrospective. It does **not** own GitHub Actions CI
+  run-id, phase-end retrospective, final `implementation/handoff.md`,
+  or `implementation/preamble.md` `active -> closing`; those remain
+  phase-end-owned by the existing split. The plan will be revised to
+  make this distinction explicit because several T8/T9 notes say
+  "T10 handoff" as shorthand while `retrospectives.md` makes final
+  handoff selection a phase-end duty.
+
+  **Implementation-gates selection for T10.**
+
+  | Trap | Applies? | Reason / close artifact |
+  |---|---|---|
+  | #1 semantic migration | No | T10 adds no enum / schema / IR variant and no runtime traversal change; it syncs docs to already-landed shapes. |
+  | #2 structural side effects | No | T10 makes no tree / state / Visual mutation. Structural side-effect semantics are described, not changed. |
+  | #3 parallel data drift | No | T10 changes no parallel runtime data structure. |
+  | #4 untested authored branch | No | T10 adds no reject / diagnostic / size branch. Existing T3/T6/T7/T9 branch tests remain the evidence. |
+  | #5 carry-forward underweighted | **Yes** | Prior tasks left several phase-end / future-phase candidates. Close with a concrete ledger in this log and plan checkboxes showing which candidates are T10-owned versus phase-end-owned. |
+  | #6 deterministic failure / flake rolling | Standing | If local verification fails or recurs, record root cause / disposition; do not reroll to green. |
+  | #7 GUI positive control | No for new evidence | T10 has no new GUI-render deliverable. It cites T8 assistant screenshots and T9 owner smoke but does not replace them. |
+
+  **Review lane.** T10 is a document-sync / process-plan task, not a new
+  high-risk schema or runtime structural change. Owner has requested a
+  separate agent review after T10; that review should focus on A12
+  external-reader completeness, doc-vs-implementation divergence,
+  carry-forward ownership, and the T10/phase-end split.
+
 - **2026-06-17 / T9 review remediation 2 — finding #4 (commit-failure
   rollback registry leak) fixed.** Re-reviewing R-2, the second agent
   found a **production bug** the new rollback test exposed: the
