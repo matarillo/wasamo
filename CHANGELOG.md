@@ -44,9 +44,11 @@ collection literals / assignment forms, textual IR spellings, positional
 identity, runtime mutation timing, validation, child-carried ZStack placement,
 and explicit deferrals. Phase 8 carries the positional baseline into the full
 gallery assembly; per-item handlers / conditionals, keyed identity, nested
-`for`, member-range bodies, loop-external collection reads, dynamic styling,
-host collection APIs, and the per-item richness / `TypedValue` cluster remain
-deferred unless the owner opens Phase 7b.
+`for`, member-range bodies, general loop-external collection reads, and host
+collection APIs remain deferred. The narrower per-item richness cluster
+surfaced by the gallery — structured item fields / `TypedValue`,
+loop-external indexed reads for paired item data, and bindable `Box.fill` /
+dynamic styling — remains deferred unless the owner opens Phase 7b.
 
 Decisions: [DD-M3-P7-001..007](./process/milestone-3/phase-7/decisions/preamble.md).
 

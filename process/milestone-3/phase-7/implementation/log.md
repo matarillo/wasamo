@@ -28,13 +28,14 @@
   |---|---|
   | DD-M3-P7-007 reactive-drain residuals 1-3 | Carry-forward in `handoff.md` with re-triggers. |
   | Synchronous non-batched drain contract | Closed by T7; not carried open. |
-  | Per-item richness cluster + owner Phase 7b reservation | Carry-forward in `handoff.md`; not assigned to M4+ as settled. |
+  | Per-item richness cluster + owner Phase 7b reservation | Carry-forward in `handoff.md`; not assigned to M4+ as settled. The handoff now records the load-bearing root: the gallery's richer compositions all reduced to constant-only `Box.fill` / dynamic styling pressure. |
   | Keyed identity, per-item handlers, per-item conditional, nested `for`, member-range bodies, loop-external reads | Carry-forward in `handoff.md` with framing triggers. |
   | Grid placement migration | Carry-forward in `handoff.md`; trigger remains structural mutation under Grid. |
   | Host-state-boundary future compatibility | Carry-forward in `handoff.md`. |
   | Structural mutation cleanup invariant | Doc-folded and summarized as a future warning: built children not retained by the final tree must go through `widget_destroy`, not an unannotated drop. |
+  | T9 `insert_child` ownership question | Phase-end disposition recorded: no Phase 7 shipped-path signature migration; accept in-code documentation plus the doc-folded cleanup invariant, and reopen if a future valid-child `insert_child` failure surface becomes reachable. |
   | T9 partial-insert rollback proof carry | Closed before phase end by T9; not carried open. |
-  | GUI evidence / assertion self-falsification learning | Carried as process learning for future GUI evidence or defensive assertion remediation; no immediate process-rule edit in this batch because the current rule already requires positive controls, and a broader enforcement change would need its own process decision if made structural. |
+  | GUI evidence / assertion self-falsification learning | Split in `handoff.md`: GUI positive-control discipline is partly covered by the current rule, but assertion-revert falsifiability is not. The assertion half is carried as a process VDR candidate with a likely Forcing artifact, not dismissed by the GUI rule. |
   | DPI blur / DPI awareness | M4-owned residual; not a Phase 7 failure. |
 
   **Pending gate.** The remaining phase-end evidence is the GitHub Actions

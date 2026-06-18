@@ -35,6 +35,13 @@ loop-external indexed reads, and bindable `Box.fill` form one cluster. The
 owner reserved a possible Phase 7b, so the handoff records triggers without
 prematurely assigning the cluster to M4+.
 
+The fourth learning is that the phase's self-falsification lessons split in
+two. GUI positive controls are already partly covered by the standing visual
+evidence rule, but assertion remediation needs its own artifact: a new
+defensive assertion should be shown capable of failing for the target bug,
+for example through a revert/fault-seam check. That assertion half is carried
+as a process VDR candidate rather than silently treated as covered.
+
 ## Checklist
 
 12. **Acceptance criteria (Ax) achieved:** **achieved**
@@ -83,7 +90,10 @@ prematurely assigning the cluster to M4+.
       closed by T7 and is not carried open.
     - Closed / local-only items are not carried as open residuals: partial
       insert rollback proof is closed by T9; structural cleanup invariant is
-      doc-folded; direct `Clear` evidence is closed; ABI no-touch is closed.
+      doc-folded; the `insert_child` failure ownership question is accepted
+      for Phase 7 close as in-code documentation plus the cleanup invariant,
+      with a future valid-child failure surface as the reopen trigger; direct
+      `Clear` evidence is closed; ABI no-touch is closed.
     - Doc-folded material stays in the living docs rather than handoff prose:
       iteration grammar, collection types, runtime mutation, textual IR,
       positional identity, and child-carried ZStack placement.

@@ -58,6 +58,10 @@ next-phase-relevant learnings.
   and bindable `Box.fill` / dynamic styling. The accepted Phase 7 reduction
   used a single scalar collection and constant styling, and the owner
   reserved the option to open Phase 7b; do not write M4+ routing as settled.
+  The load-bearing root was `Box.fill` being constant-only: the attempted
+  richer thumbnail compositions all eventually reduced to that constraint, so
+  future work should not rediscover the same dead ends before reopening
+  bindable styling or richer item values.
   Re-trigger: a gallery thumbnail needing per-item `{ label, color }`,
   dynamic `fill`, structured item fields, or the owner opening Phase 7b.
 
@@ -108,11 +112,16 @@ next-phase-relevant learnings.
   failure and does not affect iteration semantics.
 
 - **The process learning on GUI / assertion self-falsification should be
-  codified.** Phase 7 repeated the lesson that GUI evidence must distinguish
-  the intended behavior from a look-alike, and that remediation assertions
-  should be proven capable of failing for the bug they claim to cover.
-  Re-trigger: any future GUI-render evidence, screenshot-based close
-  artifact, or defensive assertion remediation.
+  split before codification.** Phase 7 repeated two related but distinct
+  failure modes. GUI evidence must distinguish the intended behavior from a
+  look-alike; that half is already partly covered by the positive-control
+  rule. Assertion remediation is different: a newly added defensive assertion
+  should be shown capable of failing for the bug it claims to cover, for
+  example by a revert/fault-seam check. That half is not covered by the GUI
+  positive-control rule and is a process VDR candidate with a likely Forcing
+  artifact. Re-trigger: any future defensive assertion remediation or any
+  third-party review finding that an assertion could pass without detecting
+  the target bug.
 
 ## Closed items — do not carry as open residuals
 
@@ -125,6 +134,14 @@ next-phase-relevant learnings.
   that is not retained by the final tree must be disposed through
   `widget_destroy`, not by an unannotated drop. This keeps staging and commit
   failure cleanup symmetric.
+
+- **`insert_child` failure ownership is accepted as an in-code invariant for
+  Phase 7 close.** T9 asked whether `insert_child` should change to a
+  failure-returning ownership type across shipped paths or remain documented
+  as a near-unreachable defensive branch. No Phase 7 shipped-path signature
+  migration is taken. The close disposition is: keep the in-code
+  documentation plus the doc-folded cleanup invariant, and reopen only if a
+  future valid-child `insert_child` failure surface becomes reachable.
 
 - **The direct `Clear` runtime path is closed.** T8/T9 added the gallery
   `Clear` action and T7 covers zero-child mutation behavior; Phase 7 did not
