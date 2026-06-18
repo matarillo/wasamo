@@ -1,12 +1,12 @@
 # Wasamo DSL Specification
 
-**Document version:** 1.8
-**Last updated:** 2026-06-13
+**Document version:** 1.9
+**Last updated:** 2026-06-18
 **Status:** M3-Phase 2 closed (implementation-synced); M3-Phase 3
 closed (implementation-synced); M3-Phase 4 closed
 (implementation-synced); M3-Phase 5 closed (implementation-synced);
-M3-Phase 6 closed (implementation-synced); M3-Phase 7 design accepted
-(implementation pending).
+M3-Phase 6 closed (implementation-synced); M3-Phase 7 closed
+(implementation-synced).
 Covers the M2 `.ui` surface, the `state` surface keyword
 retroactively, the M3-Phase 1 `bool` scalar binding additions, the
 M3-Phase 2 Box layout primitive (with `aspect` / `fill` literal
@@ -2122,7 +2122,7 @@ placement / shape rules reject it.
 
 ### 4.15 Iteration and collection-driven generation (M3-Phase 7)
 
-**Phase status:** M3-Phase 7 design accepted; implementation pending.
+**Phase status:** M3-Phase 7 closed; implementation-synced.
 
 This chapter introduces **iteration** — a collection binding that
 drives the **number of generated widget subtrees**. It is the **second
@@ -2301,6 +2301,51 @@ keywords: a state or widget named `append` or `drop-last` still parses.
 `;` placement is unchanged — `;` terminates handler-block statements
 only (the collection assignment is an `assign_stmt` alternative);
 member positions (state declarations, property settings) carry none.
+
+The Phase 7 gallery slice uses all four authored mutation forms in the
+visible `examples/gallery/gallery.ui` thumbnail set:
+
+```
+state labels: string[] = ["S01", "S02", "S03", "S04", "S05", "S06"]
+
+Button {
+    text: "Add"
+    clicked => { labels = labels.append("NEW"); }
+}
+Button {
+    text: "Remove"
+    clicked => { labels = labels.drop-last(); }
+}
+Button {
+    text: "Clear"
+    clicked => { labels = []; }
+}
+Button {
+    text: "Reset"
+    clicked => {
+        labels = ["S01", "S02", "S03", "S04", "S05", "S06"];
+    }
+}
+
+ScrollView {
+    offset-y: scroll_y
+    WrapPanel {
+        for label, index in labels {
+            Box {
+                aspect: 1:1
+                fill: #336699cc
+                Text { text: "\{label} #\{index}" }
+            }
+        }
+    }
+}
+```
+
+This example deliberately varies only the scalar label (plus the
+loop-local index). Varying both label and colour per item requires
+deferred surfaces — record-like item data / `TypedValue`,
+loop-external indexed collection reads, and a bindable `Box.fill`
+surface — so the Phase 7 gallery keeps `fill` static.
 
 **Equal-value writes propagate nothing.** A collection assignment whose
 new value equals the current value performs no dirty propagation — a
@@ -2527,18 +2572,18 @@ The `Member::Conditional` variant (M3-Phase 6) holds the `if` block: its
 (`Expr::BoolLit` or an `Expr::Ident` resolving to a `bool`-typed state,
 §4.14), and its `body` is a single `Member::WidgetDecl` (the exactly-one-
 widget-child rule — a non-structural, multi-child, or nested-conditional
-body is rejected). This is the M3-Phase 6 design-draft shape; the exact
-field set is finalised at implementation, and `else` / `switch` / `for`
-extend it additively (a branch list / sibling variants) without
-re-shaping the existing members.
+body is rejected). This is the landed M3-Phase 6 shape; `else` /
+`switch` / `for` extend the structural-control-flow family additively
+(a branch list / sibling variants) without re-shaping the existing
+members.
 
 The `Member::Iteration` variant (M3-Phase 7) holds the `for` block: the
 author-named binders, the collection state name, and a single
 `Member::WidgetDecl` body (§4.15). The collection literal (state
 defaults and assignment RHS) and the `append` / `drop-last` method-call
-expressions are companion design-draft AST additions; like the
-`Conditional` shape, the exact field / variant set is finalised at
-implementation without changing the §3 / §4.15 author surface.
+expressions are companion M3-Phase 7 AST additions. Their landed
+lowering maps to the textual-IR / `HandlerExpr` forms in §8.9 without
+changing the §3 / §4.15 author surface.
 
 All AST nodes carry a `span: Span` field (byte offset, line, col) for error reporting.
 
@@ -2703,10 +2748,9 @@ state thumbs: i32[] = [101, 102, 103]
 state captions: string[] = []
 ```
 
-The M3-Phase 7 collection forms are design-draft shapes (exact token
-spellings finalised at implementation re-sync); the normative
-properties are: collection state declarations and list-literal defaults
-**roundtrip losslessly** through emit → load, and the loader rejects an
+The M3-Phase 7 collection forms above are the landed token spellings.
+Collection state declarations and list-literal defaults **roundtrip
+losslessly** through emit → load, and the loader rejects an
 element-type mismatch, a nested list, a list default on a scalar state,
 and a scalar default on a collection state as
 `WASAMO_ERR_IR_MALFORMED` (§8.11).
@@ -2886,8 +2930,14 @@ body, non-bool / unresolved condition) is in §8.11.
 
 **The `for` member (M3-Phase 7).** Like the `if` member, a `for` member
 is IR-only: it materialises no widget and no Visual of its own — the
-loader interprets it. The exact token spelling is a design-draft shape
-(finalised at implementation re-sync); the normative properties are:
+loader interprets it. The landed textual-IR spelling is:
+
+```
+for <binder> in <collection> { node ... }
+for <binder>, <index-binder> in <collection> { node ... }
+```
+
+The normative properties are:
 
 - the **binders, the collection reference, and the body roundtrip
   losslessly** through emit → load;
@@ -3116,13 +3166,12 @@ interp_part ::= STRING         ; literal text fragment
 | `(list-drop-last NAME)` | collection tail-removal expression | M3-Phase 7. Pure and total: the collection minus its last element; identity on empty; collection-assignment RHS only |
 | `list_literal` | static collection value | M3-Phase 7. State defaults (§8.4) and collection-assignment RHS (whole-value reset / clear) |
 
-The M3-Phase 7 rows are design-draft shapes — exact form spellings and
-`HandlerExpr` variant names are finalised at implementation re-sync,
-within the single unified `HandlerExpr` enum (no side enum). A
-collection assignment evaluates as read-modify-write (or, for the
-literal, a direct whole-value set) on the whole-value collection
-signal; an assignment whose new value equals the current value performs
-no dirty propagation (§4.15).
+The M3-Phase 7 rows are the landed spellings and map to the single
+unified `HandlerExpr` enum (no side enum). A collection assignment
+evaluates as read-modify-write (or, for the literal, a direct
+whole-value set) on the whole-value collection signal; an assignment
+whose new value equals the current value performs no dirty propagation
+(§4.15).
 
 **`interp_part` mapping:**
 
@@ -3283,3 +3332,4 @@ surface.
 | 1.6     | 2026-06-02 | Moved the historical M1 lexical rationale appendix into `process/milestone-1/phase-1/decisions/`; this spec now keeps only the normative DSL surface. |
 | 1.7     | 2026-06-08 | M3-Phase 6 close: §4.13 and §4.14 marked implementation-synced; textual IR re-synced to the landed control-flow member and component host surface. Component-level Window host attributes (`title` / `backdrop` / `theme`) now lower to `host prop` entries beside the content root, host bindings are rejected, and the old shape that placed host attributes on the content root is malformed IR. |
 | 1.8     | 2026-06-13 | M3-Phase 7 design draft (Moment 1): added §4.15 iteration — the second chapter of the structural rendering model (`for` block with author-named binders; collection state types `i32[]` / `string[]` / `bool[]` with list-literal defaults; whole-value collection assignment over pure `append` / `drop-last` expressions and static-literal reset / clear; positional un-keyed identity baseline with the keyed non-promise; mutation-then-observe timing; all-or-unchanged insertion; per-container admission; diagnostics matrix). Supporting: §2.1 `in` reservation (`for` now has a production), §2.2 bracket / paren / comma tokens, §3 grammar, §4.6 / §4.7 binder-read and collection-state notes, §5 AST, §8.4 / §8.5 / §8.9 textual-IR collection and `for` forms with a worked offsets example, §8.11 validation rows. Swept the stale §4.14 `for` forward references (the `for` body ships single-widget, not member-range; the identity baseline ships positional un-keyed, with keyed as future opt-in) per the live-doc-sync rule. No ABI change; `abi_spec.md` untouched. Pending implementation re-sync at Phase 7 close. |
+| 1.9     | 2026-06-18 | M3-Phase 7 implementation sync (Moment 2): flipped Phase 7 status markers to closed / implementation-synced; confirmed the landed textual-IR spellings (`for`, `list-prop-read`, `item-read`, `index-read`, `list-append`, `list-drop-last`, list literals) and unified `HandlerExpr` mapping; added the gallery slice example showing all four authored collection mutation forms (`append`, `drop-last`, empty clear, static reset) and recorded why per-item colour richness remains deferred. No ABI change; `abi_spec.md` remains untouched. |

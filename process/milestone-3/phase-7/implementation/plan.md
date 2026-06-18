@@ -481,9 +481,9 @@ cannot be discharged by the assistant baseline.
 - [x] T9 step-end retrospective recorded at
       `process/milestone-3/phase-7/retrospectives/t9.md`.
 
-### T10 — Phase-end gates and Moment 2 re-sync
+### T10 — Step-end local gates and Moment 2 re-sync
 
-Discharges the m3-plan phase-end criteria, the
+Discharges the T10-owned portion of the m3-plan phase-end criteria, the
 [ADR Moment 2 commit set](../decisions/preamble.md#upstream-document-revisions-moment-1--moment-2),
 and the **A12 spec-closure gate** (ADR verification closure item 7).
 The step-end retrospective is **owned by T10**; the phase-end
@@ -492,36 +492,59 @@ implementation-preamble status flip are **NOT owned by T10** (see the
 preamble split). Before closing, cross-check this T0-frozen task list
 against mid-phase owner decisions and revise where they diverge.
 
-- [ ] `cargo fmt --all -- --check` green locally (returns to T10
-      ownership if T10 changed production Rust).
-- [ ] `cargo build --release --workspace` and `cargo test --workspace`
-      green locally; CI green is phase-end-owned.
-- [ ] `docs/dsl_spec.md` §4.15 marker flips to `M3-Phase 7 closed;
+Critical responsibility split (rechecked at T10 start): T10 is a
+**document-sync and step-close task**, not the phase-close task. It owns
+local verification, the Moment 2 implementation sync, the M3 plan row,
+and a carry-forward **candidate ledger** in `log.md`. The phase-end
+retro owns final `implementation/handoff.md`, GitHub Actions CI run-id,
+phase-end retrospective, and `implementation/preamble.md` status flip.
+T8/T9 shorthand such as "T10 handoff" is interpreted as "T10 records
+the inputs so phase-end cannot lose them", not as T10 finalizing
+`handoff.md`.
+
+- [x] T10 start gate recorded in [log.md](./log.md): carry-over from
+      `log.md` and every Phase 7 task retrospective checked; relevant
+      implementation-gates selected; T10 / phase-end ownership split
+      made auditable before the docs are edited.
+- [x] `cargo fmt --all -- --check` green locally.
+- [x] Local clean rebuild green locally (`cargo clean` →
+      `cargo build --release --workspace` →
+      `cargo build --workspace` → `cargo test --workspace`). CI green is
+      phase-end-owned.
+- [x] `docs/dsl_spec.md` §4.15 marker flips to `M3-Phase 7 closed;
       implementation-synced`; document Status header updated;
       divergence corrections folded (including the design-draft token
       spellings in §8.4 / §8.5 / §8.9 pinned to the landed shapes);
       the Moment-1-front-loaded §4.14 / §9 revisions **re-verified
       against the implementation** like every other synced statement.
-- [ ] **A12 spec-closure gate (evidence item 7):** the iteration
+- [x] **A12 spec-closure gate (evidence item 7):** the iteration
       chapter at the external-reader bar — grammar, collection types /
       literals / assignment forms, binder scope rules, the positional
       un-keyed identity baseline stated normatively, runtime mutation
       timing, validation / invalid examples matching the shipped
       diagnostics.
-- [ ] `docs/architecture.md` §6.7.10 / §6.8.5 / §9 re-synced to the
+- [x] `docs/architecture.md` §6.7.10 / §6.8.5 / §9 re-synced to the
       landed shape; top Status flips to `M3-Phase 7 closed
       (implementation-synced)`.
-- [ ] `docs/notes/architectural-family.md` — the FD-Q trigger-1/-3
+- [x] `docs/notes/architectural-family.md` — the FD-Q trigger-1/-3
       confirm entry lands (revise-in-place).
-- [ ] `docs/abi_spec.md` re-confirmed untouched; any forced ABI
+- [x] `docs/abi_spec.md` re-confirmed untouched; any forced ABI
       surface escalates with owner confirmation.
-- [ ] `process/milestone-3/plan.md` Phase 7 row Status flips to
-      `complete`.
-- [ ] ADR set touched **only** if a retrospectives.md §phase-sync
+- [x] `process/milestone-3/plan.md` Phase 7 row Status flips to
+      `implementation complete; phase-end pending`.
+- [x] ADR set touched **only** if a retrospectives.md §phase-sync
       ADR-touch case applies; otherwise it stays at its Moment 1
       Accepted state.
-- [ ] [log.md](./log.md) records the phase-close evidence pointers and
+- [x] [log.md](./log.md) records the phase-close evidence pointers and
       implementation summary distilled from T1–T9.
+- [x] [log.md](./log.md) records the phase-end handoff candidate ledger
+      distilled from T1–T9 and T10: DD-M3-P7-007 residual rows + their
+      re-triggers; the per-item richness trigger cluster
+      (structured-item / `TypedValue`, loop-external indexed read,
+      bindable `Box.fill`) with the owner Phase 7b reservation; Grid
+      placement migration trigger; host-state-boundary future-compat
+      record; structural-mutation failure cleanup invariant; and the
+      GUI/assertion self-falsification process-codify candidate.
 - [ ] Carry-forward inputs to the Phase 8 pre-doc recorded under
       [handoff.md](./handoff.md) (at minimum: the DD-M3-P7-007 carry
       rows + re-triggers; the keyed-identity / per-item-handler /
@@ -532,11 +555,12 @@ against mid-phase owner decisions and revise where they diverge.
       trigger observation the gallery surfaced at T8 (G-2) — the first
       concrete app case where scalar items cannot express the per-item
       data, routed to M4/M5 per DD-M3-P7-002**). **NOT owned by T10**;
-      stays `[ ]` at T10 close.
+      stays `[ ]` at T10 close. The preceding `log.md` ledger is T10's
+      auditable input to this phase-end-owned handoff.
 - [ ] Front-matter `status` on [preamble.md](./preamble.md) flips
       `active` → `closing` at the **phase-end batch commit**, not at
       T10 step-close. **NOT owned by T10**; stays `[ ]` at T10 close.
-- [ ] **T10 step-end retrospective recorded** at
+- [x] **T10 step-end retrospective recorded** at
       `process/milestone-3/phase-7/retrospectives/t10.md` (items 1–11;
       **owned by T10**).
 - [ ] **Phase-end retrospective recorded** at

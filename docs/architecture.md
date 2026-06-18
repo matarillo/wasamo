@@ -1,6 +1,6 @@
 # Wasamo Architecture
 
-**Status:** M1 complete (Phases 0-8); M2 complete (Phases 1-7) — Foundation acceptance A1-A6 discharged; M3-Phase 1, M3-Phase 2, M3-Phase 3, M3-Phase 4, and M3-Phase 5 complete. M3-Phase 6 closed (implementation-synced): ZStack, conditional rendering, and the component host surface are documented to match the landed implementation. M3-Phase 7 design accepted (implementation pending): iteration — `ControlFlowNode::For` / `BindingTarget::ForLoopSubtree`, the canonized member-expansion seam, stage-then-commit range mutation, and child-carried ZStack placement (§6.7.10, §6.8.5) are documented as accepted design ahead of implementation.
+**Status:** M1 complete (Phases 0-8); M2 complete (Phases 1-7) — Foundation acceptance A1-A6 discharged; M3-Phase 1, M3-Phase 2, M3-Phase 3, M3-Phase 4, and M3-Phase 5 complete. M3-Phase 6 closed (implementation-synced): ZStack, conditional rendering, and the component host surface are documented to match the landed implementation. M3-Phase 7 closed (implementation-synced): iteration — `ControlFlowNode::For` / `BindingTarget::ForLoopSubtree`, the canonized member-expansion seam, stage-then-commit range mutation, and child-carried ZStack placement (§6.7.10, §6.8.5) are documented to match the landed implementation.
 
 ---
 
@@ -1010,7 +1010,7 @@ reveal the real requirements — rather than silently deferred.
 
 #### 6.7.10 Iteration (M3-Phase 7)
 
-**Phase status:** M3-Phase 7 design accepted; implementation pending.
+**Phase status:** M3-Phase 7 closed; implementation-synced.
 
 M3-Phase 7 generalises the structural control-flow machinery from
 presence (0/1) to **cardinality (0..N)**: a runtime-mutable collection
@@ -1027,6 +1027,10 @@ expressions — no second expression enum, no `TypedValue` (judged and
 not adopted: every value position stays monomorphic at lowering time).
 Author-visible semantics are normative in
 [dsl_spec.md §4.15](./dsl_spec.md#415-iteration-and-collection-driven-generation-m3-phase-7).
+The landed textual IR uses `(list-prop-read NAME)`,
+`(item-read NAME)`, `(index-read NAME)`, `(list-append NAME expr)`,
+`(list-drop-last NAME)`, and list literals as the unified
+`HandlerExpr` carrier.
 
 **Whole-value collection signals.** A collection `state` is **one**
 signal holding the whole value (`Signal<Vec<i32>>` /
@@ -1090,10 +1094,16 @@ Any staging failure disposes the staged work, logs a range-scoped
 diagnostic (declared slot, positions, failed stage — the log surface
 upgraded from Phase 6's single-child line), and aborts the whole
 mutation with the tree observably unchanged. The commit then performs
-the splice; a WinRT failure inside commit is an OS-level inconsistency
-logged with range context, not a designed state. Rollback and
-terminal-error postures were declined on proportionality; the recorded
-re-trigger is an observed commit-stage failure in CI or the field.
+the splice. A commit-stage failure is defensive / near-unreachable
+under the current valid-child paths, but the landed implementation
+still rolls back any already-committed prefix, destroys any remaining
+staged children, and logs range context. The one caveat is the
+by-value `insert_child` failure contract: the faulting child itself is
+consumed by the failed insert call. Changing that would require a
+cross-cutting signature change across existing structural paths, so it
+is left as an in-code documented residual that re-triggers only if
+valid-child insertion failure becomes reachable or `insert_child`'s
+signature is changed.
 
 **One placement-aware splice seam owns the structural side-effect
 set.** Every structural child mutation on the materialised tree —
@@ -1107,6 +1117,12 @@ widget-pointer registry release / registration; (5) effect disposal
 ahead of teardown (§6.7.6) and staged-effect attachment at commit. No
 caller composes these around the seam; no structural edit reaches
 `children` through a placement-blind route.
+
+**Failure cleanup invariant.** Any built child that is not retained by
+the final materialised tree must be disposed through the runtime's
+structural teardown path (`widget_destroy`, which drops bindings and
+registry entries), not by an unannotated drop. This keeps staging and
+commit failure cleanup symmetric.
 
 **Disposal and drain.** Removed subtrees dispose tail-first, effects
 ahead of structural teardown, registry entries through the existing
@@ -1407,7 +1423,7 @@ intrinsic ("size to the largest child" on a bounded axis) ZStack is not
 expressible until a future size-constraint surface.
 
 **Per-child alignment — child-carried placement (storage contract
-revised in M3-Phase 7; design accepted, implementation pending).** Each
+revised in M3-Phase 7; implementation-synced).** Each
 child is measured against the ZStack content rect and anchored within
 it; the default `h-align` / `v-align` is **`center`** (a `Stretch`
 alignment or a `Fill` constraint expands the child to the full content

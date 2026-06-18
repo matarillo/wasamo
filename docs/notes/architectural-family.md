@@ -87,9 +87,14 @@ commitment:
 | DD-P6-001..007 (stable-core C ABI) | Handle-based; no scope / view-body primitive |
 | DD-M2-P3-001 = A (handler runs runtime-side) | Handler mutates persistent property storage; family (2) handler would update state to trigger view re-execution |
 | DD-M2-P5-001..006 (Phase 5, Accepted) | Signal + Effect on a tree with `BindingTarget` enum; family (1)-flavored API surface |
+| DD-M3-P7-001..007 (iteration grammar, Accepted) | `for` is absorbed as `ControlFlowNode::For` plus `BindingTarget::ForLoopSubtree`; runtime-owned collection signals mutate a persistent tree through stage-then-commit structural splices, confirming the tree-with-bindings family for the Phase 7 trigger-1 / trigger-3 check |
 
 No accepted ADR names family (1) as the long-term selection. This
-note does not upgrade the implicit fit to an explicit commitment.
+note does not upgrade the implicit fit to an explicit commitment. The
+M3-Phase 7 re-read (Moment 2, 2026-06-18) **confirmed** the current
+family fit for iteration: the collection-driven cardinality feature
+fit inside the existing control-flow / `BindingTarget` framing, so no
+vision decision record was opened and the strain triggers remain live.
 
 ## Family-neutral vs family-coupled parts of the current design
 
