@@ -12,15 +12,17 @@ use std::rc::Rc;
 
 use wasamo_ir::{
     CompoundOp, ControlFlowBranch, ControlFlowNode, HandlerExpr, InterpolationPart, IrBinding,
-    IrComponent, IrHandler, IrLiteral, IrMember, IrNode, IrProp, IrState, IrType, KindPayload,
-    TrackSize,
+    IrComponent, IrHandler, IrLiteral, IrMember, IrNode, IrProp, IrState, IrStateType, IrType,
+    KindPayload, TrackSize,
 };
 
 use crate::box_values;
 use crate::layout::{Alignment, CellPlacement, TrackSize as LayoutTrackSize, ZStackPlacement};
 use crate::reactive::{
-    register_binding, register_bool_binding, register_conditional_binding, set_active_registry,
-    BindingTarget, PropertyKey, Signal, SignalRegistry, WidgetId,
+    register_binding, register_bool_binding, register_conditional_binding,
+    register_for_item_binding, register_for_item_bool_binding, register_for_loop_binding,
+    set_active_registry, BindingTarget, ForItemContext, PropertyKey, Signal, SignalRegistry,
+    WidgetId,
 };
 use crate::text::{TextRenderer, TypographyStyle};
 use crate::widget::{
@@ -92,10 +94,22 @@ pub struct BuiltUi {
 enum DeclaredMemberSlot {
     Widget,
     Conditional(Rc<RefCell<ConditionalRuntimeState>>),
+    ForLoop(Rc<RefCell<ForLoopRuntimeState>>),
 }
 
 struct ConditionalRuntimeState {
     live_child: bool,
+}
+
+struct ForLoopRuntimeState {
+    live_children: usize,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum TailRangePlan {
+    Insert { start: usize, count: usize },
+    Remove { tail_first_indices: Vec<usize> },
+    NoOp,
 }
 
 impl BuiltUi {
@@ -133,6 +147,30 @@ impl BuiltUi {
             None => false,
         }
     }
+
+    #[doc(hidden)]
+    pub fn __set_string_list_state_for_test(&self, name: &str, value: Vec<String>) -> bool {
+        match self.registry.string_lists.get(name) {
+            Some(signal) => signal.set_if_changed(value),
+            None => false,
+        }
+    }
+
+    #[doc(hidden)]
+    pub fn __set_i32_list_state_for_test(&self, name: &str, value: Vec<i32>) -> bool {
+        match self.registry.i32_lists.get(name) {
+            Some(signal) => signal.set_if_changed(value),
+            None => false,
+        }
+    }
+
+    #[doc(hidden)]
+    pub fn __set_bool_list_state_for_test(&self, name: &str, value: Vec<bool>) -> bool {
+        match self.registry.bool_lists.get(name) {
+            Some(signal) => signal.set_if_changed(value),
+            None => false,
+        }
+    }
 }
 
 // ── Parser ────────────────────────────────────────────────────────────────────
@@ -153,13 +191,14 @@ pub fn parse_ir(text: &str) -> Result<IrComponent, IrLoadError> {
         tokens: &tokens,
         pos: 0,
     };
-    let comp = p.parse_component()?;
+    let mut comp = p.parse_component()?;
     if p.pos < p.tokens.len() {
         return Err(IrLoadError::Parse(format!(
             "unexpected trailing tokens after component (token #{})",
             p.pos
         )));
     }
+    annotate_collection_expr_types(&mut comp)?;
     validate(&comp)?;
     Ok(comp)
 }
@@ -184,6 +223,7 @@ fn validate(comp: &IrComponent) -> Result<(), IrLoadError> {
                 state.name
             )));
         }
+        validate_state_default(state)?;
     }
     validate_host_surface(comp)?;
     reject_root_squatted_host_attrs(comp)?;
@@ -235,7 +275,160 @@ fn validate(comp: &IrComponent) -> Result<(), IrLoadError> {
     // ZStack-level attrs, no bindings/handlers, and only its direct children
     // may carry `h-align` / `v-align` placement annotations.
     validate_phase6_zstack_node_invariants(&comp.root, ParentKind::Root)?;
-    validate_phase6_control_flow_invariants(&comp.root)
+    validate_phase6_control_flow_invariants(&comp.root)?;
+    validate_phase7_iteration_invariants(&comp.root, false)
+}
+
+fn validate_state_default(state: &IrState) -> Result<(), IrLoadError> {
+    match (&state.ty, &state.default) {
+        (IrStateType::Scalar(IrType::I32), IrLiteral::Int(_))
+        | (IrStateType::Scalar(IrType::Str), IrLiteral::Str(_))
+        | (IrStateType::Scalar(IrType::Bool), IrLiteral::Bool(_)) => Ok(()),
+        (IrStateType::Collection(elem), IrLiteral::List(items)) => {
+            for item in items {
+                validate_list_literal_item(elem, item).map_err(|msg| {
+                    IrLoadError::Validate(format!(
+                        "collection state `{}` default {}",
+                        state.name, msg
+                    ))
+                })?;
+            }
+            Ok(())
+        }
+        (IrStateType::Scalar(_), IrLiteral::List(_)) => Err(IrLoadError::Validate(format!(
+            "scalar state `{}` cannot use a list literal default",
+            state.name
+        ))),
+        (IrStateType::Collection(_), other) => Err(IrLoadError::Validate(format!(
+            "collection state `{}` default must be a list literal, got {other:?}",
+            state.name
+        ))),
+        (expected, other) => Err(IrLoadError::Validate(format!(
+            "state `{}` default does not match declared type {expected:?}: {other:?}",
+            state.name
+        ))),
+    }
+}
+
+fn validate_list_literal_item(elem: &IrType, item: &IrLiteral) -> Result<(), String> {
+    match (elem, item) {
+        (IrType::I32, IrLiteral::Int(_))
+        | (IrType::Str, IrLiteral::Str(_))
+        | (IrType::Bool, IrLiteral::Bool(_)) => Ok(()),
+        (_, IrLiteral::List(_)) => Err("cannot contain a nested list literal".into()),
+        (expected, other) => Err(format!(
+            "element must match `{}`, got {other:?}",
+            scalar_type_name(expected)
+        )),
+    }
+}
+
+fn scalar_type_name(ty: &IrType) -> &'static str {
+    match ty {
+        IrType::I32 => "i32",
+        IrType::Str => "string",
+        IrType::Bool => "bool",
+    }
+}
+
+fn annotate_collection_expr_types(comp: &mut IrComponent) -> Result<(), IrLoadError> {
+    let declared: std::collections::HashMap<String, IrStateType> = comp
+        .states
+        .iter()
+        .map(|state| (state.name.clone(), state.ty.clone()))
+        .collect();
+    annotate_node_collection_expr_types(&mut comp.root, &declared)
+}
+
+fn annotate_node_collection_expr_types(
+    node: &mut IrNode,
+    declared: &std::collections::HashMap<String, IrStateType>,
+) -> Result<(), IrLoadError> {
+    for binding in &mut node.bindings {
+        annotate_expr_collection_types(&mut binding.expr, declared)?;
+    }
+    for handler in &mut node.handlers {
+        annotate_expr_collection_types(&mut handler.expr, declared)?;
+    }
+    for member in &mut node.children {
+        annotate_member_collection_expr_types(member, declared)?;
+    }
+    Ok(())
+}
+
+fn annotate_member_collection_expr_types(
+    member: &mut IrMember,
+    declared: &std::collections::HashMap<String, IrStateType>,
+) -> Result<(), IrLoadError> {
+    match member {
+        IrMember::Widget(node) => annotate_node_collection_expr_types(node, declared),
+        IrMember::ControlFlow(ControlFlowNode::If { branches }) => {
+            for branch in branches {
+                annotate_expr_collection_types(&mut branch.condition, declared)?;
+                for body_member in &mut branch.body {
+                    annotate_member_collection_expr_types(body_member, declared)?;
+                }
+            }
+            Ok(())
+        }
+        IrMember::ControlFlow(ControlFlowNode::For {
+            collection, body, ..
+        }) => {
+            annotate_expr_collection_types(collection, declared)?;
+            for body_member in body {
+                annotate_member_collection_expr_types(body_member, declared)?;
+            }
+            Ok(())
+        }
+    }
+}
+
+fn annotate_expr_collection_types(
+    expr: &mut HandlerExpr,
+    declared: &std::collections::HashMap<String, IrStateType>,
+) -> Result<(), IrLoadError> {
+    match expr {
+        HandlerExpr::ListPropRead { path, elem }
+        | HandlerExpr::ListAppend { path, elem, .. }
+        | HandlerExpr::ListDropLast { path, elem } => {
+            if let Some(IrStateType::Collection(found)) = declared.get(path) {
+                *elem = found.clone();
+            }
+        }
+        _ => {}
+    }
+    match expr {
+        HandlerExpr::Assign { rhs, .. } | HandlerExpr::CompoundAssign { rhs, .. } => {
+            annotate_expr_collection_types(rhs, declared)?;
+        }
+        HandlerExpr::ListAppend { value, .. } => {
+            annotate_expr_collection_types(value, declared)?;
+        }
+        HandlerExpr::Interpolation(parts) => {
+            for part in parts {
+                if let InterpolationPart::Expr(inner) = part {
+                    annotate_expr_collection_types(inner, declared)?;
+                }
+            }
+        }
+        HandlerExpr::Block(exprs) => {
+            for inner in exprs {
+                annotate_expr_collection_types(inner, declared)?;
+            }
+        }
+        HandlerExpr::IntLit(_)
+        | HandlerExpr::StrLit(_)
+        | HandlerExpr::BoolLit(_)
+        | HandlerExpr::PropRead { .. }
+        | HandlerExpr::StrPropRead { .. }
+        | HandlerExpr::BoolPropRead { .. }
+        | HandlerExpr::ListPropRead { .. }
+        | HandlerExpr::ItemRead { .. }
+        | HandlerExpr::IndexRead { .. }
+        | HandlerExpr::ListDropLast { .. }
+        | HandlerExpr::ListLit(_) => {}
+    }
+    Ok(())
 }
 
 const HOST_STATIC_ATTRS: &[&str] = &["title", "backdrop", "theme"];
@@ -356,9 +549,133 @@ fn validate_phase6_control_flow_invariants(node: &IrNode) -> Result<(), IrLoadEr
                     }
                 }
             }
+            IrMember::ControlFlow(ControlFlowNode::For { body, .. }) => {
+                if body.len() != 1 {
+                    return Err(IrLoadError::Validate(format!(
+                        "`for` body supports exactly one widget member in M3-Phase 7, got {}",
+                        body.len()
+                    )));
+                }
+                match &body[0] {
+                    IrMember::Widget(body) => validate_phase6_control_flow_invariants(body)?,
+                    IrMember::ControlFlow(_) => {
+                        return Err(IrLoadError::Validate(
+                            "a nested control-flow member is not valid directly in a `for` body in M3-Phase 7".into(),
+                        ));
+                    }
+                }
+            }
         }
     }
     Ok(())
+}
+
+fn validate_phase7_iteration_invariants(
+    node: &IrNode,
+    inside_for_template: bool,
+) -> Result<(), IrLoadError> {
+    if inside_for_template && !node.handlers.is_empty() {
+        return Err(IrLoadError::Validate(
+            "handlers inside a `for` body template are deferred in M3-Phase 7".into(),
+        ));
+    }
+
+    let current = parent_kind_for(node);
+    for member in &node.children {
+        match member {
+            IrMember::Widget(child) => {
+                validate_phase7_iteration_invariants(child, inside_for_template)?;
+            }
+            IrMember::ControlFlow(ControlFlowNode::If { branches }) => {
+                for branch in branches {
+                    for body_member in &branch.body {
+                        validate_phase7_iteration_member_invariants(
+                            body_member,
+                            current,
+                            inside_for_template,
+                        )?;
+                    }
+                }
+            }
+            IrMember::ControlFlow(ControlFlowNode::For { body, .. }) => {
+                validate_direct_for_parent(node)?;
+                if inside_for_template {
+                    return Err(IrLoadError::Validate(
+                        "nested `for` is deferred in M3-Phase 7".into(),
+                    ));
+                }
+                if body.len() != 1 || !matches!(body.first(), Some(IrMember::Widget(_))) {
+                    return Err(IrLoadError::Validate(
+                        "`for` body admits exactly one widget child in M3-Phase 7".into(),
+                    ));
+                }
+                if let Some(IrMember::Widget(body_node)) = body.first() {
+                    validate_phase7_iteration_invariants(body_node, true)?;
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
+fn validate_phase7_iteration_member_invariants(
+    member: &IrMember,
+    parent: ParentKind,
+    inside_for_template: bool,
+) -> Result<(), IrLoadError> {
+    match member {
+        IrMember::Widget(child) => validate_phase7_iteration_invariants(child, inside_for_template),
+        IrMember::ControlFlow(ControlFlowNode::If { branches }) => {
+            for branch in branches {
+                for body_member in &branch.body {
+                    validate_phase7_iteration_member_invariants(
+                        body_member,
+                        parent,
+                        inside_for_template,
+                    )?;
+                }
+            }
+            Ok(())
+        }
+        IrMember::ControlFlow(ControlFlowNode::For { body, .. }) => {
+            if inside_for_template {
+                return Err(IrLoadError::Validate(
+                    "nested `for` is deferred in M3-Phase 7".into(),
+                ));
+            }
+            match parent {
+                ParentKind::Grid | ParentKind::Cell => Err(IrLoadError::Validate(
+                    "direct `for` is not valid in Grid placement contexts in M3-Phase 7".into(),
+                )),
+                _ => {
+                    if body.len() != 1 || !matches!(body.first(), Some(IrMember::Widget(_))) {
+                        return Err(IrLoadError::Validate(
+                            "`for` body admits exactly one widget child in M3-Phase 7".into(),
+                        ));
+                    }
+                    if let Some(IrMember::Widget(body_node)) = body.first() {
+                        validate_phase7_iteration_invariants(body_node, true)?;
+                    }
+                    Ok(())
+                }
+            }
+        }
+    }
+}
+
+fn validate_direct_for_parent(parent_node: &IrNode) -> Result<(), IrLoadError> {
+    match parent_node.widget_type.as_str() {
+        "ScrollView" => Err(IrLoadError::Validate(
+            "direct `for` is not valid in ScrollView; wrap it in a content widget such as `WrapPanel`".into(),
+        )),
+        "Box" => Err(IrLoadError::Validate(
+            "direct `for` is not valid in Box because Box admits at most one child".into(),
+        )),
+        "Grid" | "Cell" => Err(IrLoadError::Validate(
+            "direct `for` is not valid in Grid placement contexts in M3-Phase 7".into(),
+        )),
+        _ => Ok(()),
+    }
 }
 
 fn validate_phase2_member_invariants(member: &IrMember) -> Result<(), IrLoadError> {
@@ -369,6 +686,12 @@ fn validate_phase2_member_invariants(member: &IrMember) -> Result<(), IrLoadErro
                 for body_member in &branch.body {
                     validate_phase2_member_invariants(body_member)?;
                 }
+            }
+            Ok(())
+        }
+        IrMember::ControlFlow(ControlFlowNode::For { body, .. }) => {
+            for body_member in body {
+                validate_phase2_member_invariants(body_member)?;
             }
             Ok(())
         }
@@ -487,6 +810,12 @@ fn validate_phase4_member_invariants(member: &IrMember) -> Result<(), IrLoadErro
             }
             Ok(())
         }
+        IrMember::ControlFlow(ControlFlowNode::For { body, .. }) => {
+            for body_member in body {
+                validate_phase4_member_invariants(body_member)?;
+            }
+            Ok(())
+        }
     }
 }
 
@@ -524,6 +853,12 @@ fn validate_phase3_member_invariants(member: &IrMember) -> Result<(), IrLoadErro
                 for body_member in &branch.body {
                     validate_phase3_member_invariants(body_member)?;
                 }
+            }
+            Ok(())
+        }
+        IrMember::ControlFlow(ControlFlowNode::For { body, .. }) => {
+            for body_member in body {
+                validate_phase3_member_invariants(body_member)?;
             }
             Ok(())
         }
@@ -578,6 +913,12 @@ fn validate_phase5_member_invariants(member: &IrMember) -> Result<(), IrLoadErro
                 for body_member in &branch.body {
                     validate_phase5_member_invariants(body_member)?;
                 }
+            }
+            Ok(())
+        }
+        IrMember::ControlFlow(ControlFlowNode::For { body, .. }) => {
+            for body_member in body {
+                validate_phase5_member_invariants(body_member)?;
             }
             Ok(())
         }
@@ -674,6 +1015,12 @@ fn validate_phase6_zstack_member_invariants(
                 for body_member in &branch.body {
                     validate_phase6_zstack_member_invariants(body_member, parent)?;
                 }
+            }
+            Ok(())
+        }
+        IrMember::ControlFlow(ControlFlowNode::For { body, .. }) => {
+            for body_member in body {
+                validate_phase6_zstack_member_invariants(body_member, parent)?;
             }
             Ok(())
         }
@@ -938,12 +1285,33 @@ fn grid_rects_overlap(a: &GridCellRect, b: &GridCellRect) -> bool {
         && ranges_overlap(a.column, a.column_span, b.column, b.column_span)
 }
 
+#[derive(Clone, Copy)]
+struct LoopReadScope<'a> {
+    binder: &'a str,
+    index_binder: Option<&'a str>,
+    elem: &'a IrType,
+}
+
 fn validate_node_references(
     node: &IrNode,
-    declared: &std::collections::HashMap<&str, IrType>,
+    declared: &std::collections::HashMap<&str, IrStateType>,
+) -> Result<(), IrLoadError> {
+    validate_node_references_in_scope(node, declared, None, false)
+}
+
+fn validate_node_references_in_scope(
+    node: &IrNode,
+    declared: &std::collections::HashMap<&str, IrStateType>,
+    loop_scope: Option<LoopReadScope<'_>>,
+    inside_for_template: bool,
 ) -> Result<(), IrLoadError> {
     for binding in &node.bindings {
-        validate_expr_references(&binding.expr, declared, &|name| {
+        if let Some(scope) = loop_scope {
+            if let Some((_, target_ty)) = resolve_prop_key(&node.widget_type, &binding.prop_name) {
+                validate_loop_local_binding_type(&binding.expr, &target_ty, scope)?;
+            }
+        }
+        validate_expr_references(&binding.expr, declared, loop_scope, &|name| {
             format!(
                 "binding `{}` references undeclared name `{}`",
                 binding.prop_name, name
@@ -951,7 +1319,12 @@ fn validate_node_references(
         })?;
     }
     for handler in &node.handlers {
-        validate_expr_references(&handler.expr, declared, &|name| {
+        if inside_for_template {
+            return Err(IrLoadError::Validate(
+                "handlers inside a `for` body template are deferred in M3-Phase 7".into(),
+            ));
+        }
+        validate_expr_references(&handler.expr, declared, None, &|name| {
             format!(
                 "handler `on {}` references undeclared name `{}`",
                 handler.signal, name
@@ -959,68 +1332,187 @@ fn validate_node_references(
         })?;
     }
     for member in &node.children {
-        validate_member_references(member, declared)?;
+        validate_member_references(member, declared, loop_scope, inside_for_template)?;
     }
     Ok(())
 }
 
 fn validate_member_references(
     member: &IrMember,
-    declared: &std::collections::HashMap<&str, IrType>,
+    declared: &std::collections::HashMap<&str, IrStateType>,
+    loop_scope: Option<LoopReadScope<'_>>,
+    inside_for_template: bool,
 ) -> Result<(), IrLoadError> {
     match member {
-        IrMember::Widget(node) => validate_node_references(node, declared),
+        IrMember::Widget(node) => {
+            validate_node_references_in_scope(node, declared, loop_scope, inside_for_template)
+        }
         IrMember::ControlFlow(ControlFlowNode::If { branches }) => {
             for branch in branches {
                 validate_condition_expr(&branch.condition, declared)?;
                 for body_member in &branch.body {
-                    validate_member_references(body_member, declared)?;
+                    validate_member_references(
+                        body_member,
+                        declared,
+                        loop_scope,
+                        inside_for_template,
+                    )?;
                 }
+            }
+            Ok(())
+        }
+        IrMember::ControlFlow(ControlFlowNode::For {
+            binder,
+            index_binder,
+            collection,
+            body,
+        }) => {
+            validate_for_header(binder, index_binder.as_deref(), collection, declared)?;
+            if inside_for_template {
+                return Err(IrLoadError::Validate(
+                    "nested `for` is deferred in M3-Phase 7".into(),
+                ));
+            }
+            let child_scope = LoopReadScope {
+                binder,
+                index_binder: index_binder.as_deref(),
+                elem: match collection {
+                    HandlerExpr::ListPropRead { elem, .. } => elem,
+                    _ => &IrType::I32,
+                },
+            };
+            for body_member in body {
+                validate_member_references(body_member, declared, Some(child_scope), true)?;
             }
             Ok(())
         }
     }
 }
 
-fn validate_expr_references(
+fn validate_loop_local_binding_type(
     expr: &HandlerExpr,
-    declared: &std::collections::HashMap<&str, IrType>,
-    err_msg: &dyn Fn(&str) -> String,
+    target_ty: &IrType,
+    loop_scope: LoopReadScope<'_>,
 ) -> Result<(), IrLoadError> {
     match expr {
-        HandlerExpr::IntLit(_) | HandlerExpr::StrLit(_) | HandlerExpr::BoolLit(_) => Ok(()),
-        HandlerExpr::PropRead { path }
-        | HandlerExpr::StrPropRead { path }
-        | HandlerExpr::BoolPropRead { path } => {
-            if !declared.contains_key(path.as_str()) {
-                Err(IrLoadError::Validate(err_msg(path)))
-            } else {
-                Ok(())
+        HandlerExpr::ItemRead { binder } if binder == loop_scope.binder => {
+            match (target_ty, loop_scope.elem) {
+                (IrType::Str, IrType::Bool) => Err(IrLoadError::Validate(
+                    "bool loop binder cannot be used in string binding; bool formatting/display conversion is not defined in M3-Phase 7".into(),
+                )),
+                (IrType::I32, IrType::I32) | (IrType::Str, IrType::I32 | IrType::Str) | (IrType::Bool, IrType::Bool) => Ok(()),
+                (expected, found) => Err(IrLoadError::Validate(format!(
+                    "loop binder `{binder}` has element type `{}`, not `{}`",
+                    scalar_type_name(found),
+                    scalar_type_name(expected)
+                ))),
             }
         }
-        HandlerExpr::Assign { lhs, rhs } => {
-            if !declared.contains_key(lhs.as_str()) {
-                return Err(IrLoadError::Validate(err_msg(lhs)));
+        HandlerExpr::IndexRead { binder } if loop_scope.index_binder == Some(binder.as_str()) => {
+            match target_ty {
+                IrType::I32 | IrType::Str => Ok(()),
+                IrType::Bool => Err(IrLoadError::Validate(
+                    "loop index binder cannot be used in a bool binding".into(),
+                )),
             }
-            validate_expr_references(rhs, declared, err_msg)
-        }
-        HandlerExpr::CompoundAssign { lhs, rhs, .. } => {
-            if !declared.contains_key(lhs.as_str()) {
-                return Err(IrLoadError::Validate(err_msg(lhs)));
-            }
-            validate_expr_references(rhs, declared, err_msg)
         }
         HandlerExpr::Interpolation(parts) => {
             for part in parts {
                 if let InterpolationPart::Expr(inner) = part {
-                    validate_expr_references(inner, declared, err_msg)?;
+                    validate_loop_local_binding_type(inner, &IrType::Str, loop_scope)?;
                 }
             }
             Ok(())
         }
         HandlerExpr::Block(exprs) => {
             for inner in exprs {
-                validate_expr_references(inner, declared, err_msg)?;
+                validate_loop_local_binding_type(inner, target_ty, loop_scope)?;
+            }
+            Ok(())
+        }
+        HandlerExpr::Assign { rhs, .. } | HandlerExpr::CompoundAssign { rhs, .. } => {
+            validate_loop_local_binding_type(rhs, target_ty, loop_scope)
+        }
+        HandlerExpr::ListAppend { value, .. } => {
+            validate_loop_local_binding_type(value, target_ty, loop_scope)
+        }
+        _ => Ok(()),
+    }
+}
+
+fn validate_expr_references(
+    expr: &HandlerExpr,
+    declared: &std::collections::HashMap<&str, IrStateType>,
+    loop_scope: Option<LoopReadScope<'_>>,
+    err_msg: &dyn Fn(&str) -> String,
+) -> Result<(), IrLoadError> {
+    match expr {
+        HandlerExpr::IntLit(_) | HandlerExpr::StrLit(_) | HandlerExpr::BoolLit(_) => Ok(()),
+        HandlerExpr::ItemRead { binder } => match loop_scope {
+            Some(scope) if binder == scope.binder => Ok(()),
+            Some(_) => Err(IrLoadError::Validate(format!(
+                "`item-read {binder}` is not in scope for the current `for` body"
+            ))),
+            None => Err(IrLoadError::Validate(format!(
+                "loop-local binder `{binder}` may be read only inside its `for` body"
+            ))),
+        },
+        HandlerExpr::IndexRead { binder } => match loop_scope.and_then(|scope| scope.index_binder) {
+            Some(index) if binder == index => Ok(()),
+            Some(_) => Err(IrLoadError::Validate(format!(
+                "`index-read {binder}` is not in scope for the current `for` body"
+            ))),
+            None => Err(IrLoadError::Validate(format!(
+                "loop-local index binder `{binder}` may be read only inside its `for` body"
+            ))),
+        },
+        HandlerExpr::PropRead { path }
+        | HandlerExpr::StrPropRead { path }
+        | HandlerExpr::BoolPropRead { path } => validate_scalar_read_path(path, declared, err_msg),
+        HandlerExpr::ListPropRead { .. } => Err(IrLoadError::Validate(
+            "collection reads are valid only as a `for` collection header in M3-Phase 7".into(),
+        )),
+        HandlerExpr::Assign { lhs, rhs } => {
+            match declared.get(lhs.as_str()) {
+                Some(IrStateType::Scalar(_)) => {
+                    validate_expr_references(rhs, declared, loop_scope, err_msg)
+                }
+                Some(IrStateType::Collection(_)) => {
+                    validate_collection_assignment_rhs(lhs, rhs, declared, err_msg)
+                }
+                None => Err(IrLoadError::Validate(err_msg(lhs))),
+            }
+        }
+        HandlerExpr::CompoundAssign { lhs, rhs, .. } => {
+            match declared.get(lhs.as_str()) {
+                Some(IrStateType::Scalar(_)) => {
+                    validate_expr_references(rhs, declared, loop_scope, err_msg)
+                }
+                Some(IrStateType::Collection(_)) => Err(IrLoadError::Validate(format!(
+                    "collection state `{lhs}` cannot use compound assignment"
+                ))),
+                None => Err(IrLoadError::Validate(err_msg(lhs))),
+            }
+        }
+        HandlerExpr::ListAppend { .. } | HandlerExpr::ListDropLast { .. } => {
+            Err(IrLoadError::Validate(
+                "collection edit expressions are valid only as a collection assignment RHS in M3-Phase 7".into(),
+            ))
+        }
+        HandlerExpr::ListLit(_) => Err(IrLoadError::Validate(
+            "list literals are valid only as collection state defaults or collection assignment RHS in M3-Phase 7".into(),
+        )),
+        HandlerExpr::Interpolation(parts) => {
+            for part in parts {
+                if let InterpolationPart::Expr(inner) = part {
+                    validate_expr_references(inner, declared, loop_scope, err_msg)?;
+                }
+            }
+            Ok(())
+        }
+        HandlerExpr::Block(exprs) => {
+            for inner in exprs {
+                validate_expr_references(inner, declared, loop_scope, err_msg)?;
             }
             Ok(())
         }
@@ -1029,12 +1521,12 @@ fn validate_expr_references(
 
 fn validate_condition_expr(
     expr: &HandlerExpr,
-    declared: &std::collections::HashMap<&str, IrType>,
+    declared: &std::collections::HashMap<&str, IrStateType>,
 ) -> Result<(), IrLoadError> {
     match expr {
         HandlerExpr::BoolLit(_) => Ok(()),
         HandlerExpr::BoolPropRead { path } => match declared.get(path.as_str()) {
-            Some(IrType::Bool) => Ok(()),
+            Some(IrStateType::Scalar(IrType::Bool)) => Ok(()),
             Some(other) => Err(IrLoadError::Validate(format!(
                 "`if` condition `{path}` must resolve to bool, got {other:?}"
             ))),
@@ -1049,6 +1541,185 @@ fn validate_condition_expr(
         }
         other => Err(IrLoadError::Validate(format!(
             "`if` condition must be a bool literal or bool state read, got {other:?}"
+        ))),
+    }
+}
+
+fn validate_scalar_read_path(
+    path: &str,
+    declared: &std::collections::HashMap<&str, IrStateType>,
+    err_msg: &dyn Fn(&str) -> String,
+) -> Result<(), IrLoadError> {
+    match declared.get(path) {
+        Some(IrStateType::Scalar(_)) => Ok(()),
+        Some(IrStateType::Collection(_)) => Err(IrLoadError::Validate(format!(
+            "scalar expression references collection state `{path}`"
+        ))),
+        None => Err(IrLoadError::Validate(err_msg(path))),
+    }
+}
+
+fn validate_collection_read_path(
+    path: &str,
+    elem: &IrType,
+    declared: &std::collections::HashMap<&str, IrStateType>,
+    err_msg: &dyn Fn(&str) -> String,
+) -> Result<(), IrLoadError> {
+    match declared.get(path) {
+        Some(IrStateType::Collection(found)) if found == elem => Ok(()),
+        Some(IrStateType::Collection(found)) => Err(IrLoadError::Validate(format!(
+            "collection read `{path}` has element tag `{}`, but state is `{}`",
+            scalar_type_name(elem),
+            scalar_type_name(found)
+        ))),
+        Some(IrStateType::Scalar(_)) => Err(IrLoadError::Validate(format!(
+            "collection expression references scalar state `{path}`"
+        ))),
+        None => Err(IrLoadError::Validate(err_msg(path))),
+    }
+}
+
+fn validate_collection_assignment_rhs(
+    lhs: &str,
+    rhs: &HandlerExpr,
+    declared: &std::collections::HashMap<&str, IrStateType>,
+    err_msg: &dyn Fn(&str) -> String,
+) -> Result<(), IrLoadError> {
+    let elem = match declared.get(lhs) {
+        Some(IrStateType::Collection(elem)) => elem,
+        _ => return Err(IrLoadError::Validate(err_msg(lhs))),
+    };
+    match rhs {
+        HandlerExpr::ListAppend {
+            path,
+            elem: rhs_elem,
+            value,
+        } if path == lhs && rhs_elem == elem => {
+            validate_collection_element_expr(lhs, elem, value, declared, err_msg)?;
+            Ok(())
+        }
+        HandlerExpr::ListDropLast {
+            path,
+            elem: rhs_elem,
+        } if path == lhs && rhs_elem == elem => Ok(()),
+        HandlerExpr::ListLit(items) => {
+            for item in items {
+                validate_list_literal_item(elem, item).map_err(IrLoadError::Validate)?;
+            }
+            Ok(())
+        }
+        HandlerExpr::ListAppend { path, .. } | HandlerExpr::ListDropLast { path, .. } => {
+            Err(IrLoadError::Validate(format!(
+                "collection assignment `{lhs}` RHS must use `{lhs}` as its receiver, got `{path}`"
+            )))
+        }
+        other => Err(IrLoadError::Validate(format!(
+            "collection assignment `{lhs}` requires list-append, list-drop-last, or list literal RHS, got {other:?}"
+        ))),
+    }
+}
+
+fn validate_collection_element_expr(
+    lhs: &str,
+    elem: &IrType,
+    value: &HandlerExpr,
+    declared: &std::collections::HashMap<&str, IrStateType>,
+    err_msg: &dyn Fn(&str) -> String,
+) -> Result<(), IrLoadError> {
+    match (elem, value) {
+        (IrType::I32, HandlerExpr::IntLit(_))
+        | (IrType::Str, HandlerExpr::StrLit(_))
+        | (IrType::Bool, HandlerExpr::BoolLit(_)) => Ok(()),
+        (IrType::I32, HandlerExpr::PropRead { path }) => {
+            validate_scalar_value_read(lhs, elem, path, declared, err_msg)
+        }
+        (IrType::Str, HandlerExpr::StrPropRead { path }) => {
+            validate_scalar_value_read(lhs, elem, path, declared, err_msg)
+        }
+        (IrType::Bool, HandlerExpr::BoolPropRead { path }) => {
+            validate_scalar_value_read(lhs, elem, path, declared, err_msg)
+        }
+        (
+            _,
+            HandlerExpr::PropRead { path }
+            | HandlerExpr::StrPropRead { path }
+            | HandlerExpr::BoolPropRead { path },
+        ) => validate_scalar_value_read(lhs, elem, path, declared, err_msg),
+        (IrType::Str, HandlerExpr::Interpolation(_)) => {
+            validate_expr_references(value, declared, None, err_msg)
+        }
+        (_, HandlerExpr::ItemRead { .. } | HandlerExpr::IndexRead { .. }) => {
+            validate_expr_references(value, declared, None, err_msg)
+        }
+        _ => Err(IrLoadError::Validate(format!(
+            "collection assignment `{lhs}` appends a value that does not match element type `{}`",
+            scalar_type_name(elem)
+        ))),
+    }
+}
+
+fn validate_scalar_value_read(
+    lhs: &str,
+    elem: &IrType,
+    path: &str,
+    declared: &std::collections::HashMap<&str, IrStateType>,
+    err_msg: &dyn Fn(&str) -> String,
+) -> Result<(), IrLoadError> {
+    match declared.get(path) {
+        Some(IrStateType::Scalar(found)) if found == elem => Ok(()),
+        Some(IrStateType::Scalar(found)) => Err(IrLoadError::Validate(format!(
+            "collection assignment `{lhs}` appends `{path}` with type `{}`, expected `{}`",
+            scalar_type_name(found),
+            scalar_type_name(elem)
+        ))),
+        Some(IrStateType::Collection(_)) => Err(IrLoadError::Validate(format!(
+            "collection assignment `{lhs}` cannot append collection state `{path}` as one element"
+        ))),
+        None => Err(IrLoadError::Validate(err_msg(path))),
+    }
+}
+
+fn validate_for_header(
+    binder: &str,
+    index_binder: Option<&str>,
+    collection: &HandlerExpr,
+    declared: &std::collections::HashMap<&str, IrStateType>,
+) -> Result<(), IrLoadError> {
+    if binder.is_empty() {
+        return Err(IrLoadError::Validate(
+            "`for` binder must not be empty".into(),
+        ));
+    }
+    if declared.contains_key(binder) {
+        return Err(IrLoadError::Validate(format!(
+            "`for` binder `{binder}` collides with a declared state"
+        )));
+    }
+    if let Some(index) = index_binder {
+        if index.is_empty() {
+            return Err(IrLoadError::Validate(
+                "`for` index binder must not be empty".into(),
+            ));
+        }
+        if index == binder {
+            return Err(IrLoadError::Validate(
+                "`for` binder and index binder must be distinct".into(),
+            ));
+        }
+        if declared.contains_key(index) {
+            return Err(IrLoadError::Validate(format!(
+                "`for` index binder `{index}` collides with a declared state"
+            )));
+        }
+    }
+    match collection {
+        HandlerExpr::ListPropRead { path, elem } => {
+            validate_collection_read_path(path, elem, declared, &|name| {
+                format!("`for` references undeclared collection `{name}`")
+            })
+        }
+        other => Err(IrLoadError::Validate(format!(
+            "`for` collection must be a collection state read, got {other:?}"
         ))),
     }
 }
@@ -1075,6 +1746,9 @@ enum Token {
     RBrace,
     LParen,
     RParen,
+    LBracket,
+    RBracket,
+    Comma,
     Eq,
     Colon,
     Ident(String),
@@ -1128,6 +1802,18 @@ fn tokenize(text: &str) -> Result<Vec<Token>, IrLoadError> {
             }
             ')' => {
                 tokens.push(Token::RParen);
+                i += 1;
+            }
+            '[' => {
+                tokens.push(Token::LBracket);
+                i += 1;
+            }
+            ']' => {
+                tokens.push(Token::RBracket);
+                i += 1;
+            }
+            ',' => {
+                tokens.push(Token::Comma);
                 i += 1;
             }
             '=' => {
@@ -1417,13 +2103,20 @@ impl<'a> Parser<'a> {
         let name = self.expect_ident()?;
         self.expect(&Token::Colon)?;
         let ty_str = self.expect_ident()?;
-        let ty = match ty_str.as_str() {
+        let elem = match ty_str.as_str() {
             "i32" => IrType::I32,
             "string" => IrType::Str,
             "bool" => IrType::Bool,
             other => {
                 return Err(IrLoadError::Parse(format!("unknown state type: {other}")));
             }
+        };
+        let ty = if matches!(self.peek(), Some(Token::LBracket)) {
+            self.advance();
+            self.expect(&Token::RBracket)?;
+            IrStateType::Collection(elem)
+        } else {
+            IrStateType::Scalar(elem)
         };
         self.expect(&Token::Eq)?;
         let default = self.parse_literal()?;
@@ -1459,6 +2152,9 @@ impl<'a> Parser<'a> {
                 }
                 Some(Token::Ident(s)) if s == "if" => {
                     children.push(IrMember::ControlFlow(self.parse_if_member()?))
+                }
+                Some(Token::Ident(s)) if s == "for" => {
+                    children.push(IrMember::ControlFlow(self.parse_for_member()?))
                 }
                 Some(Token::Ident(s)) if s == "tracks" => {
                     // `tracks` lines are Grid-only (DD-M3-P5-001 carrier
@@ -1544,6 +2240,9 @@ impl<'a> Parser<'a> {
                 Some(Token::Ident(s)) if s == "if" => {
                     body.push(IrMember::ControlFlow(self.parse_if_member()?));
                 }
+                Some(Token::Ident(s)) if s == "for" => {
+                    body.push(IrMember::ControlFlow(self.parse_for_member()?));
+                }
                 Some(other) => {
                     return Err(IrLoadError::Parse(format!(
                         "unexpected token in if body: {other:?}"
@@ -1554,6 +2253,53 @@ impl<'a> Parser<'a> {
         }
         Ok(ControlFlowNode::If {
             branches: vec![ControlFlowBranch { condition, body }],
+        })
+    }
+
+    fn parse_for_member(&mut self) -> Result<ControlFlowNode, IrLoadError> {
+        self.expect_keyword("for")?;
+        let binder = self.expect_ident()?;
+        let index_binder = if matches!(self.peek(), Some(Token::Comma)) {
+            self.advance();
+            Some(self.expect_ident()?)
+        } else {
+            None
+        };
+        self.expect_keyword("in")?;
+        let collection_name = self.expect_ident()?;
+        self.expect(&Token::LBrace)?;
+        let mut body = Vec::new();
+        loop {
+            match self.peek() {
+                Some(Token::RBrace) => {
+                    self.advance();
+                    break;
+                }
+                Some(Token::Ident(s)) if s == "node" => {
+                    body.push(IrMember::Widget(self.parse_node()?));
+                }
+                Some(Token::Ident(s)) if s == "if" => {
+                    body.push(IrMember::ControlFlow(self.parse_if_member()?));
+                }
+                Some(Token::Ident(s)) if s == "for" => {
+                    body.push(IrMember::ControlFlow(self.parse_for_member()?));
+                }
+                Some(other) => {
+                    return Err(IrLoadError::Parse(format!(
+                        "unexpected token in for body: {other:?}"
+                    )));
+                }
+                None => return Err(IrLoadError::Parse("unexpected EOF in for body".into())),
+            }
+        }
+        Ok(ControlFlowNode::For {
+            binder,
+            index_binder,
+            collection: HandlerExpr::ListPropRead {
+                path: collection_name,
+                elem: IrType::I32,
+            },
+            body,
         })
     }
 
@@ -1620,6 +2366,10 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_literal(&mut self) -> Result<IrLiteral, IrLoadError> {
+        match self.peek() {
+            Some(Token::LBracket) => return self.parse_list_literal(),
+            _ => {}
+        }
         match self.advance() {
             Some(Token::Int(n)) => Ok(IrLiteral::Int(*n)),
             Some(Token::Str(s)) => Ok(IrLiteral::Str(s.clone())),
@@ -1642,6 +2392,44 @@ impl<'a> Parser<'a> {
         }
     }
 
+    fn parse_list_literal(&mut self) -> Result<IrLiteral, IrLoadError> {
+        self.expect(&Token::LBracket)?;
+        let mut items = Vec::new();
+        if matches!(self.peek(), Some(Token::RBracket)) {
+            self.advance();
+            return Ok(IrLiteral::List(items));
+        }
+        loop {
+            let item = match self.advance() {
+                Some(Token::Int(n)) => IrLiteral::Int(*n),
+                Some(Token::Str(s)) => IrLiteral::Str(s.clone()),
+                Some(Token::Ident(s)) if s == "true" => IrLiteral::Bool(true),
+                Some(Token::Ident(s)) if s == "false" => IrLiteral::Bool(false),
+                other => {
+                    return Err(IrLoadError::Parse(format!(
+                        "expected scalar list literal element, got {other:?}"
+                    )));
+                }
+            };
+            items.push(item);
+            match self.peek() {
+                Some(Token::Comma) => {
+                    self.advance();
+                }
+                Some(Token::RBracket) => {
+                    self.advance();
+                    break;
+                }
+                other => {
+                    return Err(IrLoadError::Parse(format!(
+                        "expected `,` or `]` in list literal, got {other:?}"
+                    )));
+                }
+            }
+        }
+        Ok(IrLiteral::List(items))
+    }
+
     fn parse_expr(&mut self) -> Result<HandlerExpr, IrLoadError> {
         match self.peek() {
             Some(Token::Int(n)) => {
@@ -1662,6 +2450,10 @@ impl<'a> Parser<'a> {
                 self.advance();
                 Ok(HandlerExpr::BoolLit(false))
             }
+            Some(Token::LBracket) => match self.parse_list_literal()? {
+                IrLiteral::List(items) => Ok(HandlerExpr::ListLit(items)),
+                _ => unreachable!(),
+            },
             Some(Token::LParen) => self.parse_sexpr(),
             other => Err(IrLoadError::Parse(format!(
                 "expected expression, got {other:?}"
@@ -1684,6 +2476,37 @@ impl<'a> Parser<'a> {
             "bool-prop-read" => {
                 let path = self.expect_ident()?;
                 HandlerExpr::BoolPropRead { path }
+            }
+            "list-prop-read" => {
+                let path = self.expect_ident()?;
+                HandlerExpr::ListPropRead {
+                    path,
+                    elem: IrType::I32,
+                }
+            }
+            "item-read" => {
+                let binder = self.expect_ident()?;
+                HandlerExpr::ItemRead { binder }
+            }
+            "index-read" => {
+                let binder = self.expect_ident()?;
+                HandlerExpr::IndexRead { binder }
+            }
+            "list-append" => {
+                let path = self.expect_ident()?;
+                let value = self.parse_expr()?;
+                HandlerExpr::ListAppend {
+                    path,
+                    elem: IrType::I32,
+                    value: Box::new(value),
+                }
+            }
+            "list-drop-last" => {
+                let path = self.expect_ident()?;
+                HandlerExpr::ListDropLast {
+                    path,
+                    elem: IrType::I32,
+                }
             }
             "assign" => {
                 let lhs = self.expect_ident()?;
@@ -1774,8 +2597,8 @@ pub fn build_widget_tree(
 fn build_signal_registry(states: &[IrState]) -> SignalRegistry {
     let mut registry = SignalRegistry::new();
     for state in states {
-        match state.ty {
-            IrType::I32 => {
+        match &state.ty {
+            IrStateType::Scalar(IrType::I32) => {
                 let initial = match &state.default {
                     IrLiteral::Int(n) => *n,
                     _ => 0,
@@ -1784,7 +2607,7 @@ fn build_signal_registry(states: &[IrState]) -> SignalRegistry {
                     .i32s
                     .insert(state.name.clone(), Signal::new(initial));
             }
-            IrType::Str => {
+            IrStateType::Scalar(IrType::Str) => {
                 let initial = match &state.default {
                     IrLiteral::Str(s) => s.clone(),
                     _ => String::new(),
@@ -1793,13 +2616,58 @@ fn build_signal_registry(states: &[IrState]) -> SignalRegistry {
                     .strings
                     .insert(state.name.clone(), Signal::new(initial));
             }
-            IrType::Bool => {
+            IrStateType::Scalar(IrType::Bool) => {
                 let initial = match &state.default {
                     IrLiteral::Bool(b) => *b,
                     _ => false,
                 };
                 registry
                     .bools
+                    .insert(state.name.clone(), Signal::new(initial));
+            }
+            IrStateType::Collection(IrType::I32) => {
+                let initial = match &state.default {
+                    IrLiteral::List(items) => items
+                        .iter()
+                        .filter_map(|item| match item {
+                            IrLiteral::Int(n) => Some(*n),
+                            _ => None,
+                        })
+                        .collect(),
+                    _ => Vec::new(),
+                };
+                registry
+                    .i32_lists
+                    .insert(state.name.clone(), Signal::new(initial));
+            }
+            IrStateType::Collection(IrType::Str) => {
+                let initial = match &state.default {
+                    IrLiteral::List(items) => items
+                        .iter()
+                        .filter_map(|item| match item {
+                            IrLiteral::Str(s) => Some(s.clone()),
+                            _ => None,
+                        })
+                        .collect(),
+                    _ => Vec::new(),
+                };
+                registry
+                    .string_lists
+                    .insert(state.name.clone(), Signal::new(initial));
+            }
+            IrStateType::Collection(IrType::Bool) => {
+                let initial = match &state.default {
+                    IrLiteral::List(items) => items
+                        .iter()
+                        .filter_map(|item| match item {
+                            IrLiteral::Bool(b) => Some(*b),
+                            _ => None,
+                        })
+                        .collect(),
+                    _ => Vec::new(),
+                };
+                registry
+                    .bool_lists
                     .insert(state.name.clone(), Signal::new(initial));
             }
         }
@@ -1812,6 +2680,16 @@ fn build_node(
     compositor: &Compositor,
     renderer: &TextRenderer,
     registry: &Rc<SignalRegistry>,
+) -> Result<Box<WidgetNode>, IrLoadError> {
+    build_node_with_loop_context(node, compositor, renderer, registry, None)
+}
+
+fn build_node_with_loop_context(
+    node: &IrNode,
+    compositor: &Compositor,
+    renderer: &TextRenderer,
+    registry: &Rc<SignalRegistry>,
+    loop_context: Option<&ForItemContext>,
 ) -> Result<Box<WidgetNode>, IrLoadError> {
     let mut widget = construct_widget(node, compositor, renderer, registry)?;
 
@@ -1832,8 +2710,15 @@ fn build_node(
         // the loader selects the evaluator/writer pair matching the target
         // property's declared `IrType`. The reactive engine itself stays
         // type-agnostic; the seam lives here at the call site.
-        let handle = match prop_ty {
-            IrType::Bool => register_bool_binding(
+        let handle = match (prop_ty, loop_context) {
+            (IrType::Bool, Some(item)) => register_for_item_bool_binding(
+                target,
+                binding.expr.clone(),
+                Rc::clone(registry),
+                item.clone(),
+                widget_write_property_bool,
+            ),
+            (IrType::Bool, None) => register_bool_binding(
                 target,
                 binding.expr.clone(),
                 Rc::clone(registry),
@@ -1843,7 +2728,14 @@ fn build_node(
             // writer (stringified by `evaluate_binding`, parsed at the
             // per-widget setter — typed-i32 writer lands when its use case
             // arrives).
-            IrType::I32 | IrType::Str => register_binding(
+            (IrType::I32 | IrType::Str, Some(item)) => register_for_item_binding(
+                target,
+                binding.expr.clone(),
+                Rc::clone(registry),
+                item.clone(),
+                widget_write_property,
+            ),
+            (IrType::I32 | IrType::Str, None) => register_binding(
                 target,
                 binding.expr.clone(),
                 Rc::clone(registry),
@@ -1878,7 +2770,13 @@ fn build_node(
                     cell.widget_children().count()
                 ))
             })?;
-            let content_widget = build_node(content, compositor, renderer, registry)?;
+            let content_widget = build_node_with_loop_context(
+                content,
+                compositor,
+                renderer,
+                registry,
+                loop_context,
+            )?;
             widget
                 .append_child(content_widget)
                 .map_err(|e| IrLoadError::Build(format!("append_child failed: {e:?}")))?;
@@ -1894,6 +2792,7 @@ fn build_node(
                 compositor,
                 renderer,
                 registry,
+                loop_context,
             )?;
         }
     }
@@ -1909,11 +2808,13 @@ fn append_static_member(
     compositor: &Compositor,
     renderer: &TextRenderer,
     registry: &Rc<SignalRegistry>,
+    loop_context: Option<&ForItemContext>,
 ) -> Result<(), IrLoadError> {
     match member {
         IrMember::Widget(child) => {
             declared_slots.borrow_mut().push(DeclaredMemberSlot::Widget);
-            let child_widget = build_node(child, compositor, renderer, registry)?;
+            let child_widget =
+                build_node_with_loop_context(child, compositor, renderer, registry, loop_context)?;
             if parent.is_zstack() {
                 parent
                     .insert_child_with_zstack_placement(
@@ -1968,22 +2869,169 @@ fn append_static_member(
             );
             parent.bindings.push(handle);
         }
+        IrMember::ControlFlow(ControlFlowNode::For {
+            binder,
+            index_binder,
+            collection,
+            body,
+        }) => {
+            let (collection_name, elem, live_children) =
+                static_collection_cardinality(collection, registry)?;
+            let state = Rc::new(RefCell::new(ForLoopRuntimeState { live_children }));
+            declared_slots
+                .borrow_mut()
+                .push(DeclaredMemberSlot::ForLoop(Rc::clone(&state)));
+            let body = match body.first() {
+                Some(IrMember::Widget(node)) => node,
+                _ => {
+                    return Err(IrLoadError::Build(
+                        "`for` body must contain one widget member".into(),
+                    ));
+                }
+            };
+            let base_index = {
+                let slots = declared_slots.borrow();
+                materialized_offset_for_declared_slot(declared_member_index, &slots)
+            };
+            for position in 0..live_children {
+                let item_context = ForItemContext {
+                    collection: collection_name.clone(),
+                    elem: elem.clone(),
+                    binder: binder.clone(),
+                    index_binder: index_binder.clone(),
+                    position,
+                };
+                let child_widget = build_node_with_loop_context(
+                    body,
+                    compositor,
+                    renderer,
+                    registry,
+                    Some(&item_context),
+                )?;
+                let insert_index = base_index + position;
+                if parent.is_zstack() {
+                    parent
+                        .insert_child_with_zstack_placement(
+                            insert_index,
+                            child_widget,
+                            extract_zstack_placement(body),
+                        )
+                        .map_err(|e| IrLoadError::Build(format!("insert_child failed: {e:?}")))?;
+                } else {
+                    parent
+                        .insert_child(insert_index, child_widget)
+                        .map_err(|e| IrLoadError::Build(format!("insert_child failed: {e:?}")))?;
+                }
+            }
+            let parent_id = WidgetId(parent as *mut WidgetNode as *mut ());
+            let target = BindingTarget::ForLoopSubtree {
+                parent: parent_id,
+                declared_member_index,
+            };
+            let slots_for_effect = Rc::clone(&declared_slots);
+            let registry_for_effect = Rc::clone(registry);
+            let body_for_effect = body.clone();
+            let binder_for_effect = binder.clone();
+            let index_binder_for_effect = index_binder.clone();
+            let collection_for_effect = collection_name.clone();
+            let elem_for_effect = elem.clone();
+            let handle = register_for_loop_binding(
+                target,
+                collection.clone(),
+                Rc::clone(registry),
+                move |parent_id, declared_member_index, new_len| {
+                    mutate_for_loop_subtree(
+                        parent_id,
+                        declared_member_index,
+                        new_len,
+                        &body_for_effect,
+                        &binder_for_effect,
+                        &index_binder_for_effect,
+                        &collection_for_effect,
+                        &elem_for_effect,
+                        &slots_for_effect,
+                        &registry_for_effect,
+                    );
+                },
+            );
+            parent.bindings.push(handle);
+        }
     }
     Ok(())
 }
 
-fn materialized_index_for_declared_member(
+fn static_collection_cardinality(
+    collection: &HandlerExpr,
+    registry: &SignalRegistry,
+) -> Result<(String, IrType, usize), IrLoadError> {
+    let HandlerExpr::ListPropRead { path, elem } = collection else {
+        return Err(IrLoadError::Build(format!(
+            "`for` collection must be a collection state read, got {collection:?}"
+        )));
+    };
+    let len = match elem {
+        IrType::I32 => registry
+            .i32_lists
+            .get(path)
+            .ok_or_else(|| IrLoadError::Build(format!("unknown i32 collection `{path}`")))?
+            .get_untracked()
+            .len(),
+        IrType::Str => registry
+            .string_lists
+            .get(path)
+            .ok_or_else(|| IrLoadError::Build(format!("unknown string collection `{path}`")))?
+            .get_untracked()
+            .len(),
+        IrType::Bool => registry
+            .bool_lists
+            .get(path)
+            .ok_or_else(|| IrLoadError::Build(format!("unknown bool collection `{path}`")))?
+            .get_untracked()
+            .len(),
+    };
+    Ok((path.clone(), elem.clone(), len))
+}
+
+fn declared_slot_live_cardinality(slot: &DeclaredMemberSlot) -> usize {
+    match slot {
+        DeclaredMemberSlot::Widget => 1,
+        DeclaredMemberSlot::Conditional(state) => usize::from(state.borrow().live_child),
+        DeclaredMemberSlot::ForLoop(state) => state.borrow().live_children,
+    }
+}
+
+fn materialized_offset_for_declared_slot(
     declared_member_index: usize,
     declared_slots: &[DeclaredMemberSlot],
 ) -> usize {
     declared_slots
         .iter()
         .take(declared_member_index)
-        .map(|slot| match slot {
-            DeclaredMemberSlot::Widget => 1,
-            DeclaredMemberSlot::Conditional(state) => usize::from(state.borrow().live_child),
-        })
+        .map(declared_slot_live_cardinality)
         .sum()
+}
+
+#[allow(dead_code)]
+fn total_materialized_children(declared_slots: &[DeclaredMemberSlot]) -> usize {
+    declared_slots
+        .iter()
+        .map(declared_slot_live_cardinality)
+        .sum()
+}
+
+fn plan_tail_range_change(old_len: usize, new_len: usize) -> TailRangePlan {
+    if new_len > old_len {
+        TailRangePlan::Insert {
+            start: old_len,
+            count: new_len - old_len,
+        }
+    } else if new_len < old_len {
+        TailRangePlan::Remove {
+            tail_first_indices: (new_len..old_len).rev().collect(),
+        }
+    } else {
+        TailRangePlan::NoOp
+    }
 }
 
 fn mutate_conditional_subtree(
@@ -2016,7 +3064,7 @@ fn mutate_conditional_subtree(
     }
     let live_index = {
         let slots = declared_slots.borrow();
-        materialized_index_for_declared_member(declared_member_index, &slots)
+        materialized_offset_for_declared_slot(declared_member_index, &slots)
     };
     unsafe {
         let parent = &mut *parent_ptr;
@@ -2025,12 +3073,12 @@ fn mutate_conditional_subtree(
             let renderer = crate::get_text_renderer();
             match build_node(body, compositor, renderer, registry) {
                 Ok(child) => {
-                    let result = match zstack_placement_for_parent(parent, body) {
-                        Some(placement) => {
-                            parent.insert_child_with_zstack_placement(live_index, child, placement)
-                        }
-                        None => parent.insert_child(live_index, child),
-                    };
+                    let result = insert_structural_child(
+                        parent,
+                        live_index,
+                        child,
+                        zstack_placement_for_parent(parent, body),
+                    );
                     match result {
                         Ok(()) => {
                             state.borrow_mut().live_child = true;
@@ -2042,7 +3090,7 @@ fn mutate_conditional_subtree(
                 Err(e) => eprintln!("wasamo: conditional subtree build failed: {e}"),
             }
         } else {
-            match parent.remove_child(live_index) {
+            match remove_structural_child(parent, live_index) {
                 Ok(removed) => {
                     crate::widget::widget_destroy(removed);
                     state.borrow_mut().live_child = false;
@@ -2052,6 +3100,218 @@ fn mutate_conditional_subtree(
             }
         }
     }
+}
+
+#[allow(clippy::too_many_arguments)]
+fn mutate_for_loop_subtree(
+    parent_id: WidgetId,
+    declared_member_index: usize,
+    new_len: usize,
+    body: &IrNode,
+    binder: &str,
+    index_binder: &Option<String>,
+    collection_name: &str,
+    elem: &IrType,
+    declared_slots: &Rc<RefCell<Vec<DeclaredMemberSlot>>>,
+    registry: &Rc<SignalRegistry>,
+) {
+    let parent_ptr = parent_id.0 as *mut WidgetNode;
+    if parent_ptr.is_null() {
+        return;
+    }
+    let state = {
+        let slots = declared_slots.borrow();
+        match slots.get(declared_member_index) {
+            Some(DeclaredMemberSlot::ForLoop(state)) => Rc::clone(state),
+            _ => {
+                eprintln!("wasamo: for binding declared slot {declared_member_index} is missing");
+                return;
+            }
+        }
+    };
+    let old_len = state.borrow().live_children;
+    if old_len == new_len {
+        return;
+    }
+    let live_index = {
+        let slots = declared_slots.borrow();
+        materialized_offset_for_declared_slot(declared_member_index, &slots)
+    };
+    let plan = plan_tail_range_change(old_len, new_len);
+    unsafe {
+        let parent = &mut *parent_ptr;
+        match plan {
+            TailRangePlan::Insert { start, count } => {
+                let compositor = crate::get_compositor();
+                let renderer = crate::get_text_renderer();
+                let mut staged = Vec::with_capacity(count);
+                for position in start..(start + count) {
+                    let item_context = ForItemContext {
+                        collection: collection_name.to_string(),
+                        elem: elem.clone(),
+                        binder: binder.to_string(),
+                        index_binder: index_binder.clone(),
+                        position,
+                    };
+                    match build_node_with_loop_context(
+                        body,
+                        compositor,
+                        renderer,
+                        registry,
+                        Some(&item_context),
+                    ) {
+                        Ok(child) => staged.push(child),
+                        Err(e) => {
+                            for child in staged {
+                                crate::widget::widget_destroy(child);
+                            }
+                            eprintln!(
+                                "wasamo: for range insert build failed at position {position}: {e}"
+                            );
+                            return;
+                        }
+                    }
+                }
+                let placement = zstack_placement_for_parent(parent, body);
+                let mut inserted = 0usize;
+                // `while let` (not `for`) so the staged iterator stays usable
+                // inside the failure branch to dispose the not-yet-committed
+                // remainder.
+                let mut staged_iter = staged.into_iter().enumerate();
+                while let Some((offset, child)) = staged_iter.next() {
+                    let insert_index = live_index + start + offset;
+                    // Production inserts directly. A `debug_assertions`-gated
+                    // test-only fault seam (see `__arm_structural_insert_fault_for_test`;
+                    // Rust-side fault injection, NOT a WinRT mock) can force the
+                    // Nth commit insert to fail so the rollback branch below is
+                    // directly exercised. Absent from release builds.
+                    #[cfg(debug_assertions)]
+                    let insert_result = if structural_insert_fault_armed(inserted) {
+                        // The staged child is not inserted; dispose it (mirrors a
+                        // real insert failure, where `insert_child` consumes the
+                        // child) and report the error to drive rollback.
+                        crate::widget::widget_destroy(child);
+                        Err(crate::widget::MutationError::IndexOutOfBounds)
+                    } else {
+                        insert_structural_child(parent, insert_index, child, placement)
+                    };
+                    #[cfg(not(debug_assertions))]
+                    let insert_result =
+                        insert_structural_child(parent, insert_index, child, placement);
+                    match insert_result {
+                        Ok(()) => inserted += 1,
+                        Err(e) => {
+                            // Roll back so the tree and registry return to the
+                            // pre-write baseline (review finding #4). `WidgetNode`
+                            // has no `Drop`, so a bare drop skips `widget_destroy`'s
+                            // `remove_for_widget`; any child holding a `registry`
+                            // entry would leak. Today's handler-free `for`-body
+                            // children hold none (per-item `EffectHandle`s
+                            // self-dispose on `Drop`), so this branch's disposal is
+                            // a *defensive* symmetry with the staging-failure branch
+                            // and the no-`Drop` ⇒ explicit-disposal invariant — not
+                            // an active leak fix for current bodies, but required
+                            // for any future body shape that registers entries.
+                            //   (a) remove + destroy the committed prefix, tail-first;
+                            for rollback in (0..inserted).rev() {
+                                if let Ok(removed) =
+                                    remove_structural_child(parent, live_index + start + rollback)
+                                {
+                                    crate::widget::widget_destroy(removed);
+                                }
+                            }
+                            //   (b) destroy the staged children not yet committed.
+                            for (_, leftover) in staged_iter.by_ref() {
+                                crate::widget::widget_destroy(leftover);
+                            }
+                            // The faulting child itself was already consumed: by
+                            // `widget_destroy` in the test seam, or by `insert_child`
+                            // in production (its by-value contract drops the child on
+                            // a WinRT failure — a near-unreachable path here, as the
+                            // index is always valid and the child freshly unattached;
+                            // recovering it would mean changing `insert_child`'s
+                            // signature across the conditional / ABI / static callers,
+                            // which is out of this task's scope).
+                            eprintln!("wasamo: for range insert_child failed: {e:?}");
+                            return;
+                        }
+                    }
+                }
+                state.borrow_mut().live_children = new_len;
+                crate::emit::mark_layout_dirty_for(parent_ptr);
+            }
+            TailRangePlan::Remove { tail_first_indices } => {
+                for position in tail_first_indices {
+                    match remove_structural_child(parent, live_index + position) {
+                        Ok(removed) => crate::widget::widget_destroy(removed),
+                        Err(e) => {
+                            eprintln!("wasamo: for range remove_child failed: {e:?}");
+                            return;
+                        }
+                    }
+                }
+                state.borrow_mut().live_children = new_len;
+                crate::emit::mark_layout_dirty_for(parent_ptr);
+            }
+            TailRangePlan::NoOp => {}
+        }
+    }
+}
+
+fn insert_structural_child(
+    parent: &mut WidgetNode,
+    index: usize,
+    child: Box<WidgetNode>,
+    zstack_placement: Option<ZStackPlacement>,
+) -> Result<(), crate::widget::MutationError> {
+    match zstack_placement {
+        Some(placement) => parent.insert_child_with_zstack_placement(index, child, placement),
+        None => parent.insert_child(index, child),
+    }
+}
+
+fn remove_structural_child(
+    parent: &mut WidgetNode,
+    index: usize,
+) -> Result<Box<WidgetNode>, crate::widget::MutationError> {
+    parent.remove_child(index)
+}
+
+// ── Test-only structural-insert fault seam (review finding #2) ──────────────
+//
+// Rust-side fault injection — NOT a WinRT/OS API mock — that forces the Nth
+// commit-stage `insert_structural_child` in `mutate_for_loop_subtree` to fail,
+// so the partial-insert rollback branch is directly exercised by a mock-free
+// Windows integration test. Gated on `debug_assertions`, so the seam, the arm
+// helpers, and the cost of the per-insert check are all absent from release
+// builds (`cargo build --release` disables `debug_assertions`); the project's
+// CI runs `cargo test` in the dev profile, where `debug_assertions` is on.
+#[cfg(debug_assertions)]
+thread_local! {
+    static FAIL_STRUCTURAL_INSERT_AT: std::cell::Cell<Option<usize>> =
+        std::cell::Cell::new(None);
+}
+
+#[cfg(debug_assertions)]
+fn structural_insert_fault_armed(inserted_so_far: usize) -> bool {
+    FAIL_STRUCTURAL_INSERT_AT.with(|cell| cell.get() == Some(inserted_so_far))
+}
+
+/// Arm the for-range commit loop to fail its `inserted_index`-th structural
+/// insert (0-based count of successful inserts so far). Test-only; absent from
+/// release. Call under the integration `test_lock` and disarm before any
+/// assertion that may panic, to avoid leaking the armed state onto the
+/// reused runtime thread.
+#[cfg(debug_assertions)]
+#[doc(hidden)]
+pub fn __arm_structural_insert_fault_for_test(inserted_index: usize) {
+    FAIL_STRUCTURAL_INSERT_AT.with(|cell| cell.set(Some(inserted_index)));
+}
+
+#[cfg(debug_assertions)]
+#[doc(hidden)]
+pub fn __disarm_structural_insert_fault_for_test() {
+    FAIL_STRUCTURAL_INSERT_AT.with(|cell| cell.set(None));
 }
 
 fn zstack_placement_for_parent(parent: &WidgetNode, body: &IrNode) -> Option<ZStackPlacement> {
@@ -2191,12 +3451,12 @@ fn construct_widget(
             WidgetNode::grid(compositor, columns, rows, cell_placements)
                 .map_err(|e| IrLoadError::Build(format!("grid: {e}")))
         }
-        // M3-Phase 6 T3: ZStack materialisation. Per-child placement
-        // annotations are parent-owned and carried as a vector parallel to
-        // direct children; document order is preserved by the generic child
-        // append loop below.
-        "ZStack" => WidgetNode::zstack(compositor, Vec::new())
-            .map_err(|e| IrLoadError::Build(format!("zstack: {e}"))),
+        // M3-Phase 6 T3 / M3-Phase 7 T5: ZStack materialisation. Per-child
+        // placement annotations are carried on child slots; document order
+        // is preserved by the generic child append loop below.
+        "ZStack" => {
+            WidgetNode::zstack(compositor).map_err(|e| IrLoadError::Build(format!("zstack: {e}")))
+        }
         other => Err(IrLoadError::UnknownWidget(other.to_string())),
     }
 }
@@ -2243,7 +3503,7 @@ fn extract_zstack_placement(child: &IrNode) -> ZStackPlacement {
 }
 
 #[cfg(test)]
-fn collect_static_zstack_placements(
+fn collect_static_zstack_child_placement_slots(
     members: &[IrMember],
     registry: &SignalRegistry,
 ) -> Result<Vec<ZStackPlacement>, IrLoadError> {
@@ -2264,6 +3524,22 @@ fn collect_static_zstack_placements(
                             ));
                         }
                     };
+                    placements.push(extract_zstack_placement(body));
+                }
+            }
+            IrMember::ControlFlow(ControlFlowNode::For {
+                collection, body, ..
+            }) => {
+                let (_, _, live_children) = static_collection_cardinality(collection, registry)?;
+                let body = match body.first() {
+                    Some(IrMember::Widget(node)) => node,
+                    _ => {
+                        return Err(IrLoadError::Build(
+                            "`for` body must contain one widget member".into(),
+                        ));
+                    }
+                };
+                for _ in 0..live_children {
                     placements.push(extract_zstack_placement(body));
                 }
             }
@@ -2451,43 +3727,157 @@ mod tests {
         })))
     }
 
+    fn for_loop_slot(live_children: usize) -> DeclaredMemberSlot {
+        DeclaredMemberSlot::ForLoop(Rc::new(RefCell::new(ForLoopRuntimeState { live_children })))
+    }
+
     #[test]
-    fn materialized_index_counts_preceding_widgets_and_live_conditionals() {
+    fn expansion_seam_counts_interleaved_widgets_conditionals_and_for_loops() {
         let toggled = Rc::new(RefCell::new(ConditionalRuntimeState { live_child: true }));
+        let generated = Rc::new(RefCell::new(ForLoopRuntimeState { live_children: 3 }));
         let slots = vec![
             DeclaredMemberSlot::Widget,
             DeclaredMemberSlot::Widget,
             conditional_slot(false),
             DeclaredMemberSlot::Conditional(Rc::clone(&toggled)),
+            DeclaredMemberSlot::ForLoop(Rc::clone(&generated)),
             DeclaredMemberSlot::Widget,
         ];
 
         assert_eq!(
-            materialized_index_for_declared_member(2, &slots),
+            materialized_offset_for_declared_slot(2, &slots),
             2,
             "preceding widgets contribute one materialised child each"
         );
         assert_eq!(
-            materialized_index_for_declared_member(3, &slots),
+            materialized_offset_for_declared_slot(3, &slots),
             2,
             "absent preceding conditional contributes no materialised child"
         );
         assert_eq!(
-            materialized_index_for_declared_member(4, &slots),
+            materialized_offset_for_declared_slot(4, &slots),
             3,
             "present preceding conditional contributes one materialised child"
         );
         assert_eq!(
-            materialized_index_for_declared_member(5, &slots),
+            materialized_offset_for_declared_slot(5, &slots),
+            6,
+            "preceding for-loop contributes its live cardinality"
+        );
+        assert_eq!(
+            materialized_offset_for_declared_slot(6, &slots),
+            7,
+            "mixed widget / absent conditional / present conditional / for-loop prefix"
+        );
+        assert_eq!(
+            total_materialized_children(&slots),
+            7,
+            "total materialised count is the sum of live slot cardinalities"
+        );
+
+        generated.borrow_mut().live_children = 0;
+        assert_eq!(
+            materialized_offset_for_declared_slot(5, &slots),
+            3,
+            "zero-cardinality for-loop contributes no materialised children"
+        );
+        assert_eq!(
+            total_materialized_children(&slots),
             4,
-            "mixed widget / absent conditional / present conditional prefix"
+            "total count recomputes after for-loop cardinality changes"
         );
 
         toggled.borrow_mut().live_child = false;
         assert_eq!(
-            materialized_index_for_declared_member(4, &slots),
+            materialized_offset_for_declared_slot(4, &slots),
             2,
             "removing a preceding conditional shifts later materialised indices"
+        );
+    }
+
+    #[test]
+    fn expansion_seam_handles_boundaries_and_total_count() {
+        let slots = vec![
+            for_loop_slot(0),
+            DeclaredMemberSlot::Widget,
+            conditional_slot(true),
+            for_loop_slot(2),
+        ];
+
+        assert_eq!(
+            materialized_offset_for_declared_slot(0, &slots),
+            0,
+            "first declared slot starts at materialised offset zero"
+        );
+        assert_eq!(
+            materialized_offset_for_declared_slot(1, &slots),
+            0,
+            "leading zero-cardinality slot does not move the offset"
+        );
+        assert_eq!(
+            materialized_offset_for_declared_slot(4, &slots),
+            4,
+            "offset after the final declared slot equals total materialised children"
+        );
+        assert_eq!(total_materialized_children(&slots), 4);
+    }
+
+    #[test]
+    fn tail_range_plan_derives_insert_remove_and_noop_cases() {
+        assert_eq!(
+            plan_tail_range_change(2, 5),
+            TailRangePlan::Insert { start: 2, count: 3 },
+            "tail growth inserts the new suffix"
+        );
+        assert_eq!(
+            plan_tail_range_change(5, 2),
+            TailRangePlan::Remove {
+                tail_first_indices: vec![4, 3, 2],
+            },
+            "tail shrink removes from the old tail toward the retained prefix"
+        );
+        assert_eq!(
+            plan_tail_range_change(3, 3),
+            TailRangePlan::NoOp,
+            "same-length reset is a no-op for structural range planning"
+        );
+        assert_eq!(
+            plan_tail_range_change(0, 0),
+            TailRangePlan::NoOp,
+            "empty boundary is stable"
+        );
+        assert_eq!(
+            plan_tail_range_change(0, 1),
+            TailRangePlan::Insert { start: 0, count: 1 },
+            "empty-to-one inserts at the beginning of the range"
+        );
+        assert_eq!(
+            plan_tail_range_change(1, 0),
+            TailRangePlan::Remove {
+                tail_first_indices: vec![0],
+            },
+            "one-to-empty removes the only materialised child"
+        );
+    }
+
+    #[test]
+    fn expansion_seam_composes_for_slot_offset_with_tail_plan() {
+        let slots = vec![
+            DeclaredMemberSlot::Widget,
+            for_loop_slot(2),
+            DeclaredMemberSlot::Widget,
+        ];
+        let for_slot_base = materialized_offset_for_declared_slot(1, &slots);
+
+        let insert_start = match plan_tail_range_change(2, 3) {
+            TailRangePlan::Insert { start, count: 1 } => start,
+            other => panic!("expected single tail insert, got {other:?}"),
+        };
+
+        assert_eq!(
+            for_slot_base + insert_start,
+            3,
+            "absolute insertion index composes declared-slot base offset with for-local tail plan"
         );
     }
 
@@ -2510,6 +3900,40 @@ mod tests {
         assert_eq!(
             evaluate_static_condition(&HandlerExpr::BoolLit(false), &registry),
             Ok(false)
+        );
+    }
+
+    #[test]
+    fn collection_signal_registry_populates_all_collection_types() {
+        let registry = build_signal_registry(&[
+            IrState {
+                name: "ints".into(),
+                ty: IrStateType::Collection(IrType::I32),
+                default: IrLiteral::List(vec![IrLiteral::Int(1), IrLiteral::Int(2)]),
+            },
+            IrState {
+                name: "labels".into(),
+                ty: IrStateType::Collection(IrType::Str),
+                default: IrLiteral::List(vec![
+                    IrLiteral::Str("a".into()),
+                    IrLiteral::Str("b".into()),
+                ]),
+            },
+            IrState {
+                name: "flags".into(),
+                ty: IrStateType::Collection(IrType::Bool),
+                default: IrLiteral::List(vec![IrLiteral::Bool(true), IrLiteral::Bool(false)]),
+            },
+        ]);
+
+        assert_eq!(registry.i32_lists["ints"].get_untracked(), vec![1, 2],);
+        assert_eq!(
+            registry.string_lists["labels"].get_untracked(),
+            vec!["a".to_string(), "b".to_string()],
+        );
+        assert_eq!(
+            registry.bool_lists["flags"].get_untracked(),
+            vec![true, false],
         );
     }
 
@@ -2561,7 +3985,7 @@ mod tests {
             IrMember::Widget(text_with_align("center", "center")),
         ];
 
-        let placements = collect_static_zstack_placements(&members, &registry).unwrap();
+        let placements = collect_static_zstack_child_placement_slots(&members, &registry).unwrap();
         assert_eq!(placements.len(), 3);
         assert_eq!(placements[0].h_align, Alignment::Leading);
         assert_eq!(placements[0].v_align, Alignment::Leading);
@@ -2569,6 +3993,37 @@ mod tests {
         assert_eq!(placements[1].v_align, Alignment::Stretch);
         assert_eq!(placements[2].h_align, Alignment::Center);
         assert_eq!(placements[2].v_align, Alignment::Center);
+    }
+
+    #[test]
+    fn zstack_static_placement_reducer_expands_for_cardinality_after_t6() {
+        let mut registry = SignalRegistry::new();
+        registry
+            .i32_lists
+            .insert("xs".into(), Signal::new(vec![1, 2, 3]));
+        let members = vec![IrMember::ControlFlow(ControlFlowNode::For {
+            binder: "x".into(),
+            index_binder: None,
+            collection: HandlerExpr::ListPropRead {
+                path: "xs".into(),
+                elem: IrType::I32,
+            },
+            body: vec![IrMember::Widget(IrNode {
+                widget_type: "Text".into(),
+                props: vec![],
+                bindings: vec![],
+                handlers: vec![],
+                children: vec![],
+                kind_payload: None,
+            })],
+        })];
+
+        let placements = collect_static_zstack_child_placement_slots(&members, &registry).unwrap();
+        assert_eq!(placements.len(), 3);
+        assert!(placements
+            .iter()
+            .all(|placement| placement.h_align == Alignment::Center
+                && placement.v_align == Alignment::Center));
     }
 
     // M3-Phase 4 T4 / DD-M3-P4-003: ScrollView's `offset-y` is `i32`.
@@ -2644,7 +4099,7 @@ mod tests {
         );
         assert_eq!(c.states.len(), 1);
         assert_eq!(c.states[0].name, "count");
-        assert_eq!(c.states[0].ty, IrType::I32);
+        assert_eq!(c.states[0].ty, IrStateType::Scalar(IrType::I32));
         assert_eq!(c.states[0].default, IrLiteral::Int(0));
     }
 
@@ -2655,8 +4110,585 @@ mod tests {
              state msg: string = \"hi\"\n\
              node V {}\n}",
         );
-        assert_eq!(c.states[0].ty, IrType::Str);
+        assert_eq!(c.states[0].ty, IrStateType::Scalar(IrType::Str));
         assert_eq!(c.states[0].default, IrLiteral::Str("hi".into()));
+    }
+
+    #[test]
+    fn collection_state_i32_list_default_parses() {
+        let c = parse_ok(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             state thumbs: i32[] = [1, 2, 3]\n\
+             node V {}\n}",
+        );
+        assert_eq!(c.states[0].ty, IrStateType::Collection(IrType::I32));
+        assert_eq!(
+            c.states[0].default,
+            IrLiteral::List(vec![
+                IrLiteral::Int(1),
+                IrLiteral::Int(2),
+                IrLiteral::Int(3)
+            ])
+        );
+    }
+
+    #[test]
+    fn collection_state_string_and_bool_list_defaults_parse() {
+        let c = parse_ok(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             state labels: string[] = [\"a\", \"b\"]\n\
+             state flags: bool[] = [true, false]\n\
+             node V {}\n}",
+        );
+        assert_eq!(c.states[0].ty, IrStateType::Collection(IrType::Str));
+        assert_eq!(
+            c.states[0].default,
+            IrLiteral::List(vec![IrLiteral::Str("a".into()), IrLiteral::Str("b".into())])
+        );
+        assert_eq!(c.states[1].ty, IrStateType::Collection(IrType::Bool));
+        assert_eq!(
+            c.states[1].default,
+            IrLiteral::List(vec![IrLiteral::Bool(true), IrLiteral::Bool(false)])
+        );
+    }
+
+    #[test]
+    fn collection_state_rejects_mismatched_list_element() {
+        let err = parse_ir(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             state thumbs: i32[] = [1, \"two\"]\n\
+             node V {}\n}",
+        )
+        .unwrap_err();
+        assert!(
+            matches!(err, IrLoadError::Validate(ref m) if m.contains("element must match `i32`")),
+            "{err:?}"
+        );
+    }
+
+    #[test]
+    fn collection_state_rejects_nested_list_default() {
+        let state = IrState {
+            name: "nested".into(),
+            ty: IrStateType::Collection(IrType::I32),
+            default: IrLiteral::List(vec![IrLiteral::List(vec![IrLiteral::Int(1)])]),
+        };
+        let err = validate_state_default(&state).unwrap_err();
+        assert!(
+            matches!(err, IrLoadError::Validate(ref m) if m.contains("cannot contain a nested list literal")),
+            "{err:?}"
+        );
+    }
+
+    #[test]
+    fn scalar_state_rejects_list_default() {
+        let err = parse_ir(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             state count: i32 = [1]\n\
+             node V {}\n}",
+        )
+        .unwrap_err();
+        assert!(
+            matches!(err, IrLoadError::Validate(ref m) if m.contains("scalar state `count` cannot use a list literal default")),
+            "{err:?}"
+        );
+    }
+
+    #[test]
+    fn scalar_state_rejects_type_mismatched_default() {
+        let err = parse_ir(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             state count: i32 = true\n\
+             node V {}\n}",
+        )
+        .unwrap_err();
+        assert!(
+            matches!(err, IrLoadError::Validate(ref m) if m.contains("default does not match declared type")),
+            "{err:?}"
+        );
+    }
+
+    #[test]
+    fn for_member_parses_binders_collection_and_body() {
+        let c = parse_ok(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             state thumbs: i32[] = [1, 2]\n\
+             node WrapPanel {\n\
+               for thumb, i in thumbs {\n\
+                 node Text { bind text = (interp \"#\" ((index-read i)) \":\" ((item-read thumb))) }\n\
+               }\n\
+             }\n}",
+        );
+        match &c.root.children[0] {
+            IrMember::ControlFlow(ControlFlowNode::For {
+                binder,
+                index_binder,
+                collection,
+                body,
+            }) => {
+                assert_eq!(binder, "thumb");
+                assert_eq!(index_binder.as_deref(), Some("i"));
+                assert_eq!(
+                    *collection,
+                    HandlerExpr::ListPropRead {
+                        path: "thumbs".into(),
+                        elem: IrType::I32,
+                    }
+                );
+                assert_eq!(body.len(), 1);
+            }
+            other => panic!("expected for member, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn for_member_rejects_scalar_collection_target() {
+        let err = parse_ir(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             state count: i32 = 0\n\
+             node WrapPanel { for x in count { node Text {} } }\n}",
+        )
+        .unwrap_err();
+        assert!(
+            matches!(err, IrLoadError::Validate(ref m) if m.contains("collection expression references scalar state `count`")),
+            "{err:?}"
+        );
+    }
+
+    #[test]
+    fn for_member_rejects_undeclared_collection_target() {
+        let err = parse_ir(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             node WrapPanel { for x in missing { node Text {} } }\n}",
+        )
+        .unwrap_err();
+        assert!(
+            matches!(err, IrLoadError::Validate(ref m) if m.contains("undeclared collection `missing`")),
+            "{err:?}"
+        );
+    }
+
+    #[test]
+    fn for_member_rejects_binder_state_collision() {
+        let err = parse_ir(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             state x: i32 = 0\n\
+             state xs: i32[] = []\n\
+             node WrapPanel { for x in xs { node Text {} } }\n}",
+        )
+        .unwrap_err();
+        assert!(
+            matches!(err, IrLoadError::Validate(ref m) if m.contains("binder `x` collides")),
+            "{err:?}"
+        );
+    }
+
+    #[test]
+    fn for_member_rejects_same_binder_and_index() {
+        let err = parse_ir(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             state xs: i32[] = []\n\
+             node WrapPanel { for x, x in xs { node Text {} } }\n}",
+        )
+        .unwrap_err();
+        assert!(
+            matches!(err, IrLoadError::Validate(ref m) if m.contains("binder and index binder must be distinct")),
+            "{err:?}"
+        );
+    }
+
+    #[test]
+    fn for_member_rejects_index_state_collision() {
+        let err = parse_ir(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             state i: i32 = 0\n\
+             state xs: i32[] = []\n\
+             node WrapPanel { for x, i in xs { node Text {} } }\n}",
+        )
+        .unwrap_err();
+        assert!(
+            matches!(err, IrLoadError::Validate(ref m) if m.contains("index binder `i` collides")),
+            "{err:?}"
+        );
+    }
+
+    #[test]
+    fn for_member_rejects_multi_child_body() {
+        let err = parse_ir(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             state xs: i32[] = []\n\
+             node WrapPanel { for x in xs { node Text {} node Text {} } }\n}",
+        )
+        .unwrap_err();
+        assert!(
+            matches!(err, IrLoadError::Validate(ref m) if m.contains("`for` body supports exactly one widget member")),
+            "{err:?}"
+        );
+    }
+
+    #[test]
+    fn for_member_rejects_nested_control_flow_body() {
+        let err = parse_ir(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             state xs: i32[] = []\n\
+             node WrapPanel { for x in xs { if true { node Text {} } } }\n}",
+        )
+        .unwrap_err();
+        assert!(
+            matches!(err, IrLoadError::Validate(ref m) if m.contains("nested control-flow")),
+            "{err:?}"
+        );
+    }
+
+    #[test]
+    fn for_member_rejects_direct_disallowed_containers() {
+        let cases = [
+            (
+                ";wasamo-ir v0\ncomponent C inherits W {\n\
+                 state xs: i32[] = []\n\
+                 node ScrollView { for x in xs { node Text {} } }\n}",
+                "ScrollView",
+            ),
+            (
+                ";wasamo-ir v0\ncomponent C inherits W {\n\
+                 state xs: i32[] = []\n\
+                 node Box { for x in xs { node Text {} } }\n}",
+                "Box",
+            ),
+            (
+                ";wasamo-ir v0\ncomponent C inherits W {\n\
+                 state xs: i32[] = []\n\
+                 node Grid { tracks columns = 1* tracks rows = 1* for x in xs { node Cell { node Text {} } } }\n}",
+                "Grid",
+            ),
+        ];
+        for (src, needle) in cases {
+            let err = parse_ir(src).unwrap_err();
+            assert!(
+                matches!(err, IrLoadError::Validate(ref m) if m.contains(needle)),
+                "{needle}: {err:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn for_member_rejects_component_body_surface_at_parse() {
+        let err = parse_ir(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             state xs: i32[] = []\n\
+             for x in xs { node Text {} }\n\
+             node Window {}\n}",
+        )
+        .unwrap_err();
+        assert!(
+            matches!(err, IrLoadError::Parse(ref m) if m.contains("unexpected token in component body")),
+            "{err:?}"
+        );
+    }
+
+    #[test]
+    fn for_member_rejects_handler_and_nested_for_inside_template() {
+        let handler = parse_ir(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             state xs: i32[] = []\n\
+             node WrapPanel { for x in xs { node Button { on clicked { 1 } } } }\n}",
+        )
+        .unwrap_err();
+        assert!(
+            matches!(handler, IrLoadError::Validate(ref m) if m.contains("handlers inside a `for` body")),
+            "{handler:?}"
+        );
+
+        let nested = parse_ir(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             state xs: i32[] = []\n\
+             node WrapPanel { for x in xs { node VStack { for y in xs { node Text {} } } } }\n}",
+        )
+        .unwrap_err();
+        assert!(
+            matches!(nested, IrLoadError::Validate(ref m) if m.contains("nested `for`")),
+            "{nested:?}"
+        );
+    }
+
+    #[test]
+    fn loop_local_reads_are_scoped_to_for_body() {
+        let outside_item = parse_ir(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             state xs: string[] = []\n\
+             node VStack { node Text { bind text = (item-read x) } }\n}",
+        )
+        .unwrap_err();
+        assert!(
+            matches!(outside_item, IrLoadError::Validate(ref m) if m.contains("may be read only inside")),
+            "{outside_item:?}"
+        );
+
+        let missing_index = parse_ir(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             state xs: string[] = []\n\
+             node WrapPanel { for x in xs { node Text { bind text = (index-read i) } } }\n}",
+        )
+        .unwrap_err();
+        assert!(
+            matches!(missing_index, IrLoadError::Validate(ref m) if m.contains("may be read only inside")),
+            "{missing_index:?}"
+        );
+
+        let bool_interp = parse_ir(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             state flags: bool[] = []\n\
+             node WrapPanel { for flag in flags { node Text { bind text = (interp \"v=\" ((item-read flag))) } } }\n}",
+        )
+        .unwrap_err();
+        assert!(
+            matches!(bool_interp, IrLoadError::Validate(ref m) if m.contains("bool loop binder")),
+            "{bool_interp:?}"
+        );
+
+        let string_item_to_i32_target = parse_ir(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             state labels: string[] = []\n\
+             node WrapPanel { for label in labels { node Text { bind font = (item-read label) } } }\n}",
+        )
+        .unwrap_err();
+        assert!(
+            matches!(string_item_to_i32_target, IrLoadError::Validate(ref m) if m.contains("element type `string`, not `i32`")),
+            "{string_item_to_i32_target:?}"
+        );
+
+        let index_read_to_bool_target = parse_ir(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             state nums: i32[] = []\n\
+             node WrapPanel { for n, i in nums { node Button { bind enabled = (index-read i) } } }\n}",
+        )
+        .unwrap_err();
+        assert!(
+            matches!(index_read_to_bool_target, IrLoadError::Validate(ref m) if m.contains("index binder cannot be used in a bool binding")),
+            "{index_read_to_bool_target:?}"
+        );
+    }
+
+    #[test]
+    fn collection_assignment_drop_last_rhs_parses_and_validates() {
+        let c = parse_ok(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             state thumbs: i32[] = [1]\n\
+             node Button { on clicked { (assign thumbs (list-drop-last thumbs)) } }\n}",
+        );
+        let handler = &c.root.handlers[0];
+        assert_eq!(
+            handler.expr,
+            HandlerExpr::Assign {
+                lhs: "thumbs".into(),
+                rhs: Box::new(HandlerExpr::ListDropLast {
+                    path: "thumbs".into(),
+                    elem: IrType::I32,
+                }),
+            }
+        );
+    }
+
+    #[test]
+    fn collection_assignment_append_rhs_parses_and_validates() {
+        let c = parse_ok(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             state thumbs: i32[] = [1]\n\
+             state next: i32 = 2\n\
+             node Button { on clicked { (assign thumbs (list-append thumbs (prop-read next))) } }\n}",
+        );
+        let handler = &c.root.handlers[0];
+        assert_eq!(
+            handler.expr,
+            HandlerExpr::Assign {
+                lhs: "thumbs".into(),
+                rhs: Box::new(HandlerExpr::ListAppend {
+                    path: "thumbs".into(),
+                    elem: IrType::I32,
+                    value: Box::new(HandlerExpr::PropRead {
+                        path: "next".into(),
+                    }),
+                }),
+            }
+        );
+    }
+
+    #[test]
+    fn collection_assignment_append_literal_type_mismatch_rejected() {
+        let err = parse_ir(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             state xs: i32[] = []\n\
+             node Button { on clicked { (assign xs (list-append xs \"bad\")) } }\n}",
+        )
+        .unwrap_err();
+        assert!(
+            matches!(err, IrLoadError::Validate(ref m) if m.contains("does not match element type `i32`")),
+            "{err:?}"
+        );
+    }
+
+    #[test]
+    fn collection_assignment_append_scalar_read_type_mismatch_rejected() {
+        let err = parse_ir(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             state xs: i32[] = []\n\
+             state label: string = \"bad\"\n\
+             node Button { on clicked { (assign xs (list-append xs (str-prop-read label))) } }\n}",
+        )
+        .unwrap_err();
+        assert!(
+            matches!(err, IrLoadError::Validate(ref m) if m.contains("appends `label` with type `string`, expected `i32`")),
+            "{err:?}"
+        );
+    }
+
+    #[test]
+    fn append_collection_state_as_element_rejected() {
+        let err = parse_ir(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             state xs: i32[] = []\n\
+             state ys: i32[] = []\n\
+             node Button { on clicked { (assign xs (list-append xs (prop-read ys))) } }\n}",
+        )
+        .unwrap_err();
+        assert!(
+            matches!(err, IrLoadError::Validate(ref m) if m.contains("cannot append collection state")),
+            "{err:?}"
+        );
+    }
+
+    #[test]
+    fn collection_assignment_list_literal_rhs_parses_and_validates() {
+        let c = parse_ok(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             state thumbs: i32[] = [1]\n\
+             node Button { on clicked { (assign thumbs [2, 3]) } }\n}",
+        );
+        let handler = &c.root.handlers[0];
+        assert_eq!(
+            handler.expr,
+            HandlerExpr::Assign {
+                lhs: "thumbs".into(),
+                rhs: Box::new(HandlerExpr::ListLit(vec![
+                    IrLiteral::Int(2),
+                    IrLiteral::Int(3)
+                ])),
+            }
+        );
+    }
+
+    #[test]
+    fn collection_state_rejects_scalar_default() {
+        let err = parse_ir(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             state xs: i32[] = 1\n\
+             node V {}\n}",
+        )
+        .unwrap_err();
+        assert!(
+            matches!(err, IrLoadError::Validate(ref m) if m.contains("default must be a list literal")),
+            "{err:?}"
+        );
+    }
+
+    #[test]
+    fn collection_compound_assignment_rejected() {
+        let err = parse_ir(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             state xs: i32[] = []\n\
+             node Button { on clicked { (compound-assign += xs 1) } }\n}",
+        )
+        .unwrap_err();
+        assert!(
+            matches!(err, IrLoadError::Validate(ref m) if m.contains("cannot use compound assignment")),
+            "{err:?}"
+        );
+    }
+
+    #[test]
+    fn collection_edit_outside_assignment_rhs_rejected() {
+        let err = parse_ir(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             state xs: i32[] = []\n\
+             node Button { on clicked { (list-drop-last xs) } }\n}",
+        )
+        .unwrap_err();
+        assert!(
+            matches!(err, IrLoadError::Validate(ref m) if m.contains("collection edit expressions are valid only")),
+            "{err:?}"
+        );
+    }
+
+    #[test]
+    fn collection_assignment_wrong_rhs_kind_rejected() {
+        let err = parse_ir(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             state xs: i32[] = []\n\
+             state n: i32 = 1\n\
+             node Button { on clicked { (assign xs (prop-read n)) } }\n}",
+        )
+        .unwrap_err();
+        assert!(
+            matches!(err, IrLoadError::Validate(ref m) if m.contains("requires list-append, list-drop-last, or list literal RHS")),
+            "{err:?}"
+        );
+    }
+
+    #[test]
+    fn collection_assignment_wrong_receiver_rejected() {
+        let err = parse_ir(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             state xs: i32[] = []\n\
+             state ys: i32[] = []\n\
+             node Button { on clicked { (assign xs (list-drop-last ys)) } }\n}",
+        )
+        .unwrap_err();
+        assert!(
+            matches!(err, IrLoadError::Validate(ref m) if m.contains("RHS must use `xs` as its receiver")),
+            "{err:?}"
+        );
+    }
+
+    #[test]
+    fn scalar_assignment_list_rhs_rejected() {
+        let err = parse_ir(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             state count: i32 = 0\n\
+             node Button { on clicked { (assign count [1]) } }\n}",
+        )
+        .unwrap_err();
+        assert!(
+            matches!(err, IrLoadError::Validate(ref m) if m.contains("list literals are valid only")),
+            "{err:?}"
+        );
+    }
+
+    #[test]
+    fn scalar_read_of_collection_state_rejected() {
+        let err = parse_ir(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             state xs: i32[] = []\n\
+             node Text { bind text = (prop-read xs) }\n}",
+        )
+        .unwrap_err();
+        assert!(
+            matches!(err, IrLoadError::Validate(ref m) if m.contains("scalar expression references collection state")),
+            "{err:?}"
+        );
+    }
+
+    #[test]
+    fn bare_collection_read_outside_for_header_rejected() {
+        let err = parse_ir(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             state xs: i32[] = []\n\
+             node Text { bind text = (list-prop-read xs) }\n}",
+        )
+        .unwrap_err();
+        assert!(
+            matches!(err, IrLoadError::Validate(ref m) if m.contains("collection reads are valid only")),
+            "{err:?}"
+        );
     }
 
     #[test]
@@ -2914,7 +4946,7 @@ mod tests {
         );
         assert_eq!(c.states.len(), 1);
         assert_eq!(c.states[0].name, "ready");
-        assert_eq!(c.states[0].ty, IrType::Bool);
+        assert_eq!(c.states[0].ty, IrStateType::Scalar(IrType::Bool));
         assert_eq!(c.states[0].default, IrLiteral::Bool(false));
     }
 
@@ -2925,7 +4957,7 @@ mod tests {
              state ready: bool = true\n\
              node V {}\n}",
         );
-        assert_eq!(c.states[0].ty, IrType::Bool);
+        assert_eq!(c.states[0].ty, IrStateType::Scalar(IrType::Bool));
         assert_eq!(c.states[0].default, IrLiteral::Bool(true));
     }
 
@@ -3036,7 +5068,7 @@ mod tests {
             host_bindings: vec![],
             states: vec![IrState {
                 name: "count".into(),
-                ty: IrType::I32,
+                ty: IrStateType::Scalar(IrType::I32),
                 default: IrLiteral::Int(0),
             }],
             root: IrNode {
@@ -3117,10 +5149,13 @@ mod tests {
         out.push_str(";wasamo-ir v0\n\n");
         out.push_str(&format!("component {} inherits {} {{\n", c.name, c.base));
         for s in &c.states {
-            let ty = match s.ty {
-                IrType::I32 => "i32",
-                IrType::Str => "string",
-                IrType::Bool => "bool",
+            let ty = match &s.ty {
+                IrStateType::Scalar(IrType::I32) => "i32",
+                IrStateType::Scalar(IrType::Str) => "string",
+                IrStateType::Scalar(IrType::Bool) => "bool",
+                IrStateType::Collection(IrType::I32) => "i32[]",
+                IrStateType::Collection(IrType::Str) => "string[]",
+                IrStateType::Collection(IrType::Bool) => "bool[]",
             };
             out.push_str(&format!(
                 "    state {}: {} = {}\n",
@@ -3188,6 +5223,30 @@ mod tests {
                         out.push_str(&format!("{}}}\n", i));
                     }
                 }
+                IrMember::ControlFlow(ControlFlowNode::For {
+                    binder,
+                    index_binder,
+                    collection,
+                    body,
+                }) => {
+                    let i = "  ".repeat(depth + 1);
+                    let collection_name = match collection {
+                        HandlerExpr::ListPropRead { path, .. } => path.as_str(),
+                        other => unreachable!("For.collection must be ListPropRead, got {other:?}"),
+                    };
+                    match index_binder {
+                        Some(index) => out.push_str(&format!(
+                            "{i}for {binder}, {index} in {collection_name} {{\n"
+                        )),
+                        None => out.push_str(&format!("{i}for {binder} in {collection_name} {{\n")),
+                    }
+                    for body_member in body {
+                        if let IrMember::Widget(node) = body_member {
+                            render_node(out, node, depth + 2);
+                        }
+                    }
+                    out.push_str(&format!("{}}}\n", i));
+                }
             }
         }
         out.push_str(&format!("{i}}}\n"));
@@ -3199,6 +5258,10 @@ mod tests {
             IrLiteral::Str(s) => format!("\"{}\"", s.replace('\\', "\\\\").replace('"', "\\\"")),
             IrLiteral::Ident(id) => id.clone(),
             IrLiteral::Bool(b) => (if *b { "true" } else { "false" }).to_string(),
+            IrLiteral::List(items) => {
+                let inner: Vec<String> = items.iter().map(render_lit).collect();
+                format!("[{}]", inner.join(", "))
+            }
             IrLiteral::Ratio { num, den } => format!("{}:{}", num, den),
             IrLiteral::Color(value) => {
                 let alpha = (*value >> 24) & 0xFF;
@@ -3220,6 +5283,17 @@ mod tests {
             HandlerExpr::PropRead { path } => format!("(prop-read {})", path),
             HandlerExpr::StrPropRead { path } => format!("(str-prop-read {})", path),
             HandlerExpr::BoolPropRead { path } => format!("(bool-prop-read {})", path),
+            HandlerExpr::ListPropRead { path, .. } => format!("(list-prop-read {})", path),
+            HandlerExpr::ItemRead { binder } => format!("(item-read {})", binder),
+            HandlerExpr::IndexRead { binder } => format!("(index-read {})", binder),
+            HandlerExpr::ListAppend { path, value, .. } => {
+                format!("(list-append {} {})", path, render_expr(value))
+            }
+            HandlerExpr::ListDropLast { path, .. } => format!("(list-drop-last {})", path),
+            HandlerExpr::ListLit(items) => {
+                let inner: Vec<String> = items.iter().map(render_lit).collect();
+                format!("[{}]", inner.join(", "))
+            }
             HandlerExpr::Assign { lhs, rhs } => format!("(assign {} {})", lhs, render_expr(rhs)),
             HandlerExpr::CompoundAssign { lhs, op, rhs } => {
                 let op_str = match op {
@@ -4430,6 +6504,13 @@ mod tests {
         assert_validate_err(
             ";wasamo-ir v0\ncomponent C inherits W {\n\
              node VStack { if true { if false { node Text {} } } }\n\
+             }",
+            "nested control-flow",
+        );
+        assert_validate_err(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             state xs: i32[] = []\n\
+             node Box { if true { for x in xs { node Text {} } } }\n\
              }",
             "nested control-flow",
         );

@@ -14,6 +14,14 @@ pub enum TypeName {
     Str,
     Float,
     Bool,
+    Collection(CollectionElemType),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CollectionElemType {
+    Int,
+    Str,
+    Bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -60,6 +68,19 @@ pub enum Expr {
         name: String,
         span: Span,
     },
+    QualifiedRef {
+        name: QualifiedName,
+    },
+    ListLit {
+        items: Vec<Expr>,
+        span: Span,
+    },
+    CollectionCall {
+        receiver: QualifiedName,
+        method: String,
+        args: Vec<Expr>,
+        span: Span,
+    },
     /// Ratio literal `<num>:<den>` (DD-M3-P2-002). Per dsl_spec §4.9
     /// this expression is only accepted as the RHS of `Box.aspect`;
     /// rejection in other positions is `wasamoc check`'s responsibility.
@@ -90,9 +111,12 @@ impl Expr {
             | Expr::BoolLit { span, .. }
             | Expr::Measurement { span, .. }
             | Expr::Ident { span, .. }
+            | Expr::ListLit { span, .. }
+            | Expr::CollectionCall { span, .. }
             | Expr::RatioLit { span, .. }
             | Expr::ColorLit { span, .. }
             | Expr::UnsupportedOperator { span, .. } => span,
+            Expr::QualifiedRef { name } => &name.span,
         }
     }
 }
@@ -169,8 +193,20 @@ pub struct Statement {
 }
 
 #[derive(Debug, Clone)]
+pub struct ExprStatement {
+    pub value: Expr,
+    pub span: Span,
+}
+
+#[derive(Debug, Clone)]
+pub enum BlockStatement {
+    Assignment(Statement),
+    Expr(ExprStatement),
+}
+
+#[derive(Debug, Clone)]
 pub struct Block {
-    pub statements: Vec<Statement>,
+    pub statements: Vec<BlockStatement>,
     pub span: Span,
 }
 
@@ -215,6 +251,13 @@ pub enum Member {
     },
     Conditional {
         condition: Expr,
+        body: Vec<Member>,
+        span: Span,
+    },
+    For {
+        binder: String,
+        index_binder: Option<String>,
+        collection: Expr,
         body: Vec<Member>,
         span: Span,
     },

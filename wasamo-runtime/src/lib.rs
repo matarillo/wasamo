@@ -41,6 +41,24 @@ pub mod ffi {
     pub fn __signal_tokens_for_test(widget: *mut WasamoWidget, name: &str) -> Vec<u64> {
         crate::registry::signal_tokens_for(widget, name)
     }
+
+    #[doc(hidden)]
+    pub fn __registry_entry_count_for_test() -> usize {
+        crate::registry::__entry_count_for_test()
+    }
+
+    #[doc(hidden)]
+    pub fn __runtime_health_for_test() -> &'static str {
+        match crate::reactive::runtime_health() {
+            crate::reactive::RuntimeHealth::Healthy => "Healthy",
+            crate::reactive::RuntimeHealth::Diverged => "Diverged",
+        }
+    }
+
+    #[doc(hidden)]
+    pub fn __reactive_divergence_diagnostics_present_for_test() -> bool {
+        crate::reactive::divergence_diagnostics().is_some()
+    }
 }
 
 pub use layout::{Alignment, SizeConstraint, WidgetKind};

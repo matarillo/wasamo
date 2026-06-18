@@ -2,7 +2,7 @@
 title: DSL 文法 — 検討メモと未解決事項
 status: live
 created: 2026-05-07
-last-updated: 2026-06-01
+last-updated: 2026-06-10
 related-adrs:
   - process/milestone-2/phase-2/decisions/preamble.md
   - process/m2-phase-6-ir-loader.md
@@ -99,6 +99,17 @@ identity を扱う時、top-layer anchor 参照を開く時、または「state 
   Phase 6 の `if` には不要。
 - 次の本命は Phase 7 iteration の item identity / key surface。ここで
   widget id と item key を混同しないこと。
+
+**M3-Phase 7 owner 回答後（2026-06-10）:**
+
+- iteration の per-item context として `item` / `index` を、**「全参照を `state`
+  経由に揃える」主義への初の明文例外** ＝ **loop-local read-only binding** として
+  認める（owner 回答、[owner-intent-answers §2 Q5a](../../process/milestone-3/phase-7/requirements/owner-intent-answers.md);
+  思想は本ノート Q8）。例外は **式（binding）位置に限る**。
+- **handler 位置から `item` を読めるか**（select-this-item 等）は **未決のまま
+  残す** — 別 admission 判断として後続の設計文書で裁く（責務先は本ノートに
+  書かない。現在の割当は phase-7 framing を参照）。
+- これは「任意 widget id」を開くものではない。widget id ≠ item key の規律は不変。
 
 ---
 
@@ -417,3 +428,55 @@ accessibility、ABI / host boundary を横断する論点である。
 - Widget id / anchor 参照 surface（Q1）を開くとき。
 - Window-level property / host-wiring / multi-window 設計（Q2）を開くとき。
 - dropdown / menu / tooltip / popover が v1 必須に近づいたとき。
+
+---
+
+### Q8. イテレーション grammar の思想（初回surface）
+
+**状態（M3-Phase 7 owner 回答後 2026-06-10）:**
+
+Phase 7 の iteration（`for`）の初回surface の思想を owner 回答
+（[owner-intent-answers](../../process/milestone-3/phase-7/requirements/owner-intent-answers.md)）
+から蒸留する。Q6 の構造的制御構文ファミリー（`if` → `else` / `switch` / `for`）の
+loop メンバに対応する。**スケジュール（責務先の M4 / M5 / ADR 割当）はここに
+書かない** — 正本は phase-7 framing に置き、本ノートは思想と条件ベースの再訪契機
+のみ保持する（計画は仮説であり、思想 note に埋めると計画改訂のたびに腐る。現在の
+割当は phase-7 framing を参照）。
+
+**初回surface の中核思想:**
+
+- **collection binding が cardinality を駆動する。** iteration は静的展開では
+  なく、実行時可変の collection binding が、生成される widget subtree の**個数**を
+  駆動することを示す（凍結 acceptance「collection binding drives widget-tree
+  generation」と無改訂で整合）。`if` が subtree の present/absent を駆動したのに
+  対し、`for` は 0..N の cardinality を駆動する。
+- **un-keyed base が baseline。** 初回surface は identity を保持しない
+  fresh/positional base（collection 変化で rebuild）。これは Q6 の「軽量な
+  declared tree と寿命を持つ entity tree の分離」の un-keyed 形を collection へ
+  一般化したもの。
+- **keyed identity / retained state は declared-tree anchor 上の opt-in。**
+  declared tree（`for` メンバ + item template）が安定 anchor なので、将来の
+  keyed retention は IR 変更なしの opt-in として後付けでき、baseline の
+  destroy/rebuild を黙って変えない。
+- **reorder は別問題（ordering contract）。** data-driven reorder は ordering
+  contract + keyed diff を要し、cardinality 駆動の証明とは別の thesis。初回surface
+  は append/truncate-only。
+- **要素型は `TypedValue` と一体で育てる。** `item` は初回surface では scalar。
+  複合 field（`item.filename` 等）は要素型を複合にし `TypedValue` 圧力を生むため、
+  型システムの thesis と一緒に開く。
+- **loop-local `item` / `index` は state 経由主義への初の明文例外**（Q1 追記参照）。
+  例外は式（binding）位置に限り、handler 位置の可読性は未決。
+
+**この議論を再訪する契機（条件ベース。スケジュールは phase-7 framing 参照）:**
+
+- repeated subtree 内に focus / input / selected / user-editable state が入る、
+  または reorder を許す → keyed identity / retained state を開く。
+- sort / filter / drag reorder / keyed diff を要する UI → data-driven reorder。
+- `item.filename` / caption fields / record-like state など scalar で足りない
+  concrete case → structured item fields（`TypedValue` と一体）。
+- select-this-item / delete-this-item 等の per-item interaction → handler 位置
+  からの `item` 参照 / per-item handler admission。
+- nested `for` / `else` / `switch` / template-local named scope の必要 → nested
+  template scope（nested structural control flow と同じ波で開く）。
+- N item 生成が `MUTATION_CAP` に触れる、または visible list が数十〜数百 item を
+  acceptance として要求 → gallery-scale / cap / fan-out。

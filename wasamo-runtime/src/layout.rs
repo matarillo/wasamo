@@ -34,7 +34,7 @@ pub enum WidgetKind {
     // M3-Phase 6 DD-M3-P6-001 / DD-M3-P6-002 per-kind tag for the ZStack
     // layout primitive. ZStack has direct children, defaults to `Fill/Fill`,
     // sizes by the per-axis max child union on Shrink/unbounded axes, and
-    // carries per-child alignment in `zstack_placements`.
+    // reads child-carried placement from each direct child (DD-M3-P7-006).
     ZStack,
 }
 
@@ -75,9 +75,9 @@ pub struct CellPlacement {
     pub v_align: Alignment,
 }
 
-/// M3-Phase 6 DD-M3-P6-002 per-ZStack-child placement, parallel to
-/// `LayoutNode.children`. Defaults are `Center/Center` and are applied at
-/// the runtime build boundary; this type is only the layout-engine carrier.
+/// M3-Phase 6 DD-M3-P6-002 per-ZStack-child placement. M3-Phase 7 stores
+/// it on the child slot, interpreted by the ZStack parent; default
+/// `Center/Center` is applied when the child has no carried placement.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ZStackPlacement {
     pub h_align: Alignment,
@@ -243,13 +243,15 @@ pub struct LayoutNode {
     /// DD-M3-P5-003 / DD-M3-P5-005 per-Cell placements, parallel to
     /// `children` (`cell_placements[i]` places `children[i]`). Empty on
     /// every non-Grid kind. Document order = children order = paint /
-    /// z-order (DD-M3-P5-005 Option A).
+    /// z-order (DD-M3-P5-005 Option A). DD-M3-P7-006 deliberately keeps
+    /// Grid static-only in Phase 7; if Grid admits structural mutation,
+    /// migrate this to child-carried placement before that mutation path
+    /// lands.
     pub cell_placements: Vec<CellPlacement>,
-    /// DD-M3-P6-002 per-ZStack-child placements, parallel to `children`.
-    /// Empty on every non-ZStack kind. Document order = children order =
-    /// layout-side z-order substrate; real paint precedence is verified at
-    /// the Visual layer in T3.
-    pub zstack_placements: Vec<ZStackPlacement>,
+    /// DD-M3-P7-006 child-carried ZStack placement. Meaningful only when
+    /// this node is a direct child of a ZStack parent; `None` means the
+    /// ZStack parent uses its default `Center/Center` placement.
+    pub zstack_placement: Option<ZStackPlacement>,
 }
 
 impl LayoutNode {
@@ -274,7 +276,7 @@ impl LayoutNode {
             grid_columns: Vec::new(),
             grid_rows: Vec::new(),
             cell_placements: Vec::new(),
-            zstack_placements: Vec::new(),
+            zstack_placement: None,
         }
     }
 
@@ -299,7 +301,7 @@ impl LayoutNode {
             grid_columns: Vec::new(),
             grid_rows: Vec::new(),
             cell_placements: Vec::new(),
-            zstack_placements: Vec::new(),
+            zstack_placement: None,
         }
     }
 
@@ -324,7 +326,7 @@ impl LayoutNode {
             grid_columns: Vec::new(),
             grid_rows: Vec::new(),
             cell_placements: Vec::new(),
-            zstack_placements: Vec::new(),
+            zstack_placement: None,
         }
     }
 
@@ -354,7 +356,7 @@ impl LayoutNode {
             grid_columns: Vec::new(),
             grid_rows: Vec::new(),
             cell_placements: Vec::new(),
-            zstack_placements: Vec::new(),
+            zstack_placement: None,
         }
     }
 
@@ -387,7 +389,7 @@ impl LayoutNode {
             grid_columns: Vec::new(),
             grid_rows: Vec::new(),
             cell_placements: Vec::new(),
-            zstack_placements: Vec::new(),
+            zstack_placement: None,
         }
     }
 
@@ -425,7 +427,7 @@ impl LayoutNode {
             grid_columns: Vec::new(),
             grid_rows: Vec::new(),
             cell_placements: Vec::new(),
-            zstack_placements: Vec::new(),
+            zstack_placement: None,
         }
     }
 
@@ -465,18 +467,17 @@ impl LayoutNode {
             grid_columns: columns,
             grid_rows: rows,
             cell_placements,
-            zstack_placements: Vec::new(),
+            zstack_placement: None,
         }
     }
 
     // M3-Phase 6 DD-M3-P6-001 / DD-M3-P6-002 ZStack layout entry. Both axes
     // default to `Fill` so overlay roots track the parent allocation on
     // bounded axes; `measure_zstack` reports the child-union desired size on
-    // Shrink/unbounded axes. `zstack_placements` is parallel to `children`.
-    // T3 wires the runtime build boundary; T2 exercises this directly in
-    // pure-logic tests.
+    // Shrink/unbounded axes. Direct-child placement is read from each child
+    // node's `zstack_placement` field (DD-M3-P7-006).
     #[allow(dead_code)]
-    pub fn zstack(zstack_placements: Vec<ZStackPlacement>) -> Self {
+    pub fn zstack() -> Self {
         Self {
             kind: WidgetKind::ZStack,
             width: SizeConstraint::Fill,
@@ -497,7 +498,7 @@ impl LayoutNode {
             grid_columns: Vec::new(),
             grid_rows: Vec::new(),
             cell_placements: Vec::new(),
-            zstack_placements,
+            zstack_placement: None,
         }
     }
 }
@@ -1377,10 +1378,10 @@ fn arrange_grid(node: &mut LayoutNode, x: f32, y: f32, w: f32, h: f32) -> Result
     Ok(())
 }
 
-// DD-M3-P6-002 arrange: every child shares the same overlap rect. Center is
-// the default placement; explicit start/center/end/stretch is carried by the
-// parallel `zstack_placements` vector. Iteration stays in children-vector
-// order, which is the layout-side substrate for document-order z-order.
+// DD-M3-P6-002 / DD-M3-P7-006 arrange: every child shares the same overlap
+// rect. Center is the default placement; explicit start/center/end/stretch
+// is carried by the child slot. Iteration stays in children-vector order,
+// which is the layout-side substrate for document-order z-order.
 fn arrange_zstack(
     node: &mut LayoutNode,
     x: f32,
@@ -1402,11 +1403,9 @@ fn arrange_zstack(
     node.offset = (x, y);
     node.size = (outer_w, outer_h);
 
-    let placements = node.zstack_placements.clone();
-    for (i, child) in node.children.iter_mut().enumerate() {
-        let placement = placements
-            .get(i)
-            .copied()
+    for child in node.children.iter_mut() {
+        let placement = child
+            .zstack_placement
             .unwrap_or_else(ZStackPlacement::centered);
         let measure_w = if axis_is_stretchy(placement.h_align, &child.width) {
             outer_w
@@ -2937,12 +2936,14 @@ mod tests {
         ZStackPlacement { h_align, v_align }
     }
 
+    fn with_zplace(mut node: LayoutNode, placement: ZStackPlacement) -> LayoutNode {
+        node.zstack_placement = Some(placement);
+        node
+    }
+
     #[test]
     fn zstack_defaults_to_fill_fill_and_centers_children() {
-        let mut z = LayoutNode::zstack(vec![
-            ZStackPlacement::centered(),
-            ZStackPlacement::centered(),
-        ]);
+        let mut z = LayoutNode::zstack();
         z.children.push(LayoutNode::rectangle(
             SizeConstraint::Fill,
             SizeConstraint::Fill,
@@ -2964,11 +2965,7 @@ mod tests {
 
     #[test]
     fn zstack_shrink_measure_uses_child_union_with_fill_child_zero() {
-        let mut z = LayoutNode::zstack(vec![
-            ZStackPlacement::centered(),
-            ZStackPlacement::centered(),
-            ZStackPlacement::centered(),
-        ]);
+        let mut z = LayoutNode::zstack();
         z.width = SizeConstraint::Shrink;
         z.height = SizeConstraint::Shrink;
         z.children.push(LayoutNode::rectangle(
@@ -2997,22 +2994,18 @@ mod tests {
 
     #[test]
     fn zstack_arrange_alignment_overrides() {
-        let mut z = LayoutNode::zstack(vec![
+        let mut z = LayoutNode::zstack();
+        z.children.push(with_zplace(
+            LayoutNode::rectangle(SizeConstraint::Fixed(30.0), SizeConstraint::Fixed(20.0)),
             zplace(Alignment::Leading, Alignment::Leading),
+        ));
+        z.children.push(with_zplace(
+            LayoutNode::rectangle(SizeConstraint::Fixed(40.0), SizeConstraint::Fixed(50.0)),
             zplace(Alignment::Trailing, Alignment::Trailing),
+        ));
+        z.children.push(with_zplace(
+            LayoutNode::rectangle(SizeConstraint::Fixed(25.0), SizeConstraint::Fixed(10.0)),
             zplace(Alignment::Stretch, Alignment::Center),
-        ]);
-        z.children.push(LayoutNode::rectangle(
-            SizeConstraint::Fixed(30.0),
-            SizeConstraint::Fixed(20.0),
-        ));
-        z.children.push(LayoutNode::rectangle(
-            SizeConstraint::Fixed(40.0),
-            SizeConstraint::Fixed(50.0),
-        ));
-        z.children.push(LayoutNode::rectangle(
-            SizeConstraint::Fixed(25.0),
-            SizeConstraint::Fixed(10.0),
         ));
 
         run_layout(&mut z, 100.0, 80.0).unwrap();
@@ -3027,10 +3020,7 @@ mod tests {
 
     #[test]
     fn zstack_arrange_preserves_document_order_substrate() {
-        let mut z = LayoutNode::zstack(vec![
-            ZStackPlacement::centered(),
-            ZStackPlacement::centered(),
-        ]);
+        let mut z = LayoutNode::zstack();
         z.children.push(LayoutNode::rectangle(
             SizeConstraint::Fixed(80.0),
             SizeConstraint::Fixed(60.0),
@@ -3066,7 +3056,7 @@ mod tests {
         // unexercised. A wrong arm would report the child union (200x50)
         // under Shrink or (0,0) under Fill; only Fixed reports (150,90),
         // and it must be independent of the available bound.
-        let mut z = LayoutNode::zstack(vec![ZStackPlacement::centered()]);
+        let mut z = LayoutNode::zstack();
         z.width = SizeConstraint::Fixed(150.0);
         z.height = SizeConstraint::Fixed(90.0);
         z.children.push(LayoutNode::rectangle(
