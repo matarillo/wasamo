@@ -70,9 +70,32 @@ TBD.
 ## Phase 7b acceptance criteria (restated)
 
 SSOT は [process/_roadmap.md M3](../../../_roadmap.md) / [plan.md §Acceptance criteria](../../plan.md)。
-本 phase は新たに挿入されたため、計画時点の独立 AC は持たない。
+本 phase は当初計画にない owner-inserted phase であるため、計画時点の独立 AC を持たない。
 
-ただし、Phase 7b は M3 全体の **A11 / A12** に対する補助的な risk-reduction phase として扱う。
+ただし **「Phase 7b は新 AC を要しない」とは断定しない。** 新 AC の要否は
+DD-M3-P7b-001（author surface）の結論に **contingent** であり、その DD より前に
+ここで決め打ちしてはならない。理由は、既存 AC が placement の author surface を
+一度も名指していないからである。A2 は Grid を "1 cell 1 child, star sizing + spanning"、
+A4 は ZStack を "sibling z-order by document order" としか約束しておらず、
+*親解釈 placement をどう書くか*、ましてや *コンテナ横断で一貫した書き方* は
+どの既存 AC の thesis も担っていない。Phase 7b の届ける「cross-container で coherent な
+parent-interpreted placement モデル」は、A2 と A4 の隙間に落ちている。
+
+したがって AC 上の扱いは、DD-M3-P7b-001 の出口で次のいずれかに確定する。
+**この判断と plan 改訂の経路は ADR Accepted 時点で固定し、plan の Revision log に記録する。**
+
+* **(a) DD-001 が public author-facing placement surface を変える場合**
+  （例: `slot.*` prefix、`Layer` 導入、`Cell` → `slot.row` 移行）。
+  A2/A4 が一度も名指していない新しい author-facing 契約が生まれ、外部読者がそれに依存する。
+  この場合は M3 acceptance-criteria revision 例外のもとで、新 AC を追加するか
+  A2 / A4 / A12 の wording を refine する。phase 挿入は「新 AC を伴う phase」として
+  AC-revision 例外ルート（Revision log + Phase breakdown 更新 + ROADMAP mirror）で処理する。
+* **(b) DD-001 が surface を保ったまま非対称を原則として明文化するに留まる場合**。
+  新しい author surface は生まれず、純粋に spec / doc hygiene なので、Phase 7b は
+  既存の **A11 / A12** のもとで discharge する。phase 挿入は新 AC を伴わないため、
+  vision-ADR（phase-insertion）ルートで処理する。
+
+どちらに転んでも効く既存 obligation:
 
 * **A11**: `.ui`, `wasamo-ir`, `wasamoc`, `wasamo-runtime`, `docs/dsl_spec.md`, `examples/gallery/`
   が同期して進むこと。Phase 7b が placement surface を変える場合、この同期対象に含まれる。
@@ -322,6 +345,7 @@ ADR が判断すべき面積は固定する。
 
 | Acceptance / obligation       | Phase 7b での discharge                                                                                                                        |
 | ----------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| New-AC question (contingent)  | §"Phase 7b acceptance criteria" のとおり、DD-001 が author surface を変える (a) なら AC-revision 例外で AC 追加 / A2・A4・A12 refine、変えない (b) なら A11/A12 で discharge。ADR Accepted 時点で確定し plan Revision log に記録。 |
 | M3 A11 synchronization        | DD-001 / DD-002 の採択後、`.ui`, `wasamo-ir`, `wasamoc`, `wasamo-runtime`, `docs/dsl_spec.md`, `docs/architecture.md`, `examples/gallery/` を同期する。 |
 | M3 A12 public draft quality   | DD-001 で author-facing placement surface と invalid examples を決め、`docs/dsl_spec.md` に説明可能な形で反映する。                                             |
 | Phase 7 DD-M3-P7-006 overlap  | DD-002 で consume / revise / supersede の関係を明記する。                                                                                              |
