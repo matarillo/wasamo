@@ -479,7 +479,8 @@ M3 is complete when **all** of the following hold:
 
 - **2026-05-21 — Phase-end criterion 7 wording aligned to
   Phase 1 / Phase 2 practice.** Routed under
-  [plans/README.md §Factual correction](../README.md).
+  the Factual-correction tier of the plan-revision discipline
+  ([workflow.md](../procedures/workflow.md), DD-V-026).
   The original wording named `docs/notes/retrospectives.md` as
   the landing site for the per-phase retrospective entry. In
   practice, both Phase 1
@@ -493,6 +494,13 @@ M3 is complete when **all** of the following hold:
   phase-end retrospective entry, covering ship / slip / merge
   + push) is unchanged; no acceptance criterion is affected;
   no phase scope is changed.
+
+- **2026-06-19 — Plan-revision wording aligned to DD-V-026.** The
+  `Frozen agreement` is no longer read-only under `in-progress`; the
+  owner-facing resume note and the stale `Factual correction` link are
+  updated to point at the plan-revision discipline
+  ([workflow.md](../procedures/workflow.md)). Tier-1 factual: no AC,
+  phase, dependency, or scope change.
 
 ## Progress
 
@@ -522,6 +530,6 @@ closed 2026-05-22 and discharged the WrapPanel constituent of A3
 minimal) closed 2026-05-25 and discharged A5 (ScrollView minimal) and
 the A11 gallery proof's owner-acceptance half (owner-manual GUI smoke
 on the rebuilt gallery host after the T6 window-root Fill/Fill fix).
-The Frozen agreement section remains read-only under the
-`in-progress` lifecycle (acceptance-criteria revision exception
-aside).
+The Frozen agreement section is revisable under the plan-revision
+discipline ([workflow.md](../procedures/workflow.md), DD-V-026):
+owner-authorised, critically-checked, and proportionally recorded.

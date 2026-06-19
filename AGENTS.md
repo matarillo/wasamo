@@ -22,8 +22,12 @@ structure.
   (covers vision / governance / policy / roadmap): doc system,
   RFC policy, DSL policy, process rules.
 - `process/milestone-N/` — Per-milestone artifacts:
-  - `plan.md` — Milestone execution plan. Frozen once
-    `status: in-progress`.
+  - `plan.md` — Milestone execution plan. Its `Frozen agreement`
+    section is revisable under the gated plan-revision discipline
+    (owner-authorised, critically-checked, proportionally recorded) —
+    see [process/procedures/workflow.md](process/procedures/workflow.md)
+    and
+    [DD-V-026](process/cross-milestone/decisions/plan-revision-discipline.md).
   - `handoff.md` — Cross-phase design prerequisites and residuals;
     written at milestone close.
   - `requirements/` — Milestone-level scope, spec, and wireframes.

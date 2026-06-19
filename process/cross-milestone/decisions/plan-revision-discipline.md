@@ -1,6 +1,6 @@
 # Vision Decision Record — Plan revision discipline
 
-**Status:** Proposed
+**Status:** Accepted 2026-06-19
 
 **Scope:** `process/procedures/workflow.md`, `process/README.md`,
 `AGENTS.md` (its always-loaded plan-freeze wording),
@@ -46,12 +46,12 @@ freeze that forbids change unless an exception fires.
 
 This vision decision record sets the plan-revision discipline
 accordingly (DD-V-026) and re-homes it (DD-V-027). Both decisions
-follow the ADR shape (Options → Comparison → Recommendation) and remain
-`Proposed` pending owner review.
+follow the ADR shape (Options → Comparison → Recommendation) and are
+`Accepted` as of 2026-06-19.
 
 ## DD-V-026 — Plan revision discipline: gated revision with proportional recording
 
-**Status:** Proposed
+**Status:** Accepted
 
 **Context:**
 [DD-V-015](./doc-system.md#dd-v-015--plan-two-layer-structure-frozen-agreement--live-progress)
@@ -274,7 +274,7 @@ question dissolves.
 
 ## DD-V-027 — Home of the plan-revision discipline
 
-**Status:** Proposed
+**Status:** Accepted
 
 **Context:**
 [DD-V-019](./process-rule-ssot.md#dd-v-019--process-rule-ssot-distribution)
@@ -360,4 +360,4 @@ edits land in the same commit batch that flips this VDR to `Accepted`:
 
 | Version | Date | Notes |
 |---------|------|-------|
-| 0.1 | 2026-06-19 | Initial draft. Proposed; pending owner review. |
+| 0.1 | 2026-06-19 | Drafted and Accepted same session. |

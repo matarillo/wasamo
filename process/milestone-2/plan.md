@@ -230,7 +230,9 @@ and [process/cross-milestone/decisions/post-m2-roadmap.md](../cross-milestone/de
 ### Revision log
 
 - **2026-05-08** — Acceptance criteria revision under the
-  README.md "Acceptance criteria revision" exception.
+  README.md "Acceptance criteria revision" exception (that exception
+  now lives in the plan-revision discipline:
+  [workflow.md](../procedures/workflow.md), DD-V-026).
   - Motivation: A1–A4 cover pipeline wiring and structural cleanup
     but do not cover the runtime guarantees (execution order,
     re-entrancy/guard placement, type-agnostic binding) required to

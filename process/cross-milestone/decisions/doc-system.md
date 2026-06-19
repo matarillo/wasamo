@@ -224,6 +224,13 @@ in-progress freeze rule applies to `Frozen agreement` only;
 is still a single file; archival policy is unchanged (deleted on
 completion by default).
 
+**Superseded in part (2026-06-19, DD-V-026):** the *read-only* aspect of
+the in-progress freeze rule is superseded — the `Frozen agreement`
+section is now revisable behind the plan-revision discipline's gate. The
+two-section structure (`Frozen agreement` / `Progress`) decided here is
+retained. See
+[plan-revision-discipline.md](./plan-revision-discipline.md).
+
 ## DD-V-016 — Plan → ROADMAP commit flow redefinition
 
 **Status:** Accepted

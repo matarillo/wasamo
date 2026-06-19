@@ -122,6 +122,50 @@ ADR や決定に昇格して終了、または却下されて消化される。
 
 設計同期 / 実装同期のタイミングで本文と一緒にヘッダの Status も最新化する。
 
+### 計画(plan)改訂の規律
+
+`milestone-N/plan.md` の `## Frozen agreement` は `status: in-progress` でも
+**read-only ではない**。計画は計画時点の仮説であり、前提が変われば適切な手順で
+改訂できる。守るのは agreement の不変性ではなく、変更が **単独・無吟味でない**
+ことと **監査可能** であること。由来と論拠は
+[plan-revision-discipline.md（DD-V-026）](../cross-milestone/decisions/plan-revision-discipline.md)。
+
+**ゲート（全 tier 共通）:**
+
+- **エージェントは合意済み agreement 本文を単独で改訂しない。** 提案し、オーナーが
+  authorise する。binding は「オーナーが合意したもの」に係り status ラベルではない
+  ——未合意の内容（未レビュー draft、レビュー中の未確定部）は自由に編集してよい。
+  提案は別 artifact（Revision-log エントリ草案）として出し、本文 land は承認後。
+- **前提が変わったと気づいたら改訂を提案するのはエージェントの積極的義務。** 黙認は
+  無断変更と同種の失敗。
+- **批判的チェックは起点でない側が行い、起点の自己採点は禁止。** エージェント提案→
+  オーナーが check、オーナー起点→エージェントが check。
+
+**記録（比例3 tier）:**
+
+1. **Editorial / factual** — 文言・移動した path・cross-reference。Revision-log 1 行。
+   識別子・参照グラフ・規範的意味を変えない機械的修正のみ（識別子 rename は原則 tier 2）。
+2. **Scope / AC / phase 構成** — AC の追加/refine/supersede、phase の挿入/並べ替え、
+   依存・acceptance↔phase mapping・out-of-scope の変更。批判チェック済み前提＋根拠付き
+   Revision-log。既存 AC ID 保持（silent renumber 禁止）、AC 変更時は `process/_roadmap.md`
+   を mirror。方向で非対称：
+   - **追加/refine** — 一行 impact check（既存 AC 意味・依存順・完了 phase 評価・
+     retro/merge gate・ROADMAP mirror 要否）。
+   - **撤回/narrowing** — 加えて deferral-with-trigger 表（責務の置き先＋activation
+     trigger）。silent drop 禁止。
+3. **Thesis / purpose 反転** — Revision-log ＋ vision decision record。批判チェックは
+   可能なら独立レビュー。
+
+**status scope:** ゲートと軽量 tier は `draft` / `in-progress` の間のみ。`completed`
+plan の agreement は軽く書き換えない——factual 修正 (tier 1) は archival correction、
+完了済みの substantive 再解釈は milestone `handoff.md` / phase retrospective・postmortem /
+`process/_roadmap.md` revision note /（規範変更なら）VDR に retraction weight で記録する。
+
+**Revision-log 最小テンプレ（tier 2/3）:** what/tier・initiator・old premise・
+new evidence・why the old plan no longer holds（insufficient / incorrect / lower-confidence）・
+no-change option・critical check（非起点側、自己記入禁止）・owner authorisation。提案時は
+critical check と owner authorisation を `pending` とし、本文 land は両充足後。
+
 以下の各段階では、特記なき限りこのライフサイクルに従う。
 
 ---
@@ -190,8 +234,9 @@ ADR や決定に昇格して終了、または却下されて消化される。
 - **アウトプット**:
   - `milestone-N/plan.md` — phase breakdown、各 phase の目標と依存
 
-`plan.md` は `status: in-progress` にした時点で凍結。以後の変更は明示的な改訂
-履歴を残す（→ [process/README.md §Folder conventions](../README.md#folder-conventions)）。
+`plan.md` の `## Frozen agreement` は `status: in-progress` 以降も read-only では
+なく、下記「計画(plan)改訂の規律」のゲートと比例記録に従って改訂できる
+（[DD-V-026](../cross-milestone/decisions/plan-revision-discipline.md)）。
 
 ---
 
