@@ -3,6 +3,7 @@
 **Status:** Proposed
 
 **Scope:** `process/procedures/workflow.md`, `process/README.md`,
+`AGENTS.md` (its always-loaded plan-freeze wording),
 `process/cross-milestone/decisions/` (this file, its supersede of the
 read-only clause of DD-V-015, and its refinement of DD-V-019), the
 `milestone-N/plan.md` agreement-edit rules, and the stale
@@ -85,8 +86,8 @@ and a read-only wall is only one way to force deliberateness.
 
 - **Option 2 — Revisable agreement behind an authority-and-critical-
   check gate, with proportional light recording.** The agreement
-  section is revisable at any status, but a substantive revision must
-  clear a gate before it is recorded: (i) the **owner authorises** it —
+  section is revisable while the plan is `draft` or `in-progress`, but
+  a substantive revision must clear a gate before it is recorded: (i) the **owner authorises** it —
   the agent never changes the agreement on its own authority; and
   (ii) it rests on a **premise change that has been critically
   checked** — the agent *proposes* such revisions when it observes a
@@ -137,8 +138,15 @@ keep the name `Frozen agreement` for continuity, or be renamed
 
 Three rules hold across **all** tiers:
 
-- **The agent never revises the agreement on its own authority** — it
-  proposes; the owner authorises.
+- **The agent never revises the agreed agreement body on its own
+  authority** — it proposes; the owner authorises. This binds the
+  *agreed* agreement section of a plan; the binding attaches to whatever
+  the owner has agreed, not to a status label — content **not yet
+  owner-agreed** (an unreviewed draft, or a still-open part of a plan
+  under review) is freely editable. A proposal is a **separate
+  artifact** — a drafted Revision-log entry, not an in-place edit of the
+  agreement body — and the body edit lands only after owner
+  authorisation.
 - **Proposing a revision when a premise has shifted is a positive
   duty**, not optional caution: withholding such a proposal is a
   failure mode, the same kind as making an unauthorised change.
@@ -150,12 +158,15 @@ Three rules hold across **all** tiers:
 
 The proportional recording then has three tiers:
 
-1. **Editorial / factual** — wording, file path, cross-reference, name.
-   A one-line Revision-log entry; no premise-check (there is no premise
-   to re-examine). This tier is available **only** when the change
-   alters no gate, scope, or intent — it corrects the record to match
-   what was already meant. If there is any doubt whether a change is
-   factual or substantive, it is **tier 2**.
+1. **Editorial / factual** — wording, a moved file path, a
+   cross-reference target. A one-line Revision-log entry; no
+   premise-check (there is no premise to re-examine). This tier is
+   available **only** for a mechanical correction that changes no
+   identifier, no reference graph, and no normative meaning — it
+   corrects the record to match what was already meant. Renaming an AC,
+   phase, or decision *identifier* is presumptively **tier 2** (it
+   touches the reference graph), as is any change where it is in doubt
+   whether it is factual or substantive.
 2. **Scope / AC / phase-structure** — adding, refining, or superseding
    acceptance criteria; inserting or reordering phases; changing
    dependencies, the acceptance ↔ phase mapping, or out-of-scope. All
@@ -165,8 +176,14 @@ The proportional recording then has three tiers:
    `process/_roadmap.md` is mirrored whenever acceptance criteria
    change. Tier 2 is **asymmetric by direction**:
    - **Additive / refining** (add an AC, insert a phase, refine
-     wording, reorder phases that have not executed): the above is
-     sufficient. These changes are self-correcting and visible.
+     wording, reorder phases that have not executed): lighter, because
+     these are self-correcting and visible — but not free. The entry
+     must still carry a one-line **impact check**: the change's effect
+     (if any) on existing AC meaning, dependency order, the evaluation
+     of completed phases, the retro / merge gate, and whether a ROADMAP
+     mirror is required. "Additive" describes the edit, not its blast
+     radius; the impact check is what confirms the edit is genuinely
+     additive in effect.
    - **Retracting / narrowing** (supersede or remove an AC, move
      in-scope work to out-of-scope, defer a committed deliverable,
      reorder or alter a *completed* phase): heavier, because a
@@ -185,17 +202,60 @@ The proportional recording then has three tiers:
    independent** where feasible (a separate review pass), not only the
    non-initiating side's judgement.
 
-**Enforcement tier:** the Revision-log entry is **Forcing** — and for
-tier 2/3 it must record the **premise that changed, who initiated, and
-the non-initiating side's critical-check outcome** alongside what
-changed and the owner's authorisation, so the *gate* (not merely the
-edit) is auditable against ground truth. Tier 2 retractions add the
-**deferral-with-trigger artifact**; tier 2 changes touching acceptance
-criteria add the **ROADMAP-mirror artifact**; tier 3 adds the
-**decision-record artifact**. Two things are checkable on their face: an
-agreement edit with no recorded owner authorisation, and a premise-check
-recorded by the same side that initiated the change — each is a
-violation.
+**Status scope.** The gate and its light tiers apply while a plan is
+`draft` or `in-progress`. A `completed` plan's agreement is **not**
+lightly rewritten: a factual error is fixed as an archival correction
+(tier 1), but any substantive re-interpretation of completed work —
+re-scoping a shipped phase, re-reading what an AC was discharged by — is
+not a planning change and does not ride the additive path; it goes
+through postmortem / ROADMAP history at retraction weight (independent
+check plus a durable record of the original and the re-reading). That
+durable record lives in one of: the milestone `handoff.md`, a phase
+retrospective / postmortem, a `process/_roadmap.md` revision note, or —
+if the re-reading changes a normative decision — a vision decision
+record.
+
+**Enforcement tier:** the Revision-log entry is **Forcing** — for
+tier 2/3 it must be filled out to the template below, so the *gate* (not
+merely the edit) is auditable against ground truth. Tier 2 retractions
+additionally produce the **deferral-with-trigger artifact**; tier 2
+changes touching acceptance criteria produce the **ROADMAP-mirror
+artifact**; tier 3 adds the **decision-record artifact**. Two things are
+checkable on their face: an agreement edit with no recorded owner
+authorisation, and a premise-check recorded by the same side that
+initiated the change — each is a violation.
+
+**Revision-log entry — minimal template.** To keep "light" from
+decaying into thinly-grounded after-the-fact assent, each tier-2/3 entry
+is a fixed fill-in (a few lines, not an essay):
+
+- **What / tier** — the edit and its tier (2-additive, 2-retracting, 3).
+- **Initiator** — owner or agent.
+- **Old premise** — the assumption the prior plan rested on.
+- **New evidence** — what changed, concretely (not "things changed").
+- **Why the old plan no longer holds** — how it is now insufficient,
+  incorrect, or lower-confidence given the evidence (it need not be
+  "invalid"; over-claiming a clean break is itself a failure mode).
+- **No-change option considered** — what keeping the plan as-is would
+  cost, and why that was rejected.
+- **Critical check** — the non-initiating side's assessment (the
+  owner's, when the agent proposed; the agent's, when the owner
+  initiated). The initiator may not write this field for itself.
+- **Owner authorisation** — recorded; absent it, the edit is a
+  violation.
+- *(additive)* **Impact check** — the one-liner from the additive tier.
+- *(retracting)* **Deferral** — the activation-trigger row.
+
+At proposal time a proposer leaves the fields it cannot yet fill —
+**Critical check** and **Owner authorisation** — as `pending`; the
+agreement body edit lands only once both are filled. (When the owner
+initiates, the owner's initiation *is* the authorisation, recorded as
+such, and the agent supplies the critical check.)
+
+The owner's authorisation is the **root of trust**; these fields exist
+so that authorisation is *informed* rather than reflexive, and so an
+agent's "the premise changed" is a falsifiable record rather than an
+assertion.
 
 **Worked consequence (M3-Phase 7b):** inserting Phase 7b is a tier-2
 **additive** change (a phase insertion). Its premise change — the
@@ -275,14 +335,19 @@ per [DD-V-020](./process-rule-ssot.md#dd-v-020--process-rule-change-lifecycle).
 ## Landing tasks (on Accepted-flip)
 
 Per [DD-V-020](./process-rule-ssot.md#dd-v-020--process-rule-change-lifecycle),
-this is a structural change (it touches workflow.md / README.md and
-supersedes the read-only clause of DD-V-015), so the SSOT edits land in
-the same commit batch that flips this VDR to `Accepted`:
+this is a structural change (it touches workflow.md / README.md /
+AGENTS.md and supersedes the read-only clause of DD-V-015), so the SSOT
+edits land in the same commit batch that flips this VDR to `Accepted`:
 
 - Write the gated plan-revision discipline into
   `process/procedures/workflow.md` §document lifecycle: the
   authority-and-critical-check gate, the agent's propose-and-verify
-  duties, and the three recording tiers (DD-V-026).
+  duties, the three recording tiers, the status scope, and the
+  Revision-log entry template (DD-V-026).
+- Replace the always-loaded plan-freeze wording in `AGENTS.md` (the
+  `plan.md` "Frozen once `status: in-progress`" line) with a one-line
+  pointer to the new discipline, so the always-loaded contract does not
+  contradict the SSOT.
 - Tighten the DD-V-019 ownership row (DD-V-027) and leave a pointer in
   `process/README.md`.
 - Mark the read-only clause of DD-V-015 superseded, with a pointer
