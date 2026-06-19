@@ -44,6 +44,10 @@ process/
 | `retrospectives/` | Post-implementation reflection | Append-only after phase close |
 | `handoff.md` | Items carried to the next phase or milestone | Written at close |
 
+> `milestone-N/plan.md`'s `Frozen agreement` is **not** read-only under
+> `in-progress`; it is revisable under the plan-revision discipline
+> ([workflow.md](./procedures/workflow.md), DD-V-026).
+
 ## SSOT distribution
 
 Process knowledge is split across five homes by category. Each home owns its category; other files link rather than duplicate.
@@ -51,8 +55,8 @@ Process knowledge is split across five homes by category. Each home owns its cat
 | SSOT | Owns |
 |---|---|
 | [`AGENTS.md`](../AGENTS.md) (with `CLAUDE.md` as its Claude-Code `@AGENTS.md` import shim) | Enforceable rules: language, testing, commit, CI, build order, rule-enforcement tiers |
-| `process/README.md` (this file) | Structural conventions: folders, lifecycle, mutability |
-| [`process/procedures/workflow.md`](./procedures/workflow.md) | Development workflow (milestone/phase stages, document lifecycle, glossary) |
+| `process/README.md` (this file) | Structural conventions: folder roles and the mutability of doc categories |
+| [`process/procedures/workflow.md`](./procedures/workflow.md) | Development workflow (milestone/phase stages, document status lifecycle including the plan-revision discipline, glossary) |
 | [`process/procedures/retrospectives.md`](procedures/retrospectives.md) | Retrospective procedure (task/phase retro, merge gate) |
 | `process/cross-milestone/decisions/` | Vision decision records (the *why* behind the conventions) |
 
