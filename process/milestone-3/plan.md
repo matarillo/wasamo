@@ -499,14 +499,16 @@ M3 is complete when **all** of the following hold:
   `Frozen agreement` is no longer read-only under `in-progress`; the
   owner-facing resume note and the stale `Factual correction` link are
   updated to point at the plan-revision discipline
-  ([workflow.md](../procedures/workflow.md)). Tier-1 factual: no AC,
-  phase, dependency, or scope change.
+  ([workflow.md](../procedures/workflow.md)). The Progress-section
+  intro's stale `docs/plans/progress/` path is corrected to each
+  phase's `implementation/plan.md`. Tier-1 factual: no AC, phase,
+  dependency, or scope change.
 
 ## Progress
 
 The Progress section is a compact milestone index. Detailed live
-task tracking belongs in phase progress files under
-`docs/plans/progress/`; completed phase logs are distilled into
+task tracking belongs in each phase's `implementation/plan.md` (with
+`implementation/log.md`); completed phase logs are distilled into
 ADRs, CHANGELOG, notes, and git history, then deleted by default.
 
 | Phase | Status | Progress file | ADR | Notes |
