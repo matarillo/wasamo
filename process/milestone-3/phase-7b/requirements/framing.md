@@ -1,13 +1,13 @@
 ---
 title: M3-Phase 7b framing — parent-interpreted placement attributes
-status: draft
+status: aligned
 created: 2026-06-19
 target-phase: M3-Phase 7b
 -------------------------
 
 # M3-Phase 7b framing
 
-**Status:** draft
+**Status:** aligned (owner-aligned 2026-06-19)
 **Targets phase:** M3-Phase 7b (parent-interpreted placement attributes)
 
 プロジェクトの開発プロセス（[workflow.md §2](../../../procedures/workflow.md)）に従い、
@@ -35,35 +35,43 @@ Phase 7b scope とし、どこからを trigger 付きで後続へ送るのか�
 ## 今回オーナーに決めてほしいこと（Owner alignment packet）
 
 **この節だけ読めば合意判断できる。** 推奨でよければ「OK」、変えたい項目だけ指示してください。
-詳細な根拠は後続の各節に置く。
+各項目は合意後に右端の **確定先** へ転記される（1 項目 = 1 合意単位 = 1 確定先）。詳細な根拠は後続の各節に置く。
 
-| ID | 決めてほしいこと                         | 推奨                                                                                                                                            | 詳細                                                                                                                                                                                 |
-| -- | -------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| ①  | Phase 7b を挿入する目的                 | **Grid / ZStack の parent-interpreted placement surface と内部 child-slot model を、M3 public draft 前に整理する corrective phase** とする                   | 新 layout primitive を足す phase ではない。既存 placement surface の意味論・author surface・内部 storage・将来 code-construction boundary を揃える phase。                                                    |
-| ②  | Phase 7b thesis                  | **親が解釈する child placement は widget property ではなく child-slot metadata である**、というモデルを DSL / IR / runtime / future API 方針に通す                       | `Text.text` や `Button.enabled` とは違い、`h-align`, `row`, `column` などは直近親 container が子をどう配置するかの情報である。                                                                                  |
-| ③  | DD slate                         | **2 DD 構成**にする                                                                                                                                | DD-001 = author-facing DSL surface。DD-002 = child-slot internal model and future construction boundary。migration / compatibility / diagnostics は各 DD の sub-issue として扱い、独立 DD にしない。 |
-| ④  | DSL surface の設計空間                | DD-001 で **edge wrapper / prefix なし / fixed prefix / XAML-style attached property / parent-declared namespace** を比較対象に入れる                     | Recommendation は ADR で決める。ただし framing では、最低限この設計空間を確保する。                                                                                                                           |
-| ⑤  | 内部設計の設計空間                        | DD-002 で **widget property model / parent parallel metadata / encapsulated SoA / child-slot-carried metadata / keyed metadata map** を比較対象に入れる | 既存 DD-M3-P7-006 の ST2 を入力として扱う。ただし author surface を変える可能性があるため、Phase 7b で再度 contract を明文化する。                                                                                       |
-| ⑥  | Architectural family             | **vision decision record は新設しない**。tree-with-bindings 仮説内の整理として扱う                                                                              | SwiftUI / Compose 的な view-function scope modifier へ pivot する phase ではない。外部 DSL の tree member / child-slot metadata として整理する。                                                        |
-| ⑦  | Future code-construction API/ABI | **Phase 7b では API/ABI を追加しないが、将来 API の非コミット制約を記録する**                                                                                          | 例: placement は child property setter ではなく、parent-scoped insertion / child-slot builder で表す方向を推奨制約として残す。具体 API signature は後続 phase へ送る。                                             |
-| ⑧  | 実装範囲                             | ADR が Accepted された場合、Phase 7b は docs だけでなく、選ばれた surface に必要な parser / checker / lowering / runtime / examples の同期まで行う                         | ただし新 layout algorithm は作らない。既存 Grid / ZStack の placement 表現と検証を整理する。                                                                                                               |
+| ID | 決めてほしいこと | 推奨 | 確定先 |
+| -- | -- | -- | -- |
+| A | Phase 7b の目的と thesis | 既存 placement surface を揃える **corrective phase**。settled な床は「親が解釈する child placement は widget の **intrinsic property ではない**」まで。**container-specific sugar か generalizable parent-data か**（概念軸）と、**child-slot か parallel か**（storage 軸）は結論ではなく DD で開く。child-slot は観測済み drift ゆえ**有力仮説**として記すが既定ではない。新 layout primitive は足さない。 | FD-7b-A |
+| B | DD slate（2 本構成と予約する比較空間） | **DD-001** = author-facing DSL surface（比較空間: edge wrapper / prefix なし / fixed prefix / XAML-style attached property / parent-declared namespace）。**DD-002** = placement internal model and construction boundary（比較空間: widget property model / parent parallel metadata / encapsulated SoA / child-slot-carried metadata / keyed metadata map）。migration / compatibility / diagnostics は各 DD の sub-issue とし、独立 DD にしない。 | FD-7b-B（比較空間の詳細は §論点 slate） |
+| C | Architectural family の扱い | placement grammar の整理は architectural-family note の **re-evaluation trigger 1（M3 DSL spec drafting）を踏む**。各 surface option（attached property / parent-declared namespace を含む）が family に与える影響を DD-001 で**確認**し、family (1) 内に収まるなら **revise-in-place（VDR 不要）**、pivot 級なら **VDR へ昇格**する——という条件付き判断を記録する。surface option はいずれも tree-description grammar で view-function re-execution ではないため **family (1) 内 confirm が期待される**が、結論は DD の出口で確定する。これは DD-V-026 の**比例記録の原則**（重い artifact は thesis 反転 / family pivot 級にのみ留保）の application であり、Phase 7 Moment-2 の confirm-no-VDR と同型。 | FD-7b-C ＋ architectural-family.md alignment 表（Moment 1/2 で記録） |
+| D | Future code-construction API/ABI | Phase 7b では API/ABI を追加しない。非コミット制約として記録するのは「**placement を generic child property setter で表さない**」（概念 thesis 由来）まで。正の形（parent-scoped insertion / child-slot builder 等）は**非規範**とし固定しない。具体 API signature は後続 phase へ送る。 | FD-7b-D |
+| E | Scope（実装範囲と containment） | ADR が Accepted された場合、Phase 7b は docs だけでなく、選ばれた surface に必要な parser / checker / lowering / runtime / examples の同期まで実装する。新 layout algorithm は作らない。generic modifier system / custom layout container / non-layout parent-data / keyed identity / public API design は activation trigger 付きで carry する。 | FD-7b-E |
+| F | 新 AC の要否（contingent） | いま決め打ちしない。**DD-M3-P7b-001 の出口**で、(a) author surface を変えるなら AC-revision 例外で新 AC 追加 or A2 / A4 / A12 refine、(b) 変えないなら A11 / A12 で discharge。ADR Accepted 時点で確定し plan Revision-log に記録する。 | §Phase 7b acceptance criteria ＋ plan Revision-log |
 
 **返事チェックリスト:**
 
-* ① Phase 7b 目的: ☐
-* ② Phase 7b thesis: ☐
-* ③ DD slate 2 本構成: ☐
-* ④ DSL surface 設計空間: ☐
-* ⑤ 内部設計 設計空間: ☐
-* ⑥ Architectural family 扱い: ☐
-* ⑦ Future code-construction API/ABI は非コミット制約のみ: ☐
-* ⑧ 実装範囲: ☐
+* A 目的と thesis: ☐
+* B DD slate 2 本＋比較空間: ☐
+* C Architectural family（条件付き confirm／pivot なら VDR 昇格）: ☐
+* D Future code-construction は非コミット制約のみ: ☐
+* E Scope（実装まで＋containment）: ☐
+* F 新 AC は DD-001 contingent: ☐
 
 ---
 
 ## オーナー合意の記録
 
-TBD.
+**2026-06-19**: owner が Owner alignment packet A〜F に正式合意。
+A→FD-7b-A、B→FD-7b-B、C→FD-7b-C、D→FD-7b-D、E→FD-7b-E、
+F→§Phase 7b acceptance criteria ＋ plan Revision-log に確定。
+
+合意に至る経緯: framing draft（`355e23a`, pre-alignment）に対し owner との対話で packet を
+case A 構造（A〜F・確定先列）へ再編し、FD-7b-C を「条件付き confirm／pivot なら VDR 昇格」に補正。
+続けて Codex の 3 パスのレビューを批判的に検討して folding し、(i) thesis を「placement は intrinsic
+widget property ではない」を床とし child-slot / generalizable を DD で開く軸に降格、(ii) DD-001 に
+Option 0（principled asymmetry / status quo）・name-collision rule・control-flow surface・forward-compat
+reservation を追加、(iii) DD-002 に bindability 方針・textual IR compatibility policy を追加し名称を
+中立化（Placement internal model …）、(iv) stale fact（ZStack は Phase 7 で child-carried 実装済み・
+Grid 未移行）と default 所有（Grid stretch / ZStack center）を訂正、(v) 用語を storage 中立へ磨き込み、
+まで反映済み。
 
 ---
 
@@ -91,7 +99,8 @@ parent-interpreted placement モデル」は、A2 と A4 の隙間に落ちて�
   A2 / A4 / A12 の wording を refine する。phase 挿入は「新 AC を伴う phase」として
   AC-revision 例外ルート（Revision log + Phase breakdown 更新 + ROADMAP mirror）で処理する。
 * **(b) DD-001 が surface を保ったまま非対称を原則として明文化するに留まる場合**。
-  新しい author surface は生まれず、純粋に spec / doc hygiene なので、Phase 7b は
+  新しい author-facing 契約は生まれない（DD-002 が Grid storage migration や textual IR change を採れば
+  内部実装は変わりうるが、外部読者が依存する新しい author-facing 契約は生じない）ので、Phase 7b は
   既存の **A11 / A12** のもとで discharge する。phase 挿入は新 AC を伴わないため、
   vision-ADR（phase-insertion）ルートで処理する。
 
@@ -109,32 +118,45 @@ parent-interpreted placement モデル」は、A2 と A4 の隙間に落ちて�
 
 Phase 7b の thesis は:
 
-> 親 container が解釈する child placement 情報を、widget 自身の通常 property ではなく、
-> **parent-interpreted child-slot metadata** として明文化し、Grid / ZStack の author-facing DSL surface、
-> IR / runtime storage、将来の code-construction API 方針を同じ概念に揃える。
+> 親 container が解釈する child placement 情報を、**widget 自身の intrinsic property と混同しない公開モデル**
+> として確立し、Grid / ZStack の author-facing DSL surface、IR / runtime storage、将来の code-construction
+> API 方針を、同じ概念境界の上で coherent に揃える。placement を container-specific sugar とみなすか
+> generalizable parent-data とみなすか、また storage を child-slot 化するかは、この thesis の**結論ではなく
+> DD で開く軸**である。
 
-Phase 7b の設計 thesis は次の 4 点に分解できる。
+Phase 7b の設計 thesis は、settled な床と、DD で開く軸に分けて整理する。
+
+**Settled な床（再審議しない）:**
 
 1. **Placement is not an intrinsic widget property.**
    `Text.text` や `Button.enabled` は widget 自身の属性である。一方、Grid の `row` / `column`、
-   ZStack の `h-align` / `v-align` は、その child が直近の親 container の中でどう扱われるかを
-   指定する情報である。したがって、意味論上は child widget property ではなく child-slot metadata である。
+   ZStack の `h-align` / `v-align` は、その child が直近の親 container の中でどう扱われるかを指定する
+   parent-interpreted な情報である。これは container-specific sugar 派・generalizable parent-data 派の
+   どちらも合意する概念の床であり、ここまでが thesis である。
 
-2. **Author surface must not obscure the model.**
-   Grid は `Cell` wrapper、ZStack は direct child 上の `h-align` / `v-align` という surface を持っている。
-   現状はどちらも parent-interpreted placement だが、見た目が違う。Phase 7b はこのブレを、
-   edge wrapper / fixed prefix / prefix なし sugar などの選択肢として明示比較する。
+**DD で開く軸（結論ではない）:**
 
-3. **Runtime storage must remove drift by construction.**
-   Parent-owned placement metadata を `children` と並列 vector で持つと、insert / remove / range splice /
-   future reorder で child list と placement metadata がずれる危険が残る。Phase 7b は、placement を
-   child-slot record に載せる内部 contract を再確認または改訂し、DSL surface と接続する。
+2. **Conceptual boundary — container-specific か generalizable か。**
+   placement を「Grid 固有の `Cell` / ZStack 固有の annotation という container-specific な構文」とみなすか、
+   「container 横断の generalizable な parent-data grammar（例 `slot.*`）」とみなすかは、surface と storage の
+   手前にある上位の概念判断である。DD-001 冒頭で比較する。
 
-4. **Future code-construction API must remain natural.**
-   Wasamo は現時点でコードから UI tree を組む public API/ABI を持たないが、将来導入する可能性がある。
-   そのとき placement は `child.set_property("h-align", ...)` ではなく、
-   `parent.append_child(child, slot_metadata)` または parent-scoped builder のように表現される方が自然である。
-   Phase 7b は API を設計しないが、その方向を塞がない DSL / IR / runtime model にする。
+3. **Author surface must not obscure the model.**
+   Grid は `Cell` wrapper、ZStack は direct child 上の `h-align` / `v-align` という surface を持つ。
+   現状はどちらも parent-interpreted placement だが見た目が違う。Phase 7b はこのブレを、edge wrapper /
+   fixed prefix / prefix なし sugar / attached property / namespace、および **非対称を設計思想として
+   明文化・維持する案（status quo）** として明示比較する。
+
+4. **Runtime storage — drift を構造的に消すか。**
+   parent-owned placement を `children` と並列 vector で持つと insert / remove / splice / reorder でずれる
+   危険がある。child-slot record に載せる案は Phase 6 で観測された drift を構造的に消すため **有力仮説**だが、
+   parallel / encapsulated SoA / keyed map も DD-002 の比較対象に残す。なお ZStack は Phase 7 で既に
+   child-carried へ同期済み、Grid は parallel のまま——Phase 7b はこの非対称を author surface と合わせて再接続する。
+
+5. **Future code-construction API must remain natural.**
+   将来コードから UI tree を組む API を入れる場合、placement を generic child property setter
+   （`child.set_property("h-align", …)`）で表さないことだけを非コミット制約として残す。正の形
+   （parent-scoped insertion / builder 等）は非規範とし、Phase 7b では固定しない。
 
 この thesis は、M3 の新 feature breadth を増やすものではない。むしろ、M3 public draft に入る前に、
 既に入った Grid / ZStack placement surface の意味論を揃え、将来の iteration / construction API で破綻しない
@@ -144,23 +166,28 @@ Phase 7b の設計 thesis は次の 4 点に分解できる。
 
 ## Architectural-family trigger confirmation
 
-Phase 7b では、`architectural-family.md` の re-evaluation trigger が発火していると扱う。
-具体的には、M3 DSL spec drafting 中に author-facing grammar / placement surface を再整理しており、
-これは DSL grammar が public-contract layer に影響するためである。
+Phase 7b では、`architectural-family.md` の re-evaluation trigger 1（M3 DSL spec drafting）が発火していると扱う。
+具体的には、author-facing grammar / placement surface を再整理しており、これは DSL grammar が public-contract
+layer に影響するためである。
 
-ただし本 framing は、Phase 7b のために vision decision record を新設しない。理由は次のとおり。
+本 framing は VDR 要否を**結論として先取りしない**。DD-001 の各 surface option が family に与える影響を確認
+したうえで、family (1) 内に収まるなら revise-in-place（VDR 不要）、pivot 級なら VDR へ昇格する。現時点の
+見立てでは、surface option はいずれも family (1) 内に収まると**期待される**。理由:
 
-* Phase 7b は view-function with re-execution family への pivot ではない。
-* SwiftUI / Compose 的な host-language scope modifier を導入する phase ではない。
+* surface option（edge wrapper / prefix / attached property / parent-declared namespace）はいずれも
+  tree-**description** grammar であり、view-function with re-execution（family 2）ではない。
+* SwiftUI / Compose 的な host-language scope modifier（view-body 再実行の単位）を導入する phase ではない。
 * `.ui` は引き続き tree description であり、placement は tree の親子 slot に載る metadata として扱う。
 * C ABI は引き続き handle-based / tree-mutation-compatible な方向であり、embedded scripting runtime や view-body re-execution primitive を必要としない。
-* したがって、現行の tree-with-bindings working hypothesis 内で整理できる。
+
+この「trigger は踏むが、確認のうえ family (1) 内なら VDR 不要」という条件付き運用は、DD-V-026 の比例記録原則
+（重い artifact は thesis 反転 / family pivot 級にのみ留保）の application である。
 
 Architectural-family note には、Moment 1 または Moment 2 で次の扱いを記録する:
 
-* Phase 7b re-read result: confirm within family (1).
-* Placement surface は family (1) の tree / child-slot metadata として吸収。
-* No DD-V vision decision record.
+* Phase 7b re-read result: 各 surface option の family-impact を確認した結果（期待は confirm within family (1)）。
+* family (1) 内なら placement surface を tree / parent-interpreted placement metadata として吸収、VDR なし。
+* もし DD-001/002 が pivot 級の choice を採るなら VDR へ昇格。
 
 ---
 
@@ -174,7 +201,8 @@ Architectural-family note には、Moment 1 または Moment 2 で次の扱い�
 * Placement-like attributes は、親が解釈しなければ意味を持たない。
 * `Cell` は runtime widget として materialise する widget ではなく、Grid placement を運ぶ構造的 wrapper として扱われている。
 * ZStack の `h-align` / `v-align` は、ZStack direct child にだけ許される parent-consumed placement annotation であり、child の通常 prop set には残らない。
-* 既存 DD-M3-P7-006 は、parallel-vector drift を観測済み failure mode として扱い、child-carried placement を推奨している。
+* **storage の現状**: ZStack は M3-Phase 7 で **child-carried placement に実装同期済み**（architecture.md §6.8.5）。Grid は static-only ゆえ `cell_placements` を **parallel-vector のまま**保持し、structural-mutation path が開くときに child-carried へ移す trigger が記録されている。DD-M3-P7-006 は parallel-vector drift を観測済み failure mode として child-carried を推奨した DD だが、その推奨は **ZStack では実装済み・Grid では未適用**である。
+* **default は parent container が所有する**: surface を揃えても default semantics は統一されない。現状 Grid `Cell` の `h-align` / `v-align` default は **stretch**、ZStack の default は **center**。surface 統一は default 統一を含意しない（default を変えるなら別個の layout-behavior change になる）。
 * Phase 7b は public C ABI / Rust safe API / Zig API に新規 code-construction surface を追加しない。
 
 ### 本 framing で open DD に送る edge
@@ -209,13 +237,23 @@ author-facing surface に一貫性がない。M3 public draft にこのまま入
 
 **sub-issues:**
 
+* Conceptual boundary（先頭で扱う上位判断）:
+
+  * placement は container-specific な DSL sugar（Grid 固有 `Cell` / ZStack 固有 annotation）か、
+    container 横断の generalizable な parent-data grammar（`slot.*` 等）か。
+  * この概念判断が以降の Surface form の評価軸を規定する。
 * Surface form:
 
-  * Option 1: Grid `Cell` / ZStack `Layer` のような edge wrapper に寄せる。
+  * **Option 0: principled asymmetry / documented status quo** — Grid = structured `Cell` wrapper、
+    ZStack = lightweight direct annotation の非対称を、「構造データを伴う placement のみ wrapper、単純な
+    alignment は直付け」という設計思想として明文化し維持する。既存実装への追認ではなく意図されたモデルか
+    を判断する一級 option。
+  * Option 1: Grid `Cell` / ZStack `Layer` のような edge wrapper に統一して寄せる。
   * Option 2: prefix は置かず、意味論だけ child-edge / child-slot に統一する。
   * Option 3: fixed prefix を置く。
   * Option 4: XAML-style attached property。
   * Option 5: parent-declared modifier namespace。
+  * 各 option には architectural family への影響（family (1) 内か pivot 級か）を 1 行で添える（FD-7b-C）。
 * Fixed prefix の語彙:
 
   * `slot.`
@@ -232,6 +270,26 @@ author-facing surface に一貫性がない。M3 public draft にこのまま入
   * direct child `h-align` / `v-align` 維持。
   * `slot.h-align` / `slot.v-align` へ移行。
   * `Layer` wrapper を導入。
+* Name-collision rule（surface option の比較軸でもある）:
+
+  * parent-consumed placement attr が将来 child widget の通常 prop と同名になった場合の規則
+    （親が先に consume / `slot.*` 等の namespace で回避 / diagnostic）。
+  * no-prefix 直書きは衝突リスク、prefix / namespace は回避——この差は surface option の優劣に直結する。
+* Control-flow × placement の author surface:
+
+  * `for` / `if` で生成される child に placement をどう書くか（body root child に付く / block に付く /
+    生成各 child に複製）。runtime は Phase 7 で「生成 child が placement を staging→commit で運ぶ」まで
+    実装済み（architecture.md §6.7.10 / §6.8.5）なので、ここで決めるのは author surface の見え方。
+  * per-iteration で placement を変えられるか（= bindability、DD-002 と連結）。
+* Placement の bindability（surface 側の見え方）:
+
+  * 現状 placement は literal/constant。bindable 化の実装は Phase 7b でしないが、author surface 上
+    「将来 bind できる concept か」を DD-002 の storage 方針と一貫させる。
+* Forward-compat reservation（実装は defer・互換だけ今見る）:
+
+  * 選んだ surface が、将来の custom layout container の custom slot attr や non-layout parent-data
+    （hit-test / focus / accessibility）と**衝突しない予約条件**を満たすこと。将来 system は設計しないが、
+    構文が将来拡張を偶然狭めない条件を名指す。
 * Diagnostics:
 
   * placement attr が許される parent context。
@@ -243,7 +301,7 @@ author-facing surface に一貫性がない。M3 public draft にこのまま入
   * pre-1.0 compatibility alias の有無。
   * dsl_spec の stale prose sweep。
 
-### DD-M3-P7b-002 — Child-slot placement model and construction boundary
+### DD-M3-P7b-002 — Placement internal model and construction boundary
 
 **問い:**
 DSL で書かれた parent-interpreted placement metadata を、IR / textual IR / runtime storage / structural mutation /
@@ -251,19 +309,20 @@ future code-construction API 方針でどう表すべきか。
 
 **Phase 7b の問いである理由:**
 DD-M3-P7-006 は storage model と structural side-effect atomicity を扱ったが、
-その spec content seed は author surface unchanged を前提としていた。Phase 7b は author surface 自体を
-変える可能性があるため、child-slot model を architecture contract として再接続する必要がある。
+その spec content seed は author surface unchanged を前提としていた。**その child-carried 推奨は ZStack では
+M3-Phase 7 で実装済み・Grid では未適用**であり、Phase 7b は author surface 自体を変える可能性があるため、
+placement storage model を architecture contract として（ZStack の既存実装と Grid 未移行の非対称も含めて）再接続する必要がある。
 また、将来 code-construction API を入れるなら、placement を child property setter で表すのか、
 parent insertion / child-slot builder で表すのかを、少なくとも方向として記録しておく必要がある。
 
 **sub-issues:**
 
-* Internal model:
+* Internal model（child-slot は観測済み drift ゆえ**有力仮説**だが、既定ではなく比較する）:
 
   * Widget property model。
   * Parent parallel metadata。
   * Encapsulated SoA + splice-only mutation。
-  * Child-slot-carried placement。
+  * Child-slot-carried placement（leading hypothesis）。
   * Keyed metadata map。
 * IR / textual IR:
 
@@ -271,6 +330,14 @@ parent insertion / child-slot builder で表すのかを、少なくとも方向
   * Explicit child-slot record。
   * Parent-specific placement payload。
   * Loader validation policy。
+  * **Compatibility policy**: child-slot record 化が textual IR の破壊的変更になる場合、旧 form を loader で
+    migrate するか、reject するか、IR schema revision として扱うか。pre-1.0 の textual IR は wasamoc が `.ui`
+    から毎ビルド再生成する build-internal artifact ゆえ default は **reject + 再生成** 寄りだが、明示的に DD で決める。
+* Placement の bindability / reactive mutation:
+
+  * 現状 placement は literal/constant。Phase 7b で bindable にする実装はしないが、「placement は将来 bindable に
+    なりうる public concept か」「layout 安定のため原則 constant-only か」を**方針 + trigger**として記録する
+    （reactive architecture との境界。実装は defer）。
 * Runtime storage:
 
   * `Vec<WidgetNode>` + side metadata。
@@ -285,12 +352,12 @@ parent insertion / child-slot builder で表すのかを、少なくとも方向
 * Future code-construction boundary:
 
   * No new API in Phase 7b。
-  * Future API should prefer parent-scoped insertion / child-slot builder。
-  * Avoid generic child property setter for placement。
+  * 非コミット制約は「generic child property setter で placement を表さない」まで（概念 thesis 由来）。
+  * 正の形（parent-scoped insertion / child-slot builder 等）は非規範で、ABI shape を固定しない。
   * Concrete API sketches are non-normative and must not freeze ABI shape。
 * Documentation:
 
-  * `docs/architecture.md` に child-slot model を記述。
+  * `docs/architecture.md` に chosen placement model を記述（child-slot 採用時はその model）。
   * `docs/dsl_spec.md` に author-facing placement surface と diagnostics を記述。
   * `docs/abi_spec.md` は原則 no-touch。ただし future compatibility note が必要かは DD で判断。
 
@@ -310,7 +377,7 @@ ADR が判断すべき面積は固定する。
 * ZStack `h-align` / `v-align` と Grid `row` / `column` / `span` / alignment の admission / rejection rules。
 * Existing examples / gallery `.ui` の更新方針。
 * `docs/dsl_spec.md` の placement surface chapter / invalid examples。
-* `docs/architecture.md` の child-slot model / structural mutation contract。
+* `docs/architecture.md` の chosen placement model / structural mutation contract。
 * DD-M3-P7-006 との関係整理:
 
   * consume as premise,
@@ -332,11 +399,11 @@ ADR が判断すべき面積は固定する。
 
 | Deferred item                                             | 責務を置く先                                                               | activation trigger                                                                                            | 理由                                                                                                                                                                |
 | --------------------------------------------------------- | -------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Public code-construction API / ABI                        | Future code-construction phase / M6 ABI freeze preparation           | Widget constructors or tree-building APIs are promoted beyond experimental / internal use                     | Phase 7b は API shape を固定しない。placement is child-slot metadata という方向だけ記録する。                                                                                         |
-| Generic modifier system                                   | Future DSL ergonomics / styling phase                                | Non-placement modifier use case が concrete app から出る                                                           | Phase 7b は placement に限定する。styling / behavior / accessibility modifier を同じ構文に混ぜない。                                                                                |
-| User-defined containers and custom slot attributes        | Component / custom-layout phase                                      | User-defined layout container が child placement keys を定義する必要が出る                                               | Phase 7b は built-in Grid / ZStack の parent-interpreted placement に限定する。                                                                                           |
-| Non-layout parent-data                                    | M4+ input / accessibility / modal behavior phase                     | Hit-test capture, focus grouping, accessibility relationship など、layout 以外の parent-interpreted metadata が必要になる | `slot.*` を採用する場合でも、Phase 7b は layout placement のみを規範化する。                                                                                                          |
-| Keyed child metadata / retained identity                  | Future keyed identity / reorder phase                                | list reorder, retained subtree state, `key:` surface が開く                                                      | Phase 7b の child-slot は structural parent-child edge であり、element identity / keyed diff とは別問題。                                                                     |
+| Public code-construction API / ABI                        | Future code-construction phase / M6 ABI freeze preparation           | Widget constructors or tree-building APIs are promoted beyond experimental / internal use                     | Phase 7b は API shape を固定しない。placement を generic child property setter で表さない、という方向だけ記録する（正の形は非規範）。                                                                                         |
+| Generic modifier system                                   | Future DSL ergonomics / styling phase                                | Non-placement modifier use case が concrete app から出る                                                           | Phase 7b は placement に限定する。styling / behavior / accessibility modifier を同じ構文に混ぜない。構文が将来の modifier 拡張を偶然狭めない予約条件は DD-001 で見る（実装は defer）。                                                                                |
+| User-defined containers and custom slot attributes        | Component / custom-layout phase                                      | User-defined layout container が child placement keys を定義する必要が出る                                               | Phase 7b は built-in Grid / ZStack の parent-interpreted placement に限定する。選んだ surface が custom slot attr と衝突しない予約条件は DD-001 で見る（実装は defer）。                                                                                           |
+| Non-layout parent-data                                    | M4+ input / accessibility / modal behavior phase                     | Hit-test capture, focus grouping, accessibility relationship など、layout 以外の parent-interpreted metadata が必要になる | `slot.*` を採用する場合でも、Phase 7b は layout placement のみを規範化する。選んだ surface が non-layout parent-data と衝突しない予約条件は DD-001 で見る（実装は defer）。                                                                                                          |
+| Keyed child metadata / retained identity                  | Future keyed identity / reorder phase                                | list reorder, retained subtree state, `key:` surface が開く                                                      | Phase 7b の placement metadata は structural parent-child edge の問題であり、element identity / keyed diff とは別問題。                                                                     |
 | Grid structural mutation under Cell                       | Future Grid mutation phase, or Phase 7b if DD explicitly pulls it in | direct `for` of `Cell`, conditional `Cell`, or structural mutation under Grid is admitted                     | Current Phase 7 DD deferred Grid storage migration because direct `for` under Grid is rejected. Phase 7b may revise this, but if not revised the trigger remains. |
 | Layout algorithm changes                                  | Future layout primitive refinement phase                             | Grid / ZStack geometry itselfが不足する concrete app case が出る                                                      | Phase 7b は representation / surface の整理であり、新しい measure-arrange semantics は作らない。                                                                                   |
 | Backward compatibility guarantee for old placement syntax | Pre-1.0 compatibility policy / public draft stabilization            | External users depend on shipped syntax or public docs declare stability                                      | Pre-1.0 では必要最小限の migration に留める。compat alias を置くかは DD-001 で判断する。                                                                                                  |
@@ -349,7 +416,7 @@ ADR が判断すべき面積は固定する。
 | M3 A11 synchronization        | DD-001 / DD-002 の採択後、`.ui`, `wasamo-ir`, `wasamoc`, `wasamo-runtime`, `docs/dsl_spec.md`, `docs/architecture.md`, `examples/gallery/` を同期する。 |
 | M3 A12 public draft quality   | DD-001 で author-facing placement surface と invalid examples を決め、`docs/dsl_spec.md` に説明可能な形で反映する。                                             |
 | Phase 7 DD-M3-P7-006 overlap  | DD-002 で consume / revise / supersede の関係を明記する。                                                                                              |
-| Future code-construction risk | DD-002 で API を追加せず、placement を child property setter として扱わない future-compat constraint を記録する。                                                 |
+| Future code-construction risk | DD-002 で API を追加せず、placement を generic child property setter として扱わない future-compat constraint を記録する（正の形は非規範）。                                                 |
 | Parallel data drift risk      | DD-002 と implementation gates #2 / #3 で structural side-effect enumeration と storage invariant を閉じる。                                         |
 
 ---
@@ -382,7 +449,7 @@ Phase 7b の検証は、**新しい見た目を作ること**ではなく、**�
 * Migration / compatibility alias tests, if aliases are accepted.
 * Roundtrip / textual IR tests:
 
-  * chosen DSL surface lowers to child-slot metadata;
+  * chosen DSL surface lowers to the chosen placement storage model;
   * textual IR loader re-rejects malformed placement metadata;
   * stale old IR form is either accepted via migration or rejected with named diagnostic, depending on DD.
 
@@ -398,7 +465,7 @@ Phase 7b の検証は、**新しい見た目を作ること**ではなく、**�
   * layout invalidation.
 * If `for` is already implemented before Phase 7b lands, range-generated ZStack children carry placement through staging → commit.
 * Destroy / detach path does not leak placement metadata.
-* No-placement containers carry `None` / equivalent and do not pay placement-specific logic except through the generic child-slot path.
+* If a child-slot model is chosen, no-placement containers carry `None` / equivalent and pay no placement-specific logic except through the generic child-slot path.
 
 ### Implementation gate expectations
 
@@ -435,8 +502,8 @@ DD-002 は、DD-M3-P7-006 を consume / revise / supersede のどれで扱うか
 ### R4. Future API を今決めすぎる
 
 コード構築 API との親和性を意識しすぎると、まだ driver のない ABI shape を先に固定してしまう。
-Phase 7b では API shape を決めない。決めるのは「placement は child property ではなく parent-scoped child-slot metadata」
-という方向だけである。
+Phase 7b では API shape を決めない。決めるのは「placement を generic child property setter で表さない」という
+非コミット制約だけで、正の形（parent-scoped insertion / builder 等）は非規範とする。
 
 ### R5. Implementation larger than corrective phase
 
@@ -449,41 +516,62 @@ DSL syntax, IR, runtime storage, examples, docs を同時に触ると、Phase 7b
 
 ### FD-7b-A. Phase 7b thesis
 
-Phase 7b は、parent-interpreted placement attributes を child-slot metadata として整理する corrective phase である。
-新 layout primitive や新 app feature を追加する phase ではない。
+Phase 7b は、parent-interpreted placement attributes を **widget の intrinsic property と混同しない公開モデル**
+として整理する corrective phase である。settled な床は「placement は parent-interpreted であり intrinsic widget
+property ではない」まで。container-specific sugar か generalizable parent-data か、および storage を child-slot 化
+するかは結論ではなく DD で開く（child-slot は観測済み drift ゆえ有力仮説）。新 layout primitive や新 app feature を
+追加する phase ではない。
 
-**Status:** draft
+**Status:** agreed (owner-aligned 2026-06-19)
 
 ### FD-7b-B. DD slate
 
 Phase 7b の ADR set は次の 2 DD を持つ。
 
 * DD-M3-P7b-001 — Parent-interpreted placement authoring surface
-* DD-M3-P7b-002 — Child-slot placement model and construction boundary
+* DD-M3-P7b-002 — Placement internal model and construction boundary
 
-**Status:** draft
+各 DD が比較する設計空間は §論点 slate に予約する。migration / compatibility / diagnostics は
+独立 DD にせず各 DD の sub-issue として扱う。
+
+**Status:** agreed (owner-aligned 2026-06-19)
 
 ### FD-7b-C. Architectural family
 
-Phase 7b は architectural-family re-evaluation trigger を踏むが、vision decision record は新設しない。
-tree-with-bindings working hypothesis 内で吸収する。
+Phase 7b は architectural-family re-evaluation trigger 1（M3 DSL spec drafting）を踏む。VDR 要否は
+**結論として先取りせず**、DD-001 の各 surface option（attached property / parent-declared namespace を含む）が
+family に与える影響を確認したうえで、**family (1) 内に収まるなら revise-in-place（VDR 不要）、pivot 級なら
+VDR へ昇格**する、という条件付き判断とする。現時点の見立てでは、surface option はいずれも tree-description
+grammar であり view-function re-execution（family 2）ではないため、**family (1) 内 confirm が期待される**が、
+確定は DD の出口で行う。記録は revise-in-place（architectural-family.md の alignment 表と re-evaluation triggers
+を Moment 1/2 で更新し commit）で行い、pivot 級と判明した場合のみ VDR を起こす。
 
-**Status:** draft
+この条件付き運用は、
+[plan-revision-discipline](../../../cross-milestone/decisions/plan-revision-discipline.md)（DD-V-026）が確立した
+**比例記録の原則**——重い artifact は thesis 反転 / family pivot 級にのみ留保し、confirm / additive な変更は
+軽い記録で足りる——の application である。architectural-family note の Phase 7 Moment-2 re-read が同様に
+confirm-within-family を VDR なしで処理した前例がある。
+
+**Status:** agreed (owner-aligned 2026-06-19)
 
 ### FD-7b-D. Future code-construction boundary
 
 Phase 7b は public code-construction API / ABI を追加しない。
-ただし、placement は child property setter ではなく parent-scoped child-slot metadata として将来 API に渡るべき、
-という非コミット制約を DD-002 に記録する。
+非コミット制約として記録するのは「placement を generic child property setter で表さない」（概念 thesis 由来）まで。
+正の形（parent-scoped insertion / child-slot builder 等）は非規範とし、ABI shape を固定しない。具体 signature は
+後続 phase へ送る。
 
-**Status:** draft
+**Status:** agreed (owner-aligned 2026-06-19)
 
-### FD-7b-E. Scope containment
+### FD-7b-E. Scope（実装範囲と containment）
 
-Generic modifier system、custom layout container、non-layout parent-data、keyed identity、public API design は Phase 7b scope 外とし、
-activation trigger 付きで carry する。
+ADR が Accepted された場合、Phase 7b は docs だけでなく、選ばれた surface に必要な
+parser / checker / lowering / runtime / examples の同期まで実装する。新 layout algorithm は作らない。
 
-**Status:** draft
+Generic modifier system、custom layout container、non-layout parent-data、keyed identity、public API design は
+Phase 7b scope 外とし、activation trigger 付きで carry する。
+
+**Status:** agreed (owner-aligned 2026-06-19)
 
 ---
 
@@ -493,13 +581,12 @@ activation trigger 付きで carry する。
 
 次の内容を Phase 7b framing の入力として吸収した。
 
-* Current storage uses parent-owned per-child placement metadata parallel to `children`.
 * Parallel data drift was observed in Phase 6 and is not hypothetical.
-* ST2 child-carried placement is the proposed structural fix.
+* ST2 child-carried placement was the proposed structural fix; it is **implemented for ZStack in M3-Phase 7**, while **Grid remains on the parallel `cell_placements` vector** (static-only; migration trigger held).
 * The child slot carries node plus optional parent-interpreted placement kind.
-* The concrete value space may be common enum or per-container child-entry type; the important contract is parent-interpreted child-slot-carried shape.
+* DD-M3-P7-006 framed the important contract as a parent-interpreted child-slot-carried shape (the concrete value space may be common enum or per-container child-entry type).
 * The splice primitive side-effect enumeration is the baseline for structural mutation audit.
-* The original DD assumed author surface unchanged; Phase 7b reopens that assumption.
+* The original DD assumed author surface unchanged; Phase 7b reopens that assumption and re-connects the ZStack-implemented model to Grid and the DSL surface.
 
 ### From docs/architecture.md — ZStack and C ABI current state
 
@@ -507,7 +594,8 @@ activation trigger 付きで carry する。
 
 * ZStack currently takes children directly in document order.
 * ZStack `h-align` / `v-align` are authored as child props but consumed by the parent context as placement annotations.
-* ZStack placement metadata is carried parallel to children in the current architecture prose.
+* ZStack placement is **child-carried** in the current architecture prose (storage contract revised and implementation-synced in M3-Phase 7, §6.8.5); the earlier parallel `zstack_placements` vector was replaced. Grid's `cell_placements` is still parallel because Grid is static-only.
+* Grid `Cell` alignment defaults to `stretch`; ZStack alignment defaults to `center` — defaults are owned per container even where the attribute name is shared.
 * The C ABI is handle-based and has tree mutation in the stable core.
 * M1 experimental constructors existed, but constructor promotion is deferred.
 * Phase 7b must not accidentally commit a future public code-construction API shape.
@@ -528,7 +616,7 @@ activation trigger 付きで carry する。
 * Wasamo currently fits tree-with-bindings best, but this is a live working hypothesis, not a ratified long-term commitment.
 * M3 DSL grammar choices are a re-evaluation trigger.
 * C ABI as handle-based, textual IR as tree description, and DSL grammar are family-coupled at the public-contract boundary.
-* Phase 7b confirms within the current family rather than opening a vision decision record.
+* Phase 7b checks each surface option's family impact; it is expected to confirm within the current family (VDR unnecessary), but escalates to a vision decision record if a DD-001/002 choice turns out pivot-level.
 
 ---
 
@@ -538,7 +626,7 @@ Owner がこの framing に alignment したら、次の段階では Phase 7b AD
 
 * `process/milestone-3/phase-7b/decisions/preamble.md`
 * `process/milestone-3/phase-7b/decisions/dd-m3-p7b-001-parent-interpreted-placement-authoring-surface.md`
-* `process/milestone-3/phase-7b/decisions/dd-m3-p7b-002-child-slot-placement-model-and-construction-boundary.md`
+* `process/milestone-3/phase-7b/decisions/dd-m3-p7b-002-placement-internal-model-and-construction-boundary.md`
 
 ADR draft は `Status: Proposed` から始める。その後、owner review を経て `Status: Accepted` に進め、
 続けて Moment 1 design-spec sync を行う。
