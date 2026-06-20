@@ -114,7 +114,12 @@ ADR consumes:
   surface across parser / checker / lowering / runtime / examples (not
   docs alone); no new layout algorithm; generic modifier system, custom
   layout containers, non-layout parent-data, keyed identity, and public
-  API design are carried out with activation triggers.
+  API design are carried out with activation triggers. **Exception:**
+  DD-001 Option 5 (parent-declared namespace) is a pivot-level surface
+  7b cannot implement in-phase — selecting it does **not** Accept the DD
+  set as a 7b implementation directive but triggers an M3 plan revision
+  inserting Phase 7c, which decides the mechanism (DD-001 §Options
+  Option 5, "Accepted-time process meaning").
 
 ### Architectural-family confirmation (FD-7b-C)
 
@@ -301,6 +306,13 @@ finalised at the Accepted flip; the anticipated set:
 - [`../../plan.md`](../../plan.md) — Phase 7b row populated; the
   contingent new-AC disposition recorded in the Revision log at this
   Accepted flip (branch (a) or (b)).
+- [`../../../_roadmap.md`](../../../_roadmap.md) — **conditional touch
+  (branch (a) only).** If DD-001's chosen surface changes the public
+  author-facing surface (the recommended `h-align` → `slot.h-align` is
+  branch (a)), the new AC or the A2 / A4 / A12 refinement is mirrored into
+  the ROADMAP acceptance-criteria SSOT in the same Accepted-flip commit
+  set (M3 acceptance-criteria revision exception). **No touch under branch
+  (b)** (surface held, Option 0).
 - `implementation/plan.md` / `log.md` — opened after the Accepted flip.
 
 **Moment 2 — Phase close commit set (impl re-sync):** dsl_spec /

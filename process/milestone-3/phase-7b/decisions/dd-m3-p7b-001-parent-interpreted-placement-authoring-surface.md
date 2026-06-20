@@ -183,9 +183,22 @@ re-execution).
    container *declares* the slot attributes it admits; children use that
    namespace.
    - What you gain: the most extensible toward user-defined containers.
+   - **Lightweight variant (5a) — internal slot-declaration table now,
+     public declaration *syntax* later.** Built-in containers declare
+     their admitted slot keys in an *implementation-side* registry (a
+     table the checker/loader consult), and the user-facing
+     *declaration syntax* for custom containers is opened only post-1.0.
+     This is the intermediate between Option 3's fixed `slot.` prefix and
+     full Option 5: it buys a uniform admission mechanism without
+     publishing a namespace grammar in the M3 draft. From the author's
+     view it collapses toward Option 3 — children still write `slot.*`;
+     only the *source of admitted keys* differs — so for Phase 7b's two
+     built-in containers it adds machinery the author never sees.
    - What you give up: over-built for two built-in containers in a
      corrective phase (framing R1 / R5); the custom-container case is
-     explicitly deferred.
+     explicitly deferred. Variant 5a narrows the cost (no public grammar)
+     but its admission table is still machinery built now for a benefit
+     that lands in the user-container era.
    - Technical risk: **the only family-pivot risk** — within family (1)
      for the declaration-as-data form, but *escalates toward family (2)*
      if the namespace becomes a host-language scope construct (not
@@ -198,6 +211,18 @@ re-execution).
      designed only if Option 5 is adopted (not pre-drafted here).
      Adopting Option 5 is an M3 responsibility discharged by inserting
      phase 7c to design the mechanism — it is not deferred to M4+.
+   - **Accepted-time process meaning (Option 5 only).** Every other
+     option, if Accepted, makes this DD set a **Phase 7b implementation
+     directive** (preamble FD-7b-E: parser / checker / lowering / runtime
+     / examples). Option 5 is the exception: its mechanism cannot be
+     implemented inside 7b's corrective scope, so selecting it does **not**
+     Accept this DD set as a 7b implementation directive. Instead the
+     owner choice triggers an **M3 plan revision that inserts Phase 7c**,
+     and 7c's own framing + ADR decide the namespace mechanism; the 7b
+     surface DD is then closed as "surface decided = Option 5, mechanism
+     delegated to 7c" rather than driving 7b code. This keeps the 7c
+     insertion an explicit pre-Accepted plan decision, not a choice that
+     slips in during 7b implementation.
 
 ### Forward-compat impact
 
@@ -212,10 +237,38 @@ DD-002's constant-per-instance stance.
 
 ### Recommendation
 
-**CB-B + Option 3 with the `slot.` prefix**, unifying Grid and ZStack
-on `slot.*`, and **retaining `Cell` as a structural-grouping sugar**
-over the `slot.*` model (not removed) so Grid authors keep the
-grouped-payload affordance while the underlying model is unified.
+**CB-B + Option 3 with the `slot.` prefix, paired with SI-2 PM-1** —
+i.e. **model-level unification**: Grid and ZStack lower to one `slot.*`
+parent-interpreted placement model, with **`Cell` retained as a
+structural-grouping sugar** over that model (not removed) so Grid authors
+keep the grouped-payload affordance.
+
+This bundles two distinct senses of "unify", which the owner judges
+separately:
+
+- **Model / semantic unification** — both containers store and mean the
+  same parent-interpreted `slot.*` placement. This *is* recommended;
+  PM-1 carries it.
+- **Surface-visible unification** — the author *writes* the same direct
+  `slot.*` form under both containers (Grid drops `Cell`, or admits
+  `slot.*` alongside it). This is **PM-2 / PM-3 and is *not* recommended
+  for Phase 7b:** under PM-1 the authored surface stays asymmetric
+  (Grid = `Cell`, ZStack = `slot.*`).
+
+So the recommendation does **not** make the author-facing surface
+uniform; it unifies the *model* and keeps a **documented, narrowed**
+authored asymmetry — one form per container, a sugar over a shared
+model — which is a different thing from Option 0's **two-grammar**
+asymmetry (wrapper vs bare child prop, with no shared model underneath).
+The axis the owner therefore weighs across Option 0 / Option 3+PM-1 /
+Option 3+PM-2 is **how much authored asymmetry to keep**: Option 0 keeps
+two grammars and no shared model; Option 3+PM-1 keeps one
+grammar-with-sugar over a shared model; Option 3+PM-2/3 removes the
+authored asymmetry entirely, at a two-ways-to-write cost (PM-2) or a full
+Grid rewrite (PM-3). PM-1 is recommended because it makes the *model*
+legibly parent-interpreted (the thesis) without spending the public
+draft's budget on two co-equal Grid surfaces; the asymmetry that remains
+is sugar over a unified model, not a second public model.
 
 The decision hinges on three merit axes in priority order — **(1)
 legibility of the parent-interpreted nature** (the thesis), **(2)
@@ -228,15 +281,24 @@ precedence rule. On (3), 3 reserves cleanly; 5 over-reserves and carries
 the only family-pivot risk; 4 couples to parent type names.
 
 Option 0 is the steel-man for "do nothing structural" (cheapest, a
-defensible *documented* model) — it loses on axes (1) and (2). Option 5
-is the steel-man for "maximally future-proof" — it loses on
-proportionality for a corrective phase. Option 3 maximises (1)–(3) and
-pays only a bounded, in-phase migration cost.
+defensible *documented* model) — it loses on axes (1) and (2), and its
+asymmetry is two grammars rather than PM-1's one-grammar-over-one-model.
+Option 5 (and its lighter variant 5a) is the steel-man for "maximally
+future-proof" — both lose on proportionality for a corrective phase:
+5a's admission-table machinery is invisible to the author yet must be
+built and spec-positioned now, whereas `slot.`'s fixed prefix already
+reserves the user-container and non-layout-parent-data paths additively
+(§Forward-compat impact) **without publishing a namespace grammar in the
+M3 public draft**. Option 3 maximises (1)–(3) and pays only a bounded,
+in-phase migration cost.
 
-Recorded as **Proposed**: the conceptual boundary and the prefix token
-are exactly where owner merit-judgment is invited, and Option 0 remains
-a live alternative if the owner weights churn-avoidance and the
-"documented asymmetry" model above cross-container legibility.
+Recorded as **Proposed**: the conceptual boundary, the prefix token, and
+the PM-1-vs-PM-2 authored-asymmetry call are exactly where owner
+merit-judgment is invited. Option 0 remains a live alternative if the
+owner weights churn-avoidance and the "documented two-grammar asymmetry"
+model above cross-container legibility; **PM-2 is the live alternative if
+the owner wants the authored surface itself unified**, not only the
+model.
 
 ## Sub-issues
 
@@ -388,7 +450,11 @@ re-sugar.
 
 **PM-1** (Main decision's "retain `Cell` as sugar"), with **PM-2 as the
 live alternative** if the owner weights surface symmetry over "one form
-per container". The asymmetry cost of PM-1 is the explicit reason PM-2
+per container". PM-1 delivers the Main decision's **model-level**
+unification (both lower to `slot.*`) while leaving the **authored
+surface** asymmetric; PM-2 / PM-3 are the **surface-visible**
+unification choices (see Main decision §Recommendation for the two
+senses). The authored-asymmetry cost of PM-1 is the explicit reason PM-2
 is kept on the table; this is an owner merit call.
 
 ## SI-3: ZStack edge wrapper name
@@ -491,28 +557,99 @@ with no new syntax and matches the one-widget-per-iteration body rule.
 ## Decision outcome
 
 TBD (Proposed). Filled at the Accepted flip with the chosen conceptual
-boundary, surface option + prefix token, the `Cell`-as-sugar
-disposition, the control-flow form, and the contingent new-AC branch
-(a)/(b) per the preamble §Acceptance relation.
+boundary, surface option + prefix token, the `Cell`-as-sugar disposition,
+the control-flow form, and the items below.
+
+**Acceptance disposition (owner-confirmed at the flip, not agent-default).**
+The recommended surface changes the *public* ZStack author surface
+(`h-align` → `slot.h-align`), so under the preamble §Acceptance relation
+it is **branch (a)** (a public author-surface change), not (b). Branch (a)
+requires an explicit owner choice recorded here: **either** a new AC for
+the unified placement surface **or** a refinement of A2 / A4 / A12 wording
+under the M3 acceptance-criteria revision exception. The chosen form is
+mirrored to `process/_roadmap.md` (preamble Moment 1 touch list) and
+recorded in the plan Revision log at this flip. (If the owner instead
+selects Option 0, the surface holds and this discharges under branch (b)
+— A11 / A12, no new AC.)
 
 ## Spec impact
 
 `docs/dsl_spec.md` (author-facing, external-reader bar, no DD option
 labels per the living-spec vocabulary rule):
 
-- The chosen placement surface for Grid and ZStack (under the
-  recommendation: `slot.*` on the child, with `Cell` as grouping sugar),
-  with grammar additions for the prefix and the wrapper-as-sugar form.
+- The chosen placement surface for Grid and ZStack. **Under the
+  recommendation (Option 3 + PM-1 — model-level unification, surface
+  asymmetry retained):**
+  - **Grid author surface stays `Cell { row / column / span / align }`**,
+    unchanged from today. Direct `slot.*` on a Grid child is **not** an
+    author surface and is **rejected** (PM-1). `Cell` lowers to the same
+    per-child `slot.*` model (DD-002), so the unification is in the
+    *model*, not the authored surface.
+  - **ZStack author surface becomes `slot.h-align` / `slot.v-align`** on
+    the child, replacing today's bare `h-align` / `v-align`.
+  - Grammar additions: the `slot.` prefix lexeme (ZStack path) and the
+    retained `Cell` wrapper-as-sugar production (Grid path) — no new node
+    type for the ZStack path.
+  - **(If the owner instead picks PM-2 / PM-3** this bullet widens: PM-2
+    admits Grid direct `slot.*` *alongside* `Cell`; PM-3 replaces `Cell`
+    with `slot.*`. Both make the *authored* surface uniform — the
+    surface-visible unification PM-1 declines.)
 - **Per-key admission table (the diagnostics — kept as a forcing
   artifact, not summarised away):** which placement keys each container
   admits — Grid: `row` / `column` / `span` / alignment; ZStack:
-  `h-align` / `v-align` (spelled under the chosen surface, e.g.
-  `slot.row` under Option 3) — and that they are **rejected everywhere
-  else**. A stray placement attr (under a non-admitting parent) is a
+  `h-align` / `v-align` (spelled under the chosen surface — under PM-1,
+  Grid keys *inside* `Cell` and ZStack keys as `slot.h-align` /
+  `slot.v-align`) — and that they are **rejected everywhere else**
+  (including Grid direct `slot.*` under PM-1). A stray placement attr (under a non-admitting parent) is a
   named check error, re-checked by the loader; the check distinguishes a
   placement attr from an unknown widget prop in both directions (neither
   is silently accepted as the other). Each reject is a named diagnostic
   with a firing test.
+- **`slot.*` grammar — accepted / rejected examples (forcing table, the
+  owner-visible boundary):** the *internal* parse mechanics — whether the
+  lexer emits one `slot.h-align` token or `Ident("slot") Dot
+  Ident("h-align")` folded by the parser into a dotted property key, and
+  how the canonical key is stored on the AST / IR — is an **implementer
+  recommendation, not an owner decision.** Recommended: the parser reads
+  `slot.` + key as a *dotted property-key* (not an expression
+  member-access), storing the canonical key (`slot.h-align`) on the
+  placement slot, so it never collides with expression-grammar qualified
+  access. What the **spec fixes** is the author-visible accept / reject
+  set and which stage rejects:
+
+  | Example | Disposition | Stage |
+  |---|---|---|
+  | `slot.h-align: end` on a ZStack child | accepted | — |
+  | `Cell { row: 1, column: 0 }` Grid child | accepted (PM-1 sugar) | — |
+  | `slot.row: 1` direct on a Grid child (PM-1) | rejected — Grid is `Cell`-authored | checker |
+  | `slot.h-align: end` under a non-admitting parent (e.g. VStack) | rejected — parent admits no placement | checker |
+  | `slot.foo: …` on a ZStack child | rejected — unknown slot key | checker |
+  | `slot.h-align: some_state` (binding RHS) | rejected — placement is constant per instance | checker |
+  | `slot.h-align: end` *where a state named `end` exists* | accepted — `end` is the placement keyword, **not** the state | checker |
+  | `slot:` / `slot..h-align` / `slot.` (malformed key) | rejected — malformed placement key | parser |
+
+  Parser-stage rejects (malformed key shape) are distinguished from
+  checker-stage rejects (admission / unknown-key / constant-RHS); each row
+  is a named diagnostic with a firing test (`wasamoc check`), re-checked by
+  the loader where it survives to IR. (Under PM-2 / PM-3 the `slot.row: 1`
+  Grid row flips to accepted.)
+- **Placement value namespace (the resolution rule):** a placement key's
+  RHS is resolved against the **closed placement-keyword set** for that
+  key (`h-align` / `v-align` → `start` / `center` / `end` / `stretch`;
+  `row` / `column` / `span` → integer literals), **not** through the state
+  namespace. A bare keyword like `end` is therefore *always* the placement
+  constant even if a state of the same name exists — placement values do
+  not shadow- or resolve-through state, so the same `.ui` cannot flip
+  accepted/rejected by checker ordering. Reading a state into placement
+  requires explicit binding-expression syntax, which is the
+  constant-per-instance reject above (a future bindable-placement
+  surface, §Out of scope).
+- **Placement RHS is constant per instance (the diagnostics):** a
+  placement key whose RHS is a state- or loop-local binding *expression*
+  (not a literal / constant) is a **named check error** with a firing
+  test. This is what keeps `slot.*` from reading as a *bindable*
+  parent-data grammar before that is designed (§Out of scope re-visit
+  trigger); it is rejected, not silently dropped.
 - **Defaults preserved per container:** omitted alignment falls to the
   existing per-container default (Grid `stretch`, ZStack `center`);
   unifying the surface does not unify the defaults (see §Out of scope).
@@ -541,8 +678,12 @@ labels per the living-spec vocabulary rule):
   check` test plus a loader re-check, and paired accept/reject fixtures
   pin the placement-vs-ordinary-property distinction.
 - **Migration:** the `examples/gallery/` sweep is bounded and greppable;
-  with no long-lived alias, the old forms become named diagnostics, each
-  with a firing test. This cost is a tie-breaker, not a counter-argument.
+  with no long-lived alias, the old **ZStack bare** placement attrs
+  (`h-align` / `v-align` written directly, without the `slot.` prefix)
+  become named diagnostics, each with a firing test. **Grid `Cell` is not
+  an old form under PM-1** — it is retained as sugar, not rejected — so
+  only the ZStack path migrates. This cost is a tie-breaker, not a
+  counter-argument.
 - **Family-pivot guard:** the FD-7b-C family-impact confirm (Option 3
   within family (1)) is the exit check; only a pivot-level choice
   (Option 5 becoming a scope construct) would escalate to a VDR.
@@ -551,15 +692,31 @@ labels per the living-spec vocabulary rule):
 
 - **Bindable placement** — not implemented this phase; recorded as a
   future-possible concept only (see §Dependencies and the Main decision
-  §Forward-compat impact).
+  §Forward-compat impact). Because `slot.*` reads property-like, a reader
+  may expect `slot.row: some_state` or per-item placement binding; Phase
+  7b admits only a **constant per-instance** placement RHS. A state- or
+  loop-local *expression* RHS on a placement key is **rejected by a named
+  diagnostic** (§Spec impact), not silently accepted, so the surface does
+  not pre-promise bindability it cannot yet honour. **Re-visit trigger:**
+  a concrete app needs state- / loop-local placement that varies after
+  construction; at that point bindable placement is designed *together
+  with* the `BindingTarget` machinery (a new binding-target variant) and
+  DD-002's child-slot effect lifecycle — not as a `slot.*`-local addition
+  — so the reactive landing is decided once, whole.
 - **Generic modifier system / custom-container custom slot attributes /
   non-layout parent-data** (hit-test / focus / accessibility) — reserved
   by a namespaced surface, built later with triggers (framing §Out of
   scope / R1).
 - **Long-lived backward-compatibility alias for the old placement
   syntax** — under the recommendation, none is retained (pre-1.0 minimal
-  migration); the old forms are rejected by a named diagnostic. (If the
-  owner chooses Option 0 instead, no migration arises.)
+  migration); the old **ZStack bare** placement attrs are rejected by a
+  named diagnostic. Grid `Cell` is **not** an old form under PM-1 (it is
+  retained as sugar), so no Grid **author-syntax** migration arises — and
+  this is *only* about author syntax: it does **not** waive DD-002's Grid
+  **storage** migration, which SM-B performs under CB-B *including PM-1*
+  (DD-002 SI-2). Under PM-3 the Grid `Cell` author form would migrate too.
+  (If the owner chooses Option 0 instead, no migration of either kind
+  arises.)
 - **Layout-algorithm changes** — placement is parent-interpreted
   metadata; no measure/arrange algorithm is re-decided here.
 - **Default-alignment unification (Grid `stretch` / ZStack `center` →
@@ -577,19 +734,13 @@ labels per the living-spec vocabulary rule):
 
 ## Revision history
 
-- 2026-06-19 — Initial draft (Proposed). Conceptual boundary plus six
-  surface options (0–5), the control-flow sub-issue (CF-1..3), and a
-  recommendation of CB-B + Option 3 (`slot.`) with `Cell` as sugar.
-  Pending owner review.
-- 2026-06-20 — Added the per-option "Follow-up if chosen" notes and the
-  conditional sub-issues a surface choice forces: SI-1 prefix token and
-  SI-2 per-container `Cell` mapping (Option 3), SI-3 ZStack wrapper name
-  (Option 1); control-flow renumbered SI-4. Recorded default-alignment
-  and key-spelling as deliberately-deferred with re-visit triggers under
-  Out of scope; added the per-key admission table and default-preservation
-  to Spec impact. Assigned every follow-up a decision home so none is
-  settled at implementation: surface-determining follow-ups resolved in
-  pre-doc before Accepted (conditional SIs; Options 2/4 via a pre-doc SI
-  if they become live), Option 5's namespace mechanism via an inserted
-  phase 7c (M3, not M4+). No recommendation changed; Status remains
-  Proposed.
+- 2026-06-19 — Initial draft (Proposed). Conceptual boundary + six surface
+  options (0–5), the control-flow sub-issue, recommendation CB-B + Option 3
+  (`slot.`) with `Cell` as sugar.
+- 2026-06-20 — Strategic / recommendation-choice / implementation-readiness
+  review folds reflected (Status: Proposed; no recommendation reversed):
+  added the conditional follow-up sub-issues (SI-1..4) and Option 5a, split
+  model- vs surface-level unification (Option 3 + PM-1), and pinned the
+  owner-visible boundaries — `slot.*` grammar/diagnostics table, branch-(a)
+  acceptance disposition, Option 5 → Phase 7c, and Grid author-syntax vs
+  DD-002 storage migration.
