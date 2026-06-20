@@ -1,33 +1,34 @@
+---
+title: Placement internal model and construction boundary
+status: Proposed
+phase: M3-Phase 7b
+ac: A11 (IR / runtime / loader sync) — discharges the framing parallel-data-drift obligation with impl-gates #2 / #3; the contingent new-AC question is owned by DD-M3-P7b-001, not this DD (storage is not author-visible)
+date: 2026-06-19
+related:
+  - ./preamble.md
+  - ./dd-m3-p7b-001-parent-interpreted-placement-authoring-surface.md
+  - ../../phase-7/decisions/dd-m3-p7-006-placement-storage-and-structural-side-effects.md
+  - ../requirements/framing.md
+---
+
 # DD-M3-P7b-002 — Placement internal model and construction boundary
 
 **Status:** Proposed
-**Phase:** M3-Phase 7b
-**AC:** A11 (IR / runtime / loader sync); discharges the framing
-parallel-data-drift obligation with implementation gates #2 / #3.
-Storage changes are not author-visible, so the contingent new-AC
-question (preamble §Acceptance relation) is owned by
-[DD-M3-P7b-001](./dd-m3-p7b-001-parent-interpreted-placement-authoring-surface.md),
-not this DD.
 
-## The question
+## Context
 
 How should parent-interpreted placement metadata — once written in the
 DSL (DD-001) — be represented across IR, textual IR, runtime storage,
 and structural mutation, and what direction (not API) is recorded for a
 future code-construction surface?
 
-## Decision dependency summary
+Child-slot-carried is the **leading hypothesis** (it removed the
+observed Phase 6 drift class structurally and is already shipped for
+ZStack), but it is **not** a default; the alternatives are compared on
+merit (owner prior — decide on which model structurally removes the
+drift class, migration cost as tie-breaker only).
 
-Consumes DD-M3-P7b-001 (conceptual boundary + author-visible
-bindability read). Re-opens and re-connects
-[DD-M3-P7-006](../../phase-7/decisions/dd-m3-p7-006-placement-storage-and-structural-side-effects.md),
-which decided child-carried placement (ST2) for ZStack and **deferred
-Grid** behind a trigger, under the assumption that the author surface
-was unchanged — an assumption Phase 7b reopens. The **first thing this
-DD fixes is the relationship to DD-M3-P7-006**: consume / revise /
-supersede / split (framing R3).
-
-## Current state consumed (verified at drafting)
+**Current state consumed (verified at drafting):**
 
 - ZStack: **child-carried** placement (Phase 7 ST2); the parallel
   `zstack_placements` vector was removed (architecture.md §6.8.5).
@@ -40,215 +41,302 @@ supersede / split (framing R3).
   code-construction surface in the stable ABI beyond handle-based tree
   mutation (abi_spec).
 
-## Sub-issue 1 — Relationship to DD-M3-P7-006 (decided first)
+## Dependencies
 
-- **Consume.** Treat DD-M3-P7-006 as the settled ZStack baseline and
-  build only the Grid / surface re-connection on top. Cleanest if the
-  DD-001 surface choice does not disturb the storage contract.
-- **Revise.** Keep DD-M3-P7-006's child-carried thesis but extend it:
-  migrate Grid in-phase and/or restate the contract in terms of the
-  DD-001 surface. Likely if DD-001 picks a unified surface (CB-B) and
-  Grid is pulled in.
-- **Supersede.** Replace DD-M3-P7-006's storage decision if Phase 7b's
-  surface choice forces a different model. Reserved for a pivot; not
-  expected.
-- **Split.** DD-M3-P7-006 keeps structural-mutation atomicity; this DD
-  owns the placement *representation* re-connection.
+- **Consumes** DD-M3-P7b-001 (conceptual boundary + author-visible
+  bindability read). DD-001 and DD-002 are **Accepted together** as one
+  phase ADR set.
+- **Re-opens and re-connects**
+  [DD-M3-P7-006](../../phase-7/decisions/dd-m3-p7-006-placement-storage-and-structural-side-effects.md),
+  which decided child-carried placement (ST2) for ZStack and **deferred
+  Grid** behind a trigger, under the assumption that the author surface
+  was unchanged — an assumption Phase 7b reopens. Fixing the verb for
+  that relationship (consume / revise / supersede / split, framing R3)
+  is the upper-level premise of the Main decision below.
+- **Bindability (carried, not implemented).** Phase 7b does not
+  implement bindable placement. This DD records a *policy + trigger*:
+  placement is **constant-per-instance** in Phase 7b, with per-iteration
+  variation (distinct literal placement per generated child) admitted
+  only as far as the staging → commit path already supports; full
+  reactive re-binding is deferred with a trigger. This must stay
+  consistent with DD-001's author-surface read.
 
-The recommendation states which verb is taken and why, so the two DDs
-do not hold the same decision twice (framing R3).
+## Main decision — internal model (and the P7-006 relationship it assumes)
 
-## Sub-issue 2 — Internal model
+The single load-bearing decision is which **internal model** stores
+parent-interpreted placement. The upper-level premise it assumes is the
+verb taken on DD-M3-P7-006: the recommendation below takes **revise**
+(keep its child-carried thesis, extend to Grid, restate against the
+DD-001 surface) — *consume* understates Grid being pulled in, *supersede*
+overstates it (the storage thesis is unchanged), *split* would leave the
+representation re-connection unowned.
 
-Child-slot-carried is the **leading hypothesis** (it removed the
-observed Phase 6 drift class structurally and is already shipped for
-ZStack), but it is **not** a default; the alternatives are compared on
-merit (owner prior).
+### Options
 
-- **IM-1 — widget property model.** Store placement as an ordinary
-  property on the child widget node.
-  - Rejected on the thesis: it makes placement an *intrinsic widget
-    property*, contradicting FD-7b-A's settled floor. Listed for
-    completeness.
-- **IM-2 — parent parallel metadata.** The current Grid model: a
-  placement vector kept parallel to `children`.
-  - Merit: zero migration for Grid; contiguous reads in arrange. Cost:
-    the **observed** drift class (Phase 6, implementation-gates trap
-    #3) — child list and placement vector desynchronise on insert /
-    remove / splice / reorder, policed by helper discipline rather than
-    structure.
-- **IM-3 — encapsulated SoA + splice-only mutation.** Keep the parallel
-  representation but behind a module boundary; all structural mutation
-  enters one splice primitive.
-  - Merit: removes the *bypass* drift class by language visibility,
-    zero data-model migration. Cost: preserves the representational
-    split (placement stored apart from the child it places); staged
-    subtrees still carry placement beside children until commit; the
-    splice signature keeps parallel-vector bookkeeping. This is the
-    fair structural SoA steel-man (it is DD-M3-P7-006's ST1').
-- **IM-4 — child-slot-carried placement (leading hypothesis).** The
-  child slot carries the node plus its optional parent-interpreted
-  placement (`None` for placement-free containers).
-  - Merit: the drift class is removed **by construction** — a child and
-    its placement are one record, so no insert / remove / splice /
-    reorder can desynchronise them; the splice signature shrinks
-    (children in, children out); generated subtrees carry placement
-    through staging → commit as ordinary data; storage matches the
-    authored parent-interpreted model without making placement an
-    intrinsic widget property. Already shipped for ZStack.
-  - Cost: a runtime structural migration of the Grid arrange / loader
-    read path (full-review lane); the concrete value space (one enum
-    vs per-container child-entry type) is an implementation choice left
-    open.
-- **IM-5 — keyed metadata map.** Placement keyed by child identity.
-  - Rejected on merit: imports an identity key into a phase whose
-    identity baseline is positional / un-keyed (DD-M3-P7-005); the key
-    must be invented precisely where identity is position, and the map
-    can still desync with the child list on remove.
+1. **IM-1 — widget property model.** Store placement as an ordinary
+   property on the child widget node.
+   - What you gain: trivially uniform with widget props.
+   - What you give up: makes placement an *intrinsic widget property*,
+     contradicting FD-7b-A's settled floor.
+   - Technical risk: thesis-violating; listed for completeness, rejected.
+2. **IM-2 — parent parallel metadata.** The current Grid model: a
+   placement vector kept parallel to `children`.
+   - What you gain: zero migration for Grid; contiguous reads in arrange.
+   - What you give up: the **observed** drift class (Phase 6, impl-gates
+     trap #3) — child list and placement vector desynchronise on insert
+     / remove / splice / reorder, policed by helper discipline rather
+     than structure.
+   - Technical risk: the invariant is policed, not structural; every new
+     code path can re-introduce the drift.
+3. **IM-3 — encapsulated SoA + splice-only mutation.** Keep the parallel
+   representation but behind a module boundary; all structural mutation
+   enters one splice primitive (DD-M3-P7-006's ST1').
+   - What you gain: removes the *bypass* drift class by language
+     visibility, zero data-model migration.
+   - What you give up: preserves the representational split (placement
+     stored apart from the child it places); staged subtrees still carry
+     placement beside children until commit; the splice signature keeps
+     parallel-vector bookkeeping.
+   - Technical risk: low (no data migration), but the split keeps costing
+     range staging and any future reorder / key work.
+4. **IM-4 — child-slot-carried placement (leading hypothesis).** The
+   child slot carries the node plus its optional parent-interpreted
+   placement (`None` for placement-free containers).
+   - What you gain: the drift class is removed **by construction** — a
+     child and its placement are one record, so no insert / remove /
+     splice / reorder can desynchronise them; the splice signature
+     shrinks (children in, children out); generated subtrees carry
+     placement through staging → commit as ordinary data; storage matches
+     the authored parent-interpreted model without making placement an
+     intrinsic widget property. **Already shipped for ZStack.**
+   - What you give up: a runtime structural migration of the Grid arrange
+     / loader read path; the concrete value space (one enum vs
+     per-container child-entry type) is left open.
+   - Technical risk: the Grid read-path migration is a runtime structural
+     change (full-review lane); bounded by existing Phase 5 Grid fixtures.
+5. **IM-5 — keyed metadata map.** Placement keyed by child identity.
+   - What you gain: direct lookup by identity.
+   - What you give up: imports an identity key into a phase whose
+     identity baseline is positional / un-keyed (DD-M3-P7-005); the key
+     must be invented precisely where identity is position, and the map
+     can still desync with the child list on remove.
+   - Technical risk: keyed-identity machinery before the keyed thesis;
+     rejected on merit.
 
-## Sub-issue 3 — IR / textual IR + compatibility policy
-
-- Representation: existing child `IrProp` consumption vs an explicit
-  child-slot record vs a parent-specific placement payload; loader
-  validation policy for malformed placement metadata.
-- **Compatibility policy (named explicitly).** If a child-slot record
-  is a breaking change to textual IR, the old form is either migrated
-  by the loader, rejected, or treated as an IR schema revision. The
-  pre-1.0 textual IR is a **build-internal artifact** that `wasamoc`
-  regenerates from `.ui` every build, so the default leans
-  **reject + regenerate** — but it is decided here, not assumed, and
-  matched to the DD-001 migration stance (no long-lived alias).
-
-## Sub-issue 4 — Placement bindability / reactive mutation
-
-Placement is literal / constant today. Phase 7b does **not** implement
-bindable placement. What this DD records is a **policy + trigger**:
-whether placement is a future-bindable public concept or constant-only
-for layout stability, and where the reactive-architecture boundary sits
-if it later becomes bindable. This must be consistent with DD-001's
-author-surface read (sub-issue 7 there). The leading position: placement
-is *constant-per-instance* in Phase 7b, with per-iteration variation
-(distinct literal placement per generated child) admitted only as far
-as the staging → commit path already supports; full reactive
-re-binding of placement is deferred with a trigger.
-
-## Sub-issue 5 — Runtime storage
-
-- `Vec<WidgetNode>` + side metadata (IM-2 shape) vs a `Vec<ChildSlot>`
-  conceptual model (IM-4 shape) vs a container-specific child-entry
-  type.
-- Common placement enum vs per-container placement payload — left as an
-  implementation choice under IM-4 (what is fixed is the
-  parent-interpreted, child-slot-carried *shape*, not a global enum).
-
-## Sub-issue 6 — Structural mutation
-
-- Adopt the DD-M3-P7-006 splice primitive as-is, or re-enumerate its
-  side effects for Phase 7b's paths.
-- Grid migration trigger: keep it held (Grid stays static-only) or
-  **migrate Grid in Phase 7b** so both containers share one model. If
-  DD-001 unifies the surface (CB-B) while Grid storage stays parallel,
-  the surface and storage disagree across containers — an argument to
-  pull the Grid migration into this phase. Pulling Grid in is the one
-  place Phase 7b might exceed a minimal corrective (framing R5); the
-  cost is bounded (Grid arrange loop + loader extraction, with Phase 5
-  fixtures as the regression gate).
-
-## Sub-issue 7 — Future code-construction boundary
-
-- **No new API in Phase 7b** (FD-7b-D).
-- The only non-committal constraint recorded: a future code-construction
-  API **must not express placement as a generic child property setter**
-  (`child.set_property("h-align", …)`) — that would re-introduce the
-  intrinsic-widget-property reading the thesis rejects.
-- The positive shape (parent-scoped insertion / child-slot builder /
-  …) is **non-normative** and explicitly does **not** freeze ABI shape;
-  concrete signatures are deferred to a future code-construction phase
-  (framing scope table).
-
-## Sub-issue 8 — Documentation
-
-- `docs/architecture.md`: the chosen placement internal model
-  (child-slot-carried if IM-4), the structural-mutation contract, and
-  the ZStack-implemented / Grid-disposition state, re-connected.
-- `docs/dsl_spec.md`: owned by DD-001 (author surface); this DD does
-  not touch it (storage is not author-visible).
-- `docs/abi_spec.md`: **no touch** (FD-7b-D), unless this DD finds an
-  unavoidable future-compatibility note — judged here as **not
-  needed**, since no API is added and the non-committal constraint is
-  recorded in architecture prose, not the ABI.
-
-## Comparison
-
-The internal-model axis decides on **which model removes the drift
-class** (the central Phase 7b obligation, implementation-gates trap
-#3), with migration cost as tie-breaker. IM-1 contradicts the thesis;
-IM-5 is keyed machinery before the keyed thesis; IM-2 leaves the
-observed drift policed-not-structural. The real contest is **IM-3
-(encapsulated SoA)** vs **IM-4 (child-slot-carried)**: IM-3 removes the
-bypass class with zero data migration, but keeps the representational
-split (placement stored apart from its child), so range staging and any
-future reorder / key work keep paying the parallel-bookkeeping cost.
-IM-4 removes the split itself and matches the authored model; it is
-already shipped for ZStack, so adopting it phase-wide is *convergence*,
-not a fresh bet, and its only cost is the bounded Grid migration.
-
-## Recommendation
-
-**Proposed direction (subject to owner review):**
-
-1. **DD-M3-P7-006 relationship: revise.** Keep its child-carried
-   thesis; extend it to Grid and restate the contract against the
-   DD-001 surface. (Not *consume*, because Grid is pulled in; not
-   *supersede*, because the storage thesis is unchanged.)
-2. **Internal model: IM-4 (child-slot-carried)**, phase-wide,
-   converging Grid onto the model ZStack already uses. Concrete value
-   space (shared enum vs per-container child-entry type) left to
-   implementation, as in DD-M3-P7-006.
-3. **Grid migration: pull into Phase 7b** so surface and storage agree
-   across containers, *if* DD-001 unifies the surface (CB-B); if DD-001
-   keeps the asymmetry (Option 0), Grid migration may stay
-   trigger-held. This conditional is the explicit coupling to DD-001's
-   outcome.
-4. **IR / textual IR: explicit child-slot record; reject + regenerate**
-   for stale old IR forms (build-internal artifact; matches DD-001's
-   no-long-lived-alias migration), with a named loader diagnostic.
-5. **Bindability: constant-per-instance in Phase 7b**; per-iteration
-   distinct literals admitted via staging → commit; full reactive
-   re-binding deferred with a trigger.
-6. **Structural mutation: adopt the DD-M3-P7-006 splice primitive**,
-   re-enumerating its side-effect set for the Grid path as the trap
-   #2 / #3 close artifact.
-7. **Future code-construction: record the non-committal constraint
-   only** (no generic child property setter); no API, no ABI shape,
-   abi_spec no-touch.
-
-This direction removes the drift class by construction, unifies the two
-containers on the model already shipped for one, and keeps the future
-API unfrozen. It is **Proposed**: the load-bearing owner-merit point is
-item 3 (whether to pull the Grid migration into this corrective phase),
-which is coupled to DD-001's surface outcome and to the framing R5
-scope-creep risk; the rest follows from IM-4 once chosen.
-
-## Forward-compat exposure
+### Forward-compat impact
 
 - **Reorder / keyed identity** — IM-4 makes "move a child" carry its
   placement for free; a future reconciler diffs whole child records.
-- **New placement-bearing containers** — adopt child-slot-carried,
-  parent-interpreted placement from birth; per-container value space
-  until a shared enum has implementation merit.
-- **Host state boundary / code-construction** — the recorded
-  non-committal constraint keeps a future builder API unblocked without
-  freezing it.
+- **New placement-bearing containers** — under IM-4 they adopt
+  child-slot-carried, parent-interpreted placement from birth;
+  per-container value space until a shared enum has implementation merit.
+- IM-2/IM-3 keep the representational split that each of those future
+  extensions would have to keep paying for.
+
+### Recommendation
+
+**IM-4 (child-slot-carried), phase-wide**, converging Grid onto the
+model ZStack already uses; P7-006 relationship = **revise**. The real
+contest is IM-3 vs IM-4: IM-3 removes the bypass class with zero data
+migration but keeps the representational split; IM-4 removes the split
+itself and matches the authored model, and because it is already shipped
+for ZStack, adopting it phase-wide is *convergence*, not a fresh bet.
+IM-1 contradicts the thesis; IM-2 leaves the observed drift
+policed-not-structural; IM-5 is keyed machinery before the keyed thesis.
+Concrete value space (shared enum vs per-container child-entry type) is
+left to implementation, as in DD-M3-P7-006.
+
+Recorded as **Proposed**: the load-bearing owner-merit point is whether
+to pull the Grid migration into this corrective phase (SI-2), coupled to
+DD-001's surface outcome.
+
+## Sub-issues
+
+Two sub-decisions carry their own option sets; both follow the Main
+decision (IM-4) and feed the spec / mitigation sections:
+
+- **SI-1 — IR / textual IR representation** — the placement carrier and
+  the stale-form compatibility policy.
+- **SI-2 — Structural mutation** — splice-primitive reuse and the
+  Grid-migration conditional (the load-bearing owner-merit point).
+
+### Dependencies among sub-issues
+
+The IR carrier (child-slot record vs parallel) and the structural
+mutation path move together: a child-slot IR record presumes IM-4 and
+feeds the splice primitive's "children in, children out" signature.
+SI-2's Grid-migration conditional additionally depends on DD-001's
+boundary choice (CB-B vs Option 0).
+
+## SI-1: IR / textual IR representation
+
+### Context
+
+How placement is carried across IR and textual IR, and what happens to
+stale forms. The pre-1.0 textual IR is a **build-internal artifact**
+that `wasamoc` regenerates from `.ui` every build.
+
+### Options
+
+1. **IR-1 — existing child `IrProp` consumption.** Keep placement as
+   ordinary child props in the IR.
+   - Depends on (main option): pairs with IM-2/IM-3 (parent reads props
+     into a parallel vector).
+   - What you gain: no IR shape change.
+   - What you give up: the IR does not express the child-slot record IM-4
+     wants; the loader keeps re-deriving the split.
+   - Technical risk: low IR risk, but locks in the representational split.
+2. **IR-2 — explicit child-slot record (recommended).** The IR carries a
+   child entry = node + optional placement payload.
+   - Depends on (main option): IM-4.
+   - What you gain: the storage shape is expressed in the IR; loader
+     extraction targets one record; roundtrip pins it.
+   - What you give up: a breaking change to the textual-IR shape.
+   - Technical risk: an IR schema change — mitigated by reject + regenerate
+     (below), since the IR is build-internal.
+
+Compatibility policy (decided, not assumed): **reject + regenerate.**
+Stale old-form IR is rejected with a named loader diagnostic and
+regenerated by `wasamoc`, rather than dual-parsed. Matches DD-001's
+no-long-lived-alias migration stance.
+
+### Forward-compat impact
+
+A child-slot IR record is the shape a future reconciler / reorder diff
+operates on (whole child records). Reject + regenerate keeps the loader
+single-form, so a later IR addition is an additive record field, not a
+dual-form parser.
+
+### Recommendation
+
+**IR-2 (explicit child-slot record) + reject + regenerate** for stale
+old IR forms, with a named loader diagnostic.
+
+## SI-2: Structural mutation
+
+### Context
+
+Whether to adopt the DD-M3-P7-006 splice primitive as-is or re-enumerate
+its side effects for Phase 7b's paths, and **whether to migrate Grid in
+Phase 7b**. This is the load-bearing owner-merit point.
+
+### Options
+
+1. **SM-A — keep the DD-M3-P7-006 splice primitive; Grid stays
+   trigger-held.** ZStack stays child-carried; Grid keeps its parallel
+   vector (static-only) until its trigger fires.
+   - Depends on (main option): compatible with IM-4 for ZStack only.
+   - Depends on (other sub-issue): viable if DD-001 keeps the surface
+     asymmetry (Option 0).
+   - What you gain: minimal corrective footprint (framing R5).
+   - What you give up: if DD-001 unifies the surface (CB-B) while Grid
+     storage stays parallel, surface and storage disagree across
+     containers.
+   - Technical risk: low; but leaves a known split in place.
+2. **SM-B — migrate Grid into Phase 7b (recommended if CB-B).** Pull the
+   Grid `cell_placements` migration into this phase so both containers
+   share one model; re-enumerate the splice side-effect set for the Grid
+   path.
+   - Depends on (main option): IM-4 phase-wide.
+   - Depends on (other sub-issue): conditional on DD-001 choosing CB-B
+     (unified surface); if DD-001 keeps Option 0, SM-A may stand.
+   - What you gain: surface and storage agree across containers; one
+     model, one splice signature.
+   - What you give up: this is the one place Phase 7b might exceed a
+     minimal corrective (framing R5).
+   - Technical risk: Grid arrange loop + loader extraction is a runtime
+     structural change; bounded — Phase 5 Grid fixtures are the regression
+     gate, migration is its own commit preceding any Grid mutation path.
+
+### Forward-compat impact
+
+Migrating Grid now (SM-B) means any future Grid structural mutation
+(`for` of `Cell`s, conditional `Cell`s) is built against the
+child-carried model from the start; keeping it held (SM-A) preserves the
+DD-M3-P7-006 recursive trigger (migrate before any Grid mutation path
+exists).
+
+### Recommendation
+
+**SM-B (migrate Grid in Phase 7b)** if DD-001 unifies the surface
+(CB-B); **SM-A (trigger-held)** if DD-001 keeps the asymmetry (Option
+0). Either way, adopt the DD-M3-P7-006 splice primitive and re-enumerate
+its side-effect set for the migrated path as the trap #2 / #3 close
+artifact.
+
+## Decision outcome
+
+TBD (Proposed). Filled at the Accepted flip with the P7-006 verb, the
+internal model (IM-n), the IR carrier + compatibility policy, the
+Grid-migration disposition (SM-A/SM-B, conditional on DD-001), and the
+bindability policy + trigger.
+
+## Spec impact
+
+`docs/architecture.md`:
+
+- The chosen placement internal model (under the recommendation:
+  child-slot-carried, IM-4), stated as parent-interpreted per-container
+  placement carried by the child slot, re-connecting the
+  ZStack-implemented model with Grid and the DD-001 surface.
+- The splice primitive's **side-effect set re-enumerated for the
+  migrated path** (kept as a forcing artifact, not summarised away):
+  child list splice (placement riding along), Visual sibling order,
+  layout invalidation, widget-pointer registry, effect ownership — as
+  one composed operation; the Grid / ZStack storage state and the
+  remaining migration trigger (if SM-A).
+- A non-normative note that a future code-construction API **must not**
+  express placement as a generic child property setter (recorded in
+  prose, not the ABI).
+
+`docs/dsl_spec.md`: **not touched** by this DD (storage is not
+author-visible; the author surface is DD-001's seed).
+
+`docs/abi_spec.md`: **no touch** (FD-7b-D) — no API is added; the
+non-committal constraint lives in architecture prose, not the ABI.
+
+## Risk mitigation
+
+(Assuming the recommended IM-4 + IR-2 + SM-B under CB-B.)
+
+- **Grid migration:** a runtime structural change on the full-review
+  lane, bounded — Phase 5 Grid fixtures (track sizing, spanning,
+  membership / conflict, arrange overflow) run unchanged as the
+  regression gate; the migration is its own commit preceding any Grid
+  mutation path. A tie-breaker cost, not a counter-argument.
+- **IR schema change:** reject + regenerate keeps the loader single-form
+  (no dual-form parser); roundtrip fixtures pin the new child-slot shape;
+  malformed placement metadata is re-rejected by a named loader
+  diagnostic.
+- **Splice side-effect set:** re-enumerated for the Grid path as the
+  trap #2 / #3 close artifact; the parallel-data audit reduces to "no
+  parallel vectors remain on mutated paths" (greppable: `cell_placements`
+  migrated or static-only with the DD pointer).
+- **Convergence, not a fresh bet:** IM-4 is already shipped for ZStack,
+  so the novel-risk perimeter is the Grid read / loader path only, not a
+  new storage model.
+- **Performance** is a non-axis at gallery N; child-slot reads replace
+  parallel-vector indexing with no caching / segmenting introduced.
+
+## Out of scope
+
+- **No new code-construction API / ABI** (FD-7b-D). The only recorded
+  constraint is non-committal: a future builder must not express
+  placement as a generic child property setter
+  (`child.set_property("h-align", …)`), which would re-introduce the
+  intrinsic-widget-property reading. The positive shape (parent-scoped
+  insertion / child-slot builder) is non-normative and not frozen.
+- **Bindable placement** — not implemented; constant-per-instance with a
+  deferral trigger (see §Dependencies).
+- **Keyed child metadata / retained identity** — rejected for this phase
+  (IM-5); identity baseline stays positional (DD-M3-P7-005).
+- **Grid structural mutation under `Cell`** — out of scope unless SM-B
+  pulls the storage migration in; the mutation paths themselves
+  (`for`/`if` of `Cell`s) remain deferred with the DD-M3-P7-006 trigger.
 
 ## Revision history
 
-- 2026-06-19 — Initial draft (Status: Proposed), expanded from the
-  framing §論点 slate (DD-M3-P7b-002). DD-M3-P7-006 relationship,
-  internal-model options (IM-1..5 with child-slot as leading
-  hypothesis, not default), IR / textual-IR compatibility policy,
-  bindability policy+trigger, runtime storage, structural mutation +
-  Grid-migration conditional, future code-construction boundary, and
-  documentation touch/no-touch recorded, with a Proposed recommendation
-  (revise P7-006 / IM-4 phase-wide / Grid pulled in conditional on
-  DD-001). Pending owner review.
+- 2026-06-19 — Initial draft (Proposed). P7-006 relationship (revise),
+  internal-model options (IM-1..5), the IR and structural-mutation
+  sub-issues (SI-1 / SI-2), and a recommendation of IM-4 phase-wide with
+  the Grid migration conditional on DD-001. Pending owner review.
