@@ -1,6 +1,6 @@
 ---
 title: Placement internal model and construction boundary
-status: Proposed
+status: Accepted
 phase: M3-Phase 7b
 ac: A11 (IR / runtime / loader sync) — discharges the framing parallel-data-drift obligation with impl-gates #2 / #3; the contingent new-AC question is owned by DD-M3-P7b-001, not this DD (storage is not author-visible)
 date: 2026-06-19
@@ -13,7 +13,7 @@ related:
 
 # DD-M3-P7b-002 — Placement internal model and construction boundary
 
-**Status:** Proposed
+**Status:** Accepted
 
 ## Context
 
@@ -195,8 +195,9 @@ and its integration condition binds only under CB-B — under Option 0 the
 per-container payloads need no shared-path guarantee. SI-4 decides the
 *textual* spelling of the SI-1 record (Rust abstract form is SI-1's,
 textual canonical form is SI-4's); it depends on DD-001's PM disposition
-(under PM-1, Grid is authored as `Cell` but its textual-IR canonical form
-is still SI-4's call — keep the `Cell` wrapper or normalise it away).
+(under PM-2, Grid is authored as `Cell` *or* direct `slot.*`, but the
+textual-IR canonical form is still SI-4's call — keep the `Cell` wrapper
+in textual IR or normalise both authored forms to the slot record).
 
 ## SI-1: IR / textual IR representation
 
@@ -249,15 +250,24 @@ ZStack placement rides ordinary child `IrProp`s. Under IR-2 the slot
 becomes node + optional placement payload — sketch:
 
 ```text
-IrMember::Widget { node: IrNode, placement: Option<IrPlacement> }
-   IrPlacement = the SI-3 carrier (recommended VS-1a: a closed
-                 Grid/ZStack payload), None for placement-free parents
+IrMember::Widget { node: IrNode, slot_data: Option<IrSlotData> }
+   IrSlotData = the SI-3 carrier (VS-1a: a closed Grid/ZStack payload),
+                None for placement-free parents
 ```
 
-Both **Grid `Cell` sugar (DD-001 PM-1)** and **ZStack `slot.*`** lower to
-this *one* slot record — that is where the model-level unification lives.
-The *textual* spelling of that record (does `Cell` survive in textual IR,
-or is it normalised away?) is **SI-4**, not decided here.
+The carrier is given a deliberately broad name (`IrSlotData`, mirroring
+the runtime `SlotData` chosen in SI-3) rather than `IrPlacement`, so the
+future VS-3 transition (first non-layout parent-data) is additive under
+the same name (SI-3). The exact IR spelling is an implementer
+recommendation; the broad-naming *intent* is the owner-visible part.
+
+Under DD-001 **PM-2**, **all three authored forms** — Grid `Cell`, Grid
+direct `slot.*`, and ZStack `slot.*` — lower to this *one* slot record;
+that is where the model-level unification lives (the Grid `Cell` and Grid
+direct `slot.*` forms are mutually exclusive per child, but both target
+the same record). The *textual* spelling of that record (does `Cell`
+survive in textual IR, or is it normalised away?) is **SI-4**, not decided
+here.
 
 ## SI-2: Structural mutation
 
@@ -338,6 +348,13 @@ and accepts the residual CB-B model/storage split under PM-1 — this is an
 adopt the DD-M3-P7-006 splice primitive and re-enumerate its side-effect
 set for the migrated path as the trap #2 / #3 close artifact.
 
+**Owner decision (2026-06-21): SM-B** — DD-001 selected CB-B / Option 3 /
+**PM-2**, so Grid migrates in Phase 7b. Under PM-2 the SM-B-vs-SM-C
+distinction collapses: PM-2 admits Grid children authored on direct
+`slot.*`, so even the conservative SM-C reading would migrate Grid. SM-B
+is recorded as the disposition; the DD-M3-P7-006 splice side-effect set is
+re-enumerated for the Grid path.
+
 ## SI-3: Child-slot value space (placement payload shape)
 
 ### Context
@@ -356,8 +373,9 @@ modifier system Phase 7b explicitly defers (framing R1).
 
 1. **VS-1 — per-container typed payload (recommended for Phase 7b).**
    Each placement-bearing container's slot carries a small typed payload
-   for *its* keys (Grid: `row` / `column` / `span` / alignment; ZStack:
-   `h-align` / `v-align`), `None` where the container takes no placement.
+   for *its* keys (Grid: `row` / `column` / `row-span` / `column-span` /
+   `h-align` / `v-align`; ZStack: `h-align` / `v-align`), `None` where the
+   container takes no placement.
    - What you gain: minimal, exact storage; no key-space invention beyond
      today's two containers; matches the bounded corrective scope.
    - What you give up: a third placement-bearing container adds a third
@@ -440,6 +458,22 @@ here is the carrier shape (VS-1a vs 1b vs 1c) and the agreement that
 "generalizable parent-data" (DD-001 CB-B) buys the *reserved* path (the
 condition), not an *immediately shared* carrier.
 
+**Owner decision (2026-06-21): VS-1 / VS-1a**, with the carrier given a
+deliberately **broad name — `SlotData`** (not `Placement`). The runtime
+child slot carries `slot_data: Option<SlotData>`, where `SlotData` is
+**today a closed enum** (`SlotData::{ Grid(..), ZStack(..) }`), under the
+CB-B integration condition above (no out-of-slot storage; one `slot.*`
+admission path). The broad name is chosen so the future VS-3 transition
+(first non-layout parent-data — see §Forward-compat impact triggers) is an
+**additive change under the same name**: `SlotData` migrates enum → struct
+(`SlotData { placement: Option<Placement>, … }`) with the `Grid` /
+`ZStack` variants moving into an inner `Placement` enum, no rename. **No
+naming-change trigger is set** — the owner raises a fresh ADR if the
+`slot` vocabulary is later revised. The IR carrier (SI-1) mirrors the
+broad naming (`IrSlotData`); exact in-memory / IR spelling is an
+implementer recommendation, the broad-naming intent is the owner-visible
+part.
+
 ## SI-4: Canonical textual-IR shape for placement slots
 
 ### Context
@@ -502,25 +536,29 @@ child {
 }
 ```
 
-Both authored forms lower to this one record (SI-1 `{ node, placement }`):
+All authored forms lower to this one record (SI-1 `{ node, slot_data }`):
 
 ```text
 # ZStack child (authored slot.h-align / slot.v-align)
 child { placement zstack { h-align: end, v-align: center }
         node Text { ... } }
 
-# Grid child (authored via Cell { row/column/span/align } — PM-1 sugar)
-child { placement grid { row: 1, column: 0, span: 2, align: stretch }
+# Grid child — authored via Cell { row/column/row-span/column-span/
+# h-align/v-align } OR direct slot.* on the child (DD-001 PM-2); both
+# lower to the same record
+child { placement grid { row: 1, column: 0, row-span: 2, column-span: 1,
+                         h-align: stretch, v-align: stretch }
         node Button { ... } }
 ```
 
 Normative in the skeleton: the `child` / `placement <kind>` / `node`
 keywords and nesting, the `<kind>` set, and that placement values are
 constants. Non-normative (emitter trivia): exact whitespace, comma vs
-newline separators, and key order inside a placement block. The Grid
-`Cell` *authoring* wrapper (DD-001 PM-1) is sugar that lowers to the same
-`child { placement grid { … } node … }` record; it does **not**
-survive as a `Cell` node in textual IR under IR-B.
+newline separators, and key order inside a placement block. Under DD-001
+PM-2 both Grid authoring forms — the `Cell` wrapper and direct `slot.*` —
+lower to the same `child { placement grid { … } node … }` record; the
+`Cell` wrapper does **not** survive as a `Cell` node in textual IR under
+IR-B.
 
 ### Stale-form diagnostic
 
@@ -543,14 +581,29 @@ it is recorded for owner confirmation, not settled by the implementer.
 
 ## Decision outcome
 
-TBD (Proposed). Filled at the Accepted flip with the P7-006 verb, the
-internal model (IM-n), the IR carrier + compatibility policy (SI-1), the
-Grid-migration disposition (SM-A / SM-B / SM-C, conditional on DD-001's
-**CB-A/CB-B boundary** — SM-B under CB-B including PM-1), the child-slot
-value-space shape (VS-n; recommended minimum carrier VS-1a) + CB-B
-integration condition, the **canonical textual-IR shape (IR-A/B/C) and
-stale-form compatibility contract (SI-4)**, and the bindability policy +
-trigger.
+**Accepted 2026-06-21** (paired with DD-001 — one phase ADR set), after
+the PM-2 integration review (owner pass). The decision:
+
+**Decision (2026-06-21):**
+
+- **DD-M3-P7-006 verb:** revise (keep the child-carried thesis, extend to
+  Grid, restate against the DD-001 surface).
+- **Internal model:** **IM-4** (child-slot-carried), phase-wide.
+- **IR carrier + compatibility (SI-1):** **IR-2** (explicit child-slot
+  record) + **reject + regenerate** for stale old IR (no dual-parse).
+- **Structural mutation / Grid migration (SI-2):** **SM-B** — Grid
+  migrates in Phase 7b (DD-001 = CB-B / PM-2).
+- **Child-slot value space (SI-3):** **VS-1 / VS-1a** (one slot field, a
+  closed payload enum), carrier named **`SlotData`** (broad name; closed
+  enum today, additive enum → struct at the first non-layout parent-data,
+  no rename; no naming-change trigger), under the CB-B integration
+  condition. VS-2 / VS-3 deferred with triggers.
+- **Canonical textual-IR shape (SI-4):** **IR-B** (normalise to the
+  child-slot record in textual IR; reject + regenerate stale `Cell` /
+  bare-placement IR with a named loader diagnostic).
+- **Bindability:** constant-per-instance this phase; binding RHS rejected
+  by a named diagnostic (DD-001); reactive landing deferred to the joint
+  `BindingTarget` + child-slot effect-lifecycle trigger (§Dependencies).
 
 ## Spec impact
 
@@ -560,10 +613,13 @@ trigger.
   child-slot-carried, IM-4), stated as parent-interpreted per-container
   placement carried by the child slot, re-connecting the
   ZStack-implemented model with Grid and the DD-001 surface. The
-  value-space shape (under the recommendation: per-container payload
-  behind one slot record, VS-1) is stated together with the CB-B
-  integration condition that keeps a later shared / extensible carrier an
-  additive change (no out-of-slot storage; one `slot.*` admission path).
+  value-space shape (per-container payload behind one slot record, VS-1a)
+  is stated together with the CB-B integration condition that keeps a
+  later shared / extensible carrier an additive change (no out-of-slot
+  storage; one `slot.*` admission path). The carrier is the broadly-named
+  **`SlotData`** (today a closed `Grid` / `ZStack` enum; additive to a
+  struct when the first non-layout parent-data lands), so the type name
+  does not advertise layout-only and the VS-3 transition is rename-free.
 - The splice primitive's **side-effect set re-enumerated for the
   migrated path** (kept as a forcing artifact, not summarised away):
   child list splice (placement riding along), Visual sibling order,
@@ -616,9 +672,13 @@ non-committal constraint lives in architecture prose, not the ABI.
   effect-lifecycle landing are in §Dependencies (shared with DD-001).
 - **Keyed child metadata / retained identity** — rejected for this phase
   (IM-5); identity baseline stays positional (DD-M3-P7-005).
-- **Grid structural mutation under `Cell`** — out of scope unless SM-B
-  pulls the storage migration in; the mutation paths themselves
-  (`for`/`if` of `Cell`s) remain deferred with the DD-M3-P7-006 trigger.
+- **Grid structural mutation paths (`for` / `if` of `Cell`s)** — remain
+  **deferred** with the DD-M3-P7-006 recursive trigger (migrate before any
+  Grid mutation path exists). SM-B pulls the Grid **storage migration**
+  into Phase 7b (that is *in* scope — Grid converges onto the child-slot
+  `SlotData` model), but **not** the mutation paths themselves: no `for` /
+  `if` of `Cell`s is built this phase. Storage migration ≠ mutation
+  surface; only the former is in 7b scope.
 
 ## Revision history
 
@@ -631,3 +691,15 @@ non-committal constraint lives in architecture prose, not the ABI.
   textual-IR normative skeleton, IR-B); re-keyed SI-2 Grid migration on the
   CB-A/CB-B boundary (SM-B under CB-B incl. PM-1); sharpened the
   bindability re-visit trigger.
+- 2026-06-21 — PM-2 integration (Status: Proposed; flip pending review,
+  paired with DD-001). Recorded the owner-selected direction (revise /
+  IM-4 / IR-2 / **SM-B** / **VS-1a** / IR-B). Named the child-slot carrier
+  **`SlotData`** (broad name; closed enum today, additive enum → struct at
+  the VS-3 trigger, no rename; no naming-change trigger), with the IR
+  carrier mirroring it (`IrSlotData`). Noted the SM-B / SM-C collapse
+  under PM-2 (Grid is directly authored on `slot.*`, so it migrates
+  regardless).
+- 2026-06-21 — Codex re-review fold (Status: Proposed): rewrote the
+  §Out of scope Grid-mutation bullet so SM-B's **storage migration** (in
+  scope) is not read as pulling the **mutation paths** (`for` / `if` of
+  `Cell`s, still deferred) into scope.

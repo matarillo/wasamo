@@ -1,8 +1,8 @@
 ---
 title: Parent-interpreted placement authoring surface
-status: Proposed
+status: Accepted
 phase: M3-Phase 7b
-ac: contingent — new-AC disposition (branch (a) AC-revision exception vs branch (b) A11/A12 discharge) fixed at this DD's Accepted flip; see preamble §Acceptance relation
+ac: branch (a) — PM-2 changes the public author surface for both containers (ZStack h-align → slot.h-align; Grid gains direct slot.*); new AC for the unified placement surface, or an A2/A4/A12 refinement, recorded at the Accepted flip; see §Decision outcome and preamble §Acceptance relation
 date: 2026-06-19
 related:
   - ./preamble.md
@@ -12,7 +12,7 @@ related:
 
 # DD-M3-P7b-001 — Parent-interpreted placement authoring surface
 
-**Status:** Proposed
+**Status:** Accepted
 
 ## Context
 
@@ -300,6 +300,11 @@ model above cross-container legibility; **PM-2 is the live alternative if
 the owner wants the authored surface itself unified**, not only the
 model.
 
+**Owner merit-judgment (2026-06-21): CB-B + Option 3 (`slot.`) + PM-2.**
+The owner took the PM-2 live alternative — the authored surface unified
+(Grid gains direct `slot.*` alongside `Cell`) — as a *provisional* state
+pending the pre-1.0 wrapper-rule decision. See §Decision outcome.
+
 ## Sub-issues
 
 **Follow-up decision discipline.** Every "Follow-up if chosen" in
@@ -457,6 +462,13 @@ unification choices (see Main decision §Recommendation for the two
 senses). The authored-asymmetry cost of PM-1 is the explicit reason PM-2
 is kept on the table; this is an owner merit call.
 
+**Owner decision (2026-06-21): PM-2** — the documented live alternative.
+The owner weights cross-container surface uniformity over "one form per
+container", accepting the two-form Grid spec / diagnostics burden (strict
+mixing reject) as a **provisional** state resolved at the pre-1.0
+wrapper-rule gate (§Out of scope). The "structural data ⇒ wrapper"
+principle is not adopted as the rule now (insufficient grounding).
+
 ## SI-3: ZStack edge wrapper name
 
 *Applies only if the Main decision selects Option 1 (edge wrapper).*
@@ -556,21 +568,36 @@ with no new syntax and matches the one-widget-per-iteration body rule.
 
 ## Decision outcome
 
-TBD (Proposed). Filled at the Accepted flip with the chosen conceptual
-boundary, surface option + prefix token, the `Cell`-as-sugar disposition,
-the control-flow form, and the items below.
+**Accepted 2026-06-21** (paired with DD-002 — one phase ADR set), after
+the PM-2 integration review (owner pass). The decision:
 
-**Acceptance disposition (owner-confirmed at the flip, not agent-default).**
-The recommended surface changes the *public* ZStack author surface
-(`h-align` → `slot.h-align`), so under the preamble §Acceptance relation
-it is **branch (a)** (a public author-surface change), not (b). Branch (a)
-requires an explicit owner choice recorded here: **either** a new AC for
-the unified placement surface **or** a refinement of A2 / A4 / A12 wording
-under the M3 acceptance-criteria revision exception. The chosen form is
-mirrored to `process/_roadmap.md` (preamble Moment 1 touch list) and
-recorded in the plan Revision log at this flip. (If the owner instead
-selects Option 0, the surface holds and this discharges under branch (b)
-— A11 / A12, no new AC.)
+**Decision (2026-06-21):**
+
+- **Conceptual boundary:** CB-B (generalizable parent-data, scoped to
+  layout this phase).
+- **Surface option:** Option 3 (fixed prefix), token **`slot.`** (SI-1).
+- **Per-container mapping (SI-2):** **PM-2** — `Cell` retained as the
+  grouped form *and* direct `slot.*` admitted on Grid children; one form
+  per child (strict mixing reject). Chosen for cross-container surface
+  uniformity. **Provisional:** the two-form Grid surface is resolved to
+  PM-1 or PM-3 at the pre-1.0 wrapper-rule gate (§Out of scope).
+- **Control-flow (SI-4):** CF-1 (placement on the body's root child).
+- **Examples convention:** Grid examples default to `Cell` (provisional,
+  not normative, not an AC); direct `slot.*` shown to illustrate the
+  unified surface.
+- **No normative canonical form** is declared for Grid this phase.
+
+**Acceptance disposition (branch (a)).** PM-2 changes the *public* author
+surface for **both** containers (ZStack `h-align` → `slot.h-align`; Grid
+*gains* direct `slot.*` alongside `Cell`), so under the preamble
+§Acceptance relation it is **branch (a)**. The AC form — **either** a new
+AC for the unified placement surface **or** a refinement of A2 / A4 / A12
+wording under the M3 acceptance-criteria revision exception — is an
+**owner choice**, recorded in the plan Revision log and mirrored to
+`process/_roadmap.md` (preamble Moment 1 touch list) as the immediate
+follow-on of this flip. The AC states the **accept-set** (Grid accepts
+`Cell` and `slot.*`; ZStack `slot.*`), *not* the provisional examples
+convention.
 
 ## Spec impact
 
@@ -578,33 +605,51 @@ selects Option 0, the surface holds and this discharges under branch (b)
 labels per the living-spec vocabulary rule):
 
 - The chosen placement surface for Grid and ZStack. **Under the
-  recommendation (Option 3 + PM-1 — model-level unification, surface
-  asymmetry retained):**
-  - **Grid author surface stays `Cell { row / column / span / align }`**,
-    unchanged from today. Direct `slot.*` on a Grid child is **not** an
-    author surface and is **rejected** (PM-1). `Cell` lowers to the same
-    per-child `slot.*` model (DD-002), so the unification is in the
-    *model*, not the authored surface.
+  owner-selected direction (Option 3 + PM-2 — model-level unification
+  *and* a unified direct surface, with `Cell` retained):**
+  - **Grid children may be authored two ways: the `Cell { row / column /
+    row-span / column-span / h-align / v-align }` wrapper (the grouped
+    form) *and* direct `slot.*` keys on the child.** Both are accepted and
+    lower to the same per-child `slot.*` model (DD-002). **No normative
+    canonical form is declared** for Grid this phase; `Cell` is the
+    **provisional conventional form** for Grid examples (convention note
+    below), pending the pre-1.0 wrapper-rule decision (§Out of scope).
+  - **A Grid child is *either* a `Cell` wrapper *or* a content widget
+    carrying direct `slot.*`** (in the direct form the content widget is
+    itself the Grid child — no `Cell`). **Two distinct rejects keep this
+    unambiguous for the checker:**
+    - `slot.*` keys appearing among a `Cell` node's own attributes →
+      **mixing reject** (a `Cell` carries placement through its own `row`
+      / `column` / `row-span` / `column-span` / `h-align` / `v-align`
+      keys, never `slot.*`);
+    - `slot.*` on a widget *inside* a `Cell` → **non-admitting-parent
+      reject** (the widget's immediate parent is the `Cell` wrapper, which
+      admits no placement) — a *different* diagnostic from mixing.
+
+    Both are named check errors with firing tests.
   - **ZStack author surface becomes `slot.h-align` / `slot.v-align`** on
     the child, replacing today's bare `h-align` / `v-align`.
-  - Grammar additions: the `slot.` prefix lexeme (ZStack path) and the
-    retained `Cell` wrapper-as-sugar production (Grid path) — no new node
-    type for the ZStack path.
-  - **(If the owner instead picks PM-2 / PM-3** this bullet widens: PM-2
-    admits Grid direct `slot.*` *alongside* `Cell`; PM-3 replaces `Cell`
-    with `slot.*`. Both make the *authored* surface uniform — the
-    surface-visible unification PM-1 declines.)
+  - Grammar additions: the `slot.` prefix lexeme (ZStack path **and** the
+    Grid direct path) and the retained `Cell` wrapper-as-sugar production
+    (Grid grouped path) — no new node type for the `slot.*` path.
+  - **Provisional convention (not normative, not an AC):** Grid examples
+    in `docs/dsl_spec.md` and `examples/gallery/` are written with `Cell`
+    by default; direct `slot.*` is shown where it illustrates the unified
+    surface. This convention is **provisional** and is revisited at the
+    pre-1.0 wrapper-rule decision (§Out of scope), which resolves toward
+    PM-1 (drop Grid direct `slot.*`) or PM-3 (drop `Cell`).
 - **Per-key admission table (the diagnostics — kept as a forcing
   artifact, not summarised away):** which placement keys each container
-  admits — Grid: `row` / `column` / `span` / alignment; ZStack:
-  `h-align` / `v-align` (spelled under the chosen surface — under PM-1,
-  Grid keys *inside* `Cell` and ZStack keys as `slot.h-align` /
-  `slot.v-align`) — and that they are **rejected everywhere else**
-  (including Grid direct `slot.*` under PM-1). A stray placement attr (under a non-admitting parent) is a
-  named check error, re-checked by the loader; the check distinguishes a
-  placement attr from an unknown widget prop in both directions (neither
-  is silently accepted as the other). Each reject is a named diagnostic
-  with a firing test.
+  admits — Grid: `row` / `column` / `row-span` / `column-span` /
+  `h-align` / `v-align`; ZStack: `h-align` / `v-align` — and that they
+  are **rejected everywhere else**. Under PM-2, Grid keys are admitted
+  **both** inside `Cell` *and* as direct `slot.*` on the child (but not
+  both on the same child — see the strict mixing reject above); ZStack
+  keys as `slot.h-align` / `slot.v-align`. A stray placement attr (under a
+  non-admitting parent) is a named check error, re-checked by the loader;
+  the check distinguishes a placement attr from an unknown widget prop in
+  both directions (neither is silently accepted as the other). Each reject
+  is a named diagnostic with a firing test.
 - **`slot.*` grammar — accepted / rejected examples (forcing table, the
   owner-visible boundary):** the *internal* parse mechanics — whether the
   lexer emits one `slot.h-align` token or `Ident("slot") Dot
@@ -620,8 +665,10 @@ labels per the living-spec vocabulary rule):
   | Example | Disposition | Stage |
   |---|---|---|
   | `slot.h-align: end` on a ZStack child | accepted | — |
-  | `Cell { row: 1, column: 0 }` Grid child | accepted (PM-1 sugar) | — |
-  | `slot.row: 1` direct on a Grid child (PM-1) | rejected — Grid is `Cell`-authored | checker |
+  | `Cell { row: 1 column: 0  Box {} }` Grid child | accepted (grouped form) | — |
+  | `Box { slot.row: 1 slot.column: 0 }` directly under `Grid` (no `Cell`) | accepted (PM-2 direct form; the widget is the Grid child) | — |
+  | `Cell { row: 1 slot.column: 0  Box {} }` — `slot.*` among a `Cell`'s own attrs | rejected — mixing: a `Cell` carries placement via its own keys, not `slot.*` | checker |
+  | `Cell { row: 1  Box { slot.column: 0 } }` — `slot.*` on a widget *inside* a `Cell` | rejected — non-admitting parent: the widget's parent is `Cell` | checker |
   | `slot.h-align: end` under a non-admitting parent (e.g. VStack) | rejected — parent admits no placement | checker |
   | `slot.foo: …` on a ZStack child | rejected — unknown slot key | checker |
   | `slot.h-align: some_state` (binding RHS) | rejected — placement is constant per instance | checker |
@@ -629,15 +676,16 @@ labels per the living-spec vocabulary rule):
   | `slot:` / `slot..h-align` / `slot.` (malformed key) | rejected — malformed placement key | parser |
 
   Parser-stage rejects (malformed key shape) are distinguished from
-  checker-stage rejects (admission / unknown-key / constant-RHS); each row
-  is a named diagnostic with a firing test (`wasamoc check`), re-checked by
-  the loader where it survives to IR. (Under PM-2 / PM-3 the `slot.row: 1`
-  Grid row flips to accepted.)
+  checker-stage rejects (admission / mixing / unknown-key / constant-RHS);
+  each row is a named diagnostic with a firing test (`wasamoc check`),
+  re-checked by the loader where it survives to IR. The strict Cell-vs-
+  `slot.*` mixing reject is the PM-2-specific diagnostic (one author form
+  per Grid child).
 - **Placement value namespace (the resolution rule):** a placement key's
   RHS is resolved against the **closed placement-keyword set** for that
   key (`h-align` / `v-align` → `start` / `center` / `end` / `stretch`;
-  `row` / `column` / `span` → integer literals), **not** through the state
-  namespace. A bare keyword like `end` is therefore *always* the placement
+  `row` / `column` / `row-span` / `column-span` → integer literals),
+  **not** through the state namespace. A bare keyword like `end` is therefore *always* the placement
   constant even if a state of the same name exists — placement values do
   not shadow- or resolve-through state, so the same `.ui` cannot flip
   accepted/rejected by checker ordering. Reading a state into placement
@@ -653,9 +701,11 @@ labels per the living-spec vocabulary rule):
 - **Defaults preserved per container:** omitted alignment falls to the
   existing per-container default (Grid `stretch`, ZStack `center`);
   unifying the surface does not unify the defaults (see §Out of scope).
-- Existing key/value spelling (`row` / `h-align` / `start` / `center` /
-  `end` / `stretch`) is **inherited unchanged**; the surface adds only
-  the chosen prefix/wrapper, not new key names.
+- Existing key/value spelling is **inherited unchanged** — the full Grid
+  key set `row` / `column` / `row-span` / `column-span` / `h-align` /
+  `v-align`, the ZStack `h-align` / `v-align`, and the alignment values
+  `start` / `center` / `end` / `stretch`; the surface adds only the chosen
+  prefix/wrapper, not new key names.
 - Stale placement prose swept in the same touch.
 - **If Option 2 or Option 4 is the chosen surface, its surface-semantics
   follow-up is specified here, not at implementation:** for Option 2,
@@ -681,9 +731,18 @@ labels per the living-spec vocabulary rule):
   with no long-lived alias, the old **ZStack bare** placement attrs
   (`h-align` / `v-align` written directly, without the `slot.` prefix)
   become named diagnostics, each with a firing test. **Grid `Cell` is not
-  an old form under PM-1** — it is retained as sugar, not rejected — so
-  only the ZStack path migrates. This cost is a tie-breaker, not a
-  counter-argument.
+  an old form** — it is retained as the grouped form, and Grid also gains
+  the direct `slot.*` surface — so the ZStack bare path is the only
+  removal. This cost is a tie-breaker, not a counter-argument.
+- **PM-2 two-form burden (accepted cost):** admitting both `Cell` and
+  direct `slot.*` on Grid adds **two named checker diagnostics** (each
+  with a firing test) — a **mixing reject** (`slot.*` among a `Cell`
+  node's own attributes) and the existing **non-admitting-parent reject**
+  (`slot.*` on a widget *inside* a `Cell`) — plus the provisional-
+  convention prose so the public draft is not a coin-flip. This is the spec / diagnostics cost
+  the owner accepts for cross-container surface uniformity; it is bounded
+  to the corrective phase and resolved at the pre-1.0 wrapper-rule gate
+  (§Out of scope).
 - **Family-pivot guard:** the FD-7b-C family-impact confirm (Option 3
   within family (1)) is the exit check; only a pivot-level choice
   (Option 5 becoming a scope construct) would escalate to a VDR.
@@ -708,15 +767,38 @@ labels per the living-spec vocabulary rule):
   by a namespaced surface, built later with triggers (framing §Out of
   scope / R1).
 - **Long-lived backward-compatibility alias for the old placement
-  syntax** — under the recommendation, none is retained (pre-1.0 minimal
-  migration); the old **ZStack bare** placement attrs are rejected by a
-  named diagnostic. Grid `Cell` is **not** an old form under PM-1 (it is
-  retained as sugar), so no Grid **author-syntax** migration arises — and
-  this is *only* about author syntax: it does **not** waive DD-002's Grid
-  **storage** migration, which SM-B performs under CB-B *including PM-1*
-  (DD-002 SI-2). Under PM-3 the Grid `Cell` author form would migrate too.
-  (If the owner chooses Option 0 instead, no migration of either kind
-  arises.)
+  syntax** — under the owner-selected PM-2, none is retained (pre-1.0
+  minimal migration); the old **ZStack bare** placement attrs (`h-align`
+  / `v-align` written directly without the `slot.` prefix) are rejected by
+  a named diagnostic. Grid `Cell` is **not** an old form (retained as the
+  grouped form) and Grid additionally **gains** the direct `slot.*`
+  surface, so no Grid **author-syntax** is removed — but this does **not**
+  waive DD-002's Grid **storage** migration, which SM-B performs under
+  CB-B (DD-002 SI-2). If the pre-1.0 wrapper-rule decision later moves to
+  PM-3, the Grid `Cell` author form migrates then.
+- **PM-2 → PM-1 / PM-3 wrapper-rule decision (pre-1.0 gate).** PM-2 ships
+  *two* author forms for Grid placement (`Cell` and direct `slot.*`) — a
+  deliberately **provisional** state. Before Wasamo reaches 1.0 a rule
+  must be decided for *which widgets / containers may use a wrapper form*,
+  resolving the Grid surface toward **PM-1** (keep `Cell`, drop Grid
+  direct `slot.*`) or **PM-3** (drop `Cell`, keep `slot.*` only). The
+  "structural data ⇒ wrapper" principle is **not** adopted as that rule
+  now (insufficient grounding — Grid is the only instance). **Re-visit
+  triggers:**
+  - a new container wants an edge / wrapper form for any reason (whether
+    or not its payload is structural data);
+  - a public code-construction API / builder surface is designed (it bears
+    directly on whether `Cell` stays DSL-only sugar — a child-slot builder
+    favours direct `slot.*`);
+  - custom containers / custom slot attributes are designed;
+  - the first non-layout parent-data (hit-test / focus / accessibility) is
+    introduced;
+  - **Wasamo reaching 1.0 (hard deadline)** — the provisional two-form
+    state must not freeze into the public 1.0 contract.
+
+  **Carry path:** recorded here now; carried into
+  `phase-7b/implementation/handoff.md` after the Accepted flip; folded
+  into the **M3 `handoff.md`** at milestone close as a pre-1.0 residual.
 - **Layout-algorithm changes** — placement is parent-interpreted
   metadata; no measure/arrange algorithm is re-decided here.
 - **Default-alignment unification (Grid `stretch` / ZStack `center` →
@@ -744,3 +826,19 @@ labels per the living-spec vocabulary rule):
   owner-visible boundaries — `slot.*` grammar/diagnostics table, branch-(a)
   acceptance disposition, Option 5 → Phase 7c, and Grid author-syntax vs
   DD-002 storage migration.
+- 2026-06-21 — PM-2 integration (Status: Proposed; Accepted flip pending
+  integration review). Recorded the owner-selected direction (CB-B +
+  Option 3 `slot.` + **PM-2** + CF-1). Flipped Grid direct-`slot.*`
+  admission to **accepted**; added the **strict `Cell` / `slot.*` mixing
+  reject** and the full 6-key Grid set (`row` / `column` / `row-span` /
+  `column-span` / `h-align` / `v-align`, correcting the earlier `span` /
+  `align` shorthand); set **no normative canonical** + provisional
+  `Cell`-default examples convention; added the **pre-1.0 wrapper-rule
+  re-visit trigger** (PM-2 → PM-1 / PM-3) with its carry path; fixed
+  branch-(a) framing to cover the dual Grid surface.
+- 2026-06-21 — Codex re-review folds (Status: Proposed): corrected the
+  placement value-namespace and key-spelling bullets to the full 6-key
+  Grid set (`row-span` / `column-span`, not `span`); split the strict
+  **mixing reject** (`slot.*` on a `Cell` node) from the
+  **non-admitting-parent reject** (`slot.*` on a widget inside a `Cell`)
+  as two distinct named diagnostics, with concrete syntax.

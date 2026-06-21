@@ -2,7 +2,7 @@
 
 **Phase:** M3-Phase 7b (parent-interpreted placement attributes — owner-inserted corrective)
 **Date:** 2026-06-19
-**Status:** Proposed
+**Status:** Accepted (both DDs flipped 2026-06-21 after PM-2 integration review)
 
 ## Context
 
@@ -167,16 +167,18 @@ confirm-no-VDR.
 
 The Phase 7b ADR carries the two framing-slate DDs (FD-7b-B):
 
-| DD | Title | Status |
-|---|---|---|
-| [DD-M3-P7b-001](./dd-m3-p7b-001-parent-interpreted-placement-authoring-surface.md) | Parent-interpreted placement authoring surface | Proposed |
-| [DD-M3-P7b-002](./dd-m3-p7b-002-placement-internal-model-and-construction-boundary.md) | Placement internal model and construction boundary | Proposed |
+| DD | Title | Status | Decision summary |
+|---|---|---|---|
+| [DD-M3-P7b-001](./dd-m3-p7b-001-parent-interpreted-placement-authoring-surface.md) | Parent-interpreted placement authoring surface | Accepted | CB-B + Option 3 (`slot.`) + **PM-2**: Grid admits **both** `Cell` and direct `slot.*` (one form per child — strict mixing reject); ZStack on `slot.h-align` / `slot.v-align`; CF-1. No normative canonical form; provisional `Cell`-default examples convention resolved at the pre-1.0 wrapper-rule gate. Branch (a). |
+| [DD-M3-P7b-002](./dd-m3-p7b-002-placement-internal-model-and-construction-boundary.md) | Placement internal model and construction boundary | Accepted | **IM-4** child-slot-carried (revise DD-M3-P7-006), **SM-B** Grid storage migration, **VS-1a** closed payload in a broadly-named **`SlotData`** carrier, **IR-2** + **IR-B** (reject + regenerate stale IR); placement constant-per-instance. |
 
-`Decision summary` cells are intentionally left out of this table while
-both DDs are `Proposed`: filling a decision summary before owner review
-would pre-empt the comparison. ADRs stay `Proposed` through the full
-review pass and are not rushed to an Accepted flip; the table gains
-decision summaries at that flip.
+Both DDs were flipped to `Accepted` on 2026-06-21 after the PM-2
+integration review (owner pass). The `slot.`-prefix placement surface
+(PM-2) and the child-slot `SlotData` model are the load-bearing outcomes;
+per-DD detail is in each DD's §Decision outcome. The branch-(a) AC
+disposition and the normative `docs/dsl_spec.md` / `docs/architecture.md`
+sections are the remaining Moment 1 follow-ons (separate review concerns
+per [../../../../AGENTS.md §Commit rules](../../../../AGENTS.md)).
 
 ## Cross-DD decision dependency
 
