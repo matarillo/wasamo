@@ -69,12 +69,21 @@ complete; T1 may open.
 
 Discharges ADR obligations 1 and 2
 ([preamble.md §Obligations](./preamble.md#obligations-carried-from-the-adr-represented-in-this-plan-from-the-start)).
-**No production code lands**; outputs are recorded decisions in
-[log.md](./log.md) plus any revision of this plan. This is a
-risk-mitigation spike for R-A / R-B / R-D / R-E (the migration's
-compile surface and the parser's dotted-key seam).
+**No production code lands**; the compiler-verification edit is
+throwaway and must be reverted before T1 closes. T1's landing artifacts
+are recorded decisions in [log.md](./log.md) plus any revision of this
+plan. This is a risk-mitigation spike for R-A / R-B / R-D / R-E (the
+migration's compile surface and the parser's dotted-key seam), not the
+first slice of the migration itself.
 
-- [ ] **Read every landing file end-to-end** (not grep-sample), per the
+T1 owns only the implementation-recon boundary: the carrier spelling the
+DDs left as an implementer recommendation, the source call-site map, the
+bisectable sequencing / seams, and the downstream owner assignment for
+each open point. If recon shows that the default T2 → T3 → T4 sequence
+cannot keep the workspace buildable, T1 revises the task split before
+any migration code lands.
+
+- [x] **Read every landing file end-to-end** (not grep-sample), per the
       [spike discipline](../../../procedures/implementation-gates.md):
       `wasamo-ir/src/lib.rs` (`IrMember` / `IrNode` / `KindPayload`),
       `wasamo-runtime/src/widget.rs` (`zstack_placement`, `WidgetData::Grid`,
@@ -92,21 +101,24 @@ compile surface and the parser's dotted-key seam).
       placement-bind variant); record it in [log.md](./log.md) as it
       drives the parser / check / lower shape. Record the per-file
       placement touch-points.
-- [ ] **Compiler-verify the carrier migration** — introduce a throwaway
+- [x] **Compiler-verify the carrier migration** — introduce a throwaway
       `IrMember::Widget { node, slot_data }` (struct variant) +
       `IrSlotData` and a runtime `SlotData` skeleton, `cargo build` the
       workspace to **enumerate every breaking call-site by compiler
       error**, record the site list, then **revert** (no production code
-      from the spike). This is the trap-#1 pre-audit; the authoritative
-      audit table is T2/T3's close artifact.
-- [ ] **Fix and record the carrier in-memory / IR spelling** the DDs
+      from the spike). This was a compile-surface probe only; the T2
+      target spelling is the `IrChildSlot` wrapper below. This is the
+      trap-#1 pre-audit; the authoritative audit table is T2/T3's close
+      artifact.
+- [x] **Fix and record the carrier in-memory / IR spelling** the DDs
       left as an implementer recommendation (DD-002 SI-1 / SI-3): the
-      Rust `IrSlotData` shape, the runtime `SlotData::{ Grid(..),
-      ZStack(..) }` shape, and the IR-B textual skeleton field mapping
-      (`placement <kind> { … }`). The **DD-fixed** parts (`SlotData`
-      broad name; VS-1a closed enum; reject + regenerate; the normative
-      IR-B keywords / nesting) are not reopened.
-- [ ] **Fix and record the bisectable sequencing** (T2 → T3 → T4) and
+      Rust `IrChildSlot` wrapper + `IrSlotData` shape, the runtime
+      `SlotData::{ Grid(..), ZStack(..) }` shape, and the IR-B textual
+      skeleton field mapping (`placement <kind> { … }`). The
+      **DD-fixed** parts (`SlotData` broad name; VS-1a closed enum;
+      reject + regenerate; the normative IR-B keywords / nesting) are not
+      reopened.
+- [x] **Fix and record the bisectable sequencing** (T2 → T3 → T4) and
       the inter-task seams: **Seam A** — T2's loader converts IR
       `slot_data` into the *legacy* runtime storage (`zstack_placement`
       + `cell_placements`) so the workspace builds before T3; **Seam B** —
@@ -115,17 +127,20 @@ compile surface and the parser's dotted-key seam).
       flips the in-repo `.ui` files in the same commit. Revise this plan
       if the default order changes (e.g. if Seam A's adapter is not
       cleanly separable and T2/T3 must bundle).
-- [ ] **Sharpen the preamble §Technical risks table** against the
+- [x] **Sharpen the preamble §Technical risks table** against the
       current source (pin file/line hotspots for R-A / R-B / R-E);
       record the **T2 impl-gates selection** (review lane + applicable
       traps with reasons for non-applicable ones) before T2 opens.
 
 **Start gate:** read this plan + the ADR set + the spike-discipline
-gate. **End gate (spike-specific):** every open point is **assigned to a
-downstream task and its scope is seen** — not "no surprises expected";
-the carrier spelling, sequencing, seams, and call-site list are recorded
-in [log.md](./log.md); the throwaway migration is reverted (no
-production code on the T1 commit).
+gate; check [log.md](./log.md) for prior carry-over; then record T1's
+own implementation-gate selection, review lane, planned proof
+obligations, and known carry-forward candidates in [log.md](./log.md)
+before the throwaway carrier edit. **End gate (spike-specific):** every
+open point is **assigned to a downstream task and its scope is seen** —
+not "no surprises expected"; the carrier spelling, sequencing, seams,
+and call-site list are recorded in [log.md](./log.md); the throwaway
+migration is reverted (no production code on the T1 commit).
 
 ---
 
@@ -139,11 +154,22 @@ A adapter (T3 removes it) — so T2 is internally bisectable and the
 runtime behaviour is unchanged.
 
 - [ ] `wasamo-ir`: `IrMember::Widget(IrNode)` →
-      `IrMember::Widget { node: IrNode, slot_data: Option<IrSlotData> }`
-      (compile-error-forcing struct variant); add the `IrSlotData`
-      carrier (closed Grid / ZStack payload per VS-1a, broad name
-      mirroring runtime `SlotData`). `KindPayload::Grid` (track lists)
-      stays; only per-child placement moves to `slot_data`.
+      `IrMember::Widget(IrChildSlot)`, with
+      `IrChildSlot { node: IrNode, slot_data: Option<IrSlotData> }`.
+      Add the `IrSlotData` carrier (closed Grid / ZStack payload per
+      VS-1a, broad name mirroring runtime `SlotData`). `KindPayload::Grid`
+      (track lists) stays; only per-child placement moves to
+      `slot_data`.
+- [ ] IR Rust spelling tradeoff recorded for review:
+      `IrMember::Widget(IrChildSlot)` is preferred over
+      `IrMember::Widget { node, slot_data }`.
+      Pros: it makes the IR child-slot record first-class like the
+      runtime/layout `ChildSlot` records; keeps slot-local future fields
+      (`key`, lifecycle metadata) off the enum variant; and gives helper
+      APIs a single slot object to pass when placement is relevant.
+      Cons: it adds one named wrapper type and slightly more pattern-match
+      churn than a struct variant; placement-insensitive callers must
+      consciously unwrap `slot.node`.
 - [ ] Migrate every construction / match site so the workspace builds:
       `wasamoc` lower routes the **existing** authored placement (Grid
       `Cell` extraction, ZStack bare `h-align` / `v-align`) into
@@ -172,7 +198,7 @@ runtime behaviour is unchanged.
       deliberately rejects), `IrNode::widget_children()` and every
       widget-only filter explicitly classified.
 
-**Sub-task hypothesis:** (a) IR carrier + `IrSlotData`; (b) lower
+**Sub-task hypothesis:** (a) `IrChildSlot` + `IrSlotData`; (b) lower
 re-route + emit IR-B; (c) loader parse + Seam A adapter; (d) stale-form
 reject + roundtrip tests. T1 may merge/split these.
 
@@ -188,15 +214,19 @@ The **runtime-structural full-review-lane** task (gates traps #1 / #2 /
 #3; risk R-B / R-G). Converges both containers onto the child-slot
 `SlotData` model and removes the last parallel placement vector.
 
-- [ ] Introduce `WidgetNode.slot_data: Option<SlotData>` (VS-1a closed
-      enum `SlotData::{ Grid(..), ZStack(..) }`), **replacing**
-      `WidgetNode.zstack_placement`. ZStack placement moves onto the
-      unified field (behaviour-preserving rename + widen).
+- [ ] Introduce an explicit runtime child-slot record (recommended local
+      type name: `ChildSlot`, not ADR-fixed) so `WidgetNode.children`
+      stores `{ node: Box<WidgetNode>, slot_data: Option<SlotData> }`
+      records instead of bare child nodes. `SlotData` remains the VS-1a
+      closed enum `SlotData::{ Grid(..), ZStack(..) }`; this replaces
+      `WidgetNode.zstack_placement` without making placement an intrinsic
+      child-widget field.
 - [ ] **SM-B: migrate Grid** — remove `WidgetData::Grid.cell_placements`
       (the parallel vector); Grid per-child placement rides
-      `SlotData::Grid` on the child slot. The loader's Grid `Cell`
-      extraction writes `SlotData::Grid` onto the child slot (Seam B —
-      the T2 adapter is removed; loader feeds `SlotData` directly).
+      `SlotData::Grid` on the runtime child-slot record. The loader's
+      Grid `Cell` extraction writes `SlotData::Grid` onto the slot record
+      (Seam B — the T2 adapter is removed; loader materializes runtime
+      child slots directly).
 - [ ] Migrate the layout read-path — **there are two parallel vectors,
       not one.** Besides `WidgetData::Grid.cell_placements`, the layout
       mirror has its own `LayoutNode.cell_placements`
@@ -204,18 +234,21 @@ The **runtime-structural full-review-lane** task (gates traps #1 / #2 /
       populated by `build_layout_tree` and consumed by `arrange_grid`'s
       `children.zip(cell_placements)`
       ([layout.rs:1327](../../../../wasamo-runtime/src/layout.rs#L1327)).
-      Both must move onto the child slot (`LayoutNode` carries the slot
-      placement), or the `WidgetData` / loader vector is deleted while
-      the layout mirror keeps the drift class. `build_layout_tree` /
-      `arrange_grid` / the ZStack arrange path read placement from the
-      child slot.
+      Both must move onto an explicit layout child-slot record
+      (`LayoutNode.children` stores child slots, not bare children), or
+      the `WidgetData` / loader vector is deleted while the layout mirror
+      keeps the drift class. `build_layout_tree` / `arrange_grid` / the
+      ZStack arrange path read placement from the child slot.
 - [ ] Re-enumerate the splice / insert / remove / replace side-effect
       bundle for the migrated path (trap #2 close artifact): child list
       splice (placement riding the slot), Visual sibling order, layout
       invalidation, widget-pointer registry, effect ownership — restated
       from DD-M3-P7-006 for the Grid path. `insert_child_inner` /
-      `remove_child` / `replace_child` normalise the slot to `None` for
-      placement-free parents.
+      `remove_child` / `replace_child` mutate child-slot records:
+      insertion computes slot data from the parent context, removal drops
+      the detached slot metadata while returning a bare widget subtree,
+      replacement preserves / recomputes the slot metadata on the slot
+      while replacing the node, and placement-free parents carry `None`.
 - [ ] **Close artifact (trap #3):** no parallel placement vector remains
       on any mutated path — the audit table has an **independent row per
       site**: `WidgetData::Grid.cell_placements`,
@@ -244,10 +277,10 @@ The **runtime-structural full-review-lane** task (gates traps #1 / #2 /
       membership / conflict, arrange overflow) + Phase 6/7 ZStack
       fixtures run unchanged.
 
-**Sub-task hypothesis:** (a) `slot_data` field + ZStack rename;
-(b) Grid `cell_placements` removal + loader Seam B; (c) layout
-read-path; (d) splice side-effect re-enumeration; (e) integration +
-regression fixtures. T1 may re-cut.
+**Sub-task hypothesis:** (a) runtime `ChildSlot` record + ZStack
+migration; (b) Grid `cell_placements` removal + loader Seam B; (c)
+layout child-slot read-path; (d) splice side-effect re-enumeration; (e)
+integration + regression fixtures. T1 may re-cut.
 
 **Start gate:** T2 merged; T3 trap selection recorded. **End gate:**
 workspace + integration + regression green; trap #1/#2/#3 artifacts
@@ -440,6 +473,11 @@ status flip.
       re-enumeration confirmed against the code; the future-API
       non-committal constraint (no generic child property setter) present
       in prose.
+- [ ] `docs/architecture.md` §6.7.9 member-level structural IR
+      re-synced to the landed Rust spelling: both code blocks / prose
+      examples that currently show the design-draft
+      `Widget { node, slot_data }` spelling are updated to the landed
+      `IrChildSlot` wrapper if T2 lands that shape.
 - [ ] `docs/notes/architectural-family.md` FD-7b-C confirm-within-family
       (1) entry landed (revise-in-place) if not already at Moment 1.
 - [ ] `docs/abi_spec.md` re-confirmed untouched; any forced ABI surface
