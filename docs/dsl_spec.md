@@ -1,12 +1,13 @@
 # Wasamo DSL Specification
 
-**Document version:** 1.9
-**Last updated:** 2026-06-18
+**Document version:** 1.10
+**Last updated:** 2026-06-21
 **Status:** M3-Phase 2 closed (implementation-synced); M3-Phase 3
 closed (implementation-synced); M3-Phase 4 closed
 (implementation-synced); M3-Phase 5 closed (implementation-synced);
 M3-Phase 6 closed (implementation-synced); M3-Phase 7 closed
-(implementation-synced).
+(implementation-synced); M3-Phase 7b design draft (Moment 1 —
+`slot.*` placement surface, §4.16; pending implementation re-sync).
 Covers the M2 `.ui` surface, the `state` surface keyword
 retroactively, the M3-Phase 1 `bool` scalar binding additions, the
 M3-Phase 2 Box layout primitive (with `aspect` / `fill` literal
@@ -25,7 +26,10 @@ attribute surface, the M3-Phase 7 iteration grammar (the `for`
 structural control-flow member — the second chapter of the structural
 rendering model — with collection state types `i32[]` / `string[]` /
 `bool[]`, list literals, whole-value collection assignment, and
-author-named loop-local binders; see §4.15), and `;wasamo-ir v0`.
+author-named loop-local binders; see §4.15), the M3-Phase 7b
+parent-interpreted placement surface (the shared `slot.*` namespace
+unifying Grid and ZStack child placement, with Grid retaining a `Cell`
+grouped form; see §4.16), and `;wasamo-ir v0`.
 
 ---
 
@@ -195,6 +199,7 @@ component_def    ::= "component" IDENT "inherits" IDENT
 
 member           ::= property_decl
                   |  property_bind
+                  |  placement_bind            ; M3-Phase 7b; see §4.16
                   |  widget_decl
                   |  signal_handler
                   |  state_decl
@@ -211,6 +216,22 @@ state_decl       ::= "state" IDENT ":" state_type "="
                      ; only when state_type is a collection type (§4.7)
 
 property_bind    ::= IDENT ":" expr
+
+; M3-Phase 7b. A parent-interpreted placement key (§4.16). The key
+; carries the reserved `slot.` prefix; `slot` is a contextual prefix,
+; significant only as the head of a dotted placement key, and stays a
+; valid ordinary identifier elsewhere. The RHS PARSES as a general `expr`
+; (same as `property_bind`), so a state-read RHS is well-formed at the
+; parse level; the placement-specific rules are CHECK-LAYER, not grammar:
+; (1) the value must be a constant resolved against the closed
+; placement-keyword set (alignment keyword for slot.h-align / slot.v-align,
+; integer literal for slot.row / slot.column / slot.row-span /
+; slot.column-span), NOT the state namespace; (2) a binding-expression RHS
+; is a `wasamoc check` reject (placement is constant per instance);
+; (3) admission (which parent admits which key) is a `wasamoc check` rule.
+; Only a malformed KEY shape (`slot:` / `slot..h-align` / `slot.`) is a
+; parser reject (§4.16).
+placement_bind   ::= "slot" "." IDENT ":" expr
 
 widget_decl      ::= IDENT "{" member* "}"
 
@@ -325,6 +346,7 @@ Within `member`, a 2-token lookahead resolves the alternative:
 | `state`     | `IDENT`      | `state_decl`         |
 | `if`        | (keyword)    | `conditional_member` |
 | `for`       | (keyword)    | `iteration_member`   |
+| `IDENT("slot")` | `.`      | `placement_bind`     |
 | `IDENT`     | `:`          | `property_bind`      |
 | `IDENT`     | `{`          | `widget_decl`        |
 | `IDENT`     | `=>`         | `signal_handler`     |
@@ -333,6 +355,19 @@ Within `member`, a 2-token lookahead resolves the alternative:
 the `member` dispatch resolves a leading `if` / `for` on the first
 token alone — there is no collision with `property_bind` /
 `widget_decl` / `signal_handler` (all of which begin with an `IDENT`).
+
+`slot` (M3-Phase 7b) is **not** a keyword — it is a contextual prefix
+(§4.16). The 2-token lookahead distinguishes a `placement_bind` from a
+`property_bind` by the second token: a leading `IDENT` whose text is
+`slot` followed by `.` (the `Dot` token) routes to `placement_bind`
+(`slot.<key>: <expr>`); a leading `IDENT` followed by `:` stays a
+`property_bind`. The RHS parses as a general `expr` in both cases — the
+placement-specific constraint that a valid checked value is a *constant*
+(not a binding expression) is a check-layer rule, not a parse-level one
+(§4.16). `slot` therefore remains a valid ordinary identifier everywhere
+it is **not** immediately followed by `.` in member position; a property
+literally named `slot` would still bind as `slot: <expr>` (second token
+`:`, not `.`).
 Within the iteration header, the comma-optional second binder is
 resolved with one token of lookahead after the first `IDENT`. A leading
 `else` / `switch` keyword is a "reserved / not yet supported" parse
@@ -430,14 +465,17 @@ Declares a child widget. Widget type names are PascalCase identifiers.
 | `Box`       | Layout container with optional `aspect` / `fill` (M3-Phase 2; see §4.9) |
 | `WrapPanel` | Wrapping layout container (M3-Phase 3; see §4.10) |
 | `ScrollView` | Vertical scroll viewport with exactly one content child (M3-Phase 4; see §4.11) |
-| `Grid`      | 2D layout container with declared track lists per axis; children are `Cell`-wrapped (M3-Phase 5; see §4.12) |
-| `ZStack`    | Overlay layout container; children overlap and paint back-to-front in document order (M3-Phase 6; see §4.13) |
+| `Grid`      | 2D layout container with declared track lists per axis; children carry placement via a `Cell` wrapper or direct `slot.*` keys (M3-Phase 5; placement surface M3-Phase 7b; see §4.12 / §4.16) |
+| `ZStack`    | Overlay layout container; children overlap and paint back-to-front in document order; per-child overlay alignment via `slot.*` (M3-Phase 6; placement surface M3-Phase 7b; see §4.13 / §4.16) |
 
 `Cell` is **not** a free-standing widget registry entry. It is a
 Grid-specific child wrapper construct (one content child per `Cell`,
 carrying explicit placement / span / alignment metadata) consumed by
 Grid's lowering; `Cell` outside a `Grid` parent is rejected at
-`wasamoc check`. See §4.12.
+`wasamoc check`. It is retained as a grouped convenience over the
+parent-interpreted `slot.*` placement model — a Grid child may be
+authored as a `Cell` wrapper *or* with direct `slot.*` keys (§4.16).
+See §4.12.
 
 `if` is **not** a widget registry entry either. It is a **structural
 control-flow construct** (the first member of Wasamo's structural
@@ -1200,20 +1238,29 @@ not carry the viewport clip.
 
 ### 4.12 Grid layout primitive (M3-Phase 5)
 
-**Phase status:** M3-Phase 5 closed; implementation-synced.
+**Phase status:** M3-Phase 5 closed; implementation-synced. The child
+placement surface is extended in M3-Phase 7b (design draft, Moment 1;
+see §4.16): a Grid child may be authored as a `Cell` wrapper **or** with
+direct `slot.*` placement keys, both expressing the same
+parent-interpreted placement.
 
 `Grid` is a 2D layout primitive that arranges children across a
 declared row × column track matrix. Tracks are declared once on
-`Grid` via the `columns:` and `rows:` attributes. Each child is
-wrapped in a `Cell` carrying explicit `row` / `column` placement,
-optional `row-span` / `column-span`, and optional per-cell `h-align`
-/ `v-align`. Content widgets inside a `Cell` carry no Grid-specific
-metadata.
+`Grid` via the `columns:` and `rows:` attributes. Each child carries
+explicit `row` / `column` placement, optional `row-span` /
+`column-span`, and optional per-cell `h-align` / `v-align` — authored
+**either** grouped in a `Cell` wrapper (`Cell { row: … column: … }`)
+**or** directly on the child in the `slot.*` namespace (`Box { slot.row:
+… slot.column: … }`, §4.16). Both forms express the same
+parent-interpreted placement and lower to the same model; a single Grid
+child uses one form, never both. Content widgets carry no Grid-specific
+*widget* property — placement is parent-interpreted metadata, not a
+widget attribute (§4.16).
 
-Grid admits **zero or more `Cell` children**. The minimum valid Grid
-shape is `columns.len() >= 1` and `rows.len() >= 1`; a Grid with no
-`Cell` children resolves to its outer rectangle with no drawn cell
-content.
+Grid admits **zero or more children** (each a `Cell` wrapper or a
+directly-placed content widget). The minimum valid Grid shape is
+`columns.len() >= 1` and `rows.len() >= 1`; a Grid with no children
+resolves to its outer rectangle with no drawn cell content.
 
 #### Sizing mental model
 
@@ -1232,14 +1279,16 @@ Grid sizing follows six facts:
    parent allocates after fixed tracks are honoured. `auto` /
    intrinsic and floating-point weights are reserved for a future
    phase (see *Reserved future surface* below).
-4. **Children go in `Cell` wrappers, not directly in Grid.** Each
-   `Cell` declares its placement as `row` + `column` (zero-based)
-   and optionally spans cells via `row-span` + `column-span`
-   (default `1`). Same-cell occupancy — two `Cell`s whose resolved
-   `(row, column, row-span, column-span)` rectangles share any
-   resolved cell — is rejected at `wasamoc check` and at runtime
-   `validate()`. Intentional overlay is not Grid's responsibility;
-   Phase 6 ZStack owns overlay.
+4. **Each child declares its placement — grouped in a `Cell` or
+   directly via `slot.*`.** A child declares `row` + `column`
+   (zero-based) and optionally spans cells via `row-span` +
+   `column-span` (default `1`), authored either as a `Cell` wrapper's
+   bare keys or as direct `slot.*` keys on the child (§4.16). Same-cell
+   occupancy — two children whose resolved
+   `(row, column, row-span, column-span)` rectangles share any resolved
+   cell — is rejected at `wasamoc check` and at runtime `validate()`,
+   regardless of which form authored each. Intentional overlay is not
+   Grid's responsibility; Phase 6 ZStack owns overlay.
 5. **Grid does not grow to fit its content.** On a bounded axis,
    Grid's outer rectangle equals the parent's allocation on that
    axis. Fixed-track sums that exceed the parent's allocation
@@ -1260,11 +1309,14 @@ Compose/SwiftUI grids should note the following:
 - **WPF `Grid`.** WPF declares `RowDefinition` /
   `ColumnDefinition` and routes child placement through attached
   `Grid.Row` / `Grid.Column` properties on arbitrary content
-  widgets. Wasamo's Grid declares tracks the same way conceptually
-  but routes child placement through an explicit `Cell` wrapper
-  rather than attached properties on content widgets — content
-  widgets stay free of Grid-specific metadata. Star sizing,
-  spanning, and zero-based indexing match WPF.
+  widgets. Wasamo declares tracks the same way conceptually and
+  routes child placement either through an explicit `Cell` wrapper
+  or through the `slot.*` placement namespace on the child (§4.16) —
+  the latter is the closest analogue to WPF's attached properties,
+  but neutrally namespaced rather than qualified by the parent type.
+  Either way placement is parent-interpreted metadata, kept out of
+  the content widget's own property set. Star sizing, spanning, and
+  zero-based indexing match WPF.
 - **CSS Grid.** Wasamo's Phase 5 Grid borrows the *tracks +
   placed children* shape but ships a deliberately narrower surface:
   fixed pixels and weighted-star only (no `auto`, no `minmax`, no
@@ -1288,24 +1340,62 @@ Compose/SwiftUI grids should note the following:
 
 #### Children
 
-Grid admits zero or more **`Cell`** children directly. `Cell` is a
-Grid-owned single-child layout wrapper:
+Grid admits zero or more children, each authored in one of two
+mutually-exclusive forms:
+
+1. **A `Cell` wrapper** — a Grid-owned single-child layout wrapper
+   carrying the placement as its own bare keys.
+2. **A directly-placed content widget** carrying `slot.*` placement
+   keys (§4.16) — the content widget is itself the Grid child, with no
+   `Cell`.
+
+**`Cell` wrapper form:**
 
 - Each `Cell` accepts **exactly one content child**. `wasamoc check`
-  rejects `Cell { }` (0 children) and `Cell { X Y }` (2+ children);
-  the runtime IR loader's `validate()` independently rejects
-  malformed memory IR through `WASAMO_ERR_IR_MALFORMED`. Authors
-  who want multiple widgets in one cell wrap them explicitly
+  rejects `Cell { }` (0 children) and `Cell { X Y }` (2+ children).
+  This is a `.ui`-source / checker rule on the wrapper: lowering
+  normalises the `Cell` to a child-slot placement record (§4.16), so a
+  `Cell` node does **not** reach the runtime loader — the loader's
+  `Cell`-specific gate is the **stale-form rejection** of a surviving
+  `node Cell { … }` IR (§8.5), not a child-count re-check. Authors who
+  want multiple widgets in one cell wrap them explicitly
   (`Cell { VStack { Text { } Text { } } }`).
-- `Cell` outside a `Grid` parent is rejected at `wasamoc check` and
-  at `validate()`. `Cell` is not a free-standing widget; it has no
-  meaning outside Grid's lowering.
+- `Cell` outside a `Grid` parent is rejected at `wasamoc check`. `Cell`
+  is not a free-standing widget; it has no meaning outside Grid's
+  lowering (and, being normalised away, never appears as a node in the
+  loaded IR).
 - `Cell` itself does not materialise as a runtime widget Visual.
   The Visual tree contains one Visual for Grid plus one Visual per
   `Cell`'s content child — the existing **1 WidgetNode = 1 Visual**
   convention from §6.5 of `architecture.md` is preserved.
 
-Non-`Cell` direct children of Grid are rejected at `wasamoc check`.
+**Direct `slot.*` form:** a content widget placed directly under Grid
+(no `Cell`) carries its placement in the `slot.*` namespace (§4.16); the
+widget *is* the Grid child and materialises one Visual, the same 1
+WidgetNode = 1 Visual convention. The two forms are **mutually exclusive
+per child** and are kept unambiguous by two distinct `wasamoc check`
+rejects (both operate on the `Cell` wrapper before normalization, so
+they are checker-side; the loader's parallel guard is the stale-form
+rejection of a surviving `node Cell`, §8.5):
+
+- **mixing reject** — `slot.*` appearing among a `Cell` node's own
+  attributes (a `Cell` carries placement through its bare keys, not
+  `slot.*`);
+- **non-admitting-parent reject** — `slot.*` on a widget *inside* a
+  `Cell` (the widget's immediate parent is the `Cell` wrapper, which
+  admits no placement of its own).
+
+A direct child of Grid that is neither a `Cell` wrapper nor carries
+`slot.*` placement is permitted only under the single-child escape
+clause below (it lowers to `(0, 0)`); a multi-child Grid requires every
+child to declare placement (in either form).
+
+**No normative canonical form** is declared for Grid this milestone;
+this spec writes Grid examples with `Cell` by convention and shows
+direct `slot.*` where it illustrates the shared placement surface
+(§4.16). The convention is **provisional** (a future pre-1.0 decision
+fixes whether a wrapper form is retained) and is not an acceptance
+criterion.
 
 #### Attributes
 
@@ -1365,46 +1455,58 @@ Grid {
 }
 ```
 
-**On `Cell`:**
+**Placement keys (in a `Cell`, written bare; directly on a child,
+written `slot.*`):** the six placement keys are identical across both
+authoring forms — the `Cell` wrapper writes them bare (`row:` /
+`column:` / …), a directly-placed child writes them with the `slot.`
+prefix (`slot.row:` / `slot.column:` / …, §4.16). Types, defaults, and
+ranges are the same in both forms:
 
-| Attribute       | Type   | Default                              | Valid range                                | Violations |
-|-----------------|--------|--------------------------------------|--------------------------------------------|------------|
-| `row:`          | `i32`  | `0` (single-`Cell` Grid only; see below) | `[0, rows.len())`                          | `wasamoc check` + `validate()` reject |
-| `column:`       | `i32`  | `0` (single-`Cell` Grid only; see below) | `[0, columns.len())`                       | `wasamoc check` + `validate()` reject |
-| `row-span:`     | `i32`  | `1`                                  | `[1, rows.len() - row]`                    | `wasamoc check` + `validate()` reject |
-| `column-span:`  | `i32`  | `1`                                  | `[1, columns.len() - column]`              | `wasamoc check` + `validate()` reject |
-| `h-align:`      | ident  | `stretch`                            | `{ start, center, end, stretch }`          | `wasamoc check` + `validate()` reject |
-| `v-align:`      | ident  | `stretch`                            | `{ start, center, end, stretch }`          | `wasamoc check` + `validate()` reject |
+| Placement key          | In a `Cell` | Direct on child | Type   | Default                              | Valid range                                | Violations |
+|------------------------|-------------|-----------------|--------|--------------------------------------|--------------------------------------------|------------|
+| row                    | `row:`         | `slot.row:`         | `i32`  | `0` (single-child Grid only; see below) | `[0, rows.len())`                          | `wasamoc check` + `validate()` reject |
+| column                 | `column:`      | `slot.column:`      | `i32`  | `0` (single-child Grid only; see below) | `[0, columns.len())`                       | `wasamoc check` + `validate()` reject |
+| row span               | `row-span:`    | `slot.row-span:`    | `i32`  | `1`                                  | `[1, rows.len() - row]`                    | `wasamoc check` + `validate()` reject |
+| column span            | `column-span:` | `slot.column-span:` | `i32`  | `1`                                  | `[1, columns.len() - column]`              | `wasamoc check` + `validate()` reject |
+| horizontal alignment   | `h-align:`     | `slot.h-align:`     | ident  | `stretch`                            | `{ start, center, end, stretch }`          | `wasamoc check` + `validate()` reject |
+| vertical alignment     | `v-align:`     | `slot.v-align:`     | ident  | `stretch`                            | `{ start, center, end, stretch }`          | `wasamoc check` + `validate()` reject |
 
-Unknown Cell attributes are rejected at `wasamoc check`. Phase 5
-has no `Cell` `clip:` / `z-index:` / `area:` surface.
+Unknown `Cell` attributes, and unknown `slot.*` keys on a Grid child,
+are rejected at `wasamoc check`. Mixing the two forms on one child — a
+`slot.*` key among a `Cell`'s own attributes, or a `slot.*` key on a
+widget inside a `Cell` — is rejected by the two distinct diagnostics in
+*Children* above. Grid has no `clip:` / `z-index:` / `area:` surface in
+either form.
 
 **Placement-attribute presence rule.** In a Grid with two or more
-`Cell` children, every `Cell` must declare both `row` and `column`
-explicitly; omitting either is a `wasamoc check` diagnostic. In a
-Grid with exactly one `Cell`, missing `row` and/or `column` is
-permitted and lowers to `0`. The single-Cell Grid escape clause
-exists for minimal demo cases; multi-Cell Grids are required to be
-self-describing so the diagnostic surface for "missed placement"
-stays local.
+children, every child must declare both row and column explicitly
+(bare `row` / `column` in a `Cell`, or `slot.row` / `slot.column`
+directly); omitting either is a `wasamoc check` diagnostic. In a Grid
+with exactly one child, missing row and/or column is permitted and
+lowers to `0`. The single-child Grid escape clause exists for minimal
+demo cases; multi-child Grids are required to be self-describing so the
+diagnostic surface for "missed placement" stays local.
 
 **Same-cell / overlapping-rectangle conflict rejection.** For every
-pair of `Cell`s within a Grid, the algorithm checks whether their
+pair of children within a Grid, the algorithm checks whether their
 resolved `(row, column, row-span, column-span)` rectangles share
-any cell. Conflicts are rejected at `wasamoc check` and at
-`validate()`, with a diagnostic naming both conflicting `Cell`s
+any cell — independent of which form (a `Cell` wrapper or direct
+`slot.*`) authored each. Conflicts are rejected at `wasamoc check` and
+at `validate()`, with a diagnostic naming both conflicting children
 and the shared resolved cell coordinate.
 
-**Indexing convention.** All `row` / `column` values are
-**zero-based** at the `.ui` boundary and zero-based internally.
-`row: 0` is the first row, `row: rows.len() - 1` is the last.
+**Indexing convention.** All row / column values are **zero-based** at
+the `.ui` boundary and zero-based internally. `row: 0` (or `slot.row:
+0`) is the first row, `rows.len() - 1` is the last.
 
-**Constant-only.** Grid `columns:` / `rows:` and Cell placement /
-span / alignment attributes are constant-only literals in Phase 5;
-none of them are bindable. No new `IrType`, `IrLiteral`, or
-`PropertyValue` variant is introduced. A future phase may admit
-bindable track lists or bindable Cell placement; Phase 5 does not
-foreclose this but does not implement it.
+**Constant-only.** Grid `columns:` / `rows:` and the placement / span /
+alignment keys (in either authoring form) are constant-only literals;
+none of them are bindable, and a binding-expression RHS on a placement
+key is a `wasamoc check` reject (§4.16, placement is constant per
+instance). No new `IrType`, `IrLiteral`, or `PropertyValue` variant is
+introduced for placement. A future phase may admit bindable track lists
+or bindable placement; this milestone does not foreclose it but does not
+implement it.
 
 #### Track-resolution algorithm
 
@@ -1530,9 +1632,15 @@ tag is added, consistent with the Phase 4
 
 #### Arrange, overflow, and z-order
 
-After track resolution, each `Cell`'s resolved rectangle is placed
+Placement is resolved before arrange, so the algorithm below operates on
+each child's resolved `(row, column, row-span, column-span, h-align,
+v-align)` regardless of which authoring form produced it; "`Cell`" in
+this section denotes a placed Grid child (a `Cell` wrapper or a child
+carrying direct `slot.*`, §4.16).
+
+After track resolution, each child's resolved rectangle is placed
 relative to Grid. The content widget is then arranged inside that
-rectangle per `Cell`'s alignment attributes:
+rectangle per the child's alignment:
 
 - **`h-align: stretch` (default).** Content is measured with the
   cell's resolved width as its horizontal bound; the content's
@@ -1597,17 +1705,29 @@ enforce. The dual-gate pattern matches §4.9 Box (single content
 child + `RATIO` sign), §4.10 WrapPanel (negative-literal
 rejection), and §4.11 ScrollView (single content child).
 
-Phase 5 Grid invariants checked at `validate()`:
+**The loader validates the normalized placement, not a `Cell` node.**
+Under M3-Phase 7b the `Cell` wrapper is an **author-surface grouping
+form** that lowering normalises away (§4.16); the loaded IR carries each
+placed Grid child as a content node plus a `SlotData::Grid` placement
+payload (architecture.md §6.8.6), and a stale `node Cell { … }` form is
+**rejected and regenerated**, not slot-ised (IR-B, §8.5). The `Cell`
+**structural** rules — exactly one content child per `Cell`, `Cell` only
+under a `Grid` parent — are therefore `.ui` source / `wasamoc check`
+rules (they constrain the wrapper before it is normalised), not loader
+invariants; the loader's `Cell`-specific job is the stale-form rejection
+below. The placement **value** invariants apply to the normalized
+`SlotData::Grid` payload of every placed child (whichever form authored
+it):
 
-| Invariant | On failure |
+| Invariant (on the normalized `SlotData::Grid` payload, unless noted) | On failure |
 |-----------|------------|
 | Grid declares at least one row and at least one column | `WASAMO_ERR_IR_MALFORMED` |
 | Each fixed track value `>= 1`; each star weight in `[1, 1024]` | `WASAMO_ERR_IR_MALFORMED` |
-| Each `Cell` has exactly one content child | `WASAMO_ERR_IR_MALFORMED` |
-| `Cell.row` in `[0, rows.len())`; `Cell.column` in `[0, columns.len())` | `WASAMO_ERR_IR_MALFORMED` |
-| `Cell.row-span >= 1`; `Cell.column-span >= 1`; `row + row-span <= rows.len()`; `column + column-span <= columns.len()` | `WASAMO_ERR_IR_MALFORMED` |
-| No two `Cell`s within a Grid share any resolved cell | `WASAMO_ERR_IR_MALFORMED` |
-| `Cell.h-align` and `Cell.v-align` values in `{ start, center, end, stretch }` | `WASAMO_ERR_IR_MALFORMED` |
+| A placed child's `row` in `[0, rows.len())`; `column` in `[0, columns.len())` | `WASAMO_ERR_IR_MALFORMED` |
+| `row-span >= 1`; `column-span >= 1`; `row + row-span <= rows.len()`; `column + column-span <= columns.len()` | `WASAMO_ERR_IR_MALFORMED` |
+| No two placed children within a Grid share any resolved cell | `WASAMO_ERR_IR_MALFORMED` |
+| `h-align` / `v-align` values in `{ start, center, end, stretch }` | `WASAMO_ERR_IR_MALFORMED` |
+| A stale `node Cell { … }` wrapper or bare-placement-`prop` form in the IR (pre-normalization shape) | `WASAMO_ERR_IR_MALFORMED` (named stale-placement-form diagnostic; reject + regenerate, §8.5) |
 
 All Grid invariants are **reject-at-validate**, not clamp-at-arrange.
 Placement / span values have no defensible clamped interpretation: a
@@ -1637,12 +1757,14 @@ rather than "unknown token" / "unknown attribute" feedback:
   `area:` attribute; such an attribute would lower to the same
   `(row, column, row-span, column-span)` rectangle.
 - **Bindable track lists / placement.** Phase 5 is constant-only.
-- **Iteration-template-generated `Cell`s** (e.g.
-  `for item in items { Cell { row: ... ... } }`). Grid is not an
-  M3 iteration target — M3-Phase 7's `for` member rejects a Grid
-  parent as a recorded deferral (§4.15); the iteration grammar's M3 target is
+- **Iteration-generated Grid children** (e.g.
+  `for item in items { Cell { row: … } }` or a `for` body whose root
+  child carries `slot.*`). Grid is not an M3 iteration target —
+  M3-Phase 7's `for` member rejects a Grid parent as a recorded
+  deferral (§4.15); the iteration grammar's M3 target is
   WrapPanel-backed thumbnail collections. Future admission is
-  structurally possible because every `Cell` is explicit.
+  structurally possible because each child's placement is explicit in
+  either authoring form.
 - **Per-cell clipping** (`Cell { clip: true ... }`) and any
   author-facing per-cell clip surface.
 - **Author-facing `z-index:` / paint-order attribute on `Cell`.**
@@ -1673,23 +1795,28 @@ all are additive on top of the Phase 5 surface.
    clip — paint is truncated, not propagated to siblings — but
    trailing Cells become invisible. The fix is to reduce the
    declared fixed widths or grow the parent's allocation.
-3. **Forgetting `row:` / `column:` in a multi-`Cell` Grid.** The
-   single-Cell escape clause does **not** apply once a Grid has
-   two or more `Cell`s. `wasamoc check` rejects the omission with
+3. **Forgetting row / column in a multi-child Grid.** The
+   single-child escape clause does **not** apply once a Grid has
+   two or more children. `wasamoc check` rejects the omission with
    a local diagnostic; the fix is to add the missing placement
-   explicitly.
-4. **Two `Cell`s with overlapping rectangles.** Two Cells that
+   explicitly (bare in a `Cell` or as `slot.row` / `slot.column`).
+4. **Two children with overlapping rectangles.** Two children that
    resolve to overlapping `(row, column, row-span, column-span)`
-   rectangles are rejected with a diagnostic naming both Cells and
-   the shared resolved cell. Intentional overlay is Phase 6
-   ZStack's responsibility; the fix is to relocate one Cell or
-   wait for ZStack.
-5. **Expecting per-cell clipping.** A Cell whose content paints
+   rectangles are rejected with a diagnostic naming both and
+   the shared resolved cell — regardless of authoring form.
+   Intentional overlay is Phase 6 ZStack's responsibility; the fix
+   is to relocate one child or wait for ZStack.
+5. **Mixing `Cell` and `slot.*` on one child.** A `slot.*` key among
+   a `Cell`'s own attributes, or `slot.*` on a widget inside a `Cell`,
+   is rejected by the two distinct diagnostics in *Children*. Pick one
+   form per child: a `Cell` wrapper with bare keys, or a directly-placed
+   child with `slot.*`.
+6. **Expecting per-cell clipping.** A cell whose content paints
    past the cell rectangle may cross into a sibling cell's region
    (until Grid's outer-bounds clip cuts it off). The fix is to
    wrap the oversized content in a clipping parent (e.g.
    ScrollView).
-6. **Expecting Grid to grow with its tracks.** Grid's outer
+7. **Expecting Grid to grow with its tracks.** Grid's outer
    rectangle equals the parent's allocation on each bounded axis,
    not the sum of resolved track sizes. Authors who want a Grid
    sized by its tracks must size the parent's allocation
@@ -1697,7 +1824,11 @@ all are additive on top of the Phase 5 surface.
 
 ### 4.13 ZStack layout primitive (M3-Phase 6)
 
-**Phase status:** M3-Phase 6 closed; implementation-synced.
+**Phase status:** M3-Phase 6 closed; implementation-synced. The
+per-child alignment surface is revised to the `slot.*` placement
+namespace in M3-Phase 7b (design draft, Moment 1; see §4.16) — bare
+`h-align` / `v-align` on a ZStack child becomes `slot.h-align` /
+`slot.v-align`.
 
 `ZStack` is an **overlay-dedicated** layout container: its children
 occupy the **same** overlap region and paint **back-to-front** in
@@ -1729,9 +1860,9 @@ ZStack is **stacked, centered, back-to-front, clipped to bounds**:
    ZStack content rect — that is the defining property of the
    primitive. Children do not flow or tile; they overlap.
 2. **Centered by default.** Each child is anchored at `center` on both
-   axes unless it sets `h-align` / `v-align` (see *Attributes*). A
-   ZStack layer is an overlay that should sit at its natural size, so
-   `center` — not `stretch` — is the right default.
+   axes unless it sets `slot.h-align` / `slot.v-align` (see
+   *Attributes*). A ZStack layer is an overlay that should sit at its
+   natural size, so `center` — not `stretch` — is the right default.
 3. **Back-to-front in document order.** Paint order = document order;
    the later child paints on top. There is no `z-index` (*Out of
    scope*).
@@ -1800,26 +1931,31 @@ ZStack attributes are rejected at `wasamoc check` and at runtime
 not a ZStack attribute.
 
 **Per-child alignment.** Each ZStack **direct child** may carry
-`h-align` and `v-align`:
+`slot.h-align` and `slot.v-align` — parent-interpreted placement keys in
+the shared `slot.*` namespace (§4.16):
 
-| Attribute  | Type  | Default  | Valid range                       |
-|------------|-------|----------|-----------------------------------|
-| `h-align:` | ident | `center` | `{ start, center, end, stretch }` |
-| `v-align:` | ident | `center` | `{ start, center, end, stretch }` |
+| Placement key   | Type  | Default  | Valid range                       |
+|-----------------|-------|----------|-----------------------------------|
+| `slot.h-align:` | ident | `center` | `{ start, center, end, stretch }` |
+| `slot.v-align:` | ident | `center` | `{ start, center, end, stretch }` |
 
-The default is **`center`** on both axes (contrast Grid's `Cell`, which
-defaults to `stretch` because a grid cell is a *slot* the content
-fills; a ZStack layer is an *overlay* that sits at its natural size).
-`stretch` (or a `Fill` size constraint on the child) expands the child
-to the full content rect; `start` / `center` / `end` anchor the child's
-measured size within the content rect.
+The default is **`center`** on both axes (contrast Grid, which defaults
+to `stretch` because a grid cell is a *slot* the content fills; a ZStack
+layer is an *overlay* that sits at its natural size). `stretch` (or a
+`Fill` size constraint on the child) expands the child to the full
+content rect; `start` / `center` / `end` anchor the child's measured
+size within the content rect.
 
-`h-align` / `v-align` are **placement annotations the parent consumes**,
-admitted only on a **ZStack direct child** (and a Grid `Cell`, §4.12);
-on any other widget they are rejected at `wasamoc check` and
-`validate()`. The ZStack (or Grid) context reads them as child-placement
-metadata *before* the child's own attribute check, so the child's normal
-unknown-attribute rejection never sees them.
+`slot.h-align` / `slot.v-align` are **parent-interpreted placement**,
+not widget properties (§4.16): they are admitted only on a **ZStack
+direct child**, read by the ZStack context as child-placement metadata
+*before* the child's own attribute check, so the child's normal
+unknown-attribute rejection never sees them. The same keys placed under
+a non-admitting parent — or written **bare** (without the `slot.`
+prefix, the M3-Phase 6 spelling) on a ZStack child — are rejected by a
+named `wasamoc check` diagnostic, re-checked by the loader. Grid's
+placement uses the same keys (§4.12), authored grouped inside a `Cell`
+(bare) or directly as `slot.*`.
 
 #### Measure-arrange and Visual contract
 
@@ -1827,8 +1963,8 @@ ZStack's measure-arrange operates on pure data
 (`wasamo-runtime/src/layout.rs`); the algorithm is Win32/WinRT-free.
 After ZStack resolves its outer rect (per *Sizing*), each child is
 measured against the ZStack content rect and anchored within it by its
-`h-align` / `v-align`. All children share the **same** content rect —
-the overlap region.
+`slot.h-align` / `slot.v-align`. All children share the **same** content
+rect — the overlap region.
 
 **Paint order is document order.** The first child paints first
 (bottom), the last paints last (top). This rides the existing
@@ -2402,15 +2538,15 @@ re-evaluates item bindings in place with no structural edit).
 | Container | Direct `for` child | Reason |
 |---|---|---|
 | `VStack` / `HStack` / `WrapPanel` | **admitted** | arbitrary-children contract |
-| `ZStack` | **admitted** | arbitrary-children contract; per-child placement rides the child |
+| `ZStack` | **admitted** | arbitrary-children contract; per-child `slot.*` placement (§4.16) rides the body's root child (CF on the body root) |
 | `ScrollView` | **rejected** | exactly-one-content-child contract (§4.11); wrap the `for` inside the single content widget — `ScrollView { WrapPanel { for … } }` is the canonical gallery shape |
 | `Box` | **rejected** | at-most-one-child contract (§4.9); a `for` can produce more than one |
-| `Grid` | **rejected** | children are `Cell`-mediated (§4.12); `for`-of-`Cell`s is a recorded deferral |
+| `Grid` | **rejected** | Grid children carry placement (`Cell` or direct `slot.*`, §4.12); `for`-generated Grid placement is a recorded deferral |
 | component level | **rejected** | no parent slot for a 0..N root, same ground as the component-level `if` reject |
 
 Each rejection is a named diagnostic, not a silent gap; the ScrollView
 / Grid rejections record deferrals (a conditionally-/ iteratively-
-shaped ScrollView content model, `for`-generated `Cell`s), not
+shaped ScrollView content model, `for`-generated Grid placement), not
 permanent exclusions.
 
 #### Diagnostics (rejected shapes)
@@ -2493,6 +2629,201 @@ collection live **outside** the `for` body.
 - **Large-N performance / lazy materialisation** — deliberately out of
   scope at gallery N.
 
+### 4.16 Parent-interpreted placement (`slot.*`) (M3-Phase 7b)
+
+**Phase status:** M3-Phase 7b design draft (Moment 1).
+
+Some layout containers interpret metadata *about how a child sits inside
+them*: Grid reads a child's row / column / span / alignment, and ZStack
+reads a child's alignment within the overlap region. This metadata is
+**parent-interpreted placement** — it is **not an attribute of the child
+widget itself**. `Text.text` and `Button.enabled` are properties of the
+widget; a child's `row` / `column` or its overlay `h-align` describe how
+the child is *treated by its immediate parent container*. Placement is
+therefore authored in a dedicated **`slot.*`** namespace on the child,
+never as an ordinary widget property.
+
+The prefix exists so the parent-interpreted nature is legible at the
+call site — `slot.h-align` reads as "the slot this child occupies in its
+parent", not as a property the child carries — and so placement keys can
+never collide with a widget's own property names as the widget
+vocabulary grows. The two placement-bearing containers this milestone
+ships — **Grid** (§4.12) and **ZStack** (§4.13) — share this one
+placement grammar; Grid additionally keeps a `Cell` grouped form as a
+convenience over the same model (below).
+
+#### The `slot.` placement-key prefix
+
+A placement key is a property bind whose key carries the reserved
+**`slot.`** prefix:
+
+```
+ZStack {
+    Box { slot.h-align: end  slot.v-align: start  Text { text: "badge" } }
+}
+
+Grid {
+    columns: 1* 1*
+    rows: 64
+    Button { slot.row: 0  slot.column: 1  Text { text: "ok" } }
+}
+```
+
+`slot` is a **contextual prefix**, not a reserved keyword: it is
+significant only as the head of a dotted placement key and remains a
+valid ordinary identifier everywhere else. The right-hand side is a
+**placement constant** — an integer literal (`slot.row` / `slot.column`
+/ `slot.row-span` / `slot.column-span`) or an alignment keyword
+(`slot.h-align` / `slot.v-align`) — resolved against the closed
+placement-keyword set for that key (below), not against the state
+namespace.
+
+The grammar is a member alternative (§3 `placement_bind`); the key is a
+dotted placement key (`slot` `.` *placement-name*), distinct from an
+ordinary `property_bind`. Whether the lexer emits one token or the
+parser folds `Ident("slot") Dot Ident(name)` into a placement key is an
+internal encoding; the spec fixes the author-visible accepted / rejected
+set and the rejecting stage (below).
+
+#### Admission — which container admits which keys
+
+Placement keys are admitted **only** on a child of a placement-bearing
+parent, and only the keys that parent interprets. Every other position
+is a named `wasamoc check` error (re-checked by the loader):
+
+| Parent  | Admitted placement keys (on a direct child)                                            | Default alignment |
+|---------|----------------------------------------------------------------------------------------|-------------------|
+| `Grid`  | `slot.row` / `slot.column` / `slot.row-span` / `slot.column-span` / `slot.h-align` / `slot.v-align` | `stretch` (§4.12) |
+| `ZStack`| `slot.h-align` / `slot.v-align`                                                         | `center` (§4.13)  |
+| any other (VStack / HStack / WrapPanel / ScrollView / Box / component) | none — placement is rejected | — |
+
+Grid's keys are admitted **two ways** (§4.12): grouped inside a `Cell`
+wrapper (where they are written *bare* — `row` / `column` / … — as the
+`Cell`'s own attributes), **or** directly on the child as `slot.*`. The
+two forms are mutually exclusive per child (below). ZStack admits only
+the direct `slot.*` form. Unifying the surface does **not** unify the
+defaults: an omitted Grid alignment falls to `stretch` (a cell is a slot
+the content fills), an omitted ZStack alignment to `center` (an overlay
+sits at its natural size).
+
+#### Accepted / rejected examples (the author-visible boundary)
+
+| Example | Disposition | Stage |
+|---|---|---|
+| `slot.h-align: end` on a ZStack child | accepted | — |
+| `Cell { row: 1  column: 0  Box {} }` Grid child | accepted (grouped form) | — |
+| `Box { slot.row: 1  slot.column: 0 }` directly under `Grid` (no `Cell`) | accepted (direct form; the widget is the Grid child) | — |
+| `Box { h-align: end }` on a ZStack child — **bare** alignment, no `slot.` prefix (the M3-Phase 6 spelling) | rejected — placement must use the `slot.*` prefix; bare `h-align` reads as an unknown widget property | `wasamoc check` |
+| `Cell { row: 1  slot.column: 0  Box {} }` — `slot.*` among a `Cell`'s own attributes | rejected — **mixing**: a `Cell` carries placement via its own keys, not `slot.*` | `wasamoc check` |
+| `Cell { row: 1  Box { slot.column: 0 } }` — `slot.*` on a widget *inside* a `Cell` | rejected — **non-admitting parent**: the widget's parent is the `Cell` wrapper | `wasamoc check` |
+| `slot.h-align: end` under a non-admitting parent (e.g. VStack) | rejected — parent admits no placement | `wasamoc check` |
+| `slot.foo: …` on a ZStack child | rejected — unknown slot key | `wasamoc check` |
+| `slot.h-align: some_state` (binding RHS) | rejected — placement is constant per instance | `wasamoc check` |
+| `slot.h-align: end` *where a state named `end` exists* | accepted — `end` is the placement keyword, **not** the state | `wasamoc check` |
+| `slot:` / `slot..h-align` / `slot.` (malformed key) | rejected — malformed placement key | parser |
+
+Parser-stage rejects (a malformed key *shape*) are distinguished from
+`wasamoc check`-stage rejects (admission / mixing / unknown key /
+constant-RHS). Each row is a named diagnostic with a firing test, and
+each surviving invariant is re-checked by the runtime loader.
+
+The **mixing** reject and the **non-admitting-parent** reject are two
+*distinct* diagnostics: the first fires when `slot.*` appears among a
+`Cell` node's own attributes (a `Cell` carries placement through its
+bare `row` / `column` / `row-span` / `column-span` / `h-align` /
+`v-align` keys); the second fires when `slot.*` appears on a widget
+whose immediate parent is a `Cell` (which admits no placement of its
+own).
+
+#### Placement values resolve against a closed keyword set
+
+A placement key's right-hand side is resolved against the **closed
+placement-keyword set** for that key, **not** through the state
+namespace:
+
+- `slot.h-align` / `slot.v-align` → one of `start` / `center` / `end` /
+  `stretch`;
+- `slot.row` / `slot.column` / `slot.row-span` / `slot.column-span` →
+  integer literals (the §4.12 range rules apply).
+
+A bare keyword like `end` is therefore **always** the placement constant
+even if a state of the same name exists; placement values do not shadow
+or resolve through state, so the same `.ui` cannot flip
+accepted/rejected by checker ordering. Reading a state into placement
+would require explicit binding-expression syntax — which is the
+constant-per-instance reject below.
+
+#### Placement is constant per instance
+
+A placement key whose right-hand side is a state- or loop-local binding
+*expression* (rather than a literal / keyword constant) is a named
+`wasamoc check` error. This keeps `slot.*` from reading as a *bindable*
+parent-data grammar before that surface is designed: placement is fixed
+when the child is constructed and does not re-bind reactively. A `for`
+body may give each generated child its own *literal* placement (CF on
+the body's root child, below), but no placement key takes a binding RHS
+this milestone. The rejection is explicit, not a silent drop, so the
+surface does not pre-promise bindability it cannot yet honour.
+
+#### Placement on `for` / `if`-generated children
+
+Placement on a generated child is written exactly where it is written on
+a static child: **on the body's root widget** of the `for` / `if` block.
+The body root *is* a child of the placement-bearing parent, so the
+generated-child placement surface is identical to the static-child
+surface; a multi-widget item wraps in a container that then carries the
+placement, the same as static. There is no separate placement locus on
+the `for` / `if` block itself.
+
+The placement keys available are **the admitting parent's** keys (the
+admission table above) — *not* a fixed set. Of the two placement-bearing
+containers, only **ZStack** admits a `for` member (§4.15: Grid rejects a
+direct `for`), so a `for`-generated child carries the ZStack keys:
+
+```
+ZStack {
+    for t in overlays {
+        Box { slot.h-align: end  slot.v-align: start  Text { text: "\{t}" } }
+    }
+}
+```
+
+A `for`-generated **Grid** child (which would carry `slot.row` /
+`slot.column`) is therefore **not** an M3 surface: Grid admits no `for`,
+so the combination cannot be authored this milestone (§4.15 Grid `for`
+reject; the deferral is recorded there). `if`-generated placement follows
+the same rule — the body root carries whatever the admitting parent's
+keys are.
+
+#### Grid's `Cell` grouped form over the same model
+
+Grid keeps the `Cell` wrapper (§4.12) as a **grouped convenience** over
+this placement model: `Cell { row / column / row-span / column-span /
+h-align / v-align }` and direct `slot.*` on the child express the *same*
+parent-interpreted placement and are both accepted. This milestone
+declares **no normative canonical form** for Grid; the examples in this
+spec and in `examples/gallery/` write Grid placement with `Cell` by
+convention, showing direct `slot.*` where it illustrates the shared
+surface. That convention is **provisional** — a future pre-1.0 decision
+fixes whether a wrapper form is retained — and is not an acceptance
+criterion. ZStack has no wrapper form; its placement is always direct
+`slot.*`.
+
+#### Out of scope (M3-Phase 7b)
+
+- **Bindable placement** — placement is constant per instance (above).
+  A state- or loop-local placement that *varies after construction*
+  reopens with the binding-target machinery, not as a `slot.*`-local
+  addition.
+- **Custom-container / custom slot keys and non-layout parent-data**
+  (hit-test / focus / accessibility) — the `slot.*` namespace reserves
+  these additive paths but this milestone builds neither; only Grid and
+  ZStack placement keys are admitted.
+- **Default-alignment unification** — Grid `stretch` / ZStack `center`
+  stay per-container; each is natural for its container.
+- **Placement key/value spelling revision** (e.g. `h-align` → `hAlign`)
+  — existing spelling is inherited unchanged.
+
 ---
 
 ## 5. AST Structure (M1)
@@ -2509,6 +2840,7 @@ ComponentDef {
 Member (enum) {
     PropertyDecl  { name: String, ty: TypeName, default: Expr },
     PropertyBind  { name: String, value: Expr },
+    PlacementBind { key: String, value: Expr },                  // M3-Phase 7b; `slot.<key>` (§4.16)
     WidgetDecl    { type_name: String, members: Vec<Member> },
     SignalHandler { signal: String, body: Block },
     StateMember   { name: String, ty: TypeName, default: Expr },  // M2
@@ -2518,6 +2850,17 @@ Member (enum) {
                     collection: String,
                     body: Box<Member /* WidgetDecl only */> },    // M3-Phase 7; `for` (§4.15)
 }
+
+// M3-Phase 7b. PlacementBind.key is the placement key WITHOUT the `slot.`
+// prefix (e.g. "row", "h-align"); .value is an `Expr` — the RHS parses as
+// a general expr (same carrier as PropertyBind), so a state-read RHS is
+// well-formed at parse time. The parser folds `IDENT("slot") Dot IDENT(key)
+// Colon expr` into this variant when the leading IDENT is the contextual
+// prefix `slot`. The placement-specific rules are check-layer, not parser
+// concerns: admission (which parent admits which key), the closed-keyword
+// value resolution, and the constant-RHS requirement (a binding-expression
+// value is a `wasamoc check` reject) all run in `wasamoc check` (§4.16).
+// Only a malformed KEY shape is a parser reject.
 
 TrackAxis (enum) { Columns, Rows }                  // M3-Phase 5
 
@@ -2770,11 +3113,27 @@ node_body   ::= ( track_decl
                 | binding
                 | handler
                 | widget_node
+                | placed_child                 ; M3-Phase 7b; see below
                 | control_flow_member )*       ; control_flow_member is M3-Phase 6
+
+; M3-Phase 7b. A child carrying parent-interpreted placement (§4.16).
+; The child node is wrapped in a `child` record carrying its placement
+; payload; a placement-free child stays a bare `widget_node`. Both Grid
+; authoring forms (a `Cell` wrapper and direct `slot.*`) and the ZStack
+; `slot.*` form lower to this one record — the `Cell` wrapper does NOT
+; survive as a node in textual IR.
+placed_child ::= "child" "{" placement_decl widget_node "}"
+placement_decl
+             ::= "placement" placement_kind "{" placement_entry* "}"
+placement_kind ::= "grid" | "zstack"
+placement_entry ::= IDENT "=" ( INT | IDENT )   ; constant only; key in the
+                                                ; kind's admitted set (§4.16)
 ```
 
 `IDENT` is the widget type (e.g. `Window`, `VStack`, `Text`, `Button`).
-Children appear as nested `node` blocks in document order. A
+Children appear as nested `node` blocks in document order; a child that
+carries parent-interpreted placement (a Grid or ZStack child, §4.16)
+appears as a `child { placement … node … }` record instead. A
 `control_flow_member` is **not** a `node` — it is a structural operator
 over members (see *Control-flow members* below).
 
@@ -2802,9 +3161,8 @@ canonicalised to `1*`:
 node Grid {
     tracks columns = 180 1* 2*
     tracks rows = 1* 1*
-    node Cell {
-        prop row = 0
-        prop column = 0
+    child {
+        placement grid { row = 0  column = 0 }
         node Text { prop text = "header" }
     }
 }
@@ -2814,11 +3172,43 @@ Unlike the author-surface DSL (§4.12), the runtime IR `tracks` grammar
 is **whitespace-insensitive**: `INT "*"` lowers to `Star(weight)`
 whether or not the `*` is adjacent, because the author-surface
 `1*`-vs-`1 *` distinction is resolved at `wasamoc` compile time and the
-canonical machine format always emits the explicit weight. `Cell`
-placement / span / alignment ride standard `prop` lines using existing
-`INT` and `IDENT` literals; `Cell` is an IR-only node consumed by
-Grid's lowering and is not a runtime widget kind (see
-[architecture.md §6.7.7](./architecture.md#677-binding-registration-api-after-m2)).
+canonical machine format always emits the explicit weight.
+
+**Placement is normalised to the child-slot record (M3-Phase 7b).** Both
+Grid authoring forms — the `Cell` wrapper and direct `slot.*` — and the
+ZStack `slot.*` form lower to **one** `child { placement <kind> { … }
+node … }` record (`<kind>` ∈ `{ grid, zstack }`); the placement keys ride
+`= `-separated constant entries (`INT` / `IDENT`) in the admitted set for
+that kind (§4.16). The `Cell` wrapper does **not** survive as a node in
+textual IR — it is an author-surface grouping form (§4.12), normalised
+away at emit, so the runtime model carries placement on the child slot
+with no parallel vector (the storage model is normative in
+[architecture.md §6.8.6](./architecture.md#686-child-slot-placement-storage-slotdata-m3-phase-7b)). A
+ZStack child's record uses `placement zstack { h-align = … v-align = … }`:
+
+```
+node ZStack {
+    node Box { prop fill = #00000080 }
+    child {
+        placement zstack { h-align = end  v-align = start }
+        node Text { prop text = "badge" }
+    }
+}
+```
+
+The grammar skeleton (the `child` / `placement <kind>` / `node` keywords
+and nesting, the `<kind>` set, and constant-only values) is normative;
+inter-entry separators and key ordering inside a placement block are
+emitter trivia.
+
+**Stale-form rejection (reject + regenerate).** The textual IR is a
+build-internal artifact `wasamoc` regenerates every build, so the loader
+is **single-form**: old-form placement IR — a `node Cell { prop row = …
+}` wrapper, or bare ZStack placement `prop` lines on a child — is
+rejected with a **named loader diagnostic** (not silently slot-ised), and
+the build re-emits the canonical `child { … }` record. No dual-parse
+transition window is carried, matching the no-long-lived-alias migration
+stance.
 
 **Control-flow members (M3-Phase 6; `for` added M3-Phase 7).** A
 `control_flow_member` encodes a structural control-flow construct in
@@ -2908,11 +3298,13 @@ normative schema is in [architecture.md](./architecture.md)):
 
 ```
 IrNode { widget_type: "Window", children: [
-    Widget(IrNode { widget_type: "WrapPanel", … }),
+    Widget { node: IrNode { widget_type: "WrapPanel", … }, slot_data: None },
     ControlFlow(ControlFlowNode::If { branches: [
         Branch {
             condition: HandlerExpr::BoolPropRead("is_lightbox_open"),
-            body: [ Widget(IrNode { widget_type: "ZStack", … }) ],   // exactly one
+            // body member is a Widget { node, slot_data }; the ZStack is a
+            // Window child, so slot_data: None (placement-free parent, §4.16)
+            body: [ Widget { node: IrNode { widget_type: "ZStack", … }, slot_data: None } ],
         },
     ] }),
 ] }
@@ -3004,12 +3396,14 @@ loaded IR (schema shape normative in
 
 ```
 IrNode { widget_type: "VStack", children: [
-    Widget(IrNode { widget_type: "Text", … }),                 // declared slot 0
+    Widget { node: IrNode { widget_type: "Text", … }, slot_data: None },  // declared slot 0
     ControlFlow(ControlFlowNode::For {                          // declared slot 1
         binder: "thumb",
         index_binder: None,
         collection: HandlerExpr::ListPropRead { path: "thumbs", elem: I32 },
-        body: [ Widget(IrNode { widget_type: "Box", … }) ],     // exactly one
+        // body member is a Widget { node, slot_data }; the Box is a VStack
+        // child, so slot_data: None (placement-free parent, §4.16)
+        body: [ Widget { node: IrNode { widget_type: "Box", … }, slot_data: None } ],
     }),
     ControlFlow(ControlFlowNode::If { … }),                     // declared slot 2
 ] }
@@ -3237,8 +3631,10 @@ defense-in-depth validation:
 | `WrapPanel` `item-cross-size`, `item-spacing`, and `line-spacing` are non-negative `i32` (M3-Phase 3) | Yes | `WASAMO_ERR_IR_MALFORMED` |
 | `ScrollView` node has exactly one content child (M3-Phase 4) | Yes | `WASAMO_ERR_IR_MALFORMED` |
 | `Grid` declares at least one row and at least one column; each fixed track value is `>= 1`; each star weight is in `[1, 1024]` (M3-Phase 5) | Yes | `WASAMO_ERR_IR_MALFORMED` |
-| Each `Cell` has exactly one content child; `Cell.row` in `[0, rows.len())`; `Cell.column` in `[0, columns.len())`; `Cell.row-span`/`column-span >= 1` with resolved rectangle within declared track count; no two `Cell`s in the same Grid share any resolved cell; `h-align`/`v-align` in `{ start, center, end, stretch }` (M3-Phase 5) | Yes | `WASAMO_ERR_IR_MALFORMED` |
-| `ZStack` declares no ZStack-level attributes; `h-align`/`v-align` appear only on a `ZStack` direct child or a Grid `Cell` and are in `{ start, center, end, stretch }` (M3-Phase 6) | Yes | `WASAMO_ERR_IR_MALFORMED` |
+| **Grid placement payload** (normalized `SlotData::Grid`, M3-Phase 7b; not a `Cell` node): a placed child's row in `[0, rows.len())`, column in `[0, columns.len())`, row-span/column-span `>= 1` with resolved rectangle within declared track count; no two placed children in the same Grid share any resolved cell; alignment in `{ start, center, end, stretch }` (M3-Phase 5 invariants on the M3-Phase 7b storage) | Yes | `WASAMO_ERR_IR_MALFORMED` |
+| **ZStack payload**: `ZStack` declares no ZStack-level attributes; its per-child placement (`slot.h-align` / `slot.v-align`, M3-Phase 7b) is in `{ start, center, end, stretch }` (M3-Phase 6) | Yes | `WASAMO_ERR_IR_MALFORMED` |
+| **Shared placement admission** (§4.16, M3-Phase 7b): a placement payload is admitted only under a placement-admitting parent (Grid, ZStack) and rejected elsewhere; one placement form per Grid child (mixing rejected); a placement value is a constant, not a binding expression (loaded-IR placement representation normative in [architecture.md §6.8.6](./architecture.md#686-child-slot-placement-storage-slotdata-m3-phase-7b)) | Yes | `WASAMO_ERR_IR_MALFORMED` |
+| **Stale placement-IR form** (IR-B, M3-Phase 7b): a `node Cell { … }` wrapper or a bare-placement-`prop` form surviving in the loaded IR (the pre-normalization shape) is rejected with a named diagnostic and regenerated, not slot-ised (§8.5). The `Cell` **structural** rules (exactly one content child; `Cell` only under `Grid`) are `wasamoc check` / `.ui`-source rules, not loader invariants — the loader never sees a `Cell` node | Yes | `WASAMO_ERR_IR_MALFORMED` |
 | A control-flow (`if`) member carries **exactly one branch** (no `else` until specified), a **single-widget body** (not empty, not multiple children, no non-structural body member, no nested control-flow member), and a **bool-typed, resolved** condition; an `if` appears only where a member is admitted inside a widget body (not at component level) (M3-Phase 6) | Yes | `WASAMO_ERR_IR_MALFORMED` |
 | Component host attributes are only `title`, `backdrop`, and `theme`; `title` must be a string literal; `backdrop` and `theme` must be keyword identifiers; host bindings are rejected; the same names are rejected if squatted as props or bindings on the content root (M3-Phase 6) | Yes | `WASAMO_ERR_IR_MALFORMED` |
 | Collection state declarations: a list default appears only on a collection-typed state (and a scalar default only on a scalar state); list elements are scalar literals matching the declared element type; no nested lists (M3-Phase 7) | Yes | `WASAMO_ERR_IR_MALFORMED` |
@@ -3252,9 +3648,10 @@ Type mismatches indicate a `wasamoc` bug, not a recoverable load-time error.
 
 The M3 rows above (Phase 2 `Box` child count, Phase 2 `RATIO` sign,
 Phase 3 WrapPanel non-negative attributes, Phase 4 ScrollView
-single-content-child rule, Phase 5 Grid structural / track / placement /
+single-content-child rule, Phase 5 Grid track / placement-payload /
 span / conflict / alignment-vocabulary invariants, Phase 6 ZStack
-attribute / alignment-placement invariants, Phase 6 control-flow
+attribute / placement-payload invariants, the Phase 7b shared placement
+admission + stale-form rejection, Phase 6 control-flow
 (`if`) branch / body / condition invariants, Phase 6 host-surface
 catalog / value-shape / binding / content-root-separation invariants,
 and Phase 7 collection-state / `for`-member / collection-assignment
@@ -3263,17 +3660,21 @@ invariants) are explicitly dual-gated rather than trusted because
 `wasamoc`; the runtime gate is the last line of defence for these spec
 invariants. See §4.9 for the Box child-count rationale, §8.2 for the
 `RATIO` surface constraint, §4.10 for the WrapPanel attribute range,
-§4.11 for the ScrollView child-count rule, §4.12 for the full Grid /
-Cell invariant set, §4.13 for the ZStack attribute / alignment-placement
-rules, and §4.14 for the conditional `if` branch / body / condition
-rules — all of which `wasamoc check` already enforces. The host-surface
+§4.11 for the ScrollView child-count rule, §4.12 for the Grid
+placement-payload / loader rejection rules, §4.13 for the ZStack
+attribute / placement rules, §4.16 for the shared placement admission /
+constant-RHS / stale-form rules, and §4.14 for the conditional `if`
+branch / body / condition rules — all of which `wasamoc check` already
+enforces (the `Cell` **structural** rules — one content child, `Cell`
+only under `Grid` — are `wasamoc check`-only, since the loader sees the
+normalized placement, not a `Cell` node). The host-surface
 rules guard the direct-IR-loader entry as well as `.ui` lowering: `.ui`
 authors see the compiler diagnostics first, while hand-authored textual
 IR reaches the same malformed-IR boundary.
 
 Phase 5 Grid invariants are **reject-at-validate**, not
 clamp-at-arrange: placement and span values have no defensible
-clamped interpretation (a silently-clamped Cell would displace
+clamped interpretation (a silently-clamped placement would displace
 legitimately-placed siblings and produce order-dependent layout).
 The only layout-time gate Phase 5 introduces is
 `LayoutError::GridUnboundedStarAxis` (§4.12), which is not a
@@ -3333,3 +3734,4 @@ surface.
 | 1.7     | 2026-06-08 | M3-Phase 6 close: §4.13 and §4.14 marked implementation-synced; textual IR re-synced to the landed control-flow member and component host surface. Component-level Window host attributes (`title` / `backdrop` / `theme`) now lower to `host prop` entries beside the content root, host bindings are rejected, and the old shape that placed host attributes on the content root is malformed IR. |
 | 1.8     | 2026-06-13 | M3-Phase 7 design draft (Moment 1): added §4.15 iteration — the second chapter of the structural rendering model (`for` block with author-named binders; collection state types `i32[]` / `string[]` / `bool[]` with list-literal defaults; whole-value collection assignment over pure `append` / `drop-last` expressions and static-literal reset / clear; positional un-keyed identity baseline with the keyed non-promise; mutation-then-observe timing; all-or-unchanged insertion; per-container admission; diagnostics matrix). Supporting: §2.1 `in` reservation (`for` now has a production), §2.2 bracket / paren / comma tokens, §3 grammar, §4.6 / §4.7 binder-read and collection-state notes, §5 AST, §8.4 / §8.5 / §8.9 textual-IR collection and `for` forms with a worked offsets example, §8.11 validation rows. Swept the stale §4.14 `for` forward references (the `for` body ships single-widget, not member-range; the identity baseline ships positional un-keyed, with keyed as future opt-in) per the live-doc-sync rule. No ABI change; `abi_spec.md` untouched. Pending implementation re-sync at Phase 7 close. |
 | 1.9     | 2026-06-18 | M3-Phase 7 implementation sync (Moment 2): flipped Phase 7 status markers to closed / implementation-synced; confirmed the landed textual-IR spellings (`for`, `list-prop-read`, `item-read`, `index-read`, `list-append`, `list-drop-last`, list literals) and unified `HandlerExpr` mapping; added the gallery slice example showing all four authored collection mutation forms (`append`, `drop-last`, empty clear, static reset) and recorded why per-item colour richness remains deferred. No ABI change; `abi_spec.md` remains untouched. |
+| 1.10    | 2026-06-21 | M3-Phase 7b design draft (Moment 1): added §4.16 parent-interpreted placement — the shared `slot.*` namespace for Grid and ZStack child placement. ZStack per-child alignment moves from bare `h-align` / `v-align` to `slot.h-align` / `slot.v-align` (§4.13); Grid gains a direct `slot.*` form alongside the retained `Cell` grouped form (§4.12), one form per child with two distinct mixing / non-admitting-parent rejects, no normative canonical form (provisional `Cell`-default examples convention). Supporting: §3 `placement_bind` production, §4.4 registry note, §4.15 `for`-placement (placement on the body root child), §8.11 validation rows (placement admission / constant-RHS). Placement is constant per instance; a binding-expression RHS is rejected. No new `IrType` / `IrLiteral` / `PropertyValue` or C ABI change; `abi_spec.md` untouched. The loaded-IR placement representation and storage model are normative in `architecture.md` (DD-002 / Moment 1, landing in the sibling architecture commit), so the textual-IR placement emit form (§8.5) re-syncs there. Pending implementation re-sync at Phase 7b close. |
