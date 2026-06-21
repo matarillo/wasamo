@@ -139,6 +139,15 @@ is published as a stable public draft.
   selected state surface). The novel normative content is the
   measure-arrange spec for WrapPanel and Grid and the grammar
   surface (conditional rendering, iteration)
+- **A13.** Parent-interpreted placement authoring surface: Grid cell
+  placement (`row` / `column` / `row-span` / `column-span` / `h-align` /
+  `v-align`) and ZStack alignment (`h-align` / `v-align`) are authored as
+  parent-interpreted `slot.*` metadata — not intrinsic widget properties
+  — unified across containers on one `slot.` namespace, with Grid
+  additionally retaining the `Cell` grouping form (Grid accepts both
+  `Cell` and direct `slot.*`, one form per child; ZStack accepts
+  `slot.*`). Demonstrates that the DSL distinguishes "data the parent
+  interprets about a child" from a widget's own properties
 
 ## M4: Interaction stack
 
