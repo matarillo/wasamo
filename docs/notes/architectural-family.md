@@ -88,6 +88,7 @@ commitment:
 | DD-M2-P3-001 = A (handler runs runtime-side) | Handler mutates persistent property storage; family (2) handler would update state to trigger view re-execution |
 | DD-M2-P5-001..006 (Phase 5, Accepted) | Signal + Effect on a tree with `BindingTarget` enum; family (1)-flavored API surface |
 | DD-M3-P7-001..007 (iteration grammar, Accepted) | `for` is absorbed as `ControlFlowNode::For` plus `BindingTarget::ForLoopSubtree`; runtime-owned collection signals mutate a persistent tree through stage-then-commit structural splices, confirming the tree-with-bindings family for the Phase 7 trigger-1 / trigger-3 check |
+| DD-M3-P7b-001..002 (placement surface + model, Accepted) | The `slot.*` prefix is a parse-level parent-data namespace on tree nodes, and placement is carried on the child slot (`SlotData`); both are tree-*description* constructs, not view-function re-execution. Confirms family (1) for the Phase 7b trigger-1 (M3 DSL spec drafting) check |
 
 No accepted ADR names family (1) as the long-term selection. This
 note does not upgrade the implicit fit to an explicit commitment. The
@@ -95,6 +96,12 @@ M3-Phase 7 re-read (Moment 2, 2026-06-18) **confirmed** the current
 family fit for iteration: the collection-driven cardinality feature
 fit inside the existing control-flow / `BindingTarget` framing, so no
 vision decision record was opened and the strain triggers remain live.
+The M3-Phase 7b re-read (2026-06-21, FD-7b-C) likewise **confirmed**
+family (1): the `slot.*` placement surface (DD-001 Option 3) is a
+parse-level namespace on tree nodes and placement rides the child slot
+(`SlotData`, DD-002), introducing no host-language scope modifier or view
+re-execution, so the trigger-1 (M3 DSL spec drafting) re-evaluation
+revised this table in place with no vision decision record.
 
 ## Family-neutral vs family-coupled parts of the current design
 
