@@ -49,11 +49,12 @@ is only *what each task builds* (DD pointers, not a re-derivation):
   Grid(..), ZStack(..) }` today; additive enum → struct at the first
   non-layout parent-data, no rename) under the CB-B integration
   condition; **IR-2 + IR-B** the IR carries an explicit child-slot
-  record (`IrMember::Widget { node, slot_data }` + `IrSlotData`), textual
-  IR normalises all three authored forms to the `child { placement
-  <kind> { … } node … }` skeleton, stale `Cell` / bare-placement IR is
-  **reject + regenerate** with a named loader diagnostic. Placement is
-  constant per instance (binding RHS rejected).
+  record (`IrMember::Widget(IrChildSlot)` with
+  `IrChildSlot { node, slot_data }` + `IrSlotData`), textual IR
+  normalises all three authored forms to the `child { placement <kind>
+  { … } node … }` skeleton, stale `Cell` / bare-placement IR is **reject
+  + regenerate** with a named loader diagnostic. Placement is constant
+  per instance (binding RHS rejected).
 
 Out of scope — bindable / reactive placement; the PM-2 → PM-1 / PM-3
 pre-1.0 wrapper-rule decision; Grid structural mutation paths (`for` /
@@ -195,14 +196,14 @@ Known phase-wide gate load (from the ADR
 [§Implementation gate expectations](../decisions/preamble.md#implementation-gate-expectations)):
 
 - **Trap #1 (semantic migration / call-site audit)** — the
-  `IrMember::Widget(IrNode)` → `IrMember::Widget { node, slot_data }`
-  carrier change (T2) and the runtime `zstack_placement` + Grid
-  `cell_placements` → unified `slot_data` change (T3): the close
+  `IrMember::Widget(IrNode)` → `IrMember::Widget(IrChildSlot)` carrier
+  change (T2) and the runtime `zstack_placement` + Grid
+  `cell_placements` → unified child-slot `SlotData` change (T3): the close
   artifact is the `rg`-enumerated match-site table over `IrMember` /
   `IrNode` placement extraction / `WidgetData::Grid` / arrange-loop
   call-sites, with `IrNode::widget_children()` and every widget-only /
-  placement-filter helper classified. Prefer the compile-error-forcing
-  struct-variant shape so Rust enumerates the breakage.
+  placement-filter helper classified. Prefer a compile-error-forcing
+  carrier shape so Rust enumerates the breakage.
 - **Trap #2 (structural side-effect enumeration)** — the Grid-path
   splice / insert / remove / replace side-effect bundle (T3): child list splice
   (placement riding along), Visual sibling order, layout invalidation,
@@ -247,7 +248,7 @@ current source before T2 opens):
 
 | ID | Risk | Mitigation |
 |---|---|---|
-| R-A | **The IR carrier change is compile-error-forcing.** `IrMember::Widget(IrNode)` → `IrMember::Widget { node, slot_data }` breaks every match on the tuple variant across `wasamo-ir`, `wasamoc` (lower / emit / check), and the runtime loader; the workspace will not build until all sites migrate together. | T2 bundles the IR carrier + emit (IR-B) + loader parse + stale-form reject as one buildable commit (AGENTS.md §Commit rules); call-site audit artifact at close; struct-variant shape forces every site. |
+| R-A | **The IR carrier change is compile-error-forcing.** `IrMember::Widget(IrNode)` → `IrMember::Widget(IrChildSlot)` breaks every match on the tuple variant across `wasamo-ir`, `wasamoc` (lower / emit / check), and the runtime loader; the workspace will not build until all sites migrate together. | T2 bundles the `IrChildSlot` carrier + emit (IR-B) + loader parse + stale-form reject as one buildable commit (AGENTS.md §Commit rules); call-site audit artifact at close; the wrapper shape forces every site to classify whether it needs the slot record or only `slot.node`. |
 | R-B | **The runtime `SlotData` migration touches shipped Grid arrange (Phase 5) and ZStack (Phase 6/7) paths.** Grid `cell_placements` is a parallel vector read in `build_layout_tree` / `arrange_grid`; ZStack reads `zstack_placement`. | T3 is its own commit; Phase 5 Grid fixtures (track sizing, spanning, membership/conflict, arrange overflow) + Phase 6/7 ZStack fixtures are the regression gate; trap #3 greppable close. |
 | R-C | **The author-surface flip is breaking.** ZStack bare `h-align` / `v-align` become named rejects (no long-lived alias), so every in-repo `.ui` using bare ZStack alignment stops compiling. | T4 bundles the in-repo `.ui` migration (gallery + examples + test fixtures) in the same commit so the build stays green; the sweep is bounded and greppable; the bare-form reject ships with a firing test. |
 | R-D | **PM-2 two-form Grid surface — mixing reject vs non-admitting-parent reject are easily conflated.** `slot.*` among a `Cell` node's own attrs and `slot.*` on a widget *inside* a `Cell` are **two distinct** named diagnostics. | The DD-001 §Spec-impact 8-row forcing table is the checklist; each row a direct firing `wasamoc check` test; the two Cell-related rejects are separate test names. |
@@ -270,7 +271,8 @@ current source before T2 opens):
 - Specification (Moment 1 design draft, marker flips at T7 Moment 2):
   [`docs/dsl_spec.md`](../../../../docs/dsl_spec.md) §4.16 placement
   chapter + §8.5 / §8.11; [`docs/architecture.md`](../../../../docs/architecture.md)
-  §6.8.6 `SlotData` storage + §6.8.4 Grid (SM-B).
+  §6.7.9 member-level structural IR + §6.8.6 `SlotData` storage +
+  §6.8.4 Grid (SM-B).
 - ABI: [`docs/abi_spec.md`](../../../../docs/abi_spec.md) — **no touch**
   (FD-7b-D); the future-API non-committal constraint lives in
   `architecture.md` prose, not the ABI. If implementation surfaces an
