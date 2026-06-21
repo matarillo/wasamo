@@ -135,10 +135,12 @@ is published as a stable public draft.
   `examples/gallery/` within the same phase. Spec drafting is a
   per-phase deliverable, not an end-of-milestone byproduct
 - **A12.** DSL specification first public draft (covers M2 surface
-  plus the above M3 primitives, grammar surface, scalar type, and
-  selected state surface). The novel normative content is the
-  measure-arrange spec for WrapPanel and Grid and the grammar
-  surface (conditional rendering, iteration)
+  plus the above M3 primitives, grammar surface, scalar type,
+  selected state surface, and the parent-interpreted placement
+  authoring surface of A13). The novel normative content is the
+  measure-arrange spec for WrapPanel and Grid, the grammar
+  surface (conditional rendering, iteration), and the
+  parent-interpreted placement authoring surface
 - **A13.** Parent-interpreted placement authoring surface: Grid cell
   placement (`row` / `column` / `row-span` / `column-span` / `h-align` /
   `v-align`) and ZStack alignment (`h-align` / `v-align`) are authored as

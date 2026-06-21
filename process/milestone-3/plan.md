@@ -83,8 +83,9 @@ with stable IDs for phase mapping:
 - **A1.** `examples/gallery/gallery.ui` drives the Photo Gallery
   target app end-to-end on the M2 reactive foundation, exercising
   every M3 layout primitive (A2–A6), both grammar surfaces (A7–A8),
-  the `bool` scalar (A9), and the Button `selected` state surface
-  (A10) through the `.ui → IR → runtime` path.
+  the `bool` scalar (A9), the Button `selected` state surface
+  (A10), and the parent-interpreted placement authoring surface
+  (A13) through the `.ui → IR → runtime` path.
 - **A2.** Grid layout primitive (1 cell 1 child, star sizing +
   spanning; same-cell overlap is **not** provided — overlay is
   ZStack's responsibility).
@@ -115,9 +116,15 @@ with stable IDs for phase mapping:
   `examples/gallery/` E2E proof. No phase closes leaving one side
   ahead of the others.
 - **A12.** DSL specification first public draft. Covers the M2
-  surface plus A2–A10; the novel normative content is the
-  measure-arrange specifications for WrapPanel and Grid and the
-  grammar surface for A7–A8.
+  surface plus A2–A10 and A13; the novel normative content is the
+  measure-arrange specifications for WrapPanel and Grid, the
+  grammar surface for A7–A8, and the parent-interpreted placement
+  authoring surface (A13).
+- **A13.** Parent-interpreted placement authoring surface: Grid cell
+  placement and ZStack alignment are authored as `slot.*` parent-data
+  on one namespace — not intrinsic widget properties — with Grid also
+  retaining the `Cell` grouping form (Grid accepts both `Cell` and
+  direct `slot.*`, one form per child; ZStack `slot.*`).
 
 ### Phase breakdown
 
@@ -311,7 +318,8 @@ surface.
 | A9 (`bool` scalar) | M3-Phase 1 |
 | A10 (Button selected state) | M3-Phase 8 |
 | A11 (per-phase spec / impl / E2E sync) | Every phase (operational rule, not a single-phase deliverable) |
-| A12 (DSL spec first public draft) | M3-Phase 8 (promotion); written incrementally in M3-Phase 1–7 |
+| A12 (DSL spec first public draft) | M3-Phase 8 (promotion); written incrementally in M3-Phase 1–7 (including the Phase 7b placement surface) |
+| A13 (parent-interpreted placement authoring surface) | M3-Phase 7b (corrective; surface frozen ahead of the Phase 8 public draft) |
 
 **M3-Phase 7b acceptance note (resolved 2026-06-21 — branch (a),
 new AC A13).** Phase 7b was inserted as a tier-2 additive plan
@@ -468,7 +476,7 @@ A phase closes when **all** of the following hold:
 
 M3 is complete when **all** of the following hold:
 
-1. **Every acceptance criterion A1–A12 is discharged**, with the
+1. **Every acceptance criterion A1–A13 is discharged**, with the
    discharge recorded in the corresponding ADR and the plan's
    Progress section's row marked completed.
 2. **Phase 8 outputs all three deliverables**: A10 (Button
