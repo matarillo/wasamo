@@ -51,16 +51,17 @@ closes.
       body landed (commit `4e5312c`).
 - [x] `process/_roadmap.md` A13 + `process/milestone-3/plan.md` Phase 7b
       row + Revision log (branch (a)) landed.
-- [ ] `process/milestone-3/phase-7b/implementation/preamble.md` and this
+- [x] `process/milestone-3/phase-7b/implementation/preamble.md` and this
       `plan.md` opened with `status: active`; skeleton `log.md` /
-      `handoff.md` opened — **this batch (pending owner review).**
-- [ ] `docs/notes/architectural-family.md` FD-7b-C confirm entry — lands
-      revise-in-place at Moment 1 *or* Moment 2; if not yet landed,
-      carried to T7. (Recorded here so it is not lost.)
+      `handoff.md` opened (owner review passed, Codex 2-pass folds;
+      commit `cdc735c`, merged onto `feat/m3-phase-7b` at `5c4c312`).
+- [x] `docs/notes/architectural-family.md` FD-7b-C confirm-within-family
+      (1) entry landed revise-in-place at **Moment 1** (commit
+      `0864c4a`); no Moment 2 carry needed.
 
-**Start gate:** none (doc-only). **End gate:** the implementation docs
-are on the pre-doc branch and the Moment 1 commit set is complete; T1
-may open.
+**Start gate:** none (doc-only). **End gate (closed):** the
+implementation docs are on the branch and the Moment 1 commit set is
+complete; T1 may open.
 
 ---
 
