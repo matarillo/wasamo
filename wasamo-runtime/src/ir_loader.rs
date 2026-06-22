@@ -17,7 +17,9 @@ use wasamo_ir::{
 };
 
 use crate::box_values;
-use crate::layout::{Alignment, CellPlacement, TrackSize as LayoutTrackSize, ZStackPlacement};
+use crate::layout::{
+    Alignment, CellPlacement, SlotData, TrackSize as LayoutTrackSize, ZStackPlacement,
+};
 use crate::reactive::{
     register_binding, register_bool_binding, register_conditional_binding,
     register_for_item_binding, register_for_item_bool_binding, register_for_loop_binding,
@@ -2897,34 +2899,18 @@ fn build_node_with_loop_context(
     }
 
     // Children: recurse and attach via the Phase 4 internal mutation API.
-    //
-    if node.widget_type == "Grid" {
-        for slot in node.widget_child_slots() {
-            let content_widget = build_node_with_loop_context(
-                &slot.node,
-                compositor,
-                renderer,
-                registry,
-                loop_context,
-            )?;
-            widget
-                .append_child(content_widget)
-                .map_err(|e| IrLoadError::Build(format!("append_child failed: {e:?}")))?;
-        }
-    } else {
-        let declared_slots = Rc::new(RefCell::new(Vec::with_capacity(node.children.len())));
-        for (declared_member_index, member) in node.children.iter().enumerate() {
-            append_static_member(
-                member,
-                declared_member_index,
-                Rc::clone(&declared_slots),
-                &mut widget,
-                compositor,
-                renderer,
-                registry,
-                loop_context,
-            )?;
-        }
+    let declared_slots = Rc::new(RefCell::new(Vec::with_capacity(node.children.len())));
+    for (declared_member_index, member) in node.children.iter().enumerate() {
+        append_static_member(
+            member,
+            declared_member_index,
+            Rc::clone(&declared_slots),
+            &mut widget,
+            compositor,
+            renderer,
+            registry,
+            loop_context,
+        )?;
     }
 
     Ok(widget)
@@ -2950,19 +2936,13 @@ fn append_static_member(
                 registry,
                 loop_context,
             )?;
-            if parent.is_zstack() {
-                parent
-                    .insert_child_with_zstack_placement(
-                        parent.child_count(),
-                        child_widget,
-                        zstack_placement_from_slot(child),
-                    )
-                    .map_err(|e| IrLoadError::Build(format!("insert_child failed: {e:?}")))?;
-            } else {
-                parent
-                    .append_child(child_widget)
-                    .map_err(|e| IrLoadError::Build(format!("append_child failed: {e:?}")))?;
-            }
+            parent
+                .insert_child_with_slot_data(
+                    parent.child_count(),
+                    child_widget,
+                    slot_data_for_parent(parent, child),
+                )
+                .map_err(|e| IrLoadError::Build(format!("insert_child failed: {e:?}")))?;
         }
         IrMember::ControlFlow(ControlFlowNode::If { branches }) => {
             let branch = branches
@@ -3044,19 +3024,13 @@ fn append_static_member(
                     Some(&item_context),
                 )?;
                 let insert_index = base_index + position;
-                if parent.is_zstack() {
-                    parent
-                        .insert_child_with_zstack_placement(
-                            insert_index,
-                            child_widget,
-                            zstack_placement_from_slot(body),
-                        )
-                        .map_err(|e| IrLoadError::Build(format!("insert_child failed: {e:?}")))?;
-                } else {
-                    parent
-                        .insert_child(insert_index, child_widget)
-                        .map_err(|e| IrLoadError::Build(format!("insert_child failed: {e:?}")))?;
-                }
+                parent
+                    .insert_child_with_slot_data(
+                        insert_index,
+                        child_widget,
+                        slot_data_for_parent(parent, body),
+                    )
+                    .map_err(|e| IrLoadError::Build(format!("insert_child failed: {e:?}")))?;
             }
             let parent_id = WidgetId(parent as *mut WidgetNode as *mut ());
             let target = BindingTarget::ForLoopSubtree {
@@ -3212,7 +3186,7 @@ fn mutate_conditional_subtree(
                         parent,
                         live_index,
                         child,
-                        zstack_placement_for_parent(parent, body),
+                        slot_data_for_parent(parent, body),
                     );
                     match result {
                         Ok(()) => {
@@ -3307,7 +3281,7 @@ fn mutate_for_loop_subtree(
                         }
                     }
                 }
-                let placement = zstack_placement_for_parent(parent, body);
+                let slot_data = slot_data_for_parent(parent, body);
                 let mut inserted = 0usize;
                 // `while let` (not `for`) so the staged iterator stays usable
                 // inside the failure branch to dispose the not-yet-committed
@@ -3328,11 +3302,11 @@ fn mutate_for_loop_subtree(
                         crate::widget::widget_destroy(child);
                         Err(crate::widget::MutationError::IndexOutOfBounds)
                     } else {
-                        insert_structural_child(parent, insert_index, child, placement)
+                        insert_structural_child(parent, insert_index, child, slot_data)
                     };
                     #[cfg(not(debug_assertions))]
                     let insert_result =
-                        insert_structural_child(parent, insert_index, child, placement);
+                        insert_structural_child(parent, insert_index, child, slot_data);
                     match insert_result {
                         Ok(()) => inserted += 1,
                         Err(e) => {
@@ -3397,12 +3371,9 @@ fn insert_structural_child(
     parent: &mut WidgetNode,
     index: usize,
     child: Box<WidgetNode>,
-    zstack_placement: Option<ZStackPlacement>,
+    slot_data: Option<SlotData>,
 ) -> Result<(), crate::widget::MutationError> {
-    match zstack_placement {
-        Some(placement) => parent.insert_child_with_zstack_placement(index, child, placement),
-        None => parent.insert_child(index, child),
-    }
+    parent.insert_child_with_slot_data(index, child, slot_data)
 }
 
 fn remove_structural_child(
@@ -3449,8 +3420,22 @@ pub fn __disarm_structural_insert_fault_for_test() {
     FAIL_STRUCTURAL_INSERT_AT.with(|cell| cell.set(None));
 }
 
-fn zstack_placement_for_parent(parent: &WidgetNode, body: &IrChildSlot) -> Option<ZStackPlacement> {
-    parent.is_zstack().then(|| zstack_placement_from_slot(body))
+fn slot_data_for_parent(parent: &WidgetNode, slot: &IrChildSlot) -> Option<SlotData> {
+    slot_data_for_parent_kind(parent.is_zstack(), parent.is_grid(), slot)
+}
+
+fn slot_data_for_parent_kind(
+    parent_is_zstack: bool,
+    parent_is_grid: bool,
+    slot: &IrChildSlot,
+) -> Option<SlotData> {
+    if parent_is_zstack {
+        Some(SlotData::ZStack(zstack_payload_from_ir_slot(slot)))
+    } else if parent_is_grid {
+        Some(SlotData::Grid(grid_placement_from_slot(slot)))
+    } else {
+        None
+    }
 }
 
 #[cfg(test)]
@@ -3559,17 +3544,13 @@ fn construct_widget(
             WidgetNode::scroll_view(compositor, offset_y)
                 .map_err(|e| IrLoadError::Build(format!("scroll_view: {e}")))
         }
-        // M3-Phase 5 T3: Grid materialisation (DD-M3-P5-001 carrier c1).
+        // M3-Phase 5 T3 / M3-Phase 7b T3: Grid materialisation.
         // The track lists live on `node.kind_payload` (not `node.props` —
-        // `IrProp.value` stays strictly `IrLiteral`); the per-Cell
-        // placements are extracted from each `Cell` child's standard
-        // `IrProp` entries here, so `WidgetData::Grid` carries the
-        // layout-engine mirror types and `build_layout_tree` stays a
-        // structural copy (log.md T3 R-B Decision 1). `validate()` has
-        // already rejected malformed track lists / placements / overlaps
-        // before this arm runs (DD-M3-P5-006). The `Cell` flattening
-        // (appending each Cell's single content child) is the `build_node`
-        // special case; this arm only builds the shell + placement vector.
+        // `IrProp.value` stays strictly `IrLiteral`). Per-child placement
+        // is converted from each `IrChildSlot.slot_data` during child
+        // insertion, so this arm builds only the Grid shell + track lists.
+        // `validate()` has already rejected malformed track lists /
+        // placements / overlaps before this arm runs (DD-M3-P5-006).
         "Grid" => {
             let (columns, rows) = match &node.kind_payload {
                 Some(KindPayload::Grid { columns, rows }) => (
@@ -3582,11 +3563,7 @@ fn construct_widget(
                     ));
                 }
             };
-            let cell_placements = node
-                .widget_child_slots()
-                .map(grid_placement_from_slot)
-                .collect();
-            WidgetNode::grid(compositor, columns, rows, cell_placements)
+            WidgetNode::grid(compositor, columns, rows)
                 .map_err(|e| IrLoadError::Build(format!("grid: {e}")))
         }
         // M3-Phase 6 T3 / M3-Phase 7 T5: ZStack materialisation. Per-child
@@ -3609,7 +3586,7 @@ fn to_layout_track_size(t: &TrackSize) -> LayoutTrackSize {
     }
 }
 
-fn zstack_placement_from_slot(slot: &IrChildSlot) -> ZStackPlacement {
+fn zstack_payload_from_ir_slot(slot: &IrChildSlot) -> ZStackPlacement {
     match &slot.slot_data {
         Some(IrSlotData::ZStack { h_align, v_align }) => ZStackPlacement {
             h_align: to_layout_alignment(*h_align),
@@ -3667,7 +3644,7 @@ fn collect_static_zstack_child_placement_slots(
     let mut placements = Vec::new();
     for member in members {
         match member {
-            IrMember::Widget(slot) => placements.push(zstack_placement_from_slot(slot)),
+            IrMember::Widget(slot) => placements.push(zstack_payload_from_ir_slot(slot)),
             IrMember::ControlFlow(ControlFlowNode::If { branches }) => {
                 let branch = branches
                     .first()
@@ -3681,7 +3658,7 @@ fn collect_static_zstack_child_placement_slots(
                             ));
                         }
                     };
-                    placements.push(zstack_placement_from_slot(body));
+                    placements.push(zstack_payload_from_ir_slot(body));
                 }
             }
             IrMember::ControlFlow(ControlFlowNode::For {
@@ -3697,7 +3674,7 @@ fn collect_static_zstack_child_placement_slots(
                     }
                 };
                 for _ in 0..live_children {
-                    placements.push(zstack_placement_from_slot(body));
+                    placements.push(zstack_payload_from_ir_slot(body));
                 }
             }
         }
@@ -3820,11 +3797,99 @@ mod tests {
         }
     }
 
+    fn text_node() -> IrNode {
+        IrNode {
+            widget_type: "Text".into(),
+            props: Vec::new(),
+            bindings: Vec::new(),
+            handlers: Vec::new(),
+            children: Vec::new(),
+            kind_payload: None,
+        }
+    }
+
     fn zstack_slot(node: IrNode, h_align: IrAlignment, v_align: IrAlignment) -> IrChildSlot {
         IrChildSlot {
             node,
             slot_data: Some(IrSlotData::ZStack { h_align, v_align }),
         }
+    }
+
+    fn grid_slot(
+        node: IrNode,
+        row: u32,
+        column: u32,
+        h_align: IrAlignment,
+        v_align: IrAlignment,
+    ) -> IrChildSlot {
+        IrChildSlot {
+            node,
+            slot_data: Some(IrSlotData::Grid {
+                row,
+                column,
+                row_span: 2,
+                column_span: 3,
+                h_align,
+                v_align,
+            }),
+        }
+    }
+
+    #[test]
+    fn slot_data_for_parent_kind_maps_zstack_slot_payload() {
+        let slot = zstack_slot(text_node(), IrAlignment::End, IrAlignment::Start);
+
+        assert_eq!(
+            slot_data_for_parent_kind(true, false, &slot),
+            Some(SlotData::ZStack(ZStackPlacement {
+                h_align: Alignment::Trailing,
+                v_align: Alignment::Leading,
+            }))
+        );
+    }
+
+    #[test]
+    fn slot_data_for_parent_kind_maps_grid_slot_payload() {
+        let slot = grid_slot(text_node(), 4, 5, IrAlignment::Center, IrAlignment::Stretch);
+
+        assert_eq!(
+            slot_data_for_parent_kind(false, true, &slot),
+            Some(SlotData::Grid(CellPlacement {
+                row: 4,
+                column: 5,
+                row_span: 2,
+                column_span: 3,
+                h_align: Alignment::Center,
+                v_align: Alignment::Stretch,
+            }))
+        );
+    }
+
+    #[test]
+    fn slot_data_for_parent_kind_normalizes_non_placement_parent_to_none() {
+        let slot = zstack_slot(text_node(), IrAlignment::End, IrAlignment::Start);
+
+        assert_eq!(slot_data_for_parent_kind(false, false, &slot), None);
+    }
+
+    #[test]
+    fn slot_data_for_parent_kind_defaults_missing_zstack_payload_to_center() {
+        let slot = child_slot(text_node());
+
+        assert_eq!(
+            slot_data_for_parent_kind(true, false, &slot),
+            Some(SlotData::ZStack(ZStackPlacement::centered()))
+        );
+    }
+
+    #[test]
+    fn slot_data_for_parent_kind_defaults_missing_grid_payload_to_origin_stretch() {
+        let slot = child_slot(text_node());
+
+        assert_eq!(
+            slot_data_for_parent_kind(false, true, &slot),
+            Some(SlotData::Grid(CellPlacement::default_grid()))
+        );
     }
 
     // ── resolve_prop_key / binding dispatch (M3-Phase 1 T8 / DD-M3-P1-009) ──
