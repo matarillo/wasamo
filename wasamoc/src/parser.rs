@@ -1188,17 +1188,24 @@ mod tests {
 
     #[test]
     fn malformed_slot_property_keys_rejected_at_parse() {
-        for src in [
-            "component C inherits W { ZStack { Text { slot: end } } }",
-            "component C inherits W { ZStack { Text { slot..h-align: end } } }",
-            "component C inherits W { ZStack { Text { slot. } } }",
-        ] {
-            let msg = parse_err_msg(src);
-            assert!(
-                msg.contains("slot") || msg.contains("expected identifier"),
-                "message: {msg}"
-            );
-        }
+        let msg = parse_err_msg("component C inherits W { ZStack { Text { slot: end } } }");
+        assert!(
+            msg.contains("malformed slot property key") && msg.contains("slot.<key>"),
+            "message: {msg}"
+        );
+
+        let msg =
+            parse_err_msg("component C inherits W { ZStack { Text { slot..h-align: end } } }");
+        assert!(
+            msg.contains("expected identifier") && msg.contains("`.`"),
+            "message: {msg}"
+        );
+
+        let msg = parse_err_msg("component C inherits W { ZStack { Text { slot. } } }");
+        assert!(
+            msg.contains("expected identifier") && msg.contains("`}`"),
+            "message: {msg}"
+        );
     }
 
     #[test]

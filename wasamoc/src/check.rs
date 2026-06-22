@@ -5263,11 +5263,122 @@ mod tests {
     }
 
     #[test]
+    fn grid_direct_slot_row_out_of_range_rejected() {
+        let errs = errors(
+            r#"component C inherits W {
+                Grid { columns: 1* rows: 1* Text { slot.row: 1 slot.column: 0 } }
+            }"#,
+        );
+        assert!(
+            errs.iter()
+                .any(|e| e.contains("`slot.row` placement exceeds the grid")),
+            "{errs:?}"
+        );
+    }
+
+    #[test]
+    fn grid_direct_slot_column_out_of_range_rejected() {
+        let errs = errors(
+            r#"component C inherits W {
+                Grid { columns: 1* rows: 1* Text { slot.row: 0 slot.column: 1 } }
+            }"#,
+        );
+        assert!(
+            errs.iter()
+                .any(|e| e.contains("`slot.column` placement exceeds the grid")),
+            "{errs:?}"
+        );
+    }
+
+    #[test]
+    fn grid_direct_slot_negative_index_rejected() {
+        let errs = errors(
+            r#"component C inherits W {
+                Grid { columns: 1* rows: 1* Text { slot.row: -1 slot.column: 0 } }
+            }"#,
+        );
+        assert!(
+            errs.iter().any(|e| {
+                e.contains("`slot.row` must be a non-negative integer") && e.contains("got -1")
+            }),
+            "{errs:?}"
+        );
+    }
+
+    #[test]
+    fn grid_direct_slot_zero_span_rejected() {
+        let errs = errors(
+            r#"component C inherits W {
+                Grid { columns: 1* rows: 1* Text { slot.row-span: 0 } }
+            }"#,
+        );
+        assert!(
+            errs.iter()
+                .any(|e| e.contains("`slot.row-span` must be a positive integer")),
+            "{errs:?}"
+        );
+    }
+
+    #[test]
+    fn grid_direct_slot_non_literal_span_rejected() {
+        let errs = errors(
+            r#"component C inherits W {
+                state span: i32 = 1
+                Grid { columns: 1* rows: 1* Text { slot.row-span: span } }
+            }"#,
+        );
+        assert!(
+            errs.iter()
+                .any(|e| e.contains("`slot.row-span` must be a positive integer literal")),
+            "{errs:?}"
+        );
+    }
+
+    #[test]
+    fn grid_direct_slot_bad_alignment_keyword_rejected() {
+        let errs = errors(
+            r#"component C inherits W {
+                Grid { columns: 1* rows: 1* Text { slot.h-align: middle } }
+            }"#,
+        );
+        assert!(
+            errs.iter()
+                .any(|e| e.contains("`slot.h-align` must be one of") && e.contains("`middle`")),
+            "{errs:?}"
+        );
+    }
+
+    #[test]
+    fn grid_direct_slot_non_keyword_alignment_rejected() {
+        let errs = errors(
+            r#"component C inherits W {
+                Grid { columns: 1* rows: 1* Text { slot.h-align: 3 } }
+            }"#,
+        );
+        assert!(
+            errs.iter()
+                .any(|e| e.contains("`slot.h-align` expects an alignment keyword")),
+            "{errs:?}"
+        );
+    }
+
+    #[test]
     fn grid_direct_slot_value_namespace_prefers_alignment_keyword() {
         let result = check_src(
             r#"component C inherits W {
                 state end: i32 = 0
                 Grid { columns: 1* rows: 1* Text { slot.h-align: end } }
+            }"#,
+        );
+        assert!(!result.has_errors(), "{:?}", result.diagnostics);
+    }
+
+    #[test]
+    fn zstack_direct_slot_value_namespace_prefers_alignment_keyword() {
+        let result = check_src(
+            r#"component C inherits W {
+                state end: i32 = 0
+                ZStack { Text { slot.h-align: end } }
             }"#,
         );
         assert!(!result.has_errors(), "{:?}", result.diagnostics);
