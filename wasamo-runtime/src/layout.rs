@@ -2773,6 +2773,21 @@ mod tests {
     }
 
     #[test]
+    fn grid_arrange_bare_child_slot_uses_default_placement() {
+        let mut g = LayoutNode::grid(
+            vec![TrackSize::Fixed(100), TrackSize::Fixed(200)],
+            vec![TrackSize::Fixed(50), TrackSize::Fixed(80)],
+        );
+        g.children.push(fill_child());
+
+        run_layout(&mut g, 300.0, 130.0).unwrap();
+
+        assert_eq!(g.children[0].slot_data, None);
+        assert_eq!(g.children[0].offset, (0.0, 0.0));
+        assert_eq!(g.children[0].size, (100.0, 50.0));
+    }
+
+    #[test]
     fn grid_arrange_weighted_star_cells() {
         // columns 1* 2* over 300 → 100 : 200; single full-height row.
         let mut g = LayoutNode::grid(

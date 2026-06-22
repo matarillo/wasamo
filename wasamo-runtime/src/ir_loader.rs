@@ -3421,9 +3421,17 @@ pub fn __disarm_structural_insert_fault_for_test() {
 }
 
 fn slot_data_for_parent(parent: &WidgetNode, slot: &IrChildSlot) -> Option<SlotData> {
-    if parent.is_zstack() {
+    slot_data_for_parent_kind(parent.is_zstack(), parent.is_grid(), slot)
+}
+
+fn slot_data_for_parent_kind(
+    parent_is_zstack: bool,
+    parent_is_grid: bool,
+    slot: &IrChildSlot,
+) -> Option<SlotData> {
+    if parent_is_zstack {
         Some(SlotData::ZStack(zstack_payload_from_ir_slot(slot)))
-    } else if parent.is_grid() {
+    } else if parent_is_grid {
         Some(SlotData::Grid(grid_placement_from_slot(slot)))
     } else {
         None
@@ -3789,11 +3797,99 @@ mod tests {
         }
     }
 
+    fn text_node() -> IrNode {
+        IrNode {
+            widget_type: "Text".into(),
+            props: Vec::new(),
+            bindings: Vec::new(),
+            handlers: Vec::new(),
+            children: Vec::new(),
+            kind_payload: None,
+        }
+    }
+
     fn zstack_slot(node: IrNode, h_align: IrAlignment, v_align: IrAlignment) -> IrChildSlot {
         IrChildSlot {
             node,
             slot_data: Some(IrSlotData::ZStack { h_align, v_align }),
         }
+    }
+
+    fn grid_slot(
+        node: IrNode,
+        row: u32,
+        column: u32,
+        h_align: IrAlignment,
+        v_align: IrAlignment,
+    ) -> IrChildSlot {
+        IrChildSlot {
+            node,
+            slot_data: Some(IrSlotData::Grid {
+                row,
+                column,
+                row_span: 2,
+                column_span: 3,
+                h_align,
+                v_align,
+            }),
+        }
+    }
+
+    #[test]
+    fn slot_data_for_parent_kind_maps_zstack_slot_payload() {
+        let slot = zstack_slot(text_node(), IrAlignment::End, IrAlignment::Start);
+
+        assert_eq!(
+            slot_data_for_parent_kind(true, false, &slot),
+            Some(SlotData::ZStack(ZStackPlacement {
+                h_align: Alignment::Trailing,
+                v_align: Alignment::Leading,
+            }))
+        );
+    }
+
+    #[test]
+    fn slot_data_for_parent_kind_maps_grid_slot_payload() {
+        let slot = grid_slot(text_node(), 4, 5, IrAlignment::Center, IrAlignment::Stretch);
+
+        assert_eq!(
+            slot_data_for_parent_kind(false, true, &slot),
+            Some(SlotData::Grid(CellPlacement {
+                row: 4,
+                column: 5,
+                row_span: 2,
+                column_span: 3,
+                h_align: Alignment::Center,
+                v_align: Alignment::Stretch,
+            }))
+        );
+    }
+
+    #[test]
+    fn slot_data_for_parent_kind_normalizes_non_placement_parent_to_none() {
+        let slot = zstack_slot(text_node(), IrAlignment::End, IrAlignment::Start);
+
+        assert_eq!(slot_data_for_parent_kind(false, false, &slot), None);
+    }
+
+    #[test]
+    fn slot_data_for_parent_kind_defaults_missing_zstack_payload_to_center() {
+        let slot = child_slot(text_node());
+
+        assert_eq!(
+            slot_data_for_parent_kind(true, false, &slot),
+            Some(SlotData::ZStack(ZStackPlacement::centered()))
+        );
+    }
+
+    #[test]
+    fn slot_data_for_parent_kind_defaults_missing_grid_payload_to_origin_stretch() {
+        let slot = child_slot(text_node());
+
+        assert_eq!(
+            slot_data_for_parent_kind(false, true, &slot),
+            Some(SlotData::Grid(CellPlacement::default_grid()))
+        );
     }
 
     // ── resolve_prop_key / binding dispatch (M3-Phase 1 T8 / DD-M3-P1-009) ──
