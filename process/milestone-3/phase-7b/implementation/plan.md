@@ -151,7 +151,14 @@ trap #4 for the loader rejects; risk R-A / R-F). Lands the IR carrier +
 emit + loader parse + stale-form reject as one buildable commit. At T2
 close the loader still feeds the **legacy** runtime storage via the Seam
 A adapter (T3 removes it) — so T2 is internally bisectable and the
-runtime behaviour is unchanged.
+runtime behaviour is unchanged. T2's responsibility boundary is the
+IR/textual-IR contract plus the temporary adapter: it normalises the
+existing authored Grid `Cell` and ZStack bare-placement surfaces into
+`IrChildSlot.slot_data`, emits only the canonical `child { placement ...
+node ... }` textual IR, parses that canonical form, and rejects stale
+old-form textual IR. It does **not** delete `WidgetData::Grid.cell_placements`,
+`WidgetNode.zstack_placement`, or any layout mirror; those drift-closing
+structural changes are T3.
 
 - [ ] `wasamo-ir`: `IrMember::Widget(IrNode)` →
       `IrMember::Widget(IrChildSlot)`, with
@@ -179,6 +186,15 @@ runtime behaviour is unchanged.
       node … }` skeleton; the runtime loader parses IR-B and (Seam A)
       converts `slot_data` back into `zstack_placement` /
       `cell_placements` for the unchanged runtime.
+- [ ] Runtime validation stays intentionally transitional: Grid is
+      validated against canonical child-slot records by reading
+      `IrSlotData::Grid`, then the Seam A builder derives the legacy
+      `cell_placements` vector from the same slots; ZStack placement is
+      likewise read from `IrSlotData::ZStack` and bridged to the existing
+      `insert_child_with_zstack_placement` path. Any child slot whose
+      placement kind is invalid for its immediate parent is rejected by
+      the loader. The absence of parallel-vector deletion is a named T3
+      carry-forward, not a T2 close condition.
 - [ ] Loader **reject + regenerate**: stale old-form placement IR (a
       `Cell` node with placement `IrProp`s, or bare ZStack placement
       props on a child) is a **named loader diagnostic**

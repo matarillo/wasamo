@@ -11,9 +11,9 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use wasamo_ir::{
-    CompoundOp, ControlFlowBranch, ControlFlowNode, HandlerExpr, InterpolationPart, IrBinding,
-    IrComponent, IrHandler, IrLiteral, IrMember, IrNode, IrProp, IrState, IrStateType, IrType,
-    KindPayload, TrackSize,
+    CompoundOp, ControlFlowBranch, ControlFlowNode, HandlerExpr, InterpolationPart, IrAlignment,
+    IrBinding, IrChildSlot, IrComponent, IrHandler, IrLiteral, IrMember, IrNode, IrProp,
+    IrSlotData, IrState, IrStateType, IrType, KindPayload, TrackSize,
 };
 
 use crate::box_values;
@@ -361,7 +361,7 @@ fn annotate_member_collection_expr_types(
     declared: &std::collections::HashMap<String, IrStateType>,
 ) -> Result<(), IrLoadError> {
     match member {
-        IrMember::Widget(node) => annotate_node_collection_expr_types(node, declared),
+        IrMember::Widget(slot) => annotate_node_collection_expr_types(&mut slot.node, declared),
         IrMember::ControlFlow(ControlFlowNode::If { branches }) => {
             for branch in branches {
                 annotate_expr_collection_types(&mut branch.condition, declared)?;
@@ -525,7 +525,7 @@ fn is_child_placement_prop(name: &str) -> bool {
 fn validate_phase6_control_flow_invariants(node: &IrNode) -> Result<(), IrLoadError> {
     for member in &node.children {
         match member {
-            IrMember::Widget(child) => validate_phase6_control_flow_invariants(child)?,
+            IrMember::Widget(slot) => validate_phase6_control_flow_invariants(&slot.node)?,
             IrMember::ControlFlow(ControlFlowNode::If { branches }) => {
                 if branches.len() != 1 {
                     return Err(IrLoadError::Validate(format!(
@@ -541,7 +541,7 @@ fn validate_phase6_control_flow_invariants(node: &IrNode) -> Result<(), IrLoadEr
                     )));
                 }
                 match &branch.body[0] {
-                    IrMember::Widget(body) => validate_phase6_control_flow_invariants(body)?,
+                    IrMember::Widget(slot) => validate_phase6_control_flow_invariants(&slot.node)?,
                     IrMember::ControlFlow(_) => {
                         return Err(IrLoadError::Validate(
                             "a nested control-flow member is not valid directly in an `if` body in M3-Phase 6".into(),
@@ -557,7 +557,7 @@ fn validate_phase6_control_flow_invariants(node: &IrNode) -> Result<(), IrLoadEr
                     )));
                 }
                 match &body[0] {
-                    IrMember::Widget(body) => validate_phase6_control_flow_invariants(body)?,
+                    IrMember::Widget(slot) => validate_phase6_control_flow_invariants(&slot.node)?,
                     IrMember::ControlFlow(_) => {
                         return Err(IrLoadError::Validate(
                             "a nested control-flow member is not valid directly in a `for` body in M3-Phase 7".into(),
@@ -583,8 +583,8 @@ fn validate_phase7_iteration_invariants(
     let current = parent_kind_for(node);
     for member in &node.children {
         match member {
-            IrMember::Widget(child) => {
-                validate_phase7_iteration_invariants(child, inside_for_template)?;
+            IrMember::Widget(slot) => {
+                validate_phase7_iteration_invariants(&slot.node, inside_for_template)?;
             }
             IrMember::ControlFlow(ControlFlowNode::If { branches }) => {
                 for branch in branches {
@@ -609,8 +609,8 @@ fn validate_phase7_iteration_invariants(
                         "`for` body admits exactly one widget child in M3-Phase 7".into(),
                     ));
                 }
-                if let Some(IrMember::Widget(body_node)) = body.first() {
-                    validate_phase7_iteration_invariants(body_node, true)?;
+                if let Some(IrMember::Widget(body_slot)) = body.first() {
+                    validate_phase7_iteration_invariants(&body_slot.node, true)?;
                 }
             }
         }
@@ -624,7 +624,9 @@ fn validate_phase7_iteration_member_invariants(
     inside_for_template: bool,
 ) -> Result<(), IrLoadError> {
     match member {
-        IrMember::Widget(child) => validate_phase7_iteration_invariants(child, inside_for_template),
+        IrMember::Widget(slot) => {
+            validate_phase7_iteration_invariants(&slot.node, inside_for_template)
+        }
         IrMember::ControlFlow(ControlFlowNode::If { branches }) => {
             for branch in branches {
                 for body_member in &branch.body {
@@ -653,8 +655,8 @@ fn validate_phase7_iteration_member_invariants(
                             "`for` body admits exactly one widget child in M3-Phase 7".into(),
                         ));
                     }
-                    if let Some(IrMember::Widget(body_node)) = body.first() {
-                        validate_phase7_iteration_invariants(body_node, true)?;
+                    if let Some(IrMember::Widget(body_slot)) = body.first() {
+                        validate_phase7_iteration_invariants(&body_slot.node, true)?;
                     }
                     Ok(())
                 }
@@ -680,7 +682,7 @@ fn validate_direct_for_parent(parent_node: &IrNode) -> Result<(), IrLoadError> {
 
 fn validate_phase2_member_invariants(member: &IrMember) -> Result<(), IrLoadError> {
     match member {
-        IrMember::Widget(child) => validate_phase2_node_invariants(child),
+        IrMember::Widget(slot) => validate_phase2_node_invariants(&slot.node),
         IrMember::ControlFlow(ControlFlowNode::If { branches }) => {
             for branch in branches {
                 for body_member in &branch.body {
@@ -801,7 +803,7 @@ fn validate_phase4_node_invariants(node: &IrNode) -> Result<(), IrLoadError> {
 
 fn validate_phase4_member_invariants(member: &IrMember) -> Result<(), IrLoadError> {
     match member {
-        IrMember::Widget(child) => validate_phase4_node_invariants(child),
+        IrMember::Widget(slot) => validate_phase4_node_invariants(&slot.node),
         IrMember::ControlFlow(ControlFlowNode::If { branches }) => {
             for branch in branches {
                 for body_member in &branch.body {
@@ -847,7 +849,7 @@ fn validate_phase3_node_invariants(node: &IrNode) -> Result<(), IrLoadError> {
 
 fn validate_phase3_member_invariants(member: &IrMember) -> Result<(), IrLoadError> {
     match member {
-        IrMember::Widget(child) => validate_phase3_node_invariants(child),
+        IrMember::Widget(slot) => validate_phase3_node_invariants(&slot.node),
         IrMember::ControlFlow(ControlFlowNode::If { branches }) => {
             for branch in branches {
                 for body_member in &branch.body {
@@ -882,13 +884,8 @@ fn validate_phase5_node_invariants(node: &IrNode) -> Result<(), IrLoadError> {
     match node.widget_type.as_str() {
         "Grid" => {
             validate_grid_invariants(node)?;
-            // Descend into each Cell's content child (the Cell wrapper
-            // itself is validated above and is IR-only). A bad child-count
-            // was already rejected by `validate_grid_invariants`.
-            for cell in node.widget_children() {
-                for member in &cell.children {
-                    validate_phase5_member_invariants(member)?;
-                }
+            for slot in node.widget_child_slots() {
+                validate_phase5_node_invariants(&slot.node)?;
             }
         }
         "Cell" => {
@@ -907,7 +904,7 @@ fn validate_phase5_node_invariants(node: &IrNode) -> Result<(), IrLoadError> {
 
 fn validate_phase5_member_invariants(member: &IrMember) -> Result<(), IrLoadError> {
     match member {
-        IrMember::Widget(child) => validate_phase5_node_invariants(child),
+        IrMember::Widget(slot) => validate_phase5_node_invariants(&slot.node),
         IrMember::ControlFlow(ControlFlowNode::If { branches }) => {
             for branch in branches {
                 for body_member in &branch.body {
@@ -982,18 +979,9 @@ fn validate_phase6_zstack_node_invariants(
 
     for prop in &node.props {
         if matches!(prop.name.as_str(), "h-align" | "v-align") {
-            let allowed = parent == ParentKind::ZStack
-                || (parent == ParentKind::Grid && node.widget_type == "Cell");
-            if !allowed {
-                return Err(IrLoadError::Validate(format!(
-                    "`{}` is valid only on a ZStack direct child or Grid `Cell`",
-                    prop.name
-                )));
-            }
-            validate_alignment_literal(
-                &prop.value,
-                &format!("{}.{}", node.widget_type, prop.name),
-            )?;
+            return Err(legacy_placement_ir_form(
+                "bare `h-align` / `v-align` props are stale textual IR; regenerate to child-slot placement",
+            ));
         }
     }
 
@@ -1009,7 +997,10 @@ fn validate_phase6_zstack_member_invariants(
     parent: ParentKind,
 ) -> Result<(), IrLoadError> {
     match member {
-        IrMember::Widget(child) => validate_phase6_zstack_node_invariants(child, parent),
+        IrMember::Widget(slot) => {
+            validate_slot_data_parent(parent, slot)?;
+            validate_phase6_zstack_node_invariants(&slot.node, parent)
+        }
         IrMember::ControlFlow(ControlFlowNode::If { branches }) => {
             for branch in branches {
                 for body_member in &branch.body {
@@ -1027,14 +1018,21 @@ fn validate_phase6_zstack_member_invariants(
     }
 }
 
-fn validate_alignment_literal(value: &IrLiteral, label: &str) -> Result<(), IrLoadError> {
-    match value {
-        IrLiteral::Ident(id) if matches!(id.as_str(), "start" | "center" | "end" | "stretch") => {
-            Ok(())
-        }
-        _ => Err(IrLoadError::Validate(format!(
-            "`{label}` must be one of start, center, end, stretch"
-        ))),
+fn validate_slot_data_parent(parent: ParentKind, slot: &IrChildSlot) -> Result<(), IrLoadError> {
+    match (parent, &slot.slot_data) {
+        (ParentKind::Grid, Some(IrSlotData::Grid { .. }) | None) => Ok(()),
+        (ParentKind::Grid, Some(IrSlotData::ZStack { .. })) => Err(IrLoadError::Validate(
+            "invalid-placement-ir: `placement zstack` is not valid on a Grid child".into(),
+        )),
+        (ParentKind::ZStack, Some(IrSlotData::ZStack { .. }) | None) => Ok(()),
+        (ParentKind::ZStack, Some(IrSlotData::Grid { .. })) => Err(IrLoadError::Validate(
+            "invalid-placement-ir: `placement grid` is not valid on a ZStack child".into(),
+        )),
+        (_, Some(_)) => Err(IrLoadError::Validate(
+            "invalid-placement-ir: placement data is valid only on Grid or ZStack child slots"
+                .into(),
+        )),
+        (_, None) => Ok(()),
     }
 }
 
@@ -1116,38 +1114,36 @@ fn validate_grid_invariants(node: &IrNode) -> Result<(), IrLoadError> {
     let columns_len = columns.len() as i64;
     let rows_len = rows.len() as i64;
 
-    // Per-Cell validation + rectangle collection (DD-M3-P5-003 /
-    // DD-M3-P5-005 / DD-M3-P5-006).
+    // Per-child-slot validation + rectangle collection. M3-Phase 7b T2
+    // normalises the old `Cell` textual form to `IrSlotData::Grid`; a
+    // surviving `Cell` node is stale IR and must be regenerated.
     let mut rects: Vec<GridCellRect> = Vec::new();
     for member in &node.children {
         match member {
-            IrMember::Widget(cell) if cell.widget_type == "Cell" => {
-                // A `Cell` is a non-Grid node and must not carry a Grid payload.
-                reject_non_grid_kind_payload(cell)?;
-                rects.push(validate_grid_cell(cell, columns_len, rows_len)?);
+            IrMember::Widget(slot) if slot.node.widget_type == "Cell" => {
+                return Err(legacy_placement_ir_form(
+                    "Grid `Cell` child wrapper is stale textual IR; regenerate to `child { placement grid ... node ... }`",
+                ));
             }
-            IrMember::Widget(child) => {
-                return Err(IrLoadError::Validate(format!(
-                    "`Grid` children must be wrapped in `Cell`, found `{}` (DD-M3-P5-001)",
-                    child.widget_type
-                )));
+            IrMember::Widget(slot) => {
+                rects.push(validate_grid_child_slot(slot, columns_len, rows_len)?)
             }
             IrMember::ControlFlow(_) => {
                 return Err(IrLoadError::Validate(
-                    "`Grid` children must be wrapped in `Cell`; conditional members are not valid directly in runtime Grid IR".into(),
+                    "`Grid` children must use child slots; conditional members are not valid directly in runtime Grid IR".into(),
                 ));
             }
         }
     }
 
     // Same-cell / overlapping-rectangle conflict (DD-M3-P5-003): no two
-    // Cells share any resolved cell. `O(n_cells^2)` pairwise (trivial for
+    // Grid child placements share any resolved cell. `O(n_cells^2)` pairwise (trivial for
     // practical Grid sizes per DD-M3-P5-006).
     for i in 0..rects.len() {
         for j in (i + 1)..rects.len() {
             if grid_rects_overlap(&rects[i], &rects[j]) {
                 return Err(IrLoadError::Validate(format!(
-                    "`Grid` Cell at (row {}, column {}) overlaps an earlier Cell's rectangle; same-cell and overlapping placements are rejected (DD-M3-P5-003)",
+                    "`Grid` child placement at (row {}, column {}) overlaps an earlier Grid child rectangle; same-cell and overlapping placements are rejected (DD-M3-P5-003)",
                     rects[j].row, rects[j].column
                 )));
             }
@@ -1157,59 +1153,49 @@ fn validate_grid_invariants(node: &IrNode) -> Result<(), IrLoadError> {
     Ok(())
 }
 
-// Validate one `Cell` node's invariants and return its resolved
-// rectangle (DD-M3-P5-001 / DD-M3-P5-003 / DD-M3-P5-005 / DD-M3-P5-006).
-// Placement / span defaults match `extract_cell_placement` and
-// `wasamoc lower`'s placement-default Option A (`row` / `column` absent →
-// `0`; `row-span` / `column-span` absent → `1`). The multi-Cell
-// placement-presence rule is compile-time-only (DD-M3-P5-006 marks it
-// `(n/a)` at runtime); a multi-Cell Grid that omits placement is caught
-// by the overlap check (two Cells both defaulting to `(0, 0)`).
-fn validate_grid_cell(
-    cell: &IrNode,
+fn legacy_placement_ir_form(detail: &str) -> IrLoadError {
+    IrLoadError::Validate(format!("legacy-placement-ir-form: {detail}"))
+}
+
+// Validate one Grid child slot and return its resolved rectangle. Missing
+// slot data preserves the existing Grid defaults; wrong-kind slot data is
+// malformed canonical IR.
+fn validate_grid_child_slot(
+    slot: &IrChildSlot,
     columns_len: i64,
     rows_len: i64,
 ) -> Result<GridCellRect, IrLoadError> {
-    // Cell single content child (DD-M3-P5-001).
-    let widget_child_count = cell.widget_children().count();
-    if widget_child_count != 1 {
-        return Err(IrLoadError::Validate(format!(
-            "`Cell` requires exactly one content child, got {} (DD-M3-P5-001)",
-            widget_child_count
-        )));
-    }
-    if cell
-        .children
-        .iter()
-        .any(|m| matches!(m, IrMember::ControlFlow(_)))
-    {
-        return Err(IrLoadError::Validate(
-            "`Cell` admits exactly one direct widget content child; put conditional members inside that content widget".into(),
-        ));
-    }
-
-    // Placement / span values (Int literal positions). `wasamoc lower`
-    // emits these as `IrLiteral::Int`; a non-Int literal is malformed.
-    let row = grid_cell_int(cell, "row", 0)?;
-    let column = grid_cell_int(cell, "column", 0)?;
-    let row_span = grid_cell_int(cell, "row-span", 1)?;
-    let column_span = grid_cell_int(cell, "column-span", 1)?;
-
-    // Alignment vocabulary (DD-M3-P5-005): `h-align` / `v-align`, when
-    // present, are idents in `{ start, center, end, stretch }`.
-    validate_cell_alignment(cell, "h-align")?;
-    validate_cell_alignment(cell, "v-align")?;
+    let (row, column, row_span, column_span) = match &slot.slot_data {
+        Some(IrSlotData::Grid {
+            row,
+            column,
+            row_span,
+            column_span,
+            ..
+        }) => (
+            *row as i64,
+            *column as i64,
+            *row_span as i64,
+            *column_span as i64,
+        ),
+        Some(IrSlotData::ZStack { .. }) => {
+            return Err(IrLoadError::Validate(
+                "invalid-placement-ir: `placement zstack` is not valid on a Grid child".into(),
+            ));
+        }
+        None => (0, 0, 1, 1),
+    };
 
     // Placement value range (DD-M3-P5-003): row in `[0, rows.len())`,
     // column in `[0, columns.len())`.
     if row < 0 || row >= rows_len {
         return Err(IrLoadError::Validate(format!(
-            "`Cell.row` {row} is out of range [0, {rows_len}) (DD-M3-P5-003)"
+            "`Grid` child placement `row` {row} is out of range [0, {rows_len}) (DD-M3-P5-003)"
         )));
     }
     if column < 0 || column >= columns_len {
         return Err(IrLoadError::Validate(format!(
-            "`Cell.column` {column} is out of range [0, {columns_len}) (DD-M3-P5-003)"
+            "`Grid` child placement `column` {column} is out of range [0, {columns_len}) (DD-M3-P5-003)"
         )));
     }
 
@@ -1217,23 +1203,23 @@ fn validate_grid_cell(
     // rectangle fits within the declared track count.
     if row_span < 1 {
         return Err(IrLoadError::Validate(format!(
-            "`Cell.row-span` must be a positive integer (>= 1), got {row_span} (DD-M3-P5-003)"
+            "`Grid` child placement `row-span` must be a positive integer (>= 1), got {row_span} (DD-M3-P5-003)"
         )));
     }
     if column_span < 1 {
         return Err(IrLoadError::Validate(format!(
-            "`Cell.column-span` must be a positive integer (>= 1), got {column_span} (DD-M3-P5-003)"
+            "`Grid` child placement `column-span` must be a positive integer (>= 1), got {column_span} (DD-M3-P5-003)"
         )));
     }
     if row + row_span > rows_len {
         return Err(IrLoadError::Validate(format!(
-            "`Cell` row span exceeds the grid: row {row} + row-span {row_span} = {} > {rows_len} declared row tracks (DD-M3-P5-003)",
+            "`Grid` child row span exceeds the grid: row {row} + row-span {row_span} = {} > {rows_len} declared row tracks (DD-M3-P5-003)",
             row + row_span
         )));
     }
     if column + column_span > columns_len {
         return Err(IrLoadError::Validate(format!(
-            "`Cell` column span exceeds the grid: column {column} + column-span {column_span} = {} > {columns_len} declared column tracks (DD-M3-P5-003)",
+            "`Grid` child column span exceeds the grid: column {column} + column-span {column_span} = {} > {columns_len} declared column tracks (DD-M3-P5-003)",
             column + column_span
         )));
     }
@@ -1244,36 +1230,6 @@ fn validate_grid_cell(
         row_span,
         column_span,
     })
-}
-
-/// Read a `Cell` placement / span attribute as an `i64`, defaulting when
-/// the prop is absent. A present-but-non-`Int` literal is malformed.
-fn grid_cell_int(cell: &IrNode, name: &str, default: i64) -> Result<i64, IrLoadError> {
-    match cell.props.iter().find(|p| p.name == name) {
-        Some(prop) => match &prop.value {
-            IrLiteral::Int(n) => Ok(*n as i64),
-            other => Err(IrLoadError::Validate(format!(
-                "`Cell.{name}` must be an integer literal, got {other:?} (DD-M3-P5-003)"
-            ))),
-        },
-        None => Ok(default),
-    }
-}
-
-/// Validate a `Cell` alignment attribute against the DD-M3-P5-005
-/// vocabulary when present. Absent is valid (defaults to `stretch`).
-fn validate_cell_alignment(cell: &IrNode, name: &str) -> Result<(), IrLoadError> {
-    let Some(prop) = cell.props.iter().find(|p| p.name == name) else {
-        return Ok(());
-    };
-    match &prop.value {
-        IrLiteral::Ident(v) if matches!(v.as_str(), "start" | "center" | "end" | "stretch") => {
-            Ok(())
-        }
-        other => Err(IrLoadError::Validate(format!(
-            "`Cell.{name}` must be one of start, center, end, stretch, got {other:?} (DD-M3-P5-005)"
-        ))),
-    }
 }
 
 /// Half-open rectangle overlap in track coordinates (DD-M3-P5-003).
@@ -1344,8 +1300,8 @@ fn validate_member_references(
     inside_for_template: bool,
 ) -> Result<(), IrLoadError> {
     match member {
-        IrMember::Widget(node) => {
-            validate_node_references_in_scope(node, declared, loop_scope, inside_for_template)
+        IrMember::Widget(slot) => {
+            validate_node_references_in_scope(&slot.node, declared, loop_scope, inside_for_template)
         }
         IrMember::ControlFlow(ControlFlowNode::If { branches }) => {
             for branch in branches {
@@ -2147,8 +2103,14 @@ impl<'a> Parser<'a> {
                 Some(Token::Ident(s)) if s == "prop" => props.push(self.parse_prop()?),
                 Some(Token::Ident(s)) if s == "bind" => bindings.push(self.parse_binding()?),
                 Some(Token::Ident(s)) if s == "on" => handlers.push(self.parse_handler()?),
+                Some(Token::Ident(s)) if s == "child" => {
+                    children.push(IrMember::Widget(self.parse_child_slot()?))
+                }
                 Some(Token::Ident(s)) if s == "node" => {
-                    children.push(IrMember::Widget(self.parse_node()?))
+                    children.push(IrMember::Widget(IrChildSlot {
+                        node: self.parse_node()?,
+                        slot_data: None,
+                    }))
                 }
                 Some(Token::Ident(s)) if s == "if" => {
                     children.push(IrMember::ControlFlow(self.parse_if_member()?))
@@ -2223,6 +2185,175 @@ impl<'a> Parser<'a> {
         })
     }
 
+    fn parse_child_slot(&mut self) -> Result<IrChildSlot, IrLoadError> {
+        self.expect_keyword("child")?;
+        self.expect(&Token::LBrace)?;
+        let mut slot_data = None;
+        let mut node = None;
+
+        loop {
+            match self.peek() {
+                Some(Token::RBrace) => {
+                    self.advance();
+                    break;
+                }
+                Some(Token::Ident(s)) if s == "placement" => {
+                    if slot_data.is_some() {
+                        return Err(IrLoadError::Parse(
+                            "malformed-placement-ir: duplicate `placement` block in child slot"
+                                .into(),
+                        ));
+                    }
+                    slot_data = Some(self.parse_slot_data()?);
+                }
+                Some(Token::Ident(s)) if s == "node" => {
+                    if node.is_some() {
+                        return Err(IrLoadError::Parse(
+                            "malformed-placement-ir: duplicate `node` block in child slot".into(),
+                        ));
+                    }
+                    node = Some(self.parse_node()?);
+                }
+                Some(other) => {
+                    return Err(IrLoadError::Parse(format!(
+                        "malformed-placement-ir: unexpected token in child slot: {other:?}"
+                    )));
+                }
+                None => return Err(IrLoadError::Parse("unexpected EOF in child slot".into())),
+            }
+        }
+
+        let node = node.ok_or_else(|| {
+            IrLoadError::Parse("malformed-placement-ir: child slot missing `node` block".into())
+        })?;
+        Ok(IrChildSlot { node, slot_data })
+    }
+
+    fn parse_slot_data(&mut self) -> Result<IrSlotData, IrLoadError> {
+        self.expect_keyword("placement")?;
+        let kind = self.expect_ident()?;
+        self.expect(&Token::LBrace)?;
+        match kind.as_str() {
+            "grid" => self.parse_grid_slot_data(),
+            "zstack" => self.parse_zstack_slot_data(),
+            other => Err(IrLoadError::Parse(format!(
+                "malformed-placement-ir: unknown placement kind `{other}`"
+            ))),
+        }
+    }
+
+    fn parse_grid_slot_data(&mut self) -> Result<IrSlotData, IrLoadError> {
+        let mut row = 0;
+        let mut column = 0;
+        let mut row_span = 1;
+        let mut column_span = 1;
+        let mut h_align = IrAlignment::Stretch;
+        let mut v_align = IrAlignment::Stretch;
+        let mut seen = std::collections::HashSet::new();
+
+        while !matches!(self.peek(), Some(Token::RBrace)) {
+            let key = self.expect_ident()?;
+            if !seen.insert(key.clone()) {
+                return Err(IrLoadError::Parse(format!(
+                    "malformed-placement-ir: duplicate grid placement key `{key}`"
+                )));
+            }
+            self.expect(&Token::Colon)?;
+            match key.as_str() {
+                "row" => row = self.expect_nonnegative_u32("grid.row")?,
+                "column" => column = self.expect_nonnegative_u32("grid.column")?,
+                "row-span" => row_span = self.expect_positive_u32("grid.row-span")?,
+                "column-span" => {
+                    column_span = self.expect_positive_u32("grid.column-span")?;
+                }
+                "h-align" => h_align = self.expect_alignment("grid.h-align")?,
+                "v-align" => v_align = self.expect_alignment("grid.v-align")?,
+                other => {
+                    return Err(IrLoadError::Parse(format!(
+                        "malformed-placement-ir: unknown grid placement key `{other}`"
+                    )));
+                }
+            }
+            if matches!(self.peek(), Some(Token::Comma)) {
+                self.advance();
+            }
+        }
+        self.expect(&Token::RBrace)?;
+        Ok(IrSlotData::Grid {
+            row,
+            column,
+            row_span,
+            column_span,
+            h_align,
+            v_align,
+        })
+    }
+
+    fn parse_zstack_slot_data(&mut self) -> Result<IrSlotData, IrLoadError> {
+        let mut h_align = IrAlignment::Center;
+        let mut v_align = IrAlignment::Center;
+        let mut seen = std::collections::HashSet::new();
+
+        while !matches!(self.peek(), Some(Token::RBrace)) {
+            let key = self.expect_ident()?;
+            if !seen.insert(key.clone()) {
+                return Err(IrLoadError::Parse(format!(
+                    "malformed-placement-ir: duplicate zstack placement key `{key}`"
+                )));
+            }
+            self.expect(&Token::Colon)?;
+            match key.as_str() {
+                "h-align" => h_align = self.expect_alignment("zstack.h-align")?,
+                "v-align" => v_align = self.expect_alignment("zstack.v-align")?,
+                other => {
+                    return Err(IrLoadError::Parse(format!(
+                        "malformed-placement-ir: unknown zstack placement key `{other}`"
+                    )));
+                }
+            }
+            if matches!(self.peek(), Some(Token::Comma)) {
+                self.advance();
+            }
+        }
+        self.expect(&Token::RBrace)?;
+        Ok(IrSlotData::ZStack { h_align, v_align })
+    }
+
+    fn expect_nonnegative_u32(&mut self, label: &str) -> Result<u32, IrLoadError> {
+        match self.advance() {
+            Some(Token::Int(n)) if *n >= 0 => Ok(*n as u32),
+            other => Err(IrLoadError::Parse(format!(
+                "malformed-placement-ir: `{label}` must be a non-negative integer, got {other:?}"
+            ))),
+        }
+    }
+
+    fn expect_positive_u32(&mut self, label: &str) -> Result<u32, IrLoadError> {
+        match self.advance() {
+            Some(Token::Int(n)) if *n >= 1 => Ok(*n as u32),
+            other => Err(IrLoadError::Parse(format!(
+                "malformed-placement-ir: `{label}` must be a positive integer, got {other:?}"
+            ))),
+        }
+    }
+
+    fn expect_alignment(&mut self, label: &str) -> Result<IrAlignment, IrLoadError> {
+        match self.advance() {
+            Some(Token::Ident(s)) => match s.as_str() {
+                "start" => Ok(IrAlignment::Start),
+                "center" => Ok(IrAlignment::Center),
+                "end" => Ok(IrAlignment::End),
+                "stretch" => Ok(IrAlignment::Stretch),
+                other => Err(IrLoadError::Parse(format!(
+                    "malformed-placement-ir: `{label}` must be one of start, center, end, stretch, got `{other}`"
+                ))),
+            },
+            other => Err(IrLoadError::Parse(format!(
+                "malformed-placement-ir: `{label}` must be an alignment keyword, got {other:?}"
+            ))),
+        }
+    }
+
     fn parse_if_member(&mut self) -> Result<ControlFlowNode, IrLoadError> {
         self.expect_keyword("if")?;
         let condition = self.parse_expr()?;
@@ -2234,8 +2365,14 @@ impl<'a> Parser<'a> {
                     self.advance();
                     break;
                 }
+                Some(Token::Ident(s)) if s == "child" => {
+                    body.push(IrMember::Widget(self.parse_child_slot()?));
+                }
                 Some(Token::Ident(s)) if s == "node" => {
-                    body.push(IrMember::Widget(self.parse_node()?));
+                    body.push(IrMember::Widget(IrChildSlot {
+                        node: self.parse_node()?,
+                        slot_data: None,
+                    }));
                 }
                 Some(Token::Ident(s)) if s == "if" => {
                     body.push(IrMember::ControlFlow(self.parse_if_member()?));
@@ -2275,8 +2412,14 @@ impl<'a> Parser<'a> {
                     self.advance();
                     break;
                 }
+                Some(Token::Ident(s)) if s == "child" => {
+                    body.push(IrMember::Widget(self.parse_child_slot()?));
+                }
                 Some(Token::Ident(s)) if s == "node" => {
-                    body.push(IrMember::Widget(self.parse_node()?));
+                    body.push(IrMember::Widget(IrChildSlot {
+                        node: self.parse_node()?,
+                        slot_data: None,
+                    }));
                 }
                 Some(Token::Ident(s)) if s == "if" => {
                     body.push(IrMember::ControlFlow(self.parse_if_member()?));
@@ -2752,26 +2895,10 @@ fn build_node_with_loop_context(
 
     // Children: recurse and attach via the Phase 4 internal mutation API.
     //
-    // M3-Phase 5 T3 (R-B): Grid bypasses the generic child loop. A Grid's
-    // IR children are `Cell` wrappers — IR-only nodes that never
-    // materialise as a `WidgetNode` (DD-M3-P5-001), so feeding them to
-    // `build_node` / `construct_widget` would `UnknownWidget`. Instead each
-    // Cell's single content child is built and appended directly, in
-    // document order, so `WidgetNode.children` stays parallel to the
-    // `cell_placements` that `construct_widget` extracted from the same
-    // `node.children` in the same order (log.md T3 R-B Decision 2). The
-    // single-content-child invariant was enforced by `validate()`
-    // (DD-M3-P5-006); the `first()` guard is the defensive fallback.
     if node.widget_type == "Grid" {
-        for cell in node.widget_children() {
-            let content = cell.widget_children().next().ok_or_else(|| {
-                IrLoadError::Build(format!(
-                    "Grid `Cell` requires exactly one content child, got {}",
-                    cell.widget_children().count()
-                ))
-            })?;
+        for slot in node.widget_child_slots() {
             let content_widget = build_node_with_loop_context(
-                content,
+                &slot.node,
                 compositor,
                 renderer,
                 registry,
@@ -2813,14 +2940,19 @@ fn append_static_member(
     match member {
         IrMember::Widget(child) => {
             declared_slots.borrow_mut().push(DeclaredMemberSlot::Widget);
-            let child_widget =
-                build_node_with_loop_context(child, compositor, renderer, registry, loop_context)?;
+            let child_widget = build_node_with_loop_context(
+                &child.node,
+                compositor,
+                renderer,
+                registry,
+                loop_context,
+            )?;
             if parent.is_zstack() {
                 parent
                     .insert_child_with_zstack_placement(
                         parent.child_count(),
                         child_widget,
-                        extract_zstack_placement(child),
+                        zstack_placement_from_slot(child),
                     )
                     .map_err(|e| IrLoadError::Build(format!("insert_child failed: {e:?}")))?;
             } else {
@@ -2834,7 +2966,7 @@ fn append_static_member(
                 .first()
                 .ok_or_else(|| IrLoadError::Build("`if` control flow has no branch".into()))?;
             let body = match branch.body.first() {
-                Some(IrMember::Widget(node)) => node.clone(),
+                Some(IrMember::Widget(slot)) => slot.clone(),
                 _ => {
                     return Err(IrLoadError::Build(
                         "`if` body must contain one widget member".into(),
@@ -2882,7 +3014,7 @@ fn append_static_member(
                 .borrow_mut()
                 .push(DeclaredMemberSlot::ForLoop(Rc::clone(&state)));
             let body = match body.first() {
-                Some(IrMember::Widget(node)) => node,
+                Some(IrMember::Widget(slot)) => slot,
                 _ => {
                     return Err(IrLoadError::Build(
                         "`for` body must contain one widget member".into(),
@@ -2902,7 +3034,7 @@ fn append_static_member(
                     position,
                 };
                 let child_widget = build_node_with_loop_context(
-                    body,
+                    &body.node,
                     compositor,
                     renderer,
                     registry,
@@ -2914,7 +3046,7 @@ fn append_static_member(
                         .insert_child_with_zstack_placement(
                             insert_index,
                             child_widget,
-                            extract_zstack_placement(body),
+                            zstack_placement_from_slot(body),
                         )
                         .map_err(|e| IrLoadError::Build(format!("insert_child failed: {e:?}")))?;
                 } else {
@@ -3038,7 +3170,7 @@ fn mutate_conditional_subtree(
     parent_id: WidgetId,
     declared_member_index: usize,
     present: bool,
-    body: &IrNode,
+    body: &IrChildSlot,
     declared_slots: &Rc<RefCell<Vec<DeclaredMemberSlot>>>,
     registry: &Rc<SignalRegistry>,
 ) {
@@ -3071,7 +3203,7 @@ fn mutate_conditional_subtree(
         if present {
             let compositor = crate::get_compositor();
             let renderer = crate::get_text_renderer();
-            match build_node(body, compositor, renderer, registry) {
+            match build_node(&body.node, compositor, renderer, registry) {
                 Ok(child) => {
                     let result = insert_structural_child(
                         parent,
@@ -3107,7 +3239,7 @@ fn mutate_for_loop_subtree(
     parent_id: WidgetId,
     declared_member_index: usize,
     new_len: usize,
-    body: &IrNode,
+    body: &IrChildSlot,
     binder: &str,
     index_binder: &Option<String>,
     collection_name: &str,
@@ -3154,7 +3286,7 @@ fn mutate_for_loop_subtree(
                         position,
                     };
                     match build_node_with_loop_context(
-                        body,
+                        &body.node,
                         compositor,
                         renderer,
                         registry,
@@ -3314,8 +3446,8 @@ pub fn __disarm_structural_insert_fault_for_test() {
     FAIL_STRUCTURAL_INSERT_AT.with(|cell| cell.set(None));
 }
 
-fn zstack_placement_for_parent(parent: &WidgetNode, body: &IrNode) -> Option<ZStackPlacement> {
-    parent.is_zstack().then(|| extract_zstack_placement(body))
+fn zstack_placement_for_parent(parent: &WidgetNode, body: &IrChildSlot) -> Option<ZStackPlacement> {
+    parent.is_zstack().then(|| zstack_placement_from_slot(body))
 }
 
 #[cfg(test)]
@@ -3447,7 +3579,10 @@ fn construct_widget(
                     ));
                 }
             };
-            let cell_placements = node.widget_children().map(extract_cell_placement).collect();
+            let cell_placements = node
+                .widget_child_slots()
+                .map(grid_placement_from_slot)
+                .collect();
             WidgetNode::grid(compositor, columns, rows, cell_placements)
                 .map_err(|e| IrLoadError::Build(format!("grid: {e}")))
         }
@@ -3471,34 +3606,53 @@ fn to_layout_track_size(t: &TrackSize) -> LayoutTrackSize {
     }
 }
 
-/// Extract a `Cell` IR node's placement into the layout-engine
-/// `CellPlacement` (DD-M3-P5-003 / DD-M3-P5-005). Reads the standard
-/// `IrProp` entries (`row` / `column` Int; `row-span` / `column-span`
-/// Int; `h-align` / `v-align` Ident). Defaults match `wasamoc lower`'s
-/// placement-default Option A and the runtime `validate()` gate: `row` /
-/// `column` absent → `0`, `row-span` / `column-span` absent → `1`,
-/// alignment absent → `Stretch` (DD-M3-P5-005 stretch default). Negative
-/// / out-of-range values were already rejected by `validate()`; the
-/// `as u32` casts here are total over the validated accept set.
-fn extract_cell_placement(cell: &IrNode) -> CellPlacement {
-    CellPlacement {
-        row: extract_int_prop(&cell.props, "row").unwrap_or(0).max(0) as u32,
-        column: extract_int_prop(&cell.props, "column").unwrap_or(0).max(0) as u32,
-        row_span: extract_int_prop(&cell.props, "row-span")
-            .unwrap_or(1)
-            .max(1) as u32,
-        column_span: extract_int_prop(&cell.props, "column-span")
-            .unwrap_or(1)
-            .max(1) as u32,
-        h_align: extract_alignment_prop_or(&cell.props, "h-align", Alignment::Stretch),
-        v_align: extract_alignment_prop_or(&cell.props, "v-align", Alignment::Stretch),
+fn zstack_placement_from_slot(slot: &IrChildSlot) -> ZStackPlacement {
+    match &slot.slot_data {
+        Some(IrSlotData::ZStack { h_align, v_align }) => ZStackPlacement {
+            h_align: to_layout_alignment(*h_align),
+            v_align: to_layout_alignment(*v_align),
+        },
+        _ => ZStackPlacement {
+            h_align: Alignment::Center,
+            v_align: Alignment::Center,
+        },
     }
 }
 
-fn extract_zstack_placement(child: &IrNode) -> ZStackPlacement {
-    ZStackPlacement {
-        h_align: extract_alignment_prop_or(&child.props, "h-align", Alignment::Center),
-        v_align: extract_alignment_prop_or(&child.props, "v-align", Alignment::Center),
+fn grid_placement_from_slot(slot: &IrChildSlot) -> CellPlacement {
+    match &slot.slot_data {
+        Some(IrSlotData::Grid {
+            row,
+            column,
+            row_span,
+            column_span,
+            h_align,
+            v_align,
+        }) => CellPlacement {
+            row: *row,
+            column: *column,
+            row_span: *row_span,
+            column_span: *column_span,
+            h_align: to_layout_alignment(*h_align),
+            v_align: to_layout_alignment(*v_align),
+        },
+        _ => CellPlacement {
+            row: 0,
+            column: 0,
+            row_span: 1,
+            column_span: 1,
+            h_align: Alignment::Stretch,
+            v_align: Alignment::Stretch,
+        },
+    }
+}
+
+fn to_layout_alignment(alignment: IrAlignment) -> Alignment {
+    match alignment {
+        IrAlignment::Start => Alignment::Leading,
+        IrAlignment::Center => Alignment::Center,
+        IrAlignment::End => Alignment::Trailing,
+        IrAlignment::Stretch => Alignment::Stretch,
     }
 }
 
@@ -3510,21 +3664,21 @@ fn collect_static_zstack_child_placement_slots(
     let mut placements = Vec::new();
     for member in members {
         match member {
-            IrMember::Widget(child) => placements.push(extract_zstack_placement(child)),
+            IrMember::Widget(slot) => placements.push(zstack_placement_from_slot(slot)),
             IrMember::ControlFlow(ControlFlowNode::If { branches }) => {
                 let branch = branches
                     .first()
                     .ok_or_else(|| IrLoadError::Build("`if` control flow has no branch".into()))?;
                 if evaluate_static_condition(&branch.condition, registry)? {
                     let body = match branch.body.first() {
-                        Some(IrMember::Widget(node)) => node,
+                        Some(IrMember::Widget(slot)) => slot,
                         _ => {
                             return Err(IrLoadError::Build(
                                 "`if` body must contain one widget member".into(),
                             ));
                         }
                     };
-                    placements.push(extract_zstack_placement(body));
+                    placements.push(zstack_placement_from_slot(body));
                 }
             }
             IrMember::ControlFlow(ControlFlowNode::For {
@@ -3532,7 +3686,7 @@ fn collect_static_zstack_child_placement_slots(
             }) => {
                 let (_, _, live_children) = static_collection_cardinality(collection, registry)?;
                 let body = match body.first() {
-                    Some(IrMember::Widget(node)) => node,
+                    Some(IrMember::Widget(slot)) => slot,
                     _ => {
                         return Err(IrLoadError::Build(
                             "`for` body must contain one widget member".into(),
@@ -3540,34 +3694,12 @@ fn collect_static_zstack_child_placement_slots(
                     }
                 };
                 for _ in 0..live_children {
-                    placements.push(extract_zstack_placement(body));
+                    placements.push(zstack_placement_from_slot(body));
                 }
             }
         }
     }
     Ok(placements)
-}
-
-/// Map a `Cell` alignment `IrProp` (`h-align` / `v-align`) to the layout
-/// `Alignment`, defaulting to `Stretch` when absent (DD-M3-P5-005). The
-/// vocabulary (`start` / `center` / `end` / `stretch`) was validated by
-/// `validate()`; an unrecognised ident here falls back to `Stretch`
-/// rather than failing, since this runs after the validate gate.
-fn extract_alignment_prop_or(props: &[IrProp], name: &str, default: Alignment) -> Alignment {
-    let ident = props
-        .iter()
-        .find(|p| p.name == name)
-        .and_then(|p| match &p.value {
-            IrLiteral::Ident(id) => Some(id.as_str()),
-            _ => None,
-        });
-    match ident {
-        Some("start") => Alignment::Leading,
-        Some("center") => Alignment::Center,
-        Some("end") => Alignment::Trailing,
-        Some("stretch") => Alignment::Stretch,
-        _ => default,
-    }
 }
 
 // Widget catalog: `(widget_type, prop_name) → (PROP_* id, declared IrType)`.
@@ -3677,6 +3809,20 @@ fn has_binding(bindings: &[IrBinding], name: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn child_slot(node: IrNode) -> IrChildSlot {
+        IrChildSlot {
+            node,
+            slot_data: None,
+        }
+    }
+
+    fn zstack_slot(node: IrNode, h_align: IrAlignment, v_align: IrAlignment) -> IrChildSlot {
+        IrChildSlot {
+            node,
+            slot_data: Some(IrSlotData::ZStack { h_align, v_align }),
+        }
+    }
 
     // ── resolve_prop_key / binding dispatch (M3-Phase 1 T8 / DD-M3-P1-009) ──
     //
@@ -3941,37 +4087,35 @@ mod tests {
     fn zstack_static_placements_follow_materialized_member_order() {
         // Reducer logic pin only: after T5, production ZStack placement is
         // accumulated through append_static_member's per-child insert path.
-        fn text_with_align(h_align: &str, v_align: &str) -> IrNode {
-            IrNode {
-                widget_type: "Text".into(),
-                props: vec![
-                    IrProp {
-                        name: "h-align".into(),
-                        value: IrLiteral::Ident(h_align.into()),
-                    },
-                    IrProp {
-                        name: "v-align".into(),
-                        value: IrLiteral::Ident(v_align.into()),
-                    },
-                ],
-                bindings: vec![],
-                handlers: vec![],
-                children: vec![],
-                kind_payload: None,
-            }
+        fn text_with_align(h_align: IrAlignment, v_align: IrAlignment) -> IrChildSlot {
+            zstack_slot(
+                IrNode {
+                    widget_type: "Text".into(),
+                    props: vec![],
+                    bindings: vec![],
+                    handlers: vec![],
+                    children: vec![],
+                    kind_payload: None,
+                },
+                h_align,
+                v_align,
+            )
         }
 
         let mut registry = SignalRegistry::new();
         registry.bools.insert("open".into(), Signal::new(true));
         registry.bools.insert("closed".into(), Signal::new(false));
         let members = vec![
-            IrMember::Widget(text_with_align("start", "start")),
+            IrMember::Widget(text_with_align(IrAlignment::Start, IrAlignment::Start)),
             IrMember::ControlFlow(ControlFlowNode::If {
                 branches: vec![ControlFlowBranch {
                     condition: HandlerExpr::BoolPropRead {
                         path: "open".into(),
                     },
-                    body: vec![IrMember::Widget(text_with_align("end", "stretch"))],
+                    body: vec![IrMember::Widget(text_with_align(
+                        IrAlignment::End,
+                        IrAlignment::Stretch,
+                    ))],
                 }],
             }),
             IrMember::ControlFlow(ControlFlowNode::If {
@@ -3979,10 +4123,13 @@ mod tests {
                     condition: HandlerExpr::BoolPropRead {
                         path: "closed".into(),
                     },
-                    body: vec![IrMember::Widget(text_with_align("stretch", "end"))],
+                    body: vec![IrMember::Widget(text_with_align(
+                        IrAlignment::Stretch,
+                        IrAlignment::End,
+                    ))],
                 }],
             }),
-            IrMember::Widget(text_with_align("center", "center")),
+            IrMember::Widget(text_with_align(IrAlignment::Center, IrAlignment::Center)),
         ];
 
         let placements = collect_static_zstack_child_placement_slots(&members, &registry).unwrap();
@@ -4008,14 +4155,14 @@ mod tests {
                 path: "xs".into(),
                 elem: IrType::I32,
             },
-            body: vec![IrMember::Widget(IrNode {
+            body: vec![IrMember::Widget(child_slot(IrNode {
                 widget_type: "Text".into(),
                 props: vec![],
                 bindings: vec![],
                 handlers: vec![],
                 children: vec![],
                 kind_payload: None,
-            })],
+            }))],
         })];
 
         let placements = collect_static_zstack_child_placement_slots(&members, &registry).unwrap();
@@ -4064,7 +4211,7 @@ mod tests {
 
     fn child_widget<'a>(node: &'a IrNode, index: usize) -> &'a IrNode {
         match &node.children[index] {
-            IrMember::Widget(child) => child,
+            IrMember::Widget(slot) => &slot.node,
             other => panic!("expected widget child at {index}, got {other:?}"),
         }
     }
@@ -4818,7 +4965,7 @@ mod tests {
                 assert_eq!(branches[0].body.len(), 1);
                 assert_eq!(
                     match &branches[0].body[0] {
-                        IrMember::Widget(node) => node.widget_type.as_str(),
+                        IrMember::Widget(slot) => slot.node.widget_type.as_str(),
                         other => panic!("expected widget body, got {other:?}"),
                     },
                     "Text"
@@ -5086,7 +5233,7 @@ mod tests {
                 bindings: vec![],
                 handlers: vec![],
                 children: vec![
-                    IrMember::Widget(IrNode {
+                    IrMember::Widget(child_slot(IrNode {
                         widget_type: "Text".into(),
                         props: vec![IrProp {
                             name: "font".into(),
@@ -5104,8 +5251,8 @@ mod tests {
                         handlers: vec![],
                         children: vec![],
                         kind_payload: None,
-                    }),
-                    IrMember::Widget(IrNode {
+                    })),
+                    IrMember::Widget(child_slot(IrNode {
                         widget_type: "Button".into(),
                         props: vec![
                             IrProp {
@@ -5128,7 +5275,7 @@ mod tests {
                         }],
                         children: vec![],
                         kind_payload: None,
-                    }),
+                    })),
                 ],
                 kind_payload: None,
             },
@@ -5210,14 +5357,14 @@ mod tests {
         }
         for child in &n.children {
             match child {
-                IrMember::Widget(node) => render_node(out, node, depth + 1),
+                IrMember::Widget(slot) => render_child_slot(out, slot, depth + 1),
                 IrMember::ControlFlow(ControlFlowNode::If { branches }) => {
                     let i = "  ".repeat(depth + 1);
                     for branch in branches {
                         out.push_str(&format!("{}if {} {{\n", i, render_expr(&branch.condition)));
                         for body_member in &branch.body {
-                            if let IrMember::Widget(node) = body_member {
-                                render_node(out, node, depth + 2);
+                            if let IrMember::Widget(slot) = body_member {
+                                render_child_slot(out, slot, depth + 2);
                             }
                         }
                         out.push_str(&format!("{}}}\n", i));
@@ -5241,8 +5388,8 @@ mod tests {
                         None => out.push_str(&format!("{i}for {binder} in {collection_name} {{\n")),
                     }
                     for body_member in body {
-                        if let IrMember::Widget(node) = body_member {
-                            render_node(out, node, depth + 2);
+                        if let IrMember::Widget(slot) = body_member {
+                            render_child_slot(out, slot, depth + 2);
                         }
                     }
                     out.push_str(&format!("{}}}\n", i));
@@ -5250,6 +5397,48 @@ mod tests {
             }
         }
         out.push_str(&format!("{i}}}\n"));
+    }
+
+    fn render_child_slot(out: &mut String, slot: &IrChildSlot, depth: usize) {
+        let i = "    ".repeat(depth);
+        out.push_str(&format!("{i}child {{\n"));
+        if let Some(slot_data) = &slot.slot_data {
+            render_slot_data(out, slot_data, depth + 1);
+        }
+        render_node(out, &slot.node, depth + 1);
+        out.push_str(&format!("{i}}}\n"));
+    }
+
+    fn render_slot_data(out: &mut String, slot_data: &IrSlotData, depth: usize) {
+        let i = "    ".repeat(depth);
+        match slot_data {
+            IrSlotData::Grid {
+                row,
+                column,
+                row_span,
+                column_span,
+                h_align,
+                v_align,
+            } => out.push_str(&format!(
+                "{i}placement grid {{ row: {row}, column: {column}, row-span: {row_span}, column-span: {column_span}, h-align: {}, v-align: {} }}\n",
+                render_alignment(*h_align),
+                render_alignment(*v_align)
+            )),
+            IrSlotData::ZStack { h_align, v_align } => out.push_str(&format!(
+                "{i}placement zstack {{ h-align: {}, v-align: {} }}\n",
+                render_alignment(*h_align),
+                render_alignment(*v_align)
+            )),
+        }
+    }
+
+    fn render_alignment(alignment: IrAlignment) -> &'static str {
+        match alignment {
+            IrAlignment::Start => "start",
+            IrAlignment::Center => "center",
+            IrAlignment::End => "end",
+            IrAlignment::Stretch => "stretch",
+        }
     }
 
     fn render_lit(l: &IrLiteral) -> String {
@@ -6011,6 +6200,18 @@ mod tests {
         }
     }
 
+    fn assert_parse_err(src: &str, needle: &str) {
+        match parse_err(src) {
+            IrLoadError::Parse(msg) => {
+                assert!(
+                    msg.contains(needle),
+                    "parse message `{msg}` did not contain `{needle}`"
+                )
+            }
+            other => panic!("expected Parse error, got {other:?}"),
+        }
+    }
+
     // ── tracks parse (carrier c1) ───────────────────────────────────────
 
     #[test]
@@ -6022,7 +6223,7 @@ mod tests {
              node Grid {\n\
                tracks columns = 180 1* 2*\n\
                tracks rows = 1* 1*\n\
-               node Cell { prop row = 0 prop column = 0 node Text {} }\n\
+               child { placement grid { row: 0, column: 0 } node Text {} }\n\
              }\n}",
         );
         assert_eq!(c.root.widget_type, "Grid");
@@ -6055,7 +6256,7 @@ mod tests {
              node Grid {\n\
                tracks columns = *\n\
                tracks rows = *\n\
-               node Cell { prop row = 0 prop column = 0 node Text {} }\n\
+               child { placement grid { row: 0, column: 0 } node Text {} }\n\
              }\n}",
         );
         match c.root.kind_payload.as_ref().unwrap() {
@@ -6097,19 +6298,73 @@ mod tests {
         )
     }
 
+    fn grid_child(placement: &str) -> String {
+        format!("child {{ placement grid {{ {placement} }} node Text {{}} }}")
+    }
+
+    #[test]
+    fn child_slot_missing_node_rejected_at_parse() {
+        assert_parse_err(
+            &valid_grid_src("child { placement grid { row: 0, column: 0 } }"),
+            "child slot missing `node` block",
+        );
+    }
+
+    #[test]
+    fn child_slot_duplicate_node_rejected_at_parse() {
+        assert_parse_err(
+            &valid_grid_src("child { node Text {} node Text {} }"),
+            "duplicate `node` block in child slot",
+        );
+    }
+
+    #[test]
+    fn child_slot_duplicate_placement_rejected_at_parse() {
+        assert_parse_err(
+            &valid_grid_src(
+                "child { placement grid { row: 0, column: 0 } placement grid { row: 0, column: 0 } node Text {} }",
+            ),
+            "duplicate `placement` block in child slot",
+        );
+    }
+
+    #[test]
+    fn child_slot_unknown_placement_kind_rejected_at_parse() {
+        assert_parse_err(
+            &valid_grid_src("child { placement overlay {} node Text {} }"),
+            "unknown placement kind `overlay`",
+        );
+    }
+
+    #[test]
+    fn grid_slot_unknown_key_rejected_at_parse() {
+        assert_parse_err(
+            &valid_grid_src(&grid_child("row: 0, column: 0, layer: 1")),
+            "unknown grid placement key `layer`",
+        );
+    }
+
+    #[test]
+    fn grid_slot_duplicate_key_rejected_at_parse() {
+        assert_parse_err(
+            &valid_grid_src(&grid_child("row: 0, row: 1, column: 0")),
+            "duplicate grid placement key `row`",
+        );
+    }
+
     #[test]
     fn grid_positive_control_validates() {
-        // Fixed + weighted-star tracks, a spanning Cell and three
-        // single-cell Cells — all placements distinct, all in range.
+        // Fixed + weighted-star tracks, a spanning slot and three
+        // single-cell slots — all placements distinct, all in range.
         let c = parse_ok(
             ";wasamo-ir v0\ncomponent C inherits W {\n\
              node Grid {\n\
                tracks columns = 180 1* 2*\n\
                tracks rows = 1* 1*\n\
-               node Cell { prop row = 0 prop column = 0 prop column-span = 3 node Text {} }\n\
-               node Cell { prop row = 1 prop column = 0 node Text {} }\n\
-               node Cell { prop row = 1 prop column = 1 prop h-align = center node Text {} }\n\
-               node Cell { prop row = 1 prop column = 2 node Text {} }\n\
+               child { placement grid { row: 0, column: 0, column-span: 3 } node Text {} }\n\
+               child { placement grid { row: 1, column: 0 } node Text {} }\n\
+               child { placement grid { row: 1, column: 1, h-align: center } node Text {} }\n\
+               child { placement grid { row: 1, column: 2 } node Text {} }\n\
              }\n}",
         );
         assert_eq!(c.root.children.len(), 4);
@@ -6123,7 +6378,7 @@ mod tests {
             ";wasamo-ir v0\ncomponent C inherits W {\n\
              node Grid {\n\
                tracks rows = 1*\n\
-               node Cell { prop row = 0 prop column = 0 node Text {} }\n\
+               child { placement grid { row: 0, column: 0 } node Text {} }\n\
              }\n}",
             "at least one column track",
         );
@@ -6135,7 +6390,7 @@ mod tests {
             ";wasamo-ir v0\ncomponent C inherits W {\n\
              node Grid {\n\
                tracks columns = 1*\n\
-               node Cell { prop row = 0 prop column = 0 node Text {} }\n\
+               child { placement grid { row: 0, column: 0 } node Text {} }\n\
              }\n}",
             "at least one row track",
         );
@@ -6150,7 +6405,7 @@ mod tests {
              node Grid {\n\
                tracks columns = 0\n\
                tracks rows = 1*\n\
-               node Cell { prop row = 0 prop column = 0 node Text {} }\n\
+               child { placement grid { row: 0, column: 0 } node Text {} }\n\
              }\n}",
             "fixed track size must be a positive integer",
         );
@@ -6163,7 +6418,7 @@ mod tests {
              node Grid {\n\
                tracks columns = 1025*\n\
                tracks rows = 1*\n\
-               node Cell { prop row = 0 prop column = 0 node Text {} }\n\
+               child { placement grid { row: 0, column: 0 } node Text {} }\n\
              }\n}",
             "star weight must be in [1, 1024]",
         );
@@ -6174,16 +6429,16 @@ mod tests {
     #[test]
     fn grid_cell_column_out_of_range_rejected() {
         assert_validate_err(
-            &valid_grid_src("node Cell { prop row = 0 prop column = 2 node Text {} }"),
-            "`Cell.column` 2 is out of range [0, 2)",
+            &valid_grid_src(&grid_child("row: 0, column: 2")),
+            "`Grid` child placement `column` 2 is out of range [0, 2)",
         );
     }
 
     #[test]
     fn grid_cell_row_out_of_range_rejected() {
         assert_validate_err(
-            &valid_grid_src("node Cell { prop row = 5 prop column = 0 node Text {} }"),
-            "`Cell.row` 5 is out of range [0, 2)",
+            &valid_grid_src(&grid_child("row: 5, column: 0")),
+            "`Grid` child placement `row` 5 is out of range [0, 2)",
         );
     }
 
@@ -6191,11 +6446,11 @@ mod tests {
 
     #[test]
     fn grid_cell_zero_span_rejected() {
-        assert_validate_err(
+        assert_parse_err(
             &valid_grid_src(
-                "node Cell { prop row = 0 prop column = 0 prop column-span = 0 node Text {} }",
+                "child { placement grid { row: 0, column: 0, column-span: 0 } node Text {} }",
             ),
-            "`Cell.column-span` must be a positive integer",
+            "grid.column-span",
         );
     }
 
@@ -6203,27 +6458,27 @@ mod tests {
     fn grid_cell_span_exceeds_grid_rejected() {
         assert_validate_err(
             &valid_grid_src(
-                "node Cell { prop row = 0 prop column = 1 prop column-span = 2 node Text {} }",
+                "child { placement grid { row: 0, column: 1, column-span: 2 } node Text {} }",
             ),
             "column span exceeds the grid",
         );
     }
 
-    // ── Cell child-count ────────────────────────────────────────────────
+    // ── stale Cell textual IR ───────────────────────────────────────────
 
     #[test]
-    fn grid_cell_zero_content_children_rejected() {
+    fn grid_legacy_cell_zero_content_children_rejected_as_stale_ir() {
         assert_validate_err(
             &valid_grid_src("node Cell { prop row = 0 prop column = 0 }"),
-            "`Cell` requires exactly one content child, got 0",
+            "legacy-placement-ir-form",
         );
     }
 
     #[test]
-    fn grid_cell_two_content_children_rejected() {
+    fn grid_legacy_cell_two_content_children_rejected_as_stale_ir() {
         assert_validate_err(
             &valid_grid_src("node Cell { prop row = 0 prop column = 0 node Text {} node Text {} }"),
-            "`Cell` requires exactly one content child, got 2",
+            "legacy-placement-ir-form",
         );
     }
 
@@ -6233,10 +6488,10 @@ mod tests {
     fn grid_same_cell_conflict_rejected() {
         assert_validate_err(
             &valid_grid_src(
-                "node Cell { prop row = 0 prop column = 0 node Text {} }\n\
-                 node Cell { prop row = 0 prop column = 0 node Text {} }",
+                "child { placement grid { row: 0, column: 0 } node Text {} }\n\
+                 child { placement grid { row: 0, column: 0 } node Text {} }",
             ),
-            "overlaps an earlier Cell's rectangle",
+            "overlaps an earlier Grid child rectangle",
         );
     }
 
@@ -6246,25 +6501,23 @@ mod tests {
         // (0,1).
         assert_validate_err(
             &valid_grid_src(
-                "node Cell { prop row = 0 prop column = 0 prop column-span = 2 node Text {} }\n\
-                 node Cell { prop row = 0 prop column = 1 node Text {} }",
+                "child { placement grid { row: 0, column: 0, column-span: 2 } node Text {} }\n\
+                 child { placement grid { row: 0, column: 1 } node Text {} }",
             ),
-            "overlaps an earlier Cell's rectangle",
+            "overlaps an earlier Grid child rectangle",
         );
     }
 
     #[test]
     fn grid_multi_cell_omitted_placement_collides_at_origin() {
-        // Runtime validate() does not enforce the compile-time-only
-        // multi-Cell placement-presence rule; two Cells omitting `row` /
-        // `column` both default to (0, 0) and are caught by the overlap
-        // gate (DD-M3-P5-006 defense-in-depth).
+        // Two Grid child slots omitting explicit placement both default
+        // to (0, 0) and are caught by the overlap gate.
         assert_validate_err(
             &valid_grid_src(
-                "node Cell { node Text {} }\n\
-                 node Cell { node Text {} }",
+                "child { node Text {} }\n\
+                 child { node Text {} }",
             ),
-            "overlaps an earlier Cell's rectangle",
+            "overlaps an earlier Grid child rectangle",
         );
     }
 
@@ -6272,26 +6525,36 @@ mod tests {
 
     #[test]
     fn grid_cell_unknown_alignment_rejected() {
-        assert_validate_err(
+        assert_parse_err(
             &valid_grid_src(
-                "node Cell { prop row = 0 prop column = 0 prop h-align = middle node Text {} }",
+                "child { placement grid { row: 0, column: 0, h-align: middle } node Text {} }",
             ),
-            "`Cell.h-align` must be one of start, center, end, stretch",
+            "grid.h-align",
         );
     }
 
-    // ── non-Cell Grid child / Cell outside Grid ─────────────────────────
+    // ── legacy Cell outside Grid ────────────────────────────────────────
 
     #[test]
-    fn grid_non_cell_child_rejected() {
-        assert_validate_err(
+    fn grid_direct_child_without_placement_defaults_to_origin() {
+        let c = parse_ok(
             ";wasamo-ir v0\ncomponent C inherits W {\n\
              node Grid {\n\
                tracks columns = 1*\n\
                tracks rows = 1*\n\
                node Text {}\n\
              }\n}",
-            "children must be wrapped in `Cell`",
+        );
+        assert_eq!(c.root.children.len(), 1);
+    }
+
+    #[test]
+    fn grid_rejects_zstack_slot_data() {
+        assert_validate_err(
+            &valid_grid_src(
+                "child { placement zstack { h-align: center, v-align: center } node Text {} }",
+            ),
+            "`placement zstack` is not valid on a Grid child",
         );
     }
 
@@ -6386,14 +6649,14 @@ mod tests {
             ],
             bindings: vec![],
             handlers: vec![],
-            children: vec![IrMember::Widget(IrNode {
+            children: vec![IrMember::Widget(child_slot(IrNode {
                 widget_type: "Text".into(),
                 props: vec![],
                 bindings: vec![],
                 handlers: vec![],
                 children: vec![],
                 kind_payload: None,
-            })],
+            }))],
             kind_payload: Some(KindPayload::Grid {
                 columns: vec![TrackSize::Star(1)],
                 rows: vec![TrackSize::Star(1)],
@@ -6410,7 +6673,7 @@ mod tests {
                 props: vec![],
                 bindings: vec![],
                 handlers: vec![],
-                children: vec![IrMember::Widget(cell)],
+                children: vec![IrMember::Widget(child_slot(cell))],
                 kind_payload: Some(KindPayload::Grid {
                     columns: vec![TrackSize::Star(1)],
                     rows: vec![TrackSize::Star(1)],
@@ -6419,7 +6682,7 @@ mod tests {
         };
         match validate(&comp) {
             Err(IrLoadError::Validate(msg)) => {
-                assert!(msg.contains("only valid on a `Grid` node"), "got: {msg}")
+                assert!(msg.contains("legacy-placement-ir-form"), "got: {msg}")
             }
             other => panic!("expected Validate error, got {other:?}"),
         }
@@ -6433,11 +6696,51 @@ mod tests {
             ";wasamo-ir v0\ncomponent C inherits W {\n\
              node ZStack {\n\
                node Box { prop fill = #336699cc }\n\
-               node Text { prop h-align = end prop v-align = start prop text = \"caption\" }\n\
+               child { placement zstack { h-align: end, v-align: start } node Text { prop text = \"caption\" } }\n\
              }\n}",
         );
         assert_eq!(c.root.widget_type, "ZStack");
         assert_eq!(c.root.children.len(), 2);
+    }
+
+    #[test]
+    fn zstack_slot_unknown_key_rejected_at_parse() {
+        assert_parse_err(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             node ZStack { child { placement zstack { h-align: center, layer: 1 } node Text {} } }\n\
+             }",
+            "unknown zstack placement key `layer`",
+        );
+    }
+
+    #[test]
+    fn zstack_slot_duplicate_key_rejected_at_parse() {
+        assert_parse_err(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             node ZStack { child { placement zstack { h-align: center, h-align: end } node Text {} } }\n\
+             }",
+            "duplicate zstack placement key `h-align`",
+        );
+    }
+
+    #[test]
+    fn zstack_rejects_grid_slot_data() {
+        assert_validate_err(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             node ZStack { child { placement grid { row: 0, column: 0 } node Text {} } }\n\
+             }",
+            "`placement grid` is not valid on a ZStack child",
+        );
+    }
+
+    #[test]
+    fn zstack_legacy_bare_child_placement_rejected_as_stale_ir() {
+        assert_validate_err(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             node ZStack { node Text { prop h-align = end } }\n\
+             }",
+            "legacy-placement-ir-form",
+        );
     }
 
     #[test]
@@ -6542,7 +6845,7 @@ mod tests {
             ";wasamo-ir v0\ncomponent C inherits W {\n\
              node Grid { tracks columns = 1* tracks rows = 1* node Cell { node VStack {} if true { node Text {} } } }\n\
              }",
-            "put conditional members inside that content widget",
+            "legacy-placement-ir-form",
         );
     }
 
@@ -6659,7 +6962,7 @@ mod tests {
     fn zstack_child_zstack_accepts_placement_props() {
         let c = parse_ok(
             ";wasamo-ir v0\ncomponent C inherits W {\n\
-             node ZStack { node ZStack { prop h-align = stretch prop v-align = stretch node Text {} } }\n\
+             node ZStack { child { placement zstack { h-align: stretch, v-align: stretch } node ZStack { node Text {} } } }\n\
              }",
         );
         validate(&c).expect("ZStack direct-child placement applies even when the child is ZStack");
@@ -6795,10 +7098,10 @@ mod tests {
 
     #[test]
     fn zstack_child_unknown_alignment_rejected_at_validate() {
-        assert_validate_err(
+        assert_parse_err(
             ";wasamo-ir v0\ncomponent C inherits W {\n\
-             node ZStack { node Text { prop h-align = middle } }\n}",
-            "`Text.h-align` must be one of start, center, end, stretch",
+             node ZStack { child { placement zstack { h-align: middle } node Text {} } }\n}",
+            "zstack.h-align",
         );
     }
 
@@ -6806,8 +7109,8 @@ mod tests {
     fn placement_prop_outside_zstack_child_or_grid_cell_rejected_at_validate() {
         assert_validate_err(
             ";wasamo-ir v0\ncomponent C inherits W {\n\
-             node VStack { node Text { prop h-align = center } }\n}",
-            "valid only on a ZStack direct child or Grid `Cell`",
+             node VStack { child { placement zstack { h-align: center } node Text {} } }\n}",
+            "placement data is valid only on Grid or ZStack child slots",
         );
     }
 

@@ -317,6 +317,82 @@ Carry-forward ownership:
 - No owner-unknown unresolved point remains from T1. All open items are
   assigned above to T2, T3, T4, T5, T7, or phase-end.
 
+### T2 start gate — IR + textual-IR migration
+
+Carry-over check from prior tasks:
+
+- T1 left the following T2-owned carry-over items: the `IrChildSlot` /
+  `IrSlotData` schema migration; lower / emit / loader migration of every
+  `IrMember::Widget` call-site; canonical IR-B textual record parsing and
+  emitting; loader stale-form rejects for old `Cell` placement IR and old
+  bare ZStack placement props; and the trap-#1 call-site audit table at
+  close.
+- T1 also left Seam A as an explicit T2 -> T3 carry-forward: T2 may feed
+  the legacy runtime storage (`WidgetData::Grid.cell_placements` and
+  `WidgetNode.zstack_placement`) from parsed `slot_data`, but T3 owns
+  removing the adapter and deleting the parallel storage / layout mirror.
+- No owner-unknown item in T1 blocks T2 start. Items owned by T4/T5/T7
+  stay outside T2 unless implementation discovers a new dependency.
+
+Critical T2 responsibility re-cut:
+
+- T2 is the IR and textual-IR boundary task, not the runtime structural
+  migration. It must make `IrMember::Widget(IrChildSlot)` the only IR
+  widget-child shape, make `child { placement <kind> { ... } node ... }`
+  the only emitted textual-IR child shape, parse that shape, and reject
+  stale old-form textual IR with named loader diagnostics.
+- T2 keeps the existing authored surfaces working only as lowering input:
+  Grid `Cell` and ZStack bare `h-align` / `v-align` lower into
+  `slot_data`. It does not add the new `slot.*` author surface, checker
+  matrix, or `.ui` migration; those remain T4-owned.
+- T2's Seam A adapter must be obvious and removable: loader/building may
+  derive legacy Grid `cell_placements` and ZStack insertion placement
+  from `IrSlotData`, but no T2 code may claim the parallel-data drift
+  class is closed. T3 owns that structural close.
+- T2 should revise plan.md only where it sharpens this boundary. It must
+  not reopen DD-fixed outcomes: `slot.` author surface, PM-2, VS-1a
+  `SlotData`/`IrSlotData`, IR-B canonical textual skeleton, stale-form
+  reject + regenerate, and constant-per-instance placement.
+
+Selected traps and non-applicable reasons:
+
+| Trap | Classification | Reason |
+|---|---|---|
+| #1 semantic migration | Applies | T2 changes the IR widget-child schema from `IrMember::Widget(IrNode)` to `IrMember::Widget(IrChildSlot)` and adds `IrSlotData`; every traversal, constructor, emitter, parser, validator, and helper such as `widget_children()` must be classified. |
+| #2 structural side effects | Not applicable to T2 landing | T2 intentionally does not change runtime child storage or mutation primitives; it bridges `slot_data` back to the legacy runtime paths. T3 owns insert/remove/replace side-effect enumeration. |
+| #3 parallel data drift | Not applicable to T2 landing | T2 keeps `WidgetData::Grid.cell_placements` and the layout mirror alive behind Seam A. The remaining drift is a named T3 carry-forward, not a T2 close. |
+| #4 untested authored branch | Applies narrowly | T2 adds loader textual-IR parse/reject branches: canonical `child` records, invalid placement metadata, invalid placement kind for parent, and stale old-form placement IR. Direct firing tests are required. |
+| #5 carry-forward | Applies | Seam A and any call-site deliberately classified as placement-insensitive must be recorded with downstream owner and close condition. |
+| #6 deterministic failure disposition | Conditional | Applies only if an unexpected recurring failure appears during migration or tests; record rerun history and root-cause/disposition before close. |
+| #7 GUI positive control | Not applicable | T2 has no GUI-render deliverable; GUI evidence and positive controls are T5/T6. |
+
+Review lane:
+
+- **Full independent review** because T2 is an IR / schema migration.
+  The full review must include the trap-#4 branch/test-focused check for
+  the new loader reject / diagnostic branches.
+
+Planned proof obligations before implementation:
+
+| Branch / behavior / invariant hypothesis | Category | T2 proof obligation |
+|---|---|---|
+| `IrMember::Widget` carries an `IrChildSlot` wrapper and no constructor / matcher remains on the tuple-node shape. | Semantic migration | `rg` / `git diff` call-site audit over `IrMember::Widget`, `IrChildSlot`, `IrSlotData`, and `widget_children()`; workspace build green. |
+| Existing Grid `Cell` authoring lowers to a Grid `IrSlotData` record and no `Cell` node is emitted in canonical textual IR. | Semantic / IR-B emit | Lower / emit tests that fire the Grid path; output contains `child {` + `placement grid` and excludes `node Cell`. |
+| Existing ZStack bare placement authoring lowers to a ZStack `IrSlotData` record and placement props no longer remain on the child node in canonical textual IR. | Semantic / IR-B emit | Lower / emit tests that fire the ZStack path; output contains `placement zstack` and excludes `prop h-align` / `prop v-align` for placement. |
+| Runtime textual parser accepts the canonical child-slot record for Grid and ZStack. | Parser / semantic branch | Direct parser tests for `placement grid` and `placement zstack`, including defaulted placement when `placement` is omitted. |
+| Loader rejects stale old-form placement IR instead of silently slot-ising it. | Reject / diagnostic | Direct parser/validate tests for `node Cell { prop row ... }` under Grid and child `prop h-align` / `prop v-align` under ZStack; diagnostic names `legacy-placement-ir-form`. |
+| Loader rejects malformed or parent-incompatible placement metadata. | Reject / diagnostic | Direct tests for bad placement kind/key/value or placement kind under a non-admitting parent; each branch is named in the close map. |
+| Seam A preserves runtime behaviour while leaving drift closure to T3. | Carry-forward / observable invariant | Build-path code derives legacy Grid `cell_placements` and ZStack insertion placement from `IrSlotData`; close artifact names T3 owner for adapter removal and parallel-vector deletion. |
+
+Known carry-forward candidates at T2 start:
+
+| Candidate | Owner task | Scope / impact | Close condition |
+|---|---|---|---|
+| Seam A adapter removal | T3 | Loader/build path still converts IR `slot_data` into legacy runtime placement storage; leaving it unassigned would make Phase 7b look closed while parallel drift remains. | T3 removes adapter and feeds runtime child-slot records directly. |
+| Runtime/layout child-slot records and parallel-vector deletion | T3 | `WidgetData::Grid.cell_placements`, `LayoutNode.cell_placements`, `WidgetNode.zstack_placement`, layout arrange reads, and mutation side effects remain structurally old. | T3 trap-#1/#2/#3 artifacts and green integration/regression tests. |
+| New `slot.*` author surface and `.ui` migration | T4 | T2 continues to accept old author input as lowering input; the public surface is not yet flipped. | T4 parser/check/lower matrix, `.ui` sweep, and branch/test-focused review. |
+| `docs/architecture.md` §6.7.9 landed IR spelling sync | T7 | T2 may land `IrChildSlot`, diverging from design-draft examples that used a struct variant sketch. | T7 Moment 2 docs sync or explicit disposition if T2 lands a different spelling. |
+
 ## CI / verification log
 
 _(append build / test / integration / CI-run evidence and the per-task
@@ -331,3 +407,72 @@ firing-test names, trap-#7 GUI evidence pointers.)_
 | Throwaway `cargo build --workspace` after `IrMember::Widget { node, slot_data }` | Failed as intended | First stopped at `wasamo-ir/src/lib.rs:225` (`widget_children()`); after temporarily updating that helper, downstream errors named wasamoc emit/lower, runtime loader traversal/parser/build sites, and runtime `zstack_placement` storage sites. Recorded above under "T1 compiler-verification results." |
 | `git restore --source=HEAD -- wasamo-ir/src/lib.rs wasamo-runtime/src/widget.rs` | Reverted throwaway source edits | Required escalation because sandbox blocked `.git/index.lock`; target was limited to the two spike-touched source files. |
 | `cargo build --workspace` after revert | Green | Workspace returned to buildable state; only `process/milestone-3/phase-7b/implementation/plan.md` and `log.md` remain modified. |
+
+### T2 verification
+
+| Command / evidence | Result | Notes |
+|---|---|---|
+| `cargo fmt --all` | Green | Formatting completed after the final test additions. |
+| `cargo test -p wasamo-runtime --lib` | Green | 414 passed, 0 failed. This directly includes the new loader parser / validation branch tests. |
+| `cargo test --workspace` | Green | Workspace tests passed, including `wasamo-ir` 24 tests, `wasamo-runtime` 414 tests, `wasamoc` 356 tests, examples, integration tests, and doctests. Cargo still emits the pre-existing warning that package `wasamo` provides no linkable target. |
+| `git diff --check` | Green | No whitespace errors; output contains only Git's CRLF working-copy warnings. |
+
+T2 trap-#1 call-site audit:
+
+| Site family | Source query / diff cue | T2 disposition |
+|---|---|---|
+| IR carrier and helpers | `rg -n "pub enum IrSlotData|pub struct IrChildSlot|Widget\\(IrChildSlot\\)|widget_child_slots|widget_children" wasamo-ir\src\lib.rs` -> `IrSlotData` at line 164, `IrChildSlot` at 180, `Widget(IrChildSlot)` at 202, `widget_children()` at 244, `widget_child_slots()` at 251. | Closed in T2. `widget_children()` remains placement-insensitive by returning `slot.node`; `widget_child_slots()` is the placement-sensitive helper. |
+| IR constructors / matchers | `rg -n "IrMember::Widget\\(" wasamo-ir\src wasamoc\src wasamo-runtime\src wasamo-runtime\tests` shows every production matcher/constructor uses a slot binding, `child_slot(...)`, `parse_child_slot()`, or an explicit `IrChildSlot`. | Closed in T2 except runtime storage, which is explicitly Seam A / T3. |
+| wasamoc lower | `rg -n "fn (lower_grid_cell_slot|lower_zstack_child_slot)|IrSlotData::(Grid|ZStack)|grid_cell_lowers_to_child_slot_with_grid_slot_data|zstack_lowers_child_placement_to_slot_data" wasamoc\src\lower.rs` -> Grid slot lower at 305/340; ZStack slot lower at 351/374; direct tests at 1252 and 1307. | Closed in T2 for old author surfaces lowering to slot data. T4 owns the new `slot.*` author surface. |
+| wasamoc emit | `rg -n "fn emit_child_slot|fn emit_slot_data|placement grid|placement zstack|grid_cell_emitted_as_child_slot_with_grid_placement|zstack_emitted_as_node_with_direct_children_in_order" wasamoc\src\emit.rs` -> emitter helpers at 128/138; canonical placement strings at 148/158; direct tests at 706 and 731. | Closed in T2. The emitter canonicalizes widget children as `child { ... node ... }`. |
+| runtime parser / validator branches | `rg -n "fn parse_child_slot|fn parse_slot_data|fn parse_grid_slot_data|fn parse_zstack_slot_data|legacy-placement-ir-form|invalid-placement-ir|malformed-placement-ir|child_slot_|grid_slot_|zstack_slot_|grid_legacy_cell|zstack_legacy_bare|grid_rejects_zstack|zstack_rejects_grid|placement_prop_outside" wasamo-runtime\src\ir_loader.rs` -> parser helpers at 2188, 2232, 2245, 2292; named diagnostics at 1025/1029/1032/1157/2203-2352; tests at 6306-6552, 6707-6742, and 7109. | Closed in T2 for canonical parser, stale-form rejects, and parent-compatible placement validation. |
+| runtime Seam A adapter | `rg -n "grid_placement_from_slot|zstack_placement_from_slot|zstack_placement_for_parent|widget_child_slots\\(\\)|slot\\.node|cell_placements" wasamo-runtime\src\ir_loader.rs` -> build derives `cell_placements` from child slots at 3582-3586; ZStack placement adapters at 3449 and 3609; Grid adapter at 3622. | Intentionally open as Seam A. T3 owns removing these adapters and deleting runtime/layout parallel placement storage. |
+
+T2 close gate — implemented-branch test map:
+
+| Implemented branch / behavior | Category | Source query / diff cue | Direct test or owner |
+|---|---|---|---|
+| `IrMember::Widget` now carries `IrChildSlot`, and `IrSlotData` is the IR carrier for parent-interpreted placement. | Semantic migration | `rg -n "pub enum IrSlotData|pub struct IrChildSlot|Widget\\(IrChildSlot\\)" wasamo-ir\src\lib.rs` | `wasamo_ir::tests::child_slot_carries_optional_slot_data` |
+| Placement-insensitive IR traversal still sees widget nodes through `widget_children()`, while placement-sensitive traversal uses `widget_child_slots()`. | Semantic migration | `rg -n "widget_children|widget_child_slots" wasamo-ir\src\lib.rs` | `wasamo_ir::tests::widget_children_excludes_for_body_widgets` plus compile-forced call-site migration. |
+| Existing Grid `Cell` authoring lowers to `IrSlotData::Grid` on the child slot. | Semantic branch | `rg -n "lower_grid_cell_slot|IrSlotData::Grid|grid_cell_lowers_to_child_slot_with_grid_slot_data" wasamoc\src\lower.rs` | `wasamoc::lower::tests::grid_cell_lowers_to_child_slot_with_grid_slot_data` |
+| Existing ZStack bare `h-align` / `v-align` authoring lowers to `IrSlotData::ZStack` and is stripped from child props. | Semantic branch | `rg -n "lower_zstack_child_slot|IrSlotData::ZStack|zstack_lowers_child_placement_to_slot_data" wasamoc\src\lower.rs` | `wasamoc::lower::tests::zstack_lowers_child_placement_to_slot_data` |
+| Grid textual IR emission canonicalizes child placement as `child { placement grid ... node ... }` and no longer emits `node Cell`. | Semantic / textual IR | `rg -n "emit_child_slot|emit_slot_data|placement grid|grid_cell_emitted_as_child_slot_with_grid_placement" wasamoc\src\emit.rs` | `wasamoc::emit::tests::grid_cell_emitted_as_child_slot_with_grid_placement` |
+| ZStack textual IR emission canonicalizes child placement as `placement zstack` and no longer emits bare placement props on the child node. | Semantic / textual IR | `rg -n "placement zstack|zstack_emitted_as_node_with_direct_children_in_order" wasamoc\src\emit.rs` | `wasamoc::emit::tests::zstack_emitted_as_node_with_direct_children_in_order` |
+| Parser accepts canonical child slots and rejects malformed child-slot shape: missing node, duplicate node, duplicate placement, unknown placement kind. | Reject / diagnostic | `rg -n "fn parse_child_slot|fn parse_slot_data|malformed-placement-ir|child_slot_" wasamo-runtime\src\ir_loader.rs` | `child_slot_missing_node_rejected_at_parse`; `child_slot_duplicate_node_rejected_at_parse`; `child_slot_duplicate_placement_rejected_at_parse`; `child_slot_unknown_placement_kind_rejected_at_parse` |
+| Parser rejects malformed Grid placement payload: unknown key, duplicate key, non-positive span, unknown alignment. | Reject / diagnostic | `rg -n "fn parse_grid_slot_data|expect_positive_u32|expect_alignment|grid_slot_|grid_cell_zero_span|grid_cell_unknown_alignment" wasamo-runtime\src\ir_loader.rs` | `grid_slot_unknown_key_rejected_at_parse`; `grid_slot_duplicate_key_rejected_at_parse`; `grid_cell_zero_span_rejected`; `grid_cell_unknown_alignment_rejected` |
+| Parser rejects malformed ZStack placement payload: unknown key, duplicate key, unknown alignment. | Reject / diagnostic | `rg -n "fn parse_zstack_slot_data|zstack_slot_|zstack_child_unknown_alignment" wasamo-runtime\src\ir_loader.rs` | `zstack_slot_unknown_key_rejected_at_parse`; `zstack_slot_duplicate_key_rejected_at_parse`; `zstack_child_unknown_alignment_rejected_at_validate` |
+| Runtime validation reads Grid placement from `IrSlotData::Grid` and preserves range/span/overlap/default semantics. | Semantic / invariant | `rg -n "validate_grid_child_slot|grid_positive_control|grid_cell_.*rejected|grid_same_cell|grid_overlapping|grid_multi_cell|grid_direct_child_without_placement" wasamo-runtime\src\ir_loader.rs` | `grid_positive_control_validates`; `grid_cell_column_out_of_range_rejected`; `grid_cell_row_out_of_range_rejected`; `grid_cell_span_exceeds_grid_rejected`; `grid_same_cell_conflict_rejected`; `grid_overlapping_span_conflict_rejected`; `grid_multi_cell_omitted_placement_collides_at_origin`; `grid_direct_child_without_placement_defaults_to_origin` |
+| Runtime validation rejects stale old-form Grid placement IR (`node Cell ...`) with the named stale-form diagnostic. | Reject / diagnostic | `rg -n "legacy-placement-ir-form|grid_legacy_cell|validate_rejects_cell_with_kind_payload" wasamo-runtime\src\ir_loader.rs` | `grid_legacy_cell_zero_content_children_rejected_as_stale_ir`; `grid_legacy_cell_two_content_children_rejected_as_stale_ir`; `validate_rejects_cell_with_kind_payload` |
+| Runtime validation reads ZStack placement from `IrSlotData::ZStack` and rejects stale old-form bare placement props on a child node. | Semantic / reject | `rg -n "zstack_positive_control|zstack_legacy_bare|zstack_rejects_grid|zstack_child_zstack_accepts_placement_props" wasamo-runtime\src\ir_loader.rs` | `zstack_positive_control_validates_direct_children`; `zstack_child_zstack_accepts_placement_props`; `zstack_rejects_grid_slot_data`; `zstack_legacy_bare_child_placement_rejected_as_stale_ir` |
+| Runtime validation rejects placement metadata under a non-admitting parent or with the wrong placement kind for Grid/ZStack. | Reject / diagnostic | `rg -n "invalid-placement-ir|grid_rejects_zstack|zstack_rejects_grid|placement_prop_outside" wasamo-runtime\src\ir_loader.rs` | `grid_rejects_zstack_slot_data`; `zstack_rejects_grid_slot_data`; `placement_prop_outside_zstack_child_or_grid_cell_rejected_at_validate` |
+| Seam A derives legacy runtime Grid / ZStack placement storage from `IrSlotData` while preserving existing runtime behavior. | Transitional semantic bridge | `rg -n "grid_placement_from_slot|zstack_placement_from_slot|zstack_placement_for_parent|cell_placements" wasamo-runtime\src\ir_loader.rs`; `rg -n "#\\[test\\]|fn .*grid|zstack|iteration|slot|placement" wasamo-runtime\tests\grid_layout_integration.rs wasamo-runtime\tests\zstack_layout_integration.rs wasamo-runtime\tests\iteration_mutation_integration.rs` | Existing integration tests in `grid_layout_integration.rs`, `zstack_layout_integration.rs`, and `iteration_mutation_integration.rs`; T3 owns deleting the adapter. |
+| New `slot.*` author surface is not implemented in T2. | Author surface | `rg -n "parse_property_bind|PropertyBind|h-align|v-align|Cell" wasamoc\src` remains the old author-surface seam. | Owner task = T4; scope = parser/check/lower/fixtures; impact = DD author surface not yet exposed; close condition = T4 branch/test matrix and `.ui` sweep. |
+| Runtime/layout child-slot records and parallel placement vector deletion are not implemented in T2. | Structural / parallel-data | `rg -n "cell_placements|zstack_placement|LayoutNode::grid|arrange_grid|build_layout_tree" wasamo-runtime\src` remains the T3 hotspot set from T1. | Owner task = T3; scope = runtime `ChildSlot`, layout child-slot records, mutation helpers; impact = drift class remains behind Seam A; close condition = T3 trap-#1/#2/#3 close artifacts and tests. |
+| GUI visual proof for the author-facing placement change is not implemented in T2. | GUI evidence | T2 changes IR/textual IR only and does not launch GUI hosts. | Owner task = T5; scope = human-visible behavior after T4/T5; impact = no screenshot evidence yet; close condition = launch + screenshot + positive-control analysis. |
+| Normative docs sync is not implemented in T2. | Docs | `git diff --name-only` lists no files under `docs/`. | Owner task = T7; scope = `docs/architecture.md` §6.7.9 and related landed spelling; impact = design draft may lag landed `IrChildSlot`; close condition = T7 docs sync or explicit disposition. |
+
+T2 close gate — behavior / invariant carry scan:
+
+| Behavior / invariant | Closed in T2? | Owner / scope / impact / close condition |
+|---|---|---|
+| Canonical emitted textual IR uses `child { placement <kind> ... node ... }` for widget children with optional parent-interpreted slot data. | Closed | Closed by wasamoc emit tests and runtime parser tests listed above. |
+| Placement-free legacy direct `node` children still parse as `IrChildSlot { slot_data: None }`; under Grid, omission defaults to origin / span 1 / stretch. | Closed in T2 as a transitional compatibility behavior | Scope = parser lenience for placement-free children only; stale placement forms still reject. Direct tests: `grid_direct_child_without_placement_defaults_to_origin`, `grid_multi_cell_omitted_placement_collides_at_origin`, and existing ZStack direct-child positive control. |
+| Stale old-form placement textual IR is rejected with `legacy-placement-ir-form` rather than normalized. | Closed | Closed by stale Grid `Cell` and stale ZStack bare-child placement tests. |
+| Runtime storage still has parallel placement data behind Seam A. | Not closed | Owner task = T3; scope = `WidgetData::Grid.cell_placements`, `WidgetNode.zstack_placement`, layout mirror, insertion / removal / replacement side effects; impact = parallel-data drift risk remains; close condition = T3 removes adapters and records structural side-effect / drift audit. |
+| New `slot.*` author syntax and checker diagnostics are not exposed. | Not closed | Owner task = T4; scope = parser/check/lower/fixtures; impact = users still author old `Cell` / bare ZStack placement until T4; close condition = T4 direct branch tests and fixture migration. |
+| Docs may still describe the pre-T2 sketch rather than the landed `IrChildSlot` textual / memory shape. | Not closed | Owner task = T7; scope = architecture / DSL / ABI sync if required; impact = reference docs lag implementation; close condition = T7 docs sync or explicit no-change record. |
+| GUI-visible placement behavior was not re-proven by screenshot in T2. | Not closed | Owner task = T5; scope = launch + screenshot + positive control after author surface migration; impact = T2 has only logic/integration evidence; close condition = T5 GUI evidence artifact. |
+
+T2 carry-forward ownership:
+
+| Carry-forward | Owner task | Scope / impact | Close condition |
+|---|---|---|---|
+| Remove Seam A and make runtime/layout child slots the placement carrier. | T3 | Runtime and layout still mirror placement into legacy storage; drift remains possible if later mutation paths are missed. | T3 deletes legacy vectors / fields or proves replacement, updates mutation side-effect enumeration, and passes integration tests. |
+| Expose the new direct `slot.*` author surface and reject old author placement forms where required by DD. | T4 | T2 only migrates IR/textual IR and keeps old `.ui` inputs lowering for compatibility. | T4 parser/check/lower matrix and fixture sweep are complete. |
+| Produce GUI positive-control evidence for the author-facing behavior. | T5 | T2 has no GUI deliverable. | T5 launch + screenshot + assistant analysis shows the intended screen and a positive control. |
+| Sync normative/reference docs with the landed IR/textual shape. | T7 | T2 changed implementation shape; docs were intentionally not edited. | T7 updates or explicitly disposes architecture / DSL references. |
+
+No owner-unknown unresolved point remains from T2. Deterministic-failure
+trap #6 did not trigger: after final test additions, `cargo test -p
+wasamo-runtime --lib` and `cargo test --workspace` both completed green
+without rerun-only failures.
