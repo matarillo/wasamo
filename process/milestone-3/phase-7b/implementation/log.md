@@ -487,3 +487,175 @@ No owner-unknown unresolved point remains from T2. Deterministic-failure
 trap #6 did not trigger: after final test additions, `cargo test -p
 wasamo-runtime --lib` and `cargo test --workspace` both completed green
 without rerun-only failures.
+
+### T3 start gate — runtime `SlotData` storage migration
+
+Carry-over check:
+
+- T2 left the Seam A adapter as explicit T3-owned carry-over:
+  `wasamo-runtime/src/ir_loader.rs` still converts `IrSlotData` into
+  legacy runtime placement storage via `grid_placement_from_slot`,
+  `zstack_placement_from_slot`, `zstack_placement_for_parent`, and
+  `insert_child_with_zstack_placement`.
+- Runtime storage remains split: `WidgetNode.children` stores bare
+  children, `WidgetNode.zstack_placement` stores a ZStack parent-owned
+  child-slot fact on the child node, and `WidgetData::Grid.cell_placements`
+  stores Grid placement in a parallel vector.
+- Layout storage remains split: `LayoutNode.children` stores bare
+  children, `LayoutNode.zstack_placement` stores ZStack child placement on
+  the child node, and `LayoutNode.cell_placements` is a second Grid
+  parallel vector consumed by `arrange_grid`.
+- T2 also carried forward T4/T5/T7 items (`slot.*` author surface, GUI
+  evidence, docs sync), but none blocks T3 as long as T3 does not expose a
+  new author syntax or edit normative docs.
+
+Critical T3 responsibility re-cut:
+
+- T3 is a runtime/layout structural migration, not an IR parser or
+  author-surface task. T2 already made textual IR canonical; T3 consumes
+  the existing `IrChildSlot.slot_data` and removes the runtime Seam A
+  adapter.
+- T3's central responsibility is to make the runtime and layout child
+  lists carry an explicit child-slot record with `SlotData`, so placement
+  moves with the child through insert / remove / replace and through
+  layout-tree construction.
+- T3 must delete both Grid parallel vectors (`WidgetData::Grid.cell_placements`
+  and `LayoutNode.cell_placements`) and the old ZStack child field
+  (`WidgetNode.zstack_placement` / `LayoutNode.zstack_placement`). A rename
+  that leaves placement on the child widget/node rather than the child slot
+  would not close IM-4.
+- T3 may add Windows-runtime integration coverage for the new storage
+  paths, but pure unit tests remain appropriate only for extracted or
+  mirror logic that has no Win32/WinRT dependency.
+
+Selected traps and non-applicable reasons:
+
+| Trap | Classification | Reason |
+|---|---|---|
+| #1 semantic migration | Applies | T3 changes the runtime/layout carrier shape for child placement: `WidgetNode.children` and `LayoutNode.children` become child-slot records; every traversal, constructor, layout read, sync, dispose, mutation, and loader insertion site must be classified. |
+| #2 structural side effects | Applies | T3 changes tree mutation primitives. Insert / remove / replace must preserve Visual sibling order, layout invalidation callers, registry/effect disposal ownership, attached flags, and placement metadata riding on the slot. |
+| #3 parallel data drift | Applies | T3 deletes the drift class by removing `WidgetData::Grid.cell_placements` and `LayoutNode.cell_placements`; the close artifact must independently audit each hotspot and prove no mutated path still carries placement in a parallel vector. |
+| #4 untested authored branch | Not applicable | T3 does not add parser/checker authored-surface branches or new named diagnostics; T4 owns `slot.*` accept/reject branches. If T3 introduces a new runtime reject branch unexpectedly, the close gate must add a direct firing test and upgrade this classification. |
+| #5 carry-forward | Applies | T3 must carry forward any runtime/layout invariant that T4/T5/T7 could trip, especially the absence of Grid structural mutation paths and the requirement that new author forms lower into runtime `SlotData` rather than legacy adapters. |
+| #6 deterministic failure disposition | Conditional | Applies only if recurring or retry-sensitive failures appear while running runtime integration / workspace tests. Any such failure must get rerun history and disposition before close. |
+| #7 GUI positive control | Not applicable | T3 has no GUI-render evidence deliverable. T5 owns launch + screenshot + positive-control analysis after T4 exposes the author surface. |
+
+Review lane:
+
+- **Full independent review** because T3 is a runtime structural change and
+  the close artifacts include trap #1/#2/#3 structural migration proof.
+
+Planned proof obligations before implementation:
+
+| Branch / behavior / invariant hypothesis | Category | T3 proof obligation |
+|---|---|---|
+| Runtime child storage is `ChildSlot { node, slot_data }`, not a child widget field. | Semantic migration / invariant | `rg` call-site table over `WidgetNode.children`, `zstack_placement`, `SlotData`, insert/remove/replace, dispose, sync, and layout construction; direct tests or integration evidence for mutation paths. |
+| Grid placement has no runtime parallel vector. | Parallel-data / invariant | `rg` / diff cue proving `WidgetData::Grid.cell_placements` is deleted and Grid insertion converts each `IrChildSlot` to runtime `SlotData::Grid` on the child slot. |
+| Layout placement has no mirror parallel vector. | Parallel-data / invariant | `rg` / diff cue proving `LayoutNode.cell_placements`, `LayoutNode::grid(..., cell_placements)`, and `arrange_grid`'s `children.zip(cell_placements)` are migrated to layout child slots. |
+| ZStack placement no longer lives on child nodes. | Semantic migration / invariant | `rg` / diff cue proving `WidgetNode.zstack_placement` and `LayoutNode.zstack_placement` are deleted; arrange reads `SlotData::ZStack` from child slots and defaults omitted placement to center. |
+| Insert / remove / replace keep placement tied to the slot while preserving existing side effects. | Structural side effects | Side-effect enumeration at close plus direct integration or justified pure mirror coverage for insert, remove, and replace; removed/detached returned subtrees carry no slot metadata. |
+| Conditional / for-generated ZStack children carry `SlotData` through staging -> commit. | Semantic / structural invariant | Existing or new integration tests that mutate generated children under ZStack and observe placement/order/invalidation; no Grid mutation path is introduced. |
+| Placement-free parents normalize child slots to `None`. | Semantic invariant | Direct test or audited call site showing generic insertion under non-placement parents does not retain stale slot data. |
+
+Known carry-forward candidates at T3 start:
+
+| Candidate | Owner task | Scope / impact | Close condition |
+|---|---|---|---|
+| New `slot.*` author surface and in-repo `.ui` migration | T4 | T3 consumes IR slot data only; users still author old ZStack bare placement / Grid `Cell` until T4. | T4 parser/check/lower matrix, fixture sweep, and branch/test-focused review. |
+| GUI positive-control evidence | T5 | T3 may prove runtime/layout storage by tests but does not prove visible author-facing placement after `slot.*`. | T5 launch + screenshot + assistant analysis with positive controls. |
+| Normative/reference docs sync for landed runtime/layout shape | T7 | T3 may change the precise implementation shape that `docs/architecture.md` must describe at Moment 2. | T7 docs sync or explicit disposition. |
+| Grid structural mutation paths remain out of scope | Future phase / T7 ledger | T3 migrates storage but does not add direct `for` / `if` of Grid cells; future Grid mutation work must build on child-slot storage and re-run side-effect gates. | T7 candidate ledger / phase-end handoff records the trigger and close condition. |
+
+### T3 verification
+
+| Command / evidence | Result | Notes |
+|---|---|---|
+| `cargo test -p wasamo-runtime --lib` after the first migration pass | Failed, compile-forced | The errors named the remaining unmigrated layout test constructors / pushes and the old widget pure-mirror helper imports. Disposition: introduced `ChildSlots` test-compatible wrapper, updated pure mirror tests, and converted Grid/ZStack layout tests to slot-carried placement helpers. |
+| `cargo test -p wasamo-runtime --lib` after fixing compile-forced sites | Green | 417 passed, 0 failed. |
+| `cargo test -p wasamo-runtime --test zstack_layout_integration` after adding the replace-child integration | Green | 3 passed, including `zstack_replace_child_preserves_child_slot_placement`. |
+| `cargo test -p wasamo-runtime` | Green | Runtime unit + Windows integration tests passed. Includes Grid, ZStack, conditional, and iteration mutation integration coverage. |
+| `cargo fmt --all -- --check` | Green | Formatting check passed. |
+| `cargo test --workspace` | Green | Workspace tests passed, including `wasamo-ir` 24 tests, `wasamo-runtime` 417 lib tests plus integrations, `wasamoc` 356 tests, examples, integration tests, and doctests. Cargo still emits the pre-existing warning that package `wasamo` provides no linkable target. |
+| `git diff --check` | Green | No whitespace errors; output contains only Git's CRLF working-copy warnings. |
+| `rg -n "cell_placements\|zstack_placement\|insert_child_with_zstack_placement\|zstack_placement_for_parent" wasamo-runtime\src` | No matches | Confirms the old runtime/layout storage names and old ZStack insertion adapter no longer survive in source. |
+
+T3 trap-#1 call-site audit:
+
+| Site family | Source query / diff cue | T3 disposition |
+|---|---|---|
+| Runtime child storage carrier | `rg -n "pub struct ChildSlot|pub children: Vec<ChildSlot>|slot_data: Option<SlotData>|impl (Deref|AsRef)<WidgetNode> for ChildSlot" wasamo-runtime\src\widget.rs` | Closed in T3. Runtime child slots now carry `{ node, slot_data }`; deref / `AsRef` preserve existing child-node traversal ergonomics without moving placement onto the child widget. |
+| Runtime insert/remove/replace mutation primitives | `rg -n "insert_child_with_slot_data|fn insert_child_inner|fn remove_child|fn replace_child|ChildSlot::new|replacement_slot_data|into_node" wasamo-runtime\src\widget.rs` | Closed in T3. Insert stores slot data, remove drops slot metadata by returning the bare node, and replace preserves the existing slot data while replacing the node. |
+| Runtime layout-tree construction | `rg -n "fn build_layout_child_slots|LayoutChildSlot::new\\(slot.build_layout_tree\\(\\), slot.slot_data\\)|WidgetData::Grid \\{ columns, rows \\}|LayoutNode::grid\\(" wasamo-runtime\src\widget.rs` | Closed in T3. Runtime child slots are copied into layout child slots; Grid no longer copies a parent vector. |
+| Loader child materialisation | `rg -n "slot_data_for_parent|insert_child_with_slot_data|grid_placement_from_slot|zstack_payload_from_ir_slot|WidgetNode::grid\\(compositor, columns, rows\\)" wasamo-runtime\src\ir_loader.rs` | Closed in T3. T2's Seam A adapter is removed; loader converts `IrSlotData` into runtime `SlotData` at insertion time for static, conditional, and `for`-generated children. |
+| Layout child storage carrier | `rg -n "pub enum SlotData|pub struct LayoutChildSlot|pub struct ChildSlots|pub children: ChildSlots|push_slot" wasamo-runtime\src\layout.rs` | Closed in T3. Layout children are explicit child slots; test-only bare pushes normalize placement to `None`. |
+| Layout Grid read path | `rg -n "fn arrange_grid|Some\\(SlotData::Grid|CellPlacement::default_grid|pub fn grid\\(columns: Vec<TrackSize>, rows: Vec<TrackSize>\\)" wasamo-runtime\src\layout.rs` | Closed in T3. Grid arrange reads placement from each child slot and defaults omitted placement to origin/span-1/stretch. |
+| Layout ZStack read path | `rg -n "fn arrange_zstack|Some\\(SlotData::ZStack|ZStackPlacement::centered|with_zplace" wasamo-runtime\src\layout.rs` | Closed in T3. ZStack arrange reads placement from each child slot and defaults omitted placement to center/center. |
+
+T3 trap-#2 structural side-effect enumeration:
+
+| Mutated path / side effect | T3 disposition | Direct evidence |
+|---|---|---|
+| Child list splice | `WidgetNode.children` stores `ChildSlot`, so slot metadata is inserted / removed / replaced atomically with the child entry. | `widget::tests::insert_stores_zstack_slot_data_on_the_slot`; `widget::tests::insert_stores_grid_slot_data_on_the_slot`; `widget::tests::remove_returns_detached_subtree_without_slot_metadata`; `widget::tests::replace_preserves_existing_slot_data_on_new_child`. |
+| Visual sibling order | Existing `InsertAtTop` / `InsertBelow` / remove / top insert behavior is unchanged; slot wrapping does not change the Visual used for ordering (`ChildSlot` derefs to `WidgetNode`). | `conditional_toggle_preserves_declared_visual_order_and_disposes_registry`; `reactive_for_tail_append_reset_remove_preserves_order_and_prefix_identity`; `zstack_replace_child_preserves_child_slot_placement` rechecks live Visual order after replacement. |
+| Layout invalidation | Existing structural mutation callers still mark layout dirty after conditional / for mutations; public insert/remove/replace keep their previous mutation API shape. | `conditional_toggle_drains_fresh_subtree_effects_before_return`; `reactive_for_zstack_tail_append_uses_child_carried_placement`; `staged_for_insert_commit_failure_rolls_back_partial_inserts`. |
+| Widget-pointer registry / effect ownership | Removal and rollback still return/destroy the bare subtree; child-slot metadata is dropped before `widget_destroy`, while binding disposal / registry severing remains subtree-owned. | `destroy_child_binding_also_stopped`; `conditional_toggle_preserves_declared_visual_order_and_disposes_registry`; `staged_for_insert_build_failure_leaves_tree_unchanged`; `staged_for_insert_commit_failure_rolls_back_partial_inserts`. |
+| Placement ownership | Placement is parent/slot-owned, not child-widget-owned. Removed returned subtrees carry no slot metadata; replacements inherit the slot metadata of the replaced position. | `remove_returns_detached_subtree_without_slot_metadata`; `replace_preserves_existing_slot_data_on_new_child`; `zstack_replace_child_preserves_child_slot_placement`. |
+
+T3 trap-#3 parallel-data drift audit:
+
+| Parallel-data hotspot | Source query / diff cue | T3 disposition |
+|---|---|---|
+| `WidgetData::Grid.cell_placements` | `rg -n "cell_placements" wasamo-runtime\src` -> no matches | Deleted. Grid variant now stores only `columns` / `rows`; child placement rides runtime `ChildSlot.slot_data`. |
+| `LayoutNode.cell_placements` | `rg -n "cell_placements" wasamo-runtime\src` -> no matches | Deleted. Layout Grid placement rides `LayoutChildSlot.slot_data`. |
+| `LayoutNode::grid` constructor signature | `rg -n "pub fn grid\\(columns: Vec<TrackSize>, rows: Vec<TrackSize>\\)" wasamo-runtime\src\layout.rs` | Migrated. No placement vector argument remains. |
+| `arrange_grid` zip over parallel vector | `rg -n "fn arrange_grid|zip\\(|Some\\(SlotData::Grid|CellPlacement::default_grid" wasamo-runtime\src\layout.rs` | Migrated. `arrange_grid` iterates child slots and reads `SlotData::Grid` or the Grid default. |
+| `build_layout_tree` copy into layout mirror | `rg -n "fn build_layout_child_slots|LayoutChildSlot::new\\(slot.build_layout_tree\\(\\), slot.slot_data\\)" wasamo-runtime\src\widget.rs` | Migrated. Runtime slot data is copied directly into layout slot data. |
+| Old ZStack child field / insertion adapter | `rg -n "zstack_placement|insert_child_with_zstack_placement|zstack_placement_for_parent" wasamo-runtime\src` -> no matches | Deleted. ZStack placement is `SlotData::ZStack` on the child slot. |
+
+T3 close gate — implemented-branch test map:
+
+| Implemented branch / behavior | Category | Source query / diff cue | Direct test or owner |
+|---|---|---|---|
+| Runtime children are explicit `ChildSlot` records carrying `Option<SlotData>`. | Semantic migration | `rg -n "pub struct ChildSlot|pub children: Vec<ChildSlot>|slot_data: Option<SlotData>" wasamo-runtime\src\widget.rs` | `widget::tests::insert_stores_zstack_slot_data_on_the_slot`; `widget::tests::insert_stores_grid_slot_data_on_the_slot` |
+| Placement-free runtime insertion normalizes slot data to `None`. | Semantic invariant | `rg -n "insert_child\\(|insert_child_with_slot_data|ChildSlot::new\\(child, slot_data\\)" wasamo-runtime\src\widget.rs` | `widget::tests::non_placement_parent_insert_normalizes_slot_data_to_none` |
+| Runtime remove returns a bare detached subtree and drops slot metadata. | Structural side effect | `rg -n "fn remove_child|remove\\(index\\)\\.into_node\\(\\)|removed.attached = false" wasamo-runtime\src\widget.rs` | `widget::tests::remove_returns_detached_subtree_without_slot_metadata`; existing `remove_returns_detached` |
+| Runtime replace preserves the slot metadata while swapping the child node. | Structural side effect | `rg -n "fn replace_child|replacement_slot_data|ChildSlot::new\\(new_child, replacement_slot_data\\)" wasamo-runtime\src\widget.rs` | `widget::tests::replace_preserves_existing_slot_data_on_new_child`; `zstack_replace_child_preserves_child_slot_placement` |
+| Loader static children insert runtime `SlotData` instead of calling a ZStack-only adapter. | Semantic migration | `rg -n "append_static_member|insert_child_with_slot_data|slot_data_for_parent\\(parent, child\\)" wasamo-runtime\src\ir_loader.rs` | Covered by `grid_rooted_fixture_lays_out_cells_through_visual_tree`; `zstack_rooted_fixture_preserves_live_visual_order_and_clip` |
+| Loader conditional children carry slot data through remove/reinsert. | Structural / semantic | `rg -n "mutate_conditional_subtree|slot_data_for_parent\\(parent, body\\)|remove_structural_child" wasamo-runtime\src\ir_loader.rs` | `conditional_zstack_reinsert_uses_declared_placement_metadata`; `conditional_toggle_preserves_declared_visual_order_and_disposes_registry` |
+| Loader `for`-generated ZStack children carry slot data through staging -> commit and rollback. | Structural / semantic | `rg -n "mutate_for_loop_subtree|let slot_data = slot_data_for_parent|insert_structural_child\\(parent, insert_index, child, slot_data\\)" wasamo-runtime\src\ir_loader.rs` | `reactive_for_zstack_tail_append_uses_child_carried_placement`; `static_for_under_zstack_preserves_child_carried_placement`; `staged_for_insert_commit_failure_rolls_back_partial_inserts` |
+| Grid runtime constructor no longer accepts a placement vector. | Parallel-data | `rg -n "WidgetNode::grid\\(compositor, columns, rows\\)|pub\\(crate\\) fn grid\\(" wasamo-runtime\src\ir_loader.rs wasamo-runtime\src\widget.rs` | `grid_rooted_fixture_lays_out_cells_through_visual_tree`; `grid_vstack_root_fixture_pins_production_root_shape` |
+| Layout children are explicit `LayoutChildSlot` records carrying `Option<SlotData>`. | Semantic migration | `rg -n "pub struct LayoutChildSlot|pub struct ChildSlots|pub children: ChildSlots" wasamo-runtime\src\layout.rs` | `layout::tests::grid_arrange_fixed_cell_rectangles`; `layout::tests::zstack_arrange_alignment_overrides` |
+| Layout Grid arrange reads `SlotData::Grid` from each child slot and applies defaults for omitted placement. | Semantic / size behavior | `rg -n "fn arrange_grid|Some\\(SlotData::Grid|CellPlacement::default_grid" wasamo-runtime\src\layout.rs` | `layout::tests::grid_arrange_alignment_within_cell`; `layout::tests::grid_arrange_preserves_document_order`; runtime loader tests `grid_direct_child_without_placement_defaults_to_origin`, `grid_multi_cell_omitted_placement_collides_at_origin` |
+| Layout ZStack arrange reads `SlotData::ZStack` from each child slot and applies center defaults for omitted placement. | Semantic / size behavior | `rg -n "fn arrange_zstack|Some\\(SlotData::ZStack|ZStackPlacement::centered" wasamo-runtime\src\layout.rs` | `layout::tests::zstack_arrange_alignment_overrides`; `layout::tests::zstack_defaults_to_fill_fill_and_centers_children` |
+| Old parallel placement storage and old ZStack child field are absent from runtime/layout source. | Parallel-data invariant | `rg -n "cell_placements\|zstack_placement\|insert_child_with_zstack_placement\|zstack_placement_for_parent" wasamo-runtime\src` -> no matches | Owner closed in T3; grep is the direct forcing artifact. |
+| New `slot.*` author surface is not implemented in T3. | Author surface | `rg -n "parse_property_bind|PropertyBind|slot\\.|h-align|v-align|Cell" wasamoc\src` remains the T4 hotspot set. | Owner task = T4; scope = parser/check/lower/fixtures; impact = DD author surface not yet exposed; close condition = T4 branch/test matrix and `.ui` sweep. |
+| GUI positive-control evidence is not implemented in T3. | GUI evidence | T3 changes runtime/layout storage and does not launch GUI hosts for screenshot evidence. | Owner task = T5; scope = launch + screenshot + positive controls after T4; impact = no assistant visual proof yet; close condition = T5 evidence files + analysis. |
+| Normative docs sync is not implemented in T3. | Docs | `git diff --name-only` lists no files under `docs/`. | Owner task = T7; scope = `docs/architecture.md` storage / IR spelling sync; impact = reference docs lag implementation; close condition = T7 Moment 2 docs sync or explicit disposition. |
+
+T3 close gate — behavior / invariant carry scan:
+
+| Behavior / invariant | Closed in T3? | Owner / scope / impact / close condition |
+|---|---|---|
+| Runtime and layout child-slot records are now the only placement carriers for Grid/ZStack runtime layout. | Closed | Closed by source shape (`ChildSlot`, `LayoutChildSlot`, `SlotData`) and old-storage grep with no matches. |
+| Grid omitted placement still defaults to origin / span 1 / stretch. | Closed | Closed by `CellPlacement::default_grid`, `arrange_grid`, and direct loader/layout tests listed above. |
+| ZStack omitted placement still defaults to center / center. | Closed | Closed by `ZStackPlacement::centered`, `arrange_zstack`, and direct layout/runtime integration tests listed above. |
+| Remove/destroy leaks no slot metadata. | Closed | Runtime `remove_child` returns `ChildSlot::into_node()`, dropping slot data; covered by pure mirror and integration destruction tests. |
+| Replacement preserves the parent slot metadata for the new child. | Closed | Covered by pure mirror and `zstack_replace_child_preserves_child_slot_placement`. |
+| Grid structural mutation paths remain out of scope even though storage has migrated. | Not closed in T3, intentionally deferred | Owner task = T7 / phase-end handoff; scope = future direct `for` / `if` of Grid cells; impact = future mutation work must re-run trap #2/#3 on Grid; close condition = T7 candidate ledger records the trigger and future owner. |
+| New direct `slot.*` author syntax and ZStack bare-placement reject are not exposed yet. | Not closed | Owner task = T4; scope = parser/check/lower/fixtures; impact = users still author old ZStack bare placement until T4; close condition = T4 direct branch tests and fixture migration. |
+| GUI-visible same-position proof has not run after storage migration. | Not closed | Owner task = T5; scope = assistant screenshot + positive controls after T4; impact = storage has test evidence but no visual proof; close condition = T5 evidence artifacts. |
+| Docs may still describe design-draft storage spelling rather than landed runtime/layout child-slot wrappers. | Not closed | Owner task = T7; scope = architecture / DSL implementation sync; impact = reference docs lag implementation; close condition = T7 docs sync or explicit no-change record. |
+
+T3 carry-forward ownership:
+
+| Carry-forward | Owner task | Scope / impact | Close condition |
+|---|---|---|---|
+| Expose the new direct `slot.*` author surface and reject old author placement forms where required by DD. | T4 | Runtime/layout storage is now final, but author syntax is still the old surface. | T4 parser/check/lower matrix and fixture sweep are complete. |
+| Produce GUI positive-control evidence against final storage and author surface. | T5 | T3 has runtime/integration evidence only. | T5 launch + screenshot + assistant analysis shows ZStack and Grid positive controls. |
+| Sync normative/reference docs with landed runtime/layout child-slot shape. | T7 | T3 changed implementation shape; docs were intentionally not edited. | T7 updates or explicitly disposes architecture / DSL references. |
+| Record the future Grid structural-mutation trigger after storage migration. | T7 / phase-end | Storage migration is complete, but future Grid mutation paths still need a re-trigger rule. | T7 candidate ledger / phase-end handoff records scope, impact, and close condition. |
+
+No owner-unknown unresolved point remains from T3. Deterministic-failure
+trap #6 did not trigger: the initial compile failure was the expected
+semantic-migration enumeration, not a flaky runtime/test failure; all
+post-fix reruns listed above completed green.

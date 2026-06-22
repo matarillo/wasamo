@@ -228,22 +228,25 @@ test recorded; **full independent review** before merge.
 
 The **runtime-structural full-review-lane** task (gates traps #1 / #2 /
 #3; risk R-B / R-G). Converges both containers onto the child-slot
-`SlotData` model and removes the last parallel placement vector.
+`SlotData` model and removes the last parallel placement vector. T3 is
+not a parser / author-surface task: T2 already made the textual IR carry
+`IrChildSlot.slot_data`; T3 removes the Seam A runtime adapter and makes
+runtime + layout child lists themselves carry the placement record.
 
-- [ ] Introduce an explicit runtime child-slot record (recommended local
+- [x] Introduce an explicit runtime child-slot record (recommended local
       type name: `ChildSlot`, not ADR-fixed) so `WidgetNode.children`
       stores `{ node: Box<WidgetNode>, slot_data: Option<SlotData> }`
       records instead of bare child nodes. `SlotData` remains the VS-1a
       closed enum `SlotData::{ Grid(..), ZStack(..) }`; this replaces
       `WidgetNode.zstack_placement` without making placement an intrinsic
       child-widget field.
-- [ ] **SM-B: migrate Grid** — remove `WidgetData::Grid.cell_placements`
+- [x] **SM-B: migrate Grid** — remove `WidgetData::Grid.cell_placements`
       (the parallel vector); Grid per-child placement rides
-      `SlotData::Grid` on the runtime child-slot record. The loader's
-      Grid `Cell` extraction writes `SlotData::Grid` onto the slot record
-      (Seam B — the T2 adapter is removed; loader materializes runtime
-      child slots directly).
-- [ ] Migrate the layout read-path — **there are two parallel vectors,
+      `SlotData::Grid` on the runtime child-slot record. The loader
+      converts T2's already-canonical `IrSlotData::Grid` into runtime
+      `SlotData::Grid` at child insertion time (Seam B — the T2 adapter is
+      removed; loader materializes runtime child slots directly).
+- [x] Migrate the layout read-path — **there are two parallel vectors,
       not one.** Besides `WidgetData::Grid.cell_placements`, the layout
       mirror has its own `LayoutNode.cell_placements`
       ([layout.rs:250](../../../../wasamo-runtime/src/layout.rs#L250))
@@ -255,7 +258,7 @@ The **runtime-structural full-review-lane** task (gates traps #1 / #2 /
       the `WidgetData` / loader vector is deleted while the layout mirror
       keeps the drift class. `build_layout_tree` / `arrange_grid` / the
       ZStack arrange path read placement from the child slot.
-- [ ] Re-enumerate the splice / insert / remove / replace side-effect
+- [x] Re-enumerate the splice / insert / remove / replace side-effect
       bundle for the migrated path (trap #2 close artifact): child list
       splice (placement riding the slot), Visual sibling order, layout
       invalidation, widget-pointer registry, effect ownership — restated
@@ -265,7 +268,7 @@ The **runtime-structural full-review-lane** task (gates traps #1 / #2 /
       the detached slot metadata while returning a bare widget subtree,
       replacement preserves / recomputes the slot metadata on the slot
       while replacing the node, and placement-free parents carry `None`.
-- [ ] **Close artifact (trap #3):** no parallel placement vector remains
+- [x] **Close artifact (trap #3):** no parallel placement vector remains
       on any mutated path — the audit table has an **independent row per
       site**: `WidgetData::Grid.cell_placements`,
       `LayoutNode.cell_placements`, `LayoutNode::grid` (constructor
@@ -273,7 +276,7 @@ The **runtime-structural full-review-lane** task (gates traps #1 / #2 /
       (the copy) — each shown migrated to the child slot or deleted
       (greppable: no `cell_placements` / `zstack_placements` survives on
       a mutated path); no-placement containers carry `None`.
-- [ ] Windows-runtime integration fixtures (CI-gated, fail-not-skip):
+- [x] Windows-runtime integration fixtures (CI-gated, fail-not-skip):
       ZStack and Grid layout read placement from child-slot storage;
       structural insert / remove **and `replace_child`** under ZStack
       preserve child order, Visual sibling order, placement, and
@@ -286,10 +289,10 @@ The **runtime-structural full-review-lane** task (gates traps #1 / #2 /
       replace directly** or record in [log.md](./log.md) why the pure
       mirror test + the trap-#2 close artifact suffice without a separate
       integration run. Also: destroy / detach leaks no placement
-      metadata; a `for`-generated ZStack child carries `SlotData` through
-      staging → commit (CF-1 / R-G; storage only — **no Grid mutation
-      path** is built, DD-002 §Out of scope).
-- [ ] Regression gate: Phase 5 Grid fixtures (track sizing, spanning,
+      metadata; `if` / `for`-generated ZStack children carry
+      `SlotData::ZStack` through staging → commit (CF-1 / R-G; storage
+      only — **no Grid mutation path** is built, DD-002 §Out of scope).
+- [x] Regression gate: Phase 5 Grid fixtures (track sizing, spanning,
       membership / conflict, arrange overflow) + Phase 6/7 ZStack
       fixtures run unchanged.
 

@@ -1,6 +1,6 @@
 // Pure layout engine — no Win32/WinRT dependencies; all logic here is unit-testable.
 
-use std::cell::Cell;
+use std::{cell::Cell, ops::Deref, ops::DerefMut};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum WidgetKind {
@@ -26,10 +26,10 @@ pub enum WidgetKind {
     // DD-M3-P5-004 track resolution + DD-M3-P5-005 arrange / alignment live
     // in `resolve_axis_tracks` / `measure_grid` / `arrange_grid` below; the
     // IR-loader / widget-catalog half (`WidgetData::Grid` →
-    // `LayoutNode::grid`) lands in T3. The track lists and per-Cell
-    // placements ride the flat-struct fields `grid_columns` / `grid_rows` /
-    // `cell_placements` (R-D mitigation, log.md T2 entry); `Cell` is IR-only
-    // and never materialises as its own `LayoutNode`.
+    // `LayoutNode::grid`) lands in T3. The track lists ride the flat-struct
+    // fields `grid_columns` / `grid_rows`; per-child placement rides
+    // `LayoutChildSlot.slot_data`. `Cell` is IR-only and never materialises
+    // as its own `LayoutNode`.
     Grid,
     // M3-Phase 6 DD-M3-P6-001 / DD-M3-P6-002 per-kind tag for the ZStack
     // layout primitive. ZStack has direct children, defaults to `Fill/Fill`,
@@ -58,9 +58,8 @@ pub enum TrackSize {
     Star(u32),
 }
 
-/// M3-Phase 5 DD-M3-P5-003 / DD-M3-P5-005 per-`Cell` placement, parallel
-/// to `LayoutNode.children` (`cell_placements[i]` places content child
-/// `children[i]`). Zero-based `row` / `column`; `row_span` / `column_span`
+/// M3-Phase 5 DD-M3-P5-003 / DD-M3-P5-005 per-`Cell` placement carried on
+/// a Grid child's `LayoutChildSlot`. Zero-based `row` / `column`; `row_span` / `column_span`
 /// default to `1`; `h_align` / `v_align` default to `Stretch`. Defaults
 /// are applied at the T3 build boundary, not at this type. The existing
 /// `Alignment` enum is reused per-axis (`Leading` = `start`, `Center`,
@@ -73,6 +72,19 @@ pub struct CellPlacement {
     pub column_span: u32,
     pub h_align: Alignment,
     pub v_align: Alignment,
+}
+
+impl CellPlacement {
+    pub fn default_grid() -> Self {
+        Self {
+            row: 0,
+            column: 0,
+            row_span: 1,
+            column_span: 1,
+            h_align: Alignment::Stretch,
+            v_align: Alignment::Stretch,
+        }
+    }
 }
 
 /// M3-Phase 6 DD-M3-P6-002 per-ZStack-child placement. M3-Phase 7 stores
@@ -90,6 +102,99 @@ impl ZStackPlacement {
             h_align: Alignment::Center,
             v_align: Alignment::Center,
         }
+    }
+}
+
+/// Parent-interpreted child-slot payload. The immediate parent chooses
+/// whether and how to consume it; placement-free parents carry `None`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SlotData {
+    Grid(CellPlacement),
+    ZStack(ZStackPlacement),
+}
+
+#[derive(Debug, Clone)]
+pub struct LayoutChildSlot {
+    pub node: LayoutNode,
+    pub slot_data: Option<SlotData>,
+}
+
+impl LayoutChildSlot {
+    pub fn new(node: LayoutNode, slot_data: Option<SlotData>) -> Self {
+        Self { node, slot_data }
+    }
+
+    pub fn bare(node: LayoutNode) -> Self {
+        Self::new(node, None)
+    }
+}
+
+impl Deref for LayoutChildSlot {
+    type Target = LayoutNode;
+
+    fn deref(&self) -> &Self::Target {
+        &self.node
+    }
+}
+
+impl DerefMut for LayoutChildSlot {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.node
+    }
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct ChildSlots(Vec<LayoutChildSlot>);
+
+impl ChildSlots {
+    pub fn new() -> Self {
+        Self(Vec::new())
+    }
+
+    pub fn push(&mut self, node: LayoutNode) {
+        self.0.push(LayoutChildSlot::bare(node));
+    }
+
+    pub fn push_slot(&mut self, slot: LayoutChildSlot) {
+        self.0.push(slot);
+    }
+}
+
+impl From<Vec<LayoutChildSlot>> for ChildSlots {
+    fn from(value: Vec<LayoutChildSlot>) -> Self {
+        Self(value)
+    }
+}
+
+impl Deref for ChildSlots {
+    type Target = [LayoutChildSlot];
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl DerefMut for ChildSlots {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
+
+impl<'a> IntoIterator for &'a ChildSlots {
+    type Item = &'a LayoutChildSlot;
+    type IntoIter = std::slice::Iter<'a, LayoutChildSlot>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.iter()
+    }
+}
+
+impl<'a> IntoIterator for &'a mut ChildSlots {
+    type Item = &'a mut LayoutChildSlot;
+    type IntoIter = std::slice::IterMut<'a, LayoutChildSlot>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.iter_mut()
     }
 }
 
@@ -199,7 +304,7 @@ pub struct LayoutNode {
     /// offset is recorded back into `applied_offset_y` for the Visual
     /// layer to read at sync time.
     pub offset_y: i32,
-    pub children: Vec<LayoutNode>,
+    pub children: ChildSlots,
     // Written by arrange():
     pub offset: (f32, f32),
     pub size: (f32, f32),
@@ -240,18 +345,6 @@ pub struct LayoutNode {
     pub grid_columns: Vec<TrackSize>,
     /// DD-M3-P5-002 Grid row track list. See `grid_columns`.
     pub grid_rows: Vec<TrackSize>,
-    /// DD-M3-P5-003 / DD-M3-P5-005 per-Cell placements, parallel to
-    /// `children` (`cell_placements[i]` places `children[i]`). Empty on
-    /// every non-Grid kind. Document order = children order = paint /
-    /// z-order (DD-M3-P5-005 Option A). DD-M3-P7-006 deliberately keeps
-    /// Grid static-only in Phase 7; if Grid admits structural mutation,
-    /// migrate this to child-carried placement before that mutation path
-    /// lands.
-    pub cell_placements: Vec<CellPlacement>,
-    /// DD-M3-P7-006 child-carried ZStack placement. Meaningful only when
-    /// this node is a direct child of a ZStack parent; `None` means the
-    /// ZStack parent uses its default `Center/Center` placement.
-    pub zstack_placement: Option<ZStackPlacement>,
 }
 
 impl LayoutNode {
@@ -268,15 +361,13 @@ impl LayoutNode {
             item_spacing: 0.0,
             line_spacing: 0.0,
             offset_y: 0,
-            children: Vec::new(),
+            children: ChildSlots::new(),
             offset: (0.0, 0.0),
             size: (0.0, 0.0),
             applied_offset_y: Cell::new(0.0),
             wrap_measured_cross_bound: Cell::new(f32::NAN),
             grid_columns: Vec::new(),
             grid_rows: Vec::new(),
-            cell_placements: Vec::new(),
-            zstack_placement: None,
         }
     }
 
@@ -293,15 +384,13 @@ impl LayoutNode {
             item_spacing: 0.0,
             line_spacing: 0.0,
             offset_y: 0,
-            children: Vec::new(),
+            children: ChildSlots::new(),
             offset: (0.0, 0.0),
             size: (0.0, 0.0),
             applied_offset_y: Cell::new(0.0),
             wrap_measured_cross_bound: Cell::new(f32::NAN),
             grid_columns: Vec::new(),
             grid_rows: Vec::new(),
-            cell_placements: Vec::new(),
-            zstack_placement: None,
         }
     }
 
@@ -318,15 +407,13 @@ impl LayoutNode {
             item_spacing: 0.0,
             line_spacing: 0.0,
             offset_y: 0,
-            children: Vec::new(),
+            children: ChildSlots::new(),
             offset: (0.0, 0.0),
             size: (0.0, 0.0),
             applied_offset_y: Cell::new(0.0),
             wrap_measured_cross_bound: Cell::new(f32::NAN),
             grid_columns: Vec::new(),
             grid_rows: Vec::new(),
-            cell_placements: Vec::new(),
-            zstack_placement: None,
         }
     }
 
@@ -348,15 +435,13 @@ impl LayoutNode {
             item_spacing: 0.0,
             line_spacing: 0.0,
             offset_y: 0,
-            children: Vec::new(),
+            children: ChildSlots::new(),
             offset: (0.0, 0.0),
             size: (0.0, 0.0),
             applied_offset_y: Cell::new(0.0),
             wrap_measured_cross_bound: Cell::new(f32::NAN),
             grid_columns: Vec::new(),
             grid_rows: Vec::new(),
-            cell_placements: Vec::new(),
-            zstack_placement: None,
         }
     }
 
@@ -381,15 +466,13 @@ impl LayoutNode {
             item_spacing,
             line_spacing,
             offset_y: 0,
-            children: Vec::new(),
+            children: ChildSlots::new(),
             offset: (0.0, 0.0),
             size: (0.0, 0.0),
             applied_offset_y: Cell::new(0.0),
             wrap_measured_cross_bound: Cell::new(f32::NAN),
             grid_columns: Vec::new(),
             grid_rows: Vec::new(),
-            cell_placements: Vec::new(),
-            zstack_placement: None,
         }
     }
 
@@ -419,15 +502,13 @@ impl LayoutNode {
             item_spacing: 0.0,
             line_spacing: 0.0,
             offset_y,
-            children: Vec::new(),
+            children: ChildSlots::new(),
             offset: (0.0, 0.0),
             size: (0.0, 0.0),
             applied_offset_y: Cell::new(0.0),
             wrap_measured_cross_bound: Cell::new(f32::NAN),
             grid_columns: Vec::new(),
             grid_rows: Vec::new(),
-            cell_placements: Vec::new(),
-            zstack_placement: None,
         }
     }
 
@@ -436,17 +517,12 @@ impl LayoutNode {
     // parent allocation on a bounded axis (DD-M3-P5-004 "Grid outer rect");
     // on an unbounded axis with fixed-only tracks the outer rect collapses
     // to the resolved `fixed_sum` (handled in `measure_grid` /
-    // `arrange_grid`). `columns` / `rows` are the per-axis track lists and
-    // `cell_placements` is parallel to `children` (set by the caller after
-    // construction). T3 wired the IR-loader / `build_layout_tree` path
+    // `arrange_grid`). `columns` / `rows` are the per-axis track lists;
+    // placement is read from each child slot. T3 wired the IR-loader / `build_layout_tree` path
     // (`WidgetData::Grid` → this constructor), so the T2-era
     // `#[allow(dead_code)]` forward-pointer is no longer needed; the
     // pure-logic T2 tests also exercise it directly.
-    pub fn grid(
-        columns: Vec<TrackSize>,
-        rows: Vec<TrackSize>,
-        cell_placements: Vec<CellPlacement>,
-    ) -> Self {
+    pub fn grid(columns: Vec<TrackSize>, rows: Vec<TrackSize>) -> Self {
         Self {
             kind: WidgetKind::Grid,
             width: SizeConstraint::Fill,
@@ -459,15 +535,13 @@ impl LayoutNode {
             item_spacing: 0.0,
             line_spacing: 0.0,
             offset_y: 0,
-            children: Vec::new(),
+            children: ChildSlots::new(),
             offset: (0.0, 0.0),
             size: (0.0, 0.0),
             applied_offset_y: Cell::new(0.0),
             wrap_measured_cross_bound: Cell::new(f32::NAN),
             grid_columns: columns,
             grid_rows: rows,
-            cell_placements,
-            zstack_placement: None,
         }
     }
 
@@ -475,7 +549,7 @@ impl LayoutNode {
     // default to `Fill` so overlay roots track the parent allocation on
     // bounded axes; `measure_zstack` reports the child-union desired size on
     // Shrink/unbounded axes. Direct-child placement is read from each child
-    // node's `zstack_placement` field (DD-M3-P7-006).
+    // child slot's `SlotData::ZStack`.
     #[allow(dead_code)]
     pub fn zstack() -> Self {
         Self {
@@ -490,15 +564,13 @@ impl LayoutNode {
             item_spacing: 0.0,
             line_spacing: 0.0,
             offset_y: 0,
-            children: Vec::new(),
+            children: ChildSlots::new(),
             offset: (0.0, 0.0),
             size: (0.0, 0.0),
             applied_offset_y: Cell::new(0.0),
             wrap_measured_cross_bound: Cell::new(f32::NAN),
             grid_columns: Vec::new(),
             grid_rows: Vec::new(),
-            cell_placements: Vec::new(),
-            zstack_placement: None,
         }
     }
 }
@@ -1287,7 +1359,7 @@ fn grid_shrink_extent(tracks: &[TrackSize], avail: f32) -> Result<f32, LayoutErr
 //   the cell and is contained only by Grid's outer-bounds clip, installed
 //   on Grid's own Visual at sync_visuals time per DD-M3-P5-005).
 // - **Paint / z-order** is document order, preserved by iterating
-//   `children` (and the parallel `cell_placements`) in order.
+//   child slots in order.
 fn arrange_grid(node: &mut LayoutNode, x: f32, y: f32, w: f32, h: f32) -> Result<(), LayoutError> {
     let col_bound = if w.is_finite() {
         AxisBound::Bounded(w)
@@ -1320,11 +1392,12 @@ fn arrange_grid(node: &mut LayoutNode, x: f32, y: f32, w: f32, h: f32) -> Result
     node.offset = (x, y);
     node.size = (outer_w, outer_h);
 
-    // `cell_placements` is parallel to `children`; `zip` borrows the two
-    // disjoint fields and stops at the shorter (validate() guarantees equal
-    // length, so a stray unplaced child is simply not arranged rather than
-    // indexing out of range).
-    for (child, placement) in node.children.iter_mut().zip(node.cell_placements.iter()) {
+    for child_slot in node.children.iter_mut() {
+        let placement = match child_slot.slot_data {
+            Some(SlotData::Grid(placement)) => placement,
+            _ => CellPlacement::default_grid(),
+        };
+        let child = &mut child_slot.node;
         let col_start = placement.column as usize;
         let col_end = (placement.column + placement.column_span) as usize;
         let row_start = placement.row as usize;
@@ -1403,10 +1476,12 @@ fn arrange_zstack(
     node.offset = (x, y);
     node.size = (outer_w, outer_h);
 
-    for child in node.children.iter_mut() {
-        let placement = child
-            .zstack_placement
-            .unwrap_or_else(ZStackPlacement::centered);
+    for child_slot in node.children.iter_mut() {
+        let placement = match child_slot.slot_data {
+            Some(SlotData::ZStack(placement)) => placement,
+            _ => ZStackPlacement::centered(),
+        };
+        let child = &mut child_slot.node;
         let measure_w = if axis_is_stretchy(placement.h_align, &child.width) {
             outer_w
         } else {
@@ -1511,7 +1586,7 @@ fn arrange_box(node: &mut LayoutNode, x: f32, y: f32, w: f32, h: f32) -> Result<
 }
 
 fn arrange_vstack(
-    children: &mut [LayoutNode],
+    children: &mut [LayoutChildSlot],
     x: f32,
     y: f32,
     w: f32,
@@ -1576,7 +1651,7 @@ fn arrange_vstack(
 }
 
 fn arrange_hstack(
-    children: &mut [LayoutNode],
+    children: &mut [LayoutChildSlot],
     x: f32,
     y: f32,
     w: f32,
@@ -2555,6 +2630,11 @@ mod tests {
         )
     }
 
+    fn push_grid_child(grid: &mut LayoutNode, child: LayoutNode, placement: CellPlacement) {
+        grid.children
+            .push_slot(LayoutChildSlot::new(child, Some(SlotData::Grid(placement))));
+    }
+
     // A Fill/Fill content rectangle (stretches to the cell extent).
     fn fill_child() -> LayoutNode {
         LayoutNode::rectangle(SizeConstraint::Fill, SizeConstraint::Fill)
@@ -2663,12 +2743,8 @@ mod tests {
     #[test]
     fn grid_arrange_outer_rect_is_parent_allocation() {
         // DD-M3-P5-004 Grid outer rect on a bounded axis = parent allocation.
-        let mut g = LayoutNode::grid(
-            vec![TrackSize::Star(1)],
-            vec![TrackSize::Star(1)],
-            vec![stretch_cell(0, 0, 1, 1)],
-        );
-        g.children.push(fill_child());
+        let mut g = LayoutNode::grid(vec![TrackSize::Star(1)], vec![TrackSize::Star(1)]);
+        push_grid_child(&mut g, fill_child(), stretch_cell(0, 0, 1, 1));
         run_layout(&mut g, 400.0, 250.0).unwrap();
         assert_eq!(g.offset, (0.0, 0.0));
         assert_eq!(g.size, (400.0, 250.0));
@@ -2680,16 +2756,11 @@ mod tests {
         let mut g = LayoutNode::grid(
             vec![TrackSize::Fixed(100), TrackSize::Fixed(200)],
             vec![TrackSize::Fixed(50), TrackSize::Fixed(80)],
-            vec![
-                stretch_cell(0, 0, 1, 1),
-                stretch_cell(0, 1, 1, 1),
-                stretch_cell(1, 0, 1, 1),
-                stretch_cell(1, 1, 1, 1),
-            ],
         );
-        for _ in 0..4 {
-            g.children.push(fill_child());
-        }
+        push_grid_child(&mut g, fill_child(), stretch_cell(0, 0, 1, 1));
+        push_grid_child(&mut g, fill_child(), stretch_cell(0, 1, 1, 1));
+        push_grid_child(&mut g, fill_child(), stretch_cell(1, 0, 1, 1));
+        push_grid_child(&mut g, fill_child(), stretch_cell(1, 1, 1, 1));
         run_layout(&mut g, 300.0, 130.0).unwrap();
         assert_eq!(g.children[0].offset, (0.0, 0.0));
         assert_eq!(g.children[0].size, (100.0, 50.0));
@@ -2707,10 +2778,9 @@ mod tests {
         let mut g = LayoutNode::grid(
             vec![TrackSize::Star(1), TrackSize::Star(2)],
             vec![TrackSize::Star(1)],
-            vec![stretch_cell(0, 0, 1, 1), stretch_cell(0, 1, 1, 1)],
         );
-        g.children.push(fill_child());
-        g.children.push(fill_child());
+        push_grid_child(&mut g, fill_child(), stretch_cell(0, 0, 1, 1));
+        push_grid_child(&mut g, fill_child(), stretch_cell(0, 1, 1, 1));
         run_layout(&mut g, 300.0, 90.0).unwrap();
         assert_eq!(g.children[0].offset, (0.0, 0.0));
         assert_eq!(g.children[0].size, (100.0, 90.0));
@@ -2732,13 +2802,17 @@ mod tests {
                 TrackSize::Fixed(50),
                 TrackSize::Fixed(50),
             ],
-            vec![
-                stretch_cell(0, 0, 1, 3), // header spanning all columns
-                stretch_cell(1, 1, 2, 2), // 2×2 spanning block
-            ],
         );
-        g.children.push(fill_child());
-        g.children.push(fill_child());
+        push_grid_child(
+            &mut g,
+            fill_child(),
+            stretch_cell(0, 0, 1, 3), // header spanning all columns
+        );
+        push_grid_child(
+            &mut g,
+            fill_child(),
+            stretch_cell(1, 1, 2, 2), // 2x2 spanning block
+        );
         run_layout(&mut g, 300.0, 150.0).unwrap();
         // Header: columns 0..3 → x 0..300, row 0..1 → y 0..50.
         assert_eq!(g.children[0].offset, (0.0, 0.0));
@@ -2752,15 +2826,12 @@ mod tests {
     fn grid_arrange_alignment_within_cell() {
         // One 200×100 cell; a 50×40 fixed content rect under each alignment.
         let run = |h: Alignment, v: Alignment| -> ((f32, f32), (f32, f32)) {
-            let mut g = LayoutNode::grid(
-                vec![TrackSize::Fixed(200)],
-                vec![TrackSize::Fixed(100)],
-                vec![cell(0, 0, 1, 1, h, v)],
+            let mut g = LayoutNode::grid(vec![TrackSize::Fixed(200)], vec![TrackSize::Fixed(100)]);
+            push_grid_child(
+                &mut g,
+                LayoutNode::rectangle(SizeConstraint::Fixed(50.0), SizeConstraint::Fixed(40.0)),
+                cell(0, 0, 1, 1, h, v),
             );
-            g.children.push(LayoutNode::rectangle(
-                SizeConstraint::Fixed(50.0),
-                SizeConstraint::Fixed(40.0),
-            ));
             run_layout(&mut g, 200.0, 100.0).unwrap();
             (g.children[0].offset, g.children[0].size)
         };
@@ -2801,10 +2872,9 @@ mod tests {
         let mut g = LayoutNode::grid(
             vec![TrackSize::Fixed(200), TrackSize::Fixed(200)],
             vec![TrackSize::Fixed(100)],
-            vec![stretch_cell(0, 0, 1, 1), stretch_cell(0, 1, 1, 1)],
         );
-        g.children.push(fill_child());
-        g.children.push(fill_child());
+        push_grid_child(&mut g, fill_child(), stretch_cell(0, 0, 1, 1));
+        push_grid_child(&mut g, fill_child(), stretch_cell(0, 1, 1, 1));
         run_layout(&mut g, 300.0, 100.0).unwrap();
         // Grid does not grow to 400; outer rect = parent allocation.
         assert_eq!(g.size, (300.0, 100.0));
@@ -2820,33 +2890,33 @@ mod tests {
     fn grid_arrange_unbounded_star_axis_errors() {
         // A Grid with a star column arranged against an unbounded width
         // surfaces the layout error (mirrors the ScrollView unbounded gate).
-        let mut g = LayoutNode::grid(
-            vec![TrackSize::Star(1)],
-            vec![TrackSize::Fixed(100)],
-            vec![stretch_cell(0, 0, 1, 1)],
-        );
-        g.children.push(fill_child());
+        let mut g = LayoutNode::grid(vec![TrackSize::Star(1)], vec![TrackSize::Fixed(100)]);
+        push_grid_child(&mut g, fill_child(), stretch_cell(0, 0, 1, 1));
         let err = arrange(&mut g, 0.0, 0.0, f32::INFINITY, 100.0).unwrap_err();
         assert_eq!(err, LayoutError::GridUnboundedStarAxis);
     }
 
     #[test]
     fn grid_arrange_preserves_document_order() {
-        // `cell_placements[i]` always governs `children[i]`; the arrange loop
-        // visits children in declared (document) order, which is the
+        // The child slot's placement always governs that child; the arrange
+        // loop visits child slots in declared (document) order, which is the
         // DD-M3-P5-005 paint / z-order. Declare cells out of row-major order
         // and assert each child lands in its own declared cell (not reordered
         // by position).
         let mut g = LayoutNode::grid(
             vec![TrackSize::Fixed(100), TrackSize::Fixed(100)],
             vec![TrackSize::Fixed(50)],
-            vec![
-                stretch_cell(0, 1, 1, 1), // first child → right column
-                stretch_cell(0, 0, 1, 1), // second child → left column
-            ],
         );
-        g.children.push(fill_child());
-        g.children.push(fill_child());
+        push_grid_child(
+            &mut g,
+            fill_child(),
+            stretch_cell(0, 1, 1, 1), // first child -> right column
+        );
+        push_grid_child(
+            &mut g,
+            fill_child(),
+            stretch_cell(0, 0, 1, 1), // second child -> left column
+        );
         run_layout(&mut g, 200.0, 50.0).unwrap();
         // child[0] declared first → right column (x=100), regardless of
         // having a higher column index than child[1].
@@ -2865,13 +2935,12 @@ mod tests {
         // centred. Measuring the non-stretch width against the cell (40)
         // would instead shrink the Box to 40×40 (the pre-fix behaviour),
         // so this asserts the natural-extent measure.
-        let mut g = LayoutNode::grid(
-            vec![TrackSize::Fixed(40)],
-            vec![TrackSize::Fixed(100)],
-            vec![cell(0, 0, 1, 1, Alignment::Center, Alignment::Stretch)],
+        let mut g = LayoutNode::grid(vec![TrackSize::Fixed(40)], vec![TrackSize::Fixed(100)]);
+        push_grid_child(
+            &mut g,
+            LayoutNode::box_(Some(Ratio { num: 1, den: 1 })),
+            cell(0, 0, 1, 1, Alignment::Center, Alignment::Stretch),
         );
-        g.children
-            .push(LayoutNode::box_(Some(Ratio { num: 1, den: 1 })));
         run_layout(&mut g, 40.0, 100.0).unwrap();
         // Natural square sized off the stretched height: 100×100.
         assert_eq!(g.children[0].size, (100.0, 100.0));
@@ -2898,20 +2967,18 @@ mod tests {
         let mut g = LayoutNode::grid(
             vec![TrackSize::Fixed(40), TrackSize::Fixed(40)],
             vec![TrackSize::Fixed(40)],
-            vec![
-                cell(0, 0, 1, 1, Alignment::Center, Alignment::Center),
-                cell(0, 1, 1, 1, Alignment::Center, Alignment::Center),
-            ],
         );
         // Two 60-wide natural-size rects, each wider than its 40px cell.
-        g.children.push(LayoutNode::rectangle(
-            SizeConstraint::Fixed(60.0),
-            SizeConstraint::Fixed(20.0),
-        ));
-        g.children.push(LayoutNode::rectangle(
-            SizeConstraint::Fixed(60.0),
-            SizeConstraint::Fixed(20.0),
-        ));
+        push_grid_child(
+            &mut g,
+            LayoutNode::rectangle(SizeConstraint::Fixed(60.0), SizeConstraint::Fixed(20.0)),
+            cell(0, 0, 1, 1, Alignment::Center, Alignment::Center),
+        );
+        push_grid_child(
+            &mut g,
+            LayoutNode::rectangle(SizeConstraint::Fixed(60.0), SizeConstraint::Fixed(20.0)),
+            cell(0, 1, 1, 1, Alignment::Center, Alignment::Center),
+        );
         run_layout(&mut g, 80.0, 40.0).unwrap();
         // child[0] in column 0 cell (0..40), centred: x = (40-60)/2 = -10 → spans -10..50.
         // child[1] in column 1 cell (40..80), centred: x = 40 + (40-60)/2 = 30 → spans 30..70.
@@ -2936,9 +3003,8 @@ mod tests {
         ZStackPlacement { h_align, v_align }
     }
 
-    fn with_zplace(mut node: LayoutNode, placement: ZStackPlacement) -> LayoutNode {
-        node.zstack_placement = Some(placement);
-        node
+    fn with_zplace(node: LayoutNode, placement: ZStackPlacement) -> LayoutChildSlot {
+        LayoutChildSlot::new(node, Some(SlotData::ZStack(placement)))
     }
 
     #[test]
@@ -2995,15 +3061,15 @@ mod tests {
     #[test]
     fn zstack_arrange_alignment_overrides() {
         let mut z = LayoutNode::zstack();
-        z.children.push(with_zplace(
+        z.children.push_slot(with_zplace(
             LayoutNode::rectangle(SizeConstraint::Fixed(30.0), SizeConstraint::Fixed(20.0)),
             zplace(Alignment::Leading, Alignment::Leading),
         ));
-        z.children.push(with_zplace(
+        z.children.push_slot(with_zplace(
             LayoutNode::rectangle(SizeConstraint::Fixed(40.0), SizeConstraint::Fixed(50.0)),
             zplace(Alignment::Trailing, Alignment::Trailing),
         ));
-        z.children.push(with_zplace(
+        z.children.push_slot(with_zplace(
             LayoutNode::rectangle(SizeConstraint::Fixed(25.0), SizeConstraint::Fixed(10.0)),
             zplace(Alignment::Stretch, Alignment::Center),
         ));

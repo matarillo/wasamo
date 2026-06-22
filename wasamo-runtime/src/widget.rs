@@ -1,11 +1,12 @@
 use crate::box_values;
 use crate::handler::{self, EvalContext, EvalError, HandlerExpr};
 use crate::layout::{
-    self, Alignment, CellPlacement, LayoutError, LayoutNode, SizeConstraint, TrackSize,
-    ZStackPlacement,
+    self, Alignment, ChildSlots, LayoutChildSlot, LayoutError, LayoutNode, SizeConstraint,
+    SlotData, TrackSize,
 };
 use crate::reactive::EffectHandle;
 use crate::text::{TextRenderer, TypographyStyle};
+use std::ops::{Deref, DerefMut};
 use windows::{
     Foundation::{
         Numerics::{Vector2, Vector3},
@@ -149,21 +150,12 @@ enum WidgetData {
         content_visual: SpriteVisual,
     },
     // M3-Phase 5 DD-M3-P5-001 per-kind tag for the Grid layout primitive.
-    // The track lists and per-Cell placements are stored as the
-    // layout-engine mirror types (`layout::TrackSize` / `CellPlacement`):
-    // the IR loader (`ir_loader::construct_widget` "Grid" arm) performs the
-    // `wasamo_ir::TrackSize` → `layout::TrackSize` conversion and the
-    // `Cell` `IrProp` → `CellPlacement` extraction, so `build_layout_tree`
-    // is a structural copy into `LayoutNode::grid` (log.md T3 R-B
-    // Decision 1). `Cell` is IR-only (DD-M3-P5-001) — it never
-    // materialises as a `WidgetData` variant; the loader flattens each
-    // Cell's single content child onto `WidgetNode.children`, kept
-    // parallel to `cell_placements` (`cell_placements[i]` places
-    // `children[i]`). DD-M3-P7-006 keeps Grid static-only in Phase 7;
-    // migrate `cell_placements` to child-carried storage before any Grid
-    // structural mutation path lands. No `PropertyValue` / binding / ABI
-    // path touches these fields (Phase 5 constant-only, DD-M3-P5-001 /
-    // DD-M3-P5-006).
+    // The track lists are stored as layout-engine mirror types. Per-child
+    // placement rides the runtime child slot as `SlotData::Grid`, so this
+    // variant no longer carries parent metadata parallel to `children`.
+    // `Cell` is IR-only (DD-M3-P5-001) and never materialises as a
+    // `WidgetData` variant. No `PropertyValue` / binding / ABI path touches
+    // these fields (Phase 5 constant-only, DD-M3-P5-001 / DD-M3-P5-006).
     //
     // The outer Visual carries the DD-M3-P5-005 outer-bounds clip
     // (`Visual.Clip = InsetClip{0,0,0,0}`, installed in `WidgetNode::grid`,
@@ -173,17 +165,55 @@ enum WidgetData {
     Grid {
         columns: Vec<TrackSize>,
         rows: Vec<TrackSize>,
-        cell_placements: Vec<CellPlacement>,
     },
     // M3-Phase 6 DD-M3-P6-001 / DD-M3-P6-002 per-kind tag for the ZStack
     // layout primitive. Children are direct real widgets in document order
-    // (first = bottom, last = top). M3-Phase 7 DD-M3-P7-006 moved per-child
-    // `h-align` / `v-align` storage onto the child slot (`WidgetNode`
-    // `zstack_placement`) so placement travels with the child through
-    // mutation and staging instead of living in a parent-owned parallel
-    // vector. The outer Visual carries the zero-inset clip; children
-    // deliberately do not get per-child clips.
+    // (first = bottom, last = top). Per-child `h-align` / `v-align` rides
+    // the runtime child slot as `SlotData::ZStack`, so placement travels
+    // with the child through mutation and staging. The outer Visual carries
+    // the zero-inset clip; children deliberately do not get per-child clips.
     ZStack,
+}
+
+pub struct ChildSlot {
+    node: Box<WidgetNode>,
+    slot_data: Option<SlotData>,
+}
+
+impl ChildSlot {
+    fn new(node: Box<WidgetNode>, slot_data: Option<SlotData>) -> Self {
+        Self { node, slot_data }
+    }
+
+    fn into_node(self) -> Box<WidgetNode> {
+        self.node
+    }
+}
+
+impl Deref for ChildSlot {
+    type Target = WidgetNode;
+
+    fn deref(&self) -> &Self::Target {
+        &self.node
+    }
+}
+
+impl DerefMut for ChildSlot {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.node
+    }
+}
+
+impl AsRef<WidgetNode> for ChildSlot {
+    fn as_ref(&self) -> &WidgetNode {
+        &self.node
+    }
+}
+
+impl AsMut<WidgetNode> for ChildSlot {
+    fn as_mut(&mut self) -> &mut WidgetNode {
+        &mut self.node
+    }
 }
 
 // ── Property dispatch (M1 experimental property IDs from wasamo.h §5) ─────────
@@ -221,24 +251,6 @@ impl From<windows::core::Error> for PropertyError {
     fn from(e: windows::core::Error) -> Self {
         PropertyError::Runtime(format!("{e}"))
     }
-}
-
-fn child_slot_zstack_placement(
-    is_zstack_parent: bool,
-    zstack_placement: Option<ZStackPlacement>,
-) -> Option<ZStackPlacement> {
-    is_zstack_parent.then(|| zstack_placement.unwrap_or_else(ZStackPlacement::centered))
-}
-
-fn replacement_child_zstack_placement(
-    is_zstack_parent: bool,
-    existing_slot_placement: Option<ZStackPlacement>,
-) -> Option<ZStackPlacement> {
-    child_slot_zstack_placement(is_zstack_parent, existing_slot_placement)
-}
-
-fn clear_detached_child_zstack_placement(zstack_placement: &mut Option<ZStackPlacement>) {
-    *zstack_placement = None;
 }
 
 // M3-Phase 3 T5: WrapPanel absent-to-default mapping (DD-M3-P3-003 /
@@ -335,7 +347,7 @@ pub struct WidgetNode {
     width: SizeConstraint,
     height: SizeConstraint,
     pub visual: SpriteVisual,
-    pub children: Vec<Box<WidgetNode>>,
+    pub children: Vec<ChildSlot>,
     /// DSL inline handler body for a named signal (DD-M2-P3-002 = Option B).
     /// `(signal_name, expr)` — stored directly on the widget, separate from
     /// the host listener list. Phase 6 populates this from textual IR.
@@ -345,10 +357,6 @@ pub struct WidgetNode {
     /// `replace_child`, and `window::set_root`. Used by `widget_destroy`
     /// to reject destruction of still-attached widgets (DD-M2-P4-003).
     pub attached: bool,
-    /// Parent-interpreted ZStack child placement carried on this child slot
-    /// (DD-M3-P7-006). Set to `Some` only while the node is attached under a
-    /// ZStack parent; placement-free parent insertions normalize it to `None`.
-    zstack_placement: Option<ZStackPlacement>,
     /// Reactive bindings owned by this node. Dropping an EffectHandle
     /// removes it from the dependency graph (DD-M2-P5-003).
     pub(crate) bindings: Vec<EffectHandle>,
@@ -389,7 +397,6 @@ impl WidgetNode {
             children: Vec::new(),
             inline_handlers: Vec::new(),
             attached: false,
-            zstack_placement: None,
             bindings: Vec::new(),
         }))
     }
@@ -413,7 +420,6 @@ impl WidgetNode {
             children: Vec::new(),
             inline_handlers: Vec::new(),
             attached: false,
-            zstack_placement: None,
             bindings: Vec::new(),
         }))
     }
@@ -437,7 +443,6 @@ impl WidgetNode {
             children: Vec::new(),
             inline_handlers: Vec::new(),
             attached: false,
-            zstack_placement: None,
             bindings: Vec::new(),
         }))
     }
@@ -476,7 +481,6 @@ impl WidgetNode {
             children: Vec::new(),
             inline_handlers: Vec::new(),
             attached: false,
-            zstack_placement: None,
             bindings: Vec::new(),
         }))
     }
@@ -523,7 +527,6 @@ impl WidgetNode {
             children: Vec::new(),
             inline_handlers: Vec::new(),
             attached: false,
-            zstack_placement: None,
             bindings: Vec::new(),
         }))
     }
@@ -565,7 +568,6 @@ impl WidgetNode {
             children: Vec::new(),
             inline_handlers: Vec::new(),
             attached: false,
-            zstack_placement: None,
             bindings: Vec::new(),
         }))
     }
@@ -623,32 +625,26 @@ impl WidgetNode {
             children: Vec::new(),
             inline_handlers: Vec::new(),
             attached: false,
-            zstack_placement: None,
             bindings: Vec::new(),
         }))
     }
 
-    // M3-Phase 5 T3: Grid constructor. The track lists and per-Cell
-    // placements arrive already converted to the layout-engine mirror
-    // types (`ir_loader::construct_widget` "Grid" arm performs the
-    // `wasamo_ir::TrackSize` → `layout::TrackSize` conversion and the
-    // `Cell` `IrProp` → `CellPlacement` extraction — log.md T3 R-B
-    // Decision 1). `cell_placements[i]` places the content child that the
-    // loader appends at `children[i]` (the Cell wrapper itself is
-    // IR-only). The constructor installs the DD-M3-P5-005 outer-bounds
+    // M3-Phase 5 T3 / M3-Phase 7b T3: Grid constructor. The track lists
+    // arrive already converted to the layout-engine mirror types; per-child
+    // placement is carried by child slots inserted after construction. The
+    // constructor installs the DD-M3-P5-005 outer-bounds
     // clip on the outer Visual (`Visual.Clip = InsetClip{0,0,0,0}`, the
     // same zero-inset auto-tracking clip ScrollView's outer Visual uses,
     // so the `sync_visuals` size write keeps the clipped region in sync
     // with the Grid rect each layout pass). Grid paints no background
     // brush. Width / height default to `Fill` / `Fill` (mirrors
     // `LayoutNode::grid`); the child-count / placement invariants are
-    // enforced upstream by `wasamoc check` (T1) and `ir_loader::validate()`
+    // enforced upstream by `wasamoc check` and `ir_loader::validate()`
     // (T3), not by this data shape.
     pub(crate) fn grid(
         compositor: &Compositor,
         columns: Vec<TrackSize>,
         rows: Vec<TrackSize>,
-        cell_placements: Vec<CellPlacement>,
     ) -> windows::core::Result<Box<Self>> {
         use windows::core::Interface;
         let visual = compositor.CreateSpriteVisual()?;
@@ -656,18 +652,13 @@ impl WidgetNode {
         let outer_visual: Visual = visual.cast()?;
         outer_visual.SetClip(&clip)?;
         Ok(Box::new(Self {
-            data: WidgetData::Grid {
-                columns,
-                rows,
-                cell_placements,
-            },
+            data: WidgetData::Grid { columns, rows },
             width: SizeConstraint::Fill,
             height: SizeConstraint::Fill,
             visual,
             children: Vec::new(),
             inline_handlers: Vec::new(),
             attached: false,
-            zstack_placement: None,
             bindings: Vec::new(),
         }))
     }
@@ -690,7 +681,6 @@ impl WidgetNode {
             children: Vec::new(),
             inline_handlers: Vec::new(),
             attached: false,
-            zstack_placement: None,
             bindings: Vec::new(),
         }))
     }
@@ -822,7 +812,6 @@ impl WidgetNode {
             children: Vec::new(),
             inline_handlers: Vec::new(),
             attached: false,
-            zstack_placement: None,
             bindings: Vec::new(),
         }))
     }
@@ -1346,6 +1335,10 @@ impl WidgetNode {
         matches!(self.data, WidgetData::ZStack)
     }
 
+    pub(crate) fn is_grid(&self) -> bool {
+        matches!(self.data, WidgetData::Grid { .. })
+    }
+
     pub fn insert_child(
         &mut self,
         index: usize,
@@ -1354,20 +1347,20 @@ impl WidgetNode {
         self.insert_child_inner(index, child, None)
     }
 
-    pub(crate) fn insert_child_with_zstack_placement(
+    pub(crate) fn insert_child_with_slot_data(
         &mut self,
         index: usize,
         child: Box<WidgetNode>,
-        placement: ZStackPlacement,
+        slot_data: Option<SlotData>,
     ) -> Result<(), MutationError> {
-        self.insert_child_inner(index, child, Some(placement))
+        self.insert_child_inner(index, child, slot_data)
     }
 
     fn insert_child_inner(
         &mut self,
         index: usize,
         mut child: Box<WidgetNode>,
-        zstack_placement: Option<ZStackPlacement>,
+        slot_data: Option<SlotData>,
     ) -> Result<(), MutationError> {
         if index > self.children.len() {
             return Err(MutationError::IndexOutOfBounds);
@@ -1375,7 +1368,6 @@ impl WidgetNode {
         if child.attached {
             return Err(MutationError::AlreadyAttached);
         }
-        child.zstack_placement = child_slot_zstack_placement(self.is_zstack(), zstack_placement);
         use windows::core::Interface;
         let parent_container: ContainerVisual = self
             .content_container_visual()
@@ -1402,7 +1394,8 @@ impl WidgetNode {
                 .map_err(|_| MutationError::IndexOutOfBounds)?;
         }
         child.attached = true;
-        self.children.insert(index, child);
+        self.children
+            .insert(index, ChildSlot::new(child, slot_data));
         Ok(())
     }
 
@@ -1423,9 +1416,8 @@ impl WidgetNode {
             .Children()
             .and_then(|c| c.Remove(&child_visual))
             .map_err(|_| MutationError::IndexOutOfBounds)?;
-        let mut removed = self.children.remove(index);
+        let mut removed = self.children.remove(index).into_node();
         removed.attached = false;
-        clear_detached_child_zstack_placement(&mut removed.zstack_placement);
         Ok(removed)
     }
 
@@ -1440,11 +1432,7 @@ impl WidgetNode {
         if new_child.attached {
             return Err(MutationError::AlreadyAttached);
         }
-        let replacement_placement = replacement_child_zstack_placement(
-            self.is_zstack(),
-            self.children[index].zstack_placement,
-        );
-        new_child.zstack_placement = replacement_placement;
+        let replacement_slot_data = self.children[index].slot_data;
         use windows::core::Interface;
         let old_visual: Visual = self.children[index]
             .visual
@@ -1468,9 +1456,12 @@ impl WidgetNode {
             .InsertAtTop(&new_visual)
             .map_err(|_| MutationError::IndexOutOfBounds)?;
         new_child.attached = true;
-        let mut old = std::mem::replace(&mut self.children[index], new_child);
+        let mut old = std::mem::replace(
+            &mut self.children[index],
+            ChildSlot::new(new_child, replacement_slot_data),
+        )
+        .into_node();
         old.attached = false;
-        clear_detached_child_zstack_placement(&mut old.zstack_placement);
         Ok(old)
     }
 
@@ -1533,8 +1524,16 @@ impl WidgetNode {
         self.sync_visuals(&layout_tree, (0.0, 0.0))
     }
 
+    fn build_layout_child_slots(&self) -> ChildSlots {
+        self.children
+            .iter()
+            .map(|slot| LayoutChildSlot::new(slot.build_layout_tree(), slot.slot_data))
+            .collect::<Vec<_>>()
+            .into()
+    }
+
     fn build_layout_tree(&self) -> LayoutNode {
-        let mut layout_node = match &self.data {
+        match &self.data {
             WidgetData::Rectangle | WidgetData::Text { .. } | WidgetData::Button(_) => {
                 LayoutNode::rectangle(self.width.clone(), self.height.clone())
             }
@@ -1546,11 +1545,7 @@ impl WidgetNode {
                 let mut node = LayoutNode::vstack(*spacing, *padding, *alignment);
                 node.width = self.width.clone();
                 node.height = self.height.clone();
-                node.children = self
-                    .children
-                    .iter()
-                    .map(|c| c.build_layout_tree())
-                    .collect();
+                node.children = self.build_layout_child_slots();
                 node
             }
             WidgetData::HStack {
@@ -1561,11 +1556,7 @@ impl WidgetNode {
                 let mut node = LayoutNode::hstack(*spacing, *padding, *alignment);
                 node.width = self.width.clone();
                 node.height = self.height.clone();
-                node.children = self
-                    .children
-                    .iter()
-                    .map(|c| c.build_layout_tree())
-                    .collect();
+                node.children = self.build_layout_child_slots();
                 node
             }
             // M3-Phase 2 T8: thread the Box-internal `aspect` into the
@@ -1585,11 +1576,7 @@ impl WidgetNode {
                 let mut node = LayoutNode::box_(layout_ratio);
                 node.width = self.width.clone();
                 node.height = self.height.clone();
-                node.children = self
-                    .children
-                    .iter()
-                    .map(|c| c.build_layout_tree())
-                    .collect();
+                node.children = self.build_layout_child_slots();
                 node
             }
             // M3-Phase 3 T5: thread the WrapPanel attribute set into the
@@ -1612,11 +1599,7 @@ impl WidgetNode {
                 );
                 node.width = self.width.clone();
                 node.height = self.height.clone();
-                node.children = self
-                    .children
-                    .iter()
-                    .map(|c| c.build_layout_tree())
-                    .collect();
+                node.children = self.build_layout_child_slots();
                 node
             }
             // M3-Phase 4 T3: thread the ScrollView `offset_y` into the
@@ -1628,54 +1611,29 @@ impl WidgetNode {
                 let mut node = LayoutNode::scroll_view(*offset_y);
                 node.width = self.width.clone();
                 node.height = self.height.clone();
-                node.children = self
-                    .children
-                    .iter()
-                    .map(|c| c.build_layout_tree())
-                    .collect();
+                node.children = self.build_layout_child_slots();
                 node
             }
-            // M3-Phase 5 T3: thread the Grid track lists + per-Cell
-            // placements into the pure-logic layout engine. The fields are
-            // already the layout-engine mirror types (the loader did the
-            // IR→layout conversion — log.md T3 R-B Decision 1), so this is
-            // a structural copy into `LayoutNode::grid`. `cell_placements`
-            // stays parallel to `children`: the loader appended each Cell's
-            // content child at the same index, so the layout tree's
-            // children order matches `cell_placements` order, which is the
-            // DD-M3-P5-005 document / paint order. `arrange_grid` writes
-            // each content child's resolved offset / size directly onto its
-            // `LayoutNode`, read back by `sync_visuals`.
-            WidgetData::Grid {
-                columns,
-                rows,
-                cell_placements,
-            } => {
-                let mut node =
-                    LayoutNode::grid(columns.clone(), rows.clone(), cell_placements.clone());
+            // M3-Phase 5 T3 / M3-Phase 7b T3: thread the Grid track lists
+            // and child-slot placement into the pure-logic layout engine.
+            // `arrange_grid` writes each content child's resolved offset /
+            // size directly onto its `LayoutNode`, read back by
+            // `sync_visuals`.
+            WidgetData::Grid { columns, rows } => {
+                let mut node = LayoutNode::grid(columns.clone(), rows.clone());
                 node.width = self.width.clone();
                 node.height = self.height.clone();
-                node.children = self
-                    .children
-                    .iter()
-                    .map(|c| c.build_layout_tree())
-                    .collect();
+                node.children = self.build_layout_child_slots();
                 node
             }
             WidgetData::ZStack => {
                 let mut node = LayoutNode::zstack();
                 node.width = self.width.clone();
                 node.height = self.height.clone();
-                node.children = self
-                    .children
-                    .iter()
-                    .map(|c| c.build_layout_tree())
-                    .collect();
+                node.children = self.build_layout_child_slots();
                 node
             }
-        };
-        layout_node.zstack_placement = self.zstack_placement;
-        layout_node
+        }
     }
 
     // `computed.offset` is the absolute offset the layout engine assigns in
@@ -1962,11 +1920,8 @@ fn read_accent_color() -> Color {
 
 #[cfg(test)]
 mod tests {
-    use super::{
-        child_slot_zstack_placement, clear_detached_child_zstack_placement,
-        replacement_child_zstack_placement, MutationError,
-    };
-    use crate::layout::{Alignment, ZStackPlacement};
+    use super::MutationError;
+    use crate::layout::{Alignment, CellPlacement, SlotData, ZStackPlacement};
 
     // Minimal stand-in for WidgetNode used only to verify index-check and
     // attached-flag logic, without requiring a Win32/WinRT environment.
@@ -1981,7 +1936,12 @@ mod tests {
         }
     }
 
-    struct Children(Vec<Slot>);
+    struct StoredSlot {
+        slot: Slot,
+        slot_data: Option<SlotData>,
+    }
+
+    struct Children(Vec<StoredSlot>);
 
     impl Children {
         fn new() -> Self {
@@ -1992,7 +1952,16 @@ mod tests {
             self.0.len()
         }
 
-        fn insert(&mut self, index: usize, mut slot: Slot) -> Result<(), MutationError> {
+        fn insert(&mut self, index: usize, slot: Slot) -> Result<(), MutationError> {
+            self.insert_with_slot_data(index, slot, None)
+        }
+
+        fn insert_with_slot_data(
+            &mut self,
+            index: usize,
+            mut slot: Slot,
+            slot_data: Option<SlotData>,
+        ) -> Result<(), MutationError> {
             if index > self.0.len() {
                 return Err(MutationError::IndexOutOfBounds);
             }
@@ -2000,7 +1969,7 @@ mod tests {
                 return Err(MutationError::AlreadyAttached);
             }
             slot.attached = true;
-            self.0.insert(index, slot);
+            self.0.insert(index, StoredSlot { slot, slot_data });
             Ok(())
         }
 
@@ -2008,9 +1977,9 @@ mod tests {
             if index >= self.0.len() {
                 return Err(MutationError::IndexOutOfBounds);
             }
-            let mut slot = self.0.remove(index);
-            slot.attached = false;
-            Ok(slot)
+            let mut stored = self.0.remove(index);
+            stored.slot.attached = false;
+            Ok(stored.slot)
         }
 
         fn replace(&mut self, index: usize, mut new: Slot) -> Result<Slot, MutationError> {
@@ -2021,9 +1990,20 @@ mod tests {
                 return Err(MutationError::AlreadyAttached);
             }
             new.attached = true;
-            let mut old = std::mem::replace(&mut self.0[index], new);
-            old.attached = false;
-            Ok(old)
+            let slot_data = self.0[index].slot_data;
+            let mut old = std::mem::replace(
+                &mut self.0[index],
+                StoredSlot {
+                    slot: new,
+                    slot_data,
+                },
+            );
+            old.slot.attached = false;
+            Ok(old.slot)
+        }
+
+        fn slot_data_at(&self, index: usize) -> Option<SlotData> {
+            self.0[index].slot_data
         }
     }
 
@@ -2031,12 +2011,16 @@ mod tests {
         ZStackPlacement { h_align, v_align }
     }
 
+    fn grid_place() -> CellPlacement {
+        CellPlacement::default_grid()
+    }
+
     #[test]
     fn insert_at_zero() {
         let mut ch = Children::new();
         assert!(ch.insert(0, Slot::new()).is_ok());
         assert_eq!(ch.len(), 1);
-        assert!(ch.0[0].attached);
+        assert!(ch.0[0].slot.attached);
     }
 
     #[test]
@@ -2101,7 +2085,7 @@ mod tests {
         ch.insert(0, Slot::new()).unwrap();
         let old = ch.replace(0, Slot::new()).unwrap();
         assert!(!old.attached);
-        assert!(ch.0[0].attached);
+        assert!(ch.0[0].slot.attached);
     }
 
     #[test]
@@ -2137,7 +2121,7 @@ mod tests {
     fn attached_transition_append_remove() {
         let mut ch = Children::new();
         ch.insert(0, Slot::new()).unwrap();
-        assert!(ch.0[0].attached);
+        assert!(ch.0[0].slot.attached);
         let s = ch.remove(0).unwrap();
         assert!(!s.attached);
     }
@@ -2150,7 +2134,7 @@ mod tests {
         assert!(!s.attached);
         // Re-attaching the same slot (now detached) should succeed.
         ch.insert(0, s).unwrap();
-        assert!(ch.0[0].attached);
+        assert!(ch.0[0].slot.attached);
     }
 
     #[test]
@@ -2162,64 +2146,66 @@ mod tests {
     }
 
     #[test]
-    fn zstack_insert_default_placement_is_centered_on_production_logic() {
-        assert_eq!(
-            child_slot_zstack_placement(true, None),
-            Some(ZStackPlacement::centered())
-        );
+    fn insert_stores_zstack_slot_data_on_the_slot() {
+        let mut ch = Children::new();
+        let slot_data = Some(SlotData::ZStack(zplace(
+            Alignment::Trailing,
+            Alignment::Stretch,
+        )));
+
+        ch.insert_with_slot_data(0, Slot::new(), slot_data).unwrap();
+
+        assert_eq!(ch.slot_data_at(0), slot_data);
     }
 
     #[test]
-    fn zstack_insert_explicit_placement_is_preserved_on_production_logic() {
-        assert_eq!(
-            child_slot_zstack_placement(
-                true,
-                Some(zplace(Alignment::Trailing, Alignment::Stretch))
-            ),
-            Some(zplace(Alignment::Trailing, Alignment::Stretch))
-        );
+    fn insert_stores_grid_slot_data_on_the_slot() {
+        let mut ch = Children::new();
+        let slot_data = Some(SlotData::Grid(grid_place()));
+
+        ch.insert_with_slot_data(0, Slot::new(), slot_data).unwrap();
+
+        assert_eq!(ch.slot_data_at(0), slot_data);
     }
 
     #[test]
-    fn non_zstack_insert_normalizes_child_slot_placement_to_none() {
-        assert_eq!(
-            child_slot_zstack_placement(
-                false,
-                Some(zplace(Alignment::Trailing, Alignment::Stretch))
-            ),
-            None
-        );
+    fn non_placement_parent_insert_normalizes_slot_data_to_none() {
+        let mut ch = Children::new();
+
+        ch.insert(0, Slot::new()).unwrap();
+
+        assert_eq!(ch.slot_data_at(0), None);
     }
 
     #[test]
-    fn zstack_remove_detaches_and_clears_child_slot_placement() {
-        let mut placement = Some(zplace(Alignment::Leading, Alignment::Center));
+    fn remove_returns_detached_subtree_without_slot_metadata() {
+        let mut ch = Children::new();
+        ch.insert_with_slot_data(
+            0,
+            Slot::new(),
+            Some(SlotData::ZStack(ZStackPlacement::centered())),
+        )
+        .unwrap();
 
-        clear_detached_child_zstack_placement(&mut placement);
+        let removed = ch.remove(0).unwrap();
 
-        assert_eq!(placement, None);
+        assert!(!removed.attached);
+        assert_eq!(ch.len(), 0);
     }
 
     #[test]
-    fn zstack_replace_preserves_existing_slot_placement_on_new_child() {
-        assert_eq!(
-            replacement_child_zstack_placement(
-                true,
-                Some(zplace(Alignment::Leading, Alignment::Stretch))
-            ),
-            Some(zplace(Alignment::Leading, Alignment::Stretch))
-        );
-    }
+    fn replace_preserves_existing_slot_data_on_new_child() {
+        let mut ch = Children::new();
+        let slot_data = Some(SlotData::ZStack(zplace(
+            Alignment::Leading,
+            Alignment::Stretch,
+        )));
+        ch.insert_with_slot_data(0, Slot::new(), slot_data).unwrap();
 
-    #[test]
-    fn non_zstack_replace_normalizes_replacement_placement_to_none() {
-        assert_eq!(
-            replacement_child_zstack_placement(
-                false,
-                Some(zplace(Alignment::Leading, Alignment::Stretch))
-            ),
-            None
-        );
+        let old = ch.replace(0, Slot::new()).unwrap();
+
+        assert!(!old.attached);
+        assert_eq!(ch.slot_data_at(0), slot_data);
     }
 
     // ── Binding disposal mirror ───────────────────────────────────────────────
