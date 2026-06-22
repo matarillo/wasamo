@@ -955,6 +955,9 @@ fn validate_phase6_zstack_node_invariants(
                 "`ZStack` must not carry a `kind_payload` (DD-M3-P6-001)".into(),
             ));
         }
+        // Let stale child-placement props on a nested ZStack fall through to
+        // the global legacy-placement diagnostic below instead of reporting a
+        // generic ZStack attribute error.
         let zstack_widget_prop = node
             .props
             .iter()
@@ -5286,6 +5289,63 @@ mod tests {
         assert_eq!(parsed, original, "round-trip mismatch\nIR text:\n{text}");
     }
 
+    #[test]
+    fn grid_slot_emit_then_parse_preserves_payload_values() {
+        let original = IrComponent {
+            name: "GridRoundTrip".into(),
+            base: "Window".into(),
+            host_props: vec![],
+            host_bindings: vec![],
+            states: vec![],
+            root: IrNode {
+                widget_type: "Grid".into(),
+                props: vec![],
+                bindings: vec![],
+                handlers: vec![],
+                children: vec![IrMember::Widget(IrChildSlot {
+                    node: IrNode {
+                        widget_type: "Text".into(),
+                        props: vec![IrProp {
+                            name: "text".into(),
+                            value: IrLiteral::Str("cell".into()),
+                        }],
+                        bindings: vec![],
+                        handlers: vec![],
+                        children: vec![],
+                        kind_payload: None,
+                    },
+                    slot_data: Some(IrSlotData::Grid {
+                        row: 1,
+                        column: 2,
+                        row_span: 1,
+                        column_span: 2,
+                        h_align: IrAlignment::Center,
+                        v_align: IrAlignment::End,
+                    }),
+                })],
+                kind_payload: Some(KindPayload::Grid {
+                    columns: vec![
+                        TrackSize::Fixed(120),
+                        TrackSize::Star(1),
+                        TrackSize::Star(2),
+                        TrackSize::Star(1),
+                    ],
+                    rows: vec![TrackSize::Fixed(40), TrackSize::Star(1)],
+                }),
+            },
+        };
+
+        let text = render(&original);
+        assert!(
+            text.contains(
+                "placement grid { row: 1, column: 2, row-span: 1, column-span: 2, h-align: center, v-align: end }"
+            ),
+            "IR text did not contain the non-default Grid placement:\n{text}"
+        );
+        let parsed = parse_ok(&text);
+        assert_eq!(parsed, original, "round-trip mismatch\nIR text:\n{text}");
+    }
+
     /// Minimal IR text renderer mirroring `wasamoc::emit` (§8 normative grammar).
     /// Kept in the test module so the parser test does not require `wasamoc` as
     /// a dev-dependency; correctness vs. the compiler's emitter is enforced by
@@ -5336,6 +5396,13 @@ mod tests {
     fn render_node(out: &mut String, n: &IrNode, depth: usize) {
         let i = "    ".repeat(depth);
         out.push_str(&format!("{i}node {} {{\n", n.widget_type));
+        if let Some(KindPayload::Grid { columns, rows }) = &n.kind_payload {
+            out.push_str(&format!(
+                "{i}    tracks columns = {}\n",
+                render_tracks(columns)
+            ));
+            out.push_str(&format!("{i}    tracks rows = {}\n", render_tracks(rows)));
+        }
         for p in &n.props {
             out.push_str(&format!(
                 "{i}    prop {} = {}\n",
@@ -5430,6 +5497,17 @@ mod tests {
                 render_alignment(*v_align)
             )),
         }
+    }
+
+    fn render_tracks(tracks: &[TrackSize]) -> String {
+        tracks
+            .iter()
+            .map(|track| match track {
+                TrackSize::Fixed(px) => px.to_string(),
+                TrackSize::Star(weight) => format!("{weight}*"),
+            })
+            .collect::<Vec<_>>()
+            .join(" ")
     }
 
     fn render_alignment(alignment: IrAlignment) -> &'static str {
@@ -6337,6 +6415,14 @@ mod tests {
     }
 
     #[test]
+    fn child_slot_unexpected_token_rejected_at_parse() {
+        assert_parse_err(
+            &valid_grid_src("child { prop text = \"x\" node Text {} }"),
+            "unexpected token in child slot",
+        );
+    }
+
+    #[test]
     fn grid_slot_unknown_key_rejected_at_parse() {
         assert_parse_err(
             &valid_grid_src(&grid_child("row: 0, column: 0, layer: 1")),
@@ -6455,6 +6541,16 @@ mod tests {
     }
 
     #[test]
+    fn grid_slot_negative_row_rejected_at_parse() {
+        assert_parse_err(
+            &valid_grid_src(
+                "child { placement grid { row: -1, column: 0, column-span: 1 } node Text {} }",
+            ),
+            "grid.row",
+        );
+    }
+
+    #[test]
     fn grid_cell_span_exceeds_grid_rejected() {
         assert_validate_err(
             &valid_grid_src(
@@ -6528,6 +6624,16 @@ mod tests {
         assert_parse_err(
             &valid_grid_src(
                 "child { placement grid { row: 0, column: 0, h-align: middle } node Text {} }",
+            ),
+            "grid.h-align",
+        );
+    }
+
+    #[test]
+    fn grid_slot_non_keyword_alignment_rejected_at_parse() {
+        assert_parse_err(
+            &valid_grid_src(
+                "child { placement grid { row: 0, column: 0, h-align: 5 } node Text {} }",
             ),
             "grid.h-align",
         );
