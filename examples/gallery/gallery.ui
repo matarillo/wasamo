@@ -6,6 +6,7 @@ component Gallery inherits Window {
     state scroll_y: i32 = 0
     state is_lightbox_open: bool = false
     state labels: string[] = ["S01", "S02", "S03", "S04", "S05", "S06"]
+    state is_placement_demo_open: bool = true
 
     ZStack {
         VStack {
@@ -122,6 +123,12 @@ component Gallery inherits Window {
             }
 
             Button {
+                text: "Open placement demo"
+                style: accent
+                clicked => { root.is_placement_demo_open = true; }
+            }
+
+            Button {
                 text: "Scroll down (+100)"
                 style: accent
                 clicked => { root.scroll_y += 100; }
@@ -213,6 +220,87 @@ component Gallery inherits Window {
                                 clicked => { root.is_lightbox_open = false; }
                             }
                         }
+                    }
+                }
+            }
+        }
+
+        if is_placement_demo_open {
+            ZStack {
+                slot.h-align: stretch
+                slot.v-align: stretch
+
+                Box {
+                    slot.h-align: stretch
+                    slot.v-align: stretch
+                    fill: #0a0f18ff
+                }
+
+                VStack {
+                    slot.h-align: stretch
+                    slot.v-align: stretch
+                    spacing: 10px
+                    padding: 16px
+
+                    Text { text: "Placement demo — Phase 7b verification (removed at Phase 8)" }
+
+                    Text { text: "ZStack slot.h-align (same box, three keys -> three x positions):" }
+                    ZStack {
+                        Box {
+                            slot.h-align: stretch
+                            slot.v-align: stretch
+                            fill: #112233ff
+                        }
+                        Box {
+                            slot.h-align: start
+                            slot.v-align: center
+                            fill: #4488ddff
+                            Text { text: "slot.h-align: start" }
+                        }
+                        Box {
+                            slot.v-align: center
+                            fill: #888888ff
+                            Text { text: "omitted -> center" }
+                        }
+                        Box {
+                            slot.h-align: end
+                            slot.v-align: center
+                            fill: #dd8844ff
+                            Text { text: "slot.h-align: end" }
+                        }
+                    }
+
+                    Text { text: "Grid placement: distinct row/column/span; r0c0 stretch-fills vs r0c2 centered:" }
+                    Grid {
+                        columns: 220 220 220
+                        rows: 56 56
+
+                        Cell {
+                            row: 0 column: 0
+                            Box {
+                                fill: #336699ff
+                                Text { text: "r0c0 stretch" }
+                            }
+                        }
+                        Cell {
+                            row: 0 column: 2 h-align: center v-align: center
+                            Box {
+                                fill: #cc3366ff
+                                Text { text: "r0c2 centered" }
+                            }
+                        }
+                        Cell {
+                            row: 1 column: 0 column-span: 3
+                            Box {
+                                fill: #669933ff
+                                Text { text: "r1 span 3 columns" }
+                            }
+                        }
+                    }
+
+                    Button {
+                        text: "Close demo"
+                        clicked => { root.is_placement_demo_open = false; }
                     }
                 }
             }
