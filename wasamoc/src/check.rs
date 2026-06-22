@@ -37,6 +37,17 @@ const CELL_ATTRS: &[&str] = &[
 /// the content within the resolved cell rectangle.
 const ALIGN_VALUES: &[&str] = &["start", "center", "end", "stretch"];
 
+const GRID_SLOT_KEYS: &[&str] = &[
+    "row",
+    "column",
+    "row-span",
+    "column-span",
+    "h-align",
+    "v-align",
+];
+
+const ZSTACK_SLOT_KEYS: &[&str] = &["h-align", "v-align"];
+
 /// Parent-owned child-placement attributes (Grid `Cell` / ZStack direct
 /// children). They are consumed by the parent context, not by the child widget.
 const CHILD_PLACEMENT_ATTRS: &[&str] = &["h-align", "v-align"];
@@ -493,6 +504,14 @@ fn box_prop_surface_form(prop_name: &str) -> &'static str {
     }
 }
 
+fn slot_key(name: &str) -> Option<&str> {
+    name.strip_prefix("slot.")
+}
+
+fn slot_attr_label(key: &str) -> String {
+    format!("slot.{key}")
+}
+
 /// Validate a property bind on `WrapPanel.item-cross-size`,
 /// `WrapPanel.item-spacing`, or `WrapPanel.line-spacing`. All three are
 /// constant-only `i32` per DD-M3-P3-003 / DD-M3-P3-004: the RHS must be
@@ -811,6 +830,67 @@ fn check_zstack_unknown_attr(name: &str, span: &Span, filename: &str, diags: &mu
     ));
 }
 
+fn check_unknown_slot_key(
+    key: &str,
+    parent: &str,
+    allowed: &[&str],
+    span: &Span,
+    filename: &str,
+    diags: &mut Vec<Diagnostic>,
+) {
+    diags.push(error(
+        filename,
+        span,
+        format!(
+            "unknown `{}` slot key `slot.{}`; valid keys: {}",
+            parent,
+            key,
+            allowed
+                .iter()
+                .map(|k| format!("`slot.{k}`"))
+                .collect::<Vec<_>>()
+                .join(", ")
+        ),
+    ));
+}
+
+fn check_slot_property_outside_parent(
+    key: &str,
+    enclosing_widget: Option<&str>,
+    parent_widget: Option<&str>,
+    span: &Span,
+    filename: &str,
+    diags: &mut Vec<Diagnostic>,
+) {
+    let position = match (enclosing_widget, parent_widget) {
+        (Some("Cell"), Some("Grid")) => "among `Cell` placement attributes".to_string(),
+        (Some(widget), Some("Cell")) => {
+            format!("on a widget inside a `Cell` content child (`{widget}`)")
+        }
+        (Some(widget), _) => format!("inside `{}`", widget),
+        (None, _) => "at component level".to_string(),
+    };
+    diags.push(error(
+        filename,
+        span,
+        format!(
+            "`slot.{}` is parent-owned child placement data; it is only valid on a Grid direct child or a ZStack direct child; found {}",
+            key, position
+        ),
+    ));
+}
+
+fn check_slot_mixing_in_cell(key: &str, span: &Span, filename: &str, diags: &mut Vec<Diagnostic>) {
+    diags.push(error(
+        filename,
+        span,
+        format!(
+            "strict PM-2 mixing reject: `slot.{}` cannot appear among `Cell` attributes; use either `Cell {{ row: ... }}` grouped placement or direct `slot.*` on a Grid child, not both",
+            key
+        ),
+    ));
+}
+
 fn check_child_placement_outside_parent(
     name: &str,
     enclosing_widget: Option<&str>,
@@ -829,6 +909,22 @@ fn check_child_placement_outside_parent(
         format!(
             "`{}` is a parent-owned child placement attribute; it is only valid on a ZStack direct child or a Grid `Cell` (dsl_spec §4.13); found {}",
             name, position
+        ),
+    ));
+}
+
+fn check_zstack_bare_child_placement(
+    name: &str,
+    span: &Span,
+    filename: &str,
+    diags: &mut Vec<Diagnostic>,
+) {
+    diags.push(error(
+        filename,
+        span,
+        format!(
+            "ZStack child bare `{}` is no longer accepted; use `slot.{}` for parent-owned placement",
+            name, name
         ),
     ));
 }
@@ -1067,6 +1163,17 @@ struct CellRect {
     column_span: i64,
 }
 
+enum GridPlacementChild<'a> {
+    Cell {
+        members: &'a [Member],
+        span: &'a Span,
+    },
+    Direct {
+        members: &'a [Member],
+        span: &'a Span,
+    },
+}
+
 /// Validate a `Grid` widget body (DD-M3-P5-001 .. DD-M3-P5-006). This is
 /// the Grid-level pass: Cell placement bounds depend on the declared
 /// track counts and overlap detection compares all cells, so every
@@ -1112,8 +1219,9 @@ fn check_grid(members: &[Member], grid_span: &Span, filename: &str, diags: &mut 
         ));
     }
 
-    // 3. Collect Cells; reject any non-Cell / non-track member.
-    let mut cells: Vec<(&[Member], &Span)> = Vec::new();
+    // 3. Collect placement-bearing children. Grid admits retained `Cell`
+    // wrappers and direct child widgets with `slot.*` placement.
+    let mut placement_children: Vec<GridPlacementChild<'_>> = Vec::new();
     for m in members {
         match m {
             Member::GridTracks { .. } => {}
@@ -1122,29 +1230,33 @@ fn check_grid(members: &[Member], grid_span: &Span, filename: &str, diags: &mut 
                 members: cm,
                 span,
             } if type_name == "Cell" => {
-                cells.push((cm, span));
+                placement_children.push(GridPlacementChild::Cell { members: cm, span });
             }
             Member::WidgetDecl {
-                type_name, span, ..
+                members: cm, span, ..
             } => {
-                diags.push(error(
-                    filename,
-                    span,
-                    format!(
-                        "Grid children must be wrapped in `Cell` (dsl_spec §4.12); found `{}`",
-                        type_name
-                    ),
-                ));
+                placement_children.push(GridPlacementChild::Direct { members: cm, span });
             }
             Member::PropertyBind { name, span, .. } => {
-                diags.push(error(
-                    filename,
-                    span,
-                    format!(
-                        "unknown Grid attribute `{}`; Grid declares only `columns:` and `rows:` (dsl_spec §4.12)",
-                        name
-                    ),
-                ));
+                if let Some(key) = slot_key(name) {
+                    check_slot_property_outside_parent(
+                        key,
+                        Some("Grid"),
+                        None,
+                        span,
+                        filename,
+                        diags,
+                    );
+                } else {
+                    diags.push(error(
+                        filename,
+                        span,
+                        format!(
+                            "unknown Grid attribute `{}`; Grid declares only `columns:` and `rows:` (dsl_spec §4.12)",
+                            name
+                        ),
+                    ));
+                }
             }
             Member::SignalHandler { span, .. } => {
                 diags.push(error(filename, span, "`Grid` takes no signal handlers"));
@@ -1163,22 +1275,38 @@ fn check_grid(members: &[Member], grid_span: &Span, filename: &str, diags: &mut 
         }
     }
 
-    // 4. Per-cell validation + rectangle collection. The single-Cell
-    //    escape clause (DD-M3-P5-001 placement-default Option A) lets a
-    //    lone Cell omit `row:` / `column:`.
-    let single_cell = cells.len() == 1;
+    // 4. Per-child validation + rectangle collection. The retained `Cell`
+    //    grouped form keeps its single-child placement escape. Direct
+    //    `slot.*` children use child-slot defaults for omitted placement.
+    let single_grid_child = placement_children.len() == 1;
     let mut rects: Vec<(CellRect, &Span)> = Vec::new();
-    for (cell_members, cell_span) in &cells {
-        if let Some(rect) = check_cell(
-            cell_members,
-            cell_span,
-            single_cell,
-            columns_len,
-            rows_len,
-            filename,
-            diags,
-        ) {
-            rects.push((rect, cell_span));
+    for child in &placement_children {
+        match child {
+            GridPlacementChild::Cell { members, span } => {
+                if let Some(rect) = check_cell(
+                    members,
+                    span,
+                    single_grid_child,
+                    columns_len,
+                    rows_len,
+                    filename,
+                    diags,
+                ) {
+                    rects.push((rect, span));
+                }
+            }
+            GridPlacementChild::Direct { members, span } => {
+                if let Some(rect) = check_grid_direct_child_slot(
+                    members,
+                    span,
+                    columns_len,
+                    rows_len,
+                    filename,
+                    diags,
+                ) {
+                    rects.push((rect, span));
+                }
+            }
         }
     }
 
@@ -1299,6 +1427,9 @@ fn check_cell(
     for m in members {
         match m {
             Member::PropertyBind { name, value, span } => match name.as_str() {
+                _ if slot_key(name).is_some() => {
+                    check_slot_mixing_in_cell(slot_key(name).unwrap(), span, filename, diags)
+                }
                 "row" => {
                     row_present = true;
                     row = check_cell_index(name, value, span, filename, diags);
@@ -1391,6 +1522,185 @@ fn check_cell(
             column_span,
         }),
         _ => None,
+    }
+}
+
+fn check_grid_direct_child_slot(
+    members: &[Member],
+    child_span: &Span,
+    columns_len: Option<usize>,
+    rows_len: Option<usize>,
+    filename: &str,
+    diags: &mut Vec<Diagnostic>,
+) -> Option<CellRect> {
+    let mut row: Option<i64> = Some(0);
+    let mut column: Option<i64> = Some(0);
+    let mut row_span: Option<i64> = Some(1);
+    let mut column_span: Option<i64> = Some(1);
+
+    for m in members {
+        if let Member::PropertyBind { name, value, span } = m {
+            let Some(key) = slot_key(name) else {
+                continue;
+            };
+            match key {
+                "row" => row = check_grid_slot_index(key, value, span, filename, diags),
+                "column" => column = check_grid_slot_index(key, value, span, filename, diags),
+                "row-span" => row_span = check_grid_slot_span(key, value, span, filename, diags),
+                "column-span" => {
+                    column_span = check_grid_slot_span(key, value, span, filename, diags)
+                }
+                "h-align" | "v-align" => check_grid_slot_align(key, value, span, filename, diags),
+                _ => check_unknown_slot_key(key, "Grid", GRID_SLOT_KEYS, span, filename, diags),
+            }
+        }
+    }
+
+    if let (Some(r), Some(rs), Some(rl)) = (row, row_span, rows_len) {
+        if r + rs > rl as i64 {
+            diags.push(error(
+                filename,
+                child_span,
+                format!(
+                    "`slot.row` placement exceeds the grid: row {} + row-span {} = {} > {} declared row tracks (dsl_spec §4.16)",
+                    r, rs, r + rs, rl
+                ),
+            ));
+        }
+    }
+    if let (Some(c), Some(cs), Some(cl)) = (column, column_span, columns_len) {
+        if c + cs > cl as i64 {
+            diags.push(error(
+                filename,
+                child_span,
+                format!(
+                    "`slot.column` placement exceeds the grid: column {} + column-span {} = {} > {} declared column tracks (dsl_spec §4.16)",
+                    c, cs, c + cs, cl
+                ),
+            ));
+        }
+    }
+
+    match (row, column, row_span, column_span) {
+        (Some(row), Some(column), Some(row_span), Some(column_span)) => Some(CellRect {
+            row,
+            column,
+            row_span,
+            column_span,
+        }),
+        _ => None,
+    }
+}
+
+fn check_grid_slot_index(
+    key: &str,
+    value: &Expr,
+    span: &Span,
+    filename: &str,
+    diags: &mut Vec<Diagnostic>,
+) -> Option<i64> {
+    match value {
+        Expr::IntLit { value: v, .. } => {
+            if *v < 0 {
+                diags.push(error(
+                    filename,
+                    span,
+                    format!(
+                        "`{}` must be a non-negative integer (got {}); placement is zero-based (dsl_spec §4.16)",
+                        slot_attr_label(key),
+                        v
+                    ),
+                ));
+                None
+            } else {
+                Some(*v)
+            }
+        }
+        _ => {
+            diags.push(error(
+                filename,
+                span,
+                format!(
+                    "`{}` must be a non-negative integer literal; placement is constant per instance (dsl_spec §4.16)",
+                    slot_attr_label(key)
+                ),
+            ));
+            None
+        }
+    }
+}
+
+fn check_grid_slot_span(
+    key: &str,
+    value: &Expr,
+    span: &Span,
+    filename: &str,
+    diags: &mut Vec<Diagnostic>,
+) -> Option<i64> {
+    match value {
+        Expr::IntLit { value: v, .. } => {
+            if *v < 1 {
+                diags.push(error(
+                    filename,
+                    span,
+                    format!(
+                        "`{}` must be a positive integer (>= 1) (got {}) (dsl_spec §4.16)",
+                        slot_attr_label(key),
+                        v
+                    ),
+                ));
+                None
+            } else {
+                Some(*v)
+            }
+        }
+        _ => {
+            diags.push(error(
+                filename,
+                span,
+                format!(
+                    "`{}` must be a positive integer literal; placement is constant per instance (dsl_spec §4.16)",
+                    slot_attr_label(key)
+                ),
+            ));
+            None
+        }
+    }
+}
+
+fn check_grid_slot_align(
+    key: &str,
+    value: &Expr,
+    span: &Span,
+    filename: &str,
+    diags: &mut Vec<Diagnostic>,
+) {
+    match value {
+        Expr::Ident { name: v, .. } => {
+            if !ALIGN_VALUES.contains(&v.as_str()) {
+                diags.push(error(
+                    filename,
+                    span,
+                    format!(
+                        "`{}` must be one of {} (got `{}`) (dsl_spec §4.16)",
+                        slot_attr_label(key),
+                        ALIGN_VALUES.join(", "),
+                        v
+                    ),
+                ));
+            }
+        }
+        _ => {
+            diags.push(error(
+                filename,
+                span,
+                format!(
+                    "`{}` expects an alignment keyword ({}); placement is constant per instance (dsl_spec §4.16)",
+                    slot_attr_label(key),
+                    ALIGN_VALUES.join(", ")
+                ),
+            ));
+        }
     }
 }
 
@@ -1642,6 +1952,17 @@ fn check_members_inner(
 
             Member::PropertyBind { name, value, span } => {
                 if enclosing_widget.is_none() {
+                    if let Some(key) = slot_key(name) {
+                        check_slot_property_outside_parent(
+                            key,
+                            enclosing_widget,
+                            parent_widget,
+                            span,
+                            filename,
+                            diags,
+                        );
+                        continue;
+                    }
                     check_host_property_bind(name, value, span, filename, ns, diags);
                     continue;
                 }
@@ -1651,11 +1972,41 @@ fn check_members_inner(
                 // and skip the generic `check_expr_type` path, which would
                 // otherwise re-reject the literal positionally (the Ratio /
                 // Color arm rejects every appearance outside this site).
-                if CHILD_PLACEMENT_ATTRS.contains(&name.as_str()) {
+                if let Some(key) = slot_key(name) {
+                    if enclosing_widget == Some("Cell") && parent_widget == Some("Grid") {
+                        // Grid's enclosing pass emits the strict PM-2
+                        // mixing diagnostic for Cell attributes.
+                    } else if parent_widget == Some("Grid") {
+                        // Grid's enclosing pass validates direct child
+                        // slot keys, values, bounds, and overlap.
+                    } else if parent_widget == Some("ZStack") {
+                        if ZSTACK_SLOT_KEYS.contains(&key) {
+                            check_zstack_child_align(name, value, span, filename, diags);
+                        } else {
+                            check_unknown_slot_key(
+                                key,
+                                "ZStack",
+                                ZSTACK_SLOT_KEYS,
+                                span,
+                                filename,
+                                diags,
+                            );
+                        }
+                    } else {
+                        check_slot_property_outside_parent(
+                            key,
+                            enclosing_widget,
+                            parent_widget,
+                            span,
+                            filename,
+                            diags,
+                        );
+                    }
+                } else if CHILD_PLACEMENT_ATTRS.contains(&name.as_str()) {
                     if enclosing_widget == Some("Cell") {
                         // Grid's enclosing pass validates Cell placement.
                     } else if parent_widget == Some("ZStack") {
-                        check_zstack_child_align(name, value, span, filename, diags);
+                        check_zstack_bare_child_placement(name, span, filename, diags);
                     } else {
                         check_child_placement_outside_parent(
                             name,
@@ -4550,16 +4901,11 @@ mod tests {
     }
 
     #[test]
-    fn grid_non_cell_child_rejected() {
-        let errs = errors(
+    fn grid_direct_child_without_slot_uses_default_placement() {
+        let result = check_src(
             r#"component C inherits W { Grid { columns: 1* rows: 1* Text { text: "loose" } } }"#,
         );
-        assert!(
-            errs.iter()
-                .any(|e| e.contains("must be wrapped in `Cell`") && e.contains("`Text`")),
-            "{:?}",
-            errs
-        );
+        assert!(!result.has_errors(), "{:?}", result.diagnostics);
     }
 
     #[test]
@@ -4853,11 +5199,282 @@ mod tests {
             r#"component C inherits W {
                 ZStack {
                     Box { fill: #00000080 }
-                    Text { h-align: center v-align: end text: "caption" }
+                    Text { slot.h-align: center slot.v-align: end text: "caption" }
                 }
             }"#,
         );
         assert!(!result.has_errors(), "{:?}", result.diagnostics);
+    }
+
+    #[test]
+    fn grid_direct_slot_child_accepted() {
+        let result = check_src(
+            r#"component C inherits W {
+                Grid {
+                    columns: 1* 1*
+                    rows: 1*
+                    Text { slot.row: 0 slot.column: 1 slot.h-align: center text: "direct" }
+                }
+            }"#,
+        );
+        assert!(!result.has_errors(), "{:?}", result.diagnostics);
+    }
+
+    #[test]
+    fn grid_cell_and_direct_slot_forms_can_coexist() {
+        let result = check_src(
+            r#"component C inherits W {
+                Grid {
+                    columns: 1* 1*
+                    rows: 1*
+                    Cell { row: 0 column: 0 Text { text: "cell" } }
+                    Text { slot.row: 0 slot.column: 1 text: "direct" }
+                }
+            }"#,
+        );
+        assert!(!result.has_errors(), "{:?}", result.diagnostics);
+    }
+
+    #[test]
+    fn grid_direct_slot_unknown_key_rejected() {
+        let errs = errors(
+            r#"component C inherits W { Grid { columns: 1* rows: 1* Text { slot.foo: 0 } } }"#,
+        );
+        assert!(
+            errs.iter()
+                .any(|e| e.contains("unknown `Grid` slot key `slot.foo`")),
+            "{errs:?}"
+        );
+    }
+
+    #[test]
+    fn grid_direct_slot_constant_rhs_rejected() {
+        let errs = errors(
+            r#"component C inherits W {
+                state r: i32 = 0
+                Grid { columns: 1* rows: 1* Text { slot.row: r } }
+            }"#,
+        );
+        assert!(
+            errs.iter()
+                .any(|e| e.contains("`slot.row` must be a non-negative integer literal")),
+            "{errs:?}"
+        );
+    }
+
+    #[test]
+    fn grid_direct_slot_row_out_of_range_rejected() {
+        let errs = errors(
+            r#"component C inherits W {
+                Grid { columns: 1* rows: 1* Text { slot.row: 1 slot.column: 0 } }
+            }"#,
+        );
+        assert!(
+            errs.iter()
+                .any(|e| e.contains("`slot.row` placement exceeds the grid")),
+            "{errs:?}"
+        );
+    }
+
+    #[test]
+    fn grid_direct_slot_column_out_of_range_rejected() {
+        let errs = errors(
+            r#"component C inherits W {
+                Grid { columns: 1* rows: 1* Text { slot.row: 0 slot.column: 1 } }
+            }"#,
+        );
+        assert!(
+            errs.iter()
+                .any(|e| e.contains("`slot.column` placement exceeds the grid")),
+            "{errs:?}"
+        );
+    }
+
+    #[test]
+    fn grid_direct_slot_negative_index_rejected() {
+        let errs = errors(
+            r#"component C inherits W {
+                Grid { columns: 1* rows: 1* Text { slot.row: -1 slot.column: 0 } }
+            }"#,
+        );
+        assert!(
+            errs.iter().any(|e| {
+                e.contains("`slot.row` must be a non-negative integer") && e.contains("got -1")
+            }),
+            "{errs:?}"
+        );
+    }
+
+    #[test]
+    fn grid_direct_slot_zero_span_rejected() {
+        let errs = errors(
+            r#"component C inherits W {
+                Grid { columns: 1* rows: 1* Text { slot.row-span: 0 } }
+            }"#,
+        );
+        assert!(
+            errs.iter()
+                .any(|e| e.contains("`slot.row-span` must be a positive integer")),
+            "{errs:?}"
+        );
+    }
+
+    #[test]
+    fn grid_direct_slot_non_literal_span_rejected() {
+        let errs = errors(
+            r#"component C inherits W {
+                state span: i32 = 1
+                Grid { columns: 1* rows: 1* Text { slot.row-span: span } }
+            }"#,
+        );
+        assert!(
+            errs.iter()
+                .any(|e| e.contains("`slot.row-span` must be a positive integer literal")),
+            "{errs:?}"
+        );
+    }
+
+    #[test]
+    fn grid_direct_slot_bad_alignment_keyword_rejected() {
+        let errs = errors(
+            r#"component C inherits W {
+                Grid { columns: 1* rows: 1* Text { slot.h-align: middle } }
+            }"#,
+        );
+        assert!(
+            errs.iter()
+                .any(|e| e.contains("`slot.h-align` must be one of") && e.contains("`middle`")),
+            "{errs:?}"
+        );
+    }
+
+    #[test]
+    fn grid_direct_slot_non_keyword_alignment_rejected() {
+        let errs = errors(
+            r#"component C inherits W {
+                Grid { columns: 1* rows: 1* Text { slot.h-align: 3 } }
+            }"#,
+        );
+        assert!(
+            errs.iter()
+                .any(|e| e.contains("`slot.h-align` expects an alignment keyword")),
+            "{errs:?}"
+        );
+    }
+
+    #[test]
+    fn grid_direct_slot_value_namespace_prefers_alignment_keyword() {
+        let result = check_src(
+            r#"component C inherits W {
+                state end: i32 = 0
+                Grid { columns: 1* rows: 1* Text { slot.h-align: end } }
+            }"#,
+        );
+        assert!(!result.has_errors(), "{:?}", result.diagnostics);
+    }
+
+    #[test]
+    fn zstack_direct_slot_value_namespace_prefers_alignment_keyword() {
+        let result = check_src(
+            r#"component C inherits W {
+                state end: i32 = 0
+                ZStack { Text { slot.h-align: end } }
+            }"#,
+        );
+        assert!(!result.has_errors(), "{:?}", result.diagnostics);
+    }
+
+    #[test]
+    fn grid_direct_slot_overlaps_cell_rejected() {
+        let errs = errors(
+            r#"component C inherits W {
+                Grid {
+                    columns: 1* rows: 1*
+                    Cell { row: 0 column: 0 Text {} }
+                    Text { slot.row: 0 slot.column: 0 }
+                }
+            }"#,
+        );
+        assert!(errs.iter().any(|e| e.contains("overlaps")), "{errs:?}");
+    }
+
+    #[test]
+    fn slot_property_inside_cell_attrs_is_mixing_reject() {
+        let errs = errors(
+            r#"component C inherits W {
+                Grid { columns: 1* rows: 1* Cell { slot.row: 0 Text {} } }
+            }"#,
+        );
+        assert!(
+            errs.iter().any(|e| e.contains("strict PM-2 mixing reject")),
+            "{errs:?}"
+        );
+    }
+
+    #[test]
+    fn slot_property_inside_cell_content_is_non_admitting_parent_reject() {
+        let errs = errors(
+            r#"component C inherits W {
+                Grid { columns: 1* rows: 1* Cell { Text { slot.row: 0 } } }
+            }"#,
+        );
+        assert!(
+            errs.iter().any(|e| {
+                e.contains("parent-owned child placement data") && e.contains("inside a `Cell`")
+            }),
+            "{errs:?}"
+        );
+        assert!(
+            !errs.iter().any(|e| e.contains("strict PM-2 mixing reject")),
+            "{errs:?}"
+        );
+    }
+
+    #[test]
+    fn slot_property_under_non_admitting_parent_rejected() {
+        let errs = errors(r#"component C inherits W { VStack { Text { slot.h-align: center } } }"#);
+        assert!(
+            errs.iter()
+                .any(|e| e.contains("parent-owned child placement data")
+                    && e.contains("inside `Text`")),
+            "{errs:?}"
+        );
+    }
+
+    #[test]
+    fn slot_property_at_component_level_rejected() {
+        let errs = errors(r#"component C inherits W { slot.h-align: center ZStack {} }"#);
+        assert!(
+            errs.iter()
+                .any(|e| e.contains("parent-owned child placement data")
+                    && e.contains("component level")),
+            "{errs:?}"
+        );
+    }
+
+    #[test]
+    fn zstack_slot_unknown_key_rejected() {
+        let errs = errors(r#"component C inherits W { ZStack { Text { slot.row: 0 } } }"#);
+        assert!(
+            errs.iter()
+                .any(|e| e.contains("unknown `ZStack` slot key `slot.row`")),
+            "{errs:?}"
+        );
+    }
+
+    #[test]
+    fn zstack_slot_constant_rhs_rejected() {
+        let errs = errors(
+            r#"component C inherits W {
+                state align: string = "end"
+                ZStack { Text { slot.h-align: align } }
+            }"#,
+        );
+        assert!(
+            errs.iter()
+                .any(|e| e.contains("`slot.h-align` must be one of")),
+            "{errs:?}"
+        );
     }
 
     #[test]
@@ -5069,10 +5686,10 @@ mod tests {
 
     #[test]
     fn zstack_child_bad_alignment_value_rejected() {
-        let errs = errors(r#"component C inherits W { ZStack { Text { h-align: middle } } }"#);
+        let errs = errors(r#"component C inherits W { ZStack { Text { slot.h-align: middle } } }"#);
         assert!(
             errs.iter()
-                .any(|e| e.contains("ZStack child `h-align` must be one of")
+                .any(|e| e.contains("ZStack child `slot.h-align` must be one of")
                     && e.contains("`middle`")),
             "{:?}",
             errs
@@ -5084,12 +5701,24 @@ mod tests {
         // A non-identifier value (here an integer literal) must hit the
         // `expects an alignment keyword` arm of `check_zstack_child_align`,
         // distinct from the bad-identifier arm above.
-        let errs = errors(r#"component C inherits W { ZStack { Text { h-align: 3 } } }"#);
+        let errs = errors(r#"component C inherits W { ZStack { Text { slot.h-align: 3 } } }"#);
         assert!(
             errs.iter()
-                .any(|e| e.contains("ZStack child `h-align` expects an alignment keyword")),
+                .any(|e| e.contains("ZStack child `slot.h-align` expects an alignment keyword")),
             "{:?}",
             errs
+        );
+    }
+
+    #[test]
+    fn zstack_child_bare_alignment_rejected() {
+        let errs = errors(r#"component C inherits W { ZStack { Text { h-align: end } } }"#);
+        assert!(
+            errs.iter().any(|e| {
+                e.contains("ZStack child bare `h-align` is no longer accepted")
+                    && e.contains("slot.h-align")
+            }),
+            "{errs:?}"
         );
     }
 

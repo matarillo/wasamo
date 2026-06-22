@@ -233,8 +233,8 @@ const ZSTACK_PLACEMENT_SRC: &str = r#"component ConditionalZStackPlacement inher
         Text { text: "base" }
         if open {
             Text {
-                h-align: end
-                v-align: start
+                slot.h-align: end
+                slot.v-align: start
                 text: "edge"
             }
         }

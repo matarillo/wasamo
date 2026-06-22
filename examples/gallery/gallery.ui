@@ -9,8 +9,8 @@ component Gallery inherits Window {
 
     ZStack {
         VStack {
-            h-align: stretch
-            v-align: stretch
+            slot.h-align: stretch
+            slot.v-align: stretch
             spacing: 12px
             padding: 12px
 
@@ -170,12 +170,12 @@ component Gallery inherits Window {
 
         if is_lightbox_open {
             ZStack {
-                h-align: stretch
-                v-align: stretch
+                slot.h-align: stretch
+                slot.v-align: stretch
 
                 Box {
-                    h-align: stretch
-                    v-align: stretch
+                    slot.h-align: stretch
+                    slot.v-align: stretch
                     fill: #10182099
                 }
 
