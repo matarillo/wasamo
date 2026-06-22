@@ -294,12 +294,17 @@ fn lower_child_slot_with_loop(
 ) -> IrChildSlot {
     match parent_widget_type {
         "Grid" if widget_type == "Cell" => lower_grid_cell_slot(members, ns, loop_ctx),
+        "Grid" => lower_grid_direct_child_slot(widget_type, members, ns, loop_ctx),
         "ZStack" => lower_zstack_child_slot(widget_type, members, ns, loop_ctx),
         _ => IrChildSlot {
             node: lower_node_with_loop(widget_type, members, ns, loop_ctx),
             slot_data: None,
         },
     }
+}
+
+fn slot_key(name: &str) -> Option<&str> {
+    name.strip_prefix("slot.")
 }
 
 fn lower_grid_cell_slot(
@@ -348,6 +353,68 @@ fn lower_grid_cell_slot(
     }
 }
 
+fn lower_grid_direct_child_slot(
+    widget_type: &str,
+    members: &[Member],
+    ns: &Namespace,
+    loop_ctx: Option<&LowerLoopContext<'_>>,
+) -> IrChildSlot {
+    let mut stripped_members = Vec::with_capacity(members.len());
+    let mut has_slot_data = false;
+    let mut row = 0;
+    let mut column = 0;
+    let mut row_span = 1;
+    let mut column_span = 1;
+    let mut h_align = IrAlignment::Stretch;
+    let mut v_align = IrAlignment::Stretch;
+
+    for member in members {
+        match member {
+            Member::PropertyBind { name, value, .. } => match slot_key(name) {
+                Some("row") => {
+                    has_slot_data = true;
+                    row = lower_i32_placement(value).max(0) as u32;
+                }
+                Some("column") => {
+                    has_slot_data = true;
+                    column = lower_i32_placement(value).max(0) as u32;
+                }
+                Some("row-span") => {
+                    has_slot_data = true;
+                    row_span = lower_i32_placement(value).max(1) as u32;
+                }
+                Some("column-span") => {
+                    has_slot_data = true;
+                    column_span = lower_i32_placement(value).max(1) as u32;
+                }
+                Some("h-align") => {
+                    has_slot_data = true;
+                    h_align = lower_alignment_placement(value);
+                }
+                Some("v-align") => {
+                    has_slot_data = true;
+                    v_align = lower_alignment_placement(value);
+                }
+                Some(_) => {}
+                None => stripped_members.push(member.clone()),
+            },
+            _ => stripped_members.push(member.clone()),
+        }
+    }
+
+    IrChildSlot {
+        node: lower_node_with_loop(widget_type, &stripped_members, ns, loop_ctx),
+        slot_data: has_slot_data.then_some(IrSlotData::Grid {
+            row,
+            column,
+            row_span,
+            column_span,
+            h_align,
+            v_align,
+        }),
+    }
+}
+
 fn lower_zstack_child_slot(
     widget_type: &str,
     members: &[Member],
@@ -360,10 +427,10 @@ fn lower_zstack_child_slot(
 
     for member in members {
         match member {
-            Member::PropertyBind { name, value, .. } if name == "h-align" => {
+            Member::PropertyBind { name, value, .. } if name == "slot.h-align" => {
                 h_align = Some(lower_alignment_placement(value));
             }
-            Member::PropertyBind { name, value, .. } if name == "v-align" => {
+            Member::PropertyBind { name, value, .. } if name == "slot.v-align" => {
                 v_align = Some(lower_alignment_placement(value));
             }
             _ => stripped_members.push(member.clone()),
@@ -1280,6 +1347,39 @@ mod tests {
     }
 
     #[test]
+    fn grid_direct_slot_lowers_to_same_grid_slot_data_as_cell() {
+        let cell_comp = lower_src(
+            r#"component C inherits W {
+                Grid {
+                    columns: 1* 1*
+                    rows: 1*
+                    Cell { row: 0 column: 1 h-align: center Text { text: "x" } }
+                }
+            }"#,
+        );
+        let direct_comp = lower_src(
+            r#"component C inherits W {
+                Grid {
+                    columns: 1* 1*
+                    rows: 1*
+                    Text { slot.row: 0 slot.column: 1 slot.h-align: center text: "x" }
+                }
+            }"#,
+        );
+        let IrMember::Widget(cell_slot) = &cell_comp.root.children[0] else {
+            panic!("expected Cell-lowered slot");
+        };
+        let IrMember::Widget(direct_slot) = &direct_comp.root.children[0] else {
+            panic!("expected direct slot");
+        };
+        assert_eq!(direct_slot.node.widget_type, "Text");
+        assert_eq!(find_prop(&direct_slot.node, "slot.row"), None);
+        assert_eq!(find_prop(&direct_slot.node, "slot.column"), None);
+        assert_eq!(find_prop(&direct_slot.node, "slot.h-align"), None);
+        assert_eq!(direct_slot.slot_data, cell_slot.slot_data);
+    }
+
+    #[test]
     fn non_grid_node_has_no_kind_payload() {
         let comp = lower_src("component C inherits W { VStack { Text {} } }");
         assert!(comp.root.kind_payload.is_none());
@@ -1309,7 +1409,7 @@ mod tests {
             r#"component C inherits W {
                 ZStack {
                     Box { fill: #00000080 }
-                    Text { h-align: center v-align: end text: "caption" }
+                    Text { slot.h-align: center slot.v-align: end text: "caption" }
                 }
             }"#,
         );
@@ -1323,6 +1423,8 @@ mod tests {
         assert_eq!(child_widget(zstack, 1).widget_type, "Text");
         assert_eq!(find_prop(child_widget(zstack, 1), "h-align"), None);
         assert_eq!(find_prop(child_widget(zstack, 1), "v-align"), None);
+        assert_eq!(find_prop(child_widget(zstack, 1), "slot.h-align"), None);
+        assert_eq!(find_prop(child_widget(zstack, 1), "slot.v-align"), None);
         let IrMember::Widget(slot) = &zstack.children[1] else {
             panic!("expected ZStack child slot");
         };
@@ -1331,6 +1433,50 @@ mod tests {
             Some(IrSlotData::ZStack {
                 h_align: IrAlignment::Center,
                 v_align: IrAlignment::End,
+            })
+        );
+    }
+
+    #[test]
+    fn zstack_slot_defaults_omitted_axis_to_center() {
+        let comp = lower_src(
+            r#"component C inherits W {
+                ZStack {
+                    Text { slot.h-align: end text: "caption" }
+                }
+            }"#,
+        );
+        let IrMember::Widget(slot) = &comp.root.children[0] else {
+            panic!("expected ZStack child slot");
+        };
+        assert_eq!(
+            slot.slot_data,
+            Some(IrSlotData::ZStack {
+                h_align: IrAlignment::End,
+                v_align: IrAlignment::Center,
+            })
+        );
+    }
+
+    #[test]
+    fn conditional_body_root_slot_lowers_under_zstack() {
+        let comp = lower_src(
+            r#"component C inherits W {
+                state ready: bool = true
+                ZStack { if ready { Text { slot.h-align: end } } }
+            }"#,
+        );
+        let IrMember::ControlFlow(ControlFlowNode::If { branches }) = &comp.root.children[0] else {
+            panic!("expected if child");
+        };
+        let IrMember::Widget(slot) = &branches[0].body[0] else {
+            panic!("expected if body child slot");
+        };
+        assert_eq!(
+            slot.slot_data,
+            Some(IrSlotData::ZStack {
+                h_align: IrAlignment::End,
+                v_align: IrAlignment::Center,
             })
         );
     }

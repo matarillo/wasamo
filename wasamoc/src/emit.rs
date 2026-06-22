@@ -733,7 +733,7 @@ mod tests {
             r#"component C inherits W {
                 ZStack {
                     Box { fill: #00000080 }
-                    Text { h-align: center v-align: end text: "caption" }
+                    Text { slot.h-align: center slot.v-align: end text: "caption" }
                 }
             }"#,
         );

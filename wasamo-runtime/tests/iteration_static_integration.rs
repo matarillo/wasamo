@@ -212,8 +212,8 @@ fn static_for_under_zstack_preserves_child_carried_placement() {
     ZStack {
         for label in labels {
             Text {
-                h-align: end
-                v-align: start
+                slot.h-align: end
+                slot.v-align: start
                 text: label
             }
         }

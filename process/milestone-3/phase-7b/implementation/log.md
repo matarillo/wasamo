@@ -663,3 +663,146 @@ No owner-unknown unresolved point remains from T3. Deterministic-failure
 trap #6 did not trigger: the initial compile failure was the expected
 semantic-migration enumeration, not a flaky runtime/test failure; all
 post-fix reruns listed above completed green.
+
+### T4 start gate — author surface
+
+Carry-over check:
+
+- T3 carry-forward assigns the new direct `slot.*` author surface and
+  ZStack bare-placement reject to T4. This includes parser / check /
+  lower / fixture sweep, with impact that users are still on the old
+  ZStack bare placement surface until T4 closes.
+- T3 carry-forward for GUI positive-control evidence remains T5-owned;
+  T4 must migrate examples / fixtures but does not prove visible render.
+- T3 carry-forward for normative/reference docs sync and future Grid
+  structural-mutation trigger remains T7 / phase-end-owned; T4 must not
+  silently edit those docs as part of the author-surface commit unless a
+  new discovered divergence forces a plan revision.
+
+Critical T4 responsibility re-cut:
+
+- T4 is the author-surface flip over the already-final T2/T3 IR/runtime
+  storage, not another carrier migration. Its durable output is a single
+  accepted author surface (`slot.*` for direct parent-owned placement),
+  direct branch tests for the PM-2 matrix, lowering into `IrSlotData`,
+  and an in-repo `.ui` migration away from ZStack bare placement.
+- The parser stores dotted placement keys in the existing AST shape:
+  `Member::PropertyBind { name: "slot.<key>", value, span }`. No new AST
+  member variant is planned; malformed dotted shapes are parser-stage
+  rejects.
+- Grid retains `Cell` as grouped sugar. Direct `slot.*` on a Grid child
+  is added as an equal accepted form; mixing `slot.*` inside a `Cell`
+  remains a distinct reject from `slot.*` on a widget nested inside a
+  `Cell`.
+- T4 does not own assistant GUI evidence, owner GUI smoke, or Moment 2
+  docs sync. Those remain T5 / T6 / T7 carry-forward items.
+
+Selected traps and non-applicable reasons:
+
+| Trap | Classification | Reason |
+|---|---|---|
+| #1 semantic migration | Not applicable | T4 does not change an enum / schema carrier shape. It extends parser/check/lower behavior over the existing `PropertyBind` and `IrChildSlot` / `IrSlotData` carriers. |
+| #2 structural side effects | Not applicable | No runtime tree mutation, layout invalidation, Visual order, registry, or effect ownership path changes are planned. |
+| #3 parallel data drift | Not applicable | T3 already deleted parallel placement storage. T4 lowers author syntax into the unified child-slot data and introduces no parallel vector / cache. |
+| #4 untested authored branch | Applies | T4 adds parser rejects, checker diagnostics, accept branches, and lowering branches for `slot.*`, strict mixing, stale ZStack bare placement, constant-only RHS, value namespace, and placement-vs-unknown-property splits; every branch needs a direct firing test. |
+| #5 carry-forward | Applies | T4 leaves GUI proof, docs sync, and future Grid mutation policy to later tasks; any branch not implemented in T4 must have owner / scope / impact / close condition. |
+| #6 deterministic failure disposition | Conditional | Applies only if a recurring build / test / runtime failure appears during T4. A deterministic failure cannot be re-rolled to green without disposition. |
+| #7 GUI positive control | Not applicable | T4's deliverable is compiler/parser/check/lower behavior and fixture migration, not GUI-render evidence. T5 owns launch + screenshot + positive controls. |
+
+Review lane:
+
+- **Branch-test-focused review** because T4 adds diagnostic / reject /
+  accept / lowering branches but does not perform schema migration,
+  runtime structural change, or GUI-render evidence. The review must
+  check the implemented-branch test map row by row.
+
+Planned proof obligations before implementation:
+
+| Branch / behavior / invariant hypothesis | Category | T4 proof obligation |
+|---|---|---|
+| `slot.<key>:` parses as a property-bind key and is not expression member access. | Parser / semantic | Parser tests for canonical `slot.h-align`; parser rejects for `slot:`, `slot..h-align`, and `slot.`. |
+| Grid direct `slot.row` / `slot.column` / `slot.row-span` / `slot.column-span` / `slot.h-align` / `slot.v-align` are accepted on direct child widgets. | Semantic / accept | Checker positive and lowering tests showing direct Grid child `IrSlotData::Grid`. |
+| Grid `Cell` remains accepted grouped sugar and lowers to the same `IrSlotData::Grid` shape. | Semantic invariant | Existing Cell tests plus a direct equivalence test between `Cell` and direct `slot.*`. |
+| ZStack direct children accept only `slot.h-align` / `slot.v-align`; defaults remain center/center when one axis is omitted. | Semantic / accept | Checker and lowering tests for direct ZStack `slot.*` and default preservation. |
+| `slot.*` inside `Cell`'s own attrs is a strict PM-2 mixing reject. | Diagnostic / reject | Direct checker test whose message names mixing, distinct from non-admitting-parent. |
+| `slot.*` on a widget nested inside `Cell` is a non-admitting-parent reject, not the mixing diagnostic. | Diagnostic / reject | Direct checker test whose message names non-admitting parent / inside `Cell` content. |
+| `slot.*` under non-admitting parents and at component / host level is rejected distinctly from unknown widget properties where practical. | Diagnostic / reject | Direct checker tests for VStack and component-level placement. |
+| Unknown slot keys are rejected by the slot-key path, while unknown widget props still use ordinary unknown-property diagnostics. | Diagnostic / reject | Direct tests for `slot.foo` and `foo:` on a widget. |
+| Slot placement RHS is constant per instance and uses the placement keyword namespace; state-backed `end` must not override keyword `end`. | Diagnostic / semantic | Direct tests for state-backed placement RHS reject and state named `end` still allowing `slot.h-align: end`. |
+| ZStack bare `h-align` / `v-align` on direct children is rejected; no long-lived alias remains. | Diagnostic / reject | Direct checker test and `.ui` sweep with no surviving bare ZStack placement. |
+| CF-1 body-root placement inherits the static child surface. | Semantic | Lowering test for `if` or `for` body root under ZStack / Grid carrying slot data. |
+| In-repo `.ui` files no longer use ZStack bare placement and still compile through the workspace build. | Observable behavior | Greppable sweep plus `cargo test --workspace` / example build evidence. |
+
+Known carry-forward candidates at T4 start:
+
+| Candidate | Owner task | Scope / impact | Close condition |
+|---|---|---|---|
+| Assistant GUI positive-control proof | T5 | T4 changes author syntax and examples but does not produce screenshot evidence; visible placement could still regress despite compiler tests. | T5 evidence files + analysis show ZStack and Grid positive controls. |
+| Owner manual GUI smoke | T6 | Human-visible validation remains separate from assistant screenshots. | Owner accepts or records fail/fix/re-run. |
+| Moment 2 docs sync for landed `slot.*` surface and child-slot implementation | T7 | T4 implementation may diverge in small spelling/details from Moment 1 prose. | T7 updates `docs/dsl_spec.md` / `docs/architecture.md` or records explicit disposition. |
+| Future Grid structural-mutation trigger | T7 / phase-end | T4 admits direct Grid child placement but does not add direct Grid `if` / `for` mutation paths. | T7 candidate ledger / phase-end handoff records trigger, scope, impact, and close condition. |
+
+### T4 close gate — author surface
+
+T4 verification:
+
+| Command / evidence | Result | Notes |
+|---|---|---|
+| `cargo test -p wasamoc` | Green | 374 lib tests + roundtrip tests passed after parser / check / lower / emit updates. |
+| `cargo test --workspace` initial T4 run | Failed deterministically | `conditional_zstack_reinsert_uses_declared_placement_metadata` failed because a runtime integration authored-source fixture still used ZStack bare `h-align` / `v-align`. Disposition: migrated runtime authored-source fixtures to `slot.*`; this was not a flaky failure. |
+| `cargo test -p wasamo-runtime --test conditional_toggle_integration` | Green | Direct rerun of the previously failing deterministic case passed after fixture migration. |
+| `cargo test --workspace` final T4 run | Green | Workspace tests passed, including `wasamoc`, runtime unit tests, Windows integration tests, examples, and doctests. Cargo still emits the pre-existing warning that package `wasamo` provides no linkable target. |
+| `rg -n "slot\\.h-align\|slot\\.v-align\|h-align:\|v-align:" examples wasamo-runtime\tests wasamoc\src -g "*.ui" -g "*.rs"` | Reviewed | Remaining bare `h-align` / `v-align` hits are retained Grid `Cell` tests / fixtures, textual-IR emitter strings, and explicit bare-reject tests. ZStack authored fixtures and examples use `slot.*`. |
+
+T4 close gate — implemented-branch test map:
+
+| Implemented branch / behavior | Category | Source query / diff cue | Direct test or owner |
+|---|---|---|---|
+| `slot.<key>:` parses into existing `Member::PropertyBind { name: "slot.<key>", ... }`. | Parser / semantic | `rg -n "parse_slot_property_bind\|slot_dotted_property_bind_canonicalizes_name" wasamoc\src\parser.rs` | `parser::tests::slot_dotted_property_bind_canonicalizes_name` |
+| Malformed `slot:` / `slot..h-align` / `slot.` are parser-stage rejects. | Parser reject | `rg -n "malformed_slot_property_keys_rejected_at_parse\|malformed slot property key" wasamoc\src\parser.rs` | `parser::tests::malformed_slot_property_keys_rejected_at_parse` |
+| Grid direct child `slot.row` / `slot.column` / `slot.h-align` is accepted. | Semantic / accept | `rg -n "check_grid_direct_child_slot\|grid_direct_slot_child_accepted" wasamoc\src\check.rs` | `check::tests::grid_direct_slot_child_accepted` |
+| Grid direct child with no `slot.*` uses child-slot default placement instead of the old non-Cell reject. | Semantic / default | `rg -n "GridPlacementChild::Direct\|grid_direct_child_without_slot_uses_default_placement" wasamoc\src\check.rs` | `check::tests::grid_direct_child_without_slot_uses_default_placement`; loader default remains covered by `ir_loader::tests::grid_direct_child_without_placement_defaults_to_origin` |
+| Grid direct slot and retained `Cell` grouped form can coexist and both participate in overlap checks. | Semantic / invariant | `rg -n "GridPlacementChild\|check_cell_overlaps\|grid_cell_and_direct_slot_forms_can_coexist\|grid_direct_slot_overlaps_cell_rejected" wasamoc\src\check.rs` | `check::tests::grid_cell_and_direct_slot_forms_can_coexist`; `check::tests::grid_direct_slot_overlaps_cell_rejected` |
+| Grid direct `slot.*` lowers to the same `IrSlotData::Grid` as `Cell`; slot props are stripped from the child node. | Semantic lowering | `rg -n "lower_grid_direct_child_slot\|grid_direct_slot_lowers_to_same_grid_slot_data_as_cell" wasamoc\src\lower.rs` | `lower::tests::grid_direct_slot_lowers_to_same_grid_slot_data_as_cell` |
+| Unknown Grid slot key rejects through the slot-key diagnostic path. | Diagnostic reject | `rg -n "unknown `.*slot key\|grid_direct_slot_unknown_key_rejected" wasamoc\src\check.rs` | `check::tests::grid_direct_slot_unknown_key_rejected` |
+| Grid direct slot placement RHS is constant per instance for integer placement. | Diagnostic reject | `rg -n "grid_direct_slot_constant_rhs_rejected\|must be a non-negative integer literal" wasamoc\src\check.rs` | `check::tests::grid_direct_slot_constant_rhs_rejected` |
+| Placement value namespace treats `end` as the alignment keyword even when a state named `end` exists. | Semantic branch | `rg -n "grid_direct_slot_value_namespace_prefers_alignment_keyword" wasamoc\src\check.rs` | `check::tests::grid_direct_slot_value_namespace_prefers_alignment_keyword` |
+| `slot.*` among a `Cell` node's own attrs is the strict PM-2 mixing reject. | Diagnostic reject | `rg -n "strict PM-2 mixing\|slot_property_inside_cell_attrs_is_mixing_reject" wasamoc\src\check.rs` | `check::tests::slot_property_inside_cell_attrs_is_mixing_reject` |
+| `slot.*` on a widget inside `Cell` content is the non-admitting-parent reject, distinct from mixing. | Diagnostic reject | `rg -n "check_slot_property_outside_parent\|slot_property_inside_cell_content_is_non_admitting_parent_reject" wasamoc\src\check.rs` | `check::tests::slot_property_inside_cell_content_is_non_admitting_parent_reject` |
+| `slot.*` under a non-admitting parent and at component level is rejected as parent-owned placement data. | Diagnostic reject | `rg -n "slot_property_under_non_admitting_parent_rejected\|slot_property_at_component_level_rejected" wasamoc\src\check.rs` | `check::tests::slot_property_under_non_admitting_parent_rejected`; `check::tests::slot_property_at_component_level_rejected` |
+| ZStack direct child accepts only `slot.h-align` / `slot.v-align`. | Semantic / accept | `rg -n "ZSTACK_SLOT_KEYS\|zstack_direct_child_alignment_accepted" wasamoc\src\check.rs` | `check::tests::zstack_direct_child_alignment_accepted` |
+| ZStack unknown slot key rejects through the slot-key diagnostic path. | Diagnostic reject | `rg -n "zstack_slot_unknown_key_rejected\|unknown `ZStack` slot key" wasamoc\src\check.rs` | `check::tests::zstack_slot_unknown_key_rejected` |
+| ZStack slot alignment RHS is constant keyword placement data, not a state-backed binding. | Diagnostic reject | `rg -n "zstack_slot_constant_rhs_rejected\|ZStack child `slot.h-align`" wasamoc\src\check.rs` | `check::tests::zstack_slot_constant_rhs_rejected`; subcases `check::tests::zstack_child_bad_alignment_value_rejected`, `check::tests::zstack_child_non_keyword_alignment_value_rejected` |
+| ZStack bare child `h-align` / `v-align` is rejected; no long-lived alias remains. | Diagnostic reject | `rg -n "ZStack child bare\|zstack_child_bare_alignment_rejected" wasamoc\src\check.rs` | `check::tests::zstack_child_bare_alignment_rejected` |
+| ZStack `slot.*` lowers into `IrSlotData::ZStack`, strips `slot.*` props, and defaults omitted axis to center. | Semantic lowering | `rg -n "slot.h-align\|slot.v-align\|zstack_slot_defaults_omitted_axis_to_center" wasamoc\src\lower.rs` | `lower::tests::zstack_lowers_child_placement_to_slot_data`; `lower::tests::zstack_slot_defaults_omitted_axis_to_center` |
+| CF-1 body-root placement inherits the static child surface under ZStack. | Semantic lowering | `rg -n "conditional_body_root_slot_lowers_under_zstack" wasamoc\src\lower.rs` | `lower::tests::conditional_body_root_slot_lowers_under_zstack`; runtime fixtures `conditional_zstack_reinsert_uses_declared_placement_metadata`, `static_for_under_zstack_preserves_child_carried_placement`, `reactive_for_zstack_tail_append_uses_child_carried_placement` use authored `slot.*` after the fixture migration. |
+| In-repo authored `.ui` and runtime authored-source fixtures migrated from ZStack bare placement to `slot.*`; retained bare `h-align` / `v-align` are Grid `Cell`, textual-IR, or explicit reject tests. | Observable / fixture migration | `rg -n "slot\\.h-align\|slot\\.v-align\|h-align:\|v-align:" examples wasamo-runtime\tests wasamoc\src -g "*.ui" -g "*.rs"` | Owner closed in T4 by source sweep + `cargo test --workspace`. |
+| GUI positive-control evidence is not implemented in T4. | GUI evidence | `git diff --name-only` lists no T5 evidence screenshots or capture scripts. | Owner task = T5; scope = launch + screenshot + positive controls; impact = no assistant visual proof yet; close condition = T5 evidence files + analysis. |
+| Normative docs sync is not implemented in T4. | Docs | `git diff --name-only` lists no files under `docs/`. | Owner task = T7; scope = `docs/dsl_spec.md` / `docs/architecture.md` Moment 2 sync; impact = reference docs lag implementation; close condition = T7 sync or explicit disposition. |
+
+T4 close gate — behavior / invariant carry scan:
+
+| Behavior / invariant | Closed in T4? | Owner / scope / impact / close condition |
+|---|---|---|
+| Dotted `slot.*` is an author property key, not expression member access. | Closed | Parser canonicalizes into existing `PropertyBind.name`; parser tests listed above close this behavior. |
+| Grid direct children are now admitted by the author checker and default through child-slot placement when `slot.*` is omitted. | Closed | Closed by `check_grid_direct_child_slot`, `grid_direct_child_without_slot_uses_default_placement`, and workspace tests. This is a new observable author behavior versus the old "must be wrapped in Cell" reject. |
+| Retained Grid `Cell` syntax and direct Grid `slot.*` syntax lower to the same `IrSlotData::Grid` model. | Closed | Closed by `grid_direct_slot_lowers_to_same_grid_slot_data_as_cell`; retained Cell fixture hits remain intentional. |
+| ZStack direct placement is only `slot.h-align` / `slot.v-align`; bare child alignment is now a named reject. | Closed | Closed by `zstack_child_bare_alignment_rejected`, fixture migration, and workspace tests. |
+| Placement values are constant per instance and use the placement keyword namespace. | Closed | Closed for direct Grid and ZStack slot branches by the constant-RHS and keyword-namespace tests listed above. Bindable placement remains out of scope. |
+| Grid direct `if` / `for` mutation paths are still out of scope even though static direct Grid child authoring is now accepted. | Not closed | Owner task = T7 / phase-end handoff; scope = future Grid structural mutation paths; impact = future work must re-run trap #2/#3 before admitting direct Grid control-flow; close condition = T7 candidate ledger / phase-end handoff records trigger. |
+| Assistant-visible GUI proof has not run after author-surface migration. | Not closed | Owner task = T5; scope = gallery launch + screenshot + positive controls; impact = compiler/runtime tests do not prove visible placement; close condition = T5 evidence artifacts. |
+| Docs still contain Moment 1 design-draft wording until Moment 2. | Not closed | Owner task = T7; scope = DSL / architecture implementation sync; impact = external-reader docs may lag the shipped `slot.*` details; close condition = T7 updates or explicit no-change record. |
+
+T4 carry-forward ownership:
+
+| Carry-forward | Owner task | Scope / impact | Close condition |
+|---|---|---|---|
+| Produce assistant GUI positive-control evidence against the new author surface. | T5 | T4 changed examples / fixtures but did not capture rendered output. | T5 launch + screenshot + assistant analysis for ZStack and Grid positive controls. |
+| Owner manual GUI smoke. | T6 | Human-visible check remains separate from automated tests. | Owner records accept or fail/fix/re-run. |
+| Moment 2 docs sync for landed author surface and storage model. | T7 | No `docs/` files were edited in T4. | T7 syncs `docs/dsl_spec.md` / `docs/architecture.md` or records disposition. |
+| Future Grid structural-mutation trigger. | T7 / phase-end | Direct static Grid child authoring is accepted, but direct Grid `if` / `for` remains out of scope. | T7 candidate ledger / phase-end handoff records trigger, scope, impact, and close condition. |
+
+No owner-unknown unresolved point remains from T4. Trap #6 did trigger
+for the initial deterministic workspace failure; the root cause was
+stale authored ZStack bare-placement fixtures, and the disposition was
+fixture migration followed by a direct rerun and full workspace green.

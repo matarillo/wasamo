@@ -459,8 +459,8 @@ fn reactive_for_zstack_tail_append_uses_child_carried_placement() {
         Text { text: "base" }
         for label in labels {
             Text {
-                h-align: end
-                v-align: start
+                slot.h-align: end
+                slot.v-align: start
                 text: label
             }
         }

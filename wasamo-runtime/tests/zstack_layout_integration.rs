@@ -118,7 +118,7 @@ fn assert_zstack_visual_contract(zstack: &WidgetNode, label: &str) {
         );
     }
 
-    // The third child carries `h-align: end; v-align: start` in both
+    // The third child carries `slot.h-align: end; slot.v-align: start` in both
     // fixtures. Read the live Visual offset so the T3 runtime
     // WidgetData -> LayoutNode placement boundary is exercised end-to-end,
     // not only by T2's pure layout tests.
@@ -135,8 +135,8 @@ const ZSTACK_ROOT_SRC: &str = r#"component ZStackRoot inherits Window {
         Text { text: "bottom" }
         Text { text: "middle" }
         Text {
-            h-align: end
-            v-align: start
+            slot.h-align: end
+            slot.v-align: start
             text: "top"
         }
     }
@@ -151,8 +151,8 @@ const VSTACK_ZSTACK_SRC: &str = r#"component VStackZStackRoot inherits Window {
             Text { text: "bottom" }
             Text { text: "middle" }
             Text {
-                h-align: end
-                v-align: start
+                slot.h-align: end
+                slot.v-align: start
                 text: "top"
             }
         }

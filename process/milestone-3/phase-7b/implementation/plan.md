@@ -314,15 +314,21 @@ R-C / R-D / R-E). Discharges ADR evidence item (1) (compile-time
 positive + the full reject matrix). **Branch/test-focused review** for
 the reject branches. T4 owns the author surface only; runtime storage is
 T3-owned and the textual-IR carrier is T2-owned (T4 lowers into it).
+T4 does **not** own GUI-visible proof, normative/reference docs sync, or
+future Grid structural-mutation policy; those remain T5 / T7 carry-forward
+items. T4 may update this task list as the reject matrix is enumerated,
+but it must not weaken the PM-2 accept-set or the ZStack bare-placement
+reject fixed by the DDs.
 
-- [ ] Lexer / parser: the `slot.` dotted property-key lexeme on a child
+- [x] Lexer / parser: the `slot.` dotted property-key lexeme on a child
       (`slot.row` / `slot.column` / `slot.row-span` / `slot.column-span`
-      / `slot.h-align` / `slot.v-align`) read as a **dotted property
-      key, not an expression member-access** (R-E); the retained `Cell`
-      wrapper-as-sugar production (no new node type for the `slot.*`
-      path). Malformed key shapes (`slot:` / `slot..h-align` / `slot.`)
-      are **parser-stage** rejects.
-- [ ] `wasamoc check` — the full DD-001 §Spec-impact forcing table
+      / `slot.h-align` / `slot.v-align`) read into the existing
+      `Member::PropertyBind { name = "slot.<key>", ... }` AST shape as a
+      **dotted property key, not an expression member-access** (R-E). No
+      new AST member variant or runtime node type is introduced for the
+      `slot.*` path. Malformed key shapes (`slot:` / `slot..h-align` /
+      `slot.`) are **parser-stage** rejects.
+- [x] `wasamoc check` — the full DD-001 §Spec-impact forcing table
       (each row a named diagnostic with a firing test, trap #4):
       - **Per-key admission:** Grid admits the 6 keys (inside `Cell`
         **and** as direct `slot.*`); ZStack admits `slot.h-align` /
@@ -340,13 +346,16 @@ T3-owned and the textual-IR carrier is T2-owned (T4 lowers into it).
         `h-align` / `v-align` → named reject (no long-lived alias, R-C);
         placement-vs-unknown-widget-prop split in both directions.
       - Defaults preserved per container (Grid `stretch`, ZStack
-        `center`).
-- [ ] Lower all three authored forms — Grid `Cell`, Grid direct
+        `center`). A Grid child with direct `slot.*` and no `row` /
+        `column` follows the child-slot default path established by
+        T2/T3; the retained `Cell` grouped form keeps its existing
+        single-Cell / multi-Cell placement rules.
+- [x] Lower all three authored forms — Grid `Cell`, Grid direct
       `slot.*`, ZStack `slot.*` — into the **one** T2 IR slot record
       (model-level unification); CF-1 (placement on the `for` / `if`
       body's root child) inherits the static-child surface, no new
       syntax.
-- [ ] **`.ui` migration (bundled — R-C):** flip every in-repo `.ui`
+- [x] **`.ui` migration (bundled — R-C):** flip every in-repo `.ui`
       (`examples/gallery/`, `examples/**`, `wasamoc` / runtime test
       fixtures) off bare ZStack `h-align` / `v-align` onto
       `slot.h-align` / `slot.v-align`; Grid `Cell` stays (retained
@@ -354,14 +363,16 @@ T3-owned and the textual-IR carrier is T2-owned (T4 lowers into it).
       `gallery.ui`) stays green. Grid examples default to `Cell`
       (provisional convention); show direct `slot.*` where it
       illustrates the unified surface.
-- [ ] Tests: positive controls (`slot.*` under both containers compiles
+- [x] Tests: positive controls (`slot.*` under both containers compiles
       and lowers; `Cell` and Grid direct `slot.*` both lower to the same
       record; a state named `end` / `append` still parses) + one reject
       test per matrix row; emit-roundtrip shape tests (with T2).
 
-**Sub-task hypothesis:** (a) lexer/parser dotted-key + Cell sugar;
-(b) check admission matrix + the two Cell-related rejects; (c) lower all
-forms + CF-1; (d) `.ui` migration sweep. Splittable per the matrix.
+**Sub-task hypothesis:** (a) parser dotted-key storage in existing
+`PropertyBind`; (b) check admission matrix + the two Cell-related
+rejects; (c) lower Grid direct `slot.*`, retained Grid `Cell`, ZStack
+`slot.*`, and CF-1 body-root placement into `IrSlotData`; (d) `.ui`
+migration sweep. Splittable per the matrix.
 
 **Start gate:** **T3 merged** (the runtime feeds `SlotData` directly —
 the Seam A legacy adapter is gone, so what T4 lowers is exercised
