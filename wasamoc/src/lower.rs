@@ -4,9 +4,9 @@ use crate::ast::{
 };
 use crate::check::Namespace;
 use crate::ir::{
-    CompoundOp, ControlFlowBranch, ControlFlowNode, HandlerExpr, InterpolationPart, IrBinding,
-    IrComponent, IrHandler, IrLiteral, IrMember, IrNode, IrProp, IrState, IrStateType, IrType,
-    KindPayload, TrackSize as IrTrackSize,
+    CompoundOp, ControlFlowBranch, ControlFlowNode, HandlerExpr, InterpolationPart, IrAlignment,
+    IrBinding, IrChildSlot, IrComponent, IrHandler, IrLiteral, IrMember, IrNode, IrProp,
+    IrSlotData, IrState, IrStateType, IrType, KindPayload, TrackSize as IrTrackSize,
 };
 
 /// Lower a checked AST to the IR representation.
@@ -178,7 +178,8 @@ fn lower_node_with_loop(
                 members: child_members,
                 ..
             } => {
-                children.push(IrMember::Widget(lower_node_with_loop(
+                children.push(IrMember::Widget(lower_child_slot_with_loop(
+                    widget_type,
                     type_name,
                     child_members,
                     ns,
@@ -193,7 +194,7 @@ fn lower_node_with_loop(
                         condition: lower_condition_expr(condition, ns),
                         body: body
                             .iter()
-                            .map(|m| lower_widget_body_member(m, ns, loop_ctx))
+                            .map(|m| lower_widget_body_member(widget_type, m, ns, loop_ctx))
                             .collect(),
                     }],
                 }));
@@ -227,7 +228,7 @@ fn lower_node_with_loop(
                     },
                     body: body
                         .iter()
-                        .map(|m| lower_widget_body_member(m, ns, Some(&child_loop)))
+                        .map(|m| lower_widget_body_member(widget_type, m, ns, Some(&child_loop)))
                         .collect(),
                 }));
             }
@@ -265,6 +266,7 @@ fn lower_node_with_loop(
 }
 
 fn lower_widget_body_member(
+    parent_widget_type: &str,
     member: &Member,
     ns: &Namespace,
     loop_ctx: Option<&LowerLoopContext<'_>>,
@@ -272,8 +274,134 @@ fn lower_widget_body_member(
     match member {
         Member::WidgetDecl {
             type_name, members, ..
-        } => IrMember::Widget(lower_node_with_loop(type_name, members, ns, loop_ctx)),
+        } => IrMember::Widget(lower_child_slot_with_loop(
+            parent_widget_type,
+            type_name,
+            members,
+            ns,
+            loop_ctx,
+        )),
         _ => panic!("lower_widget_body_member: non-widget body (check should have rejected)"),
+    }
+}
+
+fn lower_child_slot_with_loop(
+    parent_widget_type: &str,
+    widget_type: &str,
+    members: &[Member],
+    ns: &Namespace,
+    loop_ctx: Option<&LowerLoopContext<'_>>,
+) -> IrChildSlot {
+    match parent_widget_type {
+        "Grid" if widget_type == "Cell" => lower_grid_cell_slot(members, ns, loop_ctx),
+        "ZStack" => lower_zstack_child_slot(widget_type, members, ns, loop_ctx),
+        _ => IrChildSlot {
+            node: lower_node_with_loop(widget_type, members, ns, loop_ctx),
+            slot_data: None,
+        },
+    }
+}
+
+fn lower_grid_cell_slot(
+    members: &[Member],
+    ns: &Namespace,
+    loop_ctx: Option<&LowerLoopContext<'_>>,
+) -> IrChildSlot {
+    let mut row = 0;
+    let mut column = 0;
+    let mut row_span = 1;
+    let mut column_span = 1;
+    let mut h_align = IrAlignment::Stretch;
+    let mut v_align = IrAlignment::Stretch;
+    let mut content: Option<(&str, &[Member])> = None;
+
+    for member in members {
+        match member {
+            Member::PropertyBind { name, value, .. } => match name.as_str() {
+                "row" => row = lower_i32_placement(value).max(0) as u32,
+                "column" => column = lower_i32_placement(value).max(0) as u32,
+                "row-span" => row_span = lower_i32_placement(value).max(1) as u32,
+                "column-span" => column_span = lower_i32_placement(value).max(1) as u32,
+                "h-align" => h_align = lower_alignment_placement(value),
+                "v-align" => v_align = lower_alignment_placement(value),
+                _ => {}
+            },
+            Member::WidgetDecl {
+                type_name, members, ..
+            } => content = Some((type_name.as_str(), members.as_slice())),
+            _ => {}
+        }
+    }
+
+    let (type_name, child_members) =
+        content.expect("lower_grid_cell_slot: Cell content missing (check should have rejected)");
+    IrChildSlot {
+        node: lower_node_with_loop(type_name, child_members, ns, loop_ctx),
+        slot_data: Some(IrSlotData::Grid {
+            row,
+            column,
+            row_span,
+            column_span,
+            h_align,
+            v_align,
+        }),
+    }
+}
+
+fn lower_zstack_child_slot(
+    widget_type: &str,
+    members: &[Member],
+    ns: &Namespace,
+    loop_ctx: Option<&LowerLoopContext<'_>>,
+) -> IrChildSlot {
+    let mut stripped_members = Vec::with_capacity(members.len());
+    let mut h_align: Option<IrAlignment> = None;
+    let mut v_align: Option<IrAlignment> = None;
+
+    for member in members {
+        match member {
+            Member::PropertyBind { name, value, .. } if name == "h-align" => {
+                h_align = Some(lower_alignment_placement(value));
+            }
+            Member::PropertyBind { name, value, .. } if name == "v-align" => {
+                v_align = Some(lower_alignment_placement(value));
+            }
+            _ => stripped_members.push(member.clone()),
+        }
+    }
+
+    let slot_data = if h_align.is_some() || v_align.is_some() {
+        Some(IrSlotData::ZStack {
+            h_align: h_align.unwrap_or(IrAlignment::Center),
+            v_align: v_align.unwrap_or(IrAlignment::Center),
+        })
+    } else {
+        None
+    };
+
+    IrChildSlot {
+        node: lower_node_with_loop(widget_type, &stripped_members, ns, loop_ctx),
+        slot_data,
+    }
+}
+
+fn lower_i32_placement(value: &Expr) -> i32 {
+    match value {
+        Expr::IntLit { value, .. } => *value as i32,
+        _ => panic!("lower_i32_placement: non-int placement (check should have rejected)"),
+    }
+}
+
+fn lower_alignment_placement(value: &Expr) -> IrAlignment {
+    match value {
+        Expr::Ident { name, .. } => match name.as_str() {
+            "start" => IrAlignment::Start,
+            "center" => IrAlignment::Center,
+            "end" => IrAlignment::End,
+            "stretch" => IrAlignment::Stretch,
+            _ => panic!("lower_alignment_placement: bad alignment (check should have rejected)"),
+        },
+        _ => panic!("lower_alignment_placement: non-ident alignment (check should have rejected)"),
     }
 }
 
@@ -616,7 +744,7 @@ mod tests {
 
     fn child_widget<'a>(node: &'a IrNode, index: usize) -> &'a IrNode {
         match &node.children[index] {
-            IrMember::Widget(child) => child,
+            IrMember::Widget(slot) => &slot.node,
             other => panic!("expected widget child at {index}, got {other:?}"),
         }
     }
@@ -1121,7 +1249,7 @@ mod tests {
     }
 
     #[test]
-    fn grid_cell_lowers_as_child_node_with_placement_props() {
+    fn grid_cell_lowers_to_child_slot_with_grid_slot_data() {
         let comp = lower_src(
             r#"component C inherits W {
                 Grid {
@@ -1133,33 +1261,22 @@ mod tests {
         );
         let grid = &comp.root;
         assert_eq!(grid.children.len(), 1);
-        let cell = child_widget(grid, 0);
-        assert_eq!(cell.widget_type, "Cell");
-        assert!(cell.kind_payload.is_none());
+        let IrMember::Widget(slot) = &grid.children[0] else {
+            panic!("expected Grid child slot");
+        };
+        assert_eq!(slot.node.widget_type, "Text");
+        assert!(slot.node.kind_payload.is_none());
         assert_eq!(
-            cell.props
-                .iter()
-                .find(|p| p.name == "row")
-                .map(|p| &p.value),
-            Some(&IrLiteral::Int(0))
+            slot.slot_data,
+            Some(IrSlotData::Grid {
+                row: 0,
+                column: 1,
+                row_span: 1,
+                column_span: 1,
+                h_align: IrAlignment::Center,
+                v_align: IrAlignment::Stretch,
+            })
         );
-        assert_eq!(
-            cell.props
-                .iter()
-                .find(|p| p.name == "column")
-                .map(|p| &p.value),
-            Some(&IrLiteral::Int(1))
-        );
-        assert_eq!(
-            cell.props
-                .iter()
-                .find(|p| p.name == "h-align")
-                .map(|p| &p.value),
-            Some(&IrLiteral::Ident("center".into()))
-        );
-        // The Cell's content widget is its single child node.
-        assert_eq!(cell.children.len(), 1);
-        assert_eq!(child_widget(cell, 0).widget_type, "Text");
     }
 
     #[test]
@@ -1187,7 +1304,7 @@ mod tests {
     // --- M3-Phase 6 T1: ZStack direct-child lowering (DD-M3-P6-001) -----
 
     #[test]
-    fn zstack_lowers_as_direct_children_without_kind_payload() {
+    fn zstack_lowers_child_placement_to_slot_data() {
         let comp = lower_src(
             r#"component C inherits W {
                 ZStack {
@@ -1204,13 +1321,17 @@ mod tests {
         assert_eq!(zstack.children.len(), 2);
         assert_eq!(child_widget(zstack, 0).widget_type, "Box");
         assert_eq!(child_widget(zstack, 1).widget_type, "Text");
+        assert_eq!(find_prop(child_widget(zstack, 1), "h-align"), None);
+        assert_eq!(find_prop(child_widget(zstack, 1), "v-align"), None);
+        let IrMember::Widget(slot) = &zstack.children[1] else {
+            panic!("expected ZStack child slot");
+        };
         assert_eq!(
-            find_prop(child_widget(zstack, 1), "h-align"),
-            Some(&IrLiteral::Ident("center".into()))
-        );
-        assert_eq!(
-            find_prop(child_widget(zstack, 1), "v-align"),
-            Some(&IrLiteral::Ident("end".into()))
+            slot.slot_data,
+            Some(IrSlotData::ZStack {
+                h_align: IrAlignment::Center,
+                v_align: IrAlignment::End,
+            })
         );
     }
 
@@ -1233,7 +1354,7 @@ mod tests {
                 assert_eq!(branches[0].body.len(), 1);
                 assert_eq!(
                     match &branches[0].body[0] {
-                        IrMember::Widget(node) => node.widget_type.as_str(),
+                        IrMember::Widget(slot) => slot.node.widget_type.as_str(),
                         other => panic!("expected widget body, got {other:?}"),
                     },
                     "Text"
@@ -1293,7 +1414,7 @@ mod tests {
                     panic!("expected Text body");
                 };
                 assert_eq!(
-                    text.bindings[0].expr,
+                    text.node.bindings[0].expr,
                     HandlerExpr::ItemRead {
                         binder: "label".into()
                     }
@@ -1347,9 +1468,9 @@ mod tests {
                 let IrMember::Widget(box_node) = &body[0] else {
                     panic!("expected Box body");
                 };
-                assert_eq!(box_node.widget_type, "Box");
-                assert_eq!(box_node.children.len(), 1);
-                let text = child_widget(box_node, 0);
+                assert_eq!(box_node.node.widget_type, "Box");
+                assert_eq!(box_node.node.children.len(), 1);
+                let text = child_widget(&box_node.node, 0);
                 let HandlerExpr::Interpolation(parts) = &text.bindings[0].expr else {
                     panic!("expected interpolation binding");
                 };
@@ -1400,7 +1521,7 @@ mod tests {
                     panic!("expected VStack body");
                 };
                 assert_eq!(
-                    vstack.bindings[0].expr,
+                    vstack.node.bindings[0].expr,
                     HandlerExpr::IndexRead { binder: "i".into() }
                 );
             }

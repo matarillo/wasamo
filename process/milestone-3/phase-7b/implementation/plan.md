@@ -151,16 +151,23 @@ trap #4 for the loader rejects; risk R-A / R-F). Lands the IR carrier +
 emit + loader parse + stale-form reject as one buildable commit. At T2
 close the loader still feeds the **legacy** runtime storage via the Seam
 A adapter (T3 removes it) — so T2 is internally bisectable and the
-runtime behaviour is unchanged.
+runtime behaviour is unchanged. T2's responsibility boundary is the
+IR/textual-IR contract plus the temporary adapter: it normalises the
+existing authored Grid `Cell` and ZStack bare-placement surfaces into
+`IrChildSlot.slot_data`, emits only the canonical `child { placement ...
+node ... }` textual IR, parses that canonical form, and rejects stale
+old-form textual IR. It does **not** delete `WidgetData::Grid.cell_placements`,
+`WidgetNode.zstack_placement`, or any layout mirror; those drift-closing
+structural changes are T3.
 
-- [ ] `wasamo-ir`: `IrMember::Widget(IrNode)` →
+- [x] `wasamo-ir`: `IrMember::Widget(IrNode)` →
       `IrMember::Widget(IrChildSlot)`, with
       `IrChildSlot { node: IrNode, slot_data: Option<IrSlotData> }`.
       Add the `IrSlotData` carrier (closed Grid / ZStack payload per
       VS-1a, broad name mirroring runtime `SlotData`). `KindPayload::Grid`
       (track lists) stays; only per-child placement moves to
       `slot_data`.
-- [ ] IR Rust spelling tradeoff recorded for review:
+- [x] IR Rust spelling tradeoff recorded for review:
       `IrMember::Widget(IrChildSlot)` is preferred over
       `IrMember::Widget { node, slot_data }`.
       Pros: it makes the IR child-slot record first-class like the
@@ -170,7 +177,7 @@ runtime behaviour is unchanged.
       Cons: it adds one named wrapper type and slightly more pattern-match
       churn than a struct variant; placement-insensitive callers must
       consciously unwrap `slot.node`.
-- [ ] Migrate every construction / match site so the workspace builds:
+- [x] Migrate every construction / match site so the workspace builds:
       `wasamoc` lower routes the **existing** authored placement (Grid
       `Cell` extraction, ZStack bare `h-align` / `v-align`) into
       `slot_data` (the new `slot.*` author surface is T4 — T2 keeps the
@@ -179,12 +186,21 @@ runtime behaviour is unchanged.
       node … }` skeleton; the runtime loader parses IR-B and (Seam A)
       converts `slot_data` back into `zstack_placement` /
       `cell_placements` for the unchanged runtime.
-- [ ] Loader **reject + regenerate**: stale old-form placement IR (a
+- [x] Runtime validation stays intentionally transitional: Grid is
+      validated against canonical child-slot records by reading
+      `IrSlotData::Grid`, then the Seam A builder derives the legacy
+      `cell_placements` vector from the same slots; ZStack placement is
+      likewise read from `IrSlotData::ZStack` and bridged to the existing
+      `insert_child_with_zstack_placement` path. Any child slot whose
+      placement kind is invalid for its immediate parent is rejected by
+      the loader. The absence of parallel-vector deletion is a named T3
+      carry-forward, not a T2 close condition.
+- [x] Loader **reject + regenerate**: stale old-form placement IR (a
       `Cell` node with placement `IrProp`s, or bare ZStack placement
       props on a child) is a **named loader diagnostic**
       (`legacy-placement-ir-form`-style), not silently slot-ised. Direct
       firing test (trap #4).
-- [ ] IR-type unit tests cover the `slot_data` encoding and the IR-B
+- [x] IR-type unit tests cover the `slot_data` encoding and the IR-B
       roundtrip at the **IR level** — construct `IrSlotData` directly and
       assert emit → load preserves it for the Grid and ZStack payloads;
       placement defaults preserved. (Tests that the **authored** direct
@@ -192,7 +208,7 @@ runtime behaviour is unchanged.
       not exist until T4, so it is not auditable as a T2 close-gate item.
       T2's roundtrip is exercised via the existing Grid `Cell` / ZStack
       lowering and direct IR construction.)
-- [ ] **Close artifact (trap #1):** the `rg`-enumerated call-site audit
+- [x] **Close artifact (trap #1):** the `rg`-enumerated call-site audit
       table over `IrMember` / `IrNode` placement extraction / emit /
       loader, each site classified (extended / correctly unaffected /
       deliberately rejects), `IrNode::widget_children()` and every

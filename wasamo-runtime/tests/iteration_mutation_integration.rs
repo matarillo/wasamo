@@ -12,8 +12,8 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Mutex, OnceLock};
 
 use wasamo_ir::{
-    ControlFlowNode, HandlerExpr, IrComponent, IrLiteral, IrMember, IrNode, IrState, IrStateType,
-    IrType,
+    ControlFlowNode, HandlerExpr, IrChildSlot, IrComponent, IrLiteral, IrMember, IrNode, IrState,
+    IrStateType, IrType,
 };
 use wasamo_runtime::ffi;
 use wasamo_runtime::ir_loader::{build_widget_tree, parse_ir};
@@ -695,13 +695,16 @@ fn staged_for_insert_build_failure_leaves_tree_unchanged() {
                         path: "labels".into(),
                         elem: IrType::Str,
                     },
-                    body: vec![IrMember::Widget(IrNode {
-                        widget_type: "NotAWidget".into(),
-                        props: Vec::new(),
-                        bindings: Vec::new(),
-                        handlers: Vec::new(),
-                        children: Vec::new(),
-                        kind_payload: None,
+                    body: vec![IrMember::Widget(IrChildSlot {
+                        node: IrNode {
+                            widget_type: "NotAWidget".into(),
+                            props: Vec::new(),
+                            bindings: Vec::new(),
+                            handlers: Vec::new(),
+                            children: Vec::new(),
+                            kind_payload: None,
+                        },
+                        slot_data: None,
                     })],
                 })],
                 kind_payload: None,
