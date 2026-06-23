@@ -396,43 +396,95 @@ review**). The owner-visible portion is T6's. Assistant evidence is
 **launch + DPI-aware screenshot capture + assistant analysis**;
 `Start-Process` survival is a supporting signal only.
 
-- [ ] Build and run `examples/gallery-rust/` (and the lightbox / overlay
-      ZStack surface). **Capture mechanics — reuse the proven Phase 6/7
-      pattern**
+**T5 re-cut against the actual gallery (recorded in [log.md](./log.md)).**
+The planning-time hypothesis assumed the shipped gallery already exercises
+the placement positive controls. A pre-implementation probe (environment
+capability check + capture of the current `examples/gallery/gallery.ui`,
+frames under [evidence/](./evidence/) `t5-probe-*.png`) disproved that:
+
+- The gallery's ZStack children use **only `slot.h-align: stretch`** —
+  there is **no `end` alignment and no alignment contrast** anywhere in
+  the shipped surface, so the ZStack positive control cannot be read off
+  the current gallery.
+- The main-screen Grid does **not appear** in an 800×600 capture; the
+  only Grid placement surface is the **lightbox** (centred 400px column +
+  per-row cells), which must be opened to be observed.
+- The proven `capture-lightbox.ps1` **click coordinates are stale** for
+  the current layout (the probe's "open" frame equals the "closed" frame
+  — the lightbox did not open), so the script cannot be reused verbatim.
+
+Therefore T5 owns **building a deliberate placement positive-control
+surface**, not relying on the gallery's incidental layout. Per the owner
+decision (2026-06-23, recorded in [log.md](./log.md)), the surface is a
+**toggled placement-demo sub-screen added to `gallery.ui`** (option A):
+T5 and T6 share one host, and it follows the established pattern of the
+gallery accumulating per-phase verification surfaces (Footer clip = P5,
+lightbox = P6/7, reactive list = P7) that the **Phase 8 close will sweep
+together**. The added surface carries an explicit Phase-8-removal marker
+and is recorded as a Phase-8 cleanup carry-forward (T7 / phase-end
+ledger).
+
+- [x] Add a **placement-demo sub-screen** to `examples/gallery/gallery.ui`
+      (a `state is_placement_demo_open` + "Open placement demo" button +
+      `if`-overlay; self-contained, marked for Phase 8 removal) that makes
+      the positive controls **visible and contrastive**:
+      - **ZStack:** three overlay children at `slot.h-align: start` /
+        omitted → default centre / `end` land at **three different
+        horizontal positions** — a single static frame a wrong
+        implementation could not equally produce.
+      - **Grid:** cells at distinct row/column/span **and** an explicit
+        `h-align: center` cell contrasted against a **stretch-default**
+        cell (the per-container default).
+      - **Deviations (recorded in [log.md](./log.md)):** the overlay
+        content is wrapped in a stretched `VStack` because a Grid cannot
+        be a placed ZStack child (`check_grid` rejects `slot.*`; a
+        ZStack-centred Grid measures 0×0 — pinned by
+        `zstack_grid_child_slot_alignment_rejected`, carry-forward to T7);
+        `aspect` Boxes are avoided in demo cells (they abort the intrinsic
+        measure). The surface defaults to `false` and is opened by a click
+        in the capture; synthetic input drives the Composition app's
+        buttons on a real / elevated desktop (a sandboxed session drops the
+        input — environment note, not an app limitation).
+- [x] Build and run `examples/gallery-rust/`. **Capture mechanics —
+      reuse the proven Phase 6/7 pattern**
       ([capture-lightbox.ps1](../../phase-6/implementation/evidence/capture-lightbox.ps1)):
       per-monitor-DPI-aware, enumerate the top-level HWND by title,
       `CopyFromScreen` over `GetWindowRect` (not `PrintWindow`, which
-      reads back blank under DirectComposition).
-- [ ] **ZStack positive control:** a child authored `slot.h-align: end`
-      is right-aligned **and** a contrasting-alignment child lands at a
-      *different* position — a single static frame a wrong
-      implementation could equally produce is **not** evidence. Capture
-      the same overlay at the same positions as the old surface
-      (same-position re-render proof).
-- [ ] **Grid positive control:** a Grid sub-screen shows row / column /
-      span / alignment visibly reflected, **and** a stray / omitted
-      placement falls to the per-container default (`stretch`) as the
-      contrast. If no Grid sub-screen exists in the gallery, add a
-      minimal Grid placement fixture or use an existing Grid example
-      (recorded in [log.md](./log.md)).
-- [ ] Record assistant evidence as labelled frames under
-      [evidence/](./evidence/) (`tN-<purpose>.png`) with the analysis
-      noting what each frame proves and the positive control it carries.
-      DPI blur, if any, is the known M4 residual, not a Phase 7b failure.
+      reads back blank under DirectComposition). The navigation
+      coordinates were re-derived; the re-tuned capture driver
+      ([capture-placement-demo.ps1](./evidence/capture-placement-demo.ps1))
+      lands under [evidence/](./evidence/).
+- [x] Record assistant evidence as labelled frames under
+      [evidence/](./evidence/) (`t5-home.png`, `t5-placement-demo.png`,
+      `t5-lightbox-slot-current.png`, `t5-lightbox-bare-baseline.png`) with
+      the analysis in [evidence/README.md](./evidence/README.md) noting
+      what each frame proves and the positive control it carries. DPI blur,
+      if any, is the known M4 residual, not a Phase 7b failure.
+- [x] **Same-position proof (closed in T5).** Capture the current-branch
+      `slot.*` lightbox at the Phase 6/7 baseline size and compare to the
+      pre-migration lightbox evidence.
 
 **Baseline for the same-position proof.** Because T4 rejects the old
-ZStack bare syntax, the "same positions as the old surface" comparison
-**cannot be regenerated on this branch**. T5 must name its baseline
-source up front in [log.md](./log.md) — one of: the Phase 6/7 lightbox
-GUI evidence; a screenshot captured at the **T4-pre commit** (last
-commit on the old surface); or an existing integration fixture that
-records the placed-child coordinates. The chosen baseline is the
-reference the positive control is read against.
+ZStack bare syntax, the bare-surface baseline **cannot be regenerated on
+this branch**. The correct baseline is the **T4-pre commit** (`3134287`,
+the last commit on the bare surface, with the *same* lightbox content) —
+**not** the Phase 6/7 evidence, which is an older gallery version whose
+unrelated `.ui` evolution would confound the comparison (a ~20px offset).
+T5 built `gallery-rust` at `3134287` in a throwaway worktree and captured
+`evidence/t5-lightbox-bare-baseline.png`, then captured the current
+`slot.*` lightbox `evidence/t5-lightbox-slot-current.png` at the same
+800×600. The two are **pixel-position identical** (photo/caption bbox
+`x=150..648 y=60..544` in both), proving the `slot.*` migration is
+position-preserving (assistant portion closed in T5; owner-visible
+confirmation is T6's). The **contrast** half (varied ZStack alignment →
+varied position; omitted Grid placement → default) is the placement-demo
+sub-screen's `t5-placement-demo.png`.
 
 **Start gate:** **T3 merged** (placement renders from final `SlotData`
 storage) **and** T4 merged (`.ui` on the new surface); the baseline
 source named; T5 trap selection recorded. **End gate:** screenshots +
-analysis + positive controls under `evidence/`; **full independent
+analysis + positive controls under `evidence/`; the placement-demo
+surface recorded as a Phase-8 removal carry-forward; **full independent
 review**.
 
 ---
