@@ -517,7 +517,7 @@ the recorded T5 baseline pair as the same-position corroboration.
       [evidence/t6-owner-smoke-script.md](./evidence/t6-owner-smoke-script.md)
       (exact launch / navigation / per-control observation + pass-fail
       criteria).
-- [ ] Owner runs the gallery placement-demo + lightbox per the observation
+- [x] Owner runs the gallery placement-demo + lightbox per the observation
       script and observes, with the **positive control = placement varied**
       (an explicit alignment lands where expected, a contrasting one lands
       elsewhere, omitted placement falls to the default — a single static
@@ -526,13 +526,15 @@ the recorded T5 baseline pair as the same-position corroboration.
       three distinct horizontal positions; the Grid cells land at their
       distinct row/column/span with r0c0 stretch-filled vs r0c2 centered;
       WrapPanel reflow / ScrollView behaviour stay correct around placed
-      children; window close is crash-free.
-- [ ] Owner explicitly accepts the smoke result, or records a fail
+      children; window close is crash-free. **Done (2026-06-23):** owner
+      ran the smoke and captured `evidence/t6-{home,placement-demo,lightbox}.png`.
+- [x] Owner explicitly accepts the smoke result, or records a fail
       observation; **fixes land additively on the `feat/m3-phase-7b-t6`
       branch** (the fix container) and the checklist re-runs to green
       before T6 closes (M3-Phase 4 T6 smoke-fail → fix → re-smoke
-      precedent).
-- [ ] T6 step-end retrospective recorded at
+      precedent). **Done (2026-06-23):** owner accepted all observations as
+      pass; no fix iteration needed.
+- [x] T6 step-end retrospective recorded at
       `process/milestone-3/phase-7b/retrospectives/t6.md` (recorded after
       the owner smoke result is known, per the owner-smoke precedent).
 

@@ -1154,3 +1154,31 @@ No owner-unknown unresolved point remains from the T6 assistant prep:
 every open item is assigned to T6 (owner), the T6 fix container, or
 T7 / phase-end. Deterministic-failure trap #6 did not trigger — the host
 build and launch were green on the first run.
+
+### T6 close gate — owner-smoke result (2026-06-23)
+
+The owner ran the GUI smoke on a visible desktop with a real mouse per
+[evidence/t6-owner-smoke-script.md](./evidence/t6-owner-smoke-script.md)
+and **accepted all observations as pass** (no fix iteration needed).
+Owner-captured frames committed under [evidence/](./evidence/):
+
+| Frame | Observation | Owner result |
+|---|---|---|
+| `t6-placement-demo.png` | Obs 1 ZStack `slot.h-align` start/omitted/end → left/center/right (three distinct x); Obs 2 Grid r0c0 stretch-fill vs r0c2 centered + r1 span-3 (distinct row/column/span + alignment contrast) | pass |
+| `t6-lightbox.png` | Obs 3 lightbox card centered (same-position corroboration vs `t5-lightbox-slot-current.png`); WrapPanel / ScrollView around placed children correct | pass |
+| `t6-home.png` | false-state home (both buttons, no overlay) — context | pass |
+| (window close) | Obs 4 Alt+F4 / × crash-free | pass |
+
+Assistant corroboration of the owner frames (sanity check before
+committing them as evidence — not a substitute for the owner judgement):
+both positive-control frames are non-blank and show the expected spatial
+contrasts (ZStack three-position spread; Grid stretch-vs-centered). The
+fixed-track Grid not resizing with the window is **expected** (T5
+deliberate authoring — star tracks / `aspect` cells abort arrange in this
+nested overlay; T7 / phase-end triage carry-forward), and Obs 2's positive
+control is the in-frame alignment contrast, not resize responsiveness.
+
+This closes the **owner half** of ADR evidence item (4); the assistant
+half was closed in T5. No deterministic-failure (trap #6) and no
+smoke-fail fix iteration occurred. The T6 step-end retrospective is at
+[../retrospectives/t6.md](../retrospectives/t6.md).

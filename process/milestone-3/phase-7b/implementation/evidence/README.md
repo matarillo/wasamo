@@ -107,6 +107,42 @@ at the capture size — which is why T5 adds the deliberate placement-demo
 surface. (A pre-implementation probe confirmed both this and that the
 environment renders non-blank GUI.)
 
+## T6 — owner-manual GUI smoke frames
+
+The **owner-performed** GUI smoke (ADR evidence item (4), owner portion;
+the assistant baseline above does not replace it) was run on a visible
+desktop with a real mouse per
+[t6-owner-smoke-script.md](./t6-owner-smoke-script.md), and the owner
+accepted all observations as pass (2026-06-23). The owner-captured frames:
+
+- `t6-home.png` — gallery home, false-state (both "Open placement demo"
+  and "Open lightbox" buttons present, no overlay).
+- `t6-placement-demo.png` — the placement-demo overlay carrying both
+  positive controls in one frame: **ZStack** `slot.h-align: start` (blue)
+  at the left, `omitted -> center` (gray) at the center, `slot.h-align:
+  end` (orange) at the right — three distinct x positions; **Grid**
+  `r0c0 stretch` (blue) stretch-filling its top-left cell vs `r0c2
+  centered` (pink) as a small centered box in the column-3 cell, and
+  `r1 span 3 columns` (green) spanning the full width on row 1 (distinct
+  row/column/span + the stretch-vs-centered alignment contrast).
+- `t6-lightbox.png` — the lightbox card centered over the gallery,
+  corroborating the T5 same-position frame; the main-screen header Grid
+  (`Header spans 3 columns`, `C0 fixed 120` / `C1 star 1*` / `C2 star 2*`)
+  also renders at this window size.
+
+These owner frames mirror the T5 assistant frames on the same surface;
+their added value is the **owner-confirmed, real-desktop provenance** of
+the human-visible smoke (M3-Phase 4 T6 precedent), not new visual content.
+
+> The demo Grid uses **fixed** tracks (`columns: 220 220 220`,
+> `rows: 56 56`) and so does not resize with the window — a deliberate T5
+> choice because star (`*`) tracks / `aspect` cells abort arrange in this
+> nested overlay (T5 layout finding, T7 / phase-end triage carry-forward).
+> Observation 2's positive control is the in-frame alignment contrast, not
+> resize responsiveness, so the fixed Grid does not weaken the smoke. The
+> ZStack panel is width-following (the `start`/`end` spread widens with the
+> window).
+
 ## Phase-8 removal
 
 The placement-demo surface (`state is_placement_demo_open`, the "Open
