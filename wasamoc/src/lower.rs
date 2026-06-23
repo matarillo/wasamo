@@ -1438,6 +1438,48 @@ mod tests {
     }
 
     #[test]
+    fn zstack_grid_child_slot_lowers_to_zstack_slot_data() {
+        // M3-Phase 7b T6b non-GUI positive control: a `Grid` placed as a
+        // direct `ZStack` child lowers its own `slot.h-align` / `slot.v-align`
+        // into the ZStack child slot's `IrSlotData::ZStack`, and the Grid node
+        // keeps its Grid identity (kind payload / its Cell child) while the
+        // placement props do NOT remain on the Grid node. This pins that the
+        // newly-accepted author form (T6b checker fix) actually reaches the
+        // one slot record, not just that it passes `check`.
+        let comp = lower_src(
+            r#"component C inherits W {
+                ZStack {
+                    Grid { slot.h-align: end slot.v-align: start columns: 1* rows: 1* Cell { Text { text: "x" } } }
+                }
+            }"#,
+        );
+        let zstack = &comp.root;
+        assert_eq!(zstack.widget_type, "ZStack");
+        assert_eq!(zstack.children.len(), 1);
+
+        // The Grid node keeps its identity and carries no leftover placement.
+        let grid = child_widget(zstack, 0);
+        assert_eq!(grid.widget_type, "Grid");
+        assert!(grid.kind_payload.is_some(), "Grid tracks must survive");
+        assert_eq!(find_prop(grid, "slot.h-align"), None);
+        assert_eq!(find_prop(grid, "slot.v-align"), None);
+        assert_eq!(grid.children.len(), 1, "Grid's Cell child must survive");
+
+        // The placement rides the ZStack child slot, as ZStack slot data.
+        let IrMember::Widget(slot) = &zstack.children[0] else {
+            panic!("expected ZStack child slot");
+        };
+        assert_eq!(slot.node.widget_type, "Grid");
+        assert_eq!(
+            slot.slot_data,
+            Some(IrSlotData::ZStack {
+                h_align: IrAlignment::End,
+                v_align: IrAlignment::Start,
+            })
+        );
+    }
+
+    #[test]
     fn zstack_slot_defaults_omitted_axis_to_center() {
         let comp = lower_src(
             r#"component C inherits W {

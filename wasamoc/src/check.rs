@@ -5459,25 +5459,45 @@ mod tests {
     #[test]
     fn zstack_grid_child_slot_alignment_accepted() {
         // M3-Phase 7b T6b: a `Grid` that is a direct `ZStack` child MAY
-        // carry `slot.h-align` / `slot.v-align` to place itself, per
+        // carry both `slot.h-align` and `slot.v-align` to place itself, per
         // DD-M3-P7b-001 ("slot.* valid on a ZStack direct child"; a Grid is
         // a widget). Previously the Grid pass (`check_grid`) consumed the
         // `slot.*` among the Grid's own members and wrongly rejected it as
         // "inside `Grid`". The parent ZStack validates it through the generic
-        // walk, so there is no placement-misplacement diagnostic now.
+        // walk, so the whole component compiles with NO error (asserted on
+        // `has_errors()`, not just the absence of one diagnostic string).
         // (The layout-side limitation — a Fill-default Grid collapses to 0×0
         // on a Shrink ancestor axis — is a separate carry-forward, not a
         // checker concern: docs/notes/author-controllable-sizing.md.)
-        let errs = errors(
+        let result = check_src(
             r#"component C inherits W {
-                ZStack { Grid { slot.h-align: end columns: 1* rows: 1* Cell { Text { text: "x" } } } }
+                ZStack { Grid { slot.h-align: end slot.v-align: start columns: 1* rows: 1* Cell { Text { text: "x" } } } }
             }"#,
         );
         assert!(
-            !errs
-                .iter()
-                .any(|e| e.contains("parent-owned child placement data")),
-            "Grid-as-ZStack-child slot.* must be accepted, got: {errs:?}"
+            !result.has_errors(),
+            "Grid-as-ZStack-child slot.h-align/slot.v-align must compile, got: {:?}",
+            result.diagnostics
+        );
+    }
+
+    #[test]
+    fn zstack_grid_child_unknown_slot_key_still_rejected() {
+        // Positive control for `zstack_grid_child_slot_alignment_accepted`:
+        // T6b skips *all* `slot.*` among a Grid's own members, not only the
+        // alignment keys. A Grid-placement key (`slot.row`) on a Grid that is
+        // a ZStack child is therefore delegated to the parent ZStack, which
+        // rejects it as an unknown ZStack slot key. Pins that the delegation
+        // does not silently accept Grid placement keys on a ZStack child.
+        let errs = errors(
+            r#"component C inherits W {
+                ZStack { Grid { slot.row: 0 columns: 1* rows: 1* Cell { Text { text: "x" } } } }
+            }"#,
+        );
+        assert!(
+            errs.iter()
+                .any(|e| e.contains("unknown `ZStack` slot key `slot.row`")),
+            "{errs:?}"
         );
     }
 
@@ -5510,6 +5530,27 @@ mod tests {
         let errs = errors(
             r#"component C inherits W {
                 VStack { Grid { slot.h-align: end columns: 1* rows: 1* Cell { Text { text: "x" } } } }
+            }"#,
+        );
+        let placement_errs = errs
+            .iter()
+            .filter(|e| {
+                e.contains("parent-owned child placement data") && e.contains("inside `Grid`")
+            })
+            .count();
+        assert_eq!(placement_errs, 1, "{errs:?}");
+    }
+
+    #[test]
+    fn component_level_grid_slot_still_rejected_once() {
+        // Completes `nonadmitting_parent_grid_child_slot_still_rejected` for
+        // the parent=None branch named in the T6b start gate ("VStack /
+        // component level"): a Grid at the component root (no admitting
+        // parent) still has its `slot.*` rejected as parent-owned data in the
+        // wrong position, exactly once (the Grid pass adds no duplicate).
+        let errs = errors(
+            r#"component C inherits W {
+                Grid { slot.h-align: end columns: 1* rows: 1* Cell { Text { text: "x" } } }
             }"#,
         );
         let placement_errs = errs

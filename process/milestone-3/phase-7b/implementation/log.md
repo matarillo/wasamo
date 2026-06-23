@@ -1277,10 +1277,24 @@ hunk in `check_grid`, three test hunks) + `git grep`.
 
 | Implemented branch / behavior | Category | Source query / diff cue | Direct test or owner |
 |---|---|---|---|
-| `check_grid` no longer consumes `slot.*` among the Grid's own members; the `slot_key(name).is_some()` arm is now a no-op (parent-owned, delegated to the generic walk). | Semantic (reject→accept) | `git diff wasamoc/src/check.rs` shows the `Member::PropertyBind` arm in `check_grid` changed from `check_slot_property_outside_parent(...)` to the skip comment; `rg -n "slot_key\\(name\\)\\.is_some\\(\\)" wasamoc/src/check.rs` | `wasamoc::check::tests::zstack_grid_child_slot_alignment_accepted` |
+| `check_grid` no longer consumes `slot.*` among the Grid's own members; the `slot_key(name).is_some()` arm is now a no-op (parent-owned, delegated to the generic walk). The Grid-in-ZStack child **compiles** (no error at all, both `slot.h-align` and `slot.v-align`). | Semantic (reject→accept) | `git diff wasamoc/src/check.rs` shows the `Member::PropertyBind` arm in `check_grid` changed from `check_slot_property_outside_parent(...)` to the skip comment; test asserts `!check_src(...).has_errors()` on a fixture with both axes | `wasamoc::check::tests::zstack_grid_child_slot_alignment_accepted` |
 | Parent ZStack still validates the `slot.h-align` **value** of a Grid-in-ZStack child (not a blanket accept). | Reject (value) — positive control | `rg -n "fn zstack_grid_child_slot_alignment_value_still_validated" wasamoc/src/check.rs`; needle: error contains `ZStack child \`slot.h-align\` must be one of` (fired by `check_zstack_child_align` via the `parent_widget == ZStack` branch) | `wasamoc::check::tests::zstack_grid_child_slot_alignment_value_still_validated` |
-| `slot.*` on a Grid under a non-admitting parent (VStack) is still rejected, and **exactly once** (no Grid-pass duplicate). | Reject (position) + invariant — positive control | `rg -n "fn nonadmitting_parent_grid_child_slot_still_rejected" wasamoc/src/check.rs`; needle: count of errors containing `parent-owned child placement data` && `inside \`Grid\`` equals 1 | `wasamoc::check::tests::nonadmitting_parent_grid_child_slot_still_rejected` |
+| The skip delegates **all** `slot.*` keys (not only alignment): a Grid-placement key (`slot.row`) on a Grid that is a ZStack child is delegated to the parent ZStack and rejected as an unknown ZStack slot key. | Reject (key namespace) — positive control | `rg -n "fn zstack_grid_child_unknown_slot_key_still_rejected" wasamoc/src/check.rs`; needle: error contains `unknown \`ZStack\` slot key \`slot.row\`` | `wasamoc::check::tests::zstack_grid_child_unknown_slot_key_still_rejected` |
+| `slot.*` on a Grid under a non-admitting parent (VStack, `parent_widget = Some("VStack")`) is still rejected, and **exactly once** (no Grid-pass duplicate). | Reject (position) + invariant — positive control | `rg -n "fn nonadmitting_parent_grid_child_slot_still_rejected" wasamoc/src/check.rs`; needle: count of errors containing `parent-owned child placement data` && `inside \`Grid\`` equals 1 | `wasamoc::check::tests::nonadmitting_parent_grid_child_slot_still_rejected` |
+| `slot.*` on a Grid at component root (`parent_widget = None`) is still rejected, and **exactly once** (the other sub-branch of the start-gate "VStack / component level" row). | Reject (position, parent=None) + invariant | `rg -n "fn component_level_grid_slot_still_rejected_once" wasamoc/src/check.rs`; needle: count of errors containing `parent-owned child placement data` && `inside \`Grid\`` equals 1 | `wasamoc::check::tests::component_level_grid_slot_still_rejected_once` |
+| The newly-accepted Grid-in-ZStack author form **lowers** the Grid's `slot.h-align` / `slot.v-align` into the ZStack child slot's `IrSlotData::ZStack`; the Grid node keeps its identity (kind payload + Cell child) and retains no placement props. | Semantic (lower / IR) — non-GUI positive control | `rg -n "fn zstack_grid_child_slot_lowers_to_zstack_slot_data" wasamoc/src/lower.rs`; needles: `slot.slot_data == Some(IrSlotData::ZStack { End, Start })`; `find_prop(grid, "slot.h-align") == None`; `grid.kind_payload.is_some()` | `wasamoc::lower::tests::zstack_grid_child_slot_lowers_to_zstack_slot_data` |
 | Unknown **non-slot** Grid attribute (`Grid { foo: 0 }`) is still rejected by `check_grid`. | Reject (preserved) | `git diff` shows the `else` arm (`unknown Grid attribute …`) unchanged | Pre-existing `wasamoc::check::tests` Grid-attribute coverage (unchanged; not re-authored in T6b) |
+
+**Codex review follow-up (2026-06-24).** External-agent review found the
+implementation correct but the trap-#4 test pin too weak. Strengthened per
+its four findings: (1) the accept test now asserts `!has_errors()` (full
+compile) with both `slot.h-align` and `slot.v-align`, not just the absence
+of one diagnostic string; (2) added `zstack_grid_child_unknown_slot_key_still_rejected`
+for the all-keys skip sub-branch; (3) added `component_level_grid_slot_still_rejected_once`
+for the `parent = None` sub-branch named in the start gate; (4) added the
+lower-side non-GUI positive control `zstack_grid_child_slot_lowers_to_zstack_slot_data`.
+`cargo test -p wasamoc --lib` 388 passed (was 385; +3 net); `cargo test
+--workspace` green; `cargo fmt --all -- --check` exit 0.
 
 T6b close gate — behavior / invariant carry scan:
 
