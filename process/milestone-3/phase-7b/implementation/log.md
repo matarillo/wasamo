@@ -1010,3 +1010,147 @@ Verification after the follow-up:
 | `cargo test -p wasamoc --lib zstack_grid_child_slot_alignment_rejected` | Green | Pins the current Grid-as-ZStack-child `slot.*` reject. |
 | `cargo build --release -p gallery-rust` (demo default `false`) | Green | Build-time `wasamoc check` of `gallery.ui` passes. |
 | Non-sandbox capture (`-OpenDemoAt` / `-OpenLightboxAt`) | Frames captured | `t5-home.png`, `t5-placement-demo.png`, `t5-lightbox-slot-current.png` regenerated from the committed `false` default by clicking. |
+
+### T6 start gate — owner-manual GUI smoke
+
+Carry-over check:
+
+- T5 (and T2/T3/T4 before it) carry exactly one T6-owned item: the
+  **owner-visible GUI smoke** for ADR evidence item (4), a separate gate
+  from T5's assistant baseline. T5 closed the **assistant** portion
+  (launch + screenshot + analysis + positive controls; same-position
+  proof against the T4-pre `3134287` bare baseline, pixel-identical) and
+  explicitly left the human-correctness judgement to T6.
+- T5 carry-forward also assigns to T6 (jointly with future gallery
+  editors) the **layout-coupled capture-driver coordinates** note; and to
+  T7 / phase-end the **Phase-8 removal** of the placement-demo surface and
+  the two **layout findings** (Grid-as-placed-ZStack-child reject;
+  `aspect`-in-cell arrange abort). None of these block T6.
+- Start-gate precondition satisfied: T5 is merged into `feat/m3-phase-7b`
+  (`ce5cc4d`); the T6 branch `feat/m3-phase-7b-t6` is at the same commit;
+  working tree clean. No owner-unknown item blocks T6.
+
+Critical T6 responsibility re-cut (plan.md is a hypothesis):
+
+- T6's substance is the **owner-performed** GUI smoke + explicit
+  acceptance. The assistant **cannot** discharge it; the assistant's T6
+  deliverable is bounded to (a) confirming the start-gate precondition,
+  (b) preparing the runnable host, and (c) authoring the detailed owner
+  observation script. This split was not auditable in the prior plan.md
+  T6 checklist, so plan.md was revised to add a checkable **Assistant
+  prep** item and keep the smoke / acceptance / retro items `[ ]` until
+  the owner reports.
+- The prior plan.md wording ("ZStack `slot.*` / Grid placement render at
+  the **same positions as the old surface**") was corrected: the bare
+  ZStack surface is rejected on this branch (T4), so **no live old-vs-new
+  comparison is possible**, and the same-position invariant was already
+  closed by T5 (assistant portion). The owner's positive control is
+  therefore **placement varied** on the placement-demo sub-screen (varied
+  alignment → varied position; omitted → per-container default), with the
+  recorded T5 baseline pair as same-position corroboration.
+- The **fix container** is named explicitly (`feat/m3-phase-7b-t6`) per
+  [retrospectives.md §step-end item 11](../../../procedures/retrospectives.md):
+  if the owner smoke fails, the visible-correctness fix lands additively
+  on the T6 branch and re-enters the appropriate production review lane
+  (M3-Phase 4 T6 smoke-fail → fix → re-smoke precedent).
+- The assistant must not fabricate the owner result or check the
+  owner-performed items; the T6 step-end retrospective is recorded **after**
+  the owner smoke result is known.
+
+Selected traps and non-applicable reasons:
+
+| Trap | Classification | Reason |
+|---|---|---|
+| #1 semantic migration | Not applicable to assistant prep | T6 assistant prep changes no enum / IR / schema carrier; it adds an observation-script doc + plan/log process edits only. If a smoke-fail fix later touches a carrier, it re-enters trap #1 on the fix. |
+| #2 structural side effects | Not applicable to assistant prep | No tree / state mutation production code lands in T6 assistant prep. A smoke-fail fix touching a runtime mutation path would re-classify (as M3-Phase 4 T6's fix bundle did). |
+| #3 parallel data drift | Not applicable | T6 introduces no parallel vector / index / cache. Placement already rides the unified child slot (T3). |
+| #4 untested authored branch | Not applicable to assistant prep | T6 assistant prep adds no compiler reject / diagnostic / size branch. A smoke-fail fix that added one would ship a direct firing test and re-classify. |
+| #5 carry-forward | Applies | T6 carries the owner-acceptance gate, the inherited Phase-8 demo removal + layout findings (T7 / phase-end), the layout-coupled capture coordinates, and the conditional smoke-fail fix container. Each is recorded with owner / scope / close condition. |
+| #6 deterministic failure disposition | Conditional | Applies only if the host build / launch shows a recurring failure (e.g. an Observation-5-class Compositor reuse). Any such failure gets a root cause, not a re-roll to green. None occurred: build green, launch survived. |
+| #7 GUI positive control | Applies (central, owner-side) | T6's deliverable **is** the GUI smoke. The assistant prep supplies the runnable host + an observation script that names the positive control (placement varied) and per-control pass/fail; the **owner** discharges the rendered-evidence judgement. The assistant launch-survival check is a supporting "no early crash" signal only — it does **not** substitute for the owner smoke or the T5 screenshot baseline. |
+
+Review lane:
+
+- **No special production-code review for the assistant prep** — it lands
+  process docs (observation script + plan/log) and a host build only, no
+  production Rust. The external review checks the observation-script
+  completeness and the responsibility-split auditability. **Conditional:**
+  any owner-smoke-fail fix that lands production code re-enters its
+  implementation-gates §4 lane (full independent review for runtime /
+  GUI-render changes; branch/test-focused for reject-branch additions).
+
+Planned proof obligations before completion (assistant prep hypotheses):
+
+| Branch / behavior / invariant hypothesis | Category | T6 proof obligation |
+|---|---|---|
+| The host on the post-T5-merge branch builds and launches without early crash. | Observable / host-runnable | `cargo build --release -p gallery-rust` green; `Start-Process` survival (supporting signal). |
+| The placement-demo sub-screen and lightbox are reachable by the documented navigation (Open placement demo / Open lightbox / Close demo). | Observable / owner-followable | Observation script names the exact buttons; T5 already captured the rendered sub-screens (`t5-placement-demo.png`, `t5-lightbox-slot-current.png`). |
+| The observation script names a positive control the owner can read (varied alignment → varied position; omitted → default; stretch-vs-centered Grid contrast). | Owner-evidence quality | Script has a per-control section with explicit PASS / FAIL. |
+| No live old-surface comparison is required of the owner. | Scope correctness | Plan re-cut + script "Same-position note" point to the T5 baseline pair; the same-position invariant is T5-closed. |
+
+Known carry-forward candidates at T6 start:
+
+| Candidate | Owner | Scope / impact | Close condition |
+|---|---|---|---|
+| Owner-acceptance gate | T6 (owner) | The smoke + explicit acceptance cannot be discharged by the assistant; until recorded, T6 cannot close. | Owner runs the observation script and accepts, or records fail → fix → re-run. |
+| Smoke-fail fix container | T6 branch (conditional) | Any visible-correctness fix lands additively on `feat/m3-phase-7b-t6` and re-enters the appropriate review lane. | Re-smoke green + owner acceptance. |
+| Phase-8 removal of placement-demo surface + capture driver | T7 / phase-end → Phase 8 | Inherited from T5; throwaway verification scaffolding in `gallery.ui` + `evidence/`. | T7 candidate ledger / phase-end handoff records it; Phase 8 sweep removes. |
+| Layout findings (Grid-as-placed-ZStack-child reject; `aspect`-in-cell arrange abort) | T7 / phase-end (triage) | Inherited from T5; not Phase-7b regressions. | T7 triages accept-vs-spec-note; the pin test updates with the decision. |
+| Capture-driver coordinates are layout-coupled | T6 / future gallery editor | Inherited from T5; navigation coords assume the current gallery layout. | Whoever next changes the gallery layout re-derives coordinates. |
+| Moment 2 docs sync | T7 | T6 edits no `docs/`. | T7 Moment 2 sync, unrelated to T6 deliverables. |
+
+No owner-unknown unresolved point at T6 start: every open item above is
+assigned to T6 (owner), the T6 fix container, T7 / phase-end, or the
+Phase 8 close.
+
+### T6 end gate — assistant-prep portion
+
+The owner-smoke close gate (owner acceptance) is recorded **after** the
+owner runs the smoke; this is the auditable artifact for the
+assistant-completable portion only.
+
+T6 assistant-prep verification:
+
+| Command / evidence | Result | Notes |
+|---|---|---|
+| `git rev-parse --short HEAD` / `feat/m3-phase-7b` | `ce5cc4d` / `ce5cc4d` | T6 branch at the T5-merge commit; start-gate precondition "T5 merged" satisfied; working tree clean before T6 edits. |
+| `cargo build --release -p gallery-rust` | Green | Runnable host built on the T6 branch (`Finished release` in 3.48s). Build-time `wasamoc check` of `gallery.ui` passes. |
+| `Start-Process target/release/gallery-rust.exe` survival | Alive after 3s, title `Gallery` | Supporting "no early crash" signal only — **not** GUI evidence (T5 owns screenshot evidence). |
+
+T6 close gate — implemented-branch / behavior test map:
+
+(T6 implements **no compiler reject / diagnostic / size / semantic
+branch** — trap #4 non-applicable. The assistant-prep "implemented"
+artifacts are the observation script + host-runnable confirmation + the
+plan responsibility re-cut; each row's proof is the build / launch or the
+`git diff`. The owner-performed evidence rows are owner=T6.)
+
+| Implemented artifact / behavior | Category | Source query / diff cue | Direct proof or owner |
+|---|---|---|---|
+| Owner observation script authored (launch + per-control navigation + PASS/FAIL + same-position note). | GUI smoke prep | `git status` shows new `evidence/t6-owner-smoke-script.md`. | The file's per-control PASS/FAIL sections; reviewed for completeness in the external review. |
+| Runnable host built + launches without early crash on the T6 branch. | Host-runnable | `cargo build --release -p gallery-rust` green; `Start-Process` survival. | Build + launch evidence above (supporting signal). |
+| plan.md T6 re-cut: assistant-prep vs owner-smoke split made auditable; same-position wording corrected; fix container named. | Process / ownership | `git diff -- process/milestone-3/phase-7b/implementation/plan.md` shows the `[x]` Assistant-prep item, the responsibility-split paragraph, and `feat/m3-phase-7b-t6` as the fix container. | External review of the plan diff. |
+| Owner-visible smoke (ZStack three-position / Grid stretch-vs-centered / lightbox / close) is **not** discharged by the assistant. | GUI positive control (owner) | `evidence/t6-owner-smoke-script.md` Observations 1–4. | Owner task = T6; close = owner runs the script and accepts (or fail → fix → re-run). |
+| No **new** compiler reject / diagnostic / size branch. | (trap #4 non-applicable) | `git diff` adds no `check` / `lower` branch (no Rust source changed in T6 prep). | T4 owns the `slot.*` reject matrix; T5 owns the screenshot baseline. |
+
+T6 close gate — behavior / invariant carry scan:
+
+| Behavior / invariant | Closed in T6 prep? | Owner / scope / impact / close condition |
+|---|---|---|
+| Runnable host + detailed owner observation script are prepared for the owner smoke. | Closed (assistant prep) | Closed by the build/launch evidence + `evidence/t6-owner-smoke-script.md`. |
+| Owner-visible placement smoke (positive control = placement varied) is performed and accepted. | Not closed (owner-performed) | Owner = T6; scope = gallery placement-demo + lightbox; impact = ADR evidence item (4) owner half open until accepted; close = owner accept or fail → fix (on `feat/m3-phase-7b-t6`) → re-run. |
+| Phase-8 removal of the placement-demo surface + capture driver. | Not closed (inherited, deferred) | Owner = T7 / phase-end ledger → Phase 8; close = Phase 8 cleanup sweep. |
+| Layout findings (Grid-as-ZStack-child reject; aspect-in-cell abort). | Not closed (inherited, deferred) | Owner = T7 / phase-end triage; close = accept-vs-spec-note decision. |
+
+T6 carry-forward ownership:
+
+| Carry-forward | Owner task | Scope / impact | Close condition |
+|---|---|---|---|
+| Owner-visible GUI smoke + acceptance. | T6 (owner) | Human correctness judgement is owner-owned; assistant prep is complete. | Owner runs the observation script, accepts or records fail/fix/re-run. |
+| Smoke-fail visible-correctness fix. | T6 branch (conditional) | Lands additively on `feat/m3-phase-7b-t6`; re-enters its review lane. | Re-smoke green + owner acceptance. |
+| Phase-8 removal + layout findings + capture-coord staleness. | T7 / phase-end → Phase 8 | Inherited from T5; recorded in the candidate ledger. | T7 ledger / phase-end handoff; Phase 8 sweep. |
+
+No owner-unknown unresolved point remains from the T6 assistant prep:
+every open item is assigned to T6 (owner), the T6 fix container, or
+T7 / phase-end. Deterministic-failure trap #6 did not trigger — the host
+build and launch were green on the first run.
