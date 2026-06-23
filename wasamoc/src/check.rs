@@ -5487,17 +5487,32 @@ mod tests {
         // T6b skips *all* `slot.*` among a Grid's own members, not only the
         // alignment keys. A Grid-placement key (`slot.row`) on a Grid that is
         // a ZStack child is therefore delegated to the parent ZStack, which
-        // rejects it as an unknown ZStack slot key. Pins that the delegation
-        // does not silently accept Grid placement keys on a ZStack child.
+        // rejects it as an unknown ZStack slot key.
+        //
+        // The discriminator vs the OLD behavior is that the Grid pass adds
+        // NO "inside `Grid`" diagnostic: the old `check_grid` consumed
+        // `slot.row` and emitted "inside `Grid`" *in addition to* the parent
+        // walk's unknown-key error, so asserting only the unknown-key
+        // presence would pass on the old code too. The unknown-key error must
+        // also appear exactly once (no duplicate path).
         let errs = errors(
             r#"component C inherits W {
                 ZStack { Grid { slot.row: 0 columns: 1* rows: 1* Cell { Text { text: "x" } } } }
             }"#,
         );
+        let unknown_key = errs
+            .iter()
+            .filter(|e| e.contains("unknown `ZStack` slot key `slot.row`"))
+            .count();
+        assert_eq!(
+            unknown_key, 1,
+            "parent ZStack must reject the delegated key exactly once: {errs:?}"
+        );
         assert!(
-            errs.iter()
-                .any(|e| e.contains("unknown `ZStack` slot key `slot.row`")),
-            "{errs:?}"
+            !errs.iter().any(|e| {
+                e.contains("parent-owned child placement data") && e.contains("inside `Grid`")
+            }),
+            "Grid pass must NOT consume slot.row (no \"inside `Grid`\"): {errs:?}"
         );
     }
 

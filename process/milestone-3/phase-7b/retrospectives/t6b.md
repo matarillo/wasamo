@@ -25,6 +25,13 @@ T5/T6 で発見された「ZStack 直下の Grid に `slot.h-align`/`slot.v-alig
   （問題B の証拠ベース / Vision DR 予定地）。
 - `6b28832` fix(wasamoc): Grid-as-ZStack-child の `slot.*` を accept（T6b
   本体 + plan/log の start/close gate artifact）。
+- `b56ab73` test(m3-phase-7b): Codex review 1 巡目対応（accept を
+  `!has_errors()` 両軸化、unknown-key / component-level / lower 側 positive
+  control 追加、close-gate branch map 更新）。
+- （本コミット）test(m3-phase-7b): Codex review 2 巡目対応（unknown-key
+  テストに「`inside Grid` を出さない」discriminator + unknown-key count==1
+  を追加、log verification 主表を `cargo test -p wasamoc --lib` 388 に差し替え、
+  本 retro を最終状態に更新）。
 
 ## チェックリスト（task-end、項目 1〜11）
 
@@ -38,12 +45,14 @@ T5/T6 で発見された「ZStack 直下の Grid に `slot.h-align`/`slot.v-alig
    子で有効」と述べており、Grid もウィジェットなので本修正は DD 意図への
    整合であって normative spec の変更を伴わない。`docs/notes/` 追加は
    exploratory ノートで規範文書ではない（項目 2 の判定対象外）。
-3. **post-commit 検証。** task-end 範囲では targeted + workspace test を
-   green 確認（`grid_child_slot` 3 件、`cargo test --workspace` 全 green、
-   `cargo fmt --all -- --check` exit 0、`cargo build -p wasamoc` に新規
-   warning なし）。**clean rebuild（`cargo clean` → release+debug →
-   workspace test）は T7 step-end / phase-end が所有する gate** なので
-   本 task では未実施（incremental の proxy）。
+3. **post-commit 検証。** task-end 範囲で最終的に green 確認：
+   `cargo test -p wasamoc --lib` **388 passed**（T6b 6 テスト含む）、
+   `cargo test --workspace` 全 green、`cargo fmt --all -- --check` exit 0、
+   `cargo build -p wasamoc` に新規 warning なし。Codex review は 2 巡実施し、
+   指摘修正を branch に additive に積んだ（`b56ab73` + 本コミット）。
+   **clean rebuild（`cargo clean` → release+debug → workspace test）は
+   T7 step-end / phase-end が所有する gate** なので本 task では未実施
+   （incremental の proxy）。
 4. **PO に相談すべき設計判断・トレードオフ。** あり（実施済み）。(a) 修正
    範囲、(b) 問題B の責務帰属・締切・記録メカニズムを着手前にチャットで
    合意した。残る判断（Vision DR の milestone home）は Phase 8 framing 送り

@@ -1264,11 +1264,11 @@ Known carry-forward candidates at T6b start:
 
 | Command / evidence | Result | Notes |
 |---|---|---|
-| `cargo test -p wasamoc --lib grid_child_slot` | Green | 3 passed: `zstack_grid_child_slot_alignment_accepted`, `zstack_grid_child_slot_alignment_value_still_validated`, `nonadmitting_parent_grid_child_slot_still_rejected`. |
-| `cargo test --workspace` | Green | wasamoc lib 385 passed (was 382; +3 T6b tests, old `..._rejected` renamed to `..._accepted` in place), wasamo-runtime 423, wasamo-ir 24, all integration / doctests pass. No new failures. |
+| `cargo test -p wasamoc --lib` | Green | 388 passed (was 382 pre-T6b; +6 T6b tests, old `..._rejected` renamed to `..._accepted` in place). The 6 T6b tests: `check::tests::{zstack_grid_child_slot_alignment_accepted, zstack_grid_child_slot_alignment_value_still_validated, zstack_grid_child_unknown_slot_key_still_rejected, nonadmitting_parent_grid_child_slot_still_rejected, component_level_grid_slot_still_rejected_once}` + `lower::tests::zstack_grid_child_slot_lowers_to_zstack_slot_data`. |
+| `cargo test --workspace` | Green | wasamoc lib 388, wasamo-runtime 423, wasamo-ir 24, all integration / doctests pass. No new failures. |
 | `cargo fmt --all -- --check` | Green | Exit 0 on post-edit state. |
 | `cargo build -p wasamoc` warning scan | Green | No new `dead_code` / unused warning; `check_slot_property_outside_parent` stays used by `check_members_inner`. |
-| `git grep "inside \`Grid\`" wasamoc/src/check.rs` | Only new comments + the non-admitting test | No other test asserted a Grid-own `slot.*` reject, so nothing else broke. |
+| `git grep "inside \`Grid\`" wasamoc/src/check.rs` | Only new comments + the non-admitting / component-level tests | No other test asserted a Grid-own `slot.*` reject, so nothing else broke. |
 
 T6b close gate — implemented-branch test map (trap #4):
 
