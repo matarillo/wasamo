@@ -543,6 +543,77 @@ the recorded T5 baseline pair as the same-position corroboration.
 
 ---
 
+### T6b — Grid-as-ZStack-child `slot.*` checker fix (T5 finding)
+
+**Inserted mid-phase** (owner decision 2026-06-24) after the T5/T6
+Grid-in-ZStack finding. T5 pinned, via
+`wasamoc::check::tests::zstack_grid_child_slot_alignment_rejected`, that a
+`Grid` placed as a direct `ZStack` child cannot carry `slot.h-align` /
+`slot.v-align`: the Grid pass (`check_grid`) consumes the `slot.*` among
+the Grid's **own** members and rejects them as "inside `Grid`", even
+though [DD-M3-P7b-001](../decisions/dd-m3-p7b-001-parent-interpreted-placement-authoring-surface.md)
+intent is that `slot.*` is valid on a ZStack direct child (a Grid is a
+widget, hence a valid ZStack direct child). This is a checker bug —
+the implementation diverges from its own DD intent — so it is corrected
+**inside Phase 7b** rather than deferred.
+
+**Two-problem boundary (critical re-cut).** The T5 test comment conflated
+two independent issues; T6b owns **only the first**:
+
+- **Problem A (checker — T6b owns):** `check_grid` wrongly rejects `slot.*`
+  on the Grid node itself. The generic member walk
+  (`check_members_inner`'s `parent_widget` dispatch) already validates the
+  same `slot.*` correctly (ZStack parent → alignment value check), so the
+  Grid pass is a **second, wrong** evaluation. Fix: `check_grid` skips
+  `slot.*` PropertyBinds among its own members (they are parent-owned
+  data, validated by the parent), keeping the unknown-non-slot-attribute
+  reject.
+- **Problem B (layout — NOT T6b):** a Fill-default container (Grid/ZStack)
+  reports 0 desired size, so a Grid nested on a Shrink ancestor axis
+  collapses to 0×0. This is a Phase 5 (`measure_grid` Fill→0) + Phase 6
+  (ZStack measure/anchor) layout-contract property, **unrelated to the
+  slot redesign** (verified: 7b touched neither function body), and is the
+  symptom of a long-deferred `width`/`height` author surface. It is
+  recorded as a carry-forward, **not fixed here**
+  ([author-controllable-sizing notes](../../../../docs/notes/author-controllable-sizing.md);
+  Vision DR scheduled for Phase 8 framing; hard backstop = pre-1.0 / M6
+  ABI-freeze prep).
+
+After T6b, `ZStack { Grid { slot.* … } }` compiles, and the **common case
+where the ZStack has a definite size** (full-window overlay, etc.) renders
+correctly. The non-stretch/Shrink-context collapse (problem B) stays a
+known sizing limitation.
+
+- [x] `wasamoc check`: `check_grid` no longer consumes `slot.*` among the
+      Grid's own members; parent-owned placement validation is delegated to
+      the generic walk. The unknown-non-slot Grid-attribute reject stays.
+- [x] Flip the pinned test to the accepted behavior and add the positive
+      control: (a) `ZStack { Grid { slot.h-align: end … } }` **accepted**;
+      (b) value still validated by the parent — `slot.h-align: <bogus>` on a
+      Grid-in-ZStack **rejected** as a bad alignment (proves it is not a
+      blanket accept); (c) non-admitting parent still rejects —
+      `VStack { Grid { slot.h-align: … } }` **rejected** (proves it is not a
+      blanket accept of `slot.*` on any Grid). These three together are the
+      trap-#4 positive control (a single accept frame a blanket-accept
+      could equally produce is not evidence).
+- [x] Record the problem-B / `width`-`height` carry-forward (docs/notes
+      pointer + T7 candidate-ledger input + Vision DR timing).
+- [x] No `.ui` / spec change: the DD already says `slot.*` is valid on a
+      ZStack direct child; the gallery uses the VStack-wrap workaround and
+      is left unchanged (no Grid-in-ZStack added — that would hit problem B).
+
+**Sub-task hypothesis:** single commit (checker fix + tests). Splittable
+only if the test flip and the fix must land separately to keep the build
+green (they do not).
+
+**Start gate:** T6 merged; T6b trap selection recorded in
+[log.md](./log.md). **End gate:** workspace + tests green; trap-#4
+branch-test map recorded (accept + value-validation + non-admitting
+reject); problem-B carry-forward recorded; **branch/test-focused review**
+of the reject/accept branches before merge.
+
+---
+
 ### T7 — Step-end local gates + Moment 2 re-sync + A12 closure
 
 Discharges the T7-owned portion of the phase-end criteria, the

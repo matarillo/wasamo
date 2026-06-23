@@ -1182,3 +1182,137 @@ This closes the **owner half** of ADR evidence item (4); the assistant
 half was closed in T5. No deterministic-failure (trap #6) and no
 smoke-fail fix iteration occurred. The T6 step-end retrospective is at
 [../retrospectives/t6.md](../retrospectives/t6.md).
+
+### T6b start gate — Grid-as-ZStack-child `slot.*` checker fix
+
+T6b is a **mid-phase inserted task** (owner decision 2026-06-24): correct
+the checker so a `Grid` placed as a direct `ZStack` child may carry
+`slot.h-align` / `slot.v-align`, per the DD-M3-P7b-001 intent that
+`slot.*` is valid on a ZStack direct child.
+
+Carry-over check from prior tasks:
+
+- The relevant carry-over is the T5/T6 **layout finding** (Grid-as-ZStack-
+  child reject; aspect-in-cell abort), recorded with close condition
+  "accept-vs-spec-note decision; owner = T7 / phase-end triage"
+  (`log.md` T5 §close gate; T6 carry-forward ownership). The owner chose
+  **accept-and-fix the checker half** and to insert T6b for it, leaving the
+  layout (sizing) half as a recorded carry-forward.
+- No owner-unknown item from T1–T6 blocks T6b. The Phase-8 demo-removal and
+  candidate-ledger carry-forwards stay T7/phase-end-owned and are untouched
+  by T6b.
+
+Critical T6b responsibility re-cut (two-problem boundary):
+
+- **Problem A (T6b owns):** `check_grid`'s member loop
+  ([check.rs:1240](../../../../wasamoc/src/check.rs#L1240)) calls
+  `check_slot_property_outside_parent(key, Some("Grid"), None, …)` on a
+  `slot.*` PropertyBind among the Grid's **own** members, rejecting it as
+  "inside `Grid`". But the same member is **already** validated correctly by
+  the generic walk `check_members_inner` via the `parent_widget == Some("ZStack")`
+  branch ([check.rs:1982](../../../../wasamoc/src/check.rs#L1982)). The Grid
+  pass is a duplicate, wrong evaluation. Fix: `check_grid` **skips** `slot.*`
+  PropertyBinds (parent-owned, validated by the parent), keeping the
+  unknown-non-slot Grid-attribute reject.
+- **Problem B (NOT T6b):** the layout 0×0 collapse is the Phase 5
+  (`measure_grid` Fill→0) + Phase 6 (ZStack measure/anchor) contract,
+  unrelated to the slot redesign (git-verified: the 7b layout commits did
+  not change `measure_grid` / `axis_is_stretchy` bodies). It is the symptom
+  of the long-deferred `width`/`height` author surface, recorded in
+  [author-controllable-sizing notes](../../../../docs/notes/author-controllable-sizing.md);
+  Vision DR scheduled for Phase 8 framing, hard backstop pre-1.0 / M6
+  ABI-freeze prep.
+
+Selected traps and non-applicable reasons:
+
+| Trap | Classification | Reason |
+|---|---|---|
+| #1 semantic migration | Not applicable | No enum / IR / schema variant or field change; T6b edits checker control flow only. No traversal call-site set changes shape. |
+| #2 structural side effects | Not applicable | No tree-structure / state mutation; the checker emits diagnostics, it does not mutate the widget tree or derived runtime state. |
+| #3 parallel data drift | Not applicable | No parallel vector / derived index / cache is touched. |
+| #4 untested authored branch | **Applies** | T6b changes a reject branch to an accept and relies on a different (parent) branch for validation; it must ship direct tests that fire the new accept, the preserved value-validation reject, and the preserved non-admitting-parent reject. |
+| #5 carry-forward | **Applies** | Problem B (layout 0×0 / `width`-`height` sizing) is a recorded carry-forward with a re-trigger criterion; T6b must point at the docs/notes home and the Vision DR timing, not silently leave it. |
+| #6 deterministic failure disposition | Conditional | Only if an unexpected recurring test failure appears; record rerun history + root cause before close. |
+| #7 GUI positive control | Not applicable | T6b has no GUI-render deliverable. The visible Grid-in-ZStack render is the problem-B-limited case, explicitly not fixed here; the positive control is at the checker (accept / value / non-admitting) level. The T5/T6 GUI evidence stands. |
+
+Review lane:
+
+- **Branch/test-focused review** (not full). T6b is a diagnostic / reject /
+  accept branch change in `wasamoc check` — not a schema/IR migration,
+  runtime structural change, or GUI-render evidence. The review must check
+  the trap-#4 branch/test map (accept + value-validation reject +
+  non-admitting reject). Owner runs an external-agent review after commit.
+
+Planned proof obligations before implementation (hypotheses):
+
+| Branch / behavior / invariant hypothesis | Category | T6b proof obligation |
+|---|---|---|
+| `ZStack { Grid { slot.h-align: end … } }` is accepted (no "inside `Grid`" / parent-owned diagnostic). | Semantic (accept) | Flip `zstack_grid_child_slot_alignment_rejected` → accepted: assert the parsed component produces no placement-misplacement error. |
+| The `slot.h-align` **value** on a Grid-in-ZStack is still validated by the parent ZStack. | Reject (value) | Direct test: `slot.h-align: <bogus>` on a Grid-in-ZStack rejected as a bad alignment (`check_zstack_child_align` fires). |
+| `slot.*` on a Grid under a **non-admitting** parent (VStack / component level) is still rejected, exactly once. | Reject (position) + invariant | Direct test: `VStack { Grid { slot.h-align: … } }` rejected as parent-owned/"inside `Grid`"; no duplicate diagnostic. |
+| `check_slot_property_outside_parent` is not left dead by the edit. | Invariant (no dead_code) | It remains called from `check_members_inner` (component-level + non-admitting child); workspace builds with no new `dead_code` warning. |
+| No existing `.ui` / fixture / spec depends on the old reject. | Observable invariant | `rg`/`git grep` for other tests asserting "inside `Grid`" on a Grid-own `slot.*`; workspace tests stay green. |
+
+Known carry-forward candidates at T6b start:
+
+| Candidate | Owner task | Scope / impact | Close condition |
+|---|---|---|---|
+| Problem B — layout 0×0 / author-controllable `width`-`height` sizing | T7 ledger → Phase 8 Vision DR | A Fill-default container nested on a Shrink ancestor axis collapses; `slot.*` on a Grid-in-ZStack now compiles but only renders when the ZStack has a definite size. | docs/notes home landed; T7 candidate ledger records responsibility = Vision DR, trigger, ABI-impact-pending; Vision DR at Phase 8 framing assigns the milestone home; hard backstop pre-1.0 / M6 ABI-freeze prep. |
+| Phase-8 demo-removal + candidate ledger (inherited) | T7 / phase-end → Phase 8 | Untouched by T6b; stays as T5/T6 recorded. | T7 ledger / phase-end handoff; Phase 8 sweep. |
+
+### T6b verification
+
+| Command / evidence | Result | Notes |
+|---|---|---|
+| `cargo test -p wasamoc --lib` | Green | 388 passed (was 382 pre-T6b; +6 T6b tests, old `..._rejected` renamed to `..._accepted` in place). The 6 T6b tests: `check::tests::{zstack_grid_child_slot_alignment_accepted, zstack_grid_child_slot_alignment_value_still_validated, zstack_grid_child_unknown_slot_key_still_rejected, nonadmitting_parent_grid_child_slot_still_rejected, component_level_grid_slot_still_rejected_once}` + `lower::tests::zstack_grid_child_slot_lowers_to_zstack_slot_data`. |
+| `cargo test --workspace` | Green | wasamoc lib 388, wasamo-runtime 423, wasamo-ir 24, all integration / doctests pass. No new failures. |
+| `cargo fmt --all -- --check` | Green | Exit 0 on post-edit state. |
+| `cargo build -p wasamoc` warning scan | Green | No new `dead_code` / unused warning; `check_slot_property_outside_parent` stays used by `check_members_inner`. |
+| `git grep "inside \`Grid\`" wasamoc/src/check.rs` | Only new comments + the non-admitting / component-level tests | No other test asserted a Grid-own `slot.*` reject, so nothing else broke. |
+
+T6b close gate — implemented-branch test map (trap #4):
+
+Enumeration source: `git diff` of `wasamoc/src/check.rs` (one production
+hunk in `check_grid`, five check-side test functions) and
+`wasamoc/src/lower.rs` (one lower-side test function) + `git grep`. The
+six T6b tests are enumerated in the rows below and in the verification
+table; they land across the initial T6b commit and the two Codex review
+follow-ups (`b56ab73`, `c79b340`).
+
+| Implemented branch / behavior | Category | Source query / diff cue | Direct test or owner |
+|---|---|---|---|
+| `check_grid` no longer consumes `slot.*` among the Grid's own members; the `slot_key(name).is_some()` arm is now a no-op (parent-owned, delegated to the generic walk). The Grid-in-ZStack child **compiles** (no error at all, both `slot.h-align` and `slot.v-align`). | Semantic (reject→accept) | `git diff wasamoc/src/check.rs` shows the `Member::PropertyBind` arm in `check_grid` changed from `check_slot_property_outside_parent(...)` to the skip comment; test asserts `!check_src(...).has_errors()` on a fixture with both axes | `wasamoc::check::tests::zstack_grid_child_slot_alignment_accepted` |
+| Parent ZStack still validates the `slot.h-align` **value** of a Grid-in-ZStack child (not a blanket accept). | Reject (value) — positive control | `rg -n "fn zstack_grid_child_slot_alignment_value_still_validated" wasamoc/src/check.rs`; needle: error contains `ZStack child \`slot.h-align\` must be one of` (fired by `check_zstack_child_align` via the `parent_widget == ZStack` branch) | `wasamoc::check::tests::zstack_grid_child_slot_alignment_value_still_validated` |
+| The skip delegates **all** `slot.*` keys (not only alignment): a Grid-placement key (`slot.row`) on a Grid that is a ZStack child is delegated to the parent ZStack and rejected as an unknown ZStack slot key. | Reject (key namespace) — positive control | `rg -n "fn zstack_grid_child_unknown_slot_key_still_rejected" wasamoc/src/check.rs`; needle: error contains `unknown \`ZStack\` slot key \`slot.row\`` | `wasamoc::check::tests::zstack_grid_child_unknown_slot_key_still_rejected` |
+| `slot.*` on a Grid under a non-admitting parent (VStack, `parent_widget = Some("VStack")`) is still rejected, and **exactly once** (no Grid-pass duplicate). | Reject (position) + invariant — positive control | `rg -n "fn nonadmitting_parent_grid_child_slot_still_rejected" wasamoc/src/check.rs`; needle: count of errors containing `parent-owned child placement data` && `inside \`Grid\`` equals 1 | `wasamoc::check::tests::nonadmitting_parent_grid_child_slot_still_rejected` |
+| `slot.*` on a Grid at component root (`parent_widget = None`) is still rejected, and **exactly once** (the other sub-branch of the start-gate "VStack / component level" row). | Reject (position, parent=None) + invariant | `rg -n "fn component_level_grid_slot_still_rejected_once" wasamoc/src/check.rs`; needle: count of errors containing `parent-owned child placement data` && `inside \`Grid\`` equals 1 | `wasamoc::check::tests::component_level_grid_slot_still_rejected_once` |
+| The newly-accepted Grid-in-ZStack author form **lowers** the Grid's `slot.h-align` / `slot.v-align` into the ZStack child slot's `IrSlotData::ZStack`; the Grid node keeps its identity (kind payload + Cell child) and retains no placement props. | Semantic (lower / IR) — non-GUI positive control | `rg -n "fn zstack_grid_child_slot_lowers_to_zstack_slot_data" wasamoc/src/lower.rs`; needles: `slot.slot_data == Some(IrSlotData::ZStack { End, Start })`; `find_prop(grid, "slot.h-align") == None`; `grid.kind_payload.is_some()` | `wasamoc::lower::tests::zstack_grid_child_slot_lowers_to_zstack_slot_data` |
+| Unknown **non-slot** Grid attribute (`Grid { foo: 0 }`) is still rejected by `check_grid`. | Reject (preserved) | `git diff` shows the `else` arm (`unknown Grid attribute …`) unchanged | Pre-existing `wasamoc::check::tests` Grid-attribute coverage (unchanged; not re-authored in T6b) |
+
+**Codex review follow-up (2026-06-24).** External-agent review found the
+implementation correct but the trap-#4 test pin too weak. Strengthened per
+its four findings: (1) the accept test now asserts `!has_errors()` (full
+compile) with both `slot.h-align` and `slot.v-align`, not just the absence
+of one diagnostic string; (2) added `zstack_grid_child_unknown_slot_key_still_rejected`
+for the all-keys skip sub-branch; (3) added `component_level_grid_slot_still_rejected_once`
+for the `parent = None` sub-branch named in the start gate; (4) added the
+lower-side non-GUI positive control `zstack_grid_child_slot_lowers_to_zstack_slot_data`.
+`cargo test -p wasamoc --lib` 388 passed (was 385; +3 net); `cargo test
+--workspace` green; `cargo fmt --all -- --check` exit 0.
+
+T6b close gate — behavior / invariant carry scan:
+
+| Behavior / invariant | Closed in T6b? | Owner / scope / impact / close condition |
+|---|---|---|
+| A `Grid` that is a direct `ZStack` child may carry `slot.h-align` / `slot.v-align` (checker accepts). | **Closed** | Verified by `zstack_grid_child_slot_alignment_accepted`; value-validation and non-admitting reject preserved. No `.ui` / spec change needed (DD already states `slot.*` valid on a ZStack direct child). |
+| Layout: a Fill-default Grid nested on a Shrink ancestor axis collapses to 0×0 (the `slot.*` now compiles but may not render). | **Not closed (intentionally deferred)** | Owner = T7 ledger → Phase 8 Vision DR; scope = author-controllable `width`/`height` sizing; impact = Grid-in-ZStack renders only when the ZStack has a definite size; close = Vision DR assigns milestone home; trigger + pre-1.0 backstop recorded in [author-controllable-sizing notes](../../../../docs/notes/author-controllable-sizing.md). |
+| Default-center / start / end alignment is a visual no-op on a Fill container (only content-sized children anchor). | **Not closed (documented limitation)** | Owner = same as above (it is a facet of the `width`/`height` gap); impact = authors cannot anchor a *smaller* Grid in a ZStack; close = the sizing Vision DR. Recorded in the docs/notes home, not a new T6b artifact. |
+
+T6b carry-forward ownership:
+
+- No owner-unknown unresolved point remains from T6b. Problem B and its
+  facets are owned by **T7 candidate ledger → Phase 8 Vision DR**, with the
+  docs/notes home landed and the re-trigger / hard backstop recorded.
+- Deterministic-failure trap #6 did not trigger — the six T6b tests and
+  the workspace suite passed on the first run after each edit (initial T6b
+  commit and both Codex review follow-ups).
