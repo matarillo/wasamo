@@ -5453,6 +5453,31 @@ mod tests {
     }
 
     #[test]
+    fn zstack_grid_child_slot_alignment_rejected() {
+        // Pins CURRENT behavior (M3-Phase 7b T5 finding; carry-forward to
+        // T7 / phase-end triage). A `Grid` that is a direct `ZStack` child
+        // cannot carry `slot.h-align` / `slot.v-align` to place itself: the
+        // Grid pass (`check_grid`) consumes `slot.*` among the Grid's own
+        // members and rejects them as "inside `Grid`", even though the
+        // generic rule admits a `slot.*` on a ZStack direct child. The DD
+        // intent ("slot.* valid on a ZStack direct child") would *accept*
+        // this; the accept-vs-reject decision is deferred (a ZStack-centred
+        // Grid also currently measures 0×0, so accepting it needs a layout
+        // change too). Update this test if the behavior is changed.
+        let errs = errors(
+            r#"component C inherits W {
+                ZStack { Grid { slot.h-align: end columns: 1* rows: 1* Cell { Text { text: "x" } } } }
+            }"#,
+        );
+        assert!(
+            errs.iter().any(|e| {
+                e.contains("parent-owned child placement data") && e.contains("inside `Grid`")
+            }),
+            "{errs:?}"
+        );
+    }
+
+    #[test]
     fn zstack_slot_unknown_key_rejected() {
         let errs = errors(r#"component C inherits W { ZStack { Text { slot.row: 0 } } }"#);
         assert!(

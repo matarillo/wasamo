@@ -6,7 +6,7 @@ component Gallery inherits Window {
     state scroll_y: i32 = 0
     state is_lightbox_open: bool = false
     state labels: string[] = ["S01", "S02", "S03", "S04", "S05", "S06"]
-    state is_placement_demo_open: bool = true
+    state is_placement_demo_open: bool = false
 
     ZStack {
         VStack {

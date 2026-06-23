@@ -438,10 +438,13 @@ ledger).
       - **Deviations (recorded in [log.md](./log.md)):** the overlay
         content is wrapped in a stretched `VStack` because a Grid cannot
         be a placed ZStack child (`check_grid` rejects `slot.*`; a
-        ZStack-centred Grid measures 0×0); `aspect` Boxes are avoided in
-        demo cells (they abort the intrinsic measure); and the surface is
-        authored **default-open** because synthetic input does not drive
-        the Composition app's buttons in a non-interactive agent session.
+        ZStack-centred Grid measures 0×0 — pinned by
+        `zstack_grid_child_slot_alignment_rejected`, carry-forward to T7);
+        `aspect` Boxes are avoided in demo cells (they abort the intrinsic
+        measure). The surface defaults to `false` and is opened by a click
+        in the capture; synthetic input drives the Composition app's
+        buttons on a real / elevated desktop (a sandboxed session drops the
+        input — environment note, not an app limitation).
 - [x] Build and run `examples/gallery-rust/`. **Capture mechanics —
       reuse the proven Phase 6/7 pattern**
       ([capture-lightbox.ps1](../../phase-6/implementation/evidence/capture-lightbox.ps1)):
@@ -452,11 +455,14 @@ ledger).
       ([capture-placement-demo.ps1](./evidence/capture-placement-demo.ps1))
       lands under [evidence/](./evidence/).
 - [x] Record assistant evidence as labelled frames under
-      [evidence/](./evidence/) (`t5-placement-demo.png`,
-      `t5-gallery-home-no-demo.png`) with the analysis in
+      [evidence/](./evidence/) (`t5-home.png`, `t5-placement-demo.png`,
+      `t5-lightbox-slot-current.png`) with the analysis in
       [evidence/README.md](./evidence/README.md) noting what each frame
       proves and the positive control it carries. DPI blur, if any, is the
       known M4 residual, not a Phase 7b failure.
+- [x] **Same-position proof (closed in T5).** Capture the current-branch
+      `slot.*` lightbox at the Phase 6/7 baseline size and compare to the
+      pre-migration lightbox evidence.
 
 **Baseline for the same-position proof.** Because T4 rejects the old
 ZStack bare syntax, the "same positions as the old surface" comparison
@@ -464,11 +470,14 @@ ZStack bare syntax, the "same positions as the old surface" comparison
 against the **Phase 6/7 lightbox GUI evidence**
 ([phase-6 evidence](../../phase-6/implementation/evidence/)) — the
 `slot.*` migration is a pure re-expression of placement, so the lightbox
-scrim/photo land at the same positions as before the migration. The new
-**contrast** half (varied ZStack alignment → varied position; omitted
-Grid placement → default) is what the placement-demo sub-screen adds,
-since no pre-migration frame exercised it. T5 names this split in
-[log.md](./log.md).
+scrim/photo land at the same positions as before the migration. T5
+captured `evidence/t5-lightbox-slot-current.png` (current `slot.*`
+lightbox at the baseline 800×600) and read it against
+`phase-6/evidence/t7-lightbox-open.png`: same centered scrim/photo/caption/
+nav arrangement (assistant portion closed in T5; owner-visible
+confirmation is T6's). The **contrast** half (varied ZStack alignment →
+varied position; omitted Grid placement → default) is the placement-demo
+sub-screen's `t5-placement-demo.png`.
 
 **Start gate:** **T3 merged** (placement renders from final `SlotData`
 storage) **and** T4 merged (`.ui` on the new surface); the baseline

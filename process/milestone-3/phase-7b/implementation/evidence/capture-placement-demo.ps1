@@ -6,21 +6,32 @@
 # button was inserted). Captures the live Gallery HWND via CopyFromScreen over
 # GetWindowRect (PrintWindow reads back blank under DirectComposition).
 #
-# Layout assumption: the placement-demo button / close button coordinates below
-# are derived against the WxH size set here. A later gallery layout change
-# re-staleness them — re-derive from a fresh -CaptureHomeOnly frame.
+# Layout assumption: the button coordinates passed below are derived against the
+# WxH size set here. A later gallery layout change re-staleness them — re-derive
+# from a fresh -CaptureHomeOnly frame.
+#
+# Synthetic input (SetCursorPos+mouse_event and posted WM_LBUTTON*) drives the
+# wasamo Composition app's buttons ONLY on a real / elevated desktop session;
+# inside a restricted (sandboxed) session the injected input is dropped and the
+# button never fires. Run this capture on a visible, non-sandboxed desktop.
 param(
   [string]$OutDir = $PSScriptRoot,
   [string]$OutputPrefix = "t5",
-  [int]$Width = 800,
-  [int]$Height = 650,
+  [int]$Width = 820,
+  [int]$Height = 720,
   # "x,y" window-relative point of the "Open placement demo" button. When set,
-  # the script clicks it after the home capture and captures the demo overlay.
+  # the script clicks it after the home capture and captures the demo overlay
+  # as "<prefix>-placement-demo.png".
   [string]$OpenDemoAt = "",
   # "x,y" window-relative point of the demo "Close demo" button. When set (with
   # -OpenDemoAt), the script clicks it after the demo capture and captures the
   # closed-again frame (the toggle positive control: the overlay disappears).
   [string]$CloseDemoAt = "",
+  # "x,y" window-relative point of the "Open lightbox" button. When set, the
+  # script clicks it after the home capture and captures the lightbox overlay as
+  # "<prefix>-lightbox-slot-current.png" (the same-position re-render proof:
+  # compare scrim/photo placement against the Phase 6/7 lightbox evidence).
+  [string]$OpenLightboxAt = "",
   [switch]$CaptureHomeOnly
 )
 
@@ -157,6 +168,13 @@ try {
       Start-Sleep -Milliseconds 900
       Capture-Window $h "$OutputPrefix-demo-closed.png"
     }
+  }
+
+  if (-not $CaptureHomeOnly -and $OpenLightboxAt -ne "") {
+    $ol = $OpenLightboxAt.Split(',')
+    Click-Message $h ([int]$ol[0]) ([int]$ol[1])
+    Start-Sleep -Milliseconds 900
+    Capture-Window $h "$OutputPrefix-lightbox-slot-current.png"
   }
 } finally {
   Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue
