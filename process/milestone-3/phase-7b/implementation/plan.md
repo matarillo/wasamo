@@ -456,10 +456,10 @@ ledger).
       lands under [evidence/](./evidence/).
 - [x] Record assistant evidence as labelled frames under
       [evidence/](./evidence/) (`t5-home.png`, `t5-placement-demo.png`,
-      `t5-lightbox-slot-current.png`) with the analysis in
-      [evidence/README.md](./evidence/README.md) noting what each frame
-      proves and the positive control it carries. DPI blur, if any, is the
-      known M4 residual, not a Phase 7b failure.
+      `t5-lightbox-slot-current.png`, `t5-lightbox-bare-baseline.png`) with
+      the analysis in [evidence/README.md](./evidence/README.md) noting
+      what each frame proves and the positive control it carries. DPI blur,
+      if any, is the known M4 residual, not a Phase 7b failure.
 - [x] **Same-position proof (closed in T5).** Capture the current-branch
       `slot.*` lightbox at the Phase 6/7 baseline size and compare to the
       pre-migration lightbox evidence.
