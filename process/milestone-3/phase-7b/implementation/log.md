@@ -1273,7 +1273,11 @@ Known carry-forward candidates at T6b start:
 T6b close gate — implemented-branch test map (trap #4):
 
 Enumeration source: `git diff` of `wasamoc/src/check.rs` (one production
-hunk in `check_grid`, three test hunks) + `git grep`.
+hunk in `check_grid`, five check-side test functions) and
+`wasamoc/src/lower.rs` (one lower-side test function) + `git grep`. The
+six T6b tests are enumerated in the rows below and in the verification
+table; they land across the initial T6b commit and the two Codex review
+follow-ups (`b56ab73`, `c79b340`).
 
 | Implemented branch / behavior | Category | Source query / diff cue | Direct test or owner |
 |---|---|---|---|
@@ -1309,5 +1313,6 @@ T6b carry-forward ownership:
 - No owner-unknown unresolved point remains from T6b. Problem B and its
   facets are owned by **T7 candidate ledger → Phase 8 Vision DR**, with the
   docs/notes home landed and the re-trigger / hard backstop recorded.
-- Deterministic-failure trap #6 did not trigger — the three new tests and
-  the workspace suite passed on the first run after the edit.
+- Deterministic-failure trap #6 did not trigger — the six T6b tests and
+  the workspace suite passed on the first run after each edit (initial T6b
+  commit and both Codex review follow-ups).
