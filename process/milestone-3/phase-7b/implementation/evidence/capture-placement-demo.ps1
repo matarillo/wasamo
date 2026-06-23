@@ -17,6 +17,10 @@
 param(
   [string]$OutDir = $PSScriptRoot,
   [string]$OutputPrefix = "t5",
+  # Override the gallery-rust.exe path. Defaults to this repo's release build;
+  # set it to a worktree build to capture a baseline from another commit (e.g.
+  # the T4-pre bare-syntax lightbox for the same-position proof).
+  [string]$ExePath = "",
   [int]$Width = 820,
   [int]$Height = 720,
   # "x,y" window-relative point of the "Open placement demo" button. When set,
@@ -66,8 +70,12 @@ public static class WinDemoCap {
 [WinDemoCap]::SetProcessDpiAwarenessContext([IntPtr](-4)) | Out-Null
 Add-Type -AssemblyName System.Drawing
 
-$repo = (Resolve-Path "$PSScriptRoot\..\..\..\..\..").Path
-$exe = Join-Path $repo "target\release\gallery-rust.exe"
+if ($ExePath -ne "") {
+  $exe = $ExePath
+} else {
+  $repo = (Resolve-Path "$PSScriptRoot\..\..\..\..\..").Path
+  $exe = Join-Path $repo "target\release\gallery-rust.exe"
+}
 if (-not (Test-Path $exe)) { throw "missing $exe" }
 New-Item -ItemType Directory -Force $OutDir | Out-Null
 

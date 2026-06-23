@@ -833,10 +833,10 @@ Pre-implementation probe (recorded before choosing the approach):
 
 - **Environment capability — confirmed.** Built `gallery-rust` release and
   ran the proven `capture-lightbox.ps1` against the current gallery.
-  Result: non-blank 800×600 frames rendering the live Gallery
-  (`evidence/t5-probe-closed.png` / `t5-probe-open.png` /
-  `t5-probe-closed-after-click.png`). Assistant-visible capture is
-  dischargeable in this environment (visible desktop + live Compositor).
+  Result: non-blank 800×600 frames rendering the live Gallery (the
+  throwaway probe frames were later consolidated into the final
+  `evidence/t5-home.png`). Assistant-visible capture is dischargeable in
+  this environment (visible desktop + live Compositor).
 - **Surface gap — disproves the planning hypothesis.** The shipped
   gallery does **not** surface the placement positive controls:
   (a) every ZStack child uses `slot.h-align: stretch` — no `end`, no
@@ -915,8 +915,8 @@ assigned to T6, T7, or the Phase 8 close.
 |---|---|---|
 | `cargo build --release -p gallery-rust` (placement-demo `.ui` added) | Green | Build-time `wasamoc check` of `gallery.ui` passes — the demo uses only the shipped T4 `slot.*` / `Cell` accept surface. |
 | `cargo build --release --workspace` | Green | Whole workspace builds with the `gallery.ui` change; pre-existing `wasamo` no-linkable-target warning unchanged. No Rust source changed in T5. |
-| Launch + DPI-aware capture (`capture-placement-demo.ps1`) | Non-blank render captured | `evidence/t5-placement-demo.png` (820×720) renders both positive controls; `evidence/t5-gallery-home-no-demo.png` confirms environment capability + that the shipped gallery does not surface placement. |
-| Assistant pixel analysis | Positive controls confirmed | ZStack: `start`/omitted-`center`/`end` at three distinct x-positions; Grid: r0c0 stretch-fill vs r0c2 centered, r1 span-3 — analysed in [evidence/README.md](./evidence/README.md). |
+| Launch + DPI-aware capture (`capture-placement-demo.ps1`, non-sandbox desktop) | Non-blank render captured | `evidence/t5-home.png` (clean `false`-state home) → click → `evidence/t5-placement-demo.png` renders both positive controls; `evidence/t5-lightbox-slot-current.png` + `t5-lightbox-bare-baseline.png` are the same-position pair. |
+| Assistant pixel analysis | Positive controls + same-position confirmed | ZStack: `start`/omitted-`center`/`end` at three distinct x-positions; Grid: r0c0 stretch-fill vs r0c2 centered, r1 span-3; lightbox `slot.*` vs T4-pre bare bbox identical (`x=150..648 y=60..544`) — analysed in [evidence/README.md](./evidence/README.md). |
 
 T5 close gate — implemented-branch / behavior test map:
 
@@ -931,7 +931,7 @@ captured pixels.)
 | Placement-demo surface added to `gallery.ui` (state + button + `if is_placement_demo_open` overlay). | GUI fixture | `git diff -- examples/gallery/gallery.ui` shows `is_placement_demo_open`, "Open placement demo", and the overlay `ZStack`/`VStack`. | `cargo build --release -p gallery-rust` green (build-time `wasamoc check`). |
 | ZStack `slot.h-align` start / omitted→center / end render at three distinct horizontal positions. | Observable / positive control | `evidence/t5-placement-demo.png` top panel; authored at `gallery.ui` ZStack children. | Assistant pixel analysis (left/center/right boxes) — `evidence/README.md`. |
 | Grid cell placement (row/column/span) + stretch-default vs centered alignment render distinctly. | Observable / positive control | `evidence/t5-placement-demo.png` lower panel; authored Grid `Cell` placement in `gallery.ui`. | Assistant pixel analysis (r0c0 stretch-fill, r0c2 centered, r1 span-3). |
-| Same-position re-render: current `slot.*` lightbox lands at the pre-migration positions. | Observable / positive control | `evidence/t5-lightbox-slot-current.png` (800×600) vs `phase-6/evidence/t7-lightbox-open.png`. | Assistant pixel analysis (centered scrim/photo/caption/nav arrangement matches). |
+| Same-position re-render: current `slot.*` lightbox lands at the pre-migration positions. | Observable / positive control | `evidence/t5-lightbox-slot-current.png` vs `evidence/t5-lightbox-bare-baseline.png` (T4-pre `3134287`, same content). | Bbox scan: photo/caption region `x=150..648 y=60..544` identical in both. |
 | Re-tuned DPI-aware capture driver for the current layout. | Tooling | `git status` shows new `evidence/capture-placement-demo.ps1`. | Produced the captured frames; documents the layout assumption + non-sandbox input requirement in the script header. |
 | Grid-as-placed-ZStack-child `slot.*` reject pinned by a direct test (current behavior; accept-vs-reject deferred). | Reject (pin of existing branch) | `rg -n "zstack_grid_child_slot_alignment_rejected" wasamoc\src\check.rs` | `wasamoc::check::tests::zstack_grid_child_slot_alignment_rejected` |
 | No **new** compiler reject / diagnostic / size branch (the pinned Grid reject already existed in `check_grid`). | (trap #4 non-applicable) | `git diff` adds no new `check`/`lower` branch, only a test. | T4 owns the `slot.*` reject matrix; T5 adds only the review-requested pin test. |
@@ -942,14 +942,14 @@ T5 close gate — behavior / invariant carry scan:
 |---|---|---|
 | `slot.h-align` placement is visibly read from the migrated model and produces alignment-keyword-driven positions (assistant baseline). | Closed (assistant portion) | Closed by `evidence/t5-placement-demo.png` + analysis. The **owner-visible** smoke remains T6. |
 | Grid cell placement (row/column/span/alignment) is visibly reflected (assistant baseline). | Closed (assistant portion) | Closed by the Grid panel in the same frame + analysis. Owner-visible smoke = T6. |
-| Same-position re-render proof (lightbox lands where it did pre-migration). | Closed (assistant portion) — see review response below | Closed by `evidence/t5-lightbox-slot-current.png` (current-branch `slot.*` lightbox at the Phase 6/7 baseline 800×600) compared to `phase-6/evidence/t7-lightbox-open.png`: same centered scrim/photo/caption/nav arrangement. Owner-visible confirmation remains T6. |
+| Same-position re-render proof (lightbox lands where it did pre-migration). | Closed (assistant portion) — see review response below | Closed by `evidence/t5-lightbox-slot-current.png` (current `slot.*`) vs `evidence/t5-lightbox-bare-baseline.png` (T4-pre `3134287` bare syntax, **same gallery content**): photo/caption bbox **pixel-identical** (`x=150..648 y=60..544`). The Phase 6 frame is a different gallery version and is **not** the baseline. Owner-visible confirmation remains T6. |
 | Gallery placement-demo surface is throwaway and must be removed at Phase 8. | Not closed (deferred) | Owner = T7 / phase-end ledger → Phase 8; scope = `is_placement_demo_open` state + button + overlay in `gallery.ui` + `evidence/` driver; close = Phase 8 cleanup sweep removes it with the other per-phase verification surfaces. |
 
 T5 carry-forward ownership:
 
 | Carry-forward | Owner task | Scope / impact | Close condition |
 |---|---|---|---|
-| Owner-visible GUI smoke + same-position lightbox proof. | T6 | Assistant baseline proves contrast on a default-open demo surface; human correctness judgement + the interactive lightbox same-position comparison remain owner-owned. | Owner runs the gallery, accepts or records fail/fix/re-run. |
+| Owner-visible GUI smoke. | T6 | The assistant baseline proves the contrast (click-opened demo) and the same-position re-render (`slot.*` vs T4-pre bare, pixel-identical); human correctness judgement remains owner-owned. | Owner runs the gallery, accepts or records fail/fix/re-run. |
 | Phase-8 removal of the placement-demo surface. | T7 / phase-end → Phase 8 | `gallery.ui` demo state/button/overlay + `evidence/` capture driver are verification scaffolding. | T7 candidate ledger / phase-end handoff records it; Phase 8 sweep removes it. |
 | **Finding — Grid cannot be a placed ZStack/overlay child.** `check_grid` consumes `slot.*` among a Grid's own members and rejects it ("found inside Grid"), so a Grid cannot carry `slot.h-align`/`v-align`; and a Grid centered by the ZStack default measures 0×0 (`measure_grid` reads the `Fill` width/height constraint, not the track sums) → invisible. Worked around in T5 by wrapping Grid content in a stretched `VStack`. **Current reject pinned** by `wasamoc::check::tests::zstack_grid_child_slot_alignment_rejected` (per the Codex review). | T7 / phase-end (triage) | Author-surface ↔ layout interaction gap surfaced by T5; the DD intent ("slot.* valid on a ZStack direct child") would accept it, so this is a real gap, not intended semantics. Not a Phase-7b regression. Impact: authors cannot place a Grid directly in a ZStack overlay. | T7 decides accept (needs `check_grid` + layout change) vs explicit-reject-as-spec (needs a clearer diagnostic + docs); the pin test updates with the decision. |
 | **Finding — `aspect` Box inside a Grid cell aborts arrange** when the cell is measured under an unbounded intrinsic probe (`BoxAspectUnboundedBoth` during the enclosing VStack/ZStack measure), silently dropping the whole subtree. | T7 / phase-end (triage) | Pre-existing layout behavior surfaced by T5 (the documented aspect-needs-a-bounded-axis rule). Worked around by using plain fill Boxes in demo cells. | T7 records for owner triage; no Phase-7b code change. |
@@ -969,13 +969,20 @@ positive controls sufficient but found three gaps; all three are resolved
 on this branch (follow-up commit):
 
 1. **Same-position proof closed in T5, not punted to T6.** Re-ran the
-   capture on a non-sandboxed desktop where synthetic input works, opened
-   the current-branch `slot.*` lightbox at the Phase 6/7 baseline size,
-   and added `evidence/t5-lightbox-slot-current.png` with the comparison
-   against `phase-6/evidence/t7-lightbox-open.png` (see the corrected
-   behavior/invariant row above). This also corrected the earlier
-   "synthetic input does not drive the buttons" finding — it was a sandbox
-   artifact.
+   capture on a non-sandboxed desktop where synthetic input works and
+   opened the current-branch `slot.*` lightbox. This also corrected the
+   earlier "synthetic input does not drive the buttons" finding — it was a
+   sandbox artifact. **(Second review round, 2026-06-23:** Codex measured
+   a 20px Y-offset vs the Phase 6 frame. Root cause: the Phase 6 evidence
+   is a *different gallery version*, so it conflated gallery-`.ui`
+   evolution with the migration. Re-did the proof against the **correct**
+   baseline — the T4-pre commit `3134287` (last bare-syntax commit, same
+   gallery content), built in a throwaway worktree because the current
+   `wasamoc` rejects bare syntax. `evidence/t5-lightbox-bare-baseline.png`
+   vs `evidence/t5-lightbox-slot-current.png` are **pixel-position
+   identical** (bbox `x=150..648 y=60..544`), proving the migration is
+   position-preserving. The Phase 6 frame is no longer cited as the
+   baseline.)
 2. **Grid-as-placed-ZStack-child behavior pinned.** Not fixed in T5
    (accepting it needs both a `check_grid` change and a layout change —
    out of T5's GUI-evidence scope), so the **current reject is pinned by a

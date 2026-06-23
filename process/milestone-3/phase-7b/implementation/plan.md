@@ -465,16 +465,17 @@ ledger).
       pre-migration lightbox evidence.
 
 **Baseline for the same-position proof.** Because T4 rejects the old
-ZStack bare syntax, the "same positions as the old surface" comparison
-**cannot be regenerated on this branch**. The same-position half is read
-against the **Phase 6/7 lightbox GUI evidence**
-([phase-6 evidence](../../phase-6/implementation/evidence/)) — the
-`slot.*` migration is a pure re-expression of placement, so the lightbox
-scrim/photo land at the same positions as before the migration. T5
-captured `evidence/t5-lightbox-slot-current.png` (current `slot.*`
-lightbox at the baseline 800×600) and read it against
-`phase-6/evidence/t7-lightbox-open.png`: same centered scrim/photo/caption/
-nav arrangement (assistant portion closed in T5; owner-visible
+ZStack bare syntax, the bare-surface baseline **cannot be regenerated on
+this branch**. The correct baseline is the **T4-pre commit** (`3134287`,
+the last commit on the bare surface, with the *same* lightbox content) —
+**not** the Phase 6/7 evidence, which is an older gallery version whose
+unrelated `.ui` evolution would confound the comparison (a ~20px offset).
+T5 built `gallery-rust` at `3134287` in a throwaway worktree and captured
+`evidence/t5-lightbox-bare-baseline.png`, then captured the current
+`slot.*` lightbox `evidence/t5-lightbox-slot-current.png` at the same
+800×600. The two are **pixel-position identical** (photo/caption bbox
+`x=150..648 y=60..544` in both), proving the `slot.*` migration is
+position-preserving (assistant portion closed in T5; owner-visible
 confirmation is T6's). The **contrast** half (varied ZStack alignment →
 varied position; omitted Grid placement → default) is the placement-demo
 sub-screen's `t5-placement-demo.png`.

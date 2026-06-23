@@ -28,8 +28,14 @@ committed code by re-running the driver:
 ```
 # home + placement demo (click "Open placement demo")
 pwsh -File capture-placement-demo.ps1 -Width 820 -Height 720 -OutputPrefix t5 -OpenDemoAt "410,399"
-# same-position lightbox at the Phase 6/7 baseline size (click "Open lightbox")
+# current slot.* lightbox (click "Open lightbox")
 pwsh -File capture-placement-demo.ps1 -Width 800 -Height 600 -OutputPrefix t5 -OpenLightboxAt "400,341"
+# T4-pre bare-syntax baseline (build gallery-rust at commit 3134287 in a
+# worktree, then point -ExePath at it; produces t5-lightbox-bare-baseline.png):
+#   git worktree add --detach ../wasamo-t4pre 3134287
+#   (in the worktree) cargo build --release -p wasamo-runtime -p wasamo-dll -p gallery-rust
+pwsh -File capture-placement-demo.ps1 -ExePath ..\..\..\..\..\..\wasamo-t4pre\target\release\gallery-rust.exe `
+     -Width 800 -Height 600 -OutputPrefix t5-baseline -OpenLightboxAt "400,341"
 ```
 
 ## Frames
@@ -62,21 +68,35 @@ positive controls, both read off the migrated `slot.*` / `SlotData` model:
   (row/column/span all reflected). Distinct cell positions + the
   stretch-vs-centered contrast are the positive control.
 
-### `t5-lightbox-slot-current.png` — same-position re-render proof
+### `t5-lightbox-slot-current.png` + `t5-lightbox-bare-baseline.png` — same-position re-render proof
 
-The current-branch (`slot.*`-migrated) lightbox, captured at the Phase
-6/7 baseline window size (800×600) by clicking "Open lightbox". Compared
-to the pre-migration baseline
-[`../../phase-6/implementation/evidence/t7-lightbox-open.png`](../../phase-6/implementation/evidence/t7-lightbox-open.png)
-(also 800×600): the scrim fills the whole window (Fill/Fill), and the 4:3
-"Lightbox photo placeholder" is centered, with the "Gallery image 01"
-caption directly below it, the "Box 4:3 placeholder…" line under that, and
-the "< > x" nav buttons centered at the bottom — the **same centered
-overlay arrangement** as the baseline. The `slot.*` migration is a pure
-re-expression of placement and lands the lightbox content in the same
-positions. (Home content *behind* the semi-transparent scrim differs
-between the two frames because the gallery `.ui` evolved across phases;
-that is not the lightbox placement under test.)
+The same-position proof isolates the **`slot.*` migration** from gallery
+content evolution by comparing two frames built from the **same gallery
+content**, differing only in placement syntax:
+
+- `t5-lightbox-slot-current.png` — the current-branch lightbox
+  (`slot.h-align: stretch` …), captured at 800×600 by clicking "Open
+  lightbox".
+- `t5-lightbox-bare-baseline.png` — the **T4-pre** lightbox (commit
+  `3134287`, the last commit on the bare `h-align` / `v-align` surface,
+  built in a throwaway worktree because the current `wasamoc` rejects the
+  bare form), same window size. Its lightbox `Grid` is identical
+  (`columns: 1* 400 1*  rows: 1* 300 64 44 1*`); only the placement
+  *syntax* differs.
+
+These two are **pixel-position-identical** — the light photo-placeholder /
+caption region measures `x=150..648  y=60..544` in **both** (extracted by
+a bbox scan). The bare and `slot.*` forms lower to the same `IrSlotData`
+(T4 lower tests) and so render at the same coordinates: the migration is
+position-preserving.
+
+> Note on the Phase 6 evidence: the earlier
+> [`../../phase-6/implementation/evidence/t7-lightbox-open.png`](../../phase-6/implementation/evidence/t7-lightbox-open.png)
+> is **not** the right baseline — it is from an older gallery version, so
+> its photo region (`y=80..524`) differs by ~20px from the current frame
+> for reasons of gallery-`.ui` evolution, *not* the placement migration.
+> The T4-pre baseline above controls for that by holding the gallery
+> content fixed.
 
 ## "Gallery does not surface the contrast" (recorded in [../log.md](../log.md))
 
