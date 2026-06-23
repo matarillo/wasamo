@@ -496,19 +496,47 @@ gate from T5's assistant baseline. The assistant prepares the runnable
 host + the detailed owner observation script; the smoke itself is
 owner-performed and cannot be discharged by the assistant baseline.
 
-- [ ] Owner runs the gallery / lightbox and observes, with the
-      **positive control = placement varied** (an explicit alignment
-      lands where expected, a contrasting one lands elsewhere, omitted
-      placement falls to the default — a single static frame a hardcoded
-      tree could equally produce is not evidence): ZStack `slot.*`
-      placement and Grid cell placement render at the same positions as
-      the old surface; WrapPanel reflow / ScrollView behaviour stay
-      correct around placed children.
-- [ ] Owner explicitly accepts the smoke result, or records a fail
-      observation; fixes land additively on the T6 branch and the
-      checklist re-runs to green before T6 closes.
-- [ ] T6 step-end retrospective recorded at
-      `process/milestone-3/phase-7b/retrospectives/t6.md`.
+**Responsibility split (re-cut at T6 start — recorded in [log.md](./log.md)).**
+The assistant-prep deliverables (runnable host + observation script) are
+checkable assistant items; the smoke and acceptance are genuinely
+owner-performed and stay `[ ]` until the owner reports. The **same-position**
+half of evidence item (4) was **closed in T5** (assistant portion:
+current `slot.*` lightbox vs the T4-pre bare baseline `3134287`,
+pixel-identical), and the bare surface is rejected on this branch (T4), so
+the owner **cannot** re-derive a live old-vs-new comparison; the owner's
+positive control is **placement varied on the placement-demo sub-screen**
+(varied alignment → varied position; omitted → per-container default), with
+the recorded T5 baseline pair as the same-position corroboration.
+
+- [x] **Assistant prep (owned by the assistant).** Confirm T5 merged
+      (start-gate precondition: phase branch / T6 branch at `ce5cc4d`);
+      build the runnable host (`cargo build --release -p gallery-rust`,
+      green); confirm it launches without early crash (supporting "no
+      early crash" signal only — **not** GUI evidence, which is T5's);
+      author the detailed owner observation script at
+      [evidence/t6-owner-smoke-script.md](./evidence/t6-owner-smoke-script.md)
+      (exact launch / navigation / per-control observation + pass-fail
+      criteria).
+- [x] Owner runs the gallery placement-demo + lightbox per the observation
+      script and observes, with the **positive control = placement varied**
+      (an explicit alignment lands where expected, a contrasting one lands
+      elsewhere, omitted placement falls to the default — a single static
+      frame a hardcoded tree could equally produce is not evidence): the
+      ZStack `slot.h-align` start / omitted-center / end children land at
+      three distinct horizontal positions; the Grid cells land at their
+      distinct row/column/span with r0c0 stretch-filled vs r0c2 centered;
+      WrapPanel reflow / ScrollView behaviour stay correct around placed
+      children; window close is crash-free. **Done (2026-06-23):** owner
+      ran the smoke and captured `evidence/t6-{home,placement-demo,lightbox}.png`.
+- [x] Owner explicitly accepts the smoke result, or records a fail
+      observation; **fixes land additively on the `feat/m3-phase-7b-t6`
+      branch** (the fix container) and the checklist re-runs to green
+      before T6 closes (M3-Phase 4 T6 smoke-fail → fix → re-smoke
+      precedent). **Done (2026-06-23):** owner accepted all observations as
+      pass; no fix iteration needed.
+- [x] T6 step-end retrospective recorded at
+      `process/milestone-3/phase-7b/retrospectives/t6.md` (recorded after
+      the owner smoke result is known, per the owner-smoke precedent).
 
 **Start gate:** T5 merged; runnable host + observation script prepared.
 **End gate:** owner acceptance (or fail → fix → re-run) recorded.
