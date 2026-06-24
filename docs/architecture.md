@@ -1,6 +1,6 @@
 # Wasamo Architecture
 
-**Status:** M1 complete (Phases 0-8); M2 complete (Phases 1-7) — Foundation acceptance A1-A6 discharged; M3-Phase 1, M3-Phase 2, M3-Phase 3, M3-Phase 4, and M3-Phase 5 complete. M3-Phase 6 closed (implementation-synced): ZStack, conditional rendering, and the component host surface are documented to match the landed implementation. M3-Phase 7 closed (implementation-synced): iteration — `ControlFlowNode::For` / `BindingTarget::ForLoopSubtree`, the canonized member-expansion seam, stage-then-commit range mutation, and child-carried ZStack placement (§6.7.10, §6.8.5) are documented to match the landed implementation.
+**Status:** M1 complete (Phases 0-8); M2 complete (Phases 1-7) — Foundation acceptance A1-A6 discharged; M3-Phase 1, M3-Phase 2, M3-Phase 3, M3-Phase 4, and M3-Phase 5 complete. M3-Phase 6 closed (implementation-synced): ZStack, conditional rendering, and the component host surface are documented to match the landed implementation. M3-Phase 7 closed (implementation-synced): iteration — `ControlFlowNode::For` / `BindingTarget::ForLoopSubtree`, the canonized member-expansion seam, stage-then-commit range mutation, and child-carried ZStack placement (§6.7.10, §6.8.5) are documented to match the landed implementation. M3-Phase 7b closed (implementation-synced): the parent-interpreted placement model — child-slot `SlotData` carrier (§6.7.9, §6.8.6), Grid storage convergence off the parallel `cell_placements` vector (§6.8.4), and the textual-IR `child { placement … }` record (IR-B) — is documented to match the landed implementation (`IrMember::Widget(IrChildSlot)`; runtime `ChildSlot` / `SlotData`).
 
 ---
 
@@ -884,9 +884,18 @@ first-class **member**, not a widget. `IrNode.children` is
 
 ```rust
 enum IrMember {
-    Widget(IrNode),
+    // M3-Phase 7b carries parent-interpreted placement on the child
+    // slot: a member is the node plus its optional placement payload
+    // (None for a child of a placement-free parent). The landed spelling
+    // is the tuple variant `Widget(IrChildSlot)` wrapping a named
+    // `IrChildSlot { node, slot_data }` record (keeping future slot-local
+    // fields off the enum variant); the owner-visible commitment is that
+    // placement rides the child slot, in a broadly-named carrier
+    // (IrSlotData), not a parallel parent vector.
+    Widget(IrChildSlot),
     ControlFlow(ControlFlowNode),
 }
+struct IrChildSlot { node: IrNode, slot_data: Option<IrSlotData> }
 enum ControlFlowNode {
     If { branches: Vec<Branch> },   // Phase 6: exactly one Branch, no else
     // M3-Phase 7 adds the sibling iteration variant (§6.7.10):
@@ -903,9 +912,17 @@ struct Branch { condition: HandlerExpr, body: Vec<IrMember> }
 
 The condition rides the existing `HandlerExpr` (a `BoolLit` or a
 bool-typed `BoolPropRead`); `IrProp.value` stays strictly `IrLiteral`,
-so no new scalar / literal type is added. Phase 6 constrains `branches`
-to length 1 and `body` to exactly one `Widget(_)` member at lowering
-and loader time — anything other than exactly one `Widget(_)` body
+so no new scalar / literal type is added. The `slot_data` field on the
+child slot (`IrChildSlot`, M3-Phase 7b) carries parent-interpreted
+placement and is detailed in §6.8.6 (the child-slot `SlotData` model); it
+is `None` for a child whose parent admits no placement, so the
+conditional / iteration machinery above is untouched by placement — a
+generated `body` member is a `Widget(IrChildSlot { node, slot_data })`
+like any static child, and the `for` /
+`if` body root carries whatever placement it would carry as a static
+child (dsl_spec §4.16, placement on the body root child). Phase 6 constrains `branches`
+to length 1 and `body` to exactly one `Widget(..)` member at lowering
+and loader time — anything other than exactly one `Widget(..)` body
 member (an empty body, more than one member, or a non-widget member
 such as a textual `prop` / `binding` / `handler` line or a nested
 `ControlFlow(_)`), or a second `Branch`, is `WASAMO_ERR_IR_MALFORMED` —
@@ -919,7 +936,7 @@ construction/traversal site at compile time, so the change is
 mechanical and exhaustive rather than a silent-omission hazard. Like
 Grid's `Cell`, a control-flow member materialises **no `WidgetNode` and
 no `Visual`** — the loader *interprets* it, emitting widgets for
-`Widget(_)` members and a conditional binding for `ControlFlow(_)`.
+`Widget(..)` members and a conditional binding for `ControlFlow(_)`.
 Validation is **not** deferred with materialisation: the loader
 recurses into the declared branch body at load time and runs the full
 validate / name-resolution / bool-typed-condition check even when the
@@ -1109,7 +1126,7 @@ signature is changed.
 set.** Every structural child mutation on the materialised tree —
 conditional 0/1 and `for` ranges alike — enters one mutation seam that
 performs, as one composed operation: (1) the `children` splice
-(child-carried placement rides along, §6.8.5); (2) Visual sibling-order
+(child-carried placement rides along, §6.8.6); (2) Visual sibling-order
 updates (removed Visuals detached, staged Visuals inserted at the
 correct sibling positions — declared order with live cardinalities,
 never just on top); (3) parent layout invalidation (§6.6); (4)
@@ -1287,9 +1304,12 @@ relative-offset closure.
 
 **Grid does not extend the per-type writer seam, but it extends the IR
 node shape with a Grid-specific kind payload alongside the existing
-`IrProp` machinery.** Grid appears as another `widget_type: "Grid"` value on `IrNode`, with
-zero or more `Cell` children carrying placement / span / alignment
-metadata. The two load-bearing structural choices are:
+`IrProp` machinery.** Grid appears as another `widget_type: "Grid"` value
+on `IrNode`, with zero or more children carrying placement / span /
+alignment metadata — authored grouped in a `Cell` wrapper **or** directly
+via `slot.*` (M3-Phase 7b; dsl_spec §4.16), both normalising to one
+child-slot placement payload (§6.8.6). The two load-bearing structural
+choices are:
 
 - **`TrackSize` domain type lives outside `IrProp`.** Grid's
   `columns:` and `rows:` track lists carry sequences of a
@@ -1310,22 +1330,30 @@ metadata. The two load-bearing structural choices are:
   field; future Grid extensions (`auto`, `minmax`, named lines,
   bindable tracks) localise to `KindPayload::Grid` without
   pressuring `IrProp`.
-- **`Cell` is an IR-only wrapper, not a runtime widget kind.**
-  `Cell` appears in `wasamo-ir` as `widget_type: "Cell"` so the
-  parser and IR loader recognise it, but it is **not** registered
-  in the `wasamo-runtime` widget catalog. Grid's lowering reads
-  its IR Cell subtrees directly to extract `(row, column,
-  row-span, column-span, h-align, v-align)` per Cell, and arranges
-  each Cell's single content child as Grid's effective layout
-  child. The WidgetNode / Visual tree therefore contains one node
-  for Grid plus one node per Cell's content widget; `Cell` itself
-  does not materialise as a WidgetNode or Visual. `Cell` outside a
-  `Grid` parent is rejected at `wasamoc check` and at runtime
-  `validate()` (defense-in-depth per Phase 1 / Phase 2 T7 /
-  Phase 3 T6 / Phase 4). Cell's placement / span /
-  alignment attributes live in standard `IrProp` entries using
-  existing `i32` and `Ident` literals — no new `IrLiteral` variant
-  is added.
+- **`Cell` is an author-surface grouping form, not a runtime widget
+  kind — and not a textual-IR node.** Under M3-Phase 7b a Grid child's
+  placement is authored **two ways** (dsl_spec §4.16): grouped in a
+  `Cell` wrapper, or directly on the child via `slot.*`. The **parser**
+  recognises `Cell` in `.ui` source, but **lowering normalises both
+  authored forms to one child-slot placement record** (`SlotData::Grid`
+  carrying `(row, column, row-span, column-span, h-align, v-align)`,
+  §6.8.6) — `Cell` does **not** survive as a `widget_type: "Cell"` node
+  in the textual or loaded IR (IR-B: the emitter writes the
+  `child { placement grid { … } node … }` record, dsl_spec §8.5; stale
+  `node Cell { … }` IR is rejected + regenerated, not slot-ised by the
+  loader). `Cell` is **not** registered in the `wasamo-runtime` widget
+  catalog and arranges each placed child as Grid's effective layout
+  child; the WidgetNode / Visual tree contains one node for Grid plus one
+  node per placed content widget — `Cell` materialises no WidgetNode or
+  Visual. `Cell` outside a `Grid` parent — and the two mixing rejects
+  (a `slot.*` key among a `Cell`'s own attributes; a `slot.*` key on a
+  widget *inside* a `Cell`) — are **source / `wasamoc check` rules** on
+  the wrapper before normalization; the runtime side is **not** a `Cell`
+  child-structure re-check (the loader never sees a `Cell` node) but the
+  stale-form rejection of a surviving `node Cell { … }` IR (reject +
+  regenerate, dsl_spec §4.16 / §8.5). Placement values use existing
+  `i32` and `Ident` literals — no new `IrLiteral` variant is
+  added.
 
 All Phase 5 Grid attributes are **constant-only**; no Grid or Cell
 attribute is bindable in Phase 5. No new `IrType`, `IrLiteral`, or
@@ -1336,16 +1364,21 @@ appear in `PropertyValue`, and the new `LayoutError` variant below
 is host-internal. F5 (`TypedValue`) deferral is preserved.
 
 The runtime materialises Grid as a per-kind widget data shape
-(`WidgetData::Grid { columns, rows, cell_placements }`) holding the
-declared track lists (`Vec<TrackSize>` per axis) and the per-Cell
-placement metadata (`cell_placements`, parallel to the content
-children). The parallel-vector shape survives M3-Phase 7's
-child-carried placement migration (§6.8.5) because the Grid path is
-**static-only** — Grid rejects a direct `for` member and admits no
-structural mutation under it; the recorded trigger is that any Grid
+(`WidgetData::Grid { columns, rows }`) holding the declared track lists
+(`Vec<TrackSize>` per axis). **M3-Phase 7b migrates Grid's per-child
+placement off the former parallel `cell_placements` vector onto the
+child slot** (`SlotData::Grid`, §6.8.6), converging Grid onto the
+child-carried model ZStack already used. The migration is a runtime
+structural change on the full-review lane, bounded by the Phase 5 Grid
+fixtures (track sizing, spanning, membership / conflict, arrange
+overflow) as the regression gate, and lands as its own commit. This is a
+**storage** migration, not a mutation surface: Grid still rejects a
+direct `for` member and admits no structural mutation under it, so the
+DD-recorded recursive trigger persists — any future Grid
 structural-mutation path (a `for` of `Cell`s, conditional `Cell`s)
-migrates `cell_placements` to the child-carried model **before** that
-path is built. It does **not** cache resolved per-Cell rectangles:
+builds against the child-slot model from the start (the parallel-vector
+that previously held the trigger is now gone). Grid does **not** cache
+resolved per-cell rectangles:
 `arrange_grid` re-derives each axis's track resolution and writes the
 resolved offset / size directly onto each content child's
 `LayoutNode` every layout pass (no arrange-result cache, unlike Phase
@@ -1373,12 +1406,18 @@ sync convention (unlike Phase 4 ScrollView, which introduced an
 intermediate content Visual for the scroll-offset translation).
 Grid uses the existing **1 WidgetNode = 1 Visual** convention:
 Grid's own Visual carries the outer-bounds clip
-(`Visual.Clip = InsetClip { 0, 0, 0, 0 }`); each Cell's content
+(`Visual.Clip = InsetClip { 0, 0, 0, 0 }`); each placed child's content
 widget Visual is a direct child of Grid's Visual through the normal
 `sync_visuals()` path. Grid has no translation analog to
 ScrollView's scroll offset, so the intermediate-Visual pattern is
 not needed; admitting per-cell clipping later would be the right
-place to revisit Cell-owned Visuals, not Phase 5.
+place to revisit per-cell Visuals, not now. With placement now on the
+child slot (§6.8.6), a future Grid structural-mutation path enters the
+**same** placement-aware splice seam (§6.7.10 — children splice with
+placement riding along, Visual sibling order, layout invalidation,
+widget-pointer registry, effect ownership, as one composed operation) as
+ZStack and the conditional / iteration paths; no Grid-specific
+parallel-vector bookkeeping remains.
 
 The Phase 5 layout engine boundary remains Win32/WinRT-free: the
 Grid track-resolution algorithm and arrange pass operate on pure
@@ -1394,16 +1433,20 @@ unit tests. See
 #### 6.8.5 ZStack (M3-Phase 6)
 
 **ZStack is a pure overlap container that rides the generic `IrNode`
-machinery unchanged — no new IR vocabulary.** ZStack appears as another
-`widget_type: "ZStack"` value on `IrNode` with `kind_payload: None`,
-taking its children **directly** in document order like VStack / HStack
-/ WrapPanel (no `Cell`-style wrapper; unlike Grid, overlap needs no
-per-child structured placement carrier). No new `IrType`, `IrLiteral`,
-or `PropertyValue` variant is introduced, so neither the per-type
-writer seam nor the C ABI value union is touched. The runtime registers
-`ZStack` as a layout-container widget kind parallel to WrapPanel; each
-child is a real widget that materialises a `WidgetNode` and a `Visual`,
-with the `1 WidgetNode = 1 Visual` convention intact.
+machinery — no `kind_payload`, no `Cell`-style wrapper.** ZStack appears
+as another `widget_type: "ZStack"` value on `IrNode` with
+`kind_payload: None`, taking its children **directly** in document order
+like VStack / HStack / WrapPanel. Per-child overlay alignment is **not**
+a `kind_payload` and **not** a child widget property: M3-Phase 7b carries
+it as parent-interpreted placement on the **child slot**
+(`SlotData::ZStack`, the shared child-slot carrier defined in §6.8.6), so the member
+shape gains the `slot_data` field (§6.7.9) — the one new IR-shape element.
+No new `IrType`, `IrLiteral`, or `PropertyValue` variant is introduced
+(placement values reuse `i32` / `Ident` literals), so neither the
+per-type writer seam nor the C ABI value union is touched. The runtime
+registers `ZStack` as a layout-container widget kind parallel to
+WrapPanel; each child is a real widget that materialises a `WidgetNode`
+and a `Visual`, with the `1 WidgetNode = 1 Visual` convention intact.
 
 **Sizing.** ZStack's default size constraint is **`Fill/Fill`** (like
 Grid / ScrollView): on a bounded parent axis it takes the full parent
@@ -1423,33 +1466,33 @@ intrinsic ("size to the largest child" on a bounded axis) ZStack is not
 expressible until a future size-constraint surface.
 
 **Per-child alignment — child-carried placement (storage contract
-revised in M3-Phase 7; implementation-synced).** Each
-child is measured against the ZStack content rect and anchored within
-it; the default `h-align` / `v-align` is **`center`** (a `Stretch`
-alignment or a `Fill` constraint expands the child to the full content
-rect via the existing cross-axis rule). All children share the same
-content rect — the defining property of the overlap. The alignment is
-authored as ordinary child `IrProp` ident-literals; the storage
+revised in M3-Phase 7; generalised across containers in M3-Phase 7b).**
+Each child is measured against the ZStack content rect and anchored
+within it; the default `slot.h-align` / `slot.v-align` is **`center`** (a
+`Stretch` alignment or a `Fill` constraint expands the child to the full
+content rect via the existing cross-axis rule). All children share the
+same content rect — the defining property of the overlap. The storage
 contract is **child-carried placement**: a child slot carries the node
 plus its optional **parent-interpreted** placement (`None` for
-placement-free containers), so a child and its placement are one
-record that no insert, remove, range splice, or future reorder can
-desynchronise. This replaces the Phase 6 shape — a parent-owned
-`zstack_placements` vector kept parallel to `children`, whose
-parallel-vector invariant had to be policed by paired insert / remove
-helpers and drifted in practice — with a structural guarantee, ahead of
-the M3-Phase 7 range mutations that cross ZStack (a `for` member is
-admitted under ZStack). Placement does not thereby become an intrinsic
-widget property: the author surface is unchanged, and the parent still
-interprets the carried value. Generated subtrees carry their
-per-item-instantiated placement through staging → commit as ordinary
-child-slot data (§6.7.10). `h-align` / `v-align` are
-admitted only on a **ZStack direct child** (and a Grid `Cell`); the
-parent context consumes them as placement annotations before the
-child's own unknown-prop check and excludes them from the child's prop
-set, and they are rejected on any other parent — closing both the
-"valid placement wrongly rejected" and "stray placement wrongly
-accepted" failure modes.
+placement-free containers), so a child and its placement are one record
+that no insert, remove, range splice, or future reorder can
+desynchronise. M3-Phase 6 stored ZStack placement in a parent-owned
+`zstack_placements` vector parallel to `children`, whose parallel-vector
+invariant had to be policed by paired insert / remove helpers and
+drifted in practice; M3-Phase 7 moved ZStack onto the child slot, and
+**M3-Phase 7b converges Grid onto the same model** (§6.8.4) so both
+placement-bearing containers carry placement on one record. Placement
+does not thereby become an intrinsic widget property: it is authored in
+the parent-interpreted `slot.*` namespace (dsl_spec §4.16), and the
+parent still interprets the carried value. Generated subtrees carry
+their per-item-instantiated placement through staging → commit as
+ordinary child-slot data (§6.7.10).
+
+ZStack's per-child placement uses the `SlotData::ZStack` variant of the
+shared child-slot carrier defined in **§6.8.6** (the carrier ZStack and
+Grid share); `slot.h-align` / `slot.v-align` are admitted only on a
+ZStack direct child, consumed by the parent context before the child's
+own unknown-prop check and rejected on any other parent.
 
 **z-order and clip.** Paint order is document order — first child at the
 bottom, last on top, no `z-index`. Static children ride the normal
@@ -1467,6 +1510,100 @@ The C ABI surface is unchanged: ZStack adds no `PropertyValue` variant
 and no new `LayoutError`, so [abi_spec.md](./abi_spec.md) ships **no**
 ABI changes for Phase 6. See
 [dsl_spec.md §4.13 ZStack chapter](./dsl_spec.md#413-zstack-layout-primitive-m3-phase-6).
+
+#### 6.8.6 Child-slot placement storage `SlotData` (M3-Phase 7b)
+
+**Status:** M3-Phase 7b closed; implementation-synced.
+
+Both placement-bearing containers — Grid (§6.8.4) and ZStack (§6.8.5) —
+carry parent-interpreted placement on **one shared child-slot carrier**,
+rather than each in its own parallel parent-side vector. This section is
+the normative home for that storage model; Grid and ZStack reference it
+rather than each restating it. It re-connects the child-carried model
+ZStack shipped in M3-Phase 7 with the Grid storage migration (§6.8.4)
+and the `slot.*` author surface (dsl_spec §4.16), per the M3-Phase 7b
+placement-model decision.
+
+**The carrier.** The optional placement payload is a single
+broadly-named carrier, landed as `Option<SlotData>` on the child
+slot (`IrSlotData` on the IR member, §6.7.9):
+
+```rust
+// Landed in-memory shape (the broad name and the one-field invariant are
+// the owner-visible commitments; the per-container payload types reuse the
+// existing layout-engine placement structs).
+enum SlotData {
+    Grid(CellPlacement),     // row / column / row-span / column-span / h-align / v-align
+    ZStack(ZStackPlacement), // h-align / v-align
+}
+// runtime child slot: ChildSlot { node: Box<WidgetNode>, slot_data: Option<SlotData> }
+// layout  child slot: LayoutChildSlot { node, slot_data: Option<SlotData> }
+```
+
+Three properties are load-bearing and **normative**, independent of the
+exact Rust spelling:
+
+- **One field, one carrier.** Placement is *one* optional field on the
+  child slot, not separate per-container fields and not a parent-side
+  parallel vector. A child with no parent-interpreted placement carries
+  `None` and pays no placement-specific cost.
+- **Per-container payload behind one record.** The payload is a
+  per-container value (`Grid` keys / `ZStack` keys), a **closed** carrier
+  today — a third placement-bearing container would add a variant. This
+  is a storage *encoding*, not a cross-container vocabulary: the
+  variants stay container-named.
+- **Broad name, additive future.** The carrier is named for the *slot*,
+  not for *placement* or *layout*, so the first non-layout parent-data
+  (hit-test / focus / accessibility) is an **additive change under the
+  same name** — `SlotData` migrates enum → struct
+  (`SlotData { placement: Option<Placement>, … }`, the `Grid` / `ZStack`
+  variants moving into an inner `Placement` enum) with no rename. No
+  naming-change trigger is set; revising the `slot` vocabulary is a fresh
+  decision if it ever arises.
+
+**CB-B integration condition (the generalizability the `slot.*` surface
+promises is kept by storage, not just naming).** Two invariants keep a
+later shared / extensible carrier an *additive* change rather than a
+re-litigation of where placement lives: (i) **no container stores its
+placement outside the child slot** (no return to a parallel vector), and
+(ii) the loader / checker treat every `slot.*` key through the **same
+admission path** regardless of payload variant. Under those two,
+collapsing the container-named variants into a shared placement enum, or
+opening an extensible slot-metadata record, is a carrier change behind
+the one field — not a storage or author-surface change.
+
+**Admission (shared by both containers).** A placement payload is
+admitted only on a child of a placement-bearing parent, and the parent
+context consumes it before the child's own unknown-prop check (excluding
+it from the child's prop set); placement on any other parent is rejected.
+Grid admits its keys on a `Cell` wrapper (bare) or a directly placed
+child (`slot.*`), both lowering to `SlotData::Grid` (§6.8.4); ZStack
+admits `slot.h-align` / `slot.v-align` on a direct child, lowering to
+`SlotData::ZStack` (§6.8.5). The author-facing admission table and the
+named diagnostics are normative in dsl_spec §4.16; the loaded IR carries
+the lowered payload, and stale parallel/`Cell`-node forms are rejected +
+regenerated (IR-B, dsl_spec §8.5).
+
+**Structural mutation.** A child and its placement are **one record**, so
+no insert / remove / range splice / future reorder can desynchronise
+them; the placement-aware splice seam (§6.7.10) carries placement along
+the `children` splice as one composed operation (child-list splice, Visual
+sibling order, layout invalidation, widget-pointer registry, effect
+ownership). ZStack already mutates through this seam (M3-Phase 7);
+Grid's storage migrates onto the same record in M3-Phase 7b but admits no
+structural mutation yet (§6.8.4 — `for` / `if` of `Cell`s stays deferred
+behind the recursive trigger). Generated subtrees carry their
+per-item-instantiated placement through staging → commit as ordinary
+child-slot data (§6.7.10).
+
+**Future code-construction boundary (non-normative).** A future
+code-construction API **must not** express placement as a generic child
+property setter (`child.set_property("h-align", …)`), which would
+re-introduce the intrinsic-widget-property reading the `slot.*` surface
+exists to avoid. The positive shape (a parent-scoped insertion or
+child-slot builder) is left open; this is recorded as a constraint on
+that future design, not an API added now (no ABI change —
+[abi_spec.md](./abi_spec.md) is untouched).
 
 ---
 

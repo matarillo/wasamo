@@ -152,6 +152,36 @@ pub enum KindPayload {
     },
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum IrAlignment {
+    Start,
+    Center,
+    End,
+    Stretch,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum IrSlotData {
+    Grid {
+        row: u32,
+        column: u32,
+        row_span: u32,
+        column_span: u32,
+        h_align: IrAlignment,
+        v_align: IrAlignment,
+    },
+    ZStack {
+        h_align: IrAlignment,
+        v_align: IrAlignment,
+    },
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct IrChildSlot {
+    pub node: IrNode,
+    pub slot_data: Option<IrSlotData>,
+}
+
 /// A reactive binding (`bind name = expr`).
 #[derive(Debug, Clone, PartialEq)]
 pub struct IrBinding {
@@ -169,7 +199,7 @@ pub struct IrHandler {
 /// A member in a widget node body.
 #[derive(Debug, Clone, PartialEq)]
 pub enum IrMember {
-    Widget(IrNode),
+    Widget(IrChildSlot),
     ControlFlow(ControlFlowNode),
 }
 
@@ -213,7 +243,14 @@ pub struct IrNode {
 impl IrNode {
     pub fn widget_children(&self) -> impl Iterator<Item = &IrNode> {
         self.children.iter().filter_map(|member| match member {
-            IrMember::Widget(node) => Some(node),
+            IrMember::Widget(slot) => Some(&slot.node),
+            IrMember::ControlFlow(_) => None,
+        })
+    }
+
+    pub fn widget_child_slots(&self) -> impl Iterator<Item = &IrChildSlot> {
+        self.children.iter().filter_map(|member| match member {
+            IrMember::Widget(slot) => Some(slot),
             IrMember::ControlFlow(_) => None,
         })
     }
@@ -233,6 +270,13 @@ pub struct IrComponent {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn child_slot(node: IrNode) -> IrChildSlot {
+        IrChildSlot {
+            node,
+            slot_data: None,
+        }
+    }
 
     #[test]
     fn ir_type_bool_distinct_from_i32_and_str() {
@@ -414,11 +458,14 @@ mod tests {
         let control = ControlFlowNode::If {
             branches: vec![ControlFlowBranch {
                 condition: HandlerExpr::BoolLit(true),
-                body: vec![IrMember::Widget(text.clone())],
+                body: vec![IrMember::Widget(child_slot(text.clone()))],
             }],
         };
 
-        assert!(matches!(IrMember::Widget(text), IrMember::Widget(_)));
+        assert!(matches!(
+            IrMember::Widget(child_slot(text)),
+            IrMember::Widget(_)
+        ));
         assert!(matches!(
             IrMember::ControlFlow(control),
             IrMember::ControlFlow(ControlFlowNode::If { .. })
@@ -485,14 +532,14 @@ mod tests {
 
     #[test]
     fn control_flow_for_encodes_binders_collection_and_body() {
-        let body = IrMember::Widget(IrNode {
+        let body = IrMember::Widget(child_slot(IrNode {
             widget_type: "Text".into(),
             props: vec![],
             bindings: vec![],
             handlers: vec![],
             children: vec![],
             kind_payload: None,
-        });
+        }));
         let flow = ControlFlowNode::For {
             binder: "thumb".into(),
             index_binder: Some("i".into()),
@@ -543,7 +590,7 @@ mod tests {
             bindings: vec![],
             handlers: vec![],
             children: vec![
-                IrMember::Widget(direct.clone()),
+                IrMember::Widget(child_slot(direct.clone())),
                 IrMember::ControlFlow(ControlFlowNode::For {
                     binder: "item".into(),
                     index_binder: None,
@@ -551,7 +598,7 @@ mod tests {
                         path: "items".into(),
                         elem: IrType::I32,
                     },
-                    body: vec![IrMember::Widget(repeated)],
+                    body: vec![IrMember::Widget(child_slot(repeated))],
                 }),
             ],
             kind_payload: None,
@@ -559,6 +606,32 @@ mod tests {
 
         let children: Vec<&IrNode> = parent.widget_children().collect();
         assert_eq!(children, vec![&direct]);
+    }
+
+    #[test]
+    fn child_slot_carries_optional_slot_data() {
+        let node = IrNode {
+            widget_type: "Text".into(),
+            props: vec![],
+            bindings: vec![],
+            handlers: vec![],
+            children: vec![],
+            kind_payload: None,
+        };
+        let slot = IrChildSlot {
+            node,
+            slot_data: Some(IrSlotData::ZStack {
+                h_align: IrAlignment::End,
+                v_align: IrAlignment::Center,
+            }),
+        };
+        assert!(matches!(
+            slot.slot_data,
+            Some(IrSlotData::ZStack {
+                h_align: IrAlignment::End,
+                v_align: IrAlignment::Center
+            })
+        ));
     }
 
     #[test]

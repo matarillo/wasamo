@@ -10,6 +10,7 @@ adrs:
   - process/milestone-3/phase-5/decisions/preamble.md  # Phase 5 (Grid layout primitive)
   - process/milestone-3/phase-6/decisions/preamble.md  # Phase 6 (ZStack + conditional rendering)
   - process/milestone-3/phase-7/decisions/preamble.md  # Phase 7 (iteration grammar)
+  - process/milestone-3/phase-7b/decisions/preamble.md  # Phase 7b (parent-interpreted placement — owner-inserted corrective)
 created: 2026-05-16
 agreed: 2026-05-16
 in-progress: 2026-05-19
@@ -82,8 +83,9 @@ with stable IDs for phase mapping:
 - **A1.** `examples/gallery/gallery.ui` drives the Photo Gallery
   target app end-to-end on the M2 reactive foundation, exercising
   every M3 layout primitive (A2–A6), both grammar surfaces (A7–A8),
-  the `bool` scalar (A9), and the Button `selected` state surface
-  (A10) through the `.ui → IR → runtime` path.
+  the `bool` scalar (A9), the Button `selected` state surface
+  (A10), and the parent-interpreted placement authoring surface
+  (A13) through the `.ui → IR → runtime` path.
 - **A2.** Grid layout primitive (1 cell 1 child, star sizing +
   spanning; same-cell overlap is **not** provided — overlay is
   ZStack's responsibility).
@@ -114,9 +116,15 @@ with stable IDs for phase mapping:
   `examples/gallery/` E2E proof. No phase closes leaving one side
   ahead of the others.
 - **A12.** DSL specification first public draft. Covers the M2
-  surface plus A2–A10; the novel normative content is the
-  measure-arrange specifications for WrapPanel and Grid and the
-  grammar surface for A7–A8.
+  surface plus A2–A10 and A13; the novel normative content is the
+  measure-arrange specifications for WrapPanel and Grid, the
+  grammar surface for A7–A8, and the parent-interpreted placement
+  authoring surface (A13).
+- **A13.** Parent-interpreted placement authoring surface: Grid cell
+  placement and ZStack alignment are authored as `slot.*` parent-data
+  on one namespace — not intrinsic widget properties — with Grid also
+  retaining the `Cell` grouping form (Grid accepts both `Cell` and
+  direct `slot.*`, one form per child; ZStack `slot.*`).
 
 ### Phase breakdown
 
@@ -188,6 +196,36 @@ exercises that surface in `examples/gallery/`.
   remains deferred. If pressure surfaces, the ADR opens it
   as an explicit DD.
 
+- **M3-Phase 7b — Parent-interpreted placement attributes
+  (owner-inserted corrective).** Not in the original plan; inserted
+  2026-06-19 between Phase 7 and Phase 8 (tier-2 additive plan
+  revision — see Revision log). A **corrective** phase, not a
+  feature-breadth one: it adds no new layout primitive and no new app
+  feature. Phases 5–7 shipped Grid `Cell`, ZStack `h-align` /
+  `v-align`, and `for`-generated placement, but the *author-facing
+  surface*, *internal storage model*, and *future code-construction
+  story* for parent-interpreted child placement diverged across
+  containers (Grid keeps a parallel `cell_placements` vector; ZStack
+  was migrated to child-carried placement in Phase 7; the two are
+  authored with different syntax). Before the M3 public draft
+  (Phase 8) freezes that surface, Phase 7b establishes a coherent
+  public model on one settled floor — *placement is parent-interpreted,
+  not an intrinsic widget property* — and aligns the Grid / ZStack DSL
+  surface, IR / runtime storage, and future-API direction on it. The
+  two ADR decisions are DD-M3-P7b-001 (author-facing placement surface)
+  and DD-M3-P7b-002 (placement internal model and construction
+  boundary); whether the container-specific-vs-generalizable conceptual
+  boundary and the child-slot-vs-parallel storage question resolve one
+  way or another is left to the DDs, not pre-decided here. Origin and
+  owner-aligned framing:
+  [phase-7b/requirements/framing.md](phase-7b/requirements/framing.md)
+  (owner-aligned 2026-06-19). If Accepted, Phase 7b implements the
+  chosen surface across parser / checker / lowering / runtime /
+  examples, not docs alone. Whether Phase 7b requires a new acceptance
+  criterion is **contingent on DD-M3-P7b-001's outcome** and fixed at
+  ADR-Accepted time (see the Acceptance ↔ phase mapping note and
+  Revision log).
+
 - **M3-Phase 8 — Button `selected` state + Gallery E2E + DSL
   spec public draft.** Three workstreams that close M3 together:
   (i) settle the concrete construct for A10 (`selected: bool`
@@ -220,9 +258,11 @@ M3-Phase 1 (bool scalar)
         │                              ▲
 M3-Phase 2 (Box) ──► M3-Phase 3 (WrapPanel) ──► M3-Phase 4 (ScrollView) ──┤
                                                                           │
-                            M3-Phase 5 (Grid) ────────────────────────────┤
+                            M3-Phase 5 (Grid) ──┐                         │
+                                                ├─► M3-Phase 7b ──────────┤
+                            M3-Phase 7 (iter) ──┘   (placement corrective)│
                                                                           │
-                            M3-Phase 7 (iteration grammar) ───────────────┘
+                                                                          ┘
 ```
 
 Phase 1 (`bool`) is a hard prerequisite for Phase 6 (conditional
@@ -249,8 +289,19 @@ phases at the IR / evaluator level, but its E2E proof
 ScrollView combination from Phase 4. Sequencing after Phase 4
 keeps the E2E proof a strict superset rather than a re-do.
 
+Phase 7b (parent-interpreted placement corrective) depends on
+Phase 5 (Grid `Cell` placement surface) and Phase 7 (ZStack
+child-carried placement under `for` generation), because it
+re-connects the placement surface / storage model those phases
+shipped. It is sequenced **before** Phase 8 so the placement
+surface is coherent before the public draft freezes it: deferring
+the alignment to after Phase 8 would mean a breaking change to a
+published surface rather than a pre-publication correction.
+
 Phase 8 depends on every preceding phase (it assembles the full
-gallery and promotes the cumulative spec).
+gallery and promotes the cumulative spec), and now sequences after
+Phase 7b so the spec public draft describes the aligned placement
+surface.
 
 ### Acceptance ↔ phase mapping
 
@@ -267,7 +318,28 @@ gallery and promotes the cumulative spec).
 | A9 (`bool` scalar) | M3-Phase 1 |
 | A10 (Button selected state) | M3-Phase 8 |
 | A11 (per-phase spec / impl / E2E sync) | Every phase (operational rule, not a single-phase deliverable) |
-| A12 (DSL spec first public draft) | M3-Phase 8 (promotion); written incrementally in M3-Phase 1–7 |
+| A12 (DSL spec first public draft) | M3-Phase 8 (promotion); written incrementally in M3-Phase 1–7 (including the Phase 7b placement surface) |
+| A13 (parent-interpreted placement authoring surface) | M3-Phase 7b (corrective; surface frozen ahead of the Phase 8 public draft) |
+
+**M3-Phase 7b acceptance note (resolved 2026-06-21 — branch (a),
+new AC A13).** Phase 7b was inserted as a tier-2 additive plan
+revision (2026-06-19; see Revision log) and its relation to the
+acceptance criteria was contingent on DD-M3-P7b-001's outcome. At
+the 2026-06-21 Accepted flip the DD selected **PM-2**, which changes
+the public author-facing surface (ZStack `h-align` →
+`slot.h-align`; Grid gains direct `slot.*`), so the disposition is
+**branch (a)**: a new acceptance criterion **A13**
+(parent-interpreted placement authoring surface) is added to
+`process/_roadmap.md` under the M3 acceptance-criteria revision
+exception. The existing criteria never named the placement *author
+surface* (A2 promises Grid "1 cell 1 child, star sizing +
+spanning"; A4 promises ZStack "sibling z-order by document order" —
+neither names *how placement is written*), so A13 **pins that
+surface** rather than refining A2 / A4 / A12. **A11**
+(per-phase `.ui` / IR / `wasamoc` / runtime / `docs/dsl_spec.md` /
+`examples/gallery/` sync) and **A12** (public-draft explicability)
+continue to apply. See the 2026-06-21 Revision-log entry for the
+corrective-vs-feature-breadth framing.
 
 ### Out of scope (deferred to later milestones)
 
@@ -404,7 +476,7 @@ A phase closes when **all** of the following hold:
 
 M3 is complete when **all** of the following hold:
 
-1. **Every acceptance criterion A1–A12 is discharged**, with the
+1. **Every acceptance criterion A1–A13 is discharged**, with the
    discharge recorded in the corresponding ADR and the plan's
    Progress section's row marked completed.
 2. **Phase 8 outputs all three deliverables**: A10 (Button
@@ -504,6 +576,86 @@ M3 is complete when **all** of the following hold:
   phase's `implementation/plan.md`. Tier-1 factual: no AC, phase,
   dependency, or scope change.
 
+- **2026-06-19 — M3-Phase 7b (parent-interpreted placement
+  corrective) inserted between Phase 7 and Phase 8.** Routed as a
+  **tier-2 (scope) — additive** revision under the plan-revision
+  discipline ([workflow.md §計画(plan)改訂の規律](../procedures/workflow.md),
+  [DD-V-026](../cross-milestone/decisions/plan-revision-discipline.md)).
+
+  - **What changed.** A new phase (M3-Phase 7b) is added to the Phase
+    breakdown, Phase dependencies diagram + prose, frontmatter `adrs`,
+    and Progress table. Phase 8 now sequences after Phase 7b. **No
+    acceptance criterion, no existing phase's scope, and no existing
+    dependency edge is altered or removed** — this is purely additive
+    sequencing ahead of the public-draft phase.
+  - **Old premise.** The original M3 plan assumed Phase 7's iteration
+    grammar was the last surface work before Phase 8 assembled the
+    gallery and promoted the spec; parent-interpreted placement was
+    treated as settled across Phases 5–7.
+  - **New premise.** Phases 5–7 shipped Grid `Cell`, ZStack `h-align` /
+    `v-align`, and `for`-generated placement with a **divergent**
+    author surface, storage model (Grid parallel `cell_placements`
+    vector vs ZStack child-carried), and future-API story. Freezing
+    that divergence in the Phase 8 public draft would convert a
+    pre-publication correction into a post-publication breaking change.
+    A corrective phase ahead of Phase 8 is the smaller cost.
+  - **No-change option (considered, rejected).** Carry the divergence
+    into Phase 8 and let the public draft document the asymmetry as-is.
+    Rejected because Phase 8 is editorial (it promotes, it does not
+    re-decide surface), so the divergence would either ship unexamined
+    or force surface re-litigation inside the close phase — the failure
+    the corrective insertion is meant to avoid. Documenting the
+    asymmetry *as a principle* remains live, but as DD-M3-P7b-001
+    Option 0, not as a no-phase default.
+  - **Critical check (agent).** Verified the insertion touches no AC
+    text (A1–A12 unchanged); ROADMAP needs no mirror now because
+    `process/_roadmap.md §M3` enumerates acceptance criteria, not
+    phases (phase structure lives in this plan) — a ROADMAP mirror is
+    required only if DD-M3-P7b-001 later triggers an AC change
+    (branch (a) of the acceptance note). Confirmed Phase 7b's stated
+    dependencies (Phase 5 Grid, Phase 7 ZStack) match the shipped
+    surfaces it re-connects.
+  - **Owner authorisation.** Owner aligned the Phase 7b framing packet
+    A–F on 2026-06-19, including FD-7b-E (Phase 7b implements, not
+    docs-only) and the phase insertion itself
+    ([phase-7b/requirements/framing.md §オーナー合意の記録](phase-7b/requirements/framing.md)).
+  - **Impact check.** Downstream artifacts affected: Phase 8 sequencing
+    (now after 7b) — reflected above; ROADMAP — no change now (see
+    critical check); existing AC mapping rows — unchanged (Phase 7b's
+    AC relation is contingent and recorded as a separate note, not a
+    row). No prior phase's `implementation/` artifacts are reopened.
+    The new-AC question is **deferred to DD-M3-P7b-001's Accepted
+    flip** and will be recorded here as a follow-up Revision-log entry
+    at that time (branch (a) AC-revision exception, or branch (b)
+    A11/A12 discharge — see the Acceptance ↔ phase mapping note).
+
+- **2026-06-21 — M3-Phase 7b ADRs Accepted; branch (a) → new AC A13.**
+  DD-M3-P7b-001 / DD-M3-P7b-002 flipped to Accepted after the PM-2
+  integration review (owner pass). DD-001 selected **PM-2** (Grid admits
+  both `Cell` and direct `slot.*`, one form per child; ZStack `slot.*`),
+  a public author-surface change → **branch (a)** of the acceptance note.
+  Disposition recorded: a new acceptance criterion **A13** is added to
+  `process/_roadmap.md` under the M3 acceptance-criteria revision
+  exception (ROADMAP mirrored in the same commit).
+
+  - **Why a new AC, not feature-scope creep.** A13 is a **corrective
+    public-contract** criterion, **not new feature breadth**: it adds no
+    layout primitive and no app capability — it pins the
+    parent-interpreted placement *authoring surface* that Phases 5–7
+    already shipped divergently, so the Phase 8 public draft freezes a
+    coherent contract instead of an inconsistency. The acceptance surface
+    grows by one row only because that surface was previously unnamed by
+    any AC, not because new functionality was added.
+  - **Provisional residual (pre-1.0).** PM-2 ships two Grid author forms
+    (`Cell` and direct `slot.*`); resolving to PM-1 or PM-3 is a pre-1.0
+    wrapper-rule decision carried in DD-M3-P7b-001 §Out of scope →
+    `phase-7b/implementation/handoff.md` → M3 `handoff.md`. A13 states the
+    accept-set (both forms accepted), not the provisional `Cell`-default
+    examples convention.
+  - **Remaining Moment 1.** The normative `docs/dsl_spec.md` /
+    `docs/architecture.md` placement sections land separately (distinct
+    review concern), after which Phase 7b's `implementation/` opens.
+
 ## Progress
 
 The Progress section is a compact milestone index. Detailed live
@@ -520,6 +672,7 @@ ADRs, CHANGELOG, notes, and git history, then deleted by default.
 | M3-Phase 5 — Grid layout primitive | complete | [plan.md](phase-5/implementation/plan.md) | [preamble.md](phase-5/decisions/preamble.md) | ADR Accepted 2026-05-28; execution opened 2026-05-29; A2 (Grid) discharged + A11 gallery owner-acceptance 2026-05-30; Moment-2 docs synced + phase-end CI green + merged to main 2026-05-30; second novel-normative-spec phase; star sizing |
 | M3-Phase 6 — ZStack + conditional rendering | complete | [plan.md](phase-6/implementation/plan.md) | [preamble.md](phase-6/decisions/preamble.md) | ADR Accepted 2026-06-02; A4 + A7 discharged 2026-06-09; first grammar surface (binding drives subtree present/absent); `bool` prereq landed in Phase 1; **M3-Phase 4 R1 (Window-title wiring) closed** via static `title:` host-wiring (DD-M3-P6-006); Moment-2 docs synced + phase-end CI green run 27149254110 |
 | M3-Phase 7 — Iteration grammar | complete | [plan.md](phase-7/implementation/plan.md) | [preamble.md](phase-7/decisions/preamble.md) | ADR Accepted 2026-06-13; execution opened 2026-06-13; A8 discharged by collection-driven `for` generation with runtime append / remove / clear / reset positive controls; A11/A12 Moment 2 docs synced 2026-06-18; `TypedValue` pressure judged — **not adopted**, with per-item richness triggers recorded in the phase-end handoff; phase-end CI green run 27731815476 |
+| M3-Phase 7b — Parent-interpreted placement attributes (owner-inserted corrective) | implementation complete; phase-end pending | [plan.md](phase-7b/implementation/plan.md) | [preamble.md](phase-7b/decisions/preamble.md) | Inserted 2026-06-19 (tier-2 additive); framing owner-aligned 2026-06-19; DD-M3-P7b-001/002 Accepted 2026-06-21 (CB-B + Option 3 `slot.` + PM-2; IM-4 + SM-B + VS-1a `SlotData` + IR-B); branch (a) → new **A13**; T1–T6b landed (IR `IrChildSlot` + runtime/layout `ChildSlot`/`SlotData`, `slot.*` author surface + PM-2 matrix, GUI evidence + owner smoke, T6b Grid-as-ZStack-child checker fix); Moment 2 docs synced at T7 (2026-06-24); phase-end (CI run id, handoff finalization, preamble status flip, phase-end retro) pending |
 | M3-Phase 8 — `selected` state + Gallery E2E + DSL spec public draft | not started | — | — | A1, A10, A12 discharge |
 
 ### Owner-facing resume note

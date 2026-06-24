@@ -116,8 +116,8 @@ fn build_zstack_ir() -> wasamo_ir::IrComponent {
     ZStack {
         Box { fill: #336699cc }
         Text {
-            h-align: end
-            v-align: start
+            slot.h-align: end
+            slot.v-align: start
             text: "caption"
         }
         Box { fill: #993366cc }

@@ -1,6 +1,7 @@
 use crate::ir::{
-    CompoundOp, ControlFlowNode, HandlerExpr, InterpolationPart, IrBinding, IrComponent, IrHandler,
-    IrLiteral, IrMember, IrNode, IrProp, IrState, IrStateType, IrType, KindPayload, TrackSize,
+    CompoundOp, ControlFlowNode, HandlerExpr, InterpolationPart, IrAlignment, IrBinding,
+    IrChildSlot, IrComponent, IrHandler, IrLiteral, IrMember, IrNode, IrProp, IrSlotData, IrState,
+    IrStateType, IrType, KindPayload, TrackSize,
 };
 
 /// Serialise an IrComponent to the normative Wasamo IR text format (§8, DD-M2-P6-002).
@@ -86,7 +87,7 @@ fn emit_node(out: &mut String, node: &IrNode, indent: usize) {
 
 fn emit_member(out: &mut String, member: &IrMember, indent: usize) {
     match member {
-        IrMember::Widget(node) => emit_node(out, node, indent),
+        IrMember::Widget(slot) => emit_child_slot(out, slot, indent),
         IrMember::ControlFlow(ControlFlowNode::If { branches }) => {
             let i = ind(indent);
             for branch in branches {
@@ -121,6 +122,53 @@ fn emit_member(out: &mut String, member: &IrMember, indent: usize) {
             }
             out.push_str(&format!("{}}}\n", i));
         }
+    }
+}
+
+fn emit_child_slot(out: &mut String, slot: &IrChildSlot, indent: usize) {
+    let i = ind(indent);
+    out.push_str(&format!("{i}child {{\n"));
+    if let Some(slot_data) = &slot.slot_data {
+        emit_slot_data(out, slot_data, indent + 1);
+    }
+    emit_node(out, &slot.node, indent + 1);
+    out.push_str(&format!("{i}}}\n"));
+}
+
+fn emit_slot_data(out: &mut String, slot_data: &IrSlotData, indent: usize) {
+    match slot_data {
+        IrSlotData::Grid {
+            row,
+            column,
+            row_span,
+            column_span,
+            h_align,
+            v_align,
+        } => out.push_str(&format!(
+            "{}placement grid {{ row: {}, column: {}, row-span: {}, column-span: {}, h-align: {}, v-align: {} }}\n",
+            ind(indent),
+            row,
+            column,
+            row_span,
+            column_span,
+            emit_alignment(*h_align),
+            emit_alignment(*v_align)
+        )),
+        IrSlotData::ZStack { h_align, v_align } => out.push_str(&format!(
+            "{}placement zstack {{ h-align: {}, v-align: {} }}\n",
+            ind(indent),
+            emit_alignment(*h_align),
+            emit_alignment(*v_align)
+        )),
+    }
+}
+
+fn emit_alignment(alignment: IrAlignment) -> &'static str {
+    match alignment {
+        IrAlignment::Start => "start",
+        IrAlignment::Center => "center",
+        IrAlignment::End => "end",
+        IrAlignment::Stretch => "stretch",
     }
 }
 
@@ -485,7 +533,7 @@ mod tests {
         assert_eq!(b.children.len(), 1);
         assert!(matches!(
             &b.children[0],
-            IrMember::Widget(child) if child.widget_type == "Text"
+            IrMember::Widget(child) if child.node.widget_type == "Text"
         ));
 
         let out = emit(&comp);
@@ -655,7 +703,7 @@ mod tests {
     }
 
     #[test]
-    fn grid_cell_emitted_as_node_with_placement_props() {
+    fn grid_cell_emitted_as_child_slot_with_grid_placement() {
         let out = emit_src(
             r#"component C inherits W {
                 Grid {
@@ -665,10 +713,15 @@ mod tests {
                 }
             }"#,
         );
-        assert!(out.contains("node Cell {"), "got: {}", out);
-        assert!(out.contains("prop row = 0"), "got: {}", out);
-        assert!(out.contains("prop column = 1"), "got: {}", out);
-        assert!(out.contains("prop h-align = center"), "got: {}", out);
+        assert!(!out.contains("node Cell {"), "got: {}", out);
+        assert!(out.contains("child {"), "got: {}", out);
+        assert!(
+            out.contains(
+                "placement grid { row: 0, column: 1, row-span: 1, column-span: 1, h-align: center, v-align: stretch }"
+            ),
+            "got: {}",
+            out
+        );
         assert!(out.contains("node Text {"), "got: {}", out);
     }
 
@@ -680,7 +733,7 @@ mod tests {
             r#"component C inherits W {
                 ZStack {
                     Box { fill: #00000080 }
-                    Text { h-align: center v-align: end text: "caption" }
+                    Text { slot.h-align: center slot.v-align: end text: "caption" }
                 }
             }"#,
         );
@@ -693,8 +746,13 @@ mod tests {
         let text_pos = out.find("node Text {").expect("Text child emitted");
         assert!(box_pos < text_pos, "got: {}", out);
         assert!(out.contains("prop fill = #00000080"), "got: {}", out);
-        assert!(out.contains("prop h-align = center"), "got: {}", out);
-        assert!(out.contains("prop v-align = end"), "got: {}", out);
+        assert!(
+            out.contains("placement zstack { h-align: center, v-align: end }"),
+            "got: {}",
+            out
+        );
+        assert!(!out.contains("prop h-align = center"), "got: {}", out);
+        assert!(!out.contains("prop v-align = end"), "got: {}", out);
     }
 
     #[test]
@@ -796,8 +854,8 @@ mod tests {
     #[test]
     fn collection_state_and_for_member_emit_in_textual_ir_shape() {
         use crate::ir::{
-            ControlFlowNode, HandlerExpr, IrComponent, IrLiteral, IrMember, IrNode, IrState,
-            IrStateType, IrType,
+            ControlFlowNode, HandlerExpr, IrChildSlot, IrComponent, IrLiteral, IrMember, IrNode,
+            IrState, IrStateType, IrType,
         };
 
         let comp = IrComponent {
@@ -822,13 +880,16 @@ mod tests {
                         path: "thumbs".into(),
                         elem: IrType::I32,
                     },
-                    body: vec![IrMember::Widget(IrNode {
-                        widget_type: "Text".into(),
-                        props: vec![],
-                        bindings: vec![],
-                        handlers: vec![],
-                        children: vec![],
-                        kind_payload: None,
+                    body: vec![IrMember::Widget(IrChildSlot {
+                        node: IrNode {
+                            widget_type: "Text".into(),
+                            props: vec![],
+                            bindings: vec![],
+                            handlers: vec![],
+                            children: vec![],
+                            kind_payload: None,
+                        },
+                        slot_data: None,
                     })],
                 })],
                 kind_payload: None,

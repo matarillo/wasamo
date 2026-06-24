@@ -88,7 +88,7 @@ fn box_phase2_emit_parses_back_to_ir_literal_variants() {
     assert_eq!(comp.root.children.len(), 1);
     assert!(matches!(
         &comp.root.children[0],
-        IrMember::Widget(node) if node.widget_type == "Text"
+        IrMember::Widget(slot) if slot.node.widget_type == "Text"
     ));
 }
 

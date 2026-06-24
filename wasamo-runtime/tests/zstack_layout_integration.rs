@@ -118,7 +118,7 @@ fn assert_zstack_visual_contract(zstack: &WidgetNode, label: &str) {
         );
     }
 
-    // The third child carries `h-align: end; v-align: start` in both
+    // The third child carries `slot.h-align: end; slot.v-align: start` in both
     // fixtures. Read the live Visual offset so the T3 runtime
     // WidgetData -> LayoutNode placement boundary is exercised end-to-end,
     // not only by T2's pure layout tests.
@@ -135,8 +135,8 @@ const ZSTACK_ROOT_SRC: &str = r#"component ZStackRoot inherits Window {
         Text { text: "bottom" }
         Text { text: "middle" }
         Text {
-            h-align: end
-            v-align: start
+            slot.h-align: end
+            slot.v-align: start
             text: "top"
         }
     }
@@ -151,12 +151,16 @@ const VSTACK_ZSTACK_SRC: &str = r#"component VStackZStackRoot inherits Window {
             Text { text: "bottom" }
             Text { text: "middle" }
             Text {
-                h-align: end
-                v-align: start
+                slot.h-align: end
+                slot.v-align: start
                 text: "top"
             }
         }
     }
+}"#;
+
+const REPLACEMENT_TEXT_SRC: &str = r#"component ReplacementText inherits Window {
+    Text { text: "replacement" }
 }"#;
 
 #[test]
@@ -233,6 +237,44 @@ fn zstack_vstack_root_fixture_pins_production_root_shape() {
                 "ZStack bottom = window bottom (Fill/Fill child receives remaining height)",
             );
             assert_zstack_visual_contract(zstack, "VStack-rooted fixture");
+        },
+    );
+}
+
+#[test]
+fn zstack_replace_child_preserves_child_slot_placement() {
+    run_on_owning_runtime_thread_or_skip(
+        "ZStack replace_child placement integration test",
+        move || {
+            let ir = lower_ui_to_ir(ZSTACK_ROOT_SRC);
+            let component = parse_ir(&ir).expect("parse_ir failed");
+            let compositor = wasamo_runtime::get_compositor();
+            let text_renderer = wasamo_runtime::get_text_renderer();
+            let mut built = build_widget_tree(&component, compositor, text_renderer)
+                .expect("build_widget_tree failed");
+
+            let replacement_ir = lower_ui_to_ir(REPLACEMENT_TEXT_SRC);
+            let replacement_component = parse_ir(&replacement_ir).expect("replacement parse_ir");
+            let replacement_built =
+                build_widget_tree(&replacement_component, compositor, text_renderer)
+                    .expect("replacement build_widget_tree");
+            let replacement = replacement_built.root;
+            let old = built
+                .root
+                .replace_child(2, replacement)
+                .expect("replace top child");
+            assert!(
+                !old.attached,
+                "replace_child must detach the returned subtree"
+            );
+
+            built
+                .root
+                .run_layout_as_window_root(300.0, 200.0)
+                .expect("run_layout_as_window_root failed");
+
+            let root = built.root.as_ref();
+            assert_zstack_visual_contract(root, "ZStack replace_child fixture");
         },
     );
 }

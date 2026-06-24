@@ -220,6 +220,14 @@ impl<'a> Parser<'a> {
         }
 
         if matches!(self.peek(), Token::Ident(_)) {
+            if matches!(self.peek(), Token::Ident(name) if name == "slot") {
+                if matches!(self.peek_next(), Token::Dot) {
+                    return self.parse_slot_property_bind();
+                }
+                if matches!(self.peek_next(), Token::Colon) {
+                    return Err(self.error("malformed slot property key; expected `slot.<key>:`"));
+                }
+            }
             let next_colon = matches!(self.peek_next(), Token::Colon);
             let next_lbrace = matches!(self.peek_next(), Token::LBrace);
             let next_arrow = matches!(self.peek_next(), Token::Arrow);
@@ -384,6 +392,30 @@ impl<'a> Parser<'a> {
         let end = value.span().end;
         Ok(Member::PropertyBind {
             name,
+            value,
+            span: Span {
+                start: start.start,
+                end,
+                line: start.line,
+                col: start.col,
+            },
+        })
+    }
+
+    fn parse_slot_property_bind(&mut self) -> Result<Member, Diagnostic> {
+        let start = self.current_span().clone();
+        let (prefix, _) = self.expect_ident()?;
+        debug_assert_eq!(prefix, "slot");
+        if !matches!(self.peek(), Token::Dot) {
+            return Err(self.error("malformed slot property key; expected `slot.<key>:`"));
+        }
+        self.advance();
+        let (key, _) = self.expect_ident()?;
+        self.expect_colon()?;
+        let value = self.parse_expr()?;
+        let end = value.span().end;
+        Ok(Member::PropertyBind {
+            name: format!("slot.{key}"),
             value,
             span: Span {
                 start: start.start,
@@ -1136,6 +1168,44 @@ mod tests {
         } else {
             panic!("expected PropertyBind");
         }
+    }
+
+    #[test]
+    fn slot_dotted_property_bind_canonicalizes_name() {
+        let def = parse_ok("component C inherits W { ZStack { Text { slot.h-align: end } } }");
+        let Member::WidgetDecl { members, .. } = &def.members[0] else {
+            panic!("expected root widget");
+        };
+        let Member::WidgetDecl { members, .. } = &members[0] else {
+            panic!("expected child widget");
+        };
+        let Member::PropertyBind { name, value, .. } = &members[0] else {
+            panic!("expected slot property bind");
+        };
+        assert_eq!(name, "slot.h-align");
+        assert!(matches!(value, Expr::Ident { name, .. } if name == "end"));
+    }
+
+    #[test]
+    fn malformed_slot_property_keys_rejected_at_parse() {
+        let msg = parse_err_msg("component C inherits W { ZStack { Text { slot: end } } }");
+        assert!(
+            msg.contains("malformed slot property key") && msg.contains("slot.<key>"),
+            "message: {msg}"
+        );
+
+        let msg =
+            parse_err_msg("component C inherits W { ZStack { Text { slot..h-align: end } } }");
+        assert!(
+            msg.contains("expected identifier") && msg.contains("`.`"),
+            "message: {msg}"
+        );
+
+        let msg = parse_err_msg("component C inherits W { ZStack { Text { slot. } } }");
+        assert!(
+            msg.contains("expected identifier") && msg.contains("`}`"),
+            "message: {msg}"
+        );
     }
 
     #[test]

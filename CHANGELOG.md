@@ -14,6 +14,42 @@ the **Status** section of [README.md](./README.md).
 
 ## [Unreleased] — M3: DSL surface (in progress)
 
+### M3-Phase 7b — Parent-interpreted placement (2026-06-24)
+
+Aligns the parent-interpreted placement surface shipped piecemeal in
+Phases 5–7 onto one author surface and one internal model, discharging M3
+acceptance **A13** — before the Phase 8 public draft freezes it. A
+corrective phase: no new layout primitive, no new app feature.
+
+Author surface: Grid cell placement (`row` / `column` / `row-span` /
+`column-span` / `h-align` / `v-align`) and ZStack alignment (`h-align` /
+`v-align`) are authored as parent-interpreted **`slot.*`** metadata, not
+intrinsic widget properties, unified on one `slot.` namespace. Grid admits
+**both** a `Cell` grouped form and direct `slot.*` (one form per child,
+strict mixing reject); ZStack moves bare `h-align` / `v-align` to
+`slot.h-align` / `slot.v-align` (no long-lived alias). Placement is
+constant per instance (a binding RHS is rejected).
+
+Internal model: `wasamo-ir` carries placement on an explicit child slot
+(`IrMember::Widget(IrChildSlot)` + `IrSlotData`); `wasamo-runtime` and the
+layout tree store an explicit `ChildSlot` / `LayoutChildSlot` with a
+broadly-named `SlotData` carrier, removing Grid's parallel
+`cell_placements` vector (and its layout mirror) so a child and its
+placement are one record. Textual IR normalises all three authored forms
+to one `child { placement <kind> { … } node … }` record; stale `Cell` /
+bare-placement IR is reject-and-regenerate. `wasamoc` lowers all forms to
+the one record. No new C ABI surface (`abi_spec.md` untouched).
+
+Visible proof: a placement-demo sub-screen in
+`examples/gallery/gallery.ui` shows ZStack `slot.h-align` start / center /
+end at three distinct positions and Grid stretch-default vs centered cells;
+assistant screenshots + owner-manual smoke carry the positive controls, and
+the migration is same-position-preserving against the pre-migration
+baseline. Carry-forwards: the PM-2 pre-1.0 wrapper-rule decision, the
+VS-2 / VS-3 carrier triggers, the Grid structural-mutation trigger,
+bindable placement, and the author-controllable `width` / `height` sizing
+gap (Phase 8 framing Vision DR).
+
 ### M3-Phase 7 — Iteration grammar (2026-06-18)
 
 Adds the iteration grammar, discharging M3 acceptance **A8**. The author
