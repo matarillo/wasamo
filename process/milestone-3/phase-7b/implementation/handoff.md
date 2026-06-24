@@ -146,6 +146,24 @@ The T5-recorded **Grid-as-ZStack-child checker reject** is **resolved**
 child now compiles); only its sizing half survives as Problem B above, so
 it is not carried as an open checker-design decision.
 
+## Framing deferred-items reconciliation (正本 rows → handoff status)
+
+The deferred-items **正本** is the framing scope table
+([../requirements/framing.md §Out of scope](../requirements/framing.md));
+this handoff **refines** it, it does not replace it. Every 正本 row is
+reconciled below so none is dropped — no Phase 8 row is silently lost.
+
+| 正本 row (framing) | Handoff status | Where / responsibility |
+|---|---|---|
+| Public code-construction API / ABI | **Carried** | The FD-7b-D non-committal constraint above (no generic child property setter); responsibility = future code-construction phase / M6 ABI freeze prep. |
+| Generic modifier system | **Still deferred — no Phase 8 action** | Future DSL ergonomics / styling phase; the syntax-doesn't-narrow-future-modifiers reservation is in DD-001 (implementation deferred). Touched only as the joint-design partner of the VS-3 non-layout-parent-data trigger above. |
+| User-defined containers and custom slot attributes | **Still deferred — no Phase 8 action** | Component / custom-layout phase; its placement-key-collision reservation rides the PM-2 wrapper-rule decision and the VS-2 carrier trigger above (a custom container is a "new container" / "new placement-bearing container" re-trigger). |
+| Non-layout parent-data | **Covered by the VS-3 trigger** above | The first non-layout parent-data (hit-test / focus / accessibility) is exactly the `SlotData` enum → struct additive migration trigger (VS-3), designed jointly with the framing generic-modifier decision. M4+ input / accessibility phase. |
+| Keyed child metadata / retained identity | **Still deferred — no Phase 8 action** | Future keyed-identity / reorder phase. **Orthogonal to placement**: Phase 7b placement is the structural parent-child edge, not element identity / keyed diff; a `key:` surface is a separate problem and is not opened by the child-slot record. |
+| Grid structural mutation under `Cell` | **Covered by the Grid structural-mutation trigger** above | DD-M3-P7-006 recursive; storage migrated onto the child slot this phase, mutation surface not built. Future Grid mutation phase. |
+| Layout algorithm changes | **Still deferred — no Phase 8 action** (distinct from Problem B) | Future layout-primitive-refinement phase; no new measure-arrange semantics this phase. **Problem B (author-controllable sizing) is a *different* residual** — it is a missing author *surface* over the existing algorithm, not a change to the geometry itself; do not conflate the two. |
+| Backward-compatibility guarantee for old placement syntax | **Resolved for now — reopens only under a public compat policy** | DD-001 shipped **no long-lived alias**: bare ZStack `h-align` / `v-align` are rejected (a firing test), the loader rejects + regenerates stale IR. Pre-1.0 keeps migration minimal. Re-trigger: a pre-1.0 public compatibility policy declares the shipped syntax stable, or external users depend on it. Pre-1.0 compatibility-policy phase. |
+
 ## Phase 8 (editorial) note
 
 Phase 8 promotes `docs/dsl_spec.md` to the first public draft (A12) and
