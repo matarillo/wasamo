@@ -1,13 +1,13 @@
 # Wasamo DSL Specification
 
-**Document version:** 1.10
-**Last updated:** 2026-06-21
+**Document version:** 1.11
+**Last updated:** 2026-06-24
 **Status:** M3-Phase 2 closed (implementation-synced); M3-Phase 3
 closed (implementation-synced); M3-Phase 4 closed
 (implementation-synced); M3-Phase 5 closed (implementation-synced);
 M3-Phase 6 closed (implementation-synced); M3-Phase 7 closed
-(implementation-synced); M3-Phase 7b design draft (Moment 1 —
-`slot.*` placement surface, §4.16; pending implementation re-sync).
+(implementation-synced); M3-Phase 7b closed (implementation-synced —
+`slot.*` placement surface, §4.16).
 Covers the M2 `.ui` surface, the `state` surface keyword
 retroactively, the M3-Phase 1 `bool` scalar binding additions, the
 M3-Phase 2 Box layout primitive (with `aspect` / `fill` literal
@@ -1239,10 +1239,10 @@ not carry the viewport clip.
 ### 4.12 Grid layout primitive (M3-Phase 5)
 
 **Phase status:** M3-Phase 5 closed; implementation-synced. The child
-placement surface is extended in M3-Phase 7b (design draft, Moment 1;
-see §4.16): a Grid child may be authored as a `Cell` wrapper **or** with
-direct `slot.*` placement keys, both expressing the same
-parent-interpreted placement.
+placement surface is extended in M3-Phase 7b (closed;
+implementation-synced; see §4.16): a Grid child may be authored as a
+`Cell` wrapper **or** with direct `slot.*` placement keys, both
+expressing the same parent-interpreted placement.
 
 `Grid` is a 2D layout primitive that arranges children across a
 declared row × column track matrix. Tracks are declared once on
@@ -1826,8 +1826,8 @@ all are additive on top of the Phase 5 surface.
 
 **Phase status:** M3-Phase 6 closed; implementation-synced. The
 per-child alignment surface is revised to the `slot.*` placement
-namespace in M3-Phase 7b (design draft, Moment 1; see §4.16) — bare
-`h-align` / `v-align` on a ZStack child becomes `slot.h-align` /
+namespace in M3-Phase 7b (closed; implementation-synced; see §4.16) —
+bare `h-align` / `v-align` on a ZStack child becomes `slot.h-align` /
 `slot.v-align`.
 
 `ZStack` is an **overlay-dedicated** layout container: its children
@@ -2631,7 +2631,7 @@ collection live **outside** the `for` body.
 
 ### 4.16 Parent-interpreted placement (`slot.*`) (M3-Phase 7b)
 
-**Phase status:** M3-Phase 7b design draft (Moment 1).
+**Phase status:** M3-Phase 7b closed; implementation-synced.
 
 Some layout containers interpret metadata *about how a child sits inside
 them*: Grid reads a child's row / column / span / alignment, and ZStack
@@ -2839,8 +2839,7 @@ ComponentDef {
 
 Member (enum) {
     PropertyDecl  { name: String, ty: TypeName, default: Expr },
-    PropertyBind  { name: String, value: Expr },
-    PlacementBind { key: String, value: Expr },                  // M3-Phase 7b; `slot.<key>` (§4.16)
+    PropertyBind  { name: String, value: Expr },                 // M3-Phase 7b: also carries `slot.<key>` placement (§4.16)
     WidgetDecl    { type_name: String, members: Vec<Member> },
     SignalHandler { signal: String, body: Block },
     StateMember   { name: String, ty: TypeName, default: Expr },  // M2
@@ -2851,16 +2850,18 @@ Member (enum) {
                     body: Box<Member /* WidgetDecl only */> },    // M3-Phase 7; `for` (§4.15)
 }
 
-// M3-Phase 7b. PlacementBind.key is the placement key WITHOUT the `slot.`
-// prefix (e.g. "row", "h-align"); .value is an `Expr` — the RHS parses as
-// a general expr (same carrier as PropertyBind), so a state-read RHS is
-// well-formed at parse time. The parser folds `IDENT("slot") Dot IDENT(key)
-// Colon expr` into this variant when the leading IDENT is the contextual
-// prefix `slot`. The placement-specific rules are check-layer, not parser
-// concerns: admission (which parent admits which key), the closed-keyword
-// value resolution, and the constant-RHS requirement (a binding-expression
-// value is a `wasamoc check` reject) all run in `wasamoc check` (§4.16).
-// Only a malformed KEY shape is a parser reject.
+// M3-Phase 7b. A parent-interpreted placement key `slot.<key>` (§4.16) is
+// stored in the existing `PropertyBind` variant — there is NO separate
+// `PlacementBind` AST variant. The parser folds `IDENT("slot") Dot IDENT(key)
+// Colon expr` into `PropertyBind` when the leading IDENT is the contextual
+// prefix `slot`, canonicalizing `.name` to the full dotted key WITH the
+// `slot.` prefix retained (e.g. "slot.row", "slot.h-align"); `.value` is an
+// `Expr` — the RHS parses as a general expr, so a state-read RHS is
+// well-formed at parse time. The placement-specific rules are check-layer,
+// not parser concerns: admission (which parent admits which key), the
+// closed-keyword value resolution, and the constant-RHS requirement (a
+// binding-expression value is a `wasamoc check` reject) all run in
+// `wasamoc check` (§4.16). Only a malformed KEY shape is a parser reject.
 
 TrackAxis (enum) { Columns, Rows }                  // M3-Phase 5
 
@@ -3298,13 +3299,13 @@ normative schema is in [architecture.md](./architecture.md)):
 
 ```
 IrNode { widget_type: "Window", children: [
-    Widget { node: IrNode { widget_type: "WrapPanel", … }, slot_data: None },
+    Widget(IrChildSlot { node: IrNode { widget_type: "WrapPanel", … }, slot_data: None }),
     ControlFlow(ControlFlowNode::If { branches: [
         Branch {
             condition: HandlerExpr::BoolPropRead("is_lightbox_open"),
-            // body member is a Widget { node, slot_data }; the ZStack is a
-            // Window child, so slot_data: None (placement-free parent, §4.16)
-            body: [ Widget { node: IrNode { widget_type: "ZStack", … }, slot_data: None } ],
+            // body member is a Widget(IrChildSlot { node, slot_data }); the ZStack
+            // is a Window child, so slot_data: None (placement-free parent, §4.16)
+            body: [ Widget(IrChildSlot { node: IrNode { widget_type: "ZStack", … }, slot_data: None }) ],
         },
     ] }),
 ] }
@@ -3396,14 +3397,14 @@ loaded IR (schema shape normative in
 
 ```
 IrNode { widget_type: "VStack", children: [
-    Widget { node: IrNode { widget_type: "Text", … }, slot_data: None },  // declared slot 0
+    Widget(IrChildSlot { node: IrNode { widget_type: "Text", … }, slot_data: None }),  // declared slot 0
     ControlFlow(ControlFlowNode::For {                          // declared slot 1
         binder: "thumb",
         index_binder: None,
         collection: HandlerExpr::ListPropRead { path: "thumbs", elem: I32 },
-        // body member is a Widget { node, slot_data }; the Box is a VStack
-        // child, so slot_data: None (placement-free parent, §4.16)
-        body: [ Widget { node: IrNode { widget_type: "Box", … }, slot_data: None } ],
+        // body member is a Widget(IrChildSlot { node, slot_data }); the Box is a
+        // VStack child, so slot_data: None (placement-free parent, §4.16)
+        body: [ Widget(IrChildSlot { node: IrNode { widget_type: "Box", … }, slot_data: None }) ],
     }),
     ControlFlow(ControlFlowNode::If { … }),                     // declared slot 2
 ] }
@@ -3735,3 +3736,4 @@ surface.
 | 1.8     | 2026-06-13 | M3-Phase 7 design draft (Moment 1): added §4.15 iteration — the second chapter of the structural rendering model (`for` block with author-named binders; collection state types `i32[]` / `string[]` / `bool[]` with list-literal defaults; whole-value collection assignment over pure `append` / `drop-last` expressions and static-literal reset / clear; positional un-keyed identity baseline with the keyed non-promise; mutation-then-observe timing; all-or-unchanged insertion; per-container admission; diagnostics matrix). Supporting: §2.1 `in` reservation (`for` now has a production), §2.2 bracket / paren / comma tokens, §3 grammar, §4.6 / §4.7 binder-read and collection-state notes, §5 AST, §8.4 / §8.5 / §8.9 textual-IR collection and `for` forms with a worked offsets example, §8.11 validation rows. Swept the stale §4.14 `for` forward references (the `for` body ships single-widget, not member-range; the identity baseline ships positional un-keyed, with keyed as future opt-in) per the live-doc-sync rule. No ABI change; `abi_spec.md` untouched. Pending implementation re-sync at Phase 7 close. |
 | 1.9     | 2026-06-18 | M3-Phase 7 implementation sync (Moment 2): flipped Phase 7 status markers to closed / implementation-synced; confirmed the landed textual-IR spellings (`for`, `list-prop-read`, `item-read`, `index-read`, `list-append`, `list-drop-last`, list literals) and unified `HandlerExpr` mapping; added the gallery slice example showing all four authored collection mutation forms (`append`, `drop-last`, empty clear, static reset) and recorded why per-item colour richness remains deferred. No ABI change; `abi_spec.md` remains untouched. |
 | 1.10    | 2026-06-21 | M3-Phase 7b design draft (Moment 1): added §4.16 parent-interpreted placement — the shared `slot.*` namespace for Grid and ZStack child placement. ZStack per-child alignment moves from bare `h-align` / `v-align` to `slot.h-align` / `slot.v-align` (§4.13); Grid gains a direct `slot.*` form alongside the retained `Cell` grouped form (§4.12), one form per child with two distinct mixing / non-admitting-parent rejects, no normative canonical form (provisional `Cell`-default examples convention). Supporting: §3 `placement_bind` production, §4.4 registry note, §4.15 `for`-placement (placement on the body root child), §8.11 validation rows (placement admission / constant-RHS). Placement is constant per instance; a binding-expression RHS is rejected. No new `IrType` / `IrLiteral` / `PropertyValue` or C ABI change; `abi_spec.md` untouched. The loaded-IR placement representation and storage model are normative in `architecture.md` (DD-002 / Moment 1, landing in the sibling architecture commit), so the textual-IR placement emit form (§8.5) re-syncs there. Pending implementation re-sync at Phase 7b close. |
+| 1.11    | 2026-06-24 | M3-Phase 7b implementation sync (Moment 2): flipped §4.12 / §4.13 / §4.16 status markers to closed / implementation-synced. Pinned the §5 AST to the landed parser — `slot.<key>` rides the existing `PropertyBind` variant (name canonicalized **with** the `slot.` prefix retained, e.g. `slot.h-align`); there is **no** separate `PlacementBind` AST variant. Pinned the §8 loaded-IR examples to the landed IR member spelling `Widget(IrChildSlot { node, slot_data })` (tuple variant wrapping `IrChildSlot`, not the struct-variant draft sketch). The §3 `placement_bind` author-surface production and the §8.5 `child { placement <kind> { … } node … }` textual-IR skeleton matched the landed `wasamoc` emit / loader and were confirmed unchanged. No ABI change; `abi_spec.md` remains untouched. |
