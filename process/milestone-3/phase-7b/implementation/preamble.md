@@ -168,9 +168,15 @@ revised where they diverge (revise, do not work around).
 
 This implementation file opens at `status: active` and transitions to
 `status: closing` at the **phase-end batch commit** — the phase-branch
-commit that lands the CI-verified gates and the spec / architecture /
-plan status flips + log.md — **not** at T7 step-close. The on-CI gates
-are phase-end-owned and verified only after the phase branch runs
+commit that records the CI-verified on-CI gates (the GitHub Actions CI
+run id), finalizes `handoff.md`, appends the CI evidence to `log.md`, and
+flips this front-matter `status` — **not** at T7 step-close. The Moment 2
+spec / architecture docs sync (`docs/dsl_spec.md` §4.16 / §8.5 / §8.11 +
+`docs/architecture.md` §6.7.9 / §6.8.4 / §6.8.6 markers) and the M3
+`plan.md` Phase 7b row flip are **T7-owned and land at T7 step-close**
+(with the T7 step-end gates + candidate ledger in `log.md`); the
+phase-end batch does **not** re-do those flips. The on-CI gates are
+phase-end-owned and verified only after the phase branch runs
 `workflow_dispatch` CI, so **T7 step-close itself leaves
 `status: active`**. The phase-end retrospective is a separate commit in
 the same phase-end cluster, recorded under
