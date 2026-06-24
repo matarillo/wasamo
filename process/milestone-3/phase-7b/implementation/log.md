@@ -1316,3 +1316,250 @@ T6b carry-forward ownership:
 - Deterministic-failure trap #6 did not trigger — the six T6b tests and
   the workspace suite passed on the first run after each edit (initial T6b
   commit and both Codex review follow-ups).
+
+### T7 start gate — step-end local gates + Moment 2 re-sync + A12 closure
+
+Carry-over check (from `log.md` and every Phase 7b task retrospective):
+
+- **T1** carried to T7: `docs/architecture.md` §6.7.9 illustrative IR
+  spelling must match the landed wrapper shape (the design-draft
+  `Widget { node, slot_data }` vs the landed `IrChildSlot`); and the
+  phase-end residual ledger (wrapper rule, VS-2/VS-3, Grid mutation,
+  bindable placement, default alignment, key/value spelling).
+- **T2** carried to T7: sync normative/reference docs with the landed
+  IR / textual shape (`IrChildSlot` tuple variant; canonical `child {
+  placement … node … }` textual IR).
+- **T3** carried to T7: sync the landed runtime/layout child-slot shape
+  (`ChildSlot` / `LayoutChildSlot` / `SlotData::{ Grid(CellPlacement),
+  ZStack(ZStackPlacement) }`); record the future Grid structural-mutation
+  trigger in the ledger.
+- **T4** carried to T7: Moment 2 docs sync for the landed `slot.*` author
+  surface; the future Grid structural-mutation trigger. **T4 landed
+  `slot.*` in the existing `PropertyBind` AST variant with the `slot.`
+  prefix retained in `name` — no new AST variant** (T4 close map:
+  `slot_dotted_property_bind_canonicalizes_name`).
+- **T5** carried to T7 / phase-end: Phase-8 removal of the placement-demo
+  surface + capture driver; the layout findings (Grid-as-ZStack-child
+  reject — its **checker half was since resolved by T6b**; `aspect`-in-cell
+  arrange abort); the capture-driver layout-coupled-coordinates note.
+- **T6** carried nothing new to T7 (assistant-prep + owner smoke, all
+  pass; the T5-origin carries stay as recorded).
+- **T6b** carried to T7 ledger → Phase 8 Vision DR: **Problem B** —
+  author-controllable `width`/`height` sizing (a Fill-default container on
+  a Shrink ancestor axis collapses to 0×0). `docs/notes/author-controllable-sizing.md`
+  is the landed home; T7 records responsibility = Phase 8 framing Vision
+  DR, hard backstop = pre-1.0 / M6 ABI-freeze prep.
+
+No owner-unknown unresolved point from any prior task blocks T7. Every
+open carry above is a T7-document-sync or T7-ledger item, or a
+phase-end-owned item explicitly outside T7.
+
+Critical T7 responsibility re-cut (plan.md is a hypothesis):
+
+- **T7 is a document-sync + step-close task, NOT the phase-close task.**
+  It owns: the local gates (`cargo fmt --check`, clean rebuild + workspace
+  test), the Moment 2 implementation sync (`docs/dsl_spec.md` §4.16 / §8.5
+  / §8.11 + Status header; `docs/architecture.md` §6.7.9 / §6.8.4 / §6.8.6
+  + Status header; `abi_spec.md` untouched-confirm; `architectural-family.md`
+  confirm), the M3 `plan.md` Phase 7b row status flip, the phase-end
+  **candidate ledger** in `log.md`, and the **T7 step-end retrospective**
+  (items 1–11).
+- **T7 does NOT own** (these stay `[ ]` at T7 step-close and land on the
+  phase branch as separate phase-end commits): the phase-end retrospective
+  (items 12–18), the GitHub Actions CI run id, `implementation/handoff.md`
+  finalization, and the `implementation/preamble.md` front-matter
+  `status: active → closing` flip. T7 step-close leaves `status: active`.
+- **Cross-check of the T0-frozen list vs mid-phase owner decisions
+  (revise, do not work around).** The T0 T7 list predates **T6b**
+  (mid-phase inserted 2026-06-24). plan.md was revised at T7 start to: (a)
+  name the two concrete Moment-2 divergences found at recon (the §5 AST
+  `PlacementBind` variant that does not exist; the §8 `Widget { node,
+  slot_data }` struct-variant spelling); (b) make the §6.7.9 sync definite
+  (T2 landed `IrChildSlot`, no longer conditional); (c) add the
+  mid-phase-surfaced residuals to the candidate-ledger bullet (Problem B
+  sizing → Phase 8 Vision DR, Phase-8 demo removal, `aspect`-in-cell,
+  capture-coord staleness).
+- **T7 must not reopen DD-fixed outcomes** (`slot.` surface, PM-2, VS-1a
+  `SlotData`/`IrSlotData`, IR-B skeleton, reject+regenerate,
+  constant-per-instance). It only pins the living spec to the **landed**
+  shapes and records residuals; the spec carries provenance via ADR
+  hyperlink, not DD/option labels.
+
+Two named Moment-2 divergences found at T7 recon (the "divergence
+corrections folded" the plan calls for):
+
+| # | Spec location | Design-draft (Moment 1) shows | Landed shape | Owner task that landed it |
+|---|---|---|---|---|
+| D1 | `dsl_spec.md` §5 AST (`Member` enum) + comment | a distinct `PlacementBind { key, value }` member variant; comment says key is stored **without** the `slot.` prefix | **no new AST variant**: `slot.*` rides the existing `Member::PropertyBind { name: "slot.<key>", value, span }` with the `slot.` prefix **retained** in `name` | T4 (`wasamoc/src/ast.rs` `Member`; `parser::tests::slot_dotted_property_bind_canonicalizes_name`) |
+| D2 | `dsl_spec.md` §8 loaded-IR examples + `architecture.md` §6.7.9 | struct variant `Widget { node, slot_data }` | tuple variant `Widget(IrChildSlot { node, slot_data })` with `IrChildSlot { node: IrNode, slot_data: Option<IrSlotData> }` | T2 (`wasamo-ir/src/lib.rs` `IrMember::Widget(IrChildSlot)`) |
+
+The §3 grammar `placement_bind` production stays correct (a `slot.X:`
+author surface *is* a distinct dotted-key shape from a bare
+`property_bind`); only the §5 **AST type** that the spec said it parses
+into diverged. The `slot.` admission/value/constant rules already read as
+check-layer in the spec, which matches the landed parser.
+
+Selected traps and non-applicable reasons:
+
+| Trap | Classification | Reason |
+|---|---|---|
+| #1 semantic migration | Not applicable | T7 changes no enum / IR / schema carrier. It edits reference docs + process docs only; the landed carriers (`IrChildSlot`, `SlotData`, `PropertyBind`) are read, not changed. If T7 had found a code-vs-spec divergence requiring a **code** change, that change would re-enter trap #1 on its own commit — none was found; the divergences are doc-only. |
+| #2 structural side effects | Not applicable | No tree / state / structure mutation production code lands in T7. |
+| #3 parallel data drift | Not applicable | No parallel vector / derived index / cache is introduced or touched. T3 already deleted the placement parallel vectors. |
+| #4 untested authored branch | Not applicable | T7 adds no compiler reject / diagnostic / size branch. The local clean-rebuild + workspace test re-runs the existing suite; no new branch needs a firing test. |
+| #5 carry-forward | **Applies (central)** | T7's defining deliverable is the phase-end candidate ledger: every deferred residual (DD-frozen + the mid-phase-surfaced Problem B / Phase-8 demo / layout findings) must be recorded with evidence and a re-trigger criterion. |
+| #6 deterministic failure disposition | Conditional | Applies only if the local clean rebuild / workspace test shows a recurring failure. Any such failure gets a root cause + disposition, not a re-roll to green. |
+| #7 GUI positive control | Not applicable | T7 has no GUI-render deliverable. The GUI evidence + positive controls were T5 (assistant) and T6 (owner). |
+
+Review lane:
+
+- **No high-risk production-code review lane** (§4): T7 lands no
+  schema / IR migration, no runtime structural change, no GUI-render
+  evidence, and no new reject / diagnostic branch — it edits `docs/` +
+  `process/` + `log.md` only. The external-agent review the owner runs
+  after this checks the **doc-sync accuracy** (the living spec pinned to
+  the landed shapes; the two named divergences D1 / D2 corrected) and the
+  **candidate-ledger completeness** (every residual present with a
+  re-trigger criterion). Doc commits are scoped by review concern
+  ([AGENTS.md §Commit rules](../../../../AGENTS.md#commit-rules)).
+
+Planned proof obligations before editing the docs:
+
+| Hypothesis | Category | T7 proof obligation |
+|---|---|---|
+| The landed AST stores `slot.*` in `PropertyBind`, not a `PlacementBind` variant. | Spec-vs-code divergence | Read `wasamoc/src/ast.rs` `Member` enum — confirmed: no `PlacementBind`. §5 AST corrected to match. |
+| The landed IR member is `Widget(IrChildSlot)`, not `Widget { node, slot_data }`. | Spec-vs-code divergence | Read `wasamo-ir/src/lib.rs` — confirmed `IrMember::Widget(IrChildSlot)`. §6.7.9 + §8 examples corrected. |
+| The landed runtime carrier is `SlotData::{ Grid(CellPlacement), ZStack(ZStackPlacement) }`. | Spec-vs-code divergence | Read `wasamo-runtime/src/layout.rs` — confirmed. §6.8.6 carrier sketch re-synced (`GridPlacement` → `CellPlacement`). |
+| The §4.16 admission table already covers a Grid as a ZStack direct child carrying `slot.*` (T6b). | A12 closure / spec accuracy | The table admits `slot.h-align` / `slot.v-align` on **any** ZStack direct child; a Grid is a widget, so no spec change is needed for T6b (confirmed in the T6b retro item 2). |
+| `abi_spec.md` is untouched. | FD-7b-D invariant | `git diff` over `docs/abi_spec.md` empty across the phase. |
+| The local clean rebuild + workspace test is green. | Build / regression | `cargo fmt --all -- --check`; `cargo clean` → `cargo build --release --workspace` → `cargo build --workspace` → `cargo test --workspace`. |
+
+Known carry-forward candidates at T7 start (close into the candidate
+ledger + the T7 retro):
+
+| Candidate | Owner | Scope / impact | Close condition |
+|---|---|---|---|
+| Phase-end retro (items 12–18), CI run id, handoff finalization, preamble status flip | phase-end (NOT T7) | These are the phase → main merge-gate preconditions; T7 step-close leaves them `[ ]`. | Phase-end batch commits on the phase branch after T7 merges in. |
+| Candidate ledger residuals | T7 ledger → Phase 8 pre-doc | DD-frozen (wrapper rule / VS-2/VS-3 / Grid mutation / bindable placement / default-alignment / key-value spelling) + mid-phase (Problem B sizing / Phase-8 demo removal / aspect-in-cell / capture-coord). | T7 records each with a re-trigger criterion; phase-end handoff finalizes the Phase 8 pre-doc inputs. |
+
+### T7 verification
+
+| Command / evidence | Result | Notes |
+|---|---|---|
+| `cargo fmt --all -- --check` | Green | Exit 0 on the T7 doc-edit working tree (T7 changes no Rust source, so this re-confirms the merged T6b state). |
+| `cargo clean` → `cargo build --release --workspace` | Green | `Finished release` in 53.27s, exit 0. Clean rebuild from an empty `target/` (6270 files removed). |
+| `cargo build --workspace` (debug) | Green | `Finished dev` in 44.36s, exit 0. |
+| `cargo test --workspace` | Green | Exit 0. No production code changed since the T6b merge (`9f69bfd`), so the suite is the T6b-recorded counts: `wasamoc` 388, `wasamo-runtime` 423, `wasamo-ir` 24, plus example / integration / doctests. |
+| `git diff --name-only` | `docs/architecture.md`, `docs/dsl_spec.md`, `process/.../log.md`, `process/.../plan.md` (+ M3 `plan.md`, retro `t7.md`) | No files under a Rust crate; no `docs/abi_spec.md`. Confirms T7 is doc/process-only. |
+| `git diff --name-only \| grep abi_spec` | empty | `docs/abi_spec.md` untouched across the phase (FD-7b-D). |
+
+T7 docs-sync close artifact (Moment 2 — each edit + the divergence it
+corrects):
+
+| Doc location | Edit | Landed shape it is pinned to |
+|---|---|---|
+| `dsl_spec.md` Status header (v1.10 → v1.11) | 7b `design draft (Moment 1)` → `closed (implementation-synced)`; new 1.11 revision-history row | — |
+| `dsl_spec.md` §4.12 / §4.13 / §4.16 phase-status markers | `design draft, Moment 1` → `closed; implementation-synced` | — |
+| `dsl_spec.md` §5 AST (`Member` enum + comment) — **divergence D1** | removed the `PlacementBind { key, value }` variant; `slot.<key>` rides existing `PropertyBind`, name canonicalized **with** the `slot.` prefix retained | `wasamoc/src/ast.rs` `Member::PropertyBind`; `parser::tests::slot_dotted_property_bind_canonicalizes_name` |
+| `dsl_spec.md` §8 loaded-IR examples (2 blocks) — **divergence D2** | `Widget { node, slot_data }` → `Widget(IrChildSlot { node, slot_data })` | `wasamo-ir/src/lib.rs` `IrMember::Widget(IrChildSlot)` |
+| `architecture.md` Status header | 7b `design draft (Moment 1) … pending; not yet landed` → `closed (implementation-synced) … to match the landed implementation` | — |
+| `architecture.md` §6.7.9 code block + prose — **divergence D2** | `Widget { node, slot_data }` struct variant → `Widget(IrChildSlot)` tuple variant + explicit `struct IrChildSlot { node, slot_data }`; `Widget { .. }` patterns → `Widget(..)` | `wasamo-ir/src/lib.rs` |
+| `architecture.md` §6.8.6 status + carrier code | `design draft (Moment 1); not yet implemented` → `closed; implementation-synced`; `Grid(GridPlacement)` → `Grid(CellPlacement)`; added runtime `ChildSlot` / layout `LayoutChildSlot` slot lines; "recommended as" → "landed as" | `wasamo-runtime/src/layout.rs` `SlotData` / `LayoutChildSlot`; `widget.rs` `ChildSlot` |
+| `architecture.md` §6.8.4 (Grid SM-B) | Re-confirmed already in landed terms (Grid placement off the deleted `cell_placements` vector onto the child slot; placement-aware splice seam); the future-API non-committal constraint (no generic child property setter) present in §6.8.6 prose | T3 `cell_placements` deletion (greppable: no matches) |
+| `dsl_spec.md` §8.5 textual-IR `child { placement <kind> { … } node … }` skeleton | Re-confirmed matching the landed `wasamoc` emit / loader; unchanged | `wasamoc/src/emit.rs`; `wasamo-runtime/src/ir_loader.rs` |
+| `architectural-family.md` FD-7b-C | Re-confirmed landed at Moment 1 (T0 commit `0864c4a`, "confirmed family (1)"); no Moment 2 carry | — |
+| `docs/abi_spec.md` | Confirmed untouched (FD-7b-D) | — |
+
+**A12 spec-closure gate.** The §4.16 placement chapter is at the
+external-reader bar: the `slot.*` namespace prose + the `slot.` prefix
+rule, the PM-2 two-form Grid accept-set (admission table), the
+accepted/rejected examples table (each row matching a shipped `wasamoc
+check` / parser diagnostic, including the two distinct mixing vs
+non-admitting-parent rejects and the value-namespace `end` rule), the
+constant-per-instance rule, and the per-container defaults (Grid
+`stretch` / ZStack `center`). The T6b behaviour (a Grid as a ZStack direct
+child carrying `slot.*`) is already covered by the admission table (any
+ZStack direct child admits `slot.h-align` / `slot.v-align`) — no chapter
+edit needed.
+
+### Phase-close evidence pointers + implementation summary (T1–T6b)
+
+Distilled for the phase-end handoff (the phase-end retro / handoff
+finalization is **not** T7-owned):
+
+| Task | What landed | Key evidence |
+|---|---|---|
+| T1 | Pre-implementation spike — carrier spelling (`IrChildSlot` / `SlotData`), bisectable sequencing (T2 → T3 → T4, Seams A/B/C), call-site recon. No production code. | `log.md` T1 decisions + compiler-verification table; throwaway revert clean. |
+| T2 | IR + textual-IR migration: `IrMember::Widget(IrChildSlot)` + `IrSlotData` + IR-B `child { placement … node … }` emit/parse + loader stale-form reject; Seam A bridges to legacy runtime storage. | `wasamo-ir` 24 tests; trap-#1 call-site audit; loader reject tests. |
+| T3 | Runtime/layout `ChildSlot` / `LayoutChildSlot` / `SlotData` migration; Grid `cell_placements` + layout mirror + `zstack_placement` deleted (greppable: no matches); Seam A removed. | trap #1/#2/#3 audits; Windows integration (insert/remove/replace, `for`/`if` placement); regression fixtures green. |
+| T4 | `slot.*` author surface (PM-2 matrix) lowering all three forms to one record; `.ui` migration off bare ZStack alignment. | full forcing-table firing tests; branch/test-focused review. |
+| T5 | Assistant GUI evidence: placement-demo sub-screen + DPI-aware capture; ZStack three-position + Grid stretch-vs-centered positive controls; same-position proof vs T4-pre `3134287` (pixel-identical). | `evidence/t5-*.png` + `evidence/README.md`; full independent review. |
+| T6 | Owner-manual GUI smoke — all observations pass, no fix iteration. | `evidence/t6-*.png`; `evidence/t6-owner-smoke-script.md`; `retrospectives/t6.md`. |
+| T6b | Grid-as-ZStack-child `slot.*` checker fix (`check_grid` delegates parent-owned placement to the generic walk); 6 trap-#4 tests. | `wasamoc` 388 tests; branch/test-focused review (2 Codex rounds). |
+
+### Phase-end handoff candidate ledger (distilled T1–T6b + T7)
+
+Recorded here for the phase-end handoff to finalize into
+`implementation/handoff.md` → M3 `handoff.md` (T7 records; phase-end
+finalizes). Each residual carries its re-trigger criterion.
+
+**DD-frozen residuals (from DD-M3-P7b-001 / -002 §Out of scope):**
+
+| Residual | Re-trigger criterion | Home / owner |
+|---|---|---|
+| **Pre-1.0 wrapper-rule decision** (PM-2 → PM-1 / PM-3): whether Grid retains a wrapper form, and whether a normative canonical Grid form is fixed | The pre-1.0 wrapper-rule gate (before the public surface is frozen for 1.0); the provisional `Cell`-default examples convention is not an AC | DD-M3-P7b-001 §Out of scope → Phase 8 framing / pre-1.0 |
+| **VS-2 (shared placement enum) / VS-3 (extensible slot-metadata record)** carrier triggers | A third placement-bearing container (VS-2), or the first non-layout parent-data — hit-test / focus / accessibility (VS-3, the `SlotData` enum → struct additive migration under the same name) | DD-M3-P7b-002 §Out of scope; architecture §6.8.6 CB-B integration condition |
+| **Grid structural-mutation trigger** (DD-M3-P7-006 recursive) | Any future direct `for` / `if` of Grid `Cell`s — storage already migrated onto the child slot, so the mutation path must re-run trap #2/#3 on the Grid splice seam before admitting it | DD-M3-P7-006; architecture §6.8.4 |
+| **Bindable-placement trigger** | A reactive/varying placement surface — reopens with the joint `BindingTarget` + child-slot effect-lifecycle machinery, not as a `slot.*`-local addition | DD-M3-P7b-001/002 §Out of scope (constant-per-instance) |
+| **Default-alignment unification** (Grid `stretch` / ZStack `center`) | A deliberate cross-container default-unification decision; stays per-container until then | DD-M3-P7b-001 §Out of scope |
+| **Placement key/value spelling revision** (e.g. `h-align` → `hAlign`) | A milestone-wide identifier-spelling decision; inherited spelling unchanged until then | DD-M3-P7b-001 §Out of scope |
+
+**Mid-phase-surfaced residuals (the T0 list predates T6b — added at the
+T7 cross-check):**
+
+| Residual | Re-trigger criterion | Home / owner |
+|---|---|---|
+| **Problem B — author-controllable `width`/`height` sizing** (T6b): a Fill-default container (Grid/ZStack) nested on a Shrink ancestor axis collapses to 0×0; `slot.*` on a Grid-in-ZStack now compiles but renders only when the ZStack has a definite size | A Vision DR at **Phase 8 framing** assigns the milestone home; **hard backstop = pre-1.0 / M6 ABI-freeze prep** (ABI impact pending). The 7b layout maths (`measure_grid` Fill→0, `axis_is_stretchy`) is git-verified unchanged by 7b — this is a Phase 5/6 contract, not a slot-redesign regression | [docs/notes/author-controllable-sizing.md](../../../../docs/notes/author-controllable-sizing.md) (landed); Phase 8 Vision DR |
+| **Phase-8 removal of the placement-demo surface + capture driver** (T5) | The Phase 8 close cleanup sweep that removes the per-phase gallery verification surfaces (P5 Footer clip, P6/7 lightbox, P7 reactive list, P7b placement-demo) | T5 verification scaffolding in `examples/gallery/gallery.ui` (marked for Phase-8 removal) + `evidence/capture-placement-demo.ps1`; Phase 8 close |
+| **`aspect`-in-cell arrange-abort** finding (T5) | Owner triage of the pre-existing layout behaviour (`aspect` Box in a Grid cell aborts under an unbounded intrinsic probe); a facet of the same sizing gap, not a 7b regression | Phase 8 triage (folds into the Problem B sizing DR) |
+| **Capture-driver layout-coupled coordinates** (T5) | Whoever next changes the gallery layout re-derives the navigation coordinates (the inherited script went stale the same way) | `evidence/capture-placement-demo.ps1` header documents its layout assumption; future gallery editor |
+
+The **Grid-as-ZStack-child checker reject** that T5 first recorded as a
+carry-forward is **resolved** (T6b fixed the checker half — `slot.*` on a
+Grid that is a ZStack direct child now compiles); only its **sizing half**
+survives as Problem B above. It is therefore **not** re-listed as an open
+checker decision.
+
+### T7 close gate — implemented-artifact map
+
+(T7 implements **no compiler reject / diagnostic / size / semantic
+branch** — trap #4 non-applicable. The "implemented" artifacts are the
+local-gate evidence + the doc-sync edits + the candidate ledger; each
+row's proof is the build/grep or the `git diff`.)
+
+| Implemented artifact / behavior | Category | Source query / diff cue | Direct proof or owner |
+|---|---|---|---|
+| Local gates green (fmt + clean rebuild + workspace test). | Build / regression | `cargo fmt --all -- --check`; `cargo clean` → release → debug → `cargo test --workspace` | T7 verification table above (all exit 0). |
+| Moment 2 markers flipped (`dsl_spec` §4.12/§4.13/§4.16 + Status; `architecture` Status + §6.8.6). | Docs / spec closure | `git diff docs/dsl_spec.md docs/architecture.md`; `rg "design draft\|not yet implemented" docs/` → only historical changelog rows | T7 docs-sync close artifact. |
+| Divergence D1 (`PlacementBind` → `PropertyBind`) corrected. | Spec-vs-code divergence | `git diff docs/dsl_spec.md` §5 AST; `wasamoc/src/ast.rs` has no `PlacementBind` | T7 docs-sync table row D1. |
+| Divergence D2 (`Widget { node, slot_data }` → `Widget(IrChildSlot { … })`) corrected in `dsl_spec` §8 + `architecture` §6.7.9. | Spec-vs-code divergence | `rg "Widget \{ node" docs/` → no matches; `wasamo-ir/src/lib.rs` `IrMember::Widget(IrChildSlot)` | T7 docs-sync table rows D2. |
+| A12 placement chapter at external-reader bar. | Spec closure | `dsl_spec.md` §4.16 (admission table + examples + constant-per-instance + defaults) | A12 gate note above. |
+| `abi_spec.md` untouched; `architectural-family.md` FD-7b-C landed. | Invariant | `git diff --name-only` excludes both; FD-7b-C at `0864c4a` | T7 verification table. |
+| M3 `plan.md` Phase 7b row flipped to `implementation complete; phase-end pending`. | Process | `git diff process/milestone-3/plan.md` | The row diff. |
+| Phase-end handoff candidate ledger recorded. | Carry-forward (trap #5) | This `log.md` ledger section | Phase-end handoff finalizes into `handoff.md`. |
+| Phase-end-owned items (CI run id, handoff finalization, preamble status flip, phase-end retro) **not** done by T7. | Ownership split | plan.md T7 rows for these stay `[ ]` | Owner = phase-end batch commits. |
+
+### T7 close gate — behavior / invariant carry scan
+
+| Behavior / invariant | Closed in T7? | Owner / scope / impact / close condition |
+|---|---|---|
+| Local clean-rebuild + workspace test green at phase implementation close. | Closed | T7 verification table; CI green is the separate phase-end gate. |
+| Living spec (dsl_spec / architecture) pinned to the landed shapes (markers + D1 + D2); abi untouched. | Closed | T7 docs-sync close artifact + greps. |
+| A12 placement-chapter spec-closure at the external-reader bar. | Closed | §4.16 gate note. |
+| Phase-end handoff candidate ledger recorded with re-trigger criteria. | Closed (recorded; finalization is phase-end's) | Ledger section above; phase-end handoff folds it into `handoff.md` → M3 `handoff.md`. |
+| Phase-end retro (items 12–18), CI run id, `handoff.md` finalization, `preamble.md` status flip. | **Not closed (NOT T7-owned)** | Owner = phase-end batch commits on the phase branch after T7 merges in; plan.md T7 rows stay `[ ]`. |
+| Deterministic-failure trap #6. | Did not trigger | The clean rebuild + workspace test passed on the first run; no recurring failure. |
+
+No owner-unknown unresolved point remains from T7: every open item is
+either a recorded candidate-ledger residual with a re-trigger criterion
+or an explicitly phase-end-owned item outside T7.

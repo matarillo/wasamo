@@ -633,58 +633,81 @@ retro owns final `implementation/handoff.md`, the GitHub Actions CI
 run-id, the phase-end retrospective, and `implementation/preamble.md`
 status flip.
 
-- [ ] T7 start gate recorded in [log.md](./log.md): carry-over from
+- [x] T7 start gate recorded in [log.md](./log.md): carry-over from
       `log.md` and every Phase 7b task retrospective checked; relevant
       implementation-gates selected; T7 / phase-end ownership split made
       auditable before the docs are edited.
-- [ ] `cargo fmt --all -- --check` green locally.
-- [ ] Local clean rebuild green locally (`cargo clean` →
+- [x] `cargo fmt --all -- --check` green locally.
+- [x] Local clean rebuild green locally (`cargo clean` →
       `cargo build --release --workspace` → `cargo build --workspace` →
       `cargo test --workspace`). CI green is phase-end-owned.
-- [ ] `docs/dsl_spec.md` §4.16 / §8.5 / §8.11 marker flips to
+- [x] `docs/dsl_spec.md` §4.16 / §8.5 / §8.11 marker flips to
       `M3-Phase 7b closed; implementation-synced`; document Status
       header updated; divergence corrections folded (the design-draft
-      token / skeleton spellings pinned to the landed shapes).
-- [ ] **A12 spec-closure gate:** the placement chapter at the
+      token / skeleton spellings pinned to the landed shapes). **Two
+      named divergences found at T7 recon** (recorded in [log.md](./log.md)):
+      (i) §5 AST shows a `PlacementBind { key, value }` member variant,
+      but T4 landed `slot.*` in the existing `PropertyBind { name:
+      "slot.<key>", … }` with **no new AST variant** and the `slot.`
+      prefix **retained** in `name`; (ii) §8 loaded-IR examples show the
+      design-draft struct variant `Widget { node, slot_data }`, but T2
+      landed the tuple variant `Widget(IrChildSlot { node, slot_data })`.
+- [x] **A12 spec-closure gate:** the placement chapter at the
       external-reader bar — the `slot.*` surface, the PM-2 two-form Grid
       accept-set, the invalid examples matching the shipped diagnostics,
       the constant-per-instance rule, the per-container defaults.
-- [ ] `docs/architecture.md` §6.8.6 (`SlotData` storage) + §6.8.4 (Grid
+- [x] `docs/architecture.md` §6.8.6 (`SlotData` storage) + §6.8.4 (Grid
       SM-B) re-synced to the landed shape; the splice side-effect
       re-enumeration confirmed against the code; the future-API
       non-committal constraint (no generic child property setter) present
       in prose.
-- [ ] `docs/architecture.md` §6.7.9 member-level structural IR
-      re-synced to the landed Rust spelling: both code blocks / prose
-      examples that currently show the design-draft
-      `Widget { node, slot_data }` spelling are updated to the landed
-      `IrChildSlot` wrapper if T2 lands that shape.
-- [ ] `docs/notes/architectural-family.md` FD-7b-C confirm-within-family
-      (1) entry landed (revise-in-place) if not already at Moment 1.
-- [ ] `docs/abi_spec.md` re-confirmed untouched; any forced ABI surface
-      escalates with owner confirmation.
-- [ ] `process/milestone-3/plan.md` Phase 7b row Status flips to
+- [x] `docs/architecture.md` §6.7.9 member-level structural IR
+      re-synced to the landed Rust spelling: the code block and prose
+      examples that show the design-draft `Widget { node, slot_data }`
+      spelling are updated to the landed `IrChildSlot` wrapper
+      (`Widget(IrChildSlot { node, slot_data })`) — **T2 landed that
+      shape** (`wasamo-ir/src/lib.rs`: `IrMember::Widget(IrChildSlot)`),
+      so this is definite, not conditional.
+- [x] `docs/notes/architectural-family.md` FD-7b-C confirm-within-family
+      (1) entry landed (revise-in-place) — already at Moment 1 (commit
+      `0864c4a`); re-confirmed, no Moment 2 carry.
+- [x] `docs/abi_spec.md` re-confirmed untouched; any forced ABI surface
+      escalates with owner confirmation. (None forced — `git diff` empty.)
+- [x] `process/milestone-3/plan.md` Phase 7b row Status flips to
       `implementation complete; phase-end pending`.
-- [ ] ADR set touched **only** if a retrospectives.md §phase-sync
+- [x] ADR set touched **only** if a retrospectives.md §phase-sync
       ADR-touch case applies; otherwise it stays at its Moment 1
-      Accepted state.
-- [ ] [log.md](./log.md) records the phase-close evidence pointers and
-      implementation summary distilled from T1–T6.
-- [ ] [log.md](./log.md) records the phase-end handoff **candidate
-      ledger** distilled from T1–T6 and T7: the **pre-1.0 wrapper-rule
-      decision** (PM-2 → PM-1 / PM-3) with its re-triggers; the
-      **VS-2 / VS-3** carrier triggers; the **Grid structural-mutation**
-      trigger (DD-M3-P7-006 recursive — migrate before any Grid mutation
-      path); the **bindable-placement** trigger (joint `BindingTarget` +
-      child-slot effect lifecycle); the default-alignment-unification and
-      key/value-spelling deferrals.
+      Accepted state. (No phase-sync ADR-touch case applied — ADR stays
+      Accepted at Moment 1.)
+- [x] [log.md](./log.md) records the phase-close evidence pointers and
+      implementation summary distilled from T1–T6b.
+- [x] [log.md](./log.md) records the phase-end handoff **candidate
+      ledger** distilled from T1–T6b and T7. **DD-frozen residuals:** the
+      **pre-1.0 wrapper-rule decision** (PM-2 → PM-1 / PM-3) with its
+      re-triggers; the **VS-2 / VS-3** carrier triggers; the **Grid
+      structural-mutation** trigger (DD-M3-P7-006 recursive — migrate
+      before any Grid mutation path); the **bindable-placement** trigger
+      (joint `BindingTarget` + child-slot effect lifecycle); the
+      default-alignment-unification and key/value-spelling deferrals.
+      **Mid-phase-surfaced residuals (the T0 list predates T6b — added at
+      the T7 cross-check):** **Problem B — author-controllable
+      `width`/`height` sizing** (T6b: a Fill-default container nested on a
+      Shrink ancestor axis collapses to 0×0; `slot.*` on a Grid-in-ZStack
+      now compiles but renders only when the ZStack has a definite size;
+      home = [docs/notes/author-controllable-sizing.md](../../../../docs/notes/author-controllable-sizing.md);
+      responsibility = **Phase 8 framing Vision DR**, hard backstop =
+      pre-1.0 / M6 ABI-freeze prep); the **Phase-8 removal of the
+      placement-demo surface + capture driver** (T5 verification
+      scaffolding in `gallery.ui` + `evidence/`); the **`aspect`-in-cell
+      arrange-abort** finding (T5, pre-existing layout behaviour); the
+      **capture-driver layout-coupled coordinates** note (T5).
 - [ ] Carry-forward inputs to the Phase 8 pre-doc recorded under
       [handoff.md](./handoff.md). Completed by the phase-end handoff, not
       by T7.
 - [ ] Front-matter `status` on [preamble.md](./preamble.md) flips
       `active` → `closing` at the **phase-end batch commit**, not at T7
       step-close. Completed by the phase-end documentation batch.
-- [ ] **T7 step-end retrospective recorded** at
+- [x] **T7 step-end retrospective recorded** at
       `process/milestone-3/phase-7b/retrospectives/t7.md` (items 1–11;
       **owned by T7**).
 - [ ] **Phase-end retrospective recorded** at
@@ -694,7 +717,8 @@ status flip.
       close. CI run id is recorded by the phase-end log / retro update
       after the `workflow_dispatch` gate goes green.
 
-**Start gate:** T6 merged; T7 start-gate recorded. **End gate (T7
+**Start gate:** T6b merged (the mid-phase task inserted after T6 — branch
+`feat/m3-phase-7b` at `9f69bfd`); T7 start-gate recorded. **End gate (T7
 step-close):** local gates green, Moment 2 synced, candidate ledger
 recorded, T7 retro done — `status` stays `active` (phase-end owns the
 flip).

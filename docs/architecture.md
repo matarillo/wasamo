@@ -1,6 +1,6 @@
 # Wasamo Architecture
 
-**Status:** M1 complete (Phases 0-8); M2 complete (Phases 1-7) — Foundation acceptance A1-A6 discharged; M3-Phase 1, M3-Phase 2, M3-Phase 3, M3-Phase 4, and M3-Phase 5 complete. M3-Phase 6 closed (implementation-synced): ZStack, conditional rendering, and the component host surface are documented to match the landed implementation. M3-Phase 7 closed (implementation-synced): iteration — `ControlFlowNode::For` / `BindingTarget::ForLoopSubtree`, the canonized member-expansion seam, stage-then-commit range mutation, and child-carried ZStack placement (§6.7.10, §6.8.5) are documented to match the landed implementation. M3-Phase 7b design draft (Moment 1): the parent-interpreted placement model — child-slot `SlotData` carrier (§6.7.9, §6.8.6), Grid storage convergence off the parallel `cell_placements` vector (§6.8.4), and the textual-IR `child { placement … }` record (IR-B) — is documented ahead of the Phase 7b implementation re-sync (pending; not yet landed).
+**Status:** M1 complete (Phases 0-8); M2 complete (Phases 1-7) — Foundation acceptance A1-A6 discharged; M3-Phase 1, M3-Phase 2, M3-Phase 3, M3-Phase 4, and M3-Phase 5 complete. M3-Phase 6 closed (implementation-synced): ZStack, conditional rendering, and the component host surface are documented to match the landed implementation. M3-Phase 7 closed (implementation-synced): iteration — `ControlFlowNode::For` / `BindingTarget::ForLoopSubtree`, the canonized member-expansion seam, stage-then-commit range mutation, and child-carried ZStack placement (§6.7.10, §6.8.5) are documented to match the landed implementation. M3-Phase 7b closed (implementation-synced): the parent-interpreted placement model — child-slot `SlotData` carrier (§6.7.9, §6.8.6), Grid storage convergence off the parallel `cell_placements` vector (§6.8.4), and the textual-IR `child { placement … }` record (IR-B) — is documented to match the landed implementation (`IrMember::Widget(IrChildSlot)`; runtime `ChildSlot` / `SlotData`).
 
 ---
 
@@ -886,13 +886,16 @@ first-class **member**, not a widget. `IrNode.children` is
 enum IrMember {
     // M3-Phase 7b carries parent-interpreted placement on the child
     // slot: a member is the node plus its optional placement payload
-    // (None for a child of a placement-free parent). Exact spelling is
-    // an implementer recommendation; the owner-visible commitment is
-    // that placement rides the child slot, in a broadly-named carrier
+    // (None for a child of a placement-free parent). The landed spelling
+    // is the tuple variant `Widget(IrChildSlot)` wrapping a named
+    // `IrChildSlot { node, slot_data }` record (keeping future slot-local
+    // fields off the enum variant); the owner-visible commitment is that
+    // placement rides the child slot, in a broadly-named carrier
     // (IrSlotData), not a parallel parent vector.
-    Widget { node: IrNode, slot_data: Option<IrSlotData> },
+    Widget(IrChildSlot),
     ControlFlow(ControlFlowNode),
 }
+struct IrChildSlot { node: IrNode, slot_data: Option<IrSlotData> }
 enum ControlFlowNode {
     If { branches: Vec<Branch> },   // Phase 6: exactly one Branch, no else
     // M3-Phase 7 adds the sibling iteration variant (§6.7.10):
@@ -909,16 +912,17 @@ struct Branch { condition: HandlerExpr, body: Vec<IrMember> }
 
 The condition rides the existing `HandlerExpr` (a `BoolLit` or a
 bool-typed `BoolPropRead`); `IrProp.value` stays strictly `IrLiteral`,
-so no new scalar / literal type is added. The `slot_data` field on
-`Widget` (M3-Phase 7b) carries parent-interpreted placement and is
-detailed in §6.8.6 (the child-slot `SlotData` model); it is `None` for a
-child whose parent admits no placement, so the conditional / iteration
-machinery above is untouched by placement — a generated `body` member is
-a `Widget { node, slot_data }` like any static child, and the `for` /
+so no new scalar / literal type is added. The `slot_data` field on the
+child slot (`IrChildSlot`, M3-Phase 7b) carries parent-interpreted
+placement and is detailed in §6.8.6 (the child-slot `SlotData` model); it
+is `None` for a child whose parent admits no placement, so the
+conditional / iteration machinery above is untouched by placement — a
+generated `body` member is a `Widget(IrChildSlot { node, slot_data })`
+like any static child, and the `for` /
 `if` body root carries whatever placement it would carry as a static
 child (dsl_spec §4.16, placement on the body root child). Phase 6 constrains `branches`
-to length 1 and `body` to exactly one `Widget { .. }` member at lowering
-and loader time — anything other than exactly one `Widget { .. }` body
+to length 1 and `body` to exactly one `Widget(..)` member at lowering
+and loader time — anything other than exactly one `Widget(..)` body
 member (an empty body, more than one member, or a non-widget member
 such as a textual `prop` / `binding` / `handler` line or a nested
 `ControlFlow(_)`), or a second `Branch`, is `WASAMO_ERR_IR_MALFORMED` —
@@ -932,7 +936,7 @@ construction/traversal site at compile time, so the change is
 mechanical and exhaustive rather than a silent-omission hazard. Like
 Grid's `Cell`, a control-flow member materialises **no `WidgetNode` and
 no `Visual`** — the loader *interprets* it, emitting widgets for
-`Widget { .. }` members and a conditional binding for `ControlFlow(_)`.
+`Widget(..)` members and a conditional binding for `ControlFlow(_)`.
 Validation is **not** deferred with materialisation: the loader
 recurses into the declared branch body at load time and runs the full
 validate / name-resolution / bool-typed-condition check even when the
@@ -1509,7 +1513,7 @@ ABI changes for Phase 6. See
 
 #### 6.8.6 Child-slot placement storage `SlotData` (M3-Phase 7b)
 
-**Status:** M3-Phase 7b design draft (Moment 1); not yet implemented.
+**Status:** M3-Phase 7b closed; implementation-synced.
 
 Both placement-bearing containers — Grid (§6.8.4) and ZStack (§6.8.5) —
 carry parent-interpreted placement on **one shared child-slot carrier**,
@@ -1521,18 +1525,19 @@ and the `slot.*` author surface (dsl_spec §4.16), per the M3-Phase 7b
 placement-model decision.
 
 **The carrier.** The optional placement payload is a single
-broadly-named carrier, recommended as `Option<SlotData>` on the child
+broadly-named carrier, landed as `Option<SlotData>` on the child
 slot (`IrSlotData` on the IR member, §6.7.9):
 
 ```rust
-// Recommended in-memory shape (exact spelling is an implementer
-// recommendation; the broad name and the one-field invariant are the
-// owner-visible commitments).
+// Landed in-memory shape (the broad name and the one-field invariant are
+// the owner-visible commitments; the per-container payload types reuse the
+// existing layout-engine placement structs).
 enum SlotData {
-    Grid(GridPlacement),     // row / column / row-span / column-span / h-align / v-align
+    Grid(CellPlacement),     // row / column / row-span / column-span / h-align / v-align
     ZStack(ZStackPlacement), // h-align / v-align
 }
-// child slot: { node, slot_data: Option<SlotData> }
+// runtime child slot: ChildSlot { node: Box<WidgetNode>, slot_data: Option<SlotData> }
+// layout  child slot: LayoutChildSlot { node, slot_data: Option<SlotData> }
 ```
 
 Three properties are load-bearing and **normative**, independent of the
