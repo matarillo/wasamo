@@ -46,6 +46,29 @@ remain the implementation evidence.
   maths is what let the in-scope fix be separated from the deferred surface
   instead of bundling both under one "deferred" label.
 
+## Phase-End Gate
+
+Final verification-closure mapping (workflow.md §6.1): the ADR's five
+fixed evidence lines
+([decisions/preamble.md §Verification closure](../decisions/preamble.md#verification-closure-what-counts-as-phase-7b-evidence))
+→ the discharging task + concrete evidence. The full per-test close-gate
+tables live in [implementation/log.md](../implementation/log.md); this is
+the closure index.
+
+| # | ADR evidence line | Discharged by | Concrete evidence (representative; full tables in log.md) |
+|---|---|---|---|
+| (1) | `wasamoc check` — positive + the full reject matrix / forcing table | **T4** (+ T6b) | The DD-001 forcing-table firing tests: `check::tests::{grid_direct_slot_child_accepted, grid_direct_slot_lowers_to_same_grid_slot_data_as_cell, slot_property_inside_cell_attrs_is_mixing_reject, slot_property_inside_cell_content_is_non_admitting_parent_reject, slot_property_under_non_admitting_parent_rejected, grid_direct_slot_unknown_key_rejected, grid_direct_slot_constant_rhs_rejected, *_value_namespace_prefers_alignment_keyword, zstack_child_bare_alignment_rejected, …}`; parser `malformed_slot_property_keys_rejected_at_parse`. T6b: `check::tests::{zstack_grid_child_slot_alignment_accepted, *_value_still_validated, nonadmitting_parent_grid_child_slot_still_rejected, …}`. (log.md T4 / T6b close maps.) |
+| (2) | lowering / textual-IR roundtrip / loader rejection | **T2** | IR roundtrip: `wasamo_ir::tests::child_slot_carries_optional_slot_data`; `ir_loader::tests::grid_slot_emit_then_parse_preserves_payload_values`. Emit canonicalization: `emit::tests::{grid_cell_emitted_as_child_slot_with_grid_placement, zstack_emitted_as_node_with_direct_children_in_order}`. Loader stale-form / malformed rejects: `{grid_legacy_cell_*_rejected_as_stale_ir, zstack_legacy_bare_child_placement_rejected_as_stale_ir, child_slot_*_rejected_at_parse, grid_slot_*_rejected}`. (log.md T2 trap-#1 / trap-#4 maps.) |
+| (3) | Windows-runtime integration (CI-gated, fail-not-skip): layout reads placement from child-slot storage; insert / remove / replace preserves order + Visual sibling order + placement + invalidation; destroy leaks no placement metadata; `if` / `for`-generated children carry placement | **T3** | Integration fixtures: `zstack_replace_child_preserves_child_slot_placement`, `conditional_zstack_reinsert_uses_declared_placement_metadata`, `reactive_for_zstack_tail_append_uses_child_carried_placement`, `static_for_under_zstack_preserves_child_carried_placement`, `grid_rooted_fixture_lays_out_cells_through_visual_tree`; trap-#3 grep (no `cell_placements` / `zstack_placement` survives). **Local `cargo test --workspace` green (T7 ground truth); the CI-gated confirmation is item 16 — pending the phase-branch `workflow_dispatch` run.** (log.md T3 trap-#1/#2/#3 maps.) |
+| (4) | assistant-visible GUI + positive control; owner-visible smoke | **T5** (assistant) + **T6** (owner) | T5: `evidence/t5-placement-demo.png` (ZStack start/center/end three x-positions; Grid stretch-vs-centered), `t5-lightbox-{slot-current,bare-baseline}.png` (same-position, pixel-identical vs T4-pre `3134287`), analysis in `evidence/README.md`. T6: owner accepted `evidence/t6-{placement-demo,lightbox,home}.png` (2026-06-23, no fix iteration). |
+| (5) | A12 spec-closure gate (`docs/dsl_spec.md` placement chapter + `docs/architecture.md` model; Moment 1 → Moment 2 marker flip) | **T7** | `docs/dsl_spec.md` §4.16 placement chapter at the external-reader bar + §4.12 / §4.13 / §8.5 / §8.11; `docs/architecture.md` §6.7.9 / §6.8.4 / §6.8.6; markers flipped to closed / implementation-synced; divergences D1 (`PlacementBind`→`PropertyBind`) and D2 (`Widget{…}`→`Widget(IrChildSlot)`) corrected; `abi_spec.md` untouched. (log.md T7 docs-sync close artifact + A12 gate note.) |
+
+Only line (3)'s CI-gated confirmation is open (item 16); every other
+evidence line is discharged and recorded. The positive-control discipline
+(a single static frame a wrong implementation could equally produce is not
+evidence) is met by the same-position-plus-contrast proof in (4) and the
+firing reject tests in (1) / (2).
+
 ## Checklist
 
 12. **Acceptance criteria (Ax) achieved:** **achieved**
