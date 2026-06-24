@@ -701,9 +701,11 @@ status flip.
       scaffolding in `gallery.ui` + `evidence/`); the **`aspect`-in-cell
       arrange-abort** finding (T5, pre-existing layout behaviour); the
       **capture-driver layout-coupled coordinates** note (T5).
-- [ ] Carry-forward inputs to the Phase 8 pre-doc recorded under
-      [handoff.md](./handoff.md). Completed by the phase-end handoff, not
-      by T7.
+- [x] Carry-forward inputs to the Phase 8 pre-doc recorded under
+      [handoff.md](./handoff.md). Completed by the phase-end handoff (not
+      by T7) — finalized 2026-06-24 with the DD-set residuals + the
+      mid-phase-surfaced residuals (Problem B sizing, Phase-8 demo removal,
+      aspect-in-cell, capture-coord) + Main Learnings.
 - [ ] Front-matter `status` on [preamble.md](./preamble.md) flips
       `active` → `closing` at the **phase-end batch commit**, not at T7
       step-close. Completed by the phase-end documentation batch.

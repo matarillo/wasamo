@@ -1563,3 +1563,18 @@ row's proof is the build/grep or the `git diff`.)
 No owner-unknown unresolved point remains from T7: every open item is
 either a recorded candidate-ledger residual with a re-trigger criterion
 or an explicitly phase-end-owned item outside T7.
+
+### Phase-end verification (NOT T7-owned — phase-end batch)
+
+The phase-end batch is recorded after T7 merged into `feat/m3-phase-7b`
+(`a2ebeef`). Doc-side close (handoff finalization, CHANGELOG entry,
+phase-end retrospective items 12–15 / 17 / 18) landed pre-CI; the on-CI
+gate (item 16) + the `preamble.md` `active → closing` flip land in the
+phase-end commit that records the CI run id.
+
+| Command / evidence | Result | Notes |
+|---|---|---|
+| Phase-end local clean-rebuild ground truth | Green | Recorded in the T7 verification table above (`cargo fmt --all -- --check` exit 0; `cargo clean` 6270 files / 1.7 GiB → release 53.27s → debug → `cargo test --workspace`, all exit 0). No production code changed after the T6b merge, so this is the phase implementation-close ground truth. |
+| GitHub Actions `workflow_dispatch` on `feat/m3-phase-7b` | **Pending** | To be run after push (separate owner-approved gate). Run id + `success` recorded here and in [../retrospectives/phase-end.md](../retrospectives/phase-end.md) item 16 before the phase → main merge. |
+| Human-visible GUI smoke | Satisfied (T6) | Owner-manual gallery placement smoke 2026-06-23 (T6); no new GUI behaviour after T6 (T6b is checker-only). Counter host CI smokes are the base-path regression gate. |
+| CI YAML change | None | No new language / build system / matrix axis; existing Windows CI covers it. |

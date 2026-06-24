@@ -1,15 +1,37 @@
 # M3-Phase 7b — implementation handoff
 
-> **Status: skeleton — finalised at phase close.** Per
+> **Status: finalised at phase close (2026-06-24).** Per
 > [workflow.md §6.3](../../../procedures/workflow.md) and
 > [retrospectives.md](../../../procedures/retrospectives.md) item 15,
-> this file is written as a confirmed deliverable at the **phase-end
-> retrospective**, not during implementation. The entries below are the
-> **known carry-forward candidates from the ADR set**, recorded now so
-> they cannot be lost; the phase-end retro confirms, expands (with the
-> task-retrospective item-10 `carry-forward` candidates), and re-cuts
-> them into the final structure. Do not treat this skeleton as the
-> finalised handoff.
+> this file is the confirmed phase-close deliverable. It carries the
+> **DD-set carry-forward residuals** plus the **mid-phase-surfaced
+> residuals** (T5 / T6b, distilled from the T7 candidate ledger in
+> [log.md](./log.md)) and the **Main Learnings**. The deferred-items
+> **正本** (activation triggers + responsibility landings) remains the
+> framing scope table; this file is the forward-carry input to the Phase 8
+> pre-doc, not a parallel table.
+
+## Main Learnings
+
+- **Last-task / phase-end ownership split holds.** T7 (the final step)
+  rightly owned the Moment 2 docs sync, the local clean rebuild, the M3
+  `plan.md` row flip, and the candidate ledger; the phase-end batch owns
+  the CI run id, this handoff finalization, the phase-end retrospective,
+  and the `preamble.md` `active → closing` flip. Keeping the spec /
+  architecture / M3-plan flips on T7 (not the phase-end batch) is what the
+  T7 review corrected in the `preamble.md` Lifecycle wording.
+- **Pin the living spec to landed *source*, not to the design draft.** The
+  T7 Moment 2 sync found two divergences a status-only flip would have
+  frozen: the §5 AST `PlacementBind` variant that the implementation never
+  adopted (it rides `PropertyBind`), and the `Widget { node, slot_data }`
+  struct-variant sketch the implementation landed as the tuple
+  `Widget(IrChildSlot)`. Reading the type definitions (not grepping) is
+  what surfaced them.
+- **A "constraint finding" can be two independent problems.** The T5
+  Grid-in-ZStack finding was a checker bug (problem A, fixed in T6b) **and**
+  a long-deferred sizing gap (problem B, carried). Bundling them under one
+  "deferred" label nearly hid the in-scope fix; git-verifying that 7b
+  changed no layout maths is what separated them.
 
 Forward-carry material for the next phase's pre-doc framing. The next
 planned implementation phase is **M3-Phase 8** (editorial: public draft
@@ -77,13 +99,64 @@ this file points to it rather than re-deriving a parallel table.
   intrinsic-widget-property reading). The positive shape (parent-scoped
   insertion / child-slot builder) is non-normative and not frozen.
 
+## Mid-phase-surfaced residuals (T5 / T6b — not in the ADR set)
+
+These surfaced during implementation (the T0 ADR set predates them) and
+were distilled into the T7 candidate ledger ([log.md](./log.md)). They are
+**not** Phase 7b regressions.
+
+- **Problem B — author-controllable `width` / `height` sizing (the
+  primary mid-phase residual).** A Fill-default container (Grid / ZStack)
+  nested on a Shrink ancestor axis collapses to 0×0; with T6b the checker
+  now *accepts* `slot.*` on a Grid that is a ZStack direct child, but the
+  Grid only **renders** when the ZStack has a definite size. This is the
+  symptom of the long-deferred explicit-sizing surface (deferred since
+  M3-Phase 2), **not** a slot-redesign regression — git-verified that 7b
+  changed neither `measure_grid` (Fill→0) nor `axis_is_stretchy`. Live
+  home: [docs/notes/author-controllable-sizing.md](../../../../docs/notes/author-controllable-sizing.md).
+  **Responsibility: a Vision DR at Phase 8 framing** assigns the milestone
+  home; **hard backstop = pre-1.0 / M6 ABI-freeze prep** (ABI impact
+  pending — an explicit `width` / `height` surface may touch the value
+  union). Default-center / start / end alignment being a visual no-op on a
+  Fill container is a facet of the same gap, not a separate item.
+
+- **Phase-8 removal of the placement-demo verification surface.** The T5
+  placement-demo sub-screen in `examples/gallery/gallery.ui`
+  (`is_placement_demo_open` state + button + `if`-overlay, marked for
+  Phase-8 removal) and its capture driver
+  `evidence/capture-placement-demo.ps1` are throwaway verification
+  scaffolding. Re-trigger: the Phase 8 close cleanup sweep that removes the
+  per-phase gallery verification surfaces (P5 Footer clip, P6/7 lightbox,
+  P7 reactive list, **P7b placement-demo**).
+
+- **`aspect`-in-cell arrange abort.** An `aspect` Box in a Grid cell
+  aborts arrange under an unbounded intrinsic probe
+  (`BoxAspectUnboundedBoth`), silently dropping the subtree. Pre-existing
+  layout behaviour (the documented aspect-needs-a-bounded-axis rule), a
+  facet of the same sizing gap; folds into the Problem B Phase 8 triage.
+
+- **Capture-driver layout-coupled coordinates.** The re-tuned navigation
+  coordinates in `capture-placement-demo.ps1` assume the current gallery
+  layout; a later layout change re-staleness them (as happened to the
+  inherited script). Re-trigger: whoever next changes the gallery layout
+  re-derives the coordinates (the script header documents its assumption).
+
+The T5-recorded **Grid-as-ZStack-child checker reject** is **resolved**
+(T6b fixed the checker half — `slot.*` on a Grid that is a ZStack direct
+child now compiles); only its sizing half survives as Problem B above, so
+it is not carried as an open checker-design decision.
+
 ## Phase 8 (editorial) note
 
 Phase 8 promotes `docs/dsl_spec.md` to the first public draft (A12) and
 assembles the full gallery (A1). The placement surface is **frozen** by
 Phase 7b for exactly this reason — Phase 8 should read the synced
 `docs/dsl_spec.md` §4.16 + `docs/architecture.md` §6.8.6 / §6.8.4
-directly and must **not** re-decide the surface. The one open placement
-item Phase 8 must surface (not resolve) is the **PM-2 provisional
-two-form Grid state** above, so the public draft does not silently freeze
-it.
+directly and must **not** re-decide the surface. Two items Phase 8 must
+surface (not silently freeze):
+
+- the **PM-2 provisional two-form Grid state** above (the public draft must
+  flag that the wrapper-rule decision is pre-1.0, not settled); and
+- the **Problem B sizing Vision DR** — Phase 8 framing is the assigned
+  home for the author-controllable `width` / `height` decision, so the
+  public draft must not present the Fill-default sizing as final.
