@@ -1,6 +1,6 @@
 ---
 title: M3-Phase 7b phase-end retrospective
-status: recorded (item 16 CI evidence pending the phase-branch run)
+status: recorded
 created: 2026-06-24
 scope: phase-end
 phase: M3-Phase 7b — Parent-interpreted placement attributes
@@ -59,12 +59,12 @@ the closure index.
 |---|---|---|---|
 | (1) | `wasamoc check` — positive + the full reject matrix / forcing table | **T4** (+ T6b) | The DD-001 forcing-table firing tests: `check::tests::{grid_direct_slot_child_accepted, grid_direct_slot_lowers_to_same_grid_slot_data_as_cell, slot_property_inside_cell_attrs_is_mixing_reject, slot_property_inside_cell_content_is_non_admitting_parent_reject, slot_property_under_non_admitting_parent_rejected, grid_direct_slot_unknown_key_rejected, grid_direct_slot_constant_rhs_rejected, *_value_namespace_prefers_alignment_keyword, zstack_child_bare_alignment_rejected, …}`; parser `malformed_slot_property_keys_rejected_at_parse`. T6b: `check::tests::{zstack_grid_child_slot_alignment_accepted, *_value_still_validated, nonadmitting_parent_grid_child_slot_still_rejected, …}`. (log.md T4 / T6b close maps.) |
 | (2) | lowering / textual-IR roundtrip / loader rejection | **T2** | IR roundtrip: `wasamo_ir::tests::child_slot_carries_optional_slot_data`; `ir_loader::tests::grid_slot_emit_then_parse_preserves_payload_values`. Emit canonicalization: `emit::tests::{grid_cell_emitted_as_child_slot_with_grid_placement, zstack_emitted_as_node_with_direct_children_in_order}`. Loader stale-form / malformed rejects: `{grid_legacy_cell_*_rejected_as_stale_ir, zstack_legacy_bare_child_placement_rejected_as_stale_ir, child_slot_*_rejected_at_parse, grid_slot_*_rejected}`. (log.md T2 trap-#1 / trap-#4 maps.) |
-| (3) | Windows-runtime integration (CI-gated, fail-not-skip): layout reads placement from child-slot storage; insert / remove / replace preserves order + Visual sibling order + placement + invalidation; destroy leaks no placement metadata; `if` / `for`-generated children carry placement | **T3** | Integration fixtures: `zstack_replace_child_preserves_child_slot_placement`, `conditional_zstack_reinsert_uses_declared_placement_metadata`, `reactive_for_zstack_tail_append_uses_child_carried_placement`, `static_for_under_zstack_preserves_child_carried_placement`, `grid_rooted_fixture_lays_out_cells_through_visual_tree`; trap-#3 grep (no `cell_placements` / `zstack_placement` survives). **Local `cargo test --workspace` green (T7 ground truth); the CI-gated confirmation is item 16 — pending the phase-branch `workflow_dispatch` run.** (log.md T3 trap-#1/#2/#3 maps.) |
+| (3) | Windows-runtime integration (CI-gated, fail-not-skip): layout reads placement from child-slot storage; insert / remove / replace preserves order + Visual sibling order + placement + invalidation; destroy leaks no placement metadata; `if` / `for`-generated children carry placement | **T3** | Integration fixtures: `zstack_replace_child_preserves_child_slot_placement`, `conditional_zstack_reinsert_uses_declared_placement_metadata`, `reactive_for_zstack_tail_append_uses_child_carried_placement`, `static_for_under_zstack_preserves_child_carried_placement`, `grid_rooted_fixture_lays_out_cells_through_visual_tree`; trap-#3 grep (no `cell_placements` / `zstack_placement` survives). Local `cargo test --workspace` green (T7 ground truth); the CI-gated confirmation is **item 16 — green**, run [28072510434](https://github.com/matarillo/wasamo/actions/runs/28072510434). (log.md T3 trap-#1/#2/#3 maps.) |
 | (4) | assistant-visible GUI + positive control; owner-visible smoke | **T5** (assistant) + **T6** (owner) | T5: `evidence/t5-placement-demo.png` (ZStack start/center/end three x-positions; Grid stretch-vs-centered), `t5-lightbox-{slot-current,bare-baseline}.png` (same-position, pixel-identical vs T4-pre `3134287`), analysis in `evidence/README.md`. T6: owner accepted `evidence/t6-{placement-demo,lightbox,home}.png` (2026-06-23, no fix iteration). |
 | (5) | A12 spec-closure gate (`docs/dsl_spec.md` placement chapter + `docs/architecture.md` model; Moment 1 → Moment 2 marker flip) | **T7** | `docs/dsl_spec.md` §4.16 placement chapter at the external-reader bar + §4.12 / §4.13 / §8.5 / §8.11; `docs/architecture.md` §6.7.9 / §6.8.4 / §6.8.6; markers flipped to closed / implementation-synced; divergences D1 (`PlacementBind`→`PropertyBind`) and D2 (`Widget{…}`→`Widget(IrChildSlot)`) corrected; `abi_spec.md` untouched. (log.md T7 docs-sync close artifact + A12 gate note.) |
 
-Only line (3)'s CI-gated confirmation is open (item 16); every other
-evidence line is discharged and recorded. The positive-control discipline
+All five evidence lines are discharged: line (3)'s CI-gated confirmation
+went green (item 16, run 28072510434). The positive-control discipline
 (a single static frame a wrong implementation could equally produce is not
 evidence) is met by the same-position-plus-contrast proof in (4) and the
 firing reject tests in (1) / (2).
@@ -142,12 +142,18 @@ firing reject tests in (1) / (2).
       Grid state and the Problem B sizing Vision DR, so the public draft
       does not silently freeze either.
 
-16. **CI green:** **pending — phase-branch run after push**
-    - The phase branch `feat/m3-phase-7b` (head `a2ebeef` plus this
-      phase-end batch) will be pushed and a `workflow_dispatch` CI run
-      triggered; **the GitHub Actions run id + success is recorded here and
-      in `implementation/log.md` after the run goes green**, before the
-      phase → main merge. Push is a separate owner-approved gate.
+16. **CI green:** **green**
+    - The phase branch `feat/m3-phase-7b` was pushed at head
+      `59f9be6903349f37a2fe0f5f84e42e9653e9ca52`.
+    - GitHub Actions workflow `CI`, event `workflow_dispatch`, run
+      [28072510434](https://github.com/matarillo/wasamo/actions/runs/28072510434)
+      concluded **success** (`2026-06-24T03:12:21Z` →
+      `2026-06-24T03:16:14Z`).
+    - Green CI steps: release workspace build, debug workspace build for
+      tests, workspace tests, C ABI smoke (`cl` / `clang-cl`), CMake smoke,
+      Zig binding smoke, `counter-c`, `counter-rust`, `counter-zig`, and
+      `wasamoc check counter.ui`. This discharges the CI-gated cell of
+      Phase-End Gate line (3) (the T3 Windows-runtime integration fixtures).
     - Phase-end local clean-rebuild ground truth is already recorded in
       `implementation/log.md` (T7 verification): `cargo fmt --all --
       --check` exit 0; `cargo clean` (6270 files / 1.7 GiB) → release
@@ -185,12 +191,10 @@ firing reject tests in (1) / (2).
 
 ## Merge Readiness
 
-Checklist items 12–15, 17, 18 are recorded; item 16 (phase-branch CI green)
-is **pending the `workflow_dispatch` run after push** and is the remaining
-gate before the phase → main merge. `implementation/handoff.md` is
-finalized and `implementation/preamble.md` flips to `status: closing` in
-the same phase-end batch commit that records the CI run id. Per the
-retrospective procedure, this record is **evidence** for the phase → main
-merge gate, not merge authorization: the phase → main no-ff merge requires
-explicit owner approval after CI is green, and push to main is a separate
-gate.
+Checklist items 12–18 are all recorded and the phase-branch CI gate is
+**green** (run 28072510434). `implementation/handoff.md` is finalized and
+`implementation/preamble.md` flips to `status: closing` in the same
+phase-end batch commit that records the CI run id. Per the retrospective
+procedure, this record is **evidence** for the phase → main merge gate, not
+merge authorization: the phase → main no-ff merge requires explicit owner
+approval, and push to main is a separate gate.

@@ -1575,6 +1575,6 @@ phase-end commit that records the CI run id.
 | Command / evidence | Result | Notes |
 |---|---|---|
 | Phase-end local clean-rebuild ground truth | Green | Recorded in the T7 verification table above (`cargo fmt --all -- --check` exit 0; `cargo clean` 6270 files / 1.7 GiB → release 53.27s → debug → `cargo test --workspace`, all exit 0). No production code changed after the T6b merge, so this is the phase implementation-close ground truth. |
-| GitHub Actions `workflow_dispatch` on `feat/m3-phase-7b` | **Pending** | To be run after push (separate owner-approved gate). Run id + `success` recorded here and in [../retrospectives/phase-end.md](../retrospectives/phase-end.md) item 16 before the phase → main merge. |
+| GitHub Actions `workflow_dispatch` on `feat/m3-phase-7b` | **Green** | Run [28072510434](https://github.com/matarillo/wasamo/actions/runs/28072510434) concluded **success** (head `59f9be6`; `2026-06-24T03:12:21Z` → `2026-06-24T03:16:14Z`). Green steps: release + debug workspace build, workspace tests, C ABI smoke (`cl` / `clang-cl`), CMake smoke, Zig binding smoke, `counter-c` / `counter-rust` / `counter-zig`, `wasamoc check counter.ui`. The workflow has no `cargo fmt` step, so fmt stays local evidence (T7 table). |
 | Human-visible GUI smoke | Satisfied (T6) | Owner-manual gallery placement smoke 2026-06-23 (T6); no new GUI behaviour after T6 (T6b is checker-only). Counter host CI smokes are the base-path regression gate. |
 | CI YAML change | None | No new language / build system / matrix axis; existing Windows CI covers it. |

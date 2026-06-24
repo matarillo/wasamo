@@ -706,18 +706,20 @@ status flip.
       by T7) — finalized 2026-06-24 with the DD-set residuals + the
       mid-phase-surfaced residuals (Problem B sizing, Phase-8 demo removal,
       aspect-in-cell, capture-coord) + Main Learnings.
-- [ ] Front-matter `status` on [preamble.md](./preamble.md) flips
+- [x] Front-matter `status` on [preamble.md](./preamble.md) flips
       `active` → `closing` at the **phase-end batch commit**, not at T7
-      step-close. Completed by the phase-end documentation batch.
+      step-close. Done 2026-06-24 in the post-CI phase-end commit (with the
+      CI run id).
 - [x] **T7 step-end retrospective recorded** at
       `process/milestone-3/phase-7b/retrospectives/t7.md` (items 1–11;
       **owned by T7**).
-- [ ] **Phase-end retrospective recorded** at
+- [x] **Phase-end retrospective recorded** at
       `process/milestone-3/phase-7b/retrospectives/phase-end.md` (items
       12–18; **NOT owned by T7**; separate retro work on the phase branch
       after T7 merged in). No open `phase-sync` items survive past phase
-      close. CI run id is recorded by the phase-end log / retro update
-      after the `workflow_dispatch` gate goes green.
+      close. CI run id recorded after the `workflow_dispatch` gate went
+      green — run [28072510434](https://github.com/matarillo/wasamo/actions/runs/28072510434)
+      **success** (2026-06-24).
 
 **Start gate:** T6b merged (the mid-phase task inserted after T6 — branch
 `feat/m3-phase-7b` at `9f69bfd`); T7 start-gate recorded. **End gate (T7
