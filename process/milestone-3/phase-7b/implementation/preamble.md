@@ -1,11 +1,12 @@
 ---
 phase: M3-Phase 7b
 title: Parent-interpreted placement attributes
-status: closing
+status: retired
 adr: process/milestone-3/phase-7b/decisions/preamble.md
 plan: process/milestone-3/plan.md
 opened: 2026-06-21
 closing: 2026-06-24
+retired: 2026-06-24
 ---
 
 # M3-Phase 7b — Parent-interpreted placement attributes: Implementation
