@@ -290,5 +290,8 @@ handoff / framing 正本の deferred items のうち、final-phase 批判検討�
   M4 owned）— [DD-V-022/023](../../../cross-milestone/decisions/dpi-awareness-m4-deferral.md)
   + roadmap M4 AC。full gallery assembly の evidence 解析時に「既知の M4
   残課題」として注記するに留める（Phase 6/7 と同じ扱い）。Phase 8 の A1 は
-  Box + Text placeholder + plain text Button で構造経路を証明し、real image /
-  click-to-open / modal focus は M4 のまま。
+  Box + Text placeholder + plain text Button で構造経路を証明する。**Button
+  handler で bool を切り替え lightbox subtree を出し入れする構造証明は M3
+  対象**（[spec.md](../../requirements/spec.md) の Interaction 節）で、M4 へ送るのは
+  **real thumbnail hit-testing / modal focus / gesture 磨き込み**——framing
+  §Phase 8 設計方針・scope と整合する。
