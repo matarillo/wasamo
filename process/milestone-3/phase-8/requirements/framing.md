@@ -358,15 +358,26 @@ M3 機能を対応づける。統合作業はこの表を埋めることであ�
 ただし「A1 の M3 機能を**余計な検証 UI なしに Photo Gallery ターゲットアプリ内で
 通す**」という目的はここで固定する。
 
-| Photo Gallery の部分 | そこを通る M3 機能 |
-|---|---|
-| 全体フレーム | Grid（star sizing / 連結 span） |
-| サムネイル一覧 | WrapPanel ＋ ScrollView（折り返し ＋ ビューポート） |
-| サムネイル生成 | 繰り返し（iteration）＋ コレクションバインディング |
-| ライトボックス | ZStack ＋ 条件レンダリング（真偽値で出し入れ） |
-| タブ風セクション（サムネイル強調を含めるかは DD-001 で確定） | 真偽値 ＋ 選択中状態（`selected`） |
-| 写真らしき領域 | Box（`aspect`）＋ Text の仮置き |
-| 子の配置 | `slot.*`（Grid `Cell` / ZStack） |
+右端の列は、その部分が
+[gallery-wireframe.html](../../requirements/gallery-wireframe.html) の**どこ**を
+指すかを示す（**(1)(2)(3)** は wireframe 自身の番号付き callout。Grid 全体
+フレーム・タブ・強調サムネイル・配置は wireframe に番号が無いので、領域名と
+座標で補足する）。
+
+| Photo Gallery の部分 | そこを通る M3 機能 | wireframe 上の位置（gallery-wireframe.html） |
+|---|---|---|
+| 全体フレーム | Grid（star sizing / 連結 span） | default 図の窓全体を **上＝タブ帯(高さ40) / 中＝サムネイル領域(伸縮) / 下＝ステータス帯「218 photos」(高さ20)** に分ける行割り（callout 番号なし＝roadmap A1 の "Grid (overall frame)"） |
+| サムネイル一覧 | WrapPanel ＋ ScrollView（折り返し ＋ ビューポート） | default 図 **callout (1)**（5×4 のサムネイル格子）＋「WrapPanel proof strip」節の **narrow / overflow** 図（ScrollView の clip＋scroll） |
+| サムネイル生成 | 繰り返し（iteration）＋ コレクションバインディング | 同じ格子の各セル（節「Grammar &amp; binding surfaces」の **Repetition** ＝ thumbnail collection を反復生成） |
+| ライトボックス | ZStack ＋ 条件レンダリング（真偽値で出し入れ） | **lightbox 図** の **callout (3)**（scrim ＋ 中央写真 ＋ キャプション ＋ `< > x` を重ねる）。条件レンダリング ＝ lightbox subtree が `bool` で出入り |
+| タブ風セクション（サムネイル強調を含めるかは DD-001 で確定） | 真偽値 ＋ 選択中状態（`selected`） | default 図 上部の **「All(選択中) / Albums / Favorites」タブ帯**、および格子内の **強調された 1 枚（2 行目 3 列目の青いセル）**（節「Grammar &amp; binding surfaces」の **Button selected state**） |
+| 写真らしき領域 | Box（`aspect`）＋ Text の仮置き | default 図 **callout (2)**（正方サムネ Box `aspect:1/1`）＋ lightbox 図 中央の **`[photo]` プレースホルダ（Box `aspect 4:3` ＋ Text）** |
+| 子の配置 | `slot.*`（Grid `Cell` / ZStack） | Grid 全体フレームの行/列割り当て（`Cell`）と、lightbox 中央写真の ZStack 中央寄せ（`slot.h-align` / `slot.v-align`） |
+
+なお、タブ帯内部の横並びは **HStack**、lightbox キャプションの縦並びは
+**VStack**（wireframe「Supporting layout primitives」）で、いずれも M2 baseline。
+本表で新しいのは選択中状態（`selected`）と配置（`slot.*`）であり、線形 stack
+自体は M3 surface ではない。
 
 ### オーナー確認ポイント（packet G の工程化）
 
