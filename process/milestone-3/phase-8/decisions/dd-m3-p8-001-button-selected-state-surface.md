@@ -87,12 +87,18 @@ ground, and the over-engineering brake stays in force.
   only at the documentation seam: DD-002 positions any deferred selection
   surface (the Out-of-scope axes below) in the public draft. DD-002
   does not decide this DD's authoring form. Because that positioning is
-  where the owner sees how the reserved axes read as *public contract*,
-  **DD-001 should not Accept before at least a DD-002 + `preamble.md`
-  skeleton exists** enumerating this DD's adopted form, its reserved axes,
-  and their public-draft representation (drafted in parallel per the
-  Phase-8 plan; the `related` links above resolve when those skeletons
-  land).
+  where the owner sees how the reserved axes read as *public contract*, and
+  because this DD's α recommendation **leans on** that positioning as its
+  teaching-risk mitigation (§Recommendation (Layer 2)), **DD-001 should not
+  Accept before DD-002 carries the α-mitigation items in *concrete,
+  inspectable form*** — not merely a skeleton that names them. Specifically
+  DD-002 §DD-001 coupling must hold, drafted (recommendations pending
+  DD-002's own Accept): the public-draft note authorship, its wording
+  strength, the `==`-migration forward pointer, and the deferred-axis
+  representation of this DD's adopted form + reserved axes. (DD-002's broader
+  public-draft *policy* options A/B/C may stay skeletal; only the coupling
+  items must be concrete. Drafted in parallel per the Phase-8 plan; the
+  `related` links above resolve when those documents land.)
 - **Shipped-surface facts that bound the space** (spike §確定した事実,
   not re-litigated): the expression grammar has **no `==`** (`HandlerExpr`
   /`CompoundOp` = `Add/Sub/Mul/Div` only,
@@ -310,7 +316,12 @@ confirmed as the lighter second-stage pick in **SI-4**. **By default this
 single Accept decides both** — the S1/S2 direction and the recommended
 lexeme `ToggleButton { checked }`; only if the owner *explicitly* holds the
 name does SI-4 stay an **Accepted-blocking unresolved sub-issue** until it
-is fixed (§SI-4). Because
+is fixed (§SI-4). **Recording rule (so the lexeme is never swept in by
+silence):** the Accepted flip must name **both items explicitly** — e.g.
+`Accepted: S2a + lexeme ToggleButton/checked` (or `Accepted: S2a; lexeme
+held — SI-4 open`). A bare "S2a accepted" does **not** close SI-4; the
+two-item wording is the auditable artifact that the owner saw the lexeme
+decision, not only the S1/S2 design direction. Because
 S2a **reverses** the framing/spike S1 recommendation, that call is an
 **eyes-open reversal**, not a neutral pick — the cost and re-sync are
 enumerated next.
@@ -339,9 +350,23 @@ cost visible:
     selected)"), A10 (candidate list; already "concrete construct settled
     per phase"), A12 ("selected state surface") reworded to
     `ToggleButton` / `checked` where they name the concrete construct.
-  - `framing.md` — packet C recommendation + checklist line 58, and the
-    A1 feature-mapping table row ("タブ風セクション … `selected`" /
-    "Button selected state") re-pointed to `ToggleButton` / `checked`.
+  - `process/milestone-3/plan.md` — the Phase 8 row and the A9/A10
+    deliverable wording carry "Button `selected` state" (plan.md lines 48,
+    110, where A10's candidate list names "`selected: bool` attribute vs
+    separate `ToggleButton`"); reworded to the chosen construct in the same
+    Accepted-flip set. **Distinguish two kinds of touch:** where plan prose
+    *names the concrete construct* it is re-pointed; where it *records what
+    the phase decided* (e.g. a Revision-log line) it is **appended, not
+    overwritten** (same auditability rule as the framing record below).
+  - `framing.md` — **two distinct touches, not one overwrite.** The packet C
+    recommendation and checklist line 58 are an **owner-aligned decision
+    record** (the `selected: bool` / "no new widget" direction the owner
+    actually ☑-checked on 2026-06-25); they are **annotated as superseded by
+    this DD**, *not* rewritten — overwriting would erase the audit trail of
+    what was agreed, the same discipline applied to the spike below. The A1
+    feature-mapping table row ("タブ風セクション … `selected`" / "Button
+    selected state") is a **working hypothesis** already flagged updatable at
+    FD-8-G(1), so it **is re-pointed** to `ToggleButton` / `checked`.
   - the stage-1 spike's S1-lead conclusion noted as **superseded by this
     DD** (the spike stays an immutable record; the supersession is recorded
     here, not by editing the spike).
@@ -652,11 +677,22 @@ only):
 - **`ToggleButton` with a `checked` attribute** (the SI-4 lexeme —
   `ToggleButton` / `checked` recommended; under the S1 alternative,
   `selected` on Button) — a boolean attribute, driven by the
-  existing one-way boolean binding, with the chosen minimal visual (SI-1).
-  Stated as a widget attribute distinct from placement (`slot.*`) and from
-  intrinsic text/enabled props; the toggle is **controlled** (the click →
-  value → state write is the author's handler), with the two-way (S2b) and
-  widget-owned (S2c) models noted as out of scope.
+  existing one-way boolean binding. Stated as a widget attribute distinct
+  from placement (`slot.*`) and from intrinsic text/enabled props; the
+  toggle is **controlled** (the click → value → state write is the author's
+  handler), with the two-way (S2b) and widget-owned (S2c) models noted as
+  out of scope.
+  - **Visual-write timing (aligns with SI-1).** A rendered selected visual
+    does not exist before the attribute lands, and SI-1 fixes the **final**
+    minimal visual at the post-implementation owner checkpoint (spike
+    stage 2 / FD-8-G(3)), **not** at this DD's Accept. So at **Moment 1**
+    the spec documents the attribute and states the visual as **minimal,
+    candidate set V-a / V-b / V-c, concrete pick pending the implementation
+    checkpoint** — it does **not** assert a chosen visual the owner has not
+    yet seen. The **concrete minimal visual is pinned at Moment 2** (after
+    the impl checkpoint), in the same touch that flips the spec marker to
+    `implementation-synced`. This split prevents an un-decided visual from
+    reading as settled in the Moment-1 spec.
 - **Admission / rejection table (forcing artifact, not summarised away):**
   `checked` is admitted on `ToggleButton`; on any other widget it is a
   **named check error**, re-checked by the loader, each with a firing test.
@@ -880,3 +916,26 @@ Also out of M3 scope (existing triggers hold):
   generic `TypedValue`)" so the scope-expansion compares fairly. **Finding
   3** is an Accept-gate (DD-002 / `preamble.md` skeleton), not a DD-001
   edit. Status remains Proposed.
+- 2026-06-28 — Accept-discipline review folds (Status: Proposed;
+  recommendation unchanged). **Finding 2 (re-sync auditability):** added
+  `process/milestone-3/plan.md` (lines 48 / 110 "Button `selected` state")
+  to §Accepted-time re-sync targets, and **split the `framing.md` touch** —
+  the owner-aligned packet C recommendation + checklist ☑ are **annotated as
+  superseded, not overwritten** (preserving the audit trail of what was
+  agreed, matching the spike-immutability discipline), while the A1 table
+  (a working hypothesis) is re-pointed. **Finding 3 (SI-4 silent-sweep):**
+  added a **recording rule** to §Recommendation (Layer 1) — the Accepted
+  flip must name **both** items explicitly (`S2a + lexeme
+  ToggleButton/checked`); a bare "S2a accepted" does not close SI-4.
+  **Finding 4 (visual timing):** §Spec impact now splits the selected-visual
+  write — Moment 1 documents the candidate set with the concrete pick
+  **pending**, Moment 2 pins it after the impl checkpoint — consistent with
+  SI-1. (The High finding on α's mitigation is folded in DD-002 /
+  `preamble.md`, not here.) Status remains Proposed.
+- 2026-06-28 — Gate-strength alignment (Status: Proposed; recommendation
+  unchanged). §Dependencies §Couples-to raised from "DD-002 + `preamble.md`
+  **skeleton** exists" to "DD-002 carries the α-mitigation items in
+  **concrete, inspectable form**" — matching §Recommendation (Layer 2) and
+  the now-concrete DD-002 §DD-001 coupling, so the Accept condition no longer
+  reads two ways (only DD-002's policy options A/B/C may stay skeletal).
+  Status remains Proposed.
