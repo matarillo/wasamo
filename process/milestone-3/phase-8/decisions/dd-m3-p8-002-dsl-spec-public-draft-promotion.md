@@ -24,8 +24,9 @@ related:
 > before Accepting α", so it cannot be a TODO at α's Accept. The four
 > coupling items are therefore written and inspectable (recommendations
 > pending this DD's own Accept), while the broader public-draft policy is
-> still being drafted. This DD does **not** decide DD-001's authoring form;
-> it is drafted in parallel with DD-001 per the Phase-8 plan.
+> still being drafted. This DD does **not** decide DD-001's control surface
+> (the B2-vs-T1 control taxonomy); it is drafted in parallel with DD-001 per
+> the Phase-8 plan.
 
 ## Context
 
@@ -71,10 +72,10 @@ reserve so much that M4's design space shrinks) stays in force.
   editorial responsibility** to position honestly — surface re-litigation
   is **out** (constraints §1).
 - **Couples to** [DD-M3-P8-001](./dd-m3-p8-001-button-selected-state-surface.md)
-  **one-directionally**: this DD **positions** the selected-state surface
-  DD-001 ships and the four axes DD-001 defers; it does **not** decide
-  DD-001's authoring form. See §DD-001 coupling for the four items DD-001's
-  Accept depends on.
+  **one-directionally**: this DD **positions** the toggle/selected surface
+  DD-001 ships and the **five axes** DD-001 defers; it does **not** decide
+  DD-001's **control surface** (the B2-vs-T1 control-taxonomy choice). See
+  §DD-001 coupling for the four items DD-001's Accept depends on.
 - **References** the **Problem B Vision DR** (raised under
   [process/cross-milestone/decisions/](../../../cross-milestone/decisions/)
   per FD-8-D) — a separate review unit. This DD links to it for the sizing
@@ -128,8 +129,9 @@ draft as public?
 
 ## DD-001 coupling — the four pre-Accept gate items
 
-DD-001's Layer-2 (α) recommendation carries a **public-example teaching
-risk**: the O(N²) handwritten one-true-others-false exclusion pattern, if
+DD-001's Layer-3 / Main-decision-C (α) recommendation carries a
+**public-example teaching risk**: the O(N²) handwritten one-true-others-false
+exclusion pattern, if
 shipped in a public gallery without positioning, risks teaching an
 anti-pattern as the canonical way to express tab exclusion. DD-001's α
 recommendation **leans on this note as the mitigation** ("α's teaching-risk
@@ -178,24 +180,30 @@ and inspectable**, which it now is.)
    is **migrated** from α to the discriminant form when `==` lands is an
    **independent decision for the `==` phase**, *not* promised by this note —
    the note creates a forward pointer, not a migration commitment.
-4. **Representation of DD-001's four deferred axes — recommended default =
+4. **Representation of DD-001's five deferred axes — recommended default =
    future-note, not reservation.** Per Main decision A's minimal-reservation
-   policy, all four are written as **future notes** (not strong
+   policy, all five are written as **future notes** (not strong
    reservations): **Axis 1** equality-operator family (`==`); **Axis 2**
    group-surface family (`RadioGroup` / `TabBar` / `SegmentedControl`);
    **Axis 3** two-way binding (SwiftUI model); **Axis 4** widget-owned state
-   (WPF/Qt model, family-level / Vision-DR-scale). The draft states honestly
-   that **"exactly one selected" is author-composed, not a built-in group
-   construct**, and that `checked` (or `selected`) is M3's minimal surface,
-   not the only future selection model. Whether any axis is *promoted* from
-   future-note to reservation is decided in §Main decision A at this DD's
-   Accept; the **default carried for α's gate is future-note**.
+   (WPF/Qt model — narrow opt-in uncontrolled toggle, or the general
+   family-level form); **Axis 5** generic-Toggle appearance / control-family
+   unification (G1 — SwiftUI `Toggle` + `toggleStyle`; Win32 / WinForms /
+   AppKit ancestry). The draft states honestly that **"exactly one selected"
+   is author-composed, not a built-in group construct**, and that the M3
+   `checked` surface (on a `ToggleButton` or a checkable `Button`, per
+   DD-001's A outcome) is M3's minimal surface, not the only future selection
+   model. Whether any axis is *promoted* from future-note to reservation is
+   decided in §Main decision A at this DD's Accept; the **default carried for
+   α's gate is future-note**.
 
 If DD-001 instead Accepts **β** (static tab highlight, no live exclusion),
 item 1–3's teaching-risk note is not needed, but item 4 (deferred-axis
-representation) still applies. If DD-001 Accepts the **S1** authoring form
-(`Button { selected }`), the surface named in the spec changes accordingly
-(§Spec impact); the coupling structure is unchanged.
+representation) still applies. The **control-surface outcome (B2 checkable
+`Button` vs T1 dedicated `ToggleButton`, with its SI-4 lexeme)** is DD-001's
+co-equal owner-open call; whichever lands, the surface named in the spec
+changes accordingly (§Spec impact) and **the coupling structure is
+unchanged**.
 
 ## Sub-issues *(to draft)*
 
@@ -214,8 +222,9 @@ only):
 
 - The status marker (C-1), M3 CHANGELOG (C-2), and the unsettled-surface
   positioning (B-1…B-5) folded into the relevant chapters.
-- The selected-state surface DD-001 ships (`ToggleButton { checked }` or
-  `Button { selected }` per DD-001's Accept) positioned with the
+- The toggle/selected surface DD-001 ships (a dedicated `ToggleButton` with
+  `checked`, **or** a checkable `Button` with `checked` — per DD-001's
+  control-taxonomy outcome and SI-4 lexeme) positioned with the
   author-composed-exclusion note (§DD-001 coupling) and the deferred-axis
   representation.
 - Stale prose swept in the same touch.
@@ -271,3 +280,17 @@ future-compat note.
   the `==` operator not promised to ship), aligning the recommended public
   prose with Main decision A's minimal-reservation policy. Recommendation
   unchanged.
+- 2026-06-28 — Sync to DD-001's control-taxonomy restructure (Status:
+  Proposed). §DD-001 coupling item 4: deferred axes **four → five** (added
+  **Axis 5** = G1 generic-Toggle appearance / control-family unification —
+  SwiftUI `toggleStyle`, Win32 / WinForms / AppKit ancestry); Axis 4 noted at
+  two weights (opt-in uncontrolled toggle vs general family-level). Replaced
+  the `Button { selected }` / S1 framing with the **B2 (checkable `Button`) vs
+  T1 (dedicated `ToggleButton`) co-equal owner-open** surface in §DD-001
+  coupling and §Spec impact; `selected` no longer named as a live attribute.
+  Coupling structure unchanged.
+- 2026-06-28 — Terminology-sync stragglers (Status: Proposed). §Dependencies
+  §Couples-to: "four axes" → **five axes**, "authoring form" → **control
+  surface (B2-vs-T1 control taxonomy)**. §DD-001 coupling intro: "Layer-2 (α)
+  recommendation" → **Layer-3 / Main-decision-C (α)**, matching DD-001's
+  axis renumbering. No content change.

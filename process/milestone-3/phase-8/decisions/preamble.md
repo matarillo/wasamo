@@ -68,8 +68,9 @@ The premises Phase 8 treats as fixed (framing §再検討しない前提;
   decide (framing §66).
 
 What stays **open and decided by the DDs**, not by this preamble: the
-selected-state authoring form and its driving-boolean / exclusion
-mechanism (DD-001); and how the public draft positions reserved,
+toggle/selected **control surface** (the B2-vs-T1 control taxonomy), its
+write model, and its driving-boolean / exclusion mechanism (DD-001); and how
+the public draft positions reserved,
 provisional, and unsettled surface (DD-002). The framing's scope table,
 verification strategy, and risk register are the authority for these
 boundaries ([../requirements/framing.md](../requirements/framing.md)).
@@ -152,9 +153,11 @@ state while displayed**. These facts — not assertion — are what make
 exclusion expressible only as a *composition of boolean states*, and what
 put two-way binding and widget-owned state out of M3's reach. DD-001 cites
 the spike as authority and does not re-derive it. The spike is an
-**immutable record**; where DD-001's recommendation **reverses** the
-spike's S1-lead conclusion, the supersession is recorded in DD-001
-(§Accepted-time re-sync), not by editing the spike.
+**immutable record**; the spike's S1-lead conclusion is **superseded** by
+DD-001's control-taxonomy restructure (the spike's under-specified "S1" is
+DD-001's **B1**, recommended-reject; the real Button-side option is the
+**B2** capability), and that supersession is recorded in DD-001 (§Accepted
+disposition / Revision history), **not** by editing the spike.
 
 ### Architectural-family confirmation (FD-8-C / notes triage)
 
@@ -212,7 +215,7 @@ The Phase 8 ADR carries the two framing-slate DDs (FD-8-B):
 
 | DD | Title | Status | Decision summary |
 |---|---|---|---|
-| [DD-M3-P8-001](./dd-m3-p8-001-button-selected-state-surface.md) | Selected / toggle-state authoring surface | Proposed | Layer 1 (authoring form): **S2a — `ToggleButton { checked }`** recommended (controlled + one-way), **S1 — `Button { selected }`** the minimal alternative; S2b (SwiftUI two-way) / S2c (WPF/Qt widget-owned) deferred, S3 rejected, S4–S6 out (per-reason). Two-stage Accept (S1-vs-S2; then SI-4 lexeme). Layer 2 (driving boolean / exclusion): **α** (handwritten block assignment, live-proven) recommended, **β** (two-button single bool) the documented alternative; γ/δ deferred on the `==` axis. Recommendation **reverses** the framing/spike S1 lead — eyes-open, with §Accepted-time re-sync. |
+| [DD-M3-P8-001](./dd-m3-p8-001-button-selected-state-surface.md) | Toggle / selected-state control surface | Proposed | Restructured into a **control taxonomy** (3 axes). **A — control taxonomy:** B1 generic Button attribute (**strong reject**) / **B2 checkable Button** / **T1 dedicated `ToggleButton`** / G1 generic Toggle + appearance (**strong defer**, Axis 5). **B2 ↔ T1 are co-equal and owner-open** — the DD does *not* pre-pick (the prior `ToggleButton`-recommended / S1-minimal framing is withdrawn; the old "S1" was under-specified and is now B1, rejected). **B — write model:** W1 controlled one-way (adopt) / W2 two-way / W3 widget-owned (deferred). **C — exclusion:** α (recommended, β as triggered fallback); γ/δ deferred on `==`. Full Accept records the §Accepted-disposition tuple (A surface + lexeme, B, C, sub-issues, DD-002 gate); re-sync is rebuilt per the A outcome (no standing reversal/re-sync section). |
 | [DD-M3-P8-002](./dd-m3-p8-002-dsl-spec-public-draft-promotion.md) | DSL spec public-draft promotion: reservation & how unsettled surface is shown | Proposed (partial draft) | Decides (a) whether M4 syntax is reserved, (b) how provisional / unsettled future surface is positioned (PM-2 wrapper-rule, explicit sizing / Problem B, default-alignment asymmetry, placement spelling, placement bindability), (c) the status marker + CHANGELOG + external-reader pass line. Policy options pending; **§DD-001 coupling drafted concretely** (the four pre-Accept items DD-001's α leans on — see §Cross-DD dependency). |
 
 Both DDs are at **Proposed**. DD-001 is the load-bearing surface decision
@@ -227,21 +230,23 @@ Neither flips to Accepted in this preamble; per-DD detail is in each DD.
 Unlike Phase 7b's mutually-coupled DD pair, Phase 8's two DDs couple
 **one-directionally at the documentation seam only**:
 
-- **DD-002 does not decide DD-001's authoring form.** Whether selected
-  state is `ToggleButton { checked }` or `Button { selected }`, and how the
-  driving boolean is produced, is entirely DD-001's call.
+- **DD-002 does not decide DD-001's control surface.** Whether the surface
+  is a **checkable `Button` (B2)** or a **dedicated `ToggleButton` (T1)** —
+  the co-equal, owner-open control-taxonomy choice — and how the driving
+  boolean is produced, is entirely DD-001's call.
 - **DD-001's deferred surface is *positioned* by DD-002.** DD-001 defers
-  four axes (equality-operator family; group-surface family; two-way
-  binding; widget-owned state) and ships an M3-era exclusion pattern. How
-  those reserved axes and that provisional pattern read as **public
-  contract** in the first public draft is DD-002's editorial call.
+  **five axes** (equality-operator family; group-surface family; two-way
+  binding; widget-owned state; **generic-Toggle appearance / control-family
+  unification, G1**) and ships an M3-era exclusion pattern. How those
+  reserved axes and that provisional pattern read as **public contract** in
+  the first public draft is DD-002's editorial call.
 
 Because that positioning is where the owner sees the reserved axes as
 public contract, and because DD-001's α recommendation *leans on* it as the
 teaching-risk mitigation, **DD-001 should not Accept before DD-002 carries
 that mitigation in *concrete, inspectable form*** — not merely a skeleton
 that names it (DD-001 §Couples-to). Concretely, DD-002 §DD-001 coupling
-must hold, drafted, the four items DD-001's Layer-2 recommendation and
+must hold, drafted, the four items DD-001's Layer-3 (Main decision C, α/β) recommendation and
 Out-of-scope depend on:
 
 1. **Who authors the α provisional public-draft note** (the spec / gallery
@@ -249,7 +254,7 @@ Out-of-scope depend on:
 2. **How strong the gallery comment / spec note is** (so readers do not
    read O(N²) as the intended long-term idiom).
 3. **The migration trigger to the future discriminant (`==`) form.**
-4. **How the four deferred DD-001 axes are represented** in the public
+4. **How the five deferred DD-001 axes are represented** in the public
    draft (reserved vs future-note, per DD-002's reservation policy).
 
 This is the **pre-Accept gate**: DD-001's α recommendation *leans
@@ -327,7 +332,7 @@ finalised against the chosen options at the Accepted flips):
 5. **Assistant-visible GUI evidence + positive control.** Gallery / lightbox
    / selected-state shown via launch + DPI-aware screenshot (`CopyFromScreen`)
    + assistant analysis; the **selected visual shown changing across two
-   frames** (and, under Layer-2 α, the exclusion — one on, others off — in
+   frames** (and, under Layer-3 α, the exclusion — one on, others off — in
    the same two frames). UI review is in one representative host; the other
    two are checked for identical render / no regression. Owner human-visible
    smoke is a separate gate.
@@ -345,7 +350,7 @@ the selected-state task is expected to trip: **#1 semantic migration**
 (the attribute crosses parser / check / lower / IR / loader / runtime
 visual — call-site audit table), **#4 untested authored branch** (the new
 attribute + its reject diagnostic on non-supporting widgets get direct
-firing tests — DD-001 SI-3), **#5 carry-forward** (the four deferred axes,
+firing tests — DD-001 SI-3), **#5 carry-forward** (the five deferred axes,
 Problem B, PM-2 wrapper-rule recorded in the M3 handoff), and **#7 GUI
 positive control** (the two-frame selected/exclusion proof). The gallery
 integration tasks additionally trip **#2 missed side effects** (capture
@@ -387,9 +392,11 @@ at the Accepted flips; the anticipated set:
   disposition (none, or the DD-002 contingency) recorded in the Revision
   log at the relevant Accepted flip.
 - [`../../../_roadmap.md`](../../../_roadmap.md) — **conditional touch.**
-  DD-001 §Accepted-time re-sync touches A9 / A10 / A12 wording **if S2a is
-  Accepted** (the `ToggleButton` / `checked` lexeme); DD-002's contingency
-  touches the AC SSOT **only if a new public promise is added**.
+  DD-001's re-sync (rebuilt per the A outcome — §Accepted disposition) touches
+  A9 / A10 / A12 wording in the chosen lexeme (**T1** → the `ToggleButton` /
+  `checked` type+attr; **B2** → the `checkable` / `checked` keywords);
+  DD-002's contingency touches the AC SSOT **only if a new public promise is
+  added**.
 - `implementation/plan.md` / `log.md` — opened after the Accepted flips.
 
 **Moment 2 — Phase / milestone close commit set (impl re-sync):** dsl_spec /
@@ -426,3 +433,4 @@ learning).
 |---|---|
 | 2026-06-27 | Initial draft (Status: Proposed). DD-001 at Proposed under multi-pass review; DD-002 at skeleton stage. Framing owner-aligned 2026-06-25 ([../requirements/framing.md](../requirements/framing.md) §オーナー合意の記録). Records the one-directional DD-001→DD-002 documentation coupling and DD-001's pre-Accept gate (the four α-mitigation / deferred-axis items the DD-002 skeleton must enumerate). |
 | 2026-06-28 | Accept-discipline review fold (Status: Proposed). Corrected §Cross-DD dependency: the pre-Accept gate requires DD-002's §DD-001 coupling to carry its **concrete form** (not merely "exist as open items"), matching DD-001 §Couples-to; DD-002 accordingly drafted those four items concretely. Status line + DD-002 Decisions row updated to "partial draft" (coupling concrete, policy options pending); also swept the stale "skeleton stage" prose under the Decisions table to the same "partial draft" wording. Follow-up sweep: the §Cross-DD dependency lead sentence ("DD-002 + preamble **skeleton** exists … the skeleton must enumerate") replaced with the concrete-form gate, so the gate is no longer double-read within the section. |
+| 2026-06-28 | Sync to DD-001's control-taxonomy restructure. DD-001 Decisions row rewritten (B1 reject / **B2 ↔ T1 co-equal owner-open** / G1 strong-defer; W1/W2/W3 write model; α/β; §Accepted-disposition tuple; the prior `ToggleButton`-recommended / S1-minimal / reversal framing withdrawn). §Cross-DD dependency: surface is "checkable `Button` (B2) **or** dedicated `ToggleButton` (T1)" (not S1); deferred axes **four → five** (added Axis 5 = G1 appearance / control-family unification). `_roadmap` re-sync note made A-conditional (T1 type+attr / B2 keywords), replacing the dropped "if S2a Accepted" reversal/re-sync wording. impl-gate carry-forward count five. §Pre-DD-spike supersession note rewritten (spike "S1" → DD-001 B1). Layer-number sync: α called **Layer-3 / Main decision C** (was "Layer-2") in §Cross-DD dependency and the §Verification positive-control note, matching DD-001's renumbering. |
