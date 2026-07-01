@@ -96,7 +96,7 @@ ground, and the over-engineering brake stays in force.
   only at the documentation seam: DD-002 positions any deferred selection
   surface (the Out-of-scope axes below) in the public draft. DD-002 does not
   decide this DD's control surface. Because that positioning is where the
-  owner sees how the reserved axes read as *public contract*, and because
+  owner sees how the deferred (non-foreclosed) axes read as *public contract*, and because
   this DD's α recommendation (Main decision C) **leans on** that positioning
   as its teaching-risk mitigation, **DD-001 should not Accept before DD-002
   carries the α-mitigation items in *concrete, inspectable form*** — not
@@ -121,6 +121,19 @@ ground, and the over-engineering brake stays in force.
 
 The load-bearing decision: on what control surface a persistent toggle/
 selected state lives. Four options, named by *where the capability lives*.
+
+**The dispute, stated narrowly.** This is *not* whether wasamo adopts a
+capability-typed component system in general. The narrower question is whether
+wasamo's **author-facing button abstraction carries an optional checkability**.
+B2 answers *yes* — a button-looking binary toggle is spelled as a **checkable
+`Button`**. T1 answers *no* — persistent `checked` state is the responsibility
+of a dedicated toggle control, so a button-looking toggle is spelled as a
+**`ToggleButton`**. This is a judgement about the **author-facing surface /
+concept vocabulary**, not about internal inheritance or shared-component
+structure: T1 may still share a `ButtonBase`-style common path internally, and
+B2 does **not** imply treating Switch / CheckBox / RadioButton / Tab / Picker /
+SegmentedControl as Button modes. Under either choice, future Switch / CheckBox
+/ RadioButton / Segment / Tab can be added as their own typed surfaces.
 
 > **Axis A is *type structure*, independent of the Main-decision-B *write
 > model*.** A given framework can sit on a point of *each* axis: WPF's
@@ -153,41 +166,67 @@ selected state lives. Four options, named by *where the capability lives*.
    spelling — a boolean flag `checkable: true` (shown) vs a `mode: checkable`
    enum — is **SI-4 CF-1 / CF-2**; CF-1 is the illustration here, and CF-2
    carries extra cost — §B2-cost note.)
-   - What you gain: keeps **one widget type** (no catalog growth); the
-     stateful-ness is **explicit** at the use site (`checkable: true`), so
-     B1's leak is closed without a new node. Aligns with wasamo's own
-     architectural family — **tree-with-bindings (Slint `Button { checkable;
-     checked; toggled }`, Qt `QPushButton::checkable`, QML)** keeps the
-     toggle as a *capability on Button*, not a separate type
+   - What you gain: the **smallest author surface** that closes B1's leak —
+     **one widget type** (no catalog growth), reusing the existing Button's
+     look, press behaviour, and implementation; the stateful-ness is
+     **explicit at the use site** (`checkable: true`), without a new node. It
+     is **not** an unusual shape: it has clear precedent in **Qt**
+     (`QAbstractButton { checkable; checked }`), **Slint** (`Button { checkable;
+     checked }`), and **ARIA** (`button` role + `aria-pressed` — a state
+     annotation, so a weaker analogue than a component API). That lineage is
+     clear, but it is a **minority** one and not, on its own, evidence of
+     wasamo's preferred future direction
      ([architectural-family.md](../../../../docs/notes/architectural-family.md)).
    - What you give up / cost: a **cross-attribute dependency** the checker
      must specify and enforce — `checked` is meaningful **only** under
      `checkable: true` (reject otherwise? default? — **SI-5**). wasamo has
      not had an attribute whose validity depends on another attribute's
      value; this is new checker work and a new public rule DD-002 must
-     document. *Family note:* Slint/Qt checkable buttons **self-toggle** (W3
-     on axis B); wasamo would borrow their **type structure** (a capability
-     on Button), **not** their write model — M3 uses the controlled W1, so
-     the author writes `checked`, the Button does not flip itself.
+     document. The other cost is **semantic**: the toggle role is **not
+     visible in the type name** — a reader cannot distinguish a stateful
+     toggle from an ordinary action button until they see the `checkable` /
+     `checked` attributes. So the reason to adopt B2, if any, is **surface
+     economy / local minimality**, not a future-taxonomy argument. *Boundary:*
+     B2 only fixes the **spelling of a button-looking binary toggle**; it is
+     **not** a decision to treat Switch / CheckBox / RadioButton / Tab /
+     Picker / SegmentedControl as Button modes — grouping, exclusive
+     selection, value selection, two-way binding, and widget-owned state stay
+     separate future decisions (§Out of scope). *Family note:* Slint/Qt
+     checkable buttons **self-toggle** (W3 on axis B); wasamo would borrow
+     their **type structure** (a capability on Button), **not** their write
+     model — M3 uses the controlled W1, so the author writes `checked`, the
+     Button does not flip itself.
    - Technical risk: cross-cutting (parser → check → lower → IR → runtime →
      widget visual → cross-host parity), plus the `checkable`-gated `checked`
      validation; no new node, no new layout primitive.
 3. **T1 — dedicated ToggleButton.** `ToggleButton { checked: <bool> }` — a
    **distinct widget type** whose name carries the toggle/select purpose.
    *(Live contender — co-equal with B2.)*
-   - What you gain: the role is **named in the type**; `Button` keeps a
-     single momentary meaning and there is no cross-attribute dependency —
-     a `ToggleButton` simply has `checked`. Matches the **dedicated-type
-     family — WPF / WinUI `ToggleButton.IsChecked`, MUI / Fluent UI React
-     `ToggleButton`, Compose Material3 `ToggleButton`** — the model SI-1's
-     WinUI visual lean already points at.
-   - What you give up / cost: a **new widget node end-to-end** (parser →
-     check → lower → IR → runtime loader → widget visual) — **widget catalog
-     growth**, wider than B2's attribute-on-existing-Button change. It also
-     **consumes a new type name** (its concrete lexeme is SI-4), a forward
-     cost B2 avoids by leaving the type catalog untouched. *Family note:*
-     WPF/WinUI `ToggleButton` self-toggles (W3); like B2, wasamo borrows the
-     **type structure**, not the write model (W1 in M3).
+   - What you gain: the toggle role is **named in the type** (the chief
+     author-semantics merit); `Button` keeps a single momentary / action
+     meaning and there is no cross-attribute dependency — a `ToggleButton`
+     simply has `checked`. Matches the **dedicated-type family**: **WPF /
+     WinUI**, where `ButtonBase` is the clickable / pressable / commandable
+     base and `checked` is introduced at **`ToggleButton.IsChecked`** (with
+     `CheckBox` / `RadioButton` specialising `ToggleButton` — internal /
+     conceptual button-family sharing is allowed), plus **Radix `Toggle`** (a
+     two-state-button primitive) and **MUI / Fluent UI React `ToggleButton`** —
+     the model SI-1's WinUI visual lean already points at. (**Compose** and
+     **Flutter** sit nearby but mixed: Compose pairs an action `Button` with
+     typed `Switch` / `Checkbox` or the low-level `toggleable` modifier;
+     Flutter uses purpose-specific `ToggleButtons` / `SegmentedButton` /
+     `IconButton.isSelected`. Neither is a B2 capability-flag-on-Button
+     precedent.)
+   - What you give up / cost: it adds an **author-facing type** for a
+     relatively small difference (a button-looking toggle) — a **new widget
+     node end-to-end** (parser → check → lower → IR → runtime loader → widget
+     visual), **catalog growth** wider than B2's attribute-on-existing-Button
+     change, and it **consumes a new type name** (its concrete lexeme is
+     SI-4), a forward cost B2 avoids by leaving the type catalog untouched.
+     Adopting T1 does **not** fix the future shape of Switch / CheckBox /
+     RadioButton / Picker / SegmentedControl — those stay separate decisions.
+     *Family note:* WPF/WinUI `ToggleButton` self-toggles (W3); like B2,
+     wasamo borrows the **type structure**, not the write model (W1 in M3).
    - Technical risk: a new widget node plus a selected visual; reuses
      Button's leaf measure/arrange (no new layout primitive); the node
      surface is wider than B2's.
@@ -223,7 +262,7 @@ selected state lives. Four options, named by *where the capability lives*.
 - **G1 — defer with trigger (strong recommendation, not finalized).** A real
   but minority lineage (SwiftUI; Win32/WinForms/AppKit family-unification
   ancestry); adopting it opens an appearance/control-family axis beyond M3.
-  Reserved on **Axis 5** (§Out of scope), revived by a future appearance /
+  Deferred (non-foreclosed) on **Axis 5** (§Out of scope), revived by a future appearance /
   control-family phase.
 - **B2 vs T1 — genuinely open (co-equal).** This DD does **not** pre-pick.
   The product-merit comparison is now possible for the first time and is the
@@ -235,24 +274,26 @@ selected state lives. Four options, named by *where the capability lives*.
   | Catalog | **one type** (capability flag) | **new type** (catalog growth) |
   | New checker work | **`checkable`↔`checked` dependency** (SI-5) | none beyond admit-on-type (SI-3) |
   | Lexeme consumed (SI-4) | a capability form (CF-1 `checkable:true` / CF-2 `mode:checkable`) + `checked` — no type name | a new type name + `checked` |
-  | **Current-impl / family fit** *(a live hypothesis, not a ratified direction — see below)* | fits the **tree-with-bindings** shape wasamo *currently* sits in (capability on Button, as Slint / Qt) | fits the **dedicated-type** family (WPF / WinUI / MUI) |
+  | **External precedent** *(a secondary consideration — see below)* | clear but **minority**: Qt / Slint checkable Button, ARIA `aria-pressed` | dedicated-type mainstream: WPF / WinUI / Radix / MUI (Compose / Flutter nearby) |
   | SI-1 visual lean | neutral | the WinUI `ToggleButton` look already chosen for the visual |
 
   The **substantive deciding axis is product taxonomy / author semantics** —
   *toggle as a mode of Button* (B2: fewer types, role implicit in a flag,
-  but a new cross-attribute dependency) vs *toggle as its own kind* (T1:
-  explicit role in the type, cleaner per-type semantics, but catalog
-  growth). **Current-implementation / family fit is a *secondary*
-  consideration, deliberately not over-weighted:** wasamo's tree-with-
-  bindings alignment is a **live working hypothesis, not a ratified long-term
-  direction**
+  but a new cross-attribute dependency and a toggle role invisible in the type
+  name) vs *toggle as its own kind* (T1: explicit role in the type, cleaner
+  per-type semantics, but an extra author-facing type for a small diff).
+  **External precedent is a *secondary* consideration, deliberately not
+  over-weighted:** both options have real lineage — Qt / Slint / ARIA for B2,
+  WPF / WinUI / Radix / MUI for T1 — so neither precedent set is dispositive,
+  and wasamo's own tree-with-bindings alignment is itself a **live working
+  hypothesis, not a ratified long-term direction**
   ([architectural-family.md](../../../../docs/notes/architectural-family.md):
-  "no accepted ADR names family (1) as the long-term selection"), so "B2 fits
-  the current family" is a *fit-to-current-hypothesis* argument, **not** a
-  principled-correctness argument — it must not be read as making B2 the
-  design-principled option and T1 the merely-cosmetic one. Both are
-  legitimate product taxonomies; T1's "explicit role in the type" is a
-  genuine author-semantics merit, not just a visual one.
+  "no accepted ADR names family (1) as the long-term selection"). So "B2 has
+  precedent" must **not** be read as making B2 the design-principled option and
+  T1 the merely-cosmetic one. Both are legitimate product taxonomies; T1's
+  "explicit role in the type" is a genuine author-semantics merit, not just a
+  visual one, and B2's value is **surface economy**, not a future-taxonomy
+  claim.
 
   **B2's cost is *CF-dependent* (SI-4).** Under **CF-1** (`checkable: true`
   boolean flag) B2's new surface is just the `checkable`↔`checked`
@@ -302,7 +343,7 @@ write-back — §Dependencies).
    - Why defer: requires **two-way binding (state write-back)**, which M3
      has no shipped surface for and which is a binding-direction feature in
      its own right — implementing it now exceeds Phase 8 (A10 is "a *one-way*
-     boolean binding drives an attribute"). Reserved on the two-way axis
+     boolean binding drives an attribute"). Deferred (non-foreclosed) on the two-way axis
      (Axis 3). Choosing W1 does **not** foreclose it.
    - Technical risk: n/a in M3 (deferred).
 3. **W3 — widget-owned self-toggling state** *(defer — exceeds Phase 8; its
@@ -464,8 +505,10 @@ explicitly (a bare "accepted" closes nothing auditable):
      approximation accounting is recorded in the A1 table / plan (SI-2), not
      in the DD-002 α-note.
 6. **Re-sync targets rebuilt per the A outcome** (the prior §Accepted-time
-   re-sync was dropped pending A): **T1** → new-widget re-sync (roadmap A9 /
-   A10 / A12, framing, `plan.md`, spec/architecture) in the chosen type name;
+   re-sync was dropped pending A): **T1** → new-widget re-sync (roadmap A1 /
+   A10 / A12, framing, `plan.md`, spec/architecture) in the chosen type name
+   — A1's wording "the Button `selected` state surface" updates to the
+   ToggleButton form;
    **B2** → keyword re-sync in the **chosen capability form** (CF-1
    `checkable:true` / CF-2 `mode:checkable`) + `checked`, no new type. The
    framing packet-C form (`Button { selected }`) is recorded as **B1,
@@ -543,8 +586,16 @@ differently from the rest.
   thumbnail, and is **not** an A10 `checked` instance (decoration, not a
   binding-driven attribute). It reproduces the wireframe *look* only.
 - **(TH-live — real thumbnail selection: M4.)** Clicking a thumbnail to select
-  it (exclusive, data-driven) needs record collections / per-item attribute
-  binding / `for`-internal handlers / hit-testing — all M4.
+  it (exclusive, data-driven) needs, at minimum: a **click surface on the
+  cell** (today `clicked` is `Button`-only — M4 interaction), **handler-position
+  binder reads** (admission undecided —
+  [dsl-grammar Q8](../../../../docs/notes/dsl-grammar.md)), and a **means to
+  derive a per-cell boolean** (`index == selected` — the `==` / M-expr1
+  family). **Record collections** are needed only for the *richer*
+  per-photo-record variant (select-by-photo-record), **not** for index-based
+  selection
+  ([gallery-expression-use-cases.md UC3](../../requirements/gallery-expression-use-cases.md)).
+  All M4-or-later.
 
 **Recommendation:** the **tab band is the sole A10 binding-driven surface**;
 the thumbnail highlight is **TH-b** (fixed decoration, wireframe fidelity) or,
@@ -678,8 +729,15 @@ flag).
 
 The adopted M3 surface (a checkable Button **or** a `ToggleButton`, with a
 controlled one-way `checked`) is M3's **minimal** toggle surface, not "the
-one and only selection model forever". The richer models stay reserved, on
-different triggers (the §Out of scope axes hold the triggers):
+one and only selection model forever". The richer models are kept
+**non-foreclosed** — not built in M3, their design space left open on
+different triggers (the §Out of scope axes hold the triggers). This is
+**design non-foreclosure, not a public reservation**: each axis's
+*public-draft* representation defaults to a **future-note with a trigger**,
+**not** a reserved slot, and is promoted to a public reservation only if
+**[DD-002](./dd-m3-p8-002-dsl-spec-public-draft-promotion.md)'s Main decision A
+promotes it at DD-002's Accept** — the minimal-reservation default DD-002
+item 4 already carries.
 
 - (a) **Two-way binding (W2)** stays open, *conditionally additive*:
   `checked` is one-way in M3; a future two-way form must be **opt-in** (a
@@ -702,8 +760,8 @@ different triggers (the §Out of scope axes hold the triggers):
   only with shipped surface (α / β), leaving future `RadioGroup` / `TabBar` /
   `SegmentedControl` parents free (Axis 2).
 - (d) **Generic Toggle + appearance (G1)** and the broader **control-family
-  unification** (Win32/WinForms/AppKit ancestry) stay reserved for a future
-  appearance / control-family phase (Axis 5); M3 does not open an
+  unification** (Win32/WinForms/AppKit ancestry) stay **deferred (future-note,
+  Axis 5)** for a future appearance / control-family phase; M3 does not open an
   `appearance` axis.
 - (e) M3 selected visuals are provisional and absorbed/overridden by the M5
   theme surface; accessibility / focus / input semantics are re-designable
@@ -772,7 +830,8 @@ measure/arrange — reuses Button's leaf layout).
   widget-owned state (W3), no dedicated group widget (Axis 2), no generic-
   appearance Toggle (G1), and no full theme are built; the toggle stays
   controlled + one-way (W1), visuals minimal (SI-1), exclusion author-
-  composed (α/β). The richer models are kept as *reservations*, not built.
+  composed (α/β). The richer models are kept **non-foreclosed** (deferred with
+  triggers), not built.
   **If B2 + CF-2 is chosen,** the `mode` enum is kept **minimal**
   (`momentary` / `checkable` only); the full future-mode / appearance axis is
   **not** pre-opened (that is Axis 5 / G1) — CF-2 buys naming, not the control
@@ -955,3 +1014,45 @@ Also out of M3 scope (existing triggers hold):
   positions generally (not "string interpolation only"); the real blocker is
   no per-cell boolean can be derived (no record fields, no `==`, no indexed
   read, `if` can't read the binder).
+- 2026-06-29 — Re-pointing fold: dispute narrowed, gain/lose tone aligned
+  (Status: Proposed; **B2/T1 stay co-equal — no T1 lean**; three-axis A/B/C
+  structure unchanged, exclusion stays Main decision C). Main decision A gains
+  a **"dispute, stated narrowly"** framing — the question is whether wasamo's
+  author-facing **button abstraction carries optional checkability**, **not**
+  whether wasamo adopts a capability-typed component system; the choice is
+  author-surface vocabulary, not internal inheritance (T1 may share a
+  `ButtonBase` path; B2 does not make Switch / CheckBox / RadioButton / Tab /
+  Picker / SegmentedControl into Button modes). **B2** reframed: gain = the
+  smallest surface, reusing Button look/press/impl, with **Qt / Slint / ARIA**
+  as clear-but-minority precedent (not a wasamo-direction argument); added
+  cost = the toggle role is invisible in the type name, so B2's case is
+  **surface economy**, plus an explicit **boundary**. **T1** reframed: gain =
+  role named in the type, with **WPF / WinUI** (`ButtonBase` → `ToggleButton`,
+  `CheckBox` / `RadioButton` specialise), **Radix**, **MUI**; cost = an extra
+  author-facing type for a small diff; **Compose / Flutter** noted as mixed,
+  not B2 precedents. Comparison row "current-impl / family fit" →
+  **"external precedent"** (secondary; both sides have lineage, neither
+  dispositive). Recommendation unchanged.
+- 2026-06-29 — Owner-review folds (Status: Proposed; recommendations
+  unchanged). **(1) SI-2 TH-live weakened:** real thumbnail selection needs, at
+  minimum, a cell click surface + handler-position binder reads (Q8) + a
+  per-cell boolean (`index == selected`); **record collections are only the
+  *richer* per-photo-record variant**, not the index-based baseline (per
+  [gallery-expression-use-cases.md UC3](../../requirements/gallery-expression-use-cases.md)).
+  **(2) Deferred-axis strength aligned to DD-002:** §Forward-compat reworded
+  from "stay reserved" to **design non-foreclosure → public-draft default =
+  future-note with a trigger, promoted to a reservation only at this DD's
+  Accept** (resolving DD-002 item 4's "Main decision A's minimal-reservation
+  policy" reference, which DD-001 had not stated); G1 (d) "stay reserved" →
+  "deferred (future-note)". **(3) Re-sync target fixed:** T1 new-widget re-sync
+  `A9 → A1` (A9 = bool scalar, untouched by a new type name; A1 carries the
+  "Button `selected` state surface" wording that updates under T1).
+- 2026-06-29 — Owner-review folds (round 2; Status: Proposed; recommendations
+  unchanged). **(1) Promotion authority disambiguated:** §Forward-compat now
+  says public-reservation promotion is **DD-002's Main decision A at DD-002's
+  Accept** (not DD-001's control-taxonomy Main decision A). **(2) Residual
+  "reservation" language swept** to match the non-foreclosure framing:
+  §Couples-to "reserved axes" → "deferred (non-foreclosed) axes"; Layer-1 G1
+  "Reserved on Axis 5" and Main-decision-B W2 "Reserved on the two-way axis" →
+  "Deferred (non-foreclosed)"; §Risk over-build guard "kept as reservations" →
+  "kept non-foreclosed (deferred with triggers)".
