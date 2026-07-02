@@ -181,6 +181,10 @@ here.
 - First showcase application — sufficient to demonstrate Wasamo
   identity for contributor outreach, even if rough around
   polish-level details
+- Author-controllable sizing (Problem B) design spike — preferred
+  in this milestone. M4 planning records the spike disposition
+  (default M4; deferral to M5 positively justified) per the
+  [author-controllable sizing VDR](./cross-milestone/decisions/author-controllable-sizing-surface.md)
 
 ## M5: Identity & tooling
 
@@ -197,6 +201,10 @@ is a first-class editor experience.
   VS Code work may begin in parallel any time after M3's DSL spec
   public draft is agreed; M5 is its acceptance gate, not its
   earliest start
+- Author-controllable sizing (Problem B) implementation if the
+  M4/M5 spike concludes it is warranted; otherwise it falls back to
+  the M6 disposition below, per the
+  [author-controllable sizing VDR](./cross-milestone/decisions/author-controllable-sizing-surface.md)
 
 ## M6: 1.0 — C ABI stabilization
 
@@ -207,6 +215,11 @@ polished showcase ships, and SemVer applies.
 
 - C ABI freeze; SemVer applies from this point
 - Public backward-compatibility commitment
+- Author-controllable sizing (Problem B) disposition before ABI
+  freeze — implement if ABI-bearing, or record why a post-freeze
+  append-only addition is safe. Backstop if the M4/M5 schedule
+  slips, per the
+  [author-controllable sizing VDR](./cross-milestone/decisions/author-controllable-sizing-surface.md)
 - Performance targets: <100 ms cold start, <30 MB memory,
   single-digit-MB binaries
 - Polished showcase application (production-grade, distinct from

@@ -5,8 +5,16 @@ docs/notes/ は owner-authored の探索メモ／live open question 置き場（
 
 # ウィジェットの明示サイズ指定 — 未解決の future surface
 
-**状態:** Open question（未割当）。実装フェーズ未定。
-**最終更新:** 2026-06-24（M3-Phase 7b T5/T6b 発見を起点に起票）。
+**状態:** Resolved（責務割当済み）。
+**最終更新:** 2026-07-02（Vision DR Accepted に伴い pointer 化）。
+
+> **解決済み:** この論点の責務・トリガーは
+> [author-controllable sizing VDR](../../process/cross-milestone/decisions/author-controllable-sizing-surface.md)
+> （Accepted 2026-07-02）に移った。要点: M3 では実装せず、**遅くとも M5・推奨 M4 で
+> design spike**、spike の結論しだい M5 で実装、**M6 ABI freeze 前の対応判断**を最後の
+> 備えとする。M4/M5 の振り分けは M4 計画時に記録する。
+> 以下の各節（§2–§7）は **その VDR の非規範な証拠・設計メモ**として残す。§6「責務と締切」・
+> §7「想定する対応」は VDR に置き換わっており、historical。
 
 ---
 
