@@ -78,9 +78,9 @@ is published as a stable public draft.
   frame), WrapPanel + ScrollView (thumbnail grid), ZStack
   (lightbox overlay), and Box (aspect-constrained placeholders);
   `bool` bindings drive conditional rendering (lightbox open /
-  close) and Button `selected` state (tab-like sections); an
-  iteration grammar generates thumbnails from a collection
-  binding
+  close) and the `ToggleButton` `checked` selected state (tab-like
+  sections); an iteration grammar generates thumbnails from a
+  collection binding
 - **A2.** Grid layout primitive (1 cell 1 child, star sizing +
   spanning; same-cell overlap is not provided — overlay is
   ZStack's responsibility), demonstrating that DSL can express 2D
@@ -120,24 +120,25 @@ is published as a stable public draft.
   after M3
 - **A9.** `bool` added as the third scalar binding type alongside
   `i32` and `String`, demonstrating that subtree presence
-  (conditional rendering) and widget attribute state (Button
-  selected) can both be driven by a scalar extension without
-  introducing the `TypedValue` generic value union, which remains
-  deferred
-- **A10.** Button `selected` state surface admitted (the concrete
-  construct — `selected: bool` attribute vs separate
-  `ToggleButton` primitive vs theming binding — is settled per
-  phase under M3), demonstrating that a `bool` scalar binding
-  can drive a widget attribute
+  (conditional rendering) and widget attribute state
+  (`ToggleButton` `checked`) can both be driven by a scalar extension
+  without introducing the `TypedValue` generic value union, which
+  remains deferred
+- **A10.** Selected / toggle state surface admitted, settled under
+  M3 as a dedicated `ToggleButton` widget carrying a controlled
+  one-way `checked: <bool>` attribute (ordinary `Button` keeps its
+  momentary action-only meaning), demonstrating that a `bool` scalar
+  binding can drive a widget attribute
 - **A11.** DSL spec, implementation, and E2E proof are
   synchronized per phase: each M3 phase updates `docs/dsl_spec.md`
   for the surface it ships and exercises that surface in
   `examples/gallery/` within the same phase. Spec drafting is a
   per-phase deliverable, not an end-of-milestone byproduct
 - **A12.** DSL specification first public draft (covers M2 surface
-  plus the above M3 primitives, grammar surface, scalar type,
-  selected state surface, and the parent-interpreted placement
-  authoring surface of A13). The novel normative content is the
+  plus the above M3 primitives, grammar surface, scalar type, the
+  `ToggleButton` selected / toggle state surface, and the
+  parent-interpreted placement authoring surface of A13). The novel
+  normative content is the
   measure-arrange spec for WrapPanel and Grid, the grammar
   surface (conditional rendering, iteration), and the
   parent-interpreted placement authoring surface
@@ -181,6 +182,10 @@ here.
 - First showcase application — sufficient to demonstrate Wasamo
   identity for contributor outreach, even if rough around
   polish-level details
+- Author-controllable sizing (Problem B) design spike — preferred
+  in this milestone. M4 planning records the spike disposition
+  (default M4; deferral to M5 positively justified) per the
+  [author-controllable sizing VDR](./cross-milestone/decisions/author-controllable-sizing-surface.md)
 
 ## M5: Identity & tooling
 
@@ -197,6 +202,10 @@ is a first-class editor experience.
   VS Code work may begin in parallel any time after M3's DSL spec
   public draft is agreed; M5 is its acceptance gate, not its
   earliest start
+- Author-controllable sizing (Problem B) implementation if the
+  M4/M5 spike concludes it is warranted; otherwise it falls back to
+  the M6 disposition below, per the
+  [author-controllable sizing VDR](./cross-milestone/decisions/author-controllable-sizing-surface.md)
 
 ## M6: 1.0 — C ABI stabilization
 
@@ -207,6 +216,11 @@ polished showcase ships, and SemVer applies.
 
 - C ABI freeze; SemVer applies from this point
 - Public backward-compatibility commitment
+- Author-controllable sizing (Problem B) disposition before ABI
+  freeze — implement if ABI-bearing, or record why a post-freeze
+  append-only addition is safe. Backstop if the M4/M5 schedule
+  slips, per the
+  [author-controllable sizing VDR](./cross-milestone/decisions/author-controllable-sizing-surface.md)
 - Performance targets: <100 ms cold start, <30 MB memory,
   single-digit-MB binaries
 - Polished showcase application (production-grade, distinct from
