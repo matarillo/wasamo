@@ -183,10 +183,12 @@ roadmap SSOT
 [constraints §2](../requirements/constraints.md)). Phase 8 owns **raising
 it and fixing the issue record**, not implementing or finally designing the
 sizing surface — that is a separate gate that **does not block M3 close**
-(FD-8-D). The Vision DR's recommended disposition is a pre-M6 ABI-freeze
-gate with an earlier concrete-app trigger, while leaving grammar / IR /
-runtime / host-API / reactive-shape choices open for the owning design
-phase. DD-002's Problem B responsibility is **editorial**: the public draft
+(FD-8-D). The Vision DR is now **Accepted** (2026-07-02): Option D as the
+M6 ABI-freeze backstop **plus a scheduled M4/M5 trigger** — a design spike
+no later than M5 (preferred M4), implementation in M5 if the spike so
+concludes, with the M6 disposition retained if the schedule slips. The
+grammar / IR / runtime / host-API / reactive-shape choices stay open for
+that spike to settle. DD-002's Problem B responsibility is **editorial**: the public draft
 must not present Fill-default sizing as final, and must position explicit
 sizing as a **future surface** without reserving exact syntax. The
 `aspect`-in-cell arrange-abort facet folds into the same triage
@@ -273,9 +275,9 @@ re-connection; the Problem B Vision DR **raising** (not implementation); and
 the milestone-close hand-off folding.
 
 Out of Phase 8 scope (triggers held — constraints carry-forward table):
-explicit-sizing **implementation** (Problem B Vision DR's pre-M6 disposition
-gate / earlier concrete-app trigger); PM-2 wrapper-rule **decision**
-(pre-1.0, via M3 handoff);
+explicit-sizing **implementation** (Problem B Vision DR's scheduled M4/M5
+spike + implementation; M6 disposition backstop); PM-2 wrapper-rule
+**decision** (pre-1.0, via M3 handoff);
 default-alignment unification **implementation** (future layout-behavior
 phase); image primitives / asset pipeline / scrollbar widget / input /
 modal / theme (M4 / M5); public code-construction API / ABI (M6 ABI prep);
@@ -425,3 +427,4 @@ learning).
 | 2026-06-28 | Sync to DD-001's control-taxonomy restructure. DD-001 Decisions row rewritten (B1 reject / **B2 ↔ T1 co-equal owner-open** / G1 strong-defer; W1/W2/W3 write model; α/β; §Accepted-disposition tuple; the prior `ToggleButton`-recommended / S1-minimal / reversal framing withdrawn). §Cross-DD dependency: surface is "checkable `Button` (B2) **or** dedicated `ToggleButton` (T1)" (not S1); deferred axes **four → five** (added Axis 5 = G1 appearance / control-family unification). `_roadmap` re-sync note made A-conditional (T1 type+attr / B2 keywords), replacing the dropped "if S2a Accepted" reversal/re-sync wording. impl-gate carry-forward count five. §Pre-DD-spike supersession note rewritten (spike "S1" → DD-001 B1). Layer-number sync: α called **Layer-3 / Main decision C** (was "Layer-2") in §Cross-DD dependency and the §Verification positive-control note, matching DD-001's renumbering. |
 | 2026-07-01 | Completed DD-002 synchronization. Status line and Decisions table now reflect DD-002 as a full Proposed draft (Main decisions A/B/C drafted, recommendation = future notes with no syntax reservation; publication mechanics = marker + change history + external-reader smoke). Problem B section links the new cross-milestone Vision DR and records its recommended pre-M6 ABI-freeze disposition gate while keeping syntax / IR / runtime / host-API design open. |
 | 2026-07-01 | Owner accepted DD-001 tuple: T1 `ToggleButton` / `checked`, W1, α, V-a, TH-a, T1 diagnostics, SI-5 empty. Preamble status, Decisions table, cross-DD dependency, and upstream re-sync targets updated. DD-002 remains Proposed. |
+| 2026-07-02 | Reflected the Problem B Vision DR Accept: the §Problem B disposition and the out-of-scope line now describe the accepted **Option D backstop + scheduled M4/M5 trigger** (spike ≤ M5, preferred M4; implementation in M5 if the spike so concludes; M6 backstop) instead of the pre-revision demand-driven wording. DD-001/DD-002 status unchanged. |

@@ -144,18 +144,20 @@ Options:
   false: Phase 2 / 4 / 7b already exposed explicit sizing as a known future
   surface.
 - **B-2b — reserve exact `width` / `height` syntax.** Clear, but premature:
-  the Vision DR has not yet decided whether the surface is grammar-only,
-  modifier-like, layout-parent data, runtime state, host-construction API, or
-  some combination.
+  the now-accepted Vision DR (2026-07-02) deliberately leaves the surface
+  shape (grammar-only, modifier-like, layout-parent data, runtime state,
+  host-construction API, or some combination) to a scheduled M4/M5 spike, so
+  no spelling is settled to reserve.
 - **B-2c — future-note explicit sizing, linked to the Vision DR.** State that
   M3 sizing is kind-default, that author-controllable sizing is a known future
   surface, and that exact syntax / IR / ABI implications are decided by the
-  cross-milestone VDR and its owning follow-up.
+  M4/M5 spike scheduled by the cross-milestone VDR.
 
 **Recommendation:** **B-2c.** The public draft should not call Fill/Shrink
 defaults final, but it should also not reserve a spelling or implementation
-architecture before the Vision DR is accepted. The `aspect`-in-cell arrange
-abort is folded into the same note, not split into a second future feature.
+architecture, because the accepted Vision DR defers the surface shape to the
+M4/M5 spike. The `aspect`-in-cell arrange abort is folded into the same note,
+not split into a second future feature.
 
 ### B-3 — default-alignment asymmetry
 
@@ -343,3 +345,4 @@ At Accept, record:
 | 2026-06-28 | Synced to DD-001's control-taxonomy restructure (B2/T1 co-equal, five deferred axes). |
 | 2026-07-01 | Completed Main decisions A/B/C as a full Proposed draft. Recommendation: future notes with no syntax reservation; honest positioning of PM-2 / Problem B / defaults / spelling / bindability / DD-001 axes; publication mechanics = status marker + M3 change history + external-reader smoke. |
 | 2026-07-01 | Synced to DD-001 owner acceptance: DD-001 now fixes T1 `ToggleButton` / `checked`, W1, and α. Coupling section now treats α items 1-3 as active and spec impact names the concrete `ToggleButton { checked }` surface. DD-002 status remains Proposed. |
+| 2026-07-02 | Reflected the Problem B Vision DR Accept in B-2b / B-2c: the surface shape is now described as deliberately deferred to the VDR's scheduled M4/M5 spike (not "the VDR has not yet decided" / "before the VDR is accepted"). Recommendation (B-2c: future-note, no reservation) unchanged. DD-002 status remains Proposed. |
