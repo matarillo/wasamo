@@ -83,9 +83,9 @@ with stable IDs for phase mapping:
 - **A1.** `examples/gallery/gallery.ui` drives the Photo Gallery
   target app end-to-end on the M2 reactive foundation, exercising
   every M3 layout primitive (A2–A6), both grammar surfaces (A7–A8),
-  the `bool` scalar (A9), the Button `selected` state surface
-  (A10), and the parent-interpreted placement authoring surface
-  (A13) through the `.ui → IR → runtime` path.
+  the `bool` scalar (A9), the `ToggleButton` `checked` selected-state
+  surface (A10), and the parent-interpreted placement authoring
+  surface (A13) through the `.ui → IR → runtime` path.
 - **A2.** Grid layout primitive (1 cell 1 child, star sizing +
   spanning; same-cell overlap is **not** provided — overlay is
   ZStack's responsibility).
@@ -107,10 +107,10 @@ with stable IDs for phase mapping:
 - **A9.** `bool` admitted as the third scalar binding type
   alongside `i32` and `String`. The `TypedValue` generic value
   union remains deferred.
-- **A10.** Button `selected` state surface admitted. The concrete
-  construct (`selected: bool` attribute vs separate `ToggleButton`
-  primitive vs theming binding) is settled in the phase that owns
-  it.
+- **A10.** Selected / toggle state surface admitted, settled
+  (M3-Phase 8) as a dedicated `ToggleButton` widget carrying a
+  controlled one-way `checked: <bool>` attribute; ordinary `Button`
+  keeps its momentary action-only meaning.
 - **A11.** Per-phase synchronization of `.ui`, `wasamo-ir`,
   `wasamoc`, `wasamo-runtime`, `docs/dsl_spec.md`, and an
   `examples/gallery/` E2E proof. No phase closes leaving one side
@@ -316,7 +316,7 @@ surface.
 | A7 (conditional rendering grammar) | M3-Phase 6 |
 | A8 (iteration grammar) | M3-Phase 7 |
 | A9 (`bool` scalar) | M3-Phase 1 |
-| A10 (Button selected state) | M3-Phase 8 |
+| A10 (`ToggleButton` selected state) | M3-Phase 8 |
 | A11 (per-phase spec / impl / E2E sync) | Every phase (operational rule, not a single-phase deliverable) |
 | A12 (DSL spec first public draft) | M3-Phase 8 (promotion); written incrementally in M3-Phase 1–7 (including the Phase 7b placement surface) |
 | A13 (parent-interpreted placement authoring surface) | M3-Phase 7b (corrective; surface frozen ahead of the Phase 8 public draft) |
@@ -479,8 +479,8 @@ M3 is complete when **all** of the following hold:
 1. **Every acceptance criterion A1–A13 is discharged**, with the
    discharge recorded in the corresponding ADR and the plan's
    Progress section's row marked completed.
-2. **Phase 8 outputs all three deliverables**: A10 (Button
-   `selected` state) shipped; A1 (full `gallery.ui` running on
+2. **Phase 8 outputs all three deliverables**: A10 (`ToggleButton`
+   selected state) shipped; A1 (full `gallery.ui` running on
    all three example hosts) demonstrated; A12 (DSL spec first
    public draft) promoted in `docs/dsl_spec.md` with a
    `status: public-draft` (or equivalent) frontmatter marker and
@@ -667,6 +667,22 @@ M3 is complete when **all** of the following hold:
   A10/A12 discharge against existing criteria. Tier-1 factual: no AC, phase,
   dependency, or scope change.
 
+- **2026-07-03 — A10 lexeme re-sync landed (DD-M3-P8-001 §Accepted
+  disposition item 6).** The A1 / A9 / A10 / A12 wording in
+  `process/_roadmap.md` and the A1 / A10 AC mirror here were re-synced from
+  the "Button `selected` state" shorthand to the accepted `ToggleButton` /
+  `checked` lexeme (a dedicated widget with a controlled one-way `checked:
+  <bool>` attribute). The framing packet-C `selected: bool` recommendation
+  is recorded as DD-001 B1-rejected in a dated framing addendum, not
+  overwritten. This is the documentation execution of the 2026-07-02
+  tier-1-factual disposition above — **the AC set, its IDs, and A10's thesis
+  (a `bool` binding drives a widget attribute) are unchanged**; only the
+  settled construct is named. Distinct from that entry's "no new-AC
+  `_roadmap` *mirror* required" note, which concerns the FD-8-F
+  new-public-promise branch that did not fire. `docs/dsl_spec.md` §4.17 /
+  `docs/architecture.md` §6.7.7 already carried the accepted lexeme from the
+  Moment 1 design sync.
+
 ## Progress
 
 The Progress section is a compact milestone index. Detailed live
@@ -684,7 +700,7 @@ ADRs, CHANGELOG, notes, and git history, then deleted by default.
 | M3-Phase 6 — ZStack + conditional rendering | complete | [plan.md](phase-6/implementation/plan.md) | [preamble.md](phase-6/decisions/preamble.md) | ADR Accepted 2026-06-02; A4 + A7 discharged 2026-06-09; first grammar surface (binding drives subtree present/absent); `bool` prereq landed in Phase 1; **M3-Phase 4 R1 (Window-title wiring) closed** via static `title:` host-wiring (DD-M3-P6-006); Moment-2 docs synced + phase-end CI green run 27149254110 |
 | M3-Phase 7 — Iteration grammar | complete | [plan.md](phase-7/implementation/plan.md) | [preamble.md](phase-7/decisions/preamble.md) | ADR Accepted 2026-06-13; execution opened 2026-06-13; A8 discharged by collection-driven `for` generation with runtime append / remove / clear / reset positive controls; A11/A12 Moment 2 docs synced 2026-06-18; `TypedValue` pressure judged — **not adopted**, with per-item richness triggers recorded in the phase-end handoff; phase-end CI green run 27731815476 |
 | M3-Phase 7b — Parent-interpreted placement attributes (owner-inserted corrective) | complete | [plan.md](phase-7b/implementation/plan.md) | [preamble.md](phase-7b/decisions/preamble.md) | Inserted 2026-06-19 (tier-2 additive); framing owner-aligned 2026-06-19; DD-M3-P7b-001/002 Accepted 2026-06-21 (CB-B + Option 3 `slot.` + PM-2; IM-4 + SM-B + VS-1a `SlotData` + IR-B); branch (a) → new **A13** (discharged); T1–T6b landed (IR `IrChildSlot` + runtime/layout `ChildSlot`/`SlotData`, `slot.*` author surface + PM-2 matrix, GUI evidence + owner smoke, T6b Grid-as-ZStack-child checker fix); Moment 2 docs synced at T7; phase-end CI green run 28072510434 + merged to main 2026-06-24 |
-| M3-Phase 8 — `selected` state + Gallery E2E + DSL spec public draft | ADRs accepted; execution not started | — | [preamble.md](phase-8/decisions/preamble.md) | DD-M3-P8-001 Accepted 2026-07-01 (`ToggleButton` / `checked`); DD-M3-P8-002 Accepted 2026-07-02 (public-draft promotion, A-2/C-2, no new AC); A1, A10, A12 discharge pending Moment 1/2 + gallery integration |
+| M3-Phase 8 — `selected` state + Gallery E2E + DSL spec public draft | ADRs accepted; implementation plan opened (§4, 2026-07-03) | [plan.md](phase-8/implementation/plan.md) | [preamble.md](phase-8/decisions/preamble.md) | DD-M3-P8-001 Accepted 2026-07-01 (`ToggleButton` / `checked`); DD-M3-P8-002 Accepted 2026-07-02 (public-draft promotion, A-2/C-2, no new AC); T0 opened + A10 lexeme re-sync landed; A1, A10, A12 discharge pending T1–T11 (impl + gallery integration + Moment 2) |
 
 ### Owner-facing resume note
 

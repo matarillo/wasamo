@@ -99,6 +99,17 @@ primitive なし）、B=DD 2 本（DD-M3-P8-001 選択中状態 / DD-M3-P8-002 �
 E=実装まで＋検証画面の片付け・M4 以降は前送り、F=新 AC 不要見込み（DD-002 が
 公開上の約束を増やさない限り）、G=owner UI 確認の工程化。
 
+**2026-07-03 追記（DD-001 Accepted 後の確定記録。packet 本文は当時記録として
+保持し、上書きしない）:** packet C が推奨した `selected: bool` 属性は、DD-001 で
+**B1（普通の Button への裸の属性）として却下**され、採択形は **T1 —
+専用部品 `ToggleButton { checked: <bool> }`**（controlled one-way・V-a 背景色）に
+確定した（[DD-M3-P8-001](../decisions/dd-m3-p8-001-button-selected-state-surface.md)）。
+これは「packet の読み方」で予告したとおり、packet C の OK が**方向合意**であって
+代替案の却下ではなく、具体形は事前スパイク ＋ DD-001 の比較で仕分ける、という
+運用の結果である。よって `_roadmap.md` / `plan.md` の A1 / A9 / A10 / A12 文言は
+`ToggleButton` / `checked` の採択語彙へ再同期済み（DD-001 §Accepted disposition
+item 6）。framing の受入れ基準（A10 が selected-state を予約）は不変。
+
 ---
 
 ## Phase 8 受入れ基準

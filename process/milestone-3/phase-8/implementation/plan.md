@@ -54,12 +54,16 @@ docs. Implementation (T1) begins only after T0 closes.
 - [x] Problem B Vision DR raised and Accepted
       ([author-controllable-sizing-surface.md](../../../cross-milestone/decisions/author-controllable-sizing-surface.md),
       2026-07-02) — Phase 8 carries only the documentation posture.
-- [ ] **Remaining DD-001 item-6 re-sync** (separate review concern from
-      this plan): `process/_roadmap.md` A10 / A1 wording updated from
-      the "Button `selected` state" shorthand to the accepted
-      `ToggleButton` / `checked` lexeme; the framing packet-C form
-      annotated as B1-rejected (annotated in a revisions note, not
-      overwritten — the framing is frozen).
+- [x] **Remaining DD-001 item-6 re-sync** (separate review concern from
+      this plan): `process/_roadmap.md` A1 / A9 / A10 / A12 +
+      `process/milestone-3/plan.md` A1 / A10 (AC mirror) wording
+      re-synced from the "Button `selected` state" shorthand to the
+      accepted `ToggleButton` / `checked` lexeme; the framing packet-C
+      `selected: bool` form recorded as DD-001 B1-rejected in a dated
+      addendum (not overwritten — the framing is frozen). `docs/dsl_spec.md`
+      §4.17 / `docs/architecture.md` §6.7.7 already carry the accepted
+      lexeme from Moment 1. Executes the plan Revision-log 2026-07-02
+      tier-1-factual entry (no new AC).
 - [x] This `preamble.md` + `plan.md` owner-reviewed (owner accepted
       2026-07-03; the plan is explicitly a working hypothesis, revisable
       mid-implementation) and landed with `status: active`; skeleton
