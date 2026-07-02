@@ -301,7 +301,8 @@ DD-001 accepted Layer-3 α, which carries a public-example teaching risk:
 the O(N^2) handwritten one-true-others-false exclusion pattern could be
 mistaken for the intended long-term idiom. DD-001's pre-Accept gate is
 satisfied because this DD carries the mitigation in concrete, inspectable
-form; DD-002 itself remains Proposed until its own owner Accept.
+form; DD-002 is now **Accepted** (2026-07-02), so those items are settled
+disposition (α items 1-4 active).
 
 Recommended coupling:
 

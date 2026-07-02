@@ -67,18 +67,19 @@ The premises Phase 8 treats as fixed (framing §再検討しない前提;
   DD-001 has now accepted the carrier surface as
   `ToggleButton { checked: <bool> }` with controlled one-way writes.
 
-What stays **open and decided by the DDs**, not by this preamble: DD-001 is
-now closed on `ToggleButton` / `checked` / W1 / α / V-a / TH-a, while DD-002
-still decides how the public draft positions future-note, provisional, and
+What was **decided by the DDs**, not by this preamble: DD-001 is
+closed on `ToggleButton` / `checked` / W1 / α / V-a / TH-a, and DD-002 has
+settled how the public draft positions future-note, provisional, and
 unsettled surface. The framing's scope table,
 verification strategy, and risk register are the authority for these
 boundaries ([../requirements/framing.md](../requirements/framing.md)).
 
-### Acceptance relation (no new AC expected — contingent on DD-002)
+### Acceptance relation (no new AC — settled at the DD-002 Accept)
 
 Phase 8's three deliverables are each **already named by an existing
 acceptance criterion**, so — unlike Phase 7b, which minted A13 for a
-surface no AC named — **no new AC is expected** (framing FD-8-F):
+surface no AC named — **no new AC is added** (framing FD-8-F; recorded in
+the plan Revision log):
 
 - **A10** reserves the selected-state surface from the start; DD-001
   discharges it.
@@ -88,13 +89,12 @@ surface no AC named — **no new AC is expected** (framing FD-8-F):
 - **A11** (continuing obligation) keeps `.ui` / IR / `wasamoc` / runtime /
   `docs/dsl_spec.md` / `examples/gallery/` in lock-step.
 
-The one **contingency**: if **DD-002 adds a new public promise** (e.g.
-reserving M4 syntax in a way that commits author-facing surface), the
-M3 acceptance-criteria revision exception applies — a new AC or an A12
-wording refinement is recorded, ROADMAP mirrored, plan Revision log
-updated. If DD-002 adds no public promise, "no new AC" is recorded in the
-plan Revision log. This preamble does not pre-commit either way; the
-disposition is fixed at the **DD-002 Accepted flip**.
+The contingency is now **resolved**: DD-002 accepted **future notes with no
+syntax reservation** (2026-07-02), adding no new public promise, so **no new
+AC** is recorded in the plan Revision log. (Had DD-002 instead reserved
+author-facing M4 syntax, the M3 acceptance-criteria revision exception would
+have applied — a new AC or an A12 wording refinement recorded, ROADMAP
+mirrored, plan Revision log updated. It did not.)
 
 ### Owner-agreed framing decisions
 
@@ -222,10 +222,11 @@ The Phase 8 ADR carries the two framing-slate DDs (FD-8-B):
 | DD | Title | Status | Decision summary |
 |---|---|---|---|
 | [DD-M3-P8-001](./dd-m3-p8-001-button-selected-state-surface.md) | Toggle / selected-state control surface | Accepted 2026-07-01 | Accepted tuple: **T1 `ToggleButton` / `checked`**, **W1 controlled one-way**, **α live tab-band exclusion** (β only as triggered fallback), **V-a background colour only**, **TH-a no thumbnail highlight**, T1 admission/rejection diagnostics, and SI-5 empty under T1. B1 rejected; B2 not adopted; G1, W2/W3, `==` discriminant, and group surfaces deferred on their recorded triggers. |
-| [DD-M3-P8-002](./dd-m3-p8-002-dsl-spec-public-draft-promotion.md) | DSL spec public-draft promotion: reservation & how unsettled surface is shown | Proposed | Recommends **future notes, no syntax reservation** (A-2) for M4/M5/M6-facing surface; positions PM-2 as accepted-but-provisional, Problem B as a future sizing surface linked to the Vision DR, default alignment as explicable container-owned semantics unless external-reader smoke proves debt, inherited placement spelling as an affirmative keep, placement bindability as constant-per-instance, and DD-001's five deferred axes as future notes. Publication mechanics recommended: `status: public-draft`, M3 change history, and external-reader smoke (C-2). §DD-001 coupling remains concrete for α's pre-Accept gate. |
+| [DD-M3-P8-002](./dd-m3-p8-002-dsl-spec-public-draft-promotion.md) | DSL spec public-draft promotion: reservation & how unsettled surface is shown | Accepted 2026-07-02 | Accepted: **future notes, no syntax reservation** (A-2) for M4/M5/M6-facing surface — no new public-promise AC; PM-2 documented as accepted-but-provisional (B-1b), Problem B as a future sizing surface linked to the Vision DR with shape not reserved and the M4/M5 schedule kept out of the public draft (B-2c), default alignment as explicable container-owned semantics (B-3b; a reader-smoke downgrade to B-3c is a separate procedural step, not left open at Accept), inherited placement spelling an affirmative keep (B-4a), placement bindability constant-per-instance (B-5b), and DD-001's five deferred axes as future notes (B-6b). Publication mechanics: `status: public-draft` marker + M3 change history + external-reader smoke (C-2). §DD-001 coupling α items 1-4 active. |
 
-DD-001 is **Accepted**. DD-002 remains **Proposed** with full recommendations
-for its public-draft policy; it still needs its own owner Accepted flip.
+Both **DD-001** (Accepted 2026-07-01) and **DD-002** (Accepted 2026-07-02) are
+settled. Moment 1/2 spec sync and gallery integration follow the accepted
+decisions.
 
 ## Cross-DD decision dependency (one-directional + a pre-Accept gate)
 
@@ -257,9 +258,10 @@ the four drafted items DD-001's Layer-3 α path and Out-of-scope depend on:
 4. **How the five deferred DD-001 axes are represented** in the public
    draft (reserved vs future-note, per DD-002's reservation policy).
 
-This **pre-Accept gate is satisfied for DD-001**: the mitigation is written
-and inspectable. The items remain *recommendations* pending DD-002's own
-Accept; DD-001 did not require DD-002 to be fully Accepted first.
+This **pre-Accept gate was satisfied for DD-001** before its 2026-07-01
+Accept: the mitigation was written and inspectable. With **DD-002 now
+Accepted** (2026-07-02), the four items are settled disposition (α items 1-4
+active), no longer pending recommendations.
 
 ## Scope and out of scope
 
@@ -364,10 +366,13 @@ at the Accepted flips; the anticipated set:
   surface, DD-002 public-draft policy, preamble — they may converge at
   different rates and need not land in one commit).
 - [`docs/dsl_spec.md`](../../../../docs/dsl_spec.md) — **touch (expected).**
-  The selected-state surface + its admission/rejection table (DD-001); the
-  unsettled-surface positioning, status marker, and CHANGELOG (DD-002). No
-  DD/option labels in spec prose (living-spec vocabulary rule); provenance
-  via ADR hyperlink only.
+  The selected-state surface + its admission/rejection table (DD-001) and the
+  unsettled-surface future-note positioning (DD-002). The `status:
+  public-draft` marker and the public-draft promotion CHANGELOG entry are
+  **deferred to Moment 2**: they publish an as-yet-unimplemented surface, so
+  the marker flip gates on the surface actually running at phase close (the
+  external-reader smoke is already Moment 2). No DD/option labels in spec
+  prose (living-spec vocabulary rule); provenance via ADR hyperlink only.
 - [`docs/architecture.md`](../../../../docs/architecture.md) — **touch
   (expected).** The `ToggleButton` node / `checked` attribute representation
   through lower / IR / runtime loader / widget visual, consistent with the
@@ -393,7 +398,9 @@ at the Accepted flips; the anticipated set:
 **Moment 2 — Phase / milestone close commit set (impl re-sync):** dsl_spec /
 architecture markers flip to `closed; implementation-synced` with
 divergence corrections; the architectural-family confirm entry lands if
-not already; the external-reader smoke result recorded; the plan rows flip
+not already; the `status: public-draft` marker and the public-draft
+promotion CHANGELOG entry land and the external-reader smoke result is
+recorded (C-2 publication mechanics); the plan rows flip
 complete; the M3 `handoff.md` folds the deferred群 (PM-2 wrapper-rule,
 Problem B pre-M6 disposition gate and any gallery workaround); phase-end +
 milestone-end retrospectives + CI run-id ownership per the final-task /
@@ -409,7 +416,7 @@ learning).
 | FD-8-C — boolean-on-existing-binding; minimal visuals; exclusion on shipped surface; vehicle/surface left to spike+DD-001 | Constraint | §Settled floor; DD-001 |
 | FD-8-D — Problem B = cross-milestone Vision DR, M3-close non-blocking | Constraint | §Problem B; §Scope |
 | FD-8-E — implement-not-docs + cleanup scope + containment | Constraint | §Scope; §Verification closure |
-| FD-8-F — new AC unlikely (contingent on DD-002) | Constraint | §Acceptance relation; plan Revision log |
+| FD-8-F — new AC unlikely (was contingent on DD-002; resolved at DD-002 Accept: no new AC) | Constraint | §Acceptance relation; plan Revision log |
 | FD-8-G — five staged owner UI checkpoints | Discipline | §Verification closure; impl plan |
 | Stage-1 feasibility spike — shipped-surface facts; α live-proven; option set rebuilt | Authority (cited, not re-derived) | §Pre-DD spike; DD-001 |
 | constraints §1–§9 + carry-forward table | Carry-in / forward-maintained | §Settled floor; §Scope; §Problem B |
@@ -429,3 +436,4 @@ learning).
 | 2026-07-01 | Completed DD-002 synchronization. Status line and Decisions table now reflect DD-002 as a full Proposed draft (Main decisions A/B/C drafted, recommendation = future notes with no syntax reservation; publication mechanics = marker + change history + external-reader smoke). Problem B section links the new cross-milestone Vision DR and records its recommended pre-M6 ABI-freeze disposition gate while keeping syntax / IR / runtime / host-API design open. |
 | 2026-07-01 | Owner accepted DD-001 tuple: T1 `ToggleButton` / `checked`, W1, α, V-a, TH-a, T1 diagnostics, SI-5 empty. Preamble status, Decisions table, cross-DD dependency, and upstream re-sync targets updated. DD-002 remains Proposed. |
 | 2026-07-02 | Reflected the Problem B Vision DR Accept: the §Problem B disposition and the out-of-scope line now describe the accepted **Option D backstop + scheduled M4/M5 trigger** (spike ≤ M5, preferred M4; implementation in M5 if the spike so concludes; M6 backstop) instead of the pre-revision demand-driven wording. DD-001/DD-002 status unchanged. |
+| 2026-07-02 | DD-002 Accept sync (stale-status fix surfaced in Moment 1 review): the §Decisions table row, the two-DDs-settled line, and the §Cross-DD pre-Accept-gate closure updated from the stale "DD-002 Proposed / pending its own Accept" wording to **DD-002 Accepted 2026-07-02** (header already said Accepted; body was inconsistent). Moment 1/2 split refined: the `status: public-draft` marker and the public-draft promotion CHANGELOG entry move from the Moment 1 `docs/dsl_spec.md` touch to **Moment 2** (marker flip gates on the surface running at phase close; external-reader smoke was already Moment 2). |

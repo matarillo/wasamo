@@ -107,7 +107,7 @@ ground, and the over-engineering brake stays in force.
   direction; exclusion feasibility settled by the pre-DD spike; the carrying
   *control surface* left open for this DD per framing §66), FD-8-E
   (implement-not-docs scope), and FD-8-F (no new AC expected unless DD-002
-  adds a public promise).
+  adds a public promise — resolved by DD-002: no new AC).
 - **Fed by** the stage-1 feasibility spike
   ([../requirements/dd-001-stage1-spike.md](../requirements/dd-001-stage1-spike.md)),
   the authority for which Layer-3 options are *real* on shipped surface. The
@@ -122,10 +122,10 @@ ground, and the over-engineering brake stays in force.
   contract*, and because accepted α **leans on** that positioning as its
   teaching-risk mitigation, DD-002 had to carry the α-mitigation items in
   *concrete, inspectable form* before this DD could Accept. That gate is
-  satisfied: DD-002 §DD-001 coupling holds drafted recommendations for the
+  satisfied: DD-002 §DD-001 coupling carries the concrete items for the
   public-draft note authorship, wording strength, `==`-migration forward
-  pointer, and deferred-axis representation. DD-002 itself remains Proposed
-  until its own owner Accepted flip.
+  pointer, and deferred-axis representation. DD-002 is now **Accepted**
+  (2026-07-02), so those items are settled disposition (α items 1-4 active).
 - **Shipped-surface facts that bound the space** (spike §確定した事実, not
   re-litigated): the expression grammar has **no `==`** (`HandlerExpr` /
   `CompoundOp` = `Add/Sub/Mul/Div` only,
@@ -754,6 +754,11 @@ only):
 
 - A **`ToggleButton`** widget with a `checked` boolean attribute, driven by
   the existing one-way boolean binding.
+- `ToggleButton` **carries Button's existing `text` / `style` / `enabled`
+  attributes and `clicked` handler**; `checked` is the **only new**
+  selected-state attribute. It reuses Button's leaf measure/arrange (no new
+  layout primitive), and `ToggleButton.enabled` carries the same Phase-1
+  disabled contract as `Button.enabled`.
 - The toggle is **controlled** (the click → value → state write is the
   author's handler), with the two-way (W2) and widget-owned (W3) models noted
   out of scope.
@@ -1018,3 +1023,10 @@ Also out of M3 scope (existing triggers hold):
   rejection rule, SI-4 = **`ToggleButton` / `checked`**, SI-5 accepted as
   empty under T1. Status flipped to Accepted and A-conditional / owner-open
   prose synced to the accepted tuple.
+- 2026-07-02 — Author-surface clarification (Moment 1 review fold; **decision
+  unchanged**). §Spec impact now records that `ToggleButton` carries Button's
+  existing `text` / `style` / `enabled` attributes and `clicked` handler, with
+  `checked` the only new selected-state attribute (a shared author-facing
+  surface reusing Button's leaf layout). Surfaced when the Moment 1
+  `docs/dsl_spec.md` sync needed a `ToggleButton.enabled` catalog row for §4.3
+  consistency; owner-directed 2026-07-02.
