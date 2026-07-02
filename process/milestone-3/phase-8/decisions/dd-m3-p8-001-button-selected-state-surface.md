@@ -1,9 +1,9 @@
 ---
 title: Toggle / selected-state control surface
-status: Proposed
+status: Accepted
 phase: M3-Phase 8
-ac: A10 (existing) — selected-state is reserved by A10 from the start (unlike 7b's newly-minted A13), so no new AC is expected; discharges under A10 + A11 + A12. Any new public-promise AC would come from DD-002, not this DD. Confirmed at the Accepted flip (framing FD-8-F).
-date: 2026-06-28
+ac: A10 (existing) — selected-state is reserved by A10 from the start (unlike 7b's newly-minted A13), so no new AC is needed for this DD; discharges under A10 + A11 + A12. Any new public-promise AC would come from DD-002, not this DD.
+date: 2026-07-01
 related:
   - ./preamble.md
   - ./dd-m3-p8-002-dsl-spec-public-draft-promotion.md
@@ -14,7 +14,29 @@ related:
 
 # DD-M3-P8-001 — Toggle / selected-state control surface
 
-**Status:** Proposed
+**Status:** Accepted 2026-07-01
+
+**Accepted disposition (owner decision, 2026-07-01):**
+
+- **Main A:** T1 — dedicated `ToggleButton`.
+- **Main B:** W1 — controlled + one-way lifted state.
+- **Main C:** α — live tab-band exclusion by author-composed boolean block
+  assignment; β remains only the triggered fallback if implementation proves
+  α unworkable.
+- **SI-1:** V-a — background colour only.
+- **SI-2:** TH-a — no thumbnail highlight; the tab band is the sole A10
+  binding-driven surface.
+- **SI-3:** accepted under the T1 rule: `checked` is admitted on
+  `ToggleButton` and rejected elsewhere with named firing tests.
+- **SI-4:** `ToggleButton` widget name and `checked` attribute name.
+- **SI-5:** accepted as empty / non-applicable under T1; no B2
+  `checkable` / `checked` dependency is introduced.
+
+B1 is rejected, B2 is not adopted, and G1 remains deferred (Axis 5). W2 and
+W3 remain deferred (Axes 3 / 4). γ/δ remain deferred on the future `==`
+expression-family trigger (Axis 1), and group surfaces remain deferred on
+their own write-back / selected-value / interaction-semantics trigger
+(Axis 2).
 
 ## Context
 
@@ -95,16 +117,15 @@ ground, and the over-engineering brake stays in force.
 - **Couples to** [DD-M3-P8-002](./dd-m3-p8-002-dsl-spec-public-draft-promotion.md)
   only at the documentation seam: DD-002 positions any deferred selection
   surface (the Out-of-scope axes below) in the public draft. DD-002 does not
-  decide this DD's control surface. Because that positioning is where the
-  owner sees how the deferred (non-foreclosed) axes read as *public contract*, and because
-  this DD's α recommendation (Main decision C) **leans on** that positioning
-  as its teaching-risk mitigation, **DD-001 should not Accept before DD-002
-  carries the α-mitigation items in *concrete, inspectable form*** — not
-  merely a skeleton that names them. DD-002 §DD-001 coupling must hold,
-  drafted (recommendations pending DD-002's own Accept): the public-draft
-  note authorship, its wording strength, the `==`-migration forward pointer,
-  and the deferred-axis representation. (DD-002's broader policy options
-  A/B/C may stay skeletal; only the coupling items must be concrete.)
+  decide this DD's accepted control surface. Because that positioning is
+  where the owner sees how the deferred (non-foreclosed) axes read as *public
+  contract*, and because accepted α **leans on** that positioning as its
+  teaching-risk mitigation, DD-002 had to carry the α-mitigation items in
+  *concrete, inspectable form* before this DD could Accept. That gate is
+  satisfied: DD-002 §DD-001 coupling holds drafted recommendations for the
+  public-draft note authorship, wording strength, `==`-migration forward
+  pointer, and deferred-axis representation. DD-002 itself remains Proposed
+  until its own owner Accepted flip.
 - **Shipped-surface facts that bound the space** (spike §確定した事実, not
   re-litigated): the expression grammar has **no `==`** (`HandlerExpr` /
   `CompoundOp` = `Add/Sub/Mul/Div` only,
@@ -148,7 +169,7 @@ SegmentedControl as Button modes. Under either choice, future Switch / CheckBox
 
 1. **B1 — generic Button attribute.** `Button { selected: bool }` (or
    `Button { checked: bool }`) — a bare boolean on the **ordinary** Button.
-   *(Strongly recommended reject — not finalized.)*
+   *(Rejected.)*
    - What you gain: the smallest possible surface; one attribute on an
      existing widget.
    - What you give up / why reject: it reads as if **every** `Button` can be
@@ -162,7 +183,7 @@ SegmentedControl as Button modes. Under either choice, future Switch / CheckBox
 2. **B2 — Button mode / capability.** `Button { checkable: true; checked:
    <bool> }` — an ordinary `Button` holds **no** persistent state; only a
    Button **declared with the toggle capability** carries a persistent
-   `checked`. *(Live contender — co-equal with T1.)* (The capability's
+   `checked`. *(Not adopted for M3.)* (The capability's
    spelling — a boolean flag `checkable: true` (shown) vs a `mode: checkable`
    enum — is **SI-4 CF-1 / CF-2**; CF-1 is the illustration here, and CF-2
    carries extra cost — §B2-cost note.)
@@ -201,7 +222,7 @@ SegmentedControl as Button modes. Under either choice, future Switch / CheckBox
      validation; no new node, no new layout primitive.
 3. **T1 — dedicated ToggleButton.** `ToggleButton { checked: <bool> }` — a
    **distinct widget type** whose name carries the toggle/select purpose.
-   *(Live contender — co-equal with B2.)*
+   *(Accepted.)*
    - What you gain: the toggle role is **named in the type** (the chief
      author-semantics merit); `Button` keeps a single momentary / action
      meaning and there is no cross-attribute dependency — a `ToggleButton`
@@ -232,8 +253,8 @@ SegmentedControl as Button modes. Under either choice, future Switch / CheckBox
      surface is wider than B2's.
 4. **G1 — generic Toggle + appearance.** `Toggle { appearance: button;
    checked: <bool> }` — a single toggle control whose **appearance**
-   (button / switch / checkbox) is selected by a property. *(Strongly
-   recommended defer — not finalized; not reject.)*
+   (button / switch / checkbox) is selected by a property. *(Deferred, not
+   rejected.)*
    - What you gain: one control covers button / switch / checkbox looks —
      the SwiftUI `Toggle` + `.toggleStyle(.button / .switch / .checkbox)`
      idiom.
@@ -253,20 +274,19 @@ SegmentedControl as Button modes. Under either choice, future Switch / CheckBox
      live precedent.
    - Technical risk: n/a in M3 (deferred).
 
-### Recommendation (Layer 1)
+### Recommendation / decision (Layer 1)
 
-- **B1 — reject (strong recommendation, not finalized).** The "every Button
+- **B1 — rejected.** The "every Button
   is selectable" leak is a real surface defect; the properly-specified
-  Button option is B2. Recorded as the DD's strong recommendation; the owner
-  has not hard-accepted it.
-- **G1 — defer with trigger (strong recommendation, not finalized).** A real
+  Button option was B2.
+- **G1 — deferred with trigger.** A real
   but minority lineage (SwiftUI; Win32/WinForms/AppKit family-unification
   ancestry); adopting it opens an appearance/control-family axis beyond M3.
   Deferred (non-foreclosed) on **Axis 5** (§Out of scope), revived by a future appearance /
   control-family phase.
-- **B2 vs T1 — genuinely open (co-equal).** This DD does **not** pre-pick.
-  The product-merit comparison is now possible for the first time and is the
-  owner's call:
+- **T1 — accepted.** The owner accepted **T1 — dedicated `ToggleButton`** on
+  2026-07-01. B2 remains a fully-compared but not-adopted M3 alternative.
+  The product-merit comparison that led to that owner call:
 
   | | **B2 — checkable Button** | **T1 — dedicated ToggleButton** |
   |---|---|---|
@@ -302,16 +322,14 @@ SegmentedControl as Button modes. Under either choice, future Switch / CheckBox
   **future-mode axis** that edges into Axis 5 (control-family) territory — so
   CF-2 widens B2's floor toward T1's and beyond. The table row "new checker
   work" is the CF-1 reading; pick CF-2 and B2's cost grows. This keeps the
-  B2-vs-T1 comparison honest about *which B2*. Recorded as
-  **Proposed**; the B2/T1 pick is the product-merit call the owner makes at
-  the Accepted flip.
+  B2-vs-T1 comparison honest about *which B2*.
 
 ## Main decision B — State ownership & write model (Layer 2)
 
-Given a control surface (B2 or T1), **who writes the boolean after a
-click?** This axis is **independent of A** (it applies to whichever surface
-A picks) and reuses the model analysis from the prior draft. The three
-models differ on two questions:
+Given a toggle control surface, **who writes the boolean after a click?**
+This axis is **independent of A** (it applied to either B2 or T1 during the
+comparison; T1 is now accepted) and reuses the model analysis from the prior
+draft. The three models differ on two questions:
 
 - **Where does the canonical state live?** *lifted* into a `state`
   declaration (W1, W2), or *owned by the widget* (W3).
@@ -333,7 +351,7 @@ write-back — §Dependencies).
    data flow).
    - What you gain: it is exactly the shipped single-boolean binding path
      Phase 1 ships; A10's thesis (a binding drives an *attribute*) is
-     expressed directly, on either B2 or T1.
+     expressed directly on the accepted T1 surface.
    - What you give up: the author writes the per-toggle transition by hand
      (no write-back ergonomics — that is W2).
    - Technical risk: rides the existing single-boolean primitive.
@@ -370,18 +388,18 @@ write-back — §Dependencies).
      *type structure* (B2/T1).
    - Technical risk: n/a in M3 (deferred).
 
-### Recommendation (Layer 2)
+### Recommendation / decision (Layer 2)
 
-**W1 — controlled + one-way.** It is the only model real on M3's shipped
-surface, and it expresses A10's thesis directly on either B2 or T1. W2 and
-W3 are **deferred** (two-way binding / widget-owned state are out of Phase
-8; W3's *general* form is additionally a family-level call, though a narrow
-opt-in uncontrolled toggle is lighter — option 3), not rejected. Recorded as
-**Proposed**.
+**W1 — controlled + one-way — accepted.** It is the only model real on M3's
+shipped surface, and it expresses A10's thesis directly on the accepted T1
+surface. W2 and W3 are **deferred** (two-way binding / widget-owned state are
+out of Phase 8; W3's *general* form is additionally a family-level call,
+though a narrow opt-in uncontrolled toggle is lighter — option 3), not
+rejected.
 
 ## Main decision C — Driving boolean & exclusion (Layer 3)
 
-Given the controlled W1 surface (B2's `checked` or T1's `checked`), how is
+Given the accepted controlled W1 surface (`ToggleButton.checked`), how is
 that boolean *produced*, and how is "exactly one selected" expressed with
 shipped surface? This is **unchanged by the Layer-1/2 choice** — the
 mechanism is identical whether the boolean rides a checkable `Button` or a
@@ -422,10 +440,10 @@ discriminant to a per-button `checked` boolean, and `==` is absent from the
 grammar (spike §案 γ / §案 δ). They are deferred under the equality-operator
 axis (Axis 1), **not** placed in the M3 comparison.
 
-### Recommendation (Layer 3)
+### Recommendation / decision (Layer 3)
 
-**α — show exclusion live in the tab band — recommended, with β as the
-documented live alternative.** On product merit, α delivers what A10 is
+**α — show exclusion live in the tab band — accepted, with β retained only as
+the triggered fallback.** On product merit, α delivers what A10 is
 strongest demonstrating: a boolean binding driving a widget attribute under
 a realistic multi-button exclusion, matching the wireframe, already proven
 on the live runtime. β satisfies A10's core thesis too but trades away the
@@ -445,19 +463,17 @@ minimally and render the tab band static, recording the static-approximation
 in the A1 table / plan (SI-2). α is recommended because the exclusion
 behaviour is the more informative thing to show and is de-risked, **and the
 teaching-risk is mitigable by the note** rather than by dropping the
-demonstration; β is the retreat if the owner judges O(N²) too brittle to be
-the first public example. Recorded as **Proposed**.
+demonstration; β remains only the triggered fallback if implementation shows
+α unworkable.
 
-**α/β disposition at Accept (not a co-held pair).** If the owner Accepts α,
-**α is the selected form and β is *not* adopted** — β is retained only as a
+**α/β disposition at Accept (not a co-held pair).** The owner accepted α on
+2026-07-01. **α is the selected form and β is *not* adopted** — β is retained only as a
 **defined fallback with a trigger**: it is substituted *only if* the
 implementation / impl-checkpoint shows α unworkable (e.g. the live tab-band
 exclusion cannot be rendered cleanly), at which point the substitution is
 recorded in the A1 table / plan with the SI-2 static-approximation
 accounting. β is **not** a still-open alternative the owner may pick later
-without that trigger. (If the owner instead Accepts β outright, α is not
-built and the tab band ships static — a different Accept, named explicitly
-per §Accepted disposition.)
+without that trigger.
 
 A **fourth path — make exclusion *easy* by adding `==`** (a single
 discriminant + `checked: tab == value`, O(N), intrinsically exclusive) —
@@ -473,78 +489,50 @@ expansion landing in M3's final, draft-publishing phase, so it is held to its
 own later phase (Axis 1's trigger), owner-overridable as an **eyes-open M3
 scope expansion**, not a feasibility default.
 
-## Accepted disposition (what the flip records)
+## Accepted disposition
 
-A full Accept of this DD is **not** a single word — it closes all three axes
-plus the sub-issues and the DD-002 gate (the gate's *weight* depends on the
-Layer-3 choice — see item 5). The Accepted flip must record the **tuple**
-explicitly (a bare "accepted" closes nothing auditable):
+The owner accepted the full tuple on 2026-07-01:
 
-1. **A — control surface + full lexeme (SI-4), named together:** e.g. `T1 +
-   ToggleButton/checked`, **or** `B2 + CF-1 checkable:true/checked` (the
-   **capability form** CF-1/CF-2 **and** the state attribute, per SI-4). **B1
-   = rejected** and **G1 = deferred (Axis 5)** are confirmed at the flip (the
-   DD's strong recommendations become decisions only here).
-2. **B — write model:** `W1` (controlled + one-way) adopted; `W2`, `W3`
+1. **A — control surface + lexeme:** `T1 + ToggleButton/checked`.
+   **B1 = rejected**, **B2 = not adopted**, and **G1 = deferred (Axis 5)**.
+2. **B — write model:** `W1` controlled + one-way adopted; `W2`, `W3`
    deferred (Axes 3 / 4).
-3. **C — exclusion:** `α` selected (β retained only as the triggered fallback
-   per §α/β disposition) **or** `β` selected outright (tab band static).
-4. **Sub-issues:** SI-1 candidate set + criterion fixed (visual pick deferred
-   to the impl checkpoint); SI-2 application target (tab band live / thumbnail
-   static, subject to FD-8-G(1)); SI-3 diagnostics rule per the A outcome;
-   **SI-5** dependency rule **iff** A = B2 (empty under T1).
-5. **DD-002 gate satisfied — weight depends on the Layer-3 choice:**
-   - **Under α:** the gate is the **full** one — DD-002 §DD-001 coupling
-     must carry its **concrete, inspectable** items **1–3** (the α
-     teaching-risk note: authorship, strength, `==`-migration trigger) plus
-     item **4** (deferred-axis representation); items 1–3 are a **precondition
-     of Accepting α** (§Dependencies / §Couples-to).
-   - **Under β outright:** the α teaching-risk note is **not needed**, so
-     coupling items 1–3 do **not** gate this Accept; **only item 4**
-     (representation of the five deferred axes) applies. β's static-
-     approximation accounting is recorded in the A1 table / plan (SI-2), not
-     in the DD-002 α-note.
-6. **Re-sync targets rebuilt per the A outcome** (the prior §Accepted-time
-   re-sync was dropped pending A): **T1** → new-widget re-sync (roadmap A1 /
-   A10 / A12, framing, `plan.md`, spec/architecture) in the chosen type name
-   — A1's wording "the Button `selected` state surface" updates to the
-   ToggleButton form;
-   **B2** → keyword re-sync in the **chosen capability form** (CF-1
-   `checkable:true` / CF-2 `mode:checkable`) + `checked`, no new type. The
-   framing packet-C form (`Button { selected }`) is recorded as **B1,
-   rejected** — annotated, not overwritten.
-
-**Partial Accept is allowed and must name what is held.** If the owner fixes
-A's *direction* but **explicitly holds the lexeme**, SI-4 is carried
-**Accepted-blocking** (the DD is not fully Accepted on the naming axis; the
-re-sync and Moment-1 spec sync wait on it) — recorded as e.g. `Accepted: T1;
-lexeme held — SI-4 open`. Any element left open is named the same way, so the
-record always says exactly which axes closed.
+3. **C — exclusion:** `α` selected. β is retained only as the triggered
+   fallback per §α/β disposition.
+4. **Sub-issues:** **SI-1 = V-a** (background colour only), **SI-2 = TH-a**
+   (no thumbnail highlight), **SI-3 = T1 admission/rejection diagnostics**,
+   **SI-4 = `ToggleButton` / `checked`**, **SI-5 = empty under T1**.
+5. **DD-002 gate satisfied for α:** DD-002 §DD-001 coupling carries concrete
+   items 1-3 (the α teaching-risk note: authorship, strength,
+   `==`-migration trigger) plus item 4 (deferred-axis representation). Those
+   items remain DD-002 recommendations until DD-002's own Accept, but they are
+   written and inspectable, satisfying this DD's pre-Accept dependency.
+6. **Re-sync target:** new-widget re-sync in the chosen type name:
+   `_roadmap` / `plan.md` / framing / `docs/dsl_spec.md` /
+   `docs/architecture.md` update A1 / A10 / A12 wording from the older
+   "Button selected state" shorthand to the accepted `ToggleButton { checked:
+   <bool> }` form. The framing packet-C form (`Button { selected }`) is
+   recorded as **B1, rejected** — annotated, not overwritten.
 
 ## Sub-issues
 
-### SI-1 — Minimal visual pass line *(owner-presented; A-independent)*
+### SI-1 — Minimal visual pass line *(accepted: V-a)*
 
-M3 selected visuals are minimal, but the *specific* minimal form must be
-**shown to the owner**, not chosen on syntax alone
+M3 selected visuals are minimal. The specific minimal form was shown to the
+owner as a design choice, not chosen on syntax alone
 ([spec.md](../../requirements/spec.md) Out-of-scope §Visual). Candidates:
 
 - **V-a — background colour only** (selected cell gets a fill).
 - **V-b — border only** (selected cell gets an outline).
 - **V-c — colour + border** (both).
 
-A rendered selected visual does **not** exist before the surface is
-implemented — the spike's stage 1 does *not* verify visuals (stage 2, after
-the surface lands). So the pass line is **not** an Accepted-flip condition;
-this DD fixes the **candidate set** (V-a / V-b / V-c) and the **judgement
-criterion** (the chosen visual must be distinguishable across the two-frame
-positive control, not a static look-alike). The **final pick** is confirmed
-at the implementation-plan owner checkpoint (spike stage 2 / FD-8-G(3)),
-where the owner sees the rendered candidate. **Verification note:** a
-single-cue visual (V-a, fill only) must show the fill change unambiguously
-across the two frames; V-c reads least ambiguously, V-a is most minimal.
+**Decision:** the owner accepted **V-a — background colour only** on
+2026-07-01. The implementation checkpoint still verifies that this single-cue
+visual changes unambiguously across the two-frame positive control; if it
+does not, that is an implementation/design revision trigger, not an open
+choice among V-a / V-b / V-c.
 
-### SI-2 — Application target: tabs vs thumbnail highlight *(A-independent)*
+### SI-2 — Application target: tabs vs thumbnail highlight *(accepted: TH-a)*
 
 The wireframe carries selected-state in **two** places: the tab band and a
 **highlighted thumbnail** (row 2, col 3). This DD says which the
@@ -597,41 +585,30 @@ differently from the rest.
   ([gallery-expression-use-cases.md UC3](../../requirements/gallery-expression-use-cases.md)).
   All M4-or-later.
 
-**Recommendation:** the **tab band is the sole A10 binding-driven surface**;
-the thumbnail highlight is **TH-b** (fixed decoration, wireframe fidelity) or,
-if the owner prefers minimalism, **TH-a**. Under **either**, the thumbnail
-highlight is **not** counted as an A10 instance — A10's binding-driven proof
-rests on the tab band. This is **forced by the `for` binding facts above**,
-not merely preferred.
+**Decision:** the owner accepted **TH-a — no thumbnail highlight** on
+2026-07-01. The **tab band is the sole A10 binding-driven surface**; the
+thumbnail highlight is not reproduced in M3 and is not counted as an A10
+instance. This is **forced by the `for` binding facts above** and accepted as
+the Phase 8 gallery approximation, not merely preferred.
 
-- Initial hypothesis: per FD-8-G(1) the wireframe-fidelity / placeholder
-  agreement updates the A1 feature-mapping table and may revise the TH-a/TH-b
-  choice in the implementation plan.
-- **If Layer-3 β is chosen**, the tab band *also* shows a *static* highlight
-  (no live exclusion); A10's binding-driven proof then rests on the two-button
-  toggle, and that accounting (static approximation) must be **recorded in the
-  A1 table / plan** at the FD-8-G(1) checkpoint.
+- FD-8-G(1) records the wireframe-fidelity / placeholder agreement and updates
+  the A1 feature-mapping table to show that the thumbnail highlight is a
+  deliberate M3 omission / future M4+ item, not an accidental miss.
+- If the β fallback is ever triggered, the tab band becomes a static
+  approximation and that substitution must be **recorded in the A1 table /
+  plan** at the FD-8-G(1) checkpoint or the implementation-plan revision that
+  activates the fallback.
 
-### SI-3 — Diagnostics *(A-conditional)*
+### SI-3 — Diagnostics *(accepted under T1)*
 
-The admission / rejection rule depends on the control surface:
-
-- **Under T1:** `checked` is admitted on `ToggleButton` and **rejected on
-  widgets that do not support it** (`Button { checked: … }`, `Text { checked:
-  … }`), as a named check error with a firing test, both directions.
-- **Under B2:** `checked` is admitted **only under the chosen capability
-  form** (SI-4 CF-1 `checkable: true` / CF-2 `mode: checkable`) and
-  **rejected on a plain `Button`** (and on non-supporting widgets); the
-  capability-gated case is detailed in **SI-5**.
-
-Either way this falls out of the chosen surface and is the authored-branch
+`checked` is admitted on `ToggleButton` and **rejected on widgets that do not
+support it** (`Button { checked: … }`, `Text { checked: … }`), as a named
+check error with firing tests in both directions. This is the authored-branch
 evidence (impl-gates trap #4); detail in §Spec impact.
 
-### SI-4 — Lexical surface *(owner-presented; A-conditional)*
+### SI-4 — Lexical surface *(accepted: `ToggleButton` / `checked`)*
 
-The concrete lexemes depend on the Main-decision-A outcome and are an
-owner-presented pick (the type-structure decision does not by itself fix the
-lexeme):
+The concrete lexeme is part of the accepted Main-decision-A outcome:
 
 - **Under T1 — a type name + an attribute name.**
   - **Type name:** `ToggleButton` / `SelectableButton` / `TabButton` / a
@@ -655,7 +632,8 @@ lexeme):
     `pressed`), aligns with WinUI (SI-1) and the multitude, and is value-
     flavored. `pressed` stays defensible **only** if wasamo decides to name
     M4's transient state otherwise.
-- **Under B2 — capability expression form + state attribute (no type name).**
+- **Under B2 — capability expression form + state attribute (no type name;
+  not adopted).**
   The option space is **not just the attribute name**: *how the capability
   itself is expressed* is a fair choice that must be decidable, because it
   shapes the SI-5 dependency rule and the public surface.
@@ -680,26 +658,21 @@ lexeme):
     analysis as under T1 (`pressed` double-books the toolkit transient-press
     word + M4 input states; `selected` implies grouping the standalone toggle
     lacks; **`checked`** recommended).
-  - *Lean (owner-presented, not pre-picked):* **CF-1 (`checkable: true`)** is
+  - *Lean recorded for comparison:* **CF-1 (`checkable: true`)** is
     the family-consistent default and keeps SI-5 a simple boolean dependency;
     **CF-2 (`mode:`)** buys future-mode extensibility at the cost of a new
-    enum-attribute kind that edges toward G1's territory. The owner picks the
-    **capability form**, not only the name.
+    enum-attribute kind that edges toward G1's territory. Because T1 was
+    accepted, no B2 capability form is chosen.
 
 *(G1's analogous lexeme — `appearance: button` — is intentionally **not**
 enumerated here, since G1 is recommended-defer (Axis 5); it is recorded there,
 not in this sub-issue.)*
 
-This is **owner-presented**, not pre-decided. **Recording rule:** the
-Accepted flip must name the **A outcome and its full lexeme together** — e.g.
-`Accepted: T1 + ToggleButton/checked`, or `Accepted: B2 + CF-1
-checkable:true/checked` (the capability form **and** the state attribute); a
-bare "T1 accepted" / "B2 accepted" does **not** close SI-4. If the owner
-explicitly holds any part of the lexeme, SI-4 is carried **Accepted-blocking**
-(the DD is not fully Accepted on the naming axis; re-sync / spec wording wait
-on it).
+**Decision:** the owner accepted **`ToggleButton`** as the widget name and
+**`checked`** as the attribute name on 2026-07-01. The B2 capability-form
+branch is not adopted.
 
-### SI-5 — `checkable` ↔ `checked` dependency model *(B2-only)*
+### SI-5 — `checkable` ↔ `checked` dependency model *(accepted empty under T1)*
 
 Live **only if Main decision A = B2.** B2 introduces wasamo's first
 **cross-attribute dependency**: `checked` is meaningful only under the chosen
@@ -720,16 +693,16 @@ checkable`). The DD must specify (the rule's *shape* follows the CF choice):
   dependency.
 
 This is the concrete artifact of B2's "spec burden" cost (§Main decision A)
-and feeds the B2-vs-T1 comparison. **Folds into SI-3** if the owner prefers
-a single diagnostics sub-issue; kept separate here because the dependency is
-the distinctive B2 cost. **Under T1 this sub-issue is empty** (no capability
-flag).
+and fed the B2-vs-T1 comparison. It is kept separate here because the
+dependency was the distinctive B2 cost. **Decision:** because Main decision A accepted T1,
+this sub-issue is **empty / non-applicable** (no capability flag and no
+cross-attribute dependency).
 
 ## Forward-compat impact
 
-The adopted M3 surface (a checkable Button **or** a `ToggleButton`, with a
-controlled one-way `checked`) is M3's **minimal** toggle surface, not "the
-one and only selection model forever". The richer models are kept
+The adopted M3 surface (`ToggleButton { checked: <bool> }`, controlled
+one-way) is M3's **minimal** toggle surface, not "the one and only selection
+model forever". The richer models are kept
 **non-foreclosed** — not built in M3, their design space left open on
 different triggers (the §Out of scope axes hold the triggers). This is
 **design non-foreclosure, not a public reservation**: each axis's
@@ -767,75 +740,57 @@ item 4 already carries.
   theme surface; accessibility / focus / input semantics are re-designable
   in M4+.
 
-**B2 vs T1 forward note.** The forward cost differs by A: **T1** consumes a
-new **type name** (SI-4) whose later growth is either same-type binding
-modes or new sibling widgets (undecided); **B2** consumes the **chosen
-capability form** (CF-1 `checkable` / CF-2 `mode`) + `checked` **keywords**
-and a cross-attribute-dependency rule, but leaves the type catalog untouched.
-**Under CF-2, B2 additionally opens an enum-valued `mode` attribute and a
-future-mode axis** that edges into Axis 5 (control-family) territory — a wider
-forward cost than CF-1. Neither is built here beyond the M3 minimal surface.
+**T1 forward note.** T1 consumes a new **type name** (`ToggleButton`) whose
+later growth is either same-type binding modes or new sibling widgets
+(undecided). B2's capability-form path (`checkable` / `mode`) is not adopted
+in M3, so no cross-attribute dependency or enum-valued `mode` attribute is
+introduced.
 
 ## Spec impact
 
 `docs/dsl_spec.md` (author-facing, external-reader bar, **no DD/option
 labels** per the living-spec vocabulary rule; provenance via ADR hyperlink
-only) — **A-conditional**:
+only):
 
-- **Under T1:** a **`ToggleButton`** widget with a `checked` boolean
-  attribute (SI-4 lexeme), driven by the existing one-way boolean binding.
-- **Under B2:** the **chosen capability form** (SI-4 CF-1 `checkable: true`
-  flag, or CF-2 `mode: checkable` enum) **+ `checked`** state on `Button`,
-  with the capability-gated `checked` rule (SI-5) stated as the admission
-  rule. **If CF-2,** the spec also documents the `mode` enum attribute and its
-  value set (`momentary` / `checkable`), kept minimal (not the full
-  future-mode axis, which is Axis 5).
-- Common: the toggle is **controlled** (the click → value → state write is
-  the author's handler), with the two-way (W2) and widget-owned (W3) models
-  noted out of scope. The **chosen minimal visual** is **not** asserted at
-  Moment 1 — the spec states it as *minimal, candidate set V-a/V-b/V-c, pick
-  pending the implementation checkpoint*; the **concrete visual is pinned at
-  Moment 2** (after the impl checkpoint), consistent with SI-1.
-- **Admission / rejection table (forcing artifact):** the chosen rule
-  (T1: `checked` on `ToggleButton` only; B2: `checked` under the chosen
-  capability form only — CF-1 `checkable: true` / CF-2 `mode: checkable`),
-  re-checked by the loader, each with a firing test and a paired accept/reject
-  fixture.
+- A **`ToggleButton`** widget with a `checked` boolean attribute, driven by
+  the existing one-way boolean binding.
+- The toggle is **controlled** (the click → value → state write is the
+  author's handler), with the two-way (W2) and widget-owned (W3) models noted
+  out of scope.
+- The selected / checked visual is **V-a**: background colour only. Moment 2
+  verifies that the fill change is visible in the two-frame positive control.
+- **Admission / rejection table (forcing artifact):** `checked` is admitted
+  on `ToggleButton` only and rejected on `Button`, `Text`, and other
+  non-supporting widgets; the loader re-checks malformed IR, with firing tests
+  and paired accept/reject fixtures.
 - **Exclusion** documented as a *composition of boolean states* (the Layer-3
   form), stated honestly as **author-composed, not a built-in group
   construct** (bears on DD-002's public-draft positioning).
 - Stale prose swept; selected/toggle visuals documented as **minimal /
   provisional**, pointing forward to the M5 theme surface.
 
-`docs/architecture.md`: the chosen control surface (a `ToggleButton` node, or
-a capability + `checked` on Button — CF-1 boolean flag / CF-2 `mode` enum) and
-its representation through lower / IR / runtime loader / widget visual,
-consistent with the existing
-single-boolean binding model (no new binding-target class, no new
+`docs/architecture.md`: the `ToggleButton` node and `checked` representation
+through lower / IR / runtime loader / widget visual, consistent with the
+existing single-boolean binding model (no new binding-target class, no new
 measure/arrange — reuses Button's leaf layout).
 
 ## Risk mitigation
 
 - **The toggle surface is a cross-cutting change (framing R6).** It crosses
   parser → check → lower → IR emit → runtime loader → widget visual →
-  cross-host parity. Under **T1** it adds a **new widget node**; under **B2**
-  it adds a **cross-attribute dependency** (SI-5). Beyond the impl-gates
+  cross-host parity. Under accepted **T1** it adds a **new widget node**.
+  Beyond the impl-gates
   call-site audit table (trap #1), the **checked-propagation audit** is the
   central A10 evidence, pinned by firing tests / positive controls: (i)
-  `checked` rejected where unsupported (T1: non-`ToggleButton`; B2:
-  capability-absent — no `checkable:true` / `mode:checkable`), (ii) a
+  `checked` rejected where unsupported (non-`ToggleButton`), (ii) a
   bool-binding change reaches the visual, (iii) C / Rust / Zig render the same
   (cross-host parity).
 - **Over-build guard (framing R3).** No two-way binding (W2), no
   widget-owned state (W3), no dedicated group widget (Axis 2), no generic-
   appearance Toggle (G1), and no full theme are built; the toggle stays
   controlled + one-way (W1), visuals minimal (SI-1), exclusion author-
-  composed (α/β). The richer models are kept **non-foreclosed** (deferred with
+  composed (α). The richer models are kept **non-foreclosed** (deferred with
   triggers), not built.
-  **If B2 + CF-2 is chosen,** the `mode` enum is kept **minimal**
-  (`momentary` / `checkable` only); the full future-mode / appearance axis is
-  **not** pre-opened (that is Axis 5 / G1) — CF-2 buys naming, not the control
-  -family surface.
 - **Demonstration-vehicle feasibility (framing R8).** Whether the tab-band
   exclusion (α) is too heavy was the explicit reason for the pre-DD spike,
   which proved α real on the live path and fixed β as the retreat.
@@ -1056,3 +1011,10 @@ Also out of M3 scope (existing triggers hold):
   "Reserved on Axis 5" and Main-decision-B W2 "Reserved on the two-way axis" →
   "Deferred (non-foreclosed)"; §Risk over-build guard "kept as reservations" →
   "kept non-foreclosed (deferred with triggers)".
+- 2026-07-01 — **Accepted by owner.** Main A = **T1 dedicated
+  `ToggleButton`**, Main B = **W1 controlled + one-way**, Main C = **α live
+  tab-band exclusion**. SI-1 = **V-a background colour only**, SI-2 =
+  **TH-a no thumbnail highlight**, SI-3 accepted under the T1 admission /
+  rejection rule, SI-4 = **`ToggleButton` / `checked`**, SI-5 accepted as
+  empty under T1. Status flipped to Accepted and A-conditional / owner-open
+  prose synced to the accepted tuple.

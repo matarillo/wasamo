@@ -2,295 +2,344 @@
 title: DSL spec public-draft promotion — reservation & how unsettled surface is shown
 status: Proposed
 phase: M3-Phase 8
-ac: A12 (existing) — the public-draft promotion is named by A12; discharges under A12 + A11. A **new public-promise AC** is added only if a reservation/promise in §Main decision A commits author-facing surface (framing FD-8-F); that contingency is decided at this DD's Accepted flip and recorded in the plan Revision log.
-date: 2026-06-27
+ac: A12 (existing) — the public-draft promotion is named by A12; discharges under A12 + A11. A new public-promise AC is added only if a reservation/promise in Main decision A commits author-facing surface (framing FD-8-F); this draft recommends no such new AC.
+date: 2026-07-01
 related:
   - ./preamble.md
   - ./dd-m3-p8-001-button-selected-state-surface.md
   - ../requirements/framing.md
   - ../requirements/constraints.md
+  - ../../../cross-milestone/decisions/author-controllable-sizing-surface.md
 ---
 
 # DD-M3-P8-002 — DSL spec public-draft promotion: reservation & how unsettled surface is shown
 
 **Status:** Proposed
 
-> **Partial-draft stage.** §Main decisions A/B/C carry **structure,
-> questions, and direction** but their **option comparisons are not yet
-> drafted** (marked *(to draft)*). **Exception — §DD-001 coupling is drafted
-> to concrete recommended proposals**, because DD-001's α recommendation
-> *leans on* that mitigation: per DD-001 §Couples-to the mitigation must
-> "carry its concrete form so the owner can confirm the mitigation is real
-> before Accepting α", so it cannot be a TODO at α's Accept. The four
-> coupling items are therefore written and inspectable (recommendations
-> pending this DD's own Accept), while the broader public-draft policy is
-> still being drafted. This DD does **not** decide DD-001's control surface
-> (the B2-vs-T1 control taxonomy); it is drafted in parallel with DD-001 per
-> the Phase-8 plan.
-
 ## Context
 
-`docs/dsl_spec.md` was updated **per-phase** across M3 (Phases 1–7b), so
-promoting it to its **first public draft** (A12) is an **editorial** pass,
-not greenfield writing
-([constraints §1](../requirements/constraints.md);
-[framing FD-8-A](../requirements/framing.md)). But the first public draft
-is the **first public contract**: external readers and downstream tooling
-(the M5 VS Code extension) start to depend on it, and changing "what is
-written as settled" later becomes a breaking change. So the editorial pass
-must make a set of **honest-positioning** decisions — what to reserve, and
-how to write what is *not yet settled* so it does not read as settled.
+`docs/dsl_spec.md` was updated per-phase across M3 (Phases 1-7b), so
+promoting it to the **first public draft** (A12) is an editorial pass, not
+greenfield writing. But it is also the first version external readers and
+downstream tools can reasonably treat as a public reference. This DD
+therefore decides how the public draft distinguishes:
 
-This DD does **not** re-decide any frozen surface (placement is read from
-the landed source — constraints §1). It decides three things:
+- surface M3 actually ships and documents as reproducible;
+- surface M3 accepts but keeps **provisional** before 1.0;
+- future surface that is known, named, and deliberately **not yet designed**;
+- future surface that is explicitly **not reserved**, so later milestones
+  remain free to design it.
 
-- **(a) Reservation** — whether M4-facing syntax is reserved in the public
-  draft, or recorded as declined.
-- **(b) Positioning of unsettled / provisional future surface** — PM-2's
-  two-form Grid wrapper rule, explicit sizing (Problem B), the
-  default-alignment asymmetry, placement spelling, placement bindability.
-- **(c) Publication mechanics** — the status marker, the M3 CHANGELOG, and
-  the external-reader pass line.
+The main design risk is **false certainty**. If the public draft writes an
+unsettled item as normative, later correction becomes a breaking public-doc
+change. The opposite risk is **false emptiness**: if the draft merely omits
+known unresolved surface, external readers will infer that the current
+behavior is final. This DD adopts a middle vocabulary that is visible enough
+to be honest, but weak enough not to pre-design M4/M5/M6.
 
-Per the owner prior, each option is compared on **product merit first**;
-documentation cost is not a con, and the over-positioning brake (do not
-reserve so much that M4's design space shrinks) stays in force.
+This DD does **not** re-decide the frozen Phase 7b placement surface. It
+reads the landed `slot.*` / Grid `Cell` + direct `slot.*` model from
+`docs/dsl_spec.md` and `docs/architecture.md` (constraints §1). It also did
+not decide DD-001's control surface: DD-001 has accepted T1
+`ToggleButton` / `checked`. This DD only decides how that accepted surface
+and the deferred axes are written in the public draft.
+
+Per the owner prior, options are compared on **design fit and public-contract
+honesty first**. Documentation cost is not counted as a con; implementation
+size is only a tie-breaker.
 
 ## Dependencies
 
-- **Consumes** framing FD-8-A (editorial thesis), FD-8-B (this is the
-  second of the two DDs), FD-8-D (Problem B is a cross-milestone Vision DR;
-  this DD owns only its **editorial** positioning, not its disposition),
-  FD-8-F (a new public promise here is the **only** path to a new AC), and
-  the plan's M4-reservation affirmative-judgement discipline (silence
-  defaults to "do not reserve", but exercising the reservation permission
-  is an **active** act — [plan.md](../../plan.md)).
-- **Carry-in constraints** ([constraints §2–§7](../requirements/constraints.md)):
-  Problem B sizing (§2), PM-2 provisional wrapper-rule (§3),
-  default-alignment asymmetry (§4), placement spelling (§5), placement
-  bindability / backward-compat positioning (§7). Each is **Phase 8's
-  editorial responsibility** to position honestly — surface re-litigation
-  is **out** (constraints §1).
+- **Consumes** framing FD-8-A/B/D/F/G and constraints §2-§8.
 - **Couples to** [DD-M3-P8-001](./dd-m3-p8-001-button-selected-state-surface.md)
-  **one-directionally**: this DD **positions** the toggle/selected surface
-  DD-001 ships and the **five axes** DD-001 defers; it does **not** decide
-  DD-001's **control surface** (the B2-vs-T1 control-taxonomy choice). See
-  §DD-001 coupling for the four items DD-001's Accept depends on.
-- **References** the **Problem B Vision DR** (raised under
-  [process/cross-milestone/decisions/](../../../cross-milestone/decisions/)
-  per FD-8-D) — a separate review unit. This DD links to it for the sizing
-  positioning; it does not contain its disposition.
+  one-directionally: DD-001 has chosen `ToggleButton { checked: <bool> }`,
+  W1, and α; this DD positions that accepted surface and the deferred axes in
+  the public draft.
+- **References** the Problem B Vision DR
+  ([author-controllable-sizing-surface.md](../../../cross-milestone/decisions/author-controllable-sizing-surface.md)).
+  That VDR owns the roadmap-level responsibility question for explicit
+  sizing; this DD owns only the public-draft wording.
 
-## Main decision A — M4 syntax reservation
+## Main decision A — Future-surface reservation policy
 
-**Question:** does the first public draft **reserve** any M4-facing syntax,
-or record that reservation was **declined**? (The plan requires an explicit
-judgement; silence defaults to "do not reserve".)
+**Question:** should the first public draft reserve M4/M5/M6-facing syntax,
+or should it use non-committal future notes and record reservation as
+declined?
 
-**Direction (to draft):** keep reservation **minimal** — write unsettled
-items as **future notes**, not as strong reservations. Over-reserving
-shrinks M4's design space; under-reserving leaves compatibility
-expectations vague; the minimal-reservation middle is the target.
+### Options
 
-- **Options (to draft):** (A-1) reserve nothing, record as declined;
-  (A-2) minimal future-note only (recommended direction, not yet drafted);
-  (A-3) explicit reservation of named M4 constructs.
-- **AC contingency:** if a reservation here **commits author-facing
-  surface** (a public promise), the new-AC exception fires (FD-8-F); if it
-  is a non-committal future note, no new AC. Decided at this DD's Accepted
-  flip; recorded in the plan Revision log either way.
+1. **A-1 — reserve nothing; omit future surfaces except in handoff.**
+   - What you gain: the public draft stays small and purely normative.
+   - What you give up: known unresolved items become invisible to external
+     readers. In particular, PM-2, explicit sizing, and DD-001's exclusion
+     axes would look accidentally final because the draft would not say
+     otherwise.
+   - Assessment: too weak for A12. It protects future design freedom, but by
+     hiding known uncertainty.
+2. **A-2 — future notes, no syntax reservation.** The draft names known
+   future surfaces and their triggers, but uses explicitly non-committal
+   language (`future surface`, `candidate`, `not reserved`, `not a stability
+   commitment`) and avoids promising exact syntax unless a surface is already
+   accepted.
+   - What you gain: honest public documentation without narrowing M4/M5/M6's
+     design space. External readers see that the current M3 idioms are real
+     but not necessarily the long-term idioms.
+   - What you give up: the draft is slightly more editorially complex, and
+     future readers must distinguish normative sections from future notes.
+   - Assessment: best fit for Phase 8. It satisfies the plan's affirmative
+     judgement requirement while avoiding premature grammar / runtime /
+     reactive-architecture commitments.
+3. **A-3 — reserve named future syntax now.** Reserve exact spellings such
+   as `width`, `height`, `tab == value`, group widgets, material/backdrop
+   syntax, or two-way binding notation.
+   - What you gain: downstream tooling can avoid claiming those names for
+     other purposes, and external readers see likely direction.
+   - What you give up: it converts unsettled architecture into public
+     promises before the owning milestone has compared grammar, IR, runtime,
+     and host-API consequences. It would especially over-constrain M4 input /
+     focus and M6 ABI design.
+   - Assessment: too strong for M3 close. Use only if a specific future
+     surface has already been accepted elsewhere; none has.
 
-## Main decision B — positioning unsettled / provisional future surface
+### Recommendation
 
-**Question:** for each carry-in item that is **not yet settled**, how is it
-written so the public draft does not read it as settled? Each is an
-**editorial** positioning call (the surface itself is not re-litigated —
-constraints §1).
+Adopt **A-2 — future notes, no syntax reservation**.
 
-| Sub-decision | Carry-in | What must be positioned | Direction (to draft) |
-|---|---|---|---|
-| B-1 — PM-2 two-form Grid | [constraints §3](../requirements/constraints.md) | State the accept-set (both `Cell` and direct `slot.*` are accepted) **while flagging the wrapper-rule as pre-1.0 undecided / provisional**. The wrapper-rule *decision* is **not** made here (pre-1.0, via M3 handoff). | Describe accept-set; mark wrapper-rule provisional |
-| B-2 — explicit sizing (Problem B) | [constraints §2](../requirements/constraints.md); Problem B Vision DR | Do **not** present Fill-default sizing as final; position explicit `width`/`height` as a **future surface**, linked to the Problem B Vision DR. Fold the `aspect`-in-cell arrange-abort facet into the same note. | Future-surface note + Vision DR link |
-| B-3 — default-alignment asymmetry | [constraints §4](../requirements/constraints.md) | Describe the current defaults (Grid `stretch` / ZStack `center`) **accurately**, and make an **explicit judgement** whether the asymmetry is explicable or explicability-debt. Explicable → close on documentation accuracy; debt → forward to a future layout-behavior phase. No unification implemented here. | Accurate description + explicit explicability judgement |
-| B-4 — placement spelling | [constraints §5](../requirements/constraints.md) | Public-draft stabilization is the **last pre-publication revision chance** for `h-align` etc. Decide keep vs revise **affirmatively** (silence is not allowed). | Recommended: **keep** inherited spelling — affirmed, not silent |
-| B-5 — placement bindability / compat | [constraints §7](../requirements/constraints.md) | Describe placement as **constant-per-instance** accurately (binding RHS rejected), and position the draft as a **first public draft, not a permanent compatibility commitment** (public compat is M6). | Accurate "constant" description + "not a stability commitment" framing |
+This is not chosen because it is the smallest implementation. It is chosen
+because it matches the public-draft thesis: M3 publishes what exists, and it
+is honest about known unsettled surface without drafting later milestones in
+advance. It also avoids creating a new public-promise AC: future notes are
+not acceptance commitments. The plan Revision log should record **no new AC**
+unless this DD is changed at Accept time to reserve exact author-facing
+syntax.
 
-## Main decision C — publication mechanics
+## Main decision B — Positioning unsettled / provisional surface
 
-**Question:** what status marker, change history, and pass line mark the
-draft as public?
+**Question:** for each carry-in item, what does the public draft say so that
+readers neither over-trust the current shape nor assume the project forgot
+the issue?
 
-- **C-1 — status marker:** a `status: public-draft` (or equivalent) header
-  marker on `docs/dsl_spec.md`. *(form to draft)*
-- **C-2 — CHANGELOG:** an M3 change-history entry. *(scope to draft)*
-- **C-3 — external-reader pass line:** can the spec **alone** (against a
-  C-ABI virtual host) reproduce M3 surface? If not, the gap is editorial
-  remaining work (milestone-end criterion 5). *(pass criterion to draft)*
+### B-1 — PM-2 two-form Grid wrapper rule
 
-## DD-001 coupling — the four pre-Accept gate items
+Options:
 
-DD-001's Layer-3 / Main-decision-C (α) recommendation carries a
-**public-example teaching risk**: the O(N²) handwritten one-true-others-false
-exclusion pattern, if
-shipped in a public gallery without positioning, risks teaching an
-anti-pattern as the canonical way to express tab exclusion. DD-001's α
-recommendation **leans on this note as the mitigation** ("α's teaching-risk
-is mitigable by the provisional note rather than by dropping the
-demonstration"), so the mitigation cannot be a TODO at α's Accept: per
-DD-001 §Couples-to it must **carry its concrete form so the owner can
-confirm the mitigation is real before Accepting α**. The items below are
-therefore drafted to **concrete recommended proposals** (not `to draft`)
-even while §Main decisions A/B/C remain skeletal — they are the part of
-this DD α's Accept actually depends on. (They are *recommendations* pending
-this DD's own Accept; what α requires is that the mitigation be **written
-and inspectable**, which it now is.)
+- **B-1a — present both forms as final peers.** Accurate for M3's accept-set,
+  but too strong: it hides the pre-1.0 wrapper-rule decision.
+- **B-1b — document both accepted forms and mark the wrapper rule
+  provisional.** State that both `Cell { ... }` and direct `slot.*` are valid
+  in M3, while the canonical wrapper rule remains a pre-1.0 decision carried
+  through M3 handoff.
+- **B-1c — pick PM-1 or PM-3 now.** Would settle the future rule before a
+  concrete new wrapper pressure or public code-construction API exists.
 
-1. **Note authorship (文責) — recommended split.** The **spec note** (in
-   `docs/dsl_spec.md`, by this DD at Moment 1) and the **gallery `.ui`
-   comment** (in `examples/gallery/gallery.ui`, by the A1 integration task).
-   The spec note is the **load-bearing** one (external readers depend on the
-   spec, not the example source); the gallery comment is a local
-   reinforcement so a reader copying the `.ui` sees the caveat in place. The
-   spec note is the artifact the owner reviews at FD-8-G(4) (public-draft
-   review).
-2. **Gallery / spec note strength — recommended wording.** Strong enough to
-   deny canonical status, bounded so it does not over-commit the future
-   syntax. Recommended spec form (illustrative, final prose at Moment 1):
-   *"Exactly-one-selected exclusion is expressed here by composing one
-   boolean state per option and assigning them together in each handler.
-   This is the **M3-era** way to express it; a future equality operator
-   could allow a single-discriminant form instead (see below). Authors
-   should not treat the per-option assignment as the language's intended
-   long-term idiom."* — i.e. it (a) names it M3-era, (b) points forward
-   without specifying syntax **and without promising the future operator
-   ships or that this example is replaced**, (c) explicitly disclaims
-   canonical status. The wording stays a *future note*, not a reservation,
-   per Main decision A — "could allow", not "is expected to replace". The
-   gallery comment is a one-line echo pointing at the spec section. **Not**
-   stronger than this: it must not promise the `==` form's exact spelling
-   (that is the `==` phase's call) — Main decision A's minimal-reservation
-   policy applies.
-3. **Discriminant (`==`) migration trigger — recommended.** The forward
-   pointer names the future form `checked: tab == value` (O(N), single
-   assignment, intrinsically exclusive) as a **candidate future replacement
-   for the M3-era pattern** — *candidate*, not a committed replacement, since
-   the `==` operator is not promised to ship — with the **revival trigger =
-   an equality operator `==` entering the expression grammar** (DD-001
-   Axis 1; the spec note points at, not reproduces, that axis). Recorded explicitly: whether `examples/gallery/`
-   is **migrated** from α to the discriminant form when `==` lands is an
-   **independent decision for the `==` phase**, *not* promised by this note —
-   the note creates a forward pointer, not a migration commitment.
-4. **Representation of DD-001's five deferred axes — recommended default =
-   future-note, not reservation.** Per Main decision A's minimal-reservation
-   policy, all five are written as **future notes** (not strong
-   reservations): **Axis 1** equality-operator family (`==`); **Axis 2**
-   group-surface family (`RadioGroup` / `TabBar` / `SegmentedControl`);
-   **Axis 3** two-way binding (SwiftUI model); **Axis 4** widget-owned state
-   (WPF/Qt model — narrow opt-in uncontrolled toggle, or the general
-   family-level form); **Axis 5** generic-Toggle appearance / control-family
-   unification (G1 — SwiftUI `Toggle` + `toggleStyle`; Win32 / WinForms /
-   AppKit ancestry). The draft states honestly that **"exactly one selected"
-   is author-composed, not a built-in group construct**, and that the M3
-   `checked` surface (on a `ToggleButton` or a checkable `Button`, per
-   DD-001's A outcome) is M3's minimal surface, not the only future selection
-   model. Whether any axis is *promoted* from future-note to reservation is
-   decided in §Main decision A at this DD's Accept; the **default carried for
-   α's gate is future-note**.
+**Recommendation:** **B-1b.** It preserves the accepted M3 surface and tells
+the truth about the unresolved 1.0 rule. It does not over-state either form
+as canonical.
 
-If DD-001 instead Accepts **β** (static tab highlight, no live exclusion),
-item 1–3's teaching-risk note is not needed, but item 4 (deferred-axis
-representation) still applies. The **control-surface outcome (B2 checkable
-`Button` vs T1 dedicated `ToggleButton`, with its SI-4 lexeme)** is DD-001's
-co-equal owner-open call; whichever lands, the surface named in the spec
-changes accordingly (§Spec impact) and **the coupling structure is
-unchanged**.
+### B-2 — explicit sizing (Problem B)
 
-## Sub-issues *(to draft)*
+Options:
 
-- **SI-1 — granularity of the future-note convention.** A single
-  "Provisional / future surface" convention used uniformly (B-1…B-5,
-  reservation A, the DD-001 axes) vs per-item bespoke wording. *(to draft)*
-- **SI-2 — abi_spec future-compat note.** Whether the public draft forces
-  any `docs/abi_spec.md` touch (default: no-touch unless a future-compat
-  note proves unavoidable — preamble §End-state). *(to draft)*
+- **B-2a — describe current kind-default sizing as final.** Simple, but
+  false: Phase 2 / 4 / 7b already exposed explicit sizing as a known future
+  surface.
+- **B-2b — reserve exact `width` / `height` syntax.** Clear, but premature:
+  the Vision DR has not yet decided whether the surface is grammar-only,
+  modifier-like, layout-parent data, runtime state, host-construction API, or
+  some combination.
+- **B-2c — future-note explicit sizing, linked to the Vision DR.** State that
+  M3 sizing is kind-default, that author-controllable sizing is a known future
+  surface, and that exact syntax / IR / ABI implications are decided by the
+  cross-milestone VDR and its owning follow-up.
 
-## Spec impact *(to draft)*
+**Recommendation:** **B-2c.** The public draft should not call Fill/Shrink
+defaults final, but it should also not reserve a spelling or implementation
+architecture before the Vision DR is accepted. The `aspect`-in-cell arrange
+abort is folded into the same note, not split into a second future feature.
 
-`docs/dsl_spec.md` (author-facing, external-reader bar, **no DD/option
-labels** per the living-spec vocabulary rule; provenance via ADR hyperlink
-only):
+### B-3 — default-alignment asymmetry
 
-- The status marker (C-1), M3 CHANGELOG (C-2), and the unsettled-surface
-  positioning (B-1…B-5) folded into the relevant chapters.
-- The toggle/selected surface DD-001 ships (a dedicated `ToggleButton` with
-  `checked`, **or** a checkable `Button` with `checked` — per DD-001's
-  control-taxonomy outcome and SI-4 lexeme) positioned with the
-  author-composed-exclusion note (§DD-001 coupling) and the deferred-axis
-  representation.
-- Stale prose swept in the same touch.
+Options:
 
-`docs/architecture.md`: no new model from this DD (DD-001 owns the toggle
-node's representation); this DD touches architecture only if a positioning
-decision needs the internal model described for accuracy. *(judged at
-draft time)*
+- **B-3a — unify defaults now.** Changes behavior inside the public-draft
+  phase and reopens Phase 7b's frozen placement model.
+- **B-3b — document current defaults as container-owned semantics and judge
+  them explicable.** Grid defaults to `stretch` because grid cells allocate
+  tracks; ZStack defaults to `center` because overlay composition has no
+  track fill contract.
+- **B-3c — document current defaults but mark them as explicability debt.**
+  Keeps M3 behavior while explicitly sending unification to a future
+  layout-behavior phase.
 
-`docs/abi_spec.md`: no-touch unless SI-2 finds an unavoidable
-future-compat note.
+**Recommendation:** **B-3b, with a review hook.** The asymmetry is
+explainable if the spec presents defaults as **container-owned semantics**,
+not as a global alignment rule. If the external-reader smoke shows that this
+still reads as arbitrary, downgrade to **B-3c** and carry a future
+layout-behavior residual. Do not implement B-3a in Phase 8.
+
+### B-4 — placement spelling
+
+Options:
+
+- **B-4a — keep inherited kebab-case spellings** (`h-align`, `v-align`,
+  `row-span`, `column-span`), explicitly affirmed.
+- **B-4b — revise to camelCase / alternative names** before the public draft.
+- **B-4c — leave spelling unexamined.**
+
+**Recommendation:** **B-4a.** This is a positive decision, not silent carry.
+The current spelling is internally consistent across placement keys and
+already appears in the landed spec. Revising now would spend the last
+pre-publication chance on naming churn without evidence that the existing
+names block comprehension. B-4c is rejected because public-draft
+stabilization is the named trigger for an affirmative keep/revise judgement.
+
+### B-5 — placement bindability / compatibility positioning
+
+Options:
+
+- **B-5a — present placement as permanently constant.**
+- **B-5b — describe current placement as constant-per-instance, with binding
+  RHS rejected, and state that the first public draft is not a permanent
+  compatibility guarantee.**
+- **B-5c — reserve bindable placement now.**
+
+**Recommendation:** **B-5b.** It is the only option that is both accurate and
+non-foreclosing. Public compatibility commitments are an M6 concern, not an
+M3 public-draft side effect.
+
+### B-6 — DD-001 selected/toggle deferred axes
+
+Options:
+
+- **B-6a — write only the chosen M3 toggle surface.**
+- **B-6b — write the chosen M3 surface plus future notes for the five
+  non-foreclosed DD-001 axes.**
+- **B-6c — reserve the five axes as expected future syntax.**
+
+**Recommendation:** **B-6b.** The chosen M3 surface must be normative. The
+deferred axes must be visible because they are real design alternatives, but
+they should remain future notes: equality/discriminant selection, group
+surface, two-way binding, widget-owned state, and generic Toggle appearance
+are not accepted M3 or M4 syntax.
+
+## Main decision C — Publication mechanics
+
+**Question:** what concrete artifacts make the draft publicly reviewable?
+
+### Options
+
+1. **C-1 — frontmatter/status marker only.**
+   - Too weak: a marker says "public draft" but does not show what changed or
+     whether an external reader can reproduce M3.
+2. **C-2 — status marker + M3 change history + external-reader smoke.**
+   - Balanced: the marker gives state, the change history gives provenance,
+     and the smoke check tests the spec as a reader-facing artifact.
+3. **C-3 — full compatibility policy and versioning model.**
+   - Too strong: public compatibility is M6, and adopting it here would turn
+     the first draft into a stability contract.
+
+### Recommendation
+
+Adopt **C-2**:
+
+- `docs/dsl_spec.md` gets `status: public-draft` (or equivalent existing
+  frontmatter style).
+- A concise M3 change-history / CHANGELOG entry links the M3 ADRs and the
+  public-draft anchor.
+- The external-reader smoke asks whether a reader with only `docs/dsl_spec.md`
+  could reproduce the M3 surface against a hypothetical host that already
+  provides the C ABI. A "not yet" answer is remaining editorial work, not a
+  test skip.
+- The draft explicitly says the public draft is **not yet** the M6
+  backward-compatibility commitment.
+
+## DD-001 coupling — concrete items active under accepted α
+
+DD-001 accepted Layer-3 α, which carries a public-example teaching risk:
+the O(N^2) handwritten one-true-others-false exclusion pattern could be
+mistaken for the intended long-term idiom. DD-001's pre-Accept gate is
+satisfied because this DD carries the mitigation in concrete, inspectable
+form; DD-002 itself remains Proposed until its own owner Accept.
+
+Recommended coupling:
+
+1. **Note authorship.** The load-bearing note lives in `docs/dsl_spec.md`
+   under this DD's Moment 1 spec work. `examples/gallery/gallery.ui` also
+   gets a local comment when A1 integrates the gallery.
+2. **Note strength.** The spec note names the pattern as the **M3-era**
+   author-composed exclusion idiom, not a canonical long-term language
+   design. Illustrative wording: "Exactly-one-selected exclusion is expressed
+   in M3 by composing one boolean state per option and assigning them
+   together in each handler. This is an M3-era pattern; a future equality
+   operator could allow a single-discriminant form. Do not treat the
+   per-option assignment pattern as a long-term reservation."
+3. **Migration trigger.** The discriminant form revives when an equality
+   operator enters the expression grammar. Whether `examples/gallery/` is
+   migrated at that time is a future decision, not promised here.
+4. **Deferred-axis representation.** The five DD-001 axes are written as
+   **future notes, not reservations**, unless this DD is changed at Accept
+   time: equality/discriminant, group surface, two-way binding,
+   widget-owned state, generic Toggle appearance/control-family.
+
+Because DD-001 accepted α, items 1-3 are active. Item 4 applies regardless.
+
+## Spec impact
+
+`docs/dsl_spec.md`:
+
+- Add the public-draft status marker, M3 change history, and a short
+  "public draft vs compatibility commitment" note.
+- Fold in the DD-001-selected toggle surface using the accepted lexeme:
+  `ToggleButton { checked: <bool> }`, without DD option labels in living spec
+  prose.
+- Add future-note wording for PM-2, explicit sizing / Problem B,
+  placement defaults, placement spelling, placement bindability, and DD-001's
+  deferred axes.
+- Keep normative M3 syntax separate from future notes.
+
+`docs/architecture.md`:
+
+- Touched only where the public-draft wording needs an architecture pointer
+  for accuracy. DD-001 owns the toggle representation.
+
+`docs/abi_spec.md`:
+
+- No touch expected. Revisit only if the external-reader smoke shows the
+  public draft cannot explain the M3 surface without an ABI note.
+
+`process/milestone-3/plan.md`:
+
+- Record the FD-8-F disposition in the Revision log: **no new AC** if this
+  DD Accepts A-2/C-2 without syntax reservation; otherwise record the
+  public-promise exception.
 
 ## Out of scope
 
-- **Surface re-litigation of any frozen Phase 7b placement surface** — read
-  from landed source (constraints §1).
-- **The PM-2 wrapper-rule *decision*** — pre-1.0, via M3 handoff (this DD
-  only flags it provisional — B-1).
-- **Explicit-sizing *implementation* and the Problem B *disposition*** —
-  the Vision DR's assigned milestone (this DD only positions it
-  editorially — B-2).
-- **Default-alignment *unification* implementation** — future
-  layout-behavior phase (this DD only judges explicability — B-3).
-- **DD-001's authoring-form decision** — DD-001 owns it; this DD positions
-  only its deferred surface.
-- **Backward-compatibility *guarantees*** — public compat is M6; the first
-  public draft is not a stability commitment (B-5).
+- Re-deciding Phase 7b placement surface.
+- PM-2 wrapper-rule final decision.
+- Explicit-sizing implementation or the Problem B roadmap disposition.
+- Default-alignment behavior unification.
+- Re-deciding DD-001's accepted `ToggleButton` / `checked` control surface.
+- M4 input/focus, M5 theme/tooling, and M6 compatibility policy.
+
+## Accepted-time disposition checklist
+
+At Accept, record:
+
+- A policy: A-2 recommended; if changed to A-3, name the exact public promise
+  and the AC/roadmap update.
+- B sub-decisions: B-1b, B-2c, B-3b-or-B-3c based on reader smoke, B-4a,
+  B-5b, B-6b.
+- C mechanics: C-2 recommended.
+- DD-001 coupling: α items 1-3 are active; item 4 is active.
+- Plan Revision-log outcome: no-new-AC vs public-promise exception.
 
 ## Revision history
 
-- 2026-06-27 — Initial **skeleton** (Status: Proposed). Structure,
-  questions (Main decisions A/B/C), sub-issues, and the **DD-001 coupling
-  gate** (four pre-Accept items: note authorship, note strength,
-  discriminant-migration trigger, deferred-axis representation) fixed;
-  per-decision option comparisons and recommendations *not yet drafted*.
-  Exists to satisfy DD-001's pre-Accept gate (§Couples-to /
-  [preamble §Cross-DD dependency](./preamble.md)); drafted in parallel with
-  DD-001 per the Phase-8 plan.
-- 2026-06-28 — Accept-discipline review fold (Status: Proposed). Resolved
-  the **High** finding that DD-001's α mitigation was still a TODO: **§DD-001
-  coupling items 1–4 are drafted to concrete recommended proposals** (note
-  authorship = spec note by this DD + gallery comment by the A1 task;
-  recommended spec wording naming the pattern "M3-era" with a non-committal
-  forward pointer; the `==`-grammar revival trigger with migration left to
-  the `==` phase; deferred-axis default = future-note). DD-001's α can now
-  Accept against a **written, inspectable** mitigation rather than an open
-  item. §Main decisions A/B/C option comparisons remain *(to draft)*.
-- 2026-06-28 — Future-note strength fold (Status: Proposed). Softened the
-  recommended `==`-note wording so it reads as a **future note, not a public
-  reservation** (item 2: "a future equality operator **could allow** a
-  single-discriminant form" rather than "**is expected to replace** it";
-  item 3: the discriminant form is a **candidate** future replacement, with
-  the `==` operator not promised to ship), aligning the recommended public
-  prose with Main decision A's minimal-reservation policy. Recommendation
-  unchanged.
-- 2026-06-28 — Sync to DD-001's control-taxonomy restructure (Status:
-  Proposed). §DD-001 coupling item 4: deferred axes **four → five** (added
-  **Axis 5** = G1 generic-Toggle appearance / control-family unification —
-  SwiftUI `toggleStyle`, Win32 / WinForms / AppKit ancestry); Axis 4 noted at
-  two weights (opt-in uncontrolled toggle vs general family-level). Replaced
-  the `Button { selected }` / S1 framing with the **B2 (checkable `Button`) vs
-  T1 (dedicated `ToggleButton`) co-equal owner-open** surface in §DD-001
-  coupling and §Spec impact; `selected` no longer named as a live attribute.
-  Coupling structure unchanged.
-- 2026-06-28 — Terminology-sync stragglers (Status: Proposed). §Dependencies
-  §Couples-to: "four axes" → **five axes**, "authoring form" → **control
-  surface (B2-vs-T1 control taxonomy)**. §DD-001 coupling intro: "Layer-2 (α)
-  recommendation" → **Layer-3 / Main-decision-C (α)**, matching DD-001's
-  axis renumbering. No content change.
+| Date | Change |
+|---|---|
+| 2026-06-27 | Initial skeleton (Status: Proposed). |
+| 2026-06-28 | Drafted DD-001 coupling to concrete recommended proposals so DD-001's α mitigation is inspectable before Accept. |
+| 2026-06-28 | Synced to DD-001's control-taxonomy restructure (B2/T1 co-equal, five deferred axes). |
+| 2026-07-01 | Completed Main decisions A/B/C as a full Proposed draft. Recommendation: future notes with no syntax reservation; honest positioning of PM-2 / Problem B / defaults / spelling / bindability / DD-001 axes; publication mechanics = status marker + M3 change history + external-reader smoke. |
+| 2026-07-01 | Synced to DD-001 owner acceptance: DD-001 now fixes T1 `ToggleButton` / `checked`, W1, and α. Coupling section now treats α items 1-3 as active and spec impact names the concrete `ToggleButton { checked }` surface. DD-002 status remains Proposed. |
