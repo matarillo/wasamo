@@ -1,6 +1,6 @@
 ---
 title: DSL spec public-draft promotion — reservation & how unsettled surface is shown
-status: Proposed
+status: Accepted
 phase: M3-Phase 8
 ac: A12 (existing) — the public-draft promotion is named by A12; discharges under A12 + A11. A new public-promise AC is added only if a reservation/promise in Main decision A commits author-facing surface (framing FD-8-F); this draft recommends no such new AC.
 date: 2026-07-01
@@ -14,7 +14,34 @@ related:
 
 # DD-M3-P8-002 — DSL spec public-draft promotion: reservation & how unsettled surface is shown
 
-**Status:** Proposed
+**Status:** Accepted 2026-07-02
+
+**Accepted disposition (owner decision, 2026-07-02):**
+
+- **Main A — future-surface reservation policy:** A-2 — future notes, no
+  syntax reservation. No new public-promise AC is created.
+- **Main B — positioning unsettled / provisional surface:**
+  - **B-1b** — both `Cell { ... }` and direct `slot.*` forms documented as
+    valid M3 surface; the canonical wrapper rule stays a pre-1.0 handoff
+    decision.
+  - **B-2c** — future-note explicit sizing. The `docs/dsl_spec.md` wording
+    stops at "pre-1.0 unresolved; exact syntax / IR / ABI shape not reserved";
+    the accepted Problem B VDR's M4/M5 spike schedule stays out of the public
+    draft (cited only internally in this DD).
+  - **B-3b** — Grid/ZStack defaults documented as container-owned semantics
+    and judged explicable. A reader-smoke downgrade to B-3c is a separate
+    procedural step, not an outcome left open at this Accept.
+  - **B-4a** — inherited kebab-case placement spellings kept, affirmed (not
+    silent carry).
+  - **B-5b** — placement is constant-per-instance with binding RHS rejected;
+    the public draft is not an M6 compatibility guarantee.
+  - **B-6b** — the chosen M3 toggle surface is normative; the five DD-001 axes
+    are future notes (not accepted M3 syntax, not reserved as M4 syntax).
+- **Main C — publication mechanics:** C-2 — status marker + M3 change history
+  + external-reader smoke.
+- **DD-001 coupling:** α items 1-3 active; item 4 active.
+- **Plan Revision-log outcome:** no new AC (A-2/C-2 accepted without syntax
+  reservation).
 
 ## Context
 
@@ -362,3 +389,4 @@ At Accept, record:
 | 2026-07-01 | Synced to DD-001 owner acceptance: DD-001 now fixes T1 `ToggleButton` / `checked`, W1, and α. Coupling section now treats α items 1-3 as active and spec impact names the concrete `ToggleButton { checked }` surface. DD-002 status remains Proposed. |
 | 2026-07-02 | Reflected the Problem B Vision DR Accept in B-2b / B-2c: the surface shape is now described as deliberately deferred to the VDR's scheduled M4/M5 spike (not "the VDR has not yet decided" / "before the VDR is accepted"). Recommendation (B-2c: future-note, no reservation) unchanged. DD-002 status remains Proposed. |
 | 2026-07-02 | Codex review folds. (1) B-2c: bounded the DSL public-draft wording to "pre-1.0 unresolved; shape not reserved" and made explicit that the VDR's M4/M5 schedule stays out of `docs/dsl_spec.md` (schedule is a process/roadmap commitment, cited only internally) — aligns with the accepted VDR. (2) B-3: Accept now selects B-3b definitively; reader-smoke downgrade to B-3c is a separate procedural step, not an outcome left open at Accept (checklist synced). (3) B-6b: "not accepted M3 or M4 syntax" → "not accepted M3 syntax and not reserved as M4 syntax" to match DD-001's non-foreclosed axes. DD-002 status remains Proposed. |
+| 2026-07-02 | **Accepted (owner decision).** A-2 / B-1b / B-2c / B-3b / B-4a / B-5b / B-6b / C-2; DD-001 coupling α items 1-4 active; plan Revision-log outcome = no new AC. Accepted disposition recorded at the top of the DD. Moment 1/2 spec sync and gallery integration follow. |

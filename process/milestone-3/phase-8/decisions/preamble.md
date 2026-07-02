@@ -3,10 +3,11 @@
 **Phase:** M3-Phase 8 (selected state + gallery integration + DSL spec
 public draft — **the final M3 phase**)
 **Date:** 2026-07-01
-**Status:** Mixed: DD-001 Accepted 2026-07-01; DD-002 Proposed. DD-002
-now carries full Main decision A/B/C option comparisons and recommendations;
-DD-001's α documentation mitigation remains concrete and inspectable pending
-DD-002's own Accepted flip.
+**Status:** DD-001 Accepted 2026-07-01; DD-002 Accepted 2026-07-02. Both
+Phase 8 architecture decisions are settled. DD-001's α documentation
+mitigation is now carried by DD-002's accepted disposition (coupling items
+1-4 active). Moment 1/2 spec sync and gallery integration follow the
+accepted decisions.
 
 ## Context
 
