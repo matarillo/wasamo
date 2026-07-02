@@ -148,16 +148,25 @@ Options:
   shape (grammar-only, modifier-like, layout-parent data, runtime state,
   host-construction API, or some combination) to a scheduled M4/M5 spike, so
   no spelling is settled to reserve.
-- **B-2c — future-note explicit sizing, linked to the Vision DR.** State that
-  M3 sizing is kind-default, that author-controllable sizing is a known future
-  surface, and that exact syntax / IR / ABI implications are decided by the
-  M4/M5 spike scheduled by the cross-milestone VDR.
+- **B-2c — future-note explicit sizing, linked to the Vision DR.** In
+  `docs/dsl_spec.md`, state that M3 sizing is kind-default and that
+  author-controllable sizing is a known **pre-1.0 unresolved future surface**
+  whose exact syntax / IR / ABI shape is **not reserved**. The public-draft
+  wording stops there: it carries the future-work framing **only** and does
+  **not** publish the VDR's M4/M5 spike schedule, which the accepted Vision DR
+  records as a process / roadmap commitment, not an external promise
+  ([author-controllable-sizing-surface.md](../../../cross-milestone/decisions/author-controllable-sizing-surface.md)
+  §Recommendation, §Consequent edits). DD-002 may cite that scheduled spike
+  internally as the reason the shape is left open; the schedule itself stays
+  out of the DSL public draft.
 
 **Recommendation:** **B-2c.** The public draft should not call Fill/Shrink
 defaults final, but it should also not reserve a spelling or implementation
-architecture, because the accepted Vision DR defers the surface shape to the
-M4/M5 spike. The `aspect`-in-cell arrange abort is folded into the same note,
-not split into a second future feature.
+architecture. DD-002's internal rationale for leaving the shape open is that
+the accepted Vision DR defers the surface shape to a scheduled M4/M5 spike; the
+public-draft note conveys only "pre-1.0 unresolved; shape not reserved" and
+keeps that schedule internal. The `aspect`-in-cell arrange abort is folded into
+the same note, not split into a second future feature.
 
 ### B-3 — default-alignment asymmetry
 
@@ -173,11 +182,15 @@ Options:
   Keeps M3 behavior while explicitly sending unification to a future
   layout-behavior phase.
 
-**Recommendation:** **B-3b, with a review hook.** The asymmetry is
-explainable if the spec presents defaults as **container-owned semantics**,
-not as a global alignment rule. If the external-reader smoke shows that this
-still reads as arbitrary, downgrade to **B-3c** and carry a future
-layout-behavior residual. Do not implement B-3a in Phase 8.
+**Recommendation:** **B-3b.** At Accept this selects B-3b definitively: the
+spec presents defaults as **container-owned semantics**, not as a global
+alignment rule (Grid `stretch` because grid cells allocate tracks; ZStack
+`center` because overlay composition has no track-fill contract), and judges
+the asymmetry explicable. Accept does **not** leave a B-3b/B-3c toss-up open.
+If the external-reader smoke *later* shows the defaults still read as
+arbitrary, that is handled by a **separate procedural step** — revise the
+Accepted disposition to B-3c and carry a future layout-behavior residual — not
+by treating the Accept outcome as undecided. Do not implement B-3a in Phase 8.
 
 ### B-4 — placement spelling
 
@@ -222,7 +235,7 @@ Options:
 deferred axes must be visible because they are real design alternatives, but
 they should remain future notes: equality/discriminant selection, group
 surface, two-way binding, widget-owned state, and generic Toggle appearance
-are not accepted M3 or M4 syntax.
+are not accepted M3 syntax and not reserved as M4 syntax.
 
 ## Main decision C — Publication mechanics
 
@@ -330,8 +343,10 @@ At Accept, record:
 
 - A policy: A-2 recommended; if changed to A-3, name the exact public promise
   and the AC/roadmap update.
-- B sub-decisions: B-1b, B-2c, B-3b-or-B-3c based on reader smoke, B-4a,
-  B-5b, B-6b.
+- B sub-decisions: B-1b, B-2c (public-draft note stops at "pre-1.0 unresolved;
+  shape not reserved" — the M4/M5 schedule stays out of `docs/dsl_spec.md`),
+  B-3b (revision to B-3c only via the separate reader-smoke procedure, not left
+  open at Accept), B-4a, B-5b, B-6b.
 - C mechanics: C-2 recommended.
 - DD-001 coupling: α items 1-3 are active; item 4 is active.
 - Plan Revision-log outcome: no-new-AC vs public-promise exception.
@@ -346,3 +361,4 @@ At Accept, record:
 | 2026-07-01 | Completed Main decisions A/B/C as a full Proposed draft. Recommendation: future notes with no syntax reservation; honest positioning of PM-2 / Problem B / defaults / spelling / bindability / DD-001 axes; publication mechanics = status marker + M3 change history + external-reader smoke. |
 | 2026-07-01 | Synced to DD-001 owner acceptance: DD-001 now fixes T1 `ToggleButton` / `checked`, W1, and α. Coupling section now treats α items 1-3 as active and spec impact names the concrete `ToggleButton { checked }` surface. DD-002 status remains Proposed. |
 | 2026-07-02 | Reflected the Problem B Vision DR Accept in B-2b / B-2c: the surface shape is now described as deliberately deferred to the VDR's scheduled M4/M5 spike (not "the VDR has not yet decided" / "before the VDR is accepted"). Recommendation (B-2c: future-note, no reservation) unchanged. DD-002 status remains Proposed. |
+| 2026-07-02 | Codex review folds. (1) B-2c: bounded the DSL public-draft wording to "pre-1.0 unresolved; shape not reserved" and made explicit that the VDR's M4/M5 schedule stays out of `docs/dsl_spec.md` (schedule is a process/roadmap commitment, cited only internally) — aligns with the accepted VDR. (2) B-3: Accept now selects B-3b definitively; reader-smoke downgrade to B-3c is a separate procedural step, not an outcome left open at Accept (checklist synced). (3) B-6b: "not accepted M3 or M4 syntax" → "not accepted M3 syntax and not reserved as M4 syntax" to match DD-001's non-foreclosed axes. DD-002 status remains Proposed. |
