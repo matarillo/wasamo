@@ -18,10 +18,9 @@ exceptions this phase:
   concern and intermediate states would leave the build or the evidence
   scripts broken, so it may bundle into one buildable commit (or split
   only at seams T1 identifies as independently green).
-- **T3 / T4** — if T1's compiler-verification shows the widget-kind
-  addition is compile-error-forcing across crates (non-additive kind
-  carrier), the affected sites bundle into one buildable commit;
-  otherwise the default split (compiler/IR, then runtime) holds.
+- **T3 / T4** — T1 found the widget-kind carrier is string-based rather
+  than compile-error-forcing, so the default split holds: T3 owns the
+  compiler/IR surface and T4 owns the runtime node/visual surface.
 
 If implementation reveals an item should split or reorder, revise this
 list so it stays an accurate record rather than a frozen prediction.

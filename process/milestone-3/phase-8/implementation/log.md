@@ -158,6 +158,9 @@ attention folded in for SI-3 reject tests.
 Required plan revisions before work continues:
 
 - Done in this task: `plan.md` now states T1's critical responsibility cut.
+- Done after review: `plan.md` now resolves the T3/T4 bundle exception;
+  T1 falsified the compile-error-forcing premise, so the default
+  compiler/IR-then-runtime split holds.
 - Done in this task: `preamble.md` R-1/R-6 now reflect the string-carrier
   wrong-kind probe and host-template porting facts.
 
@@ -179,6 +182,11 @@ Owner-facing judgments explicitly not decided by T1:
 - SI-1 ambiguity trigger if V-a background-only is not visible enough in the
   actual captured frames.
 - Any β fallback substitution; T1 found no source reason to pre-trigger it.
+- Whether unknown widget kinds should remain `wasamoc check` warnings with
+  exit 0 or become hard diagnostics. T1 records the hole and routes
+  `ToggleButton` admission around it with positive fixtures; changing the
+  diagnostic policy is a separate owner/decision question and T3 must not
+  silently change it while adding `ToggleButton`.
 
 Carry-forward found by T1:
 
