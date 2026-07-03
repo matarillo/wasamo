@@ -18,10 +18,9 @@ exceptions this phase:
   concern and intermediate states would leave the build or the evidence
   scripts broken, so it may bundle into one buildable commit (or split
   only at seams T1 identifies as independently green).
-- **T3 / T4** — if T1's compiler-verification shows the widget-kind
-  addition is compile-error-forcing across crates (non-additive kind
-  carrier), the affected sites bundle into one buildable commit;
-  otherwise the default split (compiler/IR, then runtime) holds.
+- **T3 / T4** — T1 found the widget-kind carrier is string-based rather
+  than compile-error-forcing, so the default split holds: T3 owns the
+  compiler/IR surface and T4 owns the runtime node/visual surface.
 
 If implementation reveals an item should split or reorder, revise this
 list so it stays an accurate record rather than a frozen prediction.
@@ -84,7 +83,17 @@ decisions in [log.md](./log.md) plus any revision of this plan. Exit
 criterion: **every open point is assigned to a downstream task and its
 scope is seen**, not "no surprises expected".
 
-- [ ] **Read every landing file end-to-end** (not grep-sample):
+Critical responsibility cut (T1 re-check, 2026-07-03): T1 owns
+**source-grounded uncertainty reduction and task-boundary repair**, not
+early implementation. It must distinguish (a) facts that force a plan
+revision before T2/T3, (b) downstream implementation choices that are
+now scoped enough to leave with their owning task, and (c) owner-facing
+UI judgments that T2/T5/T7 still own. T1 must not silently decide the
+A1 placeholder agreement, change the author-facing `ToggleButton`
+surface, or leave a production edit behind. A T1 "done" report is valid
+only if the log makes those three buckets auditable.
+
+- [x] **Read every landing file end-to-end** (not grep-sample):
       `wasamoc/src/{lexer,parser,ast,check,lower,emit}.rs` (widget-name
       admission; the attribute admission tables — e.g.
       `("Button", "enabled")` rows in `check.rs`; style/text lowering),
@@ -96,21 +105,21 @@ scope is seen**, not "no surprises expected".
       construction, `enabled` propagation path, where the V-a checked
       background fill plugs in), `wasamo-runtime/src/layout.rs` (Button
       leaf measure reuse). Record the per-file touch points.
-- [ ] **Compiler-verify the widget-kind addition**: introduce a
+- [x] **Compiler-verify the widget-kind addition**: introduce a
       throwaway `ToggleButton` kind at the IR carrier, `cargo build` the
       workspace to enumerate every dispatch/match site by compiler error
       (or, if the kind is string-carried, enumerate the dispatch tables
       by targeted search *and* a deliberate wrong-kind probe), record
       the site list, then **revert**. This is the trap-#1 pre-audit; the
       authoritative audit table is T3/T4's close artifact.
-- [ ] **Fix and record the internal shape recommendations** the DD left
+- [x] **Fix and record the internal shape recommendations** the DD left
       to implementation: whether `ToggleButton` shares a Button-family
       code path internally (ButtonBase-style sharing is allowed; the
       *author-facing* taxonomy is DD-fixed), how `checked` reuses the
       existing single-boolean binding path, and how the V-a fill
       composes with `style` / `enabled` visuals (including the R-2
       ambiguity check plan against Mica/backdrop).
-- [ ] **Gallery + hosts recon**: map the current
+- [x] **Gallery + hosts recon**: map the current
       `examples/gallery/gallery.ui` sections to the wireframe target
       (what folds where; what is swept); list retained capture scripts
       whose coordinates must re-derive (trap #2); read
@@ -119,12 +128,15 @@ scope is seen**, not "no surprises expected".
       the gallery-port deltas (component name, `.uic` path, window
       loop); confirm the CI step shapes to mirror
       ([ci.yml](../../../../.github/workflows/ci.yml)).
-- [ ] **Fix and record the bisectable sequencing** (default
+- [x] **Fix and record the bisectable sequencing** (default
       T2 → T3 → T4 → T5 → T6 → T7; T2 is independent of T3/T4 and may
       run in parallel or reorder) and the inter-task seams (T5 needs
       T3+T4 for the tab band; T6 needs T5's final `gallery.ui`; T7
       needs T5+T6). Revise this plan if the default order changes.
-- [ ] Sharpen the preamble §Technical risks table against the source;
+- [x] **Record the T1 responsibility buckets**: plan revisions required
+      before work continues; downstream choices that are scoped but left
+      to T2–T8; owner-facing judgments explicitly not decided by T1.
+- [x] Sharpen the preamble §Technical risks table against the source;
       record the **T3 gate selection** (review lane + applicable traps
       with reasons for non-applicable ones) before T3 opens.
 
