@@ -456,6 +456,14 @@ mod tests {
     }
 
     #[test]
+    fn togglebutton_absent_checked_emits_no_checked_prop_or_binding() {
+        let out = emit_src(r#"component C inherits W { ToggleButton { text: "Albums" } }"#);
+        assert!(out.contains("node ToggleButton {"), "got: {}", out);
+        assert!(!out.contains("prop checked ="), "got: {}", out);
+        assert!(!out.contains("bind checked ="), "got: {}", out);
+    }
+
+    #[test]
     fn togglebutton_checked_binding_emitted() {
         let out = emit_src(
             "component C inherits W { state selected: bool = true ToggleButton { checked: selected } }",

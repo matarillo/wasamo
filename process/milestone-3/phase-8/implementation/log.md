@@ -559,7 +559,7 @@ Verification commands:
 |---|---|---|
 | `wasamoc/src/check.rs` `KNOWN_WIDGET_TYPES` | must-dispatch | Added `ToggleButton`; positive test `togglebutton_known_widget_and_attrs_accepted_without_warning` proves no unknown-widget warning. Preserved the general `unknown_widget_type_is_warning_not_error` policy. |
 | `wasamoc/src/check.rs` `widget_prop_type` | must-dispatch | Added typed rows for `ToggleButton.text`, `ToggleButton.enabled`, and `ToggleButton.checked`; `style` remains keyword-valued / untyped like Button's existing path. |
-| `wasamoc/src/check.rs` property-bind dispatch | must-dispatch | Added `check_checked_attr_admission` for `checked` outside `ToggleButton`; added `check_togglebutton_property_name` so unknown `ToggleButton` attributes reject while admitted attrs flow through existing expr/type checks. |
+| `wasamoc/src/check.rs` property-bind dispatch | must-dispatch | Added `check_checked_attr_admission` for `checked` outside `ToggleButton`; added `check_togglebutton_property_name` so unknown `ToggleButton` attributes reject while admitted attrs flow through existing expr/type checks. Review remediation: `ScrollView` / `ZStack` container-specific unknown-attribute gates intentionally run before the generic `checked` admission gate, so their `checked` rejects use the container-specific diagnostics; component-level `checked` routes through the host-attribute reject, not this helper. |
 | `wasamoc/src/lower.rs` `lower_node*` / `Member::WidgetDecl` | generic / unchanged | No schema branch needed: `IrNode.widget_type` remains `String`, props/bindings/handlers are already generic. Added tests pinning `ToggleButton` kind, literal `checked`, bool-state `checked` binding, and alpha handler lowering. |
 | `wasamoc/src/emit.rs` `emit_node` / prop / bind / handler emission | generic / unchanged | No emit branch needed: node kind, props, bindings, and handlers emit generically. Added tests for literal, binding, and alpha block textual IR. |
 | `wasamo-ir/src/lib.rs` `IrNode` / `IrBinding` / `HandlerExpr` | generic / unchanged | No IR schema change: `widget_type` and `prop_name` are strings, bool binding uses existing `HandlerExpr::BoolPropRead`. Existing IR tests continue green. |
@@ -570,10 +570,12 @@ Verification commands:
 | Branch / diagnostic | Firing test |
 |---|---|
 | `ToggleButton` known-widget admission and carried attrs | `togglebutton_known_widget_and_attrs_accepted_without_warning` |
-| `checked` omitted (default remains runtime-owned, absent IR prop) | `togglebutton_checked_absent_accepted` |
+| `checked` omitted (default remains runtime-owned, absent IR prop/binding) | `togglebutton_checked_absent_accepted`, `togglebutton_absent_checked_lowers_no_ir_prop_or_binding`, `togglebutton_absent_checked_emits_no_checked_prop_or_binding` |
+| component-level `checked` routes to the host-attribute reject | `component_level_checked_routes_to_host_attr_reject` |
 | `checked` on `Button` | `checked_on_button_rejected` |
 | `checked` on `Text` | `checked_on_text_rejected` |
 | `checked` on another non-supporting widget | `checked_on_other_widget_rejected` |
+| `checked` on container widgets whose attr gates precede generic admission | `checked_on_scrollview_rejected_by_container_attr_gate`, `checked_on_zstack_rejected_by_container_attr_gate` |
 | non-bool literal RHS for `ToggleButton.checked` | `togglebutton_checked_non_bool_rhs_rejected` |
 | non-bool state RHS for `ToggleButton.checked` | `togglebutton_checked_i32_state_rejected` |
 | unknown `ToggleButton` attribute | `togglebutton_unknown_attr_rejected` |
@@ -595,6 +597,13 @@ Verification commands:
   construction are still absent by design. **Evidence:** T3 plan/log split
   and T3 tests stop at wasamoc emit. **Re-trigger:** T4 start gate.
   **Placement:** direct T4 start-gate carry-over, not milestone handoff.
+- **Constraint:** absent `ToggleButton.checked` is intentionally absent from
+  textual IR (`props` / `bindings`) and T4 must materialize the runtime
+  default `false`. **Evidence:** T3 review remediation tests
+  `togglebutton_absent_checked_lowers_no_ir_prop_or_binding` and
+  `togglebutton_absent_checked_emits_no_checked_prop_or_binding`.
+  **Re-trigger:** T4 loader/widget defaulting. **Placement:** direct T4
+  start-gate carry-over, not milestone handoff.
 
 **#6 deterministic-failure disposition**
 
@@ -634,3 +643,17 @@ Reviewer-run verification:
 - `cargo test --workspace`
 
 All reviewer-run checks were green.
+
+## T3 review remediation (2026-07-04)
+
+Claude Code review after the Galileo review raised three low/minor gaps.
+T3 addressed them before merge:
+
+- F1: Added lower/emit tests proving absent `checked` produces no IR prop or
+  binding, and recorded the T4 carry-forward that runtime must supply
+  default `false`.
+- F2: Added `ScrollView` / `ZStack` reject tests and recorded that those
+  container-specific unknown-attribute gates intentionally precede the
+  generic `checked` admission diagnostic.
+- F3: Removed the component fallback from `check_checked_attr_admission`;
+  component-level `checked` is now pinned as a host-attribute reject.

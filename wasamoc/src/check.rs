@@ -673,22 +673,19 @@ fn check_togglebutton_property_name(
 }
 
 fn check_checked_attr_admission(
-    enclosing_widget: Option<&str>,
+    widget: &str,
     span: &Span,
     filename: &str,
     diags: &mut Vec<Diagnostic>,
 ) {
-    if enclosing_widget != Some("ToggleButton") {
-        let widget = enclosing_widget.unwrap_or("component");
-        diags.push(error(
-            filename,
-            span,
-            format!(
-                "`checked` is only valid on ToggleButton, not `{}` (dsl_spec §4.17)",
-                widget
-            ),
-        ));
-    }
+    diags.push(error(
+        filename,
+        span,
+        format!(
+            "`checked` is only valid on ToggleButton, not `{}` (dsl_spec §4.17)",
+            widget
+        ),
+    ));
 }
 
 /// Validate a `ScrollView.offset-y` binding RHS (DD-M3-P4-003). The
@@ -2089,7 +2086,12 @@ fn check_members_inner(
                 {
                     check_box_const_only_bind(name, value, span, filename, diags);
                 } else if name == "checked" && enclosing_widget != Some("ToggleButton") {
-                    check_checked_attr_admission(enclosing_widget, span, filename, diags);
+                    // Component-level `checked` is routed through
+                    // `check_host_property_bind` above; this helper is only
+                    // for widget-body admission.
+                    if let Some(widget) = enclosing_widget {
+                        check_checked_attr_admission(widget, span, filename, diags);
+                    }
                 } else if enclosing_widget == Some("ToggleButton") {
                     check_togglebutton_property_name(name, span, filename, diags);
                     check_expr_type_in_loop_context(
@@ -3817,6 +3819,17 @@ mod tests {
     }
 
     #[test]
+    fn component_level_checked_routes_to_host_attr_reject() {
+        let errs = errors("component C inherits W { checked: true ToggleButton {} }");
+        assert_eq!(errs.len(), 1, "{:?}", errs);
+        assert!(
+            errs[0].contains("unknown host attribute `checked`"),
+            "{:?}",
+            errs
+        );
+    }
+
+    #[test]
     fn checked_on_button_rejected() {
         let errs = errors("component C inherits W { Button { checked: true } }");
         assert_eq!(errs.len(), 1, "{:?}", errs);
@@ -3847,6 +3860,28 @@ mod tests {
         assert!(
             errs[0].contains("`checked` is only valid on ToggleButton")
                 && errs[0].contains("not `Box`"),
+            "{:?}",
+            errs
+        );
+    }
+
+    #[test]
+    fn checked_on_scrollview_rejected_by_container_attr_gate() {
+        let errs = errors("component C inherits W { ScrollView { checked: true Text {} } }");
+        assert_eq!(errs.len(), 1, "{:?}", errs);
+        assert!(
+            errs[0].contains("not a recognised ScrollView attribute"),
+            "{:?}",
+            errs
+        );
+    }
+
+    #[test]
+    fn checked_on_zstack_rejected_by_container_attr_gate() {
+        let errs = errors("component C inherits W { ZStack { checked: true Text {} } }");
+        assert_eq!(errs.len(), 1, "{:?}", errs);
+        assert!(
+            errs[0].contains("unknown ZStack attribute `checked`"),
             "{:?}",
             errs
         );

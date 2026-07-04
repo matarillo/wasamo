@@ -1110,6 +1110,15 @@ mod tests {
     }
 
     #[test]
+    fn togglebutton_absent_checked_lowers_no_ir_prop_or_binding() {
+        let comp = lower_src(r#"component C inherits W { ToggleButton { text: "Albums" } }"#);
+        let toggle = &comp.root;
+        assert_eq!(toggle.widget_type, "ToggleButton");
+        assert!(!toggle.props.iter().any(|p| p.name == "checked"));
+        assert!(!toggle.bindings.iter().any(|b| b.prop_name == "checked"));
+    }
+
+    #[test]
     fn togglebutton_checked_binding_lowers_to_bool_prop_read() {
         let comp = lower_src(
             "component C inherits W { state selected: bool = true ToggleButton { checked: selected } }",
