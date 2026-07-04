@@ -924,3 +924,192 @@ Verification:
 | `git diff --check` | green |
 | `cargo test -p wasamo-runtime togglebutton -- --nocapture` | green: 19 focused runtime unit tests + 5 Windows runtime integration tests |
 | `cargo test --workspace` | green; existing `wasamo` linkable-target / `wasamo-sys` ordering warnings only |
+
+## T5 start gate — carry-over check, responsibility cut, and trap selection (2026-07-05)
+
+Carry-over checked before choosing the T5 approach:
+
+- From T2 log / T2 retrospective: the owner-accepted G(1) / A1 table is the
+  audit basis for Gallery UI work. T5 must preserve each row or record an
+  explicit owner/review disposition; mutation controls remain omitted only
+  with the Phase 7 collection/iteration coverage citation.
+- From T1 / T2 retrospectives: Phase 8 capture coordinates are not retained
+  ground truth from prior phases. T5 must derive any first-render /
+  alpha-precheck coordinates from the final T5 surface, and must not reuse T2
+  coordinates without re-auditing them.
+- From T2 / T4 log and retrospectives: R-2 is the checked-visual ambiguity
+  question against the final effective Gallery tab-band background, not an
+  independent Mica proof. T5 must precheck the final tab band, while T7 owns
+  the authoritative two-frame evidence package.
+- From T3 / T4 retrospectives: `ToggleButton` compiler and runtime surfaces
+  are available; T5 should use the accepted W1 alpha exclusion shape rather
+  than inventing a new group widget, self-toggle, equality expression, or
+  diagnostic-policy change.
+- From T2 retrospective: the strict `Box.aspect` positive-control question
+  remains T7/T8-owned. T5 keeps the 4:3 and 1:1 placeholders rendering but
+  does not try to close the final aspect proof.
+
+T5 responsibility after critical re-check: T5 owns the landed Rust-host
+Gallery surface that T6 ports and T7 captures. It completes the T2 skeleton
+with the real `ToggleButton` tab band, records the verification-screen sweep
+and A1 table audit, keeps the agreed M3 placeholders honest, derives the T5
+first-render / alpha-precheck capture coordinates, and runs the FD-8-G(2)
+first-render direction check. T5 does not own C/Zig host parity,
+authoritative GUI evidence, public-draft sync, owner final smoke, new layout
+engine work, real images, thumbnail hit-testing, or collection-mutation
+controls unless the A1 audit disproves the existing Phase 7 coverage
+disposition.
+
+Selected traps:
+
+| Trap | Applies? | Reason / required T5 close artifact |
+|---|---:|---|
+| #1 semantic migration | No | T5 consumes the already-landed `ToggleButton` compiler/runtime surface and does not change enum / IR / schema types or widget catalogs. |
+| #2 missed side effects | Yes | Replacing the tab band and finalizing the Gallery surface can alter layout, lightbox layering, scroll controls, retained evidence scripts, and T6/T7 assumptions. Close with a structural side-effect enumeration plus the A1 row-by-row audit and retired-script disposition. |
+| #3 parallel/derived data drift | No | T5 introduces no parallel vector/map/index or cache. The three tab booleans are source state, not a derived mirror; alpha handlers update all three explicitly. |
+| #4 untested authored branch | No | T5 adds no diagnostic / reject / size branch. Existing compiler/runtime ToggleButton tests cover the authored branches from T3/T4. |
+| #5 carry-forward | Yes | Any final Gallery constraint later tasks must preserve (T6 port assumptions, T7 evidence coordinates, R-2 precheck outcome, omitted mutation-control citation) must be recorded with evidence and a re-trigger. |
+| #6 deterministic failure | Conditional | Any recurring build/test/capture failure gets rerun history and disposition; no "green on retry" without cause. |
+| #7 GUI positive control | Yes | T5 includes a Rust-host first-render / alpha-exclusion precheck for G(2). Close with launch + screenshot + analysis and a two-frame alpha precheck. T7 remains the authoritative GUI evidence owner. |
+
+Review lane: normal task-end review as planned for T5, with the trap-#2
+coordinate / structural-side-effect check and the T5-scoped #7 precheck
+artifact. T7 remains the full independent review lane for authoritative
+GUI-render evidence; any T5 change that expands into runtime structure,
+schema/IR migration, or authoritative GUI evidence would require
+reclassification before merge.
+
+## T5 end gate — Gallery integration close artifacts (2026-07-05)
+
+T5 completed the Rust-host Gallery surface only. The T2 tab placeholder is
+now the real `ToggleButton` alpha exclusion band; the rest of the T2
+owner-accepted Gallery skeleton was preserved; no C/Zig host, spec draft,
+or authoritative T7 evidence work was absorbed.
+
+Verification commands:
+
+| Command | Result |
+|---|---|
+| `cargo run -p wasamoc -- check examples\gallery\gallery.ui` | green |
+| `cargo build -p gallery-rust --release` | green; existing `wasamo` linkable-target warning only |
+| `git diff --check` | green; existing working-copy LF→CRLF warnings only |
+| `cargo fmt --all -- --check` | green |
+| `cargo test --workspace` | green; existing `wasamo` linkable-target / `wasamo-sys` ordering warnings only |
+| `process\milestone-3\phase-8\implementation\evidence\capture-t5-gallery.ps1` inside the sandbox | failed reproducibly with off-screen window rect `(2330,1169)` and `CopyFromScreen` invalid handle |
+| Same capture script outside the sandbox (`require_escalated`) | green; captured `t5-gallery-default-all.png`, `t5-gallery-selected-albums.png`, `t5-gallery-selected-favorites.png`, `t5-gallery-lightbox.png`, `t5-gallery-closed-after-lightbox.png`, `t5-gallery-scroll-before.png`, and `t5-gallery-scrolled.png` |
+
+FD-8-G(2): owner first-render check passed on 2026-07-05 ("G(2) OK").
+
+**A1 / G(1) table audit**
+
+| Gallery surface | T5 disposition |
+|---|---|
+| Overall frame | Preserved the T2 `ZStack` + stretch `Grid` frame (`rows: 56 / 1* / 28`, `columns: 1* / 1*`) with content/status `column-span: 2`. No transparent fixed sizer shim or layout-engine change was introduced; T5 capture uses explicit window sizing as T2 did. |
+| Tabs | Replaced the three plain Buttons with three `ToggleButton`s bound to `tab_all_selected`, `tab_albums_selected`, and `tab_favorites_selected`. Each handler writes all three bool states, preserving alpha live exclusion. `default-all`, `selected-albums`, and `selected-favorites` frames show exactly one selected background at a time. |
+| Thumbnail area | Preserved the darker `#2f343b` content Box, `ScrollView`, padded `VStack`, `WrapPanel`, `for label, index in labels`, `#4f6272` 1:1 Box placeholders, and Text labels. The narrow scroll pair proves the retained scroll offset surface still moves the thumbnail list. |
+| Thumbnail highlight | Still omitted per TH-a / DD-001. No static selected-thumbnail highlight was reintroduced. |
+| Real images / hit-testing | Still Box + Text placeholders; `Open lightbox` remains the M3 hit-testing substitute. No real image or thumbnail-click surface was added. |
+| Lightbox | Preserved conditional `ZStack`, semi-transparent `#101820cc` scrim, 4:3 image placeholder, caption, close Button, and inert prev/next Buttons. The close action is live; `t5-gallery-lightbox.png` and `t5-gallery-closed-after-lightbox.png` form the T5 precheck pair. |
+| Scrollbar / wheel / drag | Kept the Scroll down / Scroll up Buttons as the minimal M3 offset-control UI. `t5-gallery-scroll-before.png` and `t5-gallery-scrolled.png` prove non-zero offset after the derived click coordinate. |
+| Collection mutation Buttons | Remain omitted. T5 cites the T2 owner disposition and existing Phase 7 coverage for `.append`, `.drop-last`, empty-list assignment, static-list reassignment, and dynamic `for` cardinality; T8 still owns the no-silently-deferred-surface audit citation. |
+| Status | Preserved the static status text. No collection-length read was added. |
+| Verification-only screens | No placement-demo state/button/overlay, footer-clip demo, standalone static ten-photo strip, mutation-control dashboard, or verification menu reappears in `examples/gallery/gallery.ui`. |
+
+**Verification-surface sweep / retired evidence**
+
+`rg` query used:
+
+```
+rg -n "placement|footer|Photo [0-9]|Add|Remove|Clear|Reset|is_placement|ToggleButton|tab_.*selected|checked:|Open lightbox|Scroll down|Scroll up|aspect|slot\.row-span|column-span" examples\gallery\gallery.ui
+```
+
+Result: only the expected T5 surface remains: three `ToggleButton`s and
+their bool states / `checked` bindings, scroll and lightbox operation
+Buttons, `column-span`, `aspect`, and `slot.row-span`. The retired prior
+capture scripts remain as historical evidence under their owning phase
+directories:
+
+- `process\milestone-3\phase-5\implementation\evidence\capture-smoke.ps1`
+- `process\milestone-3\phase-5\implementation\evidence\resize-test.ps1`
+- `process\milestone-3\phase-6\implementation\evidence\capture-lightbox.ps1`
+- `process\milestone-3\phase-7\evidence\capture-iteration.ps1`
+- `process\milestone-3\phase-7b\implementation\evidence\capture-placement-demo.ps1`
+
+T5 does not delete or rewrite those historical scripts; it records that the
+Phase 8 Gallery no longer exposes their old verification-only sub-screens,
+and the new Phase 8 capture coordinates start from
+`capture-t5-gallery.ps1`.
+
+**#2 structural side-effect enumeration**
+
+| Structure/state changed | Derived effect / disposition |
+|---|---|
+| Header tab group changed from Button placeholders to `ToggleButton`s. | Added three bool states as the source-of-truth tab state. Each click handler writes all three states, so no derived selected index or parallel cache is introduced. Capture frames prove the selected background moves and previous selection clears. |
+| `All` no longer uses `style: accent`; selected state supplies the visual cue. | This keeps the V-a background-only checked cue as the tab selection signal. The T5 precheck shows the blue selected background is readable against the final effective header background. T7 still owns the authoritative selected/exclusion evidence. |
+| Capture coordinates changed from T2. | New script derives T5 coordinates: Albums `(112,72)`, Favorites `(220,72)`, Open lightbox `(1100,72)`, close `(885,168)`, and Scroll down `(397,72)` after resizing to `760x420`. The first lightbox-close attempt used the wrong y coordinate; the script now captures `closed-after-lightbox` before the scroll pair to prove the close succeeded. |
+| Lightbox state can obscure scroll evidence if not closed. | Closed the lightbox before resizing for scroll frames; `scroll-before` / `scrolled` now show the Gallery list rather than the lightbox overlay. |
+| Verification-only surfaces remain absent. | The Gallery is now the single Rust-host verification surface for A1; T6 ports this `.ui`, and T7 captures authoritative GUI evidence from it. |
+
+**#5 carry-forward**
+
+- **Constraint:** T6 must port the final T5 `examples/gallery/gallery.ui`
+  exactly enough that the same alpha tab band, scroll controls, and lightbox
+  placeholders appear in C/Zig hosts. **Evidence:** T5 A1 table audit and
+  `t5-gallery-default-all.png`. **Re-trigger:** any T6 host-port divergence
+  or `.ui` edit after this commit. **Placement:** carry-forward for T6/T7.
+- **Constraint:** T7 must treat T5 frames as a precheck, not the
+  authoritative GUI package. It must re-capture the selected/exclusion,
+  lightbox open/closed, wrap/overflow, and aspect evidence after T6 merges.
+  **Evidence:** T5 review lane and `capture-t5-gallery.ps1`. **Re-trigger:**
+  T7 evidence start or any final Gallery surface change. **Placement:**
+  carry-forward for T7.
+- **Constraint:** If future work moves header controls or changes window
+  sizing, coordinate-based capture scripts must be re-derived and include a
+  state-confirming frame after modal/lightbox close actions. **Evidence:**
+  the first T5 close coordinate missed, causing the scroll pair to be
+  captured under the lightbox until the script added
+  `closed-after-lightbox`. **Re-trigger:** any layout-affecting Gallery UI
+  change or capture-script reuse. **Placement:** carry-forward candidate for
+  phase-end item 15.
+- **Constraint:** Collection mutation controls remain omitted by relying on
+  Phase 7 evidence, not by silently dropping the surface. **Evidence:** T2
+  G(1) owner acceptance and T5 A1 audit. **Re-trigger:** T8
+  no-silently-deferred-surface audit. **Placement:** carry-forward for T8.
+
+**#6 deterministic-failure disposition**
+
+- The first sandboxed capture failed with the same off-screen
+  `CopyFromScreen` invalid-handle symptom recorded in T2. Disposition:
+  sandbox/window-positioning interference, not an app regression; the same
+  script succeeded outside the sandbox with the window at `(0,0)`.
+- The initial T5 capture script did not stop on the `CopyFromScreen`
+  exception. Disposition: script robustness defect; added
+  `$ErrorActionPreference = "Stop"`.
+- The first visible-desktop T5 script captured the scroll pair while the
+  lightbox was still open because the close click y coordinate missed the
+  close Button. Disposition: coordinate derivation defect; corrected close
+  coordinate to `(885,168)` and added a `closed-after-lightbox` frame before
+  the scroll pair. Rerun green.
+
+**#7 GUI positive-control precheck**
+
+T5 GUI evidence is a precheck for G(2), not the authoritative T7 package.
+The frames show:
+
+- `t5-gallery-default-all.png`: Rust host renders the integrated Gallery;
+  All is selected, thumbnail WrapPanel renders, operation Buttons and status
+  are visible.
+- `t5-gallery-selected-albums.png` and
+  `t5-gallery-selected-favorites.png`: clicking tabs moves the selected
+  background and clears the previous tab, proving live alpha exclusion rather
+  than a static selected look-alike.
+- `t5-gallery-lightbox.png` and
+  `t5-gallery-closed-after-lightbox.png`: the conditional lightbox subtree is
+  present then absent after the close Button.
+- `t5-gallery-scroll-before.png` and `t5-gallery-scrolled.png`: at the narrow
+  viewport, clicking Scroll down moves the thumbnail content from
+  `IMG 001`-`IMG 010` to `IMG 006`-`IMG 015`, proving the retained
+  `ScrollView.offset-y` operation.
+
+T7 remains responsible for the final assistant GUI evidence with the full
+positive-control set, including strict aspect closure or the T8 citation.
