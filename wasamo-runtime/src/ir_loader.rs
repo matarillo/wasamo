@@ -279,7 +279,7 @@ fn validate(comp: &IrComponent) -> Result<(), IrLoadError> {
     validate_phase6_zstack_node_invariants(&comp.root, ParentKind::Root)?;
     validate_phase6_control_flow_invariants(&comp.root)?;
     validate_phase7_iteration_invariants(&comp.root, false)?;
-    validate_phase8_togglebutton_node_invariants(&comp.root, &declared)
+    validate_phase8_togglebutton_node_invariants(&comp.root, &declared, None)
 }
 
 fn validate_state_default(state: &IrState) -> Result<(), IrLoadError> {
@@ -337,6 +337,7 @@ fn scalar_type_name(ty: &IrType) -> &'static str {
 fn validate_phase8_togglebutton_node_invariants(
     node: &IrNode,
     declared: &std::collections::HashMap<&str, IrStateType>,
+    loop_scope: Option<LoopReadScope<'_>>,
 ) -> Result<(), IrLoadError> {
     if node.widget_type == "ToggleButton" {
         for prop in &node.props {
@@ -378,6 +379,7 @@ fn validate_phase8_togglebutton_node_invariants(
                 &binding.expr,
                 &target_ty,
                 declared,
+                loop_scope,
                 &format!("ToggleButton.{}", binding.prop_name),
             )?;
         }
@@ -397,7 +399,7 @@ fn validate_phase8_togglebutton_node_invariants(
     }
 
     for member in &node.children {
-        validate_phase8_togglebutton_member_invariants(member, declared)?;
+        validate_phase8_togglebutton_member_invariants(member, declared, loop_scope)?;
     }
     Ok(())
 }
@@ -405,22 +407,44 @@ fn validate_phase8_togglebutton_node_invariants(
 fn validate_phase8_togglebutton_member_invariants(
     member: &IrMember,
     declared: &std::collections::HashMap<&str, IrStateType>,
+    loop_scope: Option<LoopReadScope<'_>>,
 ) -> Result<(), IrLoadError> {
     match member {
         IrMember::Widget(slot) => {
-            validate_phase8_togglebutton_node_invariants(&slot.node, declared)
+            validate_phase8_togglebutton_node_invariants(&slot.node, declared, loop_scope)
         }
         IrMember::ControlFlow(ControlFlowNode::If { branches }) => {
             for branch in branches {
                 for body_member in &branch.body {
-                    validate_phase8_togglebutton_member_invariants(body_member, declared)?;
+                    validate_phase8_togglebutton_member_invariants(
+                        body_member,
+                        declared,
+                        loop_scope,
+                    )?;
                 }
             }
             Ok(())
         }
-        IrMember::ControlFlow(ControlFlowNode::For { body, .. }) => {
+        IrMember::ControlFlow(ControlFlowNode::For {
+            binder,
+            index_binder,
+            collection,
+            body,
+        }) => {
+            let child_scope = LoopReadScope {
+                binder,
+                index_binder: index_binder.as_deref(),
+                elem: match collection {
+                    HandlerExpr::ListPropRead { elem, .. } => elem,
+                    _ => &IrType::I32,
+                },
+            };
             for body_member in body {
-                validate_phase8_togglebutton_member_invariants(body_member, declared)?;
+                validate_phase8_togglebutton_member_invariants(
+                    body_member,
+                    declared,
+                    Some(child_scope),
+                )?;
             }
             Ok(())
         }
@@ -452,6 +476,7 @@ fn validate_scalar_binding_expr_type(
     expr: &HandlerExpr,
     expected: &IrType,
     declared: &std::collections::HashMap<&str, IrStateType>,
+    loop_scope: Option<LoopReadScope<'_>>,
     label: &str,
 ) -> Result<(), IrLoadError> {
     match (expected, expr) {
@@ -468,10 +493,10 @@ fn validate_scalar_binding_expr_type(
                 format!("binding `{label}` references undeclared name `{name}`")
             })
         }
-        (_, HandlerExpr::PropRead { path })
-        | (_, HandlerExpr::StrPropRead { path })
-        | (_, HandlerExpr::BoolPropRead { path }) => {
-            validate_scalar_binding_read_type(path, expected, declared, label)
+        (_, HandlerExpr::ItemRead { .. } | HandlerExpr::IndexRead { .. })
+            if loop_scope.is_some() =>
+        {
+            validate_loop_local_binding_type(expr, expected, loop_scope.expect("checked above"))
         }
         _ => Err(IrLoadError::Validate(format!(
             "binding `{label}` must resolve to `{}`",
@@ -7231,7 +7256,51 @@ mod tests {
              state index: i32 = 0\n\
              node ToggleButton { bind checked = (prop-read index) }\n\
              }",
-            "binding `ToggleButton.checked` reads `index` with type `i32`, expected `bool`",
+            "binding `ToggleButton.checked` must resolve to `bool`",
+        );
+    }
+
+    #[test]
+    fn validate_rejects_togglebutton_checked_wrong_read_tag_runtime_ir() {
+        assert_validate_err(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             state selected: bool = true\n\
+             node ToggleButton { bind checked = (str-prop-read selected) }\n\
+             }",
+            "binding `ToggleButton.checked` must resolve to `bool`",
+        );
+    }
+
+    #[test]
+    fn validate_accepts_togglebutton_checked_loop_item_binding_runtime_ir() {
+        let c = parse_ok(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             state flags: bool[] = [true, false]\n\
+             node WrapPanel { for flag in flags { node ToggleButton { bind checked = (item-read flag) } } }\n\
+             }",
+        );
+        validate(&c).expect("ToggleButton.checked may bind a bool loop item");
+    }
+
+    #[test]
+    fn validate_accepts_togglebutton_text_loop_item_binding_runtime_ir() {
+        let c = parse_ok(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             state labels: string[] = [\"All\", \"Albums\"]\n\
+             node WrapPanel { for label in labels { node ToggleButton { bind text = (item-read label) } } }\n\
+             }",
+        );
+        validate(&c).expect("ToggleButton.text may bind a string loop item");
+    }
+
+    #[test]
+    fn validate_rejects_togglebutton_checked_loop_index_binding_runtime_ir() {
+        assert_validate_err(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             state flags: bool[] = [true, false]\n\
+             node WrapPanel { for flag, i in flags { node ToggleButton { bind checked = (index-read i) } } }\n\
+             }",
+            "loop index binder cannot be used in a bool binding",
         );
     }
 

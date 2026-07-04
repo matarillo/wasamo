@@ -721,7 +721,7 @@ Verification commands:
 | Command | Result |
 |---|---|
 | `cargo fmt --all -- --check` | green |
-| `cargo test -p wasamo-runtime togglebutton -- --nocapture` | green: 9 focused runtime unit tests + 4 Windows runtime integration tests |
+| `cargo test -p wasamo-runtime togglebutton -- --nocapture` | green: 13 focused runtime unit tests + 4 Windows runtime integration tests |
 | `cargo test -p wasamo-runtime validate_rejects_checked -- --nocapture` | green: 4 non-supporting-kind loader rejects |
 | `cargo test --workspace` | green; existing `wasamo` linkable-target / `wasamo-sys` ordering warnings only |
 
@@ -770,6 +770,9 @@ rg -n "ToggleButton|PROP_TOGGLEBUTTON_CHECKED|validate_phase8_togglebutton|resol
 | unknown `ToggleButton` attr / binding | `validate_rejects_togglebutton_unknown_attr_runtime_ir`, `validate_rejects_togglebutton_unknown_binding_runtime_ir` |
 | non-bindable `ToggleButton.style` | `validate_rejects_togglebutton_style_binding_runtime_ir` |
 | non-bool `ToggleButton.checked` literal / binding | `validate_rejects_togglebutton_checked_non_bool_literal_runtime_ir`, `validate_rejects_togglebutton_checked_non_bool_binding_runtime_ir` |
+| wrong expression tag for `ToggleButton.checked` direct IR | `validate_rejects_togglebutton_checked_wrong_read_tag_runtime_ir` |
+| loop-local `ToggleButton` bindings stay valid | `validate_accepts_togglebutton_checked_loop_item_binding_runtime_ir`, `validate_accepts_togglebutton_text_loop_item_binding_runtime_ir` |
+| loop index still cannot drive bool `checked` | `validate_rejects_togglebutton_checked_loop_index_binding_runtime_ir` |
 | absent `checked` defaults to runtime `false`; literal `true` changes visual | `togglebutton_default_false_and_literal_checked_drive_distinct_visuals` |
 | bool-state flip drives checked visual | `togglebutton_bool_state_flip_reaches_checked_visual` |
 | alpha exclusion drains to exactly one checked | `togglebutton_alpha_exclusion_click_leaves_exactly_one_checked` |
@@ -813,3 +816,42 @@ owner.
 
 Review lane remains **full independent review** before merge; this close adds
 runtime structural change and diagnostic/reject branches.
+
+## T4 independent review and remediation (2026-07-04)
+
+Reviewer: Confucius subagent (`019f2d45-5b56-7463-b0bb-6fa5a4ec6e14`).
+
+Initial result: two findings.
+
+1. The T4 validator accepted malformed direct IR where a `checked` binding
+   used the wrong expression tag but referenced a bool state (for example
+   `str-prop-read selected` with `selected: bool`). The bool binding
+   evaluator would then reject at runtime instead of loader validation
+   re-rejecting the malformed IR.
+2. The T4 validator recursed into `for` bodies without preserving loop scope,
+   so valid loop-local `ToggleButton` bindings such as `checked: flag` for a
+   bool collection item or `text: label` for a string collection item were
+   rejected at runtime load.
+
+Remediation:
+
+- `validate_phase8_togglebutton_node_invariants` now carries
+  `LoopReadScope` through `if` / `for` recursion, matching the existing
+  Phase 7 reference validator's loop-local type rules.
+- `validate_scalar_binding_expr_type` now checks expression kind and target
+  type together: bool targets require bool literals / `bool-prop-read` /
+  valid bool loop items, string targets require string forms, and wrong read
+  tags are rejected before binding registration.
+- Added firing tests for the wrong-tag same-state-type reject, valid
+  loop-local `checked` and `text` bindings, and invalid loop-index-to-bool
+  `checked`.
+
+Remediation verification:
+
+| Command | Result |
+|---|---|
+| `cargo fmt --all` | green |
+| `cargo fmt --all -- --check` | green |
+| `git diff --check` | green |
+| `cargo test -p wasamo-runtime togglebutton -- --nocapture` | green: 13 focused runtime unit tests + 4 Windows runtime integration tests |
+| `cargo test --workspace` | green; existing `wasamo` linkable-target / `wasamo-sys` ordering warnings only |
