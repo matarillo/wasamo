@@ -97,8 +97,10 @@ known widget (no unknown-widget warning), and T3/T4 trap-#1 audit must be
 - **Visual composition:** let `enabled: false` keep the existing disabled
   override. For enabled `ToggleButton`s, `checked` should alter the
   background color in a way that remains visibly distinct from default and
-  accent normal states; if the two-frame evidence is ambiguous against Mica,
-  T4 records an SI-1 implementation-checkpoint design revision trigger.
+  accent normal states; if the two-frame evidence is ambiguous against the
+  final effective Gallery background, T4 records an SI-1 implementation-
+  checkpoint design revision trigger. Mica/backdrop is a possible
+  ambiguity factor, not a separate proof target.
 - **Author-facing boundary:** do not add `checkable`, generic `Toggle`,
   self-toggle, two-way binding, group widgets, or `==` grammar in T3/T4.
 
@@ -252,10 +254,12 @@ independent-review GUI evidence task per the preamble.
 Implemented the first non-throwaway Photo Gallery skeleton in
 `examples/gallery/gallery.ui`:
 
-- Root `ZStack` with an opaque background `Box` and a real stretch `Grid`
-  frame (`rows: 56 1* 28`, `columns: 1* 1*`). The header uses two
-  side-by-side cells; the content and status regions use `column-span: 2`
-  to span the full frame width.
+- Root `ZStack` with a real stretch `Grid` frame (`rows: 56 1* 28`,
+  `columns: 1* 1*`). The header uses two side-by-side cells; the content
+  and status regions use `column-span: 2` to span the full frame width.
+  There is no root fill `Box`; the header/status background is the
+  effective window/backdrop surface, while the thumbnail content area has
+  its own darker `Box`.
 - The left header cell holds the tab placeholder `HStack` (`All`,
   `Albums`, `Favorites`), with `All` styled `accent` only as the T2
   placeholder; T5 swaps this to `ToggleButton` / `checked`.
@@ -289,9 +293,12 @@ Assistant image analysis:
 - `t2-owner-placement-wide.png`: non-blank Gallery window; left tab group,
   right operation group, padded thumbnail grid, and status strip are
   visible. The wide frame shows 18 thumbnails arranged as 9 columns x 2
-  rows. The accepted top-row and thumbnail placeholder colors keep labels
-  readable. This run is after the owner placement change to two star
-  columns with `column-span: 2` on the content/status rows.
+  rows. Header/status areas are no longer covered by an explicit root fill
+  Box; the current capture shows the dark effective window/backdrop
+  surface behind those rows, with the thumbnail area still carried by the
+  darker `#2f343b` content Box. This run is after the owner placement
+  change to two star columns with `column-span: 2` on the content/status
+  rows.
 - `t2-owner-placement-narrow.png`: same surface at 760px width; thumbnails
   reflow to 5 columns (with a final partial row). This is the T2
   positive control for the real stretch Grid + WrapPanel path,
@@ -317,6 +324,10 @@ owner-placement run; earlier `t2-skeleton-*`, `t2-row56-*`,
 `t2-row64-*`, `t2-accepted-colors-*`, and `t2-span-frame-*` captures were
 superseded during iteration and deleted before commit.
 
+After the post-review R-2 discussion, the owner removed the explicit root
+fill from `gallery.ui`; the retained `t2-owner-placement-*` frames were
+regenerated from the saved script against that current source state.
+
 Additional owner G(1) feedback before T2 close:
 
 - The top tab/action Button labels looked vertically biased because the
@@ -328,13 +339,18 @@ Additional owner G(1) feedback before T2 close:
 - The thumbnail area lacked top/left inset. T2 fixed this with existing
   DSL surface by wrapping the thumbnail `WrapPanel` in a
   `ScrollView`-content `VStack { padding: 12px }`.
-- A stretch opaque root background was added so the skeleton does not
-  depend on compositor/backdrop transparency or show unrelated desktop
-  pixels. The latest owner placement uses that background as the header
-  and status band, with a darker content `Box` behind the thumbnail area.
-- The top row background was owner-reviewed away from the trial
-  `#301010` color and accepted as `#272a2d`: a neutral dark band that
-  separates row 1 from row 2 while preserving Button/Text contrast.
+- A stretch opaque root background was trialed to make the skeleton
+  independent of compositor/backdrop transparency. After the R-2 review,
+  the owner removed that root fill from `gallery.ui`. The current
+  owner-placement captures therefore leave the header and status rows on
+  the effective window/backdrop surface; only the thumbnail area keeps a
+  dedicated darker `#2f343b` content `Box`.
+- The trial top-row background (`#301010`, later `#272a2d`) is no longer a
+  landed explicit fill. The durable requirement is not that exact color:
+  tab/action labels must remain readable, the first and second rows must
+  remain visually distinguishable, and T4/T7 must judge
+  `ToggleButton.checked` against the final effective background rather
+  than treating Mica itself as a separate acceptance target.
 - The top row content is split into two Grid cells: the tab `HStack` is
   left-aligned in the first star column, while the scroll/lightbox
   operation `HStack` is right-aligned in the second star column.
@@ -364,7 +380,7 @@ T2 technical findings / triage:
 | Light tab-band chrome made default Button labels unreadable. | Removed the light tab background and updated placeholder fills to maintain contrast with the current white Text/Button rendering. This is an owner-feedback correction in the G(1) checkpoint, not a new design surface. |
 | Top-row Button labels looked lower than centered. | Fixed in T2 by increasing the tab row height to `56`; the cause was row clipping, not a runtime Button visual issue. `auto` row tracks are unavailable in the current checker/runtime surface. |
 | Thumbnail area lacked top/left padding. | Fixed in T2 with `VStack { padding: 12px }` inside the ScrollView content. |
-| Trial top-row and placeholder colors needed owner direction. | Owner accepted `#272a2d` for the top row, `#4f6272` for thumbnail placeholders, and `#5b7080` for the lightbox image placeholder. |
+| Trial top-row and placeholder colors needed owner direction. | Owner first accepted `#272a2d` as a readable trial top-row fill, then removed the explicit root/top-row fill after the R-2 review. Current T2 captures use the effective window/backdrop surface behind the header/status rows. Owner-accepted placeholder colors remain `#4f6272` for thumbnails and `#5b7080` for the lightbox image placeholder. |
 | The first T2 skeleton had no `column-span` after removing the old verification Grid. | Fixed in the current owner placement by using a two-star-column frame and applying `column-span: 2` to the content and status rows. This avoids silent deferral of the Grid column-span surface. |
 | The first T2 owner-placement lightbox still did not exercise row-span or Grid direct-child `slot.*`. | Fixed in T2 by moving lightbox nav/close Buttons to direct Grid children with `slot.*` placement; the side nav Buttons use `slot.row-span: 2`. |
 | Status text remains intentionally static and short. | Accepted M3 placeholder; dynamic collection length remains out of scope. |
@@ -379,7 +395,7 @@ or record an explicit deviation with owner/review disposition.
 | Gallery surface | M3 implementation / placeholder agreement candidate | Later owner |
 |---|---|---|
 | Overall frame | Real stretch Grid frame (`rows: 56 / 1* / 28`, `columns: 1* / 1*`) with content/status spanning both columns via `column-span: 2`; no transparent fixed sizer shim in the current `.ui`. | T5 keeps/revises with a recorded Problem B disposition; no layout-engine change in Phase 8. |
-| Tabs | T2 plain-Button placeholder on the accepted `#272a2d` header band; labels must remain readable. The tab group is left-aligned in the first header cell, while scroll/lightbox actions are right-aligned in the second header cell. T5 replaces the tab group with 3 `ToggleButton`s and α live exclusion. | T5/T7 prove selected/exclusion. |
+| Tabs | T2 plain-Button placeholder on the effective window/backdrop header surface; labels must remain readable and the header/content boundary must remain clear. The tab group is left-aligned in the first header cell, while scroll/lightbox actions are right-aligned in the second header cell. T5 replaces the tab group with 3 `ToggleButton`s and α live exclusion. R-2 is about `ToggleButton.checked` being visually unambiguous against the final effective background, not about proving Mica as a separate feature. | T5/T7 prove selected/exclusion and close R-2 with the checked/on-off positive control. |
 | Thumbnail area | Spanned content cell with darker `#2f343b` background; `ScrollView` + padded content `VStack` + `WrapPanel` + `for` over placeholder labels; `#4f6272` Box + Text stands in for images. | T5 final A1 integration; T7 wrap/overflow evidence. |
 | Thumbnail highlight | Omitted per TH-a / DD-001; no static selected-thumbnail highlight in M3. | None unless owner revises DD scope. |
 | Real images / hit-testing | Box + Text placeholders; `Open lightbox` Button is the M3 hit-testing substitute. | M4. |
@@ -404,7 +420,7 @@ reject / size branch (#4).
 | Footer-overflow clip demo removed from the Gallery surface. | The final app no longer exposes the old top Grid/footer clipping proof. The Grid concept is reused only as the Gallery frame. |
 | Static ten-photo thumbnail proof replaced by an 18-label `for`/`WrapPanel` thumbnail surface. | A1 thumbnail wrapping remains exercised, with enough cardinality to show wrap and scroll; old static `Photo 1`-style evidence frames were deleted as obsolete. |
 | Add/Remove/Clear/Reset mutation controls removed. | Owner accepted omission from the final Gallery UI because Phase 7 already verified `.append`, `.drop-last`, empty-list assignment, static-list reassignment, and dynamic `for` cardinality. T5/T8 must cite that coverage if the controls remain omitted. |
-| Root layout changed to `ZStack` + stretch two-column `Grid` frame with no transparent fixed sizer shim. | Header/content/status placement is now the Gallery skeleton. Problem B remains a layout-engine residual; T2 did not introduce a layout-engine change. |
+| Root layout changed to `ZStack` + stretch two-column `Grid` frame with no transparent fixed sizer shim and no landed root fill `Box`. | Header/content/status placement is now the Gallery skeleton. Header/status rows use the effective window/backdrop surface; the thumbnail area has its own content `Box`. Problem B remains a layout-engine residual; T2 did not introduce a layout-engine change. |
 | Header split into left tab group and right operation group. | Plain Buttons remain T2 placeholders; T5 swaps tabs to `ToggleButton`. The row height is recorded as the T2 value (`56`) while the durable constraint is "no clipping / readable labels." |
 | Content/status rows span both Grid columns. | `column-span` is exercised in the Gallery surface instead of silently deferred. |
 | Lightbox controls moved to direct Grid children with `slot.*` placement; side controls use `slot.row-span: 2`. | A13 direct `slot.*` and row-span are now exercised by the Gallery surface. Prev/next remain inert placeholders; close remains live. |
@@ -423,6 +439,11 @@ reject / size branch (#4).
 - If mutation controls remain omitted, T5/T8 must cite the existing Phase
   7 collection/iteration coverage rather than treating the omission as a
   purely visual cleanup.
+- T4/T7 must close R-2 by proving that the final `ToggleButton.checked`
+  visual is unambiguous against the final effective Gallery background.
+  This is not a requirement to prove Mica as an independent feature; Mica
+  is only one possible backdrop/theme factor that could make a
+  background-only checked cue ambiguous.
 - T7 authoritative GUI evidence must re-derive coordinates after final
   ToggleButton/restyling work; T2 coordinates are not a reusable contract.
 - Problem B remains outside T2: if later work needs a sizing shim or a

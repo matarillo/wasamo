@@ -12,12 +12,6 @@ component Gallery inherits Window {
     ]
 
     ZStack {
-        Box {
-            slot.h-align: stretch
-            slot.v-align: stretch
-            fill: #272a2d
-        }
-
         Grid {
             slot.h-align: stretch
             slot.v-align: stretch

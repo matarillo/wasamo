@@ -118,7 +118,9 @@ only if the log makes those three buckets auditable.
       *author-facing* taxonomy is DD-fixed), how `checked` reuses the
       existing single-boolean binding path, and how the V-a fill
       composes with `style` / `enabled` visuals (including the R-2
-      ambiguity check plan against Mica/backdrop).
+      ambiguity check plan against the final effective Gallery background;
+      Mica/backdrop is a possible ambiguity factor, not a separate proof
+      target).
 - [x] **Gallery + hosts recon**: map the current
       `examples/gallery/gallery.ui` sections to the wireframe target
       (what folds where; what is swept); list retained capture scripts
@@ -166,9 +168,9 @@ B residual. T2 must not silently absorb layout-engine changes or final UI
 judgments that belong to T5/T7/owner checkpoints.
 
 - [x] Restructure `examples/gallery/gallery.ui` to the **wireframe
-      skeleton**: Grid overall frame (rows ≈ tab band 40 / content 1* /
-      status 20; current T2 shape uses two star columns, direct `Cell`
-      alignment in the header, and content/status `column-span: 2`),
+      skeleton**: Grid overall frame (current T2 shape uses rows
+      `56 / 1* / 28`, two star columns, direct `Cell` alignment in the
+      header, and content/status `column-span: 2`),
       tab-band placeholder `HStack`, thumbnail area `ScrollView {
       WrapPanel { for … } }`, status strip `Text`, lightbox `ZStack` +
       `if` retained, Box `aspect` placeholders, `slot.*` placement —
@@ -256,10 +258,11 @@ node).
       (text / style / enabled / click) and leaf measure/arrange — a new
       node, not a new layout primitive; **V-a checked visual**:
       background colour change on `checked`, composing with `style` and
-      `enabled` states; verify the cue is unambiguous against the Mica
-      backdrop (R-2 — if ambiguous in practice, that is an SI-1
-      implementation-checkpoint revision recorded in log.md, not a new
-      option choice).
+      `enabled` states; verify the cue is unambiguous against the final
+      effective Gallery background (R-2 — Mica/backdrop is a possible
+      ambiguity factor, not a separate proof target; if ambiguous in
+      practice, that is an SI-1 implementation-checkpoint revision
+      recorded in log.md, not a new option choice).
 - [ ] Reactive path: a bool-state change through the existing binding
       drives the visual (propagation-audit point (ii)); `clicked`
       handler block-assignment writes the state (W1 controlled — the
