@@ -606,3 +606,31 @@ resolved by running `cargo fmt --all`; the subsequent fmt check was green.
 
 Not applicable. T3 has no GUI-render deliverable; T4/T7 own visual and
 screenshot evidence.
+
+## T3 independent review (2026-07-04)
+
+Reviewer: Galileo subagent (`019f2cff-3718-79c3-a25b-53d9830219c1`).
+
+Result: **no findings**. The reviewer checked commits `a79d15e` and
+`763b011` in code-review stance and found no blocking implementation bug,
+behavioral regression, SI-3 branch/test gap, or start/end-gate recording
+gap.
+
+Reviewer spot checks:
+
+- `ToggleButton` admission and `checked` type catalog in
+  `wasamoc/src/check.rs`.
+- `checked` unsupported-widget rejects, `ToggleButton` unknown-attribute
+  reject, and corresponding firing tests.
+- lower / emit / public pipeline carry-through tests.
+- T3 start/end gate records and T3/T4 responsibility split.
+
+Reviewer-run verification:
+
+- `git diff --check 7c27074..HEAD`
+- `cargo fmt --all -- --check`
+- `cargo test -p wasamoc togglebutton -- --nocapture`
+- `cargo test -p wasamoc checked -- --nocapture`
+- `cargo test --workspace`
+
+All reviewer-run checks were green.
