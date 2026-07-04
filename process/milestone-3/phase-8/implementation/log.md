@@ -657,3 +657,159 @@ T3 addressed them before merge:
   generic `checked` admission diagnostic.
 - F3: Removed the component fallback from `check_checked_attr_admission`;
   component-level `checked` is now pinned as a host-attribute reject.
+
+## T4 start gate — carry-over check, responsibility cut, and trap selection (2026-07-04)
+
+Carry-over checked before choosing the T4 approach:
+
+- From T3 log / T3 retrospective: T4 must mirror the authoring catalog at
+  the runtime loader boundary: `ToggleButton` admits `text` / `style` /
+  `enabled` / `checked`; `checked` is valid only on `ToggleButton`; unknown
+  `ToggleButton` props/bindings must not become a direct textual-IR hole.
+- From T3 review remediation: absent `checked` is intentionally absent from
+  textual IR, so T4 must materialize the runtime default `false` and pin it
+  with a fixture.
+- From T1/T3: widget kind is string-carried, so T4 cannot rely on compiler
+  exhaustiveness for runtime dispatch. It needs an `rg`-enumerated audit over
+  runtime kind/property dispatch sites and direct tests for the new runtime
+  branches.
+- From T2 log / retrospective: R-2 closes against the final effective Gallery
+  background, not by separately proving Mica. T4 can choose and test an
+  unambiguous runtime checked colour, but final Gallery-background evidence
+  remains T5/T7-owned if later UI work changes the surface.
+- From T2/T3 retrospectives: coordinate derivation, A1/G(1) table adherence,
+  C/Zig host parity, and authoritative screenshot evidence are later tasks;
+  T4 should not absorb them.
+
+T4 responsibility after critical re-check: T4 owns the runtime
+defensive-reader and widget-node boundary for `ToggleButton.checked`:
+loader validation, property-key resolution, widget construction, defaulting,
+Button-family visual/state sharing, bool-binding propagation, alpha
+exclusion runtime behaviour, and Button regression fixtures. T4 does not own
+Gallery integration, final tab-band assembly, cross-host parity, or the
+authoritative GUI evidence package.
+
+Selected traps:
+
+| Trap | Applies? | Reason / close artifact |
+|---|---:|---|
+| #1 semantic migration | Yes | Runtime gains a `ToggleButton` widget kind and a `checked` property path across `validate()`, `construct_widget`, `resolve_prop_key`, `WidgetData`, property setters/getters, hit testing, hover, and layout leaf dispatch. Close with an `rg`-enumerated runtime call-site audit table. |
+| #2 missed side effects | Yes | `checked`, `enabled`, `style`, hover/press, click dispatch, layout sizing, and Visual brush state interact on the shared Button-family visual. Close with a structural side-effect enumeration covering colour priority, layout dirtiness, event dispatch, and Button regression. |
+| #3 parallel/derived data drift | No | T4 should not introduce a separate index/cache or parallel child/property table; if a shared helper is introduced, it remains the single Button-family state object. |
+| #4 untested authored branch | Yes | T4 adds loader validation/property-key/widget setter branches for `ToggleButton.checked` and malformed runtime IR. Each reject/default/propagation branch needs a direct firing test. |
+| #5 carry-forward | Yes | R-2 final-background evidence and any runtime catalog invariant that T5/T7 must preserve need evidence + re-trigger. Expected carry-forward: final Gallery tab-band must re-capture checked/unchecked frames after T5 restyling. |
+| #6 deterministic failure | Conditional | Any repeatable build/test/runtime failure gets a rerun history and disposition before close. |
+| #7 GUI positive control | No | T4 has live Windows-runtime fixtures and visual-brush assertions, but not a GUI screenshot deliverable. Authoritative launch + screenshot + positive-control evidence is T7; T4 records only the runtime visual cue and carries R-2 to T5/T7 if needed. |
+
+Review lane: **full independent review** because T4 is a runtime structural
+change (new widget node / runtime property path) and also adds
+diagnostic/reject branches; the review must include the trap-#4
+branch/test-focused check.
+
+## T4 end gate — runtime node / visual close artifacts (2026-07-04)
+
+T4 implemented the runtime half only: the loader now accepts and constructs
+`ToggleButton`, runtime validation mirrors the T3 authoring catalog for the
+new kind, `checked` defaults to `false` when absent from textual IR, the
+existing bool-binding writer drives the new checked property, and the
+Button-family visual / hit-test / hover / layout leaf paths include the
+new runtime kind. Gallery tab-band integration, cross-host parity, and
+authoritative screenshot evidence remain T5-T7.
+
+Verification commands:
+
+| Command | Result |
+|---|---|
+| `cargo fmt --all -- --check` | green |
+| `cargo test -p wasamo-runtime togglebutton -- --nocapture` | green: 9 focused runtime unit tests + 4 Windows runtime integration tests |
+| `cargo test -p wasamo-runtime validate_rejects_checked -- --nocapture` | green: 4 non-supporting-kind loader rejects |
+| `cargo test --workspace` | green; existing `wasamo` linkable-target / `wasamo-sys` ordering warnings only |
+
+**#1 call-site audit table**
+
+`rg` query used:
+
+```
+rg -n "ToggleButton|PROP_TOGGLEBUTTON_CHECKED|validate_phase8_togglebutton|resolve_prop_key|construct_widget|WidgetData::Button|WidgetData::ToggleButton|button_data_mut|effective_button_color|hit_test_click|update_hover|clear_hover|build_layout_tree|__togglebutton_checked" wasamo-runtime\src wasamo-runtime\tests
+```
+
+| Site | Classification | T4 disposition |
+|---|---|---|
+| `ir_loader::validate()` phase gates | must-dispatch | Added `validate_phase8_togglebutton_node_invariants` after the Phase 7 gates. It recurses through widget / `if` / `for` members and rejects `checked` outside `ToggleButton`, unknown `ToggleButton` attrs/bindings, `style` binding, and non-bool `checked` literal/binding forms. |
+| `ir_loader::construct_widget` | must-dispatch | Added the `"ToggleButton"` arm. It extracts Button-family `text` / `style` / `enabled`, extracts `checked`, supplies runtime default `false` when absent, and defers initial bound values to the existing binding initial run. |
+| `ir_loader::resolve_prop_key` + binding registration loop | must-dispatch | Added `ToggleButton.text`, `ToggleButton.enabled`, and `ToggleButton.checked`; `checked` returns `IrType::Bool` and selects `register_bool_binding` + `widget_write_property_bool`. `ToggleButton.style` remains a static prop only; validation rejects style binding before it can reach dispatch. |
+| `WidgetData` / constructors | must-dispatch | Added distinct `WidgetData::ToggleButton(Box<ButtonData>)` and `WidgetNode::toggle_button`, while sharing the Button-family construction helper and `ButtonData`. Runtime kind remains visible for the `checked` support boundary. |
+| `WidgetNode` property get/set | must-dispatch | Button-family `text` / `style` / `enabled` dispatch accepts both `Button` and `ToggleButton`; `PROP_TOGGLEBUTTON_CHECKED` is accepted only by `ToggleButton` and writes through `update_toggle_button_checked`. |
+| Visual colour helpers | must-dispatch | `ButtonData` carries `checked`; `effective_button_color` applies disabled first, checked second, then normal Button state. `toggle_checked_color` gives the V-a background-only cue used by the runtime fixtures. |
+| Hit test / hover / clear-hover | must-dispatch | Replaced Button-only matches with `button_data_mut`, so `ToggleButton` inherits click dispatch, inline handler execution, host signal enqueue, enabled suppression, hover/press state, and hover clearing. |
+| Layout leaf dispatch | must-dispatch | `build_layout_tree` routes `WidgetData::ToggleButton` through the same rectangle leaf as Button; no new layout primitive or layout algorithm change. |
+| Test-only accessors | must-prove | `__togglebutton_checked_for_test` and the existing enabled accessor let mock-free integration tests assert live runtime state without mocking Win32/WinRT. |
+| `window.rs` event forwarding | unchanged / generic | Existing root calls to `hit_test_click`, `update_hover`, and `clear_hover` need no edit because the per-node Button-family dispatch now includes `ToggleButton`. |
+
+**#2 structural side-effect enumeration**
+
+| Structure/state changed | Derived effect / disposition |
+|---|---|
+| Runtime widget tree gained `WidgetData::ToggleButton`. | Kept as a distinct runtime node so loader validation/property dispatch can distinguish `checked` support; layout treats it as the existing Button leaf. |
+| `ButtonData` gained `checked`. | Stored in the shared Button-family state object so style, enabled, hover, and checked colour priority are computed from one source of truth. |
+| Background brush colour now depends on checked state. | Priority is disabled > checked > normal Button style/state. Existing disabled contract is preserved by `disabled_togglebutton_suppresses_click_like_button`; existing Button tests remain green in `cargo test --workspace`. |
+| Button-family click / hover paths now include ToggleButton. | `button_data_mut` centralizes the shared branch. Alpha fixture proves `clicked` handler block assignment updates state and bindings; disabled fixture proves click suppression still wins. |
+| Binding target catalog gained `PROP_TOGGLEBUTTON_CHECKED = 7`. | It is a runtime property key for the existing bool-binding writer path; no new `PropertyValue`, reactive writer class, or ABI header constant was introduced. |
+| Runtime validation now closes the direct textual-IR hole for the new kind. | T4 intentionally does not reform the older Button-wide loose catalog; the new closed `ToggleButton` catalog mirrors T3 and is pinned with reject tests. |
+
+**#4 branch tests**
+
+| Branch / diagnostic / behaviour | Firing test |
+|---|---|
+| `ToggleButton.checked` property-key is bool | `resolve_prop_key_togglebutton_checked_is_bool` |
+| Button-family `ToggleButton` attrs resolve through the loader catalog | `resolve_prop_key_togglebutton_button_family_attrs` |
+| `ToggleButton` checked literal validates | `togglebutton_checked_literal_validates` |
+| `ToggleButton` checked bool binding validates | `togglebutton_checked_binding_validates` |
+| `checked` prop on non-supporting kinds | `validate_rejects_checked_on_button_runtime_ir`, `validate_rejects_checked_on_text_runtime_ir` |
+| `checked` binding on non-supporting kinds | `validate_rejects_checked_binding_on_button_runtime_ir`, `validate_rejects_checked_binding_on_text_runtime_ir` |
+| unknown `ToggleButton` attr / binding | `validate_rejects_togglebutton_unknown_attr_runtime_ir`, `validate_rejects_togglebutton_unknown_binding_runtime_ir` |
+| non-bindable `ToggleButton.style` | `validate_rejects_togglebutton_style_binding_runtime_ir` |
+| non-bool `ToggleButton.checked` literal / binding | `validate_rejects_togglebutton_checked_non_bool_literal_runtime_ir`, `validate_rejects_togglebutton_checked_non_bool_binding_runtime_ir` |
+| absent `checked` defaults to runtime `false`; literal `true` changes visual | `togglebutton_default_false_and_literal_checked_drive_distinct_visuals` |
+| bool-state flip drives checked visual | `togglebutton_bool_state_flip_reaches_checked_visual` |
+| alpha exclusion drains to exactly one checked | `togglebutton_alpha_exclusion_click_leaves_exactly_one_checked` |
+| disabled ToggleButton suppresses click | `disabled_togglebutton_suppresses_click_like_button` |
+
+**#5 carry-forward**
+
+- **Constraint:** T5/T7 must re-check R-2 against the final effective Gallery
+  tab-band background after any Gallery restyling, because T4 proved the
+  runtime checked cue by live brush state but did not capture the final
+  Gallery surface. **Evidence:** `togglebutton_default_false_and_literal_checked_drive_distinct_visuals`
+  and `togglebutton_bool_state_flip_reaches_checked_visual`. **Re-trigger:**
+  T5 swaps the tab band to `ToggleButton` or changes the surrounding
+  background. **Placement:** carry-forward for T5/T7.
+- **Constraint:** `ToggleButton` runtime validation is intentionally stricter
+  than the older Button direct-IR catalog; future new widget kinds should
+  mirror their compiler catalog at the runtime defensive-reader boundary
+  rather than inheriting Button's older loose path. **Evidence:** T4
+  `validate_phase8_togglebutton_node_invariants` and reject matrix.
+  **Re-trigger:** any future new widget kind or direct textual-IR catalog
+  change. **Placement:** phase-end item 15 candidate; may become local-only
+  if a broader runtime catalog policy lands before phase close.
+
+**#6 deterministic-failure disposition**
+
+- First focused build failed because `button_data_mut()` hid the disjoint
+  `self.data` / `self.visual` field borrow that the old Button-only code
+  relied on. Disposition: code defect introduced by the helper extraction;
+  fixed by cloning the `SpriteVisual` handle before borrowing Button-family
+  state, then rerun green.
+- A second focused build failed because the new integration test named the
+  loader return type `BuiltComponent`; the actual type is `BuiltUi`.
+  Disposition: test type-name error; fixed and rerun green.
+
+**#7 GUI evidence**
+
+Not applicable for T4. The task has mock-free Windows runtime fixtures that
+read live `CompositionColorBrush` values and hit-test live `WidgetNode`s, but
+no launch + screenshot deliverable. T7 remains the authoritative GUI evidence
+owner.
+
+Review lane remains **full independent review** before merge; this close adds
+runtime structural change and diagnostic/reject branches.
