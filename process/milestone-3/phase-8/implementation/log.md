@@ -1063,6 +1063,14 @@ and the new Phase 8 capture coordinates start from
   **Evidence:** T5 review lane and `capture-t5-gallery.ps1`. **Re-trigger:**
   T7 evidence start or any final Gallery surface change. **Placement:**
   carry-forward for T7.
+- **Constraint:** T7's authoritative capture must be planned as a
+  visible-desktop / outside-sandbox run, and the capture harness itself is a
+  known fragile dependency rather than a neutral detail: T2 and T5 both
+  reproduced sandboxed off-screen `CopyFromScreen` failure before succeeding
+  outside the sandbox. **Evidence:** T2 and T5 deterministic-failure
+  dispositions. **Re-trigger:** T7 GUI-evidence start or any future task that
+  treats `CopyFromScreen` screenshot automation as merge-gate evidence.
+  **Placement:** carry-forward for T7 and phase-end item 15 consideration.
 - **Constraint:** If future work moves header controls or changes window
   sizing, coordinate-based capture scripts must be re-derived and include a
   state-confirming frame after modal/lightbox close actions. **Evidence:**
@@ -1140,3 +1148,31 @@ Reviewer-noted test gaps are intentional downstream ownership: T7 must
 re-derive absolute-coordinate capture frames for final evidence; strict
 `Box.aspect` positive-control closure remains T7/T8; mutation-control
 omission remains T8's no-silently-deferred-surface audit item.
+
+## T5 Claude review remediation (2026-07-05)
+
+Reviewer: Claude review packet supplied by the owner.
+
+Findings accepted:
+
+1. The T5 retrospective double-loop section treated the missed close-click
+   coordinate mostly as an execution-method lesson. It needed to ask the
+   deeper premise question: whether coordinate-based screenshot capture is an
+   adequate evidence form for the T7 authoritative GUI package after T2 and
+   T5 both exposed the same class of harness fragility.
+2. The T7 carry-forward under-surfaced the known capture-harness dependency:
+   authoritative evidence should be planned as visible-desktop /
+   outside-sandbox work, not as a neutral rerun of the same coordinate script
+   style.
+
+Remediation:
+
+- Strengthened the T5 retrospective double-loop section so the planning
+  premise under review is the evidence style itself, while the close-click
+  miss remains in the deterministic-failure / single-loop record.
+- Added an explicit T7 carry-forward that names the sandboxed
+  `CopyFromScreen` / coordinate harness as a twice-observed fragile
+  dependency and requires T7 to plan authoritative capture on the
+  visible-desktop path.
+
+No code, GUI surface, evidence frames, or verification results changed.
