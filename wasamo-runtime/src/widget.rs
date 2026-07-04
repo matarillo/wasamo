@@ -40,6 +40,7 @@ enum ButtonState {
 struct ButtonData {
     style: ButtonStyle,
     state: ButtonState,
+    checked: bool,
     // Background brush retained for in-place color animation (DD-P5-005).
     bg_brush: CompositionColorBrush,
     label_visual: SpriteVisual,
@@ -74,6 +75,7 @@ enum WidgetData {
         style: TypographyStyle,
     },
     Button(Box<ButtonData>),
+    ToggleButton(Box<ButtonData>),
     // M3-Phase 2 DD-M3-P2-001 per-kind tag. `aspect` / `fill` are stored as
     // Box-internal domain types (DD-M3-P2-002 / DD-M3-P2-003 variant
     // strategy Option A) — neither is a `PropertyValue` variant in Phase 2,
@@ -232,6 +234,7 @@ pub const PROP_BUTTON_ENABLED: u32 = 5;
 // variant is introduced (the general typed-`i32` evaluator / writer
 // pair stays deferred to M4+ per ADR §M4 hand-off item 2).
 pub const PROP_SCROLLVIEW_OFFSET_Y: u32 = 6;
+pub const PROP_TOGGLEBUTTON_CHECKED: u32 = 7;
 
 #[derive(Debug, Clone)]
 pub enum PropertyValue {
@@ -745,6 +748,29 @@ impl WidgetNode {
         label: &str,
         style: ButtonStyle,
     ) -> windows::core::Result<Box<Self>> {
+        Self::button_family(compositor, renderer, label, style, true, false, false)
+    }
+
+    pub fn toggle_button(
+        compositor: &Compositor,
+        renderer: &TextRenderer,
+        label: &str,
+        style: ButtonStyle,
+        enabled: bool,
+        checked: bool,
+    ) -> windows::core::Result<Box<Self>> {
+        Self::button_family(compositor, renderer, label, style, enabled, checked, true)
+    }
+
+    fn button_family(
+        compositor: &Compositor,
+        renderer: &TextRenderer,
+        label: &str,
+        style: ButtonStyle,
+        enabled: bool,
+        checked: bool,
+        toggle: bool,
+    ) -> windows::core::Result<Box<Self>> {
         let label_style = TypographyStyle::Body;
         let (lw, lh) = renderer.measure(label, label_style)?;
 
@@ -758,7 +784,8 @@ impl WidgetNode {
 
         // Root visual: background.
         let bg_visual = compositor.CreateSpriteVisual()?;
-        let initial_color = button_state_color(style, ButtonState::Normal, accent);
+        let initial_color =
+            effective_button_color(style, ButtonState::Normal, accent, enabled, checked);
         let bg_brush = compositor.CreateColorBrushWithColor(initial_color)?;
         bg_visual.SetBrush(&bg_brush)?;
 
@@ -795,17 +822,23 @@ impl WidgetNode {
         let btn_data = Box::new(ButtonData {
             style,
             state: ButtonState::Normal,
+            checked,
             bg_brush,
             label_visual,
             label_text: label.to_owned(),
             label_style,
             clicked_fn: None,
             accent,
-            enabled: true,
+            enabled,
         });
+        let data = if toggle {
+            WidgetData::ToggleButton(btn_data)
+        } else {
+            WidgetData::Button(btn_data)
+        };
 
         Ok(Box::new(Self {
-            data: WidgetData::Button(btn_data),
+            data,
             width: SizeConstraint::Fixed(btn_w),
             height: SizeConstraint::Fixed(btn_h),
             visual: bg_visual,
@@ -835,11 +868,17 @@ impl WidgetNode {
         Ok(())
     }
 
-    /// Register a callback invoked when this Button is clicked.
-    /// Panics if called on a non-Button widget.
+    /// Register a callback invoked when this Button-family widget is clicked.
     pub fn set_clicked<F: Fn() + 'static>(&mut self, f: F) {
-        if let WidgetData::Button(ref mut btn) = self.data {
+        if let Some(btn) = self.button_data_mut() {
             btn.clicked_fn = Some(Box::new(f));
+        }
+    }
+
+    fn button_data_mut(&mut self) -> Option<&mut ButtonData> {
+        match &mut self.data {
+            WidgetData::Button(btn) | WidgetData::ToggleButton(btn) => Some(btn),
+            _ => None,
         }
     }
 
@@ -851,13 +890,18 @@ impl WidgetNode {
 
     pub fn get_property(&self, id: u32) -> Result<PropertyValue, PropertyError> {
         match (&self.data, id) {
-            (WidgetData::Button(btn), PROP_BUTTON_LABEL) => {
+            (WidgetData::Button(btn) | WidgetData::ToggleButton(btn), PROP_BUTTON_LABEL) => {
                 Ok(PropertyValue::String(btn.label_text.clone()))
             }
-            (WidgetData::Button(btn), PROP_BUTTON_STYLE) => {
+            (WidgetData::Button(btn) | WidgetData::ToggleButton(btn), PROP_BUTTON_STYLE) => {
                 Ok(PropertyValue::I32(button_style_to_i32(btn.style)))
             }
-            (WidgetData::Button(btn), PROP_BUTTON_ENABLED) => Ok(PropertyValue::Bool(btn.enabled)),
+            (WidgetData::Button(btn) | WidgetData::ToggleButton(btn), PROP_BUTTON_ENABLED) => {
+                Ok(PropertyValue::Bool(btn.enabled))
+            }
+            (WidgetData::ToggleButton(btn), PROP_TOGGLEBUTTON_CHECKED) => {
+                Ok(PropertyValue::Bool(btn.checked))
+            }
             (WidgetData::Text { content, .. }, PROP_TEXT_CONTENT) => {
                 Ok(PropertyValue::String(content.clone()))
             }
@@ -880,20 +924,22 @@ impl WidgetNode {
         // "needs a layout pass to take effect on screen".
         let size_affecting = matches!(
             (&self.data, id),
-            (WidgetData::Button(_), PROP_BUTTON_LABEL)
-                | (WidgetData::Text { .. }, PROP_TEXT_CONTENT)
+            (
+                WidgetData::Button(_) | WidgetData::ToggleButton(_),
+                PROP_BUTTON_LABEL
+            ) | (WidgetData::Text { .. }, PROP_TEXT_CONTENT)
                 | (WidgetData::Text { .. }, PROP_TEXT_STYLE)
                 | (WidgetData::ScrollView { .. }, PROP_SCROLLVIEW_OFFSET_Y)
         );
         let result = match (&mut self.data, id) {
-            (WidgetData::Button(_), PROP_BUTTON_LABEL) => {
+            (WidgetData::Button(_) | WidgetData::ToggleButton(_), PROP_BUTTON_LABEL) => {
                 let s = match value {
                     PropertyValue::String(s) => s.clone(),
                     _ => return Err(PropertyError::TypeMismatch),
                 };
                 self.update_button_label(&s)
             }
-            (WidgetData::Button(_), PROP_BUTTON_STYLE) => {
+            (WidgetData::Button(_) | WidgetData::ToggleButton(_), PROP_BUTTON_STYLE) => {
                 let v = match value {
                     PropertyValue::I32(v) => *v,
                     _ => return Err(PropertyError::TypeMismatch),
@@ -901,12 +947,19 @@ impl WidgetNode {
                 let new_style = button_style_from_i32(v).ok_or(PropertyError::TypeMismatch)?;
                 self.update_button_style(new_style)
             }
-            (WidgetData::Button(_), PROP_BUTTON_ENABLED) => {
+            (WidgetData::Button(_) | WidgetData::ToggleButton(_), PROP_BUTTON_ENABLED) => {
                 let v = match value {
                     PropertyValue::Bool(b) => *b,
                     _ => return Err(PropertyError::TypeMismatch),
                 };
                 self.update_button_enabled(v)
+            }
+            (WidgetData::ToggleButton(_), PROP_TOGGLEBUTTON_CHECKED) => {
+                let v = match value {
+                    PropertyValue::Bool(b) => *b,
+                    _ => return Err(PropertyError::TypeMismatch),
+                };
+                self.update_toggle_button_checked(v)
             }
             (WidgetData::Text { .. }, PROP_TEXT_CONTENT) => {
                 let s = match value {
@@ -954,7 +1007,7 @@ impl WidgetNode {
         let compositor = &rt.compositor;
         let renderer = &rt.text_renderer;
 
-        let WidgetData::Button(ref mut btn) = self.data else {
+        let Some(btn) = self.button_data_mut() else {
             return Err(PropertyError::UnknownId);
         };
         let label_style = btn.label_style;
@@ -996,16 +1049,18 @@ impl WidgetNode {
     fn update_button_style(&mut self, new_style: ButtonStyle) -> Result<(), PropertyError> {
         let rt = crate::runtime::get();
         let compositor = &rt.compositor;
-        let WidgetData::Button(ref mut btn) = self.data else {
+        let visual = self.visual.clone();
+        let Some(btn) = self.button_data_mut() else {
             return Err(PropertyError::UnknownId);
         };
         if btn.style == new_style {
             return Ok(());
         }
         btn.style = new_style;
-        let target = effective_button_color(btn.style, btn.state, btn.accent, btn.enabled);
+        let target =
+            effective_button_color(btn.style, btn.state, btn.accent, btn.enabled, btn.checked);
         let new_brush = compositor.CreateColorBrushWithColor(target)?;
-        self.visual.SetBrush(&new_brush)?;
+        visual.SetBrush(&new_brush)?;
         btn.bg_brush = new_brush;
         Ok(())
     }
@@ -1013,7 +1068,8 @@ impl WidgetNode {
     fn update_button_enabled(&mut self, new_enabled: bool) -> Result<(), PropertyError> {
         let rt = crate::runtime::get();
         let compositor = &rt.compositor;
-        let WidgetData::Button(ref mut btn) = self.data else {
+        let visual = self.visual.clone();
+        let Some(btn) = self.button_data_mut() else {
             return Err(PropertyError::UnknownId);
         };
         if btn.enabled == new_enabled {
@@ -1025,9 +1081,29 @@ impl WidgetNode {
         // only repaint the background and reset the transient state so the
         // grey colour isn't immediately overridden by a stale hover/press.
         btn.state = ButtonState::Normal;
-        let target = effective_button_color(btn.style, btn.state, btn.accent, btn.enabled);
+        let target =
+            effective_button_color(btn.style, btn.state, btn.accent, btn.enabled, btn.checked);
         let new_brush = compositor.CreateColorBrushWithColor(target)?;
-        self.visual.SetBrush(&new_brush)?;
+        visual.SetBrush(&new_brush)?;
+        btn.bg_brush = new_brush;
+        Ok(())
+    }
+
+    fn update_toggle_button_checked(&mut self, new_checked: bool) -> Result<(), PropertyError> {
+        let rt = crate::runtime::get();
+        let compositor = &rt.compositor;
+        let visual = self.visual.clone();
+        let WidgetData::ToggleButton(ref mut btn) = self.data else {
+            return Err(PropertyError::UnknownId);
+        };
+        if btn.checked == new_checked {
+            return Ok(());
+        }
+        btn.checked = new_checked;
+        let target =
+            effective_button_color(btn.style, btn.state, btn.accent, btn.enabled, btn.checked);
+        let new_brush = compositor.CreateColorBrushWithColor(target)?;
+        visual.SetBrush(&new_brush)?;
         btn.bg_brush = new_brush;
         Ok(())
     }
@@ -1135,8 +1211,8 @@ impl WidgetNode {
 
     // ── Hit testing ───────────────────────────────────────────────────────────
 
-    /// Traverse the tree and fire the `clicked_fn` of the first Button whose
-    /// computed visual rect contains `(x, y)` in window client coordinates.
+    /// Traverse the tree and fire the `clicked_fn` of the first Button-family
+    /// widget whose computed visual rect contains `(x, y)`.
     pub fn hit_test_click(&mut self, x: i32, y: i32) {
         self.hit_test_click_inner(x, y, 0.0, 0.0);
     }
@@ -1152,7 +1228,7 @@ impl WidgetNode {
         // before we re-borrow `self.data` mutably below.
         let widget_ptr: *mut WidgetNode = self as *mut WidgetNode;
 
-        if let WidgetData::Button(ref mut btn) = self.data {
+        if let Some(btn) = self.button_data_mut() {
             // Phase 1 `Button.enabled` (DD-M3-P1-005): suppress click dispatch
             // when disabled — neither the host callback nor the inline `clicked`
             // handler fires, and no "clicked" signal is enqueued. Hit-testing
@@ -1217,7 +1293,7 @@ impl WidgetNode {
         }
     }
 
-    /// Update hover/press state for all Buttons based on mouse position.
+    /// Update hover/press state for all Button-family widgets based on mouse position.
     /// `down` is true while the left mouse button is held.
     pub fn update_hover(
         &mut self,
@@ -1242,7 +1318,7 @@ impl WidgetNode {
         let abs_x = off_x + vx;
         let abs_y = off_y + vy;
 
-        if let WidgetData::Button(ref mut btn) = self.data {
+        if let Some(btn) = self.button_data_mut() {
             // Phase 1 `Button.enabled` (DD-M3-P1-005): a disabled button does
             // not react to hover/press — its background stays at the flat
             // grey set by `update_button_enabled`.
@@ -1265,7 +1341,8 @@ impl WidgetNode {
             if new_state != btn.state {
                 let old_state = btn.state;
                 btn.state = new_state;
-                let target = button_state_color(btn.style, new_state, btn.accent);
+                let target =
+                    effective_button_color(btn.style, new_state, btn.accent, true, btn.checked);
                 let ticks = transition_duration(old_state, new_state);
                 start_color_anim(compositor, &btn.bg_brush, target, ticks)?;
             }
@@ -1277,12 +1354,18 @@ impl WidgetNode {
         Ok(())
     }
 
-    /// Reset all Button states to Normal (called on WM_MOUSELEAVE).
+    /// Reset all Button-family states to Normal (called on WM_MOUSELEAVE).
     pub fn clear_hover(&mut self, compositor: &Compositor) -> windows::core::Result<()> {
-        if let WidgetData::Button(ref mut btn) = self.data {
+        if let Some(btn) = self.button_data_mut() {
             if btn.state != ButtonState::Normal {
                 btn.state = ButtonState::Normal;
-                let target = button_state_color(btn.style, ButtonState::Normal, btn.accent);
+                let target = effective_button_color(
+                    btn.style,
+                    ButtonState::Normal,
+                    btn.accent,
+                    true,
+                    btn.checked,
+                );
                 start_color_anim(compositor, &btn.bg_brush, target, 1_670_000)?;
             }
         }
@@ -1326,7 +1409,15 @@ impl WidgetNode {
     #[doc(hidden)]
     pub fn __button_enabled_for_test(&self) -> Option<bool> {
         match &self.data {
-            WidgetData::Button(button) => Some(button.enabled),
+            WidgetData::Button(button) | WidgetData::ToggleButton(button) => Some(button.enabled),
+            _ => None,
+        }
+    }
+
+    #[doc(hidden)]
+    pub fn __togglebutton_checked_for_test(&self) -> Option<bool> {
+        match &self.data {
+            WidgetData::ToggleButton(button) => Some(button.checked),
             _ => None,
         }
     }
@@ -1534,7 +1625,10 @@ impl WidgetNode {
 
     fn build_layout_tree(&self) -> LayoutNode {
         match &self.data {
-            WidgetData::Rectangle | WidgetData::Text { .. } | WidgetData::Button(_) => {
+            WidgetData::Rectangle
+            | WidgetData::Text { .. }
+            | WidgetData::Button(_)
+            | WidgetData::ToggleButton(_) => {
                 LayoutNode::rectangle(self.width.clone(), self.height.clone())
             }
             WidgetData::VStack {
@@ -1816,11 +1910,44 @@ fn effective_button_color(
     state: ButtonState,
     accent: Color,
     enabled: bool,
+    checked: bool,
 ) -> Color {
     if !enabled {
         BUTTON_DISABLED_COLOR
+    } else if checked {
+        toggle_checked_color(style, state, accent)
     } else {
         button_state_color(style, state, accent)
+    }
+}
+
+fn toggle_checked_color(style: ButtonStyle, state: ButtonState, accent: Color) -> Color {
+    match style {
+        ButtonStyle::Default => match state {
+            ButtonState::Normal => Color {
+                A: 0xE6,
+                R: 0x2F,
+                G: 0x80,
+                B: 0xED,
+            },
+            ButtonState::Hovered => Color {
+                A: 0xF0,
+                R: 0x4B,
+                G: 0x93,
+                B: 0xF0,
+            },
+            ButtonState::Pressed => Color {
+                A: 0xF0,
+                R: 0x1F,
+                G: 0x66,
+                B: 0xCC,
+            },
+        },
+        ButtonStyle::Accent => match state {
+            ButtonState::Normal => darken(accent, 28),
+            ButtonState::Hovered => lighten(accent, 16),
+            ButtonState::Pressed => darken(accent, 44),
+        },
     }
 }
 
@@ -1920,8 +2047,11 @@ fn read_accent_color() -> Color {
 
 #[cfg(test)]
 mod tests {
-    use super::MutationError;
+    use super::{
+        effective_button_color, ButtonState, ButtonStyle, MutationError, BUTTON_DISABLED_COLOR,
+    };
     use crate::layout::{Alignment, CellPlacement, SlotData, ZStackPlacement};
+    use windows::UI::Color;
 
     // Minimal stand-in for WidgetNode used only to verify index-check and
     // attached-flag logic, without requiring a Win32/WinRT environment.
@@ -2013,6 +2143,91 @@ mod tests {
 
     fn grid_place() -> CellPlacement {
         CellPlacement::default_grid()
+    }
+
+    fn color(a: u8, r: u8, g: u8, b: u8) -> Color {
+        Color {
+            A: a,
+            R: r,
+            G: g,
+            B: b,
+        }
+    }
+
+    #[test]
+    fn togglebutton_disabled_color_wins_over_checked_and_pressed_state() {
+        let accent = color(0xFF, 0x20, 0x80, 0xD0);
+        for style in [ButtonStyle::Default, ButtonStyle::Accent] {
+            for state in [
+                ButtonState::Normal,
+                ButtonState::Hovered,
+                ButtonState::Pressed,
+            ] {
+                assert_eq!(
+                    effective_button_color(style, state, accent, false, true),
+                    BUTTON_DISABLED_COLOR
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn togglebutton_checked_hover_press_color_matrix_is_pinned() {
+        let accent = color(0xFF, 0x20, 0x80, 0xD0);
+        assert_eq!(
+            effective_button_color(
+                ButtonStyle::Default,
+                ButtonState::Normal,
+                accent,
+                true,
+                true
+            ),
+            color(0xE6, 0x2F, 0x80, 0xED)
+        );
+        assert_eq!(
+            effective_button_color(
+                ButtonStyle::Default,
+                ButtonState::Hovered,
+                accent,
+                true,
+                true
+            ),
+            color(0xF0, 0x4B, 0x93, 0xF0)
+        );
+        assert_eq!(
+            effective_button_color(
+                ButtonStyle::Default,
+                ButtonState::Pressed,
+                accent,
+                true,
+                true
+            ),
+            color(0xF0, 0x1F, 0x66, 0xCC)
+        );
+        assert_eq!(
+            effective_button_color(ButtonStyle::Accent, ButtonState::Normal, accent, true, true),
+            color(0xFF, 0x04, 0x64, 0xB4)
+        );
+        assert_eq!(
+            effective_button_color(
+                ButtonStyle::Accent,
+                ButtonState::Hovered,
+                accent,
+                true,
+                true
+            ),
+            color(0xFF, 0x30, 0x90, 0xE0)
+        );
+        assert_eq!(
+            effective_button_color(
+                ButtonStyle::Accent,
+                ButtonState::Pressed,
+                accent,
+                true,
+                true
+            ),
+            color(0xFF, 0x00, 0x54, 0xA4)
+        );
     }
 
     #[test]

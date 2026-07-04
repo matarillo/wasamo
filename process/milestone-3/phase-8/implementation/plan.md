@@ -265,31 +265,49 @@ Discharges ADR evidence item (2)-loader and propagation-audit point
 (ii). **Full independent review** (runtime structural: new widget
 node).
 
-- [ ] `wasamo-runtime` loader: `ToggleButton` kind dispatch; `checked`
+Critical responsibility cut (T4 re-check, 2026-07-04): T4 owns the
+**runtime defensive-reader and widget-node boundary** for
+`ToggleButton.checked`. It mirrors T3's authoring catalog in the runtime
+loader (`text` / `style` / `enabled` / `checked`, with `checked` valid
+only on `ToggleButton`), materializes absent `checked` as the runtime
+default `false`, and proves bool-state writes drive the live visual. T4
+does **not** own Gallery integration, final tab-band composition, C/Zig
+host parity, screenshot-coordinate derivation, or the authoritative T7
+GUI evidence package. Its R-2 work is the runtime cue and an
+unambiguous-colour fixture; the final effective Gallery-background proof
+remains a T5/T7 carry-forward if later UI work changes that background.
+
+- [x] `wasamo-runtime` loader: `ToggleButton` kind dispatch; `checked`
       literal + binding registration reusing the `enabled` bool-binding
       path; loader **re-rejects** malformed IR (`checked` on a
-      non-supporting kind) with a named diagnostic + firing test
-      (dual-gate pattern).
-- [ ] Widget construction: `ToggleButton` reuses Button's visual
+      non-supporting kind, unknown `ToggleButton` attribute / binding,
+      non-string `text`, non-keyword `style`, non-bool `enabled`, and
+      non-bool `checked` values) with named diagnostics + firing tests
+      (dual-gate pattern); absent `checked` stays absent in textual IR
+      and defaults to runtime `false`.
+- [x] Widget construction: `ToggleButton` reuses Button's visual
       (text / style / enabled / click) and leaf measure/arrange — a new
       node, not a new layout primitive; **V-a checked visual**:
       background colour change on `checked`, composing with `style` and
-      `enabled` states; verify the cue is unambiguous against the final
-      effective Gallery background (R-2 — Mica/backdrop is a possible
-      ambiguity factor, not a separate proof target; if ambiguous in
-      practice, that is an SI-1 implementation-checkpoint revision
-      recorded in log.md, not a new option choice).
-- [ ] Reactive path: a bool-state change through the existing binding
+      `enabled` states; pure tests pin Default/Accent checked
+      hover/press arms and disabled-over-checked priority, while T5/T7
+      still verify the cue is unambiguous against the final effective
+      Gallery background (R-2 — Mica/backdrop is a possible ambiguity
+      factor, not a separate proof target; if ambiguous in practice, that
+      is an SI-1 implementation-checkpoint revision recorded in log.md,
+      not a new option choice).
+- [x] Reactive path: a bool-state change through the existing binding
       drives the visual (propagation-audit point (ii)); `clicked`
       handler block-assignment writes the state (W1 controlled — the
       widget does not self-toggle).
-- [ ] Windows-runtime fixtures (CI-gated, fail-not-skip): checked
+- [x] Windows-runtime fixtures (CI-gated, fail-not-skip): checked
       visual state reflects the bound value at load; a state flip
       reaches the visual; the α exclusion shape drains to exactly-one-
       checked; `enabled: false` keeps the Phase-1 disabled contract
       (no `clicked` fire). Regression: existing Button fixtures
-      unchanged.
-- [ ] **Close artifact:** trap-#1 audit rows for the runtime sites;
+      unchanged; runtime default `false` is pinned when `checked` is
+      absent.
+- [x] **Close artifact:** trap-#1 audit rows for the runtime sites;
       trap-#4 loader-reject firing test recorded.
 
 **Start gate:** T3 merged; T4 gate selection recorded. **End gate:**
