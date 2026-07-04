@@ -281,18 +281,21 @@ remains a T5/T7 carry-forward if later UI work changes that background.
       literal + binding registration reusing the `enabled` bool-binding
       path; loader **re-rejects** malformed IR (`checked` on a
       non-supporting kind, unknown `ToggleButton` attribute / binding,
-      and non-bool `checked` value) with named diagnostics + firing tests
-      (dual-gate pattern); absent `checked` stays absent in textual IR and
-      defaults to runtime `false`.
+      non-string `text`, non-keyword `style`, non-bool `enabled`, and
+      non-bool `checked` values) with named diagnostics + firing tests
+      (dual-gate pattern); absent `checked` stays absent in textual IR
+      and defaults to runtime `false`.
 - [x] Widget construction: `ToggleButton` reuses Button's visual
       (text / style / enabled / click) and leaf measure/arrange — a new
       node, not a new layout primitive; **V-a checked visual**:
       background colour change on `checked`, composing with `style` and
-      `enabled` states; verify the cue is unambiguous against the final
-      effective Gallery background (R-2 — Mica/backdrop is a possible
-      ambiguity factor, not a separate proof target; if ambiguous in
-      practice, that is an SI-1 implementation-checkpoint revision
-      recorded in log.md, not a new option choice).
+      `enabled` states; pure tests pin Default/Accent checked
+      hover/press arms and disabled-over-checked priority, while T5/T7
+      still verify the cue is unambiguous against the final effective
+      Gallery background (R-2 — Mica/backdrop is a possible ambiguity
+      factor, not a separate proof target; if ambiguous in practice, that
+      is an SI-1 implementation-checkpoint revision recorded in log.md,
+      not a new option choice).
 - [x] Reactive path: a bool-state change through the existing binding
       drives the visual (propagation-audit point (ii)); `clicked`
       handler block-assignment writes the state (W1 controlled — the

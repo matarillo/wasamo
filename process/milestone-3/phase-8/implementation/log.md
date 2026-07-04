@@ -721,7 +721,7 @@ Verification commands:
 | Command | Result |
 |---|---|
 | `cargo fmt --all -- --check` | green |
-| `cargo test -p wasamo-runtime togglebutton -- --nocapture` | green: 14 focused runtime unit tests + 4 Windows runtime integration tests |
+| `cargo test -p wasamo-runtime togglebutton -- --nocapture` | green: 19 focused runtime unit tests + 5 Windows runtime integration tests |
 | `cargo test -p wasamo-runtime validate_rejects_checked -- --nocapture` | green: 4 non-supporting-kind loader rejects |
 | `cargo test --workspace` | green; existing `wasamo` linkable-target / `wasamo-sys` ordering warnings only |
 
@@ -752,7 +752,7 @@ rg -n "ToggleButton|PROP_TOGGLEBUTTON_CHECKED|validate_phase8_togglebutton|resol
 |---|---|
 | Runtime widget tree gained `WidgetData::ToggleButton`. | Kept as a distinct runtime node so loader validation/property dispatch can distinguish `checked` support; layout treats it as the existing Button leaf. |
 | `ButtonData` gained `checked`. | Stored in the shared Button-family state object so style, enabled, hover, and checked colour priority are computed from one source of truth. |
-| Background brush colour now depends on checked state. | Priority is disabled > checked > normal Button style/state. Existing disabled contract is preserved by `disabled_togglebutton_suppresses_click_like_button`; existing Button tests remain green in `cargo test --workspace`. |
+| Background brush colour now depends on checked state. | Priority is disabled > checked > normal Button style/state. `disabled_checked_togglebutton_shows_disabled_not_checked_color` pins disabled-over-checked brush priority, `disabled_togglebutton_suppresses_click_like_button` pins disabled click suppression, and checked hover/press colour arms are covered by pure colour-matrix tests. Existing Button tests remain green in `cargo test --workspace`. |
 | Button-family click / hover paths now include ToggleButton. | `button_data_mut` centralizes the shared branch. Alpha fixture proves `clicked` handler block assignment updates state and bindings; disabled fixture proves click suppression still wins. |
 | Binding target catalog gained `PROP_TOGGLEBUTTON_CHECKED = 7`. | It is a runtime property key for the existing bool-binding writer path; no new `PropertyValue`, reactive writer class, or ABI header constant was introduced. |
 | Runtime validation now closes the direct textual-IR hole for the new kind. | T4 intentionally does not reform the older Button-wide loose catalog; the new closed `ToggleButton` catalog mirrors T3 and is pinned with reject tests. |
@@ -769,12 +769,14 @@ rg -n "ToggleButton|PROP_TOGGLEBUTTON_CHECKED|validate_phase8_togglebutton|resol
 | `checked` binding on non-supporting kinds | `validate_rejects_checked_binding_on_button_runtime_ir`, `validate_rejects_checked_binding_on_text_runtime_ir` |
 | unknown `ToggleButton` attr / binding | `validate_rejects_togglebutton_unknown_attr_runtime_ir`, `validate_rejects_togglebutton_unknown_binding_runtime_ir` |
 | non-bindable `ToggleButton.style` | `validate_rejects_togglebutton_style_binding_runtime_ir` |
+| malformed Button-family `ToggleButton` literal attrs | `validate_rejects_togglebutton_text_non_str_literal_runtime_ir`, `validate_rejects_togglebutton_style_non_ident_literal_runtime_ir`, `validate_rejects_togglebutton_enabled_non_bool_literal_runtime_ir` |
 | non-bool `ToggleButton.checked` literal / binding | `validate_rejects_togglebutton_checked_non_bool_literal_runtime_ir`, `validate_rejects_togglebutton_checked_non_bool_binding_runtime_ir` |
 | wrong expression tag for `ToggleButton.checked` direct IR | `validate_rejects_togglebutton_checked_wrong_read_tag_runtime_ir` |
 | loop-local `ToggleButton` bindings stay valid | `validate_accepts_togglebutton_checked_loop_item_binding_runtime_ir`, `validate_accepts_togglebutton_text_loop_item_binding_runtime_ir`, `validate_accepts_togglebutton_text_loop_item_interpolation_runtime_ir` |
 | loop index still cannot drive bool `checked` | `validate_rejects_togglebutton_checked_loop_index_binding_runtime_ir` |
 | absent `checked` defaults to runtime `false`; literal `true` changes visual | `togglebutton_default_false_and_literal_checked_drive_distinct_visuals` |
 | bool-state flip drives checked visual | `togglebutton_bool_state_flip_reaches_checked_visual` |
+| checked colour priority and hover/press matrix | `togglebutton_disabled_color_wins_over_checked_and_pressed_state`, `togglebutton_checked_hover_press_color_matrix_is_pinned`, `disabled_checked_togglebutton_shows_disabled_not_checked_color` |
 | alpha exclusion drains to exactly one checked | `togglebutton_alpha_exclusion_click_leaves_exactly_one_checked` |
 | disabled ToggleButton suppresses click | `disabled_togglebutton_suppresses_click_like_button` |
 
@@ -875,3 +877,50 @@ Final remediation verification:
 Final re-review result: no remaining findings. Confucius checked commit
 `3039ee2`, including the interpolation loop-scope patch and the new positive
 test.
+
+## T4 Claude review remediation (2026-07-04)
+
+Reviewer: Claude review packet supplied by the owner.
+
+Findings accepted:
+
+1. The end-gate branch/test table omitted authored literal-reject branches
+   for `ToggleButton.text`, `ToggleButton.style`, and
+   `ToggleButton.enabled`.
+2. The structural side-effect table overstated the disabled fixture: it
+   proved click suppression, not the disabled-over-checked brush priority.
+3. The checked hover/press colour arms were implemented but not pinned.
+4. The retrospective double-loop section mixed helper-extraction compile
+   learning into a goal/premise retrospective.
+
+Remediation:
+
+- Added firing loader tests for non-string `text`, non-keyword `style`, and
+  non-bool `enabled` literal rejects.
+- Added pure colour-matrix tests for disabled-over-checked priority and the
+  Default/Accent checked hover/press arms.
+- Strengthened runtime visual fixtures with unchecked-same-colour and
+  unrelated-state no-repaint negative controls, plus
+  `disabled_checked_togglebutton_shows_disabled_not_checked_color`.
+- Updated the T4 plan and end-gate tables so the recorded branch/test matrix
+  matches the authored code.
+- Revised the T4 retrospective double-loop section to keep borrow/type-name
+  compile failures in deterministic-failure learning rather than goal/premise
+  learning.
+
+Deterministic-failure disposition:
+
+- The first focused rerun failed because
+  `validate_rejects_togglebutton_text_non_str_literal_runtime_ir` expected
+  `str` while the existing diagnostic formatter says `string`. Disposition:
+  test expectation defect; corrected to the existing diagnostic text and
+  rerun green.
+
+Verification:
+
+| Command | Result |
+|---|---|
+| `cargo fmt --all -- --check` | green |
+| `git diff --check` | green |
+| `cargo test -p wasamo-runtime togglebutton -- --nocapture` | green: 19 focused runtime unit tests + 5 Windows runtime integration tests |
+| `cargo test --workspace` | green; existing `wasamo` linkable-target / `wasamo-sys` ordering warnings only |

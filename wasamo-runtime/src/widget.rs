@@ -2047,8 +2047,11 @@ fn read_accent_color() -> Color {
 
 #[cfg(test)]
 mod tests {
-    use super::MutationError;
+    use super::{
+        effective_button_color, ButtonState, ButtonStyle, MutationError, BUTTON_DISABLED_COLOR,
+    };
     use crate::layout::{Alignment, CellPlacement, SlotData, ZStackPlacement};
+    use windows::UI::Color;
 
     // Minimal stand-in for WidgetNode used only to verify index-check and
     // attached-flag logic, without requiring a Win32/WinRT environment.
@@ -2140,6 +2143,91 @@ mod tests {
 
     fn grid_place() -> CellPlacement {
         CellPlacement::default_grid()
+    }
+
+    fn color(a: u8, r: u8, g: u8, b: u8) -> Color {
+        Color {
+            A: a,
+            R: r,
+            G: g,
+            B: b,
+        }
+    }
+
+    #[test]
+    fn togglebutton_disabled_color_wins_over_checked_and_pressed_state() {
+        let accent = color(0xFF, 0x20, 0x80, 0xD0);
+        for style in [ButtonStyle::Default, ButtonStyle::Accent] {
+            for state in [
+                ButtonState::Normal,
+                ButtonState::Hovered,
+                ButtonState::Pressed,
+            ] {
+                assert_eq!(
+                    effective_button_color(style, state, accent, false, true),
+                    BUTTON_DISABLED_COLOR
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn togglebutton_checked_hover_press_color_matrix_is_pinned() {
+        let accent = color(0xFF, 0x20, 0x80, 0xD0);
+        assert_eq!(
+            effective_button_color(
+                ButtonStyle::Default,
+                ButtonState::Normal,
+                accent,
+                true,
+                true
+            ),
+            color(0xE6, 0x2F, 0x80, 0xED)
+        );
+        assert_eq!(
+            effective_button_color(
+                ButtonStyle::Default,
+                ButtonState::Hovered,
+                accent,
+                true,
+                true
+            ),
+            color(0xF0, 0x4B, 0x93, 0xF0)
+        );
+        assert_eq!(
+            effective_button_color(
+                ButtonStyle::Default,
+                ButtonState::Pressed,
+                accent,
+                true,
+                true
+            ),
+            color(0xF0, 0x1F, 0x66, 0xCC)
+        );
+        assert_eq!(
+            effective_button_color(ButtonStyle::Accent, ButtonState::Normal, accent, true, true),
+            color(0xFF, 0x04, 0x64, 0xB4)
+        );
+        assert_eq!(
+            effective_button_color(
+                ButtonStyle::Accent,
+                ButtonState::Hovered,
+                accent,
+                true,
+                true
+            ),
+            color(0xFF, 0x30, 0x90, 0xE0)
+        );
+        assert_eq!(
+            effective_button_color(
+                ButtonStyle::Accent,
+                ButtonState::Pressed,
+                accent,
+                true,
+                true
+            ),
+            color(0xFF, 0x00, 0x54, 0xA4)
+        );
     }
 
     #[test]

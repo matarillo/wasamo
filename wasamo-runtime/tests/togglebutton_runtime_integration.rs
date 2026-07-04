@@ -79,22 +79,34 @@ fn togglebutton_default_false_and_literal_checked_drive_distinct_visuals() {
                 r#"component ToggleDefaults inherits Window {
     HStack {
         ToggleButton { text: "All" }
+        ToggleButton { text: "Recent" }
         ToggleButton { text: "Favorites" checked: true }
     }
 }"#,
             );
 
             let off = &built.root.children[0];
-            let on = &built.root.children[1];
+            let also_off = &built.root.children[1];
+            let on = &built.root.children[2];
             assert_eq!(
                 off.__togglebutton_checked_for_test(),
                 Some(false),
                 "absent checked must materialize runtime default false"
             );
             assert_eq!(
+                also_off.__togglebutton_checked_for_test(),
+                Some(false),
+                "a second absent checked value must also default false"
+            );
+            assert_eq!(
                 on.__togglebutton_checked_for_test(),
                 Some(true),
                 "literal checked=true must materialize on the runtime node"
+            );
+            assert_eq!(
+                rgba(read_widget_color(off)),
+                rgba(read_widget_color(also_off)),
+                "unchecked ToggleButtons should share the same default background"
             );
             assert_ne!(
                 rgba(read_widget_color(off)),
@@ -113,6 +125,7 @@ fn togglebutton_bool_state_flip_reaches_checked_visual() {
             let built = build_ui(
                 r#"component ToggleBinding inherits Window {
     state selected: bool = false
+    state unrelated: bool = false
     ToggleButton {
         text: "Albums"
         checked: selected
@@ -122,6 +135,16 @@ fn togglebutton_bool_state_flip_reaches_checked_visual() {
 
             assert_eq!(built.root.__togglebutton_checked_for_test(), Some(false));
             let before = read_widget_color(&built.root);
+
+            assert!(
+                built.__set_bool_state_for_test("unrelated", true),
+                "test seam must update the unrelated state"
+            );
+            assert_eq!(
+                rgba(before),
+                rgba(read_widget_color(&built.root)),
+                "unrelated state writes must not repaint the checked visual"
+            );
 
             assert!(
                 built.__set_bool_state_for_test("selected", true),
@@ -210,6 +233,32 @@ fn disabled_togglebutton_suppresses_click_like_button() {
                 built.root.__togglebutton_checked_for_test(),
                 Some(false),
                 "disabled ToggleButton must not fire clicked handlers"
+            );
+        },
+    );
+}
+
+#[test]
+fn disabled_checked_togglebutton_shows_disabled_not_checked_color() {
+    run_on_owning_runtime_thread_or_skip(
+        "ToggleButton disabled checked colour-priority integration test",
+        move || {
+            let built = build_ui(
+                r#"component DisabledCheckedToggle inherits Window {
+    ToggleButton {
+        text: "Disabled"
+        enabled: false
+        checked: true
+    }
+}"#,
+            );
+
+            assert_eq!(built.root.__button_enabled_for_test(), Some(false));
+            assert_eq!(built.root.__togglebutton_checked_for_test(), Some(true));
+            assert_eq!(
+                rgba(read_widget_color(&built.root)),
+                (0x40, 0x80, 0x80, 0x80),
+                "disabled colour must win over the checked visual cue"
             );
         },
     );

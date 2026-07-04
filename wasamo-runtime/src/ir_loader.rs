@@ -7240,6 +7240,36 @@ mod tests {
     }
 
     #[test]
+    fn validate_rejects_togglebutton_text_non_str_literal_runtime_ir() {
+        assert_validate_err(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             node ToggleButton { prop text = true }\n\
+             }",
+            "ToggleButton.text must be a `string` literal",
+        );
+    }
+
+    #[test]
+    fn validate_rejects_togglebutton_style_non_ident_literal_runtime_ir() {
+        assert_validate_err(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             node ToggleButton { prop style = 1 }\n\
+             }",
+            "ToggleButton.style must be a keyword identifier",
+        );
+    }
+
+    #[test]
+    fn validate_rejects_togglebutton_enabled_non_bool_literal_runtime_ir() {
+        assert_validate_err(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             node ToggleButton { prop enabled = 1 }\n\
+             }",
+            "ToggleButton.enabled must be a `bool` literal",
+        );
+    }
+
+    #[test]
     fn validate_rejects_togglebutton_checked_non_bool_literal_runtime_ir() {
         assert_validate_err(
             ";wasamo-ir v0\ncomponent C inherits W {\n\
