@@ -375,7 +375,10 @@ T10's separate gate.
       positive control** (click a different tab → its background
       changes **and** the previously-selected tab clears — exclusion in
       the same two frames); **wrap/overflow** (narrow-width reflow
-      and/or scroll-offset frames per the agreed state set).
+      and/or scroll-offset frames per the agreed state set); **aspect**
+      evidence that distinguishes a live `Box.aspect` constraint from a
+      no-op look-alike, or records the T8 audit citation that proves the
+      aspect surface elsewhere.
 - [ ] Verify each positive control distinguishes the intended behaviour
       from a static look-alike (AGENTS.md §Testing rules); note known
       M4 residuals (DPI blur, dynamic title) as residuals, not

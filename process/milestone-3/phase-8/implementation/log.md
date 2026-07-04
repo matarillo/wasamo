@@ -444,6 +444,12 @@ reject / size branch (#4).
   This is not a requirement to prove Mica as an independent feature; Mica
   is only one possible backdrop/theme factor that could make a
   background-only checked cue ambiguous.
+- T7/T8 must close the stricter `aspect` positive-control question. T2
+  only proves that current aspect placeholders render without aborting or
+  collapsing; later evidence should either include a frame where
+  `Box.aspect` visibly constrains size beyond a coincidental fixed cell, or
+  cite the authoritative non-Gallery proof that already covers that
+  behaviour.
 - T7 authoritative GUI evidence must re-derive coordinates after final
   ToggleButton/restyling work; T2 coordinates are not a reusable contract.
 - Problem B remains outside T2: if later work needs a sizing shim or a
