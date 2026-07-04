@@ -871,3 +871,7 @@ Final remediation verification:
 | `git diff --check` | green |
 | `cargo test -p wasamo-runtime togglebutton -- --nocapture` | green: 14 focused runtime unit tests + 4 Windows runtime integration tests |
 | `cargo test --workspace` | green; existing `wasamo` linkable-target / `wasamo-sys` ordering warnings only |
+
+Final re-review result: no remaining findings. Confucius checked commit
+`3039ee2`, including the interpolation loop-scope patch and the new positive
+test.
