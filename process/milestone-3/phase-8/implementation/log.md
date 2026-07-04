@@ -721,7 +721,7 @@ Verification commands:
 | Command | Result |
 |---|---|
 | `cargo fmt --all -- --check` | green |
-| `cargo test -p wasamo-runtime togglebutton -- --nocapture` | green: 13 focused runtime unit tests + 4 Windows runtime integration tests |
+| `cargo test -p wasamo-runtime togglebutton -- --nocapture` | green: 14 focused runtime unit tests + 4 Windows runtime integration tests |
 | `cargo test -p wasamo-runtime validate_rejects_checked -- --nocapture` | green: 4 non-supporting-kind loader rejects |
 | `cargo test --workspace` | green; existing `wasamo` linkable-target / `wasamo-sys` ordering warnings only |
 
@@ -771,7 +771,7 @@ rg -n "ToggleButton|PROP_TOGGLEBUTTON_CHECKED|validate_phase8_togglebutton|resol
 | non-bindable `ToggleButton.style` | `validate_rejects_togglebutton_style_binding_runtime_ir` |
 | non-bool `ToggleButton.checked` literal / binding | `validate_rejects_togglebutton_checked_non_bool_literal_runtime_ir`, `validate_rejects_togglebutton_checked_non_bool_binding_runtime_ir` |
 | wrong expression tag for `ToggleButton.checked` direct IR | `validate_rejects_togglebutton_checked_wrong_read_tag_runtime_ir` |
-| loop-local `ToggleButton` bindings stay valid | `validate_accepts_togglebutton_checked_loop_item_binding_runtime_ir`, `validate_accepts_togglebutton_text_loop_item_binding_runtime_ir` |
+| loop-local `ToggleButton` bindings stay valid | `validate_accepts_togglebutton_checked_loop_item_binding_runtime_ir`, `validate_accepts_togglebutton_text_loop_item_binding_runtime_ir`, `validate_accepts_togglebutton_text_loop_item_interpolation_runtime_ir` |
 | loop index still cannot drive bool `checked` | `validate_rejects_togglebutton_checked_loop_index_binding_runtime_ir` |
 | absent `checked` defaults to runtime `false`; literal `true` changes visual | `togglebutton_default_false_and_literal_checked_drive_distinct_visuals` |
 | bool-state flip drives checked visual | `togglebutton_bool_state_flip_reaches_checked_visual` |
@@ -846,12 +846,28 @@ Remediation:
   loop-local `checked` and `text` bindings, and invalid loop-index-to-bool
   `checked`.
 
-Remediation verification:
+Re-review result: one remaining finding.
+
+1. The remediation carried loop scope for direct `ToggleButton.text` loop-item
+   bindings, but the string interpolation branch still called
+   `validate_expr_references` without the active `LoopReadScope`; valid
+   runtime IR such as `bind text = (interp "Tab " ((item-read label)))`
+   inside `for label in labels` was still rejected.
+
+Second remediation:
+
+- `validate_scalar_binding_expr_type` now passes `loop_scope` into the
+  `Interpolation` reference validator, matching the Phase 7 validator path.
+- Added
+  `validate_accepts_togglebutton_text_loop_item_interpolation_runtime_ir` as
+  a firing positive-control test for loop-local text interpolation.
+
+Final remediation verification:
 
 | Command | Result |
 |---|---|
 | `cargo fmt --all` | green |
 | `cargo fmt --all -- --check` | green |
 | `git diff --check` | green |
-| `cargo test -p wasamo-runtime togglebutton -- --nocapture` | green: 13 focused runtime unit tests + 4 Windows runtime integration tests |
+| `cargo test -p wasamo-runtime togglebutton -- --nocapture` | green: 14 focused runtime unit tests + 4 Windows runtime integration tests |
 | `cargo test --workspace` | green; existing `wasamo` linkable-target / `wasamo-sys` ordering warnings only |

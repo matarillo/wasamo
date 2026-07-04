@@ -489,7 +489,7 @@ fn validate_scalar_binding_expr_type(
             validate_scalar_binding_read_type(path, expected, declared, label)
         }
         (IrType::Str, HandlerExpr::Interpolation(_)) => {
-            validate_expr_references(expr, declared, None, &|name| {
+            validate_expr_references(expr, declared, loop_scope, &|name| {
                 format!("binding `{label}` references undeclared name `{name}`")
             })
         }
@@ -7291,6 +7291,17 @@ mod tests {
              }",
         );
         validate(&c).expect("ToggleButton.text may bind a string loop item");
+    }
+
+    #[test]
+    fn validate_accepts_togglebutton_text_loop_item_interpolation_runtime_ir() {
+        let c = parse_ok(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             state labels: string[] = [\"All\", \"Albums\"]\n\
+             node WrapPanel { for label in labels { node ToggleButton { bind text = (interp \"Tab \" ((item-read label))) } } }\n\
+             }",
+        );
+        validate(&c).expect("ToggleButton.text interpolation may read a string loop item");
     }
 
     #[test]
