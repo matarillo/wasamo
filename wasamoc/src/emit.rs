@@ -432,6 +432,89 @@ mod tests {
         assert!(out.contains("(assign ready false)"), "got: {}", out);
     }
 
+    #[test]
+    fn togglebutton_checked_literal_and_button_attrs_emitted() {
+        let out = emit_src(
+            r#"component C inherits W {
+                state selected: bool = true
+                ToggleButton {
+                    text: "Photos"
+                    style: accent
+                    enabled: true
+                    checked: false
+                    clicked => { selected = true; }
+                }
+            }"#,
+        );
+        assert!(out.contains("node ToggleButton {"), "got: {}", out);
+        assert!(out.contains("prop text = \"Photos\""), "got: {}", out);
+        assert!(out.contains("prop style = accent"), "got: {}", out);
+        assert!(out.contains("prop enabled = true"), "got: {}", out);
+        assert!(out.contains("prop checked = false"), "got: {}", out);
+        assert!(out.contains("on clicked {"), "got: {}", out);
+        assert!(out.contains("(assign selected true)"), "got: {}", out);
+    }
+
+    #[test]
+    fn togglebutton_checked_binding_emitted() {
+        let out = emit_src(
+            "component C inherits W { state selected: bool = true ToggleButton { checked: selected } }",
+        );
+        assert!(out.contains("node ToggleButton {"), "got: {}", out);
+        assert!(
+            out.contains("bind checked = (bool-prop-read selected)"),
+            "got: {}",
+            out
+        );
+    }
+
+    #[test]
+    fn togglebutton_alpha_tab_band_emits_block_handlers() {
+        let out = emit_src(
+            r#"component C inherits W {
+                state all: bool = true
+                state albums: bool = false
+                state favorites: bool = false
+                HStack {
+                    ToggleButton {
+                        text: "All"
+                        checked: all
+                        clicked => { all = true; albums = false; favorites = false; }
+                    }
+                    ToggleButton {
+                        text: "Albums"
+                        checked: albums
+                        clicked => { all = false; albums = true; favorites = false; }
+                    }
+                    ToggleButton {
+                        text: "Favorites"
+                        checked: favorites
+                        clicked => { all = false; albums = false; favorites = true; }
+                    }
+                }
+            }"#,
+        );
+        assert_eq!(
+            out.matches("node ToggleButton {").count(),
+            3,
+            "got: {}",
+            out
+        );
+        assert_eq!(
+            out.matches("bind checked = (bool-prop-read").count(),
+            3,
+            "got: {}",
+            out
+        );
+        assert!(
+            out.contains(
+                "(block (assign all false) (assign albums true) (assign favorites false))"
+            ),
+            "got: {}",
+            out
+        );
+    }
+
     // --- T5: Box ratio / color literal IR text emit ---------------------
     //
     // Verifies that ratio and color literals appear in `prop` literal

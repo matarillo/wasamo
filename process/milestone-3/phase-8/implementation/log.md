@@ -490,3 +490,119 @@ Retained evidence frames:
 Review lane: T2 involved GUI-render evidence, so the close is subject to
 independent review before merge. Claude review comments were addressed
 before this T2 commit; the commit carries the review trailer.
+
+## T3 start gate — carry-over check, responsibility cut, and trap selection (2026-07-04)
+
+Carry-over checked before choosing the T3 approach:
+
+- From T1 log / T1 retrospective: widget kind is string-carried
+  (`IrNode.widget_type: String`) and unknown widgets are warning-only at
+  `wasamoc check`. T3 therefore must prove `ToggleButton` is admitted as a
+  known widget with a no-unknown-warning positive fixture, and must not
+  silently change the general unknown-widget policy to a hard error.
+- From T1 log: parser / AST / lower / emit are generic for this surface;
+  the expected production change is concentrated in `check.rs`, while
+  lower/emit tests pin that the generic paths carry `ToggleButton`,
+  `checked`, `clicked`, and alpha block-assignment handlers unchanged.
+- From T2 log / T2 retrospective: G(1) / A1 table, coordinate drift, R-2
+  visual ambiguity, and aspect positive-control carry-forwards are owned by
+  T4/T5/T7/T8. They do not expand T3 into GUI/runtime work; T3 only supplies
+  the alpha tab-band compile fixture that later Gallery work will consume.
+
+T3 responsibility after critical re-check: T3 owns the authoring compiler
+and textual IR boundary for `ToggleButton.checked`: widget admission,
+typed attribute admission/rejection, lowering through the existing generic
+IR carrier, and textual IR emission fixtures. T3 does not own runtime
+loader validation, widget construction, checked visual composition, Gallery
+integration, or the project-wide unknown-widget diagnostic policy.
+
+Selected traps:
+
+| Trap | Applies? | Reason / close artifact |
+|---|---:|---|
+| #1 semantic migration | Yes | New author-facing widget kind and `checked` attribute cross `KNOWN_WIDGET_TYPES`, `widget_prop_type`, lower/emit generic paths, and textual IR fixtures. Close with an `rg`-enumerated call-site audit table, including sites deliberately left generic / unchanged. |
+| #2 missed side effects | No | T3 does not mutate runtime tree structure, Visual order, Gallery layout, capture coordinates, or runtime property storage. |
+| #3 parallel/derived data drift | No | T3 introduces no parallel vector, derived index, or cache. |
+| #4 untested authored branch | Yes | T3 adds checker admission/reject branches for `ToggleButton.checked`; each SI-3 reject must have a firing test. |
+| #5 carry-forward | Yes | Preserve and re-record the string-carrier / warning-only known-widget invariant, and record any new compiler/IR invariant T4/T5 must preserve. |
+| #6 deterministic failure | Conditional | Any repeatable build/test failure gets a rerun history and disposition before close. |
+| #7 GUI positive control | No | T3 has no GUI-render deliverable; T4/T7 own runtime visual / screenshot evidence. |
+
+Review lane: **full independent review**, with branch/test-focused review
+folded in for the SI-3 reject matrix.
+
+## T3 end gate — compiler / IR surface close artifacts (2026-07-04)
+
+T3 implemented the compiler/textual-IR half only: `wasamoc` now knows
+`ToggleButton`, admits `checked` as a bool property on that widget, rejects
+`checked` elsewhere, and the generic lower/emit paths carry the widget kind,
+`checked` literal/binding forms, `clicked`, and alpha block-assignment
+handlers into textual IR. Runtime loader / widget construction / visual
+state remain T4.
+
+Verification commands:
+
+| Command | Result |
+|---|---|
+| `cargo fmt --all -- --check` | green |
+| `cargo test -p wasamoc` | green: 403 unit tests + 7 roundtrip tests |
+| `cargo test --workspace` | green |
+
+**#1 call-site audit table**
+
+`rg` queries used:
+
+- `rg -n "KNOWN_WIDGET_TYPES|widget_prop_type|check_togglebutton_property_name|check_checked_attr_admission|checked|ToggleButton" wasamoc\src wasamoc\tests wasamo-ir\src`
+- `rg -n "widget_type|KindPayload|emit_node|lower_node|Member::WidgetDecl|IrNode|bindings|handlers" wasamoc\src\lower.rs wasamoc\src\emit.rs wasamo-ir\src\lib.rs`
+
+| Site | Classification | T3 disposition |
+|---|---|---|
+| `wasamoc/src/check.rs` `KNOWN_WIDGET_TYPES` | must-dispatch | Added `ToggleButton`; positive test `togglebutton_known_widget_and_attrs_accepted_without_warning` proves no unknown-widget warning. Preserved the general `unknown_widget_type_is_warning_not_error` policy. |
+| `wasamoc/src/check.rs` `widget_prop_type` | must-dispatch | Added typed rows for `ToggleButton.text`, `ToggleButton.enabled`, and `ToggleButton.checked`; `style` remains keyword-valued / untyped like Button's existing path. |
+| `wasamoc/src/check.rs` property-bind dispatch | must-dispatch | Added `check_checked_attr_admission` for `checked` outside `ToggleButton`; added `check_togglebutton_property_name` so unknown `ToggleButton` attributes reject while admitted attrs flow through existing expr/type checks. |
+| `wasamoc/src/lower.rs` `lower_node*` / `Member::WidgetDecl` | generic / unchanged | No schema branch needed: `IrNode.widget_type` remains `String`, props/bindings/handlers are already generic. Added tests pinning `ToggleButton` kind, literal `checked`, bool-state `checked` binding, and alpha handler lowering. |
+| `wasamoc/src/emit.rs` `emit_node` / prop / bind / handler emission | generic / unchanged | No emit branch needed: node kind, props, bindings, and handlers emit generically. Added tests for literal, binding, and alpha block textual IR. |
+| `wasamo-ir/src/lib.rs` `IrNode` / `IrBinding` / `HandlerExpr` | generic / unchanged | No IR schema change: `widget_type` and `prop_name` are strings, bool binding uses existing `HandlerExpr::BoolPropRead`. Existing IR tests continue green. |
+| `wasamoc/tests/roundtrip.rs` public pipeline fixture | must-prove | Added `togglebutton_surface_emits_literal_and_binding_forms`, covering lex -> parse -> check -> lower -> emit for literal and binding `checked` forms plus carried Button attrs. |
+
+**#4 branch tests**
+
+| Branch / diagnostic | Firing test |
+|---|---|
+| `ToggleButton` known-widget admission and carried attrs | `togglebutton_known_widget_and_attrs_accepted_without_warning` |
+| `checked` omitted (default remains runtime-owned, absent IR prop) | `togglebutton_checked_absent_accepted` |
+| `checked` on `Button` | `checked_on_button_rejected` |
+| `checked` on `Text` | `checked_on_text_rejected` |
+| `checked` on another non-supporting widget | `checked_on_other_widget_rejected` |
+| non-bool literal RHS for `ToggleButton.checked` | `togglebutton_checked_non_bool_rhs_rejected` |
+| non-bool state RHS for `ToggleButton.checked` | `togglebutton_checked_i32_state_rejected` |
+| unknown `ToggleButton` attribute | `togglebutton_unknown_attr_rejected` |
+| alpha tab-band compile shape | `togglebutton_alpha_tab_band_shape_accepted` |
+| lower / emit / public pipeline carry-through | `togglebutton_literal_checked_lowers_to_ir_prop`, `togglebutton_checked_binding_lowers_to_bool_prop_read`, `togglebutton_alpha_tab_band_lowers_block_assignment_handlers`, `togglebutton_checked_literal_and_button_attrs_emitted`, `togglebutton_checked_binding_emitted`, `togglebutton_alpha_tab_band_emits_block_handlers`, `togglebutton_surface_emits_literal_and_binding_forms` |
+
+**#5 carry-forward**
+
+- **Constraint:** while widget kind remains string-carried and unknown
+  widgets remain warning-only at `wasamoc check`, new widget-kind tasks must
+  prove known-widget admission with a no-unknown-warning positive fixture.
+  **Evidence:** preserved `unknown_widget_type_is_warning_not_error`; T3
+  added `togglebutton_known_widget_and_attrs_accepted_without_warning`.
+  **Re-trigger:** any future new widget kind before the diagnostic policy is
+  intentionally revised. **Placement:** carry-forward candidate for
+  phase-end item 15.
+- **Constraint:** `ToggleButton.checked` is now compiler-admitted in textual
+  IR, but runtime loader validation / property-key resolution / widget
+  construction are still absent by design. **Evidence:** T3 plan/log split
+  and T3 tests stop at wasamoc emit. **Re-trigger:** T4 start gate.
+  **Placement:** direct T4 start-gate carry-over, not milestone handoff.
+
+**#6 deterministic-failure disposition**
+
+No deterministic or recurring failure occurred during T3. The only initial
+issue was `cargo fmt --all -- --check` reporting formatting diffs, which was
+resolved by running `cargo fmt --all`; the subsequent fmt check was green.
+
+**#7 GUI evidence**
+
+Not applicable. T3 has no GUI-render deliverable; T4/T7 own visual and
+screenshot evidence.
