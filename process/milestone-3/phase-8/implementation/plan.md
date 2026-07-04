@@ -212,29 +212,45 @@ risk R-1). Discharges ADR evidence items (1) and (2)-emit, and
 propagation-audit point (i). **Full independent review**, with the
 branch/test-focused check folded in for the reject matrix.
 
-- [ ] `wasamoc` parse/check: `ToggleButton` admitted as a widget kind;
+Critical responsibility cut (T3 re-check, 2026-07-04): T3 owns the
+**authoring/compiler/IR boundary** for `ToggleButton.checked`, not the
+runtime node, visual state, gallery tab-band, or diagnostic-policy
+reform. Because widget kind is string-carried and unknown widgets are
+warning-only today, T3 must prove `ToggleButton` is known/admitted with a
+no-unknown-warning positive fixture; it must not silently convert the
+general unknown-widget policy to a hard error. T2's G(1) table and GUI
+evidence carry forward to T5/T7 and do not change T3's scope except that
+the alpha tab-band compile fixture should match the later Gallery shape.
+
+- [x] `wasamoc` parse/check: `ToggleButton` admitted as a widget kind;
       attribute admission per [dsl_spec §4.17](../../../../docs/dsl_spec.md)
       — carries Button's `text` / `style` / `enabled` + `clicked`
       handler; `checked: <bool>` (literal or bool-state binding)
       admitted on `ToggleButton` **only**; default `false` when absent.
-- [ ] SI-3 reject matrix (named diagnostics, firing tests both
+      Positive fixture must assert no unknown-widget warning for
+      `ToggleButton`.
+- [x] SI-3 reject matrix (named diagnostics, firing tests both
       directions, trap #4): `checked` on `Button` / `Text` / other
       non-supporting widgets → reject; unknown attributes on
       `ToggleButton` → existing unknown-attr path; non-bool `checked`
       RHS → type reject.
-- [ ] Lower + emit: `ToggleButton` kind + `checked` prop/binding
+- [x] Lower + emit: `ToggleButton` kind + `checked` prop/binding
       through the existing single-boolean binding model (no new
-      binding-target class); textual-IR emit shape per the spec; IR
-      roundtrip tests (emit → load preserves kind + `checked` literal
-      and binding forms).
-- [ ] Positive fixtures: a `ToggleButton` with `text` / `style` /
+      binding-target class); textual-IR emit shape per the spec; public
+      wasamoc pipeline fixture proves emitted IR carries the kind,
+      `checked` literal, and `checked` binding forms. Loader preservation
+      remains T4's responsibility.
+- [x] Positive fixtures: a `ToggleButton` with `text` / `style` /
       `enabled` / `clicked` / `checked` compiles and lowers; the α
       tab-band shape (3 ToggleButtons + 3 bool states + block-assign
       exclusion handlers) compiles (the stage-1 spike shape, now on the
-      real surface).
-- [ ] **Close artifact (trap #1):** the call-site audit table over
+      real surface) without introducing equality, group widgets,
+      self-toggle, or two-way binding.
+- [x] **Close artifact (trap #1):** the call-site audit table over
       widget-kind dispatch + attribute-admission sites (check / lower /
-      emit / IR), each site classified.
+      emit / IR), each site classified, including sites deliberately left
+      generic / unchanged and the preserved warning-only unknown-widget
+      policy.
 
 **Start gate:** T1 site list + T3 gate selection recorded. **End
 gate:** workspace + tests green; audit table + firing tests recorded;
