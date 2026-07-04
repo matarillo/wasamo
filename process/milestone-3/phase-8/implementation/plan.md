@@ -118,7 +118,9 @@ only if the log makes those three buckets auditable.
       *author-facing* taxonomy is DD-fixed), how `checked` reuses the
       existing single-boolean binding path, and how the V-a fill
       composes with `style` / `enabled` visuals (including the R-2
-      ambiguity check plan against Mica/backdrop).
+      ambiguity check plan against the final effective Gallery background;
+      Mica/backdrop is a possible ambiguity factor, not a separate proof
+      target).
 - [x] **Gallery + hosts recon**: map the current
       `examples/gallery/gallery.ui` sections to the wireframe target
       (what folds where; what is swept); list retained capture scripts
@@ -154,22 +156,34 @@ Discharges ADR verification-closure item (4) and the FD-8-G(1)
 checkpoint. Independent of T3/T4 (the tab band is plain-Button
 placeholder at this stage — swapped to `ToggleButton` in T5).
 
-- [ ] Restructure `examples/gallery/gallery.ui` to the **wireframe
-      skeleton**: Grid overall frame (rows ≈ tab band 40 / content 1* /
-      status 20), tab-band placeholder `HStack`, thumbnail area
-      `ScrollView { WrapPanel { for … } }`, status strip `Text`,
-      lightbox `ZStack` + `if` retained, Box `aspect` placeholders,
-      `slot.*` placement — the first assembly step, not a throwaway
-      (T5 completes it). Workspace stays green (build compiles
-      `gallery.ui`).
-- [ ] **Technical smoke (assistant, before any owner UI review):**
+Critical responsibility cut (T2 re-check, 2026-07-03): T2 owns the
+**first non-throwaway Photo Gallery skeleton** and the **wireframe-
+fidelity / M3-placeholder agreement basis**. It does not own the final
+A1 gallery assembly, verification-screen sweep, `ToggleButton` tab
+band, host parity, or authoritative GUI evidence package. Its technical
+smoke is deliberately early: it should expose layout collapse / clip /
+aspect / scroll risks before owner UI review, then classify findings as
+fixable by the existing surface, owner-agreement placeholder, or Problem
+B residual. T2 must not silently absorb layout-engine changes or final UI
+judgments that belong to T5/T7/owner checkpoints.
+
+- [x] Restructure `examples/gallery/gallery.ui` to the **wireframe
+      skeleton**: Grid overall frame (current T2 shape uses rows
+      `56 / 1* / 28`, two star columns, direct `Cell` alignment in the
+      header, and content/status `column-span: 2`),
+      tab-band placeholder `HStack`, thumbnail area `ScrollView {
+      WrapPanel { for … } }`, status strip `Text`, lightbox `ZStack` +
+      `if` retained, Box `aspect` placeholders, `slot.*` placement —
+      the first assembly step, not a throwaway (T5 completes it).
+      Workspace stays green (build compiles `gallery.ui`).
+- [x] **Technical smoke (assistant, before any owner UI review):**
       build + launch `gallery-rust`, DPI-aware capture + analysis;
       check 0-sizing / clip breakage / `aspect`-abort / scroll breakage
       (Problem B's Fill→0 collapse surfaced early — framing R7).
       Findings triage recorded in [log.md](./log.md): fix with existing
       surface, or route to the A1-table placeholder / G(1) agreement /
       Problem B note. **No layout-engine change.**
-- [ ] **FD-8-G(1) owner agreement packet** (informed by the smoke):
+- [x] **FD-8-G(1) owner agreement packet** (informed by the smoke):
       the wireframe-fidelity / M3-placeholder table — real images →
       Box + Text; thumbnail click-to-open → explicit "Open lightbox"
       Button (hit-testing = M4); lightbox prev/next Button presence and
@@ -179,11 +193,11 @@ placeholder at this stage — swapped to `ToggleButton` in T5).
       status text static (no collection-length read exists in M3);
       which mutation Buttons (`Add` / `Remove` / `Clear` / `Reset`)
       survive as A1 minimal operation UI vs are swept; scrim/backdrop
-      approximations. Owner agreement recorded.
-- [ ] **Update the A1 feature-mapping table** (the framing's table is
+      approximations. Owner agreement recorded in [log.md](./log.md).
+- [x] **Update the A1 feature-mapping table** (the framing's table is
       the initial hypothesis): the agreed table lands in this plan (or
       log.md) as the audit basis for all later UI checks; deviations
-      from the framing table noted.
+      from the framing table noted in [log.md](./log.md).
 
 **Start gate:** T1 recon (gallery mapping) recorded; T2 gate selection
 recorded. **End gate:** skeleton renders without collapse (or triaged),
@@ -244,10 +258,11 @@ node).
       (text / style / enabled / click) and leaf measure/arrange — a new
       node, not a new layout primitive; **V-a checked visual**:
       background colour change on `checked`, composing with `style` and
-      `enabled` states; verify the cue is unambiguous against the Mica
-      backdrop (R-2 — if ambiguous in practice, that is an SI-1
-      implementation-checkpoint revision recorded in log.md, not a new
-      option choice).
+      `enabled` states; verify the cue is unambiguous against the final
+      effective Gallery background (R-2 — Mica/backdrop is a possible
+      ambiguity factor, not a separate proof target; if ambiguous in
+      practice, that is an SI-1 implementation-checkpoint revision
+      recorded in log.md, not a new option choice).
 - [ ] Reactive path: a bool-state change through the existing binding
       drives the visual (propagation-audit point (ii)); `clicked`
       handler block-assignment writes the state (W1 controlled — the
@@ -286,13 +301,15 @@ sweeps the per-phase verification surfaces
       Buttons; status strip; Box `aspect` placeholders; `slot.*` /
       `Cell` placement per the frozen 7b surface; the agreed minimal
       operation UI (scroll / any retained mutation Buttons).
-- [ ] **Sweep the per-phase verification surfaces**: placement-demo
-      sub-screen + its state/button (P7b) and
-      `phase-7b/.../evidence/capture-placement-demo.ps1` retirement
-      note; the Grid footer-clip demo (P5); the standalone static
-      `Photo 1–10` WrapPanel; verification-only Buttons not in the
-      agreed operation UI. No verification menu / dashboard remains
-      (FD-8-E).
+- [ ] **Complete the per-phase verification-surface sweep**: T2 already
+      removed the placement-demo sub-screen/state/button, the Grid
+      footer-clip demo, the standalone static `Photo 1–10` WrapPanel,
+      and mutation Buttons from the skeleton. T5 verifies no
+      verification-only surface reappears while integrating
+      `ToggleButton`, records the `phase-7b/.../evidence/capture-
+      placement-demo.ps1` retirement note, and records the A1-table
+      disposition for any operation UI it keeps/removes. No verification
+      menu / dashboard remains (FD-8-E).
 - [ ] Regression gate: workspace + all fixtures green; every M3 surface
       in the A1 table is exercised by the integrated app (audit against
       the T2-updated table, row by row, recorded in log.md).
@@ -358,7 +375,10 @@ T10's separate gate.
       positive control** (click a different tab → its background
       changes **and** the previously-selected tab clears — exclusion in
       the same two frames); **wrap/overflow** (narrow-width reflow
-      and/or scroll-offset frames per the agreed state set).
+      and/or scroll-offset frames per the agreed state set); **aspect**
+      evidence that distinguishes a live `Box.aspect` constraint from a
+      no-op look-alike, or records the T8 audit citation that proves the
+      aspect surface elsewhere.
 - [ ] Verify each positive control distinguishes the intended behaviour
       from a static look-alike (AGENTS.md §Testing rules); note known
       M4 residuals (DPI blur, dynamic title) as residuals, not
