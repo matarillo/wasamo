@@ -1113,3 +1113,30 @@ The frames show:
 
 T7 remains responsible for the final assistant GUI evidence with the full
 positive-control set, including strict aspect closure or the T8 citation.
+
+## T5 independent review (2026-07-05)
+
+Reviewer: Peirce subagent (`019f2f55-8a72-7bf1-9456-9f882646503c`).
+
+Result: **no findings**.
+
+Review scope: commits `8f906f9` and `96e1a68`; T5 Gallery `.ui`
+integration, start/end gate artifacts, T5 evidence script and committed PNG
+frames, and `retrospectives/t5.md`.
+
+Reviewer confirmation:
+
+- `ToggleButton` tab integration is confined to the Gallery surface and does
+  not touch compiler/runtime/layout code.
+- T5 responsibility split is clear: C/Zig hosts remain T6, authoritative GUI
+  evidence remains T7, and public-draft/audit work remains T8 onward.
+- Start/end gates include the A1/G(1) audit, trap #2 structural side-effect
+  enumeration, trap #5 carry-forward entries, and the T5-scoped #7 precheck.
+- Committed PNG evidence shows exclusive selected-tab movement, lightbox
+  open/close, and scroll offset movement.
+- T5 retrospective records the task checklist and T6/T7/T8 ownership.
+
+Reviewer-noted test gaps are intentional downstream ownership: T7 must
+re-derive absolute-coordinate capture frames for final evidence; strict
+`Box.aspect` positive-control closure remains T7/T8; mutation-control
+omission remains T8's no-silently-deferred-surface audit item.
