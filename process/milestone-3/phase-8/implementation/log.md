@@ -1364,3 +1364,25 @@ Reviewer confirmation:
 Reviewer-noted residuals are intentional downstream ownership: remote GitHub
 Actions run id remains push / phase-end owned, and the selected/exclusion,
 lightbox, wrap/overflow, and aspect positive controls remain T7-owned.
+
+## T6 Claude review disposition (2026-07-05)
+
+Reviewer: Claude review packet supplied by the owner.
+
+Findings disposition:
+
+1. **CI YAML parse-level verification not run before merge** (low).
+   Accepted by the owner on 2026-07-05. The T6 end-gate relaxation is
+   intentional: push is a separate gate, and phase-end already owns the
+   push + GitHub Actions CI confirmation procedure. T6 therefore closes with
+   local rehearsal of the CI commands and records that remote workflow parse /
+   run evidence remains phase-end owned rather than task-close owned.
+2. **Retrospective double-loop section lightly mixes execution mechanics**
+   (low). Recorded as learning for the next start gate: keep premise /
+   planning-hypothesis learning separate from deterministic-failure and
+   environment mechanics.
+3. **`embed_uic.cmake` added a `HEADER_GUARD` parameter while described as a
+   pure port** (trivial). Recorded as harmless; behavior is correct and the
+   host boundary remains the counter-template memory-load pattern.
+
+No code or evidence changes were required.
