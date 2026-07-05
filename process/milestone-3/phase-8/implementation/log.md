@@ -1339,3 +1339,28 @@ strip text `18 placeholders - Image and hit-testing are M4`. This proves
 each host loaded and rendered the same Gallery surface rather than merely
 starting a process. T7 remains responsible for the selected/exclusion,
 lightbox, wrap/overflow, and aspect positive controls.
+
+## T6 independent review (2026-07-05)
+
+Reviewer: Cicero subagent (`019f2fda-1fc6-7ea3-b095-a1f41f0b4601`).
+
+Result: **no findings**.
+
+Review scope: commits `f3ccaef` and `74a38b6`; new Gallery C/Zig hosts, CI
+steps, T6 plan/log/evidence, committed parity PNGs, and `retrospectives/t6.md`.
+
+Reviewer confirmation:
+
+- C/Zig host names and paths are consistently ported to Gallery.
+- Both new hosts preserve the embedded-IR `WASAMO_LOAD_MEMORY` boundary and
+  do not perform host-side widget mutation.
+- CI Gallery steps follow the release workspace build and match the AGENTS.md
+  `wasamoc` build-ordering requirement.
+- No tracked generated artifacts (`.zig-cache`, `zig-out`, generated `.uic`,
+  or generated headers) leaked into the commit set.
+- The committed T6 parity PNGs show the same initial Gallery view across
+  Rust, C, and Zig.
+
+Reviewer-noted residuals are intentional downstream ownership: remote GitHub
+Actions run id remains push / phase-end owned, and the selected/exclusion,
+lightbox, wrap/overflow, and aspect positive controls remain T7-owned.
