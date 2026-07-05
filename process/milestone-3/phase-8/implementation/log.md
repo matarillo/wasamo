@@ -1595,8 +1595,8 @@ Findings disposition:
    required to verify `Box.aspect` reproducibility during the external-reader
    smoke.
 
-Owner decision surface for Finding 2: either (A) accept the current
-plan-sanctioned T8 carry-forward, or (B) reopen T7 to add a dedicated
-aspect-vs-no-aspect comparison capture. Current recorded disposition follows
-(A); choose (B) only if T7 must be self-contained for aspect without relying on
-the already-landed Phase 2 tests and T8 public-draft smoke.
+Owner decision for Finding 2: owner accepted (A) on 2026-07-05. T7 remains
+closed with the current plan-sanctioned T8 carry-forward: Gallery visual
+evidence plus already-landed Phase 2 aspect tests, with T8 required to verify
+`Box.aspect` reproducibility during the external-reader smoke. T7 will not be
+reopened for a dedicated aspect-vs-no-aspect comparison capture.
