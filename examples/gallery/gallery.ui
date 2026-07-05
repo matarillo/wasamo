@@ -5,6 +5,9 @@ component Gallery inherits Window {
 
     state scroll_y: i32 = 0
     state is_lightbox_open: bool = false
+    state tab_all_selected: bool = true
+    state tab_albums_selected: bool = false
+    state tab_favorites_selected: bool = false
     state labels: string[] = [
         "IMG 001", "IMG 002", "IMG 003", "IMG 004", "IMG 005", "IMG 006",
         "IMG 007", "IMG 008", "IMG 009", "IMG 010", "IMG 011", "IMG 012",
@@ -26,12 +29,33 @@ component Gallery inherits Window {
                     spacing: 8px
                     padding: 8px
 
-                    Button {
+                    ToggleButton {
                         text: "All"
-                        style: accent
+                        checked: tab_all_selected
+                        clicked => {
+                            root.tab_all_selected = true;
+                            root.tab_albums_selected = false;
+                            root.tab_favorites_selected = false;
+                        }
                     }
-                    Button { text: "Albums" }
-                    Button { text: "Favorites" }
+                    ToggleButton {
+                        text: "Albums"
+                        checked: tab_albums_selected
+                        clicked => {
+                            root.tab_all_selected = false;
+                            root.tab_albums_selected = true;
+                            root.tab_favorites_selected = false;
+                        }
+                    }
+                    ToggleButton {
+                        text: "Favorites"
+                        checked: tab_favorites_selected
+                        clicked => {
+                            root.tab_all_selected = false;
+                            root.tab_albums_selected = false;
+                            root.tab_favorites_selected = true;
+                        }
+                    }
                 }
             }
 

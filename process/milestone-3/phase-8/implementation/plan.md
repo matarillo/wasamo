@@ -323,19 +323,32 @@ sweeps the per-phase verification surfaces
 ([constraints §6](../requirements/constraints.md)). Gates trap #2
 (capture coordinates) + the R-5 regression risk.
 
-- [ ] Tab band: 3 `ToggleButton`s (All / Albums / Favorites) with
+Critical responsibility cut (T5 re-check, 2026-07-05): T5 owns the
+**landed Rust-host Gallery surface** that T6 ports and T7 captures. It
+replaces the T2 tab placeholder with the real `ToggleButton` alpha
+exclusion band, keeps or explicitly dispositions each G(1) / A1 table row,
+records the verification-screen sweep / retired-script status, and creates
+or re-derives only the capture coordinates needed for the T5 first-render
+direction check. T5 does **not** own the C / Zig hosts, the authoritative
+assistant GUI evidence package, the strict `Box.aspect` positive-control
+closure, the public-draft audit, or owner final smoke. It must not absorb
+new layout-engine work, generic diagnostic-policy changes, real image /
+thumbnail hit-testing work, or collection-mutation controls unless the A1
+audit proves the existing Phase 7 coverage citation insufficient.
+
+- [x] Tab band: 3 `ToggleButton`s (All / Albums / Favorites) with
       `checked:` bound to per-tab bool states and α block-assignment
       exclusion handlers; V-a visual distinguishes the selected tab.
       (**β fallback trigger:** if the live exclusion proves unworkable
       here, substitute β and record the SI-2 static-approximation
       accounting in this plan + the A1 table — preamble obligation 2.)
-- [ ] Assemble the remaining agreed surface: `for`-generated thumbnail
+- [x] Assemble the remaining agreed surface: `for`-generated thumbnail
       WrapPanel inside ScrollView (iteration + wrap + viewport);
       lightbox ZStack + `if` with close (and agreed prev/next form)
       Buttons; status strip; Box `aspect` placeholders; `slot.*` /
       `Cell` placement per the frozen 7b surface; the agreed minimal
       operation UI (scroll / any retained mutation Buttons).
-- [ ] **Complete the per-phase verification-surface sweep**: T2 already
+- [x] **Complete the per-phase verification-surface sweep**: T2 already
       removed the placement-demo sub-screen/state/button, the Grid
       footer-clip demo, the standalone static `Photo 1–10` WrapPanel,
       and mutation Buttons from the skeleton. T5 verifies no
@@ -344,17 +357,19 @@ sweeps the per-phase verification surfaces
       placement-demo.ps1` retirement note, and records the A1-table
       disposition for any operation UI it keeps/removes. No verification
       menu / dashboard remains (FD-8-E).
-- [ ] Regression gate: workspace + all fixtures green; every M3 surface
+- [x] Regression gate: workspace + all fixtures green; every M3 surface
       in the A1 table is exercised by the integrated app (audit against
       the T2-updated table, row by row, recorded in log.md).
-- [ ] Re-derive layout-coupled coordinates in retained capture scripts
-      (trap #2); park superseded scripts with the evidence they
-      supported.
-- [ ] **FD-8-G(2): owner first-render UI check** on the Rust host
+- [x] Re-derive layout-coupled coordinates for the T5 first-render /
+      alpha-precheck capture script (trap #2); do not treat T2 coordinates
+      as retained ground truth. Park superseded scripts with the evidence
+      they supported, including the Phase 7b placement-demo retirement note.
+- [x] **FD-8-G(2): owner first-render UI check** on the Rust host
       (early direction check; assistant pre-verifies α exclusion works
       live before presenting). Findings that exceed the plan go back to
       the A1 table / framing revisions (framing packet-G note), not
-      silently absorbed.
+      silently absorbed. If owner feedback requires additive fixes, they
+      land on the T5 branch and this checkpoint reruns before T5 close.
 
 **Start gate:** T2 (agreed table) + T4 merged; T5 gate selection
 recorded. **End gate:** integrated gallery green + A1-table audit
