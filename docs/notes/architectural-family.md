@@ -89,6 +89,7 @@ commitment:
 | DD-M2-P5-001..006 (Phase 5, Accepted) | Signal + Effect on a tree with `BindingTarget` enum; family (1)-flavored API surface |
 | DD-M3-P7-001..007 (iteration grammar, Accepted) | `for` is absorbed as `ControlFlowNode::For` plus `BindingTarget::ForLoopSubtree`; runtime-owned collection signals mutate a persistent tree through stage-then-commit structural splices, confirming the tree-with-bindings family for the Phase 7 trigger-1 / trigger-3 check |
 | DD-M3-P7b-001..002 (placement surface + model, Accepted) | The `slot.*` prefix is a parse-level parent-data namespace on tree nodes, and placement is carried on the child slot (`SlotData`); both are tree-*description* constructs, not view-function re-execution. Confirms family (1) for the Phase 7b trigger-1 (M3 DSL spec drafting) check |
+| DD-M3-P8-001..002 (ToggleButton / public draft, Accepted) | `ToggleButton.checked` is an ordinary bool binding on a persistent tree node; the exactly-one-selected Gallery tab band is author-composed by handler state writes, not by re-executing a view function. The public-draft pass adds no host-language scope or function-composition grammar. Confirms family (1) for the Phase 8 trigger-1 capstone check |
 
 No accepted ADR names family (1) as the long-term selection. This
 note does not upgrade the implicit fit to an explicit commitment. The
@@ -102,6 +103,13 @@ parse-level namespace on tree nodes and placement rides the child slot
 (`SlotData`, DD-002), introducing no host-language scope modifier or view
 re-execution, so the trigger-1 (M3 DSL spec drafting) re-evaluation
 revised this table in place with no vision decision record.
+The M3-Phase 8 re-read (2026-07-05, public-draft capstone) again
+**confirmed** family (1): the final M3 widget-state addition is a
+controlled bool attribute on a tree node, the Gallery tab exclusion is
+plain state assignment over persistent bindings, and the public draft
+keeps future selection / sizing / placement directions as notes rather
+than reserving a view-function or host-language composition model. No
+vision decision record was opened; the strain triggers remain live.
 
 ## Family-neutral vs family-coupled parts of the current design
 

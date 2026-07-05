@@ -1,7 +1,7 @@
 # Wasamo DSL Specification
 
-**Document version:** 1.12
-**Last updated:** 2026-07-02
+**Document version:** 1.13
+**Last updated:** 2026-07-05
 **Status:** M3-Phase 2 closed (implementation-synced); M3-Phase 3
 closed (implementation-synced); M3-Phase 4 closed
 (implementation-synced); M3-Phase 5 closed (implementation-synced);
@@ -664,7 +664,7 @@ superseded by it.
 
 `Box` is a layout container that admits **zero or one child**.
 Multi-child overlap is ZStack's responsibility
-(Phase 6, not yet shipped); a Box declared with two or more children
+(M3-Phase 6); a Box declared with two or more children
 is rejected at compile time by `wasamoc check` **and** independently
 rejected by the runtime IR loader (`wasamo-runtime/src/ir_loader.rs`)
 at IR-load time. The two rejection gates are required because
@@ -2451,8 +2451,8 @@ keywords: a state or widget named `append` or `drop-last` still parses.
 only (the collection assignment is an `assign_stmt` alternative);
 member positions (state declarations, property settings) carry none.
 
-The Phase 7 gallery slice uses all four authored mutation forms in the
-visible `examples/gallery/gallery.ui` thumbnail set:
+The Phase 7 verification slice used all four authored mutation forms in
+the gallery thumbnail set:
 
 ```
 state labels: string[] = ["S01", "S02", "S03", "S04", "S05", "S06"]
@@ -2494,7 +2494,16 @@ This example deliberately varies only the scalar label (plus the
 loop-local index). Varying both label and colour per item requires
 deferred surfaces — record-like item data / `TypedValue`,
 loop-external indexed collection reads, and a bindable `Box.fill`
-surface — so the Phase 7 gallery keeps `fill` static.
+surface — so the Phase 7 proof keeps `fill` static.
+
+The final M3 Photo Gallery target app still uses a collection state and
+`for label, index in labels` to generate thumbnails, but it does not keep
+the Phase 7 Add / Remove / Clear / Reset controls as end-user UI. Those
+controls were verification scaffolding for the collection-assignment
+surface; their coverage remains this section's authored mutation example
+and the Phase 7 implementation evidence, while the integrated Gallery
+keeps the target-app surface focused on generated thumbnails, scrolling,
+selection, and lightbox state.
 
 **Equal-value writes propagate nothing.** A collection assignment whose
 new value equals the current value performs no dirty propagation — a
@@ -3924,3 +3933,4 @@ surface.
 | 1.10    | 2026-06-21 | M3-Phase 7b design draft (Moment 1): added §4.16 parent-interpreted placement — the shared `slot.*` namespace for Grid and ZStack child placement. ZStack per-child alignment moves from bare `h-align` / `v-align` to `slot.h-align` / `slot.v-align` (§4.13); Grid gains a direct `slot.*` form alongside the retained `Cell` grouped form (§4.12), one form per child with two distinct mixing / non-admitting-parent rejects, no normative canonical form (provisional `Cell`-default examples convention). Supporting: §3 `placement_bind` production, §4.4 registry note, §4.15 `for`-placement (placement on the body root child), §8.11 validation rows (placement admission / constant-RHS). Placement is constant per instance; a binding-expression RHS is rejected. No new `IrType` / `IrLiteral` / `PropertyValue` or C ABI change; `abi_spec.md` untouched. The loaded-IR placement representation and storage model are normative in `architecture.md` (DD-002 / Moment 1, landing in the sibling architecture commit), so the textual-IR placement emit form (§8.5) re-syncs there. Pending implementation re-sync at Phase 7b close. |
 | 1.11    | 2026-06-24 | M3-Phase 7b implementation sync (Moment 2): flipped §4.12 / §4.13 / §4.16 status markers to closed / implementation-synced. Pinned the §5 AST to the landed parser — `slot.<key>` rides the existing `PropertyBind` variant (name canonicalized **with** the `slot.` prefix retained, e.g. `slot.h-align`); there is **no** separate `PlacementBind` AST variant. Pinned the §8 loaded-IR examples to the landed IR member spelling `Widget(IrChildSlot { node, slot_data })` (tuple variant wrapping `IrChildSlot`, not the struct-variant draft sketch). The §3 `placement_bind` author-surface production and the §8.5 `child { placement <kind> { … } node … }` textual-IR skeleton matched the landed `wasamoc` emit / loader and were confirmed unchanged. No ABI change; `abi_spec.md` remains untouched. |
 | 1.12    | 2026-07-02 | M3-Phase 8 design draft (Moment 1): added §4.17 `ToggleButton` selected / toggle-state surface (controlled one-way `checked` bool attribute; background-colour-only minimal / provisional visual; `checked` admitted on `ToggleButton` only with a two-gate reject; exactly-one-selected exclusion as an author-composed M3-era pattern; five future selection directions kept as non-reserved future notes) and §4.18 public-draft future-surface notes (author-controllable sizing as a pre-1.0 unresolved surface whose shape is not reserved — no schedule published; Grid two-form placement provisional; default-alignment asymmetry as container-owned / explicable; placement-spelling affirmative keep; placement bindability). §4.4 registry gains the `ToggleButton` row and §4.8 property catalog gains the `ToggleButton` `checked` and shared `enabled` rows (`enabled` carries the same Phase-1 disabled contract as `Button.enabled`); §8.5 notes `ToggleButton` as an ordinary node reusing the bool binding forms. No new `IrType` / `IrLiteral` / `PropertyValue` or token; `abi_spec.md` untouched. The `status: public-draft` marker, the public-draft promotion change-history entry (distinct from this revision-history table), and the external-reader smoke are deferred to Phase 8 close (Moment 2). Pending implementation re-sync at Phase 8 close. |
+| 1.13    | 2026-07-05 | M3-Phase 8 public-draft readiness editorial pass: removed stale pre-Phase-6 wording from §4.9 and clarified that the Phase 7 collection mutation Buttons were verification scaffolding, while the final integrated Gallery keeps generated thumbnails without retaining Add / Remove / Clear / Reset as end-user UI. The public-draft marker and promotion change-history entry remain deferred to the Phase 8 Moment 2 sync. |
