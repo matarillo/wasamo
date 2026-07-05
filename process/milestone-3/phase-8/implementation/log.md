@@ -1688,7 +1688,7 @@ Editorial fixes made during the smoke:
 | A-2 future notes, no syntax reservation | §4.18 states the listed items are not reserved syntax, not stability commitments, and promise no spelling / IR / ABI shape. | Yes |
 | B-1b PM-2 both forms + provisional wrapper rule | §4.16 accepts both `Cell` and direct `slot.*`; §4.18 says canonical form is pre-1.0 carry-forward, not settled. | Yes |
 | B-2c sizing future note, no shape reservation, no public M4/M5 schedule | §4.18 names explicit sizing as pre-1.0 unresolved, says syntax / IR / ABI shape are not reserved, and publishes no schedule. | Yes |
-| B-3b container-owned defaults | §4.16 / §4.18 explain Grid `stretch` and ZStack `center` as container-owned semantics. T8 reader smoke found this explicable; no B-3c revision procedure triggered. | Yes |
+| B-3b container-owned defaults | §4.16 / §4.18 explain Grid `stretch` and ZStack `center` as container-owned semantics. Grid is a track container: absent child alignment stretches each placed child through the resolved cell so row/column sizing remains the primary layout contract. ZStack is an overlay container: absent child alignment centers each overlay in the union bounds so layering does not silently imply fill. T8 reader smoke found the asymmetry explicable from those container semantics; no B-3c revision procedure triggered. | Yes |
 | B-4a spelling affirmed keep | §4.18 states kebab-case placement spelling is an affirmative keep, not silent carry. | Yes |
 | B-5b placement bindability | §4.16 / §4.18 state placement is constant per instance, binding RHS rejected, future bindability not foreclosed. | Yes |
 | B-6b DD-001 five deferred axes as future notes | §4.17 lists equality / single-discriminant selection, group widgets, two-way binding, widget-owned state, and generic toggle appearance as not-reserved future directions. | Yes |
@@ -1713,7 +1713,7 @@ memory?
 | A3 WrapPanel | §4.10 describes line formation, item sizing, spacing, wrap / overflow, aspect-child footguns, and validation. | Yes |
 | A4 ZStack | §4.13 + §4.16 describe document-order z-order, `Fill/Fill`, union sizing, clip, and `slot.*` alignment. | Yes |
 | A5 ScrollView | §4.11 describes exactly one content child, vertical viewport / clip, `offset-y` binding, clamp, and intermediate visual. | Yes |
-| A6 Box / aspect / placeholder | §4.9 describes zero-or-one child, `aspect` / `fill`, inscribed fit, bounded-axis-wins, runtime errors, and Box + Text placeholder convention. The T7 Gallery aspect proof is citation-backed by Phase 2 layout tests, and the spec is sufficient to reproduce the 1:1 thumbnail and 4:3 lightbox placeholders. | Yes |
+| A6 Box / aspect / placeholder | §4.9 describes zero-or-one child, `aspect` / `fill`, inscribed fit, bounded-axis-wins, runtime errors, and Box + Text placeholder convention. T8 re-verified the cited Phase 2 coverage in `wasamo-runtime/src/layout.rs`: `box_aspect_inscribed_width_constrained`, `box_aspect_inscribed_height_constrained`, `box_aspect_unbounded_height_uses_bounded_axis_wins`, `box_aspect_unbounded_width_uses_bounded_axis_wins`, `box_aspect_unbounded_both_axes_is_runtime_error`, and child centering / clipping tests cover the behaviours cited by T7. The spec is sufficient to reproduce the 1:1 thumbnail and 4:3 lightbox placeholders. | Yes |
 | A7 conditional rendering | §4.14 and §8.5 describe `if`, bool condition, single-widget body, present/absent semantics, fresh-on-return, and validation. | Yes |
 | A8 iteration / collections | §4.7, §4.15, §8.4, §8.5, §8.9, and §8.11 describe collection state, `for`, binders, whole-value assignment, mutation timing, positional identity, textual IR, and validation. | Yes |
 | A9 bool scalar | §2.1, §2.2, §4.3, §4.6, §4.7, §4.8, §8.4, and §8.9 describe bool literals, `bool` state, bool reads / assignment, and bool property binding. | Yes |
@@ -1831,3 +1831,23 @@ Reviewer confirmation:
 
 Reviewer note: the review used `git diff`, `rg`, and line inspection; it did not
 rerun the cargo commands already recorded in the T8 log.
+
+## T8 post-review remediation (2026-07-05)
+
+Reviewer: Claude.
+
+Result: **minor, non-blocking findings; remediated in follow-up.**
+
+Remediation:
+
+- B-3b's "explicable" verdict was strengthened from a bare reader-smoke
+  conclusion into a forcing artifact: the DD-002 disposition table now states
+  why Grid's absent alignment stretches through a track cell while ZStack's
+  absent alignment centers overlays in the union bounds.
+- A6's aspect citation now records that T8 re-verified the Phase 2 coverage in
+  `wasamo-runtime/src/layout.rs`, naming the inscribed, bounded-axis-wins,
+  unbounded-error, child-centering, and clipping test families.
+- The T8 retrospective double-loop "observed facts" section no longer lists
+  cargo green / review no-findings execution results as premise-validation
+  signals; it focuses on the stale-wording detections, decision-label scan, and
+  the under-evidenced B-3b artifact found by review.
