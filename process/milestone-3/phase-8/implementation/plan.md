@@ -476,7 +476,21 @@ The spec-closure work (ADR item (6), minus the T11 marker flip).
 Reads the **landed** implementation (pin-to-landed-source learning),
 not the design draft.
 
-- [ ] Editorial pass over `docs/dsl_spec.md` **whole-document** at the
+Critical responsibility cut (T8 re-check, 2026-07-05): T8 owns the
+**public-draft readiness audit before promotion**, not the promotion
+mechanics themselves. It must read the landed T7 surface and source-backed
+tests, then make `docs/dsl_spec.md` reproducible for an external reader for
+all M3 surfaces. The external-reader smoke is the parent gate: the A11
+ADR-to-spec trace, the no-silently-deferred-surface audit, the Phase 7
+mutation-control citation, the T7 aspect visual + Phase 2 test citation, and
+the architectural-family confirm entry are inputs to that smoke. T8 may make
+editorial fixes in `docs/dsl_spec.md` and revise
+`docs/notes/architectural-family.md`, but it must not flip
+`status: public-draft`, add the public-draft change-history entry, change
+`docs/architecture.md` status markers, draft M3 handoff, run owner G(4), or
+reopen shipped UI semantics.
+
+- [x] Editorial pass over `docs/dsl_spec.md` **whole-document** at the
       external-reader bar: §4.17 re-verified against the shipped
       implementation; the DD-002 accepted dispositions verified present
       and honestly worded — B-1b (PM-2 both forms + provisional wrapper
@@ -486,7 +500,7 @@ not the design draft.
       placement, no compatibility guarantee), B-6b (five DD-001 axes as
       future notes); the α M3-era exclusion note at the DD-002-coupling
       strength (items 1–3); no DD/option labels in spec prose.
-- [ ] **External-reader smoke** (milestone-end criterion 5): a
+- [x] **External-reader smoke** (milestone-end criterion 5): a
       structured walkthrough asking whether a reader with only
       `docs/dsl_spec.md` could reproduce each M3 surface (A2–A10, A13,
       grammar surfaces) against a hypothetical C-ABI host; per-surface
@@ -494,15 +508,15 @@ not the design draft.
       remaining editorial work in this task. **B-3b check:** if the
       defaults still read as arbitrary, trigger the separate B-3c
       revision procedure (owner-gated), not a silent rewording.
-- [ ] **A11 auditability check** (milestone-end criterion 4): every M3
+- [x] **A11 auditability check** (milestone-end criterion 4): every M3
       phase ADR names the `docs/dsl_spec.md` sections it updated;
       gaps listed + closed (pointer fixes in the ADRs' allowed
       sections or log-recorded disposition).
-- [ ] **No-silently-deferred-surface audit** (milestone-end criterion
+- [x] **No-silently-deferred-surface audit** (milestone-end criterion
       6): the M3 target-app pre-doc's 必要 surface list checked item by
       item — shipped, or recorded as a deviation in the M3 plan
       Revision log; result recorded for T9's handoff.
-- [ ] `docs/notes/architectural-family.md`: the Phase 8
+- [x] `docs/notes/architectural-family.md`: the Phase 8
       confirm-within-family entry lands revise-in-place (trigger 1 —
       M3 spec capstone; not yet landed at Moment 1).
 

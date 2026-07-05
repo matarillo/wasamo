@@ -1600,3 +1600,254 @@ closed with the current plan-sanctioned T8 carry-forward: Gallery visual
 evidence plus already-landed Phase 2 aspect tests, with T8 required to verify
 `Box.aspect` reproducibility during the external-reader smoke. T7 will not be
 reopened for a dedicated aspect-vs-no-aspect comparison capture.
+
+## T8 start gate — carry-over check, responsibility cut, and trap selection (2026-07-05)
+
+Carry-over checked before choosing the T8 approach:
+
+- From T7 log / retrospective: `Box.aspect` is closed as Gallery visual
+  evidence plus Phase 2 tests, not a fresh aspect-vs-no-aspect comparison
+  screenshot. T8 must verify that `docs/dsl_spec.md` lets an external reader
+  reproduce the aspect behaviour without private implementation memory.
+- From T5 log / retrospective: collection mutation controls are omitted from
+  the final Gallery UI only by citing existing Phase 7 collection / iteration
+  coverage. T8 must include that citation in the no-silently-deferred-surface
+  audit rather than treating the omission as visual cleanup.
+- From T2/T5/T7: coordinate-based GUI evidence remains a visible-desktop,
+  final-surface evidence path, not a portable semantic test. T8 should cite
+  the landed evidence and not create new GUI evidence.
+- From T1/T3/T4: `ToggleButton` / `checked` is string-carried through IR,
+  known-widget admission is proved by no-warning compiler fixtures, absent
+  `checked` remains absent in textual IR and defaults to runtime `false`, and
+  runtime loader mirrors the closed `ToggleButton` catalog. T8 must verify
+  §4.17 against these landed facts.
+- From T2/T5/T7: R-2 checked-visual ambiguity is closed by final Gallery
+  selected/exclusion frames. T8 should not reopen visual design; it only checks
+  the spec wording says background-colour-only and controlled one-way honestly.
+- From T6: Gallery C/Zig host build ordering and memory-load boundaries remain
+  phase-end / handoff candidates; T8 records no new host requirement unless
+  the external-reader smoke exposes a spec gap.
+- From T7: T10 owner human-visible smoke remains separate from T8 and must not
+  be replaced by saved screenshots.
+
+T8 responsibility after critical re-check: T8 owns the public-draft readiness
+audit before promotion. The external-reader smoke is the parent gate; the A11
+ADR-to-spec trace, no-silently-deferred-surface audit, T7 aspect citation,
+Phase 7 mutation citation, DD-002 future-note checks, and architectural-family
+confirmation are inputs to that gate. T8 may make editorial fixes to
+`docs/dsl_spec.md` and revise `docs/notes/architectural-family.md`, but it
+does not flip the `status: public-draft` marker, write the public-draft
+promotion change-history entry, update `docs/architecture.md` status markers,
+draft M3 handoff, run G(4), or change shipped Gallery semantics.
+
+Selected traps:
+
+| Trap | Applies? | Reason / required T8 close artifact |
+|---|---:|---|
+| #1 semantic migration | No | T8 does not change an enum / IR schema / runtime traversal. It audits spec/source alignment only. |
+| #2 missed side effects | Yes | Editorial changes can change public-surface meaning and audit disposition. Close with a structural side-effect enumeration naming every docs/process artifact changed and its downstream owner impact. |
+| #3 parallel/derived data drift | No | T8 introduces no parallel runtime/source data. The audit tables are review artifacts, not source-of-truth mirrors for code. |
+| #4 untested authored branch | No | T8 adds no compiler/runtime diagnostic, reject, or size branch. Existing tests may be cited; no new branch firing is required. |
+| #5 carry-forward | Yes | Any public-draft residual or milestone-close input found by the audits must be recorded with evidence and a re-trigger criterion for T9/T11/phase-end/milestone-close. |
+| #6 deterministic failure | Conditional | Any repeatable command/audit failure gets rerun history and disposition; no accepting a transient clean result without cause. |
+| #7 GUI positive control | No | T8's deliverable is document audit and editorial readiness. It cites T7 GUI evidence instead of producing new GUI frames. |
+
+Review lane: normal task-end review after the retrospective. T8 is a document
+and audit task; no schema / IR migration, runtime structural change, new
+diagnostic branch, or new GUI-render evidence is introduced. The review should
+focus on spec accuracy, the external-reader smoke table, A11 trace completeness,
+and no-silently-deferred-surface dispositions.
+
+## T8 audit results — public-draft readiness before promotion (2026-07-05)
+
+T8 read `docs/dsl_spec.md` against the landed implementation and evidence
+through T7. It did **not** flip the `status: public-draft` marker, add the
+public-draft promotion change-history entry, or update `docs/architecture.md`
+status markers; those remain T11 responsibilities.
+
+Editorial fixes made during the smoke:
+
+- `docs/dsl_spec.md` §4.9 no longer calls ZStack "not yet shipped"; that was
+  stale pre-Phase-6 wording.
+- `docs/dsl_spec.md` §4.15 now distinguishes the Phase 7 collection-mutation
+  verification slice from the final integrated Gallery UI, which omits Add /
+  Remove / Clear / Reset controls by owner-accepted A1 disposition while still
+  relying on Phase 7 evidence for the mutation surface.
+- `docs/dsl_spec.md` document version / last-updated fields and revision
+  history now record the T8 readiness editorial pass without performing the
+  separate public-draft promotion entry.
+- `docs/notes/architectural-family.md` records the Phase 8 trigger-1 capstone
+  re-read: `ToggleButton.checked` and the public draft introduce no
+  view-function / host-language composition model, so family (1) remains the
+  working hypothesis and no vision decision record is opened.
+
+### DD-002 disposition check
+
+| DD-002 item | Spec disposition | Verdict |
+|---|---|---|
+| A-2 future notes, no syntax reservation | §4.18 states the listed items are not reserved syntax, not stability commitments, and promise no spelling / IR / ABI shape. | Yes |
+| B-1b PM-2 both forms + provisional wrapper rule | §4.16 accepts both `Cell` and direct `slot.*`; §4.18 says canonical form is pre-1.0 carry-forward, not settled. | Yes |
+| B-2c sizing future note, no shape reservation, no public M4/M5 schedule | §4.18 names explicit sizing as pre-1.0 unresolved, says syntax / IR / ABI shape are not reserved, and publishes no schedule. | Yes |
+| B-3b container-owned defaults | §4.16 / §4.18 explain Grid `stretch` and ZStack `center` as container-owned semantics. Grid is a track container: absent child alignment stretches each placed child through the resolved cell so row/column sizing remains the primary layout contract. ZStack is an overlay container: absent child alignment centers each overlay in the union bounds so layering does not silently imply fill. T8 reader smoke found the asymmetry explicable from those container semantics; no B-3c revision procedure triggered. | Yes |
+| B-4a spelling affirmed keep | §4.18 states kebab-case placement spelling is an affirmative keep, not silent carry. | Yes |
+| B-5b placement bindability | §4.16 / §4.18 state placement is constant per instance, binding RHS rejected, future bindability not foreclosed. | Yes |
+| B-6b DD-001 five deferred axes as future notes | §4.17 lists equality / single-discriminant selection, group widgets, two-way binding, widget-owned state, and generic toggle appearance as not-reserved future directions. | Yes |
+| C-2 marker + M3 change history + smoke | External-reader smoke is recorded below. Marker and public-draft promotion entry intentionally remain T11-gated. | T8 portion yes |
+| DD-001 coupling alpha items | §4.17 documents controlled one-way `ToggleButton.checked`, background-colour-only selected visual, `checked` admission on ToggleButton only, and author-composed exactly-one exclusion. | Yes |
+
+`rg -n "DD-|Option [A-Z]|B-1b|B-2c|B-3b|B-4a|B-5b|B-6b|A-2|C-2" docs\dsl_spec.md`
+found no DD / option labels in normative spec prose; the only hit was a
+revision-history provenance note naming "DD-002 / Moment 1" in the Phase 7b
+history row. That is acceptable because the Living-spec vocabulary discipline
+applies to spec body prose, while revision history keeps provenance.
+
+### External-reader smoke
+
+Question asked: could a reader with only `docs/dsl_spec.md` reproduce the M3
+surface against a hypothetical C-ABI host, without private implementation
+memory?
+
+| Surface / AC | Spec anchors used | Verdict |
+|---|---|---|
+| A2 Grid | §4.12, §4.16, §8.5, §8.11 describe tracks, spans, one-form-per-child placement, star sizing, clip, and loaded placement records. | Yes |
+| A3 WrapPanel | §4.10 describes line formation, item sizing, spacing, wrap / overflow, aspect-child footguns, and validation. | Yes |
+| A4 ZStack | §4.13 + §4.16 describe document-order z-order, `Fill/Fill`, union sizing, clip, and `slot.*` alignment. | Yes |
+| A5 ScrollView | §4.11 describes exactly one content child, vertical viewport / clip, `offset-y` binding, clamp, and intermediate visual. | Yes |
+| A6 Box / aspect / placeholder | §4.9 describes zero-or-one child, `aspect` / `fill`, inscribed fit, bounded-axis-wins, runtime errors, and Box + Text placeholder convention. T8 re-verified the cited Phase 2 coverage in `wasamo-runtime/src/layout.rs`: `box_aspect_inscribed_width_constrained`, `box_aspect_inscribed_height_constrained`, `box_aspect_unbounded_height_uses_bounded_axis_wins`, `box_aspect_unbounded_width_uses_bounded_axis_wins`, `box_aspect_unbounded_both_axes_is_runtime_error`, and child centering / clipping tests cover the behaviours cited by T7. The spec is sufficient to reproduce the 1:1 thumbnail and 4:3 lightbox placeholders. | Yes |
+| A7 conditional rendering | §4.14 and §8.5 describe `if`, bool condition, single-widget body, present/absent semantics, fresh-on-return, and validation. | Yes |
+| A8 iteration / collections | §4.7, §4.15, §8.4, §8.5, §8.9, and §8.11 describe collection state, `for`, binders, whole-value assignment, mutation timing, positional identity, textual IR, and validation. | Yes |
+| A9 bool scalar | §2.1, §2.2, §4.3, §4.6, §4.7, §4.8, §8.4, and §8.9 describe bool literals, `bool` state, bool reads / assignment, and bool property binding. | Yes |
+| A10 `ToggleButton.checked` | §4.4, §4.8, §4.17, §8.5, and §8.11 describe `ToggleButton`, `checked`, inherited Button attributes, controlled one-way semantics, default `false`, background-colour-only selected visual, author-composed exclusion, and loader re-checking. | Yes |
+| A13 parent-interpreted placement | §3, §4.12, §4.13, §4.16, §8.5, and §8.11 describe `slot.*`, Grid `Cell`, direct placement, ZStack placement, constant RHS, stale-form rejection, and loaded storage. | Yes |
+| A1 integrated Gallery path | The spec contains every surface needed for the final `examples/gallery/gallery.ui`: Window host attrs, ZStack, Grid, Cell/direct `slot.*`, ScrollView, WrapPanel, `for`, Box aspect/fill, Text interpolation, ToggleButton, Button handlers, and bool/i32/string/string[] state. `cargo run --release -p wasamoc -- check examples\gallery\gallery.ui` passed during T8. | Yes |
+
+No "not yet" verdict survived. The smoke did find two editorial gaps (stale
+ZStack wording and stale "visible gallery mutation controls" wording); both
+were fixed in this task.
+
+### A11 auditability check
+
+Audit question: does each M3 phase ADR set name the `docs/dsl_spec.md`
+sections it updated, or otherwise make the spec-sync surface auditable?
+
+| Phase | ADR trace found | Verdict |
+|---|---|---|
+| M3-Phase 1 | `phase-1/decisions/preamble.md` §Upstream document revisions names §2.1, bool literal/token surface, §4.2 / §4.3 / §4.6, and the IR normative spec updates. | Yes |
+| M3-Phase 2 | `phase-2/decisions/preamble.md` §Upstream document revisions names the Box chapter / §4.9, literal grammar, AST, and IR updates. | Yes |
+| M3-Phase 3 | `phase-3/decisions/preamble.md` §Upstream document revisions names new §4.10 WrapPanel and its supporting content. | Yes |
+| M3-Phase 4 | `phase-4/decisions/preamble.md` §Upstream document revisions names new §4.11 ScrollView and later marker flip. | Yes |
+| M3-Phase 5 | `phase-5/decisions/preamble.md` §Upstream document revisions names new §4.12 Grid, §4.4 registry row, §8.5 textual IR, and §8.11 validation rows. | Yes |
+| M3-Phase 6 | `phase-6/decisions/preamble.md` §Upstream revisions names §4.13 ZStack, §4.14 conditional rendering, §3 grammar, §8.5 / §8.11, and component host surface sync. | Yes |
+| M3-Phase 7 | `phase-7/decisions/preamble.md` §Upstream revisions names §3, §4.15, §4.14 forward-reference sweep, §8.4 / §8.5 / §8.9 / §8.11, and architecture sync. | Yes |
+| M3-Phase 7b | `phase-7b/decisions/preamble.md` §Upstream revisions names §4.16, §4.12 / §4.13 placement re-sync, §8.5, §8.11, and architecture storage sections. | Yes |
+| M3-Phase 8 | `phase-8/decisions/preamble.md` §Upstream document revisions names §4.17, §4.18, §4.4 / §4.8, §8.5, `docs/architecture.md`, and architectural-family note updates. | Yes |
+
+No ADR pointer fix was required.
+
+### No-silently-deferred-surface audit
+
+Audit basis: `process/milestone-3/requirements/spec.md` §必要 surface,
+the T2 G(1) / A1 table, T5 A1 audit, and T7 evidence package.
+
+| Required / out-of-scope surface | Disposition | Evidence |
+|---|---|---|
+| Grid | Shipped and present in final Gallery overall frame / lightbox frame. | `gallery.ui`; T5 A1 audit; §4.12. |
+| WrapPanel | Shipped and present in final thumbnail area. | `gallery.ui`; T7 wrap/overflow frames; §4.10. |
+| ZStack | Shipped and present in final root/lightbox overlay. | `gallery.ui`; T7 lightbox frames; §4.13. |
+| ScrollView | Shipped and present in final thumbnail viewport with `offset-y`. | `gallery.ui`; T7 narrow before/after scroll frames; §4.11. |
+| Box / `aspect` / `fill` | Shipped and present in thumbnail placeholders, scrim, and 4:3 lightbox placeholder. | `gallery.ui`; T7 aspect visual + Phase 2 tests; §4.9. |
+| Conditional rendering | Shipped and present as lightbox `if is_lightbox_open`. | T7 lightbox open/closed frames; §4.14. |
+| Iteration / collection generation | Shipped and present as `for label, index in labels`. | `gallery.ui`; T7 thumbnail frames; §4.15. |
+| Collection mutation forms | Shipped in Phase 7 evidence, intentionally omitted from final end-user Gallery controls by owner G(1) / T5 disposition. | §4.15 now states Phase 7 mutation controls were verification scaffolding; T5/T8 cite Phase 7 coverage. |
+| Bool scalar | Shipped and used by lightbox state and tab selected states. | `gallery.ui`; §4.7 / §4.8. |
+| Selected / toggle state | Shipped as `ToggleButton.checked`; alpha exclusion used in final tab band. | T7 selected/exclusion frames; §4.17. |
+| Parent-interpreted placement | Shipped and used via Grid `Cell` plus direct `slot.*` on ZStack/Grid children. | `gallery.ui`; §4.16 / §8.5. |
+| Image widget / real images | Explicitly out of M3; carried by Box + Text placeholders. | `spec.md` Out-of-scope; §4.9 placeholder convention; Gallery status text. |
+| Thumbnail hit-testing, real scrollbar/wheel/drag, modal focus, dynamic status/title | Explicitly M4+ residuals, not silently deferred M3 surfaces. | `spec.md` Out-of-scope; T7 known residuals; T10 still owns human-visible smoke. |
+
+No M3-required surface was silently deferred. The only omitted final-Gallery UI
+controls are collection mutation Buttons, and their omission is explicitly
+covered by Phase 7 evidence rather than treated as a visual preference.
+
+### T8 close-gate artifacts
+
+**#2 structural side-effect enumeration**
+
+| Artifact changed | Side effect / disposition |
+|---|---|
+| `process/milestone-3/phase-8/implementation/plan.md` | T8 responsibility cut now states the public-draft readiness audit boundary and keeps marker flip / promotion / G(4) in T11/T9. |
+| `process/milestone-3/phase-8/implementation/log.md` | Start gate, smoke verdicts, A11 audit, no-silent audit, DD-002 disposition check, and close-gate artifacts recorded for reviewer audit. |
+| `docs/dsl_spec.md` | Stale reader-facing wording fixed; collection mutation example repositioned as Phase 7 verification evidence; version / last-updated / revision-history entry updated without public-draft promotion. |
+| `docs/notes/architectural-family.md` | Phase 8 trigger-1 capstone confirmation recorded revise-in-place; no vision decision record opened. |
+
+**#5 carry-forward**
+
+- **Constraint:** T11 must still perform the Moment 2 public-draft promotion
+  mechanics: flip the public-draft marker, add the promotion change-history
+  entry, resync architecture status markers, record the external-reader smoke
+  result, and confirm `docs/abi_spec.md` remains untouched. **Evidence:** T8
+  deliberately stopped at readiness audit and did not perform those flips.
+  **Re-trigger:** T11 start gate. **Placement:** carry-forward for T11.
+- **Constraint:** T9 must use the T8 no-silent audit results as M3 handoff
+  input, especially PM-2, Problem B, default alignment, spelling, M4 residuals,
+  and collection-mutation omission/citation. **Evidence:** audits above.
+  **Re-trigger:** T9 handoff draft. **Placement:** carry-forward for T9.
+- **Constraint:** Phase-end / milestone-close should decide which T1-T8
+  implementation learnings become durable handoff items rather than local task
+  learnings: coordinate-based GUI evidence, widget-kind catalog mirroring,
+  C/Zig Gallery build ordering, and public-draft future notes. **Evidence:**
+  T1-T8 retrospectives and the audit tables above. **Re-trigger:** phase-end
+  candidate ledger and M3 handoff. **Placement:** carry-forward for T11 /
+  phase-end / milestone-close.
+
+**#6 deterministic-failure disposition**
+
+- `cargo run --release -p wasamoc -- check examples\gallery\gallery.ui` passed.
+- `rg -n "DD-|Option [A-Z]|B-1b|B-2c|B-3b|B-4a|B-5b|B-6b|A-2|C-2" docs\dsl_spec.md`
+  produced one revision-history-only hit, not a spec-body failure.
+- `git diff --check` passed (PowerShell reported line-ending conversion
+  warnings only).
+- `cargo fmt --all -- --check` passed.
+- `cargo test --workspace` passed.
+- No deterministic failure occurred.
+
+## T8 independent review (2026-07-05)
+
+Reviewer: Helmholtz subagent (`019f3264-6ccd-7f72-b993-876a53644329`).
+
+Result: **no findings**.
+
+Review scope: T8 working-tree changes in `docs/dsl_spec.md`,
+`docs/notes/architectural-family.md`, `implementation/plan.md`, and
+`implementation/log.md`.
+
+Reviewer confirmation:
+
+- T8 responsibility stays bounded to public-draft readiness audit and editorial
+  fixes; `status: public-draft` marker flip and promotion entry remain T11.
+- Implementation-gate records, external-reader smoke, A11 trace, and
+  no-silently-deferred-surface audit are complete for T8.
+- T8 does not absorb T9/T11 ownership.
+
+Reviewer note: the review used `git diff`, `rg`, and line inspection; it did not
+rerun the cargo commands already recorded in the T8 log.
+
+## T8 post-review remediation (2026-07-05)
+
+Reviewer: Claude.
+
+Result: **minor, non-blocking findings; remediated in follow-up.**
+
+Remediation:
+
+- B-3b's "explicable" verdict was strengthened from a bare reader-smoke
+  conclusion into a forcing artifact: the DD-002 disposition table now states
+  why Grid's absent alignment stretches through a track cell while ZStack's
+  absent alignment centers overlays in the union bounds.
+- A6's aspect citation now records that T8 re-verified the Phase 2 coverage in
+  `wasamo-runtime/src/layout.rs`, naming the inscribed, bounded-axis-wins,
+  unbounded-error, child-centering, and clipping test families.
+- The T8 retrospective double-loop "observed facts" section no longer lists
+  cargo green / review no-findings execution results as premise-validation
+  signals; it focuses on the stale-wording detections, decision-label scan, and
+  the under-evidenced B-3b artifact found by review.
