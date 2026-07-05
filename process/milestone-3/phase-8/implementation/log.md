@@ -1176,3 +1176,213 @@ Remediation:
   visible-desktop path.
 
 No code, GUI surface, evidence frames, or verification results changed.
+
+## T6 start gate — carry-over check, responsibility cut, and trap selection (2026-07-05)
+
+Carry-over checked before choosing the T6 approach:
+
+- From T1 log: `counter-c` and `counter-zig` are templates, not generic
+  Gallery hosts. T6 must port counter-specific artifact names
+  (`COUNTER_UI`, `COUNTER_UIC`, `COUNTER_UIC_H`, `COUNTER_UIC`,
+  `counter_uic`, executable names, `.ui` paths, README text) to Gallery
+  names and keep the build-order assumption that `target/release/wasamoc.exe`
+  and `target/release/wasamo.dll.lib` already exist.
+- From T5 log / T5 retrospective: `examples/gallery/gallery.ui` is the final
+  Rust-host Gallery surface for T6. T6 must not change tab-band, scroll, or
+  lightbox semantics unless a host-port issue forces a recorded disposition.
+- From T5 log / T5 retrospective: authoritative GUI evidence remains T7. T6
+  may capture a default-render cross-host parity precheck, but it must not
+  treat T5 coordinates or any T6 coordinates as T7 ground truth.
+- From T2/T5 deterministic-failure records: any screenshot-based T6 parity
+  run is planned as visible-desktop / outside-sandbox evidence; sandboxed
+  `CopyFromScreen` off-screen failure is a known harness risk, not a neutral
+  detail.
+- From T5 carry-forward to T8: collection mutation controls remain omitted by
+  owner disposition and Phase 7 evidence citation. T6 should not reintroduce
+  mutation UI while porting hosts.
+
+T6 responsibility after critical re-check: T6 owns the C and Zig Gallery host
+ports, local clean-order build rehearsal, CI per-example steps, and a
+default-view cross-host parity precheck. It does not own the authoritative
+two-frame selected/exclusion, lightbox, wrap/overflow, or aspect evidence
+package; T7 re-captures that final state set after T6 merges. T6 must keep
+the new hosts declarative (`WASAMO_LOAD_MEMORY` / embedded `.uic`, no
+host-side widget mutation) and must not change compiler/runtime/layout or the
+Gallery `.ui` surface unless the plan is revised first.
+
+Selected traps:
+
+| Trap | Applies? | Reason / required T6 close artifact |
+|---|---:|---|
+| #1 semantic migration | No | T6 adds example hosts and CI steps only; no enum, IR, schema, widget catalog, or runtime property surface changes. |
+| #2 missed side effects | Yes | Adding C/Zig hosts changes example inventory, generated artifact names, build ordering assumptions, runtime DLL requirements, README instructions, CI coverage, and downstream T7 parity assumptions. Close with a structural side-effect enumeration and host-port delta table. |
+| #3 parallel/derived data drift | No | T6 introduces no parallel source/runtime data structure. Generated `.uic` / embedded headers are build artifacts derived by the host build systems, not committed source mirrors. |
+| #4 untested authored branch | No | T6 adds no diagnostic / reject / size branch. Build-script failure messages are ported from the existing templates; direct firing tests are not appropriate unless T6 authors a new conditional branch beyond template adaptation. |
+| #5 carry-forward | Yes | T7 needs final host paths, parity-frame assumptions, and any host-port divergence; T8/phase-end may need CI/build-order learning. Close with carry-forward entries and re-trigger criteria or explicit none. |
+| #6 deterministic failure | Conditional | Any recurring CMake/Zig/build/capture failure gets a rerun history and disposition; no "green on retry" without cause. |
+| #7 GUI positive control | Yes, scoped | T6's parity precheck is GUI-host rendering. Close with launch + default-view screenshots + analysis that distinguishes "host loaded the integrated Gallery" from merely staying alive. T7 remains the authoritative GUI positive-control owner. |
+
+Review lane: normal task-end review with explicit checks for trap #2
+host/build/CI side effects and the T6-scoped GUI parity artifact. If T6
+expands into runtime structure, compiler/IR migration, diagnostic branches,
+or the authoritative T7 GUI evidence package, the review lane must be
+reclassified before merge.
+
+## T6 end gate — Gallery C/Zig hosts + CI step close artifacts (2026-07-05)
+
+T6 completed the missing C and Zig Gallery hosts and added CI build coverage
+for both. The T5 `examples/gallery/gallery.ui` surface was not changed; the
+new hosts load the same compiled `.uic` through memory embedding and perform
+no host-side widget mutation. T7 remains the owner of the authoritative
+positive-control GUI evidence package.
+
+**Host-port delta table**
+
+| Template surface | Gallery port |
+|---|---|
+| `examples/counter-c/CMakeLists.txt` | New `examples/gallery-c/CMakeLists.txt` points at `examples/gallery/gallery.ui`, emits `gallery.uic` / `gallery_uic.h`, uses `GALLERY_UIC`, builds `gallery-c.exe`, and keeps the release `wasamoc.exe` / `wasamo.dll.lib` ordering checks. |
+| `examples/counter-c/embed_uic.cmake` | New Gallery copy defaults to `GALLERY_UIC` and `WASAMO_GALLERY_UIC_H`, with optional `ARRAY_NAME` / `HEADER_GUARD` inputs from CMake. |
+| `examples/counter-c/main.c` | New `gallery-c/main.c` includes `gallery_uic.h` and calls `wasamo_load_ui(WASAMO_LOAD_MEMORY, GALLERY_UIC, GALLERY_UIC_LEN, ...)`; no `wasamo_set_property` calls. |
+| `examples/counter-zig/build.zig` | New `examples/gallery-zig/build.zig` accepts `-Dgallery-ui`, compiles `gallery.ui` to `gallery.uic`, exposes anonymous import `gallery_uic`, and builds `gallery-zig.exe`. |
+| `examples/counter-zig/main.zig` | New `gallery-zig/main.zig` embeds `gallery_uic` and calls `wasamo_load_ui(WASAMO_LOAD_MEMORY, ...)`; no host-side mutation. |
+| `.github/workflows/ci.yml` | Added `gallery-c (CMake, Release)`, `gallery-zig (Zig, ReleaseSafe)`, and `wasamoc check gallery.ui` steps mirroring the counter ordering after the release workspace build. |
+
+Verification commands:
+
+| Command | Result |
+|---|---|
+| `cargo build --release --workspace` | green; existing `wasamo` linkable-target warning only |
+| `cargo run --release -p wasamoc -- check examples\gallery\gallery.ui` | green |
+| `cmake -S examples/gallery-c -B build/gallery-c` via the Visual Studio CMake path | green; plain `cmake` was not on this shell's `PATH` |
+| `cmake --build build/gallery-c --config Release` via the Visual Studio CMake path | green; produced `build/gallery-c/Release/gallery-c.exe` |
+| `zig build -p . ...` inside the sandbox | failed with `AccessDenied` reading Zig std/compiler cache |
+| same `zig build -p . ...` outside the sandbox | green |
+| `zig build -p ../../build/gallery-zig ...` outside the sandbox | green; produced `build/gallery-zig/bin/gallery-zig.exe` |
+| `cargo fmt --all -- --check` | green |
+| `zig fmt --check examples\gallery-zig\build.zig examples\gallery-zig\main.zig` outside the sandbox | green |
+| `git diff --check` | green; existing working-copy LF->CRLF warnings only |
+| `cargo build --workspace` | green |
+| `cargo test --workspace` | green; existing `wasamo` linkable-target / `wasamo-sys` ordering warnings only |
+| `capture-t6-parity.ps1` outside the sandbox | green; captured `t6-parity-rust.png`, `t6-parity-c.png`, and `t6-parity-zig.png` |
+
+Remote GitHub Actions was not run for T6 before this task-end record because
+`feat/m3-phase-8-t6` has no visible remote tracking branch in this workspace
+and push is a separate owner gate. The new CI commands were locally rehearsed
+in the same build order; a workflow run id remains phase-branch / phase-end
+owned if the owner wants remote CI before merge.
+
+**#2 structural side-effect enumeration**
+
+| Structure / state changed | Derived effect / disposition |
+|---|---|
+| Example inventory now has `examples/gallery-c/` and `examples/gallery-zig/`. | README / build scripts identify them as Gallery hosts, not counter variants. Generated Zig outputs from local verification were removed from the source tree; committed files are source + evidence only. |
+| C host build now shells out to `wasamoc build examples/gallery/gallery.ui`. | The CMake script keeps the same release build ordering guard as `counter-c`; missing `wasamoc.exe`, `wasamo.dll.lib`, or `gallery.ui` fails at configure/build time with explicit messages. |
+| C embedded artifact names changed. | `gallery.uic`, `gallery_uic.h`, `GALLERY_UIC`, and `GALLERY_UIC_LEN` are used consistently across CMake, generated header, and `main.c`; no `COUNTER_*` source names remain in `gallery-c`. |
+| Zig host build now shells out to `wasamoc build examples/gallery/gallery.ui`. | `build.zig` keeps the release defaults for `wasamoc.exe`, `wasamo.dll.lib`, and `bindings/zig/wasamo.zig`; local verification also built to `build/gallery-zig` to avoid leaving source-tree artifacts. |
+| Zig embedded artifact name changed. | `gallery_uic` is used consistently as the anonymous import and `@embedFile` key; no `counter_uic` source names remain in `gallery-zig`. |
+| CI per-example coverage changed. | Added Gallery C/Zig and Gallery `wasamoc check` steps after the release workspace build, matching the counter ordering and adding no new language/build system. |
+| T6 GUI parity evidence added. | The capture script uses host executable paths for Rust/C/Zig and adds `target/release` to `PATH` so C/Zig can locate `wasamo.dll`; screenshots are default-view parity prechecks only and are not T7 positive-control ground truth. |
+
+**#5 carry-forward**
+
+- **Constraint:** T7 must re-capture the authoritative selected/exclusion,
+  lightbox, wrap/overflow, and aspect/citation evidence after the T6 host
+  additions; T6 parity frames are default-view no-regression evidence only.
+  **Evidence:** `capture-t6-parity.ps1` and `t6-parity-*.png` show all hosts
+  load the same initial Gallery, but no T7 state transitions are exercised.
+  **Re-trigger:** T7 evidence start or any post-T6 Gallery UI / host-path
+  change. **Placement:** carry-forward for T7.
+- **Constraint:** Future C/Zig Gallery host changes must preserve the
+  declarative memory-load boundary unless a separate task/decision changes
+  host responsibilities. **Evidence:** both new hosts embed `.uic` and call
+  `wasamo_load_ui(WASAMO_LOAD_MEMORY, ...)` with no host-side widget mutation.
+  **Re-trigger:** any future edit to `examples/gallery-c/main.c`,
+  `examples/gallery-zig/main.zig`, or their build scripts. **Placement:**
+  carry-forward candidate for phase-end item 15.
+- **Constraint:** CI/local build instructions for C/Zig Gallery hosts depend
+  on a prior release build of `wasamoc.exe` and `wasamo.dll.lib`, matching the
+  existing counter examples. **Evidence:** CMake configure checks and Zig
+  defaults both point at `target/release`; local rehearsal built release
+  workspace first. **Re-trigger:** any CI step reorder, host build-script
+  path change, or future attempt to run these examples without the release
+  workspace build. **Placement:** carry-forward candidate for phase-end
+  item 15.
+
+**#6 deterministic-failure disposition**
+
+- Plain `cmake` failed because CMake was not on this PowerShell PATH.
+  Disposition: environment PATH issue, not a Gallery host defect. The Visual
+  Studio-installed CMake executable at
+  `C:\Program Files\Microsoft Visual Studio\18\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\cmake.exe`
+  configured and built the host green.
+- The first sandboxed Zig build failed with `AccessDenied` while reading Zig
+  std/compiler-cache files under the WinGet Zig installation. Disposition:
+  sandbox access limitation, not a Gallery host defect. The same command
+  succeeded outside the sandbox, and a second outside-sandbox build placed
+  outputs under `build/gallery-zig`.
+
+**#7 GUI parity precheck**
+
+`capture-t6-parity.ps1` ran through the approved visible-desktop path and
+captured:
+
+- `t6-parity-rust.png`
+- `t6-parity-c.png`
+- `t6-parity-zig.png`
+
+Assistant analysis: all three frames show the same integrated Gallery
+default view at 1200x760 / 96 DPI: window title "Gallery"; All selected in
+the `ToggleButton` tab band; Albums and Favorites unselected; Scroll down,
+Scroll up, and Open lightbox controls in the header; 18 thumbnail
+placeholders labelled `IMG 001 #0` through `IMG 018 #17`; and the status
+strip text `18 placeholders - Image and hit-testing are M4`. This proves
+each host loaded and rendered the same Gallery surface rather than merely
+starting a process. T7 remains responsible for the selected/exclusion,
+lightbox, wrap/overflow, and aspect positive controls.
+
+## T6 independent review (2026-07-05)
+
+Reviewer: Cicero subagent (`019f2fda-1fc6-7ea3-b095-a1f41f0b4601`).
+
+Result: **no findings**.
+
+Review scope: commits `f3ccaef` and `74a38b6`; new Gallery C/Zig hosts, CI
+steps, T6 plan/log/evidence, committed parity PNGs, and `retrospectives/t6.md`.
+
+Reviewer confirmation:
+
+- C/Zig host names and paths are consistently ported to Gallery.
+- Both new hosts preserve the embedded-IR `WASAMO_LOAD_MEMORY` boundary and
+  do not perform host-side widget mutation.
+- CI Gallery steps follow the release workspace build and match the AGENTS.md
+  `wasamoc` build-ordering requirement.
+- No tracked generated artifacts (`.zig-cache`, `zig-out`, generated `.uic`,
+  or generated headers) leaked into the commit set.
+- The committed T6 parity PNGs show the same initial Gallery view across
+  Rust, C, and Zig.
+
+Reviewer-noted residuals are intentional downstream ownership: remote GitHub
+Actions run id remains push / phase-end owned, and the selected/exclusion,
+lightbox, wrap/overflow, and aspect positive controls remain T7-owned.
+
+## T6 Claude review disposition (2026-07-05)
+
+Reviewer: Claude review packet supplied by the owner.
+
+Findings disposition:
+
+1. **CI YAML parse-level verification not run before merge** (low).
+   Accepted by the owner on 2026-07-05. The T6 end-gate relaxation is
+   intentional: push is a separate gate, and phase-end already owns the
+   push + GitHub Actions CI confirmation procedure. T6 therefore closes with
+   local rehearsal of the CI commands and records that remote workflow parse /
+   run evidence remains phase-end owned rather than task-close owned.
+2. **Retrospective double-loop section lightly mixes execution mechanics**
+   (low). Recorded as learning for the next start gate: keep premise /
+   planning-hypothesis learning separate from deterministic-failure and
+   environment mechanics.
+3. **`embed_uic.cmake` added a `HEADER_GUARD` parameter while described as a
+   pure port** (trivial). Recorded as harmless; behavior is correct and the
+   host boundary remains the counter-template memory-load pattern.
+
+No code or evidence changes were required.
