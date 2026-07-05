@@ -1386,3 +1386,217 @@ Findings disposition:
    host boundary remains the counter-template memory-load pattern.
 
 No code or evidence changes were required.
+
+## T7 start gate — carry-over check, responsibility cut, and trap selection (2026-07-05)
+
+Carry-over checked before choosing the T7 approach:
+
+- From T1/T2/T5 log and retrospectives: Phase 8 GUI evidence coordinates are
+  not retained ground truth. T7 must re-derive the capture coordinates from
+  the final post-T6 Gallery surface and must not reuse T2/T5 coordinates as a
+  contract.
+- From T5 log / retrospective: T5 frames are precheck evidence only. T7 must
+  re-capture selected/exclusion, lightbox, wrap/overflow, and aspect evidence
+  on the final surface, and include state-confirming frames after state
+  changes such as lightbox close.
+- From T5 retrospective: authoritative GUI capture must be planned as a
+  visible-desktop / outside-sandbox activity because the coordinate +
+  `CopyFromScreen` harness is a twice-observed fragile dependency, not a
+  neutral implementation detail.
+- From T6 log / retrospective: T6 parity frames prove only default-view
+  no-regression across Rust/C/Zig. They do not exercise selected/exclusion,
+  lightbox, wrap/overflow, or aspect positive controls.
+- From T2/T4/T5 carry-forward: R-2 remains open until the final Gallery
+  tab-band screenshots prove the `ToggleButton.checked` background is
+  visually unambiguous on the effective Gallery background.
+- From T2 carry-forward: the strict `Box.aspect` positive-control question
+  remains open for T7/T8; T7 should close it with frames that distinguish a
+  live aspect constraint from a no-op look-alike, or record the T8 audit
+  citation path explicitly.
+
+T7 responsibility after critical re-check: T7 owns the authoritative
+assistant-visible evidence package for the final post-T6 Gallery surface and
+the FD-8-G(3) owner confirmation over the captured selected/exclusion and
+lightbox positive controls. It does not own new Gallery semantics, host-port
+changes, the T8 no-silently-deferred-surface audit, or T10 human-visible
+smoke. The capture script may add robustness around window positioning and
+state-confirming frames, but any UI or runtime behaviour change would require
+a plan revision before implementation.
+
+Selected traps:
+
+| Trap | Applies? | Reason / required T7 close artifact |
+|---|---:|---|
+| #1 semantic migration | No | T7 changes no compiler/IR/schema/widget-kind/runtime property surface. |
+| #2 missed side effects | Yes | T7 adds/updates evidence files and a capture harness whose coordinates, window sizes, foreground/topmost handling, PATH, and state transitions affect the evidence. Close with a structural side-effect enumeration and evidence inventory. |
+| #3 parallel/derived data drift | No | T7 introduces no parallel runtime/source data structure. Evidence PNGs are generated artifacts with the capture script and README as their durable provenance, not a source-of-truth mirror. |
+| #4 untested authored branch | No | T7 adds no diagnostic / reject / size branch. Capture-script guard failures are operational checks, not product branches requiring unit tests. |
+| #5 carry-forward | Yes | Any evidence residual (especially aspect citation vs direct proof, owner G(3) status, and capture-harness constraints) must be recorded with evidence and a re-trigger criterion. |
+| #6 deterministic failure | Conditional | Any recurring build/capture failure gets rerun history and disposition; no accepting "green on retry" without explaining the harness/environment cause. |
+| #7 GUI positive control | Yes | T7's deliverable is GUI-render evidence. Close with launch + DPI-aware screenshots + assistant analysis + positive controls for selected/exclusion, lightbox, wrap/overflow, and aspect/citation. |
+
+Review lane: **full independent review** because T7 is the authoritative
+GUI-render evidence package. The review must check the captured frames,
+analysis, positive-control reasoning, and G(3) owner-confirmation record.
+
+## T7 end gate — assistant GUI evidence package close artifacts (2026-07-05)
+
+T7 captured the authoritative assistant-visible GUI evidence package for the
+final post-T6 Gallery surface on the Rust host. The T5/T6 frames remain
+prechecks only; all T7 positive-control frames were re-captured after the
+C/Zig host additions.
+
+Coordinate provenance: T6 did not change `examples/gallery/gallery.ui`, so
+the T5 header/control coordinates remained valid. T7 confirmed that invariant
+against the post-T6 surface and reused those coordinates as re-validated
+capture inputs rather than treating the T5 script as evidence or contract.
+
+Capture command:
+
+```
+powershell -ExecutionPolicy Bypass -File process\milestone-3\phase-8\implementation\evidence\capture-t7-gallery.ps1
+```
+
+The command ran on a visible Windows desktop outside the filesystem sandbox.
+All frames reported DPI 96 and physical window rect `(0,0)`:
+
+| Frame | Evidence role |
+|---|---|
+| `evidence/t7-gallery-default-all.png` | Default view; All selected; 1200x760. |
+| `evidence/t7-gallery-selected-albums.png` | Selected/exclusion transition 1; Albums selected and All cleared. |
+| `evidence/t7-gallery-selected-favorites.png` | Selected/exclusion transition 2; Favorites selected and Albums cleared. |
+| `evidence/t7-gallery-lightbox-open.png` | Conditional lightbox subtree present. |
+| `evidence/t7-gallery-lightbox-closed.png` | Conditional lightbox subtree absent after close; state-confirming frame before narrow/scroll capture. |
+| `evidence/t7-gallery-narrow-before-scroll.png` | Narrow-width reflow frame before scroll; 760x420. |
+| `evidence/t7-gallery-narrow-after-scroll.png` | Narrow-width scroll-offset frame after Scroll down. |
+
+Detailed assistant analysis is recorded in `evidence/README.md`.
+
+**FD-8-G(3) owner confirmation**
+
+Owner confirmed G(3) OK on 2026-07-05 after being given the selected/exclusion
+and lightbox positive-control review instructions. The confirmed frame groups:
+
+- selected/exclusion:
+  `t7-gallery-default-all.png` →
+  `t7-gallery-selected-albums.png` →
+  `t7-gallery-selected-favorites.png`
+- lightbox:
+  `t7-gallery-lightbox-open.png` →
+  `t7-gallery-lightbox-closed.png`
+
+**#2 structural side-effect enumeration**
+
+| Structure / state changed | Derived effect / disposition |
+|---|---|
+| Added `capture-t7-gallery.ps1`. | The script depends on visible-desktop `CopyFromScreen`, foreground/topmost positioning, and absolute coordinates re-validated against the final post-T6 Rust host. Because T6 did not change `gallery.ui`, the T5 coordinates were confirmed still valid and reused. It records state-confirming frames after selected-tab clicks and lightbox close. |
+| Added seven T7 PNG frames. | They are generated evidence artifacts tied to the script and README analysis; they do not replace the `.ui` source or T5/T6 precheck frames. |
+| Added `evidence/README.md`. | The README names T7 as authoritative assistant evidence, classifies T2/T5/T6 frames as prechecks, and records positive-control analysis plus known M4 residuals. |
+| Updated `plan.md` T7 checkboxes. | T7 evidence, positive-control verification, and G(3) owner confirmation are closed; T8/T10 ownership remains unchanged. |
+| Recorded T7 start/end gates in this log. | Review lane is full independent review; phase-end / T8 carry-forward remains separate. |
+
+**#5 carry-forward**
+
+- **Constraint:** Future reuse of the T7 capture harness must treat
+  coordinate-based `CopyFromScreen` as a visible-desktop, final-surface
+  evidence path, not a portable semantic test. **Evidence:** T2/T5 sandboxed
+  capture failures and T7's successful outside-sandbox capture at `(0,0)`.
+  **Re-trigger:** any future GUI evidence task that reuses or adapts
+  `capture-t7-gallery.ps1`, or any Gallery layout/header coordinate change.
+  **Placement:** carry-forward candidate for phase-end item 15.
+- **Constraint:** T8 should treat the T7 aspect closure as Gallery-level
+  visual evidence backed by already-landed Phase 2 aspect tests, not as a new
+  source or spec change. **Evidence:** T7 frames show square thumbnail
+  placeholders and the 4:3 lightbox placeholder; Phase 2 tests pin the exact
+  aspect measure/arrange branches. **Re-trigger:** if T8's public-draft smoke
+  finds `Box.aspect` unreproducible from `docs/dsl_spec.md` alone.
+  **Placement:** carry-forward for T8.
+- **Constraint:** T10 owner human-visible smoke remains separate from T7 and
+  should use T7's frame set only as prep material. **Evidence:** AGENTS.md and
+  `retrospectives.md` distinguish assistant-visible capture from owner smoke;
+  T7 closed G(3), not G(5). **Re-trigger:** T10 smoke prep. **Placement:**
+  carry-forward for T10.
+
+**#6 deterministic-failure disposition**
+
+No deterministic build or capture failure occurred during T7. The release
+workspace build was already green, and the visible-desktop capture completed
+on the first T7 run. The known sandboxed `CopyFromScreen` failure class from
+T2/T5 was handled by planning T7 capture outside the sandbox rather than
+rerolling a failed sandbox run.
+
+**#7 GUI positive-control evidence**
+
+- Selected/exclusion: the All → Albums → Favorites frames prove live
+  controlled `ToggleButton.checked` propagation and alpha exclusion. Each
+  transition shows the newly clicked tab checked and the previous tab cleared,
+  closing R-2 on the final effective Gallery background.
+- Lightbox: the open/closed pair proves the conditional lightbox subtree is
+  present and then absent after close.
+- Wrap/overflow: the 1200x760 default frame shows nine columns; the 760x420
+  narrow frame reflows to five columns; after Scroll down, the visible labels
+  advance from an `IMG 001`-anchored range to an `IMG 006`-anchored range.
+- Aspect: the Gallery frames show the 1:1 thumbnail placeholders and 4:3
+  lightbox placeholder in the final UI; the stricter "not a no-op look-alike"
+  reasoning is recorded in `evidence/README.md` and backed by the Phase 2
+  aspect tests (`wasamo-runtime/src/layout.rs` aspect unit tests and
+  `wasamo-runtime/tests/box_layout_integration.rs`).
+
+Known M4 residuals remain residuals, not T7 failures: real images,
+thumbnail hit-testing, wheel/drag scrolling, modal focus, dynamic title/status,
+and runtime DPI-awareness.
+
+## T7 independent review (2026-07-05)
+
+Reviewer: Jason subagent (`019f3024-a9e8-7ed2-9b75-a386f87e4372`).
+
+Result: **no findings**.
+
+Review scope: T7-only working tree changes — `plan.md`, `log.md`,
+`evidence/README.md`, `evidence/capture-t7-gallery.ps1`, and the seven
+`t7-gallery-*.png` frames.
+
+Reviewer confirmation:
+
+- GUI positive controls are recorded and visually match the PNGs:
+  selected/exclusion, lightbox present/absent, narrow reflow/scroll, and
+  aspect/citation coverage.
+- Structural side effects are enumerated for the capture script, generated
+  PNGs, README, plan, and log effects.
+- Carry-forward is explicit for capture-harness fragility, T8 aspect/spec
+  audit handling, and T10 owner-smoke separation.
+- G(3) owner confirmation is recorded with the confirmed frame groups.
+- T7 responsibility boundaries are clear and do not absorb T8/T10 ownership.
+
+Reviewer-noted residual: aspect evidence is partly visual and partly by
+citation to already-landed Phase 2 tests, not a fresh no-aspect comparison
+screenshot. This is consistent with the T7 plan wording; T8 should still
+verify that the public draft makes the aspect surface reproducible without
+relying on private implementation memory.
+
+## T7 Claude review disposition (2026-07-05)
+
+Reviewer: Claude review packet supplied by the owner.
+
+Findings disposition:
+
+1. **Coordinate provenance wording overstated "re-derive".** Accepted. T7
+   reused the same absolute coordinates as T5 after confirming that T6 did not
+   change `gallery.ui`; the frames are correct, but the end-gate wording needed
+   to say "re-validated and reused" rather than imply fresh derivation.
+   Remediation: added the coordinate-provenance note above and corrected the
+   #2 structural side-effect row.
+2. **Aspect remains the weakest positive-control leg because it is visual +
+   citation-backed, not a fresh no-aspect comparison screenshot.** Accepted as
+   a plan-sanctioned residual, not a T7 blocker. Direct T7 closure would require
+   an additional comparison fixture/frame pair, but that would add a special
+   evidence surface beyond the final Gallery capture. T7 keeps the current
+   disposition: Gallery visual evidence plus Phase 2 aspect tests, with T8
+   required to verify `Box.aspect` reproducibility during the external-reader
+   smoke.
+
+Owner decision for Finding 2: owner accepted (A) on 2026-07-05. T7 remains
+closed with the current plan-sanctioned T8 carry-forward: Gallery visual
+evidence plus already-landed Phase 2 aspect tests, with T8 required to verify
+`Box.aspect` reproducibility during the external-reader smoke. T7 will not be
+reopened for a dedicated aspect-vs-no-aspect comparison capture.

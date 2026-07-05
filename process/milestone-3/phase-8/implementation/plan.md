@@ -433,7 +433,20 @@ The authoritative assistant-visible evidence (ADR item (5); gates trap
 `Start-Process` survival is a supporting signal only. Owner smoke is
 T10's separate gate.
 
-- [ ] Capture the agreed state set on the Rust host (labelled frames
+Critical responsibility cut (T7 re-check, 2026-07-05): T7 owns the
+**authoritative assistant-visible evidence package** for the final
+post-T6 Gallery surface. It must re-capture the selected/exclusion,
+lightbox, wrap/overflow, and aspect/citation evidence after the C/Zig
+host additions, treating T5/T6 frames as prechecks only. Because T2 and
+T5 both exposed sandboxed `CopyFromScreen` / coordinate fragility, T7's
+capture is planned as a visible-desktop / outside-sandbox activity with
+state-confirming frames after state-changing clicks. T7 does **not** own
+new Gallery UI semantics, C/Zig host changes, T8's no-silently-deferred
+audit, or T10's human-visible smoke. G(3) remains an explicit owner
+confirmation over the captured positive-control frames before T7 can be
+reported done.
+
+- [x] Capture the agreed state set on the Rust host (labelled frames
       under [evidence/](./evidence/), analysis in
       `evidence/README.md`): **default view**; **lightbox open +
       closed** (subtree present/absent pair); **selected two-frame
@@ -444,11 +457,11 @@ T10's separate gate.
       evidence that distinguishes a live `Box.aspect` constraint from a
       no-op look-alike, or records the T8 audit citation that proves the
       aspect surface elsewhere.
-- [ ] Verify each positive control distinguishes the intended behaviour
+- [x] Verify each positive control distinguishes the intended behaviour
       from a static look-alike (AGENTS.md §Testing rules); note known
       M4 residuals (DPI blur, dynamic title) as residuals, not
       failures.
-- [ ] **FD-8-G(3): owner confirms the two-frame positive controls**
+- [x] **FD-8-G(3): owner confirms the two-frame positive controls**
       (selected/exclusion + lightbox) over the captured frames.
 
 **Start gate:** T6 merged (final surface + re-derived coordinates); T7
