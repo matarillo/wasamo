@@ -384,28 +384,44 @@ A1 "all three hosts" requirement. Build ordering per
 [AGENTS.md §Build ordering](../../../../AGENTS.md): `wasamoc` builds
 before the C / Zig hosts.
 
-- [ ] `examples/gallery-c/`: port `counter-c` (CMakeLists +
+Critical responsibility cut (T6 re-check, 2026-07-05): T6 owns the
+**host-template ports and CI build coverage** for the already-landed T5
+Gallery surface. It must port the final `examples/gallery/gallery.ui`
+without changing the Gallery semantics that T7 will capture, keep the C /
+Zig hosts declarative (`WASAMO_LOAD_MEMORY` / embedded `.uic`, no host-side
+widget mutation), and mirror the proven counter build ordering. T6 may run
+a default-render cross-host parity precheck to prove the new hosts actually
+load the same integrated Gallery, but it does **not** own the authoritative
+two-frame selected/exclusion, lightbox, wrap/overflow, or aspect evidence
+package; those remain T7's full-review GUI evidence. If screenshot capture
+is used for T6 parity, the twice-observed visible-desktop / outside-sandbox
+constraint is recorded up front and any coordinates are treated as
+task-local precheck coordinates, not T7 ground truth.
+
+- [x] `examples/gallery-c/`: port `counter-c` (CMakeLists +
       `embed_uic.cmake` + `main.c`) to the Gallery component; builds
       and runs against `target/release/wasamo.dll`.
-- [ ] `examples/gallery-zig/`: port `counter-zig` (`build.zig` +
+- [x] `examples/gallery-zig/`: port `counter-zig` (`build.zig` +
       `main.zig`); builds and runs.
-- [ ] CI: add `gallery-c` / `gallery-zig` build steps mirroring the
+- [x] CI: add `gallery-c` / `gallery-zig` build steps mirroring the
       counter steps in [ci.yml](../../../../.github/workflows/ci.yml)
       (per-example enumeration — not a new build system; `gallery-rust`
       is already workspace-covered). Optionally add
       `wasamoc check examples/gallery/gallery.ui` beside the counter
       check step.
-- [ ] **Cross-host parity (propagation-audit point (iii)):** launch all
-      three hosts, DPI-aware capture, assistant analysis — C / Rust /
-      Zig render the same integrated gallery (representative-host UI
-      review stays Rust; C / Zig are identical-render / no-regression
-      checks). Parity frames land under [evidence/](./evidence/) as
-      `t6-parity-<host>.png`.
+- [x] **Cross-host parity (propagation-audit point (iii)):** launch all
+      three hosts, DPI-aware default-view capture, assistant analysis —
+      C / Rust / Zig render the same integrated gallery at first load
+      (representative-host UI review stays Rust; C / Zig are identical-
+      render / no-regression checks). Parity frames land under
+      [evidence/](./evidence/) as `t6-parity-<host>.png`. T7 still
+      re-captures the authoritative positive-control state set after T6.
 
 **Start gate:** T5 merged; T6 gate selection recorded. **End gate:**
-three hosts build + run; CI steps green on the phase branch
-(`workflow_dispatch` or push run recorded in log.md); parity analysis
-recorded.
+three hosts build + run; CI steps added and locally rehearsed in the
+phase build order; remote CI run id recorded if the task branch is
+available to GitHub Actions before merge (otherwise the run id remains
+phase-branch / phase-end owned); parity analysis recorded.
 
 ---
 
