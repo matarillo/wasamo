@@ -1446,6 +1446,11 @@ final post-T6 Gallery surface on the Rust host. The T5/T6 frames remain
 prechecks only; all T7 positive-control frames were re-captured after the
 C/Zig host additions.
 
+Coordinate provenance: T6 did not change `examples/gallery/gallery.ui`, so
+the T5 header/control coordinates remained valid. T7 confirmed that invariant
+against the post-T6 surface and reused those coordinates as re-validated
+capture inputs rather than treating the T5 script as evidence or contract.
+
 Capture command:
 
 ```
@@ -1484,7 +1489,7 @@ and lightbox positive-control review instructions. The confirmed frame groups:
 
 | Structure / state changed | Derived effect / disposition |
 |---|---|
-| Added `capture-t7-gallery.ps1`. | The script depends on visible-desktop `CopyFromScreen`, foreground/topmost positioning, and absolute coordinates derived from the final post-T6 Rust host. It records state-confirming frames after selected-tab clicks and lightbox close. |
+| Added `capture-t7-gallery.ps1`. | The script depends on visible-desktop `CopyFromScreen`, foreground/topmost positioning, and absolute coordinates re-validated against the final post-T6 Rust host. Because T6 did not change `gallery.ui`, the T5 coordinates were confirmed still valid and reused. It records state-confirming frames after selected-tab clicks and lightbox close. |
 | Added seven T7 PNG frames. | They are generated evidence artifacts tied to the script and README analysis; they do not replace the `.ui` source or T5/T6 precheck frames. |
 | Added `evidence/README.md`. | The README names T7 as authoritative assistant evidence, classifies T2/T5/T6 frames as prechecks, and records positive-control analysis plus known M4 residuals. |
 | Updated `plan.md` T7 checkboxes. | T7 evidence, positive-control verification, and G(3) owner confirmation are closed; T8/T10 ownership remains unchanged. |
@@ -1568,3 +1573,30 @@ citation to already-landed Phase 2 tests, not a fresh no-aspect comparison
 screenshot. This is consistent with the T7 plan wording; T8 should still
 verify that the public draft makes the aspect surface reproducible without
 relying on private implementation memory.
+
+## T7 Claude review disposition (2026-07-05)
+
+Reviewer: Claude review packet supplied by the owner.
+
+Findings disposition:
+
+1. **Coordinate provenance wording overstated "re-derive".** Accepted. T7
+   reused the same absolute coordinates as T5 after confirming that T6 did not
+   change `gallery.ui`; the frames are correct, but the end-gate wording needed
+   to say "re-validated and reused" rather than imply fresh derivation.
+   Remediation: added the coordinate-provenance note above and corrected the
+   #2 structural side-effect row.
+2. **Aspect remains the weakest positive-control leg because it is visual +
+   citation-backed, not a fresh no-aspect comparison screenshot.** Accepted as
+   a plan-sanctioned residual, not a T7 blocker. Direct T7 closure would require
+   an additional comparison fixture/frame pair, but that would add a special
+   evidence surface beyond the final Gallery capture. T7 keeps the current
+   disposition: Gallery visual evidence plus Phase 2 aspect tests, with T8
+   required to verify `Box.aspect` reproducibility during the external-reader
+   smoke.
+
+Owner decision surface for Finding 2: either (A) accept the current
+plan-sanctioned T8 carry-forward, or (B) reopen T7 to add a dedicated
+aspect-vs-no-aspect comparison capture. Current recorded disposition follows
+(A); choose (B) only if T7 must be self-contained for aspect without relying on
+the already-landed Phase 2 tests and T8 public-draft smoke.
