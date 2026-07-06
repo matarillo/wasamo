@@ -60,7 +60,13 @@ checklist は **オーナー報告の構造化テンプレ**であり、項目�
    green/fail。「green」は `--check` がゼロ終了することを
    指し、単に `cargo fmt --all` が走り終わったことではない。事前に
    `cargo fmt --all` を回すのは構わないが、ゲートは post-commit
-   state での `--check` が ground truth。M3-Phase 1 phase-end で
+   state での `--check` が ground truth。retrospective 記録後に
+   remediation commit がブランチに乗った場合、記録済みの検証は
+   final branch state より古くなるため、merge 前に **final branch
+   state に対して** doc gates (`cargo fmt --all -- --check` /
+   `git diff --check`) を再実行する (M3-Phase 8 の T4–T9 で再発を
+   記録し、T10/T11/phase-end が適用して固定したクラス)。
+   M3-Phase 1 phase-end で
    task 跨ぎの fmt ドリフトを見落とした事故 (commit `1129aea`) を踏まえ、
    M3-Phase 2 フェーズ計画 決定 E (a) で固定された discipline
    (see [m3-phase-2 framing §E](../milestone-3/phase-2/requirements/framing.md))。
