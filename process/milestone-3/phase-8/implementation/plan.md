@@ -533,7 +533,18 @@ Prepares the milestone-close inputs early enough to review before the
 close batches (FD-8-G(4): the public draft and the M3 handoff have the
 largest owner judgment surface).
 
-- [ ] Draft `process/milestone-3/handoff.md` (milestone-level; distinct
+Critical responsibility cut (T9 re-check, 2026-07-05): T9 owns the
+**milestone-level handoff draft and G(4) review packet**, not public-draft
+promotion, final milestone-close recording, T10 human-visible smoke, or T11
+Moment 2 sync. It must reuse the T8 no-silently-deferred-surface audit and
+the T1-T8 carry-forward set rather than rediscovering residuals, and it must
+separate (a) public-reader future notes already folded into `docs/dsl_spec.md`,
+(b) pre-1.0 / M4-M6 residuals that the M3 handoff must carry, and (c) local
+Phase 8 evidence-process learnings that T11 / phase-end may choose to put in
+`implementation/handoff.md`. The milestone handoff remains `status: draft`
+after T9; milestone close owns the final `status: recorded` flip.
+
+- [x] Draft `process/milestone-3/handoff.md` (milestone-level; distinct
       from this phase's `implementation/handoff.md`): PM-2 wrapper-rule
       decision (pre-1.0, re-triggers); Problem B disposition (VDR
       Accepted: M4/M5 spike schedule + M6 backstop); DD-001's five
@@ -542,13 +553,16 @@ largest owner judgment surface).
       title / modal focus M4 residuals; TypedValue / structured-item
       triggers (Phase 7 carry); host-state-boundary record; anything
       the T8 audits surfaced.
-- [ ] **FD-8-G(4): owner reviews the public draft (post-T8
+- [x] **FD-8-G(4): owner reviews the public draft (post-T8
       `docs/dsl_spec.md`) + the M3 handoff draft together** before the
-      phase close batches open.
+      phase close batches open. The T9 branch is the fix container for
+      additive corrections from that review; the task may not be reported
+      done or merged until explicit owner acceptance is recorded.
 
-**Start gate:** T8 merged. **End gate:** G(4) owner review passed;
-handoff draft parked at `status: draft` (finalized at milestone close,
-not here).
+**Start gate:** T8 merged; T9 carry-over check and gate selection recorded.
+**End gate:** G(4) owner review passed; handoff draft parked at
+`status: draft` (finalized at milestone close, not here); T9 close artifacts
+recorded in [log.md](./log.md).
 
 ---
 

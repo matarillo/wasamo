@@ -1851,3 +1851,161 @@ Remediation:
   cargo green / review no-findings execution results as premise-validation
   signals; it focuses on the stale-wording detections, decision-label scan, and
   the under-evidenced B-3b artifact found by review.
+
+## T9 start gate — carry-over check, responsibility cut, and trap selection (2026-07-05)
+
+Carry-over checked before choosing the T9 approach:
+
+- From T8 log / retrospective: T9 must reuse the no-silently-deferred-surface
+  audit and carry-forward list instead of rediscovering the residual set. The
+  high-priority handoff inputs are PM-2, Problem B, default alignment, placement
+  spelling, M4 residuals, and collection-mutation omission/citation.
+- From T8: public-draft promotion mechanics remain T11-owned. T9 must not flip
+  `status: public-draft`, add the promotion change-history entry, update
+  `docs/architecture.md` status markers, or confirm `docs/abi_spec.md`.
+- From T7/T8: owner human-visible smoke remains T10-owned; T9 cites the T7
+  assistant-visible evidence only as background for residuals.
+- From T1/T3/T4: the string-carried widget-kind catalog / warning-only
+  unknown-widget policy is a possible phase-end handoff candidate, not a
+  required milestone-level user-surface residual unless the phase-end item-15
+  review promotes it.
+- From T5/T6/T7: coordinate-based GUI evidence, visible-desktop capture, and
+  C/Zig Gallery build ordering are evidence-process / host-build learnings for
+  the T11 candidate ledger and phase-end `implementation/handoff.md`; T9 should
+  not overload the milestone-level handoff with task-local mechanics.
+
+T9 responsibility after critical re-check: T9 owns the milestone-level handoff
+draft and the FD-8-G(4) review packet. It prepares the owner-visible review
+surface that pairs post-T8 `docs/dsl_spec.md` with
+`process/milestone-3/handoff.md`, while leaving public-draft promotion to T11,
+final handoff status to milestone close, and final human-visible smoke to T10.
+The handoff draft must distinguish durable pre-1.0 / M4-M6 residuals from local
+Phase 8 implementation learnings that still need phase-end triage.
+
+Selected traps:
+
+| Trap | Applies? | Reason / required T9 close artifact |
+|---|---:|---|
+| #1 semantic migration | No | T9 changes no enum / IR / schema / runtime traversal; it drafts process handoff only. |
+| #2 missed side effects | Yes | A milestone handoff can accidentally promote local implementation mechanics into durable roadmap commitments or drop required residuals. Close with a structural side-effect enumeration over changed process docs and the owner-review packet. |
+| #3 parallel/derived data drift | No | T9 introduces no runtime parallel storage or derived index. The handoff is a milestone-close input, not a duplicate source of normative spec text. |
+| #4 untested authored branch | No | T9 adds no compiler/runtime diagnostic, reject, size, or authored execution branch. |
+| #5 carry-forward | Yes | The task's purpose is carry-forward. Close with each milestone-level residual's source/evidence/re-trigger and a separate list of items intentionally left to T11 / phase-end. |
+| #6 deterministic failure | Conditional | Any repeatable command or audit failure gets rerun history and disposition. |
+| #7 GUI positive control | No | T9 has no GUI-render deliverable; it cites T7 evidence and leaves owner human-visible smoke to T10. |
+
+Review lane: normal task-end review after the retrospective. T9 is a document
+handoff / review-packet task; it introduces no schema / IR migration, runtime
+structural change, diagnostic branch, or new GUI-render evidence.
+
+## T9 G(4) detail review remediation (2026-07-06)
+
+Owner summary review accepted the G(4) shape but asked for detail corrections
+after Claude reviewed the T9 packet. The T9 branch remains the additive-fix
+container for those review findings; G(4) is not recorded as accepted until
+the owner explicitly accepts the remediated packet.
+
+Remediation applied:
+
+- `docs/dsl_spec.md` §4.17 no longer claims that Phase 8 is the first M3 case
+  where a bool binding drives a widget attribute. It now contrasts
+  `Button.enabled` (Phase 1 interaction gating) with `ToggleButton.checked`
+  as the first persistent selected-state attribute.
+- `docs/dsl_spec.md` and `docs/architecture.md` process-state wording now
+  separates the T8-verified implementation / external-reader smoke facts from
+  the T11 formal close / public-draft marker flip.
+- `docs/dsl_spec.md` §4.18 no longer implies that the public draft carries
+  reopen triggers; triggers stay in this milestone handoff / process layer.
+- `process/milestone-3/handoff.md` now scopes itself to roadmap /
+  trigger-driven residuals and points per-primitive deferrals back to the
+  owning `docs/dsl_spec.md` sections, avoiding a parallel-spec handoff.
+- `process/milestone-3/handoff.md` corrects the `TypedValue` note: M3 added
+  the `bool` scalar binding path plus `i32[]` / `string[]` / `bool[]`
+  collection paths, not the already-existing M2 `i32` / `String` scalar paths.
+- `process/milestone-3/handoff.md` carries the phase-vocabulary cleanup as an
+  owner-adopted pre-1.0 public-facing consistency residual. It does not block
+  M3 close and does not require T9 / M3 implementation work.
+
+### T11 allowed diff surface (pre-enumerated by T9)
+
+T11's public-draft promotion diff must match this enumerated surface. It may
+not include body-prose semantic rewrites beyond these status / promotion
+mechanics; any body-prose correction requires a separate owner-visible
+review concern before T11 close.
+
+| Artifact | Allowed T11 touch |
+|---|---|
+| `docs/dsl_spec.md` front-matter / top Status | Flip the public-draft marker and update status wording from the T8-verified intermediate state to Phase 8 closed / public-draft. |
+| `docs/dsl_spec.md` §4.17 Phase status line | Flip from "implementation verified in T8; formal close at Moment 2" to closed / implementation-synced wording. |
+| `docs/dsl_spec.md` public-draft promotion change-history entry | Add the promotion entry with links to the M3 ADR set and the public-draft anchor. |
+| `docs/architecture.md` top Status | Flip the M3-Phase 8 clause from T8-verified intermediate state to Phase 8 closed / implementation-synced. |
+| `docs/architecture.md` §6.7.7 status sentence | Flip the local status sentence from T8-verified intermediate state to closed / implementation-synced. |
+| `CHANGELOG.md` | Add the M3 CHANGELOG entry linking each M3 phase ADR and the public-draft anchor. |
+| `docs/abi_spec.md` | Confirm no-op; no file touch expected unless a forced ABI note is owner-approved. |
+
+### Handoff coverage check against T8 audits
+
+T9 checked the T8 audit results against the milestone handoff draft:
+
+| T8 audit / carry-forward input | T9 handoff disposition |
+|---|---|
+| PM-2 two-form Grid placement remains provisional. | `PM-2 Grid Wrapper Rule`. |
+| Problem B explicit sizing has an Accepted VDR with M4/M5 spike and M6 backstop. | `Author-Controllable Sizing (Problem B)`. |
+| Default alignment asymmetry was explicable in T8, no B-3c revision triggered. | `Default Alignment`. |
+| Placement spelling was affirmatively kept; bindability remains constant-per-instance. | `Placement Spelling And Bindability`. |
+| DD-001's five selected-state deferred axes remain non-foreclosed. | `Selected-State Deferred Axes`. |
+| M4 residuals: real images, thumbnail hit-testing, wheel/drag, modal focus, dynamic title/status, DPI-awareness. | `M4 Residual Cluster`. |
+| Owner-raised public-facing phase-vocabulary cleanup. | `Public-Facing Phase Vocabulary Cleanup`; adopted as pre-1.0 residual, not an M3-close blocker. |
+| Collection mutation controls were omitted from the final Gallery only with Phase 7 evidence / §4.15 citation. | Not repeated as a milestone residual; the coverage citation is folded into `docs/dsl_spec.md` §4.15 and T8's no-silent audit. |
+| Coordinate capture, visible-desktop evidence, widget-kind catalog, C/Zig build-order learnings. | Deliberately left to T11 / phase-end candidate review, not promoted into milestone handoff by T9. |
+
+This closes the T9 "anything the T8 audits surfaced" coverage check for the
+handoff draft, subject to owner G(4) acceptance.
+
+## T9 close gate — handoff draft and G(4) owner review (2026-07-06)
+
+Owner G(4) acceptance recorded: "G(4) 承認。この内容で進めてよい。"
+
+T9 close artifacts:
+
+**#2 structural side-effect enumeration**
+
+| Artifact changed | Side effect / disposition |
+|---|---|
+| `docs/dsl_spec.md` | Corrected reader-facing Phase 8 status and §4.17 framing so the public draft reads as T8-verified while leaving the formal public-draft promotion to T11. No marker flip, promotion entry, or CHANGELOG entry was added. |
+| `docs/architecture.md` | Corrected the Phase 8 status wording and §6.7.7 sentence to match T8 verification while leaving formal close wording to T11. |
+| `process/milestone-3/handoff.md` | Created the milestone-level draft handoff. It carries roadmap / trigger-driven residuals, points per-primitive deferrals back to `docs/dsl_spec.md`, and records public-facing phase-vocabulary cleanup as a pre-1.0 residual. It remains `status: draft`; milestone close owns the `status: recorded` flip. |
+| `process/milestone-3/phase-8/implementation/plan.md` | T9 responsibility cut, task progress, and G(4) acceptance are recorded. T10/T11 ownership remains unchanged. |
+| `process/milestone-3/phase-8/implementation/log.md` | Start gate, G(4) remediation, T11 allowed diff surface, handoff coverage check, and close gate are recorded. |
+
+**#5 carry-forward**
+
+- **Constraint:** T11 promotion diff is limited to the pre-enumerated status /
+  promotion surface: `docs/dsl_spec.md` top status, §4.17 phase-status line,
+  promotion change-history entry, `docs/architecture.md` top status and §6.7.7
+  status sentence, CHANGELOG entry, and ABI no-op confirmation. **Evidence:**
+  T9 G(4) remediation and owner acceptance. **Re-trigger:** T11 start gate.
+  **Placement:** carry-forward for T11.
+- **Constraint:** Public-facing phase vocabulary cleanup is a formal pre-1.0
+  residual, not an M3-close blocker. **Evidence:** owner G(4) clarification and
+  `process/milestone-3/handoff.md` entry. **Re-trigger:** pre-1.0 public-doc /
+  diagnostic vocabulary pass. **Placement:** M3 handoff.
+- **Constraint:** Per-primitive / per-family deferrals remain in their owning
+  `docs/dsl_spec.md` sections; the M3 handoff is limited to roadmap /
+  trigger-driven residuals. **Evidence:** T9 handoff scope paragraph and
+  Claude G(4) review finding. **Re-trigger:** milestone-close finalization of
+  `process/milestone-3/handoff.md`. **Placement:** M3 handoff.
+
+**#6 deterministic-failure disposition**
+
+- `rg` stale-status search for `pending implementation sync`,
+  `pending implementation re-sync`, `external-reader smoke land`,
+  `last new M3 authoring fact`, and the old bool-binding wording produced no
+  hits.
+- `git diff --check` passed (PowerShell reported line-ending conversion
+  warnings only).
+- No deterministic failure occurred.
+
+T9 end-gate status: G(4) passed; handoff draft remains `status: draft`;
+T10/T11/phase-end/milestone-close ownership remains as recorded in
+`plan.md`.
