@@ -2560,3 +2560,70 @@ Reviewer confirmation:
 - Doc gates re-run by the reviewer over the final branch state
   (`cargo fmt --all -- --check`, `git diff --check`): green —
   satisfying the T9-derived final-branch-state re-run condition.
+
+## Phase-end batch start gate — carry-over check, responsibility cut, and trap selection (2026-07-06)
+
+Carry-over checked before choosing the batch approach (log.md + every
+Phase 8 task retrospective t1–t11):
+
+- **Zero `phase-sync` classifications** across all eleven task
+  retrospectives (item-10 sweep). The Moment 2 spec-sync slate beyond
+  T11's landed promotion is therefore empty; retro item 15 only closes
+  `carry-forward` / `local-only` dispositions.
+- **The T11 candidate ledger is complete against the retro record.**
+  Every t1–t11 item-10 entry was cross-checked: task-scoped
+  carry-forwards (t2 → T5/T7/T8, t3 → T4, t4 → T5/T7, t5 → T6/T7/T8,
+  t6 → T7, t7 → T8/T10, t8 → T9/T11, t9 → T11 / M3 handoff,
+  t10 → T11/phase-end) were each consumed by the owning task's
+  start-gate carry-over check; the durable residue matches the eight
+  ledger items plus the milestone-level pointer set (owned by the T9
+  M3 handoff draft, not duplicated).
+- **Open obligations landing on this batch:** CI run id;
+  `implementation/handoff.md` finalization; phase-end retrospective;
+  preamble `active → closing` flip; the G(5) surface-binding re-check
+  (T10/T11 carry-forward — path-scoped product range `5b66321..HEAD`
+  empty, re-verified at batch close and again before merge); the
+  final-branch-state doc-gate re-run over this batch's own commits
+  (T9-derived rule, applied by T10/T11); the ledger item-7 disposition
+  decision explicitly delegated to phase-end.
+- From the T11 end gate: the G(5) binding held at T11 close (range
+  empty over 23 commits). The T11 → phase-branch merge (`882ff20`)
+  added no product-path change.
+
+Responsibility cut (critical re-check) is recorded in
+[plan.md](./plan.md) §Phase-end batch: the batch owns the merge-gate
+preconditions (retro items 12–18 + Phase-End Gate mapping, handoff
+finalization closing every ledger item, CI green, preamble flip) and
+the instrumental push of the **phase branch only** for
+`workflow_dispatch` (7b precedent, run 28072510434; the owner push
+gate remains the separate post-merge main push). It does not own the
+milestone-close batch (milestone retro, M3 handoff `status: recorded`
+flip, `_roadmap` flip, release step), the merge / push themselves
+(owner-gated), or any product-surface change.
+
+Ledger item-7 disposition (decided at this gate, executed in its own
+commit): the post-retrospective-remediation / final-branch-state gap
+recurred across T4–T9 and is a clarification of retrospectives.md
+item 3's existing "post-commit state" intent, not a new rule category
+— a **minor edit** per the AGENTS.md process-rule lifecycle boundary
+test (touches no other SSOT, supersedes no decision). A short
+final-branch-state note lands in `retrospectives.md`; the constraint
+also stays in the finalized handoff for successor visibility.
+
+Selected traps:
+
+| Trap | Applies? | Reason / required close artifact |
+|---|---:|---|
+| #1 semantic migration | No | No enum / IR / schema / widget catalog / runtime change; the diff is process documentation only. |
+| #2 missed side effects | Yes | Status flips (preamble, plan checkboxes) and the handoff/retro pair change what the process documents claim; drift between retro item 15, the handoff, the ledger, and the preamble/plan status wording — or restating spec / M3-handoff content instead of citing it (the trap-#3 document analogue) — is the realized risk class. Close with a structural side-effect enumeration over every changed artifact plus a cross-document consistency check. |
+| #3 parallel/derived data drift | No | No production parallel data; the document analogue is enumerated and closed under trap #2. |
+| #4 untested authored branch | No | No code and no diagnostic / reject / size branch is authored. |
+| #5 carry-forward | Yes | The finalized handoff **is** the carry-forward deliverable; additionally the G(5) surface binding must be re-recorded as the merge-gate re-trigger. Close with the finalized handoff + the re-trigger criteria. |
+| #6 deterministic failure | Conditional | The remote CI run can fail (new gallery-c / gallery-zig steps run on GitHub Actions for the first time). Any deterministic failure gets a rerun history and disposition; no green-on-retry without cause. |
+| #7 GUI positive control | No | No GUI-render deliverable; T7 evidence and the T10 owner smoke are closed and bound to the unchanged surface, which this batch re-verifies by the path-scoped range check. |
+
+Review lane: normal process/doc review by an independent subagent
+after the retrospective (no schema / IR migration, runtime structural
+change, or GUI-render evidence). A forced product-surface change would
+re-trigger the G(5) owner re-run and re-evaluate the lane before
+landing.

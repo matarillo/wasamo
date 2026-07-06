@@ -703,16 +703,50 @@ Lands on the phase branch after T11 merges in, by separate commits; the
 precondition for the phase → main merge gate
 ([retrospectives.md](../../../procedures/retrospectives.md)).
 
-- [ ] GitHub Actions CI run id recorded (`workflow_dispatch` on the
-      phase branch, including the new gallery-c / gallery-zig steps).
+Critical responsibility cut (phase-end re-check, 2026-07-06): the
+phase-end batch owns the **phase → main merge-gate preconditions** —
+the phase-end retrospective (items 12–18) with the Phase-End Gate
+verification-closure mapping, `implementation/handoff.md` finalization
+from the T11 candidate ledger (closing every ledger item as
+doc-folded / carry-forward / local-only, including the ledger item-7
+retrospectives-procedure disposition delegated to phase-end), the
+CI-green gate, and the preamble status flip. Three plan hypotheses
+were sharpened against procedure and precedent: (a) the CI run id
+requires an **instrumental push of the phase branch only** (Phase 7b
+precedent, run 28072510434 on pushed head `59f9be6`) — task branches
+stay local, and the owner-gated push in the merge procedure remains
+the separate post-merge main push; (b) the T10/T11 G(5)
+surface-binding carry-forward makes the **path-scoped product-range
+check** (`5b66321..HEAD` empty over `wasamoc` / `wasamo-runtime` /
+`wasamo-ir` / `examples` / `bindings` / CI) a phase-end close artifact,
+re-checked before the merge; (c) the T9-derived **final-branch-state
+doc-gate re-run** applies to this batch's own commits. Doc-side close
+(handoff + retro items 12–15 / 17 / 18) lands pre-CI; the run id +
+item 16 + preamble flip land in the final phase-end commit (7b
+ordering). The batch does not own the milestone-close items, the
+merge / push themselves (owner-gated), or any product-surface change —
+a forced product change invalidates G(5) and requires an owner re-run
+before landing.
+
+- [x] Phase-end start gate recorded in [log.md](./log.md): carry-over
+      from log.md and every Phase 8 task retrospective checked
+      (zero `phase-sync` items); trap selection + review lane recorded.
 - [ ] `implementation/handoff.md` finalized from the candidate ledger
       (this phase's cross-phase residuals; the milestone-level items
-      flow to the M3 handoff, not duplicated here).
+      flow to the M3 handoff, not duplicated here). Ledger item-7
+      disposition executed: the final-branch-state verification note
+      lands in `retrospectives.md` as a minor edit (own commit).
 - [ ] Phase-end retrospective recorded at
-      `../retrospectives/phase-end.md` (items 12–18); no open
-      `phase-sync` items survive.
+      `../retrospectives/phase-end.md` (items 12–18, Phase-End Gate
+      mapping); no open `phase-sync` items survive. Item 16 cell
+      completed by the CI-run-id commit.
+- [ ] GitHub Actions CI run id recorded (`workflow_dispatch` on the
+      pushed phase branch, including the new gallery-c / gallery-zig
+      steps); G(5) path-scoped product-range check re-verified empty;
+      doc gates re-run over the final branch state.
 - [ ] [preamble.md](./preamble.md) front-matter `status` flips
-      `active` → `closing`.
+      `active` → `closing` (same commit as the CI run id, 7b
+      precedent).
 - [ ] Owner approval → phase branch no-ff merge to main; push is a
       separate gate.
 
