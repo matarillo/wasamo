@@ -647,14 +647,14 @@ surface (`wasamoc/` / `wasamo-runtime/` / `wasamo-ir/` / `examples/` /
 unchanged since the T7 capture commit (`5b66321`), and a forced
 product fix re-triggers the owner smoke before it lands.
 
-- [ ] T11 start gate recorded in [log.md](./log.md): carry-over from
+- [x] T11 start gate recorded in [log.md](./log.md): carry-over from
       log.md and every Phase 8 task retrospective checked; T11 /
       phase-end / milestone-end ownership split made auditable.
-- [ ] `cargo fmt --all -- --check` green locally.
-- [ ] Local clean rebuild green (`cargo clean` → release build → debug
+- [x] `cargo fmt --all -- --check` green locally.
+- [x] Local clean rebuild green (`cargo clean` → release build → debug
       build → `cargo test --workspace`), plus the C / Zig example hosts
       in the AGENTS.md build order. CI green is phase-end-owned.
-- [ ] `docs/dsl_spec.md`: the §4.17 phase-status line and the top
+- [x] `docs/dsl_spec.md`: the §4.17 phase-status line and the top
       Status block flip to `M3-Phase 8 closed; implementation-synced`
       (§4.18 carries no phase-status marker — its state is governed by
       the top Status block; divergence corrections were already folded
@@ -666,18 +666,21 @@ product fix re-triggers the owner smoke before it lands.
       (linking the M3 ADRs); the T8 external-reader smoke result
       recorded there; the revision-history table gains an appended
       Moment 2 row (append-only per the T9 carry-forward).
-- [ ] **CHANGELOG entry for M3** (milestone-end criterion 3): links
+- [x] **CHANGELOG entry for M3** (milestone-end criterion 3): links
       each M3 phase ADR and the public-draft anchor.
-- [ ] `docs/architecture.md` §6.7.7 (+ any sections the gallery /
+- [x] `docs/architecture.md` §6.7.7 (+ any sections the gallery /
       ToggleButton work touched) re-synced to the landed shape; Status
-      header updated.
-- [ ] `docs/abi_spec.md` re-confirmed untouched; any forced surface
-      escalates with owner confirmation.
-- [ ] `process/milestone-3/plan.md` Phase 8 row flips to
+      header updated. (T8/T9 already folded the substantive re-sync;
+      T11's touch is the status wording per the allowed surface.)
+- [x] `docs/abi_spec.md` re-confirmed untouched; any forced surface
+      escalates with owner confirmation. (No-op confirmed; no forced
+      surface arose.)
+- [x] `process/milestone-3/plan.md` Phase 8 row flips to
       `implementation complete; phase-end pending`.
-- [ ] ADR set touched only if a retrospectives.md §phase-sync
-      ADR-touch case applies.
-- [ ] [log.md](./log.md) records the phase-close evidence pointers +
+- [x] ADR set touched only if a retrospectives.md §phase-sync
+      ADR-touch case applies. (Checked at the T11 end gate: no case
+      applies; ADR set untouched.)
+- [x] [log.md](./log.md) records the phase-close evidence pointers +
       implementation summary distilled from T1–T10, and the phase-end
       handoff **candidate ledger**: the five DD-001 axes; PM-2 wrapper
       rule; Problem B disposition; default-alignment (per T8 outcome);
