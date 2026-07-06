@@ -1,20 +1,22 @@
 # Wasamo DSL Specification
 
-**Document version:** 1.14
+**Document version:** 1.15
 **Last updated:** 2026-07-06
-**Status:** M3-Phase 2 closed (implementation-synced); M3-Phase 3
+**Status:** `public-draft` (M3) — this document is the first public
+draft of the Wasamo DSL specification, promoted at M3-Phase 8 close;
+the promotion record and the M3 decision links live in the
+[public-draft change history](#public-draft-change-history). A public
+draft is **not** a backward-compatibility guarantee (§4.18). Phase
+state: M3-Phase 2 closed (implementation-synced); M3-Phase 3
 closed (implementation-synced); M3-Phase 4 closed
 (implementation-synced); M3-Phase 5 closed (implementation-synced);
 M3-Phase 6 closed (implementation-synced); M3-Phase 7 closed
 (implementation-synced); M3-Phase 7b closed (implementation-synced —
-`slot.*` placement surface, §4.16). M3-Phase 8 is a **design draft**
-(Moment 1): the `ToggleButton` / `checked` selected-state surface (§4.17)
-and the public-draft future-surface notes (§4.18) have been verified against
-the landed implementation and external-reader smoke in M3-Phase 8 T8. The
-`status: public-draft` marker and the public-draft promotion change-history
-entry (linking the M3 ADRs from the public-draft anchor — distinct from this
-document's ongoing revision-history table) land at Phase 8 close (Moment 2),
-not in this design draft.
+`slot.*` placement surface, §4.16); M3-Phase 8 closed
+(implementation-synced — the `ToggleButton` / `checked` selected-state
+surface, §4.17, and the public-draft future-surface notes, §4.18,
+match the landed implementation; external-reader smoke verified in
+M3-Phase 8 T8).
 Covers the M2 `.ui` surface, the `state` surface keyword
 retroactively, the M3-Phase 1 `bool` scalar binding additions, the
 M3-Phase 2 Box layout primitive (with `aspect` / `fill` literal
@@ -2848,8 +2850,7 @@ criterion. ZStack has no wrapper form; its placement is always direct
 
 ### 4.17 `ToggleButton` and selected / toggle state (M3-Phase 8)
 
-**Phase status:** M3-Phase 8 implementation verified in T8; formal
-closed / public-draft status flips at Phase 8 close (Moment 2).
+**Phase status:** M3-Phase 8 closed; implementation-synced.
 
 `ToggleButton` is a button that carries a persistent **selected /
 `checked`** state. Phase 1 already proved that a boolean binding can drive a
@@ -3910,6 +3911,33 @@ not a runtime union. The genuine `TypedValue` driver — structured item
 fields (`item.field`, record-like values) — is out of the Phase 7
 surface.
 
+## Public draft change history
+
+This section is the public-draft promotion record — the public-draft
+anchor — distinct from the per-edit revision-history table below.
+
+- **2026-07-06 — promoted to `public-draft` at M3 close (M3-Phase 8
+  Moment 2).** The M3 surface (§4.1–§4.18) matches the landed
+  implementation, and the M3-Phase 8 external-reader smoke recorded a
+  "yes" verdict for every M3 surface (Grid, WrapPanel, ZStack,
+  ScrollView, Box `aspect` / `fill`, conditional rendering, iteration
+  and collections, `bool` scalar binding, `ToggleButton` / `checked`,
+  parent-interpreted placement, and the integrated Gallery path): a
+  reader with only this document can reproduce each surface against a
+  hypothetical host that already provides the C ABI. A public draft is
+  **not** a backward-compatibility guarantee; public-compatibility
+  commitments are a later-milestone concern (§4.18). Deciding records
+  (per M3 phase):
+  [Phase 1 — `bool` scalar binding](../process/milestone-3/phase-1/decisions/preamble.md);
+  [Phase 2 — Box](../process/milestone-3/phase-2/decisions/preamble.md);
+  [Phase 3 — WrapPanel](../process/milestone-3/phase-3/decisions/preamble.md);
+  [Phase 4 — ScrollView](../process/milestone-3/phase-4/decisions/preamble.md);
+  [Phase 5 — Grid](../process/milestone-3/phase-5/decisions/preamble.md);
+  [Phase 6 — ZStack + conditional rendering](../process/milestone-3/phase-6/decisions/preamble.md);
+  [Phase 7 — iteration](../process/milestone-3/phase-7/decisions/preamble.md);
+  [Phase 7b — parent-interpreted placement](../process/milestone-3/phase-7b/decisions/preamble.md);
+  [Phase 8 — selected state + Gallery + public draft](../process/milestone-3/phase-8/decisions/preamble.md).
+
 ## Revision history
 
 | Version | Date       | Notes                                                                             |
@@ -3938,3 +3966,4 @@ surface.
 | 1.12    | 2026-07-02 | M3-Phase 8 design draft (Moment 1): added §4.17 `ToggleButton` selected / toggle-state surface (controlled one-way `checked` bool attribute; background-colour-only minimal / provisional visual; `checked` admitted on `ToggleButton` only with a two-gate reject; exactly-one-selected exclusion as an author-composed M3-era pattern; five future selection directions kept as non-reserved future notes) and §4.18 public-draft future-surface notes (author-controllable sizing as a pre-1.0 unresolved surface whose shape is not reserved — no schedule published; Grid two-form placement provisional; default-alignment asymmetry as container-owned / explicable; placement-spelling affirmative keep; placement bindability). §4.4 registry gains the `ToggleButton` row and §4.8 property catalog gains the `ToggleButton` `checked` and shared `enabled` rows (`enabled` carries the same Phase-1 disabled contract as `Button.enabled`); §8.5 notes `ToggleButton` as an ordinary node reusing the bool binding forms. No new `IrType` / `IrLiteral` / `PropertyValue` or token; `abi_spec.md` untouched. The `status: public-draft` marker, the public-draft promotion change-history entry (distinct from this revision-history table), and the external-reader smoke are deferred to Phase 8 close (Moment 2). Pending implementation re-sync at Phase 8 close. |
 | 1.13    | 2026-07-05 | M3-Phase 8 public-draft readiness editorial pass: removed stale pre-Phase-6 wording from §4.9 and clarified that the Phase 7 collection mutation Buttons were verification scaffolding, while the final integrated Gallery keeps generated thumbnails without retaining Add / Remove / Clear / Reset as end-user UI. The public-draft marker and promotion change-history entry remain deferred to the Phase 8 Moment 2 sync. |
 | 1.14    | 2026-07-06 | M3-Phase 8 T9 G(4) review remediation: normalised the Phase 8 verification-status wording after T8 external-reader smoke, corrected §4.17 so `ToggleButton.checked` is framed as the first persistent selected-state bool attribute rather than the first bool-driven widget attribute, and kept public-draft reopen triggers out of §4.18 prose. No public-draft marker, promotion change-history entry, or ABI change. |
+| 1.15    | 2026-07-06 | M3-Phase 8 implementation sync (Moment 2): flipped the top Status block and the §4.17 phase-status marker to closed / implementation-synced, promoted the document to `public-draft`, and added the public-draft change-history anchor (promotion record + M3 decision links + T8 external-reader smoke result). No body-prose semantic change (divergence corrections were folded in 1.13 / 1.14); no new `IrType` / `IrLiteral` / `PropertyValue` or token; `abi_spec.md` untouched. |
