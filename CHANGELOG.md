@@ -12,7 +12,20 @@ This file records what has shipped. For what is planned, see
 [process/_roadmap.md](./process/_roadmap.md). For the current state of work, see
 the **Status** section of [README.md](./README.md).
 
-## [Unreleased] — M3: DSL surface (in progress)
+## [v0.3.0] — 2026-07-06 — M3: DSL surface
+
+M3 grows the DSL surface from "one counter" to real layouts and
+publishes the result. Five layout primitives (Box, WrapPanel,
+ScrollView, Grid, ZStack), two grammar surfaces (conditional rendering,
+iteration), the `bool` scalar, the `ToggleButton` / `checked`
+selected-state surface, and the parent-interpreted `slot.*` placement
+surface are proven end-to-end by the integrated Photo Gallery on the
+C / Rust / Zig hosts, and `docs/dsl_spec.md` is promoted to its first
+**public draft** (v1.15). The milestone discharges acceptance criteria
+A1–A13; the discharge mapping is recorded in
+[process/milestone-3/plan.md](./process/milestone-3/plan.md)
+§Milestone close, and the M3 → M4 carry-forward in
+[process/milestone-3/handoff.md](./process/milestone-3/handoff.md).
 
 ### M3-Phase 8 — ToggleButton selected state, Gallery integration, DSL spec public draft (2026-07-06)
 
