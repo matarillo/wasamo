@@ -2716,3 +2716,20 @@ Reviewer confirmation:
   (`cargo fmt --all -- --check`, `git diff --check`): green.
 - Cross-document consistency: run id / head sha / ownership split
   agree across retro item 16, plan, log, and preamble.
+
+## Phase-end batch — final-branch-state CI confirmation (2026-07-06)
+
+The owner pushed the full final branch state (head `1bc2fd1`, including
+the phase-end close and the pre-merge review record) and a second
+`workflow_dispatch` run was dispatched over it.
+
+| Command / evidence | Result |
+|---|---|
+| GitHub Actions `workflow_dispatch` on `feat/m3-phase-8` @ `1bc2fd1` | **Green.** Run [28786580142](https://github.com/matarillo/wasamo/actions/runs/28786580142) concluded **success** (head `1bc2fd182dd03371166fab388b18fe1bfb231803`; `2026-07-06T10:58:00Z` → `2026-07-06T11:02:02Z`). Same green step set as run 28784793695, now over the actual pushed head rather than its ancestor `d72090b`. Annotations were the upstream Node 20→24 deprecation notice only. |
+| `git log --oneline 5b66321..HEAD -- wasamoc wasamo-runtime wasamo-ir examples bindings .github` | empty — the G(5) surface binding still holds over the final branch state. |
+
+This satisfies the final-branch-state re-run discipline literally: the
+CI gate is green on the head that will be merged, not only on an
+earlier docs-identical ancestor. The item-16 run of record remains
+28784793695 (head `d72090b`); 28786580142 is the confirming run over
+`1bc2fd1`.
