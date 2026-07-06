@@ -570,23 +570,48 @@ recorded in [log.md](./log.md).
 
 The owner-performed gate (separate from T7's assistant baseline).
 
-- [ ] Assistant prep: rebuild the three hosts; author the owner
-      observation script at `evidence/t10-owner-smoke-script.md`
-      (launch / navigation / per-state observation + pass-fail
-      criteria) covering the agreed state set — default view, lightbox
-      open/close, tab selection with exclusion (positive control:
-      clicking tabs moves the single selected highlight), wrap/overflow
-      — on the representative Rust host, plus launch + default-view
-      confirmation on C and Zig.
-- [ ] Owner runs the smoke and observes per the script; owner
-      explicitly accepts, or records a fail observation → fixes land
-      additively on the task branch → re-run to green (Phase 4 / 7b
-      precedent).
+Critical responsibility cut (T10 re-check, 2026-07-06): T10 owns the
+**FD-8-G(5) owner-performed human-visible smoke** over the agreed state
+set and its additive fix container — nothing else. The gate evidence is
+the owner's explicit per-state acceptance recorded in
+[log.md](./log.md); assistant screenshots are **not** the T10 evidence
+form, and the T7 frames / T10 script are prep material only
+(AGENTS.md §Testing rules — the owner smoke is not replaced by the
+assistant baseline). T10 does not own Moment 2 docs sync (T11), the CI
+run id / phase-end batch, new Gallery semantics, or reopening the
+T7/T8/T9 evidence and audits. Because T8/T9 landed documentation only,
+T10's prep first confirms by git history that the built surface equals
+the T7-captured surface; if a fail observation forces a fix touching
+compiler / runtime / `gallery.ui` / hosts, the T10 gate selection and
+review lane are re-evaluated before that fix lands.
+
+- [x] Assistant prep: confirm the runtime surface is unchanged since
+      the T7 capture (T8/T9 doc-only git check); rebuild the three
+      hosts in the AGENTS.md build order and rehearse the script's
+      build/launch commands (launch survival is a supporting no-early-
+      crash signal only); author the owner observation script at
+      `evidence/t10-owner-smoke-script.md` (launch / navigation /
+      per-state observation + pass-fail criteria) covering the agreed
+      state set — default view, lightbox open/close, tab selection with
+      exclusion (positive control: clicking tabs moves the single
+      selected highlight and clears the previous one), wrap/overflow
+      (narrow resize reflow + scroll movement), window close without
+      crash — on the representative Rust host, plus launch +
+      default-view confirmation on C and Zig. The script names the
+      known M4 residuals so they are observed as residuals, not
+      recorded as fail observations, and cites the A1 table / T7
+      evidence set rather than restating the state-set definition.
+- [ ] Owner runs the smoke on a visible Windows desktop session
+      ([human-visible-smoke.md](../../../../docs/notes/human-visible-smoke.md)
+      environment rules) and observes per the script; owner explicitly
+      accepts, or records a fail observation → fixes land additively on
+      the task branch → re-run to green (Phase 4 / 7b precedent).
 - [ ] T10 step-end retrospective recorded at
       `../retrospectives/t10.md`.
 
-**Start gate:** T9 merged (surface frozen). **End gate:** owner
-acceptance recorded.
+**Start gate:** T9 merged (surface frozen); T10 carry-over check and
+gate selection recorded in [log.md](./log.md). **End gate:** owner
+acceptance recorded in log.md.
 
 ---
 
