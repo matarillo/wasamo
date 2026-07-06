@@ -2026,3 +2026,61 @@ Findings remediated after the T9 retrospective commit:
 
 No public-draft marker, promotion change-history entry, CHANGELOG entry, or
 ABI spec change was introduced by this remediation.
+
+## T9 pre-merge independent review remediation (2026-07-06)
+
+Reviewer: Claude (the pre-merge independent review required by
+`retrospectives/t9.md` §マージゲート).
+
+The review verified the T9 packet against the plan/log claims — handoff
+coverage against the plan's required item list, the T11 allowed diff
+surface, and the spec-body corrections' presence in `docs/dsl_spec.md` /
+`docs/architecture.md` — and raised three findings. Dispositions:
+
+1. **G(4) acceptance predated the post-retrospective spec remediation.**
+   The owner acceptance recorded at the T9 close gate (`b13d2fd`) covered
+   the packet state before `0389c99`, which afterwards touched the reviewed
+   public-draft surface: the `1.14` revision-history row (with the `1.12`
+   row restored to its original wording) and the §4.18 process-trigger
+   wording. Disposition: the pre-merge review enumerated those two changes
+   to the owner; the owner confirmed them and directed this remediation on
+   2026-07-06. G(4) acceptance is thereby recorded as covering the
+   remediated packet state. No further packet change may land on the T9
+   branch without a new owner-visible review concern.
+
+2. **End-gate verification range excluded the post-retrospective commits.**
+   The recorded step-end verification (`git diff --check HEAD~4..HEAD` at
+   `b13d2fd`) did not cover `53127f3` / `0389c99`; both are doc-only, so
+   the build gates were unaffected. Disposition: doc gates re-run over the
+   final branch state for this remediation (results below).
+   **Carry-forward candidate:** post-retrospective remediation commits have
+   recurred across T4–T9, and each leaves the recorded step-end
+   verification behind the final branch state. **Re-trigger:** phase-end
+   item 15 review. **Placement:** phase-end candidate — decide whether the
+   retrospective procedure needs a final-branch-state verification note.
+
+3. **Two implicit constraints recorded as structured carry-forwards:**
+   - **Constraint:** spec revision-history rows are append-only —
+     corrections land as new dated rows; prior rows are never
+     retroactively rewritten. **Evidence:** `0389c99` restored the `1.12`
+     row and added the `1.14` row instead of keeping the earlier
+     retroactive rewrite. **Re-trigger:** any future revision-history edit
+     in `docs/dsl_spec.md` / `docs/architecture.md`. **Placement:**
+     phase-end item 15 candidate.
+   - **Constraint:** document-task start gates should treat parallel-spec /
+     duplicated-doc drift as the document analogue of trap #3 and
+     enumerate it explicitly under trap #2. T9's dominant realized risk —
+     the first handoff draft drifting toward a parallel spec — was caught
+     by the G(4) review, not by the recorded gate selection, whose trap #3
+     "No" used the production-data reading only. **Evidence:** T9 start
+     gate vs the Claude G(4) handoff-scope finding. **Re-trigger:** the
+     next document-only task start gate (T11). **Placement:** phase-end
+     item 15 candidate.
+
+Verification over the final branch state (post-`0389c99` plus this log
+entry):
+
+| Command | Result |
+|---|---|
+| `cargo fmt --all -- --check` | green |
+| `git diff --check` | green; existing working-copy line-ending warnings only |
