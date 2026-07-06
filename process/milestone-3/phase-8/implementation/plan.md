@@ -687,7 +687,7 @@ product fix re-triggers the owner smoke before it lands.
       spelling affirmed-keep; M4 residual cluster (DPI, dynamic title,
       hit-testing, modal focus, wheel/drag); anything mid-phase
       surfaced.
-- [ ] **T11 step-end retrospective recorded** at
+- [x] **T11 step-end retrospective recorded** at
       `../retrospectives/t11.md` (items 1–11; owned by T11).
 
 **Start gate:** T10 merged; T11 start gate recorded. **End gate (T11
