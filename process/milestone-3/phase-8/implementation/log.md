@@ -2255,3 +2255,39 @@ unchanged since T7.
 
 Review lane: normal task-end review after the retrospective
 (unchanged from the start gate).
+
+## T10 pre-merge independent review (2026-07-06)
+
+Reviewer: independent subagent (`ac856a27369a8d53d`).
+
+Result: **no findings** (PASS on all seven checks).
+
+Review scope: commits `0c097a6..HEAD` (`933be8c`, `d787e28`, `c9354ce`)
+— the T10 gate records, owner smoke script, and retrospective.
+
+Reviewer confirmation:
+
+- Diff scope is exactly the four claimed doc files; no product-source,
+  test, or CI touch.
+- Start/close gates satisfy `implementation-gates.md`: trap selection
+  with reasons and re-trigger conditions recorded before the approach;
+  close artifacts present for #2 / #5 / #6 / #7-scoped, with the owner
+  "G(5) OK" acceptance as the gate evidence and the launch rehearsal
+  correctly demoted to a supporting signal.
+- Script-vs-surface consistency verified against
+  `examples/gallery/gallery.ui` (tab exclusion handlers, inert `<` /
+  `>`, `x` close handler, status text, 18 labels, scroll buttons) and
+  against the T6 host layout / `build.zig` defaults.
+- Surface-freshness claim verified: the path-scoped git range since the
+  T7 capture commit is empty and the 16-commit count is exact.
+- Responsibility boundaries respected: no touch of `docs/dsl_spec.md`,
+  `docs/architecture.md`, `docs/abi_spec.md`, or CHANGELOG; T11 /
+  phase-end ownership explicitly disclaimed.
+- Retrospective is complete (items 1–11, double-loop, merge gate) and
+  the plan T10 section is an accurate record.
+
+Reviewer observation (not a finding): the recorded post-commit
+verification ran at `d787e28` and the retrospective commit `c9354ce`
+post-dates it; since `c9354ce` is the retrospective itself and not a
+remediation commit, the T9 carry-forward re-run condition does not
+fire.
