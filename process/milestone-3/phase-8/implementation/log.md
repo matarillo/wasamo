@@ -2009,3 +2009,20 @@ T9 close artifacts:
 T9 end-gate status: G(4) passed; handoff draft remains `status: draft`;
 T10/T11/phase-end/milestone-close ownership remains as recorded in
 `plan.md`.
+
+## T9 post-retrospective review remediation (2026-07-06)
+
+Reviewer: Claude.
+
+Findings remediated after the T9 retrospective commit:
+
+- `docs/dsl_spec.md` revision history now records the T9 G(4) review
+  remediation as a new `1.14` row and updates the document version /
+  last-updated fields. The earlier `1.12` Moment 1 row was restored to its
+  original forward-looking history instead of being retrospectively rewritten.
+- `docs/dsl_spec.md` §4.18 no longer names the internal milestone handoff as
+  a public-draft reference. It now says process triggers for reopening future
+  questions are outside the public draft.
+
+No public-draft marker, promotion change-history entry, CHANGELOG entry, or
+ABI spec change was introduced by this remediation.
