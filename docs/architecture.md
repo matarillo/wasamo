@@ -1,6 +1,6 @@
 # Wasamo Architecture
 
-**Status:** M1 complete (Phases 0-8); M2 complete (Phases 1-7) — Foundation acceptance A1-A6 discharged; M3-Phase 1, M3-Phase 2, M3-Phase 3, M3-Phase 4, and M3-Phase 5 complete. M3-Phase 6 closed (implementation-synced): ZStack, conditional rendering, and the component host surface are documented to match the landed implementation. M3-Phase 7 closed (implementation-synced): iteration — `ControlFlowNode::For` / `BindingTarget::ForLoopSubtree`, the canonized member-expansion seam, stage-then-commit range mutation, and child-carried ZStack placement (§6.7.10, §6.8.5) are documented to match the landed implementation. M3-Phase 7b closed (implementation-synced): the parent-interpreted placement model — child-slot `SlotData` carrier (§6.7.9, §6.8.6), Grid storage convergence off the parallel `cell_placements` vector (§6.8.4), and the textual-IR `child { placement … }` record (IR-B) — is documented to match the landed implementation (`IrMember::Widget(IrChildSlot)`; runtime `ChildSlot` / `SlotData`). M3-Phase 8 **design draft** (Moment 1): the `ToggleButton` selected-state runtime representation (§6.7.7) is documented as a new leaf widget reusing Button's leaf layout and the existing bool writer seam, pending implementation sync.
+**Status:** M1 complete (Phases 0-8); M2 complete (Phases 1-7) — Foundation acceptance A1-A6 discharged; M3-Phase 1, M3-Phase 2, M3-Phase 3, M3-Phase 4, and M3-Phase 5 complete. M3-Phase 6 closed (implementation-synced): ZStack, conditional rendering, and the component host surface are documented to match the landed implementation. M3-Phase 7 closed (implementation-synced): iteration — `ControlFlowNode::For` / `BindingTarget::ForLoopSubtree`, the canonized member-expansion seam, stage-then-commit range mutation, and child-carried ZStack placement (§6.7.10, §6.8.5) are documented to match the landed implementation. M3-Phase 7b closed (implementation-synced): the parent-interpreted placement model — child-slot `SlotData` carrier (§6.7.9, §6.8.6), Grid storage convergence off the parallel `cell_placements` vector (§6.8.4), and the textual-IR `child { placement … }` record (IR-B) — is documented to match the landed implementation (`IrMember::Widget(IrChildSlot)`; runtime `ChildSlot` / `SlotData`). M3-Phase 8 **design draft** (Moment 1): the `ToggleButton` selected-state runtime representation (§6.7.7) has been verified against the landed implementation in M3-Phase 8 T8; the formal closed / public-draft status flip remains Phase 8 close (Moment 2).
 
 ---
 
@@ -859,8 +859,9 @@ is introduced: `checked` is an ordinary bool `prop` binding in textual IR
 ([dsl_spec.md §8.5](./dsl_spec.md#85-widget-nodes-and-control-flow-members)).
 The **controlled one-way** write model — the author's `clicked` handler
 writes the driving state; the widget never writes back — is the existing
-single-boolean binding model, unchanged. This note is an M3-Phase 8
-design draft pending implementation re-sync at Phase 8 close (Moment 2).
+single-boolean binding model, unchanged. This note was verified against the
+landed M3-Phase 8 implementation in T8; the formal closed / public-draft
+status flip remains Phase 8 close (Moment 2).
 
 #### 6.7.8 Forward-compatibility and out-of-scope
 
