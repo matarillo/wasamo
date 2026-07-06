@@ -1,17 +1,21 @@
 ---
 title: M3 handoff - public-draft residuals and pre-1.0 carry-forward
-status: draft
+status: recorded
 created: 2026-07-05
+recorded: 2026-07-06
 source-milestone: M3
 ---
 
 # M3 Handoff
 
-Drafted during M3-Phase 8 T9 for the FD-8-G(4) owner review. This file is
-the milestone-level handoff, distinct from
-[phase-8/implementation/handoff.md](phase-8/implementation/handoff.md).
-It stays `status: draft` until the milestone-close batch finalizes it after
-Phase 8 closes.
+Drafted during M3-Phase 8 T9 for the FD-8-G(4) owner review; **finalized
+at the milestone close (2026-07-06)** after the Phase 8 → main merge
+(`40c9341`). The finalization re-checked the T10 / T11 / phase-end batch
+records against this draft: no new milestone-level residual surfaced, so
+the content stands as owner-reviewed at G(4) with only close-state tense
+updates. This file is the milestone-level handoff, distinct from
+[phase-8/implementation/handoff.md](phase-8/implementation/handoff.md),
+and is the input to M4 planning (workflow §1.1).
 
 M3's public draft and integrated Gallery prove the shipped DSL surface. This
 handoff records the roadmap / trigger-driven residuals that need milestone
@@ -38,9 +42,10 @@ left only inside a primitive chapter.
 - The integrated Gallery shipped across Rust, C, and Zig hosts. Real images,
   thumbnail hit-testing, wheel/drag scrolling, modal focus, dynamic title /
   status, and runtime DPI-awareness remain out of M3.
-- The DSL spec reached public-draft readiness in T8. T11 still owns the
-  formal public-draft marker flip, promotion change-history entry,
-  architecture status sync, ABI no-op confirmation, and CHANGELOG entry.
+- The DSL spec reached public-draft readiness in T8, and T11 landed the
+  promotion: `docs/dsl_spec.md` `status: public-draft` (v1.15) with the
+  promotion change-history anchor, `docs/architecture.md` status sync,
+  the `docs/abi_spec.md` no-op confirmation, and the CHANGELOG M3 entry.
 
 ## Public-Draft Residuals
 
@@ -127,8 +132,9 @@ controls. The following remain M4+ residuals, not M3 failures:
 - dynamic Window title / dynamic collection-count status;
 - runtime DPI-awareness and DPI-localized layout evidence.
 
-T10 still owns the owner human-visible smoke for the M3 state set. That smoke
-does not convert the M4 residuals into M3 scope.
+The T10 owner human-visible smoke (G(5), accepted 2026-07-06 with no fail
+observation) covered the M3 state set. That smoke does not convert the M4
+residuals into M3 scope.
 
 ## Type-System And Host-State Notes
 
@@ -157,8 +163,12 @@ together so they do not drift.
 Phase 8's implementation log and retrospectives also contain local process
 learnings: string-carried widget-kind catalogs, visible-desktop screenshot
 capture, coordinate re-derivation after UI changes, and C/Zig Gallery build
-ordering. T11 and the phase-end batch must decide which of those belong in
-the phase-level `implementation/handoff.md`.
+ordering. The phase-end batch dispositioned them (2026-07-06): the durable
+engineering constraints live in the finalized
+[phase-8/implementation/handoff.md](phase-8/implementation/handoff.md), two
+recurrence classes were folded into the procedure SSOTs
+(`retrospectives.md` / `implementation-gates.md`), and the rest closed
+local-only.
 
-Do not silently promote all local mechanics into this milestone handoff. This
-file should stay focused on durable public-surface and roadmap residuals.
+No local mechanics were promoted into this milestone handoff. This file
+stays focused on durable public-surface and roadmap residuals.
