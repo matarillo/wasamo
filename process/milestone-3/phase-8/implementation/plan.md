@@ -757,12 +757,15 @@ Phase 8 is the final M3 phase; the milestone close follows as its own
 gated batch ([workflow.md §7](../../../procedures/workflow.md);
 [plan.md §Milestone-end criteria](../../plan.md)).
 
-- [ ] Milestone review: every phase-end retrospective re-read; A1–A13
-      discharge confirmed and recorded (M3 plan Progress rows +
-      criterion mapping), with the Phase 8 evidence pointers.
-- [ ] `process/milestone-3/handoff.md` finalized (from the T9
-      owner-reviewed draft) — `status: recorded`.
-- [ ] `process/_roadmap.md` M3 flipped to complete with acceptance
-      evidence links; M3 `plan.md` `status` → `completed`.
+- [x] Milestone review: every phase-end retrospective re-read; A1–A13
+      discharge confirmed and recorded (M3 plan §Milestone close:
+      criterion mapping + the seven milestone-end criteria), with the
+      Phase 8 evidence pointers.
+- [x] `process/milestone-3/handoff.md` finalized (from the T9
+      owner-reviewed draft) — `status: recorded` 2026-07-06; no new
+      milestone-level residual surfaced, close-state tense sync only.
+- [x] `process/_roadmap.md` M3 flipped to shipped 2026-07-06 with
+      acceptance evidence links (anchor preserved); M3 `plan.md`
+      `status` → `completed`.
 - [ ] Release step per workflow §7.4 (tagging / CHANGELOG shape) —
       owner decision at close time.

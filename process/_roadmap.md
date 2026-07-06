@@ -63,7 +63,9 @@ See [CHANGELOG entry](../CHANGELOG.md#m2-foundation--shipped-2026-05-11)
 and [process/milestone-2/plan.md](./milestone-2/plan.md) for the completed
 phase breakdown.
 
-## M3: DSL surface
+<a id="m3-dsl-surface"></a>
+
+## M3: DSL surface ✅ shipped 2026-07-06
 
 **Thesis:** the DSL is expressive enough to write real layouts, and
 is published as a stable public draft.
@@ -151,6 +153,12 @@ is published as a stable public draft.
   `Cell` and direct `slot.*`, one form per child; ZStack accepts
   `slot.*`). Demonstrates that the DSL distinguishes "data the parent
   interprets about a child" from a widget's own properties
+
+See the [CHANGELOG M3 entry](../CHANGELOG.md) and
+[process/milestone-3/plan.md](./milestone-3/plan.md) for the completed
+phase breakdown and the A1–A13 discharge mapping (§Milestone close);
+the M3 → M4 carry-forward is
+[process/milestone-3/handoff.md](./milestone-3/handoff.md).
 
 ## M4: Interaction stack
 
