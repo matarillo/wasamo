@@ -14,6 +14,58 @@ the **Status** section of [README.md](./README.md).
 
 ## [Unreleased] — M3: DSL surface (in progress)
 
+### M3-Phase 8 — ToggleButton selected state, Gallery integration, DSL spec public draft (2026-07-06)
+
+Closes M3 implementation with three deliverables and no new layout
+primitive. This is the M3 milestone entry: it links each M3 phase
+decision record and the public-draft anchor.
+
+**A10 — `ToggleButton` / `checked`.** A dedicated `ToggleButton`
+widget carries Button's `text` / `style` / `enabled` / `clicked` plus
+exactly one new attribute: a controlled one-way `checked` boolean
+(literal or bool-state binding; runtime default `false`;
+background-colour-only selected visual composing with `style` and the
+disabled contract). `checked` is admitted on `ToggleButton` only —
+compiler reject plus runtime loader re-reject, each with firing tests.
+Exactly-one-selected tab exclusion is author-composed in `clicked`
+handlers (an M3-era pattern, not a reserved idiom). No new IR type,
+binding-target class, or C ABI surface (`abi_spec.md` untouched).
+
+**A1 — integrated Photo Gallery on all three hosts.** The per-phase
+verification screens folded into a single Photo Gallery app
+(`examples/gallery/gallery.ui`): stretch Grid frame with spans and
+`Cell` / direct `slot.*` placement, live-exclusion `ToggleButton` tab
+band, ScrollView + WrapPanel + `for`-generated thumbnail grid, aspect
+Box placeholders, and a conditional lightbox overlay. New
+`examples/gallery-c/` and `examples/gallery-zig/` hosts (ported from
+the counter templates, declarative memory-load boundary preserved)
+render the same surface as `gallery-rust`; CI builds all three.
+Staged owner checkpoints G(1)–G(5) all passed, ending with the final
+human-visible smoke.
+
+**A12 — DSL spec public draft.** `docs/dsl_spec.md` is promoted to
+`status: public-draft` after a whole-document editorial pass and an
+external-reader smoke over every M3 surface; the promotion record is
+the [public-draft change history](./docs/dsl_spec.md#public-draft-change-history)
+anchor. The draft is not a backward-compatibility guarantee (an M6
+concern).
+
+M3 decision records (per phase):
+[Phase 1 — `bool` scalar binding](./process/milestone-3/phase-1/decisions/preamble.md);
+[Phase 2 — Box](./process/milestone-3/phase-2/decisions/preamble.md);
+[Phase 3 — WrapPanel](./process/milestone-3/phase-3/decisions/preamble.md);
+[Phase 4 — ScrollView](./process/milestone-3/phase-4/decisions/preamble.md);
+[Phase 5 — Grid](./process/milestone-3/phase-5/decisions/preamble.md);
+[Phase 6 — ZStack + conditional rendering](./process/milestone-3/phase-6/decisions/preamble.md);
+[Phase 7 — iteration](./process/milestone-3/phase-7/decisions/preamble.md);
+[Phase 7b — parent-interpreted placement](./process/milestone-3/phase-7b/decisions/preamble.md);
+[Phase 8 — selected state + Gallery + public draft](./process/milestone-3/phase-8/decisions/preamble.md).
+
+Carry-forwards live in the M3 handoff (roadmap / trigger-driven
+residuals: PM-2 wrapper rule, author-controllable sizing / Problem B,
+default alignment, placement spelling and bindability, the five
+selected-state deferred axes, the M4 residual cluster).
+
 ### M3-Phase 7b — Parent-interpreted placement (2026-06-24)
 
 Aligns the parent-interpreted placement surface shipped piecemeal in

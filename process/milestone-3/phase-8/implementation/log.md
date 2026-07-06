@@ -2291,3 +2291,272 @@ verification ran at `d787e28` and the retrospective commit `c9354ce`
 post-dates it; since `c9354ce` is the retrospective itself and not a
 remediation commit, the T9 carry-forward re-run condition does not
 fire.
+
+## T11 start gate — carry-over check, responsibility cut, and trap selection (2026-07-06)
+
+Carry-over checked before choosing the T11 approach (log.md + every
+Phase 8 task retrospective t1–t10):
+
+- From T8 log / retrospective: T11 owns the Moment 2 promotion
+  mechanics — flip the public-draft marker, add the promotion
+  change-history entry, resync `docs/architecture.md` status markers,
+  record the T8 external-reader smoke result, and confirm
+  `docs/abi_spec.md` remains untouched. T8 deliberately stopped at the
+  readiness audit.
+- From T9 log / retrospective: the T11 promotion diff is limited to the
+  T9-pre-enumerated allowed surface (log.md §T11 allowed diff surface,
+  seven rows). Any body-prose semantic correction is a separate
+  owner-visible review concern and must not ride the T11 diff.
+- From the T9 pre-merge review carry-forwards, three constraints fire
+  on T11 directly: (a) spec revision-history rows are **append-only** —
+  the T11 promotion entry and the new revision row land as additions;
+  no prior row is retroactively rewritten; (b) document-task start
+  gates treat **parallel-doc drift** as the document analogue of trap
+  #3 and enumerate it under trap #2 — T11's CHANGELOG entry and
+  candidate ledger must cite/link the owning documents rather than
+  restate spec or handoff content; (c) if post-retrospective
+  remediation commits land on the T11 branch, the doc gates re-run
+  over the final branch state before merge.
+- From T10 log / retrospective: the G(5) acceptance is bound to the
+  surface state unchanged since the T7 capture commit (`5b66321`).
+  T11 touches `docs/` / `CHANGELOG.md` / `process/` only; a forced
+  product-surface change would invalidate the smoke and require an
+  owner re-run before landing. T11 verifies the path-scoped git range
+  is still empty at close.
+- From T8 carry-forward (T11 / phase-end / milestone-close): the
+  candidate ledger triages which T1–T10 learnings become durable
+  handoff items; milestone-level residuals already live in the T9
+  owner-reviewed `process/milestone-3/handoff.md` draft and are
+  **pointed to, not duplicated** (T9 "not a parallel spec" rule).
+- Plan-hypothesis corrections recorded in `plan.md` (T11 critical
+  responsibility cut): §4.18 has no `Phase status:` marker to flip
+  (source-verified — the only Phase 8 marker is §4.17's), and the
+  "divergence corrections folded" work was already discharged by
+  T8/T9, so T11 adds no body-prose change.
+
+T11 responsibility after critical re-check: T11 owns the Moment 2
+public-draft promotion mechanics on the T9-enumerated allowed surface,
+the step-end local gates (fmt / clean rebuild / C and Zig hosts in the
+AGENTS.md build order), the M3 plan Phase 8 row flip, the phase-close
+evidence pointers + implementation summary + phase-end handoff
+candidate ledger in this log, and its own step retrospective. It does
+not own the CI run id, `implementation/handoff.md` finalization, the
+phase-end retrospective, the preamble status flip, the milestone-close
+batch, or any product-surface change.
+
+Selected traps:
+
+| Trap | Applies? | Reason / required T11 close artifact |
+|---|---:|---|
+| #1 semantic migration | No | T11 changes no enum / IR / schema / widget catalog / runtime traversal; the diff is documentation and process records only. |
+| #2 missed side effects | Yes | Status flips and the promotion entry change what the public documents claim across `docs/dsl_spec.md`, `docs/architecture.md`, `CHANGELOG.md`, and the M3 plan row; drift between them (or restating spec/handoff content in the CHANGELOG / candidate ledger — the trap-#3 document analogue per the T9 carry-forward) is the realized risk class. Close with a structural side-effect enumeration over every changed artifact plus a cross-document consistency check (marker wording, anchor links, append-only history). |
+| #3 parallel/derived data drift | No | No production parallel data. The document analogue (a second source of truth in CHANGELOG / ledger prose) is explicitly enumerated and closed under trap #2. |
+| #4 untested authored branch | No | T11 authors no diagnostic / reject / size branch and no code. |
+| #5 carry-forward | Yes | The candidate ledger is the task's carry-forward deliverable; additionally the G(5) surface binding must be re-recorded for the phase-end batch. Close with the ledger and re-trigger criteria. |
+| #6 deterministic failure | Conditional | The local clean rebuild and C / Zig host builds can fail repeatably (known classes: sandbox `zig build` AccessDenied, CMake PATH). Any recurring failure gets a rerun history and disposition; no green-on-retry without cause. |
+| #7 GUI positive control | No | T11 has no GUI-render deliverable. The local rebuild is a build gate, not GUI evidence; the authoritative GUI evidence (T7) and owner smoke (T10) are closed and bound to the unchanged surface, which T11 re-verifies by the path-scoped git range check. |
+
+Review lane: normal task-end review after the retrospective. T11 is a
+document-sync / step-close task: no schema / IR migration, runtime
+structural change, diagnostic branch, or GUI-render evidence. If a
+forced change crosses into product surface, the review lane and the
+G(5) validity are re-evaluated before that change lands.
+
+## T11 end gate — Moment 2 sync, local gates, and candidate ledger (2026-07-06)
+
+T11 landed the Moment 2 public-draft promotion on the T9-enumerated
+allowed surface and ran the step-end local gates. No product surface
+(`wasamoc/` / `wasamo-runtime/` / `wasamo-ir/` / `examples/` /
+`bindings/` / CI) was touched, so the G(5) acceptance remains bound to
+the unchanged surface.
+
+**Allowed-surface conformance check (T9 §T11 allowed diff surface)**
+
+| Allowed artifact / touch | T11 disposition |
+|---|---|
+| `docs/dsl_spec.md` front-matter / top Status | Flipped: top Status now opens with the `public-draft` (M3) marker, links the public-draft change-history anchor, and records M3-Phase 8 closed (implementation-synced) with the T8 smoke reference. Document version 1.15. |
+| `docs/dsl_spec.md` §4.17 phase-status line | Flipped to `M3-Phase 8 closed; implementation-synced.` (§4.18 has no phase-status marker — plan-hypothesis correction recorded at the start gate.) |
+| `docs/dsl_spec.md` promotion change-history entry | Added `## Public draft change history` (the public-draft anchor) before the revision-history table: promotion date, T8 external-reader smoke result, no-compatibility-guarantee note, and links to all nine M3 phase ADR preambles. Revision-history row 1.15 appended; no prior row rewritten (append-only per the T9 carry-forward). |
+| `docs/architecture.md` top Status | Flipped the Phase 8 clause to closed (implementation-synced) + public-draft promotion note. |
+| `docs/architecture.md` §6.7.7 status sentence | Flipped the block label and closing sentence from design draft / T8-verified to implementation-synced at Phase 8 close. |
+| `CHANGELOG.md` | Added the M3 / Phase 8 entry (milestone-end criterion 3): A10 / A1 / A12 summaries, links to each M3 phase ADR preamble and the public-draft anchor, and a pointer to the M3 handoff for carry-forwards (citation, not restatement — trap-#2 parallel-doc guard). |
+| `docs/abi_spec.md` | Confirmed no-op: file untouched by T11 (`git status` clean for `docs/abi_spec.md`); no forced ABI note arose. |
+
+No body-prose semantic change landed. Process-side artifacts outside
+that surface (this `plan.md` / `log.md`, `process/milestone-3/plan.md`
+Phase 8 row) are T11 step-close records per the plan, not public-draft
+surface.
+
+**Local gates (step-end, run at the post-promotion commit state)**
+
+| Command | Result |
+|---|---|
+| `git log --oneline 5b66321..HEAD -- wasamoc wasamo-runtime wasamo-ir examples bindings .github` | empty over 23 commits — the built/smoked surface is unchanged since the T7 capture commit; G(5) binding holds |
+| `cargo fmt --all -- --check` | green |
+| `cargo clean` | clean (removed prior target state) |
+| `cargo build --release --workspace` | green; existing `wasamo` linkable-target warning only |
+| `cargo build --workspace` | green |
+| `cargo test --workspace` | green; 0 failed across all suites (wasamoc 408 unit + 7 roundtrip; runtime + Windows integration suites all ok) |
+| VS-bundled `cmake -S examples/gallery-c -B build/gallery-c` + `--build --config Release` | green; produced `build/gallery-c/Release/gallery-c.exe` |
+| `zig build -p ..\..\build\gallery-zig -Doptimize=ReleaseSafe` from `examples/gallery-zig` | green (in-sandbox); produced `build/gallery-zig/bin/gallery-zig.exe` |
+
+CI (GitHub Actions run id) remains phase-end-owned; the local clean
+rebuild is the T11 proxy per the plan.
+
+**#2 structural side-effect enumeration**
+
+| Artifact changed | Side effect / disposition |
+|---|---|
+| `docs/dsl_spec.md` | The document now publicly claims `public-draft` status. Derived claims kept consistent: top Status, §4.17 marker, anchor section, and revision row 1.15 all state the same closed / implementation-synced / public-draft facts; the anchor is the single promotion record and the revision table stays per-edit history. |
+| `docs/architecture.md` | Top Status and §6.7.7 no longer say "design draft" / "flip remains Phase 8 close" — wording that would contradict the promoted spec. No other section touched. |
+| `CHANGELOG.md` | New Phase 8 entry is the M3 milestone entry (criterion 3). It links the owning documents (ADRs, public-draft anchor, M3 handoff) instead of restating spec or handoff content. |
+| `process/milestone-3/plan.md` | Phase 8 Progress row flipped to `implementation complete; phase-end pending`; A1/A10/A12 discharge recording explicitly left to milestone close (criterion 1). |
+| `process/milestone-3/phase-8/implementation/plan.md` | T11 responsibility cut + hypothesis corrections + checkbox flips; phase-end / milestone-close bullets remain `[ ]` per the ownership split. |
+| This `log.md` | T11 start/end gates, candidate ledger, phase-close evidence pointers, and implementation summary recorded. |
+| ADR set | Not touched. No retrospectives.md phase-sync ADR-touch case applies: no AC-discharge divergence found (T8 A11 audit + T9 G(4) already verified the trace), no out-of-phase residual filing at T11 (phase-end owns handoff finalization), no thesis-level change. |
+
+**#5 carry-forward**
+
+- **Constraint:** the G(5) / T7-surface binding continues through the
+  phase-end batch: any product-path change before the phase-to-main
+  merge invalidates the owner smoke and requires an owner re-run. T11
+  re-verified the path-scoped git range is still empty. **Evidence:**
+  the surface-freshness row above. **Re-trigger:** any product-path
+  commit on the phase branch before merge. **Placement:** carry-forward
+  for the phase-end batch.
+- **Constraint:** if post-retrospective remediation commits land on the
+  T11 branch, the doc gates (`cargo fmt --all -- --check`,
+  `git diff --check`) re-run over the final branch state before merge
+  (T9 pre-merge carry-forward). **Re-trigger:** any commit after the
+  T11 retrospective commit. **Placement:** T11 merge gate.
+
+**Phase-end handoff candidate ledger (decided at phase-end item 15)**
+
+Milestone-level residuals are owned by the T9 owner-reviewed
+`process/milestone-3/handoff.md` draft and are not duplicated into the
+phase handoff (T9 "not a parallel spec" rule): the five DD-001
+selected-state deferred axes; the PM-2 Grid wrapper rule; the Problem B
+/ author-controllable sizing disposition (Accepted VDR, M4/M5 spike +
+M6 backstop); default alignment (T8: explicable, no B-3c triggered);
+placement spelling affirmed-keep and bindability; the M4 residual
+cluster (real images, thumbnail hit-testing, wheel/drag scrolling,
+modal focus, dynamic title/status, runtime DPI-awareness); the
+public-facing phase-vocabulary cleanup (pre-1.0 residual).
+
+Phase-level candidates for `implementation/handoff.md` (from T1-T10
+item-10 entries and pre-merge review carry-forwards):
+
+1. String-carried widget kind + warning-only unknown-widget policy:
+   new widget kinds must prove admission with a no-unknown-warning
+   positive fixture (T1/T3; re-trigger: any new widget kind while the
+   policy stands).
+2. Runtime defensive-reader catalog mirroring: new widget kinds mirror
+   their compiler catalog at the loader boundary rather than
+   inheriting Button's older loose path (T4).
+3. Coordinate-based `CopyFromScreen` capture is a visible-desktop,
+   final-surface, surface-coupled evidence path: re-derive coordinates
+   per surface, include state-confirming frames, plan outside-sandbox
+   (T2/T5/T7).
+4. C/Zig host build ordering (release `wasamoc.exe` / `wasamo.dll.lib`
+   before host builds) and the declarative `WASAMO_LOAD_MEMORY` host
+   boundary (T6).
+5. Normative-spec revision-history rows are append-only; corrections
+   land as new dated rows (T9 pre-merge review).
+6. Document-task start gates enumerate parallel-doc drift (the
+   document analogue of trap #3) under trap #2 (T9 pre-merge review;
+   applied by T10 and T11).
+7. Post-retrospective remediation commits leave the recorded step-end
+   verification behind the final branch state; decide whether the
+   retrospective procedure needs a final-branch-state verification
+   note (T9 pre-merge review; recurred T4-T9).
+8. Owner-gate prep standardizes the path-scoped git range check before
+   reusing prior evidence as prep material; `t10-owner-smoke-script.md`
+   is surface-coupled and needs a surface-unchanged check before reuse
+   (T10).
+
+**#6 deterministic-failure disposition**
+
+No deterministic failure occurred during T11. All gates were green on
+first run, including the in-sandbox `zig build` (the T6-class
+`AccessDenied` did not recur, consistent with T10's environment-variance
+record).
+
+**Phase-close evidence pointers (for the phase-end batch)**
+
+- G(1) wireframe / A1 placeholder agreement: owner "OK accept all"
+  2026-07-04 (T2 log, G(1) packet / A1 table).
+- G(2) first-render owner check: "G(2) OK" 2026-07-05 (T5 log).
+- G(3) two-frame positive controls: owner confirmation 2026-07-05 over
+  `evidence/t7-gallery-*.png` (T7 log; analysis in
+  `evidence/README.md`).
+- G(4) public draft + M3 handoff review: owner acceptance 2026-07-06
+  (T9 log; remediated packet coverage recorded in the T9 pre-merge
+  review entry).
+- G(5) owner human-visible smoke: "G(5) OK" 2026-07-06, no fail
+  observation (T10 log; script at `evidence/t10-owner-smoke-script.md`).
+- Authoritative GUI evidence: seven `t7-gallery-*.png` frames +
+  `evidence/README.md`; parity prechecks `t6-parity-{rust,c,zig}.png`;
+  T2/T5 precheck frames.
+- Remote CI run id: not yet recorded — phase-end batch
+  (`workflow_dispatch` on the phase branch, including the gallery-c /
+  gallery-zig steps).
+
+**Implementation summary (T1-T11, distilled)**
+
+Phase 8 closed M3 implementation. T1 (spike) established that the IR
+widget-kind carrier is a string with a warning-only unknown-widget
+policy, fixing the T3/T4 evidence shape. T2 landed the Photo Gallery
+wireframe skeleton and the owner-accepted G(1) / A1 placeholder table.
+T3/T4 landed `ToggleButton` / `checked` across compiler + textual IR
+and runtime loader + widget visual (controlled one-way;
+background-colour-only checked cue; disabled > checked > state colour
+priority), each with call-site audits and firing-test matrices. T5
+integrated the final Rust-host Gallery (live alpha tab-band exclusion)
+and swept the verification-only surfaces; T6 ported the C and Zig
+hosts and added CI steps; T7 captured the authoritative GUI evidence
+package with positive controls (G(3)). T8 ran the public-draft
+readiness audit (external-reader smoke all-"yes", A11 trace complete,
+no silently deferred surface); T9 drafted the M3 handoff and passed
+G(4), pre-enumerating the T11 diff surface; T10 passed the owner
+human-visible smoke G(5) on the unchanged surface. T11 promoted
+`docs/dsl_spec.md` to `public-draft` (anchor + CHANGELOG +
+architecture sync), ran the step-end local gates green, and recorded
+this candidate ledger. Remaining: phase-end batch (CI run id, handoff
+finalization, phase retro, preamble flip, owner-gated merge/push) and
+the milestone-close batch.
+
+## T11 pre-merge independent review (2026-07-06)
+
+Reviewer: independent subagent (`a166cdc7349578fae`).
+
+Result: **no findings** (PASS on all seven checks).
+
+Review scope: commits `2c7fbe7..21bc8f8` (`062accf`, `13efc50`,
+`6342692`, `21bc8f8`) — the T11 gate records, Moment 2 public-draft
+promotion docs, candidate ledger, and retrospective.
+
+Reviewer confirmation:
+
+- Commit surface is exactly the seven claimed files; the path-scoped
+  git range since the T7 capture commit (`5b66321`) is empty, so the
+  G(5) surface binding holds.
+- The `docs/dsl_spec.md` diff is confined to the top block, the §4.17
+  phase-status line, the new public-draft change-history anchor, and
+  the appended 1.15 revision row; prior revision rows are untouched
+  (append-only verified); remaining "design draft" strings are
+  historical revision rows only.
+- Cross-document consistency verified: dsl_spec top Status / §4.17 /
+  architecture top Status / §6.7.7 agree; all nine M3 phase ADR
+  preamble links and the `#public-draft-change-history` anchor resolve
+  from both CHANGELOG and dsl_spec.
+- Start/close gates satisfy `implementation-gates.md`: trap selection
+  with reasons recorded before the approach (commit order verified);
+  close artifacts present for #2 / #5 / #6, including the 1:1
+  conformance check against the T9 allowed-surface enumeration.
+- Plan / retrospective accuracy verified against the actual diff;
+  phase-end and milestone-close bullets remain `[ ]`; responsibility
+  boundaries respected (no handoff finalization, preamble flip, CI run
+  id, ADR-set or `abi_spec.md` touch).
+- Doc gates re-run by the reviewer over the final branch state
+  (`cargo fmt --all -- --check`, `git diff --check`): green —
+  satisfying the T9-derived final-branch-state re-run condition.
