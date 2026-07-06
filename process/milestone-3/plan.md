@@ -1,6 +1,6 @@
 ---
 milestone: M3
-status: in-progress
+status: completed
 roadmap-anchor: ROADMAP.md#m3-dsl-surface
 adrs:
   - process/milestone-3/phase-1/decisions/preamble.md  # Phase 1 (bool scalar)
@@ -14,6 +14,7 @@ adrs:
 created: 2026-05-16
 agreed: 2026-05-16
 in-progress: 2026-05-19
+completed: 2026-07-06
 ---
 
 # M3 Plan — DSL surface milestone
@@ -702,6 +703,61 @@ ADRs, CHANGELOG, notes, and git history, then deleted by default.
 | M3-Phase 7b — Parent-interpreted placement attributes (owner-inserted corrective) | complete | [plan.md](phase-7b/implementation/plan.md) | [preamble.md](phase-7b/decisions/preamble.md) | Inserted 2026-06-19 (tier-2 additive); framing owner-aligned 2026-06-19; DD-M3-P7b-001/002 Accepted 2026-06-21 (CB-B + Option 3 `slot.` + PM-2; IM-4 + SM-B + VS-1a `SlotData` + IR-B); branch (a) → new **A13** (discharged); T1–T6b landed (IR `IrChildSlot` + runtime/layout `ChildSlot`/`SlotData`, `slot.*` author surface + PM-2 matrix, GUI evidence + owner smoke, T6b Grid-as-ZStack-child checker fix); Moment 2 docs synced at T7; phase-end CI green run 28072510434 + merged to main 2026-06-24 |
 | M3-Phase 8 — `selected` state + Gallery E2E + DSL spec public draft | complete | [plan.md](phase-8/implementation/plan.md) | [preamble.md](phase-8/decisions/preamble.md) | DD-M3-P8-001 Accepted 2026-07-01 (`ToggleButton` / `checked`); DD-M3-P8-002 Accepted 2026-07-02 (public-draft promotion, A-2/C-2, no new AC); T1–T11 landed 2026-07-03..06 (ToggleButton/checked end-to-end; integrated Gallery on C/Rust/Zig hosts + CI steps; assistant GUI evidence; public-draft promotion at Moment 2); owner checkpoints G(1)–G(5) all passed; phase-end batch CI green (run 28784793695, confirmed over final branch state by 28786580142); merged to main 2026-07-06 (`40c9341`); A1 / A10 / A12 discharge recording + `_roadmap` / M3-plan-status flips owned by the milestone-close batch |
 
+### Milestone close (2026-07-06)
+
+Milestone review per [workflow.md §7.1](../procedures/workflow.md):
+every phase-end retrospective
+(`phase-{1,2,3,4,5,6,7,7b,8}/retrospectives/phase-end.md`) was re-read
+and the acceptance-criteria discharge confirmed. Phases 4–8 record the
+discharge directly in their item-12 "achieved" cells; Phases 1–3
+predate that checklist numbering and their discharge is carried by the
+Progress rows above plus each ADR's verification-closure section (the
+trace re-audited milestone-wide at Phase 8 T8).
+
+**A1–A13 criterion mapping (final):**
+
+| Criterion | Discharged by | Evidence pointer |
+|---|---|---|
+| A1 (integrated Gallery E2E, three hosts) | Phase 8 (T5/T6/T7) | `examples/gallery/gallery.ui` + `gallery-{rust,c,zig}` hosts + CI steps; `phase-8/implementation/evidence/t7-gallery-*.png` + `t6-parity-*.png`; owner G(2)/G(3)/G(5) |
+| A2 (Grid) | Phase 5 | Progress row (discharged 2026-05-30); ADR verification closure |
+| A3 (WrapPanel) | Phase 3 | Progress row (discharged 2026-05-22); ADR verification closure |
+| A4 (ZStack) | Phase 6 | Progress row (discharged 2026-06-09); phase-end retro item 12 |
+| A5 (ScrollView minimal) | Phase 4 | Progress row (discharged 2026-05-25); phase-end retro item 12 |
+| A6 (Box + aspect) | Phase 2 | Progress row (discharged 2026-05-20); ADR verification closure |
+| A7 (conditional rendering) | Phase 6 | Progress row (discharged 2026-06-09); phase-end retro item 12 |
+| A8 (iteration) | Phase 7 | Progress row; phase-end retro item 12 (append / drop-last / clear / reset positive controls) |
+| A9 (`bool` scalar) | Phase 1 | Progress row (discharged 2026-05-19); ADR verification closure |
+| A10 (`ToggleButton` / `checked`) | Phase 8 (T3/T4) | `docs/dsl_spec.md` §4.17; T3/T4 firing-test matrices in `phase-8/implementation/log.md`; T7 selected/exclusion frames |
+| A11 (per-phase sync) | Every phase | Phase 8 T8 A11 audit: all nine phase ADR sets name their `docs/dsl_spec.md` sections; no pointer fix required |
+| A12 (public draft) | Phase 8 (T8/T11) | `docs/dsl_spec.md` `status: public-draft` v1.15 + promotion anchor; T8 external-reader smoke all-"yes" |
+| A13 (parent-interpreted placement) | Phase 7b | Progress row (Accepted 2026-06-21, merged 2026-06-24); phase-end retro item 12 |
+
+**Milestone-end criteria (all seven hold):**
+
+1. A1–A13 discharged and recorded — the mapping above + Progress rows
+   + each phase ADR (trace verified by the T8 A11 audit).
+2. Phase 8 shipped all three deliverables — Phase 8 phase-end retro
+   item 12 (A10 / A1 / A12).
+3. CHANGELOG M3 entry — landed at T11, linking all nine phase ADR
+   preambles and the public-draft anchor.
+4. A11 auditable — Phase 8 T8 A11 audit table (nine phases, all
+   "yes").
+5. External-reader smoke — Phase 8 T8: per-surface verdicts all "yes";
+   result recorded in the `docs/dsl_spec.md` public-draft anchor.
+6. No silently deferred M3 surface — Phase 8 T8 audit: every pre-doc
+   必要-surface row shipped or explicitly dispositioned (the only
+   omitted final-Gallery controls are collection-mutation Buttons,
+   covered by the Phase 7 evidence citation).
+7. Clean rebuild green on CI for the merge commit on main — push run
+   [28788746610](https://github.com/matarillo/wasamo/actions/runs/28788746610)
+   success (head `43cf6b9`, carrying merge `40c9341`); phase-branch
+   runs 28784793695 / 28786580142 green.
+
+Milestone handoff: [handoff.md](./handoff.md) (`status: recorded`,
+finalized from the T9 owner-reviewed draft). The release step
+(workflow §7.4 — tagging / CHANGELOG heading shape) is an owner
+decision recorded separately.
+
 ### Owner-facing resume note
 
 M3 plan is `in-progress` as of 2026-05-19. M3-Phase 1 (`bool`
@@ -715,3 +771,9 @@ on the rebuilt gallery host after the T6 window-root Fill/Fill fix).
 The Frozen agreement section is revisable under the plan-revision
 discipline ([workflow.md](../procedures/workflow.md), DD-V-026):
 owner-authorised, critically-checked, and proportionally recorded.
+
+**M3 closed 2026-07-06.** All phases complete and merged to main
+(final merge `40c9341`); A1–A13 discharged per the Milestone close
+section above; milestone handoff recorded. M4 planning starts from
+[handoff.md](./handoff.md) and
+[process/_roadmap.md §M4](../_roadmap.md).
