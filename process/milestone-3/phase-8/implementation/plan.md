@@ -608,7 +608,7 @@ review lane are re-evaluated before that fix lands.
       the task branch → re-run to green (Phase 4 / 7b precedent).
       (Owner acceptance "G(5) OK" recorded 2026-07-06; no fail
       observation.)
-- [ ] T10 step-end retrospective recorded at
+- [x] T10 step-end retrospective recorded at
       `../retrospectives/t10.md`.
 
 **Start gate:** T9 merged (surface frozen); T10 carry-over check and
