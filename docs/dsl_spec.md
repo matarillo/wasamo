@@ -2848,14 +2848,16 @@ criterion. ZStack has no wrapper form; its placement is always direct
 
 ### 4.17 `ToggleButton` and selected / toggle state (M3-Phase 8)
 
-**Phase status:** M3-Phase 8 design draft (Moment 1); pending
-implementation sync.
+**Phase status:** M3-Phase 8 implementation verified in T8; formal
+closed / public-draft status flips at Phase 8 close (Moment 2).
 
 `ToggleButton` is a button that carries a persistent **selected /
-`checked`** state. It shows the last new M3 authoring fact: a **boolean
-binding drives a widget *attribute*** — not only a widget's text (§2.4) or
-its presence under an `if` (§4.14). An ordinary `Button` (§4.4) keeps a
-single momentary / action meaning and carries **no** selected state; the
+`checked`** state. Phase 1 already proved that a boolean binding can drive a
+typed widget attribute through `Button.enabled` (§4.8); `ToggleButton.checked`
+is the first persistent selected-state attribute. Unlike `enabled`, which
+gates interaction and disabled visuals, `checked` keeps an author-controlled
+visual selection state alive across frames. An ordinary `Button` (§4.4) keeps
+a single momentary / action meaning and carries **no** selected state; the
 persistent toggle state lives only on `ToggleButton`, so a reader can tell a
 stateful toggle from an action button by the widget type alone.
 
