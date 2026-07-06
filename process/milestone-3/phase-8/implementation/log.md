@@ -2674,3 +2674,45 @@ main push) at head `d72090b`.
 No deterministic failure occurred: the remote CI run was green on its
 first execution (including the first remote gallery-c / gallery-zig
 builds), and no local gate failed during the batch.
+
+## Phase-end batch pre-merge independent review (2026-07-06)
+
+Reviewer: independent subagent (`ae8568a5b2e1f1ed7`).
+
+Result: **no findings** (PASS on all eight checks).
+
+Review scope: commits `882ff20..0665bfc` (`cf84246`, `0fc5b8f`,
+`172ed65`, `d72090b`, `0665bfc`) — the phase-end start gate + plan
+re-cut, handoff finalization, procedure SSOT minor edits, phase-end
+retrospective, and the CI-green close.
+
+Reviewer confirmation:
+
+- Commit surface is process/-only (seven files); the path-scoped
+  product range `5b66321..HEAD` is empty, so the G(5) surface binding
+  holds over the entire batch.
+- The start gate landed in the first batch commit with the full trap
+  table (reasons for non-applicable traps) and review lane, before the
+  batch work.
+- The finalized handoff dispositions all eight T11 ledger items
+  (1–5, 8 → carry-forward with evidence + re-trigger; 6, 7 →
+  doc-folded into the procedure SSOTs); the "zero `phase-sync`
+  classifications" claim was verified against all eleven task retros;
+  nothing durable was dropped; milestone residuals are pointed, not
+  restated.
+- The two procedure edits qualify as minor edits under the AGENTS.md
+  boundary test and accurately restate the originating T9 pre-merge
+  findings.
+- Retro items 12–18 verified against ground truth: CHANGELOG links all
+  nine phase ADRs + the public-draft anchor; `docs/dsl_spec.md` is
+  `public-draft` v1.15; `_roadmap` carries the ToggleButton/checked
+  lexeme; nine cited test names located in source; all evidence files
+  present; `gh run view 28784793695` returns success /
+  `workflow_dispatch` / head `d72090b` — exact match.
+- Ownership boundaries respected: M3 handoff still `status: draft`,
+  `_roadmap` / M3 plan untouched, preamble `closing` (not retired),
+  owner-approval and milestone-close bullets remain `[ ]`.
+- Doc gates re-run by the reviewer over the final branch state
+  (`cargo fmt --all -- --check`, `git diff --check`): green.
+- Cross-document consistency: run id / head sha / ownership split
+  agree across retro item 16, plan, log, and preamble.
