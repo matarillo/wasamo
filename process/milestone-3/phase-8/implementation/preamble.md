@@ -1,7 +1,7 @@
 ---
 phase: M3-Phase 8
 title: Selected state + Gallery integration + DSL spec public draft
-status: closing
+status: retired
 adr: process/milestone-3/phase-8/decisions/preamble.md
 plan: process/milestone-3/plan.md
 opened: 2026-07-02

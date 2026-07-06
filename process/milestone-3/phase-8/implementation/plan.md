@@ -748,8 +748,8 @@ before landing.
 - [x] [preamble.md](./preamble.md) front-matter `status` flips
       `active` → `closing` (same commit as the CI run id, 7b
       precedent).
-- [ ] Owner approval → phase branch no-ff merge to main; push is a
-      separate gate.
+- [x] Owner approval → phase branch no-ff merge to main; push is a
+      separate gate. (Owner approved 2026-07-06; no-ff merge `40c9341`.)
 
 ### Milestone-close batch (workflow §7 — after the phase → main merge)
 
