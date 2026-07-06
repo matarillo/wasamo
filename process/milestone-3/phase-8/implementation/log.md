@@ -2524,3 +2524,39 @@ architecture sync), ran the step-end local gates green, and recorded
 this candidate ledger. Remaining: phase-end batch (CI run id, handoff
 finalization, phase retro, preamble flip, owner-gated merge/push) and
 the milestone-close batch.
+
+## T11 pre-merge independent review (2026-07-06)
+
+Reviewer: independent subagent (`a166cdc7349578fae`).
+
+Result: **no findings** (PASS on all seven checks).
+
+Review scope: commits `2c7fbe7..21bc8f8` (`062accf`, `13efc50`,
+`6342692`, `21bc8f8`) — the T11 gate records, Moment 2 public-draft
+promotion docs, candidate ledger, and retrospective.
+
+Reviewer confirmation:
+
+- Commit surface is exactly the seven claimed files; the path-scoped
+  git range since the T7 capture commit (`5b66321`) is empty, so the
+  G(5) surface binding holds.
+- The `docs/dsl_spec.md` diff is confined to the top block, the §4.17
+  phase-status line, the new public-draft change-history anchor, and
+  the appended 1.15 revision row; prior revision rows are untouched
+  (append-only verified); remaining "design draft" strings are
+  historical revision rows only.
+- Cross-document consistency verified: dsl_spec top Status / §4.17 /
+  architecture top Status / §6.7.7 agree; all nine M3 phase ADR
+  preamble links and the `#public-draft-change-history` anchor resolve
+  from both CHANGELOG and dsl_spec.
+- Start/close gates satisfy `implementation-gates.md`: trap selection
+  with reasons recorded before the approach (commit order verified);
+  close artifacts present for #2 / #5 / #6, including the 1:1
+  conformance check against the T9 allowed-surface enumeration.
+- Plan / retrospective accuracy verified against the actual diff;
+  phase-end and milestone-close bullets remain `[ ]`; responsibility
+  boundaries respected (no handoff finalization, preamble flip, CI run
+  id, ADR-set or `abi_spec.md` touch).
+- Doc gates re-run by the reviewer over the final branch state
+  (`cargo fmt --all -- --check`, `git diff --check`): green —
+  satisfying the T9-derived final-branch-state re-run condition.
