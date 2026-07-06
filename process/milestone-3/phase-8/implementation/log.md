@@ -2291,3 +2291,73 @@ verification ran at `d787e28` and the retrospective commit `c9354ce`
 post-dates it; since `c9354ce` is the retrospective itself and not a
 remediation commit, the T9 carry-forward re-run condition does not
 fire.
+
+## T11 start gate — carry-over check, responsibility cut, and trap selection (2026-07-06)
+
+Carry-over checked before choosing the T11 approach (log.md + every
+Phase 8 task retrospective t1–t10):
+
+- From T8 log / retrospective: T11 owns the Moment 2 promotion
+  mechanics — flip the public-draft marker, add the promotion
+  change-history entry, resync `docs/architecture.md` status markers,
+  record the T8 external-reader smoke result, and confirm
+  `docs/abi_spec.md` remains untouched. T8 deliberately stopped at the
+  readiness audit.
+- From T9 log / retrospective: the T11 promotion diff is limited to the
+  T9-pre-enumerated allowed surface (log.md §T11 allowed diff surface,
+  seven rows). Any body-prose semantic correction is a separate
+  owner-visible review concern and must not ride the T11 diff.
+- From the T9 pre-merge review carry-forwards, three constraints fire
+  on T11 directly: (a) spec revision-history rows are **append-only** —
+  the T11 promotion entry and the new revision row land as additions;
+  no prior row is retroactively rewritten; (b) document-task start
+  gates treat **parallel-doc drift** as the document analogue of trap
+  #3 and enumerate it under trap #2 — T11's CHANGELOG entry and
+  candidate ledger must cite/link the owning documents rather than
+  restate spec or handoff content; (c) if post-retrospective
+  remediation commits land on the T11 branch, the doc gates re-run
+  over the final branch state before merge.
+- From T10 log / retrospective: the G(5) acceptance is bound to the
+  surface state unchanged since the T7 capture commit (`5b66321`).
+  T11 touches `docs/` / `CHANGELOG.md` / `process/` only; a forced
+  product-surface change would invalidate the smoke and require an
+  owner re-run before landing. T11 verifies the path-scoped git range
+  is still empty at close.
+- From T8 carry-forward (T11 / phase-end / milestone-close): the
+  candidate ledger triages which T1–T10 learnings become durable
+  handoff items; milestone-level residuals already live in the T9
+  owner-reviewed `process/milestone-3/handoff.md` draft and are
+  **pointed to, not duplicated** (T9 "not a parallel spec" rule).
+- Plan-hypothesis corrections recorded in `plan.md` (T11 critical
+  responsibility cut): §4.18 has no `Phase status:` marker to flip
+  (source-verified — the only Phase 8 marker is §4.17's), and the
+  "divergence corrections folded" work was already discharged by
+  T8/T9, so T11 adds no body-prose change.
+
+T11 responsibility after critical re-check: T11 owns the Moment 2
+public-draft promotion mechanics on the T9-enumerated allowed surface,
+the step-end local gates (fmt / clean rebuild / C and Zig hosts in the
+AGENTS.md build order), the M3 plan Phase 8 row flip, the phase-close
+evidence pointers + implementation summary + phase-end handoff
+candidate ledger in this log, and its own step retrospective. It does
+not own the CI run id, `implementation/handoff.md` finalization, the
+phase-end retrospective, the preamble status flip, the milestone-close
+batch, or any product-surface change.
+
+Selected traps:
+
+| Trap | Applies? | Reason / required T11 close artifact |
+|---|---:|---|
+| #1 semantic migration | No | T11 changes no enum / IR / schema / widget catalog / runtime traversal; the diff is documentation and process records only. |
+| #2 missed side effects | Yes | Status flips and the promotion entry change what the public documents claim across `docs/dsl_spec.md`, `docs/architecture.md`, `CHANGELOG.md`, and the M3 plan row; drift between them (or restating spec/handoff content in the CHANGELOG / candidate ledger — the trap-#3 document analogue per the T9 carry-forward) is the realized risk class. Close with a structural side-effect enumeration over every changed artifact plus a cross-document consistency check (marker wording, anchor links, append-only history). |
+| #3 parallel/derived data drift | No | No production parallel data. The document analogue (a second source of truth in CHANGELOG / ledger prose) is explicitly enumerated and closed under trap #2. |
+| #4 untested authored branch | No | T11 authors no diagnostic / reject / size branch and no code. |
+| #5 carry-forward | Yes | The candidate ledger is the task's carry-forward deliverable; additionally the G(5) surface binding must be re-recorded for the phase-end batch. Close with the ledger and re-trigger criteria. |
+| #6 deterministic failure | Conditional | The local clean rebuild and C / Zig host builds can fail repeatably (known classes: sandbox `zig build` AccessDenied, CMake PATH). Any recurring failure gets a rerun history and disposition; no green-on-retry without cause. |
+| #7 GUI positive control | No | T11 has no GUI-render deliverable. The local rebuild is a build gate, not GUI evidence; the authoritative GUI evidence (T7) and owner smoke (T10) are closed and bound to the unchanged surface, which T11 re-verifies by the path-scoped git range check. |
+
+Review lane: normal task-end review after the retrospective. T11 is a
+document-sync / step-close task: no schema / IR migration, runtime
+structural change, diagnostic branch, or GUI-render evidence. If a
+forced change crosses into product surface, the review lane and the
+G(5) validity are re-evaluated before that change lands.

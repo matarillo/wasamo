@@ -624,6 +624,29 @@ The final task's step-close half per the ownership split
 document-sync and step-close task, **not** the phase-close or
 milestone-close task.
 
+Critical responsibility cut (T11 re-check, 2026-07-06): T11 owns the
+**Moment 2 public-draft promotion mechanics, the step-end local gates,
+and the phase-end candidate ledger** — nothing else. Its docs diff is
+bound to the T9-enumerated allowed surface ([log.md](./log.md) §T11
+allowed diff surface): `docs/dsl_spec.md` top Status / §4.17
+phase-status line / public-draft promotion change-history entry (the
+public-draft anchor), `docs/architecture.md` top Status + §6.7.7 status
+sentence, `CHANGELOG.md` M3 entry, and the `docs/abi_spec.md` no-op
+confirmation. Two plan hypotheses were corrected against the source:
+(a) §4.18 carries no `Phase status:` marker — only §4.17 does, so
+there is no §4.18 marker flip; the §4.18 state is governed by the top
+Status block; (b) the "divergence corrections folded" work was already
+discharged by T8 (readiness editorial pass) and T9 (G(4) remediation)
+— T11 folds no body-prose correction; any newly found divergence is a
+separate owner-visible review concern per the T9 carry-forward. T11
+does not own the CI run id, `implementation/handoff.md` finalization,
+the phase-end retrospective, the preamble status flip (phase-end
+batch), or the milestone-close batch. T11 must not touch product
+surface (`wasamoc/` / `wasamo-runtime/` / `wasamo-ir/` / `examples/` /
+`bindings/` / CI): the G(5) acceptance is bound to the surface
+unchanged since the T7 capture commit (`5b66321`), and a forced
+product fix re-triggers the owner smoke before it lands.
+
 - [ ] T11 start gate recorded in [log.md](./log.md): carry-over from
       log.md and every Phase 8 task retrospective checked; T11 /
       phase-end / milestone-end ownership split made auditable.
@@ -631,14 +654,18 @@ milestone-close task.
 - [ ] Local clean rebuild green (`cargo clean` → release build → debug
       build → `cargo test --workspace`), plus the C / Zig example hosts
       in the AGENTS.md build order. CI green is phase-end-owned.
-- [ ] `docs/dsl_spec.md`: §4.17 / §4.18 markers flip to `M3-Phase 8
-      closed; implementation-synced`; divergence corrections folded
-      (landed shapes, not design-draft sketches); **`status:
-      public-draft` frontmatter marker lands** (C-2 — gated on the
-      surface running, which T5–T10 established); the public-draft
-      promotion change-history entry lands (linking the M3 ADRs and the
-      public-draft anchor); the T8 external-reader smoke result
-      recorded.
+- [ ] `docs/dsl_spec.md`: the §4.17 phase-status line and the top
+      Status block flip to `M3-Phase 8 closed; implementation-synced`
+      (§4.18 carries no phase-status marker — its state is governed by
+      the top Status block; divergence corrections were already folded
+      by T8/T9, and T11 adds no body-prose change); **the
+      `status: public-draft` marker lands in the top Status block**
+      (C-2 — gated on the surface running, which T5–T10 established);
+      the public-draft promotion change-history entry lands as the
+      public-draft anchor, distinct from the revision-history table
+      (linking the M3 ADRs); the T8 external-reader smoke result
+      recorded there; the revision-history table gains an appended
+      Moment 2 row (append-only per the T9 carry-forward).
 - [ ] **CHANGELOG entry for M3** (milestone-end criterion 3): links
       each M3 phase ADR and the public-draft anchor.
 - [ ] `docs/architecture.md` §6.7.7 (+ any sections the gallery /
