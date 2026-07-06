@@ -2084,3 +2084,210 @@ entry):
 |---|---|
 | `cargo fmt --all -- --check` | green |
 | `git diff --check` | green; existing working-copy line-ending warnings only |
+
+## T10 start gate — carry-over check, responsibility cut, and trap selection (2026-07-06)
+
+Carry-over checked before choosing the T10 approach (log.md + every
+Phase 8 task retrospective t1–t9):
+
+- From T7 log / retrospective: T7 frames are prep material only; the
+  owner human-visible smoke is a separate gate and must not be replaced
+  by the saved screenshots. T7 closed G(3); T10 owns G(5).
+- From T7 / T8 dispositions: `Box.aspect` is closed as Gallery visual
+  evidence + Phase 2 tests + T8 external-reader smoke. It is not part of
+  the G(5) human state set; T10 must not reopen it.
+- From T8 / T9: the known M4 residuals (real images, thumbnail
+  hit-testing, wheel/drag scrolling, modal focus, dynamic title/status,
+  runtime DPI-awareness) are residuals, not failures. The T10 script
+  must name them so the owner does not record them as fail observations.
+- From T9 retrospective: G(4) passed; the T10 branch is the additive fix
+  container for fail observations. Any fix that touches compiler /
+  runtime / `gallery.ui` / hosts re-triggers gate selection and review
+  lane re-evaluation before landing.
+- From the T9 pre-merge review carry-forwards: (a) post-retrospective
+  remediation commits have recurred across T4–T9 and leave the recorded
+  step-end verification behind the final branch state — if T10 gains
+  remediation commits, the doc gates re-run over the final branch state;
+  (b) document-task start gates treat parallel-doc drift as the document
+  analogue of trap #3, enumerated under trap #2 — the T10 owner script
+  must cite the agreed A1 table / T7 evidence set rather than restate
+  the state-set definition as a second source of truth.
+- From T2 / T5 / T7 deterministic-failure records: GUI observation needs
+  a visible Windows desktop; sandboxed capture is a known-fragile
+  harness. For T10 this lands on the owner's side: the smoke requires a
+  visible desktop session per
+  `docs/notes/human-visible-smoke.md` (local or screen-visible RDP/VNC;
+  plain SSH is not valid evidence).
+- From T6 log / retrospective: the C / Zig Gallery hosts require the
+  release `wasamoc.exe` / `wasamo.dll.lib` build order and `wasamo.dll`
+  resolvable at run time (PATH or exe-adjacent copy); the T10 script
+  must encode this so the owner's launch does not fail on environment
+  setup.
+- Surface-freshness check: `git log 5b66321..HEAD` (T7 capture commit →
+  current `feat/m3-phase-8-t10` base) contains 16 commits, none touching
+  `wasamoc/`, `wasamo-runtime/`, `wasamo-ir/`, `examples/`, `bindings/`,
+  or `.github/` — T8/T9 were documentation-only. The surface the owner
+  will smoke is the surface T7 captured.
+
+T10 responsibility after critical re-check: T10 owns the FD-8-G(5)
+owner-performed human-visible smoke over the agreed state set — the
+assistant prep (surface-freshness check, three-host rebuild, script
+authoring, build/launch rehearsal), the owner observation run, the
+additive fix container for fail observations, and the T10 retrospective.
+The gate evidence is the owner's explicit acceptance recorded in this
+log, not assistant screenshots. T10 does not own Moment 2 docs sync,
+CHANGELOG, the public-draft marker (T11), the CI run id / phase-end
+batch, milestone-close recording, or any new Gallery semantics.
+
+Selected traps:
+
+| Trap | Applies? | Reason / required T10 close artifact |
+|---|---:|---|
+| #1 semantic migration | No | T10 changes no enum / IR / schema / widget catalog / runtime traversal. A fail-observation fix that would touch such a surface re-triggers gate selection before landing. |
+| #2 missed side effects | Yes | T10 adds an owner-facing operational script plus rebuild instructions whose drift from the actual surface / evidence set is the realized risk class (T9 finding: parallel-doc drift is the document analogue of trap #3 and is enumerated here). Close with a structural side-effect enumeration over changed files and a script-vs-surface consistency check (commands rehearsed, coordinates-free observation steps, A1/T7 citations instead of restatement). |
+| #3 parallel/derived data drift | No | No production parallel data. The document analogue (script restating the state-set definition) is explicitly carried under trap #2 per the T9 carry-forward. |
+| #4 untested authored branch | No | T10 authors no diagnostic / reject / size branch. Fail-observation fixes would re-trigger this trap. |
+| #5 carry-forward | Yes | The owner smoke outcome (accept, or fail observations and their dispositions), plus any observation classified as an M4 residual, must be recorded with evidence and re-trigger criteria for T11 / phase-end / milestone close. |
+| #6 deterministic failure | Conditional | Any repeatable build / launch failure during the assistant rehearsal or the owner run gets a rerun history and disposition; no green-on-retry without cause. |
+| #7 GUI positive control | Yes, scoped | The G(5) gate itself is the owner's live observation; the script must build the positive controls in (tab click moves the single selected highlight and clears the previous one; lightbox subtree present → absent; narrow reflow + scroll movement; close without crash). The assistant's launch rehearsal is a supporting no-early-crash signal only, per AGENTS.md §Testing rules; no new assistant screenshot package is authored because the surface is unchanged since T7 (doc-only T8/T9). If the surface changes on this branch, assistant re-capture on the visible-desktop path re-triggers. |
+
+Review lane: normal task-end review after the retrospective. T10 lands
+an owner-observation script, prep records, and the owner-acceptance
+record; no schema / IR migration, runtime structural change, diagnostic
+branch, or new assistant GUI-render evidence package is planned. If a
+fail-observation fix crosses into those classes, the review lane is
+reclassified before merge.
+
+## T10 assistant prep — rebuild, rehearsal, and owner script (2026-07-06)
+
+Surface-freshness check: `git log --oneline 5b66321..HEAD -- wasamoc
+wasamo-runtime wasamo-ir examples bindings .github` is empty over the 16
+commits since the T7 capture commit — T8/T9 landed documentation only,
+so the binaries below embody exactly the surface T7 captured and the
+owner smoke needs no assistant re-capture baseline.
+
+Rebuild rehearsal (AGENTS.md build order, repo root):
+
+| Command | Result |
+|---|---|
+| `cargo build --release --workspace` | green; existing `wasamo` linkable-target warning only |
+| VS-bundled `cmake -S examples/gallery-c -B build/gallery-c` + `--build --config Release` | green; produced `build/gallery-c/Release/gallery-c.exe` |
+| `zig build -p ..\..\build\gallery-zig -Doptimize=ReleaseSafe` from `examples/gallery-zig` | green (in-sandbox this time; the T6 AccessDenied did not recur); produced `build/gallery-zig/bin/gallery-zig.exe` |
+
+Launch rehearsal (supporting no-early-crash signal only, per the T10
+gate selection — not render evidence): with `target\release` on `PATH`,
+each host was started, checked after 3 s, and stopped:
+
+| Host | alive | MainWindowHandle |
+|---|---|---|
+| `gallery-rust.exe` | yes | non-zero |
+| `gallery-c.exe` | yes | non-zero |
+| `gallery-zig.exe` | yes | non-zero |
+
+Owner observation script authored at
+`evidence/t10-owner-smoke-script.md`: environment rules
+(visible-desktop session per `docs/notes/human-visible-smoke.md`),
+build/launch commands as rehearsed above, the agreed state set as
+per-step observations with pass/fail criteria (default view; tab
+selection with live exclusion as the positive control; lightbox
+open/close subtree present→absent; narrow-resize reflow + scroll
+movement; window close without crash; C/Zig launch + default view), and
+the named M3 placeholder / M4 residual list so residuals are not
+recorded as fail observations. The script cites the plan T10 state set,
+the T2 G(1) / A1 table, and the T7 evidence README rather than
+restating the state-set definition (trap-#2 parallel-doc guard).
+
+Owner run and G(5) acceptance are pending; the end-gate entry lands
+after the owner records the result.
+
+## T10 end gate — owner G(5) acceptance and close artifacts (2026-07-06)
+
+Owner ran the human-visible smoke per
+`evidence/t10-owner-smoke-script.md` and recorded explicit acceptance:
+**"G(5) OK"** (2026-07-06). No fail observation was recorded, so the
+additive-fix container was not used and no fix landed on the task
+branch; nothing needed adding to the M3 placeholder / M4 residual list.
+
+**#2 structural side-effect enumeration**
+
+| Artifact changed | Side effect / disposition |
+|---|---|
+| `process/milestone-3/phase-8/implementation/plan.md` | T10 critical responsibility re-cut, gate-evidence form (owner acceptance in log.md, not assistant screenshots), and task checkboxes recorded. T11 / phase-end / milestone-close ownership unchanged. |
+| `process/milestone-3/phase-8/implementation/log.md` | T10 start gate, assistant prep, and this end gate recorded for reviewer audit. |
+| `evidence/t10-owner-smoke-script.md` | New owner-facing operational script. Script-vs-surface consistency: build/launch commands were rehearsed green before handoff, and the observation steps were verified against `examples/gallery/gallery.ui` source facts (three-tab exclusion handlers, inert `<` / `>` placeholders, `x` close handler, static status text). The script cites the plan T10 state set / T2 A1 table / T7 evidence README rather than restating the state-set definition (trap-#2 parallel-doc guard). |
+| No product surface change. | Compiler / runtime / `gallery.ui` / hosts / CI are untouched by T10; the smoked surface equals the T7-captured surface per the start-gate git check. |
+
+**#5 carry-forward**
+
+- **Constraint:** the G(5) acceptance is bound to the surface state that
+  has been unchanged since the T7 capture commit (`5b66321`). Any change
+  to `wasamoc/`, `wasamo-runtime/`, `wasamo-ir/`, `examples/`,
+  `bindings/`, or CI that lands after T10 and before the phase → main
+  merge invalidates the smoke and re-triggers an owner re-run.
+  **Evidence:** T10 start-gate surface-freshness check + the owner
+  acceptance above. **Re-trigger:** any such change on the phase branch
+  before phase close. **Placement:** carry-forward for T11 / phase-end.
+- **Constraint:** `t10-owner-smoke-script.md` is a surface-coupled
+  operational document of the same class as the capture scripts; future
+  reuse requires a surface-unchanged check or a script revision first.
+  **Evidence:** the script's step observations encode current
+  `gallery.ui` facts (labels, control placement, status text).
+  **Re-trigger:** any future owner smoke that reuses or adapts the
+  script. **Placement:** phase-end item 15 candidate.
+
+**#6 deterministic-failure disposition**
+
+No deterministic failure occurred during T10 prep or the owner run. The
+T6-class sandbox `AccessDenied` on `zig build` did not recur (the T10
+in-sandbox build was green on the first run); recorded as environment
+variance, not as a flake disposition.
+
+**#7 GUI positive-control (scoped) evidence**
+
+The gate evidence is the owner's live observation per the script's
+per-step positive controls — tab-exclusion highlight movement, lightbox
+subtree present → absent, narrow-resize reflow + scroll movement, window
+close without crash on the Rust host, plus C / Zig launch + default-view
+confirmation — and the explicit acceptance recorded above. The assistant
+launch rehearsal remains a supporting no-early-crash signal only; no
+assistant screenshot package was authored because the surface is
+unchanged since T7.
+
+Review lane: normal task-end review after the retrospective
+(unchanged from the start gate).
+
+## T10 pre-merge independent review (2026-07-06)
+
+Reviewer: independent subagent (`ac856a27369a8d53d`).
+
+Result: **no findings** (PASS on all seven checks).
+
+Review scope: commits `0c097a6..HEAD` (`933be8c`, `d787e28`, `c9354ce`)
+— the T10 gate records, owner smoke script, and retrospective.
+
+Reviewer confirmation:
+
+- Diff scope is exactly the four claimed doc files; no product-source,
+  test, or CI touch.
+- Start/close gates satisfy `implementation-gates.md`: trap selection
+  with reasons and re-trigger conditions recorded before the approach;
+  close artifacts present for #2 / #5 / #6 / #7-scoped, with the owner
+  "G(5) OK" acceptance as the gate evidence and the launch rehearsal
+  correctly demoted to a supporting signal.
+- Script-vs-surface consistency verified against
+  `examples/gallery/gallery.ui` (tab exclusion handlers, inert `<` /
+  `>`, `x` close handler, status text, 18 labels, scroll buttons) and
+  against the T6 host layout / `build.zig` defaults.
+- Surface-freshness claim verified: the path-scoped git range since the
+  T7 capture commit is empty and the 16-commit count is exact.
+- Responsibility boundaries respected: no touch of `docs/dsl_spec.md`,
+  `docs/architecture.md`, `docs/abi_spec.md`, or CHANGELOG; T11 /
+  phase-end ownership explicitly disclaimed.
+- Retrospective is complete (items 1–11, double-loop, merge gate) and
+  the plan T10 section is an accurate record.
+
+Reviewer observation (not a finding): the recorded post-commit
+verification ran at `d787e28` and the retrospective commit `c9354ce`
+post-dates it; since `c9354ce` is the retrospective itself and not a
+remediation commit, the T9 carry-forward re-run condition does not
+fire.
