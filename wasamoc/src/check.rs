@@ -11,6 +11,7 @@ const KNOWN_WIDGET_TYPES: &[&str] = &[
     "HStack",
     "Text",
     "Button",
+    "ToggleButton",
     "Rectangle",
     "Box",
     "WrapPanel",
@@ -405,6 +406,9 @@ fn widget_prop_type(widget_type: &str, prop_name: &str) -> Option<TypeName> {
         ("Text", "text") => Some(TypeName::Str),
         ("Button", "text") => Some(TypeName::Str),
         ("Button", "enabled") => Some(TypeName::Bool),
+        ("ToggleButton", "text") => Some(TypeName::Str),
+        ("ToggleButton", "enabled") => Some(TypeName::Bool),
+        ("ToggleButton", "checked") => Some(TypeName::Bool),
         // `Box.aspect: Ratio` and `Box.fill: Color` are Box-internal value
         // types (DD-M3-P2-002 / DD-M3-P2-003 Option A); they are not
         // `TypeName` entries and bypass the type-compatibility table.
@@ -646,6 +650,40 @@ fn check_scrollview_unknown_attr(
         format!(
             "`{}` is not a recognised ScrollView attribute in M3-Phase 4; only `offset-y` is in scope (dsl_spec §4.11)",
             prop_name
+        ),
+    ));
+}
+
+fn check_togglebutton_property_name(
+    prop_name: &str,
+    span: &Span,
+    filename: &str,
+    diags: &mut Vec<Diagnostic>,
+) {
+    if !matches!(prop_name, "text" | "style" | "enabled" | "checked") {
+        diags.push(error(
+            filename,
+            span,
+            format!(
+                "unknown ToggleButton attribute `{}`; valid attributes: text, style, enabled, checked (dsl_spec §4.17)",
+                prop_name
+            ),
+        ));
+    }
+}
+
+fn check_checked_attr_admission(
+    widget: &str,
+    span: &Span,
+    filename: &str,
+    diags: &mut Vec<Diagnostic>,
+) {
+    diags.push(error(
+        filename,
+        span,
+        format!(
+            "`checked` is only valid on ToggleButton, not `{}` (dsl_spec §4.17)",
+            widget
         ),
     ));
 }
@@ -2047,6 +2085,36 @@ fn check_members_inner(
                     && (name.as_str() == "aspect" || name.as_str() == "fill")
                 {
                     check_box_const_only_bind(name, value, span, filename, diags);
+                } else if name == "checked" && enclosing_widget != Some("ToggleButton") {
+                    // Component-level `checked` is routed through
+                    // `check_host_property_bind` above; this helper is only
+                    // for widget-body admission.
+                    if let Some(widget) = enclosing_widget {
+                        check_checked_attr_admission(widget, span, filename, diags);
+                    }
+                } else if enclosing_widget == Some("ToggleButton") {
+                    check_togglebutton_property_name(name, span, filename, diags);
+                    check_expr_type_in_loop_context(
+                        value,
+                        span,
+                        filename,
+                        ns,
+                        loop_ctx,
+                        inside_for_template,
+                        all_loop_binders,
+                        diags,
+                    );
+                    check_property_bind_target_in_context(
+                        enclosing_widget,
+                        name,
+                        value,
+                        span,
+                        filename,
+                        ns,
+                        loop_ctx,
+                        inside_for_template,
+                        diags,
+                    );
                 } else if WRAPPANEL_INT_ATTRS.contains(&name.as_str()) {
                     // WrapPanel's three attributes (DD-M3-P3-003 /
                     // DD-M3-P3-004) are constant-only `i32` per dsl_spec
@@ -3721,6 +3789,170 @@ mod tests {
         let ws = warnings("component C inherits W { UnknownWidget {} }");
         assert_eq!(ws.len(), 1);
         assert!(ws[0].contains("unknown widget type"));
+    }
+
+    #[test]
+    fn togglebutton_known_widget_and_attrs_accepted_without_warning() {
+        let src = r#"component C inherits W {
+            state on: bool = true
+            ToggleButton {
+                text: "Photos"
+                style: accent
+                enabled: true
+                checked: on
+                clicked => { on = false; }
+            }
+        }"#;
+        let result = check_src(src);
+        assert!(!result.has_errors(), "{:?}", result.diagnostics);
+        assert!(
+            warnings(src).is_empty(),
+            "ToggleButton must be known, warnings: {:?}",
+            warnings(src)
+        );
+    }
+
+    #[test]
+    fn togglebutton_checked_absent_accepted() {
+        let result = check_src(r#"component C inherits W { ToggleButton { text: "Albums" } }"#);
+        assert!(!result.has_errors(), "{:?}", result.diagnostics);
+    }
+
+    #[test]
+    fn component_level_checked_routes_to_host_attr_reject() {
+        let errs = errors("component C inherits W { checked: true ToggleButton {} }");
+        assert_eq!(errs.len(), 1, "{:?}", errs);
+        assert!(
+            errs[0].contains("unknown host attribute `checked`"),
+            "{:?}",
+            errs
+        );
+    }
+
+    #[test]
+    fn checked_on_button_rejected() {
+        let errs = errors("component C inherits W { Button { checked: true } }");
+        assert_eq!(errs.len(), 1, "{:?}", errs);
+        assert!(
+            errs[0].contains("`checked` is only valid on ToggleButton")
+                && errs[0].contains("not `Button`"),
+            "{:?}",
+            errs
+        );
+    }
+
+    #[test]
+    fn checked_on_text_rejected() {
+        let errs = errors("component C inherits W { Text { checked: true } }");
+        assert_eq!(errs.len(), 1, "{:?}", errs);
+        assert!(
+            errs[0].contains("`checked` is only valid on ToggleButton")
+                && errs[0].contains("not `Text`"),
+            "{:?}",
+            errs
+        );
+    }
+
+    #[test]
+    fn checked_on_other_widget_rejected() {
+        let errs = errors("component C inherits W { Box { checked: true } }");
+        assert_eq!(errs.len(), 1, "{:?}", errs);
+        assert!(
+            errs[0].contains("`checked` is only valid on ToggleButton")
+                && errs[0].contains("not `Box`"),
+            "{:?}",
+            errs
+        );
+    }
+
+    #[test]
+    fn checked_on_scrollview_rejected_by_container_attr_gate() {
+        let errs = errors("component C inherits W { ScrollView { checked: true Text {} } }");
+        assert_eq!(errs.len(), 1, "{:?}", errs);
+        assert!(
+            errs[0].contains("not a recognised ScrollView attribute"),
+            "{:?}",
+            errs
+        );
+    }
+
+    #[test]
+    fn checked_on_zstack_rejected_by_container_attr_gate() {
+        let errs = errors("component C inherits W { ZStack { checked: true Text {} } }");
+        assert_eq!(errs.len(), 1, "{:?}", errs);
+        assert!(
+            errs[0].contains("unknown ZStack attribute `checked`"),
+            "{:?}",
+            errs
+        );
+    }
+
+    #[test]
+    fn togglebutton_checked_non_bool_rhs_rejected() {
+        let errs = errors("component C inherits W { ToggleButton { checked: 1 } }");
+        assert_eq!(errs.len(), 1, "{:?}", errs);
+        assert!(
+            errs[0].contains("type mismatch in binding `ToggleButton.checked`")
+                && errs[0].contains("target is `bool`")
+                && errs[0].contains("source is `i32`"),
+            "{:?}",
+            errs
+        );
+    }
+
+    #[test]
+    fn togglebutton_checked_i32_state_rejected() {
+        let errs = errors(
+            "component C inherits W { state index: i32 = 0 ToggleButton { checked: index } }",
+        );
+        assert_eq!(errs.len(), 1, "{:?}", errs);
+        assert!(
+            errs[0].contains("type mismatch in binding `ToggleButton.checked`")
+                && errs[0].contains("target is `bool`")
+                && errs[0].contains("source is `i32`"),
+            "{:?}",
+            errs
+        );
+    }
+
+    #[test]
+    fn togglebutton_unknown_attr_rejected() {
+        let errs = errors("component C inherits W { ToggleButton { selected: true } }");
+        assert_eq!(errs.len(), 1, "{:?}", errs);
+        assert!(
+            errs[0].contains("unknown ToggleButton attribute `selected`"),
+            "{:?}",
+            errs
+        );
+    }
+
+    #[test]
+    fn togglebutton_alpha_tab_band_shape_accepted() {
+        let src = r#"component C inherits W {
+            state all: bool = true
+            state albums: bool = false
+            state favorites: bool = false
+            HStack {
+                ToggleButton {
+                    text: "All"
+                    checked: all
+                    clicked => { all = true; albums = false; favorites = false; }
+                }
+                ToggleButton {
+                    text: "Albums"
+                    checked: albums
+                    clicked => { all = false; albums = true; favorites = false; }
+                }
+                ToggleButton {
+                    text: "Favorites"
+                    checked: favorites
+                    clicked => { all = false; albums = false; favorites = true; }
+                }
+            }
+        }"#;
+        let result = check_src(src);
+        assert!(!result.has_errors(), "{:?}", result.diagnostics);
+        assert!(warnings(src).is_empty(), "{:?}", warnings(src));
     }
 
     // --- T3: Box accept shapes (dsl_spec §4.9) ---

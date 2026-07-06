@@ -1,13 +1,22 @@
 # Wasamo DSL Specification
 
-**Document version:** 1.11
-**Last updated:** 2026-06-24
-**Status:** M3-Phase 2 closed (implementation-synced); M3-Phase 3
+**Document version:** 1.15
+**Last updated:** 2026-07-06
+**Status:** `public-draft` (M3) — this document is the first public
+draft of the Wasamo DSL specification, promoted at M3-Phase 8 close;
+the promotion record and the M3 decision links live in the
+[public-draft change history](#public-draft-change-history). A public
+draft is **not** a backward-compatibility guarantee (§4.18). Phase
+state: M3-Phase 2 closed (implementation-synced); M3-Phase 3
 closed (implementation-synced); M3-Phase 4 closed
 (implementation-synced); M3-Phase 5 closed (implementation-synced);
 M3-Phase 6 closed (implementation-synced); M3-Phase 7 closed
 (implementation-synced); M3-Phase 7b closed (implementation-synced —
-`slot.*` placement surface, §4.16).
+`slot.*` placement surface, §4.16); M3-Phase 8 closed
+(implementation-synced — the `ToggleButton` / `checked` selected-state
+surface, §4.17, and the public-draft future-surface notes, §4.18,
+match the landed implementation; external-reader smoke verified in
+M3-Phase 8 T8).
 Covers the M2 `.ui` surface, the `state` surface keyword
 retroactively, the M3-Phase 1 `bool` scalar binding additions, the
 M3-Phase 2 Box layout primitive (with `aspect` / `fill` literal
@@ -29,7 +38,10 @@ rendering model — with collection state types `i32[]` / `string[]` /
 author-named loop-local binders; see §4.15), the M3-Phase 7b
 parent-interpreted placement surface (the shared `slot.*` namespace
 unifying Grid and ZStack child placement, with Grid retaining a `Cell`
-grouped form; see §4.16), and `;wasamo-ir v0`.
+grouped form; see §4.16), the M3-Phase 8 `ToggleButton` selected /
+toggle-state surface (a controlled one-way `checked` boolean attribute;
+see §4.17) with its public-draft future-surface notes (§4.18), and
+`;wasamo-ir v0`.
 
 ---
 
@@ -467,6 +479,7 @@ Declares a child widget. Widget type names are PascalCase identifiers.
 | `ScrollView` | Vertical scroll viewport with exactly one content child (M3-Phase 4; see §4.11) |
 | `Grid`      | 2D layout container with declared track lists per axis; children carry placement via a `Cell` wrapper or direct `slot.*` keys (M3-Phase 5; placement surface M3-Phase 7b; see §4.12 / §4.16) |
 | `ZStack`    | Overlay layout container; children overlap and paint back-to-front in document order; per-child overlay alignment via `slot.*` (M3-Phase 6; placement surface M3-Phase 7b; see §4.13 / §4.16) |
+| `ToggleButton` | Button carrying a persistent selected / `checked` boolean state (M3-Phase 8; see §4.17) |
 
 `Cell` is **not** a free-standing widget registry entry. It is a
 Grid-specific child wrapper construct (one content child per `Cell`,
@@ -625,6 +638,8 @@ dispatched through a per-type binding writer at the runtime loader.
 | Widget | Property  | Type   | Default | Notes |
 |--------|-----------|--------|---------|-------|
 | `Button` | `enabled` | `bool` | `true`  | M3-Phase 1; see contract below |
+| `ToggleButton` | `checked` | `bool` | `false` | M3-Phase 8; one-way controlled — see §4.17 |
+| `ToggleButton` | `enabled` | `bool` | `true`  | M3-Phase 8; same contract as `Button.enabled` above |
 
 **`Button.enabled` Phase 1 contract.** When bound to `false`:
 
@@ -651,7 +666,7 @@ superseded by it.
 
 `Box` is a layout container that admits **zero or one child**.
 Multi-child overlap is ZStack's responsibility
-(Phase 6, not yet shipped); a Box declared with two or more children
+(M3-Phase 6); a Box declared with two or more children
 is rejected at compile time by `wasamoc check` **and** independently
 rejected by the runtime IR loader (`wasamo-runtime/src/ir_loader.rs`)
 at IR-load time. The two rejection gates are required because
@@ -2438,8 +2453,8 @@ keywords: a state or widget named `append` or `drop-last` still parses.
 only (the collection assignment is an `assign_stmt` alternative);
 member positions (state declarations, property settings) carry none.
 
-The Phase 7 gallery slice uses all four authored mutation forms in the
-visible `examples/gallery/gallery.ui` thumbnail set:
+The Phase 7 verification slice used all four authored mutation forms in
+the gallery thumbnail set:
 
 ```
 state labels: string[] = ["S01", "S02", "S03", "S04", "S05", "S06"]
@@ -2481,7 +2496,16 @@ This example deliberately varies only the scalar label (plus the
 loop-local index). Varying both label and colour per item requires
 deferred surfaces — record-like item data / `TypedValue`,
 loop-external indexed collection reads, and a bindable `Box.fill`
-surface — so the Phase 7 gallery keeps `fill` static.
+surface — so the Phase 7 proof keeps `fill` static.
+
+The final M3 Photo Gallery target app still uses a collection state and
+`for label, index in labels` to generate thumbnails, but it does not keep
+the Phase 7 Add / Remove / Clear / Reset controls as end-user UI. Those
+controls were verification scaffolding for the collection-assignment
+surface; their coverage remains this section's authored mutation example
+and the Phase 7 implementation evidence, while the integrated Gallery
+keeps the target-app surface focused on generated thumbnails, scrolling,
+selection, and lightbox state.
 
 **Equal-value writes propagate nothing.** A collection assignment whose
 new value equals the current value performs no dirty propagation — a
@@ -2824,6 +2848,178 @@ criterion. ZStack has no wrapper form; its placement is always direct
 - **Placement key/value spelling revision** (e.g. `h-align` → `hAlign`)
   — existing spelling is inherited unchanged.
 
+### 4.17 `ToggleButton` and selected / toggle state (M3-Phase 8)
+
+**Phase status:** M3-Phase 8 closed; implementation-synced.
+
+`ToggleButton` is a button that carries a persistent **selected /
+`checked`** state. Phase 1 already proved that a boolean binding can drive a
+typed widget attribute through `Button.enabled` (§4.8); `ToggleButton.checked`
+is the first persistent selected-state attribute. Unlike `enabled`, which
+gates interaction and disabled visuals, `checked` keeps an author-controlled
+visual selection state alive across frames. An ordinary `Button` (§4.4) keeps
+a single momentary / action meaning and carries **no** selected state; the
+persistent toggle state lives only on `ToggleButton`, so a reader can tell a
+stateful toggle from an action button by the widget type alone.
+
+`ToggleButton` carries the **same author-facing attributes `Button`
+provides** — `text`, `style`, and `enabled` (§4.8) — plus a `clicked`
+handler, and it reuses Button's leaf measure / arrange. It is a new widget
+*node*, **not** a new layout primitive, and it adds exactly one attribute of
+its own, `checked`.
+
+#### The `checked` attribute
+
+| Widget | Property | Type | Default | Bindable |
+|--------|----------|------|---------|----------|
+| `ToggleButton` | `checked` | `bool` | `false` | yes — one-way boolean binding (§4.3) |
+
+`checked` is bound exactly as any other bool property (§4.3): a `BOOL_LIT`
+or an identifier resolving to a `bool`-typed `state`. Binding `checked` to a
+`state` makes the selected visual **reactive** — when the state changes, the
+visual follows.
+
+#### Controlled, one-way
+
+The toggle is **controlled**: a `ToggleButton` does **not** flip its own
+`checked` on click. The author owns the transition — a `clicked` handler
+writes the driving `state`, exactly as any other bool state is written
+(§4.6). There is no widget-owned selected state and no write-back from the
+widget into the bound state this milestone. The click → value → state write
+is always author code.
+
+```
+component TabBar inherits Window {
+    state on_photos: bool = true
+    state on_albums: bool = false
+
+    HStack {
+        ToggleButton {
+            text: "Photos"
+            checked: on_photos
+            clicked => { on_photos = true; on_albums = false; }
+        }
+        ToggleButton {
+            text: "Albums"
+            checked: on_albums
+            clicked => { on_photos = false; on_albums = true; }
+        }
+    }
+}
+```
+
+#### Selected visual
+
+The selected state is shown as a **background-colour change only** on the
+selected button; there is no border or other cue this milestone. The
+selected visual is **minimal and provisional** — the full theme / styling
+surface (named palettes, borders, focus rings) is a later-milestone (M5)
+concern and may absorb or override the M3 selected look. Selected visuals
+are not a stability commitment (§4.18).
+
+#### `checked` admission — accepted on `ToggleButton` only
+
+`checked` is a `ToggleButton` attribute. It is **rejected on any other
+widget**, mirroring the placement-key admission model (§4.16):
+
+| Example | Disposition | Stage |
+|---|---|---|
+| `ToggleButton { checked: is_on }` (`is_on` a bool state) | accepted | — |
+| `ToggleButton { checked: true }` | accepted | — |
+| `Button { checked: … }` | rejected — `checked` is not a `Button` attribute | `wasamoc check` |
+| `Text { checked: … }` | rejected — `checked` is not a `Text` attribute | `wasamoc check` |
+| `ToggleButton { checked: 1 }` (i32 RHS into a `bool` target) | rejected — type mismatch (§4.3) | `wasamoc check` |
+
+Each row is a named diagnostic with a firing test. The surviving invariant
+(`checked` on a non-`ToggleButton` node) is re-checked by the runtime IR
+loader — the two-gate defence of §4.9 / §4.16, because `wasamo_load_ui`'s
+memory-IR entry point does not pass through `wasamoc`.
+
+#### Exactly-one-selected exclusion is author-composed (M3-era pattern)
+
+There is **no built-in group / exclusive-selection construct** in M3. A tab
+band where *exactly one* button is selected is expressed by composing **one
+boolean state per option** and assigning them together in each handler —
+each `clicked` sets its own state `true` and the others `false` (the example
+above). This is an **M3-era authoring pattern**, not a canonical long-term
+language design: it grows as O(N²) hand-written assignments in the number of
+options. A future equality operator could allow a single-discriminant form
+(one state, `checked: tab == value`); this milestone provides none, and the
+per-option assignment pattern must **not** be read as a reserved or
+long-term idiom (§4.18).
+
+#### Future directions (not reserved)
+
+Richer selection models are known and deliberately left un-designed here.
+None is reserved syntax or a stability commitment (§4.18); each is a
+recorded future direction:
+
+- **Equality / single-discriminant selection** — a discriminant state with
+  `checked: tab == value`, once an equality operator enters the expression
+  grammar (§4.6 admits no operators today).
+- **Group / exclusive-selection widgets** — a `RadioGroup` / `TabBar` /
+  segmented parent that manages exclusion so the author writes no per-option
+  assignment.
+- **Two-way binding** — a `checked` bound two-way so a click writes the
+  state with no handler; M3's binding is one-way (§4.3).
+- **Widget-owned (self-toggling) state** — a `ToggleButton` that flips its
+  own `checked`; M3 state is explicit and lifted, not owned inside a widget.
+- **Generic toggle appearance** — a single control whose appearance
+  (button / switch / checkbox) is selected by a property.
+
+### 4.18 Public-draft future surface and provisional notes (M3-Phase 8)
+
+This section maps surface that M3 either keeps **provisional** before 1.0 or
+names as a **future direction that is deliberately not yet designed**. It
+exists so a reader treats the current shape honestly: the items below are
+**not reserved syntax** and **not stability commitments**. Nothing here
+promises a spelling, an IR shape, or an ABI; each names a known open
+question. Process triggers for reopening these questions are outside this
+public draft. The M3 surface in §4.1–§4.17 is what M3 ships; this section is
+the map of what is intentionally left open.
+
+A public draft of this spec is **not** a backward-compatibility guarantee.
+Public-compatibility commitments are a later-milestone (M6) concern;
+documenting a current M3 shape does not freeze it.
+
+#### Author-controllable sizing (explicit `width` / `height`)
+
+M3 sizing is **kind-default**: each layout primitive sizes by its own rule
+(Fill / Shrink / aspect-derived / track-allocated, §4.9–§4.16). Explicit,
+author-controllable sizing (`width` / `height`, or an equivalent) is a known
+**pre-1.0 unresolved future surface**. Its exact syntax, IR, and ABI shape
+are **not reserved** — whether it is grammar-only, a modifier, layout-parent
+data, runtime state, a host-construction API, or some combination is left
+open for the milestone that designs it. The current kind-default behaviour
+is **not** presented as final. The `aspect`-in-a-Grid-cell arrange
+interaction (§4.9 / §4.12) folds into this same open question, not a
+separate future feature.
+
+#### Grid two-form placement (`Cell` vs direct `slot.*`)
+
+Grid child placement may be authored two ways — a `Cell` wrapper or direct
+`slot.*` keys — and both are valid M3 surface (§4.16). Which form, if any,
+is canonical is a **pre-1.0 decision carried forward**, not settled by this
+draft; the spec declares no normative canonical form.
+
+#### Default-alignment asymmetry (Grid `stretch` / ZStack `center`)
+
+The differing default alignments are **container-owned semantics**, not a
+global rule (§4.16): a Grid cell fills its allocated track (`stretch`); a
+ZStack overlay has no track-fill contract and sits at its natural size
+(`center`). The asymmetry is judged **explicable** and kept. A future
+layout-behavior phase could unify defaults; that is not reserved here.
+
+#### Placement spelling and bindability
+
+The inherited kebab-case placement spellings (`slot.h-align` /
+`slot.v-align` / `slot.row-span` / `slot.column-span`, §4.16) are kept — an
+**affirmative keep** for the public draft, not a silent carry. Placement is
+**constant per instance**: a binding-expression RHS is rejected (§4.16), and
+this draft does not promise that placement stays permanently constant or
+permanently non-bindable — a bindable-placement surface, if ever designed,
+is a separate future decision.
+
 ---
 
 ## 5. AST Structure (M1)
@@ -3131,7 +3327,10 @@ placement_entry ::= IDENT "=" ( INT | IDENT )   ; constant only; key in the
                                                 ; kind's admitted set (§4.16)
 ```
 
-`IDENT` is the widget type (e.g. `Window`, `VStack`, `Text`, `Button`).
+`IDENT` is the widget type (e.g. `Window`, `VStack`, `Text`, `Button`,
+`ToggleButton`). A `ToggleButton` (§4.17) is an ordinary `node` whose
+`checked` boolean rides the existing bool binding forms (§8.6 / §8.7); it
+introduces no new IR grammar.
 Children appear as nested `node` blocks in document order; a child that
 carries parent-interpreted placement (a Grid or ZStack child, §4.16)
 appears as a `child { placement … node … }` record instead. A
@@ -3712,6 +3911,33 @@ not a runtime union. The genuine `TypedValue` driver — structured item
 fields (`item.field`, record-like values) — is out of the Phase 7
 surface.
 
+## Public draft change history
+
+This section is the public-draft promotion record — the public-draft
+anchor — distinct from the per-edit revision-history table below.
+
+- **2026-07-06 — promoted to `public-draft` at M3 close (M3-Phase 8
+  Moment 2).** The M3 surface (§4.1–§4.18) matches the landed
+  implementation, and the M3-Phase 8 external-reader smoke recorded a
+  "yes" verdict for every M3 surface (Grid, WrapPanel, ZStack,
+  ScrollView, Box `aspect` / `fill`, conditional rendering, iteration
+  and collections, `bool` scalar binding, `ToggleButton` / `checked`,
+  parent-interpreted placement, and the integrated Gallery path): a
+  reader with only this document can reproduce each surface against a
+  hypothetical host that already provides the C ABI. A public draft is
+  **not** a backward-compatibility guarantee; public-compatibility
+  commitments are a later-milestone concern (§4.18). Deciding records
+  (per M3 phase):
+  [Phase 1 — `bool` scalar binding](../process/milestone-3/phase-1/decisions/preamble.md);
+  [Phase 2 — Box](../process/milestone-3/phase-2/decisions/preamble.md);
+  [Phase 3 — WrapPanel](../process/milestone-3/phase-3/decisions/preamble.md);
+  [Phase 4 — ScrollView](../process/milestone-3/phase-4/decisions/preamble.md);
+  [Phase 5 — Grid](../process/milestone-3/phase-5/decisions/preamble.md);
+  [Phase 6 — ZStack + conditional rendering](../process/milestone-3/phase-6/decisions/preamble.md);
+  [Phase 7 — iteration](../process/milestone-3/phase-7/decisions/preamble.md);
+  [Phase 7b — parent-interpreted placement](../process/milestone-3/phase-7b/decisions/preamble.md);
+  [Phase 8 — selected state + Gallery + public draft](../process/milestone-3/phase-8/decisions/preamble.md).
+
 ## Revision history
 
 | Version | Date       | Notes                                                                             |
@@ -3737,3 +3963,7 @@ surface.
 | 1.9     | 2026-06-18 | M3-Phase 7 implementation sync (Moment 2): flipped Phase 7 status markers to closed / implementation-synced; confirmed the landed textual-IR spellings (`for`, `list-prop-read`, `item-read`, `index-read`, `list-append`, `list-drop-last`, list literals) and unified `HandlerExpr` mapping; added the gallery slice example showing all four authored collection mutation forms (`append`, `drop-last`, empty clear, static reset) and recorded why per-item colour richness remains deferred. No ABI change; `abi_spec.md` remains untouched. |
 | 1.10    | 2026-06-21 | M3-Phase 7b design draft (Moment 1): added §4.16 parent-interpreted placement — the shared `slot.*` namespace for Grid and ZStack child placement. ZStack per-child alignment moves from bare `h-align` / `v-align` to `slot.h-align` / `slot.v-align` (§4.13); Grid gains a direct `slot.*` form alongside the retained `Cell` grouped form (§4.12), one form per child with two distinct mixing / non-admitting-parent rejects, no normative canonical form (provisional `Cell`-default examples convention). Supporting: §3 `placement_bind` production, §4.4 registry note, §4.15 `for`-placement (placement on the body root child), §8.11 validation rows (placement admission / constant-RHS). Placement is constant per instance; a binding-expression RHS is rejected. No new `IrType` / `IrLiteral` / `PropertyValue` or C ABI change; `abi_spec.md` untouched. The loaded-IR placement representation and storage model are normative in `architecture.md` (DD-002 / Moment 1, landing in the sibling architecture commit), so the textual-IR placement emit form (§8.5) re-syncs there. Pending implementation re-sync at Phase 7b close. |
 | 1.11    | 2026-06-24 | M3-Phase 7b implementation sync (Moment 2): flipped §4.12 / §4.13 / §4.16 status markers to closed / implementation-synced. Pinned the §5 AST to the landed parser — `slot.<key>` rides the existing `PropertyBind` variant (name canonicalized **with** the `slot.` prefix retained, e.g. `slot.h-align`); there is **no** separate `PlacementBind` AST variant. Pinned the §8 loaded-IR examples to the landed IR member spelling `Widget(IrChildSlot { node, slot_data })` (tuple variant wrapping `IrChildSlot`, not the struct-variant draft sketch). The §3 `placement_bind` author-surface production and the §8.5 `child { placement <kind> { … } node … }` textual-IR skeleton matched the landed `wasamoc` emit / loader and were confirmed unchanged. No ABI change; `abi_spec.md` remains untouched. |
+| 1.12    | 2026-07-02 | M3-Phase 8 design draft (Moment 1): added §4.17 `ToggleButton` selected / toggle-state surface (controlled one-way `checked` bool attribute; background-colour-only minimal / provisional visual; `checked` admitted on `ToggleButton` only with a two-gate reject; exactly-one-selected exclusion as an author-composed M3-era pattern; five future selection directions kept as non-reserved future notes) and §4.18 public-draft future-surface notes (author-controllable sizing as a pre-1.0 unresolved surface whose shape is not reserved — no schedule published; Grid two-form placement provisional; default-alignment asymmetry as container-owned / explicable; placement-spelling affirmative keep; placement bindability). §4.4 registry gains the `ToggleButton` row and §4.8 property catalog gains the `ToggleButton` `checked` and shared `enabled` rows (`enabled` carries the same Phase-1 disabled contract as `Button.enabled`); §8.5 notes `ToggleButton` as an ordinary node reusing the bool binding forms. No new `IrType` / `IrLiteral` / `PropertyValue` or token; `abi_spec.md` untouched. The `status: public-draft` marker, the public-draft promotion change-history entry (distinct from this revision-history table), and the external-reader smoke are deferred to Phase 8 close (Moment 2). Pending implementation re-sync at Phase 8 close. |
+| 1.13    | 2026-07-05 | M3-Phase 8 public-draft readiness editorial pass: removed stale pre-Phase-6 wording from §4.9 and clarified that the Phase 7 collection mutation Buttons were verification scaffolding, while the final integrated Gallery keeps generated thumbnails without retaining Add / Remove / Clear / Reset as end-user UI. The public-draft marker and promotion change-history entry remain deferred to the Phase 8 Moment 2 sync. |
+| 1.14    | 2026-07-06 | M3-Phase 8 T9 G(4) review remediation: normalised the Phase 8 verification-status wording after T8 external-reader smoke, corrected §4.17 so `ToggleButton.checked` is framed as the first persistent selected-state bool attribute rather than the first bool-driven widget attribute, and kept public-draft reopen triggers out of §4.18 prose. No public-draft marker, promotion change-history entry, or ABI change. |
+| 1.15    | 2026-07-06 | M3-Phase 8 implementation sync (Moment 2): flipped the top Status block and the §4.17 phase-status marker to closed / implementation-synced, promoted the document to `public-draft`, and added the public-draft change-history anchor (promotion record + M3 decision links + T8 external-reader smoke result). No body-prose semantic change (divergence corrections were folded in 1.13 / 1.14); no new `IrType` / `IrLiteral` / `PropertyValue` or token; `abi_spec.md` untouched. |

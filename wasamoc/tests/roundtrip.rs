@@ -23,14 +23,17 @@ fn bool_demo_ui() -> PathBuf {
 
 /// Run `wasamoc build` on a .ui fixture and return the emitted IR text.
 fn build_ui(path: PathBuf) -> String {
-    use wasamoc::{check, emit, lexer, lower, parser};
-
     let src = std::fs::read_to_string(&path).expect(".ui fixture not found");
     let path_str = path.to_string_lossy().to_string();
+    build_src(&src, &path_str)
+}
 
-    let tokens = lexer::tokenize(&src, &path_str).expect("lex failed");
-    let ast = parser::parse(&tokens, &path_str).expect("parse failed");
-    let result = check::check(&ast, &path_str);
+fn build_src(src: &str, path: &str) -> String {
+    use wasamoc::{check, emit, lexer, lower, parser};
+
+    let tokens = lexer::tokenize(src, path).expect("lex failed");
+    let ast = parser::parse(&tokens, path).expect("parse failed");
+    let result = check::check(&ast, path);
     assert!(
         !result.has_errors(),
         "check errors: {:?}",
@@ -129,6 +132,49 @@ fn bool_demo_ui_contains_bool_binding_and_handler() {
     assert!(
         ir.contains("on clicked {") && ir.contains("(assign ready false)"),
         "missing clicked handler bool assignment, got:\n{}",
+        ir
+    );
+}
+
+#[test]
+fn togglebutton_surface_emits_literal_and_binding_forms() {
+    let ir = build_src(
+        r#"component ToggleDemo inherits Window {
+            state selected: bool = true
+            HStack {
+                ToggleButton {
+                    text: "Literal"
+                    checked: false
+                }
+                ToggleButton {
+                    text: "Binding"
+                    style: accent
+                    enabled: true
+                    checked: selected
+                    clicked => { selected = false; }
+                }
+            }
+        }"#,
+        "<togglebutton-roundtrip>",
+    );
+    assert!(
+        ir.contains("node ToggleButton {"),
+        "missing ToggleButton node, got:\n{}",
+        ir
+    );
+    assert!(
+        ir.contains("prop checked = false"),
+        "missing literal checked prop, got:\n{}",
+        ir
+    );
+    assert!(
+        ir.contains("bind checked = (bool-prop-read selected)"),
+        "missing checked bool binding, got:\n{}",
+        ir
+    );
+    assert!(
+        ir.contains("prop style = accent") && ir.contains("prop enabled = true"),
+        "missing carried Button attrs, got:\n{}",
         ir
     );
 }

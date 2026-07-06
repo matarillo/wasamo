@@ -74,6 +74,11 @@ jobs:
           cmake -S examples/counter-c -B build/counter-c
           cmake --build build/counter-c --config Release
 
+      - name: gallery-c (CMake, Release)
+        run: |
+          cmake -S examples/gallery-c -B build/gallery-c
+          cmake --build build/gallery-c --config Release
+
       - name: counter-rust (cargo, release)
         run: cargo build --release -p counter-rust
 
@@ -81,5 +86,12 @@ jobs:
         run: zig build -p . "-Dwasamo-lib=../../target/release/wasamo.dll.lib" "-Dwasamo-zig=../../bindings/zig/wasamo.zig" "-Doptimize=ReleaseSafe"
         working-directory: examples/counter-zig
 
+      - name: gallery-zig (Zig, ReleaseSafe)
+        run: zig build -p . "-Dwasamo-lib=../../target/release/wasamo.dll.lib" "-Dwasamo-zig=../../bindings/zig/wasamo.zig" "-Doptimize=ReleaseSafe"
+        working-directory: examples/gallery-zig
+
       - name: wasamoc check counter.ui
         run: cargo run --release -p wasamoc -- check examples/counter/counter.ui
+
+      - name: wasamoc check gallery.ui
+        run: cargo run --release -p wasamoc -- check examples/gallery/gallery.ui

@@ -30,7 +30,7 @@ use crate::text::{TextRenderer, TypographyStyle};
 use crate::widget::{
     widget_write_property, widget_write_property_bool, ButtonStyle, WidgetNode,
     PROP_BUTTON_ENABLED, PROP_BUTTON_LABEL, PROP_BUTTON_STYLE, PROP_SCROLLVIEW_OFFSET_Y,
-    PROP_TEXT_CONTENT, PROP_TEXT_STYLE,
+    PROP_TEXT_CONTENT, PROP_TEXT_STYLE, PROP_TOGGLEBUTTON_CHECKED,
 };
 
 use windows::UI::Composition::Compositor;
@@ -278,7 +278,8 @@ fn validate(comp: &IrComponent) -> Result<(), IrLoadError> {
     // may carry `h-align` / `v-align` placement annotations.
     validate_phase6_zstack_node_invariants(&comp.root, ParentKind::Root)?;
     validate_phase6_control_flow_invariants(&comp.root)?;
-    validate_phase7_iteration_invariants(&comp.root, false)
+    validate_phase7_iteration_invariants(&comp.root, false)?;
+    validate_phase8_togglebutton_node_invariants(&comp.root, &declared, None)
 }
 
 fn validate_state_default(state: &IrState) -> Result<(), IrLoadError> {
@@ -330,6 +331,199 @@ fn scalar_type_name(ty: &IrType) -> &'static str {
         IrType::I32 => "i32",
         IrType::Str => "string",
         IrType::Bool => "bool",
+    }
+}
+
+fn validate_phase8_togglebutton_node_invariants(
+    node: &IrNode,
+    declared: &std::collections::HashMap<&str, IrStateType>,
+    loop_scope: Option<LoopReadScope<'_>>,
+) -> Result<(), IrLoadError> {
+    if node.widget_type == "ToggleButton" {
+        for prop in &node.props {
+            match prop.name.as_str() {
+                "text" => validate_literal_type(&prop.value, IrType::Str, "ToggleButton.text")?,
+                "style" => {
+                    if !matches!(prop.value, IrLiteral::Ident(_)) {
+                        return Err(IrLoadError::Validate(
+                            "ToggleButton.style must be a keyword identifier".into(),
+                        ));
+                    }
+                }
+                "enabled" => {
+                    validate_literal_type(&prop.value, IrType::Bool, "ToggleButton.enabled")?
+                }
+                "checked" => {
+                    validate_literal_type(&prop.value, IrType::Bool, "ToggleButton.checked")?
+                }
+                other => {
+                    return Err(IrLoadError::Validate(format!(
+                        "unknown ToggleButton attribute `{other}`; valid attributes: text, style, enabled, checked"
+                    )));
+                }
+            }
+        }
+        for binding in &node.bindings {
+            if binding.prop_name == "style" {
+                return Err(IrLoadError::Validate(
+                    "ToggleButton.style is not bindable in M3-Phase 8".into(),
+                ));
+            }
+            let Some((_, target_ty)) = resolve_prop_key("ToggleButton", &binding.prop_name) else {
+                return Err(IrLoadError::Validate(format!(
+                    "unknown ToggleButton binding `{}`; valid bindable attributes: text, enabled, checked",
+                    binding.prop_name
+                )));
+            };
+            validate_scalar_binding_expr_type(
+                &binding.expr,
+                &target_ty,
+                declared,
+                loop_scope,
+                &format!("ToggleButton.{}", binding.prop_name),
+            )?;
+        }
+    } else {
+        if node.props.iter().any(|p| p.name == "checked") {
+            return Err(IrLoadError::Validate(format!(
+                "`checked` is only valid on ToggleButton, not `{}`",
+                node.widget_type
+            )));
+        }
+        if node.bindings.iter().any(|b| b.prop_name == "checked") {
+            return Err(IrLoadError::Validate(format!(
+                "`checked` binding is only valid on ToggleButton, not `{}`",
+                node.widget_type
+            )));
+        }
+    }
+
+    for member in &node.children {
+        validate_phase8_togglebutton_member_invariants(member, declared, loop_scope)?;
+    }
+    Ok(())
+}
+
+fn validate_phase8_togglebutton_member_invariants(
+    member: &IrMember,
+    declared: &std::collections::HashMap<&str, IrStateType>,
+    loop_scope: Option<LoopReadScope<'_>>,
+) -> Result<(), IrLoadError> {
+    match member {
+        IrMember::Widget(slot) => {
+            validate_phase8_togglebutton_node_invariants(&slot.node, declared, loop_scope)
+        }
+        IrMember::ControlFlow(ControlFlowNode::If { branches }) => {
+            for branch in branches {
+                for body_member in &branch.body {
+                    validate_phase8_togglebutton_member_invariants(
+                        body_member,
+                        declared,
+                        loop_scope,
+                    )?;
+                }
+            }
+            Ok(())
+        }
+        IrMember::ControlFlow(ControlFlowNode::For {
+            binder,
+            index_binder,
+            collection,
+            body,
+        }) => {
+            let child_scope = LoopReadScope {
+                binder,
+                index_binder: index_binder.as_deref(),
+                elem: match collection {
+                    HandlerExpr::ListPropRead { elem, .. } => elem,
+                    _ => &IrType::I32,
+                },
+            };
+            for body_member in body {
+                validate_phase8_togglebutton_member_invariants(
+                    body_member,
+                    declared,
+                    Some(child_scope),
+                )?;
+            }
+            Ok(())
+        }
+    }
+}
+
+fn validate_literal_type(
+    value: &IrLiteral,
+    expected: IrType,
+    label: &str,
+) -> Result<(), IrLoadError> {
+    let ok = matches!(
+        (&expected, value),
+        (IrType::I32, IrLiteral::Int(_))
+            | (IrType::Str, IrLiteral::Str(_))
+            | (IrType::Bool, IrLiteral::Bool(_))
+    );
+    if ok {
+        Ok(())
+    } else {
+        Err(IrLoadError::Validate(format!(
+            "{label} must be a `{}` literal",
+            scalar_type_name(&expected)
+        )))
+    }
+}
+
+fn validate_scalar_binding_expr_type(
+    expr: &HandlerExpr,
+    expected: &IrType,
+    declared: &std::collections::HashMap<&str, IrStateType>,
+    loop_scope: Option<LoopReadScope<'_>>,
+    label: &str,
+) -> Result<(), IrLoadError> {
+    match (expected, expr) {
+        (IrType::I32, HandlerExpr::IntLit(_))
+        | (IrType::Str, HandlerExpr::StrLit(_))
+        | (IrType::Bool, HandlerExpr::BoolLit(_)) => Ok(()),
+        (IrType::I32, HandlerExpr::PropRead { path })
+        | (IrType::Str, HandlerExpr::StrPropRead { path })
+        | (IrType::Bool, HandlerExpr::BoolPropRead { path }) => {
+            validate_scalar_binding_read_type(path, expected, declared, label)
+        }
+        (IrType::Str, HandlerExpr::Interpolation(_)) => {
+            validate_expr_references(expr, declared, loop_scope, &|name| {
+                format!("binding `{label}` references undeclared name `{name}`")
+            })
+        }
+        (_, HandlerExpr::ItemRead { .. } | HandlerExpr::IndexRead { .. })
+            if loop_scope.is_some() =>
+        {
+            validate_loop_local_binding_type(expr, expected, loop_scope.expect("checked above"))
+        }
+        _ => Err(IrLoadError::Validate(format!(
+            "binding `{label}` must resolve to `{}`",
+            scalar_type_name(expected)
+        ))),
+    }
+}
+
+fn validate_scalar_binding_read_type(
+    path: &str,
+    expected: &IrType,
+    declared: &std::collections::HashMap<&str, IrStateType>,
+    label: &str,
+) -> Result<(), IrLoadError> {
+    match declared.get(path) {
+        Some(IrStateType::Scalar(found)) if found == expected => Ok(()),
+        Some(IrStateType::Scalar(found)) => Err(IrLoadError::Validate(format!(
+            "binding `{label}` reads `{path}` with type `{}`, expected `{}`",
+            scalar_type_name(found),
+            scalar_type_name(expected)
+        ))),
+        Some(IrStateType::Collection(_)) => Err(IrLoadError::Validate(format!(
+            "binding `{label}` references collection state `{path}`"
+        ))),
+        None => Err(IrLoadError::Validate(format!(
+            "binding `{label}` references undeclared name `{path}`"
+        ))),
     }
 }
 
@@ -3499,6 +3693,36 @@ fn construct_widget(
             WidgetNode::button(compositor, renderer, &initial, style)
                 .map_err(|e| IrLoadError::Build(format!("button: {e}")))
         }
+        "ToggleButton" => {
+            let label = extract_str_prop(&node.props, "text").unwrap_or_default();
+            let style = extract_button_style(&node.props, "style");
+            let enabled = extract_bool_prop(&node.props, "enabled").unwrap_or(true);
+            let checked = extract_bool_prop(&node.props, "checked").unwrap_or(false);
+            let initial_label = if has_binding(&node.bindings, "text") {
+                String::new()
+            } else {
+                label
+            };
+            let initial_enabled = if has_binding(&node.bindings, "enabled") {
+                true
+            } else {
+                enabled
+            };
+            let initial_checked = if has_binding(&node.bindings, "checked") {
+                false
+            } else {
+                checked
+            };
+            WidgetNode::toggle_button(
+                compositor,
+                renderer,
+                &initial_label,
+                style,
+                initial_enabled,
+                initial_checked,
+            )
+            .map_err(|e| IrLoadError::Build(format!("toggle_button: {e}")))
+        }
         // M3-Phase 2 T7: Box materialisation. `IrLiteral::Ratio` and
         // `IrLiteral::Color` are unpacked directly into Box-internal
         // domain types (DD-M3-P2-002 / DD-M3-P2-003 Option A) — they
@@ -3694,6 +3918,10 @@ fn resolve_prop_key(widget_type: &str, prop_name: &str) -> Option<(PropertyKey, 
         ("Button", "text") => Some((PROP_BUTTON_LABEL, IrType::Str)),
         ("Button", "style") => Some((PROP_BUTTON_STYLE, IrType::I32)),
         ("Button", "enabled") => Some((PROP_BUTTON_ENABLED, IrType::Bool)),
+        ("ToggleButton", "text") => Some((PROP_BUTTON_LABEL, IrType::Str)),
+        ("ToggleButton", "style") => Some((PROP_BUTTON_STYLE, IrType::I32)),
+        ("ToggleButton", "enabled") => Some((PROP_BUTTON_ENABLED, IrType::Bool)),
+        ("ToggleButton", "checked") => Some((PROP_TOGGLEBUTTON_CHECKED, IrType::Bool)),
         // M3-Phase 4 T4 / DD-M3-P4-003: ScrollView's `offset-y` is `i32`
         // (DSL surface storage type). The `I32` selection here routes
         // the binding through the string-baked `register_binding` +
@@ -3723,6 +3951,16 @@ fn extract_str_prop(props: &[IrProp], name: &str) -> Option<String> {
         .find(|p| p.name == name)
         .and_then(|p| match &p.value {
             IrLiteral::Str(s) => Some(s.clone()),
+            _ => None,
+        })
+}
+
+fn extract_bool_prop(props: &[IrProp], name: &str) -> Option<bool> {
+    props
+        .iter()
+        .find(|p| p.name == name)
+        .and_then(|p| match &p.value {
+            IrLiteral::Bool(b) => Some(*b),
             _ => None,
         })
 }
@@ -3926,6 +4164,26 @@ mod tests {
         let (key, ty) = resolve_prop_key("Button", "style").expect("Button.style exists");
         assert_eq!(key, PROP_BUTTON_STYLE);
         assert_eq!(ty, IrType::I32);
+    }
+
+    #[test]
+    fn resolve_prop_key_togglebutton_checked_is_bool() {
+        let (key, ty) =
+            resolve_prop_key("ToggleButton", "checked").expect("ToggleButton.checked exists");
+        assert_eq!(key, PROP_TOGGLEBUTTON_CHECKED);
+        assert_eq!(ty, IrType::Bool);
+    }
+
+    #[test]
+    fn resolve_prop_key_togglebutton_button_family_attrs() {
+        assert_eq!(
+            resolve_prop_key("ToggleButton", "text"),
+            Some((PROP_BUTTON_LABEL, IrType::Str))
+        );
+        assert_eq!(
+            resolve_prop_key("ToggleButton", "enabled"),
+            Some((PROP_BUTTON_ENABLED, IrType::Bool))
+        );
     }
 
     #[test]
@@ -6881,6 +7139,209 @@ mod tests {
              node ZStack { child { placement zstack { h-align: center, layer: 1 } node Text {} } }\n\
              }",
             "unknown zstack placement key `layer`",
+        );
+    }
+
+    // ── M3-Phase 8 T4: ToggleButton runtime catalog defense ───────────
+
+    #[test]
+    fn togglebutton_checked_literal_validates() {
+        let c = parse_ok(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             node ToggleButton { prop text = \"All\" prop checked = true }\n\
+             }",
+        );
+        validate(&c).expect("ToggleButton checked literal must validate");
+    }
+
+    #[test]
+    fn togglebutton_checked_binding_validates() {
+        let c = parse_ok(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             state selected: bool = true\n\
+             node ToggleButton { bind checked = (bool-prop-read selected) }\n\
+             }",
+        );
+        validate(&c).expect("ToggleButton checked bool binding must validate");
+    }
+
+    #[test]
+    fn validate_rejects_checked_on_button_runtime_ir() {
+        assert_validate_err(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             node Button { prop checked = true }\n\
+             }",
+            "`checked` is only valid on ToggleButton",
+        );
+    }
+
+    #[test]
+    fn validate_rejects_checked_on_text_runtime_ir() {
+        assert_validate_err(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             node Text { prop checked = true }\n\
+             }",
+            "`checked` is only valid on ToggleButton",
+        );
+    }
+
+    #[test]
+    fn validate_rejects_checked_binding_on_button_runtime_ir() {
+        assert_validate_err(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             state selected: bool = true\n\
+             node Button { bind checked = (bool-prop-read selected) }\n\
+             }",
+            "`checked` binding is only valid on ToggleButton",
+        );
+    }
+
+    #[test]
+    fn validate_rejects_checked_binding_on_text_runtime_ir() {
+        assert_validate_err(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             state selected: bool = true\n\
+             node Text { bind checked = (bool-prop-read selected) }\n\
+             }",
+            "`checked` binding is only valid on ToggleButton",
+        );
+    }
+
+    #[test]
+    fn validate_rejects_togglebutton_unknown_attr_runtime_ir() {
+        assert_validate_err(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             node ToggleButton { prop selected = true }\n\
+             }",
+            "unknown ToggleButton attribute `selected`",
+        );
+    }
+
+    #[test]
+    fn validate_rejects_togglebutton_unknown_binding_runtime_ir() {
+        assert_validate_err(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             state selected: bool = true\n\
+             node ToggleButton { bind selected = (bool-prop-read selected) }\n\
+             }",
+            "unknown ToggleButton binding `selected`",
+        );
+    }
+
+    #[test]
+    fn validate_rejects_togglebutton_style_binding_runtime_ir() {
+        assert_validate_err(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             state style_id: i32 = 1\n\
+             node ToggleButton { bind style = (prop-read style_id) }\n\
+             }",
+            "ToggleButton.style is not bindable",
+        );
+    }
+
+    #[test]
+    fn validate_rejects_togglebutton_text_non_str_literal_runtime_ir() {
+        assert_validate_err(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             node ToggleButton { prop text = true }\n\
+             }",
+            "ToggleButton.text must be a `string` literal",
+        );
+    }
+
+    #[test]
+    fn validate_rejects_togglebutton_style_non_ident_literal_runtime_ir() {
+        assert_validate_err(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             node ToggleButton { prop style = 1 }\n\
+             }",
+            "ToggleButton.style must be a keyword identifier",
+        );
+    }
+
+    #[test]
+    fn validate_rejects_togglebutton_enabled_non_bool_literal_runtime_ir() {
+        assert_validate_err(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             node ToggleButton { prop enabled = 1 }\n\
+             }",
+            "ToggleButton.enabled must be a `bool` literal",
+        );
+    }
+
+    #[test]
+    fn validate_rejects_togglebutton_checked_non_bool_literal_runtime_ir() {
+        assert_validate_err(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             node ToggleButton { prop checked = 1 }\n\
+             }",
+            "ToggleButton.checked must be a `bool` literal",
+        );
+    }
+
+    #[test]
+    fn validate_rejects_togglebutton_checked_non_bool_binding_runtime_ir() {
+        assert_validate_err(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             state index: i32 = 0\n\
+             node ToggleButton { bind checked = (prop-read index) }\n\
+             }",
+            "binding `ToggleButton.checked` must resolve to `bool`",
+        );
+    }
+
+    #[test]
+    fn validate_rejects_togglebutton_checked_wrong_read_tag_runtime_ir() {
+        assert_validate_err(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             state selected: bool = true\n\
+             node ToggleButton { bind checked = (str-prop-read selected) }\n\
+             }",
+            "binding `ToggleButton.checked` must resolve to `bool`",
+        );
+    }
+
+    #[test]
+    fn validate_accepts_togglebutton_checked_loop_item_binding_runtime_ir() {
+        let c = parse_ok(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             state flags: bool[] = [true, false]\n\
+             node WrapPanel { for flag in flags { node ToggleButton { bind checked = (item-read flag) } } }\n\
+             }",
+        );
+        validate(&c).expect("ToggleButton.checked may bind a bool loop item");
+    }
+
+    #[test]
+    fn validate_accepts_togglebutton_text_loop_item_binding_runtime_ir() {
+        let c = parse_ok(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             state labels: string[] = [\"All\", \"Albums\"]\n\
+             node WrapPanel { for label in labels { node ToggleButton { bind text = (item-read label) } } }\n\
+             }",
+        );
+        validate(&c).expect("ToggleButton.text may bind a string loop item");
+    }
+
+    #[test]
+    fn validate_accepts_togglebutton_text_loop_item_interpolation_runtime_ir() {
+        let c = parse_ok(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             state labels: string[] = [\"All\", \"Albums\"]\n\
+             node WrapPanel { for label in labels { node ToggleButton { bind text = (interp \"Tab \" ((item-read label))) } } }\n\
+             }",
+        );
+        validate(&c).expect("ToggleButton.text interpolation may read a string loop item");
+    }
+
+    #[test]
+    fn validate_rejects_togglebutton_checked_loop_index_binding_runtime_ir() {
+        assert_validate_err(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             state flags: bool[] = [true, false]\n\
+             node WrapPanel { for flag, i in flags { node ToggleButton { bind checked = (index-read i) } } }\n\
+             }",
+            "loop index binder cannot be used in a bool binding",
         );
     }
 

@@ -1072,6 +1072,125 @@ mod tests {
         assert_eq!(child_widget(vstack, 1).widget_type, "Button");
     }
 
+    #[test]
+    fn togglebutton_literal_checked_lowers_to_ir_prop() {
+        let comp = lower_src(
+            r#"component C inherits W {
+                state selected: bool = true
+                ToggleButton {
+                    text: "Photos"
+                    style: accent
+                    enabled: true
+                    checked: false
+                    clicked => { selected = false; }
+                }
+            }"#,
+        );
+        let toggle = &comp.root;
+        assert_eq!(toggle.widget_type, "ToggleButton");
+        assert_eq!(toggle.props.len(), 4);
+        assert!(toggle
+            .props
+            .iter()
+            .any(|p| { p.name == "text" && p.value == IrLiteral::Str("Photos".into()) }));
+        assert!(toggle
+            .props
+            .iter()
+            .any(|p| { p.name == "style" && p.value == IrLiteral::Ident("accent".into()) }));
+        assert!(toggle
+            .props
+            .iter()
+            .any(|p| { p.name == "enabled" && p.value == IrLiteral::Bool(true) }));
+        assert!(toggle
+            .props
+            .iter()
+            .any(|p| { p.name == "checked" && p.value == IrLiteral::Bool(false) }));
+        assert_eq!(toggle.handlers.len(), 1);
+        assert_eq!(toggle.handlers[0].signal, "clicked");
+    }
+
+    #[test]
+    fn togglebutton_absent_checked_lowers_no_ir_prop_or_binding() {
+        let comp = lower_src(r#"component C inherits W { ToggleButton { text: "Albums" } }"#);
+        let toggle = &comp.root;
+        assert_eq!(toggle.widget_type, "ToggleButton");
+        assert!(!toggle.props.iter().any(|p| p.name == "checked"));
+        assert!(!toggle.bindings.iter().any(|b| b.prop_name == "checked"));
+    }
+
+    #[test]
+    fn togglebutton_checked_binding_lowers_to_bool_prop_read() {
+        let comp = lower_src(
+            "component C inherits W { state selected: bool = true ToggleButton { checked: selected } }",
+        );
+        let toggle = &comp.root;
+        assert_eq!(toggle.widget_type, "ToggleButton");
+        assert!(toggle.props.is_empty(), "{:?}", toggle.props);
+        assert_eq!(toggle.bindings.len(), 1);
+        let binding = &toggle.bindings[0];
+        assert_eq!(binding.prop_name, "checked");
+        assert_eq!(
+            binding.expr,
+            HandlerExpr::BoolPropRead {
+                path: "selected".into(),
+            }
+        );
+    }
+
+    #[test]
+    fn togglebutton_alpha_tab_band_lowers_block_assignment_handlers() {
+        let comp = lower_src(
+            r#"component C inherits W {
+                state all: bool = true
+                state albums: bool = false
+                state favorites: bool = false
+                HStack {
+                    ToggleButton {
+                        text: "All"
+                        checked: all
+                        clicked => { all = true; albums = false; favorites = false; }
+                    }
+                    ToggleButton {
+                        text: "Albums"
+                        checked: albums
+                        clicked => { all = false; albums = true; favorites = false; }
+                    }
+                    ToggleButton {
+                        text: "Favorites"
+                        checked: favorites
+                        clicked => { all = false; albums = false; favorites = true; }
+                    }
+                }
+            }"#,
+        );
+        let hstack = &comp.root;
+        assert_eq!(hstack.widget_type, "HStack");
+        assert_eq!(hstack.children.len(), 3);
+        let albums = child_widget(hstack, 1);
+        assert_eq!(albums.widget_type, "ToggleButton");
+        assert_eq!(albums.bindings.len(), 1);
+        assert_eq!(albums.bindings[0].prop_name, "checked");
+        let HandlerExpr::Block(exprs) = &albums.handlers[0].expr else {
+            panic!("expected block assignment handler");
+        };
+        assert_eq!(exprs.len(), 3);
+        assert!(matches!(
+            &exprs[0],
+            HandlerExpr::Assign { lhs, rhs }
+                if lhs == "all" && matches!(rhs.as_ref(), HandlerExpr::BoolLit(false))
+        ));
+        assert!(matches!(
+            &exprs[1],
+            HandlerExpr::Assign { lhs, rhs }
+                if lhs == "albums" && matches!(rhs.as_ref(), HandlerExpr::BoolLit(true))
+        ));
+        assert!(matches!(
+            &exprs[2],
+            HandlerExpr::Assign { lhs, rhs }
+                if lhs == "favorites" && matches!(rhs.as_ref(), HandlerExpr::BoolLit(false))
+        ));
+    }
+
     // --- T4: Box ratio / color literal lowering -------------------------
     //
     // The accepted positions for `Expr::RatioLit` / `Expr::ColorLit` are

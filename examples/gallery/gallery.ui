@@ -5,172 +5,120 @@ component Gallery inherits Window {
 
     state scroll_y: i32 = 0
     state is_lightbox_open: bool = false
-    state labels: string[] = ["S01", "S02", "S03", "S04", "S05", "S06"]
-    state is_placement_demo_open: bool = false
+    state tab_all_selected: bool = true
+    state tab_albums_selected: bool = false
+    state tab_favorites_selected: bool = false
+    state labels: string[] = [
+        "IMG 001", "IMG 002", "IMG 003", "IMG 004", "IMG 005", "IMG 006",
+        "IMG 007", "IMG 008", "IMG 009", "IMG 010", "IMG 011", "IMG 012",
+        "IMG 013", "IMG 014", "IMG 015", "IMG 016", "IMG 017", "IMG 018"
+    ]
 
     ZStack {
-        VStack {
+        Grid {
             slot.h-align: stretch
             slot.v-align: stretch
-            spacing: 12px
-            padding: 12px
+            columns: 1* 1*
+            rows: 56 1* 28
 
-            Grid {
-                columns: 120 1* 2*
-                rows: 36 1* 36
+            Cell {
+                row: 0 column: 0
+                h-align: start
+                v-align: center
+                HStack {
+                    spacing: 8px
+                    padding: 8px
 
-                Cell {
-                    row: 0 column: 0 column-span: 3
-                    Box {
-                        fill: #224488cc
-                        Text { text: "Header (spans 3 columns)" }
-                    }
-                }
-
-                Cell {
-                    row: 1 column: 0
-                    Box {
-                        fill: #336699cc
-                        Text { text: "C0 fixed 120" }
-                    }
-                }
-                Cell {
-                    row: 1 column: 1
-                    Box {
-                        fill: #669933cc
-                        Text { text: "C1 star 1*" }
-                    }
-                }
-                Cell {
-                    row: 1 column: 2
-                    Box {
-                        fill: #996633cc
-                        Text { text: "C2 star 2*" }
-                    }
-                }
-
-                Cell {
-                    row: 2 column: 0 column-span: 3 v-align: start
-                    Box {
-                        aspect: 4:1
-                        fill: #cc3366cc
-                        Text { text: "Footer (overflows below, clipped at Grid bounds)" }
-                    }
-                }
-            }
-
-            WrapPanel {
-                item-cross-size: 88
-                item-spacing: 12
-                line-spacing: 12
-
-                Box {
-                    aspect: 1:1
-                    fill: #336699cc
-                    Text { text: "Photo 1" }
-                }
-                Box {
-                    aspect: 1:1
-                    fill: #663366cc
-                    Text { text: "Photo 2" }
-                }
-                Box {
-                    aspect: 1:1
-                    fill: #669933cc
-                    Text { text: "Photo 3" }
-                }
-                Box {
-                    aspect: 1:1
-                    fill: #996633cc
-                    Text { text: "Photo 4" }
-                }
-                Box {
-                    aspect: 1:1
-                    fill: #339966cc
-                    Text { text: "Photo 5" }
-                }
-                Box {
-                    aspect: 1:1
-                    fill: #996699cc
-                    Text { text: "Photo 6" }
-                }
-                Box {
-                    aspect: 1:1
-                    fill: #cc9933cc
-                    Text { text: "Photo 7" }
-                }
-                Box {
-                    aspect: 1:1
-                    fill: #3399cccc
-                    Text { text: "Photo 8" }
-                }
-                Box {
-                    aspect: 1:1
-                    fill: #cc6699cc
-                    Text { text: "Photo 9" }
-                }
-                Box {
-                    aspect: 1:1
-                    fill: #66cc99cc
-                    Text { text: "Photo 10" }
-                }
-            }
-
-            Button {
-                text: "Open lightbox"
-                style: accent
-                clicked => { root.is_lightbox_open = true; }
-            }
-
-            Button {
-                text: "Open placement demo"
-                style: accent
-                clicked => { root.is_placement_demo_open = true; }
-            }
-
-            Button {
-                text: "Scroll down (+100)"
-                style: accent
-                clicked => { root.scroll_y += 100; }
-            }
-            Button {
-                text: "Scroll up (-100)"
-                clicked => { root.scroll_y -= 100; }
-            }
-
-            Button {
-                text: "Add"
-                style: accent
-                clicked => { labels = labels.append("NEW"); }
-            }
-            Button {
-                text: "Remove"
-                clicked => { labels = labels.drop-last(); }
-            }
-            Button {
-                text: "Clear"
-                clicked => { labels = []; }
-            }
-            Button {
-                text: "Reset"
-                clicked => { labels = ["S01", "S02", "S03", "S04", "S05", "S06"]; }
-            }
-
-            ScrollView {
-                offset-y: scroll_y
-
-                WrapPanel {
-                    item-cross-size: 128
-                    item-spacing: 8
-                    line-spacing: 8
-
-                    for label, index in labels {
-                        Box {
-                            aspect: 1:1
-                            fill: #336699cc
-                            Text { text: "\{label} #\{index}" }
+                    ToggleButton {
+                        text: "All"
+                        checked: tab_all_selected
+                        clicked => {
+                            root.tab_all_selected = true;
+                            root.tab_albums_selected = false;
+                            root.tab_favorites_selected = false;
                         }
                     }
+                    ToggleButton {
+                        text: "Albums"
+                        checked: tab_albums_selected
+                        clicked => {
+                            root.tab_all_selected = false;
+                            root.tab_albums_selected = true;
+                            root.tab_favorites_selected = false;
+                        }
+                    }
+                    ToggleButton {
+                        text: "Favorites"
+                        checked: tab_favorites_selected
+                        clicked => {
+                            root.tab_all_selected = false;
+                            root.tab_albums_selected = false;
+                            root.tab_favorites_selected = true;
+                        }
+                    }
+                }
+            }
+
+            Cell {
+                row: 0 column: 1
+                h-align: end
+                v-align: center
+                HStack {
+                    spacing: 8px
+                    padding: 8px
+
+                    Button {
+                        text: "Scroll down"
+                        clicked => { root.scroll_y += 100; }
+                    }
+                    Button {
+                        text: "Scroll up"
+                        clicked => { root.scroll_y -= 100; }
+                    }
+                    Button {
+                        text: "Open lightbox"
+                        style: accent
+                        clicked => { root.is_lightbox_open = true; }
+                    }
+                }
+            }
+
+            Cell {
+                row: 1 column: 0 column-span: 2
+                h-align: stretch
+                v-align: stretch
+                Box {
+                    fill: #2f343b
+                    ScrollView {
+                        offset-y: scroll_y
+
+                        VStack {
+                            padding: 12px
+
+                            WrapPanel {
+                                item-cross-size: 88
+                                item-spacing: 12
+                                line-spacing: 12
+
+                                for label, index in labels {
+                                    Box {
+                                        aspect: 1:1
+                                        fill: #4f6272
+                                        Text { text: "\{label} #\{index}" }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            Cell {
+                row: 2 column: 0 column-span: 2
+                h-align: start
+                HStack {
+                    padding: 4px
+                    Text { text: "18 placeholders - Image and hit-testing are M4" }
                 }
             }
         }
@@ -183,124 +131,58 @@ component Gallery inherits Window {
                 Box {
                     slot.h-align: stretch
                     slot.v-align: stretch
-                    fill: #10182099
+                    fill: #101820cc
                 }
 
                 Grid {
-                    columns: 1* 400 1*
-                    rows: 1* 300 64 44 1*
+                    slot.h-align: stretch
+                    slot.v-align: stretch
+                    columns: 1* 56 400 56 1*
+                    rows: 1* 44 300 64 1*
 
                     Cell {
-                        row: 1 column: 1
+                        row: 2 column: 2
                         Box {
                             aspect: 4:3
-                            fill: #e6eef8ff
-                            Text { text: "Lightbox photo placeholder" }
+                            fill: #5b7080
+                            Text { text: "[photo]" }
                         }
                     }
 
                     Cell {
-                        row: 2 column: 1
+                        row: 3 column: 2
                         VStack {
                             spacing: 4px
-                            Text { text: "Gallery image 01" }
+                            Text { text: "IMG 001  2026-04-12" }
                             Text { text: "Box 4:3 placeholder; Image widget lands in M4" }
                         }
                     }
 
-                    Cell {
-                        row: 3 column: 1 h-align: center
-                        HStack {
-                            spacing: 8px
-
-                            Button { text: "<" }
-                            Button { text: ">" }
-                            Button {
-                                text: "x"
-                                clicked => { root.is_lightbox_open = false; }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        if is_placement_demo_open {
-            ZStack {
-                slot.h-align: stretch
-                slot.v-align: stretch
-
-                Box {
-                    slot.h-align: stretch
-                    slot.v-align: stretch
-                    fill: #0a0f18ff
-                }
-
-                VStack {
-                    slot.h-align: stretch
-                    slot.v-align: stretch
-                    spacing: 10px
-                    padding: 16px
-
-                    Text { text: "Placement demo — Phase 7b verification (removed at Phase 8)" }
-
-                    Text { text: "ZStack slot.h-align (same box, three keys -> three x positions):" }
-                    ZStack {
-                        Box {
-                            slot.h-align: stretch
-                            slot.v-align: stretch
-                            fill: #112233ff
-                        }
-                        Box {
-                            slot.h-align: start
-                            slot.v-align: center
-                            fill: #4488ddff
-                            Text { text: "slot.h-align: start" }
-                        }
-                        Box {
-                            slot.v-align: center
-                            fill: #888888ff
-                            Text { text: "omitted -> center" }
-                        }
-                        Box {
-                            slot.h-align: end
-                            slot.v-align: center
-                            fill: #dd8844ff
-                            Text { text: "slot.h-align: end" }
-                        }
-                    }
-
-                    Text { text: "Grid placement: distinct row/column/span; r0c0 stretch-fills vs r0c2 centered:" }
-                    Grid {
-                        columns: 220 220 220
-                        rows: 56 56
-
-                        Cell {
-                            row: 0 column: 0
-                            Box {
-                                fill: #336699ff
-                                Text { text: "r0c0 stretch" }
-                            }
-                        }
-                        Cell {
-                            row: 0 column: 2 h-align: center v-align: center
-                            Box {
-                                fill: #cc3366ff
-                                Text { text: "r0c2 centered" }
-                            }
-                        }
-                        Cell {
-                            row: 1 column: 0 column-span: 3
-                            Box {
-                                fill: #669933ff
-                                Text { text: "r1 span 3 columns" }
-                            }
-                        }
+                    Button {
+                        slot.row: 2
+                        slot.column: 1
+                        slot.row-span: 2
+                        slot.h-align: center
+                        slot.v-align: center
+                        text: "<"
                     }
 
                     Button {
-                        text: "Close demo"
-                        clicked => { root.is_placement_demo_open = false; }
+                        slot.row: 2
+                        slot.column: 3
+                        slot.row-span: 2
+                        slot.h-align: center
+                        slot.v-align: center
+                        text: ">"
+                    }
+
+                    Button {
+                        slot.row: 1
+                        slot.column: 3
+                        slot.h-align: center
+                        slot.v-align: center
+                        text: "x"
+                        clicked => { root.is_lightbox_open = false; }
                     }
                 }
             }
