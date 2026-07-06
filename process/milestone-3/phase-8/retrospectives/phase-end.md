@@ -1,6 +1,6 @@
 ---
 title: M3-Phase 8 phase-end retrospective
-status: draft
+status: recorded
 created: 2026-07-06
 scope: phase-end
 phase: M3-Phase 8 — Selected state + Gallery integration + DSL spec public draft
@@ -148,11 +148,28 @@ lightbox present/absent pair, and the firing reject tests in (1)/(2).
       t1–t11**, so no open phase-sync item survives this close (the
       Moment 2 sync was fully discharged by T11's promotion set).
 
-16. **CI green:** **pending at this commit** — completed by the
-    phase-end close commit that records the `workflow_dispatch` run id
-    on the pushed phase branch (including the first remote execution of
-    the `gallery-c` / `gallery-zig` / `wasamoc check gallery.ui` steps).
-    Phase-end local clean-rebuild ground truth is already recorded in
+16. **CI green:** **green**
+    - The phase branch `feat/m3-phase-8` was pushed at head
+      `d72090bcfb4e9325f4efcce09d22b5f9991c4fe8` (instrumental push for
+      `workflow_dispatch`; the owner push gate remains the post-merge
+      main push).
+    - GitHub Actions workflow `CI`, event `workflow_dispatch`, run
+      [28784793695](https://github.com/matarillo/wasamo/actions/runs/28784793695)
+      concluded **success** (`2026-07-06T10:24:30Z` →
+      `2026-07-06T10:28:10Z`).
+    - Green CI steps: release + debug workspace builds, workspace tests
+      (Windows-runtime fixtures CI-gated fail-not-skip), C ABI smoke
+      (`cl` / `clang-cl`), CMake smoke, Zig binding smoke,
+      `counter-c` / `counter-rust` / `counter-zig`,
+      `wasamoc check counter.ui`, and the **first remote execution** of
+      the T6-added `gallery-c (CMake, Release)`,
+      `gallery-zig (Zig, ReleaseSafe)`, and
+      `wasamoc check gallery.ui` steps. This discharges the CI-gated
+      cells of Phase-End Gate lines (2) / (3) and retro item 18's
+      remote confirmation. Annotations were upstream deprecation
+      warnings only; the workflow has no `cargo fmt` step, so fmt
+      remains local evidence.
+    - Phase-end local clean-rebuild ground truth is recorded in
     [implementation/log.md](../implementation/log.md) (T11 local gates:
     `cargo fmt --all -- --check`, `cargo clean` → release → debug →
     `cargo test --workspace`, C / Zig hosts in the AGENTS.md build
@@ -197,10 +214,10 @@ lightbox present/absent pair, and the firing reject tests in (1)/(2).
 
 ## Merge Readiness
 
-Checklist items 12–15 / 17 / 18 are recorded; item 16 is discharged by
-the phase-end close commit that records the CI run id and flips
-`implementation/preamble.md` to `status: closing`.
-`implementation/handoff.md` is finalized. Per the retrospective
+Checklist items 12–18 are all recorded and the phase-branch CI gate is
+**green** (run 28784793695). `implementation/handoff.md` is finalized
+and `implementation/preamble.md` flips to `status: closing` in the same
+phase-end close commit that records the CI run id. Per the retrospective
 procedure, this record is **evidence** for the phase → main merge gate,
 not merge authorization: the phase → main no-ff merge requires explicit
 owner approval, and push to main is a separate owner gate. Before the

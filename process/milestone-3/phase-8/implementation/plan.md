@@ -731,20 +731,21 @@ before landing.
 - [x] Phase-end start gate recorded in [log.md](./log.md): carry-over
       from log.md and every Phase 8 task retrospective checked
       (zero `phase-sync` items); trap selection + review lane recorded.
-- [ ] `implementation/handoff.md` finalized from the candidate ledger
+- [x] `implementation/handoff.md` finalized from the candidate ledger
       (this phase's cross-phase residuals; the milestone-level items
       flow to the M3 handoff, not duplicated here). Ledger item-7
       disposition executed: the final-branch-state verification note
       lands in `retrospectives.md` as a minor edit (own commit).
-- [ ] Phase-end retrospective recorded at
+- [x] Phase-end retrospective recorded at
       `../retrospectives/phase-end.md` (items 12–18, Phase-End Gate
       mapping); no open `phase-sync` items survive. Item 16 cell
       completed by the CI-run-id commit.
-- [ ] GitHub Actions CI run id recorded (`workflow_dispatch` on the
+- [x] GitHub Actions CI run id recorded (`workflow_dispatch` on the
       pushed phase branch, including the new gallery-c / gallery-zig
-      steps); G(5) path-scoped product-range check re-verified empty;
-      doc gates re-run over the final branch state.
-- [ ] [preamble.md](./preamble.md) front-matter `status` flips
+      steps): run 28784793695 **green** (head `d72090b`); G(5)
+      path-scoped product-range check re-verified empty; doc gates
+      re-run over the final branch state before merge.
+- [x] [preamble.md](./preamble.md) front-matter `status` flips
       `active` → `closing` (same commit as the CI run id, 7b
       precedent).
 - [ ] Owner approval → phase branch no-ff merge to main; push is a

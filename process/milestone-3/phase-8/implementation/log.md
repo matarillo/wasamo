@@ -2627,3 +2627,50 @@ after the retrospective (no schema / IR migration, runtime structural
 change, or GUI-render evidence). A forced product-surface change would
 re-trigger the G(5) owner re-run and re-evaluate the lane before
 landing.
+
+## Phase-end batch end gate — CI green and close artifacts (2026-07-06)
+
+The phase branch `feat/m3-phase-8` was pushed (instrumental push for
+`workflow_dispatch` only; the owner push gate remains the post-merge
+main push) at head `d72090b`.
+
+| Command / evidence | Result |
+|---|---|
+| GitHub Actions `workflow_dispatch` on `feat/m3-phase-8` | **Green.** Run [28784793695](https://github.com/matarillo/wasamo/actions/runs/28784793695) concluded **success** (head `d72090b`; `2026-07-06T10:24:30Z` → `2026-07-06T10:28:10Z`). Green steps include release + debug workspace builds, workspace tests (Windows-runtime fixtures CI-gated fail-not-skip), C ABI / CMake / Zig binding smokes, `counter-{c,rust,zig}`, `wasamoc check counter.ui`, and the **first remote execution** of the T6-added `gallery-c (CMake, Release)`, `gallery-zig (Zig, ReleaseSafe)`, and `wasamoc check gallery.ui` steps. Annotations were upstream deprecation warnings only (Node 20 → 24 for `mlugg/setup-zig@v2`), no failures. The workflow has no `cargo fmt` step, so fmt stays local evidence. |
+| `git log --oneline 5b66321..HEAD -- wasamoc wasamo-runtime wasamo-ir examples bindings .github` | empty — every phase-end batch commit is docs / process only; the G(5) surface binding holds. |
+| `cargo fmt --all -- --check` (pre-push branch state) | green |
+| `git diff --check` (pre-push branch state) | green |
+| Local clean-rebuild ground truth | Recorded at the T11 local gates (`cargo clean` → release → debug → `cargo test --workspace` → C / Zig hosts in the AGENTS.md build order, all green); valid for this batch because the path-scoped product range above is empty. |
+
+**#2 structural side-effect enumeration (this close commit)**
+
+| Artifact changed | Side effect / disposition |
+|---|---|
+| `implementation/preamble.md` | Front-matter `status` flips `active` → `closing` per its own Lifecycle wording ("`active` → `closing` at the phase-end batch commit"); no body change needed — the ownership-split prose already attributes the Moment 2 flips to T11 and this batch's items to phase-end. |
+| `implementation/plan.md` | The four phase-end batch bullets flip `[x]`; the owner-approval merge bullet and the milestone-close batch bullets stay `[ ]` (owner-gated / post-merge). |
+| `retrospectives/phase-end.md` | Item 16 filled with the run id and green-step record; front-matter `status` flips `draft` → `recorded`; Merge Readiness updated to state the CI gate is discharged. |
+| This `log.md` | End gate recorded. |
+| `CHANGELOG.md` / `process/_roadmap.md` / `process/milestone-3/plan.md` | Untouched by this commit — consistency was verified at retro item 13; the M3 plan Phase 8 row flip and `_roadmap` completion flip are post-merge / milestone-close owned. |
+
+**#5 carry-forward (merge-gate re-triggers)**
+
+- **Constraint:** the G(5) / T7-surface binding holds through the
+  phase → main merge: any product-path commit
+  (`wasamoc` / `wasamo-runtime` / `wasamo-ir` / `examples` /
+  `bindings` / `.github`) on the phase branch before the merge
+  invalidates the owner smoke and requires an owner re-run.
+  **Evidence:** the path-scoped range row above. **Re-trigger:** any
+  product-path commit before merge. **Placement:** merge gate (owner
+  report).
+- **Constraint:** the doc gates (`cargo fmt --all -- --check`,
+  `git diff --check`) re-run over the **final branch state** before the
+  merge if any commit (review record, remediation) lands after this
+  gate — now procedural per the retrospectives.md item 3 note folded at
+  this close. **Re-trigger:** any commit after this close commit.
+  **Placement:** merge gate.
+
+**#6 deterministic-failure disposition**
+
+No deterministic failure occurred: the remote CI run was green on its
+first execution (including the first remote gallery-c / gallery-zig
+builds), and no local gate failed during the batch.
