@@ -601,11 +601,13 @@ review lane are re-evaluated before that fix lands.
       known M4 residuals so they are observed as residuals, not
       recorded as fail observations, and cites the A1 table / T7
       evidence set rather than restating the state-set definition.
-- [ ] Owner runs the smoke on a visible Windows desktop session
+- [x] Owner runs the smoke on a visible Windows desktop session
       ([human-visible-smoke.md](../../../../docs/notes/human-visible-smoke.md)
       environment rules) and observes per the script; owner explicitly
       accepts, or records a fail observation → fixes land additively on
       the task branch → re-run to green (Phase 4 / 7b precedent).
+      (Owner acceptance "G(5) OK" recorded 2026-07-06; no fail
+      observation.)
 - [ ] T10 step-end retrospective recorded at
       `../retrospectives/t10.md`.
 
