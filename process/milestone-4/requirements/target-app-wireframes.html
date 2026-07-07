@@ -1,0 +1,414 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<title>M4 target app 候補比較 — A / B1 / B2 / B3</title>
+<style>
+  :root {
+    --ink: #222;
+    --muted: #667;
+    --frame: #8a93a6;
+    --paper: #fafbfd;
+    --mica: linear-gradient(135deg, #e8ecf4 0%, #dfe7f0 45%, #e9e3ee 100%);
+    --accent: #2f6fd0;
+    --warn: #b2541a;
+  }
+  body {
+    font-family: "Yu Gothic UI", "Segoe UI", sans-serif;
+    color: var(--ink);
+    margin: 2rem auto;
+    max-width: 72rem;
+    padding: 0 1.5rem;
+    line-height: 1.7;
+    background: #fff;
+  }
+  h1 { font-size: 1.5rem; border-bottom: 3px solid var(--accent); padding-bottom: .4rem; }
+  h2 { font-size: 1.25rem; margin-top: 2.5rem; border-left: 6px solid var(--accent); padding-left: .6rem; }
+  h3 { font-size: 1.05rem; margin-top: 1.8rem; }
+  p, li { max-width: 62rem; }
+  .meta { color: var(--muted); font-size: .9rem; }
+  .note {
+    background: #f4f6fb; border: 1px solid #d5dbe8; border-radius: 6px;
+    padding: .7rem 1rem; font-size: .92rem; margin: 1rem 0;
+  }
+  .warn { border-color: #e0b68f; background: #fdf3ea; }
+  table { border-collapse: collapse; margin: 1rem 0; font-size: .9rem; }
+  th, td { border: 1px solid #c8cede; padding: .35rem .6rem; text-align: left; vertical-align: top; }
+  th { background: #eef1f7; }
+  td.c { text-align: center; }
+
+  /* ---- wireframe primitives ---- */
+  .board { display: flex; flex-wrap: wrap; gap: 1.4rem; align-items: flex-start; margin: 1rem 0; }
+  .window {
+    background: var(--paper); border: 2px solid var(--frame); border-radius: 8px;
+    box-shadow: 3px 4px 0 rgba(120,130,150,.25); overflow: hidden;
+    font-size: .78rem;
+  }
+  .window.mica .body { background: var(--mica); }
+  .titlebar {
+    display: flex; justify-content: space-between; align-items: center;
+    background: #dde3ee; padding: .25rem .6rem; font-weight: 600;
+    border-bottom: 1px solid var(--frame);
+  }
+  .titlebar .buttons { color: var(--muted); letter-spacing: .3em; }
+  .body { padding: .6rem; }
+  .row { display: flex; gap: .5rem; align-items: center; margin-bottom: .5rem; }
+  .textfield {
+    flex: 1; border: 1.5px solid var(--accent); border-radius: 4px; background: #fff;
+    padding: .2rem .5rem; color: var(--muted); font-style: italic;
+  }
+  .btn {
+    border: 1.5px solid var(--frame); border-radius: 4px; background: #fff;
+    padding: .15rem .7rem; white-space: nowrap;
+  }
+  .btn.primary { border-color: var(--accent); color: var(--accent); font-weight: 600; }
+  .btn.disabled { color: #aab; border-style: dashed; }
+  .toggle-on, .toggle-off {
+    display: inline-block; width: 2.4em; border-radius: 999px; text-align: center;
+    border: 1.5px solid var(--frame); font-size: .7rem;
+  }
+  .toggle-on { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .thumbwrap { display: flex; flex-wrap: wrap; gap: .45rem; }
+  .thumb {
+    width: 4.2rem; height: 4.2rem; border: 1.5px solid var(--frame); border-radius: 4px;
+    display: flex; align-items: center; justify-content: center;
+    background: repeating-linear-gradient(45deg, #eceff5, #eceff5 6px, #e2e6ef 6px, #e2e6ef 12px);
+    color: var(--muted);
+  }
+  .statusbar {
+    border-top: 1px solid var(--frame); padding: .25rem .6rem; color: var(--muted);
+    background: #eef0f6; font-size: .72rem;
+  }
+  .overlay {
+    position: relative; border: 2px dashed var(--warn); border-radius: 6px;
+    background: rgba(40,44,54,.85); color: #eee; padding: .8rem; margin-top: .6rem;
+  }
+  .popover {
+    border: 1.5px solid var(--warn); border-radius: 6px; background: #fff;
+    box-shadow: 2px 3px 0 rgba(120,90,40,.25); padding: .3rem .2rem; width: 11rem;
+    font-size: .75rem;
+  }
+  .popover div { padding: .15rem .6rem; }
+  .popover div.sep { border-top: 1px solid #ddd; padding: 0; margin: .15rem 0; }
+  .annot { color: var(--warn); font-size: .72rem; font-weight: 600; }
+  .navlist { border-right: 1px solid var(--frame); padding-right: .5rem; min-width: 8rem; }
+  .navlist div { padding: .2rem .4rem; border-radius: 4px; }
+  .navlist .sel { background: var(--accent); color: #fff; }
+  .msg { max-width: 70%; border-radius: 8px; padding: .25rem .6rem; margin-bottom: .35rem; }
+  .msg.me { margin-left: auto; background: #d9e7fb; }
+  .msg.bot { margin-right: auto; background: #eceff5; }
+  .sticky {
+    width: 12rem; border: 2px solid var(--frame); border-radius: 6px; overflow: hidden;
+    box-shadow: 3px 4px 0 rgba(120,130,150,.25); font-size: .78rem;
+  }
+  .sticky .bar { padding: .15rem .5rem; font-weight: 600; display: flex; justify-content: space-between; }
+  .sticky .txt { padding: .5rem; min-height: 5rem; background: rgba(255,255,255,.6); }
+</style>
+</head>
+<body>
+
+<h1>M4 target app 候補比較 — A / B1 / B2 / B3</h1>
+
+<p class="meta">
+status: exploratory artifact ・ created: 2026-07-07 ・
+関連: <a href="framing.md">framing.md</a>（M4 start framing、判断基準の正本）/
+<a href="../../_roadmap.md">process/_roadmap.md</a> §M4 /
+<a href="../../milestone-3/handoff.md">M3 handoff</a> /
+<a href="../../../docs/notes/m4-interaction-intake.md">m4-interaction-intake.md</a>
+</p>
+
+<div class="note">
+本ファイルは M4 target app の<strong>候補比較のための探索アーティファクト</strong>である
+（M3 の <a href="../../milestone-3/requirements/target-app-wireframes.html">target-app-wireframes.html</a> と同役割）。
+採択の SSOT は本ファイルではなく、採択後に書く <code>requirements/spec.md</code>（M4 target app pre-doc）。
+軸別素読みは均等加重で書く。<strong>オーナー加重の反映と採択判断は未実施</strong>（末尾の placeholder 節参照）。
+</div>
+
+<h2>0. 前提 — 候補が証明すべきもの</h2>
+
+<p>M4 acceptance criteria（<a href="../../_roadmap.md">_roadmap.md</a> §M4）と
+§1.1 で take 合意済みの pool item（core 4 件）を証明対象とする。
+下記は app 候補に依存しない共通項:</p>
+
+<ul>
+  <li><strong>per-monitor DPI / AccessKit・UIA / Mica・Acrylic + accent</strong> — どの候補でも同等に証明可能（app の絵柄に依らない）。</li>
+  <li><strong>sizing spike</strong>（Problem B、M4 計画で振り分け記録）— app 非依存。</li>
+  <li><strong>stretch 層</strong>（Image widget / literal <code>fill</code>）は A 前提の take。B 系採択時は pool へ戻す（1 行 disposition）。</li>
+  <li>B 系はいずれも M3 handoff の <strong>M4 residual cluster</strong>（実画像・thumbnail hit-testing・wheel/drag scroll・lightbox modal focus・dynamic title・DPI のうち AC 化されていないもの）を M4 で消化しない。採択時は M5 への carry を framing で明示する。</li>
+</ul>
+
+<h2>案 A — Photo Gallery 成熟（M3 継続）</h2>
+
+<p>M3 の Gallery を実 interaction app に育てる。実画像（stretch）、thumbnail click で
+lightbox、検索欄（TextField + IME）、context menu（top-layer）、別 window viewer（multi-window）。</p>
+
+<div class="board">
+  <div class="window mica" style="width:26rem">
+    <div class="titlebar"><span>Gallery — 24 items</span><span class="buttons">— □ ×</span></div>
+    <div class="body">
+      <div class="row">
+        <span class="textfield">Search photos…（IME 日本語入力）</span>
+        <span class="btn">Sort ▾</span>
+      </div>
+      <div class="annot">▲ TextField + IME / Sort ▾ = top-layer dropdown</div>
+      <div class="thumbwrap">
+        <div class="thumb">img</div><div class="thumb">img</div><div class="thumb">img</div>
+        <div class="thumb">img</div><div class="thumb">img</div>
+        <div class="popover" style="position:absolute; margin-left:6rem;">
+          <div>Open</div><div>Open in new window</div><div class="sep"></div><div>Rename…</div>
+        </div>
+      </div>
+      <div class="annot">▲ thumbnail click（generic hit-test）/ 右クリック = context menu（top-layer）</div>
+      <div class="overlay">
+        <strong>Lightbox（modal）</strong> — focus trap / Esc close / ← → prev-next / scrim click-away
+        <div class="row" style="margin-top:.4rem">
+          <span class="btn">←</span>
+          <span style="flex:1;text-align:center">photo 12 / 24</span>
+          <span class="btn">→</span>
+          <span class="btn">×</span>
+        </div>
+      </div>
+    </div>
+    <div class="statusbar">24 items — 3 selected（動的 status = 述語/カウント）</div>
+  </div>
+
+  <div class="window mica" style="width:15rem">
+    <div class="titlebar"><span>sunset_beach.jpg</span><span class="buttons">— □ ×</span></div>
+    <div class="body">
+      <div class="thumb" style="width:100%;height:7rem">full image</div>
+      <div class="annot">▲ 別 window viewer（multi-window / dynamic title = filename）</div>
+    </div>
+  </div>
+</div>
+
+<table>
+  <tr><th>AC / take</th><th>A での証明形</th></tr>
+  <tr><td>input / focus / event routing</td><td>thumbnail click・lightbox focus trap・Esc/←→・wheel/drag scroll・touch tap</td></tr>
+  <tr><td>TextField + IME</td><td>検索欄（+ Rename dialog を足す余地）。<strong>app の本筋ではなく周辺</strong></td></tr>
+  <tr><td>multi-window</td><td>viewer window（per-window state = 表示中 photo、cross-window focus）</td></tr>
+  <tr><td>host state boundary</td><td>photo collection の host 供給・検索 text write-back → host filter で差し替え</td></tr>
+  <tr><td>expression predicates</td><td><code>enabled: index &gt; 0</code>（prev/next 端）、<code>if matches == 0</code> empty state</td></tr>
+  <tr><td>top-layer overlays</td><td>context menu / sort dropdown</td></tr>
+  <tr><td>window config props</td><td>dynamic title（filename / count）、initial window size</td></tr>
+  <tr><td>stretch</td><td><strong>Image widget と literal fill が本領を発揮する唯一の案</strong></td></tr>
+</table>
+
+<p><strong>強み:</strong> M3 residual cluster を 1:1 で消化。M3 資産（gallery.ui、3 ホスト）継続で
+spec/実装の立ち上がり最速。実画像 + Mica の絵は outreach 訴求が強い。<br>
+<strong>弱み:</strong> TextField/IME が検索欄どまりで、M4 thesis の中心（text input）の検証が薄い。
+focus 対象のコントロール種が少ない。</p>
+
+<h2>案 B1 — 付箋（Sticky Notes）</h2>
+
+<p>デスクトップに小窓のメモを貼る Windows 定番アプリの Wasamo 版。
+<strong>1 メモ = 1 window</strong> で multi-window が製品意味そのものになる。</p>
+
+<div class="board">
+  <div class="window mica" style="width:17rem">
+    <div class="titlebar"><span>Sticky Notes — 5 notes</span><span class="buttons">— □ ×</span></div>
+    <div class="body">
+      <div class="row">
+        <span class="textfield">Search notes…（IME）</span>
+        <span class="btn primary">＋ New</span>
+      </div>
+      <div class="row" style="border:1px solid #ccd;border-radius:4px;padding:.2rem .4rem">買い物リスト — 牛乳、卵…</div>
+      <div class="row" style="border:1px solid #ccd;border-radius:4px;padding:.2rem .4rem">M4 の TODO — framing…</div>
+      <div class="annot">▲ 一覧 window（検索 + open。click で該当 note window へ focus 移動 = cross-window focus）</div>
+    </div>
+  </div>
+
+  <div class="sticky" style="background:#fdf3c9">
+    <div class="bar">買い物リスト <span>▾ ×</span></div>
+    <div class="txt">牛乳、卵、食パン<br>（日本語入力 = IME 本番）</div>
+  </div>
+  <div class="sticky" style="background:#d9f0d9">
+    <div class="bar">M4 の TODO <span>▾ ×</span></div>
+    <div class="txt">framing ドラフト<br>候補比較…</div>
+  </div>
+  <div class="popover">
+    <div>Color ▸ 黄 / 緑 / 桃 / 青</div><div class="sep"></div><div>Delete note</div><div>New note</div>
+  </div>
+</div>
+<p class="annot">▲ note 色 = literal fill の出番（stretch）/ ▾ menu = top-layer / title は先頭行から動的生成</p>
+
+<table>
+  <tr><th>AC / take</th><th>B1 での証明形</th></tr>
+  <tr><td>multi-window</td><td><strong>主役</strong>。note 作成 = window 生成、per-window state = note 本文、close = note を閉じる</td></tr>
+  <tr><td>TextField + IME</td><td>note 本文の編集（<strong>ただし本質的に複数行</strong> — 下記リスク）</td></tr>
+  <tr><td>host state boundary</td><td>notes の host 供給・編集 write-back・host 側保存</td></tr>
+  <tr><td>top-layer overlays</td><td>note menu（色替え/削除）</td></tr>
+  <tr><td>expression predicates</td><td>一覧の empty state、検索ヒット数</td></tr>
+  <tr><td>window config props</td><td>dynamic title（先頭行）、note window の initial size</td></tr>
+</table>
+
+<p><strong>強み:</strong> multi-window の検証密度が全候補で最高。小窓 Mica/Acrylic が並ぶ絵は
+identity 訴求が最強クラス。<br>
+<strong>弱み・構造リスク:</strong> 付箋本文は本質的に<strong>複数行編集</strong>（折返し・選択・クリップボード）。
+M4 AC の TextField は「minimum editable text widget」であり、複数行まで要求すると
+TextField 工数が跳ねる。単一行に落とすと付箋らしさが崩れる。<strong>採択するなら
+「M4 TextField は複数行を含むか」を framing の最初の問いとして解決する必要がある。</strong></p>
+
+<h2>案 B2 — 設定画面（Settings クローン）</h2>
+
+<p>Windows 11「設定」風の 2 ペイン app。異種コントロールが密集し、
+focus model と top-layer overlay の検証密度が最高になる。</p>
+
+<div class="board">
+  <div class="window mica" style="width:30rem">
+    <div class="titlebar"><span>Settings</span><span class="buttons">— □ ×</span></div>
+    <div class="body" style="display:flex;gap:.8rem">
+      <div class="navlist">
+        <div class="sel">System</div>
+        <div>Personalization</div>
+        <div>Accessibility</div>
+        <div>About</div>
+      </div>
+      <div style="flex:1">
+        <div class="row"><span class="textfield">Find a setting…（IME）</span></div>
+        <div class="row"><span style="flex:1">Night light</span><span class="toggle-on">on</span></div>
+        <div class="row" style="padding-left:1rem;color:#889">
+          <span style="flex:1">Strength</span><span class="btn">Medium ▾</span>
+        </div>
+        <div class="annot">▲ 親 off で子は disabled（enabled: 述語）/ Medium ▾ = top-layer dropdown</div>
+        <div class="row"><span style="flex:1">Bluetooth</span><span class="toggle-off">off</span></div>
+        <div class="row"><span style="flex:1">Device name</span><span class="textfield">DESKTOP-…（rename）</span></div>
+        <div class="row"><span class="btn primary">Apply</span><span class="btn disabled">Revert</span></div>
+        <div class="annot">▲ Apply/Revert の enabled = 「変更あり」述語 / 設定値 = host state 読み書き</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<table>
+  <tr><th>AC / take</th><th>B2 での証明形</th></tr>
+  <tr><td>focus / event routing</td><td><strong>主役</strong>。nav ⇄ pane、toggle / dropdown / textfield / button 異種混在の Tab 順・focus visual</td></tr>
+  <tr><td>top-layer overlays</td><td>dropdown / tooltip — 最も自然な出番</td></tr>
+  <tr><td>expression predicates</td><td>依存設定の enabled、変更ダーティ判定</td></tr>
+  <tr><td>TextField + IME</td><td>設定検索・デバイス名（単一行で自然）</td></tr>
+  <tr><td>host state boundary</td><td>設定値の host 供給・write-back（apply/revert）</td></tr>
+  <tr><td>multi-window</td><td><strong>弱い</strong> — 設定 app は単一 window。別 window は作為的になる</td></tr>
+  <tr><td>AccessKit / UIA</td><td>コントロール role の多様性で UIA 検証も最密</td></tr>
+</table>
+
+<p><strong>強み:</strong> focus model・UIA・overlay の検証密度最高。Mica identity は本家「設定」そのもの。
+単一行 TextField で複数行リスクなし。<br>
+<strong>弱み:</strong> multi-window の自然な出番がない（AC を app 外の最小 fixture で証明するか、
+作為的な別 window を足すか、の選択を迫られる）。動きが少なく showcase としての楽しさは最弱。</p>
+
+<h2>案 B3 — チャット（ローカル echo bot）</h2>
+
+<p>会話 UI。送信すると host 側 bot が返信するローカル完結チャット。
+IME と host state boundary（in/out 両方向）が製品動作の本体になる。</p>
+
+<div class="board">
+  <div class="window mica" style="width:13rem">
+    <div class="titlebar"><span>Chats</span><span class="buttons">— □ ×</span></div>
+    <div class="body">
+      <div class="row" style="border:1px solid #ccd;border-radius:4px;padding:.2rem .4rem">
+        <span style="flex:1">Echo Bot</span><span class="annot">2</span>
+      </div>
+      <div class="row" style="border:1px solid #ccd;border-radius:4px;padding:.2rem .4rem">
+        <span style="flex:1">雑談</span>
+      </div>
+      <div class="annot">▲ 会話ごとに別 window で開ける（multi-window）/ 未読数 = i32 binding</div>
+    </div>
+  </div>
+
+  <div class="window mica" style="width:22rem">
+    <div class="titlebar"><span>Echo Bot — 12 messages</span><span class="buttons">— □ ×</span></div>
+    <div class="body">
+      <div class="msg me">こんにちは（IME 日本語入力が本番）</div>
+      <div class="msg bot">こんにちは（← host-origin write で追加）</div>
+      <div class="msg me">M4 の設計を進めています</div>
+      <div class="msg bot">M4 の設計を進めています</div>
+      <div class="row" style="margin-top:.5rem">
+        <span class="textfield">メッセージを入力…</span>
+        <span class="btn primary">Send</span>
+      </div>
+      <div class="annot">▲ Send enabled = 「入力が空でない」述語 / 送信 = TextField write-back → host、
+      返信 = host-origin write（take item の in/out 両方向が見える）</div>
+    </div>
+  </div>
+</div>
+
+<table>
+  <tr><th>AC / take</th><th>B3 での証明形</th></tr>
+  <tr><td>TextField + IME</td><td><strong>主役</strong>。日本語で会話を打つことが app の本体（単一行で自然）</td></tr>
+  <tr><td>host state boundary</td><td><strong>最強</strong>。write-back（送信）+ host-origin write（bot 返信）の両方向が製品動作</td></tr>
+  <tr><td>multi-window</td><td>会話ごとの window（per-window state = 会話、cross-window focus）</td></tr>
+  <tr><td>expression predicates</td><td>Send enabled（非空判定）、未読 <code>if count &gt; 0</code></td></tr>
+  <tr><td>top-layer overlays</td><td>絵文字 / 定型文 picker popover</td></tr>
+  <tr><td>input / scroll</td><td>メッセージ列の wheel / drag / touch scroll、Enter 送信</td></tr>
+  <tr><td>window config props</td><td>dynamic title（会話名 + 件数）</td></tr>
+</table>
+
+<p><strong>強み:</strong> IME と host state boundary の証明が全候補最強。入力欄は単一行で自然
+（複数行リスク回避）。会話が増える・返ってくる、という動きがあり showcase として見栄えする。<br>
+<strong>弱み・構造リスク:</strong> メッセージ = text + 送信者 + （時刻）の<strong>並行配列</strong>になり、
+M3 の「structured item data なし」制約の限界を突く可能性（TypedValue 圧力。framing で
+並行配列 2〜3 本で収まるか点検要）。会話相手が fake（echo bot）であることの見せ方。</p>
+
+<h2>軸別素読み（均等加重）</h2>
+
+<table>
+  <tr>
+    <th>軸</th>
+    <th>A: Gallery</th><th>B1: 付箋</th><th>B2: 設定</th><th>B3: チャット</th>
+  </tr>
+  <tr><td>1. TextField / IME の中心性</td><td class="c">△</td><td class="c">○</td><td class="c">○</td><td class="c">◎</td></tr>
+  <tr><td>2. multi-window の自然さ</td><td class="c">○</td><td class="c">◎</td><td class="c">△</td><td class="c">○</td></tr>
+  <tr><td>3. focus / event routing 検証密度</td><td class="c">○</td><td class="c">○</td><td class="c">◎</td><td class="c">○</td></tr>
+  <tr><td>4. top-layer overlay の自然さ</td><td class="c">○</td><td class="c">○</td><td class="c">◎</td><td class="c">○</td></tr>
+  <tr><td>5. host state boundary の証明力</td><td class="c">○</td><td class="c">○</td><td class="c">○</td><td class="c">◎</td></tr>
+  <tr><td>6. M3 residual 消化</td><td class="c">◎</td><td class="c">△</td><td class="c">△</td><td class="c">△</td></tr>
+  <tr><td>7. 構造リスク（複数行 / TypedValue 圧力）</td><td class="c">低</td><td class="c"><strong>高（複数行）</strong></td><td class="c">低</td><td class="c">中（並行配列）</td></tr>
+  <tr><td>8. identity / outreach 訴求</td><td class="c">○</td><td class="c">◎</td><td class="c">◎</td><td class="c">○</td></tr>
+  <tr><td>9. 実装・spec 工数（相対）</td><td class="c">小（資産継続）</td><td class="c">中〜大</td><td class="c">中</td><td class="c">中</td></tr>
+</table>
+
+<h3>軸ごとの補足</h3>
+
+<ul>
+  <li><strong>軸 1（IME 中心性）:</strong> M4 thesis の中心は text input と focus。
+  A は検索欄どまりで thesis 検証としては薄い。B3 は日本語会話そのものが app の本体。</li>
+  <li><strong>軸 2（multi-window）:</strong> B1 のみ「window の生成・破棄が製品操作」。
+  A/B3 は「開ける」レベル、B2 は作為なしには出番がない。B2 採択時は multi-window AC の
+  discharge 方法（最小 fixture の別建て等）を framing で決める必要がある。</li>
+  <li><strong>軸 6（residual 消化）:</strong> A のみ M3 handoff の M4 residual cluster を
+  そのまま消化。B 系採択時は M5 への carry を framing で明示 disposition（silent drop 禁止）。</li>
+  <li><strong>軸 7（構造リスク）:</strong> B1 の複数行編集は TextField AC の
+  「minimum」解釈を最初に確定しないと工数が読めない。B3 の並行配列は
+  <a href="../../../docs/notes/typed-value-evaluator.md">typed-value-evaluator.md</a> の
+  再評価トリガ（List item context binding）に接近する。A/B2 は既知 surface の範囲。</li>
+  <li><strong>軸 9（工数）:</strong> A は gallery.ui + 3 ホストの継続で最小。
+  B 系は `.ui`・host・wireframe を新規に書く。B1 はさらに複数行 TextField を含むと最大。</li>
+</ul>
+
+<div class="note warn">
+<strong>均等加重での読み:</strong> 単独首位はない。B3 が「thesis 中心性（軸 1・5）で最強 +
+リスク中」、B2 が「検証密度（軸 3・4）で最強 + multi-window に穴」、B1 が「multi-window と
+identity で最強 + 複数行リスク高」、A が「工数・残務消化で最強 + thesis 中心性が薄い」。
+<strong>どの軸を重く見るかで採択が変わる構図であり、オーナー加重が決定打になる。</strong>
+</div>
+
+<h2>オーナー加重を反映した素読み（placeholder）</h2>
+
+<div class="note">
+未記入。オーナーから軸 1〜9 の加重（重 / 通常 / 軽）を得た後、本節に加重後の読みと
+順位を記録する。採択そのものは <code>requirements/spec.md</code>（M4 target app pre-doc）で明文化し、
+本ファイルは比較記録として保持する。
+</div>
+
+<h2>位置づけと将来</h2>
+
+<ul>
+  <li>本ファイルは exploratory artifact。採択判断・採用理由・必要 surface・out-of-scope の
+  SSOT は採択後の <code>spec.md</code> が持つ。</li>
+  <li>採択された候補の wireframe は、M3 の前例
+  （<a href="../../milestone-3/requirements/spec.md">M3 spec.md</a> §視覚 artifacts との参照関係）に
+  ならい、必要なら英語ラベルの stable 抽出版を <code>docs/references/</code> へ切り出す。</li>
+  <li>非採択候補の記述は歴史的記録としてここに残す。</li>
+</ul>
+
+</body>
+</html>
