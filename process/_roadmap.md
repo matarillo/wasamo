@@ -215,6 +215,17 @@ is a first-class editor experience.
   the M6 disposition below, per the
   [author-controllable sizing VDR](./cross-milestone/decisions/author-controllable-sizing-surface.md)
 
+<a id="pre-10-candidate-pool"></a>
+
+## Pre-1.0 candidate pool
+
+Triaged items the owner wants before 1.0 that are not (yet) assigned
+to a milestone. Entries carry **no acceptance criteria** and are not
+commitments. The item table and the per-planning disposition log live
+in [process/candidate-pool.md](./candidate-pool.md); governing rules
+(entry criterion, tags, lifecycle, disposition duty) are in
+[DD-V-028](./cross-milestone/decisions/pre-1.0-candidate-pool.md).
+
 ## M6: 1.0 — C ABI stabilization
 
 **Thesis:** the ABI is settled, performance targets are met, a
