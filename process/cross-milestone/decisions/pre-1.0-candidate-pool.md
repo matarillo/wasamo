@@ -1,6 +1,6 @@
 # Vision Decision Record — Pre-1.0 candidate pool (DD-V-028)
 
-**Status:** Proposed
+**Status:** Accepted
 
 **Scope:** adds a non-AC section to `process/_roadmap.md` that holds
 triaged pre-1.0 candidate items not (yet) assigned to a milestone, and
@@ -181,7 +181,10 @@ bounded-growth prior, which pull back toward C.
 **Owner review position (2026-07-07): leans C.** The Accept decision
 resolves the C-vs-D choice; both shapes are fully specified (rules
 below are option-neutral except the Placement and size-hatch bullets,
-and the Consequent edits section carries both variants). Whichever is chosen, the falsifier is
+and the Consequent edits section carries both variants). *Resolved at
+Accept (2026-07-07): **Option D**, after a side-by-side comparison of
+both working states (C committed as `wip/option-c`, D built in the
+working tree).* Whichever is chosen, the falsifier is
 recorded: C is reassessed if the pool exceeds ~25 items or grows
 across two consecutive plannings; D is reassessed if a planning finds
 stale rows that ambient visibility would have caught, or a `take`
@@ -283,3 +286,4 @@ If **Option C** is chosen at Accept:
 | 2026-07-07 | Seeding experiment (full `docs/notes/` sweep, 12 items) run against the owner's roadmap-balance concern. Item format tightened to one table row (hard bound); entry criterion refined to exclude open design questions; growth valve added (pre-authorised split to `process/candidate-pool.md` at ~20 items). Still Proposed. |
 | 2026-07-07 | Recommendation flipped **Option C → Option D (hybrid)** on the seeding evidence: 12 items at one row each already tie the M4 section (37 vs 35 lines) and the growth direction is asymmetric. Option D rewritten from "separate backlog file" to the hybrid shape (item table + disposition log in `process/candidate-pool.md`, AC-less stub in `_roadmap.md`); C/D assessments rebalanced with the measured weight; growth valve retired (absorbed by D). Still Proposed. |
 | 2026-07-07 | Full-slate critical pass (owner-requested). D's give-ups made explicit: ambient-visibility loss (structural, partially mitigable only at Soft tier), two-file `take` silent-drop channel (closed to Forcing by the new option-neutral destination-link rule), link fan-out; D gains churn-rate separation. C gains the mirrored strengths (ambient visibility, single-file `take` diffs) and the **owner's bounded-growth prior** (~2× the day-one seed) recorded as a counter to the size argument, with a cheap falsifier (item count per §1.1 pass). A sharpened to "re-derivable but non-auditable"; B retained as the escalation path for heavy items. Recommendation stays D (agent); owner review position leans C; Accept resolves. Consequent edits split into option variants. Still Proposed. |
+| 2026-07-07 | **Accepted** after owner review, with **Option D (hybrid)** chosen following a side-by-side comparison of both working states (C committed as `wip/option-c`, D in the working tree). Consequent edits landed in the same commit: `process/candidate-pool.md` created (item table + disposition log, 12-item seed), `_roadmap.md` pool section reduced to the stub, workflow §1.1 third input repointed to `candidate-pool.md` (+ destination-link rule), `docs/notes/owner-intake.md` triage destination repointed. |

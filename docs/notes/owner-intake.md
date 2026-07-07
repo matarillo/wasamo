@@ -41,9 +41,9 @@ related-notes:
 - **reject** — 見送り。理由 1 行を残してエントリを閉じる
 - **fix-now** — バグ・明白な不整合。通常の修正作業へ
 - **Pre-1.0 candidate pool** — 分解・タグ付け済みで、どの milestone
-  にも未割当の item。`_roadmap.md` の
-  [Pre-1.0 candidate pool](../../process/_roadmap.md#pre-10-candidate-pool)
-  節へ（ルールは
+  にも未割当の item。
+  [process/candidate-pool.md](../../process/candidate-pool.md) の
+  item テーブルへ（ルールは
   [DD-V-028](../../process/cross-milestone/decisions/pre-1.0-candidate-pool.md)）
 - **fast lane**（計画中） — 小粒 additive item の比例縮小レーン。
   VDR 未確定の構想。具体的な小粒 item が最初に出た時点で VDR を
@@ -62,8 +62,8 @@ M3 までに実装したウィジェットの機能を拡張したい。例: Box
 要素で背景色（`fill`）を設定できること。
 
 - **triage:** triaged (2026-07-07) → 3 item に分解し
-  [Pre-1.0 candidate pool](../../process/_roadmap.md#pre-10-candidate-pool)
-  へ（DD-V-028 の Accept と同時に有効）: (a) レイアウトコンテナへの
+  [Pre-1.0 candidate pool](../../process/candidate-pool.md)
+  へ（DD-V-028 Accepted）: (a) レイアウトコンテナへの
   リテラル `fill` 拡張（`ABI-bearing: no`・小粒）、(b) themed widget
   （Button 等）の背景色（M5 theming の設計空間・`unknown`）、
   (c) reactive な `fill`（binding type / TypedValue 問題・`unknown`）

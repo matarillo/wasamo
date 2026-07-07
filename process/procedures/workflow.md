@@ -202,11 +202,13 @@ critical check と owner authorisation を `pending` とし、本文 land は両
    を確認し、本マイルストーンで発火するものがないか点検する。発火している
    ものは取り込み判断（本マイルストーンで解決するか、引き続き live のまま
    置くか）。
-3. **`process/_roadmap.md` の Pre-1.0 candidate pool** — 各 item に処遇
-   （`take (milestone N)` / `hold` / `retire`）を判断し、pool 節の
+3. **Pre-1.0 candidate pool
+   （[process/candidate-pool.md](../candidate-pool.md)）** — 各 item に
+   処遇（`take (milestone N)` / `hold` / `retire`）を判断し、同ファイルの
    disposition log に日付付きで記録する
    （[DD-V-028](../cross-milestone/decisions/pre-1.0-candidate-pool.md)
-   の Forcing artifact）。`ABI-bearing: unknown` の item は M6 直前の
+   の Forcing artifact）。`take` / `retire` は着地先リンク必須
+   （destination-link rule）。`ABI-bearing: unknown` の item は M6 直前の
    マイルストーン計画までに `yes` / `no` へ解消する。
 
 1 と 2 はマイルストーンレベルでは内部判断として消化し、明示的な文書化は
