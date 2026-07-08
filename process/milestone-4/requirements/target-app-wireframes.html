@@ -121,13 +121,18 @@ status: exploratory artifact ・ created: 2026-07-07 ・
 本ファイルは M4 target app の<strong>候補比較のための探索アーティファクト</strong>である
 （M3 の <a href="../../milestone-3/requirements/target-app-wireframes.html">target-app-wireframes.html</a> と同役割）。
 採択の SSOT は本ファイルではなく、採択後に書く <code>requirements/spec.md</code>（M4 target app pre-doc）。
-軸別素読みは均等加重で書く。<strong>オーナー加重の反映と採択判断は未実施</strong>（末尾の placeholder 節参照）。
+判断基準（優先機能リストのカバレッジ第一・副次基準）の正本は
+<a href="framing.md">framing.md</a> §機能リスト / §target app の選定であり、
+本ファイルは重み付け前の素読みまでを記録する。
+<strong>オーナー確認の反映と採択判断は未実施</strong>（末尾の placeholder 節参照）。
 </div>
 
 <h2>0. 前提 — 候補が証明すべきもの</h2>
 
-<p>M4 acceptance criteria（<a href="../../_roadmap.md">_roadmap.md</a> §M4）と
-§1.1 で take 合意済みの pool item（core 4 件）を証明対象とする。
+<p>証明対象は M4 で実装する機能リスト — M4 acceptance criteria
+（<a href="../../_roadmap.md">_roadmap.md</a> §M4）+ §1.1 で take 合意済みの
+pool item。機能リストの精緻化と優先順位（P1〜P4）の正本は
+<a href="framing.md">framing.md</a> §機能リスト。
 下記は app 候補に依存しない共通項:</p>
 
 <ul>
@@ -348,54 +353,81 @@ IME と host state boundary（in/out 両方向）が製品動作の本体にな�
 M3 の「structured item data なし」制約の限界を突く可能性（TypedValue 圧力。framing で
 並行配列 2〜3 本で収まるか点検要）。会話相手が fake（echo bot）であることの見せ方。</p>
 
-<h2>軸別素読み（均等加重）</h2>
+<h2>優先機能カバレッジの素読み（重み付け前）</h2>
+
+<p>行は <a href="framing.md">framing.md</a> §機能リストのうち選定上の差別化要因
+（P1 / P3 / P4）。P2（Mica / DPI）と input handling はどの候補でも同等に証明できる
+非差別化項目のため行に含めない。<br>
+凡例: ◎ = app の本筋として証明 / ○ = 自然に組み込める / △ = 周辺的・作為が要る /
+× = 出番がない。</p>
 
 <table>
   <tr>
-    <th>軸</th>
+    <th>優先</th><th>機能</th>
     <th>A: Gallery</th><th>B1: 付箋</th><th>B2: 設定</th><th>B3: チャット</th>
   </tr>
-  <tr><td>1. TextField / IME の中心性</td><td class="c">△</td><td class="c">○</td><td class="c">○</td><td class="c">◎</td></tr>
-  <tr><td>2. multi-window の自然さ</td><td class="c">○</td><td class="c">◎</td><td class="c">△</td><td class="c">○</td></tr>
-  <tr><td>3. focus / event routing 検証密度</td><td class="c">○</td><td class="c">○</td><td class="c">◎</td><td class="c">○</td></tr>
-  <tr><td>4. top-layer overlay の自然さ</td><td class="c">○</td><td class="c">○</td><td class="c">◎</td><td class="c">○</td></tr>
-  <tr><td>5. host state boundary の証明力</td><td class="c">○</td><td class="c">○</td><td class="c">○</td><td class="c">◎</td></tr>
-  <tr><td>6. M3 residual 消化</td><td class="c">◎</td><td class="c">△</td><td class="c">△</td><td class="c">△</td></tr>
-  <tr><td>7. 構造リスク（複数行 / TypedValue 圧力）</td><td class="c">低</td><td class="c"><strong>高（複数行）</strong></td><td class="c">低</td><td class="c">中（並行配列）</td></tr>
-  <tr><td>8. identity / outreach 訴求</td><td class="c">○</td><td class="c">◎</td><td class="c">◎</td><td class="c">○</td></tr>
-  <tr><td>9. 実装・spec 工数（相対）</td><td class="c">小（資産継続）</td><td class="c">中〜大</td><td class="c">中</td><td class="c">中</td></tr>
+  <tr><td>P1</td><td>focus model / event routing（検証密度）</td><td class="c">○</td><td class="c">○</td><td class="c">◎</td><td class="c">○</td></tr>
+  <tr><td>P1</td><td>TextField</td><td class="c">△</td><td class="c">◎*</td><td class="c">○</td><td class="c">◎</td></tr>
+  <tr><td>P1</td><td>IME（日本語入力）</td><td class="c">△</td><td class="c">◎*</td><td class="c">○</td><td class="c">◎</td></tr>
+  <tr><td>P1</td><td>multi-window</td><td class="c">○</td><td class="c">◎</td><td class="c">×</td><td class="c">○</td></tr>
+  <tr><td>P1</td><td>AccessKit / UIA（検証密度）</td><td class="c">○</td><td class="c">○</td><td class="c">◎</td><td class="c">○</td></tr>
+  <tr><td>P3</td><td>host state boundary</td><td class="c">○</td><td class="c">○</td><td class="c">○</td><td class="c">◎</td></tr>
+  <tr><td>P3</td><td>expression predicates</td><td class="c">○</td><td class="c">○</td><td class="c">◎</td><td class="c">◎</td></tr>
+  <tr><td>P3</td><td>top-layer overlays</td><td class="c">○</td><td class="c">○</td><td class="c">◎</td><td class="c">○</td></tr>
+  <tr><td>P3</td><td>window config props</td><td class="c">◎</td><td class="c">◎</td><td class="c">△</td><td class="c">○</td></tr>
+  <tr><td>P4</td><td>Image widget</td><td class="c">◎</td><td class="c">×</td><td class="c">×</td><td class="c">×</td></tr>
+  <tr><td>P4</td><td>literal fill（Box 以外）</td><td class="c">○</td><td class="c">◎</td><td class="c">△</td><td class="c">△</td></tr>
 </table>
 
-<h3>軸ごとの補足</h3>
+<p class="meta">* B1 の TextField / IME の ◎ は「M4 TextField が複数行編集を含む」
+前提（framing 問い 1）。単一行に落とすと付箋らしさごと崩れ、評価は ○ 以下に下がる。</p>
+
+<h3>副次基準（第一基準が拮抗した場合の判断材料）</h3>
+
+<table>
+  <tr>
+    <th>副次基準</th>
+    <th>A: Gallery</th><th>B1: 付箋</th><th>B2: 設定</th><th>B3: チャット</th>
+  </tr>
+  <tr><td>1. 実装・spec 工数（相対）</td><td class="c">小（資産継続）</td><td class="c">中〜大</td><td class="c">中</td><td class="c">中</td></tr>
+  <tr><td>2. 構造リスク</td><td class="c">低</td><td class="c"><strong>高（複数行）</strong></td><td class="c">低</td><td class="c">中（並行配列）</td></tr>
+  <tr><td>3. identity / outreach 訴求</td><td class="c">○</td><td class="c">◎</td><td class="c">◎</td><td class="c">○</td></tr>
+  <tr><td>4. M3 residual 消化</td><td class="c">◎</td><td class="c">△</td><td class="c">△</td><td class="c">△</td></tr>
+</table>
+
+<h3>補足</h3>
 
 <ul>
-  <li><strong>軸 1（IME 中心性）:</strong> M4 thesis の中心は text input と focus。
+  <li><strong>TextField / IME 行:</strong> M4 thesis の中心は text input と focus。
   A は検索欄どまりで thesis 検証としては薄い。B3 は日本語会話そのものが app の本体。</li>
-  <li><strong>軸 2（multi-window）:</strong> B1 のみ「window の生成・破棄が製品操作」。
+  <li><strong>multi-window 行:</strong> B1 のみ「window の生成・破棄が製品操作」。
   A/B3 は「開ける」レベル、B2 は作為なしには出番がない。B2 採択時は multi-window AC の
   discharge 方法（最小 fixture の別建て等）を framing で決める必要がある。</li>
-  <li><strong>軸 6（residual 消化）:</strong> A のみ M3 handoff の M4 residual cluster を
-  そのまま消化。B 系採択時は M5 への carry を framing で明示 disposition（silent drop 禁止）。</li>
-  <li><strong>軸 7（構造リスク）:</strong> B1 の複数行編集は TextField AC の
+  <li><strong>副次基準 2（構造リスク）:</strong> B1 の複数行編集は TextField AC の
   「minimum」解釈を最初に確定しないと工数が読めない。B3 の並行配列は
   <a href="../../../docs/notes/typed-value-evaluator.md">typed-value-evaluator.md</a> の
   再評価トリガ（List item context binding）に接近する。A/B2 は既知 surface の範囲。</li>
-  <li><strong>軸 9（工数）:</strong> A は gallery.ui + 3 ホストの継続で最小。
+  <li><strong>副次基準 4（residual 消化）:</strong> A のみ M3 handoff の M4 residual cluster を
+  そのまま消化。B 系採択時は M5 への carry を framing で明示 disposition（silent drop 禁止）。</li>
+  <li><strong>副次基準 1（工数）:</strong> A は gallery.ui + 3 ホストの継続で最小。
   B 系は `.ui`・host・wireframe を新規に書く。B1 はさらに複数行 TextField を含むと最大。</li>
 </ul>
 
 <div class="note warn">
-<strong>均等加重での読み:</strong> 単独首位はない。B3 が「thesis 中心性（軸 1・5）で最強 +
-リスク中」、B2 が「検証密度（軸 3・4）で最強 + multi-window に穴」、B1 が「multi-window と
-identity で最強 + 複数行リスク高」、A が「工数・残務消化で最強 + thesis 中心性が薄い」。
-<strong>どの軸を重く見るかで採択が変わる構図であり、オーナー加重が決定打になる。</strong>
+<strong>重み付け前の読み:</strong> 単独首位はない。B3 = P1 の text 系 + P3 host state で最強・
+リスク中、B2 = focus / overlay / UIA の検証密度で最強だが multi-window に穴、B1 = multi-window と
+identity で最強だが複数行リスク高、A = 工数・残務消化で最強だが text 系が薄い。
+<strong>P1 のうちどの機能を重く見るか（text 系か multi-window か focus 密度か）と副次基準の
+効かせ方で採択が変わる構図であり、framing 問い 1（機能リストの精緻化・優先順位の確認）が
+決定打になる。</strong>
 </div>
 
-<h2>オーナー加重を反映した素読み（placeholder）</h2>
+<h2>オーナー確認を反映した読み（placeholder）</h2>
 
 <div class="note">
-未記入。オーナーから軸 1〜9 の加重（重 / 通常 / 軽）を得た後、本節に加重後の読みと
-順位を記録する。採択そのものは <code>requirements/spec.md</code>（M4 target app pre-doc）で明文化し、
+未記入。framing 問い 1（機能リストの精緻化と優先順位の確認、特に TextField 最小面）の
+確定後、本節にカバレッジの重み付け読みと順位を記録する。採択そのものは
+<code>requirements/spec.md</code>（M4 target app pre-doc）で明文化し、
 本ファイルは比較記録として保持する。
 </div>
 

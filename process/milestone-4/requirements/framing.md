@@ -17,8 +17,16 @@ M4 開始時のマイルストーンレベル framing（workflow §1.3）。M3 �
 target app 採択・ROADMAP acceptance 見直し・plan drafting に先立って、
 thesis の読み・取り込み方針・判断基準を固定する。
 
-§1.1 引き継ぎ確認（2026-07-07 実施、オーナー合意済）の結論を取り込み、
-target app 採択（A/B、未確定）を本 framing の中心の問いとして扱う。
+判断の順序は次のとおり（オーナー指示 2026-07-08、F4）:
+
+1. **M4 で実装する機能リストを精緻化し、優先順位を付ける**（本 framing
+   §機能リスト）。
+2. **その優先機能をどれだけ自然にカバーできるかで target app を決める**
+   （本 framing §target app の選定。比較記録は
+   [target-app-wireframes.html](target-app-wireframes.html)）。
+
+app が先にあって機能が従うのではない。機能リストが先にあり、app は
+その証明手段として選ばれる。
 
 ---
 
@@ -48,8 +56,8 @@ target app 採択（A/B、未確定）を本 framing の中心の問いとして
 
 - **M4 residual cluster**（実画像・thumbnail hit-testing・wheel/drag
   scroll・lightbox modal focus・dynamic title/status・runtime DPI）は
-  target app 採択に依存して消化先が変わる（→ §target app）。DPI と
-  modal focus 系は AC / intake ケースとして app 非依存に扱う。
+  target app 採択に依存して消化先が変わる（→ §target app の選定）。
+  DPI と modal focus 系は AC / intake ケースとして app 非依存に扱う。
 - **Author-controllable sizing spike** — [VDR](../../cross-milestone/decisions/author-controllable-sizing-surface.md)
   により M4 計画は spike の振り分け（デフォルト M4、M5 送りは積極的
   正当化が必要）を記録する義務を負う。→ §最初に決めるべき問い 7。
@@ -116,21 +124,69 @@ item count = 12（DD-V-028 の growth falsifier 記録用）。
   stretch の残量を再評価する（「どうしても収まらない」の判定を感覚では
   なく事前に決めた時点で行う）。
 
-## M4 target app を framing で決める
+## M4 実装機能リストの精緻化と優先順位付け
 
-M3 の実績順序（framing で基準 → wireframes で候補比較 → spec.md で採択
-明文化）にならい、target app 採択を本 framing の中心の問いとする。
-候補と軸別素読み（均等加重）の正本は
-[target-app-wireframes.html](target-app-wireframes.html)。
+target app 選定に先立ち、M4 で実装する機能を列挙し優先順位を付ける。
+出自は AC（[_roadmap.md](../../_roadmap.md) §M4）と §1.1 の pool 処遇合意。
+ここでの優先順位は **target app 選定の重み**である（実装順序・phase 割り
+当ては §1.4 plan.md で別途決める）。
 
-- **候補 slate**: A（Photo Gallery 成熟 / M3 継続）、B1（付箋）、
-  B2（設定画面クローン）、B3（チャット / ローカル echo bot）。
-- **判断の構図**（均等加重の読み）: 単独首位なし。B3 = thesis 中心性
-  （IME / host state）最強、B2 = 検証密度（focus / overlay）最強だが
-  multi-window に穴、B1 = multi-window / identity 最強だが複数行編集
-  リスク高、A = 工数・M3 residual 消化最強だが text input が周辺的。
-  **軸の加重（オーナー）が決定打になる。**
-- オーナーの現時点の傾き: B 系（2026-07-07 チャット、未確定）。
+| 優先 | 機能 | 出自 | 選定上の扱い |
+|---|---|---|---|
+| **P1** | focus model + event routing | AC / intake ケース 6 | 差別化要因（証明の密度が app で変わる） |
+| **P1** | input handling（keyboard / mouse / touch） | AC | ほぼ非差別化（どの app にも同等にある） |
+| **P1** | TextField（最小編集テキスト） | AC | 差別化要因。**最小面（単一行 / 複数行）の精緻化が先決** → 問い 1 |
+| **P1** | IME via TSF（日本語入力） | AC | 差別化要因（app の本筋か周辺かが分かれる） |
+| **P1** | multi-window（per-window state・cross-window focus） | AC | 差別化要因（自然な出番の有無が分かれる） |
+| **P1** | AccessKit / UIA | AC | 差別化要因（コントロール多様性で検証密度が変わる） |
+| **P2** | Mica / Acrylic + accent follow-through（initial） | AC | **非差別化**（app の絵柄に依らず同等に証明可） |
+| **P2** | per-monitor DPI awareness | AC / DD-V-022 | **非差別化**（同上） |
+| **P3** | host state boundary（host 供給・host write・write-back） | pool take (core) | 差別化要因 |
+| **P3** | expression predicates（M-expr1/2a） | pool take (core) | 差別化要因 |
+| **P3** | top-layer overlays（最小 proof） | pool take (core) | 差別化要因 |
+| **P3** | window config props（dynamic title / initial size / WindowConfig） | pool take (core) | 差別化要因 |
+| **P4** | `Image` widget | pool take (stretch) | 載れば取る（載らなければ pool へ戻す） |
+| **P4** | literal `fill`（Box 以外） | pool take (stretch) | 同上 |
+| — | first showcase application | AC | app 選定の**結果そのもの**（機能ではない） |
+| — | sizing spike disposition | AC / VDR | **app 非依存**の独立 duty |
+
+優先順位の根拠:
+
+- **P1** = thesis が名指しする構成要素（focus model とその 4 消費者 +
+  入力そのもの）。target app はこれらを**本筋として**証明できるほど良い。
+- **P2** = AC だが app の絵柄と独立に証明できる platform 面。選定の
+  重みには入れない。
+- **P3** = core take（AC 昇格予定）。P1 に準じて重いが、thesis 名指しでは
+  ない分 P1 の下に置く。
+- **P4** = stretch。カバーできる app なら加点、できなくても減点は小さい
+  （二層構造により撤回が安価なため）。
+
+## target app の選定 — 判断基準と候補
+
+### 判断基準（正本はこの節）
+
+- **第一基準 — 優先機能のカバレッジ**: P1 → P3 → P4 の順の重みで、
+  各機能を「app の本筋として証明できる（◎）/ 自然に組み込める（○）/
+  周辺的・作為が要る（△）/ 出番がない（×）」で読む。
+- **副次基準**（第一基準が拮抗した場合の判断材料）:
+  1. 実装・spec 工数（M3 資産の再利用性）
+  2. 構造リスク（複数行 TextField 圧力・`TypedValue` / 並行配列圧力）
+  3. identity / contributor outreach 訴求
+  4. M3 residual cluster の消化
+- カバレッジ行列と読みの記録は
+  [target-app-wireframes.html](target-app-wireframes.html) に置く
+  （比較記録。判断基準の正本は本節）。
+
+### 候補（4 案）
+
+| 案 | 概要 | 一言でいうと |
+|---|---|---|
+| **A** | Photo Gallery 成熟（M3 継続） | 工数・residual 消化最強、text 入力が周辺的 |
+| **B1** | 付箋（Sticky Notes） | multi-window / identity 最強、複数行 TextField リスク高 |
+| **B2** | 設定画面クローン | focus / overlay / UIA 密度最強、multi-window に穴 |
+| **B3** | チャット（ローカル echo bot） | IME / host state 最強、並行配列圧力に注意 |
+
+オーナーの現時点の傾き: B 系（2026-07-07 チャット、未確定）。
 
 ### 採択に依存して変わるもの（app-dependent 帰結）
 
@@ -190,18 +246,24 @@ M3 の実績順序（framing で基準 → wireframes で候補比較 → spec.m
 
 ## M4 で最初に決めるべき問い
 
-1. **target app 採択** — 候補 slate と軸は上記。オーナー加重待ち。
-2. **TextField の最小面** — 単一行で閉じるか、複数行（折返し・選択・
-   クリップボード）まで含むか。B1 採択なら必須の前提問題。A/B2/B3 なら
-   単一行で自然に閉じる。IME（TSF）検証に必要な最小面もここで確定。
+順序は依存方向どおり: 問い 1（機能リスト）が問い 2（app 選定）に先行する。
+
+1. **機能リストの精緻化と優先順位の確認**（オーナー）—
+   §機能リストの P1〜P4 と各機能の粒度を確認する。特に:
+   **TextField の最小面**（単一行で閉じるか、複数行〔折返し・選択・
+   クリップボード〕まで含むか。B1 採択の前提問題であり、IME/TSF 検証に
+   必要な最小面もここで確定）、**top-layer overlays の最小 proof の粒度**
+   （anchored popover まで要るか、root overlay + click-away で足りるか）。
+2. **target app 採択** — 問い 1 で確定した優先機能のカバレッジを第一基準に
+   4 案から選ぶ（§target app の選定）。
 3. **event routing model** — capture/target/bubble 三相か target-only +
    high-level signals か（intake ケース 6）。focus model の土台として
-   最初期の phase で決める。
-4. **multi-window の discharge 形**（特に B2 採択時）— app 内 proof か
-   最小 fixture 別建てか。
-5. **touch の検証環境** — touch AC をどの環境・どの証拠形で discharge
+   採択後最初期の phase で決める。
+4. **touch の検証環境** — touch AC をどの環境・どの証拠形で discharge
    するか（[verification-environments.md](../../../docs/notes/verification-environments.md)
    の taxonomy に追記が要るか）。
+5. **multi-window の discharge 形**（B2 採択時）— app 内 proof か
+   最小 fixture 別建てか。
 6. **M3 residual cluster の disposition**（B 系採択時）— M5 carry の
    明示記録。
 7. **sizing spike の置き場** — どの phase に置くか（デフォルト M4 実施。
@@ -226,9 +288,15 @@ pool の M4 関連 item はオーナー意向により最大限 target app に�
 方向で framing する。収まらない場合の escape valve は F2 の二層構造が
 提供する（stretch は 1 行 disposition、core は正規 narrowing）。
 
-### F4 — target app は候補比較で採択する（open）
+### F4 — 機能リストが先、target app はそのカバレッジで選ぶ（2026-07-08 指示）
 
-A / B1 / B2 / B3 の slate から、オーナー加重を反映した素読みで採択する。
+M4 で実装する機能リストの精緻化・優先順位付けを最初に行い、target app は
+その優先機能をどれだけ自然にカバーできるかで決める。app が先にあって
+機能が従うのではない。判断基準の正本は本 framing §target app の選定。
+
+### F5 — target app 採択（open）
+
+A / B1 / B2 / B3 の 4 案から、問い 1 確定後のカバレッジ読みで採択する。
 採択の明文化は `requirements/spec.md`（§1.2 成果物）。**未確定。**
 
 ## 初期 phase breakdown 仮説
@@ -241,11 +309,12 @@ focus model 確定後、showcase 統合と AccessKit / Mica / DPI の evidence �
 
 ## Next step
 
-1. オーナー: 軸 1〜9 の加重と slate の増減 →
-   [target-app-wireframes.html](target-app-wireframes.html) に加重後の
-   読みを記録。
-2. target app 採択 → `requirements/spec.md`（M4 target app pre-doc）で
-   明文化 + 本 framing F4 を確定・app-dependent 帰結を revisions で確定。
+1. オーナー: 問い 1（機能リストの精緻化と優先順位の確認 — 特に TextField
+   最小面と overlay 最小 proof の粒度）+ 副次基準の重み。
+2. 確定した優先機能でカバレッジ読みを
+   [target-app-wireframes.html](target-app-wireframes.html) に記録 →
+   target app 採択（F5 確定）→ `requirements/spec.md` で明文化 +
+   app-dependent 帰結を本 framing の revisions で確定。
 3. [candidate-pool.md](../../candidate-pool.md) disposition log に着地先
    リンク付きで記入（item count = 12 を併記）。
 4. ROADMAP M4 AC revision（core take 4 件の昇格 + app 照らし審査）。
