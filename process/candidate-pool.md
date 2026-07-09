@@ -38,6 +38,7 @@ questions (those stay in their notes):
 | Developer debug support (first step: `wasamoc` lint for silent 0-collapse) | no (lint); unknown (runtime diag channel) | M5 tooling | [developer-debugging](../docs/notes/developer-debugging.md) |
 | Release distribution (artifacts, channels, discovery, versioning) | no | M4 showcase outreach; M6 1.0 | [release-distribution](../docs/notes/release-distribution.md) |
 | Component extension model — freeze check only (registration ABI append-only-safe?) | unknown | post-1.0 + M6 disposition | [component-extension-model](../docs/notes/component-extension-model.md) |
+| Anchored popover — declarative widget-anchored placement on top of the M4 top-layer surface (anchor reference, coordinate conversion, placement rule; gated on the [dsl-grammar Q1](../docs/notes/dsl-grammar.md) widget-id question) | unknown | M5 widget set (Menu / ComboBox are the canonical buyers) | [M4 framing](./milestone-4/requirements/framing.md) granularity decision (2026-07-09); [top-layer-overlays](../docs/notes/top-layer-overlays.md) candidate C |
 
 ## Disposition log
 
