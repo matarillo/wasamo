@@ -1,5 +1,5 @@
 ---
-title: M4 start framing — Interaction stack
+title: M4 開始時の方針固め（start framing）— Interaction stack
 status: draft
 created: 2026-07-07
 related:
@@ -8,172 +8,361 @@ related:
   - process/candidate-pool.md
   - docs/notes/m4-interaction-intake.md
   - process/milestone-4/requirements/target-app-wireframes.html
+  - process/milestone-4/requirements/single-line-text-editing.md
 ---
 
-# M4 start framing — Interaction stack
+# M4 開始時の方針固め（start framing）— Interaction stack
 
-M4 開始時のマイルストーンレベル framing（workflow §1.3）。M3 の前例
-（[M3 framing.md](../../milestone-3/requirements/framing.md)）と同じく、
-target app 採択・ROADMAP acceptance 見直し・plan drafting に先立って、
-thesis の読み・取り込み方針・判断基準を固定する。
+M4 開始時のマイルストーンレベルの方針固め（workflow §1.3 の framing）。
+M3 の前例（[M3 framing.md](../../milestone-3/requirements/framing.md)）と
+同じく、題材アプリの採択・ROADMAP 達成条件の見直し・計画の起草に先立って、
+主眼の読み・取り込み方針・判断基準を固定する。
 
-判断の順序は次のとおり（オーナー指示 2026-07-08、F4）:
+判断の順序は次のとおり（F4）:
 
-1. **M4 で実装する機能リストを精緻化し、優先順位を付ける**（本 framing
-   §機能リスト）。
-2. **その優先機能をどれだけ自然にカバーできるかで target app を決める**
-   （本 framing §target app の選定。比較記録は
+1. **M4 で実装する機能リストを精緻化し、優先順位を付ける**（§機能
+   リスト）。
+2. **その優先機能をどれだけ自然にカバーできるかで題材アプリを決める**
+   （§題材アプリの選定。比較記録は
    [target-app-wireframes.html](target-app-wireframes.html)）。
 
-app が先にあって機能が従うのではない。機能リストが先にあり、app は
+アプリが先にあって機能が従うのではない。機能リストが先にあり、アプリは
 その証明手段として選ばれる。
+
+**本文書の読み方**: 前半（§主眼の読み〜§機能リスト〜§題材アプリの選定）
+は合意済みの前提と提案の本文、後半は管理事項。**オーナーに決定を求める
+未決事項は §オーナーへの問い に Q1・Q2 として集約**しており、本文中の
+「→ Q1」等の記号はその節を指す。オーナーが今決める必要のないものは
+§採択後・各フェーズへ送る決定事項に、着地先を固定して送る。
 
 ---
 
-## M4 thesis の読み
+## M4 主眼（thesis）の読み
 
-[_roadmap.md](../../_roadmap.md) §M4 の thesis:
+[_roadmap.md](../../_roadmap.md) §M4 の主眼（thesis）:
 
 > input, multi-window, text input, and accessibility share a focus
 > model; they ship together so the focus model is settled once.
 
 これを次のように読む:
 
-- **M4 の中心 deliverable は focus model の一回確定**である。input handling・
-  TextField・IME・AccessKit・multi-window は個別 feature ではなく、
-  同一の focus model を共有する消費者として一括で設計・出荷する。
-- したがって M4 への取り込み判断の基準は、スケジュールの都合ではなく
-  「**focus model settlement の質を脅かすか**」に置く（F1）。
-- Mica / Acrylic + accent + per-monitor DPI は「Wasamo identity が
-  demonstrable になる」ための土台であり、first showcase（contributor
-  outreach）が visible proof を担う。
+- **M4 の中心成果物はフォーカスモデルの一回確定**である。入力処理・
+  入力欄 TextField・IME・AccessKit・複数ウィンドウは個別の機能ではなく、
+  同一のフォーカスモデルを共有する利用者として一括で設計・出荷する。
+- したがって M4 への取り込み判断の基準は、日程の都合ではなく
+  「**フォーカスモデル確定の質を脅かすか**」に置く（F1）。
+- Mica / Acrylic + アクセント色 + モニターごとの DPI 対応は「Wasamo
+  らしさが目に見える形になる」ための土台であり、最初の見本アプリ
+  （協力者への呼びかけ用）が見える証明を担う。
+
+## 方針決定の記録（F1〜F5）
+
+本方針固めの前提となる決定の台帳。F1〜F4 は合意済み、F5 のみ未確定。
+
+- **F1 — M4 はフォーカスモデルのマイルストーンと読む**（2026-07-07
+  合意）。中心成果物はフォーカスモデルの一回確定。追加範囲の取り込み
+  判断の基準は「フォーカスモデル確定の質を脅かすか」。詳細は
+  §主眼の読み。
+- **F2 — 取り込みは二層（中核 / 予備）で行う**（2026-07-07 合意）。
+  中核 = フォーカスモデルと結合する項目の AC 昇格。予備 = 切り離し
+  可能な葉である題材アプリ機能（AC 非昇格）。予備の再評価点 =
+  フォーカスモデル中核 ADR の Accepted 時点。詳細は §二層取り込み方針。
+- **F3 — 「なるべく M4 で実施」を方針の出発点とする**（2026-07-07
+  合意）。候補プールの M4 関連項目は最大限題材アプリに取り込む方向で
+  方針を固める。逃げ道は F2 の二層構造が提供する。詳細は
+  §二層取り込み方針。
+- **F4 — 機能リストが先、題材アプリはそのカバレッジで選ぶ**
+  （2026-07-08 指示）。冒頭の「判断の順序」がその実行。判断基準の正本は
+  §題材アプリの選定。
+- **F5 — 題材アプリの採択。未確定**（→ §オーナーへの問い Q2）。
+  A / B1 / B2 / B3 の 4 案から、Q1 確定後のカバレッジの読みで採択する。
+  採択の明文化は `requirements/spec.md`（§1.2 の成果物）。
+
+## 二層取り込み方針（オーナー合意済み）
+
+オーナー意向「候補プールの M4 関連項目はなるべく M4 で実施したい」を
+方針固めの出発点として明文化する（F3）。ただし無条件の最大取り込みは、
+(a) 撤回時の手続きコストの非対称（AC 化した項目の削除は DD-V-026
+tier 2 の縮小手続き）、(b) 題材アプリの機能詰め込み化による主眼検証の
+希薄化、を招くため、取り込みを二層に分ける（F2）:
+
+- **M4 中核（core、AC 昇格）** — フォーカスモデルと設計が結合する項目。
+  ROADMAP の M4 AC に昇格し、落とす場合は DD-V-026 tier 2 の縮小手続き
+  （再開条件つき先送りの表つき）を踏む。
+- **M4 予備（stretch、題材アプリの機能、AC 非昇格）** — 主眼と独立に
+  切り離せる葉。`requirements/spec.md` のアプリ仕様には入れるが ROADMAP
+  の AC にはしない。落とす場合は候補プールへ戻す 1 行の処遇記録で済む
+  （安価で監査可能な逃げ道）。
+- **再評価点（checkpoint）** — フォーカスモデルの中核 ADR が Accepted に
+  なった時点で予備の残量を再評価する（「どうしても収まらない」の判定を
+  感覚ではなく事前に決めた時点で行う）。
 
 ## §1.1 引き継ぎ確認の結果（取り込み）
 
 3 入力の消化結果。詳細判断はオーナー承認済（2026-07-07 チャット）。
 
-### M3 handoff から
+### M3 引き継ぎ（handoff）から
 
-- **M4 residual cluster**（実画像・thumbnail hit-testing・wheel/drag
-  scroll・lightbox modal focus・dynamic title/status・runtime DPI）は
-  target app 採択に依存して消化先が変わる（→ §target app の選定）。
-  DPI と modal focus 系は AC / intake ケースとして app 非依存に扱う。
-- **Author-controllable sizing spike** — [VDR](../../cross-milestone/decisions/author-controllable-sizing-surface.md)
-  により M4 計画は spike の振り分け（デフォルト M4、M5 送りは積極的
-  正当化が必要）を記録する義務を負う。→ §最初に決めるべき問い 7。
-- TextField の two-way binding を設計する際、M3 selected-state 決定の
-  deferred 軸「Two-way binding」の reopen トリガー（family-consistent
-  two-way binding design opens）が**発火する**。M4 の該当 phase の DD で
-  明示的に扱う。
-- PM-2 Grid wrapper rule・default alignment・placement spelling は
-  M4 では reopen トリガーが発火しない見込み。持ち越し。
+- **M4 残務群（residual cluster）**（実画像・サムネイルの位置判定・
+  ホイール / ドラッグでのスクロール・ライトボックスのモーダルフォーカス・
+  動的なタイトル / 状態表示・実行時 DPI）は題材アプリの採択に依存して
+  消化先が変わる（→ §題材アプリの選定）。DPI とモーダルフォーカス系は
+  AC / 検討ケースとしてアプリ非依存に扱う。
+- **作者によるサイズ指定の試掘（sizing spike）** —
+  [VDR](../../cross-milestone/decisions/author-controllable-sizing-surface.md)
+  により M4 計画は試掘の振り分け（既定は M4、M5 送りは積極的な正当化が
+  必要）を記録する義務を負う。→ §採択後・各フェーズへ送る決定事項。
+- 入力欄 TextField の双方向束縛を設計する際、M3 の選択状態決定で先送り
+  した軸「双方向束縛」の再開条件（一族として一貫した双方向束縛の設計が
+  開くこと）が**発火する**。M4 の該当フェーズの DD で明示的に扱う。
+- PM-2 の Grid wrapper 規則・既定の整列・placement の綴りは M4 では
+  再開条件が発火しない見込み。持ち越し。
 
-### live notes から（トリガー点検）
+### 現役ノート（live notes）から — 発火点検
 
-M4 で発火するノート 6 本。いずれも `status: live` のまま、M4 の
-framing / 各 phase の入力として消費する:
+M4 で発火するノートは 6 本。いずれも `status: live` のまま、M4 の
+方針固め / 各フェーズの入力として消費する:
 
 | ノート | 発火内容 / M4 での扱い |
 |---|---|
-| [m4-interaction-intake.md](../../../docs/notes/m4-interaction-intake.md) | ノート全体が M4 framing 必須入力。具体ケース 1〜6 を `M4 scope / M4 explicit defer / M5+ / 1.0 required` に分類する義務（→ §open question の扱い） |
-| [host-state-boundary.md](../../../docs/notes/host-state-boundary.md) | 「M4 input / TextField / focus model 設計時」トリガー発火。pool take (core) と一体 |
-| [dsl-grammar.md](../../../docs/notes/dsl-grammar.md) Q2 | 「M4 の Mica / Acrylic 導入」トリガー発火。Window-prop family（backdrop / theme / dynamic title / WindowConfig）を pool take (core) と一体で扱う |
-| [top-layer-overlays.md](../../../docs/notes/top-layer-overlays.md) | 「M4 input / focus model の pre-doc」トリガー発火。pool take (core) と一体 |
-| [expression-language-roadmap.md](../../../docs/notes/expression-language-roadmap.md) | M-expr1 述語（M4 早期仮説）+ M-expr5 双方向束縛（TextField）が発火見込み。pool take (core) と一体 |
-| [layout-engine.md](../../../docs/notes/layout-engine.md) §3.1 / §3.2 | DPI 局所化・AccessKit 同期 — M4 AC そのものの設計入力 |
+| [m4-interaction-intake.md](../../../docs/notes/m4-interaction-intake.md) | ノート全体が M4 方針固めの必須入力。具体ケース 1〜6 を `M4 scope / M4 explicit defer / M5+ / 1.0 required` に分類する義務（→ §検討ノートのケース分類と宿題） |
+| [host-state-boundary.md](../../../docs/notes/host-state-boundary.md) | 「M4 の入力 / TextField / フォーカスモデル設計時」の再訪条件が発火。候補プールの取り込み（中核）と一体 |
+| [dsl-grammar.md](../../../docs/notes/dsl-grammar.md) Q2 | 「M4 の Mica / Acrylic 導入」で発火。ウィンドウ属性の一族（背景材 / テーマ / 動的タイトル / WindowConfig）を取り込み（中核）と一体で扱う |
+| [top-layer-overlays.md](../../../docs/notes/top-layer-overlays.md) | 「M4 の入力 / フォーカスモデルの事前文書」で発火。取り込み（中核）と一体 |
+| [expression-language-roadmap.md](../../../docs/notes/expression-language-roadmap.md) | M-expr1 述語（M4 早期の仮説）+ M-expr5 双方向束縛（TextField）が発火見込み。取り込み（中核）と一体 |
+| [layout-engine.md](../../../docs/notes/layout-engine.md) §3.1 / §3.2 | DPI の局所化・AccessKit 同期 — M4 AC そのものの設計入力 |
 
-発火しないノートは全件 live 維持（resolve なし）。ただし
+発火ノートが本方針固めに課す議題・義務と、その着地先。番号つきの
+「義務 N」は [m4-interaction-intake.md](../../../docs/notes/m4-interaction-intake.md)
+§M4 pre-doc / framing への要求の項番:
+
+| ノート | 議題 / 義務 | 着地先 |
+|---|---|---|
+| m4-interaction-intake | 義務 1: 検討ケース 1〜6 の分類 | §検討ノートのケース分類と宿題（ケース別の現状表。正式記入は採択後の改訂） |
+| 〃 | 義務 2: 入力 AC を消化する具体証明の決定 | 採択後の AC 改訂（§ROADMAP 達成条件の扱い）+ `requirements/spec.md` |
+| 〃 | 義務 3: M3 ライトボックスの拡張か別 fixture か | §採択に依存して変わるもの（写真ギャラリー案〔題材候補 A〕採択時のみ） |
+| 〃 | 義務 4: `Button.clicked` と汎用クリック処理の関係の明文化 | §粒度の定義（フォーカスモデル）— イベント配送フェーズ ADR の必須論点 |
+| 〃 | 義務 5: フォーカス閉じ込め / モーダル / アクセシビリティのフェーズ分割 | §初期フェーズ分割の仮説（§1.4 で確定） |
+| 〃 | 義務 6: 最前面の層を M4 で開くか、ルートの重ね表示 + 入力 / フォーカスまでか | §粒度の定義（重ね表示）（開く = G2。吸着は M5 送り） |
+| host-state-boundary | 3 能力（初期値のホスト供給・表示中のホスト書き込み・書き戻し）の M4 取り込み | §機能リスト P3 行（AC 昇格）。書き戻しの粒度は §粒度の定義（文字編集）構成 5 |
+| 〃 | API の形状・未解決事項（型モデル・書き込み衝突・生成束縛ほか） | 該当フェーズの ADR |
+| dsl-grammar Q2 | ウィンドウ属性一族の文法入口 | §機能リスト P2 行 + P3 行（ウィンドウ設定プロパティ）。綴りはフェーズ ADR |
+| dsl-grammar Q1 | 部品の名前参照を M4 で開くか | 開かない（§粒度の定義〔重ね表示〕— 吸着差分を M5 送りとした帰結） |
+| top-layer-overlays | 最小 surface の粒度と実現方式 | 粒度は §粒度の定義（重ね表示）（G2）。実現方式（Portal 相当の具体）・座標 / clip / 重なり順は該当フェーズの ADR |
+| expression-language-roadmap | M-expr1/2a を M4 に組み込むか | §機能リスト P3 行（述語式、AC 昇格） |
+| 〃 | M-expr5 双方向束縛を M4 で開くか | 開く（§粒度の定義〔文字編集〕構成 5。ホスト状態境界と一体） |
+| 〃 | `TypedValue` の ABI 影響の照合 | §検討ノートのケース分類と宿題（M4 期間中の宿題） |
+| layout-engine §3.1 / §3.2 | DPI 局所化・AccessKit 同期の設計入力 | AC は既存（P1 / P2 行）。設計は該当フェーズの ADR |
+
+発火しないノートは全件 live 維持（解決扱いにしない）。ただし
 [architectural-family.md](../../../docs/notes/architectural-family.md) の
-トリガー 3（`BindingTarget` に収まらない binding shape）は TextField
-two-way binding の設計中に発火しうるため、該当 phase で監視する。
+再訪条件 3（`BindingTarget` に収まらない束縛の形）は TextField の
+双方向束縛の設計中に発火しうるため、該当フェーズで監視する。
 [release-distribution.md](../../../docs/notes/release-distribution.md) G 節の
-「M4 = 1.0 cut の準備」は roadmap 変遷（M6 = 1.0）に対して stale な
-記述（ノート側の小残件、本 framing では扱わない）。
+「M4 = 1.0 切り出しの準備」はロードマップの変遷（M6 = 1.0）に対して
+古い記述（ノート側の小さな残件、本文書では扱わない）。
 
-### Pre-1.0 candidate pool から（処遇合意）
+### 1.0 前候補プールから — 処遇合意
 
-12 item の処遇をオーナー合意済（2026-07-07）。
-[candidate-pool.md](../../candidate-pool.md) の disposition log への記入は、
-destination-link rule により **本 framing の確定（着地先の成立）後**に行う
-（同一 planning 内）。
+12 項目の処遇をオーナー合意済（2026-07-07）。
+[candidate-pool.md](../../candidate-pool.md) の処遇記録（disposition log）
+への記入は、着地先リンクの規則により**本方針固めの確定（着地先の成立）
+後**に行う（同一の計画作業内）。
 
-| 処遇 | Item |
+| 処遇 | 項目 |
 |---|---|
-| take (M4 **core**) — AC 昇格 | host state boundary（ABI-bearing: yes）/ expression predicates（M-expr1/2a）/ top-layer overlays / window config props |
-| take (M4 **stretch**) — target-app feature、AC 非昇格。**A 採択が前提** | `Image` widget / literal `fill`（Box 以外） |
-| hold | themed-widget 背景色（M5 theming）/ reactive `fill` / `TypedValue`（M-expr2b/3）/ developer debug support（M5）/ release distribution（narrow slice のみ本 framing 入力、→ §open question の扱い）/ component extension model |
+| 取り込み（M4 **中核** = core）— AC 昇格 | ホスト状態境界（host state boundary、ABI への影響: あり）/ 述語式（expression predicates、M-expr1/2a）/ 最前面の重ね表示（top-layer overlays）/ ウィンドウ設定プロパティ（window config props） |
+| 取り込み（M4 **予備** = stretch）— 題材アプリの機能、AC 非昇格。**写真ギャラリー案（題材候補 A、§題材アプリの選定）の採択が前提** | `Image` 部品 / `fill` の直値指定（Box 以外） |
+| 保留（hold） | テーマ対応部品の背景色（M5 テーマ対応）/ 反応的 `fill` / `TypedValue`（M-expr2b/3）/ 開発者向けデバッグ支援（M5）/ 配布（最小限の答えのみ本方針固めの入力、→ §検討ノートのケース分類と宿題）/ 部品拡張の仕組み |
 
-item count = 12（DD-V-028 の growth falsifier 記録用）。
-
-## 二層取り込み方針（owner-agreed）
-
-オーナー意向「pool の M4 関連 item はなるべく M4 で実施したい」を framing の
-出発点として明文化する（F3）。ただし無条件の最大取り込みは、(a) 撤回時の
-手続きコスト非対称（AC 化した item の削除は DD-V-026 tier 2 narrowing）、
-(b) target app の feature 袋化による thesis 検証の希薄化、を招くため、
-取り込みを二層に分ける（F2）:
-
-- **M4 core（AC 昇格）** — focus model と設計が結合する item。
-  ROADMAP M4 AC に昇格し、落とす場合は DD-V-026 tier 2 narrowing
-  （deferral-with-trigger 表つき）を踏む。
-- **M4 stretch（target-app feature、AC 非昇格）** — thesis と独立で
-  切り離し可能な葉。`requirements/spec.md` の app 仕様には入れるが
-  ROADMAP AC にはしない。落とす場合は pool へ戻す 1 行 disposition で
-  済む（安価・監査可能な escape valve）。
-- **checkpoint** — focus model の中核 ADR が Accepted になった時点で
-  stretch の残量を再評価する（「どうしても収まらない」の判定を感覚では
-  なく事前に決めた時点で行う）。
+項目数 = 12（DD-V-028 の増殖反証（growth falsifier）の記録用）。
 
 ## M4 実装機能リストの精緻化と優先順位付け
 
-target app 選定に先立ち、M4 で実装する機能を列挙し優先順位を付ける。
-出自は AC（[_roadmap.md](../../_roadmap.md) §M4）と §1.1 の pool 処遇合意。
-ここでの優先順位は **target app 選定の重み**である（実装順序・phase 割り
-当ては §1.4 plan.md で別途決める）。
+題材アプリの選定に先立ち、M4 で実装する機能を列挙し優先順位を付ける。
+出自は AC（[_roadmap.md](../../_roadmap.md) §M4）と §1.1 の候補プール
+処遇合意。ここでの優先順位は**題材アプリ選定の重み**である（実装順序・
+フェーズ割り当ては §1.4 plan.md で別途決める）。
 
 | 優先 | 機能 | 出自 | 選定上の扱い |
 |---|---|---|---|
-| **P1** | focus model + event routing | AC / intake ケース 6 | 差別化要因（証明の密度が app で変わる） |
-| **P1** | input handling（keyboard / mouse / touch） | AC | ほぼ非差別化（どの app にも同等にある） |
-| **P1** | TextField（最小編集テキスト） | AC | 差別化要因。**最小面（単一行 / 複数行）の精緻化が先決** → 問い 1 |
-| **P1** | IME via TSF（日本語入力） | AC | 差別化要因（app の本筋か周辺かが分かれる） |
-| **P1** | multi-window（per-window state・cross-window focus） | AC | 差別化要因（自然な出番の有無が分かれる） |
-| **P1** | AccessKit / UIA | AC | 差別化要因（コントロール多様性で検証密度が変わる） |
-| **P2** | Mica / Acrylic + accent follow-through（initial） | AC | **非差別化**（app の絵柄に依らず同等に証明可） |
-| **P2** | per-monitor DPI awareness | AC / DD-V-022 | **非差別化**（同上） |
-| **P3** | host state boundary（host 供給・host write・write-back） | pool take (core) | 差別化要因 |
-| **P3** | expression predicates（M-expr1/2a） | pool take (core) | 差別化要因 |
-| **P3** | top-layer overlays（最小 proof） | pool take (core) | 差別化要因 |
-| **P3** | window config props（dynamic title / initial size / WindowConfig） | pool take (core) | 差別化要因 |
-| **P4** | `Image` widget | pool take (stretch) | 載れば取る（載らなければ pool へ戻す） |
-| **P4** | literal `fill`（Box 以外） | pool take (stretch) | 同上 |
-| — | first showcase application | AC | app 選定の**結果そのもの**（機能ではない） |
-| — | sizing spike disposition | AC / VDR | **app 非依存**の独立 duty |
+| **P1** | フォーカスモデル + イベント配送（event routing） | AC / 検討ケース 6 | 差別化要因（証明の密度がアプリで変わる）。粒度の定義は §粒度の定義（フォーカスモデル） |
+| **P1** | 入力処理（キーボード / マウス / タッチ） | AC | ほぼ非差別化（どのアプリにも同等にある） |
+| **P1** | 単一行の文字編集（TextInput 相当。カーソル・範囲選択・クリップボード・TSF 結線・UIA。粒度の定義は §粒度の定義〔文字編集〕） | AC | 差別化要因（アプリの本筋か周辺かが分かれる） |
+| **P4** | 複数行の文字編集（TextArea 相当。折返し・上下のカーソル移動・Enter での改行・縦スクロール） | AC の解釈の上積み（"minimum" の外側） | 載れば取る。**ただし付箋アプリ（題材候補 B1、§題材アプリの選定）採択時は事実上中核化する** → §粒度の定義（文字編集） |
+| **P1** | TSF 経由の IME（日本語入力） | AC | 差別化要因（アプリの本筋か周辺かが分かれる）。検証は単一行の行が担う |
+| **P1** | 複数ウィンドウ（ウィンドウごとの状態・ウィンドウ間のフォーカス移動） | AC | 差別化要因（自然な出番の有無が分かれる） |
+| **P1** | AccessKit / UIA | AC | 差別化要因（部品の多様さで検証密度が変わる） |
+| **P2** | Mica / Acrylic + アクセント色の追従（初回 surface） | AC | **非差別化**（アプリの絵柄に依らず同等に証明可） |
+| **P2** | モニターごとの DPI 対応 | AC / DD-V-022 | **非差別化**（同上） |
+| **P3** | ホスト状態境界（初期値の供給・表示中のホスト書き込み・書き戻し） | 取り込み（中核） | 差別化要因 |
+| **P3** | 述語式（M-expr1/2a） | 取り込み（中核） | 差別化要因 |
+| **P3** | 最前面の重ね表示（最小証明。粒度の定義は §粒度の定義〔重ね表示〕） | 取り込み（中核） | 差別化要因 |
+| **P3** | ウィンドウ設定プロパティ（動的タイトル / 初期サイズ / WindowConfig） | 取り込み（中核） | 差別化要因 |
+| **P4** | `Image` 部品 | 取り込み（予備） | 載れば取る（載らなければ候補プールへ戻す） |
+| **P4** | `fill` の直値指定（Box 以外） | 取り込み（予備） | 同上 |
+| — | 最初の見本アプリ（first showcase application） | AC | アプリ選定の**結果そのもの**（機能ではない） |
+| — | サイズ指定の試掘（sizing spike）の振り分け | AC / VDR | **アプリ非依存**の独立の義務 |
 
 優先順位の根拠:
 
-- **P1** = thesis が名指しする構成要素（focus model とその 4 消費者 +
-  入力そのもの）。target app はこれらを**本筋として**証明できるほど良い。
-- **P2** = AC だが app の絵柄と独立に証明できる platform 面。選定の
-  重みには入れない。
-- **P3** = core take（AC 昇格予定）。P1 に準じて重いが、thesis 名指しでは
-  ない分 P1 の下に置く。
-- **P4** = stretch。カバーできる app なら加点、できなくても減点は小さい
-  （二層構造により撤回が安価なため）。
+- **P1** = 主眼が名指しする構成要素（フォーカスモデルとその 4 つの
+  利用者 + 入力そのもの）。題材アプリはこれらを**本筋として**証明できる
+  ほど良い。
+- **P2** = AC だがアプリの絵柄と独立に証明できる基盤面。選定の重みには
+  入れない。
+- **P3** = 中核の取り込み（AC 昇格予定）。P1 に準じて重いが、主眼の
+  名指しではない分 P1 の下に置く。
+- **P4** = 予備（候補プール由来）、または AC 解釈の上積み（複数行の
+  文字編集）。カバーできるアプリなら加点、できなくても減点は小さい。
+  撤回は、予備なら候補プールへ戻す 1 行の処遇記録、上積みなら M5 への
+  申し送りのみ（候補プールの項目ですらないため）。ただし複数行の行には
+  付箋アプリ（題材候補 B1）連動の注意がある（→ §粒度の定義〔文字編集〕）。
 
-## target app の選定 — 判断基準と候補
+### 粒度の定義（提案 — Q1 で確定）
+
+機能リストの行のうち、粒度が自明でない 3 か所を定義する。本節は提案で
+あり、確定は §オーナーへの問い Q1。確定後は「提案」表記を外す。
+
+#### フォーカスモデル + イベント配送（P1 行）
+
+配送モデルそのものの選択（capture / target / bubble の三相か、対象のみ +
+高水準シグナルか — 検討ケース 6）は、採択後最初期のフェーズ ADR に送る
+（→ §採択後・各フェーズへ送る決定事項）。ただし本方針固めの時点で、
+その ADR が扱うべき設計ケースと実証の形を固定する:
+
+- フォーカスモデルの設計ケースには、M5 の公式部品一式
+  （[_roadmap.md](../../_roadmap.md) §M5）が消費者として要求する意味論を、
+  部品を作らずに含める: (a) グループ内の矢印キー移動と「Tab はグループ
+  全体を 1 停止と扱う」グループ化（ラジオボタン相当）、(b) フォーカスは
+  本体に留めたまま開いた一覧内の活性項目だけを動かす、フォーカスと
+  活性項目の分離（ドロップダウン相当）。これを M4 で固めておかないと、
+  主眼「フォーカスモデルの一回確定」が M5 の部品実装で破れる。
+- (a)(b) は紙の設計ケースに留めず、**フォーカスモデル中核 ADR の
+  Accepted 前に動くもので実証する**: 走査の中核（木 + スコープ注釈 →
+  次のフォーカス先）を Win32 非依存の純ロジックとして切り出して単体
+  テストで固定し、イベント経路は既存材料（Button・selected 状態・
+  最前面の層）を組んだ機構検証用の最小 fixture で通す。fixture は
+  公式部品として公開しない（spec.md・部品一覧に載せず、綴りは fixture
+  限定の非規範。部品一式の正規の買い手は M5）。仮の RadioButton /
+  ComboBox を部品として作ることはしない — グループの `.ui` 綴りは M5 の
+  設計判断であり、M4 で既成事実化しない。
+- 既存の `Button.clicked` シグナルと Button 以外への汎用クリック処理の
+  関係（検討ケース 3。ヒットテスト適格性 — 視覚を持つ部品は全て対象か、
+  明示の属性が要るか — を含む）を、同じフェーズ ADR の必須論点とする
+  （[検討ノートの義務 4](../../../docs/notes/m4-interaction-intake.md)
+  の着地先）。
+
+#### 文字編集 — 単一行（P1 行）と複数行（P4 行）
+
+文字編集は「単一行か複数行か」という事前の二者択一を置かず、別の行と
+して異なる優先度で扱う。分割数の根拠:
+
+- **1 行のまま** — 「単一行か複数行か」の事前ゲートが残る。行分割で
+  解消できるゲートを判断として残す理由がない。
+- **2 行（採用）** — 分割線は、コストの崖（単一行 → 複数行で部品の
+  論理・検証面が跳ねる）とアプリ差別化の線（複数行を本筋で要するのは
+  付箋アプリ〔題材候補 B1〕だけ）が**一致する場所**にある。
+- **3 行以上**（単一行の最小面をさらに分ける、複数行の内部を分ける）—
+  行はアプリ選定の重みとして独立に読めるのが条件だが、
+  「クリップボードの有無」や「縦スクロールの有無」で差別化される
+  アプリ候補は存在しないため過剰。
+
+なお部品の形（単一の TextField に複数行属性を持たせるか、TextInput /
+TextArea の 2 部品にするか）は文法・API の設計判断であり、行の分割は
+これを予断しない（後続フェーズの ADR で決める）。
+
+**P1 行（単一行の文字編集）の粒度** — 技術的な根拠: IME/TSF 検証
+（`ITextStoreACP` 相当のテキスト保持部の実装）が要求するのは、テキストの
+中身の保持・**範囲選択の内部モデル**（IME が変換中に選択範囲の取得・
+設定と範囲置換を行う）・カーソルと変換中文字列の画面上の矩形（変換候補
+ウィンドウの配置、GetTextExt 相当）であり、**複数行は TSF 検証に
+不要**。逆に範囲選択は、利用者向けの操作を削っても内部モデルとしては
+必須になる。よって AC の「minimum editable text widget; required by IME
+verification」はこの行だけで満たせる。掘り下げ（自前エディタの成熟段階
+D0〜D4・責務分解・実装の重さの内訳）は補足資料
+[single-line-text-editing.md](single-line-text-editing.md) を参照。構成:
+
+1. **カーソル（caret）** — クリック位置への配置（位置判定）・← → /
+   Home / End・描画・はみ出し時の追従スクロール。
+2. **範囲選択（selection）** — 内部モデル（TSF 必須）+ 利用者向けの操作
+   （マウスでなぞる・Shift+← →・反転表示）。
+3. **クリップボード** — Ctrl+C / X / V（`CF_UNICODETEXT`。貼り付け
+   文字列に含まれる改行の扱いは後続フェーズの ADR で決める）。
+4. **IME/TSF** — 変換中文字列のその場表示（下線）・変換候補ウィンドウの
+   配置・範囲置換。
+5. **双方向束縛 / 書き戻し** — ホスト状態境界の取り込み・
+   [expression-language-roadmap.md](../../../docs/notes/expression-language-roadmap.md)
+   の M-expr5 双方向束縛の発火と一体。
+6. **UIA** — AccessKit 経由の Text / Value 相当の最小の役割付け。
+
+どの行にも載せない（M4）: 元に戻す（undo）、パスワード用の伏せ字、
+装飾つきテキスト。単語単位の移動・ダブルクリック選択などの安価な
+便利機能は後続フェーズの ADR の裁量（AC にしない）。Enter を送信の
+合図にするか・未入力時の薄字表示（placeholder）はフェーズ ADR /
+アプリ仕様へ委譲。
+
+**P4 行（複数行の文字編集）の粒度**: 折返し・上下のカーソル移動・
+Enter での改行・縦スクロールとカーソル追従・複数矩形の範囲選択。
+AC 非該当（AC の "minimum" は P1 行で満たす）。載せない / 落とす場合の
+手続きコストはゼロに近い（候補プールの項目でもないため、記録は M5 への
+申し送りのみ）。工数が跳ねるのは描画より部品の論理側（DirectWrite が
+折返しと位置判定を持つため）。
+
+**二層構造との整合の注意**: P4 の建て付けは「安く落とせる」ことが前提
+だが、**付箋アプリ（題材候補 B1）は複数行が本筋**のため、B1 採択時に
+この行は事実上中核化し、落とすとアプリごと崩れる。B1 を選ぶ判断は
+「複数行のコストを中核並みに引き受ける」判断とセットであることを、
+カバレッジの重み付け読み（Q2）で明示する。
+
+#### 最前面の重ね表示（P3 行）
+
+文字編集と同型の解消（規則一式を P3 行 / 吸着差分を P4 行に分割する）も
+検討したが、**吸着差分は行として載せず、M5 への明示的な先送りを推奨**
+する。理由: 複数行の文字編集が「実装コストの塊だが文法に響かない」のに
+対し、吸着は部品の名前参照
+（[dsl-grammar.md](../../../docs/notes/dsl-grammar.md) Q1）という
+**DSL 文法面の判断を含む**。文法面を「載れば取る」層に置くと、Q1 を
+開くかどうかの判断がアプリの都合で暗黙に行われてしまう。
+
+中核として取り込む根拠は「フォーカスモデルと設計が結合する」こと。
+結合しているのは、外側クリックで閉じる際のイベントの届け方・Esc キーの
+取り扱い・フォーカスの閉じ込め・閉じた時のフォーカスの戻し先・最前面に
+移した内容の読み上げ順序であり、**吸着位置の解決（部品の名前参照・
+座標変換・重なり回避）はフォーカスモデルと独立**の座標計算・書き味の
+話である（[top-layer-overlays.md](../../../docs/notes/top-layer-overlays.md)
+が挙げる重ね表示の実現方式の候補 A〜D〔題材候補とは別物〕と未解決事項を
+参照）。
+
+| 粒度 | 内容 | 評価 |
+|---|---|---|
+| **G1. ルートの重ね表示 + 閉じ方の規則のみ** | 構造は M3 の ZStack のまま、外側クリックで閉じる / Esc / フォーカス閉じ込めを付ける | 最前面の層に特有の状況（画面上の前後関係 ≠ 文書上の親子関係）を一度も見ずにフォーカスモデルを確定することになり、M5 の部品一式（Menu / ComboBox）で規則が移植できないと判明すると主眼「一度で固める」が破れる。取り込み項目「top-layer overlays」の実体も空になる |
+| **G2. 最前面の層という構造 + 規則一式、吸着なし（推奨）** | 宣言位置からウィンドウ水準の最前面層へ実体を移す構造（Portal 相当）の上で、外側クリックで閉じる / Esc / フォーカス閉じ込め / フォーカスの戻し / 読み上げ順序を証明。配置は手動（具体の仕組みはフェーズ ADR） | フォーカスと結合する部分をすべて本物の最前面層の上で固められる。[dsl-grammar.md](../../../docs/notes/dsl-grammar.md) Q1（部品の名前参照）を M4 で開かずに済む |
+| **G3. 吸着小窓（anchored popover）まで** | G2 + 宣言的な吸着（名前参照・座標変換・単一の配置規則） | アプリの書き味は最良だが、追加差分はフォーカスと無関係。dsl-grammar Q1 が M4 に入り、フォーカスモデル確定と並走する設計面が増える |
+
+推奨: **G2 を中核の最小証明とし、吸着小窓（G3 との差分）は M5 へ明示的に
+先送りする**（M5 の公式部品一式の Menu / ComboBox が正規の買い手）。
+アプリ側のメニュー / 選択肢一覧 / 絵文字選択などは G2 の粗い配置で証明
+する（見本アプリの AC は仕上げ細部の粗さを許容する — "rough around
+polish-level details"）。
+
+検討ケースへの見込み: ケース 2（外側クリックで閉じる）・4（フォーカス
+閉じ込め）・5（Esc で閉じる）は G2 採用で M4 範囲入りが確定的になる
+（正式分類はアプリ採択後、§検討ノートのケース分類と宿題）。
+
+## 題材アプリ（target app）の選定 — 判断基準と候補
 
 ### 判断基準（正本はこの節）
 
 - **第一基準 — 優先機能のカバレッジ**: P1 → P3 → P4 の順の重みで、
-  各機能を「app の本筋として証明できる（◎）/ 自然に組み込める（○）/
+  各機能を「アプリの本筋として証明できる（◎）/ 自然に組み込める（○）/
   周辺的・作為が要る（△）/ 出番がない（×）」で読む。
 - **副次基準**（第一基準が拮抗した場合の判断材料）:
-  1. 実装・spec 工数（M3 資産の再利用性）
-  2. 構造リスク（複数行 TextField 圧力・`TypedValue` / 並行配列圧力）
-  3. identity / contributor outreach 訴求
-  4. M3 residual cluster の消化
-- カバレッジ行列と読みの記録は
+  1. 実装・仕様書きの工数（M3 資産の再利用性）
+  2. 構造リスク（複数行の文字編集の圧力・`TypedValue` / 並行配列の圧力）
+  3. Wasamo らしさ / 協力者への呼びかけの訴求力
+  4. M3 残務群の消化
+- カバレッジの行列と読みの記録は
   [target-app-wireframes.html](target-app-wireframes.html) に置く
   （比較記録。判断基準の正本は本節）。
 
@@ -181,142 +370,157 @@ target app 選定に先立ち、M4 で実装する機能を列挙し優先順位
 
 | 案 | 概要 | 一言でいうと |
 |---|---|---|
-| **A** | Photo Gallery 成熟（M3 継続） | 工数・residual 消化最強、text 入力が周辺的 |
-| **B1** | 付箋（Sticky Notes） | multi-window / identity 最強、複数行 TextField リスク高 |
-| **B2** | 設定画面クローン | focus / overlay / UIA 密度最強、multi-window に穴 |
-| **B3** | チャット（ローカル echo bot） | IME / host state 最強、並行配列圧力に注意 |
+| **A** | 写真ギャラリーの成熟（M3 継続） | 工数・残務消化で最強、文字入力が周辺的 |
+| **B1** | 付箋（Sticky Notes） | 複数ウィンドウ / らしさで最強、複数行の文字編集（P4 行）を事実上中核として要求 |
+| **B2** | 設定画面の再現 | フォーカス / 重ね表示 / UIA の密度で最強、複数ウィンドウに穴 |
+| **B3** | チャット（ローカルのおうむ返しボット） | IME / ホスト状態境界で最強、並行配列の圧力に注意 |
 
 オーナーの現時点の傾き: B 系（2026-07-07 チャット、未確定）。
 
-### 採択に依存して変わるもの（app-dependent 帰結）
+### 採択に依存して変わるもの
 
-- **stretch take（Image widget / literal `fill`）は A 前提の判断。**
-  B 系採択時は Image widget は pool へ戻す（hold、M5 widget set lean）。
-  literal `fill` は B1 なら note 色として残留、B2/B3 なら再判定。
-- **M3 handoff の M4 residual cluster** は A なら app がそのまま消化。
-  B 系採択時は M5 への carry を本 framing の revisions で明示 disposition
-  する（silent drop 禁止）。
-- **multi-window AC の discharge 方法**: B2 採択時のみ、app 内に自然な
-  出番がないため、最小 fixture の別建て等の discharge 方法を追加で決める。
+- **予備の取り込み（`Image` 部品 / `fill` の直値指定）は A 前提の判断。**
+  B 系採択時は `Image` 部品は候補プールへ戻す（保留、M5 の部品一式の
+  流れで再考）。`fill` の直値指定は B1 なら付箋の色として残留、B2/B3
+  なら再判定。
+- **M3 引き継ぎの M4 残務群**は A ならアプリがそのまま消化。B 系採択時は
+  M5 への持ち越しを本文書の改訂で明示的に処遇する（黙って落とすことの
+  禁止）。
+- **複数ウィンドウ AC の証明方法**: B2 採択時のみ、アプリ内に自然な
+  出番がないため、最小の検証用部品を別に立てる等の証明方法を追加で
+  決める。
+- **A 採択時のライトボックスの扱い**: M3 のライトボックスを拡張するか、
+  別の最小 fixture を作るか（検討ノートの義務 3）を `requirements/spec.md`
+  で決める。
 
-## ROADMAP acceptance の扱い
+## ROADMAP 達成条件（AC）の扱い
 
-- AC の SSOT は [_roadmap.md](../../_roadmap.md)。M4 AC は target app
-  採択後に「app に照らして審査」し、core take 4 件の AC 昇格を含む
-  revision を起こす（DD-V-026 tier 2 追加/refine: 一行 impact check +
-  Revision-log + `_roadmap.md` mirror）。
-- 既存 AC（input / multi-window / TextField / IME / AccessKit / Mica /
-  DPI / showcase / sizing spike disposition）は削らない。revision は
-  追加・具体化の方向のみを想定する。
-- sizing spike の振り分け記録（デフォルト M4）は plan.md 策定（§1.4）で
-  phase 割り当てとともに確定する。
+- AC の正本（SSOT）は [_roadmap.md](../../_roadmap.md)。M4 AC は題材
+  アプリの採択後に「アプリに照らして審査」し、中核取り込み 4 件の AC
+  昇格を含む改訂を起こす（DD-V-026 tier 2 の追加 / 具体化: 一行の影響
+  確認 + 改訂記録 + `_roadmap.md` への反映）。
+- 既存 AC（入力 / 複数ウィンドウ / TextField / IME / AccessKit / Mica /
+  DPI / 見本アプリ / サイズ試掘の振り分け）は削らない。改訂は追加・
+  具体化の方向のみを想定する。
+- サイズ試掘の振り分け記録（既定は M4）は plan.md 策定（§1.4）で
+  フェーズ割り当てとともに確定する。
 
-## docs/notes open question の扱い
+## 検討ノートのケース分類と M4 期間中の宿題
 
-- **intake ケース 1〜6 の分類**（thumbnail click / click-away / generic
-  hit handler / focus trap / keyboard close / event routing）は target app
-  採択後に本 framing の revisions で確定する。分類枠は intake note の
-  規定どおり `M4 scope / M4 explicit defer / M5+ / 1.0 required`。
-  ただし ケース 6（event routing model）は app に依らず M4 scope
-  （focus model の土台）である見込みが強い。
-- **`TypedValue` の `ABI-bearing: unknown` 解消**（abi_spec 照合 —
-  ホストが計算済み値を set/get するか）を M4 期間中の宿題として置く。
-  B3 採択時は並行配列圧力の点検と併せて前倒しする。
-- **release distribution の narrow slice**: M4 の contributor outreach が
-  必要とする最小回答は「contributor が showcase を入手・実行する手順」
-  であり、clone + build 手順の整備で足りる見込み。artifact 配布・署名・
-  channel 等の note 本体は開かない（hold 維持）。
+- **検討ケース 1〜6 の分類** — 分類枠は検討ノートの規定どおり
+  `M4 scope / M4 explicit defer / M5+ / 1.0 required`、正式な記入は
+  題材アプリの採択後に本文書の改訂で一括して行う。ただし現状の見込みは
+  ケースごとに異なり、アプリ非依存に決まるものと採択待ちのものを
+  区別する:
+
+  | ケース | 現状の見込み | 確定の時期 |
+  |---|---|---|
+  | 1. クリックで開く（サムネイル等） | ケース 3 の帰結 + アプリ依存（何をクリックで開くか） | 採択後の改訂 |
+  | 2. 外側クリックで閉じる | G2 採用で M4 範囲（アプリ非依存、§粒度の定義〔重ね表示〕） | Q1 の確定と同時 |
+  | 3. Button 以外への汎用クリック処理 | **全候補に共通**（一覧の行クリックはどの候補にもある）。イベント配送フェーズ ADR の必須論点（§粒度の定義〔フォーカスモデル〕） | イベント配送フェーズの ADR |
+  | 4. フォーカス閉じ込め | G2 採用で M4 範囲（アプリ非依存） | Q1 の確定と同時 |
+  | 5. キーボードで閉じる / 移動 | Esc は G2 採用で M4 範囲。重ね表示内の Tab 移動はケース 4 と一体。矢印での前後移動はアプリ依存 | Esc / Tab は Q1 の確定と同時、矢印は採択後の改訂 |
+  | 6. イベント配送の仕組み | アプリに依らず M4 範囲（フォーカスモデルの土台） | イベント配送フェーズの ADR |
+
+- **`TypedValue` の「ABI への影響: 不明」の解消**（abi_spec との照合 —
+  ホストが計算済みの値を読み書きするか）を M4 期間中の宿題として置く。
+  チャット案（題材候補 B3）採択時は並行配列の圧力点検と併せて前倒し
+  する。
+- **配布の最小限の答え**: M4 の協力者への呼びかけが必要とする最小限の
+  答えは「協力者が見本アプリを入手・実行する手順」であり、clone + build
+  手順の整備で足りる見込み。成果物の配布・署名・配布経路などのノート
+  本体は開かない（保留維持）。
 
 ## M4 に入れないもの
 
-- **Full theming surface**（light/dark、accent の widget 伝播、type ramp）
-  — M5。M4 は root backdrop + accent follow-through の initial まで。
-- **Official widget set**（CheckBox / ComboBox / Menu 等）— M5。
-  top-layer overlays の take は「overlay 面の設計と最小 proof」であり、
-  Menu / ComboBox という widget 製品面の完成を意味しない。
-- **`TypedValue` / structured item data**（M-expr2b/3）— hold。
-  独立 pre-1.0 slot の判断は M5 close の判断点（DD-V-028 Out of scope）。
-- **themed-widget 背景色 / reactive `fill`** — hold（M5 theming /
-  TypedValue 設計空間）。
-- **developer debug support** — hold（M5 tooling lean）。
-- **component extension model** — hold(post-1.0 + M6 freeze check)。
-- **release distribution の note 本体**（artifact / channel / signing /
-  versioning）— hold。上記 narrow slice のみ。
-- **hot reload / アニメーション DSL** — post-1.0（既存 roadmap どおり）。
+- **全面的なテーマ対応**（明暗テーマ、アクセント色の部品への伝播、
+  文字の大きさ体系）— M5。M4 はルートの背景材 + アクセント色追従の
+  初回 surface まで。
+- **公式の部品一式**（CheckBox / ComboBox / Menu 等）— M5。最前面の
+  重ね表示の取り込みは「重ね表示面の設計と最小証明」であり、Menu /
+  ComboBox という部品製品面の完成を意味しない。
+- **`TypedValue` / 構造化された項目データ**（M-expr2b/3）— 保留。
+  独立の 1.0 前マイルストーン枠の判断は M5 終了時の判断点（DD-V-028 の
+  対象外事項）。
+- **テーマ対応部品の背景色 / 反応的 `fill`** — 保留（M5 テーマ対応 /
+  TypedValue の設計空間）。
+- **開発者向けデバッグ支援** — 保留（M5 の道具立ての流れ）。
+- **部品拡張の仕組み** — 保留（1.0 後 + M6 凍結時の確認）。
+- **配布のノート本体**（成果物 / 配布経路 / 署名 / 版管理）— 保留。
+  上記の最小限の答えのみ。
+- **ホットリロード / アニメーション DSL** — 1.0 後（既存ロードマップ
+  どおり）。
 
-## M4 で最初に決めるべき問い
+## 初期フェーズ分割の仮説
 
-順序は依存方向どおり: 問い 1（機能リスト）が問い 2（app 選定）に先行する。
+題材アプリの採択後に記入する（記入待ち）。現時点の依存方向の見立てのみ
+置く: イベント配送 / フォーカスモデルが最初期、単一行の文字編集 +
+IME とホスト状態境界がその上、複数ウィンドウと最前面の重ね表示が
+フォーカスモデル確定後、見本アプリの統合と AccessKit / Mica / DPI の
+証拠が後段。サイズ試掘は独立で任意の位置に置ける。
+フォーカス閉じ込め・モーダル・アクセシビリティを同一フェーズで扱うか
+分割するか（検討ノートの義務 5）は、§1.4 のフェーズ分割で確定する。
 
-1. **機能リストの精緻化と優先順位の確認**（オーナー）—
-   §機能リストの P1〜P4 と各機能の粒度を確認する。特に:
-   **TextField の最小面**（単一行で閉じるか、複数行〔折返し・選択・
-   クリップボード〕まで含むか。B1 採択の前提問題であり、IME/TSF 検証に
-   必要な最小面もここで確定）、**top-layer overlays の最小 proof の粒度**
-   （anchored popover まで要るか、root overlay + click-away で足りるか）。
-2. **target app 採択** — 問い 1 で確定した優先機能のカバレッジを第一基準に
-   4 案から選ぶ（§target app の選定）。
-3. **event routing model** — capture/target/bubble 三相か target-only +
-   high-level signals か（intake ケース 6）。focus model の土台として
-   採択後最初期の phase で決める。
-4. **touch の検証環境** — touch AC をどの環境・どの証拠形で discharge
+## オーナーへの問い（Q1・Q2）
+
+本方針固めでオーナーが決めるのは次の 2 問。順序は依存方向どおり
+Q1 → Q2。
+
+### Q1 — 機能リストの確定（提案あり、確認待ち）
+
+§機能リストの表（P1〜P4）と §粒度の定義（提案）を確定する。具体的な
+確認点は 3 つ:
+
+1. **文字編集の 2 行分割**（単一行 = P1 / 複数行 = P4、付箋アプリ
+   〔題材候補 B1〕連動の注意つき）と各行の粒度でよいか
+   （§粒度の定義〔文字編集〕）。
+2. **重ね表示は行を分割せず、P3 行の粒度 = G2**（吸着差分は M5 へ
+   明示的に先送り）でよいか（§粒度の定義〔重ね表示〕）。
+3. **（既定路線の明文化）** 書き戻し / 双方向束縛は単一行の行の構成 5
+   としてホスト状態境界の取り込みと一体、でよいか。
+
+確定後: §粒度の定義の「提案」表記を外して確定形に書き換え、カバレッジの
+重み付け読み（[target-app-wireframes.html](target-app-wireframes.html) —
+文字編集の行分割に合わせた行列の更新を含む）へ進む。
+
+### Q2 — 題材アプリの採択（= F5、未確定）
+
+Q1 で確定した優先機能のカバレッジを第一基準に、4 案（§題材アプリの
+選定）から選ぶ。副次基準（工数・構造リスク・訴求力・残務消化）の重みに
+意向があれば併せて示す。採択の明文化は `requirements/spec.md`
+（§1.2 の成果物）で行い、採択に依存する帰結（§採択に依存して変わる
+もの）は本文書の改訂で確定する。
+
+## 採択後・各フェーズへ送る決定事項
+
+オーナーが本方針固めの時点で決める必要はない。着地先を固定して送る:
+
+1. **イベント配送の仕組み** — capture / target / bubble の三相か、対象
+   のみ + 高水準シグナルか（検討ケース 6）。採択後最初期のフェーズの
+   ADR で決める。設計ケースと実証の形は §粒度の定義（フォーカスモデル）
+   で固定済み。
+2. **タッチの検証環境** — タッチの AC をどの環境・どの証拠の形で消化
    するか（[verification-environments.md](../../../docs/notes/verification-environments.md)
-   の taxonomy に追記が要るか）。
-5. **multi-window の discharge 形**（B2 採択時）— app 内 proof か
-   最小 fixture 別建てか。
-6. **M3 residual cluster の disposition**（B 系採択時）— M5 carry の
-   明示記録。
-7. **sizing spike の置き場** — どの phase に置くか（デフォルト M4 実施。
-   M5 送りにするなら VDR の求める積極的正当化を記録）。
+   の分類に追記が要るか）。該当フェーズの計画で決める。
+3. **複数ウィンドウの証明の形** — 設定画面案（題材候補 B2）採択時のみ。
+   アプリ内での証明か、最小の検証用部品の別建てか。採択後の spec.md で
+   決める。
+4. **M3 残務群の処遇** — B 系採択時、M5 への持ち越しを本文書の改訂で
+   明示記録する。
+5. **サイズ試掘の置き場** — どのフェーズに置くか（既定は M4 実施。
+   M5 送りにするなら VDR の求める積極的な正当化を記録）。§1.4 plan.md
+   で確定する。
 
-## Owner-agreed framing decisions
+## 次の一手
 
-### F1 — M4 は focus-model milestone と読む（2026-07-07 合意）
-
-M4 の中心 deliverable は focus model の一回確定。追加スコープの取り込み
-判断基準は「focus model settlement の質を脅かすか」に置く。
-
-### F2 — 取り込みは二層（core / stretch）で行う（2026-07-07 合意）
-
-core = focus model 結合 item の AC 昇格。stretch = 切り離し可能な葉の
-target-app feature（AC 非昇格）。stretch の再評価 checkpoint = focus model
-中核 ADR の Accepted 時点。
-
-### F3 — 「なるべく M4 で実施」を framing の出発点とする（2026-07-07 合意）
-
-pool の M4 関連 item はオーナー意向により最大限 target app に取り込む
-方向で framing する。収まらない場合の escape valve は F2 の二層構造が
-提供する（stretch は 1 行 disposition、core は正規 narrowing）。
-
-### F4 — 機能リストが先、target app はそのカバレッジで選ぶ（2026-07-08 指示）
-
-M4 で実装する機能リストの精緻化・優先順位付けを最初に行い、target app は
-その優先機能をどれだけ自然にカバーできるかで決める。app が先にあって
-機能が従うのではない。判断基準の正本は本 framing §target app の選定。
-
-### F5 — target app 採択（open）
-
-A / B1 / B2 / B3 の 4 案から、問い 1 確定後のカバレッジ読みで採択する。
-採択の明文化は `requirements/spec.md`（§1.2 成果物）。**未確定。**
-
-## 初期 phase breakdown 仮説
-
-target app 採択後に記入する（placeholder）。現時点の依存方向の見立てのみ
-置く: event routing / focus model（問い 3）が最初期、TextField + IME と
-host state boundary がその上、multi-window と top-layer overlays が
-focus model 確定後、showcase 統合と AccessKit / Mica / DPI の evidence が
-後段。sizing spike は独立で任意の位置に置ける（問い 7）。
-
-## Next step
-
-1. オーナー: 問い 1（機能リストの精緻化と優先順位の確認 — 特に TextField
-   最小面と overlay 最小 proof の粒度）+ 副次基準の重み。
-2. 確定した優先機能でカバレッジ読みを
+1. オーナー: Q1 の確認（§オーナーへの問い）+ 副次基準の重みの意向。
+2. 確定した優先機能でカバレッジの重み付け読みを
    [target-app-wireframes.html](target-app-wireframes.html) に記録 →
-   target app 採択（F5 確定）→ `requirements/spec.md` で明文化 +
-   app-dependent 帰結を本 framing の revisions で確定。
-3. [candidate-pool.md](../../candidate-pool.md) disposition log に着地先
-   リンク付きで記入（item count = 12 を併記）。
-4. ROADMAP M4 AC revision（core take 4 件の昇格 + app 照らし審査）。
-5. `milestone-4/plan.md`（§1.4）で phase breakdown + sizing spike 振り分け
+   Q2 題材アプリの採択（F5 確定）→ `requirements/spec.md` で明文化 +
+   採択に依存する帰結を本文書の改訂で確定。
+3. [candidate-pool.md](../../candidate-pool.md) の処遇記録に着地先リンク
+   付きで記入（項目数 = 12 を併記）。
+4. ROADMAP M4 AC の改訂（中核取り込み 4 件の昇格 + アプリに照らした
+   審査）。
+5. `milestone-4/plan.md`（§1.4）でフェーズ分割 + サイズ試掘の振り分け
    記録。

@@ -380,7 +380,7 @@ M3 の「structured item data なし」制約の限界を突く可能性（Typed
 </table>
 
 <p class="meta">* B1 の TextField / IME の ◎ は「M4 TextField が複数行編集を含む」
-前提（framing 問い 1）。単一行に落とすと付箋らしさごと崩れ、評価は ○ 以下に下がる。</p>
+前提（framing の Q1 — 文字編集の行分割）。単一行に落とすと付箋らしさごと崩れ、評価は ○ 以下に下がる。</p>
 
 <h3>副次基準（第一基準が拮抗した場合の判断材料）</h3>
 
@@ -418,14 +418,14 @@ M3 の「structured item data なし」制約の限界を突く可能性（Typed
 リスク中、B2 = focus / overlay / UIA の検証密度で最強だが multi-window に穴、B1 = multi-window と
 identity で最強だが複数行リスク高、A = 工数・残務消化で最強だが text 系が薄い。
 <strong>P1 のうちどの機能を重く見るか（text 系か multi-window か focus 密度か）と副次基準の
-効かせ方で採択が変わる構図であり、framing 問い 1（機能リストの精緻化・優先順位の確認）が
+効かせ方で採択が変わる構図であり、framing の Q1（機能リストの確定）が
 決定打になる。</strong>
 </div>
 
 <h2>オーナー確認を反映した読み（placeholder）</h2>
 
 <div class="note">
-未記入。framing 問い 1（機能リストの精緻化と優先順位の確認、特に TextField 最小面）の
+未記入。framing の Q1（機能リストの確定 — 文字編集の行分割と各行の粒度）の
 確定後、本節にカバレッジの重み付け読みと順位を記録する。採択そのものは
 <code>requirements/spec.md</code>（M4 target app pre-doc）で明文化し、
 本ファイルは比較記録として保持する。
