@@ -110,7 +110,7 @@
 <h1>M4 target app 候補比較 — A / B1 / B2 / B3</h1>
 
 <p class="meta">
-status: exploratory artifact ・ created: 2026-07-07 ・ updated: 2026-07-09 ・
+status: exploratory artifact ・ created: 2026-07-07 ・ updated: 2026-07-11 ・
 関連: <a href="framing.md">framing.md</a>（M4 start framing、判断基準の正本）/
 <a href="../../_roadmap.md">process/_roadmap.md</a> §M4 /
 <a href="../../milestone-3/handoff.md">M3 handoff</a> /
@@ -217,9 +217,12 @@ M3 で先送りした事項の優先消化</strong>（正本は <a href="framing
         <span class="textfield">Search notes…（IME）</span>
         <span class="btn primary">＋ New</span>
       </div>
-      <div class="row" style="border:1px solid #ccd;border-radius:4px;padding:.2rem .4rem">買い物リスト — 牛乳、卵…</div>
-      <div class="row" style="border:1px solid #ccd;border-radius:4px;padding:.2rem .4rem">M4 の TODO — framing…</div>
-      <div class="annot">▲ 一覧 window（検索 + open。click で該当 note window へ focus 移動 = cross-window focus）</div>
+      <div class="row" style="border:1px solid #ccd;border-radius:4px;padding:.2rem .4rem"><span style="flex:1">買い物リスト — 牛乳、卵…</span><span class="btn">…</span></div>
+      <div class="row" style="border:1px solid #ccd;border-radius:4px;padding:.2rem .4rem"><span style="flex:1">M4 の TODO — framing…</span><span class="btn">…</span></div>
+      <div class="annot">▲ 一覧 window（検索 + open。click で該当 note window へ focus 移動 = cross-window focus）/
+      項目の「…」→ Delete note → <strong>削除確認 modal dialog</strong>。一覧の項目
+      （for / ScrollView 内）から開くため最前面層が構造的に要求される（framing の設計条件）。
+      本家 Sticky Notes も一覧からの削除で確認 dialog を出す</div>
     </div>
   </div>
 
@@ -243,7 +246,7 @@ M3 で先送りした事項の優先消化</strong>（正本は <a href="framing
   <tr><td>multi-window</td><td><strong>主役</strong>。note 作成 = window 生成、per-window state = note 本文、close = note を閉じる</td></tr>
   <tr><td>top-layer（構造 + 外側クリック型）</td><td>note menu（色替え / 削除）</td></tr>
   <tr><td>動的タイトル（window config props）</td><td>先頭行から生成（host 合成）。note window の initial size も自然</td></tr>
-  <tr><td>閉じ込め × 最前面層（modal dialog）</td><td>note の削除確認 — 本家 Sticky Notes に実在。文字入力は内蔵しない</td></tr>
+  <tr><td>閉じ込め × 最前面層（modal dialog）</td><td>note の削除確認 — <strong>一覧 window の項目の「…」から開く</strong>（for / ScrollView 内 → 最前面層が構造的に要求される。framing §粒度の定義〔重ね表示〕の設計条件）。本家 Sticky Notes に実在。文字入力は内蔵しない</td></tr>
   <tr><td>focus / UIA 検証の密度</td><td>部品種は少なめ（本文 + menu + 一覧）</td></tr>
   <tr><td>host state boundary の書き戻し方向</td><td>本文編集の write-back・host 側保存</td></tr>
 </table>
@@ -277,9 +280,12 @@ focus model と top-layer overlay の検証密度が最高になる。</p>
         </div>
         <div class="annot">▲ 親 off で子は disabled（enabled: 述語）/ Medium ▾ = top-layer dropdown</div>
         <div class="row"><span style="flex:1">Bluetooth</span><span class="toggle-off">off</span></div>
-        <div class="row"><span style="flex:1">Device name</span><span class="textfield">DESKTOP-…（rename）</span></div>
+        <div class="row"><span style="flex:1">Device name — DESKTOP-…</span><span class="btn">Rename</span></div>
         <div class="row"><span class="btn primary">Apply</span><span class="btn disabled">Revert</span></div>
-        <div class="annot">▲ Apply/Revert の enabled = 「変更あり」述語 / 設定値 = host state 読み書き</div>
+        <div class="annot">▲ Apply/Revert の enabled = 「変更あり」述語 / 設定値 = host state 読み書き /
+        右 pane = ScrollView（設定頁は縦 scroll、本家同様）。Rename →
+        <strong>「PC 名を変更」modal dialog を ScrollView 内の行から開く</strong> —
+        clip を脱出するため最前面層が構造的に要求される（framing の設計条件）</div>
       </div>
     </div>
   </div>
@@ -289,8 +295,8 @@ focus model と top-layer overlay の検証密度が最高になる。</p>
   <tr><th>第二 app の担当分</th><th>B2 での証明形</th></tr>
   <tr><td>focus / UIA 検証の密度</td><td><strong>主役</strong>。nav ⇄ pane、toggle / dropdown / textfield / button 異種混在の Tab 順・focus visual・role の多様性で最密</td></tr>
   <tr><td>top-layer（構造 + 外側クリック型）</td><td>dropdown / tooltip — 最も自然な出番</td></tr>
-  <tr><td>閉じ込め × 最前面層（modal dialog）</td><td>「PC 名を変更」dialog — 本家 Windows 設定に実在する先例（文字入力内蔵）</td></tr>
-  <tr><td>単一行の文字編集 + IME</td><td>設定検索・デバイス名（単一行で自然。ただし app の本筋ではなく周辺）</td></tr>
+  <tr><td>閉じ込め × 最前面層（modal dialog）</td><td>「PC 名を変更」dialog — 本家 Windows 設定に実在する先例（文字入力内蔵）。<strong>ScrollView の pane 内の行から開く</strong>ため最前面層が構造的に要求される（framing の設計条件）</td></tr>
+  <tr><td>単一行の文字編集 + IME</td><td>設定検索・デバイス名（rename dialog 内で編集。単一行で自然。ただし app の本筋ではなく周辺）</td></tr>
   <tr><td>host state boundary の書き戻し方向</td><td>設定値の write-back（apply / revert）</td></tr>
   <tr><td>multi-window</td><td><strong>出番なし</strong> — 設定 app は単一 window。証明の別建てが必要</td></tr>
   <tr><td>動的タイトル（window config props）</td><td><strong>出番なし</strong> — 設定 window のタイトルは静的。証明の別建てが必要</td></tr>
@@ -307,16 +313,29 @@ Mica identity は本家「設定」そのもの。単一行で複数行リスク
 IME と host state boundary（in/out 両方向）が製品動作の本体になる。</p>
 
 <div class="board">
-  <div class="window mica" style="width:13rem">
+  <div class="window mica" style="width:15rem">
     <div class="titlebar"><span>Chats</span><span class="buttons">— □ ×</span></div>
     <div class="body">
-      <div class="row" style="border:1px solid #ccd;border-radius:4px;padding:.2rem .4rem">
-        <span style="flex:1">Echo Bot</span><span class="annot">2</span>
+      <div class="row">
+        <span style="flex:1"></span><span class="btn primary">＋ New</span>
       </div>
       <div class="row" style="border:1px solid #ccd;border-radius:4px;padding:.2rem .4rem">
-        <span style="flex:1">雑談</span>
+        <span style="flex:1">Echo Bot</span><span class="annot">2</span><span class="btn">…</span>
       </div>
-      <div class="annot">▲ 会話ごとに別 window で開ける（multi-window）/ 未読数 = i32 binding</div>
+      <div class="row" style="border:1px solid #ccd;border-radius:4px;padding:.2rem .4rem">
+        <span style="flex:1">雑談</span><span class="btn">…</span>
+      </div>
+      <div class="annot">▲ 会話ごとに別 window で開ける（multi-window）/ 未読数 = i32 binding /
+      ＋ New = 自動命名（「新しい会話」）で即作成 — 名前は項目の改名で付ける /
+      項目の「…」→ 改名・削除（→ 下の modal dialog）</div>
+      <div class="overlay" style="margin-top:.6rem">
+        <strong>会話の名前を変更</strong>（modal dialog、最前面層）
+        <div class="row" style="margin-top:.4rem"><span class="textfield">雑談｜（IME）</span></div>
+        <div class="row" style="margin-bottom:0"><span style="flex:1"></span><span class="btn" style="background:#fff">OK</span><span class="btn" style="background:#fff">Cancel</span></div>
+        <div class="annot" style="color:#f0b98a">▲ 会話一覧の項目（for / ScrollView 内）から開く —
+        最前面層が構造的に要求される（framing の設計条件）。閉じ込め × 最前面層 × 文字入力 × IME
+        の四重の組合せを 1 か所で証明</div>
+      </div>
     </div>
   </div>
 
@@ -344,7 +363,7 @@ IME と host state boundary（in/out 両方向）が製品動作の本体にな�
   <tr><td>multi-window</td><td>会話ごとの window（per-window state = 会話、cross-window focus）</td></tr>
   <tr><td>top-layer（構造 + 外側クリック型）</td><td>絵文字 / 定型文 picker popover</td></tr>
   <tr><td>動的タイトル（window config props）</td><td>会話名 + 件数。bot 返信がもともと host 起点のため host 合成が自然</td></tr>
-  <tr><td>閉じ込め × 最前面層（modal dialog）</td><td>会話の改名 / 新規会話の名前入力（<strong>文字入力内蔵</strong> — 閉じ込め × 最前面層 × 文字入力 × IME を 1 か所で証明）・会話の削除確認</td></tr>
+  <tr><td>閉じ込め × 最前面層（modal dialog）</td><td>会話の改名・削除確認 — <strong>会話一覧の項目の「…」から開く</strong>（for / ScrollView 内 → 最前面層が構造的に要求される。framing の設計条件）。改名は<strong>文字入力内蔵</strong>で、閉じ込め × 最前面層 × 文字入力 × IME を 1 か所で証明。新規会話は自動命名で作成し名前は改名で付ける — 根から開く名前入力 dialog は ZStack で足りてしまい組合せを実証しないため置かない</td></tr>
   <tr><td>focus / UIA 検証の密度</td><td>一覧 + 入力欄 + button。異種混在の密度は B2 に劣る</td></tr>
 </table>
 
@@ -375,7 +394,7 @@ M3 先送り DSL 面・host 供給 / 差し替え・stretch・residual cluster�
   <tr><td>multi-window</td><td class="c">◎</td><td class="c">×</td><td class="c">○</td></tr>
   <tr><td>top-layer（構造 + 外側クリック型の規則）</td><td class="c">○（note menu）</td><td class="c">◎（dropdown / tooltip）</td><td class="c">○（絵文字 / 定型文 picker）</td></tr>
   <tr><td>動的タイトル（window config props）</td><td class="c">◎（先頭行）</td><td class="c">×</td><td class="c">◎（会話名 + 件数。host 合成が自然 — bot 返信がもともと host 起点）</td></tr>
-  <tr><td>閉じ込め × 最前面層（modal dialog、P3・予備）</td><td class="c">○（削除確認 — 本家 Sticky Notes に実在。文字入力なし）</td><td class="c">◎（「PC 名を変更」dialog — 本家設定に実在。文字入力内蔵）</td><td class="c">◎（改名 / 新規会話の名前入力・削除確認）</td></tr>
+  <tr><td>閉じ込め × 最前面層（modal dialog、P3・予備）</td><td class="c">○（削除確認 — 一覧の項目から開く。本家 Sticky Notes に実在。文字入力なし）</td><td class="c">◎（「PC 名を変更」dialog — ScrollView の pane 内の行から開く。本家設定に実在。文字入力内蔵）</td><td class="c">◎（改名・削除確認 — 会話一覧の項目から開く。改名は文字入力内蔵）</td></tr>
   <tr><td>focus / UIA 検証の密度（異種部品の Tab 順）</td><td class="c">○</td><td class="c">◎</td><td class="c">○</td></tr>
   <tr><td>host state boundary の書き戻し方向</td><td class="c">○（編集の保存）</td><td class="c">○（apply / revert）</td><td class="c">◎（送信 = write-back + bot 返信 = host 起点 write の両方向）</td></tr>
 </table>
@@ -403,7 +422,7 @@ M3 先送り DSL 面・host 供給 / 差し替え・stretch・residual cluster�
 <ul>
   <li><strong>B3: 担当分に穴がない唯一の案。</strong>全行 ○ 以上、◎ 4。文字入力 + IME は
   「日本語で会話を打つことが app の本体」で単一行が自然。書き戻し + host 起点 write の
-  両方向が製品動作で、A の担当（供給・差し替え）と正確に補完。改名 / 名前入力 dialog は
+  両方向が製品動作で、A の担当（供給・差し替え）と正確に補完。会話一覧の項目から開く改名 dialog は
   <strong>閉じ込め × 最前面層 × 文字入力 × IME の四重の組合せ</strong>を 1 か所で証明し、
   multi-window と合わせて「モーダルの及ぶ範囲はウィンドウ単位」の論点も作為なしに発火する。
   残る注意は並行配列の圧力のみ（framing の TypedValue 宿題を前倒し点検）。</li>
@@ -418,7 +437,9 @@ M3 先送り DSL 面・host 供給 / 差し替え・stretch・residual cluster�
   <li><strong>modal dialog の設計条件（全候補共通）:</strong> dialog は項目ごとの文脈
   （for / ScrollView 内）から開く形に設計し、最前面層が構造的に要求されるようにする。
   根宣言の dialog では ZStack で足りてしまい、組合せを実証しない
-  （framing §粒度の定義〔重ね表示〕）。</li>
+  （framing §粒度の定義〔重ね表示〕）。各候補での開き元は上記の各候補の表に記録 —
+  B1: 一覧 window の項目の「…」/ B2: ScrollView の pane 内の Rename 行 /
+  B3: 会話一覧の項目の「…」。</li>
 </ul>
 
 <div class="note">
