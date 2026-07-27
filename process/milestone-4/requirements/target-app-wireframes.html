@@ -107,11 +107,12 @@
 </head>
 <body>
 
-<h1>M4 target app 候補比較 — A / B1 / B2 / B3</h1>
+<h1>M4 target app 候補比較 — A / B1 / B2 / B3 / B4</h1>
 
 <p class="meta">
-status: exploratory artifact ・ created: 2026-07-07 ・ updated: 2026-07-11 ・
+status: exploratory artifact ・ created: 2026-07-07 ・ updated: 2026-07-27 ・
 関連: <a href="framing.md">framing.md</a>（M4 start framing、判断基準の正本）/
+<a href="target-app-wireframes.additional.html">target-app-wireframes.additional.html</a>（案 B4 の候補節）/
 <a href="../../_roadmap.md">process/_roadmap.md</a> §M4 /
 <a href="../../milestone-3/handoff.md">M3 handoff</a> /
 <a href="../../../docs/notes/m4-interaction-intake.md">m4-interaction-intake.md</a>
@@ -123,14 +124,17 @@ status: exploratory artifact ・ created: 2026-07-07 ・ updated: 2026-07-11 ・
 採択の SSOT は本ファイルではなく、採択後に書く <code>requirements/spec.md</code>（M4 target app pre-doc）。
 判断基準（優先機能リストのカバレッジ第一・副次基準）の正本は
 <a href="framing.md">framing.md</a> §機能リスト / §target app の選定であり、
-本ファイルはカバレッジの重み付け読みまでを記録する。
+本ファイルはカバレッジの重み付け読みまでを記録する。<br>
+<strong>案 B4（思いつきメモ）の候補節だけは別ファイル</strong>
+（<a href="target-app-wireframes.additional.html">target-app-wireframes.additional.html</a>）にある —
+他の 3 案より後に追加されたため。<strong>候補一覧と重み付け読みは本ファイルに集約</strong>する。
 </div>
 
 <h2>0. 前提 — 2 本立てと証明対象</h2>
 
 <p>題材アプリは <strong>2 本立て</strong>（framing F6）:
 <strong>A（Photo Gallery 成熟）= 採択確定</strong> +
-<strong>第二 app（B1 / B2 / B3 から選定、未決 = Q2）</strong>。
+<strong>第二 app = B4（思いつきメモ）</strong>（framing F8、2026-07-27 採択）。
 証明対象は M4 で実装する機能リスト — M4 acceptance criteria
 （<a href="../../_roadmap.md">_roadmap.md</a> §M4）+ §1.1 で take 合意済みの
 pool item — で、カバレッジは 2 本の組で満たす。機能リストの精緻化と
@@ -375,7 +379,20 @@ modal dialog の掛け算で「モーダルの及ぶ範囲はウィンドウ単�
 M3 の「structured item data なし」制約の限界を突く可能性（TypedValue 圧力。framing で
 並行配列 2〜3 本で収まるか点検要）。会話相手が fake（echo bot）であることの見せ方。</p>
 
-<h2>カバレッジの重み付け読み — 第二 app の選定（Q2、未決）</h2>
+<h2>案 B4 — 思いつきメモ（Quick Capture Inbox）【第二 app として採択（F8）】</h2>
+
+<p>短い思いつきを溜める、完了状態を持たない書き留め用の app。<strong>1 リスト = 1 window</strong>
+（Inbox / Ideas / Shopping）。一行の入力欄に日本語で項目を入力して追加することが主操作で、
+item は文字列 collection に留める。<strong>wireframe・担当分ごとの証明形・設計メモは別ファイル</strong>:
+<a href="target-app-wireframes.additional.html">target-app-wireframes.additional.html</a>
+（他の 3 案より後に追加されたため候補節を別に持つ。下記の重み付け読みは本ファイルが持つ）。</p>
+
+<p><strong>強み:</strong> 一行入力 + IME と write-back が製品の中心にあり、複数行編集を招かない。
+item を文字列 collection に留められるため、B3 の sender / time などの並行配列を避けやすい。<br>
+<strong>弱み:</strong> 1 list = 1 window は自然だが、B1 の 1 note = 1 window や
+B3 の 1 conversation = 1 window より製品上の必然性は少し弱い。focus / UIA の部品多様性も B2 に及ばない。</p>
+
+<h2>カバレッジの重み付け読み — 第二 app の選定（Q2、決着）</h2>
 
 <p>読みの行は<strong>第二 app の担当分</strong>（<a href="framing.md">framing.md</a>
 §題材アプリ二本立てと役割分担）。A が担う行（focus 基本形・汎用クリック・述語式 +
@@ -388,15 +405,15 @@ M3 先送り DSL 面・host 供給 / 差し替え・stretch・residual cluster�
 <table>
   <tr>
     <th>第二 app の担当分</th>
-    <th>B1: 付箋</th><th>B2: 設定</th><th>B3: チャット</th>
+    <th>B1: 付箋</th><th>B2: 設定</th><th>B3: チャット</th><th>B4: 思いつきメモ</th>
   </tr>
-  <tr><td>単一行の文字編集 + IME（主眼の中心）</td><td class="c">◎*</td><td class="c">○</td><td class="c">◎</td></tr>
-  <tr><td>multi-window</td><td class="c">◎</td><td class="c">×</td><td class="c">○</td></tr>
-  <tr><td>top-layer（構造 + 外側クリック型の規則）</td><td class="c">○（note menu）</td><td class="c">◎（dropdown / tooltip）</td><td class="c">○（絵文字 / 定型文 picker）</td></tr>
-  <tr><td>動的タイトル（window config props）</td><td class="c">◎（先頭行）</td><td class="c">×</td><td class="c">◎（会話名 + 件数。host 合成が自然 — bot 返信がもともと host 起点）</td></tr>
-  <tr><td>閉じ込め × 最前面層（modal dialog、P3・予備）</td><td class="c">○（削除確認 — 一覧の項目から開く。本家 Sticky Notes に実在。文字入力なし）</td><td class="c">◎（「PC 名を変更」dialog — ScrollView の pane 内の行から開く。本家設定に実在。文字入力内蔵）</td><td class="c">◎（改名・削除確認 — 会話一覧の項目から開く。改名は文字入力内蔵）</td></tr>
-  <tr><td>focus / UIA 検証の密度（異種部品の Tab 順）</td><td class="c">○</td><td class="c">◎</td><td class="c">○</td></tr>
-  <tr><td>host state boundary の書き戻し方向</td><td class="c">○（編集の保存）</td><td class="c">○（apply / revert）</td><td class="c">◎（送信 = write-back + bot 返信 = host 起点 write の両方向）</td></tr>
+  <tr><td>単一行の文字編集 + IME（主眼の中心）</td><td class="c">◎*</td><td class="c">○</td><td class="c">◎</td><td class="c">◎（短い item の捕捉・改名が app の中心。複数行編集を要求しない）</td></tr>
+  <tr><td>multi-window</td><td class="c">◎</td><td class="c">×</td><td class="c">○</td><td class="c">○（1 list = 1 window。launcher から開く / 既存 window へ focus 移動）</td></tr>
+  <tr><td>top-layer（構造 + 外側クリック型の規則）</td><td class="c">○（note menu）</td><td class="c">◎（dropdown / tooltip）</td><td class="c">○（絵文字 / 定型文 picker）</td><td class="c">○（各 item の「…」menu。ScrollView / for の内部から開く）</td></tr>
+  <tr><td>動的タイトル（window config props）</td><td class="c">◎（先頭行）</td><td class="c">×</td><td class="c">◎（会話名 + 件数。host 合成が自然 — bot 返信がもともと host 起点）</td><td class="c">◎（<code>Ideas — 12 items</code>。項目追加・archive で自然に変化。initial size も list window として自然）</td></tr>
+  <tr><td>閉じ込め × 最前面層（modal dialog、P3・予備）</td><td class="c">○（削除確認 — 一覧の項目から開く。本家 Sticky Notes に実在。文字入力なし）</td><td class="c">◎（「PC 名を変更」dialog — ScrollView の pane 内の行から開く。本家設定に実在。文字入力内蔵）</td><td class="c">◎（改名・削除確認 — 会話一覧の項目から開く。改名は文字入力内蔵）</td><td class="c">◎（item の「…」→ Rename dialog。ScrollView 内の行が起点で根 ZStack では代用できない。文字入力内蔵）</td></tr>
+  <tr><td>focus / UIA 検証の密度（異種部品の Tab 順）</td><td class="c">○</td><td class="c">◎</td><td class="c">○</td><td class="c">○（list / TextField / Add / item row / menu / dialog を横断。B2 より部品種は少ない）</td></tr>
+  <tr><td>host state boundary の書き戻し方向</td><td class="c">○（編集の保存）</td><td class="c">○（apply / revert）</td><td class="c">◎（送信 = write-back + bot 返信 = host 起点 write の両方向）</td><td class="c">◎（追加・改名・archive を host store へ write-back。供給・差し替えは A の担当に留める）</td></tr>
 </table>
 
 <p class="meta">* B1 の ◎ は「複数行の文字編集（P4 行）を中核並みのコストで引き受ける」判断と
@@ -407,20 +424,34 @@ M3 先送り DSL 面・host 供給 / 差し替え・stretch・residual cluster�
 <table>
   <tr>
     <th>副次基準</th>
-    <th>B1: 付箋</th><th>B2: 設定</th><th>B3: チャット</th>
+    <th>B1: 付箋</th><th>B2: 設定</th><th>B3: チャット</th><th>B4: 思いつきメモ</th>
   </tr>
-  <tr><td>1. 実装・spec 工数（相対）</td><td class="c">中〜大（複数行を含むと最大）</td><td class="c">中</td><td class="c">中</td></tr>
-  <tr><td>2. 構造リスク</td><td class="c"><strong>高（複数行）</strong></td><td class="c">低</td><td class="c">中（並行配列 — <a href="../../../docs/notes/typed-value-evaluator.md">typed-value-evaluator.md</a> の再評価トリガに接近）</td></tr>
-  <tr><td>3. identity / outreach 訴求</td><td class="c">◎</td><td class="c">◎</td><td class="c">○（動きがあり見栄えはする）</td></tr>
+  <tr><td>1. 実装・spec 工数（相対）</td><td class="c">中〜大（複数行を含むと最大）</td><td class="c">中</td><td class="c">中</td><td class="c">中</td></tr>
+  <tr><td>2. 構造リスク</td><td class="c"><strong>高（複数行）</strong></td><td class="c">低</td><td class="c">中（並行配列 — <a href="../../../docs/notes/typed-value-evaluator.md">typed-value-evaluator.md</a> の再評価トリガに接近）</td><td class="c"><strong>低</strong>（item は文字列 collection のみ。複数行も並行配列も招かない）</td></tr>
+  <tr><td>3. identity / outreach 訴求</td><td class="c">◎</td><td class="c">◎</td><td class="c">○（動きがあり見栄えはする）</td><td class="c">△〜○（Mica の小 window が並ぶ絵は出せるが、動きは B3 に劣る）</td></tr>
 </table>
 
 <p class="meta">M3 残務群の消化（framing §判断基準の副次基準 4）は A の担当のため、
 第二 app の選定では効かない。</p>
 
-<h3>読み（2026-07-09 時点。採択は未決 = Q2）</h3>
+<h3>読みと採択結果（2026-07-27、Q2 決着 = framing F8）</h3>
 
 <ul>
-  <li><strong>B3: 担当分に穴がない唯一の案。</strong>全行 ○ 以上、◎ 4。文字入力 + IME は
+  <li><strong>採択 = B4（思いつきメモ）。</strong>第一基準では B3 と B4 が同格・先頭で、
+  どちらも担当分に穴がなく ◎ 4・○ 3。B1 は複数行編集のコスト、B2 は穴 2 つを抱えるため
+  第一基準の段階で後退し、選定はこの 2 案の副次基準に委ねられた。工数は同程度のため
+  実質は構造リスクと訴求力の 2 軸となり、<strong>構造リスクの低さ（B4）を
+  訴求の動き（B3）より重く取った</strong> — B3 の並行配列の圧力
+  （<code>TypedValue</code> / 構造化された項目データの保留に接近する）を M4 に
+  持ち込まない判断である。以下の各案の読みは判断の記録として残す。</li>
+  <li><strong>B4: B3 と同じ穴なし・構造リスクは最も低い。</strong>一行入力 + IME と
+  write-back が製品の中心にあり、複数行編集を招かない。item を文字列 collection に
+  留められるため B3 の並行配列の圧力を回避する。item の「…」→ Rename dialog は
+  ScrollView 内の行が起点で、<strong>閉じ込め × 最前面層 × 文字入力 × IME の四重の組合せ</strong>を
+  B3 と同様に 1 か所で証明する。B3 に劣るのは multi-window の製品上の必然性
+  （1 list = 1 window は 1 conversation = 1 window より弱い）と showcase の動き。
+  詳細は <a href="target-app-wireframes.additional.html">B4 の候補節</a>。</li>
+  <li><strong>B3: 担当分に穴がない。</strong>全行 ○ 以上、◎ 4。文字入力 + IME は
   「日本語で会話を打つことが app の本体」で単一行が自然。書き戻し + host 起点 write の
   両方向が製品動作で、A の担当（供給・差し替え）と正確に補完。会話一覧の項目から開く改名 dialog は
   <strong>閉じ込め × 最前面層 × 文字入力 × IME の四重の組合せ</strong>を 1 か所で証明し、
@@ -439,13 +470,17 @@ M3 先送り DSL 面・host 供給 / 差し替え・stretch・residual cluster�
   根宣言の dialog では ZStack で足りてしまい、組合せを実証しない
   （framing §粒度の定義〔重ね表示〕）。各候補での開き元は上記の各候補の表に記録 —
   B1: 一覧 window の項目の「…」/ B2: ScrollView の pane 内の Rename 行 /
-  B3: 会話一覧の項目の「…」。</li>
+  B3: 会話一覧の項目の「…」/ B4: list window の item 行の「…」。
+  B4 の「＋ 新しいリスト」も同じ理由で名前入力 dialog を持たず、自動命名 +
+  launcher 行からの改名にしている。</li>
 </ul>
 
 <div class="note">
-採択そのものは <code>requirements/spec.md</code>（M4 target app pre-doc）で明文化し、
-本ファイルは比較記録として保持する。採択に依存する帰結は
-<a href="framing.md">framing.md</a> §第二アプリの採択に依存して変わるもので確定する。
+Q2 は <strong>A + B4 の 2 本</strong>で決着した（framing F6 / F8）。採択の明文化は
+<code>requirements/spec.md</code>（M4 target app pre-doc）で行い、本ファイルは
+<strong>選定の比較記録</strong>として保持する（非採択 3 案の読みは歴史的記録）。
+採択に伴う制約 — 項目は文字列の並びに留める / 一覧 window の行に件数を出さない — は
+<a href="framing.md">framing.md</a> §第二アプリの採択に依存して変わるものが正本。
 </div>
 
 <h2>位置づけと将来</h2>
