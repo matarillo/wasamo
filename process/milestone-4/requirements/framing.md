@@ -1,6 +1,6 @@
 ---
 title: M4 開始時の方針固め（start framing）— Interaction stack
-status: draft
+status: accepted
 created: 2026-07-07
 related:
   - process/_roadmap.md
