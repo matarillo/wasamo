@@ -38,6 +38,8 @@ criterion rather than a date.
 | Phantom-typed length newtypes (`Dip<T>` / `Px<T>`) | Available, not scheduled | Adopted only if a unit-mixing defect actually recurs — not on a prediction that it might |
 | `WM_GETDPISCALEDSIZE` | Available, not scheduled | A phase wanting to propose its own post-change window size (author-specified sizing, AC11 / M4-Phase 8) |
 | Synthesised pointer update after a scale change | M4-Phase 2 event model | If hover correctness across a resize turns out to matter |
+| **The per-node scale cache has exactly one writer** — the attach / scale-change walk; `WindowState` holds the authoritative value (T1 decision, [log.md](./log.md) §T1) | In force from T5 onward | Any path that attaches, re-parents, or re-materialises a subtree **without** running the walk leaves stale scales behind: staged iteration subtrees, M4-Phase 2 event-model tree edits, M4-Phase 8 moving a tree between windows. Such a path must call the walk |
+| **`cargo test --workspace` needs `cargo build -p wasamo-runtime` first from a cold target directory** — `wasamo-dll/build.rs` whole-archives the *uplifted* `<profile>/libwasamo_runtime.rlib`, which cargo produces only once `wasamo-runtime` has been built as a primary package (T1 finding F-5; pre-existing, not introduced by this phase) | T12's clean-rebuild gate; [AGENTS.md §Build ordering](../../../../AGENTS.md) | Any clean rebuild, any CI cache miss, or any toolchain update that invalidates the uplifted rlib. Cold-directory failure is `LNK1356`; a stale uplifted rlib fails later as `LNK2019` on `core` / `std` symbols. `cargo check` never links and stays green through both |
 
 ## Residuals
 
