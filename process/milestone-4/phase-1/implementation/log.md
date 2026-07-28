@@ -1271,24 +1271,34 @@ only `StartAnimation` targets `"Color"`); F-18, F-19 and F-20 are
 correct; the six before/after pairs match to SHA-256; N1 / N2 / N3 show
 what they are said to show.
 
-**Open for the owner — the disposition of `window_add_widget` (R-1).**
-Three options, none of which T3 should take unilaterally, because they
-differ in scope rather than in correctness:
+**The disposition of `window_add_widget` (R-1): document and keep.**
+Taken as T3's own decision. It was briefly raised as an owner question
+and should not have been — none of the three owner-confirm criteria fires
+(no AC or phase change, no new cross-task constraint beyond the
+carry-forward already recorded, no downstream task revision), and the
+question was about how to *describe* the change rather than what to
+build. The grounds:
 
-1. **Document and keep** (what is landed). The regression is real but
-   confined to a `pub` item of a workspace-internal crate with **zero
-   callers** — `bindings/rust` depends on `wasamo-sys`, i.e. the C ABI,
-   not on this crate — so nothing shipped changes. Cost: a public entry
-   whose behaviour narrowed without a decision.
-2. **Give it a layout pass.** It would then place both the background and
-   the label, which is arguably the API repaired rather than regressed —
-   but it inverts the function's stated contract ("no layout") and is a
-   behaviour change on a task chartered as behaviour-identical.
-3. **Remove it.** No caller, and `window_set_root` covers the supported
-   case. An API removal, out of T3's scope.
+- **Nothing is blocked.** `window_add_widget` appears in no spec —
+  `docs/architecture.md`, `docs/abi_spec.md` and `docs/dsl_spec.md` do
+  not mention it — carries no ABI surface, and has **zero callers** in
+  the workspace. `bindings/rust` depends on `wasamo-sys`, i.e. the C ABI,
+  not on this crate.
+- **It is already superseded.** `window_set_root` was added at `163067a`
+  for exactly the case that needs layout, and the runtime difference
+  between the two entries (layout pass, hit-test registration) is
+  recorded as far back as
+  [M2-Phase 7 framing O6](../../../milestone-2/phase-7/requirements/framing-dd-010.md),
+  where it was found by GUI execution rather than source review.
+- **The alternatives cost more than the problem.** Giving it a layout
+  pass would invert its stated "no layout" contract and change behaviour
+  on a task chartered as behaviour-identical; removing it is a public-API
+  deletion and belongs to a cleanup task, not here.
 
-Recorded as a **stated limit** either way, so the phase does not close
-claiming a behaviour-identical refactor without the exception attached.
+Recorded as a **stated limit**, so the phase does not close claiming a
+behaviour-identical refactor with no exception attached, and carried to
+[handoff.md](./handoff.md) as a cleanup candidate — a caller-less public
+entry left behind when `window_set_root` superseded it.
 
 **A note on the review's own limit.** Every finding concerns a path or a
 claim; none contradicts the landed arithmetic or the write relocation
