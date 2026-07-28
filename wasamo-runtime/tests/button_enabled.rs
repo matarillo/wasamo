@@ -143,7 +143,7 @@ fn button_enabled_property_flips_visual_and_suppresses_click() {
         .expect("set bg size");
 
     let widget_ptr = (&mut *button) as *mut WidgetNode as *mut ffi::WasamoWidget;
-    button.hit_test_click(50, 20);
+    button.hit_test_click(50.0, 20.0);
     assert_eq!(
         click_count.get(),
         1,
@@ -201,7 +201,7 @@ fn button_enabled_property_flips_visual_and_suppresses_click() {
 
     // Click suppression: hit-testing the same pixel must NOT invoke the
     // callback while disabled.
-    button.hit_test_click(50, 20);
+    button.hit_test_click(50.0, 20.0);
     assert_eq!(
         click_count.get(),
         1,
@@ -230,7 +230,7 @@ fn button_enabled_property_flips_visual_and_suppresses_click() {
     );
 
     // Click dispatch resumes once re-enabled.
-    button.hit_test_click(50, 20);
+    button.hit_test_click(50.0, 20.0);
     assert_eq!(
         click_count.get(),
         2,

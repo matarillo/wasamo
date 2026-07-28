@@ -1,4 +1,5 @@
 use crate::box_values;
+use crate::dip_scale::DipScale;
 use crate::handler::{self, EvalContext, EvalError, HandlerExpr};
 use crate::layout::{
     self, Alignment, ChildSlots, LayoutChildSlot, LayoutError, LayoutNode, SizeConstraint,
@@ -380,6 +381,27 @@ pub struct WidgetNode {
     /// Reactive bindings owned by this node. Dropping an EffectHandle
     /// removes it from the dependency graph (DD-M2-P5-003).
     pub(crate) bindings: Vec<EffectHandle>,
+    /// This node's cached copy of its window's DIP -> physical conversion
+    /// factor (M4-Phase 1; the carrier decision recorded in
+    /// `implementation/log.md` §T1).
+    ///
+    /// **A cache with exactly one writer** — the attach / scale-change walk —
+    /// while `WindowState::scale` holds the authoritative value. It exists
+    /// because the three passes that need a scale stand on a node and not on a
+    /// window: `sync_visuals` converts outbound, `hit_test_click_inner` and
+    /// `update_hover_inner` convert the `Visual` readback inbound, and the
+    /// property-write re-rasterization paths reach a node through a bare
+    /// `*mut WidgetNode` with no window in hand at all. Threading a parameter
+    /// instead was compiler-measured at 28 broken test call sites against 7,
+    /// and had no answer on that last path.
+    ///
+    /// `DipScale::default()` is the identity, so a tree that has not been
+    /// attached to a window converts as 1 — which is also what every node holds
+    /// until the walk lands, and is why introducing the field changes no
+    /// rendered output.
+    ///
+    /// Not `pub` and not `pub(crate)`: every reader is in this module.
+    scale: DipScale,
 }
 
 // ── Tree-mutation errors ──────────────────────────────────────────────────────
@@ -418,6 +440,7 @@ impl WidgetNode {
             inline_handlers: Vec::new(),
             attached: false,
             bindings: Vec::new(),
+            scale: DipScale::default(),
         }))
     }
 
@@ -441,6 +464,7 @@ impl WidgetNode {
             inline_handlers: Vec::new(),
             attached: false,
             bindings: Vec::new(),
+            scale: DipScale::default(),
         }))
     }
 
@@ -464,6 +488,7 @@ impl WidgetNode {
             inline_handlers: Vec::new(),
             attached: false,
             bindings: Vec::new(),
+            scale: DipScale::default(),
         }))
     }
 
@@ -502,6 +527,7 @@ impl WidgetNode {
             inline_handlers: Vec::new(),
             attached: false,
             bindings: Vec::new(),
+            scale: DipScale::default(),
         }))
     }
 
@@ -548,6 +574,7 @@ impl WidgetNode {
             inline_handlers: Vec::new(),
             attached: false,
             bindings: Vec::new(),
+            scale: DipScale::default(),
         }))
     }
 
@@ -589,6 +616,7 @@ impl WidgetNode {
             inline_handlers: Vec::new(),
             attached: false,
             bindings: Vec::new(),
+            scale: DipScale::default(),
         }))
     }
 
@@ -646,6 +674,7 @@ impl WidgetNode {
             inline_handlers: Vec::new(),
             attached: false,
             bindings: Vec::new(),
+            scale: DipScale::default(),
         }))
     }
 
@@ -680,6 +709,7 @@ impl WidgetNode {
             inline_handlers: Vec::new(),
             attached: false,
             bindings: Vec::new(),
+            scale: DipScale::default(),
         }))
     }
 
@@ -702,6 +732,7 @@ impl WidgetNode {
             inline_handlers: Vec::new(),
             attached: false,
             bindings: Vec::new(),
+            scale: DipScale::default(),
         }))
     }
 
@@ -871,6 +902,7 @@ impl WidgetNode {
             inline_handlers: Vec::new(),
             attached: false,
             bindings: Vec::new(),
+            scale: DipScale::default(),
         }))
     }
 
@@ -1234,14 +1266,31 @@ impl WidgetNode {
 
     /// Traverse the tree and fire the `clicked_fn` of the first Button-family
     /// widget whose computed visual rect contains `(x, y)`.
-    pub fn hit_test_click(&mut self, x: i32, y: i32) {
+    ///
+    /// **`(x, y)` are DIP** (M4-Phase 1, DD-M4-P1-002 option H2): the window
+    /// procedure divides the pointer message's physical coordinates by the
+    /// window's scale before calling in, so hit-testing runs in the same space
+    /// as layout. `f32` rather than `i32` because a DIP pointer position is not
+    /// an integer — physical 50 at 150% is 33.33 — and truncating it would make
+    /// hit-test edges depend on the scale factor for no benefit.
+    pub fn hit_test_click(&mut self, x: f32, y: f32) {
         self.hit_test_click_inner(x, y, 0.0, 0.0);
     }
 
-    fn hit_test_click_inner(&mut self, x: i32, y: i32, off_x: f32, off_y: f32) {
+    fn hit_test_click_inner(&mut self, x: f32, y: f32, off_x: f32, off_y: f32) {
         // The visual's current offset is available via computed layout stored on the Visual.
         // We read it back from the SpriteVisual to avoid tracking a separate state.
+        //
+        // DD-M4-P1-002 audit row 9, the inbound seam. The readback is physical
+        // — it is what `sync_visuals` wrote — while `x` / `y` and the
+        // accumulated `off_x` / `off_y` are DIP, so it is divided here. **The
+        // divisor is this node's own cache** because the value being divided is
+        // the one this node's `sync_visuals` multiplied: row 9 undoes row 4, and
+        // the two are the same variable by construction rather than by
+        // agreeing. See the T5 decision entry in `implementation/log.md`.
         let (vx, vy, vw, vh) = visual_rect(&self.visual);
+        let (vx, vy) = self.scale.pair_to_dip((vx, vy));
+        let (vw, vh) = self.scale.pair_to_dip((vw, vh));
         let abs_x = off_x + vx;
         let abs_y = off_y + vy;
 
@@ -1262,9 +1311,7 @@ impl WidgetNode {
                 }
                 return;
             }
-            let fx = x as f32;
-            let fy = y as f32;
-            if fx >= abs_x && fx < abs_x + vw && fy >= abs_y && fy < abs_y + vh {
+            if x >= abs_x && x < abs_x + vw && y >= abs_y && y < abs_y + vh {
                 if let Some(ref f) = btn.clicked_fn {
                     f();
                 }
@@ -1316,11 +1363,13 @@ impl WidgetNode {
 
     /// Update hover/press state for all Button-family widgets based on mouse position.
     /// `down` is true while the left mouse button is held.
+    ///
+    /// **`(x, y)` are DIP**, for the reason given on [`Self::hit_test_click`].
     pub fn update_hover(
         &mut self,
         compositor: &Compositor,
-        x: i32,
-        y: i32,
+        x: f32,
+        y: f32,
         down: bool,
     ) -> windows::core::Result<()> {
         self.update_hover_inner(compositor, x, y, down, 0.0, 0.0)
@@ -1329,13 +1378,16 @@ impl WidgetNode {
     fn update_hover_inner(
         &mut self,
         compositor: &Compositor,
-        x: i32,
-        y: i32,
+        x: f32,
+        y: f32,
         down: bool,
         off_x: f32,
         off_y: f32,
     ) -> windows::core::Result<()> {
+        // Audit row 9's second call site — same conversion, same divisor.
         let (vx, vy, vw, vh) = visual_rect(&self.visual);
+        let (vx, vy) = self.scale.pair_to_dip((vx, vy));
+        let (vw, vh) = self.scale.pair_to_dip((vw, vh));
         let abs_x = off_x + vx;
         let abs_y = off_y + vy;
 
@@ -1349,9 +1401,7 @@ impl WidgetNode {
                 }
                 return Ok(());
             }
-            let fx = x as f32;
-            let fy = y as f32;
-            let inside = fx >= abs_x && fx < abs_x + vw && fy >= abs_y && fy < abs_y + vh;
+            let inside = x >= abs_x && x < abs_x + vw && y >= abs_y && y < abs_y + vh;
             let new_state = if inside && down {
                 ButtonState::Pressed
             } else if inside {
@@ -1767,14 +1817,30 @@ impl WidgetNode {
     ) -> windows::core::Result<()> {
         use windows::core::Interface;
         let visual: Visual = self.visual.cast()?;
+        // DD-M4-P1-002 audit row 4, the outbound seam. `computed` is DIP and
+        // the Composition visual tree is physical, so every write below
+        // multiplies by this node's scale — through the named operations, not
+        // by hand: `dip * scale.factor()` satisfies a prose reading of the rule
+        // and is wrong only at non-dyadic scales, where two of the phase's
+        // three test factors cannot see it (T2 findings F-13 / F-15).
+        //
+        // `relative_offset_to_physical` is what makes **convert once, on the
+        // difference** the natural call rather than a discipline: it is handed
+        // the two absolute DIP positions, so subtracting in DIP and multiplying
+        // the result — one rounding instead of two — is the only thing a caller
+        // can express without converting each operand itself.
+        let (offset_x, offset_y) = self
+            .scale
+            .relative_offset_to_physical(computed.offset, parent_abs_offset);
+        let (size_x, size_y) = self.scale.extent_to_physical(computed.size);
         visual.SetOffset(Vector3 {
-            X: computed.offset.0 - parent_abs_offset.0,
-            Y: computed.offset.1 - parent_abs_offset.1,
+            X: offset_x,
+            Y: offset_y,
             Z: 0.0,
         })?;
         visual.SetSize(Vector2 {
-            X: computed.size.0,
-            Y: computed.size.1,
+            X: size_x,
+            Y: size_y,
         })?;
         // DD-M4-P1-002 §The conversion sites row 6: the Button-family
         // label's placement is written here rather than at construction,
@@ -1787,16 +1853,24 @@ impl WidgetNode {
         // size is the label's measured extent, not `computed.size`: a parent
         // that stretches the button changes the arranged size but not the
         // extent of the text drawn into the label surface.
+        //
+        // Audit row 6. **The offset here is already parent-relative**, so it is
+        // not the difference-taking case row 4 is: there is no absolute pair to
+        // subtract, and `relative_offset_to_physical` cannot be applied without
+        // inventing one (T3 finding F-19). Each component goes through the
+        // scalar `to_physical`, which is one multiplication and therefore
+        // exactly the one rounding the rule asks for.
         if let WidgetData::Button(btn) | WidgetData::ToggleButton(btn) = &self.data {
             let label_visual: Visual = btn.label_visual.cast()?;
             label_visual.SetOffset(Vector3 {
-                X: BUTTON_PAD_H,
-                Y: BUTTON_PAD_V,
+                X: self.scale.to_physical(BUTTON_PAD_H),
+                Y: self.scale.to_physical(BUTTON_PAD_V),
                 Z: 0.0,
             })?;
+            let (label_w, label_h) = self.scale.extent_to_physical(btn.label_size);
             label_visual.SetSize(Vector2 {
-                X: btn.label_size.0,
-                Y: btn.label_size.1,
+                X: label_w,
+                Y: label_h,
             })?;
         }
         // DD-M3-P4-004 Option A: when self is a ScrollView, the
@@ -1814,18 +1888,23 @@ impl WidgetNode {
         // no clip (the outer Visual's InsetClip clips the translated
         // content); its size mirrors the viewport for hit-testing
         // consistency with the outer Visual.
+        //
+        // Audit row 5, and the same already-parent-relative case as row 6:
+        // `(0, -applied_y)` is the intermediate's offset inside its own parent,
+        // so each component takes the scalar `to_physical`. **The recursion
+        // itself stays entirely in DIP** — `child_parent_abs` below is the
+        // value the layout engine arranged against, and only the two
+        // Composition writes above it multiply.
         let child_parent_abs = if let WidgetData::ScrollView { content_visual, .. } = &self.data {
             let applied = computed.applied_offset_y.get();
             let int_visual: Visual = content_visual.cast()?;
             int_visual.SetOffset(Vector3 {
-                X: 0.0,
-                Y: -applied,
+                X: self.scale.to_physical(0.0),
+                Y: self.scale.to_physical(-applied),
                 Z: 0.0,
             })?;
-            int_visual.SetSize(Vector2 {
-                X: computed.size.0,
-                Y: computed.size.1,
-            })?;
+            let (int_w, int_h) = self.scale.extent_to_physical(computed.size);
+            int_visual.SetSize(Vector2 { X: int_w, Y: int_h })?;
             (computed.offset.0, computed.offset.1 - applied)
         } else {
             computed.offset

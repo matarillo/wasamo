@@ -51,20 +51,31 @@ pub struct WindowState {
     /// concludes that no host needs the scale factor, so putting it on a
     /// `pub use`-exported type would ship the surface that decision declines.
     ///
-    /// Written here and not yet read: the seams that divide and multiply by it
-    /// land at T5, and the `WM_DPICHANGED` handler that rewrites it at T7. The
-    /// allow is that forward pointer, in the same shape as `dip_scale`'s
-    /// module-level one, and goes away with the first seam.
-    #[allow(dead_code)]
+    /// Read by `wnd_proc`'s size and pointer arms, by `set_root`'s first
+    /// layout and by `emit::flush_layout`; rewritten by the `WM_DPICHANGED`
+    /// handler at T7.
     pub(crate) scale: DipScale,
 
     // Event callbacks set by the host before wasamo_run().
+    //
+    // **Every coordinate below is DIP** (M4-Phase 1; DD-M4-P1-004 fixes DIP as
+    // the unit of every outward-facing length, and these are `pub` fields on a
+    // `pub use`-exported type). `wnd_proc` divides the message's physical
+    // values by this window's scale before invoking them, so a host receives
+    // the same numbers its `.ui` dimensions are written in. Recorded rather
+    // than inherited: no ABI or Rust-native function installs any of these
+    // today, so the unit would otherwise have changed as a silent side effect
+    // of moving the conversion seam.
+    //
+    // The pointer slots are `f32` for the reason `hit_test_click` is: a DIP
+    // pointer position is not an integer, and `i32` would have made the
+    // declared unit nominal by truncating physical 50 at 150% to DIP 33.
     pub resize_fn: Option<Box<dyn FnMut(f32, f32)>>,
     pub key_down_fn: Option<Box<dyn FnMut(u16)>>,
-    pub mouse_down_fn: Option<Box<dyn FnMut(i32, i32)>>,
-    pub mouse_move_fn: Option<Box<dyn FnMut(i32, i32)>>,
+    pub mouse_down_fn: Option<Box<dyn FnMut(f32, f32)>>,
+    pub mouse_move_fn: Option<Box<dyn FnMut(f32, f32)>>,
     pub mouse_leave_fn: Option<Box<dyn FnMut()>>,
-    pub mouse_up_fn: Option<Box<dyn FnMut(i32, i32)>>,
+    pub mouse_up_fn: Option<Box<dyn FnMut(f32, f32)>>,
 
     // Tracks whether TrackMouseEvent has been called for the current enter/leave cycle.
     tracking_mouse: bool,
@@ -275,13 +286,19 @@ pub fn set_root(state: &mut WindowState, root: Box<WidgetNode>) -> windows::core
     state.root.Children()?.InsertAtTop(&child_visual)?;
 
     // Initial layout against current client size.
+    //
+    // DD-M4-P1-002 audit row 2, the inbound seam. `GetClientRect` reports
+    // physical pixels and the layout engine works in DIP, so the extent is
+    // divided by this window's scale before it reaches `run_layout_as_window_root`
+    // — through `pair_to_dip` rather than a hand-written division, so the one
+    // place the conversion rule lives stays one place (T2 finding F-15).
     let mut rect = RECT::default();
     let (cw, ch) = unsafe {
         if GetClientRect(state.hwnd, &mut rect).is_ok() {
-            (
+            state.scale.pair_to_dip((
                 (rect.right - rect.left) as f32,
                 (rect.bottom - rect.top) as f32,
-            )
+            ))
         } else {
             (0.0, 0.0)
         }
@@ -350,6 +367,22 @@ fn apply_dark_mode(hwnd: HWND) {
     };
 }
 
+/// The **physical** client-area pointer position packed into a mouse message's
+/// `lParam`, sign-extended per axis.
+///
+/// Hoisted at M4-Phase 1 T5 because the conversion seam would otherwise have
+/// divided this expression at three sites that each wrote it out again — the
+/// same rule-in-two-places shape T2 finding F-14 records. The signed
+/// extraction is deliberate and is *not* shared with `WM_SIZE`: a pointer
+/// coordinate is negative when the cursor leaves the client area to the left or
+/// above, while a client extent is unsigned.
+fn pointer_physical(lparam: LPARAM) -> (f32, f32) {
+    (
+        (lparam.0 & 0xFFFF) as i16 as f32,
+        ((lparam.0 >> 16) & 0xFFFF) as i16 as f32,
+    )
+}
+
 unsafe extern "system" fn wnd_proc(
     hwnd: HWND,
     msg: u32,
@@ -372,10 +405,19 @@ unsafe extern "system" fn wnd_proc(
 
     if !state_ptr.is_null() {
         let state = &mut *state_ptr;
+        // This window's conversion factor, copied out once so the arms below
+        // can hold a `&mut` borrow of a callback slot at the same time.
+        // DD-M4-P1-002 audit rows 1 and 3 both divide by it: the client extent
+        // and the pointer stream arrive in the client area's physical pixels
+        // and everything downstream of this procedure — layout, hit-testing,
+        // hover, and the host callbacks — is DIP.
+        let scale = state.scale;
 
         if msg == WM_SIZE {
-            let w = (lparam.0 & 0xFFFF) as f32;
-            let h = ((lparam.0 >> 16) & 0xFFFF) as f32;
+            let (w, h) = scale.pair_to_dip((
+                (lparam.0 & 0xFFFF) as f32,
+                ((lparam.0 >> 16) & 0xFFFF) as f32,
+            ));
             if let Some(f) = &mut state.resize_fn {
                 f(w, h);
             }
@@ -394,8 +436,7 @@ unsafe extern "system" fn wnd_proc(
         }
 
         if msg == WM_MOUSEMOVE {
-            let x = (lparam.0 & 0xFFFF) as i16 as i32;
-            let y = ((lparam.0 >> 16) & 0xFFFF) as i16 as i32;
+            let (x, y) = scale.pair_to_dip(pointer_physical(lparam));
             if !state.tracking_mouse {
                 // Request WM_MOUSELEAVE when the cursor leaves the client area.
                 let mut tme = TRACKMOUSEEVENT {
@@ -428,8 +469,7 @@ unsafe extern "system" fn wnd_proc(
         }
 
         if msg == WM_LBUTTONDOWN {
-            let x = (lparam.0 & 0xFFFF) as i16 as i32;
-            let y = ((lparam.0 >> 16) & 0xFFFF) as i16 as i32;
+            let (x, y) = scale.pair_to_dip(pointer_physical(lparam));
             state.mouse_down = true;
             if let Some(f) = &mut state.mouse_down_fn {
                 f(x, y);
@@ -441,8 +481,7 @@ unsafe extern "system" fn wnd_proc(
         }
 
         if msg == WM_LBUTTONUP {
-            let x = (lparam.0 & 0xFFFF) as i16 as i32;
-            let y = ((lparam.0 >> 16) & 0xFFFF) as i16 as i32;
+            let (x, y) = scale.pair_to_dip(pointer_physical(lparam));
             state.mouse_down = false;
             if let Some(f) = &mut state.mouse_up_fn {
                 f(x, y);

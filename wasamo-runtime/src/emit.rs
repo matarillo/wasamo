@@ -132,13 +132,25 @@ fn flush_layout() {
         if let Some(ref mut root) = state.root_widget {
             use windows::Win32::Foundation::RECT;
             use windows::Win32::UI::WindowsAndMessaging::GetClientRect;
+            // DD-M4-P1-002 audit row 2's **second** production site (M4-Phase 1
+            // T1 finding F-1): the ADR names only `window::set_root`, but the
+            // reactive drain's layout phase performs the same
+            // `GetClientRect` -> layout conversion after every size-affecting
+            // property write, and an unconverted extent here would hand layout
+            // physical pixels on the busiest path in the runtime.
+            //
+            // `state.scale` and `state.hwnd` are read beside the `root_widget`
+            // borrow above: disjoint fields of the same struct, so this needs no
+            // restructuring. (T1's note that `update_button_label` must read the
+            // scale *before* `button_data_mut()` is about a method that borrows
+            // all of `self`, and does not apply to a field access.)
             let mut rect = RECT::default();
             let (cw, ch) = unsafe {
                 if GetClientRect(state.hwnd, &mut rect).is_ok() {
-                    (
+                    state.scale.pair_to_dip((
                         (rect.right - rect.left) as f32,
                         (rect.bottom - rect.top) as f32,
-                    )
+                    ))
                 } else {
                     (0.0, 0.0)
                 }
