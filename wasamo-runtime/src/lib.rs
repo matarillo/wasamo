@@ -1,5 +1,9 @@
 mod abi;
 mod box_values;
+// M4-Phase 1 DD-M4-P1-002: the DIP <-> physical-pixel conversion carrier.
+// Declared here so the module compiles and its unit tests run; it has no
+// production caller until T4 puts the authoritative value on `WindowState`.
+mod dip_scale;
 mod emit;
 pub mod handler;
 pub mod ir_loader;
