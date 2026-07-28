@@ -1366,8 +1366,47 @@ the Grid to zero height on any property write**. That is exactly the
 M3-Phase 4 T6 failure `run_layout_as_window_root`'s doc comment describes,
 still live on the drain path. *Not fixed here* — T3 must stay
 behaviour-identical, and this is a behaviour change with its own
-evidence needs. *Disposition:* recorded in [handoff.md](./handoff.md) and
-raised with the owner, with the recommendation that it land in **T5**,
-which already edits that call site for the inbound DIP conversion (audit
-row 2b), as its own commit with its own before/after frames.
+evidence needs. *Disposition:* **[plan.md](./plan.md) §T5** as its own
+commit with its own before/after frames — T5 already edits that call site
+for the inbound DIP conversion (audit row 2b), so fixing it elsewhere
+would mean touching the line twice. The item is marked reassignable: it
+is a pre-existing defect, not a T5 deliverable, and the owner may move it
+without argument. Also in [handoff.md](./handoff.md).
+
+### Re-audit addendum — the review rounds re-run against the task list
+
+The in-gate re-audit (above) ran against what **T3's own work** measured.
+The two review rounds then produced further facts, and re-reading the
+task list against *those* is the same obligation, one level out — the
+failure mode T1 and T2 recorded is "a source of new facts that is not
+re-read against the plan", and a review is such a source. Two items, both
+in tasks T3 does not touch.
+
+- **F-23 — `emit::flush_layout` uses a different layout entry from every
+  other path.** Recorded above; folded into [plan.md](./plan.md) §T5.
+- **F-24 — the direct-hosting path is outside the whole phase's
+  machinery, and T1's carry-forward was written as if no such path
+  existed yet.** [handoff.md](./handoff.md) states the scale cache's
+  re-trigger as "any path that attaches … *without* running the walk",
+  and illustrates it with M4-Phase 2 and M4-Phase 8 — i.e. as a future
+  hazard. `lib.rs::window_add_widget` is already one: a subtree attached
+  through it never enters `root_widget`, so it gets **no layout, no
+  `sync_visuals`, no scale-cache write and no re-rasterization walk** —
+  both walk callers (`window::set_root`, T7's handler) traverse
+  `root_widget`. Consequences worth stating before they are discovered:
+  T5's cache stays at the identity there regardless of the window's
+  scale, and **T6's crispness claim is bounded** — it holds for widgets
+  the window owns as content, not for anything hosted directly. Nothing
+  needs fixing (the conversions are unconditional; an unreached node is
+  simply unconverted), but a limit that is stated is not a surprise at
+  M4-Phase 8. *Disposition:* [plan.md](./plan.md) §T5 and §T6 as stated
+  limits, and the handoff re-trigger corrected from "future" to "one
+  already ships".
+
+Verdict for every other task, re-read again against the review findings:
+**T4, T7, T8, T9, T10, T11, T12 and the preamble — no further
+correction.** T7's enumeration is about what a scale change drags along,
+a different shape from the attach-path question; T8's assertions stay
+node-level because `label_visual` is private; T9 / T10 / T12 already
+carry F-21's corrected wording.
 

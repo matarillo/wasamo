@@ -412,6 +412,35 @@ landable as one reviewed commit rather than a visible regression.
       is its first reader; T6's walk is its only writer, so between T5
       and T6 it is permanently 1 — the same identity world every other
       conversion lands into.
+- [ ] **Record the direct-hosting path as a stated limit** (T3 finding
+      F-24). T1's carry-forward wrote the cache's re-trigger as "any
+      *future* path that attaches a subtree without running the walk",
+      listing M4-Phase 2 and M4-Phase 8. **One such path already ships**:
+      `lib.rs::window_add_widget` attaches a widget's Visual to
+      `WindowState::root` without putting it in `root_widget`, so the
+      subtree is outside **the whole of this phase's machinery** — no
+      layout, no `sync_visuals`, no scale cache write, and (T6) no
+      re-rasterization. Its scale cache stays `DipScale::default()`
+      forever, which is correct-looking at 100% and wrong at any other
+      scale. Nothing to fix here — the conversions are unconditional and
+      an unreached node is simply unconverted — but the limit is stated
+      rather than discovered at M4-Phase 8, when a tree really can move
+      between differently-scaled windows.
+- [ ] **Fix `emit::flush_layout`'s layout entry, as its own commit**
+      (T3 finding F-23; **owner may reassign this item — it is a
+      pre-existing defect, not a T5 deliverable**). `window::set_root`
+      and the `WM_SIZE` arm call `run_layout_as_window_root`, which
+      forces the root `LayoutNode` to `Fill` / `Fill`; the reactive
+      drain's layout phase calls the plain `run_layout`, which does not.
+      A root container that is `Shrink` with a `Fill` descendant
+      therefore lays out correctly on resize and **collapses that
+      descendant on any property write** — the M3-Phase 4 T6 failure
+      that `run_layout_as_window_root`'s own doc comment describes, still
+      live on the drain path. It lands here because T5 already edits that
+      exact call site for the inbound conversion (row 2b), so fixing it
+      elsewhere would mean touching the line twice. **Separate commit
+      with its own before/after frames** — it is a behaviour change and
+      must not ride inside a conversion commit.
 - [ ] **Outbound, Visual geometry** (audit rows 4–6): `sync_visuals`
       node writes, the ScrollView intermediate Visual, and the Button /
       ToggleButton label writes relocated by T3 — all multiplied by `s`.
@@ -533,6 +562,13 @@ test.
       `SetOffset` / `SetSize` in the runtime is inside `sync_visuals`,
       and that property is what makes the T5 audit complete; a walk that
       rewrites a Visual's size while it is there breaks it silently.
+      **And the walk has the same reach as `sync_visuals`, not a wider
+      one** (T3 finding F-24): both callers — `window::set_root` and T7's
+      handler — traverse `state.root_widget`, so a subtree attached
+      through `lib.rs::window_add_widget` is never walked and keeps text
+      rasterized at scale 1. Same stated limit as T5's, and R-1's
+      crispness claim is bounded by it: it holds for widgets the window
+      owns as content.
 - [ ] Thread the scale into `draw_text`'s five call sites. Note the
       borrow order T1 hit: `update_button_label` must read the node's
       scale **before** `self.button_data_mut()`, which borrows all of
