@@ -185,7 +185,12 @@ fn create_hwnd(title: &str, width: i32, height: i32) -> windows::core::Result<HW
 /// otherwise enter happen to be no-ops today: the `WM_SIZE` arm acquires a
 /// division by this window's scale at the conversion seams, and it is the wrong
 /// arm to enter with no root widget installed and no emit registration yet
-/// made. Note that at a scale of 1 the size does not change and **no `WM_SIZE`
+/// made. **The claim is exactly that, and not "a null pointer makes `wnd_proc`
+/// inert"**: `WM_DESTROY` and `WM_ERASEBKGND` are handled *above* the null
+/// check, and the first calls `PostQuitMessage` (T4 independent review finding
+/// R-5). Neither appears in the measured set, so this correction is safe — but
+/// the safety of the two arms above the check rests on the message set, not on
+/// the pointer. Note that at a scale of 1 the size does not change and **no `WM_SIZE`
 /// is dispatched at all**, so this placement is unverifiable until the
 /// awareness declaration lands — which is the reason it is decided structurally
 /// rather than by observing that nothing currently goes wrong. The
@@ -199,11 +204,14 @@ fn create_hwnd(title: &str, width: i32, height: i32) -> windows::core::Result<HW
 /// the `x` / `y` arguments are ignored.
 ///
 /// A failure leaves the window at the requested numbers — wrong at any scale
-/// but 100%, and not a reason to fail window creation (DD-M4-P1-003 §Failure
-/// handling: log and survive).
+/// but 100% — which is not a reason to fail window creation, but is a reason to
+/// say so. DD-M4-P1-003 §Failure handling is "log **and** survive", and the
+/// runtime's diagnostic channel is the `wasamo:`-prefixed `eprintln!` the
+/// handler, IR loader and reactive engine already use; swallowing this would
+/// leave a mis-sized window on a scaled monitor with nothing to attribute it to.
 fn realize_dip_window_size(hwnd: HWND, scale: DipScale, width: i32, height: i32) {
     let (physical_width, physical_height) = scale.window_size_to_physical((width, height));
-    let _ = unsafe {
+    let result = unsafe {
         SetWindowPos(
             hwnd,
             None,
@@ -214,6 +222,14 @@ fn realize_dip_window_size(hwnd: HWND, scale: DipScale, width: i32, height: i32)
             SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE,
         )
     };
+    if let Err(e) = result {
+        eprintln!(
+            "wasamo: could not realise the requested {width}x{height} DIP window size as \
+             {physical_width}x{physical_height} physical (scale {}): {e}. The window keeps \
+             the requested numbers as physical pixels.",
+            scale.factor()
+        );
+    }
 }
 
 fn create_desktop_window_target(

@@ -13,7 +13,7 @@
 /// The DPI at which one DIP is one physical pixel — the "100%" reference, and
 /// the value the OS reports unconditionally to a process that has declared no
 /// DPI awareness (DD-M4-P1-001).
-pub const REFERENCE_DPI: f32 = 96.0;
+pub const REFERENCE_DPI: u32 = 96;
 
 /// A window's DIP → physical-pixel conversion factor.
 ///
@@ -23,18 +23,25 @@ pub const REFERENCE_DPI: f32 = 96.0;
 /// window's client area. This type is the only place the two spaces meet
 /// (DD-M4-P1-002); the layout engine never receives one.
 ///
-/// Only the factor is retained. The originating DPI is deliberately **not**
-/// stored: a second representation of the same fact is a drift source, and
-/// every consumer wants the factor rather than the DPI.
+/// **The originating DPI is what is retained, and the factor is derived from
+/// it.** T2 landed this the other way round — factor stored, DPI discarded, on
+/// the grounds that "every consumer wants the factor rather than the DPI". T4's
+/// independent review falsified that premise: [`Self::window_size_to_physical`]
+/// wants the DPI, because an `f32` factor cannot express `dpi / 96` exactly for
+/// every DPI a custom scaling can produce, and a rounding rule stated on a
+/// value the type has already approximated is a rule the type does not keep.
+/// Storing the DPI is also strictly *less* drift-prone than the alternative of
+/// carrying both: there is one representation, and it is the one from which
+/// both answers are exactly derivable.
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub struct DipScale {
-    s: f32,
+    dpi: u32,
 }
 
 impl DipScale {
     /// 100% — every conversion is the identity. This is the value in force on
     /// an undeclared process and, until T9, on every process.
-    pub const IDENTITY: Self = Self { s: 1.0 };
+    pub const IDENTITY: Self = Self { dpi: REFERENCE_DPI };
 
     /// Construct from an OS-reported DPI — `GetDpiForWindow` at window
     /// creation, or `HIWORD(wParam)` of `WM_DPICHANGED`.
@@ -55,23 +62,27 @@ impl DipScale {
         if dpi == 0 {
             return Self::IDENTITY;
         }
-        Self {
-            s: dpi as f32 / REFERENCE_DPI,
-        }
+        Self { dpi }
     }
 
     /// The raw factor, for the consumers that need the number itself rather
     /// than a conversion — the D2D context resolution `96 × s` at T6, and the
     /// scale-ratio assertions at T8.
+    ///
+    /// Derived rather than stored, and exactly as before: this is the same
+    /// `dpi as f32 / 96.0` expression the factor field used to be initialised
+    /// with, so every `f32` conversion below is bit-identical to what T2
+    /// landed. What changed is that the *integer* rule no longer has to start
+    /// from this value.
     pub fn factor(self) -> f32 {
-        self.s
+        self.dpi as f32 / REFERENCE_DPI as f32
     }
 
     // ── Outbound: DIP → physical ─────────────────────────────────────────────
 
     /// A single length.
     pub fn to_physical(self, dip: f32) -> f32 {
-        dip * self.s
+        dip * self.factor()
     }
 
     /// A Visual's physical extent (`SetSize`).
@@ -109,7 +120,7 @@ impl DipScale {
 
     /// A single length.
     pub fn to_dip(self, px: f32) -> f32 {
-        px / self.s
+        px / self.factor()
     }
 
     /// A physical pair — a pointer position, a window client extent, or a
@@ -161,29 +172,45 @@ impl DipScale {
     /// DPI-aware (DD-M4-P1-003 §Initial scale acquisition; DD-M4-P1-004 §What
     /// `width` / `height` denote).
     ///
-    /// **Rounds to nearest**, and the direction deliberately differs from
-    /// [`Self::surface_pixels`]. That rule rounds *up* because a surface is an
-    /// allocation and a truncated one clips the final column of glyph
-    /// coverage. Nothing is clipped by a window half a pixel small: the client
-    /// extent is read back through `GetClientRect` and converted, never
-    /// assumed. What this quantity has instead is a fidelity contract — an
-    /// 800 DIP window is meant to *be* 800 DIP on every monitor — so the
-    /// physical integer to pick is the one whose DIP value is nearest what was
-    /// asked for. `ceil` and `trunc` each bias the realised logical size in a
-    /// fixed direction for no stated reason.
+    /// **Rounds to nearest, resolving an exact half away from zero** — the
+    /// `MulDiv(value, dpi, 96)` semantics, computed here in integers rather
+    /// than borrowed by name.
     ///
-    /// Nearest is also the convention the OS itself uses (`MulDiv(v, dpi, 96)`)
-    /// when it computes the suggested rectangle `WM_DPICHANGED` delivers and
-    /// the handler applies verbatim, so a window's size at creation and its
-    /// size after a round trip across two equally-scaled monitors are the same
-    /// number rather than two sources disagreeing by a pixel.
+    /// The direction deliberately differs from [`Self::surface_pixels`]. That
+    /// rule rounds *up* because a surface is an allocation whose consumer
+    /// assumes it, and a truncated one clips the final column of glyph
+    /// coverage. A window rectangle is not an allocation of that kind: layout
+    /// reads the realised client extent back through `GetClientRect` and
+    /// converts it, so a half-pixel-smaller window produces a layout for the
+    /// window that exists rather than one overflowing a window that does not.
+    /// (It does **not** follow that nothing can ever be clipped — a fixed-size
+    /// or overflowing subtree can exceed any client rectangle. The asymmetry
+    /// being claimed is only that this quantity carries no
+    /// allocate-at-least-as-much obligation, T4 independent review finding
+    /// R-7.) What it carries instead is a fidelity contract — an 800 DIP window
+    /// is meant to *be* 800 DIP on every monitor — so the physical integer to
+    /// pick is the one whose DIP value is nearest what was asked for. `ceil`
+    /// and `trunc` each bias the realised logical size in a fixed direction for
+    /// no stated reason.
+    ///
+    /// **The arithmetic is exact for every DPI, which is why this operation is
+    /// the reason the type retains the DPI** (see the type's own note). The
+    /// obvious implementation — multiply by [`Self::factor`] and round —
+    /// silently is not the stated rule: an `f32` cannot hold `dpi / 96` exactly
+    /// unless the DPI is a multiple of 24, and Windows custom scaling can
+    /// produce others. Measured over `dpi` 1–600 × `dip` 1–4000: the `f32`
+    /// route disagrees with this one on 21,190 of 2.4M pairs, always by one
+    /// pixel and always on an input whose true product is an exact half — for
+    /// instance 804 DIP at 100 DPI, which is exactly 837.5 and which the `f32`
+    /// route rounds *down* to 837. Every one of the ten standard Windows
+    /// scalings has an exactly-representable factor, so none of them can show
+    /// the difference; that is the same shape as F-13 and is precisely why the
+    /// rule is implemented rather than approximated.
     ///
     /// Integer in, integer out, so no caller holds an `f32` to cast with
-    /// `as i32` — which truncates. The arithmetic widens to `f64` so that **at
-    /// 100% the conversion is the exact identity for every `i32`**, including
-    /// the values above 2^24 that `f32` cannot represent: the identity world
-    /// T2 through T8 land into is then a property of the type rather than of
-    /// the magnitudes that happen to be passed.
+    /// `as i32` — which truncates. At 100% the conversion is the exact identity
+    /// for every `i32`, including values above 2^24 that `f32` cannot
+    /// represent.
     pub fn window_size_to_physical(self, dip: (i32, i32)) -> (i32, i32) {
         (
             self.length_to_physical_i32(dip.0),
@@ -192,7 +219,20 @@ impl DipScale {
     }
 
     fn length_to_physical_i32(self, dip: i32) -> i32 {
-        (f64::from(dip) * f64::from(self.s)).round() as i32
+        // i64 holds i32::MAX * any plausible DPI with room to spare, so the
+        // product cannot overflow before the rounding term is added.
+        let scaled = dip as i64 * self.dpi as i64;
+        let half = REFERENCE_DPI as i64 / 2;
+        // Rust integer division truncates toward zero, so biasing by half in
+        // the operand's own direction is round-half-away-from-zero.
+        let biased = if scaled >= 0 {
+            scaled + half
+        } else {
+            scaled - half
+        };
+        // Saturate rather than wrap, matching the `f32 as i32` cast this
+        // replaced: a nonsensical input must not become a plausible one.
+        (biased / REFERENCE_DPI as i64).clamp(i32::MIN as i64, i32::MAX as i64) as i32
     }
 }
 
@@ -472,6 +512,64 @@ mod tests {
         // Each axis is converted independently, so a mutation that reuses one
         // axis for both does not pass unnoticed.
         assert_eq!(s125.window_size_to_physical((801, 803)), (1001, 1004));
+    }
+
+    /// The rule is `MulDiv(dip, dpi, 96)` for **every** DPI, not only for the
+    /// ones whose factor an `f32` happens to hold exactly (T4 independent
+    /// review finding R-1). The witness is the reviewer's: 804 DIP at 100 DPI
+    /// is exactly 837.5, and multiplying by the `f32` factor yields
+    /// 837.4999680519104, which rounds the wrong way.
+    #[test]
+    fn window_size_is_exact_at_a_dpi_no_f32_factor_can_hold() {
+        assert_eq!(
+            DipScale::from_dpi(100).window_size_to_physical((804, 804)),
+            (838, 838)
+        );
+
+        // The same claim as a property, against exact rational arithmetic in
+        // i128, over every DPI a custom scaling can plausibly produce. This is
+        // the test that would have caught the `f32` route; the standard-scaling
+        // cases above cannot, because their factors are exact.
+        fn exact_mul_div(dip: i32, dpi: u32) -> i32 {
+            let doubled = dip as i128 * dpi as i128 * 2;
+            let biased = if dip >= 0 { doubled + 96 } else { doubled - 96 };
+            (biased / 192) as i32
+        }
+        for dpi in [97u32, 100, 101, 110, 123, 137, 149, 175, 199, 250, 401] {
+            let s = DipScale::from_dpi(dpi);
+            for dip in [-4000, -804, -1, 0, 1, 13, 96, 240, 799, 800, 804, 4000] {
+                assert_eq!(
+                    s.window_size_to_physical((dip, dip)),
+                    (exact_mul_div(dip, dpi), exact_mul_div(dip, dpi)),
+                    "dpi={dpi} dip={dip}"
+                );
+            }
+        }
+    }
+
+    /// The integer rule computes in `i64`, so a DIP size whose physical
+    /// equivalent leaves `i32` must **saturate**, as the `f32 as i32` cast this
+    /// replaced did — not wrap, which would turn an absurd request into a
+    /// plausible one of the opposite sign. Added because the mutation run found
+    /// the case unguarded: no other test reaches the clamp, since a 100%
+    /// identity never leaves the range it started in.
+    #[test]
+    fn window_size_saturates_rather_than_wrapping() {
+        let s400 = DipScale::from_dpi(384);
+        assert_eq!(
+            s400.window_size_to_physical((i32::MAX, i32::MAX)),
+            (i32::MAX, i32::MAX)
+        );
+        assert_eq!(
+            s400.window_size_to_physical((i32::MIN, i32::MIN)),
+            (i32::MIN, i32::MIN)
+        );
+        // Just inside the range is not clamped, so the assertions above are
+        // about the boundary rather than about the factor.
+        assert_eq!(
+            DipScale::from_dpi(192).window_size_to_physical((1_000_000, -1_000_000)),
+            (2_000_000, -2_000_000)
+        );
     }
 
     #[test]
