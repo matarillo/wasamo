@@ -175,16 +175,23 @@ fn create_hwnd(title: &str, width: i32, height: i32) -> windows::core::Result<HW
 /// **Placed before `WindowState` is boxed and before the `GWLP_USERDATA`
 /// pointer is installed.** `SetWindowPos` dispatches window messages
 /// *synchronously, before it returns* — the property DD-M4-P1-003 makes
-/// load-bearing for `WM_DPICHANGED`. Running the correction here means
-/// `wnd_proc` reads a null `GWLP_USERDATA` and hands them to `DefWindowProcW`,
-/// so the nested dispatch **cannot reach a half-built `WindowState` at all**.
-/// That is a structural guarantee rather than the accident that the arms it
-/// would otherwise enter happen to be no-ops today: the `WM_SIZE` arm acquires
-/// a division by this window's scale at the conversion seams, and it is the
-/// wrong arm to enter with no root widget installed and no emit registration
-/// yet made. The `WM_DPICHANGED` handler's ordering obligation is the opposite
-/// case and must be derived on its own terms — there the window is fully
-/// built and the nested `WM_SIZE` is required to do the re-layout.
+/// load-bearing for `WM_DPICHANGED`. Measured here, on a window whose size the
+/// correction actually changes: `WM_WINDOWPOSCHANGING`, `WM_GETMINMAXINFO`,
+/// `WM_NCCALCSIZE`, `WM_WINDOWPOSCHANGED`, **`WM_SIZE`**, then `WM_GETICON`.
+/// Running the correction here means `wnd_proc` reads a null `GWLP_USERDATA`
+/// for every one of them and hands them to `DefWindowProcW`, so the nested
+/// dispatch **cannot reach a half-built `WindowState` at all**. That is a
+/// structural guarantee rather than the accident that the arms it would
+/// otherwise enter happen to be no-ops today: the `WM_SIZE` arm acquires a
+/// division by this window's scale at the conversion seams, and it is the wrong
+/// arm to enter with no root widget installed and no emit registration yet
+/// made. Note that at a scale of 1 the size does not change and **no `WM_SIZE`
+/// is dispatched at all**, so this placement is unverifiable until the
+/// awareness declaration lands — which is the reason it is decided structurally
+/// rather than by observing that nothing currently goes wrong. The
+/// `WM_DPICHANGED` handler's ordering obligation is the opposite case and must
+/// be derived on its own terms: there the window is fully built and the nested
+/// `WM_SIZE` is *required* to run the re-layout.
 ///
 /// The flags are **not** that handler's either. It applies an OS-suggested
 /// rectangle and therefore moves the window on purpose; here the placement is
