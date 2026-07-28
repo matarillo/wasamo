@@ -87,6 +87,12 @@ placed before T9**: it drives the machinery at 125% / 150% / 200%
 without needing an awareness declaration, so the risk the ordering
 creates is closed inside the ordering.
 
+**Not all three of those factors are equally load-bearing** (T2 finding
+F-13). At a power-of-two factor the scale multiplication is exact, so the
+convert-once-on-the-difference rule has no observable effect and a DIP
+round trip is exactly the identity — measured, by brute-force search over
+`f32`. 200% checks magnitude; 125% and 150% are what check the rules.
+
 T1 confirms this hypothesis against the source before T2 opens. If recon
 shows an intermediate state that cannot stay buildable or visually
 green, T1 revises the task split rather than proceeding.
@@ -197,12 +203,21 @@ approach is chosen**. The phase-wide load, from the
 - **Trap #4 (untested authored branch)** — the ADR judged this
   non-applicable on the grounds that the phase adds no author-facing
   surface and no new validation branch. **This plan narrows that
-  judgment rather than inheriting it**: T9 does add a diagnostic branch
-  (the tolerated-declaration-failure path). T9 must therefore re-run the
-  trap-#4 decision explicitly. If that branch cannot be fired by a test
-  because process DPI awareness is a one-shot per process, that is
-  recorded as a **stated limit with its reason** in [log.md](./log.md) —
-  not silently skipped, and not left as an inherited "non-applicable".
+  judgment rather than inheriting it**, and the narrowing has **two**
+  sites, not one (T2 finding F-12 — this paragraph originally named only
+  T9, while [plan.md](./plan.md) §T2 already named T2, so the two
+  documents disagreed from the moment they were written):
+  - **T2** ships two authored arithmetic branches — the zero-DPI
+    fallback to the identity, and the one-pixel surface floor. Both
+    landed with a test that fires them, and each test was in turn shown
+    to fail against a deliberately wrong implementation; the mutation
+    table in [log.md](./log.md) is the artifact.
+  - **T9** adds a diagnostic branch (the tolerated-declaration-failure
+    path) and must re-run the trap-#4 decision explicitly. If that branch
+    cannot be fired by a test because process DPI awareness is a one-shot
+    per process, that is recorded as a **stated limit with its reason**
+    in [log.md](./log.md) — not silently skipped, and not left as an
+    inherited "non-applicable".
 
 **Review lanes** ([gates §4](../../../procedures/implementation-gates.md)):
 
@@ -213,7 +228,8 @@ approach is chosen**. The phase-wide load, from the
 | T7 | Full independent review | Runtime structural change with re-entrancy through the message loop |
 | T9 | Full independent review | Process-wide platform posture + the diagnostic branch (trap #4 folded in) |
 | T10 | Full independent review | GUI-render evidence |
-| T2, T3, T4, T8 | Normal review | Pure logic (T2), behaviour-identical refactor (T3), additive per-window state (T4), test-only (T8). T3 carries an explicit regression check against shipped rendering |
+| T2 | Branch/test-focused review | **Corrected at T2 (finding F-12); this row read "Normal review / pure logic".** Pure logic is why T2 is not in a full-review class, but it adds two authored branches, and [gates §4](../../../procedures/implementation-gates.md) assigns exactly that case the branch/test-focused lane. "No full review" is not "no review" |
+| T3, T4, T8 | Normal review | Behaviour-identical refactor (T3), additive per-window state (T4), test-only (T8). T3 carries an explicit regression check against shipped rendering |
 
 ## Technical risks (planning-time recon; T1 sharpens)
 

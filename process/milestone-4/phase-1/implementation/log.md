@@ -640,3 +640,92 @@ re-evaluates whether (b) belongs in the phase handoff.
   unreachable surface because of the forward-pointer allow, which names
   T4 / T5 / T6 as the tasks that remove it.
 
+### Plan-hypothesis re-audit (2026-07-28, owner-prompted)
+
+The first pass of T2's plan revision updated **only §T2** — ticking its
+items and recording the one-commit landing — without re-reading the rest
+of the task list against what T2 had learned. That is the same omission
+class T1 recorded as F-6 … F-10, recurring one task later and under the
+same prompt. Recorded as findings again, and the recurrence is the more
+important half: **the re-audit is not a spike-only obligation. Any task
+that measures something can falsify a hypothesis in a task it never
+touched.**
+
+Six standing hypotheses were falsified or sharpened.
+
+- **F-11 — the plan's own gate-substitution table handed T2 the one
+  artifact an agent can fabricate.** [plan.md](./plan.md) §Task list
+  reads "What counts per task: T2 its own unit tests (pure logic,
+  genuinely informative), T3 the rendered gallery frame, T5 the
+  call-site audit table, T6 the rendered output, T7 the structural
+  side-effect enumeration, T8 its own scale-driving assertions." Every
+  entry but T2's is checkable against ground truth; "its own unit tests"
+  is a green/red claim, which is exactly what F-4 had just finished
+  disqualifying. The exception for pure logic is right but its
+  **condition was missing**: pure logic is informative *once the tests
+  are shown to fire*. T2 measured the gap — eleven green tests said only
+  "eleven tests exist and passed" until seven mutations showed which
+  wrong implementation each one catches. *Disposition:* §Task list
+  revised; the mutation table is T2's real artifact.
+- **F-12 — the plan's narrowing of trap #4 was itself incomplete.**
+  [preamble.md §Implementation gates](./preamble.md#implementation-gates)
+  records the ADR's phase-wide "trap #4 non-applicable" and then narrows
+  it with one exception: "**T9** does add a diagnostic branch." T2 added
+  two authored branches (the zero-DPI fallback, the one-pixel surface
+  floor), and [plan.md](./plan.md) §T2 already said so — so the preamble
+  and the plan disagreed with each other from the moment they were
+  written, and the landing made it concrete. The consequence was not
+  cosmetic: the preamble's review-lane table assigns T2 "Normal review"
+  on the strength of "pure logic", whereas
+  [gates §4](../../../procedures/implementation-gates.md) assigns an
+  authored-branch task the **branch/test-focused review**. T2's start
+  gate classified it that way independently; the preamble is corrected to
+  match rather than the other way round. *Disposition:* preamble §Implementation
+  gates + review-lane table.
+- **F-13 — 200% cannot discriminate the convert-once rule, so T8's three
+  scale factors are not three equal probes.** Measured: at a power-of-two
+  factor the multiplication is exact, so "subtract in DIP then multiply"
+  and "multiply then subtract" agree **everywhere** — a brute-force
+  search found no disagreeing pair at 200% at all, against a witness at
+  150% one ulp apart. The round trip is likewise exactly the identity at
+  200% and inexact for the majority of `f32` at 125%. T8 keeps all three
+  factors, but 200% is a magnitude check; the rule verification is
+  carried by 125% and 150%. This is F-4's lesson at the arithmetic level:
+  the scales at which this phase's rules are observable are the awkward
+  ones. *Disposition:* [plan.md](./plan.md) §T8 + preamble §The
+  sequencing thesis.
+- **F-14 — T6's `ceil` bullet needs the landed signature, and the
+  existing `max(1.0)` becomes a second home for the floor.**
+  `surface_pixels` returns `(u32, u32)`, so T6 either casts for
+  `CreateDrawingSurface`'s `f32` `Size` or moves to
+  `CreateDrawingSurface2`'s `SizeInt32` — both permitted by DD-002, whose
+  contract is the pixel count and not the API pair. Separately, the
+  one-pixel floor now lives **in the type**, so `draw_text`'s existing
+  `width.max(1.0)` / `height.max(1.0)` must be removed rather than left
+  in place: harmless arithmetically, but it is the rounding rule living
+  in two places, which is the drift T2 exists to prevent. *Disposition:*
+  [plan.md](./plan.md) §T6.
+- **F-15 — "convert once on the difference" is now enforced by API shape,
+  and only for callers that use the API.** [plan.md](./plan.md) §T5 states
+  the rule as prose ("subtract in DIP, multiply the result"). A T5 that
+  writes `dip * self.scale.factor()` satisfies the prose reading, defeats
+  the enforcement, and is wrong only at non-dyadic scales — where, per
+  F-13, only two of the phase's test factors would notice. The bullets are
+  revised to name the operations. The single legitimate `factor()` use in
+  the phase is T6's `96 × s`, which T2 deliberately did not wrap because it
+  carries no rounding contract. *Disposition:* [plan.md](./plan.md) §T5,
+  §T6.
+- **F-16 — two downstream tasks would otherwise re-implement what the
+  type already does.** T4 needs no zero-DPI guard of its own
+  (`from_dpi` floors), and T5's "defaulted to 1 in every `WidgetNode`
+  constructor" is `DipScale::default()` rather than a hand-written
+  literal. Cosmetic individually; together they are the same
+  second-home-for-a-rule failure as F-14. *Disposition:*
+  [plan.md](./plan.md) §T4, §T5.
+
+*Disposition summary:* all six folded into [plan.md](./plan.md) and
+[preamble.md](./preamble.md) in the same commit as this entry. F-11 →
+§Task list; F-12 → preamble §Implementation gates and the review-lane
+table; F-13 → §T8 and preamble §The sequencing thesis; F-14 → §T6;
+F-15 → §T5 and §T6; F-16 → §T4 and §T5.
+
