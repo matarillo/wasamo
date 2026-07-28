@@ -1,6 +1,6 @@
 # Wasamo Architecture
 
-**Status:** M1 complete (Phases 0-8); M2 complete (Phases 1-7) — Foundation acceptance A1-A6 discharged; M3-Phase 1, M3-Phase 2, M3-Phase 3, M3-Phase 4, and M3-Phase 5 complete. M3-Phase 6 closed (implementation-synced): ZStack, conditional rendering, and the component host surface are documented to match the landed implementation. M3-Phase 7 closed (implementation-synced): iteration — `ControlFlowNode::For` / `BindingTarget::ForLoopSubtree`, the canonized member-expansion seam, stage-then-commit range mutation, and child-carried ZStack placement (§6.7.10, §6.8.5) are documented to match the landed implementation. M3-Phase 7b closed (implementation-synced): the parent-interpreted placement model — child-slot `SlotData` carrier (§6.7.9, §6.8.6), Grid storage convergence off the parallel `cell_placements` vector (§6.8.4), and the textual-IR `child { placement … }` record (IR-B) — is documented to match the landed implementation (`IrMember::Widget(IrChildSlot)`; runtime `ChildSlot` / `SlotData`). M3-Phase 8 closed (implementation-synced): the `ToggleButton` selected-state runtime representation (§6.7.7) is documented to match the landed implementation, and the DSL spec ([dsl_spec.md](./dsl_spec.md)) is promoted to the M3 `public-draft`.
+**Status:** M1 complete (Phases 0-8); M2 complete (Phases 1-7) — Foundation acceptance A1-A6 discharged; M3-Phase 1, M3-Phase 2, M3-Phase 3, M3-Phase 4, and M3-Phase 5 complete. M3-Phase 6 closed (implementation-synced): ZStack, conditional rendering, and the component host surface are documented to match the landed implementation. M3-Phase 7 closed (implementation-synced): iteration — `ControlFlowNode::For` / `BindingTarget::ForLoopSubtree`, the canonized member-expansion seam, stage-then-commit range mutation, and child-carried ZStack placement (§6.7.10, §6.8.5) are documented to match the landed implementation. M3-Phase 7b closed (implementation-synced): the parent-interpreted placement model — child-slot `SlotData` carrier (§6.7.9, §6.8.6), Grid storage convergence off the parallel `cell_placements` vector (§6.8.4), and the textual-IR `child { placement … }` record (IR-B) — is documented to match the landed implementation (`IrMember::Widget(IrChildSlot)`; runtime `ChildSlot` / `SlotData`). M3-Phase 8 closed (implementation-synced): the `ToggleButton` selected-state runtime representation (§6.7.7) is documented to match the landed implementation, and the DSL spec ([dsl_spec.md](./dsl_spec.md)) is promoted to the M3 `public-draft`. M4-Phase 1 design-drafted (2026-07-28): §12 states the normative coordinate-space model — DIP layout space, device-space visual tree and pointer stream, the conversion seams, the text-surface resolution contract, and the scale-invariance of layout results — and resolves the §13 DPI open question. §12 is written from accepted design ahead of implementation and is re-verified against the landed runtime at M4-Phase 1 close; the `windows` crate feature list (§4.5) and the initialization sequence (§5.2) are re-synced at that point.
 
 ---
 
@@ -1669,10 +1669,16 @@ pub enum TypographyStyle { Caption, Body, Subtitle, Title }
 
 | Value | Size | Weight | Font |
 |---|---|---|---|
-| `Caption` | 12 sp | Regular | Segoe UI Variable |
-| `Body` | 14 sp | Regular | Segoe UI Variable |
-| `Subtitle` | 20 sp | Semi-bold | Segoe UI Variable |
-| `Title` | 28 sp | Semi-bold | Segoe UI Variable |
+| `Caption` | 12 DIP | Regular | Segoe UI Variable |
+| `Body` | 14 DIP | Regular | Segoe UI Variable |
+| `Subtitle` | 20 DIP | Semi-bold | Segoe UI Variable |
+| `Title` | 28 DIP | Semi-bold | Segoe UI Variable |
+
+Sizes are device-independent pixels (§12.1) — the same unit as every
+other length in layout space, and the unit DirectWrite's text-format
+font size carries. The ramp is therefore scale-independent: `Caption` is
+12 DIP whatever the monitor's scale factor, and is rasterized at the
+display's resolution (§12.4) rather than magnified.
 
 Maps to the WinUI 2 / WinApp SDK typography token set. Custom font descriptors deferred to M2.
 
@@ -1998,15 +2004,258 @@ implementations.
 
 ---
 
+<a id="coordinate-spaces"></a>
+
+## 12. Coordinate Spaces and DPI Scaling (M4-Phase 1)
+
+Full decision rationale: [`process/milestone-4/phase-1/decisions/preamble.md`](../process/milestone-4/phase-1/decisions/preamble.md)
+
+### 12.1 The two spaces
+
+The runtime works in exactly two coordinate spaces, and the boundary
+between them is explicit.
+
+**Layout space — device-independent pixels (DIP).** One DIP is 1/96
+inch. Every length the layout engine consumes or produces is DIP:
+authored dimension values from a `.ui` file
+([dsl_spec.md](./dsl_spec.md) §1 *Units and the layout coordinate
+system*), the extents DirectWrite reports back through the text
+renderer's measurement path (§7.2), the typography ramp's font sizes
+(§7.3), and every `LayoutNode` offset and size (§6.3, §6.5). The layout
+engine never receives a scale factor and has no representation for one.
+
+**Device space — physical pixels of the window's client area.** The
+Composition visual tree (`Visual.Offset`, `Visual.Size`, `InsetClip`
+insets), the Win32 pointer message stream, `GetClientRect`,
+`ClientToScreen`, and the pixel buffers behind a
+`CompositionDrawingSurface` are all in device space. Composition applies
+no DPI scaling of its own: a Visual written at offset `(100, 40)` sits
+100 device pixels from its parent's left edge whatever the monitor's
+scale.
+
+The two are related by a single **scale factor** `s = dpi / 96`, where
+`dpi` is the window's effective DPI as reported by the OS:
+
+```
+physical = dip × s
+dip      = physical / s
+```
+
+`s` is not a measurement of the monitor's pixel density. It is the scale
+factor Windows reports for that window, which follows the per-monitor
+display setting the user chose. Wasamo treats it as authoritative and
+never derives it from physical dimensions.
+
+### 12.2 Where the scale factor comes from
+
+**Process DPI awareness is declared by the runtime, not by the host.**
+`wasamo_init` declares Per-Monitor-Aware V2 as its first act, before the
+`DispatcherQueueController` and the `Compositor` are created and
+necessarily before any window exists — process awareness can only be set
+while it is still unset, so ordering it first removes any question of
+which initialisation step might lock it in. No host ships an application
+manifest and no host build system gains a resource step; the host-facing
+consequences are stated in [abi_spec.md](./abi_spec.md) §4.1.
+
+Per-Monitor-Aware V2 scales the non-client area (caption, borders,
+system menu) automatically, and Wasamo relies on that in full: it paints
+no non-client area, so there is nothing to intervene between the OS and
+the frame. A future custom title bar or client-area frame extension
+would have to re-examine that reliance.
+
+A declaration that does not take effect — the ordinary case being a host
+that is already a DPI-aware Windows application and declared its own
+posture — is **tolerated, not fatal**. Nothing downstream branches on
+whether it succeeded: the runtime asks the OS for each window's
+*effective* DPI, which is 96 in a process whose effective awareness is
+unaware, so the scaled path is the only path and simply runs at `s = 1`
+there. The outcome of the attempt is recorded as a diagnostic, because a
+process whose effective awareness is below Per-Monitor-Aware V2 remains
+arithmetically correct but does not get §12.4's crispness guarantee, and
+that is a fact a developer needs to be able to see.
+
+**The scale factor is held per window.** It is read from the OS for that
+window immediately after the window is created and before any layout
+runs, cached on the window's runtime state (§7.5), and refreshed when
+the OS announces a change (§12.5). Because it is per window rather than
+per process, windows on differently scaled monitors carry different
+scale factors with no shared state to reconcile.
+
+### 12.3 The conversion seams
+
+Conversion is confined to the boundary between the two spaces, and that
+boundary is a small enumerable class of sites rather than a rule applied
+throughout the runtime. There are four kinds:
+
+1. **Client extent, inbound.** The client rectangle that drives a layout
+   pass — at window attach and on every window-resize message — arrives
+   in device space and is divided by `s` before it reaches layout.
+2. **Pointer coordinates, inbound.** Pointer message coordinates are
+   divided by `s` at the window procedure, so hit-testing and hover
+   state run in DIP like the rest of the runtime. Where hit-testing
+   reads a widget's rectangle back off its Visual (§7.5), that readback
+   is converted alongside them.
+3. **Visual geometry, outbound.** Every `Visual.SetOffset` /
+   `Visual.SetSize` write multiplies its DIP value by `s`. All such
+   writes happen in the single visual-sync traversal of §6.5 — including
+   a Button's label placement, which is written there rather than at
+   widget construction — so the set of outbound geometry writes is
+   complete rather than approximately complete.
+4. **Rasterization surfaces, outbound.** §12.4.
+
+Two properties of this seam set are contractual:
+
+- **Convert once, on the difference.** Where the sync pass converts an
+  absolute DIP offset into a parent-relative one, it subtracts in DIP
+  and multiplies the result. Multiplying both operands and then
+  subtracting is equal in exact arithmetic and differs in `f32`; the
+  single multiplication carries one rounding rather than two. The same
+  rule governs the ScrollView subtree's `parent_abs_offset` shift
+  (§6.5), which stays entirely in DIP — only the two Composition writes
+  multiply.
+- **Requested window size is DIP.** The size a host asks for
+  ([abi_spec.md](./abi_spec.md) §4.2) denotes the outer window
+  rectangle in DIP. Since a window's DPI is not knowable until the
+  window exists on a monitor, the window is created at the requested
+  numbers and brought to `size × s` before it is shown — which is
+  flash-free because window creation and window show are separate ABI
+  calls.
+
+Quantities that are deliberately **not** converted, because they are
+already scale-invariant: the root Visual's relative size adjustment,
+which ties the root to the client area as a ratio between two
+device-space quantities (§5.1); zero-valued clip insets (§6.5, §6.8),
+since zero is scale-invariant; and DirectWrite measurements, which are
+already DIP. Introducing a non-zero clip inset would put that row back
+into the converted set.
+
+### 12.4 Text-surface resolution contract
+
+Correct coordinates do not by themselves make text crisp. A DIP-sized
+rasterization surface displayed at a larger device size is a stretched
+bitmap — the same blur that whole-window bitmap stretching produces,
+relocated inside the application, and invisible on a 100% monitor.
+Crispness is bought explicitly, at the surface:
+
+- The `CompositionDrawingSurface` backing a text node is allocated at
+  **`ceil(dip × s)` pixels** on each axis. The surface-creation size
+  parameter counts pixels, not DIP.
+- The D2D device context obtained for drawing is set to **`96 × s`
+  DPI**. Its coordinate space therefore stays DIP — the text layout's
+  maximum width and height and the font size remain the DIP values —
+  while glyph rasterization and DirectWrite hinting happen at device
+  resolution. Setting the context's DPI, rather than scaling the values
+  handed to it, is what keeps text measurement in DIP and therefore
+  keeps layout independent of the scale factor (§12.5).
+- The drawing origin within the backing atlas is reported in **pixels**
+  and is divided by `s` before use as a D2D coordinate, because the
+  context is no longer at 96 DPI. This conversion is load-bearing and
+  easy to omit: the atlas origin is frequently `(0, 0)`, so omitting it
+  is correct most of the time and displaces text within its own surface
+  intermittently.
+- The Visual carrying the surface brush has the exact `dip × s` device
+  size, so surface texels map one-to-one onto device pixels. Crispness
+  follows from those two numbers agreeing, not from a filtering mode.
+
+Expressing the surface's resolution as a context transform instead of as
+a context DPI is an equivalent way to satisfy this contract; the
+contract is that the surface holds `ceil(dip × s)` pixels and that
+glyphs are rasterized at device resolution, not the particular API pair.
+
+**Rounding.** Surface allocation is the only place in this model where a
+real number becomes an integer count, and it rounds **up**. Truncation
+clips the final column or row of glyph coverage — a defect that appears
+only at non-integer scale factors and reads as a cut-off last letter.
+The at-most-one-pixel excess is transparent padding; the Visual keeps
+the exact `f32` device size. No integer pixel snapping is introduced:
+the no-snap rounding contract of §6.8 and
+[dsl_spec.md](./dsl_spec.md) §4.12 stands unchanged.
+
+**When surfaces learn their scale.** Rasterization surfaces are created
+during widget construction, which happens while the IR is loaded — before
+the widget tree is attached to a window, and therefore before any scale
+factor exists. Surfaces are built at scale 1 and brought to the window's
+scale by a **re-rasterization walk** run when the tree is attached, and
+again whenever the scale changes (§12.5). One mechanism with two callers
+has two consequences worth stating: the widget tree stays
+window-independent at construction, so a tree may be built before its
+window is chosen; and the scale-change path runs on every startup rather
+than only when a window crosses monitors. The walk re-creates each
+text-bearing node's surface and brush from state the node already holds,
+so it adds no retained state.
+
+### 12.5 Scale invariance and scale-change propagation
+
+**Invariant.** *Layout results do not depend on the scale factor.* The
+same widget tree laid out against the same client extent expressed in
+DIP produces identical `LayoutNode` offsets and sizes at every scale
+factor. This holds by construction rather than by care: the engine never
+receives a scale factor, authored values are DIP, and DirectWrite
+measurements are DIP and unchanged by re-rasterization — so
+re-rasterizing a text node cannot alter its measured size constraint and
+therefore cannot invalidate layout.
+
+A scale change consequently invalidates the **device-space projection**
+and the **rasterization**, and nothing else. It re-decides no layout
+number, mutates no tree structure, creates and destroys no node,
+enqueues no signal, and does not enter the reactive drain (§6.7) or
+touch its mutation accounting. It synthesises no pointer message either:
+the pointer may end up over a different widget after the accompanying
+resize, and the next real pointer message corrects the hover state.
+
+**Propagation order.** When the OS announces a DPI change for a window,
+the runtime performs, in this order:
+
+1. **Update the window's cached scale factor** from the announced DPI.
+2. **Apply the OS-suggested window rectangle.** Applying it preserves
+   the window's logical (DIP) size across the change, which is what the
+   DIP contract means; ignoring it would preserve the device size and
+   change the logical size instead — a window that grows and shrinks as
+   it crosses monitors.
+3. **Re-layout.** Applying the rectangle dispatches the window-resize
+   message synchronously, before it returns; that path converts the new
+   client extent to DIP at the inbound seam (§12.3) and re-runs layout
+   with the visual-geometry writes scaled by the new factor.
+4. **Re-rasterize text surfaces** at the new scale, through §12.4's
+   walk.
+
+Steps 1 and 2 are ordered, not incidental. Because step 2's resize is
+dispatched synchronously, a scale updated after it would leave that pass
+laying out and projecting with the previous factor — visibly wrong for
+at least one frame, and invisible at 100%.
+
+Step 4 may follow step 3 because measurement is scale-independent, so
+re-rasterization cannot invalidate the layout step 3 just computed. That
+is a free choice today rather than a correctness constraint; a future
+change that makes measurement scale-dependent — explicit hinting, a
+snapped metric — would make it a constraint and it would have to be
+re-derived at that point.
+
+**Invalidation granularity.** The whole window is invalidated, following
+the existing size-affecting-change policy (§6.6). Every Visual's
+projection and every text surface changes, so sub-tree granularity would
+buy nothing here.
+
+**Failure handling.** Window-geometry calls and Composition surface
+re-creation can both fail. Failures are recorded and survived, matching
+the runtime's resilient posture for layout and rendering: a failed
+re-rasterization leaves a surface at its previous resolution — visibly
+blurry until the next change, and honest about it — and a failed
+geometry call leaves the window rectangle unchanged. Neither tears down
+the window, and neither puts the runtime into the `Diverged` terminal
+state (§6.7), which is reserved for reactive-engine divergence.
+
+---
+
 <a id="open-questions-1"></a>
 
-## 12. Open Questions (to be resolved in later phases)
+## 13. Open Questions (to be resolved in later phases)
 
 The following are intentionally left open at this draft stage.
 
 | Question | Resolution phase | Status |
 |---|---|---|
-| DPI scaling localization: whether the layout engine should operate in physical pixels and implications for DirectWrite hinting | M2+ | Open |
+| DPI scaling localization: whether the layout engine should operate in physical pixels and implications for DirectWrite hinting | M4-Phase 1 | **Resolved** — the engine stays in DIP and never receives a scale factor; hinting precision is bought at the rasterization surface. See §12 |
 | AccessKit / UIA sync: when and how layout results are propagated to the accessibility tree, and the performance impact | M4 | Open (re-scoped from M2 to M4 alongside the M2-as-foundation redefinition; see [process/milestone-2/plan.md](../process/milestone-2/plan.md) Out-of-scope) |
 | Async measure: how to handle widgets whose size is unknown at measure time (e.g. image load pending) | M2+ | Open |
 | Cache invalidation granularity: strategy for detecting local property changes and recomputing only affected subtrees | M2+ | Open |
