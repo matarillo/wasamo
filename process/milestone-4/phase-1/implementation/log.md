@@ -1559,3 +1559,310 @@ correction then land together: a commit that adds the field without its
 consumer emits a never-read-field warning, and the feature flag is the
 prerequisite for the `GetDpiForWindow` call that appears in the same
 commit.
+
+### The decision — the DIP → physical window-size rounding rule
+
+Taken against the criteria fixed at the start gate. **Decided: round to
+nearest, and the rule lives inside `DipScale` as
+`window_size_to_physical((i32, i32)) -> (i32, i32)`.**
+
+`SetWindowPos` and `CreateWindowExW` take `i32` device pixels;
+`wasamo_window_create`'s `width` / `height` are `i32` DIP. This is the
+phase's **second and last** place where a real number becomes an
+integer, and the plan's warning was that borrowing `surface_pixels`'
+`ceil` would be the F-14 / F-15 class — a rule written for one purpose
+reused for another because it was to hand.
+
+| Candidate | Verdict |
+|---|---|
+| **`round`** | **Taken.** The two rules differ because the two quantities do. `surface_pixels` rounds *up* because a surface is an **allocation** and a truncated one clips the final column of glyph coverage — a one-sided failure, so a one-sided rule. Nothing is clipped by a window half a pixel small: the client extent is read back through `GetClientRect` and converted, never assumed, so the failure is two-sided and its magnitude is what matters. What this quantity carries instead is a **logical-size fidelity contract** — an 800 DIP window is meant to *be* 800 DIP on every monitor — and nearest is the integer that minimises the DIP error the author observes. Second, independent ground: nearest is `MulDiv(v, dpi, 96)`, which is what the OS itself uses to compute the `WM_DPICHANGED` suggested rectangle that T7 applies **verbatim**. Choosing it makes creation and the OS's later suggestion produce the same number, instead of two sources of a window rectangle that disagree by a pixel and drift on every monitor crossing. |
+| `ceil` | Rejected. Consistent with `surface_pixels` only in appearance: the reason for that rule is clipping, and there is no clipping here. It biases every window's realised logical size upward — by up to `1/s` DIP per axis, on every window, forever — in exchange for nothing stated. |
+| `trunc` | Rejected on the same ground `surface_pixels` rejects it, plus the bias argument in the other direction. |
+
+**Sub-decision — the rule lives in the type, not at the call site.**
+The plan framed this as "a second rounding contract in the type, which
+needs its own test" against "the type's single-rounding-contract story
+stays intact". The deciding fact is what the call site would have to
+write. `window::create` holds an `i32` DIP pair and a `DipScale`; without
+a named operation the seam reads either
+`(width as f32 * scale.factor()).round() as i32` — which reaches for
+`factor()`, the exact expression **F-15's carry-forward names as its
+re-trigger criterion and permits only for T6's `96 × s`** — or
+`scale.to_physical(width as f32).round() as i32`, which leaves the
+*integer* rule at the seam while the type owns the other integer rule.
+That is F-14's two-homes shape, and it also leaves an `f32` in the
+caller's hand one keystroke away from `as i32`, which truncates silently.
+
+So the count of contracts in the type is not the thing to preserve —
+the count of **places a rounding rule lives** is, and that is what the
+type was introduced for. The type now owns both integer rules, each
+named after what it converts, each documented against the other, and
+each with tests that fire.
+
+**One consequence of the integer signature, decided rather than
+inherited.** The arithmetic widens to `f64`. At 100% the conversion is
+then the **exact identity for every `i32`**, including values above
+2^24 that `f32` cannot represent — so "T2 through T8 land into a world
+where every conversion is the identity" is a property of the type here
+rather than of the magnitudes hosts happen to pass. No `s == 1`
+short-circuit is added to buy that; a branch would be the thing trap #4
+is about.
+
+*Record-keeping note.* The start gate's §Commit shape paragraph already
+said this rule would land in `dip_scale.rs`, which anticipated the
+sub-decision's outcome before this section argued it. Recorded rather
+than quietly re-ordered: the criteria above were fixed first and the
+argument is the one that was run, but the gate's "decide before
+choosing" discipline was not perfectly clean on this point.
+
+### The decision — where in `window::create` the correction runs, and with which flags
+
+**Decided: immediately after `create_hwnd` returns — before the
+`WindowState` is boxed and before `GWLP_USERDATA` is installed — with
+`SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE`.**
+
+The seam the plan named is `window.rs`'s `SetWindowLongPtrW` call. Before
+it, `wnd_proc` reads a null pointer and falls through to
+`DefWindowProcW`; after it, the nested messages enter the live arms with
+`root_widget` still `None`.
+
+| Candidate | Verdict |
+|---|---|
+| **Before the `GWLP_USERDATA` install** | **Taken.** The nested dispatch **cannot reach runtime state at all** — a property of where the call sits, not of the fact that the arms it would otherwise enter happen to be no-ops today. That distinction is the whole point: T5 puts a division by `state.scale` in the `WM_SIZE` arm and T7 makes ordering a correctness constraint, so "it is harmless because `root_widget` is `None` and `resize_fn` is `None`" is a claim about the *current* bodies of two `if let`s, which is exactly the kind of reasoning a later task invalidates without noticing. It also keeps the window's rectangle correct from the earliest possible moment — before the `DesktopWindowTarget` is attached and before the root Visual's `SetRelativeSizeAdjustment(1, 1)` starts tracking a client area — rather than resizing underneath them. |
+| After the `GWLP_USERDATA` install | Rejected. Its attraction was symmetry with T7 — same shape, one mechanism, exercised on every startup. But the symmetry is **false**: at T7 the window is fully built and the nested `WM_SIZE` is *required* to run the re-layout, while at creation it must do nothing and there is no root widget for it to lay out. Making the two look alike would invite a reader to transfer T7's ordering reasoning to a site that does not have it, and would re-enter a `WindowState` that `emit::register_window` has not yet seen. |
+
+**Flags.** `SWP_NOMOVE` is required and is the part that must **not** be
+copied from DD-003. Placement is `CW_USEDEFAULT`'s choice, so `x` / `y`
+have no meaningful value to pass and the window must stay where the OS
+put it. DD-003's `SWP_NOZORDER | SWP_NOACTIVATE` pair belongs to the
+`WM_DPICHANGED` path, which **applies an OS-suggested rectangle** and
+therefore moves the window deliberately; copying that pair verbatim here
+would move the window to `(0, 0)`. `SWP_NOZORDER` and `SWP_NOACTIVATE`
+are kept for their own reasons — the window is not yet shown and neither
+its Z-order nor the foreground focus is this function's business. No
+further flag is added: `SWP_NOREDRAW` and `SWP_NOSENDCHANGING` would each
+be a behaviour choice with nothing asking for it.
+
+**Failure handling.** The result is discarded. DD-003 §Failure handling
+fixes the posture — log and survive; a failed `SetWindowPos` leaves the
+rectangle unchanged and nothing tears the window down — and the runtime
+has no logging facility, so `let _ =` is the same shape `apply_mica` and
+`show` already use in this file. Recorded rather than left implicit: the
+disclosure mechanism DD-001 uses is the ABI-layer thread-local
+last-error, and reaching into it from `window::create` would be a new
+diagnostic surface with no test, which is the trap #4 shape. **The
+consequence is stated, not hidden**: if the correction fails, the window
+keeps the requested numbers as physical pixels and is visibly small at
+any scale but 100%.
+
+### Close gate
+
+**#1 — call-site audit.** The claim under check: *every path that turns
+a host's DIP window size into an HWND passes through the corrected site,
+and every path that reads a window's geometry reads it after the
+correction.* Queries over `wasamo-runtime/src`, `wasamo-dll`,
+`bindings/rust/src`, `wasamoc/src`, `examples`:
+`WindowState \{|CreateWindowExW|GetWindowRect|SetWindowPos|GetClientRect|window::create|GetDpiFor`.
+
+| Site | Classification | As landed |
+|---|---|---|
+| `abi.rs:335` `wasamo_window_create` → `window::create` | must be covered | covered — the correction is inside the callee, so the ABI function is untouched |
+| `abi.rs:1224` `wasamo_load_ui` → `window::create(title, 800, 600)` | must be covered, **and is the one T1's F-7 said would have been missed** | covered. This is the path all three example hosts take; it never passes through `wasamo_window_create`, so a correction placed there would have mis-sized every host |
+| `lib.rs:88` `window_create` (Rust-native) → `window::create` | must be covered | covered — same callee |
+| `window.rs` `create_hwnd` → the single `CreateWindowExW` | the site that consumes the uncorrected numbers | unchanged. `width` / `height` still reach it as the caller's DIP integers; correcting *before* creation is impossible because the monitor, hence the DPI, is not known until the HWND exists (DD-003 I1, `CW_USEDEFAULT`) |
+| `window.rs` the single `WindowState` literal | must carry the scale | carries `scale`, from the value read once after `create_hwnd` |
+| `window.rs:160` `set_root`'s `GetClientRect` → first layout | must read after the correction | reads after: the correction runs inside `create`, and `set_root` is a separate call every caller makes later. **Measured** — probe step 9 |
+| `emit.rs:137` `flush_layout`'s `GetClientRect` (audit row 2b, T1's F-1) | must read after the correction | reads after, necessarily: the reactive drain cannot run before the window exists. Not otherwise touched by T4 |
+| `GetWindowRect` | — | none in the runtime, before or after |
+| `SetWindowPos` | the new site | exactly one, in `realize_dip_window_size` |
+| `GetDpiForWindow` | the new site | exactly one, in `create` |
+
+**This closes DD-002 audit row 13** (`create_hwnd`'s `CreateWindowExW`
+width / height, "DIP → physical, per DD-003"). Recorded here because
+**no task in [plan.md](./plan.md) claimed that row** — §T5 covers rows
+1–6 and 8–12, §T6 covers row 7, and row 13 was named by neither. See
+F-26.
+
+**#2 — structural side-effect enumeration.** What the inserted
+`SetWindowPos` drags along. The message set is **measured**, not taken
+from the ADR's wording: a throwaway probe (below) instrumented
+`wnd_proc` behind a flag set only around the correction call.
+
+| # | Effect | Measured / stated |
+|---|---|---|
+| 1 | **Nested synchronous dispatch, size unchanged (`s = 1`, the shipped state)** | `WM_WINDOWPOSCHANGING` (0x0046), `WM_GETMINMAXINFO` (0x0024). **No `WM_SIZE`.** |
+| 2 | **Nested synchronous dispatch, size changed (`s = 1.25`, declaration added as throwaway)** | `WM_WINDOWPOSCHANGING`, `WM_GETMINMAXINFO`, `WM_NCCALCSIZE` (0x0083), `WM_WINDOWPOSCHANGED` (0x0047), **`WM_SIZE` (0x0005)**, then three `WM_GETICON` (0x007F). DD-003's load-bearing property — `SetWindowPos` dispatches `WM_SIZE` before it returns — is therefore **measured**, not inherited |
+| 3 | **What those messages reach** | Nothing. `state_ptr` was null for **every** message in both runs, so all of them went to `DefWindowProcW`. That is the placement decision's artifact |
+| 4 | `resize_fn` / `mouse_*_fn` callback slots | **unchanged** — unreachable during the nested dispatch (row 3), and no ABI or Rust-native function installs them anyway (T1 finding F-3, confirmed) |
+| 5 | `root_widget` and the layout pass | **unchanged.** `root_widget` is `None` for the whole of `create` by construction — every caller calls `set_root` afterwards — so no layout runs inside the correction under either placement |
+| 6 | `emit::register_window` | **unchanged, and deliberately after.** The correction precedes it, so a nested message cannot reach a window the emit registry has not yet seen |
+| 7 | The root Visual's `SetRelativeSizeAdjustment(1, 1)` (audit row 8) | **unchanged**, and now also *unaffected by ordering*: the correction runs before `create_desktop_window_target`, so the target is attached to a window that is already the right size rather than resized under it |
+| 8 | Window **position** | **unchanged** — `SWP_NOMOVE`. Measured: the captured windows sat at `(192,192)`, `(256,256)` and `(33,33)` across the three probe runs, i.e. wherever `CW_USEDEFAULT` put them, never `(0,0)` |
+| 9 | Window **Z-order / activation** | **unchanged** — `SWP_NOZORDER \| SWP_NOACTIVATE`, and the window is not yet shown |
+| 10 | The **client** extent | changes with the outer rectangle, and **not by the same factor**. Measured at 125%: outer 800 → 1000 DIP-exactly, client 784 × 561 → 982 × 703 physical, which is 785.6 × 562.4 DIP. The non-client frame is 8 px per side at 96 DPI and 9 px at 120 DPI, so it scales by its own rounded metric. See F-28 — this is a real qualification on T10's control B |
+| 11 | The **requested DIP size** | **not retained.** `create` keeps the scale and not the pair, so there is no second representation of the window's logical size to drift. This is the trap-#3 exclusion the start gate promised to check |
+| 12 | Reactive drain / signal registry / binding state | **unchanged** — no property is written, no node is created, nothing is enqueued. Window creation does not enter the drain and this task does not change that |
+| 13 | Behaviour at `s = 1` | **the exact identity, measured.** Probe steps 3 and 6, same run: window `800x600` client `784x561` before the correction and `800x600` / `784x561` after it, with the correction target printed as `(800, 600)` |
+
+**#4 — the authored branch that was not written.** DD-003 I1 words the
+correction as "**if the scale is not 1** apply `size × s`". Written that
+way it is a branch reachable only once T9 lands, on the path every host
+takes, and it would sit directly against DD-001 §Failure handling's
+structural argument — that tolerating a failed declaration is safe
+*because the conversion machinery has no second code path to keep
+correct*. The correction is therefore unconditional, and the artifact for
+this trap is the absence: `realize_dip_window_size` has no conditional,
+`from_dpi` already floors a zero DPI so F-16's second candidate branch is
+not written either, and the only new arithmetic ships with tests shown to
+fire (below).
+
+The rounding rule takes T2's evidence standard voluntarily — the owner's
+decision makes it mandatory only once the vision decision record lands at
+phase end, and T4 is not a pure-logic task, but the operation is pure
+logic and a green test that has not been shown to fire says nothing
+(F-11). Four wrong implementations, each applied to a
+restored-from-backup copy, run with
+`cargo test -p wasamo-runtime --lib dip_scale`, then reverted:
+
+| Mutation | Tests that failed | |
+|---|---|---|
+| **W1** `round` → `trunc` | `window_size_rounds_to_nearest_in_both_directions` | the rejected candidate |
+| **W2** `round` → `ceil` | `window_size_rounds_to_nearest_in_both_directions` | the other rejected candidate — and note it does **not** redden `window_size_converts_at_125_150_200_percent`, which is F-13's shape measured for this rule: every exact product, T10's 800 × 600 → 1000 × 750 included, is satisfied by all three candidates |
+| **W3** `f64` → `f32` arithmetic | `window_size_is_the_exact_identity_at_one_hundred_percent` | the identity claim is about the type, not about typical magnitudes |
+| **W4** the second axis reuses the first | `window_size_converts_at_125_150_200_percent`, `window_size_rounds_to_nearest_in_both_directions` | |
+
+Final state re-run green: **14 tests** in `dip_scale`, 0 failures.
+
+**#5 — carry-forward.** Three invariants, each with a re-trigger
+criterion; recorded in [handoff.md](./handoff.md).
+
+1. **The scale is per window and authoritative on `WindowState`**, seeded
+   once from the monitor the OS chose. *Re-trigger:* any second source of
+   a window's scale — a process-global cache, a monitor query at a point
+   of use, a second seeding site — reintroduces exactly the drift DD-003
+   rejected as option S1/S3, and M4-Phase 8 is where it would show.
+2. **`realize_dip_window_size` runs before `GWLP_USERDATA` is
+   installed, and its flag set is not the `WM_DPICHANGED` path's.**
+   *Re-trigger:* any task that moves the correction later, that adds a
+   geometry call to `create` after the pointer install, or that reuses
+   this helper for the change path. The second is T7's live hazard — see
+   F-30 — because the helper converts a **DIP size** while T7 applies an
+   **OS-supplied physical rectangle**, and inheriting `SWP_NOMOVE` there
+   would pin the window on every monitor crossing.
+3. **The window's logical size is realised on the *outer* rectangle, and
+   the client rectangle does not follow by the same factor.** *Re-trigger:*
+   any evidence gate or future `WindowConfig` attribute that treats a
+   DIP client size as derivable from the DIP outer size. Measured at
+   125%: 800 DIP outer is exactly 1000 physical, while the client is
+   785.6 DIP rather than 784.
+
+**#6 — deterministic-failure disposition.** None to disposition. The
+suite was green on every run; Observation 5's
+`scroll_view_layout_integration` access violation did not appear. One
+non-failure surprise was root-caused rather than worked around: the
+first mutation loop restored `dip_scale.rs` with `Copy-Item`, which
+**preserves the source file's modification time**, so cargo's
+mtime-based fingerprint considered the build current and re-ran the
+*mutated* test binary — reporting the last mutation's result as the
+restored state's. Caught because the restored run was expected green and
+was not. The loop was rewritten to restore by writing content (which
+updates the mtime), and the restored state then measured green. Recorded
+because it is a **false-negative generator for any mutation loop**, the
+same family as F-21 and F-5: a build step that looks like it did
+something and did not.
+
+**#7 — GUI evidence, and what the probe does and does not show.** T4's
+landing changes no rendered frame, so this is evidence for the *ordering
+and correction claims*, not a rendering gate. Method: throwaway
+instrumentation → `cargo build --release --workspace` (F-21) → launch →
+`CopyFromScreen` over `GetWindowRect` from a Per-Monitor-V2 capture
+process → revert. **The window is never moved or resized**, unlike T3's
+script: the size it was created at *is* the measurement. Script:
+[evidence/capture-t4-probe.ps1](./evidence/capture-t4-probe.ps1); frames
+in [evidence/t4-probe/](./evidence/t4-probe/). Environment: the 125%
+development machine.
+
+The ordering, printed rather than described — the `s = 1.25` run, which
+is the only one where the ordering can be wrong at all:
+
+```
+PROBE 0 SetProcessDpiAwarenessContext(PMv2) -> Ok(())
+PROBE 1 create(width=800, height=600) [DIP]
+PROBE 2 CreateWindowExW returned; GetDpiForWindow=120 scale=1.25
+PROBE 3 before the correction: window=800x600 client=782x553
+PROBE 4 correction target = (1000, 750)
+PROBE 5   nested dispatch during SetWindowPos: msg=0x0046 ... state_ptr_null=true
+PROBE 5   ... 0x0024, 0x0083, 0x0047, 0x0005 (WM_SIZE), 0x007F x3 — all state_ptr_null=true
+PROBE 6 after the correction: window=1000x750 client=982x703
+PROBE 7 GWLP_USERDATA installed (wnd_proc can now reach WindowState)
+PROBE 8 create returns; state.scale=1.25
+PROBE 9 set_root first layout: client=(982x703) physical, state.scale=1.25, => 785.6x562.4 DIP
+```
+
+**The positive control: three states, all measured in one session on one
+build tree**, rather than two cited from T1 and one predicted. Each pair
+of rows shares one column, so **no single number separates the three**
+and only the pair does:
+
+| State | build | window rect | client | tiles/row | frame |
+|---|---|---|---|---|---|
+| **A** — unaware + correction (**what T4 ships**) | as committed | **1000 × 750** | 980 × 701 | **7** | `unaware-with-correction.png` |
+| **B** — aware, correction suppressed | throwaway declaration, correction call removed | 800 × 600 | 782 × 553 | **7** | `aware-without-correction.png` |
+| **C** — aware + correction | throwaway declaration only | **1000 × 750** | 982 × 703 | **9** | `aware-with-correction.png` |
+
+Read as a set: **A and C are indistinguishable by the window rectangle**
+— which is F-9 measured directly rather than quoted — and **A and B are
+indistinguishable by the tile count**. A build that never declares
+awareness (A) and one that declares and corrects (C) both measure
+1000 × 750, and only the WrapPanel separates them; a build that declares
+without correcting (B) is separated by the rectangle and not by the
+tiles. This is why the plan's window-measurement check is not a control
+on its own, and the probe now says so from its own numbers.
+
+**Two things the probe falsified, both recorded as findings rather than
+smoothed over.**
+
+- The control predicted at the start gate was **wrong**: aware + correction
+  was expected to restore the unaware baseline's 7 tiles, and it reads 9.
+  That is the *correct* answer for T4 alone — the correction fixes the
+  window's outer rectangle while the **inbound** conversion that would
+  divide the client extent back into DIP is T5's, so layout receives 982
+  and treats it as DIP. The prediction assumed the whole machinery for a
+  task that lands half of it. F-27.
+- The plan's stated failure signature — "with awareness declared and T4's
+  correction absent … the WrapPanel drops from 7 tiles per row to 6" —
+  does **not** reproduce at T4: state B reads 7. T1's 6 is not wrong; T1's
+  throwaway carried the *complete* conversion machinery, so its client
+  782 physical became 625.6 DIP. The number is right for T1's build and
+  the plan restates it without that condition. F-27.
+
+**Crispness, stated as an observation and not as evidence.** State A's
+glyphs are visibly softer than state C's in the captured frames — the
+DWM stretch — which is consistent with T1's magnified pair and with R-1's
+premise. It is not offered as evidence: the comparison here is at
+capture resolution with no magnification, the two frames differ in more
+than one variable, and positive control A is T10's with its own capture
+discipline.
+
+**End-gate items from [plan.md](./plan.md) §T4.**
+
+- *Scale seeded before the first layout, verified by ordering rather than
+  by comment* — discharged twice. **By construction**: the scale is a
+  `WindowState` field initialised in the struct literal, so there is no
+  window without one and no statement order for a later edit to invert;
+  `set_root`, the first layout, cannot run before a `WindowState` exists.
+  **By measurement**: probe steps 2 → 8 → 9 above, where step 9 reads the
+  seeded 1.25 off the state at the first layout.
+- *Workspace green as a regression check only* —
+  `cargo build -p wasamo-runtime` → `cargo build --workspace` →
+  `cargo test --workspace` (the F-5 ordering, used as a matter of
+  course): **32 test binaries, 0 failures, 949 tests**, the runtime lib
+  going 457 → 460 as the three new `dip_scale` tests land. Per the
+  owner-agreed downgrade this is a regression check and nothing more —
+  and T4 is a task where that is unusually visible, since **every one of
+  the three probe states above is green**, including the two that are
+  wrong.
+- `cargo fmt --all -- --check` and `git diff --check` clean.
+- *Throwaway reverted* — `git status` clean of `wasamo-*` changes; the
+  instrumentation and the declaration exist only in this record. The
+  declaration remains T9's to land.
