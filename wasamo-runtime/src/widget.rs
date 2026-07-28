@@ -1274,23 +1274,21 @@ impl WidgetNode {
     /// an integer — physical 50 at 150% is 33.33 — and truncating it would make
     /// hit-test edges depend on the scale factor for no benefit.
     pub fn hit_test_click(&mut self, x: f32, y: f32) {
-        self.hit_test_click_inner(x, y, 0.0, 0.0);
+        // Every readback in the traversal is divided by **one** scale — this
+        // root's — rather than by each node's own. See `visual_rect_dip`.
+        let tree_scale = self.scale;
+        self.hit_test_click_inner(x, y, 0.0, 0.0, tree_scale);
     }
 
-    fn hit_test_click_inner(&mut self, x: f32, y: f32, off_x: f32, off_y: f32) {
-        // The visual's current offset is available via computed layout stored on the Visual.
-        // We read it back from the SpriteVisual to avoid tracking a separate state.
-        //
-        // DD-M4-P1-002 audit row 9, the inbound seam. The readback is physical
-        // — it is what `sync_visuals` wrote — while `x` / `y` and the
-        // accumulated `off_x` / `off_y` are DIP, so it is divided here. **The
-        // divisor is this node's own cache** because the value being divided is
-        // the one this node's `sync_visuals` multiplied: row 9 undoes row 4, and
-        // the two are the same variable by construction rather than by
-        // agreeing. See the T5 decision entry in `implementation/log.md`.
-        let (vx, vy, vw, vh) = visual_rect(&self.visual);
-        let (vx, vy) = self.scale.pair_to_dip((vx, vy));
-        let (vw, vh) = self.scale.pair_to_dip((vw, vh));
+    fn hit_test_click_inner(
+        &mut self,
+        x: f32,
+        y: f32,
+        off_x: f32,
+        off_y: f32,
+        tree_scale: DipScale,
+    ) {
+        let (vx, vy, vw, vh) = self.visual_rect_dip(tree_scale);
         let abs_x = off_x + vx;
         let abs_y = off_y + vy;
 
@@ -1307,7 +1305,7 @@ impl WidgetNode {
             // reachable.
             if !btn.enabled {
                 for child in &mut self.children {
-                    child.hit_test_click_inner(x, y, abs_x, abs_y);
+                    child.hit_test_click_inner(x, y, abs_x, abs_y, tree_scale);
                 }
                 return;
             }
@@ -1357,7 +1355,7 @@ impl WidgetNode {
         }
 
         for child in &mut self.children {
-            child.hit_test_click_inner(x, y, abs_x, abs_y);
+            child.hit_test_click_inner(x, y, abs_x, abs_y, tree_scale);
         }
     }
 
@@ -1372,9 +1370,11 @@ impl WidgetNode {
         y: f32,
         down: bool,
     ) -> windows::core::Result<()> {
-        self.update_hover_inner(compositor, x, y, down, 0.0, 0.0)
+        let tree_scale = self.scale;
+        self.update_hover_inner(compositor, x, y, down, 0.0, 0.0, tree_scale)
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn update_hover_inner(
         &mut self,
         compositor: &Compositor,
@@ -1383,11 +1383,10 @@ impl WidgetNode {
         down: bool,
         off_x: f32,
         off_y: f32,
+        tree_scale: DipScale,
     ) -> windows::core::Result<()> {
         // Audit row 9's second call site — same conversion, same divisor.
-        let (vx, vy, vw, vh) = visual_rect(&self.visual);
-        let (vx, vy) = self.scale.pair_to_dip((vx, vy));
-        let (vw, vh) = self.scale.pair_to_dip((vw, vh));
+        let (vx, vy, vw, vh) = self.visual_rect_dip(tree_scale);
         let abs_x = off_x + vx;
         let abs_y = off_y + vy;
 
@@ -1397,7 +1396,7 @@ impl WidgetNode {
             // grey set by `update_button_enabled`.
             if !btn.enabled {
                 for child in &mut self.children {
-                    child.update_hover_inner(compositor, x, y, down, abs_x, abs_y)?;
+                    child.update_hover_inner(compositor, x, y, down, abs_x, abs_y, tree_scale)?;
                 }
                 return Ok(());
             }
@@ -1420,9 +1419,47 @@ impl WidgetNode {
         }
 
         for child in &mut self.children {
-            child.update_hover_inner(compositor, x, y, down, abs_x, abs_y)?;
+            child.update_hover_inner(compositor, x, y, down, abs_x, abs_y, tree_scale)?;
         }
         Ok(())
+    }
+
+    /// This node's own Visual rectangle, read back off the live Visual and
+    /// converted to DIP — DD-M4-P1-002 audit row 9, the inbound seam.
+    ///
+    /// **`tree_scale` is the traversal root's scale, not `self.scale`, and the
+    /// difference is the whole point** (T5 independent review finding R-2; the
+    /// first landing divided by `self.scale` on the argument that "row 9 undoes
+    /// row 4", which is **backwards**).
+    ///
+    /// The readback is one node's *parent-relative* physical offset, and the
+    /// caller accumulates it into an absolute position to compare against a
+    /// pointer that `wnd_proc` divided by the **window's** scale. A widget's
+    /// composited absolute position is `Σ(local_dip_i × scale_i)`; dividing
+    /// each term by its own `scale_i` before summing yields `Σ local_dip_i`,
+    /// which equals `absolute_physical ÷ window_scale` **only if every
+    /// `scale_i` is the window's**. Dividing every term by one scale instead
+    /// gives `Σ(local_physical_i) ÷ that scale` — the composited position in
+    /// the pointer's space — for any mixture.
+    ///
+    /// So per-node division is correct *conditional on an invariant the runtime
+    /// cannot check*, and one divisor is correct unconditionally. That matters
+    /// because the mixture is reachable: a node attached to an already-attached
+    /// tree keeps the constructor identity until a scale walk runs over it, and
+    /// such a node is rendered at the wrong size **and** would then be
+    /// hit-tested where it is not. With one divisor it is hit-tested where it
+    /// actually is, which is what hit-testing should answer.
+    ///
+    /// The root's cache is the divisor because the traversal has no window in
+    /// hand and the root is where the walk starts, so "the root's scale is the
+    /// window's" is a single-point invariant rather than a per-node one.
+    fn visual_rect_dip(&self, tree_scale: DipScale) -> (f32, f32, f32, f32) {
+        // Read back from the SpriteVisual rather than tracking a separate
+        // state — the pre-existing choice DD-M4-P1-002 option H3 revisits.
+        let (vx, vy, vw, vh) = visual_rect(&self.visual);
+        let (vx, vy) = tree_scale.pair_to_dip((vx, vy));
+        let (vw, vh) = tree_scale.pair_to_dip((vw, vh));
+        (vx, vy, vw, vh)
     }
 
     /// Reset all Button-family states to Normal (called on WM_MOUSELEAVE).
