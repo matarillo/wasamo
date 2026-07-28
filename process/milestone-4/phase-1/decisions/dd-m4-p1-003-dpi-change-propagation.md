@@ -151,10 +151,14 @@ the semantics DD-004 states, because `width` / `height` denote the
 **outer window rectangle** — which is what they have always denoted,
 since they are passed straight to `CreateWindowExW`.
 
-**Superseded in part — successor pending (2026-07-29, M4-Phase 1 T4).**
+**Superseded in part (2026-07-29, M4-Phase 1 T4, by
+[DD-M4-P1-005](./dd-m4-p1-005-unconditional-size-correction.md)).**
 I1's wording above conditions the correction on the scale — "if the
-scale is not 1 apply `size × s`". **As implemented the correction is
-unconditional**,
+scale is not 1 apply `size × s`". **That clause is superseded: the
+correction is unconditional.** Nothing else in this section changes —
+create-then-correct, the `CW_USEDEFAULT` reasoning, the flash-free
+property and `AdjustWindowRectExForDpi`'s availability all stand. As
+implemented the correction is unconditional,
 and the difference is real rather than a matter of implementation shape:
 at a scale of 1 the size-preserving `SetWindowPos` still dispatches
 `WM_WINDOWPOSCHANGING` and `WM_GETMINMAXINFO`, which a guarded
@@ -188,11 +192,11 @@ on — [doc-system.md](../../../cross-milestone/decisions/doc-system.md)'s
 rather than standing in for one. The citation was to the annotation's
 shape while omitting the thing it exists to reference.
 
-**A successor record is therefore required and is pending owner
-decision**, together with the live alternative of restoring the guard
-and accepting the untested branch. Until it lands this annotation
-records the divergence rather than authorising it, and the shipped
-behaviour is unconditional. Reasoning and both options:
+**The successor is
+[DD-M4-P1-005](./dd-m4-p1-005-unconditional-size-correction.md)**, filed
+2026-07-29 on owner approval, which compares the unconditional form
+against restoring the guard and supersedes this clause alone. Reasoning
+and the measurement:
 [implementation/log.md](../implementation/log.md) §T4 (independent
 review finding R-3, delta review finding 1).
 
@@ -405,10 +409,13 @@ residual (a layout-time runtime error code) stays non-applicable
   framing is **corrected**. It originally read "Narrowed … the decision
   this section makes is unchanged", and that was wrong — the condition
   is part of what option I1 *is*, and adjudicating the DD-001 / DD-003
-  conflict is a new choice. It now reads **"Superseded in part —
-  successor pending"**, and **a successor record is required**; the
-  alternative of restoring the guard is live. The §Context qualification
-  is unaffected by this correction: it changes no option and stands as
-  an annotation. **Status stays `Accepted`** for now because nothing has
-  yet been decided in place of I1; the successor, once accepted, is what
-  changes that.
+  conflict is a new choice. The §Context qualification is unaffected by
+  this correction: it changes no option and stands as an annotation.
+- 2026-07-29: **option I1's conditional clause is superseded** by
+  [DD-M4-P1-005](./dd-m4-p1-005-unconditional-size-correction.md)
+  (owner-approved route; that record is `Proposed` pending owner review
+  of its text). The correction is unconditional. **This DD's own
+  `Status` stays `Accepted`** — one clause of one option is replaced and
+  every decision it makes stands, so the record is superseded *in part*
+  in the sense [doc-system.md](../../../cross-milestone/decisions/doc-system.md)
+  already uses, not retired.

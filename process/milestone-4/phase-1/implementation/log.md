@@ -2310,3 +2310,54 @@ survive, so it is put fresh rather than restated.
 **The §Context qualification is unaffected** by any of this. It changes
 no option, and option B remains the right disposition for it — the delta
 review agrees.
+
+### Owner decision on the delta review's finding 1 (2026-07-29)
+
+**Decided: keep the correction unconditional and file a successor
+record.** The alternative — restore DD-M4-P1-003 option I1's guard and
+leave the ADR set untouched — was rejected on the argument recorded in
+the delta disposition above: the branch is a permanent correctness cost
+on the runtime's single window-creation path, testable in neither
+direction before T9, while the record is a one-time documentation cost.
+
+**Landed:**
+[DD-M4-P1-005](../decisions/dd-m4-p1-005-unconditional-size-correction.md),
+`Status: Proposed`. The owner has approved the **substance**; the
+`Accepted` flip awaits their review of the text, per the standing
+discipline that a decision record is not finalised at the moment its
+direction is chosen. Consequent edits landed with it: DD-M4-P1-003's I1
+annotation now reads "Superseded in part … by DD-M4-P1-005", both
+revision histories carry the supersede, and the ADR-set preamble gains a
+Decisions row plus a note on the *Effective awareness vs. declared
+awareness* coupling — which is where the conflict actually lived and
+which the table stated as a consequence rather than as a constraint on
+its dependents' wording.
+
+**The boundary this establishes, stated once so it is reusable.** Two
+corrections landed on DD-M4-P1-003 on the same day and they took
+different routes, which is only defensible if the test between them is
+statable:
+
+> **Supersede** when a reader implementing the original text would not
+> obtain the shipped behaviour. **Annotate** when the text's decision
+> still produces the shipped behaviour and what is wrong is a statement
+> around it.
+
+Option I1's conditional fails that test — implement it literally and the
+correction does not run at 100%. The §Context layout-invariance
+qualification passes it — implement DD-003 exactly as written and the
+behaviour is correct; only the claim about what the results *are* was
+too strong. The distinction is not in
+[workflow.md](../../../procedures/workflow.md)'s status vocabulary,
+which lists `Proposed` / `Accepted` / `Superseded` and has no word for
+the second case, and that gap goes to the phase-end batch.
+
+**What did not change.** The shipped code is untouched by this record —
+`realize_dip_window_size` has had no conditional since it landed. This
+is a case of the implementation being right and its justification being
+filed in the wrong document, which is worth distinguishing from a record
+retrofitted to match code nobody thought about: T4's start gate recorded
+the no-branch decision, with DD-001's structural property as its reason,
+**before an approach was chosen**. What was missing was the recognition
+that a reason of that weight belongs in a decision record rather than in
+a gate entry.
