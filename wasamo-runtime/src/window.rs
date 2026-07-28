@@ -219,9 +219,8 @@ fn create_hwnd(title: &str, width: i32, height: i32) -> windows::core::Result<HW
 /// rectangle then *means* depends on the process's effective awareness and is
 /// deliberately not asserted here: an aware process gets a window that is too
 /// small by the scale factor, while an unaware one has its logical rectangle
-/// stretched by DWM and looks approximately right (T4 delta review finding 4 —
-/// an earlier draft claimed the requested numbers "remain as physical pixels",
-/// which is only the aware case). DD-M4-P1-003 §Failure handling is "log
+/// stretched by DWM and looks approximately right. DD-M4-P1-003 §Failure
+/// handling is "log
 /// **and** survive", and the
 /// runtime's diagnostic channel is the `wasamo:`-prefixed `eprintln!` the
 /// handler, IR loader and reactive engine already use; swallowing this would

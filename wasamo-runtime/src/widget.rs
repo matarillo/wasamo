@@ -1273,6 +1273,12 @@ impl WidgetNode {
     /// as layout. `f32` rather than `i32` because a DIP pointer position is not
     /// an integer — physical 50 at 150% is 33.33 — and truncating it would make
     /// hit-test edges depend on the scale factor for no benefit.
+    ///
+    /// **Precondition: `self` is the tree the window laid out.** Every readback
+    /// in the traversal is divided by `self.scale`, while the pointer was
+    /// divided by the *window's*, so entering on a subtree whose cached scale
+    /// differs from the window's compares two spaces. See
+    /// [`Self::visual_rect_dip`].
     pub fn hit_test_click(&mut self, x: f32, y: f32) {
         // Every readback in the traversal is divided by **one** scale — this
         // root's — rather than by each node's own. See `visual_rect_dip`.
@@ -1362,7 +1368,8 @@ impl WidgetNode {
     /// Update hover/press state for all Button-family widgets based on mouse position.
     /// `down` is true while the left mouse button is held.
     ///
-    /// **`(x, y)` are DIP**, for the reason given on [`Self::hit_test_click`].
+    /// **`(x, y)` are DIP**, and the same precondition applies: `self` is the
+    /// tree the window laid out. See [`Self::hit_test_click`].
     pub fn update_hover(
         &mut self,
         compositor: &Compositor,
@@ -1427,32 +1434,27 @@ impl WidgetNode {
     /// This node's own Visual rectangle, read back off the live Visual and
     /// converted to DIP — DD-M4-P1-002 audit row 9, the inbound seam.
     ///
-    /// **`tree_scale` is the traversal root's scale, not `self.scale`, and the
-    /// difference is the whole point** (T5 independent review finding R-2; the
-    /// first landing divided by `self.scale` on the argument that "row 9 undoes
-    /// row 4", which is **backwards**).
+    /// **The divisor is the traversal root's scale, not `self.scale`.** The
+    /// readback is one node's *parent-relative* physical offset and the caller
+    /// accumulates it into an absolute position, to be compared against a
+    /// pointer `wnd_proc` divided by the **window's** scale. A widget's
+    /// composited position is `Σ(local_dip_i × scale_i)`; dividing each term by
+    /// its own `scale_i` before summing yields `Σ local_dip_i`, which is the
+    /// pointer's space only if every `scale_i` is the window's. Dividing every
+    /// term by one scale gives `Σ(local_physical_i) ÷ that scale` — the
+    /// composited position, in the pointer's space — for any mixture of
+    /// descendant scales. That matters because the mixture is reachable: a node
+    /// attached to an already-attached tree keeps the constructor identity
+    /// until a scale walk runs over it.
     ///
-    /// The readback is one node's *parent-relative* physical offset, and the
-    /// caller accumulates it into an absolute position to compare against a
-    /// pointer that `wnd_proc` divided by the **window's** scale. A widget's
-    /// composited absolute position is `Σ(local_dip_i × scale_i)`; dividing
-    /// each term by its own `scale_i` before summing yields `Σ local_dip_i`,
-    /// which equals `absolute_physical ÷ window_scale` **only if every
-    /// `scale_i` is the window's**. Dividing every term by one scale instead
-    /// gives `Σ(local_physical_i) ÷ that scale` — the composited position in
-    /// the pointer's space — for any mixture.
-    ///
-    /// So per-node division is correct *conditional on an invariant the runtime
-    /// cannot check*, and one divisor is correct unconditionally. That matters
-    /// because the mixture is reachable: a node attached to an already-attached
-    /// tree keeps the constructor identity until a scale walk runs over it, and
-    /// such a node is rendered at the wrong size **and** would then be
-    /// hit-tested where it is not. With one divisor it is hit-tested where it
-    /// actually is, which is what hit-testing should answer.
-    ///
-    /// The root's cache is the divisor because the traversal has no window in
-    /// hand and the root is where the walk starts, so "the root's scale is the
-    /// window's" is a single-point invariant rather than a per-node one.
+    /// **This is a precondition on the entry, not an invariant the runtime
+    /// maintains.** [`Self::hit_test_click`] and [`Self::update_hover`] are
+    /// `pub` and take the divisor from the receiver, so entering on a
+    /// **subtree** uses that subtree's scale against a pointer divided by the
+    /// window's — and a caller cannot supply the right one, because `scale` is
+    /// private. Every production caller enters on `WindowState::root_widget`;
+    /// the workspace's own tests do not, so the hole is reachable rather than
+    /// theoretical.
     fn visual_rect_dip(&self, tree_scale: DipScale) -> (f32, f32, f32, f32) {
         // Read back from the SpriteVisual rather than tracking a separate
         // state — the pre-existing choice DD-M4-P1-002 option H3 revisits.

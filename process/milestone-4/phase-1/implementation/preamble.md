@@ -215,6 +215,20 @@ approach is chosen**. The phase-wide load, from the
   precisely where CI is not. DD-002's 13-row table is the audit
   artifact; T5 closes it with each row classified and verified, and T6
   closes row 7.
+  **The table is the audit's starting point and not its boundary**
+  (T5 independent review finding R-1, sharpening T1's F-1). Its row 2
+  names `set_root`'s `GetClientRect`, while the runtime has a second
+  production `GetClientRect → layout` path in `emit::flush_layout` — so
+  the closure was reached against a **14-site** enumeration, and the
+  contract's own "no coordinate enters or leaves outside these rows"
+  claim is true of the extended list rather than of the thirteen. The
+  implementation is complete; the enumeration was not. **Decided
+  2026-07-29 (owner): a dated annotation on DD-002**, body unchanged and
+  `Status` still `Accepted`, covering row 2 and also row 12, which names
+  `Box` — a widget that installs no clip — while omitting `ZStack`, which
+  does. Not a successor: no option is re-chosen. The same omission in
+  [architecture.md §12.3](../../../../docs/architecture.md#coordinate-spaces)
+  is a Moment 2 item in [plan.md](./plan.md) §T12.
 - **Trap #2 (structural side effects)** — armed. DD-003's 13-row
   enumeration of what a scale change drags along is T7's close artifact.
   Rows 9–13 (`SetRelativeSizeAdjustment`, clip insets, signal registry /
