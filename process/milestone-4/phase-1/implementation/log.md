@@ -890,8 +890,8 @@ assertions, not omissions.
 | 3 | `emit::flush_layout` → `run_layout` (the drain's layout phase) | label untouched | **preserved and load-bearing**: this is the pass that now carries the relocated label-update write |
 | 4 | `set_property(PROP_BUTTON_LABEL)` on an **attached** widget | brush, geometry and `SizeConstraint` all written inline | **changed.** Geometry moves to the drain's layout phase, which `wasamo_set_property` runs synchronously at the tail of the same ABI call (`drain_if_outermost`) because `size_affecting` already lists this property. No frame is presented between the brush write and the geometry write — Composition commits at the dispatcher tick, not per property set. Verified by frame: `labelupdate-clicked` and `-clicked-twice` are pixel-identical before and after |
 | 5 | `set_property(PROP_BUTTON_LABEL)` on an **unattached** widget | geometry written eagerly | **changed.** `mark_layout_dirty_for` is a no-op when the widget belongs to no window, so no layout pass runs and the label Visual keeps its previous geometry until the subtree is attached — at which point `set_root`'s first pass writes it. Self-healing, and the widget is by definition not on screen in the interval |
-| 6 | **The ABI structural mutations** — `wasamo_widget_insert_child`, `wasamo_widget_append_child`, `wasamo_widget_replace_child` (**all three**; the row originally named only `insert_child` — Codex review finding R-2) | inserted/appended/replacing button's label was placed; the button itself was not | **pre-existing class, not introduced here.** None of the three marks layout dirty and none drains, so the new node's *own* Visual already had no offset or size until the next layout pass. T3 makes the label match the button instead of floating at (16, 8) over a zero-sized background. The class is closed only by the next `WM_SIZE` or size-affecting property write |
-| 6b | **`lib.rs::window_add_widget`** — the Rust-native direct-hosting entry (**Codex review finding R-1; this row was missing entirely**) | the label carried constructor geometry `(16, 8)` / `(lw, lh)` while the background carried none, so a caller who sized the background by hand got a rendered label | **changed, and this is a real behaviour regression on a public API.** The function attaches a Visual to `window.root.Children()` and deliberately runs **no layout and no sync** (its own doc says so), so a Button-family widget added through it now keeps `Size = (0, 0)` on its label **permanently** — not until the next pass, because there is no pass. The pre-change behaviour was itself half-formed (label placed, background not), but "half-formed" and "no label" are not the same thing. Not fixed by reintroducing a construction-time write, which would destroy the one-pass invariant this task exists to create. Disposition below |
+| 6 | **The tree-mutation API** — `WidgetNode::append_child` / `insert_child` / `replace_child`, all `pub`, plus their ABI wrappers `wasamo_widget_append_child` / `_insert_child` / `_replace_child` (**re-scoped twice: the row first named only `insert_child`, then only the ABI wrappers — review findings R-2 and, on re-review, R-1's first half**) | the new button's label was placed; the button itself was not | **pre-existing class, not introduced here.** None of these marks layout dirty and none drains, so the new node's *own* Visual already had no offset or size until the next layout pass. T3 makes the label match the button instead of floating at (16, 8) over a zero-sized background. The class is closed only by the next `WM_SIZE` or size-affecting property write. **The boundary is the `WidgetNode` method, not the ABI wrapper** — `WindowState::root_widget` is `pub`, so `window.root_widget.as_mut().unwrap().append_child(button)` reaches the same code with no ABI hop |
+| 6b | **Direct Composition hosting** — `lib.rs::window_add_widget`, and equivalently any caller doing `window.root.Children()?.InsertAtTop(&widget.visual.cast()?)` by hand, since `WindowState::root` and `WidgetNode::visual` are both `pub` (**review finding R-1; this row was missing entirely, and its scope was widened on re-review**) | the label carried constructor geometry `(16, 8)` / `(lw, lh)` while the background carried none, so a caller who sized the background by hand got a rendered label | **changed, and this is a real behaviour regression on a public API.** The widget never enters `root_widget`, so it is not merely unlaid-out — **no later pass exists**, and the label keeps `Size = (0, 0)` permanently. The pre-change behaviour was itself half-formed (label placed, background not), but "half-formed" and "no label" are not the same thing. Not fixed by reintroducing a construction-time write, which would destroy the one-pass invariant this task exists to create. Disposition below |
 | 7 | `ir_loader` conditional / `for`-range mutations | as above | **preserved.** Both sites call `mark_layout_dirty_for` after the mutation, so the drain's layout phase places the new subtree. Exercised by the `gallery-lightbox` frame, whose three buttons are constructed *after* the tree was attached |
 | 8 | Visual parenting / Z-order (`bg_container.Children().InsertAtTop`) | at construction | **unchanged** — only the two geometry writes moved |
 | 9 | The node's `SizeConstraint::Fixed` pair | derived from `(lw, lh)` in both writers | **unchanged**, and still per axis (F-10): `Fixed(lw + BUTTON_PAD_H * 2.0)` and `Fixed(lh + BUTTON_PAD_V * 2.0)` in each |
@@ -979,23 +979,40 @@ at the frame edge cannot contribute):
 | `labelupdate-clicked` | the relocated label-update write, once | **0** of 224,480 |
 | `labelupdate-clicked-twice` | the same write a second time | **0** of 224,480 |
 
-**Correction (Codex review finding R-4):** these three frames were
-described as covering "three different label widths". They do not.
-`Counted 0 times` / `1 times` / `2 times` differ in glyph but **not in
-measured width** — the digits are the same advance — so the Button is the
-same width in all three. The consequence is concrete: an implementation
-that wrote `btn.label_size = (btn.label_size.0, lh)` — keeping the stale
-width — would keep two writers, keep the statement-group shape, and pass
-every frame in this set, and would only smear when a label crosses from
-one digit to two. **There is no positive control for that mutation.** The
-landed source is `(lw, lh)` and is correct; what is missing is evidence,
-and it is recorded as missing rather than papered over.
+**Correction, and then closure (review finding R-4).** The set originally
+started its counter at 0, and these three frames were described as
+covering "three different label widths". They did not:
+`Counted 0 / 1 / 2 times` differ in glyph but **not in measured width** —
+the digits share an advance — so the Button was the same width in all
+three, and an implementation writing
+`btn.label_size = (btn.label_size.0, lh)` would have kept two writers,
+kept the statement-group shape, and passed every frame.
+
+**The evidence UI now starts at 9**, so the click crosses 9 → 10, the
+label gains a digit, and the Button's measured width moves. Mutation
+**N4** confirms the set reacts: with the stale-width write in place the
+counting Button renders **completely blank** (`n4-stale-width-labelupdate.png`),
+and both `labelupdate-initial` and `-clicked` go red — the initial frame
+too, because the bound label is written through `update_button_label`
+once at registration, when the constructed label was still empty. The
+hole R-4 identified is closed rather than only recorded.
+
+**The height component is not closed, and cannot be by this set.**
+`measure` returns `DWRITE_TEXT_METRICS::height` for an unconstrained
+single-line layout, so `lh` is a font-metric constant for a given
+`TypographyStyle` — and `label_style` has no setter. A mutation writing
+`(lw, btn.label_size.1)` therefore produces an identical frame here.
+It is **not** unreachable in principle: a label whose script changes can
+draw a fallback font with different line metrics, and multi-line labels
+or a future style setter would make it ordinary. Recorded as a stated
+gap with that re-trigger rather than closed with a mutation that cannot
+be made to fire.
 
 **What the pair does and does not discriminate**, stated rather than
 implied. It **does** show that the relocated write lands, for both widget
 kinds, on all three paths that reach a Button (first layout, drain
-re-layout, post-attach construction), and at three different label widths
-on the update path — N1 and N2 are the proof that a frame in this set goes
+re-layout, post-attach construction), and across a label-width change on
+the update path — N1 and N2 are the proof that a frame in this set goes
 red when it should. It **does not** show that the *old* writes are gone:
 an implementation that added the sync arm and left the construction
 writes in place would produce exactly these frames. That half is closed
@@ -1100,7 +1117,7 @@ correct:
 | §T6 | **corrections — F-20** (the walk can read `label_size` and must not become a second measurer) and **F-21** (workspace build before the rendering gate) |
 | §T7 | **correction — F-18**: the clip-inset row inherits the Box-vs-ZStack error that F-2 corrected only on the DD-002 side |
 | §T8 | no additional correction. T3 adds no test and no assertion surface; `label_visual` stays private, so T8's Visual-ratio assertions remain node-level as written |
-| §T9 | **correction — F-21**: the three-host rebuild is the artifact for DD-001's boundary claim, and a host-package build would run it against a pre-T9 DLL |
+| §T9 | **correction — F-21**: the three-host rebuild is the artifact for DD-001's boundary claim, and a host-package build would run it against a DLL relinked around pre-T9 object code |
 | §T10 | **correction — F-21**, and a confirmation: T3's capture script and its click-point derivation are reusable, and the aware/unaware `MoveWindow` / `GetWindowRect` asymmetry T3 worked through is the same thing R-7 already assigns to T10 |
 | §T11 | no additional correction — owner-executed, unaffected |
 | §T12 | **correction — F-21's [AGENTS.md](../../../../AGENTS.md) half**, folded into the existing F-5 correction item rather than added as a second bullet |
@@ -1159,9 +1176,13 @@ Six findings, five of them in tasks T3 never touched.
   extent and does not re-measure; if a future change makes `measure`
   scale-dependent, that is the already-recorded re-trigger and both this
   and T7's step ordering are re-derived together.
-- **F-21 — a host-package build does not rebuild the runtime.** Recorded
-  in full above. *Disposition:* [plan.md](./plan.md) §T6, §T9, §T10, §T12;
-  preamble R-1b; [handoff.md](./handoff.md).
+- **F-21 — a host-package build relinks the DLL around stale object
+  code.** Recorded in full above, with the mechanism corrected at the
+  independent review: cargo *does* recompile the runtime and *does*
+  relink `wasamo.dll`; the stale input is the **uplifted** rlib that
+  `wasamo-dll/build.rs` whole-archives, which makes this F-5's root cause
+  with the opposite symptom. *Disposition:* [plan.md](./plan.md) §T6,
+  §T9, §T10, §T12; preamble R-1b; [handoff.md](./handoff.md).
 - **F-22 — the phase-wide "trap #3 non-applicable" is falsified.**
   [preamble.md](./preamble.md) §Implementation gates records trap #3 as
   non-applicable for the phase, "no parallel vectors or derived indices
@@ -1255,7 +1276,7 @@ the reviewer's word.
 
 | # | Finding | Verified | Disposition |
 |---|---|---|---|
-| R-1 | **major** — `lib.rs::window_add_widget` runs no layout and no sync, so removing the constructor geometry leaves a Button-family label permanently at `Size = (0, 0)` on that path | **Confirmed.** The function attaches a Visual to `window.root.Children()` and returns; its own doc names "no layout, no hit-test" as the point. The enumeration missed it because the enumeration walked *layout* paths, and this is the one attach path that deliberately is not one | Enumeration row **6b** added; the misleading `button_family` comment corrected (it claimed construction happens in the IR loader, which is not the only constructor); `window_add_widget`'s doc states the consequence. **Not** fixed by reintroducing a construction-time write — that would destroy the one-pass invariant the task exists to create. The API's future is an owner decision, below |
+| R-1 | **major** — `lib.rs::window_add_widget` runs no layout and no sync, so removing the constructor geometry leaves a Button-family label permanently at `Size = (0, 0)` on that path | **Confirmed.** The function attaches a Visual to `window.root.Children()` and returns; its own doc names "no layout, no hit-test" as the point. The enumeration missed it because the enumeration walked *layout* paths, and this is the one attach path that deliberately is not one | Enumeration row **6b** added; the misleading `button_family` comment corrected (it claimed construction happens in the IR loader, which is not the only constructor); `window_add_widget`'s doc states the consequence. **Not** fixed by reintroducing a construction-time write — that would destroy the one-pass invariant the task exists to create. **Widened on re-review** (see the second-round table below) and the API's disposition taken as T3's own |
 | R-2 | **minor** — enumeration row 6 named only `wasamo_widget_insert_child`; `append_child` and `replace_child` are the same class | **Confirmed** at `abi.rs:388` and `abi.rs:491`: neither marks layout dirty, neither drains | Row 6 rewritten to name all three |
 | R-3 | **minor** — the "preserved" verdicts hold only when layout succeeds; `run_layout*` propagates the error with `?` before `sync_visuals`, and both callers discard the `Result` | **Confirmed** by reading `run_layout` / `run_layout_as_window_root` and the two `let _ = …` call sites | Enumeration row **14** added, stating the condition the other rows assumed |
 | R-4 | **minor** — the three label-update frames were described as "three different label widths"; the widths are identical | **Confirmed.** `Counted 0/1/2 times` differ in glyph, not in advance width. A mutation keeping the stale width would pass the whole set | The claim is corrected in place, and the **missing** positive control is recorded as missing rather than papered over |
@@ -1306,4 +1327,47 @@ itself. What an independent review of this shape still could not supply
 is a mutation nobody thought of — R-4 is the case in point: the reviewer
 found the missing control by reading the evidence *description*, not by
 running a mutation the assistant had not designed.
+
+### Second review round (Codex, 2026-07-28) — delta review of the disposition
+
+Seven findings: one major, four minor, two nits. **Every one is real**,
+re-verified against the source before acceptance. The first round's
+lesson repeated in a sharper form: the corrections were right where they
+were applied and **incomplete in where they were applied**.
+
+| # | Finding | Verified | Disposition |
+|---|---|---|---|
+| S-1 | **major** — rows 6 / 6b counted the *ABI wrappers* and `window_add_widget`, missing direct Rust-native mutation and direct Composition hosting | **Confirmed.** `WindowState::root_widget`, `WindowState::root` and `WidgetNode::visual` are all `pub`, and `append_child` / `insert_child` / `replace_child` are `pub fn` on `WidgetNode` — so the ABI is not the boundary | Rows 6 and 6b re-scoped **by mechanism instead of by wrapper**: row 6 is the tree-mutation API with the ABI functions as one caller; row 6b is direct Composition hosting, of which `window_add_widget` is the convenience form. This is the fourth path class the re-framed enumeration was asked for |
+| S-2 | **minor** — the `button_family` comment ("every path that puts a widget on screen as content runs a layout pass") contradicts row 6 | **Confirmed** — the comment was written before rows 6 / 6b / 14 existed | Comment rewritten to name which paths do and do not, and to name the omission (`mark_layout_dirty_for`) that reproduces the defect |
+| S-3 | **minor** — F-21's old mechanism survives in the retrospective's learnings and share-forward sections and in this log's re-audit bullet | **Confirmed** at three sites | All three corrected. **This is F-18's own failure class, committed by the correction to F-18**: the fix was applied to the documents that *carried the finding* and not to the documents that *summarised* it |
+| S-4 | **minor** — "three different label widths" survives in the pair-analysis paragraph, directly after the paragraph withdrawing it | **Confirmed** | Corrected |
+| S-5 | **minor** — the R-4 gap statement covers width and understates the height component | **Confirmed** — `(lw, stale_height)` also passes the set | Gap restated for both components. The **width** half is now **closed** by evidence (below); the **height** half is recorded with the reason it cannot be closed by this set and its re-trigger |
+| S-6 | **nit** — "not rasterized to screen" misdescribes the mechanism; the label *is* rasterized and brushed, and is not composited because the Visual is zero-sized | **Confirmed** — `draw_text` and `CreateSurfaceBrushWithSurface` both run at construction | Doc corrected. The misdescription would have sent a reader to re-create the surface, which changes nothing |
+| S-7 | **nit** — the R-1 row still called the API's future an owner decision after the text below settled it | **Confirmed** | Row corrected |
+
+**The width gap is closed, not just recorded (S-5).** The evidence `.ui`
+now starts its counter at **9**, so the click crosses 9 → 10 and the
+label gains a digit; mutation **N4** (`label_size = (label_size.0, lh)`)
+turns the counting Button completely blank and reddens two frames. Both
+sets were re-captured on their respective builds and all six pairs are
+again zero.
+
+**A pre-existing defect the new evidence exposed, recorded as F-23.**
+In every frame after a click, the Grid-stretched Button **disappears** —
+in the pre-change build too, so it is not T3's and the pairs stay zero.
+The cause is a real inconsistency between the phase's two re-layout
+paths: `window::set_root` and the `WM_SIZE` arm call
+`run_layout_as_window_root`, which forces the root `LayoutNode` to
+`Fill` / `Fill`, while [`emit::flush_layout`](../../../../wasamo-runtime/src/emit.rs)
+— the reactive drain's layout phase — calls the plain `run_layout`,
+which does not. A root `VStack` (`Shrink`) holding a `Grid`
+(`Fill` / `Fill`) therefore lays out correctly on resize and **collapses
+the Grid to zero height on any property write**. That is exactly the
+M3-Phase 4 T6 failure `run_layout_as_window_root`'s doc comment describes,
+still live on the drain path. *Not fixed here* — T3 must stay
+behaviour-identical, and this is a behaviour change with its own
+evidence needs. *Disposition:* recorded in [handoff.md](./handoff.md) and
+raised with the owner, with the recommendation that it land in **T5**,
+which already edits that call site for the inbound DIP conversion (audit
+row 2b), as its own commit with its own before/after frames.
 

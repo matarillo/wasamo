@@ -828,10 +828,16 @@ impl WidgetNode {
         // are written by `sync_visuals`, alongside every other Composition
         // geometry write in the runtime.
         //
-        // The consequence is that a Button-family widget renders its label only
-        // once a layout pass has run over it. Every path that puts a widget on
-        // screen as *content* does run one; `lib.rs::window_add_widget` does
-        // not, by design, and is documented accordingly.
+        // The consequence is that a Button-family widget shows its label only
+        // once a layout pass has run over it, and **not every path that puts a
+        // widget on screen runs one**. `window::set_root` and the `WM_SIZE` arm
+        // do; the tree-mutation API (`append_child` / `insert_child` /
+        // `replace_child`, whether called directly or through their ABI
+        // wrappers) does not, and neither does `lib.rs::window_add_widget`.
+        // Those paths rely on a later `WM_SIZE` or size-affecting property
+        // write, except `window_add_widget`, which has no later pass at all.
+        // A new mutation entry that omits `emit::mark_layout_dirty_for` will
+        // reproduce the missing label.
         use windows::core::Interface;
         let label_vis: Visual = label_visual.cast()?;
         let bg_container: ContainerVisual = bg_visual.cast()?;

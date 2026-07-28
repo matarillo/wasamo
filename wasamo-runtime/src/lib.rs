@@ -108,11 +108,12 @@ pub fn get_text_renderer() -> &'static TextRenderer {
 /// Since M4-Phase 1 that also means a **Button-family widget shows no label
 /// through this path**: the label Visual's offset and size are written by
 /// `sync_visuals`, so a widget that never reaches a layout pass keeps the
-/// Composition default of `Size = (0, 0)` and the label is not rasterized to
-/// screen. Before that change the label happened to carry constructor-time
-/// geometry while its background did not, so this path rendered a
-/// half-positioned widget. Use [`window_set_root`] for anything that should
-/// lay itself out.
+/// Composition default of `Size = (0, 0)`. The label surface and its brush
+/// *are* created at construction — the label is rasterized, just never
+/// composited, so re-creating the surface does not help. Before that change
+/// the label happened to carry constructor-time geometry while its background
+/// did not, so this path rendered a half-positioned widget. Use
+/// [`window_set_root`] for anything that should lay itself out.
 pub fn window_add_widget(window: &WindowState, widget: &WidgetNode) -> windows::core::Result<()> {
     use windows::core::Interface;
     use windows::UI::Composition::Visual;

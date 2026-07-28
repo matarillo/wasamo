@@ -3,7 +3,7 @@ component LabelUpdate inherits Window {
     backdrop: mica
     theme: system
 
-    state count: i32 = 0
+    state count: i32 = 9
 
     VStack {
         spacing: 12px

@@ -22,6 +22,12 @@
 #   labelupdate-clicked bound to state), before and after a click. This is the
 #                       only coverage of the second relocated write site —
 #                       no shipped example binds a Button's text.
+#
+# The evidence .ui starts its counter at 9 on purpose, so the first click
+# crosses 9 -> 10 and the label gains a digit. At 0 -> 1 -> 2 the digits have
+# the same advance width, the Button never changes size, and an implementation
+# that wrote a stale width into `label_size` would pass every frame in the set
+# (independent review finding R-4).
 param(
   [Parameter(Mandatory = $true)][ValidateSet("before", "after")][string]$Tag
 )
