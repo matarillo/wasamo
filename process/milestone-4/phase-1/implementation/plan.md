@@ -853,7 +853,26 @@ recorded; any finding triaged to a task or to
 
 Owned by the **phase-end batch**, not by T12 — these stay `[ ]` at T12
 close: the CI run id, `handoff.md` finalization, the phase
-retrospective, and [preamble.md](./preamble.md)'s `status` flip.
+retrospective, [preamble.md](./preamble.md)'s `status` flip, and:
+
+- [ ] **File the vision decision record for the "show it goes red"
+      obligation** (owner decision on the T3 retrospective, recorded in
+      [log.md](./log.md)). Scope as decided: **mandatory for pure-logic
+      unit tests only** — a new rounding-rule / unit-conversion /
+      boundary-condition surface ships with at least one deliberately
+      wrong implementation shown to turn its tests red — and the wider
+      "any green / identical / passing observation" form is **explicitly
+      not** codified. It changes trap #4's close artifact in
+      [implementation-gates.md](../../../procedures/implementation-gates.md)
+      from "the test name per added branch" to "the test name per added
+      branch, plus the wrong implementation it was shown to catch";
+      trap #7's artifact is unchanged. Per
+      [AGENTS.md §Process rule lifecycle](../../../../AGENTS.md) the SSOT
+      edit lands in the **same commit batch** that flips the record to
+      `Accepted`, which is why no task before this one touches
+      `implementation-gates.md`. Evidence to cite: T2's seven-mutation
+      table and T3's three-mutation frame set, the second of which is the
+      argument for *not* widening the rule.
 
 **Start gate:** trap #3's documentation analogue (do not restate spec or
 handoff content in derived prose — cite the owning document) and trap

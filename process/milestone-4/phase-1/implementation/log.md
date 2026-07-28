@@ -1147,3 +1147,58 @@ commit as this entry. F-17 → preamble review-lane table (landed at the
 start gate); F-18 → §T7; F-19 → §T5; F-20 → §T6; F-21 → §T6, §T9, §T10,
 §T12, preamble R-1b, handoff; F-22 → preamble §Implementation gates.
 
+### Owner decisions on the T3 retrospective's open questions (2026-07-28)
+
+All three answered; recorded here so no later task re-opens them.
+
+1. **Review lane (F-17) — discharge the full independent review through
+   another agent.** Option (a): Codex reviews the branch against a
+   written brief, rather than the owner reading it or the assistant's own
+   audit standing in as a substitute. The merge gate is **blocked until
+   that review is complete and its findings are dispositioned**;
+   remediation commits carry `Reviewed-by: codex <codex@openai.com>`
+   alongside the Claude trailer, and the doc gates plus the retrospective's
+   commit list are re-run and updated against the final branch state.
+2. **The "show it goes red" discipline — codify option A only, leave the
+   wider form to judgment (option C), and file the vision decision record
+   at Phase 1 close.** The scope decided:
+   - **Mandatory, once the record lands: pure-logic unit tests.** A new
+     rounding-rule / unit-conversion / boundary-condition surface ships
+     with at least one deliberately wrong implementation shown to turn
+     its tests red. This is T2's mutation table promoted from "what T2
+     happened to do" to an obligation, and it touches trap #4's close
+     artifact — "the test name per added branch" becomes "the test name
+     per added branch, plus the wrong implementation it was shown to
+     catch".
+   - **Not mandated: the wider form.** T3 measured that the same
+     discipline works on a rendered frame and that it found a defect in
+     the evidence pipeline rather than in the code (F-21), but one
+     instance is not enough to put a rebuild-and-recapture cycle on every
+     GUI gate. Trap #7's close artifact is **unchanged**, and T6 / T10
+     inherit **no new obligation** — the technique stays recommended and
+     recorded, not required.
+   - **Timing.** The record is filed at **Phase 1 close**, not now.
+     Under [AGENTS.md §Process rule lifecycle](../../../../AGENTS.md) a
+     structural change updates its SSOT in the same commit batch that
+     flips the record to `Accepted`, so
+     [implementation-gates.md](../../../procedures/implementation-gates.md)
+     is **deliberately left untouched by T3**. Recording the decision now
+     and the edit later is the point: the scope is fixed while the
+     evidence is fresh, and the SSOT never carries a rule whose record is
+     still open. Owner of the filing: the **phase-end batch**, listed in
+     [plan.md](./plan.md) §T12.
+   - **In-phase consequence: none.** T2 was the phase's only pure-logic
+     surface and already discharged the obligation ahead of it existing.
+     A later task that introduces pure logic picks it up.
+3. **Evidence scaffolding stays under
+   [evidence/](./evidence/).** Confirmed with the standing correction
+   that **no `examples/` file was modified** — the capture swaps the
+   compiled `.uic` at the absolute path `gallery-rust`'s `build.rs` baked
+   into the executable, which lives under `target/` and is a gitignored
+   build product. The residue worth naming: a hard kill between the swap
+   and the `finally` restore would leave the evidence IR in place, and
+   cargo will not regenerate it unless `gallery.ui` changes — so a later
+   gallery capture would silently photograph the wrong UI. Hardening the
+   script to detect and restore a leftover backup **at start** is offered
+   and awaiting the owner's call; it is not in the reviewed diff.
+
