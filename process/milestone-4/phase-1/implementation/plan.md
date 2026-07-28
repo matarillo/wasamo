@@ -827,6 +827,20 @@ sequencing thesis does not defer all scaled-path risk to the end
       implementation from one treating physical pixels as logical —
       which would change the DIP results and, visibly, the WrapPanel
       line count.
+      **Hold the *client* extent constant across the change, and say so**
+      (T4 finding F-28, and the T4 independent review's finding R-2 that
+      the correction had not reached this bullet). "Unchanged DIP layout
+      results" is exactly true only while the DIP extent handed to layout
+      is exactly preserved, and the **outer** rectangle preserving its
+      logical size does not preserve the client one: measured at T4, the
+      non-client frame scales by its own DPI-indexed metrics, so an
+      800 × 600 DIP outer request yields 784 × 561 DIP of client at 96
+      DPI and 785.6 × 562.4 DIP at 120 DPI. T8 synthesises the message
+      and therefore **chooses the rectangle**, so it can preserve the
+      client extent and assert equality rather than a tolerance — which
+      is the stronger test and the one that isolates the handler. What it
+      must not do is assert exact equality against an
+      OS-shaped rectangle and call that the same claim.
 - [ ] Exercise at 125% / 150% / 200% — but **not as three equal probes**
       (T2 finding F-13). At a power-of-two factor the multiplication is
       exact, so convert-once and convert-twice agree everywhere and a
@@ -839,7 +853,12 @@ sequencing thesis does not defer all scaled-path risk to the end
       a synthesised `WM_DPICHANGED` proves the handling path; it does
       **not** prove that crossing a real monitor boundary delivers the
       same message with a usable suggested rectangle. That half is
-      T11's.
+      T11's. **A second limit belongs beside it**, from the bullet above:
+      the exact-invariance assertion holds because T8 preserves the
+      client extent, and the OS's suggested rectangle preserves the outer
+      one instead — so on the real path the DIP layout input moves by a
+      DIP or two and invariance is approximate. T11 is where that shows,
+      and it must not read as a failure.
 - [ ] Follow the established `0x80070005` guard pattern — **fail, not
       skip**, on a runner without Compositor capability. Any new guard
       must be shown to fire on an environment that actually lacks the
@@ -947,8 +966,12 @@ are in
       measured, an 800 × 600 DIP request is 1000 × 750 physical at 125%,
       while the *client* area goes from 784 × 561 DIP at 100% to
       982 × 703 physical = **785.6 × 562.4 DIP** at 125%, because the
-      non-client frame is 8 px per side at 96 DPI and 9 px at 120 DPI and
-      therefore scales by its own rounded metric rather than by `s`.
+      non-client frame scales by its own **DPI-indexed system metrics**
+      rather than by `s` — decomposed with `GetSystemMetricsForDpi` at
+      the T4 review: width is `2 × (SM_CXSIZEFRAME + SM_CXPADDEDBORDER)`
+      = 16 at 96 DPI and 18 at 120 DPI, height adds `SM_CYCAPTION` for
+      39 and 47. (Those are the probe machine's theme metrics; the
+      invariant is that they are DPI-indexed, not the specific numbers.)
       Layout receives the client extent, so a correct implementation lays
       out into ~1.6 DIP more width at 125% and a wrap position near a
       line-break boundary may legitimately move. A control that demands

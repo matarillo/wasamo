@@ -1671,6 +1671,18 @@ correction.* Queries over `wasamo-runtime/src`, `wasamo-dll`,
 `bindings/rust/src`, `wasamoc/src`, `examples`:
 `WindowState \{|CreateWindowExW|GetWindowRect|SetWindowPos|GetClientRect|window::create|GetDpiFor`.
 
+**The query was too narrow to be the forcing artifact it claims to be**
+(T4 independent review finding R-8): it names the APIs this task
+*happens to use* and so cannot exclude the ones it does not —
+`MoveWindow`, `AdjustWindowRect` / `AdjustWindowRectExForDpi`,
+`SetWindowPlacement`, `DeferWindowPos`, `GetWindowPlacement`. Re-run with
+those terms added over the whole repository: **no hit in any runtime
+source**, so the table's conclusion is unchanged and the reviewer reached
+it independently. The lesson is about the artifact rather than the
+result — an audit query assembled from the diff cannot falsify itself,
+and the reviewer's extension is what made "there is no second path" a
+checkable statement instead of a restatement.
+
 | Site | Classification | As landed |
 |---|---|---|
 | `abi.rs:335` `wasamo_window_create` → `window::create` | must be covered | covered — the correction is inside the callee, so the ABI function is untouched |
@@ -1706,7 +1718,7 @@ from the ADR's wording: a throwaway probe (below) instrumented
 | 7 | The root Visual's `SetRelativeSizeAdjustment(1, 1)` (audit row 8) | **unchanged**, and now also *unaffected by ordering*: the correction runs before `create_desktop_window_target`, so the target is attached to a window that is already the right size rather than resized under it |
 | 8 | Window **position** | **unchanged** — `SWP_NOMOVE`. Measured: the captured windows sat at `(192,192)`, `(256,256)` and `(33,33)` across the three probe runs, i.e. wherever `CW_USEDEFAULT` put them, never `(0,0)` |
 | 9 | Window **Z-order / activation** | **unchanged** — `SWP_NOZORDER \| SWP_NOACTIVATE`, and the window is not yet shown |
-| 10 | The **client** extent | changes with the outer rectangle, and **not by the same factor**. Measured at 125%: outer 800 → 1000 DIP-exactly, client 784 × 561 → 982 × 703 physical, which is 785.6 × 562.4 DIP. The non-client frame is 8 px per side at 96 DPI and 9 px at 120 DPI, so it scales by its own rounded metric. See F-28 — this is a real qualification on T10's control B |
+| 10 | The **client** extent | changes with the outer rectangle, and **not by the same factor**. Measured at 125%: outer 800 → 1000 DIP-exactly, client 784 × 561 → 982 × 703 physical, which is 785.6 × 562.4 DIP. The non-client frame scales by its own **DPI-indexed system metrics**, not by `s`. *(Mechanism corrected at the independent review, finding R-6: the original entry derived "8 px per side at 96 DPI, 9 px at 120" from the width alone, which does not account for the height at all. `GetSystemMetricsForDpi` on the probe machine gives `SM_CXSIZEFRAME` 4 / 4, `SM_CXPADDEDBORDER` 4 / 5, `SM_CYCAPTION` 23 / 29 at 96 / 120 DPI, so width is 2 × (4 + 4) = 16 → 2 × (4 + 5) = 18 and height is 2 × (4 + 4) + 23 = 39 → 2 × (4 + 5) + 29 = 47 — both matching the measured rectangles exactly. Re-measured independently here, not taken on the reviewer's word. These are this machine's theme metrics; the invariant is that they are DPI-indexed and independent of `s`.)* See F-28 — this is a real qualification on T10's control B |
 | 11 | The **requested DIP size** | **not retained.** `create` keeps the scale and not the pair, so there is no second representation of the window's logical size to drift. This is the trap-#3 exclusion the start gate promised to check |
 | 12 | Reactive drain / signal registry / binding state | **unchanged** — no property is written, no node is created, nothing is enqueued. Window creation does not enter the drain and this task does not change that |
 | 13 | Behaviour at `s = 1` | **the exact identity, measured.** Probe steps 3 and 6, same run: window `800x600` client `784x561` before the correction and `800x600` / `784x561` after it, with the correction target printed as `(800, 600)` |
@@ -1945,8 +1957,9 @@ Seven findings, six of them in tasks T4 never touched.
   rectangle the correction scales exactly: 800 × 600 DIP → 1000 × 750
   physical at 125%. The **client** rectangle does not follow by the same
   factor. Measured: 784 × 561 at 96 DPI and 982 × 703 at 120 DPI, i.e.
-  785.6 × 562.4 DIP — because the non-client frame is 8 px per side at 96
-  DPI and 9 px at 120 DPI and scales by its own rounded metric. Layout
+  785.6 × 562.4 DIP — because the non-client frame scales by its own
+  DPI-indexed system metrics rather than by `s` (decomposition in the
+  side-effect enumeration row 10, corrected at the review). Layout
   receives the client extent, so a correct implementation lays out into
   about 1.6 DIP more width at 125%, and a wrap position sitting near a
   line-break boundary may legitimately move. [plan.md](./plan.md) §T10
@@ -2065,3 +2078,103 @@ quotation — across [plan.md](./plan.md), [preamble.md](./preamble.md),
   §Verification closure table, which maps evidence items to tasks and
   needs no change: F-26 is about which task closes a row, F-29 about how
   a task reaches a value.
+
+### Independent review disposition (Codex, 2026-07-29)
+
+The full independent review the lane raise (F-25) required. Eight
+findings: three major, four minor, one nit. **Four of the eight
+contradict a claim this log made**, one of them a documented arithmetic
+contract the implementation did not keep. Each was re-verified against
+the source or re-measured before being accepted; none was taken on the
+reviewer's word, and one measurement (R-6's system metrics) was
+reproduced independently rather than quoted.
+
+| # | Finding | Verified | Disposition |
+|---|---|---|---|
+| R-1 | **major** — the `round` contract is not implemented for arbitrary DPI: `from_dpi` rounds the factor into `f32` first, and widening the product to `f64` cannot recover what construction discarded. Witness `dpi = 100, dip = 804`: exactly 837.5, implementation 837 | **Confirmed, and the claim was wrong.** Reproduced the witness, then swept `dpi` 1–600 × `dip` 1–4000 against exact `i128` rational rounding: **21,190 disagreements of 2.4M, all of them on inputs whose true product is an exact half, worst error one pixel — and zero at any of the ten standard Windows scalings**, whose factors are all exact in `f32`. Custom scaling reaches the rest | `DipScale` now **retains the DPI and derives the factor**; `window_size_to_physical` computes `MulDiv` in `i64`. Every `f32` conversion is bit-identical (`factor()` is the expression the field was initialised with). Two tests added — the reviewer's witness plus a property check against `i128` over eleven awkward DPIs. See the two withdrawn claims below |
+| R-2 | **major** — F-28's correction reached [plan.md](./plan.md) §T10 but not §T8, not [preamble.md](./preamble.md)'s verification-closure table, and not DD-003's three statements of exact layout invariance | **Confirmed.** The three-form search recorded above chased the *tile-count* claim and the *outer-vs-client* claim, and stopped at the documents phrasing them as **evidence**; it never asked which documents assert the **property** that F-28 qualifies. DD-003 §Context ("does not re-decide a single layout number"), its enumeration row 4 and its §Verification all do | In-phase documents corrected: §T8 now holds the **client** extent constant and says why that is the stronger test, §T8's stated-limit bullet gains the real-path counterpart, and the preamble's item (2) and positive-control discipline carry the qualification. **The ADR set is left untouched** and the divergence is recorded — raised to the owner below, because whether an Accepted DD's property statement needs a successor is not this task's call |
+| R-3 | **major** — the unconditional `SetWindowPos` is an observable departure from DD-003 I1's "if the scale is not 1", not an implementation detail; the retrospective's claim that the recommendation was unchanged is wrong | **Confirmed on the reading, and the retrospective sentence is withdrawn.** This log's own probe shows two messages dispatched at `s = 1` that a guarded implementation would not send, so the difference is observable in the runtime's own message stream | The retrospective is corrected. **The implementation is left unconditional pending an owner decision** — raised below with the argument on both sides, rather than settled in an implementation log as it was |
+| R-4 | **minor** — `SetWindowPos`'s failure is swallowed, against DD-003's "log **and** survive"; the "no logging facility" reason is false | **Confirmed, and the reason was wrong.** Sixteen `wasamo:`-prefixed `eprintln!` diagnostics exist across `handler.rs`, `ir_loader.rs` and `reactive.rs` | A diagnostic naming the requested DIP size, the physical size that was not realised, the scale, and the surviving state |
+| R-5 | **minor** — "the nested dispatch cannot reach runtime state" over-generalises: `WM_DESTROY` and `WM_ERASEBKGND` are handled above the null check and the first calls `PostQuitMessage` | **Confirmed** by reading `wnd_proc` — and the narrow claim (a half-built `WindowState` is unreachable) is what the placement actually needs | Narrowed in the source comment, [log.md](./log.md) and §T4: the two arms above the check are safe because neither is in the **measured** message set, which is a fact about the set and not about the pointer |
+| R-6 | **minor** — F-28's mechanism explains the width and not the height | **Confirmed, and re-measured here rather than accepted.** `GetSystemMetricsForDpi` on the probe machine: `SM_CXSIZEFRAME` 4 / 4, `SM_CXPADDEDBORDER` 4 / 5, `SM_CYCAPTION` 23 / 29 at 96 / 120 DPI, so width is 16 → 18 and height is 2 × (4 + 4) + 23 = 39 → 2 × (4 + 5) + 29 = 47. Both match the measured rectangles exactly | Enumeration row 10, [handoff.md](./handoff.md) and §T10 restated with the decomposition, and bounded to this machine's theme metrics — the invariant being that the metrics are DPI-indexed, not the numbers |
+| R-7 | **minor** — "nothing is clipped by a window half a pixel small" is too strong; the `GetClientRect` readback guarantees layout sees the realised extent, not that a fixed-size subtree fits | **Confirmed** | `window_size_to_physical`'s doc now claims only what the readback supports: the quantity carries no allocate-at-least-as-much obligation, which is the asymmetry the rejection of `ceil` rests on, and *not* that clipping is impossible |
+| R-8 | **nit** — the audit query names the APIs the task uses and so cannot exclude `MoveWindow`, `AdjustWindowRect*`, `SetWindowPlacement`, `DeferWindowPos` | **Confirmed as a defect in the artifact**, not in the conclusion: re-run with those terms over every `.rs` in the repository, **zero hits** | The recorded query is widened, with the lesson stated — an audit query assembled from the diff cannot falsify itself |
+
+**Two claims withdrawn outright, both from the rounding decision.**
+
+1. **"Nearest is what the OS uses to compute the `WM_DPICHANGED`
+   suggested rectangle."** Withdrawn. Microsoft's `WM_DPICHANGED`
+   contract says only that `lParam` carries a scaled suggested rectangle;
+   it does not specify `MulDiv`, and the reviewer is right that the
+   `MulDiv` reference on that page is a different example. This was
+   flagged as unverified in the review brief and it did not survive.
+   **The decision does not fall with it**: ground (a) — a window
+   rectangle carries a logical-size fidelity contract, not an allocation
+   contract, so the error is two-sided and nearest minimises it — stands
+   on its own, and R-7 narrows it without removing it. What is gone is
+   the second, independent reason; the remaining claim is the weaker and
+   true one that the implementation now computes `MulDiv`'s documented
+   semantics, whatever the OS computes.
+2. **"At 100% the conversion is the exact identity for every `i32`,
+   because the arithmetic widens to `f64`."** True as stated, and beside
+   the point: `f64` widening bought exactness only at the one factor that
+   was already exact. The claim is now a consequence of integer
+   arithmetic rather than the reason for it.
+
+**The mutation set was re-run against the new implementation, and it
+found a hole in the tests rather than in the code.** Six wrong
+implementations: nearest → `trunc`, nearest → `ceil`, back to the `f32`
+factor route, second axis reuses the first, half-away-from-zero → always
+up, and **saturate → wrap**. The first five reddened a named test
+immediately. The sixth **passed** — no test reached the clamp, because a
+100% identity never leaves the range it starts in. `window_size_saturates_rather_than_wrapping`
+was added and the mutation then fired. Worth recording plainly: the
+technique's value here was not confirming the tests, it was the one case
+where it refused to.
+
+**Raised to the owner rather than settled here.** Both are ADR-adjacent
+and neither meets the bar for an implementation-log decision.
+
+- **R-2 — does DD-003's exact-invariance property need a successor DD?**
+  [DD-003 §Context](../decisions/dd-m4-p1-003-dpi-change-propagation.md)
+  states that a DPI change "does not re-decide a single layout number",
+  and §Verification asks the integration test to assert unchanged DIP
+  results. The *mechanism* is sound — the engine never receives a scale
+  — but the *consequence* holds only while the DIP extent handed to
+  layout is preserved, and the OS's suggested rectangle preserves the
+  **outer** rectangle, whose client area then moves by a DIP or two.
+  In-phase this is closed by T8 controlling the rectangle, so nothing is
+  blocked. What is open is whether an Accepted DD may carry a property
+  statement now known to be inexact on the real path, with the
+  correction living only in the plan.
+- **R-3 — unconditional correction, or restore DD-003 I1's guard?** The
+  case for unconditional: DD-001 §Failure handling's tolerance of a
+  failed declaration rests on the conversion machinery having no second
+  code path, and a guard is a branch no test can fire until T9, on the
+  path every host takes. The case for the guard: it is the Accepted
+  text, and the reviewer is right that the difference is observable —
+  `WM_WINDOWPOSCHANGING` and `WM_GETMINMAXINFO` are dispatched at `s = 1`
+  that otherwise would not be, and one syscall per window is spent
+  achieving nothing. **Recommendation: keep it unconditional**, and if
+  that stands, record it as a narrowing of DD-003 I1 with DD-001's
+  structural argument as the reason — the same shape as the four
+  phase-wide judgments already narrowed by what landed. The
+  implementation is left unconditional while the decision is open, and
+  the merge gate is the decision point.
+
+**What the review confirmed independently**, so it is not re-argued: the
+probe frames' tile counts (7 / 7 / 9); F-27's re-reading of T1's number;
+that `runtime.rs` carries no residue of the throwaway declaration; the
+correction's placement before `apply_mica` and the target creation; the
+flag set; the review-lane raise itself; and the suite at 32 binaries and
+0 failures.
+
+**A note on the review's own limit, and on mine.** R-1 is the finding
+that matters, and it was reachable only by asking what the *documented
+rule* says and then testing the implementation against it rather than
+against its own tests. Every test T4 wrote used a standard scaling, where
+the defect is provably invisible — the same shape as F-13 and F-4, on the
+one operation the task existed to get right. The review brief asked
+specifically about the `MulDiv` claim and the `f64` widening, which is
+some evidence that naming one's own weak claims is worth doing; it also
+did not name R-1, which is the finding under them both.

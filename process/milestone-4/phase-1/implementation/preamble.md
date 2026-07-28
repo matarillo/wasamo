@@ -120,7 +120,7 @@ fixes six evidence lines; this plan adds only the task mapping.
 | ADR evidence item | Task(s) |
 |---|---|
 | (1) `DipScale` pure-logic unit tests — conversion at 125 / 150 / 200%, position-and-extent consistency, round-trip error and rounding direction, the `ceil` allocation rule, convert-once-on-the-difference | T2 |
-| (2) Windows integration evidence — declared level is Per-Monitor-Aware V2; cached scale equals `GetDpiForWindow`; after a synthesised scale change the DIP layout results are unchanged while Visual offsets and sizes moved by the ratio | T8 (scale cache + invariance control) + T9 (effective-context assertion) |
+| (2) Windows integration evidence — declared level is Per-Monitor-Aware V2; cached scale equals `GetDpiForWindow`; after a synthesised scale change the DIP layout results are unchanged while Visual offsets and sizes moved by the ratio. **The unchanged-results half is exact only while the *client* DIP extent is preserved** (T4 finding F-28; the T4 independent review found this correction had not reached here or [plan.md](./plan.md) §T8). T8 synthesises the message and so chooses the rectangle, which is what lets it assert equality rather than a tolerance; the OS's own suggested rectangle preserves the **outer** rectangle instead, and the client one then moves by a DIP or two | T8 (scale cache + invariance control) + T9 (effective-context assertion) |
 | (3) Positive control A — crispness before / after, same text, same monitor scale, compared at magnification | T10 |
 | (4) Positive control B — logical layout invariance, same `.ui` at the same logical size, 100% vs 125%, wrap positions compared | T10 |
 | (5) Positive control C — following a scale change; assistant captures the **path** on the development machine, owner captures the **literal cross-monitor form** | T10 (path) + T11 (literal) |
@@ -132,6 +132,16 @@ same picture there. Nor is "the window's physical size scales with the
 scale factor" a control — DWM bitmap stretching satisfies it too. The
 controls are the *pairs*: before/after crispness at magnification, and
 100%-vs-125% layout invariance.
+
+**The invariance in that last pair is not bit-exact** (T4 finding F-28).
+The scale factor is realised on the **outer** window rectangle, and the
+non-client frame scales by its own DPI-indexed metrics rather than by
+`s`, so the same DIP outer size yields a client area of 784 × 561 DIP at
+96 DPI and 785.6 × 562.4 DIP at 120 DPI on the development machine.
+Layout receives the client extent. A control that demands identical wrap
+positions can therefore redden a correct build; [plan.md](./plan.md) §T10
+carries the tolerance and the alternative, and §T8 carries the
+synthesised-path version of the same qualification.
 
 Windows integration fixtures **fail rather than skip** on a runner
 without Compositor capability, following the established `0x80070005`
