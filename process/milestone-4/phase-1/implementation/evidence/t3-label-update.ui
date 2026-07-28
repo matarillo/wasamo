@@ -1,0 +1,28 @@
+component LabelUpdate inherits Window {
+    title: "Label update"
+    backdrop: mica
+    theme: system
+
+    state count: i32 = 0
+
+    VStack {
+        spacing: 12px
+        padding: 24px
+
+        Text {
+            text: "Click the counting button; its own label is rebound."
+            font: body
+        }
+        Button {
+            text: "Counted \{root.count} times"
+            style: accent
+            clicked => { root.count += 1; }
+        }
+        Button {
+            text: "Static reference label"
+        }
+        ToggleButton {
+            text: "Static toggle label"
+        }
+    }
+}
