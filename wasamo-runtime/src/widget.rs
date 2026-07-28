@@ -822,10 +822,16 @@ impl WidgetNode {
         label_visual.SetBrush(&label_brush)?;
 
         // Parent the label Visual under the background Visual. Its offset and
-        // size are *not* written here: construction happens in the IR loader,
-        // before the tree is attached to a window, so no scale factor exists
-        // at this moment (DD-M4-P1-002 §Row 6 detail). They are written by
-        // `sync_visuals`, alongside every other Composition geometry write.
+        // size are *not* written here: construction precedes attachment to any
+        // window — through the IR loader or through the Rust-native API — so no
+        // scale factor exists at this moment (DD-M4-P1-002 §Row 6 detail). They
+        // are written by `sync_visuals`, alongside every other Composition
+        // geometry write in the runtime.
+        //
+        // The consequence is that a Button-family widget renders its label only
+        // once a layout pass has run over it. Every path that puts a widget on
+        // screen as *content* does run one; `lib.rs::window_add_widget` does
+        // not, by design, and is documented accordingly.
         use windows::core::Interface;
         let label_vis: Visual = label_visual.cast()?;
         let bg_container: ContainerVisual = bg_visual.cast()?;

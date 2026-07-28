@@ -890,7 +890,8 @@ assertions, not omissions.
 | 3 | `emit::flush_layout` → `run_layout` (the drain's layout phase) | label untouched | **preserved and load-bearing**: this is the pass that now carries the relocated label-update write |
 | 4 | `set_property(PROP_BUTTON_LABEL)` on an **attached** widget | brush, geometry and `SizeConstraint` all written inline | **changed.** Geometry moves to the drain's layout phase, which `wasamo_set_property` runs synchronously at the tail of the same ABI call (`drain_if_outermost`) because `size_affecting` already lists this property. No frame is presented between the brush write and the geometry write — Composition commits at the dispatcher tick, not per property set. Verified by frame: `labelupdate-clicked` and `-clicked-twice` are pixel-identical before and after |
 | 5 | `set_property(PROP_BUTTON_LABEL)` on an **unattached** widget | geometry written eagerly | **changed.** `mark_layout_dirty_for` is a no-op when the widget belongs to no window, so no layout pass runs and the label Visual keeps its previous geometry until the subtree is attached — at which point `set_root`'s first pass writes it. Self-healing, and the widget is by definition not on screen in the interval |
-| 6 | `wasamo_widget_insert_child` (ABI structural mutation) | inserted button's label was placed; the button itself was not | **pre-existing class, not introduced here.** That entry point neither marks layout dirty nor drains, so the inserted node's *own* Visual already had no offset or size until the next layout pass. T3 makes the label match the button instead of floating at (16, 8) over a zero-sized background |
+| 6 | **The ABI structural mutations** — `wasamo_widget_insert_child`, `wasamo_widget_append_child`, `wasamo_widget_replace_child` (**all three**; the row originally named only `insert_child` — Codex review finding R-2) | inserted/appended/replacing button's label was placed; the button itself was not | **pre-existing class, not introduced here.** None of the three marks layout dirty and none drains, so the new node's *own* Visual already had no offset or size until the next layout pass. T3 makes the label match the button instead of floating at (16, 8) over a zero-sized background. The class is closed only by the next `WM_SIZE` or size-affecting property write |
+| 6b | **`lib.rs::window_add_widget`** — the Rust-native direct-hosting entry (**Codex review finding R-1; this row was missing entirely**) | the label carried constructor geometry `(16, 8)` / `(lw, lh)` while the background carried none, so a caller who sized the background by hand got a rendered label | **changed, and this is a real behaviour regression on a public API.** The function attaches a Visual to `window.root.Children()` and deliberately runs **no layout and no sync** (its own doc says so), so a Button-family widget added through it now keeps `Size = (0, 0)` on its label **permanently** — not until the next pass, because there is no pass. The pre-change behaviour was itself half-formed (label placed, background not), but "half-formed" and "no label" are not the same thing. Not fixed by reintroducing a construction-time write, which would destroy the one-pass invariant this task exists to create. Disposition below |
 | 7 | `ir_loader` conditional / `for`-range mutations | as above | **preserved.** Both sites call `mark_layout_dirty_for` after the mutation, so the drain's layout phase places the new subtree. Exercised by the `gallery-lightbox` frame, whose three buttons are constructed *after* the tree was attached |
 | 8 | Visual parenting / Z-order (`bg_container.Children().InsertAtTop`) | at construction | **unchanged** — only the two geometry writes moved |
 | 9 | The node's `SizeConstraint::Fixed` pair | derived from `(lw, lh)` in both writers | **unchanged**, and still per axis (F-10): `Fixed(lw + BUTTON_PAD_H * 2.0)` and `Fixed(lh + BUTTON_PAD_V * 2.0)` in each |
@@ -898,6 +899,7 @@ assertions, not omissions.
 | 11 | `update_button_style` / `update_button_enabled` / `update_toggle_button_checked` | touch the background brush only | **unchanged** |
 | 12 | `draw_text`'s surface size at construction (`lw.max(1.0)`) | — | **unchanged.** F-14 removes that clamp at T6, not here |
 | 13 | Per-pass cost | — | **changed**: two extra WinRT property writes per Button-family node per layout pass. Bounded — the gallery has nine — on an event that is a resize or a property write |
+| 14 | **A layout pass that fails** (**Codex review finding R-3; rows 1, 3 and 7 said "preserved" without this qualification**) | the label carried constructor geometry regardless of whether layout succeeded | **changed.** `run_layout_as_window_root` and `run_layout` propagate `layout::run_layout`'s error with `?` **before** reaching `sync_visuals`, and both callers discard the `Result` (`window::set_root` and `emit::flush_layout` each do `let _ = …`). So a subtree carrying a known layout error — a Grid-cell `Box` with `aspect` unbounded on both axes — leaves every Visual in that tree unwritten, and the label now has no constructor geometry to fall back on. The rows above are accurate **conditional on layout succeeding**, which is the normal case and was the unstated assumption |
 
 **#3 — parallel/derived data.** `label_size` is a cached derivative of
 (`label_text`, `label_style`), sitting beside two existing derivatives of
@@ -975,7 +977,19 @@ at the frame edge cannot contribute):
 | `gallery-lightbox` | the `<` / `>` / `x` buttons of the conditional subtree — constructed *after* attach | **0** of 828,360 |
 | `labelupdate-initial` | the bound-text button before any click, plus a Grid-stretched button | **0** of 224,480 |
 | `labelupdate-clicked` | the relocated label-update write, once | **0** of 224,480 |
-| `labelupdate-clicked-twice` | the same write again, at a third label width | **0** of 224,480 |
+| `labelupdate-clicked-twice` | the same write a second time | **0** of 224,480 |
+
+**Correction (Codex review finding R-4):** these three frames were
+described as covering "three different label widths". They do not.
+`Counted 0 times` / `1 times` / `2 times` differ in glyph but **not in
+measured width** — the digits are the same advance — so the Button is the
+same width in all three. The consequence is concrete: an implementation
+that wrote `btn.label_size = (btn.label_size.0, lh)` — keeping the stale
+width — would keep two writers, keep the statement-group shape, and pass
+every frame in this set, and would only smear when a label crosses from
+one digit to two. **There is no positive control for that mutation.** The
+landed source is `(lw, lh)` and is correct; what is missing is evidence,
+and it is recorded as missing rather than papered over.
 
 **What the pair does and does not discriminate**, stated rather than
 implied. It **does** show that the relocated write lands, for both widget
@@ -1009,35 +1023,58 @@ example, and the script restores the gallery IR in a `finally` block.
   pairs above, all zero.
 - `cargo fmt --all -- --check` and `git diff --check` clean.
 
-### F-21 — a host-package build does not rebuild the runtime
+### F-21 — a host-package build produces a freshly linked DLL from stale object code
 
 Found while running the N2 mutation, and recorded because it is a
 **false-negative generator for every GUI evidence gate in this phase**,
 not a T3 detail.
 
-`cargo build --release -p gallery-rust` completes without recompiling
-`wasamo-runtime`. The host reaches the runtime through `wasamo-sys`,
-which links `wasamo.dll` by a build-script link-search path rather than
-by a cargo dependency edge, so a source change in `wasamo-runtime` is not
-in the host package's dependency graph and does not trigger a rebuild.
-The launched host then loads the **previous** `wasamo.dll` from
-`target/release`.
-
 Measured: the first N2 run — `ToggleButton` dropped from the sync arm —
-was built that way and produced a gallery frame **identical to the
-unmutated build**, which briefly read as "the mutation does not fire".
-Rebuilt with `cargo build --release --workspace`, the same mutation
-removed exactly the three tab labels. The mechanism is adjacent to F-5
-but distinct: F-5 is a link failure from a cold directory, this is a
-silent staleness with a green build.
+was built with `cargo build --release -p gallery-rust` and produced a
+gallery frame **identical to the unmutated build**, which briefly read as
+"the mutation does not fire". Rebuilt with
+`cargo build --release --workspace`, the same mutation removed exactly
+the three tab labels.
 
-*Disposition:* every capture in this phase is preceded by
+**The mechanism first recorded here was wrong** (Codex review finding
+R-5), and the correction matters because it changes what the symptom
+tells you. The original claim was that the host does not depend on
+`wasamo-runtime` through a cargo edge and therefore does not rebuild it.
+`cargo tree -p gallery-rust` shows the edge plainly —
+`gallery-rust → wasamo-sys → wasamo-dll → wasamo-runtime` — and a probe
+(append a comment to `widget.rs`, build `-p gallery-rust`, compare
+timestamps) shows cargo **does** recompile `wasamo-runtime` and **does**
+relink `wasamo.dll`:
+
+| Artifact | Before probe | After `-p gallery-rust` |
+|---|---|---|
+| `target/release/wasamo.dll` | 18:31:51 | **19:54:53** — relinked |
+| `target/release/deps/libwasamo_runtime-<hash>.rlib` | — | **19:54:53** — recompiled |
+| `target/release/libwasamo_runtime.rlib` (**uplifted**) | 18:31:47 | **18:31:47** — unchanged |
+
+The real cause is
+[`wasamo-dll/build.rs`](../../../../wasamo-dll/build.rs): it
+`/WHOLEARCHIVE`s the **uplifted** `<profile>/libwasamo_runtime.rlib`, and
+cargo refreshes that copy only when `wasamo-runtime` is built as a
+**primary package**. A dependency build writes the hashed rlib in
+`deps/` and leaves the uplifted one alone, so the DLL is genuinely
+relinked — new timestamp, no warning — around **stale object code**.
+
+So this is **not a mechanism distinct from F-5; it is the same root cause
+with the opposite symptom.** F-5 is that whole-archive path failing loudly
+(`LNK1356`) when the uplifted rlib is absent; F-21 is it succeeding
+quietly when the uplifted rlib is merely **old**. The two belong in one
+entry, and the "adjacent but distinct" framing originally written here is
+withdrawn. A freshness check on `wasamo.dll`'s timestamp does **not**
+detect F-21, which is the practical trap.
+
+*Disposition unchanged, and it was correct even while the reasoning was
+not:* every capture in this phase is preceded by
 `cargo build --release --workspace`, folded into [plan.md](./plan.md) §T6,
 §T9 and §T10 and into preamble R-1b; carried to
-[handoff.md](./handoff.md) alongside F-5, and folded into T12's existing
-[AGENTS.md §Build ordering](../../../../AGENTS.md) correction, which today
-describes only the `wasamoc` ordering and says nothing about the runtime
-cdylib.
+[handoff.md](./handoff.md) as F-5's second symptom rather than as a
+separate item, and folded into T12's existing
+[AGENTS.md §Build ordering](../../../../AGENTS.md) correction.
 
 ### Plan-hypothesis re-audit (2026-07-28, in-gate — not owner-prompted)
 
@@ -1206,4 +1243,57 @@ All three answered; recorded here so no later task re-opens them.
    happy path: the warning fired, the gallery IR was restored, the run
    completed, and the recaptured frames are pixel-identical to the
    committed set over the client interior.
+
+### Independent review disposition (Codex, 2026-07-28)
+
+The full independent review the lane raise (F-17) required. Five
+findings: one major, four minor. **The verdict was not "zero", and three
+of the five contradict claims this log made** — one of them a mechanism
+asserted from a truncated build log rather than measured. Each was
+re-verified against the source before being accepted; none was taken on
+the reviewer's word.
+
+| # | Finding | Verified | Disposition |
+|---|---|---|---|
+| R-1 | **major** — `lib.rs::window_add_widget` runs no layout and no sync, so removing the constructor geometry leaves a Button-family label permanently at `Size = (0, 0)` on that path | **Confirmed.** The function attaches a Visual to `window.root.Children()` and returns; its own doc names "no layout, no hit-test" as the point. The enumeration missed it because the enumeration walked *layout* paths, and this is the one attach path that deliberately is not one | Enumeration row **6b** added; the misleading `button_family` comment corrected (it claimed construction happens in the IR loader, which is not the only constructor); `window_add_widget`'s doc states the consequence. **Not** fixed by reintroducing a construction-time write — that would destroy the one-pass invariant the task exists to create. The API's future is an owner decision, below |
+| R-2 | **minor** — enumeration row 6 named only `wasamo_widget_insert_child`; `append_child` and `replace_child` are the same class | **Confirmed** at `abi.rs:388` and `abi.rs:491`: neither marks layout dirty, neither drains | Row 6 rewritten to name all three |
+| R-3 | **minor** — the "preserved" verdicts hold only when layout succeeds; `run_layout*` propagates the error with `?` before `sync_visuals`, and both callers discard the `Result` | **Confirmed** by reading `run_layout` / `run_layout_as_window_root` and the two `let _ = …` call sites | Enumeration row **14** added, stating the condition the other rows assumed |
+| R-4 | **minor** — the three label-update frames were described as "three different label widths"; the widths are identical | **Confirmed.** `Counted 0/1/2 times` differ in glyph, not in advance width. A mutation keeping the stale width would pass the whole set | The claim is corrected in place, and the **missing** positive control is recorded as missing rather than papered over |
+| R-5 | **minor** — F-21's mechanism ("no cargo dependency edge") is wrong | **Confirmed, and the claim was wrong.** `cargo tree` shows the edge; a timestamp probe shows the DLL *is* relinked. The stale artifact is the **uplifted** rlib that `wasamo-dll/build.rs` whole-archives | F-21 rewritten with the measured timestamps; the "distinct from F-5" framing withdrawn — it is F-5's root cause with the opposite symptom. Downstream copies in [plan.md](./plan.md), [preamble.md](./preamble.md) and [handoff.md](./handoff.md) corrected |
+
+**What the review confirmed independently**, and so is not re-argued
+here: the `label_size` two-writer discipline holds; `label_style` has no
+setter; `SetOffset` / `SetSize` really are confined to `sync_visuals`'s
+three pairs, with the geometry-API sweep extended past the grep terms
+used here (`SetScale`, rotation, transform matrix, relative offset,
+centre/anchor, geometry clip, offset/size animations — none present; the
+only `StartAnimation` targets `"Color"`); F-18, F-19 and F-20 are
+correct; the six before/after pairs match to SHA-256; N1 / N2 / N3 show
+what they are said to show.
+
+**Open for the owner — the disposition of `window_add_widget` (R-1).**
+Three options, none of which T3 should take unilaterally, because they
+differ in scope rather than in correctness:
+
+1. **Document and keep** (what is landed). The regression is real but
+   confined to a `pub` item of a workspace-internal crate with **zero
+   callers** — `bindings/rust` depends on `wasamo-sys`, i.e. the C ABI,
+   not on this crate — so nothing shipped changes. Cost: a public entry
+   whose behaviour narrowed without a decision.
+2. **Give it a layout pass.** It would then place both the background and
+   the label, which is arguably the API repaired rather than regressed —
+   but it inverts the function's stated contract ("no layout") and is a
+   behaviour change on a task chartered as behaviour-identical.
+3. **Remove it.** No caller, and `window_set_root` covers the supported
+   case. An API removal, out of T3's scope.
+
+Recorded as a **stated limit** either way, so the phase does not close
+claiming a behaviour-identical refactor without the exception attached.
+
+**A note on the review's own limit.** Every finding concerns a path or a
+claim; none contradicts the landed arithmetic or the write relocation
+itself. What an independent review of this shape still could not supply
+is a mutation nobody thought of — R-4 is the case in point: the reviewer
+found the missing control by reading the evidence *description*, not by
+running a mutation the assistant had not designed.
 

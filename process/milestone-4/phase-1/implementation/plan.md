@@ -553,9 +553,10 @@ recreation is WinRT-fallible). **End gate:** row 7 closed in the audit
 table; the layout-invalidation non-effect verified; local rendering
 unchanged at 100% — **captured after `cargo build --release
 --workspace`, never after a host-package build** (T3 finding F-21: a
-host build does not rebuild the runtime cdylib, so the launched host
-loads the previous `wasamo.dll` and the frame silently shows the old
-code). Full independent review before merge.
+host build relinks `wasamo.dll` from a **stale uplifted rlib**, so the
+DLL carries a fresh timestamp and old object code, and the frame
+silently shows the previous runtime). Full independent review before
+merge.
 
 ---
 
@@ -693,12 +694,13 @@ real per-monitor DPI and the identity conversions become live ones.
       manifest asset and no build-system edit (preamble obligation 6,
       risk R-8). This is the auditable artifact for the
       declarative-host boundary claim; it must be run, not inferred from
-      "we did not edit them". **Rebuild the runtime first** (T3 finding
-      F-21): a host package does not depend on `wasamo-runtime` through
-      a cargo edge — `wasamo-sys` links `wasamo.dll` by a build-script
-      search path — so building only the hosts would run them against a
-      **pre-T9 DLL** and the artifact would show the wrong awareness
-      level while looking green.
+      "we did not edit them". **Build the workspace, not just the hosts**
+      (T3 finding F-21): a host-package build relinks `wasamo.dll` around
+      the **stale uplifted** `<profile>/libwasamo_runtime.rlib`, which
+      cargo refreshes only on a primary-package build — so the hosts
+      would run against **pre-T9 object code** carrying a fresh DLL
+      timestamp, and the artifact would report the wrong awareness level
+      while every build step looked green.
 - [ ] **Re-run the trap-#4 decision explicitly** for the diagnostic
       branch (see [preamble.md §Implementation gates](./preamble.md#implementation-gates)).
       If the tolerated-failure path cannot be fired by a test because
@@ -762,11 +764,13 @@ are in
       obligation 7).
 
 - [ ] **Every capture is preceded by `cargo build --release
-      --workspace`** (T3 finding F-21). A host-package build leaves the
-      previous `wasamo.dll` in place and the launched host loads it, so a
-      frame captured after one shows the *old* runtime while the build
-      reports success. Measured at T3, where a mutation built that way
-      produced a frame identical to the unmutated build. This is the one
+      --workspace`** (T3 finding F-21). A host-package build *does*
+      recompile the runtime and *does* relink `wasamo.dll` — but it
+      whole-archives the **stale uplifted** rlib, so the DLL is fresh by
+      timestamp and old by content. Measured at T3, where a mutation
+      built that way produced a frame identical to the unmutated build.
+      **A freshness check on the DLL does not detect this**, which is why
+      the remedy is the build command and not a guard. This is the one
       failure mode that can make every control in this task pass against
       code that is not the code under test.
 - [ ] **Reusable from T3**: the capture script
@@ -815,12 +819,13 @@ recorded; any finding triaged to a task or to
       workspace-wide builds implicitly satisfy the ordering, which holds
       for `counter-rust` but not for the cdylib from a cold directory.
       **The same correction carries T3's finding F-21**, which that
-      section is silent on: building a *host* package alone does not
-      rebuild `wasamo-runtime` at all, because the host reaches the
-      runtime through `wasamo-sys`'s build-script link-search path rather
-      than a cargo dependency edge. The build succeeds and the host loads
-      the previous `wasamo.dll`. Both facts belong in one revision of
-      that section.
+      section is silent on and which shares F-5's root cause: because the
+      whole-archived rlib is the **uplifted** copy, a host-package build
+      relinks `wasamo.dll` around object code that cargo did not refresh,
+      and the result is a fresh DLL timestamp over a stale runtime. F-5
+      is that path failing loudly when the uplifted rlib is absent; F-21
+      is it succeeding quietly when it is merely old. One revision, one
+      root cause, two symptoms.
 - [ ] **Moment 2 doc sync — divergence correction.** Re-verify each
       Moment 1 statement against what actually landed and correct
       divergences. The statements flagged at ADR time as most at risk
