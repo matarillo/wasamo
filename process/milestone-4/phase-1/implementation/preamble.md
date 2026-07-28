@@ -198,8 +198,22 @@ approach is chosen**. The phase-wide load, from the
   carried because Composition surface recreation is WinRT-fallible.
 - **Trap #7 (GUI positive control)** — armed. T10, with the pair
   discipline above.
-- **Trap #3 (parallel data)** — **non-applicable**: no parallel vectors
-  or derived indices are added; the scale is a single scalar per window.
+- **Trap #3 (parallel data)** — the ADR judged this non-applicable for
+  the phase, "no parallel vectors or derived indices are added; the scale
+  is a single scalar per window". **This plan narrows that judgment
+  rather than inheriting it** (T3 finding F-22). The judgment is right
+  *about the scale* — one scalar per window, one authoritative owner —
+  but T3 landed `ButtonData.label_size`, a cached derivative of the
+  node's label text and style that sits beside two existing derivatives
+  of the same measurement (`self.width` / `self.height` as
+  `SizeConstraint::Fixed`). Its close artifact is the single-writer
+  discipline: the field is written inside the same statement group as
+  `label_text` in **both** primitives that produce a measurement, so no
+  primitive mutates the source without updating the cache, and the
+  re-trigger criterion — a third writer of a Button-family label — is
+  recorded in [handoff.md](./handoff.md). This is the third phase-wide
+  non-applicability narrowed by what actually landed, after trap #4 at T2
+  (F-12) and the review lane at T3 (F-17).
 - **Trap #4 (untested authored branch)** — the ADR judged this
   non-applicable on the grounds that the phase adds no author-facing
   surface and no new validation branch. **This plan narrows that
@@ -229,7 +243,8 @@ approach is chosen**. The phase-wide load, from the
 | T9 | Full independent review | Process-wide platform posture + the diagnostic branch (trap #4 folded in) |
 | T10 | Full independent review | GUI-render evidence |
 | T2 | Branch/test-focused review | **Corrected at T2 (finding F-12); this row read "Normal review / pure logic".** Pure logic is why T2 is not in a full-review class, but it adds two authored branches, and [gates §4](../../../procedures/implementation-gates.md) assigns exactly that case the branch/test-focused lane. "No full review" is not "no review" |
-| T3, T4, T8 | Normal review | Behaviour-identical refactor (T3), additive per-window state (T4), test-only (T8). T3 carries an explicit regression check against shipped rendering |
+| T3 | Full independent review | **Corrected at T3 (finding F-17); this row read "Normal review", grouped with T4 and T8, on the ground that a behaviour-identical refactor "carries an explicit regression check against shipped rendering".** That ground was the existing fixtures, and T1's finding F-4 removed it: the fixtures do not react to a geometry-write relocation, so [plan.md](./plan.md) §T3 now makes the **rendered frame** the gate. T3's evidence class is therefore GUI-render evidence, and it relocates a write between passes in shipped rendering code — two of the three high-risk classes in [gates §4](../../../procedures/implementation-gates.md) |
+| T4, T8 | Normal review | Additive per-window state (T4), test-only (T8) |
 
 ## Technical risks (planning-time recon; T1 sharpens)
 
@@ -237,7 +252,7 @@ approach is chosen**. The phase-wide load, from the
 |---|---|---|
 | R-1 | **Coordinates right, crispness not bought** (ADR risk R2). The phase's defining failure: every integration test passes, 100% looks perfect, and the blur the phase existed to remove is still there. Integration tests cannot discharge it — a stretched bitmap reports the same numbers. | T6 is specified and reviewed as the phase's hard part, not appended to T5. Positive control A (T10) is the only evidence that closes it. **T1 de-risked the approach**: a throwaway `ceil(dip × s)` surface + `SetDpi(96 × s)` + origin ÷ s produced visibly crisper glyphs than the DWM-stretched baseline in a magnified before/after pair on the 125% machine. That is spike evidence on one machine, not T10's artifact — but the approach is no longer unproven going in. |
 | R-2 | **A missed conversion site** is wrong only at scale ≠ 1. **Sharpened at T1 (finding F-4): the 125% development machine does not catch it either.** Every layout integration test drives `WidgetNode`s directly and never through a window, so no existing test routes a coordinate through a window's scale. Measured: with the full conversion machinery *and* the V2 declaration in place at 125%, all 32 test binaries passed — identical to baseline. | DD-002's audit table closed at T5/T6 with each row verified — now the **primary** defence, not one of three. T8's synthesised change is the **only** automated defence and its weight rises accordingly. Positive control B (T10) fails visibly if a size path is missed and a wrap position moves; T1 saw that signal fire on a deliberately incomplete build. |
-| R-1b | **A cold-directory workspace build does not link** (T1 finding F-5, pre-existing and unrelated to DPI). `wasamo-dll/build.rs` whole-archives the *uplifted* `<profile>/libwasamo_runtime.rlib`, which cargo only produces once `wasamo-runtime` is built as a primary package. A cold `cargo test --workspace` fails `LNK1356`; a stale uplifted rlib fails as `LNK2019` on `core` / `std` symbols. `cargo check` never links, so it stays green through both and gives false comfort. | Build `-p wasamo-runtime` first — verified green. Recorded in [handoff.md](./handoff.md) with its re-trigger criterion and folded into T12's clean-rebuild gate. Not fixed by this phase. |
+| R-1b | **The build command does less than it looks like it does**, in two measured ways, both pre-existing and unrelated to DPI. (i) **A cold-directory workspace build does not link** (T1 finding F-5): `wasamo-dll/build.rs` whole-archives the *uplifted* `<profile>/libwasamo_runtime.rlib`, which cargo only produces once `wasamo-runtime` is built as a primary package. A cold `cargo test --workspace` fails `LNK1356`; a stale uplifted rlib fails as `LNK2019` on `core` / `std` symbols. `cargo check` never links, so it stays green through both and gives false comfort. (ii) **A host-package build relinks the DLL around stale object code** (T3 finding F-21, mechanism corrected at the independent review): the same whole-archive path takes the **uplifted** rlib, which cargo refreshes only on a primary-package build — so `cargo build -p gallery-rust` *does* recompile `wasamo-runtime` and *does* relink `wasamo.dll`, and the DLL still carries the previous runtime. Unlike (i) this fails **silently and green**, with a fresh DLL timestamp, which makes it a false-negative generator for every GUI evidence gate and defeats any freshness check. | (i) Build `-p wasamo-runtime` first — verified green. (ii) Precede every capture with `cargo build --release --workspace` — measured at T3, where a mutation built the other way produced a frame identical to the unmutated build. Both are **one root cause with two symptoms**, recorded in [handoff.md](./handoff.md) with re-trigger criteria and folded into T6 / T9 / T10 and T12's clean-rebuild and AGENTS.md correction. Neither is fixed by this phase. |
 | R-3 | **The atlas-offset trap.** `BeginDraw` returns the offset in pixels; once the context DPI is `96 × s` it must be divided by `s`. The offset is frequently `(0, 0)`, so omitting the conversion works most of the time and displaces text within its own surface intermittently. | Named in DD-002 and in [architecture.md §12.4](../../../../docs/architecture.md#coordinate-spaces) so T6 writes it deliberately rather than discovering it; T6's review lane is full. |
 | R-4 | **`s ≠ 1` is unexercised by the real OS path until T9** — the cost of the sequencing thesis. | T8 is placed before T9 precisely to close this; the risk the ordering creates is closed inside the ordering. |
 | R-5 | **Closed at T1.** The planning-time estimate ("two production sites and at least four integration tests") undercounted: `run_layout_as_window_root` has 2 production + **13** test call sites in 6 files, and the plain `run_layout` — omitted from the estimate — has 1 production (`emit::flush_layout`) + **8** test sites in 3 files. Naive parameter threading was compiler-measured at **28 broken test call sites across 12 files**. | Resolved by caching the scale on the node instead of threading it: **7** broken sites in 4 files, all of them the `hit_test_click` literals that the `i32`→`f32` pointer-unit change costs under any carrier. The layout entry points keep their signatures and no test learns about scale. Decided and compiler-verified at T1; details in [log.md](./log.md) §T1. |

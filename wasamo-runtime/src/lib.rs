@@ -100,6 +100,20 @@ pub fn get_text_renderer() -> &'static TextRenderer {
     &runtime::get().text_renderer
 }
 
+/// Attach a widget's Visual directly to the window's Composition tree,
+/// without putting it in the window's `root_widget` slot.
+///
+/// **No layout pass runs**, which is the point of this entry compared with
+/// [`window_set_root`] — the caller positions and sizes the Visual itself.
+/// Since M4-Phase 1 that also means a **Button-family widget shows no label
+/// through this path**: the label Visual's offset and size are written by
+/// `sync_visuals`, so a widget that never reaches a layout pass keeps the
+/// Composition default of `Size = (0, 0)`. The label surface and its brush
+/// *are* created at construction — the label is rasterized, just never
+/// composited, so re-creating the surface does not help. Before that change
+/// the label happened to carry constructor-time geometry while its background
+/// did not, so this path rendered a half-positioned widget. Use
+/// [`window_set_root`] for anything that should lay itself out.
 pub fn window_add_widget(window: &WindowState, widget: &WidgetNode) -> windows::core::Result<()> {
     use windows::core::Interface;
     use windows::UI::Composition::Visual;

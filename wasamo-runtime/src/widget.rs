@@ -37,6 +37,14 @@ enum ButtonState {
     Pressed,
 }
 
+// Standard Button-family sizing: label + horizontal/vertical padding.
+// One declaration, read by the two sites that derive the node's
+// `SizeConstraint` from a fresh measurement (`button_family`,
+// `update_button_label`) and by the sync pass that places the label
+// Visual inside the background Visual.
+const BUTTON_PAD_H: f32 = 16.0;
+const BUTTON_PAD_V: f32 = 8.0;
+
 struct ButtonData {
     style: ButtonStyle,
     state: ButtonState,
@@ -46,6 +54,15 @@ struct ButtonData {
     label_visual: SpriteVisual,
     label_text: String,
     label_style: TypographyStyle,
+    // The extent `TextRenderer::measure` returned for `label_text` at
+    // `label_style`, in DIP. Written by the same two primitives that write
+    // `label_text` and that derive this node's `SizeConstraint::Fixed` pair
+    // from the same measurement; read by `sync_visuals`, which places the
+    // label Visual. It is retained rather than re-measured because the sync
+    // pass holds no `TextRenderer`, and rather than recovered from the
+    // arranged size because a stretched button's arranged size is no longer
+    // the measured label plus padding.
+    label_size: (f32, f32),
     clicked_fn: Option<Box<dyn Fn()>>,
     // Accent color for ButtonStyle::Accent (read from UISettings at creation).
     accent: Color,
@@ -774,11 +791,8 @@ impl WidgetNode {
         let label_style = TypographyStyle::Body;
         let (lw, lh) = renderer.measure(label, label_style)?;
 
-        // Standard button sizing: label + horizontal/vertical padding.
-        const PAD_H: f32 = 16.0;
-        const PAD_V: f32 = 8.0;
-        let btn_w = lw + PAD_H * 2.0;
-        let btn_h = lh + PAD_V * 2.0;
+        let btn_w = lw + BUTTON_PAD_H * 2.0;
+        let btn_h = lh + BUTTON_PAD_V * 2.0;
 
         let accent = read_accent_color();
 
@@ -807,15 +821,25 @@ impl WidgetNode {
             compositor.CreateSurfaceBrushWithSurface(&surface)?;
         label_visual.SetBrush(&label_brush)?;
 
-        // Position label centered in the button.
+        // Parent the label Visual under the background Visual. Its offset and
+        // size are *not* written here: construction precedes attachment to any
+        // window — through the IR loader or through the Rust-native API — so no
+        // scale factor exists at this moment (DD-M4-P1-002 §Row 6 detail). They
+        // are written by `sync_visuals`, alongside every other Composition
+        // geometry write in the runtime.
+        //
+        // The consequence is that a Button-family widget shows its label only
+        // once a layout pass has run over it, and **not every path that puts a
+        // widget on screen runs one**. `window::set_root` and the `WM_SIZE` arm
+        // do; the tree-mutation API (`append_child` / `insert_child` /
+        // `replace_child`, whether called directly or through their ABI
+        // wrappers) does not, and neither does `lib.rs::window_add_widget`.
+        // Those paths rely on a later `WM_SIZE` or size-affecting property
+        // write, except `window_add_widget`, which has no later pass at all.
+        // A new mutation entry that omits `emit::mark_layout_dirty_for` will
+        // reproduce the missing label.
         use windows::core::Interface;
         let label_vis: Visual = label_visual.cast()?;
-        label_vis.SetOffset(Vector3 {
-            X: PAD_H,
-            Y: PAD_V,
-            Z: 0.0,
-        })?;
-        label_vis.SetSize(Vector2 { X: lw, Y: lh })?;
         let bg_container: ContainerVisual = bg_visual.cast()?;
         bg_container.Children()?.InsertAtTop(&label_vis)?;
 
@@ -827,6 +851,7 @@ impl WidgetNode {
             label_visual,
             label_text: label.to_owned(),
             label_style,
+            label_size: (lw, lh),
             clicked_fn: None,
             accent,
             enabled,
@@ -1028,21 +1053,17 @@ impl WidgetNode {
             compositor.CreateSurfaceBrushWithSurface(&surface)?;
         btn.label_visual.SetBrush(&label_brush)?;
 
-        use windows::core::Interface;
-        const PAD_H: f32 = 16.0;
-        const PAD_V: f32 = 8.0;
-        let label_vis: Visual = btn.label_visual.cast()?;
-        label_vis.SetOffset(Vector3 {
-            X: PAD_H,
-            Y: PAD_V,
-            Z: 0.0,
-        })?;
-        label_vis.SetSize(Vector2 { X: lw, Y: lh })?;
-
         btn.label_text = new_label.to_owned();
+        // The label Visual's offset and size are written by `sync_visuals`
+        // from `label_size`, not here — every Composition geometry write in
+        // the runtime happens in that one pass (DD-M4-P1-002 §Row 6 detail).
+        // The `size_affecting` clause in `set_property` already marks the
+        // owning window's layout dirty for this property, so the drain's
+        // layout phase runs the sync pass before the ABI call returns.
+        btn.label_size = (lw, lh);
         // Natural size updates; takes effect on the next layout pass.
-        self.width = SizeConstraint::Fixed(lw + PAD_H * 2.0);
-        self.height = SizeConstraint::Fixed(lh + PAD_V * 2.0);
+        self.width = SizeConstraint::Fixed(lw + BUTTON_PAD_H * 2.0);
+        self.height = SizeConstraint::Fixed(lh + BUTTON_PAD_V * 2.0);
         Ok(())
     }
 
@@ -1755,6 +1776,29 @@ impl WidgetNode {
             X: computed.size.0,
             Y: computed.size.1,
         })?;
+        // DD-M4-P1-002 §The conversion sites row 6: the Button-family
+        // label's placement is written here rather than at construction,
+        // where no scale factor exists. Like the ScrollView intermediate
+        // Visual below, the label Visual is not a child `WidgetNode` — it
+        // lives in `ButtonData.label_visual` — so it is reached through a
+        // per-kind arm rather than the `children` / `computed.children` zip.
+        //
+        // The offset is a constant inside the background Visual, and the
+        // size is the label's measured extent, not `computed.size`: a parent
+        // that stretches the button changes the arranged size but not the
+        // extent of the text drawn into the label surface.
+        if let WidgetData::Button(btn) | WidgetData::ToggleButton(btn) = &self.data {
+            let label_visual: Visual = btn.label_visual.cast()?;
+            label_visual.SetOffset(Vector3 {
+                X: BUTTON_PAD_H,
+                Y: BUTTON_PAD_V,
+                Z: 0.0,
+            })?;
+            label_visual.SetSize(Vector2 {
+                X: btn.label_size.0,
+                Y: btn.label_size.1,
+            })?;
+        }
         // DD-M3-P4-004 Option A: when self is a ScrollView, the
         // intermediate content Visual carries the scroll translation
         // `Visual.Offset = (0, -applied_y, 0)` (T2's clamped
