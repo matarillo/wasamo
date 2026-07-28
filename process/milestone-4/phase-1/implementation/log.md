@@ -729,3 +729,111 @@ Six standing hypotheses were falsified or sharpened.
 table; F-13 → §T8 and preamble §The sequencing thesis; F-14 → §T6;
 F-15 → §T5 and §T6; F-16 → §T4 and §T5.
 
+---
+
+## T3 — Button / ToggleButton label Visual writes move into the sync pass
+
+### Start gate (recorded 2026-07-28, before choosing the approach)
+
+Read before selecting: [plan.md](./plan.md) §T3 and its §Task list
+preamble, [preamble.md](./preamble.md) (§Implementation gates, the
+review-lane table, §Technical risks), the ADR set (DD-002 §The conversion
+sites row 6 and its detail paragraph, §When surfaces learn their scale,
+§Technical risk re-evaluation; DD-003 §Structural side-effect enumeration
+row 7), the T1 and T2 entries above, and
+[implementation-gates.md](../../../procedures/implementation-gates.md).
+Source read end-to-end for the change: `widget.rs` `button_family`
+(765–850), `update_button_label` (1005–1047), `set_property`'s
+`size_affecting` clause (915–1003), `insert_child_inner` (1450–1491),
+`run_layout` / `run_layout_as_window_root` / `sync_visuals` (1571–1793);
+`window.rs::set_root` (140–174); `emit.rs` `mark_layout_dirty_for` /
+`flush_layout` (100–149); `abi.rs` `wasamo_set_property` (717–749) and
+`wasamo_widget_insert_child` (421–453); `ir_loader.rs`'s conditional and
+`for`-range mutation sites (3388–3557).
+
+**Trap selection.** [plan.md](./plan.md) §T3 pre-names trap #2. Four more
+are added here; the gate permits adding, never silently dropping.
+
+| # | Trap | Applies | Reason |
+|---|---|---|---|
+| 1 | Semantic-migration miss | **yes**, in its call-site-audit form | No enum gains a variant, but the task *is* a relocation of a write between call sites, and it is complete only if (a) **both** sites that write the label geometry today are relocated — construction (`widget.rs:813` / `818`) and the label-update path (`1035` / `1040`) — and (b) the receiving arm covers **both** `WidgetData` variants that carry a `ButtonData`. Dropping `ToggleButton` from the new arm is exactly trap #1's shape: a filter that silently omits one variant, invisible to every existing test because no test can read `label_visual` (it is private to `widget.rs`, verified by search). |
+| 2 | Missed side effects | **yes** | The named start gate. A write moves between passes: it stops happening at construction / at the property write and starts happening on every layout pass. What depended on it landing at construction time is enumerated at the close gate. |
+| 3 | Parallel/derived data drift | **conditionally yes** — decided with the trap in view, not after | Applies **iff** the measurement-source decision below retains the measured extent on `ButtonData`. That field would be a cached derivative of (`label_text`, `label_style`) sitting beside two *existing* derivatives of the same measurement — `self.width` / `self.height` as `SizeConstraint::Fixed`. If taken, it must be written atomically inside the same primitive that writes `label_text`, at **both** writers. Recorded now so the decision is made against the trap rather than justified past it. |
+| 4 | Untested authored branch | **yes**, with an unusual discharge | The new `WidgetData::Button(btn) \| ToggleButton(btn)` arm in `sync_visuals` is an authored conditional. It has **no test-visible surface**: `label_visual` is private and no integration test can observe it, so there is no test to name. Per the T2 lesson (F-11), a green suite would say nothing here anyway. The branch's firing is demonstrated by the **rendered frame** instead — labels are visible only if the arm fires, and per widget kind — and that substitution is recorded rather than the trap being marked non-applicable. |
+| 5 | Carry-forward underweighted | **yes** | After this task the invariant is **"every Composition geometry write in the runtime happens in exactly one pass"**, which is the property that makes T5's audit complete rather than approximately complete (DD-002 §Row 6 detail; [plan.md](./plan.md) §T3). It is an invariant a later task can trip by adding a geometry write at construction. Recorded with a re-trigger criterion at the close gate. |
+| 6 | Symptom taken at face value | **yes**, low expectation | The workspace suite is run as a regression check, and [verification-environments.md](../../../../docs/notes/verification-environments.md) Observation 5 records a known, root-caused `scroll_view_layout_integration` access violation whose trigger is process-global Compositor reuse. If it appears it is dispositioned against that root cause, not re-rolled. F-5's cold-directory link failure likewise has a verified remedy that is used as a matter of course. |
+| 7 | Weak GUI evidence | **yes** | T3's substantive gate is a rendered frame (T1 finding F-4: the fixtures do not react to a geometry-write relocation). Evidence is launch + `CopyFromScreen` capture + analysis of the captured image, and the **positive control is the before/after pair**, not the "after" frame alone. `Start-Process` survival is a supporting "no early crash" signal only. |
+
+**Review lane — corrected here, and the correction is a finding.**
+[preamble.md](./preamble.md)'s review-lane table assigns T3 **Normal
+review**, on the stated ground that it is a behaviour-identical refactor
+that "carries an explicit regression check against shipped rendering".
+That reason was written when the regression check was understood to be
+the existing fixtures. T1's finding F-4 and the §Task list revision that
+followed it removed that basis: the fixtures **do not react** to a
+geometry-write relocation, and [plan.md](./plan.md) §T3 now says in
+terms that "the **rendered frame is the gate**". T3's evidence class is
+therefore **GUI-render evidence**, which
+[gates §4](../../../procedures/implementation-gates.md) names as a
+**high-risk class requiring a full independent review** — and the task
+additionally relocates a write between passes in shipped rendering code,
+which reads as a runtime structural change under the same list.
+
+This is the same documents-disagree-from-birth shape as T2's F-12, one
+task later, and it is recorded as **F-17** rather than resolved by
+preferring whichever row is more convenient. *Disposition:* the
+review-lane row is corrected to **full independent review**, and the
+consequence — that the merge gate now needs a review this assistant
+cannot perform on its own work — is raised with the owner at the merge
+gate rather than absorbed silently.
+
+**Planned proof obligations** (each closed at the close gate):
+
+1. The pre-change frame set is captured **before any code edit**, on a
+   build of the unmodified tree, and its capture commit is recorded. A
+   pre-change frame reconstructed afterwards is not a control.
+2. The trap-#2 enumeration: every consumer that depended on the label
+   geometry landing at construction time, each stated as *preserved*,
+   *changed-and-why-that-is-safe*, or *pre-existing*.
+3. The measurement-source decision, made inside that enumeration, with
+   the rejected candidates and their rejection reasons.
+4. Both write sites relocated and both `ButtonData`-carrying variants
+   covered (trap #1).
+5. `PAD_H` / `PAD_V` hoisted to one declaration — the sync pass would
+   otherwise be their third site (same rule-in-two-places class as F-14).
+6. The node's sizing still derives from the same measurement:
+   `SizeConstraint::Fixed` is **per axis** (F-10), so `button_family` and
+   `update_button_label` each keep their two one-argument constraints.
+7. `cargo build -p wasamo-runtime` → `cargo build --workspace` →
+   `cargo test --workspace` green as a **regression check only** (the
+   F-5 ordering, used as a matter of course).
+8. The post-change frame set captured the same way and compared against
+   the pre-change set, with the assistant's analysis of what the
+   comparison does and does not discriminate.
+9. **The plan re-audit as an in-gate item, not an after-gate one**:
+   [plan.md](./plan.md) §T4 … §T12 and [preamble.md](./preamble.md)
+   re-read in order, with a task-by-task verdict table. T1 and T2 each
+   lost this and were caught by the owner; T2's retrospective recorded
+   the falsifiable remediation test that T3 is the first run of.
+
+**Open decision, named by the plan and deliberately not pre-empted
+here.** The two relocated writes use `(lw, lh)` from
+`TextRenderer::measure`, which is in scope at construction and at the
+label update but **not** in `sync_visuals`. Candidates, to be decided
+inside the trap-#2 enumeration: re-measure in the sync pass; retain the
+measured extent on `ButtonData`; derive it from `computed.size` minus the
+padding. The decision criteria fixed **before** looking for a preferred
+answer: (a) the value written must be **bit-identical** to today's at
+scale 1, or the task is not a behaviour-identical refactor; (b) it must
+not add a fallible OS call to a pass that currently makes none; (c) it
+must not put a rule in a second place (F-14 / F-16); (d) whatever it
+costs must be paid against trap #3 explicitly.
+
+**Commit shape.** The code change is **one commit**, per DD-002's
+bisectability requirement (preamble obligation 2) — a regression in
+shipped rendering code must be bisectable independently of the DPI
+change. That overrides the one-commit-per-task-list-item default in the
+other direction from T2's: here several checklist items must land
+*together*, because the write sites and their receiving arm do not build
+or render correctly in intermediate states.
+

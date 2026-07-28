@@ -229,7 +229,8 @@ approach is chosen**. The phase-wide load, from the
 | T9 | Full independent review | Process-wide platform posture + the diagnostic branch (trap #4 folded in) |
 | T10 | Full independent review | GUI-render evidence |
 | T2 | Branch/test-focused review | **Corrected at T2 (finding F-12); this row read "Normal review / pure logic".** Pure logic is why T2 is not in a full-review class, but it adds two authored branches, and [gates §4](../../../procedures/implementation-gates.md) assigns exactly that case the branch/test-focused lane. "No full review" is not "no review" |
-| T3, T4, T8 | Normal review | Behaviour-identical refactor (T3), additive per-window state (T4), test-only (T8). T3 carries an explicit regression check against shipped rendering |
+| T3 | Full independent review | **Corrected at T3 (finding F-17); this row read "Normal review", grouped with T4 and T8, on the ground that a behaviour-identical refactor "carries an explicit regression check against shipped rendering".** That ground was the existing fixtures, and T1's finding F-4 removed it: the fixtures do not react to a geometry-write relocation, so [plan.md](./plan.md) §T3 now makes the **rendered frame** the gate. T3's evidence class is therefore GUI-render evidence, and it relocates a write between passes in shipped rendering code — two of the three high-risk classes in [gates §4](../../../procedures/implementation-gates.md) |
+| T4, T8 | Normal review | Additive per-window state (T4), test-only (T8) |
 
 ## Technical risks (planning-time recon; T1 sharpens)
 
