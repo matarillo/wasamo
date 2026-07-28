@@ -307,6 +307,27 @@ This is spike evidence, not T10's artifact: it is a single before/after
 pair on one machine, and T10 owns the controls with their own capture
 discipline.
 
+### Owner decisions on the T1 retrospective's open questions (2026-07-28)
+
+All three carried as asked; recorded here so T5 onward does not re-open
+them.
+
+1. **The pointer's DIP type is `f32`.** The `i32` alternative breaks no
+   test but truncates (physical 50 at 150% → DIP 33), and the truncation
+   would make hit-test edges scale-dependent. The 7 literal edits in 4
+   test files are accepted as the cost of the unit change.
+2. **A green suite is downgraded to a regression check for T3–T8.** It
+   stays in every end gate and must not go red, but it is not counted as
+   evidence that a conversion is correct — F-4 measured it green with the
+   full machinery *and* the declaration in place. Each task's real gate
+   is its own artifact; the substitution table is in
+   [plan.md](./plan.md) §Task list.
+3. **T8 keeps its position after T7.** Bringing it forward would need a
+   test seam that swaps the scale without going through the
+   `WM_DPICHANGED` handler — new surface, built to compensate for an
+   ordering change, on the one task whose value is that it drives the
+   real handler.
+
 ### T5 and T6 gate selections (armed by T1, before T5 opens)
 
 Recorded here rather than at T5's own start gate because

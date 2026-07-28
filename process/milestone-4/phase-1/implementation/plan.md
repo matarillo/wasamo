@@ -19,6 +19,19 @@ including on the 125% development machine. T8 drives `s ≠ 1`
 synthetically so the ordering does not defer all scaled-path risk to the
 end.
 
+**A green suite is not evidence of correctness in T3–T8** (owner-agreed
+2026-07-28, on T1 finding F-4). Every existing layout integration test
+drives `WidgetNode`s directly and never through a window, so no test
+routes a coordinate through a window's scale; the whole conversion
+machinery *plus* the awareness declaration was measured green at 125%,
+indistinguishable from baseline. `cargo test --workspace` therefore stays
+in every end gate as a **regression check** — it must not go red — but it
+is not counted as evidence that a conversion is right. What counts per
+task: T2 its own unit tests (pure logic, genuinely informative), T3 the
+rendered gallery frame, T5 the call-site audit table, T6 the rendered
+output, T7 the structural side-effect enumeration, T8 its own
+scale-driving assertions.
+
 Default to **one commit per task-list item** per
 [AGENTS.md §Commit rules](../../../../AGENTS.md). The known exception
 this phase:
@@ -239,7 +252,8 @@ unaware, `GetDpiForWindow` returns 96, the scale is 1, and the
 
 **Start gate:** trap #5 (the per-window shape is what M4-Phase 8 will
 consume; record the invariant). **End gate:** scale seeded before first
-layout, verified by ordering rather than by comment; workspace green.
+layout, verified by ordering rather than by comment; workspace green as
+a regression check only (see the note above).
 
 ---
 
