@@ -170,8 +170,18 @@ that actually lacks the capability before the test lands
 4. **The audit table is the ADR's, not the implementation's.**
    [DD-002 §The conversion sites](../decisions/dd-m4-p1-002-coordinate-space-and-conversion-boundary.md)
    is written as the audit table so the implementation checks against it
-   rather than from memory. T5 closes against those 13 rows; rows marked
-   *unchanged* are assertions to be verified, not omissions.
+   rather than from memory. T5 audits **all** 13 rows and rows marked
+   *unchanged* are assertions to be verified, not omissions — but T5 does
+   not *close* all thirteen: **row 13 is closed at T4 and row 7 at T6**,
+   and T5's table cites them rather than re-deriving them. Corrected at T5
+   (proposition Q7): F-26 fixed this in [plan.md](./plan.md) §T5's end
+   gate at T4 and did not reach the obligation that summarises it, which
+   is the "correct the carriers, not the summaries" failure a fourth time.
+   The obligation that matters is the one T5 discharged: **the audit query
+   is assembled from an enumeration of the coordinate-carrying API
+   surface, written before the diff exists**, because a query derived from
+   what was written cannot falsify what was forgotten (T4 independent
+   review finding R-8).
 5. **The synthesised-message limit is stated, not elided.** A synthesised
    `WM_DPICHANGED` proves the handling path; it never proves that
    crossing a real monitor boundary delivers the same message with a
@@ -238,6 +248,17 @@ approach is chosen**. The phase-wide load, from the
   recorded in [handoff.md](./handoff.md). This is the third phase-wide
   non-applicability narrowed by what actually landed, after trap #4 at T2
   (F-12) and the review lane at T3 (F-17).
+  **T5 is the second site, and it was armed as non-applicable one level
+  further down** (T5 finding F-32). T1's §T5 gate selection marked trap #3
+  "no" with the reason "No parallel vector, index, or **cache** is added"
+  — in the same sentence that names the node-side scale cache T5 adds. The
+  cache is a derived copy of `WindowState::scale`, whose source the
+  runtime does mutate (T7's handler), so the trap applies and its artifact
+  is an enumeration of that source's mutators and of every path that
+  attaches a node. Running it surfaced two shipped path classes the plan's
+  walk bullet did not name — incremental tree mutation and the IR loader's
+  conditional / `for` sites — which trap #5's re-trigger sentence would
+  not have produced. Close artifact in [log.md](./log.md) §T5.
 - **Trap #4 (untested authored branch)** — the ADR judged this
   non-applicable on the grounds that the phase adds no author-facing
   surface and no new validation branch. **This plan narrows that
@@ -291,7 +312,7 @@ approach is chosen**. The phase-wide load, from the
 | R-1 | **Coordinates right, crispness not bought** (ADR risk R2). The phase's defining failure: every integration test passes, 100% looks perfect, and the blur the phase existed to remove is still there. Integration tests cannot discharge it — a stretched bitmap reports the same numbers. | T6 is specified and reviewed as the phase's hard part, not appended to T5. Positive control A (T10) is the only evidence that closes it. **T1 de-risked the approach**: a throwaway `ceil(dip × s)` surface + `SetDpi(96 × s)` + origin ÷ s produced visibly crisper glyphs than the DWM-stretched baseline in a magnified before/after pair on the 125% machine. That is spike evidence on one machine, not T10's artifact — but the approach is no longer unproven going in. |
 | R-2 | **A missed conversion site** is wrong only at scale ≠ 1. **Sharpened at T1 (finding F-4): the 125% development machine does not catch it either.** Every layout integration test drives `WidgetNode`s directly and never through a window, so no existing test routes a coordinate through a window's scale. Measured: with the full conversion machinery *and* the V2 declaration in place at 125%, all 32 test binaries passed — identical to baseline. | DD-002's audit table closed at T5/T6 with each row verified — now the **primary** defence, not one of three. T8's synthesised change is the **only** automated defence and its weight rises accordingly. Positive control B (T10) fails visibly if a size path is missed and a wrap position moves; T1 saw that signal fire on a deliberately incomplete build. |
 | R-1b | **The build command does less than it looks like it does**, in two measured ways, both pre-existing and unrelated to DPI. (i) **A cold-directory workspace build does not link** (T1 finding F-5): `wasamo-dll/build.rs` whole-archives the *uplifted* `<profile>/libwasamo_runtime.rlib`, which cargo only produces once `wasamo-runtime` is built as a primary package. A cold `cargo test --workspace` fails `LNK1356`; a stale uplifted rlib fails as `LNK2019` on `core` / `std` symbols. `cargo check` never links, so it stays green through both and gives false comfort. (ii) **A host-package build relinks the DLL around stale object code** (T3 finding F-21, mechanism corrected at the independent review): the same whole-archive path takes the **uplifted** rlib, which cargo refreshes only on a primary-package build — so `cargo build -p gallery-rust` *does* recompile `wasamo-runtime` and *does* relink `wasamo.dll`, and the DLL still carries the previous runtime. Unlike (i) this fails **silently and green**, with a fresh DLL timestamp, which makes it a false-negative generator for every GUI evidence gate and defeats any freshness check. | (i) Build `-p wasamo-runtime` first — verified green. (ii) Precede every capture with `cargo build --release --workspace` — measured at T3, where a mutation built the other way produced a frame identical to the unmutated build. Both are **one root cause with two symptoms**, recorded in [handoff.md](./handoff.md) with re-trigger criteria and folded into T6 / T9 / T10 and T12's clean-rebuild and AGENTS.md correction. Neither is fixed by this phase. |
-| R-3 | **The atlas-offset trap.** `BeginDraw` returns the offset in pixels; once the context DPI is `96 × s` it must be divided by `s`. The offset is frequently `(0, 0)`, so omitting the conversion works most of the time and displaces text within its own surface intermittently. | Named in DD-002 and in [architecture.md §12.4](../../../../docs/architecture.md#coordinate-spaces) so T6 writes it deliberately rather than discovering it; T6's review lane is full. |
+| R-3 | **The atlas-offset trap.** `BeginDraw` returns the offset in pixels; once the context DPI is `96 × s` it must be divided by `s`. The offset was described as frequently `(0, 0)`, so omitting the conversion would work most of the time and displace text within its own surface intermittently. **Measured at T5 (finding F-33) and the qualification is generous**: instrumenting `draw_text` over the gallery gives offsets `(1,2)`, `(19,2)`, `(68,2)`, `(125,2)`, `(199,2)`, `(255,2)`, `(345,2)`, `(348,2)` … — they march across the atlas and essentially **none** is `(0, 0)`. On any UI with more than a couple of text nodes the omission is wrong nearly everywhere rather than intermittently. | Named in DD-002 and in [architecture.md §12.4](../../../../docs/architecture.md#coordinate-spaces) so T6 writes it deliberately rather than discovering it; T6's review lane is full. The measurement makes the defect *easier* to catch, not less likely, and the same run recorded that atlas packing is deterministic across launches — which is what disqualified it as the cause of F-33's frame drift. architecture.md §12.4's wording is a **Moment 2 divergence item** for T12. |
 | R-4 | **`s ≠ 1` is unexercised by the real OS path until T9** — the cost of the sequencing thesis. | T8 is placed before T9 precisely to close this; the risk the ordering creates is closed inside the ordering. |
 | R-5 | **Closed at T1.** The planning-time estimate ("two production sites and at least four integration tests") undercounted: `run_layout_as_window_root` has 2 production + **13** test call sites in 6 files, and the plain `run_layout` — omitted from the estimate — has 1 production (`emit::flush_layout`) + **8** test sites in 3 files. Naive parameter threading was compiler-measured at **28 broken test call sites across 12 files**. | Resolved by caching the scale on the node instead of threading it: **7** broken sites in 4 files, all of them the `hit_test_click` literals that the `i32`→`f32` pointer-unit change costs under any carrier. The layout entry points keep their signatures and no test learns about scale. Decided and compiler-verified at T1; details in [log.md](./log.md) §T1. |
 | R-6 | **Owner-visible verification needs a second machine** (ADR risk R3): the environment exists, the scheduling does not. | Obligation 7 — the runnable set is delivered at T10, so T11 is one observation rather than a build-and-deliver task. |
