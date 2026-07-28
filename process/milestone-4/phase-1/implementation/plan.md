@@ -355,6 +355,48 @@ unaware, `GetDpiForWindow` returns 96, the scale is 1, and the
       `lib.rs::window_create`. A correction placed at the ABI function
       would leave every `.ui`-loaded window — i.e. all three example
       hosts — at the wrong physical size.
+- [ ] **Decide the rounding of the DIP → physical window size.** Named
+      here rather than met mid-edit (found while checking T4's landing
+      site at T3 close). `SetWindowPos` takes `i32`, the requested size
+      is `i32` DIP, and `size × s` is an `f32`: 800 DIP at 125% is
+      exactly 1000, but 801 DIP at 150% is 1201.5 and something must
+      decide. **T2 deliberately shipped no integer conversion except
+      `surface_pixels`**, whose contract is *surface allocation* — `ceil`
+      plus a one-pixel floor, chosen because a truncated surface clips
+      the last column of glyph coverage. Reaching for it here would
+      borrow a rule written for a different purpose, which is exactly the
+      F-14 / F-15 class. The candidates are `round` (nearest physical
+      size, off by at most half a pixel in either direction), `ceil`
+      (never smaller than requested, consistent with `surface_pixels` but
+      for no stated reason), and `trunc` (rejected on the same grounds
+      `surface_pixels` rejects it). **T4 decides, records the reason, and
+      decides separately whether the rule belongs inside `DipScale`** —
+      if it does, it is a second rounding contract in the type and needs
+      its own test; if it does not, the arithmetic lives at the call site
+      and the type's single-rounding-contract story stays intact. Note
+      that T10's window-measurement check (800 × 600 → 1000 × 750 at
+      125%) is **exact and therefore cannot discriminate any of the
+      three** — the same shape as F-13.
+- [ ] **Decide where in `window::create` the correction runs, and with
+      which flags.** Also named here rather than met mid-edit.
+      `SetWindowPos` dispatches `WM_SIZE` **synchronously, before it
+      returns** — the property DD-003 makes load-bearing for
+      `WM_DPICHANGED` — and `create`'s body has a seam that decides what
+      that nested message finds: `GWLP_USERDATA` is installed at
+      [`window.rs:83`](../../../../wasamo-runtime/src/window.rs), after
+      the `WindowState` is boxed. A correction placed **before** that
+      line dispatches into a `wnd_proc` that cannot reach any state;
+      placed **after**, it dispatches into the live `WM_SIZE` arm with
+      `root_widget` still `None`. Both are no-ops **today**, which is
+      exactly why the choice must be recorded rather than fallen into:
+      T5 makes that arm divide by the window's scale and T7 makes the
+      ordering a correctness constraint. **Flags are part of the
+      decision**: `CW_USEDEFAULT` placement means the correction must not
+      move the window, so it needs `SWP_NOMOVE` — DD-003's
+      `SWP_NOZORDER | SWP_NOACTIVATE` pair is for the `WM_DPICHANGED`
+      path, where the OS-suggested rectangle *is* applied, and copying it
+      verbatim here would move the window to whatever `x` / `y` are
+      passed.
 - [ ] **The flash-free confirmation has a sharper answer than the plan
       assumed.** Creation and `wasamo_window_show` are separate ABI
       calls, but an in-between path *does* query geometry:
