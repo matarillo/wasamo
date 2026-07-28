@@ -15,9 +15,16 @@ the declaration lands last.** Because the conversion machinery is
 unconditional and an unaware process reports 96 DPI, T2–T8 land into a
 world where every scale factor is exactly 1 and every conversion is the
 identity — so every intermediate commit is correct and visually green,
-including on the 125% development machine. T8 drives `s ≠ 1`
-synthetically so the ordering does not defer all scaled-path risk to the
-end.
+including on the 125% development machine. T1 measured the premise
+rather than inheriting it: an undeclared process is told 96 DPI on that
+machine. T8 drives `s ≠ 1` synthetically so the ordering does not defer
+all scaled-path risk to the end.
+
+**What "green" is worth here changed at T1.** The clause above is a
+statement about the *world* T2–T8 land into — every conversion really is
+an identity — not about the suite's power to detect a wrong one. Those
+are separate claims and the plan originally ran them together. The next
+paragraph separates them.
 
 **A green suite is not evidence of correctness in T3–T8** (owner-agreed
 2026-07-28, on T1 finding F-4). Every existing layout integration test
@@ -36,10 +43,16 @@ Default to **one commit per task-list item** per
 [AGENTS.md §Commit rules](../../../../AGENTS.md). The known exception
 this phase:
 
-- **T5** — the seam conversions change `run_layout_as_window_root` /
-  `sync_visuals` / hit-test signatures together (risk R-5); intermediate
-  states do not build, so the site changes and their call-site updates
-  land in one buildable commit.
+- **T5** — **narrowed at T1.** The exception was written on the
+  assumption that `run_layout_as_window_root`, `sync_visuals` and the
+  hit-test entry points all change signature together. They do not:
+  the carrier decision leaves the layout and sync signatures untouched,
+  and only `hit_test_click` / `update_hover` change (their `i32`
+  physical coordinates become `f32` DIP). The exception survives at that
+  reduced scope — those two signatures and their 7 test call sites in 4
+  files do not build in intermediate states, so they land in one
+  buildable commit — but it no longer covers the seam work as a whole,
+  and the rest of T5 may be split if it reads better that way.
 
 If implementation reveals an item should split or reorder, revise this
 list so it stays an accurate record rather than a frozen prediction —
@@ -211,17 +224,30 @@ independently of the DPI change (DD-002 risk note; preamble obligation
 are written at construction today, where no scale exists; after this
 task every Composition geometry write in the runtime happens in exactly
 one pass — which is what makes T5's audit *complete* rather than
-approximately complete.
+approximately complete. **T1 verified the premise**: the production
+Composition geometry writes are exactly the two construction-time label
+writes (`widget.rs:813` / `818`), the label-update pair (`1035` /
+`1040`), the `sync_visuals` node pair (`1749` / `1754`), the ScrollView
+intermediate pair (`1776` / `1781`), the root's
+`SetRelativeSizeAdjustment` (`window.rs:64`) and the three zero-inset
+clips. After this task the first four collapse into one pass and no
+other write exists to be missed.
 
 - [ ] Move the label offset / size writes out of Button construction and
       the label-update path into `sync_visuals`.
 - [ ] Cover `ToggleButton`'s label path in the same move (it reuses
       Button's leaf measure / arrange and carries the same label).
-- [ ] Confirm `SizeConstraint::Fixed(lw + PAD_H * 2.0, lh + PAD_V * 2.0)`
-      still derives from the same measurement — the move is a write-site
-      relocation, not a sizing change.
+- [ ] Confirm the node's sizing still derives from the same measurement
+      — the move is a write-site relocation, not a sizing change.
+      `SizeConstraint::Fixed` is per axis, so this is two constraints,
+      not one: `button_family` sets `Fixed(lw + PAD_H * 2.0)` /
+      `Fixed(lh + PAD_V * 2.0)` and `update_button_label` re-derives the
+      same pair.
 - [ ] Regression gate: existing Button / ToggleButton integration
-      fixtures and the gallery render unchanged.
+      fixtures and the gallery render unchanged. Per the note above the
+      **rendered frame is the gate**; the fixtures are a regression
+      check, and T1 measured that they do not react to a geometry-write
+      relocation the way the frame does.
 
 **Start gate:** trap #2 (the write moves between passes — enumerate what
 depended on it landing at construction time). **End gate:** the
@@ -240,11 +266,26 @@ unaware, `GetDpiForWindow` returns 96, the scale is 1, and the
       immediately after `CreateWindowExW` returns and **before any
       layout runs**, so `set_root`'s first pass already uses the real
       scale.
-- [ ] Realise `wasamo_window_create`'s DIP `width` / `height`: create at
-      the requested numbers, then apply `size × s` via `SetWindowPos`
-      before the window is shown. Confirm the flash-free property holds
-      structurally — that creation and `wasamo_window_show` are separate
-      ABI calls and no in-between path queries geometry.
+- [ ] Realise the DIP `width` / `height`: create at the requested
+      numbers, then apply `size × s` via `SetWindowPos` before the window
+      is shown. **The correction belongs inside `window::create`, not in
+      `wasamo_window_create`** (T1 finding): `window::create` has three
+      callers — the ABI entry point, `wasamo_load_ui` (which creates its
+      own 800 × 600 window and never goes through
+      `wasamo_window_create`), and the Rust-native
+      `lib.rs::window_create`. A correction placed at the ABI function
+      would leave every `.ui`-loaded window — i.e. all three example
+      hosts — at the wrong physical size.
+- [ ] **The flash-free confirmation has a sharper answer than the plan
+      assumed.** Creation and `wasamo_window_show` are separate ABI
+      calls, but an in-between path *does* query geometry:
+      `window::set_root` calls `GetClientRect` for its first layout, and
+      `wasamo_load_ui` calls it between create and show. The property
+      therefore holds only because the correction runs inside
+      `window::create` before it returns — which is the bullet above,
+      restated as the reason it is not optional. Confirm by ordering,
+      and record that `set_root`'s first layout is the consumer that
+      would have seen the uncorrected rectangle.
 - [ ] Enable the `Win32_UI_HiDpi` feature in
       `wasamo-runtime/Cargo.toml` (prerequisite for `GetDpiForWindow`;
       the awareness API itself is T9) and re-sync
@@ -532,7 +573,18 @@ are in
 - [ ] **Window measurement check** (risk R-9): a window created at
       800 × 600 DIP measures 1000 × 750 physical at 125%. Cheap,
       concrete, and the only in-phase check of DD-004's outer-window
-      -rectangle claim.
+      -rectangle claim — but **not a positive control on its own**, and
+      the plan originally treated it as one. T1 measured the *unaware*
+      baseline at exactly 1000 × 750 as well, because DWM stretches the
+      logical 800 × 600 by the same factor. The number is therefore
+      satisfied by a build that never declares awareness at all. Pair it
+      with something that separates the two: the effective-context
+      assertion from T9, or the crispness pair (control A) on the same
+      frame. T1 also measured the failure direction — with awareness
+      declared and T4's correction absent, the window measures
+      800 × 600 physical and the WrapPanel drops from 7 tiles per row to
+      6 — so the three outcomes are distinguishable when the check is
+      read alongside a control, and indistinguishable when it is not.
 - [ ] **Re-derive the capture coordinates** for later phases against the
       new coordinate space, as the evidence artifact T12's
       `verification-environments.md` revision consumes (risk R-7).

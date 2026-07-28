@@ -328,6 +328,59 @@ them.
    ordering change, on the one task whose value is that it drives the
    real handler.
 
+### Plan-hypothesis re-audit (2026-07-28, owner-prompted)
+
+The first pass of T1's plan revision updated only the tasks T1's
+findings *pointed at* — T4, T5, T6, T9, T12 — rather than re-reading the
+whole task list against what the spike had learned. A second pass at the
+owner's prompting found five more places where a planning-time
+hypothesis had been falsified or sharpened and was still standing.
+Recorded as findings because the omission class matters more than the
+five items: **a spike's output is not only "what I looked for" but "what
+else in the plan is now known to be wrong."**
+
+- **F-6 — the T5 commit-bundling exception's stated reason was
+  falsified.** It bundled T5 because `run_layout_as_window_root` /
+  `sync_visuals` / hit-test signatures "change together". Under the
+  carrier decision the first two do not change at all. The exception
+  survives at the reduced scope of the two hit-test entry points and
+  their 7 call sites; the rest of T5 is free to split.
+- **F-7 — the DIP window-size correction must live in
+  `window::create`, not `wasamo_window_create`.** T4's wording named the
+  ABI function. `window::create` has three callers, and `wasamo_load_ui`
+  — the path every example host takes — is not one of them via the ABI
+  entry point. A correction at the named site would leave all three
+  hosts at the wrong physical size, which is precisely the R-9 defect
+  T10 is supposed to catch, arriving through the door the plan left
+  open. **This is the one that would have shipped broken.**
+- **F-8 — the flash-free property has an in-between geometry query
+  after all.** T4 asked to confirm "no in-between path queries
+  geometry". `window::set_root` calls `GetClientRect` for its first
+  layout, and `wasamo_load_ui` calls it between create and show. The
+  property still holds, but for a different reason than the plan gave:
+  the correction runs inside `window::create` before it returns. The
+  confirmation is now written as a consequence of F-7 rather than as an
+  independent structural fact.
+- **F-9 — T10's window-measurement check is not a positive control.**
+  "800 × 600 DIP measures 1000 × 750 physical at 125%" is satisfied by
+  the **unaware** baseline too, because DWM stretches by the same
+  factor — T1 measured exactly 1000 × 750 before any change. A build
+  that never declares awareness passes it. It must be read alongside
+  T9's effective-context assertion or control A. T1 also measured the
+  third outcome (aware, correction absent: 800 × 600 physical, WrapPanel
+  7 tiles → 6), so all three states are separable once the check is
+  paired.
+- **F-10 — `SizeConstraint::Fixed` is per axis.** T3 wrote
+  `Fixed(lw + PAD_H * 2.0, lh + PAD_V * 2.0)` as a single two-argument
+  constraint; the source has two one-argument constraints, one per axis.
+  Cosmetic, but a T3 that copies the plan's shape will not compile.
+
+*Disposition:* all five folded into [plan.md](./plan.md) in the same
+commit as this entry. F-6 → the commit-rules exception; F-7 / F-8 → T4;
+F-9 → T10; F-10 → T3. F-7 is also the reason the T3 premise ("every
+Composition geometry write happens in exactly one pass") is now stated
+with T1's verified write list rather than as an assertion.
+
 ### T5 and T6 gate selections (armed by T1, before T5 opens)
 
 Recorded here rather than at T5's own start gate because
