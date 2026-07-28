@@ -370,6 +370,13 @@ else in the plan is now known to be wrong."**
   third outcome (aware, correction absent: 800 × 600 physical, WrapPanel
   7 tiles → 6), so all three states are separable once the check is
   paired.
+  **Corrected in place at T4 (finding F-27):** the "7 tiles → 6" half of
+  that sentence drops a condition the spike-evidence section above
+  states — T1's throwaway carried the **complete** conversion machinery,
+  so its client extent was divided back into DIP. With T4's correction
+  absent and *only* T4's code present, the same state measures **7**
+  tiles, not 6. The three-state separation still holds; the numbers are
+  in §T4.
 - **F-10 — `SizeConstraint::Fixed` is per axis.** T3 wrote
   `Fixed(lw + PAD_H * 2.0, lh + PAD_V * 2.0)` as a single two-argument
   constraint; the source has two one-argument constraints, one per axis.
@@ -1866,3 +1873,195 @@ discipline.
 - *Throwaway reverted* — `git status` clean of `wasamo-*` changes; the
   instrumentation and the declaration exist only in this record. The
   declaration remains T9's to land.
+
+### Plan-hypothesis re-audit (2026-07-28, in-gate — not owner-prompted)
+
+T1 and T2 each revised only the tasks their findings *pointed at* and
+were caught by the owner; T3 ran the re-audit as an item inside the close
+gate and found six items unprompted. This is the second run of that
+shape. [plan.md](./plan.md) §T5 … §T12 and [preamble.md](./preamble.md)
+(the review-lane table, §Implementation gates, §Technical risks, §The
+sequencing thesis, §Verification closure, §Obligations carried) were
+re-read **in order** against what T4 landed and measured. Verdicts,
+every entry, including the ones with nothing to correct:
+
+| Re-read | Verdict |
+|---|---|
+| §Task list preamble (gate-substitution table, commit rules) | **correction**: the table names T2, T3, T5, T6, T7 and T8 and **omits T4** — reasonable when T4 was thought to have nothing to show, false once its real gate turned out to be the three-state probe. T4's row added |
+| §T4 | corrections: checklist ticked, both decisions recorded as taken, the two-commit landing recorded, and the inertness claim sharpened from "the correction is a no-op" to "no `WM_SIZE` is dispatched at all, so the placement's failure mode is unreachable" |
+| §T5 | **corrections**: **F-26** (audit row 13 had no owner in the plan; T4 closes it) plus the two pickups T4 leaves — the `pub(crate)` visibility that makes row 2b reachable without widening the API, and the `#[allow(dead_code)]` T5 removes as its first reader |
+| §T6 | no additional correction. T4 touches nothing T6 depends on: `surface_pixels` is unchanged, the walk's callers are unchanged, and the scale reaches T6 through the node cache T5 introduces rather than through `WindowState` |
+| §T7 | **correction — F-30**: T7 must not inherit `SWP_NOMOVE` nor reuse `realize_dip_window_size`. Plus a confirmation folded into the step-ordering bullet: the synchronous `WM_SIZE` premise is now **measured**, and so is its absence at `s = 1` |
+| §T8 | **correction — F-29**: the cached-scale assertion has no reachable field. `pub(crate)` plus a separate test crate means T8 must add a `#[doc(hidden)] pub` seam in `lib.rs::ffi`, and must **not** widen the field |
+| §T9 | **correction**: `Win32_UI_HiDpi` is measured sufficient for the declaration symbols, so T9 needs no `Cargo.toml` edit — stated with its limit, since the two query symbols the effective-level assertion uses were not exercised |
+| §T10 | **corrections — F-27** (the three-state table measured in one session; the "7 → 6" signature was T1's number for a build carrying the full machinery, and does not reproduce at T4) and **F-28** (control B's invariance is not bit-exact, because the client rectangle does not scale by `s`) |
+| §T11 | no additional correction — owner-executed, and nothing T4 landed changes what the owner is asked to observe |
+| §T12 | **correction**: DD-004's outer-window-rectangle claim, flagged at ADR time as most at risk, now has its measurement; recorded with the trap that the same claim is **false** of the client area, so the Moment 2 wording must stay where DD-004 put it |
+| preamble §The sequencing thesis | **correction — F-31**: the thesis's cost paragraph is written for arithmetic and understates the cost for ordering decisions |
+| preamble §Verification closure | no additional correction. Evidence item (2)'s task mapping is unchanged; F-29 is about *how* T8 reaches the value, not about which task owns the claim |
+| preamble §Obligations carried | no additional correction |
+| preamble §Implementation gates | **correction**: trap #4's narrowing gains T4 as a third site — one where the judgment survives only because the approach was chosen against DD-003's own "if the scale is not 1" phrasing |
+| preamble review-lane table | corrected at the start gate — **F-25** |
+| preamble §Technical risks | **correction**: R-9 sharpened in both halves — the placement risk is worse than "inert" and the arithmetic risk is now measured rather than deferred to T10 |
+
+Seven findings, six of them in tasks T4 never touched.
+
+- **F-25 — the T4 review lane's stated ground was incomplete.** Recorded
+  at the start gate and folded there. Listed here so the count is
+  honest, not carried twice.
+- **F-26 — DD-002 audit row 13 had no owner.** The plan assigns rows 1–6
+  and 8–12 to §T5 and row 7 to §T6. **Row 13** — `create_hwnd`'s
+  `CreateWindowExW` width / height, "DIP → physical, per DD-003" — is
+  named by neither, and §T4's bullets describe the correction without
+  ever saying it closes an audit row. The consequence is not
+  hypothetical: T5's end gate is "DD-002's 13 rows, each with its
+  classification", so a T5 that closed every row it had been handed would
+  have produced a 12-row table and called it 13, on the one task whose
+  artifact *is* completeness. Closed by T4's call-site audit above.
+  *Disposition:* [plan.md](./plan.md) §T5's end gate states where row 13
+  is closed and why the gap existed.
+- **F-27 — the "7 tiles → 6" failure signature does not reproduce at
+  T4, because it was never T4's number.** [plan.md](./plan.md) §T10 reads
+  "with awareness declared and T4's correction absent, the window
+  measures 800 × 600 physical and the WrapPanel drops from 7 tiles per
+  row to 6". Measured at T4 with the declaration added as throwaway and
+  the correction removed: **7 tiles**, not 6. T1's number is not wrong —
+  T1's throwaway carried the *complete* conversion machinery, so its
+  client extent of 782 physical became 625.6 DIP — but the plan restates
+  it as a property of the missing correction alone, and read that way it
+  is false. This is the same shape as S-3 at T3: **a correction applied
+  to the document that carried the finding and not to the document that
+  summarised it**, one level further along. T4 replaces the citation with
+  three states measured in one session, and the more useful reading falls
+  out of them: rows 1 and 3 share a window rectangle, rows 1 and 2 share
+  a tile count, so **no single number separates the three**. Also
+  recorded: the aware-plus-correction row reads **9** tiles only because
+  T5's inbound seam is absent, and must read 7 once it lands — a T10 that
+  inherited 9 would pin a half-finished phase. *Disposition:*
+  [plan.md](./plan.md) §T10.
+- **F-28 — positive control B's invariance is not bit-exact, and a
+  control that assumes it is can fail a correct build.** DD-004 defines
+  `width` / `height` as the **outer** rectangle, and that is the
+  rectangle the correction scales exactly: 800 × 600 DIP → 1000 × 750
+  physical at 125%. The **client** rectangle does not follow by the same
+  factor. Measured: 784 × 561 at 96 DPI and 982 × 703 at 120 DPI, i.e.
+  785.6 × 562.4 DIP — because the non-client frame is 8 px per side at 96
+  DPI and 9 px at 120 DPI and scales by its own rounded metric. Layout
+  receives the client extent, so a correct implementation lays out into
+  about 1.6 DIP more width at 125%, and a wrap position sitting near a
+  line-break boundary may legitimately move. [plan.md](./plan.md) §T10
+  states control B as "wrap positions and element order compared" with
+  "invariance is the evidence", which as written would redden a correct
+  build. *Disposition:* §T10 gains the tolerance and the alternative
+  (drive both captures from a controlled *client* size).
+- **F-29 — T8's first assertion has no reachable field.** "A created
+  window's cached scale equals `GetDpiForWindow`" is an integration-test
+  claim, and the phase's Windows integration tests live in
+  `wasamo-runtime/tests/` — a separate crate, which can reach only `pub`
+  items. T4 landed `pub(crate) scale`, deliberately: DD-004 walks every
+  M4 phase and concludes no host needs the scale factor, and `WindowState`
+  is `pub use`-exported, so `pub` would ship exactly the surface that
+  decision declines. The fix is the established `#[doc(hidden)] pub`
+  seam in `lib.rs::ffi` beside `__install_owning_thread_for_test`, and
+  naming it now is the point — a T8 that meets this mid-edit is one
+  keystroke from widening the field instead. *Disposition:*
+  [plan.md](./plan.md) §T8.
+- **F-30 — T7 must not inherit T4's flags, and the plan only warns in
+  the other direction.** §T4 warns against copying DD-003's
+  `SWP_NOZORDER | SWP_NOACTIVATE` into `create`, because `CW_USEDEFAULT`
+  placement means the correction must not move the window. The reciprocal
+  hazard is now the live one: `window::realize_dip_window_size` exists,
+  is the only `SetWindowPos` in the runtime, and passes `SWP_NOMOVE` —
+  and T7's step 2 applies an **OS-supplied physical rectangle** whose
+  entire content is a new position *and* size. Inheriting `SWP_NOMOVE`
+  there, or reusing the helper (which converts a **DIP size**, a
+  different input entirely), would pin the window on every monitor
+  crossing while every test stayed green. A T7 author arrives at that
+  step having just read `create`. *Disposition:* [plan.md](./plan.md)
+  §T7, as its own bullet rather than a clause.
+- **F-31 — the sequencing thesis costs more for ordering decisions than
+  for arithmetic ones, and the plan's cost paragraph is written for
+  arithmetic.** [preamble.md](./preamble.md) §The sequencing thesis says
+  the cost of landing the declaration last is that "`s ≠ 1` is not
+  exercised by the *real* OS path until T9", and F-4 sharpened that with
+  "and the suite would not notice either". T4 measured a third, worse
+  case. An identity *conversion* still executes: the multiplication is in
+  the code path, and it becomes wrong only when the factor changes. An
+  identity *resize* does not even happen — measured, a size-preserving
+  `SetWindowPos` dispatches `WM_WINDOWPOSCHANGING` and
+  `WM_GETMINMAXINFO` and **no `WM_SIZE` at all**. So the question T4's
+  placement decision answers ("what does the nested message find?") has
+  no answer to get wrong before T9: the failure mode is not invisible,
+  it is unreachable. Any task placing work relative to a message dispatch
+  — T4's correction, T7's step ordering — therefore cannot lean on
+  "nothing went wrong in this build", and must argue structurally. F-4 is
+  "a green suite proves nothing about a conversion"; this is "a green run
+  proves nothing about an ordering". *Disposition:* preamble §The
+  sequencing thesis, and the reasoning is already what §T4's placement
+  decision was argued from.
+
+*Disposition summary:* all folded into [plan.md](./plan.md) and
+[preamble.md](./preamble.md) in the same commit as this entry. F-25 →
+preamble review-lane table (landed at the start gate); F-26 → §T5;
+F-27 → §T10; F-28 → §T10; F-29 → §T8; F-30 → §T7; F-31 → preamble §The
+sequencing thesis. Non-numbered corrections in the same batch: §Task
+list's gate-substitution table gains T4; §T4's checklist and decisions;
+§T5's two pickups; §T7's measured-premise confirmation; §T9's
+`Cargo.toml` finding; §T12's outer-rectangle measurement; preamble
+§Implementation gates trap #4; preamble R-9.
+
+**Applying T3's derived discipline — correct the summaries, not only the
+carriers.** T3's second review round found that its own correction to
+F-18 had been applied to the documents that *carried* the claim and not
+to the ones that *summarised* it (S-3). Each correction above was
+therefore searched for in three forms — full statement, summary, and
+quotation — across [plan.md](./plan.md), [preamble.md](./preamble.md),
+[handoff.md](./handoff.md), this log, and the ADR set. Results:
+
+- **F-27's "7 tiles → 6"** has **three** sites, not one, and the search is
+  what found the third. (i) [plan.md](./plan.md) §T10 — the full
+  statement; corrected. (ii) **This log's own T1 §Plan-hypothesis
+  re-audit, F-9's closing sentence** ("T1 also measured the third
+  outcome (aware, correction absent: 800 × 600 physical, WrapPanel 7
+  tiles → 6)") — the same restatement, dropping the same condition,
+  *inside the document that carries the original*; corrected in place
+  below, following the in-place-correction practice T3 used for F-21's
+  mechanism rather than leaving a wrong sentence standing under an
+  append-only header. (iii) [log.md](./log.md) §T1's spike-evidence
+  section — the original measurement, which states its own reason
+  ("because a 800 px physical client area is 640 DIP wide", i.e. the
+  inbound division was present) and is therefore **correct as written and
+  deliberately left alone**. Not present in the preamble, the handoff, or
+  the ADRs. That (ii) exists and (iii) is fine is S-3's shape exactly:
+  the original is self-qualifying, the summaries are not.
+- **F-28's outer-vs-client** claim appears in
+  [DD-004 §What `width` / `height` denote](../decisions/dd-m4-p1-004-unit-contract-and-spec-wording.md)
+  and in [DD-003 §Initial scale acquisition](../decisions/dd-m4-p1-003-dpi-change-propagation.md),
+  both of which say **outer** and are therefore correct and immutable.
+  Two further sites, both left unedited with the reason recorded:
+  - [framing.md](../requirements/framing.md) §positive control B states
+    the control as "同じ論理サイズのウィンドウ … 折り返し位置・並びを比較 …
+    不変であることが正しさの証拠" — the same bit-exactness assumption. It
+    is a **phase requirements document, written before the ADR set**, and
+    correcting an upstream agreement record from an implementation task
+    is not this task's call. The operative correction lives in
+    [plan.md](./plan.md) §T10, which is the document T10 executes from;
+    the divergence is flagged for T12's Moment 2 pass, which exists to
+    reconcile stated claims against what landed.
+  - [DD-002](../decisions/dd-m4-p1-002-coordinate-space-and-conversion-boundary.md)'s
+    rejection of option C1 says WrapPanel line breaks "can differ between
+    scales" under layout-in-physical. That is a claim about layout
+    *arithmetic* accumulating `f32` error, and it stands; F-28 is a
+    different cause — the client extent handed *to* an unchanged layout —
+    so the ADR's argument is unaffected and nothing is being corrected
+    there.
+- **F-30's flag pair** appears in §T4 (the warning in one direction,
+  already there), §T7 (added), and DD-003 (immutable, and correct for its
+  own path).
+- **F-31** is a new claim with no prior statement to correct; it is
+  added to the preamble and reflected in §T4's inertness paragraph.
+- **F-26 / F-29** are gaps rather than wrong statements, so there is no
+  summary to chase — but both were checked against the preamble's
+  §Verification closure table, which maps evidence items to tasks and
+  needs no change: F-26 is about which task closes a row, F-29 about how
+  a task reaches a value.

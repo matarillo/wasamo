@@ -87,6 +87,20 @@ placed before T9**: it drives the machinery at 125% / 150% / 200%
 without needing an awareness declaration, so the risk the ordering
 creates is closed inside the ordering.
 
+**The cost is larger for ordering decisions than for arithmetic ones**
+(T4 finding F-31). An identity conversion is still *executed*, so a
+missed multiplication is at least present in the code path and becomes
+wrong the moment the factor changes. An ordering decision can be worse
+than untested: measured at T4, a size-preserving `SetWindowPos`
+dispatches **no `WM_SIZE` at all**, so the question "what does the nested
+message find" has no answer to get wrong before T9 — the failure mode is
+not merely invisible, it is unreachable. Tasks that place work relative
+to a message dispatch (T4's correction, T7's step ordering) therefore
+cannot lean on "nothing went wrong" in any pre-T9 build, and must argue
+structurally instead. This is F-4's lesson one level out: F-4 says a
+green suite proves nothing about a conversion; F-31 says a green *run*
+proves nothing about an ordering.
+
 **Not all three of those factors are equally load-bearing** (T2 finding
 F-13). At a power-of-two factor the scale multiplication is exact, so the
 convert-once-on-the-difference rule has no observable effect and a DIP
@@ -232,6 +246,19 @@ approach is chosen**. The phase-wide load, from the
     per process, that is recorded as a **stated limit with its reason**
     in [log.md](./log.md) — not silently skipped, and not left as an
     inherited "non-applicable".
+  - **T4 is a third site where the judgment was live, and it survives
+    only because the approach was chosen against the ADR's own
+    phrasing.** [DD-003 §Initial scale acquisition](../decisions/dd-m4-p1-003-dpi-change-propagation.md)
+    words option I1 as "**if the scale is not 1** apply `size × s`". A
+    literal implementation would have shipped a branch reachable only
+    after T9, on the path every host takes, and directly against
+    [DD-001 §Failure handling](../decisions/dd-m4-p1-001-dpi-awareness-declaration.md)'s
+    structural argument that tolerating a failed declaration is safe
+    *because the conversion machinery has no second code path*. T4's
+    correction is unconditional and the absence of the branch is its
+    artifact. Recorded because "trap #4 did not apply" and "trap #4 was
+    avoided by a design choice" are different facts, and only the second
+    one is true here.
 
 **Review lanes** ([gates §4](../../../procedures/implementation-gates.md)):
 
@@ -244,7 +271,8 @@ approach is chosen**. The phase-wide load, from the
 | T10 | Full independent review | GUI-render evidence |
 | T2 | Branch/test-focused review | **Corrected at T2 (finding F-12); this row read "Normal review / pure logic".** Pure logic is why T2 is not in a full-review class, but it adds two authored branches, and [gates §4](../../../procedures/implementation-gates.md) assigns exactly that case the branch/test-focused lane. "No full review" is not "no review" |
 | T3 | Full independent review | **Corrected at T3 (finding F-17); this row read "Normal review", grouped with T4 and T8, on the ground that a behaviour-identical refactor "carries an explicit regression check against shipped rendering".** That ground was the existing fixtures, and T1's finding F-4 removed it: the fixtures do not react to a geometry-write relocation, so [plan.md](./plan.md) §T3 now makes the **rendered frame** the gate. T3's evidence class is therefore GUI-render evidence, and it relocates a write between passes in shipped rendering code — two of the three high-risk classes in [gates §4](../../../procedures/implementation-gates.md) |
-| T4, T8 | Normal review | Additive per-window state (T4), test-only (T8) |
+| T4 | Full independent review | **Corrected at T4 (finding F-25); this row read "Normal review", grouped with T8, on the ground "additive per-window state".** The `DipScale` field is additive, but the task also inserts a `SetWindowPos` that **re-enters `wnd_proc` synchronously in the middle of `window::create`** — on the single path both public window-create entries and all three example hosts take, at a point where the object being re-entered is half-constructed. [gates §4](../../../procedures/implementation-gates.md) names *runtime structural change* as a high-risk class, and this preamble justifies T7's full lane as "runtime structural change with **re-entrancy through the message loop**" — the same property, four tasks earlier |
+| T8 | Normal review | Test-only |
 
 ## Technical risks (planning-time recon; T1 sharpens)
 
@@ -259,7 +287,7 @@ approach is chosen**. The phase-wide load, from the
 | R-6 | **Owner-visible verification needs a second machine** (ADR risk R3): the environment exists, the scheduling does not. | Obligation 7 — the runnable set is delivered at T10, so T11 is one observation rather than a build-and-deliver task. |
 | R-7 | **Moment 2's `verification-environments.md` revision depends on evidence that does not exist yet.** Observation 4's stated premise (the host is DPI-unaware, so DWM stretches logical 800×600 to physical 1000×750) is falsified by this phase's implementation, and the corrected capture coordinates later phases rely on can only be derived against the running surface. | Deliberately deferred to Moment 2 by DD-004. T10 must **produce** the re-derived coordinates as an evidence artifact; T12 writes them. A note that is provably correct one commit late beats one that is speculatively wrong from ADR acceptance. |
 | R-8 | **The declarative-host boundary claim is assumed rather than tested.** Choosing runtime-side declaration over per-host manifests is falsifiable exactly at "all three hosts still build and run unchanged". | T9 rebuilds and runs C, Rust, and Zig hosts with no manifest asset and no build-system edit, as a recorded artifact (obligation 6). |
-| R-9 | **`SetWindowPos` correction is inert until T9**, so T4's create-then-correct path ships untested at `s ≠ 1`. | T8 covers the arithmetic; the real-window form is covered by T10's window-measurement check (an 800 × 600 DIP request must measure 1000 × 750 physical at 125%), which DD-004 calls out as cheap and concrete. |
+| R-9 | **`SetWindowPos` correction is inert until T9**, so T4's create-then-correct path ships untested at `s ≠ 1`. **Sharpened at T4**: "inert" understates it for the *placement* half — at `s = 1` the correction dispatches no `WM_SIZE` at all, so the ordering question the placement answers cannot even be posed before T9 (finding F-31). | The arithmetic is covered by `window_size_to_physical`'s tests, each shown to fail against a wrong implementation. **The real-window form is no longer deferred to T10**: T4 measured it directly with a throwaway declaration, recording three window states — unaware (1000 × 750, 7 tiles), aware without the correction (800 × 600, 7 tiles), aware with it (1000 × 750, 9 tiles, the 9 being the signature of T5's still-absent inbound seam). The residual risk is that the measurement was taken against a throwaway declaration rather than the landed one, which T9 closes. |
 
 ## Lifecycle transition
 
