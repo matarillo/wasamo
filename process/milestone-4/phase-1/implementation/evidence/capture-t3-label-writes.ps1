@@ -62,6 +62,20 @@ $uic = Get-ChildItem -Path (Join-Path $repo "target\release\build") -Filter "gal
        Select-Object -First 1
 if ($null -eq $uic) { throw "gallery.uic not found under target/release/build" }
 $uicPath = $uic.FullName
+$backup = "$uicPath.t3-backup"
+
+# Recover from an interrupted earlier run. The swap below is undone in a
+# `finally`, but a hard kill between the swap and the restore leaves the
+# evidence IR sitting at the gallery's path — and cargo will not regenerate
+# it, because `build.rs` only re-runs when `gallery.ui` changes. A later
+# gallery capture would then photograph the evidence UI and report success.
+# Restoring here makes that state self-healing on the next run rather than
+# silent until someone looks closely at a frame.
+if (Test-Path $backup) {
+  Write-Warning "leftover backup from an interrupted run — restoring $uicPath before capturing"
+  Copy-Item $backup $uicPath -Force
+  Remove-Item $backup -Force
+}
 
 $outDir = Join-Path $PSScriptRoot $Tag
 New-Item -ItemType Directory -Force -Path $outDir | Out-Null
@@ -132,7 +146,6 @@ $labelUpdateUic = Join-Path $PSScriptRoot "t3-label-update.uic"
 & (Join-Path $repo "target\release\wasamoc.exe") build $labelUpdateUi $labelUpdateUic
 if ($LASTEXITCODE -ne 0) { throw "wasamoc build failed for $labelUpdateUi" }
 
-$backup = "$uicPath.t3-backup"
 try {
   # ── Gallery frames (construction-time write site) ──────────────────────
   LaunchHost

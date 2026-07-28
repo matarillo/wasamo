@@ -1190,15 +1190,20 @@ All three answered; recorded here so no later task re-opens them.
    - **In-phase consequence: none.** T2 was the phase's only pure-logic
      surface and already discharged the obligation ahead of it existing.
      A later task that introduces pure logic picks it up.
-3. **Evidence scaffolding stays under
-   [evidence/](./evidence/).** Confirmed with the standing correction
-   that **no `examples/` file was modified** — the capture swaps the
-   compiled `.uic` at the absolute path `gallery-rust`'s `build.rs` baked
-   into the executable, which lives under `target/` and is a gitignored
-   build product. The residue worth naming: a hard kill between the swap
-   and the `finally` restore would leave the evidence IR in place, and
-   cargo will not regenerate it unless `gallery.ui` changes — so a later
-   gallery capture would silently photograph the wrong UI. Hardening the
-   script to detect and restore a leftover backup **at start** is offered
-   and awaiting the owner's call; it is not in the reviewed diff.
+3. **Evidence scaffolding stays under [evidence/](./evidence/).** The
+   capture swaps the compiled `.uic` at the absolute path
+   `gallery-rust`'s `build.rs` baked into the executable — a gitignored
+   build product under `target/` — and restores it in a `finally`. The
+   residue: a hard kill between the swap and the restore leaves the
+   evidence IR in place, and cargo will not regenerate it unless
+   `gallery.ui` changes, so a later gallery capture would photograph the
+   evidence UI and report success. **Hardened at the owner's direction**:
+   the script now detects a leftover backup at start and restores before
+   capturing, which makes the interrupted state self-healing on the next
+   run rather than silent until someone reads a frame closely. The guard
+   was verified by **reproducing the interrupted state** — evidence IR
+   written over `gallery.uic`, backup file present — not only on the
+   happy path: the warning fired, the gallery IR was restored, the run
+   completed, and the recaptured frames are pixel-identical to the
+   committed set over the client interior.
 
