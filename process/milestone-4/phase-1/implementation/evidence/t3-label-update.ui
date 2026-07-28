@@ -24,5 +24,19 @@ component LabelUpdate inherits Window {
         ToggleButton {
             text: "Static toggle label"
         }
+
+        Grid {
+            columns: 1*
+            rows: 44
+
+            Cell {
+                row: 0 column: 0
+                h-align: stretch
+                v-align: stretch
+                Button {
+                    text: "Stretched by its cell"
+                }
+            }
+        }
     }
 }

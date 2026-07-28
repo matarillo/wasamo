@@ -125,8 +125,12 @@ $AlbumsTab    = @(138, 74)   # the second ToggleButton
 $OpenLightbox = @(1104, 74)  # the accent Button that inserts the conditional subtree
 $CounterBtn   = @(320, 128)  # the label-update UI's bound-text Button
 
+# `*.uic` is gitignored, so the compiled evidence IR is regenerated from the
+# committed `.ui` with the workspace's own compiler.
+$labelUpdateUi = Join-Path $PSScriptRoot "t3-label-update.ui"
 $labelUpdateUic = Join-Path $PSScriptRoot "t3-label-update.uic"
-if (-not (Test-Path $labelUpdateUic)) { throw "missing $labelUpdateUic" }
+& (Join-Path $repo "target\release\wasamoc.exe") build $labelUpdateUi $labelUpdateUic
+if ($LASTEXITCODE -ne 0) { throw "wasamoc build failed for $labelUpdateUi" }
 
 $backup = "$uicPath.t3-backup"
 try {
