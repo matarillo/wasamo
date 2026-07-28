@@ -1,0 +1,50 @@
+---
+title: M4-Phase 1 handoff
+status: skeleton
+source-phase: M4-Phase 1
+---
+
+# M4-Phase 1 — Handoff
+
+> **Status: skeleton.** Finalized at phase close, distilled from the
+> T12 carry-forward ledger in [log.md](./log.md), per
+> [workflow.md](../../../procedures/workflow.md) and
+> [retrospectives.md](../../../procedures/retrospectives.md). The
+> sections below are the shape the close will fill, not claims.
+
+## Main learnings
+
+<!-- Filled at phase close. -->
+
+## Carry-forward to later phases
+
+Known at planning time from the ADR's forward-compat exposure; each is
+re-confirmed or revised at phase close, and each carries a re-trigger
+criterion rather than a date.
+
+| Item | Lands at | Re-trigger criterion |
+|---|---|---|
+| Layout-derived hit rectangles — stop reading geometry back off the Visual; cache each node's arranged DIP rectangle during layout | M4-Phase 2 | The event-routing model needing layout-derived hit rectangles, or a DIP-denominated minimum hit target. Both expected in that phase. The T5 pointer / readback conversions cancel today precisely because hit-testing sources geometry from the visual tree; they stop cancelling here |
+| Host-visible scale or work-area query | M4-Phase 7 ABI wave, or M4-Phase 8 with `WindowConfig` | A host must express or receive a length not expressible in DIP — a device-pixel budget, a monitor work area, a screen coordinate. Not retrofitted into this phase, and not pre-built on a prediction |
+| Per-window differing scale factors | M4-Phase 8 | Additive by construction — the scale is already per `WindowState`. Confirm no shared state crept in |
+| Client-size window semantics | M4-Phase 8 / AC11 | Arrives as a new named attribute, never as a reinterpretation of `width` / `height` |
+| Screen-coordinate mapping (IME caret and composition rectangles; top-layer placement) | M4-Phase 5 / 6, M4-Phase 9 | Lands as `visual absolute physical → ClientToScreen` with **no** scale multiplication, because the visual tree is in the space the Win32 call expects. The concrete downstream payoff of keeping the visual tree physical |
+| Resolution-dependent image asset selection | M4-Phase 4 | The second rasterized asset kind arrives on the same surface-resolution contract |
+| Integer pixel snapping | Deferred | Would extend the rounding contract inside `DipScale` rather than change the space definition |
+| Text rendering-quality tuning (rendering mode, gamma, explicit hinting) | M5 theming wave | This phase's obligation ends at "drawn at the correct resolution" |
+| Custom title bar / client-area frame extension | M5 theming wave | Would make V2's automatic non-client scaling scale a surface Wasamo also paints; the full reliance must then be re-decided |
+| Non-zero clip insets | Whenever introduced | Clip insets are exempt from conversion only because they are all zero. A non-zero inset puts that audit row back into the converted set |
+| A scale-dependent `measure` (explicit hinting, snapped metrics) | M5 text-quality wave | Would turn T7's re-rasterize-after-re-layout ordering from a free choice into a correctness constraint; the reason is recorded so it can be re-derived rather than rediscovered |
+| Phantom-typed length newtypes (`Dip<T>` / `Px<T>`) | Available, not scheduled | Adopted only if a unit-mixing defect actually recurs — not on a prediction that it might |
+| `WM_GETDPISCALEDSIZE` | Available, not scheduled | A phase wanting to propose its own post-change window size (author-specified sizing, AC11 / M4-Phase 8) |
+| Synthesised pointer update after a scale change | M4-Phase 2 event model | If hover correctness across a resize turns out to matter |
+
+## Residuals
+
+<!-- Filled at phase close: anything left undone, with its reason. -->
+
+## Verification residue
+
+<!-- Filled at phase close: what the phase's evidence does and does not
+     establish, including the synthesised-message limit and the
+     trap-#4 disposition. -->
