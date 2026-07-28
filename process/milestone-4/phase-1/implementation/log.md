@@ -443,3 +443,59 @@ lane: full independent review.
   `update_button_label` borrow order → T6; declaration placement and the
   one-shot → T9.
 
+---
+
+## T2 — `DipScale` conversion type + pure-logic unit tests
+
+### Start gate (recorded 2026-07-28, before choosing the approach)
+
+Read before selecting: [plan.md](./plan.md) §T2 and its §Task list
+preamble, the ADR set (DD-002 §The carrier of the arithmetic / §The
+rounding contract for surfaces / §The conversion sites rows 4–7, DD-003
+§`WM_DPICHANGED`, DD-004 §The unit), the T1 entries above, and
+[implementation-gates.md](../../../procedures/implementation-gates.md).
+
+**Trap selection.** [plan.md](./plan.md) §T2 pre-names trap #4; #5 is
+added here (the gate permits adding, never silently dropping).
+
+| # | Trap | Applies | Reason |
+|---|---|---|---|
+| 1 | Semantic-migration miss | no | No enum, IR, or schema type gains a variant or a field. `DipScale` is a new standalone type with no traversal over it and **no call sites** — it introduces no site into DD-002's audit table, which is T5's artifact. DD-004 already records why the schema-migration gate is non-applicable phase-wide: the unit is a semantic statement about existing literals, not a new encoding. |
+| 2 | Missed side effects | no | Nothing lands in any existing state or structure: no field is added to any type, no pass is reordered, no constructor changes. The derived effects this phase does carry belong to their own tasks — the `WindowState` field to T4, the node-side cache to T5, the brush rebuild to T6. Enumerating them here would fabricate an artifact for changes not yet written. |
+| 3 | Parallel/derived data drift | no | No parallel vector, map, index, or cache. The related design point is answered rather than deferred: `DipScale` retains **only** the factor and not the originating DPI, so there is no second representation of the same fact to drift. The *cached* copies of the factor (on `WindowState`, on each `WidgetNode`) are T4/T5/T6's, and T1 already armed them as trap #5 with a single-writer invariant. |
+| 4 | Untested authored branch | **yes** | Two authored branches ship: `from_dpi`'s zero-DPI fallback to `IDENTITY`, and `surface_pixels`' one-pixel floor (which also absorbs non-finite and negative input through a saturating cast). Each gets a test that fires it directly, not incidentally. This is also the trap [plan.md](./plan.md) §T2 names as the start gate — read there as "new arithmetic branches ship with tests that fire them". |
+| 5 | Carry-forward underweighted | **yes** | The rounding contract T2 encodes is an invariant later tasks must preserve: `ceil` for the surface and exact `f32` for the Visual size (T6), and convert-once-on-the-difference (T5). DD-002 states both; what T2 adds is that the **API shape is now the enforcement**, which is a fact a later task can defeat by hand-rolling the arithmetic instead of calling the type. Recorded with its re-trigger criterion at the close gate. |
+| 6 | Symptom taken at face value | no | T2's tests are deterministic pure-`f32` arithmetic with no OS surface, no window, and no timing — there is no flake source to root-cause. The one deterministic failure in reach is **F-5**'s cold-directory link error, which already has a root cause and a verified remedy; using that remedy is not a re-roll. If a *different* failure recurs, this trap re-arms. |
+| 7 | Weak GUI evidence | no | T2 renders nothing, launches no host, and lands no call site, so there is no frame to capture and nothing a screenshot could distinguish. R-1's crispness evidence is T6's rendering gate and T10's control A. |
+
+**Review lane.** **Branch/test-focused review** ([gates §4](../../../procedures/implementation-gates.md)).
+T2 is not one of the high-risk classes: no schema or IR migration, no
+runtime structural change (nothing existing is touched — the module has
+no callers), and no GUI-render evidence. It *does* add two authored
+branches, which is precisely the class §4 assigns the narrower lane, and
+"no full review" is not "no review". The full-review lanes stay where T1
+armed them: T5, T6, T7, T9, T10.
+
+**Planned proof obligations** (each closed at the close gate):
+
+1. The named operations exist for every conversion T5 and T6 will make,
+   so neither re-derives the arithmetic: length, extent, relative offset,
+   inbound pair, surface pixel count.
+2. Verification item 1 discharged as tests: conversion at 125 / 150 /
+   200%; position-and-extent consistency; round-trip error **and**
+   rounding direction; the `ceil` allocation contract; the
+   convert-once-on-the-difference rule, including that the type's API
+   makes the one-rounding form the natural call.
+3. The two authored branches each fired by a named test (#4).
+4. No production call site introduced — `cargo build` shows the module
+   is reachable only from its own tests, and the forward-pointer
+   `#![allow(dead_code)]` names the tasks that remove it.
+
+**Approach note recorded before coding.** The witness values for the two
+`f32` claims (round-trip inexactness with a two-sided direction, and
+convert-once ≠ convert-twice) were **found by brute-force search over
+`f32`, not chosen by hand**, because a hand-picked pair that happens to
+agree would turn each of those tests into a tautology that passes against
+a wrong implementation. The search results and the witnesses they
+produced are recorded at the close gate.
+
