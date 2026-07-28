@@ -155,7 +155,22 @@ fn flush_layout() {
                     (0.0, 0.0)
                 }
             };
-            let _ = root.run_layout(cw, ch);
+            // `run_layout_as_window_root`, not the plain `run_layout`
+            // (M4-Phase 1 T3 finding F-23; pre-existing defect, fixed here
+            // rather than carried, because this line is the one the inbound
+            // conversion above already edits).
+            //
+            // This is a **window root** being re-laid out, exactly as in
+            // `window::set_root` and the `WM_SIZE` arm, so the root
+            // `LayoutNode` must be forced to `Fill` / `Fill` for the same
+            // reason: without it a root container that is `Shrink` — the
+            // default for `VStack`, and not settable from a `.ui` — collapses a
+            // `Fill` descendant to zero, the M3-Phase 4 T6 failure that
+            // `run_layout_as_window_root`'s own doc comment describes. The
+            // drain's layout phase was the one path still calling the
+            // non-window entry, so such a tree laid out correctly on resize and
+            // collapsed on any property write.
+            let _ = root.run_layout_as_window_root(cw, ch);
         }
     }
 }
