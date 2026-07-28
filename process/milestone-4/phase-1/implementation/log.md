@@ -443,3 +443,289 @@ lane: full independent review.
   `update_button_label` borrow order → T6; declaration placement and the
   one-shot → T9.
 
+---
+
+## T2 — `DipScale` conversion type + pure-logic unit tests
+
+### Start gate (recorded 2026-07-28, before choosing the approach)
+
+Read before selecting: [plan.md](./plan.md) §T2 and its §Task list
+preamble, the ADR set (DD-002 §The carrier of the arithmetic / §The
+rounding contract for surfaces / §The conversion sites rows 4–7, DD-003
+§`WM_DPICHANGED`, DD-004 §The unit), the T1 entries above, and
+[implementation-gates.md](../../../procedures/implementation-gates.md).
+
+**Trap selection.** [plan.md](./plan.md) §T2 pre-names trap #4; #5 is
+added here (the gate permits adding, never silently dropping).
+
+| # | Trap | Applies | Reason |
+|---|---|---|---|
+| 1 | Semantic-migration miss | no | No enum, IR, or schema type gains a variant or a field. `DipScale` is a new standalone type with no traversal over it and **no call sites** — it introduces no site into DD-002's audit table, which is T5's artifact. DD-004 already records why the schema-migration gate is non-applicable phase-wide: the unit is a semantic statement about existing literals, not a new encoding. |
+| 2 | Missed side effects | no | Nothing lands in any existing state or structure: no field is added to any type, no pass is reordered, no constructor changes. The derived effects this phase does carry belong to their own tasks — the `WindowState` field to T4, the node-side cache to T5, the brush rebuild to T6. Enumerating them here would fabricate an artifact for changes not yet written. |
+| 3 | Parallel/derived data drift | no | No parallel vector, map, index, or cache. The related design point is answered rather than deferred: `DipScale` retains **only** the factor and not the originating DPI, so there is no second representation of the same fact to drift. The *cached* copies of the factor (on `WindowState`, on each `WidgetNode`) are T4/T5/T6's, and T1 already armed them as trap #5 with a single-writer invariant. |
+| 4 | Untested authored branch | **yes** | Two authored branches ship: `from_dpi`'s zero-DPI fallback to `IDENTITY`, and `surface_pixels`' one-pixel floor (which also absorbs non-finite and negative input through a saturating cast). Each gets a test that fires it directly, not incidentally. This is also the trap [plan.md](./plan.md) §T2 names as the start gate — read there as "new arithmetic branches ship with tests that fire them". |
+| 5 | Carry-forward underweighted | **yes** | The rounding contract T2 encodes is an invariant later tasks must preserve: `ceil` for the surface and exact `f32` for the Visual size (T6), and convert-once-on-the-difference (T5). DD-002 states both; what T2 adds is that the **API shape is now the enforcement**, which is a fact a later task can defeat by hand-rolling the arithmetic instead of calling the type. Recorded with its re-trigger criterion at the close gate. |
+| 6 | Symptom taken at face value | no | T2's tests are deterministic pure-`f32` arithmetic with no OS surface, no window, and no timing — there is no flake source to root-cause. The one deterministic failure in reach is **F-5**'s cold-directory link error, which already has a root cause and a verified remedy; using that remedy is not a re-roll. If a *different* failure recurs, this trap re-arms. |
+| 7 | Weak GUI evidence | no | T2 renders nothing, launches no host, and lands no call site, so there is no frame to capture and nothing a screenshot could distinguish. R-1's crispness evidence is T6's rendering gate and T10's control A. |
+
+**Review lane.** **Branch/test-focused review** ([gates §4](../../../procedures/implementation-gates.md)).
+T2 is not one of the high-risk classes: no schema or IR migration, no
+runtime structural change (nothing existing is touched — the module has
+no callers), and no GUI-render evidence. It *does* add two authored
+branches, which is precisely the class §4 assigns the narrower lane, and
+"no full review" is not "no review". The full-review lanes stay where T1
+armed them: T5, T6, T7, T9, T10.
+
+**Planned proof obligations** (each closed at the close gate):
+
+1. The named operations exist for every conversion T5 and T6 will make,
+   so neither re-derives the arithmetic: length, extent, relative offset,
+   inbound pair, surface pixel count.
+2. Verification item 1 discharged as tests: conversion at 125 / 150 /
+   200%; position-and-extent consistency; round-trip error **and**
+   rounding direction; the `ceil` allocation contract; the
+   convert-once-on-the-difference rule, including that the type's API
+   makes the one-rounding form the natural call.
+3. The two authored branches each fired by a named test (#4).
+4. No production call site introduced — `cargo build` shows the module
+   is reachable only from its own tests, and the forward-pointer
+   `#![allow(dead_code)]` names the tasks that remove it.
+
+**Approach note recorded before coding.** The witness values for the two
+`f32` claims (round-trip inexactness with a two-sided direction, and
+convert-once ≠ convert-twice) were **found by brute-force search over
+`f32`, not chosen by hand**, because a hand-picked pair that happens to
+agree would turn each of those tests into a tautology that passes against
+a wrong implementation. The search results and the witnesses they
+produced are recorded at the close gate.
+
+### The landed surface
+
+[`dip_scale.rs`](../../../../wasamo-runtime/src/dip_scale.rs), 155
+production lines plus 11 tests, declared from
+[`lib.rs`](../../../../wasamo-runtime/src/lib.rs) as `mod dip_scale;`.
+The named operations, one per conversion DD-002's table needs, so that no
+seam re-derives a rule:
+
+| Operation | Audit rows served | Note |
+|---|---|---|
+| `from_dpi(u32)` / `IDENTITY` / `Default` | T4's seeding, T7's `HIWORD(wParam)` | Retains only the factor. `Default` is hand-written; a derived one yields a zero factor. |
+| `to_physical(f32)` | scalar outbound | |
+| `extent_to_physical((f32, f32))` | 4, 5, 6 (the `SetSize` half) | Position-independent by construction. |
+| `relative_offset_to_physical(abs, parent_abs)` | 4, 5, 6 (the `SetOffset` half) | Converts once on the difference. |
+| `to_dip(f32)` | 7's atlas origin | |
+| `pair_to_dip((f32, f32))` | 1, 2 (+ F-1's 2b), 3, 9 | Positions and extents alike; inbound has no difference-taking form. |
+| `surface_pixels((f32, f32)) -> (u32, u32)` | 7's allocation | The `ceil` rule; integer return so a later cast cannot truncate it back. |
+| `factor()` | 7's `96 × s`, T8's ratio assertions | |
+
+**Two deliberate exclusions, recorded rather than left as omissions.**
+
+- **No `d2d_dpi()` helper for `96 × s`.** [plan.md](./plan.md) §T2 names
+  the `ceil` rule as the operation to own, and the reason generalises:
+  the rounding rule is owned here because it *has* a contract to get
+  wrong (up, not toward zero). `96 × s` has no rounding and no contract —
+  it is one multiplication off `factor()`, and pulling it in would put a
+  DirectWrite-context concern in a type whose value is that it has no
+  rendering dependency. T6 writes it at its call site.
+- **No `from_factor(f32)` constructor.** Every real source of a scale is
+  a DPI (`GetDpiForWindow`, `HIWORD(wParam)`), including T8's synthetic
+  changes, which drive the handler rather than constructing a scale.
+  A bare-factor constructor would exist only to let a caller invent one.
+
+**Commit shape.** One commit for all four task-list items rather than the
+default one-per-item ([AGENTS.md §Commit rules](../../../../AGENTS.md)).
+The items do not split trap-#4-clean: items 1 and 3 each introduce an
+authored branch (the zero-DPI fallback, the one-pixel floor) whose test
+lives in item 4, so a per-item split would land two untested branches in
+intermediate commits. [plan.md](./plan.md) §T2 is updated to record what
+actually happened.
+
+### Close gate
+
+**#4 — branch tests, verified by mutation, not by assertion.** Each test
+was shown to **fail against a deliberately wrong implementation**. A
+green test proves nothing about whether it fires; these runs are the
+evidence that it does. Seven throwaway mutations, each applied to a
+restored-from-backup copy, run with
+`cargo test -p wasamo-runtime --lib dip_scale`, then reverted (final state
+verified green, and `git status` shows only the intended two files):
+
+| Mutation | Tests that failed | |
+|---|---|---|
+| **M1** `ceil` → truncate | `surface_allocation_rounds_up`, `surface_allocation_is_never_zero_pixels` | the ceil contract |
+| **M2** drop the `.max(1)` floor | `surface_allocation_is_never_zero_pixels` | **authored branch 2** |
+| **M3** drop the zero-DPI guard | `zero_dpi_falls_back_to_identity` | **authored branch 1** |
+| **M4** multiply both operands, then subtract | `converting_once_on_the_difference_differs_from_converting_twice`, `position_and_extent_convert_separately` | the convert-once rule |
+| **M5** factor inverted (`96 / dpi`) | 7 of 11 | |
+| **M6** `to_dip` multiplies instead of dividing | `conversion_at_125_150_200_percent`, both round-trip tests | |
+| **M7** `extent_to_physical` converts inbound | `conversion_at_125_150_200_percent`, `position_and_extent_convert_separately` | |
+
+An eighth wrong implementation was **not expressible**: deriving an
+extent by converting two edges and subtracting cannot be written against
+`extent_to_physical`, because the signature is handed an extent and never
+a position. That is the API doing the work a test would otherwise have
+to.
+
+**Verification item 1, test by test.**
+
+| Claim | Test |
+|---|---|
+| Conversion at 125 / 150 / 200% | `from_dpi_yields_the_documented_factors`, `conversion_at_125_150_200_percent` (incl. 800 × 600 DIP → 1000 × 750 physical at 125%, DD-004's window-size claim as arithmetic) |
+| Position-and-extent consistency | `position_and_extent_convert_separately` |
+| Round-trip error | `round_trip_error_is_bounded_by_one_ulp` |
+| Rounding **direction** | `round_trip_rounds_to_nearest_in_both_directions` (two-sided) contrasted with `surface_allocation_rounds_up` (one-sided, upward) |
+| The `ceil` allocation contract | `surface_allocation_rounds_up`, `surface_allocation_is_never_zero_pixels` |
+| Convert-once-on-the-difference | `converting_once_on_the_difference_differs_from_converting_twice`, `the_difference_rule_is_only_observable_at_non_dyadic_scales` |
+| The identity world T2–T8 land into | `identity_and_default_are_one_hundred_percent` |
+
+**Three measured facts worth carrying, from the brute-force searches.**
+All three are recorded because each is a statement about what *testing*
+can and cannot catch in this phase, not just about the type.
+
+1. **A round trip is inexact in the common case, not the exceptional
+   one.** Over two million consecutive `f32` starting at 0.1:
+   750,000 non-exact round trips at 125% and 500,000 at 150%, worst
+   relative error 7.45 × 10⁻⁸ — consistent with the two-rounding bound of
+   one `f32::EPSILON`, which is what the test asserts. The direction is
+   two-sided: the ulp-neighbours of 0.1 at bit offsets +2 and +4 round
+   down and up respectively, so **no site may lean on an inequality
+   surviving a round trip**.
+2. **At 200% the round trip is exactly the identity**, because the factor
+   is a power of two. A test written only at 200% would therefore assert
+   a stronger property than the type has, and pass a broken 125%.
+3. **The convert-once rule is unobservable at 100% and 200%.** The search
+   found **no** disagreeing pair at 200% at all, whereas at 150% the
+   witness `abs = 10.1`, `parent = 5.7` gives `once = 6.600001` (the
+   correctly-rounded answer, exactly) against `twice = 6.6000013` (one
+   ulp away). This is a second, arithmetic-level instance of F-4's
+   lesson: the scales at which the phase's rules are checkable are
+   125% and 150%, and a round-number scale hides them.
+
+**#5 — carry-forward.** The invariant: **the rounding contract is now
+enforced by the API shape, and only for callers that use it.**
+`extent_to_physical` cannot be given a position, `relative_offset_to_physical`
+cannot be reached without both absolute DIP positions, and
+`surface_pixels` returns a count rather than a length. A later task that
+writes `dip * scale.factor()` by hand at a seam, or that reconstructs a
+pixel count as an `f32`, defeats all three silently and only at
+non-dyadic scales. *Re-trigger criteria:* (a) any new conversion site
+that reaches for `factor()` instead of a named operation — legitimate
+only for T6's `96 × s`; (b) an integer-pixel-snapping policy, which
+DD-002 §Forward-compat 5 says extends this type's rounding contract
+rather than the space definition; (c) a scale-dependent `measure`, which
+is already recorded against T6/T7. Recorded here rather than in
+[handoff.md](./handoff.md): the consumers are all in-phase and
+[plan.md](./plan.md) §T5 / §T6 already carry the obligation. T12
+re-evaluates whether (b) belongs in the phase handoff.
+
+**End-gate items from [plan.md](./plan.md) §T2.**
+
+- *Tests named per contract* — the mapping table above.
+- *`cargo test` green* — `cargo build -p wasamo-runtime` then
+  `cargo build --workspace` then `cargo test --workspace` (the F-5
+  ordering, used as a matter of course rather than after a failure):
+  **32 test binaries, 0 failures**, the runtime lib going 446 → 457 as
+  the 11 new tests land. `cargo fmt --all -- --check` and
+  `git diff --check` clean. Per the owner-agreed downgrade this is a
+  **regression check** for the rest of the phase — but T2 is the stated
+  exception where the task's own tests carry real information, and the
+  mutation table above is why that claim is checkable rather than
+  asserted.
+- *No production call site introduced* — audited by
+  `Select-String` for `dip_scale|DipScale` over `wasamo-runtime/src`,
+  `wasamo-runtime/tests`, `wasamo-runtime/tests/common`, `wasamoc/src`,
+  `wasamo-dll`, and `bindings/rust/src`, excluding the module itself.
+  **One hit: `lib.rs:6: mod dip_scale;`** — the declaration without which
+  the module would not compile at all. No warning is emitted for the
+  unreachable surface because of the forward-pointer allow, which names
+  T4 / T5 / T6 as the tasks that remove it.
+
+### Plan-hypothesis re-audit (2026-07-28, owner-prompted)
+
+The first pass of T2's plan revision updated **only §T2** — ticking its
+items and recording the one-commit landing — without re-reading the rest
+of the task list against what T2 had learned. That is the same omission
+class T1 recorded as F-6 … F-10, recurring one task later and under the
+same prompt. Recorded as findings again, and the recurrence is the more
+important half: **the re-audit is not a spike-only obligation. Any task
+that measures something can falsify a hypothesis in a task it never
+touched.**
+
+Six standing hypotheses were falsified or sharpened.
+
+- **F-11 — the plan's own gate-substitution table handed T2 the one
+  artifact an agent can fabricate.** [plan.md](./plan.md) §Task list
+  reads "What counts per task: T2 its own unit tests (pure logic,
+  genuinely informative), T3 the rendered gallery frame, T5 the
+  call-site audit table, T6 the rendered output, T7 the structural
+  side-effect enumeration, T8 its own scale-driving assertions." Every
+  entry but T2's is checkable against ground truth; "its own unit tests"
+  is a green/red claim, which is exactly what F-4 had just finished
+  disqualifying. The exception for pure logic is right but its
+  **condition was missing**: pure logic is informative *once the tests
+  are shown to fire*. T2 measured the gap — eleven green tests said only
+  "eleven tests exist and passed" until seven mutations showed which
+  wrong implementation each one catches. *Disposition:* §Task list
+  revised; the mutation table is T2's real artifact.
+- **F-12 — the plan's narrowing of trap #4 was itself incomplete.**
+  [preamble.md §Implementation gates](./preamble.md#implementation-gates)
+  records the ADR's phase-wide "trap #4 non-applicable" and then narrows
+  it with one exception: "**T9** does add a diagnostic branch." T2 added
+  two authored branches (the zero-DPI fallback, the one-pixel surface
+  floor), and [plan.md](./plan.md) §T2 already said so — so the preamble
+  and the plan disagreed with each other from the moment they were
+  written, and the landing made it concrete. The consequence was not
+  cosmetic: the preamble's review-lane table assigns T2 "Normal review"
+  on the strength of "pure logic", whereas
+  [gates §4](../../../procedures/implementation-gates.md) assigns an
+  authored-branch task the **branch/test-focused review**. T2's start
+  gate classified it that way independently; the preamble is corrected to
+  match rather than the other way round. *Disposition:* preamble §Implementation
+  gates + review-lane table.
+- **F-13 — 200% cannot discriminate the convert-once rule, so T8's three
+  scale factors are not three equal probes.** Measured: at a power-of-two
+  factor the multiplication is exact, so "subtract in DIP then multiply"
+  and "multiply then subtract" agree **everywhere** — a brute-force
+  search found no disagreeing pair at 200% at all, against a witness at
+  150% one ulp apart. The round trip is likewise exactly the identity at
+  200% and inexact for the majority of `f32` at 125%. T8 keeps all three
+  factors, but 200% is a magnitude check; the rule verification is
+  carried by 125% and 150%. This is F-4's lesson at the arithmetic level:
+  the scales at which this phase's rules are observable are the awkward
+  ones. *Disposition:* [plan.md](./plan.md) §T8 + preamble §The
+  sequencing thesis.
+- **F-14 — T6's `ceil` bullet needs the landed signature, and the
+  existing `max(1.0)` becomes a second home for the floor.**
+  `surface_pixels` returns `(u32, u32)`, so T6 either casts for
+  `CreateDrawingSurface`'s `f32` `Size` or moves to
+  `CreateDrawingSurface2`'s `SizeInt32` — both permitted by DD-002, whose
+  contract is the pixel count and not the API pair. Separately, the
+  one-pixel floor now lives **in the type**, so `draw_text`'s existing
+  `width.max(1.0)` / `height.max(1.0)` must be removed rather than left
+  in place: harmless arithmetically, but it is the rounding rule living
+  in two places, which is the drift T2 exists to prevent. *Disposition:*
+  [plan.md](./plan.md) §T6.
+- **F-15 — "convert once on the difference" is now enforced by API shape,
+  and only for callers that use the API.** [plan.md](./plan.md) §T5 states
+  the rule as prose ("subtract in DIP, multiply the result"). A T5 that
+  writes `dip * self.scale.factor()` satisfies the prose reading, defeats
+  the enforcement, and is wrong only at non-dyadic scales — where, per
+  F-13, only two of the phase's test factors would notice. The bullets are
+  revised to name the operations. The single legitimate `factor()` use in
+  the phase is T6's `96 × s`, which T2 deliberately did not wrap because it
+  carries no rounding contract. *Disposition:* [plan.md](./plan.md) §T5,
+  §T6.
+- **F-16 — two downstream tasks would otherwise re-implement what the
+  type already does.** T4 needs no zero-DPI guard of its own
+  (`from_dpi` floors), and T5's "defaulted to 1 in every `WidgetNode`
+  constructor" is `DipScale::default()` rather than a hand-written
+  literal. Cosmetic individually; together they are the same
+  second-home-for-a-rule failure as F-14. *Disposition:*
+  [plan.md](./plan.md) §T4, §T5.
+
+*Disposition summary:* all six folded into [plan.md](./plan.md) and
+[preamble.md](./preamble.md) in the same commit as this entry. F-11 →
+§Task list; F-12 → preamble §Implementation gates and the review-lane
+table; F-13 → §T8 and preamble §The sequencing thesis; F-14 → §T6;
+F-15 → §T5 and §T6; F-16 → §T4 and §T5.
+

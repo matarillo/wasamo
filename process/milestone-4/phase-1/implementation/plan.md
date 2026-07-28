@@ -34,10 +34,19 @@ machinery *plus* the awareness declaration was measured green at 125%,
 indistinguishable from baseline. `cargo test --workspace` therefore stays
 in every end gate as a **regression check** — it must not go red — but it
 is not counted as evidence that a conversion is right. What counts per
-task: T2 its own unit tests (pure logic, genuinely informative), T3 the
-rendered gallery frame, T5 the call-site audit table, T6 the rendered
-output, T7 the structural side-effect enumeration, T8 its own
-scale-driving assertions.
+task: T2 its own unit tests **shown to fire**, T3 the rendered gallery
+frame, T5 the call-site audit table, T6 the rendered output, T7 the
+structural side-effect enumeration, T8 its own scale-driving assertions.
+
+**T2's entry carried a missing condition, supplied at T2 (finding
+F-11).** Every other entry above is an artifact checkable against ground
+truth; "its own unit tests" is a green/red claim of exactly the kind the
+paragraph above disqualifies. The exception for pure logic is right, but
+it holds only *once the tests are shown to fire*: T2 measured that eleven
+green tests said nothing beyond "eleven tests exist and passed" until
+seven deliberately wrong implementations showed which failure each one
+catches. The mutation table in [log.md](./log.md) is T2's artifact; the
+green suite is not.
 
 Default to **one commit per task-list item** per
 [AGENTS.md §Commit rules](../../../../AGENTS.md). The known exception
@@ -197,21 +206,47 @@ contract lives. No Win32 or WinRT dependency, so it is unit-testable
 under [AGENTS.md §Testing rules](../../../../AGENTS.md) with no mocking
 question. Lands with **no call sites** — nothing consumes it until T4.
 
-- [ ] `DipScale` value type carrying `s`, constructed from a DPI value.
-- [ ] `to_physical(dip) -> f32`, `to_dip(px) -> f32`, and the rectangle
-      form (position and extent converted separately).
-- [ ] The `ceil` surface-allocation rule as a named operation, so T6
-      calls it rather than re-deriving it.
-- [ ] Unit tests, discharging **verification item 1**: conversion at
+**Closed 2026-07-28.** Landed as
+[`dip_scale.rs`](../../../../wasamo-runtime/src/dip_scale.rs) with 11
+unit tests and one call site — `mod dip_scale;` — which is the
+declaration without which the module would not compile. The four items
+below landed as **one commit**, not four: items 1 and 3 each introduce an
+authored branch whose test lives in item 4, so a per-item split would
+have landed two untested branches in intermediate commits. Artifacts in
+[log.md](./log.md) §T2.
+
+- [x] `DipScale` value type carrying `s`, constructed from a DPI value.
+      Retains only the factor, not the originating DPI. `Default` is
+      hand-written (a derived one would produce a zero factor), and a
+      zero DPI falls back to the identity rather than dividing by zero.
+- [x] `to_physical(dip) -> f32`, `to_dip(px) -> f32`, and the rectangle
+      form (position and extent converted separately). The outbound
+      position form is `relative_offset_to_physical(abs, parent_abs)`,
+      whose signature is what makes convert-once-on-the-difference the
+      natural call; inbound is a single `pair_to_dip`, because positions
+      and extents alike are one componentwise division there.
+- [x] The `ceil` surface-allocation rule as a named operation, so T6
+      calls it rather than re-deriving it. Returns a `(u32, u32)` pixel
+      count rather than a length, so a later cast cannot truncate it
+      back, and each axis is floored at one pixel (preserving
+      `draw_text`'s existing `max(1.0)`).
+- [x] Unit tests, discharging **verification item 1**: conversion at
       125% / 150% / 200%; position-and-extent consistency; round-trip
       error and rounding *direction*; the `ceil` allocation contract;
       the convert-once-on-the-difference rule (that subtracting in DIP
       then multiplying differs from multiplying then subtracting, and
-      that the type's API makes the former the natural call).
+      that the type's API makes the former the natural call). The
+      witnesses for the two `f32` claims were found by brute-force
+      search, and **each test was shown to fail against a deliberately
+      wrong implementation** — seven mutations, tabulated in
+      [log.md](./log.md). A green pure-logic test is only informative
+      once it is known to fire.
 
 **Start gate:** trap #4 applies (new arithmetic branches ship with tests
-that fire them). **End gate:** tests named per contract; `cargo test`
-green; no production call site introduced.
+that fire them); #5 was added at the start gate, because the rounding
+contract is enforced by the API shape and a later task can defeat it by
+hand-rolling the arithmetic. **End gate:** tests named per contract;
+`cargo test` green; no production call site introduced. **All met.**
 
 ---
 
@@ -265,7 +300,10 @@ unaware, `GetDpiForWindow` returns 96, the scale is 1, and the
 - [ ] `DipScale` field on `WindowState`, seeded from `GetDpiForWindow`
       immediately after `CreateWindowExW` returns and **before any
       layout runs**, so `set_root`'s first pass already uses the real
-      scale.
+      scale. Construct through `DipScale::from_dpi`, and **add no
+      zero-DPI guard here** (T2 finding F-16): `from_dpi` already floors
+      a zero to the identity, and a second guard would put the same rule
+      in two places.
 - [ ] Realise the DIP `width` / `height`: create at the requested
       numbers, then apply `size × s` via `SetWindowPos` before the window
       is shown. **The correction belongs inside `window::create`, not in
@@ -313,9 +351,13 @@ landable as one reviewed commit rather than a visible regression.
       the reactive drain's Phase 2 layout pass, which performs the same
       `GetClientRect` → `run_layout` conversion after every
       size-affecting property write.
+      Both sites convert through `DipScale::pair_to_dip`, not by
+      hand-written division (T2 finding F-15).
 - [ ] **Inbound, pointer** (audit row 3): `WM_MOUSEMOVE` /
       `WM_LBUTTONDOWN` / `WM_LBUTTONUP` coordinates divided by `s` at the
-      window procedure, so hit-testing and hover run in DIP.
+      window procedure, so hit-testing and hover run in DIP —
+      `pair_to_dip` again; inbound has one form because positions and
+      extents alike are a componentwise division there.
 - [ ] **Inbound, readback** (audit row 9): `visual_rect`'s
       `Visual.Offset` / `Visual.Size` readback divided by `s` alongside
       the pointer. Record honestly in [log.md](./log.md) that the two
@@ -324,16 +366,25 @@ landable as one reviewed commit rather than a visible regression.
       M4-Phase 2 sources geometry from layout or introduces a
       DIP-denominated hit-area rule.
 - [ ] **Introduce the node-side scale cache**, defaulted to 1 in every
-      `WidgetNode` constructor. T5 is its first reader; T6's walk is its
-      only writer, so between T5 and T6 it is permanently 1 — the same
-      identity world every other conversion lands into.
+      `WidgetNode` constructor — as `DipScale::default()`, which is the
+      identity, rather than a hand-written literal (T2 finding F-16). T5
+      is its first reader; T6's walk is its only writer, so between T5
+      and T6 it is permanently 1 — the same identity world every other
+      conversion lands into.
 - [ ] **Outbound, Visual geometry** (audit rows 4–6): `sync_visuals`
       node writes, the ScrollView intermediate Visual, and the Button /
       ToggleButton label writes relocated by T3 — all multiplied by `s`,
       **converting once on the difference**: subtract in DIP, multiply
-      the result. The ScrollView recursion stays entirely in DIP
-      (`child_parent_abs` is `(offset.0, offset.1 - applied_y)` in DIP);
-      only the two Composition writes multiply.
+      the result. **Through the named operations, not by hand** (T2
+      finding F-15): `relative_offset_to_physical(abs, parent_abs)` for
+      every `SetOffset` and `extent_to_physical` for every `SetSize`.
+      Writing `dip * scale.factor()` satisfies the prose reading of this
+      bullet, defeats the enforcement the type exists to provide, and is
+      wrong only at non-dyadic scales — where, per F-13, only two of the
+      phase's three test factors would notice. The ScrollView recursion
+      stays entirely in DIP (`child_parent_abs` is
+      `(offset.0, offset.1 - applied_y)` in DIP); only the two
+      Composition writes multiply.
 - [ ] **Verify the unchanged rows as assertions, not omissions**: row 8
       (`SetRelativeSizeAdjustment(1, 1)` — a relation between two
       physical quantities), row 10 (`measure` returns DIP — the fact
@@ -378,16 +429,29 @@ produces exactly the blur the phase set out to remove and passes every
 test.
 
 - [ ] Allocate the drawing surface at **`ceil(dip × s)` pixels** on each
-      axis, through T2's named rule.
+      axis, through T2's named rule — `DipScale::surface_pixels`, which
+      returns a `(u32, u32)` pixel count. Two consequences of the landed
+      signature (T2 finding F-14): `CreateDrawingSurface` takes an `f32`
+      `Size`, so either cast at the call or move to
+      `CreateDrawingSurface2`'s `SizeInt32` — DD-002's contract is the
+      pixel count, not the API pair — and **remove `draw_text`'s existing
+      `width.max(1.0)` / `height.max(1.0)`**, because the one-pixel floor
+      now lives inside `surface_pixels` and leaving the old clamp would
+      put the same rule in two places.
 - [ ] Set the D2D device context to **`96 × s` DPI** after `BeginDraw`,
       so `create_text_layout`'s `max_w` / `max_h` stay DIP and
       `size_sp` stays a DIP font size while rasterization and hinting
-      happen at device resolution.
+      happen at device resolution. This is the phase's **only** legitimate
+      use of `DipScale::factor()` in place of a named operation (T2
+      finding F-15): T2 deliberately did not wrap it, because it carries
+      no rounding contract and wrapping it would put a DirectWrite
+      concern inside a type whose value is having no rendering
+      dependency.
 - [ ] **Convert the atlas origin** (risk R-3): `BeginDraw`'s offset is in
       pixels and must be divided by `s` before use as the D2D drawing
-      origin. Write it deliberately — the offset is frequently `(0, 0)`,
-      so omitting it works most of the time and displaces text within its
-      own surface intermittently.
+      origin — `to_dip`, one component each. Write it deliberately — the
+      offset is frequently `(0, 0)`, so omitting it works most of the
+      time and displaces text within its own surface intermittently.
 - [ ] Keep the brush mapping one-to-one: the Visual's size is the exact
       `f32` physical `dip × s`, the surface is `ceil(dip × s)` pixels,
       and the at-most-one-pixel excess is transparent padding.
@@ -475,7 +539,14 @@ sequencing thesis does not defer all scaled-path risk to the end
       implementation from one treating physical pixels as logical —
       which would change the DIP results and, visibly, the WrapPanel
       line count.
-- [ ] Exercise at 125% / 150% / 200%.
+- [ ] Exercise at 125% / 150% / 200% — but **not as three equal probes**
+      (T2 finding F-13). At a power-of-two factor the multiplication is
+      exact, so convert-once and convert-twice agree everywhere and a
+      DIP round trip is exactly the identity; a brute-force search found
+      no disagreeing pair at 200% at all, against a witness one ulp apart
+      at 150%. 200% is therefore a magnitude check, and **the rule
+      verification is carried by 125% and 150%**. Adding more round
+      factors would not help; adding an awkward one would.
 - [ ] **Record the stated limit with the test** (preamble obligation 5):
       a synthesised `WM_DPICHANGED` proves the handling path; it does
       **not** prove that crossing a real monitor boundary delivers the
