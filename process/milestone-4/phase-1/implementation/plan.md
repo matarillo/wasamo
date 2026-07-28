@@ -35,8 +35,13 @@ indistinguishable from baseline. `cargo test --workspace` therefore stays
 in every end gate as a **regression check** — it must not go red — but it
 is not counted as evidence that a conversion is right. What counts per
 task: T2 its own unit tests **shown to fire**, T3 the rendered gallery
-frame, T5 the call-site audit table, T6 the rendered output, T7 the
-structural side-effect enumeration, T8 its own scale-driving assertions.
+frame, T4 the ordering probe's three measured window states, T5 the
+call-site audit table, T6 the rendered output, T7 the structural
+side-effect enumeration, T8 its own scale-driving assertions. **T4 was
+added to this list at T4** — it was omitted at planning time on the
+assumption that a task inert until T9 has nothing to show, and what it
+turned out to have is the one artifact that separates a correct
+create-then-correct path from three wrong ones.
 
 **T2's entry carried a missing condition, supplied at T2 (finding
 F-11).** Every other entry above is an artifact checkable against ground
@@ -75,6 +80,24 @@ selection, the reasons for non-applicable traps, and the review lane in
 [log.md](./log.md) *before* choosing an approach) and at **close** (the
 auditable artifacts), per
 [implementation-gates.md](../../../procedures/implementation-gates.md).
+
+**Propagate corrections by proposition, not by string** (T4 delta review
+finding 2, after the same failure three times). When a task falsifies a
+claim, the reflex is to search this plan and the preambles for the
+*phrasing* of the claim — and the documents that carry the same claim in
+other words are then missed every time, however many passes are run. The
+sites T4 kept missing say "does not re-decide layout", "layout results
+are scale-invariant", "the DIP results are unchanged" and "invariance is
+the evidence", and no string search over any of those finds the others.
+So: **write the falsified proposition as one sentence first, then
+enumerate the documents that assert it** — which in this phase always
+includes the [ADR-set preamble](../decisions/preamble.md)'s Decisions
+table, its cross-DD couplings and its verification list, this plan's task
+bullets, and [preamble.md](./preamble.md) — and only then search. The
+falsifiable test T5 inherits: **valid if the propagation pass names the
+proposition and enumerates the asserting documents before searching;
+falsified if a reviewer again finds an asserting site the pass never
+visited.**
 
 ---
 
@@ -219,6 +242,15 @@ have landed two untested branches in intermediate commits. Artifacts in
       Retains only the factor, not the originating DPI. `Default` is
       hand-written (a derived one would produce a zero factor), and a
       zero DPI falls back to the identity rather than dividing by zero.
+      **Reversed at T4** (independent review finding R-1, recorded here
+      because this is a checked item describing what landed and it now
+      says the opposite of the source): the type retains the **DPI** and
+      derives the factor. "Every consumer wants the factor rather than
+      the DPI" was the stated premise, and `window_size_to_physical`
+      falsified it — an `f32` factor cannot express `dpi / 96` exactly
+      unless 3 divides the DPI, so a rounding rule computed from it is
+      not the rule the type documents. `Default`, `IDENTITY` and the
+      zero-DPI fallback are unchanged in behaviour.
 - [x] `to_physical(dip) -> f32`, `to_dip(px) -> f32`, and the rectangle
       form (position and extent converted separately). The outbound
       position form is `relative_offset_to_physical(abs, parent_abs)`,
@@ -338,14 +370,43 @@ Additive per-window state. Inert until T9 — with the process still
 unaware, `GetDpiForWindow` returns 96, the scale is 1, and the
 `SetWindowPos` correction is a no-op.
 
-- [ ] `DipScale` field on `WindowState`, seeded from `GetDpiForWindow`
+**Closed 2026-07-28.** Landed as **two code commits**: the rounding rule
+in [`dip_scale.rs`](../../../../wasamo-runtime/src/dip_scale.rs) with its
+tests and no caller, then the `Win32_UI_HiDpi` feature, the
+`WindowState` field, its seeding and the correction together — a commit
+adding the field without its consumer emits a never-read-field warning,
+and the feature is the prerequisite for the `GetDpiForWindow` call in the
+same commit. A third, small commit folded the **measured** nested-message
+set into the placement comment after the probe ran. Artifacts in
+[log.md](./log.md) §T4: the two decisions with their rejected candidates,
+a 10-row call-site audit that closes DD-002 row 13, a 13-row side-effect
+enumeration whose message set is measured rather than quoted, a
+four-mutation table for the rounding rule, and a throwaway probe that
+prints the creation ordering and measures **three** window states. The
+task produced findings F-25 … F-31 and revisions to §T5, §T7, §T8, §T9,
+§T10, §T12 and the preamble.
+
+**Inertness holds, and the probe measured its shape more precisely than
+the sentence above.** At `s = 1` the correction is the exact identity —
+window `800 × 600` / client `784 × 561` before and after — and
+`SetWindowPos` dispatches **no `WM_SIZE` at all**, because the size does
+not change. So T4's placement decision is not merely identity-*valued*
+before T9; its failure mode is **unreachable**. That is F-4's lesson
+applied to an ordering rather than to an arithmetic, and it is why the
+placement below is argued structurally (see F-31).
+
+- [x] `DipScale` field on `WindowState`, seeded from `GetDpiForWindow`
       immediately after `CreateWindowExW` returns and **before any
       layout runs**, so `set_root`'s first pass already uses the real
       scale. Construct through `DipScale::from_dpi`, and **add no
       zero-DPI guard here** (T2 finding F-16): `from_dpi` already floors
       a zero to the identity, and a second guard would put the same rule
-      in two places.
-- [ ] Realise the DIP `width` / `height`: create at the requested
+      in two places. **Landed as `pub(crate) scale: DipScale`** — read
+      from `emit.rs` at T5 but never by a host, which is DD-004's "no
+      host needs the scale factor" expressed as visibility. It carries a
+      `#[allow(dead_code)]` forward pointer, in `dip_scale`'s shape,
+      because T4 writes it and T5 is its first reader.
+- [x] Realise the DIP `width` / `height`: create at the requested
       numbers, then apply `size × s` via `SetWindowPos` before the window
       is shown. **The correction belongs inside `window::create`, not in
       `wasamo_window_create`** (T1 finding): `window::create` has three
@@ -354,8 +415,10 @@ unaware, `GetDpiForWindow` returns 96, the scale is 1, and the
       `wasamo_window_create`), and the Rust-native
       `lib.rs::window_create`. A correction placed at the ABI function
       would leave every `.ui`-loaded window — i.e. all three example
-      hosts — at the wrong physical size.
-- [ ] **Decide the rounding of the DIP → physical window size.** Named
+      hosts — at the wrong physical size. **Landed as
+      `window::realize_dip_window_size`, called from `create`**, and the
+      call-site audit confirms all three callers are covered.
+- [x] **Decide the rounding of the DIP → physical window size.** Named
       here rather than met mid-edit (found while checking T4's landing
       site at T3 close). `SetWindowPos` takes `i32`, the requested size
       is `i32` DIP, and `size × s` is an `f32`: 800 DIP at 125% is
@@ -377,7 +440,21 @@ unaware, `GetDpiForWindow` returns 96, the scale is 1, and the
       that T10's window-measurement check (800 × 600 → 1000 × 750 at
       125%) is **exact and therefore cannot discriminate any of the
       three** — the same shape as F-13.
-- [ ] **Decide where in `window::create` the correction runs, and with
+      **Decided: `round`, inside `DipScale` as
+      `window_size_to_physical((i32, i32)) -> (i32, i32)`.** The window
+      rectangle carries a logical-size *fidelity* contract rather than an
+      allocation contract, so the failure is two-sided and nearest is the
+      integer that minimises it; and nearest is what `MulDiv(v, dpi, 96)`
+      — the OS's own rule for the `WM_DPICHANGED` suggested rectangle T7
+      applies verbatim — produces, so creation and the OS agree instead of
+      drifting. It lives in the type because the call-site alternative
+      reaches for `factor()`, which F-15's carry-forward names as its
+      re-trigger criterion. Integer in and out, `f64` internally, so 100%
+      is the exact identity for every `i32`. The discriminating test was
+      constructed deliberately (801 and 803 DIP at 125%); **`ceil` passes
+      every exact product, T10's check included** — measured, as mutation
+      W2.
+- [x] **Decide where in `window::create` the correction runs, and with
       which flags.** Also named here rather than met mid-edit.
       `SetWindowPos` dispatches `WM_SIZE` **synchronously, before it
       returns** — the property DD-003 makes load-bearing for
@@ -397,7 +474,18 @@ unaware, `GetDpiForWindow` returns 96, the scale is 1, and the
       path, where the OS-suggested rectangle *is* applied, and copying it
       verbatim here would move the window to whatever `x` / `y` are
       passed.
-- [ ] **The flash-free confirmation has a sharper answer than the plan
+      **Decided: before the `GWLP_USERDATA` install**, with
+      `SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE`. The nested dispatch
+      then cannot reach runtime state **by construction** rather than by
+      the accident that the two arms it would otherwise enter are
+      currently `if let Some(_)` over `None`; measured, `state_ptr` was
+      null for every one of the nine messages the correction dispatches
+      at 125%. The symmetry-with-T7 alternative was rejected as a *false*
+      symmetry: there the window is fully built and the nested `WM_SIZE`
+      is required to re-lay out. The failure result is discarded, per
+      DD-003's log-and-survive and the file's existing `let _ =`
+      convention, with the consequence stated rather than hidden.
+- [x] **The flash-free confirmation has a sharper answer than the plan
       assumed.** Creation and `wasamo_window_show` are separate ABI
       calls, but an in-between path *does* query geometry:
       `window::set_root` calls `GetClientRect` for its first layout, and
@@ -407,15 +495,28 @@ unaware, `GetDpiForWindow` returns 96, the scale is 1, and the
       restated as the reason it is not optional. Confirm by ordering,
       and record that `set_root`'s first layout is the consumer that
       would have seen the uncorrected rectangle.
-- [ ] Enable the `Win32_UI_HiDpi` feature in
+      **Confirmed by measurement**: the probe prints the correction, then
+      the `GWLP_USERDATA` install, then `create`'s return, then
+      `set_root`'s `GetClientRect` reading the corrected `982 × 703`.
+- [x] Enable the `Win32_UI_HiDpi` feature in
       `wasamo-runtime/Cargo.toml` (prerequisite for `GetDpiForWindow`;
       the awareness API itself is T9) and re-sync
       [architecture.md §4.5](../../../../docs/architecture.md) at T12.
+      **Landed**, and measured as sufficient for T9's declaration as
+      well: the throwaway probe compiled `SetProcessDpiAwarenessContext`
+      and `DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2` against this
+      feature list with no further `Cargo.toml` edit. T9's two *query*
+      symbols were not exercised, so that half is not claimed.
 
 **Start gate:** trap #5 (the per-window shape is what M4-Phase 8 will
-consume; record the invariant). **End gate:** scale seeded before first
-layout, verified by ordering rather than by comment; workspace green as
-a regression check only (see the note above).
+consume; record the invariant); traps #1, #2, #4, #6 and #7 were added
+at the start gate. **End gate:** scale seeded before first layout,
+verified by ordering rather than by comment; workspace green as a
+regression check only (see the note above). **All met** — the ordering
+discharged twice, by construction (the scale is a struct field, so no
+window exists without one and there is no statement order to invert) and
+by a printed probe trace. Review lane raised to full independent review
+(F-25).
 
 ---
 
@@ -448,6 +549,19 @@ landable as one reviewed commit rather than a visible regression.
       from the visual tree — and that they stop cancelling the moment
       M4-Phase 2 sources geometry from layout or introduces a
       DIP-denominated hit-area rule.
+      **Say *whose* scale divides it, because the comparison mixes two
+      sources** (named at T4 after reading the landing site; the row says
+      only "÷ s"). The pointer is divided at `wnd_proc` by
+      `WindowState::scale`, while `visual_rect` is called from
+      `hit_test_click_inner` / `update_hover_inner`, which stand on a node
+      and would naturally divide by the **node cache**. The two agree
+      once T6's walk runs and are both 1 before it — but they are not the
+      same variable, and a node the walk never reaches (F-24's
+      direct-hosting path) makes them disagree silently. `visual_rect` is
+      a free function taking a `SpriteVisual` with no scale in hand, so
+      the division happens at its two call sites either way; the decision
+      is which scale those sites read, and it is recorded rather than
+      fallen into.
 - [ ] **Introduce the node-side scale cache**, defaulted to 1 in every
       `WidgetNode` constructor — as `DipScale::default()`, which is the
       identity, rather than a hand-written literal (T2 finding F-16). T5
@@ -530,6 +644,15 @@ landable as one reviewed commit rather than a visible regression.
       effect. No ABI or Rust-native function installs them today —
       DD-004's claim is confirmed — but the unit must be stated
       deliberately (DIP, per W1), not inherited from the seam edit.
+- [ ] **Two things T4 left for T5 to pick up, both small and both
+      auditable** (T4 findings, recorded so they are not discovered at
+      the edit). `WindowState::scale` landed as `pub(crate)` — which is
+      what makes `emit::flush_layout`'s row-2b division reachable without
+      widening the public API, so T5 needs neither `pub` nor an
+      accessor — and it carries a `#[allow(dead_code)]` forward pointer
+      because T4 writes it and **T5 is its first reader**. Removing that
+      attribute is part of this task; leaving it in place would silence a
+      real warning for whatever comes next.
 - [ ] Apply the carrier / threading shape T1 decided (risk R-5): the
       scale is authoritative on `WindowState` and cached on each
       `WidgetNode`, written only by T6's walk; `sync_visuals`,
@@ -546,6 +669,21 @@ landable as one reviewed commit rather than a visible regression.
 table** — DD-002's 13 rows, each with its classification, the source
 location as landed, and the verification that closed it; the claim being
 checked is "no coordinate enters or leaves outside these rows".
+**Assemble the audit query independently of the diff** (T4 independent
+review finding R-8). T4's query named the APIs T4 happened to use, so it
+could not exclude the ones it did not — `MoveWindow`,
+`AdjustWindowRect*`, `SetWindowPlacement`, `DeferWindowPos` — and the
+reviewer, not the author, is who ran the widened search. A query derived
+from what was written cannot falsify what was forgotten, and on T5 that
+matters more than anywhere else in the phase, because completeness *is*
+this task's artifact. Enumerate the coordinate-carrying API surface
+first, then search for all of it.
+**Row 13 is closed at T4, not here** (`create_hwnd`'s `CreateWindowExW`
+width / height): T4's audit records the landed site and its three
+callers, so T5's table cites that rather than re-deriving it. Recorded
+because until T4 **no task in this plan claimed row 13** — the bullets
+above cover rows 1–6 and 8–12 and §T6 covers row 7, so a T5 that closed
+"every row it was given" would still have left one open (F-26).
 Full independent review before merge.
 
 ---
@@ -576,6 +714,17 @@ test.
       no rounding contract and wrapping it would put a DirectWrite
       concern inside a type whose value is having no rendering
       dependency.
+      **T4's carrier reversal makes this exact and removes the `factor()`
+      use entirely — decide whether to take it.** `DipScale` now retains
+      the DPI, and `96 × (dpi / 96)` *is* `dpi`: the value D2D wants is
+      the OS-reported DPI itself, with no multiplication and no `f32`
+      round trip. Exposing it (a `d2d_dpi()` or `dpi()` accessor) would
+      close the one hole F-15's carry-forward has to leave open, and T2's
+      stated reason for not wrapping `96 × s` — that it carries no
+      rounding contract — argues *for* this rather than against it, since
+      there is now no arithmetic left to wrap. T6 decides and records
+      which, because the alternative is defensible too: an accessor named
+      after DirectWrite's need is the rendering dependency T2 kept out.
 - [ ] **Convert the atlas origin** (risk R-3): `BeginDraw`'s offset is in
       pixels and must be divided by `s` before use as the D2D drawing
       origin — `to_dip`, one component each. Write it deliberately — the
@@ -652,7 +801,35 @@ merge.
       returns**, so a scale updated afterwards would leave that pass
       laying out and projecting with the stale factor. This is the
       phase's single most likely ordering defect and is invisible at
-      100%.
+      100%. **T4's throwaway probe is the technique that fits this, and
+      T7 has the problem in a sharper form** (finding F-31): T7's close
+      artifact is an enumeration, which is a description, and the task
+      lands before T8 drives `s ≠ 1` — so nothing in T7's own gate can
+      distinguish the right order from the wrong one. T4 answered the
+      same shape by instrumenting, building, running, printing the event
+      order and reverting; the mechanics and the capture script are in
+      [log.md](./log.md) §T4 and [evidence/](./evidence/). Not mandated —
+      T7 may find a structural argument that makes the order impossible
+      to invert, which is better — but "the enumeration says the order is
+      right" is the outcome this bullet exists to refuse. **The premise is now measured rather than inherited** (T4):
+      at 125% a size-changing `SetWindowPos` dispatches
+      `WM_WINDOWPOSCHANGING`, `WM_GETMINMAXINFO`, `WM_NCCALCSIZE`,
+      `WM_WINDOWPOSCHANGED`, **`WM_SIZE`**, then `WM_GETICON`, all before
+      it returns — and at 100% it dispatches **no `WM_SIZE` at all**,
+      because the size does not change. The second half is the sharper
+      fact: this ordering defect cannot be produced, let alone observed,
+      before T9.
+- [ ] **Do not inherit T4's flags, and do not reuse its helper**
+      (T4 finding F-30). `window::realize_dip_window_size` converts a
+      **DIP size** and must not move the window, so it passes
+      `SWP_NOMOVE`; this step applies an **OS-supplied physical
+      rectangle** whose whole content is a new position *and* size, so
+      `SWP_NOMOVE` would pin the window and defeat the suggested
+      rectangle on every monitor crossing. The two sites sit either side
+      of the same mistake, and T4's own bullet warns against copying
+      DD-003's flags **into** `create`; this is the warning in the other
+      direction, which is where a reader who has just read `create` is
+      standing.
 - [ ] Apply the suggested rectangle (do not ignore it): it preserves the
       window's logical size across the change, which is what the DIP
       contract means.
@@ -703,6 +880,16 @@ sequencing thesis does not defer all scaled-path risk to the end
 (risk R-4).
 
 - [ ] A created window's cached scale equals `GetDpiForWindow`.
+      **This needs a test seam, which does not exist yet** (T4 finding
+      F-29). The field landed as `pub(crate) scale` on `WindowState`, and
+      the phase's Windows integration tests live in
+      `wasamo-runtime/tests/`, i.e. in a separate crate that can reach
+      only `pub` items. The established shape is a `#[doc(hidden)] pub`
+      accessor in [`lib.rs`](../../../../wasamo-runtime/src/lib.rs)'s
+      `ffi` module, alongside `__install_owning_thread_for_test` and its
+      siblings. Widening the field to `pub` is the wrong fix: it would
+      put the scale factor on a `pub use`-exported type and ship the
+      host-visible surface DD-004 declines.
 - [ ] **The integration-side positive control**: drive a scale change
       through the handler and assert that **the layout's DIP results are
       unchanged** while Visual offsets and sizes have moved by the scale
@@ -710,6 +897,20 @@ sequencing thesis does not defer all scaled-path risk to the end
       implementation from one treating physical pixels as logical —
       which would change the DIP results and, visibly, the WrapPanel
       line count.
+      **Hold the *client* extent constant across the change, and say so**
+      (T4 finding F-28, and the T4 independent review's finding R-2 that
+      the correction had not reached this bullet). "Unchanged DIP layout
+      results" is exactly true only while the DIP extent handed to layout
+      is exactly preserved, and the **outer** rectangle preserving its
+      logical size does not preserve the client one: measured at T4, the
+      non-client frame scales by its own DPI-indexed metrics, so an
+      800 × 600 DIP outer request yields 784 × 561 DIP of client at 96
+      DPI and 785.6 × 562.4 DIP at 120 DPI. T8 synthesises the message
+      and therefore **chooses the rectangle**, so it can preserve the
+      client extent and assert equality rather than a tolerance — which
+      is the stronger test and the one that isolates the handler. What it
+      must not do is assert exact equality against an
+      OS-shaped rectangle and call that the same claim.
 - [ ] Exercise at 125% / 150% / 200% — but **not as three equal probes**
       (T2 finding F-13). At a power-of-two factor the multiplication is
       exact, so convert-once and convert-twice agree everywhere and a
@@ -718,11 +919,29 @@ sequencing thesis does not defer all scaled-path risk to the end
       at 150%. 200% is therefore a magnitude check, and **the rule
       verification is carried by 125% and 150%**. Adding more round
       factors would not help; adding an awkward one would.
+- [ ] **Drive at least one DPI that is not a standard scaling** (T4
+      independent review finding R-1, generalised here because T8 is where
+      it bites next). All three factors above come from DPIs that are
+      multiples of 24, so `dpi / 96` is exactly representable in `f32` for
+      every one of them — which is precisely the property that hid a
+      real arithmetic defect through eleven green T4 tests until a
+      reviewer asked what the *documented rule* said. T8 synthesises the
+      message and therefore chooses `HIWORD(wParam)` freely, so this costs
+      one more case: **100 DPI** is the measured witness (804 DIP is
+      exactly 837.5 physical there, the tie the `f32` route resolved the
+      wrong way). The general lesson to carry, not just the value: **a
+      test suite that only uses the inputs the product is expected to see
+      cannot find a rule that is wrong outside them.**
 - [ ] **Record the stated limit with the test** (preamble obligation 5):
       a synthesised `WM_DPICHANGED` proves the handling path; it does
       **not** prove that crossing a real monitor boundary delivers the
       same message with a usable suggested rectangle. That half is
-      T11's.
+      T11's. **A second limit belongs beside it**, from the bullet above:
+      the exact-invariance assertion holds because T8 preserves the
+      client extent, and the OS's suggested rectangle preserves the outer
+      one instead — so on the real path the DIP layout input moves by a
+      DIP or two and invariance is approximate. T11 is where that shows,
+      and it must not read as a failure.
 - [ ] Follow the established `0x80070005` guard pattern — **fail, not
       skip**, on a runner without Compositor capability. Any new guard
       must be shown to fire on an environment that actually lacks the
@@ -763,6 +982,15 @@ real per-monitor DPI and the identity conversions become live ones.
 - [ ] No legacy-OS fallback: both `SetProcessDpiAwarenessContext` (1703+)
       and `GetDpiForWindow` (1607+) predate the stated Windows 10 1809
       floor.
+- [ ] **No `Cargo.toml` edit is needed** — T4's `Win32_UI_HiDpi` covers
+      this task's declaration symbols. Measured, not inferred: T4's
+      throwaway probe compiled `SetProcessDpiAwarenessContext` and
+      `DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2` against the landed
+      feature list with no further change. The two symbols the
+      effective-level assertion below needs —
+      `GetWindowDpiAwarenessContext` and `AreDpiAwarenessContextsEqual` —
+      were **not** exercised, so if either is missing that is a T9 edit
+      and T12's §4.5 re-sync must pick it up.
 - [ ] Integration test asserting the **effective** level —
       `GetWindowDpiAwarenessContext(hwnd)` compared against
       `DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2` with
@@ -815,9 +1043,34 @@ are in
       the evidence.** Note that "the window's physical size scales with
       the scale factor" is *not* a control — DWM bitmap stretching
       satisfies it too.
+      **The invariance is not bit-exact, and the control must say by how
+      much** (T4 finding F-28). DD-004 defines `width` / `height` as the
+      **outer** rectangle, and only that rectangle scales exactly:
+      measured, an 800 × 600 DIP request is 1000 × 750 physical at 125%,
+      while the *client* area goes from 784 × 561 DIP at 100% to
+      982 × 703 physical = **785.6 × 562.4 DIP** at 125%, because the
+      non-client frame scales by its own **DPI-indexed system metrics**
+      rather than by `s` — decomposed with `GetSystemMetricsForDpi` at
+      the T4 review: width is `2 × (SM_CXSIZEFRAME + SM_CXPADDEDBORDER)`
+      = 16 at 96 DPI and 18 at 120 DPI, height adds `SM_CYCAPTION` for
+      39 and 47. (Those are the probe machine's theme metrics; the
+      invariant is that they are DPI-indexed, not the specific numbers.)
+      Layout receives the client extent, so a correct implementation lays
+      out into ~1.6 DIP more width at 125% and a wrap position near a
+      line-break boundary may legitimately move. A control that demands
+      identical wrap positions can therefore fail a correct build. State
+      the tolerance, or drive both captures from a controlled **client**
+      size rather than a controlled outer size.
 - [ ] **Positive control C, path form.** Two frames across a display
       setting scale change on the development machine while the window
-      is up, showing text still crisp and the logical layout unchanged.
+      is up, showing text still crisp and the logical layout unchanged
+      — **to the same tolerance control B carries, not bit-exactly**
+      (T4 delta review finding 2; this bullet read as an absolute while
+      the bullet above it already conceded the drift). A display-setting
+      change is the real path, so the window follows the OS-suggested
+      rectangle and the client extent moves with the non-client metrics.
+      Element order and wrap structure are the invariants; a single wrap
+      position sitting on a boundary is not.
 - [ ] **Window measurement check** (risk R-9): a window created at
       800 × 600 DIP measures 1000 × 750 physical at 125%. Cheap,
       concrete, and the only in-phase check of DD-004's outer-window
@@ -828,11 +1081,30 @@ are in
       satisfied by a build that never declares awareness at all. Pair it
       with something that separates the two: the effective-context
       assertion from T9, or the crispness pair (control A) on the same
-      frame. T1 also measured the failure direction — with awareness
-      declared and T4's correction absent, the window measures
-      800 × 600 physical and the WrapPanel drops from 7 tiles per row to
-      6 — so the three outcomes are distinguishable when the check is
-      read alongside a control, and indistinguishable when it is not.
+      frame. **T4 measured all three outcomes in one session and one
+      build tree** — the plan previously carried two of them from T1 plus
+      a stated failure direction, and one of those numbers was
+      conditional in a way the restatement dropped (F-27):
+
+      | State | window rect | client | gallery tiles/row |
+      |---|---|---|---|
+      | unaware (with or without the correction — it is the identity) | 1000 × 750 | 980 × 701 | 7 |
+      | aware, correction absent | 800 × 600 | 782 × 553 | **7** |
+      | aware, correction present, **T5's inbound seam still absent** | 1000 × 750 | 982 × 703 | 9 |
+
+      The plan's earlier "drops from 7 tiles per row to 6" is **T1's
+      number for T1's build**, which carried the *complete* conversion
+      machinery — its client 782 physical became 625.6 DIP. Read as a
+      property of the missing correction alone it does not reproduce:
+      aware-without-correction reads 7. The correct reading is that
+      **rows 1 and 3 share a rectangle and rows 1 and 2 share a tile
+      count**, so no single number separates the three and only the pair
+      does. Frames and numbers: [log.md](./log.md) §T4 and
+      [evidence/t4-probe/](./evidence/t4-probe/).
+      Note also that the third row's **9** is the pre-T5 signature; once
+      the inbound seam lands the same state must read **7** again, and a
+      T10 that inherits 9 as the expected number would be pinning a
+      half-finished phase.
 - [ ] **Re-derive the capture coordinates** for later phases against the
       new coordinate space, as the evidence artifact T12's
       `verification-environments.md` revision consumes (risk R-7).
@@ -908,7 +1180,14 @@ recorded; any finding triaged to a task or to
       Moment 1 statement against what actually landed and correct
       divergences. The statements flagged at ADR time as most at risk
       are the outer-window-rectangle claim and the font-size unit; both
-      are checked against running behaviour, not assumed. Flip the
+      are checked against running behaviour, not assumed. **The
+      outer-rectangle half already has its measurement** (T4): an
+      800 × 600 DIP request produced a 1000 × 750 physical *outer*
+      rectangle at 125%, while the client area landed at
+      785.6 × 562.4 DIP rather than 784 × 561. So the claim is true of
+      the outer rectangle and **false if a reader transfers it to the
+      client area** — the wording must stay where DD-004 put it. Cite
+      [log.md](./log.md) §T4 rather than re-deriving it. Flip the
       status markers in
       [architecture.md](../../../../docs/architecture.md),
       [dsl_spec.md](../../../../docs/dsl_spec.md), and
@@ -938,6 +1217,21 @@ Owned by the **phase-end batch**, not by T12 — these stay `[ ]` at T12
 close: the CI run id, `handoff.md` finalization, the phase
 retrospective, [preamble.md](./preamble.md)'s `status` flip, and:
 
+- [ ] **Decide whether `workflow.md`'s status vocabulary needs the
+      supersede-vs-annotate distinction** (raised at T4, owner decision
+      recorded in [log.md](./log.md) §T4). T4 landed the ADR set's first
+      supersede —
+      [DD-M4-P1-005](../decisions/dd-m4-p1-005-unconditional-size-correction.md)
+      — and, on the same DD and the same day, an in-place **annotation**
+      that is deliberately not one. The boundary applied was: *supersede
+      when a reader implementing the original text would not obtain the
+      shipped behaviour; annotate when the decision still produces it and
+      only a statement around it was too strong.*
+      [workflow.md](../../../procedures/workflow.md) lists `Proposed` /
+      `Accepted` / `Superseded` and has **no word for the second case**,
+      so the distinction currently exists only by precedent. Decide
+      whether it gets a line there, belongs in ADR authoring guidance, or
+      stays precedent — a process question, hence phase-end and not T12.
 - [ ] **File the vision decision record for the "show it goes red"
       obligation** (owner decision on the T3 retrospective, recorded in
       [log.md](./log.md)). Scope as decided: **mandatory for pure-logic
