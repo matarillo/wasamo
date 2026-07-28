@@ -413,8 +413,7 @@ residual (a layout-time runtime error code) stays non-applicable
   this correction: it changes no option and stands as an annotation.
 - 2026-07-29: **option I1's conditional clause is superseded** by
   [DD-M4-P1-005](./dd-m4-p1-005-unconditional-size-correction.md)
-  (owner-approved route; that record is `Proposed` pending owner review
-  of its text). The correction is unconditional. **This DD's own
+  (Accepted 2026-07-29). The correction is unconditional. **This DD's own
   `Status` stays `Accepted`** — one clause of one option is replaced and
   every decision it makes stands, so the record is superseded *in part*
   in the sense [doc-system.md](../../../cross-milestone/decisions/doc-system.md)

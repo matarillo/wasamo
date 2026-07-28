@@ -81,6 +81,24 @@ selection, the reasons for non-applicable traps, and the review lane in
 auditable artifacts), per
 [implementation-gates.md](../../../procedures/implementation-gates.md).
 
+**Propagate corrections by proposition, not by string** (T4 delta review
+finding 2, after the same failure three times). When a task falsifies a
+claim, the reflex is to search this plan and the preambles for the
+*phrasing* of the claim — and the documents that carry the same claim in
+other words are then missed every time, however many passes are run. The
+sites T4 kept missing say "does not re-decide layout", "layout results
+are scale-invariant", "the DIP results are unchanged" and "invariance is
+the evidence", and no string search over any of those finds the others.
+So: **write the falsified proposition as one sentence first, then
+enumerate the documents that assert it** — which in this phase always
+includes the [ADR-set preamble](../decisions/preamble.md)'s Decisions
+table, its cross-DD couplings and its verification list, this plan's task
+bullets, and [preamble.md](./preamble.md) — and only then search. The
+falsifiable test T5 inherits: **valid if the propagation pass names the
+proposition and enumerates the asserting documents before searching;
+falsified if a reviewer again finds an asserting site the pass never
+visited.**
+
 ---
 
 ### T0 — Moment 1 closure + implementation docs open
@@ -531,6 +549,19 @@ landable as one reviewed commit rather than a visible regression.
       from the visual tree — and that they stop cancelling the moment
       M4-Phase 2 sources geometry from layout or introduces a
       DIP-denominated hit-area rule.
+      **Say *whose* scale divides it, because the comparison mixes two
+      sources** (named at T4 after reading the landing site; the row says
+      only "÷ s"). The pointer is divided at `wnd_proc` by
+      `WindowState::scale`, while `visual_rect` is called from
+      `hit_test_click_inner` / `update_hover_inner`, which stand on a node
+      and would naturally divide by the **node cache**. The two agree
+      once T6's walk runs and are both 1 before it — but they are not the
+      same variable, and a node the walk never reaches (F-24's
+      direct-hosting path) makes them disagree silently. `visual_rect` is
+      a free function taking a `SpriteVisual` with no scale in hand, so
+      the division happens at its two call sites either way; the decision
+      is which scale those sites read, and it is recorded rather than
+      fallen into.
 - [ ] **Introduce the node-side scale cache**, defaulted to 1 in every
       `WidgetNode` constructor — as `DipScale::default()`, which is the
       identity, rather than a hand-written literal (T2 finding F-16). T5
@@ -638,6 +669,15 @@ landable as one reviewed commit rather than a visible regression.
 table** — DD-002's 13 rows, each with its classification, the source
 location as landed, and the verification that closed it; the claim being
 checked is "no coordinate enters or leaves outside these rows".
+**Assemble the audit query independently of the diff** (T4 independent
+review finding R-8). T4's query named the APIs T4 happened to use, so it
+could not exclude the ones it did not — `MoveWindow`,
+`AdjustWindowRect*`, `SetWindowPlacement`, `DeferWindowPos` — and the
+reviewer, not the author, is who ran the widened search. A query derived
+from what was written cannot falsify what was forgotten, and on T5 that
+matters more than anywhere else in the phase, because completeness *is*
+this task's artifact. Enumerate the coordinate-carrying API surface
+first, then search for all of it.
 **Row 13 is closed at T4, not here** (`create_hwnd`'s `CreateWindowExW`
 width / height): T4's audit records the landed site and its three
 callers, so T5's table cites that rather than re-deriving it. Recorded
@@ -674,6 +714,17 @@ test.
       no rounding contract and wrapping it would put a DirectWrite
       concern inside a type whose value is having no rendering
       dependency.
+      **T4's carrier reversal makes this exact and removes the `factor()`
+      use entirely — decide whether to take it.** `DipScale` now retains
+      the DPI, and `96 × (dpi / 96)` *is* `dpi`: the value D2D wants is
+      the OS-reported DPI itself, with no multiplication and no `f32`
+      round trip. Exposing it (a `d2d_dpi()` or `dpi()` accessor) would
+      close the one hole F-15's carry-forward has to leave open, and T2's
+      stated reason for not wrapping `96 × s` — that it carries no
+      rounding contract — argues *for* this rather than against it, since
+      there is now no arithmetic left to wrap. T6 decides and records
+      which, because the alternative is defensible too: an accessor named
+      after DirectWrite's need is the rendering dependency T2 kept out.
 - [ ] **Convert the atlas origin** (risk R-3): `BeginDraw`'s offset is in
       pixels and must be divided by `s` before use as the D2D drawing
       origin — `to_dip`, one component each. Write it deliberately — the
@@ -750,7 +801,17 @@ merge.
       returns**, so a scale updated afterwards would leave that pass
       laying out and projecting with the stale factor. This is the
       phase's single most likely ordering defect and is invisible at
-      100%. **The premise is now measured rather than inherited** (T4):
+      100%. **T4's throwaway probe is the technique that fits this, and
+      T7 has the problem in a sharper form** (finding F-31): T7's close
+      artifact is an enumeration, which is a description, and the task
+      lands before T8 drives `s ≠ 1` — so nothing in T7's own gate can
+      distinguish the right order from the wrong one. T4 answered the
+      same shape by instrumenting, building, running, printing the event
+      order and reverting; the mechanics and the capture script are in
+      [log.md](./log.md) §T4 and [evidence/](./evidence/). Not mandated —
+      T7 may find a structural argument that makes the order impossible
+      to invert, which is better — but "the enumeration says the order is
+      right" is the outcome this bullet exists to refuse. **The premise is now measured rather than inherited** (T4):
       at 125% a size-changing `SetWindowPos` dispatches
       `WM_WINDOWPOSCHANGING`, `WM_GETMINMAXINFO`, `WM_NCCALCSIZE`,
       `WM_WINDOWPOSCHANGED`, **`WM_SIZE`**, then `WM_GETICON`, all before
@@ -858,6 +919,19 @@ sequencing thesis does not defer all scaled-path risk to the end
       at 150%. 200% is therefore a magnitude check, and **the rule
       verification is carried by 125% and 150%**. Adding more round
       factors would not help; adding an awkward one would.
+- [ ] **Drive at least one DPI that is not a standard scaling** (T4
+      independent review finding R-1, generalised here because T8 is where
+      it bites next). All three factors above come from DPIs that are
+      multiples of 24, so `dpi / 96` is exactly representable in `f32` for
+      every one of them — which is precisely the property that hid a
+      real arithmetic defect through eleven green T4 tests until a
+      reviewer asked what the *documented rule* said. T8 synthesises the
+      message and therefore chooses `HIWORD(wParam)` freely, so this costs
+      one more case: **100 DPI** is the measured witness (804 DIP is
+      exactly 837.5 physical there, the tie the `f32` route resolved the
+      wrong way). The general lesson to carry, not just the value: **a
+      test suite that only uses the inputs the product is expected to see
+      cannot find a rule that is wrong outside them.**
 - [ ] **Record the stated limit with the test** (preamble obligation 5):
       a synthesised `WM_DPICHANGED` proves the handling path; it does
       **not** prove that crossing a real monitor boundary delivers the
@@ -1143,6 +1217,21 @@ Owned by the **phase-end batch**, not by T12 — these stay `[ ]` at T12
 close: the CI run id, `handoff.md` finalization, the phase
 retrospective, [preamble.md](./preamble.md)'s `status` flip, and:
 
+- [ ] **Decide whether `workflow.md`'s status vocabulary needs the
+      supersede-vs-annotate distinction** (raised at T4, owner decision
+      recorded in [log.md](./log.md) §T4). T4 landed the ADR set's first
+      supersede —
+      [DD-M4-P1-005](../decisions/dd-m4-p1-005-unconditional-size-correction.md)
+      — and, on the same DD and the same day, an in-place **annotation**
+      that is deliberately not one. The boundary applied was: *supersede
+      when a reader implementing the original text would not obtain the
+      shipped behaviour; annotate when the decision still produces it and
+      only a statement around it was too strong.*
+      [workflow.md](../../../procedures/workflow.md) lists `Proposed` /
+      `Accepted` / `Superseded` and has **no word for the second case**,
+      so the distinction currently exists only by precedent. Decide
+      whether it gets a line there, belongs in ADR authoring guidance, or
+      stays precedent — a process question, hence phase-end and not T12.
 - [ ] **File the vision decision record for the "show it goes red"
       obligation** (owner decision on the T3 retrospective, recorded in
       [log.md](./log.md)). Scope as decided: **mandatory for pure-logic

@@ -2361,3 +2361,84 @@ the no-branch decision, with DD-001's structural property as its reason,
 **before an approach was chosen**. What was missing was the recognition
 that a reason of that weight belongs in a decision record rather than in
 a gate entry.
+
+### Post-review plan re-audit (2026-07-29, owner-prompted)
+
+**The in-gate re-audit ran before the reviews. After them, only
+*propagation* ran — the specific findings were folded into the specific
+documents that carried them, and the task list was never re-read as a
+whole against what two review rounds had taught.** That is the T1/T2
+shape again in a new place: the earlier failure was revising only the
+tasks a finding *named*; this one is revising only the documents a
+finding *touched*, and skipping the pass that asks what else is now
+known to be wrong. Recorded plainly because the owner asked whether it
+had been done and the honest answer was no.
+
+This entry is that pass, run **proposition-first** per the delta
+review's finding 2 rather than by searching for phrasings. Seven
+propositions came out of the two review rounds; each was written as a
+sentence, then the documents asserting it were enumerated, then checked.
+
+| Proposition established by the reviews | Asserting documents checked | Verdict |
+|---|---|---|
+| **P1.** A rule stated against an external contract must be tested against that contract's semantics, not against the inputs the product expects | §T2 (closed), **§T8**, §T10's measurement check, preamble §Verification closure item (1) | **correction — §T8.** Its three factors are 120 / 144 / 192 DPI, every one a multiple of 24, so every one has an exactly-representable `f32` factor. That is the property that hid R-1 behind eleven green tests. T8 synthesises `HIWORD(wParam)` and can drive **100 DPI** for one more case |
+| **P2.** `DipScale` retains the DPI and derives the factor | §T2 (corrected), **§T6**, §T5's named operations, DD-002 §The carrier (states no representation — unaffected) | **correction — §T6.** `96 × s` is now exactly `dpi`, so the phase's one sanctioned `factor()` use has an exact, multiplication-free alternative. T6 decides whether to take it; the option did not exist when the bullet was written |
+| **P3.** The client rectangle does not scale by `s` | §T8, §T10 controls B and C, §T12, implementation preamble ×2, ADR-set preamble ×4, DD-003 ×3 | no further correction — all propagated across the two disposition commits, and the delta review's finding 2 closed the last four |
+| **P4.** An ordering decision placed relative to a message dispatch is unverifiable at `s = 1` | §T4 (closed), **§T7**, preamble §The sequencing thesis (corrected) | **correction — §T7.** Its close artifact is an enumeration, i.e. a description, and it lands before T8 drives `s ≠ 1`; DD-003 calls its step ordering the phase's single most likely defect. T4's probe technique is the fitting answer and was not offered to the task that needs it most |
+| **P5.** An audit query assembled from the diff cannot falsify what the diff forgot | **§T5**, §T6 (row 7 only), §T7 | **correction — §T5.** Completeness *is* T5's artifact, and T4's query named only the APIs T4 used. Enumerate the coordinate-carrying API surface first, then search |
+| **P6.** Corrections must be propagated by proposition, not by string | §Task list preamble (the gate paragraph) — the only place a rule for *all* remaining tasks can live | **correction — §Task list preamble**, with the falsifiable test T5 inherits |
+| **P7.** The set now has a supersede-vs-annotate boundary that the process vocabulary cannot express | §T12's phase-end-owned list | **correction — §T12 phase-end list.** It was recorded only in [log.md](./log.md) and the retrospective, i.e. nowhere the phase-end batch reads its own work items from |
+
+**Tasks re-read with nothing to correct**, stated so the pass is
+auditable rather than a list of hits: **§T9** (the `Win32_UI_HiDpi`
+sufficiency note and the trap-#4 re-decision both already carry T4's
+findings; DD-001's last-error diagnostic channel differs from the
+`eprintln!` T4 used, and that is the ADR's explicit choice rather than
+an inconsistency to fix — noted here so T9 makes it deliberately);
+**§T10** (the three-state table and both control corrections landed at
+the earlier passes); **§T11** (owner-executed, unaffected); **§T12**'s
+existing items; the implementation preamble's §Obligations carried,
+§Verification closure and review-lane table; and the ADR set, whose two
+annotations and one supersede are the reviews' own disposition.
+
+### T5's landing site, read before hand-off
+
+The plan names T5's work but not its shape at the source, and T3 set the
+precedent of naming the next task's open points before handing over
+(`cc99a72`). Read end-to-end: `widget.rs` `sync_visuals` (1763–1836),
+`hit_test_click` / `_inner` (1240 ff.), `update_hover` / `_inner`
+(1334 ff.), `visual_rect` (1930), `run_layout` / `run_layout_as_window_root`
+(1587–1640), the ten constructors' shared field block; `window.rs`
+`set_root` and the four coordinate-carrying `wnd_proc` arms;
+`emit.rs::flush_layout` (127–149).
+
+Facts worth having before the edit, none of which contradict the plan:
+
+- **The scale cache field lands in one struct and eleven construction
+  sites** — the `attached: false` field block that every constructor
+  ends with. There is **no `WidgetNode` struct literal outside
+  `widget.rs`**: a repo-wide search for one matches only function
+  signatures returning `&WidgetNode`, so T1's compiler-measured breakage
+  set of 7 test call sites stands and no test constructs the type by
+  literal.
+- **`sync_visuals` has one recursive call and two entry points**
+  (`run_layout`, `run_layout_as_window_root`), both of which call it with
+  `(0.0, 0.0)` as the root's parent offset. The outbound conversions are
+  therefore confined to one function, as T3 arranged.
+- **`visual_rect` has exactly two call sites**, both inside the
+  hit-test / hover recursion, and both immediately add the readback to an
+  accumulated absolute offset. So the inbound row-9 conversion has two
+  sites and no third consumer.
+- **`emit::flush_layout` reads `state.hwnd` inside `if let Some(ref mut
+  root) = state.root_widget`.** Reading `state.scale` in the same place
+  is the same disjoint-field borrow and needs no restructuring — worth
+  stating because T1's F-3 borrow note (`update_button_label` must read
+  the scale before `button_data_mut()`) is about a *method* borrowing all
+  of `self`, and a reader could over-apply it here.
+- **The one open point the plan did not name**, now folded into §T5: the
+  pointer is divided by `WindowState::scale` at `wnd_proc` while the
+  `visual_rect` readback is divided inside a node — two different
+  variables compared against each other in the same expression. They
+  agree from T6 onward and are both 1 before it, so nothing is broken;
+  what is missing is the decision being recorded rather than fallen into,
+  which is exactly the shape of T4's own two open points.

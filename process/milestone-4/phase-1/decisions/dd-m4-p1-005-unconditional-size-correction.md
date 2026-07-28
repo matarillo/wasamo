@@ -1,6 +1,6 @@
 # DD-M4-P1-005 — The DIP window-size correction is unconditional
 
-**Status:** Proposed
+**Status:** Accepted
 **Phase:** M4-Phase 1
 **AC:** None directly. This record exists to resolve a conflict between
 two Accepted decisions that surfaced during implementation
@@ -200,3 +200,6 @@ the trap-#2 structural side-effect enumeration.
   approved the **substance** (keep the correction unconditional; file a
   successor rather than restore the guard); the `Accepted` flip awaits
   their review of this text.
+- 2026-07-29: Accepted flip following owner review of this text; no
+  change requested to the recommendation, its options, or the stated
+  supersede scope (option I1's conditional clause and nothing else).
