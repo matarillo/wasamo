@@ -1,7 +1,7 @@
 # Wasamo DSL Specification
 
-**Document version:** 1.15
-**Last updated:** 2026-07-06
+**Document version:** 1.16
+**Last updated:** 2026-07-28
 **Status:** `public-draft` (M3) — this document is the first public
 draft of the Wasamo DSL specification, promoted at M3-Phase 8 close;
 the promotion record and the M3 decision links live in the
@@ -16,7 +16,11 @@ M3-Phase 6 closed (implementation-synced); M3-Phase 7 closed
 (implementation-synced — the `ToggleButton` / `checked` selected-state
 surface, §4.17, and the public-draft future-surface notes, §4.18,
 match the landed implementation; external-reader smoke verified in
-M3-Phase 8 T8).
+M3-Phase 8 T8). M4-Phase 1 design-drafted: the unit of every authored
+length is defined as DIP (§1 *Units and the layout coordinate system*),
+replacing the previously undefined "pixel extents in the layout
+coordinate system" wording; re-verified against the landed runtime at
+M4-Phase 1 close.
 Covers the M2 `.ui` surface, the `state` surface keyword
 retroactively, the M3-Phase 1 `bool` scalar binding additions, the
 M3-Phase 2 Box layout primitive (with `aspect` / `fill` literal
@@ -53,6 +57,60 @@ Source files use the `.ui` extension.
 M2 scope covers lexing, parsing, checking, IR text emission, runtime IR
 loading, inline handler evaluation, and reactive property binding for the
 Foundation counter surface.
+
+<a id="units-and-the-layout-coordinate-system"></a>
+
+### Units and the layout coordinate system
+
+Every length an author writes in a `.ui` file — a dimension attribute, a
+spacing, an offset, a Grid track size, a font size — is expressed in
+**device-independent pixels (DIP)**, where **1 DIP is 1/96 inch**. This
+is the unit of the layout coordinate system, and it is the only unit the
+language has. Where a `px` suffix appears (a measurement expression such
+as `12px`, §2.2 / §4.6) it names this unit; the dimension attributes
+added in M3 take bare integers in the same unit and admit no suffix.
+
+Two consequences follow, and they are the reason the unit is worth
+stating rather than assuming.
+
+- **An authored layout is identical at every display scale factor.** A
+  `.ui` file laid out in a window of a given DIP size produces the same
+  layout — the same element positions, the same sizes, the same
+  wrap positions — whether that window is on a 100%, a 150%, or a 200%
+  monitor. What changes is only how many device pixels each DIP occupies
+  on the way to the screen. An author never writes a resolution-
+  dependent number and never has a reason to ask what scale factor a
+  display is at.
+- **A DIP is a length, not a device pixel.** `24px` of padding is 24/96
+  inch at 100%, and occupies 48 device pixels on a display set to 200%.
+  Text laid out at that scale is rasterized at the device's resolution
+  rather than magnified, so it stays crisp; the surface-resolution
+  contract behind that is runtime architecture, not language surface,
+  and is normative in
+  [architecture.md §12](./architecture.md#coordinate-spaces).
+
+  The physical size a DIP resolves to is the display's scale factor,
+  which on Windows is the setting the user chose for that monitor. It
+  tracks the monitor's real pixel density closely enough for authored
+  sizes to be perceptually stable across displays, but it is a user
+  preference rather than a measurement — a display set to 150% renders
+  one DIP as 1.5 device pixels whatever its actual pixel density.
+
+**Font sizes are DIP too.** The `font:` attribute selects from a named
+typography ramp rather than carrying a number, and the ramp's four sizes
+— 12, 14, 20, and 28 — are DIP font sizes, so type scales with the
+display exactly as layout does. The ramp itself (its names, sizes,
+weights, and family) is normative in
+[architecture.md §7.3](./architecture.md#73-typographystyle-type-ramp).
+
+Dimension-bearing sections below refer to this definition rather than
+restating it. Layout arithmetic is `f32` throughout with no integer
+pixel snapping (§4.9, §4.10, §4.11, §4.12); a DIP value is therefore not
+required to be a whole number of device pixels at any scale factor, and
+a non-integer scale factor does not round authored values.
+
+Deciding record:
+[M4-Phase 1 decisions](../process/milestone-4/phase-1/decisions/preamble.md).
 
 ### Reference example (`examples/counter/counter.ui`)
 
@@ -145,7 +203,7 @@ identifiers outside a collection-assignment right-hand side.
 | `StringLit` | `"` string content `"`                 | `"Counter"`, `"Count: \{…}"` |
 | `RatioLit`  | `[0-9]+` `:` `[0-9]+`                  | `16:9`, `1:1`                |
 | `ColorLit`  | `#` `[0-9A-Fa-f]{6}` \| `#` `[0-9A-Fa-f]{8}` | `#cccccc`, `#00000080` |
-| `Unit`      | `px`                                   | `px`                         |
+| `Unit`      | `px`                                   | `px` — names the DIP unit ([§1](#units-and-the-layout-coordinate-system)) |
 | `LBrace`    | `{`                                    |                              |
 | `RBrace`    | `}`                                    |                              |
 | `LAngle`    | `<`                                    |                              |
@@ -740,8 +798,9 @@ aspect-correct rectangle that fits inside the parent. Given parent
 width `W` and height `H` and `aspect: num:den`, the branch is
 selected by integer comparison `(W as f64) * (den as f64)` vs
 `(H as f64) * (num as f64)`; once the branch is chosen the derived
-axis is computed in `f32`. No pixel-snapping in Phase 2; rasterisation
-/ DPI hinting is unaffected by this section.
+axis is computed in `f32`. No pixel-snapping in Phase 2: the derived
+extent is a DIP value that need not be a whole number of device pixels
+([§1 *Units and the layout coordinate system*](#units-and-the-layout-coordinate-system)).
 
 Edge cases:
 
@@ -887,9 +946,10 @@ note the following:
 | `line-spacing`    | `<i32>` literal  | No                  | `0` (touching lines on the cross axis) |
 
 All three attributes are constant-only integer literals in M3-Phase 3.
-The values are pixel extents in the layout coordinate system; they
-reuse the existing `i32` literal plumbing from M2 (no new `IrType`,
-no new `IrLiteral` variant, no new `PropertyValue` variant).
+The values are extents in DIP
+([§1 *Units and the layout coordinate system*](#units-and-the-layout-coordinate-system));
+they reuse the existing `i32` literal plumbing from M2 (no new
+`IrType`, no new `IrLiteral` variant, no new `PropertyValue` variant).
 
 **Non-negative integer range.** All three attributes admit
 **non-negative** integer values. `wasamoc check` rejects a negative
@@ -1161,8 +1221,9 @@ deferred future direction, not a supported Phase 6 shape.
 |---|---|---|---|
 | `offset-y` | `<i32>` literal or a bare state identifier such as `scroll_y` (declared as `state scroll_y: i32 = 0` per §4.7) | Read-only binding | `0` |
 
-`offset-y` is a signed integer pixel offset in the layout coordinate
-system. Per §4.3, the bound form is a bare identifier RHS (for example
+`offset-y` is a signed integer offset in DIP
+([§1 *Units and the layout coordinate system*](#units-and-the-layout-coordinate-system)).
+Per §4.3, the bound form is a bare identifier RHS (for example
 `offset-y: scroll_y`), not a `\{…}` interpolation — string interpolation
 is confined to string literals (see §2.4). Literal values and bound
 `i32` state values may be negative or larger than the scrollable range
@@ -1286,8 +1347,9 @@ Grid sizing follows six facts:
    tokens. Track sharing across rows / columns is automatic; there
    is no per-row column-width or per-column row-height surface.
 2. **Fixed tracks consume definite space first.** Each
-   `<integer>`-px track contributes its declared pixel size to the
-   axis's resolved extent.
+   `<integer>`-px track contributes its declared size — in DIP,
+   [§1 *Units and the layout coordinate system*](#units-and-the-layout-coordinate-system)
+   — to the axis's resolved extent.
 3. **Weighted-star tracks divide remaining bounded space by integer
    weight.** `*` (sugar for `1*`) and `n*` (positive integer in
    `[1, 1024]`) take fractional shares of the bounded space the
@@ -1435,7 +1497,7 @@ The track tokens admitted in Phase 5:
 
 | Token                      | Meaning                                  | Validation |
 |----------------------------|------------------------------------------|------------|
-| `<integer>` (positive)     | Fixed track of that pixel width / height | `value >= 1` at `wasamoc check` and `validate()` |
+| `<integer>` (positive)     | Fixed track of that width / height in DIP ([§1](#units-and-the-layout-coordinate-system)) | `value >= 1` at `wasamoc check` and `validate()` |
 | `*`                        | Weighted-star track with weight `1`      | (passes by construction) |
 | `<integer>*` (`1..=1024`)  | Weighted-star track with that integer weight | `1 <= weight <= 1024` at `wasamoc check` and `validate()` |
 
@@ -3967,3 +4029,4 @@ anchor — distinct from the per-edit revision-history table below.
 | 1.13    | 2026-07-05 | M3-Phase 8 public-draft readiness editorial pass: removed stale pre-Phase-6 wording from §4.9 and clarified that the Phase 7 collection mutation Buttons were verification scaffolding, while the final integrated Gallery keeps generated thumbnails without retaining Add / Remove / Clear / Reset as end-user UI. The public-draft marker and promotion change-history entry remain deferred to the Phase 8 Moment 2 sync. |
 | 1.14    | 2026-07-06 | M3-Phase 8 T9 G(4) review remediation: normalised the Phase 8 verification-status wording after T8 external-reader smoke, corrected §4.17 so `ToggleButton.checked` is framed as the first persistent selected-state bool attribute rather than the first bool-driven widget attribute, and kept public-draft reopen triggers out of §4.18 prose. No public-draft marker, promotion change-history entry, or ABI change. |
 | 1.15    | 2026-07-06 | M3-Phase 8 implementation sync (Moment 2): flipped the top Status block and the §4.17 phase-status marker to closed / implementation-synced, promoted the document to `public-draft`, and added the public-draft change-history anchor (promotion record + M3 decision links + T8 external-reader smoke result). No body-prose semantic change (divergence corrections were folded in 1.13 / 1.14); no new `IrType` / `IrLiteral` / `PropertyValue` or token; `abi_spec.md` untouched. |
+| 1.16    | 2026-07-28 | M4-Phase 1 design draft (Moment 1): added §1 *Units and the layout coordinate system* — every authored length and font size is DIP (`1 DIP = 1/96 inch`), an authored layout is identical at every display scale factor, and a DIP is a physical length rather than a device pixel. The previously undefined "pixel extents in the layout coordinate system" wording is **replaced** at each dimension-bearing site (§4.10 WrapPanel `item-cross-size` / `item-spacing` / `line-spacing`, §4.11 ScrollView `offset-y`, §4.12 Grid fixed track sizes), which now reference the definition instead of restating it; §2.2 notes that the `px` unit suffix names DIP, and §4.9's rounding note is restated in DIP terms. No grammar, token, AST, `IrType`, `IrLiteral`, or `PropertyValue` change — the unit is a semantic statement about existing literals, so `wasamoc` and the IR are untouched. At 100% every existing `.ui` file is unchanged in behaviour. The runtime-side coordinate-space model (the two spaces, the conversion seams, the text-surface resolution contract, scale invariance) is normative in [architecture.md §12](./architecture.md#coordinate-spaces); the ABI argument unit is in [abi_spec.md](./abi_spec.md) §4.2. Pending implementation re-sync at M4-Phase 1 close. |
