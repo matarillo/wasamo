@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<title>M4 target app 候補 B4 — 思いつきメモ（Quick Capture Inbox）</title>
+<style>
+  :root {
+    --ink: #222;
+    --muted: #667;
+    --frame: #8a93a6;
+    --paper: #fafbfd;
+    --mica: linear-gradient(135deg, #e8ecf4 0%, #dfe7f0 45%, #e9e3ee 100%);
+    --accent: #2f6fd0;
+    --warn: #b2541a;
+  }
+  body {
+    font-family: "Yu Gothic UI", "Segoe UI", sans-serif;
+    color: var(--ink);
+    margin: 2rem auto;
+    max-width: 72rem;
+    padding: 0 1.5rem;
+    line-height: 1.7;
+    background: #fff;
+  }
+  h1 { font-size: 1.5rem; border-bottom: 3px solid var(--accent); padding-bottom: .4rem; }
+  h2 { font-size: 1.25rem; margin-top: 2.5rem; border-left: 6px solid var(--accent); padding-left: .6rem; }
+  h3 { font-size: 1.05rem; margin-top: 1.8rem; }
+  p, li { max-width: 62rem; }
+  .meta { color: var(--muted); font-size: .9rem; }
+  .note {
+    background: #f4f6fb; border: 1px solid #d5dbe8; border-radius: 6px;
+    padding: .7rem 1rem; font-size: .92rem; margin: 1rem 0;
+  }
+  .warn { border-color: #e0b68f; background: #fdf3ea; }
+  table { border-collapse: collapse; margin: 1rem 0; font-size: .9rem; }
+  th, td { border: 1px solid #c8cede; padding: .35rem .6rem; text-align: left; vertical-align: top; }
+  th { background: #eef1f7; }
+  td.c { text-align: center; }
+
+  /* ---- wireframe primitives: kept aligned with target-app-wireframes.html ---- */
+  .board { display: flex; flex-wrap: wrap; gap: 1.4rem; align-items: flex-start; margin: 1rem 0; }
+  .window {
+    background: var(--paper); border: 2px solid var(--frame); border-radius: 8px;
+    box-shadow: 3px 4px 0 rgba(120,130,150,.25); overflow: hidden;
+    font-size: .78rem;
+  }
+  .window.mica .body { background: var(--mica); }
+  .titlebar {
+    display: flex; justify-content: space-between; align-items: center;
+    background: #dde3ee; padding: .25rem .6rem; font-weight: 600;
+    border-bottom: 1px solid var(--frame);
+  }
+  .titlebar .buttons { color: var(--muted); letter-spacing: .3em; }
+  .body { padding: .6rem; }
+  .row { display: flex; gap: .5rem; align-items: center; margin-bottom: .5rem; }
+  .textfield {
+    flex: 1; border: 1.5px solid var(--accent); border-radius: 4px; background: #fff;
+    padding: .2rem .5rem; color: var(--muted); font-style: italic;
+  }
+  .btn {
+    border: 1.5px solid var(--frame); border-radius: 4px; background: #fff;
+    padding: .15rem .7rem; white-space: nowrap;
+  }
+  .btn.primary { border-color: var(--accent); color: var(--accent); font-weight: 600; }
+  .item {
+    display: flex; gap: .5rem; align-items: center; margin-bottom: .35rem;
+    border: 1px solid #ccd; border-radius: 4px; padding: .2rem .4rem; background: rgba(255,255,255,.62);
+  }
+  .statusbar {
+    border-top: 1px solid var(--frame); padding: .25rem .6rem; color: var(--muted);
+    background: #eef0f6; font-size: .72rem;
+  }
+  .overlay {
+    position: relative; border: 2px dashed var(--warn); border-radius: 6px;
+    background: rgba(40,44,54,.85); color: #eee; padding: .8rem; margin-top: .6rem;
+  }
+  .popover {
+    border: 1.5px solid var(--warn); border-radius: 6px; background: #fff;
+    box-shadow: 2px 3px 0 rgba(120,90,40,.25); padding: .3rem .2rem; width: 11rem;
+    font-size: .75rem;
+  }
+  .popover div { padding: .15rem .6rem; }
+  .popover div.sep { border-top: 1px solid #ddd; padding: 0; margin: .15rem 0; }
+  .annot { color: var(--warn); font-size: .72rem; font-weight: 600; }
+  .navlist { border-right: 1px solid var(--frame); padding-right: .5rem; min-width: 7.2rem; }
+  .navlist div { padding: .2rem .4rem; border-radius: 4px; }
+  .navlist .sel { background: var(--accent); color: #fff; }
+</style>
+</head>
+<body>
+
+<h1>M4 target app 候補 B4 — 思いつきメモ（Quick Capture Inbox）</h1>
+
+<p class="meta">
+status: exploratory artifact ・ created: 2026-07-11 ・ updated: 2026-07-27 ・
+関連: <a href="framing.md">framing.md</a>（M4 start framing、判断基準の正本）/
+<a href="target-app-wireframes.html">target-app-wireframes.html</a>（A / B1 / B2 / B3 / B4 の比較記録・重み付け読み）/
+<a href="../../../docs/notes/m4-interaction-intake.md">m4-interaction-intake.md</a>
+</p>
+
+<div class="note">
+<strong>B4 は M4 の第二題材 app として採択された</strong>（framing F8、2026-07-27）。
+本ファイルは <strong>B4 の候補節</strong>（wireframe + 担当分の証明形 + 設計メモ）であり、
+案 A / B1 / B2 / B3 の候補節と同じ役割を別ファイルとして持つ
+（B4 は他の 3 案より後に追加されたため）。<br>
+採択に伴う 2 つの上限（項目は文字列の並びに留める / launcher 行に件数を出さない）は
+下記ポイント 2・3 が根拠、仕様としての正本は
+<a href="framing.md">framing.md</a> §第二アプリの採択に依存して変わるもの。<br>
+<strong>候補一覧・カバレッジの重み付け読み・副次基準の比較は
+<a href="target-app-wireframes.html">target-app-wireframes.html</a> に集約</strong>しており、
+本ファイルには置かない。判断基準の正本は <a href="framing.md">framing.md</a>
+§機能リスト / §題材アプリの選定、採択の SSOT は採択後に書く
+<code>requirements/spec.md</code>（M4 target app pre-doc）。
+</div>
+
+<h2>案 B4 — 思いつきメモ（Quick Capture Inbox。リストごとの複数 window）</h2>
+
+<p>短い思いつきを溜める、完了状態を持たない書き留め用の app。<strong>1 リスト = 1 window</strong> とし、
+Inbox / Ideas / Shopping のような独立したリストを同時に開く。新規 list は「新しいリスト」と自動命名して即作成し、
+名前は launcher 行の「…」から後で改名する。利用者の主操作は、
+一行の入力欄に日本語で項目を入力して追加すること。Todo app に寄せず、CheckBox や Toggle は使わない。</p>
+
+<div class="board">
+  <div class="window mica" style="width:16.5rem">
+    <div class="titlebar"><span>Lists</span><span class="buttons">— □ ×</span></div>
+    <div class="body">
+      <div class="item"><span style="flex:1">Inbox</span><span class="btn">…</span><span class="btn">Open</span></div>
+      <div class="item"><span style="flex:1">Ideas</span><span class="btn">…</span><span class="btn">Open</span></div>
+      <div class="item"><span style="flex:1">Shopping</span><span class="btn">…</span><span class="btn">Open</span></div>
+      <div class="row" style="margin-top:.6rem"><span class="btn primary">＋ 新しいリスト</span></div>
+      <div class="annot">▲ Open / 行 click で該当 list window を開く、または既存 window へ focus を移動する。「＋」は「新しいリスト」と自動命名した window を即作成し、launcher 行の「…」→ Rename list で命名する（根から開く名前入力 dialog を持ち込まない）。launcher 行は名前のみで件数を持たない — 件数を出すと他 window の追加が launcher へ波及し、A が担う「表示中の host 書き込み（差し替え）」と重なる。launcher 自身は「選択中の list」を持たない</div>
+    </div>
+  </div>
+
+  <div class="window mica" style="width:20rem">
+    <div class="titlebar"><span>Ideas — 12 items</span><span class="buttons">— □ ×</span></div>
+    <div class="body">
+      <div class="row">
+        <span class="textfield">思いつきを入力…（IME）</span>
+        <span class="btn primary">Add</span>
+      </div>
+      <div class="annot">▲ 一行 TextField + IME が app の本体 / Add = TextField write-back → host store</div>
+      <div class="item"><span style="flex:1">M4 のデモ手順を短くする</span><span class="btn">…</span></div>
+      <div class="item"><span style="flex:1">写真を 3 枚追加する</span><span class="btn">…</span></div>
+      <div class="item"><span style="flex:1">協力者向けの紹介文</span><span class="btn">…</span></div>
+      <div class="annot">▲ ScrollView / for の各行。行 click と「…」が汎用 hit-test の具体ケース</div>
+      <div class="overlay">
+        <strong>項目を変更</strong>（modal dialog、最前面層）
+        <div class="row" style="margin-top:.4rem"><span class="textfield">協力者向けの紹介文｜（IME）</span></div>
+        <div class="row" style="margin-bottom:0"><span style="flex:1"></span><span class="btn" style="background:#fff">Save</span><span class="btn" style="background:#fff">Cancel</span></div>
+        <div class="annot" style="color:#f0b98a">▲ ScrollView 内の項目の「…」から開く。閉じ込め × 最前面層 × 文字入力 × IME を 1 か所で実証</div>
+      </div>
+    </div>
+    <div class="statusbar">12 items（status bar は静的 Text + 束縛された件数の並置で表せる。title の値源は該当フェーズ ADR で決める）</div>
+  </div>
+
+  <div>
+    <div class="window mica" style="width:14rem">
+      <div class="titlebar"><span>Shopping — 3 items</span><span class="buttons">— □ ×</span></div>
+      <div class="body">
+        <div class="row"><span class="textfield">牛乳を追加…（IME）</span><span class="btn primary">Add</span></div>
+        <div class="item"><span style="flex:1">牛乳</span><span class="btn">…</span></div>
+        <div class="item"><span style="flex:1">コーヒー豆</span><span class="btn">…</span></div>
+        <div class="annot">▲ window ごとの collection と focus。複数の list window を並べても操作の意味が崩れない</div>
+      </div>
+    </div>
+    <div class="popover" style="margin-top:.8rem">
+      <div>Rename item…</div><div class="sep"></div><div>Archive</div>
+    </div>
+    <p class="annot">▲ 「…」menu = top-layer。外側 click / Esc / focus return / 読み上げ順序を実証</p>
+  </div>
+</div>
+
+<table>
+  <tr><th>第二 app の担当分</th><th>B4 での証明形</th></tr>
+  <tr><td>単一行の文字編集 + IME</td><td><strong>◎</strong>。短い item を捕捉して追加・改名することが app の中心。複数行編集を要求しない</td></tr>
+  <tr><td>multi-window</td><td><strong>○</strong>。1 list = 1 window（Inbox / Ideas / Shopping）。launcher から該当 window を開き、または既存 window 間で focus を移動する。新規 list は自動命名で window を即作成し、launcher 行から改名する</td></tr>
+  <tr><td>top-layer（構造 + 外側 click 型）</td><td><strong>○</strong>。各 item の「…」menu。ScrollView / for の内部から開くので、最前面層が構造的に要求される</td></tr>
+  <tr><td>動的 title（window config props）</td><td><strong>◎</strong>。<code>Ideas — 12 items</code> は項目追加・archive で自然に変化する。title の値源（束縛か host 合成か）は該当フェーズ ADR で決める。initial size も list window として自然</td></tr>
+  <tr><td>閉じ込め × 最前面層（modal dialog）</td><td><strong>◎</strong>。item の「…」→ Rename dialog。ScrollView 内の行を起点にするため、根 ZStack では代用できない</td></tr>
+  <tr><td>focus / UIA 検証の密度</td><td><strong>○</strong>。list navigation・TextField・Add button・item row・menu・dialog を横断する Tab 順と role。B2 より部品種は少ない</td></tr>
+  <tr><td>host state boundary の書き戻し方向</td><td><strong>◎</strong>。追加・改名・archive を host store へ write-back。表示中の host 書き込み（供給・差し替え）は A の担当に留める</td></tr>
+</table>
+
+<p><strong>強み:</strong> 一行入力 + IME と write-back が製品の中心にあり、複数行編集を招かない。
+item を単なる文字列 collection として扱えるため、B3 の sender / time などの並行配列を避けやすい。
+Mica の小さな複数 window が並ぶ絵も、Wasamo の multi-window surface を素直に見せられる。<br>
+<strong>弱み:</strong> 1 list = 1 window は自然だが、B1 の 1 note = 1 window や B3 の 1 conversation = 1 window より製品上の必然性は少し弱い。
+focus / UIA の部品多様性も B2 には及ばない。</p>
+
+<h2>メモ — ポイントと総合判断</h2>
+
+<h3>ポイント</h3>
+
+<ul>
+  <li><strong>「Todo」ではなく capture inbox に留める。</strong>完了・優先度・期限を入れると CheckBox / Toggle・構造化 item data・追加の状態遷移を呼び込む。M4 の B4 は未整理の文字列を追加・改名・archive するだけにする。</li>
+  <li><strong>データ形状の上限を守る。</strong>各 list の item は文字列 collection に留める。item ごとの status・色・日時・担当者を持たず、<code>TypedValue</code> / 構造化データの保留を破らない。</li>
+  <li><strong>表示中の host 書き込みを重複させない。</strong>供給・差し替えの方向は A が担う。B4 は TextField を起点とする追加・改名・archive の write-back に集中する。<strong>この上限が launcher の形を決める</strong>: launcher 行は list 名のみを持ち、件数を出さない。件数を出すと、ある list window での追加が別 window（launcher）の表示へ波及し、A が担う「表示中の host 書き込み（差し替え）」を B4 が重ねて要求してしまう。行が「名前 + 件数」の 2 値を持つ点も、項目データを文字列に留める上限に触れる。window の title と status bar の件数は、その window 自身の追加・archive で変わるだけなので上限を破らない。</li>
+  <li><strong>title の値源を予断しない。</strong>動的 title は list 名と件数が変わることで自然に必要になるが、その値を束縛で渡すか host 合成で渡すかは該当フェーズ ADR に委ねる。</li>
+  <li><strong>dialog は行の文脈から開く。</strong>Rename dialog は ScrollView / <code>for</code> 内の「…」を起点にする。Archive は menu から直接実行し、確認 dialog を出さない（表・wireframe と一致）。<strong>「＋ 新しいリスト」も同じ理由で名前入力 dialog を持たない</strong> — 根から開く名前入力 dialog は ZStack で足りてしまい、閉じ込め × 最前面層の組合せを実証しない（framing §粒度の定義〔重ね表示〕）。自動命名 + launcher 行からの改名にすることで、launcher 行にも item 行と同じ「…」menu が付き、操作の一貫性も上がる。</li>
+</ul>
+
+<h3>総合判断</h3>
+
+<p><strong>B4 は B3 に対する有力な低リスク代替案。</strong>単一行編集・IME・write-back・動的 title・最前面層・modal dialog を自然に揃えつつ、複数行編集と並行配列の圧力を避ける。B3 と比べて弱まるのは、複数 window の必然性と、動きのある showcase 性である。</p>
+
+<p class="meta">B1 / B2 / B3 との<strong>横並びの重み付け読み（第一基準・副次基準の比較と、どれを採るかの読み）は
+<a href="target-app-wireframes.html">target-app-wireframes.html</a> §カバレッジの重み付け読み</strong>が持つ。
+本ファイルはここでは繰り返さない。</p>
+
+<div class="note warn">
+<strong>B3 を選ぶ場合のリスク低減メモ:</strong> message は <code>messages: [string]</code> のみとし、
+時刻・既読・icon・任意 metadata は M4 に持ち込まない。それでも発言者ごとの左右寄せ・背景色を分けるには、
+項目ごとの真偽値 collection を別に持つか、剰余を含む算術を式言語に導入する必要がある。後者は M-expr1 の範囲外であり、
+M-expr2a の算術に剰余を含めるかも未定である。前者は並行配列を残す。したがってこの制約は圧力を減らしうるが、B3 の並行配列リスクを無償には解消しない。
+</div>
+
+<h3>候補境界のメモ</h3>
+
+<p>メール・ノート・カンバンは見栄えが良くても、本文の複数行編集・構造化 record・drag 操作を自然に要求するため M4 の第二 app には重い。設定プロファイル編集器のような開発者向け app は B4 と同程度に一行入力と write-back を満たせるが、最初の見本アプリとしての広い訴求は B3 / B4 に劣る。</p>
+
+</body>
+</html>

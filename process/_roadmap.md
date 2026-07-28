@@ -171,12 +171,16 @@ here.
 **Acceptance criteria**
 
 - Input handling: keyboard, mouse, touch; focus model and event
-  routing
+  routing. Includes click handling on non-`Button` widgets (with
+  per-item handlers inside repetition) and a **structure-independent
+  modal focus scope** — attachable to any subtree, so a root `ZStack`
+  branch and a top-layer overlay are both consumers of one concept
 - Multi-window support (per-window state, cross-window focus).
   Included pre-1.0 because its ABI implications are cross-cutting
   and an append-only post-freeze surface cannot accommodate them
-- TextField widget (minimum editable text widget; required by IME
-  verification)
+- TextField widget (minimum editable text widget — **single-line**;
+  required by IME verification. Multi-line editing is outside this
+  criterion)
 - IME via TSF (Japanese / CJK input)
 - AccessKit / UIA integration
 - Mica / Acrylic root-window backdrop; system accent color
@@ -187,13 +191,44 @@ here.
   [DD-V-022](cross-milestone/decisions/dpi-awareness-m4-deferral.md);
   the runtime is DPI-unaware as of M3 — a precondition for the
   Mica/Acrylic identity showcase above)
-- First showcase application — sufficient to demonstrate Wasamo
-  identity for contributor outreach, even if rough around
-  polish-level details
+- Host state boundary: host-supplied initial state, host writes to
+  displayed state, and write-back from an edited widget (in-out
+  binding). ABI-bearing; promoted from the
+  [candidate pool](./candidate-pool.md) at M4 planning
+- Expression predicates: reading a collection from outside the
+  repetition (count, emptiness, index access), per-item conditional
+  rendering, and equality-based selection. String concatenation and
+  general arithmetic stay outside M4; promoted from the
+  [candidate pool](./candidate-pool.md) at M4 planning
+- Top-layer overlays: the top-layer structure itself (an element
+  declared in place is realized at window level, escaping clip and
+  stacking boundaries) plus the focus rule set that binds to it —
+  click-away close, Esc, focus containment, focus restoration on
+  close, and screen-reader order. Widget-anchored placement is **not**
+  included; promoted from the [candidate pool](./candidate-pool.md)
+  at M4 planning
+- Window config properties: dynamic window title, initial window
+  size, `WindowConfig`; promoted from the
+  [candidate pool](./candidate-pool.md) at M4 planning
+- First showcase applications — **two**: the matured photo gallery
+  (the outward-facing banner) and the quick capture inbox (the
+  moving proof: Japanese text input, multi-window, overlays).
+  Together sufficient to demonstrate Wasamo identity for contributor
+  outreach, even if rough around polish-level details. Adoption,
+  per-app scope and the feature-to-app split are in
+  [milestone-4/requirements/spec.md](./milestone-4/requirements/spec.md)
 - Author-controllable sizing (Problem B) design spike — preferred
   in this milestone. M4 planning records the spike disposition
   (default M4; deferral to M5 positively justified) per the
   [author-controllable sizing VDR](./cross-milestone/decisions/author-controllable-sizing-surface.md)
+
+These criteria were revised at M4 planning (2026-07-28): four core
+intakes were promoted from the [candidate pool](./candidate-pool.md)
+and three existing criteria were specified against the adopted target
+apps. The diff table, the rationale, and the tier-2 impact check are
+in [milestone-4/requirements/spec.md](./milestone-4/requirements/spec.md)
+§ROADMAP 達成条件との同期; the milestone-level scope reading is in
+[milestone-4/requirements/framing.md](./milestone-4/requirements/framing.md).
 
 ## M5: Identity & tooling
 

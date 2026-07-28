@@ -1,0 +1,498 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<title>M4 target app 候補比較 — A / B1 / B2 / B3</title>
+<style>
+  :root {
+    --ink: #222;
+    --muted: #667;
+    --frame: #8a93a6;
+    --paper: #fafbfd;
+    --mica: linear-gradient(135deg, #e8ecf4 0%, #dfe7f0 45%, #e9e3ee 100%);
+    --accent: #2f6fd0;
+    --warn: #b2541a;
+  }
+  body {
+    font-family: "Yu Gothic UI", "Segoe UI", sans-serif;
+    color: var(--ink);
+    margin: 2rem auto;
+    max-width: 72rem;
+    padding: 0 1.5rem;
+    line-height: 1.7;
+    background: #fff;
+  }
+  h1 { font-size: 1.5rem; border-bottom: 3px solid var(--accent); padding-bottom: .4rem; }
+  h2 { font-size: 1.25rem; margin-top: 2.5rem; border-left: 6px solid var(--accent); padding-left: .6rem; }
+  h3 { font-size: 1.05rem; margin-top: 1.8rem; }
+  p, li { max-width: 62rem; }
+  .meta { color: var(--muted); font-size: .9rem; }
+  .note {
+    background: #f4f6fb; border: 1px solid #d5dbe8; border-radius: 6px;
+    padding: .7rem 1rem; font-size: .92rem; margin: 1rem 0;
+  }
+  .warn { border-color: #e0b68f; background: #fdf3ea; }
+  table { border-collapse: collapse; margin: 1rem 0; font-size: .9rem; }
+  th, td { border: 1px solid #c8cede; padding: .35rem .6rem; text-align: left; vertical-align: top; }
+  th { background: #eef1f7; }
+  td.c { text-align: center; }
+
+  /* ---- wireframe primitives ---- */
+  .board { display: flex; flex-wrap: wrap; gap: 1.4rem; align-items: flex-start; margin: 1rem 0; }
+  .window {
+    background: var(--paper); border: 2px solid var(--frame); border-radius: 8px;
+    box-shadow: 3px 4px 0 rgba(120,130,150,.25); overflow: hidden;
+    font-size: .78rem;
+  }
+  .window.mica .body { background: var(--mica); }
+  .titlebar {
+    display: flex; justify-content: space-between; align-items: center;
+    background: #dde3ee; padding: .25rem .6rem; font-weight: 600;
+    border-bottom: 1px solid var(--frame);
+  }
+  .titlebar .buttons { color: var(--muted); letter-spacing: .3em; }
+  .body { padding: .6rem; }
+  .row { display: flex; gap: .5rem; align-items: center; margin-bottom: .5rem; }
+  .textfield {
+    flex: 1; border: 1.5px solid var(--accent); border-radius: 4px; background: #fff;
+    padding: .2rem .5rem; color: var(--muted); font-style: italic;
+  }
+  .btn {
+    border: 1.5px solid var(--frame); border-radius: 4px; background: #fff;
+    padding: .15rem .7rem; white-space: nowrap;
+  }
+  .btn.primary { border-color: var(--accent); color: var(--accent); font-weight: 600; }
+  .btn.disabled { color: #aab; border-style: dashed; }
+  .toggle-on, .toggle-off {
+    display: inline-block; width: 2.4em; border-radius: 999px; text-align: center;
+    border: 1.5px solid var(--frame); font-size: .7rem;
+  }
+  .toggle-on { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .thumbwrap { display: flex; flex-wrap: wrap; gap: .45rem; }
+  .thumb {
+    width: 4.2rem; height: 4.2rem; border: 1.5px solid var(--frame); border-radius: 4px;
+    display: flex; align-items: center; justify-content: center;
+    background: repeating-linear-gradient(45deg, #eceff5, #eceff5 6px, #e2e6ef 6px, #e2e6ef 12px);
+    color: var(--muted);
+  }
+  .statusbar {
+    border-top: 1px solid var(--frame); padding: .25rem .6rem; color: var(--muted);
+    background: #eef0f6; font-size: .72rem;
+  }
+  .overlay {
+    position: relative; border: 2px dashed var(--warn); border-radius: 6px;
+    background: rgba(40,44,54,.85); color: #eee; padding: .8rem; margin-top: .6rem;
+  }
+  .popover {
+    border: 1.5px solid var(--warn); border-radius: 6px; background: #fff;
+    box-shadow: 2px 3px 0 rgba(120,90,40,.25); padding: .3rem .2rem; width: 11rem;
+    font-size: .75rem;
+  }
+  .popover div { padding: .15rem .6rem; }
+  .popover div.sep { border-top: 1px solid #ddd; padding: 0; margin: .15rem 0; }
+  .annot { color: var(--warn); font-size: .72rem; font-weight: 600; }
+  .navlist { border-right: 1px solid var(--frame); padding-right: .5rem; min-width: 8rem; }
+  .navlist div { padding: .2rem .4rem; border-radius: 4px; }
+  .navlist .sel { background: var(--accent); color: #fff; }
+  .msg { max-width: 70%; border-radius: 8px; padding: .25rem .6rem; margin-bottom: .35rem; }
+  .msg.me { margin-left: auto; background: #d9e7fb; }
+  .msg.bot { margin-right: auto; background: #eceff5; }
+  .sticky {
+    width: 12rem; border: 2px solid var(--frame); border-radius: 6px; overflow: hidden;
+    box-shadow: 3px 4px 0 rgba(120,130,150,.25); font-size: .78rem;
+  }
+  .sticky .bar { padding: .15rem .5rem; font-weight: 600; display: flex; justify-content: space-between; }
+  .sticky .txt { padding: .5rem; min-height: 5rem; background: rgba(255,255,255,.6); }
+</style>
+</head>
+<body>
+
+<h1>M4 target app 候補比較 — A / B1 / B2 / B3 / B4</h1>
+
+<p class="meta">
+status: exploratory artifact ・ created: 2026-07-07 ・ updated: 2026-07-27 ・
+関連: <a href="framing.md">framing.md</a>（M4 start framing、判断基準の正本）/
+<a href="target-app-wireframes.additional.html">target-app-wireframes.additional.html</a>（案 B4 の候補節）/
+<a href="../../_roadmap.md">process/_roadmap.md</a> §M4 /
+<a href="../../milestone-3/handoff.md">M3 handoff</a> /
+<a href="../../../docs/notes/m4-interaction-intake.md">m4-interaction-intake.md</a>
+</p>
+
+<div class="note">
+本ファイルは M4 target app の<strong>候補比較のための探索アーティファクト</strong>である
+（M3 の <a href="../../milestone-3/requirements/target-app-wireframes.html">target-app-wireframes.html</a> と同役割）。
+採択の SSOT は本ファイルではなく、採択後に書く <code>requirements/spec.md</code>（M4 target app pre-doc）。
+判断基準（優先機能リストのカバレッジ第一・副次基準）の正本は
+<a href="framing.md">framing.md</a> §機能リスト / §target app の選定であり、
+本ファイルはカバレッジの重み付け読みまでを記録する。<br>
+<strong>案 B4（思いつきメモ）の候補節だけは別ファイル</strong>
+（<a href="target-app-wireframes.additional.html">target-app-wireframes.additional.html</a>）にある —
+他の 3 案より後に追加されたため。<strong>候補一覧と重み付け読みは本ファイルに集約</strong>する。
+</div>
+
+<h2>0. 前提 — 2 本立てと証明対象</h2>
+
+<p>題材アプリは <strong>2 本立て</strong>（framing F6）:
+<strong>A（Photo Gallery 成熟）= 採択確定</strong> +
+<strong>第二 app = B4（思いつきメモ）</strong>（framing F8、2026-07-27 採択）。
+証明対象は M4 で実装する機能リスト — M4 acceptance criteria
+（<a href="../../_roadmap.md">_roadmap.md</a> §M4）+ §1.1 で take 合意済みの
+pool item — で、カバレッジは 2 本の組で満たす。機能リストの精緻化と
+優先順位（P1〜P4）・A の役割と担当分担の正本は
+<a href="framing.md">framing.md</a> §機能リスト / §題材アプリ二本立てと役割分担。
+下記は app 候補に依存しない共通項:</p>
+
+<ul>
+  <li><strong>per-monitor DPI / AccessKit・UIA / Mica・Acrylic + accent</strong> — どの候補でも同等に証明可能（app の絵柄に依らない）。</li>
+  <li><strong>sizing spike</strong>（Problem B、M4 計画で振り分け記録）— app 非依存。</li>
+  <li><strong>stretch 層</strong>（Image widget / literal <code>fill</code>）— 取り込み確定、A が消化（F6）。</li>
+  <li>M3 handoff の <strong>M4 residual cluster</strong> は A が M4 で消化する（F6）。動的な window タイトルのみ第二 app の担当（理由は framing §題材アプリ二本立てと役割分担）。</li>
+</ul>
+
+<h2>案 A — Photo Gallery 成熟（M3 継続）【採択確定（F6）】</h2>
+
+<p>M3 の Gallery を実 interaction app に育てる。役割は<strong>自然な範囲の取り込み +
+M3 で先送りした事項の優先消化</strong>（正本は <a href="framing.md">framing.md</a>
+§題材アプリ二本立てと役割分担）。見た目の正本は M3 の
+<a href="../../milestone-3/requirements/gallery-wireframe.html">gallery-wireframe.html</a> を継続 —
+<strong>検索欄・別 window viewer・context menu は持たない</strong>
+（文字入力 / IME・multi-window・top-layer・動的タイトルは第二 app の担当）。</p>
+
+<div class="board">
+  <div class="window mica" style="width:26rem">
+    <div class="titlebar"><span>Gallery</span><span class="buttons">— □ ×</span></div>
+    <div class="body">
+      <div class="row">
+        <span class="btn primary">All</span>
+        <span class="btn">Albums</span>
+        <span class="btn">Favorites</span>
+        <span style="flex:1"></span>
+        <span class="btn">＋ Add</span>
+        <span class="btn">− Remove</span>
+      </div>
+      <div class="annot">▲ タイトルは静的（動的タイトルは担わない）/ タブの排他選択 = 等値選択（M3 先送り軸の消化）/
+      Tab キーでフォーカス移動 / Add・Remove = collection 変異（M3 継続）</div>
+      <div class="thumbwrap">
+        <div class="thumb">img</div><div class="thumb">img</div>
+        <div class="thumb" style="border:2px solid var(--accent)">img</div>
+        <div class="thumb">img</div><div class="thumb">img</div>
+      </div>
+      <div class="annot">▲ 実画像（Image widget + literal fill）/ thumbnail click = 汎用 hit-test +
+      項目ごとハンドラ（item / index 参照、M3 先送り）/ 選択中 thumbnail = 等値選択 /
+      wheel・drag scroll + 実 scrollbar</div>
+      <div class="overlay">
+        <strong>Lightbox（modal、ZStack のまま）</strong> — focus trap（構造非依存のフォーカス範囲）/
+        Esc close / ← → prev-next / scrim が下の兄弟へのクリックを遮蔽
+        <div class="row" style="margin-top:.4rem">
+          <span class="btn">←</span>
+          <span style="flex:1;text-align:center">IMG_0237　2026-04-12</span>
+          <span class="btn">→</span>
+          <span class="btn">×</span>
+        </div>
+        <div class="annot" style="color:#f0b98a">▲ caption = names[selected]（ループ外の添字読み）/
+        最前面層への載せ替えはしない（根宣言 = 脱出すべき境界なし。framing §粒度の定義〔重ね表示〕）</div>
+      </div>
+    </div>
+    <div class="statusbar">photos: 218（静的 Text + 束縛 Text の並置 — 動的件数 = ループ外の件数読み。文字列連結は使わない）</div>
+  </div>
+</div>
+
+<table>
+  <tr><th>担当（F6）</th><th>A での証明形</th></tr>
+  <tr><td>focus / event routing の基本形 + 入力処理</td><td>Tab でのフォーカス移動・thumbnail click（汎用 hit-test + 項目ごとハンドラ）・Esc / ← →・wheel / drag scroll + 実 scrollbar・touch tap</td></tr>
+  <tr><td>lightbox の modal focus trap（ZStack のまま）</td><td>フォーカスの閉じ込め・戻し・scrim 遮蔽を <strong>ZStack + if の根 overlay</strong> 上で実証。ZStack の生きた実例を温存し、「閉じ込め × 最前面層」の組合せは第二 app の modal dialog 行（P3・予備）が担う</td></tr>
+  <tr><td>host state boundary（供給・差し替えの方向）</td><td>photo collection の host 供給・host による差し替え。書き戻しの方向（双方向束縛）は文字編集と一体のため第二 app</td></tr>
+  <tr><td>述語式 + M3 先送り DSL 面</td><td><code>enabled: index &gt; 0</code>（prev / next 端）・件数 0 の empty 表示・ループ外読み（件数・<code>names[selected]</code>）・項目ごとの条件表示・等値選択（選択中 thumbnail / タブ排他）</td></tr>
+  <tr><td>stretch 2 件（取り込み確定）</td><td>Image widget・literal fill（Box 以外）</td></tr>
+  <tr><td>M4 residual cluster</td><td>実画像・thumbnail hit-testing・wheel / drag scroll と実 scrollbar・lightbox modal focus・動的件数（status bar）を 1:1 で消化</td></tr>
+  <tr><td><strong>担わないもの</strong></td><td>文字編集 / IME・multi-window・top-layer・window config props（<strong>動的タイトルを含む</strong> — 単一 window のギャラリーに自然な出番がない。理由の記録は framing §題材アプリ二本立てと役割分担）</td></tr>
+</table>
+
+<h2>案 B1 — 付箋（Sticky Notes）</h2>
+
+<p>デスクトップに小窓のメモを貼る Windows 定番アプリの Wasamo 版。
+<strong>1 メモ = 1 window</strong> で multi-window が製品意味そのものになる。</p>
+
+<div class="board">
+  <div class="window mica" style="width:17rem">
+    <div class="titlebar"><span>Sticky Notes — 5 notes</span><span class="buttons">— □ ×</span></div>
+    <div class="body">
+      <div class="row">
+        <span class="textfield">Search notes…（IME）</span>
+        <span class="btn primary">＋ New</span>
+      </div>
+      <div class="row" style="border:1px solid #ccd;border-radius:4px;padding:.2rem .4rem"><span style="flex:1">買い物リスト — 牛乳、卵…</span><span class="btn">…</span></div>
+      <div class="row" style="border:1px solid #ccd;border-radius:4px;padding:.2rem .4rem"><span style="flex:1">M4 の TODO — framing…</span><span class="btn">…</span></div>
+      <div class="annot">▲ 一覧 window（検索 + open。click で該当 note window へ focus 移動 = cross-window focus）/
+      項目の「…」→ Delete note → <strong>削除確認 modal dialog</strong>。一覧の項目
+      （for / ScrollView 内）から開くため最前面層が構造的に要求される（framing の設計条件）。
+      本家 Sticky Notes も一覧からの削除で確認 dialog を出す</div>
+    </div>
+  </div>
+
+  <div class="sticky" style="background:#fdf3c9">
+    <div class="bar">買い物リスト <span>▾ ×</span></div>
+    <div class="txt">牛乳、卵、食パン<br>（日本語入力 = IME 本番）</div>
+  </div>
+  <div class="sticky" style="background:#d9f0d9">
+    <div class="bar">M4 の TODO <span>▾ ×</span></div>
+    <div class="txt">framing ドラフト<br>候補比較…</div>
+  </div>
+  <div class="popover">
+    <div>Color ▸ 黄 / 緑 / 桃 / 青</div><div class="sep"></div><div>Delete note</div><div>New note</div>
+  </div>
+</div>
+<p class="annot">▲ note 色 = literal fill（取り込みは A で確定済み。B1 でも出番）/ ▾ menu = top-layer / title は先頭行から動的生成</p>
+
+<table>
+  <tr><th>第二 app の担当分</th><th>B1 での証明形</th></tr>
+  <tr><td>単一行の文字編集 + IME</td><td>note 本文の編集が app の本体。<strong>ただし本質的に複数行</strong> — 複数行の文字編集（P4 行）を中核並みのコストで引き受ける判断とセット（framing §粒度の定義〔文字編集〕）</td></tr>
+  <tr><td>multi-window</td><td><strong>主役</strong>。note 作成 = window 生成、per-window state = note 本文、close = note を閉じる</td></tr>
+  <tr><td>top-layer（構造 + 外側クリック型）</td><td>note menu（色替え / 削除）</td></tr>
+  <tr><td>動的タイトル（window config props）</td><td>先頭行から生成（host 合成）。note window の initial size も自然</td></tr>
+  <tr><td>閉じ込め × 最前面層（modal dialog）</td><td>note の削除確認 — <strong>一覧 window の項目の「…」から開く</strong>（for / ScrollView 内 → 最前面層が構造的に要求される。framing §粒度の定義〔重ね表示〕の設計条件）。本家 Sticky Notes に実在。文字入力は内蔵しない</td></tr>
+  <tr><td>focus / UIA 検証の密度</td><td>部品種は少なめ（本文 + menu + 一覧）</td></tr>
+  <tr><td>host state boundary の書き戻し方向</td><td>本文編集の write-back・host 側保存</td></tr>
+</table>
+
+<p><strong>強み:</strong> multi-window の検証密度が全候補で最高。小窓 Mica/Acrylic が並ぶ絵は
+identity 訴求が最強クラス。<br>
+<strong>弱み・構造リスク:</strong> 付箋本文は本質的に<strong>複数行編集</strong>（折返し・上下カーソル・
+複数矩形の選択）で、担当分の中心（文字編集）の工数が跳ねる。単一行に落とすと付箋らしさごと
+崩れるため、B1 の採択は「複数行のコストを中核並みに引き受ける」判断とセット。</p>
+
+<h2>案 B2 — 設定画面（Settings クローン）</h2>
+
+<p>Windows 11「設定」風の 2 ペイン app。異種コントロールが密集し、
+focus model と top-layer overlay の検証密度が最高になる。</p>
+
+<div class="board">
+  <div class="window mica" style="width:30rem">
+    <div class="titlebar"><span>Settings</span><span class="buttons">— □ ×</span></div>
+    <div class="body" style="display:flex;gap:.8rem">
+      <div class="navlist">
+        <div class="sel">System</div>
+        <div>Personalization</div>
+        <div>Accessibility</div>
+        <div>About</div>
+      </div>
+      <div style="flex:1">
+        <div class="row"><span class="textfield">Find a setting…（IME）</span></div>
+        <div class="row"><span style="flex:1">Night light</span><span class="toggle-on">on</span></div>
+        <div class="row" style="padding-left:1rem;color:#889">
+          <span style="flex:1">Strength</span><span class="btn">Medium ▾</span>
+        </div>
+        <div class="annot">▲ 親 off で子は disabled（enabled: 述語）/ Medium ▾ = top-layer dropdown</div>
+        <div class="row"><span style="flex:1">Bluetooth</span><span class="toggle-off">off</span></div>
+        <div class="row"><span style="flex:1">Device name — DESKTOP-…</span><span class="btn">Rename</span></div>
+        <div class="row"><span class="btn primary">Apply</span><span class="btn disabled">Revert</span></div>
+        <div class="annot">▲ Apply/Revert の enabled = 「変更あり」述語 / 設定値 = host state 読み書き /
+        右 pane = ScrollView（設定頁は縦 scroll、本家同様）。Rename →
+        <strong>「PC 名を変更」modal dialog を ScrollView 内の行から開く</strong> —
+        clip を脱出するため最前面層が構造的に要求される（framing の設計条件）</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<table>
+  <tr><th>第二 app の担当分</th><th>B2 での証明形</th></tr>
+  <tr><td>focus / UIA 検証の密度</td><td><strong>主役</strong>。nav ⇄ pane、toggle / dropdown / textfield / button 異種混在の Tab 順・focus visual・role の多様性で最密</td></tr>
+  <tr><td>top-layer（構造 + 外側クリック型）</td><td>dropdown / tooltip — 最も自然な出番</td></tr>
+  <tr><td>閉じ込め × 最前面層（modal dialog）</td><td>「PC 名を変更」dialog — 本家 Windows 設定に実在する先例（文字入力内蔵）。<strong>ScrollView の pane 内の行から開く</strong>ため最前面層が構造的に要求される（framing の設計条件）</td></tr>
+  <tr><td>単一行の文字編集 + IME</td><td>設定検索・デバイス名（rename dialog 内で編集。単一行で自然。ただし app の本筋ではなく周辺）</td></tr>
+  <tr><td>host state boundary の書き戻し方向</td><td>設定値の write-back（apply / revert）</td></tr>
+  <tr><td>multi-window</td><td><strong>出番なし</strong> — 設定 app は単一 window。証明の別建てが必要</td></tr>
+  <tr><td>動的タイトル（window config props）</td><td><strong>出番なし</strong> — 設定 window のタイトルは静的。証明の別建てが必要</td></tr>
+</table>
+
+<p><strong>強み:</strong> focus model・UIA・overlay の検証密度最高。modal dialog に本家先例。
+Mica identity は本家「設定」そのもの。単一行で複数行リスクなし。<br>
+<strong>弱み:</strong> multi-window と動的タイトルの 2 つの穴に証明の別建てが必要
+（作為の除去という 2 本立ての狙いと逆行）。動きが少なく showcase としての楽しさは最弱。</p>
+
+<h2>案 B3 — チャット（ローカル echo bot）</h2>
+
+<p>会話 UI。送信すると host 側 bot が返信するローカル完結チャット。
+IME と host state boundary（in/out 両方向）が製品動作の本体になる。</p>
+
+<div class="board">
+  <div class="window mica" style="width:15rem">
+    <div class="titlebar"><span>Chats</span><span class="buttons">— □ ×</span></div>
+    <div class="body">
+      <div class="row">
+        <span style="flex:1"></span><span class="btn primary">＋ New</span>
+      </div>
+      <div class="row" style="border:1px solid #ccd;border-radius:4px;padding:.2rem .4rem">
+        <span style="flex:1">Echo Bot</span><span class="annot">2</span><span class="btn">…</span>
+      </div>
+      <div class="row" style="border:1px solid #ccd;border-radius:4px;padding:.2rem .4rem">
+        <span style="flex:1">雑談</span><span class="btn">…</span>
+      </div>
+      <div class="annot">▲ 会話ごとに別 window で開ける（multi-window）/ 未読数 = i32 binding /
+      ＋ New = 自動命名（「新しい会話」）で即作成 — 名前は項目の改名で付ける /
+      項目の「…」→ 改名・削除（→ 下の modal dialog）</div>
+      <div class="overlay" style="margin-top:.6rem">
+        <strong>会話の名前を変更</strong>（modal dialog、最前面層）
+        <div class="row" style="margin-top:.4rem"><span class="textfield">雑談｜（IME）</span></div>
+        <div class="row" style="margin-bottom:0"><span style="flex:1"></span><span class="btn" style="background:#fff">OK</span><span class="btn" style="background:#fff">Cancel</span></div>
+        <div class="annot" style="color:#f0b98a">▲ 会話一覧の項目（for / ScrollView 内）から開く —
+        最前面層が構造的に要求される（framing の設計条件）。閉じ込め × 最前面層 × 文字入力 × IME
+        の四重の組合せを 1 か所で証明</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="window mica" style="width:22rem">
+    <div class="titlebar"><span>Echo Bot — 12 messages</span><span class="buttons">— □ ×</span></div>
+    <div class="body">
+      <div class="msg me">こんにちは（IME 日本語入力が本番）</div>
+      <div class="msg bot">こんにちは（← host-origin write で追加）</div>
+      <div class="msg me">M4 の設計を進めています</div>
+      <div class="msg bot">M4 の設計を進めています</div>
+      <div class="row" style="margin-top:.5rem">
+        <span class="textfield">メッセージを入力…</span>
+        <span class="btn primary">Send</span>
+      </div>
+      <div class="annot">▲ Send enabled = 「入力が空でない」述語 / 送信 = TextField write-back → host、
+      返信 = host-origin write（take item の in/out 両方向が見える）</div>
+    </div>
+  </div>
+</div>
+
+<table>
+  <tr><th>第二 app の担当分</th><th>B3 での証明形</th></tr>
+  <tr><td>単一行の文字編集 + IME</td><td><strong>主役</strong>。日本語で会話を打つことが app の本体（単一行で自然）</td></tr>
+  <tr><td>host state boundary の書き戻し方向</td><td><strong>最強</strong>。write-back（送信）+ host 起点 write（bot 返信）の両方向が製品動作。A の担当（供給・差し替え）と正確に補完</td></tr>
+  <tr><td>multi-window</td><td>会話ごとの window（per-window state = 会話、cross-window focus）</td></tr>
+  <tr><td>top-layer（構造 + 外側クリック型）</td><td>絵文字 / 定型文 picker popover</td></tr>
+  <tr><td>動的タイトル（window config props）</td><td>会話名 + 件数。bot 返信がもともと host 起点のため host 合成が自然</td></tr>
+  <tr><td>閉じ込め × 最前面層（modal dialog）</td><td>会話の改名・削除確認 — <strong>会話一覧の項目の「…」から開く</strong>（for / ScrollView 内 → 最前面層が構造的に要求される。framing の設計条件）。改名は<strong>文字入力内蔵</strong>で、閉じ込め × 最前面層 × 文字入力 × IME を 1 か所で証明。新規会話は自動命名で作成し名前は改名で付ける — 根から開く名前入力 dialog は ZStack で足りてしまい組合せを実証しないため置かない</td></tr>
+  <tr><td>focus / UIA 検証の密度</td><td>一覧 + 入力欄 + button。異種混在の密度は B2 に劣る</td></tr>
+</table>
+
+<p><strong>強み:</strong> 担当分の全項目に自然な出番がある（下記の重み付け読み）。IME と
+host 書き戻しの証明が全候補最強で、入力欄は単一行で自然（複数行リスク回避）。multi-window と
+modal dialog の掛け算で「モーダルの及ぶ範囲はウィンドウ単位」の論点も作為なしに発火する。
+会話が増える・返ってくる、という動きがあり showcase として見栄えする。<br>
+<strong>弱み・構造リスク:</strong> メッセージ = text + 送信者 + （時刻）の<strong>並行配列</strong>になり、
+M3 の「structured item data なし」制約の限界を突く可能性（TypedValue 圧力。framing で
+並行配列 2〜3 本で収まるか点検要）。会話相手が fake（echo bot）であることの見せ方。</p>
+
+<h2>案 B4 — 思いつきメモ（Quick Capture Inbox）【第二 app として採択（F8）】</h2>
+
+<p>短い思いつきを溜める、完了状態を持たない書き留め用の app。<strong>1 リスト = 1 window</strong>
+（Inbox / Ideas / Shopping）。一行の入力欄に日本語で項目を入力して追加することが主操作で、
+item は文字列 collection に留める。<strong>wireframe・担当分ごとの証明形・設計メモは別ファイル</strong>:
+<a href="target-app-wireframes.additional.html">target-app-wireframes.additional.html</a>
+（他の 3 案より後に追加されたため候補節を別に持つ。下記の重み付け読みは本ファイルが持つ）。</p>
+
+<p><strong>強み:</strong> 一行入力 + IME と write-back が製品の中心にあり、複数行編集を招かない。
+item を文字列 collection に留められるため、B3 の sender / time などの並行配列を避けやすい。<br>
+<strong>弱み:</strong> 1 list = 1 window は自然だが、B1 の 1 note = 1 window や
+B3 の 1 conversation = 1 window より製品上の必然性は少し弱い。focus / UIA の部品多様性も B2 に及ばない。</p>
+
+<h2>カバレッジの重み付け読み — 第二 app の選定（Q2、決着）</h2>
+
+<p>読みの行は<strong>第二 app の担当分</strong>（<a href="framing.md">framing.md</a>
+§題材アプリ二本立てと役割分担）。A が担う行（focus 基本形・汎用クリック・述語式 +
+M3 先送り DSL 面・host 供給 / 差し替え・stretch・residual cluster）は A の採択確定により
+選定の重みを持たない。P2（Mica / DPI）と input handling はどの候補でも同等に証明できる
+非差別化項目のため行に含めない。<br>
+凡例: ◎ = app の本筋として証明 / ○ = 自然に組み込める / △ = 周辺的・作為が要る /
+× = 出番がない。</p>
+
+<table>
+  <tr>
+    <th>第二 app の担当分</th>
+    <th>B1: 付箋</th><th>B2: 設定</th><th>B3: チャット</th><th>B4: 思いつきメモ</th>
+  </tr>
+  <tr><td>単一行の文字編集 + IME（主眼の中心）</td><td class="c">◎*</td><td class="c">○</td><td class="c">◎</td><td class="c">◎（短い item の捕捉・改名が app の中心。複数行編集を要求しない）</td></tr>
+  <tr><td>multi-window</td><td class="c">◎</td><td class="c">×</td><td class="c">○</td><td class="c">○（1 list = 1 window。launcher から開く / 既存 window へ focus 移動）</td></tr>
+  <tr><td>top-layer（構造 + 外側クリック型の規則）</td><td class="c">○（note menu）</td><td class="c">◎（dropdown / tooltip）</td><td class="c">○（絵文字 / 定型文 picker）</td><td class="c">○（各 item の「…」menu。ScrollView / for の内部から開く）</td></tr>
+  <tr><td>動的タイトル（window config props）</td><td class="c">◎（先頭行）</td><td class="c">×</td><td class="c">◎（会話名 + 件数。host 合成が自然 — bot 返信がもともと host 起点）</td><td class="c">◎（<code>Ideas — 12 items</code>。項目追加・archive で自然に変化。initial size も list window として自然）</td></tr>
+  <tr><td>閉じ込め × 最前面層（modal dialog、P3・予備）</td><td class="c">○（削除確認 — 一覧の項目から開く。本家 Sticky Notes に実在。文字入力なし）</td><td class="c">◎（「PC 名を変更」dialog — ScrollView の pane 内の行から開く。本家設定に実在。文字入力内蔵）</td><td class="c">◎（改名・削除確認 — 会話一覧の項目から開く。改名は文字入力内蔵）</td><td class="c">◎（item の「…」→ Rename dialog。ScrollView 内の行が起点で根 ZStack では代用できない。文字入力内蔵）</td></tr>
+  <tr><td>focus / UIA 検証の密度（異種部品の Tab 順）</td><td class="c">○</td><td class="c">◎</td><td class="c">○</td><td class="c">○（list / TextField / Add / item row / menu / dialog を横断。B2 より部品種は少ない）</td></tr>
+  <tr><td>host state boundary の書き戻し方向</td><td class="c">○（編集の保存）</td><td class="c">○（apply / revert）</td><td class="c">◎（送信 = write-back + bot 返信 = host 起点 write の両方向）</td><td class="c">◎（追加・改名・archive を host store へ write-back。供給・差し替えは A の担当に留める）</td></tr>
+</table>
+
+<p class="meta">* B1 の ◎ は「複数行の文字編集（P4 行）を中核並みのコストで引き受ける」判断と
+セット（framing §粒度の定義〔文字編集〕）。単一行に落とすと付箋らしさごと崩れる。</p>
+
+<h3>副次基準（第一基準が拮抗した場合の判断材料）</h3>
+
+<table>
+  <tr>
+    <th>副次基準</th>
+    <th>B1: 付箋</th><th>B2: 設定</th><th>B3: チャット</th><th>B4: 思いつきメモ</th>
+  </tr>
+  <tr><td>1. 実装・spec 工数（相対）</td><td class="c">中〜大（複数行を含むと最大）</td><td class="c">中</td><td class="c">中</td><td class="c">中</td></tr>
+  <tr><td>2. 構造リスク</td><td class="c"><strong>高（複数行）</strong></td><td class="c">低</td><td class="c">中（並行配列 — <a href="../../../docs/notes/typed-value-evaluator.md">typed-value-evaluator.md</a> の再評価トリガに接近）</td><td class="c"><strong>低</strong>（item は文字列 collection のみ。複数行も並行配列も招かない）</td></tr>
+  <tr><td>3. identity / outreach 訴求</td><td class="c">◎</td><td class="c">◎</td><td class="c">○（動きがあり見栄えはする）</td><td class="c">△〜○（Mica の小 window が並ぶ絵は出せるが、動きは B3 に劣る）</td></tr>
+</table>
+
+<p class="meta">M3 残務群の消化（framing §判断基準の副次基準 4）は A の担当のため、
+第二 app の選定では効かない。</p>
+
+<h3>読みと採択結果（2026-07-27、Q2 決着 = framing F8）</h3>
+
+<ul>
+  <li><strong>採択 = B4（思いつきメモ）。</strong>第一基準では B3 と B4 が同格・先頭で、
+  どちらも担当分に穴がなく ◎ 4・○ 3。B1 は複数行編集のコスト、B2 は穴 2 つを抱えるため
+  第一基準の段階で後退し、選定はこの 2 案の副次基準に委ねられた。工数は同程度のため
+  実質は構造リスクと訴求力の 2 軸となり、<strong>構造リスクの低さ（B4）を
+  訴求の動き（B3）より重く取った</strong> — B3 の並行配列の圧力
+  （<code>TypedValue</code> / 構造化された項目データの保留に接近する）を M4 に
+  持ち込まない判断である。以下の各案の読みは判断の記録として残す。</li>
+  <li><strong>B4: B3 と同じ穴なし・構造リスクは最も低い。</strong>一行入力 + IME と
+  write-back が製品の中心にあり、複数行編集を招かない。item を文字列 collection に
+  留められるため B3 の並行配列の圧力を回避する。item の「…」→ Rename dialog は
+  ScrollView 内の行が起点で、<strong>閉じ込め × 最前面層 × 文字入力 × IME の四重の組合せ</strong>を
+  B3 と同様に 1 か所で証明する。B3 に劣るのは multi-window の製品上の必然性
+  （1 list = 1 window は 1 conversation = 1 window より弱い）と showcase の動き。
+  詳細は <a href="target-app-wireframes.additional.html">B4 の候補節</a>。</li>
+  <li><strong>B3: 担当分に穴がない。</strong>全行 ○ 以上、◎ 4。文字入力 + IME は
+  「日本語で会話を打つことが app の本体」で単一行が自然。書き戻し + host 起点 write の
+  両方向が製品動作で、A の担当（供給・差し替え）と正確に補完。会話一覧の項目から開く改名 dialog は
+  <strong>閉じ込め × 最前面層 × 文字入力 × IME の四重の組合せ</strong>を 1 か所で証明し、
+  multi-window と合わせて「モーダルの及ぶ範囲はウィンドウ単位」の論点も作為なしに発火する。
+  残る注意は並行配列の圧力のみ（framing の TypedValue 宿題を前倒し点検）。</li>
+  <li><strong>B2: 密度最強・穴 2 つ。</strong>focus / UIA / top-layer の検証密度と
+  「PC 名を変更」dialog の本家先例は最強。ただし multi-window と動的タイトルに自然な
+  出番がなく、証明の別建てが 2 件必要 — 作為の除去という 2 本立ての狙いと逆行する。
+  focus 密度の優位は、app 非依存の義務として確定済みのフォーカス意味論の機構検証
+  fixture が部分的に下支えする。</li>
+  <li><strong>B1: multi-window 最強・複数行コストとセット。</strong>2 本立てで負担は
+  軽くなるが、本筋が複数行編集である構造は変わらず、P4 行の事実上中核化
+  （コスト増）を引き受ける判断が前提のまま。</li>
+  <li><strong>modal dialog の設計条件（全候補共通）:</strong> dialog は項目ごとの文脈
+  （for / ScrollView 内）から開く形に設計し、最前面層が構造的に要求されるようにする。
+  根宣言の dialog では ZStack で足りてしまい、組合せを実証しない
+  （framing §粒度の定義〔重ね表示〕）。各候補での開き元は上記の各候補の表に記録 —
+  B1: 一覧 window の項目の「…」/ B2: ScrollView の pane 内の Rename 行 /
+  B3: 会話一覧の項目の「…」/ B4: list window の item 行の「…」。
+  B4 の「＋ 新しいリスト」も同じ理由で名前入力 dialog を持たず、自動命名 +
+  launcher 行からの改名にしている。</li>
+</ul>
+
+<div class="note">
+Q2 は <strong>A + B4 の 2 本</strong>で決着した（framing F6 / F8）。採択の明文化は
+<code>requirements/spec.md</code>（M4 target app pre-doc）で行い、本ファイルは
+<strong>選定の比較記録</strong>として保持する（非採択 3 案の読みは歴史的記録）。
+採択に伴う制約 — 項目は文字列の並びに留める / 一覧 window の行に件数を出さない — は
+<a href="framing.md">framing.md</a> §第二アプリの採択に依存して変わるものが正本。
+</div>
+
+<h2>位置づけと将来</h2>
+
+<ul>
+  <li>本ファイルは exploratory artifact。採択判断・採用理由・必要 surface・out-of-scope の
+  SSOT は採択後の <code>spec.md</code> が持つ。</li>
+  <li>採択された候補の wireframe は、M3 の前例
+  （<a href="../../milestone-3/requirements/spec.md">M3 spec.md</a> §視覚 artifacts との参照関係）に
+  ならい、必要なら英語ラベルの stable 抽出版を <code>docs/references/</code> へ切り出す。</li>
+  <li>非採択候補の記述は歴史的記録としてここに残す。</li>
+</ul>
+
+</body>
+</html>
