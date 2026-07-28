@@ -2132,8 +2132,9 @@ was added and the mutation then fired. Worth recording plainly: the
 technique's value here was not confirming the tests, it was the one case
 where it refused to.
 
-**Raised to the owner rather than settled here.** Both are ADR-adjacent
-and neither meets the bar for an implementation-log decision.
+**Raised to the owner rather than settled here — and answered
+2026-07-29; see §Owner decisions below.** Both are ADR-adjacent and
+neither meets the bar for an implementation-log decision.
 
 - **R-2 — does DD-003's exact-invariance property need a successor DD?**
   [DD-003 §Context](../decisions/dd-m4-p1-003-dpi-change-propagation.md)
@@ -2178,3 +2179,67 @@ one operation the task existed to get right. The review brief asked
 specifically about the `MulDiv` claim and the `f64` widening, which is
 some evidence that naming one's own weak claims is worth doing; it also
 did not name R-1, which is the finding under them both.
+
+### Owner decisions on the T4 review findings (2026-07-29)
+
+Three questions, all answered; recorded here so no later task re-opens
+them.
+
+1. **The review-lane raise (F-25) is approved** after the fact. T4 was
+   reviewed under the full independent lane and the merge gate stayed
+   blocked until the findings were dispositioned.
+2. **R-2 and R-3 are recorded as dated annotations on DD-M4-P1-003, not
+   as a successor record and not as a plan-side correction alone.**
+3. Same disposition for both, because they are one governance question
+   with two instances.
+
+**Why the middle option, stated because the reasoning generalises.**
+The three candidates were: (A) leave the correction in
+[plan.md](./plan.md) and this log; (B) annotate the ADR in place, body
+unchanged, pointing at the measurement; (C) file a successor record.
+
+- **(C) is disproportionate.** A successor record exists to re-choose an
+  option. Neither finding re-chooses one: DD-003 still applies the
+  OS-suggested rectangle, still fixes the same step ordering, and still
+  creates-then-corrects. What is wrong is the accuracy of one property
+  statement (R-2) and the conditionality of one clause inside an
+  option's description (R-3). A successor with nothing to decide would
+  make the record set harder to read, not easier.
+- **(A) is where the phase was already heading, and it fails quietly.**
+  The correction would live only in implementation documents, while the
+  ADR — the decision SSOT — kept the strong claim. T12's Moment 2
+  divergence pass covers `architecture.md`, `dsl_spec.md` and
+  `abi_spec.md`; **it does not cover ADRs**, so nothing in the process
+  would ever revisit DD-003's sentence. And DD-003 is not an ADR that
+  goes unread: [plan.md](./plan.md) §T7 makes its enumeration T7's close
+  artifact, so the next reader is a task that consumes exactly the rows
+  in question. This is F-18's shape — a correction landing in one of the
+  two documents that carry the error — pre-empted rather than repeated.
+- **(B) has precedent in this repository.**
+  [doc-system.md](../../../cross-milestone/decisions/doc-system.md)
+  carries an in-place "**Superseded in part (2026-06-19, DD-V-026)**"
+  block, and
+  [governance-rfc-deferral.md](../../../cross-milestone/decisions/governance-rfc-deferral.md)
+  records the same discipline in words: add a line pointing at the
+  resolution, **do not rewrite the historical note**. So the mechanism
+  was available rather than invented, and the immutability rule is
+  honoured — the original prose stands, and the annotation is dated,
+  attributed and evidence-linked.
+
+**What landed.** Two annotations in
+[dd-m4-p1-003](../decisions/dd-m4-p1-003-dpi-change-propagation.md) —
+§Context "Qualified in part" and §Initial scale acquisition "Narrowed" —
+plus a row in that DD's revision history and a row in the ADR-set
+[preamble](../decisions/preamble.md)'s. **Every `Status:` stays
+`Accepted`.** Bodies are unchanged.
+
+**A note for the phase-end batch.** This is the set's first
+post-acceptance annotation, and it establishes by use a distinction the
+process documents do not currently name: *superseded* (an option is
+re-chosen) versus *qualified / narrowed* (the decision stands and a
+statement around it is corrected). Whether that distinction deserves a
+line in [workflow.md](../../../procedures/workflow.md)'s status
+vocabulary — which today lists only `Proposed` / `Accepted` /
+`Superseded` — is a process question, not a phase question, and it goes
+to the phase-end batch alongside the "show it goes red" vision decision
+record rather than being decided here.
