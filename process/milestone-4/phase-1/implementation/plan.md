@@ -270,6 +270,30 @@ other write exists to be missed.
 
 - [ ] Move the label offset / size writes out of Button construction and
       the label-update path into `sync_visuals`.
+- [ ] **Decide where the sync pass gets the label's measured size.**
+      Named here rather than discovered at the write (found while
+      preparing T3's handoff, after the T2 merge): the two relocated
+      writes use `(lw, lh)` from `TextRenderer::measure`, which is in
+      scope at construction and at the label update but **not** in
+      `sync_visuals` — the node retains `label_text` / `label_style` but
+      not the measured extent, and `sync_visuals` takes no renderer.
+      The candidates are re-measuring in the sync pass (needs a renderer
+      parameter), retaining the measured extent on `ButtonData` (new
+      state, which T3 may take — DD-002's no-new-state claim is about
+      T6's re-rasterization walk, not about this move), or deriving it
+      from `computed.size` minus the padding (which stops being the same
+      number the moment a parent stretches the button). This is T3's
+      decision and its trap-#2 enumeration is where it belongs; the plan
+      names it so T3 does not meet it mid-edit.
+- [ ] Note that the label Visual is **not** a child `WidgetNode` — it
+      lives in `ButtonData.label_visual` — so the sync pass reaches it
+      through a `WidgetData::Button(btn) | ToggleButton(btn)` arm, in the
+      same shape as the existing ScrollView intermediate arm, not through
+      the `children` / `computed.children` zip.
+- [ ] `PAD_H` / `PAD_V` are declared **twice** today (in `button_family`
+      and again inside `update_button_label`). The sync pass would be a
+      third site; hoist them to one constant instead. Same
+      rule-in-two-places class as T2 finding F-14.
 - [ ] Cover `ToggleButton`'s label path in the same move (it reuses
       Button's leaf measure / arrange and carries the same label).
 - [ ] Confirm the node's sizing still derives from the same measurement
