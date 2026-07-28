@@ -1,7 +1,7 @@
 ---
 phase: M4-Phase 1
 title: Per-monitor DPI awareness and the coordinate-space boundary
-status: draft
+status: active
 adr: process/milestone-4/phase-1/decisions/preamble.md
 plan: process/milestone-4/plan.md
 opened: 2026-07-28

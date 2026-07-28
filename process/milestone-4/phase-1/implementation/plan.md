@@ -61,9 +61,11 @@ after T0 closes.
       Moment 2**, with the reason recorded (DD-004 §Note updates): the
       phase falsifies its premise, and the corrected capture coordinates
       can only be derived against the running surface.
-- [ ] This `preamble.md` + `plan.md` + skeleton [log.md](./log.md) /
-      [handoff.md](./handoff.md) owner-reviewed and landed; front-matter
-      `status` flips `draft` → `active`.
+- [x] This `preamble.md` + `plan.md` + skeleton [log.md](./log.md) /
+      [handoff.md](./handoff.md) owner-reviewed and landed (`dedd327`,
+      merged to the phase branch at `80d79c4`); front-matter `status`
+      flipped `draft` → `active` 2026-07-28 on owner authorisation to
+      open T1.
 
 **Start gate:** none (doc-only). **End gate:** the implementation docs
 are on the branch and the Moment 1 commit set is complete; T1 may open.
