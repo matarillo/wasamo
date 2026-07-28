@@ -224,6 +224,15 @@ have landed two untested branches in intermediate commits. Artifacts in
       Retains only the factor, not the originating DPI. `Default` is
       hand-written (a derived one would produce a zero factor), and a
       zero DPI falls back to the identity rather than dividing by zero.
+      **Reversed at T4** (independent review finding R-1, recorded here
+      because this is a checked item describing what landed and it now
+      says the opposite of the source): the type retains the **DPI** and
+      derives the factor. "Every consumer wants the factor rather than
+      the DPI" was the stated premise, and `window_size_to_physical`
+      falsified it — an `f32` factor cannot express `dpi / 96` exactly
+      unless 3 divides the DPI, so a rounding rule computed from it is
+      not the rule the type documents. `Default`, `IDENTITY` and the
+      zero-DPI fallback are unchanged in behaviour.
 - [x] `to_physical(dip) -> f32`, `to_dip(px) -> f32`, and the rectangle
       form (position and extent converted separately). The outbound
       position form is `relative_offset_to_physical(abs, parent_abs)`,
@@ -980,7 +989,14 @@ are in
       size rather than a controlled outer size.
 - [ ] **Positive control C, path form.** Two frames across a display
       setting scale change on the development machine while the window
-      is up, showing text still crisp and the logical layout unchanged.
+      is up, showing text still crisp and the logical layout unchanged
+      — **to the same tolerance control B carries, not bit-exactly**
+      (T4 delta review finding 2; this bullet read as an absolute while
+      the bullet above it already conceded the drift). A display-setting
+      change is the real path, so the window follows the OS-suggested
+      rectangle and the client extent moves with the non-client metrics.
+      Element order and wrap structure are the invariants; a single wrap
+      position sitting on a boundary is not.
 - [ ] **Window measurement check** (risk R-9): a window created at
       800 × 600 DIP measures 1000 × 750 physical at 125%. Cheap,
       concrete, and the only in-phase check of DD-004's outer-window

@@ -203,9 +203,15 @@ fn create_hwnd(title: &str, width: i32, height: i32) -> windows::core::Result<HW
 /// `CW_USEDEFAULT`'s choice and must survive, so `SWP_NOMOVE` is required and
 /// the `x` / `y` arguments are ignored.
 ///
-/// A failure leaves the window at the requested numbers — wrong at any scale
-/// but 100% — which is not a reason to fail window creation, but is a reason to
-/// say so. DD-M4-P1-003 §Failure handling is "log **and** survive", and the
+/// A failure leaves the `CreateWindowExW` rectangle uncorrected — which is not
+/// a reason to fail window creation, but is a reason to say so. What that
+/// rectangle then *means* depends on the process's effective awareness and is
+/// deliberately not asserted here: an aware process gets a window that is too
+/// small by the scale factor, while an unaware one has its logical rectangle
+/// stretched by DWM and looks approximately right (T4 delta review finding 4 —
+/// an earlier draft claimed the requested numbers "remain as physical pixels",
+/// which is only the aware case). DD-M4-P1-003 §Failure handling is "log
+/// **and** survive", and the
 /// runtime's diagnostic channel is the `wasamo:`-prefixed `eprintln!` the
 /// handler, IR loader and reactive engine already use; swallowing this would
 /// leave a mis-sized window on a scaled monitor with nothing to attribute it to.
@@ -225,8 +231,8 @@ fn realize_dip_window_size(hwnd: HWND, scale: DipScale, width: i32, height: i32)
     if let Err(e) = result {
         eprintln!(
             "wasamo: could not realise the requested {width}x{height} DIP window size as \
-             {physical_width}x{physical_height} physical (scale {}): {e}. The window keeps \
-             the requested numbers as physical pixels.",
+             {physical_width}x{physical_height} physical (scale {}): {e}. The original \
+             CreateWindowExW rectangle remains uncorrected.",
             scale.factor()
         );
     }

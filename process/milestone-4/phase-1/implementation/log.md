@@ -2243,3 +2243,70 @@ vocabulary — which today lists only `Proposed` / `Accepted` /
 `Superseded` — is a process question, not a phase question, and it goes
 to the phase-end batch alongside the "show it goes red" vision decision
 record rather than being decided here.
+
+### Delta review disposition (Codex, 2026-07-29) — the disposition re-reviewed
+
+Six findings: two major, four minor. **The integer rounding rule itself
+drew no correctness finding** — the reviewer re-ran the 1–600 DPI ×
+1–4000 DIP sweep independently and reproduced 21,190 mismatches at one
+pixel, checked the negative and boundary behaviour, and confirmed the
+`f32` conversions are bit-identical. Every finding is about a **claim
+made around the code**, which is the same distribution as the first
+round.
+
+| # | Finding | Verified | Disposition |
+|---|---|---|---|
+| 1 | **major** — the I1 annotation changes what option I1 *is*, and adjudicates a DD-001 / DD-003 conflict, so "no decision, option … changes" and "nothing is superseded" are false; a successor record is required | **Confirmed, and the claim was wrong.** The condition sits inside I1's definition, so a reader implementing I1 as written does not get the shipped behaviour — which is the operative test for "decision changed". Worse, the precedent the disposition rested on undercuts it: [doc-system.md](../../../cross-milestone/decisions/doc-system.md)'s "Superseded in part" block **points at successor DD-V-026**; it does not stand in for one. The citation was to the annotation's shape while dropping the thing it exists to reference | Annotation re-headed **"Superseded in part — successor pending"**, the false framing quoted and withdrawn in place, and both revision histories corrected. **The successor is not written here**: the owner's alternative — restore the guard and accept the untested branch — is live again now that the cheap path is closed, and writing a record that may be discarded is the wrong order. Raised below |
+| 2 | **major** — the exact-invariance qualification reached DD-003 but not the ADR-set preamble's own body, which asserts the unqualified property in four further places; and plan §T10's control C still demands "logical layout unchanged" absolutely, contradicting control B directly above it | **Confirmed at all five sites.** The preamble's DD-003 summary row, the cross-DD dependency chain, verification item 2 and positive control B each state the property in **different words**, and control C states it as an absolute for the one path where it is least true — a real display-setting change, where the OS-suggested rectangle moves the client extent | All five annotated or corrected in place. See the process note below: this is the third occurrence of the same class, and the reason it recurred is now diagnosable rather than merely embarrassing |
+| 3 | **minor** — the `DipScale` reversal did not propagate to [plan.md](./plan.md) §T2's checked item ("retains only the factor") or to the retrospective, which counts two implementation commits and says no existing function was rewritten | **Confirmed.** §T2's item is a record of what landed and now says the opposite of the source; the retrospective's two statements describe the pre-review branch | §T2 gains the reversal with its reason; the retrospective's commit count and §5 corrected. The **T2 entry in this log is deliberately left alone** — it is a dated record of what T2 decided, and finding R-1's disposition above already corrects it forward, which is the distinction between a historical record and a standing claim |
+| 4 | **minor** — the failure diagnostic asserts the requested numbers "remain as physical pixels", which is only true of an aware process; DWM stretches the rectangle for the unaware one DD-001 explicitly supports | **Confirmed.** The claim silently assumed the post-T9 world inside the one code path that exists to survive its absence | Diagnostic and doc comment now say the `CreateWindowExW` rectangle **remains uncorrected**, and the doc states both readings rather than picking the one that happens to be false today |
+| 5 | **minor** — "no host can observe them" is too broad: a native host can install a `WH_CALLWNDPROC` hook on the thread and see sent messages before the window procedure | **Confirmed.** The null `GWLP_USERDATA` supports "no Wasamo runtime state and no Wasamo-exposed callback observes them" and nothing wider | Narrowed in the DD-003 annotation |
+| 6 | **minor** — "an `f32` cannot hold `dpi / 96` exactly unless the DPI is a multiple of 24" is false; `96 = 2^5 × 3`, so the condition is that **3 divides the DPI**. And "both answers are exactly derivable" contradicts the paragraph saying the factor is rounded | **Confirmed, and the falsifier was in my own output.** The R-1 probe printed *333 exact factors in `dpi` 1–1000* — precisely the count of multiples of 3 — in the same run that produced the witness. Every standard Windows scaling happens to be a multiple of 24, so the wrong claim still predicted the standard set correctly and read as confirmed | Both corrected, with the self-falsification recorded rather than quietly fixed. The design argument is restated as **integer results exactly, `f32` factor deterministically** |
+
+**Why the propagation failure recurred three times, stated as a
+mechanism rather than as an apology.** T3's S-3 established "correct the
+summaries, not only the carriers", and T4 ran that discipline twice —
+once in the in-gate re-audit, once after the first review. Both times it
+searched for the **phrasing** of the corrected claim: "7 tiles", "outer
+versus client", `SWP_NOMOVE`. The sites it kept missing state the same
+**proposition** in words that share no phrase with it — "does not
+re-decide layout", "layout results are scale-invariant", "the DIP
+results are unchanged", "invariance is the evidence". A string search
+cannot find those, and running it twice cannot either.
+
+The correction that follows: **search by proposition, not by string.**
+Before folding a finding, write the proposition it falsifies as one
+sentence, then ask which documents assert *that*, independently of how
+they word it. For a claim about a normative property, the candidate set
+is every document that summarises the decision — which in this phase is
+always the ADR-set preamble, the implementation preamble, and the plan's
+task bullets. This is recorded as the T4 remediation for the
+re-audit discipline and is the falsifiable test the next task inherits:
+**T5 is valid if its propagation pass names the proposition and
+enumerates the asserting documents before searching; falsified if a
+reviewer again finds an asserting site the search did not visit.**
+
+**Raised to the owner — the R-3 question is reopened, and the option
+set has changed.** Yesterday's approval of "annotate rather than
+supersede" was given on my recommendation, and **that recommendation was
+wrong for the I1 half**. The cheap path is closed; the honest choice is
+now between two real costs.
+
+- **Keep the correction unconditional and file a successor record**
+  (DD-M4-P1-005, superseding I1's conditional clause only). Cost: one
+  short ADR, owner review, and the set's first supersede. Buys: no
+  branch that cannot be fired until T9 on the path every host takes.
+- **Restore the guard** and let DD-003 stand exactly as written. Cost: an
+  authored branch that trap #4 exists to prevent, untestable in either
+  direction before T9, on `window::create`. Buys: no ADR work, and the
+  record set stays untouched.
+
+**Recommendation: the successor record.** The branch is a permanent
+correctness cost paid on every window creation forever; the ADR is a
+one-time documentation cost. But the case is closer than I made it
+sound yesterday, and the previous recommendation's reasoning does not
+survive, so it is put fresh rather than restated.
+
+**The §Context qualification is unaffected** by any of this. It changes
+no option, and option B remains the right disposition for it — the delta
+review agrees.

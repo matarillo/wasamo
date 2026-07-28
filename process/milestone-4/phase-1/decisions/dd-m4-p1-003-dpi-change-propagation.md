@@ -151,9 +151,10 @@ the semantics DD-004 states, because `width` / `height` denote the
 **outer window rectangle** — which is what they have always denoted,
 since they are passed straight to `CreateWindowExW`.
 
-**Narrowed (2026-07-29, M4-Phase 1 T4; owner-approved).** I1's wording
-above conditions the correction on the scale — "if the scale is not 1
-apply `size × s`". **As implemented the correction is unconditional**,
+**Superseded in part — successor pending (2026-07-29, M4-Phase 1 T4).**
+I1's wording above conditions the correction on the scale — "if the
+scale is not 1 apply `size × s`". **As implemented the correction is
+unconditional**,
 and the difference is real rather than a matter of implementation shape:
 at a scale of 1 the size-preserving `SetWindowPos` still dispatches
 `WM_WINDOWPOSCHANGING` and `WM_GETMINMAXINFO`, which a guarded
@@ -171,11 +172,29 @@ to keep correct*. A guard here would be a branch that no test can fire
 until the declaration lands — on the one path both public window-create
 entries and all three example hosts take — which is precisely the
 untested-authored-branch failure the phase's implementation gates are
-armed against. Where the two DDs conflict, the structural safety
-argument wins over a clause inside an option's description; the decision
-this section makes (create, then correct) is unchanged. Recorded at
+armed against.
+
+**This annotation is not itself sufficient, and the first draft of it
+claimed otherwise.** It said the decision "(create, then correct) is
+unchanged" and that a clause inside an option's description was being
+narrowed rather than a decision changed. The T4 delta review rejected
+that: the condition is part of **what option I1 is**, a reader
+implementing I1 as written would not produce the shipped behaviour, and
+adjudicating a conflict between two Accepted DDs is itself a new choice.
+[process/README.md](../../../README.md) makes `decisions/` immutable
+under the **supersede rule**, and the precedent this disposition leaned
+on — [doc-system.md](../../../cross-milestone/decisions/doc-system.md)'s
+"Superseded in part" block — *points at a successor record* (DD-V-026)
+rather than standing in for one. The citation was to the annotation's
+shape while omitting the thing it exists to reference.
+
+**A successor record is therefore required and is pending owner
+decision**, together with the live alternative of restoring the guard
+and accepting the untested branch. Until it lands this annotation
+records the divergence rather than authorising it, and the shipped
+behaviour is unconditional. Reasoning and both options:
 [implementation/log.md](../implementation/log.md) §T4 (independent
-review finding R-3).
+review finding R-3, delta review finding 1).
 
 **Recorded caveat:** the DPI observed immediately after creation is the
 DPI of the monitor the OS chose. If the window is subsequently moved,
@@ -379,10 +398,17 @@ residual (a layout-time runtime error code) stays non-applicable
   owner approval after the M4-Phase 1 T4 independent review. §Context's
   layout-invariance consequence is **qualified** (it holds of a
   controlled client extent, not of the OS-suggested rectangle, because
-  the non-client frame does not scale by `s`), and §Initial scale
-  acquisition's option I1 is **narrowed** (the correction ships
-  unconditional, on DD-M4-P1-001's structural grounds). **Status stays
-  `Accepted`**: no decision, option, or ordering in this DD changes —
-  what changes is the accuracy of one property statement and the
-  conditionality of one clause. Recorded rather than superseded because
-  a successor record would have no option to re-choose.
+  the non-client frame does not scale by `s`); §Initial scale
+  acquisition's option I1 is annotated because the shipped correction is
+  unconditional.
+- 2026-07-29 (same day, T4 delta review): the second annotation's
+  framing is **corrected**. It originally read "Narrowed … the decision
+  this section makes is unchanged", and that was wrong — the condition
+  is part of what option I1 *is*, and adjudicating the DD-001 / DD-003
+  conflict is a new choice. It now reads **"Superseded in part —
+  successor pending"**, and **a successor record is required**; the
+  alternative of restoring the guard is live. The §Context qualification
+  is unaffected by this correction: it changes no option and stands as
+  an annotation. **Status stays `Accepted`** for now because nothing has
+  yet been decided in place of I1; the successor, once accepted, is what
+  changes that.

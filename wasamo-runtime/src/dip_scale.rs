@@ -31,8 +31,10 @@ pub const REFERENCE_DPI: u32 = 96;
 /// every DPI a custom scaling can produce, and a rounding rule stated on a
 /// value the type has already approximated is a rule the type does not keep.
 /// Storing the DPI is also strictly *less* drift-prone than the alternative of
-/// carrying both: there is one representation, and it is the one from which
-/// both answers are exactly derivable.
+/// carrying both: there is one representation, and from it the integer results
+/// are derived **exactly** and the `f32` factor **deterministically**. (Not
+/// "both exactly" — the factor is a rounded value and saying otherwise would
+/// contradict the paragraph above. T4 delta review finding 6.)
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub struct DipScale {
     dpi: u32,
@@ -196,9 +198,16 @@ impl DipScale {
     /// **The arithmetic is exact for every DPI, which is why this operation is
     /// the reason the type retains the DPI** (see the type's own note). The
     /// obvious implementation — multiply by [`Self::factor`] and round —
-    /// silently is not the stated rule: an `f32` cannot hold `dpi / 96` exactly
-    /// unless the DPI is a multiple of 24, and Windows custom scaling can
-    /// produce others. Measured over `dpi` 1–600 × `dip` 1–4000: the `f32`
+    /// silently is not the stated rule: `96 = 2^5 × 3`, so `dpi / 96` is a
+    /// dyadic rational — and therefore exact in `f32` at these magnitudes —
+    /// **exactly when 3 divides the DPI**, and Windows custom scaling can
+    /// produce DPIs that it does not. (An earlier draft said "a multiple of
+    /// 24", which is sufficient and not necessary; the sweep below had already
+    /// printed 333 exact factors in `dpi` 1–1000, i.e. precisely the multiples
+    /// of 3, so the claim was falsified by its own measurement. T4 delta review
+    /// finding 6. Every standard Windows scaling happens to be a multiple of
+    /// 24, which is why the wrong claim still predicted the standard set
+    /// correctly.) Measured over `dpi` 1–600 × `dip` 1–4000: the `f32`
     /// route disagrees with this one on 21,190 of 2.4M pairs, always by one
     /// pixel and always on an input whose true product is an exact half — for
     /// instance 804 DIP at 100 DPI, which is exactly 837.5 and which the `f32`
