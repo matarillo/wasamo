@@ -15,18 +15,44 @@ the declaration lands last.** Because the conversion machinery is
 unconditional and an unaware process reports 96 DPI, T2–T8 land into a
 world where every scale factor is exactly 1 and every conversion is the
 identity — so every intermediate commit is correct and visually green,
-including on the 125% development machine. T8 drives `s ≠ 1`
-synthetically so the ordering does not defer all scaled-path risk to the
-end.
+including on the 125% development machine. T1 measured the premise
+rather than inheriting it: an undeclared process is told 96 DPI on that
+machine. T8 drives `s ≠ 1` synthetically so the ordering does not defer
+all scaled-path risk to the end.
+
+**What "green" is worth here changed at T1.** The clause above is a
+statement about the *world* T2–T8 land into — every conversion really is
+an identity — not about the suite's power to detect a wrong one. Those
+are separate claims and the plan originally ran them together. The next
+paragraph separates them.
+
+**A green suite is not evidence of correctness in T3–T8** (owner-agreed
+2026-07-28, on T1 finding F-4). Every existing layout integration test
+drives `WidgetNode`s directly and never through a window, so no test
+routes a coordinate through a window's scale; the whole conversion
+machinery *plus* the awareness declaration was measured green at 125%,
+indistinguishable from baseline. `cargo test --workspace` therefore stays
+in every end gate as a **regression check** — it must not go red — but it
+is not counted as evidence that a conversion is right. What counts per
+task: T2 its own unit tests (pure logic, genuinely informative), T3 the
+rendered gallery frame, T5 the call-site audit table, T6 the rendered
+output, T7 the structural side-effect enumeration, T8 its own
+scale-driving assertions.
 
 Default to **one commit per task-list item** per
 [AGENTS.md §Commit rules](../../../../AGENTS.md). The known exception
 this phase:
 
-- **T5** — the seam conversions change `run_layout_as_window_root` /
-  `sync_visuals` / hit-test signatures together (risk R-5); intermediate
-  states do not build, so the site changes and their call-site updates
-  land in one buildable commit.
+- **T5** — **narrowed at T1.** The exception was written on the
+  assumption that `run_layout_as_window_root`, `sync_visuals` and the
+  hit-test entry points all change signature together. They do not:
+  the carrier decision leaves the layout and sync signatures untouched,
+  and only `hit_test_click` / `update_hover` change (their `i32`
+  physical coordinates become `f32` DIP). The exception survives at that
+  reduced scope — those two signatures and their 7 test call sites in 4
+  files do not build in intermediate states, so they land in one
+  buildable commit — but it no longer covers the seam work as a whole,
+  and the rest of T5 may be split if it reads better that way.
 
 If implementation reveals an item should split or reorder, revise this
 list so it stays an accurate record rather than a frozen prediction —
@@ -80,7 +106,14 @@ recorded decisions in [log.md](./log.md) plus any revision of this plan.
 This is a risk-mitigation spike for R-2 / R-5 and a confirmation of the
 sequencing thesis — not the first slice of the work.
 
-- [ ] **Read every landing file end-to-end** (not grep-sample), per the
+**Closed 2026-07-28.** Every item below is discharged and its artifact is
+in [log.md](./log.md) §T1. The spike produced five findings (F-1 … F-5),
+two decisions (the carrier shape, the walk shape), two confirmations
+(the sequencing thesis, the declaration site), and revisions to T4, T5,
+T6, T9 and T12 below. All throwaway edits were reverted; no production
+code lands on the T1 commit.
+
+- [x] **Read every landing file end-to-end** (not grep-sample), per the
       [spike discipline](../../../procedures/implementation-gates.md):
       [`wasamo-runtime/src/window.rs`](../../../../wasamo-runtime/src/window.rs)
       (`create`, `create_hwnd`, `set_root`, `wnd_proc`'s six message
@@ -97,35 +130,50 @@ sequencing thesis — not the first slice of the work.
       [`abi.rs`](../../../../wasamo-runtime/src/abi.rs)
       (`wasamo_window_create`, `set_last_error`), and
       `wasamo-runtime/Cargo.toml`. Record the per-file touch-points.
-- [ ] **Verify DD-002's 13-row audit table against the source** and
+      **Two files were added to the list by the read**: `emit.rs`
+      (a second production `GetClientRect` → layout path) and `lib.rs`
+      (the Rust-native `window_create` / `window_set_root`).
+- [x] **Verify DD-002's 13-row audit table against the source** and
       record any row whose file / function has moved since ADR drafting,
       plus any coordinate-carrying path the table does not name. The
       table is the contract; a discrepancy is a finding to record, not a
-      silent correction.
-- [ ] **Decide and record the `DipScale` carrier and threading shape**
-      (risk R-5). `run_layout_as_window_root` is called from two
-      production sites and at least four integration tests with literal
-      DIP extents; `hit_test_click` / `update_hover` take `i32` physical
-      today. Decide once: a scale-defaulting parameter, a separate
-      window-scale entry point, or scale held on the node — and whether
-      existing tests keep their current signatures. **Compiler-verify**
-      by making the change, building the workspace to enumerate every
-      breaking call site by compiler error, recording the list, then
-      reverting.
-- [ ] **Decide and record where the re-rasterization walk lives** and
+      silent correction. **Three findings: F-1** (row 2 covers a second
+      site, `emit::flush_layout`), **F-2** (row 12 names Box, which
+      installs no clip; the third clip site is ZStack), **F-3** (the six
+      `WindowState` callback slots carry coordinates with no stated
+      unit).
+- [x] **Decide and record the `DipScale` carrier and threading shape**
+      (risk R-5). Both candidate shapes were built, compiled and
+      reverted; the breakage sets are the compiler's, not an estimate.
+      **Decided: authoritative on `WindowState`, cached on each
+      `WidgetNode`, written by one walk** — 7 test call sites in 4 files,
+      against 28 in 12 files for parameter threading, and the only shape
+      with an answer on the `set_property` re-rasterization path.
+      The pointer's DIP type is `f32`. Existing tests keep their layout
+      signatures; the 7 broken sites are the `hit_test_click` literals.
+- [x] **Decide and record where the re-rasterization walk lives** and
       what it re-creates (`WidgetData::Text { content, style }`,
       `ButtonData` / `ToggleButton` label state), confirming DD-002's
-      claim that no new retained state is required.
-- [ ] **Confirm or revise the sequencing thesis.** Check that T2 → T8
+      claim that no new retained state is required. **Decided:**
+      `WidgetNode::apply_scale_recursive`, called from `set_root` and
+      from the `WM_DPICHANGED` handler. DD-002's no-new-state claim holds
+      for the re-rasterization itself.
+- [x] **Confirm or revise the sequencing thesis.** Check that T2 → T8
       each leave the workspace buildable, the test suite green, and the
       rendered output unchanged at the development machine's 125%. If
       any intermediate state cannot hold that, revise this task list
-      before T2 opens.
-- [ ] **Confirm the awareness-declaration site** — that `runtime::init()`
+      before T2 opens. **Confirmed**, premise measured (an undeclared
+      process is told 96 DPI on the 125% machine). No task split
+      revised. **F-4 qualifies the comfort**: the suite stays green with
+      the machinery *and* the declaration in place, because no existing
+      test routes a coordinate through a window's scale.
+- [x] **Confirm the awareness-declaration site** — that `runtime::init()`
       can declare before `CreateDispatcherQueueController`, and that the
       existing `RUNTIME.get().is_some()` early return does not cause a
-      second `wasamo_init` to re-declare.
-- [ ] **Sharpen [preamble.md §Technical risks](./preamble.md#technical-risks-planning-time-recon-t1-sharpens)**
+      second `wasamo_init` to re-declare. **Confirmed both**, with the
+      wording sharpened to "the first **OS-touching** act, below the
+      one-shot guard".
+- [x] **Sharpen [preamble.md §Technical risks](./preamble.md#technical-risks-planning-time-recon-t1-sharpens)**
       against the source (pin file / line hotspots), and record the
       **T5 and T6 gate selections** with reasons for non-applicable
       traps before T5 opens.
@@ -176,17 +224,30 @@ independently of the DPI change (DD-002 risk note; preamble obligation
 are written at construction today, where no scale exists; after this
 task every Composition geometry write in the runtime happens in exactly
 one pass — which is what makes T5's audit *complete* rather than
-approximately complete.
+approximately complete. **T1 verified the premise**: the production
+Composition geometry writes are exactly the two construction-time label
+writes (`widget.rs:813` / `818`), the label-update pair (`1035` /
+`1040`), the `sync_visuals` node pair (`1749` / `1754`), the ScrollView
+intermediate pair (`1776` / `1781`), the root's
+`SetRelativeSizeAdjustment` (`window.rs:64`) and the three zero-inset
+clips. After this task the first four collapse into one pass and no
+other write exists to be missed.
 
 - [ ] Move the label offset / size writes out of Button construction and
       the label-update path into `sync_visuals`.
 - [ ] Cover `ToggleButton`'s label path in the same move (it reuses
       Button's leaf measure / arrange and carries the same label).
-- [ ] Confirm `SizeConstraint::Fixed(lw + PAD_H * 2.0, lh + PAD_V * 2.0)`
-      still derives from the same measurement — the move is a write-site
-      relocation, not a sizing change.
+- [ ] Confirm the node's sizing still derives from the same measurement
+      — the move is a write-site relocation, not a sizing change.
+      `SizeConstraint::Fixed` is per axis, so this is two constraints,
+      not one: `button_family` sets `Fixed(lw + PAD_H * 2.0)` /
+      `Fixed(lh + PAD_V * 2.0)` and `update_button_label` re-derives the
+      same pair.
 - [ ] Regression gate: existing Button / ToggleButton integration
-      fixtures and the gallery render unchanged.
+      fixtures and the gallery render unchanged. Per the note above the
+      **rendered frame is the gate**; the fixtures are a regression
+      check, and T1 measured that they do not react to a geometry-write
+      relocation the way the frame does.
 
 **Start gate:** trap #2 (the write moves between passes — enumerate what
 depended on it landing at construction time). **End gate:** the
@@ -205,11 +266,26 @@ unaware, `GetDpiForWindow` returns 96, the scale is 1, and the
       immediately after `CreateWindowExW` returns and **before any
       layout runs**, so `set_root`'s first pass already uses the real
       scale.
-- [ ] Realise `wasamo_window_create`'s DIP `width` / `height`: create at
-      the requested numbers, then apply `size × s` via `SetWindowPos`
-      before the window is shown. Confirm the flash-free property holds
-      structurally — that creation and `wasamo_window_show` are separate
-      ABI calls and no in-between path queries geometry.
+- [ ] Realise the DIP `width` / `height`: create at the requested
+      numbers, then apply `size × s` via `SetWindowPos` before the window
+      is shown. **The correction belongs inside `window::create`, not in
+      `wasamo_window_create`** (T1 finding): `window::create` has three
+      callers — the ABI entry point, `wasamo_load_ui` (which creates its
+      own 800 × 600 window and never goes through
+      `wasamo_window_create`), and the Rust-native
+      `lib.rs::window_create`. A correction placed at the ABI function
+      would leave every `.ui`-loaded window — i.e. all three example
+      hosts — at the wrong physical size.
+- [ ] **The flash-free confirmation has a sharper answer than the plan
+      assumed.** Creation and `wasamo_window_show` are separate ABI
+      calls, but an in-between path *does* query geometry:
+      `window::set_root` calls `GetClientRect` for its first layout, and
+      `wasamo_load_ui` calls it between create and show. The property
+      therefore holds only because the correction runs inside
+      `window::create` before it returns — which is the bullet above,
+      restated as the reason it is not optional. Confirm by ordering,
+      and record that `set_root`'s first layout is the consumer that
+      would have seen the uncorrected rectangle.
 - [ ] Enable the `Win32_UI_HiDpi` feature in
       `wasamo-runtime/Cargo.toml` (prerequisite for `GetDpiForWindow`;
       the awareness API itself is T9) and re-sync
@@ -217,7 +293,8 @@ unaware, `GetDpiForWindow` returns 96, the scale is 1, and the
 
 **Start gate:** trap #5 (the per-window shape is what M4-Phase 8 will
 consume; record the invariant). **End gate:** scale seeded before first
-layout, verified by ordering rather than by comment; workspace green.
+layout, verified by ordering rather than by comment; workspace green as
+a regression check only (see the note above).
 
 ---
 
@@ -230,7 +307,12 @@ landable as one reviewed commit rather than a visible regression.
 
 - [ ] **Inbound, client extent** (audit rows 1–2): `wnd_proc`'s `WM_SIZE`
       client extent and `set_root`'s `GetClientRect` divided by `s`
-      before reaching `run_layout_as_window_root`.
+      before reaching `run_layout_as_window_root`. **Row 2 covers two
+      sites** (T1 finding F-1): `set_root` and
+      [`emit::flush_layout`](../../../../wasamo-runtime/src/emit.rs),
+      the reactive drain's Phase 2 layout pass, which performs the same
+      `GetClientRect` → `run_layout` conversion after every
+      size-affecting property write.
 - [ ] **Inbound, pointer** (audit row 3): `WM_MOUSEMOVE` /
       `WM_LBUTTONDOWN` / `WM_LBUTTONUP` coordinates divided by `s` at the
       window procedure, so hit-testing and hover run in DIP.
@@ -241,6 +323,10 @@ landable as one reviewed commit rather than a visible regression.
       from the visual tree — and that they stop cancelling the moment
       M4-Phase 2 sources geometry from layout or introduces a
       DIP-denominated hit-area rule.
+- [ ] **Introduce the node-side scale cache**, defaulted to 1 in every
+      `WidgetNode` constructor. T5 is its first reader; T6's walk is its
+      only writer, so between T5 and T6 it is permanently 1 — the same
+      identity world every other conversion lands into.
 - [ ] **Outbound, Visual geometry** (audit rows 4–6): `sync_visuals`
       node writes, the ScrollView intermediate Visual, and the Button /
       ToggleButton label writes relocated by T3 — all multiplied by `s`,
@@ -253,9 +339,28 @@ landable as one reviewed commit rather than a visible regression.
       physical quantities), row 10 (`measure` returns DIP — the fact
       that carries "layout stays DIP"), row 11 (`size_sp` is DIP), row
       12 (`InsetClip` insets are all zero, and zero is scale-invariant).
-- [ ] Apply the carrier / threading shape T1 decided (risk R-5); update
-      the affected integration-test call sites without pushing scale
-      awareness into tests that have no business with it.
+      **Row 12's site list is ScrollView / Grid / ZStack**, not
+      ScrollView / Grid / Box (T1 finding F-2): `WidgetNode::box_`
+      installs no clip, and `WidgetNode::zstack` does. The row's
+      conclusion is unaffected; the sites asserted against are not.
+- [ ] **Decide and record the unit of `WindowState`'s six callback
+      slots** (T1 finding F-3). `resize_fn` / `mouse_move_fn` /
+      `mouse_down_fn` / `mouse_up_fn` are invoked from `wnd_proc` with
+      the raw message values, so this task changes their unit as a side
+      effect. No ABI or Rust-native function installs them today —
+      DD-004's claim is confirmed — but the unit must be stated
+      deliberately (DIP, per W1), not inherited from the seam edit.
+- [ ] Apply the carrier / threading shape T1 decided (risk R-5): the
+      scale is authoritative on `WindowState` and cached on each
+      `WidgetNode`, written only by T6's walk; `sync_visuals`,
+      `hit_test_click_inner` and `update_hover_inner` read `self.scale`
+      and keep their signatures. The layout entry points keep theirs
+      too, and their `f32` arguments become DIP. The only test edits are
+      the **7 `hit_test_click` call sites in 4 files**
+      (`button_enabled.rs` ×3, `togglebutton_runtime_integration.rs` ×2,
+      `bool_binding_live_propagation.rs` ×1,
+      `iteration_mutation_integration.rs` ×1), which change from `i32`
+      to `f32` because the pointer's DIP type is `f32`.
 
 **Start gate:** traps #1 and #2. **End gate:** the **call-site audit
 table** — DD-002's 13 rows, each with its classification, the source
@@ -290,7 +395,17 @@ test.
       construction (before the tree is attached to a window) and brought
       to the window's scale by a walk run at attach. Re-creates each
       text-bearing node's surface and brush from state the node already
-      holds; adds no retained state.
+      holds; adds no retained state. Shape decided at T1:
+      `WidgetNode::apply_scale_recursive(&mut self, compositor,
+      renderer, scale)`, called from `window::set_root` after the first
+      layout and from T7's handler; it writes the node-side scale cache
+      T5 introduced, then rebuilds `WidgetData::Text { content, style }`
+      and `ButtonData`'s `label_text` / `label_style` surfaces.
+- [ ] Thread the scale into `draw_text`'s five call sites. Note the
+      borrow order T1 hit: `update_button_label` must read the node's
+      scale **before** `self.button_data_mut()`, which borrows all of
+      `self`; `update_text_content` / `update_text_style` destructure
+      `self.data` directly and need no such care.
 - [ ] Confirm re-rasterization does **not** change any node's
       `SizeConstraint::Fixed(w, h)` — `measure` is DIP and unaffected by
       scale — so it cannot invalidate layout. This is the property T7
@@ -385,10 +500,17 @@ under test; this flips the process posture so the OS starts reporting
 real per-monitor DPI and the identity conversions become live ones.
 
 - [ ] `SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2)`
-      as the **first act** of `runtime::init()` — before
+      as the **first OS-touching act** of `runtime::init()` — before
       `CreateDispatcherQueueController`, before `Compositor::new`, before
-      `TextRenderer::new`. Guard it with the existing one-shot so a
-      second `wasamo_init` does not re-declare.
+      `TextRenderer::new`, and **below** the existing
+      `RUNTIME.get().is_some()` early return. T1 verified both halves:
+      the declaration takes effect from that position, and the existing
+      one-shot already prevents a second `wasamo_init` from
+      re-declaring, so **no new guard is added**. Placing it *above* the
+      early return is the defect to avoid — it would re-declare and take
+      `ERROR_ACCESS_DENIED` on a process that had already declared
+      correctly. `capture_owning_thread()` necessarily precedes it and
+      is not OS work that can lock the awareness.
 - [ ] **Tolerate failure.** `ERROR_ACCESS_DENIED` means the process's
       awareness was already set — typically by a legitimate host that
       declared its own. `wasamo_init` still returns `WASAMO_OK`; the
@@ -451,7 +573,18 @@ are in
 - [ ] **Window measurement check** (risk R-9): a window created at
       800 × 600 DIP measures 1000 × 750 physical at 125%. Cheap,
       concrete, and the only in-phase check of DD-004's outer-window
-      -rectangle claim.
+      -rectangle claim — but **not a positive control on its own**, and
+      the plan originally treated it as one. T1 measured the *unaware*
+      baseline at exactly 1000 × 750 as well, because DWM stretches the
+      logical 800 × 600 by the same factor. The number is therefore
+      satisfied by a build that never declares awareness at all. Pair it
+      with something that separates the two: the effective-context
+      assertion from T9, or the crispness pair (control A) on the same
+      frame. T1 also measured the failure direction — with awareness
+      declared and T4's correction absent, the window measures
+      800 × 600 physical and the WrapPanel drops from 7 tiles per row to
+      6 — so the three outcomes are distinguishable when the check is
+      read alongside a control, and indistinguishable when it is not.
 - [ ] **Re-derive the capture coordinates** for later phases against the
       new coordinate space, as the evidence artifact T12's
       `verification-environments.md` revision consumes (risk R-7).
@@ -489,7 +622,15 @@ recorded; any finding triaged to a task or to
 ### T12 — Step-end local gates + Moment 2 re-sync + step retro
 
 - [ ] Clean rebuild + `cargo test --workspace` green; all three example
-      hosts build in the documented order.
+      hosts build in the documented order. **From a cold target
+      directory the workspace test build needs
+      `cargo build -p wasamo-runtime` first** (T1 finding F-5,
+      pre-existing): `wasamo-dll/build.rs` whole-archives the uplifted
+      `<profile>/libwasamo_runtime.rlib`, which cargo produces only once
+      `wasamo-runtime` has been built as a primary package. Also correct
+      [AGENTS.md §Build ordering](../../../../AGENTS.md)'s claim that
+      workspace-wide builds implicitly satisfy the ordering, which holds
+      for `counter-rust` but not for the cdylib from a cold directory.
 - [ ] **Moment 2 doc sync — divergence correction.** Re-verify each
       Moment 1 statement against what actually landed and correct
       divergences. The statements flagged at ADR time as most at risk
