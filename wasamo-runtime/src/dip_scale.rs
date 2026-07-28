@@ -3,10 +3,11 @@
 // dependency — so the rounding contract lives in one unit-testable place
 // instead of being re-derived at each conversion seam.
 //
-// Nothing consumes this module yet. `WindowState` gains the authoritative
-// value at T4, the conversion seams call it at T5, and the text-surface
-// allocation calls `surface_pixels` at T6. The module-level allow below is
-// that forward-pointer and goes away as those tasks land.
+// `WindowState` holds the authoritative value and `window::create` realises the
+// DIP window size through `window_size_to_physical` (T4). The remaining
+// operations are still unreached: the conversion seams call them at T5, and the
+// text-surface allocation calls `surface_pixels` at T6. The module-level allow
+// below is that forward-pointer and goes away as those tasks land.
 #![allow(dead_code)]
 
 /// The DPI at which one DIP is one physical pixel — the "100%" reference, and
