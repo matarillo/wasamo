@@ -152,6 +152,47 @@ impl DipScale {
     fn pixel_count(physical: f32) -> u32 {
         (physical.ceil() as u32).max(1)
     }
+
+    // ── The window-size rounding rule ────────────────────────────────────────
+
+    /// Physical dimensions for a DIP outer-window rectangle — the argument
+    /// `CreateWindowExW` and `SetWindowPos` interpret once the process is
+    /// DPI-aware (DD-M4-P1-003 §Initial scale acquisition; DD-M4-P1-004 §What
+    /// `width` / `height` denote).
+    ///
+    /// **Rounds to nearest**, and the direction deliberately differs from
+    /// [`Self::surface_pixels`]. That rule rounds *up* because a surface is an
+    /// allocation and a truncated one clips the final column of glyph
+    /// coverage. Nothing is clipped by a window half a pixel small: the client
+    /// extent is read back through `GetClientRect` and converted, never
+    /// assumed. What this quantity has instead is a fidelity contract — an
+    /// 800 DIP window is meant to *be* 800 DIP on every monitor — so the
+    /// physical integer to pick is the one whose DIP value is nearest what was
+    /// asked for. `ceil` and `trunc` each bias the realised logical size in a
+    /// fixed direction for no stated reason.
+    ///
+    /// Nearest is also the convention the OS itself uses (`MulDiv(v, dpi, 96)`)
+    /// when it computes the suggested rectangle `WM_DPICHANGED` delivers and
+    /// the handler applies verbatim, so a window's size at creation and its
+    /// size after a round trip across two equally-scaled monitors are the same
+    /// number rather than two sources disagreeing by a pixel.
+    ///
+    /// Integer in, integer out, so no caller holds an `f32` to cast with
+    /// `as i32` — which truncates. The arithmetic widens to `f64` so that **at
+    /// 100% the conversion is the exact identity for every `i32`**, including
+    /// the values above 2^24 that `f32` cannot represent: the identity world
+    /// T2 through T8 land into is then a property of the type rather than of
+    /// the magnitudes that happen to be passed.
+    pub fn window_size_to_physical(self, dip: (i32, i32)) -> (i32, i32) {
+        (
+            self.length_to_physical_i32(dip.0),
+            self.length_to_physical_i32(dip.1),
+        )
+    }
+
+    fn length_to_physical_i32(self, dip: i32) -> i32 {
+        (f64::from(dip) * f64::from(self.s)).round() as i32
+    }
 }
 
 /// 100%, so that a not-yet-attached widget tree converts as the identity.
@@ -388,6 +429,70 @@ mod tests {
         // the WinRT allocation is left to reject it (T6 trap #6) instead of a
         // silently wrong-sized surface being produced here.
         assert_eq!(s.surface_pixels((f32::INFINITY, 1.0)), (u32::MAX, 2));
+    }
+
+    #[test]
+    fn window_size_converts_at_125_150_200_percent() {
+        // DD-M4-P1-004's window-size claim in the integer form the ABI
+        // actually carries, where `conversion_at_125_150_200_percent` asserts
+        // it as `f32` extents: 800 x 600 DIP is 1000 x 750 physical at 125%.
+        let sizes = [
+            (DPI_125, (1000, 750)),
+            (DPI_150, (1200, 900)),
+            (DPI_200, (1600, 1200)),
+        ];
+        for (dpi, expected) in sizes {
+            assert_eq!(
+                DipScale::from_dpi(dpi).window_size_to_physical((800, 600)),
+                expected,
+                "dpi={dpi}"
+            );
+        }
+    }
+
+    #[test]
+    fn window_size_rounds_to_nearest_in_both_directions() {
+        // The cases that discriminate the rule. Every size whose product is
+        // exact -- 800 x 600 at any of the phase's three factors, including
+        // T10's window-measurement check -- is satisfied by ceil, trunc and
+        // round alike, which is the F-13 shape: the rule is pinned by an
+        // awkward number here or it is not pinned at all.
+        let s125 = DipScale::from_dpi(DPI_125);
+        // 801 DIP at 125% is 1001.25. Nearest is down; `ceil` would give 1002.
+        assert_eq!(s125.window_size_to_physical((801, 801)), (1001, 1001));
+        // 803 DIP at 125% is 1003.75. Nearest is up; `trunc` would give 1003.
+        assert_eq!(s125.window_size_to_physical((803, 803)), (1004, 1004));
+        // The one input where the nearest integer is not unique: 801 DIP at
+        // 150% is exactly 1201.5, resolved away from zero as `MulDiv` does.
+        assert_eq!(
+            DipScale::from_dpi(DPI_150).window_size_to_physical((801, 801)),
+            (1202, 1202)
+        );
+        // Each axis is converted independently, so a mutation that reuses one
+        // axis for both does not pass unnoticed.
+        assert_eq!(s125.window_size_to_physical((801, 803)), (1001, 1004));
+    }
+
+    #[test]
+    fn window_size_is_the_exact_identity_at_one_hundred_percent() {
+        // The world T2-T8 land into, for this operation, stated as a property
+        // of every `i32` rather than of the sizes hosts happen to pass.
+        // 16_777_217 is 2^24 + 1, the first integer `f32` cannot represent:
+        // an `f32` multiplication returns 16_777_216 here even at a factor of
+        // exactly one.
+        for s in [
+            DipScale::IDENTITY,
+            DipScale::default(),
+            DipScale::from_dpi(DPI_100),
+        ] {
+            for dip in [0, 1, -1, 800, 16_777_217, i32::MAX, i32::MIN] {
+                assert_eq!(
+                    s.window_size_to_physical((dip, dip)),
+                    (dip, dip),
+                    "dip={dip}"
+                );
+            }
+        }
     }
 
     #[test]
