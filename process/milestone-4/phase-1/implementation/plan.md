@@ -197,21 +197,47 @@ contract lives. No Win32 or WinRT dependency, so it is unit-testable
 under [AGENTS.md §Testing rules](../../../../AGENTS.md) with no mocking
 question. Lands with **no call sites** — nothing consumes it until T4.
 
-- [ ] `DipScale` value type carrying `s`, constructed from a DPI value.
-- [ ] `to_physical(dip) -> f32`, `to_dip(px) -> f32`, and the rectangle
-      form (position and extent converted separately).
-- [ ] The `ceil` surface-allocation rule as a named operation, so T6
-      calls it rather than re-deriving it.
-- [ ] Unit tests, discharging **verification item 1**: conversion at
+**Closed 2026-07-28.** Landed as
+[`dip_scale.rs`](../../../../wasamo-runtime/src/dip_scale.rs) with 11
+unit tests and one call site — `mod dip_scale;` — which is the
+declaration without which the module would not compile. The four items
+below landed as **one commit**, not four: items 1 and 3 each introduce an
+authored branch whose test lives in item 4, so a per-item split would
+have landed two untested branches in intermediate commits. Artifacts in
+[log.md](./log.md) §T2.
+
+- [x] `DipScale` value type carrying `s`, constructed from a DPI value.
+      Retains only the factor, not the originating DPI. `Default` is
+      hand-written (a derived one would produce a zero factor), and a
+      zero DPI falls back to the identity rather than dividing by zero.
+- [x] `to_physical(dip) -> f32`, `to_dip(px) -> f32`, and the rectangle
+      form (position and extent converted separately). The outbound
+      position form is `relative_offset_to_physical(abs, parent_abs)`,
+      whose signature is what makes convert-once-on-the-difference the
+      natural call; inbound is a single `pair_to_dip`, because positions
+      and extents alike are one componentwise division there.
+- [x] The `ceil` surface-allocation rule as a named operation, so T6
+      calls it rather than re-deriving it. Returns a `(u32, u32)` pixel
+      count rather than a length, so a later cast cannot truncate it
+      back, and each axis is floored at one pixel (preserving
+      `draw_text`'s existing `max(1.0)`).
+- [x] Unit tests, discharging **verification item 1**: conversion at
       125% / 150% / 200%; position-and-extent consistency; round-trip
       error and rounding *direction*; the `ceil` allocation contract;
       the convert-once-on-the-difference rule (that subtracting in DIP
       then multiplying differs from multiplying then subtracting, and
-      that the type's API makes the former the natural call).
+      that the type's API makes the former the natural call). The
+      witnesses for the two `f32` claims were found by brute-force
+      search, and **each test was shown to fail against a deliberately
+      wrong implementation** — seven mutations, tabulated in
+      [log.md](./log.md). A green pure-logic test is only informative
+      once it is known to fire.
 
 **Start gate:** trap #4 applies (new arithmetic branches ship with tests
-that fire them). **End gate:** tests named per contract; `cargo test`
-green; no production call site introduced.
+that fire them); #5 was added at the start gate, because the rounding
+contract is enforced by the API shape and a later task can defeat it by
+hand-rolling the arithmetic. **End gate:** tests named per contract;
+`cargo test` green; no production call site introduced. **All met.**
 
 ---
 

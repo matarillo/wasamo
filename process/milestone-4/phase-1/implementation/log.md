@@ -499,3 +499,144 @@ agree would turn each of those tests into a tautology that passes against
 a wrong implementation. The search results and the witnesses they
 produced are recorded at the close gate.
 
+### The landed surface
+
+[`dip_scale.rs`](../../../../wasamo-runtime/src/dip_scale.rs), 155
+production lines plus 11 tests, declared from
+[`lib.rs`](../../../../wasamo-runtime/src/lib.rs) as `mod dip_scale;`.
+The named operations, one per conversion DD-002's table needs, so that no
+seam re-derives a rule:
+
+| Operation | Audit rows served | Note |
+|---|---|---|
+| `from_dpi(u32)` / `IDENTITY` / `Default` | T4's seeding, T7's `HIWORD(wParam)` | Retains only the factor. `Default` is hand-written; a derived one yields a zero factor. |
+| `to_physical(f32)` | scalar outbound | |
+| `extent_to_physical((f32, f32))` | 4, 5, 6 (the `SetSize` half) | Position-independent by construction. |
+| `relative_offset_to_physical(abs, parent_abs)` | 4, 5, 6 (the `SetOffset` half) | Converts once on the difference. |
+| `to_dip(f32)` | 7's atlas origin | |
+| `pair_to_dip((f32, f32))` | 1, 2 (+ F-1's 2b), 3, 9 | Positions and extents alike; inbound has no difference-taking form. |
+| `surface_pixels((f32, f32)) -> (u32, u32)` | 7's allocation | The `ceil` rule; integer return so a later cast cannot truncate it back. |
+| `factor()` | 7's `96 × s`, T8's ratio assertions | |
+
+**Two deliberate exclusions, recorded rather than left as omissions.**
+
+- **No `d2d_dpi()` helper for `96 × s`.** [plan.md](./plan.md) §T2 names
+  the `ceil` rule as the operation to own, and the reason generalises:
+  the rounding rule is owned here because it *has* a contract to get
+  wrong (up, not toward zero). `96 × s` has no rounding and no contract —
+  it is one multiplication off `factor()`, and pulling it in would put a
+  DirectWrite-context concern in a type whose value is that it has no
+  rendering dependency. T6 writes it at its call site.
+- **No `from_factor(f32)` constructor.** Every real source of a scale is
+  a DPI (`GetDpiForWindow`, `HIWORD(wParam)`), including T8's synthetic
+  changes, which drive the handler rather than constructing a scale.
+  A bare-factor constructor would exist only to let a caller invent one.
+
+**Commit shape.** One commit for all four task-list items rather than the
+default one-per-item ([AGENTS.md §Commit rules](../../../../AGENTS.md)).
+The items do not split trap-#4-clean: items 1 and 3 each introduce an
+authored branch (the zero-DPI fallback, the one-pixel floor) whose test
+lives in item 4, so a per-item split would land two untested branches in
+intermediate commits. [plan.md](./plan.md) §T2 is updated to record what
+actually happened.
+
+### Close gate
+
+**#4 — branch tests, verified by mutation, not by assertion.** Each test
+was shown to **fail against a deliberately wrong implementation**. A
+green test proves nothing about whether it fires; these runs are the
+evidence that it does. Seven throwaway mutations, each applied to a
+restored-from-backup copy, run with
+`cargo test -p wasamo-runtime --lib dip_scale`, then reverted (final state
+verified green, and `git status` shows only the intended two files):
+
+| Mutation | Tests that failed | |
+|---|---|---|
+| **M1** `ceil` → truncate | `surface_allocation_rounds_up`, `surface_allocation_is_never_zero_pixels` | the ceil contract |
+| **M2** drop the `.max(1)` floor | `surface_allocation_is_never_zero_pixels` | **authored branch 2** |
+| **M3** drop the zero-DPI guard | `zero_dpi_falls_back_to_identity` | **authored branch 1** |
+| **M4** multiply both operands, then subtract | `converting_once_on_the_difference_differs_from_converting_twice`, `position_and_extent_convert_separately` | the convert-once rule |
+| **M5** factor inverted (`96 / dpi`) | 7 of 11 | |
+| **M6** `to_dip` multiplies instead of dividing | `conversion_at_125_150_200_percent`, both round-trip tests | |
+| **M7** `extent_to_physical` converts inbound | `conversion_at_125_150_200_percent`, `position_and_extent_convert_separately` | |
+
+An eighth wrong implementation was **not expressible**: deriving an
+extent by converting two edges and subtracting cannot be written against
+`extent_to_physical`, because the signature is handed an extent and never
+a position. That is the API doing the work a test would otherwise have
+to.
+
+**Verification item 1, test by test.**
+
+| Claim | Test |
+|---|---|
+| Conversion at 125 / 150 / 200% | `from_dpi_yields_the_documented_factors`, `conversion_at_125_150_200_percent` (incl. 800 × 600 DIP → 1000 × 750 physical at 125%, DD-004's window-size claim as arithmetic) |
+| Position-and-extent consistency | `position_and_extent_convert_separately` |
+| Round-trip error | `round_trip_error_is_bounded_by_one_ulp` |
+| Rounding **direction** | `round_trip_rounds_to_nearest_in_both_directions` (two-sided) contrasted with `surface_allocation_rounds_up` (one-sided, upward) |
+| The `ceil` allocation contract | `surface_allocation_rounds_up`, `surface_allocation_is_never_zero_pixels` |
+| Convert-once-on-the-difference | `converting_once_on_the_difference_differs_from_converting_twice`, `the_difference_rule_is_only_observable_at_non_dyadic_scales` |
+| The identity world T2–T8 land into | `identity_and_default_are_one_hundred_percent` |
+
+**Three measured facts worth carrying, from the brute-force searches.**
+All three are recorded because each is a statement about what *testing*
+can and cannot catch in this phase, not just about the type.
+
+1. **A round trip is inexact in the common case, not the exceptional
+   one.** Over two million consecutive `f32` starting at 0.1:
+   750,000 non-exact round trips at 125% and 500,000 at 150%, worst
+   relative error 7.45 × 10⁻⁸ — consistent with the two-rounding bound of
+   one `f32::EPSILON`, which is what the test asserts. The direction is
+   two-sided: the ulp-neighbours of 0.1 at bit offsets +2 and +4 round
+   down and up respectively, so **no site may lean on an inequality
+   surviving a round trip**.
+2. **At 200% the round trip is exactly the identity**, because the factor
+   is a power of two. A test written only at 200% would therefore assert
+   a stronger property than the type has, and pass a broken 125%.
+3. **The convert-once rule is unobservable at 100% and 200%.** The search
+   found **no** disagreeing pair at 200% at all, whereas at 150% the
+   witness `abs = 10.1`, `parent = 5.7` gives `once = 6.600001` (the
+   correctly-rounded answer, exactly) against `twice = 6.6000013` (one
+   ulp away). This is a second, arithmetic-level instance of F-4's
+   lesson: the scales at which the phase's rules are checkable are
+   125% and 150%, and a round-number scale hides them.
+
+**#5 — carry-forward.** The invariant: **the rounding contract is now
+enforced by the API shape, and only for callers that use it.**
+`extent_to_physical` cannot be given a position, `relative_offset_to_physical`
+cannot be reached without both absolute DIP positions, and
+`surface_pixels` returns a count rather than a length. A later task that
+writes `dip * scale.factor()` by hand at a seam, or that reconstructs a
+pixel count as an `f32`, defeats all three silently and only at
+non-dyadic scales. *Re-trigger criteria:* (a) any new conversion site
+that reaches for `factor()` instead of a named operation — legitimate
+only for T6's `96 × s`; (b) an integer-pixel-snapping policy, which
+DD-002 §Forward-compat 5 says extends this type's rounding contract
+rather than the space definition; (c) a scale-dependent `measure`, which
+is already recorded against T6/T7. Recorded here rather than in
+[handoff.md](./handoff.md): the consumers are all in-phase and
+[plan.md](./plan.md) §T5 / §T6 already carry the obligation. T12
+re-evaluates whether (b) belongs in the phase handoff.
+
+**End-gate items from [plan.md](./plan.md) §T2.**
+
+- *Tests named per contract* — the mapping table above.
+- *`cargo test` green* — `cargo build -p wasamo-runtime` then
+  `cargo build --workspace` then `cargo test --workspace` (the F-5
+  ordering, used as a matter of course rather than after a failure):
+  **32 test binaries, 0 failures**, the runtime lib going 446 → 457 as
+  the 11 new tests land. `cargo fmt --all -- --check` and
+  `git diff --check` clean. Per the owner-agreed downgrade this is a
+  **regression check** for the rest of the phase — but T2 is the stated
+  exception where the task's own tests carry real information, and the
+  mutation table above is why that claim is checkable rather than
+  asserted.
+- *No production call site introduced* — audited by
+  `Select-String` for `dip_scale|DipScale` over `wasamo-runtime/src`,
+  `wasamo-runtime/tests`, `wasamo-runtime/tests/common`, `wasamoc/src`,
+  `wasamo-dll`, and `bindings/rust/src`, excluding the module itself.
+  **One hit: `lib.rs:6: mod dip_scale;`** — the declaration without which
+  the module would not compile at all. No warning is emitted for the
+  unreachable surface because of the forward-pointer allow, which names
+  T4 / T5 / T6 as the tasks that remove it.
+
