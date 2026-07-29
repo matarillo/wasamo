@@ -842,18 +842,16 @@ test.
       it any less deliberately. The same run also measured that atlas
       packing is **deterministic across launches**, which is what
       disqualified it as the explanation for F-33's frame drift.
-- [ ] **Resolve the brush mapping against DD-M4-P1-006's status before
-      editing it.** The Visual's size is the exact `f32` physical
+- [ ] **Implement DD-M4-P1-006's accepted brush mapping.** The Visual's
+      size is the exact `f32` physical
       `dip × s` and the surface is `ceil(dip × s)` pixels, so the default
       `Uniform` / `0.5` mapping resamples the larger surface and may
-      offset it. DD-M4-P1-006 remains `Proposed`: its current candidate is
-      `CompositionStretch::None` with alignment ratios `0.0`, which would
-      keep unit scale and align the surface origin relative to the Visual;
-      storage outside the exact Visual extent would be clipped on the
-      right and bottom, not shown as padding. If the record is Accepted,
-      implement that mapping at every `CreateSurfaceBrushWithSurface`
-      site. If it is revised or still Proposed, do not silently implement
-      an unaccepted substitute.
+      offset it. DD-M4-P1-006 requires
+      `CompositionStretch::None` with alignment ratios `0.0`, which keeps
+      unit scale and aligns the surface origin relative to the Visual;
+      storage outside the exact Visual extent is clipped on the right and
+      bottom, not shown as padding. Set that mapping at every
+      `CreateSurfaceBrushWithSurface` site.
       **Measure the accepted mapping with controls.** Use a
       non-proportional surface/Visual pair and compare it with the default
       so resampling and centring displacement are observable; exercise
@@ -1012,11 +1010,11 @@ the exact `f32` extent — **the two stop being the same size and the
 brush's mapping between them starts to matter.**
 That mapping is what
 [DD-M4-P1-006](../decisions/dd-m4-p1-006-surface-brush-mapping-is-set-not-inherited.md)
-proposes to fix (`Status: Proposed`): `CompositionStretch::None` with
-alignment ratios `0.0`, because the default is `Uniform` with `0.5` and
-would scale the larger surface down and centre it. **T6 sets those only
-if the record is Accepted, and confirms the accepted mapping by
-measurement.** The candidate values come from Microsoft's documentation,
+fixes (`Status: Accepted`): `CompositionStretch::None` with alignment
+ratios `0.0`, because the default is `Uniform` with `0.5` and would scale
+the larger surface down and centre it. **T6 sets those values and confirms
+the accepted mapping by measurement.** The values come from Microsoft's
+documentation,
 not from a measurement in this repository, and this phase's rule is that
 a mechanism written into an accepted record is measured.
 Two related non-signals, so the gate is not over-read: **removing
@@ -1571,15 +1569,13 @@ recorded; any finding triaged to a task or to
       Crispness follows from those two numbers agreeing, not from a
       filtering mode" — while the same section allocates `ceil(dip × s)`,
       which is what stops them agreeing. The requirement is right and the
-      explanation is not; the final brush mapping must be resolved rather
-      than inherited. **The known-false claim is closed; the replacement
-      is not**:
+      explanation is not; the brush mapping must be set rather than
+      inherited. **Closed by accepted design**:
       [DD-M4-P1-006](../decisions/dd-m4-p1-006-surface-brush-mapping-is-set-not-inherited.md)
-      (`Proposed`) would supersede the default-mapping and transparent-
-      padding mechanism sentences on acceptance, and **§12.4 now labels
-      `None` / `0.0` as a candidate rather than accepted design**. T12
-      reconciles the spec with the record's then-current status instead of
-      re-deriving the rejected default. (iv) **Added after the
+      (`Accepted`) supersedes the default-mapping and transparent-padding
+      mechanism sentences, and **§12.4 now states `None` / `0.0` as the
+      accepted design**. T12 re-verifies the spec against the landed T6
+      implementation instead of re-deriving the rejected default. (iv) **Added after the
       T5 independent review** (finding R-1):
       [architecture.md §12.3](../../../../docs/architecture.md#coordinate-spaces)
       states the inbound client-extent seam as "at window attach and on

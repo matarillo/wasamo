@@ -1,13 +1,13 @@
-# DD-M4-P1-006 — The surface brush's texel mapping would be set, not inherited
+# DD-M4-P1-006 — The surface brush's texel mapping is set, not inherited
 
-**Status:** Proposed
+**Status:** Accepted
 **Phase:** M4-Phase 1
-**Proposes to supersede:** [DD-M4-P1-002](./dd-m4-p1-002-coordinate-space-and-conversion-boundary.md)
+**Supersedes in part:** [DD-M4-P1-002](./dd-m4-p1-002-coordinate-space-and-conversion-boundary.md)
 §The rasterization surface step 4's mechanism clause **and** §The
 rounding contract for surfaces' "transparent padding" mechanism
-sentence, on acceptance of this record. The one-to-one scale requirement,
+sentence. The one-to-one scale requirement,
 the `ceil` allocation rule, the exact-`f32` Visual extent, and every other
-part of DD-M4-P1-002 would stand.
+part of DD-M4-P1-002 stand.
 
 ## Context
 
@@ -32,10 +32,9 @@ horizontal and vertical alignment ratios of `0.5`, so a surface larger
 than its Visual is **scaled down and centred**, not padded. Implementing
 step 4 as written therefore loses the property the step is named for.
 
-## Proposed decision
+## Decision
 
-**The runtime would set the surface brush's stretch and alignment
-explicitly:
+**The runtime sets the surface brush's stretch and alignment explicitly:
 `CompositionStretch::None`, with `HorizontalAlignmentRatio` and
 `VerticalAlignmentRatio` both `0.0`.**
 
@@ -54,7 +53,7 @@ device coordinate under the phase's no-pixel-snapping contract. This
 record neither introduces `SnapToPixels` nor claims that `None` alone
 eliminates interpolation caused by any other transform.
 
-**What T6 would confirm, if this record is accepted, is clipping
+**What T6 must confirm is clipping
 behaviour rather than padding.** The expected mapping is: no stretch,
 no centring displacement, and the surface storage beyond the exact
 Visual extent clipped on the right and bottom. The control must exercise
@@ -77,7 +76,7 @@ is observed, T6 records and escalates it rather than silently growing the
 Visual: admitting overhang changes DD-M4-P1-002 §The rounding contract
 for surfaces and needs a separate accepted revision.
 
-Under this proposal, nothing else would change: allocate at
+Under this decision, nothing else changes: allocate at
 `ceil(dip × s)` pixels, set the D2D context DPI to the window's DPI,
 divide the atlas origin, and keep the Visual at the exact `f32` physical
 extent.
@@ -96,19 +95,19 @@ extent.
   satisfies the texel mapping and still displaces every glyph by up to
   half a pixel — the same failure as an unconverted atlas origin, reached
   through a different door.
-- **Grow the Visual to the `ceil`-sized surface.** Rejected for this
-  proposal: it would show all surface storage, but changes the accepted
+- **Grow the Visual to the `ceil`-sized surface.** Rejected: it would show
+  all surface storage, but changes the accepted
   exact-`f32` projection and the phase's no-pixel-snapping contract. A
   measured overhang defect is the trigger to reconsider that contract,
   not authority to change it inside T6.
 
 ## Verification
 
-The candidate values are read from Microsoft's `CompositionStretch`,
+The decision values are read from Microsoft's `CompositionStretch`,
 `CompositionSurfaceBrush.HorizontalAlignmentRatio` and
-`VerticalAlignmentRatio` documentation. If this record is accepted, T6
-would confirm them by measurement — the first task at which the
-difference is observable. The positive control compares the candidate
+`VerticalAlignmentRatio` documentation. T6 must confirm them by
+measurement — the first task at which the difference is observable. The
+positive control compares the accepted mapping
 against the default on a non-proportional size pair, and observes both an
 integer and a fractional device-space Visual origin so unit scale is not
 over-read as screen-pixel alignment. The phase's standing rule is that a
@@ -116,18 +115,15 @@ mechanism written into a record is measured rather than cited.
 
 ## Consequences
 
-- If accepted before **T6**, T6 would set both properties at every
-  `CreateSurfaceBrushWithSurface` site and measure the result. If revised
-  or still Proposed, T6 must implement no unaccepted substitute. The
-  runtime calls `SetStretch` nowhere today, so the candidate would be an
-  addition rather than a change.
+- **T6** sets both properties at every `CreateSurfaceBrushWithSurface`
+  site and measures the result. The runtime calls `SetStretch` nowhere
+  today, so the mapping is an addition rather than a change.
 - **[architecture.md §12.4](../../../../docs/architecture.md#coordinate-spaces)**
-  no longer claims that the default brush provides one-to-one mapping;
-  while this record is Proposed it identifies `None` / `0.0` as the
-  candidate rather than as an accepted contract.
-- No DD besides the two named DD-M4-P1-002 mechanism sentences and no
-  shipped code would be affected. The runtime has no `ceil`-sized
-  surface yet; T6 is the task planned to introduce the first.
+  states `None` / `0.0` as the accepted contract rather than claiming
+  that the default brush provides one-to-one mapping.
+- No DD besides the two named DD-M4-P1-002 mechanism sentences is
+  affected, and acceptance changes no shipped code. The runtime has no
+  `ceil`-sized surface yet; T6 is the task planned to introduce the first.
 
 ## Revision history
 
@@ -138,3 +134,6 @@ mechanism written into a record is measured rather than cited.
   "transparent padding" sentence, separated integer allocation from
   glyph overhang, and bounded the unit-scale claim away from absolute
   screen-pixel alignment.
+- 2026-07-29: Accepted following owner approval after critical review.
+  The recommendation, rejected options, supersede scope, T6 measurement
+  obligation, and separate overhang residual stand as reviewed.

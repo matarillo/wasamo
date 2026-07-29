@@ -230,17 +230,16 @@ Coordinates being right does not make text crisp. What does:
    maps one texel to one device pixel. Crispness follows from the two
    numbers agreeing, not from a filtering mode.
 
-   **Supersede proposed (2026-07-29, M4-Phase 1 T5, by
+   **Superseded in part (2026-07-29, M4-Phase 1 T5, by
    [DD-M4-P1-006](./dd-m4-p1-006-surface-brush-mapping-is-set-not-inherited.md),
-   `Status: Proposed` — the mechanism clause and the rounding section's
-   "transparent padding" mechanism sentence. This block becomes
-   "Superseded in part" when that record is Accepted.)** The step's
+   `Status: Accepted` — the mechanism clause and the rounding section's
+   "transparent padding" mechanism sentence.)** The step's
    *requirement*, unit scale between the surface and Visual, stands. The
    sentence explaining *how* does not: §The rounding contract for surfaces
    allocates **`ceil(dip × s)`** pixels, which is what stops the surface
    and the Visual being the same size, and `CompositionSurfaceBrush`
    defaults to `Uniform` with `0.5` alignment ratios — it scales the
-   larger surface down and centres it. The proposed successor would set
+   larger surface down and centres it. The successor sets
    `CompositionStretch::None` with alignment ratios `0.0`; it does not
    claim absolute screen-pixel alignment for a fractionally positioned
    Visual.
@@ -269,12 +268,12 @@ number must become an integer count. The contract:
 - The **visual's** size stays the exact `f32` physical value. The
   at-most-one-pixel excess in the surface is transparent padding.
 
-  **Supersede proposed (2026-07-29, M4-Phase 1 T5, by
+  **Superseded in part (2026-07-29, M4-Phase 1 T5, by
   [DD-M4-P1-006](./dd-m4-p1-006-surface-brush-mapping-is-set-not-inherited.md),
-  `Status: Proposed`; effective only if that record is Accepted.)** The
+  `Status: Accepted`.)** The
   allocation rule remains `ceil`, but "transparent padding" is not the
-  brush mechanism: with the proposed `None` mapping, storage outside the
-  exact Visual extent would be clipped. `ceil` represents a fractional
+  brush mechanism: with the accepted `None` mapping, storage outside the
+  exact Visual extent is clipped. `ceil` represents a fractional
   requested extent with whole texels; the relevant condition is
   non-integer `dip × s`, which can occur at scale 1, not only a
   non-integer scale factor. It does not reserve visible glyph overhang
@@ -573,15 +572,13 @@ All additive; none requires reshaping what this DD ships.
   because the table is written as the gate's audit artifact, so its
   completeness is load-bearing and two known errors in it make the table
   unusable without a companion document.
-- 2026-07-29: **A supersede of §The rasterization surface step 4's
-  mechanism clause and §The rounding contract for surfaces' "transparent
-  padding" mechanism sentence is proposed** in
+- 2026-07-29: **§The rasterization surface step 4's mechanism clause and
+  §The rounding contract for surfaces' "transparent padding" mechanism
+  sentence are superseded in part** by
   [DD-M4-P1-006](./dd-m4-p1-006-surface-brush-mapping-is-set-not-inherited.md)
-  (`Status: Proposed`): the clause relies on the default surface brush,
+  (`Status: Accepted`): the clause relies on the default surface brush,
   which is `Uniform` with `0.5` alignment ratios and therefore scales and
-  centres a `ceil`-sized surface. The step's requirement — one texel to
-  unit scale between the surface and Visual — is unchanged and is what
-  the proposed successor preserves. This record's `Status` stays
-  `Accepted`; two mechanism sentences are proposed for replacement, not
-  the record, and no replacement takes effect unless DD-M4-P1-006 is
-  Accepted.
+  centres a `ceil`-sized surface. The step's requirement — unit scale
+  between the surface and Visual — is unchanged and is what
+  the successor preserves. This record's `Status` stays `Accepted`; two
+  mechanism sentences are replaced, not the record.
