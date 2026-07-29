@@ -28,8 +28,13 @@
 # the same advance width, the Button never changes size, and an implementation
 # that wrote a stale width into `label_size` would pass every frame in the set
 # (independent review finding R-4).
+# `-Tag` names the output directory under this folder. T3's own record is the
+# pair `before` / `after`; the parameter is left free-form because T5 re-runs
+# the same six frames as a **regression** check against its own freshly
+# captured baseline (`t5-before` / `t5-after`) rather than against a set
+# photographed on another day under another desktop state.
 param(
-  [Parameter(Mandatory = $true)][ValidateSet("before", "after")][string]$Tag
+  [Parameter(Mandatory = $true)][string]$Tag
 )
 
 $ErrorActionPreference = "Stop"

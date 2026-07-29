@@ -230,6 +230,20 @@ Coordinates being right does not make text crisp. What does:
    maps one texel to one device pixel. Crispness follows from the two
    numbers agreeing, not from a filtering mode.
 
+   **Superseded in part (2026-07-29, M4-Phase 1 T5, by
+   [DD-M4-P1-006](./dd-m4-p1-006-surface-brush-mapping-is-set-not-inherited.md),
+   `Status: Accepted` — the mechanism clause and the rounding section's
+   "transparent padding" mechanism sentence.)** The step's
+   *requirement*, unit scale between the surface and Visual, stands. The
+   sentence explaining *how* does not: §The rounding contract for surfaces
+   allocates **`ceil(dip × s)`** pixels, which is what stops the surface
+   and the Visual being the same size, and `CompositionSurfaceBrush`
+   defaults to `Uniform` with `0.5` alignment ratios — it scales the
+   larger surface down and centres it. The successor sets
+   `CompositionStretch::None` with alignment ratios `0.0`; it does not
+   claim absolute screen-pixel alignment for a fractionally positioned
+   Visual.
+
 **Alternative considered:** leave the D2D context at 96 DPI and apply a
 scale transform to it instead (`SetTransform`). D2D composes the world
 transform into glyph rasterization, so this is also correct, and it
@@ -253,6 +267,17 @@ number must become an integer count. The contract:
   non-integer scales and reads as "the last letter is cut off."
 - The **visual's** size stays the exact `f32` physical value. The
   at-most-one-pixel excess in the surface is transparent padding.
+
+  **Superseded in part (2026-07-29, M4-Phase 1 T5, by
+  [DD-M4-P1-006](./dd-m4-p1-006-surface-brush-mapping-is-set-not-inherited.md),
+  `Status: Accepted`.)** The
+  allocation rule remains `ceil`, but "transparent padding" is not the
+  brush mechanism: with the accepted `None` mapping, storage outside the
+  exact Visual extent is clipped. `ceil` represents a fractional
+  requested extent with whole texels; the relevant condition is
+  non-integer `dip × s`, which can occur at scale 1, not only a
+  non-integer scale factor. It does not reserve visible glyph overhang
+  outside the DirectWrite layout metrics.
 - No integer snapping is introduced anywhere else. The "no pixel
   snapping" policy already stated in
   [docs/dsl_spec.md](../../../../docs/dsl_spec.md) and
@@ -352,6 +377,54 @@ paths, expanded with the two construction-time writes found while
 drafting. The implementation audits against this table, not from
 memory; "no coordinate enters or leaves outside these rows" is the
 claim being checked.
+
+**Qualified in part (2026-07-29, M4-Phase 1 T5; owner-approved).** The
+paragraph above claims completeness for the rows, and **two of the rows
+are wrong**. Both were found by T1 reading the landing files end to end,
+and both were recorded in
+[implementation/log.md](../implementation/log.md) rather than here — the
+dated-annotation mechanism this block uses was not established in the set
+until T4.
+
+- **Row 2 names one site and there are two.** `emit::flush_layout` — the
+  reactive drain's layout phase, which runs after **every size-affecting
+  property write** — performs the same `GetClientRect` → layout
+  conversion as `set_root`. A reader converting only the named site
+  leaves the runtime's most frequently taken layout path unconverted.
+  T5 landed both; the second is audited as row "2b" (finding F-1).
+- **Row 12 names a site that does not exist and omits one that does.**
+  `WidgetNode::box_` installs no clip; the third zero-inset
+  `CreateInsetClip` is in `WidgetNode::zstack`. The row's *conclusion* —
+  all insets are zero, and zero is scale-invariant — is unaffected, but a
+  reader auditing "Box" verifies nothing while never looking at ZStack
+  (finding F-2). Re-verified against the source at T3 and again at T5:
+  `CreateInsetClip` appears in `scroll_view`, `grid` and `zstack`, and
+  nowhere else.
+
+**What is qualified is the completeness claim, not the decision.** Option
+C3 stands, the seam *classes* the rows describe are right, and the phase
+closed against the corrected set — T5's close gate enumerates all
+thirteen rows with the landed source location and the verification for
+each. Nothing shipped wrong: every inbound and outbound site converts.
+
+**The lesson the two errors carry is about the artifact.** What caught
+them was the practice this paragraph says the table replaces — reading
+the source end to end — and following the instruction literally would
+have passed both. The table is a **classification whose instances must
+still be enumerated from the source**, and
+[constraints §4](../requirements/constraints.md), which it was derived
+from, says exactly that: it records the paths as this phase's *area* and
+states that "no path outside the list" is closed by the implementation
+gate's call-site audit. **The stronger claim was introduced here**, over
+an inventory its own source had labelled provisional. T5's audit was
+therefore assembled from an enumeration of the coordinate-carrying **API
+surface**, written before any edit, rather than from these rows.
+
+Surfaced as T5 independent review finding R-1 — the closure was reached
+against a fourteen-site list while the contract stayed at thirteen.
+Evidence: [implementation/log.md](../implementation/log.md) §T1 (F-1,
+F-2) and §T5 (the pre-registered API enumeration and the close-gate audit
+table).
 
 | # | Site | Direction | Today | After |
 |---|---|---|---|---|
@@ -487,3 +560,25 @@ All additive; none requires reshaping what this DD ships.
 - 2026-07-28: Initial draft (Status: Proposed).
 - 2026-07-28: Accepted flip following owner approval of the phase slate; no
   change requested to the recommendations or their comparisons.
+- 2026-07-29: **One dated annotation added in place, body unchanged**, on
+  owner approval after the M4-Phase 1 T5 independent review (finding
+  R-1). §The conversion sites' completeness claim is **qualified**: row 2
+  names one of two `GetClientRect` → layout sites (`emit::flush_layout`
+  is the other, T1 finding F-1) and row 12 names `Box`, which installs no
+  clip, while omitting `ZStack`, which does (T1 finding F-2). `Status`
+  stays `Accepted` and no decision changes — option C3, the seam classes
+  and every row's conclusion stand, and the phase closed against the
+  corrected set. Recorded here rather than left in the implementation log
+  because the table is written as the gate's audit artifact, so its
+  completeness is load-bearing and two known errors in it make the table
+  unusable without a companion document.
+- 2026-07-29: **§The rasterization surface step 4's mechanism clause and
+  §The rounding contract for surfaces' "transparent padding" mechanism
+  sentence are superseded in part** by
+  [DD-M4-P1-006](./dd-m4-p1-006-surface-brush-mapping-is-set-not-inherited.md)
+  (`Status: Accepted`): the clause relies on the default surface brush,
+  which is `Uniform` with `0.5` alignment ratios and therefore scales and
+  centres a `ceil`-sized surface. The step's requirement — unit scale
+  between the surface and Visual — is unchanged and is what
+  the successor preserves. This record's `Status` stays `Accepted`; two
+  mechanism sentences are replaced, not the record.

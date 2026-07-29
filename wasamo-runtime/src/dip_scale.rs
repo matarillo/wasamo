@@ -3,12 +3,12 @@
 // dependency — so the rounding contract lives in one unit-testable place
 // instead of being re-derived at each conversion seam.
 //
-// `WindowState` holds the authoritative value and `window::create` realises the
-// DIP window size through `window_size_to_physical` (T4). The remaining
-// operations are still unreached: the conversion seams call them at T5, and the
-// text-surface allocation calls `surface_pixels` at T6. The module-level allow
-// below is that forward-pointer and goes away as those tasks land.
-#![allow(dead_code)]
+// `WindowState` holds the authoritative value, `window::create` realises the
+// DIP window size through `window_size_to_physical` (T4), and the conversion
+// seams call the remaining operations (T5). The one operation still unreached
+// is `surface_pixels`, which T6's text-surface allocation calls; the
+// module-level `allow(dead_code)` that used to stand here is narrowed to that
+// pair, so a genuinely dead item added later is reported rather than absorbed.
 
 /// The DPI at which one DIP is one physical pixel — the "100%" reference, and
 /// the value the OS reports unconditionally to a process that has declared no
@@ -156,6 +156,7 @@ impl DipScale {
     /// or non-finite input therefore yields one pixel rather than zero, and an
     /// infinite one yields `u32::MAX`, which the WinRT allocation rejects as it
     /// should rather than silently producing a wrong-sized surface.
+    #[allow(dead_code)] // T6's text-surface allocation is the first caller.
     pub fn surface_pixels(self, dip: (f32, f32)) -> (u32, u32) {
         (
             Self::pixel_count(self.to_physical(dip.0)),
@@ -163,6 +164,7 @@ impl DipScale {
         )
     }
 
+    #[allow(dead_code)] // reachable only through `surface_pixels`, above.
     fn pixel_count(physical: f32) -> u32 {
         (physical.ceil() as u32).max(1)
     }

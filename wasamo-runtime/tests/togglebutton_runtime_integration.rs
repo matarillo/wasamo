@@ -195,7 +195,7 @@ fn togglebutton_alpha_exclusion_click_leaves_exactly_one_checked() {
 
             let albums = built.root.children[1].as_mut();
             pin_hit_rect(albums);
-            albums.hit_test_click(60, 20);
+            albums.hit_test_click(60.0, 20.0);
 
             assert_eq!(
                 checked_children(&built.root),
@@ -227,7 +227,7 @@ fn disabled_togglebutton_suppresses_click_like_button() {
             assert_eq!(built.root.__togglebutton_checked_for_test(), Some(false));
 
             pin_hit_rect(&built.root);
-            built.root.hit_test_click(60, 20);
+            built.root.hit_test_click(60.0, 20.0);
 
             assert_eq!(
                 built.root.__togglebutton_checked_for_test(),

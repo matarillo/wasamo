@@ -42,6 +42,13 @@ added to this list at T4** — it was omitted at planning time on the
 assumption that a task inert until T9 has nothing to show, and what it
 turned out to have is the one artifact that separates a correct
 create-then-correct path from three wrong ones.
+**T5's row was extended at T5**, for the same reason: "the call-site audit
+table" is true and incomplete. T5 also had a *discriminating* observation
+available to it, because this plan had already predicted the number the
+task would move — 9 tiles per row to 7 — and a throwaway declaration makes
+that number readable at 125% without waiting for T9. An audit table plus a
+predicted measurement is a stronger gate than an audit table, and the
+measurement cost one build.
 
 **T2's entry carried a missing condition, supplied at T2 (finding
 F-11).** Every other entry above is an artifact checkable against ground
@@ -527,7 +534,33 @@ nowhere else. Every conversion is the identity at `s = 1`, so the
 observable behaviour is unchanged until T9 — which is what makes this
 landable as one reviewed commit rather than a visible regression.
 
-- [ ] **Inbound, client extent** (audit rows 1–2): `wnd_proc`'s `WM_SIZE`
+**Closed 2026-07-29.** Landed as **three code commits**: the seams
+(`67435cd`); separately, the pre-existing `emit::flush_layout` defect
+(`7b23854`), which is a behaviour change and must not ride inside a commit
+whose whole claim is that nothing observable moves; and `a4939dc`, which
+**replaces the readback's divisor** with the traversal root's scale
+(finding R-2). Artifacts in
+[log.md](./log.md) §T5: the pre-registered coordinate-carrying API
+enumeration, the 13-row call-site audit built against it, a 14-row
+side-effect enumeration, the trap-#3 mutator table, the three named
+decisions with their rejected candidates, and two GUI artifacts of
+different kinds. The task produced findings F-32 and F-33 and revisions to
+§Task list, §T6, §T7, §T8, §T10, §T12, the preamble and the handoff.
+
+**The identity claim is measured, not argued.** The six T3 evidence frames
+re-captured on the T5 tree are **byte-identical to the committed T3 set**
+over the client interior — across two days and two builds.
+
+**And for the first time in the phase, a seam was observed working.**
+[plan.md](./plan.md) §T10 predicted that T4's aware-plus-correction state
+would go from **9 tiles per row to 7** once the inbound seam landed. It
+reads 7; removing the inbound division puts it back to 9; and with the
+node cache throwaway-seeded the tree fills the client instead of 1/1.25 of
+it. That last state is what makes the outbound half visible too, and it is
+also the reminder that **T5's shipped state renders at 80% of a 125%
+client** — correct, because T6 owns the walk that writes the cache.
+
+- [x] **Inbound, client extent** (audit rows 1–2): `wnd_proc`'s `WM_SIZE`
       client extent and `set_root`'s `GetClientRect` divided by `s`
       before reaching `run_layout_as_window_root`. **Row 2 covers two
       sites** (T1 finding F-1): `set_root` and
@@ -537,12 +570,12 @@ landable as one reviewed commit rather than a visible regression.
       size-affecting property write.
       Both sites convert through `DipScale::pair_to_dip`, not by
       hand-written division (T2 finding F-15).
-- [ ] **Inbound, pointer** (audit row 3): `WM_MOUSEMOVE` /
+- [x] **Inbound, pointer** (audit row 3): `WM_MOUSEMOVE` /
       `WM_LBUTTONDOWN` / `WM_LBUTTONUP` coordinates divided by `s` at the
       window procedure, so hit-testing and hover run in DIP —
       `pair_to_dip` again; inbound has one form because positions and
       extents alike are a componentwise division there.
-- [ ] **Inbound, readback** (audit row 9): `visual_rect`'s
+- [x] **Inbound, readback** (audit row 9): `visual_rect`'s
       `Visual.Offset` / `Visual.Size` readback divided by `s` alongside
       the pointer. Record honestly in [log.md](./log.md) that the two
       conversions **cancel today** — hit-testing sources its geometry
@@ -562,13 +595,31 @@ landable as one reviewed commit rather than a visible regression.
       the division happens at its two call sites either way; the decision
       is which scale those sites read, and it is recorded rather than
       fallen into.
-- [ ] **Introduce the node-side scale cache**, defaulted to 1 in every
+      **Decided: the traversal root's scale — one divisor for the whole
+      traversal**, landed as `WidgetNode::visual_rect_dip`. The readback is
+      a *parent-relative* value that the traversal accumulates, so the
+      composited absolute position is `Σ(local_dip × scale_i)` while
+      per-node division produces `Σ local_dip`, which matches the pointer's
+      space (`absolute_physical ÷ window_scale`) only if **every** node's
+      scale is the window's. One divisor needs only the **root's** — and
+      the mixture is reachable through F-32's path list, where a node
+      attached to an already-attached tree keeps the constructor identity.
+      The root's cache is what the traversal has, because it holds no
+      window (T1's carrier decision) and the walk starts there.
+      **This is a precondition on the public entry, not an invariant the
+      runtime maintains.** `hit_test_click` / `update_hover` take the
+      divisor from the receiver, so entering on a **subtree** uses that
+      subtree's cache against a pointer divided by the window's, and
+      `togglebutton_runtime_integration.rs` enters that way. `scale` is
+      private, so a caller cannot supply the right divisor even knowingly.
+      Every *production* caller enters on `WindowState::root_widget`.
+- [x] **Introduce the node-side scale cache**, defaulted to 1 in every
       `WidgetNode` constructor — as `DipScale::default()`, which is the
       identity, rather than a hand-written literal (T2 finding F-16). T5
       is its first reader; T6's walk is its only writer, so between T5
       and T6 it is permanently 1 — the same identity world every other
       conversion lands into.
-- [ ] **Record the direct-hosting path as a stated limit** (T3 finding
+- [x] **Record the direct-hosting path as a stated limit** (T3 finding
       F-24). T1's carry-forward wrote the cache's re-trigger as "any
       *future* path that attaches a subtree without running the walk",
       listing M4-Phase 2 and M4-Phase 8. **One such path already ships**:
@@ -582,7 +633,7 @@ landable as one reviewed commit rather than a visible regression.
       an unreached node is simply unconverted — but the limit is stated
       rather than discovered at M4-Phase 8, when a tree really can move
       between differently-scaled windows.
-- [ ] **Fix `emit::flush_layout`'s layout entry, as its own commit**
+- [x] **Fix `emit::flush_layout`'s layout entry, as its own commit**
       (T3 finding F-23; **owner may reassign this item — it is a
       pre-existing defect, not a T5 deliverable**). `window::set_root`
       and the `WM_SIZE` arm call `run_layout_as_window_root`, which
@@ -597,7 +648,16 @@ landable as one reviewed commit rather than a visible regression.
       elsewhere would mean touching the line twice. **Separate commit
       with its own before/after frames** — it is a behaviour change and
       must not ride inside a conversion commit.
-- [ ] **Outbound, Visual geometry** (audit rows 4–6): `sync_visuals`
+      **Landed as `7b23854`, the second commit**, with the before/after
+      pair in [evidence/t5-after/](./evidence/t5-after/) and
+      [evidence/t5-f23-after/](./evidence/t5-f23-after/): the two
+      post-click label-update frames differ by 30,800 of 224,224 pixels —
+      the Grid-stretched Button reappearing — while `labelupdate-initial`
+      (no drain yet) and all three gallery frames (root is not `Shrink`
+      over a `Fill`) are identical. **The item stays reassignable**: it is
+      isolated in one commit precisely so the owner can move it out
+      without touching the conversion work.
+- [x] **Outbound, Visual geometry** (audit rows 4–6): `sync_visuals`
       node writes, the ScrollView intermediate Visual, and the Button /
       ToggleButton label writes relocated by T3 — all multiplied by `s`.
       **Through the named operations, not by hand** (T2 finding F-15):
@@ -608,7 +668,7 @@ landable as one reviewed commit rather than a visible regression.
       test factors would notice. The ScrollView recursion stays entirely
       in DIP (`child_parent_abs` is `(offset.0, offset.1 - applied_y)` in
       DIP); only the Composition writes multiply.
-- [ ] **The offsets are not one case but two** (T3 finding F-19; this
+- [x] **The offsets are not one case but two** (T3 finding F-19; this
       bullet previously said `relative_offset_to_physical(abs,
       parent_abs)` for *every* `SetOffset`). **Only row 4 takes a
       difference** — the node's own write, `computed.offset −
@@ -628,7 +688,18 @@ landable as one reviewed commit rather than a visible regression.
       one rounding — but the choice must be made rather than fallen into,
       because this is precisely where F-15's "reach for `factor()`"
       temptation is strongest.
-- [ ] **Verify the unchanged rows as assertions, not omissions**: row 8
+      **Decided: `to_physical` per component; no already-relative pair
+      operation is added.** The deciding fact is not how the call site
+      reads but what a second operation would cost: the type would then
+      hold two offset-converting operations, one enforcing
+      convert-once-on-the-difference and one not, distinguished only by a
+      name — and the wrong pick at row 4 type-checks, reads plausibly and
+      is the two-rounding form. Reusing `extent_to_physical` was rejected
+      separately, because its documented position-independence property
+      would become a statement about a value that is not an extent. The
+      temptation did not fire: `factor()` still has **exactly one**
+      production call site in the workspace, T4's diagnostic string.
+- [x] **Verify the unchanged rows as assertions, not omissions**: row 8
       (`SetRelativeSizeAdjustment(1, 1)` — a relation between two
       physical quantities), row 10 (`measure` returns DIP — the fact
       that carries "layout stays DIP"), row 11 (`size_sp` is DIP), row
@@ -637,14 +708,26 @@ landable as one reviewed commit rather than a visible regression.
       ScrollView / Grid / Box (T1 finding F-2): `WidgetNode::box_`
       installs no clip, and `WidgetNode::zstack` does. The row's
       conclusion is unaffected; the sites asserted against are not.
-- [ ] **Decide and record the unit of `WindowState`'s six callback
+- [x] **Decide and record the unit of `WindowState`'s six callback
       slots** (T1 finding F-3). `resize_fn` / `mouse_move_fn` /
       `mouse_down_fn` / `mouse_up_fn` are invoked from `wnd_proc` with
       the raw message values, so this task changes their unit as a side
       effect. No ABI or Rust-native function installs them today —
       DD-004's claim is confirmed — but the unit must be stated
       deliberately (DIP, per W1), not inherited from the seam edit.
-- [ ] **Two things T4 left for T5 to pick up, both small and both
+      **Decided: DIP, and the three pointer slots change from `i32` to
+      `f32`.** Stating DIP while keeping `i32` would have delivered a
+      truncated DIP position — physical 50 at 150% is 33.33 — the defect
+      T1 rejected when it chose `f32` for the hit-test entries, arriving
+      through a different door; a unit destroyed by its own type is a
+      note, not a decision. Audited rather than assumed: the six slots
+      have **zero installers** anywhere in the repository, and
+      [architecture.md §7.5](../../../../docs/architecture.md) spells out
+      a signature only for `resize_fn` and `key_down_fn`, both unchanged —
+      so no spec statement is falsified and no spec edit is required.
+      Recorded because "no edit needed" and "did not look" are different
+      facts.
+- [x] **Two things T4 left for T5 to pick up, both small and both
       auditable** (T4 findings, recorded so they are not discovered at
       the edit). `WindowState::scale` landed as `pub(crate)` — which is
       what makes `emit::flush_layout`'s row-2b division reachable without
@@ -653,7 +736,7 @@ landable as one reviewed commit rather than a visible regression.
       because T4 writes it and **T5 is its first reader**. Removing that
       attribute is part of this task; leaving it in place would silence a
       real warning for whatever comes next.
-- [ ] Apply the carrier / threading shape T1 decided (risk R-5): the
+- [x] Apply the carrier / threading shape T1 decided (risk R-5): the
       scale is authoritative on `WindowState` and cached on each
       `WidgetNode`, written only by T6's walk; `sync_visuals`,
       `hit_test_click_inner` and `update_hover_inner` read `self.scale`
@@ -664,6 +747,13 @@ landable as one reviewed commit rather than a visible regression.
       `bool_binding_live_propagation.rs` ×1,
       `iteration_mutation_integration.rs` ×1), which change from `i32`
       to `f32` because the pointer's DIP type is `f32`.
+      **One qualification after the review** (finding R-2): `sync_visuals`
+      reads `self.scale` as written, but the two hit-test traversals read
+      it **once, at the root**, and carry it down as a private parameter —
+      `self.scale` per node is the wrong divisor for an accumulated
+      readback. The **public** signatures are still unchanged, which is
+      what T1's decision was protecting, and the 7 test call sites are
+      unaffected by the correction.
 
 **Start gate:** traps #1 and #2. **End gate:** the **call-site audit
 table** — DD-002's 13 rows, each with its classification, the source
@@ -678,6 +768,16 @@ from what was written cannot falsify what was forgotten, and on T5 that
 matters more than anywhere else in the phase, because completeness *is*
 this task's artifact. Enumerate the coordinate-carrying API surface
 first, then search for all of it.
+**Done at the start gate, before a line was edited** ([log.md](./log.md)
+§T5 §The coordinate-carrying API surface), so the query demonstrably could
+not have been assembled from the diff. The result the diff could not have
+suggested: `MoveWindow`, `AdjustWindowRect*`, `SetWindowPlacement`,
+`DeferWindowPos`, `GetWindowRect`, `ClientToScreen`, `ScreenToClient`,
+`MapWindowPoints`, `GetCursorPos`, `GetSystemMetrics*`,
+`MonitorFromWindow`, `SetScale`, `SetTransformMatrix`, `SetCenterPoint`,
+`SetAnchorPoint`, `SetRelativeOffsetAdjustment` and `SetTransform` appear
+in **no** `.rs` in the repository, and the one `StartAnimation` animates
+`"Color"`.
 **Row 13 is closed at T4, not here** (`create_hwnd`'s `CreateWindowExW`
 width / height): T4's audit records the landed site and its three
 callers, so T5's table cites that rather than re-deriving it. Recorded
@@ -730,9 +830,38 @@ test.
       origin — `to_dip`, one component each. Write it deliberately — the
       offset is frequently `(0, 0)`, so omitting it works most of the
       time and displaces text within its own surface intermittently.
-- [ ] Keep the brush mapping one-to-one: the Visual's size is the exact
-      `f32` physical `dip × s`, the surface is `ceil(dip × s)` pixels,
-      and the at-most-one-pixel excess is transparent padding.
+      **"Frequently `(0, 0)`" is generous, measured** (T5 finding F-33).
+      T5 instrumented `draw_text` to print the offset for every call and
+      ran the gallery: the offsets are `(1,2)`, `(19,2)`, `(68,2)`,
+      `(125,2)`, `(199,2)`, `(255,2)`, `(345,2)`, `(348,2)` … — they march
+      across the atlas and **essentially none is `(0, 0)`**. On a UI with
+      more than a couple of text nodes, omitting the division is wrong
+      almost everywhere rather than intermittently, so the failure this
+      bullet describes as "works most of the time" would in fact be
+      obvious — which is good news for catching it and no reason to write
+      it any less deliberately. The same run also measured that atlas
+      packing is **deterministic across launches**, which is what
+      disqualified it as the explanation for F-33's frame drift.
+- [ ] **Implement DD-M4-P1-006's accepted brush mapping.** The Visual's
+      size is the exact `f32` physical
+      `dip × s` and the surface is `ceil(dip × s)` pixels, so the default
+      `Uniform` / `0.5` mapping resamples the larger surface and may
+      offset it. DD-M4-P1-006 requires
+      `CompositionStretch::None` with alignment ratios `0.0`, which keeps
+      unit scale and aligns the surface origin relative to the Visual;
+      storage outside the exact Visual extent is clipped on the right and
+      bottom, not shown as padding. Set that mapping at every
+      `CreateSurfaceBrushWithSurface` site.
+      **Measure the accepted mapping with controls.** Use a
+      non-proportional surface/Visual pair and compare it with the default
+      so resampling and centring displacement are observable; exercise
+      both an integer and a fractional device-space Visual origin so unit
+      scale is not mistaken for screen-pixel alignment. `ceil` represents
+      a fractional requested extent with whole texels; it does not reserve
+      visible glyph overhang outside `DWRITE_TEXT_METRICS`. A visible
+      overhang regression may be recorded here, but changing the Visual's
+      bounds requires an accepted revision to DD-M4-P1-002 rather than an
+      ad-hoc T6 fix.
 - [ ] The **re-rasterization walk**: surfaces are built at scale 1 during
       construction (before the tree is attached to a window) and brought
       to the window's scale by a walk run at attach. Re-creates each
@@ -743,6 +872,23 @@ test.
       layout and from T7's handler; it writes the node-side scale cache
       T5 introduced, then rebuilds `WidgetData::Text { content, style }`
       and `ButtonData`'s `label_text` / `label_style` surfaces.
+      **"After the first layout" is wrong, and it is wrong in a way T5
+      photographed** (T5 finding F-34). `sync_visuals` multiplies by
+      **`self.scale`, the node cache**, and `run_layout_as_window_root` —
+      `set_root`'s only layout pass — calls it. So a walk that runs
+      afterwards updates the cache *after* the only pass that reads it,
+      rebuilds the surfaces correctly, writes no geometry (rightly), and
+      leaves the Visual tree at the identity projection: **a correct DIP
+      layout drawn at 1/s in the corner of the client area.** That is
+      exactly T5's P1 capture, which T5's own record calls "correct for T5
+      alone because T6 owns the walk" — true of T5 and not true of T6 as
+      specified here. **T6 decides** between running the whole walk before
+      the first layout and splitting it so only the cache write precedes
+      layout; the walk depends on no layout result either way, since it
+      rebuilds from retained state and `measure` is scale-invariant
+      (row 10). What it must **not** do is give the walk a geometry write
+      — that breaks T3's one-pass invariant and with it the completeness
+      of the T5 audit.
       **The walk reads `ButtonData.label_size` rather than re-measuring**
       (T3 finding F-20): T3 retained the measured extent, and `measure`
       is DIP and scale-invariant (row 10), so a re-measure inside the
@@ -760,11 +906,49 @@ test.
       rasterized at scale 1. Same stated limit as T5's, and R-1's
       crispness claim is bounded by it: it holds for widgets the window
       owns as content.
+      **The cost of a missed walk is now the rendering half only** (T5
+      independent review finding R-2). Before T5's correction an
+      unwalked node was rasterized at the identity **and** hit-tested at
+      coordinates it is not drawn at, because the readback was divided by
+      each node's own cache; the traversal now divides by one scale, so a
+      mis-scaled node is at least hit-testable where it actually is.
+      Recorded because it *narrows* what T6 must guarantee — the
+      remaining consequence is blurred, wrongly-sized rendering, not a
+      silent input mismatch.
+      **Decide the walk's reach, because two callers are not the whole
+      set** (T5 finding F-32). T5 ran trap #3 as an enumeration of every
+      mutator of `WindowState::scale` and every path that attaches a node,
+      and it surfaced two classes this bullet does not name — both
+      shipped, neither future: **`WidgetNode::append_child` /
+      `insert_child` / `replace_child` on an already-attached tree**, and
+      **the IR loader's conditional and `for` mutation sites**. Each puts
+      a freshly constructed node — holding `DipScale::default()` and a
+      scale-1 text surface — under a window whose scale is not 1, and each
+      calls `mark_layout_dirty_for`, which schedules layout and not a
+      scale walk. So a tab switch or a list append at 125% would render
+      its new widgets at the identity beside correctly scaled siblings.
+      T6 either covers them or records the omission as a stated limit;
+      what it must not do is inherit "two callers" as the answer.
 - [ ] Thread the scale into `draw_text`'s five call sites. Note the
       borrow order T1 hit: `update_button_label` must read the node's
       scale **before** `self.button_data_mut()`, which borrows all of
       `self`; `update_text_content` / `update_text_style` destructure
       `self.data` directly and need no such care.
+      **The signature being threaded into is public, and the type is
+      not** (T5 finding F-35). `TextRenderer::draw_text` is `pub` on a
+      type [`lib.rs`](../../../../wasamo-runtime/src/lib.rs)
+      `pub use`-exports beside a public `get_text_renderer()`, so this is
+      a Rust-native public change in the same class as T5's callback
+      slots — and `DipScale` is crate-private, so it cannot appear there
+      without making the type public. Audited: `draw_text` has **no
+      caller outside `widget.rs`** in the repository, so the change is
+      free today; the 26 `get_text_renderer()` test sites all hand the
+      renderer to a constructor rather than drawing with it. **T6 decides
+      what crosses the boundary**, and the options differ: a `u32` DPI
+      keeps `DipScale` internal and hands the callee the value D2D wants
+      (T4's carrier reversal makes `96 × s` exactly the DPI); an `f32`
+      factor is the `factor()` reach F-15 names; a public `DipScale`
+      ships a scale type on the surface DD-004 declined.
 - [ ] Confirm re-rasterization does **not** change any node's
       `SizeConstraint::Fixed(w, h)` — `measure` is DIP and unaffected by
       scale — so it cannot invalidate layout. This is the property T7
@@ -782,7 +966,75 @@ unchanged at 100% — **captured after `cargo build --release
 --workspace`, never after a host-package build** (T3 finding F-21: a
 host build relinks `wasamo.dll` from a **stale uplifted rlib**, so the
 DLL carries a fresh timestamp and old object code, and the frame
-silently shows the previous runtime). Full independent review before
+silently shows the previous runtime).
+**"Unchanged" needs a baseline, and one capture is not one** (T5 finding
+F-33). Measured on an unmodified tree: three captures inside one process
+are bit-identical and two captures from different launches in the same
+session are bit-identical, but **the first launch of a session was an
+outlier** by up to 149 of 827,904 pixels, and a settled capture differed
+from the committed set of the previous day by 25. So **one capture is not
+a baseline and a committed frame set is not one either**; re-capture, and
+agree multiple captures on each side.
+**What the residual is, measured.** T5 classified the differing pixels: in
+both same-code pairs **every one was a text pixel and none flipped between
+background and covered**, so the coverage mask was identical and only the
+intensity of already-covered pixels moved, bounded at **13 per channel**.
+
+**The max per-channel delta is asymmetric evidence and does not classify.**
+A **large** delta proves only that the difference is **outside the drift
+bound this phase measured** — not what moved, since an intensity-only
+defect can exceed the bound and the drift's own mechanism is unidentified.
+A **small** delta proves nothing either, for three reasons that matter
+here: a rasterization defect changes intensity **without** moving
+geometry, and **a wrong D2D context DPI is precisely that — this task's
+defining failure would read as drift**; a sub-pixel positional error need
+not flip any pixel between covered and uncovered; and contrast belongs to
+the edge rather than to the change, so a geometry move between two near
+colours gives a small delta.
+[evidence/compare-frames.ps1](./evidence/compare-frames.ps1) therefore
+**exits non-zero on any difference by default** and reports the delta as
+information; `-AllowDrift` opts into treating a small-delta difference as
+a pass, which is a judgement to record rather than a default to inherit.
+The threshold is a measurement on this machine, not a constant. **The
+mechanism behind the drift is still unidentified** — atlas packing was
+instrumented and ruled out — so a difference this gate meets is a thing to
+explain, not a thing to clear.
+
+**This gate reaches one third of what T6 does** (finding F-36). At
+`s = 1` the D2D context DPI becomes `96 × 1` and the atlas origin division
+becomes `÷ 1`, so **both changes that buy crispness are no-ops**. The
+`ceil` allocation is not: the gallery's measured surfaces are
+`15.81 × 18.62`, `46.57 × 18.62`, `72.03 × 18.62` …, every one
+non-integer, so the surface changes size at 100% while the Visual keeps
+the exact `f32` extent — **the two stop being the same size and the
+brush's mapping between them starts to matter.**
+That mapping is what
+[DD-M4-P1-006](../decisions/dd-m4-p1-006-surface-brush-mapping-is-set-not-inherited.md)
+fixes (`Status: Accepted`): `CompositionStretch::None` with alignment
+ratios `0.0`, because the default is `Uniform` with `0.5` and would scale
+the larger surface down and centre it. **T6 sets those values and confirms
+the accepted mapping by measurement.** The values come from Microsoft's
+documentation,
+not from a measurement in this repository, and this phase's rule is that
+a mechanism written into an accepted record is measured.
+Two related non-signals, so the gate is not over-read: **removing
+`draw_text`'s `width.max(1.0)`** produces no independent visible
+difference, because `surface_pixels` already applies the one-pixel floor;
+and **omitting the walk entirely** renders the same as the constructor's
+scale-1 surfaces at 100%. So the gate reaches the allocation and its
+brush, and certifies nothing else. That is F-31's shape a second time: a
+gate
+that passes while the deliverable is absent, because the deliverable is
+unreachable at the scale the gate runs at.
+**T5 demonstrated the technique that closes it, at a cost of one line.** A
+throwaway `SetProcessDpiAwarenessContext(PMv2)` in `runtime::init()`,
+reverted before close, makes the scaled path observable without waiting
+for T9; T5 used it for the 9 → 7 tile control, and its **P2** capture in
+[evidence/t5-probe/](./evidence/t5-probe/) is already T6's before-picture
+— correct geometry at 125% with visibly soft glyphs, which is R-1's
+premise rendered rather than argued. Not mandated. But "the frame at 100%
+is unchanged" is not evidence that text is crisp, and this is the task
+where that distinction is the whole point. Full independent review before
 merge.
 
 ---
@@ -796,6 +1048,34 @@ merge.
       (3) the nested synchronous `WM_SIZE` re-runs layout through T5's
       inbound seam; (4) re-rasterize text surfaces through T6's walk;
       (5) return `LRESULT(0)`.
+      **Step 4 is in the wrong place, for the same reason T6's walk is**
+      (T5 finding F-34). Step 3's nested `WM_SIZE` runs
+      `run_layout_as_window_root`, which calls `sync_visuals`, which
+      multiplies by the **node** caches — and step 4 is what writes them.
+      So the re-layout projects with the previous scale and the walk then
+      fixes only the rasterization.
+      **Whether DD-003 needs a note, a successor, or nothing is not
+      settled here.** Reading its step 1 "update *the cached scale*" as
+      covering the per-node caches T1 later introduced is not supported by
+      the text: DD-003 names `WindowState`'s field explicitly and chose
+      that field as the storage. **The route depends on the shape T6 and
+      T7 choose**:
+      if only the cache *write* moves into step 1 and the fallible surface
+      rebuild stays at step 4, a dated annotation may cover it; if the
+      whole walk moves, the fixed order itself changes and that is a
+      successor. Decide the shape first, then the record — and the record
+      is an owner decision either way, not an implementation-log one.
+      T7 decides together with T6's `set_root` call site: they are one
+      question asked twice.
+      **Steps 3 and 4 are now assertions rather than descriptions** (T5).
+      Step 3's inbound seam exists and divides by `WindowState::scale`, so
+      "the nested `WM_SIZE` re-runs layout in DIP" is a statement about
+      landed code. And step 4 is not merely fourth in a list: T5's trap-#3
+      enumeration makes **refreshing the node caches the discipline that
+      keeps a derived copy correct**, so a handler that updates
+      `WindowState::scale` without running the walk leaves every node
+      converting by the previous factor — a parallel-data defect, not a
+      missed optional step (finding F-32).
 - [ ] Encode the reason for step 1 preceding step 2 structurally, not as
       a comment: `SetWindowPos` dispatches `WM_SIZE` **before it
       returns**, so a scale updated afterwards would leave that pass
@@ -911,6 +1191,14 @@ sequencing thesis does not defer all scaled-path risk to the end
       is the stronger test and the one that isolates the handler. What it
       must not do is assert exact equality against an
       OS-shaped rectangle and call that the same claim.
+      **"Client extent" now has two readings and they are opposite** (T5).
+      Before the inbound seam landed, the client extent layout received
+      *was* the physical one; since T5 it is `physical ÷ s`. What T8 must
+      hold constant is the **DIP** client extent, which means the
+      synthesised rectangle's *physical* client must move **by the scale
+      ratio**. A test that holds the physical client constant asserts the
+      opposite of the intended claim: the DIP extent would change by the
+      ratio and the layout results with it.
 - [ ] Exercise at 125% / 150% / 200% — but **not as three equal probes**
       (T2 finding F-13). At a power-of-two factor the multiplication is
       exact, so convert-once and convert-twice agree everywhere and a
@@ -942,6 +1230,26 @@ sequencing thesis does not defer all scaled-path risk to the end
       one instead — so on the real path the DIP layout input moves by a
       DIP or two and invariance is approximate. T11 is where that shows,
       and it must not read as a failure.
+- [ ] **Assert that a mixed-scale tree hit-tests correctly from the window
+      root** (finding F-37). T5's traversal divides every `visual_rect`
+      readback by the **traversal root's** scale, so a tree containing a
+      descendant whose cached scale is *not* the window's still resolves
+      to the rectangle the widget is actually composited at. That is the
+      property one divisor gives and per-node division did not, and it
+      needs a scale change driven through the handler, which is why it
+      lands here.
+      **Not** the stale-subtree *receiver* case: entering on a subtree
+      whose cache is not the window's is a documented misuse, and pinning
+      it with a test would fix a stated limit as a regression contract.
+      That limit lives on `hit_test_click`'s doc comment and in
+      [handoff.md](./handoff.md), with no test.
+      **Constructibility depends on a T6 decision that is open.** §T6
+      leaves open whether the walk covers the incremental attach paths
+      F-32 enumerated. **If it does**, no ordinary path produces a stale
+      descendant and T8 needs a `#[doc(hidden)] pub` seam to set one — the
+      `lib.rs::ffi` shape F-29 already names for the scale accessor. **If
+      it does not**, a post-change `append_child` constructs it directly.
+      Read T6's answer before designing the test.
 - [ ] Follow the established `0x80070005` guard pattern — **fail, not
       skip**, on a runner without Compositor capability. Any new guard
       must be shown to fire on an environment that actually lacks the
@@ -1037,6 +1345,29 @@ are in
       "after" frame alone proves nothing.** If a pre-change frame is
       reused rather than re-captured, check the commit it was captured
       at against the current surface first.
+      **That check is necessary and not sufficient** (T5 finding F-33).
+      Measured at the *identical commit*: two settled captures a day apart
+      differ by 25 of 827,904 pixels on the gallery frames, and a
+      session's first launch differed from its own second and third by
+      149, at up to 13 per channel. Every differing pixel is a text pixel and none flips between background and covered, so the coverage mask is identical and only intensity moves â but "tile-label glyph antialiasing" was wrong twice over: a **button** label is in the set, and antialiasing is where the pixels are, not an established cause. So a
+      reused frame can show a regression that does not exist even when the
+      commit matches. **Re-capture, and agree multiple captures on each
+      side of the change.**
+      **What the residual tells you, and what it does not**, measured. The
+      drift is **intensity-only on already-covered text pixels, bounded at
+      13 per channel**, with the coverage mask unchanged. A **large** max
+      per-channel delta proves only that the difference is **outside that
+      measured bound** — not what caused it, since an intensity-only
+      defect can exceed it and the drift's own mechanism is unidentified.
+      A **small** delta proves nothing either. **The number does not
+      classify; it only says which side of a measurement you are on.**
+      [evidence/compare-frames.ps1](./evidence/compare-frames.ps1) exits
+      non-zero on any difference and reports the delta as information.
+      **Control A must not lean on it.**
+      Crispness is a **glyph-shape** judgement, made by looking at the
+      magnified pair — stems, counters, fringing — and a pixel count
+      cannot stand in for it in either direction: neither a large delta
+      nor a small one tells you whether text got sharper.
 - [ ] **Positive control B — logical layout invariance.** The same `.ui`
       at the same logical window size, captured at 100% and at 125%,
       with wrap positions and element order compared. **Invariance is
@@ -1105,6 +1436,18 @@ are in
       the inbound seam lands the same state must read **7** again, and a
       T10 that inherits 9 as the expected number would be pinning a
       half-finished phase.
+      **Measured at T5, so this stops being a prediction.** With the
+      inbound seam landed and a throwaway declaration, the same state
+      reads **7**; removing the division puts it back to 9. Two further
+      readings T10 should expect rather than discover: at T5 the tree
+      occupies **1/1.25 of the client** (785.6 × 562.4 of 982 × 703),
+      because the outbound writes multiply by the *node* cache and T6's
+      walk is its only writer — so a capture taken between T5 and T6 looks
+      small and is correct (**and if it still looks small after T6, the
+      walk ran after the layout that reads the cache** — finding F-34,
+      folded into §T6 and §T7); and with the cache seeded the tree fills the
+      client at 7 tiles while the glyphs stay soft, which is R-1's premise
+      rendered rather than argued. Frames: [evidence/t5-probe/](./evidence/t5-probe/).
 - [ ] **Re-derive the capture coordinates** for later phases against the
       new coordinate space, as the evidence artifact T12's
       `verification-environments.md` revision consumes (risk R-7).
@@ -1200,6 +1543,47 @@ recorded; any finding triaged to a task or to
       — the host is DPI-unaware, so DWM stretches logical 800×600 to
       physical 1000×750 — is falsified by this phase, and later phases
       read the note as procedure.
+      **A second correction belongs in the same pass** (T5 finding F-33):
+      the note is where the frame-reuse procedure lives for later phases,
+      and "check the commit the evidence was captured at" is measurably
+      not sufficient — the baseline must come from two agreeing captures
+      in the same session as the comparison. The same proposition is
+      stated in the ADR set's verification-closure item 3 and in
+      [constraints §9](../requirements/constraints.md); **whether either
+      of those needs a dated annotation is an owner decision** raised in
+      [log.md](./log.md) §T5, not T12's to take.
+- [ ] **Four Moment 2 divergence items named at T5**, so they are folded
+      into the pass above rather than found during it. (i)
+      [architecture.md §12.4](../../../../docs/architecture.md#coordinate-spaces)
+      says the atlas origin "is frequently `(0, 0)`, so omitting it" works
+      most of the time; measured on the gallery, essentially no surface
+      lands at `(0, 0)`. The normative statement is a general claim and
+      the spec is the document Moment 2 exists to reconcile — so it is
+      corrected there, not by an implementation task. (ii) The
+      frame-reuse procedure above, if the owner's answer puts it in a
+      spec or note rather than only in this plan. (iii) **Added after the
+      T5 round-4 review** (finding 2):
+      [architecture.md §12.4](../../../../docs/architecture.md#coordinate-spaces)
+      says "the Visual carrying the surface brush has the exact `dip × s`
+      device size, so surface texels map one-to-one onto device pixels.
+      Crispness follows from those two numbers agreeing, not from a
+      filtering mode" — while the same section allocates `ceil(dip × s)`,
+      which is what stops them agreeing. The requirement is right and the
+      explanation is not; the brush mapping must be set rather than
+      inherited. **Closed by accepted design**:
+      [DD-M4-P1-006](../decisions/dd-m4-p1-006-surface-brush-mapping-is-set-not-inherited.md)
+      (`Accepted`) supersedes the default-mapping and transparent-padding
+      mechanism sentences, and **§12.4 now states `None` / `0.0` as the
+      accepted design**. T12 re-verifies the spec against the landed T6
+      implementation instead of re-deriving the rejected default. (iv) **Added after the
+      T5 independent review** (finding R-1):
+      [architecture.md §12.3](../../../../docs/architecture.md#coordinate-spaces)
+      states the inbound client-extent seam as "at window attach and on
+      every window-resize message", which **omits the reactive drain's
+      layout pass** — the third site, on the busiest path in the runtime,
+      landed as audit row 2b. The spec understates the seam class it
+      defines, and the same omission is in DD-002's row 2 (whose ADR-side
+      handling is an owner decision, raised in [log.md](./log.md) §T5).
 - [ ] Flip the [M4 plan](../../plan.md) Phase 1 row to complete.
 - [ ] Carry-forward to [handoff.md](./handoff.md) with re-trigger
       criteria: layout-derived hit rectangles (M4-Phase 2); the
@@ -1232,6 +1616,21 @@ retrospective, [preamble.md](./preamble.md)'s `status` flip, and:
       so the distinction currently exists only by precedent. Decide
       whether it gets a line there, belongs in ADR authoring guidance, or
       stays precedent — a process question, hence phase-end and not T12.
+- [ ] **Safety net only — confirm T7 closed DD-M4-P1-003's step-ordering
+      record**, and file it here only if it did not. **The primary owner
+      is T7, not phase-end**: T7 chooses the ordering shape, so the record
+      can be decided at its own close, and §T7 places it with the owner
+      there.
+      The substance, for the audit: step 3's nested `WM_SIZE` re-lays out
+      through `sync_visuals`, which reads the **node** caches, while step 4
+      is what writes them — so the fixed order projects with the previous
+      scale (F-34). The
+      *shape* is T6's and T7's — cache-write-only into step 1, or the
+      whole walk — and **the record follows the shape, at T7's close**:
+      a dated annotation if the decision still produces the shipped
+      behaviour, a successor if the fixed order itself changes. Unlike
+      the two items above it, this one is **not** phase-end's to decide;
+      it is phase-end's to check.
 - [ ] **File the vision decision record for the "show it goes red"
       obligation** (owner decision on the T3 retrospective, recorded in
       [log.md](./log.md)). Scope as decided: **mandatory for pure-logic
