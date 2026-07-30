@@ -4602,4 +4602,46 @@ review finding: **the new test binary's Compositor-unavailable skip path has not
 been observed firing.** The helper is the already-verified shared one, but T6's
 round-1 R3 classified per-binary observation as the requirement, so this binary
 needs one owner run on an environment where `wasamo_init` returns `0x80070005`.
-No merge approval is implied.
+No merge approval is implied. *(That blocker was closed the same day — see
+§External Compositor-unavailable evidence below.)*
+
+### External Compositor-unavailable evidence (2026-07-30)
+
+The owner ran the T7 test binary in a Windows session where runtime
+initialisation reached the established Compositor-unavailable classification:
+
+`cargo test -p wasamo-runtime --test dpi_change_propagation_integration -- --nocapture --test-threads=1`
+
+All four tests entered their named negative path rather than their Compositor
+body:
+
+| Test | Observed guard output |
+|---|---|
+| `a_null_suggested_rectangle_survives_and_still_projects` | `skipping DPI change with a null rectangle: runtime compositor unavailable` |
+| `a_size_changing_suggested_rectangle_projects_through_the_nested_wm_size` | `skipping DPI change with a size-changing rectangle: runtime compositor unavailable` |
+| `an_unchanged_suggested_rectangle_projects_through_the_fallback` | `skipping DPI change with no nested WM_SIZE: runtime compositor unavailable` |
+| `two_failed_projections_leave_the_text_stale_without_diverging` | `skipping DPI change with unresolvable layout: runtime compositor unavailable` |
+
+Result: 4 passed, 0 failed, 0 ignored, 0 measured, 0 filtered out.
+
+**It was the same binary, not a rebuild.** Cargo reported
+`Finished ... in 0.07s` and ran
+`dpi_change_propagation_integration-108571e2c139caae.exe` — the artifact hash
+from the local live-Compositor run. So the difference between the two runs is
+the session's Compositor capability and nothing else, which is what makes this
+a control on the guard rather than on a second build. The environment split is
+the one [verification-environments.md](../../../../docs/notes/verification-environments.md)
+records: the same machine yields `0x80070005` from `wasamo_init` in a session
+without a usable desktop.
+
+This is the required actual firing of the substring-classified local skip
+branch, per [AGENTS.md §Testing rules](../../../../AGENTS.md) — a guard
+verified only on the happy path is not verified — and per T6 round-1 R3's
+finding that the observation is owed **per binary** rather than inherited from
+the shared helper. The same helper statically asserts that this branch may not
+skip when `GITHUB_ACTIONS` is set, so the CI direction is closed by
+construction.
+
+Together with the local live-Compositor 4/4 run, T7's sole landing blocker is
+closed. **The full independent review remains outstanding**, and merge to
+`feat/m4-phase-1` is still a separate owner-approval gate.
