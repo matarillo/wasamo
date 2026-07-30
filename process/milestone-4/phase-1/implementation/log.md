@@ -4366,3 +4366,503 @@ branch; the same helper statically asserts that this branch may not skip when
 full zero-major review, and the zero-major / zero-minor correction review, this
 closes T6's final landing blocker. T6 is **done**. No merge or push is implied;
 merging to `feat/m4-phase-1` still requires explicit owner approval.
+
+## T7 — `WM_DPICHANGED` propagation
+
+### Carry-over audit and responsibility re-audit (2026-07-30, before start gate)
+
+Branch: `feat/m4-phase-1-t7`, created from `feat/m4-phase-1` at `1ff4cb1`
+(the T6 merge commit).
+
+The completed retrospectives and the handoff leave T7 four live obligations
+and nothing else. It is the first mutator of `WindowState::scale`, so it is
+where the derived node caches can first be left behind. It must consume T6's
+split primitives in DD-M4-P1-003's written order — geometry through
+`run_layout_as_window_root_at_scale` at an explicit target, raster through
+`refresh_text_surfaces_recursive` against the independent marker — without
+moving a step. It must not reuse `window::realize_dip_window_size` or its
+`SWP_NOMOVE` flag set (handoff row for T4). And it owns DD-003's 13-row
+structural side-effect enumeration as its close artifact, reading row 10's
+clip sites from the source rather than from the ADR's wording, which names
+Box where ZStack is (T1 F-2, re-verified at T3).
+
+Everything else the audit surfaced is already owned elsewhere and is not T7
+work: the PMv2 declaration is T9, synthetic `s != 1` assertions and the scale
+accessor seam are T8, the literal monitor crossing is T11, `window_add_widget`
+remains a stated content-boundary limit, and the frame-baseline and
+target-isolation rules bind T10 / T12.
+
+The task list itself survives the audit; five decisions it did not name are
+added to [plan.md](./plan.md) §T7 before the gate is selected. Four of them
+are only visible from the arm the handler sits beside, which is the reason the
+re-audit read `wnd_proc` end to end rather than reading the task list: the
+first `wnd_proc` re-entrancy with a live `GWLP_USERDATA` makes the arm's
+*placement* a soundness decision; the nested refresh suppression is a
+correctness property rather than step-order fidelity, because the landed arm
+discards the geometry `Result` and refreshes unconditionally; `lParam` is a
+raw `RECT*` from a message parameter and null is a reachable input; and the
+handler synthesises no `resize_fn` call, which incidentally makes that slot
+the only public observation of whether a nested `WM_SIZE` ran. The fifth is
+that the step-3 verdict is pure logic whose failure states the OS cannot be
+asked to produce.
+
+### Start gate (recorded 2026-07-30, before production-code edits)
+
+Review lane: **full independent review**. T7 changes the window procedure,
+introduces re-entrancy through it, and is the first writer of the
+authoritative scale — runtime-structural on all three counts. Trap #4
+composes with that review rather than replacing it.
+
+| # | Applies | Reason and planned close artifact |
+|---|---|---|
+| 1 — semantic migration / call sites | **no** | No enum, schema, IR or field type changes, and no existing traversal gains a case. The new step-3 verdict type is introduced with every consumer in the same commit and is matched exhaustively. The *caller* question that does exist — which callers of the geometry and raster primitives change discipline — is not a migration and is closed under traps 2/3 as an enumeration of all four call sites. |
+| 2 — structural side effects | **yes** | The phase's primary side-effect surface. Close with DD-M4-P1-003's 13 rows, each stated `updated` or `verified unchanged` against the source, rows 9–13 verified rather than assumed. |
+| 3 — parallel / derived data | **yes** | Added at the re-audit. `WindowState::scale` is authoritative and T7 is its first mutator; the per-node geometry cache and per-node `raster_scale` are both derived from it. Close by enumerating every consumer of the value step 1 writes and showing that neither derived copy can advance without a whole-tree projection having succeeded. |
+| 4 — authored branch | **yes** | Three authored branches: the no-nested-geometry fallback, the null suggested rectangle, and the denial of step 4 after both projections fail. Each gets a test that fires it directly; the fallback's is a mock-free integration test, and the pure step-3 verdict is unit-tested over all three states so the arm no OS input can reach is still fired. |
+| 5 — carry-forward | **yes** | The step 1 / step 2 order, the nested-refresh suppression, the fallback trigger, and the arm-placement soundness argument are all invariants a later task can trip — T9 makes the ordering defect producible for the first time, T8 synthesises the message, M4-Phase 2 touches this procedure. Record each with evidence and a re-trigger criterion. |
+| 6 — deterministic failure | **yes** | Added at the re-audit. The change lives in a message loop behind a raw pointer, where the tempting dispositions are "it passed on retry" and "the nested message must have run". Any recurring failure is rooted rather than re-rolled, and *observed nested geometry* rather than *entry into `WM_SIZE`* is what the handler records. |
+| 7 — GUI positive control | **no** | The handler's intended per-monitor path needs T9's declaration before the OS will drive it for a real monitor change. A pre-T9 capture at 100% therefore cannot distinguish that path's presence from its absence. The phase assigns synthetic scale-driven assertions to T8 and the literal monitor crossing plus its human-visible smoke to T11. No frame is captured here, and none is claimed. |
+
+The approach is therefore constrained before editing: the arm sits above the
+`&mut *state_ptr` borrow and holds no outer reference across `SetWindowPos`;
+step 1 writes the scale and opens the nested-pass observation in one
+primitive, so no path installs the marker without having committed the scale;
+the nested `WM_SIZE` reports whether its projection *succeeded* and refreshes
+no text; and step 4 runs only behind the extracted verdict.
+
+### Implementation result and end gate (2026-07-30)
+
+Landed as one code commit, `e63586e`. The handler and its four branch tests are
+one commit rather than two because three of the branches the handler introduces
+are authored failure paths, and a commit carrying them without the tests that
+fire them is precisely the state trap #4 exists to refuse.
+
+`wnd_proc` gains a `WM_DPICHANGED` arm **above** the `&mut *state_ptr` block.
+`handle_dpi_changed` commits the scale and installs the nested-pass marker in
+one primitive (`begin_scale_change`), applies the OS-suggested physical
+rectangle (`apply_suggested_rectangle`), reads back what the re-entrant
+`WM_SIZE` reported, falls back to `project_current_client_extent` when no
+projection succeeded, and refreshes text only behind
+`GeometryProgress::whole_tree_projected`. The `WM_SIZE` arm gains two
+conditionals on the marker: it suppresses its ordinary text refresh and it
+reports its projection's outcome.
+
+#### Traps 2 and 3 — DD-M4-P1-003's 13 rows, closed against the source
+
+The claim under test is "a scale change drags along exactly these, and nothing
+else". Rows marked *verified unchanged* were checked by search, not by memory.
+
+| Row | Effect | Result |
+|---|---|---|
+| 1 | `WindowState`'s cached scale | **updated**, first — `begin_scale_change` in [`window.rs`](../../../../wasamo-runtime/src/window.rs), the only mutator in the runtime beside the creation-time seed. |
+| 2 | The window rectangle | **updated** from the OS suggestion via `SetWindowPos`, with `SWP_NOZORDER` + `SWP_NOACTIVATE` and **not** `SWP_NOMOVE`. Asserted by test 1, which moves as well as resizes. |
+| 3 | The client extent | **updated** — arrives through the nested `WM_SIZE` and is divided at the T5 seam; when no `WM_SIZE` arrives, read from `GetClientRect` and divided by the same committed scale in the fallback. |
+| 4 | Layout | **re-run** over the new DIP client extent, by the nested pass or the fallback. Per the 2026-07-29 DD-003 annotation, "identical results" holds of a *controlled* client extent; T8 preserves one, T11 does not. |
+| 5 | Every widget Visual's offset and size | **updated** by `sync_visuals` at the explicit target. No handler-specific geometry code. |
+| 6 | The ScrollView intermediate Visual | **updated**, same pass. |
+| 7 | The Button label Visual | **updated**, same pass, with **no handler-specific code** — the assertion DD-003 row 7 says it is making. Verified structurally: `sync_visuals` is the only `SetOffset` / `SetSize` site in the runtime (T3's invariant, re-searched here), and it reaches the label through the Button / ToggleButton arm. Had T3 not moved that write, this row would have needed handler code and would have been the phase's silent bug. |
+| 8 | Every text surface and its brush | **updated** by `refresh_text_surfaces_recursive` at step 4 — and **only behind a succeeded projection**, which is the one place this row's wording needed strengthening rather than implementing. |
+| 9 | The root's `SetRelativeSizeAdjustment(1, 1)` | **verified unchanged.** `rg SetRelativeSizeAdjustment wasamo-runtime/src` returns exactly one site, inside `create` in [`window.rs`](../../../../wasamo-runtime/src/window.rs). It relates two physical quantities, so it is scale-independent, and no code path re-writes it. |
+| 10 | `InsetClip` insets | **verified unchanged**, and **the ADR's site list is wrong here.** `rg CreateInsetClip` returns the constructors `WidgetNode::scroll_view`, `WidgetNode::grid` and `WidgetNode::zstack` — **not `WidgetNode::box_`**, which installs no clip. Independently, a search for every `Set*Inset` setter finds **no site in the repository**, so every inset is the constructor default of zero and zero is scale-invariant. The row's conclusion stands; the widgets it names do not. (T1 F-2 established this against DD-002 row 12 and dispositioned the correction only to T5; T3 F-18 predicted that a T7 reading the ADR wording would assert a site that does not exist.) |
+| 11 | Signal registry, effect graph, binding state, widget pointers | **verified unchanged.** The diff introduces no `registry`, `reactive`, `emit::`, or `mark_layout_dirty_for` token — searched over the whole added diff, not over the functions the author remembered writing. The two matches are the words "reactive drain" inside a doc comment saying it must not be entered. |
+| 12 | `MUTATION_CAP` / drain accounting | **verified unchanged**, by the same search. The handler enqueues nothing and never marks a window dirty, so `emit::flush_layout` is not reached and the drain is not entered. |
+| 13 | Hover and press state | **verified unchanged.** No `mouse_down`, `update_hover` or `clear_hover` token in the diff, and no pointer message is synthesised. The pointer may end up over a different widget after the resize; the next real `WM_MOUSEMOVE` corrects it. |
+
+**Trap #3, the derived copies.** `WindowState::scale` is authoritative and T7 is
+its first mutator, so this is the first task where a derived copy can be left
+behind. Every access in the runtime, enumerated by searching `.scale` across
+`window.rs`, `emit.rs` and `abi.rs`:
+
+| Site | Kind | Consequence of the change |
+|---|---|---|
+| `create`'s struct literal | seed | Unchanged. |
+| `begin_scale_change` | **write** | The only mutation. Installs the marker in the same function. |
+| `set_root` (pre-attach refresh, `pair_to_dip`, geometry target) | read x3 | Unchanged; runs before any change can occur. |
+| `wnd_proc`'s single `let scale = state.scale` | read | Serves the `WM_SIZE` arm and all three pointer arms. Read *per entry*, so the nested pass sees the committed value. |
+| `emit::flush_layout` (`pair_to_dip`, geometry target) | read x2 | Unchanged; a later drain projects at whatever the current scale is. |
+| `abi::wasamo_window_set_root`'s T6 preflight | read | Unchanged. |
+| `project_current_client_extent`, `refresh_text_at_new_scale` | read x2 | New; both read the committed value, and the fallback uses the *same* value as divisor and as projection target rather than two that happen to agree. |
+
+The two derived copies — each node's `scale` (geometry) and `raster_scale`
+(last-rasterized DPI) — advance only through `commit_scale_recursive` and
+`refresh_text_surfaces_recursive` respectively, and T7 reaches neither except
+through `run_layout_as_window_root_at_scale` and the step-4 call. So the
+authoritative value cannot move without either every geometry cache following it
+or the divergence being logged and left visible.
+
+#### Trap 4 — authored branches, each fired directly
+
+| Branch | Test that fires it |
+|---|---|
+| No successful nested projection, so the whole-tree fallback runs | `an_unchanged_suggested_rectangle_projects_through_the_fallback` — a suggested rectangle equal to the current one makes `SetWindowPos` succeed while dispatching no `WM_SIZE`, so `resize_fn` is not called and only the fallback can have produced target-scale geometry. |
+| Null suggested rectangle: skip step 2, log, fall back | `a_null_suggested_rectangle_survives_and_still_projects` |
+| No projection succeeded: deny step 4, log, leave everything stale | `two_failed_projections_leave_the_text_stale_without_diverging` |
+| `GeometryProgress`'s three states | `window::tests::only_a_succeeded_projection_permits_step_four` and `neither_unsuccessful_state_is_progress` — pure logic, because a *failed* projection needs a layout error and a *succeeded* one a live Compositor. |
+| Failed step-2 rectangle application (diagnostic only) | `a_failed_rectangle_application_reports_the_rectangle_and_the_consequence` |
+| Failed client-rectangle read: verdict `Failed` plus diagnostic | `a_failed_client_rect_read_yields_no_projection_and_says_so`, with `a_successful_client_rect_read_yields_the_physical_extent` on the other arm |
+| Failed step-4 re-rasterization (diagnostic only) | `a_failed_text_refresh_reports_that_geometry_already_converged` |
+
+**The last three rows were added after the independent review, which was
+right that they were missing.** The first end-gate table listed only the three
+branches with observable behaviour and called them "each fired directly", while
+three authored *diagnostic* arms sat untested — the exact shape trap #4 names.
+The disposition took three steps.
+
+**First, measurement (F-43): degenerate extents do not provoke failure.** A throwaway
+probe called `SetWindowPos` on a live window with negative extents, an inverted
+rectangle, zero, `i32::MIN` and `i32::MAX`; **every one returned `Ok`**. That
+measurement says nothing universal about other failure conditions: the API
+contracts report failure generically, `SetWindowPos` also documents cross-session
+failure, and an invalid handle can make a direct mock-free probe fail even though
+it is not a state this window procedure should manufacture. The refresh failure
+remains a WinRT surface or brush failure. The implementation therefore does not
+claim that the three failures are impossible or OS-unprovokable.
+
+**Second, deleting them was rejected.** DD-M4-P1-003 §Failure handling explicitly
+requires the failed `SetWindowPos` and failed re-rasterization consequences to be
+logged and survived. `GetClientRect` is the implementation's fallback read, not
+one of the two calls the ADR names; reporting its failure follows the same
+resilient posture but is not attributed to an explicit three-item mandate. T4's
+`realize_dip_window_size` also carries the same `SetWindowPos` diagnostic.
+
+**Third, the first extraction was rejected by delta review and replaced.** A
+`windows::core::Error` is not pure test data on Windows: constructing it calls
+`RoOriginateErrorW`, and formatting it consults Windows error information. The
+OS-bound call sites now render that value to an owned string immediately. Pure
+functions — `finish_rectangle_application`, `client_extent_or_failure`, and
+`finish_text_refresh` — receive only that string summary plus primitive local
+data, own the failure branch, and dispatch the completed diagnostic to a supplied
+sink. Their unit tests capture the sink in `Vec<String>` and assert one dispatch,
+the OS summary, and the operational consequence. No Win32/WinRT type or call is
+present on the tested path; production supplies `emit_runtime_diagnostic`.
+
+The extraction also pulled the fallback's only arithmetic into the open, and
+**that turned out to be uncovered**: mutation M6 swapped the two axes of the
+client extent and **all four integration tests stayed green** while
+`a_successful_client_rect_read_yields_the_physical_extent` failed. So the
+extraction closed a real coverage gap rather than only satisfying the gate.
+
+The failing tree is `VStack { Text, HStack { Box } }`, reached through the `.ui`
+path because `WidgetNode::box_` is `pub(crate)`. It fails deterministically
+rather than by injection: `measure_vstack` passes an infinite child height and
+`measure_hstack` an infinite child width, so the childless `Box` is measured
+against unbounded space on both axes and returns `LayoutError::BoxNoExtent`
+(DD-M3-P2-005).
+
+**The green suite was not taken as evidence.** Five mutations, each built and
+run:
+
+| # | Mutation | Result |
+|---|---|---|
+| M1 | Steps 1 and 2 inverted (`begin_scale_change` after `SetWindowPos`) | **4/4 still pass.** Predicted, and the measurement is the point — see F-41. |
+| M2 | Nested-refresh suppression removed | `two_failed_projections...` **fails**; the other three pass. |
+| M3 | Fallback removed | the two fallback tests **fail**; the nested-path and both-fail tests pass. |
+| M4 | Step-4 permission gate removed | `two_failed_projections...` **fails**. A distinct mechanism from M2, caught independently. |
+| M5 | `SWP_NOMOVE` inherited from the creation-time correction | `a_size_changing_suggested_rectangle...` **fails**. |
+| M6 | The fallback's client-extent axes swapped (added at review remediation) | `a_successful_client_rect_read_yields_the_physical_extent` **fails**; **all four integration tests stay green**. |
+
+M5 is worth stating plainly: [handoff.md](./handoff.md) predicted that inheriting
+that flag would pin the window on every monitor crossing "while every test stays
+green". It would have, with a suggested rectangle that only changed the size.
+Moving the rectangle as well costs nothing and converts the hazard from a comment
+into a failing test.
+
+#### Trap 6 — what the measurements refused to confirm
+
+**F-41 — the ordering defect is not observable in the final state, measured
+(M1).** The task's own bullet asked for the step 1 / step 2 order to be encoded
+structurally or shown by a falsifiable probe, and warned that "the enumeration
+says the order is right" is the outcome to refuse. M1 is that probe, and it
+falsifies the *stronger* reading of the design claim while confirming the weaker
+one. Inverting the two steps leaves all four tests green, because the nested
+`WM_SIZE` then finds no marker, is neither suppressed nor reported, and the
+handler's fallback re-projects the whole tree at the committed scale — so the
+**final** state is correct either way. What the inversion demonstrably still
+produces is a geometry write at the stale factor and a text refresh at the stale
+DPI, both overwritten by the fallback. **So the design does not make the ordering
+defect impossible; it makes it transient instead of persistent.** That is a
+weaker claim than "unconstructible" and it is the one the code supports.
+
+**And "transient" is as far as the measurement reaches.** DD-M4-P1-003 predicts
+that a stale-scale nested pass leaves the window "visibly wrong for one frame at
+best", and it is tempting to restate that as what M1 showed. It is not: M1
+established the wrong *intermediate state*, not a presented frame. The whole
+handler runs inside a single message, and Composition commits on the dispatcher
+tick, so the compositor may never see the intermediate projection at all.
+Establishing whether a frame is presented would need a capture across the change,
+which is T11's instrument and not available before T9 anyway.
+
+**F-42 — a `.ui` attribute typo produces an empty widget with no error, and it
+made a first-draft assertion vacuous.** The first version of these tests wrote
+`Text { content: "..." }`. The DSL attribute is `text:`; `check::check` reported
+**no error** and `has_errors()` was false, so the tests ran against `Text` nodes
+whose content was the empty string and whose measured width was `0.0` — under
+which `assert_close(after, before * 1.25)` compares `0.0` with `0.0` and passes.
+Three of the four tests were caught only by the *surface pixel* assertion, whose
+expected `ceil(0.0) == 0` disagreed with `surface_pixels`' one-pixel floor. The
+defect is pre-existing `wasamoc` lenience, not T7's to fix, and it is not filed
+as a T7 finding beyond this record — but the lesson generalises past this task:
+**a `.ui`-driven test can be green and empty**, and an assertion of the form
+"the value scaled by k" is satisfied by zero. Both `.ui` fixtures here now
+assert non-degenerately.
+
+What caught the vacuity was the *surface pixel* assertion, whose expected
+`ceil(0.0)` disagreed with `surface_pixels`' one-pixel floor — i.e. a second,
+differently-shaped fact about the witness. **That is three of the four tests, not
+all four**: `two_failed_projections_leave_the_text_stale_without_diverging`
+deliberately discards the Visual size and compares only the surface, because a
+tree that never lays out has no projected geometry to read. Its discriminating
+power does not depend on the witness being non-degenerate — a degenerate witness
+still moves from a 19-pixel to a 24-pixel surface when the step-4 gate is
+removed — so the fixture is sound and only this paragraph's earlier phrasing
+("each test reads two facts") was wrong. Carried forward as: **an assertion that
+scales a measured quantity needs a second fact of a different shape beside it,
+or a witness proven non-degenerate.**
+
+No failure was re-rolled and no test was retried to green. M2 through M5 were
+expected to fail and did; M1 was expected to pass and did.
+
+#### Trap 5 — carry-forward
+
+Recorded in the T7 retrospective's item 10 and carried to
+[handoff.md](./handoff.md) at phase close:
+
+- **The handler holds no `&mut WindowState` across `SetWindowPos`.**
+  *Re-trigger:* any task adding work to the `WM_DPICHANGED` arm, or moving it
+  inside `wnd_proc`'s null-checked block. M4-Phase 2's event model touches this
+  procedure next.
+- **Step 4 is permitted only by a succeeded whole-tree projection**, and the
+  nested `WM_SIZE` suppresses its own refresh to make that gate meaningful.
+  *Re-trigger:* any new caller of `refresh_text_surfaces_recursive`, or any
+  change making `measure` scale-dependent (which would also turn step 4's
+  position from a free choice into a correctness constraint).
+- **`resize_fn` fires from the `WM_SIZE` arm and nowhere else**, which is what
+  makes it the discriminator between the nested path and the fallback.
+  *Re-trigger:* the first host or ABI function to install a resize callback, or
+  any task that synthesises one from the change path.
+- **DD-M4-P1-003 row 10 names Box where the source has ZStack.** Closed here
+  against the source for the third time (T1, T3, T7). *Re-trigger:* any task
+  building an enumeration from the ADR's row-10 wording.
+
+#### Verification
+
+All commands on Windows, against the post-commit branch state:
+
+- `cargo fmt --all -- --check` — green.
+- `git diff --check` — green.
+- `cargo test -p wasamo-runtime --lib -- --test-threads=1` — 466 passed (464 plus the two `GeometryProgress` tests).
+- `cargo test -p wasamo-runtime --test dpi_change_propagation_integration -- --nocapture --test-threads=1` — 4 passed.
+- `cargo clean`, then `cargo build -p wasamo-runtime`, `cargo build --release --workspace`, `cargo build --workspace`, `cargo test --workspace -- --test-threads=1` — recorded in the T7 retrospective item 3.
+
+No GUI capture: trap #7 is non-applicable for the reason recorded at the start
+gate, and no frame is claimed.
+
+**End-gate result: passed**, subject to the required full independent review
+after the T7 retrospective, and subject to one landing blocker that is not a
+review finding: **the new test binary's Compositor-unavailable skip path has not
+been observed firing.** The helper is the already-verified shared one, but T6's
+round-1 R3 classified per-binary observation as the requirement, so this binary
+needs one owner run on an environment where `wasamo_init` returns `0x80070005`.
+No merge approval is implied. *(That blocker was closed the same day — see
+§External Compositor-unavailable evidence below.)*
+
+### External Compositor-unavailable evidence (2026-07-30)
+
+The owner ran the T7 test binary in a Windows session where runtime
+initialisation reached the established Compositor-unavailable classification:
+
+`cargo test -p wasamo-runtime --test dpi_change_propagation_integration -- --nocapture --test-threads=1`
+
+All four tests entered their named negative path rather than their Compositor
+body:
+
+| Test | Observed guard output |
+|---|---|
+| `a_null_suggested_rectangle_survives_and_still_projects` | `skipping DPI change with a null rectangle: runtime compositor unavailable` |
+| `a_size_changing_suggested_rectangle_projects_through_the_nested_wm_size` | `skipping DPI change with a size-changing rectangle: runtime compositor unavailable` |
+| `an_unchanged_suggested_rectangle_projects_through_the_fallback` | `skipping DPI change with no nested WM_SIZE: runtime compositor unavailable` |
+| `two_failed_projections_leave_the_text_stale_without_diverging` | `skipping DPI change with unresolvable layout: runtime compositor unavailable` |
+
+Result: 4 passed, 0 failed, 0 ignored, 0 measured, 0 filtered out.
+
+**It was the same binary, not a rebuild.** Cargo reported
+`Finished ... in 0.07s` and ran
+`dpi_change_propagation_integration-108571e2c139caae.exe` — the artifact hash
+from the local live-Compositor run. So the difference between the two runs is
+the session's Compositor capability and nothing else, which is what makes this
+a control on the guard rather than on a second build. The environment split is
+the one [verification-environments.md](../../../../docs/notes/verification-environments.md)
+records: the same machine yields `0x80070005` from `wasamo_init` in a session
+without a usable desktop.
+
+This is the required actual firing of the substring-classified local skip
+branch, per [AGENTS.md §Testing rules](../../../../AGENTS.md) — a guard
+verified only on the happy path is not verified — and per T6 round-1 R3's
+finding that the observation is owed **per binary** rather than inherited from
+the shared helper. The same helper statically asserts that this branch may not
+skip when `GITHUB_ACTIONS` is set, so the CI direction is closed by
+construction.
+
+Together with the local live-Compositor 4/4 run, T7's sole landing blocker is
+closed. **The full independent review remains outstanding**, and merge to
+`feat/m4-phase-1` is still a separate owner-approval gate.
+
+### Independent review disposition (2026-07-30)
+
+The independent review of `feat/m4-phase-1..9bd17cb` returned **1 major and 4
+minor**. The zero-major gate was not met. All five were confirmed and none was
+argued down. The first dispositions below were found incomplete by delta review;
+their second remediation is recorded after the start gate.
+
+| # | Severity | Finding | Disposition |
+|---|---|---|---|
+| R1 | major | Three authored diagnostic branches ship untested — the failed `SetWindowPos`, the failed `GetClientRect`, and the failed step-4 refresh — while the end-gate table listed only the three behaviourally-observable branches and called them "each fired directly" | **Confirmed. First remediation incomplete; second remediation below.** The first extraction left WinRT FFI in unit tests and did not fire sink dispatch. The replacement moves the error to an owned summary at the OS boundary and has FFI-free pure functions own branch + dispatch. |
+| R2 | minor | The M1 weakening still overclaims: "one visibly wrong frame" was not measured, only a wrong intermediate state; and "an undeclared process is never sent this message" is stronger than Microsoft documents | **Confirmed. First remediation incomplete; second remediation below.** The corrected implementation comment was accurate, but the start-gate row and retrospective still carried the stronger claims. |
+| R3 | minor | "On an ordinary resize every `raster_scale` already equals the target" misses a subtree attached after a scale change, whose marker is still the constructor identity | **Confirmed. First remediation incomplete; second remediation below.** The plan named the subtree but incorrectly inferred harmless convergence, while the production comment retained the original claim. Both now describe this as pre-existing ordinary-resize behaviour outside T7's convergence proof. |
+| R4 | minor | End-gate source line references drifted after the comment-only commit | **Confirmed. First remediation incomplete; second remediation below.** The drifted instances moved to function names, but row 10 retained three line numbers while the disposition claimed the whole class was fixed. All enumeration rows now use symbols. |
+| R5 | minor | F-42's "each test reads two facts about the witness" is false of the failed-projection test, which reads only the surface | **Confirmed. First remediation incomplete; second remediation below.** The log was narrowed to three of four, but the test helper comment retained the universal claim. It now names the three-tests/one-test split and the fourth test's reason. |
+
+**The reviewer verified rather than read** on the load-bearing claims —
+re-running M1 through M5, re-deriving the `BoxNoExtent` path, checking the
+aliasing by inspection of borrow lifetimes across `SetWindowPos`, and confirming
+the T8 / T9 / T11 boundaries. Four findings include an over-strong record, but
+R1 is not record-only: the first remediation also violated the unit-test FFI
+boundary and left sink dispatch unfired. The corrected classification and the
+recurrence boundary are recorded in the T7 retrospective.
+
+Post-remediation verification, on the branch tip:
+
+- `cargo fmt --all -- --check`, `git diff --check` — green.
+- `cargo test -p wasamo-runtime --lib -- --test-threads=1` — **470 passed** (466 plus the four new diagnostic and extent tests).
+- `cargo test -p wasamo-runtime --test dpi_change_propagation_integration -- --test-threads=1` — 4 passed.
+- `cargo test --workspace -- --test-threads=1` — green.
+
+The branch requires a **delta review** over the remediation commits before the
+zero-major verdict stands. Merge remains a separate owner-approval gate.
+
+### Delta-review remediation start gate (2026-07-31)
+
+The delta review found that R1 was not closed: the four new tests were unit
+tests with a hidden WinRT FFI dependency, and the three production diagnostic
+dispatch branches still were not fired. It also found the same R2--R5 claims
+left standing on sibling documentation surfaces. Before choosing the second
+remediation shape, the implementation-gate catalog was re-read and classified:
+
+| Trap | Applies | Reason / required close artifact |
+|---|---|---|
+| 1 — semantic migration | no | No enum, schema, IR variant, or field changes. |
+| 2 — missed side effects | **yes** | Moving diagnostic decisions across the OS/pure boundary can lose the emitted message or the client-read failure verdict. Enumerate those effects at close. |
+| 3 — parallel / derived drift | **yes**, documentation analogue | R2--R5 each survived on a sibling claim-bearing surface. Close with a proposition-based search and an explicit occurrence table, not a file-local edit. |
+| 4 — authored branch | **yes** | This remediation exists to make each diagnostic decision and its sink dispatch fire in a test that has no Win32/WinRT FFI dependency. Record one test per branch and re-run the diagnostic-removal mutation. |
+| 5 — carry-forward | **yes** | The value-level boundary must be stated narrowly: a pure test may receive a local error summary, but may not construct or format `windows::core::Error`. Record the rule and its re-trigger criterion in the T7 retrospective. |
+| 6 — deterministic failure | **yes** | The delta review supplied two deterministic counterexamples: removing all three production emissions left 470 + 4 tests green, and M6 left all four integration tests green. Re-run both after the fix and disposition the result. |
+| 7 — GUI evidence | no | The remediation changes diagnostics, tests, and claim accuracy; it does not deliver or alter GUI rendering. |
+
+**Review lane:** full independent review. Although the immediate defect is
+diagnostic/test focused, the correction moves the runtime's OS/pure boundary
+and updates the T7 runtime structure, so the high-risk lane is the conservative
+classification. The branch/test-focused trap-4 check composes with it.
+
+### Delta-review remediation result and close gate (2026-07-31)
+
+The second remediation replaces the first extraction rather than layering a
+test-only exception onto it. `windows::core::Error` exists only above the
+boundary; `RectangleSnapshot`, the owned error summary, `GeometryProgress`, and
+the diagnostic sink are the complete input/output surface below it.
+
+**Trap 2 — structural side effects and OS/pure call-site audit.** Query:
+`rg -n "finish_rectangle_application|client_extent_or_failure|finish_text_refresh|emit_runtime_diagnostic|os_error_summary" wasamo-runtime/src/window.rs`.
+
+| OS result site | Boundary conversion | Pure decision and side effects | Test |
+|---|---|---|---|
+| `apply_suggested_rectangle` / `SetWindowPos` | `os_error_summary(&result)` | `finish_rectangle_application` emits exactly one diagnostic on failure; fallback behaviour remains independent | `a_failed_rectangle_application_reports_the_rectangle_and_the_consequence` |
+| `project_current_client_extent` / `GetClientRect` | `os_error_summary(&read)` | `client_extent_or_failure` emits exactly once and returns `GeometryProgress::Failed`; success preserves `(right-left, bottom-top)` | failure and success `client_extent_or_failure` tests |
+| `refresh_text_at_new_scale` / recursive WinRT refresh | `os_error_summary(&refreshed)` | `finish_text_refresh` emits exactly once; the pre-existing no-root early return remains above the call | `a_failed_text_refresh_reports_that_geometry_already_converged` |
+
+No new runtime state, tree structure, layout invalidation, callback, or error
+channel was added. The diagnostic text is unchanged except for the already
+reviewed client-read consequence sentence. The integration diff remains comment
+only, so the owner's per-binary Compositor-unavailable observation remains valid.
+
+**Trap 3 — proposition occurrence table.** Searches covered `implementation/`,
+`retrospectives/t7.md`, `window.rs`, and the T7 integration test. Historical
+finding rows may quote the rejected wording; they now label it as rejected.
+
+| Proposition | Claim-bearing occurrences after remediation |
+|---|---|
+| R1: FFI-free diagnostic tests / failure reachability / ADR scope | `window.rs` boundary comment and tests; T7 trap-4 account; retrospective constraint. No unit test constructs or formats `windows::core::Error`; F-43 is limited to five live-HWND extent inputs; the ADR's explicit requirement is two diagnostics, with `GetClientRect` identified as implementation posture. |
+| R2: intermediate projection, not a measured frame; per-monitor delivery only | `handle_dpi_changed` doc, T7 start-gate row 7, plan close note, and retrospective items 4 / downstream handoff all use the bounded statement. The immutable ADR remains a design prediction, explicitly distinguished from T7 evidence. |
+| R3: ordinary resize is not T7 convergence evidence | Plan re-audit point 2 and the `WM_SIZE` comment both identify the call as pre-existing, potentially serving failed or newly attached nodes, and unconditional after a geometry failure. |
+| R4: no T7 end-gate source line references | Rows 9 and 10 name `create`, `WidgetNode::scroll_view`, `grid`, `zstack`, and `box_`; older task-history line references elsewhere in the milestone log are outside this claim. |
+| R5: witness count | Integration helper comment and F-42 both state three tests read geometry + surface and the failed-projection test reads surface only. |
+
+**Trap 4 — branch tests.** The diagnostic functions receive only `Option<&str>`,
+`RectangleSnapshot`, primitive DPI, a local sink, and (for the fallback) return
+`GeometryProgress`. Their tested paths contain no Windows type or FFI call.
+
+| Branch | Direct firing |
+|---|---|
+| Failed rectangle application + sink dispatch | `a_failed_rectangle_application_reports_the_rectangle_and_the_consequence` |
+| Failed client read + sink dispatch + `Failed` verdict | `a_failed_client_rect_read_yields_no_projection_and_says_so` |
+| Successful client read + extent arithmetic | `a_successful_client_rect_read_yields_the_physical_extent` |
+| Failed text refresh + sink dispatch | `a_failed_text_refresh_reports_that_geometry_already_converged` |
+
+Each failure test also asserts that the OS-bound summary text reaches the sink,
+not only that a consequence substring was generated.
+
+**Trap 5 — carry-forward.** Recorded in the T7 retrospective item 10. Re-trigger
+when a task adds a diagnostic after a Win32/WinRT call: construct and format the
+platform error only at the OS boundary, pass an owned local summary below it,
+and make the pure decision own dispatch to its sink. A test that constructs or
+formats `windows::core::Error` is not pure. The retrospective's universal-claim
+enumeration remains a soft proposal unless a vision decision promotes it into a
+project-wide required artifact.
+
+**Trap 6 — deterministic mutations and disposition.** Both review
+counterexamples were re-run against the replacement:
+
+| Mutation | Observed result | Disposition |
+|---|---|---|
+| Remove all three `emit(&diagnostic)` calls from the pure decisions | The three named failure tests each failed at `diagnostics.len() == 1`; the three unrelated window tests passed | Trap #4 now distinguishes branch + dispatch from a string builder. Mutation restored. |
+| M6: swap fallback extent axes | T7 integration 4/4 remained green; `a_successful_client_rect_read_yields_the_physical_extent` failed with `(750, 1000)` vs `(1000, 750)` | Original coverage finding remains valid. Mutation restored. |
+
+Final restored-state verification:
+
+- `cargo fmt --all -- --check` — green.
+- `cargo test -p wasamo-runtime --lib -- --test-threads=1` — 470 passed.
+- `cargo test -p wasamo-runtime --test dpi_change_propagation_integration -- --test-threads=1` — 4 passed.
+- `cargo test --workspace -- --test-threads=1` — green; only the pre-existing no-linkable-target and linker-message warnings appeared.
+- `git diff --check` — green.
+
+Trap 7 remains non-applicable: no GUI rendering behaviour changed or is claimed.
+The required full independent re-review remains a merge gate; this close artifact
+does not self-certify that review.
+
+### Merge approval (2026-07-31)
+
+The paragraph above asks for one further independent round over the delta
+remediation. **That round was not run.** The owner reviewed the state and
+authorised the delta reviewer's fixes to be committed and the branch merged, so
+the task-end merge gate was closed by explicit owner approval rather than by a
+third review returning zero-major. Recorded here so a later reader does not
+infer a review that did not happen.
+
+What the merge does rest on, and what it does not:
+
+- **Rests on:** two independent review rounds (round 1 over the whole branch,
+  the delta review over the first remediation), both of whose findings are
+  confirmed and remediated; the mutation evidence M1–M6 including the delta
+  review's own diagnostic-removal counterexample; the owner-observed
+  Compositor-unavailable guard firing; and green `cargo fmt --all -- --check`,
+  `git diff --check`, `cargo test --workspace` on the final branch state.
+- **Does not rest on:** a review of the second remediation itself
+  (`ec5b852`, `4013870`). Those two commits are the delta reviewer's own work
+  plus its record, verified by the test suite and by re-running the mutations,
+  but not independently re-reviewed.
+
+The residual is small and named: the second remediation moves an OS/pure
+boundary and rewrites four unit tests, and its own close gate is self-reported.
+If a later task finds a defect there, this is the commit range to look at first.
+
+Phase-end (T12) still owns the phase → main gate, which is separate from this
+one, and push remains a separate gate again.

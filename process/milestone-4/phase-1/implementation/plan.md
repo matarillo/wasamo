@@ -1118,7 +1118,100 @@ therefore complete. Merge remains a separate owner-approval gate.
 
 ### T7 — `WM_DPICHANGED` propagation
 
-- [ ] Handle `WM_DPICHANGED` in `wnd_proc` in the **fixed order**:
+**Responsibility re-audit at task start (2026-07-30).** The list below survives
+the audit against the landed T6 code — `WindowState::scale` is the
+authoritative target, `run_layout_as_window_root_at_scale` is the fallible
+geometry entry that commits the node cache only after a complete
+`sync_visuals`, and `refresh_text_surfaces_recursive` is the independent
+fallible raster pass keyed on `raster_scale`. Five things the list did not name
+are added, because each is a decision T7 makes rather than one it inherits, and
+four of them are reachable only by reading the arm the handler sits beside.
+
+1. **This handler is the first `wnd_proc` re-entrancy with a live
+   `GWLP_USERDATA`, so *where the arm sits* is a soundness decision.** Every
+   existing arm runs inside `if !state_ptr.is_null() { let state = &mut
+   *state_ptr; … }`, a `&mut WindowState` borrow that spans the whole arm set.
+   T4's correction dispatches nested messages before that pointer is installed,
+   so no arm has ever re-entered with one live. An arm placed inside the block
+   would hold that borrow across `SetWindowPos`, and the nested frame would
+   create a second `&mut` to the same object — aliasing UB, sound only by the
+   accident that nothing miscompiles today. The handler therefore sits **above**
+   the block and reaches `WindowState` through short-lived accesses either side
+   of `SetWindowPos`, which is the same by-construction argument T4 made for
+   the creation-time correction, in the one place the pointer is live.
+2. **Suppressing the nested refresh is a correctness property, not fidelity to
+   the ADR's step numbering.** The `WM_SIZE` arm as landed discards the geometry
+   `Result` and calls `refresh_text_surfaces_recursive` unconditionally. On an
+   ordinary resize the target does not move, but that does **not** make the call
+   a convergence proof: it may retry an earlier rasterization failure or prepare
+   a newly attached node, and it remains unconditional even if that resize's
+   geometry pass fails. That is pre-existing ordinary-resize behaviour, not a
+   property T7 relies on or strengthens. (`emit::flush_layout` has the same
+   pre-existing shape. The standalone `run_layout_as_window_root` differs — it
+   `?`s on geometry before refreshing.) Under a
+   scale change the target *has* moved, so an unconditional nested refresh
+   advances raster markers to the new DPI whether or not the geometry pass that
+   was supposed to accompany them succeeded — exactly the convergence claim the
+   T6 independent review rejected, arriving through the message loop instead of
+   through a shared cache. The suppression is what makes step 4's permission
+   conditional; it is not a reordering of the accepted steps.
+3. **`lParam` is a raw `RECT*` taken from a message parameter.** `wnd_proc` is
+   reachable by `SendMessageW` from any process, and T8 will synthesise this
+   message deliberately, so a null pointer is a reachable input rather than a
+   hypothetical one. Dereferencing it is the one failure in this handler that
+   does not survive. Guarded, and the guard is an authored branch with its own
+   direct test (trap #4), not a defensive line without one.
+4. **The handler synthesises no host callback.** `resize_fn` is invoked by the
+   `WM_SIZE` arm and therefore fires on the nested path and not on the fallback
+   — even though the *DIP* client extent changes on both, because the physical
+   extent divided by a new scale is a new DIP extent. Row 13's reasoning covers
+   this: the handler synthesises no pointer message, and a synthesised resize
+   notification is the same class of invention. DD-003 does not ask for one and
+   the slot has no installers. Recorded because the decision has a second
+   consequence: `resize_fn` becomes the only *public* observation of whether a
+   nested `WM_SIZE` ran, which is what lets the fallback test assert that it
+   did not.
+5. **The step-3 verdict is pure logic, and two of its three states cannot be
+   produced from the OS on demand.** "A whole-tree projection has succeeded" is
+   the predicate that gates step 4, and it is asked twice — once to decide
+   whether the fallback is required, once to decide whether text may refresh.
+   It is extracted and unit-tested over its whole input space, so the arm the
+   integration tests cannot reach is still fired somewhere. The mock-free
+   fallback test remains the trap-#4 artifact; the unit test pins the rule.
+
+**Closed 2026-07-30.** Landed as **one code commit** (`e63586e`) — the handler
+introduces three authored failure branches, and a commit carrying them without
+the tests that fire them is the state trap #4 exists to refuse. Artifacts in
+[log.md](./log.md) §T7: the 13-row structural side-effect enumeration closed
+against the source, the enumeration of every `WindowState::scale` access, four
+mock-free integration tests plus six pure-logic tests named per branch, and a
+six-mutation table. The task produced findings F-41 and F-42.
+
+**One claim in the re-audit above came out weaker than written, and the
+measurement is what weakened it.** Re-audit point 1 and this task's second
+bullet both wanted the step 1 / step 2 order held by structure. What the landed
+structure gives is that **no path installs the nested-pass marker against a
+stale scale** — which is real but narrower. Mutation M1 inverted the two calls
+and **all four integration tests stayed green**, because an unrecognised nested
+pass is an unreported one, so the fallback re-projects and the final state
+converges. The stale-factor projection DD-003 warns about still happens; it is
+now transient rather than persistent. Propagated by proposition rather than by
+string, per §Task list: the sentence falsified is *"the step 1 / step 2 order can
+be made structurally impossible to get wrong"*, and the documents asserting it
+were this plan's §T7, `WindowState::pending_scale_change`'s doc comment, and
+`handle_dpi_changed`'s doc comment — all three corrected. **DD-M4-P1-003 needed
+no change**: its "visibly wrong for one frame at best" wording remains the
+accepted design warning, but T7 established only the stale intermediate
+projection. Whether that projection is presented as a frame is T11 evidence.
+
+**And one hazard the handoff predicted would stay green does not.** M5 inherited
+`SWP_NOMOVE` from `realize_dip_window_size`; the nested-path test's suggested
+rectangle **moves as well as resizes**, so it fails. The handoff row for T4
+records that inheriting the flag "pins the window on every monitor crossing while
+every test stays green" — true of a rectangle that only changes the size, and no
+longer true here.
+
+- [x] Handle `WM_DPICHANGED` in `wnd_proc` in the **fixed order**:
       (1) update `WindowState`'s cached scale from `HIWORD(wParam)`;
       (2) apply the OS-suggested rectangle from `lParam` via
       `SetWindowPos(..., SWP_NOZORDER | SWP_NOACTIVATE)`;
@@ -1163,7 +1256,7 @@ therefore complete. Merge remains a separate owner-approval gate.
       `WindowState::scale` without running the walk leaves every node
       converting by the previous factor — a parallel-data defect, not a
       missed optional step (finding F-32).
-- [ ] Encode the reason for step 1 preceding step 2 structurally, not as
+- [x] Encode the reason for step 1 preceding step 2 structurally, not as
       a comment: `SetWindowPos` dispatches `WM_SIZE` **before it
       returns**, so a scale updated afterwards would leave that pass
       laying out and projecting with the stale factor. This is the
@@ -1186,7 +1279,7 @@ therefore complete. Merge remains a separate owner-approval gate.
       because the size does not change. The second half is the sharper
       fact: this ordering defect cannot be produced, let alone observed,
       before T9.
-- [ ] **Do not inherit T4's flags, and do not reuse its helper**
+- [x] **Do not inherit T4's flags, and do not reuse its helper**
       (T4 finding F-30). `window::realize_dip_window_size` converts a
       **DIP size** and must not move the window, so it passes
       `SWP_NOMOVE`; this step applies an **OS-supplied physical
@@ -1197,10 +1290,10 @@ therefore complete. Merge remains a separate owner-approval gate.
       DD-003's flags **into** `create`; this is the warning in the other
       direction, which is where a reader who has just read `create` is
       standing.
-- [ ] Apply the suggested rectangle (do not ignore it): it preserves the
+- [x] Apply the suggested rectangle (do not ignore it): it preserves the
       window's logical size across the change, which is what the DIP
       contract means.
-- [ ] **Failure handling:** log and survive. Track successful nested geometry,
+- [x] **Failure handling:** log and survive. Track successful nested geometry,
       not merely entry into `WM_SIZE`. If `SetWindowPos` fails or returns
       without such a pass, obtain the unchanged/current physical client
       extent, convert it to DIP with the new `state.scale`, and retry step 3
@@ -1219,9 +1312,51 @@ therefore complete. Merge remains a separate owner-approval gate.
       into `Diverged`, which is for reactive-engine divergence. Add a direct
       test that fires the no-nested-geometry fallback; a success-path handler
       test does not cover this authored branch.
-- [ ] `WM_GETDPISCALEDSIZE` is **not** handled this phase — recorded as
+- [x] `WM_GETDPISCALEDSIZE` is **not** handled this phase — recorded as
       forward exposure, not an omission.
-- [ ] **Row 10's site list is ScrollView / Grid / ZStack**, not
+- [x] **Place the arm above the `&mut *state_ptr` block** and reach state
+      through short-lived accesses either side of `SetWindowPos`, per re-audit
+      point 1. The nested frame needs its own `&mut` to lay out; what must not
+      exist is an outer one alive at the same time.
+- [x] **Guard the null suggested rectangle**, per re-audit point 3: log, skip
+      step 2, and let step 3's fallback carry the change. The scale is already
+      committed at that point, so a malformed message still converges rather
+      than leaving the authoritative value ahead of every projection.
+- [x] **Extract the step-3 verdict as pure logic** and unit-test its three
+      states, per re-audit point 5.
+- [x] **The test set, and what each member discriminates.** A mock-free
+      Windows integration binary driving real `WM_DPICHANGED` messages through
+      `SendMessageW` at a real window. The four cases are not four samples of
+      one path:
+      1. *changed rectangle* — the nested path, and the **control that makes
+         case 2's negative assertion mean something**: it establishes that
+         `resize_fn` fires at all.
+      2. *unchanged rectangle* — `SetWindowPos` succeeds, the size does not
+         change, **no `WM_SIZE` is dispatched** (T4 measured exactly this), so
+         `resize_fn` does not fire and only the fallback can have produced
+         target-scale geometry. This is the trap-#4 artifact.
+      3. *null rectangle* — the guard from the bullet above, firing the
+         fallback through a second entry condition.
+      4. *both projections fail* — `VStack { Text, HStack { Box } }` reaches
+         `LayoutError::BoxNoExtent` deterministically, because `measure_vstack`
+         passes an infinite child height and `measure_hstack` an infinite child
+         width, so the childless `Box` is measured against both. The nested pass
+         and the fallback then both fail and step 4 must be **denied**: the
+         Text node's surface stays at its old size and
+         `reactive::runtime_health()` stays `Healthy`. This one is
+         discriminating against the *pre-existing* shape rather than against a
+         hypothetical one — today's arm would refresh the text regardless.
+      `WindowState::scale` itself is asserted only indirectly, through the
+      geometry the projection produced: the `#[doc(hidden)] pub` accessor F-29
+      names belongs to T8, and adding it here would widen the surface for an
+      assertion T8 needs and T7 does not.
+      **A new test binary re-opens the negative-guard obligation.** The shared
+      `run_on_owning_runtime_thread_or_skip` helper is unchanged and already
+      verified, but T6's review classified per-binary observation as the
+      requirement (round 1 R3), so the skip path of *this* binary must be seen
+      firing on a Compositor-unavailable environment before T7 lands. Owner
+      action, same as T6's.
+- [x] **Row 10's site list is ScrollView / Grid / ZStack**, not
       ScrollView / Grid / Box (T3 finding F-18). T1's F-2 established
       this against the source — `WidgetNode::box_` installs no clip and
       `WidgetNode::zstack` does — but dispositioned the correction only
@@ -1234,7 +1369,7 @@ therefore complete. Merge remains a separate owner-approval gate.
       T3: `CreateInsetClip` appears in `scroll_view`, `grid` and
       `zstack`, and nowhere else. The row's conclusion (all insets are
       zero, zero is scale-invariant) is unaffected.
-- [ ] **Row 7 is now literally true and should be asserted, not
+- [x] **Row 7 is now literally true and should be asserted, not
       inherited.** DD-003 row 7 says the Button label Visual's offset and
       size are covered "because DD-002 moved that write into the sync
       pass". T3 performed that move, so the assertion T7 makes is that
@@ -1244,7 +1379,14 @@ therefore complete. Merge remains a separate owner-approval gate.
 
 **Start gate:** trap #2 (the phase's primary side-effect surface), trap #4
 (the no-nested-geometry fallback is an authored failure/size branch), and
-trap #5. **End gate:** the **structural side-effect enumeration** —
+trap #5 — **re-run at task start rather than inherited**, and the re-audit adds
+trap #3 (the node geometry cache and the raster markers are both derived from
+the value step 1 writes, and the handler is the first thing that moves it) and
+trap #6 (the message loop and a live `GWLP_USERDATA` pointer are where a
+symptom is most tempting to take at face value). The selection and the reasons
+for the two traps still judged non-applicable are recorded in
+[log.md](./log.md) §T7. **End gate:** the **structural side-effect
+enumeration** —
 DD-003's 13 rows, each stated as updated or verified-unchanged. Rows
 9–13 (`SetRelativeSizeAdjustment`, clip insets, signal registry /
 effect graph / binding state / widget pointers, `MUTATION_CAP` and drain
