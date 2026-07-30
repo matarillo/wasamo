@@ -4866,3 +4866,105 @@ If a later task finds a defect there, this is the commit range to look at first.
 
 Phase-end (T12) still owns the phase → main gate, which is separate from this
 one, and push remains a separate gate again.
+
+---
+
+## T8 — Windows integration evidence (mock-free, CI-gated, fail-not-skip)
+
+### Carry-over audit and responsibility re-audit (2026-07-31, before start gate)
+
+Branch: `feat/m4-phase-1-t8`, created from `feat/m4-phase-1` at `65f3f2b`
+(the T7 merge commit).
+
+The completed retrospectives, the handoff and the T7 close leave T8 six live
+obligations and nothing else.
+
+| Carried from | Obligation | Disposition here |
+|---|---|---|
+| T4 F-29 | `WindowState::scale` has no test-visible accessor; the integration tests are a separate crate | T8 adds the `#[doc(hidden)] pub` seam, returning a `u32` DPI so `DipScale` stays crate-private |
+| T4 F-28 + T5 | The invariance claim holds of the **DIP client extent**, which the *outer* rectangle does not preserve | T8 synthesises the rectangle from a measured frame and a chosen client extent, and asserts the realised client |
+| T2 F-13 + T4 review R-1 | 125 / 150 / 200% are not three equal probes, and every standard scaling has an exactly-representable factor | The matrix adds **100 DPI**, whose factor no `f32` holds exactly |
+| T5 F-37 | The one-divisor traversal property needs a mixed-scale tree, which no legitimate path leaves constructible once geometry exists | T8 adds the second `#[doc(hidden)] pub` seam and drives the click through a real `WM_LBUTTONUP` |
+| T6 round-1 R3 | The Compositor-unavailable skip path is owed **per binary** | T8 lands a new binary, so the observation is a landing blocker for an owner run |
+| T7 F-42 | A `.ui`-driven test can be green and empty, and a "scaled by k" assertion is satisfied by zero | Every witness is asserted non-degenerate, and each carries a second fact of a different shape (surface pixels, row assignment) |
+
+Everything else the audit surfaced is owned elsewhere and is not T8 work: the
+PMv2 declaration and the three-host rebuild are T9; the assistant frame
+captures, the re-derived capture coordinates and the runnable-set delivery are
+T10; the literal monitor crossing is T11; the Moment 2 spec sync and the
+`workflow.md` / "show it goes red" process questions are T12 and phase-end.
+`lib.rs::window_add_widget` remains a stated content-boundary limit, and the
+stale-*receiver* hit-test case remains a documented misuse with no test (T5's
+decision, deliberately not pinned as a regression contract).
+
+The task list itself survives the audit. Four things it did not name are added
+to [plan.md](./plan.md) T8 before the gate is selected, and three of them are
+visible only from working out what the assertions would actually read rather
+than from re-reading the list:
+
+- **F-44 — the plan's exactness claim is unreachable from the window T8 is
+  handed.** The plan says T8 "chooses the rectangle, so it can assert equality
+  rather than a tolerance". Preserving the DIP client extent means
+  multiplying the *physical* client by `dpi / 96`, and the created window's
+  client is 784 x 561 physical at 96 DPI (T4, measured): 561 x 1.25 is 701.25.
+  There is no integer rectangle that preserves the DIP extent, at 120, 144,
+  192 **or** 100 DPI, so a literal implementation would have asserted an
+  approximate invariance while the plan claimed an exact one. One step fixes
+  every factor at once — normalise the physical client to a **multiple of
+  24** first, since `96 = 2^5 x 3` and the four DPIs contribute denominators
+  4, 2, 1 and 24.
+- **F-45 — the ADR's evidence item (2) is one claim, not two, until a
+  discrete witness is added.** "The DIP layout results are unchanged" and
+  "the Visual offsets and sizes moved by the ratio" are the same equation
+  whenever the before-state is `s = 1`, because the only reading of a DIP
+  layout result the runtime offers is a Visual read back and divided. The
+  separating fact has to be **discrete**: the WrapPanel row assignment, which
+  the plan's T10 already records as the 9-vs-7 signature. A wrong
+  implementation that treats physical as logical moves the row count; a
+  correct one cannot.
+- **The non-client frame is measured, not predicted.** Below T9 the process
+  is unaware, so the frame should be the 96-DPI one whatever a synthesised
+  message claims — but that is a prediction about `WM_NCCALCSIZE`, so the
+  frame is read as `GetWindowRect - GetClientRect` and the realised client is
+  asserted afterwards.
+- **Two seams, not one.** F-29 named the scale accessor; the mixed-scale
+  hit-test bullet needs a second, to set one node's cached geometry scale
+  stale after geometry exists. Both are public-surface additions and so are
+  decisions, not implementation details.
+
+**The binary is new rather than an extension of T7's.**
+`dpi_change_propagation_integration.rs` fires authored branches and states in
+its own header what it is and is not; a scale matrix and a hit-test property
+landing inside it would blur both, and the ADR's evidence item (2) is easier
+to cite as a named artifact. The cost — a re-opened per-binary
+Compositor-unavailable observation, which is an owner run and a landing
+blocker — is accepted rather than avoided, on the same terms T6 and T7 paid it.
+
+### Start gate (recorded 2026-07-31, before production-code edits)
+
+Review lane: **normal review** as classified by
+[preamble.md](./preamble.md#review-lanes) ("T8 — test-only"). The
+classification is re-checked rather than inherited, and it survives with one
+qualification: T8 is not purely test-only, because it adds two
+`#[doc(hidden)] pub` seams to the runtime crate. Neither is reachable from a
+host through `wasamo.h`, neither changes production behaviour, and both are
+of the shape [gates section 4](../../../procedures/implementation-gates.md)
+leaves outside the high-risk classes. The trap-#4 branch/test-focused check
+composes with it and is the substance of this task anyway.
+
+| # | Applies | Reason and planned close artifact |
+|---|---|---|
+| 1 — semantic migration / call sites | **yes** | No enum or schema changes, but two new `#[doc(hidden)] pub` items land on the runtime's public surface, and the question the trap asks — who else can reach this, and what does each caller mean by it — is live for exactly that reason. Close with a call-site audit of both seams: every caller, its classification, and the reason no production path may acquire one. |
+| 2 — structural side effects | **yes** | The client normalisation drives a real `SetWindowPos` and therefore a real `WM_SIZE` before the change, and the hit-test fixture drives a real `WM_LBUTTONUP` that also updates hover and enqueues a signal. Enumerate what each synthesised message drags along, so a test does not silently depend on an effect it did not intend. |
+| 3 — parallel / derived data | **yes** | The node geometry-scale seam exists precisely to put a derived copy out of sync with its source. Close by stating which copy is poked, which primitive normally owns it, and why the poke cannot leak into a production path. |
+| 4 — authored branch | **yes** | The gate's substance. Every assertion must fire directly and be shown to go red against a deliberately wrong implementation; the mutation table is the artifact, not the passing run. |
+| 5 — carry-forward | **yes** | The one-divisor traversal property, the two seams, and the multiple-of-24 normalisation rule are all invariants a later task can trip — T9 makes the real OS drive this path, M4-Phase 2 replaces the readback with layout-derived rectangles. Record each with evidence and a re-trigger criterion. |
+| 6 — deterministic failure | **yes**, low expectation | Real windows, real messages and a live Compositor, where "it passed the second time" is the tempting disposition. Carried so any recurring failure is rooted rather than re-rolled; nothing here is expected to be flaky. |
+| 7 — GUI positive control | **no** | T8's evidence is headless runtime state read back off live Composition objects, not a rendered frame. The assistant frame captures and their positive-control pairs are T10's, and the human-visible smoke is T11's. No frame is captured here and none is claimed. |
+
+The approach is therefore constrained before editing: both seams return or
+take a `u32` DPI so `DipScale` stays crate-private; the client extent is
+normalised to a multiple of 24 and the realised value asserted before any
+synthesised message is sent; the invariance witness is the discrete row
+assignment rather than a number the ratio assertion already reads; and no
+assertion is recorded as evidence until a mutation has been shown to break it.

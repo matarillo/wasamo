@@ -1403,6 +1403,74 @@ Placed **before** T9 on purpose: it drives `s ≠ 1` synthetically, so the
 sequencing thesis does not defer all scaled-path risk to the end
 (risk R-4).
 
+**Responsibility re-audit at task start (2026-07-31).** The list below
+survives the audit against the landed T5 / T6 / T7 code, and four things it
+did not name are added — three of them reachable only by working out what
+the assertions would actually read.
+
+1. **"T8 chooses the rectangle, so it can assert equality rather than a
+   tolerance" is not true of the window T8 is handed** (finding F-44). The
+   claim is right in principle and unreachable in practice from the created
+   window: `wasamo_load_ui` asks for 800 × 600 DIP and the client extent that
+   produces is 784 × 561 physical at 96 DPI (T4, measured). Preserving the
+   **DIP** client extent means multiplying the physical client by `dpi / 96`,
+   and 561 × 1.25 is 701.25 — not an integer, so no synthesised rectangle
+   holds the DIP extent exactly, and the same is true at 144, 192 and 100 DPI.
+   The fix is one step and it makes every factor exact at once: **normalise
+   the physical client to a multiple of 24 before the change**, because
+   `96 = 2^5 × 3` and the four DPIs under test contribute denominators 4, 2, 1
+   and 24. T8 therefore sets the window rectangle once at 96 DPI, asserts the
+   realised client, and only then synthesises the message. The alternative —
+   an approximate invariance claim with a stated tolerance — is what T11
+   already carries for the OS-shaped rectangle, and having both halves
+   approximate would leave the phase with no exact statement of the property
+   at all.
+2. **The outer rectangle is derived from a measured frame, not from the
+   scale.** T8 must supply an *outer* rectangle while what it controls is the
+   *client* extent, and the two differ by the non-client frame, which scales
+   by its own DPI-indexed metrics rather than by `s` (T4 finding F-28). Below
+   T9 the process is unaware, so the frame is the 96-DPI one and does not move
+   when a synthesised message claims a new DPI — but that is a prediction, so
+   the frame is measured as `GetWindowRect − GetClientRect` and the realised
+   client is asserted afterwards rather than assumed.
+3. **The two halves of the ADR's evidence item (2) are the same sentence
+   until an independent witness is added** (finding F-45). "The DIP layout
+   results are unchanged" and "the Visual offsets and sizes moved by the
+   ratio" are one claim, not two, whenever the before-state is `s = 1`: the
+   only reading of a DIP layout result the runtime offers is a Visual read
+   back and divided, so `after = before × ratio` and `after ÷ ratio = before`
+   are the same equation. What separates them is a **discrete** consequence of
+   layout — the WrapPanel row assignment DD-002 and §T10 already name as the
+   9-tiles-vs-7-tiles signature. An implementation that treats physical pixels
+   as logical changes the row count; one that scales correctly cannot. T8's
+   invariance witness is therefore the row structure, and the ratio assertion
+   rides beside it as a second fact of a different shape (T7's F-42
+   carry-forward).
+4. **Two `#[doc(hidden)] pub` seams, not one.** F-29 named the scale
+   accessor. The mixed-scale hit-test bullet needs a second one — a way to
+   set a single node's cached geometry scale stale *after* geometry exists —
+   and the bullet already says so; it is listed here as a deliverable because
+   it is a public-surface addition and therefore a decision rather than an
+   implementation detail.
+
+**The binary is new rather than an extension of T7's** — decided at the
+re-audit. `dpi_change_propagation_integration.rs` fires T7's authored
+branches and says in its own header what it is and is not; a scale matrix and
+a hit-test property landing inside it would blur both, and the ADR's evidence
+item (2) is easier to cite as a named artifact. The cost is real and is
+accepted: a new test binary re-opens the per-binary
+Compositor-unavailable observation (T6 round-1 R3), which is an owner run and
+a landing blocker, exactly as it was at T6 and T7.
+
+- [ ] **The two test seams**, in [`lib.rs`](../../../../wasamo-runtime/src/lib.rs)'s
+      `ffi` module and on `WidgetNode`, in the established
+      `__install_owning_thread_for_test` shape. Both take or return a `u32`
+      DPI rather than a `DipScale`, so the carrier stays crate-private —
+      the same resolution T6 reached for
+      `__run_layout_as_window_root_at_dpi_for_test`. Widening
+      `WindowState::scale` to `pub` is the wrong fix: it would put the scale
+      factor on a `pub use`-exported type and ship the host-visible surface
+      DD-004 declines.
 - [ ] A created window's cached scale equals `GetDpiForWindow`.
       **This needs a test seam, which does not exist yet** (T4 finding
       F-29). The field landed as `pub(crate) scale` on `WindowState`, and
@@ -1443,6 +1511,15 @@ sequencing thesis does not defer all scaled-path risk to the end
       ratio**. A test that holds the physical client constant asserts the
       opposite of the intended claim: the DIP extent would change by the
       ratio and the layout results with it.
+      **And the invariance half needs a witness the ratio half cannot
+      produce** (re-audit point 3, finding F-45): with the before-state at
+      `s = 1` the two halves are algebraically one claim, so the DIP-side
+      assertion is the **WrapPanel row assignment** — which tile sits on
+      which line — and not a number derived from the Visual geometry the
+      ratio assertion already reads. The fixture is sized so the row break
+      is the 9-vs-7 signature §T10 records: 12 tiles of `item-cross-size: 88`
+      at `item-spacing: 12` in a 720 DIP client give 7 per row, and a client
+      that grew by the ratio because the inbound seam was missed gives 9.
 - [ ] Exercise at 125% / 150% / 200% — but **not as three equal probes**
       (T2 finding F-13). At a power-of-two factor the multiplication is
       exact, so convert-once and convert-twice agree everywhere and a
@@ -1497,15 +1574,35 @@ sequencing thesis does not defer all scaled-path risk to the end
       the `lib.rs::ffi` shape F-29 already names for the scale accessor. The
       seam exists only to test the one-divisor traversal property; it is not
       a production attach path.
+- [ ] **Normalise the physical client to a multiple of 24 before the
+      change**, per re-audit point 1, and assert the realised client rather
+      than assuming the non-client frame stayed put (point 2). The
+      normalisation is an ordinary `SetWindowPos` at 96 DPI, so it drives the
+      ordinary `WM_SIZE` path and needs nothing new in the runtime.
 - [ ] Follow the established `0x80070005` guard pattern — **fail, not
       skip**, on a runner without Compositor capability. Any new guard
       must be shown to fire on an environment that actually lacks the
       capability before the test lands; a guard verified only on the
-      happy path is not verified.
+      happy path is not verified. **This is a new binary, so the
+      observation is owed again** (T6 round-1 R3) and is a landing blocker
+      closed by an owner run, not by this task.
+- [ ] **Show each assertion go red against a deliberately wrong
+      implementation.** T8 is where the phase's "green proves nothing"
+      thesis is finally testable against real scaled behaviour, so the
+      close artifact is a mutation table, not a passing run: at minimum the
+      inbound client-extent seam removed (the row count must move), the
+      per-node divisor restored in `visual_rect_dip` (the mixed-scale hit
+      test must fail), and the outbound multiplication dropped. A mutation
+      that leaves every test green is the finding, not the failure.
 
 **Start gate:** trap #4 (each assertion fires directly, not
-incidentally). **End gate:** tests green locally and in CI; the stated
-limit recorded in the test and in [log.md](./log.md).
+incidentally); re-run the selection at task start rather than inheriting
+it — the re-audit adds trap #1 (two new `#[doc(hidden)] pub` seams are
+public-surface call sites), trap #2 (the normalisation drives a real
+`WM_SIZE` before the change) and trap #5 (the seams and the one-divisor
+property are invariants a later task can trip). **End gate:** tests green
+locally and in CI; the mutation table; the stated limits recorded in the
+test and in [log.md](./log.md).
 
 ---
 
