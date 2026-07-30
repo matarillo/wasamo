@@ -69,10 +69,12 @@ pub struct WindowState {
     /// handler needs.
     ///
     /// Written only by `begin_scale_change` and `handle_dpi_changed`, and
-    /// `begin_scale_change` commits `scale` in the same breath: there is no
+    /// `begin_scale_change` commits `scale` in the same breath: **there is no
     /// path that installs this marker without having already committed the new
-    /// scale, which is the step 1 / step 2 ordering expressed as a primitive
-    /// rather than as a statement order a later edit could invert.
+    /// scale.** That is the property the primitive buys, and it is narrower than
+    /// "the step order cannot be inverted" — a later edit can still move the
+    /// call, and measurement says the final state survives it (see
+    /// `handle_dpi_changed`).
     pending_scale_change: Option<GeometryProgress>,
 
     // Event callbacks set by the host before wasamo_run().
@@ -449,18 +451,24 @@ impl GeometryProgress {
 /// extent by `WindowState::scale` and projects the tree at it, so a scale
 /// committed after `SetWindowPos` would leave that pass laying out and
 /// projecting with the previous factor — one visibly wrong frame, and the
-/// phase's single most likely ordering defect. The order is not held by this
-/// comment: `begin_scale_change` writes the scale and installs the marker
-/// together, and the marker is what tells the nested pass it is step 3, so an
-/// edit that moved the call after `SetWindowPos` would not produce a
-/// stale-scale projection quietly — it would leave the nested pass
-/// unrecognised, hence unreported, hence re-done by the fallback at the
-/// committed scale. **The defect degrades to the fallback rather than to a
-/// wrong frame, and the fallback is directly tested.**
+/// phase's single most likely ordering defect. `begin_scale_change` writes the
+/// scale and installs the marker together, and the marker is what tells the
+/// nested pass it is step 3, so an edit that moved the call after
+/// `SetWindowPos` would leave that pass unrecognised, hence unreported, hence
+/// re-done by the fallback at the committed scale.
 ///
-/// Invisible before T9: an undeclared process is never sent this message, and
-/// at a scale of 1 `SetWindowPos` would dispatch no `WM_SIZE` anyway (T4,
-/// measured). That is why the ordering is argued structurally above rather than
+/// **What that is worth is measured, and it is less than "the order cannot be
+/// got wrong".** Inverting the two calls leaves all four integration tests
+/// green, because the *final* state converges either way. What the inversion
+/// still produces is the stale-factor projection DD-M4-P1-003 warns about, plus
+/// a text refresh at the stale DPI, both corrected a moment later by the
+/// fallback. So the structure turns the defect from **persistent** into
+/// **transient and self-correcting** — no more than that, and the persistent
+/// half is the half no test could have caught before T9.
+///
+/// Invisible before T9 either way: an undeclared process is never sent this
+/// message, and at a scale of 1 `SetWindowPos` dispatches no `WM_SIZE` at all
+/// (T4, measured). That is why the ordering is argued structurally rather than
 /// by observing that nothing currently goes wrong.
 ///
 /// Failure handling is **log and survive** throughout, per DD-M4-P1-003: no
