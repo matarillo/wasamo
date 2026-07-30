@@ -1106,9 +1106,11 @@ explicit authoritative-target geometry entry and an independent
 last-rasterized-DPI marker; the mock-free stale-raster control is 3/3 green and
 the two post-remediation six-frame sets are identical to the accepted success
 path. The supplied review's new minors are fixed or dispositioned in
-[log.md](./log.md). T6 is not yet reportable as done: the new integration
-binary's real Compositor-unavailable guard firing and a tip delta review remain
-open landing gates.
+[log.md](./log.md). The full review at `eb3021e` returned zero-major / 3 minor;
+the correction-only delta through `e3e878d` then received a zero-major /
+zero-minor narrow verification. T6 is not yet reportable as done: the new
+integration binary's real Compositor-unavailable guard firing remains the sole
+open landing gate.
 
 ---
 

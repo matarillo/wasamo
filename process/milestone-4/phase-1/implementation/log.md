@@ -4317,8 +4317,9 @@ bound; the identical targeted command then passed. Final code-tip validation:
 - `cargo test --workspace -- --test-threads=1` — green, 956 tests;
 - `cargo fmt --all -- --check`, `git diff --check` — green.
 
-The branch requires another independent delta review. The separate real
-Compositor-unavailable skip firing remains the external landing blocker.
+The branch requires another independent delta review at this point in the
+history. The separate real Compositor-unavailable skip firing remains the
+external landing blocker.
 
 ### Final independent review disposition (2026-07-30)
 
@@ -4335,6 +4336,8 @@ documentation corrections and are fixed after the reviewed tip:
 3. the evidence pointer names `t6-r1-final-a/b`, with `t6-final` retained as its
    byte-identical predecessor.
 
-No source code or captured PNG changes in this disposition. A final narrow
-review checks only these factual corrections. The real Compositor-unavailable
-guard firing remains the sole external landing blocker.
+No source code or captured PNG changes in this disposition. The final narrow
+review of `eb3021e..e3e878d` returned **zero major / zero minor** and confirmed
+all three factual corrections without a new inconsistency. The review gate is
+closed. The real Compositor-unavailable guard firing remains the sole external
+landing blocker.
