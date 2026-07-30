@@ -1500,6 +1500,14 @@ are in
       the remedy is the build command and not a guard. This is the one
       failure mode that can make every control in this task pass against
       code that is not the code under test.
+      **Cross-tree and mutation comparisons also isolate their artifact
+      directories** (T6 finding F-40). A parent worktree and the task tree
+      must not write the same cargo target, and any deliberately mutated
+      build finishes with `cargo clean -p wasamo-runtime --release` plus an
+      accepted-source workspace rebuild before the final capture. T6 caught
+      cargo reporting the task runtime fresh after the shared target had
+      just built the parent; a fresh DLL timestamp cannot distinguish this
+      case either.
 - [ ] **Reusable from T3**: the capture script
       [evidence/capture-t3-label-writes.ps1](./evidence/capture-t3-label-writes.ps1)
       carries the working mechanics — PMv2 capture process,
@@ -1586,6 +1594,11 @@ recorded; any finding triaged to a task or to
       [constraints §9](../requirements/constraints.md); **whether either
       of those needs a dated annotation is an owner decision** raised in
       [log.md](./log.md) §T5, not T12's to take.
+      **A third correction is T6 finding F-40:** cross-tree baselines use
+      separate cargo target directories, and mutation evidence ends with a
+      package clean plus accepted-source rebuild. Timestamp freshness and an
+      unqualified cargo "fresh" result are not source-identity evidence when
+      two source trees reused one artifact directory.
 - [ ] **Four Moment 2 divergence items named at T5**, so they are folded
       into the pass above rather than found during it. (i)
       [architecture.md §12.4](../../../../docs/architecture.md#coordinate-spaces)
