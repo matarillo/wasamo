@@ -822,7 +822,7 @@ This revision keeps `sync_visuals` as the runtime's only Composition geometry
 writer and makes a failed preparation retryable, because the cache remains
 old until the whole preparation succeeds.
 
-- [ ] Allocate the drawing surface at **`ceil(dip × s)` pixels** on each
+- [x] Allocate the drawing surface at **`ceil(dip × s)` pixels** on each
       axis, through T2's named rule — `DipScale::surface_pixels`, which
       returns a `(u32, u32)` pixel count. Two consequences of the landed
       signature (T2 finding F-14): `CreateDrawingSurface` takes an `f32`
@@ -949,12 +949,16 @@ old until the whole preparation succeeds.
       `insert_child` / `replace_child` on an already-attached tree**, and
       **the IR loader's conditional and `for` mutation sites**. Each puts
       a freshly constructed node — holding `DipScale::default()` and a
-      scale-1 text surface — under a window whose scale is not 1, and each
-      calls `mark_layout_dirty_for`, which schedules layout and not a
-      scale walk. The primitive therefore also runs at the start of
-      `run_layout` / `run_layout_as_window_root`, before `sync_visuals`.
-      A tab switch or list append is normalized by the same operation as
-      initial attach; no mutation primitive writes a cache by itself.
+      scale-1 text surface — under a window whose scale is not 1. The IR
+      conditional / `for` sites call `mark_layout_dirty_for`; the direct
+      Rust and ABI mutation APIs do **not** schedule or drain layout and
+      retain T3's stated limit that they wait for a later `WM_SIZE` or
+      size-affecting property write. The primitive therefore also runs at
+      the start of `run_layout` / `run_layout_as_window_root`, before
+      `sync_visuals`.
+      An IR tab switch / list append is normalized in its scheduled pass;
+      a direct mutation is normalized in the first later pass, before it can
+      receive layout geometry. No mutation primitive writes a cache by itself.
 - [x] Preserve public `TextRenderer::draw_text` as the 96-DPI convenience
       entry and add a crate-private device-DPI path for the runtime's seven
       scaled call expressions (the existing five plus the walk's Text and
@@ -969,14 +973,16 @@ old until the whole preparation succeeds.
       `pub use`-exports beside a public `get_text_renderer()`, so this is
       a Rust-native public change in the same class as T5's callback
       slots — and `DipScale` is crate-private, so it cannot appear there
-      without making the type public. Audited: `draw_text` has **no
-      caller outside `widget.rs`** in the repository, so the change is
-      free today; the 26 `get_text_renderer()` test sites all hand the
+      without making the type public. Audited at task start: `draw_text` had
+      **no production caller outside `widget.rs`**, so the change was free;
+      the 26 `get_text_renderer()` test sites all handed the
       renderer to a constructor rather than drawing with it. **Resolved at
       task start:** nothing new crosses the public boundary. The crate-private
       path takes the `u32` DPI D2D wants; `DipScale` stays private, the factor
       accessor is not used, and existing Rust-native callers of the public
-      method keep its 96-DPI semantics.
+      method keep its 96-DPI semantics. T6's mock-free integration control
+      now calls the public wrapper directly to pin that retained identity path;
+      it is a test caller, not a new production consumer.
 - [x] Confirm re-rasterization does **not** change any node's
       `SizeConstraint::Fixed(w, h)` — `measure` is DIP and unaffected by
       scale — so it cannot invalidate layout. This is the property T7
@@ -1279,11 +1285,14 @@ sequencing thesis does not defer all scaled-path risk to the end
       [handoff.md](./handoff.md), with no test.
       **Constructibility is resolved by T6.** Its layout-entry primitive
       normalizes every incremental attach path F-32 enumerated before
-      `sync_visuals`, so no legitimate path leaves a stale descendant once
-      the mutation becomes geometrically observable. T8 therefore needs a
-      `#[doc(hidden)] pub` seam to set one — the `lib.rs::ffi` shape F-29
-      already names for the scale accessor. The seam exists only to test the
-      one-divisor traversal property; it is not a production attach path.
+      `sync_visuals`. A direct mutation can hold a stale, still-unlaid-out
+      descendant while it waits for the API's pre-existing later-layout
+      trigger, but no legitimate path leaves one stale once the mutation
+      becomes geometrically observable. T8 therefore needs a
+      `#[doc(hidden)] pub` seam to set a stale cache after geometry exists —
+      the `lib.rs::ffi` shape F-29 already names for the scale accessor. The
+      seam exists only to test the one-divisor traversal property; it is not
+      a production attach path.
 - [ ] Follow the established `0x80070005` guard pattern — **fail, not
       skip**, on a runner without Compositor capability. Any new guard
       must be shown to fire on an environment that actually lacks the

@@ -15,6 +15,7 @@ absent from the final source and remains T9's responsibility.
 | `t6-100-after-a/b` | T6 implementation | 96 | `ceil` allocation plus accepted brush mapping at identity scale |
 | `t6-brush-default` | T6 implementation with the three DD-M4-P1-006 brush setters removed | 96 | Mutation control isolating the accepted mapping from the other row-7 changes |
 | `t6-final` | Accepted T6 source after a forced clean release rebuild | 96 | Branch-tip restoration check after the mutation build |
+| `t6-scaled-surface-identity-a/b` | T6 geometry/cache plus accepted brush mapping, with text rasterization forced to 96 DPI | 120 | Direct negative control: correct scaled geometry with a stale-resolution surface |
 
 The capture repeats are not interchangeable historical references. They are
 kept together because T5 measured session drift and established that a single
@@ -44,6 +45,14 @@ frame is not a baseline.
 - `t6-100-after-b` vs `t6-final`: all six client interiors are byte-identical.
   This closes the mutation-control loop: the final release DLL was rebuilt
   from the accepted source rather than left on the setter-removed artifact.
+- `t6-scaled-surface-identity-a` vs `-b`: all six client interiors are
+  byte-identical.
+- `t6-scaled-surface-identity-b` vs `t6-after-b`: all six frames differ
+  materially (9,183–25,977 pixels, maximum per-channel delta 223–252).
+  Unlike the parent baseline, both sides use 120-DPI node caches and therefore
+  occupy the same client with the same 9×2 tile layout. The mutation changes
+  only `draw_text_at_dpi`'s effective DPI; its temporary process-awareness
+  declaration merely exposes the already-existing 120-DPI path.
 
 ## Assistant screenshot analysis
 
@@ -57,6 +66,17 @@ The scaled positive control is the same text on the same 120-DPI monitor:
   the client and rasterizes the same run at 120 DPI. Stems and horizontal
   strokes are narrower and more consistent, counters remain open, and the
   baseline no longer has the stretched-bitmap fringe.
+
+The review-added negative control removes the geometry confound from that
+pair. `t6-scaled-surface-identity-b/gallery-default.png` and
+`t6-after-b/gallery-default.png` have the same window, button and tile edges
+and the same 9×2 arrangement. In the mutation, labels remain rasterized at
+96 DPI inside 120-DPI Visuals and appear visibly smaller and less consistent;
+the accepted frame rasterizes those same labels at 120 DPI. Because the
+accepted DD-M4-P1-006 brush does not stretch, this wrong implementation shows
+as under-sized glyphs rather than P2's old-default-brush blur. Either image is
+compatible with correct geometry; only the pair distinguishes the required
+surface-resolution path.
 
 The brush mutation is the same label at effective 96 DPI:
 

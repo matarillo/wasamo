@@ -38,6 +38,7 @@ that was made, not as a substitute for capturing.
 | `t6-100-baseline-*`, `t6-100-after-*` | T6 — identity-path control showing that `ceil` allocation plus DD-M4-P1-006 is intentionally observable even though D2D DPI and atlas-origin conversion are identities |
 | `t6-brush-default/` | T6 mutation control — the implementation with only DD-M4-P1-006's three setters removed |
 | `t6-final/` | T6 — six branch-tip frames captured after a forced clean rebuild of the accepted source; client interiors are byte-identical to `t6-100-after-b/` |
+| `t6-scaled-surface-identity-a/b/` | T6 review mutation — effective 120-DPI geometry/cache with every text surface and D2D context forced to 96 DPI; the direct positive control for the scaled rasterization path |
 
 ## Scripts
 

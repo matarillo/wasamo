@@ -4018,8 +4018,11 @@ so its two temporary `dead_code` allowances were removed.
 window authority; T7 will add its first mutation. Node constructors still
 start at identity. Initial `set_root` explicitly applies the window value.
 `append_child`, `insert_child`, `replace_child`, and the IR conditional / `for`
-sites remain cache-neutral: their existing dirty-layout path reaches a window
-root whose layout entry applies that root's scale recursively before geometry.
+sites remain cache-neutral. The IR paths mark the owning window dirty and drain
+through its layout entry. The direct Rust / ABI mutation APIs retain T3's
+existing limit: they schedule no layout and wait for a later `WM_SIZE` or
+size-affecting property write. In either case, the first layout that can assign
+geometry applies the window root's scale recursively before `sync_visuals`.
 The direct-Composition `window_add_widget` path retains no layout/content root
 and remains the already-stated unsupported boundary.
 
@@ -4098,3 +4101,24 @@ All commands ran on Windows from the T6 branch tip source:
 
 End-gate result: **passed**, subject to the required full independent review
 after the T6 retrospective. No merge approval is implied.
+
+### Independent review round 1 disposition (2026-07-30)
+
+Result: **3 major, 3 minor**. The zero-major merge gate is not met.
+
+| # | Severity | Finding | Disposition |
+|---|---|---|---|
+| R1 | major | T6's combined prepare+commit primitive does not yet supply DD-M4-P1-003 / T7's fixed order with both new-cache nested geometry and post-layout rasterization; its retry claim also has no authoritative target once `WindowState::scale` and the root cache diverge | **Confirmed; owner decision pending.** The plan already calls this a T6/T7 joint choice and reserves whether the cache commit moves into step 1 or the full walk moves. T6 cannot close while its public-to-crate primitive leaves that consumer unresolved. |
+| R2 | major | The first 125% baseline changes both geometry cache and text surfaces, so it does not isolate the defining scaled-rasterization failure | **Confirmed and remediated.** Two fresh mutation captures hold geometry/cache at 120 DPI while forcing every text surface and D2D context to 96 DPI. The two runs are byte-identical; versus accepted `t6-after-b`, all six frames differ by 9,183–25,977 pixels with maximum channel delta 223–252. Both occupy the same client and retain the same rectangular geometry / 9×2 tile layout; only the text-surface path is mutated. |
+| R3 | major | The new mock-free test binary has no recorded real `0x80070005` negative-path firing | **Confirmed; external evidence pending.** The helper is established, but the project rule requires this new test to be observed on a Compositor-unavailable environment rather than inheriting an earlier binary's observation. |
+| R4 | minor | Direct tree-mutation APIs were incorrectly described as scheduling dirty layout | **Fixed.** Plan, log and retrospective now distinguish IR dirty/drain from direct APIs waiting for a later layout; T6 guarantees normalization before the first later geometry write, not immediate layout. |
+| R5 | minor | The allocation checkbox was open and the public-wrapper caller statement predated the new integration control | **Fixed.** The checkbox is complete; the statement now distinguishes no production caller from the deliberate T6 test caller. |
+| R6 | minor | The live test accepted any surface at least as large as the Visual rather than exact `ceil` | **Fixed.** It now asserts `SizeInt32.Width/Height == ceil(Visual.Size.X/Y)` before the non-proportional mapping controls. Targeted test remains 2/2 green. |
+
+R2 evidence is
+[evidence/t6-scaled-surface-identity-a/](./evidence/t6-scaled-surface-identity-a/)
+and `-b/`. The temporary PMv2 declaration and identity-DPI renderer mutation
+were removed, then `cargo clean -p wasamo-runtime --release` and
+`cargo build --release --workspace` rebuilt the accepted source. R1 requires a
+product-owner record decision; R3 requires an external environment whose
+runtime actually returns `0x80070005`.
