@@ -197,6 +197,12 @@ code lands on the T1 commit.
       `WidgetNode::apply_scale_recursive`, called from `set_root` and
       from the `WM_DPICHANGED` handler. DD-002's no-new-state claim holds
       for the re-rasterization itself.
+      **Corrected at T6 independent review:** that single primitive and
+      no-new-state claim do not survive log-and-survive failure. Geometry scale
+      and the DPI of the brush actually installed can diverge, so the landed
+      shape is an explicit authoritative-target geometry entry plus
+      `refresh_text_surfaces_recursive`, with a separate per-node
+      `raster_scale` marker. T7 composes them around the nested `WM_SIZE`.
 - [x] **Confirm or revise the sequencing thesis.** Check that T2 → T8
       each leave the workspace buildable, the test suite green, and the
       rendered output unchanged at the development machine's 125%. If
@@ -1095,6 +1101,15 @@ is unchanged" is not evidence that text is crisp, and this is the task
 where that distinction is the whole point. Full independent review before
 merge.
 
+**Review-remediation state (2026-07-30):** R1 landed as `fad59e2` with an
+explicit authoritative-target geometry entry and an independent
+last-rasterized-DPI marker; the mock-free stale-raster control is 3/3 green and
+the two post-remediation six-frame sets are identical to the accepted success
+path. The supplied review's new minors are fixed or dispositioned in
+[log.md](./log.md). T6 is not yet reportable as done: the new integration
+binary's real Compositor-unavailable guard firing and a tip delta review remain
+open landing gates.
+
 ---
 
 ### T7 — `WM_DPICHANGED` propagation
@@ -1536,7 +1551,10 @@ are in
       accepted-source workspace rebuild before the final capture. T6 caught
       cargo reporting the task runtime fresh after the shared target had
       just built the parent; a fresh DLL timestamp cannot distinguish this
-      case either.
+      case either. A byte-identical restored frame distinguishes the accepted
+      build from the specific render-changing mutation, not from every possible
+      source tree: render-neutral mutations require the clean/rebuild record or
+      another structural/source artifact.
 - [ ] **Reusable from T3**: the capture script
       [evidence/capture-t3-label-writes.ps1](./evidence/capture-t3-label-writes.ps1)
       carries the working mechanics — PMv2 capture process,
@@ -1627,7 +1645,8 @@ recorded; any finding triaged to a task or to
       separate cargo target directories, and mutation evidence ends with a
       package clean plus accepted-source rebuild. Timestamp freshness and an
       unqualified cargo "fresh" result are not source-identity evidence when
-      two source trees reused one artifact directory.
+      two source trees reused one artifact directory; neither is frame identity
+      general source-identity evidence when the mutation could be render-neutral.
 - [ ] **Four Moment 2 divergence items named at T5**, so they are folded
       into the pass above rather than found during it. (i)
       [architecture.md §12.4](../../../../docs/architecture.md#coordinate-spaces)

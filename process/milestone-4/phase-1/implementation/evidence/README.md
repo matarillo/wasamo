@@ -39,6 +39,7 @@ that was made, not as a substitute for capturing.
 | `t6-brush-default/` | T6 mutation control — the implementation with only DD-M4-P1-006's three setters removed |
 | `t6-final/` | T6 — six branch-tip frames captured after a forced clean rebuild of the accepted source; client interiors are byte-identical to `t6-100-after-b/` |
 | `t6-scaled-surface-identity-a/b/` | T6 review mutation — effective 120-DPI geometry/cache with every text surface and D2D context forced to 96 DPI; the direct positive control for the scaled rasterization path |
+| `t6-r1-final-a/b/` | T6 review remediation — two live six-frame sets from `fad59e2`; mutually byte-identical and byte-identical to `t6-final/`, with the render-neutral R1 distinction fired by the mock-free integration control |
 
 ## Scripts
 

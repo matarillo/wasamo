@@ -4057,6 +4057,10 @@ captures differed materially in all six frames at 96 DPI (9,360–24,868 pixels,
 maximum channel delta 220–249). This is not evidence that the D2D scale
 boundary failed: DPI and atlas-origin conversion are identities at 96, while
 whole-pixel `ceil` allocation and DD-M4-P1-006's mapping are still observable.
+Here `96 DPI` is the runtime-effective path: because the final declaration had
+not landed, DWM enlarged the complete frame on the 125% desktop. The reported
+PNG measurements are therefore post-DWM physical pixels, although both sides
+of each comparison pass through the same enlargement.
 Removing only the three brush setters changed all six frames again
 (9,327–25,197 pixels, maximum delta 217–234), and the live-object integration
 test names the mechanism. The plan and end gate were corrected rather than
@@ -4070,17 +4074,22 @@ comparison worktree was removed; `cargo clean -p wasamo-runtime --release`
 then forced the accepted source to compile before the release workspace build.
 After the setter-removal mutation capture, the same clean/rebuild sequence was
 run again. The six `t6-final` client interiors are byte-identical to the six
-accepted `t6-100-after-b` interiors, proving the final DLL is not the mutation
-artifact. Future cross-tree comparisons must use separate target directories;
-mutation captures must finish with a package clean and accepted rebuild.
+accepted `t6-100-after-b` interiors, proving the final DLL is not the named
+setter-removal mutation artifact. That byte identity is not general
+source-identity evidence: a render-neutral mutation could produce the same
+frames and needs a structural/source artifact. Future cross-tree comparisons
+must use separate target directories; mutation captures must finish with a
+package clean and accepted rebuild, with the rebuild record—not the frame
+alone—carrying source restoration.
 
 #### Trap 7 — GUI evidence
 
 [evidence/t6-analysis/README.md](./evidence/t6-analysis/README.md) records the
 capture matrix, pixel counts, mutation, and assistant screenshot analysis. At
 effective 120 DPI the same gallery is the positive control: the parent occupies
-only `1 / 1.25` of the client and its magnified status text has stretched grey
-fringes and uneven stems; T6 fills the client and shows narrower consistent
+only `1 / 1.25` of the client and its 96-DPI glyph rasterization has grey edges
+and uneven stems; its default brush adds a slight whole-surface shrink/centring,
+not DWM bitmap stretching. T6 fills the client and shows narrower consistent
 strokes and open counters. Three fresh captures on each side establish the
 repeatability bounds. The 96-DPI default-brush mutation visibly centres and
 scales the integer surface; the accepted brush holds the origin and unit
@@ -4163,3 +4172,75 @@ inside its nested `WM_SIZE` and run it after `SetWindowPos` returns.
 The two tip-only commits (`a26f213`, `e532c9f`) remain outside the supplied
 review base and require a delta review together with this remediation before
 the final zero-major verdict.
+
+### R1 remediation result and repeated end-gate artifacts (2026-07-30)
+
+Landed as `fad59e2` after the pre-code plan record `23e14c3`. `WidgetNode`
+now holds two deliberately distinct derived facts: `scale` is the geometry /
+hit-test projection cache; `raster_scale` is the DPI of the text brush actually
+installed. Production window geometry receives `WindowState::scale`
+explicitly, passes that one target through the complete `sync_visuals`
+recursion, then commits every node geometry cache after successful sync. Text
+refresh is a separate fallible recursion and advances a node's raster marker
+only after `SetBrush` succeeds. The match is exhaustive over every current
+`WidgetData` variant.
+
+The three production boundaries compose those primitives as follows:
+
+| Caller | Authoritative target | Geometry/cache | Text refresh |
+|---|---|---|---|
+| `window::set_root` | `state.scale` | refresh new tree before replacing the old root; initial geometry then uses the explicit target and commits it | pre-attach, so failure preserves the installed root |
+| `wnd_proc::WM_SIZE` | the local copy of `state.scale` | `run_layout_as_window_root_at_scale` | separate call after geometry; T7 can suppress this call only for its nested `WM_SIZE` and run it at DD-003 step 4 |
+| `emit::flush_layout` | `state.scale` | same explicit-target geometry entry | separate call after geometry, covering IR incremental attach and later layout after direct mutation |
+
+Standalone Rust/test layout entries have no `WindowState`; they use their root
+geometry cache as their target, run target-threaded geometry, commit it, then
+refresh against the independent raster marker. Property writers rasterize at
+the node geometry scale and update `raster_scale` only after brush installation.
+
+**Structural side effects.** One `DipScale` marker is added per node; every
+constructor initializes both markers to identity. No `SizeConstraint`, retained
+text measurement, tree structure, registry/effect/signal state, reactive drain
+accounting, or Composition geometry-writer site is added. `sync_visuals`
+remains the only geometry writer; it now reads its explicit recursion target
+rather than `self.scale`. The new T6 pre-attach failure is also checked at the C
+ABI while the raw handle can still be restored, so that failure does not drop
+the host's allocation or leave its handle dangling. The wider experimental
+`set_root` ownership-on-error contract for pre-existing post-preparation WinRT
+failures is not redefined by T6.
+
+**Deterministic control.** The mock-free
+`authoritative_geometry_scale_preserves_a_stale_raster_retry` test creates a
+live Text surface at 96 DPI, runs geometry-only projection at 120 DPI, verifies
+the surface remains the original size, then calls the standalone layout entry.
+The geometry cache is already 120 DPI at that point, so the old shared-marker
+implementation would skip. The corrected implementation consults the stale
+raster marker and installs a surface whose exact integer size is the ceil of
+the 120-DPI Visual. The T6 integration binary is now **3 passed** locally.
+
+**GUI evidence.** A release workspace build preceded two fresh live six-frame
+captures, `t6-r1-final-a/b`. The sets are byte-identical to each other and all
+six client interiors are also byte-identical to the pre-remediation
+`t6-final` set. Direct inspection confirmed a non-blank 9 × 2 gallery, the
+click-created lightbox, and the `Counted 10 times` property-update frame with
+all expected labels. The exact frame match is a success-path regression check;
+the mock-free stale-raster control is the positive control for R1's
+render-neutral state distinction.
+
+Round-2 new-minor disposition after the remediation:
+
+| Minor | Result |
+|---|---|
+| 3 wildcard match | **Fixed** — exhaustive current variants. |
+| 4 consumed-Box comment / T6 preflight | **Fixed for the T6-added failure** — false comment removed; C ABI restores the raw handle if scale-aware preparation fails. Pre-existing later WinRT ownership semantics are unchanged. |
+| 5 text failure blocks geometry | **Fixed** — geometry/cache and refresh are separate calls; raster failure cannot prevent the completed geometry pass. |
+| 6 96-DPI evidence description | **Fixed** — evidence distinguishes runtime-effective 96 DPI from the post-DWM 125%-desktop frame. |
+| 7 stretched-fringe mechanism | **Fixed** — lower raster resolution plus the default brush's slight shrink/centring replaces the incorrect DWM-stretch explanation. |
+| 8 byte identity overclaim | **Fixed** — it excludes the named render-changing mutation; render-neutral changes require structural/source evidence. |
+| 9 public `draw_text` storage contract | **Fixed** — rustdoc records 96-DPI inputs, ceil storage and caller brush-mapping responsibility. |
+| 10 retrospective invariant | **Fixed** — item 10 records explicit authoritative target plus independent geometry/raster markers and the T7 consumer shape. |
+| 11 negative skip firing | **Still pending external evidence.** Static fail-not-skip direction is present, but the project rule still requires one real Compositor-unavailable run before landing. |
+
+R1 is code-remediated but not self-cleared: the branch still requires a delta
+review over `a26f213..HEAD`, and the negative-path environment evidence remains
+a non-review landing gate.
