@@ -446,10 +446,23 @@ fn a_created_windows_cached_scale_is_the_dpi_the_os_reports() {
 /// the before-state at `s = 1` a ratio assertion and a "DIP unchanged"
 /// assertion are one equation (finding F-45):
 ///
-/// - **Input-side, and the one that actually separates them**: the realised
-///   physical client equals a target computed from [`CLIENT_W`], and the root
-///   Visual equals those constants before and after. Neither is a ratio, and
-///   nothing read off the post-change tree can stand in for them.
+/// - **Input-side**: `realised_client` equals a target computed from
+///   [`CLIENT_W`]. This is the one assertion here that no ratio assertion can
+///   stand in for — it is read from `GetClientRect`, not off the Visual tree,
+///   and nothing else touches it. The root-Visual assertions sit beside it and
+///   are **partly implied**: at the three exact DPIs `before_root × factor`
+///   pins the size components, so what stays independent there is the *offset*
+///   components — no `assert_scaled` covers `.0` / `.1` — and, at 100 DPI, an
+///   exact tuple where the ratio assertion only carries a tolerance.
+///
+///   **What this does and does not do, corrected at the T8 round-3 review.**
+///   It does not supply a second independent *reading of the output*, which is
+///   what F-45 says the runtime does not offer. It guarantees the experiment
+///   held the input it claims to have held. That is the honest role, and the
+///   earlier wording — "the one that actually separates them", plus "nothing
+///   read off the post-change tree can stand in for them" — overstated it in
+///   two ways at once: `after_root` **is** read off the post-change tree, so
+///   the sentence disqualified one of its own two members.
 /// - **Discrete**: the WrapPanel row assignment, against a count derived from
 ///   the `.ui` source. Independent for the **before** state; redundant for
 ///   the after state and kept for legibility — see [`TILES_PER_ROW`], which

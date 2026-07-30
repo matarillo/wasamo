@@ -1467,11 +1467,18 @@ the assertions would actually read.
    factor — so once the ratio assertion fixes every tile at `before × factor`
    and the *before* row shape is pinned to the `.ui`-derived constant, the
    *after* row shape **follows**. No state exists where it fires and they do
-   not. F-45's problem stands; its proposed answer does not. **What separates
-   the two halves is on the input side**: the realised physical client
-   asserted against a target computed from this file's constants, and the root
-   Visual asserted against those constants before and after — numbers chosen
-   here rather than ratios read off the tree. The after-state row assertion
+   not. F-45's problem stands; its proposed answer does not. **The input-side
+   assertions are what remain**, and the round-3 review corrected the claim
+   made for them too: the realised physical client, asserted against a target
+   computed from this file's constants, is the one thing no ratio assertion
+   touches — it is read from `GetClientRect` rather than off the Visual tree.
+   The root-Visual assertions are **partly implied** (at the three exact DPIs
+   the size components follow from `before_root × factor`; the offset
+   components and 100 DPI's exact tuple do not). And their role is narrower
+   than "separates the two halves": they guarantee the experiment held the
+   input it claims to have held, which is not a second independent reading of
+   the *output* — the thing F-45 says the runtime does not offer. The
+   after-state row assertion
    stays for **legibility**, so a failure names the 9-vs-7 signature instead
    of a pile of `f32` mismatches; legibility is a property of an evidence
    artifact and is not evidence.

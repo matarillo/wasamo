@@ -5248,9 +5248,28 @@ does not take. *(ii)* The clean-tree half is stated **for that interval** and
 must not be read as standing: the round-2 review applied and reverted seven
 mutations, which rebuilt this artifact (mtime 5:08 → 6:23). The owner's
 observation is a past event and is unaffected; the argument's shelf life is
-not. **The cheap fix for next time is a content hash**, so it is recorded now:
-the artifact at the branch tip is SHA-256
-`DEEDD907A933EC7BA2A9662F17F8D32E83FF580081B5376549B6ADCFB05E9CAB`.
+not.
+
+*(iii)* **A content hash was prescribed here as "the cheap fix" and that
+prescription is wrong — measured at the round-3 review, finding MINOR B.**
+This repository's debug artifacts are **not bit-reproducible**: rebuilt from
+an unchanged source tree they hash differently every time. Five builds, five
+values — the reviewer's three and two more taken here by touching the test
+file's mtime and rebuilding:
+`DEEDD907…`, `9E1C632D…`, `98E873BC…`, `EC2FAB51…`, `E017EF34…`. So a hash
+recorded in a document is unverifiable even by its author, and worse as a
+*prescription*: a later task following it would record a number nobody can
+check, and a later reviewer comparing hashes would get a **false positive**
+for "the binary changed" — a fresh instance of the false-green /
+false-alarm class this phase already carries three findings about
+(F-5 / F-21 / F-40). The recorded value is therefore withdrawn rather than
+kept with a caveat.
+
+**What does work, and is what should have been written**: hash *the same
+file twice*, before and after the run being attested, and require the two to
+agree. That measures identity across an interval, which is the actual claim,
+and it assumes nothing about the build being deterministic. `LastWriteTime`
+read at the same two points is cheaper and sufficient for the same purpose.
 
 This is the required actual firing of the substring-classified local skip
 branch, per [AGENTS.md §Testing rules](../../../../AGENTS.md) — a guard
@@ -5333,6 +5352,7 @@ recommended listing it, and listing it is what separates the two rows:
 | [DD-M4-P1-003 §Context](../decisions/dd-m4-p1-003-dpi-change-propagation.md)'s 2026-07-29 annotation — "exact invariance is a property of a **controlled client extent** … the integration test preserves the client extent and therefore still asserts equality rather than a tolerance" | **Survives — reason restated at round 2 (MINOR 1), because the original one-liner was ambiguous in the way that invites the opposite verdict.** "Controlled" has two readings. Under *chosen by the test* it is necessary-not-sufficient exactly as "chosen" is, and 785 × 480 falsifies it. Under *held at the same DIP value* it is sufficient — and 785 × 480 is then **not** a controlled extent, because its DIP extent moves from 785 to 784.8, which is the entire content of M5. The annotation's own contrast fixes the second reading: it is set against the OS-suggested rectangle, whose defect is that it **moves** the client extent. The sentence is sound under the reading its context establishes. Recorded because "checked and it holds" and "did not look" are different facts — and so is "checked, and said why in a way that does not survive being read the other way" |
 | Same annotation's **revision-history summary** (`dd-m4-p1-003-…md` §Revision history, 2026-07-29) — "it holds of a controlled client extent, not of the OS-suggested rectangle" | **Survives, same reading.** Added at round 2 (MINOR 2): it is *derived prose* summarising the body annotation, which is the documentation form of trap #3 — the trap T8 declared applicable and then closed only over the node-side derived copy. Recorded rather than corrected: the summary says what the body says |
 | [decisions/preamble.md](../decisions/preamble.md) §Revision log, 2026-07-29 row — "exact invariance is a property of a controlled client extent" | **Survives, same reading.** Added at round 2 (MINOR 2), same derived-prose class. Also recorded: the round-1 query `controlled client extent` cannot match `a *controlled* client extent`, so markdown emphasis inside a phrase is a way a proposition search silently under-reports |
+| This log's own §T7 structural side-effect table, row 4 — "'identical results' holds of a *controlled* client extent; T8 preserves one, T11 does not" | **Survives**, and its wording is the better one: "preserves" is the held-constant reading spelled out, so it does not depend on how "controlled" is taken. **Added at round 3 (NIT A), and the reason it was missed twice is the finding**: round 2 raised it and the round-2 disposition left it out with no verdict, because it sits in a *T7* artifact and "is a historical record correctable here?" was treated as a reason to defer rather than a question to answer. Enumerating it costs one row and answering it costs one sentence; deferring it cost two rounds. It is also the exact instance of the markdown-emphasis blind spot the row above records — `*controlled*` again |
 | [decisions/preamble.md](../decisions/preamble.md) §Phase 1 verification closure item 2's 2026-07-29 qualification — "the unchanged-results half is exact **because the test synthesises the message and therefore holds the client extent constant**" | **Asserts the falsified causation**, in the `therefore`. **Raised to the owner, not corrected here.** No decision or option is re-chosen, so by the boundary T4 established — *supersede when a reader implementing the original text would not obtain the shipped behaviour; annotate when the decision still produces it and only a statement around it was too strong* — this is at most a third dated annotation, and the annotate route on an Accepted record is the owner's call, as it was at T4. The implementation-side documents now carry the corrected form, so nothing downstream reads the ADR for this |
 
 Post-remediation verification, on the branch tip:
@@ -5414,3 +5434,130 @@ prose, doc comments, and one assertion message. The owner's per-binary
 Compositor-unavailable observation and the mutation evidence therefore both
 remain valid. A further independent round is required before the zero-major
 verdict stands; merge remains a separate owner-approval gate.
+
+### Independent review round 3 disposition — delta over the round-2 remediation (2026-07-31)
+
+**Zero-major reached.** No new major; both round-2 majors closed. The round
+returned **2 minor and 1 nit**, all three confirmed and remediated here, and it
+**accepted the one push-back** T8 made.
+
+**The reviewer re-derived rather than accepted.** It independently reproduced
+both shadowing runs — M1 with `after_root` disabled firing `row_shape` at
+`(9, 2)` against `(7, 2)`, and M3 with the root `assert_scaled` also disabled
+firing per-tile at `88.0` against `110.0` — matching the recorded values
+exactly. It checked MAJOR 2's replacement proposition against every member of
+its set (24 is the lcm of the four denominators; `dpi / 96` is dyadic exactly
+when `3 | dpi`, giving three of four) and found it neither over- nor
+under-stated. And it produced a counter-measurement of its own, below.
+
+| # | Round-2 finding | Round-3 verdict | Action |
+|---|---|---|---|
+| MAJOR 1 | mutation table recorded pre-M5 panic sites | **closed** — shadowing runs independently reproduced | — |
+| MAJOR 2 | "exactly recoverable at every DPI" false at 100 | **closed** — replacement checked over its whole set | — |
+| MINOR 1 | the "controlled" verdict's reasoning | **closed; the push-back is accepted** — see below | Reasoning stands as written |
+| MINOR 2 | ADR enumeration missed two revision logs | **closed**, one residual → NIT A | Third row added |
+| MINOR 3 | the discrete witness is not independent | **not closed** — the *replacement* claim is over-strong | Corrected, below |
+| MINOR 4 | "function of" too strong | **closed** | — |
+| MINOR 5 | 9-vs-7 degenerates at 100 DPI | **closed** | — |
+| NIT 1 | filename hash is not identity | **not closed** — the prescription added with the fix does not work | Corrected, below |
+| NIT 2 | "exact" used in two senses | **closed** | — |
+
+**Over-closed: none.** In particular the reviewer endorsed keeping the
+after-state row assertion for legibility rather than deleting it, on three
+grounds: deleting it makes an M1-class failure present as a list of `f32`
+mismatches with the phase's own 9-vs-7 signature absent from the output; the
+doc *and* the assertion message both now say it is redundant and not evidence,
+so the misreading path is closed; and a redundant assertion costs no runtime.
+
+#### MINOR 1 — the push-back was accepted, and the reason narrows the residual
+
+The reviewer withdrew its own finding after checking the annotation's context:
+the contrast is drawn against the OS-suggested rectangle, whose defect is that
+it **moves** the client extent, so the axis is preserved-vs-moved and not
+chosen-vs-not; and the very next sentence glosses "controlled" as
+"**preserves** the client extent". It also confirmed independently that the
+held-constant reading is genuinely sufficient — identical DIP input into a pure
+layout gives identical DIP output, and physical is then `dip × factor` against
+a before of `dip × 1` — and that 100 DPI is not a counter-example but a case
+where the antecedent fails.
+
+**One thing it added is worth more than the finding it withdrew.** The reviewer
+read the ADR body directly and took the wrong reading, so the ambiguity is
+demonstrably in the ADR sentence and not only in T8's summary of it — n = 1,
+measured. That does not make an ADR edit T8's to do. It is folded into the
+question already with the owner about `decisions/preamble.md` item 2: **if**
+that annotation is written, the cheapest disambiguation is to say
+"controlled (held at the same DIP value)" in the same breath.
+
+#### MINOR 3 — the replacement separator was over-strong in two ways
+
+The withdrawal held: the round-2 correction is right that `row_shape(after)`
+follows from the ratio assertion plus the pinned before-state, and the
+reviewer confirmed it is carried through to the assertion message itself. What
+did not hold is what replaced it — "**what separates them is the input side**:
+the realised client, **and the root Visual**, … nothing read off the
+post-change tree can stand in for them".
+
+1. **The sentence disqualifies one of its own two members.** `after_root` is
+   read off the post-change tree. That is the same structure as the claim just
+   withdrawn, one member over.
+2. **`after_root` is partly implied.** `before_root` is pinned to the
+   constants and `assert_scaled` covers `.2` / `.3`, and at the three exact
+   DPIs `720 × factor` is exactly `target_w` — so the size components follow
+   there. What stays independent is the **offset** components, which no
+   `assert_scaled` touches, and the **100 DPI** case, where the exact tuple is
+   strictly stronger than a tolerated ratio.
+3. **"Separates" claims the wrong thing.** F-45's problem is that the runtime
+   offers one reading of a DIP layout *result*. An input-side assertion does
+   not supply a second one; it guarantees the experiment held the input it
+   claims to have held. That is the right role and a narrower one.
+
+Corrected at both sites. `realised_client` alone carries the "no ratio
+assertion touches it" claim — it comes from `GetClientRect`, not from the
+Visual tree.
+
+#### NIT 1 — the fix was right and the prescription attached to it was not
+
+The two corrections stand. The **content hash prescribed beside them does
+not**: this repository's debug artifacts are not bit-reproducible. Measured
+over five builds of an unchanged source tree — three by the reviewer, two here
+by touching the test file's mtime and rebuilding — **five distinct SHA-256
+values**. So the recorded hash was unverifiable by its own author, and as a
+prescription it would have had later tasks record uncheckable numbers and
+later reviewers read a rebuild as "the binary changed": a false-alarm
+generator, in a phase already carrying three findings about false signals from
+build artifacts.
+
+Withdrawn and replaced with what measures the actual claim: **hash the same
+file twice, before and after the run being attested, and require agreement** —
+identity across an interval, assuming nothing about determinism.
+`LastWriteTime` at the same two points is cheaper and sufficient. Carried
+forward, because a later task designing evidence around reproducible builds
+would be building on sand.
+
+#### The pattern the reviewer named, and what it changes
+
+**A remediation has introduced a fresh over-strong claim in three consecutive
+rounds** — round 1 produced MAJOR 2, round 2 produced MINOR 3's replacement
+separator and NIT 1's hash prescription. The magnitude is shrinking
+(major → minor → minor) and the round-2 corrective demonstrably worked where
+it was pointed: MAJOR 2's replacement was checked over its whole set and
+survived. It did not reach the claims that were *not* the corrected
+proposition — a separator description and a procedural recommendation.
+
+So the corrective is widened again, and this is the third widening:
+**the all-members check applies to everything a remediation commit newly
+asserts, not only to the proposition being corrected.** Recorded in the T8
+retrospective.
+
+Post-remediation verification, on the branch tip:
+
+- `cargo fmt --all -- --check`, `git diff --check` — green.
+- `cargo test -p wasamo-runtime --test dpi_scale_matrix_integration -- --test-threads=1` — 3 passed.
+- `cargo test --workspace -- --test-threads=1` — green, 35 binaries.
+
+This remediation changes prose and doc comments only; no assertion, tolerance,
+comparison or control flow moved. The owner's per-binary
+Compositor-unavailable observation and the mutation evidence remain valid, and
+the reviewer independently confirmed that reading of the round-2 diff before
+relying on it.
