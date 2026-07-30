@@ -4366,3 +4366,66 @@ branch; the same helper statically asserts that this branch may not skip when
 full zero-major review, and the zero-major / zero-minor correction review, this
 closes T6's final landing blocker. T6 is **done**. No merge or push is implied;
 merging to `feat/m4-phase-1` still requires explicit owner approval.
+
+## T7 — `WM_DPICHANGED` propagation
+
+### Carry-over audit and responsibility re-audit (2026-07-30, before start gate)
+
+Branch: `feat/m4-phase-1-t7`, created from `feat/m4-phase-1` at `1ff4cb1`
+(the T6 merge commit).
+
+The completed retrospectives and the handoff leave T7 four live obligations
+and nothing else. It is the first mutator of `WindowState::scale`, so it is
+where the derived node caches can first be left behind. It must consume T6's
+split primitives in DD-M4-P1-003's written order — geometry through
+`run_layout_as_window_root_at_scale` at an explicit target, raster through
+`refresh_text_surfaces_recursive` against the independent marker — without
+moving a step. It must not reuse `window::realize_dip_window_size` or its
+`SWP_NOMOVE` flag set (handoff row for T4). And it owns DD-003's 13-row
+structural side-effect enumeration as its close artifact, reading row 10's
+clip sites from the source rather than from the ADR's wording, which names
+Box where ZStack is (T1 F-2, re-verified at T3).
+
+Everything else the audit surfaced is already owned elsewhere and is not T7
+work: the PMv2 declaration is T9, synthetic `s != 1` assertions and the scale
+accessor seam are T8, the literal monitor crossing is T11, `window_add_widget`
+remains a stated content-boundary limit, and the frame-baseline and
+target-isolation rules bind T10 / T12.
+
+The task list itself survives the audit; five decisions it did not name are
+added to [plan.md](./plan.md) §T7 before the gate is selected. Four of them
+are only visible from the arm the handler sits beside, which is the reason the
+re-audit read `wnd_proc` end to end rather than reading the task list: the
+first `wnd_proc` re-entrancy with a live `GWLP_USERDATA` makes the arm's
+*placement* a soundness decision; the nested refresh suppression is a
+correctness property rather than step-order fidelity, because the landed arm
+discards the geometry `Result` and refreshes unconditionally; `lParam` is a
+raw `RECT*` from a message parameter and null is a reachable input; and the
+handler synthesises no `resize_fn` call, which incidentally makes that slot
+the only public observation of whether a nested `WM_SIZE` ran. The fifth is
+that the step-3 verdict is pure logic whose failure states the OS cannot be
+asked to produce.
+
+### Start gate (recorded 2026-07-30, before production-code edits)
+
+Review lane: **full independent review**. T7 changes the window procedure,
+introduces re-entrancy through it, and is the first writer of the
+authoritative scale — runtime-structural on all three counts. Trap #4
+composes with that review rather than replacing it.
+
+| # | Applies | Reason and planned close artifact |
+|---|---|---|
+| 1 — semantic migration / call sites | **no** | No enum, schema, IR or field type changes, and no existing traversal gains a case. The new step-3 verdict type is introduced with every consumer in the same commit and is matched exhaustively. The *caller* question that does exist — which callers of the geometry and raster primitives change discipline — is not a migration and is closed under traps 2/3 as an enumeration of all four call sites. |
+| 2 — structural side effects | **yes** | The phase's primary side-effect surface. Close with DD-M4-P1-003's 13 rows, each stated `updated` or `verified unchanged` against the source, rows 9–13 verified rather than assumed. |
+| 3 — parallel / derived data | **yes** | Added at the re-audit. `WindowState::scale` is authoritative and T7 is its first mutator; the per-node geometry cache and per-node `raster_scale` are both derived from it. Close by enumerating every consumer of the value step 1 writes and showing that neither derived copy can advance without a whole-tree projection having succeeded. |
+| 4 — authored branch | **yes** | Three authored branches: the no-nested-geometry fallback, the null suggested rectangle, and the denial of step 4 after both projections fail. Each gets a test that fires it directly; the fallback's is a mock-free integration test, and the pure step-3 verdict is unit-tested over all three states so the arm no OS input can reach is still fired. |
+| 5 — carry-forward | **yes** | The step 1 / step 2 order, the nested-refresh suppression, the fallback trigger, and the arm-placement soundness argument are all invariants a later task can trip — T9 makes the ordering defect producible for the first time, T8 synthesises the message, M4-Phase 2 touches this procedure. Record each with evidence and a re-trigger criterion. |
+| 6 — deterministic failure | **yes** | Added at the re-audit. The change lives in a message loop behind a raw pointer, where the tempting dispositions are "it passed on retry" and "the nested message must have run". Any recurring failure is rooted rather than re-rolled, and *observed nested geometry* rather than *entry into `WM_SIZE`* is what the handler records. |
+| 7 — GUI positive control | **no** | The handler's observable effect needs a real `WM_DPICHANGED`, which needs T9's declaration: before it the OS delivers this message to no window, so a capture at 100% cannot distinguish the handler's presence from its absence. The phase assigns the synthetic scale-driven assertions to T8 and the literal monitor crossing plus its human-visible smoke to T11. No frame is captured here, and none is claimed. |
+
+The approach is therefore constrained before editing: the arm sits above the
+`&mut *state_ptr` borrow and holds no outer reference across `SetWindowPos`;
+step 1 writes the scale and opens the nested-pass observation in one
+primitive, so no path installs the marker without having committed the scale;
+the nested `WM_SIZE` reports whether its projection *succeeded* and refreshes
+no text; and step 4 runs only behind the extracted verdict.
