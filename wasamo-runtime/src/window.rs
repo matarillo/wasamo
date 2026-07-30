@@ -17,9 +17,9 @@ use windows::{
                 CreateWindowExW, DefWindowProcW, GetWindowLongPtrW, LoadCursorW, PostQuitMessage,
                 RegisterClassExW, SetWindowLongPtrW, SetWindowPos, ShowWindow, CS_HREDRAW,
                 CS_VREDRAW, CW_USEDEFAULT, GWLP_USERDATA, IDC_ARROW, SWP_NOACTIVATE, SWP_NOMOVE,
-                SWP_NOZORDER, SW_SHOW, WM_DESTROY, WM_ERASEBKGND, WM_KEYDOWN, WM_LBUTTONDOWN,
-                WM_LBUTTONUP, WM_MOUSEMOVE, WM_SIZE, WNDCLASSEXW, WS_EX_NOREDIRECTIONBITMAP,
-                WS_OVERLAPPEDWINDOW,
+                SWP_NOZORDER, SW_SHOW, WM_DESTROY, WM_DPICHANGED, WM_ERASEBKGND, WM_KEYDOWN,
+                WM_LBUTTONDOWN, WM_LBUTTONUP, WM_MOUSEMOVE, WM_SIZE, WNDCLASSEXW,
+                WS_EX_NOREDIRECTIONBITMAP, WS_OVERLAPPEDWINDOW,
             },
         },
     },
@@ -55,6 +55,25 @@ pub struct WindowState {
     /// layout and by `emit::flush_layout`; rewritten by the `WM_DPICHANGED`
     /// handler at T7.
     pub(crate) scale: DipScale,
+
+    /// `Some` for exactly the span of the `SetWindowPos` inside a
+    /// `WM_DPICHANGED` handler (M4-Phase 1 T7), carrying what that call's
+    /// **re-entrant** `WM_SIZE` reported about DD-M4-P1-003 step 3.
+    ///
+    /// It exists because `SetWindowPos` dispatches `WM_SIZE` synchronously,
+    /// which makes the nested pass the handler's step 3 rather than an ordinary
+    /// resize. The `WM_SIZE` arm therefore consults it for two things: it must
+    /// **not** refresh text (step 4 owns that, after `SetWindowPos` returns,
+    /// and only behind a succeeded projection), and it must report whether its
+    /// projection *succeeded* — entry into the message is not the fact the
+    /// handler needs.
+    ///
+    /// Written only by `begin_scale_change` and `handle_dpi_changed`, and
+    /// `begin_scale_change` commits `scale` in the same breath: there is no
+    /// path that installs this marker without having already committed the new
+    /// scale, which is the step 1 / step 2 ordering expressed as a primitive
+    /// rather than as a statement order a later edit could invert.
+    pending_scale_change: Option<GeometryProgress>,
 
     // Event callbacks set by the host before wasamo_run().
     //
@@ -110,6 +129,7 @@ pub fn create(title: &str, width: i32, height: i32) -> windows::core::Result<Box
         root,
         _target: target,
         scale,
+        pending_scale_change: None,
         resize_fn: None,
         key_down_fn: None,
         mouse_down_fn: None,
@@ -374,6 +394,287 @@ fn apply_dark_mode(hwnd: HWND) {
     };
 }
 
+// ── WM_DPICHANGED (DD-M4-P1-003) ─────────────────────────────────────────────
+
+/// Whether DD-M4-P1-003 **step 3** — a whole-tree geometry projection at the
+/// newly committed scale — has succeeded yet.
+///
+/// The reason this is a value rather than a `bool` at the call site is that the
+/// question is asked twice about two different attempts (the re-entrant
+/// `WM_SIZE`, then the fallback) and answered once for step 4. The two
+/// unsuccessful states are distinguished for the diagnostic only: both lead to
+/// the fallback, and the final message reports which one preceded it.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+enum GeometryProgress {
+    /// No projection has run. What a `SetWindowPos` that dispatched no
+    /// `WM_SIZE` leaves behind — which includes the case where it *succeeded*
+    /// without changing the size, and the case where it failed.
+    NotProjected,
+    /// A projection ran and failed. A further attempt is still made, because a
+    /// different client extent may resolve.
+    Failed,
+    /// The whole tree is projected and its per-node geometry cache is
+    /// committed at the new scale.
+    Projected,
+}
+
+impl GeometryProgress {
+    /// The invariant step 4 hangs off: **text surfaces may be replaced and
+    /// raster markers advanced only once a whole-tree projection has
+    /// succeeded.**
+    ///
+    /// A `raster_scale` that moves past a geometry pass which did not happen
+    /// claims a convergence the Visual tree does not have — the failure the T6
+    /// independent review rejected in its shared-cache form, which reaches this
+    /// handler through the message loop instead. Asked twice: once to decide
+    /// whether the fallback is required, once to decide whether step 4 may run.
+    fn whole_tree_projected(self) -> bool {
+        matches!(self, Self::Projected)
+    }
+}
+
+/// DD-M4-P1-003's `WM_DPICHANGED` propagation, in the ADR's fixed order.
+///
+/// **Called from above `wnd_proc`'s `&mut *state_ptr` block, deliberately.**
+/// `SetWindowPos` dispatches `WM_SIZE` before it returns, so this is the first
+/// place in the runtime where `wnd_proc` re-enters with `GWLP_USERDATA`
+/// installed — T4's creation-time correction dispatches its nested messages
+/// while the pointer is still null. The nested frame needs its own
+/// `&mut WindowState` to lay out; what must not exist is an outer one alive at
+/// the same time, so every access here is short-lived and none spans step 2.
+/// Handling this message inside that block would have been sound only by the
+/// accident that the aliasing does not currently miscompile.
+///
+/// **Why step 1 precedes step 2.** The nested `WM_SIZE` divides the client
+/// extent by `WindowState::scale` and projects the tree at it, so a scale
+/// committed after `SetWindowPos` would leave that pass laying out and
+/// projecting with the previous factor — one visibly wrong frame, and the
+/// phase's single most likely ordering defect. The order is not held by this
+/// comment: `begin_scale_change` writes the scale and installs the marker
+/// together, and the marker is what tells the nested pass it is step 3, so an
+/// edit that moved the call after `SetWindowPos` would not produce a
+/// stale-scale projection quietly — it would leave the nested pass
+/// unrecognised, hence unreported, hence re-done by the fallback at the
+/// committed scale. **The defect degrades to the fallback rather than to a
+/// wrong frame, and the fallback is directly tested.**
+///
+/// Invisible before T9: an undeclared process is never sent this message, and
+/// at a scale of 1 `SetWindowPos` would dispatch no `WM_SIZE` anyway (T4,
+/// measured). That is why the ordering is argued structurally above rather than
+/// by observing that nothing currently goes wrong.
+///
+/// Failure handling is **log and survive** throughout, per DD-M4-P1-003: no
+/// path here tears down the window, none reports a new error to `wasamo_run`,
+/// and the runtime is never put into `Diverged` — that state is for
+/// reactive-engine divergence, and nothing in a scale change enters the
+/// reactive drain. The caller returns `LRESULT(0)` regardless (step 5).
+///
+/// `WM_GETDPISCALEDSIZE` is not handled this phase. V2 delivers it *before* the
+/// change so a process can propose its own new size, and Wasamo has no reason
+/// to override a suggestion that already preserves logical size. Forward
+/// exposure, not an omission.
+unsafe fn handle_dpi_changed(
+    hwnd: HWND,
+    state_ptr: *mut WindowState,
+    wparam: WPARAM,
+    lparam: LPARAM,
+) {
+    // Step 1. `HIWORD(wParam)` is the new Y-axis DPI; Windows reports the same
+    // value in both halves, and DD-M4-P1-003 names this one.
+    let new_scale = DipScale::from_dpi(((wparam.0 >> 16) & 0xFFFF) as u32);
+    begin_scale_change(state_ptr, new_scale);
+
+    // Step 2.
+    apply_suggested_rectangle(hwnd, lparam);
+
+    // Step 3. Close the observation window and read what the re-entrant pass
+    // reported. `None` cannot occur — step 1 installed the marker and nothing
+    // else takes it — and is read as "nothing was reported" rather than
+    // asserted, because a panic unwinding out of a window procedure is not a
+    // failure mode worth introducing to diagnose an unreachable one.
+    let nested = (*state_ptr)
+        .pending_scale_change
+        .take()
+        .unwrap_or(GeometryProgress::NotProjected);
+    let progress = if nested.whole_tree_projected() {
+        nested
+    } else {
+        project_current_client_extent(state_ptr)
+    };
+
+    // Step 4.
+    if progress.whole_tree_projected() {
+        refresh_text_at_new_scale(state_ptr);
+    } else {
+        eprintln!(
+            "wasamo: no geometry pass succeeded for the change to {} DPI (step 3: \
+             {nested:?}, then the fallback also failed), so the text surfaces are \
+             left at their previous resolution and every geometry cache and raster \
+             marker stays stale. The Visual tree may be partially updated, because \
+             the projection writes Visuals as it walks and commits caches only \
+             after the whole walk succeeds. The next resize or size-affecting \
+             property write retries the whole tree.",
+            new_scale.dpi()
+        );
+    }
+}
+
+/// Step 1: commit the new scale **and** open the nested-pass observation, in one
+/// place.
+///
+/// The two writes are here together rather than at the call site so that no
+/// path can install the marker without having committed the scale — the marker
+/// is the nested pass's only signal that it is step 3, and a marker installed
+/// against a stale scale is the ordering defect this function exists to make
+/// unconstructible.
+unsafe fn begin_scale_change(state_ptr: *mut WindowState, new_scale: DipScale) {
+    let state = &mut *state_ptr;
+    state.scale = new_scale;
+    state.pending_scale_change = Some(GeometryProgress::NotProjected);
+}
+
+/// Step 2: apply the OS-suggested **physical** rectangle.
+///
+/// Applying it rather than ignoring it is what preserves the window's *logical*
+/// size across the change, which is what the DIP contract means; ignoring it
+/// would give a window that grows and shrinks as it crosses monitors.
+///
+/// **The flags are not `window::realize_dip_window_size`'s, and that helper is
+/// not reusable here** (T4 finding F-30). It converts a DIP *size* and must
+/// leave `CW_USEDEFAULT`'s placement alone, so it passes `SWP_NOMOVE`. This
+/// rectangle's whole content is a new position *and* size, so `SWP_NOMOVE`
+/// would pin the window and defeat the suggestion on every monitor crossing —
+/// while every test stayed green. The two sites sit either side of the same
+/// mistake.
+///
+/// `lParam` is a raw `RECT*` supplied by the message, and `wnd_proc` is
+/// reachable by `SendMessageW` from any process — so a null is a reachable
+/// input, not a hypothetical one, and dereferencing it is the one failure in
+/// this handler that would not survive. Skipping step 2 leaves the scale
+/// already committed and the fallback carrying the change, so a malformed
+/// message still converges.
+unsafe fn apply_suggested_rectangle(hwnd: HWND, lparam: LPARAM) {
+    let suggested = lparam.0 as *const windows::Win32::Foundation::RECT;
+    if suggested.is_null() {
+        eprintln!(
+            "wasamo: WM_DPICHANGED carried a null suggested rectangle, so the window \
+             rectangle is left unchanged. The new scale is already committed and the \
+             widget tree is re-projected from the current client rectangle instead."
+        );
+        return;
+    }
+    let r = *suggested;
+    let result = SetWindowPos(
+        hwnd,
+        None,
+        r.left,
+        r.top,
+        r.right - r.left,
+        r.bottom - r.top,
+        SWP_NOZORDER | SWP_NOACTIVATE,
+    );
+    if let Err(e) = result {
+        eprintln!(
+            "wasamo: could not apply the OS-suggested window rectangle \
+             {}x{} at ({}, {}) for a DPI change: {e}. The window keeps its previous \
+             rectangle; the widget tree is still re-projected at the new scale.",
+            r.right - r.left,
+            r.bottom - r.top,
+            r.left,
+            r.top
+        );
+    }
+}
+
+/// Step 3, fallback: project the whole tree from the **current** client
+/// rectangle at the committed scale.
+///
+/// Required whenever `SetWindowPos` produced no successful re-entrant
+/// projection — which is not only the failure case. A `SetWindowPos` that
+/// succeeds *without changing the size* dispatches no `WM_SIZE` at all (T4,
+/// measured), and the DIP client extent has still changed, because the same
+/// physical extent divided by a new scale is a new DIP extent. Without this,
+/// the authoritative scale would move while every derived geometry cache stayed
+/// behind it.
+///
+/// The extent is read physical and converted through the **committed** scale,
+/// and the same scale is passed as the projection target, so the divisor and
+/// the multiplier are one value rather than two that happen to agree.
+unsafe fn project_current_client_extent(state_ptr: *mut WindowState) -> GeometryProgress {
+    use windows::Win32::Foundation::RECT;
+    use windows::Win32::UI::WindowsAndMessaging::GetClientRect;
+
+    let state = &mut *state_ptr;
+    let target = state.scale;
+    let hwnd = state.hwnd;
+
+    let mut rect = RECT::default();
+    if let Err(e) = GetClientRect(hwnd, &mut rect) {
+        eprintln!(
+            "wasamo: could not read the client rectangle to re-project the widget tree \
+             at {} DPI: {e}.",
+            target.dpi()
+        );
+        return GeometryProgress::Failed;
+    }
+    let (w, h) = target.pair_to_dip((
+        (rect.right - rect.left) as f32,
+        (rect.bottom - rect.top) as f32,
+    ));
+
+    match state.root_widget.as_mut() {
+        // A window with no content tree has nothing to project, so the change
+        // has converged. Reported as success rather than as a failure with no
+        // cause, and it lets step 4 no-op instead of logging.
+        None => GeometryProgress::Projected,
+        Some(root) => match root.run_layout_as_window_root_at_scale(w, h, target) {
+            Ok(()) => GeometryProgress::Projected,
+            Err(e) => {
+                eprintln!(
+                    "wasamo: could not re-project the widget tree at {} DPI from the \
+                     current {w}x{h} DIP client extent: {e}.",
+                    target.dpi()
+                );
+                GeometryProgress::Failed
+            }
+        },
+    }
+}
+
+/// Step 4: re-rasterize the text surfaces whose installed DPI is no longer the
+/// window's.
+///
+/// Reached only behind [`GeometryProgress::whole_tree_projected`]. Safe to run
+/// after step 3 rather than before it because `measure` is DIP and
+/// scale-invariant, so replacing a surface cannot change any node's
+/// `SizeConstraint::Fixed` pair and cannot invalidate the layout step 3 just
+/// computed. That is a property of today's text stack, not a free ordering: an
+/// explicitly-hinted or snapped `measure` would make this a correctness
+/// constraint to re-derive (DD-M4-P1-003 §Forward-compat exposure 6).
+///
+/// A failure here leaves the failed node's surface at the old resolution —
+/// visibly blurry, honest about it, and retryable, because the raster marker
+/// advances per node only after its brush is installed and geometry has already
+/// converged at the new scale.
+unsafe fn refresh_text_at_new_scale(state_ptr: *mut WindowState) {
+    let state = &mut *state_ptr;
+    let target = state.scale;
+    let Some(root) = state.root_widget.as_mut() else {
+        return;
+    };
+    let runtime = runtime::get();
+    if let Err(e) =
+        root.refresh_text_surfaces_recursive(&runtime.compositor, &runtime.text_renderer, target)
+    {
+        eprintln!(
+            "wasamo: could not re-rasterize every text surface at {} DPI: {e}. The \
+             geometry is at the new scale; the surfaces that failed stay at their \
+             previous resolution and are retried on the next pass.",
+            target.dpi()
+        );
+    }
+}
+
 /// The **physical** client-area pointer position packed into a mouse message's
 /// `lParam`, sign-extended per axis.
 ///
@@ -410,6 +711,17 @@ unsafe extern "system" fn wnd_proc(
         return LRESULT(1);
     }
 
+    // Handled **above** the `&mut *state_ptr` block below, not inside it: its
+    // `SetWindowPos` re-enters this procedure synchronously, and an outer
+    // `&mut WindowState` alive across that call would alias the nested frame's.
+    // See `handle_dpi_changed`. With no state installed there is no scale to
+    // update and nothing to project, so the message falls through to
+    // `DefWindowProcW`.
+    if msg == WM_DPICHANGED && !state_ptr.is_null() {
+        handle_dpi_changed(hwnd, state_ptr, wparam, lparam);
+        return LRESULT(0);
+    }
+
     if !state_ptr.is_null() {
         let state = &mut *state_ptr;
         // This window's conversion factor, copied out once so the arms below
@@ -428,14 +740,52 @@ unsafe extern "system" fn wnd_proc(
             if let Some(f) = &mut state.resize_fn {
                 f(w, h);
             }
+            // Is this DD-M4-P1-003 step 3 — the pass re-entered from inside the
+            // `WM_DPICHANGED` handler's `SetWindowPos` — or an ordinary resize?
+            // The marker's presence decides two things, and its value is how
+            // this pass reports back.
+            let scale_change = state.pending_scale_change.is_some();
+            let mut progress = GeometryProgress::Projected;
             if let Some(root) = state.root_widget.as_mut() {
-                let _ = root.run_layout_as_window_root_at_scale(w, h, scale);
-                let runtime = crate::runtime::get();
-                let _ = root.refresh_text_surfaces_recursive(
-                    &runtime.compositor,
-                    &runtime.text_renderer,
-                    scale,
-                );
+                progress = match root.run_layout_as_window_root_at_scale(w, h, scale) {
+                    Ok(()) => GeometryProgress::Projected,
+                    Err(e) => {
+                        // Logged only on the scale-change path: the ordinary
+                        // resize has swallowed this Result since M3-Phase 2 and
+                        // this task is not the place to start reporting it, but
+                        // a scale change that fails to project is the one thing
+                        // the handler's final diagnostic is about.
+                        if scale_change {
+                            eprintln!(
+                                "wasamo: the re-entrant WM_SIZE of a DPI change could not \
+                                 project the widget tree at {} DPI over a {w}x{h} DIP client \
+                                 extent: {e}.",
+                                scale.dpi()
+                            );
+                        }
+                        GeometryProgress::Failed
+                    }
+                };
+                // Under a scale change the target has moved, so refreshing here
+                // would advance every raster marker to the new DPI whether or
+                // not the projection that should accompany them succeeded. Step
+                // 4 owns it, after `SetWindowPos` returns and behind a succeeded
+                // projection. On an ordinary resize the target has not moved, so
+                // this call only retries a node whose earlier rasterization
+                // failed — which is what it is for.
+                if !scale_change {
+                    let runtime = crate::runtime::get();
+                    let _ = root.refresh_text_surfaces_recursive(
+                        &runtime.compositor,
+                        &runtime.text_renderer,
+                        scale,
+                    );
+                }
+            }
+            if scale_change {
+                // Reports the projection's **outcome**, not that this arm ran:
+                // entry into `WM_SIZE` is not the fact step 4 needs.
+                state.pending_scale_change = Some(progress);
             }
             return LRESULT(0);
         }
@@ -508,4 +858,42 @@ unsafe extern "system" fn wnd_proc(
     }
 
     DefWindowProcW(hwnd, msg, wparam, lparam)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::GeometryProgress;
+
+    /// The step-4 permission rule, pinned as pure logic.
+    ///
+    /// This exists because two of the three states are not producible from the
+    /// OS on demand. `NotProjected` is reachable from a test (a `SetWindowPos`
+    /// that changes no size dispatches no `WM_SIZE`), but a *failed* projection
+    /// needs a layout error and a *succeeded* one needs a live Compositor — so
+    /// the integration binary covers the paths it can reach and the rule itself
+    /// is fired here over its whole input space. The proposition is the one the
+    /// T6 independent review established: only a succeeded whole-tree
+    /// projection permits a raster marker to advance.
+    #[test]
+    fn only_a_succeeded_projection_permits_step_four() {
+        assert!(GeometryProgress::Projected.whole_tree_projected());
+        assert!(!GeometryProgress::Failed.whole_tree_projected());
+        assert!(!GeometryProgress::NotProjected.whole_tree_projected());
+    }
+
+    /// A `SetWindowPos` that succeeds without changing the size and one that
+    /// fails outright leave the handler in the *same* state, and the fallback
+    /// must fire for both. They are distinct variants only so the final
+    /// diagnostic can say which happened, so the test that matters is that
+    /// neither is mistaken for progress.
+    #[test]
+    fn neither_unsuccessful_state_is_progress() {
+        for state in [GeometryProgress::NotProjected, GeometryProgress::Failed] {
+            assert!(
+                !state.whole_tree_projected(),
+                "{state:?} must send the handler into the fallback"
+            );
+        }
+        assert_ne!(GeometryProgress::NotProjected, GeometryProgress::Failed);
+    }
 }
