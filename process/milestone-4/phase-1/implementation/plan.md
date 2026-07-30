@@ -1108,9 +1108,11 @@ the two post-remediation six-frame sets are identical to the accepted success
 path. The supplied review's new minors are fixed or dispositioned in
 [log.md](./log.md). The full review at `eb3021e` returned zero-major / 3 minor;
 the correction-only delta through `e3e878d` then received a zero-major /
-zero-minor narrow verification. T6 is not yet reportable as done: the new
-integration binary's real Compositor-unavailable guard firing remains the sole
-open landing gate.
+zero-minor narrow verification. The owner then ran the new integration binary
+in a real Compositor-unavailable Windows session: all three named tests entered
+the `runtime compositor unavailable` skip path and the binary reported 3
+passed. T6's implementation, evidence, retrospective, and review gates are
+therefore complete. Merge remains a separate owner-approval gate.
 
 ---
 

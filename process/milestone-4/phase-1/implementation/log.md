@@ -4341,3 +4341,28 @@ review of `eb3021e..e3e878d` returned **zero major / zero minor** and confirmed
 all three factual corrections without a new inconsistency. The review gate is
 closed. The real Compositor-unavailable guard firing remains the sole external
 landing blocker.
+
+### External Compositor-unavailable evidence and T6 close (2026-07-30)
+
+The owner ran the exact new test binary from the T6 branch in a Windows
+PowerShell 7.6.4 session where runtime initialisation reached the established
+Compositor-unavailable classification:
+
+`cargo test -p wasamo-runtime --test text_surface_mapping_integration -- --nocapture --test-threads=1`
+
+All three tests fired their named negative path rather than their Compositor
+body:
+
+| Test | Observed guard output |
+|---|---|
+| `authoritative_geometry_scale_preserves_a_stale_raster_retry` | `skipping geometry/raster scale separation: runtime compositor unavailable` |
+| `ceil_surface_mapping_is_observed_at_integer_and_fractional_visual_origins` | `skipping text surface source/destination mapping: runtime compositor unavailable` |
+| `text_surface_brush_overrides_the_scaled_centered_default` | `skipping text surface brush mapping: runtime compositor unavailable` |
+
+The binary result was 3 passed, 0 failed, 0 ignored, 0 measured, and 0 filtered
+out. This is the required actual firing of the substring-classified local skip
+branch; the same helper statically asserts that this branch may not skip when
+`GITHUB_ACTIONS` is set. Together with the local live-Compositor 3/3 run, the
+full zero-major review, and the zero-major / zero-minor correction review, this
+closes T6's final landing blocker. T6 is **done**. No merge or push is implied;
+merging to `feat/m4-phase-1` still requires explicit owner approval.
