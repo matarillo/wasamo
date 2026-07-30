@@ -5170,3 +5170,48 @@ returns `0x80070005`. CI is a separate gate again: the same helper statically
 refuses to skip when `GITHUB_ACTIONS` is set, so the fail-not-skip direction is
 closed by construction, but the actual CI run id belongs to the phase-end
 batch. No merge approval is implied.
+
+### External Compositor-unavailable evidence (2026-07-31)
+
+The owner ran the T8 test binary in a Windows session where runtime
+initialisation reached the established Compositor-unavailable
+classification:
+
+`cargo test -p wasamo-runtime --test dpi_scale_matrix_integration -- --nocapture --test-threads=1`
+
+All three tests entered their named negative path rather than their
+Compositor body:
+
+| Test | Observed guard output |
+|---|---|
+| `a_created_windows_cached_scale_is_the_dpi_the_os_reports` | `skipping cached window scale: runtime compositor unavailable` |
+| `a_stale_descendant_scale_still_hit_tests_where_the_widget_is` | `skipping mixed-scale hit test: runtime compositor unavailable` |
+| `dip_layout_is_invariant_while_every_visual_moves_by_the_ratio` | `skipping DIP invariance across the scale matrix: runtime compositor unavailable` |
+
+Result: 3 passed, 0 failed, 0 ignored, 0 measured, 0 filtered out.
+
+**It was the same binary, not a rebuild.** Cargo reported
+`Finished ... in 0.07s` and ran
+`dpi_scale_matrix_integration-911796c0ce6f8da6.exe`. That is the only such
+artifact on disk, produced by the clean rebuild recorded in the T8
+retrospective's item 3, and the working tree has been clean since — the two
+commits after it are documentation. So the difference between this run and the
+local live-Compositor 3/3 run is the session's Compositor capability and
+nothing else, which is what makes it a control on the guard rather than on a
+second build. *(Cargo's freshness verdict is the weaker half of that argument
+and is not leaned on alone; the phase has twice measured it saying "fresh"
+about something stale — F-5 / F-21 / F-40. Here it is corroborated by the
+single on-disk artifact and the clean tree, and the whole-archive path those
+findings concern is the `wasamo.dll` link, which an integration test binary
+does not take.)*
+
+This is the required actual firing of the substring-classified local skip
+branch, per [AGENTS.md §Testing rules](../../../../AGENTS.md) — a guard
+verified only on the happy path is not verified — and per T6 round-1 R3's
+finding that the observation is owed **per binary** rather than inherited from
+the shared helper. The same helper statically asserts that this branch may not
+skip when `GITHUB_ACTIONS` is set, so the CI direction is closed by
+construction and the run id itself belongs to the phase-end batch.
+
+T8's sole landing blocker is closed. Normal review before merge remains
+outstanding, and merge to `feat/m4-phase-1` is a separate owner-approval gate.

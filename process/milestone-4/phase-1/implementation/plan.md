@@ -1611,21 +1611,23 @@ same run measured a second constraint no rounding argument predicts: at
       than assuming the non-client frame stayed put (point 2). The
       normalisation is an ordinary `SetWindowPos` at 96 DPI, so it drives the
       ordinary `WM_SIZE` path and needs nothing new in the runtime.
-- [ ] Follow the established `0x80070005` guard pattern — **fail, not
+- [x] Follow the established `0x80070005` guard pattern — **fail, not
       skip**, on a runner without Compositor capability. Any new guard
       must be shown to fire on an environment that actually lacks the
       capability before the test lands; a guard verified only on the
       happy path is not verified. **This is a new binary, so the
       observation is owed again** (T6 round-1 R3) and is a landing blocker
       closed by an owner run, not by this task.
-      **The code half is landed** — the binary routes every test through
-      the shared `run_on_owning_runtime_thread_or_skip`, which statically
-      refuses to skip when `GITHUB_ACTIONS` is set — and the **observation
-      half is open**, which is why this box stays unticked.
       **Ownership, stated rather than left to a checklist**: the run is the
       **owner's**, on a session where `wasamo_init` returns `0x80070005`,
-      and the **fix container if it does not fire is the `feat/m4-phase-1-t8`
-      branch before merge** — an additive commit there, not a follow-up task.
+      and the **fix container if it did not fire would be the
+      `feat/m4-phase-1-t8` branch before merge** — an additive commit there,
+      not a follow-up task.
+      **Closed 2026-07-31 by owner run**: all three tests entered their
+      named skip path, 3 passed, and cargo ran the on-disk
+      `...-911796c0ce6f8da6.exe` without rebuilding — the same artifact as
+      the local live-Compositor run, so the session's capability is the only
+      difference between them. Output in [log.md](./log.md) §T8.
 - [x] **Show each assertion go red against a deliberately wrong
       implementation.** T8 is where the phase's "green proves nothing"
       thesis is finally testable against real scaled behaviour, so the
@@ -1646,12 +1648,12 @@ public-surface call sites), trap #2 (the normalisation drives a real
 property are invariants a later task can trip). **End gate:** tests green
 locally and in CI; the mutation table; the stated limits recorded in the
 test and in [log.md](./log.md).
-**Met, with two things outstanding and neither of them a test result**:
-this binary's Compositor-unavailable skip path has not been observed firing
-(owner run, landing blocker), and the CI run id belongs to the phase-end
-batch. Normal review before merge, per the lane table — re-checked at the
-start gate rather than inherited, and qualified there: T8 is not purely
-test-only, because it adds two `#[doc(hidden)] pub` seams.
+**Met.** The one landing blocker — this binary's Compositor-unavailable skip
+path observed firing — was closed the same day by an owner run (3/3 named
+skips, same artifact). The CI run id belongs to the phase-end batch. Normal
+review before merge, per the lane table — re-checked at the start gate rather
+than inherited, and qualified there: T8 is not purely test-only, because it
+adds two `#[doc(hidden)] pub` seams.
 
 ---
 
