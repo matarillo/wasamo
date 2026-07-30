@@ -100,7 +100,7 @@ impl TextRenderer {
         })
     }
 
-    /// Measure the natural (unconstrained) pixel size of a text string.
+    /// Measure the natural (unconstrained) DIP size of a text string.
     pub fn measure(&self, text: &str, style: TypographyStyle) -> windows::core::Result<(f32, f32)> {
         let layout = self.create_text_layout(text, style, f32::MAX, f32::MAX)?;
         let mut metrics = DWRITE_TEXT_METRICS::default();
@@ -108,7 +108,15 @@ impl TextRenderer {
         Ok((metrics.widthIncludingTrailingWhitespace, metrics.height))
     }
 
-    /// Allocate a `CompositionDrawingSurface` and draw `text` onto it.
+    /// Allocate a 96-DPI `CompositionDrawingSurface` and draw `text` onto it.
+    ///
+    /// `width` and `height` are DIP. Surface storage is an integer pixel grid,
+    /// so each axis is `ceil(dip)` pixels with a one-pixel minimum; it may be
+    /// slightly larger than a Visual using the exact fractional DIP extent.
+    /// A caller that creates its own `CompositionSurfaceBrush` must choose the
+    /// desired mapping explicitly. The WinRT default (`Uniform`, centred) can
+    /// shrink and displace this whole-pixel surface; the runtime's widget path
+    /// uses one-to-one, origin-aligned mapping instead.
     pub fn draw_text(
         &self,
         text: &str,

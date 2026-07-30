@@ -271,12 +271,13 @@ pub fn set_root(state: &mut WindowState, mut root: Box<WidgetNode>) -> windows::
     use windows::Win32::Foundation::RECT;
     use windows::Win32::UI::WindowsAndMessaging::GetClientRect;
 
-    // Prepare the new content tree before detaching the old one. The fallible
-    // brush pass leaves all node caches untouched until it has completed, and
-    // a failure here therefore preserves both the old installed root and a
-    // uniformly-scaled new tree that the caller can discard.
+    // Prepare the new content tree before detaching the old one. A failure
+    // preserves the installed root. The incoming Box is still consumed by
+    // this call and is dropped on failure; the experimental C ABI's
+    // ownership-on-error contract is tracked separately rather than described
+    // here as caller-recoverable.
     let runtime = crate::runtime::get();
-    root.apply_scale_recursive(&runtime.compositor, &runtime.text_renderer, state.scale)?;
+    root.refresh_text_surfaces_recursive(&runtime.compositor, &runtime.text_renderer, state.scale)?;
 
     if let Some(prev) = state.root_widget.take() {
         prev.for_each_ptr(&mut |p| {
@@ -311,7 +312,7 @@ pub fn set_root(state: &mut WindowState, mut root: Box<WidgetNode>) -> windows::
     };
     state.root_widget = Some(root);
     if let Some(r) = state.root_widget.as_mut() {
-        let _ = r.run_layout_as_window_root(cw, ch);
+        let _ = r.run_layout_as_window_root_at_scale(cw, ch, state.scale);
     }
     Ok(())
 }
@@ -428,7 +429,13 @@ unsafe extern "system" fn wnd_proc(
                 f(w, h);
             }
             if let Some(root) = state.root_widget.as_mut() {
-                let _ = root.run_layout_as_window_root(w, h);
+                let _ = root.run_layout_as_window_root_at_scale(w, h, scale);
+                let runtime = crate::runtime::get();
+                let _ = root.refresh_text_surfaces_recursive(
+                    &runtime.compositor,
+                    &runtime.text_renderer,
+                    scale,
+                );
             }
             return LRESULT(0);
         }

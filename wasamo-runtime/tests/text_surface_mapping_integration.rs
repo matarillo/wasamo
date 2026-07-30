@@ -173,3 +173,88 @@ fn ceil_surface_mapping_is_observed_at_integer_and_fractional_visual_origins() {
         );
     });
 }
+
+#[test]
+fn authoritative_geometry_scale_preserves_a_stale_raster_retry() {
+    run_on_owning_runtime_thread_or_skip("geometry/raster scale separation", move || {
+        let compositor = wasamo_runtime::get_compositor();
+        let renderer = wasamo_runtime::get_text_renderer();
+        let mut root =
+            WidgetNode::hstack(compositor, 0.0, 0.0, Alignment::Leading).expect("create HStack");
+        root.append_child(
+            WidgetNode::text(
+                compositor,
+                renderer,
+                "independent raster retry marker",
+                TypographyStyle::Body,
+            )
+            .expect("create Text"),
+        )
+        .expect("append Text");
+
+        let initial_brush: CompositionSurfaceBrush = root.children[0]
+            .visual
+            .Brush()
+            .expect("initial Text brush")
+            .cast()
+            .expect("initial surface brush");
+        let initial_surface: CompositionDrawingSurface = initial_brush
+            .Surface()
+            .expect("initial surface")
+            .cast()
+            .expect("initial drawing surface");
+        let initial_size = initial_surface.SizeInt32().expect("initial surface size");
+
+        root.__run_layout_as_window_root_at_dpi_for_test(300.0, 100.0, 120)
+            .expect("120-DPI geometry pass");
+        let text_visual: Visual = root.children[0].visual.cast().expect("Text Visual");
+        let scaled_visual_size = text_visual.Size().expect("scaled Text Visual size");
+        let stale_brush: CompositionSurfaceBrush = root.children[0]
+            .visual
+            .Brush()
+            .expect("stale Text brush")
+            .cast()
+            .expect("stale surface brush");
+        let stale_surface: CompositionDrawingSurface = stale_brush
+            .Surface()
+            .expect("stale surface")
+            .cast()
+            .expect("stale drawing surface");
+        assert_eq!(
+            stale_surface.SizeInt32().expect("stale surface size"),
+            initial_size,
+            "geometry-only scaling must not claim that the text surface was refreshed"
+        );
+        assert!(
+            initial_size.Width < scaled_visual_size.X.ceil() as i32
+                || initial_size.Height < scaled_visual_size.Y.ceil() as i32,
+            "the control requires the 96-DPI surface to be observably stale at 120 DPI"
+        );
+
+        // The public standalone layout entry derives its target from the now
+        // committed geometry cache. A shared marker would skip here; the
+        // independent raster marker must still trigger the replacement.
+        root.run_layout_as_window_root(300.0, 100.0)
+            .expect("retry stale text refresh");
+        let refreshed_brush: CompositionSurfaceBrush = root.children[0]
+            .visual
+            .Brush()
+            .expect("refreshed Text brush")
+            .cast()
+            .expect("refreshed surface brush");
+        let refreshed_surface: CompositionDrawingSurface = refreshed_brush
+            .Surface()
+            .expect("refreshed surface")
+            .cast()
+            .expect("refreshed drawing surface");
+        let refreshed_size = refreshed_surface
+            .SizeInt32()
+            .expect("refreshed surface size");
+        assert_eq!(refreshed_size.Width, scaled_visual_size.X.ceil() as i32);
+        assert_eq!(refreshed_size.Height, scaled_visual_size.Y.ceil() as i32);
+        assert_ne!(
+            refreshed_size, initial_size,
+            "the retry must install a new device-resolution surface"
+        );
+    });
+}

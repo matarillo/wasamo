@@ -170,7 +170,14 @@ fn flush_layout() {
             // drain's layout phase was the one path still calling the
             // non-window entry, so such a tree laid out correctly on resize and
             // collapsed on any property write.
-            let _ = root.run_layout_as_window_root(cw, ch);
+            let target = state.scale;
+            let _ = root.run_layout_as_window_root_at_scale(cw, ch, target);
+            let runtime = crate::runtime::get();
+            let _ = root.refresh_text_surfaces_recursive(
+                &runtime.compositor,
+                &runtime.text_renderer,
+                target,
+            );
         }
     }
 }

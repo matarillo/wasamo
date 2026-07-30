@@ -1076,7 +1076,21 @@ pub unsafe extern "C" fn wasamo_window_set_root(
         set_last_error("wasamo_window_set_root: root is null");
         return WASAMO_ERR_INVALID_ARG;
     }
-    let root_box: Box<WidgetNode> = Box::from_raw(root);
+    let mut root_box: Box<WidgetNode> = Box::from_raw(root);
+    // T6 made scale-aware text preparation the first fallible set-root step.
+    // Run that step while the ABI can still restore the caller's raw handle:
+    // ownership transfers only after successful preparation. `window::set_root`
+    // repeats the call, but its raster markers make the second pass a no-op.
+    let runtime = crate::runtime::get();
+    if let Err(e) = root_box.refresh_text_surfaces_recursive(
+        &runtime.compositor,
+        &runtime.text_renderer,
+        (*window).scale,
+    ) {
+        let _ = Box::into_raw(root_box);
+        set_last_error(format!("wasamo_window_set_root: {e}"));
+        return WASAMO_ERR_RUNTIME;
+    }
     match crate::window::set_root(&mut *window, root_box) {
         Ok(()) => {
             clear_last_error();

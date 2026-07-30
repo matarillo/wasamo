@@ -414,13 +414,12 @@ pub struct WidgetNode {
     ///
     /// **A cache with exactly one writer** — the attach / scale-change walk —
     /// while `WindowState::scale` holds the authoritative value. It exists
-    /// because the three passes that need a scale stand on a node and not on a
-    /// window: `sync_visuals` converts outbound, `hit_test_click_inner` and
-    /// `update_hover_inner` convert the `Visual` readback inbound, and the
-    /// property-write re-rasterization paths reach a node through a bare
-    /// `*mut WidgetNode` with no window in hand at all. Threading a parameter
-    /// instead was compiler-measured at 28 broken test call sites against 7,
-    /// and had no answer on that last path.
+    /// because hit testing and property-write re-rasterization stand on a node
+    /// with no window in hand. Production `sync_visuals` does not infer its
+    /// target from this copy: the window layout caller supplies the
+    /// authoritative value, and the successful geometry pass commits it here
+    /// before returning. Standalone Rust layout entries use the root copy as
+    /// their target because they are not attached through `WindowState`.
     ///
     /// `DipScale::default()` is the identity, so a tree that has not been
     /// attached to a window converts as 1 — which is also what every node holds
@@ -429,6 +428,16 @@ pub struct WidgetNode {
     ///
     /// Not `pub` and not `pub(crate)`: every reader is in this module.
     scale: DipScale,
+    /// DPI of the text surface most recently installed for this node.
+    ///
+    /// This is deliberately independent of `scale`: geometry can advance
+    /// after a recoverable WinRT rasterization failure, and retryability must
+    /// describe the brush that actually exists rather than the geometry that
+    /// should exist. Non-text nodes carry the same marker so the recursive
+    /// freshness walk has one uniform node shape; exhaustive `WidgetData`
+    /// matching keeps a future text-bearing variant from becoming a silent
+    /// no-op.
+    raster_scale: DipScale,
 }
 
 // ── Tree-mutation errors ──────────────────────────────────────────────────────
@@ -468,6 +477,7 @@ impl WidgetNode {
             attached: false,
             bindings: Vec::new(),
             scale: DipScale::default(),
+            raster_scale: DipScale::default(),
         }))
     }
 
@@ -492,6 +502,7 @@ impl WidgetNode {
             attached: false,
             bindings: Vec::new(),
             scale: DipScale::default(),
+            raster_scale: DipScale::default(),
         }))
     }
 
@@ -516,6 +527,7 @@ impl WidgetNode {
             attached: false,
             bindings: Vec::new(),
             scale: DipScale::default(),
+            raster_scale: DipScale::default(),
         }))
     }
 
@@ -556,6 +568,7 @@ impl WidgetNode {
             attached: false,
             bindings: Vec::new(),
             scale: DipScale::default(),
+            raster_scale: DipScale::default(),
         }))
     }
 
@@ -603,6 +616,7 @@ impl WidgetNode {
             attached: false,
             bindings: Vec::new(),
             scale: DipScale::default(),
+            raster_scale: DipScale::default(),
         }))
     }
 
@@ -645,6 +659,7 @@ impl WidgetNode {
             attached: false,
             bindings: Vec::new(),
             scale: DipScale::default(),
+            raster_scale: DipScale::default(),
         }))
     }
 
@@ -703,6 +718,7 @@ impl WidgetNode {
             attached: false,
             bindings: Vec::new(),
             scale: DipScale::default(),
+            raster_scale: DipScale::default(),
         }))
     }
 
@@ -738,6 +754,7 @@ impl WidgetNode {
             attached: false,
             bindings: Vec::new(),
             scale: DipScale::default(),
+            raster_scale: DipScale::default(),
         }))
     }
 
@@ -761,6 +778,7 @@ impl WidgetNode {
             attached: false,
             bindings: Vec::new(),
             scale: DipScale::default(),
+            raster_scale: DipScale::default(),
         }))
     }
 
@@ -931,6 +949,7 @@ impl WidgetNode {
             attached: false,
             bindings: Vec::new(),
             scale: DipScale::default(),
+            raster_scale: DipScale::default(),
         }))
     }
 
@@ -1125,6 +1144,7 @@ impl WidgetNode {
         // Natural size updates; takes effect on the next layout pass.
         self.width = SizeConstraint::Fixed(lw + BUTTON_PAD_H * 2.0);
         self.height = SizeConstraint::Fixed(lh + BUTTON_PAD_V * 2.0);
+        self.raster_scale = self.scale;
         Ok(())
     }
 
@@ -1245,6 +1265,7 @@ impl WidgetNode {
         *content = new_content.to_owned();
         self.width = SizeConstraint::Fixed(w);
         self.height = SizeConstraint::Fixed(h);
+        self.raster_scale = self.scale;
         Ok(())
     }
 
@@ -1284,6 +1305,7 @@ impl WidgetNode {
 
         self.width = SizeConstraint::Fixed(w);
         self.height = SizeConstraint::Fixed(h);
+        self.raster_scale = self.scale;
         Ok(())
     }
 
@@ -1701,33 +1723,20 @@ impl WidgetNode {
 
     // ── Window-scale preparation ─────────────────────────────────────────────
 
-    /// Bring every node in this subtree to `target` without ever exposing a
-    /// partially updated geometry-scale cache to `sync_visuals`.
+    /// Refresh text surfaces whose last successful rasterization differs from
+    /// `target`.
     ///
-    /// The fallible pass replaces stale text brushes first and deliberately
-    /// leaves all caches untouched. Only after the whole pass succeeds does
-    /// the infallible commit pass update the caches. A failure can therefore
-    /// leave some brushes prepared at the target resolution, but geometry
-    /// remains uniformly at the old scale and the next call retries because
-    /// the stale caches still identify the unfinished work.
-    pub(crate) fn apply_scale_recursive(
+    /// Raster freshness is independent of the geometry cache. Each node's
+    /// marker advances only after its replacement brush is installed, so a
+    /// partial WinRT failure leaves precisely the unfinished suffix retryable
+    /// without holding back layout or target-scale geometry.
+    pub(crate) fn refresh_text_surfaces_recursive(
         &mut self,
         compositor: &Compositor,
         renderer: &TextRenderer,
         target: DipScale,
     ) -> windows::core::Result<()> {
-        self.prepare_stale_text_brushes(compositor, renderer, target)?;
-        self.commit_scale_recursive(target);
-        Ok(())
-    }
-
-    fn prepare_stale_text_brushes(
-        &mut self,
-        compositor: &Compositor,
-        renderer: &TextRenderer,
-        target: DipScale,
-    ) -> windows::core::Result<()> {
-        if self.scale != target {
+        if self.raster_scale != target {
             match &self.data {
                 WidgetData::Text { content, style } => {
                     let (width, height) =
@@ -1771,17 +1780,25 @@ impl WidgetNode {
                     let brush = create_text_surface_brush(compositor, &surface)?;
                     button.label_visual.SetBrush(&brush)?;
                 }
-                _ => {}
+                WidgetData::Rectangle
+                | WidgetData::VStack { .. }
+                | WidgetData::HStack { .. }
+                | WidgetData::Box { .. }
+                | WidgetData::WrapPanel { .. }
+                | WidgetData::ScrollView { .. }
+                | WidgetData::Grid { .. }
+                | WidgetData::ZStack => {}
             }
+            self.raster_scale = target;
         }
 
         for child in &mut self.children {
-            child.prepare_stale_text_brushes(compositor, renderer, target)?;
+            child.refresh_text_surfaces_recursive(compositor, renderer, target)?;
         }
         Ok(())
     }
 
-    fn commit_scale_recursive(&mut self, target: DipScale) {
+    pub(crate) fn commit_scale_recursive(&mut self, target: DipScale) {
         self.scale = target;
         for child in &mut self.children {
             child.commit_scale_recursive(target);
@@ -1795,18 +1812,29 @@ impl WidgetNode {
     /// M3-Phase 2 T8: `layout::run_layout` is fallible — it surfaces
     /// `LayoutError::BoxAspectUnboundedBoth` / `BoxNoExtent` from
     /// DD-M3-P2-005. We translate those into `windows::core::Error` so
-    /// the existing `WM_SIZE` -> `r.run_layout(cw, ch)` call sites (which
-    /// already swallow the Result with `let _ = …`) keep their current
-    /// shape. A dedicated C ABI surface for layout-time runtime errors
+    /// the existing window layout call sites (which already swallow the
+    /// Result with `let _ = …`) keep their current shape. A dedicated C ABI
+    /// surface for layout-time runtime errors
     /// is out of Phase 2 scope and tracked alongside the ABI work in
     /// later phases.
     pub fn run_layout(&mut self, window_w: f32, window_h: f32) -> windows::core::Result<()> {
         let target = self.scale;
+        self.run_layout_at_scale(window_w, window_h, target)?;
         let runtime = crate::runtime::get();
-        self.apply_scale_recursive(&runtime.compositor, &runtime.text_renderer, target)?;
+        self.refresh_text_surfaces_recursive(&runtime.compositor, &runtime.text_renderer, target)
+    }
+
+    fn run_layout_at_scale(
+        &mut self,
+        window_w: f32,
+        window_h: f32,
+        target: DipScale,
+    ) -> windows::core::Result<()> {
         let mut layout_tree = self.build_layout_tree();
         layout::run_layout(&mut layout_tree, window_w, window_h).map_err(layout_error_to_winerr)?;
-        self.sync_visuals(&layout_tree, (0.0, 0.0))
+        self.sync_visuals(&layout_tree, (0.0, 0.0), target)?;
+        self.commit_scale_recursive(target);
+        Ok(())
     }
 
     /// Layout entry for the **window-root** WidgetNode (the one
@@ -1844,13 +1872,45 @@ impl WidgetNode {
         window_h: f32,
     ) -> windows::core::Result<()> {
         let target = self.scale;
+        self.run_layout_as_window_root_at_scale(window_w, window_h, target)?;
         let runtime = crate::runtime::get();
-        self.apply_scale_recursive(&runtime.compositor, &runtime.text_renderer, target)?;
+        self.refresh_text_surfaces_recursive(&runtime.compositor, &runtime.text_renderer, target)
+    }
+
+    /// Run window-root geometry at an authoritative window scale.
+    ///
+    /// This entry deliberately does not refresh text. Window callers compose
+    /// the infallible geometry/cache operation with the fallible raster pass;
+    /// T7 can therefore defer the latter out of the nested `WM_SIZE` while
+    /// preserving DD-M4-P1-003's fixed ordering.
+    pub(crate) fn run_layout_as_window_root_at_scale(
+        &mut self,
+        window_w: f32,
+        window_h: f32,
+        target: DipScale,
+    ) -> windows::core::Result<()> {
         let mut layout_tree = self.build_layout_tree();
         layout_tree.width = SizeConstraint::Fill;
         layout_tree.height = SizeConstraint::Fill;
         layout::run_layout(&mut layout_tree, window_w, window_h).map_err(layout_error_to_winerr)?;
-        self.sync_visuals(&layout_tree, (0.0, 0.0))
+        self.sync_visuals(&layout_tree, (0.0, 0.0), target)?;
+        self.commit_scale_recursive(target);
+        Ok(())
+    }
+
+    /// Exercise authoritative window-scale geometry without refreshing text.
+    ///
+    /// This test seam keeps the private `DipScale` carrier private while a
+    /// mock-free integration test verifies that geometry cache and raster
+    /// freshness can diverge and subsequently reconcile.
+    #[doc(hidden)]
+    pub fn __run_layout_as_window_root_at_dpi_for_test(
+        &mut self,
+        window_w: f32,
+        window_h: f32,
+        dpi: u32,
+    ) -> windows::core::Result<()> {
+        self.run_layout_as_window_root_at_scale(window_w, window_h, DipScale::from_dpi(dpi))
     }
 
     fn build_layout_child_slots(&self) -> ChildSlots {
@@ -1981,12 +2041,14 @@ impl WidgetNode {
         &mut self,
         computed: &LayoutNode,
         parent_abs_offset: (f32, f32),
+        target: DipScale,
     ) -> windows::core::Result<()> {
         use windows::core::Interface;
         let visual: Visual = self.visual.cast()?;
         // DD-M4-P1-002 audit row 4, the outbound seam. `computed` is DIP and
         // the Composition visual tree is physical, so every write below
-        // multiplies by this node's scale — through the named operations, not
+        // multiplies by the authoritative window target — through the named
+        // operations, not
         // by hand: `dip * scale.factor()` satisfies a prose reading of the rule
         // and is wrong only at non-dyadic scales, where two of the phase's
         // three test factors cannot see it (T2 findings F-13 / F-15).
@@ -1996,10 +2058,9 @@ impl WidgetNode {
         // the two absolute DIP positions, so subtracting in DIP and multiplying
         // the result — one rounding instead of two — is the only thing a caller
         // can express without converting each operand itself.
-        let (offset_x, offset_y) = self
-            .scale
-            .relative_offset_to_physical(computed.offset, parent_abs_offset);
-        let (size_x, size_y) = self.scale.extent_to_physical(computed.size);
+        let (offset_x, offset_y) =
+            target.relative_offset_to_physical(computed.offset, parent_abs_offset);
+        let (size_x, size_y) = target.extent_to_physical(computed.size);
         visual.SetOffset(Vector3 {
             X: offset_x,
             Y: offset_y,
@@ -2030,11 +2091,11 @@ impl WidgetNode {
         if let WidgetData::Button(btn) | WidgetData::ToggleButton(btn) = &self.data {
             let label_visual: Visual = btn.label_visual.cast()?;
             label_visual.SetOffset(Vector3 {
-                X: self.scale.to_physical(BUTTON_PAD_H),
-                Y: self.scale.to_physical(BUTTON_PAD_V),
+                X: target.to_physical(BUTTON_PAD_H),
+                Y: target.to_physical(BUTTON_PAD_V),
                 Z: 0.0,
             })?;
-            let (label_w, label_h) = self.scale.extent_to_physical(btn.label_size);
+            let (label_w, label_h) = target.extent_to_physical(btn.label_size);
             label_visual.SetSize(Vector2 {
                 X: label_w,
                 Y: label_h,
@@ -2066,18 +2127,18 @@ impl WidgetNode {
             let applied = computed.applied_offset_y.get();
             let int_visual: Visual = content_visual.cast()?;
             int_visual.SetOffset(Vector3 {
-                X: self.scale.to_physical(0.0),
-                Y: self.scale.to_physical(-applied),
+                X: target.to_physical(0.0),
+                Y: target.to_physical(-applied),
                 Z: 0.0,
             })?;
-            let (int_w, int_h) = self.scale.extent_to_physical(computed.size);
+            let (int_w, int_h) = target.extent_to_physical(computed.size);
             int_visual.SetSize(Vector2 { X: int_w, Y: int_h })?;
             (computed.offset.0, computed.offset.1 - applied)
         } else {
             computed.offset
         };
         for (child, child_computed) in self.children.iter_mut().zip(computed.children.iter()) {
-            child.sync_visuals(child_computed, child_parent_abs)?;
+            child.sync_visuals(child_computed, child_parent_abs, target)?;
         }
         Ok(())
     }
