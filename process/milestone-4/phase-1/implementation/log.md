@@ -3943,7 +3943,7 @@ No trap is judged non-applicable after the responsibility re-audit.
 
 | # | Applies | Reason and planned close artifact |
 |---|---|---|
-| 1 — semantic migration / call sites | **yes** | DD-002 audit row 7 changes and the internal scaled drawing entry has six production callers (five existing paths plus the re-rasterization path). Close with the exact `rg` queries, every caller classified, and an explicit unchanged-row-10 check. |
+| 1 — semantic migration / call sites | **yes** | DD-002 audit row 7 changes and the internal scaled drawing entry has seven production call expressions (five existing paths plus the re-rasterization path's Text and Button-family arms). Close with the exact `rg` queries, every caller classified, and an explicit unchanged-row-10 check. |
 | 2 — structural side effects | **yes** | The primitive changes text brushes and the cache that every geometry write reads. Enumerate brush replacement, cache commit, layout ordering, geometry non-effects, layout invalidation, child reach, and failure state. |
 | 3 — parallel / derived data | **yes** | Each node cache is derived from `WindowState::scale`. Close by enumerating the authoritative scale mutator and all attach / layout paths, and show that cache commit occurs only inside the prepare-then-commit primitive after fallible work succeeds. |
 | 4 — authored branch | **yes** | Reusing a Text node's fixed extent requires a size-shape branch, and rendering failures may gain a diagnostic branch. Add a direct test for each branch introduced; do not count an incidental GUI run. |
@@ -3957,3 +3957,144 @@ crate; text extents are read rather than re-measured; no new retained
 rendering state is added; no Composition geometry write leaves
 `sync_visuals`; and cache writes occur only after the complete fallible
 preparation succeeds.
+
+### Implementation result and end gate (2026-07-30)
+
+T6 implements the responsibility selected at the start gate. `TextRenderer`
+now allocates each drawing surface with `DipScale::surface_pixels`, sets the
+D2D context to the retained raw DPI, and converts `BeginDraw`'s physical atlas
+offset back to DIP before drawing. `WidgetNode` creates every text surface
+brush through one helper that sets `CompositionStretch::None` and both
+alignment ratios to `0.0`. The public `draw_text` method remains the 96-DPI
+entry; the runtime uses the crate-private `draw_text_at_dpi` entry.
+
+The tree operation is the planned prepare-then-commit pair. The fallible pass
+replaces stale Text and Button-family brushes from retained DIP state and does
+not change a cache. The infallible pass then writes every node cache. `set_root`
+runs it before detaching the previous root, and both layout entries run it
+before building a layout tree, so a newly inserted child is normalized before
+the first `sync_visuals` that can expose it.
+
+#### Trap 1 — semantic call-site audit
+
+Queries used:
+
+```text
+rg -n "draw_text\(" --glob "*.rs" .
+rg -n "draw_text_at_dpi\(" wasamo-runtime/src
+rg -n "CreateSurfaceBrushWithSurface" wasamo-runtime/src wasamo-runtime/tests
+```
+
+| Site | DPI source | Disposition |
+|---|---|---|
+| public `TextRenderer::draw_text` wrapper | `REFERENCE_DPI` | Existing Rust-native contract retained; the integration control is its only repository caller outside the wrapper itself. |
+| Text constructor | identity | Construction precedes window ownership; normalized by the first attach/layout operation. |
+| Button / ToggleButton constructor | identity | Same construction boundary. |
+| Button label update | node cache | Reads DPI before the whole-node mutable borrow, then replaces the brush. |
+| Text content update | node cache | Re-measures because content changed, then rasterizes at the already-attached node scale. |
+| Text style update | node cache | Re-measures because style changed, then rasterizes at the already-attached node scale. |
+| prepare pass, Text arm | target window scale | Reads the retained fixed extent; no measurement. |
+| prepare pass, Button-family arm | target window scale | Reads `ButtonData.label_size`; no measurement. |
+
+The seven internal call expressions are therefore all classified. The one
+production `CreateSurfaceBrushWithSurface` expression is inside the accepted
+mapping helper. Audit row 10 is unchanged: measurement still takes DIP and the
+scale walk contains no `measure` call. `DipScale::surface_pixels` is now live,
+so its two temporary `dead_code` allowances were removed.
+
+#### Traps 2 and 3 — structural side effects and parallel data
+
+| Effect / copy | Writer and ordering | End-gate result |
+|---|---|---|
+| drawing-surface pixel extent | `draw_text_at_dpi`, `ceil(dip × scale)`, minimum one pixel | Changed intentionally; Visual extent is not rounded. |
+| D2D DPI and atlas origin | `draw_text_at_dpi`, after `BeginDraw` | Both sides of the physical/DIP boundary use the same `DipScale`. |
+| surface-brush mapping | `create_text_surface_brush` | One production writer; `None` / `0.0` / `0.0`. |
+| Text / Button brush | property-update path or prepare pass | A prepare failure may leave an already-prepared brush, but no geometry cache is partially committed; stale caches make the next pass retry. |
+| node scale cache | `commit_scale_recursive` only | One assignment expression in the runtime, reached only after the complete fallible pass succeeds. |
+| Composition geometry | `sync_visuals` only | The prepare and commit passes contain no `SetOffset` / `SetSize`; the repository search finds those writes only in `sync_visuals`. |
+| retained DIP extent / layout invalidation | existing constructors and property updates only | The scale walk neither writes `SizeConstraint` / `label_size` nor calls `mark_layout_dirty_for`; row-10 scale-independent measurement is preserved. |
+
+`WindowState::scale`, initialized from `GetDpiForWindow`, is the current
+window authority; T7 will add its first mutation. Node constructors still
+start at identity. Initial `set_root` explicitly applies the window value.
+`append_child`, `insert_child`, `replace_child`, and the IR conditional / `for`
+sites remain cache-neutral: their existing dirty-layout path reaches a window
+root whose layout entry applies that root's scale recursively before geometry.
+The direct-Composition `window_add_widget` path retains no layout/content root
+and remains the already-stated unsupported boundary.
+
+#### Trap 4 — authored branches
+
+`fixed_extent` has one accepted shape (`Fixed`, `Fixed`) and rejects either
+non-fixed axis. `fixed_extent_accepts_only_two_fixed_axes` directly fires the
+accepted branch and both rejection positions as pure Rust logic. The remaining
+new failure exits are WinRT calls propagated with `?`; no diagnostic/reject
+branch was added around them, and the OS surface is not mocked.
+
+The mock-free `text_surface_mapping_integration` test reads live WinRT objects.
+Its default-brush control observes `Uniform` / `0.5` / `0.5`; the production
+Text brush observes `None` / `0.0` / `0.0`. A second test observes a
+non-proportional ceil-source / exact-Visual pair and integer plus fractional
+Visual origins. Both tests pass with `--test-threads=1`.
+
+#### Trap 5 — carry-forward
+
+The single cache writer, geometry-writer boundary, and scale-independent
+measurement premise remain active. Re-run this audit if a new attach path can
+reach geometry without `run_layout` / `run_layout_as_window_root`, if
+measurement becomes scale-dependent, if a new text-bearing widget variant is
+added, or if `window_add_widget` gains a retained content root. T7 consumes the
+primitive; T8's stale-descendant control therefore requires the hidden test
+seam recorded in the revised plan.
+
+#### Trap 6 — deterministic failure and disposition
+
+**F-39 — the 100% "unchanged" hypothesis was false.** Fresh parent and T6
+captures differed materially in all six frames at 96 DPI (9,360–24,868 pixels,
+maximum channel delta 220–249). This is not evidence that the D2D scale
+boundary failed: DPI and atlas-origin conversion are identities at 96, while
+whole-pixel `ceil` allocation and DD-M4-P1-006's mapping are still observable.
+Removing only the three brush setters changed all six frames again
+(9,327–25,197 pixels, maximum delta 217–234), and the live-object integration
+test names the mechanism. The plan and end gate were corrected rather than
+retrying toward the expected picture.
+
+**F-40 — a comparison build reused an artifact directory across two source
+trees.** After building the parent worktree into the shared target, a main-tree
+workspace build reported the current runtime fresh. That makes a timestamped
+DLL insufficient evidence, the same practical failure class as F-21. The
+comparison worktree was removed; `cargo clean -p wasamo-runtime --release`
+then forced the accepted source to compile before the release workspace build.
+After the setter-removal mutation capture, the same clean/rebuild sequence was
+run again. The six `t6-final` client interiors are byte-identical to the six
+accepted `t6-100-after-b` interiors, proving the final DLL is not the mutation
+artifact. Future cross-tree comparisons must use separate target directories;
+mutation captures must finish with a package clean and accepted rebuild.
+
+#### Trap 7 — GUI evidence
+
+[evidence/t6-analysis/README.md](./evidence/t6-analysis/README.md) records the
+capture matrix, pixel counts, mutation, and assistant screenshot analysis. At
+effective 120 DPI the same gallery is the positive control: the parent occupies
+only `1 / 1.25` of the client and its magnified status text has stretched grey
+fringes and uneven stems; T6 fills the client and shows narrower consistent
+strokes and open counters. Three fresh captures on each side establish the
+repeatability bounds. The 96-DPI default-brush mutation visibly centres and
+scales the integer surface; the accepted brush holds the origin and unit
+mapping. The branch-tip `t6-final/gallery-default.png` was inspected after the
+forced clean build and shows the intended Gallery screen, not a blank or stale
+host. Literal cross-monitor delivery remains T11's responsibility.
+
+#### Verification
+
+All commands ran on Windows from the T6 branch tip source:
+
+- `cargo fmt --all -- --check` — green.
+- `cargo build --release --workspace` after the forced package clean — green.
+- `cargo build --workspace` — green.
+- `cargo test --workspace -- --test-threads=1` — green.
+- `cargo test -p wasamo-runtime --test text_surface_mapping_integration -- --test-threads=1` — 2 passed.
+- `git diff --check` — green.
+
+End-gate result: **passed**, subject to the required full independent review
+after the T6 retrospective. No merge approval is implied.

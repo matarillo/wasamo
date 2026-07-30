@@ -832,7 +832,7 @@ old until the whole preparation succeeds.
       `width.max(1.0)` / `height.max(1.0)`**, because the one-pixel floor
       now lives inside `surface_pixels` and leaving the old clamp would
       put the same rule in two places.
-- [ ] Set the D2D device context to **`96 × s` DPI** after `BeginDraw`,
+- [x] Set the D2D device context to **`96 × s` DPI** after `BeginDraw`,
       so `create_text_layout`'s `max_w` / `max_h` stay DIP and
       `size_sp` stays a DIP font size while rasterization and hinting
       happen at device resolution. This is the phase's **only** legitimate
@@ -852,7 +852,7 @@ old until the whole preparation succeeds.
       there is now no arithmetic left to wrap. T6 decides and records
       which, because the alternative is defensible too: an accessor named
       after DirectWrite's need is the rendering dependency T2 kept out.
-- [ ] **Convert the atlas origin** (risk R-3): `BeginDraw`'s offset is in
+- [x] **Convert the atlas origin** (risk R-3): `BeginDraw`'s offset is in
       pixels and must be divided by `s` before use as the D2D drawing
       origin — `to_dip`, one component each. Write it deliberately — the
       offset is frequently `(0, 0)`, so omitting it works most of the
@@ -869,7 +869,7 @@ old until the whole preparation succeeds.
       it any less deliberately. The same run also measured that atlas
       packing is **deterministic across launches**, which is what
       disqualified it as the explanation for F-33's frame drift.
-- [ ] **Implement DD-M4-P1-006's accepted brush mapping.** The Visual's
+- [x] **Implement DD-M4-P1-006's accepted brush mapping.** The Visual's
       size is the exact `f32` physical
       `dip × s` and the surface is `ceil(dip × s)` pixels, so the default
       `Uniform` / `0.5` mapping resamples the larger surface and may
@@ -889,7 +889,7 @@ old until the whole preparation succeeds.
       overhang regression may be recorded here, but changing the Visual's
       bounds requires an accepted revision to DD-M4-P1-002 rather than an
       ad-hoc T6 fix.
-- [ ] The **re-rasterization primitive**: surfaces are built at scale 1
+- [x] The **re-rasterization primitive**: surfaces are built at scale 1
       during construction (before the tree is attached to a window) and
       brought to the window's scale by a two-pass primitive. It first
       re-creates the surfaces and brushes of stale text-bearing nodes from
@@ -955,9 +955,10 @@ old until the whole preparation succeeds.
       `run_layout` / `run_layout_as_window_root`, before `sync_visuals`.
       A tab switch or list append is normalized by the same operation as
       initial attach; no mutation primitive writes a cache by itself.
-- [ ] Preserve public `TextRenderer::draw_text` as the 96-DPI convenience
-      entry and add a crate-private device-DPI path for the runtime's six
-      scaled callers (the existing five plus the walk). Note the
+- [x] Preserve public `TextRenderer::draw_text` as the 96-DPI convenience
+      entry and add a crate-private device-DPI path for the runtime's seven
+      scaled call expressions (the existing five plus the walk's Text and
+      Button-family arms). Note the
       borrow order T1 hit: `update_button_label` must read the node's
       scale **before** `self.button_data_mut()`, which borrows all of
       `self`; `update_text_content` / `update_text_style` destructure
@@ -976,25 +977,26 @@ old until the whole preparation succeeds.
       path takes the `u32` DPI D2D wants; `DipScale` stays private, the factor
       accessor is not used, and existing Rust-native callers of the public
       method keep its 96-DPI semantics.
-- [ ] Confirm re-rasterization does **not** change any node's
+- [x] Confirm re-rasterization does **not** change any node's
       `SizeConstraint::Fixed(w, h)` — `measure` is DIP and unaffected by
       scale — so it cannot invalidate layout. This is the property T7
       depends on.
-- [ ] If the atlas-origin conversion proves fragile in practice, the
+- [x] If the atlas-origin conversion proves fragile in practice, the
       permitted alternative is expressing the surface's resolution as a
       context transform instead of a context DPI; the contract is
       `ceil(dip × s)` pixels and device-resolution glyphs, not the API
       pair. Record the choice and the reason in [log.md](./log.md).
 
 **Start gate:** re-run all seven decisions rather than inheriting T1's dated
-selection. The responsibility re-audit makes #1 (row 7 and the six scaled
+selection. The responsibility re-audit makes #1 (row 7 and the seven scaled
 callers), #2 (brush/cache/tree effects), #3 (the per-node cache), #4 (the
 fixed-extent size branch), #5 (single-writer and scale-independent measure),
 #6 (fallible surface preparation), and #7 (GUI evidence) all applicable.
 **End gate:** row 7 closed in the audit table; the prepare-then-commit cache
 atomicity and every incremental attach path enumerated; the fixed-extent
-branch fired by a test; the layout-invalidation non-effect verified; local
-rendering unchanged at 100% — **captured after `cargo build --release
+branch fired by a test; the layout-invalidation non-effect verified; and
+the 100% change bounded to the text surfaces that `ceil` allocation plus
+DD-M4-P1-006 intentionally changes — **captured after `cargo build --release
 --workspace`, never after a host-package build** (T3 finding F-21: a
 host build relinks `wasamo.dll` from a **stale uplifted rlib**, so the
 DLL carries a fresh timestamp and old object code, and the frame
@@ -1275,13 +1277,13 @@ sequencing thesis does not defer all scaled-path risk to the end
       it with a test would fix a stated limit as a regression contract.
       That limit lives on `hit_test_click`'s doc comment and in
       [handoff.md](./handoff.md), with no test.
-      **Constructibility depends on a T6 decision that is open.** §T6
-      leaves open whether the walk covers the incremental attach paths
-      F-32 enumerated. **If it does**, no ordinary path produces a stale
-      descendant and T8 needs a `#[doc(hidden)] pub` seam to set one — the
-      `lib.rs::ffi` shape F-29 already names for the scale accessor. **If
-      it does not**, a post-change `append_child` constructs it directly.
-      Read T6's answer before designing the test.
+      **Constructibility is resolved by T6.** Its layout-entry primitive
+      normalizes every incremental attach path F-32 enumerated before
+      `sync_visuals`, so no legitimate path leaves a stale descendant once
+      the mutation becomes geometrically observable. T8 therefore needs a
+      `#[doc(hidden)] pub` seam to set one — the `lib.rs::ffi` shape F-29
+      already names for the scale accessor. The seam exists only to test the
+      one-divisor traversal property; it is not a production attach path.
 - [ ] Follow the established `0x80070005` guard pattern — **fail, not
       skip**, on a runner without Compositor capability. Any new guard
       must be shown to fire on an environment that actually lacks the

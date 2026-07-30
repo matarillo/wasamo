@@ -34,6 +34,10 @@ that was made, not as a substitute for capturing.
 | `t5-f23-after/` | T5 — the F-23 layout-entry fix: two post-click frames change, four do not |
 | `t5-review-after/` | T5 — the branch tip; identical to `t5-f23-after/`, which is what shows the R-2 correction is behaviour-preserving at scale 1 |
 | `t5-probe/` | T5 — the positive control at 125% under a throwaway declaration: 7 tiles with the inbound seam, 9 without, and the outbound half with the node cache seeded |
+| `t6-baseline-*`, `t6-after-*` | T6 — three fresh captures on each side of the 125% rendering change; repeatability, comparison numbers and screenshot analysis are in [t6-analysis/README.md](./t6-analysis/README.md) |
+| `t6-100-baseline-*`, `t6-100-after-*` | T6 — identity-path control showing that `ceil` allocation plus DD-M4-P1-006 is intentionally observable even though D2D DPI and atlas-origin conversion are identities |
+| `t6-brush-default/` | T6 mutation control — the implementation with only DD-M4-P1-006's three setters removed |
+| `t6-final/` | T6 — six branch-tip frames captured after a forced clean rebuild of the accepted source; client interiors are byte-identical to `t6-100-after-b/` |
 
 ## Scripts
 
