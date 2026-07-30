@@ -4913,6 +4913,12 @@ than from re-reading the list:
   every factor at once — normalise the physical client to a **multiple of
   24** first, since `96 = 2^5 x 3` and the four DPIs contribute denominators
   4, 2, 1 and 24.
+  *(Corrected at close, by mutation M5. The arithmetic here holds. The
+  consequence stated with it — "so a literal implementation would have
+  asserted an approximate invariance" — is **false of this fixture**: its
+  per-tile assertions are insensitive to a sub-DIP change in the client
+  extent, and it took a root-Visual readback to make the normalisation
+  load-bearing. The close-gate trap-#4 entry records the sequence.)*
 - **F-45 — the ADR's evidence item (2) is one claim, not two, until a
   discrete witness is added.** "The DIP layout results are unchanged" and
   "the Visual offsets and sizes moved by the ratio" are the same equation
@@ -4968,3 +4974,199 @@ normalised to a multiple of 24 and the realised value asserted before any
 synthesised message is sent; the invariance witness is the discrete row
 assignment rather than a number the ratio assertion already reads; and no
 assertion is recorded as evidence until a mutation has been shown to break it.
+
+### Implementation result and end gate (2026-07-31)
+
+Landed as one code commit, `0ebf8ae`. The two seams and the tests that consume
+them are one commit rather than two because a seam without its consumer is
+dead `#[doc(hidden)] pub` surface, and a commit carrying one is the state
+trap #1 exists to refuse.
+
+`wasamo-runtime/tests/dpi_scale_matrix_integration.rs` holds three tests;
+`ffi::__window_scale_dpi_for_test` and
+`WidgetNode::__set_geometry_scale_dpi_for_test` are the seams.
+
+#### Trap 1 — the two new public items, and every caller
+
+Query: `rg -n "__window_scale_dpi_for_test|__set_geometry_scale_dpi_for_test" --type rust`.
+
+| Item | Callers | Classification |
+|---|---|---|
+| `ffi::__window_scale_dpi_for_test` | `dpi_scale_matrix_integration.rs` x3 (one per test) | Read-only. Returns `(*window).scale.dpi()`. Cannot change runtime state, so no production path can be harmed by its existence; the reason it is a seam rather than a `pub` field is that widening the field would put the scale factor on a `pub use`-exported type and ship the host-visible surface DD-M4-P1-004 declines. |
+| `WidgetNode::__set_geometry_scale_dpi_for_test` | `dpi_scale_matrix_integration.rs` x1 | **Write, and deliberately drift-producing.** It writes the derived geometry-scale copy without the projection that owns it — exactly what trap #3 exists to prevent — because the property under test is what survives that drift. Zero production callers, asserted by the query; the doc comment states that it must not acquire one. |
+
+Both take or return a `u32` DPI, so `DipScale` stays crate-private. That is
+the same resolution T6 reached for
+`WidgetNode::__run_layout_as_window_root_at_dpi_for_test`, which sits
+immediately above the new one and is the third member of this family alongside
+`ffi::__install_owning_thread_for_test` and its siblings. **Nothing new
+crosses the C ABI**: neither symbol is `extern "C"`, neither appears in
+`wasamo.h`, and `rg -n "scale" bindings/ examples/` returns no host reference.
+
+#### Trap 2 — what the synthesised messages drag along
+
+The tests drive three real messages. Each is enumerated rather than assumed,
+because a test that depends on an effect it did not intend is a test that
+reports the wrong thing when that effect moves.
+
+| Message | Dispatched by | Effects the test relies on | Effects it must not rely on |
+|---|---|---|---|
+| `WM_SIZE` (normalisation) | the test's own `SetWindowPos` before any change | Re-layout at the *current* scale, so the "before" readback is the chosen client extent rather than `wasamo_load_ui`'s | It also runs the ordinary post-layout text refresh; the surface assertion compares before against after, so a refresh on either side is harmless |
+| `WM_DPICHANGED` | `SendMessageW` | Steps 1-5 of DD-M4-P1-003, including the nested `WM_SIZE` its `SetWindowPos` dispatches | Which of the nested pass or the fallback produced the geometry — T7 owns that discrimination and T8 asserts only the result |
+| `WM_LBUTTONUP` | `SendMessageW` | `hit_test_click` after the pointer crosses the inbound seam | It also clears `mouse_down`, calls `update_hover(down=false)` (which may start a colour animation) and enqueues a `clicked` signal. None is asserted; the signal is never drained, because no message loop runs |
+
+The normalisation is what makes the "before" state a number this file chose.
+Without it every assertion below would be about `wasamo_load_ui`'s 784 x 561
+client, which is the rectangle F-44 shows cannot be preserved.
+
+#### Trap 3 — the derived copy, poked on purpose
+
+`WindowState::scale` is authoritative; each node's `scale` is the derived
+geometry copy, written only by `commit_scale_recursive` from inside a
+successful projection (T6/T7). `__set_geometry_scale_dpi_for_test` writes one
+node's copy and nothing else — not its children, not its `raster_scale`, not
+its Visual. That the Visual is untouched is asserted rather than stated: the
+test re-reads the node's rectangle after the poke and requires it to be
+bit-identical to the pre-poke one.
+
+The drift is the subject, not an accident. The property is that a hit-test
+traversal divides every readback by the **traversal root's** scale, so the
+mixture is survivable; per-node division would place the node at
+`physical / its own scale`, which is its composited position multiplied by the
+window's factor.
+
+#### Trap 4 — every assertion fired, and every test shown to go red
+
+Seven mutations, each built and run. Five are production-code mutations; M5
+and the `factor_is_exact` probe are fixture mutations, which is the right
+shape for claims about the *fixture's* discriminating power.
+
+| # | Mutation | Result |
+|---|---|---|
+| M1 | The inbound client-extent seam removed from the `WM_SIZE` arm (physical treated as DIP) | `dip_layout_...` **fails**: `row_shape` reads `(9, 2)` against `(7, 2)`. The 9-vs-7 signature the plan predicted for a rendered frame, in a headless test. The other two pass |
+| M2 | `visual_rect_dip` divides by `self.scale` instead of the traversal root's | `a_stale_descendant_...` **fails** on the stale case (`0` clicks against `1`) while its **control click passes**, so the failure is the divisor and not the coordinates. The other two pass |
+| M3 | `sync_visuals` writes sizes at `DipScale::IDENTITY` | `dip_layout_...` **fails**: tile 0 width reads `88.0` against `110.0` |
+| M4 | `surface_pixels` truncates instead of ceiling | `dip_layout_...` **fails**: the first label's surface reads `(24, 23)` against `(25, 24)` |
+| M5 | The fixture's client extent set to 785 x 480 — not a multiple of 24 | Discussed below; **first run passed**, which is the finding |
+| M6 | M3 with the matrix restricted to 100 DPI | `dip_layout_...` **fails** at 100 DPI, so the non-standard entry is not a passenger |
+| M7 | `begin_scale_change` does not commit the scale | `a_created_windows_...` **fails** (`96` against `144`) and `dip_layout_...` with it; the mixed-scale test passes, because a change that never happens is internally consistent |
+
+Every mutation was restored; the final state is the committed one and the
+suite is green on it.
+
+**M5 is the one that changed the implementation, and it changed it by
+falsifying the reasoning that produced F-44.** F-44's arithmetic is right —
+no integer rectangle preserves the DIP extent from 784 x 561 at any matrix
+DPI. The *consequence* recorded at the start gate was that the per-tile
+geometry assertions therefore could not be equalities, and the first run of
+M5 refuted it: at 785 x 480, where the recovered DIP width is 784.8 rather
+than 785, **every per-tile assertion still passed**. WrapPanel tiles are
+start-packed at a fixed cross-size, so they do not move when the client extent
+shifts by a fraction of a DIP. The fixture was therefore not testing the
+client extent at all in its continuous half.
+
+The fix is one readback: the **root** node's Visual, which under the
+window-root `Fill` override *is* the client rectangle. With it added, the same
+785 x 480 run fails at `981.0` against an expected `981.25`, and the
+normalisation is load-bearing rather than tidy. Recorded as the sequence it
+was rather than as the conclusion: the finding's premise survived, its stated
+consequence did not, and only running the mutation separated them.
+
+**A second measurement came out of the same run and is not a rounding
+issue at all.** With the client at 784 x 561, the 192 DPI case asks for a
+1568 x 1122 client and the window realises 1568 x **1014** — the monitor's
+maximum track size. `set_client_extent`'s realised-client assertion is what
+turns that into a named failure instead of a silent one, and it is a real
+constraint on any later scale fixture: **the 200% target must fit the
+display.** 720 x 480 asks for 1440 x 960 and gets it on the development
+machine.
+
+**And the exactness split is measured, not defensive.** Forcing
+`factor_is_exact` to `true` fails at 100 DPI on the root height: `500.0` read
+against `499.99997` expected. The *runtime* produced exactly 500; the test's
+naive expectation `480 x f32(100/96)` is the imprecise number, because the DIP
+extent the runtime laid out into is `500 / f32(100/96)` = 480.00003 rather
+than 480. So the invariance holds at 100 DPI and its naive restatement does
+not — an `f32` property, not a conversion-boundary one.
+
+#### Trap 5 — carry-forward
+
+Recorded in the T8 retrospective's item 10 and carried to
+[handoff.md](./handoff.md) at phase close:
+
+- **A scale-invariance fixture normalises its physical client to a multiple
+  of 24 and asserts the realised value.** *Evidence:* 96 = 2^5 x 3, so a
+  multiple of 24 makes 100 / 120 / 144 / 192 DPI all produce integer targets;
+  and 784 x 561 fails at 192 DPI on the monitor's max track size rather than
+  on rounding. *Re-trigger:* any later task that asserts layout invariance
+  across a scale change — T10's control B, T11's literal form, M4-Phase 8's
+  second window.
+- **A fixture can be insensitive to the very input it claims to hold
+  constant.** *Evidence:* mutation M5 — start-packed WrapPanel tiles did not
+  move when the client extent shifted by 0.2 DIP, so the continuous half of
+  the invariance claim was reading nothing about the client extent until the
+  root Visual was added. *Re-trigger:* any assertion of the form "input X was
+  preserved, so output Y is unchanged" where Y is not demonstrably a function
+  of X.
+- **`__set_geometry_scale_dpi_for_test` has zero production callers and must
+  keep zero.** *Evidence:* it writes the derived geometry copy outside the
+  projection that owns it, which is the drift trap #3 exists to prevent.
+  *Re-trigger:* any production path that needs to set a node's cached scale
+  — which would mean a second writer beside `commit_scale_recursive`, the
+  thing T6's boundary exists to prevent.
+- **The one-divisor traversal property now has a test, and it is the
+  *descendant* case only.** *Evidence:* `a_stale_descendant_...`, shown to
+  fail under M2. The stale-*receiver* case — entering `hit_test_click` on a
+  subtree whose cache is not the window's — remains a documented misuse with
+  no test, deliberately (T5's decision: pinning it would fix a stated limit as
+  a regression contract). *Re-trigger:* M4-Phase 2's option H3, hit rectangles
+  cached from layout, deletes the property and its test together.
+
+#### Trap 6 — deterministic failure
+
+No failure was re-rolled and no test was retried to green. Every mutation
+result above was the expected one except M5's first run, which was expected to
+fail and passed — the disposition is the fixture change recorded under trap #4,
+not a re-run. The three tests were run repeatedly across seven mutation cycles
+on a live Compositor with no intermittent result.
+
+#### Verification
+
+All commands on Windows, against the post-commit branch state:
+
+- `cargo fmt --all -- --check` — green.
+- `git diff --check` — green.
+- `cargo test -p wasamo-runtime --test dpi_scale_matrix_integration -- --test-threads=1` — 3 passed.
+- `cargo build --release --workspace` — green.
+- `cargo test --workspace -- --test-threads=1` — green; 35 test binaries, no `FAILED`, runtime unit tests still 470.
+
+No GUI capture: trap #7 is non-applicable for the reason recorded at the start
+gate, and no frame is claimed.
+
+**The stated limits**, recorded here and in the test's own module header so a
+reader of either finds them:
+
+1. A synthesised `WM_DPICHANGED` proves the handling path. It does **not**
+   prove that crossing a real monitor boundary delivers the same message with
+   a usable suggested rectangle. That half is T11's, and neither alone
+   discharges AC7's third requirement.
+2. The exact-invariance assertion holds **because this file chooses the
+   rectangle** and preserves the DIP client extent. The OS's suggested
+   rectangle preserves the **outer** rectangle instead, so on the real path
+   the DIP layout input moves by a DIP or two and invariance is approximate.
+   T11 is where that shows, and it must not read as a failure.
+3. The process has not declared awareness yet, so `GetDpiForWindow` reports 96
+   here and the creation-time half of the cached-scale test is `96 == 96`
+   until T9. What is live now is the post-change half. The test asserts
+   `os_dpi == 96` explicitly, so T9 will land on a failing assertion rather
+   than on a silently degenerate one.
+
+**End-gate result: passed**, subject to the review lane and to one landing
+blocker that is not a review finding: **this binary's Compositor-unavailable
+skip path has not been observed firing.** The helper is the already-verified
+shared one, but T6's round-1 R3 classified the observation as owed per binary,
+so this binary needs one owner run on an environment where `wasamo_init`
+returns `0x80070005`. CI is a separate gate again: the same helper statically
+refuses to skip when `GITHUB_ACTIONS` is set, so the fail-not-skip direction is
+closed by construction, but the actual CI run id belongs to the phase-end
+batch. No merge approval is implied.

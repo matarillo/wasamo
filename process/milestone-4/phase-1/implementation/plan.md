@@ -1425,6 +1425,21 @@ the assertions would actually read.
    already carries for the OS-shaped rectangle, and having both halves
    approximate would leave the phase with no exact statement of the property
    at all.
+   **The arithmetic above survived the task and the consequence stated with
+   it did not** (mutation M5, at close). The falsified sentence is *"without
+   the normalisation the per-node geometry assertions could not be
+   equalities"*: run at 785 × 480, where the recovered DIP width is 784.8
+   rather than 785, **every per-tile assertion still passed**, because
+   WrapPanel tiles are start-packed at a fixed cross-size and do not move when
+   the client extent shifts by a fraction of a DIP. What the normalisation
+   protects is the **root** Visual — which under the window-root `Fill`
+   override *is* the client rectangle — and the row-break count, which sits on
+   a boundary a fraction of a DIP can cross. The root readback was added to
+   the test because of that mutation; with it the same run fails at `981.0`
+   against `981.25`. A second, larger reason surfaced in the same run and is
+   not a rounding matter at all: **the 200% target must fit the display.** An
+   784 × 561 client asks for 1568 × 1122 at 192 DPI and realises 1568 × 1014,
+   the monitor's maximum track size.
 2. **The outer rectangle is derived from a measured frame, not from the
    scale.** T8 must supply an *outer* rectangle while what it controls is the
    *client* extent, and the two differ by the non-client frame, which scales
@@ -1462,7 +1477,24 @@ accepted: a new test binary re-opens the per-binary
 Compositor-unavailable observation (T6 round-1 R3), which is an owner run and
 a landing blocker, exactly as it was at T6 and T7.
 
-- [ ] **The two test seams**, in [`lib.rs`](../../../../wasamo-runtime/src/lib.rs)'s
+**Closed 2026-07-31.** Landed as **one code commit** (`0ebf8ae`) — a
+`#[doc(hidden)] pub` seam without its consumer is dead public surface, which
+is the state trap #1 refuses. Artifacts in [log.md](./log.md) §T8: the
+two-seam call-site audit, the three-message side-effect enumeration, the
+derived-copy statement, a **seven-mutation** table in which every one of the
+three tests is shown to go red, the carry-forward with re-trigger criteria,
+and the three stated limits. The task produced findings F-44 and F-45 and one
+correction to F-44's own stated consequence.
+
+**One mutation changed the implementation rather than confirming it.** M5 —
+the fixture's client extent set to a number that is not a multiple of 24 —
+was expected to fail and **passed**, because start-packed WrapPanel tiles are
+insensitive to a sub-DIP change in the client extent. Adding the root node's
+Visual to the readback is what made the normalisation load-bearing, and the
+same run measured a second constraint no rounding argument predicts: at
+784 × 561 the 200% target exceeds the monitor's maximum track size.
+
+- [x] **The two test seams**, in [`lib.rs`](../../../../wasamo-runtime/src/lib.rs)'s
       `ffi` module and on `WidgetNode`, in the established
       `__install_owning_thread_for_test` shape. Both take or return a `u32`
       DPI rather than a `DipScale`, so the carrier stays crate-private —
@@ -1471,7 +1503,7 @@ a landing blocker, exactly as it was at T6 and T7.
       `WindowState::scale` to `pub` is the wrong fix: it would put the scale
       factor on a `pub use`-exported type and ship the host-visible surface
       DD-004 declines.
-- [ ] A created window's cached scale equals `GetDpiForWindow`.
+- [x] A created window's cached scale equals `GetDpiForWindow`.
       **This needs a test seam, which does not exist yet** (T4 finding
       F-29). The field landed as `pub(crate) scale` on `WindowState`, and
       the phase's Windows integration tests live in
@@ -1482,7 +1514,7 @@ a landing blocker, exactly as it was at T6 and T7.
       siblings. Widening the field to `pub` is the wrong fix: it would
       put the scale factor on a `pub use`-exported type and ship the
       host-visible surface DD-004 declines.
-- [ ] **The integration-side positive control**: drive a scale change
+- [x] **The integration-side positive control**: drive a scale change
       through the handler and assert that **the layout's DIP results are
       unchanged** while Visual offsets and sizes have moved by the scale
       ratio. The first half is what distinguishes a correct
@@ -1520,7 +1552,7 @@ a landing blocker, exactly as it was at T6 and T7.
       is the 9-vs-7 signature §T10 records: 12 tiles of `item-cross-size: 88`
       at `item-spacing: 12` in a 720 DIP client give 7 per row, and a client
       that grew by the ratio because the inbound seam was missed gives 9.
-- [ ] Exercise at 125% / 150% / 200% — but **not as three equal probes**
+- [x] Exercise at 125% / 150% / 200% — but **not as three equal probes**
       (T2 finding F-13). At a power-of-two factor the multiplication is
       exact, so convert-once and convert-twice agree everywhere and a
       DIP round trip is exactly the identity; a brute-force search found
@@ -1528,7 +1560,7 @@ a landing blocker, exactly as it was at T6 and T7.
       at 150%. 200% is therefore a magnitude check, and **the rule
       verification is carried by 125% and 150%**. Adding more round
       factors would not help; adding an awkward one would.
-- [ ] **Drive at least one DPI that is not a standard scaling** (T4
+- [x] **Drive at least one DPI that is not a standard scaling** (T4
       independent review finding R-1, generalised here because T8 is where
       it bites next). All three factors above come from DPIs that are
       multiples of 24, so `dpi / 96` is exactly representable in `f32` for
@@ -1541,7 +1573,7 @@ a landing blocker, exactly as it was at T6 and T7.
       wrong way). The general lesson to carry, not just the value: **a
       test suite that only uses the inputs the product is expected to see
       cannot find a rule that is wrong outside them.**
-- [ ] **Record the stated limit with the test** (preamble obligation 5):
+- [x] **Record the stated limit with the test** (preamble obligation 5):
       a synthesised `WM_DPICHANGED` proves the handling path; it does
       **not** prove that crossing a real monitor boundary delivers the
       same message with a usable suggested rectangle. That half is
@@ -1551,7 +1583,7 @@ a landing blocker, exactly as it was at T6 and T7.
       one instead — so on the real path the DIP layout input moves by a
       DIP or two and invariance is approximate. T11 is where that shows,
       and it must not read as a failure.
-- [ ] **Assert that a mixed-scale tree hit-tests correctly from the window
+- [x] **Assert that a mixed-scale tree hit-tests correctly from the window
       root** (finding F-37). T5's traversal divides every `visual_rect`
       readback by the **traversal root's** scale, so a tree containing a
       descendant whose cached scale is *not* the window's still resolves
@@ -1574,7 +1606,7 @@ a landing blocker, exactly as it was at T6 and T7.
       the `lib.rs::ffi` shape F-29 already names for the scale accessor. The
       seam exists only to test the one-divisor traversal property; it is not
       a production attach path.
-- [ ] **Normalise the physical client to a multiple of 24 before the
+- [x] **Normalise the physical client to a multiple of 24 before the
       change**, per re-audit point 1, and assert the realised client rather
       than assuming the non-client frame stayed put (point 2). The
       normalisation is an ordinary `SetWindowPos` at 96 DPI, so it drives the
@@ -1586,7 +1618,11 @@ a landing blocker, exactly as it was at T6 and T7.
       happy path is not verified. **This is a new binary, so the
       observation is owed again** (T6 round-1 R3) and is a landing blocker
       closed by an owner run, not by this task.
-- [ ] **Show each assertion go red against a deliberately wrong
+      **The code half is landed** — the binary routes every test through
+      the shared `run_on_owning_runtime_thread_or_skip`, which statically
+      refuses to skip when `GITHUB_ACTIONS` is set — and the **observation
+      half is open**, which is why this box stays unticked.
+- [x] **Show each assertion go red against a deliberately wrong
       implementation.** T8 is where the phase's "green proves nothing"
       thesis is finally testable against real scaled behaviour, so the
       close artifact is a mutation table, not a passing run: at minimum the
@@ -1594,6 +1630,9 @@ a landing blocker, exactly as it was at T6 and T7.
       per-node divisor restored in `visual_rect_dip` (the mixed-scale hit
       test must fail), and the outbound multiplication dropped. A mutation
       that leaves every test green is the finding, not the failure.
+      **Seven mutations, and the last sentence turned out to be about this
+      task rather than a caution for it**: M5 passed when it was expected to
+      fail, and the fixture changed as a result.
 
 **Start gate:** trap #4 (each assertion fires directly, not
 incidentally); re-run the selection at task start rather than inheriting
@@ -1603,6 +1642,12 @@ public-surface call sites), trap #2 (the normalisation drives a real
 property are invariants a later task can trip). **End gate:** tests green
 locally and in CI; the mutation table; the stated limits recorded in the
 test and in [log.md](./log.md).
+**Met, with two things outstanding and neither of them a test result**:
+this binary's Compositor-unavailable skip path has not been observed firing
+(owner run, landing blocker), and the CI run id belongs to the phase-end
+batch. Normal review before merge, per the lane table — re-checked at the
+start gate rather than inherited, and qualified there: T8 is not purely
+test-only, because it adds two `#[doc(hidden)] pub` seams.
 
 ---
 
