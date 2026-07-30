@@ -7,9 +7,15 @@ that look interchangeable and are not.
 
 ## The current reference set
 
-**`t5-review-after/`** — the branch tip as of T5 close. `t5-f23-after/`
-is byte-identical to it over the client interior and is kept because it
-is the "after" half of the F-23 pair.
+**`t6-r1-final-a/` and `t6-r1-final-b/`** — the current T6 success-path
+artifact. The two sets are byte-identical over all six client interiors and
+are also byte-identical to their `t6-final/` predecessor. The later
+`1220b10` change is confined to ABI ownership error handling and a Rustdoc
+correction; it does not alter rendering code or replace these frames.
+
+`t5-review-after/` remains the branch-tip record at T5 close.
+`t5-f23-after/` is byte-identical to it over the client interior and is kept
+because it is the "after" half of the F-23 pair.
 
 **`after/` (T3's) is stale for two frames.** It predates the F-23 fix, so
 `labelupdate-clicked` and `labelupdate-clicked-twice` differ from the

@@ -1134,8 +1134,9 @@ open landing gates.
       `WM_SIZE`, record completion only after that message's geometry pass
       succeeds, then invoke the refresh after `SetWindowPos` returns. If
       `SetWindowPos` fails **or no successful nested geometry pass was
-      observed**, step 3 is not skipped: read the current client rectangle and
-      run the geometry-only entry explicitly at the new `WindowState::scale`
+      observed**, step 3 is not skipped: read the current **physical** client
+      extent, convert it through `state.scale.pair_to_dip(...)`, and run the
+      geometry-only entry explicitly at the same new `WindowState::scale`
       before step 4. This fallback is required even when `SetWindowPos`
       succeeds without changing the size and therefore emits no `WM_SIZE`.
       After a successful nested or fallback geometry pass, surface failure
@@ -1197,12 +1198,16 @@ open landing gates.
       contract means.
 - [ ] **Failure handling:** log and survive. Track successful nested geometry,
       not merely entry into `WM_SIZE`. If `SetWindowPos` fails or returns
-      without such a pass, obtain the unchanged/current client rectangle and
-      retry step 3 through the explicit-target geometry-only entry. Only a
-      successful geometry pass permits step 4 to advance text markers. If
-      both the nested attempt and fallback geometry fail, log the error, do
-      not refresh text, and leave the geometry cache / raster markers stale
-      rather than claiming convergence. A failed re-rasterization after
+      without such a pass, obtain the unchanged/current physical client
+      extent, convert it to DIP with the new `state.scale`, and retry step 3
+      through the geometry-only entry with that same explicit target. Only a
+      successful whole-tree geometry pass permits step 4 to advance text
+      markers. `sync_visuals` writes Visuals incrementally and commits node
+      caches only after the full traversal succeeds: if both the nested
+      attempt and fallback geometry fail, log the error, do not refresh text,
+      and retain the honest possible state of partially updated Visuals plus
+      stale geometry caches / raster markers rather than claiming convergence.
+      A failed re-rasterization after
       successful geometry leaves a surface at the old resolution — visibly
       blurry and retryable; a failed `SetWindowPos` leaves only the outer
       rectangle unchanged. None of these failures tears down the window;

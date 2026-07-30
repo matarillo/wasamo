@@ -4291,9 +4291,13 @@ and `1220b10` (ownership branch control and wording correction).
 | Minor — geometry/cache operation called infallible | **Fixed.** Rustdoc now says fallible geometry projection followed by an infallible cache commit, independent from the fallible raster pass. |
 
 **Close-gate artifacts for this delta.** The authoritative window scale is
-unchanged. T7's derived Visual geometry and geometry cache advance together
-only after successful projection; a missing nested message triggers the
-explicit fallback, and failed fallback does not advance raster markers. The
+unchanged. T7's derived geometry cache advances only after the entire fallible
+Visual projection succeeds. Because `sync_visuals` performs WinRT writes
+incrementally, a failed projection can leave a Visual prefix updated while all
+node caches remain stale; a missing or failed nested pass therefore triggers a
+whole-tree fallback, and a failed fallback leaves the possible partial Visual
+state plus stale caches / raster markers logged rather than claiming atomicity.
+Text refresh runs only after one whole-tree geometry pass succeeds. The
 T6 ABI preflight mutates only the incoming text brushes/markers before attach;
 on rejection it neither calls `window::set_root` nor drops the incoming
 allocation. Its generic transaction is the only raw restore site, and its
@@ -4315,3 +4319,22 @@ bound; the identical targeted command then passed. Final code-tip validation:
 
 The branch requires another independent delta review. The separate real
 Compositor-unavailable skip firing remains the external landing blocker.
+
+### Final independent review disposition (2026-07-30)
+
+The independent review of `97c24cf..eb3021e` returned **zero major and 3
+minor**. The prior missing-step-3 major, ABI ownership branch control, and
+fallibility wording were confirmed closed. The three final minors are
+documentation corrections and are fixed after the reviewed tip:
+
+1. the failure-state artifact now distinguishes incremental Visual writes from
+   the all-traversal-success geometry-cache commit;
+2. T7's fallback now explicitly converts the physical current client extent to
+   DIP through `state.scale.pair_to_dip(...)` before passing both the DIP extent
+   and same authoritative target to geometry-only layout; and
+3. the evidence pointer names `t6-r1-final-a/b`, with `t6-final` retained as its
+   byte-identical predecessor.
+
+No source code or captured PNG changes in this disposition. A final narrow
+review checks only these factual corrections. The real Compositor-unavailable
+guard firing remains the sole external landing blocker.
