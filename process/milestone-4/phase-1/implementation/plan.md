@@ -1175,7 +1175,38 @@ four of them are reachable only by reading the arm the handler sits beside.
    integration tests cannot reach is still fired somewhere. The mock-free
    fallback test remains the trap-#4 artifact; the unit test pins the rule.
 
-- [ ] Handle `WM_DPICHANGED` in `wnd_proc` in the **fixed order**:
+**Closed 2026-07-30.** Landed as **one code commit** (`e63586e`) — the handler
+introduces three authored failure branches, and a commit carrying them without
+the tests that fire them is the state trap #4 exists to refuse. Artifacts in
+[log.md](./log.md) §T7: the 13-row structural side-effect enumeration closed
+against the source, the enumeration of every `WindowState::scale` access, four
+mock-free integration tests plus two pure-logic tests named per branch, and a
+five-mutation table. The task produced findings F-41 and F-42.
+
+**One claim in the re-audit above came out weaker than written, and the
+measurement is what weakened it.** Re-audit point 1 and this task's second
+bullet both wanted the step 1 / step 2 order held by structure. What the landed
+structure gives is that **no path installs the nested-pass marker against a
+stale scale** — which is real but narrower. Mutation M1 inverted the two calls
+and **all four integration tests stayed green**, because an unrecognised nested
+pass is an unreported one, so the fallback re-projects and the final state
+converges. The stale-factor projection DD-003 warns about still happens; it is
+now transient rather than persistent. Propagated by proposition rather than by
+string, per §Task list: the sentence falsified is *"the step 1 / step 2 order can
+be made structurally impossible to get wrong"*, and the documents asserting it
+were this plan's §T7, `WindowState::pending_scale_change`'s doc comment, and
+`handle_dpi_changed`'s doc comment — all three corrected. **DD-M4-P1-003 needed
+no change**: its own wording ("visibly wrong for one frame at best") is exactly
+what remains true.
+
+**And one hazard the handoff predicted would stay green does not.** M5 inherited
+`SWP_NOMOVE` from `realize_dip_window_size`; the nested-path test's suggested
+rectangle **moves as well as resizes**, so it fails. The handoff row for T4
+records that inheriting the flag "pins the window on every monitor crossing while
+every test stays green" — true of a rectangle that only changes the size, and no
+longer true here.
+
+- [x] Handle `WM_DPICHANGED` in `wnd_proc` in the **fixed order**:
       (1) update `WindowState`'s cached scale from `HIWORD(wParam)`;
       (2) apply the OS-suggested rectangle from `lParam` via
       `SetWindowPos(..., SWP_NOZORDER | SWP_NOACTIVATE)`;
@@ -1220,7 +1251,7 @@ four of them are reachable only by reading the arm the handler sits beside.
       `WindowState::scale` without running the walk leaves every node
       converting by the previous factor — a parallel-data defect, not a
       missed optional step (finding F-32).
-- [ ] Encode the reason for step 1 preceding step 2 structurally, not as
+- [x] Encode the reason for step 1 preceding step 2 structurally, not as
       a comment: `SetWindowPos` dispatches `WM_SIZE` **before it
       returns**, so a scale updated afterwards would leave that pass
       laying out and projecting with the stale factor. This is the
@@ -1243,7 +1274,7 @@ four of them are reachable only by reading the arm the handler sits beside.
       because the size does not change. The second half is the sharper
       fact: this ordering defect cannot be produced, let alone observed,
       before T9.
-- [ ] **Do not inherit T4's flags, and do not reuse its helper**
+- [x] **Do not inherit T4's flags, and do not reuse its helper**
       (T4 finding F-30). `window::realize_dip_window_size` converts a
       **DIP size** and must not move the window, so it passes
       `SWP_NOMOVE`; this step applies an **OS-supplied physical
@@ -1254,10 +1285,10 @@ four of them are reachable only by reading the arm the handler sits beside.
       DD-003's flags **into** `create`; this is the warning in the other
       direction, which is where a reader who has just read `create` is
       standing.
-- [ ] Apply the suggested rectangle (do not ignore it): it preserves the
+- [x] Apply the suggested rectangle (do not ignore it): it preserves the
       window's logical size across the change, which is what the DIP
       contract means.
-- [ ] **Failure handling:** log and survive. Track successful nested geometry,
+- [x] **Failure handling:** log and survive. Track successful nested geometry,
       not merely entry into `WM_SIZE`. If `SetWindowPos` fails or returns
       without such a pass, obtain the unchanged/current physical client
       extent, convert it to DIP with the new `state.scale`, and retry step 3
@@ -1276,19 +1307,19 @@ four of them are reachable only by reading the arm the handler sits beside.
       into `Diverged`, which is for reactive-engine divergence. Add a direct
       test that fires the no-nested-geometry fallback; a success-path handler
       test does not cover this authored branch.
-- [ ] `WM_GETDPISCALEDSIZE` is **not** handled this phase — recorded as
+- [x] `WM_GETDPISCALEDSIZE` is **not** handled this phase — recorded as
       forward exposure, not an omission.
-- [ ] **Place the arm above the `&mut *state_ptr` block** and reach state
+- [x] **Place the arm above the `&mut *state_ptr` block** and reach state
       through short-lived accesses either side of `SetWindowPos`, per re-audit
       point 1. The nested frame needs its own `&mut` to lay out; what must not
       exist is an outer one alive at the same time.
-- [ ] **Guard the null suggested rectangle**, per re-audit point 3: log, skip
+- [x] **Guard the null suggested rectangle**, per re-audit point 3: log, skip
       step 2, and let step 3's fallback carry the change. The scale is already
       committed at that point, so a malformed message still converges rather
       than leaving the authoritative value ahead of every projection.
-- [ ] **Extract the step-3 verdict as pure logic** and unit-test its three
+- [x] **Extract the step-3 verdict as pure logic** and unit-test its three
       states, per re-audit point 5.
-- [ ] **The test set, and what each member discriminates.** A mock-free
+- [x] **The test set, and what each member discriminates.** A mock-free
       Windows integration binary driving real `WM_DPICHANGED` messages through
       `SendMessageW` at a real window. The four cases are not four samples of
       one path:
@@ -1320,7 +1351,7 @@ four of them are reachable only by reading the arm the handler sits beside.
       requirement (round 1 R3), so the skip path of *this* binary must be seen
       firing on a Compositor-unavailable environment before T7 lands. Owner
       action, same as T6's.
-- [ ] **Row 10's site list is ScrollView / Grid / ZStack**, not
+- [x] **Row 10's site list is ScrollView / Grid / ZStack**, not
       ScrollView / Grid / Box (T3 finding F-18). T1's F-2 established
       this against the source — `WidgetNode::box_` installs no clip and
       `WidgetNode::zstack` does — but dispositioned the correction only
@@ -1333,7 +1364,7 @@ four of them are reachable only by reading the arm the handler sits beside.
       T3: `CreateInsetClip` appears in `scroll_view`, `grid` and
       `zstack`, and nowhere else. The row's conclusion (all insets are
       zero, zero is scale-invariant) is unaffected.
-- [ ] **Row 7 is now literally true and should be asserted, not
+- [x] **Row 7 is now literally true and should be asserted, not
       inherited.** DD-003 row 7 says the Button label Visual's offset and
       size are covered "because DD-002 moved that write into the sync
       pass". T3 performed that move, so the assertion T7 makes is that

@@ -4429,3 +4429,177 @@ step 1 writes the scale and opens the nested-pass observation in one
 primitive, so no path installs the marker without having committed the scale;
 the nested `WM_SIZE` reports whether its projection *succeeded* and refreshes
 no text; and step 4 runs only behind the extracted verdict.
+
+### Implementation result and end gate (2026-07-30)
+
+Landed as one code commit, `e63586e`. The handler and its four branch tests are
+one commit rather than two because three of the branches the handler introduces
+are authored failure paths, and a commit carrying them without the tests that
+fire them is precisely the state trap #4 exists to refuse.
+
+`wnd_proc` gains a `WM_DPICHANGED` arm **above** the `&mut *state_ptr` block.
+`handle_dpi_changed` commits the scale and installs the nested-pass marker in
+one primitive (`begin_scale_change`), applies the OS-suggested physical
+rectangle (`apply_suggested_rectangle`), reads back what the re-entrant
+`WM_SIZE` reported, falls back to `project_current_client_extent` when no
+projection succeeded, and refreshes text only behind
+`GeometryProgress::whole_tree_projected`. The `WM_SIZE` arm gains two
+conditionals on the marker: it suppresses its ordinary text refresh and it
+reports its projection's outcome.
+
+#### Traps 2 and 3 — DD-M4-P1-003's 13 rows, closed against the source
+
+The claim under test is "a scale change drags along exactly these, and nothing
+else". Rows marked *verified unchanged* were checked by search, not by memory.
+
+| Row | Effect | Result |
+|---|---|---|
+| 1 | `WindowState`'s cached scale | **updated**, first — `begin_scale_change` at [`window.rs:532`](../../../../wasamo-runtime/src/window.rs), the only mutator in the runtime beside the creation-time seed. |
+| 2 | The window rectangle | **updated** from the OS suggestion via `SetWindowPos`, with `SWP_NOZORDER` + `SWP_NOACTIVATE` and **not** `SWP_NOMOVE`. Asserted by test 1, which moves as well as resizes. |
+| 3 | The client extent | **updated** — arrives through the nested `WM_SIZE` and is divided at the T5 seam; when no `WM_SIZE` arrives, read from `GetClientRect` and divided by the same committed scale in the fallback. |
+| 4 | Layout | **re-run** over the new DIP client extent, by the nested pass or the fallback. Per the 2026-07-29 DD-003 annotation, "identical results" holds of a *controlled* client extent; T8 preserves one, T11 does not. |
+| 5 | Every widget Visual's offset and size | **updated** by `sync_visuals` at the explicit target. No handler-specific geometry code. |
+| 6 | The ScrollView intermediate Visual | **updated**, same pass. |
+| 7 | The Button label Visual | **updated**, same pass, with **no handler-specific code** — the assertion DD-003 row 7 says it is making. Verified structurally: `sync_visuals` is the only `SetOffset` / `SetSize` site in the runtime (T3's invariant, re-searched here), and it reaches the label through the Button / ToggleButton arm. Had T3 not moved that write, this row would have needed handler code and would have been the phase's silent bug. |
+| 8 | Every text surface and its brush | **updated** by `refresh_text_surfaces_recursive` at step 4 — and **only behind a succeeded projection**, which is the one place this row's wording needed strengthening rather than implementing. |
+| 9 | The root's `SetRelativeSizeAdjustment(1, 1)` | **verified unchanged.** `rg SetRelativeSizeAdjustment wasamo-runtime/src` returns exactly one site, [`window.rs:125`](../../../../wasamo-runtime/src/window.rs), inside `create`. It relates two physical quantities, so it is scale-independent, and no code path re-writes it. |
+| 10 | `InsetClip` insets | **verified unchanged**, and **the ADR's site list is wrong here.** `rg CreateInsetClip` returns `widget.rs:690` / `744` / `768`, whose enclosing functions are `scroll_view`, `grid` and `zstack` — **not Box**. `WidgetNode::box_` installs no clip. Independently, a search for every `Set*Inset` setter finds **no site in the repository**, so every inset is the constructor default of zero and zero is scale-invariant. The row's conclusion stands; the widgets it names do not. (T1 F-2 established this against DD-002 row 12 and dispositioned the correction only to T5; T3 F-18 predicted that a T7 reading the ADR wording would assert a site that does not exist.) |
+| 11 | Signal registry, effect graph, binding state, widget pointers | **verified unchanged.** The diff introduces no `registry`, `reactive`, `emit::`, or `mark_layout_dirty_for` token — searched over the whole added diff, not over the functions the author remembered writing. The two matches are the words "reactive drain" inside a doc comment saying it must not be entered. |
+| 12 | `MUTATION_CAP` / drain accounting | **verified unchanged**, by the same search. The handler enqueues nothing and never marks a window dirty, so `emit::flush_layout` is not reached and the drain is not entered. |
+| 13 | Hover and press state | **verified unchanged.** No `mouse_down`, `update_hover` or `clear_hover` token in the diff, and no pointer message is synthesised. The pointer may end up over a different widget after the resize; the next real `WM_MOUSEMOVE` corrects it. |
+
+**Trap #3, the derived copies.** `WindowState::scale` is authoritative and T7 is
+its first mutator, so this is the first task where a derived copy can be left
+behind. Every access in the runtime, enumerated by searching `.scale` across
+`window.rs`, `emit.rs` and `abi.rs`:
+
+| Site | Kind | Consequence of the change |
+|---|---|---|
+| `create`'s struct literal | seed | Unchanged. |
+| `begin_scale_change` (`window.rs:532`) | **write** | The only mutation. Installs the marker in the same function. |
+| `set_root` (pre-attach refresh, `pair_to_dip`, geometry target) | read x3 | Unchanged; runs before any change can occur. |
+| `wnd_proc`'s single `let scale = state.scale` (`window.rs:733`) | read | Serves the `WM_SIZE` arm and all three pointer arms. Read *per entry*, so the nested pass sees the committed value. |
+| `emit::flush_layout` (`pair_to_dip`, geometry target) | read x2 | Unchanged; a later drain projects at whatever the current scale is. |
+| `abi::wasamo_window_set_root`'s T6 preflight | read | Unchanged. |
+| `project_current_client_extent`, `refresh_text_at_new_scale` | read x2 | New; both read the committed value, and the fallback uses the *same* value as divisor and as projection target rather than two that happen to agree. |
+
+The two derived copies — each node's `scale` (geometry) and `raster_scale`
+(last-rasterized DPI) — advance only through `commit_scale_recursive` and
+`refresh_text_surfaces_recursive` respectively, and T7 reaches neither except
+through `run_layout_as_window_root_at_scale` and the step-4 call. So the
+authoritative value cannot move without either every geometry cache following it
+or the divergence being logged and left visible.
+
+#### Trap 4 — authored branches, each fired directly
+
+| Branch | Test that fires it |
+|---|---|
+| No successful nested projection, so the whole-tree fallback runs | `an_unchanged_suggested_rectangle_projects_through_the_fallback` — a suggested rectangle equal to the current one makes `SetWindowPos` succeed while dispatching no `WM_SIZE`, so `resize_fn` is not called and only the fallback can have produced target-scale geometry. |
+| Null suggested rectangle: skip step 2, log, fall back | `a_null_suggested_rectangle_survives_and_still_projects` |
+| No projection succeeded: deny step 4, log, leave everything stale | `two_failed_projections_leave_the_text_stale_without_diverging` |
+| `GeometryProgress`'s three states | `window::tests::only_a_succeeded_projection_permits_step_four` and `neither_unsuccessful_state_is_progress` — pure logic, because a *failed* projection needs a layout error and a *succeeded* one a live Compositor. |
+
+The failing tree is `VStack { Text, HStack { Box } }`, reached through the `.ui`
+path because `WidgetNode::box_` is `pub(crate)`. It fails deterministically
+rather than by injection: `measure_vstack` passes an infinite child height and
+`measure_hstack` an infinite child width, so the childless `Box` is measured
+against unbounded space on both axes and returns `LayoutError::BoxNoExtent`
+(DD-M3-P2-005).
+
+**The green suite was not taken as evidence.** Five mutations, each built and
+run:
+
+| # | Mutation | Result |
+|---|---|---|
+| M1 | Steps 1 and 2 inverted (`begin_scale_change` after `SetWindowPos`) | **4/4 still pass.** Predicted, and the measurement is the point — see F-41. |
+| M2 | Nested-refresh suppression removed | `two_failed_projections...` **fails**; the other three pass. |
+| M3 | Fallback removed | the two fallback tests **fail**; the nested-path and both-fail tests pass. |
+| M4 | Step-4 permission gate removed | `two_failed_projections...` **fails**. A distinct mechanism from M2, caught independently. |
+| M5 | `SWP_NOMOVE` inherited from the creation-time correction | `a_size_changing_suggested_rectangle...` **fails**. |
+
+M5 is worth stating plainly: [handoff.md](./handoff.md) predicted that inheriting
+that flag would pin the window on every monitor crossing "while every test stays
+green". It would have, with a suggested rectangle that only changed the size.
+Moving the rectangle as well costs nothing and converts the hazard from a comment
+into a failing test.
+
+#### Trap 6 — what the measurements refused to confirm
+
+**F-41 — the ordering defect is not observable in the final state, measured
+(M1).** The task's own bullet asked for the step 1 / step 2 order to be encoded
+structurally or shown by a falsifiable probe, and warned that "the enumeration
+says the order is right" is the outcome to refuse. M1 is that probe, and it
+falsifies the *stronger* reading of the design claim while confirming the weaker
+one. Inverting the two steps leaves all four tests green, because the nested
+`WM_SIZE` then finds no marker, is neither suppressed nor reported, and the
+handler's fallback re-projects the whole tree at the committed scale — so the
+**final** state is correct either way. What the inversion still produces is
+exactly what DD-M4-P1-003 warns about: one projection written to the Visual tree
+at the stale factor, plus a text refresh at the stale DPI, before the fallback
+corrects both. **So the design does not make the ordering defect impossible; it
+makes it transient and self-correcting instead of persistent.** That is a weaker
+claim than "unconstructible" and it is the one the code supports. The persistent
+half is what no test could have caught before T9 and what the structure now
+prevents; the transient frame remains, is invisible at 100%, and becomes
+observable when T9 lands.
+
+**F-42 — a `.ui` attribute typo produces an empty widget with no error, and it
+made a first-draft assertion vacuous.** The first version of these tests wrote
+`Text { content: "..." }`. The DSL attribute is `text:`; `check::check` reported
+**no error** and `has_errors()` was false, so the tests ran against `Text` nodes
+whose content was the empty string and whose measured width was `0.0` — under
+which `assert_close(after, before * 1.25)` compares `0.0` with `0.0` and passes.
+Three of the four tests were caught only by the *surface pixel* assertion, whose
+expected `ceil(0.0) == 0` disagreed with `surface_pixels`' one-pixel floor. The
+defect is pre-existing `wasamoc` lenience, not T7's to fix, and it is not filed
+as a T7 finding beyond this record — but the lesson generalises past this task:
+**a `.ui`-driven test can be green and empty**, and an assertion of the form
+"the value scaled by k" is satisfied by zero. Both `.ui` fixtures here now
+assert non-degenerately, and the reason the vacuity was caught at all is that
+each test reads two facts about the witness rather than one. Carried forward.
+
+No failure was re-rolled and no test was retried to green. M2 through M5 were
+expected to fail and did; M1 was expected to pass and did.
+
+#### Trap 5 — carry-forward
+
+Recorded in the T7 retrospective's item 10 and carried to
+[handoff.md](./handoff.md) at phase close:
+
+- **The handler holds no `&mut WindowState` across `SetWindowPos`.**
+  *Re-trigger:* any task adding work to the `WM_DPICHANGED` arm, or moving it
+  inside `wnd_proc`'s null-checked block. M4-Phase 2's event model touches this
+  procedure next.
+- **Step 4 is permitted only by a succeeded whole-tree projection**, and the
+  nested `WM_SIZE` suppresses its own refresh to make that gate meaningful.
+  *Re-trigger:* any new caller of `refresh_text_surfaces_recursive`, or any
+  change making `measure` scale-dependent (which would also turn step 4's
+  position from a free choice into a correctness constraint).
+- **`resize_fn` fires from the `WM_SIZE` arm and nowhere else**, which is what
+  makes it the discriminator between the nested path and the fallback.
+  *Re-trigger:* the first host or ABI function to install a resize callback, or
+  any task that synthesises one from the change path.
+- **DD-M4-P1-003 row 10 names Box where the source has ZStack.** Closed here
+  against the source for the third time (T1, T3, T7). *Re-trigger:* any task
+  building an enumeration from the ADR's row-10 wording.
+
+#### Verification
+
+All commands on Windows, against the post-commit branch state:
+
+- `cargo fmt --all -- --check` — green.
+- `git diff --check` — green.
+- `cargo test -p wasamo-runtime --lib -- --test-threads=1` — 466 passed (464 plus the two `GeometryProgress` tests).
+- `cargo test -p wasamo-runtime --test dpi_change_propagation_integration -- --nocapture --test-threads=1` — 4 passed.
+- `cargo clean`, then `cargo build -p wasamo-runtime`, `cargo build --release --workspace`, `cargo build --workspace`, `cargo test --workspace -- --test-threads=1` — recorded in the T7 retrospective item 3.
+
+No GUI capture: trap #7 is non-applicable for the reason recorded at the start
+gate, and no frame is claimed.
+
+**End-gate result: passed**, subject to the required full independent review
+after the T7 retrospective, and subject to one landing blocker that is not a
+review finding: **the new test binary's Compositor-unavailable skip path has not
+been observed firing.** The helper is the already-verified shared one, but T6's
+round-1 R3 classified per-binary observation as the requirement, so this binary
+needs one owner run on an environment where `wasamo_init` returns `0x80070005`.
+No merge approval is implied.
