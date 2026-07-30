@@ -1,3 +1,4 @@
+use crate::dip_scale::{DipScale, REFERENCE_DPI};
 use windows::{
     core::Interface,
     Foundation::Size,
@@ -99,7 +100,7 @@ impl TextRenderer {
         })
     }
 
-    /// Measure the natural (unconstrained) pixel size of a text string.
+    /// Measure the natural (unconstrained) DIP size of a text string.
     pub fn measure(&self, text: &str, style: TypographyStyle) -> windows::core::Result<(f32, f32)> {
         let layout = self.create_text_layout(text, style, f32::MAX, f32::MAX)?;
         let mut metrics = DWRITE_TEXT_METRICS::default();
@@ -107,7 +108,15 @@ impl TextRenderer {
         Ok((metrics.widthIncludingTrailingWhitespace, metrics.height))
     }
 
-    /// Allocate a `CompositionDrawingSurface` and draw `text` onto it.
+    /// Allocate a 96-DPI `CompositionDrawingSurface` and draw `text` onto it.
+    ///
+    /// `width` and `height` are DIP. Surface storage is an integer pixel grid,
+    /// so each axis is `ceil(dip)` pixels with a one-pixel minimum; it may be
+    /// slightly larger than a Visual using the exact fractional DIP extent.
+    /// A caller that creates its own `CompositionSurfaceBrush` must choose the
+    /// desired mapping explicitly. The WinRT default (`Uniform`, centred) can
+    /// shrink and displace this whole-pixel surface; the runtime's widget path
+    /// uses one-to-one, origin-aligned mapping instead.
     pub fn draw_text(
         &self,
         text: &str,
@@ -116,10 +125,26 @@ impl TextRenderer {
         height: f32,
         color: Color,
     ) -> windows::core::Result<CompositionDrawingSurface> {
+        self.draw_text_at_dpi(text, style, width, height, color, REFERENCE_DPI)
+    }
+
+    /// Draw text at the device resolution represented by `dpi`, while keeping
+    /// every layout and DirectWrite input in DIP.
+    pub(crate) fn draw_text_at_dpi(
+        &self,
+        text: &str,
+        style: TypographyStyle,
+        width: f32,
+        height: f32,
+        color: Color,
+        dpi: u32,
+    ) -> windows::core::Result<CompositionDrawingSurface> {
+        let scale = DipScale::from_dpi(dpi);
+        let (surface_width, surface_height) = scale.surface_pixels((width, height));
         let surface = self.gfx_device.CreateDrawingSurface(
             Size {
-                Width: width.max(1.0),
-                Height: height.max(1.0),
+                Width: surface_width as f32,
+                Height: surface_height as f32,
             },
             DirectXPixelFormat::B8G8R8A8UIntNormalized,
             DirectXAlphaMode::Premultiplied,
@@ -129,32 +154,44 @@ impl TextRenderer {
         let mut offset = windows::Win32::Foundation::POINT::default();
         let dc: ID2D1DeviceContext = unsafe { interop.BeginDraw(None, &mut offset)? };
 
-        unsafe {
-            dc.Clear(Some(&D2D1_COLOR_F {
-                r: 0.0,
-                g: 0.0,
-                b: 0.0,
-                a: 0.0,
-            }));
-        }
-
-        let color_f = D2D1_COLOR_F {
-            r: color.R as f32 / 255.0,
-            g: color.G as f32 / 255.0,
-            b: color.B as f32 / 255.0,
-            a: color.A as f32 / 255.0,
-        };
-        let brush: ID2D1SolidColorBrush = unsafe { dc.CreateSolidColorBrush(&color_f, None)? };
-
-        let layout = self.create_text_layout(text, style, width, height)?;
+        // `BeginDraw`'s atlas offset is in physical pixels. Setting the context
+        // DPI keeps D2D's drawing coordinates in DIP, so the offset must cross
+        // the same boundary in the opposite direction before it is used as the
+        // drawing origin (DD-M4-P1-002 audit row 7).
+        unsafe { dc.SetDpi(dpi as f32, dpi as f32) };
         let origin = D2D_POINT_2F {
-            x: offset.x as f32,
-            y: offset.y as f32,
+            x: scale.to_dip(offset.x as f32),
+            y: scale.to_dip(offset.y as f32),
         };
-        unsafe {
-            dc.DrawTextLayout(origin, &layout, &brush, Default::default());
-            interop.EndDraw()?;
-        }
+
+        // Once BeginDraw succeeds, EndDraw must run even if a later D2D or
+        // DirectWrite allocation fails. Keep the first failure, but close the
+        // drawing transaction before propagating it.
+        let draw_result = (|| -> windows::core::Result<()> {
+            unsafe {
+                dc.Clear(Some(&D2D1_COLOR_F {
+                    r: 0.0,
+                    g: 0.0,
+                    b: 0.0,
+                    a: 0.0,
+                }))
+            };
+
+            let color_f = D2D1_COLOR_F {
+                r: color.R as f32 / 255.0,
+                g: color.G as f32 / 255.0,
+                b: color.B as f32 / 255.0,
+                a: color.A as f32 / 255.0,
+            };
+            let brush: ID2D1SolidColorBrush = unsafe { dc.CreateSolidColorBrush(&color_f, None)? };
+
+            let layout = self.create_text_layout(text, style, width, height)?;
+            unsafe { dc.DrawTextLayout(origin, &layout, &brush, Default::default()) };
+            Ok(())
+        })();
+        let end_result = unsafe { interop.EndDraw() };
+        draw_result?;
+        end_result?;
 
         Ok(surface)
     }

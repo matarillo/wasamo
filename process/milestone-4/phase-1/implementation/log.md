@@ -3893,3 +3893,476 @@ accurate list: those three are the ones a bisect can land on.
    external readers use. The atlas-origin sentence is **not** in this
    question — its conclusion is unaffected and its overstatement is
    empirical, so Moment 2 is the right home for it.
+
+## T6 — Text-surface resolution + the re-rasterization walk
+
+### Carry-over audit and responsibility re-audit (2026-07-30, before start gate)
+
+Branch: `feat/m4-phase-1-t6`, created from `feat/m4-phase-1` at
+`5e36ce5`.
+
+The completed-task retrospectives and handoff leave five live T6-owned
+obligations: consume `DipScale::surface_pixels` and remove its temporary
+`dead_code` allowance; become the one writer of every node scale cache;
+cover the incremental tree-mutation and IR conditional / `for` attach
+paths F-32 found; preserve `sync_visuals` as the only Composition geometry
+writer and `ButtonData.label_size` as the label-measurement source; and
+produce GUI evidence that exercises scale != 1 rather than treating a 100%
+frame as crispness evidence. The public subtree hit-test receiver
+precondition, frame-drift mechanism, direct-Composition
+`window_add_widget` path, and later-phase carry-forward rows remain stated
+limits rather than T6 implementation work.
+
+The plan's single fallible `apply_scale_recursive` hypothesis fails its own
+side-effect test. If a surface recreation fails after earlier nodes have
+already changed their caches, the next geometry pass projects one tree at
+mixed scales. It also treats `set_root` and T7 as the whole reach even though
+F-32 identified shipped incremental attach paths. The revised T6
+responsibility is a prepare-then-commit primitive: rebuild stale brushes
+without cache mutation, then write all caches in an infallible pass only
+after preparation succeeds. It runs before initial layout and at every
+layout entry, which covers inserted content at the point it first becomes
+geometrically observable without teaching every mutator a second scale
+rule. `window_add_widget` remains outside because it deliberately retains no
+content root and runs no layout.
+
+Two other planning choices are resolved before editing. Public
+`TextRenderer::draw_text` remains a 96-DPI convenience wrapper; a
+crate-private method takes raw `u32` DPI, so neither `DipScale` nor an
+unstructured factor becomes public. The walk reads the existing fixed Text
+extent and `ButtonData.label_size`; it does not call `measure`, add retained
+measurement state, or write Composition geometry. The corresponding
+changes are recorded in [plan.md](./plan.md) §T6 before the start gate is
+selected.
+
+### Start gate (recorded 2026-07-30, before production-code edits)
+
+Review lane: **full independent review** — T6 changes the runtime rendering
+path, the tree-wide cache commit boundary, and produces GUI-render evidence.
+No trap is judged non-applicable after the responsibility re-audit.
+
+| # | Applies | Reason and planned close artifact |
+|---|---|---|
+| 1 — semantic migration / call sites | **yes** | DD-002 audit row 7 changes and the internal scaled drawing entry has seven production call expressions (five existing paths plus the re-rasterization path's Text and Button-family arms). Close with the exact `rg` queries, every caller classified, and an explicit unchanged-row-10 check. |
+| 2 — structural side effects | **yes** | The primitive changes text brushes and the cache that every geometry write reads. Enumerate brush replacement, cache commit, layout ordering, geometry non-effects, layout invalidation, child reach, and failure state. |
+| 3 — parallel / derived data | **yes** | Each node cache is derived from `WindowState::scale`. Close by enumerating the authoritative scale mutator and all attach / layout paths, and show that cache commit occurs only inside the prepare-then-commit primitive after fallible work succeeds. |
+| 4 — authored branch | **yes** | Reusing a Text node's fixed extent requires a size-shape branch, and rendering failures may gain a diagnostic branch. Add a direct test for each branch introduced; do not count an incidental GUI run. |
+| 5 — carry-forward | **yes** | Preserve the single-writer rule, the no-geometry-write rule, and the scale-independent-measure premise. Record their evidence and re-trigger criteria, including a future scale-dependent `measure`. |
+| 6 — deterministic failure | **yes** | Surface allocation, `BeginDraw`, `EndDraw`, brush creation, and brush installation are fallible across O(text nodes). A recurring failure is rooted and dispositioned; the all-or-no-cache-commit shape is verified rather than retried to green. |
+| 7 — GUI positive control | **yes** | A 100% frame cannot exercise the D2D DPI or atlas-origin changes. Capture and inspect multiple 100% regression frames, a throwaway-PMv2 125% crispness pair, and an accepted-vs-default brush control with a deliberately non-proportional surface / Visual pair at integer and fractional device origins. |
+
+The implementation approach is therefore constrained before editing: public
+`draw_text` stays source-compatible; scaled drawing takes raw DPI inside the
+crate; text extents are read rather than re-measured; no new retained
+rendering state is added; no Composition geometry write leaves
+`sync_visuals`; and cache writes occur only after the complete fallible
+preparation succeeds.
+
+### Implementation result and end gate (2026-07-30)
+
+T6 implements the responsibility selected at the start gate. `TextRenderer`
+now allocates each drawing surface with `DipScale::surface_pixels`, sets the
+D2D context to the retained raw DPI, and converts `BeginDraw`'s physical atlas
+offset back to DIP before drawing. `WidgetNode` creates every text surface
+brush through one helper that sets `CompositionStretch::None` and both
+alignment ratios to `0.0`. The public `draw_text` method remains the 96-DPI
+entry; the runtime uses the crate-private `draw_text_at_dpi` entry.
+
+The tree operation is the planned prepare-then-commit pair. The fallible pass
+replaces stale Text and Button-family brushes from retained DIP state and does
+not change a cache. The infallible pass then writes every node cache. `set_root`
+runs it before detaching the previous root, and both layout entries run it
+before building a layout tree, so a newly inserted child is normalized before
+the first `sync_visuals` that can expose it.
+
+#### Trap 1 — semantic call-site audit
+
+Queries used:
+
+```text
+rg -n "draw_text\(" --glob "*.rs" .
+rg -n "draw_text_at_dpi\(" wasamo-runtime/src
+rg -n "CreateSurfaceBrushWithSurface" wasamo-runtime/src wasamo-runtime/tests
+```
+
+| Site | DPI source | Disposition |
+|---|---|---|
+| public `TextRenderer::draw_text` wrapper | `REFERENCE_DPI` | Existing Rust-native contract retained; the integration control is its only repository caller outside the wrapper itself. |
+| Text constructor | identity | Construction precedes window ownership; normalized by the first attach/layout operation. |
+| Button / ToggleButton constructor | identity | Same construction boundary. |
+| Button label update | node cache | Reads DPI before the whole-node mutable borrow, then replaces the brush. |
+| Text content update | node cache | Re-measures because content changed, then rasterizes at the already-attached node scale. |
+| Text style update | node cache | Re-measures because style changed, then rasterizes at the already-attached node scale. |
+| prepare pass, Text arm | target window scale | Reads the retained fixed extent; no measurement. |
+| prepare pass, Button-family arm | target window scale | Reads `ButtonData.label_size`; no measurement. |
+
+The seven internal call expressions are therefore all classified. The one
+production `CreateSurfaceBrushWithSurface` expression is inside the accepted
+mapping helper. Audit row 10 is unchanged: measurement still takes DIP and the
+scale walk contains no `measure` call. `DipScale::surface_pixels` is now live,
+so its two temporary `dead_code` allowances were removed.
+
+#### Traps 2 and 3 — structural side effects and parallel data
+
+| Effect / copy | Writer and ordering | End-gate result |
+|---|---|---|
+| drawing-surface pixel extent | `draw_text_at_dpi`, `ceil(dip × scale)`, minimum one pixel | Changed intentionally; Visual extent is not rounded. |
+| D2D DPI and atlas origin | `draw_text_at_dpi`, after `BeginDraw` | Both sides of the physical/DIP boundary use the same `DipScale`. |
+| surface-brush mapping | `create_text_surface_brush` | One production writer; `None` / `0.0` / `0.0`. |
+| Text / Button brush | property-update path or prepare pass | A prepare failure may leave an already-prepared brush, but no geometry cache is partially committed; stale caches make the next pass retry. |
+| node scale cache | `commit_scale_recursive` only | One assignment expression in the runtime, reached only after the complete fallible pass succeeds. |
+| Composition geometry | `sync_visuals` only | The prepare and commit passes contain no `SetOffset` / `SetSize`; the repository search finds those writes only in `sync_visuals`. |
+| retained DIP extent / layout invalidation | existing constructors and property updates only | The scale walk neither writes `SizeConstraint` / `label_size` nor calls `mark_layout_dirty_for`; row-10 scale-independent measurement is preserved. |
+
+`WindowState::scale`, initialized from `GetDpiForWindow`, is the current
+window authority; T7 will add its first mutation. Node constructors still
+start at identity. Initial `set_root` explicitly applies the window value.
+`append_child`, `insert_child`, `replace_child`, and the IR conditional / `for`
+sites remain cache-neutral. The IR paths mark the owning window dirty and drain
+through its layout entry. The direct Rust / ABI mutation APIs retain T3's
+existing limit: they schedule no layout and wait for a later `WM_SIZE` or
+size-affecting property write. In either case, the first layout that can assign
+geometry applies the window root's scale recursively before `sync_visuals`.
+The direct-Composition `window_add_widget` path retains no layout/content root
+and remains the already-stated unsupported boundary.
+
+#### Trap 4 — authored branches
+
+`fixed_extent` has one accepted shape (`Fixed`, `Fixed`) and rejects either
+non-fixed axis. `fixed_extent_accepts_only_two_fixed_axes` directly fires the
+accepted branch and both rejection positions as pure Rust logic. The remaining
+new failure exits are WinRT calls propagated with `?`; no diagnostic/reject
+branch was added around them, and the OS surface is not mocked.
+
+The mock-free `text_surface_mapping_integration` test reads live WinRT objects.
+Its default-brush control observes `Uniform` / `0.5` / `0.5`; the production
+Text brush observes `None` / `0.0` / `0.0`. A second test observes a
+non-proportional ceil-source / exact-Visual pair and integer plus fractional
+Visual origins. Both tests pass with `--test-threads=1`.
+
+#### Trap 5 — carry-forward
+
+The single cache writer, geometry-writer boundary, and scale-independent
+measurement premise remain active. Re-run this audit if a new attach path can
+reach geometry without `run_layout` / `run_layout_as_window_root`, if
+measurement becomes scale-dependent, if a new text-bearing widget variant is
+added, or if `window_add_widget` gains a retained content root. T7 consumes the
+primitive; T8's stale-descendant control therefore requires the hidden test
+seam recorded in the revised plan.
+
+#### Trap 6 — deterministic failure and disposition
+
+**F-39 — the 100% "unchanged" hypothesis was false.** Fresh parent and T6
+captures differed materially in all six frames at 96 DPI (9,360–24,868 pixels,
+maximum channel delta 220–249). This is not evidence that the D2D scale
+boundary failed: DPI and atlas-origin conversion are identities at 96, while
+whole-pixel `ceil` allocation and DD-M4-P1-006's mapping are still observable.
+Here `96 DPI` is the runtime-effective path: because the final declaration had
+not landed, DWM enlarged the complete frame on the 125% desktop. The reported
+PNG measurements are therefore post-DWM physical pixels, although both sides
+of each comparison pass through the same enlargement.
+Removing only the three brush setters changed all six frames again
+(9,327–25,197 pixels, maximum delta 217–234), and the live-object integration
+test names the mechanism. The plan and end gate were corrected rather than
+retrying toward the expected picture.
+
+**F-40 — a comparison build reused an artifact directory across two source
+trees.** After building the parent worktree into the shared target, a main-tree
+workspace build reported the current runtime fresh. That makes a timestamped
+DLL insufficient evidence, the same practical failure class as F-21. The
+comparison worktree was removed; `cargo clean -p wasamo-runtime --release`
+then forced the accepted source to compile before the release workspace build.
+After the setter-removal mutation capture, the same clean/rebuild sequence was
+run again. The six `t6-final` client interiors are byte-identical to the six
+accepted `t6-100-after-b` interiors, proving the final DLL is not the named
+setter-removal mutation artifact. That byte identity is not general
+source-identity evidence: a render-neutral mutation could produce the same
+frames and needs a structural/source artifact. Future cross-tree comparisons
+must use separate target directories; mutation captures must finish with a
+package clean and accepted rebuild, with the rebuild record—not the frame
+alone—carrying source restoration.
+
+#### Trap 7 — GUI evidence
+
+[evidence/t6-analysis/README.md](./evidence/t6-analysis/README.md) records the
+capture matrix, pixel counts, mutation, and assistant screenshot analysis. At
+effective 120 DPI the same gallery is the positive control: the parent occupies
+only `1 / 1.25` of the client and its 96-DPI glyph rasterization has grey edges
+and uneven stems; its default brush adds a slight whole-surface shrink/centring,
+not DWM bitmap stretching. T6 fills the client and shows narrower consistent
+strokes and open counters. Three fresh captures on each side establish the
+repeatability bounds. The 96-DPI default-brush mutation visibly centres and
+scales the integer surface; the accepted brush holds the origin and unit
+mapping. The branch-tip `t6-final/gallery-default.png` was inspected after the
+forced clean build and shows the intended Gallery screen, not a blank or stale
+host. Literal cross-monitor delivery remains T11's responsibility.
+
+#### Verification
+
+All commands ran on Windows from the T6 branch tip source:
+
+- `cargo fmt --all -- --check` — green.
+- `cargo build --release --workspace` after the forced package clean — green.
+- `cargo build --workspace` — green.
+- `cargo test --workspace -- --test-threads=1` — green.
+- `cargo test -p wasamo-runtime --test text_surface_mapping_integration -- --test-threads=1` — 2 passed.
+- `git diff --check` — green.
+
+End-gate result: **passed**, subject to the required full independent review
+after the T6 retrospective. No merge approval is implied.
+
+### Independent review round 1 disposition (2026-07-30)
+
+Result: **3 major, 3 minor**. The zero-major merge gate is not met.
+
+| # | Severity | Finding | Disposition |
+|---|---|---|---|
+| R1 | major | T6's combined prepare+commit primitive does not yet supply DD-M4-P1-003 / T7's fixed order with both new-cache nested geometry and post-layout rasterization; its retry claim also has no authoritative target once `WindowState::scale` and the root cache diverge | **Confirmed; owner decision pending.** The plan already calls this a T6/T7 joint choice and reserves whether the cache commit moves into step 1 or the full walk moves. T6 cannot close while its public-to-crate primitive leaves that consumer unresolved. |
+| R2 | major | The first 125% baseline changes both geometry cache and text surfaces, so it does not isolate the defining scaled-rasterization failure | **Confirmed and remediated.** Two fresh mutation captures hold geometry/cache at 120 DPI while forcing every text surface and D2D context to 96 DPI. The two runs are byte-identical; versus accepted `t6-after-b`, all six frames differ by 9,183–25,977 pixels with maximum channel delta 223–252. Both occupy the same client and retain the same rectangular geometry / 9×2 tile layout; only the text-surface path is mutated. |
+| R3 | major | The new mock-free test binary has no recorded real `0x80070005` negative-path firing | **Confirmed; external evidence pending.** The helper is established, but the project rule requires this new test to be observed on a Compositor-unavailable environment rather than inheriting an earlier binary's observation. |
+| R4 | minor | Direct tree-mutation APIs were incorrectly described as scheduling dirty layout | **Fixed.** Plan, log and retrospective now distinguish IR dirty/drain from direct APIs waiting for a later layout; T6 guarantees normalization before the first later geometry write, not immediate layout. |
+| R5 | minor | The allocation checkbox was open and the public-wrapper caller statement predated the new integration control | **Fixed.** The checkbox is complete; the statement now distinguishes no production caller from the deliberate T6 test caller. |
+| R6 | minor | The live test accepted any surface at least as large as the Visual rather than exact `ceil` | **Fixed.** It now asserts `SizeInt32.Width/Height == ceil(Visual.Size.X/Y)` before the non-proportional mapping controls. Targeted test remains 2/2 green. |
+
+R2 evidence is
+[evidence/t6-scaled-surface-identity-a/](./evidence/t6-scaled-surface-identity-a/)
+and `-b/`. The temporary PMv2 declaration and identity-DPI renderer mutation
+were removed, then `cargo clean -p wasamo-runtime --release` and
+`cargo build --release --workspace` rebuilt the accepted source. R1 requires a
+product-owner record decision; R3 requires an external environment whose
+runtime actually returns `0x80070005`.
+
+### Independent review round 2 intake and remediation plan (2026-07-30)
+
+The owner supplied a second independent review derived against `97c24cf` and
+independently checked against branch tip `e532c9f`. It reports **2 major and 11
+minor at the reviewed base**. At the tip, its major 2 and minors 1–2 are the
+already-landed R2/R4/R5/R6 remediation; its major 1 is the same unresolved R1,
+with a concrete failure trace; and minors 3–11 are new or newly classified.
+The zero-major gate therefore remains unmet.
+
+The review's major-1 trace assumes one possible T7 caller order that has not
+landed, but its root proposition is confirmed independently of that scenario:
+production layout entries infer a target from a derived root copy, and the same
+copy claims both geometry projection and successful text rasterization. A
+fallible brush operation can therefore both block geometry and erase the only
+retry marker. The chosen remediation follows the reviewer's recommendation:
+production callers supply `WindowState::scale`; geometry and raster freshness
+become separate facts; and surface failure no longer prevents layout. This
+preserves DD-M4-P1-003's written order, so neither a successor nor a move of
+the whole walk into step 1 is selected. T7 will defer the ordinary text refresh
+inside its nested `WM_SIZE` and run it after `SetWindowPos` returns.
+
+| Review item | Tip disposition before code remediation |
+|---|---|
+| Major 1 — inferred layout target and shared freshness cache | **Confirmed; remediation selected above.** This is first because it is the only unresolved major at the tip. |
+| Major 2 — scaled evidence geometry confound | **Already fixed in `e532c9f`.** The scaled surface-identity mutation holds geometry/cache at 120 DPI. |
+| Minor 1 — direct mutations do not dirty layout | **Already fixed in `e532c9f`.** |
+| Minor 2 — open allocation checkbox | **Already fixed in `e532c9f`.** |
+| Minor 3 — wildcard absorbs future text-bearing variants | **Confirmed; fix in this remediation.** Make the match exhaustive. |
+| Minor 4 — `set_root` comment says the caller can discard a consumed `Box` | **Confirmed as a false comment and a wider ABI failure-contract question.** Correct the comment now; audit whether preserving a host handle on failure can be changed without redefining the experimental ABI ownership contract. |
+| Minor 5 — text failure prevents geometry | **Confirmed; fix with the major-1 split.** Geometry runs and commits independently; raster failure stays retryable through its own marker. |
+| Minor 6 — the 96-effective-DPI frames are DWM-scaled | **Confirmed; factual evidence correction required.** The pixels remain valid comparisons, but the description must distinguish process-effective DPI from final DWM frame scaling. |
+| Minor 7 — parent `stretched-bitmap fringe` mechanism is wrong | **Confirmed; factual evidence correction required.** The old default brush slightly shrinks/centres; the dominant visible difference is lower glyph resolution. |
+| Minor 8 — byte identity does not prove source identity | **Confirmed as a qualification to F-40.** It proves restoration from the tested mutation, not arbitrary source identity; render-neutral mutations need a structural/source artifact. |
+| Minor 9 — public `draw_text` now returns a ceil-sized surface | **Confirmed; document the retained 96-DPI but changed storage-extent contract.** Callers supplying their own brush must set the one-to-one mapping if that is what they require. |
+| Minor 10 — new layout-target/cache invariant absent from retrospective | **Confirmed; update item 10 after the code shape lands.** |
+| Minor 11 — negative skip guard unobserved | **Confirmed; external evidence pending.** The fail-not-skip assertion closes the CI direction statically, so this review classifies it minor rather than round 1's major, but the AGENTS.md landing requirement still has to be discharged on a Compositor-unavailable environment. |
+
+The two tip-only commits (`a26f213`, `e532c9f`) remain outside the supplied
+review base and require a delta review together with this remediation before
+the final zero-major verdict.
+
+### R1 remediation result and repeated end-gate artifacts (2026-07-30)
+
+Landed as `fad59e2` after the pre-code plan record `23e14c3`. `WidgetNode`
+now holds two deliberately distinct derived facts: `scale` is the geometry /
+hit-test projection cache; `raster_scale` is the DPI of the text brush actually
+installed. Production window geometry receives `WindowState::scale`
+explicitly, passes that one target through the complete `sync_visuals`
+recursion, then commits every node geometry cache after successful sync. Text
+refresh is a separate fallible recursion and advances a node's raster marker
+only after `SetBrush` succeeds. The match is exhaustive over every current
+`WidgetData` variant.
+
+The three production boundaries compose those primitives as follows:
+
+| Caller | Authoritative target | Geometry/cache | Text refresh |
+|---|---|---|---|
+| `window::set_root` | `state.scale` | refresh new tree before replacing the old root; initial geometry then uses the explicit target and commits it | pre-attach, so failure preserves the installed root |
+| `wnd_proc::WM_SIZE` | the local copy of `state.scale` | `run_layout_as_window_root_at_scale` | separate call after geometry; T7 can suppress this call only for its nested `WM_SIZE` and run it at DD-003 step 4 |
+| `emit::flush_layout` | `state.scale` | same explicit-target geometry entry | separate call after geometry, covering IR incremental attach and later layout after direct mutation |
+
+Standalone Rust/test layout entries have no `WindowState`; they use their root
+geometry cache as their target, run target-threaded geometry, commit it, then
+refresh against the independent raster marker. Property writers rasterize at
+the node geometry scale and update `raster_scale` only after brush installation.
+
+**Structural side effects.** One `DipScale` marker is added per node; every
+constructor initializes both markers to identity. No `SizeConstraint`, retained
+text measurement, tree structure, registry/effect/signal state, reactive drain
+accounting, or Composition geometry-writer site is added. `sync_visuals`
+remains the only geometry writer; it now reads its explicit recursion target
+rather than `self.scale`. The new T6 pre-attach failure is also checked at the C
+ABI while the raw handle can still be restored, so that failure does not drop
+the host's allocation or leave its handle dangling. The wider experimental
+`set_root` ownership-on-error contract for pre-existing post-preparation WinRT
+failures is not redefined by T6.
+
+**Deterministic control.** The mock-free
+`authoritative_geometry_scale_preserves_a_stale_raster_retry` test creates a
+live Text surface at 96 DPI, runs geometry-only projection at 120 DPI, verifies
+the surface remains the original size, then calls the standalone layout entry.
+The geometry cache is already 120 DPI at that point, so the old shared-marker
+implementation would skip. The corrected implementation consults the stale
+raster marker and installs a surface whose exact integer size is the ceil of
+the 120-DPI Visual. The T6 integration binary is now **3 passed** locally.
+
+**GUI evidence.** A release workspace build preceded two fresh live six-frame
+captures, `t6-r1-final-a/b`. The sets are byte-identical to each other and all
+six client interiors are also byte-identical to the pre-remediation
+`t6-final` set. Direct inspection confirmed a non-blank 9 × 2 gallery, the
+click-created lightbox, and the `Counted 10 times` property-update frame with
+all expected labels. The exact frame match is a success-path regression check;
+the mock-free stale-raster control is the positive control for R1's
+render-neutral state distinction.
+
+Round-2 new-minor disposition after the remediation:
+
+| Minor | Result |
+|---|---|
+| 3 wildcard match | **Fixed** — exhaustive current variants. |
+| 4 consumed-Box comment / T6 preflight | **Fixed for the T6-added failure** — false comment removed; C ABI restores the raw handle if scale-aware preparation fails. Pre-existing later WinRT ownership semantics are unchanged. |
+| 5 text failure blocks geometry | **Fixed** — geometry/cache and refresh are separate calls; raster failure cannot prevent the completed geometry pass. |
+| 6 96-DPI evidence description | **Fixed** — evidence distinguishes runtime-effective 96 DPI from the post-DWM 125%-desktop frame. |
+| 7 stretched-fringe mechanism | **Fixed** — lower raster resolution plus the default brush's slight shrink/centring replaces the incorrect DWM-stretch explanation. |
+| 8 byte identity overclaim | **Fixed** — it excludes the named render-changing mutation; render-neutral changes require structural/source evidence. |
+| 9 public `draw_text` storage contract | **Fixed** — rustdoc records 96-DPI inputs, ceil storage and caller brush-mapping responsibility. |
+| 10 retrospective invariant | **Fixed** — item 10 records explicit authoritative target plus independent geometry/raster markers and the T7 consumer shape. |
+| 11 negative skip firing | **Still pending external evidence.** Static fail-not-skip direction is present, but the project rule still requires one real Compositor-unavailable run before landing. |
+
+R1 is code-remediated but not self-cleared: the branch still requires a delta
+review over `a26f213..HEAD`, and the negative-path environment evidence remains
+a non-review landing gate.
+
+### Independent delta review intake and remediation start gate (2026-07-30)
+
+The independent review of `97c24cf..d2084c7` reports **1 major and 2
+minor**; the gate is not zero-major. The confirmed major is a T7 failure-path
+planning hole rather than a missing T6 primitive: if `SetWindowPos` fails or
+does not emit a nested `WM_SIZE`, no geometry pass consumes the new
+`WindowState::scale`. The plan now requires an explicit step-3 fallback using
+the current client rectangle before text refresh. The accepted success-path
+order remains unchanged. The first minor is confirmed: T6's new ABI preflight
+error branch restores raw ownership but no test fires the restoration. The
+second minor is a confirmed wording error: geometry projection is fallible;
+only the cache commit after it is infallible.
+
+Before code remediation, the implementation-gate traps are selected as
+follows:
+
+| Trap | Applies | Reason / planned artifact |
+|---|---|---|
+| 1 — semantic migration | no | No enum, schema, IR, or variant changes. |
+| 2 — structural side effects | **yes** | Enumerate the failure-state relationship among window scale, Visual geometry, geometry cache, raster marker, installed root, and incoming ABI allocation. |
+| 3 — parallel data | **yes** | Correct the T7 fallback so authoritative scale and derived geometry cannot silently claim convergence; retain separate geometry and raster markers. |
+| 4 — authored branch | **yes** | Extract the raw-ownership preflight transaction into pure generic logic and directly fire its error branch with a drop-counted allocation; T7's future fallback also gains an explicit direct-test requirement in the plan. |
+| 5 — carry-forward | **yes** | Record the no-nested-geometry fallback and its trigger in T7's task list and the T6 retrospective. |
+| 6 — deterministic failure | no | No recurring runtime/test failure initiated this remediation; the injected pure error is a branch control, not a rerolled failure. |
+| 7 — GUI evidence | no, for this delta | The code delta is ownership-only and cannot alter rendering; the already-reviewed T6 frame sets remain the GUI artifact. |
+
+Review lane remains **full independent review** because the containing T6
+change is runtime-structural and GUI-render gated; trap #4 composes with that
+review. The selected ABI shape centralises `Box::from_raw` / `Box::into_raw`
+in a generic preflight transaction. Its test must prove that rejection returns
+the identical live pointer, does not drop it, and permits exactly one later
+destruction. `window::set_root` remains unreachable until preflight succeeds,
+so the installed root is structurally untouched on this branch.
+
+### Independent delta review remediation result (2026-07-30)
+
+The three findings were remediated in `0f05bea` (pre-code plan / gate record)
+and `1220b10` (ownership branch control and wording correction).
+
+| Finding | Result |
+|---|---|
+| Major — missing geometry when `SetWindowPos` produces no successful nested pass | **Fixed in the T7 contract.** Completion is recorded only after successful nested geometry. Failure, a no-size-change success, or a failed nested projection enters a current-client-rectangle geometry fallback at explicit `WindowState::scale`; text refresh follows only successful geometry. T7 must directly fire this branch. |
+| Minor — ABI ownership restoration untested | **Fixed.** `preflight_boxed_handle_restores_same_live_allocation_on_error` fires the extracted pure transaction's rejection branch. It observes the identical pointer, a live mutation, zero drops at rejection, and exactly one later caller destruction. The installed root is untouched because `window::set_root` is after the successful transaction arm. |
+| Minor — geometry/cache operation called infallible | **Fixed.** Rustdoc now says fallible geometry projection followed by an infallible cache commit, independent from the fallible raster pass. |
+
+**Close-gate artifacts for this delta.** The authoritative window scale is
+unchanged. T7's derived geometry cache advances only after the entire fallible
+Visual projection succeeds. Because `sync_visuals` performs WinRT writes
+incrementally, a failed projection can leave a Visual prefix updated while all
+node caches remain stale; a missing or failed nested pass therefore triggers a
+whole-tree fallback, and a failed fallback leaves the possible partial Visual
+state plus stale caches / raster markers logged rather than claiming atomicity.
+Text refresh runs only after one whole-tree geometry pass succeeds. The
+T6 ABI preflight mutates only the incoming text brushes/markers before attach;
+on rejection it neither calls `window::set_root` nor drops the incoming
+allocation. Its generic transaction is the only raw restore site, and its
+direct branch test is the trap-#4 artifact. The fallback's re-trigger is any
+`SetWindowPos` return without a recorded successful nested geometry pass; this
+is carried in T7's task list and T6's retrospective.
+
+Trap #6 became applicable during implementation: the test's first compile
+deterministically failed because `Result::expect_err`
+requires the `Ok` type (`Box<DropProbe>`) to implement `Debug`. This was not an
+ownership failure. Replacing it with an explicit `match` removed the irrelevant
+bound; the identical targeted command then passed. Final code-tip validation:
+
+- `cargo test -p wasamo-runtime --lib -- --test-threads=1` — 464 passed;
+- `cargo test -p wasamo-runtime --test text_surface_mapping_integration -- --nocapture --test-threads=1` — 3 passed;
+- `cargo build --release --workspace` — green with existing warnings;
+- `cargo test --workspace -- --test-threads=1` — green, 956 tests;
+- `cargo fmt --all -- --check`, `git diff --check` — green.
+
+The branch requires another independent delta review at this point in the
+history. The separate real Compositor-unavailable skip firing remains the
+external landing blocker.
+
+### Final independent review disposition (2026-07-30)
+
+The independent review of `97c24cf..eb3021e` returned **zero major and 3
+minor**. The prior missing-step-3 major, ABI ownership branch control, and
+fallibility wording were confirmed closed. The three final minors are
+documentation corrections and are fixed after the reviewed tip:
+
+1. the failure-state artifact now distinguishes incremental Visual writes from
+   the all-traversal-success geometry-cache commit;
+2. T7's fallback now explicitly converts the physical current client extent to
+   DIP through `state.scale.pair_to_dip(...)` before passing both the DIP extent
+   and same authoritative target to geometry-only layout; and
+3. the evidence pointer names `t6-r1-final-a/b`, with `t6-final` retained as its
+   byte-identical predecessor.
+
+No source code or captured PNG changes in this disposition. The final narrow
+review of `eb3021e..e3e878d` returned **zero major / zero minor** and confirmed
+all three factual corrections without a new inconsistency. The review gate is
+closed. The real Compositor-unavailable guard firing remains the sole external
+landing blocker.
+
+### External Compositor-unavailable evidence and T6 close (2026-07-30)
+
+The owner ran the exact new test binary from the T6 branch in a Windows
+PowerShell 7.6.4 session where runtime initialisation reached the established
+Compositor-unavailable classification:
+
+`cargo test -p wasamo-runtime --test text_surface_mapping_integration -- --nocapture --test-threads=1`
+
+All three tests fired their named negative path rather than their Compositor
+body:
+
+| Test | Observed guard output |
+|---|---|
+| `authoritative_geometry_scale_preserves_a_stale_raster_retry` | `skipping geometry/raster scale separation: runtime compositor unavailable` |
+| `ceil_surface_mapping_is_observed_at_integer_and_fractional_visual_origins` | `skipping text surface source/destination mapping: runtime compositor unavailable` |
+| `text_surface_brush_overrides_the_scaled_centered_default` | `skipping text surface brush mapping: runtime compositor unavailable` |
+
+The binary result was 3 passed, 0 failed, 0 ignored, 0 measured, and 0 filtered
+out. This is the required actual firing of the substring-classified local skip
+branch; the same helper statically asserts that this branch may not skip when
+`GITHUB_ACTIONS` is set. Together with the local live-Compositor 3/3 run, the
+full zero-major review, and the zero-major / zero-minor correction review, this
+closes T6's final landing blocker. T6 is **done**. No merge or push is implied;
+merging to `feat/m4-phase-1` still requires explicit owner approval.

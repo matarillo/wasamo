@@ -7,9 +7,15 @@ that look interchangeable and are not.
 
 ## The current reference set
 
-**`t5-review-after/`** — the branch tip as of T5 close. `t5-f23-after/`
-is byte-identical to it over the client interior and is kept because it
-is the "after" half of the F-23 pair.
+**`t6-r1-final-a/` and `t6-r1-final-b/`** — the current T6 success-path
+artifact. The two sets are byte-identical over all six client interiors and
+are also byte-identical to their `t6-final/` predecessor. The later
+`1220b10` change is confined to ABI ownership error handling and a Rustdoc
+correction; it does not alter rendering code or replace these frames.
+
+`t5-review-after/` remains the branch-tip record at T5 close.
+`t5-f23-after/` is byte-identical to it over the client interior and is kept
+because it is the "after" half of the F-23 pair.
 
 **`after/` (T3's) is stale for two frames.** It predates the F-23 fix, so
 `labelupdate-clicked` and `labelupdate-clicked-twice` differ from the
@@ -34,6 +40,12 @@ that was made, not as a substitute for capturing.
 | `t5-f23-after/` | T5 — the F-23 layout-entry fix: two post-click frames change, four do not |
 | `t5-review-after/` | T5 — the branch tip; identical to `t5-f23-after/`, which is what shows the R-2 correction is behaviour-preserving at scale 1 |
 | `t5-probe/` | T5 — the positive control at 125% under a throwaway declaration: 7 tiles with the inbound seam, 9 without, and the outbound half with the node cache seeded |
+| `t6-baseline-*`, `t6-after-*` | T6 — three fresh captures on each side of the 125% rendering change; repeatability, comparison numbers and screenshot analysis are in [t6-analysis/README.md](./t6-analysis/README.md) |
+| `t6-100-baseline-*`, `t6-100-after-*` | T6 — identity-path control showing that `ceil` allocation plus DD-M4-P1-006 is intentionally observable even though D2D DPI and atlas-origin conversion are identities |
+| `t6-brush-default/` | T6 mutation control — the implementation with only DD-M4-P1-006's three setters removed |
+| `t6-final/` | T6 — six branch-tip frames captured after a forced clean rebuild of the accepted source; client interiors are byte-identical to `t6-100-after-b/` |
+| `t6-scaled-surface-identity-a/b/` | T6 review mutation — effective 120-DPI geometry/cache with every text surface and D2D context forced to 96 DPI; the direct positive control for the scaled rasterization path |
+| `t6-r1-final-a/b/` | T6 review remediation — two live six-frame sets from `fad59e2`; mutually byte-identical and byte-identical to `t6-final/`, with the render-neutral R1 distinction fired by the mock-free integration control |
 
 ## Scripts
 
