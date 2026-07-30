@@ -1142,16 +1142,13 @@ four of them are reachable only by reading the arm the handler sits beside.
 2. **Suppressing the nested refresh is a correctness property, not fidelity to
    the ADR's step numbering.** The `WM_SIZE` arm as landed discards the geometry
    `Result` and calls `refresh_text_surfaces_recursive` unconditionally. On an
-   ordinary resize that is harmless, because the target does not move — so the
-   call does real work only for a node whose `raster_scale` is *behind* the
-   target, which is exactly what it is for: a node whose earlier rasterization
-   failed, or one attached since the last pass and still carrying the
-   constructor's identity marker. **Neither is a convergence claim**, because
-   the target has not moved: a raster marker advancing to a scale the geometry
-   is already at states nothing false, whatever the geometry pass in the same
-   arm did. (The same reasoning covers `emit::flush_layout`, which has the same
-   shape. The standalone `run_layout_as_window_root` differs — it `?`s on
-   geometry before refreshing — and needs no argument.) Under a
+   ordinary resize the target does not move, but that does **not** make the call
+   a convergence proof: it may retry an earlier rasterization failure or prepare
+   a newly attached node, and it remains unconditional even if that resize's
+   geometry pass fails. That is pre-existing ordinary-resize behaviour, not a
+   property T7 relies on or strengthens. (`emit::flush_layout` has the same
+   pre-existing shape. The standalone `run_layout_as_window_root` differs — it
+   `?`s on geometry before refreshing.) Under a
    scale change the target *has* moved, so an unconditional nested refresh
    advances raster markers to the new DPI whether or not the geometry pass that
    was supposed to accompany them succeeded — exactly the convergence claim the
@@ -1187,8 +1184,8 @@ introduces three authored failure branches, and a commit carrying them without
 the tests that fire them is the state trap #4 exists to refuse. Artifacts in
 [log.md](./log.md) §T7: the 13-row structural side-effect enumeration closed
 against the source, the enumeration of every `WindowState::scale` access, four
-mock-free integration tests plus two pure-logic tests named per branch, and a
-five-mutation table. The task produced findings F-41 and F-42.
+mock-free integration tests plus six pure-logic tests named per branch, and a
+six-mutation table. The task produced findings F-41 and F-42.
 
 **One claim in the re-audit above came out weaker than written, and the
 measurement is what weakened it.** Re-audit point 1 and this task's second
@@ -1203,8 +1200,9 @@ string, per §Task list: the sentence falsified is *"the step 1 / step 2 order c
 be made structurally impossible to get wrong"*, and the documents asserting it
 were this plan's §T7, `WindowState::pending_scale_change`'s doc comment, and
 `handle_dpi_changed`'s doc comment — all three corrected. **DD-M4-P1-003 needed
-no change**: its own wording ("visibly wrong for one frame at best") is exactly
-what remains true.
+no change**: its "visibly wrong for one frame at best" wording remains the
+accepted design warning, but T7 established only the stale intermediate
+projection. Whether that projection is presented as a frame is T11 evidence.
 
 **And one hazard the handoff predicted would stay green does not.** M5 inherited
 `SWP_NOMOVE` from `realize_dip_window_size`; the nested-path test's suggested

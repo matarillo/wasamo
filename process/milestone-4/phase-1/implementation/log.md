@@ -4421,7 +4421,7 @@ composes with that review rather than replacing it.
 | 4 — authored branch | **yes** | Three authored branches: the no-nested-geometry fallback, the null suggested rectangle, and the denial of step 4 after both projections fail. Each gets a test that fires it directly; the fallback's is a mock-free integration test, and the pure step-3 verdict is unit-tested over all three states so the arm no OS input can reach is still fired. |
 | 5 — carry-forward | **yes** | The step 1 / step 2 order, the nested-refresh suppression, the fallback trigger, and the arm-placement soundness argument are all invariants a later task can trip — T9 makes the ordering defect producible for the first time, T8 synthesises the message, M4-Phase 2 touches this procedure. Record each with evidence and a re-trigger criterion. |
 | 6 — deterministic failure | **yes** | Added at the re-audit. The change lives in a message loop behind a raw pointer, where the tempting dispositions are "it passed on retry" and "the nested message must have run". Any recurring failure is rooted rather than re-rolled, and *observed nested geometry* rather than *entry into `WM_SIZE`* is what the handler records. |
-| 7 — GUI positive control | **no** | The handler's observable effect needs a real `WM_DPICHANGED`, which needs T9's declaration: before it the OS delivers this message to no window, so a capture at 100% cannot distinguish the handler's presence from its absence. The phase assigns the synthetic scale-driven assertions to T8 and the literal monitor crossing plus its human-visible smoke to T11. No frame is captured here, and none is claimed. |
+| 7 — GUI positive control | **no** | The handler's intended per-monitor path needs T9's declaration before the OS will drive it for a real monitor change. A pre-T9 capture at 100% therefore cannot distinguish that path's presence from its absence. The phase assigns synthetic scale-driven assertions to T8 and the literal monitor crossing plus its human-visible smoke to T11. No frame is captured here, and none is claimed. |
 
 The approach is therefore constrained before editing: the arm sits above the
 `&mut *state_ptr` borrow and holds no outer reference across `SetWindowPos`;
@@ -4463,7 +4463,7 @@ else". Rows marked *verified unchanged* were checked by search, not by memory.
 | 7 | The Button label Visual | **updated**, same pass, with **no handler-specific code** — the assertion DD-003 row 7 says it is making. Verified structurally: `sync_visuals` is the only `SetOffset` / `SetSize` site in the runtime (T3's invariant, re-searched here), and it reaches the label through the Button / ToggleButton arm. Had T3 not moved that write, this row would have needed handler code and would have been the phase's silent bug. |
 | 8 | Every text surface and its brush | **updated** by `refresh_text_surfaces_recursive` at step 4 — and **only behind a succeeded projection**, which is the one place this row's wording needed strengthening rather than implementing. |
 | 9 | The root's `SetRelativeSizeAdjustment(1, 1)` | **verified unchanged.** `rg SetRelativeSizeAdjustment wasamo-runtime/src` returns exactly one site, inside `create` in [`window.rs`](../../../../wasamo-runtime/src/window.rs). It relates two physical quantities, so it is scale-independent, and no code path re-writes it. |
-| 10 | `InsetClip` insets | **verified unchanged**, and **the ADR's site list is wrong here.** `rg CreateInsetClip` returns `widget.rs:690` / `744` / `768`, whose enclosing functions are `scroll_view`, `grid` and `zstack` — **not Box**. `WidgetNode::box_` installs no clip. Independently, a search for every `Set*Inset` setter finds **no site in the repository**, so every inset is the constructor default of zero and zero is scale-invariant. The row's conclusion stands; the widgets it names do not. (T1 F-2 established this against DD-002 row 12 and dispositioned the correction only to T5; T3 F-18 predicted that a T7 reading the ADR wording would assert a site that does not exist.) |
+| 10 | `InsetClip` insets | **verified unchanged**, and **the ADR's site list is wrong here.** `rg CreateInsetClip` returns the constructors `WidgetNode::scroll_view`, `WidgetNode::grid` and `WidgetNode::zstack` — **not `WidgetNode::box_`**, which installs no clip. Independently, a search for every `Set*Inset` setter finds **no site in the repository**, so every inset is the constructor default of zero and zero is scale-invariant. The row's conclusion stands; the widgets it names do not. (T1 F-2 established this against DD-002 row 12 and dispositioned the correction only to T5; T3 F-18 predicted that a T7 reading the ADR wording would assert a site that does not exist.) |
 | 11 | Signal registry, effect graph, binding state, widget pointers | **verified unchanged.** The diff introduces no `registry`, `reactive`, `emit::`, or `mark_layout_dirty_for` token — searched over the whole added diff, not over the functions the author remembered writing. The two matches are the words "reactive drain" inside a doc comment saying it must not be entered. |
 | 12 | `MUTATION_CAP` / drain accounting | **verified unchanged**, by the same search. The handler enqueues nothing and never marks a window dirty, so `emit::flush_layout` is not reached and the drain is not entered. |
 | 13 | Hover and press state | **verified unchanged.** No `mouse_down`, `update_hover` or `clear_hover` token in the diff, and no pointer message is synthesised. The pointer may end up over a different widget after the resize; the next real `WM_MOUSEMOVE` corrects it. |
@@ -4508,29 +4508,33 @@ branches with observable behaviour and called them "each fired directly", while
 three authored *diagnostic* arms sat untested — the exact shape trap #4 names.
 The disposition took three steps.
 
-**First, measurement (F-43): the failures cannot be provoked.** A throwaway
+**First, measurement (F-43): degenerate extents do not provoke failure.** A throwaway
 probe called `SetWindowPos` on a live window with negative extents, an inverted
-rectangle, zero, `i32::MIN` and `i32::MAX`; **every one returned `Ok`**. Both it
-and `GetClientRect` document failure only for an invalid handle, which cannot
-occur inside that handle's own window procedure, and the refresh failure is a
-WinRT surface or brush call. So no test can fire any of the three through the OS.
+rectangle, zero, `i32::MIN` and `i32::MAX`; **every one returned `Ok`**. That
+measurement says nothing universal about other failure conditions: the API
+contracts report failure generically, `SetWindowPos` also documents cross-session
+failure, and an invalid handle can make a direct mock-free probe fail even though
+it is not a state this window procedure should manufacture. The refresh failure
+remains a WinRT surface or brush failure. The implementation therefore does not
+claim that the three failures are impossible or OS-unprovokable.
 
-**Second, deleting them was rejected.** DD-M4-P1-003 §Failure handling asks for
-each: "log **and** survive", a failed `SetWindowPos` "leaves the window at the
-old rectangle", a failed re-rasterization is "visibly blurry until the next
-change, and honest about it". Removing the diagnostics would have satisfied a
-process gate by deleting behaviour an accepted decision requires — and T4's
-`realize_dip_window_size` carries the same `SetWindowPos` diagnostic already.
+**Second, deleting them was rejected.** DD-M4-P1-003 §Failure handling explicitly
+requires the failed `SetWindowPos` and failed re-rasterization consequences to be
+logged and survived. `GetClientRect` is the implementation's fallback read, not
+one of the two calls the ADR names; reporting its failure follows the same
+resilient posture but is not attributed to an explicit three-item mandate. T4's
+`realize_dip_window_size` also carries the same `SetWindowPos` diagnostic.
 
-**Third, the decisions were extracted so the arms are reachable.** Each site now
-calls a pure function — `rectangle_application_diagnostic`,
-`client_extent_or_failure`, `text_refresh_diagnostic` — that takes the already
-produced `windows::core::Result` and returns the diagnostic, and in the
-client-rectangle case the verdict too. The tests construct a
-`windows::core::Error` directly. **That is not mocking the OS surface**: no Win32
-call is replaced, and the functions under test make none; the constructed value
-is the input they receive. What remains untested at the call sites is an
-`eprintln!` and a `return` dispatching a tested decision.
+**Third, the first extraction was rejected by delta review and replaced.** A
+`windows::core::Error` is not pure test data on Windows: constructing it calls
+`RoOriginateErrorW`, and formatting it consults Windows error information. The
+OS-bound call sites now render that value to an owned string immediately. Pure
+functions — `finish_rectangle_application`, `client_extent_or_failure`, and
+`finish_text_refresh` — receive only that string summary plus primitive local
+data, own the failure branch, and dispatch the completed diagnostic to a supplied
+sink. Their unit tests capture the sink in `Vec<String>` and assert one dispatch,
+the OS summary, and the operational consequence. No Win32/WinRT type or call is
+present on the tested path; production supplies `emit_runtime_diagnostic`.
 
 The extraction also pulled the fallback's only arithmetic into the open, and
 **that turned out to be uncovered**: mutation M6 swapped the two axes of the
@@ -4706,24 +4710,25 @@ closed. **The full independent review remains outstanding**, and merge to
 ### Independent review disposition (2026-07-30)
 
 The independent review of `feat/m4-phase-1..9bd17cb` returned **1 major and 4
-minor**. The zero-major gate was not met. All five are confirmed and remediated;
-none was argued down.
+minor**. The zero-major gate was not met. All five were confirmed and none was
+argued down. The first dispositions below were found incomplete by delta review;
+their second remediation is recorded after the start gate.
 
 | # | Severity | Finding | Disposition |
 |---|---|---|---|
-| R1 | major | Three authored diagnostic branches ship untested — the failed `SetWindowPos`, the failed `GetClientRect`, and the failed step-4 refresh — while the end-gate table listed only the three behaviourally-observable branches and called them "each fired directly" | **Confirmed and remediated.** Measured first (F-43): the failures cannot be provoked, so the decisions were extracted into pure functions and each arm is now fired by a unit test. The end-gate table gains three rows and the account of why. See §Trap 4 above. |
-| R2 | minor | The M1 weakening still overclaims: "one visibly wrong frame" was not measured, only a wrong intermediate state; and "an undeclared process is never sent this message" is stronger than Microsoft documents | **Confirmed and remediated.** F-41 and `handle_dpi_changed`'s doc now stop at the intermediate state and record why a presented frame was not established (one message, dispatcher-tick commit). The delivery claim is narrowed to the per-monitor path this phase is about, with the unaware / system-aware case named. |
-| R3 | minor | "On an ordinary resize every `raster_scale` already equals the target" misses a subtree attached after a scale change, whose marker is still the constructor identity | **Confirmed and remediated.** [plan.md](./plan.md) §T7 now names both cases the ordinary refresh legitimately serves — a previously failed node and a newly attached one — and states why neither is a convergence claim (the target has not moved). `emit::flush_layout` is covered by the same sentence; the standalone entry `?`s on geometry and needs no argument. |
-| R4 | minor | End-gate source line references drifted after the comment-only commit | **Confirmed and remediated**, and fixed at the class rather than the instance: the enumeration now cites **function names** instead of line numbers, which a later commit cannot invalidate. The search results themselves were correct. |
-| R5 | minor | F-42's "each test reads two facts about the witness" is false of the failed-projection test, which reads only the surface | **Confirmed and remediated.** The claim is now "three of the four", with the reason the fourth cannot read a Visual size (a tree that never lays out has no projected geometry) and the reviewer's own check that its discriminating power survives a degenerate witness. |
+| R1 | major | Three authored diagnostic branches ship untested — the failed `SetWindowPos`, the failed `GetClientRect`, and the failed step-4 refresh — while the end-gate table listed only the three behaviourally-observable branches and called them "each fired directly" | **Confirmed. First remediation incomplete; second remediation below.** The first extraction left WinRT FFI in unit tests and did not fire sink dispatch. The replacement moves the error to an owned summary at the OS boundary and has FFI-free pure functions own branch + dispatch. |
+| R2 | minor | The M1 weakening still overclaims: "one visibly wrong frame" was not measured, only a wrong intermediate state; and "an undeclared process is never sent this message" is stronger than Microsoft documents | **Confirmed. First remediation incomplete; second remediation below.** The corrected implementation comment was accurate, but the start-gate row and retrospective still carried the stronger claims. |
+| R3 | minor | "On an ordinary resize every `raster_scale` already equals the target" misses a subtree attached after a scale change, whose marker is still the constructor identity | **Confirmed. First remediation incomplete; second remediation below.** The plan named the subtree but incorrectly inferred harmless convergence, while the production comment retained the original claim. Both now describe this as pre-existing ordinary-resize behaviour outside T7's convergence proof. |
+| R4 | minor | End-gate source line references drifted after the comment-only commit | **Confirmed. First remediation incomplete; second remediation below.** The drifted instances moved to function names, but row 10 retained three line numbers while the disposition claimed the whole class was fixed. All enumeration rows now use symbols. |
+| R5 | minor | F-42's "each test reads two facts about the witness" is false of the failed-projection test, which reads only the surface | **Confirmed. First remediation incomplete; second remediation below.** The log was narrowed to three of four, but the test helper comment retained the universal claim. It now names the three-tests/one-test split and the fourth test's reason. |
 
 **The reviewer verified rather than read** on the load-bearing claims —
 re-running M1 through M5, re-deriving the `BoxNoExtent` path, checking the
 aliasing by inspection of borrow lifetimes across `SetWindowPos`, and confirming
-the T8 / T9 / T11 boundaries. R1 and R5 are both cases where the *code* was
-sound and the *record* claimed more than it had, which is the failure class this
-phase has now hit at T4, T5, T6 and T7. The recurrence is recorded in the T7
-retrospective rather than dismissed as a wording slip.
+the T8 / T9 / T11 boundaries. Four findings include an over-strong record, but
+R1 is not record-only: the first remediation also violated the unit-test FFI
+boundary and left sink dispatch unfired. The corrected classification and the
+recurrence boundary are recorded in the T7 retrospective.
 
 Post-remediation verification, on the branch tip:
 
@@ -4734,3 +4739,101 @@ Post-remediation verification, on the branch tip:
 
 The branch requires a **delta review** over the remediation commits before the
 zero-major verdict stands. Merge remains a separate owner-approval gate.
+
+### Delta-review remediation start gate (2026-07-31)
+
+The delta review found that R1 was not closed: the four new tests were unit
+tests with a hidden WinRT FFI dependency, and the three production diagnostic
+dispatch branches still were not fired. It also found the same R2--R5 claims
+left standing on sibling documentation surfaces. Before choosing the second
+remediation shape, the implementation-gate catalog was re-read and classified:
+
+| Trap | Applies | Reason / required close artifact |
+|---|---|---|
+| 1 — semantic migration | no | No enum, schema, IR variant, or field changes. |
+| 2 — missed side effects | **yes** | Moving diagnostic decisions across the OS/pure boundary can lose the emitted message or the client-read failure verdict. Enumerate those effects at close. |
+| 3 — parallel / derived drift | **yes**, documentation analogue | R2--R5 each survived on a sibling claim-bearing surface. Close with a proposition-based search and an explicit occurrence table, not a file-local edit. |
+| 4 — authored branch | **yes** | This remediation exists to make each diagnostic decision and its sink dispatch fire in a test that has no Win32/WinRT FFI dependency. Record one test per branch and re-run the diagnostic-removal mutation. |
+| 5 — carry-forward | **yes** | The value-level boundary must be stated narrowly: a pure test may receive a local error summary, but may not construct or format `windows::core::Error`. Record the rule and its re-trigger criterion in the T7 retrospective. |
+| 6 — deterministic failure | **yes** | The delta review supplied two deterministic counterexamples: removing all three production emissions left 470 + 4 tests green, and M6 left all four integration tests green. Re-run both after the fix and disposition the result. |
+| 7 — GUI evidence | no | The remediation changes diagnostics, tests, and claim accuracy; it does not deliver or alter GUI rendering. |
+
+**Review lane:** full independent review. Although the immediate defect is
+diagnostic/test focused, the correction moves the runtime's OS/pure boundary
+and updates the T7 runtime structure, so the high-risk lane is the conservative
+classification. The branch/test-focused trap-4 check composes with it.
+
+### Delta-review remediation result and close gate (2026-07-31)
+
+The second remediation replaces the first extraction rather than layering a
+test-only exception onto it. `windows::core::Error` exists only above the
+boundary; `RectangleSnapshot`, the owned error summary, `GeometryProgress`, and
+the diagnostic sink are the complete input/output surface below it.
+
+**Trap 2 — structural side effects and OS/pure call-site audit.** Query:
+`rg -n "finish_rectangle_application|client_extent_or_failure|finish_text_refresh|emit_runtime_diagnostic|os_error_summary" wasamo-runtime/src/window.rs`.
+
+| OS result site | Boundary conversion | Pure decision and side effects | Test |
+|---|---|---|---|
+| `apply_suggested_rectangle` / `SetWindowPos` | `os_error_summary(&result)` | `finish_rectangle_application` emits exactly one diagnostic on failure; fallback behaviour remains independent | `a_failed_rectangle_application_reports_the_rectangle_and_the_consequence` |
+| `project_current_client_extent` / `GetClientRect` | `os_error_summary(&read)` | `client_extent_or_failure` emits exactly once and returns `GeometryProgress::Failed`; success preserves `(right-left, bottom-top)` | failure and success `client_extent_or_failure` tests |
+| `refresh_text_at_new_scale` / recursive WinRT refresh | `os_error_summary(&refreshed)` | `finish_text_refresh` emits exactly once; the pre-existing no-root early return remains above the call | `a_failed_text_refresh_reports_that_geometry_already_converged` |
+
+No new runtime state, tree structure, layout invalidation, callback, or error
+channel was added. The diagnostic text is unchanged except for the already
+reviewed client-read consequence sentence. The integration diff remains comment
+only, so the owner's per-binary Compositor-unavailable observation remains valid.
+
+**Trap 3 — proposition occurrence table.** Searches covered `implementation/`,
+`retrospectives/t7.md`, `window.rs`, and the T7 integration test. Historical
+finding rows may quote the rejected wording; they now label it as rejected.
+
+| Proposition | Claim-bearing occurrences after remediation |
+|---|---|
+| R1: FFI-free diagnostic tests / failure reachability / ADR scope | `window.rs` boundary comment and tests; T7 trap-4 account; retrospective constraint. No unit test constructs or formats `windows::core::Error`; F-43 is limited to five live-HWND extent inputs; the ADR's explicit requirement is two diagnostics, with `GetClientRect` identified as implementation posture. |
+| R2: intermediate projection, not a measured frame; per-monitor delivery only | `handle_dpi_changed` doc, T7 start-gate row 7, plan close note, and retrospective items 4 / downstream handoff all use the bounded statement. The immutable ADR remains a design prediction, explicitly distinguished from T7 evidence. |
+| R3: ordinary resize is not T7 convergence evidence | Plan re-audit point 2 and the `WM_SIZE` comment both identify the call as pre-existing, potentially serving failed or newly attached nodes, and unconditional after a geometry failure. |
+| R4: no T7 end-gate source line references | Rows 9 and 10 name `create`, `WidgetNode::scroll_view`, `grid`, `zstack`, and `box_`; older task-history line references elsewhere in the milestone log are outside this claim. |
+| R5: witness count | Integration helper comment and F-42 both state three tests read geometry + surface and the failed-projection test reads surface only. |
+
+**Trap 4 — branch tests.** The diagnostic functions receive only `Option<&str>`,
+`RectangleSnapshot`, primitive DPI, a local sink, and (for the fallback) return
+`GeometryProgress`. Their tested paths contain no Windows type or FFI call.
+
+| Branch | Direct firing |
+|---|---|
+| Failed rectangle application + sink dispatch | `a_failed_rectangle_application_reports_the_rectangle_and_the_consequence` |
+| Failed client read + sink dispatch + `Failed` verdict | `a_failed_client_rect_read_yields_no_projection_and_says_so` |
+| Successful client read + extent arithmetic | `a_successful_client_rect_read_yields_the_physical_extent` |
+| Failed text refresh + sink dispatch | `a_failed_text_refresh_reports_that_geometry_already_converged` |
+
+Each failure test also asserts that the OS-bound summary text reaches the sink,
+not only that a consequence substring was generated.
+
+**Trap 5 — carry-forward.** Recorded in the T7 retrospective item 10. Re-trigger
+when a task adds a diagnostic after a Win32/WinRT call: construct and format the
+platform error only at the OS boundary, pass an owned local summary below it,
+and make the pure decision own dispatch to its sink. A test that constructs or
+formats `windows::core::Error` is not pure. The retrospective's universal-claim
+enumeration remains a soft proposal unless a vision decision promotes it into a
+project-wide required artifact.
+
+**Trap 6 — deterministic mutations and disposition.** Both review
+counterexamples were re-run against the replacement:
+
+| Mutation | Observed result | Disposition |
+|---|---|---|
+| Remove all three `emit(&diagnostic)` calls from the pure decisions | The three named failure tests each failed at `diagnostics.len() == 1`; the three unrelated window tests passed | Trap #4 now distinguishes branch + dispatch from a string builder. Mutation restored. |
+| M6: swap fallback extent axes | T7 integration 4/4 remained green; `a_successful_client_rect_read_yields_the_physical_extent` failed with `(750, 1000)` vs `(1000, 750)` | Original coverage finding remains valid. Mutation restored. |
+
+Final restored-state verification:
+
+- `cargo fmt --all -- --check` — green.
+- `cargo test -p wasamo-runtime --lib -- --test-threads=1` — 470 passed.
+- `cargo test -p wasamo-runtime --test dpi_change_propagation_integration -- --test-threads=1` — 4 passed.
+- `cargo test --workspace -- --test-threads=1` — green; only the pre-existing no-linkable-target and linker-message warnings appeared.
+- `git diff --check` — green.
+
+Trap 7 remains non-applicable: no GUI rendering behaviour changed or is claimed.
+The required full independent re-review remains a merge gate; this close artifact
+does not self-certify that review.
