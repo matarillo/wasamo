@@ -4837,3 +4837,32 @@ Final restored-state verification:
 Trap 7 remains non-applicable: no GUI rendering behaviour changed or is claimed.
 The required full independent re-review remains a merge gate; this close artifact
 does not self-certify that review.
+
+### Merge approval (2026-07-31)
+
+The paragraph above asks for one further independent round over the delta
+remediation. **That round was not run.** The owner reviewed the state and
+authorised the delta reviewer's fixes to be committed and the branch merged, so
+the task-end merge gate was closed by explicit owner approval rather than by a
+third review returning zero-major. Recorded here so a later reader does not
+infer a review that did not happen.
+
+What the merge does rest on, and what it does not:
+
+- **Rests on:** two independent review rounds (round 1 over the whole branch,
+  the delta review over the first remediation), both of whose findings are
+  confirmed and remediated; the mutation evidence M1–M6 including the delta
+  review's own diagnostic-removal counterexample; the owner-observed
+  Compositor-unavailable guard firing; and green `cargo fmt --all -- --check`,
+  `git diff --check`, `cargo test --workspace` on the final branch state.
+- **Does not rest on:** a review of the second remediation itself
+  (`ec5b852`, `4013870`). Those two commits are the delta reviewer's own work
+  plus its record, verified by the test suite and by re-running the mutations,
+  but not independently re-reviewed.
+
+The residual is small and named: the second remediation moves an OS/pure
+boundary and rewrites four unit tests, and its own close gate is self-reported.
+If a later task finds a defect there, this is the commit range to look at first.
+
+Phase-end (T12) still owns the phase → main gate, which is separate from this
+one, and push remains a separate gate again.
