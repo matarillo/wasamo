@@ -1622,6 +1622,10 @@ same run measured a second constraint no rounding argument predicts: at
       the shared `run_on_owning_runtime_thread_or_skip`, which statically
       refuses to skip when `GITHUB_ACTIONS` is set — and the **observation
       half is open**, which is why this box stays unticked.
+      **Ownership, stated rather than left to a checklist**: the run is the
+      **owner's**, on a session where `wasamo_init` returns `0x80070005`,
+      and the **fix container if it does not fire is the `feat/m4-phase-1-t8`
+      branch before merge** — an additive commit there, not a follow-up task.
 - [x] **Show each assertion go red against a deliberately wrong
       implementation.** T8 is where the phase's "green proves nothing"
       thesis is finally testable against real scaled behaviour, so the
