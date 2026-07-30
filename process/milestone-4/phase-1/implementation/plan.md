@@ -795,32 +795,39 @@ being right does not make text crisp; an implementation that stops at T5
 produces exactly the blur the phase set out to remove and passes every
 test.
 
-**Responsibility re-audit at task start (2026-07-30).** The planning-time
-shape — one fallible walk that writes each node's scale and immediately
-rebuilds its brush — is not safe enough to be T6's contract. If the Nth
-surface recreation fails, nodes 1 … N-1 have new geometry scales while the
-rest have old ones; the next layout can therefore project one tree at two
-scales. The same shape also has no complete answer for the already-shipped
-incremental attach paths F-32 enumerated. T6 owns a stronger boundary:
+**Responsibility re-audit at task start (2026-07-30), corrected after
+independent review.** The planning-time shape — one fallible walk that writes
+each node's scale and immediately rebuilds its brush — is not safe enough to
+be T6's contract. The first implementation replaced it with an all-or-none
+prepare-then-commit walk, but the review demonstrated that this still used one
+cache for two different facts: the scale at which geometry must be projected
+and the DPI at which a text brush was last rasterized. It also let a WinRT
+surface failure prevent the whole geometry pass and let production layout
+entries infer their target from the root copy rather than receive the
+authoritative `WindowState::scale`. T6 therefore owns the stronger boundary:
 
-1. prepare every stale text brush for the target scale **without changing
-   any node cache**;
-2. only after all fallible preparation succeeds, update the subtree's scale
-   caches in one infallible pass; and
-3. run this primitive before the geometry pass at initial attach and at the
-   start of every layout entry, so a child inserted into an attached tree is
-   normalized before `sync_visuals` first projects it.
+1. production window-layout callers pass the authoritative target explicitly;
+   geometry projection does not infer it from any node cache;
+2. the infallible geometry-scale commit and fallible text refresh are separate
+   operations, so surface failure cannot prevent the layout / `sync_visuals`
+   pass; and
+3. text freshness is tracked against the DPI at which each text-bearing node
+   was actually rasterized, independently of the geometry cache, so a partial
+   refresh remains retryable after geometry has advanced.
 
-The layout-entry placement deliberately covers the direct tree-mutation API
-and the IR conditional / `for` paths without adding a second scale-propagation
-rule to each mutator. It does **not** make
+The production layout boundary deliberately covers the direct tree-mutation
+API and the IR conditional / `for` paths without adding a second
+scale-propagation rule to each mutator. It projects the whole tree at the
+caller's target, commits that geometry scale, then refreshes stale text from
+its independent raster marker. Initial `set_root` still prepares the new tree
+before detaching the old root. It does **not** make
 `lib.rs::window_add_widget` supported content hosting: that entry runs no
 layout, retains no widget in `root_widget`, and is already documented as a
 direct-Composition path. T6 keeps that stated limit rather than giving a
 renderer side effect to a path whose contract is specifically "no layout".
 This revision keeps `sync_visuals` as the runtime's only Composition geometry
-writer and makes a failed preparation retryable, because the cache remains
-old until the whole preparation succeeds.
+writer. A failed refresh leaves geometry coherent at the target and only the
+failed text marker stale; the next eligible refresh retries it.
 
 - [x] Allocate the drawing surface at **`ceil(dip × s)` pixels** on each
       axis, through T2's named rule — `DipScale::surface_pixels`, which
@@ -891,12 +898,16 @@ old until the whole preparation succeeds.
       ad-hoc T6 fix.
 - [x] The **re-rasterization primitive**: surfaces are built at scale 1
       during construction (before the tree is attached to a window) and
-      brought to the window's scale by a two-pass primitive. It first
-      re-creates the surfaces and brushes of stale text-bearing nodes from
-      state the node already holds, with no cache mutation; only after every
-      fallible recreation succeeds does it write the node-side scale cache
-      T5 introduced in an infallible recursive pass. It adds no retained
-      state. `WidgetData::Text { content, style }` uses the node's existing
+      brought to the window's scale by a recursive refresh. The first
+      implementation treated the T5 node cache as both geometry scale and
+      raster freshness; independent review falsified that shape. The corrected
+      primitive tracks the last successful text-raster DPI separately, updates
+      that marker only after the replacement brush is installed, and leaves a
+      failed node stale without holding geometry back. The geometry cache is
+      committed by its own infallible recursive operation. This is the minimum
+      retained state needed to distinguish two facts that may diverge under the
+      accepted log-and-survive failure policy. `WidgetData::Text { content,
+      style }` uses the node's existing
       fixed DIP extent; `ButtonData` uses `label_text` / `label_style` /
       `label_size`.
       **"After the first layout" is wrong, and it is wrong in a way T5
@@ -910,9 +921,12 @@ old until the whole preparation succeeds.
       exactly T5's P1 capture, which T5's own record calls "correct for T5
       alone because T6 owns the walk" — true of T5 and not true of T6 as
       specified here. **Resolved by the responsibility re-audit above:**
-      the complete prepare-then-commit primitive runs before the first
-      layout. It depends on no layout result, since it rebuilds from retained
-      state and `measure` is scale-invariant (row 10). What it must **not** do
+      initial attachment refreshes the new tree before the first layout, while
+      later production layout passes receive the window target explicitly,
+      project and commit geometry at that target, and refresh stale text
+      independently. The refresh depends on no layout result, since it rebuilds
+      from retained state and `measure` is scale-invariant (row 10). What it
+      must **not** do
       is write geometry — that breaks T3's one-pass invariant and with it the
       completeness of the T5 audit.
       **The walk reads `ButtonData.label_size` rather than re-measuring**
@@ -953,12 +967,15 @@ old until the whole preparation succeeds.
       conditional / `for` sites call `mark_layout_dirty_for`; the direct
       Rust and ABI mutation APIs do **not** schedule or drain layout and
       retain T3's stated limit that they wait for a later `WM_SIZE` or
-      size-affecting property write. The primitive therefore also runs at
-      the start of `run_layout` / `run_layout_as_window_root`, before
-      `sync_visuals`.
+      size-affecting property write. The production layout callers therefore
+      invoke the geometry and refresh operations as one ordered boundary; the
+      geometry operation itself takes the authoritative target rather than
+      recovering it from the root.
       An IR tab switch / list append is normalized in its scheduled pass;
-      a direct mutation is normalized in the first later pass, before it can
-      receive layout geometry. No mutation primitive writes a cache by itself.
+      a direct mutation is normalized in the first later pass. The newly
+      attached subtree receives coherent target-scale geometry even if its
+      text refresh fails, and its stale raster marker preserves the retry. No
+      mutation primitive writes a cache by itself.
 - [x] Preserve public `TextRenderer::draw_text` as the 96-DPI convenience
       entry and add a crate-private device-DPI path for the runtime's seven
       scaled call expressions (the existing five plus the walk's Text and
@@ -998,9 +1015,10 @@ selection. The responsibility re-audit makes #1 (row 7 and the seven scaled
 callers), #2 (brush/cache/tree effects), #3 (the per-node cache), #4 (the
 fixed-extent size branch), #5 (single-writer and scale-independent measure),
 #6 (fallible surface preparation), and #7 (GUI evidence) all applicable.
-**End gate:** row 7 closed in the audit table; the prepare-then-commit cache
-atomicity and every incremental attach path enumerated; the fixed-extent
-branch fired by a test; the layout-invalidation non-effect verified; and
+**End gate:** row 7 closed in the audit table; the independent geometry/raster
+markers, authoritative production target, and every incremental attach path
+enumerated; the fixed-extent branch fired by a test; the layout-invalidation
+non-effect verified; and
 the 100% change bounded to the text surfaces that `ceil` allocation plus
 DD-M4-P1-006 intentionally changes — **captured after `cargo build --release
 --workspace`, never after a host-package build** (T3 finding F-21: a
@@ -1088,25 +1106,27 @@ merge.
       (3) the nested synchronous `WM_SIZE` re-runs layout through T5's
       inbound seam; (4) re-rasterize text surfaces through T6's walk;
       (5) return `LRESULT(0)`.
-      **Step 4 is in the wrong place, for the same reason T6's walk is**
-      (T5 finding F-34). Step 3's nested `WM_SIZE` runs
-      `run_layout_as_window_root`, which calls `sync_visuals`, which
-      multiplies by the **node** caches — and step 4 is what writes them.
-      So the re-layout projects with the previous scale and the walk then
-      fixes only the rasterization.
-      **Whether DD-003 needs a note, a successor, or nothing is not
-      settled here.** Reading its step 1 "update *the cached scale*" as
-      covering the per-node caches T1 later introduced is not supported by
-      the text: DD-003 names `WindowState`'s field explicitly and chose
-      that field as the storage. **The route depends on the shape T6 and
-      T7 choose**:
-      if only the cache *write* moves into step 1 and the fallible surface
-      rebuild stays at step 4, a dated annotation may cover it; if the
-      whole walk moves, the fixed order itself changes and that is a
-      successor. Decide the shape first, then the record — and the record
-      is an owner decision either way, not an implementation-log one.
-      T7 decides together with T6's `set_root` call site: they are one
-      question asked twice.
+      **T6's first combined primitive could not implement this order** (T5
+      finding F-34, T6 independent-review R1). Step 3's nested `WM_SIZE`
+      must project geometry at the new scale before step 4 refreshes text,
+      but the first implementation both inferred the target from the root
+      cache and made that cache the text-freshness marker. T6 corrects the
+      primitive boundary before T7: the nested layout receives
+      `WindowState::scale` explicitly and projects the whole tree at that
+      target; geometry-cache commit is infallible and independent; step 4
+      refreshes text against a separate last-rasterized-DPI marker. T7 must
+      suppress the ordinary post-layout refresh during the re-entrant
+      `WM_SIZE`, then invoke it after `SetWindowPos` returns. Surface failure
+      therefore leaves geometry and hit testing at the new scale while the
+      failed text marker remains stale and retryable.
+      **No DD-M4-P1-003 successor is needed for this shape.** Its five steps
+      remain in the written order and `WindowState` remains the sole
+      authoritative scale; the later node cache is only a derived geometry
+      copy committed from that value. Moving the cache write into step 1 or
+      moving the whole refresh before nested layout would change the accepted
+      mechanism, but both alternatives are rejected here because an explicit
+      target lets the original decision yield the shipped behaviour without
+      either change.
       **Steps 3 and 4 are now assertions rather than descriptions** (T5).
       Step 3's inbound seam exists and divides by `WindowState::scale`, so
       "the nested `WM_SIZE` re-runs layout in DIP" is a statement about

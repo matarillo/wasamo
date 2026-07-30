@@ -4122,3 +4122,44 @@ were removed, then `cargo clean -p wasamo-runtime --release` and
 `cargo build --release --workspace` rebuilt the accepted source. R1 requires a
 product-owner record decision; R3 requires an external environment whose
 runtime actually returns `0x80070005`.
+
+### Independent review round 2 intake and remediation plan (2026-07-30)
+
+The owner supplied a second independent review derived against `97c24cf` and
+independently checked against branch tip `e532c9f`. It reports **2 major and 11
+minor at the reviewed base**. At the tip, its major 2 and minors 1–2 are the
+already-landed R2/R4/R5/R6 remediation; its major 1 is the same unresolved R1,
+with a concrete failure trace; and minors 3–11 are new or newly classified.
+The zero-major gate therefore remains unmet.
+
+The review's major-1 trace assumes one possible T7 caller order that has not
+landed, but its root proposition is confirmed independently of that scenario:
+production layout entries infer a target from a derived root copy, and the same
+copy claims both geometry projection and successful text rasterization. A
+fallible brush operation can therefore both block geometry and erase the only
+retry marker. The chosen remediation follows the reviewer's recommendation:
+production callers supply `WindowState::scale`; geometry and raster freshness
+become separate facts; and surface failure no longer prevents layout. This
+preserves DD-M4-P1-003's written order, so neither a successor nor a move of
+the whole walk into step 1 is selected. T7 will defer the ordinary text refresh
+inside its nested `WM_SIZE` and run it after `SetWindowPos` returns.
+
+| Review item | Tip disposition before code remediation |
+|---|---|
+| Major 1 — inferred layout target and shared freshness cache | **Confirmed; remediation selected above.** This is first because it is the only unresolved major at the tip. |
+| Major 2 — scaled evidence geometry confound | **Already fixed in `e532c9f`.** The scaled surface-identity mutation holds geometry/cache at 120 DPI. |
+| Minor 1 — direct mutations do not dirty layout | **Already fixed in `e532c9f`.** |
+| Minor 2 — open allocation checkbox | **Already fixed in `e532c9f`.** |
+| Minor 3 — wildcard absorbs future text-bearing variants | **Confirmed; fix in this remediation.** Make the match exhaustive. |
+| Minor 4 — `set_root` comment says the caller can discard a consumed `Box` | **Confirmed as a false comment and a wider ABI failure-contract question.** Correct the comment now; audit whether preserving a host handle on failure can be changed without redefining the experimental ABI ownership contract. |
+| Minor 5 — text failure prevents geometry | **Confirmed; fix with the major-1 split.** Geometry runs and commits independently; raster failure stays retryable through its own marker. |
+| Minor 6 — the 96-effective-DPI frames are DWM-scaled | **Confirmed; factual evidence correction required.** The pixels remain valid comparisons, but the description must distinguish process-effective DPI from final DWM frame scaling. |
+| Minor 7 — parent `stretched-bitmap fringe` mechanism is wrong | **Confirmed; factual evidence correction required.** The old default brush slightly shrinks/centres; the dominant visible difference is lower glyph resolution. |
+| Minor 8 — byte identity does not prove source identity | **Confirmed as a qualification to F-40.** It proves restoration from the tested mutation, not arbitrary source identity; render-neutral mutations need a structural/source artifact. |
+| Minor 9 — public `draw_text` now returns a ceil-sized surface | **Confirmed; document the retained 96-DPI but changed storage-extent contract.** Callers supplying their own brush must set the one-to-one mapping if that is what they require. |
+| Minor 10 — new layout-target/cache invariant absent from retrospective | **Confirmed; update item 10 after the code shape lands.** |
+| Minor 11 — negative skip guard unobserved | **Confirmed; external evidence pending.** The fail-not-skip assertion closes the CI direction statically, so this review classifies it minor rather than round 1's major, but the AGENTS.md landing requirement still has to be discharged on a Compositor-unavailable environment. |
+
+The two tip-only commits (`a26f213`, `e532c9f`) remain outside the supplied
+review base and require a delta review together with this remediation before
+the final zero-major verdict.
