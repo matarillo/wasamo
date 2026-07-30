@@ -1461,6 +1461,23 @@ the assertions would actually read.
    invariance witness is therefore the row structure, and the ratio assertion
    rides beside it as a second fact of a different shape (T7's F-42
    carry-forward).
+   **The row structure is not that witness, and the round-2 review is right**
+   (finding MINOR 3). `row_shape` partitions tiles by equal `Y`, and a
+   partition by equality is invariant under multiplication by a positive
+   factor — so once the ratio assertion fixes every tile at `before × factor`
+   and the *before* row shape is pinned to the `.ui`-derived constant, the
+   *after* row shape **follows**. No state exists where it fires and they do
+   not. F-45's problem stands; its proposed answer does not. **What separates
+   the two halves is on the input side**: the realised physical client
+   asserted against a target computed from this file's constants, and the root
+   Visual asserted against those constants before and after — numbers chosen
+   here rather than ratios read off the tree. The after-state row assertion
+   stays for **legibility**, so a failure names the 9-vs-7 signature instead
+   of a pile of `f32` mismatches; legibility is a property of an evidence
+   artifact and is not evidence.
+   **And the signature is blind at 100 DPI** (finding MINOR 5): a
+   physical-as-logical implementation lays out into 750 DIP there, which fits
+   the same 7 tiles per row a correct one does.
 4. **Two `#[doc(hidden)] pub` seams, not one.** F-29 named the scale
    accessor. The mixed-scale hit-test bullet needs a second one — a way to
    set a single node's cached geometry scale stale *after* geometry exists —
@@ -1538,15 +1555,25 @@ same run measured a second constraint no rounding argument predicts: at
       **Choosing the rectangle is necessary and not sufficient**
       (corrected at T8, mutation M5). Three conditions carry the equality
       and only the first is about synthesising: the *physical* client
-      chosen must be one the DIP extent is exactly recoverable from at
-      every DPI under test — a multiple of 24, since `96 = 2^5 × 3`; the
-      realised value must be **asserted** rather than assumed, because a
-      requested rectangle the display cannot honour is silently not the
-      one applied; and the quantity asserted must be a **function of**
-      that extent, which T8's per-tile geometry is not and its root
-      Visual is. A T8 that had only chosen the rectangle would have
-      asserted an equality about a number the client extent does not
-      reach.
+      chosen must give an **integer** physical target at every DPI under
+      test — a multiple of 24, since `96 = 2^5 × 3`; the realised value
+      must be **asserted** rather than assumed, because a requested
+      rectangle the display cannot honour is silently not the one applied;
+      and the quantity asserted must be **sensitive to** that extent at
+      the precision the claim needs, which T8's per-tile geometry is not
+      below about a DIP and its root Visual is. A T8 that had only chosen
+      the rectangle would have asserted an equality about a number the
+      client extent does not reach.
+      **The first condition is about rational arithmetic and not about
+      `f32`** (corrected at the T8 round-2 review, finding MAJOR 2). An
+      earlier wording said the DIP extent must be "exactly recoverable at
+      every DPI in the matrix", and that is **false at 100 DPI** — the
+      recovered extent there is 480.00003 rather than 480, which is
+      precisely why the test branches on `factor_is_exact` and asserts a
+      bound rather than an equality at that one DPI. Integer targets hold
+      at all four; bit-for-bit recovery holds at three. Recorded because
+      the remediation for one over-strong claim introduced another, which
+      is the phase's recurring failure arriving inside its own fix.
       **"Client extent" now has two readings and they are opposite** (T5).
       Before the inbound seam landed, the client extent layout received
       *was* the physical one; since T5 it is `physical ÷ s`. What T8 must

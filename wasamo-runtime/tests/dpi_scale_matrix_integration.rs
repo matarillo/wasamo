@@ -23,12 +23,14 @@
 //! 2. **The exact-invariance assertion holds because this file preserves the
 //!    DIP client extent**, which is the input layout actually receives —
 //!    and choosing the rectangle is only the first of three things that
-//!    takes. The chosen *physical* client must be one the DIP extent is
-//!    exactly recoverable from at every DPI in the matrix (see
-//!    [`CLIENT_W`]); the realised value must be asserted rather than
-//!    assumed (see `set_client_extent`); and the quantity asserted must be a
-//!    function of that extent, which the per-tile geometry is not and the
-//!    root Visual is. The OS's own suggested rectangle preserves the
+//!    takes. The chosen *physical* client must give an **integer** physical
+//!    target at every DPI in the matrix (see [`CLIENT_W`]) — which is not
+//!    the same as the DIP extent being recoverable bit-for-bit, and at
+//!    100 DPI it is not (see [`factor_is_exact`]); the realised value must
+//!    be asserted rather than assumed (see `set_client_extent`); and the
+//!    quantity asserted must be **sensitive to** that extent at the
+//!    precision the claim needs, which the per-tile geometry is not below
+//!    about a DIP and the root Visual is. The OS's own suggested rectangle preserves the
 //!    **outer** rectangle instead, and the non-client frame scales by its own
 //!    DPI-indexed metrics rather than by `s` — so on the real path the DIP
 //!    layout input moves by a DIP or two and invariance is approximate. That
@@ -91,8 +93,15 @@ const DPI_MATRIX: [u32; 4] = [120, 144, 192, 100];
 /// physical at 96 DPI (T4, measured), and 561 × 1.25 is 701.25 — so no
 /// synthesised rectangle preserves the DIP extent from there, at any DPI in
 /// the matrix. `96 = 2^5 × 3`, and the matrix contributes denominators 4, 2,
-/// 1 and 24, so **a multiple of 24 makes all four exact at once**: 720 → 750 /
-/// 900 / 1080 / 1440 and 480 → 500 / 600 / 720 / 960.
+/// 1 and 24, so **a multiple of 24 makes all four targets integers at once**:
+/// 720 → 750 / 900 / 1080 / 1440 and 480 → 500 / 600 / 720 / 960.
+///
+/// **"Integer target" is not "exact in `f32`", and the two are separate
+/// claims** — the confusion T4's finding R-1 was about, arriving one level
+/// out. An integer physical target is a fact about rational arithmetic and
+/// holds at all four DPIs. Whether the DIP extent is then recoverable
+/// bit-for-bit is a fact about `f32` and holds at three of them; see
+/// [`factor_is_exact`].
 ///
 /// **Two corrections, both measured rather than reasoned** (mutation M5).
 ///
@@ -117,18 +126,48 @@ const DPI_MATRIX: [u32; 4] = [120, 144, 192, 100];
 const CLIENT_W: i32 = 720;
 const CLIENT_H: i32 = 480;
 
-/// Tiles per row, derived from the fixture's authored numbers and
-/// [`CLIENT_W`] — **not** from anything read back off a Visual.
+/// Tiles per row, predicted from the fixture's authored numbers and
+/// [`CLIENT_W`]: `88 + 12` per tile in a 720 DIP line gives
+/// `floor((720 + 12) / 100) = 7`. An implementation that treated the physical
+/// client as logical would lay out into 900 DIP at 120 DPI and fit **9** — the
+/// signature the plan records for §T10, and it is measured here rather than
+/// predicted (mutation M1 with the root assertion shadowed reads `(9, 2)`).
 ///
-/// This is the witness that makes the ADR's evidence item (2) two claims
-/// rather than one (finding F-45). "The DIP layout results are unchanged" and
-/// "the Visuals moved by the ratio" are the same equation while the
-/// before-state is `s = 1`, because the only reading of a DIP layout result
-/// the runtime offers is a Visual read back and divided. A row count computed
-/// from the `.ui` source is independent of both: `88 + 12` per tile in a 720
-/// DIP line gives `floor((720 + 12) / 100) = 7`, and an implementation that
-/// treated the physical client as logical would lay out into 900 DIP and fit
-/// **9** — the signature the plan records for §T10.
+/// **What this witness is, corrected at the T8 round-2 review (finding
+/// MINOR 3).** It was introduced as the fact that makes the ADR's evidence
+/// item (2) two claims rather than one (F-45), and described as "the half a
+/// ratio assertion cannot make". **That is false of the landed fixture, and
+/// the reason is arithmetic rather than incidental:** `row_shape` partitions
+/// tiles by equal `Y`, and a partition by equality is invariant under
+/// multiplication by a positive factor. So once `assert_scaled` has fixed
+/// every tile at `before × factor` and `row_shape(before)` is pinned to this
+/// constant, `row_shape(after)` **follows**; no state exists where the second
+/// fires and the first two do not. The claim withdrawn is that it adds
+/// discriminating power.
+///
+/// **What it does carry**, and why it stays:
+///
+/// - `row_shape(before)` against this constant is genuinely independent — it
+///   checks the 96-DPI baseline is the fixture the `.ui` describes, which
+///   nothing read off the post-change tree can establish. It says nothing
+///   about the scale change.
+/// - `row_shape(after)` is redundant against the conjunction above and is
+///   kept for **legibility**: a failure names the phase's known 9-vs-7
+///   signature instead of presenting a pile of `f32` mismatches. That is a
+///   real property of an evidence artifact and it is not evidence.
+///
+/// F-45's *problem* stands — the two halves of evidence item (2) are one
+/// equation at `s = 1`. What separates them is on the **input** side: the
+/// realised physical client asserted against a target this file computed, and
+/// the root Visual asserted against the constants above. See
+/// `dip_layout_is_invariant_while_every_visual_moves_by_the_ratio`.
+///
+/// **The 9-vs-7 signature degenerates at 100 DPI** (finding MINOR 5). A
+/// physical-as-logical implementation lays out into 750 DIP there, and
+/// `floor((750 + 12) / 100)` is **7** — the same count a correct
+/// implementation gives. The discrete witness discriminates at 120 / 144 /
+/// 192 and is blind at 100; only the root and ratio assertions catch M1
+/// there.
 const TILES_PER_ROW: usize = 7;
 const TILE_COUNT: usize = 12;
 const ROWS: usize = 2;
@@ -407,10 +446,15 @@ fn a_created_windows_cached_scale_is_the_dpi_the_os_reports() {
 /// the before-state at `s = 1` a ratio assertion and a "DIP unchanged"
 /// assertion are one equation (finding F-45):
 ///
+/// - **Input-side, and the one that actually separates them**: the realised
+///   physical client equals a target computed from [`CLIENT_W`], and the root
+///   Visual equals those constants before and after. Neither is a ratio, and
+///   nothing read off the post-change tree can stand in for them.
 /// - **Discrete**: the WrapPanel row assignment, against a count derived from
-///   the `.ui` source and the chosen client extent. An implementation that
-///   treated the physical client as logical would fit 9 tiles per row here
-///   instead of 7.
+///   the `.ui` source. Independent for the **before** state; redundant for
+///   the after state and kept for legibility — see [`TILES_PER_ROW`], which
+///   records why the original "the half a ratio assertion cannot make" was
+///   withdrawn.
 /// - **Continuous**: every tile's offset and size equals its 96-DPI value
 ///   times the factor.
 /// - **Integer, from the raster path**: each tile's text surface is the `ceil`
@@ -494,8 +538,10 @@ fn dip_layout_is_invariant_while_every_visual_moves_by_the_ratio() {
                     row_shape(&after),
                     (TILES_PER_ROW, ROWS),
                     "dpi={dpi}: layout receives the same DIP client extent, so the \
-                     same tiles must sit on the same lines — this is the half a \
-                     ratio assertion cannot make"
+                     same tiles must sit on the same lines. Redundant against the \
+                     ratio assertion below and kept so a failure names the 9-vs-7 \
+                     signature rather than a pile of f32 mismatches — see \
+                     TILES_PER_ROW"
                 );
 
                 // Continuous: every Visual moved by the ratio.

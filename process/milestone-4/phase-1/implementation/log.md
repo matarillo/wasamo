@@ -5043,16 +5043,45 @@ shape for claims about the *fixture's* discriminating power.
 
 | # | Mutation | Result |
 |---|---|---|
-| M1 | The inbound client-extent seam removed from the `WM_SIZE` arm (physical treated as DIP) | `dip_layout_...` **fails**: `row_shape` reads `(9, 2)` against `(7, 2)`. The 9-vs-7 signature the plan predicted for a rendered frame, in a headless test. The other two pass |
-| M2 | `visual_rect_dip` divides by `self.scale` instead of the traversal root's | `a_stale_descendant_...` **fails** on the stale case (`0` clicks against `1`) while its **control click passes**, so the failure is the divisor and not the coordinates. The other two pass |
-| M3 | `sync_visuals` writes sizes at `DipScale::IDENTITY` | `dip_layout_...` **fails**: tile 0 width reads `88.0` against `110.0` |
-| M4 | `surface_pixels` truncates instead of ceiling | `dip_layout_...` **fails**: the first label's surface reads `(24, 23)` against `(25, 24)` |
-| M5 | The fixture's client extent set to 785 x 480 — not a multiple of 24 | Discussed below; **first run passed**, which is the finding |
-| M6 | M3 with the matrix restricted to 100 DPI | `dip_layout_...` **fails** at 100 DPI, so the non-standard entry is not a passenger |
-| M7 | `begin_scale_change` does not commit the scale | `a_created_windows_...` **fails** (`96` against `144`) and `dip_layout_...` with it; the mixed-scale test passes, because a change that never happens is internally consistent |
+**Rows M1, M3, M4 and M6 below were re-run against the landed fixture at the
+round-2 review (finding MAJOR 1), and their recorded panic sites had gone
+stale.** M1–M4 were run *before* M5 added the root-Visual readback, and that
+readback sits above `row_shape` and `assert_scaled` in the test body, so on the
+landed fixture it is what fires first. The mutations still fail — the same
+mutation, the same test, a different assertion. This is the M5 correction
+reaching the prose and not the table, i.e. round 1's R1 one level in, and it is
+recorded as the sequence rather than silently rewritten.
 
-Every mutation was restored; the final state is the committed one and the
-suite is green on it.
+| # | Mutation | Result **as landed** | Result when first run (pre-M5 fixture) |
+|---|---|---|---|
+| M1 | The inbound client-extent seam removed from the `WM_SIZE` arm (physical treated as DIP) | `dip_layout_...` **fails** at the root assertion: `(0, 0, 1125, 750)` against `(0, 0, 900, 600)`. The other two pass | `row_shape` read `(9, 2)` against `(7, 2)` |
+| M2 | `visual_rect_dip` divides by `self.scale` instead of the traversal root's | `a_stale_descendant_...` **fails** on the stale case (`0` clicks against `1`) while its **control click passes**, so the failure is the divisor and not the coordinates. The other two pass | unchanged — this test has no root assertion |
+| M3 | `sync_visuals` writes sizes at `DipScale::IDENTITY` | `dip_layout_...` **fails** at the root assertion: `(0, 0, 720, 480)` against `(0, 0, 900, 600)` | tile 0 width read `88.0` against `110.0` |
+| M4 | `surface_pixels` truncates instead of ceiling | `dip_layout_...` **fails**: the first label's surface reads `(24, 23)` against `(25, 24)`. Unshadowed — the root assertion does not read surfaces | unchanged |
+| M5 | The fixture's client extent set to 785 x 480 — not a multiple of 24 | Discussed below; **first run passed**, which is the finding | — |
+| M6 | M3 with the matrix restricted to 100 DPI | `dip_layout_...` **fails** at 100 DPI, at the root assertion | recorded only as "fails at 100 DPI" |
+| M7 | `begin_scale_change` does not commit the scale | `a_created_windows_...` **fails** (`96` against `144`) and `dip_layout_...` with it; the mixed-scale test passes, because a change that never happens is internally consistent | unchanged |
+
+**Shadowed is not dead, and the difference is measured** (added at the round-2
+review). The gate's own standard is that **each assertion** fires directly, so
+"M1 fires something else now" leaves `row_shape` and the per-tile
+`assert_scaled` without a demonstration. Two further runs supply one:
+
+| Run | Result |
+|---|---|
+| M1 with the `after_root` assertion shadowed (`if false`) | `row_shape` **fires**: `(9, 2)` against `(7, 2)` — the 9-vs-7 signature, live on the landed fixture |
+| M3 with `after_root` **and** the root `assert_scaled` shadowed | per-tile **fires**: `dpi=120 tile 0 w`, `88.0` against `110.0` |
+
+So both assertions are reachable and discriminating; what the table had wrong
+was which one a given mutation reaches first. **One consequence is not
+repaired by that measurement and is recorded instead** (finding MINOR 3): the
+*after*-state `row_shape` assertion is implied by the conjunction of the ratio
+assertion and the *before*-state row assertion, so no mutation can fire it
+alone. It is kept for legibility, not as evidence; see
+[plan.md](./plan.md) §T8 re-audit point 3 and `TILES_PER_ROW`'s doc.
+
+Every mutation and every shadowing edit was restored; the final state is the
+committed one and the suite is green on it.
 
 **M5 is the one that changed the implementation, and it changed it by
 falsifying the reasoning that produced F-44.** F-44's arithmetic is right —
@@ -5152,9 +5181,11 @@ reader of either finds them:
    discharges AC7's third requirement.
 2. The exact-invariance assertion holds **because this file preserves the DIP
    client extent**, which choosing the rectangle is necessary and not
-   sufficient for: the chosen physical client must be exactly convertible at
-   every DPI in the matrix, the realised value must be asserted, and the
-   quantity asserted must be a function of that extent. The OS's suggested
+   sufficient for: the chosen physical client must give an **integer** target
+   at every DPI in the matrix (not the same as the DIP extent being
+   recoverable bit-for-bit, which fails at 100 DPI), the realised value must
+   be asserted, and the quantity asserted must be **sensitive to** that extent
+   at the precision the claim needs. The OS's suggested
    rectangle preserves the **outer** rectangle instead, so on the real path
    the DIP layout input moves by a DIP or two and invariance is approximate.
    T11 is where that shows, and it must not read as a failure.
@@ -5195,18 +5226,31 @@ Result: 3 passed, 0 failed, 0 ignored, 0 measured, 0 filtered out.
 
 **It was the same binary, not a rebuild.** Cargo reported
 `Finished ... in 0.07s` and ran
-`dpi_scale_matrix_integration-911796c0ce6f8da6.exe`. That is the only such
-artifact on disk, produced by the clean rebuild recorded in the T8
-retrospective's item 3, and the working tree has been clean since — the two
-commits after it are documentation. So the difference between this run and the
-local live-Compositor 3/3 run is the session's Compositor capability and
+`dpi_scale_matrix_integration-911796c0ce6f8da6.exe`, the artifact the clean
+rebuild recorded in the T8 retrospective's item 3 had produced; the working
+tree was clean over the whole interval between that rebuild and this run, the
+only commits in it being documentation. So the difference between this run and
+the local live-Compositor 3/3 run is the session's Compositor capability and
 nothing else, which is what makes it a control on the guard rather than on a
-second build. *(Cargo's freshness verdict is the weaker half of that argument
-and is not leaned on alone; the phase has twice measured it saying "fresh"
-about something stale — F-5 / F-21 / F-40. Here it is corroborated by the
-single on-disk artifact and the clean tree, and the whole-archive path those
+second build.
+
+**Two corrections to that argument, both from the round-2 review (NIT 1).**
+*(i)* "The only such artifact on disk" was offered as the strong half and is
+**not an identity argument at all**: cargo's filename hash is derived from
+package, target and profile metadata, not from source, so a mutated build
+writes the same filename — as the round-2 reviewer's own M1 and M3 runs
+demonstrated. It says which file was executed, not what was in it. The weight
+therefore rests on the clean tree plus cargo's freshness verdict, which is the
+half the phase has three findings against (F-5 / F-21 / F-40) — mitigated
+here, but not more than that, by the fact that the whole-archive path those
 findings concern is the `wasamo.dll` link, which an integration test binary
-does not take.)*
+does not take. *(ii)* The clean-tree half is stated **for that interval** and
+must not be read as standing: the round-2 review applied and reverted seven
+mutations, which rebuilt this artifact (mtime 5:08 → 6:23). The owner's
+observation is a past event and is unaffected; the argument's shelf life is
+not. **The cheap fix for next time is a content hash**, so it is recorded now:
+the artifact at the branch tip is SHA-256
+`DEEDD907A933EC7BA2A9662F17F8D32E83FF580081B5376549B6ADCFB05E9CAB`.
 
 This is the required actual firing of the substring-classified local skip
 branch, per [AGENTS.md §Testing rules](../../../../AGENTS.md) — a guard
@@ -5286,7 +5330,9 @@ recommended listing it, and listing it is what separates the two rows:
 
 | ADR site | Verdict |
 |---|---|
-| [DD-M4-P1-003 §Context](../decisions/dd-m4-p1-003-dpi-change-propagation.md)'s 2026-07-29 annotation — "exact invariance is a property of a **controlled client extent** … the integration test preserves the client extent and therefore still asserts equality rather than a tolerance" | **Survives.** It says *controlled* client extent, and states preservation as a fact about the test rather than as a consequence of synthesising. Both are true of the landed test. This is the weaker and correct form of the proposition; nothing in M5 touches it. Recorded because "checked and it holds" and "did not look" are different facts |
+| [DD-M4-P1-003 §Context](../decisions/dd-m4-p1-003-dpi-change-propagation.md)'s 2026-07-29 annotation — "exact invariance is a property of a **controlled client extent** … the integration test preserves the client extent and therefore still asserts equality rather than a tolerance" | **Survives — reason restated at round 2 (MINOR 1), because the original one-liner was ambiguous in the way that invites the opposite verdict.** "Controlled" has two readings. Under *chosen by the test* it is necessary-not-sufficient exactly as "chosen" is, and 785 × 480 falsifies it. Under *held at the same DIP value* it is sufficient — and 785 × 480 is then **not** a controlled extent, because its DIP extent moves from 785 to 784.8, which is the entire content of M5. The annotation's own contrast fixes the second reading: it is set against the OS-suggested rectangle, whose defect is that it **moves** the client extent. The sentence is sound under the reading its context establishes. Recorded because "checked and it holds" and "did not look" are different facts — and so is "checked, and said why in a way that does not survive being read the other way" |
+| Same annotation's **revision-history summary** (`dd-m4-p1-003-…md` §Revision history, 2026-07-29) — "it holds of a controlled client extent, not of the OS-suggested rectangle" | **Survives, same reading.** Added at round 2 (MINOR 2): it is *derived prose* summarising the body annotation, which is the documentation form of trap #3 — the trap T8 declared applicable and then closed only over the node-side derived copy. Recorded rather than corrected: the summary says what the body says |
+| [decisions/preamble.md](../decisions/preamble.md) §Revision log, 2026-07-29 row — "exact invariance is a property of a controlled client extent" | **Survives, same reading.** Added at round 2 (MINOR 2), same derived-prose class. Also recorded: the round-1 query `controlled client extent` cannot match `a *controlled* client extent`, so markdown emphasis inside a phrase is a way a proposition search silently under-reports |
 | [decisions/preamble.md](../decisions/preamble.md) §Phase 1 verification closure item 2's 2026-07-29 qualification — "the unchanged-results half is exact **because the test synthesises the message and therefore holds the client extent constant**" | **Asserts the falsified causation**, in the `therefore`. **Raised to the owner, not corrected here.** No decision or option is re-chosen, so by the boundary T4 established — *supersede when a reader implementing the original text would not obtain the shipped behaviour; annotate when the decision still produces it and only a statement around it was too strong* — this is at most a third dated annotation, and the annotate route on an Accepted record is the owner's call, as it was at T4. The implementation-side documents now carry the corrected form, so nothing downstream reads the ADR for this |
 
 Post-remediation verification, on the branch tip:
@@ -5300,3 +5346,71 @@ logic changed, so the owner's per-binary Compositor-unavailable observation
 and the mutation evidence both remain valid. The branch requires a **delta
 review** over the remediation commit before the zero-major verdict stands.
 Merge remains a separate owner-approval gate.
+
+### Independent review round 2 disposition (2026-07-31)
+
+A **full** independent review rather than a delta review over the round-1
+remediation, on owner instruction. The reason it is worth the extra pass is
+recorded because it is a process judgment, not a preference: T7 merged on
+round 1 plus a delta review and left its second remediation independently
+unreviewed as a named residual, and round 1's major here was a
+documentation-propagation defect whose fix touched six files — the shape a
+diff-scoped review reads least well.
+
+Result: **2 major, 5 minor, 2 nit.** The zero-major gate was not met. Eight of
+the nine are confirmed; **one minor is partially pushed back**, with the reason
+below.
+
+**The reviewer verified rather than read.** It re-ran the binary against a live
+Compositor (3/3, not skipped), re-derived M1 and M3 from their descriptions and
+observed panics the table did not predict, forced `factor_is_exact` to `true`
+and observed the 100 DPI failure, searched `bindings/` and `examples/` for the
+scale surface, ran the workspace suite and both doc gates, enumerated the
+proposition's occurrence sites independently of the table, and restored every
+mutation to a clean tree. Every claim below marked *measured* was re-measured
+here as well before dispositioning.
+
+| # | Severity | Finding | Disposition |
+|---|---|---|---|
+| MAJOR 1 | major | The mutation table's M1 / M3 / M4 / M6 rows record panic sites from the pre-M5 fixture. On the landed fixture the root-Visual assertion M5 added fires first, so `row_shape` and the per-tile `assert_scaled` have no mutation demonstrating them — while the start gate's standard is "each assertion fires directly, not incidentally" | **Confirmed, and re-measured.** M1 reproduces at the root assertion (`(0,0,1125,750)` against `(0,0,900,600)`), M3 likewise. Table rewritten with as-landed **and** first-run columns. Two shadowing runs added to close the gap the finding names: with `after_root` disabled M1 fires `row_shape` at `(9,2)` against `(7,2)`, and with the root `assert_scaled` also disabled M3 fires per-tile at `88.0` against `110.0`. Both assertions are therefore live; what was wrong was the recorded panic site |
+| MAJOR 2 | major | The round-1 remediation's proposition (b) — the physical client must be one the DIP extent is "exactly recoverable from at every DPI in the matrix" — is **false at 100 DPI**, and the same close artifact records the counter-measurement (480.00003) three screens below | **Confirmed.** This is the phase's recurring over-strong claim arriving *inside the commit that fixes an over-strong claim*, which is the part worth recording rather than the wording. (b) now separates two facts that the phrase "exact" was carrying at once: a multiple of 24 gives an **integer physical target** at all four DPIs (rational arithmetic), while bit-for-bit recovery of the DIP extent holds at three (`f32`). Corrected at all five sites the review enumerated |
+| MINOR 1 | minor | The verdict "DD-M4-P1-003's annotation survives" is wrong, because its reason — "It says *controlled* client extent" — leans on a word that is necessary-not-sufficient exactly as "chosen" is; 785 × 480 is a controlled extent that does not give exact invariance | **Partially pushed back; the verdict stands, the reasoning does not.** "Controlled" carries two readings and the disposition named neither, which is the real defect. Under *chosen by the test* the reviewer is right and the sentence is falsified. Under *held at the same DIP value* it is sufficient, and 785 × 480 is not a controlled extent in that sense — its DIP extent moves from 785 to 784.8, which is the whole content of M5. The annotation's own contrast fixes the second reading: it is set against the OS-suggested rectangle, whose defect is precisely that it **moves** the client extent. So the ADR sentence is sound and the disposition's one-line reason was ambiguous in the way that invites the reviewer's reading. Reason replaced with the explicit reading; **no ADR change** |
+| MINOR 2 | minor | The ADR-side enumeration stopped at two body sites and missed two revision-log summaries of the same annotation — derived prose, which is the documentation form of trap #3 that T8 declared applicable | **Confirmed.** Both added to the table with verdicts. The reviewer also names why the search missed them: the query `controlled client extent` does not match `a *controlled* client extent` with markdown emphasis inside it |
+| MINOR 3 | minor | The discrete witness is not independent of the ratio assertion: `row_shape` is computed from the same array `assert_scaled` reads, and a partition by equal `Y` is invariant under positive scaling, so `row_shape(after)` follows from the ratio assertion plus `row_shape(before)` | **Confirmed, and it is the most substantive of the nine.** F-45's *problem* stands — the two halves of evidence item (2) are one equation at `s = 1` — but the answer T8 gave does not separate them. What does is on the **input** side: the realised physical client against a computed target, and the root Visual against this file's constants. The after-state row assertion is kept for **legibility** and is now labelled as such. "Not a number derived from the Visual geometry" is withdrawn |
+| MINOR 4 | minor | "the per-tile geometry is **not** a function of that extent" is over-strong and contradicts the same file, which uses per-tile `Y` offsets to compute the extent-sensitive row assignment | **Confirmed.** The measurement was always "insensitive below about a DIP"; the distillation widened it. Replaced with "sensitive to that extent at the precision the claim needs" at all three sites |
+| MINOR 5 | minor | The 9-vs-7 signature degenerates at 100 DPI: a physical-as-logical implementation lays out into 750 DIP, and `floor((750+12)/100)` is 7 — the same count a correct implementation gives | **Confirmed by arithmetic here.** Recorded on `TILES_PER_ROW` and in the plan. The discrete witness discriminates at 120 / 144 / 192 and is blind at 100, where only the root and ratio assertions catch M1 |
+| NIT 1 | nit | "the only such artifact on disk" is not an identity argument — the filename hash is metadata-derived and survives a source change, as the reviewer's own mutations demonstrated | **Confirmed**, and it compounds: the reviewer's mutation cycle rebuilt that binary, so "the working tree has been clean since" is no longer true of the present. Both corrected, and the guard evidence now carries a file hash |
+| NIT 2 | nit | "exact" is used for two different things in one file — integer targets, and `f32` representability | **Confirmed**; it is MAJOR 2's root cause. `CLIENT_W`'s doc now says "integer targets" |
+
+**Round 1's dispositions, re-judged:** R1 (the F-44 propagation) is **not
+closed** — the correction reached six sites, but it introduced MAJOR 2, the
+ADR verdict in MINOR 1 was under-specified, the ADR enumeration was incomplete
+(MINOR 2), and the same M5 correction never reached the mutation table
+(MAJOR 1). R2 (the safety contract) is **closed**, neither under- nor
+over-corrected. The reviewer pushed back on nothing from round 1 and
+independently reached the same conclusion on all four items round 1 had
+pushed back on.
+
+**What this round costs the task's own corrective, and what survives it.**
+The round-1 retrospective proposed: *propagate by proposition, not by the
+finding's name; if the enumeration starts at `rg` it has already failed.*
+Round 2 shows that corrective is necessary and **not sufficient** — the
+enumeration this time was written by hand and still (i) stopped at the prose
+and never asked whether the *close artifact's own table* asserted the
+proposition, and (ii) restated the proposition in a form that was itself too
+strong. So the corrective is extended rather than replaced: **the enumeration
+must include the artifacts the task produced, not only the documents it
+inherited; and the corrected proposition is a claim like any other, so it gets
+the same "is this true of every member of its set" check the original failed.**
+
+Post-remediation verification, on the branch tip:
+
+- `cargo fmt --all -- --check`, `git diff --check` — green.
+- `cargo test -p wasamo-runtime --test dpi_scale_matrix_integration -- --test-threads=1` — 3 passed.
+- `cargo test --workspace -- --test-threads=1` — green.
+
+No test logic and no production logic changed in this remediation: the diff is
+prose, doc comments, and one assertion message. The owner's per-binary
+Compositor-unavailable observation and the mutation evidence therefore both
+remain valid. A further independent round is required before the zero-major
+verdict stands; merge remains a separate owner-approval gate.
