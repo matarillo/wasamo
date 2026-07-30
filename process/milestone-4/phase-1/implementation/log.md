@@ -3893,3 +3893,67 @@ accurate list: those three are the ones a bisect can land on.
    external readers use. The atlas-origin sentence is **not** in this
    question — its conclusion is unaffected and its overstatement is
    empirical, so Moment 2 is the right home for it.
+
+## T6 — Text-surface resolution + the re-rasterization walk
+
+### Carry-over audit and responsibility re-audit (2026-07-30, before start gate)
+
+Branch: `feat/m4-phase-1-t6`, created from `feat/m4-phase-1` at
+`5e36ce5`.
+
+The completed-task retrospectives and handoff leave five live T6-owned
+obligations: consume `DipScale::surface_pixels` and remove its temporary
+`dead_code` allowance; become the one writer of every node scale cache;
+cover the incremental tree-mutation and IR conditional / `for` attach
+paths F-32 found; preserve `sync_visuals` as the only Composition geometry
+writer and `ButtonData.label_size` as the label-measurement source; and
+produce GUI evidence that exercises scale != 1 rather than treating a 100%
+frame as crispness evidence. The public subtree hit-test receiver
+precondition, frame-drift mechanism, direct-Composition
+`window_add_widget` path, and later-phase carry-forward rows remain stated
+limits rather than T6 implementation work.
+
+The plan's single fallible `apply_scale_recursive` hypothesis fails its own
+side-effect test. If a surface recreation fails after earlier nodes have
+already changed their caches, the next geometry pass projects one tree at
+mixed scales. It also treats `set_root` and T7 as the whole reach even though
+F-32 identified shipped incremental attach paths. The revised T6
+responsibility is a prepare-then-commit primitive: rebuild stale brushes
+without cache mutation, then write all caches in an infallible pass only
+after preparation succeeds. It runs before initial layout and at every
+layout entry, which covers inserted content at the point it first becomes
+geometrically observable without teaching every mutator a second scale
+rule. `window_add_widget` remains outside because it deliberately retains no
+content root and runs no layout.
+
+Two other planning choices are resolved before editing. Public
+`TextRenderer::draw_text` remains a 96-DPI convenience wrapper; a
+crate-private method takes raw `u32` DPI, so neither `DipScale` nor an
+unstructured factor becomes public. The walk reads the existing fixed Text
+extent and `ButtonData.label_size`; it does not call `measure`, add retained
+measurement state, or write Composition geometry. The corresponding
+changes are recorded in [plan.md](./plan.md) §T6 before the start gate is
+selected.
+
+### Start gate (recorded 2026-07-30, before production-code edits)
+
+Review lane: **full independent review** — T6 changes the runtime rendering
+path, the tree-wide cache commit boundary, and produces GUI-render evidence.
+No trap is judged non-applicable after the responsibility re-audit.
+
+| # | Applies | Reason and planned close artifact |
+|---|---|---|
+| 1 — semantic migration / call sites | **yes** | DD-002 audit row 7 changes and the internal scaled drawing entry has six production callers (five existing paths plus the re-rasterization path). Close with the exact `rg` queries, every caller classified, and an explicit unchanged-row-10 check. |
+| 2 — structural side effects | **yes** | The primitive changes text brushes and the cache that every geometry write reads. Enumerate brush replacement, cache commit, layout ordering, geometry non-effects, layout invalidation, child reach, and failure state. |
+| 3 — parallel / derived data | **yes** | Each node cache is derived from `WindowState::scale`. Close by enumerating the authoritative scale mutator and all attach / layout paths, and show that cache commit occurs only inside the prepare-then-commit primitive after fallible work succeeds. |
+| 4 — authored branch | **yes** | Reusing a Text node's fixed extent requires a size-shape branch, and rendering failures may gain a diagnostic branch. Add a direct test for each branch introduced; do not count an incidental GUI run. |
+| 5 — carry-forward | **yes** | Preserve the single-writer rule, the no-geometry-write rule, and the scale-independent-measure premise. Record their evidence and re-trigger criteria, including a future scale-dependent `measure`. |
+| 6 — deterministic failure | **yes** | Surface allocation, `BeginDraw`, `EndDraw`, brush creation, and brush installation are fallible across O(text nodes). A recurring failure is rooted and dispositioned; the all-or-no-cache-commit shape is verified rather than retried to green. |
+| 7 — GUI positive control | **yes** | A 100% frame cannot exercise the D2D DPI or atlas-origin changes. Capture and inspect multiple 100% regression frames, a throwaway-PMv2 125% crispness pair, and an accepted-vs-default brush control with a deliberately non-proportional surface / Visual pair at integer and fractional device origins. |
+
+The implementation approach is therefore constrained before editing: public
+`draw_text` stays source-compatible; scaled drawing takes raw DPI inside the
+crate; text extents are read rather than re-measured; no new retained
+rendering state is added; no Composition geometry write leaves
+`sync_visuals`; and cache writes occur only after the complete fallible
+preparation succeeds.

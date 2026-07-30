@@ -795,6 +795,33 @@ being right does not make text crisp; an implementation that stops at T5
 produces exactly the blur the phase set out to remove and passes every
 test.
 
+**Responsibility re-audit at task start (2026-07-30).** The planning-time
+shape — one fallible walk that writes each node's scale and immediately
+rebuilds its brush — is not safe enough to be T6's contract. If the Nth
+surface recreation fails, nodes 1 … N-1 have new geometry scales while the
+rest have old ones; the next layout can therefore project one tree at two
+scales. The same shape also has no complete answer for the already-shipped
+incremental attach paths F-32 enumerated. T6 owns a stronger boundary:
+
+1. prepare every stale text brush for the target scale **without changing
+   any node cache**;
+2. only after all fallible preparation succeeds, update the subtree's scale
+   caches in one infallible pass; and
+3. run this primitive before the geometry pass at initial attach and at the
+   start of every layout entry, so a child inserted into an attached tree is
+   normalized before `sync_visuals` first projects it.
+
+The layout-entry placement deliberately covers the direct tree-mutation API
+and the IR conditional / `for` paths without adding a second scale-propagation
+rule to each mutator. It does **not** make
+`lib.rs::window_add_widget` supported content hosting: that entry runs no
+layout, retains no widget in `root_widget`, and is already documented as a
+direct-Composition path. T6 keeps that stated limit rather than giving a
+renderer side effect to a path whose contract is specifically "no layout".
+This revision keeps `sync_visuals` as the runtime's only Composition geometry
+writer and makes a failed preparation retryable, because the cache remains
+old until the whole preparation succeeds.
+
 - [ ] Allocate the drawing surface at **`ceil(dip × s)` pixels** on each
       axis, through T2's named rule — `DipScale::surface_pixels`, which
       returns a `(u32, u32)` pixel count. Two consequences of the landed
@@ -862,16 +889,16 @@ test.
       overhang regression may be recorded here, but changing the Visual's
       bounds requires an accepted revision to DD-M4-P1-002 rather than an
       ad-hoc T6 fix.
-- [ ] The **re-rasterization walk**: surfaces are built at scale 1 during
-      construction (before the tree is attached to a window) and brought
-      to the window's scale by a walk run at attach. Re-creates each
-      text-bearing node's surface and brush from state the node already
-      holds; adds no retained state. Shape decided at T1:
-      `WidgetNode::apply_scale_recursive(&mut self, compositor,
-      renderer, scale)`, called from `window::set_root` after the first
-      layout and from T7's handler; it writes the node-side scale cache
-      T5 introduced, then rebuilds `WidgetData::Text { content, style }`
-      and `ButtonData`'s `label_text` / `label_style` surfaces.
+- [ ] The **re-rasterization primitive**: surfaces are built at scale 1
+      during construction (before the tree is attached to a window) and
+      brought to the window's scale by a two-pass primitive. It first
+      re-creates the surfaces and brushes of stale text-bearing nodes from
+      state the node already holds, with no cache mutation; only after every
+      fallible recreation succeeds does it write the node-side scale cache
+      T5 introduced in an infallible recursive pass. It adds no retained
+      state. `WidgetData::Text { content, style }` uses the node's existing
+      fixed DIP extent; `ButtonData` uses `label_text` / `label_style` /
+      `label_size`.
       **"After the first layout" is wrong, and it is wrong in a way T5
       photographed** (T5 finding F-34). `sync_visuals` multiplies by
       **`self.scale`, the node cache**, and `run_layout_as_window_root` —
@@ -882,13 +909,12 @@ test.
       layout drawn at 1/s in the corner of the client area.** That is
       exactly T5's P1 capture, which T5's own record calls "correct for T5
       alone because T6 owns the walk" — true of T5 and not true of T6 as
-      specified here. **T6 decides** between running the whole walk before
-      the first layout and splitting it so only the cache write precedes
-      layout; the walk depends on no layout result either way, since it
-      rebuilds from retained state and `measure` is scale-invariant
-      (row 10). What it must **not** do is give the walk a geometry write
-      — that breaks T3's one-pass invariant and with it the completeness
-      of the T5 audit.
+      specified here. **Resolved by the responsibility re-audit above:**
+      the complete prepare-then-commit primitive runs before the first
+      layout. It depends on no layout result, since it rebuilds from retained
+      state and `measure` is scale-invariant (row 10). What it must **not** do
+      is write geometry — that breaks T3's one-pass invariant and with it the
+      completeness of the T5 audit.
       **The walk reads `ButtonData.label_size` rather than re-measuring**
       (T3 finding F-20): T3 retained the measured extent, and `measure`
       is DIP and scale-invariant (row 10), so a re-measure inside the
@@ -899,12 +925,11 @@ test.
       `SetOffset` / `SetSize` in the runtime is inside `sync_visuals`,
       and that property is what makes the T5 audit complete; a walk that
       rewrites a Visual's size while it is there breaks it silently.
-      **And the walk has the same reach as `sync_visuals`, not a wider
-      one** (T3 finding F-24): both callers — `window::set_root` and T7's
-      handler — traverse `state.root_widget`, so a subtree attached
-      through `lib.rs::window_add_widget` is never walked and keeps text
-      rasterized at scale 1. Same stated limit as T5's, and R-1's
-      crispness claim is bounded by it: it holds for widgets the window
+      **And the primitive has the same content boundary as `sync_visuals`,
+      not a wider one** (T3 finding F-24): it starts from a layout root.
+      A subtree attached through `lib.rs::window_add_widget` is never walked
+      and keeps text rasterized at scale 1. Same stated limit as T5's, and
+      R-1's crispness claim is bounded by it: it holds for widgets the window
       owns as content.
       **The cost of a missed walk is now the rendering half only** (T5
       independent review finding R-2). Before T5's correction an
@@ -915,21 +940,24 @@ test.
       Recorded because it *narrows* what T6 must guarantee — the
       remaining consequence is blurred, wrongly-sized rendering, not a
       silent input mismatch.
-      **Decide the walk's reach, because two callers are not the whole
-      set** (T5 finding F-32). T5 ran trap #3 as an enumeration of every
+      **The primitive's reach includes the shipped incremental paths,
+      without making each one a second writer** (T5 finding F-32). T5 ran
+      trap #3 as an enumeration of every
       mutator of `WindowState::scale` and every path that attaches a node,
-      and it surfaced two classes this bullet does not name — both
+      and it surfaced two classes the original bullet did not name — both
       shipped, neither future: **`WidgetNode::append_child` /
       `insert_child` / `replace_child` on an already-attached tree**, and
       **the IR loader's conditional and `for` mutation sites**. Each puts
       a freshly constructed node — holding `DipScale::default()` and a
       scale-1 text surface — under a window whose scale is not 1, and each
       calls `mark_layout_dirty_for`, which schedules layout and not a
-      scale walk. So a tab switch or a list append at 125% would render
-      its new widgets at the identity beside correctly scaled siblings.
-      T6 either covers them or records the omission as a stated limit;
-      what it must not do is inherit "two callers" as the answer.
-- [ ] Thread the scale into `draw_text`'s five call sites. Note the
+      scale walk. The primitive therefore also runs at the start of
+      `run_layout` / `run_layout_as_window_root`, before `sync_visuals`.
+      A tab switch or list append is normalized by the same operation as
+      initial attach; no mutation primitive writes a cache by itself.
+- [ ] Preserve public `TextRenderer::draw_text` as the 96-DPI convenience
+      entry and add a crate-private device-DPI path for the runtime's six
+      scaled callers (the existing five plus the walk). Note the
       borrow order T1 hit: `update_button_label` must read the node's
       scale **before** `self.button_data_mut()`, which borrows all of
       `self`; `update_text_content` / `update_text_style` destructure
@@ -943,12 +971,11 @@ test.
       without making the type public. Audited: `draw_text` has **no
       caller outside `widget.rs`** in the repository, so the change is
       free today; the 26 `get_text_renderer()` test sites all hand the
-      renderer to a constructor rather than drawing with it. **T6 decides
-      what crosses the boundary**, and the options differ: a `u32` DPI
-      keeps `DipScale` internal and hands the callee the value D2D wants
-      (T4's carrier reversal makes `96 × s` exactly the DPI); an `f32`
-      factor is the `factor()` reach F-15 names; a public `DipScale`
-      ships a scale type on the surface DD-004 declined.
+      renderer to a constructor rather than drawing with it. **Resolved at
+      task start:** nothing new crosses the public boundary. The crate-private
+      path takes the `u32` DPI D2D wants; `DipScale` stays private, the factor
+      accessor is not used, and existing Rust-native callers of the public
+      method keep its 96-DPI semantics.
 - [ ] Confirm re-rasterization does **not** change any node's
       `SizeConstraint::Fixed(w, h)` — `measure` is DIP and unaffected by
       scale — so it cannot invalidate layout. This is the property T7
@@ -959,10 +986,15 @@ test.
       `ceil(dip × s)` pixels and device-resolution glyphs, not the API
       pair. Record the choice and the reason in [log.md](./log.md).
 
-**Start gate:** traps #1 (audit row 7) and #6 (Composition surface
-recreation is WinRT-fallible). **End gate:** row 7 closed in the audit
-table; the layout-invalidation non-effect verified; local rendering
-unchanged at 100% — **captured after `cargo build --release
+**Start gate:** re-run all seven decisions rather than inheriting T1's dated
+selection. The responsibility re-audit makes #1 (row 7 and the six scaled
+callers), #2 (brush/cache/tree effects), #3 (the per-node cache), #4 (the
+fixed-extent size branch), #5 (single-writer and scale-independent measure),
+#6 (fallible surface preparation), and #7 (GUI evidence) all applicable.
+**End gate:** row 7 closed in the audit table; the prepare-then-commit cache
+atomicity and every incremental attach path enumerated; the fixed-extent
+branch fired by a test; the layout-invalidation non-effect verified; local
+rendering unchanged at 100% — **captured after `cargo build --release
 --workspace`, never after a host-package build** (T3 finding F-21: a
 host build relinks `wasamo.dll` from a **stale uplifted rlib**, so the
 DLL carries a fresh timestamp and old object code, and the frame
