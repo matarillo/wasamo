@@ -1914,6 +1914,30 @@ impl WidgetNode {
         self.run_layout_as_window_root_at_scale(window_w, window_h, DipScale::from_dpi(dpi))
     }
 
+    /// Leave **this one node's** cached geometry scale behind the window's,
+    /// without touching its children, its Visual geometry or its raster
+    /// marker (M4-Phase 1 T8; T5 finding F-37).
+    ///
+    /// The property under test is that a hit-test traversal divides every
+    /// `visual_rect` readback by the **traversal root's** scale rather than by
+    /// each node's own, so a descendant whose cache is stale still resolves to
+    /// the rectangle it is actually composited at. Constructing that state
+    /// needs a mixed-scale tree *with geometry already written*, and no
+    /// legitimate path produces one: `commit_scale_recursive` writes the whole
+    /// subtree, and the incremental attach paths F-32 enumerated leave a fresh
+    /// node with no geometry to hit-test at all. Hence a seam rather than a
+    /// fixture.
+    ///
+    /// **This is not a production entry and must not become one.** It writes
+    /// the derived copy without the projection that owns it, which is exactly
+    /// the drift trap #3 exists to prevent — deliberately, because the test's
+    /// subject is what survives that drift. A `u32` DPI keeps `DipScale`
+    /// crate-private, in the same shape as the entry above.
+    #[doc(hidden)]
+    pub fn __set_geometry_scale_dpi_for_test(&mut self, dpi: u32) {
+        self.scale = DipScale::from_dpi(dpi);
+    }
+
     fn build_layout_child_slots(&self) -> ChildSlots {
         self.children
             .iter()
