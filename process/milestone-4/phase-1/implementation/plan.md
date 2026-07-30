@@ -1131,9 +1131,16 @@ open landing gates.
       target; geometry-cache commit is infallible and independent; step 4
       refreshes text against a separate last-rasterized-DPI marker. T7 must
       suppress the ordinary post-layout refresh during the re-entrant
-      `WM_SIZE`, then invoke it after `SetWindowPos` returns. Surface failure
-      therefore leaves geometry and hit testing at the new scale while the
-      failed text marker remains stale and retryable.
+      `WM_SIZE`, record completion only after that message's geometry pass
+      succeeds, then invoke the refresh after `SetWindowPos` returns. If
+      `SetWindowPos` fails **or no successful nested geometry pass was
+      observed**, step 3 is not skipped: read the current client rectangle and
+      run the geometry-only entry explicitly at the new `WindowState::scale`
+      before step 4. This fallback is required even when `SetWindowPos`
+      succeeds without changing the size and therefore emits no `WM_SIZE`.
+      After a successful nested or fallback geometry pass, surface failure
+      leaves geometry and hit testing at the new scale while the failed text
+      marker remains stale and retryable.
       **No DD-M4-P1-003 successor is needed for this shape.** Its five steps
       remain in the written order and `WindowState` remains the sole
       authoritative scale; the later node cache is only a derived geometry
@@ -1188,12 +1195,21 @@ open landing gates.
 - [ ] Apply the suggested rectangle (do not ignore it): it preserves the
       window's logical size across the change, which is what the DIP
       contract means.
-- [ ] **Failure handling:** log and survive. A failed re-rasterization
-      leaves a surface at the old resolution — visibly blurry and honest
-      about it; a failed `SetWindowPos` leaves the rectangle unchanged.
-      Neither tears down the window; `wnd_proc` returns `LRESULT(0)`
-      regardless. The runtime is **not** put into `Diverged`, which is
-      for reactive-engine divergence.
+- [ ] **Failure handling:** log and survive. Track successful nested geometry,
+      not merely entry into `WM_SIZE`. If `SetWindowPos` fails or returns
+      without such a pass, obtain the unchanged/current client rectangle and
+      retry step 3 through the explicit-target geometry-only entry. Only a
+      successful geometry pass permits step 4 to advance text markers. If
+      both the nested attempt and fallback geometry fail, log the error, do
+      not refresh text, and leave the geometry cache / raster markers stale
+      rather than claiming convergence. A failed re-rasterization after
+      successful geometry leaves a surface at the old resolution — visibly
+      blurry and retryable; a failed `SetWindowPos` leaves only the outer
+      rectangle unchanged. None of these failures tears down the window;
+      `wnd_proc` returns `LRESULT(0)` regardless. The runtime is **not** put
+      into `Diverged`, which is for reactive-engine divergence. Add a direct
+      test that fires the no-nested-geometry fallback; a success-path handler
+      test does not cover this authored branch.
 - [ ] `WM_GETDPISCALEDSIZE` is **not** handled this phase — recorded as
       forward exposure, not an omission.
 - [ ] **Row 10's site list is ScrollView / Grid / ZStack**, not
@@ -1217,14 +1233,16 @@ open landing gates.
       handler-specific code — the row's own stated reason for not being
       the phase's silent bug.
 
-**Start gate:** trap #2 (the phase's primary side-effect surface) and
+**Start gate:** trap #2 (the phase's primary side-effect surface), trap #4
+(the no-nested-geometry fallback is an authored failure/size branch), and
 trap #5. **End gate:** the **structural side-effect enumeration** —
 DD-003's 13 rows, each stated as updated or verified-unchanged. Rows
 9–13 (`SetRelativeSizeAdjustment`, clip insets, signal registry /
 effect graph / binding state / widget pointers, `MUTATION_CAP` and drain
 accounting, hover and press state) must be verified as unchanged, not
 assumed: a scale change must not enter the reactive drain at all. Full
-independent review before merge.
+independent review before merge. The trap-#4 artifact names and fires the
+fallback test directly.
 
 ---
 

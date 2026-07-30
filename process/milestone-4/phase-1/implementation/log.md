@@ -4244,3 +4244,37 @@ Round-2 new-minor disposition after the remediation:
 R1 is code-remediated but not self-cleared: the branch still requires a delta
 review over `a26f213..HEAD`, and the negative-path environment evidence remains
 a non-review landing gate.
+
+### Independent delta review intake and remediation start gate (2026-07-30)
+
+The independent review of `97c24cf..d2084c7` reports **1 major and 2
+minor**; the gate is not zero-major. The confirmed major is a T7 failure-path
+planning hole rather than a missing T6 primitive: if `SetWindowPos` fails or
+does not emit a nested `WM_SIZE`, no geometry pass consumes the new
+`WindowState::scale`. The plan now requires an explicit step-3 fallback using
+the current client rectangle before text refresh. The accepted success-path
+order remains unchanged. The first minor is confirmed: T6's new ABI preflight
+error branch restores raw ownership but no test fires the restoration. The
+second minor is a confirmed wording error: geometry projection is fallible;
+only the cache commit after it is infallible.
+
+Before code remediation, the implementation-gate traps are selected as
+follows:
+
+| Trap | Applies | Reason / planned artifact |
+|---|---|---|
+| 1 — semantic migration | no | No enum, schema, IR, or variant changes. |
+| 2 — structural side effects | **yes** | Enumerate the failure-state relationship among window scale, Visual geometry, geometry cache, raster marker, installed root, and incoming ABI allocation. |
+| 3 — parallel data | **yes** | Correct the T7 fallback so authoritative scale and derived geometry cannot silently claim convergence; retain separate geometry and raster markers. |
+| 4 — authored branch | **yes** | Extract the raw-ownership preflight transaction into pure generic logic and directly fire its error branch with a drop-counted allocation; T7's future fallback also gains an explicit direct-test requirement in the plan. |
+| 5 — carry-forward | **yes** | Record the no-nested-geometry fallback and its trigger in T7's task list and the T6 retrospective. |
+| 6 — deterministic failure | no | No recurring runtime/test failure initiated this remediation; the injected pure error is a branch control, not a rerolled failure. |
+| 7 — GUI evidence | no, for this delta | The code delta is ownership-only and cannot alter rendering; the already-reviewed T6 frame sets remain the GUI artifact. |
+
+Review lane remains **full independent review** because the containing T6
+change is runtime-structural and GUI-render gated; trap #4 composes with that
+review. The selected ABI shape centralises `Box::from_raw` / `Box::into_raw`
+in a generic preflight transaction. Its test must prove that rejection returns
+the identical live pointer, does not drop it, and permits exactly one later
+destruction. `window::set_root` remains unreachable until preflight succeeds,
+so the installed root is structurally untouched on this branch.
