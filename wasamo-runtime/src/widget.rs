@@ -17,8 +17,9 @@ use windows::{
         Color,
         Composition::{
             AnimationIterationBehavior, ColorKeyFrameAnimation, CompositionAnimation,
-            CompositionColorBrush, CompositionObject, CompositionSurfaceBrush, Compositor,
-            ContainerVisual, InsetClip, SpriteVisual, Visual,
+            CompositionColorBrush, CompositionDrawingSurface, CompositionObject,
+            CompositionStretch, CompositionSurfaceBrush, Compositor, ContainerVisual, InsetClip,
+            SpriteVisual, Visual,
         },
     },
 };
@@ -361,6 +362,32 @@ fn typography_from_i32(v: i32) -> Option<TypographyStyle> {
     }
 }
 
+/// Create the one-to-one surface mapping required by DD-M4-P1-006.
+///
+/// A drawing surface is allocated at `ceil(dip * scale)` whole pixels while
+/// the Visual keeps the exact fractional physical extent. The default brush
+/// is `Uniform` and centred; relying on it scales and displaces the surface.
+/// `None` with zero alignment keeps unit scale and clips excess storage at the
+/// right and bottom Visual bounds.
+fn create_text_surface_brush(
+    compositor: &Compositor,
+    surface: &CompositionDrawingSurface,
+) -> windows::core::Result<CompositionSurfaceBrush> {
+    let brush = compositor.CreateSurfaceBrushWithSurface(surface)?;
+    brush.SetStretch(CompositionStretch::None)?;
+    brush.SetHorizontalAlignmentRatio(0.0)?;
+    brush.SetVerticalAlignmentRatio(0.0)?;
+    Ok(brush)
+}
+
+/// Read the retained natural DIP extent of a Text node without re-measuring.
+fn fixed_extent(width: &SizeConstraint, height: &SizeConstraint) -> Option<(f32, f32)> {
+    match (width, height) {
+        (SizeConstraint::Fixed(width), SizeConstraint::Fixed(height)) => Some((*width, *height)),
+        _ => None,
+    }
+}
+
 // ── WidgetNode ────────────────────────────────────────────────────────────────
 
 pub struct WidgetNode {
@@ -501,19 +528,20 @@ impl WidgetNode {
         let (w, h) = renderer.measure(text, style)?;
         let visual = compositor.CreateSpriteVisual()?;
         // Draw text onto a surface and apply it as a surface brush.
-        let surface = renderer.draw_text(
+        let surface = renderer.draw_text_at_dpi(
             text,
             style,
-            w.max(1.0),
-            h.max(1.0),
+            w,
+            h,
             Color {
                 A: 255,
                 R: 255,
                 G: 255,
                 B: 255,
             },
+            DipScale::IDENTITY.dpi(),
         )?;
-        let brush: CompositionSurfaceBrush = compositor.CreateSurfaceBrushWithSurface(&surface)?;
+        let brush = create_text_surface_brush(compositor, &surface)?;
         visual.SetBrush(&brush)?;
         Ok(Box::new(Self {
             data: WidgetData::Text {
@@ -836,20 +864,20 @@ impl WidgetNode {
 
         // Child visual: text label.
         let label_visual = compositor.CreateSpriteVisual()?;
-        let surface = renderer.draw_text(
+        let surface = renderer.draw_text_at_dpi(
             label,
             label_style,
-            lw.max(1.0),
-            lh.max(1.0),
+            lw,
+            lh,
             Color {
                 A: 255,
                 R: 255,
                 G: 255,
                 B: 255,
             },
+            DipScale::IDENTITY.dpi(),
         )?;
-        let label_brush: CompositionSurfaceBrush =
-            compositor.CreateSurfaceBrushWithSurface(&surface)?;
+        let label_brush = create_text_surface_brush(compositor, &surface)?;
         label_visual.SetBrush(&label_brush)?;
 
         // Parent the label Visual under the background Visual. Its offset and
@@ -1063,26 +1091,27 @@ impl WidgetNode {
         let rt = crate::runtime::get();
         let compositor = &rt.compositor;
         let renderer = &rt.text_renderer;
+        let dpi = self.scale.dpi();
 
         let Some(btn) = self.button_data_mut() else {
             return Err(PropertyError::UnknownId);
         };
         let label_style = btn.label_style;
         let (lw, lh) = renderer.measure(new_label, label_style)?;
-        let surface = renderer.draw_text(
+        let surface = renderer.draw_text_at_dpi(
             new_label,
             label_style,
-            lw.max(1.0),
-            lh.max(1.0),
+            lw,
+            lh,
             Color {
                 A: 255,
                 R: 255,
                 G: 255,
                 B: 255,
             },
+            dpi,
         )?;
-        let label_brush: CompositionSurfaceBrush =
-            compositor.CreateSurfaceBrushWithSurface(&surface)?;
+        let label_brush = create_text_surface_brush(compositor, &surface)?;
         btn.label_visual.SetBrush(&label_brush)?;
 
         btn.label_text = new_label.to_owned();
@@ -1187,6 +1216,7 @@ impl WidgetNode {
         let rt = crate::runtime::get();
         let compositor = &rt.compositor;
         let renderer = &rt.text_renderer;
+        let dpi = self.scale.dpi();
 
         let WidgetData::Text {
             ref mut content,
@@ -1196,19 +1226,20 @@ impl WidgetNode {
             return Err(PropertyError::UnknownId);
         };
         let (w, h) = renderer.measure(new_content, style)?;
-        let surface = renderer.draw_text(
+        let surface = renderer.draw_text_at_dpi(
             new_content,
             style,
-            w.max(1.0),
-            h.max(1.0),
+            w,
+            h,
             Color {
                 A: 255,
                 R: 255,
                 G: 255,
                 B: 255,
             },
+            dpi,
         )?;
-        let brush: CompositionSurfaceBrush = compositor.CreateSurfaceBrushWithSurface(&surface)?;
+        let brush = create_text_surface_brush(compositor, &surface)?;
         self.visual.SetBrush(&brush)?;
 
         *content = new_content.to_owned();
@@ -1221,6 +1252,7 @@ impl WidgetNode {
         let rt = crate::runtime::get();
         let compositor = &rt.compositor;
         let renderer = &rt.text_renderer;
+        let dpi = self.scale.dpi();
 
         let WidgetData::Text {
             ref mut content,
@@ -1234,19 +1266,20 @@ impl WidgetNode {
         }
         *style = new_style;
         let (w, h) = renderer.measure(content, new_style)?;
-        let surface = renderer.draw_text(
+        let surface = renderer.draw_text_at_dpi(
             content,
             new_style,
-            w.max(1.0),
-            h.max(1.0),
+            w,
+            h,
             Color {
                 A: 255,
                 R: 255,
                 G: 255,
                 B: 255,
             },
+            dpi,
         )?;
-        let brush: CompositionSurfaceBrush = compositor.CreateSurfaceBrushWithSurface(&surface)?;
+        let brush = create_text_surface_brush(compositor, &surface)?;
         self.visual.SetBrush(&brush)?;
 
         self.width = SizeConstraint::Fixed(w);
@@ -1666,6 +1699,95 @@ impl WidgetNode {
         Ok(old)
     }
 
+    // ── Window-scale preparation ─────────────────────────────────────────────
+
+    /// Bring every node in this subtree to `target` without ever exposing a
+    /// partially updated geometry-scale cache to `sync_visuals`.
+    ///
+    /// The fallible pass replaces stale text brushes first and deliberately
+    /// leaves all caches untouched. Only after the whole pass succeeds does
+    /// the infallible commit pass update the caches. A failure can therefore
+    /// leave some brushes prepared at the target resolution, but geometry
+    /// remains uniformly at the old scale and the next call retries because
+    /// the stale caches still identify the unfinished work.
+    pub(crate) fn apply_scale_recursive(
+        &mut self,
+        compositor: &Compositor,
+        renderer: &TextRenderer,
+        target: DipScale,
+    ) -> windows::core::Result<()> {
+        self.prepare_stale_text_brushes(compositor, renderer, target)?;
+        self.commit_scale_recursive(target);
+        Ok(())
+    }
+
+    fn prepare_stale_text_brushes(
+        &mut self,
+        compositor: &Compositor,
+        renderer: &TextRenderer,
+        target: DipScale,
+    ) -> windows::core::Result<()> {
+        if self.scale != target {
+            match &self.data {
+                WidgetData::Text { content, style } => {
+                    let (width, height) =
+                        fixed_extent(&self.width, &self.height).ok_or_else(|| {
+                            windows::core::Error::new(
+                                windows::core::HRESULT(0x8000FFFF_u32 as i32),
+                                "Text node does not retain a fixed DIP extent",
+                            )
+                        })?;
+                    let surface = renderer.draw_text_at_dpi(
+                        content,
+                        *style,
+                        width,
+                        height,
+                        Color {
+                            A: 255,
+                            R: 255,
+                            G: 255,
+                            B: 255,
+                        },
+                        target.dpi(),
+                    )?;
+                    let brush = create_text_surface_brush(compositor, &surface)?;
+                    self.visual.SetBrush(&brush)?;
+                }
+                WidgetData::Button(button) | WidgetData::ToggleButton(button) => {
+                    let (width, height) = button.label_size;
+                    let surface = renderer.draw_text_at_dpi(
+                        &button.label_text,
+                        button.label_style,
+                        width,
+                        height,
+                        Color {
+                            A: 255,
+                            R: 255,
+                            G: 255,
+                            B: 255,
+                        },
+                        target.dpi(),
+                    )?;
+                    let brush = create_text_surface_brush(compositor, &surface)?;
+                    button.label_visual.SetBrush(&brush)?;
+                }
+                _ => {}
+            }
+        }
+
+        for child in &mut self.children {
+            child.prepare_stale_text_brushes(compositor, renderer, target)?;
+        }
+        Ok(())
+    }
+
+    fn commit_scale_recursive(&mut self, target: DipScale) {
+        self.scale = target;
+        for child in &mut self.children {
+            child.commit_scale_recursive(target);
+        }
+    }
+
     // ── Layout ────────────────────────────────────────────────────────────────
 
     /// Builds a LayoutNode tree, runs layout, then syncs results back to SpriteVisuals.
@@ -1679,6 +1801,9 @@ impl WidgetNode {
     /// is out of Phase 2 scope and tracked alongside the ABI work in
     /// later phases.
     pub fn run_layout(&mut self, window_w: f32, window_h: f32) -> windows::core::Result<()> {
+        let target = self.scale;
+        let runtime = crate::runtime::get();
+        self.apply_scale_recursive(&runtime.compositor, &runtime.text_renderer, target)?;
         let mut layout_tree = self.build_layout_tree();
         layout::run_layout(&mut layout_tree, window_w, window_h).map_err(layout_error_to_winerr)?;
         self.sync_visuals(&layout_tree, (0.0, 0.0))
@@ -1718,6 +1843,9 @@ impl WidgetNode {
         window_w: f32,
         window_h: f32,
     ) -> windows::core::Result<()> {
+        let target = self.scale;
+        let runtime = crate::runtime::get();
+        self.apply_scale_recursive(&runtime.compositor, &runtime.text_renderer, target)?;
         let mut layout_tree = self.build_layout_tree();
         layout_tree.width = SizeConstraint::Fill;
         layout_tree.height = SizeConstraint::Fill;
@@ -2210,9 +2338,10 @@ fn read_accent_color() -> Color {
 #[cfg(test)]
 mod tests {
     use super::{
-        effective_button_color, ButtonState, ButtonStyle, MutationError, BUTTON_DISABLED_COLOR,
+        effective_button_color, fixed_extent, ButtonState, ButtonStyle, MutationError,
+        BUTTON_DISABLED_COLOR,
     };
-    use crate::layout::{Alignment, CellPlacement, SlotData, ZStackPlacement};
+    use crate::layout::{Alignment, CellPlacement, SizeConstraint, SlotData, ZStackPlacement};
     use windows::UI::Color;
 
     // Minimal stand-in for WidgetNode used only to verify index-check and
@@ -2226,6 +2355,22 @@ mod tests {
         fn new() -> Self {
             Slot { attached: false }
         }
+    }
+
+    #[test]
+    fn fixed_extent_accepts_only_two_fixed_axes() {
+        assert_eq!(
+            fixed_extent(&SizeConstraint::Fixed(12.5), &SizeConstraint::Fixed(7.25)),
+            Some((12.5, 7.25))
+        );
+        assert_eq!(
+            fixed_extent(&SizeConstraint::Fill, &SizeConstraint::Fixed(7.25)),
+            None
+        );
+        assert_eq!(
+            fixed_extent(&SizeConstraint::Fixed(12.5), &SizeConstraint::Shrink),
+            None
+        );
     }
 
     struct StoredSlot {

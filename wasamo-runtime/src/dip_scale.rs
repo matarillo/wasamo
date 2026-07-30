@@ -5,10 +5,9 @@
 //
 // `WindowState` holds the authoritative value, `window::create` realises the
 // DIP window size through `window_size_to_physical` (T4), and the conversion
-// seams call the remaining operations (T5). The one operation still unreached
-// is `surface_pixels`, which T6's text-surface allocation calls; the
-// module-level `allow(dead_code)` that used to stand here is narrowed to that
-// pair, so a genuinely dead item added later is reported rather than absorbed.
+// seams call the remaining operations (T5), and text-surface allocation calls
+// `surface_pixels` (T6). A genuinely dead item added later is therefore
+// reported rather than absorbed by a forward-looking module allowance.
 
 /// The DPI at which one DIP is one physical pixel — the "100%" reference, and
 /// the value the OS reports unconditionally to a process that has declared no
@@ -67,9 +66,10 @@ impl DipScale {
         Self { dpi }
     }
 
-    /// The raw factor, for the consumers that need the number itself rather
-    /// than a conversion — the D2D context resolution `96 × s` at T6, and the
-    /// scale-ratio assertions at T8.
+    /// The raw factor, for consumers that need the number itself rather than a
+    /// conversion — chiefly the scale-ratio assertions at T8. T6 passes the
+    /// retained DPI directly to D2D rather than reconstructing it as
+    /// `96 × s`.
     ///
     /// Derived rather than stored, and exactly as before: this is the same
     /// `dpi as f32 / 96.0` expression the factor field used to be initialised
@@ -78,6 +78,15 @@ impl DipScale {
     /// from this value.
     pub fn factor(self) -> f32 {
         self.dpi as f32 / REFERENCE_DPI as f32
+    }
+
+    /// The OS-reported DPI retained by this scale.
+    ///
+    /// D2D consumes this exact value when a text surface is rasterized. The
+    /// accessor avoids the lossy `96 × factor()` round trip and does not expose
+    /// a new public API surface because `DipScale` itself is crate-private.
+    pub fn dpi(self) -> u32 {
+        self.dpi
     }
 
     // ── Outbound: DIP → physical ─────────────────────────────────────────────
@@ -145,9 +154,10 @@ impl DipScale {
     /// coverage — a defect that appears only at non-integer scales and reads
     /// as "the last letter is cut off" (DD-M4-P1-002 §The rounding contract
     /// for surfaces). The Visual's size stays the exact `f32`
-    /// [`Self::extent_to_physical`] value; the at-most-one-pixel excess in the
-    /// surface is transparent padding, which is what keeps the surface brush's
-    /// texel-to-pixel mapping one-to-one.
+    /// [`Self::extent_to_physical`] value. DD-M4-P1-006 fixes the brush at
+    /// `None` with zero alignment, so the at-most-one-pixel excess storage is
+    /// clipped at the Visual's right and bottom bounds while the visible
+    /// mapping remains one texel to one device pixel.
     ///
     /// The integer return type is part of the contract: this is a pixel count,
     /// not a length a later cast could truncate back. Each axis is floored at
@@ -156,7 +166,6 @@ impl DipScale {
     /// or non-finite input therefore yields one pixel rather than zero, and an
     /// infinite one yields `u32::MAX`, which the WinRT allocation rejects as it
     /// should rather than silently producing a wrong-sized surface.
-    #[allow(dead_code)] // T6's text-surface allocation is the first caller.
     pub fn surface_pixels(self, dip: (f32, f32)) -> (u32, u32) {
         (
             Self::pixel_count(self.to_physical(dip.0)),
@@ -164,7 +173,6 @@ impl DipScale {
         )
     }
 
-    #[allow(dead_code)] // reachable only through `surface_pixels`, above.
     fn pixel_count(physical: f32) -> u32 {
         (physical.ceil() as u32).max(1)
     }

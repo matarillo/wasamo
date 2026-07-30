@@ -267,9 +267,16 @@ pub fn show(state: &WindowState) {
 /// subtree. A previously-installed root is detached and dropped after
 /// disconnecting any registry entries it held. Performs an initial
 /// layout pass against the window's current client size.
-pub fn set_root(state: &mut WindowState, root: Box<WidgetNode>) -> windows::core::Result<()> {
+pub fn set_root(state: &mut WindowState, mut root: Box<WidgetNode>) -> windows::core::Result<()> {
     use windows::Win32::Foundation::RECT;
     use windows::Win32::UI::WindowsAndMessaging::GetClientRect;
+
+    // Prepare the new content tree before detaching the old one. The fallible
+    // brush pass leaves all node caches untouched until it has completed, and
+    // a failure here therefore preserves both the old installed root and a
+    // uniformly-scaled new tree that the caller can discard.
+    let runtime = crate::runtime::get();
+    root.apply_scale_recursive(&runtime.compositor, &runtime.text_renderer, state.scale)?;
 
     if let Some(prev) = state.root_widget.take() {
         prev.for_each_ptr(&mut |p| {
