@@ -132,6 +132,16 @@ fn ceil_surface_mapping_is_observed_at_integer_and_fractional_visual_origins() {
             .cast()
             .expect("drawing surface");
         let surface_size = first_surface.SizeInt32().expect("surface pixel size");
+        assert_eq!(
+            surface_size.Width,
+            first_size.X.ceil() as i32,
+            "surface width must be the exact ceil of the Visual width at identity DPI"
+        );
+        assert_eq!(
+            surface_size.Height,
+            first_size.Y.ceil() as i32,
+            "surface height must be the exact ceil of the Visual height at identity DPI"
+        );
         assert!(
             surface_size.Width as f32 >= first_size.X && surface_size.Height as f32 >= first_size.Y,
             "ceil allocation must cover the exact Visual extent"
