@@ -5221,7 +5221,7 @@ outstanding, and merge to `feat/m4-phase-1` is a separate owner-approval gate.
 
 ### Independent review disposition (2026-07-31)
 
-The independent review of `feat/m4-phase-1..c3795ef` returned **1 major and 1
+The independent review of `feat/m4-phase-1..e80fb7a` returned **1 major and 1
 nit**. The zero-major gate was not met. Both were confirmed and neither was
 argued down.
 
