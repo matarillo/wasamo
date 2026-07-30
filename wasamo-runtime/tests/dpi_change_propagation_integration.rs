@@ -15,12 +15,12 @@
 //! monitor crossing is T11's. The assertions below are deliberately the weakest
 //! ones that still discriminate the branch under test.
 //!
-//! The process has not declared DPI awareness yet (T9 does), so the OS sends
-//! this message to no window on its own. That does not weaken the tests: the
-//! handler reads its new DPI out of `wParam`, so a synthesised message drives
-//! the same code the OS will drive, and it is the only way to drive it before
-//! T9. What a synthesised message cannot show is that a real monitor crossing
-//! delivers a usable suggested rectangle.
+//! The process has not declared DPI awareness yet (T9 does), so the OS does not
+//! drive this message for the per-monitor changes the phase is about. That does
+//! not weaken the tests: the handler reads its new DPI out of `wParam`, so a
+//! synthesised message drives the same code the OS will drive, and it is the
+//! only way to drive it before T9. What a synthesised message cannot show is
+//! that a real monitor crossing delivers a usable suggested rectangle.
 
 #![cfg(windows)]
 

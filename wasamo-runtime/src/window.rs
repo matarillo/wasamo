@@ -420,6 +420,83 @@ enum GeometryProgress {
     Projected,
 }
 
+// The three fallible OS / WinRT steps inside the handler report through the
+// pure functions below rather than branching at the call site.
+//
+// **They are extracted because their failures cannot be provoked.** Measured at
+// T7: `SetWindowPos` on a live window returns `Ok` for negative extents, zero
+// extents, an inverted rectangle, `i32::MIN` and `i32::MAX` alike; it and
+// `GetClientRect` document failure only for an invalid handle, which cannot
+// occur inside that handle's own window procedure. `refresh_text_surfaces_
+// recursive` fails on a WinRT surface or brush call. So none of the three can
+// be fired from a test without mocking the OS surface, which
+// [AGENTS.md](../../AGENTS.md) forbids — and DD-M4-P1-003 §Failure handling
+// asks for each of them to be reported ("log **and** survive", "visibly blurry
+// … and honest about it"), so deleting the diagnostics to satisfy the branch
+// gate would satisfy a process rule by removing behaviour an accepted decision
+// requires.
+//
+// Keeping the *decision* pure is what closes implementation gate trap #4: the
+// arm a test cannot reach through Win32 is reached directly here, and the
+// extent arithmetic that used to sit inside an `unsafe fn` becomes testable
+// with it. What remains untested at the call sites is the mechanical dispatch
+// of a tested decision — an `eprintln!` and a `return`.
+
+/// The diagnostic a failed step-2 rectangle application produces, or `None`
+/// when it succeeded. Step 3's verdict does not depend on it: the fallback
+/// covers a window that kept its previous rectangle.
+fn rectangle_application_diagnostic(
+    result: &windows::core::Result<()>,
+    r: windows::Win32::Foundation::RECT,
+) -> Option<String> {
+    let e = result.as_ref().err()?;
+    Some(format!(
+        "wasamo: could not apply the OS-suggested window rectangle {}x{} at ({}, {}) for a \
+         DPI change: {e}. The window keeps its previous rectangle; the widget tree is \
+         still re-projected at the new scale.",
+        r.right - r.left,
+        r.bottom - r.top,
+        r.left,
+        r.top
+    ))
+}
+
+/// The client extent the fallback should project, or the verdict **and**
+/// diagnostic a failed read implies.
+///
+/// The subtraction is here rather than at the call site so that the one piece of
+/// arithmetic on this path is covered by the same test as the failure arm.
+fn client_extent_or_failure(
+    result: &windows::core::Result<()>,
+    rect: windows::Win32::Foundation::RECT,
+    dpi: u32,
+) -> Result<(f32, f32), (GeometryProgress, String)> {
+    if let Some(e) = result.as_ref().err() {
+        return Err((
+            GeometryProgress::Failed,
+            format!(
+                "wasamo: could not read the client rectangle to re-project the widget tree \
+                 at {dpi} DPI: {e}. No geometry pass ran for this change."
+            ),
+        ));
+    }
+    Ok((
+        (rect.right - rect.left) as f32,
+        (rect.bottom - rect.top) as f32,
+    ))
+}
+
+/// The diagnostic a failed step-4 re-rasterization produces, or `None` when
+/// every stale surface was replaced.
+fn text_refresh_diagnostic(result: &windows::core::Result<()>, dpi: u32) -> Option<String> {
+    let e = result.as_ref().err()?;
+    Some(format!(
+        "wasamo: could not re-rasterize every text surface at {dpi} DPI: {e}. The geometry \
+         is at the new scale; the surfaces that failed stay at their previous resolution \
+         and are retried on the next pass."
+    ))
+}
+
 impl GeometryProgress {
     /// The invariant step 4 hangs off: **text surfaces may be replaced and
     /// raster markers advanced only once a whole-tree projection has
@@ -460,16 +537,22 @@ impl GeometryProgress {
 /// **What that is worth is measured, and it is less than "the order cannot be
 /// got wrong".** Inverting the two calls leaves all four integration tests
 /// green, because the *final* state converges either way. What the inversion
-/// still produces is the stale-factor projection DD-M4-P1-003 warns about, plus
-/// a text refresh at the stale DPI, both corrected a moment later by the
-/// fallback. So the structure turns the defect from **persistent** into
-/// **transient and self-correcting** — no more than that, and the persistent
-/// half is the half no test could have caught before T9.
+/// demonstrably still produces is a **geometry write at the stale factor and a
+/// text refresh at the stale DPI**, both overwritten a moment later by the
+/// fallback. Whether that intermediate state is ever *presented* was not
+/// measured and is not claimed: the whole handler runs inside one message, and
+/// Composition commits on the dispatcher tick, so the compositor may never see
+/// it. DD-M4-P1-003 predicts "visibly wrong for one frame at best"; this task
+/// establishes the wrong intermediate state, not the frame. So the structure
+/// turns the defect from **persistent** into **transient** — no more than that.
 ///
-/// Invisible before T9 either way: an undeclared process is never sent this
-/// message, and at a scale of 1 `SetWindowPos` dispatches no `WM_SIZE` at all
-/// (T4, measured). That is why the ordering is argued structurally rather than
-/// by observing that nothing currently goes wrong.
+/// Hard to observe before T9 either way: the OS does not deliver this message
+/// for the per-monitor changes this phase is about until the process declares
+/// awareness, and at a scale of 1 `SetWindowPos` dispatches no `WM_SIZE` at all
+/// (T4, measured). Not that an undeclared process is categorically unreachable
+/// — Microsoft documents delivery to unaware and system-aware top-level windows
+/// in some cases — which is one more reason the ordering is argued structurally
+/// rather than from "nothing currently goes wrong".
 ///
 /// Failure handling is **log and survive** throughout, per DD-M4-P1-003: no
 /// path here tears down the window, none reports a new error to `wasamo_run`,
@@ -581,16 +664,8 @@ unsafe fn apply_suggested_rectangle(hwnd: HWND, lparam: LPARAM) {
         r.bottom - r.top,
         SWP_NOZORDER | SWP_NOACTIVATE,
     );
-    if let Err(e) = result {
-        eprintln!(
-            "wasamo: could not apply the OS-suggested window rectangle \
-             {}x{} at ({}, {}) for a DPI change: {e}. The window keeps its previous \
-             rectangle; the widget tree is still re-projected at the new scale.",
-            r.right - r.left,
-            r.bottom - r.top,
-            r.left,
-            r.top
-        );
+    if let Some(diagnostic) = rectangle_application_diagnostic(&result, r) {
+        eprintln!("{diagnostic}");
     }
 }
 
@@ -617,18 +692,15 @@ unsafe fn project_current_client_extent(state_ptr: *mut WindowState) -> Geometry
     let hwnd = state.hwnd;
 
     let mut rect = RECT::default();
-    if let Err(e) = GetClientRect(hwnd, &mut rect) {
-        eprintln!(
-            "wasamo: could not read the client rectangle to re-project the widget tree \
-             at {} DPI: {e}.",
-            target.dpi()
-        );
-        return GeometryProgress::Failed;
-    }
-    let (w, h) = target.pair_to_dip((
-        (rect.right - rect.left) as f32,
-        (rect.bottom - rect.top) as f32,
-    ));
+    let read = GetClientRect(hwnd, &mut rect);
+    let physical = match client_extent_or_failure(&read, rect, target.dpi()) {
+        Ok(extent) => extent,
+        Err((verdict, diagnostic)) => {
+            eprintln!("{diagnostic}");
+            return verdict;
+        }
+    };
+    let (w, h) = target.pair_to_dip(physical);
 
     match state.root_widget.as_mut() {
         // A window with no content tree has nothing to project, so the change
@@ -671,15 +743,10 @@ unsafe fn refresh_text_at_new_scale(state_ptr: *mut WindowState) {
         return;
     };
     let runtime = runtime::get();
-    if let Err(e) =
-        root.refresh_text_surfaces_recursive(&runtime.compositor, &runtime.text_renderer, target)
-    {
-        eprintln!(
-            "wasamo: could not re-rasterize every text surface at {} DPI: {e}. The \
-             geometry is at the new scale; the surfaces that failed stay at their \
-             previous resolution and are retried on the next pass.",
-            target.dpi()
-        );
+    let refreshed =
+        root.refresh_text_surfaces_recursive(&runtime.compositor, &runtime.text_renderer, target);
+    if let Some(diagnostic) = text_refresh_diagnostic(&refreshed, target.dpi()) {
+        eprintln!("{diagnostic}");
     }
 }
 
@@ -870,7 +937,90 @@ unsafe extern "system" fn wnd_proc(
 
 #[cfg(test)]
 mod tests {
-    use super::GeometryProgress;
+    use super::{
+        client_extent_or_failure, rectangle_application_diagnostic, text_refresh_diagnostic,
+        GeometryProgress,
+    };
+    use windows::Win32::Foundation::RECT;
+
+    /// A `windows::core::Error` standing in for one the OS would have produced.
+    /// This is not a mock of the OS surface — no Win32 call is replaced; the
+    /// functions under test never make one. It is the value those functions
+    /// receive, constructed directly because the calls that would produce it
+    /// cannot be made to fail (see the note above `GeometryProgress`).
+    fn os_failure() -> windows::core::Result<()> {
+        Err(windows::core::Error::new(
+            windows::core::HRESULT(0x80004005_u32 as i32),
+            "simulated device failure",
+        ))
+    }
+
+    const SUGGESTED: RECT = RECT {
+        left: 100,
+        top: 60,
+        right: 1100,
+        bottom: 810,
+    };
+
+    #[test]
+    fn a_failed_rectangle_application_reports_the_rectangle_and_the_consequence() {
+        assert_eq!(rectangle_application_diagnostic(&Ok(()), SUGGESTED), None);
+
+        let diagnostic = rectangle_application_diagnostic(&os_failure(), SUGGESTED)
+            .expect("a failed application must be reported, per DD-M4-P1-003 log-and-survive");
+        assert!(diagnostic.contains("1000x750"), "{diagnostic}");
+        assert!(diagnostic.contains("(100, 60)"), "{diagnostic}");
+        assert!(
+            diagnostic.contains("keeps its previous rectangle"),
+            "an operator needs the window's resulting state, not just the failure: {diagnostic}"
+        );
+        assert!(
+            diagnostic.contains("still re-projected"),
+            "and needs to know the widget tree does converge anyway: {diagnostic}"
+        );
+    }
+
+    #[test]
+    fn a_failed_client_rect_read_yields_no_projection_and_says_so() {
+        let (verdict, diagnostic) = client_extent_or_failure(&os_failure(), SUGGESTED, 120)
+            .expect_err("a failed read cannot produce an extent");
+        assert_eq!(
+            verdict,
+            GeometryProgress::Failed,
+            "a client extent that could not be read means no geometry pass ran, which must \
+             not permit step 4"
+        );
+        assert!(!verdict.whole_tree_projected());
+        assert!(diagnostic.contains("120 DPI"), "{diagnostic}");
+        assert!(diagnostic.contains("No geometry pass ran"), "{diagnostic}");
+    }
+
+    /// The success arm carries the fallback's only arithmetic, so it is pinned
+    /// beside the failure arm rather than left to the integration tests.
+    #[test]
+    fn a_successful_client_rect_read_yields_the_physical_extent() {
+        let extent = client_extent_or_failure(&Ok(()), SUGGESTED, 120)
+            .expect("a successful read yields an extent");
+        assert_eq!(extent, (1000.0, 750.0));
+    }
+
+    #[test]
+    fn a_failed_text_refresh_reports_that_geometry_already_converged() {
+        assert_eq!(text_refresh_diagnostic(&Ok(()), 120), None);
+
+        let diagnostic = text_refresh_diagnostic(&os_failure(), 120)
+            .expect("a failed re-rasterization must be reported");
+        assert!(diagnostic.contains("120 DPI"), "{diagnostic}");
+        assert!(
+            diagnostic.contains("geometry is at the new scale"),
+            "the whole point of separating the markers is that this failure does not roll \
+             geometry back, and the diagnostic has to say so: {diagnostic}"
+        );
+        assert!(
+            diagnostic.contains("retried on the next pass"),
+            "a stale surface is retryable, not permanent: {diagnostic}"
+        );
+    }
 
     /// The step-4 permission rule, pinned as pure logic.
     ///
