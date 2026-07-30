@@ -1142,9 +1142,16 @@ four of them are reachable only by reading the arm the handler sits beside.
 2. **Suppressing the nested refresh is a correctness property, not fidelity to
    the ADR's step numbering.** The `WM_SIZE` arm as landed discards the geometry
    `Result` and calls `refresh_text_surfaces_recursive` unconditionally. On an
-   ordinary resize that is harmless, because the target does not move: every
-   `raster_scale` already equals it, so the call is a no-op except for retrying
-   a node whose earlier rasterization failed, which is what it is for. Under a
+   ordinary resize that is harmless, because the target does not move — so the
+   call does real work only for a node whose `raster_scale` is *behind* the
+   target, which is exactly what it is for: a node whose earlier rasterization
+   failed, or one attached since the last pass and still carrying the
+   constructor's identity marker. **Neither is a convergence claim**, because
+   the target has not moved: a raster marker advancing to a scale the geometry
+   is already at states nothing false, whatever the geometry pass in the same
+   arm did. (The same reasoning covers `emit::flush_layout`, which has the same
+   shape. The standalone `run_layout_as_window_root` differs — it `?`s on
+   geometry before refreshing — and needs no argument.) Under a
    scale change the target *has* moved, so an unconditional nested refresh
    advances raster markers to the new DPI whether or not the geometry pass that
    was supposed to accompany them succeeded — exactly the convergence claim the
