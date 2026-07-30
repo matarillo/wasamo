@@ -4278,3 +4278,40 @@ in a generic preflight transaction. Its test must prove that rejection returns
 the identical live pointer, does not drop it, and permits exactly one later
 destruction. `window::set_root` remains unreachable until preflight succeeds,
 so the installed root is structurally untouched on this branch.
+
+### Independent delta review remediation result (2026-07-30)
+
+The three findings were remediated in `0f05bea` (pre-code plan / gate record)
+and `1220b10` (ownership branch control and wording correction).
+
+| Finding | Result |
+|---|---|
+| Major — missing geometry when `SetWindowPos` produces no successful nested pass | **Fixed in the T7 contract.** Completion is recorded only after successful nested geometry. Failure, a no-size-change success, or a failed nested projection enters a current-client-rectangle geometry fallback at explicit `WindowState::scale`; text refresh follows only successful geometry. T7 must directly fire this branch. |
+| Minor — ABI ownership restoration untested | **Fixed.** `preflight_boxed_handle_restores_same_live_allocation_on_error` fires the extracted pure transaction's rejection branch. It observes the identical pointer, a live mutation, zero drops at rejection, and exactly one later caller destruction. The installed root is untouched because `window::set_root` is after the successful transaction arm. |
+| Minor — geometry/cache operation called infallible | **Fixed.** Rustdoc now says fallible geometry projection followed by an infallible cache commit, independent from the fallible raster pass. |
+
+**Close-gate artifacts for this delta.** The authoritative window scale is
+unchanged. T7's derived Visual geometry and geometry cache advance together
+only after successful projection; a missing nested message triggers the
+explicit fallback, and failed fallback does not advance raster markers. The
+T6 ABI preflight mutates only the incoming text brushes/markers before attach;
+on rejection it neither calls `window::set_root` nor drops the incoming
+allocation. Its generic transaction is the only raw restore site, and its
+direct branch test is the trap-#4 artifact. The fallback's re-trigger is any
+`SetWindowPos` return without a recorded successful nested geometry pass; this
+is carried in T7's task list and T6's retrospective.
+
+Trap #6 became applicable during implementation: the test's first compile
+deterministically failed because `Result::expect_err`
+requires the `Ok` type (`Box<DropProbe>`) to implement `Debug`. This was not an
+ownership failure. Replacing it with an explicit `match` removed the irrelevant
+bound; the identical targeted command then passed. Final code-tip validation:
+
+- `cargo test -p wasamo-runtime --lib -- --test-threads=1` — 464 passed;
+- `cargo test -p wasamo-runtime --test text_surface_mapping_integration -- --nocapture --test-threads=1` — 3 passed;
+- `cargo build --release --workspace` — green with existing warnings;
+- `cargo test --workspace -- --test-threads=1` — green, 956 tests;
+- `cargo fmt --all -- --check`, `git diff --check` — green.
+
+The branch requires another independent delta review. The separate real
+Compositor-unavailable skip firing remains the external landing blocker.
