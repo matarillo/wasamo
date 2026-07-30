@@ -90,9 +90,10 @@ unsafe fn load_window(ir: &str) -> *mut ffi::WasamoWindow {
 
 /// The witness Text node's live Visual extent and the pixel extent of the
 /// surface actually installed on it. The two are separate facts by design since
-/// T6 — geometry projection and last-rasterized DPI have their own markers — and
-/// every test below reads both, because the interesting failures move one
-/// without the other.
+/// T6 — geometry projection and last-rasterized DPI have their own markers.
+/// Three tests read both. The failed-projection test intentionally reads only
+/// the surface: no geometry pass succeeds there, so it has no projected Visual
+/// extent to treat as a witness.
 unsafe fn witness(window: *mut ffi::WasamoWindow) -> ((f32, f32), (i32, i32)) {
     let root = (*window)
         .root_widget
