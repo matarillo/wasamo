@@ -20,9 +20,15 @@
 //!    never proves that crossing a real monitor boundary delivers the same
 //!    message with a usable suggested rectangle. That half is T11's, and
 //!    neither alone discharges AC7's third requirement.
-//! 2. **The exact-invariance assertion holds because this file chooses the
-//!    rectangle.** It preserves the **DIP client extent**, which is the input
-//!    layout actually receives. The OS's own suggested rectangle preserves the
+//! 2. **The exact-invariance assertion holds because this file preserves the
+//!    DIP client extent**, which is the input layout actually receives —
+//!    and choosing the rectangle is only the first of three things that
+//!    takes. The chosen *physical* client must be one the DIP extent is
+//!    exactly recoverable from at every DPI in the matrix (see
+//!    [`CLIENT_W`]); the realised value must be asserted rather than
+//!    assumed (see `set_client_extent`); and the quantity asserted must be a
+//!    function of that extent, which the per-tile geometry is not and the
+//!    root Visual is. The OS's own suggested rectangle preserves the
 //!    **outer** rectangle instead, and the non-client frame scales by its own
 //!    DPI-indexed metrics rather than by `s` — so on the real path the DIP
 //!    layout input moves by a DIP or two and invariance is approximate. That

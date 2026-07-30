@@ -5150,8 +5150,11 @@ reader of either finds them:
    prove that crossing a real monitor boundary delivers the same message with
    a usable suggested rectangle. That half is T11's, and neither alone
    discharges AC7's third requirement.
-2. The exact-invariance assertion holds **because this file chooses the
-   rectangle** and preserves the DIP client extent. The OS's suggested
+2. The exact-invariance assertion holds **because this file preserves the DIP
+   client extent**, which choosing the rectangle is necessary and not
+   sufficient for: the chosen physical client must be exactly convertible at
+   every DPI in the matrix, the realised value must be asserted, and the
+   quantity asserted must be a function of that extent. The OS's suggested
    rectangle preserves the **outer** rectangle instead, so on the real path
    the DIP layout input moves by a DIP or two and invariance is approximate.
    T11 is where that shows, and it must not read as a failure.
@@ -5215,3 +5218,85 @@ construction and the run id itself belongs to the phase-end batch.
 
 T8's sole landing blocker is closed. Normal review before merge remains
 outstanding, and merge to `feat/m4-phase-1` is a separate owner-approval gate.
+
+### Independent review disposition (2026-07-31)
+
+The independent review of `feat/m4-phase-1..c3795ef` returned **1 major and 1
+nit**. The zero-major gate was not met. Both were confirmed and neither was
+argued down.
+
+**The reviewer verified rather than read** on the load-bearing claims: it
+re-ran the binary against a live Compositor (3/3), re-derived M1 and M2 from
+their descriptions and observed the predicted failures — root extent
+`1125 × 750` against `900 × 600`, and the stale-descendant click at `0`
+against `1` — re-ran the workspace suite and both doc gates, and restored its
+mutations. It pushed back on three things this task had flagged as possibly
+fragile (`row_shape`'s exact-equality grouping, `send_click`'s signed `i16`
+packing, `set_client_extent`'s use of a pre-change frame) and on the review
+lane, finding all four sound for the fixture and input range as landed.
+
+| # | Severity | Finding | Disposition |
+|---|---|---|---|
+| R1 | major | The F-44 correction did not reach the documents that assert the same proposition in other words. `implementation/preamble.md`'s verification-closure item (2) and `plan.md` §T8's positive-control bullet both still say T8 can assert equality **because** it chooses the rectangle, which is exactly what M5 showed to be insufficient — while the F-44 correction record two screens above the second one, and the test's `CLIENT_W` doc, say the opposite. The document contradicts itself | **Confirmed.** Corrected at **six** sites; the enumeration is below and it found four the review did not name. The ADR side is enumerated too, with one row raised to the owner rather than corrected here |
+| R2 | nit | `__window_scale_dpi_for_test`'s safety contract says only "a live `WasamoWindow` pointer" while the body dereferences a raw pointer immediately | **Confirmed.** Now states non-null, aligned, valid for a shared read for the duration of the call, not valid after `wasamo_window_destroy`, not retained, and owning-thread-only. Contract clarification, not an implementation defect |
+
+**R1 is the sixth occurrence of this shape in the phase** (T4 R-2, T5 R-2 and
+its close-gate row 9, T7 R2–R5, and the T4 preamble's own four sites), and the
+fifth time the corrective the plan already carries — *write the falsified
+proposition as one sentence first, then enumerate the documents that assert
+it, then search* — was **run and still under-scoped**. What went wrong this
+time is narrower than "did not enumerate": the enumeration was run against the
+finding's *name* (F-44) rather than against the proposition, so it visited the
+two places that say "F-44" and stopped. The plan's rule says to enumerate the
+asserting documents, and `implementation/preamble.md` is on the standing list
+it gives. It was not opened.
+
+**The falsified proposition, as one sentence:** *"Because T8 synthesises the
+message, it chooses the rectangle, and that is what lets it assert equality
+rather than a tolerance."*
+
+**The corrected proposition:** choosing the rectangle is **necessary and not
+sufficient**. Three conditions carry the equality, and only the first is about
+synthesising: (a) the message is synthesised, so the rectangle is chosen;
+(b) the chosen **physical** client is one the DIP extent is exactly
+recoverable from at every DPI in the matrix — a multiple of 24, since
+`96 = 2^5 × 3` — and its **realised** value is asserted rather than assumed,
+because a requested rectangle the display cannot honour is silently not the
+one applied; (c) the quantity asserted is a **function of** that extent, which
+T8's per-tile geometry is not and its root Visual is.
+
+**Occurrence table**, enumerated before searching and then checked by
+`rg "chooses the rectangle|choosing the rectangle|synthesises the message and|controlled client extent|preserves the client extent|because this file chooses"`
+over `process/milestone-4/phase-1/`, `docs/` and `wasamo-runtime/tests/`:
+
+| Site | Asserts it? | Named by the review? | Action |
+|---|---|---|---|
+| `implementation/preamble.md` §Verification closure item (2) | yes | yes | Corrected in place: the "necessary and not sufficient" clause and the three conditions |
+| `implementation/plan.md` §T8 positive-control bullet | yes | yes | Corrected in place, same three conditions |
+| `implementation/plan.md` §T8 stated-limit bullet | yes | **no** | Corrected: the second stated limit now points at the three conditions rather than at "T8 preserves the client extent" alone |
+| `wasamo-runtime/tests/dpi_scale_matrix_integration.rs` module header, limit 2 | yes | **no** | Corrected. The review read the `CLIENT_W` doc — which was right — and not the header eight lines above it, which asserted the uncorrected form |
+| `implementation/log.md` §T8 end gate, stated limit 2 | yes | **no** | Corrected, same wording as the header |
+| `retrospectives/t8.md` §後続タスク / オーナーへ共有すること | yes | **no** | Corrected |
+| `implementation/plan.md` §T8 re-audit point 1 (the F-44 record) | states the correction | — | Already correct; this is the site the contradiction was *against* |
+| `implementation/log.md` §T8 carry-over audit, F-44 bullet | states the correction | — | Already correct |
+| `dpi_scale_matrix_integration.rs` `CLIENT_W` doc | states the correction | — | Already correct |
+
+**The ADR side, enumerated with its verdict rather than swept in.** The review
+recommended listing it, and listing it is what separates the two rows:
+
+| ADR site | Verdict |
+|---|---|
+| [DD-M4-P1-003 §Context](../decisions/dd-m4-p1-003-dpi-change-propagation.md)'s 2026-07-29 annotation — "exact invariance is a property of a **controlled client extent** … the integration test preserves the client extent and therefore still asserts equality rather than a tolerance" | **Survives.** It says *controlled* client extent, and states preservation as a fact about the test rather than as a consequence of synthesising. Both are true of the landed test. This is the weaker and correct form of the proposition; nothing in M5 touches it. Recorded because "checked and it holds" and "did not look" are different facts |
+| [decisions/preamble.md](../decisions/preamble.md) §Phase 1 verification closure item 2's 2026-07-29 qualification — "the unchanged-results half is exact **because the test synthesises the message and therefore holds the client extent constant**" | **Asserts the falsified causation**, in the `therefore`. **Raised to the owner, not corrected here.** No decision or option is re-chosen, so by the boundary T4 established — *supersede when a reader implementing the original text would not obtain the shipped behaviour; annotate when the decision still produces it and only a statement around it was too strong* — this is at most a third dated annotation, and the annotate route on an Accepted record is the owner's call, as it was at T4. The implementation-side documents now carry the corrected form, so nothing downstream reads the ADR for this |
+
+Post-remediation verification, on the branch tip:
+
+- `cargo fmt --all -- --check`, `git diff --check` — green.
+- `cargo test -p wasamo-runtime --test dpi_scale_matrix_integration -- --test-threads=1` — 3 passed.
+- `cargo test --workspace -- --test-threads=1` — green.
+
+The remediation is documentation plus one doc comment; no test or production
+logic changed, so the owner's per-binary Compositor-unavailable observation
+and the mutation evidence both remain valid. The branch requires a **delta
+review** over the remediation commit before the zero-major verdict stands.
+Merge remains a separate owner-approval gate.

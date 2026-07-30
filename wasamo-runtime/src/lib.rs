@@ -82,7 +82,13 @@ pub mod ffi {
     ///
     /// # Safety
     ///
-    /// `window` must be a live `WasamoWindow` pointer.
+    /// `window` must be non-null, properly aligned, and valid for a shared
+    /// read of a live `WasamoWindow` for the duration of the call. It must
+    /// not be used after `wasamo_window_destroy`, which frees the
+    /// `WindowState` this dereferences. The pointer is read and not
+    /// retained, so no aliasing obligation outlives the call — but the
+    /// runtime is single-threaded by contract and this must be called on the
+    /// owning thread, like every other entry on this type.
     #[doc(hidden)]
     pub unsafe fn __window_scale_dpi_for_test(window: *mut WasamoWindow) -> u32 {
         (*window).scale.dpi()

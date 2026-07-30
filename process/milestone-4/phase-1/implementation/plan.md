@@ -1535,6 +1535,18 @@ same run measured a second constraint no rounding argument predicts: at
       is the stronger test and the one that isolates the handler. What it
       must not do is assert exact equality against an
       OS-shaped rectangle and call that the same claim.
+      **Choosing the rectangle is necessary and not sufficient**
+      (corrected at T8, mutation M5). Three conditions carry the equality
+      and only the first is about synthesising: the *physical* client
+      chosen must be one the DIP extent is exactly recoverable from at
+      every DPI under test — a multiple of 24, since `96 = 2^5 × 3`; the
+      realised value must be **asserted** rather than assumed, because a
+      requested rectangle the display cannot honour is silently not the
+      one applied; and the quantity asserted must be a **function of**
+      that extent, which T8's per-tile geometry is not and its root
+      Visual is. A T8 that had only chosen the rectangle would have
+      asserted an equality about a number the client extent does not
+      reach.
       **"Client extent" now has two readings and they are opposite** (T5).
       Before the inbound seam landed, the client extent layout received
       *was* the physical one; since T5 it is `physical ÷ s`. What T8 must
@@ -1579,10 +1591,12 @@ same run measured a second constraint no rounding argument predicts: at
       same message with a usable suggested rectangle. That half is
       T11's. **A second limit belongs beside it**, from the bullet above:
       the exact-invariance assertion holds because T8 preserves the
-      client extent, and the OS's suggested rectangle preserves the outer
-      one instead — so on the real path the DIP layout input moves by a
-      DIP or two and invariance is approximate. T11 is where that shows,
-      and it must not read as a failure.
+      client extent — **which takes the three conditions that bullet now
+      names, not merely a synthesised message** — and the OS's suggested
+      rectangle preserves the outer one instead, so on the real path the
+      DIP layout input moves by a DIP or two and invariance is
+      approximate. T11 is where that shows, and it must not read as a
+      failure.
 - [x] **Assert that a mixed-scale tree hit-tests correctly from the window
       root** (finding F-37). T5's traversal divides every `visual_rect`
       readback by the **traversal root's** scale, so a tree containing a
