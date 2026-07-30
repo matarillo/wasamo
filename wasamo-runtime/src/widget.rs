@@ -1880,9 +1880,10 @@ impl WidgetNode {
     /// Run window-root geometry at an authoritative window scale.
     ///
     /// This entry deliberately does not refresh text. Window callers compose
-    /// the infallible geometry/cache operation with the fallible raster pass;
-    /// T7 can therefore defer the latter out of the nested `WM_SIZE` while
-    /// preserving DD-M4-P1-003's fixed ordering.
+    /// fallible geometry projection followed by an infallible cache commit
+    /// with the independent, fallible raster pass. T7 can therefore defer the
+    /// latter out of the nested `WM_SIZE` while preserving
+    /// DD-M4-P1-003's fixed ordering.
     pub(crate) fn run_layout_as_window_root_at_scale(
         &mut self,
         window_w: f32,
