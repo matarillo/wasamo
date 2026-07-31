@@ -37,8 +37,9 @@ states; the rectangle does not separate them and never did.
 
 ## 2. The numbers, measured against the landed declaration
 
-An 800 × 600 DIP window on a 120-DPI monitor, `gallery-rust` and the staged
-`gallery-zig` alike:
+An 800 × 600 DIP window on a 120-DPI monitor. The declared column was taken on
+both `gallery-rust` and the staged `gallery-zig` and agrees; the
+`__COMPAT_LAYER` column was taken on `gallery-rust` only.
 
 | | Declared PMv2 | `__COMPAT_LAYER=DPIUNAWARE` |
 |---|---|---|
@@ -50,6 +51,14 @@ An 800 × 600 DIP window on a 120-DPI monitor, `gallery-rust` and the staged
 | Extent the layout engine receives | 785.6 × 562.4 DIP | 784 × 560.8 logical |
 | Gallery tiles per row | 7 | 7 |
 
+Both tile counts are measured here, at this window size, off `t10-shipped-created/`
+and `t10-unaware-created/` — read as tile-fill runs, since no harness emits a
+tile count. The unaware cell first cited T4's three-state table instead, which
+is a reading taken before T5, T6 and T7 landed (independent review finding N3).
+**They are equal, which means the tile count does not separate the two
+postures at this size**: the discriminators are the awareness readback and the
+982-vs-980 client.
+
 Every figure is read from a PMv2 process. The two right-hand columns come from
 the *same executable*; the AppCompat shim sets the process awareness before
 Wasamo code runs, so the declaration is refused and DD-M4-P1-001's failure
@@ -58,12 +67,22 @@ handling tolerates it.
 **A consequence for the existing tooling, measured rather than predicted.**
 [`compare-frames.ps1`](./compare-frames.ps1)'s default insets (`InsetX 12`,
 `InsetTop 44`, `InsetBottom 12`) were chosen against the 96-DPI non-client
-frame. The aware frame's top inset is 38 rather than 39 and its side and
-bottom insets are 9 rather than 10, so **the defaults still clear the frame**
-— by 6 rows at the top instead of 13, and by 2 columns instead of 3. They are
-not broken; the margin shrank. A later phase capturing at a scale above 125%
-should re-derive them rather than inherit them, because the caption grows with
-DPI while the constant does not.
+frame, whose **top inset is 31** — `SM_CYCAPTION` 23 plus an 8-px border — and
+whose side inset is 8. (31, not the 39 that is the frame's total *height*; an
+earlier version of this paragraph mixed the two, and mixed its row basis with
+its column basis on top of that — independent review finding N2.) Measured
+against one basis:
+
+| | top inset | side inset | top margin | side margin |
+|---|---:|---:|---:|---:|
+| 96 DPI — what the defaults were designed against | 31 | 8 | 13 | 4 |
+| 120 DPI, declared PMv2 | 38 | 9 | 6 | 3 |
+| 120 DPI desktop, unaware | 39 | 10 | 5 | 2 |
+
+**The defaults still clear the frame in every row.** They are not broken; the
+margin shrank. A later phase capturing above 125% should re-derive them rather
+than inherit them, because the caption grows with DPI while the constant does
+not.
 
 ## 3. Why the tool must declare — the mechanism has changed
 

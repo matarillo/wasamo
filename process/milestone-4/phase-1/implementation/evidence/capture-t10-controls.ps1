@@ -78,6 +78,7 @@ public static class WinT10 {
     [DllImport("user32.dll")] public static extern bool SetWindowPos(IntPtr h, IntPtr after, int x, int y, int cx, int cy, uint flags);
     [DllImport("user32.dll")] public static extern bool MoveWindow(IntPtr h, int x, int y, int w, int hgt, bool repaint);
     [DllImport("user32.dll")] public static extern IntPtr MonitorFromWindow(IntPtr h, uint flags);
+    [DllImport("user32.dll")] public static extern IntPtr WindowFromPoint(POINT p);
     [DllImport("shcore.dll")] public static extern int GetDpiForMonitor(IntPtr mon, int type, out uint dx, out uint dy);
 }
 '@
@@ -177,6 +178,20 @@ try {
     }
     $residual = "{0}x{1} against target {2}x{3}" -f `
       ((CurClientW) - $ClientW), ((CurClientH) - $ClientH), $ClientW, $ClientH
+    # The loop can also fall out of its bound without converging, in which case
+    # `$iterations` is 11 and every earlier version of this line still said
+    # "reached in 11 iteration(s)" — asserting success on the one path where the
+    # target was missed, next to a residual line that would have said otherwise.
+    # A frame at the wrong client size is not comparable against one at the
+    # right size, so this fails the run rather than recording it.
+    # **This branch has never executed**: every capture in the T10 evidence set
+    # converged in 1 iteration. Named rather than predicted harmless (T9 F-49).
+    if ((CurClientW) -ne $ClientW -or (CurClientH) -ne $ClientH) {
+      Rec ("client target      : {0}x{1} physical — NOT REACHED after {2} iterations" -f $ClientW, $ClientH, $iterations)
+      Rec ("client residual    : {0}" -f $residual)
+      Set-Content -Path $record -Value $lines
+      throw "client did not converge to ${ClientW}x${ClientH}; residual $residual. A frame at a different client size is not comparable, so no capture was taken."
+    }
     Rec ("client target      : {0}x{1} physical, reached in {2} iteration(s)" -f $ClientW, $ClientH, $iterations)
     Rec ("client residual    : {0}" -f $residual)
   }
@@ -217,6 +232,22 @@ try {
   $origin.X = 0; $origin.Y = 0
   [void][WinT10]::ClientToScreen($hwnd, [ref]$origin)
   Rec ("client origin      : ({0},{1})  (screen, physical)" -f $origin.X, $origin.Y)
+
+  # `CopyFromScreen` photographs a screen rectangle, not a window: anything that
+  # got in front of the host between the topmost call and the capture would be
+  # in the frame, and the artifact would not say so. Ask the OS what actually
+  # owns four interior points and fail rather than record a photograph of
+  # something else.
+  $probes = @(@(0.1, 0.1), @(0.9, 0.1), @(0.1, 0.9), @(0.9, 0.9))
+  foreach ($f in $probes) {
+    $pt = New-Object WinT10+POINT
+    $pt.X = $origin.X + [int]($cw * $f[0]); $pt.Y = $origin.Y + [int]($ch * $f[1])
+    $owner = [WinT10]::WindowFromPoint($pt)
+    if ($owner -ne $hwnd) {
+      throw "the point ($($pt.X),$($pt.Y)) inside the client belongs to window $owner, not the host's $hwnd — something is in front of it. Refusing to record a frame of another window."
+    }
+  }
+  Rec ("occlusion check    : 4 interior points, all owned by the host window")
 
   $bmp = New-Object System.Drawing.Bitmap $cw, $ch
   $g = [System.Drawing.Graphics]::FromImage($bmp)

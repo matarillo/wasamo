@@ -37,10 +37,16 @@
 # ── What is and is not exercised before a real change happens ────────────────
 #
 # The capture-and-record step is a single function used by all three legs, so
-# the "before" leg exercises it for real every run. The **DPI-change detection
-# comparison itself is not exercised until a change actually arrives** — that
-# is stated rather than predicted away (T9 finding F-49: a hazard neutralised
-# by reasoning in the same breath is what stops the check being run).
+# the "before" leg exercises it for real every run. The DPI-change detection
+# comparison was **not** exercised until a change actually arrived; the
+# 2026-08-01 03:16 run closed that gap by taking the changed and restored legs
+# through the same branches. Named rather than predicted away while it was open
+# (T9 finding F-49: a hazard neutralised by reasoning in the same breath is
+# what stops the check being run).
+#
+# Still unexercised, and named for the same reason: the PMv2-readback abort,
+# the occlusion abort, and the `GetDpiForWindow == 0` guard. All three fail
+# closed, so the failure mode is a refused run rather than a false artifact.
 #
 # Requires a build produced by `cargo build -p wasamo-runtime --release` then
 # `cargo build --release --workspace` (T1 finding F-5, T3 finding F-21).
@@ -72,6 +78,7 @@ public static class WinT10C {
     [DllImport("user32.dll")] public static extern bool SetWindowPos(IntPtr h, IntPtr after, int x, int y, int cx, int cy, uint flags);
     [DllImport("user32.dll")] public static extern bool MoveWindow(IntPtr h, int x, int y, int w, int hgt, bool repaint);
     [DllImport("user32.dll")] public static extern IntPtr MonitorFromWindow(IntPtr h, uint flags);
+    [DllImport("user32.dll")] public static extern IntPtr WindowFromPoint(POINT p);
     [DllImport("shcore.dll")] public static extern int GetDpiForMonitor(IntPtr mon, int type, out uint dx, out uint dy);
 }
 '@
@@ -150,6 +157,18 @@ function CaptureLeg([string]$leg) {
   $origin = New-Object WinT10C+POINT; $origin.X = 0; $origin.Y = 0
   [void][WinT10C]::ClientToScreen($script:HWND, [ref]$origin)
 
+  # This script interleaves with a human driving the Settings window, so it is
+  # the phase's highest-occlusion-risk capture. `CopyFromScreen` photographs a
+  # screen rectangle and would record whatever is in front without saying so.
+  foreach ($f in @(@(0.1,0.1), @(0.9,0.1), @(0.1,0.9), @(0.9,0.9))) {
+    $pt = New-Object WinT10C+POINT
+    $pt.X = $origin.X + [int]($cw * $f[0]); $pt.Y = $origin.Y + [int]($ch * $f[1])
+    $owner = [WinT10C]::WindowFromPoint($pt)
+    if ($owner -ne $script:HWND) {
+      throw "leg '$leg': the point ($($pt.X),$($pt.Y)) inside the client belongs to window $owner, not the host's $($script:HWND) — something is in front of it."
+    }
+  }
+
   $bmp = New-Object System.Drawing.Bitmap $cw, $ch
   $g = [System.Drawing.Graphics]::FromImage($bmp)
   $g.CopyFromScreen($origin.X, $origin.Y, 0, 0, (New-Object System.Drawing.Size($cw, $ch)))
@@ -164,6 +183,8 @@ function CaptureLeg([string]$leg) {
   Rec ("  non-client frame : {0} wide, {1} tall" -f ($ow - $cw), ($oh - $ch))
   Rec ("  layout extent    : {0} x {1} DIP" -f ($cw / $s), ($ch / $s))
   Rec ("  client origin    : ({0},{1})  (screen, physical)" -f $origin.X, $origin.Y)
+  Rec ("  occlusion check  : 4 interior points, all owned by the host window")
+  Rec ("  alive after leg  : {0}" -f (-not $proc.HasExited))
   Rec ("  frame            : {0}.png  ({1}x{2})" -f $leg, $cw, $ch)
   Rec ""
   Flush
@@ -197,7 +218,12 @@ try {
     Start-Sleep -Milliseconds 500
     $proc.Refresh()
     if ($proc.HasExited) { throw "host exited while waiting for the scale change" }
+    # `-ne $baseline` alone would treat a 0 return — the window gone while the
+    # process lives — as a scale change, and the run would record a false
+    # "changed" leg or a false "no change" summary. Reasoning, not observed:
+    # the per-iteration HasExited check covers the case in practice.
     $now = [WinT10C]::GetDpiForWindow($script:HWND)
+    if ($now -eq 0) { throw "GetDpiForWindow returned 0 while the process is alive — the window is gone; not treating this as a scale change" }
     if ($now -ne $baseline) { $changed = $now; break }
   }
   if ($changed -eq 0) {
@@ -219,6 +245,7 @@ try {
     $proc.Refresh()
     if ($proc.HasExited) { throw "host exited while waiting for the scale to be restored" }
     $now = [WinT10C]::GetDpiForWindow($script:HWND)
+    if ($now -eq 0) { throw "GetDpiForWindow returned 0 while the process is alive — the window is gone" }
     if ($now -eq $baseline) { $restored = $now; break }
   }
   if ($restored -eq 0) {

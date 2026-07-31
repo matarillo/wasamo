@@ -58,6 +58,7 @@ that was made, not as a substitute for capturing.
 | `t6-scaled-surface-identity-a/b/` | T6 review mutation — effective 120-DPI geometry/cache with every text surface and D2D context forced to 96 DPI; the direct positive control for the scaled rasterization path |
 | `t6-r1-final-a/b/` | T6 review remediation — two live six-frame sets from `fad59e2`; mutually byte-identical and byte-identical to `t6-final/`, with the render-neutral R1 distinction fired by the mock-free integration control |
 | `t10-shipped-created/` | T10 — the gallery's full signature at the **landed** declaration, window never moved or resized: outer 1000 × 750, client 982 × 703, **7** tiles per row |
+| `t10-unaware-created/` | T10 — the unaware half of that signature, same executable under `__COMPAT_LAYER=DPIUNAWARE`: outer 1000 × 750, client 980 × 701, **7** tiles per row. So the tile count no longer separates the two postures at this size |
 | `t10-aware-a/b/` | T10 — control A / B, `s = 1.25` side at a controlled 1200 × 720 physical client (960 × 576 DIP) |
 | `t10-unaware-a/b/` | T10 — control A2 / B, `s = 1` side, **the same executable** under `__COMPAT_LAYER=DPIUNAWARE`; also the first rendered evidence of DD-M4-P1-001's tolerated-declaration-failure path |
 | `t10-base-a/b/` | T10 — control A1's "before": the phase base `80d79c4`, built in a separate worktree under its own `CARGO_TARGET_DIR` |
@@ -89,14 +90,16 @@ result would be a size mismatch, not a regression.
   Neither says what moved — an intensity-only rasterization defect can
   land on either side. `-AllowDrift` opts into passing a
   small-delta difference — a judgement to record, never a default.
-  **Its default insets are tuned to the 96-DPI non-client frame**; measured at
-  T10, an aware window's frame is 9 / 38 / 9 / 9 physical against the unaware
-  10 / 39 / 10 / 10, so the defaults still clear it but by a smaller margin.
-  Pass zero insets for client-rectangle captures, and re-derive them above
-  125%.
+  **Its default insets are tuned to the 96-DPI non-client frame**, whose top
+  inset is 31 and side inset 8. Measured at T10, an aware window's frame is
+  9 / 38 / 9 / 9 physical against the unaware 10 / 39 / 10 / 10, so the
+  defaults still clear it — top margin 13 at 96 DPI against 6 aware and 5
+  unaware here, side margin 4 against 3 and 2. Pass zero insets for
+  client-rectangle captures, and re-derive them above 125%.
 - `capture-t10-controls.ps1 -Tag <name> [-Exe <path>] [-Unaware]
   [-ClientW <n> -ClientH <n>]` — one launch, one **client-rectangle** capture,
   and a `measurements.txt` recording the harness's own DPI-awareness readback,
+  an occlusion check over four interior client points,
   the window's awareness and DPI, both rectangles, the non-client frame and the
   extent the layout engine received. Aborts if the harness readback is not
   PMv2. `-ClientW/-ClientH` drives the *client* to an exact physical size by

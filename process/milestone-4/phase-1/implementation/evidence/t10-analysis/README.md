@@ -1,8 +1,10 @@
 # T10 assistant GUI evidence — captures, comparisons and analysis
 
-Every frame here was captured by
-[`capture-t10-controls.ps1`](../capture-t10-controls.ps1) on 2026-08-01, on
-the 125% development desktop (physical 2452 × 1291, logical 1962 × 1033,
+Frames were captured by
+[`capture-t10-controls.ps1`](../capture-t10-controls.ps1), except the three
+control-C legs, which came from
+[`capture-t10-control-c.ps1`](../capture-t10-control-c.ps1). All on
+2026-08-01, on the 125% development desktop (physical 2452 × 1291, logical 1962 × 1033,
 monitor DPI 120), against a build produced by `cargo build -p wasamo-runtime
 --release` followed by `cargo build --release --workspace` (T1 finding F-5,
 T3 finding F-21).
@@ -22,12 +24,25 @@ is recorded (T9 finding F-49). The harness aborts if the readback is not PMv2.
 | Set | Build | Posture | Client (physical) | Purpose |
 |---|---|---|---|---|
 | `t10-shipped-created/` | branch tip | aware | 982 × 703 (created) | The measurement check — the created window, never moved or resized |
+| `t10-unaware-created/` | branch tip | `__COMPAT_LAYER=DPIUNAWARE` | 980 × 701 (created) | The unaware half of the measurement check, so its row is measured here rather than carried from T4 |
 | `t10-aware-a/`, `t10-aware-b/` | branch tip | aware | 1200 × 720 | Control A / B, `s = 1.25` side |
 | `t10-unaware-a/`, `t10-unaware-b/` | branch tip | `__COMPAT_LAYER=DPIUNAWARE` | 1200 × 720 | Control A2 / B, `s = 1` side, **same bytes** |
 | `t10-base-a/`, `t10-base-b/` | `80d79c4` (phase base), separate `CARGO_TARGET_DIR` | inherently unaware | 1200 × 720 | Control A1, "before" |
 | `t10-mutation-inbound/` | branch tip, T5's inbound seam removed at all three sites | aware | 1200 × 720 | The run that shows control B can fail |
 | `t10-aware-restored/` | accepted source after `cargo clean -p wasamo-runtime --release` + workspace rebuild | aware | 1200 × 720 | F-40 restoration |
 | `t10-delivery-check/` | the **staged** `gallery-zig.exe` + `wasamo.dll` handed to T11 | aware | 982 × 703 (created) | The delivered copy runs, not just the build tree |
+
+**Occlusion.** `CopyFromScreen` photographs a screen rectangle, not a window,
+so anything in front of the host at capture time lands in the frame and the
+artifact does not say so. Both harnesses now check four interior client points
+with `WindowFromPoint` and refuse to record a frame if any of them belongs to
+another window; `occlusion check : 4 interior points, all owned by the host
+window` appears in each `measurements.txt` taken after that.
+**The frames committed before the check existed do not carry that line**, and
+their freedom from occlusion rests on inspection — every one was looked at, by
+the author and by the independent review — not on the guard. The guard was
+verified not to false-positive, and a capture taken with it is byte-identical
+to `t10-aware-a` over all 864,000 pixels, so it is capture-neutral.
 
 ### Reproducing the base-commit side
 
@@ -50,20 +65,31 @@ Risk R-9 was closed at T9, whose three-host probe ran `counter-c` /
 the gallery's numbers had only ever been taken under a *throwaway*
 declaration (T4, T5). Measured here against the landed one:
 
-| | outer | client | layout extent | tiles/row |
-|---|---|---|---|---|
-| `t10-shipped-created` | 1000 × 750 | 982 × 703 | 785.6 × 562.4 DIP | **7** |
+| Set | Posture | outer | client | layout extent | tiles/row |
+|---|---|---|---|---|---|
+| `t10-shipped-created` | declared PMv2 | 1000 × 750 | 982 × 703 | 785.6 × 562.4 DIP | **7** |
+| `t10-unaware-created` | `__COMPAT_LAYER=DPIUNAWARE` | 1000 × 750 | 980 × 701 | 784 × 560.8 | **7** |
 
 The rectangle agrees with T4's throwaway-declaration probe and with T9's
 three counter hosts. The tile count is the number plan.md §T10 predicted the
 landed state must show: **9 was the pre-T5 signature**, and a T10 that had
 inherited 9 would have been pinning a half-finished phase.
 
+**Both rows are measured here.** The unaware row was first written by citing
+T4's three-state table, which is a number taken before T5, T6 and T7 landed —
+at the one cell the responsibility re-audit says needed re-taking against the
+landed declaration. Tile counts are read off the frames as tile-fill runs at
+`y = 100`; they are not a field the harness emits.
+
 **The rectangle alone does not separate anything** — T1 measured an unaware
 process at 1000 × 750 too, because DWM stretches the logical 800 × 600 by the
 same factor, and `t10-base-a`'s own record shows the created client at
-980 × 701 for exactly that reason. What separates the states is the pair, and
-`window awareness : PER_MONITOR_AWARE_V2` beside it.
+980 × 701 for exactly that reason. **Nor does the tile count, now that both
+rows read 7**: T4's three-state table could use the pair (rectangle, tiles)
+because its third row read 9, which was the pre-T5 signature. With T5's seam
+landed the two postures agree on both, so what separates them at this size is
+the awareness readback and the two-pixel client difference. The pair that used
+to do the work no longer does.
 
 ## Control A — crispness, before and after
 
@@ -85,10 +111,16 @@ client captures, so there is no non-client frame to exclude):
 measured, and it does not retire F-33.** T5 measured 25 differing pixels a day
 apart and 149 on a session's first launch, over *window-rect* captures whose
 border is alpha-blended against the desktop. These are client-only captures of
-a topmost window taken minutes apart in one session. That is a different
-measurement, not a refutation of the earlier one, and the baseline discipline
-(re-capture, agree two captures per side) is what produced these numbers
-rather than something they license skipping.
+a topmost window. That is a different measurement, not a refutation of the
+earlier one, and the baseline discipline (re-capture, agree two captures per
+side) is what produced these numbers rather than something they license
+skipping.
+**And the strongest repeatability datum here is one this document originally
+missed** (independent review): `t10-control-c/1-before.png` is byte-identical
+to `t10-aware-a/gallery-client.png` — captured **2.5 hours earlier, at a
+different screen position, from a separate process launch, by a different
+script**. The first version of this paragraph explained the zeros as "taken
+minutes apart in one session", which that pair falsifies.
 
 **The pixel counts above do not establish crispness in either direction.** A
 large max delta proves only that the difference is outside the drift bound
@@ -102,21 +134,28 @@ Crops are nearest-neighbour ×5 via [`magnify-crop.ps1`](../magnify-crop.ps1),
 which pins the interpolation mode so the script cannot make either side look
 sharper or softer than it was captured.
 
-Status-bar run, `18 placeholders - Image and hit-testing are M4`:
+Status-bar run. Crop rectangle `(8, 692) 210 × 22`, identical for all three
+postures, so the comparison is over the same region at the same magnification.
+The full string is `18 placeholders - Image and hit-testing are M4` and the
+crop holds its first 26 characters, `18 placeholders - Image and`.
 
 - [`status-base-80d79c4-5x.png`](./status-base-80d79c4-5x.png) — the phase
   base. Stems are two to three pixels wide and unevenly so, with a broad grey
-  halo on both sides of every vertical; the `8` and `e` counters are filled to
-  a muddy mid-grey rather than left open; the hyphen and the dot of the `i`
-  smear across their neighbours. This is a 96-DPI rasterization enlarged by
-  DWM, and the softness is the bitmap stretch.
+  halo on both sides of every vertical; the `8`, `e`, `a` and `o` counters are
+  filled to a muddy mid-grey rather than left open; the hyphen is a **two-row
+  bar with no fully saturated pixel in it**. This is a 96-DPI rasterization
+  enlarged by DWM, and the softness is the bitmap stretch.
+- [`status-unaware-posture-5x.png`](./status-unaware-posture-5x.png) — the
+  branch-tip binary with its declaration refused. Soft in the same way, which
+  is the point of having it: the softness is the posture, not the vintage of
+  the code.
 - [`status-aware-5x.png`](./status-aware-5x.png) — the branch tip. Verticals
   are narrow and consistent stem to stem, edges fall off within one pixel
-  instead of two or three, counters in `8`, `e`, `a` and `o` stay open, and
-  the hyphen is a clean one-pixel bar.
+  instead of two or three, the same counters stay open, and the hyphen is a
+  **single row with saturated pixels through its middle**.
 
-Tile label, `IMG 001 #0`, over the tile fill rather than the window
-background:
+Tile label, `IMG 001 #0`, crop rectangle `(22, 128) 110 × 22` — over the tile
+fill rather than the window background:
 
 - [`tile-base-80d79c4-5x.png`](./tile-base-80d79c4-5x.png) and
   [`tile-unaware-posture-5x.png`](./tile-unaware-posture-5x.png) — both soft.
@@ -167,11 +206,14 @@ than assumed: the aware host divides the physical client by its own window DPI
 (120), and the unaware host is handed a client the OS already divided by the
 monitor's scale. `measurements.txt` names the denominator it used in each run.
 
-**Result: the layouts are identical.** Both frames place 9 tiles per row in 2
-rows, the same three tab buttons at the left of the toolbar, the same three
-action buttons at the right, and the status bar on the same baseline. Element
-order and wrap positions match. The only differences are the glyph
-rasterization described above.
+**Result: the layouts are identical, and bit-identical in position.** Measured
+at the independent review rather than inferred from the frames looking alike:
+the six toolbar button runs sit at exactly `10..69 | 80..177 | 188..295 |
+782..911 | 922..1029 | 1039..1189` in the aware, unaware **and** base frames;
+the tile runs match; the status bar's top edge is `y = 685` in all three.
+Element order and wrap positions do not merely agree to a tolerance — they
+agree exactly. The only differences are the glyph rasterization described
+above.
 
 ### The run that shows control B can fail
 
@@ -183,9 +225,14 @@ production sites — `window::set_root`, the `WM_SIZE` arm, and
 DIP. Same controlled client, same aware posture, and the frame is not subtly
 different:
 
-- **11 tiles per row instead of 9**, the eleventh clipped by the right edge.
+- **11 tiles per row instead of 9.** Measured as tile-fill runs at `y = 100`:
+  nine complete tiles from `x 15..124` to `1015..1124`, then `1140..1199` —
+  **the tenth, 60 of its 110 px, clipped by the right edge**. The eleventh
+  begins at `x 1265`, entirely outside the 1200-px client, and row 2 starts at
+  `IMG 012 #11`, which is what establishes eleven per row rather than ten.
 - **The toolbar's right-hand group is pushed off the window** — `Scroll down`
-  is cut in half and `Scroll up` / `Open lightbox` are gone entirely.
+  is cut off at the right edge (118 of its 130 px, label still legible) and
+  `Scroll up` / `Open lightbox` are gone entirely.
 - **The status bar is gone**, pushed below the client.
 - 92,805 differing pixels against the accepted frame, max per-channel delta
   252.
@@ -235,7 +282,9 @@ structure are preserved, which is what this control asserts.
 **Crispness survived the change**, which no other artifact in this phase
 covers: every earlier crispness frame is at the window's *creation* scale.
 [`status-changed-144dpi-5x.png`](./status-changed-144dpi-5x.png) is the status
-run rasterized at 144 DPI — narrow even stems, counters open in `8`, `e`, `a`
+run rasterized at 144 DPI — crop `(10, 830) 252 × 27`, the same region in DIP
+as the 120-DPI crops, so at ×5 of a 1.2× denser raster it **prints 1.2× larger
+than they do**; the comparison is of stroke quality, not of size — narrow even stems, counters open in `8`, `e`, `a`
 and `o`, a clean one-pixel hyphen. The failure this rules out is T6's
 `t6-scaled-surface-identity` signature: geometry that follows the new scale
 while the text surface stays at the old resolution and is scaled up by the

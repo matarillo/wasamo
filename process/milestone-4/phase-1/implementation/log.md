@@ -6390,9 +6390,9 @@ directory is the first capture taken under its stated conditions.
 |---|---|---|
 | **A1** crispness, phase level | `t10-base-*` (base `80d79c4`) vs `t10-aware-*` | The base build is the wrong implementation, in the only sense R-1 cares about: it is the phase before the phase |
 | **A2** crispness, posture | `t10-unaware-*` vs `t10-aware-*`, **same executable** | The `__COMPAT_LAYER` run *is* the negative side — a build whose declaration was refused |
-| **B** logical layout invariance | `t10-unaware-*` vs `t10-aware-*` at an equal 1200 × 720 physical client | `t10-mutation-inbound` — T5's inbound seam removed at all three sites: 11 clipped tiles per row, the toolbar's right group off the window, the status bar gone, 92,805 differing pixels |
-| **C** path form | **not captured** — see the disposition below | — |
-| Measurement check | `t10-shipped-created` — outer 1000 × 750, client 982 × 703, **7** tiles per row | The rectangle alone separates nothing (T1 measured 1000 × 750 unaware too); the awareness readback beside it is what does |
+| **B** logical layout invariance | `t10-unaware-*` vs `t10-aware-*` at an equal 1200 × 720 physical client | `t10-mutation-inbound` — T5's inbound seam removed at all three sites: eleven tiles per row instead of nine, the tenth clipped by the right edge and the eleventh entirely outside the client; the toolbar's right group off the window; the status bar gone; 92,805 differing pixels |
+| **C** path form | `t10-control-c` — three legs across an owner-driven 125% → 150% → 125% change, the window untouched after the first leg so the rectangle is the OS's | The counterfactual, built at the independent review: upscaling `1-before` by 1.2 — what a 120-DPI surface stretched by the Visual would give — puts the status region at mid/saturated 3.5–4.4 with max horizontal gradient 146–185, against the real `2-changed`'s **0.71 and 223**. That is T6's `t6-scaled-surface-identity` signature, and the intended result and the look-alike are far apart |
+| Measurement check | `t10-shipped-created` and `t10-unaware-created` — outer 1000 × 750 in both, client 982 × 703 against 980 × 701, **7** tiles per row in both | The rectangle separates nothing (T1 measured 1000 × 750 unaware too) and **neither does the tile count**, which is 7 on both rows at this client size; the awareness readback beside them is what does |
 
 **Control B's substitution, stated as what it is.** The `s = 1` side is an
 unaware process on the same 125% desktop, not a 100% monitor. For risk R-2 —
@@ -6407,6 +6407,34 @@ out and renders. Every prior artifact for DD-M4-P1-001's tolerated-failure
 path is headless; this is the first rendered one. It is a by-product of the
 mechanism control B needed, not a control the plan asked for, and it is
 recorded as a measurement rather than promoted to an evidence line.
+
+#### Trap #4 — the start gate's "no" was right about the product and silent about the instrument
+
+Recorded at the independent review (finding N4), and it is the **fourth** time
+this phase has narrowed an inherited or too-broad gate judgment after F-12
+(T2), F-22 (T3) and F-32 (T5).
+
+The start gate marked trap #4 non-applicable because "the scripts' own error
+paths are not product branches". That is true and it is the wrong scope:
+**this task's evidence *is* the scripts' output**, so an authored branch in a
+harness is exactly trap #4's shape, one level out from the product. The
+concrete instance: `capture-t10-controls.ps1`'s measure-and-adjust loop could
+fall out of its bound with `$iterations = 11` and still record "**reached** in
+11 iteration(s)" — asserting success on the one path where the target was
+missed, beside a residual line that would have said otherwise. Never executed;
+every capture converged in 1.
+
+Fixed by making non-convergence throw: a frame at a client size other than the
+target is not comparable against one that hit it, so refusing the capture is
+the honest outcome. Three further branches are named rather than predicted
+harmless — the PMv2-readback abort, the new occlusion abort, and the
+`GetDpiForWindow == 0` guard in the control-C harness. All three fail closed,
+so their failure mode is a refused run, not a false artifact.
+
+The sibling script already had this habit: `capture-t10-control-c.ps1` named
+its own unexercised DPI-change branch instead of predicting it harmless, and
+the analysis README records the moment the owner's run closed that gap. The
+gate judgment and the code disagreed inside one task.
 
 #### Trap #5 — carry-forward
 
@@ -6444,7 +6472,7 @@ tree** — `t10-delivery-check/` records `PER_MONITOR_AWARE_V2`,
 matching the Rust host at the same created size. "The files were copied" and
 "the delivered thing runs" are different facts.
 
-#### Control C — pending a human-driven scale change
+#### Control C — captured, on a human-driven scale change
 
 **Withdrawn: "two frames across a live display-scale change are not obtainable
 on this machine".** That was written as a measurement and it is not one. What
@@ -6539,12 +6567,25 @@ right / bottom in physical pixels:
 - `__COMPAT_LAYER=DPIUNAWARE`, `GetDpiForWindow` 96: **10 / 39 / 10 / 10**
 
 The consequence is a correction to what
-[evidence/compare-frames.ps1](./evidence/compare-frames.ps1)'s defaults mean,
-and it goes the *safe* way rather than the alarming one: `InsetTop 44` was
-chosen against 39 and now clears 38, so it still excludes the whole frame —
-by 6 rows instead of 13. Written down because the margin is shrinking with
-DPI while the constant is not, and a capture above 125% will need it
-re-derived.
+[evidence/compare-frames.ps1](./evidence/compare-frames.ps1)'s defaults
+(`InsetX 12`, `InsetTop 44`, `InsetBottom 12`) mean. **Stated from one basis,
+because the first version of this paragraph mixed two** (independent review
+finding N2): the 96-DPI figure the defaults were designed against is a **top
+inset of 31** — `SM_CYCAPTION` 23 plus an 8-px border — not the 39 that is
+the frame's total *height*. The paragraph above gives its own reason for
+taking a direct probe — "deriving top-inset from the total would have been
+arithmetic where a measurement was available" — and then made exactly that
+conflation one sentence later.
+
+| | top inset | side inset | top margin | side margin |
+|---|---:|---:|---:|---:|
+| 96 DPI (the design basis) | 31 | 8 | 13 | 4 |
+| 120 DPI, aware (measured) | 38 | 9 | 6 | 3 |
+| 120 DPI desktop, unaware (measured) | 39 | 10 | 5 | 2 |
+
+The defaults still exclude the whole frame in every row — the correction goes
+the safe way — but the margin shrinks as DPI rises while the constant does
+not, so a capture above 125% needs them re-derived rather than inherited.
 
 #### Local gates
 
@@ -6557,3 +6598,63 @@ re-derived.
 - `git status --porcelain wasamo-runtime/` — empty. The only mutation this
   task made is reverted, and the restored build's frame is byte-identical to
   the pre-mutation one over all 864,000 client pixels.
+
+### Independent review disposition (2026-08-01)
+
+Full independent review of the whole branch. **1 major, 5 minor, 6 nits, all
+confirmed**, none disputed. The reviewer re-measured every quantitative claim
+independently — re-implementing the pixel comparator with `LockBits`, counting
+tile-fill runs, template-matching the magnified crops back to their sources,
+running the host under both postures, and running the suite — and **every
+number reproduced exactly**. It reported zero instances of "evidence a wrong
+implementation would also produce" and zero instances of "a hazard named and
+then dismissed by an unmeasured prediction".
+
+**Every finding is in the prose describing the evidence, not in the evidence.**
+For a task whose entire deliverable is claims drawn off frames, that is the
+relevant surface rather than a mitigation.
+
+| # | Severity | Finding | Disposition |
+|---|---|---|---|
+| J1 | **major** | The **trap #7 close artifact still said control C was "not captured"**, with `—` in its falsifier column, and the section heading still read "pending". Control C is documented 100 lines further down *in the same file*, in `evidence/README.md`, in the analysis README, and the plan checkbox was flipped in the same commit. A reviewer directed at the gate artifact would conclude control C was open. Also: `capture-t10-control-c.ps1` was a materially new approach with new branches and landed with **no gate re-record**. | **Fixed.** Row rewritten with the artifact and its falsifier; heading corrected; the trap #4 section above records the gate delta the control-C harness should have carried. |
+| N1 | minor | The mutation frame's description did not match the frame. Measured tile-fill runs at `y = 100`: nine complete tiles then `1140..1199` — **the tenth** clipped at 60 of 110 px, with the eleventh entirely outside the client. The prose said "the eleventh clipped by the right edge". `Scroll down` retains 118 of 130 px, not "cut in half". `log.md` said "11 clipped tiles per row", which disagreed with the README. | **Fixed** in both documents, with the run positions recorded. Re-measured independently before editing. |
+| N2 | minor | The `compare-frames.ps1` inset-margin arithmetic was wrong in two documents in two different ways, and they disagreed. `log.md` said `InsetTop 44` "was chosen against 39", but 39 is the 96-DPI frame's total **height**; the top inset is **31**. On the "39" reading the margin *grew* 5 → 6, contradicting the next sentence. `t10-capture-coordinates.md` compared rows on one basis and columns on another. | **Fixed.** Both now state one basis with a table: 96 DPI 31/8 → margins 13/4; 120 DPI aware 38/9 → 6/3; unaware here 39/10 → 5/2. This matters beyond tidiness because the coordinates file is what T12 folds into normative `verification-environments.md`. |
+| N3 | minor | The unaware "tiles per row = 7" in the coordinates table was **neither measured by T10 nor cited** — it came from T4's three-state table, taken before T5/T6/T7 — at the one cell the responsibility re-audit says needed re-taking against the landed declaration. It breached this task's own trap-#2 claim that "every number in T10's prose is either measured by T10 or cited to the task that owns it". The table header also spanned `gallery-rust` and `gallery-zig` across a column only ever run on `gallery-rust`. | **Fixed by measuring it**: `t10-unaware-created/` is a new `-Unaware` capture at the created size, counted at **7**. Header scoped. A by-product worth recording: **the tile count no longer separates the two postures at this size** — both read 7 — so the awareness readback and the 982-vs-980 client are the only discriminators left. The trap #7 row now says so. |
+| N4 | minor | `capture-t10-controls.ps1`'s measure-and-adjust loop could exit unconverged and still record "reached in 11 iteration(s)". Never executed. The start gate marked trap #4 non-applicable on grounds that are right about the product and silent about the instrument, which *is* this task's evidence. | **Fixed**: non-convergence throws. Recorded as the phase's fourth narrowed gate judgment in the trap #4 section above. Three further branches named rather than predicted harmless. |
+| N5 | minor | Post-control-C staleness: the analysis README said "every frame here was captured by `capture-t10-controls.ps1`" when three came from the other script; `log.md` said "two evidence scripts, nine frame sets" against three and twelve; the retrospective's count was one short even before control C. | **Fixed** in all three. |
+| T1 | nit | The crispness prose described "the dot of the `i`" in a crop that contains no lowercase `i`, and a hyphen "smearing across its neighbours" that is space-separated. The paired aware claim was accurate and measurable. | **Fixed**, and replaced with the reviewer's measurement: the hyphen is a two-row bar with no saturated pixel in the base and a single row with saturated pixels in the aware frame. |
+| T2 | nit | The crop rectangles were recorded nowhere — `magnify-crop.ps1` prints them to the console only — so the fairness of the comparison that carries control A was not auditable from the committed artifacts. The reviewer recovered them by patch-matching and confirmed the comparison **is** fair. | **Fixed**: rectangles recorded beside each pair, including the note that the 144-DPI crop is the same region in DIP and therefore prints 1.2× larger. |
+| T3 | nit | `status-unaware-posture-5x.png` was committed and never referenced. | **Fixed**: referenced, and it earns its place — it shows the softness is the posture rather than the vintage of the code. |
+| T4 | nit | Neither harness verified that the photographed region belonged to the target window. `CopyFromScreen` takes a screen rectangle; the control-C capture interleaves with a human driving Settings and is the phase's highest-occlusion-risk shot. | **Fixed**: both harnesses check four interior client points with `WindowFromPoint` and refuse to record otherwise. **The already-committed frames do not carry the line** — their freedom from occlusion rests on inspection, by the author and by the reviewer, and that is stated rather than implied. The guard was verified not to false-positive and a capture taken with it is byte-identical to `t10-aware-a`, so it is capture-neutral and the committed set stands. |
+| T5 | nit | `capture-t10-control-c.ps1` would read a `GetDpiForWindow` of 0 — window gone, process alive — as a scale change. Reasoning-only; guarded in practice by the per-iteration `HasExited` check. | **Fixed**: 0 throws. |
+| T6 | nit | `handoff.md`'s three new T10 rows sit inside a table broken by a stray blank line introduced at `dedd327` on 2026-07-28, **before T10** — everything after it renders as literal pipe text. Pre-existing, but T10's trap-#5 artifact points at those rows. | **Fixed**: blank line removed. Pre-existing defect, repaired because this task's own close artifact is unreadable without it. |
+
+**The review also strengthened three claims the task had stated more weakly
+than the evidence allowed**, and those are folded in rather than left in the
+review:
+
+- **Control B's layouts are not merely equivalent but bit-identical in
+  position.** Toolbar button runs are the same six intervals across aware,
+  unaware and base; tile runs match; the status bar's top edge is `y = 685`
+  in all three.
+- **Control C's invariance holds in DIP, measured.** At 144 DPI the tiles sit
+  at `x 18..149`, pitch 150 — 12 DIP origin, 88 DIP width, 100 DIP pitch,
+  identical to the 120-DPI legs' 15..124, pitch 125. The status bar is 42
+  physical rows at 144 DPI and 35 at 120, both 28 DIP.
+- **Control C's crispness claim has a falsifier after all.** It shipped
+  without one. The reviewer constructed the counterfactual — `1-before`
+  upscaled 1.2×, which is what a 120-DPI surface stretched by the Visual
+  would look like — and measured mid/saturated 3.5–4.4 with max horizontal
+  gradient 146–185 against the real frame's 0.71 and 223. Recorded in the
+  trap #7 row.
+
+**One observation the review made that the task should have made itself**:
+`t10-control-c/1-before.png` is byte-identical to `t10-aware-a/gallery-client.png`
+captured 2.5 hours earlier, at a different screen position, from a separate
+process launch. That is a stronger repeatability datum than the three pairs the
+analysis README cites, and it supersedes that section's explanation ("taken
+minutes apart in one session"). Folded into the README.
+
+**Not verified by the reviewer, and left unverified**: the `cargo clean -p
+wasamo-runtime --release` "9 files, 6.9 MiB" figure, which is not retroactively
+checkable. It is a console reading recorded at the time.
