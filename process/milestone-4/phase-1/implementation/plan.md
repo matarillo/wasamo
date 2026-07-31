@@ -1780,17 +1780,34 @@ before the start gate closed.
    not evidence that it did.
 
 **Two new test binaries, and the cost is accepted rather than worked
-around.** DD-001's verification names two different facts — the level in
-force, and what happens when the declaration does not take effect — and the
-second requires a process whose awareness was set *before* `wasamo_init`,
-which contaminates the first. They cannot share a binary. Folding either
-into `dpi_scale_matrix_integration.rs` was rejected for the reason T8
-rejected the symmetric move into T7's binary: the ADR's evidence lines are
-easier to cite as named artifacts than as tests buried in a file about
-something else. Each new binary re-opens the per-binary
+around.** Test-only: two `.rs` files under `wasamo-runtime/tests/`, which cargo
+compiles one-executable-per-file and runs as separate processes. No
+`Cargo.toml` or `build.rs` change, and `cargo build --release --workspace`
+produces the same artifacts as before — nothing is added to any shipped
+surface. Stated because "binary" reads as a product artifact and this is not
+one.
+
+DD-001's verification names two different facts — the level in force, and what
+happens when the declaration does not take effect — and the second requires a
+process whose awareness was set *before* `wasamo_init`, which contaminates the
+first. **Those two cannot share a process**; that half is a hard constraint,
+not a preference. Each new file re-opens the per-binary
 Compositor-unavailable observation (T6 round-1 R3) — **a landing blocker
-closed by an owner run, not by this task**, and one owner session closes
-both.
+closed by an owner run, not by this task**, and one owner session closes both.
+
+**Only one of the two was ever separable, and the reason for separating it was
+corrected by the owner (2026-07-31).** The effective-level test has no
+process-isolation requirement and could have gone into
+`dpi_scale_matrix_integration.rs`, taking the observation count from two to
+one. This plan first justified keeping it apart on the ground T8 used against
+the symmetric move into T7's binary — that an ADR evidence line is easier to
+cite as a named artifact. **The owner ratified the split on different and
+better grounds**: separate files are easier to maintain, and the saving was
+mis-weighed against the wrong denominator — one fewer observation out of a
+21-file suite is not a saving at all. **The lesson is about how the trade-off
+was presented, not about which way it went**: a cost was offered against a
+quality (legibility) without stating what fraction of the whole that cost is,
+which is the shape that makes a reviewer unable to decide.
 
 **Closed 2026-07-31.** Landed as **one code commit** — the declaration alone
 leaves five tests red across two binaries, and the entry-clear alone is an ABI
