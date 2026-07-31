@@ -2004,10 +2004,15 @@ on-disk artifact as every local run, so the difference is the session. The
 correction discards the pre-declaration's result, reads the level actually in
 force, and moves every assertion behind the guard; it is verified in the
 losing direction by simulation and its branch still fires under T9-M1 and
-T9-M2. Details in [log.md](./log.md) §F-49. **A re-run is owed**, and this
-time with `-- --nocapture`, because a skipped test prints `ok` and its named
-skip line goes to stderr — so the first run cannot say whether the *other*
-binary skipped or merely ran.
+T9-M2. Details in [log.md](./log.md) §F-49.
+
+**Closed 2026-07-31 by a second owner run**, with `-- --nocapture` — needed
+because a skipped test prints `ok` and its named skip line goes to stderr, so
+the first run could not say whether the *other* binary skipped or merely ran.
+Both binaries print their named skip line and pass. The repaired build is what
+executed, and the filename hash does not show it (cargo derives that hash from
+metadata, not content); what shows it is that the pre-repair code panicked
+before reaching the helper and so could never have printed a skip line.
 
 ---
 

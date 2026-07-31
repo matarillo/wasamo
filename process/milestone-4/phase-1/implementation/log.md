@@ -6028,7 +6028,48 @@ of `982 × 703`, taken two days earlier through a different route.
 - The throwaway probes — the declaration `eprintln!` and the four-symbol
   compile check — are reverted; `git status` carries only the intended diff.
 
-#### Landing blocker
+#### Landing blocker — **closed 2026-07-31 by owner run, after one round of repair**
+
+Both binaries print their named skip line and pass on a session where
+`wasamo_init` returns `0x80070005`:
+
+```
+running 1 test
+skipping effective DPI awareness level: runtime compositor unavailable
+test a_windows_effective_awareness_context_is_per_monitor_aware_v2 ... ok
+
+running 1 test
+skipping tolerated declaration failure: runtime compositor unavailable
+test a_host_that_already_declared_keeps_its_level_and_is_told_ours_did_not_take ... ok
+```
+
+**Which build ran is established rather than assumed**, and the obvious check
+does not establish it. Cargo's test-executable filename hash
+(`...-1b13d4adc4b6727c.exe`) is derived from package / target / profile
+metadata, **not from content**, so it was byte-identical across the F-49 repair
+and cannot distinguish the two versions — a freshness signal that looks
+authoritative and is not, in the family of F-5 and F-21. What does establish
+it is the output itself: the pre-repair code panicked at its `expect` **before**
+reaching `run_on_owning_runtime_thread_or_skip`, so it could not print
+`skipping tolerated declaration failure` under any circumstances. That line is
+in the run. The repaired code is what executed.
+
+**The first run of this gate is what produced F-49** — the observation was
+owed twice, was run once, failed once, and closed on the second run against
+the repair. Recorded that way rather than as "closed", because a gate that
+found a defect on first execution is the evidence that the gate is worth
+having, and this phase has three prior instances where it found nothing.
+
+**It also verified the repair in its target environment**, which the local
+simulation could only approximate: the simulation forced the pre-declaration
+to lose on a machine with a live Compositor, so it exercised the assertion
+path; this run exercised the skip path on a machine where the awareness was
+already set *and* the Compositor was absent. Both halves of the repair are now
+measured, on the environments that distinguish them.
+
+---
+
+*The paragraphs below are the pre-run record, kept as written.*
 
 Two new binaries, so the per-binary Compositor-unavailable observation is owed
 twice (T6 round-1 R3). **Open at the time of writing.** The run is the
