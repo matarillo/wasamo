@@ -6229,3 +6229,99 @@ this task adds to the record: **when a fixture is claimed to be
 machine-independent, the claim has to be evaluated at each machine the fixture
 will actually run on** — for this repository that is 96 (CI) and 120 (dev), and
 an assertion is only as strong as its weakest one.
+
+---
+
+## T10 — Assistant GUI evidence (positive controls A, B, and C's path form)
+
+### Carry-over audit and responsibility re-audit (2026-08-01, before start gate)
+
+Task branch `feat/m4-phase-1-t10`, cut from `feat/m4-phase-1` = `1b3ee59`.
+
+**Carry-over into T10, read out of the T1–T9 retrospectives and
+[handoff.md](./handoff.md) rather than out of §T10 alone.** Nine items name
+T10 as a consumer; each is listed with what it obliges here.
+
+| From | Proposition | Obligation on T10 |
+|---|---|---|
+| F-5 / F-21 (T1, T3) | A host-package build relinks `wasamo.dll` around a stale uplifted rlib, silently and green | `cargo build -p wasamo-runtime --release` then `cargo build --release --workspace` before **every** capture |
+| F-40 (T6) | Two source trees sharing one cargo target directory make cargo report the wrong one fresh | The base-commit tree gets its own `CARGO_TARGET_DIR`; every mutation run ends with a package clean and an accepted-source rebuild |
+| F-33 (T5) | A committed frame set is not a baseline, and one capture is not a baseline | Re-capture both sides in the session that compares them; agree ≥2 captures per side; `compare-frames.ps1` exits non-zero on any difference and its delta classifies nothing |
+| F-28 / P3 (T4) | The client rectangle does not scale by `s` | Control B is driven from a controlled **client** rectangle, not a controlled outer one |
+| T8 | A DIP client that is a multiple of 24 is an integer physical size at 96 / 120 / 144 / 192 | Control B's target is 960 × 576 DIP |
+| F-27 (T4) / T5 | Rows 1 and 3 of the three-state table share a rectangle, rows 1 and 2 share a tile count; the third row's 9 is the pre-T5 signature and must now read 7 | The measurement check reports the **pair**, and does not inherit 9 |
+| F-34 (T5/T6) | Between T5 and T6 the tree occupies 1/1.25 of the client, and after T6 it must not | A capture that still looks small after T6 is a defect, not a known intermediate |
+| F-48 (T9) | An unaware observer reads an aware window's rectangle in virtualized coordinates | Every measuring script declares PMv2 **and says so in the artifact** |
+| F-49 (T9) | A call that arranges OS state may fail; the arrangement is not the same fact as the result | The scripts also **read the level back** and print it, rather than trusting the call |
+
+**Responsibility re-audit — what T10 should be, not what §T10 said.**
+Three of §T10's items did not survive contact with the current state of the
+phase, and the plan was revised before any capture was designed.
+
+1. **The window-measurement bullet was written as T10's closure of risk
+   R-9, and R-9 has been closed since T9.** The preamble records it closed;
+   the plan did not. What is genuinely open is narrower and is now stated
+   narrowly: T9 probed the three **counter** hosts, and tiles-per-row is a
+   **gallery** property, so the gallery's signature has only ever been taken
+   under a *throwaway* declaration (T4, T5). T10 takes it against the landed
+   one. Saying "T10 closes R-9" would have been the phase's own recurring
+   defect — a claim wider than its object — in the task whose whole content
+   is evidence.
+2. **Control A's "before" was never defined**, and the two candidate
+   referents answer different questions. The phase-level pair (base commit
+   vs branch tip) is what risk R-1 is about; the posture pair (one binary,
+   declaration allowed vs denied) is what isolates the declaration. Both are
+   run, and neither is described as doing the other's work.
+3. **Controls B and C assumed a display-scale change this machine cannot
+   make.** Measured rather than assumed — see the start gate below. B is
+   restructured onto a mechanism that exists; C is raised to the owner
+   instead of being quietly downgraded or quietly forced.
+
+**Measurements taken before the plan was revised** (feasibility, not
+evidence — the evidence captures come after the start gate):
+
+- `gallery-rust.exe` at the branch tip, probed from a PMv2 harness that
+  reads its own level back: no environment override gives `level=PMV2
+  GetDpiForWindow=120 outer=1000x750 client=982x703`, matching T4's and
+  T9's independent measurements. With `__COMPAT_LAYER=DPIUNAWARE` in the
+  child environment it gives `level=UNAWARE GetDpiForWindow=96
+  outer=1000x750 client=980x701`. The window comes up in both, so the
+  AppCompat shim gives a scale-1 run of the **shipped bytes** and
+  simultaneously exercises DD-M4-P1-001's tolerated-declaration-failure
+  path in a real host.
+- Display scale is not changeable here. One monitor, RDP session on
+  `Microsoft Remote Display Adapter`, physical 2452 × 1291 against logical
+  1962 × 1033.
+  `DisplayConfigGetDeviceInfo(DISPLAYCONFIG_DEVICE_INFO_GET_DPI_SCALE)`
+  returns `ERROR_GEN_FAILURE` (31) for the one active source.
+  `HKCU\Control Panel\Desktop` carries `Win8DpiScaling = 0`, no `LogPixels`,
+  and no `PerMonitorSettings` subkey. `SPI_GETLOGICALDPIOVERRIDE` reads 0.
+  A **no-op** `SPI_SETLOGICALDPIOVERRIDE(0)` returns TRUE — recorded as
+  "the entry point exists", **not** as "a real change would work". The
+  distinction is F-49's: arranging OS state and succeeding at it are
+  different facts, and this task will not write the second one down until
+  something measures it.
+
+### Start gate (recorded 2026-08-01, before any capture or script)
+
+Review lane: **full independent review**, as
+[preamble.md §Review lanes](./preamble.md#review-lanes) assigns it
+("GUI-render evidence"). Re-checked rather than inherited and unchanged: the
+task's entire deliverable is rendered frames and the claims drawn off them.
+
+| # | Applies | Reason and planned close artifact |
+|---|---|---|
+| 1 — semantic migration / call sites | **no** | T10 lands no production code, no enum, no schema and no traversal, so there is no call site to classify. The analogous "did the enumeration cover everything" question is real here but lands on prose, and is carried by the trap-#2 row below rather than being smuggled in under this one. |
+| 2 — structural side effects | **yes**, in trap #3's documentation sense | No runtime state changes, but T10 produces derived prose that restates measurements owned by §T4, §T5, §T9 and the ADR set — exactly the second-source-of-truth analogue. Close by citing the owning document for every inherited number and marking which numbers this task measured itself. |
+| 3 — parallel / derived data | **yes** | The phase has narrowed an inherited "no" here twice (F-22 at T3, F-32 at T5) and is not inheriting a third. The live instance is documentary: `evidence/README.md` is a parallel index of which frame set evidences which claim, and it goes stale the moment a set is added without updating it — which is what made T3's `after/` a trap. Close by updating the README in the same commit as the frames. |
+| 4 — authored branch | **no** | No reject, diagnostic or size branch is authored. The scripts' own error paths are not product branches. **Not inherited**: re-decided here, and it is a real "no" rather than a formality because T10 adds no code the product runs. |
+| 5 — carry-forward | **yes** | Two carriers are already visible: the re-derived capture coordinates that T12 turns into `verification-environments.md` Observation 4, and the runnable-set delivery that T11 consumes. Record each with a re-trigger criterion. |
+| 6 — deterministic failure | **yes** | Named in the gate line because this task's failure mode is *re-shooting*. A capture that disagrees with a number recorded at T4 / T5 / T9 is a deterministic failure to root-cause; F-33 measured a real drift band, and the temptation is to file any disagreement into it. The rule for this task: a disagreement is rooted, and the drift band is only invoked for differences whose shape was measured to match it. |
+| 7 — GUI positive control | **yes** | The gate's substance. Every control ships with the run that shows it can fail: A with the posture pair and the phase-level pair, B with the inbound-seam mutation whose signature T5 measured (9 tiles against the accepted 7). |
+
+The approach is constrained before any script is written: every harness
+declares PMv2 and prints its own readback; the base tree builds under a
+separate `CARGO_TARGET_DIR`; controls A2 and B use `__COMPAT_LAYER` rather
+than a source mutation, so only control B's falsification run is a mutation
+build at all; and control C is raised to the owner rather than resolved by
+the assistant on the owner's own desktop.
