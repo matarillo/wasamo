@@ -2070,6 +2070,25 @@ are in
       | aware, correction absent | 800 × 600 | 782 × 553 | **7** |
       | aware, correction present, **T5's inbound seam still absent** | 1000 × 750 | 982 × 703 | 9 |
 
+      **Every number in that table is unreadable from a DPI-unaware tool**
+      (T9 finding F-48, measured). A process that has not declared awareness
+      is answered by `GetWindowRect` / `GetClientRect` in *virtualized*
+      coordinates — the real rectangle divided by the system scale — so an
+      unaware measurement script reads the aware-and-corrected window as
+      `800 × 600` and lands on the "aware, correction absent" row of this
+      very table. Measured at T9: the first three-host probe reported
+      `800 × 600` for windows that are really `1000 × 750`, and declaring
+      the probe Per-Monitor-Aware V2 with no other change turned the same
+      readings into `1000 × 750` / `982 × 703`. **So T10's measurement
+      tooling — and any screenshot harness that derives a crop rectangle,
+      a click point or a cursor position — must declare its own awareness
+      first, and must say in the artifact that it did.** `GetDpiForWindow`
+      and `GetWindowDpiAwarenessContext` are *not* virtualized, so a level
+      or DPI readback stays trustworthy from an unaware caller; it is the
+      coordinates that move. The failure is silent, self-consistent, and
+      wrong by exactly the scale factor — the signature this phase exists
+      to remove, arriving in the instrument rather than in the product.
+
       The plan's earlier "drops from 7 tiles per row to 6" is **T1's
       number for T1's build**, which carried the *complete* conversion
       machinery — its client 782 physical became 625.6 DIP. Read as a
