@@ -6493,10 +6493,38 @@ different paths through the same handler, not two names for one.
 [evidence/capture-t10-control-c.ps1](./evidence/capture-t10-control-c.ps1)
 captures three legs — before, changed, restored — polling `GetDpiForWindow`
 and raising the host with `HWND_TOPMOST` immediately before each capture, so
-it never takes the keyboard or fights the Settings window for focus. **Its
-capture-and-record step is one routine used by all three legs, so the before
-leg exercises it for real; the DPI-change comparison itself is not exercised
-until a change arrives.** Stated rather than predicted away.
+it never takes the keyboard or fights the Settings window for focus.
+
+**Captured 2026-08-01 03:16, owner-driven: 125% -> 150% -> 125%.** The scale
+control is reachable in this session, which settles the question the withdrawn
+claim had made unanswerable. Numbers, frames and the reading of them are in
+[evidence/t10-analysis/README.md](./evidence/t10-analysis/README.md); the two
+results that change what the phase knows:
+
+- **Crispness survives the change.** Every earlier crispness frame in this
+  phase is at the window's *creation* scale. The 144-DPI status run is
+  natively rasterized — the failure it rules out is T6's
+  `t6-scaled-surface-identity` signature, geometry following the new scale
+  with the text surface left at the old resolution.
+- **The round trip is byte-identical**: `3-restored` matches `1-before` over
+  all 864,000 client pixels.
+
+**The DIP extent returned exactly (960 x 576 at all three legs) and that is
+recorded as an observation, not as a property.** §T10 asserts element order
+and wrap structure and explicitly not bit-exact positions, because the OS
+chooses the rectangle here and the non-client frame moves by its own
+DPI-indexed metrics (18 x 47 -> 22 x 56). Outer went 1218 -> 1462 against
+`1218 x 1.2 = 1461.6` and 767 -> 920 against `920.4` — up in width, down in
+height — and the client that fell out divided by 1.5 exactly. Whether Windows
+computes the suggested rectangle to preserve the client extent or the rounding
+landed well, **this run does not distinguish**: 1461 would have given 959.33
+DIP. Writing it as a guarantee is the defect this task already withdrew once.
+
+**Two things it does not close.** No intermediate frame was taken — the
+harness waits about 1.5 s after detecting the change — so T7's open question
+about whether a stale intermediate projection is presented stays with T11. And
+a display-setting change is a second path through the handler, not the monitor
+crossing; T11 owns the literal form.
 
 #### The non-client decomposition, measured directly
 

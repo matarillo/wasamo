@@ -209,7 +209,67 @@ DLL — the F-40 failure mode — this line would have read
 `PER_MONITOR_AWARE_V2`. The separate `CARGO_TARGET_DIR` is therefore
 confirmed by behaviour and not only by configuration.
 
-## Control C — pending a human-driven scale change
+## Control C — captured, 125% → 150% → 125%
+
+The owner changed **Settings > System > Display > Scale** while the window was
+up; [`capture-t10-control-c.ps1`](../capture-t10-control-c.ps1) polled
+`GetDpiForWindow` and took all three legs.
+[`t10-control-c/`](../t10-control-c/), 2026-08-01 03:16.
+
+| Leg | `GetDpiForWindow` | Outer | Client | Non-client | Layout extent |
+|---|---:|---|---|---|---|
+| `1-before` | 120 | 1218 × 767 | 1200 × 720 | 18 wide, 47 tall | **960 × 576 DIP** |
+| `2-changed` | 144 | 1462 × 920 | 1440 × 864 | 22 wide, 56 tall | **960 × 576 DIP** |
+| `3-restored` | 120 | 1218 × 767 | 1200 × 720 | 18 wide, 47 tall | **960 × 576 DIP** |
+
+This is the **real OS path**: the window was not touched after the "before"
+frame, so the rectangle at 144 DPI is the one Windows supplied through
+`WM_DPICHANGED` and applied through T7's handler. The window stayed
+`PER_MONITOR_AWARE_V2` throughout.
+
+**What the frames show.** `2-changed.png` places the same **9 tiles per row in
+2 rows**, the same three tab buttons left and three action buttons right, and
+the status bar on the same baseline as `1-before.png`. Element order and wrap
+structure are preserved, which is what this control asserts.
+
+**Crispness survived the change**, which no other artifact in this phase
+covers: every earlier crispness frame is at the window's *creation* scale.
+[`status-changed-144dpi-5x.png`](./status-changed-144dpi-5x.png) is the status
+run rasterized at 144 DPI — narrow even stems, counters open in `8`, `e`, `a`
+and `o`, a clean one-pixel hyphen. The failure this rules out is T6's
+`t6-scaled-surface-identity` signature: geometry that follows the new scale
+while the text surface stays at the old resolution and is scaled up by the
+Visual, which would look like
+[`status-base-80d79c4-5x.png`](./status-base-80d79c4-5x.png) does.
+
+**The round trip is byte-identical.** `3-restored.png` matches
+`1-before.png` over all 864,000 client pixels — 0 differing. Returning to the
+original scale reproduces the original frame exactly, so nothing in the change
+path leaves residue in the rendered result.
+
+**The DIP extent came back exactly, and that is not claimed as a property of
+the implementation.** plan.md §T10 asserts element order and wrap structure,
+explicitly **not** bit-exact wrap positions, because on this path the OS
+chooses the rectangle and the non-client frame moves by its own DPI-indexed
+metrics (18 × 47 → 22 × 56 here). The outer rectangle went 1218 → 1462 where
+`1218 × 1.2 = 1461.6`, and 767 → 920 where `767 × 1.2 = 920.4` — rounded up in
+width and down in height — and the client that fell out of those two
+independent movements happened to divide by 1.5 exactly. **Whether Windows
+computed the suggested rectangle to preserve the client extent, or the
+rounding simply landed well, this run does not distinguish**: one step the
+other way in width (1461) would have given 959.33 DIP. The controlled client
+was a multiple of 24 in DIP (T8's normalisation rule), which is what made an
+exact result *possible*; it is not what makes it *guaranteed*.
+
+**What control C does not establish.** No intermediate frame was captured —
+the harness waits about 1.5 s after detecting the DPI change before shooting —
+so this says nothing about whether a stale intermediate projection is
+presented during the change, which T7's retrospective left open and assigned
+to T11's capture. And a display-setting change is not a monitor crossing: it
+is a second path through the same handler, not the same path. T11 owns the
+literal form.
+
+## Control C — how it came to be captured
 
 **This section first said "two frames across a live display-scale change are
 not obtainable on this machine". That claim was wider than its evidence and
@@ -229,18 +289,17 @@ Settings while
 [`capture-t10-control-c.ps1`](../capture-t10-control-c.ps1) polls
 `GetDpiForWindow` is control C as written.
 
-The harness captures three legs — before, changed, restored — and never takes
-the keyboard or the foreground; it raises the host with `HWND_TOPMOST`
-immediately before each capture so the Settings window can stay in front while
-it waits. **Its capture-and-record step is a single routine used by all three
-legs, so the before leg exercises it for real every run; the DPI-change
-comparison itself is not exercised until a change actually arrives.**
+The harness captures three legs and never takes the keyboard or the
+foreground; it raises the host with `HWND_TOPMOST` immediately before each
+capture so the Settings window can stay in front while it waits. Before the
+run above, its capture step had been exercised by the before leg and **the
+DPI-change comparison had not** — that gap is now closed by the run itself,
+which took the changed and restored legs through the same branches.
 
-A cross-process synthesised `WM_DPICHANGED` remains unavailable as a
+A cross-process synthesised `WM_DPICHANGED` was never available as a
 substitute — its `LPARAM` is a pointer to the suggested `RECT` and Windows
-does not marshal it across a process boundary. The literal cross-monitor form
-is T11's either way; these are two different paths through the same handler,
-not two names for one.
+does not marshal it across a process boundary — and the instrumented-host
+fallback was not needed.
 
 ## What these captures do not establish
 

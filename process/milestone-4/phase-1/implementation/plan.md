@@ -2175,7 +2175,7 @@ start before the controls were designed:**
       against the accepted 7**. The mutation run ends with
       `cargo clean -p wasamo-runtime --release` plus an accepted-source
       workspace rebuild, and the restored frame is compared (F-40).
-- [ ] **Positive control C, path form. The change is made by a human;
+- [x] **Positive control C, path form. The change is made by a human;
       the assistant captures it.** Two frames across a display setting
       scale change on the development machine while the window is up,
       showing text still crisp and the logical layout unchanged — **to

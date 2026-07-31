@@ -64,6 +64,7 @@ that was made, not as a substitute for capturing.
 | `t10-mutation-inbound/` | T10 — the run that shows control B can fail: T5's inbound seam removed at all three sites, giving 11 clipped tiles per row and a toolbar pushed off the window |
 | `t10-aware-restored/` | T10 — F-40 restoration after the mutation: package clean plus accepted-source rebuild, byte-identical to `t10-aware-a/` |
 | `t10-delivery-check/` | T10 — the **staged** T11 runnable set (`gallery-zig.exe` + `wasamo.dll`) launched from its delivery directory, declaring PMv2 and rendering 7 tiles per row |
+| `t10-control-c/` | T10 — control C's path form: three legs across an **owner-driven** 125% -> 150% -> 125% display-scale change, with the window untouched after the first leg so the rectangle is the one the OS supplied |
 | `t10-analysis/` | T10 — the comparison numbers, the magnified crispness crops and the assistant's reading of them ([README](./t10-analysis/README.md)) |
 
 **Frame shape is part of a set's identity**, and the table does not repeat it
@@ -101,6 +102,13 @@ result would be a size mismatch, not a regression.
   PMv2. `-ClientW/-ClientH` drives the *client* to an exact physical size by
   measure-and-adjust, which is what lets an aware and an unaware run be
   compared without the non-client frame in the way.
+- `capture-t10-control-c.ps1 [-Tag <name>] [-WaitSeconds <n>]` — control C's
+  path form. Positions the window, captures a before frame, then polls
+  `GetDpiForWindow` while **a human** changes Settings > System > Display >
+  Scale, capturing on the change and again on the way back. It never takes the
+  keyboard or the foreground, and it does not touch the window after the first
+  frame — on this path the OS chooses the rectangle, so resizing it would
+  destroy what is being measured.
 - `magnify-crop.ps1 -In <png> -Out <png> -X -Y -W -H [-Factor 5]` —
   nearest-neighbour magnification for the glyph-shape judgement, with the
   interpolation mode pinned so the script cannot make either side of a pair
