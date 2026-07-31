@@ -176,6 +176,34 @@ picture there** — the phase closes only when all six are observed.
    the OS's own suggested rectangle it would not be — that rectangle
    preserves the outer logical size, and the client one then moves by a
    DIP or two. A second stated limit, recorded with the first.
+   **Qualified again 2026-07-31 (T8), on the same clause.** The
+   *therefore* above is too strong: synthesising the message lets a test
+   **choose** the rectangle, and choosing is necessary and not sufficient
+   for holding the client extent constant. Measured — a chosen rectangle
+   whose physical client is not a multiple of 24 does **not** preserve the
+   DIP extent at the DPIs this phase tests, because `96 = 2^5 × 3` and the
+   preserved target must be an integer; and a chosen rectangle the display
+   cannot realise is silently not the one applied. What the landed test
+   adds beyond choosing is therefore stated with it: a physical client
+   giving an integer target at every DPI under test, the **realised**
+   value asserted rather than assumed, and an asserted quantity that is
+   sensitive to that extent at the precision the claim needs. Note also
+   that "integer target" is a claim about rational arithmetic and is
+   **not** the same as the DIP extent being recoverable bit-for-bit in
+   `f32`, which holds at three of the four DPIs and not at 100.
+   **And the word "controlled" carries this set's other statement of the
+   same property** — [DD-M4-P1-003 §Context](./dd-m4-p1-003-dpi-change-propagation.md)'s
+   2026-07-29 annotation, and the two revision-log summaries of it. It is
+   to be read as **held at the same DIP value**, not as *chosen by the
+   test*: that is the reading its own contrast establishes, since the
+   OS-suggested rectangle's defect is that it **moves** the client extent,
+   and the sentence following it glosses the word as "preserves". Recorded
+   because a reviewer reading that annotation directly took the other
+   reading, so the ambiguity is in the wording and not only in a summary of
+   it. Under the held-constant reading DD-M4-P1-003 needs no change and
+   gets none. Evidence: [implementation/log.md](../implementation/log.md)
+   §T8, findings F-44 / F-45 and the round-2 and round-3 review
+   dispositions.
 3. **Positive control A — crispness, before and after.** The same text
    at the same monitor scale, captured before and after the change, and
    compared at magnification. **The pair is the control; the "after"
@@ -345,3 +373,4 @@ step that changed code, the CI run id to phase end).
 | 2026-07-29 | **[DD-M4-P1-002](./dd-m4-p1-002-coordinate-space-and-conversion-boundary.md) annotated a second time**, body unchanged, on owner approval after the M4-Phase 1 T5 round-4 review (finding 2). §The rasterization surface step 4 concludes that *the default* surface-brush stretch maps one texel to one device pixel, on the premise that the surface is `dip × s` pixels — while §The rounding contract for surfaces, in the same section, allocates **`ceil(dip × s)`**, which is exactly what stops the two agreeing. The WinRT default is `Uniform` with 0.5 alignment ratios, so it scales the larger surface down and centres it. This intermediate annotation correctly rejected the default explanation but incorrectly described an unimplemented replacement and retained "transparent padding" as a requirement; both are corrected by the proposed-successor record in the row below. |
 | 2026-07-29 | **[DD-M4-P1-006](./dd-m4-p1-006-surface-brush-mapping-is-set-not-inherited.md) filed** (`Status: Proposed`), **proposing to supersede** [DD-M4-P1-002](./dd-m4-p1-002-coordinate-space-and-conversion-boundary.md) §The rasterization surface step 4's mechanism clause and §The rounding contract for surfaces' "transparent padding" mechanism sentence. The candidate is `CompositionStretch::None` with alignment ratios `0.0` rather than the default `Uniform` / `0.5`: it would keep unit scale and align the surface origin relative to the Visual, while `None` clips storage outside the exact Visual extent. It does not promise absolute screen-pixel alignment, and `ceil` does not reserve DirectWrite glyph overhang. This would be the set's **second supersede**, on acceptance; until then neither the candidate nor its supersede is in force. [architecture.md §12.4](../../../../docs/architecture.md#coordinate-spaces) removes the known-false default claim and labels the replacement as Proposed rather than synchronising it as accepted design. |
 | 2026-07-29 | **[DD-M4-P1-006](./dd-m4-p1-006-surface-brush-mapping-is-set-not-inherited.md) Accepted on owner approval after critical review.** The recommendation, rejected options, supersede scope, T6 measurement obligation, and separate overhang residual stand as reviewed. This activates the ADR set's second partial supersede: DD-M4-P1-002's two named mechanism sentences are replaced while its unit-scale requirement, `ceil` allocation, exact-`f32` Visual extent, and `Status: Accepted` stand. Moment 1 synchronises [architecture.md §12.4](../../../../docs/architecture.md#coordinate-spaces) and the T6 plan to the accepted `None` / `0.0` contract; no T6 implementation starts in this change. |
+| 2026-07-31 | **This preamble's §Phase 1 verification closure item 2 annotated**, body unchanged and every `Status` still `Accepted`, on owner approval after the M4-Phase 1 T8 round-2 and round-3 independent reviews. The 2026-07-29 (T4) qualification on that item says the unchanged-results half is exact "because the test synthesises the message and **therefore** holds the client extent constant"; the *therefore* does not hold. Synthesising lets a test **choose** the rectangle, and choosing is necessary and not sufficient — measured at T8, a chosen rectangle whose physical client is not a multiple of 24 does not preserve the DIP extent at the DPIs under test, and one the display cannot realise is silently not the one applied. The annotation states the three conditions the landed test actually meets, and separates "integer physical target" (rational arithmetic, all four DPIs) from "DIP extent recoverable bit-for-bit" (`f32`, three of four) — a distinction whose absence caused the same over-claim to recur inside its own first correction. **No decision, option or ordering changes**, and this is an annotation rather than a supersede by the boundary T4 established: a reader implementing the original text still obtains the shipped behaviour, and only a statement around it was too strong. The same annotation fixes the reading of **"controlled"** for the set — held at the same DIP value, not chosen by the test — because a reviewer reading [DD-M4-P1-003](./dd-m4-p1-003-dpi-change-propagation.md) §Context's annotation directly took the other reading. Under the intended reading **DD-M4-P1-003 needs no change and gets none**; its own contrast and following sentence already establish it. Evidence: [implementation/log.md](../implementation/log.md) §T8, findings F-44 / F-45 and the round-2 / round-3 review dispositions. |
