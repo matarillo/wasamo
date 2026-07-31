@@ -6325,3 +6325,175 @@ separate `CARGO_TARGET_DIR`; controls A2 and B use `__COMPAT_LAYER` rather
 than a source mutation, so only control B's falsification run is a mutation
 build at all; and control C is raised to the owner rather than resolved by
 the assistant on the owner's own desktop.
+
+### Implementation result and end gate (2026-08-01)
+
+No production code. The task lands two evidence scripts, nine frame sets with
+their measurement records, the analysis README, the R-7 coordinate artifact,
+and the plan/log revisions. The frames, numbers and the assistant's reading of
+them are in
+[evidence/t10-analysis/README.md](./evidence/t10-analysis/README.md) and are
+cited rather than restated here (trap #3's documentation analogue — this
+section is derived prose and must not become a second source of truth for
+numbers the analysis owns).
+
+**Build discipline before every capture** (F-5, F-21): `cargo build -p
+wasamo-runtime --release` then `cargo build --release --workspace`, including
+before the mutation capture and again before the restoration capture. The base
+worktree built under its own `CARGO_TARGET_DIR`, never the repo's (F-40).
+
+#### Trap #2 / #3 — the derived-prose enumeration
+
+The claim: **every number in T10's prose is either measured by T10 or cited to
+the task that owns it.** The sites that carry numbers, and which they are:
+
+| Site | Numbers it carries | Disposition |
+|---|---|---|
+| `evidence/t10-analysis/README.md` | all of T10's own measurements | Owner. Everything else points here |
+| `evidence/t10-capture-coordinates.md` | T10's measurements + Observation 4's falsified clauses | Owner of the *proposal*; explicitly not normative, and says so |
+| `evidence/README.md` | one identifying line per set | Index only — no measurement is restated beyond the set's identity |
+| `plan.md` §T10 | the feasibility measurements taken before the revision | Recorded once, at the head of the section, as the reason the controls are shaped as they are |
+| this log section | none of the frame numbers | Cites the analysis README |
+
+`evidence/README.md` is the parallel structure trap #3 names, and it went
+stale once already in this phase — T3's `after/` is 30,800 pixels out of date
+for two frames and the README is the only thing that says so. Updated in the
+same commit as the frames, with a new statement that **frame shape is part of
+a set's identity**: every pre-T10 set is a six-frame window-rectangle capture
+and every T10 set is a single client-rectangle capture, so the two cannot be
+compared at all.
+
+#### Trap #6 — the disagreement that was rooted rather than re-shot
+
+One number disagreed with the phase's record and it was chased rather than
+filed under drift: **three repeatability pairs came out byte-identical**,
+where T5 finding F-33 measured 25 differing pixels a day apart and 149 on a
+session's first launch. A "better than expected" result is exactly the shape
+that gets waved through.
+
+The root cause is that these are a **different measurement**, not a better
+one. F-33's captures are window-rectangle captures whose outer frame is
+alpha-blended against whatever is behind it, taken across sessions; T10's are
+client-rectangle captures of a topmost window taken minutes apart in one
+session. The difference is in what was photographed, and it retires nothing:
+the baseline discipline (re-capture both sides in the comparing session, agree
+two captures per side) is what produced these numbers, not something they
+license skipping. Recorded in the analysis README as a measurement rather than
+as a claim about capture stability in general.
+
+No test failed and no capture was re-run to green. Every frame in the evidence
+directory is the first capture taken under its stated conditions.
+
+#### Trap #7 — the controls, and the run that shows each can fail
+
+| Control | The pair | The falsifier |
+|---|---|---|
+| **A1** crispness, phase level | `t10-base-*` (base `80d79c4`) vs `t10-aware-*` | The base build is the wrong implementation, in the only sense R-1 cares about: it is the phase before the phase |
+| **A2** crispness, posture | `t10-unaware-*` vs `t10-aware-*`, **same executable** | The `__COMPAT_LAYER` run *is* the negative side — a build whose declaration was refused |
+| **B** logical layout invariance | `t10-unaware-*` vs `t10-aware-*` at an equal 1200 × 720 physical client | `t10-mutation-inbound` — T5's inbound seam removed at all three sites: 11 clipped tiles per row, the toolbar's right group off the window, the status bar gone, 92,805 differing pixels |
+| **C** path form | **not captured** — see the disposition below | — |
+| Measurement check | `t10-shipped-created` — outer 1000 × 750, client 982 × 703, **7** tiles per row | The rectangle alone separates nothing (T1 measured 1000 × 750 unaware too); the awareness readback beside it is what does |
+
+**Control B's substitution, stated as what it is.** The `s = 1` side is an
+unaware process on the same 125% desktop, not a 100% monitor. For risk R-2 —
+a missed conversion site is wrong exactly at `s ≠ 1` — that is the comparison
+needed, and it is *stronger* than two monitors because the DIP extent is equal
+by construction (960 × 576 on both sides, residual `0x0`) rather than
+approximately. It is **weaker** in that it says nothing about monitor-to-
+monitor delivery. That half is T11's and is not claimed here.
+
+**A2's second result.** A host whose declaration was refused comes up, lays
+out and renders. Every prior artifact for DD-M4-P1-001's tolerated-failure
+path is headless; this is the first rendered one. It is a by-product of the
+mechanism control B needed, not a control the plan asked for, and it is
+recorded as a measurement rather than promoted to an evidence line.
+
+#### Trap #5 — carry-forward
+
+| Item | Where | Re-trigger criterion |
+|---|---|---|
+| The re-derived capture coordinates, with Observation 4's falsified clauses and a draft replacement | [evidence/t10-capture-coordinates.md](./evidence/t10-capture-coordinates.md) | T12 consumes it. Re-derive above 125%, on any change to the window's non-client treatment (M5's custom title bar is already a handoff item), or for any host whose window is not created through `window::create` |
+| `__COMPAT_LAYER=DPIUNAWARE` gives a scale-1 run of the shipped bytes | this section + the analysis README | Any later phase needing an `s = 1` reference without a mutation build. It also refuses the declaration, so it doubles as a live exercise of DD-M4-P1-001's failure path — and that is a *side effect*, so a phase that changes the failure handling must re-check what this posture then produces |
+| The T11 runnable set is staged and verified | `C:\Users\devuser\dev\wasamo-t11-delivery\` | T11 |
+
+#### Preamble obligation 7 — the runnable set, and a correction to its wording
+
+Staged at `C:\Users\devuser\dev\wasamo-t11-delivery\` (outside the repository;
+binaries are not committed):
+
+| File | Bytes | SHA-256 |
+|---|---:|---|
+| `gallery-zig.exe` | 1,842,176 | `9E0500093747E7854ADC28251E7C4CF80D7A8603960838EE45A63BC43AA7DA83` |
+| `wasamo.dll` | 690,176 | `F743AB82B05796D91AB72BC5D6E6634B2EE222102F3F8330168A77D1512B13FF` |
+| `wasamo-t11-gallery.zip` | 897,887 | `476C743EB289595D9A98408219C8D0BB8952A1CEA1E94A7C325A1DE78085C4A9` |
+
+**The obligation's phrasing is wrong for the host that should be delivered,
+and the correction is recorded rather than quietly applied.** Obligation 7
+says "host executable + `wasamo.dll` + compiled `.uic`". `gallery-rust` bakes
+an **absolute build-machine path** to its `.uic` in through
+`env!("WASAMO_GALLERY_IR")`, so it cannot run from a copied directory on
+another machine at all; `gallery-c` and `gallery-zig` **embed** the IR and
+load it through `WASAMO_LOAD_MEMORY`, so their set is two files and there is
+no `.uic` to ship. The Zig host was chosen for that reason. The gallery rather
+than the counter because wrapped tiles and many text runs are what make a
+layout change and a rasterization change visible to a human.
+
+**The staged copy was launched from its delivery directory, not from the build
+tree** — `t10-delivery-check/` records `PER_MONITOR_AWARE_V2`,
+`GetDpiForWindow=120`, outer 1000 × 750, client 982 × 703 and 7 tiles per row,
+matching the Rust host at the same created size. "The files were copied" and
+"the delivered thing runs" are different facts.
+
+#### Control C — raised to the owner, not resolved
+
+Two frames across a live display-scale change are not obtainable on this
+machine. Measured, not assumed: one monitor, an RDP session on `Microsoft
+Remote Display Adapter`,
+`DisplayConfigGetDeviceInfo(DISPLAYCONFIG_DEVICE_INFO_GET_DPI_SCALE)`
+returning `ERROR_GEN_FAILURE` for the only active source, `Win8DpiScaling = 0`
+with no `LogPixels` and no `PerMonitorSettings` key. The one remaining route
+is `SPI_SETLOGICALDPIOVERRIDE`, undocumented, which would rescale the owner's
+live desktop; a **no-op** call returns TRUE and that is recorded as "the entry
+point exists", not as "a real change works". A cross-process synthesised
+`WM_DPICHANGED` is not a substitute — its `LPARAM` is a pointer to the
+suggested `RECT` and Windows does not marshal it across a process boundary, so
+the host would dereference the sender's address in its own space; T8's
+synthesis works because it is in-process.
+
+The decision is the owner's because it is the owner's machine and because
+declining it moves an AC7 evidence line from T10 to T11. **T10 does not close
+AC7's third requirement either way**, and did not before this task either:
+[preamble.md](./preamble.md) already assigns the literal cross-monitor form to
+T11, and obligation 5 already says neither half discharges it alone.
+
+#### The non-client decomposition, measured directly
+
+Taken with a separate probe because
+[evidence/t10-capture-coordinates.md](./evidence/t10-capture-coordinates.md)
+needs the *inset* breakdown and not only the frame totals, and because
+deriving top-inset from the total would have been arithmetic where a
+measurement was available. An 800 × 600 DIP gallery window, left / top /
+right / bottom in physical pixels:
+
+- declared PMv2, `GetDpiForWindow` 120: **9 / 38 / 9 / 9**
+- `__COMPAT_LAYER=DPIUNAWARE`, `GetDpiForWindow` 96: **10 / 39 / 10 / 10**
+
+The consequence is a correction to what
+[evidence/compare-frames.ps1](./evidence/compare-frames.ps1)'s defaults mean,
+and it goes the *safe* way rather than the alarming one: `InsetTop 44` was
+chosen against 39 and now clears 38, so it still excludes the whole frame —
+by 6 rows instead of 13. Written down because the margin is shrinking with
+DPI while the constant is not, and a capture above 125% will need it
+re-derived.
+
+#### Local gates
+
+- `cargo fmt --all -- --check` — exit 0.
+- `git diff --check` — exit 0.
+- `cargo test --workspace --no-fail-fast` — **37 binaries, 974 tests, 0
+  failed**, unchanged from T9's post-commit state. Run against the restored
+  tree, after the mutation's `git checkout`, `cargo clean -p wasamo-runtime
+  --release` and accepted-source rebuild.
+- `git status --porcelain wasamo-runtime/` — empty. The only mutation this
+  task made is reverted, and the restored build's frame is byte-identical to
+  the pre-mutation one over all 864,000 client pixels.

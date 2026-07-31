@@ -2065,7 +2065,7 @@ start before the controls were designed:**
   **that is not evidence that a real index change works**, and it is not
   treated as such. See the control C bullet for the disposition.
 
-- [ ] **Positive control A — crispness, before and after.** The same
+- [x] **Positive control A — crispness, before and after.** The same
       text at the same monitor scale, captured before and after the
       change, compared at magnification. **The pair is the control; the
       "after" frame alone proves nothing.** If a pre-change frame is
@@ -2115,7 +2115,7 @@ start before the controls were designed:**
         declaration on both sides
         ([evidence/t6-analysis/](./evidence/t6-analysis/README.md)); A2
         does not re-derive that and does not claim to.
-- [ ] **Positive control B — logical layout invariance.** The same `.ui`
+- [x] **Positive control B — logical layout invariance.** The same `.ui`
       at the same logical window size, captured at 100% and at 125%,
       with wrap positions and element order compared. **Invariance is
       the evidence.** Note that "the window's physical size scales with
@@ -2198,7 +2198,7 @@ start before the controls were designed:**
       path therefore needs an instrumented host, which is a mutation
       build carrying F-40's obligations — proposed only if the owner
       declines the display-scale route.
-- [ ] **Window measurement check.** **Risk R-9 is closed at T9, and this
+- [x] **Window measurement check.** **Risk R-9 is closed at T9, and this
       bullet is no longer the thing that closes it** — the plan still
       reads as though T10 owns the measurement.
       [preamble.md §Technical risks](./preamble.md#technical-risks-planning-time-recon-t1-sharpens)
@@ -2278,7 +2278,7 @@ start before the controls were designed:**
       folded into §T6 and §T7); and with the cache seeded the tree fills the
       client at 7 tiles while the glyphs stay soft, which is R-1's premise
       rendered rather than argued. Frames: [evidence/t5-probe/](./evidence/t5-probe/).
-- [ ] **Re-derive the capture coordinates** for later phases against the
+- [x] **Re-derive the capture coordinates** for later phases against the
       new coordinate space, as the evidence artifact T12's
       `verification-environments.md` revision consumes (risk R-7).
       Observation 4's falsified premise is *"the host is DPI-unaware, so
@@ -2289,7 +2289,7 @@ start before the controls were designed:**
       what the capture tool must declare, and which of the OS queries
       survive an undeclared caller. Deliver it as a table of measured
       numbers plus the proposed replacement wording; T12 writes it.
-- [ ] **Deliver the runnable set to the owner's laptop** so T11 is one
+- [x] **Deliver the runnable set to the owner's laptop** so T11 is one
       observation rather than a build-and-deliver task (preamble
       obligation 7). **The obligation's phrasing — "host executable +
       `wasamo.dll` + compiled `.uic`" — does not fit the host that should
@@ -2304,7 +2304,7 @@ start before the controls were designed:**
       wrapped tiles and many text runs are what make a layout change and
       a rasterization change visible.
 
-- [ ] **Every capture is preceded by `cargo build --release
+- [x] **Every capture is preceded by `cargo build --release
       --workspace`** (T3 finding F-21). A host-package build *does*
       recompile the runtime and *does* relink `wasamo.dll` — but it
       whole-archives the **stale uplifted** rlib, so the DLL is fresh by
@@ -2325,7 +2325,7 @@ start before the controls were designed:**
       build from the specific render-changing mutation, not from every possible
       source tree: render-neutral mutations require the clean/rebuild record or
       another structural/source artifact.
-- [ ] **Reusable from T3**: the capture script
+- [x] **Reusable from T3**: the capture script
       [evidence/capture-t3-label-writes.ps1](./evidence/capture-t3-label-writes.ps1)
       carries the working mechanics — PMv2 capture process,
       `CopyFromScreen` over `GetWindowRect`, click points derived from a

@@ -1,0 +1,226 @@
+# T10 assistant GUI evidence — captures, comparisons and analysis
+
+Every frame here was captured by
+[`capture-t10-controls.ps1`](../capture-t10-controls.ps1) on 2026-08-01, on
+the 125% development desktop (physical 2452 × 1291, logical 1962 × 1033,
+monitor DPI 120), against a build produced by `cargo build -p wasamo-runtime
+--release` followed by `cargo build --release --workspace` (T1 finding F-5,
+T3 finding F-21).
+
+**The capture harness declared Per-Monitor-Aware V2 and read the level back**
+before touching a rectangle; `harness awareness : PER_MONITOR_AWARE_V2 (READ
+BACK, not the call's return value)` appears in every `measurements.txt` in
+this directory's sibling sets. A DPI-unaware observer would have been answered
+in virtualized coordinates and every number below would have been wrong by
+exactly 1.25, internally consistent and plausible (T9 finding F-48); and the
+call that sets the awareness can itself fail against state established before
+the script ran, which is why the readback rather than the return value is what
+is recorded (T9 finding F-49). The harness aborts if the readback is not PMv2.
+
+## What was captured
+
+| Set | Build | Posture | Client (physical) | Purpose |
+|---|---|---|---|---|
+| `t10-shipped-created/` | branch tip | aware | 982 × 703 (created) | The measurement check — the created window, never moved or resized |
+| `t10-aware-a/`, `t10-aware-b/` | branch tip | aware | 1200 × 720 | Control A / B, `s = 1.25` side |
+| `t10-unaware-a/`, `t10-unaware-b/` | branch tip | `__COMPAT_LAYER=DPIUNAWARE` | 1200 × 720 | Control A2 / B, `s = 1` side, **same bytes** |
+| `t10-base-a/`, `t10-base-b/` | `80d79c4` (phase base), separate `CARGO_TARGET_DIR` | inherently unaware | 1200 × 720 | Control A1, "before" |
+| `t10-mutation-inbound/` | branch tip, T5's inbound seam removed at all three sites | aware | 1200 × 720 | The run that shows control B can fail |
+| `t10-aware-restored/` | accepted source after `cargo clean -p wasamo-runtime --release` + workspace rebuild | aware | 1200 × 720 | F-40 restoration |
+| `t10-delivery-check/` | the **staged** `gallery-zig.exe` + `wasamo.dll` handed to T11 | aware | 982 × 703 (created) | The delivered copy runs, not just the build tree |
+
+## The measurement check — the gallery's full signature at the landed declaration
+
+Risk R-9 was closed at T9, whose three-host probe ran `counter-c` /
+`counter-rust` / `counter-zig`. Tiles per row is a **gallery** property, and
+the gallery's numbers had only ever been taken under a *throwaway*
+declaration (T4, T5). Measured here against the landed one:
+
+| | outer | client | layout extent | tiles/row |
+|---|---|---|---|---|
+| `t10-shipped-created` | 1000 × 750 | 982 × 703 | 785.6 × 562.4 DIP | **7** |
+
+The rectangle agrees with T4's throwaway-declaration probe and with T9's
+three counter hosts. The tile count is the number plan.md §T10 predicted the
+landed state must show: **9 was the pre-T5 signature**, and a T10 that had
+inherited 9 would have been pinning a half-finished phase.
+
+**The rectangle alone does not separate anything** — T1 measured an unaware
+process at 1000 × 750 too, because DWM stretches the logical 800 × 600 by the
+same factor, and `t10-base-a`'s own record shows the created client at
+980 × 701 for exactly that reason. What separates the states is the pair, and
+`window awareness : PER_MONITOR_AWARE_V2` beside it.
+
+## Control A — crispness, before and after
+
+`compare-frames.ps1` over the full 1200 × 720 client (no inset — these are
+client captures, so there is no non-client frame to exclude):
+
+| Comparison | Differing px of 864,000 | Max per-channel delta |
+|---|---:|---:|
+| `t10-aware-a` vs `t10-aware-b` (repeatability) | **0** | — |
+| `t10-unaware-a` vs `t10-unaware-b` (repeatability) | **0** | — |
+| `t10-base-a` vs `t10-base-b` (repeatability) | **0** | — |
+| `t10-base-a` vs `t10-unaware-a` (base vs shipped, both `s = 1`) | 23,104 | 222 |
+| `t10-base-a` vs `t10-aware-a` (**A1**, phase pair) | 23,385 | 223 |
+| `t10-unaware-a` vs `t10-aware-a` (**A2**, posture pair) | 22,725 | 221 |
+| `t10-aware-a` vs `t10-mutation-inbound` | 92,805 | 252 |
+| `t10-aware-a` vs `t10-aware-restored` | **0** | — |
+
+**Three byte-identical repeatability pairs is a stronger result than F-33
+measured, and it does not retire F-33.** T5 measured 25 differing pixels a day
+apart and 149 on a session's first launch, over *window-rect* captures whose
+border is alpha-blended against the desktop. These are client-only captures of
+a topmost window taken minutes apart in one session. That is a different
+measurement, not a refutation of the earlier one, and the baseline discipline
+(re-capture, agree two captures per side) is what produced these numbers
+rather than something they license skipping.
+
+**The pixel counts above do not establish crispness in either direction.** A
+large max delta proves only that the difference is outside the drift bound
+this phase measured; a small one proves nothing; and neither says what moved
+(T5 finding F-33, sharpened at the T5 round-3 review). Crispness is a
+glyph-shape judgement and is made below, on the magnified pairs.
+
+### The magnified pairs
+
+Crops are nearest-neighbour ×5 via [`magnify-crop.ps1`](../magnify-crop.ps1),
+which pins the interpolation mode so the script cannot make either side look
+sharper or softer than it was captured.
+
+Status-bar run, `18 placeholders - Image and hit-testing are M4`:
+
+- [`status-base-80d79c4-5x.png`](./status-base-80d79c4-5x.png) — the phase
+  base. Stems are two to three pixels wide and unevenly so, with a broad grey
+  halo on both sides of every vertical; the `8` and `e` counters are filled to
+  a muddy mid-grey rather than left open; the hyphen and the dot of the `i`
+  smear across their neighbours. This is a 96-DPI rasterization enlarged by
+  DWM, and the softness is the bitmap stretch.
+- [`status-aware-5x.png`](./status-aware-5x.png) — the branch tip. Verticals
+  are narrow and consistent stem to stem, edges fall off within one pixel
+  instead of two or three, counters in `8`, `e`, `a` and `o` stay open, and
+  the hyphen is a clean one-pixel bar.
+
+Tile label, `IMG 001 #0`, over the tile fill rather than the window
+background:
+
+- [`tile-base-80d79c4-5x.png`](./tile-base-80d79c4-5x.png) and
+  [`tile-unaware-posture-5x.png`](./tile-unaware-posture-5x.png) — both soft.
+  The `M` diagonals are stepped and grey-fringed, the `G` counter is closed
+  up, the `#` crossbars merge.
+- [`tile-aware-5x.png`](./tile-aware-5x.png) — the same run at 120 DPI. The
+  `M` diagonals resolve, the `G` counter opens, and the `#` shows four
+  separate strokes.
+
+**A1 and A2 answer different questions and neither is described as doing the
+other's work.** A1 (`t10-base-*` vs `t10-aware-*`) is the phase-level pair
+risk R-1 is about: the base build has no declaration, no conversion seams and
+no rasterization work, so its blur is the blur the phase exists to remove. A2
+(`t10-unaware-*` vs `t10-aware-*`) comes from the *same executable* — the only
+difference is that the AppCompat shim set the process awareness before Wasamo
+code ran, so `runtime::init`'s declaration took `ERROR_ACCESS_DENIED` and
+DD-M4-P1-001's failure handling tolerated it — so its difference cannot be
+attributed to any other change on the branch. **What separates T3 / T5 / T6's
+rendering work from the declaration is neither of these but the third row of
+the table** (`t10-base-a` vs `t10-unaware-a`, both at `s = 1`): 23,104 pixels,
+which is the same class T6 measured at 100% (9,360–24,868, max delta 220–249)
+and is the `ceil` allocation plus DD-M4-P1-006's brush mapping, not the scale.
+
+**A2 is also the first rendered evidence that the tolerated-declaration-failure
+path ships working.** Every prior artifact for it — DD-M4-P1-001's unit tests,
+`dpi_awareness_tolerated_failure_integration.rs` — is headless. Here a real
+host whose declaration was denied comes up, lays out and renders.
+
+## Control B — logical layout invariance across the scale factor
+
+Both sides were driven to the **same physical client rectangle** rather than
+the same outer rectangle, so F-28's tolerance drops out instead of being
+stated. Reached exactly, in one iteration, on every run:
+
+| Set | Window awareness | `GetDpiForWindow` | Outer | Client | Non-client frame | Layout extent |
+|---|---|---:|---|---|---|---|
+| `t10-aware-a` | PER_MONITOR_AWARE_V2 | 120 | 1218 × 767 | **1200 × 720** | 18 × 47 | **960 × 576** |
+| `t10-unaware-a` | UNAWARE | 96 | 1220 × 769 | **1200 × 720** | 20 × 49 | **960 × 576** |
+
+The non-client frames differ — 18 × 47 against 20 × 49 — which is exactly the
+DPI-indexed-metrics behaviour T4 decomposed, and it is why controlling the
+outer rectangle would have left the two layouts about 1.6 DIP apart. Both
+sides receive **960 × 576**, a multiple of 24 in each axis (T8's
+normalisation rule), and the residual against the target is `0x0` in both.
+
+The two extents are reached by different routes and this is written out rather
+than assumed: the aware host divides the physical client by its own window DPI
+(120), and the unaware host is handed a client the OS already divided by the
+monitor's scale. `measurements.txt` names the denominator it used in each run.
+
+**Result: the layouts are identical.** Both frames place 9 tiles per row in 2
+rows, the same three tab buttons at the left of the toolbar, the same three
+action buttons at the right, and the status bar on the same baseline. Element
+order and wrap positions match. The only differences are the glyph
+rasterization described above.
+
+### The run that shows control B can fail
+
+Invariance is evidence only if a wrong build breaks it.
+[`t10-mutation-inbound/`](../t10-mutation-inbound/) is the branch tip with
+T5's inbound `GetClientRect → layout` division removed at **all three**
+production sites — `window::set_root`, the `WM_SIZE` arm, and
+`emit::flush_layout` — so layout receives physical pixels as though they were
+DIP. Same controlled client, same aware posture, and the frame is not subtly
+different:
+
+- **11 tiles per row instead of 9**, the eleventh clipped by the right edge.
+- **The toolbar's right-hand group is pushed off the window** — `Scroll down`
+  is cut in half and `Scroll up` / `Open lightbox` are gone entirely.
+- **The status bar is gone**, pushed below the client.
+- 92,805 differing pixels against the accepted frame, max per-channel delta
+  252.
+
+Element order survives; wrap positions and the reachable extent do not. This
+is the same defect class T5 measured as 9 tiles against the accepted 7 at the
+smaller client, seen at 960 DIP.
+
+**Restoration, per T6 finding F-40.** The mutation was reverted with `git
+checkout`, followed by `cargo clean -p wasamo-runtime --release` (9 files,
+6.9 MiB removed) and a full `-p wasamo-runtime` then workspace release
+rebuild; `t10-aware-restored/` is byte-identical to `t10-aware-a/` over all
+864,000 client pixels. Byte identity distinguishes the accepted build from
+*this* render-changing mutation and is not general source-identity evidence;
+the clean-and-rebuild record is what covers a render-neutral one.
+
+**The base tree's own posture readback is a second identity check.**
+`t10-base-a/measurements.txt` records `window awareness : UNAWARE`. The
+branch-tip `wasamo.dll` declares PMv2, so had the base host loaded the wrong
+DLL — the F-40 failure mode — this line would have read
+`PER_MONITOR_AWARE_V2`. The separate `CARGO_TARGET_DIR` is therefore
+confirmed by behaviour and not only by configuration.
+
+## Control C — not captured here
+
+Two frames across a live display-scale change are **not obtainable on this
+machine**, measured rather than assumed: one monitor, an RDP session on
+`Microsoft Remote Display Adapter`,
+`DisplayConfigGetDeviceInfo(DISPLAYCONFIG_DEVICE_INFO_GET_DPI_SCALE)`
+returning `ERROR_GEN_FAILURE` for the only active source, and no
+`PerMonitorSettings` registry key because the session scale is negotiated from
+the RDP client. A cross-process synthesised `WM_DPICHANGED` is not a
+substitute — its `LPARAM` is a pointer to the suggested `RECT` and Windows
+does not marshal it across a process boundary. The disposition is an owner
+decision recorded in [../log.md](../log.md) §T10; the literal cross-monitor
+form is T11's regardless.
+
+## What these captures do not establish
+
+- **Nothing about real monitor-to-monitor delivery.** Neither side of control
+  B is a real 100% monitor; the `s = 1` side is an unaware process on the same
+  125% desktop. The comparison is the `s = 1` vs `s = 1.25` one risk R-2 needs
+  and it is exact rather than approximate, which is why it was preferred — but
+  it says nothing about `WM_DPICHANGED` arriving from a monitor crossing. That
+  is T11's, and T8's synthesised message is the automated half.
+- **Nothing about states other than the default sub-screen.** These frames are
+  `gallery-default` only. The click-driven states (tab switch, lightbox
+  insertion, bound-label update) are covered by T3's and T6's six-frame sets
+  at their own postures, not re-photographed here.
+- **Crispness is judged, not measured.** The magnified comparison is a human
+  (here, assistant) reading of glyph shape. It is the assistant baseline that
+  precedes the owner's human-visible smoke and does not replace it.
