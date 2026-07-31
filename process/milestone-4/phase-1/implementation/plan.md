@@ -2026,7 +2026,50 @@ are in
 [verification-environments.md](../../../../docs/notes/verification-environments.md)
 §Observation 4. This does not replace the owner smoke.
 
-- [ ] **Positive control A — crispness, before and after.** The same
+**The instrument declares its awareness and then reads back what is in
+force** (T9 findings F-48 and F-49). Every script that reads a rectangle,
+derives a crop, or places a click point calls
+`SetProcessDpiAwarenessContext(PMv2)`, **discards the returned value**,
+and prints `GetThreadDpiAwarenessContext` into the artifact. The call
+result is not the evidence: F-49 measured a session where the process's
+awareness was already set before any of the script's own code ran, so
+"the call returned TRUE" and "PMv2 is in force" are different facts. A
+readback that is not PMv2 invalidates every coordinate in the run.
+
+**The two mechanisms this task's controls are built on, measured at task
+start before the controls were designed:**
+
+- **`__COMPAT_LAYER=DPIUNAWARE` in the child environment makes the
+  *shipped* binary run unaware** — the AppCompat shim sets the process
+  awareness before any Wasamo code executes, so `runtime::init`'s
+  declaration takes `ERROR_ACCESS_DENIED` and
+  [DD-M4-P1-001 §Failure handling](../decisions/dd-m4-p1-001-dpi-awareness-declaration.md)
+  tolerates it. Measured on `gallery-rust.exe` at the branch tip:
+  without the variable, `level=PMV2 GetDpiForWindow=120 outer=1000x750
+  client=982x703`; with it, `level=UNAWARE GetDpiForWindow=96
+  outer=1000x750 client=980x701`. The window still comes up, which is
+  the first *rendered* evidence that the tolerated-failure path ships
+  working — every prior artifact for it is headless. This gives a
+  scale-1 reference **without a mutation build**, so controls A2 and B
+  do not inherit F-40's target-isolation problem.
+- **No *programmatic* route to a display-scale change is available in this
+  session.** The first version of this bullet said "this machine cannot
+  change its display scale", which is **wider than what was measured** —
+  the phase's own recurring defect, in the task whose content is evidence.
+  What was measured is three programmatic routes, and **the Settings UI was
+  never tried**. Measured: one monitor, an RDP
+  session on `Microsoft Remote Display Adapter` (physical 2452 × 1291,
+  logical 1962 × 1033 = 125%);
+  `DisplayConfigGetDeviceInfo(DISPLAYCONFIG_DEVICE_INFO_GET_DPI_SCALE)`
+  returns `ERROR_GEN_FAILURE` (31) for the active source;
+  `HKCU\Control Panel\Desktop` has `Win8DpiScaling = 0`, no `LogPixels`
+  and no `PerMonitorSettings` subkey — the session scale is negotiated
+  from the RDP client, not stored per user. `SPI_GETLOGICALDPIOVERRIDE`
+  reads 0 and a **no-op** `SPI_SETLOGICALDPIOVERRIDE(0)` returns TRUE;
+  **that is not evidence that a real index change works**, and it is not
+  treated as such. See the control C bullet for the disposition.
+
+- [x] **Positive control A — crispness, before and after.** The same
       text at the same monitor scale, captured before and after the
       change, compared at magnification. **The pair is the control; the
       "after" frame alone proves nothing.** If a pre-change frame is
@@ -2055,7 +2098,28 @@ are in
       magnified pair — stems, counters, fringing — and a pixel count
       cannot stand in for it in either direction: neither a large delta
       nor a small one tells you whether text got sharper.
-- [ ] **Positive control B — logical layout invariance.** The same `.ui`
+      **"Before" was undefined in this bullet until T10 opened it, and
+      the two candidate referents are not interchangeable**, so the
+      control is run in both forms:
+      - **A1 — the phase-level pair, which is the one R-1 is about.**
+        "Before" is the phase's base commit `80d79c4`
+        (`git merge-base main feat/m4-phase-1`): a runtime with no
+        declaration, no conversion seams and no rasterization work, so its
+        glyphs are the DWM-stretched blur the phase exists to remove.
+        "After" is the branch tip. The base tree is built in a separate
+        `git worktree` with its **own `CARGO_TARGET_DIR`** (T6 finding
+        F-40 — two source trees must not share one artifact directory).
+      - **A2 — the posture pair on one binary.** The branch-tip
+        executable launched normally and launched under
+        `__COMPAT_LAYER=DPIUNAWARE`. Both frames come from the *same*
+        bytes, so the difference cannot be attributed to any other change
+        on the branch. A1 alone cannot separate the declaration from T3 /
+        T5 / T6; A2 alone cannot support a claim about the phase. **T6
+        already separated its own rendering change** with a throwaway
+        declaration on both sides
+        ([evidence/t6-analysis/](./evidence/t6-analysis/README.md)); A2
+        does not re-derive that and does not claim to.
+- [x] **Positive control B — logical layout invariance.** The same `.ui`
       at the same logical window size, captured at 100% and at 125%,
       with wrap positions and element order compared. **Invariance is
       the evidence.** Note that "the window's physical size scales with
@@ -2079,18 +2143,89 @@ are in
       identical wrap positions can therefore fail a correct build. State
       the tolerance, or drive both captures from a controlled **client**
       size rather than a controlled outer size.
-- [ ] **Positive control C, path form.** Two frames across a display
-      setting scale change on the development machine while the window
-      is up, showing text still crisp and the logical layout unchanged
-      — **to the same tolerance control B carries, not bit-exactly**
-      (T4 delta review finding 2; this bullet read as an absolute while
-      the bullet above it already conceded the drift). A display-setting
-      change is the real path, so the window follows the OS-suggested
-      rectangle and the client extent moves with the non-client metrics.
-      Element order and wrap structure are the invariants; a single wrap
-      position sitting on a boundary is not.
-- [ ] **Window measurement check** (risk R-9): a window created at
-      800 × 600 DIP measures 1000 × 750 physical at 125%. Cheap,
+      **T10 takes the second option**, which removes the tolerance
+      instead of stating it, and it takes `s = 1` from the posture pair
+      rather than from a 100% monitor this machine does not have. The two
+      sides are the branch-tip binary at `s = 1.25` and the same binary
+      under `__COMPAT_LAYER=DPIUNAWARE` at `s = 1`, both driven to the
+      **same physical client rectangle** by a measure-and-adjust loop
+      rather than to the same outer rectangle. At an equal physical
+      client both processes lay out into the same DIP extent — the aware
+      one because it divides by `s`, the unaware one because the OS
+      virtualizes its client by the same factor — so the non-client
+      metrics drop out of the comparison entirely. Target
+      **1200 × 720 physical = 960 × 576 DIP**, both multiples of 24,
+      which is T8's normalisation rule (`96 = 2^5 × 3`, so a multiple of
+      24 is an integer physical size at every DPI under test).
+      **What this substitution does and does not buy.** It is the
+      `s = 1` vs `s = 1.25` comparison R-2 needs — a missed conversion
+      site is wrong exactly there — and it is *stronger* than two
+      monitors for that purpose, because the DIP extent is equal by
+      construction rather than approximately. It is **weaker** in that
+      neither side is a real 100% monitor, so it says nothing about
+      monitor-to-monitor delivery; that is T11's.
+      **The residual is measured and reported, not assumed to be zero**:
+      the unaware window's client is quantised in whole *logical* pixels,
+      so the loop may not land exactly, and what it actually reached goes
+      in the artifact.
+      **Show the control can fail.** Invariance is only evidence if a
+      wrong build breaks it, so B ships with the inbound-seam mutation
+      (T5's `GetClientRect → layout` division removed) captured at the
+      same controlled client — the state T5 measured as **9 tiles per row
+      against the accepted 7**. The mutation run ends with
+      `cargo clean -p wasamo-runtime --release` plus an accepted-source
+      workspace rebuild, and the restored frame is compared (F-40).
+- [x] **Positive control C, path form. The change is made by a human;
+      the assistant captures it.** Two frames across a display setting
+      scale change on the development machine while the window is up,
+      showing text still crisp and the logical layout unchanged — **to
+      the same tolerance control B carries, not bit-exactly** (T4 delta
+      review finding 2; this bullet read as an absolute while the bullet
+      above it already conceded the drift). A display-setting change is
+      the real path, so the window follows the OS-suggested rectangle and
+      the client extent moves with the non-client metrics. Element order
+      and wrap structure are the invariants; a single wrap position
+      sitting on a boundary is not.
+      **Who performs the change was never this bullet's to decide, and
+      T10 first read it as the assistant's.**
+      [preamble.md](./preamble.md)'s verification-closure item (5) says
+      the assistant *captures* the path — not that it causes it — and
+      the human half of the split it names is the **cross-monitor** form
+      at T11, not the scale change itself. A human changing Scale in
+      Settings while
+      [evidence/capture-t10-control-c.ps1](./evidence/capture-t10-control-c.ps1)
+      polls `GetDpiForWindow` is this bullet as written, and it needs no
+      undocumented API. **This does not make it T11's**: T11 is the
+      literal monitor crossing, on a laptop plus external display, and
+      the two are different paths through the same handler.
+      **Three legs, because the third is one more click:** before,
+      changed, and restored. Coming back to the original scale should
+      reproduce the original layout.
+      **Not available as a substitute:** a cross-process synthesised
+      `WM_DPICHANGED`. Its `LPARAM` is a pointer to the suggested `RECT`
+      and Windows does not marshal it across a process boundary, so the
+      host would dereference the sender's address in its own space. T8's
+      synthesis works because it is **in**-process. A GUI form of T8's
+      path therefore needs an instrumented host, which is a mutation
+      build carrying F-40's obligations — the fallback if no human-driven
+      scale change turns out to be possible in this session either.
+- [x] **Window measurement check.** **Risk R-9 is closed at T9, and this
+      bullet is no longer the thing that closes it** — the plan still
+      reads as though T10 owns the measurement.
+      [preamble.md §Technical risks](./preamble.md#technical-risks-planning-time-recon-t1-sharpens)
+      records R-8 and R-9 as closed by T9's three-host run against the
+      **landed** declaration. What that run did *not* cover is this
+      bullet's third column: it probed `counter-c` / `counter-rust` /
+      `counter-zig`, and **tiles per row is a gallery property**. So the
+      gallery's numbers have only ever been taken under a *throwaway*
+      declaration (T4, T5). T10's remaining job is therefore narrow and
+      worth stating narrowly: **take the shipped gallery's full signature
+      — outer, client, tiles per row — against the landed declaration**,
+      and settle whether the third row now reads 7. Everything below is
+      the inherited reasoning that makes those numbers readable, not a
+      re-derivation of R-9.
+      A window created at 800 × 600 DIP measures 1000 × 750 physical at
+      125%. Cheap,
       concrete, and the only in-phase check of DD-004's outer-window
       -rectangle claim — but **not a positive control on its own**, and
       the plan originally treated it as one. T1 measured the *unaware*
@@ -2154,15 +2289,33 @@ are in
       folded into §T6 and §T7); and with the cache seeded the tree fills the
       client at 7 tiles while the glyphs stay soft, which is R-1's premise
       rendered rather than argued. Frames: [evidence/t5-probe/](./evidence/t5-probe/).
-- [ ] **Re-derive the capture coordinates** for later phases against the
+- [x] **Re-derive the capture coordinates** for later phases against the
       new coordinate space, as the evidence artifact T12's
       `verification-environments.md` revision consumes (risk R-7).
-- [ ] **Deliver the runnable set to the owner's laptop** — host
-      executable + `wasamo.dll` + compiled `.uic` — so T11 is one
+      Observation 4's falsified premise is *"the host is DPI-unaware, so
+      DWM bitmap-stretches a logical 800 × 600 window to physical
+      1000 × 750"*. The successor statement has to say what a later phase
+      should now **do**, not only that the premise changed, and there are
+      three separable facts to carry: what the host's own posture is,
+      what the capture tool must declare, and which of the OS queries
+      survive an undeclared caller. Deliver it as a table of measured
+      numbers plus the proposed replacement wording; T12 writes it.
+- [x] **Deliver the runnable set to the owner's laptop** so T11 is one
       observation rather than a build-and-deliver task (preamble
-      obligation 7).
+      obligation 7). **The obligation's phrasing — "host executable +
+      `wasamo.dll` + compiled `.uic`" — does not fit the host that should
+      be delivered.** `gallery-rust` bakes an *absolute build-machine
+      path* to its `.uic` in via `env!("WASAMO_GALLERY_IR")`, so it
+      cannot run from a copied directory at all; `gallery-c` and
+      `gallery-zig` **embed** the IR and load it through
+      `WASAMO_LOAD_MEMORY`, so their set is exe + DLL and there is no
+      `.uic` to ship. Deliver an embedding host, and record the
+      correction rather than silently shipping two files where the
+      obligation says three. The gallery is the right subject for T11 —
+      wrapped tiles and many text runs are what make a layout change and
+      a rasterization change visible.
 
-- [ ] **Every capture is preceded by `cargo build --release
+- [x] **Every capture is preceded by `cargo build --release
       --workspace`** (T3 finding F-21). A host-package build *does*
       recompile the runtime and *does* relink `wasamo.dll` — but it
       whole-archives the **stale uplifted** rlib, so the DLL is fresh by
@@ -2183,16 +2336,25 @@ are in
       build from the specific render-changing mutation, not from every possible
       source tree: render-neutral mutations require the clean/rebuild record or
       another structural/source artifact.
-- [ ] **Reusable from T3**: the capture script
+- [x] **Reusable from T3**: the capture script
       [evidence/capture-t3-label-writes.ps1](./evidence/capture-t3-label-writes.ps1)
       carries the working mechanics — PMv2 capture process,
       `CopyFromScreen` over `GetWindowRect`, click points derived from a
       probe frame, and the swap-the-compiled-IR trick that runs an
       evidence `.ui` through a built host without touching the repo.
+      Both it and `capture-t4-probe.ps1` **already declare PMv2**, so
+      F-48 does not invalidate the T3 / T4 / T5 / T6 frame sets; what
+      those scripts do not do is *read the level back*, which is the
+      F-49 half and is what T10's script adds.
 
-**Start gate:** trap #7. **End gate:** screenshots, the assistant's
-analysis of each, and the pair-based positive controls; the re-derived
-capture coordinates recorded. Full independent review before merge.
+**Start gate:** trap #7, and trap #6 — a capture that disagrees with a
+recorded number is a deterministic failure to root-cause, not a frame to
+re-shoot. **End gate:** screenshots, the assistant's analysis of each,
+and the pair-based positive controls, each with the mutation or posture
+run that shows it can fail; the harness's awareness readback printed in
+every artifact; the re-derived capture coordinates recorded; the
+runnable set staged with its contents listed. Full independent review
+before merge.
 
 ---
 
