@@ -2052,8 +2052,12 @@ start before the controls were designed:**
   working — every prior artifact for it is headless. This gives a
   scale-1 reference **without a mutation build**, so controls A2 and B
   do not inherit F-40's target-isolation problem.
-- **This machine cannot change its display scale, so control C's
-  literal form is not available here.** Measured: one monitor, an RDP
+- **No *programmatic* route to a display-scale change is available in this
+  session.** The first version of this bullet said "this machine cannot
+  change its display scale", which is **wider than what was measured** —
+  the phase's own recurring defect, in the task whose content is evidence.
+  What was measured is three programmatic routes, and **the Settings UI was
+  never tried**. Measured: one monitor, an RDP
   session on `Microsoft Remote Display Adapter` (physical 2452 × 1291,
   logical 1962 × 1033 = 125%);
   `DisplayConfigGetDeviceInfo(DISPLAYCONFIG_DEVICE_INFO_GET_DPI_SCALE)`
@@ -2171,33 +2175,40 @@ start before the controls were designed:**
       against the accepted 7**. The mutation run ends with
       `cargo clean -p wasamo-runtime --release` plus an accepted-source
       workspace rebuild, and the restored frame is compared (F-40).
-- [ ] **Positive control C, path form. Blocked on this machine as
-      specified; disposition is an owner call.** The bullet asks for two
-      frames across a display setting scale change on the development
-      machine while the window is up, showing text still crisp and the
-      logical layout unchanged — **to the same tolerance control B
-      carries, not bit-exactly** (T4 delta review finding 2; this bullet
-      read as an absolute while the bullet above it already conceded the
-      drift). A display-setting change is the real path, so the window
-      follows the OS-suggested rectangle and the client extent moves with
-      the non-client metrics. Element order and wrap structure are the
-      invariants; a single wrap position sitting on a boundary is not.
-      **The plan assumed the change was available and it is not** — see
-      the measurements at the head of this section. What remains open is
-      whether to reach for `SPI_SETLOGICALDPIOVERRIDE`, an undocumented
-      call that would rescale the owner's live desktop and whose success
-      here is **unmeasured** (the no-op probe proves only that the entry
-      point exists). That is an owner decision, not the assistant's: it
-      is the owner's machine, and declining it moves an AC7 evidence line
-      from T10 to T11.
+- [ ] **Positive control C, path form. The change is made by a human;
+      the assistant captures it.** Two frames across a display setting
+      scale change on the development machine while the window is up,
+      showing text still crisp and the logical layout unchanged — **to
+      the same tolerance control B carries, not bit-exactly** (T4 delta
+      review finding 2; this bullet read as an absolute while the bullet
+      above it already conceded the drift). A display-setting change is
+      the real path, so the window follows the OS-suggested rectangle and
+      the client extent moves with the non-client metrics. Element order
+      and wrap structure are the invariants; a single wrap position
+      sitting on a boundary is not.
+      **Who performs the change was never this bullet's to decide, and
+      T10 first read it as the assistant's.**
+      [preamble.md](./preamble.md)'s verification-closure item (5) says
+      the assistant *captures* the path — not that it causes it — and
+      the human half of the split it names is the **cross-monitor** form
+      at T11, not the scale change itself. A human changing Scale in
+      Settings while
+      [evidence/capture-t10-control-c.ps1](./evidence/capture-t10-control-c.ps1)
+      polls `GetDpiForWindow` is this bullet as written, and it needs no
+      undocumented API. **This does not make it T11's**: T11 is the
+      literal monitor crossing, on a laptop plus external display, and
+      the two are different paths through the same handler.
+      **Three legs, because the third is one more click:** before,
+      changed, and restored. Coming back to the original scale should
+      reproduce the original layout.
       **Not available as a substitute:** a cross-process synthesised
       `WM_DPICHANGED`. Its `LPARAM` is a pointer to the suggested `RECT`
       and Windows does not marshal it across a process boundary, so the
       host would dereference the sender's address in its own space. T8's
       synthesis works because it is **in**-process. A GUI form of T8's
       path therefore needs an instrumented host, which is a mutation
-      build carrying F-40's obligations — proposed only if the owner
-      declines the display-scale route.
+      build carrying F-40's obligations — the fallback if no human-driven
+      scale change turns out to be possible in this session either.
 - [x] **Window measurement check.** **Risk R-9 is closed at T9, and this
       bullet is no longer the thing that closes it** — the plan still
       reads as though T10 owns the measurement.

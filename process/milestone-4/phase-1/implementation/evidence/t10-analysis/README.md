@@ -209,19 +209,38 @@ DLL — the F-40 failure mode — this line would have read
 `PER_MONITOR_AWARE_V2`. The separate `CARGO_TARGET_DIR` is therefore
 confirmed by behaviour and not only by configuration.
 
-## Control C — not captured here
+## Control C — pending a human-driven scale change
 
-Two frames across a live display-scale change are **not obtainable on this
-machine**, measured rather than assumed: one monitor, an RDP session on
-`Microsoft Remote Display Adapter`,
+**This section first said "two frames across a live display-scale change are
+not obtainable on this machine". That claim was wider than its evidence and
+is withdrawn.** What was measured is that three *programmatic* routes are
+unavailable in this session: one monitor, an RDP session on `Microsoft Remote
+Display Adapter`,
 `DisplayConfigGetDeviceInfo(DISPLAYCONFIG_DEVICE_INFO_GET_DPI_SCALE)`
 returning `ERROR_GEN_FAILURE` for the only active source, and no
 `PerMonitorSettings` registry key because the session scale is negotiated from
-the RDP client. A cross-process synthesised `WM_DPICHANGED` is not a
+the RDP client. **The Settings UI was never tried**, and nothing measured here
+says anything about it.
+
+The wider claim also carried an assumption that was never in the plan: that
+the assistant had to *cause* the change. The ADR set's verification-closure
+item (5) says the assistant **captures** the path. A human changing Scale in
+Settings while
+[`capture-t10-control-c.ps1`](../capture-t10-control-c.ps1) polls
+`GetDpiForWindow` is control C as written.
+
+The harness captures three legs — before, changed, restored — and never takes
+the keyboard or the foreground; it raises the host with `HWND_TOPMOST`
+immediately before each capture so the Settings window can stay in front while
+it waits. **Its capture-and-record step is a single routine used by all three
+legs, so the before leg exercises it for real every run; the DPI-change
+comparison itself is not exercised until a change actually arrives.**
+
+A cross-process synthesised `WM_DPICHANGED` remains unavailable as a
 substitute — its `LPARAM` is a pointer to the suggested `RECT` and Windows
-does not marshal it across a process boundary. The disposition is an owner
-decision recorded in [../log.md](../log.md) §T10; the literal cross-monitor
-form is T11's regardless.
+does not marshal it across a process boundary. The literal cross-monitor form
+is T11's either way; these are two different paths through the same handler,
+not two names for one.
 
 ## What these captures do not establish
 

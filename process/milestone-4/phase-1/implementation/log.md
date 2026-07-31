@@ -6444,11 +6444,31 @@ tree** — `t10-delivery-check/` records `PER_MONITOR_AWARE_V2`,
 matching the Rust host at the same created size. "The files were copied" and
 "the delivered thing runs" are different facts.
 
-#### Control C — raised to the owner, not resolved
+#### Control C — pending a human-driven scale change
 
-Two frames across a live display-scale change are not obtainable on this
-machine. Measured, not assumed: one monitor, an RDP session on `Microsoft
-Remote Display Adapter`,
+**Withdrawn: "two frames across a live display-scale change are not obtainable
+on this machine".** That was written as a measurement and it is not one. What
+was measured is that three *programmatic* routes are unavailable; **the
+Settings UI was never tried**, and nothing in the probe run bears on it. The
+claim is the phase's own recurring defect — a statement wider than its object
+— arriving in the task whose entire content is evidence, and one paragraph
+after this log records that defect as the thing to watch for.
+
+The overreach had a second half worth separating, because it is not the same
+error. The bullet was also read as "the assistant must *cause* the change",
+and that constraint is nowhere in the plan:
+[preamble.md](./preamble.md)'s verification-closure item (5) says the
+assistant **captures** the path, and the human half of the split it names is
+T11's **cross-monitor** form, not the scale change. A human changing Scale in
+Settings while
+[evidence/capture-t10-control-c.ps1](./evidence/capture-t10-control-c.ps1)
+polls `GetDpiForWindow` is control C as specified, needs no undocumented API,
+and is not a substitution requiring an owner trade-off decision at all. The
+first framing invented a dilemma out of an unexamined assumption and then
+asked the owner to resolve it.
+
+What the probe run does establish, unchanged: one monitor, an RDP session on
+`Microsoft Remote Display Adapter`,
 `DisplayConfigGetDeviceInfo(DISPLAYCONFIG_DEVICE_INFO_GET_DPI_SCALE)`
 returning `ERROR_GEN_FAILURE` for the only active source, `Win8DpiScaling = 0`
 with no `LogPixels` and no `PerMonitorSettings` key. The one remaining route
@@ -6460,11 +6480,23 @@ suggested `RECT` and Windows does not marshal it across a process boundary, so
 the host would dereference the sender's address in its own space; T8's
 synthesis works because it is in-process.
 
-The decision is the owner's because it is the owner's machine and because
-declining it moves an AC7 evidence line from T10 to T11. **T10 does not close
-AC7's third requirement either way**, and did not before this task either:
-[preamble.md](./preamble.md) already assigns the literal cross-monitor form to
-T11, and obligation 5 already says neither half discharges it alone.
+`SPI_SETLOGICALDPIOVERRIDE` therefore stops being the question. It remains
+the only *programmatic* route found, it remains unmeasured beyond a no-op
+returning TRUE, and it is not needed if a human can reach the Scale control.
+
+**T10 does not close AC7's third requirement either way**, and did not before
+this task either: [preamble.md](./preamble.md) already assigns the literal
+cross-monitor form to T11, and obligation 5 already says neither half
+discharges it alone. Control C's path form and T11's monitor crossing are two
+different paths through the same handler, not two names for one.
+
+[evidence/capture-t10-control-c.ps1](./evidence/capture-t10-control-c.ps1)
+captures three legs — before, changed, restored — polling `GetDpiForWindow`
+and raising the host with `HWND_TOPMOST` immediately before each capture, so
+it never takes the keyboard or fights the Settings window for focus. **Its
+capture-and-record step is one routine used by all three legs, so the before
+leg exercises it for real; the DPI-change comparison itself is not exercised
+until a change arrives.** Stated rather than predicted away.
 
 #### The non-client decomposition, measured directly
 
