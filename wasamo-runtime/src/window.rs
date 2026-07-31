@@ -202,8 +202,10 @@ fn create_hwnd(title: &str, width: i32, height: i32) -> windows::core::Result<HW
 ///
 /// **Unconditional, with no `scale != 1` guard.** DD-M4-P1-001's tolerance of
 /// a failed awareness declaration rests on the conversion machinery having no
-/// second code path to keep correct; a guard here would be a branch that no
-/// test can fire until the declaration lands.
+/// second code path to keep correct; a guard here would be a branch that could
+/// not be fired by any test until the declaration landed at T9, on the path
+/// every host takes. It is reachable now, and the reason not to add it is
+/// unchanged: it would be the second code path the tolerance argument denies.
 ///
 /// **Placed before `WindowState` is boxed and before the `GWLP_USERDATA`
 /// pointer is installed.** `SetWindowPos` dispatches window messages
@@ -223,10 +225,15 @@ fn create_hwnd(title: &str, width: i32, height: i32) -> windows::core::Result<HW
 /// check, and the first calls `PostQuitMessage` (T4 independent review finding
 /// R-5). Neither appears in the measured set, so this correction is safe — but
 /// the safety of the two arms above the check rests on the message set, not on
-/// the pointer. Note that at a scale of 1 the size does not change and **no `WM_SIZE`
-/// is dispatched at all**, so this placement is unverifiable until the
-/// awareness declaration lands — which is the reason it is decided structurally
-/// rather than by observing that nothing currently goes wrong. The
+/// the pointer. Note that at a scale of 1 the size does not change and **no
+/// `WM_SIZE` is dispatched at all**, which is why this placement was
+/// unverifiable while the process was still undeclared, and why it was decided
+/// structurally rather than by observing that nothing went wrong. T9's
+/// declaration makes the correction change the size on any scaled monitor, so
+/// the nested dispatch is now reachable — but **no test observes it**:
+/// `resize_fn` can only be installed after `create` returns, so the
+/// creation-time nested pass has no witness by construction. The structural
+/// argument is still what carries this, not a measurement. The
 /// `WM_DPICHANGED` handler's ordering obligation is the opposite case and must
 /// be derived on its own terms: there the window is fully built and the nested
 /// `WM_SIZE` is *required* to run the re-layout.

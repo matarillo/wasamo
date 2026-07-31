@@ -5628,7 +5628,18 @@ had reported 96.
   |---|---|---|
   | `dpi_change_propagation_integration.rs` | **3 of 4 fail** | `CHANGED_DPI = 120` **is** this machine's DPI, so the change it drives is a no-op: the ratio assertions read a factor of 1 against an expected 1.25, and `assert_ne!(before_pixels, after_pixels)` fails because no re-rasterization was needed |
   | `dpi_scale_matrix_integration.rs` | **2 of 3 fail** | `os_dpi == REFERENCE_DPI` reads 120 against 96; and `row_shape(before)` reads **(5, 3)** against **(7, 2)**, because a 720-physical client at 120 DPI is 576 DIP and `floor((576 + 12) / 100)` is 5 |
-  | everything else — 33 binaries, 523 tests | green | No other fixture routes a coordinate through a window's scale (T1 finding F-4, still exactly true) |
+  | everything else — 33 binaries, **962** tests | green | No other fixture routes a coordinate through a window's scale (T1 finding F-4, still exactly true) |
+
+  **The test count was wrong in the first draft of this row and is corrected
+  here** (T9 independent review, minor 5). It read **523**, which is a
+  `wasamo-runtime` *package* figure standing beside a *workspace* binary count.
+  Recounted: `cargo test --workspace` runs 974 tests today; subtracting this
+  task's five additions (two new binaries with one test each, three new unit
+  tests) gives 969 at probe time, and subtracting the seven tests in the two
+  affected binaries gives **962** in the other 33. Two of those seven also
+  passed. The conclusion the row supports — everything outside the two DPI
+  binaries was green — is unchanged; the number attached to it was
+  mis-scoped, in the same table whose whole point is counting.
 
   T8's handed-forward prediction of its own mechanism is exact. What it did
   not reach is T7's binary, which no task named and which fails harder. The
@@ -5732,7 +5743,7 @@ reads the thread-local it now writes, is enumerated and classified".
 | `abi::wasamo_init` → `runtime::init` | The ABI entry point | **Must clear on entry.** It is the only caller that clears the thread-local, and it used to do so *after* `runtime::init` returned. Verified by mutation T9-M2 |
 | `lib::init` → `runtime::init` | The Rust-native entry point | **Correct unchanged, and the reason is recorded rather than assumed.** It never cleared the thread-local, so the diagnostic reaches a Rust host without any edit. It also does not *set* one on failure — that asymmetry is pre-existing (it returns `Result`, so the error is the return value) and is not widened here |
 | `declaration_diagnostic` | Pure selector | Two callers: `declare_per_monitor_aware_v2` and the unit tests. No production path reads the string other than through `wasamo_last_error_message` |
-| The rest of `abi.rs` | The other `clear_last_error()` sites | **Unchanged, and counted rather than asserted** — the first draft of this row said "all 24 are success-path clears" and that is false. `abi.rs` has **25** occurrences: 1 definition and **24** call sites. Of the 24, **1** is `wasamo_init`'s (the one that moves), **21** are success-path clears in ABI entry points, and **2** are inside the `#[cfg(test)]` module that begins at line 1291 and are not ABI paths at all. The 21 are what make abi_spec §4.1's "valid until the next ABI call on that thread" true, so the diagnostic survives exactly until the host's next ABI call — the documented lifetime, not a new one. `wasamo_init` is now the single entry-clear and its comment says why |
+| The rest of `abi.rs` | The other `clear_last_error()` sites | **Unchanged, and counted rather than asserted** — the first draft of this row said "all 24 are success-path clears" and that is false. `abi.rs` has **25** occurrences: 1 definition and **24** call sites. Of the 24, **1** is `wasamo_init`'s (the one that moves), **21** are success-path clears, and **2** are inside the `#[cfg(test)]` module and are not ABI paths at all. **Of the 21, 20 are in ABI entry points and one is in the private helper `finish_stack`** — corrected after the independent review (nit 1), which caught the first draft calling all 21 entry points. The 21 are what make abi_spec §4.1's "valid until the next ABI call on that thread" true, so the diagnostic survives exactly until the host's next ABI call — the documented lifetime, not a new one. `wasamo_init` is now the single entry-clear and its comment says why |
 
 Symbols: `SetProcessDpiAwarenessContext` and
 `DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2` in production;
@@ -5750,7 +5761,7 @@ along. Each row states how it was verified, not that it was considered.
 |---|---|
 | `GetDpiForWindow` answers with the monitor's DPI instead of 96 | Measured: 120 on the development machine, in the throwaway probe and again in all three hosts |
 | The non-client frame scales by its own DPI-indexed metrics | Measured indirectly: the hosts' client is 982 × 703 inside a 1000 × 750 outer, and `frame_thickness` is read live on every call in the T8 fixture rather than derived from a DPI |
-| `window::realize_dip_window_size` stops being a no-op and **dispatches a real nested `WM_SIZE` for the first time** — the F-31 failure mode that was previously unreachable | The nested dispatch lands before the `GWLP_USERDATA` install, so `wnd_proc` cannot reach runtime state (T4's decision, argued structurally because it could not be measured then). Now measurable, and measured: all three hosts create, lay out and render without incident, and the whole workspace suite is green with every window created at 120 DPI |
+| `window::realize_dip_window_size` stops being a no-op and the nested `WM_SIZE` F-31 recorded as **unreachable** becomes reachable | **Inferred, not measured, and the first draft of this row said "measured"** (T9 independent review, minor 6). The inference is T4's measured message set plus a correction that is no longer size-preserving. What the evidence offered — three hosts creating and rendering without incident, the suite green with every window created at 120 DPI — **cannot distinguish "the nested dispatch happened and `wnd_proc` was safely inert" from "no nested dispatch happened"**, so it is a no-early-crash signal and nothing more. **No test observes it**: `resize_fn` can only be installed after `window::create` returns, so the creation-time nested pass has no witness by construction. T4's placement decision therefore still rests on its structural argument, exactly as T4 said it must |
 | Text surfaces are allocated at `ceil(dip × s)` — larger, and rebuilt on every change | The T7 and T8 surface assertions still fire; mutation T8-M4's contract (`ceil`, not truncate) is unchanged |
 | The OS begins delivering `WM_DPICHANGED` for real | Not exercised here — T11's monitor crossing is what shows it. Stated rather than implied |
 | **Near-miss**: `ERROR_ACCESS_DENIED` is `0x80070005`, which is the exact string `tests/common/mod.rs` matches to decide "Compositor unavailable" | Safe, and safe by a conjunct this task does not own: the helper checks `status == WASAMO_ERR_RUNTIME` first, and on that arm `wasamo_init` overwrites the diagnostic with `"wasamo_init: {e}"`. Recorded as a carry-forward, because a future change that reports a declaration failure through the *status* would make the helper skip every Compositor test on a machine whose host declared its own awareness |
@@ -5837,7 +5848,7 @@ harder.
 | T8-M1 | Inbound client-extent seam removed from the `WM_SIZE` arm | `dip_layout_...` **fails** (unchanged) |
 | T8-M2 | `visual_rect_dip` divides by each node's own scale | `a_stale_descendant_...` **fails**, `0` clicks against `1`, control click passing (unchanged) |
 | T8-M3 | `sync_visuals` writes sizes at `DipScale::IDENTITY` | `dip_layout_...` **fails** (unchanged) |
-| T8-M7 | `begin_scale_change` does not commit the scale | **All three** T8 tests fail and **three of four** T7 tests fail. At T8 the mixed-scale test passed under this mutation; it now fails, because the generalised fixtures depend on the commit for their baseline too. Broader, not narrower |
+| T8-M7 | `begin_scale_change` does not commit the scale | **All three** T8 tests fail and **three of four** T7 tests fail, on the 120-DPI development machine. **Qualified after the independent review (major 3): that breadth is a property of this machine, not of the fixtures.** `normalise_to_reference_baseline` asserts the committed scale is 96, which on a 96-DPI display is the value the window was created with — so it passes whether or not the commit happened. Re-measured **by this author rather than taken from the review**, with the creation DPI forced to 96: the mixed-scale test **passes** under M7, exactly as it did at T8. "Broader, not narrower" was true of the run and false as a claim about the change |
 | T7-M3 | The fallback removed | The two fallback tests **fail**; the nested-path and both-fail tests pass (unchanged) |
 | T7-M5 | `SWP_NOMOVE` inherited from the creation-time correction | `a_size_changing_suggested_rectangle...` **fails** (unchanged) |
 
@@ -5848,6 +5859,64 @@ generalisation does not touch — the generalisation changed *which DPI is
 targeted* and *how the before-state is reached*, and the six re-run are the
 ones whose sensitivity depends on either. That is a judgment, and it is
 recorded as one.
+
+#### The propagation pass — added after the independent review, which is itself the finding
+
+**This section did not exist when the end gate was first recorded, and the
+plan's end gate listed it as owed** ("the propagation pass with its enumerated
+asserting sites"). What existed was the *output* — two corrected doc comments —
+and one line in the retrospective naming them. That is precisely the abstract
+"checked" [gates §2](../../../procedures/implementation-gates.md) refuses: a
+reviewer cannot audit an enumeration that was never written down.
+
+Worse, the pass had **missed a site**, and the reviewer found it where the
+plan's own falsifiable test says it will be looked for: *"falsified if a
+reviewer again finds an asserting site the pass never visited."* The missed
+site is `window.rs`'s `realize_dip_window_size` doc comment — **in the same
+file as a site the pass did correct**. The pass propagated by the *name* T9
+(it edited the comment whose text mentioned T9) rather than by the
+proposition. That is the phase's signature failure for the ninth time,
+occurring inside the remediation written for it, which is the third time a
+remediation has done that.
+
+The enumeration, written now and audited against ground truth:
+
+**Proposition P1** — *"the process has not declared DPI awareness, so the OS
+reports 96 for every window and every scale factor is 1."*
+
+| Asserting site | Verdict |
+|---|---|
+| `tests/dpi_scale_matrix_integration.rs` header, stated limit 3 | **Corrected** — rewritten to say the messages are synthesised by choice, not by necessity |
+| `tests/dpi_change_propagation_integration.rs` header | **Corrected** — same |
+| `tests/dpi_scale_matrix_integration.rs`, test 1's assertion and doc | **Corrected** — replaced, and the replacement qualified again after review major 1 |
+| `src/dip_scale.rs`, `IDENTITY` doc | **Corrected** — "until T9, on every process" was present tense and false |
+| `src/window.rs`, `WM_DPICHANGED` handler doc | **Corrected** — re-tensed |
+| `src/window.rs`, `realize_dip_window_size` doc, the nested-`WM_SIZE` sentence | **MISSED by the pass; corrected at review remediation.** Asserted "no `WM_SIZE` is dispatched at all, so this placement is unverifiable until the awareness declaration lands" — the identical proposition the trap-2 row declares falsified |
+| `src/window.rs`, same doc comment, the no-guard paragraph | **MISSED by the pass; corrected at review remediation.** "a branch that no test can fire until the declaration lands" |
+| `src/window.rs`, `realize_dip_window_size` failure note | **No edit needed**, checked: conditional in both directions ("an aware process… while an unaware one…"), true whatever the posture |
+| `plan.md` §Task list intro; `preamble.md` §The sequencing thesis | **No edit needed**, checked: scoped to what T2–T8 landed into, and historically accurate |
+| `docs/abi_spec.md` §4.1; `docs/architecture.md` §12 | **No edit needed**, checked: both conditional ("including none, where the effective DPI is 96") |
+| `log.md` §T1–§T8, `retrospectives/t1..t8.md` | **Must not be edited** — historical record of what was true when written |
+
+**Proposition P2** — *"a created window's scale is 1, so the creation-time
+correction is an identity and dispatches no `WM_SIZE`."*
+
+| Asserting site | Verdict |
+|---|---|
+| `src/window.rs`, `realize_dip_window_size` doc | **MISSED; corrected** — the same site, which is why one proposition-first pass over both propositions would have caught it |
+| `preamble.md` R-9 | **Updated** — the residual it named is discharged, with the measurement |
+| `plan.md` §T4 "Inertness holds"; `preamble.md` F-31 paragraph | **No edit needed**, checked: both are records of what T4 measured, correctly tensed |
+| `handoff.md`, `realize_dip_window_size` row | **No edit needed**, checked: a re-trigger criterion, not a claim about the current posture |
+
+**What the miss says about the method.** Enumerating *documents* was not
+enough, because the missed site is a doc comment inside a source file, and the
+first pass's search was seeded from hits for the string `T9` and for "unaware".
+The sentence carrying the proposition contains neither. The rule the plan
+already states — write the proposition, then enumerate what asserts it, then
+search — was followed for the first two steps and abandoned at the third, where
+the enumeration was allowed to become whatever the search returned. **The
+enumeration has to name the source files by responsibility before the search
+runs**, or the search silently defines the scope.
 
 #### Trap 5 — carry-forward
 
@@ -5877,10 +5946,37 @@ directories were **deleted** first, so neither reused a cached artifact.
 - `examples/counter-zig` — `zig build` after removing `zig-out` and `.zig-cache`: clean.
 
 **No manifest asset and no build-system edit.** Audited rather than asserted:
-no `.rc`, `RT_MANIFEST` or `dpiAware` anywhere under `examples/`, and the only
-match for "manifest" is `CARGO_MANIFEST_DIR`, a cargo path variable. `git log`
-puts the last change to `examples/` at `f3ccaef` (M3-Phase 8) — before this
-phase opened.
+no `.rc` or manifest **source file** anywhere under `examples/`, no `dpiAware`
+in any of them, and the only match for "manifest" is `CARGO_MANIFEST_DIR`, a
+cargo path variable. `git log` puts the last change to `examples/` at
+`f3ccaef` (M3-Phase 8) — before this phase opened.
+
+**One correction to how that was first worded, and the replacement is measured
+rather than inferred** (independent review, nit 5). The first draft said "no
+`RT_MANIFEST` anywhere under `examples/`", which is false of the *built*
+binary. Checked at the byte level rather than reasoned about, across all three:
+
+| Host binary | embedded manifest | `dpiAware` | `dpiAwareness` |
+|---|---|---|---|
+| `counter-c/build/Release/counter.exe` | **yes** (MSVC's default `asInvoker` trustInfo manifest) | no | no |
+| `target/release/counter-rust.exe` | no | no | no |
+| `counter-zig/zig-out/bin/counter-zig.exe` | no | no | no |
+
+So one of the three does carry an embedded manifest — the toolchain's, not the
+host's — and none of the three carries a DPI element. The claim DD-M4-P1-001
+makes is that no host ships a manifest *asset of its own* or gains a build
+step, and that survives.
+
+**The first replacement wording for this was also over-strong and is not what
+is written above.** It said the absence of `dpiAware` is "what the level
+readback proves". It is not: a host manifest declaring V2 would produce the
+identical V2 reading, which is the stated limit already recorded for the
+declaration binary. What actually establishes it is the byte-level check above,
+plus T1's and T4's measurements of these same hosts as **unaware** before T9 —
+which no host-side declaration could have permitted. Recorded because a false
+universal in the middle of an audit table is what this phase keeps shipping,
+and because catching one in the correction for another is the pattern the
+reviewer named.
 
 All three launched and were asked what level is in force in their own process,
 by an observer declared Per-Monitor-Aware V2 (F-48):
@@ -5890,6 +5986,12 @@ counter-c      level=PER_MONITOR_AWARE_V2   GetDpiForWindow=120  outer=1000x750 
 counter-rust   level=PER_MONITOR_AWARE_V2   GetDpiForWindow=120  outer=1000x750  client=982x703
 counter-zig    level=PER_MONITOR_AWARE_V2   GetDpiForWindow=120  outer=1000x750  client=982x703
 ```
+
+The probe is [evidence/probe-t9-hosts.ps1](./evidence/probe-t9-hosts.ps1),
+landed after the independent review (nit 4) pointed out that three pasted lines
+with no recorded source cannot be re-audited — which matters more than usual
+here, because F-48 means the numbers depend on a property of the probe itself.
+Re-run from the committed script, it reproduces the three lines above exactly.
 
 **Why the level readback and not just "they ran".** F-9 recorded that
 1000 × 750 is *also* what an unaware process produces, because DWM stretches
@@ -5944,3 +6046,61 @@ the pre-declaration must precede `wasamo_init`. That call does not need a
 Compositor and will succeed on a session that has none, so the test still
 reaches the helper and still skips — but it means the binary does OS work
 outside the guard, which no other binary in the suite does.
+
+### T9 independent review — disposition (2026-07-31)
+
+Full independent review per the lane table. The reviewer re-ran four of T9's
+own mutations and reproduced F-47 from the pre-T9 fixtures.
+
+**Every finding acted on below was re-verified by this author before the
+correction was written**, rather than accepted on the reviewer's account —
+because the corrections themselves make claims, and a correction built on an
+unverified report is the same defect one level out. Specifically: major 1 was
+reproduced (seed replaced by `DipScale::IDENTITY`, declaration removed → the
+test fails **only** at `is_v2` while `cached == os_dpi` passes); major 3 was
+re-measured (creation DPI forced to 96 → the mixed-scale test passes under
+T8-M7, as at T8); nit 1 was recounted by walking each of the 24 call sites back
+to its enclosing function (20 `extern "C"` entry points, 1 private helper, 2 in
+`#[cfg(test)]`, 1 `wasamo_init`); nit 5 was checked at the byte level in all
+three built host binaries. Nit 3 was confirmed by reading the two spec
+sections. The rest are corrections to prose whose ground truth is the diff.
+
+| # | Severity | Finding | Disposition |
+|---|---|---|---|
+| MAJOR 1 | major | "The creation-time half stopped being degenerate at T9" is false on a 96-DPI runner. `cached == os_dpi` is satisfied by a seeding that ignores the OS entirely, because `DipScale::IDENTITY.dpi()` **is** 96, and the awareness precondition is independently true there | **Confirmed, and reproduced independently.** With `WindowState`'s seed replaced by `DipScale::IDENTITY` and the declaration removed, the test fails **only** at the `is_v2` assertion; `cached == os_dpi` passes. On a real 96-DPI runner `is_v2` is true, so the test would be green with the seeding broken. The doc comment is rewritten to say what the precondition does buy and what it does not, and the module header gains a stated limit: **the seeding path has no CI coverage from this test, and none is available** — at 96 DPI "seeded from the OS" and "seeded from the identity" are the same number |
+| MAJOR 2 | major | The propagation pass produced no enumeration artifact, and missed an asserting site — `realize_dip_window_size`'s doc comment, in the same file as a site the pass did correct | **Confirmed on both halves.** The end gate listed the enumeration as owed and shipped only the output; a §The propagation pass section is added with both propositions and every asserting site classified. The two missed sentences are corrected. This is the phase's signature failure for the **ninth** time and the **third** time inside a remediation for it, which is the finding that matters more than the two comments |
+| MAJOR 3 | major | "Broader, not narrower" for T8-M7 is a 120-DPI result presented as a property of the fixtures. `normalise_to_reference_baseline`'s scale assertion is `96 == 96` on a 96-DPI runner and passes whether or not the commit happened | **Confirmed.** The mutation row is qualified to say the breadth belongs to this machine, and the vacuity is recorded as a stated limit on the helper and in the module header. The claim the header does keep — that the *arithmetic* is machine-independent — survives, because the DIP client is 720 × 480 either way |
+| MINOR 4 | minor | `bindings/c/wasamo.h` still documents last-error as "the most recent non-OK status", which T9 carves out. It is the only place a C or Zig host learns the semantics, and it is named by no phase task | **Confirmed and fixed here.** One paragraph mirroring abi_spec §4.1's carve-out. Mechanical transcription of an Accepted DD, so it is not a spec change under the retrospective's item-2 rule. The reviewer independently checked all six example hosts and confirmed none reads last-error on an OK status |
+| MINOR 5 | minor | "the workspace's other 523 tests" pairs a `wasamo-runtime` *package* count with a *workspace* binary count | **Confirmed, recounted, corrected to 962.** `cargo test --workspace` runs 974 today; minus T9's five additions and the seven tests in the two affected binaries. The conclusion is unchanged; the number was mis-scoped in the table whose point is counting |
+| MINOR 6 | minor | "Now measurable, and measured" for the creation-time nested `WM_SIZE` is backed by an absence of failure. Nothing observes the dispatch — `resize_fn` can only be installed after `create` returns | **Confirmed.** The trap-2 row is rewritten to say *inferred*, from T4's measured message set plus a correction that is no longer size-preserving, and to state that the green suite is a no-early-crash signal only. The same correction is made in the `realize_dip_window_size` doc comment |
+| MINOR 7 | minor | "each test puts the window into the before-state it assumes" is false — 2 of 3 do, and the next sentence concedes it | **Confirmed and fixed**: "the two tests that measure a scale change" |
+| NIT 1 | nit | Of the 21 success-path clears, one is in the private helper `finish_stack`, not an entry point | **Confirmed** (read the enclosing function) **and corrected**: 20 entry points + 1 private helper |
+| NIT 2 | nit | "like every other entry point in this file" — `wasamo_last_error_message` clears nowhere and `wasamo_shutdown` has no status arm | **Confirmed and narrowed** to "the status-returning entry points" |
+| NIT 3 | nit | architecture.md §12 and abi_spec §4.1 say "first act"; the declaration is the first *OS-touching* act and does not run on a second `wasamo_init` | **Confirmed.** Normative-spec wording is Moment 2's, so it is filed as a **fifth T12 divergence item** rather than edited here. The retrospective's "no spec change" was right about §4.1's diagnostic contract and silent about this clause |
+| NIT 4 | nit | The three-host artifact is three pasted lines with no recorded probe source, which matters because F-48 made the numbers depend on a property of the probe | **Confirmed and fixed**: [evidence/probe-t9-hosts.ps1](./evidence/probe-t9-hosts.ps1), with the F-48 reason in its header. Re-run from the committed script it reproduces the three lines exactly |
+| NIT 5 | nit | "no `RT_MANIFEST` anywhere under `examples/`" is false of the built exe — MSVC embeds a default manifest | **Confirmed and corrected** to "no `.rc` or manifest *source file*". The substance is unchanged and is what the level readback proves: the toolchain's default manifest carries no `dpiAware` |
+
+**What the reviewer checked and found sound**, recorded because coverage is
+part of the artifact: all four T9 mutations re-run and reproduced exactly;
+F-47 reproduced from the pre-T9 fixtures; the placement argument and its
+readback; the `clear_last_error()` move audited across all 24 call sites and
+every `runtime::init` caller and all six example hosts; the `0x80070005`
+near-miss analysis and both its conjuncts; the two new binaries shown unable
+to pass for a wrong reason; the T7 re-generalisation shown to weaken nothing;
+the three-host artifact accepted as a genuine falsifier; and the trap-#4
+disposition, including the judgment that rejecting the pre-authorised stated
+limit was correct. The reviewer's objection there was that limits were
+**missing** (majors 1 and 3), not that a stated one was wrong.
+
+**The pattern, stated rather than left implicit.** Three of the four
+substantive findings — majors 1 and 3, minor 6 — are the same defect: a claim
+that is true of the run that produced it and false as a claim about the
+change. Major 1 and major 3 are both instances of a sharper version: **an
+assertion that discriminates on the 120-DPI development machine and is vacuous
+at 96 DPI**, presented as a property of the test. The phase has recorded this
+class eight times before T9 and it arrived twice more here, both inside work
+whose stated purpose was to make fixtures machine-independent. The corrective
+this task adds to the record: **when a fixture is claimed to be
+machine-independent, the claim has to be evaluated at each machine the fixture
+will actually run on** — for this repository that is 96 (CI) and 120 (dev), and
+an assertion is only as strong as its weakest one.

@@ -55,14 +55,32 @@
 //! The fix is not to compute against whatever DPI the machine happens to
 //! report — that would make every exactness argument below conditional on the
 //! developer's display settings, and 100 DPI's `factor_is_exact` split would
-//! stop meaning what it says. Instead each test **puts the window into the
-//! before-state it assumes**, with one synthesised `WM_DPICHANGED` to
-//! [`REFERENCE_DPI`] carrying a rectangle that realises the chosen physical
-//! client (see `normalise_to_reference_baseline`). A 96-DPI CI runner and a
-//! 120-DPI laptop then run the same arithmetic. What this deliberately gives
-//! up is observing the *creation-time* scale on a scaled monitor; that is
-//! test 1's job and `dpi_awareness_declaration_integration.rs`'s, not the
-//! matrix's.
+//! stop meaning what it says. Instead the two tests that measure a scale change
+//! **put the window into the before-state they assume**, with one synthesised
+//! `WM_DPICHANGED` to [`REFERENCE_DPI`] carrying a rectangle that realises the
+//! chosen physical client (see `normalise_to_reference_baseline`). A 96-DPI CI
+//! runner and a 120-DPI laptop then run the same arithmetic. Test 1 does not
+//! normalise and says why in its own doc comment.
+//!
+//! # Two stated limits about that baseline, both measured
+//!
+//! 1. **`normalise_to_reference_baseline`'s scale assertion is vacuous at
+//!    96 DPI.** It asserts the committed scale is [`REFERENCE_DPI`] after the
+//!    synthesised message — which on a 96-DPI display is the value the window
+//!    was created with, so it passes whether or not the handler committed
+//!    anything. Measured: with `begin_scale_change` neutered *and* the window
+//!    created at 96 DPI, `a_stale_descendant_scale_still_hit_tests_where_the_widget_is`
+//!    passes. On the 120-DPI development machine the same mutation fails all
+//!    three tests. The normalisation makes the *arithmetic* machine-independent;
+//!    it does not make every assertion about it equally sharp everywhere.
+//! 2. **The creation-time seeding path has no coverage here on a 96-DPI
+//!    runner** — see `a_created_windows_cached_scale_is_the_dpi_the_os_reports`,
+//!    where the reason is that no reading distinguishes "seeded from the OS"
+//!    from "seeded from the identity" when the monitor is at the reference DPI.
+//!
+//! What this file deliberately gives up either way is observing the
+//! *creation-time* scale on a scaled monitor; that is test 1's job on a scaled
+//! machine, and `dpi_awareness_declaration_integration.rs`'s for the level.
 
 #![cfg(windows)]
 
@@ -346,6 +364,11 @@ unsafe fn set_client_extent(hwnd: HWND, client_w: i32, client_h: i32, what: &str
 /// reports — 96 on a CI runner, 120 on the development laptop — and nothing
 /// below would be machine-independent if that value were allowed through.
 ///
+/// **The scale assertion below is vacuous on a 96-DPI display** — see the
+/// module header's stated limit 1. It is kept because it is load-bearing
+/// everywhere else and because a silent baseline is worse than a
+/// conditionally-sharp one, not because it fires on every machine.
+///
 /// Note that the non-client frame does **not** move when this runs. The
 /// process is Per-Monitor-Aware V2 and the window is still on its real
 /// monitor, so the frame keeps that monitor's DPI-indexed metrics whatever
@@ -477,17 +500,35 @@ fn assert_scaled(actual: f32, before: f32, factor: f32, exact: bool, what: &str)
 /// The cached scale is the OS's number, and the handler's `wParam` is the only
 /// thing that moves it.
 ///
-/// **The creation-time half stopped being degenerate at T9, and what says so
-/// is not a number** (finding F-47). This assertion used to be paired with
-/// `os_dpi == 96`, whose stated job was to record that the equality was
-/// `96 == 96` in an unaware process and to fail loudly when T9 landed. It did
-/// fail, as designed. Its replacement is not the same assertion with a
-/// different number — no number works, because 96 is the *correct* answer on a
-/// 100% monitor and `os_dpi != 96` would redden a correct build on a CI runner.
-/// What makes `cached == os_dpi` a claim about **per-monitor** DPI is the
-/// awareness level in force, so that is what is asserted. The full artifact for
-/// the level itself is `dpi_awareness_declaration_integration.rs`; this is the
-/// precondition this test needs in order to mean what it says.
+/// **The creation-time half is non-degenerate only on a scaled monitor, and
+/// this test cannot make it otherwise** (findings F-47 and, for the
+/// qualification, the T9 independent review's major 1).
+///
+/// The assertion used to be paired with `os_dpi == 96`, whose stated job was to
+/// record that the equality was `96 == 96` in an unaware process and to fail
+/// loudly when T9 landed. It did fail, as designed. Its replacement is not the
+/// same assertion with a different number — no number works, because 96 is the
+/// *correct* answer on a 100% monitor and `os_dpi != 96` would redden a correct
+/// build on a 96-DPI CI runner.
+///
+/// **What the awareness precondition does and does not buy.** It is what makes
+/// `cached == os_dpi` a statement about **per-monitor** DPI rather than about
+/// the constant an unaware process is handed; without it the equality is true
+/// of a window on any monitor at any scale. It does **not** restore
+/// discrimination on a 96-DPI display, and the first version of this comment
+/// claimed it did. Measured: with `WindowState`'s seed replaced by
+/// `DipScale::IDENTITY` — i.e. a runtime that ignores `GetDpiForWindow`
+/// entirely — this test still passes whenever the monitor is at 96 DPI, because
+/// `IDENTITY.dpi()` *is* 96 and the awareness assertion is independently true.
+/// **So the seeding path has no CI coverage from this test**, and none is
+/// available here: on a 96-DPI monitor "seeded from the OS" and "seeded from
+/// the identity" are the same number, and no second reading distinguishes them.
+/// The development machine at 120 DPI is what makes this test live; CI is not.
+/// Recorded as a stated limit in the module header rather than papered over.
+///
+/// The full artifact for the level itself is
+/// `dpi_awareness_declaration_integration.rs`; the precondition below is what
+/// this test needs in order to mean what it says.
 #[test]
 fn a_created_windows_cached_scale_is_the_dpi_the_os_reports() {
     run_on_owning_runtime_thread_or_skip("cached window scale", move || {

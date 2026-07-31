@@ -2235,6 +2235,21 @@ recorded; any finding triaged to a task or to
       unqualified cargo "fresh" result are not source-identity evidence when
       two source trees reused one artifact directory; neither is frame identity
       general source-identity evidence when the mutation could be render-neutral.
+- [ ] **A fifth divergence item, added at T9's independent review (nit 3).**
+      [architecture.md §12](../../../../docs/architecture.md#coordinate-spaces)
+      says `wasamo_init` "declares Per-Monitor-Aware V2 as its **first act**",
+      and [abi_spec §4.1](../../../../docs/abi_spec.md) says "as its first act
+      — before any other runtime initialisation". Both are one clause off from
+      what landed and what T1 deliberately decided: the declaration is the
+      first **OS-touching** act, below `capture_owning_thread()` and below the
+      `RUNTIME.get().is_some()` early return, so on a second `wasamo_init` it
+      does not run at all. That placement is not an implementation liberty —
+      it is what stops the runtime taking `ERROR_ACCESS_DENIED` against its own
+      correct declaration, and T9 pinned it with a readback. The specs should
+      say "first OS-touching act, once per process". Recorded here rather than
+      edited at T9 because normative-spec wording is Moment 2's, and because
+      T9's retrospective answered "no spec change" — which was right about
+      §4.1's *diagnostic* contract and silent about this clause.
 - [ ] **Four Moment 2 divergence items named at T5**, so they are folded
       into the pass above rather than found during it. (i)
       [architecture.md §12.4](../../../../docs/architecture.md#coordinate-spaces)
