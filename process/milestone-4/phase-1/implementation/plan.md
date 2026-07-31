@@ -1792,7 +1792,29 @@ Compositor-unavailable observation (T6 round-1 R3) — **a landing blocker
 closed by an owner run, not by this task**, and one owner session closes
 both.
 
-- [ ] `SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2)`
+**Closed 2026-07-31.** Landed as **one code commit** — the declaration alone
+leaves five tests red across two binaries, and the entry-clear alone is an ABI
+edit with no consumer, so no split produces a buildable, honestly-testable
+intermediate. Artifacts in [log.md](./log.md) §T9: the call-site audit, the
+process-wide side-effect enumeration, a **ten-mutation** table (four of T9's
+own, all run and none predicted, plus six inherited from T7 and T8 re-run
+against the re-generalised fixtures), the three-host artifact with the level
+in force read out of each real host process, and four stated limits. The task
+produced findings F-46, F-47 and F-48, and gave T1's F-10 the readback it had
+been carried without for eight tasks.
+
+**Two results came out that the re-audit did not predict.** The first is F-48:
+an unaware observer reads an aware window's rectangle in *virtualized*
+coordinates, so the first three-host run reported `800 × 600` for windows that
+are really `1000 × 750` — internally consistent, plausible, and wrong by
+exactly the scale factor, which is the signature this phase exists to remove.
+The second is that the fixture re-generalisation made T7's and T8's binaries
+**posture-independent**: with the declaration deleted entirely, all four T7
+tests and two of three T8 tests still pass, and the two that fail are the
+awareness assertions that should. Before this task the same mutation was
+indistinguishable from the shipped state. Both are measured, not argued.
+
+- [x] `SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2)`
       as the **first OS-touching act** of `runtime::init()` — before
       `CreateDispatcherQueueController`, before `Compositor::new`, before
       `TextRenderer::new`, and **below** the existing
@@ -1804,14 +1826,14 @@ both.
       `ERROR_ACCESS_DENIED` on a process that had already declared
       correctly. `capture_owning_thread()` necessarily precedes it and
       is not OS work that can lock the awareness.
-- [ ] **Tolerate failure.** `ERROR_ACCESS_DENIED` means the process's
+- [x] **Tolerate failure.** `ERROR_ACCESS_DENIED` means the process's
       awareness was already set — typically by a legitimate host that
       declared its own. `wasamo_init` still returns `WASAMO_OK`; the
       outcome is recorded through the existing thread-local last-error
       mechanism as a diagnostic string, not a returned status. Do **not**
       add a branch that assumes scale 1 on failure — that is the one
       option that can be wrong, and it is invisible at 100%.
-- [ ] **Make that channel actually carry** (re-audit point 1, finding
+- [x] **Make that channel actually carry** (re-audit point 1, finding
       F-46). Move `wasamo_init`'s `clear_last_error()` from its `Ok` arm to
       the **entry** of the function. Recorded as its own item because it is
       an edit to a shipped ABI entry point rather than a detail of the
@@ -1827,7 +1849,7 @@ both.
       **Falsify it rather than assert it**: run the tolerated-failure test
       against a build with the clear back on the `Ok` arm and record that
       it goes red.
-- [ ] **Decide the shape of the diagnostic, and keep it one branch.** The
+- [x] **Decide the shape of the diagnostic, and keep it one branch.** The
       selection between "record nothing" and "record the disclosure" is
       pure logic and belongs in a free function taking the call's
       `Result`, so trap #4's artifact does not depend on an OS outcome to
@@ -1840,10 +1862,10 @@ both.
       `wasamo_init` returned `WASAMO_OK`, that every scale factor is still
       derived from the effective per-window DPI, and that what is not
       guaranteed below Per-Monitor-Aware V2 is crispness.
-- [ ] No legacy-OS fallback: both `SetProcessDpiAwarenessContext` (1703+)
+- [x] No legacy-OS fallback: both `SetProcessDpiAwarenessContext` (1703+)
       and `GetDpiForWindow` (1607+) predate the stated Windows 10 1809
       floor.
-- [ ] **No `Cargo.toml` edit is needed** — T4's `Win32_UI_HiDpi` covers
+- [x] **No `Cargo.toml` edit is needed** — T4's `Win32_UI_HiDpi` covers
       this task's declaration symbols. Measured, not inferred: T4's
       throwaway probe compiled `SetProcessDpiAwarenessContext` and
       `DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2` against the landed
@@ -1858,7 +1880,7 @@ both.
       binary needs and which nothing before this task had a reason to name.
       No `Cargo.toml` edit; nothing for T12's §4.5 re-sync to pick up on
       this account.
-- [ ] Integration test asserting the **effective** level —
+- [x] Integration test asserting the **effective** level —
       `GetWindowDpiAwarenessContext(hwnd)` compared against
       `DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2` with
       `AreDpiAwarenessContextsEqual`. Assert the level in force, not that
@@ -1866,7 +1888,7 @@ both.
       point 3): the tolerated-failure test below must set the process's
       awareness before `wasamo_init` runs, which would make this
       assertion pass for the wrong reason if the two shared a process.
-- [ ] **Re-generalise T7's and T8's fixtures off the assume-creation-scale-1
+- [x] **Re-generalise T7's and T8's fixtures off the assume-creation-scale-1
       premise** (re-audit point 2, finding F-47), and treat this as evidence
       work rather than as repair. Both binaries encode "the before-state is
       96 DPI" in constants derived from `REFERENCE_DPI`, and T9 is what makes
@@ -1879,7 +1901,7 @@ both.
       tests are green again": re-run the mutations T7 and T8 recorded and
       show they still go red against the generalised fixtures. A mutation
       that now passes is a finding, not a formality.
-- [ ] **Rebuild and run all three hosts** — C, Rust, Zig — with no
+- [x] **Rebuild and run all three hosts** — C, Rust, Zig — with no
       manifest asset and no build-system edit (preamble obligation 6,
       risk R-8). This is the auditable artifact for the
       declarative-host boundary claim; it must be run, not inferred from
@@ -1890,7 +1912,7 @@ both.
       would run against **pre-T9 object code** carrying a fresh DLL
       timestamp, and the artifact would report the wrong awareness level
       while every build step looked green.
-- [ ] **Re-run the trap-#4 decision explicitly** for the diagnostic
+- [x] **Re-run the trap-#4 decision explicitly** for the diagnostic
       branch (see [preamble.md §Implementation gates](./preamble.md#implementation-gates)).
       If the tolerated-failure path cannot be fired by a test because
       process DPI awareness is a one-shot per process, record that as a
@@ -1910,7 +1932,7 @@ both.
       cannot be fired *inside a process that has already let the runtime
       declare successfully*, so no binary asserts both outcomes, and the
       two facts are two artifacts rather than one.
-- [ ] **Enumerate what the declaration drags in process-wide** (trap #2,
+- [x] **Enumerate what the declaration drags in process-wide** (trap #2,
       re-audit point 5). The declaration is a one-line call whose blast
       radius is the whole process: `GetDpiForWindow` starts answering with
       the monitor's DPI, the non-client frame starts scaling by its own
@@ -1926,7 +1948,7 @@ both.
       `status == WASAMO_ERR_RUNTIME` and the `Err` arm overwrites the
       diagnostic. Record it, because the thing protecting it is one
       conjunct in a helper this task does not own.
-- [ ] **Propagate the falsified propositions, by proposition and not by
+- [x] **Propagate the falsified propositions, by proposition and not by
       string** (§Task list's standing rule). The two this task falsifies
       are: *"the process has not declared DPI awareness, so the OS reports
       96 and every scale factor is 1"* and *"a created window's scale is 1,
