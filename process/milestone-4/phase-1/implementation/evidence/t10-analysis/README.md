@@ -29,6 +29,20 @@ is recorded (T9 finding F-49). The harness aborts if the readback is not PMv2.
 | `t10-aware-restored/` | accepted source after `cargo clean -p wasamo-runtime --release` + workspace rebuild | aware | 1200 × 720 | F-40 restoration |
 | `t10-delivery-check/` | the **staged** `gallery-zig.exe` + `wasamo.dll` handed to T11 | aware | 982 × 703 (created) | The delivered copy runs, not just the build tree |
 
+### Reproducing the base-commit side
+
+```
+git worktree add --detach <tmp>/base-80d79c4 80d79c4
+cd <tmp>/base-80d79c4
+$env:CARGO_TARGET_DIR = "<tmp>/base-target"     # never the repo's target/
+cargo build -p wasamo-runtime --release
+cargo build --release --workspace
+```
+
+then `capture-t10-controls.ps1 -Exe <tmp>/base-target/release/gallery-rust.exe`.
+The separate `CARGO_TARGET_DIR` is F-40's requirement and the worktree is
+removed afterwards, so `git worktree list` in a fresh clone shows nothing.
+
 ## The measurement check — the gallery's full signature at the landed declaration
 
 Risk R-9 was closed at T9, whose three-host probe ran `counter-c` /
