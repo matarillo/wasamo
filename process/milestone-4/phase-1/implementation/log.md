@@ -6092,6 +6092,19 @@ disposition, including the judgment that rejecting the pre-authorised stated
 limit was correct. The reviewer's objection there was that limits were
 **missing** (majors 1 and 3), not that a stated one was wrong.
 
+**Post-remediation verification, on the final branch state** (the
+[retrospectives.md](../../../procedures/retrospectives.md) item-3 rule that a
+remediation landing after the retrospective invalidates the recorded gate run):
+
+- `cargo fmt --all -- --check` and `git diff --check` — both exit 0.
+- `cargo test --workspace --no-fail-fast` — **37 binaries, 974 tests, 0 failed.**
+- `git status --porcelain` — empty; every mutation and probe reverted.
+- The remediation changes **no executable code**: a diff of `wasamo-runtime/`
+  filtered to non-comment lines is empty. Every source change is a doc comment
+  or a comment, plus one comment block in `bindings/c/wasamo.h`. So the clean
+  rebuild recorded above is not stale in the way item 3 guards against — but the
+  suite was re-run against the final state anyway rather than argued about.
+
 **The pattern, stated rather than left implicit.** Three of the four
 substantive findings — majors 1 and 3, minor 6 — are the same defect: a claim
 that is true of the run that produced it and false as a claim about the
