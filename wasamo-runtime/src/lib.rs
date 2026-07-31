@@ -63,6 +63,36 @@ pub mod ffi {
     pub fn __reactive_divergence_diagnostics_present_for_test() -> bool {
         crate::reactive::divergence_diagnostics().is_some()
     }
+
+    /// The OS-reported DPI this window's authoritative scale was built from
+    /// (M4-Phase 1 T8; T4 finding F-29).
+    ///
+    /// `WindowState::scale` is `pub(crate)` on purpose — DD-M4-P1-004 walks
+    /// every M4 phase and concludes no host needs the scale factor, so the
+    /// field stays off the `pub use`-exported surface. The integration tests
+    /// are a separate crate and can reach only `pub` items, hence this seam
+    /// rather than a widened field.
+    ///
+    /// **A `u32` DPI, not a `DipScale`.** The carrier stays crate-private,
+    /// which is the same resolution T6 reached for
+    /// `WidgetNode::__run_layout_as_window_root_at_dpi_for_test`. A DPI is
+    /// also the value a test can compare against `GetDpiForWindow` and
+    /// against the `HIWORD(wParam)` it synthesised, without reconstructing a
+    /// factor.
+    ///
+    /// # Safety
+    ///
+    /// `window` must be non-null, properly aligned, and valid for a shared
+    /// read of a live `WasamoWindow` for the duration of the call. It must
+    /// not be used after `wasamo_window_destroy`, which frees the
+    /// `WindowState` this dereferences. The pointer is read and not
+    /// retained, so no aliasing obligation outlives the call — but the
+    /// runtime is single-threaded by contract and this must be called on the
+    /// owning thread, like every other entry on this type.
+    #[doc(hidden)]
+    pub unsafe fn __window_scale_dpi_for_test(window: *mut WasamoWindow) -> u32 {
+        (*window).scale.dpi()
+    }
 }
 
 pub use layout::{Alignment, SizeConstraint, WidgetKind};
