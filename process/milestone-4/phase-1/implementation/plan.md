@@ -1711,7 +1711,127 @@ adds two `#[doc(hidden)] pub` seams.
 under test; this flips the process posture so the OS starts reporting
 real per-monitor DPI and the identity conversions become live ones.
 
-- [ ] `SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2)`
+**Responsibility re-audit at task start (2026-07-31).** The list below
+survives the audit, and **five things it did not name are added — four of
+them measured with a throwaway declaration before a line of production code
+was chosen**, per the discipline T1 and T4 used. The probe was the
+declaration and an `eprintln!` of its result, nothing else; it was reverted
+before the start gate closed.
+
+1. **The diagnostic channel this task is told to use is erased by the
+   success path of the function that is told to use it** (finding F-46).
+   [DD-001 §Failure handling](../decisions/dd-m4-p1-001-dpi-awareness-declaration.md)
+   and [abi_spec §4.1](../../../../docs/abi_spec.md) both say the outcome is
+   recorded in the thread-local last-error string and is readable through
+   `wasamo_last_error_message`. But `wasamo_init` calls `clear_last_error()`
+   on its **`Ok`** arm — *after* `runtime::init()` has returned — so a
+   diagnostic written inside `runtime::init()` is wiped before the host can
+   read it, and the declaration's tolerated-failure disclosure would not
+   ship at all. Every other ABI entry point clears on success too, which is
+   what makes abi_spec's "valid until the next ABI call" true; so the fix is
+   not to remove the clear but to **move it to the entry of `wasamo_init`**,
+   where it still discards a stale error and no longer discards this
+   function's own output. Found by reading the landing site, not predicted
+   by any earlier task.
+2. **The fixture breakage reaches two test binaries, not one** (finding
+   F-47). The T8 retrospective handed forward one assertion in one file. The
+   proposition underneath it is wider — **every DPI fixture in this phase
+   assumes the creation-time scale is 1** — and it is asserted in T7's
+   binary too. Measured with the probe in place:
+   `dpi_change_propagation_integration.rs` fails **3 of 4** and
+   `dpi_scale_matrix_integration.rs` fails **2 of 3**; the workspace's
+   other 523 tests pass. T8's own prediction of the mechanism is exact —
+   `row_shape(before)` reads `(5, 3)` against the fixture's `(7, 2)`,
+   because a 720-physical client at 120 DPI is 576 DIP and
+   `floor((576 + 12) / 100)` is 5. T7's is a different mechanism with the
+   same cause: its `CHANGED_DPI` of 120 **is** the development machine's
+   own DPI, so the change it drives becomes a no-op and the ratio and
+   surface-staleness assertions both fail.
+3. **The trap-#4 branch can be fired end-to-end, so the stated limit this
+   task was pre-authorised to record must not be taken.**
+   [preamble.md §Implementation gates](./preamble.md#implementation-gates)
+   allows "if that branch cannot be fired by a test because process DPI
+   awareness is a one-shot per process, that is recorded as a stated limit".
+   It can be fired: a **dedicated test binary that declares its own
+   awareness before `wasamo_init` runs anywhere in the process** makes the
+   runtime's declaration fail with the real `ERROR_ACCESS_DENIED`, in a real
+   process, on the shipped path. That is also the only test in the phase
+   that exercises DD-001's F2-over-F3 argument as behaviour rather than as
+   prose. The escape hatch was written into the plan as the expected
+   outcome; the re-audit rejects it, and the residual limit is narrower —
+   see the trap-#4 bullet below.
+4. **All four HiDpi symbols compile against the landed feature list**,
+   which closes the half T4 left explicitly unmeasured (see the
+   `Cargo.toml` bullet). Measured by a throwaway test target naming
+   `SetProcessDpiAwarenessContext`, `GetWindowDpiAwarenessContext`,
+   `AreDpiAwarenessContextsEqual` and `DPI_AWARENESS_CONTEXT_SYSTEM_AWARE` —
+   the fourth because re-audit point 3 needs a *second* awareness level to
+   pre-declare, and it is a symbol no earlier task had any reason to name.
+   `windows` is a plain `[dependencies]` entry with no separate
+   dev-dependency, so a test target and the library see one feature list.
+5. **T4's creation-time correction stops being unreachable, and that is
+   this task's structural side effect rather than an inherited decision.**
+   Finding F-31 recorded that at `s = 1` a size-preserving `SetWindowPos`
+   dispatches **no `WM_SIZE` at all**, so the question T4's placement
+   decision answers had no answer to get wrong. T9 is what gives it one, on
+   every host on a scaled monitor, at a point where the window is
+   half-constructed. T9 owns enumerating what that nested dispatch now
+   finds; "T4 argued it structurally" is the reason to expect it to hold,
+   not evidence that it did.
+
+**Two new test binaries, and the cost is accepted rather than worked
+around.** Test-only: two `.rs` files under `wasamo-runtime/tests/`, which cargo
+compiles one-executable-per-file and runs as separate processes. No
+`Cargo.toml` or `build.rs` change, and `cargo build --release --workspace`
+produces the same artifacts as before — nothing is added to any shipped
+surface. Stated because "binary" reads as a product artifact and this is not
+one.
+
+DD-001's verification names two different facts — the level in force, and what
+happens when the declaration does not take effect — and the second requires a
+process whose awareness was set *before* `wasamo_init`, which contaminates the
+first. **Those two cannot share a process**; that half is a hard constraint,
+not a preference. Each new file re-opens the per-binary
+Compositor-unavailable observation (T6 round-1 R3) — **a landing blocker
+closed by an owner run, not by this task**, and one owner session closes both.
+
+**Only one of the two was ever separable, and the reason for separating it was
+corrected by the owner (2026-07-31).** The effective-level test has no
+process-isolation requirement and could have gone into
+`dpi_scale_matrix_integration.rs`, taking the observation count from two to
+one. This plan first justified keeping it apart on the ground T8 used against
+the symmetric move into T7's binary — that an ADR evidence line is easier to
+cite as a named artifact. **The owner ratified the split on different and
+better grounds**: separate files are easier to maintain, and the saving was
+mis-weighed against the wrong denominator — one fewer observation out of a
+21-file suite is not a saving at all. **The lesson is about how the trade-off
+was presented, not about which way it went**: a cost was offered against a
+quality (legibility) without stating what fraction of the whole that cost is,
+which is the shape that makes a reviewer unable to decide.
+
+**Closed 2026-07-31.** Landed as **one code commit** — the declaration alone
+leaves five tests red across two binaries, and the entry-clear alone is an ABI
+edit with no consumer, so no split produces a buildable, honestly-testable
+intermediate. Artifacts in [log.md](./log.md) §T9: the call-site audit, the
+process-wide side-effect enumeration, a **ten-mutation** table (four of T9's
+own, all run and none predicted, plus six inherited from T7 and T8 re-run
+against the re-generalised fixtures), the three-host artifact with the level
+in force read out of each real host process, and four stated limits. The task
+produced findings F-46, F-47 and F-48, and gave T1's F-10 the readback it had
+been carried without for eight tasks.
+
+**Two results came out that the re-audit did not predict.** The first is F-48:
+an unaware observer reads an aware window's rectangle in *virtualized*
+coordinates, so the first three-host run reported `800 × 600` for windows that
+are really `1000 × 750` — internally consistent, plausible, and wrong by
+exactly the scale factor, which is the signature this phase exists to remove.
+The second is that the fixture re-generalisation made T7's and T8's binaries
+**posture-independent**: with the declaration deleted entirely, all four T7
+tests and two of three T8 tests still pass, and the two that fail are the
+awareness assertions that should. Before this task the same mutation was
+indistinguishable from the shipped state. Both are measured, not argued.
+
+- [x] `SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2)`
       as the **first OS-touching act** of `runtime::init()` — before
       `CreateDispatcherQueueController`, before `Compositor::new`, before
       `TextRenderer::new`, and **below** the existing
@@ -1723,17 +1843,46 @@ real per-monitor DPI and the identity conversions become live ones.
       `ERROR_ACCESS_DENIED` on a process that had already declared
       correctly. `capture_owning_thread()` necessarily precedes it and
       is not OS work that can lock the awareness.
-- [ ] **Tolerate failure.** `ERROR_ACCESS_DENIED` means the process's
+- [x] **Tolerate failure.** `ERROR_ACCESS_DENIED` means the process's
       awareness was already set — typically by a legitimate host that
       declared its own. `wasamo_init` still returns `WASAMO_OK`; the
       outcome is recorded through the existing thread-local last-error
       mechanism as a diagnostic string, not a returned status. Do **not**
       add a branch that assumes scale 1 on failure — that is the one
       option that can be wrong, and it is invisible at 100%.
-- [ ] No legacy-OS fallback: both `SetProcessDpiAwarenessContext` (1703+)
+- [x] **Make that channel actually carry** (re-audit point 1, finding
+      F-46). Move `wasamo_init`'s `clear_last_error()` from its `Ok` arm to
+      the **entry** of the function. Recorded as its own item because it is
+      an edit to a shipped ABI entry point rather than a detail of the
+      declaration, and because the naive implementation — write the
+      diagnostic inside `runtime::init()` and stop — compiles, passes every
+      existing test, and ships a runtime that contradicts
+      [abi_spec §4.1](../../../../docs/abi_spec.md). **Do not remove the
+      clear**: every ABI entry point in the file clears on success, and that
+      convention is what makes abi_spec's "valid until the next ABI call"
+      true. The observable difference is exactly one — a successful
+      `wasamo_init` may now leave a diagnostic where it previously left
+      `NULL` — and that is the spec's stated behaviour, not a new one.
+      **Falsify it rather than assert it**: run the tolerated-failure test
+      against a build with the clear back on the `Ok` arm and record that
+      it goes red.
+- [x] **Decide the shape of the diagnostic, and keep it one branch.** The
+      selection between "record nothing" and "record the disclosure" is
+      pure logic and belongs in a free function taking the call's
+      `Result`, so trap #4's artifact does not depend on an OS outcome to
+      exist. Resist a third arm distinguishing `ERROR_ACCESS_DENIED` from
+      any other `HRESULT`: with the context value a compile-time constant,
+      access-denied is the only reachable failure, so the extra arm is an
+      unreachable branch added to make a string nicer. Write one message
+      that names the `HRESULT`, names the known cause **as** the known
+      cause rather than asserting it, and states the consequence — that
+      `wasamo_init` returned `WASAMO_OK`, that every scale factor is still
+      derived from the effective per-window DPI, and that what is not
+      guaranteed below Per-Monitor-Aware V2 is crispness.
+- [x] No legacy-OS fallback: both `SetProcessDpiAwarenessContext` (1703+)
       and `GetDpiForWindow` (1607+) predate the stated Windows 10 1809
       floor.
-- [ ] **No `Cargo.toml` edit is needed** — T4's `Win32_UI_HiDpi` covers
+- [x] **No `Cargo.toml` edit is needed** — T4's `Win32_UI_HiDpi` covers
       this task's declaration symbols. Measured, not inferred: T4's
       throwaway probe compiled `SetProcessDpiAwarenessContext` and
       `DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2` against the landed
@@ -1742,12 +1891,34 @@ real per-monitor DPI and the identity conversions become live ones.
       `GetWindowDpiAwarenessContext` and `AreDpiAwarenessContextsEqual` —
       were **not** exercised, so if either is missing that is a T9 edit
       and T12's §4.5 re-sync must pick it up.
-- [ ] Integration test asserting the **effective** level —
+      **Measured at the re-audit, and the claim is now closed on all four
+      symbols**: those two compile, and so does
+      `DPI_AWARENESS_CONTEXT_SYSTEM_AWARE`, which the tolerated-failure
+      binary needs and which nothing before this task had a reason to name.
+      No `Cargo.toml` edit; nothing for T12's §4.5 re-sync to pick up on
+      this account.
+- [x] Integration test asserting the **effective** level —
       `GetWindowDpiAwarenessContext(hwnd)` compared against
       `DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2` with
       `AreDpiAwarenessContextsEqual`. Assert the level in force, not that
-      a particular function was called.
-- [ ] **Rebuild and run all three hosts** — C, Rust, Zig — with no
+      a particular function was called. **Its own binary** (re-audit
+      point 3): the tolerated-failure test below must set the process's
+      awareness before `wasamo_init` runs, which would make this
+      assertion pass for the wrong reason if the two shared a process.
+- [x] **Re-generalise T7's and T8's fixtures off the assume-creation-scale-1
+      premise** (re-audit point 2, finding F-47), and treat this as evidence
+      work rather than as repair. Both binaries encode "the before-state is
+      96 DPI" in constants derived from `REFERENCE_DPI`, and T9 is what makes
+      that a statement about the developer's monitor. The generalisation
+      must **establish** the before-state instead of inheriting it, so the
+      fixtures stop being machine-dependent in either direction — a 96-DPI
+      CI runner and a 120-DPI laptop must exercise the same arithmetic.
+      **The hazard is that this task defangs the phase's central evidence
+      while calling it a fixture fix**, so the close artifact is not "the
+      tests are green again": re-run the mutations T7 and T8 recorded and
+      show they still go red against the generalised fixtures. A mutation
+      that now passes is a finding, not a formality.
+- [x] **Rebuild and run all three hosts** — C, Rust, Zig — with no
       manifest asset and no build-system edit (preamble obligation 6,
       risk R-8). This is the auditable artifact for the
       declarative-host boundary claim; it must be run, not inferred from
@@ -1758,17 +1929,90 @@ real per-monitor DPI and the identity conversions become live ones.
       would run against **pre-T9 object code** carrying a fresh DLL
       timestamp, and the artifact would report the wrong awareness level
       while every build step looked green.
-- [ ] **Re-run the trap-#4 decision explicitly** for the diagnostic
+- [x] **Re-run the trap-#4 decision explicitly** for the diagnostic
       branch (see [preamble.md §Implementation gates](./preamble.md#implementation-gates)).
       If the tolerated-failure path cannot be fired by a test because
       process DPI awareness is a one-shot per process, record that as a
       **stated limit with its reason** in [log.md](./log.md) — not as an
       inherited "non-applicable".
+      **The escape is not taken** (re-audit point 3). The branch is fired
+      end-to-end by a dedicated binary that declares
+      `DPI_AWARENESS_CONTEXT_SYSTEM_AWARE` before `wasamo_init` runs
+      anywhere in the process, so the runtime takes the real
+      `ERROR_ACCESS_DENIED` on the shipped path; it asserts that
+      `wasamo_init` still returns `WASAMO_OK`, that the diagnostic is
+      readable, and that the effective level is the pre-declared one rather
+      than V2. The pure-logic selection between recording and not recording
+      is fired separately by unit tests on the free function, so the
+      artifact does not depend on which machine ran it. **What remains a
+      stated limit is narrower and must be recorded as such**: the branch
+      cannot be fired *inside a process that has already let the runtime
+      declare successfully*, so no binary asserts both outcomes, and the
+      two facts are two artifacts rather than one.
+- [x] **Enumerate what the declaration drags in process-wide** (trap #2,
+      re-audit point 5). The declaration is a one-line call whose blast
+      radius is the whole process: `GetDpiForWindow` starts answering with
+      the monitor's DPI, the non-client frame starts scaling by its own
+      DPI-indexed metrics, `window::realize_dip_window_size` starts
+      changing the window's size and therefore starts dispatching the
+      nested `WM_SIZE` F-31 recorded as *unreachable*, every text surface is
+      allocated larger, and the OS begins delivering `WM_DPICHANGED` for
+      real. Enumerate each with how it was verified, and include the
+      **near-miss** the probe surfaced: `ERROR_ACCESS_DENIED` is `0x80070005`
+      as an `HRESULT`, which is the exact string
+      `tests/common/mod.rs` matches to decide "Compositor unavailable" —
+      it is safe only because that check is gated on
+      `status == WASAMO_ERR_RUNTIME` and the `Err` arm overwrites the
+      diagnostic. Record it, because the thing protecting it is one
+      conjunct in a helper this task does not own.
+- [x] **Propagate the falsified propositions, by proposition and not by
+      string** (§Task list's standing rule). The two this task falsifies
+      are: *"the process has not declared DPI awareness, so the OS reports
+      96 and every scale factor is 1"* and *"a created window's scale is 1,
+      so the creation-time correction is an identity"*. Enumerate the
+      documents and source files that assert each **before searching**, and
+      include this task's own new artifacts in the enumeration (the T8
+      failure was dropping its own mutation table from the list). Statements
+      scoped explicitly to the pre-T9 world stay true and must not be
+      "corrected"; the ones to catch are the present-tense ones a reader
+      will now take as current.
 
 **Start gate:** traps #1, #2, #4 (the diagnostic branch), #5. **End
 gate:** effective-level assertion green; three-host rebuild recorded;
 the trap-#4 disposition recorded either as a firing test or as a stated
 limit. Full independent review before merge.
+**Extended at the re-audit**, because four of the items above are new: the
+close gate also owes the **mutation re-run** against the generalised T7 /
+T8 fixtures, the **falsification build** for the `clear_last_error()` move,
+the process-wide side-effect enumeration, and the propagation pass with its
+enumerated asserting sites. The two new binaries' Compositor-unavailable
+skip paths are a **landing blocker closed by an owner run**, in the shape
+T8 recorded: the run is the owner's, on a session where `wasamo_init`
+returns `0x80070005`, and the fix container if a guard did not fire is this
+task's branch before merge.
+
+**The owner run found a defect on its first execution (finding F-49), and the
+fix container was used as designed.** The tolerated-failure binary calls
+`SetProcessDpiAwarenessContext` before the skip decision — it must, because
+the pre-declaration has to precede `wasamo_init` — and this plan predicted
+that was harmless because the call needs no Compositor. **That prediction was
+reasoned rather than measured and is false**: on the owner's session the call
+returned `ERROR_ACCESS_DENIED`, because the process's awareness had already
+been set before any test code ran, and the `expect` turned that into a
+**failure on precisely the environment where every other binary skips**. Same
+on-disk artifact as every local run, so the difference is the session. The
+correction discards the pre-declaration's result, reads the level actually in
+force, and moves every assertion behind the guard; it is verified in the
+losing direction by simulation and its branch still fires under T9-M1 and
+T9-M2. Details in [log.md](./log.md) §F-49.
+
+**Closed 2026-07-31 by a second owner run**, with `-- --nocapture` — needed
+because a skipped test prints `ok` and its named skip line goes to stderr, so
+the first run could not say whether the *other* binary skipped or merely ran.
+Both binaries print their named skip line and pass. The repaired build is what
+executed, and the filename hash does not show it (cargo derives that hash from
+metadata, not content); what shows it is that the pre-repair code panicked
+before reaching the helper and so could never have printed a skip line.
 
 ---
 
@@ -1865,6 +2109,25 @@ are in
       | unaware (with or without the correction — it is the identity) | 1000 × 750 | 980 × 701 | 7 |
       | aware, correction absent | 800 × 600 | 782 × 553 | **7** |
       | aware, correction present, **T5's inbound seam still absent** | 1000 × 750 | 982 × 703 | 9 |
+
+      **Every number in that table is unreadable from a DPI-unaware tool**
+      (T9 finding F-48, measured). A process that has not declared awareness
+      is answered by `GetWindowRect` / `GetClientRect` in *virtualized*
+      coordinates — the real rectangle divided by the system scale — so an
+      unaware measurement script reads the aware-and-corrected window as
+      `800 × 600` and lands on the "aware, correction absent" row of this
+      very table. Measured at T9: the first three-host probe reported
+      `800 × 600` for windows that are really `1000 × 750`, and declaring
+      the probe Per-Monitor-Aware V2 with no other change turned the same
+      readings into `1000 × 750` / `982 × 703`. **So T10's measurement
+      tooling — and any screenshot harness that derives a crop rectangle,
+      a click point or a cursor position — must declare its own awareness
+      first, and must say in the artifact that it did.** `GetDpiForWindow`
+      and `GetWindowDpiAwarenessContext` are *not* virtualized, so a level
+      or DPI readback stays trustworthy from an unaware caller; it is the
+      coordinates that move. The failure is silent, self-consistent, and
+      wrong by exactly the scale factor — the signature this phase exists
+      to remove, arriving in the instrument rather than in the product.
 
       The plan's earlier "drops from 7 tiles per row to 6" is **T1's
       number for T1's build**, which carried the *complete* conversion
@@ -2012,6 +2275,21 @@ recorded; any finding triaged to a task or to
       unqualified cargo "fresh" result are not source-identity evidence when
       two source trees reused one artifact directory; neither is frame identity
       general source-identity evidence when the mutation could be render-neutral.
+- [ ] **A fifth divergence item, added at T9's independent review (nit 3).**
+      [architecture.md §12](../../../../docs/architecture.md#coordinate-spaces)
+      says `wasamo_init` "declares Per-Monitor-Aware V2 as its **first act**",
+      and [abi_spec §4.1](../../../../docs/abi_spec.md) says "as its first act
+      — before any other runtime initialisation". Both are one clause off from
+      what landed and what T1 deliberately decided: the declaration is the
+      first **OS-touching** act, below `capture_owning_thread()` and below the
+      `RUNTIME.get().is_some()` early return, so on a second `wasamo_init` it
+      does not run at all. That placement is not an implementation liberty —
+      it is what stops the runtime taking `ERROR_ACCESS_DENIED` against its own
+      correct declaration, and T9 pinned it with a readback. The specs should
+      say "first OS-touching act, once per process". Recorded here rather than
+      edited at T9 because normative-spec wording is Moment 2's, and because
+      T9's retrospective answered "no spec change" — which was right about
+      §4.1's *diagnostic* contract and silent about this clause.
 - [ ] **Four Moment 2 divergence items named at T5**, so they are folded
       into the pass above rather than found during it. (i)
       [architecture.md §12.4](../../../../docs/architecture.md#coordinate-spaces)

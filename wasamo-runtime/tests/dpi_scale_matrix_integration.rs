@@ -35,12 +35,52 @@
 //!    DPI-indexed metrics rather than by `s` — so on the real path the DIP
 //!    layout input moves by a DIP or two and invariance is approximate. That
 //!    is not a failure; it is a different rectangle.
-//! 3. **The process has not declared DPI awareness yet** (T9 does), so
-//!    `GetDpiForWindow` reports 96 for every window here and the OS does not
-//!    drive this message for the per-monitor changes the phase is about. The
-//!    creation-time half of test 1 is therefore `96 == 96` until T9; what is
-//!    live now is the post-change half, where the cache must equal the DPI
-//!    this file sent.
+//! 3. **The messages are still synthesised, so the OS is not what drives
+//!    them.** T9 declared Per-Monitor-Aware V2, so `GetDpiForWindow` now
+//!    reports the monitor's real DPI and the OS *would* deliver
+//!    `WM_DPICHANGED` on a monitor crossing — but this file still sends its
+//!    own, because it needs to choose the DPI and the rectangle. Driving four
+//!    DPIs including one that is not a Windows scaling is not something a
+//!    monitor can be asked to do.
+//!
+//! # The before-state is established, never inherited (T9 finding F-47)
+//!
+//! Every constant here is expressed against [`REFERENCE_DPI`], which was a
+//! fact about the process until T9 declared awareness and the OS started
+//! reporting the monitor's DPI instead of 96. On a 125% machine the created
+//! window's 720 physical client became **576 DIP**, the row shape read
+//! `(5, 3)` against this file's `(7, 2)`, and the invariance claim was about a
+//! rectangle nobody had chosen.
+//!
+//! The fix is not to compute against whatever DPI the machine happens to
+//! report — that would make every exactness argument below conditional on the
+//! developer's display settings, and 100 DPI's `factor_is_exact` split would
+//! stop meaning what it says. Instead the two tests that measure a scale change
+//! **put the window into the before-state they assume**, with one synthesised
+//! `WM_DPICHANGED` to [`REFERENCE_DPI`] carrying a rectangle that realises the
+//! chosen physical client (see `normalise_to_reference_baseline`). A 96-DPI CI
+//! runner and a 120-DPI laptop then run the same arithmetic. Test 1 does not
+//! normalise and says why in its own doc comment.
+//!
+//! # Two stated limits about that baseline, both measured
+//!
+//! 1. **`normalise_to_reference_baseline`'s scale assertion is vacuous at
+//!    96 DPI.** It asserts the committed scale is [`REFERENCE_DPI`] after the
+//!    synthesised message — which on a 96-DPI display is the value the window
+//!    was created with, so it passes whether or not the handler committed
+//!    anything. Measured: with `begin_scale_change` neutered *and* the window
+//!    created at 96 DPI, `a_stale_descendant_scale_still_hit_tests_where_the_widget_is`
+//!    passes. On the 120-DPI development machine the same mutation fails all
+//!    three tests. The normalisation makes the *arithmetic* machine-independent;
+//!    it does not make every assertion about it equally sharp everywhere.
+//! 2. **The creation-time seeding path has no coverage here on a 96-DPI
+//!    runner** — see `a_created_windows_cached_scale_is_the_dpi_the_os_reports`,
+//!    where the reason is that no reading distinguishes "seeded from the OS"
+//!    from "seeded from the identity" when the monitor is at the reference DPI.
+//!
+//! What this file deliberately gives up either way is observing the
+//! *creation-time* scale on a scaled monitor; that is test 1's job on a scaled
+//! machine, and `dpi_awareness_declaration_integration.rs`'s for the level.
 
 #![cfg(windows)]
 
@@ -56,15 +96,22 @@ use wasamo_runtime::ffi;
 
 use windows::core::Interface;
 use windows::Win32::Foundation::{HWND, LPARAM, RECT, WPARAM};
-use windows::Win32::UI::HiDpi::GetDpiForWindow;
+use windows::Win32::UI::HiDpi::{
+    AreDpiAwarenessContextsEqual, GetDpiForWindow, GetWindowDpiAwarenessContext,
+    DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2,
+};
 use windows::Win32::UI::WindowsAndMessaging::{
     GetClientRect, GetWindowRect, SendMessageW, SetWindowPos, SWP_NOACTIVATE, SWP_NOMOVE,
     SWP_NOZORDER, WM_DPICHANGED, WM_LBUTTONUP,
 };
 use windows::UI::Composition::{CompositionDrawingSurface, CompositionSurfaceBrush};
 
-/// The reference DPI, and the value an undeclared process is told
-/// unconditionally (DD-M4-P1-001).
+/// The reference DPI: the denominator of every scale factor in the runtime,
+/// and the baseline each test below puts its window into before measuring.
+///
+/// It was also the value an undeclared process was told unconditionally
+/// (DD-M4-P1-001) — true of this process until T9 and no longer, which is why
+/// it is now reached deliberately rather than assumed (see the module header).
 const REFERENCE_DPI: u32 = 96;
 
 /// The DPI matrix, and why it is not four equal probes.
@@ -89,10 +136,13 @@ const DPI_MATRIX: [u32; 4] = [120, 144, 192, 100];
 ///
 /// Preserving the *DIP* client extent across a change to `dpi` means the
 /// physical client must become `client × dpi / 96`, which has to be an
-/// integer. The window `wasamo_load_ui` creates has a client of 784 × 561
-/// physical at 96 DPI (T4, measured), and 561 × 1.25 is 701.25 — so no
-/// synthesised rectangle preserves the DIP extent from there, at any DPI in
-/// the matrix. `96 = 2^5 × 3`, and the matrix contributes denominators 4, 2,
+/// integer. The window `wasamo_load_ui` creates does not supply one: on a
+/// 96-DPI display its client is 784 × 561 physical (T4, measured), and
+/// 561 × 1.25 is 701.25 — so no synthesised rectangle preserves the DIP extent
+/// from there, at any DPI in the matrix. Since T9 the created client is not
+/// even that fixed number, because the window is realised at the monitor's DPI;
+/// which is a second reason the extent is chosen here rather than inherited.
+/// `96 = 2^5 × 3`, and the matrix contributes denominators 4, 2,
 /// 1 and 24, so **a multiple of 24 makes all four targets integers at once**:
 /// 720 → 750 / 900 / 1080 / 1440 and 480 → 500 / 600 / 720 / 960.
 ///
@@ -122,7 +172,11 @@ const DPI_MATRIX: [u32; 4] = [120, 144, 192, 100];
 ///    one. 720 × 480 asks for 1440 × 960 and gets it on the development
 ///    machine; a smaller display needs a smaller multiple of 24, and
 ///    `set_client_extent`'s assertion is what says so rather than letting the
-///    run drift.
+///    run drift. **The margin narrowed at T9** and the constraint still holds,
+///    measured: the process is now Per-Monitor-Aware V2, so the non-client
+///    frame the outer rectangle has to carry is the monitor's rather than the
+///    96-DPI one — a few pixels taller on a scaled display — while the max
+///    track size is unchanged.
 const CLIENT_W: i32 = 720;
 const CLIENT_H: i32 = 480;
 
@@ -293,6 +347,50 @@ unsafe fn set_client_extent(hwnd: HWND, client_w: i32, client_h: i32, what: &str
     );
 }
 
+/// Put a freshly created window into the before-state the assertions below
+/// assume: cached scale [`REFERENCE_DPI`], physical client
+/// `(CLIENT_W, CLIENT_H)`, and therefore a **DIP** client of the same two
+/// numbers.
+///
+/// One synthesised `WM_DPICHANGED` does both halves, because the handler
+/// commits `HIWORD(wParam)` and applies the suggested rectangle in one pass.
+/// Both halves are then asserted rather than assumed: the realised client,
+/// because a rectangle the display cannot honour is silently not the one
+/// applied, and the cached DPI, because everything downstream is expressed as
+/// a ratio against it.
+///
+/// **Why the baseline is reached rather than inherited** (T9 finding F-47):
+/// see the module header. The window is created at whatever DPI the monitor
+/// reports — 96 on a CI runner, 120 on the development laptop — and nothing
+/// below would be machine-independent if that value were allowed through.
+///
+/// **The scale assertion below is vacuous on a 96-DPI display** — see the
+/// module header's stated limit 1. It is kept because it is load-bearing
+/// everywhere else and because a silent baseline is worse than a
+/// conditionally-sharp one, not because it fires on every machine.
+///
+/// Note that the non-client frame does **not** move when this runs. The
+/// process is Per-Monitor-Aware V2 and the window is still on its real
+/// monitor, so the frame keeps that monitor's DPI-indexed metrics whatever
+/// this message claims the DPI is. That is why `frame_thickness` is measured
+/// live on every call instead of being derived from a DPI.
+unsafe fn normalise_to_reference_baseline(window: *mut ffi::WasamoWindow, what: &str) {
+    let hwnd = (*window).hwnd;
+    send_dpi_change_to_client(hwnd, REFERENCE_DPI, CLIENT_W, CLIENT_H);
+    assert_eq!(
+        client_extent(hwnd),
+        (CLIENT_W, CLIENT_H),
+        "{what}: the realised client extent must be the requested one, or every \
+         invariance assertion below is about a rectangle nobody chose"
+    );
+    assert_eq!(
+        ffi::__window_scale_dpi_for_test(window),
+        REFERENCE_DPI,
+        "{what}: the baseline scale must be the reference one, or the ratios \
+         below are taken against the developer's monitor"
+    );
+}
+
 /// Send a real `WM_DPICHANGED` whose suggested rectangle realises
 /// `(client_w, client_h)` physical client pixels at the window's current
 /// position.
@@ -401,6 +499,36 @@ fn assert_scaled(actual: f32, before: f32, factor: f32, exact: bool, what: &str)
 
 /// The cached scale is the OS's number, and the handler's `wParam` is the only
 /// thing that moves it.
+///
+/// **The creation-time half is non-degenerate only on a scaled monitor, and
+/// this test cannot make it otherwise** (findings F-47 and, for the
+/// qualification, the T9 independent review's major 1).
+///
+/// The assertion used to be paired with `os_dpi == 96`, whose stated job was to
+/// record that the equality was `96 == 96` in an unaware process and to fail
+/// loudly when T9 landed. It did fail, as designed. Its replacement is not the
+/// same assertion with a different number — no number works, because 96 is the
+/// *correct* answer on a 100% monitor and `os_dpi != 96` would redden a correct
+/// build on a 96-DPI CI runner.
+///
+/// **What the awareness precondition does and does not buy.** It is what makes
+/// `cached == os_dpi` a statement about **per-monitor** DPI rather than about
+/// the constant an unaware process is handed; without it the equality is true
+/// of a window on any monitor at any scale. It does **not** restore
+/// discrimination on a 96-DPI display, and the first version of this comment
+/// claimed it did. Measured: with `WindowState`'s seed replaced by
+/// `DipScale::IDENTITY` — i.e. a runtime that ignores `GetDpiForWindow`
+/// entirely — this test still passes whenever the monitor is at 96 DPI, because
+/// `IDENTITY.dpi()` *is* 96 and the awareness assertion is independently true.
+/// **So the seeding path has no CI coverage from this test**, and none is
+/// available here: on a 96-DPI monitor "seeded from the OS" and "seeded from
+/// the identity" are the same number, and no second reading distinguishes them.
+/// The development machine at 120 DPI is what makes this test live; CI is not.
+/// Recorded as a stated limit in the module header rather than papered over.
+///
+/// The full artifact for the level itself is
+/// `dpi_awareness_declaration_integration.rs`; the precondition below is what
+/// this test needs in order to mean what it says.
 #[test]
 fn a_created_windows_cached_scale_is_the_dpi_the_os_reports() {
     run_on_owning_runtime_thread_or_skip("cached window scale", move || {
@@ -411,6 +539,11 @@ fn a_created_windows_cached_scale_is_the_dpi_the_os_reports() {
 
             let os_dpi = GetDpiForWindow(hwnd);
             let cached = ffi::__window_scale_dpi_for_test(window);
+            let declared_per_monitor_v2 = AreDpiAwarenessContextsEqual(
+                GetWindowDpiAwarenessContext(hwnd),
+                DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2,
+            )
+            .as_bool();
 
             set_client_extent(hwnd, CLIENT_W, CLIENT_H, "creation-time normalisation");
             send_dpi_change_to_client(hwnd, 144, CLIENT_W * 144 / 96, CLIENT_H * 144 / 96);
@@ -423,12 +556,12 @@ fn a_created_windows_cached_scale_is_the_dpi_the_os_reports() {
                 "the window's authoritative scale is seeded from GetDpiForWindow \
                  and from nothing else"
             );
-            assert_eq!(
-                os_dpi, REFERENCE_DPI,
-                "the process has not declared awareness yet (T9 does), so the OS \
-                 reports the reference DPI — this assertion is what makes the \
-                 equality above a degenerate one until then, and it must be \
-                 re-read when T9 lands"
+            assert!(
+                declared_per_monitor_v2,
+                "the equality above is only a claim about per-monitor DPI while \
+                 Per-Monitor-Aware V2 is the level in force; under an unaware \
+                 process GetDpiForWindow answers 96 unconditionally and the \
+                 assertion holds for a window on any monitor at any scale"
             );
             assert_eq!(
                 after, 144,
@@ -484,7 +617,7 @@ fn dip_layout_is_invariant_while_every_visual_moves_by_the_ratio() {
                 let factor = dpi as f32 / REFERENCE_DPI as f32;
                 let exact = factor_is_exact(dpi);
 
-                set_client_extent(hwnd, CLIENT_W, CLIENT_H, "pre-change normalisation");
+                normalise_to_reference_baseline(window, "pre-change normalisation");
                 let before_root = read_root_rect(window);
                 let before = read_tiles(window);
                 let before_surface = read_first_label_surface(window);
@@ -653,7 +786,7 @@ fn a_stale_descendant_scale_still_hit_tests_where_the_widget_is() {
             let dpi = 120_u32;
             let factor = dpi as f32 / REFERENCE_DPI as f32;
 
-            set_client_extent(hwnd, CLIENT_W, CLIENT_H, "pre-change normalisation");
+            normalise_to_reference_baseline(window, "pre-change normalisation");
             send_dpi_change_to_client(
                 hwnd,
                 dpi,

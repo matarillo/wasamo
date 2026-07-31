@@ -267,11 +267,17 @@ macro_rules! guard_mutating {
 
 #[no_mangle]
 pub extern "C" fn wasamo_init() -> WasamoStatus {
+    // Cleared on *entry*, not on the success arm the way the status-returning
+    // entry points in this file do. `runtime::init` records the DPI-awareness
+    // declaration's outcome into this same thread-local as a diagnostic
+    // (DD-M4-P1-001 §Failure handling, abi_spec §4.1), so a success-path clear
+    // would run after that write and discard the disclosure the spec promises.
+    // Clearing here still drops a stale error from an earlier call, which is
+    // all the convention was buying; what it no longer drops is this
+    // function's own output.
+    clear_last_error();
     match crate::runtime::init() {
-        Ok(()) => {
-            clear_last_error();
-            WASAMO_OK
-        }
+        Ok(()) => WASAMO_OK,
         Err(e) => {
             set_last_error(format!("wasamo_init: {e}"));
             WASAMO_ERR_RUNTIME

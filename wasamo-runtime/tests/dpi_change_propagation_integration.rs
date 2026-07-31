@@ -15,12 +15,21 @@
 //! monitor crossing is T11's. The assertions below are deliberately the weakest
 //! ones that still discriminate the branch under test.
 //!
-//! The process has not declared DPI awareness yet (T9 does), so the OS does not
-//! drive this message for the per-monitor changes the phase is about. That does
-//! not weaken the tests: the handler reads its new DPI out of `wParam`, so a
-//! synthesised message drives the same code the OS will drive, and it is the
-//! only way to drive it before T9. What a synthesised message cannot show is
-//! that a real monitor crossing delivers a usable suggested rectangle.
+//! The messages are still synthesised, which is what lets these tests choose
+//! the branch under test: the handler reads its new DPI out of `wParam`, so a
+//! synthesised message drives the same code the OS drives. What a synthesised
+//! message cannot show is that a real monitor crossing delivers a usable
+//! suggested rectangle; that half is T11's.
+//!
+//! **The before-state is established, never inherited** (T9 finding F-47). This
+//! file used to name a fixed `CHANGED_DPI` of 120 and derive its expected ratio
+//! from 96, both of which were facts about a process that had not declared DPI
+//! awareness. Since T9 declared Per-Monitor-Aware V2 the OS reports the
+//! monitor's real DPI, and on a 125% machine the constant became the window's
+//! *own* DPI — so the change every test here drove was a no-op, and three of
+//! the four failed. The target is now derived from the window's committed
+//! creation-time DPI, which makes each test drive a real change on a 96-DPI CI
+//! runner and on a scaled laptop alike. See [`changed_dpi`].
 
 #![cfg(windows)]
 
@@ -39,12 +48,34 @@ use windows::Win32::Foundation::{LPARAM, RECT, WPARAM};
 use windows::Win32::UI::WindowsAndMessaging::{GetWindowRect, SendMessageW, WM_DPICHANGED};
 use windows::UI::Composition::{CompositionDrawingSurface, CompositionSurfaceBrush};
 
-/// The DPI every test below changes to. 120 is 125%, the development machine's
-/// setting, and its factor (1.25) is exactly representable — so an assertion
-/// that a Visual grew by it is exact rather than approximate. Choosing an
-/// awkward DPI is T8's job, where the *arithmetic* is what is under test.
-const CHANGED_DPI: u32 = 120;
-const CHANGED_FACTOR: f32 = CHANGED_DPI as f32 / 96.0;
+/// The ratio every test below expects each Visual to move by.
+///
+/// Exactly 2 — see [`changed_dpi`]. A power of two is representable at every
+/// magnitude, so an assertion that a Visual grew by it is exact rather than
+/// approximate. Choosing an awkward factor is T8's job, where the *arithmetic*
+/// is what is under test; here the branches are, and an exact factor keeps a
+/// branch failure from reading as a rounding one.
+const CHANGED_FACTOR: f32 = 2.0;
+
+/// The DPI a test changes `window` to: **twice the DPI the window was created
+/// at**, read back from the runtime's own committed value rather than assumed.
+///
+/// Doubling is what makes this file machine-independent (T9 finding F-47).
+/// Naming a constant DPI cannot be: whatever value is picked is some machine's
+/// native setting, and on that machine the "change" is a no-op — the ratio
+/// assertions read a factor of 1 and the surface-staleness control passes
+/// vacuously because nothing needed re-rasterizing. Deriving the target from
+/// the before-state guarantees a real change everywhere, and doubling makes the
+/// expected ratio [`CHANGED_FACTOR`] on every machine rather than a number the
+/// test would have to compute alongside the runtime.
+///
+/// Read through the T8 scale seam rather than through `GetDpiForWindow`,
+/// because what the ratio is taken against is the scale the runtime
+/// **committed** at creation — the value the before-state's Visual geometry was
+/// actually projected at.
+unsafe fn changed_dpi(window: *mut ffi::WasamoWindow) -> u32 {
+    ffi::__window_scale_dpi_for_test(window) * 2
+}
 
 fn lower_ui_to_ir(src: &str) -> String {
     use wasamoc::{check, emit, lexer, lower, parser};
@@ -189,7 +220,7 @@ fn a_size_changing_suggested_rectangle_projects_through_the_nested_wm_size() {
                 right: current.right + 160,
                 bottom: current.bottom + 120,
             };
-            send_dpi_change(window, CHANGED_DPI, Some(&suggested));
+            send_dpi_change(window, changed_dpi(window), Some(&suggested));
 
             let (after_size, after_pixels) = witness(window);
             let realised = window_rect(window);
@@ -230,7 +261,8 @@ fn a_size_changing_suggested_rectangle_projects_through_the_nested_wm_size() {
             );
             assert_ne!(
                 before_pixels, after_pixels,
-                "the control requires the 96-DPI surface to be observably stale at 120 DPI"
+                "the control requires the creation-DPI surface to be observably \
+                 stale at the doubled DPI"
             );
         }
     });
@@ -253,7 +285,7 @@ fn an_unchanged_suggested_rectangle_projects_through_the_fallback() {
             let resizes = count_resizes(window);
 
             let unchanged = window_rect(window);
-            send_dpi_change(window, CHANGED_DPI, Some(&unchanged));
+            send_dpi_change(window, changed_dpi(window), Some(&unchanged));
 
             let (after_size, after_pixels) = witness(window);
             let resize_calls = resizes.get();
@@ -300,7 +332,7 @@ fn a_null_suggested_rectangle_survives_and_still_projects() {
             let resizes = count_resizes(window);
             let before_rect = window_rect(window);
 
-            send_dpi_change(window, CHANGED_DPI, None);
+            send_dpi_change(window, changed_dpi(window), None);
 
             let (after_size, after_pixels) = witness(window);
             let after_rect = window_rect(window);
@@ -352,7 +384,7 @@ fn a_null_suggested_rectangle_survives_and_still_projects() {
 /// This is discriminating against the *shipped* alternative rather than against
 /// a hypothetical one: the `WM_SIZE` arm has refreshed text unconditionally
 /// since T6, so a T7 that did not gate step 4 would advance the witness's raster
-/// marker to 120 DPI while no geometry pass had succeeded — exactly the
+/// marker to the new DPI while no geometry pass had succeeded — exactly the
 /// convergence claim the T6 independent review rejected.
 #[test]
 fn two_failed_projections_leave_the_text_stale_without_diverging() {
@@ -382,7 +414,7 @@ component Unresolvable inherits Window {
                 right: current.right + 120,
                 bottom: current.bottom + 90,
             };
-            send_dpi_change(window, CHANGED_DPI, Some(&grown));
+            send_dpi_change(window, changed_dpi(window), Some(&grown));
 
             let (_, after_pixels) = witness(window);
             let health = ffi::__runtime_health_for_test();
