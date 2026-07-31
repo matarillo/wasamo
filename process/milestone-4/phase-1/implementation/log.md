@@ -6047,6 +6047,77 @@ Compositor and will succeed on a session that has none, so the test still
 reaches the helper and still skips — but it means the binary does OS work
 outside the guard, which no other binary in the suite does.
 
+#### F-49 — the wrinkle was real, the prediction attached to it was wrong, and the owner run is what said so
+
+**The paragraph above is preserved as written and is falsified in its second
+half.** Identifying the hazard ("this binary does OS work outside the guard")
+was correct. Predicting it was harmless — "that call does not need a
+Compositor and will succeed on a session that has none" — was **wrong, and it
+was reasoned rather than measured**, in a paragraph whose whole purpose was to
+say what might go wrong.
+
+**Owner run, 2026-07-31.** On the guard-verification session,
+`a_host_that_already_declared_keeps_its_level_and_is_told_ours_did_not_take`
+**failed** rather than skipping:
+
+```
+panicked at dpi_awareness_tolerated_failure_integration.rs:92:10:
+the test host declares its own awareness first; nothing has set it yet:
+Error { code: HRESULT(0x80070005), message: "アクセスが拒否されました。" }
+```
+
+The pre-declaration returned `ERROR_ACCESS_DENIED` — the process's awareness
+had **already been set, before a line of test code ran**. So the binary failed
+on exactly the environment where every other binary skips, which is the defect
+[AGENTS.md §Testing rules](../../../../AGENTS.md) requires this observation to
+catch. It caught it on the first run.
+
+**The cause is environmental and that much is established rather than
+inferred**: cargo reported `Finished in 0.06s` and ran
+`...-1b13d4adc4b6727c.exe`, the **same on-disk artifact** as every local run,
+so the difference between passing here and failing there is the session and
+not the build. **The mechanism is not identified and is not claimed.** The
+owner notes the account is a non-administrator, which is a plausible line —
+per-user AppCompat layers live in `HKCU` and need no elevation — but nothing
+here measures it, and `SetProcessDpiAwarenessContext` needs no privilege of
+its own. It is left as an open observation.
+
+**The fix does not depend on identifying the mechanism, which is the point.**
+The test's premise was written as a claim about *code ordering* — "this binary
+holds exactly one test, so the ordering is not a race but a sequence" — and
+that is true and irrelevant: it establishes that no *test code* set the
+awareness, and says nothing about the OS, the loader, or a compatibility shim.
+The `expect` turned an assumption about the environment into a hard failure.
+The corrected shape:
+
+- the pre-declaration is attempted and **its result is discarded**;
+- the awareness actually in force is **read back** before `wasamo_init`;
+- **every assertion moved behind the skip guard**, where the rest of the suite
+  already puts them;
+- the premise is asserted from the readback (the level must not already be V2,
+  or deferring and overriding look the same), and property 3 is stated against
+  whatever level was in force rather than against `SYSTEM_AWARE` specifically
+  — because *who won the race* was never what the test is about.
+
+**Verified in both directions rather than assumed.** The owner's condition was
+simulated locally by setting `DPI_AWARENESS_CONTEXT_UNAWARE` immediately before
+the test's own pre-declaration, so that pre-declaration loses with
+`ERROR_ACCESS_DENIED` exactly as it did on the owner's session: the test
+**passes**, and passes by asserting rather than by skipping, since the local
+Compositor is live. So the correction is not merely "no longer fatal" — the
+test is *correct* in the world where something else declared first. And the
+branch still fires: mutations T9-M1 and T9-M2 were re-run against the
+restructured test and both still turn it red.
+
+**What this says about the earlier work.** The start gate's trap-#2 row
+enumerated what the declaration drags in process-wide and got the near-miss
+against `tests/common/mod.rs` right. This is the same class one step further
+out — an OS-global property that something *outside the process's own code*
+can already have decided — and the task reasoned about it instead of measuring
+it, in the one place it had explicitly noticed the risk. **Noticing a hazard
+and then predicting it away is worse than not noticing it**, because the
+prediction is what stops the check from being run.
+
 ### T9 independent review — disposition (2026-07-31)
 
 Full independent review per the lane table. The reviewer re-ran four of T9's

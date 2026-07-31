@@ -1991,6 +1991,24 @@ T8 recorded: the run is the owner's, on a session where `wasamo_init`
 returns `0x80070005`, and the fix container if a guard did not fire is this
 task's branch before merge.
 
+**The owner run found a defect on its first execution (finding F-49), and the
+fix container was used as designed.** The tolerated-failure binary calls
+`SetProcessDpiAwarenessContext` before the skip decision — it must, because
+the pre-declaration has to precede `wasamo_init` — and this plan predicted
+that was harmless because the call needs no Compositor. **That prediction was
+reasoned rather than measured and is false**: on the owner's session the call
+returned `ERROR_ACCESS_DENIED`, because the process's awareness had already
+been set before any test code ran, and the `expect` turned that into a
+**failure on precisely the environment where every other binary skips**. Same
+on-disk artifact as every local run, so the difference is the session. The
+correction discards the pre-declaration's result, reads the level actually in
+force, and moves every assertion behind the guard; it is verified in the
+losing direction by simulation and its branch still fires under T9-M1 and
+T9-M2. Details in [log.md](./log.md) §F-49. **A re-run is owed**, and this
+time with `-- --nocapture`, because a skipped test prints `ok` and its named
+skip line goes to stderr — so the first run cannot say whether the *other*
+binary skipped or merely ran.
+
 ---
 
 ### T10 — Assistant GUI evidence (positive controls A, B, and C's path form)
