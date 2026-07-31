@@ -550,12 +550,14 @@ impl GeometryProgress {
 /// establishes the wrong intermediate state, not the frame. So the structure
 /// turns the defect from **persistent** into **transient** — no more than that.
 ///
-/// Hard to observe before T9 either way: the OS does not deliver this message
-/// for the per-monitor changes this phase is about until the process declares
-/// awareness, and at a scale of 1 `SetWindowPos` dispatches no `WM_SIZE` at all
-/// (T4, measured). Not that an undeclared process is categorically unreachable
-/// — Microsoft documents delivery to unaware and system-aware top-level windows
-/// in some cases — which is one more reason the ordering is argued structurally
+/// It was hard to observe at all until the process declared awareness: the OS
+/// does not deliver this message for the per-monitor changes this phase is
+/// about until then, and at a scale of 1 `SetWindowPos` dispatches no `WM_SIZE`
+/// at all (T4, measured). Not that an undeclared process was categorically
+/// unreachable — Microsoft documents delivery to unaware and system-aware
+/// top-level windows in some cases. T9's declaration makes the OS a real
+/// driver of this path, but it does not turn the transient window into
+/// something a test can catch, so the ordering stays argued structurally
 /// rather than from "nothing currently goes wrong".
 ///
 /// Failure handling is **log and survive** throughout, per DD-M4-P1-003: no

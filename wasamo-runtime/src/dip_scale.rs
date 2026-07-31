@@ -41,7 +41,10 @@ pub struct DipScale {
 
 impl DipScale {
     /// 100% — every conversion is the identity. This is the value in force on
-    /// an undeclared process and, until T9, on every process.
+    /// a window whose effective DPI is the reference one: a 100% monitor, or
+    /// any monitor in a process whose awareness was never declared. It stopped
+    /// being the value in force on *every* window when M4-Phase 1 T9 declared
+    /// Per-Monitor-Aware V2.
     pub const IDENTITY: Self = Self { dpi: REFERENCE_DPI };
 
     /// Construct from an OS-reported DPI — `GetDpiForWindow` at window
