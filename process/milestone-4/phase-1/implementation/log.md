@@ -6658,3 +6658,113 @@ minutes apart in one session"). Folded into the README.
 **Not verified by the reviewer, and left unverified**: the `cargo clean -p
 wasamo-runtime --release` "9 files, 6.9 MiB" figure, which is not retroactively
 checkable. It is a console reading recorded at the time.
+
+---
+
+## T11 — Owner human-visible smoke (positive control C, literal form)
+
+### Carry-over audit and responsibility re-audit (2026-08-01, before start gate)
+
+Task branch `feat/m4-phase-1-t11`, cut from `feat/m4-phase-1` = `ea1215e`.
+
+**Carry-over into T11**, read out of the T4–T10 retrospectives and
+[handoff.md](./handoff.md) rather than out of §T11 alone.
+
+| From | Proposition | Obligation on T11 |
+|---|---|---|
+| Obligation 7 (T10) | The runnable set is staged and was launched from its delivery directory, not from the build tree | T11 observes the delivered copy. The owner has transferred and extracted it, so the observing machine needs no repository, no toolchain and no build |
+| T10 (handoff) | `gallery-rust` / `counter-rust` bake an absolute build-machine path to their `.uic` and cannot run from a copied directory | The delivered host is `gallery-zig.exe` + `wasamo.dll`, and nothing else is expected to start there |
+| T10 (handoff) | `__COMPAT_LAYER=DPIUNAWARE` in a child's environment gives a scale-1 run of the **shipped bytes** | The positive control is the same executable under that variable. No mutation build, and **the delivered files are not replaced** — identical bytes is precisely what stops a difference being attributed to a different build |
+| F-49 (T9) | Arranging OS state and succeeding at it are different facts | The unaware posture is **read back** — Task Manager's DPI Awareness column, with both processes visible — not inferred from having set the variable |
+| F-28 (T4) | The client rectangle does not scale by `s`; the non-client frame moves by its own DPI-indexed metrics | The invariant asserted is element order and wrap structure — tiles per row — never a bit-exact wrap position |
+| T8 stated limit 2 | On a real crossing the **OS** chooses the rectangle, so logical invariance is approximate | The same, and T10 control B's exact-DIP result is **not** transferable here: that path chose the rectangle by measure-and-adjust, this one does not |
+| F-33 (T5) | A committed frame set is not a baseline | Every T11 frame comes from one session on one machine, and none is compared against a committed set. The observing machine is not the development machine, so its non-client metrics are its own and are not checked against §T4's |
+| F-48 (T9) | An unaware observer reads an aware window's rectangle in virtualized coordinates | T11 takes **no coordinate measurement**. The one number recorded per monitor is a tile count, which is not virtualized. Recorded so that "F-48 does not bite here" is a decision rather than an omission |
+| T7 F-34, forwarded through T10 | Whether a stale intermediate projection is ever presented as a frame during the change is still open | **Scoped out of T11 at start** — re-audit point 1 |
+
+**Responsibility re-audit — what T11 should be, not what §T11 said.**
+
+1. **The intermediate-projection question is removed from T11's observation
+   list, before the observation rather than after it.** T10's retrospective
+   forwarded it here on the ground that its own harness waits about 1.5 s after
+   detecting the change and therefore cannot speak to it. The owner's objection
+   on reading the draft checklist is the correct one and is the recorded
+   reason: during a drag the window is **in motion**, so the eye tracks it
+   instead of fixating, and the artifact in question is one or two composited
+   frames — on the order of 16–33 ms at 60 Hz — which is below what a human can
+   consciously resolve in either direction. An item that cannot produce a
+   positive observation can still produce a **negative** one, and "watched for
+   it, did not see it" would be exactly the claim-wider-than-its-object defect
+   this phase has now withdrawn twice (§T4 F-31, §T10 control C). The question
+   is not dropped: it goes to [handoff.md](./handoff.md) with the two
+   instrument classes that could answer it — frame-level capture, where a
+   positive sighting is conclusive and a null result says nothing, or an
+   in-process observation of whether a frame is committed inside the handler at
+   all, which is the shape F-34 actually poses. Neither is a human-smoke
+   instrument, and T11 lands no production code. **The screen-recording option
+   was offered with that asymmetry stated and the owner declined it**, so the
+   record reads "not captured", not "captured and saw nothing".
+2. **§T11's three bullets are a settled-state observation and carry no
+   positive control.** [AGENTS.md §Testing rules](../../../../AGENTS.md)
+   requires the owner's human-visible smoke to separate the intended behaviour
+   from a coincidental look-alike, and here the look-alike is known precisely:
+   a DPI-unaware window is bitmap-stretched to the same physical size on the
+   destination monitor, so **size separates nothing** — T1 measured it, and
+   rows 1 and 3 of §T10's three-state table share a rectangle for the same
+   reason. What separates them is glyph sharpness and the process's declared
+   level. The control is therefore the same executable run twice, once under
+   `__COMPAT_LAYER=DPIUNAWARE`, compared **side by side inside one frame on one
+   monitor**, so the comparison does not rest on two capture events.
+3. **A leg the plan did not have: the control has to *agree* somewhere too.**
+   With the external display at 100% the conversion is the identity, so the
+   aware and unaware runs should be indistinguishable there and differ on the
+   150% panel. A control that differs on both monitors is satisfied by any two
+   differing things; one that differs on exactly the scaled panel is satisfied
+   by the posture. That is why the scale pair is **chosen** — internal 150%,
+   external 100%, both owner-adjustable — rather than inherited from whatever
+   the desks happened to be set to (150% / 125% when the question was asked).
+4. **The pointer path is added to the observation.** After the crossing,
+   clicking a gallery tab and hovering a button checks that the inbound
+   conversion follows the window's new scale in a composited window. T8 already
+   drives a click through a real `WM_LBUTTONUP` at a synthesised scale, so this
+   is not the only evidence for that seam — but it is the only one where the
+   coordinate comes from a real device across a real crossing.
+5. **The protocol is written down because the instrument is a human.** Every
+   earlier GUI gate in this phase had a script, and the script was itself the
+   record of what was done. T11's equivalent is
+   [evidence/t11-owner-smoke/protocol.md](./evidence/t11-owner-smoke/protocol.md),
+   in Japanese because the owner executes it. Without it the only record of the
+   procedure would be the verdict, and a verdict cannot be audited against a
+   procedure that was never written down.
+
+**Environment, as arranged before the run** (recorded now, so a later reading
+knows what was intended rather than inferring it from the frames): laptop
+internal panel at 150%, external display at 100%, both adjustable; the delivery
+set already transferred by `scp` and extracted; frames returned the same way for
+assistant analysis. The observing machine is **not** the development machine.
+
+### Start gate (recorded 2026-08-01, before the observation)
+
+Review lane: **full independent review**. §T11 is absent from
+[preamble.md §Review lanes](./preamble.md#review-lanes) — the table stops at
+T10 — so the lane is assigned here rather than inherited, by the reasoning T10
+recorded: the deliverable is rendered evidence and the claims drawn off it, and
+zero production code lowers the risk *of the change*, not the risk this task
+carries, which is that the recorded verdict outruns what was seen. T11 also
+carries one half of AC7's third requirement.
+
+| # | Applies | Reason and planned close artifact |
+|---|---|---|
+| 1 — semantic migration / call sites | **no** | No code, no enum, no schema, no traversal. Re-decided rather than inherited: the delivered binary is run unmodified, so there is not even a build |
+| 2 — structural side effects | **yes**, in trap #3's documentation sense | The close record restates numbers owned by §T4, §T8 and §T10. Close by citing the owning document for every inherited number and marking which numbers this task observed itself |
+| 3 — parallel / derived data | **yes** | [evidence/README.md](./evidence/README.md) is a parallel index of which frame set evidences which claim, and it goes stale the moment a set is added without it. The `t11-owner-smoke/` row lands in the same commit as the frames |
+| 4 — authored branch | **no** | No reject, diagnostic or size branch, and no script is authored — the harness is a human plus the built-in capture tool |
+| 5 — carry-forward | **yes** | Two carriers are already visible: the intermediate-projection question, which goes to [handoff.md](./handoff.md) with the instrument classes that could answer it, and whatever the crossing shows about approximate logical invariance, which is M4-Phase 8's input for per-window differing scale |
+| 6 — deterministic failure | **yes** | This task's failure mode is **re-dragging**. A disagreement with a recorded number — tiles per row above all — is root-caused, not repeated until it reads better. The second half is specific to a human instrument: a "did not observe" is recorded only for observations the procedure can actually produce, which is why re-audit point 1 removes one item entirely rather than letting it be answered weakly |
+| 7 — GUI positive control | **yes** | The gate's substance. The control is the unaware twin, side by side in one frame, expected to differ on the 150% panel and to agree on the 100% one. Its own can-fail property is that agreement leg: if the two differ everywhere, the difference is not attributable to the posture |
+
+Constraints fixed before the run: the delivered files are neither modified nor
+replaced; the posture is read back rather than assumed; the window is not
+resized at any point, because its physical size and its non-client frame are
+both part of what is observed; every frame comes from the one session; and no
+number is compared against the development machine's.
