@@ -2385,14 +2385,19 @@ record of what was done; T11's equivalent is
       the OS chooses the rectangle) — and text is crisp on both.
       **7 tiles per row on both monitors**, wrap structure 7 / 7 / 4 and
       element order identical; the content band's DIP width differs by
-      **1.3 DIP**, which is F-28's residual reproducing on another
-      machine, and it did not move a wrap position.
+      **1.3 DIP** — F-28's *mechanism*, on a different quantity than the
+      client extent F-28 measured, so the value is not one F-28 predicts
+      — and **it did not move a wrap position**, which is what the bullet
+      asserts.
 - [x] Confirm the non-client area (caption, borders) scales with the
       window — the V2 automatic behaviour this phase relies on in full.
       **Measured rather than eyeballed**: the content band's width scales
-      ×1.5026 while its top edge moves ×1.452, and the gap between those
-      two numbers is the caption — DPI-indexed, not proportional to `s`,
-      which is why DD-M4-P1-004's claim has to stay on the outer
+      ×1.5026 while its top edge moves ×1.452. Attributing that gap to
+      the caption takes one stated step — the toolbar's own padding is a
+      DIP quantity and scales, so the residual falls on the caption,
+      which lands near ×1.44 for any plausible padding — and with it the
+      conclusion holds: the non-client is DPI-indexed, not proportional
+      to `s`, which is why DD-M4-P1-004's claim has to stay on the outer
       rectangle.
 - [x] **Return leg.** Drag back and confirm the original monitor
       reproduces the original appearance. A one-way crossing cannot show

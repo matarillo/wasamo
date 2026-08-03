@@ -67,7 +67,7 @@ that was made, not as a substitute for capturing.
 | `t10-delivery-check/` | T10 — the **staged** T11 runnable set (`gallery-zig.exe` + `wasamo.dll`) launched from its delivery directory, declaring PMv2 and rendering 7 tiles per row |
 | `t10-control-c/` | T10 — control C's path form: three legs across an **owner-driven** 125% -> 150% -> 125% display-scale change, with the window untouched after the first leg so the rectangle is the one the OS supplied |
 | `t10-analysis/` | T10 — the comparison numbers, the magnified crispness crops and the assistant's reading of them ([README](./t10-analysis/README.md)) |
-| `t11-owner-smoke/` | T11 — the owner's cross-monitor smoke on **another machine**: eleven frames across a drag crossing, a `Win+Shift+arrow` crossing and the unaware-twin control at 100 / 150 / 175%, plus the Task Manager posture readback, with the analysis in its own [README](./t11-owner-smoke/README.md) |
+| `t11-owner-smoke/` | T11 — the owner's cross-monitor smoke on **another machine**. Eleven owner-captured frames: seven across a drag crossing and a `Win+Shift+arrow` crossing, three of the unaware-twin control at 100 / 150 / 175%, and one Task Manager posture readback. Plus six ×6 magnified label crops (`crop-<scale>-{aware,unaware}-x6.png`), the observation protocol the owner executed, and the analysis, all in its own [README](./t11-owner-smoke/README.md) |
 
 **The `t11-owner-smoke/` set is comparable with nothing else in this
 directory.** It was captured on the owner's laptop, at 150% and 100%, with

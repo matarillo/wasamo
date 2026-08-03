@@ -6758,7 +6758,7 @@ carries one half of AC7's third requirement.
 | 1 — semantic migration / call sites | **no** | No code, no enum, no schema, no traversal. Re-decided rather than inherited: the delivered binary is run unmodified, so there is not even a build |
 | 2 — structural side effects | **yes**, in trap #3's documentation sense | The close record restates numbers owned by §T4, §T8 and §T10. Close by citing the owning document for every inherited number and marking which numbers this task observed itself |
 | 3 — parallel / derived data | **yes** | [evidence/README.md](./evidence/README.md) is a parallel index of which frame set evidences which claim, and it goes stale the moment a set is added without it. The `t11-owner-smoke/` row lands in the same commit as the frames |
-| 4 — authored branch | **no** | No reject, diagnostic or size branch, and no script is authored — the harness is a human plus the built-in capture tool |
+| 4 — authored branch | **no** | No reject, diagnostic or size branch, and no script is authored — the harness is a human plus the built-in capture tool. **Reversed at the close, and the reversal is a finding (F-53): two scripts with four branches between them were authored after this row was written, and the row was never re-decided. See §Trap #4 — reversed** |
 | 5 — carry-forward | **yes** | Two carriers are already visible: the intermediate-projection question, which goes to [handoff.md](./handoff.md) with the instrument classes that could answer it, and whatever the crossing shows about approximate logical invariance, which is M4-Phase 8's input for per-window differing scale |
 | 6 — deterministic failure | **yes** | This task's failure mode is **re-dragging**. A disagreement with a recorded number — tiles per row above all — is root-caused, not repeated until it reads better. The second half is specific to a human instrument: a "did not observe" is recorded only for observations the procedure can actually produce, which is why re-audit point 1 removes one item entirely rather than letting it be answered weakly |
 | 7 — GUI positive control | **yes** | The gate's substance. The control is the unaware twin, side by side in one frame, expected to differ on the 150% panel and to agree on the 100% one. Its own can-fail property is that agreement leg: if the two differ everywhere, the difference is not attributable to the posture |
@@ -6813,11 +6813,48 @@ the unaware side degrades monotonically.
 | `__COMPAT_LAYER=DPIUNAWARE` gives a scale-1 run of the shipped bytes | §T10; T11 uses the mechanism and adds the first Task Manager readback of both postures |
 | DD-M4-P1-004's outer-rectangle claim | The ADR; T11's captured bounds corroborate its shape and are explicitly not a second measurement |
 | The gallery's 7-tiles-per-row signature | §T10 (`t10-shipped-created/`), taken at 125% on the development machine; T11's 7 is its own reading at 150% and 100% |
+| **An unaware window is stretched to the same physical size, so size separates nothing** — the control's design premise, and more load-bearing than any row above it | T1 measured it on the undeclared build; §T10's three-state table has rows 1 and 3 sharing a rectangle for the same reason. Added after the independent review found it relied on and unlisted. T11 confirms the shape on its own frames rather than inheriting the numbers: the leading accent run of the `All` button measures **27 px in both windows at 150% and 31 px in both at 175%**, against 18 px on the un-resized 100% frame — and 18 × 1.5 = 27, 18 × 1.75 = 31.5 → 31. The two postures put the same physical geometry on the screen at each scale; only the rasterization differs |
 
 [evidence/README.md](./evidence/README.md) gains the `t11-owner-smoke/` row in
 this commit, which is trap #3's close artifact — the index is a parallel source
 of truth about which set evidences which claim and goes stale the moment a set
 lands without it.
+
+#### Trap #4 — reversed at the independent review, with a live defect behind it
+
+**The start-gate row above is false as recorded.** It says "no script is
+authored", and it was written before the approach was chosen — which is exactly
+the case
+[implementation-gates.md §0](../../../procedures/implementation-gates.md) step 2
+covers: the selection is re-decided when the approach changes. The approach did
+change. The frames came back needing measurement, and
+[`t11-edge-stats.ps1`](./evidence/t11-edge-stats.ps1) and
+[`t11-frame-diff.ps1`](./evidence/t11-frame-diff.ps1) were authored and
+committed with **four branches** between them. Nothing in the close re-visited
+the row.
+
+**And the untested branch had a defect**, which is the whole point of the trap
+rather than a coincidence. `t11-frame-diff.ps1` exited 1 on a difference and 2
+on a size mismatch and **did not exit at all on the equal path** — a run over two
+identical frames left `$LASTEXITCODE` at whatever the previous command had set.
+Reproduced by priming it to 7 and comparing a frame with itself: the script
+printed `differing 0 of 1036642` and the exit code stayed 7. Its sibling
+[`compare-frames.ps1`](./evidence/compare-frames.ps1) exits explicitly, so this
+regressed a convention established in the same directory, and
+[evidence/README.md](./evidence/README.md) advertises the script for later use.
+It never bit T11 because all three comparisons the task ran differed — the
+untested-branch pattern exactly. Fixed by exiting explicitly on all three arms.
+
+Every branch is now fired and recorded, which is the artifact the trap asks for:
+
+| Script | Branch | Exercise | Result |
+|---|---|---|---|
+| `t11-frame-diff.ps1` | identical | frame 1 against itself, inset 4, `$LASTEXITCODE` primed to 7 | `differing 0 of 1036642`, **exit 0** |
+| `t11-frame-diff.ps1` | any difference | frame 1 against frame 3, inset 4 | `differing 12 of 1036642`, exit 1 |
+| `t11-frame-diff.ps1` | size mismatch | frame 1 (1182 × 891) against frame 2 (786 × 592) | `size mismatch … not comparable frames`, exit 2 |
+| `t11-edge-stats.ps1` | crop out of bounds | `(700,500,200,200)` on a 786 × 592 frame | throws `crop (700,500,200,200) falls outside 786x592` |
+| `t11-edge-stats.ps1` | flat crop (zero range) | `(600,650,20,10)`, empty background below the tiles | throws `crop is a flat colour; there is no edge to measure` |
+| `t11-edge-stats.ps1` | normal | the leg-0 label crop | `max|dx| 157.0  mid-band 8.2%` |
 
 #### Trap #6 — three disagreements, all rooted, none re-shot
 
@@ -6827,7 +6864,7 @@ comparisons came back non-zero and each was root-caused rather than repeated:
 | Disagreement | Root cause | Disposition |
 |---|---|---|
 | The drag round trip is not pixel-identical: 8,323 of 1,053,162 differ, max delta 100 | Every differing pixel is on the outermost one or two pixels of the frame or at a corner radius. The window sat at a different desktop position on the way back, and a rounded corner blends with what is behind it | Not a render difference. Reported with the inset that isolates it (12 pixels at inset 4, all corners) rather than by widening the inset until it reads zero |
-| The 100% control pair has identical statistics but 17,712 differing pixels | The two windows were sized by hand: content bands 515 px against 522 px. The tile grid lands on different sub-pixel origins | The claim was narrowed to what was measured — the *statistics* agree — and the earlier "identical" wording was corrected before it reached a document |
+| The 100% control pair has identical statistics but **17,712 of 61,776 differing pixels** — `t11-frame-diff.ps1 -A crop-100-aware-x6.png -B crop-100-unaware-x6.png -Inset 0`, i.e. the two committed ×6 crops and not the frames, which are not the same size and so exit 2 | The two windows were sized by hand: content bands 515 px against 522 px, so the tile grid lands on different origins | The claim was narrowed to what was measured — the *statistics* agree — and the earlier "identical" wording was corrected before it reached a document. **The source of the number is named here after the independent review could not reproduce it**: it was quoted without saying what it was a diff of, and a reader reasonably tried the frames |
 | `10` vs `2` (same monitor, two launches) differ in 3,885 pixels | Max per-channel delta is **1**, confined to text rows | F-33's intensity-only drift, an order below its measured band. Recorded with its number, not filed as "drift" without one |
 
 #### Trap #5 — carry-forward
@@ -6888,6 +6925,36 @@ execution differs from what was written. The protocol being committed
 ([evidence/t11-owner-smoke/protocol.md](./evidence/t11-owner-smoke/protocol.md))
 is what makes the deviation visible at all; had the procedure lived only in
 chat, the frames would have looked like the plan.
+**A second half, added at the independent review, and it is the earlier
+failure**: the deviation was not a choice. `protocol.md` leg 4 step 13 asks for
+two un-resized windows side by side on one 150% panel, which needs about 2400
+physical pixels and cannot be done on that laptop — the procedure demanded an
+**arrangement that does not exist**, and the owner did the only thing available.
+The retrospective's own corrective covers whether an *observation* is physically
+possible (duration, motion, resolution) and says nothing about whether the
+*setup* it presupposes is reachable. So the re-trigger is two-part: check that
+the observation can be made, **and** that the arrangement it requires can be
+built. The owner named the fix while executing — internal 100% + external 150%
+would have left both windows full size — which is the shape a workable version
+of this leg takes.
+
+**F-53 — a start-gate trap selection is a prediction, and this one was
+falsified by the task's own work.** The trap #4 row says "no script is
+authored", written before the approach was chosen, and then two scripts with
+four branches were authored and committed. Nothing re-decided the row, and
+[implementation-gates.md §0](../../../procedures/implementation-gates.md) step 2
+already requires that when the approach changes. The consequence was not
+hypothetical: the unexercised equal path of `t11-frame-diff.ps1` left
+`$LASTEXITCODE` untouched, so a comparison that found no difference could be
+read as whatever ran before it — a false-green in the family of F-5, F-21 and
+`compare-frames.ps1`'s own R-4, in a script the evidence index advertises for
+reuse. It survived the whole task because all three comparisons run here
+differed. *Re-trigger:* any task whose gate selection names something the task
+does not yet have — an instrument, a script, a fixture. The selection is not
+wrong when written; it goes stale, and nothing in the current gate procedure
+prompts a re-read at close beyond the general step-2 sentence. **Caught by the
+independent review, not by me**, which is the argument for the full lane on a
+task with zero production code.
 
 #### Owner's reading
 

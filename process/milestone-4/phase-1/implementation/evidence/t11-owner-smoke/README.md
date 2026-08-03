@@ -25,7 +25,7 @@ the comparison is of *shape*, not of value.
 
 ## What was captured
 
-| Frame | Path | Monitor | What it is |
+| Frame | How the window got there | Monitor | What it is |
 |---|---|---|---|
 | `1-internal-150-aware.png` | drag | internal 150% | Before the crossing |
 | `2-external-100-aware.png` | drag | external 100% | After the crossing, settled |
@@ -48,19 +48,43 @@ band — from the `All` tab through `Open lightbox`, i.e. the full content width
 measures **1154 px at 150%** and **768 px at 100%**, a ratio of **1.5026**.
 
 In DIP that is **769.3 against 768.0 — a 1.3 DIP difference**, and it is not a
-defect: F-28 predicted exactly this residual, because layout receives the
-*client* extent and the non-client frame scales by its own DPI-indexed system
-metrics rather than by `s`. The phase measured ~1.6 DIP at 125% on the
-development machine; a real crossing on another machine reproduces the shape.
-**It did not move a wrap position**, which is the property §T11 asserts —
-element order and wrap structure, never a bit-exact wrap position.
+defect.
+
+**What F-28 does and does not say about that number** — narrowed after the
+independent review, which was right that the first wording claimed a prediction
+F-28 never made. F-28 is a measurement of the **client extent** on the
+development machine at 125%: 784 DIP against 785.6, a 1.6 DIP residual, because
+layout receives the client extent while the non-client frame scales by its own
+DPI-indexed system metrics rather than by `s`. The 1.3 above is the **content
+band**, a different quantity — the client residual less whatever the toolbar's
+own padding contributes. F-28's *mechanism* is what says a residual must exist
+and must not be assumed away; it predicts neither this value nor this quantity,
+and the phase's rule that a comparison across machines is of shape and not of
+value applies to it. The same non-invariance shows on the captured window
+bounds — 1182 / 1.5 = 788.0 against 786.0 — which is a third quantity again.
+**What matters for §T11 is the consequence, and that is measured directly: it
+did not move a wrap position.** Element order and wrap structure are what the
+task asserts, never a bit-exact position.
 
 **The non-client scales with the window, and visibly not by `s`.** The same
 band's top edge sits at **y = 61 at 150%** and **y = 42 at 100%**, a factor of
-**1.452** against the width's 1.5026. That gap *is* the caption, and the two
-numbers coming out different is the observation: the V2 automatic non-client
-scaling this phase relies on is DPI-indexed, not proportional. DD-M4-P1-004's
-claim is about the **outer** rectangle, and this is why it must stay there.
+**1.452** against the width's 1.5026.
+
+**Attributing that gap to the caption takes one step of argument, and the first
+version of this paragraph asserted it instead** (independent review). What is
+measured is a distance from the top of the captured frame to the first accent
+pixel, and that distance is the caption height *plus* the toolbar's own top
+padding. The two cannot be separated from these frames: scanning a column
+through both, the caption background and the toolbar background are the same
+colour, so there is no detectable boundary between them. The step is that the
+padding is a **DIP** quantity the app lays out, so it scales by `s` up to
+rounding — and 61 = c₁₄₄ + 1.5p against 42 = c₉₆ + p puts the caption ratio near
+1.44 for any plausible p (p = 8 gives 49 / 34; p = 6 gives 52 / 36), comfortably
+below 1.5 and well outside the ±1 px of layout rounding these frames show
+elsewhere. So the conclusion stands — **the V2 automatic non-client scaling is
+DPI-indexed, not proportional to `s`** — and it stands on that assumption, which
+is now stated. DD-M4-P1-004's claim is about the **outer** rectangle, and this
+is why it must stay there.
 
 **The window's logical size survives the crossing.** Captured bounds are
 1182 × 891 at 150% and 786 × 592 at 100%. Windows' window capture returns the
@@ -113,10 +137,17 @@ column added:
 | `gallery-zig.exe` | 18408 | gallery-zig.exe | 非対応 — Unaware |
 
 This is the level actually in force, not the declaration call's return value
-(T9 finding F-49). It is also the first observation outside the development
-machine of **both** halves of DD-M4-P1-001: the shipped binary declaring PMv2,
-and the tolerated-failure path when the AppCompat shim has already set the
-process unaware.
+(T9 finding F-49).
+
+**Split into what this frame shows and what other frames show** (independent
+review, which was right that one sentence collected too much). The frame shows
+the resulting **posture** of two processes, and nothing else. That the runtime
+*tolerates* a refused declaration is shown by frames 4 / 5 / 8, where the unaware
+process comes up and renders. The third thing DD-M4-P1-001 §Failure handling
+specifies — that the outcome of the attempt is recorded as a **diagnostic** —
+was **not** read back on this machine and is not claimed here; T9 has it
+headlessly. A section that cites F-49 for the difference between arranging OS
+state and succeeding at it owes the diagnostic the same treatment.
 
 **What this frame does not establish.** The list is sorted by Description and
 is **scrolled** — the thumb sits about a fifth of the way down its track — so
@@ -149,22 +180,40 @@ position or capture rather than rasterization. This is what makes the 150% and
 175% separations attributable to the posture.
 
 **The identification is not an appearance judgement.** `1-internal-150-aware.png`
-is a window known to be the aware one — launched normally, before the control was
-set up — and reads 157.0 / 8.2% at 150%, which is the left window's value; the
-right reads 106.6 / 19.7%. The owner's account of which shell launched which
-agrees.
+is a window known to be the aware one — launched normally, with no variable set —
+and reads 157.0 / 8.2% at 150%, which is the left window's value; the right reads
+106.6 / 19.7%. Its content band is 1154 px against the left window's 774, so what
+the metric tracks is not window width. The owner's account of which shell
+launched which agrees.
 
-**The aware side is flat across scales and the unaware side is not**: 158.6 →
-157.0 → 156.6 against 158.6 → 106.6 → 92.3. Crispness independent of the scale
-factor is risk R-1's claim, and this is it as a number rather than as an
-argument.
+**The aware side's `max|dx|` is flat across scales and the unaware side's is
+not**: 158.6 → 157.0 → 156.6 against 158.6 → 106.6 → 92.3. Crispness independent
+of the scale factor is risk R-1's claim, and this is it as a number rather than
+as an argument. **The claim is confined to that statistic** (independent review):
+the aware `mid-band` column reads 13.2% → 8.2% → 10.6%, which is neither flat nor
+monotonic, because the share of intermediate pixels depends on how much glyph and
+how much background a crop contains and the three crops are different sizes. The
+unaware side is monotonic in both columns.
+
+**The crossing frames carry this directly, and the first version of this file
+left it on the control pairs and owner attestation.** The same statistic on the
+frames that were never resized: 158.6 / 13.2% on the drag destination, 158.6 /
+13.2% after the click there, 158.6 / 13.1% on the snap destination — identical to
+the 100% aware control — and 157.0 / 8.2% on all three 150% frames, identical to
+leg 0. So "text is crisp on the destination monitor" is measured on the crossing
+itself, not inferred from a separate pair. The check was pointed out by the
+independent review and is recorded as its finding, not as something the task
+did.
 
 **Identical statistics are not identical pixels, and the difference is
 explained.** The two windows in each pair were sized by hand, so their content
 bands differ — 515 px against 522 px at 100%, 774 against 761 at 150% — the tile
-grid lands on different sub-pixel origins, and the glyph pixels differ while the
-character of the rasterization does not. Recorded because "identical" was
-written once here before it was checked, and it was true of the statistics only.
+grid lands on different origins, and the glyph pixels differ while the character
+of the rasterization does not. Measured:
+`t11-frame-diff.ps1 -A crop-100-aware-x6.png -B crop-100-unaware-x6.png -Inset 0`
+gives 17,712 of 61,776 at max per-channel delta 121. Recorded because
+"identical" was written once here before it was checked, and it was true of the
+statistics only.
 
 Look at `crop-150-aware-x6.png` against `crop-150-unaware-x6.png`: the aware
 stems carry a one-pixel fringe and the counters of the `0`s stay open; the
@@ -176,9 +225,16 @@ unaware ones have a two-pixel grey ramp on both sides of every stroke and the
 1. **The side-by-side windows were narrowed.** Two 1200-pixel windows do not fit
    on one 150% panel, so the owner resized them; the pairs show 5 tiles per row
    instead of 7. [`protocol.md`](./protocol.md) said not to resize. The
-   consequence is scoped rather than waved away: **frames 4 / 5 / 8 support the
-   crispness claims only**, and every layout claim above rests on 1 / 2 / 3 and
-   9 / 10 / 11, which were not resized. The owner notes that internal 100% +
+   consequence is scoped rather than waved away — and the scoping needed one
+   correction of its own, because the first version of it read as an absolute
+   and the very next paragraph broke it (independent review). **What the resized
+   frames cannot carry is a claim about the layout the crossing produced**, since
+   their width was set by hand rather than by the OS: every such claim above
+   rests on 1 / 2 / 3 and 9 / 10 / 11. What they *can* carry is an observation
+   about what the layout engine does **at the width they themselves establish**,
+   which is a different kind of statement and is what the toolbar note below is.
+   They also carry the crispness claims, which do not depend on window width at
+   all. The owner notes that internal 100% +
    external 150% would have avoided the resize; re-shooting was judged not worth
    it, because a crispness comparison does not depend on window width and both
    scaling directions are already covered by the round trip.
@@ -214,8 +270,28 @@ $d = "process/milestone-4/phase-1/implementation/evidence"
 & $d/t11-frame-diff.ps1 -A $d/t11-owner-smoke/10-snapmove-external-100.png -B $d/t11-owner-smoke/2-external-100-aware.png -Inset 4 -Map
 ```
 
-`t11-frame-diff.ps1` exits non-zero whenever anything differs, so a difference
-has to be read and classified rather than passed over.
+`t11-frame-diff.ps1` exits 1 on any difference, 2 on a size mismatch and 0 when
+the frames are identical, so a difference has to be read and classified rather
+than passed over. (The identical arm did not exit at all until the independent
+review; see log.md §T11 §Trap #4.)
+
+**The crops, whose provenance this section omitted.** They are not the same
+rectangles as the statistics above — a crop wants a little margin around the
+glyphs so the shapes are legible, a statistic wants the tightest box that is the
+same on both sides — so the two are recorded separately rather than left for a
+reader to recover:
+
+```powershell
+& $d/magnify-crop.ps1 -In $d/t11-owner-smoke/5-external-100-side-by-side.png -Out ...\crop-100-aware-x6.png   -X 22  -Y 138 -W 78  -H 22 -Factor 6
+& $d/magnify-crop.ps1 -In $d/t11-owner-smoke/5-external-100-side-by-side.png -Out ...\crop-100-unaware-x6.png -X 558 -Y 138 -W 78  -H 22 -Factor 6
+& $d/magnify-crop.ps1 -In $d/t11-owner-smoke/4-internal-150-side-by-side.png -Out ...\crop-150-aware-x6.png   -X 28  -Y 212 -W 128 -H 32 -Factor 6
+& $d/magnify-crop.ps1 -In $d/t11-owner-smoke/4-internal-150-side-by-side.png -Out ...\crop-150-unaware-x6.png -X 837 -Y 212 -W 128 -H 32 -Factor 6
+& $d/magnify-crop.ps1 -In $d/t11-owner-smoke/8-internal-175-side-by-side.png -Out ...\crop-175-aware-x6.png   -X 34  -Y 230 -W 145 -H 34 -Factor 6
+& $d/magnify-crop.ps1 -In $d/t11-owner-smoke/8-internal-175-side-by-side.png -Out ...\crop-175-unaware-x6.png -X 973 -Y 235 -W 145 -H 34 -Factor 6
+```
+
+Each crop strictly contains its own statistics rectangle, at the same offset on
+both sides of a pair, and each comes from the window its name says.
 
 ## What this closes, and what it does not
 

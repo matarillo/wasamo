@@ -7,10 +7,18 @@
 # directory shape nor those insets apply; this script is the single-file form
 # and takes the inset explicitly.
 #
-# -Map lists where the differences are (bounding box, worst rows, 50-row bands)
-# instead of only how many there are. That is what turns "8323 pixels differ"
-# into "every differing pixel is on the outermost two pixels of the frame and
-# the four corner radii" — a fact about the capture, not about the render.
+# -Map lists where the differences are (bounding box, and the eight rows
+# carrying the most of them) instead of only how many there are. That is what
+# turns "8323 pixels differ" into "every differing pixel is on the outermost two
+# pixels of the frame and the four corner radii" — a fact about the capture, not
+# about the render.
+#
+# Exit codes: 0 identical, 1 any difference, 2 size mismatch. **All three arms
+# exit explicitly**, including the identical one: a script that simply returns
+# leaves `$LASTEXITCODE` at whatever the previous command set, which is a
+# false-green of exactly the family this phase has hit three times (F-5, F-21,
+# and `compare-frames.ps1`'s own R-4). Its sibling in this directory exits
+# explicitly for the same reason.
 #
 # As in `compare-frames.ps1`: the pixel count and the max per-channel delta
 # describe a difference, they do not classify it. A window captured at two
@@ -64,6 +72,6 @@ try {
       if ($rows[$_] -gt 0) { Write-Output ("    y={0,4}  {1,5} px" -f $_, $rows[$_]) }
     }
   }
-  if ($diff -gt 0) { exit 1 }
+  if ($diff -gt 0) { exit 1 } else { exit 0 }
 }
 finally { $x.Dispose(); $y.Dispose() }
