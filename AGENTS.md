@@ -213,11 +213,21 @@ time. Builds in the C and Zig host build systems shell out to
   build dependency on `wasamoc` and uses `cargo:rerun-if-changed` to
   recompile when `examples/counter/counter.ui` or `wasamoc` itself
   changes.
-- **Workspace-wide builds** (`cargo build --release --workspace`)
-  build `wasamoc` as part of the graph, so they implicitly satisfy
-  the ordering for `counter-rust`. C and Zig hosts still need an
-  explicit prior `wasamoc` build because they live outside the cargo
-  workspace's build graph.
+- **Before any cold workspace build or test that links `wasamo.dll`, build
+  `wasamo-runtime` as a primary package in the same profile:**
+  `cargo build -p wasamo-runtime` before a debug workspace test, or
+  `cargo build -p wasamo-runtime --release` before a release workspace build.
+  `wasamo-dll/build.rs` whole-archives the uplifted
+  `<profile>/libwasamo_runtime.rlib`; a dependency build does not create or
+  refresh that primary-package copy. If it is absent the link fails; if it is
+  stale, a host-package build can relink a fresh-timestamped DLL around stale
+  runtime object code. A workspace-wide build by itself therefore does **not**
+  satisfy this ordering.
+- After that primary-package build, a workspace-wide release build
+  (`cargo build --release --workspace`) builds `wasamoc` and satisfies the
+  compiler ordering for `counter-rust`. C and Zig hosts still need
+  `wasamoc.exe` at the configured path before their external build systems run;
+  the preceding release workspace build supplies it.
 
 This pipeline is provisional — see
 [docs/architecture.md §1 "DSL build pipeline"](docs/architecture.md#dsl-build-pipeline-m2-phase-6-onward)
