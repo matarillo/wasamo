@@ -2362,19 +2362,131 @@ before merge.
 
 The half of AC7's third requirement that a synthesised message cannot
 reach. Owner-executed on a laptop plus external display at different
-scale factors.
+scale factors. The runnable set was delivered at T10 (preamble
+obligation 7) and is already transferred and extracted, so this is one
+observation and not a build-and-deliver task.
 
-- [ ] Drag the window between monitors at different scale factors;
-      confirm the logical layout is preserved and text stays crisp
-      through the crossing.
-- [ ] Confirm the non-client area (caption, borders) scales with the
+**Scales are chosen, not inherited** (recorded at the T11 start gate):
+internal panel **150%**, external display **100%**, both owner-adjustable.
+The 100% side is what makes the positive control below discriminating —
+there the conversion is the identity, so a correct build and the unaware
+twin must agree, while on the 150% panel they must not. A control that
+differs on both monitors is satisfied by any two differing things.
+
+**The procedure is written down because the instrument is a human.**
+Every other GUI gate in this phase had a script, and the script was the
+record of what was done; T11's equivalent is
+[evidence/t11-owner-smoke/protocol.md](./evidence/t11-owner-smoke/protocol.md).
+
+- [x] Drag the window between monitors at different scale factors and
+      read the **settled state on each side**: the logical layout is
+      preserved — element order and tiles per row, not a bit-exact wrap
+      position (F-28's ~1.6 DIP, and T8's stated limit 2: on this path
+      the OS chooses the rectangle) — and text is crisp on both.
+      **7 tiles per row on both monitors**, wrap structure 7 / 7 / 4 and
+      element order identical; the content band's DIP width differs by
+      **1.3 DIP** — F-28's *mechanism*, on a different quantity than the
+      client extent F-28 measured, so the value is not one F-28 predicts
+      — and **it did not move a wrap position**, which is what the bullet
+      asserts.
+- [x] Confirm the non-client area (caption, borders) scales with the
       window — the V2 automatic behaviour this phase relies on in full.
-- [ ] Record the verdict in [log.md](./log.md). Neither this nor T8
-      alone discharges AC7's third requirement; both together do.
+      **Measured rather than eyeballed**: the content band's width scales
+      ×1.5026 while its top edge moves ×1.452. Attributing that gap to
+      the caption takes one stated step — the toolbar's own padding is a
+      DIP quantity and scales, so the residual falls on the caption,
+      which lands near ×1.44 for any plausible padding — and with it the
+      conclusion holds: the non-client is DPI-indexed, not proportional
+      to `s`, which is why DD-M4-P1-004's claim has to stay on the outer
+      rectangle.
+- [x] **Return leg.** Drag back and confirm the original monitor
+      reproduces the original appearance. A one-way crossing cannot show
+      a state that fails to come back. **12 differing pixels of
+      1,036,642, all four corner radii** — the rounded corner blending
+      with a different patch of desktop, the window having come back to a
+      different position.
+- [x] **Pointer path after the crossing.** Click a gallery tab and hover
+      a button on the destination monitor. T8 drives a click through a
+      real `WM_LBUTTONUP` at a synthesised scale, so this is not the only
+      evidence for that seam — it is the only one whose coordinate comes
+      from a real device across a real crossing. **Favorites took the
+      click and All released**, on the destination monitor.
+- [x] **A second delivery path, added during the task.**
+      `Win+Shift+arrow` moves the window between monitors with **no modal
+      move loop running**, while a drag delivers `WM_DPICHANGED` inside
+      one — and T7's handler re-enters through a nested `WM_SIZE`, which
+      is the property its review lane is named for. Only the modal path
+      had been observed. **The two agree**: the destination frames differ
+      by 3,885 pixels at max per-channel delta **1**, and the origin
+      frames by 16 — 12 corner radii and 4 tab-label text pixels at ≤ 8 —
+      which is F-33's intensity-only drift an order below its measured
+      band.
+- [x] **Positive control — the unaware twin, side by side in one frame.**
+      Required by [AGENTS.md §Testing rules](../../../../AGENTS.md): the
+      owner smoke has to separate the intended behaviour from a
+      coincidental look-alike, and here the look-alike is known exactly —
+      a DPI-unaware window is bitmap-stretched to the **same physical
+      size** on the destination monitor, so size separates nothing (T1
+      measured it; §T10's three-state table has rows 1 and 3 sharing a
+      rectangle). The same executable is run twice, once under
+      `__COMPAT_LAYER=DPIUNAWARE` (T10's measured mechanism — the shipped
+      bytes, no mutation build, delivered files untouched), and the two
+      are captured **in one frame on one monitor** so the comparison does
+      not rest on two capture events. **The posture is read back**, from
+      Task Manager's DPI Awareness column with both processes visible,
+      not inferred from having set the variable (F-49).
+      **Fired, and so did its agreement leg** (finding F-50, which is why
+      the leg exists): at 100% the two runs are indistinguishable —
+      max luminance step 158.6 and mid-band 13.2% on both — and at 150%
+      and 175% they separate, 157.0 / 8.2% against 106.6 / 19.7% and
+      156.6 / 10.6% against 92.3 / 21.1%. The aware side is flat across
+      all three scales while the unaware side degrades monotonically,
+      which is risk R-1's claim as a number. The Task Manager readback is
+      recorded with **what it does not establish** (finding F-51): the
+      list is sorted and scrolled, so it is evidence about the two rows
+      it shows, and "only two were running" is the owner's attestation.
+- [x] Record the verdict in [log.md](./log.md), with the frames in
+      [evidence/t11-owner-smoke/](./evidence/t11-owner-smoke/) and the
+      assistant's reading of them. Neither this nor T8 alone discharges
+      AC7's third requirement; both together do.
+      **Two things the run produced that the plan did not ask for**: the
+      toolbar overlapping rather than wrapping at a narrow client, which
+      reproduces at 100% and is therefore not a DPI defect, and the
+      protocol deviation that surfaced it — the side-by-side windows were
+      narrowed by hand, so those three frames carry the crispness claims
+      only (finding F-52). Both are in [handoff.md](./handoff.md).
 
-**Start gate:** none (owner-executed). **End gate:** owner verdict
-recorded; any finding triaged to a task or to
-[handoff.md](./handoff.md).
+**Removed from this task at its start gate, with the reason recorded
+rather than the item silently dropped:** whether a **stale intermediate
+projection** is presented as a frame during the change (T7 finding F-34,
+forwarded here by T10, whose harness waits ~1.5 s after detecting the
+change). A human cannot answer it — during a drag the window is in
+motion, so the eye tracks rather than fixates, and the artifact is one or
+two composited frames, ~16–33 ms at 60 Hz. The hazard is not that the
+item fails; it is that it yields "watched for it, did not see it", which
+is the claim-wider-than-its-object defect this phase has withdrawn twice.
+It goes to [handoff.md](./handoff.md) with the two instrument classes that
+could answer it — frame-level capture (a sighting is conclusive, a null
+result says nothing) or an in-process observation of whether a frame is
+committed inside the handler at all, which is the shape F-34 poses.
+Screen recording was offered with that asymmetry stated and **declined**,
+so the record reads "not captured", not "captured and saw nothing".
+
+**Start gate:** the plan previously read "none (owner-executed)", which
+confuses *who runs the observation* with *whether the task has a gate*.
+The gate is the assistant's and it runs **before** the observation: the
+responsibility re-audit, the carry-over table, the trap selection with
+reasons, and the review lane, recorded in [log.md](./log.md) §T11.
+Traps #2 (documentation sense), #3, #5, #6 and #7 apply; #1 and #4 do
+not, re-decided rather than inherited. **End gate:** owner verdict
+recorded; the frames committed with their [evidence/README.md](./evidence/README.md)
+row in the same commit; the positive control's result recorded including
+the agreement leg; any finding triaged to a task or to
+[handoff.md](./handoff.md). Full independent review before merge — §T11
+is absent from [preamble.md §Review lanes](./preamble.md#review-lanes),
+so the lane is assigned at the start gate on T10's reasoning: zero
+production code lowers the risk *of the change*, not the risk this task
+carries, which is the verdict outrunning what was seen.
 
 ---
 

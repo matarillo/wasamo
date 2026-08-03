@@ -67,6 +67,14 @@ that was made, not as a substitute for capturing.
 | `t10-delivery-check/` | T10 — the **staged** T11 runnable set (`gallery-zig.exe` + `wasamo.dll`) launched from its delivery directory, declaring PMv2 and rendering 7 tiles per row |
 | `t10-control-c/` | T10 — control C's path form: three legs across an **owner-driven** 125% -> 150% -> 125% display-scale change, with the window untouched after the first leg so the rectangle is the one the OS supplied |
 | `t10-analysis/` | T10 — the comparison numbers, the magnified crispness crops and the assistant's reading of them ([README](./t10-analysis/README.md)) |
+| `t11-owner-smoke/` | T11 — the owner's cross-monitor smoke on **another machine**. Eleven owner-captured frames: seven across a drag crossing and a `Win+Shift+arrow` crossing, three of the unaware-twin control at 100 / 150 / 175%, and one Task Manager posture readback. Plus six ×6 magnified label crops (`crop-<scale>-{aware,unaware}-x6.png`), the observation protocol the owner executed, and the analysis, all in its own [README](./t11-owner-smoke/README.md) |
+
+**The `t11-owner-smoke/` set is comparable with nothing else in this
+directory.** It was captured on the owner's laptop, at 150% and 100%, with
+Windows' window capture rather than either script here, at window sizes the
+owner chose — three independent reasons a cross-set comparison would be a
+mismatch rather than a regression. Its frames are compared only against each
+other, which is what its own README does.
 
 **Frame shape is part of a set's identity**, and the table does not repeat it
 per row: every set above `t10-*` is a six-frame *window-rectangle* capture,
@@ -112,6 +120,18 @@ result would be a size mismatch, not a regression.
   keyboard or the foreground, and it does not touch the window after the first
   frame — on this path the OS chooses the rectangle, so resizing it would
   destroy what is being measured.
+- `t11-edge-stats.ps1 -In <png> -X -Y -W -H [-Label <s>]` — glyph-edge
+  statistics over a crop: the largest luminance step between neighbouring
+  pixels, and the share of pixels at intermediate intensity. A **proxy** for
+  the glyph-shape judgement, never a substitute for it; what makes it usable at
+  T11 is that it was exercised on a leg where it must read equal (the 100%
+  identity pair) and did.
+- `t11-frame-diff.ps1 -A <png> -B <png> [-Inset n] [-Map]` — the single-file
+  form of `compare-frames.ps1`, for frames that are neither six-frame sets nor
+  captured with the insets that script defaults to. `-Map` reports **where** the
+  differences are, which is what turns a pixel count into a classification —
+  at T11 it is what showed that a non-zero round-trip diff was entirely the
+  window's rounded corners blending with the desktop behind them.
 - `magnify-crop.ps1 -In <png> -Out <png> -X -Y -W -H [-Factor 5]` —
   nearest-neighbour magnification for the glyph-shape judgement, with the
   interpolation mode pinned so the script cannot make either side of a pair

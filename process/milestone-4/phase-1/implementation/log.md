@@ -6658,3 +6658,327 @@ minutes apart in one session"). Folded into the README.
 **Not verified by the reviewer, and left unverified**: the `cargo clean -p
 wasamo-runtime --release` "9 files, 6.9 MiB" figure, which is not retroactively
 checkable. It is a console reading recorded at the time.
+
+---
+
+## T11 — Owner human-visible smoke (positive control C, literal form)
+
+### Carry-over audit and responsibility re-audit (2026-08-01, before start gate)
+
+Task branch `feat/m4-phase-1-t11`, cut from `feat/m4-phase-1` = `ea1215e`.
+
+**Carry-over into T11**, read out of the T4–T10 retrospectives and
+[handoff.md](./handoff.md) rather than out of §T11 alone.
+
+| From | Proposition | Obligation on T11 |
+|---|---|---|
+| Obligation 7 (T10) | The runnable set is staged and was launched from its delivery directory, not from the build tree | T11 observes the delivered copy. The owner has transferred and extracted it, so the observing machine needs no repository, no toolchain and no build |
+| T10 (handoff) | `gallery-rust` / `counter-rust` bake an absolute build-machine path to their `.uic` and cannot run from a copied directory | The delivered host is `gallery-zig.exe` + `wasamo.dll`, and nothing else is expected to start there |
+| T10 (handoff) | `__COMPAT_LAYER=DPIUNAWARE` in a child's environment gives a scale-1 run of the **shipped bytes** | The positive control is the same executable under that variable. No mutation build, and **the delivered files are not replaced** — identical bytes is precisely what stops a difference being attributed to a different build |
+| F-49 (T9) | Arranging OS state and succeeding at it are different facts | The unaware posture is **read back** — Task Manager's DPI Awareness column, with both processes visible — not inferred from having set the variable |
+| F-28 (T4) | The client rectangle does not scale by `s`; the non-client frame moves by its own DPI-indexed metrics | The invariant asserted is element order and wrap structure — tiles per row — never a bit-exact wrap position |
+| T8 stated limit 2 | On a real crossing the **OS** chooses the rectangle, so logical invariance is approximate | The same, and T10 control B's exact-DIP result is **not** transferable here: that path chose the rectangle by measure-and-adjust, this one does not |
+| F-33 (T5) | A committed frame set is not a baseline | Every T11 frame comes from one session on one machine, and none is compared against a committed set. The observing machine is not the development machine, so its non-client metrics are its own and are not checked against §T4's |
+| F-48 (T9) | An unaware observer reads an aware window's rectangle in virtualized coordinates | T11 takes **no coordinate measurement**. The one number recorded per monitor is a tile count, which is not virtualized. Recorded so that "F-48 does not bite here" is a decision rather than an omission |
+| T7 F-34, forwarded through T10 | Whether a stale intermediate projection is ever presented as a frame during the change is still open | **Scoped out of T11 at start** — re-audit point 1 |
+
+**Responsibility re-audit — what T11 should be, not what §T11 said.**
+
+1. **The intermediate-projection question is removed from T11's observation
+   list, before the observation rather than after it.** T10's retrospective
+   forwarded it here on the ground that its own harness waits about 1.5 s after
+   detecting the change and therefore cannot speak to it. The owner's objection
+   on reading the draft checklist is the correct one and is the recorded
+   reason: during a drag the window is **in motion**, so the eye tracks it
+   instead of fixating, and the artifact in question is one or two composited
+   frames — on the order of 16–33 ms at 60 Hz — which is below what a human can
+   consciously resolve in either direction. An item that cannot produce a
+   positive observation can still produce a **negative** one, and "watched for
+   it, did not see it" would be exactly the claim-wider-than-its-object defect
+   this phase has now withdrawn twice (§T4 F-31, §T10 control C). The question
+   is not dropped: it goes to [handoff.md](./handoff.md) with the two
+   instrument classes that could answer it — frame-level capture, where a
+   positive sighting is conclusive and a null result says nothing, or an
+   in-process observation of whether a frame is committed inside the handler at
+   all, which is the shape F-34 actually poses. Neither is a human-smoke
+   instrument, and T11 lands no production code. **The screen-recording option
+   was offered with that asymmetry stated and the owner declined it**, so the
+   record reads "not captured", not "captured and saw nothing".
+2. **§T11's three bullets are a settled-state observation and carry no
+   positive control.** [AGENTS.md §Testing rules](../../../../AGENTS.md)
+   requires the owner's human-visible smoke to separate the intended behaviour
+   from a coincidental look-alike, and here the look-alike is known precisely:
+   a DPI-unaware window is bitmap-stretched to the same physical size on the
+   destination monitor, so **size separates nothing** — T1 measured it, and
+   rows 1 and 3 of §T10's three-state table share a rectangle for the same
+   reason. What separates them is glyph sharpness and the process's declared
+   level. The control is therefore the same executable run twice, once under
+   `__COMPAT_LAYER=DPIUNAWARE`, compared **side by side inside one frame on one
+   monitor**, so the comparison does not rest on two capture events.
+3. **A leg the plan did not have: the control has to *agree* somewhere too.**
+   With the external display at 100% the conversion is the identity, so the
+   aware and unaware runs should be indistinguishable there and differ on the
+   150% panel. A control that differs on both monitors is satisfied by any two
+   differing things; one that differs on exactly the scaled panel is satisfied
+   by the posture. That is why the scale pair is **chosen** — internal 150%,
+   external 100%, both owner-adjustable — rather than inherited from whatever
+   the desks happened to be set to (150% / 125% when the question was asked).
+4. **The pointer path is added to the observation.** After the crossing,
+   clicking a gallery tab and hovering a button checks that the inbound
+   conversion follows the window's new scale in a composited window. T8 already
+   drives a click through a real `WM_LBUTTONUP` at a synthesised scale, so this
+   is not the only evidence for that seam — but it is the only one where the
+   coordinate comes from a real device across a real crossing.
+5. **The protocol is written down because the instrument is a human.** Every
+   earlier GUI gate in this phase had a script, and the script was itself the
+   record of what was done. T11's equivalent is
+   [evidence/t11-owner-smoke/protocol.md](./evidence/t11-owner-smoke/protocol.md),
+   in Japanese because the owner executes it. Without it the only record of the
+   procedure would be the verdict, and a verdict cannot be audited against a
+   procedure that was never written down.
+
+**Environment, as arranged before the run** (recorded now, so a later reading
+knows what was intended rather than inferring it from the frames): laptop
+internal panel at 150%, external display at 100%, both adjustable; the delivery
+set already transferred by `scp` and extracted; frames returned the same way for
+assistant analysis. The observing machine is **not** the development machine.
+
+### Start gate (recorded 2026-08-01, before the observation)
+
+Review lane: **full independent review**. §T11 is absent from
+[preamble.md §Review lanes](./preamble.md#review-lanes) — the table stops at
+T10 — so the lane is assigned here rather than inherited, by the reasoning T10
+recorded: the deliverable is rendered evidence and the claims drawn off it, and
+zero production code lowers the risk *of the change*, not the risk this task
+carries, which is that the recorded verdict outruns what was seen. T11 also
+carries one half of AC7's third requirement.
+
+| # | Applies | Reason and planned close artifact |
+|---|---|---|
+| 1 — semantic migration / call sites | **no** | No code, no enum, no schema, no traversal. Re-decided rather than inherited: the delivered binary is run unmodified, so there is not even a build |
+| 2 — structural side effects | **yes**, in trap #3's documentation sense | The close record restates numbers owned by §T4, §T8 and §T10. Close by citing the owning document for every inherited number and marking which numbers this task observed itself |
+| 3 — parallel / derived data | **yes** | [evidence/README.md](./evidence/README.md) is a parallel index of which frame set evidences which claim, and it goes stale the moment a set is added without it. The `t11-owner-smoke/` row lands in the same commit as the frames |
+| 4 — authored branch | **no** | No reject, diagnostic or size branch, and no script is authored — the harness is a human plus the built-in capture tool. **Reversed at the close, and the reversal is a finding (F-53): two scripts with four branches between them were authored after this row was written, and the row was never re-decided. See §Trap #4 — reversed** |
+| 5 — carry-forward | **yes** | Two carriers are already visible: the intermediate-projection question, which goes to [handoff.md](./handoff.md) with the instrument classes that could answer it, and whatever the crossing shows about approximate logical invariance, which is M4-Phase 8's input for per-window differing scale |
+| 6 — deterministic failure | **yes** | This task's failure mode is **re-dragging**. A disagreement with a recorded number — tiles per row above all — is root-caused, not repeated until it reads better. The second half is specific to a human instrument: a "did not observe" is recorded only for observations the procedure can actually produce, which is why re-audit point 1 removes one item entirely rather than letting it be answered weakly |
+| 7 — GUI positive control | **yes** | The gate's substance. The control is the unaware twin, side by side in one frame, expected to differ on the 150% panel and to agree on the 100% one. Its own can-fail property is that agreement leg: if the two differ everywhere, the difference is not attributable to the posture |
+
+Constraints fixed before the run: the delivered files are neither modified nor
+replaced; the posture is read back rather than assumed; the window is not
+resized at any point, because its physical size and its non-client frame are
+both part of what is observed; every frame comes from the one session; and no
+number is compared against the development machine's.
+
+### Observation result and end gate (2026-08-03)
+
+No production code, no build on the observing machine. The task lands eleven
+owner-captured frames, six magnified crops, two analysis scripts, the analysis
+README, and the plan / log / handoff revisions. Frames, numbers and the reading
+of them are in
+[evidence/t11-owner-smoke/README.md](./evidence/t11-owner-smoke/README.md); this
+section records the gate, not the analysis.
+
+**Executed by the owner on 2026-08-03** against the T10 delivery set, launched
+from its delivery directory on a laptop whose internal panel was set to 150% and
+external display to 100% before the host started. The observing machine is not
+the development machine and no number is compared against §T4's.
+
+**What the owner attests, as distinct from what the frames show.** Four facts
+come from the owner and are recorded as attestation: which window in each pair
+was launched normally and which from the shell carrying
+`__COMPAT_LAYER=DPIUNAWARE`; that the side-by-side windows were narrowed by hand
+because two full-size windows do not fit on one 150% panel; that only two
+`gallery-zig.exe` instances were running; and that the `Win+Shift+arrow` leg was
+performed after the drag legs. Everything else below is read off the frames.
+
+**The result, in one line each.** Logical layout preserved across the crossing —
+7 tiles per row on both monitors, wrap structure and element order identical, and
+the content band's DIP width differing by 1.3 DIP, which is F-28's residual and
+did not move a wrap position. Non-client scaled with the window and visibly not
+by `s` (band width ×1.5026, band top ×1.452). Round trip returned the same frame
+— 12 differing pixels of 1,036,642, all four corner radii. Pointer path followed
+the new scale — the Favorites tab took a click on the destination monitor. The
+non-modal `Win+Shift+arrow` delivery agrees with the modal drag delivery to
+within F-33's text-intensity drift. Positive control fired, and its agreement
+leg fired too: at 100% the aware and unaware runs are indistinguishable, at 150%
+and 175% they are not, and the aware side is flat across all three scales while
+the unaware side degrades monotonically.
+
+#### Trap #2 / #3 — inherited numbers cited, not restated as this task's
+
+| Number used | Owner |
+|---|---|
+| The ~1.6 DIP client residual and its `GetSystemMetricsForDpi` decomposition | §T4 and [handoff.md](./handoff.md); T11 measures its own 1.3 DIP on another machine and does not re-derive the mechanism |
+| The 13-per-channel text-intensity drift band | §T5 finding F-33; T11's own differences are 1 and 8 per channel and are compared to it, not merged into it |
+| `__COMPAT_LAYER=DPIUNAWARE` gives a scale-1 run of the shipped bytes | §T10; T11 uses the mechanism and adds the first Task Manager readback of both postures |
+| DD-M4-P1-004's outer-rectangle claim | The ADR; T11's captured bounds corroborate its shape and are explicitly not a second measurement |
+| The gallery's 7-tiles-per-row signature | §T10 (`t10-shipped-created/`), taken at 125% on the development machine; T11's 7 is its own reading at 150% and 100% |
+| **An unaware window is stretched to the same physical size, so size separates nothing** — the control's design premise, and more load-bearing than any row above it | T1 measured it on the undeclared build; §T10's three-state table has rows 1 and 3 sharing a rectangle for the same reason. Added after the independent review found it relied on and unlisted. T11 confirms the shape on its own frames rather than inheriting the numbers: the leading accent run of the `All` button measures **27 px in both windows at 150% and 31 px in both at 175%**, against 18 px on the un-resized 100% frame — and 18 × 1.5 = 27, 18 × 1.75 = 31.5 → 31. The two postures put the same physical geometry on the screen at each scale; only the rasterization differs |
+
+[evidence/README.md](./evidence/README.md) gains the `t11-owner-smoke/` row in
+this commit, which is trap #3's close artifact — the index is a parallel source
+of truth about which set evidences which claim and goes stale the moment a set
+lands without it.
+
+#### Trap #4 — reversed at the independent review, with a live defect behind it
+
+**The start-gate row above is false as recorded.** It says "no script is
+authored", and it was written before the approach was chosen — which is exactly
+the case
+[implementation-gates.md §0](../../../procedures/implementation-gates.md) step 2
+covers: the selection is re-decided when the approach changes. The approach did
+change. The frames came back needing measurement, and
+[`t11-edge-stats.ps1`](./evidence/t11-edge-stats.ps1) and
+[`t11-frame-diff.ps1`](./evidence/t11-frame-diff.ps1) were authored and
+committed with **four branches** between them. Nothing in the close re-visited
+the row.
+
+**And the untested branch had a defect**, which is the whole point of the trap
+rather than a coincidence. `t11-frame-diff.ps1` exited 1 on a difference and 2
+on a size mismatch and **did not exit at all on the equal path** — a run over two
+identical frames left `$LASTEXITCODE` at whatever the previous command had set.
+Reproduced by priming it to 7 and comparing a frame with itself: the script
+printed `differing 0 of 1036642` and the exit code stayed 7. Its sibling
+[`compare-frames.ps1`](./evidence/compare-frames.ps1) exits explicitly, so this
+regressed a convention established in the same directory, and
+[evidence/README.md](./evidence/README.md) advertises the script for later use.
+It never bit T11 because all three comparisons the task ran differed — the
+untested-branch pattern exactly. Fixed by exiting explicitly on all three arms.
+
+Every branch is now fired and recorded, which is the artifact the trap asks for:
+
+| Script | Branch | Exercise | Result |
+|---|---|---|---|
+| `t11-frame-diff.ps1` | identical | frame 1 against itself, inset 4, `$LASTEXITCODE` primed to 7 | `differing 0 of 1036642`, **exit 0** |
+| `t11-frame-diff.ps1` | any difference | frame 1 against frame 3, inset 4 | `differing 12 of 1036642`, exit 1 |
+| `t11-frame-diff.ps1` | size mismatch | frame 1 (1182 × 891) against frame 2 (786 × 592) | `size mismatch … not comparable frames`, exit 2 |
+| `t11-edge-stats.ps1` | crop out of bounds | `(700,500,200,200)` on a 786 × 592 frame | throws `crop (700,500,200,200) falls outside 786x592` |
+| `t11-edge-stats.ps1` | flat crop (zero range) | `(600,650,20,10)`, empty background below the tiles | throws `crop is a flat colour; there is no edge to measure` |
+| `t11-edge-stats.ps1` | normal | the leg-0 label crop | `max|dx| 157.0  mid-band 8.2%` |
+
+#### Trap #6 — three disagreements, all rooted, none re-shot
+
+The gate line for this task named re-dragging as its failure mode. Three
+comparisons came back non-zero and each was root-caused rather than repeated:
+
+| Disagreement | Root cause | Disposition |
+|---|---|---|
+| The drag round trip is not pixel-identical: 8,323 of 1,053,162 differ, max delta 100 | Every differing pixel is on the outermost one or two pixels of the frame or at a corner radius. The window sat at a different desktop position on the way back, and a rounded corner blends with what is behind it | Not a render difference. Reported with the inset that isolates it (12 pixels at inset 4, all corners) rather than by widening the inset until it reads zero |
+| The 100% control pair has identical statistics but **17,712 of 61,776 differing pixels** — `t11-frame-diff.ps1 -A crop-100-aware-x6.png -B crop-100-unaware-x6.png -Inset 0`, i.e. the two committed ×6 crops and not the frames, which are not the same size and so exit 2 | The two windows were sized by hand: content bands 515 px against 522 px, so the tile grid lands on different origins | The claim was narrowed to what was measured — the *statistics* agree — and the earlier "identical" wording was corrected before it reached a document. **The source of the number is named here after the independent review could not reproduce it**: it was quoted without saying what it was a diff of, and a reader reasonably tried the frames |
+| `10` vs `2` (same monitor, two launches) differ in 3,885 pixels | Max per-channel delta is **1**, confined to text rows | F-33's intensity-only drift, an order below its measured band. Recorded with its number, not filed as "drift" without one |
+
+#### Trap #5 — carry-forward
+
+| Item | Where | Re-trigger criterion |
+|---|---|---|
+| Whether a stale intermediate projection is presented as a frame during a scale change | [handoff.md](./handoff.md) | T7 F-34's question, removed from T11 at the start gate as unanswerable by a human instrument. Re-triggers for any task that can run frame-level capture or observe commit boundaries in-process |
+| The toolbar overlaps rather than wrapping or clipping when the client is too narrow | [handoff.md](./handoff.md) | Observed at 100%, 150% and 175% alike, so width-driven and not this phase's. Re-triggers at M4-Phase 2 (layout / event work) or whenever a host is run at a client narrower than its content |
+| A positive control needs a leg where it must **agree** | this section, F-50 | Every later control built as "A differs from B" |
+| A list-based readback is evidence about the rows it shows | this section, F-51 | Any later use of Task Manager, a process list, or any sorted/scrolled UI as an artifact |
+
+#### Trap #7 — the positive control, and how it could have failed
+
+The control is the same executable run twice, and it ships with three ways to
+come out wrong rather than one. It could have shown **no** difference at 150%
+(the posture would then not be what separates the runs); it could have shown a
+difference at **100%** (the metric would then be measuring window identity,
+position or capture rather than rasterization); and the aware side could have
+degraded with the scale factor (R-1's claim would then be false). None did.
+`6-taskmgr-dpi.png` is the readback that keeps "we set the variable" and "the
+process is unaware" separate facts (F-49).
+
+#### Findings
+
+**F-50 — a positive control needs an agreement leg, not only a difference
+leg.** §T11 as planned had the control differing on the scaled panel and said
+nothing about where it must *not* differ. A control of the form "A differs from
+B" is satisfied by any two differing things — a different build, a different
+window size, a different capture. What makes the difference attributable to the
+posture is that the same pair is **indistinguishable** where the posture cannot
+matter, which here is the 100% monitor, where every conversion in this phase is
+the identity. The leg was added at the start gate for this reason and the scale
+pair was chosen to make it available; it then also validated the measurement,
+because a metric that separated the two runs at 100% would have been measuring
+something else. *Re-trigger:* any later control expressed as a difference.
+
+**F-51 — a sorted, scrolled list is evidence about the rows it shows, not about
+the set.** The Task Manager readback was very nearly written up as "two
+`gallery-zig.exe` processes were running". The list is sorted by Description and
+scrolled about a fifth of the way down, and rows sharing a Description are
+contiguous, so a third instance immediately above the visible top row cannot be
+excluded from the image. The correct claim is about the two rows the artifact
+shows; that only two existed is the owner's attestation and is labelled as one.
+This is F-48 and F-49's family — the instrument reporting something narrower
+than what the reader assumes — arriving in a UI screenshot rather than in an API
+result. *Re-trigger:* any artifact that is a view onto a list.
+
+**F-52 — a deviation from an owner-executed protocol is scoped, not just
+noted.** Two full-size windows do not fit side by side on one 150% panel, so the
+owner narrowed them, and the pairs show 5 tiles per row against the protocol's
+"do not resize". The reflex answers are both wrong: discarding the frames throws
+away the control, and using them for everything would put layout claims on
+frames whose layout was altered by hand. What the close does instead is say
+which claims each artifact can still carry — the narrowed pairs support the
+crispness claims only, and every layout claim rests on the six frames that were
+not resized. *Re-trigger:* any owner- or human-executed procedure whose
+execution differs from what was written. The protocol being committed
+([evidence/t11-owner-smoke/protocol.md](./evidence/t11-owner-smoke/protocol.md))
+is what makes the deviation visible at all; had the procedure lived only in
+chat, the frames would have looked like the plan.
+**A second half, added at the independent review, and it is the earlier
+failure**: the deviation was not a choice. `protocol.md` leg 4 step 13 asks for
+two un-resized windows side by side on one 150% panel, which needs about 2400
+physical pixels and cannot be done on that laptop — the procedure demanded an
+**arrangement that does not exist**, and the owner did the only thing available.
+The retrospective's own corrective covers whether an *observation* is physically
+possible (duration, motion, resolution) and says nothing about whether the
+*setup* it presupposes is reachable. So the re-trigger is two-part: check that
+the observation can be made, **and** that the arrangement it requires can be
+built. The owner named the fix while executing — internal 100% + external 150%
+would have left both windows full size — which is the shape a workable version
+of this leg takes.
+
+**F-53 — a start-gate trap selection is a prediction, and this one was
+falsified by the task's own work.** The trap #4 row says "no script is
+authored", written before the approach was chosen, and then two scripts with
+four branches were authored and committed. Nothing re-decided the row, and
+[implementation-gates.md §0](../../../procedures/implementation-gates.md) step 2
+already requires that when the approach changes. The consequence was not
+hypothetical: the unexercised equal path of `t11-frame-diff.ps1` left
+`$LASTEXITCODE` untouched, so a comparison that found no difference could be
+read as whatever ran before it — a false-green in the family of F-5, F-21 and
+`compare-frames.ps1`'s own R-4, in a script the evidence index advertises for
+reuse. It survived the whole task because all three comparisons run here
+differed. *Re-trigger:* any task whose gate selection names something the task
+does not yet have — an instrument, a script, a fixture. The selection is not
+wrong when written; it goes stale, and nothing in the current gate procedure
+prompts a re-read at close beyond the general step-2 sentence. **Caught by the
+independent review, not by me**, which is the argument for the full lane on a
+task with zero production code.
+
+#### Owner's reading
+
+Kept separate from the analysis above, because it is the thing T11 exists for
+and the pixel work is its corroboration, not the other way round. The owner's
+own three statements, rendered from the Japanese:
+
+- text was properly legible on the destination monitor — no sense of blur;
+- nothing felt broken about the layout;
+- **with the two runs side by side, the unaware one's blur was visible to the
+  eye.**
+
+The third is the one that cannot be obtained any other way. Every quantitative
+result in this task is a proxy for a glyph-shape judgement, and the judgement
+is a human one; the numbers say the two runs' edges are shaped differently and
+by how much, and a person looking at them says which one is worse. Both were
+run, and they agree.
+
+#### End gate
+
+Owner verdict recorded — the attested facts above plus the owner's own reading
+in §Owner's reading; frames committed with their [evidence/README.md](./evidence/README.md)
+row in the same commit; the positive control's result recorded including the
+agreement leg; the two new observations triaged to
+[handoff.md](./handoff.md). `cargo test --workspace` is not re-run for this
+task and is not claimed: nothing in the workspace changed, and the observing
+machine has no toolchain. Full independent review before merge.
