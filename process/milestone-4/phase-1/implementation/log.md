@@ -7076,6 +7076,7 @@ stale uplifted rlib is F-21's quiet fresh-DLL/stale-runtime failure.
 | Current instruction surface | Disposition |
 |---|---|
 | `AGENTS.md` §Build ordering | Corrected for cold debug, cold release, host evidence, and the distinction between the primary runtime step and the later workspace / host steps |
+| Implementation preamble risk table R-1b | Corrected at Normal review: its live F-21 remedy now names the release primary-package step before the release workspace build |
 | Root README and all five current counter/gallery host READMEs | The release primary-package step now precedes the release workspace step |
 | `docs/notes/human-visible-smoke.md` | Both debug and release sequences now carry their own primary-package step |
 | Counter/gallery CMake comments and missing-import-library diagnostics; C binding diagnostic | Corrected to name both ordered commands |
@@ -7195,3 +7196,19 @@ reject / size branch. Local gates are green. The CI run id, handoff
 finalization, phase retrospective, implementation-preamble status flip,
 workflow vocabulary decision, T7 safety-net check, and process-rule vision
 decision remain the phase-end batch and are deliberately untouched.
+
+### Normal review — 2026-08-04
+
+Reviewed the complete `feat/m4-phase-1...HEAD` diff against the eight T12
+items, the phase-end boundary, the landed runtime, and the proposition tables.
+Two inconsistencies were found and corrected:
+
+| Finding | Correction |
+|---|---|
+| The live preamble R-1b risk table still prescribed a release workspace build alone before capture, although AGENTS, operational guides, and handoff had been corrected | Added the preamble to the build-order claim-site audit and changed its remedy to the profile-matching primary runtime build followed by the workspace build |
+| `abi_spec.md` §4.1 still said `wasamo_init` "must be called once" immediately before documenting the landed successful second-call no-op | Restated the lifecycle in terms of the **first successful** call and the repeat no-op, without changing the ownership or initialization contract |
+
+No other T12-scope discrepancy was found. The implementation preamble remains
+`active`, the handoff remains `skeleton`, every phase-end checkbox remains
+open, and no merge or push was performed. Final doc gates are rerun after the
+review-remediation commit.

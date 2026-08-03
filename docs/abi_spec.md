@@ -218,9 +218,11 @@ WASAMO_EXPORT void         WASAMO_API wasamo_shutdown(void);
 WASAMO_EXPORT const char*  WASAMO_API wasamo_last_error_message(void);
 ```
 
-`wasamo_init` must be called once from the thread that will own
-the UI before any other `wasamo_*` function. That thread is the
-**UI thread** for the lifetime of the runtime.
+The first successful `wasamo_init` must be called from the thread that will
+own the UI before any other `wasamo_*` function. That thread is the
+**UI thread** for the lifetime of the runtime. A repeated call after successful
+initialization is a successful no-op: it neither changes the owner nor repeats
+process initialization.
 
 `wasamo_shutdown` releases all runtime state. After it returns,
 all handles previously issued are invalid; calling any other
