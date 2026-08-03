@@ -7201,12 +7201,13 @@ decision remain the phase-end batch and are deliberately untouched.
 
 Reviewed the complete `feat/m4-phase-1...HEAD` diff against the eight T12
 items, the phase-end boundary, the landed runtime, and the proposition tables.
-Two inconsistencies were found and corrected:
+Three inconsistency groups were found and corrected:
 
 | Finding | Correction |
 |---|---|
 | The live preamble R-1b risk table still prescribed a release workspace build alone before capture, although AGENTS, operational guides, and handoff had been corrected | Added the preamble to the build-order claim-site audit and changed its remedy to the profile-matching primary runtime build followed by the workspace build |
 | `abi_spec.md` §4.1 still said `wasamo_init` "must be called once" immediately before documenting the landed successful second-call no-op | Restated the lifecycle in terms of the **first successful** call and the repeat no-op, without changing the ownership or initialization contract |
+| The preamble's verification-closure row, R-3 / R-4 / R-6 / R-7 risks, lifecycle transition, and cross-reference labels still described T12 outputs as future work | Recorded the actual T9–T12 closures and Moment 2 commits while preserving `status: active` and the handoff skeleton for the phase-end owner |
 
 No other T12-scope discrepancy was found. The implementation preamble remains
 `active`, the handoff remains `skeleton`, every phase-end checkbox remains
