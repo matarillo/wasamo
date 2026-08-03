@@ -6768,3 +6768,150 @@ replaced; the posture is read back rather than assumed; the window is not
 resized at any point, because its physical size and its non-client frame are
 both part of what is observed; every frame comes from the one session; and no
 number is compared against the development machine's.
+
+### Observation result and end gate (2026-08-03)
+
+No production code, no build on the observing machine. The task lands eleven
+owner-captured frames, six magnified crops, two analysis scripts, the analysis
+README, and the plan / log / handoff revisions. Frames, numbers and the reading
+of them are in
+[evidence/t11-owner-smoke/README.md](./evidence/t11-owner-smoke/README.md); this
+section records the gate, not the analysis.
+
+**Executed by the owner on 2026-08-03** against the T10 delivery set, launched
+from its delivery directory on a laptop whose internal panel was set to 150% and
+external display to 100% before the host started. The observing machine is not
+the development machine and no number is compared against §T4's.
+
+**What the owner attests, as distinct from what the frames show.** Four facts
+come from the owner and are recorded as attestation: which window in each pair
+was launched normally and which from the shell carrying
+`__COMPAT_LAYER=DPIUNAWARE`; that the side-by-side windows were narrowed by hand
+because two full-size windows do not fit on one 150% panel; that only two
+`gallery-zig.exe` instances were running; and that the `Win+Shift+arrow` leg was
+performed after the drag legs. Everything else below is read off the frames.
+
+**The result, in one line each.** Logical layout preserved across the crossing —
+7 tiles per row on both monitors, wrap structure and element order identical, and
+the content band's DIP width differing by 1.3 DIP, which is F-28's residual and
+did not move a wrap position. Non-client scaled with the window and visibly not
+by `s` (band width ×1.5026, band top ×1.452). Round trip returned the same frame
+— 12 differing pixels of 1,036,642, all four corner radii. Pointer path followed
+the new scale — the Favorites tab took a click on the destination monitor. The
+non-modal `Win+Shift+arrow` delivery agrees with the modal drag delivery to
+within F-33's text-intensity drift. Positive control fired, and its agreement
+leg fired too: at 100% the aware and unaware runs are indistinguishable, at 150%
+and 175% they are not, and the aware side is flat across all three scales while
+the unaware side degrades monotonically.
+
+#### Trap #2 / #3 — inherited numbers cited, not restated as this task's
+
+| Number used | Owner |
+|---|---|
+| The ~1.6 DIP client residual and its `GetSystemMetricsForDpi` decomposition | §T4 and [handoff.md](./handoff.md); T11 measures its own 1.3 DIP on another machine and does not re-derive the mechanism |
+| The 13-per-channel text-intensity drift band | §T5 finding F-33; T11's own differences are 1 and 8 per channel and are compared to it, not merged into it |
+| `__COMPAT_LAYER=DPIUNAWARE` gives a scale-1 run of the shipped bytes | §T10; T11 uses the mechanism and adds the first Task Manager readback of both postures |
+| DD-M4-P1-004's outer-rectangle claim | The ADR; T11's captured bounds corroborate its shape and are explicitly not a second measurement |
+| The gallery's 7-tiles-per-row signature | §T10 (`t10-shipped-created/`), taken at 125% on the development machine; T11's 7 is its own reading at 150% and 100% |
+
+[evidence/README.md](./evidence/README.md) gains the `t11-owner-smoke/` row in
+this commit, which is trap #3's close artifact — the index is a parallel source
+of truth about which set evidences which claim and goes stale the moment a set
+lands without it.
+
+#### Trap #6 — three disagreements, all rooted, none re-shot
+
+The gate line for this task named re-dragging as its failure mode. Three
+comparisons came back non-zero and each was root-caused rather than repeated:
+
+| Disagreement | Root cause | Disposition |
+|---|---|---|
+| The drag round trip is not pixel-identical: 8,323 of 1,053,162 differ, max delta 100 | Every differing pixel is on the outermost one or two pixels of the frame or at a corner radius. The window sat at a different desktop position on the way back, and a rounded corner blends with what is behind it | Not a render difference. Reported with the inset that isolates it (12 pixels at inset 4, all corners) rather than by widening the inset until it reads zero |
+| The 100% control pair has identical statistics but 17,712 differing pixels | The two windows were sized by hand: content bands 515 px against 522 px. The tile grid lands on different sub-pixel origins | The claim was narrowed to what was measured — the *statistics* agree — and the earlier "identical" wording was corrected before it reached a document |
+| `10` vs `2` (same monitor, two launches) differ in 3,885 pixels | Max per-channel delta is **1**, confined to text rows | F-33's intensity-only drift, an order below its measured band. Recorded with its number, not filed as "drift" without one |
+
+#### Trap #5 — carry-forward
+
+| Item | Where | Re-trigger criterion |
+|---|---|---|
+| Whether a stale intermediate projection is presented as a frame during a scale change | [handoff.md](./handoff.md) | T7 F-34's question, removed from T11 at the start gate as unanswerable by a human instrument. Re-triggers for any task that can run frame-level capture or observe commit boundaries in-process |
+| The toolbar overlaps rather than wrapping or clipping when the client is too narrow | [handoff.md](./handoff.md) | Observed at 100%, 150% and 175% alike, so width-driven and not this phase's. Re-triggers at M4-Phase 2 (layout / event work) or whenever a host is run at a client narrower than its content |
+| A positive control needs a leg where it must **agree** | this section, F-50 | Every later control built as "A differs from B" |
+| A list-based readback is evidence about the rows it shows | this section, F-51 | Any later use of Task Manager, a process list, or any sorted/scrolled UI as an artifact |
+
+#### Trap #7 — the positive control, and how it could have failed
+
+The control is the same executable run twice, and it ships with three ways to
+come out wrong rather than one. It could have shown **no** difference at 150%
+(the posture would then not be what separates the runs); it could have shown a
+difference at **100%** (the metric would then be measuring window identity,
+position or capture rather than rasterization); and the aware side could have
+degraded with the scale factor (R-1's claim would then be false). None did.
+`6-taskmgr-dpi.png` is the readback that keeps "we set the variable" and "the
+process is unaware" separate facts (F-49).
+
+#### Findings
+
+**F-50 — a positive control needs an agreement leg, not only a difference
+leg.** §T11 as planned had the control differing on the scaled panel and said
+nothing about where it must *not* differ. A control of the form "A differs from
+B" is satisfied by any two differing things — a different build, a different
+window size, a different capture. What makes the difference attributable to the
+posture is that the same pair is **indistinguishable** where the posture cannot
+matter, which here is the 100% monitor, where every conversion in this phase is
+the identity. The leg was added at the start gate for this reason and the scale
+pair was chosen to make it available; it then also validated the measurement,
+because a metric that separated the two runs at 100% would have been measuring
+something else. *Re-trigger:* any later control expressed as a difference.
+
+**F-51 — a sorted, scrolled list is evidence about the rows it shows, not about
+the set.** The Task Manager readback was very nearly written up as "two
+`gallery-zig.exe` processes were running". The list is sorted by Description and
+scrolled about a fifth of the way down, and rows sharing a Description are
+contiguous, so a third instance immediately above the visible top row cannot be
+excluded from the image. The correct claim is about the two rows the artifact
+shows; that only two existed is the owner's attestation and is labelled as one.
+This is F-48 and F-49's family — the instrument reporting something narrower
+than what the reader assumes — arriving in a UI screenshot rather than in an API
+result. *Re-trigger:* any artifact that is a view onto a list.
+
+**F-52 — a deviation from an owner-executed protocol is scoped, not just
+noted.** Two full-size windows do not fit side by side on one 150% panel, so the
+owner narrowed them, and the pairs show 5 tiles per row against the protocol's
+"do not resize". The reflex answers are both wrong: discarding the frames throws
+away the control, and using them for everything would put layout claims on
+frames whose layout was altered by hand. What the close does instead is say
+which claims each artifact can still carry — the narrowed pairs support the
+crispness claims only, and every layout claim rests on the six frames that were
+not resized. *Re-trigger:* any owner- or human-executed procedure whose
+execution differs from what was written. The protocol being committed
+([evidence/t11-owner-smoke/protocol.md](./evidence/t11-owner-smoke/protocol.md))
+is what makes the deviation visible at all; had the procedure lived only in
+chat, the frames would have looked like the plan.
+
+#### Owner's reading
+
+Kept separate from the analysis above, because it is the thing T11 exists for
+and the pixel work is its corroboration, not the other way round. The owner's
+own three statements, rendered from the Japanese:
+
+- text was properly legible on the destination monitor — no sense of blur;
+- nothing felt broken about the layout;
+- **with the two runs side by side, the unaware one's blur was visible to the
+  eye.**
+
+The third is the one that cannot be obtained any other way. Every quantitative
+result in this task is a proxy for a glyph-shape judgement, and the judgement
+is a human one; the numbers say the two runs' edges are shaped differently and
+by how much, and a person looking at them says which one is worse. Both were
+run, and they agree.
+
+#### End gate
+
+Owner verdict recorded — the attested facts above plus the owner's own reading
+in §Owner's reading; frames committed with their [evidence/README.md](./evidence/README.md)
+row in the same commit; the positive control's result recorded including the
+agreement leg; the two new observations triaged to
+[handoff.md](./handoff.md). `cargo test --workspace` is not re-run for this
+task and is not claimed: nothing in the workspace changed, and the observing
+machine has no toolchain. Full independent review before merge.

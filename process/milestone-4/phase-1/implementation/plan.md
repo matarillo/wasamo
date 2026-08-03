@@ -2378,22 +2378,45 @@ Every other GUI gate in this phase had a script, and the script was the
 record of what was done; T11's equivalent is
 [evidence/t11-owner-smoke/protocol.md](./evidence/t11-owner-smoke/protocol.md).
 
-- [ ] Drag the window between monitors at different scale factors and
+- [x] Drag the window between monitors at different scale factors and
       read the **settled state on each side**: the logical layout is
       preserved — element order and tiles per row, not a bit-exact wrap
       position (F-28's ~1.6 DIP, and T8's stated limit 2: on this path
       the OS chooses the rectangle) — and text is crisp on both.
-- [ ] Confirm the non-client area (caption, borders) scales with the
+      **7 tiles per row on both monitors**, wrap structure 7 / 7 / 4 and
+      element order identical; the content band's DIP width differs by
+      **1.3 DIP**, which is F-28's residual reproducing on another
+      machine, and it did not move a wrap position.
+- [x] Confirm the non-client area (caption, borders) scales with the
       window — the V2 automatic behaviour this phase relies on in full.
-- [ ] **Return leg.** Drag back and confirm the original monitor
+      **Measured rather than eyeballed**: the content band's width scales
+      ×1.5026 while its top edge moves ×1.452, and the gap between those
+      two numbers is the caption — DPI-indexed, not proportional to `s`,
+      which is why DD-M4-P1-004's claim has to stay on the outer
+      rectangle.
+- [x] **Return leg.** Drag back and confirm the original monitor
       reproduces the original appearance. A one-way crossing cannot show
-      a state that fails to come back.
-- [ ] **Pointer path after the crossing.** Click a gallery tab and hover
+      a state that fails to come back. **12 differing pixels of
+      1,036,642, all four corner radii** — the rounded corner blending
+      with a different patch of desktop, the window having come back to a
+      different position.
+- [x] **Pointer path after the crossing.** Click a gallery tab and hover
       a button on the destination monitor. T8 drives a click through a
       real `WM_LBUTTONUP` at a synthesised scale, so this is not the only
       evidence for that seam — it is the only one whose coordinate comes
-      from a real device across a real crossing.
-- [ ] **Positive control — the unaware twin, side by side in one frame.**
+      from a real device across a real crossing. **Favorites took the
+      click and All released**, on the destination monitor.
+- [x] **A second delivery path, added during the task.**
+      `Win+Shift+arrow` moves the window between monitors with **no modal
+      move loop running**, while a drag delivers `WM_DPICHANGED` inside
+      one — and T7's handler re-enters through a nested `WM_SIZE`, which
+      is the property its review lane is named for. Only the modal path
+      had been observed. **The two agree**: the destination frames differ
+      by 3,885 pixels at max per-channel delta **1**, and the origin
+      frames by 16 — 12 corner radii and 4 tab-label text pixels at ≤ 8 —
+      which is F-33's intensity-only drift an order below its measured
+      band.
+- [x] **Positive control — the unaware twin, side by side in one frame.**
       Required by [AGENTS.md §Testing rules](../../../../AGENTS.md): the
       owner smoke has to separate the intended behaviour from a
       coincidental look-alike, and here the look-alike is known exactly —
@@ -2407,10 +2430,26 @@ record of what was done; T11's equivalent is
       not rest on two capture events. **The posture is read back**, from
       Task Manager's DPI Awareness column with both processes visible,
       not inferred from having set the variable (F-49).
-- [ ] Record the verdict in [log.md](./log.md), with the frames in
+      **Fired, and so did its agreement leg** (finding F-50, which is why
+      the leg exists): at 100% the two runs are indistinguishable —
+      max luminance step 158.6 and mid-band 13.2% on both — and at 150%
+      and 175% they separate, 157.0 / 8.2% against 106.6 / 19.7% and
+      156.6 / 10.6% against 92.3 / 21.1%. The aware side is flat across
+      all three scales while the unaware side degrades monotonically,
+      which is risk R-1's claim as a number. The Task Manager readback is
+      recorded with **what it does not establish** (finding F-51): the
+      list is sorted and scrolled, so it is evidence about the two rows
+      it shows, and "only two were running" is the owner's attestation.
+- [x] Record the verdict in [log.md](./log.md), with the frames in
       [evidence/t11-owner-smoke/](./evidence/t11-owner-smoke/) and the
       assistant's reading of them. Neither this nor T8 alone discharges
       AC7's third requirement; both together do.
+      **Two things the run produced that the plan did not ask for**: the
+      toolbar overlapping rather than wrapping at a narrow client, which
+      reproduces at 100% and is therefore not a DPI defect, and the
+      protocol deviation that surfaced it — the side-by-side windows were
+      narrowed by hand, so those three frames carry the crispness claims
+      only (finding F-52). Both are in [handoff.md](./handoff.md).
 
 **Removed from this task at its start gate, with the reason recorded
 rather than the item silently dropped:** whether a **stale intermediate
