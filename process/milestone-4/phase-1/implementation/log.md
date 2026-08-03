@@ -6982,3 +6982,59 @@ agreement leg; the two new observations triaged to
 [handoff.md](./handoff.md). `cargo test --workspace` is not re-run for this
 task and is not claimed: nothing in the workspace changed, and the observing
 machine has no toolchain. Full independent review before merge.
+
+## T12 — Step-end local gates + Moment 2 re-sync + step retro
+
+### Responsibility re-audit before approach selection
+
+Re-audited from the T12 checklist outward against the T1–T11 log,
+retrospectives, accepted ADR set, landed source at merge commit `366e4a4`, and
+the current specification / procedure claims. The branch starts from that
+commit and the worktree was clean. The task boundary still matches what
+landed, with one stale planning state corrected before this gate: T5's owner
+decision on F-33 is no longer pending. The ADR verification-closure item and
+`constraints.md` §9 remain untouched; Observation 4 alone receives the
+operative correction. The same plan item now names T10's client-rectangle and
+PMv2-readback requirements explicitly.
+
+| T12 responsibility | Landed-state audit | T12 disposition |
+|---|---|---|
+| Cold clean rebuild, workspace tests, three hosts, F-5 / F-21 build rule | F-5 and F-21 are the same uplifted-rlib root cause with loud-missing and quiet-stale symptoms; `AGENTS.md` still claims a workspace build is sufficient | Run the real gates; correct the rule without claiming to fix the build graph |
+| Moment 1 → Moment 2 sync | All three top status blocks still say M4-Phase 1 design-drafted. `architecture.md` §4.5 omits landed `Win32_UI_HiDpi`, `Foundation_Numerics`, and `Foundation_Collections`; §5.2 starts at DispatcherQueue creation and omits the owning-thread / one-shot / DPI-declaration prologue and `TextRenderer` | Re-sync to landed source; cite T4's outer/client measurement rather than measure it again |
+| Observation 4 | Still describes the host as DPI-unaware and DWM-stretched. T10's artifact fixes the measured 120-DPI coordinates and procedure; T5 and T6 already settled F-33 / F-40 | Replace the obsolete mechanism and fold in same-session paired baselines, target isolation/restoration, client capture across postures, and awareness declaration plus readback |
+| `wasamo_init` ordering clause | `runtime::init` calls `capture_owning_thread`, returns early when already initialized, then performs the first OS-touching act once; both normative specs still say simply "first act" | Correct those two claiming sites to the landed one-shot contract |
+| T5 named divergences | §12.4 still generalizes atlas origin as frequently zero; §12.3 still names only attach and resize. DD-006's brush contract already matches `create_text_surface_brush` (`None`, `0.0`, `0.0`) | Correct the two live divergences and record the brush re-verification without re-deriving the rejected default |
+| M4 progress row | Still says implementation docs open (T0) | Flip only the Phase 1 row to complete; leave phase-end document status work untouched |
+| Carry-forward | Every T12-named item already exists in the skeleton handoff with a destination and re-trigger criterion | Re-audit and record the result; do not finalize the skeleton or duplicate its rows |
+| T12 retro | Absent, as expected | Create from the task-retro template after the close gate |
+
+The correction propositions used for the documentation search are stated
+before editing so prose and auditable tables can be checked against the same
+claims:
+
+| Proposition | Claiming / carrying sites in T12 scope |
+|---|---|
+| The declaration is the first OS-touching act once per process, after thread capture and the initialized early return | `docs/architecture.md` §12.2; `docs/abi_spec.md` §4.1; initialization sequence in architecture §5.2 |
+| A text atlas origin is a pixel coordinate that must be converted; no frequency claim is needed for the conversion to be load-bearing | `docs/architecture.md` §12.4 |
+| Client-extent conversion runs at attach, resize, and the reactive dirty-layout drain | `docs/architecture.md` §12.3; the immutable DD-002 omission is already dated-annotated and is not edited here |
+| Capture geometry is physical only after the tool has declared PMv2 and read its thread awareness back; cross-posture comparisons use client rectangles | `docs/notes/verification-environments.md` Observation 4; T10 coordinate artifact is the evidence owner |
+| A comparison baseline is at least two agreeing captures per side in the same session; cross-tree builds isolate target directories and a mutation ends with package clean plus accepted-source rebuild | Observation 4; the ADR set and `constraints.md` remain unchanged by owner decision |
+
+### Start gate — recorded before approach selection
+
+| # | Failure mode | Applies? | Reason / required artifact |
+|---|---|---|---|
+| 1 | Semantic-migration miss | no | T12 introduces no symbol, variant, schema, IR form, diagnostic tag, or call-site migration. Its claim-site migration is documentation-specific and is armed under #3 with the proposition table above |
+| 2 | Structural change with unenumerated side effects | no | No runtime or schema structure changes. Cross-document status, revision, progress-row, and procedure effects are parallel documentation claims and are enumerated under #3 rather than treated as runtime structural effects |
+| 3 | Parallel / derived data drift | **yes — documentation analogue** | The same proposition appears in normative specs, a live procedure note, status blocks, revision histories, the M4 progress index, and evidence / handoff indexes. Close with a per-proposition claim-site audit and explicit unchanged sites, not a prose-only correction |
+| 4 | Untested authored branch | no at start | No branch, reject, diagnostic, size branch, fixture, or new script is planned. Existing build commands are executed rather than authored. Per F-53 this row is re-read at close and reverses if the approach adds any instrument or branch |
+| 5 | Carry-forward omission | **yes** | Re-audit every named handoff row for both destination and re-trigger criterion; cite the skeleton ledger rather than duplicating it, and do not finalize it |
+| 6 | Symptom taken at face value | **yes** | The real clean rebuild and three-host gates put F-5, F-21, and any deterministic tool/build failure in reach. Use the documented remedy for the known root cause; a different recurrence is investigated and dispositioned, never re-rolled |
+| 7 | GUI evidence without a positive control | no | T12 captures no new GUI evidence and does not re-evaluate pixels. It cites accepted T4 / T6 / T10 / T11 evidence only within its recorded conditions; no launch-survival or inherited frame is promoted into a new render claim |
+
+**Review lane: Normal review.** T12 was absent from the preamble table, so
+the row is assigned there now. This is a normative / procedural documentation
+sync with real build gates, but no schema / IR migration, runtime structural
+change, GUI-render evidence, or authored diagnostic / reject / size branch;
+none of the full or branch/test-focused triggers applies. Re-decide at close
+if the approach changes.

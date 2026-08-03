@@ -2540,15 +2540,22 @@ carries, which is the verdict outrunning what was seen.
       not sufficient — the baseline must come from two agreeing captures
       in the same session as the comparison. The same proposition is
       stated in the ADR set's verification-closure item 3 and in
-      [constraints §9](../requirements/constraints.md); **whether either
-      of those needs a dated annotation is an owner decision** raised in
-      [log.md](./log.md) §T5, not T12's to take.
+      [constraints §9](../requirements/constraints.md). The owner decided at
+      T5 close that neither receives a dated annotation: T12 makes the
+      operative correction in Observation 4 only, without reopening the ADR
+      set or the constraints.
       **A third correction is T6 finding F-40:** cross-tree baselines use
       separate cargo target directories, and mutation evidence ends with a
       package clean plus accepted-source rebuild. Timestamp freshness and an
       unqualified cargo "fresh" result are not source-identity evidence when
       two source trees reused one artifact directory; neither is frame identity
       general source-identity evidence when the mutation could be render-neutral.
+      Fold in T10 findings F-48 / F-49 as the capture-side guard: a tool that
+      reads window coordinates declares Per-Monitor-Aware V2, reads its thread
+      awareness back, and aborts on a mismatch. A comparison across awareness
+      postures captures the client rectangle via `ClientToScreen`, not the
+      outer rectangle. Use the exact T10 artifact values only in the conditions
+      under which they were measured; do not turn them into universal metrics.
 - [ ] **A fifth divergence item, added at T9's independent review (nit 3).**
       [architecture.md §12](../../../../docs/architecture.md#coordinate-spaces)
       says `wasamo_init` "declares Per-Monitor-Aware V2 as its **first act**",
