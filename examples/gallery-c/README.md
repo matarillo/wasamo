@@ -25,6 +25,7 @@ repo root.
 
 ```bat
 rem From the repo root:
+cargo build --release -p wasamo-runtime
 cargo build --release --workspace
 
 cmake -S examples/gallery-c -B build/gallery-c

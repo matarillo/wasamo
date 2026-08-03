@@ -27,6 +27,7 @@ CMake ≥ 3.21, and a release build of `wasamo.dll` / `wasamo.dll.lib` and
 
 ```bat
 rem From the repo root:
+cargo build --release -p wasamo-runtime
 cargo build --release --workspace
 
 cmake -S examples/counter-c -B build/counter-c

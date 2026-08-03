@@ -3,6 +3,7 @@ project(wasamo_gallery_c C)
 
 # Usage from the Wasamo repo root:
 #
+#   cargo build --release -p wasamo-runtime
 #   cargo build --release --workspace
 #   cmake -S examples/gallery-c -B build/gallery-c
 #   cmake --build build/gallery-c --config Release
@@ -22,7 +23,8 @@ set(GALLERY_UI         "${WASAMO_ROOT}/examples/gallery/gallery.ui")
 if(NOT EXISTS "${WASAMO_IMPORT_LIB}")
     message(FATAL_ERROR
         "wasamo.dll.lib not found at ${WASAMO_IMPORT_LIB}.\n"
-        "Run 'cargo build --release --workspace' from the Wasamo repo root first,\n"
+        "Run 'cargo build --release -p wasamo-runtime' and then\n"
+        "'cargo build --release --workspace' from the Wasamo repo root first,\n"
         "or pass -DWASAMO_ROOT=<path> pointing to a pre-built tree.")
 endif()
 

@@ -3,6 +3,7 @@ const std = @import("std");
 // Build script for the Photo Gallery Zig example.
 //
 // CI usage (from repo root):
+//   cargo build --release -p wasamo-runtime
 //   cargo build --release --workspace
 //   zig build -Dwasamo-lib=../../target/release/wasamo.dll.lib \
 //             -Dwasamo-zig=../../bindings/zig/wasamo.zig \

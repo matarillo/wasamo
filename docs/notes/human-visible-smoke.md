@@ -48,7 +48,9 @@ repo root で実行する。
 ```powershell
 cargo fmt
 cargo clean
+cargo build -p wasamo-runtime
 cargo build --workspace
+cargo build --release -p wasamo-runtime
 cargo build --release --workspace
 cargo test --workspace
 ```

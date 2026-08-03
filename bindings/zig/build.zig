@@ -5,15 +5,17 @@ const std = @import("std");
 // Exposes one module (`wasamo`) and one test step (`zig build test`).
 //
 // The binding links against `wasamo.dll.lib` (the import library emitted by
-// the `wasamo-runtime` Rust crate). The import library is expected at the
+// the `wasamo-dll` Rust crate). The import library is expected at the
 // path given by the `--wasamo-lib` option (default: the workspace release
 // target dir relative to this file's location).
 //
 // CI usage:
+//   cargo build --release -p wasamo-runtime    # refreshes the uplifted rlib
 //   cargo build --release --workspace          # emits target/release/wasamo.dll.lib
 //   zig build test --wasamo-lib ../../target/release/wasamo.dll.lib
 //
 // Local usage (debug DLL):
+//   cargo build -p wasamo-runtime
 //   cargo build --workspace
 //   zig build test --wasamo-lib ../../target/debug/wasamo.dll.lib
 
