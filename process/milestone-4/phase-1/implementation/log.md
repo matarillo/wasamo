@@ -7137,6 +7137,12 @@ branch or build graph. [handoff.md](./handoff.md) records it for the next task
 touching the rust-sys / cdylib build seam, and re-triggers it on clean builds or
 warning-policy changes.
 
+Post-close-commit verification reproduced F-54 in both cold debug and cold
+release workspace builds after their profile-matching primary runtime build;
+both workspace builds then produced the import library and exited 0. This
+widens the observed profile from the first release run to debug and release,
+without changing the mechanism or turning the warning into a failure.
+
 ### Carry-forward audit
 
 The handoff remains `status: skeleton`; T12 did not fill its phase-close

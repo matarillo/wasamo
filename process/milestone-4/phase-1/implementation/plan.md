@@ -2613,7 +2613,7 @@ carries, which is the verdict outrunning what was seen.
       of V2 non-client scaling (M5); the non-zero clip inset re-check;
       and the note that a scale-dependent `measure` would turn T7's step
       ordering into a correctness constraint.
-- [ ] Step retrospective per
+- [x] Step retrospective per
       [retrospectives.md](../../../procedures/retrospectives.md).
 
 Owned by the **phase-end batch**, not by T12 — these stay `[ ]` at T12
