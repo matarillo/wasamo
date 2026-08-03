@@ -1,7 +1,7 @@
 # Wasamo DSL Specification
 
-**Document version:** 1.16
-**Last updated:** 2026-07-28
+**Document version:** 1.17
+**Last updated:** 2026-08-04
 **Status:** `public-draft` (M3) — this document is the first public
 draft of the Wasamo DSL specification, promoted at M3-Phase 8 close;
 the promotion record and the M3 decision links live in the
@@ -16,11 +16,11 @@ M3-Phase 6 closed (implementation-synced); M3-Phase 7 closed
 (implementation-synced — the `ToggleButton` / `checked` selected-state
 surface, §4.17, and the public-draft future-surface notes, §4.18,
 match the landed implementation; external-reader smoke verified in
-M3-Phase 8 T8). M4-Phase 1 design-drafted: the unit of every authored
+M3-Phase 8 T8). M4-Phase 1 implementation-synced: the unit of every authored
 length is defined as DIP (§1 *Units and the layout coordinate system*),
 replacing the previously undefined "pixel extents in the layout
-coordinate system" wording; re-verified against the landed runtime at
-M4-Phase 1 close.
+coordinate system" wording; the grammar, AST, IR, and authored numeric values
+are unchanged, and the landed runtime keeps layout and font-size inputs in DIP.
 Covers the M2 `.ui` surface, the `state` surface keyword
 retroactively, the M3-Phase 1 `bool` scalar binding additions, the
 M3-Phase 2 Box layout primitive (with `aspect` / `fill` literal
@@ -4030,3 +4030,4 @@ anchor — distinct from the per-edit revision-history table below.
 | 1.14    | 2026-07-06 | M3-Phase 8 T9 G(4) review remediation: normalised the Phase 8 verification-status wording after T8 external-reader smoke, corrected §4.17 so `ToggleButton.checked` is framed as the first persistent selected-state bool attribute rather than the first bool-driven widget attribute, and kept public-draft reopen triggers out of §4.18 prose. No public-draft marker, promotion change-history entry, or ABI change. |
 | 1.15    | 2026-07-06 | M3-Phase 8 implementation sync (Moment 2): flipped the top Status block and the §4.17 phase-status marker to closed / implementation-synced, promoted the document to `public-draft`, and added the public-draft change-history anchor (promotion record + M3 decision links + T8 external-reader smoke result). No body-prose semantic change (divergence corrections were folded in 1.13 / 1.14); no new `IrType` / `IrLiteral` / `PropertyValue` or token; `abi_spec.md` untouched. |
 | 1.16    | 2026-07-28 | M4-Phase 1 design draft (Moment 1): added §1 *Units and the layout coordinate system* — every authored length and font size is DIP (`1 DIP = 1/96 inch`), an authored layout is identical at every display scale factor, and a DIP is a physical length rather than a device pixel. The previously undefined "pixel extents in the layout coordinate system" wording is **replaced** at each dimension-bearing site (§4.10 WrapPanel `item-cross-size` / `item-spacing` / `line-spacing`, §4.11 ScrollView `offset-y`, §4.12 Grid fixed track sizes), which now reference the definition instead of restating it; §2.2 notes that the `px` unit suffix names DIP, and §4.9's rounding note is restated in DIP terms. No grammar, token, AST, `IrType`, `IrLiteral`, or `PropertyValue` change — the unit is a semantic statement about existing literals, so `wasamoc` and the IR are untouched. At 100% every existing `.ui` file is unchanged in behaviour. The runtime-side coordinate-space model (the two spaces, the conversion seams, the text-surface resolution contract, scale invariance) is normative in [architecture.md §12](./architecture.md#coordinate-spaces); the ABI argument unit is in [abi_spec.md](./abi_spec.md) §4.2. Pending implementation re-sync at M4-Phase 1 close. |
+| 1.17    | 2026-08-04 | M4-Phase 1 implementation sync (Moment 2): flipped the phase status to implementation-synced after re-verifying the authored-length and font-size DIP statements against the landed runtime. No grammar, token, AST, `IrType`, `IrLiteral`, `PropertyValue`, or authored-value change; runtime coordinate projection and raster resolution remain normative in [architecture.md §12](./architecture.md#coordinate-spaces), and the outer-window ABI unit remains normative in [abi_spec.md §4.2](./abi_spec.md). |

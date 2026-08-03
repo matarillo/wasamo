@@ -1,7 +1,7 @@
 # Wasamo C ABI Specification
 
-**Version:** M2 Foundation ABI surface (2026-05-11); M4-Phase 1 unit contract (2026-07-28)
-**Status:** Accepted for M2 — finalised against the implemented `wasamo.h`; M3-Phase 1 in progress with no new ABI surface. M4-Phase 1 design-drafted (2026-07-28): §4.1 states that `wasamo_init` declares the process's DPI awareness and what happens when a host has already declared its own, and §4.2 states that `wasamo_window_create`'s `width` / `height` are DIP of the outer window rectangle. **No signature changes and no new functions** — both are statements of the unit and behaviour of the existing surface, bit-identical at 100%. Re-verified against the landed runtime at M4-Phase 1 close.
+**Version:** M2 Foundation ABI surface (2026-05-11); M4-Phase 1 implementation-synced unit contract (2026-08-04)
+**Status:** Accepted for M2 — finalised against the implemented `wasamo.h`; M3-Phase 1 in progress with no new ABI surface. M4-Phase 1 implementation-synced (2026-08-04): §4.1 matches the landed process-DPI-awareness declaration and tolerated host-declaration diagnostic, and §4.2 matches the landed DIP outer-window-size contract. **No signature changes and no new functions** — both are statements of the unit and behaviour of the existing surface, bit-identical at 100%. T4 measured an 800 × 600 DIP request as a 1000 × 750 physical outer rectangle at 125%; its 785.6 × 562.4 DIP client is a separate result and is not implied by the outer-size contract ([implementation log §T4](../process/milestone-4/phase-1/implementation/log.md#t4--per-window-scale--post-create-window-size-correction)).
 **Authoritative decisions:** [M1 Phase 6 C ABI decisions](../process/milestone-1/phase-6/decisions/preamble.md), the [M2 plan](../process/milestone-2/plan.md), and the [M4-Phase 1 decisions](../process/milestone-4/phase-1/decisions/preamble.md)
 
 This document specifies the C ABI exposed by `wasamo.dll` via the
@@ -234,8 +234,11 @@ on that thread. If no error has been produced, the function may
 return an empty string or `NULL`; hosts must tolerate both.
 
 **`wasamo_init` declares the process's DPI awareness.** As its first
-act — before any other runtime initialisation and before any window
-exists — `wasamo_init` sets the process to **Per-Monitor-Aware V2**.
+**OS-touching** act, once per process and before any DispatcherQueue,
+Compositor, TextRenderer, or window exists, `wasamo_init` sets the process to
+**Per-Monitor-Aware V2**. Capturing the owning thread precedes the declaration
+but cannot lock process awareness; a successful second `wasamo_init` returns
+through the runtime's one-shot guard without attempting the declaration again.
 The runtime does this on the host's behalf so that no host has to
 ship an application manifest or add a resource step to its build;
 a host that links `wasamo.dll` and calls `wasamo_init` gets
