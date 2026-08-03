@@ -2492,7 +2492,7 @@ carries, which is the verdict outrunning what was seen.
 
 ### T12 — Step-end local gates + Moment 2 re-sync + step retro
 
-- [ ] Clean rebuild + `cargo test --workspace` green; all three example
+- [x] Clean rebuild + `cargo test --workspace` green; all three example
       hosts build in the documented order. **From a cold target
       directory the workspace test build needs
       `cargo build -p wasamo-runtime` first** (T1 finding F-5,
@@ -2510,7 +2510,7 @@ carries, which is the verdict outrunning what was seen.
       is that path failing loudly when the uplifted rlib is absent; F-21
       is it succeeding quietly when it is merely old. One revision, one
       root cause, two symptoms.
-- [ ] **Moment 2 doc sync — divergence correction.** Re-verify each
+- [x] **Moment 2 doc sync — divergence correction.** Re-verify each
       Moment 1 statement against what actually landed and correct
       divergences. The statements flagged at ADR time as most at risk
       are the outer-window-rectangle claim and the font-size unit; both
@@ -2529,7 +2529,7 @@ carries, which is the verdict outrunning what was seen.
       implementation-synced, and re-sync architecture §4.5 (`windows`
       crate feature list) and §5.2 (initialization sequence) to the
       landed code.
-- [ ] **Revise `verification-environments.md` Observation 4** with the
+- [x] **Revise `verification-environments.md` Observation 4** with the
       capture coordinates T10 re-derived (risk R-7). Its stated premise
       — the host is DPI-unaware, so DWM stretches logical 800×600 to
       physical 1000×750 — is falsified by this phase, and later phases
@@ -2556,7 +2556,7 @@ carries, which is the verdict outrunning what was seen.
       postures captures the client rectangle via `ClientToScreen`, not the
       outer rectangle. Use the exact T10 artifact values only in the conditions
       under which they were measured; do not turn them into universal metrics.
-- [ ] **A fifth divergence item, added at T9's independent review (nit 3).**
+- [x] **A fifth divergence item, added at T9's independent review (nit 3).**
       [architecture.md §12](../../../../docs/architecture.md#coordinate-spaces)
       says `wasamo_init` "declares Per-Monitor-Aware V2 as its **first act**",
       and [abi_spec §4.1](../../../../docs/abi_spec.md) says "as its first act
@@ -2571,7 +2571,7 @@ carries, which is the verdict outrunning what was seen.
       edited at T9 because normative-spec wording is Moment 2's, and because
       T9's retrospective answered "no spec change" — which was right about
       §4.1's *diagnostic* contract and silent about this clause.
-- [ ] **Four Moment 2 divergence items named at T5**, so they are folded
+- [x] **Four Moment 2 divergence items named at T5**, so they are folded
       into the pass above rather than found during it. (i)
       [architecture.md §12.4](../../../../docs/architecture.md#coordinate-spaces)
       says the atlas origin "is frequently `(0, 0)`, so omitting it" works
@@ -2603,8 +2603,8 @@ carries, which is the verdict outrunning what was seen.
       landed as audit row 2b. The spec understates the seam class it
       defines, and the same omission is in DD-002's row 2 (whose ADR-side
       handling is an owner decision, raised in [log.md](./log.md) §T5).
-- [ ] Flip the [M4 plan](../../plan.md) Phase 1 row to complete.
-- [ ] Carry-forward to [handoff.md](./handoff.md) with re-trigger
+- [x] Flip the [M4 plan](../../plan.md) Phase 1 row to complete.
+- [x] Carry-forward to [handoff.md](./handoff.md) with re-trigger
       criteria: layout-derived hit rectangles (M4-Phase 2); the
       host-visible scale / work-area query trigger (M4-Phase 7 / 8);
       per-window differing scale (M4-Phase 8); resolution-dependent
