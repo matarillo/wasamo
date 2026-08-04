@@ -2678,9 +2678,12 @@ T12 rerun.
 
 ### Phase-end batch results (2026-08-04)
 
-- [x] Actual CI dispatched twice against `544574c` and recorded in
-      [phase-end.md](../retrospectives/phase-end.md); both runs fail the same
-      DPI matrix test, so phase→main remains gated.
+- [x] Actual CI initially dispatched twice against `544574c` and recorded in
+      [phase-end.md](../retrospectives/phase-end.md); both runs failed the
+      same DPI matrix test. The phase-end-owned repair at `1f162dc` then
+      passed [run 30878747516](https://github.com/matarillo/wasamo/actions/runs/30878747516)
+      and was merged no-ff as `26e2def`, so the CI criterion is discharged;
+      phase→main still awaits owner approval.
 - [x] Finalize [handoff.md](./handoff.md) as `status: recorded`.
 - [x] Record [phase-end.md](../retrospectives/phase-end.md) as `recorded`.
 - [x] Transition [preamble.md](./preamble.md) from `active` to `closing`.

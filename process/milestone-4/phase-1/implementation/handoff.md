@@ -82,14 +82,13 @@ criterion rather than a date.
 | **A start-gate trap selection is a prediction and goes stale** (T11 finding F-53, caught by the independent review) | Every task whose gate selection names something the task does not yet have — an instrument, a script, a fixture | T11's trap #4 row said "no script is authored", written before the approach was chosen; the task then authored and committed two scripts with four branches, and nothing re-decided the row. [implementation-gates.md §0](../../../procedures/implementation-gates.md) step 2 already requires the re-decision, so the rule was not missing — the prompt to re-read at close was. The consequence was live rather than formal: the unexercised equal path of `t11-frame-diff.ps1` did not exit, leaving `$LASTEXITCODE` at whatever ran before it, so "no difference" could read as a previous command's failure — the false-green family of F-5, F-21 and `compare-frames.ps1`'s R-4, in a script this index advertises for reuse. It survived because all three comparisons the task ran differed. *Re-trigger:* any close gate whose start-gate selection turned on what the task expected to build |
 | **Pure-logic tests must show that the assertion catches the wrong implementation** (T3 phase-end decision; applies only to new rounding, unit-conversion, or boundary-condition pure logic) | Any later pure-logic test adding such a branch | A deliberately wrong implementation must be run or otherwise shown to make the named test fail; the phase-end VDR [DD-V-029](../../../cross-milestone/decisions/dd-v-029-pure-logic-red-test-obligation.md) narrows this obligation to pure logic and leaves the wider green/identical-observation form uncodified |
 | **T7's second remediation was not independently reviewed after it landed** (historical verification residue) | Any later change to the `WM_DPICHANGED` handler or its step-ordering invariants | Re-trigger the full independent review lane before merge; the phase-end audit confirms DD-M4-P1-003's step-ordering record is present in T7, but cannot retroactively supply the missing post-remediation review |
-| **The T8 DPI matrix test fails in GitHub Actions on the phase HEAD while passing locally** (runs `30873359437` and `30873615639`) | Before phase→main merge, or any change to the DPI integration fixture / CI environment | Root-cause the runner-only failure of `dip_layout_is_invariant_while_every_visual_moves_by_the_ratio`; the exact test passes alone, as the full local workspace test, but both same-HEAD CI runs fail it without an assertion message. Do not treat a retry as a green flake |
+| **The T8 DPI matrix fixture must remain within the hosted runner's controllable client extent** (initial failures `30873359437` / `30873615639`, resolved by `1f162dc` and successful run `30878747516`) | Any change to the DPI integration fixture or CI environment | The initial `720 × 480` DIP fixture requested `1440 × 960` physical pixels at 192 DPI and failed twice in CI without assertion detail. The repair uses `360 × 240` DIP, whose largest request is `720 × 480`, retains the physical-as-DIP mutation witness, and prints screen/max-track metrics on failure. Re-run the CI lane and preserve a discriminating mutation witness if those dimensions, the scale matrix, or hosted-runner geometry change. |
 
 ## Residuals
 
-1. The phase→main merge gate is intentionally open. The required real CI
-   workflow dispatch was run twice against the same HEAD; both runs failed in
-   the same DPI integration test. Local targeted and workspace tests passed,
-   but that does not discharge the CI gate. Push and merge remain owner gates.
+1. The phase→main approval gate is intentionally open. The initial repeated
+   CI failure was repaired and the required CI criterion was discharged by
+   successful run `30878747516`; push and phase→main merge remain owner gates.
 2. The T7 second-remediation delta was merged after the task's independent
    review round and did not receive a further independent review. This is a
    recorded historical limitation, not an invented clean bill of review.
@@ -108,7 +107,8 @@ remain explicit in the task retrospectives and the verification note.
 
 The phase-end deterministic-failure disposition is also explicit: local
 reproduction passed, the GitHub Actions failure repeated on the same commit,
-and the issue is carried forward rather than reclassified as a flake. The
-trap-#4 rule is now extended only for pure-logic rounding/unit-conversion/
-boundary-condition tests by DD-V-029; GUI evidence and the general
-green/identical form are unchanged.
+and it was not reclassified as a flake. The bounded-fixture repair then passed
+the full CI workflow in run `30878747516`; its trigger and mutation witness
+are retained above. The trap-#4 rule is now extended only for pure-logic
+rounding/unit-conversion/boundary-condition tests by DD-V-029; GUI evidence
+and the general green/identical form are unchanged.

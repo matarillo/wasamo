@@ -7450,3 +7450,24 @@ then passed with all six tests green, including those helper branches. This
 does not claim CI success: after the experiment branch is pushed, run the
 normal CI workflow on that exact commit, attach its run ID and result here,
 and retain the phase→main merge gate until that run is green.
+
+### CI result and phase integration (2026-08-04)
+
+The required CI run was dispatched on the exact repair commit
+`1f162dc570c7c61ab78e3ba8d473ce298493fd27` of
+`exp/m4-phase-1-ci-fix`:
+[30878747516](https://github.com/matarillo/wasamo/actions/runs/30878747516)
+completed successfully. Its `cargo build` job (`91895394252`) passed the
+release and debug workspace builds, workspace tests, C/CMake/Rust/Zig smoke
+tests, and both `wasamoc check` steps. The only annotation is the external
+`mlugg/setup-zig@v2` Node.js 20 deprecation notice; it is not a workflow or
+test failure.
+
+This run dispositions the two earlier same-HEAD failures by verifying the
+documented fixture repair, not by calling them flakes. The repair commit was
+then merged no-ff into `feat/m4-phase-1` as
+`26e2defe29136f8354459202dfc7b1b70185c573` (`merge: apply M4 Phase 1 CI
+repair experiment`). The merge commit has the identical source tree to the
+CI-verified repair commit, so integration introduced no unverified content.
+The CI criterion is now satisfied. Phase→main merge and push remain separate
+owner-controlled gates; this record grants neither.

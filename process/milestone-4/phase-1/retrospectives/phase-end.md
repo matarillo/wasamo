@@ -9,8 +9,9 @@ status: recorded
 
 This retrospective closes the phase-end batch after T1–T12 were merged
 no-ff. It does not redo T12 or replace any task retrospective. The phase
-branch remains unmerged and unpushed because the phase→main approval gate is
-owner-controlled and the required CI gate is not green.
+branch was initially held because its required CI gate was not green. The
+runner-only failure was later repaired and verified in CI; phase→main remains
+an owner-controlled approval gate, not an unresolved CI gate.
 
 ## Phase-end checklist (items 12–18)
 
@@ -20,8 +21,9 @@ AC7 is implemented and its four accepted decisions are reflected by the
 landed runtime, host probes, integration evidence, and Moment 1/Moment 2
 documentation sync. The phase's acceptance claim is bounded by the evidence
 limits recorded in the task retrospectives and in the final handoff. No
-`Proposed` phase ADR remains open; the phase-end CI failure is a merge-gate
-residual, not silently accepted as green evidence.
+`Proposed` phase ADR remains open. The initial phase-end CI failure was not
+silently accepted as green evidence: it was repaired, re-run in CI, and its
+historical runs remain recorded below.
 
 ### 13. CHANGELOG and roadmap consistency
 
@@ -64,22 +66,27 @@ mechanic. The doc-folded items are not duplicated as new claims; their owning
 procedure or evidence artifact is cited. All other item-10 candidates have a
 destination and re-trigger criterion in `implementation/handoff.md`.
 
-### 16. Actual GitHub Actions CI
+### 16. Actual GitHub Actions CI and remediation
 
-The required workflow was dispatched against the verified phase HEAD
+The initial required workflow was dispatched against the verified phase HEAD
 `544574c366d6f4fded4a4232a3bda0710e3fa9d9`:
 
 | Run | Result | Observation |
 |---|---|---|
 | [30873359437](https://github.com/matarillo/wasamo/actions/runs/30873359437) | failure | Release and debug workspace builds succeeded; `dip_layout_is_invariant_while_every_visual_moves_by_the_ratio` failed in `dpi_scale_matrix_integration`. |
 | [30873615639](https://github.com/matarillo/wasamo/actions/runs/30873615639) | failure | Same HEAD and same test failed again; release/debug builds again succeeded. |
+| [30878747516](https://github.com/matarillo/wasamo/actions/runs/30878747516) | success | The CI repair experiment at `1f162dc570c7c61ab78e3ba8d473ce298493fd27` passed every workflow step: release/debug workspace builds, workspace tests, C/CMake/Rust/Zig smoke tests, and `wasamoc` checks. The subsequent no-ff phase merge has the identical source tree. |
 
 The exact integration test passes when run alone and in the full local
 `cargo test --workspace`, but the two same-HEAD CI failures are a recurring
 failure under the implementation-gates #6 rule, not a flake to roll away.
-The runner-only failure has no assertion detail in the workflow log and is
-carried forward for root-cause work. The phase→main merge gate therefore
-remains open. No push or merge was performed.
+The repair reduced the matrix fixture's largest physical request from
+`1440 × 960` to `720 × 480` while retaining the prior physical-as-DIP
+mutation witness, and relays owner-thread assertion text to the calling test
+thread. The successful run is therefore a disposition of the repeated CI
+failure, not a retry reclassified as a flake. `1f162dc` was subsequently
+merged no-ff into this phase branch as `26e2def`; no phase→main merge or push
+is implied by that local integration.
 
 ### 17. Human-visible GUI smoke
 
@@ -110,7 +117,7 @@ close approach:
 | #3 parallel/derived data | yes | Plan, roadmap, handoff, retro, workflow, and VDR claim sites were audited; no duplicate CHANGELOG claim was added. |
 | #4 authored branches | no | No executable branch was added; DD-V-029 changes only the future close artifact. |
 | #5 carry-forward | yes | All item-10 candidates were classified and the recorded handoff table has destinations and triggers. |
-| #6 deterministic failures | yes | CI failure was rerun once on the same HEAD, reproduced, and carried forward with local-vs-CI evidence. |
+| #6 deterministic failures | yes | The initial same-HEAD rerun reproduced the failure; the documented fixture repair and a successful CI run then dispositioned it without calling it a flake. |
 | #7 GUI evidence | no new evidence | The batch cites T11's existing owner smoke and adds no render claim. |
 
 Review lane: Normal documentation/process review, with the process-rule
@@ -123,7 +130,7 @@ is recorded rather than retroactively relabelled.
 
 | Required artifact | Result |
 |---|---|
-| Acceptance and ADR closure | AC7 evidence and all phase ADRs audited; CI residual explicit |
+| Acceptance and ADR closure | AC7 evidence and all phase ADRs audited; initial CI residual resolved by the recorded repair run |
 | T1–T12 item-10 classification | Complete; table above and handoff ledger agree |
 | Handoff finalization | `implementation/handoff.md` → `recorded` |
 | Implementation preamble | `active` → `closing` |
@@ -131,9 +138,8 @@ is recorded rather than retroactively relabelled.
 | T7 safety-net check | DD-M4-P1-003 step-ordering record confirmed at T7 |
 | Pure-logic red-test VDR | DD-V-029 accepted; gate SSOT updated in the same batch |
 | Local verification | `cargo fmt --all -- --check`, `git diff --check`, targeted integration test, and full local workspace test passed before this doc batch |
-| Actual CI | Runs 30873359437 and 30873615639 both failed the same test; phase→main gate remains open |
+| Actual CI | Initial runs 30873359437 / 30873615639 failed the same test; repair run 30878747516 succeeded, so the CI criterion is discharged |
 
-The phase-end documents are recorded, but the phase is not represented as
-merge-ready. Owner approval is still required for any phase→main merge and
-push, after the CI residual is resolved or explicitly dispositioned by the
-owner.
+The phase-end documents are recorded and the CI criterion is now satisfied.
+Owner approval is still required for any phase→main merge and for push; this
+retrospective does not grant either action.
