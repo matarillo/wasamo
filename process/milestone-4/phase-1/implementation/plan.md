@@ -2623,11 +2623,11 @@ carries, which is the verdict outrunning what was seen.
 - [x] Step retrospective per
       [retrospectives.md](../../../procedures/retrospectives.md).
 
-Owned by the **phase-end batch**, not by T12 — these stay `[ ]` at T12
-close: the CI run id, `handoff.md` finalization, the phase
-retrospective, [preamble.md](./preamble.md)'s `status` flip, and:
+Owned by the **phase-end batch**, not by T12 — these stayed `[ ]` at T12
+close. The phase-end batch records their disposition below; this is not a
+T12 rerun.
 
-- [ ] **Decide whether `workflow.md`'s status vocabulary needs the
+- [x] **Decide whether `workflow.md`'s status vocabulary needs the
       supersede-vs-annotate distinction** (raised at T4, owner decision
       recorded in [log.md](./log.md) §T4). T4 landed the ADR set's first
       supersede —
@@ -2642,7 +2642,7 @@ retrospective, [preamble.md](./preamble.md)'s `status` flip, and:
       so the distinction currently exists only by precedent. Decide
       whether it gets a line there, belongs in ADR authoring guidance, or
       stays precedent — a process question, hence phase-end and not T12.
-- [ ] **Safety net only — confirm T7 closed DD-M4-P1-003's step-ordering
+- [x] **Safety net only — confirm T7 closed DD-M4-P1-003's step-ordering
       record**, and file it here only if it did not. **The primary owner
       is T7, not phase-end**: T7 chooses the ordering shape, so the record
       can be decided at its own close, and §T7 places it with the owner
@@ -2657,7 +2657,7 @@ retrospective, [preamble.md](./preamble.md)'s `status` flip, and:
       behaviour, a successor if the fixed order itself changes. Unlike
       the two items above it, this one is **not** phase-end's to decide;
       it is phase-end's to check.
-- [ ] **File the vision decision record for the "show it goes red"
+- [x] **File the vision decision record for the "show it goes red"
       obligation** (owner decision on the T3 retrospective, recorded in
       [log.md](./log.md)). Scope as decided: **mandatory for pure-logic
       unit tests only** — a new rounding-rule / unit-conversion /
@@ -2675,6 +2675,19 @@ retrospective, [preamble.md](./preamble.md)'s `status` flip, and:
       `implementation-gates.md`. Evidence to cite: T2's seven-mutation
       table and T3's three-mutation frame set, the second of which is the
       argument for *not* widening the rule.
+
+### Phase-end batch results (2026-08-04)
+
+- [x] Actual CI dispatched twice against `544574c` and recorded in
+      [phase-end.md](../retrospectives/phase-end.md); both runs fail the same
+      DPI matrix test, so phase→main remains gated.
+- [x] Finalize [handoff.md](./handoff.md) as `status: recorded`.
+- [x] Record [phase-end.md](../retrospectives/phase-end.md) as `recorded`.
+- [x] Transition [preamble.md](./preamble.md) from `active` to `closing`.
+- [x] Confirm T7's DD-M4-P1-003 step-ordering record without changing T7's
+      ownership or retrospective.
+- [x] Record DD-V-029 and update the implementation-gates SSOT in the same
+      batch.
 
 **Start gate:** trap #3's documentation analogue (do not restate spec or
 handoff content in derived prose — cite the owning document) and trap

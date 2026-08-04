@@ -1,20 +1,31 @@
 ---
 title: M4-Phase 1 handoff
-status: skeleton
+status: recorded
 source-phase: M4-Phase 1
 ---
 
 # M4-Phase 1 — Handoff
 
-> **Status: skeleton.** Finalized at phase close, distilled from the
-> T12 carry-forward ledger in [log.md](./log.md), per
+> **Status: recorded (phase-end 2026-08-04).** Distilled from the T1–T12
+> carry-forward ledgers and the phase-end audit in [log.md](./log.md), per
 > [workflow.md](../../../procedures/workflow.md) and
-> [retrospectives.md](../../../procedures/retrospectives.md). The
-> sections below are the shape the close will fill, not claims.
+> [retrospectives.md](../../../procedures/retrospectives.md). Items below are
+> either durable handoff obligations or explicitly classified local residue;
+> they are not phase acceptance claims.
 
 ## Main learnings
 
-<!-- Filled at phase close. -->
+The phase's durable lesson is that DPI correctness is a chain of boundaries,
+not a single scale-factor assertion: the host declares awareness, the window
+owns one authoritative scale, layout consumes DIP client extent, composition
+receives physical geometry, and raster allocation follows the same scale.
+Evidence had to pin both the input and the output and include a positive
+control; a green test or a plausible screenshot alone was insufficient.
+
+The other durable lesson is operational: Cargo's primary-package artifact
+selection affects which runtime code a DLL archives, and a cold test-only
+selection is a different failure from a cold workspace build. Build order and
+source identity therefore belong in every later GUI evidence gate.
 
 ## Carry-forward to later phases
 
@@ -69,13 +80,35 @@ criterion rather than a date.
 | **A list-based readback is evidence about the rows it shows, not about the set** (T11 finding F-51) | Any later use of Task Manager, a process list, or any sorted or scrollable UI as an artifact | T11's posture readback was nearly written up as "two `gallery-zig.exe` processes were running". The list is sorted by Description and scrolled about a fifth of the way down its track, and rows sharing a Description are contiguous, so a third instance immediately above the topmost visible row cannot be excluded **from the image**. The supportable claim is about the rows the artifact shows; that only two existed is the owner's attestation and is labelled as one. Same family as F-48 and F-49 — the instrument reporting something narrower than the reader assumes — arriving in a screenshot rather than in an API result. *Re-trigger:* any artifact that is a view onto a list rather than the list itself |
 | **A deviation from a written human-executed procedure is scoped, not just noted** (T11 finding F-52) | Every later owner smoke or human-executed evidence step | Two full-size windows do not fit side by side on one 150% panel, so the owner narrowed them and the control pairs show 5 tiles per row against the protocol's "do not resize". Both reflexes are wrong: discarding the frames throws away the control, using them for everything puts layout claims on frames whose layout was altered by hand. The close instead says which claims each artifact can still carry, and the line is drawn by **what the deviation destroyed**: the narrowed frames cannot carry a claim about the layout *the crossing produced*, because their width was set by hand rather than by the OS, so every such claim rests on the six frames that were not resized; they can still carry the crispness claims, which do not depend on window width, and an observation about what the layout engine does *at the width they themselves establish* — which is what the toolbar row above is. An absolute "these frames support crispness only" was the first wording and its counterexample was in the next paragraph. **The procedure being committed is what made the deviation visible**: had it lived only in chat, the frames would have looked like the plan. **And the deviation was not a choice**: the protocol asked for two un-resized windows side by side on one 150% panel, which needs about 2400 physical pixels and cannot be built there. *Re-trigger:* two-part — any human-executed step whose execution differs from what was written, and, when writing one, whether the **arrangement** it presupposes is reachable and not only whether the observation is possible |
 | **A start-gate trap selection is a prediction and goes stale** (T11 finding F-53, caught by the independent review) | Every task whose gate selection names something the task does not yet have — an instrument, a script, a fixture | T11's trap #4 row said "no script is authored", written before the approach was chosen; the task then authored and committed two scripts with four branches, and nothing re-decided the row. [implementation-gates.md §0](../../../procedures/implementation-gates.md) step 2 already requires the re-decision, so the rule was not missing — the prompt to re-read at close was. The consequence was live rather than formal: the unexercised equal path of `t11-frame-diff.ps1` did not exit, leaving `$LASTEXITCODE` at whatever ran before it, so "no difference" could read as a previous command's failure — the false-green family of F-5, F-21 and `compare-frames.ps1`'s R-4, in a script this index advertises for reuse. It survived because all three comparisons the task ran differed. *Re-trigger:* any close gate whose start-gate selection turned on what the task expected to build |
+| **Pure-logic tests must show that the assertion catches the wrong implementation** (T3 phase-end decision; applies only to new rounding, unit-conversion, or boundary-condition pure logic) | Any later pure-logic test adding such a branch | A deliberately wrong implementation must be run or otherwise shown to make the named test fail; the phase-end VDR [DD-V-029](../../../cross-milestone/decisions/dd-v-029-pure-logic-red-test-obligation.md) narrows this obligation to pure logic and leaves the wider green/identical-observation form uncodified |
+| **T7's second remediation was not independently reviewed after it landed** (historical verification residue) | Any later change to the `WM_DPICHANGED` handler or its step-ordering invariants | Re-trigger the full independent review lane before merge; the phase-end audit confirms DD-M4-P1-003's step-ordering record is present in T7, but cannot retroactively supply the missing post-remediation review |
+| **The T8 DPI matrix test fails in GitHub Actions on the phase HEAD while passing locally** (runs `30873359437` and `30873615639`) | Before phase→main merge, or any change to the DPI integration fixture / CI environment | Root-cause the runner-only failure of `dip_layout_is_invariant_while_every_visual_moves_by_the_ratio`; the exact test passes alone, as the full local workspace test, but both same-HEAD CI runs fail it without an assertion message. Do not treat a retry as a green flake |
 
 ## Residuals
 
-<!-- Filled at phase close: anything left undone, with its reason. -->
+1. The phase→main merge gate is intentionally open. The required real CI
+   workflow dispatch was run twice against the same HEAD; both runs failed in
+   the same DPI integration test. Local targeted and workspace tests passed,
+   but that does not discharge the CI gate. Push and merge remain owner gates.
+2. The T7 second-remediation delta was merged after the task's independent
+   review round and did not receive a further independent review. This is a
+   recorded historical limitation, not an invented clean bill of review.
+3. F-54 (the misleading `wasamo-sys` warning) and the pre-existing F-5/F-21
+   build-graph hazards remain unscheduled engineering work; their instructions
+   and re-trigger criteria are recorded above.
 
 ## Verification residue
 
-<!-- Filled at phase close: what the phase's evidence does and does not
-     establish, including the synthesised-message limit and the
-     trap-#4 disposition. -->
+The phase evidence establishes the landed runtime and documentation behavior
+under the environments and fixtures named by T4–T11. It does not establish
+that a synthesised `WM_DPICHANGED` is identical to a monitor crossing, that a
+null frame-level capture proves no intermediate projection was displayed, or
+that a 96-DPI runner discriminates creation-time scale seeding. Those limits
+remain explicit in the task retrospectives and the verification note.
+
+The phase-end deterministic-failure disposition is also explicit: local
+reproduction passed, the GitHub Actions failure repeated on the same commit,
+and the issue is carried forward rather than reclassified as a flake. The
+trap-#4 rule is now extended only for pure-logic rounding/unit-conversion/
+boundary-condition tests by DD-V-029; GUI evidence and the general
+green/identical form are unchanged.

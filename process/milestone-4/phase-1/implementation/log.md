@@ -7286,3 +7286,110 @@ The review lane remains **Normal review** because remediation changes current
 instructions and historical interpretation only. It does not change the
 F-54 diagnostic branch, build graph, runtime structure, schema/IR, or GUI
 evidence. Phase-end batch items remain untouched.
+
+## Phase-end close batch — start gate and audit (2026-08-04)
+
+This section is append-only. It records the phase-end gate selection before
+the close approach was chosen; it is not a T12 rerun and does not replace any
+task retrospective.
+
+### Start gate
+
+| Trap | Applies? | Reason recorded before the close edits |
+|---|---|---|
+| #1 semantic migration | no | The batch changes no enum, IR, schema, or traversal. |
+| #2 missed side effects | no runtime; documentation analogue covered by #3 | No runtime/tree mutation is in scope. Document status, links, and derived progress text are enumerated under #3. |
+| #3 parallel/derived data | yes | The implementation plan, M4 plan index, handoff, phase retro, workflow SSOT, and VDR/gate catalog can drift if edited independently. Each claim site must be reconciled or explicitly left unchanged. |
+| #4 untested authored branch | no | No executable branch is added. DD-V-029 changes the future close artifact only. Re-decision would be required if code or a branch test were added. |
+| #5 carry-forward underweighted | yes | Every T1–T12 item-10 candidate must be classified as doc-folded, carry-forward, or local-only; carry-forward rows need destinations and re-trigger criteria. |
+| #6 deterministic failure / flake rolling | yes | The required real CI run is an external failure surface. A same-HEAD rerun and local-vs-CI disposition are required before calling it a flake. |
+| #7 weak GUI evidence | no new evidence | The batch adds no GUI-render claim; it cites T11's existing owner smoke and preserves its screenshot/positive-control limits. |
+
+Review lane selected before edits: **Normal documentation/process review**. The
+workflow vocabulary clarification and DD-V-029 are process artifacts; the
+VDR and `implementation-gates.md` update are kept in the same batch. No
+runtime/schema/IR change or new GUI evidence triggers a high-risk review lane.
+
+### Phase-close responsibility re-audit
+
+The T12 tail was read as the scope boundary. The phase-end-owned items are:
+the actual CI run record, handoff finalization, phase retrospective, preamble
+`active`→`closing`, workflow supersede-vs-annotate decision, T7
+step-ordering safety check, and the owner-authorized pure-logic red-test VDR.
+T12 implementation work and T12 retrospective content were not repeated.
+
+The T1–T12 item-10 audit classified T1/T2/T3/T4/T7/T8/T9/T10/T11/T12 as
+carry-forward; T5's first three findings as carry-forward and its frame-rule
+finding as doc-folded; T6's target-isolation mechanic as local-only and its
+source-tree/rebuild discipline as doc-folded. The final handoff contains the
+carry-forward destinations and re-trigger criteria. The T6 local-only item is
+not duplicated in the handoff.
+
+### Phase-end decisions and close artifacts
+
+- `implementation/handoff.md` is finalized as `status: recorded`; its main
+  learnings, residuals, verification residue, and carry-forward ledger are
+  filled without copying the normative specs.
+- `implementation/preamble.md` is transitioned from `active` to `closing`.
+- `process/milestone-4/plan.md` records the phase-end state, while the
+  milestone roadmap and `CHANGELOG.md` remain unchanged because M4 is not
+  complete.
+- `workflow.md` now distinguishes an `Accepted` decision's dated annotation
+  from a successor decision that supersedes it. A qualification that changes
+  what a reader would implement requires a successor; a too-strong surrounding
+  statement does not invent a new status.
+- Owner-authorized DD-V-029 is accepted in the same change batch as the
+  `implementation-gates.md` trap-#4 close-artifact update. It applies only to
+  new pure-logic rounding, unit-conversion, and boundary-condition branches;
+  the wider green/identical observation proposal remains uncodified.
+- The T7 safety-net check confirms that DD-M4-P1-003's step-ordering record was
+  closed at T7. The phase-end audit also records that T7's second remediation
+  did not receive a post-remediation independent review; this historical
+  limitation is not rewritten as a clean review result.
+
+### CI failure and deterministic disposition
+
+The verified phase HEAD was
+`544574c366d6f4fded4a4232a3bda0710e3fa9d9`. The first required dispatch was
+[30873359437](https://github.com/matarillo/wasamo/actions/runs/30873359437):
+release and debug workspace builds succeeded, then
+`dip_layout_is_invariant_while_every_visual_moves_by_the_ratio` failed in
+`dpi_scale_matrix_integration`. The exact test passed locally, including in
+the full local `cargo test --workspace`.
+
+The same workflow was dispatched once more without changing the HEAD:
+[30873615639](https://github.com/matarillo/wasamo/actions/runs/30873615639).
+It failed in the same test while both workspace builds again succeeded. The
+workflow log exposes no assertion detail. This is a recurring CI failure, not
+a green retry; it remains a handoff residual and keeps the phase→main merge
+gate open. No push or merge was performed.
+
+### Phase-end close gate
+
+The phase-end retrospective is recorded at
+`process/milestone-4/phase-1/retrospectives/phase-end.md`. The handoff and
+preamble transitions are recorded, all item-10 candidates have a disposition,
+and the process-rule artifact is linked. Local `cargo fmt --all -- --check`,
+`git diff --check`, targeted DPI integration tests, and the full local
+workspace test passed; actual CI remains explicitly failed as above. Any
+later change to the DPI integration fixture or CI environment must re-trigger
+the independent review/CI lane rather than treating this as a flake.
+
+### Post-commit verification (2026-08-04)
+
+After the phase-end batch commit, the required final branch-state checks were
+rerun. `cargo fmt --all -- --check` and `git diff --check` exited 0. A
+`cargo clean` removed 3,989 files / 1.5 GiB, then the build-order sequence
+completed successfully:
+
+| Command | Result |
+|---|---|
+| `cargo build --release --workspace` | exit 0, 53.25 s |
+| `cargo build --workspace` | exit 0, 40.39 s |
+| `cargo test --workspace` | exit 0, 41.5 s; all tests passed |
+
+The builds reproduce the known `wasamo-sys` missing-import-library warning
+before the workspace produces the library, plus the linker stdout warning;
+these are the F-54 / existing diagnostic surfaces already recorded above and
+not new failures. The post-commit tests were local evidence only; they do not
+supersede the two failed GitHub Actions runs in the phase-end gate.
