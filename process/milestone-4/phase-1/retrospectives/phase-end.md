@@ -93,19 +93,20 @@ phase integration.
 The repair commit `1f162dc570c7c61ab78e3ba8d473ce298493fd27` passed
 [run 30878747516](https://github.com/matarillo/wasamo/actions/runs/30878747516):
 release/debug workspace builds, workspace tests, C/CMake/Rust/Zig smoke tests,
-and `wasamoc` checks all succeeded. It was then merged no-ff as `26e2def`.
-The repair commit is an ancestor of the current phase HEAD; the no-ff merge
-has the identical source tree, and later `7ec7fe2` changes only `process/`
-files. The sole CI job has no documentation-validation or path-dependent step,
-so the successful run verifies the complete executable input of the integrated
-phase tree. This is a limited equivalence justification for the branch-name
-deviation, not a new general procedure.
+and `wasamoc` checks all succeeded. It was then merged no-ff into the phase
+branch without a source-tree change.
+That run is historical repair evidence, not a current phase-branch item-16
+result. Subsequent review remediation adds a separate integration-test target
+and changes shared test-helper visibility, so the current phase HEAD is not
+tree-equivalent to the CI-verified code commit. The former limited-equivalence
+justification is therefore withdrawn rather than extended across later commits.
 
-The successful run dispositions the repeated failure without classifying it
-as a flake. Its bounded-fixture change is causally sufficient to explain the
-green result, but the original hosted-runner geometry cause remains unmeasured.
-The CI criterion is now satisfied. Phase→main merge and push remain separate
-owner-controlled gates.
+The successful experiment dispositions the repeated failure without
+classifying it as a flake. Its bounded-fixture change is causally sufficient
+to explain the green result, but the original hosted-runner geometry cause
+remains unmeasured. The CI criterion remains open until the owner authorizes a
+push of `feat/m4-phase-1` and a `workflow_dispatch` run on that branch is
+green. Phase→main merge and push remain separate owner-controlled gates.
 
 ### 17. Human-visible GUI smoke
 

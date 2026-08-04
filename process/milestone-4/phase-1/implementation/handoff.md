@@ -86,9 +86,12 @@ criterion rather than a date.
 
 ## Residuals
 
-1. The phase→main approval gate is intentionally open. The initial repeated
-   CI failure was repaired and the required CI criterion was discharged by
-   successful run `30878747516`; push and phase→main merge remain owner gates.
+1. The phase→main approval gate is intentionally open. Successful run
+   `30878747516` verifies repair code commit `1f162dc`, but later review
+   remediation changes the integration-test target set. The phase-branch CI
+   criterion therefore remains open pending owner-authorized push and a green
+   `workflow_dispatch` on `feat/m4-phase-1`; see the phase-end retrospective
+   §16b. Phase→main merge remains an owner gate.
 2. The T7 second-remediation delta was merged after the task's independent
    review round and did not receive a further independent review. This is a
    recorded historical limitation, not an invented clean bill of review.
@@ -108,7 +111,9 @@ remain explicit in the task retrospectives and the verification note.
 The phase-end deterministic-failure disposition is also explicit: local
 reproduction passed, the GitHub Actions failure repeated on the same commit,
 and it was not reclassified as a flake. The bounded-fixture repair then passed
-the full CI workflow in run `30878747516`; its trigger and mutation witness
-are retained above. The trap-#4 rule is now extended only for pure-logic
-rounding/unit-conversion/boundary-condition tests by DD-V-029; GUI evidence
-and the general green/identical form are unchanged.
+the full CI workflow in run `30878747516`; that result is limited to verified
+code commit `1f162dc` and does not replace the pending current phase-branch
+run. Its trigger and mutation witness are retained above. The trap-#4 rule is
+now extended only for pure-logic rounding/unit-conversion/boundary-condition
+tests by DD-V-029; GUI evidence and the general green/identical form are
+unchanged.

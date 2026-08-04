@@ -7451,11 +7451,6 @@ does not claim CI success: after the experiment branch is pushed, run the
 normal CI workflow on that exact commit, attach its run ID and result here,
 and retain the phase→main merge gate until that run is green.
 
-Before committing the repair, `cargo fmt --all -- --check` and `git diff
---check` both exited 0. They were run with the targeted integration test and
-the release/debug workspace build and test sequence; their result is recorded
-here explicitly as the repair close's forcing-tier formatting/diff artifact.
-
 ### CI result and phase integration (2026-08-04)
 
 The required CI run was dispatched on the exact repair commit
@@ -7470,17 +7465,11 @@ test failure.
 
 This run dispositions the two earlier same-HEAD failures by verifying the
 documented fixture repair, not by calling them flakes. The repair commit was
-then merged no-ff into `feat/m4-phase-1` as
-`26e2defe29136f8354459202dfc7b1b70185c573` (`merge: apply M4 Phase 1 CI
-repair experiment`). The merge commit has the identical source tree to the
-CI-verified repair commit, so integration introduced no unverified content.
-The repair was dispatched from `exp/m4-phase-1-ci-fix`, not the phase branch
-named by retrospective item 16. That branch-name deviation is deliberate and
-limited: `1f162dc` is an ancestor of the phase HEAD; the no-ff merge is
-tree-identical to it; and later `7ec7fe2` changes only `process/` files while
-the single CI job has no documentation-validation or path-dependent step. The
-CI criterion is now satisfied on that equivalence basis. Phase→main merge and
-push remain separate owner-controlled gates; this record grants neither.
+then merged no-ff into `feat/m4-phase-1` without a source-tree change, so that
+integration introduced no unverified content. The repair was dispatched from
+`exp/m4-phase-1-ci-fix`, not the phase branch
+named by retrospective item 16. That branch-name deviation remains a
+historical fact. It is not a substitute for a phase-branch CI result.
 
 ### Review-remediation close (2026-08-04)
 
@@ -7507,3 +7496,19 @@ common_panic_payload -- --nocapture` passed all three helper tests; and
 `cargo test -p wasamo-runtime --test dpi_scale_matrix_integration --
 --nocapture` passed all three DPI tests. The test-only exactness mutation
 failed as expected before restoration.
+
+### Current phase-branch CI gate (2026-08-04)
+
+The CI-verified **code** commit remains
+`1f162dc570c7c61ab78e3ba8d473ce298493fd27`. Subsequent review remediation
+adds the `common_panic_payload` integration-test target and changes the shared
+test helper's visibility, so the current phase HEAD is not tree-equivalent to
+that run. The earlier experimental-branch success is retained as historical
+repair evidence only; it does not discharge retrospective item 16 for the
+current phase branch.
+
+The next required action is owner-authorized push of `feat/m4-phase-1`, then
+`workflow_dispatch` on that branch and a green result on its current HEAD.
+Only that run can discharge the CI criterion. The required formatting and
+diff artifacts are the `cargo fmt --all -- --check` and `git diff --check`
+results recorded in the review-remediation close above.

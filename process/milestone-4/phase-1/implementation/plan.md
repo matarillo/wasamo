@@ -2693,11 +2693,13 @@ T12 rerun.
 
 - [x] The phase-end-owned repair at `1f162dc` passed
       [run 30878747516](https://github.com/matarillo/wasamo/actions/runs/30878747516)
-      on `exp/m4-phase-1-ci-fix` and was merged no-ff as `26e2def`. This is a
-      recorded item-16 branch-name deviation, justified only by the identical
-      repair/merge source tree and the later process-only documentation diff;
-      see [phase-end.md](../retrospectives/phase-end.md) §16b. The CI criterion
-      is discharged; phase→main still awaits owner approval.
+      on `exp/m4-phase-1-ci-fix` and was merged no-ff into the phase branch.
+      This is a recorded item-16 branch-name deviation; it is historical repair
+      evidence only, not a phase-branch CI result. The later review remediation
+      changes the test target set, so a current `feat/m4-phase-1` CI run is
+      required; see [phase-end.md](../retrospectives/phase-end.md) §16b.
+      Phase→main still awaits owner-authorized push, green phase-branch CI,
+      and owner approval.
 
 **Start gate:** trap #3's documentation analogue (do not restate spec or
 handoff content in derived prose — cite the owning document) and trap
