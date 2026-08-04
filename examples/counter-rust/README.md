@@ -26,7 +26,6 @@ dependency of this crate.
 
 ```bat
 rem From the repo root:
-cargo build --release -p wasamo-runtime
 cargo build --release --workspace
 cargo build --release -p counter-rust
 ```

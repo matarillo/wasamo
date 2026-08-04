@@ -28,7 +28,6 @@ from the repo root, and the Visual Studio 2022 Build Tools.
 
 ```bat
 rem From the repo root:
-cargo build --release -p wasamo-runtime
 cargo build --release --workspace
 
 cd examples\counter-zig

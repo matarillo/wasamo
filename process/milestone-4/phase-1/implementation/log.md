@@ -7067,21 +7067,27 @@ the implementation preamble, record CI, or perform any phase-end item.
 
 ### Build-order proposition audit
 
-**Proposition:** a cold or runtime-changing build must build
-`wasamo-runtime` as a primary package for the relevant profile before the
-workspace build; the workspace build then supplies the DLL/import library and
-`wasamoc` for the hosts. A missing uplifted rlib is F-5's loud failure, while a
-stale uplifted rlib is F-21's quiet fresh-DLL/stale-runtime failure.
+**Corrected propositions:** (1) a cold `cargo test --workspace` needs an
+earlier same-profile primary-package build, supplied by either
+`cargo build --workspace` or the narrower `cargo build -p wasamo-runtime`;
+the workspace build itself succeeds from cold and produces the uplifted rlib,
+DLL/import library, and `wasamoc`. (2) After a runtime change, a host-package-
+only build is not evidence of the changed runtime; a same-profile workspace
+build selects the runtime as a primary member before the host is used. A
+missing uplifted rlib is F-5's loud test-only failure, while a stale uplifted
+rlib is F-21's quiet host-only fresh-DLL/stale-runtime failure.
 
 | Current instruction surface | Disposition |
 |---|---|
-| `AGENTS.md` §Build ordering | Corrected for cold debug, cold release, host evidence, and the distinction between the primary runtime step and the later workspace / host steps |
-| Implementation preamble risk table R-1b | Corrected at Normal review: its live F-21 remedy now names the release primary-package step before the release workspace build |
-| Root README and all five current counter/gallery host READMEs | The release primary-package step now precedes the release workspace step |
-| `docs/notes/human-visible-smoke.md` | Both debug and release sequences now carry their own primary-package step |
-| Counter/gallery CMake comments and missing-import-library diagnostics; C binding diagnostic | Corrected to name both ordered commands |
-| Zig binding / counter / gallery build-script usage comments | Corrected for both profiles; the Zig binding also now attributes `wasamo.dll.lib` to the `wasamo-dll` cdylib rather than the rlib-only `wasamo-runtime` package |
-| Historical implementation logs, plans, and retrospectives | Unchanged: they are evidence records, not live operational instructions |
+| `AGENTS.md` §Build ordering | Corrected after independent review: cold test-only and host-only stale paths are separate; the workspace build is itself a sufficient primary selection |
+| T12 plan, implementation preamble R-1b, and handoff F-5/F-21 rows | Corrected after independent review. R-1b's overbroad heading originated at T1 (`bcf7ea6`) and was inherited rather than introduced by T12; T12 nevertheless missed it and added the redundant primary-step remedy |
+| Root README and all five current counter/gallery host READMEs | These did not assert the false proposition, but T12 had inserted a redundant primary command. Restored the sufficient release workspace command alone |
+| `docs/notes/human-visible-smoke.md` | Removed the redundant profile-specific primary commands; the debug workspace build precedes the test, and the release workspace build precedes host evidence |
+| Counter/gallery CMake comments and missing-import-library diagnostics; C binding diagnostic | Removed the causally irrelevant runtime-only command from the missing-import-library remedy; retained the workspace build that produces the artifact |
+| Zig binding / counter / gallery build-script usage comments | Removed the redundant primary commands; retained the corrected attribution of `wasamo.dll.lib` to the `wasamo-dll` cdylib |
+| `.github/workflows/ci.yml` | Checked and unchanged: release workspace build, debug workspace build, then workspace test already follows the corrected propositions and is counterevidence to the overbroad rule |
+| `CONTRIBUTING.md` §4 | Checked and unchanged: it correctly says the release workspace build produces `wasamo.dll.lib`; it never asserted the redundant primary prerequisite |
+| Historical T1–T11 execution records | Unchanged where they record commands actually run. Current T12 interpretations and retrospective conclusions are corrected rather than rewriting earlier evidence |
 
 ### Local gate — executed 2026-08-04
 
@@ -7124,19 +7130,22 @@ replaced:
 | First sandboxed Zig invocation returned access denied while reading Zig's WinGet-installed standard library | Sandbox boundary, not a compiler or source result | Re-run outside that boundary under the already required tool permission |
 | First permitted Zig invocation parsed a relative `-Dname=../../...` value as a separate build step | PowerShell argument tokenization; the option name and value were not preserved as one argument | Quoted each complete `-Dname=value` token; the same build then passed |
 | A CMake reconfigure against `build/gallery-c` requested cached generator `Visual Studio 18 2026` and could not resolve the cached VS18 instance | Generator/cache state in that build directory; this executable's help actually marks VS17 as default | No source workaround and no claim about automatic VS18 selection. A fresh directory with explicit `-G "Visual Studio 17 2022"` configured and built green; the counter's existing VS17 directory also reconfigured and built green |
-| Clean release workspace build warned that `wasamo.dll.lib` was absent and advised building `wasamo-runtime` first, then completed successfully | Finding F-54 below; the warning observes the build before `wasamo-dll` produces the import library and recommends a package that cannot produce it | Recorded and carried with a re-trigger; not hidden by a rerun and not confused with F-5 / F-21 |
+| Clean release workspace build warned that `wasamo.dll.lib` was absent and offered a runtime-only build as part of its remedy, then completed successfully | Finding F-54 below; the warning observes the build before `wasamo-dll` produces the import library and mixes a causally irrelevant runtime-only command with the valid workspace-build alternative | Recorded and carried with a re-trigger; not hidden by a rerun and not confused with F-5 / F-21 |
 
-**F-54 — the clean `wasamo-sys` missing-import-library warning prescribes an
-impossible remedy.** `bindings/rust-sys/build.rs` checks for
+**F-54 — the clean `wasamo-sys` missing-import-library warning gives a
+misleading mixed remedy.** `bindings/rust-sys/build.rs` checks for
 `wasamo.dll.lib` before the dependency graph has completed the `wasamo-dll`
-cdylib, then says to build `wasamo-runtime`. `wasamo-runtime` is explicitly
-rlib-only; `wasamo-dll` owns the cdylib and produces the import library. The
-same clean workspace build later produced the library and succeeded, so this
-observation is neither F-5's loud uplifted-rlib failure nor evidence that the
-import library cannot be built. T12 does not change the existing diagnostic
-branch or build graph. [handoff.md](./handoff.md) records it for the next task
-touching the rust-sys / cdylib build seam, and re-triggers it on clean builds or
-warning-policy changes.
+cdylib, then offers `cargo build --workspace` or a runtime-only build followed
+by a retry. The workspace alternative can produce the import library and is
+valid. The `wasamo-runtime` command cannot produce that artifact because the
+package is rlib-only; `wasamo-dll` owns the cdylib/import library. It can still
+supply F-5's uplifted-rlib prerequisite before a later workspace test, so
+calling the entire remedy impossible was stronger than the evidence. The same
+clean workspace build later produced the library and succeeded. T12 does not
+change the existing diagnostic branch or build graph. [handoff.md](./handoff.md)
+records the narrower diagnostic defect for the next task touching the rust-sys
+/ cdylib build seam and re-triggers it on clean builds or warning-policy
+changes.
 
 Post-close-commit verification reproduced F-54 in both cold debug and cold
 release workspace builds after their profile-matching primary runtime build;
@@ -7163,8 +7172,9 @@ and was retained rather than copied into new prose:
 | Scale-dependent `measure` | M5 text-quality work; measure becomes scale-dependent and makes T7 ordering load-bearing |
 
 F-54 was added as a new, separately-triggered build-graph residual. Existing
-F-5 / F-21 rows were corrected so their live evidence command includes the
-primary runtime build before the workspace build.
+F-5 / F-21 rows were corrected after independent review: F-5 applies to a cold
+test-only selection, and F-21 requires a workspace build before evidence but
+not a separate runtime-only command before that workspace build.
 
 ### Close gate
 
@@ -7213,3 +7223,66 @@ No other T12-scope discrepancy was found. The implementation preamble remains
 `active`, the handoff remains `skeleton`, every phase-end checkbox remains
 open, and no merge or push was performed. Final doc gates are rerun after the
 review-remediation commit.
+
+### Independent review remediation — 2026-08-04
+
+An independent reviewer falsified the Normal-review build-order conclusion.
+The owner required fact adjudication before edits, then supplied a second
+check and authorized remediation. No file was changed during adjudication.
+
+#### Isolated cold-directory experiment
+
+The two commands used separate, previously absent, ignored Cargo target
+directories under `build/`; neither reused `target/`:
+
+| Command | Direct result | Artifact evidence |
+|---|---|---|
+| `cargo build --workspace --target-dir build/t12-independent-audit-workspace-only-20260804` | exit 0, 61.2 s | Top-level debug `libwasamo_runtime.rlib` (28,394,954 bytes), `wasamo.dll`, `wasamo.dll.lib`, `wasamoc.exe`, and all three Rust host executables exist |
+| `cargo test --workspace --no-run --target-dir build/t12-independent-audit-test-only-20260804` | exit 1, 48.5 s, `LNK1356` for the missing top-level `libwasamo_runtime.rlib` | No top-level runtime rlib, DLL, or import library; a hashed `deps/libwasamo_runtime-cdb2b75697feed81.rlib` exists |
+
+This directly measures the debug cold-build / cold-test distinction. It
+falsifies the T12 claim that a workspace build needs a preceding runtime-only
+build, and confirms the narrower F-5 claim about a cold test-only selection.
+
+T3 separately measured the release/stale behavioral outcome: the mutation
+built through `-p gallery-rust` looked unmutated, and rebuilding the same
+mutation with `cargo build --release --workspace` exposed it by removing the
+three labels. No T3 artifact audit timestamped the uplifted release rlib after
+that workspace command. Therefore the corrected record labels the GUI outcome
+as **measured** and the uplift-refresh explanation as an **inference** from
+Cargo's primary-package artifact layout plus `wasamo-dll/build.rs`'s
+whole-archive input.
+
+#### Review findings and dispositions
+
+| Finding | Adjudication / disposition |
+|---|---|
+| `AGENTS.md` said a workspace build alone was insufficient | Confirmed false; corrected to distinguish cold test-only, workspace build, and host-only package selection |
+| `CONTRIBUTING.md` was an omitted current surface | Confirmed omitted, but its claim was already correct. Added to this audit and left unchanged; the first adjudication incorrectly treated the reviewer as disputing its content |
+| Preamble R-1b attribution | `git log -S` identifies T1 commit `bcf7ea6` as the source of the overbroad heading. T12 inherited and failed to catch it; T12 introduced the redundant remedy. Recorded with that provenance |
+| T12 retrospective as propagation site | It does not contain the exact “workspace build alone is insufficient” sentence, but it endorses the same primary-step model and classifies operational prescriptions under it. Corrected as a T12 conclusion, not as an exact phrase match |
+| Operational README/CMake/Zig/smoke surfaces | They prescribed a redundant step rather than asserting the false proposition. Removed that step and recorded the different defect class. CMake missing-import diagnostics were more misleading because their first remedy command cannot produce the named artifact |
+| CI workflow | Confirmed counterevidence and omitted from the first audit. Its release workspace build → debug workspace build → test order is correct; audited and unchanged |
+| Release workspace remedy for F-21 | The behavioral remedy was directly measured at T3; the precise uplift-refresh mechanism was inferred. Wording now keeps those evidence levels separate |
+| F-54 said the warning's remedy sentence was false/impossible | Too broad. The workspace-build alternative is valid; the runtime-only alternative is causally unrelated to the missing import library but can satisfy F-5 before a later test. Narrowed to a misleading mixed diagnostic; source branch left unchanged and carried forward |
+
+After removing the redundant runtime-only command from the three CMake
+surfaces, the owner-specified VS18-bundled CMake 4.3.1 executable reconfigured
+and built `examples/counter-c`, `examples/gallery-c`, and `bindings/c`; all
+three exited 0. The cached counter and binding directories used the VS17
+generator, while the repaired gallery directory used VS18. This validates the
+edited CMake syntax and generated builds without changing either VS setup.
+
+Final remediation gates: `cargo fmt --all -- --check` and
+`git diff --check` exited 0; a targeted search found no remaining redundant
+runtime-only command in the edited README/CMake/Zig/smoke instruction
+surfaces; and diffs for `.github/workflows/ci.yml`, `CONTRIBUTING.md`, and the
+phase-end retrospective were empty. The full workspace build/test was not
+repeated after these documentation and CMake-message-only edits: the isolated
+cold Cargo experiments above provide the build-order evidence, and the three
+edited CMake surfaces were rebuilt after the edits.
+
+The review lane remains **Normal review** because remediation changes current
+instructions and historical interpretation only. It does not change the
+F-54 diagnostic branch, build graph, runtime structure, schema/IR, or GUI
+evidence. Phase-end batch items remain untouched.

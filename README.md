@@ -108,7 +108,6 @@ in [process/](./process/README.md).
 rem Clone and build the runtime DLL
 git clone https://github.com/matarillo/wasamo.git
 cd wasamo
-cargo build --release -p wasamo-runtime
 cargo build --release --workspace
 
 rem Build and run the Hello Counter example (C)

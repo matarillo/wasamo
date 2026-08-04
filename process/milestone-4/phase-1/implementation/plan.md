@@ -2494,22 +2494,29 @@ carries, which is the verdict outrunning what was seen.
 
 - [x] Clean rebuild + `cargo test --workspace` green; all three example
       hosts build in the documented order. **From a cold target
-      directory the workspace test build needs
+      directory, `cargo test --workspace` needs either
+      `cargo build --workspace` or the narrower
       `cargo build -p wasamo-runtime` first** (T1 finding F-5,
       pre-existing): `wasamo-dll/build.rs` whole-archives the uplifted
-      `<profile>/libwasamo_runtime.rlib`, which cargo produces only once
-      `wasamo-runtime` has been built as a primary package. Also correct
-      [AGENTS.md §Build ordering](../../../../AGENTS.md)'s claim that
-      workspace-wide builds implicitly satisfy the ordering, which holds
-      for `counter-rust` but not for the cdylib from a cold directory.
+      `<profile>/libwasamo_runtime.rlib`. A test-only build compiles the
+      runtime only as a hashed dependency under `deps/`; a workspace build
+      selects it as a primary package and does create the uplifted rlib while
+      also completing the cdylib link. T12 initially changed
+      [AGENTS.md §Build ordering](../../../../AGENTS.md) to say the primary
+      runtime command was also required before a workspace build; the
+      independent review's isolated cold-directory builds falsified that
+      overgeneralization, and the instruction was narrowed accordingly.
       **The same correction carries T3's finding F-21**, which that
       section is silent on and which shares F-5's root cause: because the
       whole-archived rlib is the **uplifted** copy, a host-package build
-      relinks `wasamo.dll` around object code that cargo did not refresh,
-      and the result is a fresh DLL timestamp over a stale runtime. F-5
+      can produce a fresh DLL timestamp over behavior from the previous
+      runtime. F-5
       is that path failing loudly when the uplifted rlib is absent; F-21
-      is it succeeding quietly when it is merely old. One revision, one
-      root cause, two symptoms.
+      is it succeeding quietly when it is merely old. T3 directly measured
+      the wrong and corrected release GUI outcomes; attributing the correction
+      to the workspace build's primary-package selection is the mechanism
+      inferred from Cargo's artifact layout and the whole-archive input. One
+      root cause, two symptoms, but different command boundaries.
 - [x] **Moment 2 doc sync — divergence correction.** Re-verify each
       Moment 1 statement against what actually landed and correct
       divergences. The statements flagged at ADR time as most at risk

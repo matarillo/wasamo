@@ -10,12 +10,10 @@ const std = @import("std");
 // target dir relative to this file's location).
 //
 // CI usage:
-//   cargo build --release -p wasamo-runtime    # refreshes the uplifted rlib
 //   cargo build --release --workspace          # emits target/release/wasamo.dll.lib
 //   zig build test --wasamo-lib ../../target/release/wasamo.dll.lib
 //
 // Local usage (debug DLL):
-//   cargo build -p wasamo-runtime
 //   cargo build --workspace
 //   zig build test --wasamo-lib ../../target/debug/wasamo.dll.lib
 

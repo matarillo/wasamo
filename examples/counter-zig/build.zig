@@ -4,14 +4,12 @@ const std = @import("std");
 // DD-M2-P6-008).
 //
 // CI usage (from repo root):
-//   cargo build --release -p wasamo-runtime
 //   cargo build --release --workspace
 //   zig build -Dwasamo-lib=../../target/release/wasamo.dll.lib \
 //             -Dwasamo-zig=../../bindings/zig/wasamo.zig \
 //             -Dwasamoc=../../target/release/wasamoc.exe
 //
 // Local usage:
-//   cargo build -p wasamo-runtime
 //   cargo build --workspace
 //   zig build -Dwasamo-lib=../../target/debug/wasamo.dll.lib \
 //             -Dwasamo-zig=../../bindings/zig/wasamo.zig \

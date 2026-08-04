@@ -16,8 +16,7 @@ project(wasamo_counter_c C)
 #                                      counter.ui to IR at build time)
 #   examples/counter/counter.ui
 #
-# Run `cargo build --release -p wasamo-runtime` and then
-# `cargo build --release --workspace` from the repo root before invoking
+# Run `cargo build --release --workspace` from the repo root before invoking
 # CMake — see CLAUDE.md "Build ordering requirements".
 
 # ── Locate wasamo ──────────────────────────────────────────────────────
@@ -35,8 +34,7 @@ set(COUNTER_UI         "${WASAMO_ROOT}/examples/counter/counter.ui")
 if(NOT EXISTS "${WASAMO_IMPORT_LIB}")
     message(FATAL_ERROR
         "wasamo.dll.lib not found at ${WASAMO_IMPORT_LIB}.\n"
-        "Run 'cargo build --release -p wasamo-runtime' and then\n"
-        "'cargo build --release --workspace' from the Wasamo repo root first,\n"
+        "Run 'cargo build --release --workspace' from the Wasamo repo root first,\n"
         "or pass -DWASAMO_ROOT=<path> pointing to a pre-built tree.")
 endif()
 

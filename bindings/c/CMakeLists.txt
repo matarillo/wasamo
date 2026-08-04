@@ -34,8 +34,7 @@ set(WASAMO_IMPORT_LIB  "${WASAMO_ROOT}/target/release/wasamo.dll.lib")
 if(NOT EXISTS "${WASAMO_IMPORT_LIB}")
     message(FATAL_ERROR
         "wasamo.dll.lib not found at ${WASAMO_IMPORT_LIB}.\n"
-        "Run 'cargo build --release -p wasamo-runtime' and then\n"
-        "'cargo build --release --workspace' from the Wasamo repo root first,\n"
+        "Run 'cargo build --release --workspace' from the Wasamo repo root first,\n"
         "or pass -DWASAMO_ROOT=<path> pointing to a pre-built tree.")
 endif()
 
