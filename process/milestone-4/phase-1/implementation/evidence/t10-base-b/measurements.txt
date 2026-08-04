@@ -1,0 +1,20 @@
+tag                : t10-base-b
+captured           : 2026-08-01 00:46:14
+harness awareness  : PER_MONITOR_AWARE_V2  (READ BACK, not the call's return value)
+host executable    : C:\Users\devuser\AppData\Local\Temp\claude\c--Users-devuser-dev-wasamo\6db2eb97-846b-459c-bf6e-38b50763b53d\scratchpad\base-target\release\gallery-rust.exe
+host build stamp   : 2026-08-01 00:42:58
+__COMPAT_LAYER     : (unset)
+created outer      : 1000x750
+created client     : 980x701  (physical)
+client target      : 1200x720 physical, reached in 1 iteration(s)
+client residual    : 0x0 against target 1200x720
+window awareness   : UNAWARE
+GetDpiForWindow    : 96
+monitor DPI        : 120
+final outer        : 1220x769  (physical)
+final client       : 1200x720  (physical)
+layout extent      : 960 x 576  via monitor DPI 120 (OS virtualization)
+non-client frame   : 20 wide, 49 tall  (physical)
+client origin      : (10,39)  (screen, physical)
+frame              : C:\Users\devuser\dev\wasamo\process\milestone-4\phase-1\implementation\evidence\t10-base-b\gallery-client.png  (1200x720)
+alive after capture: True

@@ -116,6 +116,14 @@ WASAMO_EXPORT void         WASAMO_API wasamo_shutdown(void);
  * recent non-OK status produced on the calling thread. The pointer is
  * valid until the next ABI call on that thread. May return NULL or "" if
  * no error has been produced; hosts must tolerate both.
+ *
+ * One documented exception, and it is the only one: wasamo_init sets the
+ * process's DPI awareness on the host's behalf, and if the process's
+ * awareness was already set — by the host's own manifest or an earlier call
+ * — that is not an error. wasamo_init still returns WASAMO_OK, and the
+ * outcome is left here as a diagnostic. So a successful wasamo_init may
+ * leave a non-empty string. A host that keys on the returned status rather
+ * than on this string is unaffected. See abi_spec.md section 4.1.
  */
 WASAMO_EXPORT const char* WASAMO_API wasamo_last_error_message(void);
 

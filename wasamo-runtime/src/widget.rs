@@ -1,4 +1,5 @@
 use crate::box_values;
+use crate::dip_scale::DipScale;
 use crate::handler::{self, EvalContext, EvalError, HandlerExpr};
 use crate::layout::{
     self, Alignment, ChildSlots, LayoutChildSlot, LayoutError, LayoutNode, SizeConstraint,
@@ -16,8 +17,9 @@ use windows::{
         Color,
         Composition::{
             AnimationIterationBehavior, ColorKeyFrameAnimation, CompositionAnimation,
-            CompositionColorBrush, CompositionObject, CompositionSurfaceBrush, Compositor,
-            ContainerVisual, InsetClip, SpriteVisual, Visual,
+            CompositionColorBrush, CompositionDrawingSurface, CompositionObject,
+            CompositionStretch, CompositionSurfaceBrush, Compositor, ContainerVisual, InsetClip,
+            SpriteVisual, Visual,
         },
     },
 };
@@ -37,6 +39,14 @@ enum ButtonState {
     Pressed,
 }
 
+// Standard Button-family sizing: label + horizontal/vertical padding.
+// One declaration, read by the two sites that derive the node's
+// `SizeConstraint` from a fresh measurement (`button_family`,
+// `update_button_label`) and by the sync pass that places the label
+// Visual inside the background Visual.
+const BUTTON_PAD_H: f32 = 16.0;
+const BUTTON_PAD_V: f32 = 8.0;
+
 struct ButtonData {
     style: ButtonStyle,
     state: ButtonState,
@@ -46,6 +56,15 @@ struct ButtonData {
     label_visual: SpriteVisual,
     label_text: String,
     label_style: TypographyStyle,
+    // The extent `TextRenderer::measure` returned for `label_text` at
+    // `label_style`, in DIP. Written by the same two primitives that write
+    // `label_text` and that derive this node's `SizeConstraint::Fixed` pair
+    // from the same measurement; read by `sync_visuals`, which places the
+    // label Visual. It is retained rather than re-measured because the sync
+    // pass holds no `TextRenderer`, and rather than recovered from the
+    // arranged size because a stretched button's arranged size is no longer
+    // the measured label plus padding.
+    label_size: (f32, f32),
     clicked_fn: Option<Box<dyn Fn()>>,
     // Accent color for ButtonStyle::Accent (read from UISettings at creation).
     accent: Color,
@@ -343,6 +362,32 @@ fn typography_from_i32(v: i32) -> Option<TypographyStyle> {
     }
 }
 
+/// Create the one-to-one surface mapping required by DD-M4-P1-006.
+///
+/// A drawing surface is allocated at `ceil(dip * scale)` whole pixels while
+/// the Visual keeps the exact fractional physical extent. The default brush
+/// is `Uniform` and centred; relying on it scales and displaces the surface.
+/// `None` with zero alignment keeps unit scale and clips excess storage at the
+/// right and bottom Visual bounds.
+fn create_text_surface_brush(
+    compositor: &Compositor,
+    surface: &CompositionDrawingSurface,
+) -> windows::core::Result<CompositionSurfaceBrush> {
+    let brush = compositor.CreateSurfaceBrushWithSurface(surface)?;
+    brush.SetStretch(CompositionStretch::None)?;
+    brush.SetHorizontalAlignmentRatio(0.0)?;
+    brush.SetVerticalAlignmentRatio(0.0)?;
+    Ok(brush)
+}
+
+/// Read the retained natural DIP extent of a Text node without re-measuring.
+fn fixed_extent(width: &SizeConstraint, height: &SizeConstraint) -> Option<(f32, f32)> {
+    match (width, height) {
+        (SizeConstraint::Fixed(width), SizeConstraint::Fixed(height)) => Some((*width, *height)),
+        _ => None,
+    }
+}
+
 // ── WidgetNode ────────────────────────────────────────────────────────────────
 
 pub struct WidgetNode {
@@ -363,6 +408,36 @@ pub struct WidgetNode {
     /// Reactive bindings owned by this node. Dropping an EffectHandle
     /// removes it from the dependency graph (DD-M2-P5-003).
     pub(crate) bindings: Vec<EffectHandle>,
+    /// This node's cached copy of its window's DIP -> physical conversion
+    /// factor (M4-Phase 1; the carrier decision recorded in
+    /// `implementation/log.md` §T1).
+    ///
+    /// **A cache with exactly one writer** — the attach / scale-change walk —
+    /// while `WindowState::scale` holds the authoritative value. It exists
+    /// because hit testing and property-write re-rasterization stand on a node
+    /// with no window in hand. Production `sync_visuals` does not infer its
+    /// target from this copy: the window layout caller supplies the
+    /// authoritative value, and the successful geometry pass commits it here
+    /// before returning. Standalone Rust layout entries use the root copy as
+    /// their target because they are not attached through `WindowState`.
+    ///
+    /// `DipScale::default()` is the identity, so a tree that has not been
+    /// attached to a window converts as 1 — which is also what every node holds
+    /// until the walk lands, and is why introducing the field changes no
+    /// rendered output.
+    ///
+    /// Not `pub` and not `pub(crate)`: every reader is in this module.
+    scale: DipScale,
+    /// DPI of the text surface most recently installed for this node.
+    ///
+    /// This is deliberately independent of `scale`: geometry can advance
+    /// after a recoverable WinRT rasterization failure, and retryability must
+    /// describe the brush that actually exists rather than the geometry that
+    /// should exist. Non-text nodes carry the same marker so the recursive
+    /// freshness walk has one uniform node shape; exhaustive `WidgetData`
+    /// matching keeps a future text-bearing variant from becoming a silent
+    /// no-op.
+    raster_scale: DipScale,
 }
 
 // ── Tree-mutation errors ──────────────────────────────────────────────────────
@@ -401,6 +476,8 @@ impl WidgetNode {
             inline_handlers: Vec::new(),
             attached: false,
             bindings: Vec::new(),
+            scale: DipScale::default(),
+            raster_scale: DipScale::default(),
         }))
     }
 
@@ -424,6 +501,8 @@ impl WidgetNode {
             inline_handlers: Vec::new(),
             attached: false,
             bindings: Vec::new(),
+            scale: DipScale::default(),
+            raster_scale: DipScale::default(),
         }))
     }
 
@@ -447,6 +526,8 @@ impl WidgetNode {
             inline_handlers: Vec::new(),
             attached: false,
             bindings: Vec::new(),
+            scale: DipScale::default(),
+            raster_scale: DipScale::default(),
         }))
     }
 
@@ -459,19 +540,20 @@ impl WidgetNode {
         let (w, h) = renderer.measure(text, style)?;
         let visual = compositor.CreateSpriteVisual()?;
         // Draw text onto a surface and apply it as a surface brush.
-        let surface = renderer.draw_text(
+        let surface = renderer.draw_text_at_dpi(
             text,
             style,
-            w.max(1.0),
-            h.max(1.0),
+            w,
+            h,
             Color {
                 A: 255,
                 R: 255,
                 G: 255,
                 B: 255,
             },
+            DipScale::IDENTITY.dpi(),
         )?;
-        let brush: CompositionSurfaceBrush = compositor.CreateSurfaceBrushWithSurface(&surface)?;
+        let brush = create_text_surface_brush(compositor, &surface)?;
         visual.SetBrush(&brush)?;
         Ok(Box::new(Self {
             data: WidgetData::Text {
@@ -485,6 +567,8 @@ impl WidgetNode {
             inline_handlers: Vec::new(),
             attached: false,
             bindings: Vec::new(),
+            scale: DipScale::default(),
+            raster_scale: DipScale::default(),
         }))
     }
 
@@ -531,6 +615,8 @@ impl WidgetNode {
             inline_handlers: Vec::new(),
             attached: false,
             bindings: Vec::new(),
+            scale: DipScale::default(),
+            raster_scale: DipScale::default(),
         }))
     }
 
@@ -572,6 +658,8 @@ impl WidgetNode {
             inline_handlers: Vec::new(),
             attached: false,
             bindings: Vec::new(),
+            scale: DipScale::default(),
+            raster_scale: DipScale::default(),
         }))
     }
 
@@ -629,6 +717,8 @@ impl WidgetNode {
             inline_handlers: Vec::new(),
             attached: false,
             bindings: Vec::new(),
+            scale: DipScale::default(),
+            raster_scale: DipScale::default(),
         }))
     }
 
@@ -663,6 +753,8 @@ impl WidgetNode {
             inline_handlers: Vec::new(),
             attached: false,
             bindings: Vec::new(),
+            scale: DipScale::default(),
+            raster_scale: DipScale::default(),
         }))
     }
 
@@ -685,6 +777,8 @@ impl WidgetNode {
             inline_handlers: Vec::new(),
             attached: false,
             bindings: Vec::new(),
+            scale: DipScale::default(),
+            raster_scale: DipScale::default(),
         }))
     }
 
@@ -774,11 +868,8 @@ impl WidgetNode {
         let label_style = TypographyStyle::Body;
         let (lw, lh) = renderer.measure(label, label_style)?;
 
-        // Standard button sizing: label + horizontal/vertical padding.
-        const PAD_H: f32 = 16.0;
-        const PAD_V: f32 = 8.0;
-        let btn_w = lw + PAD_H * 2.0;
-        let btn_h = lh + PAD_V * 2.0;
+        let btn_w = lw + BUTTON_PAD_H * 2.0;
+        let btn_h = lh + BUTTON_PAD_V * 2.0;
 
         let accent = read_accent_color();
 
@@ -791,31 +882,41 @@ impl WidgetNode {
 
         // Child visual: text label.
         let label_visual = compositor.CreateSpriteVisual()?;
-        let surface = renderer.draw_text(
+        let surface = renderer.draw_text_at_dpi(
             label,
             label_style,
-            lw.max(1.0),
-            lh.max(1.0),
+            lw,
+            lh,
             Color {
                 A: 255,
                 R: 255,
                 G: 255,
                 B: 255,
             },
+            DipScale::IDENTITY.dpi(),
         )?;
-        let label_brush: CompositionSurfaceBrush =
-            compositor.CreateSurfaceBrushWithSurface(&surface)?;
+        let label_brush = create_text_surface_brush(compositor, &surface)?;
         label_visual.SetBrush(&label_brush)?;
 
-        // Position label centered in the button.
+        // Parent the label Visual under the background Visual. Its offset and
+        // size are *not* written here: construction precedes attachment to any
+        // window — through the IR loader or through the Rust-native API — so no
+        // scale factor exists at this moment (DD-M4-P1-002 §Row 6 detail). They
+        // are written by `sync_visuals`, alongside every other Composition
+        // geometry write in the runtime.
+        //
+        // The consequence is that a Button-family widget shows its label only
+        // once a layout pass has run over it, and **not every path that puts a
+        // widget on screen runs one**. `window::set_root` and the `WM_SIZE` arm
+        // do; the tree-mutation API (`append_child` / `insert_child` /
+        // `replace_child`, whether called directly or through their ABI
+        // wrappers) does not, and neither does `lib.rs::window_add_widget`.
+        // Those paths rely on a later `WM_SIZE` or size-affecting property
+        // write, except `window_add_widget`, which has no later pass at all.
+        // A new mutation entry that omits `emit::mark_layout_dirty_for` will
+        // reproduce the missing label.
         use windows::core::Interface;
         let label_vis: Visual = label_visual.cast()?;
-        label_vis.SetOffset(Vector3 {
-            X: PAD_H,
-            Y: PAD_V,
-            Z: 0.0,
-        })?;
-        label_vis.SetSize(Vector2 { X: lw, Y: lh })?;
         let bg_container: ContainerVisual = bg_visual.cast()?;
         bg_container.Children()?.InsertAtTop(&label_vis)?;
 
@@ -827,6 +928,7 @@ impl WidgetNode {
             label_visual,
             label_text: label.to_owned(),
             label_style,
+            label_size: (lw, lh),
             clicked_fn: None,
             accent,
             enabled,
@@ -846,6 +948,8 @@ impl WidgetNode {
             inline_handlers: Vec::new(),
             attached: false,
             bindings: Vec::new(),
+            scale: DipScale::default(),
+            raster_scale: DipScale::default(),
         }))
     }
 
@@ -1006,43 +1110,41 @@ impl WidgetNode {
         let rt = crate::runtime::get();
         let compositor = &rt.compositor;
         let renderer = &rt.text_renderer;
+        let dpi = self.scale.dpi();
 
         let Some(btn) = self.button_data_mut() else {
             return Err(PropertyError::UnknownId);
         };
         let label_style = btn.label_style;
         let (lw, lh) = renderer.measure(new_label, label_style)?;
-        let surface = renderer.draw_text(
+        let surface = renderer.draw_text_at_dpi(
             new_label,
             label_style,
-            lw.max(1.0),
-            lh.max(1.0),
+            lw,
+            lh,
             Color {
                 A: 255,
                 R: 255,
                 G: 255,
                 B: 255,
             },
+            dpi,
         )?;
-        let label_brush: CompositionSurfaceBrush =
-            compositor.CreateSurfaceBrushWithSurface(&surface)?;
+        let label_brush = create_text_surface_brush(compositor, &surface)?;
         btn.label_visual.SetBrush(&label_brush)?;
 
-        use windows::core::Interface;
-        const PAD_H: f32 = 16.0;
-        const PAD_V: f32 = 8.0;
-        let label_vis: Visual = btn.label_visual.cast()?;
-        label_vis.SetOffset(Vector3 {
-            X: PAD_H,
-            Y: PAD_V,
-            Z: 0.0,
-        })?;
-        label_vis.SetSize(Vector2 { X: lw, Y: lh })?;
-
         btn.label_text = new_label.to_owned();
+        // The label Visual's offset and size are written by `sync_visuals`
+        // from `label_size`, not here — every Composition geometry write in
+        // the runtime happens in that one pass (DD-M4-P1-002 §Row 6 detail).
+        // The `size_affecting` clause in `set_property` already marks the
+        // owning window's layout dirty for this property, so the drain's
+        // layout phase runs the sync pass before the ABI call returns.
+        btn.label_size = (lw, lh);
         // Natural size updates; takes effect on the next layout pass.
-        self.width = SizeConstraint::Fixed(lw + PAD_H * 2.0);
-        self.height = SizeConstraint::Fixed(lh + PAD_V * 2.0);
+        self.width = SizeConstraint::Fixed(lw + BUTTON_PAD_H * 2.0);
+        self.height = SizeConstraint::Fixed(lh + BUTTON_PAD_V * 2.0);
+        self.raster_scale = self.scale;
         Ok(())
     }
 
@@ -1134,6 +1236,7 @@ impl WidgetNode {
         let rt = crate::runtime::get();
         let compositor = &rt.compositor;
         let renderer = &rt.text_renderer;
+        let dpi = self.scale.dpi();
 
         let WidgetData::Text {
             ref mut content,
@@ -1143,24 +1246,26 @@ impl WidgetNode {
             return Err(PropertyError::UnknownId);
         };
         let (w, h) = renderer.measure(new_content, style)?;
-        let surface = renderer.draw_text(
+        let surface = renderer.draw_text_at_dpi(
             new_content,
             style,
-            w.max(1.0),
-            h.max(1.0),
+            w,
+            h,
             Color {
                 A: 255,
                 R: 255,
                 G: 255,
                 B: 255,
             },
+            dpi,
         )?;
-        let brush: CompositionSurfaceBrush = compositor.CreateSurfaceBrushWithSurface(&surface)?;
+        let brush = create_text_surface_brush(compositor, &surface)?;
         self.visual.SetBrush(&brush)?;
 
         *content = new_content.to_owned();
         self.width = SizeConstraint::Fixed(w);
         self.height = SizeConstraint::Fixed(h);
+        self.raster_scale = self.scale;
         Ok(())
     }
 
@@ -1168,6 +1273,7 @@ impl WidgetNode {
         let rt = crate::runtime::get();
         let compositor = &rt.compositor;
         let renderer = &rt.text_renderer;
+        let dpi = self.scale.dpi();
 
         let WidgetData::Text {
             ref mut content,
@@ -1181,23 +1287,25 @@ impl WidgetNode {
         }
         *style = new_style;
         let (w, h) = renderer.measure(content, new_style)?;
-        let surface = renderer.draw_text(
+        let surface = renderer.draw_text_at_dpi(
             content,
             new_style,
-            w.max(1.0),
-            h.max(1.0),
+            w,
+            h,
             Color {
                 A: 255,
                 R: 255,
                 G: 255,
                 B: 255,
             },
+            dpi,
         )?;
-        let brush: CompositionSurfaceBrush = compositor.CreateSurfaceBrushWithSurface(&surface)?;
+        let brush = create_text_surface_brush(compositor, &surface)?;
         self.visual.SetBrush(&brush)?;
 
         self.width = SizeConstraint::Fixed(w);
         self.height = SizeConstraint::Fixed(h);
+        self.raster_scale = self.scale;
         Ok(())
     }
 
@@ -1213,14 +1321,35 @@ impl WidgetNode {
 
     /// Traverse the tree and fire the `clicked_fn` of the first Button-family
     /// widget whose computed visual rect contains `(x, y)`.
-    pub fn hit_test_click(&mut self, x: i32, y: i32) {
-        self.hit_test_click_inner(x, y, 0.0, 0.0);
+    ///
+    /// **`(x, y)` are DIP** (M4-Phase 1, DD-M4-P1-002 option H2): the window
+    /// procedure divides the pointer message's physical coordinates by the
+    /// window's scale before calling in, so hit-testing runs in the same space
+    /// as layout. `f32` rather than `i32` because a DIP pointer position is not
+    /// an integer — physical 50 at 150% is 33.33 — and truncating it would make
+    /// hit-test edges depend on the scale factor for no benefit.
+    ///
+    /// **Precondition: `self` is the tree the window laid out.** Every readback
+    /// in the traversal is divided by `self.scale`, while the pointer was
+    /// divided by the *window's*, so entering on a subtree whose cached scale
+    /// differs from the window's compares two spaces. See
+    /// [`Self::visual_rect_dip`].
+    pub fn hit_test_click(&mut self, x: f32, y: f32) {
+        // Every readback in the traversal is divided by **one** scale — this
+        // root's — rather than by each node's own. See `visual_rect_dip`.
+        let tree_scale = self.scale;
+        self.hit_test_click_inner(x, y, 0.0, 0.0, tree_scale);
     }
 
-    fn hit_test_click_inner(&mut self, x: i32, y: i32, off_x: f32, off_y: f32) {
-        // The visual's current offset is available via computed layout stored on the Visual.
-        // We read it back from the SpriteVisual to avoid tracking a separate state.
-        let (vx, vy, vw, vh) = visual_rect(&self.visual);
+    fn hit_test_click_inner(
+        &mut self,
+        x: f32,
+        y: f32,
+        off_x: f32,
+        off_y: f32,
+        tree_scale: DipScale,
+    ) {
+        let (vx, vy, vw, vh) = self.visual_rect_dip(tree_scale);
         let abs_x = off_x + vx;
         let abs_y = off_y + vy;
 
@@ -1237,13 +1366,11 @@ impl WidgetNode {
             // reachable.
             if !btn.enabled {
                 for child in &mut self.children {
-                    child.hit_test_click_inner(x, y, abs_x, abs_y);
+                    child.hit_test_click_inner(x, y, abs_x, abs_y, tree_scale);
                 }
                 return;
             }
-            let fx = x as f32;
-            let fy = y as f32;
-            if fx >= abs_x && fx < abs_x + vw && fy >= abs_y && fy < abs_y + vh {
+            if x >= abs_x && x < abs_x + vw && y >= abs_y && y < abs_y + vh {
                 if let Some(ref f) = btn.clicked_fn {
                     f();
                 }
@@ -1289,32 +1416,39 @@ impl WidgetNode {
         }
 
         for child in &mut self.children {
-            child.hit_test_click_inner(x, y, abs_x, abs_y);
+            child.hit_test_click_inner(x, y, abs_x, abs_y, tree_scale);
         }
     }
 
     /// Update hover/press state for all Button-family widgets based on mouse position.
     /// `down` is true while the left mouse button is held.
+    ///
+    /// **`(x, y)` are DIP**, and the same precondition applies: `self` is the
+    /// tree the window laid out. See [`Self::hit_test_click`].
     pub fn update_hover(
         &mut self,
         compositor: &Compositor,
-        x: i32,
-        y: i32,
+        x: f32,
+        y: f32,
         down: bool,
     ) -> windows::core::Result<()> {
-        self.update_hover_inner(compositor, x, y, down, 0.0, 0.0)
+        let tree_scale = self.scale;
+        self.update_hover_inner(compositor, x, y, down, 0.0, 0.0, tree_scale)
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn update_hover_inner(
         &mut self,
         compositor: &Compositor,
-        x: i32,
-        y: i32,
+        x: f32,
+        y: f32,
         down: bool,
         off_x: f32,
         off_y: f32,
+        tree_scale: DipScale,
     ) -> windows::core::Result<()> {
-        let (vx, vy, vw, vh) = visual_rect(&self.visual);
+        // Audit row 9's second call site — same conversion, same divisor.
+        let (vx, vy, vw, vh) = self.visual_rect_dip(tree_scale);
         let abs_x = off_x + vx;
         let abs_y = off_y + vy;
 
@@ -1324,13 +1458,11 @@ impl WidgetNode {
             // grey set by `update_button_enabled`.
             if !btn.enabled {
                 for child in &mut self.children {
-                    child.update_hover_inner(compositor, x, y, down, abs_x, abs_y)?;
+                    child.update_hover_inner(compositor, x, y, down, abs_x, abs_y, tree_scale)?;
                 }
                 return Ok(());
             }
-            let fx = x as f32;
-            let fy = y as f32;
-            let inside = fx >= abs_x && fx < abs_x + vw && fy >= abs_y && fy < abs_y + vh;
+            let inside = x >= abs_x && x < abs_x + vw && y >= abs_y && y < abs_y + vh;
             let new_state = if inside && down {
                 ButtonState::Pressed
             } else if inside {
@@ -1349,9 +1481,42 @@ impl WidgetNode {
         }
 
         for child in &mut self.children {
-            child.update_hover_inner(compositor, x, y, down, abs_x, abs_y)?;
+            child.update_hover_inner(compositor, x, y, down, abs_x, abs_y, tree_scale)?;
         }
         Ok(())
+    }
+
+    /// This node's own Visual rectangle, read back off the live Visual and
+    /// converted to DIP — DD-M4-P1-002 audit row 9, the inbound seam.
+    ///
+    /// **The divisor is the traversal root's scale, not `self.scale`.** The
+    /// readback is one node's *parent-relative* physical offset and the caller
+    /// accumulates it into an absolute position, to be compared against a
+    /// pointer `wnd_proc` divided by the **window's** scale. A widget's
+    /// composited position is `Σ(local_dip_i × scale_i)`; dividing each term by
+    /// its own `scale_i` before summing yields `Σ local_dip_i`, which is the
+    /// pointer's space only if every `scale_i` is the window's. Dividing every
+    /// term by one scale gives `Σ(local_physical_i) ÷ that scale` — the
+    /// composited position, in the pointer's space — for any mixture of
+    /// descendant scales. That matters because the mixture is reachable: a node
+    /// attached to an already-attached tree keeps the constructor identity
+    /// until a scale walk runs over it.
+    ///
+    /// **This is a precondition on the entry, not an invariant the runtime
+    /// maintains.** [`Self::hit_test_click`] and [`Self::update_hover`] are
+    /// `pub` and take the divisor from the receiver, so entering on a
+    /// **subtree** uses that subtree's scale against a pointer divided by the
+    /// window's — and a caller cannot supply the right one, because `scale` is
+    /// private. Every production caller enters on `WindowState::root_widget`;
+    /// the workspace's own tests do not, so the hole is reachable rather than
+    /// theoretical.
+    fn visual_rect_dip(&self, tree_scale: DipScale) -> (f32, f32, f32, f32) {
+        // Read back from the SpriteVisual rather than tracking a separate
+        // state — the pre-existing choice DD-M4-P1-002 option H3 revisits.
+        let (vx, vy, vw, vh) = visual_rect(&self.visual);
+        let (vx, vy) = tree_scale.pair_to_dip((vx, vy));
+        let (vw, vh) = tree_scale.pair_to_dip((vw, vh));
+        (vx, vy, vw, vh)
     }
 
     /// Reset all Button-family states to Normal (called on WM_MOUSELEAVE).
@@ -1556,6 +1721,90 @@ impl WidgetNode {
         Ok(old)
     }
 
+    // ── Window-scale preparation ─────────────────────────────────────────────
+
+    /// Refresh text surfaces whose last successful rasterization differs from
+    /// `target`.
+    ///
+    /// Raster freshness is independent of the geometry cache. Each node's
+    /// marker advances only after its replacement brush is installed, so a
+    /// partial WinRT failure leaves precisely the unfinished suffix retryable
+    /// without holding back layout or target-scale geometry.
+    pub(crate) fn refresh_text_surfaces_recursive(
+        &mut self,
+        compositor: &Compositor,
+        renderer: &TextRenderer,
+        target: DipScale,
+    ) -> windows::core::Result<()> {
+        if self.raster_scale != target {
+            match &self.data {
+                WidgetData::Text { content, style } => {
+                    let (width, height) =
+                        fixed_extent(&self.width, &self.height).ok_or_else(|| {
+                            windows::core::Error::new(
+                                windows::core::HRESULT(0x8000FFFF_u32 as i32),
+                                "Text node does not retain a fixed DIP extent",
+                            )
+                        })?;
+                    let surface = renderer.draw_text_at_dpi(
+                        content,
+                        *style,
+                        width,
+                        height,
+                        Color {
+                            A: 255,
+                            R: 255,
+                            G: 255,
+                            B: 255,
+                        },
+                        target.dpi(),
+                    )?;
+                    let brush = create_text_surface_brush(compositor, &surface)?;
+                    self.visual.SetBrush(&brush)?;
+                }
+                WidgetData::Button(button) | WidgetData::ToggleButton(button) => {
+                    let (width, height) = button.label_size;
+                    let surface = renderer.draw_text_at_dpi(
+                        &button.label_text,
+                        button.label_style,
+                        width,
+                        height,
+                        Color {
+                            A: 255,
+                            R: 255,
+                            G: 255,
+                            B: 255,
+                        },
+                        target.dpi(),
+                    )?;
+                    let brush = create_text_surface_brush(compositor, &surface)?;
+                    button.label_visual.SetBrush(&brush)?;
+                }
+                WidgetData::Rectangle
+                | WidgetData::VStack { .. }
+                | WidgetData::HStack { .. }
+                | WidgetData::Box { .. }
+                | WidgetData::WrapPanel { .. }
+                | WidgetData::ScrollView { .. }
+                | WidgetData::Grid { .. }
+                | WidgetData::ZStack => {}
+            }
+            self.raster_scale = target;
+        }
+
+        for child in &mut self.children {
+            child.refresh_text_surfaces_recursive(compositor, renderer, target)?;
+        }
+        Ok(())
+    }
+
+    pub(crate) fn commit_scale_recursive(&mut self, target: DipScale) {
+        self.scale = target;
+        for child in &mut self.children {
+            child.commit_scale_recursive(target);
+        }
+    }
+
     // ── Layout ────────────────────────────────────────────────────────────────
 
     /// Builds a LayoutNode tree, runs layout, then syncs results back to SpriteVisuals.
@@ -1563,15 +1812,29 @@ impl WidgetNode {
     /// M3-Phase 2 T8: `layout::run_layout` is fallible — it surfaces
     /// `LayoutError::BoxAspectUnboundedBoth` / `BoxNoExtent` from
     /// DD-M3-P2-005. We translate those into `windows::core::Error` so
-    /// the existing `WM_SIZE` -> `r.run_layout(cw, ch)` call sites (which
-    /// already swallow the Result with `let _ = …`) keep their current
-    /// shape. A dedicated C ABI surface for layout-time runtime errors
+    /// the existing window layout call sites (which already swallow the
+    /// Result with `let _ = …`) keep their current shape. A dedicated C ABI
+    /// surface for layout-time runtime errors
     /// is out of Phase 2 scope and tracked alongside the ABI work in
     /// later phases.
     pub fn run_layout(&mut self, window_w: f32, window_h: f32) -> windows::core::Result<()> {
+        let target = self.scale;
+        self.run_layout_at_scale(window_w, window_h, target)?;
+        let runtime = crate::runtime::get();
+        self.refresh_text_surfaces_recursive(&runtime.compositor, &runtime.text_renderer, target)
+    }
+
+    fn run_layout_at_scale(
+        &mut self,
+        window_w: f32,
+        window_h: f32,
+        target: DipScale,
+    ) -> windows::core::Result<()> {
         let mut layout_tree = self.build_layout_tree();
         layout::run_layout(&mut layout_tree, window_w, window_h).map_err(layout_error_to_winerr)?;
-        self.sync_visuals(&layout_tree, (0.0, 0.0))
+        self.sync_visuals(&layout_tree, (0.0, 0.0), target)?;
+        self.commit_scale_recursive(target);
+        Ok(())
     }
 
     /// Layout entry for the **window-root** WidgetNode (the one
@@ -1608,11 +1871,71 @@ impl WidgetNode {
         window_w: f32,
         window_h: f32,
     ) -> windows::core::Result<()> {
+        let target = self.scale;
+        self.run_layout_as_window_root_at_scale(window_w, window_h, target)?;
+        let runtime = crate::runtime::get();
+        self.refresh_text_surfaces_recursive(&runtime.compositor, &runtime.text_renderer, target)
+    }
+
+    /// Run window-root geometry at an authoritative window scale.
+    ///
+    /// This entry deliberately does not refresh text. Window callers compose
+    /// fallible geometry projection followed by an infallible cache commit
+    /// with the independent, fallible raster pass. T7 can therefore defer the
+    /// latter out of the nested `WM_SIZE` while preserving
+    /// DD-M4-P1-003's fixed ordering.
+    pub(crate) fn run_layout_as_window_root_at_scale(
+        &mut self,
+        window_w: f32,
+        window_h: f32,
+        target: DipScale,
+    ) -> windows::core::Result<()> {
         let mut layout_tree = self.build_layout_tree();
         layout_tree.width = SizeConstraint::Fill;
         layout_tree.height = SizeConstraint::Fill;
         layout::run_layout(&mut layout_tree, window_w, window_h).map_err(layout_error_to_winerr)?;
-        self.sync_visuals(&layout_tree, (0.0, 0.0))
+        self.sync_visuals(&layout_tree, (0.0, 0.0), target)?;
+        self.commit_scale_recursive(target);
+        Ok(())
+    }
+
+    /// Exercise authoritative window-scale geometry without refreshing text.
+    ///
+    /// This test seam keeps the private `DipScale` carrier private while a
+    /// mock-free integration test verifies that geometry cache and raster
+    /// freshness can diverge and subsequently reconcile.
+    #[doc(hidden)]
+    pub fn __run_layout_as_window_root_at_dpi_for_test(
+        &mut self,
+        window_w: f32,
+        window_h: f32,
+        dpi: u32,
+    ) -> windows::core::Result<()> {
+        self.run_layout_as_window_root_at_scale(window_w, window_h, DipScale::from_dpi(dpi))
+    }
+
+    /// Leave **this one node's** cached geometry scale behind the window's,
+    /// without touching its children, its Visual geometry or its raster
+    /// marker (M4-Phase 1 T8; T5 finding F-37).
+    ///
+    /// The property under test is that a hit-test traversal divides every
+    /// `visual_rect` readback by the **traversal root's** scale rather than by
+    /// each node's own, so a descendant whose cache is stale still resolves to
+    /// the rectangle it is actually composited at. Constructing that state
+    /// needs a mixed-scale tree *with geometry already written*, and no
+    /// legitimate path produces one: `commit_scale_recursive` writes the whole
+    /// subtree, and the incremental attach paths F-32 enumerated leave a fresh
+    /// node with no geometry to hit-test at all. Hence a seam rather than a
+    /// fixture.
+    ///
+    /// **This is not a production entry and must not become one.** It writes
+    /// the derived copy without the projection that owns it, which is exactly
+    /// the drift trap #3 exists to prevent — deliberately, because the test's
+    /// subject is what survives that drift. A `u32` DPI keeps `DipScale`
+    /// crate-private, in the same shape as the entry above.
+    #[doc(hidden)]
+    pub fn __set_geometry_scale_dpi_for_test(&mut self, dpi: u32) {
+        self.scale = DipScale::from_dpi(dpi);
     }
 
     fn build_layout_child_slots(&self) -> ChildSlots {
@@ -1743,18 +2066,66 @@ impl WidgetNode {
         &mut self,
         computed: &LayoutNode,
         parent_abs_offset: (f32, f32),
+        target: DipScale,
     ) -> windows::core::Result<()> {
         use windows::core::Interface;
         let visual: Visual = self.visual.cast()?;
+        // DD-M4-P1-002 audit row 4, the outbound seam. `computed` is DIP and
+        // the Composition visual tree is physical, so every write below
+        // multiplies by the authoritative window target — through the named
+        // operations, not
+        // by hand: `dip * scale.factor()` satisfies a prose reading of the rule
+        // and is wrong only at non-dyadic scales, where two of the phase's
+        // three test factors cannot see it (T2 findings F-13 / F-15).
+        //
+        // `relative_offset_to_physical` is what makes **convert once, on the
+        // difference** the natural call rather than a discipline: it is handed
+        // the two absolute DIP positions, so subtracting in DIP and multiplying
+        // the result — one rounding instead of two — is the only thing a caller
+        // can express without converting each operand itself.
+        let (offset_x, offset_y) =
+            target.relative_offset_to_physical(computed.offset, parent_abs_offset);
+        let (size_x, size_y) = target.extent_to_physical(computed.size);
         visual.SetOffset(Vector3 {
-            X: computed.offset.0 - parent_abs_offset.0,
-            Y: computed.offset.1 - parent_abs_offset.1,
+            X: offset_x,
+            Y: offset_y,
             Z: 0.0,
         })?;
         visual.SetSize(Vector2 {
-            X: computed.size.0,
-            Y: computed.size.1,
+            X: size_x,
+            Y: size_y,
         })?;
+        // DD-M4-P1-002 §The conversion sites row 6: the Button-family
+        // label's placement is written here rather than at construction,
+        // where no scale factor exists. Like the ScrollView intermediate
+        // Visual below, the label Visual is not a child `WidgetNode` — it
+        // lives in `ButtonData.label_visual` — so it is reached through a
+        // per-kind arm rather than the `children` / `computed.children` zip.
+        //
+        // The offset is a constant inside the background Visual, and the
+        // size is the label's measured extent, not `computed.size`: a parent
+        // that stretches the button changes the arranged size but not the
+        // extent of the text drawn into the label surface.
+        //
+        // Audit row 6. **The offset here is already parent-relative**, so it is
+        // not the difference-taking case row 4 is: there is no absolute pair to
+        // subtract, and `relative_offset_to_physical` cannot be applied without
+        // inventing one (T3 finding F-19). Each component goes through the
+        // scalar `to_physical`, which is one multiplication and therefore
+        // exactly the one rounding the rule asks for.
+        if let WidgetData::Button(btn) | WidgetData::ToggleButton(btn) = &self.data {
+            let label_visual: Visual = btn.label_visual.cast()?;
+            label_visual.SetOffset(Vector3 {
+                X: target.to_physical(BUTTON_PAD_H),
+                Y: target.to_physical(BUTTON_PAD_V),
+                Z: 0.0,
+            })?;
+            let (label_w, label_h) = target.extent_to_physical(btn.label_size);
+            label_visual.SetSize(Vector2 {
+                X: label_w,
+                Y: label_h,
+            })?;
+        }
         // DD-M3-P4-004 Option A: when self is a ScrollView, the
         // intermediate content Visual carries the scroll translation
         // `Visual.Offset = (0, -applied_y, 0)` (T2's clamped
@@ -1770,24 +2141,29 @@ impl WidgetNode {
         // no clip (the outer Visual's InsetClip clips the translated
         // content); its size mirrors the viewport for hit-testing
         // consistency with the outer Visual.
+        //
+        // Audit row 5, and the same already-parent-relative case as row 6:
+        // `(0, -applied_y)` is the intermediate's offset inside its own parent,
+        // so each component takes the scalar `to_physical`. **The recursion
+        // itself stays entirely in DIP** — `child_parent_abs` below is the
+        // value the layout engine arranged against, and only the two
+        // Composition writes above it multiply.
         let child_parent_abs = if let WidgetData::ScrollView { content_visual, .. } = &self.data {
             let applied = computed.applied_offset_y.get();
             let int_visual: Visual = content_visual.cast()?;
             int_visual.SetOffset(Vector3 {
-                X: 0.0,
-                Y: -applied,
+                X: target.to_physical(0.0),
+                Y: target.to_physical(-applied),
                 Z: 0.0,
             })?;
-            int_visual.SetSize(Vector2 {
-                X: computed.size.0,
-                Y: computed.size.1,
-            })?;
+            let (int_w, int_h) = target.extent_to_physical(computed.size);
+            int_visual.SetSize(Vector2 { X: int_w, Y: int_h })?;
             (computed.offset.0, computed.offset.1 - applied)
         } else {
             computed.offset
         };
         for (child, child_computed) in self.children.iter_mut().zip(computed.children.iter()) {
-            child.sync_visuals(child_computed, child_parent_abs)?;
+            child.sync_visuals(child_computed, child_parent_abs, target)?;
         }
         Ok(())
     }
@@ -2048,9 +2424,10 @@ fn read_accent_color() -> Color {
 #[cfg(test)]
 mod tests {
     use super::{
-        effective_button_color, ButtonState, ButtonStyle, MutationError, BUTTON_DISABLED_COLOR,
+        effective_button_color, fixed_extent, ButtonState, ButtonStyle, MutationError,
+        BUTTON_DISABLED_COLOR,
     };
-    use crate::layout::{Alignment, CellPlacement, SlotData, ZStackPlacement};
+    use crate::layout::{Alignment, CellPlacement, SizeConstraint, SlotData, ZStackPlacement};
     use windows::UI::Color;
 
     // Minimal stand-in for WidgetNode used only to verify index-check and
@@ -2064,6 +2441,22 @@ mod tests {
         fn new() -> Self {
             Slot { attached: false }
         }
+    }
+
+    #[test]
+    fn fixed_extent_accepts_only_two_fixed_axes() {
+        assert_eq!(
+            fixed_extent(&SizeConstraint::Fixed(12.5), &SizeConstraint::Fixed(7.25)),
+            Some((12.5, 7.25))
+        );
+        assert_eq!(
+            fixed_extent(&SizeConstraint::Fill, &SizeConstraint::Fixed(7.25)),
+            None
+        );
+        assert_eq!(
+            fixed_extent(&SizeConstraint::Fixed(12.5), &SizeConstraint::Shrink),
+            None
+        );
     }
 
     struct StoredSlot {

@@ -79,8 +79,9 @@
 
 #![cfg(windows)]
 
+use std::any::Any;
 use std::ffi::CStr;
-use std::panic::{catch_unwind, resume_unwind, AssertUnwindSafe};
+use std::panic::{catch_unwind, AssertUnwindSafe};
 use std::sync::mpsc;
 use std::sync::OnceLock;
 
@@ -106,6 +107,20 @@ fn runtime_compositor_unavailable(msg: Option<&str>) -> bool {
 
 fn github_actions() -> bool {
     std::env::var_os("GITHUB_ACTIONS").is_some()
+}
+
+/// Convert a panic payload into a message that can be panicked again on the
+/// calling libtest thread. `resume_unwind` intentionally bypasses that
+/// thread's panic hook, which hides an assertion's values from CI output when
+/// the originating owner thread's output is captured separately.
+pub(crate) fn panic_payload_message(payload: &(dyn Any + Send)) -> String {
+    if let Some(message) = payload.downcast_ref::<String>() {
+        message.clone()
+    } else if let Some(message) = payload.downcast_ref::<&'static str>() {
+        (*message).to_owned()
+    } else {
+        "non-string panic payload from runtime-owning thread".to_owned()
+    }
 }
 
 /// A test body, boxed for delivery to the owning runtime thread.
@@ -202,9 +217,10 @@ fn ensure_runtime() -> &'static Runtime {
 ///   independence and would leave a now-vestigial COM init on the test
 ///   thread, which step 1 exists to eliminate.
 ///
-/// On panic the body's payload is caught on the owning thread and re-raised
-/// here via `resume_unwind`, so the failure surfaces on the calling libtest
-/// thread exactly as an inline `assert!` would.
+/// On panic the body's payload is caught on the owning thread and emitted as
+/// a fresh panic on the calling libtest thread. This preserves the assertion
+/// message in libtest / CI output while allowing the owning executor to serve
+/// later tests.
 pub fn run_on_owning_runtime_thread_or_skip<F>(test_name: &str, body: F)
 where
     F: FnOnce() + Send + 'static,
@@ -215,9 +231,10 @@ where
             job_tx
                 .send(Box::new(move || {
                     // Catch the body's panic on the owning thread so the
-                    // executor loop survives it, then hand the payload back
-                    // to the waiting test thread to re-raise.
-                    let outcome = catch_unwind(AssertUnwindSafe(body));
+                    // executor loop survives it, then hand its message back
+                    // to the waiting test thread for a hook-visible panic.
+                    let outcome = catch_unwind(AssertUnwindSafe(body))
+                        .map_err(|payload| panic_payload_message(payload.as_ref()));
                     let _ = done_tx.send(outcome);
                 }))
                 .expect("owning runtime thread has stopped accepting jobs");
@@ -226,7 +243,7 @@ where
                 .expect("owning runtime thread dropped the test body without reporting")
             {
                 Ok(()) => {}
-                Err(payload) => resume_unwind(payload),
+                Err(message) => panic!("{test_name}: owner-thread test body panicked: {message}"),
             }
         }
         Runtime::CompositorUnavailable => {

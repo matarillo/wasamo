@@ -187,7 +187,7 @@ fn bool_binding_propagates_state_write_through_inline_handler_to_widget_property
     // `hit_test_click` returns, the widget reads back as disabled — the
     // end-to-end `.ui → load → click → state → bound widget property`
     // chain ADR §Verification item 3 calls for.
-    button.hit_test_click(50, 20);
+    button.hit_test_click(50.0, 20.0);
 
     assert!(
         !unsafe { read_bool_property(widget_ptr, PROP_BUTTON_ENABLED) },

@@ -1,5 +1,9 @@
 mod abi;
 mod box_values;
+// M4-Phase 1 DD-M4-P1-002: the DIP <-> physical-pixel conversion carrier.
+// Declared here so the module compiles and its unit tests run; it has no
+// production caller until T4 puts the authoritative value on `WindowState`.
+mod dip_scale;
 mod emit;
 pub mod handler;
 pub mod ir_loader;
@@ -59,6 +63,36 @@ pub mod ffi {
     pub fn __reactive_divergence_diagnostics_present_for_test() -> bool {
         crate::reactive::divergence_diagnostics().is_some()
     }
+
+    /// The OS-reported DPI this window's authoritative scale was built from
+    /// (M4-Phase 1 T8; T4 finding F-29).
+    ///
+    /// `WindowState::scale` is `pub(crate)` on purpose — DD-M4-P1-004 walks
+    /// every M4 phase and concludes no host needs the scale factor, so the
+    /// field stays off the `pub use`-exported surface. The integration tests
+    /// are a separate crate and can reach only `pub` items, hence this seam
+    /// rather than a widened field.
+    ///
+    /// **A `u32` DPI, not a `DipScale`.** The carrier stays crate-private,
+    /// which is the same resolution T6 reached for
+    /// `WidgetNode::__run_layout_as_window_root_at_dpi_for_test`. A DPI is
+    /// also the value a test can compare against `GetDpiForWindow` and
+    /// against the `HIWORD(wParam)` it synthesised, without reconstructing a
+    /// factor.
+    ///
+    /// # Safety
+    ///
+    /// `window` must be non-null, properly aligned, and valid for a shared
+    /// read of a live `WasamoWindow` for the duration of the call. It must
+    /// not be used after `wasamo_window_destroy`, which frees the
+    /// `WindowState` this dereferences. The pointer is read and not
+    /// retained, so no aliasing obligation outlives the call — but the
+    /// runtime is single-threaded by contract and this must be called on the
+    /// owning thread, like every other entry on this type.
+    #[doc(hidden)]
+    pub unsafe fn __window_scale_dpi_for_test(window: *mut WasamoWindow) -> u32 {
+        (*window).scale.dpi()
+    }
 }
 
 pub use layout::{Alignment, SizeConstraint, WidgetKind};
@@ -96,6 +130,20 @@ pub fn get_text_renderer() -> &'static TextRenderer {
     &runtime::get().text_renderer
 }
 
+/// Attach a widget's Visual directly to the window's Composition tree,
+/// without putting it in the window's `root_widget` slot.
+///
+/// **No layout pass runs**, which is the point of this entry compared with
+/// [`window_set_root`] — the caller positions and sizes the Visual itself.
+/// Since M4-Phase 1 that also means a **Button-family widget shows no label
+/// through this path**: the label Visual's offset and size are written by
+/// `sync_visuals`, so a widget that never reaches a layout pass keeps the
+/// Composition default of `Size = (0, 0)`. The label surface and its brush
+/// *are* created at construction — the label is rasterized, just never
+/// composited, so re-creating the surface does not help. Before that change
+/// the label happened to carry constructor-time geometry while its background
+/// did not, so this path rendered a half-positioned widget. Use
+/// [`window_set_root`] for anything that should lay itself out.
 pub fn window_add_widget(window: &WindowState, widget: &WidgetNode) -> windows::core::Result<()> {
     use windows::core::Interface;
     use windows::UI::Composition::Visual;

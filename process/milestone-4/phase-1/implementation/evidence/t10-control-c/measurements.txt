@@ -1,0 +1,45 @@
+tag                : t10-control-c
+started            : 2026-08-01 03:16:10
+harness awareness  : PER_MONITOR_AWARE_V2  (READ BACK, not the call's return value)
+host executable    : C:\Users\devuser\dev\wasamo\target\release\gallery-rust.exe
+host build stamp   : 2026-08-01 00:50:18
+scale change by    : a human, in Settings > System > Display > Scale
+
+positioned client  : 1200x720 physical (target 1200x720)
+
+[1-before] at 03:16:12
+  window awareness : PER_MONITOR_AWARE_V2
+  GetDpiForWindow  : 120   monitor DPI: 120
+  outer            : 1218x767  (physical)
+  client           : 1200x720  (physical)
+  non-client frame : 18 wide, 47 tall
+  layout extent    : 960 x 576 DIP
+  client origin    : (49,78)  (screen, physical)
+  frame            : 1-before.png  (1200x720)
+
+waiting for a display-scale change (up to 900s) — change Settings > System > Display > Scale now
+DPI moved 120 -> 144
+
+[2-changed] at 03:16:22
+  window awareness : PER_MONITOR_AWARE_V2
+  GetDpiForWindow  : 144   monitor DPI: 144
+  outer            : 1462x920  (physical)
+  client           : 1440x864  (physical)
+  non-client frame : 22 wide, 56 tall
+  layout extent    : 960 x 576 DIP
+  client origin    : (51,85)  (screen, physical)
+  frame            : 2-changed.png  (1440x864)
+
+waiting for the scale to be set back (up to 900s)
+DPI moved 144 -> 120 (restored)
+
+[3-restored] at 03:16:32
+  window awareness : PER_MONITOR_AWARE_V2
+  GetDpiForWindow  : 120   monitor DPI: 120
+  outer            : 1218x767  (physical)
+  client           : 1200x720  (physical)
+  non-client frame : 18 wide, 47 tall
+  layout extent    : 960 x 576 DIP
+  client origin    : (49,78)  (screen, physical)
+  frame            : 3-restored.png  (1200x720)
+

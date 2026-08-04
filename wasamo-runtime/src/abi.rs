@@ -267,11 +267,17 @@ macro_rules! guard_mutating {
 
 #[no_mangle]
 pub extern "C" fn wasamo_init() -> WasamoStatus {
+    // Cleared on *entry*, not on the success arm the way the status-returning
+    // entry points in this file do. `runtime::init` records the DPI-awareness
+    // declaration's outcome into this same thread-local as a diagnostic
+    // (DD-M4-P1-001 §Failure handling, abi_spec §4.1), so a success-path clear
+    // would run after that write and discard the disclosure the spec promises.
+    // Clearing here still drops a stale error from an earlier call, which is
+    // all the convention was buying; what it no longer drops is this
+    // function's own output.
+    clear_last_error();
     match crate::runtime::init() {
-        Ok(()) => {
-            clear_last_error();
-            WASAMO_OK
-        }
+        Ok(()) => WASAMO_OK,
         Err(e) => {
             set_last_error(format!("wasamo_init: {e}"));
             WASAMO_ERR_RUNTIME
@@ -1062,6 +1068,29 @@ pub unsafe extern "C" fn wasamo_hstack_create(
     finish_stack(node, kids, out, "wasamo_hstack_create")
 }
 
+/// Recover a boxed ABI handle for a fallible preflight without transferring
+/// ownership on rejection.
+///
+/// # Safety
+///
+/// `raw` must have been produced by `Box::into_raw`, must be valid and
+/// uniquely accessible for the duration of this call, and must not be used by
+/// the caller after `Ok` transfers ownership. On `Err`, the returned pointer
+/// is the same live allocation and remains owned by the caller.
+unsafe fn preflight_boxed_handle<T, E>(
+    raw: *mut T,
+    preflight: impl FnOnce(&mut T) -> Result<(), E>,
+) -> Result<Box<T>, (E, *mut T)> {
+    let mut owned = unsafe { Box::from_raw(raw) };
+    match preflight(&mut owned) {
+        Ok(()) => Ok(owned),
+        Err(error) => {
+            let restored = Box::into_raw(owned);
+            Err((error, restored))
+        }
+    }
+}
+
 #[no_mangle]
 pub unsafe extern "C" fn wasamo_window_set_root(
     window: *mut WasamoWindow,
@@ -1076,7 +1105,27 @@ pub unsafe extern "C" fn wasamo_window_set_root(
         set_last_error("wasamo_window_set_root: root is null");
         return WASAMO_ERR_INVALID_ARG;
     }
-    let root_box: Box<WidgetNode> = Box::from_raw(root);
+    // T6 made scale-aware text preparation the first fallible set-root step.
+    // Run that step while the ABI can still restore the caller's raw handle:
+    // ownership transfers only after successful preparation. `window::set_root`
+    // repeats the call, but its raster markers make the second pass a no-op.
+    let runtime = crate::runtime::get();
+    let root_box = match unsafe {
+        preflight_boxed_handle(root, |candidate| {
+            candidate.refresh_text_surfaces_recursive(
+                &runtime.compositor,
+                &runtime.text_renderer,
+                (*window).scale,
+            )
+        })
+    } {
+        Ok(owned) => owned,
+        Err((e, restored)) => {
+            debug_assert_eq!(restored, root);
+            set_last_error(format!("wasamo_window_set_root: {e}"));
+            return WASAMO_ERR_RUNTIME;
+        }
+    };
     match crate::window::set_root(&mut *window, root_box) {
         Ok(()) => {
             clear_last_error();
@@ -1243,6 +1292,7 @@ pub unsafe extern "C" fn wasamo_load_ui(
 mod tests {
     use super::*;
     use crate::reactive::RuntimeHealth;
+    use std::cell::Cell;
     use std::ffi::CStr;
     use std::ptr;
 
@@ -1284,5 +1334,44 @@ mod tests {
 
         crate::reactive::set_runtime_health_for_test(RuntimeHealth::Healthy);
         clear_last_error();
+    }
+
+    #[test]
+    fn preflight_boxed_handle_restores_same_live_allocation_on_error() {
+        struct DropProbe<'a> {
+            drops: &'a Cell<u32>,
+            value: u32,
+        }
+
+        impl Drop for DropProbe<'_> {
+            fn drop(&mut self) {
+                self.drops.set(self.drops.get() + 1);
+            }
+        }
+
+        let drops = Cell::new(0);
+        let original = Box::into_raw(Box::new(DropProbe {
+            drops: &drops,
+            value: 7,
+        }));
+
+        let rejected = unsafe {
+            preflight_boxed_handle(original, |candidate| {
+                candidate.value = 42;
+                Err::<(), _>("injected rejection")
+            })
+        };
+        let (error, restored) = match rejected {
+            Ok(_) => panic!("preflight must reject"),
+            Err(rejected) => rejected,
+        };
+
+        assert_eq!(error, "injected rejection");
+        assert_eq!(restored, original, "the caller must retain its handle");
+        assert_eq!(drops.get(), 0, "rejection must not drop the allocation");
+        assert_eq!(unsafe { (*restored).value }, 42, "handle must remain live");
+
+        unsafe { drop(Box::from_raw(restored)) };
+        assert_eq!(drops.get(), 1, "caller must be able to destroy it once");
     }
 }

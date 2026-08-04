@@ -132,18 +132,52 @@ fn flush_layout() {
         if let Some(ref mut root) = state.root_widget {
             use windows::Win32::Foundation::RECT;
             use windows::Win32::UI::WindowsAndMessaging::GetClientRect;
+            // DD-M4-P1-002 audit row 2's **second** production site (M4-Phase 1
+            // T1 finding F-1): the ADR names only `window::set_root`, but the
+            // reactive drain's layout phase performs the same
+            // `GetClientRect` -> layout conversion after every size-affecting
+            // property write, and an unconverted extent here would hand layout
+            // physical pixels on the busiest path in the runtime.
+            //
+            // `state.scale` and `state.hwnd` are read beside the `root_widget`
+            // borrow above: disjoint fields of the same struct, so this needs no
+            // restructuring. (T1's note that `update_button_label` must read the
+            // scale *before* `button_data_mut()` is about a method that borrows
+            // all of `self`, and does not apply to a field access.)
             let mut rect = RECT::default();
             let (cw, ch) = unsafe {
                 if GetClientRect(state.hwnd, &mut rect).is_ok() {
-                    (
+                    state.scale.pair_to_dip((
                         (rect.right - rect.left) as f32,
                         (rect.bottom - rect.top) as f32,
-                    )
+                    ))
                 } else {
                     (0.0, 0.0)
                 }
             };
-            let _ = root.run_layout(cw, ch);
+            // `run_layout_as_window_root`, not the plain `run_layout`
+            // (M4-Phase 1 T3 finding F-23; pre-existing defect, fixed here
+            // rather than carried, because this line is the one the inbound
+            // conversion above already edits).
+            //
+            // This is a **window root** being re-laid out, exactly as in
+            // `window::set_root` and the `WM_SIZE` arm, so the root
+            // `LayoutNode` must be forced to `Fill` / `Fill` for the same
+            // reason: without it a root container that is `Shrink` — the
+            // default for `VStack`, and not settable from a `.ui` — collapses a
+            // `Fill` descendant to zero, the M3-Phase 4 T6 failure that
+            // `run_layout_as_window_root`'s own doc comment describes. The
+            // drain's layout phase was the one path still calling the
+            // non-window entry, so such a tree laid out correctly on resize and
+            // collapsed on any property write.
+            let target = state.scale;
+            let _ = root.run_layout_as_window_root_at_scale(cw, ch, target);
+            let runtime = crate::runtime::get();
+            let _ = root.refresh_text_surfaces_recursive(
+                &runtime.compositor,
+                &runtime.text_renderer,
+                target,
+            );
         }
     }
 }

@@ -29,6 +29,29 @@ the *physical projection* and the *rasterization*, and nothing else. It
 does not re-decide a single layout number. That is why the propagation
 below is as small as it is, and it is what the integration test asserts.
 
+**Qualified in part (2026-07-29, M4-Phase 1 T4; owner-approved).** The
+*mechanism* above is unaffected — the engine still never receives a
+scale factor, so the layout **function** is scale-invariant. What is too
+strong is the consequence "it does not re-decide a single layout
+number", and the same over-reach appears in §Structural side-effect
+enumeration row 4 and §Verification. Layout is handed the **client**
+extent, and the client extent is not preserved when the *window's*
+logical size is: the non-client frame scales by its own DPI-indexed
+system metrics rather than by `s`. Measured on the M4-Phase 1
+development machine — an 800 × 600 DIP outer request yields 784 × 561
+DIP of client at 96 DPI and 785.6 × 562.4 DIP at 120 DPI, because
+`SM_CXSIZEFRAME` / `SM_CXPADDEDBORDER` / `SM_CYCAPTION` step 4/4/23 →
+4/5/29. So a wrap position sitting near a line-break boundary may
+legitimately move across a real scale change, and exact invariance is a
+property of a **controlled client extent**, not of the OS-suggested
+rectangle. Nothing decided in this DD changes: the suggested rectangle
+is still applied and the step ordering is unchanged. The integration
+test preserves the client extent and therefore still asserts equality
+rather than a tolerance. Measurement, reasoning and the correction to
+the phase plan:
+[implementation/log.md](../implementation/log.md) §T4 (finding F-28 and
+independent review finding R-2).
+
 ## Decision dependency summary
 
 Consumes DD-002's space definition and its re-rasterization walk (the
@@ -127,6 +150,55 @@ ever expressed in terms of a desired *client* size. It is not needed for
 the semantics DD-004 states, because `width` / `height` denote the
 **outer window rectangle** — which is what they have always denoted,
 since they are passed straight to `CreateWindowExW`.
+
+**Superseded in part (2026-07-29, M4-Phase 1 T4, by
+[DD-M4-P1-005](./dd-m4-p1-005-unconditional-size-correction.md)).**
+I1's wording above conditions the correction on the scale — "if the
+scale is not 1 apply `size × s`". **That clause is superseded: the
+correction is unconditional.** Nothing else in this section changes —
+create-then-correct, the `CW_USEDEFAULT` reasoning, the flash-free
+property and `AdjustWindowRectExForDpi`'s availability all stand. As
+implemented the correction is unconditional,
+and the difference is real rather than a matter of implementation shape:
+at a scale of 1 the size-preserving `SetWindowPos` still dispatches
+`WM_WINDOWPOSCHANGING` and `WM_GETMINMAXINFO`, which a guarded
+implementation would not. (Both reach `wnd_proc` before `GWLP_USERDATA`
+is installed and go straight to `DefWindowProcW`, so nothing in the
+runtime and no host can observe them — but the message stream differs,
+and that is enough to make this a departure from the text rather than a
+reading of it.)
+
+The reason is
+[DD-M4-P1-001 §Failure handling](./dd-m4-p1-001-dpi-awareness-declaration.md):
+tolerating a failed awareness declaration is safe *because the
+conversion machinery is unconditional and there is no second code path
+to keep correct*. A guard here would be a branch that no test can fire
+until the declaration lands — on the one path both public window-create
+entries and all three example hosts take — which is precisely the
+untested-authored-branch failure the phase's implementation gates are
+armed against.
+
+**This annotation is not itself sufficient, and the first draft of it
+claimed otherwise.** It said the decision "(create, then correct) is
+unchanged" and that a clause inside an option's description was being
+narrowed rather than a decision changed. The T4 delta review rejected
+that: the condition is part of **what option I1 is**, a reader
+implementing I1 as written would not produce the shipped behaviour, and
+adjudicating a conflict between two Accepted DDs is itself a new choice.
+[process/README.md](../../../README.md) makes `decisions/` immutable
+under the **supersede rule**, and the precedent this disposition leaned
+on — [doc-system.md](../../../cross-milestone/decisions/doc-system.md)'s
+"Superseded in part" block — *points at a successor record* (DD-V-026)
+rather than standing in for one. The citation was to the annotation's
+shape while omitting the thing it exists to reference.
+
+**The successor is
+[DD-M4-P1-005](./dd-m4-p1-005-unconditional-size-correction.md)**, filed
+2026-07-29 on owner approval, which compares the unconditional form
+against restoring the guard and supersedes this clause alone. Reasoning
+and the measurement:
+[implementation/log.md](../implementation/log.md) §T4 (independent
+review finding R-3, delta review finding 1).
 
 **Recorded caveat:** the DPI observed immediately after creation is the
 DPI of the monitor the OS chose. If the window is subsequently moved,
@@ -326,3 +398,23 @@ residual (a layout-time runtime error code) stays non-applicable
 - 2026-07-28: Initial draft (Status: Proposed).
 - 2026-07-28: Accepted flip following owner approval of the phase slate; no
   change requested to the recommendations or their comparisons.
+- 2026-07-29: Two dated annotations added in place, body unchanged, on
+  owner approval after the M4-Phase 1 T4 independent review. §Context's
+  layout-invariance consequence is **qualified** (it holds of a
+  controlled client extent, not of the OS-suggested rectangle, because
+  the non-client frame does not scale by `s`); §Initial scale
+  acquisition's option I1 is annotated because the shipped correction is
+  unconditional.
+- 2026-07-29 (same day, T4 delta review): the second annotation's
+  framing is **corrected**. It originally read "Narrowed … the decision
+  this section makes is unchanged", and that was wrong — the condition
+  is part of what option I1 *is*, and adjudicating the DD-001 / DD-003
+  conflict is a new choice. The §Context qualification is unaffected by
+  this correction: it changes no option and stands as an annotation.
+- 2026-07-29: **option I1's conditional clause is superseded** by
+  [DD-M4-P1-005](./dd-m4-p1-005-unconditional-size-correction.md)
+  (Accepted 2026-07-29). The correction is unconditional. **This DD's own
+  `Status` stays `Accepted`** — one clause of one option is replaced and
+  every decision it makes stands, so the record is superseded *in part*
+  in the sense [doc-system.md](../../../cross-milestone/decisions/doc-system.md)
+  already uses, not retired.

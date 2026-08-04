@@ -1,0 +1,18 @@
+tag                : t10-shipped-created
+captured           : 2026-08-01 00:45:09
+harness awareness  : PER_MONITOR_AWARE_V2  (READ BACK, not the call's return value)
+host executable    : C:\Users\devuser\dev\wasamo\target\release\gallery-rust.exe
+host build stamp   : 2026-08-01 00:33:58
+__COMPAT_LAYER     : (unset)
+created outer      : 1000x750
+created client     : 982x703  (physical)
+window awareness   : PER_MONITOR_AWARE_V2
+GetDpiForWindow    : 120
+monitor DPI        : 120
+final outer        : 1000x750  (physical)
+final client       : 982x703  (physical)
+layout extent      : 785.6 x 562.4  via window DPI 120 (runtime division)
+non-client frame   : 18 wide, 47 tall  (physical)
+client origin      : (137,166)  (screen, physical)
+frame              : C:\Users\devuser\dev\wasamo\process\milestone-4\phase-1\implementation\evidence\t10-shipped-created\gallery-client.png  (982x703)
+alive after capture: True

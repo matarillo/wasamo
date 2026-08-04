@@ -329,10 +329,9 @@ fn handler_collection_append_is_observable_before_click_returns() {
             button_w > 0.0 && button_h > 0.0,
             "Button must have a non-zero hit-test rect; got ({button_w}, {button_h})"
         );
-        built.root.hit_test_click(
-            (button_x + button_w / 2.0) as i32,
-            (button_y + button_h / 2.0) as i32,
-        );
+        built
+            .root
+            .hit_test_click(button_x + button_w / 2.0, button_y + button_h / 2.0);
         assert_eq!(
             text_children_from(&built.root, 1),
             ["A", "B"],

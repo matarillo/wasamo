@@ -85,7 +85,13 @@ report.
 - **#3 parallel-data sync** — which parallel structure was updated, in
   which primitive, atomically (may be folded into the #2 artifact).
 - **#4 branch tests** — the test name per added branch (one that fires it
-  directly).
+  directly). For a newly added **pure-logic rounding, unit-conversion, or
+  boundary-condition** branch, also record the deliberately wrong
+  implementation that was shown to make the test fail; this narrower
+  "show it goes red" obligation is defined by [DD-V-029](../cross-milestone/decisions/dd-v-029-pure-logic-red-test-obligation.md).
+  The wider requirement for every green or identical observation is not part
+  of this catalog, and the GUI trap's screenshot/positive-control artifact is
+  unchanged.
 - **#5 carry-forward** — where it is recorded (plan / log / handoff) and
   its re-trigger criterion.
 - **#6 deterministic-failure rerun / disposition** — the failure's rerun

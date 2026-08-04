@@ -82,6 +82,16 @@ SSOT。マイルストーン計画・設計同期・実装同期・クロージ�
 | `implementation/handoff.md` | `draft` → `recorded`（フェーズクローズ時） |
 | `milestone-N/handoff.md` | `draft` → `recorded`（マイルストーンクローズ時） |
 
+`Superseded` means that a later decision record replaces the decision or an
+option in the earlier record; it is not the status for a qualification of an
+already-landed decision. When the decision still produces the shipped
+behavior and only an explanatory statement is too strong, keep the record
+`Accepted` and add a dated annotation in its revision history, with the
+scope and reason stated. If the qualification changes what a reader would
+implement, file and accept a successor record and mark the earlier record
+`Superseded` (in whole or in part, with the successor named). This distinction
+is a lifecycle rule, not a third ADR status.
+
 ### 継続文書
 
 合意後も実装中の更新を受け付け、最終的に閉じる。

@@ -1,6 +1,6 @@
 # Wasamo Architecture
 
-**Status:** M1 complete (Phases 0-8); M2 complete (Phases 1-7) — Foundation acceptance A1-A6 discharged; M3-Phase 1, M3-Phase 2, M3-Phase 3, M3-Phase 4, and M3-Phase 5 complete. M3-Phase 6 closed (implementation-synced): ZStack, conditional rendering, and the component host surface are documented to match the landed implementation. M3-Phase 7 closed (implementation-synced): iteration — `ControlFlowNode::For` / `BindingTarget::ForLoopSubtree`, the canonized member-expansion seam, stage-then-commit range mutation, and child-carried ZStack placement (§6.7.10, §6.8.5) are documented to match the landed implementation. M3-Phase 7b closed (implementation-synced): the parent-interpreted placement model — child-slot `SlotData` carrier (§6.7.9, §6.8.6), Grid storage convergence off the parallel `cell_placements` vector (§6.8.4), and the textual-IR `child { placement … }` record (IR-B) — is documented to match the landed implementation (`IrMember::Widget(IrChildSlot)`; runtime `ChildSlot` / `SlotData`). M3-Phase 8 closed (implementation-synced): the `ToggleButton` selected-state runtime representation (§6.7.7) is documented to match the landed implementation, and the DSL spec ([dsl_spec.md](./dsl_spec.md)) is promoted to the M3 `public-draft`. M4-Phase 1 design-drafted (2026-07-28): §12 states the normative coordinate-space model — DIP layout space, device-space visual tree and pointer stream, the conversion seams, the text-surface resolution contract, and the scale-invariance of layout results — and resolves the §13 DPI open question. §12 is written from accepted design ahead of implementation and is re-verified against the landed runtime at M4-Phase 1 close; the `windows` crate feature list (§4.5) and the initialization sequence (§5.2) are re-synced at that point.
+**Status:** M1 complete (Phases 0-8); M2 complete (Phases 1-7) — Foundation acceptance A1-A6 discharged; M3-Phase 1, M3-Phase 2, M3-Phase 3, M3-Phase 4, and M3-Phase 5 complete. M3-Phase 6 closed (implementation-synced): ZStack, conditional rendering, and the component host surface are documented to match the landed implementation. M3-Phase 7 closed (implementation-synced): iteration — `ControlFlowNode::For` / `BindingTarget::ForLoopSubtree`, the canonized member-expansion seam, stage-then-commit range mutation, and child-carried ZStack placement (§6.7.10, §6.8.5) are documented to match the landed implementation. M3-Phase 7b closed (implementation-synced): the parent-interpreted placement model — child-slot `SlotData` carrier (§6.7.9, §6.8.6), Grid storage convergence off the parallel `cell_placements` vector (§6.8.4), and the textual-IR `child { placement … }` record (IR-B) — is documented to match the landed implementation (`IrMember::Widget(IrChildSlot)`; runtime `ChildSlot` / `SlotData`). M3-Phase 8 closed (implementation-synced): the `ToggleButton` selected-state runtime representation (§6.7.7) is documented to match the landed implementation, and the DSL spec ([dsl_spec.md](./dsl_spec.md)) is promoted to the M3 `public-draft`. M4-Phase 1 implementation-synced (2026-08-04): §12 matches the landed DIP layout space, device-space visual tree and pointer stream, conversion seams, text-surface resolution contract, and scale-change propagation. The `windows` crate feature list (§4.5) and the initialization sequence (§5.2) are also re-synced to the landed runtime. The outer-size contract remains specifically about the outer rectangle: T4 measured an 800 × 600 DIP request as a 1000 × 750 physical outer rectangle at 125%, while the client was 785.6 × 562.4 DIP ([implementation log §T4](../process/milestone-4/phase-1/implementation/log.md#t4--per-window-scale--post-create-window-size-correction)). [DD-M4-P1-006](../process/milestone-4/phase-1/decisions/dd-m4-p1-006-surface-brush-mapping-is-set-not-inherited.md) is Accepted and its `None` / `0.0` mapping matches the landed brush construction.
 
 ---
 
@@ -251,6 +251,7 @@ features = [
   # Core Win32
   "Win32_Foundation",
   "Win32_UI_WindowsAndMessaging",
+  "Win32_UI_HiDpi",                  # Per-monitor DPI APIs (M4-Phase 1)
   "Win32_UI_Input_KeyboardAndMouse",  # TrackMouseEvent, WM_MOUSELEAVE (Phase 4)
   "Win32_System_LibraryLoader",
   # Graphics — Phase 2
@@ -270,6 +271,8 @@ features = [
   "Win32_UI_Controls",
   # WinRT / Composition
   "Foundation",                       # Windows.Foundation.Size (Phase 4)
+  "Foundation_Collections",
+  "Foundation_Numerics",
   "Graphics_DirectX",                 # DirectXPixelFormat/AlphaMode (Phase 4)
   "System",
   "UI",
@@ -298,16 +301,29 @@ HWND
 
 ### 5.2 Initialization sequence
 
+Runtime initialization (`wasamo_init`):
+
 ```
-1. CreateDispatcherQueueController(           — init current thread as STA + attach DQ
+1. capture_owning_thread()                     — non-OS thread-affinity record
+2. if RUNTIME is already set, return           — one-shot guard
+3. SetProcessDpiAwarenessContext(PMv2)         — first OS-touching act, once per process
+4. CreateDispatcherQueueController(            — init current thread as STA + attach DQ
        DQTYPE_THREAD_CURRENT, DQTAT_COM_STA)
-2. Compositor::new()                          — create WinRT Compositor
-3. CreateWindowExW(WS_EX_NOREDIRECTIONBITMAP) — create HWND; flag prevents GDI redirection
-                                                buffer that would paint over DWM backdrop
-4. apply_mica(hwnd)                           — DwmSetWindowAttribute (Win11); no-op on Win10
-5. DesktopWindowTarget::CreateForWindow(hwnd) — attach Visual Layer to HWND
-6. ContainerVisual::new() → set as root       — root visual (no background brush; Mica shows through)
-7. GetMessage / TranslateMessage / DispatchMessage loop
+5. Compositor::new()                           — create WinRT Compositor
+6. TextRenderer::new(&compositor)              — create D2D / DirectWrite rendering state
+```
+
+Window construction and dispatch, after initialization:
+
+```
+7. CreateWindowExW(WS_EX_NOREDIRECTIONBITMAP)  — create HWND; flag prevents GDI redirection
+                                                 buffer that would paint over DWM backdrop
+8. GetDpiForWindow + SetWindowPos              — realize requested outer size in DIP
+9. apply_mica(hwnd)                            — DwmSetWindowAttribute (Win11); no-op on Win10
+10. DesktopWindowTarget::CreateForWindow(hwnd) — attach Visual Layer to HWND
+11. ContainerVisual::new() → set as root       — root visual (no background brush; Mica shows through)
+12. Install WindowState pointer + register     — wnd_proc / dirty-layout ownership
+13. GetMessage / TranslateMessage / DispatchMessage loop
 ```
 
 `WM_ERASEBKGND` returns 1 to prevent GDI from painting an opaque background over the DWM
@@ -2049,11 +2065,13 @@ never derives it from physical dimensions.
 ### 12.2 Where the scale factor comes from
 
 **Process DPI awareness is declared by the runtime, not by the host.**
-`wasamo_init` declares Per-Monitor-Aware V2 as its first act, before the
-`DispatcherQueueController` and the `Compositor` are created and
-necessarily before any window exists — process awareness can only be set
-while it is still unset, so ordering it first removes any question of
-which initialisation step might lock it in. No host ships an application
+`wasamo_init` declares Per-Monitor-Aware V2 as its first **OS-touching**
+act, once per process. `capture_owning_thread()` precedes it but performs no
+OS work that can lock awareness; the existing `RUNTIME` early return also
+precedes it, so a second successful `wasamo_init` does not re-declare and take
+`ERROR_ACCESS_DENIED` against the runtime's own declaration. The declaration
+still precedes the `DispatcherQueueController`, the `Compositor`, and every
+window — process awareness can only be set while it is still unset. No host ships an application
 manifest and no host build system gains a resource step; the host-facing
 consequences are stated in [abi_spec.md](./abi_spec.md) §4.1.
 
@@ -2088,8 +2106,9 @@ boundary is a small enumerable class of sites rather than a rule applied
 throughout the runtime. There are four kinds:
 
 1. **Client extent, inbound.** The client rectangle that drives a layout
-   pass — at window attach and on every window-resize message — arrives
-   in device space and is divided by `s` before it reaches layout.
+   pass — at window attach, on every window-resize message, and in the
+   reactive dirty-layout drain after a size-affecting property write —
+   arrives in device space and is divided by `s` before it reaches layout.
 2. **Pointer coordinates, inbound.** Pointer message coordinates are
    divided by `s` at the window procedure, so hit-testing and hover
    state run in DIP like the rest of the runtime. Where hit-testing
@@ -2149,13 +2168,20 @@ Crispness is bought explicitly, at the surface:
   keeps layout independent of the scale factor (§12.5).
 - The drawing origin within the backing atlas is reported in **pixels**
   and is divided by `s` before use as a D2D coordinate, because the
-  context is no longer at 96 DPI. This conversion is load-bearing and
-  easy to omit: the atlas origin is frequently `(0, 0)`, so omitting it
-  is correct most of the time and displaces text within its own surface
-  intermittently.
+  context is no longer at 96 DPI. This conversion is load-bearing: the
+  atlas origin may be non-zero and is always expressed in pixels, so using it
+  unchanged as a DIP drawing coordinate displaces text within its own surface.
 - The Visual carrying the surface brush has the exact `dip × s` device
-  size, so surface texels map one-to-one onto device pixels. Crispness
-  follows from those two numbers agreeing, not from a filtering mode.
+  size while the surface holds `ceil(dip × s)` pixels, so the two are not
+  the same size and the default brush cannot establish unit-scale
+  mapping: its uniform stretch resamples the surface to fit and centred
+  alignment may offset it. [DD-M4-P1-006](../process/milestone-4/phase-1/decisions/dd-m4-p1-006-surface-brush-mapping-is-set-not-inherited.md)
+  requires stretch `None` with horizontal and vertical alignment ratios
+  of `0`. That mapping keeps unit scale
+  relative to the Visual and aligns their origins; `None` then clips
+  surface storage outside the exact Visual extent on the right and
+  bottom rather than displaying it as padding. It does not by itself
+  align a fractionally positioned Visual to the screen-pixel grid.
 
 Expressing the surface's resolution as a context transform instead of as
 a context DPI is an equivalent way to satisfy this contract; the
@@ -2164,10 +2190,14 @@ glyphs are rasterized at device resolution, not the particular API pair.
 
 **Rounding.** Surface allocation is the only place in this model where a
 real number becomes an integer count, and it rounds **up**. Truncation
-clips the final column or row of glyph coverage — a defect that appears
-only at non-integer scale factors and reads as a cut-off last letter.
-The at-most-one-pixel excess is transparent padding; the Visual keeps
-the exact `f32` device size. No integer pixel snapping is introduced:
+discards the final fraction of the requested physical extent whenever
+`dip × s` is non-integer — including at scale 1 when a measured DIP
+extent is fractional — and can cut the final column or row of glyph
+coverage. The Visual keeps the exact `f32` device size. Under DD-006's
+accepted mapping, storage beyond that extent is clipped rather than
+shown. This integer allocation does not reserve visible glyph overhang
+outside the DirectWrite layout metrics; that is a separate bounds-policy
+question. No integer pixel snapping is introduced:
 the no-snap rounding contract of §6.8 and
 [dsl_spec.md](./dsl_spec.md) §4.12 stands unchanged.
 
