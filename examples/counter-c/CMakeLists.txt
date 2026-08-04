@@ -16,8 +16,8 @@ project(wasamo_counter_c C)
 #                                      counter.ui to IR at build time)
 #   examples/counter/counter.ui
 #
-# Run `cargo build --release --workspace` from the repo root before
-# invoking CMake — see CLAUDE.md "Build ordering requirements".
+# Run `cargo build --release --workspace` from the repo root before invoking
+# CMake — see CLAUDE.md "Build ordering requirements".
 
 # ── Locate wasamo ──────────────────────────────────────────────────────
 

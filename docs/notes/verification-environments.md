@@ -73,19 +73,76 @@ review #1). The assistant evidence was therefore strengthened to
 **launch + screenshot capture + assistant analysis** — a non-interactive
 but *visible* check that is stronger than headless-runtime verification
 (it observes pixels) yet weaker than human-visible smoke (no human
-judgment of correctness). Two mechanics pinned during Phase 5:
+judgment of correctness). The capture and comparison procedure, corrected by
+M4-Phase 1 evidence, is:
 
 - Use `Graphics.CopyFromScreen` over the window's `GetWindowRect`, not
   `PrintWindow`: the DirectComposition / Visual-Layer client area reads
   back **blank** under `PrintWindow`. Bring the window foreground +
-  topmost before capture.
-- The capture tooling must be **per-monitor-DPI-aware**. On the
-  M3-Phase 5 T6 box (125% scale) the host is DPI-unaware, so DWM
-  bitmap-stretches a logical 800×600 window to physical 1000×750; a
-  DPI-unaware capture would crop or mis-scale the readback. (The host's
-  own DPI-unawareness is a separate runtime gap deferred to M4 —
-  [process/cross-milestone/decisions/dpi-awareness-m4-deferral.md](../../process/cross-milestone/decisions/dpi-awareness-m4-deferral.md);
-  here it only constrains the *capture* tooling.)
+  topmost before capture. When comparing processes with different awareness
+  postures, capture the **client** rectangle instead: use `GetClientRect` and
+  map both corners with `ClientToScreen`. Equal outer rectangles do not imply
+  equal client rectangles because the non-client frame follows DPI-indexed
+  system metrics.
+- The capture tooling must declare **Per-Monitor-Aware V2 and verify that it
+  has that posture**. Discard the result of
+  `SetProcessDpiAwarenessContext`, read `GetThreadDpiAwarenessContext` back,
+  and abort on a mismatch. Declaring is not evidence that the declaration
+  took effect: process awareness may already have been fixed before the tool
+  ran. An unaware observer asking for an aware window's rectangle receives
+  virtualized coordinates divided by the system scale, even though
+  `GetDpiForWindow` and `GetWindowDpiAwarenessContext` themselves are not
+  virtualized. Plausible DPI and awareness reads therefore do not make an
+  unaware rectangle physical.
+
+The old premise for that second rule was false after M4-Phase 1: the Wasamo
+runtime now declares Per-Monitor-Aware V2 itself; DWM is not bitmap-stretching
+the normal host. On the T10 development desktop at 125% (120 DPI), a PMv2
+harness that read its own posture back measured the following values for the
+same executable and an 800 × 600 DIP request:
+
+| | Declared PMv2 | `__COMPAT_LAYER=DPIUNAWARE` |
+|---|---:|---:|
+| Outer physical rectangle | 1000 × 750 | 1000 × 750 |
+| Client physical rectangle | 982 × 703 | 980 × 701 |
+| Non-client left / top / right / bottom | 9 / 38 / 9 / 9 | 10 / 39 / 10 / 10 |
+| Extent supplied to layout | 785.6 × 562.4 DIP | 784 × 560.8 logical |
+
+These are the exact values in the
+[T10 coordinate artifact](../../process/milestone-4/phase-1/implementation/evidence/t10-capture-coordinates.md),
+not a new measurement made by this note.
+
+The existing `compare-frames.ps1` defaults (`InsetX 12`, `InsetTop 44`,
+`InsetBottom 12`) still cleared every measured frame, but their margin shrank:
+the 96-DPI basis had top / side insets 31 / 8 (margins 13 / 4), the declared
+120-DPI window 38 / 9 (margins 6 / 3), and the unaware window on the 120-DPI
+desktop 39 / 10 (margins 5 / 2). These too are T10's values, not universal
+frame metrics.
+
+The identical outer number has a different mechanism from the old note: the
+runtime itself realizes `800 × 600 DIP` as `1000 × 750` physical before show.
+The exact client and frame figures are measurements of that machine's theme
+metrics, not universal constants. Re-derive them above 125%, when non-client
+treatment changes (including a custom title bar), or for a host not created by
+the runtime's normal window path. The invariant to retain is that non-client
+metrics are DPI-indexed and independent of the runtime's scale multiplication.
+
+Frame comparison has two additional provenance requirements:
+
+- **A committed frame is not a baseline, and one capture is not a baseline.**
+  Re-capture both sides in the same comparison session and require at least
+  two agreeing captures per side before comparing across the change. Any
+  difference is non-zero by default; a measured intensity band may classify a
+  result only when its observed shape matches that band, and is never a general
+  clean-pass rule.
+- **Different source trees use different cargo target directories.** A source
+  mutation run ends with a package clean and an accepted-source rebuild.
+  Artifact timestamps, a cargo `Fresh` result, and the hash in a test
+  executable's filename do not establish source identity when two trees have
+  shared an artifact directory. Byte-identical restoration frames establish
+  restoration only when the mutation was known to change that rendered frame;
+  a render-neutral mutation can produce equality without proving which source
+  was built.
 
 This assistant baseline is a pre-owner check; it does not substitute for
 the owner's human-visible smoke

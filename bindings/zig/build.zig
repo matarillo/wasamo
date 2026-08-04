@@ -5,7 +5,7 @@ const std = @import("std");
 // Exposes one module (`wasamo`) and one test step (`zig build test`).
 //
 // The binding links against `wasamo.dll.lib` (the import library emitted by
-// the `wasamo-runtime` Rust crate). The import library is expected at the
+// the `wasamo-dll` Rust crate). The import library is expected at the
 // path given by the `--wasamo-lib` option (default: the workspace release
 // target dir relative to this file's location).
 //

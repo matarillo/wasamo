@@ -6982,3 +6982,307 @@ agreement leg; the two new observations triaged to
 [handoff.md](./handoff.md). `cargo test --workspace` is not re-run for this
 task and is not claimed: nothing in the workspace changed, and the observing
 machine has no toolchain. Full independent review before merge.
+
+## T12 — Step-end local gates + Moment 2 re-sync + step retro
+
+### Responsibility re-audit before approach selection
+
+Re-audited from the T12 checklist outward against the T1–T11 log,
+retrospectives, accepted ADR set, landed source at merge commit `366e4a4`, and
+the current specification / procedure claims. The branch starts from that
+commit and the worktree was clean. The task boundary still matches what
+landed, with one stale planning state corrected before this gate: T5's owner
+decision on F-33 is no longer pending. The ADR verification-closure item and
+`constraints.md` §9 remain untouched; Observation 4 alone receives the
+operative correction. The same plan item now names T10's client-rectangle and
+PMv2-readback requirements explicitly.
+
+| T12 responsibility | Landed-state audit | T12 disposition |
+|---|---|---|
+| Cold clean rebuild, workspace tests, three hosts, F-5 / F-21 build rule | F-5 and F-21 are the same uplifted-rlib root cause with loud-missing and quiet-stale symptoms; `AGENTS.md` still claims a workspace build is sufficient | Run the real gates; correct the rule without claiming to fix the build graph |
+| Moment 1 → Moment 2 sync | All three top status blocks still say M4-Phase 1 design-drafted. `architecture.md` §4.5 omits landed `Win32_UI_HiDpi`, `Foundation_Numerics`, and `Foundation_Collections`; §5.2 starts at DispatcherQueue creation and omits the owning-thread / one-shot / DPI-declaration prologue and `TextRenderer` | Re-sync to landed source; cite T4's outer/client measurement rather than measure it again |
+| Observation 4 | Still describes the host as DPI-unaware and DWM-stretched. T10's artifact fixes the measured 120-DPI coordinates and procedure; T5 and T6 already settled F-33 / F-40 | Replace the obsolete mechanism and fold in same-session paired baselines, target isolation/restoration, client capture across postures, and awareness declaration plus readback |
+| `wasamo_init` ordering clause | `runtime::init` calls `capture_owning_thread`, returns early when already initialized, then performs the first OS-touching act once; both normative specs still say simply "first act" | Correct those two claiming sites to the landed one-shot contract |
+| T5 named divergences | §12.4 still generalizes atlas origin as frequently zero; §12.3 still names only attach and resize. DD-006's brush contract already matches `create_text_surface_brush` (`None`, `0.0`, `0.0`) | Correct the two live divergences and record the brush re-verification without re-deriving the rejected default |
+| M4 progress row | Still says implementation docs open (T0) | Flip only the Phase 1 row to complete; leave phase-end document status work untouched |
+| Carry-forward | Every T12-named item already exists in the skeleton handoff with a destination and re-trigger criterion | Re-audit and record the result; do not finalize the skeleton or duplicate its rows |
+| T12 retro | Absent, as expected | Create from the task-retro template after the close gate |
+
+The correction propositions used for the documentation search are stated
+before editing so prose and auditable tables can be checked against the same
+claims:
+
+| Proposition | Claiming / carrying sites in T12 scope |
+|---|---|
+| The declaration is the first OS-touching act once per process, after thread capture and the initialized early return | `docs/architecture.md` §12.2; `docs/abi_spec.md` §4.1; initialization sequence in architecture §5.2 |
+| A text atlas origin is a pixel coordinate that must be converted; no frequency claim is needed for the conversion to be load-bearing | `docs/architecture.md` §12.4 |
+| Client-extent conversion runs at attach, resize, and the reactive dirty-layout drain | `docs/architecture.md` §12.3; the immutable DD-002 omission is already dated-annotated and is not edited here |
+| Capture geometry is physical only after the tool has declared PMv2 and read its thread awareness back; cross-posture comparisons use client rectangles | `docs/notes/verification-environments.md` Observation 4; T10 coordinate artifact is the evidence owner |
+| A comparison baseline is at least two agreeing captures per side in the same session; cross-tree builds isolate target directories and a mutation ends with package clean plus accepted-source rebuild | Observation 4; the ADR set and `constraints.md` remain unchanged by owner decision |
+
+### Start gate — recorded before approach selection
+
+| # | Failure mode | Applies? | Reason / required artifact |
+|---|---|---|---|
+| 1 | Semantic-migration miss | no | T12 introduces no symbol, variant, schema, IR form, diagnostic tag, or call-site migration. Its claim-site migration is documentation-specific and is armed under #3 with the proposition table above |
+| 2 | Structural change with unenumerated side effects | no | No runtime or schema structure changes. Cross-document status, revision, progress-row, and procedure effects are parallel documentation claims and are enumerated under #3 rather than treated as runtime structural effects |
+| 3 | Parallel / derived data drift | **yes — documentation analogue** | The same proposition appears in normative specs, a live procedure note, status blocks, revision histories, the M4 progress index, and evidence / handoff indexes. Close with a per-proposition claim-site audit and explicit unchanged sites, not a prose-only correction |
+| 4 | Untested authored branch | no at start | No branch, reject, diagnostic, size branch, fixture, or new script is planned. Existing build commands are executed rather than authored. Per F-53 this row is re-read at close and reverses if the approach adds any instrument or branch |
+| 5 | Carry-forward omission | **yes** | Re-audit every named handoff row for both destination and re-trigger criterion; cite the skeleton ledger rather than duplicating it, and do not finalize it |
+| 6 | Symptom taken at face value | **yes** | The real clean rebuild and three-host gates put F-5, F-21, and any deterministic tool/build failure in reach. Use the documented remedy for the known root cause; a different recurrence is investigated and dispositioned, never re-rolled |
+| 7 | GUI evidence without a positive control | no | T12 captures no new GUI evidence and does not re-evaluate pixels. It cites accepted T4 / T6 / T10 / T11 evidence only within its recorded conditions; no launch-survival or inherited frame is promoted into a new render claim |
+
+**Review lane: Normal review.** T12 was absent from the preamble table, so
+the row is assigned there now. This is a normative / procedural documentation
+sync with real build gates, but no schema / IR migration, runtime structural
+change, GUI-render evidence, or authored diagnostic / reject / size branch;
+none of the full or branch/test-focused triggers applies. Re-decide at close
+if the approach changes.
+
+### Moment 2 reconciliation and claim-site audit
+
+The corrections were applied by proposition, not by matching one wording.
+Historical task records and the immutable accepted ADR text were left as
+records of what was decided or observed at their own time.
+
+| Proposition | Claim sites checked | Close disposition |
+|---|---|---|
+| The declaration is the first **OS-touching** act once per process, after owning-thread capture and the initialized early return | `architecture.md` §5.2 / §12.2; `abi_spec.md` §4.1; `runtime.rs::init` | Both specs now state the landed ordering. `runtime.rs` remains the ground truth; no code changed |
+| The outer-size contract does not imply the same scaled client size | Top status blocks in `architecture.md` and `abi_spec.md`; architecture §12.2; ABI §4.2 | The specs cite T4's measurement under its original condition: an 800 × 600 DIP request at 125% produced a 1000 × 750 physical outer rectangle and a separate 785.6 × 562.4 DIP client result. No new measurement or universal non-client metric is claimed |
+| Client-extent conversion runs at attach, resize, and the reactive dirty-layout drain | `architecture.md` §12.3; DD-M4-P1-002 row 2 and its dated note | Architecture now names all three landed sites. The immutable ADR already carries its dated correction and was not rewritten |
+| A text atlas origin is a pixel coordinate that must be converted whether or not it is zero | `architecture.md` §12.4; `widget.rs::create_text_surface_brush` | The unsupported frequency statement was removed. The general non-zero requirement remains |
+| Surface-brush mapping is explicitly `None` / `0.0` / `0.0` | `architecture.md` §12.4; accepted DD-M4-P1-006; `widget.rs:377-379`; `text_surface_mapping_integration.rs` | Re-verified against the landed constructor and existing integration coverage; no rejected default-mapping rationale was re-derived and no new rendered claim was made |
+| The landed M4-Phase 1 author inputs remain DIP while projection and raster resolution are runtime concerns | `dsl_spec.md` top status and change history; `architecture.md` §12; `abi_spec.md` §4.2 | `dsl_spec.md` is v1.17 and implementation-synced without a grammar, AST, IR, token, or authored-value change |
+| Capture coordinates are physical only after the capture tool declares PMv2 and verifies its thread context; a cross-posture comparison captures client rectangles | `verification-environments.md` Observation 4; T10 evidence procedure and measurements | Observation 4 now gives the declaration/readback/abort procedure, `GetClientRect` + two `ClientToScreen` mappings, and the exact T10 120-DPI rows only as measurements from that run |
+| A reusable comparison baseline needs two agreeing captures on each side in the same session; cross-tree builds isolate target directories and a mutation ends with a package clean plus accepted-source rebuild | Observation 4; ADR-set verification closure; `constraints.md` §9 | Observation 4 is the operative correction. Per the T5 owner decision, the accepted ADR and constraints remain unchanged and receive no dated annotation |
+
+The three normative top-level status blocks are now implementation-synced;
+the architecture feature list includes `Win32_UI_HiDpi`,
+`Foundation_Collections`, and `Foundation_Numerics`; and its initialization
+sequence includes the owning-thread / one-shot prologue, DPI declaration,
+DispatcherQueue, Compositor, and `TextRenderer` in landed order. The M4 plan's
+Phase 1 row now says **implementation complete (T12); phase-end batch
+pending**. That wording is deliberate: it does not finalize the handoff, flip
+the implementation preamble, record CI, or perform any phase-end item.
+
+### Build-order proposition audit
+
+**Corrected propositions:** (1) a cold `cargo test --workspace` needs an
+earlier same-profile primary-package build, supplied by either
+`cargo build --workspace` or the narrower `cargo build -p wasamo-runtime`;
+the workspace build itself succeeds from cold and produces the uplifted rlib,
+DLL/import library, and `wasamoc`. (2) After a runtime change, a host-package-
+only build is not evidence of the changed runtime; a same-profile workspace
+build selects the runtime as a primary member before the host is used. A
+missing uplifted rlib is F-5's loud test-only failure, while a stale uplifted
+rlib is F-21's quiet host-only fresh-DLL/stale-runtime failure.
+
+| Current instruction surface | Disposition |
+|---|---|
+| `AGENTS.md` §Build ordering | Corrected after independent review: cold test-only and host-only stale paths are separate; the workspace build is itself a sufficient primary selection |
+| T12 plan, implementation preamble R-1b, and handoff F-5/F-21 rows | Corrected after independent review. R-1b's overbroad heading originated at T1 (`bcf7ea6`) and was inherited rather than introduced by T12; T12 nevertheless missed it and added the redundant primary-step remedy |
+| Root README and all five current counter/gallery host READMEs | These did not assert the false proposition, but T12 had inserted a redundant primary command. Restored the sufficient release workspace command alone |
+| `docs/notes/human-visible-smoke.md` | Removed the redundant profile-specific primary commands; the debug workspace build precedes the test, and the release workspace build precedes host evidence |
+| Counter/gallery CMake comments and missing-import-library diagnostics; C binding diagnostic | Removed the causally irrelevant runtime-only command from the missing-import-library remedy; retained the workspace build that produces the artifact |
+| Zig binding / counter / gallery build-script usage comments | Removed the redundant primary commands; retained the corrected attribution of `wasamo.dll.lib` to the `wasamo-dll` cdylib |
+| `.github/workflows/ci.yml` | Checked and unchanged: release workspace build, debug workspace build, then workspace test already follows the corrected propositions and is counterevidence to the overbroad rule |
+| `CONTRIBUTING.md` §4 | Checked and unchanged: it correctly says the release workspace build produces `wasamo.dll.lib`; it never asserted the redundant primary prerequisite |
+| Historical T1–T11 execution records | Unchanged where they record commands actually run. Current T12 interpretations and retrospective conclusions are corrected rather than rewriting earlier evidence |
+
+### Local gate — executed 2026-08-04
+
+Toolchain readback: `rustc 1.97.1`, `cargo 1.97.1`, Zig `0.16.0`.
+Generated counter C/Zig output directories were resolved under this workspace
+before removal, so the C and Zig host legs below are clean host builds.
+
+| Gate / command | Result |
+|---|---|
+| `cargo clean` | green; removed 6,628 files / 2.0 GiB |
+| `cargo build -p wasamo-runtime` | green, 45.09 s |
+| `cargo build --workspace` | first run was externally interrupted while the owner redirected attention to the CMake path; a clean restart was green, 2.34 s, with only existing warnings |
+| `cargo test --workspace` | green, 49.3 s; every invoked test binary exited 0 |
+| `cargo build -p wasamo-runtime --release` | green, 39.26 s |
+| `cargo build --release --workspace` | green, 6.62 s; emitted the pre-existing linkable-target warning and finding F-54 below |
+| `cargo build --release -p counter-rust` | green, 0.39 s; `target/release/counter-rust.exe` = 118,272 bytes |
+| `cmake.exe -S examples/counter-c -B build/counter-c` followed by `cmake.exe --build build/counter-c --config Release` | green; VS17 2022 generator, Windows SDK 10.0.28000.0, MSVC 19.44; `counter.exe` = 11,264 bytes |
+| From `examples/counter-zig`: `zig build "-Dwasamo-lib=../../target/release/wasamo.dll.lib" "-Dwasamo-zig=../../bindings/zig/wasamo.zig" "-Dwasamoc=../../target/release/wasamoc.exe" "-Doptimize=ReleaseSafe"` | green after the dispositions below, 11.6 s; `counter-zig.exe` = 884,736 bytes |
+| Required shared artifacts | `target/release/wasamo.dll`, `wasamo.dll.lib`, and `wasamoc.exe` all present |
+
+The exact CMake executable requested by the owner was inspected rather than
+replaced:
+
+`C:\Program Files\Microsoft Visual Studio\18\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\cmake.exe`
+
+- file and product version: `4.3.1-msvc1`; size 14,392,928 bytes;
+- Authenticode status: `Valid`, signer `Microsoft 3rd Party Application
+  Component`;
+- generator help lists VS18 2026, marks VS17 2022 as the default, and lists
+  Ninja / Ninja Multi-Config;
+- it is not on this shell's `PATH`, so the gates use the absolute path;
+- the edited counter-C, gallery-C, and C-binding CMake files all configure and
+  build with that executable. The latter two were verified in fresh explicitly
+  VS17 directories (`build/gallery-c-vs17`, `build/cmake-c-vs17`).
+
+#### Deterministic-failure rerun and disposition
+
+| Failure | Root cause | Rerun / disposition |
+|---|---|---|
+| First sandboxed Zig invocation returned access denied while reading Zig's WinGet-installed standard library | Sandbox boundary, not a compiler or source result | Re-run outside that boundary under the already required tool permission |
+| First permitted Zig invocation parsed a relative `-Dname=../../...` value as a separate build step | PowerShell argument tokenization; the option name and value were not preserved as one argument | Quoted each complete `-Dname=value` token; the same build then passed |
+| A CMake reconfigure against `build/gallery-c` requested cached generator `Visual Studio 18 2026` and could not resolve the cached VS18 instance | Generator/cache state in that build directory; this executable's help actually marks VS17 as default | No source workaround and no claim about automatic VS18 selection. A fresh directory with explicit `-G "Visual Studio 17 2022"` configured and built green; the counter's existing VS17 directory also reconfigured and built green |
+| Clean release workspace build warned that `wasamo.dll.lib` was absent and offered a runtime-only build as part of its remedy, then completed successfully | Finding F-54 below; the warning observes the build before `wasamo-dll` produces the import library and mixes a causally irrelevant runtime-only command with the valid workspace-build alternative | Recorded and carried with a re-trigger; not hidden by a rerun and not confused with F-5 / F-21 |
+
+**F-54 — the clean `wasamo-sys` missing-import-library warning gives a
+misleading mixed remedy.** `bindings/rust-sys/build.rs` checks for
+`wasamo.dll.lib` before the dependency graph has completed the `wasamo-dll`
+cdylib, then offers `cargo build --workspace` or a runtime-only build followed
+by a retry. The workspace alternative can produce the import library and is
+valid. The `wasamo-runtime` command cannot produce that artifact because the
+package is rlib-only; `wasamo-dll` owns the cdylib/import library. It can still
+supply F-5's uplifted-rlib prerequisite before a later workspace test, so
+calling the entire remedy impossible was stronger than the evidence. The same
+clean workspace build later produced the library and succeeded. T12 does not
+change the existing diagnostic branch or build graph. [handoff.md](./handoff.md)
+records the narrower diagnostic defect for the next task touching the rust-sys
+/ cdylib build seam and re-triggers it on clean builds or warning-policy
+changes.
+
+Post-close-commit verification reproduced F-54 in both cold debug and cold
+release workspace builds after their profile-matching primary runtime build;
+both workspace builds then produced the import library and exited 0. This
+widens the observed profile from the first release run to debug and release,
+without changing the mechanism or turning the warning into a failure.
+
+### Carry-forward audit
+
+The handoff remains `status: skeleton`; T12 did not fill its phase-close
+sections. Each item named in §T12 already has both a destination and a trigger,
+and was retained rather than copied into new prose:
+
+| Required carry-forward | Handoff destination / re-trigger present |
+|---|---|
+| Layout-derived hit rectangles | M4-Phase 2; event routing or a DIP minimum hit target |
+| Host-visible scale / work-area query | M4-Phase 7 / 8; first non-DIP host length |
+| Per-window differing scale | M4-Phase 8; second-window/shared-state audit |
+| Resolution-dependent images | M4-Phase 4; second rasterized asset kind |
+| Integer pixel snapping | Deferred; a recurrence requiring an extension of `DipScale` |
+| Text rendering-quality tuning | M5; explicit rendering-quality work |
+| Custom title bar and V2 non-client reliance | M5; Wasamo begins painting that surface |
+| Non-zero clip inset | Any first non-zero inset |
+| Scale-dependent `measure` | M5 text-quality work; measure becomes scale-dependent and makes T7 ordering load-bearing |
+
+F-54 was added as a new, separately-triggered build-graph residual. Existing
+F-5 / F-21 rows were corrected after independent review: F-5 applies to a cold
+test-only selection, and F-21 requires a workspace build before evidence but
+not a separate runtime-only command before that workspace build.
+
+### Close gate
+
+The approach was re-read against the start gate after the real builds and
+documentation search:
+
+- #1 remains non-applicable: no semantic symbol, schema, IR, or call-site
+  migration was introduced.
+- #2 remains non-applicable in the runtime sense: no runtime structural change
+  landed. Documentation side effects are exhaustively enumerated by the two
+  claim-site tables above.
+- #3 applies and is discharged by the per-proposition and build-instruction
+  audits, including the explicit unchanged historical / immutable sites.
+- #4 remains non-applicable. T12 authored no executable branch, fixture, test,
+  or script. It changed literals in existing CMake diagnostic branches but did
+  not add or alter their control flow; all three edited CMake files were
+  configured and built.
+- #5 applies and is discharged by the handoff audit above; the handoff was not
+  finalized.
+- #6 applies and is discharged by the deterministic-failure table. Every
+  non-green invocation was rooted and rerun or carried with a precise scope;
+  none was retried until it happened to pass.
+- #7 remains non-applicable: no GUI frame was captured or interpreted by T12.
+  Prior task measurements are cited only under their original conditions.
+
+The review lane remains **Normal review**: the approach introduced no schema /
+IR migration, runtime structural change, GUI-render evidence, or diagnostic /
+reject / size branch. Local gates are green. The CI run id, handoff
+finalization, phase retrospective, implementation-preamble status flip,
+workflow vocabulary decision, T7 safety-net check, and process-rule vision
+decision remain the phase-end batch and are deliberately untouched.
+
+### Normal review — 2026-08-04
+
+Reviewed the complete `feat/m4-phase-1...HEAD` diff against the eight T12
+items, the phase-end boundary, the landed runtime, and the proposition tables.
+Three inconsistency groups were found and corrected:
+
+| Finding | Correction |
+|---|---|
+| The live preamble R-1b risk table still prescribed a release workspace build alone before capture, although AGENTS, operational guides, and handoff had been corrected | Added the preamble to the build-order claim-site audit and changed its remedy to the profile-matching primary runtime build followed by the workspace build |
+| `abi_spec.md` §4.1 still said `wasamo_init` "must be called once" immediately before documenting the landed successful second-call no-op | Restated the lifecycle in terms of the **first successful** call and the repeat no-op, without changing the ownership or initialization contract |
+| The preamble's verification-closure row, R-3 / R-4 / R-6 / R-7 risks, lifecycle transition, and cross-reference labels still described T12 outputs as future work | Recorded the actual T9–T12 closures and Moment 2 commits while preserving `status: active` and the handoff skeleton for the phase-end owner |
+
+No other T12-scope discrepancy was found. The implementation preamble remains
+`active`, the handoff remains `skeleton`, every phase-end checkbox remains
+open, and no merge or push was performed. Final doc gates are rerun after the
+review-remediation commit.
+
+### Independent review remediation — 2026-08-04
+
+An independent reviewer falsified the Normal-review build-order conclusion.
+The owner required fact adjudication before edits, then supplied a second
+check and authorized remediation. No file was changed during adjudication.
+
+#### Isolated cold-directory experiment
+
+The two commands used separate, previously absent, ignored Cargo target
+directories under `build/`; neither reused `target/`:
+
+| Command | Direct result | Artifact evidence |
+|---|---|---|
+| `cargo build --workspace --target-dir build/t12-independent-audit-workspace-only-20260804` | exit 0, 61.2 s | Top-level debug `libwasamo_runtime.rlib` (28,394,954 bytes), `wasamo.dll`, `wasamo.dll.lib`, `wasamoc.exe`, and all three Rust host executables exist |
+| `cargo test --workspace --no-run --target-dir build/t12-independent-audit-test-only-20260804` | exit 1, 48.5 s, `LNK1356` for the missing top-level `libwasamo_runtime.rlib` | No top-level runtime rlib, DLL, or import library; a hashed `deps/libwasamo_runtime-cdb2b75697feed81.rlib` exists |
+
+This directly measures the debug cold-build / cold-test distinction. It
+falsifies the T12 claim that a workspace build needs a preceding runtime-only
+build, and confirms the narrower F-5 claim about a cold test-only selection.
+
+T3 separately measured the release/stale behavioral outcome: the mutation
+built through `-p gallery-rust` looked unmutated, and rebuilding the same
+mutation with `cargo build --release --workspace` exposed it by removing the
+three labels. No T3 artifact audit timestamped the uplifted release rlib after
+that workspace command. Therefore the corrected record labels the GUI outcome
+as **measured** and the uplift-refresh explanation as an **inference** from
+Cargo's primary-package artifact layout plus `wasamo-dll/build.rs`'s
+whole-archive input.
+
+#### Review findings and dispositions
+
+| Finding | Adjudication / disposition |
+|---|---|
+| `AGENTS.md` said a workspace build alone was insufficient | Confirmed false; corrected to distinguish cold test-only, workspace build, and host-only package selection |
+| `CONTRIBUTING.md` was an omitted current surface | Confirmed omitted, but its claim was already correct. Added to this audit and left unchanged; the first adjudication incorrectly treated the reviewer as disputing its content |
+| Preamble R-1b attribution | `git log -S` identifies T1 commit `bcf7ea6` as the source of the overbroad heading. T12 inherited and failed to catch it; T12 introduced the redundant remedy. Recorded with that provenance |
+| T12 retrospective as propagation site | It does not contain the exact “workspace build alone is insufficient” sentence, but it endorses the same primary-step model and classifies operational prescriptions under it. Corrected as a T12 conclusion, not as an exact phrase match |
+| Operational README/CMake/Zig/smoke surfaces | They prescribed a redundant step rather than asserting the false proposition. Removed that step and recorded the different defect class. CMake missing-import diagnostics were more misleading because their first remedy command cannot produce the named artifact |
+| CI workflow | Confirmed counterevidence and omitted from the first audit. Its release workspace build → debug workspace build → test order is correct; audited and unchanged |
+| Release workspace remedy for F-21 | The behavioral remedy was directly measured at T3; the precise uplift-refresh mechanism was inferred. Wording now keeps those evidence levels separate |
+| F-54 said the warning's remedy sentence was false/impossible | Too broad. The workspace-build alternative is valid; the runtime-only alternative is causally unrelated to the missing import library but can satisfy F-5 before a later test. Narrowed to a misleading mixed diagnostic; source branch left unchanged and carried forward |
+
+After removing the redundant runtime-only command from the three CMake
+surfaces, the owner-specified VS18-bundled CMake 4.3.1 executable reconfigured
+and built `examples/counter-c`, `examples/gallery-c`, and `bindings/c`; all
+three exited 0. The cached counter and binding directories used the VS17
+generator, while the repaired gallery directory used VS18. This validates the
+edited CMake syntax and generated builds without changing either VS setup.
+
+Final remediation gates: `cargo fmt --all -- --check` and
+`git diff --check` exited 0; a targeted search found no remaining redundant
+runtime-only command in the edited README/CMake/Zig/smoke instruction
+surfaces; and diffs for `.github/workflows/ci.yml`, `CONTRIBUTING.md`, and the
+phase-end retrospective were empty. The full workspace build/test was not
+repeated after these documentation and CMake-message-only edits: the isolated
+cold Cargo experiments above provide the build-order evidence, and the three
+edited CMake surfaces were rebuilt after the edits.
+
+The review lane remains **Normal review** because remediation changes current
+instructions and historical interpretation only. It does not change the
+F-54 diagnostic branch, build graph, runtime structure, schema/IR, or GUI
+evidence. Phase-end batch items remain untouched.

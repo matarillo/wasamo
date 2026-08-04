@@ -213,11 +213,25 @@ time. Builds in the C and Zig host build systems shell out to
   build dependency on `wasamoc` and uses `cargo:rerun-if-changed` to
   recompile when `examples/counter/counter.ui` or `wasamoc` itself
   changes.
-- **Workspace-wide builds** (`cargo build --release --workspace`)
-  build `wasamoc` as part of the graph, so they implicitly satisfy
-  the ordering for `counter-rust`. C and Zig hosts still need an
-  explicit prior `wasamoc` build because they live outside the cargo
-  workspace's build graph.
+- **From a cold target directory, run a debug workspace build before a debug
+  workspace test:** `cargo build --workspace` followed by
+  `cargo test --workspace`. The build selects `wasamo-runtime` as a primary
+  workspace package and creates the uplifted
+  `target/debug/libwasamo_runtime.rlib` that `wasamo-dll/build.rs`
+  whole-archives. A cold `cargo test --workspace` alone compiles only the
+  hashed dependency copy under `target/debug/deps/` and then fails to link.
+  `cargo build -p wasamo-runtime` is an equivalent, narrower way to create the
+  required uplifted rlib before the test; it is not required before a
+  workspace build.
+- After changing `wasamo-runtime`, do not use a host-package-only build as GUI
+  evidence. Build the full workspace in the evidence profile first (normally
+  `cargo build --release --workspace`). A host-only build can relink
+  `wasamo.dll` around a stale uplifted rlib. T3 measured that the release
+  workspace rebuild corrected the resulting GUI behavior; the artifact layout
+  and whole-archive input indicate that primary workspace selection refreshed
+  the uplifted copy. The release workspace build also produces `wasamo.dll`,
+  `wasamo.dll.lib`, and `wasamoc.exe`; C and Zig hosts consume those artifacts
+  from their external build systems.
 
 This pipeline is provisional — see
 [docs/architecture.md §1 "DSL build pipeline"](docs/architecture.md#dsl-build-pipeline-m2-phase-6-onward)
