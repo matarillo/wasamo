@@ -7393,3 +7393,60 @@ before the workspace produces the library, plus the linker stdout warning;
 these are the F-54 / existing diagnostic surfaces already recorded above and
 not new failures. The post-commit tests were local evidence only; they do not
 supersede the two failed GitHub Actions runs in the phase-end gate.
+
+## CI repair experiment — start gate (2026-08-04, `exp/m4-phase-1-ci-fix`)
+
+This is a follow-up experiment on a branch from phase-end commit `720b500`,
+not a revision of T12 or a deletion of the two failed CI records. Its purpose
+is to make the runner-only DPI-matrix failure observable and then remove any
+fixture dependence on an unavailable desktop extent.
+
+| Trap | Applies? | Start-gate reason |
+|---|---|---|
+| #1 semantic migration | no | No enum, IR, schema, or traversal shape changes. |
+| #2 missed side effects | yes | The matrix fixture's client size, authored tile arithmetic, expected row shape, physical targets, and raster assertions are coupled; every derived expectation must be enumerated before changing a constant. |
+| #3 parallel/derived data | yes | The test comments, evidence claims, phase-end residual, handoff, and CI outcome must not contradict the changed fixture or its diagnosis. |
+| #4 untested authored branch | yes | Making the owner-thread panic readable requires a payload-classification branch; its directly fired pure helper test must accompany it if extraction is possible without Win32/WinRT. |
+| #5 carry-forward underweighted | yes | The test executor's cross-thread panic-reporting behavior and the runner-size constraint need durable re-trigger criteria if retained. |
+| #6 deterministic failure / flake rolling | yes | Runs `30873359437` and `30873615639` repeat the same failure. The next CI run must distinguish the failing assertion and its dimensions; retry alone is not a disposition. |
+| #7 weak GUI evidence | no | This is a mock-free runtime integration-test fixture and diagnostics change, not a new GUI-host rendered-evidence claim. Existing owner smoke is not reinterpreted. |
+
+Review lane: **narrow branch/test-focused review**. The experiment changes no
+runtime behavior, ABI, schema/IR, or acceptance claim; it changes a Windows
+integration fixture and its failure relay. If diagnosis shows a runtime
+behavior defect rather than a fixture constraint, stop and reclassify before
+changing production code.
+
+### Fixture audit and local red/green evidence
+
+The former `720 × 480` DIP fixture requests `1440 × 960` physical pixels at
+192 DPI. That request is larger than the effective desktop/client work area
+available on the hosted CI desktop, which is the leading explanation for both
+failed runs. The fixture is reduced to `360 × 240` DIP, still a multiple of
+24; its largest matrix request is consequently `720 × 480` physical pixels.
+The following coupled surfaces were audited rather than changed by constant
+replacement alone:
+
+| Surface | Verified consequence |
+|---|---|
+| Matrix targets | `360 × 240` DIP maps integrally to `375 × 250`, `450 × 300`, `540 × 360`, and `720 × 480` physical pixels at 100/120/144/192 DPI. |
+| Authored UI geometry | Tile cross size and gaps are halved from `88 + 12` to `44 + 6`; the reference row remains seven tiles and the 120-DPI physical-as-DIP mutant remains nine. |
+| Oracle coverage | The 100-DPI target is still deliberately discrete-signature-blind, while the coordinate, clip, width, and raster oracles cover every matrix row. |
+| Failure diagnosis | Every client-size assertion now includes screen and max-track metrics, so a remaining hosted-run failure reports the dimensions that constrained it. |
+| Derived records | The phase-end failed-CI record and handoff remain unchanged until this branch has an actual green GitHub Actions run; neither is rewritten from local evidence. |
+
+The existing T8-M1 seam was re-run after the fixture change. Temporarily
+removing `scale.pair_to_dip` from the `WM_SIZE` inbound client-extent path
+made `dip_layout_is_invariant_while_every_visual_moves_by_the_ratio` fail at
+120 DPI: the realised root was `562.5 × 375.0` DIP instead of `450.0 ×
+300.0`. The exact production source was restored before the green rerun;
+`git diff -- wasamo-runtime/src/window.rs` is empty afterwards. This proves
+the reduced fixture still rejects the prior physical-as-DIP failure mode.
+
+`run_on_owning_runtime_thread_or_skip` now turns an owner-thread panic payload
+into a fresh caller-thread panic. Its three pure tests preserve `String` and
+`&'static str` messages and label a non-string payload. The targeted DPI test
+then passed with all six tests green, including those helper branches. This
+does not claim CI success: after the experiment branch is pushed, run the
+normal CI workflow on that exact commit, attach its run ID and result here,
+and retain the phase→main merge gate until that run is green.

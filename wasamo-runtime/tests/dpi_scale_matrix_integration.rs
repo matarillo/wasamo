@@ -101,8 +101,9 @@ use windows::Win32::UI::HiDpi::{
     DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2,
 };
 use windows::Win32::UI::WindowsAndMessaging::{
-    GetClientRect, GetWindowRect, SendMessageW, SetWindowPos, SWP_NOACTIVATE, SWP_NOMOVE,
-    SWP_NOZORDER, WM_DPICHANGED, WM_LBUTTONUP,
+    GetClientRect, GetSystemMetrics, GetWindowRect, SendMessageW, SetWindowPos, SM_CXMAXTRACK,
+    SM_CXSCREEN, SM_CYMAXTRACK, SM_CYSCREEN, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOZORDER,
+    WM_DPICHANGED, WM_LBUTTONUP,
 };
 use windows::UI::Composition::{CompositionDrawingSurface, CompositionSurfaceBrush};
 
@@ -144,7 +145,7 @@ const DPI_MATRIX: [u32; 4] = [120, 144, 192, 100];
 /// which is a second reason the extent is chosen here rather than inherited.
 /// `96 = 2^5 × 3`, and the matrix contributes denominators 4, 2,
 /// 1 and 24, so **a multiple of 24 makes all four targets integers at once**:
-/// 720 → 750 / 900 / 1080 / 1440 and 480 → 500 / 600 / 720 / 960.
+/// 360 → 375 / 450 / 540 / 720 and 240 → 250 / 300 / 360 / 480.
 ///
 /// **"Integer target" is not "exact in `f32`", and the two are separate
 /// claims** — the confusion T4's finding R-1 was about, arriving one level
@@ -169,21 +170,21 @@ const DPI_MATRIX: [u32; 4] = [120, 144, 192, 100];
 /// 2. The extent must also **fit the monitor at 200%**. Measured: an
 ///    784 × 561 client asks for 1568 × 1122 at 192 DPI and the window realises
 ///    1568 × 1014 — the max track size, a harder failure than any rounding
-///    one. 720 × 480 asks for 1440 × 960 and gets it on the development
-///    machine; a smaller display needs a smaller multiple of 24, and
-///    `set_client_extent`'s assertion is what says so rather than letting the
-///    run drift. **The margin narrowed at T9** and the constraint still holds,
-///    measured: the process is now Per-Monitor-Aware V2, so the non-client
-///    frame the outer rectangle has to carry is the monitor's rather than the
-///    96-DPI one — a few pixels taller on a scaled display — while the max
-///    track size is unchanged.
-const CLIENT_W: i32 = 720;
-const CLIENT_H: i32 = 480;
+///    one. The former 720 × 480 fixture asked for 1440 × 960, which made the
+///    evidence depend on a desktop extent the test does not control. This
+///    360 × 240 multiple-of-24 fixture asks for only 720 × 480 at 200% while
+///    preserving the same row-count falsifier below. The realised extent is
+///    still asserted and now reports the display / maximum-track metrics on
+///    failure. **The margin narrowed at T9** and the constraint still holds:
+///    the process is Per-Monitor-Aware V2, so the non-client frame the outer
+///    rectangle has to carry is the monitor's rather than the 96-DPI one.
+const CLIENT_W: i32 = 360;
+const CLIENT_H: i32 = 240;
 
 /// Tiles per row, predicted from the fixture's authored numbers and
-/// [`CLIENT_W`]: `88 + 12` per tile in a 720 DIP line gives
-/// `floor((720 + 12) / 100) = 7`. An implementation that treated the physical
-/// client as logical would lay out into 900 DIP at 120 DPI and fit **9** — the
+/// [`CLIENT_W`]: `44 + 6` per tile in a 360 DIP line gives
+/// `floor((360 + 6) / 50) = 7`. An implementation that treated the physical
+/// client as logical would lay out into 450 DIP at 120 DPI and fit **9** — the
 /// signature the plan records for §T10, and it is measured here rather than
 /// predicted (mutation M1 with the root assertion shadowed reads `(9, 2)`).
 ///
@@ -217,8 +218,8 @@ const CLIENT_H: i32 = 480;
 /// `dip_layout_is_invariant_while_every_visual_moves_by_the_ratio`.
 ///
 /// **The 9-vs-7 signature degenerates at 100 DPI** (finding MINOR 5). A
-/// physical-as-logical implementation lays out into 750 DIP there, and
-/// `floor((750 + 12) / 100)` is **7** — the same count a correct
+/// physical-as-logical implementation lays out into 375 DIP there, and
+/// `floor((375 + 6) / 50)` is **7** — the same count a correct
 /// implementation gives. The discrete witness discriminates at 120 / 144 /
 /// 192 and is blind at 100; only the root and ratio assertions catch M1
 /// there.
@@ -236,9 +237,9 @@ component ScaleMatrix inherits Window {
     title: "T8 scale matrix"
 
     WrapPanel {
-        item-cross-size: 88
-        item-spacing: 12
-        line-spacing: 12
+        item-cross-size: 44
+        item-spacing: 6
+        line-spacing: 6
 
         Box { aspect: 1:1 fill: #4f6272 Text { text: "t00" } }
         Box { aspect: 1:1 fill: #4f6272 Text { text: "t01" } }
@@ -303,6 +304,18 @@ unsafe fn client_extent(hwnd: HWND) -> (i32, i32) {
     (rect.right - rect.left, rect.bottom - rect.top)
 }
 
+/// The runner geometry that constrains a real `SetWindowPos` request. These
+/// values are diagnostic evidence only: the fixture remains fixed so its
+/// arithmetic and mutation signatures do not become environment-dependent.
+unsafe fn display_limits() -> (i32, i32, i32, i32) {
+    (
+        GetSystemMetrics(SM_CXSCREEN),
+        GetSystemMetrics(SM_CYSCREEN),
+        GetSystemMetrics(SM_CXMAXTRACK),
+        GetSystemMetrics(SM_CYMAXTRACK),
+    )
+}
+
 unsafe fn window_rect(hwnd: HWND) -> RECT {
     let mut rect = RECT::default();
     GetWindowRect(hwnd, &mut rect).expect("GetWindowRect");
@@ -339,11 +352,18 @@ unsafe fn set_client_extent(hwnd: HWND, client_w: i32, client_h: i32, what: &str
         SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE,
     )
     .expect("SetWindowPos");
+    let limits = display_limits();
     assert_eq!(
         client_extent(hwnd),
         (client_w, client_h),
         "{what}: the realised client extent must be the requested one, or every \
-         invariance assertion below is about a rectangle nobody chose"
+         invariance assertion below is about a rectangle nobody chose; \
+         requested_client=({client_w},{client_h}), \
+         display=(screen {}x{}, max_track {}x{})",
+        limits.0,
+        limits.1,
+        limits.2,
+        limits.3,
     );
 }
 
@@ -377,11 +397,18 @@ unsafe fn set_client_extent(hwnd: HWND, client_w: i32, client_h: i32, what: &str
 unsafe fn normalise_to_reference_baseline(window: *mut ffi::WasamoWindow, what: &str) {
     let hwnd = (*window).hwnd;
     send_dpi_change_to_client(hwnd, REFERENCE_DPI, CLIENT_W, CLIENT_H);
+    let limits = display_limits();
     assert_eq!(
         client_extent(hwnd),
         (CLIENT_W, CLIENT_H),
         "{what}: the realised client extent must be the requested one, or every \
-         invariance assertion below is about a rectangle nobody chose"
+         invariance assertion below is about a rectangle nobody chose; \
+         requested_client=({CLIENT_W},{CLIENT_H}), \
+         display=(screen {}x{}, max_track {}x{})",
+        limits.0,
+        limits.1,
+        limits.2,
+        limits.3,
     );
     assert_eq!(
         ffi::__window_scale_dpi_for_test(window),
@@ -467,15 +494,14 @@ fn row_shape(tiles: &[(f32, f32, f32, f32)]) -> (usize, usize) {
 /// `dpi / 96` is dyadic — and therefore exact at these magnitudes — exactly
 /// when 3 divides the DPI. At 100 DPI it is not, and the split is **measured
 /// rather than defensive**: forcing this function to `true` fails on the root
-/// height with `500.0` read against `499.99997` expected. Note which side is
-/// which. The runtime produced exactly 500; the *test's* expectation
-/// (`before × factor` = `480 × f32(100/96)`) is the imprecise number, because
-/// the DIP extent the runtime actually laid out into is `500 ÷ f32(100/96)` =
-/// 480.00003 rather than 480. So the invariance is real at 100 DPI and the
+/// height. The runtime produces the exact integer target; the *test's*
+/// expectation (`CLIENT_H × f32(100/96)`) is the imprecise number, because the
+/// DIP extent the runtime actually laid out into is the exact integer target
+/// divided by that `f32` factor. So the invariance is real at 100 DPI and the
 /// naive restatement of it is not exact — a property of `f32`, not of the
 /// conversion boundary — which is why the bound is stated for the DPIs that
-/// need it instead of being applied everywhere and hiding the three that
-/// do not.
+/// need it instead of being applied everywhere and hiding the three that do
+/// not.
 fn factor_is_exact(dpi: u32) -> bool {
     dpi % 3 == 0
 }
@@ -632,6 +658,7 @@ fn dip_layout_is_invariant_while_every_visual_moves_by_the_ratio() {
                 let after = read_tiles(window);
                 let after_surface = read_first_label_surface(window);
                 let after_label = read_first_label_rect(window);
+                let limits = display_limits();
 
                 ffi::wasamo_window_destroy(window);
 
@@ -640,7 +667,12 @@ fn dip_layout_is_invariant_while_every_visual_moves_by_the_ratio() {
                     (target_w, target_h),
                     "dpi={dpi}: the DIP client extent is preserved only if the \
                      physical one moved by the ratio; the whole invariance claim \
-                     is about this input"
+                     is about this input; requested_client=({target_w},{target_h}), \
+                     display=(screen {}x{}, max_track {}x{})",
+                    limits.0,
+                    limits.1,
+                    limits.2,
+                    limits.3,
                 );
                 assert_eq!(cached, dpi, "dpi={dpi}: the scale is committed");
 
