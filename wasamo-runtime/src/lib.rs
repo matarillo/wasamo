@@ -5,6 +5,11 @@ mod box_values;
 // production caller until T4 puts the authoritative value on `WindowState`.
 mod dip_scale;
 mod emit;
+// M4-Phase 2 pre-ADR spike: the Win32-independent focus traversal core.
+// Declared here so the module compiles and its unit tests run; it has no
+// production caller, and whether it ships in this shape is DD-M4-P2-003's
+// decision. See process/milestone-4/phase-2/decisions/exploration/.
+mod focus_core;
 pub mod handler;
 pub mod ir_loader;
 mod layout;
