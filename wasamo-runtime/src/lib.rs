@@ -10,6 +10,7 @@ mod emit;
 // production caller, and whether it ships in this shape is DD-M4-P2-003's
 // decision. See process/milestone-4/phase-2/decisions/exploration/.
 mod focus_core;
+mod focus_spike;
 pub mod handler;
 pub mod ir_loader;
 mod layout;
@@ -98,6 +99,24 @@ pub mod ffi {
     pub unsafe fn __window_scale_dpi_for_test(window: *mut WasamoWindow) -> u32 {
         (*window).scale.dpi()
     }
+}
+
+/// M4-Phase 2 **pre-ADR spike** seam: the focus traversal core and its
+/// projection from a live widget tree, reachable from the integration-test
+/// crate.
+///
+/// Named `__..._spike` rather than exported under a plain module path because
+/// it is not API and not a decision — DD-M4-P2-003 chooses whether any of this
+/// ships, and DD-M4-P2-005 chooses how the annotations are authored. The seam
+/// exists so the mechanism fixture can drive the core against a tree built
+/// through the real `.ui` -> IR -> runtime path, which is the only way to
+/// measure what the projection needs.
+///
+/// Deleted or replaced wholesale when the ADR set lands.
+#[doc(hidden)]
+pub mod __focus_spike {
+    pub use crate::focus_core::*;
+    pub use crate::focus_spike::*;
 }
 
 pub use layout::{Alignment, SizeConstraint, WidgetKind};

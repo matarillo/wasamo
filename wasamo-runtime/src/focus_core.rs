@@ -164,6 +164,10 @@ impl FocusTree {
         self.nodes[id].role
     }
 
+    pub fn parent(&self, id: FocusId) -> Option<FocusId> {
+        self.nodes[id].parent
+    }
+
     // ── Traversal domain ─────────────────────────────────────────────────
 
     /// The subtree traversal is confined to: the innermost entered modal
@@ -487,14 +491,28 @@ impl FocusState {
         self.active_item.insert(list, item);
     }
 
-    /// Enter a modal scope, capturing the focus to restore on exit.
-    pub fn enter_modal(&mut self, tree: &FocusTree, scope: FocusId) {
+    /// Enter a modal scope, capturing the focus to restore on exit. Returns
+    /// false — and changes nothing — when `scope` is not annotated as one.
+    ///
+    /// **The role check is load-bearing, and was added because a mutation
+    /// showed its absence was undetectable** (spike finding S-3). Confinement
+    /// comes from the stack, not from the role: with no check, pushing *any*
+    /// container confines traversal to it, and the mechanism fixture's
+    /// containment assertions passed against a projection that had dropped the
+    /// annotation entirely. The role's own contribution is the separate
+    /// property that an un-entered scope is not tabbable; the two are
+    /// separable mechanisms, and only this check ties them to one concept.
+    pub fn enter_modal(&mut self, tree: &FocusTree, scope: FocusId) -> bool {
+        if tree.role(scope) != FocusRole::ModalScope {
+            return false;
+        }
         self.modal_stack.push(ModalEntry {
             scope,
             restore_to: self.focused,
         });
         let entering = tree.initial_focus(self);
         self.set_focus(tree, entering);
+        true
     }
 
     /// Leave the innermost modal scope, restoring the focus captured at entry.
@@ -857,6 +875,19 @@ mod tests {
             Some(g),
             "a group with no members must not vanish from traversal"
         );
+    }
+
+    #[test]
+    fn a_node_that_is_not_a_scope_cannot_be_entered_as_one() {
+        let f = gallery();
+        let mut state = FocusState::default();
+        state.set_focus(&f.tree, Some(f.thumb0));
+        assert!(
+            !state.enter_modal(&f.tree, f.thumb1),
+            "only a node annotated as a scope may confine traversal"
+        );
+        assert_eq!(state.modal_depth(), 0, "the rejected entry changed nothing");
+        assert_eq!(state.focused(), Some(f.thumb0));
     }
 
     #[test]

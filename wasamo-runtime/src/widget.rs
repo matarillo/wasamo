@@ -986,6 +986,33 @@ impl WidgetNode {
         }
     }
 
+    /// M4-Phase 2 spike seam: the focus role and enabled state derivable from
+    /// this node's **widget kind alone**, with no authored annotation.
+    ///
+    /// Deliberately total over `WidgetData` rather than a `_` arm, so a later
+    /// widget kind cannot become a silent `Container`. The measurement it
+    /// exists for is the size of the gap: only two of `FocusRole`'s six
+    /// variants are reachable from here, which is what
+    /// `process/milestone-4/phase-2/decisions/exploration/` records as the
+    /// annotation surface DD-M4-P2-005 must design.
+    pub(crate) fn spike_focus_role(&self) -> (crate::focus_core::FocusRole, bool) {
+        use crate::focus_core::FocusRole;
+        match &self.data {
+            WidgetData::Button(btn) | WidgetData::ToggleButton(btn) => {
+                (FocusRole::Stop, btn.enabled)
+            }
+            WidgetData::Rectangle
+            | WidgetData::VStack { .. }
+            | WidgetData::HStack { .. }
+            | WidgetData::Text { .. }
+            | WidgetData::Box { .. }
+            | WidgetData::WrapPanel { .. }
+            | WidgetData::ScrollView { .. }
+            | WidgetData::Grid { .. }
+            | WidgetData::ZStack { .. } => (FocusRole::Container, true),
+        }
+    }
+
     // ── Property R/W (wasamo.h §4.3 + §5 experimental property IDs) ───────────
     //
     // Dispatch is enum-on-`WidgetData`: each variant accepts only the IDs that
