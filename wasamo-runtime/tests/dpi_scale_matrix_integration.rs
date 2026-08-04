@@ -185,8 +185,10 @@ const CLIENT_H: i32 = 240;
 /// [`CLIENT_W`]: `44 + 6` per tile in a 360 DIP line gives
 /// `floor((360 + 6) / 50) = 7`. An implementation that treated the physical
 /// client as logical would lay out into 450 DIP at 120 DPI and fit **9** — the
-/// signature the plan records for §T10, and it is measured here rather than
-/// predicted (mutation M1 with the root assertion shadowed reads `(9, 2)`).
+/// signature the plan records for §T10. `(9, 2)` was measured with the
+/// original 720 × 480 fixture; after this fixture was reduced it is re-derived
+/// from the same authored arithmetic. The current M1 rerun instead reaches the
+/// earlier root-extent assertion first.
 ///
 /// **What this witness is, corrected at the T8 round-2 review (finding
 /// MINOR 3).** It was introduced as the fact that makes the ADR's evidence
@@ -494,14 +496,15 @@ fn row_shape(tiles: &[(f32, f32, f32, f32)]) -> (usize, usize) {
 /// `dpi / 96` is dyadic — and therefore exact at these magnitudes — exactly
 /// when 3 divides the DPI. At 100 DPI it is not, and the split is **measured
 /// rather than defensive**: forcing this function to `true` fails on the root
-/// height. The runtime produces the exact integer target; the *test's*
-/// expectation (`CLIENT_H × f32(100/96)`) is the imprecise number, because the
-/// DIP extent the runtime actually laid out into is the exact integer target
-/// divided by that `f32` factor. So the invariance is real at 100 DPI and the
-/// naive restatement of it is not exact — a property of `f32`, not of the
-/// conversion boundary — which is why the bound is stated for the DPIs that
-/// need it instead of being applied everywhere and hiding the three that do
-/// not.
+/// height: the measured values with this fixture are `250.0` actual against
+/// `249.99998` expected. The runtime produces the exact integer target; the
+/// *test's* expectation (`CLIENT_H × f32(100/96)`) is the imprecise number,
+/// because the DIP extent the runtime actually laid out into is the exact
+/// integer target divided by that `f32` factor. So the invariance is real at
+/// 100 DPI and the naive restatement of it is not exact — a property of `f32`,
+/// not of the conversion boundary — which is why the bound is stated for the
+/// DPIs that need it instead of being applied everywhere and hiding the three
+/// that do not.
 fn factor_is_exact(dpi: u32) -> bool {
     dpi % 3 == 0
 }

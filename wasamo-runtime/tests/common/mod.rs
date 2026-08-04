@@ -113,7 +113,7 @@ fn github_actions() -> bool {
 /// calling libtest thread. `resume_unwind` intentionally bypasses that
 /// thread's panic hook, which hides an assertion's values from CI output when
 /// the originating owner thread's output is captured separately.
-fn panic_payload_message(payload: &(dyn Any + Send)) -> String {
+pub(crate) fn panic_payload_message(payload: &(dyn Any + Send)) -> String {
     if let Some(message) = payload.downcast_ref::<String>() {
         message.clone()
     } else if let Some(message) = payload.downcast_ref::<&'static str>() {
@@ -254,32 +254,5 @@ where
             );
             eprintln!("skipping {test_name}: runtime compositor unavailable");
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::panic_payload_message;
-    use std::any::Any;
-
-    #[test]
-    fn panic_payload_message_preserves_string_payload() {
-        let payload: Box<dyn Any + Send> = Box::new(String::from("string payload"));
-        assert_eq!(panic_payload_message(payload.as_ref()), "string payload");
-    }
-
-    #[test]
-    fn panic_payload_message_preserves_static_str_payload() {
-        let payload: Box<dyn Any + Send> = Box::new("static payload");
-        assert_eq!(panic_payload_message(payload.as_ref()), "static payload");
-    }
-
-    #[test]
-    fn panic_payload_message_labels_opaque_payload() {
-        let payload: Box<dyn Any + Send> = Box::new(42_u32);
-        assert_eq!(
-            panic_payload_message(payload.as_ref()),
-            "non-string panic payload from runtime-owning thread"
-        );
     }
 }

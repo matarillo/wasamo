@@ -7451,6 +7451,11 @@ does not claim CI success: after the experiment branch is pushed, run the
 normal CI workflow on that exact commit, attach its run ID and result here,
 and retain the phase→main merge gate until that run is green.
 
+Before committing the repair, `cargo fmt --all -- --check` and `git diff
+--check` both exited 0. They were run with the targeted integration test and
+the release/debug workspace build and test sequence; their result is recorded
+here explicitly as the repair close's forcing-tier formatting/diff artifact.
+
 ### CI result and phase integration (2026-08-04)
 
 The required CI run was dispatched on the exact repair commit
@@ -7469,5 +7474,36 @@ then merged no-ff into `feat/m4-phase-1` as
 `26e2defe29136f8354459202dfc7b1b70185c573` (`merge: apply M4 Phase 1 CI
 repair experiment`). The merge commit has the identical source tree to the
 CI-verified repair commit, so integration introduced no unverified content.
-The CI criterion is now satisfied. Phase→main merge and push remain separate
-owner-controlled gates; this record grants neither.
+The repair was dispatched from `exp/m4-phase-1-ci-fix`, not the phase branch
+named by retrospective item 16. That branch-name deviation is deliberate and
+limited: `1f162dc` is an ancestor of the phase HEAD; the no-ff merge is
+tree-identical to it; and later `7ec7fe2` changes only `process/` files while
+the single CI job has no documentation-validation or path-dependent step. The
+CI criterion is now satisfied on that equivalence basis. Phase→main merge and
+push remain separate owner-controlled gates; this record grants neither.
+
+### Review-remediation close (2026-08-04)
+
+Independent review identified that the initial hosted-desktop geometry theory
+was not measured: the new screen/max-track diagnostic did not fire in the
+green run. The handoff consequently records it only as the leading
+explanation, and retains the stronger, measured rule that the fixture must not
+depend on an uncontrolled desktop extent. The review also identified that
+item 16 names the phase branch. The experimental-branch dispatch is now
+recorded as a limited branch-name deviation with its repair/merge tree
+equivalence, not silently treated as literal compliance.
+
+The dated phase-end retrospective's initial CI conclusion was restored and
+the later result was added as §16b rather than rewriting that conclusion.
+The fixture's `(9, 2)` row shape is labelled re-derived, not newly measured;
+forcing the 100-DPI exactness branch red re-measured `250.0` actual against
+`249.99998` expected. The panic-payload helper tests now live in their own
+`common_panic_payload` integration binary, so they run once rather than once
+per integration binary that imports `common`.
+
+Review-remediation verification: `cargo fmt --all -- --check` and `git diff
+--check` exited 0; `cargo test -p wasamo-runtime --test
+common_panic_payload -- --nocapture` passed all three helper tests; and
+`cargo test -p wasamo-runtime --test dpi_scale_matrix_integration --
+--nocapture` passed all three DPI tests. The test-only exactness mutation
+failed as expected before restoration.

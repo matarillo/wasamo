@@ -2678,12 +2678,9 @@ T12 rerun.
 
 ### Phase-end batch results (2026-08-04)
 
-- [x] Actual CI initially dispatched twice against `544574c` and recorded in
-      [phase-end.md](../retrospectives/phase-end.md); both runs failed the
-      same DPI matrix test. The phase-end-owned repair at `1f162dc` then
-      passed [run 30878747516](https://github.com/matarillo/wasamo/actions/runs/30878747516)
-      and was merged no-ff as `26e2def`, so the CI criterion is discharged;
-      phase→main still awaits owner approval.
+- [x] Actual CI dispatched twice against `544574c` and recorded in
+      [phase-end.md](../retrospectives/phase-end.md); both runs fail the same
+      DPI matrix test, so phase→main remains gated.
 - [x] Finalize [handoff.md](./handoff.md) as `status: recorded`.
 - [x] Record [phase-end.md](../retrospectives/phase-end.md) as `recorded`.
 - [x] Transition [preamble.md](./preamble.md) from `active` to `closing`.
@@ -2691,6 +2688,16 @@ T12 rerun.
       ownership or retrospective.
 - [x] Record DD-V-029 and update the implementation-gates SSOT in the same
       batch.
+
+### Post-close CI remediation (2026-08-04)
+
+- [x] The phase-end-owned repair at `1f162dc` passed
+      [run 30878747516](https://github.com/matarillo/wasamo/actions/runs/30878747516)
+      on `exp/m4-phase-1-ci-fix` and was merged no-ff as `26e2def`. This is a
+      recorded item-16 branch-name deviation, justified only by the identical
+      repair/merge source tree and the later process-only documentation diff;
+      see [phase-end.md](../retrospectives/phase-end.md) §16b. The CI criterion
+      is discharged; phase→main still awaits owner approval.
 
 **Start gate:** trap #3's documentation analogue (do not restate spec or
 handoff content in derived prose — cite the owning document) and trap
