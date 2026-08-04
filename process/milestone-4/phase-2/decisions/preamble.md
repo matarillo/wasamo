@@ -3,8 +3,8 @@
 **Phase:** M4-Phase 2 (event routing, focus model, and generic click
 handling — **the milestone's centre of gravity**)
 **Date:** 2026-08-05
-**Status:** Proposed (owner review pending; DD-001 … DD-005 all
-`Proposed`)
+**Status:** Accepted (owner approval 2026-08-05; DD-001 … DD-005 all
+Accepted 2026-08-05)
 
 ## Context
 
@@ -121,10 +121,10 @@ require.
 
 ## Revisions
 
-*(None yet. This set is `Proposed`; revisions after acceptance follow
-the supersede rule, and a qualification that does not change what a
-reader would implement is recorded as a dated annotation instead
-— [workflow.md §凍結文書](../../../procedures/workflow.md).)*
+*(None yet. Revisions after acceptance follow the supersede rule, and a
+qualification that does not change what a reader would implement is
+recorded as a dated annotation instead —
+[workflow.md §凍結文書](../../../procedures/workflow.md).)*
 
 Per framing agreement 5, a spike may also run **during** the phase, and
 a finding from it may reopen an Accepted decision here through the same

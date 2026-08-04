@@ -1,6 +1,6 @@
 # DD-M4-P2-004 — The structure-independent modal focus scope
 
-**Status:** Proposed
+**Status:** Accepted
 **Phase:** M4-Phase 2
 **AC:** AC1 (modal focus scope), and the rule halves of AC10 and AC5
 
