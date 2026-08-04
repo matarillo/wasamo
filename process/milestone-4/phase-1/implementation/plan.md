@@ -2701,6 +2701,14 @@ T12 rerun.
       Phase→main still awaits owner-authorized push, green phase-branch CI,
       and owner approval.
 
+### Phase-branch CI completion (2026-08-04)
+
+- [x] After owner-authorized push, [run 30881324493](https://github.com/matarillo/wasamo/actions/runs/30881324493)
+      passed on `feat/m4-phase-1`. The verified code tree is introduced by
+      `484aee68c3e79d20a056d2159fa3a1bc64de1599`; only `process/` changes
+      intervened before the dispatched head. Item 16 is satisfied. The only
+      remaining phase-close action is owner approval for phase→main merge.
+
 **Start gate:** trap #3's documentation analogue (do not restate spec or
 handoff content in derived prose — cite the owning document) and trap
 #5. **End gate:** local gates green; the Moment 2 divergence corrections

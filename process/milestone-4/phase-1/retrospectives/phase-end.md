@@ -108,6 +108,19 @@ remains unmeasured. The CI criterion remains open until the owner authorizes a
 push of `feat/m4-phase-1` and a `workflow_dispatch` run on that branch is
 green. Phase→main merge and push remain separate owner-controlled gates.
 
+### 16c. Phase-branch CI completion (2026-08-04)
+
+After the owner authorized the phase-branch push, `workflow_dispatch` on
+`feat/m4-phase-1` completed successfully as
+[run 30881324493](https://github.com/matarillo/wasamo/actions/runs/30881324493).
+Release/debug workspace builds, workspace tests, C/CMake/Rust/Zig smoke tests,
+and `wasamoc` checks all passed. The latest code-changing commit is
+`484aee68c3e79d20a056d2159fa3a1bc64de1599`; only documentation under
+`process/` intervened before the dispatched phase-branch HEAD. Thus the phase
+branch named by item 16 directly verifies the current code tree, without
+depending on §16b's earlier experimental-branch deviation. The CI criterion is
+now satisfied; phase→main merge and push remain owner-controlled gates.
+
 ### 17. Human-visible GUI smoke
 
 T11's owner smoke is the phase's human-visible evidence: aware/unaware pairs,

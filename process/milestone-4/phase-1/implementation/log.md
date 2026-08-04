@@ -7512,3 +7512,19 @@ The next required action is owner-authorized push of `feat/m4-phase-1`, then
 Only that run can discharge the CI criterion. The required formatting and
 diff artifacts are the `cargo fmt --all -- --check` and `git diff --check`
 results recorded in the review-remediation close above.
+
+### Phase-branch CI completion (2026-08-04)
+
+After owner-authorized push, `workflow_dispatch` ran on `feat/m4-phase-1` as
+[run 30881324493](https://github.com/matarillo/wasamo/actions/runs/30881324493)
+and completed successfully. Its `cargo build` job (`91903158792`) passed the
+release/debug workspace builds, workspace tests, C/CMake/Rust/Zig smoke tests,
+and both `wasamoc check` steps.
+
+The latest code-changing commit is
+`484aee68c3e79d20a056d2159fa3a1bc64de1599`; only `process/` changes intervened
+between it and the dispatched phase-branch HEAD. The successful phase-branch
+run therefore verifies that code tree directly, while the documentation-only
+commit identifiers are deliberately not recorded here. Retrospective item 16's
+CI criterion is now satisfied. Phase→main merge and push remain separate
+owner-controlled gates.
