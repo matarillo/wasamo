@@ -106,12 +106,27 @@ their mobile-specific sources.
   built-in behaviour of the scope.
 - **K2 — one signal per key** (`key-left => { … }`, `key-right`,
   `key-escape`), delivered by DD-001's walk.
-- **K3 — one signal that names its key**
-  (`key-pressed("ArrowLeft") => { … }`), same delivery.
+- **K3 — one signal that names its key as a string**
+  (`key-down("ArrowLeft") => { … }`), same delivery.
 - **K4 — one signal that receives every key**, with the handler body
   deciding which key it was (Slint's `key-pressed(event) -> EventResult`
   shape).
 - **K5 — a declarative shortcut table** at window or scope level.
+- **K6 — K3's shape with a structured key value** rather than a string
+  (`key-down(Key.ArrowLeft) => { … }`, with a modifier set as part of
+  the value).
+
+K3 / K4 / K6 are **not three points on one line**. Two independent axes
+are in play, and conflating them is how a reader ends up thinking the
+string is the only alternative to Slint's callback:
+
+| | key selected in the **declaration** | key selected in the **body** |
+|---|---|---|
+| key denoted by a **string** | K3 | (possible; same body blocker as K4) |
+| key denoted by a **structured value** | K6 | K4 (Slint's shape) |
+
+The two axes have **different blockers in M4**, which is why they are
+listed separately and excluded separately.
 
 ## Comparison
 
@@ -270,6 +285,49 @@ and expensive elsewhere:
   to the topmost item in the top layer". Bubbling would let a dialog
   that ignores Esc close the menu underneath it.
 
+### What kind of event this is — a physical key press, not a character
+
+Fixed here because the answer constrains every option below, and
+because the web platform's own history shows what happens when it is
+left implicit.
+
+**This surface is the equivalent of the DOM `keydown` event, not of the
+deprecated `keypress`.** The distinction the web settled on is:
+
+- **`keydown`** — a physical key went down, carrying the key's identity
+  and the modifier state. Used for *commands*.
+- **`beforeinput`** — text is about to be inserted, whatever produced
+  it. Used for *content*.
+- **`keypress`** — deprecated, because it tried to be both and could
+  represent neither the modifier-bearing command nor the text produced
+  by an IME, a flick keyboard, dictation, or a paste.
+
+Wasamo takes the same split, and the two halves land in different
+phases: **this signal is the command half**, and the content half is
+M4-Phase 5's text field and M4-Phase 6's TSF integration, which receive
+text through the text-store path and **not** through key signals.
+
+Two rules follow that are fixed here and implemented later, in the same
+way this record fixes the screen-reader modality rule for M4-Phase 11:
+
+- **While an IME composition is active, key events belong to the
+  composition and are not delivered to authored handlers.** This is not
+  a detail: without it, pressing Left to move within a Japanese
+  candidate list inside A's lightbox would also step the photo. The web
+  platform needs `isComposing` for exactly this, and it is the concrete
+  reason `keypress` could not survive.
+- **Auto-repeat is delivered.** Holding Left scans back through photos,
+  which is the behaviour A wants and which an author cannot reconstruct
+  without state. The cost is that a repeat-hostile action — a save — is
+  not well served, and that case is not expressible in M4 anyway (see
+  the character-key limit below). A structured event (K4 / K6) is where
+  a repeat flag would live.
+
+The signal is therefore named **`key-down`**, not `key-pressed`.
+Slint's callback is spelled `key-pressed`, and following it would
+collide with the one web name that means something different from what
+we mean. `key-down` also pairs with a later `key-up`.
+
 ### Authored key input: K3
 
 **The owner's objection to K2 is correct and is the reason this section
@@ -291,20 +349,13 @@ If the body cannot select the key, the declaration must. That is K3, and
 it is **not** K2 with better marketing:
 
 - **K3 adds one signal, not one per key.** Any key is expressible on the
-  first day — `key-pressed("F5")`, `key-pressed("Delete")` — so nothing
+  first day — `key-down("F5")`, `key-down("Delete")` — so nothing
   has to be deleted or grandfathered at 1.0. This is the whole of the
   owner's objection, answered structurally.
-- **Modifiers extend the value, not the language**:
-  `key-pressed("Ctrl+S")` needs a wider key-name grammar, not a new
-  production. A key named by *identifier* (`key-pressed.ArrowLeft`,
-  reusing the `slot.*` precedent) would be cheaper today and would have
-  to be replaced on the day modifiers arrive, because `Ctrl+S` is not an
-  identifier.
-- **K4 remains addable, and the two coexist without redundancy.** HTML
-  ships `accesskey` beside `onkeydown`; Flutter ships `Shortcuts` beside
-  `KeyboardListener`. A declarative filter and a catch-all are different
-  tools, not two spellings of one. K4 becomes authorable once the
-  language has comparison and branching.
+- **A key named by *identifier*** (`key-down.ArrowLeft`, reusing the
+  `slot.*` precedent) would be cheaper today — no new production — and
+  would have to be replaced on the day modifiers arrive, because
+  `Ctrl+S` is not an identifier.
 - **K5 is out**, as before: the intake classification puts a general
   shortcut mechanism outside M4, and a table detached from the widget
   tree brings its own precedence rules. K3 needs none — it rides
@@ -313,6 +364,76 @@ it is **not** K2 with better marketing:
   `"ArrowLef"` that silently never fires is the failure mode this
   surface would otherwise ship with. M4 recognises a small named-key
   table; widening it is additive.
+
+#### The named-key limit, and a correction to this record's own claim
+
+An earlier draft of this section said modifiers "extend the value, not
+the language", offering `"Ctrl+S"` as the illustration. **That was too
+quick, and taking the question seriously breaks it into two extensions
+with different costs.**
+
+`keydown` exposes two different identities for the same physical press:
+the **logical key** the layout produces (DOM `event.key` — pressing the
+physical `Q` position on AZERTY yields `"a"`) and the **physical
+position** (DOM `event.code` — `"KeyQ"` regardless of layout). A
+shortcut is conventionally spelled against the logical key so it matches
+the labels on the user's keyboard; a game's WASD wants the physical one.
+A string key name does not say which.
+
+**M4 defers that question by construction**, and this is a decision
+rather than an oversight: the recognised table contains **named
+non-character keys only** — `Escape`, the four arrows, `Home`, `End`,
+`PageUp`, `PageDown`, `Enter`, `Tab`-adjacent names, function keys —
+for which the logical key and the physical position **coincide**. All of
+M4's consumers are inside that set.
+
+Two consequences, stated so a later phase does not inherit a false
+premise:
+
+- **`"Ctrl+S"` is not expressible in M4.** Admitting a character key is
+  what forces the logical-versus-physical decision, and modifiers are
+  mostly wanted *with* character keys. So modifiers and character keys
+  are one extension in practice, not two, and neither is free.
+- The extension remains **additive** — a wider table plus one settled
+  question — but the earlier claim that it costs nothing but a value
+  grammar was wrong.
+
+#### Why K4 and K6 are both deferred, for different reasons
+
+The owner asked whether a non-string key representation is simply the
+Slint-style callback under another name. **It is not**, and separating
+them is what makes each exclusion checkable.
+
+- **K4 (body-filtered) is blocked by the statement grammar.**
+  `statement ::= assign_stmt ";"` — a handler body holds assignments and
+  nothing else. No `if`, and no comparison in the expression language
+  until M4-Phase 3's predicates. K4 is not authorable in M4 **however
+  the runtime delivers the event**.
+- **K6 (structured denotation) is blocked by the value grammar.** It
+  needs a typed constant — a `Key` namespace with an `IrLiteral` to
+  carry it — which is a new kind of value in the language, not a new
+  spelling of an existing one. The `TypedValue` hold
+  ([M4 framing](../../requirements/framing.md) §M4 に入れないもの) is
+  the neighbouring decision, and inventing a one-off enum beside it is
+  the sort of fait accompli this milestone avoids elsewhere.
+- **They are deferred *together*, and that is the substantive point.**
+  With the key selected in the declaration, a string and a structured
+  value do exactly the same work: neither is compared, neither is
+  passed anywhere, and the typo protection an enum would give is
+  recovered by validating the name at `check`. **A structured key's
+  payoff is almost entirely in the body-filtered form** — comparing
+  against `Key.ArrowLeft`, reading a modifier set, testing a repeat
+  flag. So K6 without K4 buys type-safety Wasamo already has by another
+  route, at the cost of a new value kind; and K4 without K6 would want
+  K6 immediately. The pair is one future decision, not two.
+
+**Recorded conclusion: neither K4 nor K6 is supported in M4-Phase 2.**
+The reopening condition is the same for both — a handler body that can
+branch, which needs M4-Phase 3's comparison plus a branching statement
+form that no phase currently schedules. K3 and K4 then coexist rather
+than one replacing the other: HTML ships `accesskey` beside `onkeydown`,
+and Flutter ships `Shortcuts` beside `KeyboardListener`. A declarative
+filter and a catch-all are different tools.
 
 ### Which keys the runtime keeps
 
@@ -325,7 +446,7 @@ is fixed here rather than discovered:
 | Arrows, focus inside a focus group | **The runtime** (group movement, DD-003) |
 | Arrows, anywhere else | The authored walk — A's Left/Right is this case |
 | Esc, with a scope entered | Converted to a **dismissal request** on the innermost entered scope |
-| Esc, otherwise | The authored walk (`key-pressed("Escape")`) |
+| Esc, otherwise | The authored walk (`key-down("Escape")`) |
 
 The rule underneath is DD-001's, not a new one: a built-in behaviour
 consumes at the focused widget, and only unconsumed keys walk to
@@ -354,7 +475,7 @@ value changing, not the finished picture
 - **`dismiss`**: an ordinary signal name in the existing per-node
   handler table. Nothing in the IR distinguishes it; what differs is
   that the runtime raises it rather than a pointer message doing so.
-- **`key-pressed("<key>")`**: the one shape that needs new **grammar** —
+- **`key-down("<key>")`**: the one shape that needs new **grammar** —
   a signal handler whose name carries an argument. The cost is
   acknowledged rather than hidden: `slot.*` showed a dotted identifier
   needs no new production, and that cheaper spelling was rejected
@@ -364,7 +485,7 @@ value changing, not the finished picture
 
 **`docs/dsl_spec.md`** gains: `clicked` generalised from the Button
 section to a common signal; `item` / `index` availability in handler
-position; the two attributes; the `dismiss` and `key-pressed` signals;
+position; the two attributes; the `dismiss` and `key-down` signals;
 the table of which keys the runtime keeps; and a short statement of the
 focus and modal-scope semantics an external implementor would need.
 `docs/abi_spec.md` is **not** touched — no new entry point (framing
@@ -400,13 +521,25 @@ confirming the fixture introduced no normative spelling.
   M4-Phase 9 with the second source. **This is a dismissal concept, not
   a key concept**, and it is the contract M4-Phase 9's click-away and
   M5's Dialog widget both consume.
-- **K3** — one `key-pressed("<key>")` signal whose key is named in the
-  declaration, delivered by DD-001's walk, first match consuming. Any
-  key is expressible from the first day, so nothing is grandfathered at
-  1.0; modifiers extend the key-name value rather than the language; an
-  unrecognised key name is a diagnostic. Tab is never delivered to an
-  authored handler, and arrows are the runtime's only while focus is
-  inside a focus group.
+- **K3** — one `key-down("<key>")` signal whose key is named in the
+  declaration as a string, delivered by DD-001's walk, first match
+  consuming. It is the **`keydown` equivalent**: a physical key press
+  with modifier state, for *commands* — **not** the deprecated
+  `keypress`, and **not** a text-input path. An unrecognised key name is
+  a diagnostic. Tab is never delivered to an authored handler, and
+  arrows are the runtime's only while focus is inside a focus group.
+- **The recognised key table holds named non-character keys only** in
+  M4, which keeps the logical-key versus physical-position question
+  closed. `"Ctrl+S"` is therefore **not** expressible in M4; character
+  keys and modifiers are one later extension, not a free value widening.
+- **Two rules fixed here, implemented later**: an active IME composition
+  owns the keyboard and its keys are not delivered to authored handlers
+  (M4-Phase 6); auto-repeat **is** delivered.
+- **K4 (a catch-all callback) and K6 (a structured key value) are both
+  out of M4-Phase 2**, for different reasons — no branching in handler
+  bodies, and no typed-constant kind in the value grammar — and they
+  reopen **together**, because a structured key's payoff is almost
+  entirely in the catch-all form.
 - **`docs/dsl_spec.md` moves; `docs/abi_spec.md` does not.**
 
 ## Forward-compat exposure
@@ -416,14 +549,25 @@ confirming the fixture introduced no normative spelling.
   known in advance because HTML has already settled the ladder —
   `none` / `close-request` / `any` — and Phase 9 inherits the naming
   question, not the design.
-- **`key-released` is additive**, a sibling signal with no buyer today.
-- **Modifier combinations are additive within `key-pressed`'s key name**
-  (`"Ctrl+S"`), which is why the key is a string rather than an
-  identifier.
-- **A catch-all key signal (K4) is additive and becomes authorable once
-  the language has comparison and branching.** Neither is scheduled:
-  comparison arrives with M4-Phase 3's predicates, branching in handler
-  bodies is not on any phase's list. The two forms coexist by design.
+- **`key-up` is additive**, a sibling signal with no buyer today.
+- **Character keys and modifier combinations are one later extension.**
+  It is additive in grammar — a wider recognised table — but it carries
+  a question M4 does not answer: whether a key name denotes the
+  **logical key** the layout produces or the **physical position**.
+  M4's table is named non-character keys only, where the two coincide.
+- **A catch-all key signal (K4) and a structured key value (K6) are both
+  additive, and they reopen together.** K4 needs a handler body that can
+  branch — comparison arrives with M4-Phase 3's predicates, a branching
+  statement form is on no phase's list. K6 needs a typed-constant kind
+  in the value grammar, adjacent to the held `TypedValue` work. Adding
+  K4 without K6 would want K6 immediately, which is why the reopening
+  condition is written for the pair. K3 and K4 then coexist rather than
+  one superseding the other.
+- **Text input never rides this surface.** M4-Phase 5's field and
+  M4-Phase 6's TSF take content through the text-store path; `key-down`
+  stays the command half. A later phase that routes characters through
+  key signals would be re-making the mistake that deprecated the web's
+  `keypress`.
 - **A focus stop that wants Tab itself** — a text field that inserts a
   tab character, a grid that moves between cells — is the case the
   "Tab is always the runtime's" rule forecloses. No M4 widget wants it;

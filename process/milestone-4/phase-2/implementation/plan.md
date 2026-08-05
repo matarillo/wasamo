@@ -53,13 +53,20 @@ toolkits all do and mixing them is what produced the wrong answer:
   close control (M5) are others. Recommended **D2**: the scope raises a
   `dismiss` signal, the author decides what closing means, and the
   policy attribute lands at Phase 9 with the second source.
-- **Authored key input** (K1 … K5) — how an application reacts to a key.
-  Recommended **K3**: one `key-pressed("<key>")` signal whose key is an
-  argument. `statement ::= assign_stmt ";"` means a handler body cannot
-  branch, so Slint's catch-all shape is not authorable in M4 at all;
-  naming the key in the declaration is the general mechanism at the
-  granularity the language supports, and nothing is grandfathered at
-  1.0.
+- **Authored key input** (K1 … K6) — how an application reacts to a key.
+  Recommended **K3**: one `key-down("<key>")` signal whose key is an
+  argument. It is the **`keydown` equivalent** — a physical key press
+  for *commands* — explicitly not the web's deprecated `keypress`, and
+  not a text-input path; text arrives through the text-store at
+  M4-Phase 5 / 6. `statement ::= assign_stmt ";"` means a handler body
+  cannot branch, so **K4** (Slint's catch-all) is not authorable in M4
+  at all, and **K6** (a structured key value) needs a typed-constant
+  kind the value grammar does not have. Both are excluded, and they
+  **reopen together** because a structured key's payoff is in the
+  catch-all form.
+- **M4's recognised key table is named non-character keys only**, which
+  keeps the logical-key versus physical-position question closed;
+  `"Ctrl+S"` is consequently not expressible in M4.
 
 The full walkthrough with `.ui` examples and the reference comparison is
 in
