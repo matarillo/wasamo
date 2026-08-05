@@ -9,9 +9,17 @@ adr: process/milestone-4/phase-2/decisions/preamble.md
 
 Mutable during the phase. Task splits, additions and reorderings are
 recorded here as they happen rather than left as a frozen prediction
-([AGENTS.md §Commit rules](../../../../AGENTS.md#commit-rules)). The
-execution framing, the sequencing thesis and what a green suite is worth
-are in [preamble.md](./preamble.md).
+([AGENTS.md §Commit rules](../../../../AGENTS.md#commit-rules)). Two
+framing allowances ([framing.md](../requirements/framing.md) agreement
+⑤) are part of that mutability rather than exceptions to it: a spike may
+be **inserted mid-phase** when a task finds it is missing the
+information a decision needs, and a finding that shakes an Accepted
+decision **reopens the decision** — supersede when shipped behaviour
+changes, dated annotation when only the explanation narrows
+([workflow.md](../../../procedures/workflow.md)) — instead of being
+absorbed as a local workaround. The execution framing, the sequencing
+thesis and what a green suite is worth are in
+[preamble.md](./preamble.md).
 
 Each task runs the implementation gates at **both** start and close
 ([implementation-gates.md](../../../procedures/implementation-gates.md)),
@@ -70,11 +78,21 @@ candidate; whether anything reacts is T3's question.
 - **Staleness control** (DD-002's named mitigation): a fixture asserts
   that a click resolves correctly **after** a property write triggers
   re-layout — the path where a cache goes stale.
+- **The conversion the cancellation used to hide is asserted at a
+  non-unit scale.** At 100% a missing pointer conversion cannot fail any
+  test ([preamble.md §What "green" is worth](./preamble.md)), so an
+  integration fixture drives the window to a scale ≠ 1 through the
+  M4-Phase 1 synthesized propagation machinery and asserts that a click
+  at physical coordinates resolves to the widget whose DIP rectangle
+  contains the converted point. Touching the DPI-fixture environment
+  fires the Phase 1 handoff's recorded desktop-range dependency
+  ([constraints §10](../requirements/constraints.md)), which is read
+  before this fixture is written.
 - **Evidence:** pure-logic tests over a constructed *overlapping* tree —
   not the gallery, where occlusion is unobservable until T10
   ([preamble.md](./preamble.md)) — including a clip case (a rectangle
   outside its clipping ancestor does not resolve); the audit table; the
-  staleness fixture.
+  staleness fixture; the non-unit-scale resolution fixture.
 
 - [ ] T2
 
@@ -169,6 +187,10 @@ cannot say "group" or "modal" until this lands
 - `dismiss` is an ordinary signal name in the existing handler table;
   nothing in the IR distinguishes it.
 - No new token, `IrType`, `IrLiteral` or `PropertyValue`.
+- **Evidence:** accept-side tests — each attribute parses, round-trips
+  through the IR, and reaches the loaded node as its focus role — beside
+  the three reject tests, each firing its branch directly
+  (implementation-gates trap 4).
 
 - [ ] T6
 
@@ -193,15 +215,37 @@ fix:
   state has no production constructor; the projection either narrows it
   or the branch carries a test that fires it (implementation-gates
   trap 4) — recorded either way.
+- **The seam is enumerated before it is trusted**: a start-gate audit
+  lists every path that materialises or removes a subtree — initial
+  build, conditional drain, `for` regeneration — and shows each runs the
+  entry / exit seam, which is the enumeration DD-004's balanced-stack
+  argument stands on. If the seam turns out not to be one place, that is
+  new information for the plan (a spike or task split), not something a
+  local patch absorbs.
 - Dismissal: `Escape` becomes a request **addressed** to the innermost
   entered scope and stopping there; the runtime delivers it and never
   acts on it.
 - **Retire the spike scaffolding**: `focus_spike`, the `__focus_spike`
   seam, and the override map go, replaced by the real projection.
+- **Retiring the override map narrows coverage deliberately**:
+  `ActiveItemList` / `ActiveItem` have no authored source in M4, so
+  focus / active-item separation falls back to `focus_core`'s unit
+  tests — recorded as the intended state rather than silent loss (the
+  capacity ships at the pure-logic level, DD-003). Scope nesting is in
+  the same position (supported, unexercised by any M4 app — DD-004), so
+  its ordering and innermost-addressing keep — or gain — pure-logic
+  pins for Phase 9 to inherit.
 - **Evidence:** the mechanism fixture, re-pointed at the authored
   annotations; the mutation that deletes the restore branch must go red
   (the spike's M7); an entry test driven by a state write flipping the
-  `if` (the production seam, not a test-side call).
+  `if` (the production seam, not a test-side call) **and** one driven by
+  the initial build — a scope present at startup is entered, which
+  DD-004 records as behaviour, so it is asserted rather than implied;
+  and the spike's S-3 leg carried over: a **present but unannotated**
+  subtree does not confine. T12's control C cannot stand in for that
+  leg — its agreement side removes the subtree entirely, so an
+  implementation that confines *any* conditional subtree while ignoring
+  the annotation would pass it.
 
 - [ ] T7
 
@@ -303,6 +347,18 @@ agreement ⑥).
 - `EnableMouseInPointer` is **not** called (DD-001: a library does not
   change its host process's input mode); the mouse stays on the mouse
   messages, and the shared seam is the DIP conversion.
+- **Where it runs is probed, not assumed.** Pointer injection needs
+  capabilities a CI runner may lack, so a feasibility probe on the dev
+  box and on CI comes before the assertions are written. On CI the test
+  follows the standing rule: it **fails rather than silently skips**
+  when the capability is missing, and the skip guard is verified on an
+  environment that actually lacks it
+  ([CLAUDE.md §Testing rules](../../../../CLAUDE.md)). If the probe
+  finds injection infeasible everywhere, the fallback — posting
+  `WM_POINTER*` frames directly, which does not exercise the OS pointer
+  machinery — is a **weaker claim**, and swapping to it is an
+  owner-visible plan change (framing agreement ⑥ named the evidence
+  form), not a silent substitution.
 - **The limit is stated, not implied**: this does not establish that a
   physical touch digitizer produces the same messages. Recorded in the
   same shape as Phase 1's synthesized-`WM_DPICHANGED` limit.
@@ -331,6 +387,11 @@ The four controls from the [framing](../requirements/framing.md)
 - The capture width keeps the toolbar's content within the client, or
   names the known width-driven overlap as a known observation
   ([constraints.md §6](../requirements/constraints.md)).
+- **At least one control repeats at a display scale ≠ 100%** (A or C):
+  a wrong pointer conversion is invisible at 100%
+  ([preamble.md §What "green" is worth](./preamble.md)), so a capture
+  set taken only at 100% cannot distinguish the migrated input path
+  from a broken one. Every capture states its scale either way.
 - Any tool that reads window geometry or cursor position declares
   Per-Monitor-Aware V2 first (Phase 1 F-48).
 - **The owner smoke guide is written out here** (framing §オーナー目視)
@@ -361,9 +422,16 @@ The four controls from the [framing](../requirements/framing.md)
     Tab (DD-003 discharges that deferral) alongside its occlusion
     behaviour, and §4.19's focus section says the same;
   - §4.19's `for` example parses under §4.15's grammar;
+  - §4.15's per-item handler text — admission, invocation-time binder
+    reads, position-not-item identity, registration released with the
+    generated subtree — matches what T9's click-after-mutation evidence
+    landed;
   - the recognised key table in §4.19 matches the checker's table, and
     §4.19 records that an unconsumed key reaches the default window
     procedure;
+  - §4.19's `dismiss` admission rule (only beside `modal-scope: true`)
+    and its keys-the-runtime-keeps table match the landed checker and
+    runtime behaviour;
   - the entry rule (presence is the entry; focus moves in) and the clip
     bound in §13 match the landed runtime;
   - **no fixture spelling appears in `docs/dsl_spec.md`** (DD-005 /

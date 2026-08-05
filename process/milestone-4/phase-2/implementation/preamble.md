@@ -213,3 +213,28 @@ verification section:
   frames on each side (F-33).
 - **Touch** — synthesized injection only, with the limit stated: no
   touch hardware is available, agreed at framing (agreement ⑥).
+
+## Review lanes
+
+Predicted per
+[implementation-gates.md §4](../../../procedures/implementation-gates.md);
+a row found stale at a task's start gate is corrected there and the
+correction recorded (the Phase 1 F-12 / T12 precedent). The lanes
+compose: a full review of a task that also adds reject branches includes
+the branch/test-focused check.
+
+| Task | Lane | Why |
+|---|---|---|
+| T1 | Full independent review | Runtime structural change: a second store written inside the audited lockstep walk |
+| T2 | Full independent review | Runtime structural change: the complete geometry migration, both input-path readers |
+| T3 | Full independent review | Runtime structural change: dispatch, consumption, and the drain boundary |
+| T4 | Branch/test-focused review | State-ownership change behind T2's already-reviewed structure; the transition arms are the authored branches |
+| T5 | Full independent review | Runtime structural change: first production caller of the focus core, and the `WM_KEYDOWN` return-path change |
+| T6 | Branch/test-focused review | Checker / IR additions with reject branches; no runtime structural change |
+| T7 | Full independent review | Runtime structural change: the materialisation seam, the scope stack, and restore state |
+| T8 | Branch/test-focused review | Checker widening plus one grammar production; the reject tests are the artifact |
+| T9 | Full independent review | The phase's only new IR content — the loop scope carried into handler bodies (schema / IR class) |
+| T10 | Full independent review | GUI-render evidence, across three hosts |
+| T11 | Branch/test-focused review | New message arms routing into the already-reviewed seam; the single-delivery assertion is the artifact |
+| T12 | Full independent review | GUI-render evidence |
+| T13 | Normal review | Documentation and gate closure; no full or branch/test trigger applies |
