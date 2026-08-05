@@ -30,9 +30,8 @@ gains a key signal family — and therefore what
 [dsl_spec.md §4.19](../../../../docs/dsl_spec.md) says. §4.19 currently
 carries the K1 position and is rewritten by this task.
 
-**Why it reopened.** K1 was accepted without being judged against the
-rest of the set, and it leaves **two** named behaviours with no
-mechanism:
+**What is open.** K1 — no authored key surface — leaves **two** named
+behaviours with no mechanism:
 
 - **Left/Right** — the runtime has no notion of a photo index, and K1
   ships no place to write `selected_index -= 1`.
@@ -45,8 +44,8 @@ mechanism:
 Arrow keys *inside a focus group* are unaffected (DD-003 defines those
 as focus movement) and no option changes that.
 
-**The rewrite splits it into two questions**, because the reference
-toolkits all do and mixing them is what produced the wrong answer:
+**It is two questions, not one** — the split every reference toolkit
+makes:
 
 - **Dismissal** (D1 / D2 / D3) — how an overlay learns the user wants it
   closed. Esc is one *source*; click-away (M4-Phase 9) and a Dialog's
@@ -73,18 +72,16 @@ in
 [private/explainer/m4-phase-2-key-handling-options.md](../../../../private/explainer/m4-phase-2-key-handling-options.md);
 the decision is recorded in the rewritten DD-005.
 
-**Adopting D2 also rewrites DD-004's dismissal paragraph** (already
-done in the draft): the request is *addressed* to the innermost entered
-scope rather than bubbled to it. DD-004's decision is unchanged, and one
-of its Phase 9 falsifiers gets weaker as a result — dismissal no longer
-depends on the top-layer subtree being an ancestor of the focused
-widget, though authored key handlers on it still do.
+**D2 is what DD-004's dismissal paragraph is written against**: the
+request is *addressed* to the innermost entered scope rather than
+bubbled to it, which also keeps dismissal out of DD-004's Phase 9
+falsifier — authored key handlers on a top-layer subtree depend on it
+being an ancestor of the focused widget, dismissal does not.
 
-**Task shape.** No code. Per the rewrite discipline, and because no
-downstream work has started, the outcome is applied by **rewriting**
-DD-005's key-handling section and §4.19 rather than annotating them,
-after which DD-005 is re-accepted. Close artifact: the rewritten
-sections plus the owner's decision recorded in [log.md](./log.md).
+**Task shape.** No code. The outcome is applied by writing DD-005's
+key-handling section and §4.19 to the chosen option, after which DD-005
+is accepted. Close artifact: those sections plus the owner's decision
+recorded in [log.md](./log.md).
 
 - [ ] T0
 

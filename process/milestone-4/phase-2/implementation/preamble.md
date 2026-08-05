@@ -133,44 +133,39 @@ therefore ordered so that **no commit between them leaves a mixed
 input path**, and T2's close artifact is a call-site audit showing
 **zero** `visual_rect` readers on the input path.
 
-## DD-005 is not accepted, and its key-handling half contradicts DD-004
+## DD-005 is not accepted: its key-handling half is open
 
-**DD-005 is `Proposed`.** Its key-handling sub-decision was accepted
-without being judged on its merits, and re-reading it against DD-004
-shows the accepted shape does not hold.
+**DD-005 is `Proposed`**, and until it closes the authored surface is
+not settled. The open question is what an application may write in order
+to react to a key, and to a request to close an overlay.
 
-K1 ships **no authored key surface at all**: Esc is described as
-"handled by the scope" and Left/Right as "handled by the lightbox's own
-state". Neither is implementable.
-
-- **Left/Right.** The runtime has no notion of a photo index, and with
-  no authored key surface there is nothing to bind `selected_index -= 1`
-  to.
-- **Esc.** DD-004 is explicit that the scope *names* the Esc recipient
-  and **does not define what closing means** — *"the act of closing …
-  is authored. The core never mutates the tree."* Naming a recipient is
-  not a mechanism for reacting: the author still has to clear the state
-  the enclosing `if` reads, and K1 gives no place to write that.
-
-So K1 leaves **two** named behaviours without a mechanism, not one, and
-the second is a direct contradiction between two decisions in the same
-set. Arrow keys *inside a focus group* are unaffected — DD-003 defines
-those as focus movement, and no option here changes that.
-
-**The rewrite splits the question in two**, which is the substance
-rather than a tidier taxonomy: dismissal is a concept with several
-sources (Esc now, click-away at Phase 9, a Dialog's close control at
-M5) and belongs to the scope; authored key input is a separate,
-general mechanism. HTML's `<dialog>` (`cancel` + `closedby`), Slint's
+**It is two questions, not one.** Dismissal is a concept with several
+sources — Esc now, click-away at M4-Phase 9, a Dialog's close control at
+M5 — and belongs to the scope. Authored key input is a separate, general
+mechanism. HTML's `<dialog>` (`cancel` plus `closedby`), Slint's
 `PopupWindow` (`close-policy`, distinct from `FocusScope`'s key
 callbacks), Compose and SwiftUI all draw the line in the same place.
+
+Answering both with "no authored key surface" leaves **two** named
+behaviours with no mechanism:
+
+- **Left/Right.** The runtime has no notion of a photo index, so there
+  is nothing to bind `selected_index -= 1` to.
+- **Esc.** DD-004 is explicit that the scope *names* the recipient and
+  **does not define what closing means** — *"the act of closing … is
+  authored. The core never mutates the tree."* Naming a recipient is not
+  a mechanism for reacting: the author still has to clear the state the
+  enclosing `if` reads.
+
+Arrow keys *inside a focus group* are unaffected — DD-003 defines those
+as focus movement, and no option changes that.
 
 This is assigned to **T0** below: the phase does not start until it is
 resolved, because it decides whether the authored surface gains a key
 signal family and therefore what
-[dsl_spec.md §4.19](../../../../docs/dsl_spec.md) says. That section
-currently carries the K1 position and is rewritten by T0.
-A plain-language walkthrough of the options is in
+[dsl_spec.md §4.19](../../../../docs/dsl_spec.md) says. §4.19 states the
+no-key-surface position and is written to the chosen option by T0.
+A plain-language walkthrough is in
 [private/explainer/](../../../../private/explainer/m4-phase-2-key-handling-options.md).
 
 ## Verification means

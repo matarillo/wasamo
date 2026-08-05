@@ -96,13 +96,13 @@ Without it, every lightbox button would have to carry its own arrow
 handlers, which is precisely the per-consumer special-casing the
 milestone thesis exists to prevent.
 
-Requirement 2 turns out **not** to be one. DD-005 settles Esc as a
-source of a *dismissal request*, which DD-004 addresses directly to the
-innermost entered scope rather than walking to it from the focused
-widget. Requirement 2 is therefore satisfied however propagation is
-designed, and it is recorded here as considered-and-not-load-bearing so
-that a later reader does not treat it as support for bubbling. The
-conclusion is unchanged, because requirement 3 alone is decisive.
+Requirement 2 is **not** one, despite looking like it. DD-005 makes Esc
+a source of a *dismissal request*, which DD-004 addresses directly to
+the innermost entered scope rather than walking to it from the focused
+widget, so requirement 2 is satisfied however propagation is designed.
+It is listed here as considered-and-not-load-bearing, so a later reader
+does not treat it as support for bubbling; requirement 3 alone is
+decisive.
 
 Requirement 4 is satisfied by target-only *if* hit-testing resolves the
 row rather than a descendant. It is satisfied by bubbling in either

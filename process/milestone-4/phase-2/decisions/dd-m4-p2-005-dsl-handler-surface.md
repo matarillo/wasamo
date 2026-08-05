@@ -227,11 +227,10 @@ against a hypothetical. The extension point is in the *derivation*
 
 ### Dismissal: D2
 
-**These are two decisions, not one.** An earlier draft of this record
-answered "Esc closes the lightbox" and "Left/Right steps the photo"
-with a single option set, and that is what made it wrong. Every
-reference toolkit separates them, and the separation is the design
-content rather than a taxonomy.
+**Dismissal and key input are two decisions, not one.** "Esc closes the
+lightbox" and "Left/Right steps the photo" look like one question and
+are not: every reference toolkit separates them, and the separation is
+design content rather than taxonomy.
 
 - **HTML `<dialog>`** raises a `cancel` event on Esc and takes a
   declarative `closedby` attribute with three values: `none` (only a
@@ -330,12 +329,12 @@ we mean. `key-down` also pairs with a later `key-up`.
 
 ### Authored key input: K3
 
-**The owner's objection to K2 is correct and is the reason this section
-was rewritten.** Three fixed key names would have to be either removed
-or grandfathered when the general mechanism arrives — and a general
+**K2 is excluded on the language's lifetime rather than on M4's consumer
+list.** Three fixed key names would have to be either removed or
+grandfathered when the general mechanism arrives — and a general
 mechanism is certain before 1.0, because every toolkit in the reference
-set has one. Shipping three names now buys a phase and costs a
-permanent explanation.
+set has one. Shipping three names buys a phase and costs a permanent
+explanation.
 
 **A hard constraint decides the shape.** `docs/dsl_spec.md` §3 gives
 `statement ::= assign_stmt ";"` — **a handler body contains assignments
@@ -365,12 +364,10 @@ it is **not** K2 with better marketing:
   surface would otherwise ship with. M4 recognises a small named-key
   table; widening it is additive.
 
-#### The named-key limit, and a correction to this record's own claim
+#### The named-key limit
 
-An earlier draft of this section said modifiers "extend the value, not
-the language", offering `"Ctrl+S"` as the illustration. **That was too
-quick, and taking the question seriously breaks it into two extensions
-with different costs.**
+Modifier combinations are **not** a free widening of the key-name value,
+and the reason decides what M4's recognised table contains.
 
 `keydown` exposes two different identities for the same physical press:
 the **logical key** the layout produces (DOM `event.key` — pressing the
@@ -394,15 +391,14 @@ premise:
   what forces the logical-versus-physical decision, and modifiers are
   mostly wanted *with* character keys. So modifiers and character keys
   are one extension in practice, not two, and neither is free.
-- The extension remains **additive** — a wider table plus one settled
-  question — but the earlier claim that it costs nothing but a value
-  grammar was wrong.
+- The extension is **additive** — a wider table plus one settled
+  question — but it is not merely a wider value grammar.
 
 #### Why K4 and K6 are both deferred, for different reasons
 
-The owner asked whether a non-string key representation is simply the
-Slint-style callback under another name. **It is not**, and separating
-them is what makes each exclusion checkable.
+A structured key representation is **not** the Slint-style callback
+under another name, and separating them is what makes each exclusion
+checkable.
 
 - **K4 (body-filtered) is blocked by the statement grammar.**
   `statement ::= assign_stmt ";"` — a handler body holds assignments and
