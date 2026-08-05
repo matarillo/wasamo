@@ -2325,6 +2325,19 @@ phase. Keyboard messages enter the same walk, starting at the focused
 widget or, when nothing is focused, at the innermost entered focus
 scope.
 
+**Some keys never enter the walk.** `Tab` and `Shift+Tab` are consumed
+by traversal; arrow keys are consumed by group movement while focus is
+inside a group; `Escape` becomes a dismissal request while a scope is
+entered (§13.4). Each is a built-in behaviour consuming at the focused
+widget, which is the ordinary rule rather than an exception — only
+unconsumed keys reach ancestors.
+
+Key delivery is the **command** path. Text does not travel it: an
+editable widget receives content through the text-store path, and while
+an input-method composition is active the keyboard belongs to the
+composition and no authored handler is invoked. Auto-repeat is
+delivered.
+
 The ancestor chain is captured when the event is dispatched, and the
 reactive drain runs **once, after the walk completes** rather than
 between steps. Both exist for the same reason: a handler's state write
@@ -2391,6 +2404,24 @@ Pointer input is not confined by the scope. A covering widget inside the
 scope occludes what is behind it by the ordinary rule in §13.2, which is
 why a scrim is an authored widget rather than something the scope
 supplies.
+
+### 13.5 Dismissal
+
+A scope is the recipient of a **dismissal request** — the user asking
+for it to go away. The request is *addressed* to the innermost entered
+scope rather than walked to from the focused widget, so it holds
+wherever the subtree is realized, and it stops there rather than
+continuing to outer scopes.
+
+`Escape` is the only source that raises one today; a click outside the
+scope and a widget's own close control are later sources that raise the
+same request. Keeping the request separate from the key is what lets
+those arrive without a second contract.
+
+The runtime does not act on the request. It delivers it, and the
+application decides what closing means — which is the same "the core
+never mutates the tree" property that makes the request implicitly
+refusable: an application that writes nothing does not close.
 
 ---
 

@@ -133,39 +133,30 @@ therefore ordered so that **no commit between them leaves a mixed
 input path**, and T2's close artifact is a call-site audit showing
 **zero** `visual_rect` readers on the input path.
 
-## DD-005 is not accepted: its key-handling half is open
+## The keyboard half is two surfaces, not one
 
-**DD-005 is `Proposed`**, and until it closes the authored surface is
-not settled. The open question is what an application may write in order
-to react to a key, and to a request to close an overlay.
+DD-005 gives an application **two** ways to react, and keeping them
+apart is load-bearing rather than tidy.
 
-**It is two questions, not one.** Dismissal is a concept with several
-sources — Esc now, click-away at M4-Phase 9, a Dialog's close control at
-M5 — and belongs to the scope. Authored key input is a separate, general
-mechanism. HTML's `<dialog>` (`cancel` plus `closedby`), Slint's
-`PopupWindow` (`close-policy`, distinct from `FocusScope`'s key
-callbacks), Compose and SwiftUI all draw the line in the same place.
+- **`dismiss`** carries the intent "close this". `Escape` is its only
+  source in this phase; a click outside the scope (M4-Phase 9) and a
+  widget-set dialog's close control (M5) raise the same signal. Binding
+  the intent instead of the key is what lets those arrive without a
+  second contract, and it is the shape HTML's `<dialog>` (`cancel` plus
+  `closedby`), Slint's `PopupWindow` (`close-policy`), Compose and
+  SwiftUI all take.
+- **`key-down("<key>")`** is the command path for everything else. It is
+  the physical-key-press half — never text, which reaches an editable
+  widget through the text-store path — and its recognised names are
+  non-character keys only, which keeps the logical-key versus
+  physical-position question closed.
 
-Answering both with "no authored key surface" leaves **two** named
-behaviours with no mechanism:
-
-- **Left/Right.** The runtime has no notion of a photo index, so there
-  is nothing to bind `selected_index -= 1` to.
-- **Esc.** DD-004 is explicit that the scope *names* the recipient and
-  **does not define what closing means** — *"the act of closing … is
-  authored. The core never mutates the tree."* Naming a recipient is not
-  a mechanism for reacting: the author still has to clear the state the
-  enclosing `if` reads.
-
-Arrow keys *inside a focus group* are unaffected — DD-003 defines those
-as focus movement, and no option changes that.
-
-This is assigned to **T0** below: the phase does not start until it is
-resolved, because it decides whether the authored surface gains a key
-signal family and therefore what
-[dsl_spec.md §4.19](../../../../docs/dsl_spec.md) says. §4.19 states the
-no-key-surface position and is written to the chosen option by T0.
-A plain-language walkthrough is in
+Three keys never reach an authored handler: `Tab` belongs to traversal,
+arrows belong to group movement while focus is inside a group, and
+`Escape` becomes a dismissal request while a scope is entered. Each is a
+way for a handler to silently never fire, so T7 asserts them rather than
+assuming them. A plain-language walkthrough of the design and the
+options it rejected is in
 [private/explainer/](../../../../private/explainer/m4-phase-2-key-handling-options.md).
 
 ## Verification means

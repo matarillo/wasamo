@@ -22,71 +22,6 @@ whenever the task built something it did not expect to build.
 
 ---
 
-## T0 — Settle DD-005's key handling (blocking, no code)
-
-**DD-005 is `Proposed`.** The phase does not open until its key-handling
-sub-decision closes, because that decides whether the authored surface
-gains a key signal family — and therefore what
-[dsl_spec.md §4.19](../../../../docs/dsl_spec.md) says. §4.19 currently
-carries the K1 position and is rewritten by this task.
-
-**What is open.** K1 — no authored key surface — leaves **two** named
-behaviours with no mechanism:
-
-- **Left/Right** — the runtime has no notion of a photo index, and K1
-  ships no place to write `selected_index -= 1`.
-- **Esc** — DD-004 says the scope *names* the recipient and that *"the
-  act of closing … is authored. The core never mutates the tree."*
-  Naming a recipient is not a way to react to it. Under K1 there is no
-  place to write the state clear that closes the lightbox, so DD-004 and
-  DD-005 contradict each other.
-
-Arrow keys *inside a focus group* are unaffected (DD-003 defines those
-as focus movement) and no option changes that.
-
-**It is two questions, not one** — the split every reference toolkit
-makes:
-
-- **Dismissal** (D1 / D2 / D3) — how an overlay learns the user wants it
-  closed. Esc is one *source*; click-away (M4-Phase 9) and a Dialog's
-  close control (M5) are others. Recommended **D2**: the scope raises a
-  `dismiss` signal, the author decides what closing means, and the
-  policy attribute lands at Phase 9 with the second source.
-- **Authored key input** (K1 … K6) — how an application reacts to a key.
-  Recommended **K3**: one `key-down("<key>")` signal whose key is an
-  argument. It is the **`keydown` equivalent** — a physical key press
-  for *commands* — explicitly not the web's deprecated `keypress`, and
-  not a text-input path; text arrives through the text-store at
-  M4-Phase 5 / 6. `statement ::= assign_stmt ";"` means a handler body
-  cannot branch, so **K4** (Slint's catch-all) is not authorable in M4
-  at all, and **K6** (a structured key value) needs a typed-constant
-  kind the value grammar does not have. Both are excluded, and they
-  **reopen together** because a structured key's payoff is in the
-  catch-all form.
-- **M4's recognised key table is named non-character keys only**, which
-  keeps the logical-key versus physical-position question closed;
-  `"Ctrl+S"` is consequently not expressible in M4.
-
-The full walkthrough with `.ui` examples and the reference comparison is
-in
-[private/explainer/m4-phase-2-key-handling-options.md](../../../../private/explainer/m4-phase-2-key-handling-options.md);
-the decision is recorded in the rewritten DD-005.
-
-**D2 is what DD-004's dismissal paragraph is written against**: the
-request is *addressed* to the innermost entered scope rather than
-bubbled to it, which also keeps dismissal out of DD-004's Phase 9
-falsifier — authored key handlers on a top-layer subtree depend on it
-being an ancestor of the focused widget, dismissal does not.
-
-**Task shape.** No code. The outcome is applied by writing DD-005's
-key-handling section and §4.19 to the chosen option, after which DD-005
-is accepted. Close artifact: those sections plus the owner's decision
-recorded in [log.md](./log.md).
-
-- [ ] T0
-
----
-
 ## T1 — Layout-derived hit rectangles
 
 Arrange retains each node's arranged rectangle in DIP; the arrange pass
@@ -156,7 +91,7 @@ widget kind — the two roles the tree can already supply.
 
 - [ ] T4
 
-## T5 — DSL: `focus-group` and `modal-scope`
+## T5 — DSL: `focus-group`, `modal-scope`, and `dismiss`
 
 The compiler surface, ahead of the runtime behaviour, because the tree
 cannot say "group" or "modal" until this lands
@@ -166,6 +101,8 @@ cannot say "group" or "modal" until this lands
   containers), IR, loader → the node's focus role.
 - Two rejects with their own tests: a binding-expression RHS, and the
   attribute on a non-admitting widget.
+- `dismiss` is an ordinary signal name in the existing handler table;
+  nothing in the IR distinguishes it.
 - No new token, `IrType`, `IrLiteral` or `PropertyValue`.
 
 - [ ] T5
@@ -184,7 +121,9 @@ fix:
   structural succession**, and a removal's successor is computed
   **before** the mutation because node identity does not survive a
   rebuild.
-- Esc reaches the innermost entered scope by T3's ordinary walk.
+- Dismissal: `Escape` becomes a request **addressed** to the innermost
+  entered scope and stopping there; the runtime delivers it and never
+  acts on it.
 - **Retire the spike scaffolding**: `focus_spike`, the `__focus_spike`
   seam, and the override map go, replaced by the real projection.
 - **Evidence:** the mechanism fixture, re-pointed at the authored
@@ -193,15 +132,23 @@ fix:
 
 - [ ] T6
 
-## T7 — DSL: generic `clicked`
+## T7 — DSL: generic `clicked` and `key-down("<key>")`
 
 `clicked` admitted on any widget. Routing is already generic from T3, so
 this widens *who may carry a handler*, not how an event travels.
 
 - Button keeps its `enabled` suppression and its keyboard activation;
   both are Button behaviour, documented on Button.
+- `key-down` needs the phase's **one new grammar production** — a signal
+  handler whose name carries an argument. The key name is validated at
+  `check` against the recognised non-character table, and an
+  unrecognised name is a diagnostic with its own test.
+- The keys the runtime keeps (`Tab` always; arrows inside a group;
+  `Escape` while a scope is entered) are asserted, since each is a way
+  for an authored handler to silently never fire.
 - **Evidence:** a `Box` with a handler fires; a disabled Button still
-  occludes what is behind it.
+  occludes what is behind it; a `key-down("ArrowLeft")` handler fires
+  outside a group and does not fire inside one.
 
 - [ ] T7
 
@@ -234,9 +181,10 @@ one example host:
 - The lightbox is a **root `ZStack` branch** and stays one; its scrim is
   an authored covering widget, and it is what blocks background clicks —
   the scope confines the keyboard only.
-- Esc closes and Tab is contained, both per T0's outcome; focus returns
-  to the thumbnail that opened it.
-- Left/Right per T0's outcome. **Its visible result is a bound value
+- Esc closes through an authored `dismiss` handler, Tab is contained,
+  and focus returns to the thumbnail that opened it.
+- Left/Right step the photo through `key-down` handlers. **The visible
+  result is a bound value
   changing, not the finished picture** — the caption and the selected
   thumbnail need index reads and equality selection, which are
   M4-Phase 3 ([framing.md](../requirements/framing.md) §範囲の縫い目).
