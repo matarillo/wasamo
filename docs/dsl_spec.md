@@ -715,15 +715,18 @@ dispatched through a per-type binding writer at the runtime loader.
 - The layout slot is **preserved** — the button still measures and
   arranges identically to its enabled form; there is no
   `display: none` semantics.
-- Child hit-test traversal is preserved.
+- The button remains a **hit-test target**: it occludes whatever is
+  beneath it, and a click on it does not reach a lower sibling (§4.19).
+  Having dispatched nothing, it also does not stop propagation, so the
+  event continues to its ancestors.
+- It is **not a focus stop**: traversal skips it, so it cannot be
+  reached or activated from the keyboard (§4.19).
 
-**Explicitly deferred to later milestones.** Keyboard focusability and
-tab-order semantics when disabled, AccessKit / `aria-disabled`
-accessibility tree state, hover and focus visual variations, and key
-activation suppression. M4 (input/focus) and M5 (accessibility) own
-the full interaction-state contract for disabled controls; the Phase 1
-contract above is structured to be additive under that widening, not
-superseded by it.
+**Explicitly deferred to later milestones.** AccessKit / `aria-disabled`
+accessibility tree state, and hover and focus visual variations for the
+disabled state. M5 (accessibility, theming) owns those; the contract
+above is structured to be additive under that widening, not superseded
+by it.
 
 ### 4.9 Box layout primitive (M3-Phase 2)
 
@@ -3128,7 +3131,14 @@ already defines — within a container, later children paint over earlier
 ones. Every widget with a visual is a candidate, whether or not it
 carries a handler.
 
-Two consequences follow from that rule rather than from any additional
+A widget is reachable only where it is painted. A container that clips
+its content — `ScrollView` (§4.11), `Grid` (§4.12), `ZStack` (§4.13) —
+bounds its whole subtree to its own rectangle for hit-testing as well as
+for painting, so content scrolled out of a viewport receives nothing. A
+container that does not clip paints its overflowing children, and those
+children stay reachable where they are drawn.
+
+Two consequences follow from those rules rather than from any additional
 one:
 
 - **A covering widget occludes what is beneath it.** A full-bleed `Box`
@@ -3136,7 +3146,9 @@ one:
   on it, and the siblings below do not — no attribute marks a widget as
   a blocker, and none is needed.
 - **A disabled Button still occludes.** It does not dispatch (§4.8),
-  and it does not let the click reach whatever is behind it.
+  and it does not let the click reach whatever is behind it. Having run
+  no handler, it also does not end propagation: the event continues to
+  its ancestors as it would from any widget without a handler.
 
 **Propagation.** The event fires at the target and then walks its
 ancestors until a handler runs. **A handler that runs consumes the
@@ -3144,7 +3156,7 @@ event**: propagation ends there, and no ancestor sees it. There is no
 descending phase and no separate verb for stopping propagation.
 
 Keyboard events start at the focused widget — or, when nothing is
-focused, at the innermost entered modal focus scope — and walk the same
+focused, at the innermost modal focus scope — and walk the same
 way.
 
 **Handlers and state.** A handler's state writes are applied and
@@ -3159,7 +3171,7 @@ A `signal_handler` is admitted inside a `for` body (§4.15), and the
 body's binders are readable in the handler:
 
 ```wasamo
-for photo[i] in photos {
+for photo, i in photos {
     Box {
         clicked => {
             root.selected_index = i;
@@ -3181,17 +3193,24 @@ for photo[i] in photos {
 
 #### Focus
 
-Exactly one widget per window may hold focus. Button-family widgets are
+At most one widget per window holds focus. Button-family widgets are
 focusable; other widget kinds are not, and the set is widened by later
-milestones rather than by an authored attribute in M4.
+milestones rather than by an authored attribute in M4. A Button with
+`enabled: false` is **not** focusable — it is skipped by traversal and
+cannot be activated from the keyboard.
 
+- **Nothing is focused when a window opens.** No widget shows a focus
+  indicator until the keyboard is used or a click places focus.
 - **Tab / Shift+Tab** move focus in declaration order, wrapping at both
-  ends.
-- **A click** moves focus to the widget it resolved to when that widget
-  is focusable, and leaves focus unchanged otherwise — clicking
-  background never clears focus.
+  ends; the first Tab lands on the first stop.
+- **A click** moves focus to the nearest focusable widget at or above
+  the widget it resolved to, and leaves focus unchanged when there is
+  none — clicking background never clears focus.
 - Losing and regaining the window's activation does not change which
   widget is focused.
+
+A focus stop that is scrolled out of view is still a stop: traversal
+reads the tree, and clipping does not change it.
 
 #### `focus-group`
 
@@ -3224,24 +3243,43 @@ if lightbox_open {
 }
 ```
 
-A container marked `modal-scope: true` can confine the keyboard. While
-the scope is **entered**, Tab cycles only within its subtree, and no
-widget outside it can be reached by the keyboard. Scopes nest;
-the innermost entered one is in force.
+A container marked `modal-scope: true` confines the keyboard. While the
+scope is present, Tab cycles only within its subtree, and no widget
+outside it can be reached by the keyboard. Scopes nest; the innermost
+one is in force.
 
-Two rules make this well-defined:
+**Being there is being open.** The attribute does not switch a scope on;
+the subtree's **presence** does. A scope is entered as it appears — when
+the `if` that produces it becomes true, or when the window is first
+built — and left when it is removed. There is no separate act to
+perform and nothing to keep in step with the tree: the way to close a
+scope is to stop rendering it, which is what the `dismiss` handler below
+does.
 
-- **A scope that has not been entered contributes no Tab stops.** A
-  modal subtree that is present but not entered is not reachable by
-  Tab.
-- **Only a container carrying the attribute may be entered.**
+Entering does two things beyond confining traversal:
 
-**Entering and leaving.** A scope is entered when it appears and focus
-moves into it, and left when it is removed or focus is restored out of
-it. The widget focused at the moment of entry is remembered, and focus
-returns to it when the scope leaves — including when the scope
-disappears because the `if` that produced it became false. This
-restoration takes precedence over any structural successor.
+- **It remembers the focused widget**, so focus can return there. That
+  is the one fact the tree cannot supply afterwards — nothing in the
+  structure records what was focused before.
+- **It moves focus to the scope's first stop**, so the keyboard is
+  inside the scope from the moment it opens and the scope's own key
+  handlers are live without the user pressing Tab first. A scope with no
+  focusable widget leaves focus unset, and keys start at the scope
+  itself.
+
+When the scope leaves, focus **returns to the remembered widget**, in
+preference to whatever the structure would otherwise succeed to.
+
+What is remembered is what was focused, which is not always the widget
+that opened the scope. A click on a plain `Box` does not move focus
+(§Focus), so a lightbox opened by clicking a `Box` thumbnail restores to
+whatever the keyboard was on beforehand — possibly nothing. Restoring to
+the clicked widget requires that widget to be focusable, which arrives
+with the focusability attribute a later milestone adds.
+
+The attribute's job is to say **which** subtrees behave this way: a
+container without it is an ordinary container no matter what it
+contains, and only an annotated subtree becomes a scope by appearing.
 
 #### `dismiss` — the request to close
 
@@ -3258,12 +3296,16 @@ if lightbox_open {
 }
 ```
 
-The request is **addressed to the innermost entered scope** and stops
-there; it does not continue to outer scopes, so a dialog that ignores it
-does not close the menu underneath. Writing no handler means the scope
-does not close by dismissal — that is how a confirmation the user must
-answer is expressed. Nothing is vetoed or prevented: the runtime never
-mutates the tree, so not writing the state is not closing.
+The request is **addressed to the innermost scope** and stops there; it
+does not continue to outer scopes, so a dialog that ignores it does not
+close the menu underneath. Writing no handler means the scope does not
+close by dismissal — that is how a confirmation the user must answer is
+expressed. Nothing is vetoed or prevented: the runtime never mutates the
+tree, so not writing the state is not closing.
+
+`dismiss` is admitted **only on a container that carries
+`modal-scope: true`**. Written anywhere else it could never be raised,
+so it is rejected at `wasamoc check` rather than silently never firing.
 
 **Esc is a source of the request, not the request itself.** It is the
 only source in this surface; a click outside the scope and a widget-set
@@ -3311,11 +3353,16 @@ them:
 | `Tab` / `Shift+Tab` | Always the runtime — traversal cannot be overridden |
 | Arrow keys, while focus is inside a `focus-group` | The runtime (movement within the group) |
 | Arrow keys, otherwise | The propagation walk |
-| `Escape`, while a scope is entered | Becomes a dismissal request on the innermost entered scope |
+| `Escape`, while a modal scope is present | Becomes a dismissal request on the innermost one |
 | `Escape`, otherwise | The propagation walk |
 
 The rule underneath is the ordinary one: a built-in behaviour consumes
 at the focused widget, and only unconsumed keys walk to ancestors.
+
+A key that reaches the end of the walk without a handler running is
+**not** consumed by the runtime: it continues to the window's default
+handling, so system keyboard behaviour is unaffected by widgets that do
+not use it.
 
 **What a scope does not do.** It confines the **keyboard** only. It
 does not block pointer input: a click on content behind an open scope
@@ -3325,10 +3372,10 @@ Tab and passes clicks through.
 
 A scope also does not decide *what closing is* — see `dismiss` below.
 
-**Accessibility.** A screen reader sees only the innermost entered
-scope's subtree; background content is hidden by focus scope rather
-than by any layering or per-widget attribute. The reading surface
-itself arrives with the accessibility work in a later phase.
+**Accessibility.** A screen reader sees only the innermost scope's
+subtree; background content is hidden by focus scope rather than by any
+layering or per-widget attribute. The reading surface itself arrives
+with the accessibility work in a later phase.
 
 #### Attribute admission
 
@@ -3343,19 +3390,29 @@ literal, and a binding-expression RHS is rejected — the same rule
 subtree is turned on and off by the `if` that produces it, not by
 binding the attribute.
 
+The signals this section adds are admitted as follows:
+
+| Signal | Admitted on |
+|---|---|
+| `clicked` | any widget |
+| `key-down("<key>")` | any widget |
+| `dismiss` | a container carrying `modal-scope: true` |
+
 Neither attribute changes layout: an annotated container measures and
 arranges exactly as an unannotated one.
 
 #### Not in this surface
 
-Raw pointer events (`pointer-down` and siblings), a `key-up` signal,
-character keys and modifier combinations, a handler that receives
-*every* key and decides in its body which key it was, a structured key
-value, a declarative keyboard-shortcut table, a dismissal-policy
-attribute distinguishing which gestures close a scope, an attribute
-making a non-Button widget focusable, click-through (opting a widget out
-of hit-testing), a minimum hit-target size, and pointer capture for drag
-are all outside M4-Phase 2. None is reserved by this section, and each
+Raw pointer events (`pointer-down` and siblings), hover and pressed as
+authored signals (they remain Button presentation, §4.8), a `key-up`
+signal, character keys and modifier combinations, a handler that
+receives *every* key and decides in its body which key it was, a
+structured key value, a declarative keyboard-shortcut table, a
+dismissal-policy attribute distinguishing which gestures close a scope,
+an attribute making a non-Button widget focusable, click-through
+(opting a widget out of hit-testing), a minimum hit-target size,
+scrolling a focused widget into view, and pointer capture for drag are
+all outside M4-Phase 2. None is reserved by this section, and each
 would arrive additively.
 
 Two of those carry a question rather than only work. Character keys need
@@ -4319,5 +4376,6 @@ anchor — distinct from the per-edit revision-history table below.
 | 1.15    | 2026-07-06 | M3-Phase 8 implementation sync (Moment 2): flipped the top Status block and the §4.17 phase-status marker to closed / implementation-synced, promoted the document to `public-draft`, and added the public-draft change-history anchor (promotion record + M3 decision links + T8 external-reader smoke result). No body-prose semantic change (divergence corrections were folded in 1.13 / 1.14); no new `IrType` / `IrLiteral` / `PropertyValue` or token; `abi_spec.md` untouched. |
 | 1.16    | 2026-07-28 | M4-Phase 1 design draft (Moment 1): added §1 *Units and the layout coordinate system* — every authored length and font size is DIP (`1 DIP = 1/96 inch`), an authored layout is identical at every display scale factor, and a DIP is a physical length rather than a device pixel. The previously undefined "pixel extents in the layout coordinate system" wording is **replaced** at each dimension-bearing site (§4.10 WrapPanel `item-cross-size` / `item-spacing` / `line-spacing`, §4.11 ScrollView `offset-y`, §4.12 Grid fixed track sizes), which now reference the definition instead of restating it; §2.2 notes that the `px` unit suffix names DIP, and §4.9's rounding note is restated in DIP terms. No grammar, token, AST, `IrType`, `IrLiteral`, or `PropertyValue` change — the unit is a semantic statement about existing literals, so `wasamoc` and the IR are untouched. At 100% every existing `.ui` file is unchanged in behaviour. The runtime-side coordinate-space model (the two spaces, the conversion seams, the text-surface resolution contract, scale invariance) is normative in [architecture.md §12](./architecture.md#coordinate-spaces); the ABI argument unit is in [abi_spec.md](./abi_spec.md) §4.2. Pending implementation re-sync at M4-Phase 1 close. |
 | 1.17    | 2026-08-04 | M4-Phase 1 implementation sync (Moment 2): flipped the phase status to implementation-synced after re-verifying the authored-length and font-size DIP statements against the landed runtime. No grammar, token, AST, `IrType`, `IrLiteral`, `PropertyValue`, or authored-value change; runtime coordinate projection and raster resolution remain normative in [architecture.md §12](./architecture.md#coordinate-spaces), and the outer-window ABI unit remains normative in [abi_spec.md §4.2](./abi_spec.md). |
-| 1.19    | 2026-08-05 | M4-Phase 2 design sync, keyboard half: §4.19 gains the **`dismiss`** request — addressed to the innermost entered scope, not bubbled, with the author deciding what closing means and Esc named as one *source* rather than as the concept, so a later click-away or widget-set close control reuses the same signal — and the **`key-down("<key>")`** command surface, whose key is named in the declaration because the recognised set is validated at `check`. `key-down` is the physical-key-press half and is stated as **not** a text-input path: an active input-method composition owns the keyboard, and auto-repeat is delivered. The recognised names are **non-character keys only** (`"Escape"`, the arrows, `"Home"` / `"End"`, `"PageUp"` / `"PageDown"`, `"Enter"`, `"F1"`…`"F12"`), which keeps the logical-key versus physical-position question closed; character keys and modifier combinations such as `"Ctrl+S"` are outside the surface. Added the table of keys the runtime keeps (`Tab` always; arrows while focus is inside a `focus-group`; `Escape` while a scope is entered). §Not in this surface now also lists `key-up`, a catch-all key handler, a structured key value, a shortcut table, and a dismissal-policy attribute, with the two that carry an open question named. No new token, `IrType`, `IrLiteral`, or `PropertyValue`; `key-down`'s argument is the one new grammar production. `abi_spec.md` untouched. |
 | 1.18    | 2026-08-05 | M4-Phase 2 design draft (Moment 1): added §4.19 *Interaction* — `clicked` admitted on any widget (§4.5 updated from "the only recognized signal name in M1"); a pointer event resolves to exactly one target, the topmost containing widget, from which occlusion of lower siblings and of content behind a disabled Button follow as consequences rather than as separate rules; propagation is target-then-ancestors with **consume on handle** and no descending phase; a handler's state writes drain once after propagation completes. Per-item handlers are admitted inside `for` bodies with binder reads in handler position — **reversing the M3-Phase 7 deferral** in §4.15, whose "handlers inside a `for` body" subsection now points here, and updating the binder read-position statements in §4.6 and §4.15; a binder resolves at invocation time, so under the positional identity baseline a handler belongs to a slot rather than to an item, and its registration is released with the generated subtree. Added the constant-only `focus-group` and `modal-scope` boolean container attributes (same non-bindable rule as `Box.fill` / the `WrapPanel` attributes), Tab / arrow / group-memory semantics, scope entry / restoration / Esc delivery, and the statement that a scope confines the keyboard only — pointer confinement comes from the occlusion rule plus an authored covering widget. Screen-reader modality is stated as attaching to the focus scope, binding on the later accessibility phase. No new token, grammar production for expressions, `IrType`, `IrLiteral`, or `PropertyValue`; `abi_spec.md` untouched (no new ABI entry point). Pending implementation re-sync at M4-Phase 2 close. |
+| 1.19    | 2026-08-05 | M4-Phase 2 design sync, keyboard half: §4.19 gains the **`dismiss`** request — addressed to the innermost entered scope, not bubbled, with the author deciding what closing means and Esc named as one *source* rather than as the concept, so a later click-away or widget-set close control reuses the same signal — and the **`key-down("<key>")`** command surface, whose key is named in the declaration because the recognised set is validated at `check`. `key-down` is the physical-key-press half and is stated as **not** a text-input path: an active input-method composition owns the keyboard, and auto-repeat is delivered. The recognised names are **non-character keys only** (`"Escape"`, the arrows, `"Home"` / `"End"`, `"PageUp"` / `"PageDown"`, `"Enter"`, `"F1"`…`"F12"`), which keeps the logical-key versus physical-position question closed; character keys and modifier combinations such as `"Ctrl+S"` are outside the surface. Added the table of keys the runtime keeps (`Tab` always; arrows while focus is inside a `focus-group`; `Escape` while a scope is entered). §Not in this surface now also lists `key-up`, a catch-all key handler, a structured key value, a shortcut table, and a dismissal-policy attribute, with the two that carry an open question named. No new token, `IrType`, `IrLiteral`, or `PropertyValue`; `key-down`'s argument is the one new grammar production. `abi_spec.md` untouched. |
+| 1.20    | 2026-08-06 | M4-Phase 2 design sync, revision: §4.19 states that a modal scope is entered by **being present** — the subtree's appearance pushes it, remembers the widget that had focus, and moves focus to the scope's first stop, so a scope opened by a conditional is confined and its key handlers live without a separate act; closing is deleting. Restoration is stated against what was actually focused, since a click on a non-focusable widget leaves focus where it was. Hit resolution is **bounded by ancestor clips**, so content clipped out of a `ScrollView` / `Grid` / `ZStack` receives nothing while a non-clipping container's overflow stays reachable. Focus gains its opening state (nothing focused; the first Tab lands on the first stop), the rule that a click focuses the nearest focusable widget **at or above** the resolved target, and the statement that `enabled: false` removes a focus stop — which discharges the tab-order half §4.8 deferred to M4 and brings §4.8's disabled contract into agreement with §4.19's occlusion rule (a disabled Button occludes, dispatches nothing, and does not stop propagation). `dismiss` is admitted **only** on a container carrying `modal-scope: true`, with a signal-admission table beside the attribute table. A key no handler consumes now reaches the window's default handling rather than being swallowed. §Not in this surface adds hover / pressed as authored signals and scrolling a focused widget into view. Corrected the per-item handler example to §4.15's `for <binder>, <index-binder> in <collection>` form. No new token, `IrType`, `IrLiteral`, or `PropertyValue`; `abi_spec.md` untouched. Pending implementation re-sync at M4-Phase 2 close. |

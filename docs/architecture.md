@@ -2302,14 +2302,20 @@ rectangles are already in DIP.
 
 Two properties follow and are load-bearing:
 
-- **The rectangle cache has exactly one writer** — the arrange pass —
-  in the same sense as the per-node geometry scale (§12). A subtree
-  that has been attached but not laid out has no rectangles and is not
-  hit-testable, which is the intended failure: silent, and better than
-  being hit-testable at a stale rectangle.
-- **Occlusion and per-item resolution become pure logic.** "Rectangles
-  plus paint order → target" needs no Compositor, so the rules are
-  fixed by unit test rather than only through the OS.
+- **The rectangle cache has exactly one writer**, in the same sense as
+  the per-node geometry scale (§12). Layout arranges a `LayoutNode` tree
+  that is built per pass and dropped at its end, so the retained
+  rectangle lives on the widget node and is written by the lockstep walk
+  that applies layout results to the visual tree — one walk, two stores:
+  the physical offset and size to the Composition visual, the absolute
+  DIP rectangle to the node. A subtree that has been attached but not
+  laid out has no rectangles and is not hit-testable, which is the
+  intended failure: silent, and better than being hit-testable at a
+  stale rectangle.
+- **Occlusion, clipping and per-item resolution become pure logic.**
+  "Rectangles plus paint order plus clip bounds → target" needs no
+  Compositor, so the rules are fixed by unit test rather than only
+  through the OS.
 
 ### 13.2 Target selection and propagation
 
@@ -2319,18 +2325,46 @@ order the visual tree already establishes — later children paint over
 earlier ones, so the search walks children in reverse and takes the
 first containing node. Every widget with a visual is a candidate.
 
+The search is **bounded by ancestor clips**, so that it resolves what
+the screen shows rather than what the tree holds. A container whose
+visual carries an `InsetClip` — `ScrollView`, `Grid`, `ZStack` — is
+descended into only where the point lies inside its own rectangle; a
+container without one paints its overflowing children and keeps them
+resolvable. Without the bound, content scrolled outside a viewport
+retains rectangles that sit under unrelated widgets, and a click there
+resolves to something invisible.
+
 The event then walks from that target through its ancestors until a
 handler runs; a handler that runs ends the walk. There is no descending
 phase. Keyboard messages enter the same walk, starting at the focused
-widget or, when nothing is focused, at the innermost entered focus
-scope.
+widget or, when nothing is focused, at the innermost focus scope.
 
 **Some keys never enter the walk.** `Tab` and `Shift+Tab` are consumed
 by traversal; arrow keys are consumed by group movement while focus is
 inside a group; `Escape` becomes a dismissal request while a scope is
-entered (§13.4). Each is a built-in behaviour consuming at the focused
+present (§13.4). Each is a built-in behaviour consuming at the focused
 widget, which is the ordinary rule rather than an exception — only
 unconsumed keys reach ancestors.
+
+**A key nothing consumes is not swallowed.** When the walk ends with no
+handler having run, the message continues to `DefWindowProc`: the
+runtime claims only the keys it uses, and the window's default keyboard
+behaviour is not the routing model's to suppress.
+
+**Pointer, mouse and touch.** Mouse input stays on the three mouse
+messages; touch is consumed as `WM_POINTER*` rather than through the
+mouse messages the system would otherwise synthesize for it, and
+handling the pointer message is what suppresses that promotion — one
+delivery per contact. `EnableMouseInPointer`, which would route mouse
+input onto the pointer family too, is deliberately **not** called: it is
+a process-wide, one-way mode, and the runtime is a DLL inside a host
+process whose own windows would inherit it. Both families cross the same
+DIP boundary (§12), which is where they meet.
+
+Hover and pressed are Button presentation state rather than an authored
+signal, and are computed as enter / leave transitions **against the
+resolved target** rather than by a whole-tree walk, so the widget that
+paints pressed is the widget a release would dispatch to.
 
 Key delivery is the **command** path. Text does not travel it: an
 editable widget receives content through the text-store path, and while
@@ -2361,7 +2395,16 @@ present when it was generated.
 Focus is per window. A `WindowState` owns one focus record holding the
 focused node and three derived stores: per-group memory of the member
 last focused inside it, per-widget active-item pointers, and the stack
-of entered modal scopes.
+of modal scopes.
+
+A window opens with **nothing focused**. Focus arrives when the keyboard
+is used, when a click resolves to a widget with a focusable ancestor —
+the click moves focus to the nearest focusable widget at or above the
+resolved target, so a focusable widget with inner structure is reached
+by clicking its content — or when a modal scope materialises (§13.4).
+`Button.enabled = false` removes the widget from the stop list, so a
+disabled control is neither reachable by traversal nor activatable from
+the keyboard.
 
 The group memory is data parallel to the focused node, and is written by
 the **same primitive** that writes it — the same discipline the
@@ -2372,32 +2415,50 @@ leaves a group and comes back.
 Traversal is tree order. In every layout primitive Wasamo has, tree
 order and arranged order coincide, because every container arranges its
 children in declaration order; a primitive whose arranged order differs
-from its declaration order would reopen this.
+from its declaration order would reopen this. Traversal also reads the
+tree rather than the screen, so a stop clipped out of view is still a
+stop — scrolling the focused widget into view belongs with the phase
+that owns scrolling.
+
+The focus indicator is presentation state applied by the same pass that
+writes visual geometry, not a visual written at focus-change time; that
+is what keeps the single-writer property of §12 intact. Until the
+theming surface arrives it shares its only means — a background change —
+with hover and the selected state, so the three must remain visually
+distinct.
 
 ### 13.4 Modal focus scopes
 
-A scope is an annotated subtree plus an explicit entry. Confinement is
-**not** a special case in the traversal: the walk enumerates focus stops
-from a root, and entering a scope changes which root that is. The
-traversal has no modal branch.
+A scope is an annotated subtree, and **its presence is its entry**.
+Confinement is **not** a special case in the traversal: the walk
+enumerates focus stops from a root, and an entered scope changes which
+root that is. The traversal has no modal branch.
 
-The annotation and the entry carry different halves of the concept and
-are tied together deliberately:
+Entry runs on the structural seam that materialises the subtree — the
+drain that makes a conditional true, iteration generating it, or the
+initial build — and does three things: pushes the scope onto the
+per-window stack in materialisation order, captures the currently
+focused node as the restore target, and moves focus to the scope's first
+stop. The capture is there because that target cannot be recovered from
+the tree afterwards; nothing in the structure says what was focused
+before. The focus move is there because key delivery starts at the
+focused widget, so a scope that opened without taking focus would leave
+its own authored key handlers unreachable. It writes runtime focus state
+only and enqueues no further drain work.
 
-- The **entry** gives confinement, and records the focus to restore.
-  That target cannot be recovered from the tree afterwards — nothing in
-  the structure says what was focused before the scope opened — so it is
-  captured at entry.
-- The **annotation** makes an un-entered scope contribute no focus
-  stops, so a modal subtree that is present but closed is unreachable.
-- Only an annotated subtree may be entered, which is what keeps the two
-  from drifting apart.
+Deriving entry from presence is what keeps the concept single. With an
+entry act separate from presence, "present but not entered" is a
+reachable state and the concept splits into two mechanisms —
+confinement from the act, unreachability from the annotation — that can
+each fail alone while ordinary tests stay green. Under presence-entry
+the annotation has exactly one job: deciding which subtrees become
+scopes by appearing.
 
-When the entered scope's subtree is removed, restoration takes
-precedence over structural succession. A removal's successor is computed
-**before** the mutation, because node identity does not survive a
-rebuild: the conditional and iteration paths materialise fresh subtrees,
-so an identity stored across the mutation can name a different node
+Exit is removal of the subtree, and restoration takes precedence over
+structural succession. A removal's successor is computed **before** the
+mutation, because node identity does not survive a rebuild: the
+conditional and iteration paths materialise fresh subtrees, so an
+identity stored across the mutation can name a different node
 afterwards.
 
 Pointer input is not confined by the scope. A covering widget inside the
@@ -2408,10 +2469,10 @@ supplies.
 ### 13.5 Dismissal
 
 A scope is the recipient of a **dismissal request** — the user asking
-for it to go away. The request is *addressed* to the innermost entered
-scope rather than walked to from the focused widget, so it holds
-wherever the subtree is realized, and it stops there rather than
-continuing to outer scopes.
+for it to go away. The request is *addressed* to the innermost scope
+rather than walked to from the focused widget, so it holds wherever the
+subtree is realized, and it stops there rather than continuing to outer
+scopes.
 
 `Escape` is the only source that raises one today; a click outside the
 scope and a widget's own close control are later sources that raise the
