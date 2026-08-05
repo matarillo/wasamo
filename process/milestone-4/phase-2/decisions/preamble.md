@@ -2,8 +2,8 @@
 
 **Phase:** M4-Phase 2 (event routing, focus model, and generic click
 handling — **the milestone's centre of gravity**)
-**Date:** 2026-08-05
-**Status:** Accepted (owner approval 2026-08-05; DD-001 … DD-005 all
+**Date:** 2026-08-06
+**Status:** Accepted (owner approval 2026-08-06; DD-001 … DD-005 all
 Accepted)
 
 ## Context
@@ -52,8 +52,10 @@ Two consequences follow, and they shape the whole set:
   `hit_test_click` (fire the first Button-family widget whose rect
   contains the point) and `update_hover` (walk the tree setting hover /
   pressed background state). There is no dispatch table, no
-  propagation, no notion of a target, and **no keyboard path at all** —
-  `WM_KEYDOWN` is not handled.
+  propagation, no notion of a target, and **no keyboard path into the
+  widget tree** — the `WM_KEYDOWN` arm forwards the virtual key to the
+  `key_down_fn` host callback slot, which has no installer, and returns;
+  nothing in the tree can react to a key.
 - **There is no focus.** No widget can be focused, nothing is
   focusable, Tab does nothing. `ButtonData.enabled` exists and
   suppresses click dispatch (DD-M3-P1-005), which is the only
@@ -98,11 +100,11 @@ Each is an invariant a careless event model can break silently.
 
 | DD | Question | Recommendation |
 |---|---|---|
-| [DD-001](dd-m4-p2-001-event-routing-model.md) | How does an input event reach a handler? | **Target then bubble, no capture phase**, with high-level signals as the authored surface and one drain per dispatch (option R3) |
-| [DD-002](dd-m4-p2-002-hit-testing-and-generic-click.md) | How is a pointer target resolved, and which widgets are eligible? | **Layout-derived DIP rectangles** (option H2), **topmost-single-target** selection — from which scrim occlusion follows rather than being a rule — and `clicked` generalised from Button to any widget |
-| [DD-003](dd-m4-p2-003-focus-model-and-traversal.md) | Where does focus live and how does it move? | One `FocusState` per `WindowState`; focusable = **Button-family by default, extensible by annotation**; **tree-order** traversal; the spike's core adopted as the traversal implementation |
-| [DD-004](dd-m4-p2-004-modal-focus-scope.md) | What is a structure-independent modal focus scope? | An **annotated subtree plus an explicit enter/exit**, because the restore target cannot be derived from the tree (measured). A **dismissal request** is addressed to the innermost entered scope — Esc is M4's only source, click-away and M5's Dialog reuse the same recipient; **screen-reader modality attaches to the scope, not the layer** |
-| [DD-005](dd-m4-p2-005-dsl-handler-surface.md) | How is all of this spelled in `.ui`? | `clicked` on any widget; `item` / `index` readable in handler position; **two annotations** — a focus group and a modal scope — which is the gap the spike measured; a **`dismiss`** signal, because dismissal is a concept with several sources rather than a key; and **one** `key-down("<key>")` signal whose key is an argument, so no key name is grandfathered at 1.0 |
+| [DD-001](dd-m4-p2-001-event-routing-model.md) | How does an input event reach a handler? | **Target then bubble, no capture phase** (option R3), with high-level signals as the authored surface, one drain per dispatch, an unconsumed key falling through to `DefWindowProc`, and touch on `WM_POINTER*` without changing the host's process-wide input mode |
+| [DD-002](dd-m4-p2-002-hit-testing-and-generic-click.md) | How is a pointer target resolved, and which widgets are eligible? | **Layout-derived DIP rectangles** (option H2), retained beside the Visual write by the one lockstep pass; **topmost-single-target** selection **bounded by ancestor clips** — scrim occlusion follows rather than being a rule, and clipped-out content resolves nowhere — and `clicked` generalised from Button to any widget |
+| [DD-003](dd-m4-p2-003-focus-model-and-traversal.md) | Where does focus live and how does it move? | One `FocusState` per `WindowState`; focusable = **Button-family by derivation** with `enabled: false` removing the stop, the derivation being the extension point a later phase spells; nothing focused at window open; **tree-order** traversal; click focuses the nearest focusable widget at or above the target; the spike's core adopted as the traversal implementation |
+| [DD-004](dd-m4-p2-004-modal-focus-scope.md) | What is a structure-independent modal focus scope? | An **annotated subtree whose presence is the entry**: materialisation captures the restore target — not derivable from the tree afterwards (measured) — and moves focus inside. A **dismissal request** is addressed to the innermost entered scope — Esc is M4's only source, click-away and M5's Dialog reuse the same recipient; **screen-reader modality attaches to the scope, not the layer** |
+| [DD-005](dd-m4-p2-005-dsl-handler-surface.md) | How is all of this spelled in `.ui`? | `clicked` on any widget; `item` / `index` readable in handler position; **two annotations** — a focus group and a modal scope — which is the gap the spike measured; a **`dismiss`** signal admitted beside `modal-scope` only, because dismissal is a concept with several sources rather than a key; and **one** `key-down("<key>")` signal whose key is an argument, so no key name is grandfathered at 1.0 |
 
 ## Out of scope
 

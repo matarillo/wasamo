@@ -9,9 +9,11 @@
 Today there is no routing: `wnd_proc` calls `hit_test_click`, which
 walks the tree and fires **every** Button-family widget whose rectangle
 contains the point, and `update_hover`, which walks the tree setting
-background state. Keyboard messages are not handled at all. That was
-adequate while no two interactive widgets overlapped and nothing but a
-Button reacted.
+background state. The keyboard reaches nothing: the `WM_KEYDOWN` arm
+forwards the virtual key to a `key_down_fn` host callback slot that has
+no installer, and returns without consulting the widget tree or the
+default window procedure. That was adequate while no two interactive
+widgets overlapped and nothing but a Button reacted.
 
 This decision chooses how an input event finds a handler. It is the
 milestone's foundational choice: the scrim's occlusion rule, Esc
@@ -32,7 +34,8 @@ what the focus model needs.
 - **Phases** — capture / target / bubble, or fewer.
 - **Signal vocabulary** — which high-level signals exist, and whether a
   raw pointer-event surface is exposed at all.
-- **Keyboard delivery** — where a key event starts.
+- **Keyboard delivery** — where a key event starts, and what becomes of
+  a key nothing consumes.
 - **Drain coupling** — when the reactive drain runs relative to
   propagation.
 - **Delivery to a removed subtree** — the guarantee M3-Phase 7 residual
@@ -96,6 +99,13 @@ Without it, every lightbox button would have to carry its own arrow
 handlers, which is precisely the per-consumer special-casing the
 milestone thesis exists to prevent.
 
+The requirement is only expressible because focus is *inside* the
+lightbox when it opens: DD-004's entry moves focus to the scope's first
+stop, which is what makes the scope's container an ancestor of the
+focused widget and therefore reachable by the walk. A design in which
+the scope opened without taking focus would leave an authored key
+handler on it unreachable until the user pressed Tab.
+
 Requirement 2 is **not** one, despite looking like it. DD-005 makes Esc
 a source of a *dismissal request*, which DD-004 addresses directly to
 the innermost entered scope rather than walking to it from the focused
@@ -157,6 +167,38 @@ after propagation completes. This also bounds the answer to the
 removed-subtree question: the ancestor chain is captured when the event
 is dispatched, and a node removed during that dispatch is not visited.
 
+**The M3-Phase 7 drain residuals**, whose firing this decision is
+required to state
+([constraints §3](../requirements/constraints.md)):
+
+- **Cycle detection (residual 1) does not fire.** Its reopen signal is
+  written as *an effect in a generated subtree writing state*. A handler
+  is a user-initiated write, not an effect. The near case — a per-item
+  handler that mutates the very collection its subtree rides — stays
+  inside the existing machinery for the same reason the drain is placed
+  after the walk: the handler has already returned when regeneration
+  runs, so nothing re-invokes it and no cycle is created.
+- **Effect-ordering ties (residual 2) do not fire**, because this phase
+  introduces no observable ordering contract between effects.
+
+Both remain residuals under their existing signals rather than being
+closed here.
+
+**What becomes of a key nothing consumes.** The walk can end with no
+handler having run. That key **falls through to `DefWindowProc`**
+rather than being swallowed, which is a change from today's arm: a
+routing model should not claim keys it does not use, and the default
+path is where system-level keyboard behaviour lives. Swallowing every
+key would make the runtime's silence indistinguishable from its
+handling, and would hand M4-Phase 5 / 6 a keyboard already consumed
+before their surfaces exist.
+
+**The host key callback slot stays unwired.** `WindowState`'s
+`key_down_fn` has no installer, and this phase adds none: the walk is
+the key path. Installing the first one fixes a host-facing surface
+([constraints §2](../requirements/constraints.md)), and ABI work is
+M4-Phase 7's (framing agreement 7).
+
 **Touch.** M4's touch obligation is discharged by synthesized injection
 with the limit stated ([framing.md](../requirements/framing.md)
 agreement 6, owner-settled: no touch hardware is available). The
@@ -166,13 +208,32 @@ in M5 and because the injection API drives the pointer family
 directly. Coordinates cross the same DIP boundary as the mouse
 (M4-Phase 1 DD-M4-P1-002), adding no new conversion site.
 
-**Pointer capture, hover, pressed.** Hover / pressed remain
-Button-family background state as today, but move behind the routing
-model as `hovered` / `pressed` transitions computed from enter / leave
-against the resolved target rather than by a whole-tree walk. Pointer
-capture (a drag that leaves the widget) is required by *nothing* in
-this phase and is deferred with a trigger: the first drag-based
-surface, which is M4-Phase 4's scrollbar.
+Handling the pointer message also **suppresses the mouse messages the
+system would otherwise synthesize** for that contact, which is what
+makes "the handler ran exactly once" a checkable property rather than a
+hope — a touch that arrived by promotion and one that arrived through
+the pointer path are otherwise indistinguishable from the handler's
+side.
+
+The converse switch is **not** taken: `EnableMouseInPointer` would route
+*mouse* input onto the same family and unify the two paths, and it is
+tempting for exactly the reason this milestone likes — one path instead
+of two. It is refused because it is a **process-wide, one-way mode**,
+and `wasamo.dll` runs inside a host process whose own windows would
+inherit it. A library does not change its host's input mode. The mouse
+therefore stays on the mouse messages, and the shared seam is the DIP
+conversion rather than the message family.
+
+**Pointer capture, hover, pressed.** Hover and pressed stay
+Button-family **presentation state** and gain no authored surface; what
+changes is who computes them. Today a whole-tree walk sets state on
+every Button. Under this model they are enter / leave transitions
+against the **resolved target**, so the widget that paints pressed is
+the widget a release would dispatch to — under overlap the two can
+otherwise disagree, which is the defect single-target resolution exists
+to remove. Pointer capture (a drag that leaves the widget) is required
+by *nothing* in this phase and is deferred with a trigger: the first
+drag-based surface, which is M4-Phase 4's scrollbar.
 
 **The synthesised pointer update after a scale change** (carried
 forward from M4-Phase 1 T5) is resolved as **not adopted**: hover
@@ -184,16 +245,25 @@ state — the exact shape DD-M4-P1-002 §Row 6 closed.
 
 **R3 — target then bubble, with no capture phase**, plus:
 
-- **High-level signals only.** `clicked`, `pressed`, `hovered` and the
-  key events. No raw pointer-event surface in M4 — permitted by the
+- **High-level signals only.** The authored vocabulary is `clicked`,
+  `dismiss` and `key-down` (DD-005). Hover and pressed are Button-family
+  presentation state, **not** authored signals — nothing raises them to
+  an author. No raw pointer-event surface in M4 — permitted by the
   intake classification, and withheld because nothing in A or B4 needs
   it and it would be ABI-visible surface before M4-Phase 7.
-- **Keyboard starts at the focused widget**, or at the innermost modal
-  scope when nothing is focused, and bubbles.
+- **Keyboard starts at the focused widget**, or at the innermost entered
+  modal scope when nothing is focused, and bubbles. **An unconsumed key
+  falls through to `DefWindowProc`**, and the uninstalled host key
+  callback stays uninstalled.
 - **Handling consumes.** No separate stop verb.
 - **One drain per dispatch**, after propagation completes; the
-  ancestor chain is captured at dispatch.
-- **Touch via `WM_POINTER*`**, converted at the existing DIP boundary.
+  ancestor chain is captured at dispatch. The M3-Phase 7 drain residuals
+  do not fire and keep their existing signals.
+- **Touch via `WM_POINTER*`**, converted at the existing DIP boundary,
+  with the promotion it suppresses as the single-delivery check;
+  `EnableMouseInPointer` is refused as a host-wide mode change.
+- **Hover and pressed are computed against the resolved target**, not
+  by a whole-tree walk.
 - **Pointer capture deferred** to M4-Phase 4.
 
 ## Forward-compat exposure
@@ -229,5 +299,12 @@ state — the exact shape DD-M4-P1-002 §Row 6 closed.
   assumption is recorded so a later contract can be checked against it.
 - **`WM_POINTER*` is a wider surface than the three mouse messages.**
   Mitigation: only the subset the fixture and the two apps exercise is
-  handled, and unhandled members fall through to `DefWindowProc` as
-  today.
+  handled, and unhandled members fall through to `DefWindowProc` — which
+  is also what re-enables promotion for the contacts this phase does not
+  claim, so an unhandled pointer message degrades to today's behaviour
+  rather than to silence.
+- **The `DefWindowProc` fallthrough is a behaviour change on a path with
+  no current consumer.** No key reaches the default procedure today, so
+  nothing can regress visibly; the risk is the opposite direction — a
+  later phase assuming keys are swallowed. Recorded so M4-Phase 6 reads
+  it as a property rather than discovering it.

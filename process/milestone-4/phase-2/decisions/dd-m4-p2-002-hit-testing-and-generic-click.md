@@ -45,8 +45,11 @@ the comparison.
 
 ## Sub-issues
 
-- **Geometry source** — Visual readback or a layout-derived cache.
+- **Geometry source** — Visual readback or a layout-derived cache; and,
+  if the cache, where the retained rectangle lives and who writes it.
 - **Target selection** — how many widgets a pointer event resolves to.
+- **Clipping** — what bounds containment when content extends past a
+  clipping container.
 - **Eligibility** — which widgets can be a target.
 - **`Button.clicked`** — preserved, renamed, or generalised.
 - **Per-item resolution** — how a click inside repetition names its item.
@@ -81,10 +84,10 @@ the comparison.
 
 - **H1's correctness stops being free the moment anything else in this
   phase lands.** The cancellation above holds only while hit geometry
-  *is* the visual geometry. DD-004's scope containment, a DIP-denominated
-  minimum target, or any rule expressed in layout terms breaks the
-  symmetry, and the residual error is proportional to `scale - 1` — it
-  is invisible at 100% and wrong at 150%. That is the exact signature
+  *is* the visual geometry. The clip bound on containment, a
+  DIP-denominated minimum target, or any other rule expressed in layout
+  terms breaks the symmetry, and the residual error is proportional to
+  `scale - 1` — it is invisible at 100% and wrong at 150%. That is the exact signature
   M4-Phase 1 spent a phase removing from rendering; H1 leaves it in
   input.
 - **H1 carries an unenforceable precondition.** The single-divisor rule
@@ -113,8 +116,26 @@ the comparison.
 change is complete or it is not made. No intermediate state may have one
 path reading the cache and another reading the Visual, because that is
 where the cancellation argument silently stops applying to only some
-rows. The close artifact is a call-site audit showing **zero**
-`visual_rect` readers on the input path.
+rows. The input path has **two** readers today — `hit_test_click` and
+`update_hover`, the latter entered from three window messages — and the
+obligation covers both. The close artifact is a call-site audit showing
+**zero** `visual_rect` readers on the input path.
+
+**Where the retained rectangle lives and who writes it.** Layout
+computes on a transient tree: the layout entry builds a `LayoutNode`
+tree, arranges it, applies the results, and drops it. The arrange pass
+therefore cannot be the retained rectangle's writer — its output does
+not outlive the pass. The rectangle is retained **on the widget node**
+and written by the **same lockstep walk that applies layout results to
+the Visual** (`sync_visuals`): one walk, two stores — the physical
+offset and size to the Composition visual, the absolute DIP rectangle to
+the node. This inherits the discipline that walk already carries (every
+Composition geometry write in the runtime happens there and nowhere
+else — M4-Phase 1 T3) instead of inventing a second lockstep walk, which
+would be the parallel-data shape the runtime keeps eliminating. Writing
+a node-side field is not a Composition write, so the walk's audited
+single-pass property is preserved; the enumeration that closes it now
+covers both stores.
 
 ### Target selection: T2 over T1
 
@@ -134,6 +155,22 @@ This is also what keeps DD-001 free of a capture phase.
 within a container, later children paint over earlier ones. Hit-testing
 is therefore the reverse walk — children in reverse order, first
 containing node wins — which is the same total order the screen shows.
+
+**Containment is bounded by ancestor clips.** "Hit-testing resolves
+what the screen shows" has a second half: a container that installs a
+clip (`ScrollView`, `Grid`, `ZStack` — the kinds that install
+`InsetClip{0,0,0,0}` on their outer Visual) paints nothing of its
+subtree outside its own rectangle, so nothing of its subtree outside
+that rectangle may be a target. The walk descends into a clipping
+container only where the point lies inside it. A non-clipping container
+(the stacks, `WrapPanel`) paints overflowing children — the toolbar's
+measured overlap at narrow widths is exactly that — and its overflowing
+children are accordingly hittable. Without this rule the gallery itself
+misresolves: content scrolled above the `ScrollView` viewport retains
+rectangles under the toolbar, and the content cell paints later than the
+toolbar cell, so a toolbar click would resolve to an invisible
+thumbnail. The clip bound follows from the widget kind plus the same
+retained rectangle; it adds no second geometry store.
 
 ### Eligibility: E1 over E2 and E3
 
@@ -197,12 +234,18 @@ cheap later — under H1 it was not expressible.
 
 ## Recommendation
 
-- **H2** — layout retains each node's arranged **DIP** rectangle;
-  hit-testing reads that. **Complete migration:** zero `visual_rect`
-  readers remain on the input path, evidenced by a call-site audit.
+- **H2** — layout retains each node's arranged **DIP** rectangle on the
+  widget node, written by the same lockstep walk that applies layout
+  results to the Visual (one walk, two stores); hit-testing reads that.
+  **Complete migration:** zero `visual_rect` readers remain on the input
+  path — `hit_test_click` and `update_hover` both — evidenced by a
+  call-site audit.
 - **T2** — one target, the topmost containing widget, found by a
-  reverse-order walk; DD-001 then bubbles from it. Occlusion is a
-  consequence, not a rule.
+  reverse-order walk **bounded by ancestor clips**: a clipping
+  container's subtree is hittable only inside that container's
+  rectangle, and a non-clipping container's overflowing children are
+  hittable, matching paint. DD-001 then bubbles from the target.
+  Occlusion is a consequence, not a rule.
 - **E1** — every widget with a visual is a candidate; reacting is a
   separate question.
 - **`clicked` is one signal on every widget.** Button keeps its
@@ -212,10 +255,10 @@ cheap later — under H1 it was not expressible.
 
 ## Forward-compat exposure
 
-- **The cache has exactly one writer** — the layout arrange pass — by
-  the same discipline as the geometry-scale cache. Any path that
-  attaches, re-parents or re-materialises a subtree must reach layout
-  before its rectangles are trusted. `lib.rs::window_add_widget` is
+- **The cache has exactly one writer** — the lockstep walk that applies
+  layout results — by the same discipline as the geometry-scale cache.
+  Any path that attaches, re-parents or re-materialises a subtree must
+  reach layout before its rectangles are trusted. `lib.rs::window_add_widget` is
   already outside that boundary (M4-Phase 1 T3, F-24) and stays a
   cleanup candidate; under H2 a widget attached that way is not
   hit-testable, which is a *better* failure than being hit-testable at a
@@ -231,8 +274,9 @@ cheap later — under H1 it was not expressible.
 - **M4-Phase 4's scrollbar drag** will want pointer capture (DD-001
   defers it) and hit rectangles that account for scroll offset. The
   cache stores arranged rectangles, which already include the offset a
-  `ScrollView` applies, so no additional contract is needed — recorded
-  so it can be re-derived rather than rediscovered.
+  `ScrollView` applies, and the clip bound is what keeps scrolled-out
+  content unhittable — so no additional contract is needed; recorded so
+  it can be re-derived rather than rediscovered.
 
 ## Technical risk re-evaluation
 

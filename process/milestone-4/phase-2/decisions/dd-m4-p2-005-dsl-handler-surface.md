@@ -214,9 +214,10 @@ The concrete spelling proposed is `focus-group: true` and
 the `Box.fill` / `WrapPanel` precedent for attributes that do not
 traverse the binding path). Constant-only is a real limit: **a scope
 cannot be turned on and off by a binding.** It does not need to be —
-A's lightbox controls its *existence* with `if`, and DD-004's entry is
-an act, not an attribute. Recorded so a later phase that wants a
-bindable scope knows it is a change, not an oversight.
+A's lightbox controls its *existence* with `if`, and under DD-004 the
+subtree's presence is what enters the scope, so a bindable attribute
+would be a second switch for the same thing. Recorded so a later phase
+that wants a bindable scope knows it is a change, not an oversight.
 
 **Focusability opt-in** (DD-003's F3) is deliberately **not spelled in
 M4**. No M4 widget needs it: A's focusable widgets are all Button
@@ -271,6 +272,13 @@ decision exists to prevent.
 - **D2**, therefore: the scope raises `dismiss`, and **whether a handler
   exists is the policy** while there is exactly one source. Phase 9
   splits policy from handling by adding the attribute.
+
+**Admission follows the recipient.** `dismiss` is admitted only on a
+container that also carries `modal-scope: true`. The request is
+addressed to scopes, so a `dismiss` handler anywhere else could never
+fire — the same silently-never-fires failure mode the key-name
+validation exists to prevent — and the checker rejects it for the same
+reason.
 
 Two properties follow that are worth stating because they are free here
 and expensive elsewhere:
@@ -470,7 +478,9 @@ value changing, not the finished picture
   variant, no binding path.
 - **`dismiss`**: an ordinary signal name in the existing per-node
   handler table. Nothing in the IR distinguishes it; what differs is
-  that the runtime raises it rather than a pointer message doing so.
+  that the runtime raises it rather than a pointer message doing so, and
+  that `check` admits it only on a container carrying
+  `modal-scope: true`.
 - **`key-down("<key>")`**: the one shape that needs new **grammar** —
   a signal handler whose name carries an argument. The cost is
   acknowledged rather than hidden: `slot.*` showed a dotted identifier
@@ -513,10 +523,12 @@ confirming the fixture introduced no normative spelling.
   extension point.
 - **D2** — the scope raises a `dismiss` signal and the author decides
   what closing means; while Esc is the only source, the presence of a
-  handler is the policy. The declarative policy attribute lands at
-  M4-Phase 9 with the second source. **This is a dismissal concept, not
-  a key concept**, and it is the contract M4-Phase 9's click-away and
-  M5's Dialog widget both consume.
+  handler is the policy. `dismiss` is admitted only beside
+  `modal-scope: true`, where it can fire; elsewhere it is a diagnostic.
+  The declarative policy attribute lands at M4-Phase 9 with the second
+  source. **This is a dismissal concept, not a key concept**, and it is
+  the contract M4-Phase 9's click-away and M5's Dialog widget both
+  consume.
 - **K3** — one `key-down("<key>")` signal whose key is named in the
   declaration as a string, delivered by DD-001's walk, first match
   consuming. It is the **`keydown` equivalent**: a physical key press
@@ -604,7 +616,8 @@ confirming the fixture introduced no normative spelling.
   already releases.
 - **Two new attributes are two new checker branches**, each needing a
   test that fires it (implementation-gates trap 4): the attribute on a
-  widget kind that cannot carry it, and a non-constant value.
+  widget kind that cannot carry it, a non-constant value, and — for
+  `dismiss` — a handler on a container that is not a scope.
 - **G1 widens an existing signal name**, so a `.ui` that previously
   produced an "unknown signal" diagnostic may now be accepted. That is
   the intended direction, and the reject-side tests are what pin how far
