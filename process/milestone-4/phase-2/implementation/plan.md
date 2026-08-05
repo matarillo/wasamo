@@ -24,36 +24,57 @@ whenever the task built something it did not expect to build.
 
 ## T1 — Layout-derived hit rectangles
 
-Arrange retains each node's arranged rectangle in DIP; the arrange pass
-is its **only** writer, in the same sense as the per-node geometry scale
-(Phase 1). No consumer yet — this task adds the source, T2 switches the
-reader.
+Each node retains its arranged rectangle in DIP, absolute within the
+window's client area. The writer is the **lockstep walk that applies
+layout results to the Visual** (`sync_visuals`) — one walk, two stores —
+because the arranged `LayoutNode` tree is transient and does not outlive
+the layout entry (DD-002). No consumer yet — this task adds the source,
+T2 switches the readers.
 
-- Rectangle is absolute within the window's client area, so hit
-  resolution needs no accumulation walk.
+- The write inherits the walk's audited single-pass discipline; the
+  enumeration that closes that audit now covers both stores (the
+  physical write to the Visual, the DIP rectangle to the node).
+- The node also records whether its kind clips (`ScrollView`, `Grid`,
+  `ZStack` install `InsetClip{0,0,0,0}`); T2's resolution consumes it.
 - A subtree attached but never laid out has no rectangle and is not
   hit-testable. That is the intended failure and is asserted, not
   assumed.
-- **Evidence:** pure-logic tests over constructed trees, plus a writer
-  audit naming every site that could write the field.
+- **Evidence:** integration assertions that the retained rectangle
+  matches the arranged result, plus a writer audit naming every site
+  that could write the field.
 
 - [ ] T1
 
-## T2 — Single-target hit resolution
+## T2 — Single-target hit resolution and the complete geometry migration
 
 Replace the fire-every-Button recursion with reverse-order topmost
-resolution reading T1's cache. Every widget with a visual is a
+resolution reading T1's store, **bounded by ancestor clips**: a clipping
+container's subtree is resolvable only inside that container's
+rectangle; a non-clipping container's overflowing children stay
+resolvable, matching paint (DD-002). Every widget with a visual is a
 candidate; whether anything reacts is T3's question.
 
-- **The migration completes in this task** (DD-002): the close artifact
-  is a call-site audit table showing **zero** `visual_rect` readers on
-  the input path. No commit between T1 and T2 may leave a mixed path.
+- The resolution is a **free function over plain data** (rectangles +
+  order + clip bounds → target), so occlusion, clipping and per-item
+  resolution are pure logic with no Compositor.
+- **The migration completes in this task** (DD-002): both input-path
+  readers switch source — `hit_test_click` and `update_hover`, the
+  latter entered from three window messages. `update_hover` changes
+  geometry source only here; its semantic redesign is T4. The close
+  artifact is a call-site audit table showing **zero** `visual_rect`
+  readers on the input path. No commit between T1 and T2 may leave a
+  mixed path.
 - Edge containment is a **boundary condition**, so a deliberately wrong
   implementation must be shown to make the named test fail
   ([DD-V-029](../../../cross-milestone/decisions/dd-v-029-pure-logic-red-test-obligation.md)).
+- **Staleness control** (DD-002's named mitigation): a fixture asserts
+  that a click resolves correctly **after** a property write triggers
+  re-layout — the path where a cache goes stale.
 - **Evidence:** pure-logic tests over a constructed *overlapping* tree —
-  not the gallery, where occlusion is unobservable until T9
-  ([preamble.md](./preamble.md)).
+  not the gallery, where occlusion is unobservable until T10
+  ([preamble.md](./preamble.md)) — including a clip case (a rectangle
+  outside its clipping ancestor does not resolve); the audit table; the
+  staleness fixture.
 
 - [ ] T2
 
@@ -65,33 +86,75 @@ consumes the event. No descending phase.
 - The ancestor chain is captured **before** dispatch, and the reactive
   drain runs **once after** the walk completes.
 - Structural side-effect enumeration: what a handler's state write
-  pulls in (drain → re-layout → rectangle cache → focus validity), and
+  pulls in (drain → re-layout → rectangle store → focus validity), and
   which of those the walk must not observe mid-flight.
 - **Evidence:** integration tests that synthesize a click into a nested
   tree and read back which handlers ran, including a handler that
-  removes its own subtree.
+  removes its own subtree, and the consumption control DD-001 names:
+  adding a handler to a nested widget is shown to stop the ancestor's
+  from firing.
 
 - [ ] T3
 
-## T4 — Per-window focus state and Tab traversal
+## T4 — Hover and pressed behind the routing model
+
+The semantic half DD-001 fixes: hover / pressed become transitions
+computed from enter / leave against the resolved target, replacing the
+whole-tree walk. Geometry already comes from T1's store (switched in
+T2); this task changes who owns the state transitions.
+
+- Single-target consistency: the widget that paints pressed is the
+  widget a release would dispatch to; overlapping widgets no longer both
+  hover. Hover and pressed gain **no authored surface** — they stay
+  Button-family presentation (DD-001).
+- `WM_MOUSELEAVE` clears through the same transition path; the
+  disabled-Button arm keeps its no-reaction contract while the walk's
+  descend-into-children behaviour follows T2's topmost rule.
+- The synthesised pointer update after a scale change stays **not
+  adopted** (DD-001): hover self-corrects on the next move, and a second
+  producer of hover state is the shape DD-M4-P1-002 closed.
+- **Evidence:** integration tests driving enter / leave / press /
+  release sequences and reading back state transitions, including the
+  overlap case where only the topmost widget reacts.
+
+- [ ] T4
+
+## T5 — Per-window focus state and Tab traversal
 
 `FocusState` on `WindowState`; the spike's `focus_core` gains its first
 production caller; projection derives `Stop` / `Container` from the
 widget kind — the two roles the tree can already supply.
 
-- Tab / Shift+Tab in declaration order, wrapping both ends; click moves
-  focus when the resolved widget is focusable and leaves it unchanged
-  otherwise; window activation does not change it.
+- Nothing is focused at window open; Tab / Shift+Tab in declaration
+  order, wrapping both ends, so the first Tab lands on the first stop.
+  A disabled Button is skipped. Click focuses the **nearest focusable
+  widget at or above** the resolved target and leaves focus unchanged
+  when there is none; window activation does not change it.
+- The key path integrates with the **existing** `WM_KEYDOWN` arm, which
+  today forwards to the uninstalled `key_down_fn` host slot and returns.
+  Routing consumes ahead of that slot without installing it — the first
+  installer fixes the callback unit as shipped API
+  ([constraints §2](../requirements/constraints.md)), and this phase
+  must not be that installer. **An unconsumed key now falls through to
+  `DefWindowProc`** instead of being swallowed (DD-001); the arm's
+  return path changes here and the change has its own assertion.
 - The focus indicator is drawn through `sync_visuals` and nowhere else —
   a `SetOffset` / `SetSize` outside that pass silently breaks the
-  property DD-002's audit depends on (Phase 1, T3).
+  property DD-002's audit depends on (Phase 1, T3). Close artifact: the
+  enumeration of every `SetOffset` / `SetSize` in the runtime with its
+  pass (DD-003).
+- The indicator must be **distinguishable** (DD-003): M4's only means is
+  a background change, and the ToggleButton selected state and hover
+  state are also background changes. Evidence includes a frame pair
+  showing focused versus hovered/selected as visibly distinct states.
 - **Evidence:** integration tests establishing their own initial focus
   state, then asserting the **expected next stop** rather than that
-  focus moved.
+  focus moved; the indicator distinctness frames; the write-site
+  enumeration.
 
-- [ ] T4
+- [ ] T5
 
-## T5 — DSL: `focus-group`, `modal-scope`, and `dismiss`
+## T6 — DSL: `focus-group`, `modal-scope`, and `dismiss`
 
 The compiler surface, ahead of the runtime behaviour, because the tree
 cannot say "group" or "modal" until this lands
@@ -99,15 +162,17 @@ cannot say "group" or "modal" until this lands
 
 - Grammar, checker (constant-only `true` / `false`, admitted on
   containers), IR, loader → the node's focus role.
-- Two rejects with their own tests: a binding-expression RHS, and the
-  attribute on a non-admitting widget.
+- Three rejects with their own tests: a binding-expression RHS, the
+  attribute on a non-admitting widget, and a `dismiss` handler on a
+  container that does not carry `modal-scope: true` (DD-005: the request
+  is addressed to scopes, so a handler elsewhere could never fire).
 - `dismiss` is an ordinary signal name in the existing handler table;
   nothing in the IR distinguishes it.
 - No new token, `IrType`, `IrLiteral` or `PropertyValue`.
 
-- [ ] T5
+- [ ] T6
 
-## T6 — Group traversal and modal scopes in the runtime
+## T7 — Group traversal and modal scopes in the runtime
 
 Now that roles have an authored source, the behaviour DD-003 and DD-004
 fix:
@@ -115,12 +180,19 @@ fix:
 - Group: one Tab stop, arrows within, **per-group memory with a single
   writer** — the primitive that moves focus is the primitive that writes
   the memory.
-- Scope: annotation and entry as two mechanisms; an un-entered scope
-  contributes no Tab stops; only an annotated subtree may be entered;
-  restore target captured at entry; **restoration takes precedence over
-  structural succession**, and a removal's successor is computed
-  **before** the mutation because node identity does not survive a
-  rebuild.
+- Scope: **presence is the entry** (DD-004). The materialisation seam —
+  structural drain or initial build — pushes the scope in
+  materialisation order, captures the restore target, and moves focus to
+  the scope's first stop (or none, with key delivery starting at the
+  scope). Removal exits: **restoration takes precedence over structural
+  succession**, and a removal's successor is computed **before** the
+  mutation because node identity does not survive a rebuild. The entry's
+  focus move writes runtime focus state only and enqueues no further
+  drain work — asserted, not assumed.
+- Reconcile `focus_core` with presence-entry: the core's un-entered
+  state has no production constructor; the projection either narrows it
+  or the branch carries a test that fires it (implementation-gates
+  trap 4) — recorded either way.
 - Dismissal: `Escape` becomes a request **addressed** to the innermost
   entered scope and stopping there; the runtime delivers it and never
   acts on it.
@@ -128,31 +200,37 @@ fix:
   seam, and the override map go, replaced by the real projection.
 - **Evidence:** the mechanism fixture, re-pointed at the authored
   annotations; the mutation that deletes the restore branch must go red
-  (the spike's M7).
+  (the spike's M7); an entry test driven by a state write flipping the
+  `if` (the production seam, not a test-side call).
 
-- [ ] T6
+- [ ] T7
 
-## T7 — DSL: generic `clicked` and `key-down("<key>")`
+## T8 — DSL: generic `clicked` and `key-down("<key>")`
 
 `clicked` admitted on any widget. Routing is already generic from T3, so
-this widens *who may carry a handler*, not how an event travels.
+this widens *who may carry a handler* — a checker rule over the existing
+handler table — not how an event travels.
 
 - Button keeps its `enabled` suppression and its keyboard activation;
   both are Button behaviour, documented on Button.
+- Reject-side tests pin how far `clicked` widens (DD-005: a previously
+  diagnosed `.ui` may now be accepted; the reject tests are what bound
+  the widening).
 - `key-down` needs the phase's **one new grammar production** — a signal
   handler whose name carries an argument. The key name is validated at
   `check` against the recognised non-character table, and an
   unrecognised name is a diagnostic with its own test.
 - The keys the runtime keeps (`Tab` always; arrows inside a group;
   `Escape` while a scope is entered) are asserted, since each is a way
-  for an authored handler to silently never fire.
+  for an authored handler to silently never fire. The group and scope
+  behaviours these assertions run against exist from T7.
 - **Evidence:** a `Box` with a handler fires; a disabled Button still
   occludes what is behind it; a `key-down("ArrowLeft")` handler fires
   outside a group and does not fire inside one.
 
-- [ ] T7
+- [ ] T8
 
-## T8 — DSL: per-item handlers inside `for`
+## T9 — DSL: per-item handlers inside `for`
 
 The four coupled answers M3-Phase 7 routed here:
 
@@ -169,10 +247,15 @@ The four coupled answers M3-Phase 7 routed here:
   collection mutation**; a test that only clicks a freshly generated row
   cannot distinguish invocation-time resolution from generation-time
   capture.
+- **The M3-Phase 7 drain residuals are dispositioned in DD-001** (they
+  do not fire). This task's click-after-mutation evidence is what
+  exercises the nearest case, so the disposition is checked against
+  something rather than asserted; a divergence goes in
+  [log.md](./log.md).
 
-- [ ] T8
+- [ ] T9
 
-## T9 — Gallery slice (consumer A)
+## T10 — Gallery slice (consumer A)
 
 Wire the `.ui` end to end through `.ui` → IR → runtime, from at least
 one example host:
@@ -181,17 +264,30 @@ one example host:
 - The lightbox is a **root `ZStack` branch** and stays one; its scrim is
   an authored covering widget, and it is what blocks background clicks —
   the scope confines the keyboard only.
-- Esc closes through an authored `dismiss` handler, Tab is contained,
-  and focus returns to the thumbnail that opened it.
+- Esc closes through an authored `dismiss` handler and Tab is contained.
+  **Focus restores to the widget focused before the lightbox opened**
+  (or to none, when nothing was). The thumbnail itself becomes the
+  restore target when M4-Phase 5's focusability attribute makes a
+  clicked thumbnail focusable; that is recorded as Phase 5's consumer,
+  not silently claimed here.
 - Left/Right step the photo through `key-down` handlers. **The visible
-  result is a bound value
-  changing, not the finished picture** — the caption and the selected
-  thumbnail need index reads and equality selection, which are
-  M4-Phase 3 ([framing.md](../requirements/framing.md) §範囲の縫い目).
+  result is a bound value changing, not the finished picture** — the
+  caption and the selected thumbnail need index reads and equality
+  selection, which are M4-Phase 3
+  ([framing.md](../requirements/framing.md) §範囲の縫い目).
+- **Scrolled hit-testing is exercised**, because the gallery is the
+  clip rule's consumer: with `scroll_y` non-zero, a thumbnail inside the
+  viewport resolves and opens the lightbox, and a toolbar click above
+  the viewport resolves to the toolbar — not to the invisible thumbnail
+  whose rectangle sits under it.
+- **Host artifacts rebuild in order**: the new grammar and attributes
+  change `.uic`, so `wasamoc` builds before the C / Zig gallery hosts
+  re-embed their IR (the M4-Phase 1 T9 shape); A stays runnable on all
+  three hosts.
 
-- [ ] T9
+- [ ] T10
 
-## T10 — Touch
+## T11 — Touch
 
 Synthesized injection only; no touch hardware is available (framing
 agreement ⑥).
@@ -199,13 +295,25 @@ agreement ⑥).
 - The path under test is touch message → DIP conversion → hit
   resolution → handler, i.e. that touch rides the same seam as the
   pointer.
+- **The injected press fires its handler exactly once.** DD-001 takes
+  `WM_POINTER*` rather than mouse promotion, and the OS synthesizes
+  mouse messages for pointer input the window does not handle — so the
+  discriminating assertion is single delivery through the pointer path,
+  not merely "the handler fired", which promotion would also produce.
+- `EnableMouseInPointer` is **not** called (DD-001: a library does not
+  change its host process's input mode); the mouse stays on the mouse
+  messages, and the shared seam is the DIP conversion.
 - **The limit is stated, not implied**: this does not establish that a
   physical touch digitizer produces the same messages. Recorded in the
   same shape as Phase 1's synthesized-`WM_DPICHANGED` limit.
+- Confirm whether
+  [verification-environments.md](../../../../docs/notes/verification-environments.md)
+  needs a taxonomy entry for synthesized touch, per the framing's
+  verification section.
 
-- [ ] T10
+- [ ] T11
 
-## T11 — GUI evidence with positive controls
+## T12 — GUI evidence with positive controls
 
 The four controls from the [framing](../requirements/framing.md)
 §検証方針, each with its agreement leg:
@@ -213,8 +321,8 @@ The four controls from the [framing](../requirements/framing.md)
 | Control | Difference leg | Agreement leg |
 |---|---|---|
 | A — click routing and item identity | clicking thumbnail N and thumbnail M give different lightbox content | clicking N twice gives the same content |
-| B — traversal order | Tab ×1 / ×2 / ×3 and Shift+Tab reach the expected stops in reverse | two frames with no input are identical |
-| C — containment and occlusion | with the lightbox open, a background click does nothing | with it closed, the same coordinate fires |
+| B — traversal order | Tab ×1 / ×2 / ×3 and Shift+Tab reach the expected stops in reverse | two frames with no input agree within the measured text-pixel jitter (F-33: up to 13/channel), with the tolerance and comparison recorded — not asserted as bit-identical |
+| C — containment and occlusion | with the lightbox open, a background click does nothing and Tab cycles inside | with it closed, the same coordinate fires **and the same Tab reaches the background** (the DD-004 agreement leg — containment distinguished from an empty background) |
 | D — Esc | Esc closes the lightbox | an unrelated key does not |
 
 - Capture is preceded by `cargo build --release --workspace`, takes
@@ -225,10 +333,12 @@ The four controls from the [framing](../requirements/framing.md)
   ([constraints.md §6](../requirements/constraints.md)).
 - Any tool that reads window geometry or cursor position declares
   Per-Monitor-Aware V2 first (Phase 1 F-48).
+- **The owner smoke guide is written out here** (framing §オーナー目視)
+  and verified against the target commit before it is used.
 
-- [ ] T11
+- [ ] T12
 
-## T12 — Close gate
+## T13 — Close gate
 
 - Local clean rebuild and full suite in the evidence profile; CI run id
   recorded at phase end (the split of ownership Phase 1 carried: the
@@ -238,21 +348,40 @@ The four controls from the [framing](../requirements/framing.md)
   [dsl_spec.md §4.19](../../../../docs/dsl_spec.md) and
   [architecture.md §13](../../../../docs/architecture.md) against the
   landed runtime and flip their phase-status markers; record any
-  divergence rather than silently correcting it.
+  divergence rather than silently correcting it. The named check items,
+  so the re-verification is a list and not a re-read:
+  - the disabled-Button contract in
+    [dsl_spec.md §4.8](../../../../docs/dsl_spec.md) agrees with §4.19's
+    occlusion rule (a disabled Button occludes; the "child hit-test
+    traversal is preserved" reading must not survive);
+  - §4.8's M4-deferred items that this phase settled are stated where
+    they land: disabled widgets are skipped in traversal (the spike's
+    `a_disabled_stop_is_skipped`);
+  - §4.8's disabled contract states that a disabled Button is skipped by
+    Tab (DD-003 discharges that deferral) alongside its occlusion
+    behaviour, and §4.19's focus section says the same;
+  - §4.19's `for` example parses under §4.15's grammar;
+  - the recognised key table in §4.19 matches the checker's table, and
+    §4.19 records that an unconsumed key reaches the default window
+    procedure;
+  - the entry rule (presence is the entry; focus moves in) and the clip
+    bound in §13 match the landed runtime;
+  - **no fixture spelling appears in `docs/dsl_spec.md`** (DD-005 /
+    framing R2).
 - Phase-end retrospective, verification closure mapping, and
   [handoff.md](./handoff.md).
 
-- [ ] T12
+- [ ] T13
 
 ---
 
 ## Cross-task obligations
 
-- **The stretch re-evaluation checkpoint** fired at the ADR Accepted
-  flip ([plan.md](../../plan.md) §Cross-phase dispositions 3). It is a
-  milestone-level management item, not a task here, but it is recorded
-  so it is not lost: `Image` / direct-value `fill` (M4-Phase 4) and
-  multi-line text editing await the owner's re-read.
+- **The stretch re-evaluation checkpoint** ([plan.md](../../plan.md)
+  §Cross-phase dispositions 3) is discharged: owner re-read 2026-08-05,
+  **both stretch intakes retained** — `Image` / direct-value `fill` stay
+  at M4-Phase 4, multi-line text editing stays ride-if-room. No
+  disposition line to the candidate pool or M5 is owed.
 - **No new ABI function** (framing agreement ⑦, a hypothesis rather than
   a constraint). If a task finds it needs one, it proposes the tier-2
   plan revision before adding it.
