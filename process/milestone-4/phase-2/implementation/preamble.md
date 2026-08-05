@@ -14,8 +14,10 @@ The design decisions are frozen in the ADR set under
 [../decisions/](../decisions/preamble.md) (preamble + DD-M4-P2-001
 through DD-M4-P2-005, all Accepted 2026-08-06). This file and its
 sibling [plan.md](./plan.md) are mutable during the phase; in-flight
-decisions and CI evidence land in [log.md](./log.md); phase residuals
-land in [handoff.md](./handoff.md) at phase close. The front-matter
+decisions and CI evidence land in [log.md](./log.md);
+[handoff.md](./handoff.md) is seeded from the decision set's forward
+exposure and closed with the phase's residuals at phase end. The
+front-matter
 `status` flips `draft` → `active` when the owner approves the task list,
 and `active` → `closing` at the phase-end batch commit.
 
