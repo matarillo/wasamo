@@ -3,8 +3,10 @@
 **Phase:** M4-Phase 2 (event routing, focus model, and generic click
 handling — **the milestone's centre of gravity**)
 **Date:** 2026-08-05
-**Status:** Accepted (owner approval 2026-08-05; DD-001 … DD-005 all
-Accepted)
+**Status:** Partially accepted (owner approval 2026-08-05). DD-001 …
+DD-004 are `Accepted`. **DD-005 is `Proposed`**: its key-handling
+sub-decision is open, and until it closes the authored surface is not
+settled.
 
 ## Context
 

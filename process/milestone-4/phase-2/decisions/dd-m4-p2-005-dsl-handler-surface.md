@@ -1,6 +1,6 @@
 # DD-M4-P2-005 — The authored surface: handlers, item references, and focus annotations
 
-**Status:** Accepted
+**Status:** Proposed
 **Phase:** M4-Phase 2
 **AC:** AC1 (generic click handling, per-item handlers, modal focus
 scope), and phase-end criterion 4 (spec synchronization)

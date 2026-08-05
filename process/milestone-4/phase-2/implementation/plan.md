@@ -22,39 +22,44 @@ whenever the task built something it did not expect to build.
 
 ---
 
-## T0 — Resolve the Left/Right gap in DD-005 (blocking, no code)
+## T0 — Settle DD-005's key handling (blocking, no code)
 
-The phase does not open until this is settled, because it decides
-whether the authored surface gains a key signal.
+**DD-005 is `Proposed`.** The phase does not open until its key-handling
+sub-decision closes, because that decides whether the authored surface
+gains a key signal family — and therefore what
+[dsl_spec.md §4.19](../../../../docs/dsl_spec.md) says. §4.19 currently
+carries the K1 position and is rewritten by this task.
 
-**The gap.** DD-005's K1 leaves Left/Right to *"the lightbox's own
-state"*, but nothing connects an arrow key to that state: the runtime
-has no notion of a photo index, and K1 ships no authored key surface.
-Esc is fine (DD-004 names the recipient) and arrows inside a focus group
-are fine (DD-003 defines them as focus movement). The behaviour with no
-mechanism is the one AC1 and [spec.md](../../requirements/spec.md)
-§アプリ仕様 A both name.
+**Why it reopened.** K1 was accepted without being judged against the
+rest of the set, and it leaves **two** named behaviours with no
+mechanism:
 
-**Options.**
+- **Left/Right** — the runtime has no notion of a photo index, and K1
+  ships no place to write `selected_index -= 1`.
+- **Esc** — DD-004 says the scope *names* the recipient and that *"the
+  act of closing … is authored. The core never mutates the tree."*
+  Naming a recipient is not a way to react to it. Under K1 there is no
+  place to write the state clear that closes the lightbox, so DD-004 and
+  DD-005 contradict each other.
 
-| | What it is | Cost |
-|---|---|---|
-| **L1** | Adopt K2 for arrows only: a narrow key-signal family (`key-left` / `key-right`) delivered by DD-001's bubble, authorable on any widget | Adds a normative surface to §4.19 that DD-005 declined; the seam K1 already reserved is where it attaches, so routing is unchanged |
-| **L2** | Redefine the acceptance's arrows as focus movement: the lightbox's prev / next Buttons form a focus group, arrows move focus between them, activation steps the photo | No new surface; but a photo step becomes two keystrokes, and "← → で前後" in the spec has to be re-read as "← → moves between the prev / next controls" |
-| **L3** | Runtime-built-in: inside a modal scope, Left/Right activates the previous / next focusable sibling | No new surface, one keystroke; but it invents a behaviour no author asked for and would surprise any later scope that is not a media viewer |
+Arrow keys *inside a focus group* are unaffected (DD-003 defines those
+as focus movement) and no option changes that.
 
-**Recommendation: L1.** It is the option that keeps the acceptance
-meaning what it says, and DD-005 already recorded K2 as *"the honest
-general answer"* whose only argument against it was zero consumers —
-which is exactly what this gap disproves. Narrowing it to arrows keeps
-the addition small and leaves a general shortcut mechanism (K3) outside
-M4 where the intake classification put it.
+**Options** — the full walkthrough with `.ui` examples is in
+[private/explainer/m4-phase-2-key-handling-options.md](../../../../private/explainer/m4-phase-2-key-handling-options.md);
+the decision is recorded here and in the rewritten DD-005.
+
+| | What it is |
+|---|---|
+| **K1** | No authored key surface. Requires making Esc-closes and Left/Right runtime behaviour, which contradicts DD-004 and hard-codes an application policy |
+| **K2** | A key signal family (`key-escape` / `key-left` / `key-right`, or a general `key-pressed`), delivered by DD-001's existing walk |
+| **K3** | A declarative shortcut table at window or scope level |
 
 **Task shape.** No code. Per the rewrite discipline, and because no
-downstream work has started, the outcome is applied by **rewriting
-DD-005's K1 section and §4.19** rather than annotating them, and the ADR
-set is re-accepted. Close artifact: the rewritten sections plus the
-owner's decision recorded in [log.md](./log.md).
+downstream work has started, the outcome is applied by **rewriting**
+DD-005's key-handling section and §4.19 rather than annotating them,
+after which DD-005 is re-accepted. Close artifact: the rewritten
+sections plus the owner's decision recorded in [log.md](./log.md).
 
 - [ ] T0
 
@@ -207,8 +212,8 @@ one example host:
 - The lightbox is a **root `ZStack` branch** and stays one; its scrim is
   an authored covering widget, and it is what blocks background clicks —
   the scope confines the keyboard only.
-- Esc closes; Tab is contained; focus returns to the thumbnail that
-  opened it.
+- Esc closes and Tab is contained, both per T0's outcome; focus returns
+  to the thumbnail that opened it.
 - Left/Right per T0's outcome. **Its visible result is a bound value
   changing, not the finished picture** — the caption and the selected
   thumbnail need index reads and equality selection, which are
