@@ -1,6 +1,6 @@
 # DD-M4-P2-005 — The authored surface: handlers, item references, and focus annotations
 
-**Status:** Accepted
+**Status:** Proposed
 **Phase:** M4-Phase 2
 **AC:** AC1 (generic click handling, per-item handlers, modal focus
 scope), and phase-end criterion 4 (spec synchronization)
@@ -21,15 +21,31 @@ representation at all. Of those four, DD-003 puts the active-item pair
 in M5 (no widget in M4 owns a list), so **M4 needs exactly two new
 annotations**.
 
-The per-item half is a reopening, not a new surface: M3 rejected
-`item` / `index` in handler position and recorded that it would land at
-*"M4's per-item interaction"* ([M3 handoff](../../../milestone-3/handoff.md)).
-A's thumbnail click is that case.
+The per-item half is a reopening, not a new surface, and the thing being
+reopened is **larger than a spelling**.
+[dsl_spec.md §4.15](../../../../docs/dsl_spec.md) rejects a
+`signal_handler` member *anywhere inside a `for` body* — not merely
+binder reads in handler position — and states why, and what has to be
+answered together when it is admitted:
+
+> Admitting handlers without binder reads would ship per-item widgets
+> whose handlers can only mutate global state — a half-surface the spec
+> would have to explain away; admitting binder reads in handlers *is*
+> the per-item interaction surface (select-this-item / delete-this-item),
+> whose real driver arrives with input work. **Handler admission,
+> handler-position binder reads, registration lifecycle, and their
+> identity interaction are designed together at that point.**
+
+This is that point. A's thumbnail click is the driver, and the four
+concerns M3 named are four of this record's sub-issues rather than one.
 
 ## Sub-issues
 
 - **Generic `clicked`** — the spelling on a non-Button widget.
-- **`item` / `index` in handler position** — spelling and checker rule.
+- **Per-item handlers**, which M3 sends here as four coupled questions:
+  **admission** of a handler inside a `for` body, the **spelling** of
+  binder reads in handler position, the handler's **registration
+  lifecycle**, and its **interaction with iteration identity**.
 - **Key handlers** — whether Esc / arrows are authored at all.
 - **The focus group annotation.**
 - **The modal scope annotation.**
@@ -46,7 +62,7 @@ A's thumbnail click is that case.
 - **G2 — a distinct name** (`pointer_click`, `tapped`) for non-Button
   widgets, leaving `clicked` Button-specific.
 
-### `item` / `index` in handler position
+### Binder reads in handler position
 
 - **I1 — bare `item` / `index`**, the same identifiers the binding
   position already uses inside `for`.
@@ -86,22 +102,49 @@ G1 also keeps DD-002's decision legible: one signal, raised by whatever
 the hit test resolved. The Button's extra activation paths are Button
 behaviour, documented on Button.
 
-### `item` / `index`: I1
+### Per-item handlers: the four coupled answers
 
-M3 already binds `item` and `index` inside `for` in *binding* position,
-and the checker already knows the loop scope there. I2 would introduce a
-second spelling for the same values, distinguished only by which side of
-a `=>` they appear on — a distinction with no meaning to an author.
+**Admission.** A `signal_handler` is admitted inside a `for` body. M3's
+stated reason for the rejection was that admitting handlers *without*
+binder reads would ship a half-surface; admitting both together removes
+the objection rather than overriding it.
 
-M3's rejection was about the **handler evaluator** not having the loop
-scope available, not about the spelling. What this decision adds is the
-scope's availability at handler-invocation time; the identifiers are the
-ones already in the language.
+**Spelling: I1.** M3 already binds `item` and `index` inside `for` in
+*binding* position, and the checker already knows the loop scope there.
+I2 would introduce a second spelling for the same values, distinguished
+only by which side of a `=>` they appear on — a distinction with no
+meaning to an author. The checker rule follows the binding position's
+shape: the binders resolve only inside a `for` body, and a reference
+outside one is a diagnostic. **Both directions need a test**, the accept
+case and the reject case, per the shared-lexer discipline carried from
+M3.
 
-The checker rule follows the same shape as the binding position: `item`
-and `index` resolve only inside a `for` body, and a reference outside
-one is a diagnostic. **Both directions need a test** — the accept case
-and the reject case — per the shared-lexer discipline carried from M3.
+**Registration lifecycle.** A handler inside a `for` body is registered
+per generated item, so it must be released when that item's subtree is
+dropped. It rides the path that already releases the subtree's
+bindings — the generated subtree is the unit that owns both, and giving
+handlers a second lifecycle would create exactly the parallel-data drift
+the runtime keeps eliminating. Nothing new is invented here; what this
+decision fixes is that the handler's registration is *not* separately
+owned.
+
+**Identity interaction — the one that has to be stated, not assumed.**
+M3's iteration identity is **positional and un-keyed** (§4.15). A binder
+read inside a handler resolves **when the handler runs**, not when the
+subtree was generated. Together these mean a per-item handler belongs to
+a **position**, not to an item: after a collection mutation, the handler
+at position `n` reads whatever item is now at position `n`.
+
+That is the correct behaviour, and it is correct *because* of the
+invocation-time resolution rather than in spite of it. "Delete the item
+this row shows" works only if the row's handler reads the index it
+currently occupies; a handler that had captured its item at generation
+time would delete the wrong row after any preceding removal. The two
+choices — positional identity and invocation-time reads — are
+consistent, and neither is safe to change alone. A future keyed-identity
+opt-in (§4.15 records it as a possible future) is what would reopen it,
+and it is named here so that phase re-derives the pairing rather than
+discovering it.
 
 ### Focus annotations: A1
 
@@ -201,8 +244,12 @@ confirming the fixture introduced no normative spelling.
 
 - **G1** — one `clicked` signal, authorable on any widget; Button
   keeps its `enabled` suppression and its keyboard activation.
-- **I1** — bare `item` / `index` in handler position inside `for`, with
-  accept and reject tests.
+- **Per-item handlers** — a `signal_handler` is admitted inside a `for`
+  body; **I1**, bare `item` / `index` in handler position, with accept
+  and reject tests; the registration is released with the generated
+  subtree on the path that already releases its bindings; and a binder
+  read resolves at invocation time, so a handler belongs to a position
+  rather than to an item under the positional identity baseline.
 - **A1** — `focus-group: true` and `modal-scope: true` as constant-only
   boolean attributes on any container.
 - **No focusability opt-in spelling in M4**; the derivation is the
@@ -226,15 +273,28 @@ confirming the fixture introduced no normative spelling.
   internally without the author writing the attribute.
 - **The both-at-once case** (a container that is a group and a scope) is
   expressible under A1 and untested in M4.
+- **Keyed iteration identity** is the change that would reopen the
+  per-item handler semantics, because "the handler belongs to a
+  position" is a joint consequence of positional identity and
+  invocation-time reads. §4.15 already records keyed identity as a
+  possible future opt-in; this is what it would have to re-decide.
 
 ## Technical risk re-evaluation
 
-- **`item` / `index` at handler-invocation time is the phase's only new
-  IR content**, and its hazard is the one M3 named when it deferred the
-  surface: the loop scope must be the one in force when the handler
-  *runs*, not when it was authored, and repetition can re-materialise
-  the subtree in between. The evidence must include a click after a
-  collection mutation, not only a click on a freshly built list.
+- **Per-item handlers are the phase's only new IR content**, and the
+  hazard is the one M3 named when it deferred the surface: the loop
+  scope must be the one in force when the handler *runs*, and repetition
+  can re-materialise the subtree in between. The evidence must therefore
+  include a click **after a collection mutation**, not only a click on a
+  freshly built list — a test that only ever clicks a freshly generated
+  row cannot distinguish invocation-time resolution from
+  generation-time capture.
+- **The registration lifecycle fails silently in one direction.** A
+  handler left registered against a dropped subtree is not visible in
+  any rendered frame; it surfaces as a stale invocation or a leak. The
+  close artifact is the structural side-effect enumeration for subtree
+  removal, listing handler registrations beside the bindings that path
+  already releases.
 - **Two new attributes are two new checker branches**, each needing a
   test that fires it (implementation-gates trap 4): the attribute on a
   widget kind that cannot carry it, and a non-constant value.

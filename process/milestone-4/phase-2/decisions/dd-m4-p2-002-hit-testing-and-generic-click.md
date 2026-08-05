@@ -1,6 +1,6 @@
 # DD-M4-P2-002 — Hit testing, occlusion, and generic click handling
 
-**Status:** Accepted
+**Status:** Proposed
 **Phase:** M4-Phase 2
 **AC:** AC1 (click handling on non-`Button` widgets, per-item handlers)
 
