@@ -1,6 +1,6 @@
 # DD-M4-P2-001 — Event routing model
 
-**Status:** Proposed
+**Status:** Accepted
 **Phase:** M4-Phase 2
 **AC:** AC1 ("focus model and event routing")
 

@@ -1,6 +1,6 @@
 # DD-M4-P2-003 — Focus model: location, eligibility, and traversal
 
-**Status:** Proposed
+**Status:** Accepted
 **Phase:** M4-Phase 2
 **AC:** AC1 ("focus model"), and the M5 semantics the milestone
 requires be settled once

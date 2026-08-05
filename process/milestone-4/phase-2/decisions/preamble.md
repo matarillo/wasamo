@@ -3,8 +3,8 @@
 **Phase:** M4-Phase 2 (event routing, focus model, and generic click
 handling — **the milestone's centre of gravity**)
 **Date:** 2026-08-05
-**Status:** Proposed (owner review pending; DD-001 … DD-005 all
-`Proposed`)
+**Status:** Accepted (owner approval 2026-08-05; DD-001 … DD-005 all
+Accepted)
 
 ## Context
 
