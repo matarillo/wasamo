@@ -39,6 +39,15 @@ answered together when it is admitted:
 This is that point. A's thumbnail click is the driver, and the four
 concerns M3 named are four of this record's sub-issues rather than one.
 
+The keyboard half of this record is written against the reference
+toolkits rather than against M4's consumer list alone, because two of
+its choices outlive the phase: **an overlay's dismissal contract is
+what M5's Dialog widget inherits**, and **an authored key surface is
+what a 1.0 release must not have to apologise for**. HTML's `<dialog>`
+and Popover API and Slint's `PopupWindow` and `FocusScope` are the
+desktop references; Compose and SwiftUI are read for shape, not for
+their mobile-specific sources.
+
 ## Sub-issues
 
 - **Generic `clicked`** — the spelling on a non-Button widget.
@@ -46,7 +55,11 @@ concerns M3 named are four of this record's sub-issues rather than one.
   **admission** of a handler inside a `for` body, the **spelling** of
   binder reads in handler position, the handler's **registration
   lifecycle**, and its **interaction with iteration identity**.
-- **Key handlers** — whether Esc / arrows are authored at all.
+- **Dismissal** — how an overlay learns the user wants it closed. This
+  is separate from key input and is the half M5's Dialog widget
+  inherits.
+- **Authored key input** — how an application reacts to a key at all,
+  and at what granularity.
 - **The focus group annotation.**
 - **The modal scope annotation.**
 - **Focusability opt-in** (DD-003's F3 extension point).
@@ -76,14 +89,29 @@ concerns M3 named are four of this record's sub-issues rather than one.
 - **A3 — a single attribute with an enumerated value**
   (`focus-role: group` / `focus-role: modal-scope`).
 
-### Key handlers
+### Dismissal — how an overlay learns the user wants it closed
 
-- **K1 — no authored key surface in M4.** Esc closing and Left/Right
-  stepping are built-in behaviours of the scope and the app's state.
-- **K2 — key handlers as signals** (`escape => { … }`,
-  `key-left => { … }`) on any widget, delivered by DD-001's bubble.
-- **K3 — a general declarative shortcut surface** (key combinations
-  bound to actions, at window or scope level).
+- **D1 — the runtime closes it.** Esc makes the runtime clear the state
+  the enclosing conditional reads.
+- **D2 — a dismissal request signal** on the scope (`dismiss => { … }`),
+  raised by whatever gesture means "close this", with the author
+  deciding what closing is.
+- **D3 — D2 plus a declarative policy attribute now**
+  (`dismiss-policy: none | close-request | any`, the shape HTML's
+  `closedby` uses).
+
+### Authored key input
+
+- **K1 — no authored key surface in M4.** Left/Right stepping is a
+  built-in behaviour of the scope.
+- **K2 — one signal per key** (`key-left => { … }`, `key-right`,
+  `key-escape`), delivered by DD-001's walk.
+- **K3 — one signal that names its key**
+  (`key-pressed("ArrowLeft") => { … }`), same delivery.
+- **K4 — one signal that receives every key**, with the handler body
+  deciding which key it was (Slint's `key-pressed(event) -> EventResult`
+  shape).
+- **K5 — a declarative shortcut table** at window or scope level.
 
 ## Comparison
 
@@ -182,26 +210,126 @@ spelled alongside the widget that needs it than invented one phase early
 against a hypothetical. The extension point is in the *derivation*
 (DD-003), which is what makes the later spelling additive.
 
-### Key handlers: K1 for M4, with K2's shape recorded
+### Dismissal: D2
 
-- **K3 is out** — the intake classification puts a general shortcut
-  mechanism outside M4's acceptance, and AC1 is satisfied by Esc, Tab
-  and Left/Right.
-- **K2 is the honest general answer** and buys nothing A needs. A's
-  Left/Right steps between photos, which is a state change the lightbox
-  already owns; Esc closes the scope, which DD-004 delivers by bubbling
-  to a recipient that is already well-defined. Adding a key-signal
-  family would put a new normative surface into the spec for zero
-  consumers in this phase.
-- **K1's cost** is that "what happens on Left/Right" becomes runtime
-  behaviour rather than authored behaviour, which is less discoverable
-  and less flexible.
+**These are two decisions, not one.** An earlier draft of this record
+answered "Esc closes the lightbox" and "Left/Right steps the photo"
+with a single option set, and that is what made it wrong. Every
+reference toolkit separates them, and the separation is the design
+content rather than a taxonomy.
 
-The recommendation is K1 **with the seam left where K2 would attach**:
-keys are delivered by the same bubble walk as clicks (DD-001), so adding
-a key-signal family later is an addition to the signal vocabulary and
-not a change to routing. What M4 ships is Esc handled by the scope and
-Left/Right handled by the lightbox's own state.
+- **HTML `<dialog>`** raises a `cancel` event on Esc and takes a
+  declarative `closedby` attribute with three values: `none` (only a
+  developer-provided mechanism), `closerequest` (a *platform-specific
+  user action* — Esc on desktop), `any` (adds light dismiss, i.e. a
+  click outside). The spec's vocabulary is **"close request"**, not
+  "Escape", precisely so the same path covers a platform's other
+  dismissal gestures.
+- **Slint's `PopupWindow`** takes `close-policy` with
+  `close-on-click` / `close-on-click-outside` / `no-auto-close`, and
+  general key input is a *different* mechanism (`FocusScope`'s
+  `key-pressed` / `key-released` with an accept-or-reject result).
+- **Compose** pairs `onDismissRequest` with `DialogProperties`'
+  `dismissOnBackPress` / `dismissOnClickOutside`; **SwiftUI** pairs a
+  `dismiss` action with `interactiveDismissDisabled()`.
+
+What is mobile-specific is only the *source* (a back gesture); the
+*shape* — a request, a declarative policy, and the application deciding
+what closing means — is what the two desktop references have too.
+
+**The decisive fact for Wasamo is that Esc is not the only source.**
+Click-outside arrives at M4-Phase 9 with the top layer, and a close
+button arrives with M5's Dialog widget. If Esc is authored as an
+ordinary key, Phase 9 needs a second unrelated hook and M5's Dialog
+cannot offer one "on dismiss" contract — which is the divergence this
+decision exists to prevent.
+
+- **D1 is excluded.** It requires withdrawing DD-004's "the act of
+  closing is authored; the core never mutates the tree", and it burns an
+  application policy into the runtime: a scope that must *not* close on
+  Esc — an unsaved-changes confirmation — becomes inexpressible. All
+  four references can express it (`closedby="none"`, `no-auto-close`,
+  `dismissOnBackPress = false`, `interactiveDismissDisabled`). D1 would
+  ship strictly less than the state of the art.
+- **D3 is premature.** With Esc as the only source in M4, two of the
+  three policy values are indistinguishable. The attribute becomes
+  necessary at Phase 9, and adding it then is additive.
+- **D2**, therefore: the scope raises `dismiss`, and **whether a handler
+  exists is the policy** while there is exactly one source. Phase 9
+  splits policy from handling by adding the attribute.
+
+Two properties follow that are worth stating because they are free here
+and expensive elsewhere:
+
+- **Vetoing is automatic.** HTML needs `cancel` to be cancelable so an
+  author can keep a dialog open. Wasamo needs nothing: the runtime never
+  mutates the tree, so not writing the state *is* not closing. DD-004's
+  discipline is what buys this.
+- **The request is addressed, not bubbled.** It goes to the innermost
+  entered scope and stops there, matching HTML's "the close request goes
+  to the topmost item in the top layer". Bubbling would let a dialog
+  that ignores Esc close the menu underneath it.
+
+### Authored key input: K3
+
+**The owner's objection to K2 is correct and is the reason this section
+was rewritten.** Three fixed key names would have to be either removed
+or grandfathered when the general mechanism arrives — and a general
+mechanism is certain before 1.0, because every toolkit in the reference
+set has one. Shipping three names now buys a phase and costs a
+permanent explanation.
+
+**A hard constraint decides the shape.** `docs/dsl_spec.md` §3 gives
+`statement ::= assign_stmt ";"` — **a handler body contains assignments
+and nothing else.** There is no `if`, and comparison does not enter the
+expression language until M4-Phase 3's predicates. So **K4 — Slint's
+shape, one callback that receives every key and branches in the body —
+is not authorable in M4 at all**, however the runtime delivers it. This
+is a measured property of the language, not a preference.
+
+If the body cannot select the key, the declaration must. That is K3, and
+it is **not** K2 with better marketing:
+
+- **K3 adds one signal, not one per key.** Any key is expressible on the
+  first day — `key-pressed("F5")`, `key-pressed("Delete")` — so nothing
+  has to be deleted or grandfathered at 1.0. This is the whole of the
+  owner's objection, answered structurally.
+- **Modifiers extend the value, not the language**:
+  `key-pressed("Ctrl+S")` needs a wider key-name grammar, not a new
+  production. A key named by *identifier* (`key-pressed.ArrowLeft`,
+  reusing the `slot.*` precedent) would be cheaper today and would have
+  to be replaced on the day modifiers arrive, because `Ctrl+S` is not an
+  identifier.
+- **K4 remains addable, and the two coexist without redundancy.** HTML
+  ships `accesskey` beside `onkeydown`; Flutter ships `Shortcuts` beside
+  `KeyboardListener`. A declarative filter and a catch-all are different
+  tools, not two spellings of one. K4 becomes authorable once the
+  language has comparison and branching.
+- **K5 is out**, as before: the intake classification puts a general
+  shortcut mechanism outside M4, and a table detached from the widget
+  tree brings its own precedence rules. K3 needs none — it rides
+  DD-001's walk, first match consumes.
+- **An unrecognised key name is a diagnostic.** A misspelled
+  `"ArrowLef"` that silently never fires is the failure mode this
+  surface would otherwise ship with. M4 recognises a small named-key
+  table; widening it is additive.
+
+### Which keys the runtime keeps
+
+Authored keys and the focus machinery want the same keys, so the split
+is fixed here rather than discovered:
+
+| Key | Recipient |
+|---|---|
+| Tab / Shift+Tab | **Always the runtime.** Never delivered to an authored handler — an author must not be able to break traversal |
+| Arrows, focus inside a focus group | **The runtime** (group movement, DD-003) |
+| Arrows, anywhere else | The authored walk — A's Left/Right is this case |
+| Esc, with a scope entered | Converted to a **dismissal request** on the innermost entered scope |
+| Esc, otherwise | The authored walk (`key-pressed("Escape")`) |
+
+The rule underneath is DD-001's, not a new one: a built-in behaviour
+consumes at the focused widget, and only unconsumed keys walk to
+ancestors.
 
 **A caveat this decision must not hide.** A's Left/Right stepping
 changes which photo is shown, and *showing* it — the caption, the
@@ -223,12 +351,24 @@ value changing, not the finished picture
 - **Two boolean attributes**: constant-only, so they follow the
   `Box.fill` precedent — a per-kind field, no new `PropertyValue`
   variant, no binding path.
+- **`dismiss`**: an ordinary signal name in the existing per-node
+  handler table. Nothing in the IR distinguishes it; what differs is
+  that the runtime raises it rather than a pointer message doing so.
+- **`key-pressed("<key>")`**: the one shape that needs new **grammar** —
+  a signal handler whose name carries an argument. The cost is
+  acknowledged rather than hidden: `slot.*` showed a dotted identifier
+  needs no new production, and that cheaper spelling was rejected
+  because modifiers (`"Ctrl+S"`) are not identifiers. The key name is
+  validated at `check` against a recognised table, so the IR carries a
+  key name that the loader can map without re-parsing.
 
 **`docs/dsl_spec.md`** gains: `clicked` generalised from the Button
 section to a common signal; `item` / `index` availability in handler
-position; the two attributes; and a short statement of the focus and
-modal-scope semantics an external implementor would need. `docs/abi_spec.md`
-is **not** touched — no new entry point (framing agreement 7).
+position; the two attributes; the `dismiss` and `key-pressed` signals;
+the table of which keys the runtime keeps; and a short statement of the
+focus and modal-scope semantics an external implementor would need.
+`docs/abi_spec.md` is **not** touched — no new entry point (framing
+agreement 7).
 
 ### Keeping the fixture out of the normative surface
 
@@ -254,15 +394,42 @@ confirming the fixture introduced no normative spelling.
   boolean attributes on any container.
 - **No focusability opt-in spelling in M4**; the derivation is the
   extension point.
-- **K1** — no authored key-signal family; Esc is the scope's, Left/Right
-  is the lightbox's own state; the seam where K2 would attach is DD-001's
-  bubble walk.
+- **D2** — the scope raises a `dismiss` signal and the author decides
+  what closing means; while Esc is the only source, the presence of a
+  handler is the policy. The declarative policy attribute lands at
+  M4-Phase 9 with the second source. **This is a dismissal concept, not
+  a key concept**, and it is the contract M4-Phase 9's click-away and
+  M5's Dialog widget both consume.
+- **K3** — one `key-pressed("<key>")` signal whose key is named in the
+  declaration, delivered by DD-001's walk, first match consuming. Any
+  key is expressible from the first day, so nothing is grandfathered at
+  1.0; modifiers extend the key-name value rather than the language; an
+  unrecognised key name is a diagnostic. Tab is never delivered to an
+  authored handler, and arrows are the runtime's only while focus is
+  inside a focus group.
 - **`docs/dsl_spec.md` moves; `docs/abi_spec.md` does not.**
 
 ## Forward-compat exposure
 
-- **Key signals (K2) remain additive** — a new signal family on the
-  existing routing.
+- **The dismissal policy attribute is additive and is expected at
+  M4-Phase 9**, when click-away gives the second source. Its values are
+  known in advance because HTML has already settled the ladder —
+  `none` / `close-request` / `any` — and Phase 9 inherits the naming
+  question, not the design.
+- **`key-released` is additive**, a sibling signal with no buyer today.
+- **Modifier combinations are additive within `key-pressed`'s key name**
+  (`"Ctrl+S"`), which is why the key is a string rather than an
+  identifier.
+- **A catch-all key signal (K4) is additive and becomes authorable once
+  the language has comparison and branching.** Neither is scheduled:
+  comparison arrives with M4-Phase 3's predicates, branching in handler
+  bodies is not on any phase's list. The two forms coexist by design.
+- **A focus stop that wants Tab itself** — a text field that inserts a
+  tab character, a grid that moves between cells — is the case the
+  "Tab is always the runtime's" rule forecloses. No M4 widget wants it;
+  M4-Phase 5's text field is where it would first be argued, and it
+  would arrive as an opt-out on the widget rather than as an authored
+  Tab handler.
 - **A focusability attribute remains additive** and is expected at
   M4-Phase 5.
 - **A bindable scope is a change, not an addition** — the constant-only

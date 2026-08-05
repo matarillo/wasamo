@@ -135,9 +135,9 @@ input path**, and T2's close artifact is a call-site audit showing
 
 ## DD-005 is not accepted, and its key-handling half contradicts DD-004
 
-**DD-005 is `Proposed`.** Its key-handling sub-decision (K1 / K2 / K3)
-was accepted without being judged on its merits, and re-reading it
-against DD-004 shows the accepted shape does not hold.
+**DD-005 is `Proposed`.** Its key-handling sub-decision was accepted
+without being judged on its merits, and re-reading it against DD-004
+shows the accepted shape does not hold.
 
 K1 ships **no authored key surface at all**: Esc is described as
 "handled by the scope" and Left/Right as "handled by the lightbox's own
@@ -156,6 +156,14 @@ So K1 leaves **two** named behaviours without a mechanism, not one, and
 the second is a direct contradiction between two decisions in the same
 set. Arrow keys *inside a focus group* are unaffected — DD-003 defines
 those as focus movement, and no option here changes that.
+
+**The rewrite splits the question in two**, which is the substance
+rather than a tidier taxonomy: dismissal is a concept with several
+sources (Esc now, click-away at Phase 9, a Dialog's close control at
+M5) and belongs to the scope; authored key input is a separate,
+general mechanism. HTML's `<dialog>` (`cancel` + `closedby`), Slint's
+`PopupWindow` (`close-policy`, distinct from `FocusScope`'s key
+callbacks), Compose and SwiftUI all draw the line in the same place.
 
 This is assigned to **T0** below: the phase does not start until it is
 resolved, because it decides whether the authored surface gains a key

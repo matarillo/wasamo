@@ -45,15 +45,33 @@ mechanism:
 Arrow keys *inside a focus group* are unaffected (DD-003 defines those
 as focus movement) and no option changes that.
 
-**Options** — the full walkthrough with `.ui` examples is in
-[private/explainer/m4-phase-2-key-handling-options.md](../../../../private/explainer/m4-phase-2-key-handling-options.md);
-the decision is recorded here and in the rewritten DD-005.
+**The rewrite splits it into two questions**, because the reference
+toolkits all do and mixing them is what produced the wrong answer:
 
-| | What it is |
-|---|---|
-| **K1** | No authored key surface. Requires making Esc-closes and Left/Right runtime behaviour, which contradicts DD-004 and hard-codes an application policy |
-| **K2** | A key signal family (`key-escape` / `key-left` / `key-right`, or a general `key-pressed`), delivered by DD-001's existing walk |
-| **K3** | A declarative shortcut table at window or scope level |
+- **Dismissal** (D1 / D2 / D3) — how an overlay learns the user wants it
+  closed. Esc is one *source*; click-away (M4-Phase 9) and a Dialog's
+  close control (M5) are others. Recommended **D2**: the scope raises a
+  `dismiss` signal, the author decides what closing means, and the
+  policy attribute lands at Phase 9 with the second source.
+- **Authored key input** (K1 … K5) — how an application reacts to a key.
+  Recommended **K3**: one `key-pressed("<key>")` signal whose key is an
+  argument. `statement ::= assign_stmt ";"` means a handler body cannot
+  branch, so Slint's catch-all shape is not authorable in M4 at all;
+  naming the key in the declaration is the general mechanism at the
+  granularity the language supports, and nothing is grandfathered at
+  1.0.
+
+The full walkthrough with `.ui` examples and the reference comparison is
+in
+[private/explainer/m4-phase-2-key-handling-options.md](../../../../private/explainer/m4-phase-2-key-handling-options.md);
+the decision is recorded in the rewritten DD-005.
+
+**Adopting D2 also rewrites DD-004's dismissal paragraph** (already
+done in the draft): the request is *addressed* to the innermost entered
+scope rather than bubbled to it. DD-004's decision is unchanged, and one
+of its Phase 9 falsifiers gets weaker as a result — dismissal no longer
+depends on the top-layer subtree being an ancestor of the focused
+widget, though authored key handlers on it still do.
 
 **Task shape.** No code. Per the rewrite discipline, and because no
 downstream work has started, the outcome is applied by **rewriting**

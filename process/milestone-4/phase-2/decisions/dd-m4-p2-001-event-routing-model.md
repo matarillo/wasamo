@@ -90,11 +90,19 @@ lower siblings are never candidates, so nothing needs to be blocked.
 Reading it as a propagation problem is what makes a capture phase look
 necessary; it is not.
 
-Requirements 2 and 3 **are** propagation requirements, and both are of
-the same shape: a key the focused widget has no meaning for must reach
-something above it. That is bubbling. Without it, every lightbox button
-would have to carry its own Esc and arrow handlers, which is precisely
-the per-consumer special-casing the milestone thesis exists to prevent.
+Requirement 3 **is** a propagation requirement: a key the focused widget
+has no meaning for must reach something above it. That is bubbling.
+Without it, every lightbox button would have to carry its own arrow
+handlers, which is precisely the per-consumer special-casing the
+milestone thesis exists to prevent.
+
+Requirement 2 turns out **not** to be one. DD-005 settles Esc as a
+source of a *dismissal request*, which DD-004 addresses directly to the
+innermost entered scope rather than walking to it from the focused
+widget. Requirement 2 is therefore satisfied however propagation is
+designed, and it is recorded here as considered-and-not-load-bearing so
+that a later reader does not treat it as support for bubbling. The
+conclusion is unchanged, because requirement 3 alone is decisive.
 
 Requirement 4 is satisfied by target-only *if* hit-testing resolves the
 row rather than a descendant. It is satisfied by bubbling in either

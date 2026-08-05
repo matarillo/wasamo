@@ -53,7 +53,7 @@ scope is one thing.
 
 - **What a scope is** — annotation, structure, or event.
 - **What it contains** — traversal, pointer input, both.
-- **Esc** — who consumes it and what closing means.
+- **Dismissal** — who receives the request and what closing means.
 - **Restoration** — where the target comes from.
 - **Nesting.**
 - **Screen-reader modality** — the rule, fixed here, implemented in
@@ -122,18 +122,23 @@ phase does not assume more: a scope with no scrim traps Tab and does not
 block clicks. B4's rename dialog (Phase 9) will need both, and will
 compose both.
 
-### Esc
+### Dismissal
 
-The scope **names** the Esc target; it does not define what closing
-means. `esc_target` returns the innermost entered scope, and the act of
-closing — removing the subtree, clearing the state the conditional reads
-— is authored. The core never mutates the tree.
+The scope **names** the recipient of a dismissal request; it does not
+define what closing means. `esc_target` returns the innermost entered
+scope, and the act of closing — removing the subtree, clearing the state
+the conditional reads — is authored. The core never mutates the tree.
 
-This matters for the DSL: Esc is delivered by DD-001's bubble walk, and
-it reaches the scope because the scope is an ancestor of the focused
-widget. Nothing special-cases Esc in the routing model; what the scope
-adds is a well-defined recipient. If no scope is entered, Esc bubbles to
-the root and is unhandled, which is correct.
+**Esc is a source, not the concept.** The scope receives a *dismissal
+request*, and Esc is the only thing that raises one in M4. M4-Phase 9's
+click-away raises the same request, and M5's Dialog widget consumes the
+same contract — which is why the recipient is defined here in terms of
+the request rather than the key. The authored spelling is DD-005's.
+
+The request is **addressed to the innermost entered scope and stops
+there**; it does not continue to outer scopes. A dialog that ignores a
+dismissal must not close the menu underneath it. If no scope is entered,
+nothing addresses the request and Esc is an ordinary key.
 
 ### Restoration
 
@@ -194,8 +199,16 @@ were ordinary subtrees, and a top-layer subtree differs in *where it is
 realized* (window level) rather than in what the traversal sees. But the
 top layer's tree position is exactly what Phase 9 designs, and if it
 turns out that the realized subtree is not an ancestor of the focused
-widget, DD-001's bubble path for Esc breaks. **That is the specific
-falsifier**, named here so Phase 9 tests it first rather than at the end.
+widget, DD-001's walk no longer reaches it — so an **authored key
+handler** written on the top-layer container would not fire. **That is
+the specific falsifier**, named here so Phase 9 tests it first rather
+than at the end.
+
+Dismissal is deliberately **not** exposed to that falsifier: the request
+is addressed to the innermost entered scope rather than walked to from
+the focused widget, so it holds wherever the subtree is realized. That
+is a second reason to keep dismissal separate from key delivery, beyond
+the one DD-005 argues from the sources.
 
 ## Recommendation
 
@@ -205,8 +218,10 @@ falsifier**, named here so Phase 9 tests it first rather than at the end.
   DD-002's topmost-target rule plus an authored scrim.
 - **Two tied mechanisms**: an un-entered scope contributes no Tab
   stops, and only an annotated subtree may be entered.
-- **Esc** is delivered by ordinary bubbling to the innermost entered
-  scope; the scope names the recipient, the author defines closing.
+- **Dismissal** is addressed to the innermost entered scope and stops
+  there; the scope names the recipient, the author defines closing. Esc
+  is M4's only source of a dismissal request, and later sources
+  (click-away, a Dialog's close control) reuse the same recipient.
 - **Restoration** is captured at entry and takes precedence over
   structural succession when the subtree is removed.
 - **Nesting** by stack; supported, unexercised in M4.
@@ -219,7 +234,12 @@ falsifier**, named here so Phase 9 tests it first rather than at the end.
 
 - **M4-Phase 9** consumes this unchanged or supersedes it. The named
   falsifier is whether the realized top-layer subtree is an ancestor of
-  the focused widget for Esc's bubble path.
+  the focused widget — which authored key handlers on it depend on, and
+  which dismissal deliberately does not.
+- **M4-Phase 9 also adds the second dismissal source** (click-away),
+  which is where a declarative policy attribute becomes necessary: with
+  two sources, "Esc only" and "Esc or click-away" stop being the same
+  thing. DD-005 records the value ladder HTML already settled.
 - **M4-Phase 11** consumes the stack to compute the accessibility
   tree's visible subtree.
 - **M4-Phase 5 / 6** put a text field inside a scope; the text field
