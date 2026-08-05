@@ -1,6 +1,6 @@
 # Wasamo Architecture
 
-**Status:** M1 complete (Phases 0-8); M2 complete (Phases 1-7) — Foundation acceptance A1-A6 discharged; M3-Phase 1, M3-Phase 2, M3-Phase 3, M3-Phase 4, and M3-Phase 5 complete. M3-Phase 6 closed (implementation-synced): ZStack, conditional rendering, and the component host surface are documented to match the landed implementation. M3-Phase 7 closed (implementation-synced): iteration — `ControlFlowNode::For` / `BindingTarget::ForLoopSubtree`, the canonized member-expansion seam, stage-then-commit range mutation, and child-carried ZStack placement (§6.7.10, §6.8.5) are documented to match the landed implementation. M3-Phase 7b closed (implementation-synced): the parent-interpreted placement model — child-slot `SlotData` carrier (§6.7.9, §6.8.6), Grid storage convergence off the parallel `cell_placements` vector (§6.8.4), and the textual-IR `child { placement … }` record (IR-B) — is documented to match the landed implementation (`IrMember::Widget(IrChildSlot)`; runtime `ChildSlot` / `SlotData`). M3-Phase 8 closed (implementation-synced): the `ToggleButton` selected-state runtime representation (§6.7.7) is documented to match the landed implementation, and the DSL spec ([dsl_spec.md](./dsl_spec.md)) is promoted to the M3 `public-draft`. M4-Phase 1 implementation-synced (2026-08-04): §12 matches the landed DIP layout space, device-space visual tree and pointer stream, conversion seams, text-surface resolution contract, and scale-change propagation. The `windows` crate feature list (§4.5) and the initialization sequence (§5.2) are also re-synced to the landed runtime. The outer-size contract remains specifically about the outer rectangle: T4 measured an 800 × 600 DIP request as a 1000 × 750 physical outer rectangle at 125%, while the client was 785.6 × 562.4 DIP ([implementation log §T4](../process/milestone-4/phase-1/implementation/log.md#t4--per-window-scale--post-create-window-size-correction)). [DD-M4-P1-006](../process/milestone-4/phase-1/decisions/dd-m4-p1-006-surface-brush-mapping-is-set-not-inherited.md) is Accepted and its `None` / `0.0` mapping matches the landed brush construction.
+**Status:** M1 complete (Phases 0-8); M2 complete (Phases 1-7) — Foundation acceptance A1-A6 discharged; M3-Phase 1, M3-Phase 2, M3-Phase 3, M3-Phase 4, and M3-Phase 5 complete. M3-Phase 6 closed (implementation-synced): ZStack, conditional rendering, and the component host surface are documented to match the landed implementation. M3-Phase 7 closed (implementation-synced): iteration — `ControlFlowNode::For` / `BindingTarget::ForLoopSubtree`, the canonized member-expansion seam, stage-then-commit range mutation, and child-carried ZStack placement (§6.7.10, §6.8.5) are documented to match the landed implementation. M3-Phase 7b closed (implementation-synced): the parent-interpreted placement model — child-slot `SlotData` carrier (§6.7.9, §6.8.6), Grid storage convergence off the parallel `cell_placements` vector (§6.8.4), and the textual-IR `child { placement … }` record (IR-B) — is documented to match the landed implementation (`IrMember::Widget(IrChildSlot)`; runtime `ChildSlot` / `SlotData`). M3-Phase 8 closed (implementation-synced): the `ToggleButton` selected-state runtime representation (§6.7.7) is documented to match the landed implementation, and the DSL spec ([dsl_spec.md](./dsl_spec.md)) is promoted to the M3 `public-draft`. M4-Phase 1 implementation-synced (2026-08-04): §12 matches the landed DIP layout space, device-space visual tree and pointer stream, conversion seams, text-surface resolution contract, and scale-change propagation. The `windows` crate feature list (§4.5) and the initialization sequence (§5.2) are also re-synced to the landed runtime. The outer-size contract remains specifically about the outer rectangle: T4 measured an 800 × 600 DIP request as a 1000 × 750 physical outer rectangle at 125%, while the client was 785.6 × 562.4 DIP ([implementation log §T4](../process/milestone-4/phase-1/implementation/log.md#t4--per-window-scale--post-create-window-size-correction)). [DD-M4-P1-006](../process/milestone-4/phase-1/decisions/dd-m4-p1-006-surface-brush-mapping-is-set-not-inherited.md) is Accepted and its `None` / `0.0` mapping matches the landed brush construction. M4-Phase 2 design draft (2026-08-05): §13 records the input-routing and focus model — layout-derived hit rectangles, one-target selection with consume-on-handle propagation, per-window focus state, and the modal focus scope; the former Open Questions section is renumbered §14 with its anchor preserved. Pending implementation re-sync at M4-Phase 2 close.
 
 ---
 
@@ -2277,9 +2277,126 @@ state (§6.7), which is reserved for reactive-engine divergence.
 
 ---
 
+<a id="interaction-model"></a>
+
+## 13. Input Routing and the Focus Model (M4-Phase 2)
+
+**Phase status:** M4-Phase 2 design draft; pending implementation
+re-sync at phase close. The authored surface is
+[dsl_spec.md §4.19](./dsl_spec.md); this section is the runtime model
+behind it. Design provenance:
+[M4-Phase 2 decisions](../process/milestone-4/phase-2/decisions/preamble.md).
+
+### 13.1 Where hit geometry comes from
+
+Layout retains each node's arranged rectangle **in DIP**, and hit
+testing reads that. It does not read geometry back off the Visual.
+
+This is a change of source, not of space. Until M4-Phase 2 the pointer
+was divided by the window's scale on the way in and each node's Visual
+rectangle was divided again on the way out; the two conversions
+cancelled, and no test could distinguish a correct conversion from a
+missing one (§12). Sourcing the rectangle from layout removes the
+second conversion entirely: the pointer arrives in DIP and the
+rectangles are already in DIP.
+
+Two properties follow and are load-bearing:
+
+- **The rectangle cache has exactly one writer** — the arrange pass —
+  in the same sense as the per-node geometry scale (§12). A subtree
+  that has been attached but not laid out has no rectangles and is not
+  hit-testable, which is the intended failure: silent, and better than
+  being hit-testable at a stale rectangle.
+- **Occlusion and per-item resolution become pure logic.** "Rectangles
+  plus paint order → target" needs no Compositor, so the rules are
+  fixed by unit test rather than only through the OS.
+
+### 13.2 Target selection and propagation
+
+A pointer message resolves to exactly **one** target: the topmost
+widget whose rectangle contains the point, where topmost is the paint
+order the visual tree already establishes — later children paint over
+earlier ones, so the search walks children in reverse and takes the
+first containing node. Every widget with a visual is a candidate.
+
+The event then walks from that target through its ancestors until a
+handler runs; a handler that runs ends the walk. There is no descending
+phase. Keyboard messages enter the same walk, starting at the focused
+widget or, when nothing is focused, at the innermost entered focus
+scope.
+
+The ancestor chain is captured when the event is dispatched, and the
+reactive drain runs **once, after the walk completes** rather than
+between steps. Both exist for the same reason: a handler's state write
+propagates to quiescence synchronously (§6.7), which can rebuild or
+remove subtrees, and an event must not be delivered into a tree the
+same event has already invalidated.
+
+A handler declared inside a `for` body is registered per generated item
+and released with that item's subtree, on the path that already releases
+the subtree's bindings — the generated subtree owns both, and a second
+lifecycle for handlers would be the parallel-data drift this runtime
+keeps eliminating. Its loop-binder reads resolve **when the handler
+runs**, which is what makes the handler belong to a position rather than
+to an item under the positional, un-keyed iteration identity of §6.7.10:
+after a mutation the subtree at position `n` is reused for whatever item
+is now at `n`, and the handler must read that item rather than the one
+present when it was generated.
+
+### 13.3 Focus state
+
+Focus is per window. A `WindowState` owns one focus record holding the
+focused node and three derived stores: per-group memory of the member
+last focused inside it, per-widget active-item pointers, and the stack
+of entered modal scopes.
+
+The group memory is data parallel to the focused node, and is written by
+the **same primitive** that writes it — the same discipline the
+per-node geometry scale carries (§12), and for the same reason: two
+writers make two truths, and the divergence is invisible until a user
+leaves a group and comes back.
+
+Traversal is tree order. In every layout primitive Wasamo has, tree
+order and arranged order coincide, because every container arranges its
+children in declaration order; a primitive whose arranged order differs
+from its declaration order would reopen this.
+
+### 13.4 Modal focus scopes
+
+A scope is an annotated subtree plus an explicit entry. Confinement is
+**not** a special case in the traversal: the walk enumerates focus stops
+from a root, and entering a scope changes which root that is. The
+traversal has no modal branch.
+
+The annotation and the entry carry different halves of the concept and
+are tied together deliberately:
+
+- The **entry** gives confinement, and records the focus to restore.
+  That target cannot be recovered from the tree afterwards — nothing in
+  the structure says what was focused before the scope opened — so it is
+  captured at entry.
+- The **annotation** makes an un-entered scope contribute no focus
+  stops, so a modal subtree that is present but closed is unreachable.
+- Only an annotated subtree may be entered, which is what keeps the two
+  from drifting apart.
+
+When the entered scope's subtree is removed, restoration takes
+precedence over structural succession. A removal's successor is computed
+**before** the mutation, because node identity does not survive a
+rebuild: the conditional and iteration paths materialise fresh subtrees,
+so an identity stored across the mutation can name a different node
+afterwards.
+
+Pointer input is not confined by the scope. A covering widget inside the
+scope occludes what is behind it by the ordinary rule in §13.2, which is
+why a scrim is an authored widget rather than something the scope
+supplies.
+
+---
+
 <a id="open-questions-1"></a>
 
-## 13. Open Questions (to be resolved in later phases)
+## 14. Open Questions (to be resolved in later phases)
 
 The following are intentionally left open at this draft stage.
 
