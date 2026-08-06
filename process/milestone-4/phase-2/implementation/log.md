@@ -575,3 +575,137 @@ factor from the value the runtime committed, not from the constant they
 requested — written as the constant, the fixture's own
 `assert_ne!(factor, 1.0)` would have been true by construction, which is
 the tautological-assertion shape T1's retrospective flagged.
+
+---
+
+## T3 — Propagation and the drain boundary
+
+### Start gate (recorded 2026-08-06, before any source edit)
+
+Read before selecting:
+[AGENTS.md](../../../../AGENTS.md),
+[implementation-gates.md](../../../procedures/implementation-gates.md),
+[plan.md](./plan.md) §T3 and §Cross-task obligations,
+[preamble.md](./preamble.md) (§What "green" is worth, §The sequencing
+thesis, §Review lanes),
+[DD-M4-P2-001](../decisions/dd-m4-p2-001-event-routing-model.md),
+[DD-M4-P2-002](../decisions/dd-m4-p2-002-hit-testing-and-generic-click.md)
+§Recommendation,
+[DD-M4-P2-005](../decisions/dd-m4-p2-005-dsl-handler-surface.md) §Which
+keys the runtime keeps / §IR and compiler impact,
+[constraints.md](../requirements/constraints.md) §3 / §4, the Moment-1
+normative text ([architecture.md §13.2](../../../../docs/architecture.md),
+[dsl_spec.md §4.19](../../../../docs/dsl_spec.md) and §4.8's disabled
+contract), the [T2 close gate](#t2--single-target-hit-resolution-and-the-complete-geometry-migration)
+and the [T2 retrospective](../retrospectives/t2.md), and the landed
+source (`widget.rs` `hit_test_click` / `build_layout_tree` /
+`sync_visuals`, `hit.rs`, `window.rs`'s pointer arms, `emit.rs`,
+`registry.rs`, `reactive.rs::Signal::set`, `lib.rs::run`).
+
+**Scope re-decided against the code, and three facts were measured
+before the approach was chosen** (throwaway probes, run and discarded).
+Two of them contradict what T2 handed forward, so they are recorded
+first.
+
+1. **The Button-child narrowing T2 carried forward does not exist, and
+   the evidence item the plan derived from it cannot be built.**
+   `build_layout_tree` maps `Button` / `ToggleButton` / `Text` /
+   `Rectangle` to `LayoutNode::rectangle(…)`, which carries **no
+   children**, so a Button's `WidgetNode` child never enters the layout
+   tree. Measured on `Button { text: "outer" Text { text: "inner" } }`:
+   `wasamoc check` accepts it and the loader builds the `Text` as a child
+   node — and then
+
+   - in the **release** profile the child's `arranged_rect` is `None`, so
+     it is not a hit candidate at all, the click resolves to the
+     **Button**, and the Button fires (measured: one dispatch, at a
+     committed factor of 1.25 with the pointer conversion applied). There
+     is therefore no pre-T3 narrowing to close;
+   - in the **debug** profile — which is how `cargo test` runs — T2's
+     `sync_visuals` child-count `debug_assert_eq!` fires during
+     `wasamo_load_ui` (`widget.rs:2326`) and the process aborts
+     (`STATUS_STACK_BUFFER_OVERRUN`, a non-unwinding panic across the FFI
+     boundary). **A fixture that builds this shape cannot run**, so the
+     plan's "a click on a Button's child activating the Button through
+     the ancestor walk" is unbuildable as written.
+
+   Disposition at the close gate; the plan's T3 evidence item is
+   replaced, not dropped.
+
+2. **`clicked` on a non-Button widget is already accepted end to end
+   except for runtime dispatch.** `wasamoc check` accepts
+   `Box { clicked => { … } }` (no per-kind signal admission rule exists),
+   `lower` / `emit` carry it, and the IR loader attaches it — measured:
+   the loaded `Box` node holds `inline_handlers = ["clicked"]` and a
+   laid-out rectangle, so it is the resolved hit target. Clicking it does
+   nothing today, because `hit_test_click` dispatches only where
+   `button_data_mut()` is `Some`. **T3 is the piece that makes an
+   already-authorable handler fire**, which makes the generic-dispatch
+   fixture a red-before / green-after witness rather than a new surface.
+   T8's "checker widening" is correspondingly smaller than predicted —
+   carried to T8 in the close gate's re-audit.
+
+3. **`wasamo_signal_connect` already admits any widget and any signal
+   name** (`abi.rs`), so the host-facing generic `clicked` path needs no
+   ABI change either — the cross-task "no new ABI function" obligation is
+   untouched by this task.
+
+**What T3 therefore is.** Not "add bubbling to a working generic
+dispatch", but: replace the Button-family dispatch gate with the
+handler-carrying test DD-001 defines, walk target-then-ancestors under
+consumption, and reconcile the drain boundary T2 measured.
+
+**Trap selection.**
+
+| # | Trap | Applies | Reason |
+|---|---|---|---|
+| 1 | Semantic-migration miss | **yes** | No enum or schema gains a variant, so the compiler enumerates nothing here — but the *decision* "does this widget react to a click" migrates from one site (`button_data_mut()`) to a predicate over three producers (`clicked_fn`, `inline_handlers`, the signal registry). Every site that decides whether a click reacts, and every producer of a `clicked` handler, is audited as a call-site table: a producer left out of the predicate is a handler that silently never fires, and a producer left out of the invocation is a node that consumes without running anything |
+| 2 | Missed side effects | **yes** | Dispatch shape change. To enumerate before writing: the synchronous reactive drain inside a handler (a structural rebuild mid-dispatch), the layout phase that does **not** run there (T2's drain-boundary finding), `update_hover` running after `hit_test_click` in the same message arm against a tree the click may have rebuilt, registry teardown on subtree removal, and the `ButtonData.label_size` three-point write ([constraints §4](../requirements/constraints.md)), which this task must not touch |
+| 3 | Parallel/derived data drift | **yes** | The consumption predicate and the invocation are a derived pair over the same three producers: if they drift, a node either consumes without running a handler or runs one without consuming. They are made one snapshot value taken once per node, so the pair cannot be edited apart |
+| 4 | Untested authored branch | **yes** | New arms: generic (non-Button) dispatch, consumption ending the walk, the disabled-Button arm that suppresses **without** consuming, and "no handler anywhere ⇒ nothing happens". Each ships with a test that fires it directly, and each is put under a deliberately wrong implementation shown to redden it. DD-V-029's named obligation is **not** triggered (no rounding, unit-conversion or boundary-condition branch is added — edge containment stayed T2's), so these witnesses are the trap-#4 / #6 artifact rather than that decision's |
+| 5 | Carry-forward underweighted | **yes** | T4 inherits the hover-versus-target ordering inside the arm; T5 inherits the walk for the key path; T8 inherits finding 2 above and the disabled-Button assertions; T13 inherits the drain-boundary wording check and the §4.16 spec-example divergence from finding 1 |
+| 6 | Symptom taken at face value | **yes** | Finding 1's abort is a deterministic crash on an authorable shape. It is dispositioned with its mechanism named, not worked around by silently avoiding the shape |
+| 7 | Weak GUI evidence | **no** | T3 adds no Composition write, no visual and no host launch. Its behavioural difference — which handler runs — is observable only through state read-back, and the gallery has no ancestor handler and no non-Button handler until T10, so a frame captured now would be produced identically by the pre- and post-T3 dispatch. **Re-decide if** T3 ends up changing a Composition write or an observable gallery click |
+
+**Review lane.** **Full independent review**, as
+[preamble.md §Review lanes](./preamble.md) predicts and as the change
+confirms: a runtime structural change (dispatch shape, consumption, the
+drain boundary). The trap-#4 branch/test check composes into it.
+
+**The T2 correctives, applied.** T2's retrospective added two start-gate
+lines. Both are answered here rather than at the close:
+
+- *Which tests pin a property this task deletes, and do they go red or
+  stay green with a false reason?* The property being deleted is
+  "**only** a Button-family target dispatches". The tests that pin it —
+  `button_enabled.rs`, `bool_binding_live_propagation.rs`,
+  `togglebutton_runtime_integration.rs`, `iteration_mutation_integration.rs`
+  and `hit_resolution_integration.rs` — all click Buttons that carry a
+  handler, so they stay green **and their stated reasons stay true**: a
+  Button with a handler still consumes at the target. The one shape whose
+  reason would change is a click on a Button with *no* handler inside a
+  container that has one; no existing test builds it, and the new
+  fixtures do.
+- *A mutation witness is evidence only once the mutation is confirmed
+  present in the file.* Every witness at the close gate is applied with
+  an edit, read back, run, then reverted and re-read.
+
+**Planned proof obligations** (each closed at the T3 close gate):
+
+1. The call-site audit table over the three `clicked` producers and every
+   dispatch-decision site.
+2. The structural side-effect enumeration, including what the synchronous
+   rebuild inside a handler does to the rest of the message arm.
+3. Pure-logic tests for the dispatch chain's order (target first, root
+   last).
+4. Integration fixtures: generic dispatch on a non-Button widget; the
+   ancestor walk with DD-001's named consumption control (difference and
+   agreement legs); the disabled Button suppressing without consuming; a
+   handler that removes its own subtree; a host-registered listener
+   through `wasamo_signal_connect` consuming the walk.
+5. Mutation witnesses for each new arm, each read back before it is run.
+6. The drain-boundary reconciliation, decided and recorded either way.
+7. Finding 1 dispositioned with an owner-visible route, and the plan's T3
+   evidence item revised rather than quietly dropped.
+8. The whole task list re-read at the close gate (the re-audit
+   discipline, [plan.md](./plan.md) §Cross-task obligations).
