@@ -65,6 +65,16 @@ non-applicable, which is exactly the Phase 6 failure mode (a missed
 "which trap applies"). "None applies" is allowed only with an explicit
 reason.
 
+**In a phase whose normative text is synchronised ahead of
+implementation**, the artifact also lists the normative statements that
+**already answer** the behaviour this task is about to build — document,
+section, and what each fixes — or records that none does. The decision
+record is the reasoning; the specification is the answer, and a question
+with such an answer is not an escalation. An apparent disagreement between
+the two is recorded as a divergence for the phase-close re-verification,
+not resolved here
+([DD-V-031](../cross-milestone/decisions/dd-v-031-normative-answers-at-start-gate.md)).
+
 ---
 
 ## 2. Close gate — auditable artifacts (close each trap that applied)
@@ -93,7 +103,13 @@ report.
   of this catalog, and the GUI trap's screenshot/positive-control artifact is
   unchanged.
 - **#5 carry-forward** — where it is recorded (plan / log / handoff) and
-  its re-trigger criterion.
+  its re-trigger criterion. A carry-forward that **obliges a later task to
+  produce evidence for a named shape** also records the run that built that
+  shape and what it produced; a throwaway probe is enough, and the artifact
+  is the recorded result rather than a retained test. A shape that cannot
+  be built or run is **not a carry-forward** but a **finding**, recorded
+  with an owner — a named task or an owner decision
+  ([DD-V-030](../cross-milestone/decisions/dd-v-030-carry-forward-buildability.md)).
 - **#6 deterministic-failure rerun / disposition** — the failure's rerun
   history and disposition; a bare "green on retry" is not acceptable. Link
   the root cause or the tracked known-issue.

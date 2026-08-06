@@ -5,7 +5,7 @@ title: Vision Decision Record — Normative answers at the start gate
 # Vision Decision Record — Normative answers at the start gate
 
 **ID:** DD-V-031
-**Status:** Proposed
+**Status:** Accepted 2026-08-07
 **Scope:** Process rule for implementation-gate artifacts
 
 ## Context

@@ -5,7 +5,7 @@ title: Vision Decision Record — Carry-forward buildability
 # Vision Decision Record — Carry-forward buildability
 
 **ID:** DD-V-030
-**Status:** Proposed
+**Status:** Accepted 2026-08-07
 **Scope:** Process rule for implementation-gate artifacts
 
 ## Context
