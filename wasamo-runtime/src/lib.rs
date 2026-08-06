@@ -121,7 +121,7 @@ pub mod __focus_spike {
 
 pub use layout::{Alignment, SizeConstraint, WidgetKind};
 pub use text::{TextRenderer, TypographyStyle};
-pub use widget::{ButtonStyle, WidgetNode};
+pub use widget::{ButtonStyle, DipRect, WidgetNode};
 pub use window::WindowState;
 
 use windows::Win32::UI::WindowsAndMessaging::{

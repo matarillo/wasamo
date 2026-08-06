@@ -390,6 +390,24 @@ fn fixed_extent(width: &SizeConstraint, height: &SizeConstraint) -> Option<(f32,
 
 // ── WidgetNode ────────────────────────────────────────────────────────────────
 
+/// An absolute rectangle, in DIP, within the window's client area.
+///
+/// The geometry source for hit testing from M4-Phase 2 onward
+/// (DD-M4-P2-002 "one walk, two stores"): `WidgetNode::arranged_rect`
+/// retains this value, derived from the same `LayoutNode.offset` /
+/// `.size` the Composition `Visual.Offset` / `Visual.Size` writes come
+/// from, in the same `sync_visuals` pass.
+///
+/// No methods beyond the derives here — containment / hit-testing is a
+/// later task's.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct DipRect {
+    pub x: f32,
+    pub y: f32,
+    pub width: f32,
+    pub height: f32,
+}
+
 pub struct WidgetNode {
     data: WidgetData,
     width: SizeConstraint,
@@ -438,6 +456,21 @@ pub struct WidgetNode {
     /// matching keeps a future text-bearing variant from becoming a silent
     /// no-op.
     raster_scale: DipScale,
+    /// The layout-derived hit geometry for this node (DD-M4-P2-002 "one walk,
+    /// two stores"): an absolute DIP rectangle within the window's client
+    /// area.
+    ///
+    /// **Exactly one writer** — the lockstep walk in `sync_visuals`, which
+    /// derives it from the same `LayoutNode.offset` / `.size` value the
+    /// Composition `Visual.Offset` / `Visual.Size` writes come from, in the
+    /// same pass.
+    ///
+    /// `None` means this node has not been through a layout pass, which
+    /// makes it not hit-testable — the intended failure rather than being
+    /// hit-testable at a stale rectangle.
+    ///
+    /// Not `pub` and not `pub(crate)`: every reader is in this module.
+    arranged_rect: Option<DipRect>,
 }
 
 // ── Tree-mutation errors ──────────────────────────────────────────────────────
@@ -478,6 +511,7 @@ impl WidgetNode {
             bindings: Vec::new(),
             scale: DipScale::default(),
             raster_scale: DipScale::default(),
+            arranged_rect: None,
         }))
     }
 
@@ -503,6 +537,7 @@ impl WidgetNode {
             bindings: Vec::new(),
             scale: DipScale::default(),
             raster_scale: DipScale::default(),
+            arranged_rect: None,
         }))
     }
 
@@ -528,6 +563,7 @@ impl WidgetNode {
             bindings: Vec::new(),
             scale: DipScale::default(),
             raster_scale: DipScale::default(),
+            arranged_rect: None,
         }))
     }
 
@@ -569,6 +605,7 @@ impl WidgetNode {
             bindings: Vec::new(),
             scale: DipScale::default(),
             raster_scale: DipScale::default(),
+            arranged_rect: None,
         }))
     }
 
@@ -617,6 +654,7 @@ impl WidgetNode {
             bindings: Vec::new(),
             scale: DipScale::default(),
             raster_scale: DipScale::default(),
+            arranged_rect: None,
         }))
     }
 
@@ -660,6 +698,7 @@ impl WidgetNode {
             bindings: Vec::new(),
             scale: DipScale::default(),
             raster_scale: DipScale::default(),
+            arranged_rect: None,
         }))
     }
 
@@ -719,6 +758,7 @@ impl WidgetNode {
             bindings: Vec::new(),
             scale: DipScale::default(),
             raster_scale: DipScale::default(),
+            arranged_rect: None,
         }))
     }
 
@@ -755,6 +795,7 @@ impl WidgetNode {
             bindings: Vec::new(),
             scale: DipScale::default(),
             raster_scale: DipScale::default(),
+            arranged_rect: None,
         }))
     }
 
@@ -779,6 +820,7 @@ impl WidgetNode {
             bindings: Vec::new(),
             scale: DipScale::default(),
             raster_scale: DipScale::default(),
+            arranged_rect: None,
         }))
     }
 
@@ -950,6 +992,7 @@ impl WidgetNode {
             bindings: Vec::new(),
             scale: DipScale::default(),
             raster_scale: DipScale::default(),
+            arranged_rect: None,
         }))
     }
 
@@ -1622,6 +1665,73 @@ impl WidgetNode {
         matches!(self.data, WidgetData::Grid { .. })
     }
 
+    /// Restates, as a match, what three widget constructors already state by
+    /// calling `outer_visual.SetClip(&clip)`: `ScrollView`, `Grid`, and
+    /// `ZStack` each install a zero-inset `InsetClip` at construction, and no
+    /// other kind does. The two facts cannot be made atomic — one lives in a
+    /// match here, the other in three separate constructor bodies — so the
+    /// agreement between them is pinned by an integration test
+    /// (`wasamo-runtime/tests/arranged_rect_integration.rs`) that compares
+    /// this predicate against the live `Visual.Clip()` for one instance of
+    /// every `WidgetData` kind.
+    ///
+    /// The match is exhaustive with no `_` wildcard arm: a new `WidgetData`
+    /// variant fails to compile here until it is explicitly classified as
+    /// clipping or not.
+    fn clips_children(&self) -> bool {
+        match &self.data {
+            WidgetData::ScrollView { .. } | WidgetData::Grid { .. } | WidgetData::ZStack => true,
+            WidgetData::Rectangle
+            | WidgetData::VStack { .. }
+            | WidgetData::HStack { .. }
+            | WidgetData::Text { .. }
+            | WidgetData::Button(_)
+            | WidgetData::ToggleButton(_)
+            | WidgetData::Box { .. }
+            | WidgetData::WrapPanel { .. } => false,
+        }
+    }
+
+    /// Test-only accessor for `arranged_rect` (DD-M4-P2-002). `None` until a
+    /// layout pass has run over this node at least once.
+    #[doc(hidden)]
+    pub fn __arranged_rect_for_test(&self) -> Option<DipRect> {
+        self.arranged_rect
+    }
+
+    /// Test-only accessor for `clips_children`, so a mock-free integration
+    /// test can compare it against the live `Visual.Clip()` without the
+    /// predicate needing a production caller of its own before T2 lands.
+    #[doc(hidden)]
+    pub fn __clips_children_for_test(&self) -> bool {
+        self.clips_children()
+    }
+
+    /// Test-only accessor naming this node's `WidgetData` kind.
+    ///
+    /// Exists so an integration test can assert *which* kind an instance
+    /// actually is, rather than trusting the position it was constructed at
+    /// or pulled from a tree by (e.g. after a sequence of `remove_child(0)`
+    /// calls whose ordering assumption could silently drift). The match is
+    /// exhaustive with no `_` wildcard arm, so a new `WidgetData` variant
+    /// fails to compile here until it is given a name.
+    #[doc(hidden)]
+    pub fn __kind_name_for_test(&self) -> &'static str {
+        match &self.data {
+            WidgetData::Rectangle => "Rectangle",
+            WidgetData::VStack { .. } => "VStack",
+            WidgetData::HStack { .. } => "HStack",
+            WidgetData::Text { .. } => "Text",
+            WidgetData::Button(_) => "Button",
+            WidgetData::ToggleButton(_) => "ToggleButton",
+            WidgetData::Box { .. } => "Box",
+            WidgetData::WrapPanel { .. } => "WrapPanel",
+            WidgetData::ScrollView { .. } => "ScrollView",
+            WidgetData::Grid { .. } => "Grid",
+            WidgetData::ZStack => "ZStack",
+        }
+    }
+
     pub fn insert_child(
         &mut self,
         index: usize,
@@ -2089,6 +2199,15 @@ impl WidgetNode {
     // happened to render correctly; WrapPanel-arranged Boxes have non-zero
     // offsets and exposed the latent bug as visibly mis-placed Text
     // labels — see the M3-Phase 3 T9 step-end retrospective.
+    //
+    // DD-M4-P2-002 "one walk, two stores": this walk now writes two things
+    // per node — the physical Composition geometry below, and (after it)
+    // `self.arranged_rect`, the same `computed` value retained as absolute
+    // DIP on the node itself. A node-side field write is not a Composition
+    // geometry write, so the single-pass property DD-M4-P1-002's audit
+    // closed — every geometry write happens once, in this walk — is
+    // preserved; the second store rides the same traversal rather than
+    // adding one.
     fn sync_visuals(
         &mut self,
         computed: &LayoutNode,
@@ -2122,6 +2241,26 @@ impl WidgetNode {
             X: size_x,
             Y: size_y,
         })?;
+        // DD-M4-P2-002 second store: `computed.offset` retained **un-subtracted**.
+        // The Composition write above needs a parent-relative physical offset
+        // (hence the subtraction into `offset_x` / `offset_y`), while this node
+        // store needs the absolute DIP one — and both come from the same
+        // `computed.offset` value in the same pass, which is what makes them
+        // lockstep rather than two independent derivations that could drift.
+        //
+        // The ordering is deliberate: this store runs after the two Composition
+        // writes above have already succeeded (the `?`s did not early-return),
+        // so "this node has a rectangle" implies its Visual was written from the
+        // same layout result. A pass that fails part-way through the tree
+        // therefore leaves the already-visited nodes consistent between the two
+        // stores, rather than a node claiming a rectangle for a Visual that was
+        // never actually moved.
+        self.arranged_rect = Some(DipRect {
+            x: computed.offset.0,
+            y: computed.offset.1,
+            width: computed.size.0,
+            height: computed.size.1,
+        });
         // DD-M4-P1-002 §The conversion sites row 6: the Button-family
         // label's placement is written here rather than at construction,
         // where no scale factor exists. Like the ScrollView intermediate

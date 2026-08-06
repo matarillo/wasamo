@@ -51,7 +51,7 @@ T2 switches the readers.
   matches the arranged result, plus a writer audit naming every site
   that could write the field.
 
-- [ ] T1
+- [x] T1
 
 ## T2 — Single-target hit resolution and the complete geometry migration
 
@@ -72,6 +72,19 @@ candidate; whether anything reacts is T3's question.
   artifact is a call-site audit table showing **zero** `visual_rect`
   readers on the input path. No commit between T1 and T2 may leave a
   mixed path.
+- **Three existing test files hit-test against a hand-pinned Visual
+  rectangle rather than a laid-out tree** (T1 finding):
+  `button_enabled.rs`, `bool_binding_live_propagation.rs` and
+  `togglebutton_runtime_integration.rs` each write `SetOffset` /
+  `SetSize` directly so today's readback lands inside. Those nodes have
+  never been through the layout pass, so they hold no rectangle and
+  their clicks resolve to nothing once the readers switch. Laying their
+  trees out is part of the migration: re-pinning the store or skipping
+  the tests reintroduces the mixed path the obligation above exists to
+  prevent.
+- `clips_children` gains its first production caller here, so the
+  `__clips_children_for_test` accessor T1 needed becomes redundant and
+  goes rather than lingering as a second entry point.
 - Edge containment is a **boundary condition**, so a deliberately wrong
   implementation must be shown to make the named test fail
   ([DD-V-029](../../../cross-milestone/decisions/dd-v-029-pure-logic-red-test-obligation.md)).
