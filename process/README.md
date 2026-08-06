@@ -22,6 +22,7 @@ process/
       decisions/                 # Architectural Decision Records
         preamble.md              # Context, scope, summary, revision history
         dd-NNN-<slug>.md         # One file per decision
+        exploration/             # Pre-ADR spikes and exploratory notes for this phase's ADR set
         superseded/              # Superseded ADRs preserved as historical record
       implementation/            # Task plan, execution log, residuals
         preamble.md              # Phase intro and task ordering rationale
