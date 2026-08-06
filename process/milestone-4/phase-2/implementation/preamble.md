@@ -124,12 +124,17 @@ new rule is correct.
 Two specific traps this phase has to name in advance, because both
 produce a green suite and a correct-looking gallery:
 
-- **Occlusion is unobservable until T10.** Single-target resolution (T2)
-  differs from today's fire-every-Button recursion only when two
-  interactive widgets overlap, and nothing in the gallery overlaps until
-  the lightbox is wired. T2's evidence is therefore its own pure-logic
-  tests over a constructed overlapping tree, **shown to fire** against a
-  wrong implementation — not the gallery frame.
+- **Occlusion is observable in the gallery, and was measured there.** The
+  `if is_lightbox_open` branch is a later child of the root `ZStack` than
+  the main `Grid`, its scrim is stretch/stretch, and both the open and the
+  close controls are authored — so an open lightbox covers the toolbar
+  today. T4 measured the consequence directly: before it, the toolbar's
+  checked `ToggleButton` entered its hovered colour through the scrim
+  ([log.md](./log.md) §T4). The pure-logic-and-fixture evidence T2 and T4
+  each built stands on its own — a constructed overlapping tree pins the
+  rule where the gallery pins only one instance of it — but a gallery
+  frame is available as a **second, independent** check wherever a task's
+  deliverable is painted, and T4 takes it.
 - **The two cancelling conversions stop cancelling at T2.** Phase 1
   measured that the pointer division and the `visual_rect` division are
   symmetric today, so *"no test can distinguish a correct row 9 from a
@@ -228,7 +233,7 @@ the branch/test-focused check.
 | T1 | Full independent review | Runtime structural change: a second store written inside the audited lockstep walk |
 | T2 | Full independent review | Runtime structural change: the complete geometry migration, both input-path readers |
 | T3 | Full independent review | Runtime structural change: dispatch, consumption, and the drain boundary |
-| T4 | Branch/test-focused review | State-ownership change behind T2's already-reviewed structure; the transition arms are the authored branches |
+| T4 | Full independent review | Corrected at T4's start gate: retained per-window state with a cross-path invalidation surface (runtime structural change), plus GUI-render evidence. The transition arms compose in as the trap-#4 check |
 | T5 | Full independent review | Runtime structural change: first production caller of the focus core, and the `WM_KEYDOWN` return-path change |
 | T6 | Branch/test-focused review | Checker / IR additions with reject branches; no runtime structural change |
 | T7 | Full independent review | Runtime structural change: the materialisation seam, the scope stack, and restore state |
