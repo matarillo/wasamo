@@ -1042,3 +1042,179 @@ literal *takes effect* — but only for `ToggleButton`
 (`togglebutton_runtime_integration.rs`). The pairing existed for one
 widget and not the other, which is the shape that let a two-and-a-half
 month old gap stay invisible.
+
+## T4 — Hover and pressed behind the routing model
+
+### Start gate (recorded 2026-08-07, before any source edit)
+
+Read before selecting:
+[AGENTS.md](../../../../AGENTS.md),
+[implementation-gates.md](../../../procedures/implementation-gates.md),
+[plan.md](./plan.md) §T4 and §Cross-task obligations,
+[preamble.md](./preamble.md) (§What "green" is worth, §The migration
+obligation, §Review lanes),
+[DD-M4-P2-001](../decisions/dd-m4-p2-001-event-routing-model.md)
+§Pointer capture, hover, pressed and §Recommendation,
+[DD-M4-P2-002](../decisions/dd-m4-p2-002-hit-testing-and-generic-click.md)
+§Recommendation,
+[constraints.md](../requirements/constraints.md) §3 / §4 / §5 / §8 / §10,
+the Moment-1 normative text
+([architecture.md §13.2](../../../../docs/architecture.md) and §12.5,
+[dsl_spec.md §4.19](../../../../docs/dsl_spec.md) and §4.8),
+the [T3 close gate](#t3--propagation-and-the-drain-boundary) and the
+[T3 retrospective](../retrospectives/t3.md), and the landed source
+(`widget.rs` `update_hover` / `update_hover_inner` / `clear_hover` /
+`hit_test_click` / `update_button_enabled` / `update_toggle_button_checked`
+/ `effective_button_color`, `hit.rs`, `window.rs`'s four pointer arms and
+`set_root`).
+
+#### Normative statements that already answer this task's behaviour
+
+Recorded per
+[DD-V-031](../../../cross-milestone/decisions/dd-v-031-normative-answers-at-start-gate.md):
+this phase synchronised its normative text at Moment 1, so the questions
+below are **answered**, not open, and are not escalations.
+
+| Question | Document | What it fixes |
+|---|---|---|
+| Who computes hover / pressed, and against what | [architecture.md §13.2](../../../../docs/architecture.md) | "computed as enter / leave transitions **against the resolved target** rather than by a whole-tree walk" — the walk is named as the thing being replaced, so a stateless re-walk that merely narrows to the target is **not** what is specified |
+| Whether the painted node is the target or the node a release would dispatch to | the same sentence | The rule is "against the resolved target"; "so the widget that paints pressed is the widget a release would dispatch to" is its stated consequence, not a second rule. Measured below: the two coincide for every shape the widget set can build |
+| Whether hover / pressed gain an authored surface | [architecture.md §13.2](../../../../docs/architecture.md), [dsl_spec.md §4.19](../../../../docs/dsl_spec.md) | No. They are Button-family presentation state; §4.19 says a Button "paints hover / pressed states; those are Button behaviours (§4.8), not part of the signal's meaning" |
+| What a disabled Button does | [dsl_spec.md §4.8](../../../../docs/dsl_spec.md) | "Hover / press visual transitions are frozen; the background paints a flat disabled grey directly (no `ColorKeyFrameAnimation` runs)" |
+| Whether a scale change synthesises a pointer update | [architecture.md §12.5](../../../../docs/architecture.md) | "It synthesises no pointer message either: the pointer may end up over a different widget after the accompanying resize, and the next real pointer message corrects the hover state." [constraints §5](../requirements/constraints.md)'s sub-issue is therefore already discharged and needs no code |
+| Where hit geometry comes from | §13.2, §4.19 | Landed at T1 / T2; this task inherits it and changes no geometry |
+
+No divergence between the ADR set and the normative text was found, so
+nothing is carried to T13's re-verification from this row.
+
+#### Scope re-decided against the code — four facts measured first
+
+Throwaway probes and greps, run before the approach was chosen.
+
+1. **Nothing in the suite exercises hover.**
+   `rg "update_hover|clear_hover|ButtonState|hovered"` over
+   `wasamo-runtime/tests` returns **zero** hits, and `update_hover` /
+   `clear_hover` have no caller anywhere outside `window.rs`'s four pointer
+   arms (`rg` over `wasamo-runtime`, `wasamo-dll`, `bindings`, `examples`).
+   The whole-tree walk can therefore be deleted and replaced with anything
+   at all and the suite stays green — this task's instance of
+   [preamble.md §What "green" is worth](./preamble.md). Every property this
+   task claims needs a test that did not exist before it.
+2. **The gallery already contains a reachable overlap, and the pre-T4
+   defect is visible in it today.** The `if is_lightbox_open` branch is a
+   *later* child of the root `ZStack` than the main `Grid`, and its scrim
+   `Box` is stretch/stretch, so an open lightbox covers the toolbar.
+   Measured on the pre-T4 release build with
+   [evidence/capture-t4-hover.ps1](./evidence/capture-t4-hover.ps1)
+   (982x703 client at 120 DPI, mean over a 2,559-pixel mask taken from the
+   checked "All" `ToggleButton`, two frames per side):
+
+   | Side | Mean R / G / B over the mask |
+   |---|---|
+   | closed, cursor parked away | 46.99 / 117.65 / 213.41 |
+   | closed, cursor over "All" | 74.06 / 138.90 / 224.06 |
+   | open, cursor parked away | 22.39 / 42.88 / 68.30 |
+   | open, cursor over "All" | 28.15 / 46.78 / 71.19 |
+
+   Within-side frame-to-frame jitter is **0.00 on every channel**, so the
+   sampled means carry no noise floor to clear. Hover-versus-no-hover is
+   +27.07 / +21.25 / +10.65 with the lightbox closed and still
+   **+5.76 / +3.90 / +2.89 with it open** — the fifth of the same signal
+   that the scrim's `cc` alpha leaves. **The toolbar's ToggleButton hovers
+   through the scrim today.** This contradicts
+   [preamble.md](./preamble.md)'s "occlusion is unobservable until T10" for
+   the hover half, so trap #7 is selected rather than waved off, and the
+   same script re-run after the change is the close artifact.
+3. **"The resolved target" and "the nearest Button-family node on the
+   dispatch chain" coincide for every shape the widget set can build.**
+   `build_layout_tree` maps `Button` / `ToggleButton` to a childless
+   `LayoutNode` (T3 start gate finding 1), so a Button-family node is never
+   an ancestor of a hit candidate: whenever a Button-family widget is on the
+   chain at all it *is* the target. Hover therefore needs no ancestor walk,
+   and §13.2's "against the resolved target" can be implemented literally
+   with no ambiguity to resolve. Recorded because the coincidence is a
+   property of today's layout mapping rather than of the routing model — if
+   Button ever becomes a layout container the question reopens.
+4. **`ButtonData::state` already has a third writer.**
+   `update_button_enabled` sets `state = ButtonState::Normal` and paints the
+   flat grey directly, on a *binding* write rather than a pointer message.
+   Any retained "which node is painting hover" record is therefore derived
+   data that a non-pointer path can invalidate — which is what puts trap #3
+   on this task rather than off it.
+
+**What T4 therefore is.** Not "narrow the whole-tree walk to the target",
+which the normative text explicitly excludes, but: give the window a
+retained record of *which node currently paints a non-Normal state*, and
+make every pointer arm a leave / enter transition against the target
+`hit::resolve_topmost` already resolves — with the invalidation paths of
+fact 4 enumerated rather than hoped about.
+
+#### Trap selection
+
+| # | Trap | Applies | Reason |
+|---|---|---|---|
+| 1 | Semantic-migration miss | **yes** | No enum or schema gains a variant, so the compiler enumerates nothing — but the *decision* "does this widget paint hover / pressed" migrates from a per-node containment test evaluated at every node to a single resolved target. Every reader and writer of `ButtonData::state`, and every caller of the two hover entry points, is audited as a call-site table; a writer left out is a node that paints a state nobody owns |
+| 2 | Missed side effects | **yes** | The derived effects to enumerate before writing: the colour animation `start_color_anim` starts (and the `if new_state != btn.state` guard that keeps a leave from overriding the disabled grey), `update_button_enabled`'s state reset, `update_toggle_button_checked`'s brush rebuild from `btn.state`, `window::set_root` replacing the tree the retained record indexes, a click handler's synchronous rebuild between `hit_test_click` and the `update_hover` that follows it in the same `WM_LBUTTONUP` arm (T3's carry-forward to this task), and the `ButtonData.label_size` three-point write ([constraints §4](../requirements/constraints.md)) which this task must not touch |
+| 3 | Parallel/derived data drift | **yes** | The retained record and `ButtonData::state` are a derived pair: the invariant is "at most one node has `state != Normal`, and it is exactly the node the record names". They must be written in the same primitive, and fact 4's third writer is the path that can break the pair from outside |
+| 4 | Untested authored branch | **yes** | New arms: the target is an enabled Button-family widget (paint and retain); the target is a **disabled** Button-family widget (paint nothing, retain nothing, and the previously painting node still leaves); the target is a non-Button widget or nothing at all (the same); previous equals next (no leave); `WM_MOUSELEAVE` with nothing retained. Each ships with a test that fires it directly, and each is put under a deliberately wrong implementation shown to redden it. DD-V-029's named obligation is **not** triggered — no rounding, unit-conversion or boundary-condition branch is added, edge containment stayed T2's — so the witnesses are the trap-#4 / #6 artifact rather than that decision's |
+| 5 | Carry-forward underweighted | **yes** | T5 puts focus state beside this record on the same `WindowState` and adds a second painted state that must stay distinguishable from hover (DD-003); T7 materialises and removes subtrees under the pointer, which is what can shift the retained record's index; T10 is the first production consumer. Per the T3 retrospective's corrective, anything this task *requires as evidence of a later task* is built and run here first, or it is recorded as a finding with an owner instead of as a carry-forward |
+| 6 | Symptom taken at face value | **conditional** | No deterministic failure is in hand at the start gate. Selected as armed rather than applicable: any failure that appears during implementation gets a minimal repro and a root cause, not a re-roll |
+| 7 | Weak GUI evidence | **yes** | Selected on the measurement in fact 2, against the preamble's prediction. The deliverable is a painted state, and a frame that distinguishes the intended behaviour from the pre-T4 one is **buildable in the gallery today** — so the close artifact is the same capture script re-run, where the open-lightbox hover delta must collapse into the (measured, zero) within-side jitter while the closed-lightbox delta must survive |
+
+```
+- [x] #1 semantic migration   - [x] #2 side effects   - [x] #3 parallel data   - [x] #4 branch tests
+- [x] #5 carry-forward        - [~] #6 root cause     - [x] #7 GUI positive control
+```
+
+#### Review lane
+
+**Full independent review**, which is a **correction of
+[preamble.md §Review lanes](./preamble.md)'s prediction** of
+branch/test-focused. The prediction assumed T4 was "a state-ownership
+change behind T2's already-reviewed structure". Facts 1, 2 and 4 change the
+classification: the task adds **retained per-window state** with a
+cross-path invalidation surface (a runtime structural change), and it
+carries **GUI-render evidence** — two of the three high-risk classes in
+[implementation-gates.md §4](../../../procedures/implementation-gates.md).
+The trap-#4 branch/test check composes into it rather than replacing it.
+Recorded here as the Phase 1 F-12 / T12 precedent requires: a lane found
+stale at a task's start gate is corrected at that gate.
+
+#### The T3 correctives, applied
+
+T3's retrospective added two lines to later start gates. Both are answered
+here rather than at the close:
+
+- *Does the normative text already answer this task's semantics?* Yes — the
+  table above, consulted before the ADRs were read for reasoning. The one
+  place the ADR and the spec could have disagreed (target versus dispatch
+  node) is measured in fact 3 to be a distinction without a difference in
+  the current widget set.
+- *Re-measure what this task actually adds rather than inheriting the plan's
+  framing.* Done: the plan says "replacing the whole-tree walk", and fact 1
+  shows the walk is entirely unpinned, so the risk is not that the
+  replacement is hard but that **nothing would notice if it were wrong**.
+  That moves the task's centre of gravity from the transition rule to the
+  evidence.
+
+#### Planned proof obligations
+
+Each closed at the T4 close gate:
+
+1. The call-site audit table over every reader and writer of
+   `ButtonData::state` and both hover entry points.
+2. The structural side-effect enumeration, including `set_root`, the
+   binding-driven `enabled` reset, and the post-click `update_hover` in the
+   same `WM_LBUTTONUP` arm.
+3. The parallel-data statement for the retained record, naming the single
+   primitive that writes both halves.
+4. Pure-logic unit tests for the leave / enter transition rule.
+5. Integration fixtures over real messages: enter / leave / press / release
+   transitions read back from live widget state; the overlap case where only
+   the topmost widget reacts; the disabled-Button arm; `WM_MOUSELEAVE`.
+6. Mutation witnesses for each new arm, each read back from the file before
+   it is run and re-read after the revert.
+7. The GUI positive control re-run, with the pre-change numbers above as the
+   before-state.
+8. The whole task list re-read at the close gate (the re-audit discipline,
+   [plan.md](./plan.md) §Cross-task obligations).
