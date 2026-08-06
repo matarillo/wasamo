@@ -1,6 +1,7 @@
 use crate::box_values;
 use crate::dip_scale::DipScale;
 use crate::handler::{self, EvalContext, EvalError, HandlerExpr};
+use crate::hit::{self, DipPoint, HitTree};
 use crate::layout::{
     self, Alignment, ChildSlots, LayoutChildSlot, LayoutError, LayoutNode, SizeConstraint,
     SlotData, TrackSize,
@@ -398,8 +399,10 @@ fn fixed_extent(width: &SizeConstraint, height: &SizeConstraint) -> Option<(f32,
 /// `.size` the Composition `Visual.Offset` / `Visual.Size` writes come
 /// from, in the same `sync_visuals` pass.
 ///
-/// No methods beyond the derives here — containment / hit-testing is a
-/// later task's.
+/// No methods beyond the derives here: containment / hit-testing (M4-Phase
+/// 2 T2) is `hit::contains` / `hit::resolve_topmost`, free functions over
+/// this type rather than methods on it, so the resolver stays pure logic
+/// with no Compositor.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct DipRect {
     pub x: f32,
@@ -1389,8 +1392,9 @@ impl WidgetNode {
 
     // ── Hit testing ───────────────────────────────────────────────────────────
 
-    /// Traverse the tree and fire the `clicked_fn` of the first Button-family
-    /// widget whose computed visual rect contains `(x, y)`.
+    /// Resolve the topmost widget under `(x, y)` and, if it is an enabled
+    /// Button-family widget, fire its click dispatch (DD-M4-P2-002 "T2 over
+    /// T1" / "`Button.clicked` — generalised, not duplicated").
     ///
     /// **`(x, y)` are DIP** (M4-Phase 1, DD-M4-P1-002 option H2): the window
     /// procedure divides the pointer message's physical coordinates by the
@@ -1399,102 +1403,96 @@ impl WidgetNode {
     /// an integer — physical 50 at 150% is 33.33 — and truncating it would make
     /// hit-test edges depend on the scale factor for no benefit.
     ///
-    /// **Precondition: `self` is the tree the window laid out.** Every readback
-    /// in the traversal is divided by `self.scale`, while the pointer was
-    /// divided by the *window's*, so entering on a subtree whose cached scale
-    /// differs from the window's compares two spaces. See
-    /// [`Self::visual_rect_dip`].
+    /// **Entering on a subtree is now well-defined for geometry.**
+    /// `arranged_rect` is absolute DIP within the window's client area
+    /// regardless of where the traversal starts, so there is no per-tree
+    /// divisor to get wrong — the precondition the pre-T2 Visual-readback
+    /// path carried is gone (DD-M4-P2-002 "H2 deletes the row"). What a
+    /// subtree entry still does **not** get is the clip bound of any
+    /// ancestor *above* the entry point: a clipping container that would
+    /// have confined `self`'s subtree in a full-tree walk plays no part
+    /// here, because resolution starts at `self`.
     pub fn hit_test_click(&mut self, x: f32, y: f32) {
-        // Every readback in the traversal is divided by **one** scale — this
-        // root's — rather than by each node's own. See `visual_rect_dip`.
-        let tree_scale = self.scale;
-        self.hit_test_click_inner(x, y, 0.0, 0.0, tree_scale);
-    }
+        let point = DipPoint { x, y };
+        let Some(path) = hit::resolve_topmost(self, point) else {
+            return;
+        };
 
-    fn hit_test_click_inner(
-        &mut self,
-        x: f32,
-        y: f32,
-        off_x: f32,
-        off_y: f32,
-        tree_scale: DipScale,
-    ) {
-        let (vx, vy, vw, vh) = self.visual_rect_dip(tree_scale);
-        let abs_x = off_x + vx;
-        let abs_y = off_y + vy;
-
-        // We need a stable pointer to `self` for the registry signal lookup
-        // before we re-borrow `self.data` mutably below.
-        let widget_ptr: *mut WidgetNode = self as *mut WidgetNode;
-
-        if let Some(btn) = self.button_data_mut() {
-            // Phase 1 `Button.enabled` (DD-M3-P1-005): suppress click dispatch
-            // when disabled — neither the host callback nor the inline `clicked`
-            // handler fires, and no "clicked" signal is enqueued. Hit-testing
-            // still recurses into children below so non-Button descendants of
-            // a disabled Button (none in M3-Phase 1, defensive) remain
-            // reachable.
-            if !btn.enabled {
-                for child in &mut self.children {
-                    child.hit_test_click_inner(x, y, abs_x, abs_y, tree_scale);
-                }
-                return;
-            }
-            if x >= abs_x && x < abs_x + vw && y >= abs_y && y < abs_y + vh {
-                if let Some(ref f) = btn.clicked_fn {
-                    f();
-                }
-                // DD-M2-P3-002 Option B: evaluate inline handlers first, then
-                // enqueue host listeners. Inline path is separate from the
-                // host listener list and is not a disconnectable token.
-                // Safety: inline_handlers borrows are released before
-                // enqueue_signal, which does not touch this node.
-                let handler_exprs: Vec<HandlerExpr> = {
-                    // Safety: widget_ptr aliases self; we collect clones before
-                    // dispatch so no aliased mutable borrow is live during eval.
-                    unsafe { &*widget_ptr }
-                        .inline_handlers
-                        .iter()
-                        .filter(|(sig, _)| sig == "clicked")
-                        .map(|(_, expr)| expr.clone())
-                        .collect()
-                };
-                // DD-M2-P6-006: dispatch handler bodies against the
-                // SignalRegistry installed by the IR loader. If no registry
-                // is active (e.g. tests building widgets directly) fall back
-                // to a no-op context — the evaluator runs but property
-                // reads/writes report "unknown property".
-                let registry = crate::reactive::active_registry();
-                for expr in &handler_exprs {
-                    // DD-M2-P3-003: catch_unwind wrapper logs errors and
-                    // continues the event loop; location is a coarse
-                    // identifier (Phase 6 supplies the component name prefix).
-                    if let Some(reg) = registry.as_deref() {
-                        let mut ctx = crate::reactive::HandlerEvalContext::new(reg);
-                        handler::invoke_handler(expr, &mut ctx, "?.clicked");
-                    } else {
-                        let mut ctx = NullEvalContext;
-                        handler::invoke_handler(expr, &mut ctx, "?.clicked");
-                    }
-                }
-                // Route "clicked" through the C-ABI signal registry. The
-                // emission is queued and fires after the current call
-                // returns to wasamo_run's message-loop drain (abi_spec §6).
-                crate::emit::enqueue_signal(widget_ptr, "clicked", Vec::new());
-                return;
-            }
+        // Navigate to the resolved target by its child-index path
+        // (topmost-first reverse walk, so this is the one node that won).
+        let mut target: &mut WidgetNode = self;
+        for index in path {
+            target = target.children[index].as_mut();
         }
 
-        for child in &mut self.children {
-            child.hit_test_click_inner(x, y, abs_x, abs_y, tree_scale);
+        // We need a stable pointer to the target for the registry signal
+        // lookup before we re-borrow its `data` mutably below.
+        let widget_ptr: *mut WidgetNode = target as *mut WidgetNode;
+
+        let Some(btn) = target.button_data_mut() else {
+            // E1 (DD-M4-P2-002): every widget with a visual is a hit-test
+            // candidate, but only a Button-family target dispatches here.
+            // Ancestor bubbling for non-Button targets is T3's — this task
+            // must not add it.
+            return;
+        };
+        // Phase 1 `Button.enabled` (DD-M3-P1-005): suppress click dispatch
+        // when disabled — neither the host callback nor the inline `clicked`
+        // handler fires, and no "clicked" signal is enqueued. Under the
+        // pre-T2 fire-every-Button recursion a disabled Button still let
+        // hit-testing descend into its children; single-target resolution
+        // makes a disabled Button a target that **stops the walk** instead —
+        // it occludes whatever is beneath it and dispatches nothing
+        // (DD-M4-P2-002 "Consequence for hit-test eligibility").
+        if !btn.enabled {
+            return;
         }
+        if let Some(ref f) = btn.clicked_fn {
+            f();
+        }
+        // DD-M2-P3-002 Option B: evaluate inline handlers first, then
+        // enqueue host listeners. Inline path is separate from the
+        // host listener list and is not a disconnectable token.
+        // Safety: inline_handlers borrows are released before
+        // enqueue_signal, which does not touch this node.
+        let handler_exprs: Vec<HandlerExpr> = {
+            // Safety: widget_ptr aliases target; we collect clones before
+            // dispatch so no aliased mutable borrow is live during eval.
+            unsafe { &*widget_ptr }
+                .inline_handlers
+                .iter()
+                .filter(|(sig, _)| sig == "clicked")
+                .map(|(_, expr)| expr.clone())
+                .collect()
+        };
+        // DD-M2-P6-006: dispatch handler bodies against the
+        // SignalRegistry installed by the IR loader. If no registry
+        // is active (e.g. tests building widgets directly) fall back
+        // to a no-op context — the evaluator runs but property
+        // reads/writes report "unknown property".
+        let registry = crate::reactive::active_registry();
+        for expr in &handler_exprs {
+            // DD-M2-P3-003: catch_unwind wrapper logs errors and
+            // continues the event loop; location is a coarse
+            // identifier (Phase 6 supplies the component name prefix).
+            if let Some(reg) = registry.as_deref() {
+                let mut ctx = crate::reactive::HandlerEvalContext::new(reg);
+                handler::invoke_handler(expr, &mut ctx, "?.clicked");
+            } else {
+                let mut ctx = NullEvalContext;
+                handler::invoke_handler(expr, &mut ctx, "?.clicked");
+            }
+        }
+        // Route "clicked" through the C-ABI signal registry. The
+        // emission is queued and fires after the current call
+        // returns to wasamo_run's message-loop drain (abi_spec §6).
+        crate::emit::enqueue_signal(widget_ptr, "clicked", Vec::new());
     }
 
     /// Update hover/press state for all Button-family widgets based on mouse position.
     /// `down` is true while the left mouse button is held.
     ///
-    /// **`(x, y)` are DIP**, and the same precondition applies: `self` is the
-    /// tree the window laid out. See [`Self::hit_test_click`].
+    /// **`(x, y)` are DIP.** See [`Self::hit_test_click`].
     pub fn update_hover(
         &mut self,
         compositor: &Compositor,
@@ -1502,25 +1500,30 @@ impl WidgetNode {
         y: f32,
         down: bool,
     ) -> windows::core::Result<()> {
-        let tree_scale = self.scale;
-        self.update_hover_inner(compositor, x, y, down, 0.0, 0.0, tree_scale)
+        self.update_hover_inner(compositor, x, y, down)
     }
 
-    #[allow(clippy::too_many_arguments)]
+    /// M4-Phase 2 T2 geometry-source switch only (DD-M4-P2-002): `inside` now
+    /// reads `arranged_rect` directly. That rectangle is already absolute DIP
+    /// within the window's client area, so the parent-offset accumulation and
+    /// per-tree scale divisor the old Visual-readback path needed
+    /// (`off_x` / `off_y` / `tree_scale`) have nothing left to do and are
+    /// gone. Everything else — the whole-tree walk, the disabled-Button arm's
+    /// descent into children, the state-transition and animation code — is
+    /// unchanged: hover / pressed **semantics** (enter/leave against the
+    /// single resolved target, matching `hit_test_click`) are T4's; this task
+    /// changes only where the containment test's rectangle comes from.
     fn update_hover_inner(
         &mut self,
         compositor: &Compositor,
         x: f32,
         y: f32,
         down: bool,
-        off_x: f32,
-        off_y: f32,
-        tree_scale: DipScale,
     ) -> windows::core::Result<()> {
-        // Audit row 9's second call site — same conversion, same divisor.
-        let (vx, vy, vw, vh) = self.visual_rect_dip(tree_scale);
-        let abs_x = off_x + vx;
-        let abs_y = off_y + vy;
+        // A node with no rectangle (never laid out) is not inside anything.
+        let inside = self
+            .arranged_rect
+            .is_some_and(|rect| hit::contains(rect, DipPoint { x, y }));
 
         if let Some(btn) = self.button_data_mut() {
             // Phase 1 `Button.enabled` (DD-M3-P1-005): a disabled button does
@@ -1528,11 +1531,10 @@ impl WidgetNode {
             // grey set by `update_button_enabled`.
             if !btn.enabled {
                 for child in &mut self.children {
-                    child.update_hover_inner(compositor, x, y, down, abs_x, abs_y, tree_scale)?;
+                    child.update_hover_inner(compositor, x, y, down)?;
                 }
                 return Ok(());
             }
-            let inside = x >= abs_x && x < abs_x + vw && y >= abs_y && y < abs_y + vh;
             let new_state = if inside && down {
                 ButtonState::Pressed
             } else if inside {
@@ -1551,42 +1553,9 @@ impl WidgetNode {
         }
 
         for child in &mut self.children {
-            child.update_hover_inner(compositor, x, y, down, abs_x, abs_y, tree_scale)?;
+            child.update_hover_inner(compositor, x, y, down)?;
         }
         Ok(())
-    }
-
-    /// This node's own Visual rectangle, read back off the live Visual and
-    /// converted to DIP — DD-M4-P1-002 audit row 9, the inbound seam.
-    ///
-    /// **The divisor is the traversal root's scale, not `self.scale`.** The
-    /// readback is one node's *parent-relative* physical offset and the caller
-    /// accumulates it into an absolute position, to be compared against a
-    /// pointer `wnd_proc` divided by the **window's** scale. A widget's
-    /// composited position is `Σ(local_dip_i × scale_i)`; dividing each term by
-    /// its own `scale_i` before summing yields `Σ local_dip_i`, which is the
-    /// pointer's space only if every `scale_i` is the window's. Dividing every
-    /// term by one scale gives `Σ(local_physical_i) ÷ that scale` — the
-    /// composited position, in the pointer's space — for any mixture of
-    /// descendant scales. That matters because the mixture is reachable: a node
-    /// attached to an already-attached tree keeps the constructor identity
-    /// until a scale walk runs over it.
-    ///
-    /// **This is a precondition on the entry, not an invariant the runtime
-    /// maintains.** [`Self::hit_test_click`] and [`Self::update_hover`] are
-    /// `pub` and take the divisor from the receiver, so entering on a
-    /// **subtree** uses that subtree's scale against a pointer divided by the
-    /// window's — and a caller cannot supply the right one, because `scale` is
-    /// private. Every production caller enters on `WindowState::root_widget`;
-    /// the workspace's own tests do not, so the hole is reachable rather than
-    /// theoretical.
-    fn visual_rect_dip(&self, tree_scale: DipScale) -> (f32, f32, f32, f32) {
-        // Read back from the SpriteVisual rather than tracking a separate
-        // state — the pre-existing choice DD-M4-P1-002 option H3 revisits.
-        let (vx, vy, vw, vh) = visual_rect(&self.visual);
-        let (vx, vy) = tree_scale.pair_to_dip((vx, vy));
-        let (vw, vh) = tree_scale.pair_to_dip((vw, vh));
-        (vx, vy, vw, vh)
     }
 
     /// Reset all Button-family states to Normal (called on WM_MOUSELEAVE).
@@ -1699,9 +1668,18 @@ impl WidgetNode {
         self.arranged_rect
     }
 
-    /// Test-only accessor for `clips_children`, so a mock-free integration
-    /// test can compare it against the live `Visual.Clip()` without the
-    /// predicate needing a production caller of its own before T2 lands.
+    /// Test-only accessor for `clips_children`.
+    ///
+    /// `hit::resolve_topmost` (via `HitTree::hit_clips_children`) is the
+    /// predicate's production caller as of T2, so this accessor is no
+    /// longer the predicate's *only* entry point — it is retained as the
+    /// evidence seam for the eight non-`ScrollView`/`Grid`/`ZStack` widget
+    /// kinds, which cannot have children and therefore give hit resolution
+    /// no way to exercise their (non-clipping) arm: no production path
+    /// drives a click through a childless widget's clip predicate, so
+    /// `the_clip_predicate_agrees_with_the_live_visual_for_every_widget_kind`
+    /// (T1) still needs a direct reader to keep pinning the per-kind
+    /// agreement with the live `Visual.Clip()` for those eight kinds.
     #[doc(hidden)]
     pub fn __clips_children_for_test(&self) -> bool {
         self.clips_children()
@@ -2055,15 +2033,24 @@ impl WidgetNode {
     /// without touching its children, its Visual geometry or its raster
     /// marker (M4-Phase 1 T8; T5 finding F-37).
     ///
-    /// The property under test is that a hit-test traversal divides every
-    /// `visual_rect` readback by the **traversal root's** scale rather than by
-    /// each node's own, so a descendant whose cache is stale still resolves to
-    /// the rectangle it is actually composited at. Constructing that state
-    /// needs a mixed-scale tree *with geometry already written*, and no
-    /// legitimate path produces one: `commit_scale_recursive` writes the whole
-    /// subtree, and the incremental attach paths F-32 enumerated leave a fresh
-    /// node with no geometry to hit-test at all. Hence a seam rather than a
-    /// fixture.
+    /// **Pre-M4-Phase 2 T2, the property under test was that a hit-test
+    /// traversal divided every `visual_rect` readback by the traversal
+    /// root's scale rather than by each node's own**, so a descendant whose
+    /// cache was stale still resolved to the rectangle it was actually
+    /// composited at. T2 removed that reader entirely: hit-testing now reads
+    /// `arranged_rect` — absolute DIP, written once by `sync_visuals` — and
+    /// never touches `self.scale` or the Visual at all, so there is no
+    /// divisor left to be one or many of. The seam and the test that drives
+    /// it (`dpi_scale_matrix_integration.rs::
+    /// a_stale_descendant_scale_still_hit_tests_where_the_widget_is`) stay,
+    /// re-purposed: they now demonstrate that poking this node-local field
+    /// has **no** effect on hit resolution, which is the stronger
+    /// (structural, not just numerical) form of the same guarantee.
+    ///
+    /// Constructing a stale-`scale` node still needs this seam rather than a
+    /// legitimate path: `commit_scale_recursive` writes the whole subtree,
+    /// and the incremental attach paths F-32 enumerated leave a fresh node
+    /// with no geometry to hit-test at all.
     ///
     /// **This is not a production entry and must not become one.** It writes
     /// the derived copy without the projection that owns it, which is exactly
@@ -2328,10 +2315,42 @@ impl WidgetNode {
         } else {
             computed.offset
         };
+        // T1 re-audit / T2 carry-forward: `self.children` and
+        // `computed.children` are built 1:1 by `build_layout_child_slots` in
+        // the same pass, so a length mismatch is not currently reachable —
+        // but `zip` would absorb a truncation silently, leaving a trailing
+        // `WidgetNode` with no `arranged_rect` written this pass. Since T2
+        // makes that field the hit-testing source, the silent failure mode
+        // is a widget that is present but permanently unhittable rather than
+        // a panic, which is worse than a debug-time assertion.
+        debug_assert_eq!(
+            self.children.len(),
+            computed.children.len(),
+            "sync_visuals: WidgetNode/LayoutNode child count mismatch — zip would silently \
+             leave a trailing WidgetNode with no arranged_rect, i.e. a silently unhittable widget"
+        );
         for (child, child_computed) in self.children.iter_mut().zip(computed.children.iter()) {
             child.sync_visuals(child_computed, child_parent_abs, target)?;
         }
         Ok(())
+    }
+}
+
+impl HitTree for WidgetNode {
+    fn hit_rect(&self) -> Option<DipRect> {
+        self.arranged_rect
+    }
+
+    fn hit_clips_children(&self) -> bool {
+        self.clips_children()
+    }
+
+    fn hit_child_count(&self) -> usize {
+        self.children.len()
+    }
+
+    fn hit_child(&self, index: usize) -> &Self {
+        self.children[index].as_ref()
     }
 }
 
@@ -2421,20 +2440,6 @@ fn dispose_subtree_bindings(node: &mut WidgetNode) {
     for child in &mut node.children {
         dispose_subtree_bindings(child);
     }
-}
-
-// ── Helpers ───────────────────────────────────────────────────────────────────
-
-fn visual_rect(v: &SpriteVisual) -> (f32, f32, f32, f32) {
-    use windows::core::Interface;
-    let vis: Visual = v.cast().unwrap_or_else(|_| panic!("cast failed"));
-    let off = vis.Offset().unwrap_or(Vector3 {
-        X: 0.0,
-        Y: 0.0,
-        Z: 0.0,
-    });
-    let sz = vis.Size().unwrap_or(Vector2 { X: 0.0, Y: 0.0 });
-    (off.X, off.Y, sz.X, sz.Y)
 }
 
 // Minimal disabled-state colour (DD-M3-P1-005 Phase 1 contract): a flat grey
