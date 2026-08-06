@@ -709,3 +709,300 @@ lines. Both are answered here rather than at the close:
    evidence item revised rather than quietly dropped.
 8. The whole task list re-read at the close gate (the re-audit
    discipline, [plan.md](./plan.md) §Cross-task obligations).
+
+### Close gate (recorded 2026-08-07)
+
+Landed: `hit::dispatch_chain` (the target-first walk order, two unit
+tests); `hit_test_click` rewritten as capture-chain → walk →
+consume-at-the-first-node-that-runs-anything; `ClickDisposition` /
+`ClickedHandlers` / `click_disposition_for` / `run_clicked_handlers` as
+module items beside it; `WidgetNode::button_data` (the immutable
+counterpart the read-only disposition needed); a residual note on
+`set_clicked`; and `wasamo-runtime/tests/event_routing_integration.rs`
+(five fixtures).
+
+#### #1 — Call-site audit table
+
+The migrating decision is **"does this widget react to a click"**, which
+moved from one site (`button_data_mut()` at the resolved target) to a
+predicate over three producers. The compiler enumerates none of that —
+no type changed — so the artifact is the grep table.
+
+Queries:
+`rg '"clicked"' wasamo-runtime/src bindings wasamo-dll wasamoc/src examples`,
+`rg "inline_handlers|set_inline_handler" wasamo-runtime/src`,
+`rg "clicked_fn|set_clicked" wasamo-runtime/src bindings examples`,
+`rg "enqueue_signal|signal_tokens_for" wasamo-runtime/src`,
+`rg "hit_test_click" wasamo-runtime/src wasamo-runtime/tests examples bindings wasamo-dll`,
+`rg "button_data_mut\(\)|button_data\(\)" wasamo-runtime/src`.
+
+**The three producers, each shown to reach both halves of the decision.**
+A producer in the predicate but not the invocation is a node that
+consumes without running anything; a producer in the invocation but not
+the predicate is a handler that silently never fires. Both halves read
+one snapshot, so the table is over producers rather than over the two
+sites.
+
+| Producer | Written by | In the predicate | In the invocation |
+|---|---|---|---|
+| `ButtonData::clicked_fn` | `WidgetNode::set_clicked` (Rust-native) and `wasamo_button_set_clicked` → **no**: that ABI entry forwards to `wasamo_signal_connect`, so the C host path is the *registry* producer, not this one | `has_native`, Button-family only | `run_clicked_handlers` step 1 |
+| `WidgetNode::inline_handlers` where the signal is `"clicked"` | `set_inline_handler`, whose only production caller is `ir_loader.rs:3092` — attached for **every** widget kind, with no per-kind filter | `inline`, cloned at snapshot time | `run_clicked_handlers` step 2 |
+| A registry `Signal` entry named `"clicked"` | `registry::add_signal` via `wasamo_signal_connect` (and `wasamo_button_set_clicked`, which is a thin forwarder) — admits **any** widget and any name | `has_host_listener` | `run_clicked_handlers` step 3, which re-queries the registry rather than replaying captured tokens |
+
+**Every site that decides whether a click reacts.**
+
+| Call site | Classification | Reason |
+|---|---|---|
+| `widget.rs::hit_test_click` | **migrated** | The only decision site. Was "target is an enabled Button-family widget"; is now the chain walk over `click_disposition_for` |
+| `widget.rs::click_disposition_for` | **new, sole predicate** | Read-only; the one place the three producers are tested |
+| `widget.rs::run_clicked_handlers` | **new, sole invocation** | Reads the snapshot the predicate produced |
+| `window.rs:959` (`WM_LBUTTONUP`) | ignore-OK | The only production caller of `hit_test_click`; unchanged, and it still converts the pointer to DIP before calling in |
+| `widget.rs::update_hover` / `update_hover_inner` / `clear_hover` | ignore-OK | Hover is presentation state, not a `clicked` dispatch. Untouched — T4 owns its semantics |
+| `widget.rs` five other `button_data_mut()` sites (`set_clicked`, `update_button_label`, `update_button_enabled`, `update_toggle_button_checked`, the hover arm) | ignore-OK | Property setters and hover; none of them decides whether a click dispatches |
+| `emit.rs::enqueue_signal` | ignore-OK | Generic over signal name; the `"clicked"` caller is the one above. Its early return on an empty token list is what made the pre-T3 unconditional call a no-op |
+| `abi.rs::wasamo_signal_connect` / `wasamo_button_set_clicked` | ignore-OK | Registration, not dispatch. Neither gained a constraint — `wasamo_signal_connect` already admitted any widget and any signal name, so **the phase's "no new ABI function" obligation is untouched** |
+| `tests/button_enabled.rs`, `tests/bool_binding_live_propagation.rs`, `tests/togglebutton_runtime_integration.rs` | ignore-OK, re-read | These call `hit_test_click` **on the Button itself** as the entry root, so their dispatch chain is one node long and the walk is a no-op extension. All three still assert what their comments claim |
+| `tests/iteration_mutation_integration.rs:334`, `tests/hit_resolution_integration.rs` | ignore-OK, re-read | Click Buttons that carry a handler, which still consume at the target |
+
+**What the compiler enumerated: nothing.** No type changed, so every one
+of the rows above compiles either way. The one shape whose *reason*
+would have gone false — a click on a Button with no handler inside a
+container that has one — is not built by any pre-existing test, and is
+now built by `event_routing_integration.rs`.
+
+#### #2 — Structural side-effect enumeration
+
+| Derived effect | Disposition |
+|---|---|
+| **Which node's handler runs** | Changed by design: the target's if it has one, otherwise the nearest ancestor with one. Behaviour-preserving for the gallery, where every handler is on a Button that is itself the resolved target |
+| **A widget with a handler and no Button data** | Now dispatches. This is not a new authored surface — `wasamoc check`, `lower`, `emit` and the IR loader already accepted and attached it (start gate finding 2) — it is the runtime half arriving |
+| **A Button-family widget with no handler at all** | Now transparent to propagation instead of terminal. Pre-T3 it reached `enqueue_signal` unconditionally, which was a no-op with no listeners; post-T3 the walk continues past it |
+| **A disabled Button-family widget** | Suppresses its own dispatch and does **not** consume (`docs/dsl_spec.md` §4.8 / §4.19). Its occlusion is unchanged: it is still the resolved target, so nothing beneath it is reachable |
+| **The synchronous reactive drain inside a handler** | A handler's state write drains its effects synchronously at zero batch depth (`reactive::Signal::set`), so a conditional or `for` effect can rebuild or remove subtrees **during** dispatch. Handled structurally rather than defended against: the chain is captured before the first handler runs, the inline bodies are cloned into the snapshot, and the node is never dereferenced after the native closure is entered. Consumption is what makes the ancestor half unreachable — the walk returns at the first node that runs anything, so no ancestor is ever visited after user code has run |
+| **`update_hover` after `hit_test_click` in the same message arm** | Untouched, and now runs against a tree the click may have structurally rebuilt but **not** re-laid-out (the drain's layout phase is at the message-loop boundary, below). A rebuilt-but-unarranged node has no `arranged_rect`, so it is not "inside" anything and the hover walk skips it — the T1/T2 intended failure, not a new one. Recorded for T4, which owns hover |
+| **Registry teardown on subtree removal** | `widget_destroy` → `for_each_ptr` → `registry::remove_for_widget` severs registrations with the subtree. This is what makes step 3's re-query correct rather than merely safe: a node removed by its own handler enqueues nothing. Pinned by F4 |
+| **`ButtonData.label_size`'s three-point write** ([constraints §4](../requirements/constraints.md)) | Not touched. T3 writes no label geometry |
+| **Composition geometry writes** | Untouched. `SetOffset` / `SetSize` remain the same six calls inside `sync_visuals`, so DD-M4-P1-002's single-pass audit is preserved |
+| **The reactive drain's position** | Unchanged, deliberately — see the reconciliation below |
+
+**The drain-boundary reconciliation** (T2's carry-forward, and this
+task's by the plan). DD-M4-P2-001 asks for **one drain per dispatch,
+after propagation completes**; T2 measured that the production call site
+is the line after `DispatchMessageW` in `wasamo_runtime::run`, i.e. one
+drain per *message*, not per dispatch. **Resolution: the drain stays
+where it is, and the ADR's requirement is met without moving it.**
+
+- The requirement's stated purpose is that "an event must not be
+  delivered into a tree the same event has already invalidated"
+  ([architecture.md §13.2](../../../../docs/architecture.md)). What
+  would violate it is a drain *between propagation steps*. There is
+  none: the walk contains no drain point, and it ends at the first node
+  that runs anything.
+- One drain per message is a *superset* of one drain per dispatch. A
+  message that dispatched nothing leaves the queue empty and no window
+  dirty, so its drain is a no-op; a message that dispatched runs exactly
+  one drain, after `hit_test_click` has returned.
+- **Moving the drain into the `WM_LBUTTONUP` arm was considered and
+  rejected on a concrete hazard, not on cost.** Phase 3 of the drain
+  invokes host callbacks, and `abi_spec` §6 permits a callback to "freely
+  call back into the ABI" — including `wasamo_window_destroy`. Inside
+  `wnd_proc` the runtime holds a `&mut WindowState` derived from the
+  window's user data and returns through it; draining there would let a
+  host callback free that allocation mid-message and re-enter
+  `DestroyWindow` from inside a message handler. The message-loop
+  boundary is the point at which nothing is borrowed, which is what
+  makes it the safe point abi_spec §6 names.
+- **The consequence for fixtures is unchanged and stays a carry-forward**:
+  a synthesised `SendMessageW` observes an inline handler's synchronous
+  writes but not the layout phase or a host listener; a fixture that
+  needs either pumps `run`. Both this file's fixtures and
+  `hit_resolution_integration.rs` do so through the same helper.
+
+No divergence to record against the normative text: "the reactive drain
+runs once, after the walk completes" is true of the landed runtime.
+`docs/dsl_spec.md` §4.19's sentence that a handler's writes are
+"propagated to quiescence **once, after propagation completes**" is also
+satisfied, but for a reason worth stating so T13 does not re-derive it:
+the propagation that could still be in flight is empty, because the
+handler that wrote the state consumed the event. The reactive
+propagation itself is synchronous **inside** the handler, per
+[constraints §3](../requirements/constraints.md)'s non-batched drain
+contract, which this task does not change.
+
+#### #3 — Parallel-data sync
+
+The consumption decision and the invocation are the derived pair, and
+they are made **one value taken once per node**: `click_disposition_for`
+returns `ClickDisposition`, `hit_test_click` branches on it, and
+`run_clicked_handlers` receives the same `ClickedHandlers` it carries.
+Neither side re-derives "does this node have a handler" from the live
+node, so they cannot be edited apart. `ClickedHandlers` is non-empty by
+construction — the `NoHandler` variant exists so an empty snapshot is
+unrepresentable.
+
+The `inline` field is the second parallel-data point and is the same
+shape: it is a **clone taken at snapshot time**, not a re-read, because
+the node it came from may not exist by the time it is evaluated.
+
+#### #4 — Branch tests, each fired directly
+
+| Authored arm | Test that fires it |
+|---|---|
+| Generic dispatch: a non-Button target's handler runs | `a_click_on_a_widget_without_a_handler_stays_silent_while_a_click_on_a_sibling_with_one_runs_it` (positive leg) |
+| No handler on the chain at all ⇒ nothing runs | the same test's negative leg |
+| The ancestor walk: target runs nothing, ancestor does | `an_ancestor_handler_runs_only_until_a_nested_widget_gets_one_of_its_own` (first leg) |
+| Consumption ends the walk | the same test's second leg (DD-M4-P2-001's named control) |
+| Disabled Button-family: suppress **and** do not consume | `a_disabled_button_suppresses_its_own_handler_without_stopping_propagation` (difference leg) |
+| An enabled Button in the same position consumes | the same test's agreement leg |
+| A handler destroying its own node mid-dispatch | `a_handler_that_removes_its_own_widget_consumes_the_click_and_leaves_no_registration_to_fire` |
+| The host-listener producer counts for consumption | `a_host_signal_listener_on_a_non_button_widget_consumes_the_walk_until_disconnected` (first leg) |
+| …and stops counting once disconnected | the same test's agreement leg |
+| Chain order: target first, root last | `hit::tests::the_dispatch_chain_starts_at_the_target_and_ends_at_the_root` |
+| A target that is the root | `hit::tests::a_target_that_is_the_root_yields_only_the_root` |
+
+DD-V-029's named red-test obligation is **not** triggered: no rounding,
+unit-conversion or boundary-condition branch was added (edge containment
+stayed T2's). The witnesses below are the trap-#4 / #6 artifact.
+
+#### #6 — Deterministic-failure disposition and the mutation witnesses
+
+**The deterministic failure this task found is the debug abort in start
+gate finding 1**, and it is dispositioned rather than avoided. A
+`Button` carrying a `WidgetNode` child — a shape `wasamoc check`
+accepts, the IR loader builds, and
+[dsl_spec.md §4.16](../../../../docs/dsl_spec.md) shows as an
+example — aborts the process during `wasamo_load_ui` in any build with
+`debug_assertions`, because `build_layout_tree` maps Button to a
+childless `LayoutNode` and T2's `sync_visuals` child-count assertion
+then fires. Root cause named, minimal repro run (both profiles), and
+the disposition is:
+
+- **The assertion is correct and stays.** It says "a `WidgetNode` exists
+  that layout does not know about", which is exactly true here.
+- **The defect is in the DSL surface, not in routing.** Either the
+  layout tree must include Button children (which opens layout —
+  explicitly out of this phase, DD-M4-P2-002 §Minimum hit target) or
+  `wasamoc check` and the loader must reject a widget child on a
+  Button-family kind (a checker admission rule, the T8 lane) and §4.16's
+  example must be corrected. T3 does neither; it records both and routes
+  the choice to the owner.
+- **The plan's T3 evidence item derived from it is replaced, not
+  dropped** — see the plan revision below and carry-forward CF-1.
+
+**Six mutation witnesses.** Every one was applied with an edit, **read
+back from the file** to confirm the mutation was actually present before
+the run (the T2 corrective), run, then reverted and the revert confirmed
+by re-reading. No failure was re-rolled; the suite went red only where a
+mutation was deliberately introduced.
+
+| Witness | Mutation | Went red | Reading |
+|---|---|---|---|
+| **W1 — the disabled-Button suppression** | `click_disposition_for`'s `Suppressed` early return deleted | F3 alone, on "a disabled Button must suppress its own `clicked` dispatch (§4.8)" | Without the check the disabled Button's own handler runs — the §4.8 half |
+| **W2 — suppression consumes** | `ClickDisposition::Suppressed => return` instead of `continue` | F3 alone, on "a disabled Button must not stop propagation … (§4.19)" | The two halves of §4.8's sentence are pinned by two different assertions on the same click, and each has its own witness |
+| **W3 — handling no longer consumes** | the `Handlers` arm `continue`s after running | **Four**: F2 (DD-M4-P2-001's consumption control), F3 (agreement leg), F4 ("the walk must have consumed at the removed Button"), F5 (host listener) | Consumption is the rule the most evidence stands on. F4 reddening *without crashing* is itself informative: the walk continued past a node destroyed mid-dispatch and the ancestor pointer was still valid, because the chain was captured before dispatch |
+| **W4 — chain order reversed** | `dispatch_chain` builds root-first | The unit test `the_dispatch_chain_starts_at_the_target_and_ends_at_the_root`, **and** F2 / F3 / F4 / F5 — each on "the nested widget's own handler must run exactly once" | The order is load-bearing at both levels: the pure test names the property, the fixtures show the consequence (the root's handler would consume before the widget the user touched) |
+| **W5 — the pre-T3 Button-family gate restored** | `click_disposition_for` returns `NoHandler` for any non-Button node | F1 (the central claim), F2, F3, F5 | This is the before-state of this very task, reconstructed: a `Box`'s handler cannot fire. F1's message names it exactly |
+| **W6 — the host listener dropped from the predicate** | the consumption test drops `has_host_listener` | F5 alone, on "a connected host listener on the Box must fire exactly once" | The third producer is pinned separately from the other two, so the predicate cannot silently lose one |
+
+Suite state after all reverts, on the post-commit tree:
+`cargo fmt --all -- --check` zero exit, `git diff --check` clean,
+`cargo test --workspace --no-fail-fast` **42 binaries, 1,026 passed, 0
+failed, 0 skipped**. T2's baseline was 1,019; the seven added are
+`hit.rs`'s two `dispatch_chain` unit tests and
+`event_routing_integration.rs`'s five fixtures. Skip 0 means the
+Compositor was available, so the integration assertions actually ran.
+The release clean rebuild is the retrospective's item 3.
+
+#### #5 — Carry-forward
+
+| Constraint | Evidence | Placement | Re-trigger criterion |
+|---|---|---|---|
+| **CF-1 — a `Button` with a `WidgetNode` child aborts a debug build at load and renders nothing in release.** The shape is accepted by `wasamoc check`, built by the loader, shown in `dsl_spec.md` §4.16, and unknown to layout | Start gate finding 1; measured in both profiles | `carry-forward` → recorded in [plan.md](./plan.md) §T3 (replacing the evidence item it invalidates) and §T8, and raised to the owner | **T8**, which owns Button-family admission rules, unless the owner routes it elsewhere. Also **T13**: §4.16's example is a spec/implementation divergence to reconcile at the Moment-2 sync |
+| **CF-2 — a literal `enabled: false` on a plain `Button` is silently dropped.** `ir_loader.rs`'s `"Button"` arm never reads an `enabled` prop; its `"ToggleButton"` sibling does. Measured: literal `Button` → `enabled == true`, state-bound `Button` → `false`, literal `ToggleButton` → `false` | The probe above, and F3, which had to bind `enabled` to a state to build a disabled Button at all | `carry-forward` → [plan.md](./plan.md) §T8 | **T8.** Any task asserting Button's `enabled` contract from `.ui` hits it first |
+| **CF-3 — `clicked` needs no checker widening; only reject-side bounding.** `wasamoc check` has no per-kind signal admission rule, so DD-M4-P2-005's "the change is in `check` … and in the runtime's dispatch" is half already true | Start gate finding 2; F1 is the runtime half landing | `carry-forward` → [plan.md](./plan.md) §T8 | **T8**, whose reject tests are now the whole of its `clicked` work |
+| **CF-4 — `hit_test_click` entered on a subtree gets neither ancestors nor ancestor clip bounds.** T2 recorded the clip half; propagation now has the same boundary, and the three fixtures that enter on a Button rely on it being a no-op | The audit table above; `hit_test_click`'s doc comment | `carry-forward` | **T7**'s modal scopes, and any task that resolves from other than the window root |
+| **CF-5 — a native `set_clicked` closure that destroys its own node frees the closure it is running inside.** Pre-existing, not introduced here; the inline and host producers are both safe by construction | `set_clicked`'s doc comment | `carry-forward` | Any task that installs a native closure with structural side effects — no production caller exists today |
+| **CF-6 — the registry keys widgets by raw pointer, so a freed node's address could in principle be reused before the enqueue step re-queries it.** Pre-existing in the registry design; T3 relies on the re-query for CF-safe behaviour | F4 pins the intended outcome; the ABA window is not reachable from any current path | `carry-forward` | Any task that allocates a widget inside a handler's synchronous drain |
+
+#### #7 — Re-decided at close
+
+Still **not applicable**. T3 added no Composition write, no visual and no
+host launch, and the gallery has neither a non-Button handler nor an
+ancestor handler until T10 — a frame captured now would be produced
+identically by the pre- and post-T3 dispatch, which is the definition of
+a non-discriminating frame. The evidence that distinguishes them is
+state read back through the production message path, which is what the
+five fixtures do.
+
+#### Re-audit of the whole task list
+
+Per [plan.md](./plan.md) §Cross-task obligations, the full list was
+re-read at this close gate rather than only T3's item.
+
+- **T4** — hover is still the whole-tree walk with T2's geometry.
+  `resolve_topmost` is the function to call, and `hit_test_click`'s
+  chain walk is the shape to mirror if hover ever needs an ancestor
+  notion (it does not: hover is a target property). New for T4: the
+  message arm now runs `update_hover` after a click that may have
+  rebuilt the tree without re-arranging it (§2 above).
+- **T5** — the key path is the same walk with a different starting node
+  and a different signal name. `dispatch_chain` is reusable as-is; what
+  T5 adds is the focused-node entry and the `DefWindowProc` fallthrough
+  for an unconsumed key. `hit_test_click`'s structure deliberately keeps
+  the "did anything run" answer local to the walk, which is the value
+  T5's arm needs to decide whether to return `LRESULT(0)` or fall
+  through.
+- **T6** — unaffected; no IR or checker surface changed.
+- **T7** — CF-4 is now load-bearing for modal scopes: a scope that
+  resolves from other than the window root gets no ancestor chain above
+  its entry point.
+- **T8** — **three items land here** (CF-1, CF-2, CF-3). Its `clicked`
+  work is smaller than the plan predicted (no widening needed) and its
+  Button-family surface is larger (two loader defects). Recorded in the
+  plan's T8 section.
+- **T9** — per-item handlers ride this walk unchanged; the registration
+  lifecycle F4 exercises (removal severs registrations before the
+  enqueue) is the same mechanism T9's subtree-removal enumeration will
+  have to state.
+- **T10** — the gallery's first ancestor handler and first non-Button
+  handler will be the first production consumers of everything in this
+  task.
+- **T11** — touch will enter the same `hit_test_click`, so the walk is
+  message-family-agnostic already; only the DIP conversion seam is
+  shared, as DD-M4-P2-001 says.
+- **T12 / T13** — T13's re-verification list gains the §4.16 divergence
+  (CF-1). The drain wording in
+  [architecture.md §13.2](../../../../docs/architecture.md) is
+  **not** a divergence — see the reconciliation in §2 — but the reason
+  is recorded there so T13 checks it rather than re-deriving it.
+- **Cross-task obligation "no new ABI function"** — held, and now
+  positively evidenced: `wasamo_signal_connect` already admitted any
+  widget and any signal name, so the generic host path needed nothing
+  added.
+
+#### Verification means
+
+The five fixtures reuse `tests/common/mod.rs`'s skip guard **unchanged**,
+so the standing obligation to verify a newly authored guard on an
+environment that lacks the capability
+([CLAUDE.md §Testing rules](../../../../CLAUDE.md)) is discharged by the
+existing helper; `tests/common/mod.rs` was not touched, so the
+`0x80070005` two-conjunct check
+([constraints §8](../requirements/constraints.md)) is intact.
+
+No fixture changes scale, so none of them touches the DPI-fixture
+environment beyond normalising to 96 DPI at a 360x240 physical client —
+below the 480x320 ceiling M4-Phase 1 T8 settled on
+([constraints §10](../requirements/constraints.md)) — and each asserts
+both the realised extent and the committed scale rather than assuming
+the developer's monitor (Phase 1 F-47). Each derives its click
+coordinates from the scale the runtime **committed**, not from the
+constant it requested.
+
+**What these fixtures cannot show, stated rather than implied.** They run
+at scale 1, so they do not re-exercise the pointer conversion T2's
+non-unit-scale fixture owns; the walk is geometry-independent, and that
+fixture is unchanged and still green. The ancestor legs are one hop —
+the multi-level prefix order is pinned by `dispatch_chain`'s unit test
+rather than by a three-level fixture, which is the division of labour
+DD-M4-P2-002 set up when it made resolution pure logic.
