@@ -117,6 +117,30 @@ pub(crate) fn resolve_topmost<T: HitTree>(root: &T, point: DipPoint) -> Option<V
     }
 }
 
+/// The dispatch chain for a resolved hit-test target: the target's own
+/// path, then each ancestor's path in turn, ending with the root's (`[]`)
+/// — **target first, root last**. Examples: `[1, 0, 2]` yields
+/// `[[1,0,2], [1,0], [1], []]`; `[]` (the target is the root) yields
+/// `[[]]`.
+///
+/// **No second tree traversal.** DD-M4-P2-001's ancestor chain is exactly
+/// the prefixes of the path [`resolve_topmost`] already computed: every
+/// ancestor of the node at `target_path` is reached by dropping indices off
+/// the *end* of `target_path`, so this function walks the path itself, not
+/// the tree, from longest prefix (the target) down to the empty prefix
+/// (the root).
+///
+/// **Order is load-bearing.** DD-M4-P2-001 "target then bubble" fires the
+/// event at the target and walks *upward* until a handler runs, so a
+/// caller must visit this vec front-to-back — reversing it would dispatch
+/// the root before the widget the user actually touched.
+pub(crate) fn dispatch_chain(target_path: &[usize]) -> Vec<Vec<usize>> {
+    (0..=target_path.len())
+        .rev()
+        .map(|len| target_path[..len].to_vec())
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -365,5 +389,21 @@ mod tests {
             vec![TestNode::leaf(rect(0.0, 0.0, 5.0, 5.0))],
         );
         assert_eq!(resolve_topmost(&tree, pt(500.0, 500.0)), None);
+    }
+
+    #[test]
+    fn the_dispatch_chain_starts_at_the_target_and_ends_at_the_root() {
+        assert_eq!(
+            dispatch_chain(&[1, 0, 2]),
+            vec![vec![1, 0, 2], vec![1, 0], vec![1], Vec::new()],
+            "order is load-bearing: DD-M4-P2-001 fires the event at the target and \
+             walks upward until a handler runs, so a caller iterating this vec \
+             front-to-back must see the target before any ancestor and the root last"
+        );
+    }
+
+    #[test]
+    fn a_target_that_is_the_root_yields_only_the_root() {
+        assert_eq!(dispatch_chain(&[]), vec![Vec::<usize>::new()]);
     }
 }
