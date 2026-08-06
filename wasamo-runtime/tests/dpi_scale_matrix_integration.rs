@@ -11,8 +11,11 @@
 //!   the OS's number and the handler's `wParam` is what moves it.
 //! - `dip_layout_is_invariant_while_every_visual_moves_by_the_ratio` — the
 //!   positive control, over 125% / 150% / 200% **and one non-standard DPI**.
-//! - `a_stale_descendant_scale_still_hit_tests_where_the_widget_is` — the
-//!   one-divisor traversal property (T5 finding F-37).
+//! - `a_stale_descendant_scale_still_hit_tests_where_the_widget_is` — pinned
+//!   the one-divisor traversal property (T5 finding F-37) pre-M4-Phase 2 T2;
+//!   post-T2 it demonstrates the stronger structural replacement (hit
+//!   geometry never reads the Visual or the per-node scale at all — see the
+//!   test's own doc comment).
 //!
 //! # Three stated limits, recorded rather than elided
 //!
@@ -792,25 +795,40 @@ unsafe fn read_first_label_surface(window: *mut ffi::WasamoWindow) -> (i32, i32)
     surface_pixels(&root.children[0].children[0])
 }
 
-/// **The one-divisor traversal property** (T5 finding F-37).
+/// **Post-M4-Phase 2 T2: hit geometry no longer comes from the Visual at
+/// all** (DD-M4-P2-002 "H2 deletes the row").
 ///
-/// A hit-test traversal divides every `visual_rect` readback by the
-/// *traversal root's* scale, not by each node's own, so a descendant whose
-/// cached geometry scale is stale still resolves to the rectangle it is
-/// actually composited at. Per-node division would place it at
-/// `physical ÷ its own scale`, which is the composited position multiplied by
-/// the window's factor — a different rectangle.
+/// Before T2 this test pinned *the one-divisor traversal property* (T5
+/// finding F-37): a hit-test traversal divided every `visual_rect` readback
+/// by the *traversal root's* scale, not by each node's own, so a descendant
+/// whose cached geometry scale was stale still resolved to the rectangle it
+/// was actually composited at — the readback's per-node division would
+/// otherwise have placed it at `physical ÷ its own scale`, a different
+/// rectangle.
 ///
-/// The state is reached through a seam because no legitimate path leaves one:
-/// `commit_scale_recursive` writes the whole subtree, and the incremental
-/// attach paths F-32 enumerated leave a fresh node with no geometry to
-/// hit-test at all. The stale value is the **constructor identity**, which is
-/// the value those paths really would leave behind.
+/// T2 deleted that readback (`visual_rect_dip`) and its divisor entirely.
+/// Hit-testing now reads `arranged_rect` — the absolute DIP rectangle
+/// `sync_visuals` writes once, during layout — and never reads `self.scale`
+/// or the Visual on the hit-test path. The property this test now
+/// demonstrates is therefore the **stronger, structural** form of the same
+/// guarantee: poking a node's cached geometry scale
+/// (`__set_geometry_scale_dpi_for_test`) cannot move its hit rectangle *at
+/// all*, because nothing hit-testing reads is a function of that field any
+/// more. There is no "right" divisor to get right; the test stays green
+/// because the mechanism it used to exercise no longer exists on this path.
 ///
-/// The click is driven as a real `WM_LBUTTONUP` so the pointer crosses the
-/// inbound seam in `wnd_proc` — divided by the *window's* scale — rather than
-/// being handed to `hit_test_click` already in DIP. That is the mixture the
-/// property is about.
+/// The stale-scale state is still reached through a seam because no
+/// legitimate path leaves one: `commit_scale_recursive` writes the whole
+/// subtree, and the incremental attach paths F-32 enumerated leave a fresh
+/// node with no geometry to hit-test at all. The stale value is the
+/// **constructor identity**, which is the value those paths really would
+/// leave behind.
+///
+/// The click is still driven as a real `WM_LBUTTONUP` so the pointer crosses
+/// the inbound seam in `wnd_proc` — divided by the *window's* scale — rather
+/// than being handed to `hit_test_click` already in DIP; that conversion is
+/// unchanged by T2 and stays exercised even though the per-node divisor this
+/// test was written to measure is gone.
 #[test]
 fn a_stale_descendant_scale_still_hit_tests_where_the_widget_is() {
     run_on_owning_runtime_thread_or_skip("mixed-scale hit test", move || {
@@ -884,23 +902,28 @@ fn a_stale_descendant_scale_still_hit_tests_where_the_widget_is() {
             );
             assert!(
                 click_dip_y < stale_top_dip,
-                "the fixture has stopped discriminating: the click at {click_dip_y} \
-                 DIP must fall inside the button's real DIP rectangle and outside \
-                 the {stale_top_dip}-DIP top edge per-node division would compute. \
-                 A header tall enough to push the button down is what buys this."
+                "the fixture has stopped discriminating: the click at {click_dip_y} DIP \
+                 must fall inside the button's real DIP rectangle (arranged_rect), at a \
+                 value distinct from {stale_top_dip} — the button's *physical* top-edge \
+                 value, which is what a reading that skipped DIP conversion entirely \
+                 would produce. A header tall enough to push the button down is what \
+                 keeps the two apart; if they ever coincide this test can no longer tell \
+                 a correctly-converted click from a physical-value-as-DIP one."
             );
             assert_eq!(
                 control_after - control_before,
                 1,
                 "control: with no stale cache the click point resolves to the \
-                 button, so the negative case below is about the divisor and not \
-                 about the coordinates"
+                 button, so the negative case below is about the geometry-scale seam \
+                 and not about the coordinates"
             );
             assert_eq!(
                 stale_after - control_after,
                 1,
                 "a descendant left at the constructor identity must still hit-test \
-                 where it is composited — the traversal divides by the root's scale"
+                 where it is composited: hit-testing reads arranged_rect, which this \
+                 seam never touches, so poking the node's geometry scale has no way to \
+                 move its hit rectangle"
             );
         }
     });

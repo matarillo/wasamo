@@ -28,10 +28,6 @@ use wasamo_runtime::ffi;
 use wasamo_runtime::ir_loader::{build_widget_tree, parse_ir};
 use wasamo_runtime::WidgetNode;
 
-use windows::core::Interface;
-use windows::Foundation::Numerics::{Vector2, Vector3};
-use windows::UI::Composition::Visual;
-
 const PROP_BUTTON_ENABLED: u32 = 5;
 
 fn lower_ui_to_ir(src: &str) -> String {
@@ -146,24 +142,19 @@ fn bool_binding_propagates_state_write_through_inline_handler_to_widget_property
     // The Button is the component's root widget.
     let button: &mut WidgetNode = built.root.as_mut();
 
-    // `build_widget_tree` does not run a layout pass; `WidgetNode::button`
-    // leaves the background SpriteVisual sized (0,0). Pin it so
-    // `hit_test_click` lands inside — same workaround `button_enabled.rs`
-    // uses for the same reason.
-    let bg_vis: Visual = button
-        .visual
-        .cast()
-        .expect("cast bg SpriteVisual to Visual");
-    bg_vis
-        .SetOffset(Vector3 {
-            X: 0.0,
-            Y: 0.0,
-            Z: 0.0,
-        })
-        .expect("set bg offset");
-    bg_vis
-        .SetSize(Vector2 { X: 100.0, Y: 40.0 })
-        .expect("set bg size");
+    // `build_widget_tree` does not run a layout pass, so the Button has no
+    // `arranged_rect` yet — the layout-derived rectangle M4-Phase 2 T2 makes
+    // `hit_test_click`'s geometry source (DD-M4-P2-002). Lay it out as the
+    // window root (same shape `button_enabled.rs` uses) and read the click
+    // point back from the rectangle layout actually produced, rather than
+    // pinning the Visual directly the way this test did pre-T2.
+    button
+        .run_layout_as_window_root(100.0, 40.0)
+        .expect("run_layout_as_window_root failed");
+    let rect = button
+        .__arranged_rect_for_test()
+        .expect("a laid-out Button must have an arranged rectangle");
+    let (click_x, click_y) = (rect.x + rect.width / 2.0, rect.y + rect.height / 2.0);
 
     let widget_ptr = button as *mut WidgetNode as *mut ffi::WasamoWidget;
 
@@ -177,7 +168,7 @@ fn bool_binding_propagates_state_write_through_inline_handler_to_widget_property
     );
 
     // Click → inline handler `root.ready = false` runs synchronously inside
-    // `hit_test_click_inner` against `HandlerEvalContext`. `Signal<bool>::
+    // `hit_test_click` against `HandlerEvalContext`. `Signal<bool>::
     // set` then drains the dirty binding effect immediately (BATCH_DEPTH ==
     // 0), and the binding effect calls `widget_write_property_bool(
     // PROP_BUTTON_ENABLED, false)` on the same Button. The closure in the
@@ -187,7 +178,7 @@ fn bool_binding_propagates_state_write_through_inline_handler_to_widget_property
     // `hit_test_click` returns, the widget reads back as disabled — the
     // end-to-end `.ui → load → click → state → bound widget property`
     // chain ADR §Verification item 3 calls for.
-    button.hit_test_click(50.0, 20.0);
+    button.hit_test_click(click_x, click_y);
 
     assert!(
         !unsafe { read_bool_property(widget_ptr, PROP_BUTTON_ENABLED) },

@@ -12,6 +12,9 @@ mod emit;
 mod focus_core;
 mod focus_spike;
 pub mod handler;
+// M4-Phase 2 T2: pure-logic hit resolution (DD-M4-P2-002). No Compositor,
+// no windows types — see hit.rs's module doc.
+mod hit;
 pub mod ir_loader;
 mod layout;
 pub(crate) mod reactive;
