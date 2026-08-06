@@ -1019,6 +1019,17 @@ impl WidgetNode {
     }
 
     /// Register a callback invoked when this Button-family widget is clicked.
+    ///
+    /// **Residual, not introduced by M4-Phase 2 T3.** `clicked_fn` is a
+    /// `Box<dyn Fn()>` stored inline on this node and is not `Clone`, so
+    /// click dispatch cannot snapshot it out the way it snapshots inline DSL
+    /// handler expressions before running anything (see
+    /// `run_clicked_handlers` in `hit_test_click`'s neighbourhood). If the
+    /// closure registered here destroys this very node — e.g. it detaches
+    /// the node and drops the owning `Box<WidgetNode>` — it frees the
+    /// `Box<dyn Fn()>` it is executing inside. That is a pre-existing
+    /// property of this Rust-native test/example API, not something this
+    /// task fixes.
     pub fn set_clicked<F: Fn() + 'static>(&mut self, f: F) {
         if let Some(btn) = self.button_data_mut() {
             btn.clicked_fn = Some(Box::new(f));
@@ -1027,6 +1038,18 @@ impl WidgetNode {
 
     fn button_data_mut(&mut self) -> Option<&mut ButtonData> {
         match &mut self.data {
+            WidgetData::Button(btn) | WidgetData::ToggleButton(btn) => Some(btn),
+            _ => None,
+        }
+    }
+
+    /// Immutable counterpart to [`Self::button_data_mut`]. M4-Phase 2 T3's
+    /// read-only click dispositioning (`click_disposition_for`) needs to
+    /// inspect a Button-family node's `enabled` flag and `clicked_fn`
+    /// presence without taking a mutable borrow, so that peeking at every
+    /// node on the dispatch chain cannot itself conflict with anything.
+    fn button_data(&self) -> Option<&ButtonData> {
+        match &self.data {
             WidgetData::Button(btn) | WidgetData::ToggleButton(btn) => Some(btn),
             _ => None,
         }
@@ -1392,9 +1415,12 @@ impl WidgetNode {
 
     // ── Hit testing ───────────────────────────────────────────────────────────
 
-    /// Resolve the topmost widget under `(x, y)` and, if it is an enabled
-    /// Button-family widget, fire its click dispatch (DD-M4-P2-002 "T2 over
-    /// T1" / "`Button.clicked` — generalised, not duplicated").
+    /// Resolve the topmost widget under `(x, y)` and dispatch its `clicked`
+    /// event: the event fires at the resolved target and then walks its
+    /// ancestors, stopping at the first node that actually runs a handler
+    /// (DD-M4-P2-001 "target then bubble; a handler that runs consumes the
+    /// event"; DD-M4-P2-002 "`clicked` is one signal on every widget", no
+    /// longer Button-family-only).
     ///
     /// **`(x, y)` are DIP** (M4-Phase 1, DD-M4-P1-002 option H2): the window
     /// procedure divides the pointer message's physical coordinates by the
@@ -1418,75 +1444,56 @@ impl WidgetNode {
             return;
         };
 
-        // Navigate to the resolved target by its child-index path
-        // (topmost-first reverse walk, so this is the one node that won).
-        let mut target: &mut WidgetNode = self;
-        for index in path {
-            target = target.children[index].as_mut();
+        // Resolve every node of the dispatch chain to a raw pointer up
+        // front, before any handler runs. DD-M4-P2-001 "the ancestor chain
+        // is captured when the event is dispatched" (docs/architecture.md
+        // §13.2): a handler's state write can rebuild or remove subtrees
+        // synchronously (see the safety note on `run_clicked_handlers`
+        // below), so resolving an ancestor lazily — after an earlier step
+        // has already run user code — could walk into a tree the same
+        // event has already invalidated. `hit::dispatch_chain` needs no
+        // second tree walk to produce this: every ancestor's path is a
+        // prefix of the path `resolve_topmost` already returned.
+        let mut chain: Vec<*mut WidgetNode> = Vec::new();
+        for node_path in hit::dispatch_chain(&path) {
+            // Reborrow `self` fresh for each node_path instead of moving it,
+            // so the outer loop can walk down from the root again for the
+            // next ancestor.
+            let mut node: &mut WidgetNode = &mut *self;
+            for index in node_path {
+                node = node.children[index].as_mut();
+            }
+            chain.push(node as *mut WidgetNode);
         }
 
-        // We need a stable pointer to the target for the registry signal
-        // lookup before we re-borrow its `data` mutably below.
-        let widget_ptr: *mut WidgetNode = target as *mut WidgetNode;
-
-        let Some(btn) = target.button_data_mut() else {
-            // E1 (DD-M4-P2-002): every widget with a visual is a hit-test
-            // candidate, but only a Button-family target dispatches here.
-            // Ancestor bubbling for non-Button targets is T3's — this task
-            // must not add it.
-            return;
-        };
-        // Phase 1 `Button.enabled` (DD-M3-P1-005): suppress click dispatch
-        // when disabled — neither the host callback nor the inline `clicked`
-        // handler fires, and no "clicked" signal is enqueued. Under the
-        // pre-T2 fire-every-Button recursion a disabled Button still let
-        // hit-testing descend into its children; single-target resolution
-        // makes a disabled Button a target that **stops the walk** instead —
-        // it occludes whatever is beneath it and dispatches nothing
-        // (DD-M4-P2-002 "Consequence for hit-test eligibility").
-        if !btn.enabled {
-            return;
-        }
-        if let Some(ref f) = btn.clicked_fn {
-            f();
-        }
-        // DD-M2-P3-002 Option B: evaluate inline handlers first, then
-        // enqueue host listeners. Inline path is separate from the
-        // host listener list and is not a disconnectable token.
-        // Safety: inline_handlers borrows are released before
-        // enqueue_signal, which does not touch this node.
-        let handler_exprs: Vec<HandlerExpr> = {
-            // Safety: widget_ptr aliases target; we collect clones before
-            // dispatch so no aliased mutable borrow is live during eval.
-            unsafe { &*widget_ptr }
-                .inline_handlers
-                .iter()
-                .filter(|(sig, _)| sig == "clicked")
-                .map(|(_, expr)| expr.clone())
-                .collect()
-        };
-        // DD-M2-P6-006: dispatch handler bodies against the
-        // SignalRegistry installed by the IR loader. If no registry
-        // is active (e.g. tests building widgets directly) fall back
-        // to a no-op context — the evaluator runs but property
-        // reads/writes report "unknown property".
-        let registry = crate::reactive::active_registry();
-        for expr in &handler_exprs {
-            // DD-M2-P3-003: catch_unwind wrapper logs errors and
-            // continues the event loop; location is a coarse
-            // identifier (Phase 6 supplies the component name prefix).
-            if let Some(reg) = registry.as_deref() {
-                let mut ctx = crate::reactive::HandlerEvalContext::new(reg);
-                handler::invoke_handler(expr, &mut ctx, "?.clicked");
-            } else {
-                let mut ctx = NullEvalContext;
-                handler::invoke_handler(expr, &mut ctx, "?.clicked");
+        for widget_ptr in chain {
+            // Safety: every pointer in `chain` was resolved above, before
+            // any handler in this dispatch ran, so it is still live the
+            // first time the walk reaches it. No "is this node still
+            // attached?" check is needed beyond that: the loop returns as
+            // soon as a node actually runs something (the `Handlers` arm
+            // below), so no ancestor is ever visited after user code has
+            // run — a defensive re-check here would guard a branch this
+            // code path can never exercise.
+            match unsafe { click_disposition_for(widget_ptr) } {
+                // Phase 1 `Button.enabled` (DD-M3-P1-005), generalised by
+                // §4.19: a disabled Button-family widget still occludes
+                // whatever is beneath it — it is the resolved target or an
+                // ancestor of it, so it is on the chain regardless — but
+                // "the button suppresses click-handler dispatch... [and]
+                // does not stop propagation" (docs/dsl_spec.md §4.8), so
+                // the walk continues to its ancestor exactly as it would
+                // from a node with no handler at all (§4.19 "A disabled
+                // Button still occludes... Having run no handler, it also
+                // does not end propagation").
+                ClickDisposition::Suppressed => continue,
+                ClickDisposition::NoHandler => continue,
+                ClickDisposition::Handlers(handlers) => {
+                    run_clicked_handlers(widget_ptr, handlers);
+                    return;
+                }
             }
         }
-        // Route "clicked" through the C-ABI signal registry. The
-        // emission is queued and fires after the current call
-        // returns to wasamo_run's message-loop drain (abi_spec §6).
-        crate::emit::enqueue_signal(widget_ptr, "clicked", Vec::new());
     }
 
     /// Update hover/press state for all Button-family widgets based on mouse position.
@@ -2333,6 +2340,172 @@ impl WidgetNode {
             child.sync_visuals(child_computed, child_parent_abs, target)?;
         }
         Ok(())
+    }
+}
+
+// ── Click dispatch (M4-Phase 2 T3) ──────────────────────────────────────────
+
+/// What `hit_test_click` should do at one node of the captured dispatch
+/// chain, decided by [`click_disposition_for`] with no side effects.
+///
+/// **One snapshot, read at both the consumption check and the invocation
+/// site.** `hit_test_click` branches on this enum to decide whether to
+/// continue to the ancestor, and the `Handlers` arm carries everything
+/// `run_clicked_handlers` needs to actually run them. If those two
+/// decisions — "does this node consume the event?" and "what do I run?" —
+/// were derived independently from the node's live state instead of from
+/// one snapshot, they could drift: a node could consume the event without
+/// running anything, or run something without having been counted as
+/// consuming it.
+enum ClickDisposition {
+    /// A Button-family widget with `enabled == false`. It is on the
+    /// dispatch chain only because it was the hit-test target or an
+    /// ancestor of it, and it occludes as usual, but it runs nothing and
+    /// does not consume — the walk continues to its ancestor
+    /// (docs/dsl_spec.md §4.8, §4.19).
+    Suppressed,
+    /// None of the three `clicked` producers (native closure, inline DSL
+    /// handler, host signal listener) is present on this node. Runs
+    /// nothing and does not consume.
+    NoHandler,
+    /// At least one producer is present. Running any of them consumes the
+    /// event (DD-M4-P2-001 "a handler that runs consumes the event").
+    Handlers(ClickedHandlers),
+}
+
+/// The `clicked` producers found on one node, snapshotted before any of
+/// them runs.
+///
+/// **Non-empty by construction.** [`click_disposition_for`] returns
+/// [`ClickDisposition::NoHandler`] instead of an empty `ClickedHandlers`
+/// when no producer is present, so every value `run_clicked_handlers`
+/// receives has at least one thing to do.
+struct ClickedHandlers {
+    /// `ButtonData::clicked_fn` is present (Button-family only — the
+    /// Rust-native `WidgetNode::set_clicked` API).
+    has_native: bool,
+    /// DSL inline `clicked` handler bodies, already cloned out of
+    /// `WidgetNode::inline_handlers` — any widget kind can carry these.
+    inline: Vec<HandlerExpr>,
+    /// `crate::registry::signal_tokens_for(widget_ptr, "clicked")` was
+    /// non-empty: a host listener is connected via `wasamo_signal_connect`
+    /// — any widget kind.
+    has_host_listener: bool,
+}
+
+/// Read-only: what would happen if the click walk reached `widget_ptr`,
+/// without running anything. `hit_test_click` calls this once per node of
+/// its captured dispatch chain, in walk order, strictly before any earlier
+/// node in that chain has run a handler — which is what makes it sound to
+/// dereference `widget_ptr` here even though the whole chain was captured
+/// before the walk began: nothing has had a chance to invalidate it yet.
+///
+/// # Safety
+/// `widget_ptr` must point to a still-live `WidgetNode`.
+unsafe fn click_disposition_for(widget_ptr: *mut WidgetNode) -> ClickDisposition {
+    // Safety: see the function doc comment; the caller's dispatch-order
+    // invariant (no handler has run yet) is what makes this sound.
+    let node = unsafe { &*widget_ptr };
+
+    // Suppression is checked ahead of the producer scan: a disabled
+    // Button-family node dispatches nothing even if it happens to carry a
+    // native, inline, or host handler (docs/dsl_spec.md §4.8 "the button
+    // suppresses click-handler dispatch"), so its own handlers must never
+    // reach `ClickDisposition::Handlers`.
+    if let Some(false) = node.button_data().map(|btn| btn.enabled) {
+        return ClickDisposition::Suppressed;
+    }
+
+    let has_native = node
+        .button_data()
+        .is_some_and(|btn| btn.clicked_fn.is_some());
+    let inline: Vec<HandlerExpr> = node
+        .inline_handlers
+        .iter()
+        .filter(|(sig, _)| sig == "clicked")
+        .map(|(_, expr)| expr.clone())
+        .collect();
+    let has_host_listener = !crate::registry::signal_tokens_for(widget_ptr, "clicked").is_empty();
+
+    if has_native || !inline.is_empty() || has_host_listener {
+        ClickDisposition::Handlers(ClickedHandlers {
+            has_native,
+            inline,
+            has_host_listener,
+        })
+    } else {
+        ClickDisposition::NoHandler
+    }
+}
+
+/// Run every producer in `handlers` at `widget_ptr`, in the DD-M2-P3-002
+/// Option B order this runtime has always used: the native closure first,
+/// then the inline DSL handlers, then the host signal enqueue.
+///
+/// **Why this is safe despite what user code can do to the node.** A
+/// handler's state write (`reactive::Signal::set`) drains its reactive
+/// effects **synchronously**, at zero batch depth — nothing in this call
+/// wraps the dispatch in `with_batched_writes` — so a conditional or `for`
+/// effect can rebuild or remove subtrees, including this very node's,
+/// *while this function is still running*. Every step below is built
+/// around that fact rather than against it:
+///
+/// 1. `handlers.inline` was already cloned out of the node by
+///    `click_disposition_for`, before any handler ran, so evaluating it
+///    here touches no widget memory at all.
+/// 2. `widget_ptr` is dereferenced one further time, immediately below, to
+///    fetch `clicked_fn` right before calling it — the last dereference of
+///    `widget_ptr` in this function. If that closure destroys its own
+///    node, it frees the `Box<dyn Fn()>` it is executing inside; that is
+///    `set_clicked`'s documented pre-existing residual, not something
+///    introduced here.
+/// 3. `enqueue_signal` takes `widget_ptr` **only to compare it** against
+///    registry entries (`std::ptr::eq`) — it never dereferences it. A node
+///    whose subtree was removed by an earlier step in this same function
+///    has already had its registrations severed (`widget_destroy` calls
+///    `registry::remove_for_widget`), so the comparison simply finds no
+///    tokens and enqueues nothing; it does not need `widget_ptr` to still
+///    point at live memory.
+///
+/// No node-still-attached check is needed here either, for the same reason
+/// `hit_test_click`'s walk needs none: this is the one node in the chain
+/// that runs anything, and nothing after it re-reads `widget_ptr`'s
+/// pointee.
+fn run_clicked_handlers(widget_ptr: *mut WidgetNode, handlers: ClickedHandlers) {
+    if handlers.has_native {
+        // Safety: see the doc comment above — this is the one remaining
+        // dereference of widget_ptr before user code (the closure call
+        // below) begins running.
+        let node = unsafe { &mut *widget_ptr };
+        if let Some(f) = node
+            .button_data_mut()
+            .and_then(|btn| btn.clicked_fn.as_ref())
+        {
+            f();
+        }
+    }
+    // DD-M2-P6-006: dispatch handler bodies against the SignalRegistry
+    // installed by the IR loader. If no registry is active (e.g. tests
+    // building widgets directly) fall back to a no-op context — the
+    // evaluator runs but property reads/writes report "unknown property".
+    let registry = crate::reactive::active_registry();
+    for expr in &handlers.inline {
+        // DD-M2-P3-003: catch_unwind wrapper logs errors and continues the
+        // event loop; location is a coarse identifier (Phase 6 supplies
+        // the component name prefix).
+        if let Some(reg) = registry.as_deref() {
+            let mut ctx = crate::reactive::HandlerEvalContext::new(reg);
+            handler::invoke_handler(expr, &mut ctx, "?.clicked");
+        } else {
+            let mut ctx = NullEvalContext;
+            handler::invoke_handler(expr, &mut ctx, "?.clicked");
+        }
+    }
+    if handlers.has_host_listener {
+        // Route "clicked" through the C-ABI signal registry. The emission
+        // is queued and fires after the current call returns to
+        // wasamo_run's message-loop drain (abi_spec §6).
+        crate::emit::enqueue_signal(widget_ptr, "clicked", Vec::new());
     }
 }
 
