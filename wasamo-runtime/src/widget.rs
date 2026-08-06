@@ -494,6 +494,50 @@ fn mutation_error_to_winerr(err: MutationError) -> windows::core::Error {
     Error::new(E_FAIL, msg)
 }
 
+// ── Hover state (M4-Phase 2 T4) ────────────────────────────────────────────
+
+/// A window's retained record of which node currently paints a non-`Normal`
+/// `ButtonState` (`docs/architecture.md` §13.2 "hover and pressed... computed
+/// as enter / leave transitions against the resolved target"). One
+/// `HoverState` lives on `WindowState` (`window.rs`); `WidgetNode::update_hover`
+/// / `WidgetNode::clear_hover` are its only writers.
+///
+/// `target` is the path of child indices, from the **window's root
+/// widget**, of the one node that currently paints a non-`Normal`
+/// `ButtonState`; `None` when no node is entered.
+///
+/// **Invariant: at most one node in the tree has `state != ButtonState::Normal`,
+/// and it is exactly the node this path names.** `update_hover` and
+/// `clear_hover` write the record and the painted state together, in the
+/// same function call, so the pair can never be edited apart from those two
+/// entry points (T4 start gate trap #3).
+///
+/// **`update_button_enabled` is a third writer of `ButtonData::state`** — a
+/// binding write that disables a Button-family widget resets `state` to
+/// `ButtonState::Normal` directly, with no `HoverState` in reach. When
+/// `target` still names that now-disabled node, the next leave
+/// (`update_hover` or `clear_hover`) resolves to a node whose `state` is
+/// already `Normal`; `set_button_state_at`'s `if new_state != btn.state`
+/// guard then makes that leave a no-op, so the flat disabled grey
+/// `update_button_enabled` painted (`docs/dsl_spec.md` §4.8) survives
+/// instead of being unconditionally re-animated.
+#[derive(Default)]
+pub(crate) struct HoverState {
+    target: Option<Vec<usize>>,
+}
+
+impl HoverState {
+    /// Read-back for the FFI test seam
+    /// (`lib.rs::ffi::__hover_target_for_test`). `target` itself stays
+    /// private — every writer is `WidgetNode::update_hover` /
+    /// `WidgetNode::clear_hover`, both in this module — so a fixture across
+    /// the crate boundary can assert the retained path agrees with the
+    /// painted state without this accessor becoming a second writer.
+    pub(crate) fn target(&self) -> Option<&[usize]> {
+        self.target.as_deref()
+    }
+}
+
 impl WidgetNode {
     // ── Constructors ──────────────────────────────────────────────────────────
 
@@ -1496,92 +1540,162 @@ impl WidgetNode {
         }
     }
 
-    /// Update hover/press state for all Button-family widgets based on mouse position.
-    /// `down` is true while the left mouse button is held.
+    /// Update hover/press state as an enter/leave transition against the
+    /// single resolved hit-test target (M4-Phase 2 T4; replaces the pre-T4
+    /// whole-tree walk per `docs/architecture.md` §13.2 "computed as enter /
+    /// leave transitions against the resolved target rather than by a
+    /// whole-tree walk"). `down` is true while the left mouse button is
+    /// held.
+    ///
+    /// **`pub(crate)`, narrowed from `pub`.** Grep over `wasamo-runtime`,
+    /// `wasamo-dll`, `bindings`, and `examples` shows `update_hover` has no
+    /// caller outside `window.rs`'s four pointer arms (the T4 start gate's
+    /// scope-re-decision fact 1), and [`HoverState`] is itself crate-only,
+    /// so nothing outside this crate could pass the second argument anyway.
     ///
     /// **`(x, y)` are DIP.** See [`Self::hit_test_click`].
-    pub fn update_hover(
+    pub(crate) fn update_hover(
         &mut self,
         compositor: &Compositor,
+        hover: &mut HoverState,
         x: f32,
         y: f32,
         down: bool,
     ) -> windows::core::Result<()> {
-        self.update_hover_inner(compositor, x, y, down)
-    }
+        let resolved = hit::resolve_topmost(self, DipPoint { x, y });
 
-    /// M4-Phase 2 T2 geometry-source switch only (DD-M4-P2-002): `inside` now
-    /// reads `arranged_rect` directly. That rectangle is already absolute DIP
-    /// within the window's client area, so the parent-offset accumulation and
-    /// per-tree scale divisor the old Visual-readback path needed
-    /// (`off_x` / `off_y` / `tree_scale`) have nothing left to do and are
-    /// gone. Everything else — the whole-tree walk, the disabled-Button arm's
-    /// descent into children, the state-transition and animation code — is
-    /// unchanged: hover / pressed **semantics** (enter/leave against the
-    /// single resolved target, matching `hit_test_click`) are T4's; this task
-    /// changes only where the containment test's rectangle comes from.
-    fn update_hover_inner(
-        &mut self,
-        compositor: &Compositor,
-        x: f32,
-        y: f32,
-        down: bool,
-    ) -> windows::core::Result<()> {
-        // A node with no rectangle (never laid out) is not inside anything.
-        let inside = self
-            .arranged_rect
-            .is_some_and(|rect| hit::contains(rect, DipPoint { x, y }));
-
-        if let Some(btn) = self.button_data_mut() {
-            // Phase 1 `Button.enabled` (DD-M3-P1-005): a disabled button does
-            // not react to hover/press — its background stays at the flat
-            // grey set by `update_button_enabled`.
-            if !btn.enabled {
-                for child in &mut self.children {
-                    child.update_hover_inner(compositor, x, y, down)?;
+        // The paint target: `resolved` only when it names an *enabled*
+        // Button-family node. A disabled Button is still `resolved` — it
+        // still occludes, T2's rule and unchanged here — but paints nothing
+        // (`docs/dsl_spec.md` §4.8 "Hover / press visual transitions are
+        // frozen; the background paints a flat disabled grey directly"), so
+        // nothing is retained for it. This is the one and only place
+        // `enabled` is consulted by this algorithm; `set_button_state_at`
+        // deliberately repeats no such check (see its doc comment).
+        let paint_target: Option<Vec<usize>> = match resolved {
+            Some(path) => {
+                let is_enabled_button = self
+                    .node_at_path_mut(&path)
+                    .and_then(|node| node.button_data())
+                    .is_some_and(|btn| btn.enabled);
+                if is_enabled_button {
+                    Some(path)
+                } else {
+                    None
                 }
-                return Ok(());
             }
-            let new_state = if inside && down {
+            None => None,
+        };
+
+        // Leave, then enter. `hit::hover_leave_target` is `None` exactly
+        // when `hover.target == paint_target`, so a mouse move that stays
+        // inside the same button's rectangle never leaves-then-re-enters it
+        // (see that function's doc comment for why the guard is
+        // load-bearing).
+        if let Some(path) =
+            hit::hover_leave_target(hover.target.as_deref(), paint_target.as_deref())
+        {
+            self.leave_hover_at(compositor, path)?;
+        }
+        if let Some(path) = paint_target.as_deref() {
+            let entering = if down {
                 ButtonState::Pressed
-            } else if inside {
-                ButtonState::Hovered
             } else {
-                ButtonState::Normal
+                ButtonState::Hovered
             };
-            if new_state != btn.state {
-                let old_state = btn.state;
-                btn.state = new_state;
-                let target =
-                    effective_button_color(btn.style, new_state, btn.accent, true, btn.checked);
-                let ticks = transition_duration(old_state, new_state);
-                start_color_anim(compositor, &btn.bg_brush, target, ticks)?;
-            }
+            self.set_button_state_at(compositor, path, entering)?;
         }
 
-        for child in &mut self.children {
-            child.update_hover_inner(compositor, x, y, down)?;
-        }
+        // The record and the painted state are written together, in this
+        // same function, so [`HoverState`]'s pairing invariant can never be
+        // edited apart (trap #3, T4 start gate).
+        hover.target = paint_target;
         Ok(())
     }
 
-    /// Reset all Button-family states to Normal (called on WM_MOUSELEAVE).
-    pub fn clear_hover(&mut self, compositor: &Compositor) -> windows::core::Result<()> {
-        if let Some(btn) = self.button_data_mut() {
-            if btn.state != ButtonState::Normal {
-                btn.state = ButtonState::Normal;
-                let target = effective_button_color(
-                    btn.style,
-                    ButtonState::Normal,
-                    btn.accent,
-                    true,
-                    btn.checked,
-                );
-                start_color_anim(compositor, &btn.bg_brush, target, 1_670_000)?;
-            }
+    /// Reset the retained hover/press target to `Normal` (called on
+    /// `WM_MOUSELEAVE`). Same primitive as [`Self::update_hover`]'s leave
+    /// half, applied unconditionally.
+    pub(crate) fn clear_hover(
+        &mut self,
+        compositor: &Compositor,
+        hover: &mut HoverState,
+    ) -> windows::core::Result<()> {
+        if let Some(path) = hover.target.as_deref() {
+            self.leave_hover_at(compositor, path)?;
         }
-        for child in &mut self.children {
-            child.clear_hover(compositor)?;
+        hover.target = None;
+        Ok(())
+    }
+
+    /// Leave the node at `path`: drive it back to `ButtonState::Normal`
+    /// through the shared [`Self::set_button_state_at`] primitive. Shared by
+    /// [`Self::update_hover`] and [`Self::clear_hover`] so both write the
+    /// leave half identically.
+    fn leave_hover_at(
+        &mut self,
+        compositor: &Compositor,
+        path: &[usize],
+    ) -> windows::core::Result<()> {
+        self.set_button_state_at(compositor, path, ButtonState::Normal)
+    }
+
+    /// Descend `path` from `self`, one child index at a time, returning the
+    /// node it names or `None` if any index is out of range.
+    ///
+    /// **Bounds-checked (`children.get_mut`), never indexed
+    /// (`children[i]`).** A [`HoverState::target`] path can outlive the node
+    /// it named: a click handler's synchronous state write (see
+    /// `run_clicked_handlers`'s safety note) can rebuild or remove subtrees
+    /// between `hit_test_click` and the `update_hover` call that follows it
+    /// in the same `WM_LBUTTONUP` arm (`window.rs`), so a stale path segment
+    /// must resolve to `None` rather than panic.
+    fn node_at_path_mut(&mut self, path: &[usize]) -> Option<&mut WidgetNode> {
+        let mut node = self;
+        for &index in path {
+            node = node.children.get_mut(index)?.as_mut();
+        }
+        Some(node)
+    }
+
+    /// The shared state-writing primitive for both enter and leave
+    /// transitions (M4-Phase 2 T4). Resolves `path`; if it names a
+    /// Button-family node whose current state differs from `new_state`,
+    /// starts the same guarded colour-animation transition the pre-T4
+    /// whole-tree walk ran per node.
+    ///
+    /// A stale or non-Button `path` (see [`Self::node_at_path_mut`]) is a
+    /// silent no-op, not an error: there is nothing left to paint.
+    ///
+    /// **No `enabled` check here, deliberately.** `update_button_enabled`
+    /// already resets `state` to `Normal` when a Button-family node is
+    /// disabled, so a leave that targets a now-disabled node finds
+    /// `new_state == btn.state` (both `Normal`) and the guard below already
+    /// makes it a no-op — the disabled grey `update_button_enabled` painted
+    /// survives untouched. An explicit `enabled` arm here would be a branch
+    /// whose two arms are observationally identical to the guard's existing
+    /// no-op, which is exactly what implementation-gates trap #4 forbids.
+    /// `enabled` is decided exactly once, in `update_hover`'s paint-target
+    /// computation.
+    fn set_button_state_at(
+        &mut self,
+        compositor: &Compositor,
+        path: &[usize],
+        new_state: ButtonState,
+    ) -> windows::core::Result<()> {
+        let Some(node) = self.node_at_path_mut(path) else {
+            return Ok(());
+        };
+        let Some(btn) = node.button_data_mut() else {
+            return Ok(());
+        };
+        if new_state != btn.state {
+            let old_state = btn.state;
+            btn.state = new_state;
+            let target =
+                effective_button_color(btn.style, new_state, btn.accent, true, btn.checked);
+            let ticks = transition_duration(old_state, new_state);
+            start_color_anim(compositor, &btn.bg_brush, target, ticks)?;
         }
         Ok(())
     }
@@ -1623,6 +1737,21 @@ impl WidgetNode {
             WidgetData::Button(button) | WidgetData::ToggleButton(button) => Some(button.enabled),
             _ => None,
         }
+    }
+
+    /// Test-only accessor for this node's transient hover/press paint state
+    /// (M4-Phase 2 T4). `None` for non-Button-family widgets.
+    /// `ButtonState` stays private to this module — a `&'static str` is
+    /// returned instead of widening its visibility, so a cross-crate
+    /// integration test can assert the painted state without this crate
+    /// exporting `ButtonState`.
+    #[doc(hidden)]
+    pub fn __button_state_for_test(&self) -> Option<&'static str> {
+        self.button_data().map(|btn| match btn.state {
+            ButtonState::Normal => "normal",
+            ButtonState::Hovered => "hovered",
+            ButtonState::Pressed => "pressed",
+        })
     }
 
     #[doc(hidden)]

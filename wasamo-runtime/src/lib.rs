@@ -102,6 +102,26 @@ pub mod ffi {
     pub unsafe fn __window_scale_dpi_for_test(window: *mut WasamoWindow) -> u32 {
         (*window).scale.dpi()
     }
+
+    /// The window's retained hover/press target (M4-Phase 2 T4;
+    /// `WindowState::hover`), as the path of child indices from the root
+    /// widget, or `None` when nothing is currently entered.
+    ///
+    /// Exists so a fixture can assert the trap-#3 pairing invariant — the
+    /// retained record and the painted `ButtonState` agree — rather than
+    /// only the painted state that `WidgetNode::__button_state_for_test`
+    /// alone would show.
+    ///
+    /// # Safety
+    ///
+    /// Same contract as [`__window_scale_dpi_for_test`]: `window` must be
+    /// non-null, properly aligned, and valid for a shared read of a live
+    /// `WasamoWindow` for the duration of the call, on the runtime's owning
+    /// thread, and not used after `wasamo_window_destroy`.
+    #[doc(hidden)]
+    pub unsafe fn __hover_target_for_test(window: *mut WasamoWindow) -> Option<Vec<usize>> {
+        (*window).hover.target().map(|path| path.to_vec())
+    }
 }
 
 /// M4-Phase 2 **pre-ADR spike** seam: the focus traversal core and its
