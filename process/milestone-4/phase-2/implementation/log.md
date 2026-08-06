@@ -879,13 +879,10 @@ the disposition is:
 
 - **The assertion is correct and stays.** It says "a `WidgetNode` exists
   that layout does not know about", which is exactly true here.
-- **The defect is in the DSL surface, not in routing.** Either the
-  layout tree must include Button children (which opens layout —
-  explicitly out of this phase, DD-M4-P2-002 §Minimum hit target) or
-  `wasamoc check` and the loader must reject a widget child on a
-  Button-family kind (a checker admission rule, the T8 lane) and §4.16's
-  example must be corrected. T3 does neither; it records both and routes
-  the choice to the owner.
+- **The defect is in the DSL surface, not in routing.** T3 does not fix
+  it; it records the mechanism and routes the choice, which the owner
+  settled the same day in favour of the reject — see §Owner disposition
+  below.
 - **The plan's T3 evidence item derived from it is replaced, not
   dropped** — see the plan revision below and carry-forward CF-1.
 
@@ -917,7 +914,7 @@ The release clean rebuild is the retrospective's item 3.
 
 | Constraint | Evidence | Placement | Re-trigger criterion |
 |---|---|---|---|
-| **CF-1 — a `Button` with a `WidgetNode` child aborts a debug build at load and renders nothing in release.** The shape is accepted by `wasamoc check`, built by the loader, shown in `dsl_spec.md` §4.16, and unknown to layout | Start gate finding 1; measured in both profiles | `carry-forward` → recorded in [plan.md](./plan.md) §T3 (replacing the evidence item it invalidates) and §T8, and raised to the owner | **T8**, which owns Button-family admission rules, unless the owner routes it elsewhere. Also **T13**: §4.16's example is a spec/implementation divergence to reconcile at the Moment-2 sync |
+| **CF-1 — a `Button` with a `WidgetNode` child aborts a debug build at load and renders nothing in release.** The shape is accepted by `wasamoc check`, built by the loader, shown in `dsl_spec.md` §4.16, and unknown to layout | Start gate finding 1; measured in both profiles | `carry-forward` → [plan.md](./plan.md) §T3 (replacing the evidence item it invalidates) and §T8; the withheld capability has its own [candidate pool](../../../candidate-pool.md) row | **T8**, which rejects the shape at both gates and corrects §4.16's example (§Owner disposition below). **T13** then re-verifies §4.16 against the landed checker |
 | **CF-2 — a literal `enabled: false` on a plain `Button` is silently dropped.** `ir_loader.rs`'s `"Button"` arm never reads an `enabled` prop; its `"ToggleButton"` sibling does. Measured: literal `Button` → `enabled == true`, state-bound `Button` → `false`, literal `ToggleButton` → `false` | The probe above, and F3, which had to bind `enabled` to a state to build a disabled Button at all | `carry-forward` → [plan.md](./plan.md) §T8 | **T8.** Any task asserting Button's `enabled` contract from `.ui` hits it first |
 | **CF-3 — `clicked` needs no checker widening; only reject-side bounding.** `wasamoc check` has no per-kind signal admission rule, so DD-M4-P2-005's "the change is in `check` … and in the runtime's dispatch" is half already true | Start gate finding 2; F1 is the runtime half landing | `carry-forward` → [plan.md](./plan.md) §T8 | **T8**, whose reject tests are now the whole of its `clicked` work |
 | **CF-4 — `hit_test_click` entered on a subtree gets neither ancestors nor ancestor clip bounds.** T2 recorded the clip half; propagation now has the same boundary, and the three fixtures that enter on a Button rely on it being a no-op | The audit table above; `hit_test_click`'s doc comment | `carry-forward` | **T7**'s modal scopes, and any task that resolves from other than the window root |
@@ -1006,3 +1003,42 @@ fixture is unchanged and still green. The ancestor legs are one hop —
 the multi-level prefix order is pinned by `dispatch_chain`'s unit test
 rather than by a three-level fixture, which is the division of labour
 DD-M4-P2-002 set up when it made resolution pure logic.
+
+### Owner disposition of the two Button-family findings (2026-08-07)
+
+Both findings the close gate routed rather than fixed are dispositioned.
+Neither changes T3's landed code; both change what T8 owns.
+
+**CF-1 — a `Button` carrying a `WidgetNode` child.** Rejected at both
+gates: the `wasamoc check` admission rule **and** the IR loader's
+re-check, which is the two-gate shape `dsl_spec.md` §4.9 / §4.16 already
+use and is required here for the same reason — `wasamo_load_ui` admits
+memory IR that never passed through `wasamoc`. The direct C path
+(`wasamo_widget_append_child`) stays ungated, matching how `Box`'s
+child-count rule is enforced; T2's `sync_visuals` child-count assertion
+remains the tripwire there. §4.16's placement example is corrected in
+the same change: it illustrates `slot.*` and needs no Button child to
+do so. Landing: [plan.md](./plan.md) §T8.
+
+The alternative — making Button a layout container — was **not** taken
+inside this phase. It is not a defect fix but a widget-design decision
+(what becomes of the label, how children arrange, what the
+accessibility name is), and this phase does not open layout
+([DD-M4-P2-002](../decisions/dd-m4-p2-002-hit-testing-and-generic-click.md)
+§Minimum hit target). Because the reject **narrows an authored surface**,
+the withheld capability is recorded as its own row in the
+[candidate pool](../../../candidate-pool.md) — leaning M5, no milestone
+claimed — so re-opening it is a milestone decision rather than a
+rediscovery. That is the DD-V-028 lifecycle rule applied in the
+direction the pool exists for.
+
+**CF-2 — a literal `enabled: false` on a plain `Button`.** Fixed at T8,
+by reading the prop the way the `"ToggleButton"` arm does. The test that
+goes with it drives the literal through `.ui` → IR → loader and asserts
+the widget constructs disabled — the half that was missing. The checker
+already has a test that the literal is *accepted*
+(`wasamoc/src/check.rs`), and the runtime already has a test that the
+literal *takes effect* — but only for `ToggleButton`
+(`togglebutton_runtime_integration.rs`). The pairing existed for one
+widget and not the other, which is the shape that let a two-and-a-half
+month old gap stay invisible.

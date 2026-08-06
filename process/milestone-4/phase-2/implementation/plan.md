@@ -157,8 +157,10 @@ consumes the event. No descending phase.
   in a debug build the shape aborts at load on T2's `sync_visuals`
   child-count assertion. It is replaced by the general property it was
   a special case of — a click on a widget with no handler activates the
-  nearest ancestor that has one — and the defect is carried to T8
-  (close gate CF-1).
+  nearest ancestor that has one — and the defect is carried to T8,
+  which rejects the shape at both gates (close gate CF-1; the withheld
+  capability has its own [candidate pool](../../../candidate-pool.md)
+  row).
 - Structural side-effect enumeration: what a handler's state write
   pulls in (drain → re-layout → rectangle store → focus validity), and
   which of those the walk must not observe mid-flight.
@@ -324,21 +326,33 @@ handler table — not how an event travels.
   per-kind signal admission rule, so `Box { clicked => … }` has always
   been accepted, lowered and attached. T3 landed the runtime half.
 - **Two Button-family loader defects land here** (T3 close gate CF-1 /
-  CF-2), both measured and neither in T3's lane:
-  - A literal `enabled: false` on a plain `Button` is **silently
+  CF-2), both measured, neither in T3's lane, and both dispositioned by
+  the owner on 2026-08-07 ([log.md](./log.md) §T3 owner disposition):
+  - **A literal `enabled: false` on a plain `Button` is silently
     dropped** — `ir_loader.rs`'s `"Button"` arm never reads an `enabled`
     prop, unlike its `"ToggleButton"` sibling — so only a state-bound
-    `enabled` disables a Button today. Any assertion of Button's
-    `enabled` contract from `.ui` hits this first.
-  - A `Button` carrying a `WidgetNode` child aborts a debug build during
-    `wasamo_load_ui` (layout gives Button no children, so T2's
-    `sync_visuals` child-count assertion fires) and renders nothing in
-    release. The shape is accepted by `check`, built by the loader, and
-    shown as an example in
-    [dsl_spec.md §4.16](../../../../docs/dsl_spec.md). Fixing it is
-    either a checker admission rule plus a spec correction (this task's
-    lane) or a layout change (out of the phase) — **owner's call**;
-    §4.16's example is a T13 Moment-2 divergence either way.
+    `enabled` disables a Button today. Fixed here by reading the prop
+    the way the sibling arm does, with a test that drives the literal
+    through `.ui` → IR → loader and asserts the widget constructs
+    disabled. The checker already has a test that the literal is
+    **accepted**; the missing half was a test that it **takes effect**,
+    and that pairing is what the new test restores.
+  - **A `Button` carrying a `WidgetNode` child becomes a named
+    diagnostic.** The shape is accepted by `check`, built by the loader,
+    and unknown to layout, so today it renders nothing in release and
+    aborts a debug build during `wasamo_load_ui` on T2's `sync_visuals`
+    child-count assertion. Rejected here at **both** gates — the checker
+    rule plus the loader's re-check, the two-gate shape §4.9 / §4.16
+    already use, because `wasamo_load_ui` admits memory IR that never
+    passed through `wasamoc`. The direct C path
+    (`wasamo_widget_append_child`) stays ungated, matching how `Box`'s
+    child-count rule is enforced. [dsl_spec.md
+    §4.16](../../../../docs/dsl_spec.md)'s placement example is
+    corrected in the same change — it illustrates `slot.*`, and needs no
+    Button child to do so. **This narrows the authored surface
+    deliberately**, and the capability it withholds is recorded as its
+    own row in the [candidate pool](../../../candidate-pool.md) so
+    re-opening it is a milestone decision rather than a rediscovery.
 - `key-down` needs the phase's **one new grammar production** — a signal
   handler whose name carries an argument. The key name is validated at
   `check` against the recognised non-character table, and an
