@@ -242,3 +242,97 @@ standalone `WidgetNode` tree at an explicit DPI with no window and no
 monitor query — so it introduces none of the desktop-range dependency
 [constraints §10](../requirements/constraints.md) keeps out of this
 phase.
+
+---
+
+## T2 — Single-target hit resolution and the complete geometry migration
+
+### Start gate (recorded 2026-08-06, before any source edit)
+
+Read before selecting:
+[AGENTS.md](../../../../AGENTS.md),
+[implementation-gates.md](../../../procedures/implementation-gates.md),
+[plan.md](./plan.md) §T2 and §Cross-task obligations,
+[preamble.md](./preamble.md) (§What "green" is worth, §The migration
+obligation, §Review lanes),
+[DD-M4-P2-002](../decisions/dd-m4-p2-002-hit-testing-and-generic-click.md),
+[DD-M4-P2-001](../decisions/dd-m4-p2-001-event-routing-model.md)
+§Recommendation (for the T2/T3 boundary),
+[constraints.md](../requirements/constraints.md) §1 / §7 / §8 / §10,
+the [T1 close gate](#t1--layout-derived-hit-rectangles) above and the
+[T1 retrospective](../retrospectives/t1.md), and the landed source
+(`widget.rs` `hit_test_click` / `update_hover` / `visual_rect_dip` /
+`clips_children` / `sync_visuals`, `window.rs` the four pointer
+message arms, and every test that drives a click).
+
+**Scope re-decided against the code, not inherited from the plan.**
+The plan's T2 hypothesis holds, and reading the source added three
+items it does not name:
+
+1. **A fourth and fifth existing test stand on the old geometry
+   source**, beyond the three T1 named.
+   `dpi_scale_matrix_integration.rs::a_stale_descendant_scale_still_hit_tests_where_the_widget_is`
+   pins the *one-divisor traversal property* (Phase 1 F-37) — a
+   property of the readback path this task deletes. It will stay green
+   and its stated reason will be false, which is the trap-#1 shape a
+   compiler cannot catch. `iteration_mutation_integration.rs` derives
+   its click point from a `Visual` readback; that is a test-side
+   physical coordinate, valid at scale 1, and is classified rather than
+   changed.
+2. **`visual_rect_dip` and the free `visual_rect` lose their last
+   callers** when both readers switch. Leaving them is what a
+   "complete migration" audit would have to explain away, so their
+   removal is the audit's strongest evidence and is part of this task.
+3. **The `zip` length question T1's re-audit handed to T2** is decided
+   here, because T2 is the store's first reader: a truncated
+   `computed.children` would silently produce a node with no rectangle,
+   i.e. a silently unhittable widget.
+
+**Trap selection.**
+
+| # | Trap | Applies | Reason |
+|---|---|---|---|
+| 1 | Semantic-migration miss | **yes** | The geometry *source* migrates. Rust enumerates almost none of it: deleting a private helper compiles, and a test that pinned the readback property stays green. The audit is therefore a grep table over `visual_rect` / `hit_test_click` / `update_hover` across `src`, `tests`, `examples` and `wasamo-dll`, with every site classified — including the tests, which are call-sites of the migrated behaviour even when they still compile. |
+| 2 | Missed side effects | **yes** | Changing *which* node a click resolves to changes what the click's effects can be. To enumerate before writing: the disabled-Button arm (today it descends, DD-002 makes it a target that stops the walk), the hover walk's descent (semantics stay T4's), the drain → re-layout → rectangle ordering that decides whether a click is resolved against fresh geometry, entry on a subtree (the readback's precondition row disappears), and `ButtonData.label_size`'s three-point write ([constraints §4](../requirements/constraints.md)), which this task must not touch. |
+| 3 | Parallel/derived data drift | **yes** | The resolver consumes two derived facts per node — `arranged_rect` and `clips_children` — the second of which restates three constructors' `SetClip`. T1 pinned that pair with a per-kind test reached through `__clips_children_for_test`; T2's plan predicts that accessor becomes redundant. Whether the pin survives its removal is decided in this task, not assumed. |
+| 4 | Untested authored branch | **yes** | Four new arms: reverse-order first-hit, the clip-bounded descent, "no rectangle ⇒ not a candidate" (and its fail-closed form for a clipping node), and edge containment. The last is a **boundary condition**, so [DD-V-029](../../../cross-milestone/decisions/dd-v-029-pure-logic-red-test-obligation.md)'s red-test obligation applies by name, not by discretion. |
+| 5 | Carry-forward underweighted | **yes** | T3 inherits the resolution result shape (it needs the ancestor chain), T4 inherits a hover walk deliberately left semantically unchanged, and T5 / T7 / T9 inherit "a rectangle is only trustworthy after the mutation's own layout pass". Each is recorded with a re-trigger criterion. |
+| 6 | Symptom taken at face value | **yes** | Converting the fixtures is *expected* to produce reds. Every red is dispositioned as "this fixture stood on the deleted geometry source" with the mechanism named — not re-pinned to make it green, which is the exact move the complete-migration obligation exists to forbid. |
+| 7 | Weak GUI evidence | **no** | T2 adds no Composition write and no visual, and its behavioural difference from today — occlusion — is unobservable in the gallery until the lightbox is wired at T10 ([preamble.md](./preamble.md)). A gallery frame taken now would be produced identically by the old and the new resolver, which is the definition of a non-discriminating frame. **Re-decide if** T2 ends up changing a Composition write or an observable gallery click. |
+
+**Review lane.** **Full independent review**, as
+[preamble.md §Review lanes](./preamble.md) predicts and as the change
+confirms: a runtime structural change (the complete geometry
+migration plus a new dispatch shape). The trap-#4 branch/test check
+composes into it for the four new arms.
+
+**The T1 corrective, applied.** The T1 retrospective added a one-line
+start-gate test: *does this task introduce a new store / unit /
+coordinate system, and is its correctness observable at 100%?* T2
+introduces none — but it **removes the cancellation** that made the
+pointer conversion unobservable at every scale, so the same answer
+falls out: a wrong conversion is invisible at 100% and wrong at any
+other scale. A non-unit-scale leg is therefore evidence, not garnish,
+and it is the plan's own requirement rather than a discretionary
+addition.
+
+**Planned proof obligations** (each closed at the T2 close gate):
+
+1. The call-site audit table showing **zero** `visual_rect` readers on
+   the input path, covering `src` and the tests that drive clicks.
+2. The structural side-effect enumeration, including the disabled-Button
+   behaviour change and the fixture-conversion consequences.
+3. Pure-logic tests over a constructed **overlapping** tree, with a
+   clip case and its agreement leg (the same tree under a non-clipping
+   ancestor resolves).
+4. The edge-containment red-test witness (DD-V-029), plus witnesses for
+   the ordering and clip arms.
+5. The staleness fixture: a click resolved correctly *after* a property
+   write triggered re-layout.
+6. The non-unit-scale fixture: a click at **physical** coordinates
+   resolving to the widget whose DIP rectangle contains the converted
+   point, with the un-converted point as the negative leg.
+7. The `clips_children` accessor question decided and recorded either
+   way.
+8. The whole task list re-read at the close gate (the re-audit
+   discipline, [plan.md](./plan.md) §Cross-task obligations).
