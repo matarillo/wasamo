@@ -83,8 +83,12 @@ candidate; whether anything reacts is T3's question.
   the tests reintroduces the mixed path the obligation above exists to
   prevent.
 - `clips_children` gains its first production caller here, so the
-  `__clips_children_for_test` accessor T1 needed becomes redundant and
-  goes rather than lingering as a second entry point.
+  `__clips_children_for_test` accessor T1 needed stops being a second
+  entry point. **It is retained rather than removed** (recorded
+  deviation, [log.md](./log.md) §T2 close gate #3): eight of the eleven
+  widget kinds cannot have children, so no production click can reach
+  their arm of the predicate, and deleting the accessor would delete
+  T1's per-kind agreement pin for those eight instead of replacing it.
 - Edge containment is a **boundary condition**, so a deliberately wrong
   implementation must be shown to make the named test fail
   ([DD-V-029](../../../cross-milestone/decisions/dd-v-029-pure-logic-red-test-obligation.md)).
@@ -106,8 +110,15 @@ candidate; whether anything reacts is T3's question.
   ([preamble.md](./preamble.md)) — including a clip case (a rectangle
   outside its clipping ancestor does not resolve); the audit table; the
   staleness fixture; the non-unit-scale resolution fixture.
+- **Two existing test files beyond the three named above also stood on
+  the old geometry source** (found at T2's start gate):
+  `dpi_scale_matrix_integration.rs`'s one-divisor test pins a property
+  this task deletes and stays green with a false reason, so it is
+  re-documented with its assertions kept; `iteration_mutation_integration.rs`
+  derives a click point from a Visual readback, which is a test-side
+  physical coordinate and is classified rather than changed.
 
-- [ ] T2
+- [x] T2
 
 ## T3 — Propagation and the drain boundary
 
@@ -115,7 +126,24 @@ Target, then ancestors, until a handler runs; a handler that runs
 consumes the event. No descending phase.
 
 - The ancestor chain is captured **before** dispatch, and the reactive
-  drain runs **once after** the walk completes.
+  drain runs **once after** the walk completes. The chain needs no new
+  traversal: T2's `resolve_topmost` returns the **path of child indices**
+  to the target, so the ancestors are that path's prefixes.
+- **The drain is not where DD-001's wording implies** (T2 measured):
+  `wnd_proc`'s message arms never call `emit::drain_if_outermost` — the
+  production call site is the line after `DispatchMessageW` in
+  `wasamo_runtime::run`, so today a drain runs after *every* dispatched
+  message rather than once per dispatch. Reconciling "one drain per
+  dispatch, after the walk completes" with that boundary is this task's,
+  and a fixture that expects a synthesised message to re-layout must
+  pump `run` ([log.md](./log.md) §T2 close gate #2).
+- **A click over a Button-family widget's `WidgetNode` child dispatches
+  nothing between T2 and T3** (T2 carry-forward). The shape is
+  authorable today — the checker and loader both admit Button children,
+  and [dsl_spec.md §4.16](../../../../docs/dsl_spec.md) shows one — and
+  no fixture builds one, so nothing observes the narrowing. **Evidence
+  must include a click on a Button's child activating the Button through
+  the ancestor walk**, or the narrowing ships.
 - Structural side-effect enumeration: what a handler's state write
   pulls in (drain → re-layout → rectangle store → focus validity), and
   which of those the walk must not observe mid-flight.
