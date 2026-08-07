@@ -50,6 +50,13 @@
 //!   (`wasamo_signal_connect`) on a plain `Box` consumes the walk exactly
 //!   as an inline handler would, and stops doing so once
 //!   `wasamo_signal_disconnect`ed.
+//! - [`a_disabled_button_occludes_a_lower_sibling_it_paints_over`] (M4-Phase
+//!   2 T8) — the plan's other named `enabled` evidence: a disabled Button
+//!   still occludes what is behind it, now that a `Box` beneath it in a
+//!   `ZStack` can carry `clicked` too. [`a_disabled_button_suppresses_its_own_handler_without_stopping_propagation`]
+//!   above covers the *ancestor* direction (the click continues upward);
+//!   this fixture covers occlusion of a *lower sibling*, which only became
+//!   observable once the runtime dispatches a `Box`'s `clicked`.
 //!
 //! # Why an inline handler is observable synchronously and a host listener needs the loop pump
 //!
@@ -108,7 +115,7 @@ use std::ffi::c_void;
 use std::os::raw::c_char;
 use std::ptr;
 
-use wasamo_runtime::{ffi, WidgetNode};
+use wasamo_runtime::{ffi, DipRect, WidgetNode};
 
 use windows::Win32::Foundation::{HWND, LPARAM, RECT, WPARAM};
 use windows::Win32::UI::WindowsAndMessaging::{
@@ -367,6 +374,29 @@ unsafe fn connect_host_click_counter(widget: *mut ffi::WasamoWidget) -> (*mut Ce
         "wasamo_signal_connect must succeed for the fixture to mean anything"
     );
     (counter, token)
+}
+
+/// Local mirror of `hit::contains`'s edge convention — **left/top
+/// inclusive, right/bottom exclusive** — copied from
+/// `hover_transition_integration.rs` because `hit` is a private module
+/// (`mod hit;` in `lib.rs`) and unreachable from this crate. Lets the new
+/// M4-Phase 2 T8 fixture below assert exactly the relationship
+/// `hit::resolve_topmost` will apply to a probed point, rather than a
+/// symmetric approximation of it.
+fn dip_contains(rect: DipRect, x: f32, y: f32) -> bool {
+    x >= rect.x && x < rect.x + rect.width && y >= rect.y && y < rect.y + rect.height
+}
+
+/// Whether `outer` fully contains `inner`, edge-inclusive on all four
+/// sides (a rectangle contains itself). Copied from
+/// `hover_transition_integration.rs`; used below to assert "the disabled
+/// Button sits inside the full-bleed Box's rectangle" as a measured fact
+/// rather than an assumption.
+fn dip_rect_contains(outer: DipRect, inner: DipRect) -> bool {
+    outer.x <= inner.x
+        && inner.x + inner.width <= outer.x + outer.width
+        && outer.y <= inner.y
+        && inner.y + inner.height <= outer.y + outer.height
 }
 
 // ── F1 — the central claim ──────────────────────────────────────────────
@@ -1040,4 +1070,203 @@ fn a_host_signal_listener_on_a_non_button_widget_consumes_the_walk_until_disconn
             );
         }
     });
+}
+
+// ── F6 — a disabled Button occludes a lower sibling (M4-Phase 2 T8) ────────
+
+/// A full-bleed `Box { clicked => ... }` sits **underneath** a disabled
+/// `Button`. `slot.h-align: stretch` / `slot.v-align: stretch` are required
+/// on the Box, not incidental: a `Box`'s default size constraint is
+/// `Shrink`/`Shrink` (`widget.rs`'s `WidgetNode::box_` doc comment), and
+/// `ZStack`'s own default per-child alignment is `center`
+/// (`docs/dsl_spec.md` §4.13) — a Shrink, center-aligned Box with no
+/// `aspect` and no child has no way to resolve its own size at all
+/// (`layout::arrange_zstack` measures a non-stretchy child against
+/// unbounded bounds to learn its natural size, which a childless
+/// non-aspect Box cannot supply — `LayoutError::BoxNoExtent`,
+/// `docs/architecture.md`'s DD-M3-P2-005). `stretch` on both axes is the
+/// same technique `hover_transition_integration.rs`'s F5 fixture uses for
+/// its own scrim-shaped Box, here on both axes instead of one so the Box
+/// becomes genuinely full-bleed rather than partial. The disabled Button,
+/// by contrast, keeps ZStack's plain default (no `slot.*`), landing at its
+/// own intrinsic size, centred inside the Box's rectangle.
+///
+/// `enabled: false` is authored as a literal, not a `state`-bound
+/// identifier: the literal-drop defect the older
+/// `DISABLED_BUTTON_SUPPRESSION_UI` fixture above had to route around
+/// (CF-2) is already fixed on this branch (see this crate's
+/// `ir_loader.rs` "CF-2 disposition" comment on the `"Button"` arm of
+/// `construct_widget`), so the literal now lands.
+const DISABLED_BUTTON_OCCLUDES_A_LOWER_SIBLING_UI: &str = r#"component DisabledButtonOccludesALowerSibling inherits Window {
+    state hits: i32 = 0
+    VStack {
+        spacing: 0
+        padding: 0
+        Text { text: "\{root.hits}" }
+        ZStack {
+            Box {
+                slot.h-align: stretch
+                slot.v-align: stretch
+                fill: #336699cc
+                clicked => { root.hits += 1; }
+            }
+            Button { text: "gate" enabled: false }
+        }
+    }
+}"#;
+
+/// **The plan's other named `enabled` evidence**: "a disabled Button still
+/// occludes what is behind it" (`docs/dsl_spec.md` §4.19), now exercised
+/// against a *lower sibling* rather than an ancestor.
+/// [`a_disabled_button_suppresses_its_own_handler_without_stopping_propagation`]
+/// above already shows the click continuing *upward* past a disabled
+/// Button; that says nothing about what happens *underneath* one, which
+/// only became a meaningful question once a plain `Box` could carry
+/// `clicked` and the runtime actually dispatches it (T3). Two legs, both
+/// required:
+///
+/// - **Occlusion leg:** a click inside the disabled Button's rectangle
+///   must leave the Box's counter at `0`. `hit::resolve_topmost` resolves
+///   the Button (topmost-painted, DD-M4-P2-002), which is on the dispatch
+///   chain but suppressed (§4.8) — its ancestor is the `ZStack`, not the
+///   Box (a *sibling*, never visited), so the Box's own `clicked` handler
+///   is never reached at all, regardless of the Button's `enabled` state.
+/// - **Agreement leg:** a click on the same Box, outside the Button's
+///   rectangle, must increment the counter. Without this leg, "the counter
+///   stayed zero" in the first leg would be equally produced by a Box that
+///   never receives clicks at all (e.g. a hit-test or dispatch-chain
+///   regression that always resolves to the Button's ancestor), not by
+///   genuine occlusion.
+#[test]
+fn a_disabled_button_occludes_a_lower_sibling_it_paints_over() {
+    run_on_owning_runtime_thread_or_skip(
+        "F6: disabled Button occludes a lower sibling",
+        move || {
+            let ir = lower_ui_to_ir(DISABLED_BUTTON_OCCLUDES_A_LOWER_SIBLING_UI);
+            unsafe {
+                let window = load_window(&ir);
+                let hwnd = (*window).hwnd;
+                normalise_to_reference_baseline(window, CLIENT_W, CLIENT_H, "F6 baseline");
+                let factor = ffi::__window_scale_dpi_for_test(window) as f32 / REFERENCE_DPI as f32;
+
+                let (box_rect, button_rect) = {
+                    let root = (*window).root_widget.as_ref().expect("content root");
+                    let zstack = &root.children[1];
+                    assert_eq!(
+                        zstack.__kind_name_for_test(),
+                        "ZStack",
+                        "fixture stopped discriminating: the second child must actually be the \
+                     ZStack"
+                    );
+                    assert_eq!(
+                        zstack.children[1].__button_enabled_for_test(),
+                        Some(false),
+                        "fixture stopped discriminating: the Button must actually be disabled, or \
+                     the occlusion leg below proves nothing about `enabled`"
+                    );
+                    (
+                        zstack.children[0].__arranged_rect_for_test(),
+                        zstack.children[1].__arranged_rect_for_test(),
+                    )
+                };
+                let box_rect = box_rect.expect("Box must have been laid out");
+                let button_rect = button_rect.expect("Button must have been laid out");
+                assert!(
+                    box_rect.width > 0.0 && box_rect.height > 0.0,
+                    "fixture stopped discriminating: the Box rectangle {box_rect:?} must be \
+                 non-degenerate"
+                );
+                assert!(
+                    button_rect.width > 0.0 && button_rect.height > 0.0,
+                    "fixture stopped discriminating: the Button rectangle {button_rect:?} must be \
+                 non-degenerate"
+                );
+                assert!(
+                box_rect.width - button_rect.width > 20.0,
+                "fixture stopped discriminating: the full-bleed Box must be meaningfully wider \
+                 than the Button (box {box_rect:?}, button {button_rect:?}), or the agreement- \
+                 leg point below has no room to land inside the Box alone"
+            );
+                assert!(
+                    dip_rect_contains(box_rect, button_rect),
+                    "geometry this fixture depends on (docs/dsl_spec.md §4.13's default centre \
+                 alignment over a Fill/Fill Box): the Button rectangle {button_rect:?} must sit \
+                 entirely inside the Box's {box_rect:?}"
+                );
+
+                // Occlusion leg: the Button's own centre, which the full
+                // containment above guarantees is also inside the Box.
+                let (gate_x, gate_y) = (
+                    button_rect.x + button_rect.width / 2.0,
+                    button_rect.y + button_rect.height / 2.0,
+                );
+                assert!(
+                    dip_contains(button_rect, gate_x, gate_y)
+                        && dip_contains(box_rect, gate_x, gate_y),
+                    "fixture stopped discriminating: ({gate_x}, {gate_y}) must be inside both \
+                 rectangles"
+                );
+                send_click(hwnd, gate_x * factor, gate_y * factor);
+                let hits_after_gate = {
+                    let root = (*window).root_widget.as_ref().unwrap();
+                    read_counter(&root.children[0], "hits after clicking the disabled Button")
+                };
+
+                // Agreement leg: midway between the Box's left edge and the
+                // Button's left edge — inside the Box, outside the Button — the
+                // same technique `hover_transition_integration.rs`'s overlap
+                // fixture uses. Re-read both rectangles immediately before
+                // this click (rule: never click a cached rectangle across a
+                // state write that could have re-laid the tree out), even
+                // though nothing in this fixture should have moved either.
+                let (box_rect, button_rect) = {
+                    let root = (*window).root_widget.as_ref().unwrap();
+                    let zstack = &root.children[1];
+                    (
+                        zstack.children[0]
+                            .__arranged_rect_for_test()
+                            .expect("Box must still be laid out"),
+                        zstack.children[1]
+                            .__arranged_rect_for_test()
+                            .expect("Button must still be laid out"),
+                    )
+                };
+                let (box_only_x, box_only_y) = (
+                    (box_rect.x + button_rect.x) / 2.0,
+                    box_rect.y + box_rect.height / 2.0,
+                );
+                assert!(
+                    dip_contains(box_rect, box_only_x, box_only_y)
+                        && !dip_contains(button_rect, box_only_x, box_only_y),
+                    "fixture stopped discriminating: ({box_only_x}, {box_only_y}) must be inside \
+                 the Box {box_rect:?} and outside the Button {button_rect:?}, or the agreement \
+                 leg below is not testing what it claims to"
+                );
+                send_click(hwnd, box_only_x * factor, box_only_y * factor);
+                let hits_after_box = {
+                    let root = (*window).root_widget.as_ref().unwrap();
+                    read_counter(
+                        &root.children[0],
+                        "hits after clicking the Box outside the Button",
+                    )
+                };
+
+                ffi::wasamo_window_destroy(window);
+
+                assert_eq!(
+                    hits_after_gate, 0,
+                    "a click inside the disabled Button's rectangle must leave the Box's counter \
+                 at 0: the disabled Button occludes the Box beneath it, and the Box — a \
+                 sibling, not an ancestor of the Button — is never reached by the walk at all"
+                );
+                assert_eq!(
+                    hits_after_box,
+                    hits_after_gate + 1,
+                    "a click on the same Box outside the Button's rectangle must increment the \
+                 counter, or 'the counter stayed zero' above would be equally explained by a \
+                 Box that never receives clicks at all"
+                );
+            }
+        },
+    );
 }
