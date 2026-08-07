@@ -2390,3 +2390,334 @@ Each closed at the T6 close gate:
    of this task's own implementation (T5's close-gate line).
 6. The whole task list re-read at the close gate (the re-audit
    discipline, [plan.md](./plan.md) §Cross-task obligations).
+
+### Close gate (recorded 2026-08-07)
+
+Landed: `wasamoc/src/check.rs` (`FOCUS_ANNOTATION_CONTAINERS`,
+`FOCUS_ANNOTATION_ATTRS`, `check_focus_annotation_const_only_bind`,
+`check_focus_annotation_admission`, the attribute dispatch arm ahead of
+the per-kind gates, the `carries_modal_scope` predicate and the `dismiss`
+rule, `check_grid`'s two relaxations, 23 unit tests);
+`wasamo-runtime/src/widget.rs` (`FocusAnnotation`, the
+`WidgetNode::focus_annotation` field at all ten construction sites,
+`set_focus_annotation` as its sole writer, the widened `focus_role`
+container arm, `__focus_role_for_test`);
+`wasamo-runtime/src/ir_loader.rs` (`FOCUS_ANNOTATION_CONTAINERS`,
+`validate_focus_annotation_invariants` with its member recursion wired
+into `validate`, the `validate_phase6_zstack_node_invariants`
+relaxation, the annotation write in `build_node_with_loop_context`,
+22 unit tests);
+`wasamo-runtime/tests/focus_annotation_integration.rs` (one fixture).
+
+**Nothing was landed in `lexer.rs`, `parser.rs`, `lower.rs`,
+`emit.rs`, `wasamo-ir`, `focus_core.rs`, `focus_spike.rs`, `focus.rs`,
+`window.rs` or `layout.rs`** — the start gate's fact 1 predicted the
+first four and the boundary held for the rest.
+
+#### #1 — Call-site audit table
+
+Two migrations. Rust enumerates one of them and none of the other, so
+the table covers both and says which is which.
+
+Queries:
+`rg "focus-group|modal-scope|dismiss" wasamoc/src wasamo-runtime/src`,
+`rg "focus_role|focus_annotation" wasamo-runtime/src`,
+`rg "arranged_rect: None" wasamo-runtime/src/widget.rs` (the
+construction-site census),
+`rg "unknown .* attribute|takes no signal handlers|accepts no Phase-6"
+wasamoc/src wasamo-runtime/src` (the per-kind gates that could swallow a
+new name),
+`rg "SetOffset|SetSize" wasamo-runtime/src`.
+
+**The compiler-forced half.** `WidgetNode` has ten struct literals and
+no `Default`, no `..` update syntax and no builder, so the new field
+could not be missed at construction: `widget.rs` 594 / 621 / 648 / 691 /
+741 / 786 / 847 / 885 / 911 / 1085. Nothing else in the workspace
+constructs a `WidgetNode`.
+
+**The half the compiler enumerates nothing of** — every gate that
+decides whether an attribute name or a signal name is admitted. These
+rows are the artifact.
+
+| Site | Classification | Reason |
+|---|---|---|
+| `check.rs:2182` attribute dispatch arm | **new, must run early** | Placed after the `slot.*` / `CHILD_PLACEMENT_ATTRS` dispatch and after the component-level early return, and **before** the ZStack / ScrollView / ToggleButton arms. Witness W8 measures that the ordering is load-bearing rather than incidental |
+| `check.rs:2203` `check_zstack_unknown_attr` | **migrated** | Rejected `focus-group` on a ZStack before this task (start gate fact 3). Now unreachable for the two names because the arm above claims them first |
+| `check.rs` ScrollView arms (`offset-y`, then the catch-all) | **migrated** | Same shape: `modal-scope` on a `ScrollView` was a measured reject before this task |
+| `check.rs` `check_togglebutton_property_name` | **migrated** | Still rejects the names — correctly, `ToggleButton` is not a container — but the diagnostic is now the admission one. `focus_group_true_on_togglebutton_rejected_as_admission_not_unknown_attr` is what pins which of the two fires |
+| `check.rs:1366` `check_grid` attribute arm | **migrated** | Skips the two names so a `Grid` does not also report "unknown Grid attribute"; the generic dispatch owns them. Same shape as the `slot.*` skip immediately above it |
+| `check.rs:1396` `check_grid` signal arm | **migrated** | Was a blanket "`Grid` takes no signal handlers"; now lets `dismiss` through and rejects every other name. `non_dismiss_handler_on_grid_still_rejected` bounds the relaxation |
+| `check.rs:2385` `Member::SignalHandler` | **new, sole `dismiss` admission** | The one place a signal name is checked against its enclosing node in the checker |
+| `check.rs:2088` `carries_modal_scope` | **new, the predicate** | "A **container** that carries `modal-scope: true`", both halves — see #2 |
+| `check.rs` `check_host_property_bind` | ignore-OK, unchanged | Component-level `focus-group:` keeps its existing unknown-host-attribute diagnostic; `focus_group_true_at_component_level_rejected_as_unknown_host_attr` pins that it still reaches this gate rather than the new one |
+| `check.rs` `check_cell` | ignore-OK, unchanged | A `Cell` is not a container; its pre-existing unknown-attribute diagnostic fires **alongside** the new admission one, the same dual-diagnostic shape a misplaced WrapPanel attribute already produces |
+| `ir_loader.rs:251` `validate` chain | **new, ordered** | Runs immediately after `validate_phase2_node_invariants` and **before** the ZStack and ToggleButton gates, so a misplaced annotation reports admission rather than a per-kind "unknown attribute" |
+| `ir_loader.rs:1296` `validate_focus_annotation_invariants` | **new, the four rejects** | Kind admission, non-`Bool` literal, either name on the binding path, `dismiss` without `modal-scope = true` |
+| `ir_loader.rs:1358` its member recursion | **new** | Covers `IrMember::Widget`, `If` branch bodies and `For` bodies, copying the shape every earlier `validate_phaseN_member_invariants` uses |
+| `ir_loader.rs:1164` ZStack prop gate | **migrated** | Let the two names through. **This one is not cosmetic**: without it the loader refuses IR the checker accepts, and witness W6 reddens the integration fixture to prove it |
+| `ir_loader.rs:1197` ZStack handler gate | **migrated** | Was `!node.handlers.is_empty()`; now `any(|h| h.signal != "dismiss")`. `zstack_clicked_handler_still_rejected_after_relaxation` bounds it |
+| `ir_loader.rs` `validate_phase8_togglebutton_node_invariants` | ignore-OK, ordering only | Its "unknown ToggleButton attribute" arm is now unreachable for the two names because the new gate runs first; the loader-side ToggleButton test asserts which message comes out |
+| `ir_loader.rs:3189` the annotation write | **new, sole writer** | One kind-independent site in `build_node_with_loop_context`, not per-kind arms in `construct_widget` |
+| `widget.rs:1152` `set_focus_annotation` | **sole writer of the field** | `pub(crate)`; `rg` shows exactly one call site, the one above |
+| `widget.rs:1188` `focus_role` | **migrated, value set widened** | Same signature, same two callers, still total over `WidgetData`; only the container arm's value set grows |
+| `widget.rs:1931` `__focus_role_for_test` | **new, read-only** | Returns `&'static str` rather than exporting `FocusRole`, the shape `__button_state_for_test` already uses |
+| `focus_spike.rs::walk` | **second reader, re-derived** | Calls `focus_role()` and then applies its override map on top. Its fixture builds trees programmatically, so no node carries an annotation and the derived role is unchanged — measured by `focus_mechanism_fixture` staying green (4 tests) |
+| `focus.rs::FocusProjection::project` | **first reader, unchanged** | Consumes whatever `focus_role` returns; no edit needed, which is the point of T5 leaving the derivation as the extension point |
+| `abi.rs` | ignore-OK, unchanged | No `extern "C"` function added or altered; the cross-task "no new ABI function" obligation holds |
+
+**What no existing test pinned.** `git grep "focus-group|modal-scope|
+dismiss"` over `e3ff83a` (the pre-T6 tree) returns **exactly one hit in
+the whole workspace** — a doc comment in `focus.rs` naming the two
+annotations as the things arrows and `Escape` are conditioned on — and
+**no test**. Witness W1a measures the consequence directly: with the
+annotation read deleted from `focus_role`, exactly **one of 45** test
+sections goes red, and it is the one this task added.
+
+#### #2 — Structural side-effect enumeration
+
+| Derived effect | Disposition |
+|---|---|
+| **The node's focus role** | New, and the only intended effect. Computed on demand by `focus_role` from the field; no role is cached, so there is no derived copy to keep in step (which is why trap #3 was recorded non-applicable at the start gate and stayed so) |
+| **Layout** | Untouched, and required to be: dsl_spec §4.19 "neither attribute changes layout". The field is not read by `build_layout_tree`, `measure`, `arrange` or `sync_visuals` — `rg "focus_annotation" wasamo-runtime/src` returns the struct, the field, the writer and `focus_role` only |
+| **Composition geometry** | Unchanged — see #3 |
+| **`Visual` creation** | None. The annotation creates no `Visual` and no brush; it is not painted at all, which is why trap #7 is non-applicable and why no capture could witness this task |
+| **The spike's override projection** | Re-derives through the same `focus_role`. Enumerated at the start gate as the blast radius; `focus_mechanism_fixture` (4) and `focus_traversal_integration` (6) both stay green |
+| **`window::set_root` / subtree re-materialisation** | Not a concern by construction: the annotation is **built-time state on the node**, written by the loader from the IR the node was built from, so a re-materialised subtree gets it again from the same IR. Unlike T4's `HoverState` and T5's `WindowFocus` there is no window-level record to invalidate — this task retains no identifier across messages (the T5 start-gate line) |
+| **The binding path** | Deliberately closed at both gates. Constant-only means a `bind focus-group = …` is not a shape the runtime has to support, so `resolve_prop_key` gains no entry and no `PropertyValue` variant exists |
+| **`ButtonData.label_size`'s three-point write** ([constraints §4](../requirements/constraints.md)) | Not touched |
+| **`focus_core`'s group memory** | Not touched. Its single-writer discipline lives inside `FocusState::set_focus`, which this task does not call. A `Group` role now exists, but nothing moves focus into one until T7 |
+| **Traversal, for an unannotated tree** | Unchanged: with both flags `false` the container arm returns `FocusRole::Container`, which is exactly the pre-T6 value. Every existing focus test stays green without edit, which is the measurement |
+| **Traversal, for an *annotated* tree** | Changed, and this is the one behavioural consequence — see the carry-forward CF-T6-1. A `modal-scope` subtree is skipped by `tab_stops` until T7 enters it |
+
+#### #3 — Every `SetOffset` / `SetSize` in the runtime, with its pass
+
+Carried from T5 because the field is per-node presentation-adjacent
+state and DD-M4-P2-003 requires the enumeration of any task that could
+add a geometry write.
+
+Query: `rg "SetOffset|SetSize" wasamo-runtime/src`.
+
+| Site | Pass | What it writes |
+|---|---|---|
+| `widget.rs` node Visual offset / size (2 calls) | `sync_visuals` | The node's own Visual |
+| `widget.rs` Button-family label (2 calls) | `sync_visuals` | The label Visual |
+| `widget.rs` `ScrollView` intermediate (2 calls) | `sync_visuals` | The content Visual |
+| `dip_scale.rs` (2 mentions) | — | Doc comments naming the operations, not calls |
+
+**Six calls, all inside `sync_visuals`, unchanged from T1 / T2 / T3 /
+T4 / T5.** The annotation adds none.
+
+#### #4 — Branch tests, each fired directly
+
+Every branch authored by this task, with the test that fires it. 23 new
+tests in `wasamoc`, 22 in `wasamo-runtime`'s loader, 1 integration
+fixture.
+
+**Checker — accept arms**
+
+| Authored arm | Test that fires it |
+|---|---|
+| `focus-group: true` on each of the seven containers | `focus_group_true_accepted_on_every_admitting_container` (a table over all seven, each built validly) |
+| `modal-scope: true` on the same seven | `modal_scope_true_accepted_on_every_admitting_container` |
+| The `false` literal is also a constant | `focus_group_false_accepted`, `modal_scope_false_accepted` |
+| Both attributes on one container | `focus_group_and_modal_scope_together_on_one_container_accepted` |
+| `dismiss` beside `modal-scope: true` | `dismiss_handler_accepted_beside_modal_scope_true` |
+| `dismiss` on a `Grid` (the relaxed arm) | `dismiss_handler_accepted_on_grid_carrying_modal_scope` |
+| The gate that used to swallow the name — ZStack | `focus_group_true_on_zstack_produces_no_diagnostic` (asserts `diagnostics.is_empty()`, not merely no error, so a surviving *warning* would fail it) |
+| …and ScrollView | `modal_scope_true_on_scrollview_produces_no_diagnostic` |
+
+**Checker — reject arms**
+
+| Authored arm | Test that fires it |
+|---|---|
+| Constant-only, state-ident RHS | `focus_group_state_ident_rejected` |
+| Constant-only, non-bool literal RHS | `modal_scope_int_literal_rejected` |
+| Admission — `Text` | `focus_group_true_on_text_rejected` |
+| Admission — `Button` | `focus_group_true_on_button_rejected` |
+| Admission — `ToggleButton`, **and which of two diagnostics fires** | `focus_group_true_on_togglebutton_rejected_as_admission_not_unknown_attr` |
+| Admission — `Rectangle` | `focus_group_true_on_rectangle_rejected` |
+| Admission — `Cell` | `focus_group_true_inside_cell_rejected` |
+| Component level stays the host gate's | `focus_group_true_at_component_level_rejected_as_unknown_host_attr` |
+| `dismiss` with no `modal-scope` | `dismiss_handler_without_modal_scope_sibling_rejected` |
+| `dismiss` beside `modal-scope: false` | `dismiss_handler_beside_modal_scope_false_rejected` |
+| `dismiss` at component level | `dismiss_handler_at_component_level_rejected` |
+| The predicate's **kind** half | `dismiss_beside_a_modal_scope_on_a_non_container_is_still_rejected` (two diagnostics, both asserted) |
+| The predicate's **position** half | `dismiss_beside_a_component_level_modal_scope_is_still_rejected` |
+| The Grid relaxation is narrow | `non_dismiss_handler_on_grid_still_rejected` |
+
+**Loader — accept arms**
+
+`focus_group_true_accepted_on_every_admitting_container`,
+`modal_scope_true_accepted_on_every_admitting_container`,
+`focus_group_false_accepted`, `modal_scope_false_accepted`,
+`focus_group_and_modal_scope_together_on_one_container_accepted`,
+`dismiss_handler_accepted_beside_modal_scope_true`,
+`dismiss_handler_accepted_on_zstack_carrying_modal_scope`,
+`dismiss_handler_accepted_on_grid_carrying_modal_scope`.
+
+**Loader — reject arms**
+
+| Authored arm | Test that fires it |
+|---|---|
+| Kind admission | `focus_group_true_on_text_rejected`, `_on_button_rejected`, `_on_rectangle_rejected`, `modal_scope_true_on_text_rejected` |
+| …and which diagnostic wins over the ToggleButton gate | `focus_group_true_on_togglebutton_rejected_as_admission_not_unknown_attr` |
+| Non-`Bool` literal | `focus_group_non_bool_literal_rejected`, `modal_scope_non_bool_literal_rejected` |
+| The binding path | `focus_group_binding_rejected`, `modal_scope_binding_rejected` |
+| `dismiss` without / with `false` / on a non-container | `dismiss_handler_without_modal_scope_prop_rejected`, `dismiss_handler_beside_modal_scope_false_rejected`, `dismiss_handler_on_non_container_rejected` |
+| The ZStack relaxation stayed narrow — props | `zstack_spacing_prop_still_rejected_after_relaxation` |
+| …and handlers | `zstack_clicked_handler_still_rejected_after_relaxation` |
+
+**The role derivation**
+
+| Authored arm | Test that fires it |
+|---|---|
+| `focus-group: true` → `Group` | `authored_focus_annotation_reaches_the_loaded_node_as_its_focus_role` |
+| `modal-scope: true` → `ModalScope` | the same fixture |
+| unannotated container → `Container` | the same fixture (the control leg) |
+| Button-family arm unchanged under an annotated ancestor | the same fixture |
+| both-at-once → `ModalScope` (the documented precedence) | the same fixture |
+
+[DD-V-029](../../../cross-milestone/decisions/dd-v-029-pure-logic-red-test-obligation.md)'s
+**named** obligation is not triggered: this task authors no rounding, no
+unit conversion and no boundary condition. The witnesses below are the
+trap-#4 artifact instead.
+
+#### #5 — Mutation witnesses
+
+Eight witnesses. Every one was applied with an edit, **read back from
+the file** to confirm it was present before the run, run, then reverted
+with the revert confirmed by re-reading — and, for `check.rs`, by
+`git diff --stat` returning empty against the committed state (the T2
+corrective, carried by T3, T4 and T5). No failure was re-rolled: the
+suite went red only where a mutation was deliberately introduced.
+
+**Two of the eight are not mutations of this task's own implementation**
+(the T5 close-gate line): W1a and W1b each *restore the pre-T6
+behaviour* rather than break the new code, so they answer "do these
+tests catch the absence of the feature", not merely "do they watch their
+own code".
+
+| Witness | Mutation | Went red | Reading |
+|---|---|---|---|
+| **W1a — the role read restored** (restoring) | `focus_role`'s container arm returns `FocusRole::Container` unconditionally | `focus_annotation_integration` — and **nothing else in the workspace**: 1 of 45 sections | The measurement behind "no existing test pinned this". The whole workspace has exactly one test that can see the annotation reach the node, and it is this task's |
+| **W1b — the checker admission restored** (restoring) | `FOCUS_ANNOTATION_ATTRS` emptied, so the dispatch never fires and pre-T6 checker behaviour returns | 13 checker tests **and** the integration fixture (2 of 45 sections) | The integration fixture is the interesting one: it drives the real compiler, so restoring the checker makes the `.ui` fail `check` before the runtime is reached. That is the compiler-to-runtime path being end-to-end rather than two halves asserted apart |
+| **W2 — precedence flipped** | `focus_role` prefers `Group` over `ModalScope` | the integration fixture alone, on the both-at-once leg | The precedence is asserted, not incidental |
+| **W3 — loader kind admission deleted** | the `FOCUS_ANNOTATION_CONTAINERS` test short-circuited | 5 loader tests | Each non-container kind is fired by its own test, not by one representative |
+| **W4 — loader constant-only deleted** | the `IrLiteral::Bool` test short-circuited | `focus_group_non_bool_literal_rejected`, `modal_scope_non_bool_literal_rejected` | The runtime half of the constant-only rule is separately pinned from the checker half |
+| **W5 — loader `dismiss` rule deleted** | the `dismiss` arm short-circuited | 3 loader tests | Absent / `false` / non-container are three inputs to one branch, and all three are fired |
+| **W6 — the ZStack relaxation reverted** | the two names no longer skip the ZStack prop gate | 5 loader tests **and** the integration fixture | The decisive one for the two-gate question: without the relaxation the loader refuses a `.ui` the compiler accepted, and the fixture is what notices, because it is the only test that runs both gates on one input |
+| **W8 — the checker dispatch reordered** | the focus-annotation arm moved *after* the ZStack / ScrollView / ToggleButton gates | 5 checker tests, including both no-diagnostic controls and the ToggleButton which-diagnostic test | The ordering claim in the audit table is falsifiable rather than asserted |
+
+W7 (the annotation write removed at the build site, leaving `focus_role`
+intact) reddened the integration fixture alone and produced a
+`method set_focus_annotation is never used` warning — recorded here
+because the warning is a second, independent signal that the write site
+is the only one.
+
+#### #6 — Deterministic-failure disposition
+
+**None arose.** Trap 6 was selected as *armed* rather than applying, and
+it did not fire: no test failed except where a witness was deliberately
+in place, and every witness failure disappeared on the confirmed revert.
+There is no rerun history to record because there was no unexplained
+failure to rerun.
+
+#### #7 — Carry-forward
+
+| Constraint | Evidence | Placement | Re-trigger criterion |
+|---|---|---|---|
+| **CF-T6-1 — between this task and T7, a *present* `modal-scope` subtree is *un-entered*.** `focus_role` now returns `FocusRole::ModalScope`, and `focus_core::tab_stops` skips a scope the state has not entered; entry is the materialisation seam T7 owns. That is precisely the state [DD-M4-P2-004](../decisions/dd-m4-p2-004-modal-focus-scope.md) argues must not be reachable ("nothing present is un-entered") | The derivation itself, plus `focus_core::tab_stops`'s `FocusRole::ModalScope if !state.is_entered(id) => return` arm | `carry-forward` → this ledger | **T7**, which adds the entry seam and closes it. Bounded meanwhile: no shipped `.ui` carries the attribute — T10 is what adds one, after T7 — so the state is reachable only from a test or a hand-written `.ui` in between. Named at the start gate rather than found here |
+| **CF-T6-2 — a container carrying both annotations collapses to one role.** `focus_core::FocusRole` is one-of-six, so `modal-scope` takes precedence and the `focus-group` half is silently inert | The precedence branch in `focus_role` and witness W2; the integration fixture's both-at-once leg pins the chosen answer | `carry-forward` → this ledger | **T7**, which owns the projection. DD-M4-P2-005 records the case as "expressible under A1 and untested in M4", so shipping a single-valued answer is inside the decision; what T7 must decide is whether a composite role is needed or whether the surface should reject the combination |
+| **CF-T6-3 — a per-kind signal admission rule *does* exist, in two places, and `plan.md` §T8's premise is false for them.** `check_grid` rejected every signal handler on a `Grid`, and `validate_phase6_zstack_node_invariants` rejects every handler on a `ZStack`. This task relaxed both **only** for `dismiss` | Measured at the start gate (fact 4) for the checker and while wiring the loader gate for the runtime; `non_dismiss_handler_on_grid_still_rejected` and `zstack_clicked_handler_still_rejected_after_relaxation` pin the current bound | `finding` → **T8** | **T8**, which widens `clicked` to any widget. Its plan text says "`clicked` needs no checker widening — `check` has no per-kind signal admission rule"; that is true for `Box` and the stacks and **false** for `Grid` and `ZStack`, on the checker and loader side respectively. T8 must either widen both gates or record the narrowing |
+| **CF-T6-4 — the two `FOCUS_ANNOTATION_CONTAINERS` lists are duplicated across crates with no mechanical tie.** `wasamoc::check` and `wasamo_runtime::ir_loader` each hold the seven-name list; they agree today and nothing makes them stay in agreement | The two consts, and the fact that the integration fixture is the only test that runs an input through both | `carry-forward` → this ledger | **Any task that adds a container widget kind** — M4-Phase 4's `Image` is the nearest candidate, M5's widget set the larger one. This is the same shape as the pre-existing `resolve_prop_key` / `widget_prop_type` duplication the codebase already documents as deliberate (the compiler stays self-contained), so it is recorded as inherited rather than introduced |
+
+#### Re-decided at close
+
+The start gate selected traps 1, 2, 4 and 5, armed 6, and recorded 3 and
+7 non-applicable with reasons. **The selection survived unchanged**, and
+each non-applicable call is confirmed by what was built: no derived copy
+of the role was cached (3), and nothing this task lands is painted (7).
+Trap 6 stayed armed and did not fire.
+
+Two things were built that the gate did not name explicitly: the
+**loader-side relaxation of the ZStack gate** (the gate predicted a
+loader *addition*, not a loader *relaxation* — the ZStack gate's
+existence was discovered while wiring the new validate), and the second
+restoring witness W1b. Neither changes the review lane. The lane stays
+**branch/test-focused review** as predicted: the ZStack relaxation is a
+reject-branch narrowing, not a structural change, and the compiler-forced
+field addition is enumerated at all ten sites.
+
+#### Re-audit of the whole task list
+
+Per [plan.md](./plan.md) §Cross-task obligations, the full list was
+re-read at this close gate rather than only T6's item.
+
+- **T7** — inherits CF-T6-1 and CF-T6-2 directly, and gains what it was
+  waiting for: `focus_role` now yields `Group` and `ModalScope` from an
+  authored source, so T7's projection work is entry / exit / memory
+  rather than role plumbing. Its plan bullet "the core's un-entered state
+  has no production constructor" is now **false** — this task created
+  exactly that constructor — so T7's reconciliation is a real branch with
+  a real input rather than a hypothetical. Its `focus_spike` retirement is
+  unaffected: the override map still overrides whatever `focus_role`
+  derives.
+- **T8** — inherits CF-T6-3. Its `clicked`-widening premise needs
+  correcting against two measured gates. Its `key-down("<key>")` grammar
+  work is untouched by this task; the start gate's fact 1 (no grammar
+  change was needed for `focus-group` / `modal-scope` / `dismiss`) does
+  **not** generalise to `key-down`, which needs the phase's one new
+  production because a signal name carrying an argument is not an `Ident`.
+- **T9** — unaffected. Per-item handlers inside `for` are the phase's
+  only new IR content; this task added none. The `dismiss` admission
+  predicate reads a node's own member list, so a handler inside a `for`
+  body is checked against its own siblings, not the loop's.
+- **T10** — first `.ui` that will carry the attributes. It must land
+  **after** T7 for CF-T6-1's reason: annotating the gallery lightbox
+  before the entry seam exists would make its buttons keyboard-
+  unreachable. The plan's ordering already has this right; recorded so
+  the reason is visible rather than incidental.
+- **T11** — unaffected; touch inherits nothing from the annotation.
+- **T12** — unaffected by this task's landing, but its control C
+  (containment and occlusion) is the first *frame* that can see a scope,
+  and it can only see one after T7.
+- **T13** — gains two re-verification items. §4.19's attribute table
+  ("admitted on any container") and its signal-admission table are now
+  implemented on both gates and should be checked against the landed
+  container list; and §4.19's `dismiss` admission sentence should be
+  checked against the two-gate implementation rather than the checker
+  alone. CF-T6-3's narrowing is T8's to close, not T13's, but if T8
+  leaves it open T13 inherits a divergence.
+- **Cross-task obligation "no new ABI function"** — held. No `extern "C"`
+  function was added or changed; the one new public symbol is the
+  `__focus_role_for_test` seam.
+- **Cross-task obligation "every task that measures something re-reads
+  the whole task list"** — discharged here.
+
+#### Verification means
+
+`cargo clean` (9,492 files / 2.6 GiB removed), then
+`cargo build --release --workspace` 1m08s success,
+`cargo build --workspace` 1m02s success,
+`cargo test --workspace --no-fail-fast` **45 binaries/sections, 1,097
+passed, 0 failed, 0 ignored**. T5's baseline was 1,051; the 46 added are
+`check.rs`'s 23 unit tests, `ir_loader.rs`'s 22, and the one integration
+fixture. `cargo fmt --all -- --check` zero exit and `git diff --check`
+clean against the post-commit state.
+
+**The integration fixture ran rather than skipped**, verified by running
+it with `--nocapture` and confirming the shared guard's
+`skipping …: runtime compositor unavailable` line does **not** appear.
+`tests/common/mod.rs` was not touched, so the `0x80070005` two-conjunct
+check ([constraints §8](../requirements/constraints.md)) is intact and
+the standing obligation to verify a newly authored guard does not apply —
+no guard was authored.
+
+**What this task's evidence cannot show, stated rather than implied.**
+The fixture asserts the role that reaches the node; it does not assert
+what traversal then does with that role, because the behaviour does not
+exist until T7. It runs at one scale and touches no geometry, so it
+inherits nothing from and adds nothing to the pointer-conversion
+evidence T2 owns. And no captured frame exists for this task, by
+construction: the annotation is not painted, so a frame could not
+distinguish an annotated container from an unannotated one.
