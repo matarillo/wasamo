@@ -1183,31 +1183,38 @@ impl WidgetNode {
     /// untested in M4"; confinement is the stronger property — it
     /// changes which subtree is reachable at all, where a group only
     /// changes how Tab moves within one — so `modal-scope` takes
-    /// precedence here, and deciding what a *combined* group-and-scope
-    /// should mean is T7's question, not this one's.
+    /// precedence here. Whether the combination should instead mean
+    /// something else is tracked in the pre-1.0 candidate pool with no
+    /// milestone claimed (`process/candidate-pool.md` §"Focus-annotation
+    /// surface", disposition recorded in
+    /// `process/milestone-4/phase-2/implementation/log.md` §"Owner
+    /// disposition of CF-T6-2"); this function's own answer —
+    /// `modal-scope` wins — is the landed rule regardless of how that pool
+    /// item resolves.
     ///
     /// **Reachability caveat — read before widening this function's value
-    /// set.** `focus_role` has exactly two production callers,
-    /// `focus::traverse_on_key` (the `WM_KEYDOWN` traversal path) and
-    /// `focus::focus_on_click` (the `WM_LBUTTONUP` focus path), both
-    /// reached through `FocusProjection::project`'s pre-order walk — so a
-    /// wider value set changes what both paths can reach, not only what
-    /// this function returns.
+    /// set.** `focus_role` has exactly one production caller, the `walk`
+    /// helper in `focus.rs`, itself reached only from
+    /// `FocusProjection::project`'s pre-order walk. `FocusProjection::project`
+    /// in turn has six call sites in `focus.rs` — `sync_scopes_to_tree`,
+    /// `traverse_on_key`, `focus_on_click`, `arrow_on_key`, `dismiss_on_key`,
+    /// and `focused_path` — every production and test-seam path that reads
+    /// the focus tree at all, so a wider value set here changes what all of
+    /// them can reach, not only what this function returns.
     ///
-    /// Until M4-Phase 2 T7 adds the scope entry seam, a `modal-scope`
-    /// container is **present but un-entered**: nothing in production
-    /// calls `focus_core::FocusState::enter_modal` yet, and
-    /// `focus_core::FocusTree`'s `collect_stops` returns early for an
-    /// un-entered `ModalScope`, so its subtree is reachable by neither Tab
-    /// nor click-to-focus. A `focus-group` container is one Tab stop and
-    /// is not descended into: `FocusTree::tab` resolves that landing
-    /// through `resolve_stop`, so Tab already lands on the group's first
-    /// or remembered member — but `focus::focus_on_click` does **not**
-    /// call `resolve_stop`, so until T7 a click on a widget inside a
-    /// group moves focus to the **group container** itself, not to the
-    /// clicked widget. See the T6 close gate's carry-forward ledger in
-    /// `process/milestone-4/phase-2/implementation/log.md` for the
-    /// tracked disposition.
+    /// Widening this function's value set changes what the keyboard and
+    /// pointer paths can reach, and each has its own production consumer:
+    /// `focus_core::FocusTree::collect_stops` decides which roles Tab
+    /// enumerates, `focus_core::FocusTree::tab` (through `resolve_stop`)
+    /// decides where Tab lands inside a `Group`, and
+    /// `focus_core::FocusTree::focus_landing` decides where a click lands,
+    /// including landing directly on a `Group`'s clicked member rather than
+    /// the group container (M4-Phase 2 T7, closing CF-T6-5). A
+    /// `modal-scope` container is entered by its own presence:
+    /// `focus::sync_scopes_to_tree`'s entry step enters every
+    /// `FocusRole::ModalScope` node not already on the stack at the seam
+    /// that materialises it, so a scope's subtree is reachable by both Tab
+    /// and click-to-focus from the moment it exists in the tree.
     pub(crate) fn focus_role(&self) -> (crate::focus_core::FocusRole, bool) {
         use crate::focus_core::FocusRole;
         match &self.data {

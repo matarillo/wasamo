@@ -18,18 +18,34 @@
 # captured frame can.
 #
 # `examples/gallery/gallery.ui` is a tracked file that T10, not this task,
-# owns landing the annotation in -- this capture is a THROWAWAY PROBE: the
-# annotation is written in, built, captured, then reverted with
-# `git checkout -- examples/gallery/gallery.ui`. Because the probe requires
+# owns landing the annotation in -- this capture is a THROWAWAY PROBE, and
+# the annotation edit, the two builds, and the revert are OPERATOR STEPS
+# taken between this script's invocations, not something the script itself
+# performs: this script only launches an already-built exe, drives it, and
+# captures or compares frames -- it never edits `gallery.ui`, never runs
+# `cargo build`, and never runs `git checkout`. Because the probe requires
 # two structurally-compared trees built from two different `gallery.ui`
 # contents, one process launch cannot produce both frame sets the way
 # capture-t5-focus.ps1's single launch produces its four -- E and U are two
-# separate `cargo build --release --workspace` outputs. This script is
-# therefore invoked three times:
+# separate `cargo build --release --workspace` outputs the operator
+# produces before the matching `-Variant` invocation. The full sequence,
+# script steps and operator steps interleaved:
 #
-#   .\capture-t7-scope-entry.ps1 -Variant E -OutDir <dir>   # after building the E tree
-#   .\capture-t7-scope-entry.ps1 -Variant U -OutDir <dir>   # after building the U tree
-#   .\capture-t7-scope-entry.ps1 -Compare   -OutDir <dir>   # loads both sets from disk, reports
+#   1. (operator) edit `examples/gallery/gallery.ui`: add `modal-scope: true`
+#      and a `dismiss` handler to the lightbox's outer ZStack -- this is
+#      the E tree.
+#   2. (operator) `cargo build --release --workspace`.
+#   3. (script)   .\capture-t7-scope-entry.ps1 -Variant E -OutDir <dir>
+#   4. (operator) `git checkout -- examples/gallery/gallery.ui` -- reverts
+#      to the U tree (both lines removed).
+#   5. (operator) `cargo build --release --workspace`.
+#   6. (script)   .\capture-t7-scope-entry.ps1 -Variant U -OutDir <dir>
+#   7. (script)   .\capture-t7-scope-entry.ps1 -Compare   -OutDir <dir>
+#
+# Steps 3 and 6 each launch the already-built `target\release\gallery-rust.exe`,
+# open the lightbox, and save two client-rectangle frames to `-OutDir`; step
+# 7 loads both frame sets back from disk and reports -- it launches no
+# process and touches no `.ui` source.
 #
 # The two frame sets, both at one window size and position, both opening the
 # lightbox the same way and parking the cursor away from its controls

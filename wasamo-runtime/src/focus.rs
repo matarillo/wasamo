@@ -759,21 +759,31 @@ pub(crate) fn dismiss_on_key(root: &mut WidgetNode, focus: &mut WindowFocus, vk:
 /// the retained id names a node this freshly built projection cannot
 /// explain.
 ///
-/// **Read-only, and does not call [`WindowFocus::rebase`] itself.** By the
-/// time this runs, every seam that can change the tree shape has already
-/// rebased `focus` against its own projection: `move_focus`'s two
-/// production callers rebase before they read `focus.core`
-/// (`traverse_on_key`, `focus_on_click`), and every structural mutation
-/// reaches [`sync_scopes_to_tree`] through `window::set_root` or
-/// `emit::flush_layout` (M4-Phase 2 T7). So the id this reads is already
-/// expressed in a coordinate system the *live* tree can explain, and the
-/// projection built here agrees with it; the `Option` on
-/// `FocusProjection::path` is what remains for the one case rebasing
-/// cannot remove — nothing is focused at all — which collapses to the
-/// same `None` a caller here needs to distinguish from "found" either way.
+/// **Read-only, and cannot call [`WindowFocus::rebase`] itself** — this
+/// function takes `&WindowFocus`, and `rebase` needs `&mut self`.
+/// `traverse_on_key`, `focus_on_click`, `arrow_on_key`, and
+/// `dismiss_on_key` each rebase before reading `focus.core`, and every
+/// reactive structural mutation reaches [`sync_scopes_to_tree`] — which
+/// rebases too — through `window::set_root` or `emit::flush_layout`'s four
+/// `mark_layout_dirty_for` call sites in `ir_loader.rs` (M4-Phase 2 T7).
+/// The four direct-ABI child mutators (`wasamo_widget_append_child` /
+/// `insert_child` / `remove_child` / `replace_child`) reach none of that:
+/// they call `WidgetNode::insert_child` / `remove_child` / `replace_child`
+/// directly, and none of those marks the window layout-dirty, so an edit
+/// made through one of them runs no rebase before this function's next
+/// call.
 ///
-/// Used by the test seam (`lib.rs::ffi::__focus_path_for_test`). **A
-/// reader, not a second store**: the window's one record is the
+/// **The exposure is bounded by this function's only caller,**
+/// `ffi::__focus_path_for_test` (`lib.rs`) — a test seam, not a production
+/// reader. If a retained id survives one of those four mutators' edits and
+/// stays in range, this function resolves it against whatever node the
+/// fresh projection now finds at that numeric index — which need not be
+/// the node the id used to name. `None` is still what an *out-of-range*
+/// id, or no focus at all, collapses to; the in-range case is the residual
+/// this function does not close, and it is closed nowhere upstream of this
+/// function's one caller.
+///
+/// **A reader, not a second store**: the window's one record is the
 /// [`FocusId`] held by [`WindowFocus`], and this function derives a path
 /// from it on demand by projecting the live tree, rather than reading a
 /// path field that could drift from the id.
@@ -832,5 +842,50 @@ mod tests {
     #[test]
     fn a_non_arrow_key_is_not_an_arrow() {
         assert_eq!(arrow_direction(VK_A), None);
+    }
+
+    // ── `DroppedScopes::outermost` (M4-Phase 2 T7 remediation, B3) ─────────
+    //
+    // Nesting is "supported, unexercised in M4" (DD-M4-P2-004 §Nesting), so
+    // no integration fixture can build a real tree with two scopes dropped
+    // in one rebase. The selection itself is pure logic over a `Vec`, built
+    // directly here rather than through a live `WindowFocus::rebase` call —
+    // the mirror-structure allowance `CLAUDE.md` §Testing rules describes
+    // is not even needed: `DroppedScopes` already carries no Win32/WinRT
+    // dependency of its own.
+
+    #[test]
+    fn outermost_of_two_entries_is_the_first_not_the_innermost() {
+        let outer = DroppedScope {
+            restore_to: Some(1),
+        };
+        let inner = DroppedScope {
+            restore_to: Some(2),
+        };
+        let dropped = DroppedScopes(vec![outer, inner]);
+        assert_eq!(
+            dropped.outermost(),
+            Some(&outer),
+            "outermost must read the first (outermost) entry, not the last \
+             (innermost) one — DroppedScopes's own doc comment states outermost-first \
+             ordering is what this method relies on"
+        );
+    }
+
+    #[test]
+    fn outermost_of_one_entry_is_that_entry() {
+        let only = DroppedScope { restore_to: None };
+        let dropped = DroppedScopes(vec![only]);
+        assert_eq!(dropped.outermost(), Some(&only));
+    }
+
+    #[test]
+    fn outermost_of_no_entries_is_none() {
+        let dropped = DroppedScopes(Vec::new());
+        assert_eq!(
+            dropped.outermost(),
+            None,
+            "nothing dropped must read back as nothing to restore"
+        );
     }
 }

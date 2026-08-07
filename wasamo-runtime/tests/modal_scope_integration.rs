@@ -36,6 +36,12 @@
 //!   `arrow_on_key` while focus is inside a `focus-group`, and reach the
 //!   host key slot everywhere else — the agreement leg without which
 //!   "consumed" would be indistinguishable from "did nothing".
+//! - [`exit_with_no_restore_target_leaves_focus_unset`] (Fixture 7) —
+//!   `sync_scopes_to_tree`'s exit branch with `restore_to == None`
+//!   (M4-Phase 2 T7 remediation, B2): a scope entered while nothing was
+//!   focused captures `None`, and closing it must leave focus unset rather
+//!   than falling to the domain's first stop. Reuses Fixture 2's "entered
+//!   with nothing focused" shape and adds the missing leg, closing it.
 //!
 //! # Helpers copied from `focus_identity_integration.rs` and
 //! `focus_traversal_integration.rs`
@@ -1070,4 +1076,133 @@ fn arrow_keys_two_legs() {
             ffi::wasamo_window_destroy(window);
         }
     });
+}
+
+// ── Fixture 7 — exit with no restore target leaves focus unset ─────────────
+
+const SCOPE_NO_PRIOR_FOCUS_UI: &str = r#"component ModalScopeEnteredWithNothingFocusedExitLeavesFocusUnset inherits Window {
+    state open: bool = true
+    VStack {
+        spacing: 0
+        padding: 0
+        Button { text: "outside" clicked => { root.open = false; } }
+        if open {
+            VStack {
+                spacing: 0
+                padding: 0
+                modal-scope: true
+                Button { text: "scope-a" }
+                Button { text: "scope-b" }
+            }
+        }
+    }
+}"#;
+
+/// [`entry_at_initial_build`] (Fixture 2) already reaches "a scope entered
+/// with nothing focused before it": the initial build has no predecessor
+/// input at all, so the restore target `enter_modal` captures there is
+/// `None` by construction — there is no way anything could have been
+/// focused before the window's first build. What Fixture 2 never does is
+/// close the scope; this fixture does, and asserts that
+/// `sync_scopes_to_tree`'s exit branch with `restore_to == None`
+/// (`focus.rs` step 3) leaves focus unset rather than falling to the
+/// domain's first stop.
+///
+/// **`None` here is the correct answer, not a degenerate case.**
+/// `docs/dsl_spec.md` §4.19: entry "remembers the focused widget", which
+/// may be nothing; DD-M4-P2-004: entry "captures the restore target: the
+/// widget focused at that moment, possibly none". Restoration takes
+/// precedence over structural succession (`docs/architecture.md` §13.4),
+/// so "nothing was captured" must not be silently reinterpreted as "fall
+/// through to the domain's first stop" — that would swap the exit branch
+/// for the structural-succession branch whenever the captured target
+/// happens to be `None`, which is exactly the branch confusion this
+/// fixture exists to catch.
+///
+/// The scope closes through "outside", a Button declared *outside* the
+/// confined scope: clicking it does not itself move focus (the click's own
+/// focus resolution is filtered out by confinement, the same rule
+/// [`a_present_but_unannotated_subtree_does_not_confine`]'s neighbouring
+/// fixtures in this file exercise directly), but its `clicked` handler
+/// still runs and removes the scope's subtree — pointer dispatch is
+/// confined by an authored scrim, not by the scope itself
+/// (DD-M4-P2-004 §"What containment covers"), and this fixture authors no
+/// scrim.
+#[test]
+fn exit_with_no_restore_target_leaves_focus_unset() {
+    run_on_owning_runtime_thread_or_skip(
+        "modal scope: exit with no restore target leaves focus unset",
+        move || {
+            let ir = lower_ui_to_ir(SCOPE_NO_PRIOR_FOCUS_UI);
+            unsafe {
+                let window = load_window(&ir);
+                let hwnd = (*window).hwnd;
+
+                // No `normalise_to_reference_baseline` before this
+                // read-back, matching `entry_at_initial_build`: the point
+                // is that entry — and its `None` capture — has already
+                // happened by the time `load_window` returns, before any
+                // input at all.
+                {
+                    let root = (*window).root_widget.as_ref().expect("content root");
+                    assert_eq!(root.children.len(), 2, "outside Button + scope container");
+                    assert_eq!(label_of(root.children[0].as_ref()), "outside");
+                    assert_eq!(
+                        root.children[1].__focus_role_for_test(),
+                        "modal-scope",
+                        "fixture stopped discriminating: the second child must actually \
+                         carry FocusRole::ModalScope"
+                    );
+                    assert_eq!(label_of(root.children[1].children[0].as_ref()), "scope-a");
+                }
+                assert_focused_stop(window, &[1, 0], "scope-a");
+
+                normalise_to_reference_baseline(window, CLIENT_W, CLIENT_H, "F7 baseline");
+                let factor = ffi::__window_scale_dpi_for_test(window) as f32 / REFERENCE_DPI as f32;
+
+                let outside_rect = {
+                    let root = (*window).root_widget.as_ref().expect("content root");
+                    root.children[0].__arranged_rect_for_test()
+                }
+                .expect("outside must be laid out");
+                assert!(
+                    outside_rect.width > 0.0 && outside_rect.height > 0.0,
+                    "fixture stopped discriminating: outside's rectangle {outside_rect:?} \
+                     must be non-degenerate"
+                );
+
+                // Click "outside" through `click_and_drain`: the scope's
+                // removal needs Phase 2 for `sync_scopes_to_tree`'s exit
+                // step to run.
+                let (ox, oy) = (
+                    (outside_rect.x + outside_rect.width / 2.0) * factor,
+                    (outside_rect.y + outside_rect.height / 2.0) * factor,
+                );
+                click_and_drain(hwnd, ox, oy);
+
+                {
+                    let root = (*window).root_widget.as_ref().expect("content root");
+                    assert_eq!(
+                        root.children.len(),
+                        1,
+                        "the handler's own state write ('root.open = false') must have \
+                         removed the scope's subtree synchronously, or this fixture is not \
+                         exercising a removal at all"
+                    );
+                }
+
+                // The claim: focus is unset — not fallen to "outside" (the
+                // domain's first stop, what structural succession would
+                // answer) and not still naming "scope-a" (gone).
+                assert_eq!(
+                    ffi::__focus_path_for_test(window),
+                    None,
+                    "closing a scope that captured no restore target must leave focus \
+                     unset, not fall through to the domain's first stop"
+                );
+
+                ffi::wasamo_window_destroy(window);
+            }
+        },
+    );
 }

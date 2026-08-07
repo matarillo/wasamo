@@ -33,6 +33,26 @@
 //! clicks two different members of an authored `focus-group` container and
 //! asserts each click lands on the member actually clicked.
 //!
+//! # Fixture 3 — structural succession lands on the domain's first
+//! surviving stop
+//!
+//! `focus::sync_scopes_to_tree`'s structural-succession branch (`focus.rs`
+//! step 4: `else if was_focused_before && focus.focused().is_none()`) fires
+//! only when the focused node itself left the tree and no modal-scope exit
+//! explains the loss. Fixture 1 above removes a subtree the focused stop is
+//! *not* in, so the focused stop survives (only its id shifts) and step 4
+//! never runs; every modal-scope fixture in `modal_scope_integration.rs`
+//! removes a *scope's* subtree, which takes the exit branch (step 3)
+//! instead. This fixture focuses a stop inside a plain conditional subtree
+//! (no scope involved anywhere in the tree), removes that subtree through
+//! `click_and_drain` so `emit::flush_layout`'s Phase 2 actually runs, and
+//! asserts focus lands on the domain's first surviving stop — a node
+//! declared *before* the conditional, so removal never renumbers it, and
+//! deliberately neither the node focus was on before (gone) nor `None`
+//! (what a "clear to nothing" implementation of step 4 would leave), so the
+//! fixture actually distinguishes structural succession from its two
+//! neighbouring wrong answers.
+//!
 //! # Helpers copied from `focus_traversal_integration.rs` and
 //! `event_routing_integration.rs`
 //!
@@ -43,15 +63,15 @@
 //! `send_click`, `last_error`, `label_of`, `node_at_path`, and
 //! `assert_focused_stop` are copied verbatim from
 //! `focus_traversal_integration.rs`. `click_and_drain` is copied verbatim
-//! from `event_routing_integration.rs` — Fixture 1 needs it so the drain's
-//! Phase 2 (`emit::flush_layout`, where `focus::sync_scopes_to_tree`
+//! from `event_routing_integration.rs` — Fixtures 1 and 3 need it so the
+//! drain's Phase 2 (`emit::flush_layout`, where `focus::sync_scopes_to_tree`
 //! runs) actually executes; a plain `send_click` only reaches Phase 1's
 //! synchronous Effect drain, never Phase 2 (see the module header of
 //! either source file for the full "why" of that split). This file's own
 //! additions are [`pre_order_focus_id`] and [`count_nodes`] — a test-side
 //! replica of `FocusProjection::project`'s pre-order walk, needed because
 //! no ABI seam exposes a raw `FocusId` (the phase's "no new ABI function"
-//! obligation) — and the two fixtures themselves.
+//! obligation) — and the three fixtures themselves.
 //!
 //! # The client stays small (M4-Phase 1 T8 finding)
 //!
@@ -702,6 +722,144 @@ fn a_click_inside_a_focus_group_focuses_the_clicked_member() {
                 );
                 send_click(hwnd, a_cx, a_cy);
                 assert_focused_stop(window, &[0, 0], "member-a");
+
+                ffi::wasamo_window_destroy(window);
+            }
+        },
+    );
+}
+
+// ── Fixture 3 — structural succession lands on the domain's first surviving stop ──
+
+/// Declaration order: "first" (a stop outside the conditional, so removal
+/// never renumbers it), then a conditional subtree with two Buttons, then a
+/// `Box` (not a Button, `docs/dsl_spec.md` §4.19 "clicking background never
+/// clears focus") whose handler closes the conditional. No `modal-scope`
+/// anywhere in this tree — `focus.rs`'s own doc comment on
+/// `sync_scopes_to_tree` step 4 is deliberately exercised with
+/// `dropped.outermost()` always `None`, so step 4 is the only branch that
+/// can explain the lost focus.
+const STRUCTURAL_SUCCESSION_UI: &str = r#"component StructuralSuccessionFallsToTheDomainsFirstSurvivingStop inherits Window {
+    state open: bool = true
+    VStack {
+        spacing: 0
+        padding: 0
+        Button { text: "first" }
+        if open {
+            VStack {
+                spacing: 0
+                padding: 0
+                Button { text: "cond-focus" }
+                Button { text: "cond-other" }
+            }
+        }
+        Box { aspect: 4:1 fill: #336699cc clicked => { root.open = false; } }
+    }
+}"#;
+
+/// `focus::sync_scopes_to_tree`'s structural-succession branch, fired
+/// through the real seam rather than by calling `focus_core` directly
+/// (M4-Phase 2 T7 remediation, B1). Focuses "cond-focus" — a stop *inside*
+/// the conditional subtree about to be removed — then clicks the `Box`,
+/// whose handler removes that subtree, through [`click_and_drain`] so
+/// `emit::flush_layout`'s Phase 2 (where `sync_scopes_to_tree` runs)
+/// actually executes.
+///
+/// The correct landing, "first", is chosen deliberately: it is neither
+/// where focus already was ("cond-focus", which the removal took with it)
+/// nor `None` (what a "clear to nothing" implementation of the branch would
+/// leave) — so this fixture can actually fail against either wrong answer,
+/// not only pass by coincidence with one of them.
+#[test]
+fn structural_succession_lands_on_the_domains_first_surviving_stop() {
+    run_on_owning_runtime_thread_or_skip(
+        "T7 F3: structural succession falls to the domain's first surviving stop",
+        move || {
+            let ir = lower_ui_to_ir(STRUCTURAL_SUCCESSION_UI);
+            unsafe {
+                let window = load_window(&ir);
+                let hwnd = (*window).hwnd;
+                normalise_to_reference_baseline(window, CLIENT_W, CLIENT_H, "F3 baseline");
+                let factor = ffi::__window_scale_dpi_for_test(window) as f32 / REFERENCE_DPI as f32;
+
+                assert_eq!(
+                    ffi::__focus_path_for_test(window),
+                    None,
+                    "M4-Phase 1 F-47: establish the initial focus state by reading it back"
+                );
+
+                // Before-state: "first", the conditional (with its two
+                // Buttons), and the closing Box are all present, each
+                // exactly where this fixture's doc comment says.
+                let (cond_focus_rect, box_rect) = {
+                    let root = (*window).root_widget.as_ref().expect("content root");
+                    assert_eq!(
+                        root.children.len(),
+                        3,
+                        "fixture stopped discriminating: `open` starts true, so \"first\", \
+                         the conditional VStack, and the closing Box must all be present \
+                         before the click"
+                    );
+                    assert_eq!(label_of(root.children[0].as_ref()), "first");
+                    let conditional = root.children[1].as_ref();
+                    assert_eq!(conditional.child_count(), 2);
+                    assert_eq!(label_of(conditional.children[0].as_ref()), "cond-focus");
+                    assert_eq!(label_of(conditional.children[1].as_ref()), "cond-other");
+                    (
+                        conditional.children[0].__arranged_rect_for_test(),
+                        root.children[2].__arranged_rect_for_test(),
+                    )
+                };
+                let cond_focus_rect = cond_focus_rect.expect("cond-focus must be laid out");
+                let box_rect = box_rect.expect("the closing Box must be laid out");
+                assert!(
+                    cond_focus_rect.width > 0.0 && cond_focus_rect.height > 0.0,
+                    "fixture stopped discriminating: cond-focus's rectangle \
+                     {cond_focus_rect:?} must be non-degenerate"
+                );
+                assert!(
+                    box_rect.width > 0.0 && box_rect.height > 0.0,
+                    "fixture stopped discriminating: the closing Box's rectangle \
+                     {box_rect:?} must be non-degenerate"
+                );
+
+                // Focus the stop inside the conditional subtree about to be
+                // removed (a plain click: no drain needed, nothing
+                // structural happens here).
+                let (cf_cx, cf_cy) = (
+                    (cond_focus_rect.x + cond_focus_rect.width / 2.0) * factor,
+                    (cond_focus_rect.y + cond_focus_rect.height / 2.0) * factor,
+                );
+                send_click(hwnd, cf_cx, cf_cy);
+                assert_focused_stop(window, &[1, 0], "cond-focus");
+
+                // Click the closing Box through `click_and_drain`, so
+                // `emit::flush_layout`'s Phase 2 runs. The Box is not
+                // focusable, so this click must not itself move focus
+                // (`docs/dsl_spec.md` §4.19) — only its handler's
+                // structural removal is under test.
+                let (box_cx, box_cy) = (
+                    (box_rect.x + box_rect.width / 2.0) * factor,
+                    (box_rect.y + box_rect.height / 2.0) * factor,
+                );
+                click_and_drain(hwnd, box_cx, box_cy);
+
+                {
+                    let root = (*window).root_widget.as_ref().expect("content root");
+                    assert_eq!(
+                        root.children.len(),
+                        2,
+                        "the Box's own state write ('root.open = false') must have removed \
+                         the conditional subtree synchronously, or this fixture is not \
+                         exercising a removal at all"
+                    );
+                    assert_eq!(label_of(root.children[0].as_ref()), "first");
+                }
+
+                // The claim: focus lands on "first", the domain's first
+                // surviving stop — not `None` (clear to nothing) and not
+                // still naming "cond-focus" (gone).
+                assert_focused_stop(window, &[0], "first");
 
                 ffi::wasamo_window_destroy(window);
             }

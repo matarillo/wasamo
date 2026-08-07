@@ -651,10 +651,16 @@ impl FocusState {
     ///
     /// **What this function does not do.** Dropping a modal entry here is
     /// mechanical coordinate bookkeeping, not a policy decision: the
-    /// *restoration* a vanished scope owes — moving focus to wherever
-    /// `restore_to` said, or to the domain's first stop when even that is
-    /// gone — is not this function's job. That is run by a caller that
-    /// knows a scope actually closed, which lands separately; this
+    /// *restoration* a vanished scope owes is not this function's job.
+    /// `focus::sync_scopes_to_tree`'s exit step is the caller that owes it,
+    /// and it writes the dropped entry's remapped `restore_to` to focus
+    /// exactly as captured — when that is `None`, focus becomes `None`, not
+    /// the domain's first stop (`docs/dsl_spec.md` §4.19: entry "remembers
+    /// the focused widget", which may be nothing; DD-M4-P2-004: entry
+    /// "captures the restore target: the widget focused at that moment,
+    /// possibly none"). The domain's first stop is a different branch's
+    /// answer — `sync_scopes_to_tree`'s separate structural-succession
+    /// step, reached only when no scope exit explains the lost focus. This
     /// function only keeps every retained id checkable against whatever
     /// tree comes next.
     pub fn remap(&mut self, f: impl Fn(FocusId) -> Option<FocusId>) {
