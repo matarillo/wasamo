@@ -2696,14 +2696,19 @@ re-read at this close gate rather than only T6's item.
 
 #### Verification means
 
-`cargo clean` (9,492 files / 2.6 GiB removed), then
-`cargo build --release --workspace` 1m08s success,
-`cargo build --workspace` 1m02s success,
-`cargo test --workspace --no-fail-fast` **45 binaries/sections, 1,097
-passed, 0 failed, 0 ignored**. T5's baseline was 1,051; the 46 added are
-`check.rs`'s 23 unit tests, `ir_loader.rs`'s 22, and the one integration
+Run against the **final branch state**, after the review remediation
+landed ([retrospectives.md](../../../procedures/retrospectives.md) item
+3: a verification recorded before a later remediation commit is older
+than the branch it claims to describe).
+
+`cargo clean` (9,540 files / 2.6 GiB removed), then
+`cargo build --release --workspace` 1m26s success,
+`cargo build --workspace` 1m07s success,
+`cargo test --workspace --no-fail-fast` **45 binaries/sections, 1,107
+passed, 0 failed, 0 ignored**. T5's baseline was 1,051; the 56 added are
+`check.rs`'s 27 unit tests, `ir_loader.rs`'s 28, and the one integration
 fixture. `cargo fmt --all -- --check` zero exit and `git diff --check`
-clean against the post-commit state.
+clean against the final state.
 
 **The integration fixture ran rather than skipped**, verified by running
 it with `--nocapture` and confirming the shared guard's
