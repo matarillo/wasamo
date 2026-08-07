@@ -239,6 +239,16 @@ fn validate(comp: &IrComponent) -> Result<(), IrLoadError> {
     // invariants — these gates exist for IR not produced by wasamoc
     // (e.g. via `wasamo_load_ui` directly).
     validate_phase2_node_invariants(&comp.root)?;
+    // M4-Phase 2 T6 defense-in-depth gate (dsl_spec §4.19, DD-M4-P2-005
+    // A1). `wasamoc check` (T6 stage 1) rejects the same `focus-group` /
+    // `modal-scope` / `dismiss` shapes at compile time; this is the
+    // runtime half for memory IR that reaches the loader via
+    // `wasamo_load_ui` without traversing `wasamoc`. Runs early — before
+    // the per-kind gates below (ZStack, ToggleButton) — so a
+    // focus-annotation violation surfaces its own admission diagnostic
+    // rather than being swallowed by a per-kind "unknown attribute"
+    // catch-all.
+    validate_focus_annotation_invariants(&comp.root)?;
     // M3-Phase 3 T6 defense-in-depth gate (DD-M3-P3-006 runtime half).
     // `wasamoc check` (T1) rejects negative literals on WrapPanel's three
     // attribute names at compile time; this is the last-line-of-defence
@@ -1154,10 +1164,25 @@ fn validate_phase6_zstack_node_invariants(
         // Let stale child-placement props on a nested ZStack fall through to
         // the global legacy-placement diagnostic below instead of reporting a
         // generic ZStack attribute error.
-        let zstack_widget_prop = node
-            .props
-            .iter()
-            .find(|prop| !(parent == ParentKind::ZStack && is_child_placement_prop(&prop.name)));
+        //
+        // M4-Phase 2 T6 relaxation (dsl_spec §4.19, DD-M4-P2-005 A1):
+        // `wasamoc check` now accepts `focus-group` / `modal-scope` on a
+        // ZStack — it is one of the seven `FOCUS_ANNOTATION_CONTAINERS`
+        // — and a `dismiss` handler beside `modal-scope: true`. Without
+        // this widening the loader would refuse to load a `.ui` the
+        // compiler already accepted. `validate_focus_annotation_invariants`
+        // has already run (see `validate`'s ordering) and rejected a
+        // malformed shape of either attribute or of `dismiss`, so by the
+        // time this gate sees them they are known-good. Every other
+        // Phase-6 attribute and every other signal name — `clicked`
+        // included; widening `clicked` on a `ZStack` is T8's job, not
+        // this one's — stays rejected. The bindings rule is untouched:
+        // both focus annotations are constant-only and never travel the
+        // binding path.
+        let zstack_widget_prop = node.props.iter().find(|prop| {
+            !(parent == ParentKind::ZStack && is_child_placement_prop(&prop.name))
+                && !matches!(prop.name.as_str(), "focus-group" | "modal-scope")
+        });
         if let Some(prop) = zstack_widget_prop {
             return Err(IrLoadError::Validate(format!(
                 "`ZStack` accepts no Phase-6 attributes; found `{}`",
@@ -1169,7 +1194,7 @@ fn validate_phase6_zstack_node_invariants(
                 "`ZStack` accepts no Phase-6 bindings".into(),
             ));
         }
-        if !node.handlers.is_empty() {
+        if node.handlers.iter().any(|h| h.signal != "dismiss") {
             return Err(IrLoadError::Validate(
                 "`ZStack` accepts no Phase-6 handlers".into(),
             ));
@@ -1232,6 +1257,121 @@ fn validate_slot_data_parent(parent: ParentKind, slot: &IrChildSlot) -> Result<(
                 .into(),
         )),
         (_, None) => Ok(()),
+    }
+}
+
+// ── M4-Phase 2 T6: focus-group / modal-scope / dismiss ────────────────
+
+/// Container widget kinds that admit the M4-Phase 2 focus annotations
+/// (`focus-group` / `modal-scope`), per `docs/dsl_spec.md` §4.19
+/// "admitted on any container" (DD-M4-P2-005 A1). Mirrors
+/// `wasamoc::check::FOCUS_ANNOTATION_CONTAINERS` one-for-one — kept as a
+/// separate const because the two live in different crates, not because
+/// the list differs. `Text`, `Button`, `ToggleButton`, and `Rectangle`
+/// are leaf/content widgets, not containers, and are excluded; `Cell` is
+/// an IR-only Grid wrapper, not a runtime container, and is excluded
+/// too. Both `focus-group` and `modal-scope` read from this one const in
+/// `validate_focus_annotation_invariants`, so the seven-name list has a
+/// single source of truth rather than appearing once per attribute.
+const FOCUS_ANNOTATION_CONTAINERS: &[&str] = &[
+    "VStack",
+    "HStack",
+    "Box",
+    "WrapPanel",
+    "ScrollView",
+    "Grid",
+    "ZStack",
+];
+
+/// M4-Phase 2 T6 defense-in-depth gate (dsl_spec §4.19, DD-M4-P2-005
+/// A1) — the runtime half of the `wasamoc check` gate for `focus-group`
+/// / `modal-scope` / `dismiss`. `wasamoc check` (T6 stage 1) rejects the
+/// same four shapes at compile time
+/// (`check_focus_annotation_admission`,
+/// `check_focus_annotation_const_only_bind`, the constant-only binding
+/// rule, and the `dismiss`/`carries_modal_scope` predicate); this gate
+/// exists for memory IR that reaches the runtime loader through
+/// `wasamo_load_ui` without traversing `wasamoc`, the same reason every
+/// earlier `validate_phaseN_*` gate in this file exists.
+fn validate_focus_annotation_invariants(node: &IrNode) -> Result<(), IrLoadError> {
+    for prop in &node.props {
+        if !matches!(prop.name.as_str(), "focus-group" | "modal-scope") {
+            continue;
+        }
+        if !FOCUS_ANNOTATION_CONTAINERS.contains(&node.widget_type.as_str()) {
+            return Err(IrLoadError::Validate(format!(
+                "`{}` is admitted on any container (dsl_spec §4.19) and is not valid on widget `{}`",
+                prop.name, node.widget_type
+            )));
+        }
+        // Constant-only (dsl_spec §4.19, the `Box.fill` / `WrapPanel`
+        // precedent): the runtime half of `check_focus_annotation_const_only_bind`.
+        // A non-`Bool` literal reaching here means the IR was not
+        // produced by `wasamoc`.
+        if !matches!(prop.value, IrLiteral::Bool(_)) {
+            return Err(IrLoadError::Validate(format!(
+                "`{}` is constant-only (dsl_spec §4.19); expected a `true` or `false` literal",
+                prop.name
+            )));
+        }
+    }
+    // Constant-only also means "never travels the binding path" — a
+    // `bind focus-group = …` / `bind modal-scope = …` is rejected
+    // outright, independent of widget kind (mirrors `wasamoc check`'s
+    // rejection of a bare state-ident RHS, but a runtime `IrBinding` of
+    // either name is rejected unconditionally rather than re-parsing the
+    // expression shape).
+    if let Some(binding) = node
+        .bindings
+        .iter()
+        .find(|b| matches!(b.prop_name.as_str(), "focus-group" | "modal-scope"))
+    {
+        return Err(IrLoadError::Validate(format!(
+            "`{}` is constant-only (dsl_spec §4.19) and cannot be bound",
+            binding.prop_name
+        )));
+    }
+    // `dismiss` is admitted only on a node that itself carries
+    // `prop modal-scope = true`. An absent prop, a `false` value, and a
+    // non-container widget (which cannot carry a `true` value past the
+    // admission check above) all collapse to the same "no true
+    // `modal-scope` sibling" test — there is no separate container check
+    // here because the admission rule above has already ruled out a
+    // non-container ever reaching this point with `modal-scope: true`.
+    if node.handlers.iter().any(|h| h.signal == "dismiss") {
+        let carries_modal_scope_true = node
+            .props
+            .iter()
+            .any(|p| p.name == "modal-scope" && matches!(p.value, IrLiteral::Bool(true)));
+        if !carries_modal_scope_true {
+            return Err(IrLoadError::Validate(
+                "`dismiss` handler can never be raised: a dismissal request is addressed to a modal scope; write `modal-scope: true` on the same container or remove the handler (dsl_spec §4.19)".into(),
+            ));
+        }
+    }
+    for member in &node.children {
+        validate_focus_annotation_member_invariants(member)?;
+    }
+    Ok(())
+}
+
+fn validate_focus_annotation_member_invariants(member: &IrMember) -> Result<(), IrLoadError> {
+    match member {
+        IrMember::Widget(slot) => validate_focus_annotation_invariants(&slot.node),
+        IrMember::ControlFlow(ControlFlowNode::If { branches }) => {
+            for branch in branches {
+                for body_member in &branch.body {
+                    validate_focus_annotation_member_invariants(body_member)?;
+                }
+            }
+            Ok(())
+        }
+        IrMember::ControlFlow(ControlFlowNode::For { body, .. }) => {
+            for body_member in body {
+                validate_focus_annotation_member_invariants(body_member)?;
+            }
+            Ok(())
+        }
     }
 }
 
@@ -3034,6 +3174,19 @@ fn build_node_with_loop_context(
     loop_context: Option<&ForItemContext>,
 ) -> Result<Box<WidgetNode>, IrLoadError> {
     let mut widget = construct_widget(node, compositor, renderer, registry)?;
+
+    // M4-Phase 2 T6: write the authored focus annotation (dsl_spec §4.19,
+    // DD-M4-P2-005 A1) onto the freshly constructed node. One
+    // kind-independent site rather than scattered through
+    // `construct_widget`'s per-kind arms, because the annotation is not
+    // part of any widget kind's own shape — it is read back only by
+    // `WidgetNode::focus_role`. `validate` has already rejected a
+    // non-`Bool` value and a non-container carrier (`FOCUS_ANNOTATION_CONTAINERS`
+    // above), so the extracts are total over the accept set: an absent
+    // prop and an explicit `false` both correctly yield `false`.
+    let focus_group = extract_bool_prop(&node.props, "focus-group").unwrap_or(false);
+    let modal_scope = extract_bool_prop(&node.props, "modal-scope").unwrap_or(false);
+    widget.set_focus_annotation(focus_group, modal_scope);
 
     // Bindings: register each `bind` as a reactive Effect targeting the widget property.
     for binding in &node.bindings {
@@ -7772,5 +7925,258 @@ mod tests {
             }
             other => panic!("expected Validate error, got {other:?}"),
         }
+    }
+
+    // ── M4-Phase 2 T6: focus-group / modal-scope / dismiss ──────────────
+    //
+    // The runtime half of `wasamoc check`'s T6 stage 1 gate (dsl_spec
+    // §4.19, DD-M4-P2-005 A1): `validate_focus_annotation_invariants`'s
+    // four rejects, plus the ZStack relaxation (`validate_phase6_zstack_node_invariants`)
+    // and the ToggleButton dispatch-ordering control
+    // (`validate_phase8_togglebutton_node_invariants`).
+
+    /// Body fixture for each of the seven `FOCUS_ANNOTATION_CONTAINERS`
+    /// kinds, with `{ATTR}` standing in for the prop line under test.
+    /// `ScrollView` carries its required single content child; `Grid`
+    /// carries its required `tracks` lines; `Box` stays within its
+    /// at-most-one-child limit.
+    const FOCUS_ANNOTATION_CONTAINER_FIXTURES: &[(&str, &str)] = &[
+        ("VStack", "node VStack { {ATTR} }"),
+        ("HStack", "node HStack { {ATTR} }"),
+        ("Box", "node Box { {ATTR} }"),
+        ("WrapPanel", "node WrapPanel { {ATTR} }"),
+        ("ScrollView", "node ScrollView { {ATTR} node Box {} }"),
+        (
+            "Grid",
+            "node Grid { tracks columns = 1* tracks rows = 1* {ATTR} }",
+        ),
+        ("ZStack", "node ZStack { {ATTR} }"),
+    ];
+
+    fn assert_focus_annotation_accepted_everywhere(attr_line: &str) {
+        for (kind, body) in FOCUS_ANNOTATION_CONTAINER_FIXTURES {
+            let src = format!(
+                ";wasamo-ir v0\ncomponent C inherits W {{ {} }}",
+                body.replace("{ATTR}", attr_line)
+            );
+            let c = parse_ok(&src);
+            validate(&c).unwrap_or_else(|e| {
+                panic!("{kind} accepting `{attr_line}` failed: {e}\nsrc:\n{src}")
+            });
+        }
+    }
+
+    #[test]
+    fn focus_group_true_accepted_on_every_admitting_container() {
+        assert_focus_annotation_accepted_everywhere("prop focus-group = true");
+    }
+
+    #[test]
+    fn modal_scope_true_accepted_on_every_admitting_container() {
+        assert_focus_annotation_accepted_everywhere("prop modal-scope = true");
+    }
+
+    #[test]
+    fn focus_group_false_accepted() {
+        // `false` is a valid constant, not just `true` (dsl_spec §4.19).
+        assert_focus_annotation_accepted_everywhere("prop focus-group = false");
+    }
+
+    #[test]
+    fn modal_scope_false_accepted() {
+        assert_focus_annotation_accepted_everywhere("prop modal-scope = false");
+    }
+
+    #[test]
+    fn focus_group_and_modal_scope_together_on_one_container_accepted() {
+        let c = parse_ok(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             node VStack { prop focus-group = true prop modal-scope = true }\n}",
+        );
+        validate(&c).expect("a container may carry both annotations at once (DD-M4-P2-005)");
+    }
+
+    #[test]
+    fn dismiss_handler_accepted_beside_modal_scope_true() {
+        let c = parse_ok(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             state open: bool = true\n\
+             node Box { prop modal-scope = true on dismiss { (assign open false) } }\n}",
+        );
+        validate(&c).expect("dismiss beside modal-scope: true must validate");
+    }
+
+    #[test]
+    fn dismiss_handler_accepted_on_zstack_carrying_modal_scope() {
+        // Exercises the ZStack relaxation: `dismiss` is let through
+        // alongside `modal-scope: true`, even though ZStack's own
+        // Phase-6 gate rejects every other handler name.
+        let c = parse_ok(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             state open: bool = true\n\
+             node ZStack { prop modal-scope = true on dismiss { (assign open false) } node Text {} }\n}",
+        );
+        validate(&c).expect("dismiss beside modal-scope: true must validate on ZStack");
+    }
+
+    #[test]
+    fn dismiss_handler_accepted_on_grid_carrying_modal_scope() {
+        let c = parse_ok(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             state open: bool = true\n\
+             node Grid {\n\
+               tracks columns = 1*\n\
+               tracks rows = 1*\n\
+               prop modal-scope = true\n\
+               on dismiss { (assign open false) }\n\
+             }\n}",
+        );
+        validate(&c).expect("dismiss beside modal-scope: true must validate on Grid");
+    }
+
+    #[test]
+    fn focus_group_true_on_text_rejected() {
+        assert_validate_err(
+            ";wasamo-ir v0\ncomponent C inherits W { node Text { prop focus-group = true } }",
+            "`focus-group` is admitted on any container",
+        );
+    }
+
+    #[test]
+    fn focus_group_true_on_button_rejected() {
+        assert_validate_err(
+            ";wasamo-ir v0\ncomponent C inherits W { node Button { prop focus-group = true } }",
+            "`focus-group` is admitted on any container",
+        );
+    }
+
+    #[test]
+    fn focus_group_true_on_togglebutton_rejected_as_admission_not_unknown_attr() {
+        // Dispatch-ordering control: `validate_focus_annotation_invariants`
+        // runs before `validate_phase8_togglebutton_node_invariants`
+        // (wired in `validate`), so the diagnostic is the admission one,
+        // not "unknown ToggleButton attribute".
+        let err = parse_err(
+            ";wasamo-ir v0\ncomponent C inherits W { node ToggleButton { prop focus-group = true } }",
+        );
+        match err {
+            IrLoadError::Validate(msg) => {
+                assert!(
+                    msg.contains("`focus-group` is admitted on any container"),
+                    "got: {msg}"
+                );
+                assert!(
+                    !msg.contains("unknown ToggleButton attribute"),
+                    "got: {msg}"
+                );
+            }
+            other => panic!("expected Validate error, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn focus_group_true_on_rectangle_rejected() {
+        assert_validate_err(
+            ";wasamo-ir v0\ncomponent C inherits W { node Rectangle { prop focus-group = true } }",
+            "`focus-group` is admitted on any container",
+        );
+    }
+
+    #[test]
+    fn modal_scope_true_on_text_rejected() {
+        assert_validate_err(
+            ";wasamo-ir v0\ncomponent C inherits W { node Text { prop modal-scope = true } }",
+            "`modal-scope` is admitted on any container",
+        );
+    }
+
+    #[test]
+    fn focus_group_non_bool_literal_rejected() {
+        assert_validate_err(
+            ";wasamo-ir v0\ncomponent C inherits W { node VStack { prop focus-group = 1 } }",
+            "`focus-group` is constant-only",
+        );
+    }
+
+    #[test]
+    fn modal_scope_non_bool_literal_rejected() {
+        assert_validate_err(
+            ";wasamo-ir v0\ncomponent C inherits W { node VStack { prop modal-scope = \"yes\" } }",
+            "`modal-scope` is constant-only",
+        );
+    }
+
+    #[test]
+    fn focus_group_binding_rejected() {
+        assert_validate_err(
+            ";wasamo-ir v0\ncomponent C inherits W { node VStack { bind focus-group = true } }",
+            "`focus-group` is constant-only",
+        );
+    }
+
+    #[test]
+    fn modal_scope_binding_rejected() {
+        assert_validate_err(
+            ";wasamo-ir v0\ncomponent C inherits W { node VStack { bind modal-scope = true } }",
+            "`modal-scope` is constant-only",
+        );
+    }
+
+    #[test]
+    fn dismiss_handler_without_modal_scope_prop_rejected() {
+        assert_validate_err(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             state open: bool = true\n\
+             node Box { on dismiss { (assign open false) } }\n}",
+            "`dismiss` handler can never be raised",
+        );
+    }
+
+    #[test]
+    fn dismiss_handler_beside_modal_scope_false_rejected() {
+        assert_validate_err(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             state open: bool = true\n\
+             node Box { prop modal-scope = false on dismiss { (assign open false) } }\n}",
+            "`dismiss` handler can never be raised",
+        );
+    }
+
+    #[test]
+    fn dismiss_handler_on_non_container_rejected() {
+        // A non-container can never carry a `true` `modal-scope` prop
+        // (the admission check above already refuses that combination),
+        // so its `dismiss` handler always fails the same "no true
+        // `modal-scope` sibling" test as the absent/`false` cases above.
+        assert_validate_err(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             state open: bool = true\n\
+             node Text { on dismiss { (assign open false) } }\n}",
+            "`dismiss` handler can never be raised",
+        );
+    }
+
+    #[test]
+    fn zstack_spacing_prop_still_rejected_after_relaxation() {
+        // Control proving the ZStack relaxation stayed narrow: an
+        // ordinary Phase-6-rejected attribute is still rejected.
+        assert_validate_err(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             node ZStack { prop spacing = 4 node Text {} }\n}",
+            "`ZStack` accepts no Phase-6 attributes; found `spacing`",
+        );
+    }
+
+    #[test]
+    fn zstack_clicked_handler_still_rejected_after_relaxation() {
+        // Control proving the ZStack relaxation stayed narrow: every
+        // signal name other than `dismiss` is still rejected. Widening
+        // `clicked` on a `ZStack` is a later task's job, not this one's.
+        assert_validate_err(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             state count: i32 = 0\n\
+             node ZStack { on clicked { (assign count 1) } node Text {} }\n}",
+            "`ZStack` accepts no Phase-6 handlers",
+        );
     }
 }
