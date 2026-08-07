@@ -418,6 +418,22 @@ pub struct DipRect {
     pub height: f32,
 }
 
+/// The M4-Phase 2 authored focus annotations carried by a container node
+/// (`focus-group: true` / `modal-scope: true`, dsl_spec §4.19;
+/// DD-M4-P2-005 A1). Built-time state with **exactly one writer** — the
+/// IR loader (`ir_loader::build_node_with_loop_context`), through
+/// [`WidgetNode::set_focus_annotation`]. It is not window state, does not
+/// participate in layout, and creates no `Visual` and writes no geometry:
+/// it exists only to be read back by [`WidgetNode::focus_role`], which
+/// widens the widget-kind-only derivation (`FocusRole::Stop` /
+/// `FocusRole::Container`) into the two additional roles a container can
+/// carry (`FocusRole::Group`, `FocusRole::ModalScope`).
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct FocusAnnotation {
+    group: bool,
+    modal_scope: bool,
+}
+
 pub struct WidgetNode {
     data: WidgetData,
     width: SizeConstraint,
@@ -481,6 +497,15 @@ pub struct WidgetNode {
     ///
     /// Not `pub` and not `pub(crate)`: every reader is in this module.
     arranged_rect: Option<DipRect>,
+    /// The M4-Phase 2 authored focus annotation for this node (see
+    /// [`FocusAnnotation`]'s doc comment for the writer / reader
+    /// contract). **Built-time state with exactly one writer** — the IR
+    /// loader, through [`Self::set_focus_annotation`] — not window
+    /// state: it does not participate in layout and creates no `Visual`,
+    /// so every constructor below sets it to `FocusAnnotation::default()`
+    /// (both flags `false`, matching an un-annotated container) and only
+    /// the IR loader ever writes a non-default value.
+    focus_annotation: FocusAnnotation,
 }
 
 // ── Tree-mutation errors ──────────────────────────────────────────────────────
@@ -566,6 +591,7 @@ impl WidgetNode {
             scale: DipScale::default(),
             raster_scale: DipScale::default(),
             arranged_rect: None,
+            focus_annotation: FocusAnnotation::default(),
         }))
     }
 
@@ -592,6 +618,7 @@ impl WidgetNode {
             scale: DipScale::default(),
             raster_scale: DipScale::default(),
             arranged_rect: None,
+            focus_annotation: FocusAnnotation::default(),
         }))
     }
 
@@ -618,6 +645,7 @@ impl WidgetNode {
             scale: DipScale::default(),
             raster_scale: DipScale::default(),
             arranged_rect: None,
+            focus_annotation: FocusAnnotation::default(),
         }))
     }
 
@@ -660,6 +688,7 @@ impl WidgetNode {
             scale: DipScale::default(),
             raster_scale: DipScale::default(),
             arranged_rect: None,
+            focus_annotation: FocusAnnotation::default(),
         }))
     }
 
@@ -709,6 +738,7 @@ impl WidgetNode {
             scale: DipScale::default(),
             raster_scale: DipScale::default(),
             arranged_rect: None,
+            focus_annotation: FocusAnnotation::default(),
         }))
     }
 
@@ -753,6 +783,7 @@ impl WidgetNode {
             scale: DipScale::default(),
             raster_scale: DipScale::default(),
             arranged_rect: None,
+            focus_annotation: FocusAnnotation::default(),
         }))
     }
 
@@ -813,6 +844,7 @@ impl WidgetNode {
             scale: DipScale::default(),
             raster_scale: DipScale::default(),
             arranged_rect: None,
+            focus_annotation: FocusAnnotation::default(),
         }))
     }
 
@@ -850,6 +882,7 @@ impl WidgetNode {
             scale: DipScale::default(),
             raster_scale: DipScale::default(),
             arranged_rect: None,
+            focus_annotation: FocusAnnotation::default(),
         }))
     }
 
@@ -875,6 +908,7 @@ impl WidgetNode {
             scale: DipScale::default(),
             raster_scale: DipScale::default(),
             arranged_rect: None,
+            focus_annotation: FocusAnnotation::default(),
         }))
     }
 
@@ -1048,6 +1082,7 @@ impl WidgetNode {
             scale: DipScale::default(),
             raster_scale: DipScale::default(),
             arranged_rect: None,
+            focus_annotation: FocusAnnotation::default(),
         }))
     }
 
@@ -1107,19 +1142,72 @@ impl WidgetNode {
         }
     }
 
-    /// The focus role and enabled state derivable from this node's
-    /// **widget kind alone**, with no authored annotation (DD-M4-P2-003 F3:
-    /// "Button-family focusable by default via a derivation that is
-    /// exhaustive over widget kinds; the derivation is the extension
-    /// point"). `crate::focus::FocusProjection::project` calls this once
-    /// per node in its pre-order walk over the window's live tree.
+    /// Write this node's authored focus annotation (`focus-group: true` /
+    /// `modal-scope: true`, dsl_spec §4.19). **The only writer**: called
+    /// once, from the IR loader
+    /// (`ir_loader::build_node_with_loop_context`), immediately after
+    /// construction. No binding or property-write path calls this —
+    /// both attributes are constant-only (DD-M4-P2-005 A1), so there is
+    /// no second writer to keep in step with this one.
+    pub(crate) fn set_focus_annotation(&mut self, group: bool, modal_scope: bool) {
+        self.focus_annotation = FocusAnnotation { group, modal_scope };
+    }
+
+    /// The focus role and enabled state derivable from this node's widget
+    /// kind, its `enabled` flag (Button family), and — from M4-Phase 2 T6
+    /// onward — its authored [`FocusAnnotation`] (containers only).
+    /// `crate::focus::FocusProjection::project` calls this once per node
+    /// in its pre-order walk over the window's live tree.
     ///
     /// Deliberately total over `WidgetData` rather than a `_` arm, so a
-    /// later widget kind cannot become a silent `Container`. Only two of
-    /// `FocusRole`'s six variants are reachable from here — `Stop`
-    /// (Button family) and `Container` (everything else); `Group` and
-    /// `ModalScope` arrive with the authored annotations M4-Phase 2 T6
-    /// adds and T7 projects.
+    /// later widget kind cannot become a silent `Container`.
+    ///
+    /// **The Button-family arm is unchanged** (DD-M4-P2-003 F3): neither
+    /// `focus-group` nor `modal-scope` is admitted on a Button-family
+    /// widget (`ir_loader::validate_focus_annotation_invariants` — Button
+    /// is not one of the seven `FOCUS_ANNOTATION_CONTAINERS`), so
+    /// consulting an annotation there would be an unreachable branch.
+    ///
+    /// **The container arm consults the annotation**:
+    ///
+    /// - `modal_scope` set → `FocusRole::ModalScope`
+    /// - else `group` set → `FocusRole::Group`
+    /// - else → `FocusRole::Container` (the M4-Phase 2 T5 baseline, and
+    ///   the only role `Rectangle` / `Text` can ever show — the loader
+    ///   never lets either carry a non-default annotation).
+    ///
+    /// **`modal-scope` wins when a node carries both**, because
+    /// `focus_core::FocusRole` is one-of-six: a container cannot
+    /// literally hold two roles at once. DD-M4-P2-005's forward-compat
+    /// note records the both-at-once case as "expressible under A1 and
+    /// untested in M4"; confinement is the stronger property — it
+    /// changes which subtree is reachable at all, where a group only
+    /// changes how Tab moves within one — so `modal-scope` takes
+    /// precedence here, and deciding what a *combined* group-and-scope
+    /// should mean is T7's question, not this one's.
+    ///
+    /// **Reachability caveat — read before widening this function's value
+    /// set.** `focus_role` has exactly two production callers,
+    /// `focus::traverse_on_key` (the `WM_KEYDOWN` traversal path) and
+    /// `focus::focus_on_click` (the `WM_LBUTTONUP` focus path), both
+    /// reached through `FocusProjection::project`'s pre-order walk — so a
+    /// wider value set changes what both paths can reach, not only what
+    /// this function returns.
+    ///
+    /// Until M4-Phase 2 T7 adds the scope entry seam, a `modal-scope`
+    /// container is **present but un-entered**: nothing in production
+    /// calls `focus_core::FocusState::enter_modal` yet, and
+    /// `focus_core::FocusTree`'s `collect_stops` returns early for an
+    /// un-entered `ModalScope`, so its subtree is reachable by neither Tab
+    /// nor click-to-focus. A `focus-group` container is one Tab stop and
+    /// is not descended into: `FocusTree::tab` resolves that landing
+    /// through `resolve_stop`, so Tab already lands on the group's first
+    /// or remembered member — but `focus::focus_on_click` does **not**
+    /// call `resolve_stop`, so until T7 a click on a widget inside a
+    /// group moves focus to the **group container** itself, not to the
+    /// clicked widget. See the T6 close gate's carry-forward ledger in
+    /// `process/milestone-4/phase-2/implementation/log.md` for the
+    /// tracked disposition.
     pub(crate) fn focus_role(&self) -> (crate::focus_core::FocusRole, bool) {
         use crate::focus_core::FocusRole;
         match &self.data {
@@ -1134,7 +1222,16 @@ impl WidgetNode {
             | WidgetData::WrapPanel { .. }
             | WidgetData::ScrollView { .. }
             | WidgetData::Grid { .. }
-            | WidgetData::ZStack { .. } => (FocusRole::Container, true),
+            | WidgetData::ZStack { .. } => {
+                let role = if self.focus_annotation.modal_scope {
+                    FocusRole::ModalScope
+                } else if self.focus_annotation.group {
+                    FocusRole::Group
+                } else {
+                    FocusRole::Container
+                };
+                (role, true)
+            }
         }
     }
 
@@ -1846,6 +1943,25 @@ impl WidgetNode {
     #[doc(hidden)]
     pub fn __button_focused_for_test(&self) -> Option<bool> {
         self.button_data().map(|btn| btn.focused)
+    }
+
+    /// Test-only accessor for this node's [`focus_role`](Self::focus_role)
+    /// (M4-Phase 2 T6). `focus_core::FocusRole` is not exported from this
+    /// crate, so — matching [`Self::__button_state_for_test`]'s shape — a
+    /// `&'static str` is returned instead of widening a private type's
+    /// visibility: `"stop"`, `"container"`, `"group"`, or `"modal-scope"`.
+    #[doc(hidden)]
+    pub fn __focus_role_for_test(&self) -> &'static str {
+        use crate::focus_core::FocusRole;
+        match self.focus_role().0 {
+            FocusRole::Stop => "stop",
+            FocusRole::Container => "container",
+            FocusRole::Group => "group",
+            FocusRole::ModalScope => "modal-scope",
+            FocusRole::ActiveItemList | FocusRole::ActiveItem => {
+                unreachable!("focus_role never returns ActiveItemList/ActiveItem in M4-Phase 2")
+            }
+        }
     }
 
     #[doc(hidden)]

@@ -289,21 +289,69 @@ The compiler surface, ahead of the runtime behaviour, because the tree
 cannot say "group" or "modal" until this lands
 ([preamble.md §The sequencing thesis](./preamble.md)).
 
-- Grammar, checker (constant-only `true` / `false`, admitted on
-  containers), IR, loader → the node's focus role.
+- Checker (constant-only `true` / `false`, admitted on containers),
+  loader → the node's focus role.
+- **The grammar, the lexer, `lower` and `emit` needed no change at all**
+  (measured at the start gate, [log.md](./log.md) §T6 fact 1). Both names
+  already lex as a single `Ident` under §2.2's hyphen rule — the one
+  `item-cross-size` uses — parse as `property_bind`, lower through the
+  generic `Member::PropertyBind` arm to `IrProp { value: IrLiteral::Bool }`
+  and emit as `prop focus-group = true`; `dismiss => { … }` already
+  parses as a `signal_handler`. The item's original "Grammar, …, IR"
+  over-predicted two of its four; the work was checker + loader + role
+  derivation + tests. This does **not** generalise to T8's
+  `key-down("<key>")`, which still needs the phase's one new production.
 - Three rejects with their own tests: a binding-expression RHS, the
   attribute on a non-admitting widget, and a `dismiss` handler on a
   container that does not carry `modal-scope: true` (DD-005: the request
   is addressed to scopes, so a handler elsewhere could never fire).
+- **The same rules are gated at the loader as well** (recorded deviation,
+  [log.md](./log.md) §T6 start gate). `wasamo_load_ui` admits memory IR
+  that never passed through `wasamoc`, the loader must read these props
+  anyway to write the annotation, and without the gate the failure is
+  *silent* — an annotation on a `Button`, or `prop modal-scope = 1`, is
+  dropped with no diagnostic, which is the class T3's CF-2 already
+  recorded. The two-gate shape §4.9 / §4.12 / §4.16 already use.
+- **Four existing per-kind gates already rejected the new names and had
+  to be passed through or relaxed**, none of them enumerable by the
+  compiler: `check_zstack_unknown_attr`, `check_scrollview_unknown_attr`
+  and `check_grid`'s attribute arm on the checker side, and
+  `validate_phase6_zstack_node_invariants` on the loader side. The last
+  is the one that mattered — without relaxing it the loader refuses IR
+  the checker accepts, which the integration fixture is what notices
+  (witness W6).
+- **A per-kind signal admission rule does exist, in two places**, so
+  §T8's premise below is false for them: `check_grid` rejected *every*
+  handler on a `Grid` and the loader rejects every handler on a `ZStack`.
+  This task relaxed both for `dismiss` only; widening `clicked` is T8's
+  (close gate CF-T6-3).
 - `dismiss` is an ordinary signal name in the existing handler table;
   nothing in the IR distinguishes it.
 - No new token, `IrType`, `IrLiteral` or `PropertyValue`.
+- **No behaviour is built, and the intermediate state that creates is
+  named rather than left to be found.** Until T7 adds the entry seam, a
+  *present* `modal-scope` subtree is *un-entered* and `tab_stops` skips
+  it — the state DD-004 says must not be reachable. It is unreachable
+  from any shipped `.ui` (T10 adds the first one, after T7) and is
+  carried forward as CF-T6-1.
+- **A container carrying both annotations collapses to one role**, since
+  `focus_core::FocusRole` is one-of-six. `modal-scope` takes precedence,
+  which is asserted rather than incidental, and `wasamoc` **warns** that
+  the `focus-group` half has no effect — the shape stays accepted, so the
+  surface DD-005 chose is not narrowed, but the author is told rather
+  than left to find out. Whether the combination should be supported at
+  all, or the two booleans should become one enumerated attribute, is a
+  surface question **no M4-Phase 2 task owns**; it goes to the
+  [candidate pool](../../../candidate-pool.md) (owner-settled
+  2026-08-07, CF-T6-2).
 - **Evidence:** accept-side tests — each attribute parses, round-trips
   through the IR, and reaches the loaded node as its focus role — beside
-  the three reject tests, each firing its branch directly
-  (implementation-gates trap 4).
+  the reject tests, each firing its branch directly
+  (implementation-gates trap 4), on **both** gates; plus the mutation
+  witnesses, two of which restore the pre-T6 behaviour rather than break
+  the new code.
 
-- [ ] T6
+- [x] T6
 
 ## T7 — Group traversal and modal scopes in the runtime
 
@@ -322,10 +370,23 @@ fix:
   mutation because node identity does not survive a rebuild. The entry's
   focus move writes runtime focus state only and enqueues no further
   drain work — asserted, not assumed.
-- Reconcile `focus_core` with presence-entry: the core's un-entered
-  state has no production constructor; the projection either narrows it
-  or the branch carries a test that fires it (implementation-gates
-  trap 4) — recorded either way.
+- Reconcile `focus_core` with presence-entry. **The core's un-entered
+  state now has a production constructor** — T6 landed it, so this is a
+  real branch with a real input rather than a hypothetical: a `.ui`
+  carrying `modal-scope: true` projects as `FocusRole::ModalScope` with
+  nothing entered, and `collect_stops` returns early for it, so the
+  subtree is reachable by neither Tab nor click-to-focus until the entry
+  seam lands (close gate CF-T6-1). The projection either narrows the
+  un-entered state away or the branch carries a test that fires it
+  (implementation-gates trap 4) — recorded either way.
+- **Two landing paths disagree about a group, and the fix goes in one
+  primitive** (close gate CF-T6-5). `FocusTree::tab` resolves a group
+  landing through `resolve_stop`, so Tab already lands on the group's
+  first or remembered member; `focus::focus_on_click` derives its
+  landing from `tab_stops` + `nearest_focusable` and never calls it, so a
+  click inside a group focuses the **group container**. Making the click
+  path agree must go through the same primitive the memory is written
+  by, not a second landing resolver.
 - **The seam is enumerated before it is trusted**: a start-gate audit
   lists every path that materialises or removes a subtree — initial
   build, conditional drain, `for` regeneration — and shows each runs the
@@ -371,10 +432,24 @@ handler table — not how an event travels.
 - Reject-side tests pin how far `clicked` widens (DD-005: a previously
   diagnosed `.ui` may now be accepted; the reject tests are what bound
   the widening).
-- **`clicked` needs no checker widening — the reject tests are the whole
-  of its `clicked` work** (T3 measured, close gate CF-3): `check` has no
-  per-kind signal admission rule, so `Box { clicked => … }` has always
-  been accepted, lowered and attached. T3 landed the runtime half.
+- **`clicked` widens on two kinds and nowhere else** (T3 close gate
+  CF-3, corrected by T6 close gate CF-T6-3). For `Box`, the stacks,
+  `WrapPanel` and `ScrollView` there is no per-kind signal admission
+  rule, so `Box { clicked => … }` has always been accepted, lowered and
+  attached, and T3 landed the runtime half — for those kinds the reject
+  tests are the whole of the work. **`Grid` and `ZStack` each carry a
+  blanket handler rejection, and the two are not symmetric**:
+  `check_grid`'s signal arm rejects on the **compiler** side only — the
+  loader has no Grid handler gate and never has, so
+  `Grid { clicked => … }` is rejected by `check` and *accepted* by
+  `wasamo_load_ui` — while `validate_phase6_zstack_node_invariants`
+  rejects on the **loader** side only, the checker admitting it. T6
+  relaxed each for `dismiss` alone, so this task decides **three**
+  things: widen `check_grid`, widen the ZStack loader gate, and whether
+  the Grid rule gains the loader half it never had. Leaving any of them
+  narrows the authored surface against §4.19's "`clicked` — any widget"
+  and hands T13 a divergence
+  ([log.md](./log.md) §T6 close gate CF-T6-3).
 - **Two Button-family loader defects land here** (T3 close gate CF-1 /
   CF-2), both measured, neither in T3's lane, and both dispositioned by
   the owner on 2026-08-07 ([log.md](./log.md) §T3 owner disposition):
