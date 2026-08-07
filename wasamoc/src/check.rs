@@ -6571,6 +6571,98 @@ mod tests {
         );
     }
 
+    // Every test above writes `dismiss` as a flat sibling of
+    // `modal-scope: true` directly in a widget body. §4.19's own worked
+    // example — and the shape the feature exists for (the gallery
+    // lightbox) — wraps the annotated container in an `if`. These four
+    // tests exercise `carries_modal_scope`'s recomputation at the
+    // `Member::Conditional` / `Member::For` recursive calls in
+    // `check_members_inner`, which the flat tests above never reach.
+
+    #[test]
+    fn dismiss_handler_accepted_inside_if_wrapped_modal_scope() {
+        // The `if` body admits exactly one widget child in M3-Phase 6, so
+        // an outer `Box` wraps the `if` and the `if`'s branch body is the
+        // annotated inner container — dsl_spec §4.19's own
+        // `modal-scope` / `dismiss` example shape.
+        let result = check_src(
+            "component C inherits W { state lightbox_open: bool = true Box { if lightbox_open { Box { modal-scope: true dismiss => { lightbox_open = false; } } } } }",
+        );
+        assert!(!result.has_errors(), "{:?}", result.diagnostics);
+    }
+
+    #[test]
+    fn dismiss_handler_inside_if_wrapped_container_without_modal_scope_rejected() {
+        // Same shape as the accept test above, minus `modal-scope: true`.
+        // Proves the recursion into the `if` body actually re-scans the
+        // inner `Box`'s own children rather than short-circuiting or
+        // inheriting an outer answer.
+        let errs = errors(
+            "component C inherits W { state lightbox_open: bool = true Box { if lightbox_open { Box { dismiss => { lightbox_open = false; } } } } }",
+        );
+        assert_eq!(errs.len(), 1, "{:?}", errs);
+        assert!(
+            errs[0].contains("`dismiss` handler can never be raised") && errs[0].contains("§4.19"),
+            "{:?}",
+            errs
+        );
+    }
+
+    #[test]
+    fn dismiss_inside_if_wrapped_container_not_admitted_by_ancestor_modal_scope() {
+        // The discriminating case: the *enclosing* `Box`, outside the
+        // `if`, carries `modal-scope: true`, but the `if`-wrapped inner
+        // `Box` carrying `dismiss` does not. The admission rule is
+        // same-node, not ancestor — this is what a `carries_modal_scope`
+        // that leaked from the outer recursive call into the inner one
+        // (instead of being recomputed against the inner container's own
+        // siblings) would wrongly accept.
+        let errs = errors(
+            "component C inherits W { state lightbox_open: bool = true Box { modal-scope: true if lightbox_open { Box { dismiss => { lightbox_open = false; } } } } }",
+        );
+        assert_eq!(errs.len(), 1, "{:?}", errs);
+        assert!(
+            errs[0].contains("`dismiss` handler can never be raised") && errs[0].contains("§4.19"),
+            "{:?}",
+            errs
+        );
+    }
+
+    #[test]
+    fn dismiss_handler_inside_for_wrapped_container_without_modal_scope_rejected() {
+        // The `for` counterpart of the `if`-wrapped reject case above.
+        // The pre-existing "handlers inside a `for` body template are
+        // deferred in M3-Phase 7" gate (`inside_for_template`) fires
+        // unconditionally on every handler reached inside a `for` body,
+        // so a `dismiss` handler in a `for` body can only ever be a
+        // reject case, never an accept one — `inside_for_template` is
+        // threaded unchanged through the `Member::WidgetDecl` recursion,
+        // so it stays `true` all the way down to this handler. Both
+        // diagnostics are asserted: the deferred one proves that
+        // pre-existing gate still runs, and the modal-scope one proves
+        // the `Member::For` recursive call still reaches the handler and
+        // re-scans its own siblings for `carries_modal_scope` rather than
+        // the check being skipped because the handler was already
+        // rejected for the other reason.
+        let errs = errors(
+            "component C inherits W { state open: bool = true state items: i32[] = [] VStack { for it, idx in items { Box { dismiss => { open = false; } } } } }",
+        );
+        assert_eq!(errs.len(), 2, "{:?}", errs);
+        assert!(
+            errs.iter()
+                .any(|e| e
+                    .contains("handlers inside a `for` body template are deferred in M3-Phase 7")),
+            "{:?}",
+            errs
+        );
+        assert!(
+            errs.iter()
+                .any(|e| e.contains("`dismiss` handler can never be raised")),
+            "{:?}",
+            errs
+        );
+    }
+
     #[test]
     fn non_dismiss_handler_on_grid_still_rejected() {
         // Proves the Grid signal-handler relaxation is narrow: only

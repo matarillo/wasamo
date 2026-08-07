@@ -1185,6 +1185,29 @@ impl WidgetNode {
     /// changes how Tab moves within one — so `modal-scope` takes
     /// precedence here, and deciding what a *combined* group-and-scope
     /// should mean is T7's question, not this one's.
+    ///
+    /// **Reachability caveat — read before widening this function's value
+    /// set.** `focus_role` has exactly two production callers,
+    /// `focus::traverse_on_key` (the `WM_KEYDOWN` traversal path) and
+    /// `focus::focus_on_click` (the `WM_LBUTTONUP` focus path), both
+    /// reached through `FocusProjection::project`'s pre-order walk — so a
+    /// wider value set changes what both paths can reach, not only what
+    /// this function returns.
+    ///
+    /// Until M4-Phase 2 T7 adds the scope entry seam, a `modal-scope`
+    /// container is **present but un-entered**: nothing in production
+    /// calls `focus_core::FocusState::enter_modal` yet, and
+    /// `focus_core::FocusTree`'s `collect_stops` returns early for an
+    /// un-entered `ModalScope`, so its subtree is reachable by neither Tab
+    /// nor click-to-focus. A `focus-group` container is one Tab stop and
+    /// is not descended into: `FocusTree::tab` resolves that landing
+    /// through `resolve_stop`, so Tab already lands on the group's first
+    /// or remembered member — but `focus::focus_on_click` does **not**
+    /// call `resolve_stop`, so until T7 a click on a widget inside a
+    /// group moves focus to the **group container** itself, not to the
+    /// clicked widget. See the T6 close gate's carry-forward ledger in
+    /// `process/milestone-4/phase-2/implementation/log.md` for the
+    /// tracked disposition.
     pub(crate) fn focus_role(&self) -> (crate::focus_core::FocusRole, bool) {
         use crate::focus_core::FocusRole;
         match &self.data {

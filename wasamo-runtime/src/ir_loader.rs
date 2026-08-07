@@ -8083,6 +8083,25 @@ mod tests {
     }
 
     #[test]
+    fn focus_group_true_inside_cell_rejected() {
+        // Loader-side equivalent of `check.rs`'s
+        // `focus_group_true_inside_cell_rejected`: `Cell` is an IR-only
+        // Grid wrapper, not a runtime container, and is excluded from
+        // `FOCUS_ANNOTATION_CONTAINERS`. Built as a `Grid` child so
+        // `Cell` is in a legal position and the admission diagnostic is
+        // what fires, not a Cell-outside-Grid one.
+        assert_validate_err(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             node Grid {\n\
+               tracks columns = 1*\n\
+               tracks rows = 1*\n\
+               node Cell { prop focus-group = true node Text {} }\n\
+             }\n}",
+            "`focus-group` is admitted on any container",
+        );
+    }
+
+    #[test]
     fn modal_scope_true_on_text_rejected() {
         assert_validate_err(
             ";wasamo-ir v0\ncomponent C inherits W { node Text { prop modal-scope = true } }",
@@ -8153,6 +8172,98 @@ mod tests {
              state open: bool = true\n\
              node Text { on dismiss { (assign open false) } }\n}",
             "`dismiss` handler can never be raised",
+        );
+    }
+
+    // Every test above puts `dismiss` as a flat sibling of `modal-scope`
+    // directly on a node's own `prop` list. These five exercise the
+    // `ControlFlow::If` / `ControlFlow::For` arms of
+    // `validate_focus_annotation_member_invariants`, which recurse into
+    // an `if` / `for` member's body — the `wasamoc` `check.rs` mirror
+    // group above tests the same shapes at compile time; this is the
+    // runtime half for memory IR that reaches the loader without
+    // traversing `wasamoc`. The `for`-plus-`dismiss` combination cannot
+    // reach the `ControlFlow::For` arm's own `dismiss` check at all (see
+    // that test's comment); the admission-only `for` test right after it
+    // is what actually fires the arm.
+
+    #[test]
+    fn dismiss_handler_accepted_inside_if_wrapped_modal_scope() {
+        // §4.19's own worked shape: the annotated node is the `if`'s
+        // branch body, not a flat sibling of the enclosing widget. Fires
+        // the `ControlFlow::If` recursion arm.
+        let c = parse_ok(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             state open: bool = true\n\
+             node VStack { if true { node Box { prop modal-scope = true on dismiss { (assign open false) } } } }\n}",
+        );
+        validate(&c).expect("dismiss inside an if-wrapped modal-scope container must validate");
+    }
+
+    #[test]
+    fn dismiss_handler_inside_if_wrapped_container_without_modal_scope_rejected() {
+        // Same shape as the accept test above, minus `prop modal-scope =
+        // true`. Proves the `ControlFlow::If` recursion actually
+        // re-validates the inner node rather than short-circuiting.
+        assert_validate_err(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             state open: bool = true\n\
+             node VStack { if true { node Box { on dismiss { (assign open false) } } } }\n}",
+            "`dismiss` handler can never be raised",
+        );
+    }
+
+    #[test]
+    fn dismiss_handler_inside_for_wrapped_container_hits_the_pre_existing_handler_gate_first() {
+        // This is *not* the `ControlFlow::For` dismiss-check arm firing —
+        // it is unreachable for this shape. `validate()` runs
+        // `validate_node_references` (which unconditionally rejects any
+        // handler found while `inside_for_template`) before
+        // `validate_focus_annotation_invariants`, and each gate in
+        // `validate()` short-circuits via `?` on its own first error. So a
+        // `dismiss` handler inside a `for` body always surfaces this
+        // earlier, handler-name-agnostic message; `validate_focus_annotation_invariants`
+        // never runs for this node at all. (Confirmed directly: calling
+        // `validate_focus_annotation_invariants` on the parsed tree in
+        // isolation *does* return the `dismiss`-specific error — the gate
+        // itself is correct, it is simply never reached through the public
+        // `parse_ir` entry point for this shape.) This differs from
+        // `wasamoc check`'s `check_members_inner`, which accumulates
+        // diagnostics into one `Vec` in a single pass instead of
+        // short-circuiting per gate, so the checker's `for` counterpart
+        // (see `check.rs`) surfaces both messages together.
+        assert_validate_err(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             state open: bool = true\n\
+             state xs: i32[] = []\n\
+             node VStack { for x in xs { node Box { on dismiss { (assign open false) } } } }\n}",
+            "handlers inside a `for` body template are deferred in M3-Phase 7",
+        );
+    }
+
+    #[test]
+    fn focus_group_true_on_text_inside_for_body_rejected() {
+        // The reachable way to fire the `ControlFlow::For` recursion arm:
+        // an admission violation carries no handler, so it never trips the
+        // earlier, handler-only `validate_node_references` for-template
+        // gate (see the test above) and reaches
+        // `validate_focus_annotation_invariants` inside the `for` body.
+        assert_validate_err(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             state xs: i32[] = []\n\
+             node VStack { for x in xs { node Text { prop focus-group = true } } }\n}",
+            "`focus-group` is admitted on any container",
+        );
+    }
+
+    #[test]
+    fn focus_group_true_on_text_inside_if_body_rejected() {
+        // The `ControlFlow::If` recursion must reach the admission check
+        // too, not only the `dismiss` check, for a node nested inside an
+        // `if` body.
+        assert_validate_err(
+            ";wasamo-ir v0\ncomponent C inherits W { node VStack { if true { node Text { prop focus-group = true } } } }",
+            "`focus-group` is admitted on any container",
         );
     }
 
