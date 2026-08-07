@@ -149,31 +149,47 @@ function Move-To($Handle, $ClientX, $ClientY) {
   Start-Sleep -Milliseconds 450   # let the hover-in / hover-out animation settle
 }
 
-# Try to earn foreground activation the way a user does, and REPORT whether
-# it worked rather than assuming either answer.
+# Acquire foreground activation the way a user does, and verify it.
 #
+# **This is the standing rule for any automated key input, not a local
+# workaround** (docs/notes/verification-environments.md Observation 4).
+# Mouse input is routed by cursor position and needs no activation;
+# keyboard input is routed to the focused window of the *foreground*
+# thread, so a tool that synthesizes a key press without holding
+# foreground sends it somewhere else - or nowhere, when the session has no
+# foreground window at all (`GetForegroundWindow` returns 0).
 # `SetForegroundWindow` alone is refused by Windows unless the caller is
-# already foreground, so a real click inside the client area is attempted
-# first - that is what a user does and what the OS accepts. The park
-# position is used deliberately: it is inside the dark scroll area, whose
-# `Box` carries no handler and is not focusable, so the click changes
-# nothing this capture measures (docs/dsl_spec.md §4.19 "clicking
+# already foreground, so activation has to be **earned** with a real click
+# and then **read back**, never requested and assumed.
+#
+# Retried rather than concluded from one attempt: a single refusal says
+# nothing about whether the environment can do this, only that it did not
+# this instant - a window that was just created, shown and repositioned
+# takes a moment to become activatable.
+#
+# The park position is used deliberately: it is inside the dark scroll
+# area, whose `Box` carries no handler and is not focusable, so the click
+# changes nothing this capture measures (docs/dsl_spec.md §4.19 "clicking
 # background never clears focus").
 #
-# Returns $true when the window really is foreground afterwards. A `$false`
-# here is an environment fact, not a failure: a session with **no**
-# foreground window at all (`GetForegroundWindow` returns 0) cannot deliver
-# synthesized keyboard input to any window, because `keybd_event` is
-# delivered to the focused window of the foreground thread.
-function Try-Activate($Handle, $ClientX, $ClientY) {
-  Move-To $Handle $ClientX $ClientY
-  [WinT5Cap]::mouse_event(0x0002, 0, 0, 0, [UIntPtr]::Zero)   # LEFTDOWN
-  Start-Sleep -Milliseconds 60
-  [WinT5Cap]::mouse_event(0x0004, 0, 0, 0, [UIntPtr]::Zero)   # LEFTUP
-  Start-Sleep -Milliseconds 600
-  [WinT5Cap]::SetForegroundWindow($Handle) | Out-Null
-  Start-Sleep -Milliseconds 300
-  return ([WinT5Cap]::GetForegroundWindow() -eq $Handle)
+# Returns $true when the window really is foreground afterwards.
+function Try-Activate($Handle, $ClientX, $ClientY, $Attempts = 5) {
+  for ($i = 1; $i -le $Attempts; $i++) {
+    Move-To $Handle $ClientX $ClientY
+    [WinT5Cap]::mouse_event(0x0002, 0, 0, 0, [UIntPtr]::Zero)   # LEFTDOWN
+    Start-Sleep -Milliseconds 60
+    [WinT5Cap]::mouse_event(0x0004, 0, 0, 0, [UIntPtr]::Zero)   # LEFTUP
+    Start-Sleep -Milliseconds 600
+    [WinT5Cap]::SetForegroundWindow($Handle) | Out-Null
+    Start-Sleep -Milliseconds 300
+    if ([WinT5Cap]::GetForegroundWindow() -eq $Handle) {
+      if ($i -gt 1) { Write-Host "foreground acquired on attempt $i" }
+      return $true
+    }
+    Write-Host ("attempt {0}/{1}: foreground is {2}, retrying" -f $i, $Attempts, [WinT5Cap]::GetForegroundWindow())
+    Start-Sleep -Milliseconds 700
+  }
+  return $false
 }
 
 # Advance the focus by `Times` Tab presses, through the strongest input path
@@ -232,20 +248,19 @@ try {
   $parkX = [int]($cr.W * 0.5)
   $parkY = [int]($cr.H * 0.75)
 
-  # Measure the input capability before choosing how to press Tab, rather
-  # than predicting it (the T4 retrospective's start-gate corrective applied
-  # to the capture tool).
-  $fgBefore = [WinT5Cap]::GetForegroundWindow()
+  # Acquire foreground before any key input, and record which path the
+  # capture then used. Every capture states this, because the two paths
+  # support different claims and a run that silently fell back to the
+  # weaker one would look identical in its numbers.
   $script:RealKeys = Try-Activate $h $parkX $parkY
   if ($script:RealKeys) {
-    Write-Host "input path: REAL KEY PRESSES (keybd_event); the window holds foreground activation"
+    Write-Host "input path: REAL KEY PRESSES (keybd_event); foreground activation acquired and read back"
   } else {
-    Write-Host ("input path: POSTED WM_KEYDOWN (weaker claim). The window could not take foreground " +
-                "activation even after a real click; GetForegroundWindow was $fgBefore before and " +
-                "$([WinT5Cap]::GetForegroundWindow()) after. A session whose foreground window is 0 has no " +
-                "foreground thread for synthesized keyboard input to reach, so keybd_event would go " +
-                "nowhere. The posted message still travels the window's real message loop and the real " +
-                "WM_KEYDOWN arm, but this capture makes NO claim about OS keyboard delivery.")
+    Write-Host ("input path: POSTED WM_KEYDOWN (weaker claim). Foreground activation could not be " +
+                "acquired in 5 attempts. The posted message still travels the window's real message " +
+                "loop and the real WM_KEYDOWN arm, but this capture makes NO claim about OS keyboard " +
+                "delivery, and the run must be reported as the weaker form rather than filed beside " +
+                "real-key captures.")
   }
 
   # ---- N: nothing focused, cursor away (two frames) ---------------------

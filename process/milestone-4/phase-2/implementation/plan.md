@@ -548,6 +548,17 @@ The four controls from the [framing](../requirements/framing.md)
   from a broken one. Every capture states its scale either way.
 - Any tool that reads window geometry or cursor position declares
   Per-Monitor-Aware V2 first (Phase 1 F-48).
+- **Control B is Tab-driven, so its capture acquires foreground
+  activation before sending a key, verifies it, and retries** — keyboard
+  input goes to the focused window of the foreground thread, unlike the
+  cursor-routed input every earlier control used
+  ([verification-environments.md](../../../../docs/notes/verification-environments.md)
+  Observation 4). Each capture **records which input path it used**: real
+  key presses, or posted `WM_KEYDOWN`, which is the weaker claim. The
+  numbers look identical either way, so a silent fallback would be
+  invisible in the artifact. T5's
+  [capture-t5-focus.ps1](./evidence/capture-t5-focus.ps1) is the working
+  shape.
 - **The owner smoke guide is written out here** (framing §オーナー目視)
   and verified against the target commit before it is used.
 
@@ -586,6 +597,18 @@ The four controls from the [framing](../requirements/framing.md)
   - §4.19's `dismiss` admission rule (only beside `modal-scope: true`)
     and its keys-the-runtime-keeps table match the landed checker and
     runtime behaviour;
+  - **§13.3's focus-indicator sentence matches the landed runtime.** Its
+    second half ("not a visual written at focus-change time") is
+    satisfied literally — no `Visual` is created and the runtime still
+    has exactly six `SetOffset` / `SetSize` calls, all inside
+    `sync_visuals`. Its first half ("applied by the same pass that writes
+    visual geometry") is not implementable: that pass runs only from
+    layout, and a Tab press triggers none, so an indicator applied there
+    would not appear until something else re-laid the tree out. The
+    landed indicator is presentation state on the node applied by the
+    same means hover and pressed use, which is what DD-003's own
+    "the same shape as Button hover / pressed" says. Owner-settled
+    2026-08-07: correct the wording here (T5 close gate CF-T5-6);
   - the entry rule (presence is the entry; focus moves in) and the clip
     bound in §13 match the landed runtime;
   - **no fixture spelling appears in `docs/dsl_spec.md`** (DD-005 /

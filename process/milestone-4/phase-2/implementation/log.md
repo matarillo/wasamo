@@ -2021,17 +2021,28 @@ N and H reproduce T4's numbers for the same pixels to the last recorded
 digit, and two independent runs of this script (separate process launches)
 were bit-identical on all eight frames.
 
-**The input path was measured, not assumed.** The script tries to earn
-foreground activation with a real click and reports which path it then
-uses: real `keybd_event` key presses when the window holds foreground,
-posted `WM_KEYDOWN` otherwise — a **weaker claim**, printed as such. Both
-recorded runs used **real key presses**. That is worth recording because
-an earlier attempt on this same box failed to take foreground at all
-(`GetForegroundWindow` returned 0 — the session had no foreground window
-for synthesized keyboard input to reach). The capability is therefore
-**intermittent on this machine**, which is a finding T12 inherits (its
-control B is Tab-driven), and the fallback branch has consequently never
-been exercised.
+**Foreground activation is acquired before any key is sent, verified, and
+retried.** Mouse input is routed by cursor position and needs no
+activation, which is why T4's hover capture never met this; keyboard input
+is routed to the focused window of the *foreground* thread. The script
+therefore earns activation with a real click inside the client area (at
+the parking point, which changes nothing it measures), reads
+`GetForegroundWindow` back, and retries up to five times before giving up —
+and records which input path it used. Both recorded runs used **real key
+presses**.
+
+An early version of the script asked for activation without earning it and
+then, once it clicked, gave up after a single attempt; that attempt was
+refused on a freshly created-shown-repositioned window. Reading one refusal
+as an environment verdict would have been the wrong conclusion from a
+sample with no retry in it. The rule this produced is not local to this
+capture and is recorded where capture mechanics live
+([verification-environments.md](../../../../docs/notes/verification-environments.md)
+Observation 4): anything synthesizing keyboard input acquires foreground,
+verifies it, and retries. The posted-`WM_KEYDOWN` fallback remains as the
+**weaker claim** — it exercises the message loop and window procedure but
+not the OS input stack that decides which window a key reaches — and has
+consequently never been exercised.
 
 This is the assistant baseline and does **not** replace the owner's
 human-visible smoke ([CLAUDE.md §Testing rules](../../../../CLAUDE.md)).
@@ -2043,7 +2054,7 @@ human-visible smoke ([CLAUDE.md §Testing rules](../../../../CLAUDE.md)).
 | **CF-T5-1 — a retained `FocusId` that is still *in range* but names a different node after a rebuild is not detected.** `discard_stale_focus` catches only the out-of-range case | The fix's own doc comment; the in-range case has no tree shape M4-Phase 2 can build, so no test fires it | `carry-forward` → this ledger | **T7** (modal-scope materialisation and removal) and **T9** (`for` regeneration) — the two tasks that add paths creating or replacing subtrees. This is the focus twin of T4's CF-T4-1 for hover; both are the same index-shift class |
 | **CF-T5-2 — the eager successor rule is not implemented.** DD-M4-P2-003 requires the successor of a removed or disabled stop to be computed **before** the mutation; T5 applies it lazily at the next traversal, landing on the domain's first stop | F3's third leg and F6 assert the lazy behaviour by name | `carry-forward` → this ledger | **T7**, which owns the materialisation seam that can call in *before* a mutation. Until then the observable difference is that a removal falls to the first stop rather than to the structural successor |
 | **CF-T5-3 — the fixtures cannot see the indicator's appearance.** W8 deletes the colour distinction and none of the six fixtures notices; they read a boolean flag | Witness W8 | `carry-forward` → this ledger | **T12**, whose control B reads traversal order off captured frames. Any later change to `effective_button_color` needs the pure colour tests or a capture, not the fixtures |
-| **CF-T5-4 — real key input to a foreground window is intermittently unavailable on the evidence machine.** One capture attempt found `GetForegroundWindow() == 0`; two later runs earned activation with a real click and used real key presses | The capture script's measured branch, printed on every run | `carry-forward` → this ledger | **T12** (control B is Tab-driven) and **T11** (synthesized pointer injection has the same class of environment dependency). The script's shape — measure the capability, use the strongest available, print which — is the pattern to copy rather than the fallback itself |
+| **CF-T5-4 — anything synthesizing keyboard input must acquire foreground activation first, verify it, and retry.** Keyboard input is routed to the focused window of the foreground thread, so a key sent without it goes elsewhere; `SetForegroundWindow` is refused unless the caller is already foreground, so activation is earned with a real click and read back. A capture that instead posts `WM_KEYDOWN` supports a weaker claim and records that it did | This capture's own history: asking without earning failed, and a single earned attempt on a freshly shown window was refused | `doc-folded` → [verification-environments.md](../../../../docs/notes/verification-environments.md) Observation 4, beside the PMv2 read-back rule it is the sibling of | **T12** (control B is Tab-driven) and **T11** (synthesized pointer injection carries the same "earn the capability, verify it, record which path" shape). The rule is in the capture-mechanics SSOT, so a later task inherits it by reading that file rather than by finding this row |
 | **CF-T5-5 — the host key slot is now load-bearing for evidence, and still uninstalled in production.** F5's discrimination depends on `key_down_fn` being reached only after traversal declines | F5 and witness W7 | `carry-forward` → this ledger | **T8**, which adds authored `key-down` handlers between the consumption and the fallthrough. A dispatch inserted on the wrong side of the slot breaks F5, which is the intended tripwire |
 | **CF-T5-6 — §13.3's indicator sentence cannot be implemented literally.** "Applied by the same pass that writes visual geometry" would require a focus change to trigger a layout pass; the landed indicator is a brush colour written through the same primitive hover uses, and adds no geometry write | The #3 enumeration (six calls, unchanged) | `finding` → **T13's re-verification list** | **T13**, which re-verifies §13.3 against the landed runtime. The clause that *is* satisfied literally is the same sentence's second half, "not a visual written at focus-change time" |
 
