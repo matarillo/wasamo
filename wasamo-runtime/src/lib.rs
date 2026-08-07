@@ -5,10 +5,17 @@ mod box_values;
 // production caller until T4 puts the authoritative value on `WindowState`.
 mod dip_scale;
 mod emit;
-// M4-Phase 2 pre-ADR spike: the Win32-independent focus traversal core.
-// Declared here so the module compiles and its unit tests run; it has no
-// production caller, and whether it ships in this shape is DD-M4-P2-003's
-// decision. See process/milestone-4/phase-2/decisions/exploration/.
+// M4-Phase 2 T5: the production focus record and its projection of a live
+// `WidgetNode` tree onto `focus_core`. Private -- the phase's cross-task
+// obligation is no new ABI function (constraints.md §2), and nothing
+// outside this crate needs a `FocusId`.
+mod focus;
+// M4-Phase 2 DD-M4-P2-003: the Win32-independent focus traversal core,
+// consumed through `crate::focus`'s projection of a live `WidgetNode`
+// tree (`WindowState`'s keyboard and pointer arms, from T5). `focus_spike`
+// is the pre-ADR spike's override-map projection, kept only for
+// `tests/focus_mechanism_fixture.rs` until T7 retires it -- see
+// process/milestone-4/phase-2/decisions/exploration/.
 mod focus_core;
 mod focus_spike;
 pub mod handler;
@@ -122,20 +129,45 @@ pub mod ffi {
     pub unsafe fn __hover_target_for_test(window: *mut WasamoWindow) -> Option<Vec<usize>> {
         (*window).hover.target().map(|path| path.to_vec())
     }
+
+    /// The window's focused widget, as the path of child indices from the
+    /// root widget (M4-Phase 2 T5; `WindowState::focus`), or `None` when
+    /// nothing is focused or no root widget is installed.
+    ///
+    /// **A reader, not a second store.** The window holds exactly one
+    /// record — the focused `FocusId` — and this seam re-projects the live
+    /// tree on every call and maps the id back to a path through it, the
+    /// same reader shape `crate::focus::focused_path` uses in-crate. There
+    /// is no path field anywhere for this seam to read out of step with
+    /// the id it names.
+    ///
+    /// # Safety
+    ///
+    /// Same contract as [`__window_scale_dpi_for_test`]: `window` must be
+    /// non-null, properly aligned, and valid for a shared read of a live
+    /// `WasamoWindow` for the duration of the call, on the runtime's owning
+    /// thread, and not used after `wasamo_window_destroy`.
+    #[doc(hidden)]
+    pub unsafe fn __focus_path_for_test(window: *mut WasamoWindow) -> Option<Vec<usize>> {
+        let state = &*window;
+        let root = state.root_widget.as_deref()?;
+        crate::focus::focused_path(root, &state.focus)
+    }
 }
 
-/// M4-Phase 2 **pre-ADR spike** seam: the focus traversal core and its
-/// projection from a live widget tree, reachable from the integration-test
-/// crate.
+/// M4-Phase 2 spike-projection seam: `focus_core`'s traversal core plus the
+/// override-map projection from a live widget tree (`focus_spike`),
+/// reachable from the integration-test crate.
 ///
-/// Named `__..._spike` rather than exported under a plain module path because
-/// it is not API and not a decision — DD-M4-P2-003 chooses whether any of this
-/// ships, and DD-M4-P2-005 chooses how the annotations are authored. The seam
-/// exists so the mechanism fixture can drive the core against a tree built
-/// through the real `.ui` -> IR -> runtime path, which is the only way to
-/// measure what the projection needs.
-///
-/// Deleted or replaced wholesale when the ADR set lands.
+/// **Not the production path.** `crate::focus` is: it projects
+/// `WidgetNode::focus_role()` with no override map, and is what
+/// `WindowState`'s keyboard and pointer arms actually call from M4-Phase 2
+/// T5. This seam exists only for `tests/focus_mechanism_fixture.rs`, which
+/// needs the override map to synthesise the `Group` / `ModalScope` /
+/// `ActiveItemList` / `ActiveItem` roles no `.ui` surface can author yet
+/// (DD-M4-P2-005 lands at T6). Deleted, along with `focus_spike` and the
+/// override map, when T7 lands the authored annotations to project
+/// through instead.
 #[doc(hidden)]
 pub mod __focus_spike {
     pub use crate::focus_core::*;

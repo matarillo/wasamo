@@ -1,4 +1,5 @@
 use crate::dip_scale::DipScale;
+use crate::focus::{self, WindowFocus};
 use crate::runtime;
 use crate::widget::{HoverState, WidgetNode};
 use windows::{
@@ -12,7 +13,9 @@ use windows::{
         },
         UI::{
             HiDpi::GetDpiForWindow,
-            Input::KeyboardAndMouse::{TrackMouseEvent, TME_LEAVE, TRACKMOUSEEVENT},
+            Input::KeyboardAndMouse::{
+                GetKeyState, TrackMouseEvent, TME_LEAVE, TRACKMOUSEEVENT, VK_SHIFT,
+            },
             WindowsAndMessaging::{
                 CreateWindowExW, DefWindowProcW, GetWindowLongPtrW, LoadCursorW, PostQuitMessage,
                 RegisterClassExW, SetWindowLongPtrW, SetWindowPos, ShowWindow, CS_HREDRAW,
@@ -117,6 +120,20 @@ pub struct WindowState {
     /// needs to read it, and no host does — DD-M4-P1-004 keeps state like
     /// this off the `pub use`-exported surface.
     pub(crate) hover: HoverState,
+    /// This window's per-window focus record (M4-Phase 2 T5;
+    /// `docs/architecture.md` §13.3 "Focus is per window. A `WindowState`
+    /// owns one focus record..." — DD-M4-P2-003's L2). One record per
+    /// window, no global and no static, which is what leaves M4-Phase 8's
+    /// second window an additive change rather than a rebuild — the same
+    /// argument `scale` above carries for the DPI factor. Reset by
+    /// `set_root` for the same reason `hover` is, and otherwise owned
+    /// entirely by `crate::focus`'s operations, which the `WM_KEYDOWN` arm
+    /// and the `WM_LBUTTONUP` arm below call with `&mut self.focus`.
+    ///
+    /// `pub(crate)` rather than private, matching `hover` above: the
+    /// integration-test crate's `lib.rs::ffi::__focus_path_for_test` seam
+    /// needs to read it, and no host does.
+    pub(crate) focus: WindowFocus,
 }
 
 // Safety: same single-thread contract as Runtime.
@@ -153,6 +170,7 @@ pub fn create(title: &str, width: i32, height: i32) -> windows::core::Result<Box
         root_widget: None,
         mouse_down: false,
         hover: HoverState::default(),
+        focus: WindowFocus::default(),
     });
     // Store a raw pointer to WindowState in GWLP_USERDATA so wnd_proc can reach it.
     // Safety: state is heap-allocated (Box) and will outlive the HWND.
@@ -354,8 +372,10 @@ pub fn set_root(state: &mut WindowState, mut root: Box<WidgetNode>) -> windows::
     state.root_widget = Some(root);
     // The previous root (if any) is already dropped above; its indices name
     // nothing in the new tree, so a stale retained path must not survive
-    // the swap (M4-Phase 2 T4).
+    // the swap (M4-Phase 2 T4). The focus record carries the identical
+    // hazard (M4-Phase 2 T5) and is reset here for the same reason.
     state.hover = HoverState::default();
+    state.focus = WindowFocus::default();
     if let Some(r) = state.root_widget.as_mut() {
         let _ = r.run_layout_as_window_root_at_scale(cw, ch, state.scale);
     }
@@ -914,10 +934,50 @@ unsafe extern "system" fn wnd_proc(
 
         if msg == WM_KEYDOWN {
             let vk = wparam.0 as u16;
+            // The state `Tab` / `Shift+Tab` need. `GetKeyState` reports the
+            // key state as of this message's position in the input queue,
+            // and the high bit of the returned `i16`, read as `u16`, is set
+            // while the key is held (Win32 `GetKeyState` contract).
+            let shift_down = (GetKeyState(VK_SHIFT.0 as i32) as u16 & 0x8000) != 0;
+            // With no root widget installed there is no tree to traverse,
+            // so `Tab` is not claimed and falls through with every other
+            // key. That is a narrower state than "a tree with no focus
+            // stop", which `traverse_on_key` does claim: a window between
+            // `create` and `set_root` has no content at all, and there is
+            // nothing for traversal to be the recipient of.
+            if let Some(root) = state.root_widget.as_mut() {
+                if focus::traverse_on_key(
+                    root,
+                    &runtime::get().compositor,
+                    &mut state.focus,
+                    vk,
+                    shift_down,
+                ) {
+                    // Traversal consumed the key.
+                    return LRESULT(0);
+                }
+            }
+            // Routing consumes ahead of the host key slot without
+            // installing it: the first installer would fix the callback
+            // unit as shipped API (constraints.md §2), and this phase must
+            // not be that installer.
             if let Some(f) = &mut state.key_down_fn {
                 f(vk);
             }
-            return LRESULT(0);
+            // No `return` here: a key nothing consumed is not swallowed
+            // (docs/architecture.md §13.2) and must continue to
+            // `DefWindowProcW` at the bottom of this procedure. Every `if`
+            // below tests a different `msg` value than `WM_KEYDOWN`, so
+            // control falls straight through to that call.
+            //
+            // `DefWindowProcW` can dispatch further messages into this same
+            // procedure synchronously, and a nested frame will derive its
+            // own `&mut WindowState` from `GWLP_USERDATA` — sound here
+            // because nothing uses the outer `state` after the fallthrough
+            // leaves this arm, which is a different argument from
+            // `WM_DPICHANGED`'s: that handler is hoisted above the
+            // `&mut *state_ptr` borrow because it *does* use `state`
+            // afterwards.
         }
 
         if msg == WM_MOUSEMOVE {
@@ -978,19 +1038,33 @@ unsafe extern "system" fn wnd_proc(
                 f(x, y);
             }
             if let Some(root) = state.root_widget.as_mut() {
-                // Deliberate order (T3's carry-forward to T4): the release
-                // must dispatch against the tree the user actually saw, so
-                // `hit_test_click` runs first. Its handler can rebuild or
-                // remove subtrees synchronously (see `run_clicked_handlers`'s
-                // safety note); a newly materialised node has no
-                // `arranged_rect` yet (T1's store, refreshed only by the
-                // next layout pass), so it is not a hit candidate and the
-                // `update_hover` immediately below can resolve against a
-                // tree that has already moved out from under it. That
-                // staleness is not corrected here — it self-corrects on the
-                // next real pointer message, after the message-loop
-                // boundary's drain (`emit::drain_if_outermost`) has
-                // re-laid-out whatever the handler rebuilt.
+                // Deliberate order (T3's carry-forward to T4, extended by
+                // T5). Focus moves first: a click focuses the widget the
+                // user actually touched, and a handler's synchronous
+                // rebuild can invalidate the resolved path, so the focus
+                // write must precede dispatch (M4-Phase 2 T5,
+                // DD-M4-P2-003). `focus_on_click` and `hit_test_click`
+                // below both resolve the same point against the same,
+                // still-unmutated tree — neither has run any handler yet —
+                // so the two resolutions cannot disagree even though each
+                // walks the tree separately.
+                //
+                // `hit_test_click` runs next, before `update_hover`, for
+                // the reason T4 recorded: the release must dispatch
+                // against the tree the user actually saw. Its handler can
+                // rebuild or remove subtrees synchronously (see
+                // `run_clicked_handlers`'s safety note); a newly
+                // materialised node has no `arranged_rect` yet (T1's
+                // store, refreshed only by the next layout pass), so it is
+                // not a hit candidate and the `update_hover` immediately
+                // below can resolve against a tree that has already moved
+                // out from under it. That staleness is not corrected here
+                // — it self-corrects on the next real pointer message,
+                // after the message-loop boundary's drain
+                // (`emit::drain_if_outermost`) has re-laid-out whatever the
+                // handler rebuilt.
+                let _ =
+                    focus::focus_on_click(root, &runtime::get().compositor, &mut state.focus, x, y);
                 root.hit_test_click(x, y);
                 let _ =
                     root.update_hover(&runtime::get().compositor, &mut state.hover, x, y, false);
