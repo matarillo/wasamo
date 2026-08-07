@@ -119,6 +119,16 @@
 //!   (Fixture 5) — Step 0's licensed assertion shape, plus the branch
 //!   `focus::traverse_on_key`'s doc comment names explicitly: Tab is
 //!   consumed even when the tree has no focusable widget at all.
+//! - [`a_focus_record_naming_a_removed_stop_is_cleared_rather_than_read_back_stale`]
+//!   (Fixture 6) — a click on a stop whose own handler removes the
+//!   conditional subtree it lives in must not leave the retained focus
+//!   record naming a node the next projection cannot explain
+//!   (`docs/architecture.md` §13.3, DD-M4-P2-003); the record reads back
+//!   `None` and the next Tab lands on the domain's first surviving stop.
+//! This is also the regression fixture for a measured crash: before
+//! `focus::discard_stale_focus` existed, the read-back right after the
+//! click panicked with `index out of bounds`, since the retained id
+//! outlived the projection that produced it.
 //!
 //! # Helpers copied from `event_routing_integration.rs`
 //!
@@ -1217,6 +1227,181 @@ fn tab_is_consumed_by_traversal_while_an_unclaimed_key_is_not() {
 
                     ffi::wasamo_window_destroy(window);
                 }
+            }
+        },
+    );
+}
+
+// ── F6 — a focus record surviving removal of its own stop ──────────────────
+
+/// A stop outside a conditional subtree ("toolbar"), and two stops inside
+/// it ("inner-a", "closer"); "closer" removes the whole conditional
+/// subtree — itself included — from its own `clicked` handler. Shaped
+/// after `examples/gallery/gallery.ui`'s lightbox, whose `"x"` Button
+/// reaches this same defect: the lightbox is an `if is_lightbox_open`
+/// branch, and its Buttons are the highest pre-order focus ids in the
+/// tree, so focusing then removing "x" is the shipped case this fixture
+/// stands in for with a smaller tree.
+const FOCUS_RECORD_SURVIVES_REMOVAL_OF_ITS_OWN_STOP_UI: &str = r#"component FocusRecordSurvivesRemovalOfItsOwnStop inherits Window {
+    state open: bool = true
+    VStack {
+        spacing: 0
+        padding: 0
+        Button { text: "toolbar" }
+        if open {
+            VStack {
+                spacing: 0
+                padding: 0
+                Button { text: "inner-a" }
+                Button { text: "closer" clicked => { root.open = false; } }
+            }
+        }
+    }
+}"#;
+
+/// `docs/architecture.md` §13.3 / DD-M4-P2-003 ("The focused node
+/// disappearing"): `WindowFocus` retains a `focus_core::FocusId`, which is
+/// the pre-order index of `crate::focus::FocusProjection` — rebuilt fresh
+/// on every operation. In this fixture's pre-order, "closer" is id 4
+/// (root 0, toolbar 1, the conditional `VStack` 2, inner-a 3, closer 4).
+/// `window.rs`'s `WM_LBUTTONUP` arm calls `focus::focus_on_click` — which
+/// focuses "closer" against the tree as it stood *before* dispatch —
+/// **before** `hit_test_click` runs "closer"'s own handler, whose
+/// synchronous drain removes the conditional subtree "closer" lives in.
+/// The next projection has only 2 nodes (root, toolbar), so the retained
+/// id 4 names nothing in it.
+///
+/// **This is also the regression fixture for a measured crash.** Before
+/// `focus::discard_stale_focus` existed, the `ffi::__focus_path_for_test`
+/// read-back immediately after the click panicked:
+/// `thread ... panicked at wasamo-runtime\src\focus.rs:63:20: index out of
+/// bounds: the len is 2 but the index is 4` — `FocusProjection::path`
+/// indexing `self.paths[id]` directly, reached through
+/// `focus::focused_path`. A regression that removes the fix therefore
+/// makes this test **crash**, not merely fail an assertion.
+///
+/// Three things are asserted, matching the three call paths
+/// `focus::discard_stale_focus`'s doc comment enumerates:
+///
+/// - The read-back right after the click is `None`, not a stale path —
+///   call path 3 (`focused_path`, this is where the probe panicked).
+/// - A subsequent `Tab` does not panic and lands on the domain's first
+///   surviving stop ("toolbar") — call path 2
+///   (`focus_core::FocusTree::tab` -> `stop_index_of` -> `nearest`),
+///   reached only because `discard_stale_focus` clears the record before
+///   `traverse_on_key` calls into `focus_core`, which this task does not
+///   modify.
+/// - `assert_focused_stop`'s paired read-back on that landing confirms
+///   call path 1's counterpart (`move_focus`) wrote a real, explainable
+///   id rather than propagating a stale one.
+#[test]
+fn a_focus_record_naming_a_removed_stop_is_cleared_rather_than_read_back_stale() {
+    run_on_owning_runtime_thread_or_skip(
+        "F6: focus record survives removal of its own stop",
+        move || {
+            let ir = lower_ui_to_ir(FOCUS_RECORD_SURVIVES_REMOVAL_OF_ITS_OWN_STOP_UI);
+            unsafe {
+                let window = load_window(&ir);
+                let hwnd = (*window).hwnd;
+                normalise_to_reference_baseline(window, CLIENT_W, CLIENT_H, "F6 baseline");
+                let factor = ffi::__window_scale_dpi_for_test(window) as f32 / REFERENCE_DPI as f32;
+
+                assert_eq!(
+                    ffi::__focus_path_for_test(window),
+                    None,
+                    "M4-Phase 1 F-47: establish the initial focus state by reading it back"
+                );
+
+                // Before the click: the conditional subtree is present, and
+                // "closer" is the widget this fixture means to click, not
+                // merely a path that happens to resolve to it.
+                let (toolbar_rect, inner_a_rect, closer_rect) = {
+                    let root = (*window).root_widget.as_ref().expect("content root");
+                    assert_eq!(
+                        root.children.len(),
+                        2,
+                        "fixture stopped discriminating: `open` starts true, so the \
+                         conditional VStack must be present before the click"
+                    );
+                    let conditional = root.children[1].as_ref();
+                    assert_eq!(
+                        conditional.child_count(),
+                        2,
+                        "fixture stopped discriminating: the conditional subtree must \
+                         hold both 'inner-a' and 'closer' before the click"
+                    );
+                    assert_eq!(label_of(root.children[0].as_ref()), "toolbar");
+                    assert_eq!(label_of(conditional.children[0].as_ref()), "inner-a");
+                    assert_eq!(label_of(conditional.children[1].as_ref()), "closer");
+                    (
+                        root.children[0].__arranged_rect_for_test(),
+                        conditional.children[0].__arranged_rect_for_test(),
+                        conditional.children[1].__arranged_rect_for_test(),
+                    )
+                };
+                let toolbar_rect = toolbar_rect.expect("toolbar must be laid out");
+                let inner_a_rect = inner_a_rect.expect("inner-a must be laid out");
+                let closer_rect = closer_rect.expect("closer must be laid out");
+                for (label, rect) in [
+                    ("toolbar", toolbar_rect),
+                    ("inner-a", inner_a_rect),
+                    ("closer", closer_rect),
+                ] {
+                    assert!(
+                        rect.width > 0.0 && rect.height > 0.0,
+                        "fixture stopped discriminating: the {label} rectangle {rect:?} must \
+                     be non-degenerate"
+                    );
+                }
+                assert!(
+                    toolbar_rect.y + toolbar_rect.height <= inner_a_rect.y,
+                    "fixture stopped discriminating: toolbar and inner-a must be disjoint"
+                );
+                assert!(
+                    inner_a_rect.y + inner_a_rect.height <= closer_rect.y,
+                    "fixture stopped discriminating: inner-a and closer must be disjoint"
+                );
+
+                // Click "closer": `focus_on_click` focuses it before
+                // `hit_test_click` runs its handler, which removes the
+                // subtree "closer" itself lives in — the same-message
+                // hazard this fixture pins.
+                let (closer_cx, closer_cy) = (
+                    (closer_rect.x + closer_rect.width / 2.0) * factor,
+                    (closer_rect.y + closer_rect.height / 2.0) * factor,
+                );
+                send_click(hwnd, closer_cx, closer_cy);
+
+                // After the click: the conditional subtree is gone.
+                {
+                    let root = (*window).root_widget.as_ref().expect("content root");
+                    assert_eq!(
+                        root.children.len(),
+                        1,
+                        "the handler's own state write ('root.open = false') must have \
+                         removed the conditional subtree synchronously, or this fixture is \
+                         not exercising a removal at all"
+                    );
+                }
+                // The read-back itself is part of the assertion, and is
+                // where the probe that measured this defect panicked
+                // before the fix (this fixture's own doc comment).
+                assert_eq!(
+                    ffi::__focus_path_for_test(window),
+                    None,
+                    "a focus record naming a removed stop must be cleared, not read back as \
+                     a stale path into a tree that no longer has it"
+                );
+
+                // Tab once: the lazy successor rule lands on the domain's
+                // first surviving stop, not anywhere the removed subtree
+                // used to be. This also exercises call path 2
+                // (`focus_core::FocusTree::tab`), which panics on a stale
+                // id left uncleared, same as the read-back above.
+                send_tab(hwnd);
+                assert_focused_stop(window, &[0], "toolbar", None);
+
+                ffi::wasamo_window_destroy(window);
             }
         },
     );
