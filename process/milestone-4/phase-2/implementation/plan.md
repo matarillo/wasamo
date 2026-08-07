@@ -336,9 +336,14 @@ cannot say "group" or "modal" until this lands
   carried forward as CF-T6-1.
 - **A container carrying both annotations collapses to one role**, since
   `focus_core::FocusRole` is one-of-six. `modal-scope` takes precedence,
-  which is asserted rather than incidental; DD-005 records the
-  both-at-once case as expressible and untested in M4, and what a
-  composite role should mean is T7's (CF-T6-2).
+  which is asserted rather than incidental, and `wasamoc` **warns** that
+  the `focus-group` half has no effect — the shape stays accepted, so the
+  surface DD-005 chose is not narrowed, but the author is told rather
+  than left to find out. Whether the combination should be supported at
+  all, or the two booleans should become one enumerated attribute, is a
+  surface question **no M4-Phase 2 task owns**; it goes to the
+  [candidate pool](../../../candidate-pool.md) (owner-settled
+  2026-08-07, CF-T6-2).
 - **Evidence:** accept-side tests — each attribute parses, round-trips
   through the IR, and reaches the loaded node as its focus role — beside
   the reject tests, each firing its branch directly
