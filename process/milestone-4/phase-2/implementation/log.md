@@ -1495,3 +1495,29 @@ not pixels, so the animation the state drives — its duration, its restart,
 and the disabled grey the guard protects — is invisible to them (W2 and W6
 measure exactly that boundary). The GUI control at #7 is what covers the
 painted side, and it covers one overlap shape at one scale.
+
+### Owner disposition of CF-T4-5 (2026-08-07)
+
+The one finding the close gate routed rather than settled is
+dispositioned. It changes no landed code and no T4 artifact; it fixes
+where the residual claim lands.
+
+**CF-T4-5 — the preamble's occlusion prediction was false, and T2's
+occlusion claim has no gallery frame.** The owner accepted the close
+gate's recommendation:
+
+- **T2 is not reopened.** Its occlusion rule is pinned by pure-logic
+  tests over a constructed overlapping tree and by integration fixtures,
+  which bound the rule rather than one instance of it. Re-capturing a
+  gallery frame against T2 would add no information that T4's measurement
+  has not already produced on the same path.
+- **T12's control C is what closes the residual at phase level.** That
+  control is the same shape — with the lightbox open a background click
+  does nothing, with it closed the same coordinate fires — so the gallery
+  frame T2 did not take is taken there, once, for the phase.
+
+The preamble correction (`880e68c`) stands as the record of the
+prediction itself; this row is the record of what the phase does about
+the gap the prediction left behind. T12's row in the control table now
+names the discharge so the obligation is visible where it is executed
+rather than only here.

@@ -495,6 +495,17 @@ The four controls from the [framing](../requirements/framing.md)
 | A — click routing and item identity | clicking thumbnail N and thumbnail M give different lightbox content | clicking N twice gives the same content |
 | B — traversal order | Tab ×1 / ×2 / ×3 and Shift+Tab reach the expected stops in reverse | two frames with no input agree within the measured text-pixel jitter (F-33: up to 13/channel), with the tolerance and comparison recorded — not asserted as bit-identical |
 | C — containment and occlusion | with the lightbox open, a background click does nothing and Tab cycles inside | with it closed, the same coordinate fires **and the same Tab reaches the background** (the DD-004 agreement leg — containment distinguished from an empty background) |
+
+- **Control C also discharges T4's CF-T4-5** (owner-settled 2026-08-07,
+  [log.md](./log.md) §Owner disposition of CF-T4-5). T2 resolved
+  hit-testing to a single target without taking a gallery frame, because
+  the phase predicted the gallery had no reachable overlap; T4 measured
+  that prediction false. T2 is not reopened — its rule is pinned by
+  pure-logic tests over a constructed overlapping tree, which bounds the
+  rule rather than one instance of it — and the gallery frame it did not
+  take is taken **here**, once, in exactly the shape control C already
+  has. Recorded on this row so the obligation is visible where it is
+  executed.
 | D — Esc | Esc closes the lightbox | an unrelated key does not |
 
 - Capture is preceded by `cargo build --release --workspace`, takes
