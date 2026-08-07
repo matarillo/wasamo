@@ -2721,3 +2721,103 @@ inherits nothing from and adds nothing to the pointer-conversion
 evidence T2 owns. And no captured frame exists for this task, by
 construction: the annotation is not painted, so a frame could not
 distinguish an annotated container from an unannotated one.
+
+#### Independent review and its remediation (recorded 2026-08-07)
+
+The review lane ([implementation-gates.md §4](../../../procedures/implementation-gates.md))
+was executed as an **independent branch/test-focused review** by a second
+agent that did not write the code, against `c839c17` / `f1314c9` /
+`53c95f1`. It built its own branch-coverage table from the diff rather
+than from the close gate's, probed ~15 constructed `.ui` files through
+`wasamoc check` / `build` and ~18 hand-built IR-text cases through
+`parse_ir` — including memory-IR shapes the checker can never emit — and
+re-ran the suite and the integration fixture with `--nocapture`.
+
+It confirmed the two ordering claims by tracing the source (the checker's
+dispatch sits after the `slot.*` / placement routing and before the
+ZStack / ScrollView / Box / ToggleButton / WrapPanel arms; the loader's
+gate runs before the ZStack and ToggleButton gates), confirmed that
+ScrollView and Grid have **no** loader-side unknown-attribute catch-all
+so the narrower doc claim at that site is accurate, confirmed the
+`unreachable!()` arm in `__focus_role_for_test` is genuinely unreachable,
+and found **no disagreement between the two gates on any shape this task
+introduces** — including the `if`-wrapped canonical example.
+
+Four findings. Two changed the code, one sharpened a carry-forward, one
+was accepted as recorded.
+
+**F1 — the "no behaviour is added" claim needed narrowing, and the code
+site needed the caveat.** True of layout, paint and geometry; **not**
+true of routing. `focus_role`'s two callers are production message paths
+(`focus::traverse_on_key` from `WM_KEYDOWN`, `focus::focus_on_click` from
+`WM_LBUTTONUP`), so widening its value set changes what both can reach
+the moment an author writes the attribute. The close gate already
+carried the `modal-scope` half as CF-T6-1; the review added the
+`focus-group` half, which was **not** recorded. Verified at the lead's
+own reading, with one correction to the review's account:
+
+- `FocusTree::tab` **does** call `resolve_stop` (`focus_core.rs` 321 /
+  350), so **Tab into a group already lands on the group's first or
+  remembered member** — that half is correct from this task onward.
+- `focus::focus_on_click` builds its landing from `tab_stops` +
+  `nearest_focusable` and **never** calls `resolve_stop`, so **a click on
+  a widget inside a group moves focus to the group container**, not to
+  the clicked widget, until T7.
+
+Remediated by a doc-comment paragraph at `focus_role` (`6d77dae`) — a
+reader of `widget.rs` alone could not otherwise infer any of it — and by
+CF-T6-5 below. No behaviour was changed: the fix is T7's.
+
+**F2 — a real trap-#4 gap, and the most representative shape in the
+feature.** Every accept-side test wrote `dismiss` as a **flat** sibling
+of `modal-scope: true`. Nothing wrapped it in an `if`, which is §4.19's
+own worked example and the gallery lightbox's actual shape, so two newly
+authored paths had no test firing them: `carries_modal_scope`'s
+recomputation at the checker's `Conditional` / `For` recursion, and
+`validate_focus_annotation_member_invariants`'s `If` / `For` arms — both
+functions added whole by this task. The review hand-verified both were
+*correct*, so this was a coverage defect rather than a live bug; a broken
+version of either would have passed the entire committed suite.
+
+Remediated in `6d77dae` with nine tests, the discriminating one being an
+`if`-wrapped container carrying `dismiss` whose **enclosing** container
+carries `modal-scope: true` and which is **still rejected** — a predicate
+that leaked from the outer recursive call into the inner one would
+wrongly accept it. Two measured facts are recorded at the tests rather
+than smoothed over: in the checker a `dismiss` inside a `for` body draws
+**two** diagnostics (the pre-existing deferred-handler gate and this
+task's), both asserted; in the loader the same shape is intercepted by an
+earlier `validate` pass before this gate runs, so the `For` arm is fired
+by an admission violation instead and the pre-existing rejection is
+asserted for what it is. Each new test was shown to redden under a
+deliberate short-circuit of the arm it watches.
+
+**F3 — the Grid handler rule is single-gated, and that is not this
+task's to close.** `check_grid` rejects every non-`dismiss` handler on a
+`Grid`; the loader has **no** Grid handler gate at all and never has
+(verified at `e3ff83a`). So `Grid { clicked => … }` is rejected by
+`wasamoc check` and **accepted** by `wasamo_load_ui`. Pre-existing,
+unreachable through `wasamoc build` (check aborts first), and therefore
+only a memory-IR concern — but it is exactly the checker/loader
+divergence CF-T6-3 is about, and the close gate had recorded only the
+checker-versus-spec half. Folded into CF-T6-3 below.
+
+**F4 — a loader-side `Cell` admission test was missing** where the
+checker had one. Added in `6d77dae`; low risk, since the same code path
+was already covered through `Text` / `Button` / `Rectangle`.
+
+Suite after remediation: `cargo fmt --all -- --check` zero exit,
+`git diff --check` clean, `cargo test --workspace --no-fail-fast`
+**45 binaries/sections, 1,107 passed, 0 failed, 0 ignored** (the ten
+added are four checker tests and six loader tests).
+
+#### Carry-forward, revised after the review
+
+CF-T6-1 and CF-T6-3 are restated here in the form the review's evidence
+supports; CF-T6-5 is new. CF-T6-2 and CF-T6-4 stand as recorded above.
+
+| Constraint | Evidence | Placement | Re-trigger criterion |
+|---|---|---|---|
+| **CF-T6-1 (restated) — between this task and T7, a *present* `modal-scope` subtree is *un-entered*, and its subtree is reachable by neither Tab nor click-to-focus.** `focus_core::FocusState::enter_modal` has no production caller, and `collect_stops` returns early for an un-entered `ModalScope`; both `traverse_on_key` and `focus_on_click` read that stop list. The original entry named traversal only | `focus_core::collect_stops`'s `FocusRole::ModalScope if !state.is_entered(id) => return` arm; the two production callers traced in the review | `carry-forward` → this ledger, and `doc-folded` → the `focus_role` doc comment | **T7**, which adds the entry seam. Bounded meanwhile: no shipped `.ui` carries the attribute, and T10 — which adds the first one — lands after T7 |
+| **CF-T6-5 (new) — a click on a widget inside a `focus-group` moves focus to the group container, not to the clicked widget.** `FocusTree::tab` resolves a group landing through `resolve_stop`, so Tab is already correct; `focus::focus_on_click` derives its landing from `tab_stops` + `nearest_focusable` and never calls `resolve_stop` | The two call sites, read at the lead's verification of the review's F1 | `carry-forward` → this ledger, and `doc-folded` → the `focus_role` doc comment | **T7**, which owns group traversal and the per-group memory `resolve_stop` reads. The asymmetry is the tripwire: any fix that makes the click path agree with Tab must go through the same primitive rather than adding a second landing resolver |
+| **CF-T6-3 (restated) — a per-kind signal admission rule exists in three places with three different shapes, and `plan.md` §T8's premise is false for two kinds.** `check_grid` rejects every non-`dismiss` handler on a `Grid` (compiler only — the loader has **no** Grid handler gate and never has, so `Grid { clicked => … }` is rejected by `check` and accepted by `wasamo_load_ui`); `validate_phase6_zstack_node_invariants` rejects every non-`dismiss` handler on a `ZStack` (loader only — the checker admits them). `Box`, the stacks, `WrapPanel` and `ScrollView` have no rule on either side | Start-gate fact 4 for the checker; the review's probe for the absent loader Grid gate, verified against `e3ff83a`; `non_dismiss_handler_on_grid_still_rejected` and `zstack_clicked_handler_still_rejected_after_relaxation` pin the current bound | `finding` → **T8** | **T8**, which widens `clicked` to any widget. It must decide three things, not one: widen `check_grid`, widen the ZStack loader gate, and whether the Grid rule gains the loader half it never had. Leaving any of them narrows the authored surface against §4.19 and hands T13 a divergence |

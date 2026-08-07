@@ -365,10 +365,23 @@ fix:
   mutation because node identity does not survive a rebuild. The entry's
   focus move writes runtime focus state only and enqueues no further
   drain work — asserted, not assumed.
-- Reconcile `focus_core` with presence-entry: the core's un-entered
-  state has no production constructor; the projection either narrows it
-  or the branch carries a test that fires it (implementation-gates
-  trap 4) — recorded either way.
+- Reconcile `focus_core` with presence-entry. **The core's un-entered
+  state now has a production constructor** — T6 landed it, so this is a
+  real branch with a real input rather than a hypothetical: a `.ui`
+  carrying `modal-scope: true` projects as `FocusRole::ModalScope` with
+  nothing entered, and `collect_stops` returns early for it, so the
+  subtree is reachable by neither Tab nor click-to-focus until the entry
+  seam lands (close gate CF-T6-1). The projection either narrows the
+  un-entered state away or the branch carries a test that fires it
+  (implementation-gates trap 4) — recorded either way.
+- **Two landing paths disagree about a group, and the fix goes in one
+  primitive** (close gate CF-T6-5). `FocusTree::tab` resolves a group
+  landing through `resolve_stop`, so Tab already lands on the group's
+  first or remembered member; `focus::focus_on_click` derives its
+  landing from `tab_stops` + `nearest_focusable` and never calls it, so a
+  click inside a group focuses the **group container**. Making the click
+  path agree must go through the same primitive the memory is written
+  by, not a second landing resolver.
 - **The seam is enumerated before it is trusted**: a start-gate audit
   lists every path that materialises or removes a subtree — initial
   build, conditional drain, `for` regeneration — and shows each runs the
@@ -420,13 +433,18 @@ handler table — not how an event travels.
   rule, so `Box { clicked => … }` has always been accepted, lowered and
   attached, and T3 landed the runtime half — for those kinds the reject
   tests are the whole of the work. **`Grid` and `ZStack` each carry a
-  blanket handler rejection**: `check_grid`'s signal arm on the compiler
-  side and `validate_phase6_zstack_node_invariants` on the loader side,
-  both measured. T6 relaxed each for `dismiss` only, so this task either
-  widens both for `clicked` or records the narrowing with a reason —
-  silently leaving `Grid { clicked => … }` and `ZStack { clicked => … }`
-  rejected while §4.19 says `clicked` is admitted on any widget is the
-  divergence T13 would otherwise inherit.
+  blanket handler rejection, and the two are not symmetric**:
+  `check_grid`'s signal arm rejects on the **compiler** side only — the
+  loader has no Grid handler gate and never has, so
+  `Grid { clicked => … }` is rejected by `check` and *accepted* by
+  `wasamo_load_ui` — while `validate_phase6_zstack_node_invariants`
+  rejects on the **loader** side only, the checker admitting it. T6
+  relaxed each for `dismiss` alone, so this task decides **three**
+  things: widen `check_grid`, widen the ZStack loader gate, and whether
+  the Grid rule gains the loader half it never had. Leaving any of them
+  narrows the authored surface against §4.19's "`clicked` — any widget"
+  and hands T13 a divergence
+  ([log.md](./log.md) §T6 close gate CF-T6-3).
 - **Two Button-family loader defects land here** (T3 close gate CF-1 /
   CF-2), both measured, neither in T3's lane, and both dispositioned by
   the owner on 2026-08-07 ([log.md](./log.md) §T3 owner disposition):
