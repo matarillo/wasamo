@@ -2952,7 +2952,7 @@ production callers.** A `rg` over `wasamo-runtime/src`,
 `exit_modal`, `apply_arrow`, `focus_after_removing`, `esc_target`,
 `initial_focus` and `.arrow(`, excluding `focus_core.rs` itself, returns
 **one doc-comment mention** (`widget.rs:1199`, T6's reachability caveat)
-and **ten hits in `tests/focus_mechanism_fixture.rs`** — the spike
+and **nine hits in `tests/focus_mechanism_fixture.rs`** — the spike
 fixture this task retires. So every behaviour T7 lands is a first
 production caller, and no existing production test can regress it.
 
@@ -3163,3 +3163,487 @@ branch/test check composes in rather than replacing it
 - **`ActiveItemList` / `ActiveItem` gain no production producer**, so
   focus / active-item separation keeps only its `focus_core` unit tests —
   the deliberate narrowing the plan records, restated at close.
+
+### Close gate (recorded 2026-08-08)
+
+Landed in `wasamo-runtime/src/focus.rs` (`FocusProjection::anchors` and its
+two accessors, `WindowFocus::anchors` and `rebase`, `DroppedScope` /
+`DroppedScopes`, `with_focus_write`, `sync_scopes_to_tree`,
+`arrow_direction`, `arrow_on_key`, `dismiss_on_key`; `move_focus` reduced
+to a wrapper; `discard_stale_focus` and `nearest_focusable` deleted);
+`wasamo-runtime/src/focus_core.rs` (`FocusState::remap`, `modal_entries`,
+`FocusTree::focus_landing`); `wasamo-runtime/src/widget.rs`
+(`SignalHandlers`, `signal_handlers_for`, `run_signal_handlers`,
+`WidgetNode::deliver_dismiss_at`; `ClickedHandlers` and
+`run_clicked_handlers` refactored onto the shared helper);
+`wasamo-runtime/src/window.rs` (`set_root`'s seam call, the `WM_KEYDOWN`
+arm's two new consumers); `wasamo-runtime/src/emit.rs`
+(`pending_counts`, `flush_layout`'s seam call);
+`wasamo-runtime/src/lib.rs` (the `__focus_spike` module and the
+`focus_spike` declaration deleted); `wasamo-runtime/src/focus_spike.rs`
+**deleted**; `wasamo-runtime/tests/focus_identity_integration.rs` (new, 3
+fixtures), `wasamo-runtime/tests/modal_scope_integration.rs` (new, 7
+fixtures), `wasamo-runtime/tests/focus_mechanism_fixture.rs`
+(re-pointed, 3 fixtures);
+`process/milestone-4/phase-2/implementation/evidence/capture-t7-scope-entry.ps1`
+(new).
+
+**Nothing was landed in** `layout.rs`, `hit.rs`, `abi.rs`, `reactive.rs`,
+`registry.rs`, `handler.rs`, `dip_scale.rs`, `runtime.rs`, `text.rs`,
+`box_values.rs`, or anywhere in `wasamoc`, `wasamo-ir`, `docs/` or
+`examples/`. The start gate predicted the compiler and the shipped `.ui`
+would be untouched and both held.
+
+#### Correction to the start gate
+
+**Fact 1's count is nine, not ten.** The independent review re-ran the
+census over `850cb64` and got nine hits for the seven-name pattern in
+`tests/focus_mechanism_fixture.rs`. Nine is correct; the conclusion the
+fact draws — that the whole scope / arrow half of `focus_core` had no
+production caller, only that spike fixture — is unchanged either way.
+
+#### #1 — Call-site audit table
+
+Two migrations. Rust enumerates neither, because neither changes a type:
+`FocusId`'s **meaning** changes (a coordinate that is rebased, where it
+was previously assumed stable) and `FocusRole::Group` / `ModalScope` gain
+their first production **producers** while the enum itself is untouched.
+The rows are the artifact.
+
+Queries: `rg "FocusProjection::project\(" wasamo-runtime/src`;
+`rg "\.set_focus\(|\.enter_modal\(|\.apply_arrow\(|\.remap\(|exit_modal\(" wasamo-runtime/src`;
+`rg "set_button_focused_at" wasamo-runtime/src`;
+`rg "mark_layout_dirty_for" wasamo-runtime/src`;
+`rg "insert_child|remove_child|replace_child" wasamo-runtime/src`;
+`rg "SetOffset|SetSize" wasamo-runtime/src`;
+`rg "focus_spike|__focus_spike"` (whole workspace, the retirement check);
+`rg "focus_role|focus_annotation" wasamo-runtime/src`.
+
+| Site | Classification | Reason |
+|---|---|---|
+| `focus.rs` `FocusProjection::project` — **six** call sites (`sync_scopes_to_tree`, `traverse_on_key`, `focus_on_click`, `arrow_on_key`, `dismiss_on_key`, `focused_path`) | **must-rebase, audited individually** | Every one builds a fresh projection whose ids a retained record must be re-expressed against. Five call `WindowFocus::rebase` before touching `focus.core`. The sixth, `focused_path`, **cannot** — it takes `&WindowFocus` — and is bounded by its only caller being the `__focus_path_for_test` seam; the residual is CF-T7-2 and is stated in its doc comment rather than implied |
+| `focus.rs` `WindowFocus::rebase` | **new, sole writer of the pair** | Writes `core`'s remapped ids and the `anchors` they are expressed in, together. `anchors` is private with no setter, the discipline `core` already had |
+| `focus_core.rs` `FocusState::remap` | **new, the whole of the migration** | Rewrites all four id-keyed stores — `focused`, `group_memory`, `active_item`, `modal_stack` — so no store is left expressed in the previous coordinate system. Each store has its own drop rule and its own test |
+| `focus_core.rs` `FocusState::set_focus` | **migrated, still the sole writer of `focused`** | Production callers are now four, all inside `with_focus_write`'s closure argument: `move_focus`, `sync_scopes_to_tree`'s restoration step, its succession step, and — transitively — `enter_modal` and `apply_arrow`. The field stays private |
+| `focus.rs` `with_focus_write` | **new, the one primitive** | The only function in the crate that calls `WidgetNode::set_button_focused_at` (`rg` shows two calls, both inside it). Every production write of the focused id runs through it, so the record and the painted indicator cannot be edited apart — the T4 / T5 trap-#3 shape, widened to cover the two new writers |
+| `widget.rs` `set_button_focused_at` | **migrated, caller changed** | Its doc comment named `move_focus` as the only caller; that is now `with_focus_write`, which `move_focus` delegates to. Updated rather than left stale |
+| `focus_core.rs` `FocusState::enter_modal` | **new production caller** | `sync_scopes_to_tree`'s entry step. Its role check (the spike's S-3 fix) is not bypassed: the loop's own `role(id) == ModalScope` filter is a pre-order selection, not a substitute, and the doc says so |
+| `focus_core.rs` `FocusState::exit_modal` | **ignore-OK, deliberately not adopted** | Presence-driven exit makes it unreachable: a present scope is always entered, so the only exit is the subtree leaving, which `rebase` detects by the scope's anchor vanishing. Recorded as CF-T7-4 so a later phase does not read its dead state as an oversight |
+| `focus_core.rs` `FocusTree::focus_after_removing` | **ignore-OK, deliberately not adopted** | Start-gate fact 5: its structural succession is the domain's first surviving stop, which `initial_focus` produces from the post-mutation tree. Also CF-T7-4 |
+| `focus_core.rs` `FocusTree::focus_landing` | **new, the click landing** | Replaces `tab_stops` + `nearest_focusable`. `collect_stops` and this differ in exactly one place — a group's members — which is the rule, not drift, and the doc states the relationship |
+| `focus.rs` `nearest_focusable` | **deleted** | Defined against `tab_stops`, in which a group's members never appear, so it could not express the landing rule. Its four unit tests go with it; the definition it protected now lives beside `collect_stops` |
+| `focus.rs` `discard_stale_focus` | **deleted** | Its whole job — an out-of-range retained id — is the degenerate case of the rebase. Fixture 6 of `focus_traversal_integration.rs`, which was its regression test, stays green unchanged, which is the measurement that the observable behaviour survived the mechanism change |
+| `window.rs` `set_root` | **new seam call site** | After the initial layout. Also the entry point for a scope present in the initial tree (DD-M4-P2-004) |
+| `emit.rs` `flush_layout` | **new seam call site** | Phase 2 of `drain_if_outermost`, reached by every reactive structural mutation through `mark_layout_dirty_for`. Start-gate fact 4 is why it is here and not at `insert_structural_child` / `remove_structural_child` |
+| `emit.rs` `mark_layout_dirty_for` — five call sites (four structural in `ir_loader.rs`, one property write in `widget.rs:1353`) | **unchanged, re-audited** | The four structural ones are the seam's reach. The fifth is a size-affecting property write; reconciling there is a no-op, since the scope set is unchanged |
+| `abi.rs` `wasamo_widget_append_child` / `insert_child` / `remove_child` / `replace_child` | **ignore-OK, outside the seam** | None marks the window layout-dirty (DD-M4-P2-002's "outside the layout boundary"). They cannot introduce a scope — `set_focus_annotation` still has exactly one caller, the IR loader — but they can shift the tree under a retained anchor. CF-T7-2 |
+| `window.rs` `wnd_proc` `WM_KEYDOWN` arm | **migrated, two consumers inserted** | Order is Tab → arrows → Escape → host key slot → `DefWindowProcW`. The arm's no-`return` fallthrough (T5's) is unchanged, which is what CF-T5-5's tripwire depends on |
+| `widget.rs` `run_clicked_handlers` / `click_disposition_for` | **migrated, inline+host half extracted** | The native-closure step stays in `run_clicked_handlers`; ordering (native → inline → host enqueue) is unchanged. The snapshot-then-run split — the reason the walk is sound while a handler rebuilds the tree — is now stated once, in `run_signal_handlers`, and shared |
+| `widget.rs` `deliver_dismiss_at` | **new, single addressee** | No propagation walk and no suppression check: DD-M4-P2-004 addresses the request to the innermost scope rather than walking to it |
+| `widget.rs` `focus_role` | **unchanged code, corrected doc** | Its reachability caveat had gone stale in three ways and described two defects this task fixed as current. Found by the independent review, rewritten to the landed state |
+| `focus_spike.rs`, `lib.rs::__focus_spike` | **deleted** | `rg "focus_spike|__focus_spike"` over `--include=*.rs` returns **zero hits** workspace-wide |
+| `abi.rs` (as a whole) | ignore-OK, unchanged | No `extern "C"` function added or altered; the cross-task "no new ABI function" obligation holds |
+
+#### #2 — Structural side-effect enumeration
+
+Built from `git diff 850cb64..HEAD`, not from what the task set out to
+add — the T6 retrospective's corrective, which is what caught two whole
+recursion arms there.
+
+| Derived effect | Disposition |
+|---|---|
+| **The painted focus indicator** | Written by `with_focus_write` in the same call as every focused-id write. Two `set_button_focused_at` calls, both inside it |
+| **The per-group memory** | Unchanged mechanism: `FocusState::set_focus` writes it, and every path that writes focus reaches `set_focus`. It gains its first production exercise here (arrows inside a group, and `resolve_stop` reading it back on a Tab or click landing) |
+| **The modal stack** | New retained state. Pushed only by `enter_modal` from the entry step; dropped only by `remap` when the scope's anchor is gone. There is no other mutator |
+| **The anchor coordinate system** | New retained state, written only by `rebase`, together with the ids it explains |
+| **Layout** | Untouched. The annotation was already inert for layout at T6, and nothing this task adds is read by `build_layout_tree`, `measure`, `arrange` or `sync_visuals` |
+| **Composition geometry** | Unchanged — see #3 |
+| **`Visual` creation** | None. The indicator is a brush colour on an existing `Visual`, which is what DD-M4-P2-003 requires and what §13.3's second clause states literally |
+| **Drain work enqueued by entry** | **Asserted, not assumed**: `debug_assert_eq!` over `emit::pending_counts()` immediately before and after the entry loop, discharging §13.4's "writes runtime focus state only and enqueues no further drain work". Witness W8 shows the assertion fires when the invariant is broken |
+| **`window::set_root`'s reset** | `state.focus = WindowFocus::default()` already cleared the record; the seam call now also gives it a coordinate system for the tree that exists, and enters any scope present in it |
+| **The spike's second projection** | Deleted, so there is no second reader of `focus_role` to keep in step |
+| **`ButtonData.label_size`'s three-point write** ([constraints §4](../requirements/constraints.md)) | Not touched |
+| **The `clicked` dispatch order** | Unchanged by the shared-helper refactor: native closure, then inline bodies, then the host enqueue. Verified by reading the final `run_clicked_handlers`, and by `event_routing_integration.rs`'s five fixtures staying green |
+
+#### #3 — Every `SetOffset` / `SetSize` in the runtime, with its pass
+
+Carried from T5 because DD-M4-P2-003 requires the enumeration from any
+task that could add a geometry write, and this task moves the focus
+indicator.
+
+Query: `rg "SetOffset|SetSize" wasamo-runtime/src` — eight hits.
+
+| Site | Pass | What it writes |
+|---|---|---|
+| `widget.rs` node Visual offset / size (2 calls) | `sync_visuals` | The node's own Visual |
+| `widget.rs` Button-family label (2 calls) | `sync_visuals` | The label Visual |
+| `widget.rs` `ScrollView` intermediate (2 calls) | `sync_visuals` | The content Visual |
+| `dip_scale.rs` (2 mentions) | — | Doc comments naming the operations, not calls |
+
+**Six calls, all inside `sync_visuals`, unchanged from T1 / T2 / T3 / T4 /
+T5.** Entry, exit, arrows and dismissal add none.
+
+#### #4 — Branch tests, each fired directly
+
+Built from the diff. 13 integration fixtures across three files, plus 25
+new unit tests in `focus_core.rs` and 8 in `focus.rs`.
+
+**The coordinate system**
+
+| Authored arm | Test that fires it |
+|---|---|
+| `remap` — `focused` identity / shift / unmappable | `remap_with_the_identity_mapping_changes_nothing`, `remap_with_a_shifting_mapping_moves_focused`, `remap_drops_focused_when_it_is_unmappable` |
+| `remap` — group memory, key unmappable / value unmappable | `remap_drops_a_group_memory_entry_whose_key_is_unmappable`, `…_whose_value_is_unmappable` |
+| `remap` — active item | `remap_moves_an_active_item_entry` |
+| `remap` — modal entry, scope unmappable / `restore_to` unmappable / order | `remap_drops_a_modal_entry_whose_scope_is_unmappable`, `remap_keeps_a_modal_entry_whose_restore_to_is_unmappable_with_restore_to_cleared`, `remap_preserves_modal_stack_order` |
+| The in-range stale id, end to end | `a_retained_focus_record_survives_a_structural_removal_that_shifts_ids` — the branch T5 recorded as unbuildable (CF-T5-1's in-range half); the fixture pins the arithmetic (id 5 → 2, removal of 3 nodes) so it cannot silently degenerate into the out-of-range case |
+| `DroppedScopes::outermost` — 0 / 1 / 2 entries | `outermost_of_no_entries_is_none`, `outermost_of_one_entry_is_that_entry`, `outermost_of_two_entries_is_the_first_not_the_innermost` |
+
+**The click landing**
+
+| Authored arm | Test that fires it |
+|---|---|
+| Target is itself an enabled `Stop` | `focus_landing_returns_the_target_itself_when_it_is_a_stop` |
+| Target is a non-focusable container; an ancestor is a stop | `focus_landing_climbs_to_an_ancestor_stop_when_the_target_is_a_non_focusable_container` |
+| A group **member** wins over its group | `focus_landing_on_a_group_member_focuses_that_member_not_the_remembered_one` (the memory is set to a different member first, so a `resolve_stop`-based implementation fails it) |
+| The group container itself → `resolve_stop` | `focus_landing_on_the_group_container_itself_falls_back_to_the_remembered_member` |
+| A disabled member → the group's first | `focus_landing_on_a_disabled_member_falls_back_to_the_groups_first_member` |
+| Nothing legal → `None` | `focus_landing_over_a_chain_with_nothing_focusable_is_none` |
+| Outside / inside an entered scope | `focus_landing_outside_an_entered_modal_scope_is_none`, `focus_landing_inside_an_entered_modal_scope_lands_normally` |
+| End to end, through a real click | `a_click_inside_a_focus_group_focuses_the_clicked_member` (two legs: the second member, then the first) |
+
+**Entry, exit and succession**
+
+| Authored arm | Test that fires it |
+|---|---|
+| Entry through the production seam (a state write flips the `if`) | `entry_is_driven_by_the_production_seam` |
+| Entry at the initial build | `entry_at_initial_build` |
+| Entry skipped for an unannotated subtree (the spike's S-3 leg) | `a_present_but_unannotated_subtree_does_not_confine` |
+| Exit restoration, `restore_to` present, beating succession | `exit_restores_and_restoration_beats_succession`, `a_thumbnail_click_enters_the_modal_scope_and_escape_restores_it` |
+| Exit restoration, `restore_to` **absent** | `exit_with_no_restore_target_leaves_focus_unset` |
+| Structural succession, through the real seam | `structural_succession_lands_on_the_domains_first_surviving_stop` |
+| Nesting: stack order, innermost addressing, unwinding | `entering_nested_scopes_stacks_outer_then_inner`, `traversal_root_and_esc_target_name_the_innermost_entered_scope`, `exiting_both_nested_scopes_restores_each_entrys_own_capture` |
+| A scope with no stop leaves focus unset | `entering_a_scope_with_no_focus_stop_leaves_focus_unset` |
+| Group + scope in one tree, end to end | `tab_order_covers_the_group_and_the_ungrouped_stops_on_the_real_tree` |
+
+**The keys the runtime keeps** — each with both legs, because a key
+silently consumed and a key correctly consumed are indistinguishable from
+the consumption side alone
+
+| Authored arm | Test that fires it |
+|---|---|
+| `arrow_direction`'s four mappings and its `None` | `left_is_prev`, `up_is_prev`, `right_is_next`, `down_is_next`, `a_non_arrow_key_is_not_an_arrow` |
+| Arrows inside a group consume and move; arrows outside reach the host slot | `arrow_keys_two_legs` (both legs), `arrows_move_inside_the_group_and_group_memory_survives_a_visit_outside` |
+| Escape with a scope entered consumes and delivers; with none, it reaches the host slot; with a scope but no handler, it still consumes and does not close | `escapes_two_legs` (three legs) |
+
+`MovedActiveItem` is **not** a separately authored arm: the consumption
+test is one condition over the outcome, so the variant no M4 widget can
+produce does not become a branch no test can fire
+(implementation-gates trap #4, applied in its inverse direction — the
+same reading the T6 retrospective recorded).
+
+[DD-V-029](../../../cross-milestone/decisions/dd-v-029-pure-logic-red-test-obligation.md)'s
+**named** obligation is not triggered: this task authors no rounding, no
+unit conversion and no boundary condition. The witnesses below are the
+trap-#4 artifact instead.
+
+#### #5 — Mutation witnesses
+
+Eight, all applied by the task lead, each **read back from the file** to
+confirm the mutation was present before the run, run, then reverted with
+the revert confirmed by re-reading **and** by `git diff --stat` returning
+empty. The full suite was re-run green afterwards. No failure was
+re-rolled: the suite went red only where a mutation was deliberately in
+place.
+
+**Three of the eight restore the pre-T7 behaviour** rather than breaking
+the new code (the T5 close-gate line, carried by T6), so they answer "do
+these tests catch the absence of the feature", not only "do they watch
+their own code".
+
+| Witness | Mutation | Went red | Reading |
+|---|---|---|---|
+| **W1 — the restore branch deleted** (the spike's M7, named by [plan.md](./plan.md) §T7) | `sync_scopes_to_tree`'s exit step writes `None` instead of the captured `restore_to` | `exit_restores_and_restoration_beats_succession` and `a_thumbnail_click_enters_the_modal_scope_and_escape_restores_it`, and **nothing else in the crate** | Restoration is asserted, and by exactly the two fixtures that claim it |
+| **W2 — the entry walk removed** (restoring) | the entry loop's range emptied, restoring pre-T7 behaviour | 5 tests: both entry fixtures, both exit fixtures, and the mechanism fixture's scope test | `a_present_but_unannotated_subtree_does_not_confine` and `arrow_keys_two_legs` stayed **green**, which is the discriminating half — they do not depend on entry, and a test suite that reddened everywhere would not have shown that |
+| **W3 — the rebase made the identity mapping** (restoring) | `remap`'s mapping returns `Some(old_id)` rather than looking the anchor up | `a_retained_focus_record_survives_a_structural_removal_that_shifts_ids`, plus both exit fixtures | The second half is the interesting one: with ids assumed stable, a removed scope's id stays "mappable", the stack entry is never dropped, and the exit never happens. The exit path genuinely rests on the anchor mapping rather than merely coexisting with it |
+| **W4 — the T5-era click landing restored** (restoring) | `focus_landing` replaced by `tab_stops` + a nearest-stop search | 3 `focus_landing` unit tests and `a_click_inside_a_focus_group_focuses_the_clicked_member` | CF-T6-5's fix is pinned at both levels, and the mechanism fixture's Tab/arrow test stayed green — the defect was click-only, as the carry-forward recorded |
+| **W5 — arrows never consumed** | `arrow_on_key` returns `false` immediately | `arrow_keys_two_legs` and `arrows_move_inside_the_group_and_group_memory_survives_a_visit_outside` | |
+| **W6 — Escape never consumed** | `dismiss_on_key` returns `false` immediately | `escapes_two_legs`, `exit_restores_and_restoration_beats_succession`, and the mechanism fixture's scope test | |
+| **W7 — Escape consumed with no scope entered** | `dismiss_on_key` returns `true` when `esc_target` is `None` | `escapes_two_legs` **alone** | The agreement leg is what catches it. Without leg B, "Escape is consumed" would be satisfied by a runtime that swallowed every Escape |
+| **W8 — entry made to enqueue drain work** | the entry loop marks the scope's own node layout-dirty | the `debug_assert_eq!` fires, with its own message, in every entry fixture | §13.4's invariant is asserted rather than documented, and the assertion is shown to be load-bearing |
+
+Two further witnesses were run by the review remediation, each shown red
+before being left green: the structural-succession branch short-circuited
+(`structural_succession_lands_on_the_domains_first_surviving_stop` red,
+the file's other fixtures green) and the exit step filtered to
+`restore_to.is_some()` (`exit_with_no_restore_target_leaves_focus_unset`
+red, the `restore_to == Some` fixture green).
+
+#### #6 — Deterministic-failure disposition
+
+**None arose.** Trap 6 was selected as *armed* rather than applying, and
+it did not fire: no test failed except where a witness was deliberately in
+place, and every witness failure disappeared on the confirmed revert.
+There is no rerun history to record because there was no unexplained
+failure to rerun.
+
+#### #7 — GUI evidence
+
+Script:
+[capture-t7-scope-entry.ps1](./evidence/capture-t7-scope-entry.ps1).
+Frames are not committed (the evidence directory holds scripts); the
+numbers are recorded here so they survive the frames.
+
+**What it discriminates.** Every fixture above reads entry back as
+*state* — a path and a boolean. None can show that the indicator actually
+*paints* on a node the same drain created moments earlier, because
+`set_button_focused_at` starts a colour animation on a brush belonging to
+a `Visual` built during that message, and `__button_focused_for_test`
+reports the same boolean whatever colour the brush reaches. That is the
+same limit T5's capture header records for the traversal case (CF-T5-3).
+
+**The two frame sets** are two builds of the same tree. E carries
+`modal-scope: true` and a `dismiss` handler on the gallery lightbox's
+outer `ZStack`; U has both lines removed. Neither line adds a node, and
+the emitted IR differs by exactly the four lines they produce — checked by
+`wasamoc build` on both variants and diffing — so the comparison is about
+the annotation and nothing else.
+
+- **Difference leg**: the `<` Button, the scope's first stop, differs
+  between E and U by **86.04 / 66.65 / 33.86 per channel** (max-abs 86.04)
+  against a tolerance of 3.0 (the observed within-side jitter was 0; the
+  floor of 3.0 is the applied tolerance).
+- **Agreement leg**: the `>` Button, unfocused in both, differs by
+  **exactly 0**. Without this leg, "E and U differ" would be satisfied by
+  any global shift — a different window position, a different backdrop
+  tint — and would say nothing about focus.
+
+Display scale 1.25 (120 DPI), client rectangle 982x703, two frames per
+side, masks derived once from a single reference frame so no frame that
+shows the effect decides where the effect is measured. Preceded by
+`cargo build --release --workspace` for each variant
+([AGENTS.md §Build ordering](../../../../AGENTS.md), Phase 1 F-21).
+
+**Read as images, not only as numbers**, by the capturing agent and again
+by the task lead: in E the `<` Button is a warm amber rectangle and the
+`>` Button is neutral grey; in U both are neutral grey, and the lightbox
+is open identically in both. **A second discriminator was visible in the
+same pair and was not designed in**: the toolbar's accent "Open lightbox"
+Button — the widget the click focused — is bright accent blue in E and
+carries the focus tint in U. That is both halves of the entry transition
+in one frame pair, focus leaving the opener and arriving at the scope's
+first stop, which the sampled regions alone could not show. The
+restore-target capture is what E's frame shows the *other* side of.
+
+`examples/gallery/gallery.ui` is a **throwaway probe**: T10, not T7, owns
+landing the annotation in it. The operator writes the variant, builds,
+captures, and reverts with `git checkout --`; `git status` was confirmed
+clean for that path afterwards. The script's header labels which steps are
+the operator's and which are its own.
+
+This is the assistant baseline and does **not** replace the owner's
+human-visible smoke ([CLAUDE.md §Testing rules](../../../../CLAUDE.md)).
+
+#### #8 — Carry-forward
+
+| Constraint | Evidence | Placement | Re-trigger criterion |
+|---|---|---|---|
+| **CF-T7-1 — an anchor is a node address, and an address can be reused.** A node freed by `widget_destroy` can have its address handed back to a later allocation, so an anchor naming a removed node can in principle match a *different*, newly built node. The consequence is bounded to "focus lands on an unexpected widget", never an unsound read, because nothing dereferences an anchor | `FocusProjection::id_of_anchor`'s doc comment states the bound; the narrow window is that every structural mutation rebases at the end of the same drain | `carry-forward` → this ledger, and `doc-folded` → `id_of_anchor` | **T9**, whose `for` regeneration frees and allocates subtrees in one drain — the nearest shape that could produce a reuse inside one window. This is the residual that remains *after* CF-T5-1's in-range case is closed, not a restatement of it |
+| **CF-T7-2 — the four direct-ABI child mutators reach no seam, and `focused_path` cannot rebase.** `wasamo_widget_append_child` / `insert_child` / `remove_child` / `replace_child` mark nothing layout-dirty, so an edit through one of them runs no rebase; `focused_path` takes `&WindowFocus` and can only read. An in-range id can then resolve to a different node rather than to `None` | The seam enumeration at the start gate; `focused_path`'s and `id_of_anchor`'s doc comments | `carry-forward` → this ledger, and `doc-folded` → `focused_path` | Bounded today by `focused_path`'s only caller being the `__focus_path_for_test` seam and by a C-ABI-created node being unable to carry the annotation (`set_focus_annotation` has one caller, the loader). The re-trigger is the **first production reader of `focused_path`**, or any task that gives an ABI-created node a focus annotation. This is DD-M4-P2-004's own recorded residual ("a removal path that bypasses the structural seam"), now measured rather than predicted |
+| **CF-T7-3 — nesting is supported and unexercised, and its multi-entry paths are pinned only by pure logic.** `DroppedScopes::outermost`'s selection with two-plus entries, and `sync_scopes_to_tree`'s ordering when a whole nest vanishes at once, have no integration fixture, because no M4 `.ui` builds a scope inside a scope | Three `DroppedScopes` unit tests and four `focus_core` nesting tests; the independent review confirmed no fixture reaches the multi-entry path | `carry-forward` → this ledger | **M4-Phase 9**, whose dialog-from-a-menu is the first nested case. DD-M4-P2-004 records nesting as "supported, unexercised in M4"; this row says *which* code that leaves unexercised, so Phase 9 checks it rather than discovering it |
+| **CF-T7-4 — two functions of the spike core are deliberately not adopted.** `FocusState::exit_modal` is unreachable because presence-driven exit means a present scope is always entered, so the only exit is the subtree leaving, which the rebase detects. `FocusTree::focus_after_removing` is unused because its structural succession is the domain's first surviving stop, which `initial_focus` produces from the post-mutation tree | Start-gate fact 5; `focus_core.rs`'s `allow(dead_code)` comment names both, measured by removing the attribute and reading what warns | `carry-forward` → this ledger, and `doc-folded` → `focus_core.rs`'s module comment | **M4-Phase 9**. DD-M4-P2-003 says "the spike's traversal core is adopted as the implementation"; two of its functions are not, for reasons that follow from DD-M4-P2-004's presence-entry rather than from an oversight. A phase that wires them up without reading this would be adding a second exit path |
+| **CF-T7-5 — the arrow axis mapping is this implementation's choice.** `docs/dsl_spec.md` §4.19 says "arrow keys move focus within the group, wrapping at its ends" without fixing which axis maps to which direction. The landed mapping is Left / Up → previous, Right / Down → next, and both axes are accepted | `arrow_direction` and its five unit tests | `finding` → **T13's re-verification list** | **T13**, which re-verifies §4.19 against the landed runtime. Either the spec gains the sentence or the mapping is recorded as unspecified |
+| **CF-T7-6 — a click outside an entered scope leaves focus unchanged, and the normative text does not say so.** §4.19 says a scope confines the keyboard and that clicks pass through a scrim-less scope; it does not say what such a click does to focus. `focus_landing` bounds its walk to `traversal_root`, so there is no candidate outside the scope and the click takes the same arm as a background click | `focus_landing_outside_an_entered_modal_scope_is_none`; decided at the start gate rather than during implementation | `finding` → **T13's re-verification list** | **T13**. The alternative reading — a click may move focus out of a scope — would make confinement pointer-breakable, which is why the landed answer is the one consistent with "no widget outside it can be reached by the keyboard" |
+
+#### Re-decided at close
+
+The start gate selected traps 1, 2, 3, 4, 5 and 7, and armed 6.
+**The selection survived unchanged**, and each call is confirmed by what
+was built: the two uncompiler-enumerated migrations are real and their
+audit table is above (1); the side-effect enumeration found the drain-work
+question the ADR named and turned it into an assertion (2); three parallel
+pairs were kept single-writer (3); every authored arm has a firing test,
+after the review found three that did not (4); six carry-forwards are
+recorded with re-triggers (5); and the GUI control was taken and read
+(7). Trap 6 stayed armed and did not fire.
+
+**One thing was built that the gate did not name**: `with_focus_write`.
+The gate predicted two new writers of the focused id and recorded the
+trap-#3 obligation, but not that satisfying it would mean *reducing*
+`move_focus` to a wrapper over a new primitive. That is a strengthening
+rather than a deviation — `set_button_focused_at` still has exactly one
+caller — and it does not change the review lane.
+
+The lane stays **full independent review**, as predicted at both gates,
+and was executed as one.
+
+#### Re-audit of the whole task list
+
+Per [plan.md](./plan.md) §Cross-task obligations, the full list was
+re-read at this close gate rather than only T7's item.
+
+- **T8** — inherits the keys this task consumes, and they are now
+  falsifiable rather than predicted: `arrow_keys_two_legs` and
+  `escapes_two_legs` each assert both the consumption leg and the
+  fallthrough leg through the host key slot, so a `key-down` dispatch
+  inserted on the wrong side of that slot breaks a named test. That is
+  CF-T5-5's tripwire, armed. Its CF-T6-3 work — the `Grid` / `ZStack`
+  handler asymmetry — is untouched by this task and still open at T8's
+  own start gate. Its `key-down("ArrowLeft")` acceptance test will run
+  against a runtime that keeps arrows **only** inside a group, which is
+  the behaviour its plan item names.
+- **T9** — inherits CF-T7-1 directly: `for` regeneration is the nearest
+  shape that frees and allocates subtrees inside one drain. It also
+  inherits the seam unchanged — its `mutate_for_loop_subtree` already
+  reaches `flush_layout` through `mark_layout_dirty_for`, so per-item
+  handlers need no new seam work. The structural side-effect enumeration
+  its plan item owes (what subtree removal releases) now has a sibling to
+  cite: the focus record's entry is dropped by the rebase, not by a
+  release path.
+- **T10** — is the first `.ui` to carry the annotations, and the capture
+  above shows exactly what it will look like when it does. What T10 must
+  *not* inherit is the throwaway probe: `examples/gallery/gallery.ui` is
+  reverted, and landing `modal-scope: true` plus the `dismiss` handler is
+  T10's work, not a diff to recover. Its restore-target sentence is now
+  measured rather than predicted — the frame pair shows the opener losing
+  focus as the scope takes it, which is the behaviour §4.19's
+  "restores to whatever the keyboard was on beforehand" describes.
+- **T11** — touch inherits nothing from focus. Whether a touch contact
+  moves focus is still that task's explicit decision (T5's re-audit line,
+  unchanged): a `WM_POINTER*` arm would have to call `focus_on_click`
+  itself.
+- **T12** — control C (containment and occlusion) is now buildable: a
+  scope exists, it confines Tab, and the agreement leg it needs — the
+  same Tab reaching the background with the scope absent — is the same
+  shape `a_present_but_unannotated_subtree_does_not_confine` already
+  asserts at the state level. It also inherits CF-T5-3 unchanged, and
+  gains a second capture script to copy mechanics from.
+- **T13** — gains three re-verification items: CF-T7-5 (the arrow axis
+  mapping §4.19 does not fix), CF-T7-6 (what a click outside a scope does
+  to focus), and one more from the seam's shape — **§13.4's "a removal's
+  successor is computed before the mutation"** describes a runtime that
+  does the restore capture at *entry* (before, as required) and derives
+  structural succession *after* the mutation, because the answer is the
+  domain's first surviving stop either way (start-gate fact 5). The
+  sentence is satisfied in substance and not in sequence; T13 decides
+  whether the wording narrows.
+- **Cross-task obligation "no new ABI function"** — held. No `extern "C"`
+  function was added or changed; the surface shrank, if anything, because
+  the `__focus_spike` module was deleted.
+- **Cross-task obligation "every task that measures something re-reads
+  the whole task list"** — discharged here.
+
+#### Verification means
+
+Run against the **final branch state**, after the review remediation
+landed ([retrospectives.md](../../../procedures/retrospectives.md) item
+3).
+
+`cargo fmt --all -- --check` zero exit, `git diff --check` clean,
+`cargo clean` (11,719 files / 3.1 GiB removed), then
+`cargo build --release --workspace` and `cargo build --workspace` both
+successful, and `cargo test --workspace --no-fail-fast` **47
+binaries/sections, 1,145 passed, 0 failed, 0 ignored**. T6's baseline was
+1,111 across 45 sections; the two new integration binaries account for the
+two extra sections, and the 34 added tests are 25 in `focus_core.rs`, 8 in
+`focus.rs`, and 13 integration fixtures, less the 4 deleted
+(`nearest_focusable`'s three plus one, and the mechanism fixture's fourth
+test), less the spike module's own.
+
+**The new fixtures ran rather than skipped**, verified by running each
+with `--nocapture` and confirming the shared guard's
+`skipping …: runtime compositor unavailable` line does **not** appear.
+`tests/common/mod.rs` was not touched, so the `0x80070005` two-conjunct
+check ([constraints §8](../requirements/constraints.md)) is intact and the
+standing obligation to verify a newly authored guard does not apply — no
+guard was authored.
+
+**What this task's evidence cannot show, stated rather than implied.**
+Every integration fixture runs at 96 DPI and scale 1, so none of them
+re-exercises the pointer conversion T2's non-unit-scale fixture owns;
+traversal and scope entry are geometry-independent, and the click legs
+inherit a conversion that fixture still pins. The GUI capture ran at 1.25
+and shows the indicator, not the conversion. No fixture builds a scope
+inside a scope, so nesting ships pinned by pure logic alone (CF-T7-3). And
+the `dismiss` request's **host-listener** delivery — a
+`wasamo_signal_connect` listener rather than an inline handler — has no
+test of its own; the branch it would fire is the one `clicked`'s host
+fixture already fires in `run_signal_handlers`, which is why this is
+recorded as a residual rather than as a trap-#4 gap.
+
+#### Independent review and its remediation (recorded 2026-08-08)
+
+The review lane
+([implementation-gates.md §4](../../../procedures/implementation-gates.md))
+was executed as a **full independent review** by a second agent that did
+not write the code, against `623c835` / `1365695` / `f934d05` / `66bcb37`
+/ `88e97c8`. It built its own branch-coverage table from the diff rather
+than from this close gate's, re-ran the seam enumeration, traced the
+composition cases (a drain that closes one scope and opens another; a
+removal that takes the focused node and an entered scope together), and
+checked the "only caller" / "sole writer" / "one primitive" claims the
+diff adds with `rg`.
+
+It confirmed as sound: the seam enumeration and the four ABI mutators'
+classification; that a failed insert or remove leaves the tree unmutated,
+so the record cannot be left out of step by a partial edit; that a second
+`set_root` resets the record before syncing; that five of the six
+`FocusProjection::project` call sites rebase before reading `focus.core`
+and the sixth's pre-rebase read is a coordinate-independent boolean; the
+`WM_KEYDOWN` arm's order against §4.19's table; that the dismissal
+refactor preserves `run_clicked_handlers`'s safety argument unweakened and
+leaves `clicked`'s producer order unchanged; and that the deleted fourth
+mechanism-fixture test's scope-side property is genuinely carried by
+`a_present_but_unannotated_subtree_does_not_confine`.
+
+Seven findings. Four were comments claiming something the code does not
+do; three were authored branches no test fired. All seven were remediated
+in `73853da`; none changed production behaviour.
+
+- **F1 — `FocusState::remap`'s doc claimed a fallback the caller does not
+  have.** It said the restoration a vanished scope owes is "`restore_to`,
+  or the domain's first stop when even that is gone". The exit step writes
+  `restore_to` as captured, so a captured `None` leaves focus unset —
+  which is the spec's answer (§4.19 "remembers the focused widget",
+  possibly nothing), not a gap. The domain's first stop is the separate
+  structural-succession branch's answer. Comment corrected; the code was
+  right.
+- **F2 — the structural-succession branch was never fired through the
+  real seam.** Every drain-pumping fixture either removed an unrelated
+  subtree or was a scope open/close; the one T5-era test that removes the
+  focused stop uses raw `SendMessageW` and never pumps the loop, so
+  `flush_layout` never ran during it. Closed by
+  `structural_succession_lands_on_the_domains_first_surviving_stop`,
+  shown red against a short-circuit of the branch it fires.
+- **F3 — `DroppedScopes::outermost` had never run with more than one
+  entry.** No fixture can build the case (nesting is unexercised in M4),
+  but the selection is pure logic; closed by three unit tests and
+  recorded as CF-T7-3 for the seam-level half that remains unbuildable.
+- **F4 — `WidgetNode::focus_role`'s doc comment had gone stale in three
+  ways**, in a file this task's diff never touched: it counted two
+  production callers where the projection now has six entry points; its
+  reachability caveat described the present-but-un-entered scope and the
+  click-lands-on-the-group-container defects as current when this task
+  fixed both; and it called the combined group-and-scope question T7's
+  when the owner had sent it to the candidate pool. **This is the finding
+  worth carrying**: a doc comment written at T6 to warn about a defect
+  becomes a false statement the moment the defect is fixed, and nothing in
+  the toolchain notices. Rewritten to the landed state.
+- **F5 — `focused_path`'s doc overclaimed.** It said every seam has
+  already rebased before it reads; it cannot rebase, and the four ABI
+  mutators reach no seam. Narrowed, with the bound stated, and recorded as
+  CF-T7-2.
+- **F6 — the `dismiss` host-listener path has no test.** Recorded as a
+  residual in Verification means: the branch is `clicked`'s, already
+  fired; only the `dismiss` instantiation is untested.
+- **F7 — the capture script's header read as though the script performed
+  the variant swap, the builds and the revert.** It performs none of them.
+  Header rewritten to label operator steps and script steps, and the
+  numbers moved into #7 above so they survive the frames.
+
+The review also found **Fact 1's count off by one** (nine, not ten),
+corrected above.
+
+**External-agent (codex) review is not performed**, per the owner's
+standing disposition for this phase (T1–T6, re-confirmed at the T6 merge
+approval on 2026-08-07).
