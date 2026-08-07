@@ -1174,11 +1174,17 @@ fn validate_phase6_zstack_node_invariants(
         // has already run (see `validate`'s ordering) and rejected a
         // malformed shape of either attribute or of `dismiss`, so by the
         // time this gate sees them they are known-good. Every other
-        // Phase-6 attribute and every other signal name — `clicked`
-        // included; widening `clicked` on a `ZStack` is T8's job, not
-        // this one's — stays rejected. The bindings rule is untouched:
-        // both focus annotations are constant-only and never travel the
-        // binding path.
+        // Phase-6 attribute stays rejected. The bindings rule is
+        // untouched: both focus annotations are constant-only and never
+        // travel the binding path.
+        //
+        // M4-Phase 2 T8: signal-handler admission on a ZStack is not
+        // gated here at all — it is the generic name-keyed rule in
+        // `validate_focus_annotation_invariants` (`dismiss` needs a
+        // `modal-scope: true` sibling on the same node; every other
+        // signal name, e.g. `clicked`, is admitted unconditionally), the
+        // same rule every other widget kind is subject to. This gate has
+        // no per-kind handler rule of its own.
         let zstack_widget_prop = node.props.iter().find(|prop| {
             !(parent == ParentKind::ZStack && is_child_placement_prop(&prop.name))
                 && !matches!(prop.name.as_str(), "focus-group" | "modal-scope")
@@ -1192,11 +1198,6 @@ fn validate_phase6_zstack_node_invariants(
         if !node.bindings.is_empty() {
             return Err(IrLoadError::Validate(
                 "`ZStack` accepts no Phase-6 bindings".into(),
-            ));
-        }
-        if node.handlers.iter().any(|h| h.signal != "dismiss") {
-            return Err(IrLoadError::Validate(
-                "`ZStack` accepts no Phase-6 handlers".into(),
             ));
         }
     }
@@ -7869,16 +7870,21 @@ mod tests {
     }
 
     #[test]
-    fn zstack_handler_rejected_at_validate() {
-        // The handler-rejection arm of the Phase-6 ZStack gate is distinct
-        // from the binding arm above; pin it so a ZStack carrying an inline
-        // `on` handler surfaces the dedicated diagnostic.
-        assert_validate_err(
+    fn zstack_clicked_handler_validates() {
+        // T8: the Phase-6 ZStack gate no longer carries a per-kind
+        // handler rejection arm (it used to reject every signal name but
+        // `dismiss`, asymmetrically with the checker side, which never
+        // gated ZStack handlers). `clicked` is admitted on any widget
+        // per dsl_spec §4.19, so a ZStack carrying an inline `on clicked`
+        // handler now loads successfully.
+        let c = parse_ok(
             ";wasamo-ir v0\ncomponent C inherits W {\n\
              state ready: bool = true\n\
              node ZStack { on clicked { (assign ready false) } node Text {} }\n}",
-            "`ZStack` accepts no Phase-6 handlers",
         );
+        assert_eq!(c.root.widget_type, "ZStack");
+        assert_eq!(c.root.handlers.len(), 1);
+        assert_eq!(c.root.handlers[0].signal, "clicked");
     }
 
     #[test]
@@ -8008,9 +8014,10 @@ mod tests {
 
     #[test]
     fn dismiss_handler_accepted_on_zstack_carrying_modal_scope() {
-        // Exercises the ZStack relaxation: `dismiss` is let through
-        // alongside `modal-scope: true`, even though ZStack's own
-        // Phase-6 gate rejects every other handler name.
+        // T6 regression pin, unaffected by T8's removal of the
+        // ZStack-specific handler gate: `dismiss` is admitted here via
+        // the generic dsl_spec §4.19 rule because the ZStack carries
+        // `modal-scope: true`.
         let c = parse_ok(
             ";wasamo-ir v0\ncomponent C inherits W {\n\
              state open: bool = true\n\
@@ -8279,15 +8286,39 @@ mod tests {
     }
 
     #[test]
-    fn zstack_clicked_handler_still_rejected_after_relaxation() {
-        // Control proving the ZStack relaxation stayed narrow: every
-        // signal name other than `dismiss` is still rejected. Widening
-        // `clicked` on a `ZStack` is a later task's job, not this one's.
-        assert_validate_err(
+    fn grid_clicked_handler_validates() {
+        // T8: `Grid` never had a per-kind handler gate in the loader
+        // (only `wasamoc check` did, asymmetrically with ZStack); pin
+        // the accept case explicitly, symmetric with
+        // `zstack_clicked_handler_validates` above.
+        let c = parse_ok(
             ";wasamo-ir v0\ncomponent C inherits W {\n\
              state count: i32 = 0\n\
-             node ZStack { on clicked { (assign count 1) } node Text {} }\n}",
-            "`ZStack` accepts no Phase-6 handlers",
+             node Grid {\n\
+               tracks columns = 1*\n\
+               tracks rows = 1*\n\
+               on clicked { (assign count 1) }\n\
+             }\n}",
+        );
+        assert_eq!(c.root.widget_type, "Grid");
+        assert_eq!(c.root.handlers.len(), 1);
+        assert_eq!(c.root.handlers[0].signal, "clicked");
+    }
+
+    #[test]
+    fn dismiss_handler_on_zstack_without_modal_scope_prop_rejected() {
+        // T8: proves the generic dsl_spec §4.19 `dismiss` rule
+        // (`validate_focus_annotation_invariants`) still owns ZStack
+        // admission now that the ZStack-specific handler gate is gone —
+        // the diagnostic is the generic "can never be raised" message,
+        // the same one every other widget kind produces (see
+        // `dismiss_handler_without_modal_scope_prop_rejected` above for
+        // the Box case), not a ZStack-specific rejection.
+        assert_validate_err(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             state open: bool = true\n\
+             node ZStack { on dismiss { (assign open false) } node Text {} }\n}",
+            "`dismiss` handler can never be raised",
         );
     }
 }

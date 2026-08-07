@@ -1430,21 +1430,6 @@ fn check_grid(members: &[Member], grid_span: &Span, filename: &str, diags: &mut 
                     ));
                 }
             }
-            Member::SignalHandler { signal, span, .. } => {
-                // The generic `check_members_inner` dispatch (run
-                // separately on Grid's own children) owns whether
-                // `dismiss` is admissible here — it requires a
-                // `modal-scope: true` sibling (dsl_spec §4.19). Every
-                // other signal name stays rejected; widening e.g.
-                // `clicked` on Grid is out of scope for this task (T8).
-                if signal != "dismiss" {
-                    diags.push(error(
-                        filename,
-                        span,
-                        "`Grid` takes no signal handlers other than `dismiss`",
-                    ));
-                }
-            }
             Member::Conditional { span, .. } => {
                 diags.push(error(filename, span, "`Grid` children must be wrapped in `Cell`; conditional members may appear inside a Cell content widget, not directly in Grid"));
             }
@@ -1455,7 +1440,14 @@ fn check_grid(members: &[Member], grid_span: &Span, filename: &str, diags: &mut 
                     "`Grid` children must be wrapped in `Cell`; direct `for` members are not valid in Grid",
                 ));
             }
-            Member::StateMember { .. } | Member::PropertyDecl { .. } => {}
+            // Handler admission on a `Grid` is the generic rule that
+            // `check_members_inner` applies to every widget kind
+            // (dsl_spec.md §4.19's admission table: `clicked` on any
+            // widget; `dismiss` only beside `modal-scope: true`). This
+            // `check_grid` pass holds no per-kind signal rule.
+            Member::SignalHandler { .. }
+            | Member::StateMember { .. }
+            | Member::PropertyDecl { .. } => {}
         }
     }
 
@@ -6467,9 +6459,9 @@ mod tests {
 
     #[test]
     fn dismiss_handler_accepted_on_grid_carrying_modal_scope() {
-        // Grid relaxation: `Grid` takes no signal handlers other than
-        // `dismiss`, and `dismiss` itself is admissible here because the
-        // Grid carries `modal-scope: true`.
+        // `dismiss` is admitted here because the Grid carries
+        // `modal-scope: true` (the generic dsl_spec §4.19 rule; `Grid`
+        // holds no per-kind signal rule of its own).
         let result = check_src(
             "component C inherits W { state open: bool = true Grid { columns: 1* rows: 1* modal-scope: true dismiss => { open = false; } } }",
         );
@@ -6793,18 +6785,48 @@ mod tests {
     }
 
     #[test]
-    fn non_dismiss_handler_on_grid_still_rejected() {
-        // Proves the Grid signal-handler relaxation is narrow: only
-        // `dismiss` is let through, every other signal name stays
-        // rejected (widening e.g. `clicked` on Grid is T8's job).
-        let errs = errors(
+    fn clicked_handler_on_grid_accepted() {
+        // T8: `check_grid` no longer carries a per-kind signal rule, so
+        // `clicked` — admitted on any widget per dsl_spec §4.19 — is
+        // accepted on a Grid, same as on every other widget kind.
+        let result = check_src(
             "component C inherits W { state count: i32 = 0 Grid { columns: 1* rows: 1* clicked => { count += 1; } } }",
+        );
+        assert!(!result.has_errors(), "{:?}", result.diagnostics);
+    }
+
+    #[test]
+    fn clicked_handler_on_zstack_accepted() {
+        // Symmetric pin to the Grid case above: `wasamoc check` never had
+        // a per-kind signal rule for ZStack (only the runtime loader
+        // did), so this already passed; pinned explicitly so the
+        // Grid/ZStack admission pair is documented as symmetric.
+        let result = check_src(
+            "component C inherits W { state count: i32 = 0 ZStack { clicked => { count += 1; } } }",
+        );
+        assert!(!result.has_errors(), "{:?}", result.diagnostics);
+    }
+
+    #[test]
+    fn dismiss_handler_on_grid_without_modal_scope_rejected_by_generic_rule() {
+        // Proves the generic dsl_spec §4.19 `dismiss` rule now solely
+        // owns Grid admission: the diagnostic is the generic "can never
+        // be raised" message, not the removed Grid-specific "takes no
+        // signal handlers other than `dismiss`" message — a Grid-specific
+        // rejection could not satisfy this assertion.
+        let errs = errors(
+            "component C inherits W { state open: bool = true Grid { columns: 1* rows: 1* dismiss => { open = false; } } }",
         );
         assert_eq!(errs.len(), 1, "{:?}", errs);
         assert!(
-            errs[0].contains("`Grid` takes no signal handlers other than `dismiss`"),
+            errs[0].contains("`dismiss` handler can never be raised"),
             "{:?}",
             errs
         );
+        assert!(!errs[0].contains("takes no signal handlers"), "{:?}", errs);
     }
+
+    // `dismiss` on a Grid carrying `modal-scope: true` is pinned above by
+    // `dismiss_handler_accepted_on_grid_carrying_modal_scope`, which
+    // doubles as this pair's accept-side case.
 }
