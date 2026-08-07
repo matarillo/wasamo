@@ -40,6 +40,15 @@ pub(crate) struct FocusProjection {
     /// `focus_spike::Projection`'s `widgets` vec keeps for its override-map
     /// projection.
     paths: Vec<Vec<usize>>,
+    /// `anchors[id]` is the node-address anchor (M4-Phase 2 T7) that
+    /// produced focus node `id`: the same raw pointer
+    /// `WidgetNode::for_each_ptr` hands its visitor. Written by the same
+    /// walk that writes `paths`, at the same index, so `anchors[id]` and
+    /// `paths[id]` are two facts about one node rather than two things
+    /// that could drift apart (implementation-gates trap #3 — a second
+    /// walk that filled this vec independently could disagree with
+    /// `paths` about which node is `id` after any edit to either walk).
+    anchors: Vec<*mut WidgetNode>,
 }
 
 impl FocusProjection {
@@ -50,20 +59,17 @@ impl FocusProjection {
     pub(crate) fn project(root: &WidgetNode) -> Self {
         let mut tree = FocusTree::new();
         let mut paths = Vec::new();
-        walk(root, None, Vec::new(), &mut tree, &mut paths);
-        Self { tree, paths }
+        let mut anchors = Vec::new();
+        walk(root, None, Vec::new(), &mut tree, &mut paths, &mut anchors);
+        Self {
+            tree,
+            paths,
+            anchors,
+        }
     }
 
     pub(crate) fn tree(&self) -> &FocusTree {
         &self.tree
-    }
-
-    /// The number of nodes in this projection — the domain a [`FocusId`]
-    /// must be within for [`path`](Self::path) to explain it. Used by
-    /// [`discard_stale_focus`] to detect a retained id a structural
-    /// rebuild has shrunk the projection out from under.
-    pub(crate) fn len(&self) -> usize {
-        self.tree.len()
     }
 
     /// The tree path that produced focus node `id`, or `None` when `id` is
@@ -77,7 +83,12 @@ impl FocusProjection {
     /// DD-M4-P2-003. Returning `Option` makes that case unrepresentable at
     /// the call site: a caller cannot forget to check it the way a bare
     /// `&self.paths[id]` index invited back the panic this type exists to
-    /// rule out.
+    /// rule out. [`WindowFocus::rebase`] is what keeps the id this reads
+    /// pointed at a node the *current* projection can explain in the
+    /// first place (M4-Phase 2 T7); this `Option` is what remains once
+    /// that primitive has run — "nothing is focused" and "the id could
+    /// not be explained" collapsing to the one outcome a caller here needs
+    /// to distinguish from "found".
     pub(crate) fn path(&self, id: FocusId) -> Option<&[usize]> {
         self.paths.get(id).map(Vec::as_slice)
     }
@@ -87,6 +98,41 @@ impl FocusProjection {
     pub(crate) fn id_of_path(&self, path: &[usize]) -> Option<FocusId> {
         self.paths.iter().position(|p| p.as_slice() == path)
     }
+
+    /// This projection's anchor vector — `anchors[id]` is the node address
+    /// that produced focus node `id`. [`WindowFocus::rebase`] is the one
+    /// caller (M4-Phase 2 T7); see this struct's `anchors` field doc
+    /// comment for why the vector exists at all.
+    pub(crate) fn anchors(&self) -> &[*mut WidgetNode] {
+        &self.anchors
+    }
+
+    /// The focus id whose anchor is `node`, or `None` when this
+    /// projection's walk never produced one — the node has left the tree
+    /// (removed), or has not yet entered it (not attached under the root
+    /// this projection was built from).
+    ///
+    /// **Compared, never dereferenced.** A pointer surviving as *some*
+    /// anchor in `self.anchors` says only that the address matches a node
+    /// this walk visited; nothing here reads through it. That is what
+    /// makes a stale entry *detectable* rather than a silent
+    /// use-after-free: `rebase`'s caller never has a live `&WidgetNode` to
+    /// hand back for an anchor this method returns `None` for, and this
+    /// method itself never manufactures one.
+    ///
+    /// **What comparison does not rule out, stated rather than implied.**
+    /// An address freed by `widget_destroy` can be handed back by a later
+    /// allocation, so an anchor naming a removed node can in principle
+    /// match a *different*, newly built node at the same address. The
+    /// consequence is bounded to "focus lands on an unexpected widget" —
+    /// never an unsound read, since nothing dereferences an anchor — and
+    /// the window is narrow, because every structural mutation rebases at
+    /// the end of the same drain (`emit::flush_layout`). It is the residual
+    /// that remains after CF-T5-1's in-range case is closed, and is
+    /// recorded as such rather than claimed away.
+    pub(crate) fn id_of_anchor(&self, node: *mut WidgetNode) -> Option<FocusId> {
+        self.anchors.iter().position(|&p| p == node)
+    }
 }
 
 fn walk(
@@ -95,16 +141,22 @@ fn walk(
     path: Vec<usize>,
     tree: &mut FocusTree,
     paths: &mut Vec<Vec<usize>>,
+    anchors: &mut Vec<*mut WidgetNode>,
 ) {
     let index = paths.len();
     let (role, enabled) = node.focus_role();
     let id = tree.push(parent, role, enabled);
     debug_assert_eq!(id, index, "FocusId is the pre-order index by construction");
     paths.push(path.clone());
+    // Taken the same way `WidgetNode::for_each_ptr` takes it: a raw
+    // pointer from the shared reference this walk already holds, so the
+    // vector this one walk builds is what `paths` is indexed against too
+    // (this function's own doc comment, and `FocusProjection::anchors`'s).
+    anchors.push(node as *const WidgetNode as *mut WidgetNode);
     for (i, child) in node.children.iter().enumerate() {
         let mut child_path = path.clone();
         child_path.push(i);
-        walk(child, Some(id), child_path, tree, paths);
+        walk(child, Some(id), child_path, tree, paths, anchors);
     }
 }
 
@@ -118,9 +170,21 @@ fn walk(
 /// "the focus pointer... is not independently writable"): [`move_focus`]
 /// is the only function in the crate that calls `FocusState::set_focus`,
 /// so the focused id and the painted indicator can never be written apart.
+///
+/// `anchors` (M4-Phase 2 T7) is **the coordinate system the ids in `core`
+/// are expressed in** — for each id `core` might retain, the node that
+/// produced it in the projection those ids were last written against. It
+/// is compared and never dereferenced (see
+/// `FocusProjection::id_of_anchor`'s doc comment for why that is what
+/// makes a stale entry *detectable* rather than a silent
+/// use-after-free): a projection built later can walk a differently
+/// shaped tree, and `anchors[old_id]` is what lets [`Self::rebase`] ask
+/// "where is the node that used to be `old_id`" instead of trusting that
+/// `old_id` still names it.
 #[derive(Default)]
 pub(crate) struct WindowFocus {
     core: focus_core::FocusState,
+    anchors: Vec<*mut WidgetNode>,
 }
 
 impl WindowFocus {
@@ -131,6 +195,70 @@ impl WindowFocus {
     pub(crate) fn focused(&self) -> Option<FocusId> {
         self.core.focused()
     }
+
+    /// Re-express every id `core` retains in `projection`'s coordinate
+    /// system, then adopt `projection`'s anchors as the new coordinate
+    /// system going forward.
+    ///
+    /// **This is `discard_stale_focus`'s successor and closes the gap its
+    /// own doc comment recorded as CF-T5-1.** That function only caught
+    /// the *out-of-range* case: an id past the end of the new projection
+    /// could not have come from it, so it was cleared. An id that stayed
+    /// *in range* but, after a structural insert or removal, now named a
+    /// *different* node was undetectable to it — the bounded exposure its
+    /// doc comment left for this task. Rebasing through node addresses
+    /// closes that gap: an id whose anchor is no longer in the tree maps
+    /// to `None` (the old out-of-range case, generalised), and an id that
+    /// shifted to
+    /// a different position is *detected*, because its anchor's new
+    /// position — not its old numeric value — is what the mapping looks
+    /// up.
+    ///
+    /// **The two fields are written together, in this one function,
+    /// deliberately** (implementation-gates trap #3): `core`'s ids and
+    /// `anchors`, the coordinate system they are expressed in, are a
+    /// derived pair, exactly as [`move_focus`] pairs the retained record
+    /// and the painted indicator. A caller that rebased `core` without
+    /// replacing `anchors` (or vice versa) would leave the pair
+    /// inconsistent with no compiler check to catch it — `anchors` stays
+    /// private to this module for the same reason `core` has no setter.
+    ///
+    /// Every call site must run this **before** anything reads `core`
+    /// against `projection` — a caller that reads `core` first defeats the
+    /// whole point, since the ids it would read are still expressed in the
+    /// *previous* coordinate system.
+    pub(crate) fn rebase(&mut self, projection: &FocusProjection) {
+        // Snapshotted rather than borrowed for the closure below: `remap`
+        // takes `&mut self.core`, and holding a borrow of `self.anchors`
+        // across that call would need the disjoint-field argument this
+        // clone sidesteps entirely (raw pointers are cheap to copy).
+        let old_anchors = self.anchors.clone();
+        self.core.remap(|old_id| {
+            let ptr = *old_anchors.get(old_id)?;
+            projection.id_of_anchor(ptr)
+        });
+        self.anchors = projection.anchors().to_vec();
+    }
+}
+
+/// Project `root` and rebase `focus` against it — the call every seam that
+/// materialises or removes a subtree makes, so the retained record is
+/// re-expressed in the current tree's coordinate system as soon as the
+/// tree changes, rather than only lazily at the next focus operation.
+///
+/// Two production call sites (M4-Phase 2 T7's seam enumeration):
+/// `window::set_root`, right after the initial layout pass — the window's
+/// tree has just been replaced wholesale, so `focus` (itself freshly
+/// reset) needs a coordinate system for the tree that now exists — and
+/// `emit::flush_layout`, which every reactive structural mutation reaches
+/// through `mark_layout_dirty_for` (the four call sites in
+/// `ir_loader.rs`: conditional insert / remove, `for`-range insert /
+/// remove). See `flush_layout`'s own call site for why the rebase lives
+/// there rather than at `insert_structural_child` / `remove_structural_child`
+/// themselves.
+pub(crate) fn rebase_to_current_tree(root: &WidgetNode, focus: &mut WindowFocus) {
+    let projection = FocusProjection::project(root);
+    focus.rebase(&projection);
 }
 
 /// `Tab` / `Shift+Tab` are the only keys traversal takes at T5
@@ -149,17 +277,6 @@ pub(crate) fn tab_direction(vk: u16, shift_down: bool) -> Option<TabDirection> {
     } else {
         TabDirection::Forward
     })
-}
-
-/// The first entry of `chain` (target-first, root-last — `hit::dispatch_chain`'s
-/// order) that is also a Tab stop.
-///
-/// **Deliberately defined against the very list traversal enumerates**, so
-/// "what is focusable" has exactly one definition in the runtime: this
-/// function and `FocusTree::tab_stops` cannot drift apart the way two
-/// independent predicates could (implementation-gates trap #3).
-pub(crate) fn nearest_focusable(chain: &[FocusId], stops: &[FocusId]) -> Option<FocusId> {
-    chain.iter().copied().find(|id| stops.contains(id))
 }
 
 /// Write the window's focused id and the painted indicator together
@@ -194,9 +311,9 @@ pub(crate) fn move_focus(
 ) -> windows::core::Result<()> {
     // `path` returning `None` for the previous id is not an error case to
     // route around: a previous id this projection cannot explain simply
-    // means there is nothing to leave (`discard_stale_focus` already
-    // clears this at both call sites before `move_focus` runs, but the
-    // `Option` handling here does not depend on that order).
+    // means there is nothing to leave (`WindowFocus::rebase` already
+    // re-expresses this at both call sites before `move_focus` runs, but
+    // the `Option` handling here does not depend on that order).
     let prev_path = focus
         .core
         .focused()
@@ -215,48 +332,6 @@ pub(crate) fn move_focus(
 
     focus.core.set_focus(projection.tree(), next);
     Ok(())
-}
-
-/// Clear `focus`'s retained record when the id it names is not explained
-/// by `projection` — `id >= projection.len()`, so the id could not have
-/// come from *this* projection at all.
-///
-/// **Why this is needed at all.** `FocusProjection` is rebuilt fresh for
-/// every operation (this module's own doc comment), but [`WindowFocus`]
-/// retains a [`FocusId`] across messages. A handler's synchronous drain
-/// between two calls into `widget.rs` can remove a structural subtree —
-/// A's lightbox `if` branch is the shipped case — and the next
-/// projection then has fewer nodes than the id names
-/// (`docs/architecture.md` §13.3; DD-M4-P2-003 "The focused node
-/// disappearing"). **A retained id the current projection cannot
-/// explain is not focus**: clearing it here and letting the next
-/// traversal fall to the domain's first stop is the same lazy successor
-/// behaviour DD-M4-P2-003 already gives a stop disabled while it holds
-/// focus, applied to a stop that no longer exists at all. Computing the
-/// *correct* successor before the mutation is DD-M4-P2-003's stated rule
-/// too, but that requires the materialisation seam to call in — the
-/// modal / structural-removal seam M4-Phase 2 T7 owns, not this task.
-///
-/// Writes through [`focus_core::FocusState::set_focus`] — the crate's
-/// single writer of the focused id (`WindowFocus`'s doc comment states
-/// why `move_focus` is the only other caller) — so this does not become
-/// a second writer of the same field.
-///
-/// **Bound: what this catches, and what it does not.** An id that is
-/// *out of range* is caught here. An id that is still *in range* but now
-/// names a *different* node after a rebuild is not — that is the same
-/// index-shift exposure T4 recorded as CF-T4-1 for the retained hover
-/// path. It is bounded (a wrong node ends up focused, never an
-/// out-of-bounds read) and it belongs to the materialisation seam T7
-/// owns. It is not attempted here: no tree shape M4-Phase 2 can build
-/// fires that in-range case through this module's two call sites, and an
-/// unfireable branch is what implementation-gates trap #4 forbids.
-fn discard_stale_focus(projection: &FocusProjection, focus: &mut WindowFocus) {
-    if let Some(id) = focus.core.focused() {
-        if id >= projection.len() {
-            focus.core.set_focus(projection.tree(), None);
-        }
-    }
 }
 
 /// Consume `Tab` / `Shift+Tab` ahead of the host key slot; every other key
@@ -282,10 +357,10 @@ pub(crate) fn traverse_on_key(
     };
     let projection = FocusProjection::project(root);
     // Must run before anything below reads `focus.core`: `FocusTree::tab`
-    // (via `stop_index_of` -> `nearest`) indexes `self.nodes[id]` in
-    // `focus_core`, which this task must not modify, so an out-of-range
-    // id has to be caught here rather than there.
-    discard_stale_focus(&projection, focus);
+    // (via `stop_index_of` -> `nearest`) indexes `self.nodes[id]` directly
+    // in `focus_core`, so a retained id must already be expressed in this
+    // fresh projection's coordinate system before it reaches there.
+    focus.rebase(&projection);
     let next = projection.tree().tab(&focus.core, dir);
     // The `Result` is dropped rather than returned, because the answer
     // this function owes its caller is "was the key consumed", and it was:
@@ -298,9 +373,9 @@ pub(crate) fn traverse_on_key(
     true
 }
 
-/// Move focus to the nearest focusable widget at or above the resolved
-/// click target, or leave focus unchanged when there is none
-/// (`docs/dsl_spec.md` §4.19 "clicking background never clears focus").
+/// Move focus to the click landing at or above the resolved click target,
+/// or leave focus unchanged when there is none (`docs/dsl_spec.md` §4.19
+/// "clicking background never clears focus").
 ///
 /// The chain is built from `hit::dispatch_chain` — **the same ancestor
 /// walk DD-001's click dispatch uses** (DD-M4-P2-003 "The walk is DD-001's
@@ -308,6 +383,17 @@ pub(crate) fn traverse_on_key(
 /// second walk up the tree, so the click's focus resolution and the
 /// click's dispatch resolution read "at or above" off the identical
 /// ancestor list and cannot disagree.
+///
+/// **The landing rule is `focus_core::FocusTree::focus_landing`, not
+/// `tab_stops` + a nearest-stop search (M4-Phase 2 T7, closing CF-T6-5).**
+/// The T5-era version enumerated Tab stops and found the nearest one on
+/// the chain — which meant a `focus-group` container contributed *itself*
+/// to that list and its members did not appear at all, so a click on a
+/// widget inside a group moved focus to the group container rather than
+/// the clicked member. `focus_landing` walks the chain directly against
+/// node roles instead, so a member is reached before its enclosing group
+/// ever is; see that function's own doc comment for the full rule and its
+/// relationship to `tab_stops`.
 pub(crate) fn focus_on_click(
     root: &mut WidgetNode,
     compositor: &Compositor,
@@ -320,17 +406,16 @@ pub(crate) fn focus_on_click(
     };
     let projection = FocusProjection::project(root);
     // Must run before anything below reads `focus.core`, for the same
-    // reason `traverse_on_key` runs it first: `tree.tab_stops` below takes
+    // reason `traverse_on_key` runs it first: `focus_landing` below takes
     // `&focus.core` and walks from `tree.traversal_root(&focus.core)`, and
-    // a stale id must not reach either.
-    discard_stale_focus(&projection, focus);
+    // a retained id must already be expressed in this fresh projection's
+    // coordinate system before either is reached.
+    focus.rebase(&projection);
     let chain: Vec<FocusId> = hit::dispatch_chain(&target_path)
         .into_iter()
         .filter_map(|path| projection.id_of_path(&path))
         .collect();
-    let tree = projection.tree();
-    let stops = tree.tab_stops(&focus.core, tree.traversal_root(&focus.core));
-    let Some(next) = nearest_focusable(&chain, &stops) else {
+    let Some(next) = projection.tree().focus_landing(&focus.core, &chain) else {
         return Ok(());
     };
     move_focus(root, compositor, focus, &projection, Some(next))
@@ -338,10 +423,20 @@ pub(crate) fn focus_on_click(
 
 /// The focused widget's path, or `None` when nothing is focused, or when
 /// the retained id names a node this freshly built projection cannot
-/// explain (the same stale-id case [`discard_stale_focus`] clears from
-/// [`WindowFocus`] on the read/write paths; this is the read-only path's
-/// counterpart, since a call here does not go through either production
-/// entry point).
+/// explain.
+///
+/// **Read-only, and does not call [`WindowFocus::rebase`] itself.** By the
+/// time this runs, every seam that can change the tree shape has already
+/// rebased `focus` against its own projection: `move_focus`'s two
+/// production callers rebase before they read `focus.core`
+/// (`traverse_on_key`, `focus_on_click`), and every structural mutation
+/// reaches [`rebase_to_current_tree`] through `window::set_root` or
+/// `emit::flush_layout` (M4-Phase 2 T7). So the id this reads is already
+/// expressed in a coordinate system the *live* tree can explain, and the
+/// projection built here agrees with it; the `Option` on
+/// `FocusProjection::path` is what remains for the one case rebasing
+/// cannot remove — nothing is focused at all — which collapses to the
+/// same `None` a caller here needs to distinguish from "found" either way.
 ///
 /// Used by the test seam (`lib.rs::ffi::__focus_path_for_test`). **A
 /// reader, not a second store**: the window's one record is the
@@ -376,27 +471,5 @@ mod tests {
     fn a_non_tab_key_is_not_traversals_regardless_of_shift() {
         assert_eq!(tab_direction(VK_A, false), None);
         assert_eq!(tab_direction(VK_A, true), None);
-    }
-
-    #[test]
-    fn nearest_focusable_returns_the_first_chain_entry_that_is_a_stop() {
-        // chain is target-first, root-last: [2, 1, 0]; only 1 and 0 are
-        // stops, and 1 is nearer the target than 0.
-        assert_eq!(nearest_focusable(&[2, 1, 0], &[0, 1]), Some(1));
-    }
-
-    #[test]
-    fn nearest_focusable_returns_the_target_itself_when_it_is_a_stop() {
-        assert_eq!(nearest_focusable(&[3, 2, 1, 0], &[3]), Some(3));
-    }
-
-    #[test]
-    fn nearest_focusable_is_none_when_no_ancestor_is_a_stop() {
-        assert_eq!(nearest_focusable(&[2, 1, 0], &[5, 6]), None);
-    }
-
-    #[test]
-    fn nearest_focusable_over_an_empty_chain_is_none() {
-        assert_eq!(nearest_focusable(&[], &[0, 1, 2]), None);
     }
 }

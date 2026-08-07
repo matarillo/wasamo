@@ -423,6 +423,63 @@ impl FocusTree {
         ArrowOutcome::NotHandled
     }
 
+    // ── Click landing (M4-Phase 2 T7, CF-T6-5) ────────────────────────────
+
+    /// The first legal click landing in `chain` (target-first, root-last —
+    /// `hit::dispatch_chain`'s order), or `None` when nothing in it is one.
+    ///
+    /// **Relationship to [`Self::collect_stops`], stated explicitly
+    /// because the two differ in exactly one place and that difference is
+    /// the rule, not drift.** `collect_stops` decides what **Tab**
+    /// enumerates: a `Group` contributes itself, once, and is not
+    /// descended into (`docs/dsl_spec.md` §4.19 "Tab treats the group as
+    /// one stop"). This decides what a **click** lands on, and a click
+    /// already names a point, not a position in a linear order — so a
+    /// `Group`'s members are reachable directly here, and only fall back
+    /// to the group itself (via [`Self::resolve_stop`]) when the click did
+    /// not land on one of them (its own padding, or a disabled member
+    /// below it in the chain).
+    ///
+    /// Checked in this order, walking `chain` front to back:
+    ///
+    /// 1. Skip any id that is not a descendant of (or equal to)
+    ///    [`Self::traversal_root`] — a click must never move focus outside
+    ///    an entered modal scope, the same containment `tab_stops` already
+    ///    gives Tab.
+    /// 2. An enabled [`FocusRole::Stop`] is the landing, directly. This is
+    ///    the whole fix for CF-T6-5: a group's member is a `Stop`, and is
+    ///    reached here before its enclosing `Group` is ever considered —
+    ///    unlike the T5-era `focus::nearest_focusable` this replaces,
+    ///    which was defined against `tab_stops` and so could never see a
+    ///    member at all.
+    /// 3. An enabled [`FocusRole::Group`] resolves through
+    ///    [`Self::resolve_stop`] — the group's remembered member, the same
+    ///    landing Tab gives it. Reached only when the click did not land
+    ///    on a member.
+    /// 4. Everything else (`Container`, `ModalScope`, `ActiveItemList`,
+    ///    `ActiveItem`, a disabled `Stop` or `Group`) is not a landing;
+    ///    the walk continues to the next, further-out entry of `chain`.
+    /// 5. Nothing in `chain` is legal → `None`, which is "clicking
+    ///    background never clears focus" (`docs/dsl_spec.md` §4.19): the
+    ///    caller leaves the previous focus exactly where it was rather
+    ///    than writing `None` through it.
+    pub fn focus_landing(&self, state: &FocusState, chain: &[FocusId]) -> Option<FocusId> {
+        let root = self.traversal_root(state);
+        for &id in chain {
+            if !self.is_descendant_of(id, root) {
+                continue;
+            }
+            match self.nodes[id].role {
+                FocusRole::Stop if self.nodes[id].enabled => return Some(id),
+                FocusRole::Group if self.nodes[id].enabled => {
+                    return Some(self.resolve_stop(state, id));
+                }
+                _ => {}
+            }
+        }
+        None
+    }
+
     // ── Modal scopes ─────────────────────────────────────────────────────
 
     /// The scope that would consume an Esc, if any.
@@ -476,6 +533,14 @@ impl FocusState {
 
     pub fn modal_depth(&self) -> usize {
         self.modal_stack.len()
+    }
+
+    /// Read-only view of the entered modal scopes, innermost last. Exists
+    /// for the caller that closes a scope by removal (M4-Phase 2's later
+    /// work on this task) and doubles as what makes [`Self::remap`]'s
+    /// stack-order behaviour unit-testable from outside this module.
+    pub fn modal_entries(&self) -> &[ModalEntry] {
+        &self.modal_stack
     }
 
     fn is_entered(&self, scope: FocusId) -> bool {
@@ -540,6 +605,63 @@ impl FocusState {
             ArrowOutcome::MovedActiveItem { list, item } => self.set_active_item(list, item),
             ArrowOutcome::NotHandled => {}
         }
+    }
+
+    /// Re-express every retained id through `f`, the mapping from the
+    /// coordinate system this state's ids were last written against to a
+    /// new one. **This is the primitive that makes "a `FocusId` is a
+    /// coordinate, not an identity" true** (M4-Phase 2 T7): every store
+    /// keyed or valued by a `FocusId` is rewritten here, in one place,
+    /// rather than trusted to still resolve to the same node once the
+    /// projection that produced it has been rebuilt.
+    ///
+    /// - `focused` is remapped; an unmappable id becomes `None`.
+    /// - `group_memory` remaps both the key and the value; the entry is
+    ///   **dropped** when either is unmappable — a group whose id moved
+    ///   and a group whose id vanished collapse to the same case here, and
+    ///   the same is true of the remembered member.
+    /// - `active_item` follows the identical key/value rule, for the same
+    ///   reason.
+    /// - `modal_stack` remaps each entry's `scope`; the entry is
+    ///   **dropped** when the scope is unmappable, because an unmappable
+    ///   scope means its subtree is gone — there is no scope left to have
+    ///   been entered. `restore_to` is remapped independently and becomes
+    ///   `None` when unmappable, because "restore to nothing" is a legal
+    ///   state (the previously focused node is itself gone, not the
+    ///   scope). Stack order is preserved.
+    ///
+    /// **What this function does not do.** Dropping a modal entry here is
+    /// mechanical coordinate bookkeeping, not a policy decision: the
+    /// *restoration* a vanished scope owes — moving focus to wherever
+    /// `restore_to` said, or to the domain's first stop when even that is
+    /// gone — is not this function's job. That is run by a caller that
+    /// knows a scope actually closed, which lands separately; this
+    /// function only keeps every retained id checkable against whatever
+    /// tree comes next.
+    pub fn remap(&mut self, f: impl Fn(FocusId) -> Option<FocusId>) {
+        self.focused = self.focused.and_then(&f);
+
+        self.group_memory = self
+            .group_memory
+            .iter()
+            .filter_map(|(&k, &v)| Some((f(k)?, f(v)?)))
+            .collect();
+
+        self.active_item = self
+            .active_item
+            .iter()
+            .filter_map(|(&k, &v)| Some((f(k)?, f(v)?)))
+            .collect();
+
+        self.modal_stack = self
+            .modal_stack
+            .iter()
+            .filter_map(|entry| {
+                let scope = f(entry.scope)?;
+                let restore_to = entry.restore_to.and_then(&f);
+                Some(ModalEntry { scope, restore_to })
+            })
+            .collect();
     }
 }
 
@@ -969,5 +1091,276 @@ mod tests {
             Some(f.thumb1),
             "backward from the first stop wraps to the last"
         );
+    }
+
+    // ── `remap`: the id coordinate-system primitive (M4-Phase 2 T7) ──────
+
+    #[test]
+    fn remap_with_the_identity_mapping_changes_nothing() {
+        let f = gallery();
+        let mut state = FocusState::default();
+        state.set_focus(&f.tree, Some(f.favorites)); // writes group_memory[tabs] = favorites
+        state.enter_modal(&f.tree, f.lightbox); // pushes the stack, restore_to = favorites
+        state.remap(Some);
+        assert_eq!(
+            state.focused(),
+            Some(f.prev),
+            "entering the scope moved focus; an identity remap must not move it again"
+        );
+        assert_eq!(state.remembered_member_of(f.tabs), Some(f.favorites));
+        assert_eq!(
+            state.modal_entries(),
+            &[ModalEntry {
+                scope: f.lightbox,
+                restore_to: Some(f.favorites),
+            }]
+        );
+    }
+
+    #[test]
+    fn remap_with_a_shifting_mapping_moves_focused() {
+        let f = gallery();
+        let mut state = FocusState::default();
+        state.set_focus(&f.tree, Some(f.thumb0));
+        state.remap(|id| Some(id + 100));
+        assert_eq!(state.focused(), Some(f.thumb0 + 100));
+    }
+
+    #[test]
+    fn remap_drops_focused_when_it_is_unmappable() {
+        let f = gallery();
+        let mut state = FocusState::default();
+        state.set_focus(&f.tree, Some(f.thumb0));
+        state.remap(|_| None);
+        assert_eq!(state.focused(), None);
+    }
+
+    #[test]
+    fn remap_drops_a_group_memory_entry_whose_key_is_unmappable() {
+        let f = gallery();
+        let mut state = FocusState::default();
+        state.set_focus(&f.tree, Some(f.favorites));
+        assert_eq!(
+            state.remembered_member_of(f.tabs),
+            Some(f.favorites),
+            "precondition: the memory names the id this test will make unmappable"
+        );
+        state.remap(move |id| if id == f.tabs { None } else { Some(id) });
+        assert_eq!(
+            f.tree.initial_focus(&state),
+            Some(f.all),
+            "a group-memory entry whose key could not be remapped must be dropped, so \
+             re-entering the group lands on its first member rather than the stale memory"
+        );
+    }
+
+    #[test]
+    fn remap_drops_a_group_memory_entry_whose_value_is_unmappable() {
+        let f = gallery();
+        let mut state = FocusState::default();
+        state.set_focus(&f.tree, Some(f.favorites));
+        state.remap(move |id| if id == f.favorites { None } else { Some(id) });
+        assert_eq!(
+            f.tree.initial_focus(&state),
+            Some(f.all),
+            "a group-memory entry whose remembered member could not be remapped must be \
+             dropped too, or a vanished member would still be looked up by a live group id"
+        );
+    }
+
+    #[test]
+    fn remap_moves_an_active_item_entry() {
+        let (tree, combo, list, items) = dropdown();
+        let mut state = FocusState::default();
+        state.set_focus(&tree, Some(combo));
+        state.apply_arrow(
+            &tree,
+            ArrowOutcome::MovedActiveItem {
+                list,
+                item: items[0],
+            },
+        );
+        assert_eq!(state.active_item_of(list), Some(items[0]), "precondition");
+        state.remap(|id| Some(id + 100));
+        assert_eq!(state.active_item_of(list + 100), Some(items[0] + 100));
+    }
+
+    #[test]
+    fn remap_drops_a_modal_entry_whose_scope_is_unmappable() {
+        let f = gallery();
+        let mut state = FocusState::default();
+        state.set_focus(&f.tree, Some(f.thumb1));
+        state.enter_modal(&f.tree, f.lightbox);
+        assert_eq!(state.modal_depth(), 1, "precondition");
+        state.remap(move |id| if id == f.lightbox { None } else { Some(id) });
+        assert_eq!(
+            state.modal_entries(),
+            &[],
+            "a modal entry whose scope could not be remapped names a subtree that is \
+             gone, and must be dropped rather than kept pointing at nothing"
+        );
+    }
+
+    #[test]
+    fn remap_keeps_a_modal_entry_whose_restore_to_is_unmappable_with_restore_to_cleared() {
+        let f = gallery();
+        let mut state = FocusState::default();
+        state.set_focus(&f.tree, Some(f.thumb1));
+        state.enter_modal(&f.tree, f.lightbox); // restore_to = Some(thumb1)
+        state.remap(move |id| if id == f.thumb1 { None } else { Some(id) });
+        assert_eq!(
+            state.modal_entries(),
+            &[ModalEntry {
+                scope: f.lightbox,
+                restore_to: None,
+            }],
+            "restoring to nothing is a legal state: the entry survives with restore_to \
+             cleared rather than being dropped alongside a scope whose own id is fine"
+        );
+    }
+
+    #[test]
+    fn remap_preserves_modal_stack_order() {
+        // A second scope nested inside the gallery fixture would need a
+        // bespoke tree anyway, so this builds the nesting directly.
+        let mut tree = FocusTree::new();
+        let root = tree.push(None, FocusRole::Container, true);
+        let outer = tree.push(Some(root), FocusRole::ModalScope, true);
+        let outer_stop = tree.push(Some(outer), FocusRole::Stop, true);
+        let inner = tree.push(Some(outer), FocusRole::ModalScope, true);
+        tree.push(Some(inner), FocusRole::Stop, true);
+        let mut state = FocusState::default();
+        state.enter_modal(&tree, outer);
+        state.enter_modal(&tree, inner);
+        assert_eq!(state.modal_depth(), 2, "precondition");
+        state.remap(Some);
+        assert_eq!(
+            state.modal_entries(),
+            &[
+                ModalEntry {
+                    scope: outer,
+                    restore_to: None,
+                },
+                ModalEntry {
+                    scope: inner,
+                    restore_to: Some(outer_stop),
+                },
+            ],
+            "identity remap must not disturb stack order: outermost first, innermost last"
+        );
+    }
+
+    // ── `focus_landing` (M4-Phase 2 T7, CF-T6-5) ──────────────────────────
+
+    #[test]
+    fn focus_landing_returns_the_target_itself_when_it_is_a_stop() {
+        let f = gallery();
+        let state = FocusState::default();
+        // target-first, root-last, as `hit::dispatch_chain` produces it.
+        let chain = [f.thumb0, f.tree.parent(f.thumb0).unwrap(), 0];
+        assert_eq!(f.tree.focus_landing(&state, &chain), Some(f.thumb0));
+    }
+
+    #[test]
+    fn focus_landing_climbs_to_an_ancestor_stop_when_the_target_is_a_non_focusable_container() {
+        let mut tree = FocusTree::new();
+        let root = tree.push(None, FocusRole::Container, true);
+        let stop = tree.push(Some(root), FocusRole::Stop, true);
+        // A container nested under a Stop, standing in for whatever a
+        // resolved hit target can be below the widget that actually
+        // claims focus.
+        let inner = tree.push(Some(stop), FocusRole::Container, true);
+        let state = FocusState::default();
+        let chain = [inner, stop, root];
+        assert_eq!(
+            tree.focus_landing(&state, &chain),
+            Some(stop),
+            "a click that resolved below a Stop must still land on the Stop, walking \
+             outward from the target"
+        );
+    }
+
+    #[test]
+    fn focus_landing_on_a_group_member_focuses_that_member_not_the_remembered_one() {
+        let f = gallery();
+        let mut state = FocusState::default();
+        // Establish a remembered member deliberately different from the
+        // one this click targets, so a `resolve_stop`-based landing (the
+        // approach the T7 start gate rules out) would fail this test.
+        state.set_focus(&f.tree, Some(f.favorites));
+        let toolbar = f.tree.parent(f.tabs).unwrap();
+        let chain = [f.albums, f.tabs, toolbar, 0];
+        assert_eq!(
+            f.tree.focus_landing(&state, &chain),
+            Some(f.albums),
+            "a click on a group member must land on that member, not on group memory"
+        );
+    }
+
+    #[test]
+    fn focus_landing_on_the_group_container_itself_falls_back_to_the_remembered_member() {
+        let f = gallery();
+        let mut state = FocusState::default();
+        state.set_focus(&f.tree, Some(f.favorites));
+        let toolbar = f.tree.parent(f.tabs).unwrap();
+        // No member appears in the chain: the click resolved to the
+        // group's own rectangle (its padding), not to a member.
+        let chain = [f.tabs, toolbar, 0];
+        assert_eq!(
+            f.tree.focus_landing(&state, &chain),
+            Some(f.favorites),
+            "a click on the group container falls back to Tab's landing rule"
+        );
+    }
+
+    #[test]
+    fn focus_landing_on_a_disabled_member_falls_back_to_the_groups_first_member() {
+        let mut tree = FocusTree::new();
+        let root = tree.push(None, FocusRole::Container, true);
+        let group = tree.push(Some(root), FocusRole::Group, true);
+        let first = tree.push(Some(group), FocusRole::Stop, true);
+        let disabled = tree.push(Some(group), FocusRole::Stop, false);
+        let state = FocusState::default();
+        let chain = [disabled, group, root];
+        assert_eq!(
+            tree.focus_landing(&state, &chain),
+            Some(first),
+            "a disabled member is not a legal landing; the walk continues outward to \
+             the group, which (with no memory) resolves to its first member"
+        );
+    }
+
+    #[test]
+    fn focus_landing_over_a_chain_with_nothing_focusable_is_none() {
+        let mut tree = FocusTree::new();
+        let root = tree.push(None, FocusRole::Container, true);
+        let child = tree.push(Some(root), FocusRole::Container, true);
+        let state = FocusState::default();
+        assert_eq!(tree.focus_landing(&state, &[child, root]), None);
+    }
+
+    #[test]
+    fn focus_landing_outside_an_entered_modal_scope_is_none() {
+        let f = gallery();
+        let mut state = FocusState::default();
+        state.set_focus(&f.tree, Some(f.thumb1));
+        state.enter_modal(&f.tree, f.lightbox);
+        let grid = f.tree.parent(f.thumb1).unwrap();
+        let chain = [f.thumb1, grid, 0];
+        assert_eq!(
+            f.tree.focus_landing(&state, &chain),
+            None,
+            "a click outside the entered scope must never move focus out of it"
+        );
+    }
+
+    #[test]
+    fn focus_landing_inside_an_entered_modal_scope_lands_normally() {
+        let f = gallery();
+        let mut state = FocusState::default();
+        state.set_focus(&f.tree, Some(f.thumb1));
+        state.enter_modal(&f.tree, f.lightbox);
+        let chain = [f.next, f.lightbox, 0];
+        assert_eq!(f.tree.focus_landing(&state, &chain), Some(f.next));
     }
 }

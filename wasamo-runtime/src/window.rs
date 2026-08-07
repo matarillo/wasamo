@@ -378,6 +378,13 @@ pub fn set_root(state: &mut WindowState, mut root: Box<WidgetNode>) -> windows::
     state.focus = WindowFocus::default();
     if let Some(r) = state.root_widget.as_mut() {
         let _ = r.run_layout_as_window_root_at_scale(cw, ch, state.scale);
+        // The window's tree has just been replaced wholesale (M4-Phase 2
+        // T7), so the freshly reset `state.focus` needs a coordinate
+        // system for the tree that now exists — otherwise its (empty)
+        // anchor vector would still describe whatever tree preceded this
+        // one, and the first structural mutation against the new tree
+        // would have nothing correct to rebase from.
+        focus::rebase_to_current_tree(r, &mut state.focus);
     }
     Ok(())
 }

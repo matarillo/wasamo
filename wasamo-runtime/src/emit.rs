@@ -178,6 +178,28 @@ fn flush_layout() {
                 &runtime.text_renderer,
                 target,
             );
+            // M4-Phase 2 T7: re-express `state.focus`'s retained ids in
+            // this refreshed tree's coordinate system. `state.focus` is a
+            // field disjoint from `state.root_widget`, so this needs no
+            // restructuring — the same disjoint-field argument the
+            // `state.scale` / `state.hwnd` reads above this block already
+            // use.
+            //
+            // **Why here, and not at `insert_structural_child` /
+            // `remove_structural_child` themselves.** Every reactive
+            // structural mutation reaches this function through
+            // `mark_layout_dirty_for` (the four call sites in
+            // `ir_loader.rs`), but the mutation itself runs inside
+            // `Signal::set`'s synchronous drain — which, for a click, runs
+            // *inside* `hit_test_click`, which already holds `&mut
+            // WidgetNode` on the window's root. Forming `&mut WindowState`
+            // there to reach `state.focus` would alias that borrow. This
+            // function runs after `wnd_proc` has returned, at the
+            // message-loop boundary, where `&mut *wptr` is already this
+            // module's established pattern — the only place a sound `&mut
+            // WindowState` exists for every one of those four call sites
+            // at once.
+            crate::focus::rebase_to_current_tree(root, &mut state.focus);
         }
     }
 }
