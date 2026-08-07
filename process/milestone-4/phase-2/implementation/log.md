@@ -1521,3 +1521,230 @@ prediction itself; this row is the record of what the phase does about
 the gap the prediction left behind. T12's row in the control table now
 names the discharge so the obligation is visible where it is executed
 rather than only here.
+
+## T5 — Per-window focus state and Tab traversal
+
+### Start gate (recorded 2026-08-07, before any source edit)
+
+Read before selecting:
+[AGENTS.md](../../../../AGENTS.md),
+[implementation-gates.md](../../../procedures/implementation-gates.md),
+[plan.md](./plan.md) §T5 and §Cross-task obligations,
+[preamble.md](./preamble.md) (§What "green" is worth, §The keyboard half
+is two surfaces, §Review lanes),
+[DD-M4-P2-003](../decisions/dd-m4-p2-003-focus-model-and-traversal.md) in
+full,
+[DD-M4-P2-001](../decisions/dd-m4-p2-001-event-routing-model.md)
+§Recommendation (keyboard start point, unconsumed-key fallthrough),
+[DD-M4-P2-002](../decisions/dd-m4-p2-002-hit-testing-and-generic-click.md)
+§Recommendation (the resolved target a click focuses from),
+[constraints.md](../requirements/constraints.md) §2 / §4 / §7 / §8 / §10,
+the Moment-1 normative text
+([architecture.md §13.2 / §13.3](../../../../docs/architecture.md),
+[dsl_spec.md §4.19](../../../../docs/dsl_spec.md) §Focus / §Which keys the
+runtime keeps, and §4.8's disabled contract), the
+[T4 close gate](#t4--hover-and-pressed-behind-the-routing-model) and the
+[T4 retrospective](../retrospectives/t4.md), and the landed source
+(`focus_core.rs`, `focus_spike.rs`, `hit.rs`, `widget.rs`
+`spike_focus_role` / `HoverState` / `update_hover` / `node_at_path_mut` /
+`set_button_state_at` / `effective_button_color` / `update_button_enabled`
+/ `update_toggle_button_checked` / `sync_visuals`, `window.rs`'s
+`WM_KEYDOWN` and four pointer arms and `set_root`, `lib.rs`'s `ffi` seams
+and the `__focus_spike` re-export, `examples/gallery/gallery.ui`).
+
+#### Normative statements that already answer this task's behaviour
+
+Recorded per
+[DD-V-031](../../../cross-milestone/decisions/dd-v-031-normative-answers-at-start-gate.md).
+This phase synchronised its normative text at Moment 1, so the questions
+below are **answered**, not open, and none of them is an escalation.
+
+| Question | Document | What it fixes |
+|---|---|---|
+| Where focus lives, and what it holds | [architecture.md §13.3](../../../../docs/architecture.md) | "Focus is per window. A `WindowState` owns one focus record holding the focused node and three derived stores" — the record is one object, not a field per store |
+| What is focused at window open | §13.3, [dsl_spec.md §4.19](../../../../docs/dsl_spec.md) §Focus | Nothing. "No widget shows a focus indicator until the keyboard is used or a click places focus" |
+| Traversal order and wrap | §4.19 §Focus | "Tab / Shift+Tab move focus in declaration order, wrapping at both ends; the first Tab lands on the first stop" |
+| What a disabled Button does to traversal | §4.19 §Focus, [dsl_spec.md §4.8](../../../../docs/dsl_spec.md) | "A Button with `enabled: false` is **not** focusable — it is skipped by traversal and cannot be activated from the keyboard" |
+| What a click does to focus | §4.19 §Focus, §13.3 | "A click moves focus to the nearest focusable widget at or above the widget it resolved to, and leaves focus unchanged when there is none — clicking background never clears focus" |
+| What window activation does to focus | §4.19 §Focus, §13.3 | "Losing and regaining the window's activation does not change which widget is focused" |
+| What happens to a key the runtime does not use | §13.2, §4.19 §Which keys the runtime keeps | "A key that reaches the end of the walk without a handler running is **not** consumed by the runtime: it continues to the window's default handling" |
+| Which keys traversal takes | §4.19 §Which keys the runtime keeps | "`Tab` / `Shift+Tab` — Always the runtime; traversal cannot be overridden". Arrows and `Escape` are conditioned on a group / a scope, neither of which exists before T6/T7 |
+| Where the indicator may be written | §13.3 | "presentation state applied by the same pass that writes visual geometry, **not a visual written at focus-change time**"; and it "shares its only means — a background change — with hover and the selected state, so the three must remain visually distinct" |
+| Whether focus is authored | §4.19 §Not in this surface | "an attribute making a non-Button widget focusable" is outside this phase — M4 spells no opt-in, the derivation is the extension point (DD-003 F3) |
+
+**One divergence is carried to T13 rather than resolved here**, and it is
+in the indicator row. §13.3's "applied by the same pass that writes
+visual geometry" cannot be implemented literally: `sync_visuals` runs
+from a layout pass, a Tab press is not a state write and triggers no
+layout, so an indicator applied there would not appear until something
+else re-laid the tree out. Its second half — "not a visual written at
+focus-change time" — *is* satisfiable and is what this task satisfies: no
+`Visual` is created and no geometry is written, only the same
+`CompositionColorBrush` colour transition hover already drives.
+DD-M4-P2-003's own risk section names the same thing and names the
+mitigation as an artifact rather than a prohibition — "the close artifact
+for any task touching it is... every `SetOffset` / `SetSize` in the
+runtime, with its pass" — which is #2 below. Recorded as a wording
+divergence for the phase-close re-verification, not silently corrected.
+
+#### Scope re-decided against the code — six facts measured first
+
+Throwaway probes and greps, run before the approach was chosen.
+
+1. **The whole key path is unexercised, and the host slot has no
+   installer.** `rg "key_down_fn|key_down"` over the repo returns exactly
+   three hits, all in `window.rs`: the field declaration, its `None`
+   initialiser, and the invocation in the `WM_KEYDOWN` arm. `rg
+   "WM_KEYDOWN"` over `wasamo-runtime/tests`, `examples` and `bindings`
+   returns **zero** — no test anywhere sends a key message. The plan's
+   description of the arm ("forwards to the uninstalled `key_down_fn` host
+   slot and returns") is therefore measured true, and this task inherits
+   T4's shape: the risk is not that the transition rule is hard but that
+   **nothing in the suite would notice if it were wrong**.
+2. **`focus_core` has no production caller and `focus_spike` has exactly
+   one consumer.** `rg "focus_core|focus_spike|__focus_spike"` returns the
+   module declarations, the `__focus_spike` re-export in `lib.rs`,
+   `widget.rs::spike_focus_role`, and `tests/focus_mechanism_fixture.rs`.
+   DD-M4-P2-003's "the spike's core is not yet load-bearing" is measured
+   true, and this task is what makes it false.
+3. **The six Composition geometry writes are unchanged and all inside
+   `sync_visuals`** — `widget.rs` 2358 / 2363 (the node's own Visual),
+   2407 / 2413 (the Button-family label), 2443 / 2449 (the `ScrollView`
+   intermediate). `dip_scale.rs`'s two mentions are doc comments. This is
+   the *before* half of DD-M4-P2-003's required close artifact; the task
+   must not add a seventh.
+4. **`effective_button_color` has five production call sites and eight in
+   its own unit tests**, so widening its signature is compiler-forcing —
+   the one part of this task's semantic migration Rust enumerates.
+5. **The gallery's first Tab stop is a *checked* `ToggleButton`.**
+   `gallery.ui`'s first Button-family widget in tree order is the "All"
+   `ToggleButton`, bound `checked: tab_all_selected` whose initial state is
+   `true`. So the first frame of any traversal evidence is the
+   focused ∧ checked combination, which means the indicator's
+   distinctness must hold against the **selected** colour and not only
+   against `Normal` — the DD-M4-P2-003 requirement is fired by the
+   gallery's very first stop rather than by a constructed case.
+6. **The negative prediction this task depends on is about the
+   fallthrough, and it is not yet measured** (the T4 retrospective's new
+   start-gate line). The claim "an unconsumed key's fallthrough to
+   `DefWindowProc` cannot be distinguished by the returned `LRESULT`,
+   because `DefWindowProcW` returns 0 for `WM_KEYDOWN`" is a *prediction*
+   about the OS, and T4's lesson is that a negative prediction nobody
+   measures survives unchallenged. It is therefore measured during
+   implementation over a candidate key set before the fixture's assertion
+   shape is chosen, and the measurement is recorded either way.
+
+**What T5 therefore is.** Not "wire the spike up", but four things with a
+boundary each: a per-window focus record whose only writer paints in the
+same primitive; a production projection that derives `Stop` / `Container`
+from the widget kind; Tab / Shift+Tab consumed ahead of the host key slot
+with **every other key falling through to `DefWindowProc`**; and
+click-to-focus on the nearest focusable widget at or above the resolved
+target.
+
+Three boundaries are drawn deliberately and recorded in
+[plan.md](./plan.md) §T5 rather than left implicit:
+
+- **The key *walk* is not built here.** §13.2 has keyboard messages enter
+  the propagation walk at the focused widget, but no authored key handler
+  can exist until T8 adds `key-down("<key>")` — a walk built now would be
+  a branch no test could fire, which is exactly what trap #4 forbids. T5
+  lands the *consumption* half (traversal takes Tab) and the *fallthrough*
+  half; T8 lands the dispatch between them, against handlers that exist.
+- **Disabling a Button that holds focus applies the successor rule
+  lazily, at the next traversal.** DD-M4-P2-003 requires that a widget
+  disabled while focused "stops being a stop and the successor rule below
+  applies". `update_button_enabled` is on the *binding* path with no
+  window in reach, and T4 refused to give that path a second producer of
+  the hover record for the same reason — so no eager writer is added.
+  Nothing is lost that a test can see: `tab_stops` already excludes a
+  disabled stop and `tab()` from a focus that is not in the stop list
+  starts at the domain's first stop, which is the same answer
+  `focus_after_removing` gives. The Backward case differs (it lands on the
+  last stop, not the first) and is asserted rather than assumed.
+- **Focus moves on `WM_LBUTTONUP`, before dispatch.** The same message
+  that dispatches `clicked` (T3), so the widget that takes focus is the
+  widget the click activates — the release-time analogue of §13.2's
+  "the widget that paints pressed is the widget a release would dispatch
+  to" — and *before* the handler runs, because a handler's synchronous
+  rebuild can invalidate the resolved path (T3's §2 enumeration).
+
+#### Trap selection
+
+| # | Trap | Applies | Reason |
+|---|---|---|---|
+| 1 | Semantic-migration miss | **yes** | Two migrations in one task. `ButtonData` gains a field and `effective_button_color` gains a parameter — both compiler-forcing (fact 4). The `WM_KEYDOWN` arm's *return path* migrates from "always `LRESULT(0)`" to "consumed ⇒ 0, otherwise `DefWindowProcW`", and the compiler enumerates **none** of that. The audit table therefore covers every writer and reader of the new field, every caller of the colour function, and every site that decides whether a key is consumed |
+| 2 | Missed side effects | **yes** | Retained per-window state with a cross-path invalidation surface, the same class T4 met. To enumerate before writing: `window::set_root` replacing the tree the record indexes; `update_button_enabled`'s binding-path state reset (fact above); `update_toggle_button_checked`'s brush rebuild, which must now read the focus flag or a focused ToggleButton loses its indicator on the next `checked` write; a click handler's synchronous rebuild between the focus write and the dispatch that follows it in the same arm; the interaction of the focus colour with the hover colour on the **same brush**; and the Composition geometry writes, which must stay at six (fact 3, and DD-M4-P2-003's named close artifact) |
+| 3 | Parallel/derived data drift | **yes** | The window's focus record and the painted per-node flag are a derived pair with the same invariant shape T4's `HoverState` carries: at most one node is painted focused, and it is exactly the node the record names. They must be written in one primitive, and the record's own field must be unwritable from outside it. The focus record additionally carries `focus_core`'s group memory, whose single-writer discipline DD-M4-P2-003 adopts as a requirement — unexercised until T7, but the primitive that would break it is added here |
+| 4 | Untested authored branch | **yes** | New arms: Tab forward; Shift+Tab backward; the wrap at each end; a disabled stop skipped; a key that is not traversal's falling through; the click that finds a focusable ancestor; the click that finds none (focus unchanged, **not** cleared); a focus change that leaves the previously focused node. Each ships with a test that fires it directly, and each is put under a deliberately wrong implementation shown to redden it. [DD-V-029](../../../cross-milestone/decisions/dd-v-029-pure-logic-red-test-obligation.md)'s **named** obligation is not triggered — no rounding, unit conversion or boundary condition is authored here; the traversal wrap is a boundary condition but it is `focus_core`'s, landed and unit-tested by the spike, and this task adds no arm to it |
+| 5 | Carry-forward underweighted | **yes** | T6 gives the projection its authored roles; T7 retires `focus_spike` and owns the eager successor and the id-stability exposure; T8 adds the key walk between the consumption and the fallthrough; T12 inherits the indicator frames. Per the T3 retrospective's corrective, anything this task *requires as evidence of a later task* is built and run here first, or recorded as a finding with an owner rather than as a carry-forward |
+| 6 | Symptom taken at face value | **conditional** | No deterministic failure is in hand at the start gate. Selected as armed: any failure during implementation gets a minimal repro and a root cause, not a re-roll |
+| 7 | Weak GUI evidence | **yes** | The plan requires it by name — "the indicator must be **distinguishable**... Evidence includes a frame pair showing focused versus hovered/selected as visibly distinct states" — and fact 5 makes the hardest comparison (focused ∧ checked versus checked) the gallery's *first* stop. A state read-back cannot answer it: `__button_state_for_test` would report the same `"normal"` for a focused and an unfocused Button, so only a captured frame can say the three states differ |
+
+```
+- [x] #1 semantic migration   - [x] #2 side effects   - [x] #3 parallel data   - [x] #4 branch tests
+- [x] #5 carry-forward        - [~] #6 root cause     - [x] #7 GUI positive control
+```
+
+#### Review lane
+
+**Full independent review**, as
+[preamble.md §Review lanes](./preamble.md) predicts and as the change
+confirms: a runtime structural change (retained per-window focus state,
+the first production caller of the traversal core, and the `WM_KEYDOWN`
+return-path change) carrying GUI-render evidence — two of the three
+high-risk classes in
+[implementation-gates.md §4](../../../procedures/implementation-gates.md).
+The trap-#4 branch/test check composes into it for the new arms.
+
+#### The T4 correctives, applied
+
+T4's retrospective added one line to later start gates and one to later
+close gates. The start-gate line is answered here:
+
+- *Which negative prediction of the phase documents does this task depend
+  on, and has it been measured once?* Two. The plan's description of the
+  `WM_KEYDOWN` arm and DD-M4-P2-003's "the spike's core has no production
+  caller" are both measured true (facts 1 and 2). The third — that the
+  fallthrough is invisible in the returned `LRESULT` — is an assumption
+  about the OS rather than about this repo, is **not** measured yet, and
+  fact 6 makes measuring it a precondition of choosing the fixture's
+  assertion shape rather than a footnote to it.
+
+The close-gate line ("the mutation witnesses must include one that
+restores the pre-fix behaviour") is discharged at the close gate: for this
+task the pre-T5 behaviour is *no focus at all*, so the restoring mutation
+is the one that deletes the focus move and leaves the arm returning
+`LRESULT(0)`.
+
+#### Planned proof obligations
+
+Each closed at the T5 close gate:
+
+1. The call-site audit table over the new field, the widened colour
+   function, and every site that decides whether a key is consumed.
+2. The structural side-effect enumeration, including `set_root`, the
+   binding-path `enabled` reset, the `checked` brush rebuild, and the
+   click-handler rebuild inside the same message arm.
+3. **The `SetOffset` / `SetSize` enumeration with each call's pass**
+   (DD-M4-P2-003's named artifact), showing the set is still the six of
+   fact 3.
+4. The parallel-data statement naming the single primitive that writes
+   the record and the painted flag together.
+5. Pure-logic unit tests: the key-to-command mapping, the
+   nearest-focusable-at-or-above walk, and the indicator's distinctness
+   from `Normal`, `Hovered`, `Pressed` and the selected colour across
+   every style / state combination.
+6. Integration fixtures over real messages, each establishing its own
+   initial focus state (Phase 1 F-47) and asserting the **expected next
+   stop** rather than that focus moved.
+7. The fallthrough measurement of fact 6, recorded with whichever
+   assertion shape it licenses.
+8. Mutation witnesses for each new arm — including the restoring one —
+   each read back from the file before it is run and re-read after the
+   revert.
+9. The GUI evidence: focused versus hovered versus selected versus
+   normal, with an agreement leg and a control that a wrong
+   implementation would fail.
+10. The whole task list re-read at the close gate (the re-audit
+    discipline, [plan.md](./plan.md) §Cross-task obligations).
