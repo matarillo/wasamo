@@ -2829,3 +2829,73 @@ supports; CF-T6-5 is new. CF-T6-2 and CF-T6-4 stand as recorded above.
 | **CF-T6-1 (restated) — between this task and T7, a *present* `modal-scope` subtree is *un-entered*, and its subtree is reachable by neither Tab nor click-to-focus.** `focus_core::FocusState::enter_modal` has no production caller, and `collect_stops` returns early for an un-entered `ModalScope`; both `traverse_on_key` and `focus_on_click` read that stop list. The original entry named traversal only | `focus_core::collect_stops`'s `FocusRole::ModalScope if !state.is_entered(id) => return` arm; the two production callers traced in the review | `carry-forward` → this ledger, and `doc-folded` → the `focus_role` doc comment | **T7**, which adds the entry seam. Bounded meanwhile: no shipped `.ui` carries the attribute, and T10 — which adds the first one — lands after T7 |
 | **CF-T6-5 (new) — a click on a widget inside a `focus-group` moves focus to the group container, not to the clicked widget.** `FocusTree::tab` resolves a group landing through `resolve_stop`, so Tab is already correct; `focus::focus_on_click` derives its landing from `tab_stops` + `nearest_focusable` and never calls `resolve_stop` | The two call sites, read at the lead's verification of the review's F1 | `carry-forward` → this ledger, and `doc-folded` → the `focus_role` doc comment | **T7**, which owns group traversal and the per-group memory `resolve_stop` reads. The asymmetry is the tripwire: any fix that makes the click path agree with Tab must go through the same primitive rather than adding a second landing resolver |
 | **CF-T6-3 (restated) — a per-kind signal admission rule exists in three places with three different shapes, and `plan.md` §T8's premise is false for two kinds.** `check_grid` rejects every non-`dismiss` handler on a `Grid` (compiler only — the loader has **no** Grid handler gate and never has, so `Grid { clicked => … }` is rejected by `check` and accepted by `wasamo_load_ui`); `validate_phase6_zstack_node_invariants` rejects every non-`dismiss` handler on a `ZStack` (loader only — the checker admits them). `Box`, the stacks, `WrapPanel` and `ScrollView` have no rule on either side | Start-gate fact 4 for the checker; the review's probe for the absent loader Grid gate, verified against `e3ff83a`; `non_dismiss_handler_on_grid_still_rejected` and `zstack_clicked_handler_still_rejected_after_relaxation` pin the current bound | `finding` → **T8** | **T8**, which widens `clicked` to any widget. It must decide three things, not one: widen `check_grid`, widen the ZStack loader gate, and whether the Grid rule gains the loader half it never had. Leaving any of them narrows the authored surface against §4.19 and hands T13 a divergence |
+
+#### Owner disposition of CF-T6-2 (2026-08-07)
+
+The close gate assigned the both-annotations question to **T7**. Reading
+T7's plan item shows it owns group traversal, scope entry / exit, the
+materialisation seam, dismissal and the spike retirement — a **combined
+group-and-scope role is in none of them**. An assignment nothing
+executes is not a carry-forward, so the row is re-dispositioned:
+
+- **Owner (2026-08-07): keep the shape accepted, and warn.** `wasamoc`
+  emits one warning per container carrying both `focus-group: true` and
+  `modal-scope: true`, naming `focus-group` as the half with no effect
+  (`f96e1c4`). The surface DD-M4-P2-005 chose is not narrowed — rejecting
+  the combination would withdraw the reason A1 was selected over A3 —
+  but the state stops being *silent*, which is the failure mode this
+  phase closes everywhere else (a `dismiss` that could never fire, a
+  misspelled key name that never matches).
+- **The surface question itself goes to the
+  [candidate pool](../../../candidate-pool.md)**, no milestone claimed,
+  carrying the owner's direction: **if the combination turns out not to
+  be wanted, the two booleans should become one attribute with an
+  enumerated value.** That is DD-M4-P2-005's option A3, rejected there
+  *only* because it made the combination inexpressible — so dropping the
+  requirement drops the objection. Deciding the other way means giving
+  the traversal core a combined role.
+- **A combined role is not built now.** No M4 app writes both, so its
+  branches would be branches no test can fire (implementation-gates
+  trap 4).
+
+Two further witnesses close the new branch, applied and reverted with
+the revert confirmed by re-reading:
+
+| Witness | Mutation | Went red | Reading |
+|---|---|---|---|
+| **W9 — the warning removed** (restoring) | the diagnostic is not pushed, restoring the pre-warning behaviour | the two warning tests, and **nothing else** in `wasamoc` | The tests catch the absence of the warning, not only its wording |
+| **W10 — the `true` requirement dropped** | the scan matches a `focus-group` bind of any value | `focus_group_false_modal_scope_true_no_warning` alone | `focus-group: false` beside a scope is an ordinary scope, and the warning must not fire there |
+
+The message is author-facing rather than implementation-facing: an
+earlier draft said "a node can hold only one focus role", which names a
+runtime-internal enum a `.ui` author never sees and `docs/dsl_spec.md`
+never uses. It reads, verbatim:
+
+> this container carries both `focus-group: true` and `modal-scope: true`;
+> a container can behave as one or the other, not both, and a modal scope
+> wins, so `focus-group` has no effect here. Remove it, or move the group
+> to a child container (dsl_spec §4.19).
+
+#### Re-verification after the warning (recorded 2026-08-07)
+
+Run against the **final branch state**, superseding the counts recorded
+above (the branch gained the warning after they were taken):
+
+`cargo fmt --all -- --check` zero exit, `git diff --check` clean,
+`cargo clean` (8,293 files / 2.4 GiB removed), then
+`cargo build --release --workspace` 1m25s success,
+`cargo build --workspace` 53s success,
+`cargo test --workspace --no-fail-fast` **45 binaries/sections, 1,111
+passed, 0 failed, 0 ignored**. T5's baseline was 1,051; the 60 added are
+`check.rs`'s 31 unit tests, `ir_loader.rs`'s 28, and the one integration
+fixture. The integration fixture ran rather than skipped, verified with
+`--nocapture`.
+
+#### Disposition of the T8 finding (CF-T6-3), for the record
+
+The Grid / ZStack handler asymmetry is **not** an owner decision this
+task's merge waits on. It is a measurement that corrects §T8's premise,
+recorded in the carry-forward table and written into
+[plan.md](./plan.md) §T8; the decision belongs to T8's own start gate.
+The T6 retrospective's owner-consultation item lists it no longer, for
+that reason.
