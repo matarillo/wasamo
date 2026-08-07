@@ -383,8 +383,13 @@ pub fn set_root(state: &mut WindowState, mut root: Box<WidgetNode>) -> windows::
         // system for the tree that now exists — otherwise its (empty)
         // anchor vector would still describe whatever tree preceded this
         // one, and the first structural mutation against the new tree
-        // would have nothing correct to rebase from.
-        focus::rebase_to_current_tree(r, &mut state.focus);
+        // would have nothing correct to rebase from. This is also the
+        // entry seam for any modal scope present in the *initial* tree
+        // (DD-M4-P2-004 "a scope in the initial tree is entered at
+        // startup"): `sync_scopes_to_tree` walks the fresh projection and
+        // enters every `ModalScope` node it finds, exactly as it does for
+        // one materialised later by a structural mutation.
+        focus::sync_scopes_to_tree(r, &runtime.compositor, &mut state.focus);
     }
     Ok(())
 }
@@ -947,20 +952,27 @@ unsafe extern "system" fn wnd_proc(
             // while the key is held (Win32 `GetKeyState` contract).
             let shift_down = (GetKeyState(VK_SHIFT.0 as i32) as u16 & 0x8000) != 0;
             // With no root widget installed there is no tree to traverse,
-            // so `Tab` is not claimed and falls through with every other
+            // so none of Tab, an arrow key, or Escape is claimed by the
+            // focus machinery, and all three fall through with every other
             // key. That is a narrower state than "a tree with no focus
-            // stop", which `traverse_on_key` does claim: a window between
-            // `create` and `set_root` has no content at all, and there is
-            // nothing for traversal to be the recipient of.
+            // stop" / "no scope entered", which `traverse_on_key` /
+            // `arrow_on_key` / `dismiss_on_key` do each claim on their own
+            // terms: a window between `create` and `set_root` has no
+            // content at all, and there is nothing for any of the three to
+            // be the recipient of.
             if let Some(root) = state.root_widget.as_mut() {
-                if focus::traverse_on_key(
-                    root,
-                    &runtime::get().compositor,
-                    &mut state.focus,
-                    vk,
-                    shift_down,
-                ) {
+                let compositor = &runtime::get().compositor;
+                if focus::traverse_on_key(root, compositor, &mut state.focus, vk, shift_down) {
                     // Traversal consumed the key.
+                    return LRESULT(0);
+                }
+                if focus::arrow_on_key(root, compositor, &mut state.focus, vk) {
+                    // Group-internal arrow movement consumed the key.
+                    return LRESULT(0);
+                }
+                if focus::dismiss_on_key(root, &mut state.focus, vk) {
+                    // An entered modal scope consumed Escape as a
+                    // dismissal request.
                     return LRESULT(0);
                 }
             }

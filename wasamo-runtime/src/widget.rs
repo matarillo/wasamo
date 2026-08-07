@@ -1667,6 +1667,47 @@ impl WidgetNode {
         }
     }
 
+    /// Deliver a `dismiss` request to the node at `path` — the single
+    /// recipient the request is addressed to (M4-Phase 2 T7;
+    /// `docs/dsl_spec.md` §4.19 "The request is addressed to the innermost
+    /// scope and stops there"; `docs/architecture.md` §13.5). The caller
+    /// (`focus::dismiss_on_key`) has already resolved which node that is
+    /// from `focus_core::FocusTree::esc_target`; this function's only job
+    /// is to run whatever handlers that one node carries.
+    ///
+    /// **Unlike [`Self::hit_test_click`], there is no propagation walk and
+    /// no suppression check.** A dismissal request has exactly one
+    /// addressee, decided before this call, not discovered by walking
+    /// ancestors — `docs/architecture.md` §13.5 "addressed to the
+    /// innermost scope... rather than walked to from the focused widget".
+    ///
+    /// A `path` that does not resolve (the node has already left the
+    /// tree) is a silent no-op, mirroring [`Self::node_at_path_mut`]'s
+    /// bounds-checked contract.
+    ///
+    /// **Safety argument, inherited from [`click_disposition_for`] /
+    /// [`run_clicked_handlers`] rather than restated.** A `dismiss`
+    /// handler's state write drains synchronously, exactly like a
+    /// `clicked` handler's, and can remove this very node's subtree while
+    /// this call is still running (`run_signal_handlers`'s doc comment).
+    /// The snapshot-then-run split below is what that hazard requires:
+    /// [`signal_handlers_for`] clones every inline body out of the node
+    /// *before* any of them runs, and [`run_signal_handlers`]'s
+    /// host-enqueue step only compares `widget_ptr`, never dereferences
+    /// it — the same two properties `hit_test_click` /
+    /// `run_clicked_handlers` already rest on, applied here to a single
+    /// resolved node instead of a captured ancestor chain.
+    pub(crate) fn deliver_dismiss_at(&mut self, path: &[usize]) {
+        let Some(node) = self.node_at_path_mut(path) else {
+            return;
+        };
+        let widget_ptr = node as *mut WidgetNode;
+        // Safety: `widget_ptr` was just resolved from `self`, which is
+        // live, and no handler has run yet in this delivery.
+        let handlers = unsafe { signal_handlers_for(widget_ptr, "dismiss") };
+        run_signal_handlers(widget_ptr, "dismiss", handlers);
+    }
+
     /// Update hover/press state as an enter/leave transition against the
     /// single resolved hit-test target (M4-Phase 2 T4; replaces the pre-T4
     /// whole-tree walk per `docs/architecture.md` §13.2 "computed as enter /
@@ -2721,15 +2762,15 @@ enum ClickDisposition {
 /// receives has at least one thing to do.
 struct ClickedHandlers {
     /// `ButtonData::clicked_fn` is present (Button-family only — the
-    /// Rust-native `WidgetNode::set_clicked` API).
+    /// Rust-native `WidgetNode::set_clicked` API). `clicked` is the only
+    /// signal with a native producer, so this flag has no counterpart in
+    /// [`SignalHandlers`] — see that type's own doc comment.
     has_native: bool,
-    /// DSL inline `clicked` handler bodies, already cloned out of
-    /// `WidgetNode::inline_handlers` — any widget kind can carry these.
-    inline: Vec<HandlerExpr>,
-    /// `crate::registry::signal_tokens_for(widget_ptr, "clicked")` was
-    /// non-empty: a host listener is connected via `wasamo_signal_connect`
-    /// — any widget kind.
-    has_host_listener: bool,
+    /// The inline-plus-host half: DSL inline `clicked` bodies and whether
+    /// a host listener is connected. Shared shape with `dismiss`
+    /// (M4-Phase 2 T7) through [`signal_handlers_for`] /
+    /// [`run_signal_handlers`].
+    signal: SignalHandlers,
 }
 
 /// Read-only: what would happen if the click walk reached `widget_ptr`,
@@ -2758,47 +2799,91 @@ unsafe fn click_disposition_for(widget_ptr: *mut WidgetNode) -> ClickDisposition
     let has_native = node
         .button_data()
         .is_some_and(|btn| btn.clicked_fn.is_some());
-    let inline: Vec<HandlerExpr> = node
-        .inline_handlers
-        .iter()
-        .filter(|(sig, _)| sig == "clicked")
-        .map(|(_, expr)| expr.clone())
-        .collect();
-    let has_host_listener = !crate::registry::signal_tokens_for(widget_ptr, "clicked").is_empty();
+    // Safety: see `signal_handlers_for`'s doc comment — `widget_ptr` is
+    // still live and no handler in this dispatch chain has run yet, the
+    // same two facts this function's own doc comment already establishes
+    // for `node` above.
+    let signal = unsafe { signal_handlers_for(widget_ptr, "clicked") };
 
-    if has_native || !inline.is_empty() || has_host_listener {
-        ClickDisposition::Handlers(ClickedHandlers {
-            has_native,
-            inline,
-            has_host_listener,
-        })
+    if has_native || !signal.inline.is_empty() || signal.has_host_listener {
+        ClickDisposition::Handlers(ClickedHandlers { has_native, signal })
     } else {
         ClickDisposition::NoHandler
     }
 }
 
-/// Run every producer in `handlers` at `widget_ptr`, in the DD-M2-P3-002
-/// Option B order this runtime has always used: the native closure first,
-/// then the inline DSL handlers, then the host signal enqueue.
+/// The handlers found for one named signal at one node, snapshotted before
+/// any of them runs (M4-Phase 2 T7) — the inline-plus-host half of what
+/// [`ClickedHandlers`] carries for `clicked`, generalised so `dismiss`
+/// (`docs/dsl_spec.md` §4.19) can share it rather than growing a second,
+/// parallel handler dispatcher (implementation-gates trap #3: two
+/// handler-running code paths could drift on ordering, or on the
+/// synchronous-rebuild hazard [`run_signal_handlers`]'s doc comment
+/// records).
+///
+/// **No native-closure flag here**, unlike `ClickedHandlers`: `clicked` is
+/// the only signal with a Rust-native producer (`ButtonData::clicked_fn`),
+/// so `run_clicked_handlers` keeps that step in its own body and hands
+/// only this inline-plus-host half to [`run_signal_handlers`]. `dismiss`
+/// has no native producer at all — every recipient of this type either
+/// has no native step ([`WidgetNode::deliver_dismiss_at`]) or runs it
+/// separately (`run_clicked_handlers`).
+struct SignalHandlers {
+    /// DSL inline handler bodies for this signal name, already cloned out
+    /// of `WidgetNode::inline_handlers` — any widget kind can carry these.
+    inline: Vec<HandlerExpr>,
+    /// `crate::registry::signal_tokens_for(widget_ptr, signal)` was
+    /// non-empty: a host listener is connected via
+    /// `wasamo_signal_connect` — any widget kind.
+    has_host_listener: bool,
+}
+
+/// Read-only: what would run for `signal` at `widget_ptr`, without running
+/// anything. Mirrors [`click_disposition_for`]'s soundness argument,
+/// narrowed to the inline/host half that argument is actually about.
+///
+/// # Safety
+/// `widget_ptr` must point to a still-live `WidgetNode`, and this must be
+/// called before any handler has run in this delivery — the same
+/// dispatch-order invariant `click_disposition_for`'s callers already
+/// guarantee (`hit_test_click`'s pre-captured chain) and
+/// [`WidgetNode::deliver_dismiss_at`] guarantees by construction (it
+/// resolves `widget_ptr` itself, immediately before calling this).
+unsafe fn signal_handlers_for(widget_ptr: *mut WidgetNode, signal: &str) -> SignalHandlers {
+    // Safety: see the function doc comment.
+    let node = unsafe { &*widget_ptr };
+    let inline: Vec<HandlerExpr> = node
+        .inline_handlers
+        .iter()
+        .filter(|(sig, _)| sig == signal)
+        .map(|(_, expr)| expr.clone())
+        .collect();
+    let has_host_listener = !crate::registry::signal_tokens_for(widget_ptr, signal).is_empty();
+    SignalHandlers {
+        inline,
+        has_host_listener,
+    }
+}
+
+/// Run `handlers`' inline bodies, then enqueue the host listener — the
+/// inline-plus-host half of the DD-M2-P3-002 Option B order
+/// (`run_clicked_handlers` runs the native-closure step, when there is
+/// one, before calling this).
 ///
 /// **Why this is safe despite what user code can do to the node.** A
 /// handler's state write (`reactive::Signal::set`) drains its reactive
 /// effects **synchronously**, at zero batch depth — nothing in this call
 /// wraps the dispatch in `with_batched_writes` — so a conditional or `for`
 /// effect can rebuild or remove subtrees, including this very node's,
-/// *while this function is still running*. Every step below is built
-/// around that fact rather than against it:
+/// *while this function is still running* (the same hazard
+/// `run_clicked_handlers` was already built around; this is that
+/// function's argument, factored out rather than restated). The two
+/// properties it rests on hold here too:
 ///
 /// 1. `handlers.inline` was already cloned out of the node by
-///    `click_disposition_for`, before any handler ran, so evaluating it
+///    [`signal_handlers_for`], before any handler ran, so evaluating it
 ///    here touches no widget memory at all.
-/// 2. `widget_ptr` is dereferenced one further time, immediately below, to
-///    fetch `clicked_fn` right before calling it — the last dereference of
-///    `widget_ptr` in this function. If that closure destroys its own
-///    node, it frees the `Box<dyn Fn()>` it is executing inside; that is
-///    `set_clicked`'s documented pre-existing residual, not something
-///    introduced here.
-/// 3. `enqueue_signal` takes `widget_ptr` **only to compare it** against
+/// 2. `enqueue_signal` takes `widget_ptr` **only to compare it** against
 ///    registry entries (`std::ptr::eq`) — it never dereferences it. A node
 ///    whose subtree was removed by an earlier step in this same function
 ///    has already had its registrations severed (`widget_destroy` calls
@@ -2806,9 +2891,56 @@ unsafe fn click_disposition_for(widget_ptr: *mut WidgetNode) -> ClickDisposition
 ///    tokens and enqueues nothing; it does not need `widget_ptr` to still
 ///    point at live memory.
 ///
-/// No node-still-attached check is needed here either, for the same reason
-/// `hit_test_click`'s walk needs none: this is the one node in the chain
-/// that runs anything, and nothing after it re-reads `widget_ptr`'s
+/// **Unlike `run_clicked_handlers`, this function itself never
+/// dereferences `widget_ptr`** — the native-closure step is `clicked`-only
+/// and stays in that caller, so there is no "last dereference" here to
+/// call out.
+fn run_signal_handlers(widget_ptr: *mut WidgetNode, signal: &str, handlers: SignalHandlers) {
+    // DD-M2-P6-006: dispatch handler bodies against the SignalRegistry
+    // installed by the IR loader. If no registry is active (e.g. tests
+    // building widgets directly) fall back to a no-op context — the
+    // evaluator runs but property reads/writes report "unknown property".
+    let registry = crate::reactive::active_registry();
+    let location = format!("?.{signal}");
+    for expr in &handlers.inline {
+        // DD-M2-P3-003: catch_unwind wrapper logs errors and continues the
+        // event loop; location is a coarse identifier (Phase 6 supplies
+        // the component name prefix).
+        if let Some(reg) = registry.as_deref() {
+            let mut ctx = crate::reactive::HandlerEvalContext::new(reg);
+            handler::invoke_handler(expr, &mut ctx, &location);
+        } else {
+            let mut ctx = NullEvalContext;
+            handler::invoke_handler(expr, &mut ctx, &location);
+        }
+    }
+    if handlers.has_host_listener {
+        // Route the signal through the C-ABI signal registry. The
+        // emission is queued and fires after the current call returns to
+        // wasamo_run's message-loop drain (abi_spec §6).
+        crate::emit::enqueue_signal(widget_ptr, signal, Vec::new());
+    }
+}
+
+/// Run every producer in `handlers` at `widget_ptr`, in the DD-M2-P3-002
+/// Option B order this runtime has always used: the native closure first,
+/// then the inline DSL handlers, then the host signal enqueue.
+///
+/// **Why this is safe despite what user code can do to the node.** See
+/// [`run_signal_handlers`]'s doc comment for the argument this function
+/// shares with it (a handler's state write can rebuild or remove
+/// subtrees, including this node's own, synchronously). This function's
+/// own remaining step — the native closure — carries the identical
+/// property: `widget_ptr` is dereferenced one further time, immediately
+/// below, to fetch `clicked_fn` right before calling it — the last
+/// dereference of `widget_ptr` in this function. If that closure destroys
+/// its own node, it frees the `Box<dyn Fn()>` it is executing inside;
+/// that is `set_clicked`'s documented pre-existing residual, not
+/// something introduced here.
+///
+/// No node-still-attached check is needed here either, for the same
+/// reason `hit_test_click`'s walk needs none: this is the one node in the
+/// chain that runs anything, and nothing after it re-reads `widget_ptr`'s
 /// pointee.
 fn run_clicked_handlers(widget_ptr: *mut WidgetNode, handlers: ClickedHandlers) {
     if handlers.has_native {
@@ -2823,29 +2955,7 @@ fn run_clicked_handlers(widget_ptr: *mut WidgetNode, handlers: ClickedHandlers) 
             f();
         }
     }
-    // DD-M2-P6-006: dispatch handler bodies against the SignalRegistry
-    // installed by the IR loader. If no registry is active (e.g. tests
-    // building widgets directly) fall back to a no-op context — the
-    // evaluator runs but property reads/writes report "unknown property".
-    let registry = crate::reactive::active_registry();
-    for expr in &handlers.inline {
-        // DD-M2-P3-003: catch_unwind wrapper logs errors and continues the
-        // event loop; location is a coarse identifier (Phase 6 supplies
-        // the component name prefix).
-        if let Some(reg) = registry.as_deref() {
-            let mut ctx = crate::reactive::HandlerEvalContext::new(reg);
-            handler::invoke_handler(expr, &mut ctx, "?.clicked");
-        } else {
-            let mut ctx = NullEvalContext;
-            handler::invoke_handler(expr, &mut ctx, "?.clicked");
-        }
-    }
-    if handlers.has_host_listener {
-        // Route "clicked" through the C-ABI signal registry. The emission
-        // is queued and fires after the current call returns to
-        // wasamo_run's message-loop drain (abi_spec §6).
-        crate::emit::enqueue_signal(widget_ptr, "clicked", Vec::new());
-    }
+    run_signal_handlers(widget_ptr, "clicked", handlers.signal);
 }
 
 impl HitTree for WidgetNode {

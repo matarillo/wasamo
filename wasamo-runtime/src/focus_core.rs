@@ -933,6 +933,131 @@ mod tests {
         assert_eq!(f.tree.esc_target(&state), Some(f.lightbox));
     }
 
+    // ── Nesting (M4-Phase 2 T7) ────────────────────────────────────────────
+    //
+    // `plan.md` §T7 asks for this explicitly: "scope nesting is supported,
+    // unexercised by any M4 app, so its ordering and innermost-addressing
+    // keep — or gain — pure-logic pins for Phase 9 to inherit." Every Q4
+    // test above exercises exactly one entered scope; these pin what
+    // happens with two, nested.
+
+    /// A tree with a modal scope nested inside another: `before` is a stop
+    /// outside both, `outer` contains its own stop plus the nested `inner`
+    /// scope, and `inner` contains its own stop. The `before` stop is what
+    /// lets [`exiting_both_nested_scopes_restores_each_entrys_own_capture`]
+    /// give the outer entry a restore target that is not itself inside
+    /// either scope.
+    fn nested_scopes() -> (FocusTree, FocusId, FocusId, FocusId, FocusId, FocusId) {
+        let mut tree = FocusTree::new();
+        let root = tree.push(None, FocusRole::Container, true);
+        let before = tree.push(Some(root), FocusRole::Stop, true);
+        let outer = tree.push(Some(root), FocusRole::ModalScope, true);
+        let outer_stop = tree.push(Some(outer), FocusRole::Stop, true);
+        let inner = tree.push(Some(outer), FocusRole::ModalScope, true);
+        let inner_stop = tree.push(Some(inner), FocusRole::Stop, true);
+        (tree, before, outer, outer_stop, inner, inner_stop)
+    }
+
+    #[test]
+    fn entering_nested_scopes_stacks_outer_then_inner() {
+        let (tree, before, outer, _outer_stop, inner, _inner_stop) = nested_scopes();
+        let mut state = FocusState::default();
+        state.set_focus(&tree, Some(before));
+        assert!(
+            state.enter_modal(&tree, outer),
+            "outer must be a real scope"
+        );
+        assert!(
+            state.enter_modal(&tree, inner),
+            "inner must be a real scope"
+        );
+        assert_eq!(
+            state
+                .modal_entries()
+                .iter()
+                .map(|e| e.scope)
+                .collect::<Vec<_>>(),
+            vec![outer, inner],
+            "the stack is materialisation order — outer entered first, inner second — \
+             and stays in that order; traversal_root / esc_target read the *last* entry, \
+             so the order here is what makes 'innermost wins' well-defined"
+        );
+    }
+
+    #[test]
+    fn traversal_root_and_esc_target_name_the_innermost_entered_scope() {
+        let (tree, before, outer, _outer_stop, inner, _inner_stop) = nested_scopes();
+        let mut state = FocusState::default();
+        state.set_focus(&tree, Some(before));
+        state.enter_modal(&tree, outer);
+        state.enter_modal(&tree, inner);
+        assert_eq!(
+            tree.traversal_root(&state),
+            inner,
+            "traversal confines to the innermost entered scope, not the outer one"
+        );
+        assert_eq!(
+            tree.esc_target(&state),
+            Some(inner),
+            "Escape addresses the innermost scope only (docs/dsl_spec.md §4.19 \
+             \"dismiss\": \"addressed to the innermost scope and stops there\")"
+        );
+    }
+
+    #[test]
+    fn exiting_both_nested_scopes_restores_each_entrys_own_capture() {
+        let (tree, before, outer, outer_stop, inner, inner_stop) = nested_scopes();
+        let mut state = FocusState::default();
+        state.set_focus(&tree, Some(before));
+        state.enter_modal(&tree, outer); // captures `before`; lands on outer_stop
+        assert_eq!(state.focused(), Some(outer_stop), "precondition");
+        state.enter_modal(&tree, inner); // captures outer_stop; lands on inner_stop
+        assert_eq!(state.focused(), Some(inner_stop), "precondition");
+
+        // `exit_modal` unwinds one level and restores *that level's own*
+        // capture — not the outer scope's, and not the domain's first stop.
+        assert_eq!(
+            state.exit_modal(&tree),
+            Some(outer_stop),
+            "unwinding the inner scope restores what was focused when it was entered"
+        );
+        assert_eq!(state.focused(), Some(outer_stop));
+        assert_eq!(state.modal_depth(), 1, "only one level unwound");
+        assert_eq!(
+            tree.traversal_root(&state),
+            outer,
+            "back inside the outer scope, not confined to the (now-exited) inner one"
+        );
+
+        // Exiting the remaining (outer) scope restores what was focused
+        // *before either scope opened* — the outer entry's own capture.
+        assert_eq!(state.exit_modal(&tree), Some(before));
+        assert_eq!(state.focused(), Some(before));
+        assert_eq!(state.modal_depth(), 0);
+    }
+
+    #[test]
+    fn entering_a_scope_with_no_focus_stop_leaves_focus_unset() {
+        let mut tree = FocusTree::new();
+        let root = tree.push(None, FocusRole::Container, true);
+        let scope = tree.push(Some(root), FocusRole::ModalScope, true);
+        // No children under `scope`: nothing inside it can be focused.
+        let mut state = FocusState::default();
+        assert!(state.enter_modal(&tree, scope));
+        assert_eq!(
+            state.focused(),
+            None,
+            "docs/dsl_spec.md §4.19: \"A scope with no focusable widget leaves focus \
+             unset\""
+        );
+        assert_eq!(
+            tree.esc_target(&state),
+            Some(scope),
+            "the scope is still entered, and still claims Escape, even though nothing \
+             inside it can be focused"
+        );
+    }
+
     // ── Q5: the focused node disappears ──────────────────────────────────
 
     #[test]

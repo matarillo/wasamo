@@ -1,6 +1,6 @@
 //! Mock-free Windows integration evidence for M4-Phase 2 T7's coordinate
 //! system (`focus_core::FocusState::remap`, `focus::WindowFocus::rebase`,
-//! `focus::rebase_to_current_tree`) and for its click-landing fix
+//! `focus::sync_scopes_to_tree`) and for its click-landing fix
 //! (`focus_core::FocusTree::focus_landing`, closing CF-T6-5), built from
 //! real `.ui` source through `wasamoc` -> IR -> the loader, driven by real
 //! `WM_LBUTTONUP` messages through the real window procedure. Nothing is
@@ -44,7 +44,7 @@
 //! `assert_focused_stop` are copied verbatim from
 //! `focus_traversal_integration.rs`. `click_and_drain` is copied verbatim
 //! from `event_routing_integration.rs` — Fixture 1 needs it so the drain's
-//! Phase 2 (`emit::flush_layout`, where `focus::rebase_to_current_tree`
+//! Phase 2 (`emit::flush_layout`, where `focus::sync_scopes_to_tree`
 //! runs) actually executes; a plain `send_click` only reaches Phase 1's
 //! synchronous Effect drain, never Phase 2 (see the module header of
 //! either source file for the full "why" of that split). This file's own
@@ -235,7 +235,7 @@ unsafe fn send_click(hwnd: HWND, x: f32, y: f32) {
 /// wraps — until it returns. Fixture 1 needs this: the conditional
 /// subtree's removal happens synchronously inside the click's handler
 /// (Phase 1's synchronous Effect drain), but `emit::flush_layout` — Phase
-/// 2, where `focus::rebase_to_current_tree` runs — only executes at the
+/// 2, where `focus::sync_scopes_to_tree` runs — only executes at the
 /// message-loop boundary this pumps.
 ///
 /// `PostQuitMessage`'s quit flag is only consulted once the thread's
@@ -439,7 +439,7 @@ const SHIFTING_REMOVAL_UI: &str = r#"component FocusIdentitySurvivesShiftingRemo
 /// be removed), then clicks the `Box` — whose handler removes the
 /// conditional subtree that precedes every trailing Button in declaration
 /// order — through [`click_and_drain`], so `emit::flush_layout`'s Phase 2
-/// (where `focus::rebase_to_current_tree` runs) actually executes. The
+/// (where `focus::sync_scopes_to_tree` runs) actually executes. The
 /// retained record must still name "trail-1" afterward, at its shifted
 /// path, and the fixture pins the exact `FocusId` arithmetic that makes
 /// this the in-range case rather than the out-of-range one T5 already
