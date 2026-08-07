@@ -236,6 +236,11 @@ pub enum Member {
     },
     SignalHandler {
         signal: String,
+        /// The signal's string argument, if any (DD-M4-P2-005), e.g.
+        /// `Some("ArrowLeft")` for `key-down("ArrowLeft") => { ... }`.
+        /// `None` for every other signal (`clicked => { ... }`,
+        /// `dismiss => { ... }`).
+        arg: Option<String>,
         body: Block,
         span: Span,
     },

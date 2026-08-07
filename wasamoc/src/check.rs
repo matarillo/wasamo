@@ -2467,7 +2467,12 @@ fn check_members_inner(
                 }
             }
 
-            Member::SignalHandler { signal, body, span } => {
+            Member::SignalHandler {
+                signal,
+                arg,
+                body,
+                span,
+            } => {
                 if inside_for_template {
                     diags.push(error(
                         filename,
@@ -2486,6 +2491,44 @@ fn check_members_inner(
                         filename,
                         span,
                         "`dismiss` handler can never be raised: a dismissal request is addressed to a modal scope; write `modal-scope: true` on the same container or remove the handler (dsl_spec §4.19)",
+                    ));
+                }
+                // M4-Phase 2 T8: `key-down` argument rules (dsl_spec
+                // §4.19 "Keyboard input"). A `key-down` handler with no
+                // argument can never fire — the same "silently never
+                // fires" class the `dismiss` rule above guards against —
+                // and an argument naming an unrecognised key is rejected
+                // here rather than reaching the runtime unfireable.
+                // `key-down` is the only signal dsl_spec §4.19 defines
+                // with an argument, so any other signal carrying one is
+                // rejected too. Applies on every widget kind — there is
+                // no per-kind signal admission left to gate against
+                // (removed by the previous stage).
+                if signal == "key-down" {
+                    match arg {
+                        None => diags.push(error(
+                            filename,
+                            span,
+                            "`key-down` handler can never be raised: the key must be named in the declaration, e.g. `key-down(\"ArrowLeft\")` (dsl_spec §4.19)",
+                        )),
+                        Some(key) if !crate::ir::is_recognised_key_name(key) => {
+                            diags.push(error(
+                                filename,
+                                span,
+                                format!(
+                                    "`key-down(\"{key}\")` names an unrecognised key; recognised keys are the named non-character keys per dsl_spec §4.19 (`Escape`, the arrow / Home / End / Page keys, `Enter`, `F1`-`F12`)"
+                                ),
+                            ));
+                        }
+                        Some(_) => {}
+                    }
+                } else if arg.is_some() {
+                    diags.push(error(
+                        filename,
+                        span,
+                        format!(
+                            "`{signal}` does not take an argument; only `key-down` does (dsl_spec §4.19)"
+                        ),
                     ));
                 }
                 for stmt in &body.statements {
@@ -6967,4 +7010,105 @@ mod tests {
     // `dismiss` on a Grid carrying `modal-scope: true` is pinned above by
     // `dismiss_handler_accepted_on_grid_carrying_modal_scope`, which
     // doubles as this pair's accept-side case.
+
+    // ── M4-Phase 2 T8: `key-down("<key>")` argument rules (dsl_spec §4.19
+    // "Keyboard input", DD-M4-P2-005) ───────────────────────────────────
+
+    #[test]
+    fn key_down_without_argument_rejected() {
+        // A bare `key-down => { }` (no parenthesised key name) parses,
+        // but can never fire — the same "silently never fires" class the
+        // `dismiss` rule guards against.
+        let errs = errors("component C inherits W { Box { key-down => { } } }");
+        assert_eq!(errs.len(), 1, "{:?}", errs);
+        assert!(
+            errs[0].contains("`key-down` handler can never be raised")
+                && errs[0].contains("must be named")
+                && errs[0].contains("key-down(\"ArrowLeft\")"),
+            "{:?}",
+            errs
+        );
+    }
+
+    #[test]
+    fn key_down_unrecognised_key_name_rejected() {
+        let errs = errors(r#"component C inherits W { Box { key-down("Tab") => { } } }"#);
+        assert_eq!(errs.len(), 1, "{:?}", errs);
+        assert!(
+            errs[0].contains("unrecognised key") && errs[0].contains("Tab"),
+            "{:?}",
+            errs
+        );
+    }
+
+    #[test]
+    fn key_down_modifier_combo_rejected_as_unrecognised() {
+        // Modifier combinations (`Ctrl+S`) are not in this surface — they
+        // are simply an unrecognised name, no separate rule needed.
+        let errs = errors(r#"component C inherits W { Box { key-down("Ctrl+S") => { } } }"#);
+        assert_eq!(errs.len(), 1, "{:?}", errs);
+        assert!(errs[0].contains("unrecognised key"), "{:?}", errs);
+    }
+
+    #[test]
+    fn argument_on_clicked_rejected() {
+        let errs = errors(r#"component C inherits W { Box { clicked("x") => { } } }"#);
+        assert_eq!(errs.len(), 1, "{:?}", errs);
+        assert!(
+            errs[0].contains("`clicked` does not take an argument") && errs[0].contains("key-down"),
+            "{:?}",
+            errs
+        );
+    }
+
+    #[test]
+    fn argument_on_dismiss_rejected() {
+        // `modal-scope: true` sibling present so only the argument rule
+        // fires, not the `dismiss`/`carries_modal_scope` admission rule.
+        let errs =
+            errors(r#"component C inherits W { Box { modal-scope: true dismiss("x") => { } } }"#);
+        assert_eq!(errs.len(), 1, "{:?}", errs);
+        assert!(
+            errs[0].contains("`dismiss` does not take an argument"),
+            "{:?}",
+            errs
+        );
+    }
+
+    #[test]
+    fn key_down_accepted_on_box() {
+        let result = check_src(
+            "component C inherits W { state selected_index: i32 = 0 Box { key-down(\"ArrowLeft\") => { root.selected_index -= 1; } } }",
+        );
+        assert!(!result.has_errors(), "{:?}", result.diagnostics);
+    }
+
+    #[test]
+    fn key_down_accepted_on_button() {
+        let result = check_src(
+            "component C inherits W { state selected_index: i32 = 0 Button { key-down(\"ArrowLeft\") => { root.selected_index -= 1; } } }",
+        );
+        assert!(!result.has_errors(), "{:?}", result.diagnostics);
+    }
+
+    #[test]
+    fn key_down_accepted_on_grid() {
+        let result = check_src(
+            "component C inherits W { state selected_index: i32 = 0 Grid { columns: 1* rows: 1* key-down(\"ArrowLeft\") => { root.selected_index -= 1; } } }",
+        );
+        assert!(!result.has_errors(), "{:?}", result.diagnostics);
+    }
+
+    #[test]
+    fn key_down_recognised_key_names_spot_check_accepted() {
+        // Representative sample across `RECOGNISED_KEY_NAMES`, not the
+        // full 22 (that exhaustive coverage lives on the
+        // `wasamo_ir::RECOGNISED_KEY_NAMES` table test).
+        for key in ["Escape", "Enter", "F12", "PageDown"] {
+            let src =
+                format!(r#"component C inherits W {{ Box {{ key-down("{key}") => {{ }} }} }}"#);
+            let result = check_src(&src);
+            assert!(!result.has_errors(), "key={key}: {:?}", result.diagnostics);
+        }
+    }
 }

@@ -189,11 +189,77 @@ pub struct IrBinding {
     pub expr: HandlerExpr,
 }
 
-/// A signal handler (`on signal { expr }`).
+/// A signal handler (`on signal { expr }` / `on signal("arg") { expr }`).
 #[derive(Debug, Clone, PartialEq)]
 pub struct IrHandler {
     pub signal: String,
+    /// The signal's string argument, if any (DD-M4-P2-005). A separate
+    /// field rather than baked into `signal` so the loader can map it
+    /// without re-parsing. `key-down` is the only signal that currently
+    /// carries one; every other signal's handler has `arg: None`.
+    pub arg: Option<String>,
     pub expr: HandlerExpr,
+}
+
+/// The recognised key names for `key-down("<key>")` handlers (dsl_spec
+/// §4.19 "Keyboard input") — the named non-character keys, in the
+/// spec's own order. Exactly 22 entries. `"Tab"` is deliberately absent:
+/// Tab always belongs to focus traversal (dsl_spec §4.19 "Which keys the
+/// runtime keeps") and can never reach a `key-down` handler. Character
+/// keys and modifier combinations (e.g. `"Ctrl+S"`) are likewise absent
+/// — they are simply unrecognised names, needing no separate rule.
+///
+/// Single source of truth (DD-M4-P2-005): `wasamoc::check` and a later
+/// runtime virtual-key map both read this table rather than each
+/// carrying their own copy.
+pub const RECOGNISED_KEY_NAMES: &[&str] = &[
+    "Escape",
+    "ArrowLeft",
+    "ArrowRight",
+    "ArrowUp",
+    "ArrowDown",
+    "Home",
+    "End",
+    "PageUp",
+    "PageDown",
+    "Enter",
+    "F1",
+    "F2",
+    "F3",
+    "F4",
+    "F5",
+    "F6",
+    "F7",
+    "F8",
+    "F9",
+    "F10",
+    "F11",
+    "F12",
+];
+
+/// Whether `name` is one of the 22 `RECOGNISED_KEY_NAMES` (dsl_spec
+/// §4.19). Used by both `wasamoc check` and the runtime IR loader's
+/// defense-in-depth gate to reject an unrecognised `key-down` argument.
+pub fn is_recognised_key_name(name: &str) -> bool {
+    RECOGNISED_KEY_NAMES.contains(&name)
+}
+
+/// The canonical handler storage-key spelling for a `(signal, arg)` pair
+/// — the DSL/IR surface spelling verbatim: `clicked` for
+/// `("clicked", None)`, `key-down("ArrowLeft")` for
+/// `("key-down", Some("ArrowLeft"))`. The `None` case returns the bare
+/// signal name unchanged so every existing `clicked` / `dismiss` handler
+/// keeps its current storage key.
+///
+/// Single source of truth (DD-M4-P2-005) shared by the IR loader (which
+/// writes this as the inline-handler storage key at attachment time) and
+/// the runtime dispatcher (which looks handlers up by the same key) — no
+/// other code composes this string, so the two sides cannot drift.
+pub fn signal_key(signal: &str, arg: Option<&str>) -> String {
+    match arg {
+        None => signal.to_string(),
+        Some(arg) => format!("{signal}(\"{arg}\")"),
+    }
 }
 
 /// A member in a widget node body.
@@ -684,5 +750,51 @@ mod tests {
         };
         assert_eq!(s.ty, IrStateType::Scalar(IrType::Bool));
         assert_eq!(s.default, IrLiteral::Bool(false));
+    }
+
+    // --- M4-Phase 2 T8: key-down argument (DD-M4-P2-005) ----------------
+
+    #[test]
+    fn recognised_key_names_has_22_unique_entries() {
+        assert_eq!(RECOGNISED_KEY_NAMES.len(), 22);
+        let mut seen = std::collections::HashSet::new();
+        for name in RECOGNISED_KEY_NAMES {
+            assert!(seen.insert(*name), "duplicate key name: `{name}`");
+        }
+    }
+
+    #[test]
+    fn is_recognised_key_name_accepts_every_table_entry() {
+        for name in RECOGNISED_KEY_NAMES {
+            assert!(
+                is_recognised_key_name(name),
+                "`{name}` should be recognised"
+            );
+        }
+    }
+
+    #[test]
+    fn is_recognised_key_name_rejects_tab_and_character_keys() {
+        // `Tab` always belongs to focus traversal (dsl_spec §4.19) and
+        // must never be in the recognised set; character keys / modifier
+        // combinations are simply unrecognised names.
+        assert!(!is_recognised_key_name("Tab"));
+        assert!(!is_recognised_key_name("Ctrl+S"));
+        assert!(!is_recognised_key_name("a"));
+        assert!(!is_recognised_key_name(""));
+    }
+
+    #[test]
+    fn signal_key_no_arg_returns_bare_signal_name() {
+        assert_eq!(signal_key("clicked", None), "clicked");
+        assert_eq!(signal_key("dismiss", None), "dismiss");
+    }
+
+    #[test]
+    fn signal_key_with_arg_returns_dsl_spelling() {
+        assert_eq!(
+            signal_key("key-down", Some("ArrowLeft")),
+            "key-down(\"ArrowLeft\")"
+        );
     }
 }

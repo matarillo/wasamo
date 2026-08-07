@@ -137,6 +137,44 @@ fn bool_demo_ui_contains_bool_binding_and_handler() {
 }
 
 #[test]
+fn key_down_handler_surface_emits_parenthesised_argument() {
+    // M4-Phase 2 T8 (DD-M4-P2-005): `.ui` -> IR text for a `key-down`
+    // handler round-trips its string argument into the parenthesised
+    // `on key-down("<key>") { ... }` IR text form.
+    let ir = build_src(
+        r#"component KeyDemo inherits Window {
+            state selected_index: i32 = 0
+            Box {
+                modal-scope: true
+                key-down("ArrowLeft")  => { root.selected_index -= 1; }
+                key-down("ArrowRight") => { root.selected_index += 1; }
+            }
+        }"#,
+        "<key-down-roundtrip>",
+    );
+    assert!(
+        ir.contains(r#"on key-down("ArrowLeft") {"#),
+        "missing key-down(\"ArrowLeft\") handler, got:\n{}",
+        ir
+    );
+    assert!(
+        ir.contains(r#"on key-down("ArrowRight") {"#),
+        "missing key-down(\"ArrowRight\") handler, got:\n{}",
+        ir
+    );
+    assert!(
+        ir.contains("(compound-assign -= selected_index 1)"),
+        "missing compound-assign in ArrowLeft handler, got:\n{}",
+        ir
+    );
+    assert!(
+        ir.contains("(compound-assign += selected_index 1)"),
+        "missing compound-assign in ArrowRight handler, got:\n{}",
+        ir
+    );
+}
+
+#[test]
 fn togglebutton_surface_emits_literal_and_binding_forms() {
     let ir = build_src(
         r#"component ToggleDemo inherits Window {

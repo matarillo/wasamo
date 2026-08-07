@@ -231,12 +231,19 @@ impl<'a> Parser<'a> {
             let next_colon = matches!(self.peek_next(), Token::Colon);
             let next_lbrace = matches!(self.peek_next(), Token::LBrace);
             let next_arrow = matches!(self.peek_next(), Token::Arrow);
+            // `(` after a leading Ident in member position has no other
+            // meaning today (verified: `starts_collection_call_expr`
+            // requires a `.` between the Ident and the `(`, and no other
+            // member-position dispatch looks at `(`), so it is
+            // unambiguously the start of a signal handler's parenthesised
+            // argument (DD-M4-P2-005), e.g. `key-down("ArrowLeft") => {}`.
+            let next_lparen = matches!(self.peek_next(), Token::LParen);
 
             return if next_colon {
                 self.parse_property_bind()
             } else if next_lbrace {
                 self.parse_widget_decl()
-            } else if next_arrow {
+            } else if next_arrow || next_lparen {
                 self.parse_signal_handler()
             } else {
                 let next_desc = self.peek_next().description();
@@ -544,12 +551,14 @@ impl<'a> Parser<'a> {
                 }
                 // A bare word in track position (`auto`, or any other
                 // ident) that does NOT begin a new member. An ident
-                // followed by `:` / `{` / `=>` is the next member and
+                // followed by `:` / `{` / `=>` / `(` is the next member
+                // (the last is a signal handler's parenthesised argument,
+                // DD-M4-P2-005, e.g. `key-down("ArrowLeft") => {}`) and
                 // terminates the track list.
                 Token::Ident(_)
                     if !matches!(
                         self.peek_next(),
-                        Token::Colon | Token::LBrace | Token::Arrow
+                        Token::Colon | Token::LBrace | Token::Arrow | Token::LParen
                     ) =>
                 {
                     let tok = self.advance();
@@ -601,6 +610,19 @@ impl<'a> Parser<'a> {
         let start = self.current_span().clone();
         let (signal, _) = self.expect_ident()?;
 
+        // Optional parenthesised string argument (DD-M4-P2-005):
+        // `signal_handler ::= IDENT ( "(" STRING_LIT ")" )? "=>" block`.
+        // Currently only `key-down("<key>")` uses this production;
+        // `wasamoc check` rejects an argument on any other signal.
+        let arg = if matches!(self.peek(), Token::LParen) {
+            self.advance();
+            let value = self.parse_signal_handler_arg()?;
+            self.expect_rparen()?;
+            Some(value)
+        } else {
+            None
+        };
+
         let arrow_desc = self.peek().description();
         if !matches!(self.peek(), Token::Arrow) {
             return Err(self.error(format!("expected `=>`, found {}", arrow_desc)));
@@ -611,6 +633,7 @@ impl<'a> Parser<'a> {
         let end = body.span.end;
         Ok(Member::SignalHandler {
             signal,
+            arg,
             body,
             span: Span {
                 start: start.start,
@@ -619,6 +642,37 @@ impl<'a> Parser<'a> {
                 col: start.col,
             },
         })
+    }
+
+    /// Parse the string-literal argument inside `signal(...)` (e.g. the
+    /// `"ArrowLeft"` in `key-down("ArrowLeft")`). Only a plain
+    /// (non-interpolated) string literal is accepted — the argument is a
+    /// static key name the checker matches against a fixed table
+    /// (`wasamo_ir::RECOGNISED_KEY_NAMES`), not a runtime expression.
+    fn parse_signal_handler_arg(&mut self) -> Result<String, Diagnostic> {
+        let desc = self.peek().description();
+        if !matches!(self.peek(), Token::StringLit(_)) {
+            return Err(self.error(format!("expected string literal, found {}", desc)));
+        }
+        let tok = self.advance();
+        let Token::StringLit(parts) = tok.token else {
+            unreachable!()
+        };
+        let mut text = String::new();
+        for part in &parts {
+            match part {
+                StringPart::Text(s) => text.push_str(s),
+                StringPart::Interp(_) => {
+                    return Err(Diagnostic::error(
+                        self.filename,
+                        tok.span.line,
+                        tok.span.col,
+                        "signal handler argument must be a plain string literal, not an interpolated string",
+                    ));
+                }
+            }
+        }
+        Ok(text)
     }
 
     fn parse_block(&mut self) -> Result<Block, Diagnostic> {
@@ -1265,6 +1319,151 @@ mod tests {
         } else {
             panic!("expected SignalHandler");
         }
+    }
+
+    // --- M4-Phase 2 T8: `signal("arg")` parenthesised-argument production
+    // (DD-M4-P2-005) --------------------------------------------------
+
+    #[test]
+    fn signal_handler_no_arg_still_parses_with_arg_none() {
+        // Regression guard: a plain `clicked => { }` (no parenthesised
+        // argument) must keep parsing with `arg == None` after the `(`
+        // route is added to member dispatch.
+        let def = parse_ok("component C inherits W { clicked => { } }");
+        if let Member::SignalHandler { signal, arg, .. } = &def.members[0] {
+            assert_eq!(signal, "clicked");
+            assert_eq!(*arg, None);
+        } else {
+            panic!("expected SignalHandler");
+        }
+    }
+
+    #[test]
+    fn key_down_handler_parses_with_string_argument() {
+        let def = parse_ok(r#"component C inherits W { key-down("ArrowLeft") => { } }"#);
+        if let Member::SignalHandler { signal, arg, .. } = &def.members[0] {
+            assert_eq!(signal, "key-down");
+            assert_eq!(arg.as_deref(), Some("ArrowLeft"));
+        } else {
+            panic!("expected SignalHandler");
+        }
+    }
+
+    #[test]
+    fn signal_handler_arg_empty_parens_rejected() {
+        // `key-down() => { }` — empty argument list; a string literal is
+        // required inside the parens.
+        let msg = parse_err_msg("component C inherits W { key-down() => { } }");
+        assert!(
+            msg.contains("expected string literal") && msg.contains("`)`"),
+            "message: {msg}"
+        );
+    }
+
+    #[test]
+    fn signal_handler_arg_bare_ident_rejected() {
+        // `key-down(ArrowLeft) => { }` — a bare identifier where a string
+        // literal is required.
+        let msg = parse_err_msg("component C inherits W { key-down(ArrowLeft) => { } }");
+        assert!(
+            msg.contains("expected string literal") && msg.contains("identifier"),
+            "message: {msg}"
+        );
+    }
+
+    #[test]
+    fn signal_handler_arg_unclosed_paren_rejected() {
+        // `key-down("ArrowLeft" => { }` — missing the closing `)`.
+        let msg = parse_err_msg(r#"component C inherits W { key-down("ArrowLeft" => { } }"#);
+        assert!(
+            msg.contains("expected `)`") && msg.contains("`=>`"),
+            "message: {msg}"
+        );
+    }
+
+    #[test]
+    fn signal_handler_arg_missing_arrow_rejected() {
+        // `key-down("ArrowLeft")` with no `=>` following.
+        let msg = parse_err_msg(r#"component C inherits W { key-down("ArrowLeft") }"#);
+        assert!(msg.contains("expected `=>`"), "message: {msg}");
+    }
+
+    #[test]
+    fn signal_handler_arg_interpolated_string_rejected() {
+        // The argument must be a plain string literal — interpolation
+        // cannot resolve to a static key name at parse time.
+        let msg = parse_err_msg(r#"component C inherits W { key-down("\{root.key}") => { } }"#);
+        assert!(
+            msg.contains("plain string literal") && msg.contains("interpolated"),
+            "message: {msg}"
+        );
+    }
+
+    #[test]
+    fn grid_track_list_terminates_before_a_parenthesised_signal_handler() {
+        // The `(` route was added to the member dispatch AND to the
+        // Grid-specific `parse_grid_track_list` word-continuation stop
+        // set — a shared sub-parser whose lookahead decides "track word"
+        // versus "next member". Without the second half, `key-down(` is
+        // swallowed as a trailing `auto`-style track word and the `(`
+        // surfaces as "expected member, found `(`". Pinned here, at the
+        // sub-parser's own layer, rather than only through the checker
+        // test that first caught it.
+        let def = parse_ok(
+            r#"component C inherits W { Grid { columns: 1* 1* rows: 64 key-down("ArrowLeft") => { } } }"#,
+        );
+        let Member::WidgetDecl { members, .. } = &def.members[0] else {
+            panic!("expected Grid WidgetDecl");
+        };
+        let columns = members
+            .iter()
+            .find_map(|m| match m {
+                Member::GridTracks {
+                    axis: TrackAxis::Columns,
+                    tracks,
+                    ..
+                } => Some(tracks),
+                _ => None,
+            })
+            .expect("columns track list");
+        assert_eq!(
+            columns.len(),
+            2,
+            "the `key-down(` member must not be absorbed into the track list: {columns:?}"
+        );
+        let handler = members
+            .iter()
+            .find_map(|m| match m {
+                Member::SignalHandler { signal, arg, .. } => Some((signal, arg)),
+                _ => None,
+            })
+            .expect("the handler must survive as its own member");
+        assert_eq!(handler.0, "key-down");
+        assert_eq!(handler.1.as_deref(), Some("ArrowLeft"));
+    }
+
+    #[test]
+    fn grid_track_list_still_absorbs_a_bare_word_track() {
+        // The agreement leg for the stop-set change above: a bare word in
+        // track position (here the reserved-future `auto`) is still taken
+        // as a track word, so adding `(` to the stop set narrowed only
+        // the `Ident (` case and nothing else.
+        let def = parse_ok("component C inherits W { Grid { columns: auto 1* } }");
+        let Member::WidgetDecl { members, .. } = &def.members[0] else {
+            panic!("expected Grid WidgetDecl");
+        };
+        let columns = members
+            .iter()
+            .find_map(|m| match m {
+                Member::GridTracks {
+                    axis: TrackAxis::Columns,
+                    tracks,
+                    ..
+                } => Some(tracks),
+                _ => None,
+            })
+            .expect("columns track list");
+        assert_eq!(columns.len(), 2, "{columns:?}");
     }
 
     #[test]
