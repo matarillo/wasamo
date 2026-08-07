@@ -12,12 +12,10 @@ mod emit;
 mod focus;
 // M4-Phase 2 DD-M4-P2-003: the Win32-independent focus traversal core,
 // consumed through `crate::focus`'s projection of a live `WidgetNode`
-// tree (`WindowState`'s keyboard and pointer arms, from T5). `focus_spike`
-// is the pre-ADR spike's override-map projection, kept only for
-// `tests/focus_mechanism_fixture.rs` until T7 retires it -- see
-// process/milestone-4/phase-2/decisions/exploration/.
+// tree -- the only projection onto it, driven by `WindowState`'s keyboard
+// and pointer arms. See process/milestone-4/phase-2/decisions/exploration/
+// for the pre-ADR spike this module's logic was adopted from.
 mod focus_core;
-mod focus_spike;
 pub mod handler;
 // M4-Phase 2 T2: pure-logic hit resolution (DD-M4-P2-002). No Compositor,
 // no windows types — see hit.rs's module doc.
@@ -153,25 +151,6 @@ pub mod ffi {
         let root = state.root_widget.as_deref()?;
         crate::focus::focused_path(root, &state.focus)
     }
-}
-
-/// M4-Phase 2 spike-projection seam: `focus_core`'s traversal core plus the
-/// override-map projection from a live widget tree (`focus_spike`),
-/// reachable from the integration-test crate.
-///
-/// **Not the production path.** `crate::focus` is: it projects
-/// `WidgetNode::focus_role()` with no override map, and is what
-/// `WindowState`'s keyboard and pointer arms actually call from M4-Phase 2
-/// T5. This seam exists only for `tests/focus_mechanism_fixture.rs`, which
-/// needs the override map to synthesise the `Group` / `ModalScope` /
-/// `ActiveItemList` / `ActiveItem` roles no `.ui` surface can author yet
-/// (DD-M4-P2-005 lands at T6). Deleted, along with `focus_spike` and the
-/// override map, when T7 lands the authored annotations to project
-/// through instead.
-#[doc(hidden)]
-pub mod __focus_spike {
-    pub use crate::focus_core::*;
-    pub use crate::focus_spike::*;
 }
 
 pub use layout::{Alignment, SizeConstraint, WidgetKind};

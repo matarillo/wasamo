@@ -83,6 +83,27 @@ pub(crate) fn in_observer_callback() -> bool {
     IN_OBSERVER_CALLBACK.with(|f| f.get())
 }
 
+/// `(QUEUE.len(), DIRTY.len())`, read together.
+///
+/// Exists for `focus::sync_scopes_to_tree`'s entry step (M4-Phase 2 T7),
+/// which asserts against this rather than only documenting the claim it
+/// backs: `docs/architecture.md` §13.4 says modal scope entry "writes
+/// runtime focus state only and enqueues no further drain work" — "an
+/// invariant the implementation asserts rather than assumes". Reading
+/// both queues' lengths before and after the entry step and comparing
+/// them is what turns that sentence into something a `debug_assert_eq!`
+/// can fail on.
+///
+/// `pub(crate)`, not `pub`: nothing outside this crate needs to know how
+/// much work is queued, the same visibility discipline `in_drain` /
+/// `in_observer_callback` above already carry.
+pub(crate) fn pending_counts() -> (usize, usize) {
+    (
+        QUEUE.with(|q| q.borrow().len()),
+        DIRTY.with(|d| d.borrow().len()),
+    )
+}
+
 // ── Window registration for layout invalidation ───────────────────────────────
 
 pub fn register_window(window: *mut WindowState) {
@@ -178,6 +199,39 @@ fn flush_layout() {
                 &runtime.text_renderer,
                 target,
             );
+            // M4-Phase 2 T7: re-express `state.focus`'s retained ids in
+            // this refreshed tree's coordinate system, and reconcile modal
+            // scope entry/exit against it. `state.focus` is a field
+            // disjoint from `state.root_widget`, so this needs no
+            // restructuring — the same disjoint-field argument the
+            // `state.scale` / `state.hwnd` reads above this block already
+            // use.
+            //
+            // **Why here, and not at `insert_structural_child` /
+            // `remove_structural_child` themselves.** Every reactive
+            // structural mutation reaches this function through
+            // `mark_layout_dirty_for` (the four call sites in
+            // `ir_loader.rs`), but the mutation itself runs inside
+            // `Signal::set`'s synchronous drain — which, for a click, runs
+            // *inside* `hit_test_click`, which already holds `&mut
+            // WidgetNode` on the window's root. Forming `&mut WindowState`
+            // there to reach `state.focus` would alias that borrow. This
+            // function runs after `wnd_proc` has returned, at the
+            // message-loop boundary, where `&mut *wptr` is already this
+            // module's established pattern — the only place a sound `&mut
+            // WindowState` exists for every one of those four call sites
+            // at once.
+            //
+            // **This is the entry/exit seam, not only the rebase**
+            // (M4-Phase 2 T7): every structural mutation that can
+            // materialise or remove a modal scope's subtree reaches this
+            // same call site (`insert_structural_child` /
+            // `remove_structural_child` themselves run inside the
+            // synchronous drain above, before `&mut WindowState` is sound
+            // to form), so `sync_scopes_to_tree`'s entry walk and its
+            // exit-restoration step both belong here alongside the rebase
+            // they are built on top of.
+            crate::focus::sync_scopes_to_tree(root, &runtime.compositor, &mut state.focus);
         }
     }
 }

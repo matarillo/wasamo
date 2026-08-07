@@ -361,42 +361,73 @@ fix:
 - Group: one Tab stop, arrows within, **per-group memory with a single
   writer** — the primitive that moves focus is the primitive that writes
   the memory.
-- Scope: **presence is the entry** (DD-004). The materialisation seam —
-  structural drain or initial build — pushes the scope in
-  materialisation order, captures the restore target, and moves focus to
-  the scope's first stop (or none, with key delivery starting at the
-  scope). Removal exits: **restoration takes precedence over structural
-  succession**, and a removal's successor is computed **before** the
-  mutation because node identity does not survive a rebuild. The entry's
-  focus move writes runtime focus state only and enqueues no further
-  drain work — asserted, not assumed.
-- Reconcile `focus_core` with presence-entry. **The core's un-entered
-  state now has a production constructor** — T6 landed it, so this is a
-  real branch with a real input rather than a hypothetical: a `.ui`
-  carrying `modal-scope: true` projects as `FocusRole::ModalScope` with
-  nothing entered, and `collect_stops` returns early for it, so the
-  subtree is reachable by neither Tab nor click-to-focus until the entry
-  seam lands (close gate CF-T6-1). The projection either narrows the
-  un-entered state away or the branch carries a test that fires it
-  (implementation-gates trap 4) — recorded either way.
-- **Two landing paths disagree about a group, and the fix goes in one
-  primitive** (close gate CF-T6-5). `FocusTree::tab` resolves a group
-  landing through `resolve_stop`, so Tab already lands on the group's
-  first or remembered member; `focus::focus_on_click` derives its
-  landing from `tab_stops` + `nearest_focusable` and never calls it, so a
-  click inside a group focuses the **group container**. Making the click
-  path agree must go through the same primitive the memory is written
-  by, not a second landing resolver.
-- **The seam is enumerated before it is trusted**: a start-gate audit
-  lists every path that materialises or removes a subtree — initial
-  build, conditional drain, `for` regeneration — and shows each runs the
-  entry / exit seam, which is the enumeration DD-004's balanced-stack
-  argument stands on. If the seam turns out not to be one place, that is
-  new information for the plan (a spike or task split), not something a
-  local patch absorbs.
+- Scope: **presence is the entry** (DD-004). The materialisation seam
+  pushes the scope, captures the restore target, and moves focus to the
+  scope's first stop (or none, with key delivery starting at the scope).
+  Removal exits: **restoration takes precedence over structural
+  succession**. The entry's focus move writes runtime focus state only
+  and enqueues no further drain work — a `debug_assert_eq!` over the
+  queue and dirty-set lengths around the entry step, not a comment.
+- **What has to happen before the mutation is the capture, not the
+  succession** (measured at the start gate, [log.md](./log.md) §T7 fact
+  5). `focus_core::focus_after_removing`'s structural succession is the
+  domain's *first surviving stop*, which is exactly what T5's lazy
+  landing already produced — so it is derivable from the post-mutation
+  tree. The half that genuinely cannot be recovered afterwards is the
+  restore target, and that is captured at entry and held on the scope's
+  stack entry. CF-T5-2's observable content is therefore restoration
+  precedence alone, and the seam runs **after** the mutation without
+  weakening DD-004.
+- **The retained record needs a coordinate system that survives a
+  structural mutation** — the precondition this item did not name. A
+  `FocusId` is the pre-order index of a projection rebuilt per
+  operation, and a modal stack entry is the longest-lived retained id in
+  the runtime, so entry / exit built on raw ids would be built on a key
+  that silently renames nodes. `FocusProjection` carries an anchor
+  (node address) per id, `FocusState::remap` re-expresses every id-keyed
+  store, and `WindowFocus::rebase` writes the ids and their coordinate
+  system together. That closes CF-T5-1's in-range half, which T5 recorded
+  as unbuildable and which now has a fixture.
+- Reconcile `focus_core` with presence-entry. **Resolved: the branch
+  keeps its test rather than being narrowed away by the projection.**
+  `collect_stops`'s `ModalScope if !is_entered` arm stays reachable in
+  principle — through the direct-ABI child mutators, which reach no seam
+  (DD-002's "outside the layout boundary") — and is fired by
+  `focus_core`'s own `an_unentered_modal_scope_is_not_reachable_by_tab`.
+  Through every seam-running path, present implies entered.
+- **Two landing paths disagree about a group** (close gate CF-T6-5), and
+  **`resolve_stop` is not the fix** (start gate fact 8): it returns the
+  group's *remembered* member, which is right for Tab and wrong for a
+  click — clicking "Favorites" must focus "Favorites". The landing rule a
+  click needs is per-node, so `focus_core::FocusTree::focus_landing`
+  lands it beside `collect_stops`, the two differing in exactly one place
+  — a group's members — which is the rule rather than drift.
+  `focus::nearest_focusable` is deleted; the landing still reaches focus
+  through the primitive that writes the memory, so no second resolver
+  exists.
+- **The seam was enumerated before it was trusted, and it is one hop
+  later than this item predicted.** It is the layout-invalidation seam:
+  `window::set_root` for the initial build, and `emit::flush_layout` —
+  drain Phase 2 — for every reactive structural mutation, which all
+  reach it through `mark_layout_dirty_for`. It cannot sit at
+  `insert_structural_child` / `remove_structural_child`, because those
+  run inside `Signal::set`'s synchronous drain, which for a click is
+  inside `hit_test_click`, which holds `&mut WidgetNode` on the window
+  root; forming `&mut WindowState` there would alias it. The four
+  direct-ABI child mutators are outside the seam, which is DD-004's own
+  recorded residual rather than a new one.
+- **One primitive writes the focus record and the painted indicator.**
+  Entry and arrow movement are two further writers of the focused id, so
+  `move_focus` becomes a wrapper over `with_focus_write`, which snapshots
+  the previous id, performs an arbitrary write on the core, and repaints
+  the transition. `set_button_focused_at` still has exactly one caller.
 - Dismissal: `Escape` becomes a request **addressed** to the innermost
   entered scope and stopping there; the runtime delivers it and never
-  acts on it.
+  acts on it. It is consumed whether or not the scope carries a
+  `dismiss` handler — writing none is how a scope declines to close — and
+  falls through to the host key slot when no scope is entered. Delivery
+  reuses the `clicked` dispatcher's snapshot-then-run split rather than
+  adding a second one.
 - **Retire the spike scaffolding**: `focus_spike`, the `__focus_spike`
   seam, and the override map go, replaced by the real projection.
 - **Retiring the override map narrows coverage deliberately**:
@@ -408,18 +439,34 @@ fix:
   its ordering and innermost-addressing keep — or gain — pure-logic
   pins for Phase 9 to inherit.
 - **Evidence:** the mechanism fixture, re-pointed at the authored
-  annotations; the mutation that deletes the restore branch must go red
-  (the spike's M7); an entry test driven by a state write flipping the
-  `if` (the production seam, not a test-side call) **and** one driven by
-  the initial build — a scope present at startup is entered, which
-  DD-004 records as behaviour, so it is asserted rather than implied;
-  and the spike's S-3 leg carried over: a **present but unannotated**
-  subtree does not confine. T12's control C cannot stand in for that
-  leg — its agreement side removes the subtree entirely, so an
-  implementation that confines *any* conditional subtree while ignoring
-  the annotation would pass it.
+  annotations and driven through real window messages, keeping its
+  read-every-result-back-as-a-Button-label discipline and narrowed to the
+  one shape no other fixture has — a group **and** a scope in one tree;
+  the mutation that deletes the restore branch goes red on exactly the
+  two fixtures that claim restoration (the spike's M7); an entry test
+  driven by a state write flipping the `if` (the production seam, not a
+  test-side call) **and** one driven by the initial build — a scope
+  present at startup is entered, which DD-004 records as behaviour, so it
+  is asserted rather than implied; and the spike's S-3 leg carried over:
+  a **present but unannotated** subtree does not confine. T12's control C
+  cannot stand in for that leg — its agreement side removes the subtree
+  entirely, so an implementation that confines *any* conditional subtree
+  while ignoring the annotation would pass it.
+- **A frame pair is taken here rather than deferred to T12**, because no
+  state read-back can show that the indicator *paints* on a node the same
+  drain created moments earlier: `__button_focused_for_test` reports the
+  same boolean whatever colour the brush reaches (T5's CF-T5-3). Two
+  builds of the same tree, annotated and not, with the scope's first stop
+  as the difference leg and a second, never-focused Button as the
+  agreement leg. The gallery `.ui` carries the annotation only as a
+  **throwaway probe** — landing it is T10's.
+- **The mechanism fixture's fourth test is deleted rather than
+  re-pointed.** It asserted that without annotations every Button is its
+  own stop, which measured the gap DD-005 had to close; the gap is
+  closed and there is no unannotated variant of that tree left to build.
+  The property it guarded is the S-3 leg above.
 
-- [ ] T7
+- [x] T7
 
 ## T8 — DSL: generic `clicked` and `key-down("<key>")`
 
@@ -485,7 +532,12 @@ handler table — not how an event travels.
 - The keys the runtime keeps (`Tab` always; arrows inside a group;
   `Escape` while a scope is entered) are asserted, since each is a way
   for an authored handler to silently never fire. The group and scope
-  behaviours these assertions run against exist from T7.
+  behaviours these assertions run against exist from T7 — **and so does
+  the tripwire**: `arrow_keys_two_legs` and `escapes_two_legs` each
+  assert the consumption leg *and* the fallthrough leg through the host
+  key slot, so a `key-down` dispatch inserted on the wrong side of that
+  slot breaks a named test rather than silently swallowing the key
+  (CF-T5-5, armed).
 - **Evidence:** a `Box` with a handler fires; a disabled Button still
   occludes what is behind it; a `key-down("ArrowLeft")` handler fires
   outside a group and does not fire inside one.
@@ -509,6 +561,14 @@ The four coupled answers M3-Phase 7 routed here:
   collection mutation**; a test that only clicks a freshly generated row
   cannot distinguish invocation-time resolution from generation-time
   capture.
+- **The focus record's anchors are node addresses, and `for` regeneration
+  is where an address can be reused** (T7 close gate CF-T7-1). Freeing a
+  subtree and allocating a new one inside the same drain is the nearest
+  shape that could hand a retained anchor an address belonging to a
+  different node. Bounded — a wrong focus target, never an unsound read,
+  since nothing dereferences an anchor — and narrow, because the seam
+  rebases at the end of that same drain. This task is where the shape
+  exists, so it is where the residual is checked rather than assumed.
 - **The M3-Phase 7 drain residuals are dispositioned in DD-001** (they
   do not fire). This task's click-after-mutation evidence is what
   exercises the nearest case, so the disposition is checked against
@@ -686,6 +746,23 @@ The four controls from the [framing](../requirements/framing.md)
     2026-08-07: correct the wording here (T5 close gate CF-T5-6);
   - the entry rule (presence is the entry; focus moves in) and the clip
     bound in §13 match the landed runtime;
+  - **§13.4's "a removal's successor is computed before the mutation"
+    matches a runtime that captures at entry and succeeds after** (T7
+    start-gate fact 5). The pre-mutation half —
+    the restore target, which the tree cannot supply afterwards — is
+    captured at entry; structural succession is the domain's first
+    surviving stop, which the post-mutation tree yields. The sentence is
+    satisfied in substance and not in sequence; T13 decides whether the
+    wording narrows;
+  - **§4.19 does not fix which arrow axis moves which way inside a
+    group** (T7 close gate CF-T7-4). The landed mapping is Left / Up →
+    previous, Right / Down → next, with both axes accepted; either the
+    spec gains the sentence or the mapping is recorded as unspecified;
+  - **§4.19 does not say what a click *outside* an entered scope does to
+    focus** (T7 close gate CF-T7-5). The landed answer is "nothing" — the
+    click landing is bounded by the traversal root, so it takes the same
+    arm as a background click, which is the reading consistent with "no
+    widget outside it can be reached by the keyboard";
   - **no fixture spelling appears in `docs/dsl_spec.md`** (DD-005 /
     framing R2).
 - Phase-end retrospective, verification closure mapping, and
