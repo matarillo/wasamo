@@ -748,18 +748,18 @@ The four controls from the [framing](../requirements/framing.md)
     bound in §13 match the landed runtime;
   - **§13.4's "a removal's successor is computed before the mutation"
     matches a runtime that captures at entry and succeeds after** (T7
-    close gate CF-T7-4 and start-gate fact 5). The pre-mutation half —
+    start-gate fact 5). The pre-mutation half —
     the restore target, which the tree cannot supply afterwards — is
     captured at entry; structural succession is the domain's first
     surviving stop, which the post-mutation tree yields. The sentence is
     satisfied in substance and not in sequence; T13 decides whether the
     wording narrows;
   - **§4.19 does not fix which arrow axis moves which way inside a
-    group** (T7 close gate CF-T7-5). The landed mapping is Left / Up →
+    group** (T7 close gate CF-T7-4). The landed mapping is Left / Up →
     previous, Right / Down → next, with both axes accepted; either the
     spec gains the sentence or the mapping is recorded as unspecified;
   - **§4.19 does not say what a click *outside* an entered scope does to
-    focus** (T7 close gate CF-T7-6). The landed answer is "nothing" — the
+    focus** (T7 close gate CF-T7-5). The landed answer is "nothing" — the
     click landing is bounded by the traversal root, so it takes the same
     arm as a background click, which is the reading consistent with "no
     widget outside it can be reached by the keyboard";

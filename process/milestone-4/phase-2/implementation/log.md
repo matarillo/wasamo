@@ -3451,9 +3451,24 @@ human-visible smoke ([CLAUDE.md §Testing rules](../../../../CLAUDE.md)).
 | **CF-T7-1 — an anchor is a node address, and an address can be reused.** A node freed by `widget_destroy` can have its address handed back to a later allocation, so an anchor naming a removed node can in principle match a *different*, newly built node. The consequence is bounded to "focus lands on an unexpected widget", never an unsound read, because nothing dereferences an anchor | `FocusProjection::id_of_anchor`'s doc comment states the bound; the narrow window is that every structural mutation rebases at the end of the same drain | `carry-forward` → this ledger, and `doc-folded` → `id_of_anchor` | **T9**, whose `for` regeneration frees and allocates subtrees in one drain — the nearest shape that could produce a reuse inside one window. This is the residual that remains *after* CF-T5-1's in-range case is closed, not a restatement of it |
 | **CF-T7-2 — the four direct-ABI child mutators reach no seam, and `focused_path` cannot rebase.** `wasamo_widget_append_child` / `insert_child` / `remove_child` / `replace_child` mark nothing layout-dirty, so an edit through one of them runs no rebase; `focused_path` takes `&WindowFocus` and can only read. An in-range id can then resolve to a different node rather than to `None` | The seam enumeration at the start gate; `focused_path`'s and `id_of_anchor`'s doc comments | `carry-forward` → this ledger, and `doc-folded` → `focused_path` | Bounded today by `focused_path`'s only caller being the `__focus_path_for_test` seam and by a C-ABI-created node being unable to carry the annotation (`set_focus_annotation` has one caller, the loader). The re-trigger is the **first production reader of `focused_path`**, or any task that gives an ABI-created node a focus annotation. This is DD-M4-P2-004's own recorded residual ("a removal path that bypasses the structural seam"), now measured rather than predicted |
 | **CF-T7-3 — nesting is supported and unexercised, and its multi-entry paths are pinned only by pure logic.** `DroppedScopes::outermost`'s selection with two-plus entries, and `sync_scopes_to_tree`'s ordering when a whole nest vanishes at once, have no integration fixture, because no M4 `.ui` builds a scope inside a scope | Three `DroppedScopes` unit tests and four `focus_core` nesting tests; the independent review confirmed no fixture reaches the multi-entry path | `carry-forward` → this ledger | **M4-Phase 9**, whose dialog-from-a-menu is the first nested case. DD-M4-P2-004 records nesting as "supported, unexercised in M4"; this row says *which* code that leaves unexercised, so Phase 9 checks it rather than discovering it |
-| **CF-T7-4 — two functions of the spike core are deliberately not adopted.** `FocusState::exit_modal` is unreachable because presence-driven exit means a present scope is always entered, so the only exit is the subtree leaving, which the rebase detects. `FocusTree::focus_after_removing` is unused because its structural succession is the domain's first surviving stop, which `initial_focus` produces from the post-mutation tree | Start-gate fact 5; `focus_core.rs`'s `allow(dead_code)` comment names both, measured by removing the attribute and reading what warns | `carry-forward` → this ledger, and `doc-folded` → `focus_core.rs`'s module comment | **M4-Phase 9**. DD-M4-P2-003 says "the spike's traversal core is adopted as the implementation"; two of its functions are not, for reasons that follow from DD-M4-P2-004's presence-entry rather than from an oversight. A phase that wires them up without reading this would be adding a second exit path |
-| **CF-T7-5 — the arrow axis mapping is this implementation's choice.** `docs/dsl_spec.md` §4.19 says "arrow keys move focus within the group, wrapping at its ends" without fixing which axis maps to which direction. The landed mapping is Left / Up → previous, Right / Down → next, and both axes are accepted | `arrow_direction` and its five unit tests | `finding` → **T13's re-verification list** | **T13**, which re-verifies §4.19 against the landed runtime. Either the spec gains the sentence or the mapping is recorded as unspecified |
-| **CF-T7-6 — a click outside an entered scope leaves focus unchanged, and the normative text does not say so.** §4.19 says a scope confines the keyboard and that clicks pass through a scrim-less scope; it does not say what such a click does to focus. `focus_landing` bounds its walk to `traversal_root`, so there is no candidate outside the scope and the click takes the same arm as a background click | `focus_landing_outside_an_entered_modal_scope_is_none`; decided at the start gate rather than during implementation | `finding` → **T13's re-verification list** | **T13**. The alternative reading — a click may move focus out of a scope — would make confinement pointer-breakable, which is why the landed answer is the one consistent with "no widget outside it can be reached by the keyboard" |
+| **CF-T7-4 — the arrow axis mapping is this implementation's choice.** `docs/dsl_spec.md` §4.19 says "arrow keys move focus within the group, wrapping at its ends" without fixing which axis maps to which direction. The landed mapping is Left / Up → previous, Right / Down → next, and both axes are accepted | `arrow_direction` and its five unit tests | `finding` → **T13's re-verification list** | **T13**, which re-verifies §4.19 against the landed runtime. Either the spec gains the sentence or the mapping is recorded as unspecified |
+| **CF-T7-5 — a click outside an entered scope leaves focus unchanged, and the normative text does not say so.** §4.19 says a scope confines the keyboard and that clicks pass through a scrim-less scope; it does not say what such a click does to focus. `focus_landing` bounds its walk to `traversal_root`, so there is no candidate outside the scope and the click takes the same arm as a background click | `focus_landing_outside_an_entered_modal_scope_is_none`; decided at the start gate rather than during implementation | `finding` → **T13's re-verification list** | **T13**. The alternative reading — a click may move focus out of a scope — would make confinement pointer-breakable, which is why the landed answer is the one consistent with "no widget outside it can be reached by the keyboard" |
+
+**Two functions of the spike core have no production caller, and that is
+`doc-folded` rather than a row above.** `FocusState::exit_modal` is
+unreachable because presence-driven exit means a present scope is always
+entered, so the only exit is the subtree leaving, which the rebase
+detects; `FocusTree::focus_after_removing` is unused because its
+structural succession is the domain's first surviving stop, which
+`initial_focus` produces from the post-mutation tree (start-gate fact 5).
+Both follow from DD-M4-P2-004's presence-entry rather than from an
+oversight, and the invariant that matters — **the modal stack has one
+writer pair, `enter_modal` from the entry step and `remap` dropping the
+entry on exit** — is stated where the code is, in `focus_core.rs`'s
+`allow(dead_code)` comment and at `enter_modal`. Restating it here would
+be the documentation analogue of implementation-gates trap #3: a second
+source of truth in derived prose for something the owning file already
+says.
 
 #### Re-decided at close
 
@@ -3463,7 +3478,7 @@ was built: the two uncompiler-enumerated migrations are real and their
 audit table is above (1); the side-effect enumeration found the drain-work
 question the ADR named and turned it into an assertion (2); three parallel
 pairs were kept single-writer (3); every authored arm has a firing test,
-after the review found three that did not (4); six carry-forwards are
+after the review found three that did not (4); five carry-forwards are
 recorded with re-triggers (5); and the GUI control was taken and read
 (7). Trap 6 stayed armed and did not fire.
 
@@ -3518,8 +3533,8 @@ re-read at this close gate rather than only T7's item.
   shape `a_present_but_unannotated_subtree_does_not_confine` already
   asserts at the state level. It also inherits CF-T5-3 unchanged, and
   gains a second capture script to copy mechanics from.
-- **T13** — gains three re-verification items: CF-T7-5 (the arrow axis
-  mapping §4.19 does not fix), CF-T7-6 (what a click outside a scope does
+- **T13** — gains three re-verification items: CF-T7-4 (the arrow axis
+  mapping §4.19 does not fix), CF-T7-5 (what a click outside a scope does
   to focus), and one more from the seam's shape — **§13.4's "a removal's
   successor is computed before the mutation"** describes a runtime that
   does the restore capture at *entry* (before, as required) and derives
