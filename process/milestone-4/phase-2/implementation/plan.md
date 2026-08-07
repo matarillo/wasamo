@@ -231,7 +231,9 @@ widget kind — the two roles the tree can already supply.
   order, wrapping both ends, so the first Tab lands on the first stop.
   A disabled Button is skipped. Click focuses the **nearest focusable
   widget at or above** the resolved target and leaves focus unchanged
-  when there is none; window activation does not change it.
+  when there is none; window activation does not change it. The click's
+  focus write is ordered **before** dispatch, because a handler's
+  synchronous rebuild can invalidate the path the click resolved.
 - The key path integrates with the **existing** `WM_KEYDOWN` arm, which
   today forwards to the uninstalled `key_down_fn` host slot and returns.
   Routing consumes ahead of that slot without installing it — the first
@@ -240,21 +242,46 @@ widget kind — the two roles the tree can already supply.
   must not be that installer. **An unconsumed key now falls through to
   `DefWindowProc`** instead of being swallowed (DD-001); the arm's
   return path changes here and the change has its own assertion.
-- The focus indicator is drawn through `sync_visuals` and nowhere else —
-  a `SetOffset` / `SetSize` outside that pass silently breaks the
-  property DD-002's audit depends on (Phase 1, T3). Close artifact: the
-  enumeration of every `SetOffset` / `SetSize` in the runtime with its
-  pass (DD-003).
+- **The key *walk* is not built here** (decided at the start gate). No
+  authored key handler can exist until T8 adds `key-down("<key>")`, so a
+  dispatch built now would be a branch no test could fire. T5 lands the
+  consumption half and the fallthrough half; T8 lands the dispatch
+  between them.
+- **`DefWindowProc`'s return value cannot distinguish the fallthrough**
+  (measured over eight candidate keys: every one returns 0 either way).
+  What discriminates is the **host key slot**, which the arm reaches only
+  after traversal declines — a fixture installs a recorder there, and
+  that is what makes "routing consumes ahead of the slot" falsifiable.
+- The focus indicator adds **no** `SetOffset` / `SetSize`: it is a brush
+  colour written through the same primitive hover uses, and creates no
+  `Visual`. Close artifact: the enumeration of every `SetOffset` /
+  `SetSize` in the runtime with its pass (DD-003) — still the six inside
+  `sync_visuals`. [architecture.md §13.3](../../../../docs/architecture.md)'s
+  "applied by the same pass that writes visual geometry" cannot be
+  implemented literally, because a focus change triggers no layout pass;
+  the divergence is recorded for T13 rather than resolved here.
 - The indicator must be **distinguishable** (DD-003): M4's only means is
   a background change, and the ToggleButton selected state and hover
   state are also background changes. Evidence includes a frame pair
   showing focused versus hovered/selected as visibly distinct states.
+  The gallery's **first** Tab stop is a checked `ToggleButton`, so the
+  hardest of the three comparisons is the one the evidence meets first.
+- **A stop disabled or removed while focused applies the successor rule
+  lazily**, at the next traversal, landing on the domain's first stop.
+  Computing the correct successor *before* the mutation needs the
+  materialisation seam, which is T7's; both halves are carried forward
+  rather than left implicit.
+- **A retained focus id outliving its projection was a reachable crash**,
+  found in review and fixed here rather than carried: the id is the
+  pre-order index of a projection rebuilt per operation, and a handler
+  that removes its own subtree shrinks the projection out from under it.
+  The shipped gallery reaches it through the lightbox's close control.
 - **Evidence:** integration tests establishing their own initial focus
   state, then asserting the **expected next stop** rather than that
   focus moved; the indicator distinctness frames; the write-site
   enumeration.
 
-- [ ] T5
+- [x] T5
 
 ## T6 — DSL: `focus-group`, `modal-scope`, and `dismiss`
 

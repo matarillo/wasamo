@@ -1748,3 +1748,399 @@ Each closed at the T5 close gate:
    implementation would fail.
 10. The whole task list re-read at the close gate (the re-audit
     discipline, [plan.md](./plan.md) §Cross-task obligations).
+
+### Close gate (recorded 2026-08-07)
+
+Landed: `wasamo-runtime/src/focus.rs` (`FocusProjection` with its per-id
+tree paths, `WindowFocus`, the pure `tab_direction` / `nearest_focusable`,
+the `move_focus` primitive, `traverse_on_key`, `focus_on_click`,
+`discard_stale_focus`, `focused_path`, seven unit tests);
+`ButtonData::focused` with `WidgetNode::set_button_focused_at` as its sole
+writer; `effective_button_color` widened with the focus axis plus
+`focus_indicator_color` / `FOCUS_INDICATOR_COLOR` /
+`FOCUS_TRANSITION_TICKS` and two distinctness unit tests;
+`WidgetNode::focus_role` (the production derivation) and
+`__button_focused_for_test`; `WindowState::focus` with its `set_root`
+reset, the rewritten `WM_KEYDOWN` arm and the focus write in
+`WM_LBUTTONUP`; `ffi::__focus_path_for_test`;
+`wasamo-runtime/tests/focus_traversal_integration.rs` (six fixtures);
+`evidence/capture-t5-focus.ps1`.
+
+#### #1 — Call-site audit table
+
+Two migrations. Rust enumerates one of them and none of the other, so the
+table covers both and says which is which.
+
+Queries:
+`rg "effective_button_color" wasamo-runtime/src`,
+`rg "ButtonData \{" wasamo-runtime/src`,
+`rg "focused" wasamo-runtime/src/widget.rs`,
+`rg "WindowFocus|state\.focus" wasamo-runtime/src wasamo-runtime/tests bindings examples wasamo-dll`,
+`rg "set_focus|set_button_focused_at|move_focus|traverse_on_key|focus_on_click|focused_path" wasamo-runtime/src`,
+`rg "WM_KEYDOWN|key_down_fn" wasamo-runtime/src wasamo-runtime/tests examples bindings`.
+
+**The compiler-forced half.** `ButtonData` has exactly one struct literal
+(`widget.rs:1019`, inside `button_family`, behind which `button` and
+`toggle_button` both delegate) and no `Default`, no `..` update syntax and
+no builder, so the new field could not be missed at construction.
+`effective_button_color`'s parameter addition broke all five production
+call sites and all eight in its own unit tests.
+
+| `effective_button_color` call site | Classification | Reason |
+|---|---|---|
+| `button_family` constructor | must-pass `false` | Construction precedes any focus; the invariant's base case |
+| `update_button_style` | must-pass `btn.focused` | Rebuilds the brush from scratch; without the flag a focused Button loses its indicator on a style write |
+| `update_button_enabled` | must-pass `btn.focused` | Same, and it is the path that disables a Button *while focused* — the flag must be carried so re-enabling repaints the indicator rather than dropping it |
+| `update_toggle_button_checked` | must-pass `btn.focused` | Same. The gallery fires this on every toolbar click, so a dropped flag would be visible in the first frame of the GUI evidence |
+| `set_button_state_at` | must-pass `btn.focused` | The hover transition and the focus indicator share one brush; the hover write has to carry the focus axis or hovering a focused Button would erase its indicator |
+
+**The half the compiler enumerates nothing of.** No type changed for the
+key path or for the focus record, so these rows are the artifact.
+
+| Site | Classification | Reason |
+|---|---|---|
+| `focus.rs::move_focus` | **the sole writer of the pair** | The only function in the crate that calls both `set_button_focused_at` and `focus_core::FocusState::set_focus` |
+| `widget.rs::set_button_focused_at` | **the sole writer of the painted flag** | `pub(crate)`; `rg` shows its only two call sites are inside `move_focus` |
+| `focus_core::FocusState::set_focus` | **the sole writer of the focused id** | Production callers: `move_focus` and `discard_stale_focus`, both in `focus.rs`. Its other in-crate callers (`enter_modal`, `exit_modal`, `apply_arrow`) have no production caller until T7; the rest are `focus_core`'s own unit tests |
+| `window.rs::set_root` | **new** | Resets the record; the previous root is dropped just above and its indices name nothing in the new tree — the same statement, for the same reason, as T4's hover reset beside it |
+| `window.rs` `WM_KEYDOWN` arm | **migrated** | The return path changes from unconditional `LRESULT(0)` to "consumed ⇒ 0, otherwise fall through to `DefWindowProcW`". Nothing in the language forces this to be revisited, which is why it is here |
+| `window.rs` `WM_LBUTTONUP` arm | **migrated** | Gains the focus write, ordered before `hit_test_click` |
+| `focus.rs::tab_direction` | **new, sole key predicate** | The one place a virtual key is classified as traversal's |
+| `focus.rs::nearest_focusable` | **new, sole focusability test on the click path** | Defined against `FocusTree::tab_stops`'s own output rather than as a second predicate |
+| `widget.rs::focus_role` | **the sole role derivation** | Shared by the production projection and `focus_spike`'s override projection, so the two cannot disagree about what a widget kind is |
+| `widget.rs::update_hover` / `clear_hover` / `set_button_state_at`'s state half | ignore-OK | Hover is a different axis on the same brush. Untouched except for passing the focus flag through |
+| `lib.rs::ffi::__focus_path_for_test` | **new, read-only** | Projects on demand and maps the id to a path; holds no state of its own |
+| `abi.rs` | ignore-OK, unchanged | No `extern "C"` function added or altered; the cross-task "no new ABI function" obligation holds |
+| `tests/focus_mechanism_fixture.rs` | ignore-OK, re-read | Drives `focus_spike`'s override projection, which is untouched. Still passes; T7 retires it |
+
+**What no existing test pinned.** `rg "WM_KEYDOWN"` over
+`wasamo-runtime/tests`, `examples` and `bindings` returned **zero** before
+this task, and `key_down_fn` had no installer anywhere. The entire key path
+could have been written any way at all and the suite would have stayed
+green — this task's instance of
+[preamble.md §What "green" is worth](./preamble.md), and the reason the
+evidence rather than the transition rule is where the work went.
+
+#### #2 — Structural side-effect enumeration
+
+| Derived effect | Disposition |
+|---|---|
+| **Which node paints the focus indicator** | New. Exactly the node the window's record names, written in the same primitive as the record |
+| **The hover brush** | Shared, deliberately: focus and hover are two axes on one `CompositionColorBrush`. `effective_button_color` takes both, so every path that recomputes the colour carries both, and hovering a focused Button keeps the indicator |
+| **`update_button_enabled` on a focused node** | Enumerated, not fixed. A binding write that disables a focused Button leaves the record naming it and the flag set, while the paint becomes the flat disabled grey (`effective_button_color` checks `enabled` before it reads `focused`). Traversal already excludes a disabled stop, so the **next** Tab lands on the domain's first stop — DD-M4-P2-003's successor rule applied lazily. Making this eager would put a focus producer on the binding path, which is the shape T4 refused for hover and DD-M4-P2-001 refuses generally. Asserted by F3's third leg |
+| **`update_toggle_button_checked`** | Now carries the focus flag. Without it the gallery's own toolbar would drop the indicator on the first click, which is exactly the frame the GUI control captures |
+| **`window::set_root`** | Resets the record. Without it a path from the dropped tree would be applied to the new one |
+| **A click handler's synchronous rebuild, mid-`WM_LBUTTONUP`** | The reason the focus write is ordered **before** `hit_test_click`: the widget that takes focus must be the one the user touched, resolved against the tree that was on screen. Its consequence — a retained id outliving the projection that produced it — is the crash dispositioned in #6 |
+| **The `WM_KEYDOWN` return path** | Changed by design. An unconsumed key reaches `DefWindowProcW`, which can dispatch further messages into `wnd_proc` synchronously; a nested frame derives its own `&mut WindowState` from `GWLP_USERDATA`. Sound because nothing uses the outer `state` after the fallthrough leaves the arm — a different argument from `WM_DPICHANGED`'s, which is hoisted above the borrow precisely because it *does* use `state` afterwards. Stated at the site |
+| **The host key slot** | Reached only after traversal declines. Still uninstalled in production ([constraints §2](../requirements/constraints.md): the first installer fixes the callback unit as shipped API, and this phase is not it); F5 installs a recorder for the length of one fixture, which is what makes consumption observable at all |
+| **Win32 activation** | Untouched: `wnd_proc` has no `WM_SETFOCUS` / `WM_KILLFOCUS` arm, so neither can reach the record. `docs/dsl_spec.md` §4.19's "losing and regaining the window's activation does not change which widget is focused" holds by construction, and F1 asserts it rather than leaving it implied |
+| **`ButtonData.label_size`'s three-point write** ([constraints §4](../requirements/constraints.md)) | Not touched |
+| **Composition geometry writes** | Unchanged — see #3 |
+| **Layout invalidation** | None added. A focus change repaints a brush and triggers no layout pass, which is what makes the literal reading of §13.3's indicator sentence unimplementable (recorded at the start gate as a divergence for T13) |
+
+#### #3 — Every `SetOffset` / `SetSize` in the runtime, with its pass
+
+DD-M4-P2-003 names this as the required close artifact for any task
+touching the indicator, because "drawing at focus-change time is the
+obvious implementation" and a geometry write outside the single pass would
+silently break what DD-M4-P1-002's audit closed.
+
+Query: `rg "SetOffset|SetSize" wasamo-runtime/src`.
+
+| Site | Pass | What it writes |
+|---|---|---|
+| `widget.rs:2452` / `:2457` | `sync_visuals` | The node's own Visual offset and size |
+| `widget.rs:2501` / `:2507` | `sync_visuals` | The Button-family label Visual |
+| `widget.rs:2537` / `:2543` | `sync_visuals` | The `ScrollView` intermediate content Visual |
+| `dip_scale.rs:102` / `:112` | — | Doc comments naming the operations, not calls |
+
+**Six calls, all inside `sync_visuals`, unchanged from T1 / T2 / T3 / T4.**
+The focus indicator adds none: it is a `CompositionColorBrush` colour
+transition through the same `start_color_anim` hover already drives, and
+creates no `Visual`. The half of §13.3 that says "not a visual written at
+focus-change time" is therefore satisfied literally; the half that says
+"applied by the same pass that writes visual geometry" is the divergence
+recorded at the start gate for T13's re-verification.
+
+#### #4 — Parallel-data sync
+
+The retained focused id and the painted `ButtonData::focused` flag are the
+derived pair, with the invariant "at most one node paints the indicator,
+and it is exactly the node the record names".
+
+- **One primitive.** `move_focus` clears the previous node's paint, sets
+  the next node's, and writes the record, in one body. `WindowFocus::core`
+  is a private field with no setter and only a read-only `focused()`
+  accessor, so no other module can write the record; `set_button_focused_at`
+  is `pub(crate)` and has exactly two call sites, both inside `move_focus`.
+- **Asserted, not assumed.** Every fixture reads both halves after every
+  step where either could have changed — the node the record names *and*
+  the node it previously named — through `assert_focused_stop`. Witness W2
+  (the enter paint dropped) reddens all five of F1–F5 on the pairing
+  message; W3 (the leave dropped) reddens F2 and F3 on the
+  "previously focused node must have stopped painting" message.
+- **`focus_core`'s own parallel store** — the per-group memory
+  DD-M4-P2-003 requires be written by the same primitive as the focus
+  pointer — is untouched and stays enforced by visibility inside
+  `focus_core::FocusState::set_focus`. No `Group` role exists before T6/T7,
+  so the map is empty this task; the discipline is inherited rather than
+  re-implemented.
+- **The one path that can break the pair from outside** is
+  `update_button_enabled`, enumerated in #2.
+
+#### #5 — Branch tests, each fired directly
+
+| Authored arm | Test that fires it |
+|---|---|
+| `Tab` forward | `tab_walks_the_stops_in_declaration_order_and_wraps_at_both_ends` (steps 1–3) |
+| `Shift+Tab` backward | the same fixture's last two steps, and `focus::tests::tab_with_shift_is_backward` |
+| Wrap at the forward end | the same fixture, Tab from the last stop |
+| Wrap at the backward end | the same fixture, Shift+Tab from the first stop |
+| A key that is not traversal's | `focus::tests::a_non_tab_key_is_not_traversals_regardless_of_shift`, and `tab_is_consumed_by_traversal_while_an_unclaimed_key_is_not` leg 1 |
+| `Tab` consumed with **no stop in the domain** | the same fixture's leg 2 (the recorder is what makes it discriminating) |
+| A disabled stop skipped | `a_disabled_button_is_skipped_by_traversal_and_a_button_disabled_while_focused_loses_it_at_the_next_tab` (difference leg) |
+| …and reachable when enabled | the same fixture's agreement leg |
+| A stop disabled *while focused* | the same fixture's third leg |
+| Click focuses the target | `a_click_focuses_the_nearest_focusable_widget_at_or_above_the_target_and_a_background_click_changes_nothing` leg A |
+| Click on a non-focusable widget leaves focus unchanged | the same fixture's leg B |
+| Click on no widget of its own leaves focus unchanged | the same fixture's leg C |
+| `nearest_focusable`'s arms (target itself / an ancestor / none / empty chain) | `focus::tests::nearest_focusable_*` (four unit tests) |
+| Nothing focused at window open | `nothing_is_focused_when_a_window_opens_and_window_activation_does_not_change_it` (whole-tree walk, with the visited count asserted so the walk cannot be vacuous) |
+| Activation messages leave focus alone | the same fixture's second half |
+| A retained id the projection cannot explain | `a_focus_record_naming_a_removed_stop_is_cleared_rather_than_read_back_stale` |
+| The indicator's distinctness from Normal / Hovered / Pressed | `widget::tests::focused_normal_is_distinct_from_every_unfocused_hover_state` |
+| …and from the selected colour | `widget::tests::focused_unchecked_is_distinct_from_unfocused_checked_the_selected_confusion` |
+| A disabled widget's grey survives the focus flag | `widget::tests`'s disabled-colour test, looped over `focused` |
+
+[DD-V-029](../../../cross-milestone/decisions/dd-v-029-pure-logic-red-test-obligation.md)'s
+**named** obligation is not triggered: this task authors no rounding, no
+unit conversion and no boundary condition. The traversal wrap *is* a
+boundary condition, but it is `focus_core`'s, landed and unit-tested by
+the spike, and no arm of it changed here. The witnesses below are the
+trap-#4 / #6 artifact.
+
+#### #6 — Deterministic-failure disposition and the mutation witnesses
+
+**The deterministic failure this task found is a crash, and it was found
+by review rather than by a red test.** Reading the landed `move_focus`
+raised the question of what a retained `FocusId` means after the tree
+shrinks; a throwaway probe answered it:
+
+```
+thread ... panicked at wasamo-runtime\src\focus.rs:63:20:
+index out of bounds: the len is 2 but the index is 4
+```
+
+Minimal repro: a `Button` inside an `if` branch whose own `clicked`
+handler clears the branch's condition. `focus_on_click` focuses it before
+dispatch (id 4), the handler's synchronous drain removes the subtree, and
+the next projection has two nodes. Root cause: `FocusId` is the pre-order
+index of a projection rebuilt per operation, while the record outlives any
+one projection. **The shipped gallery reaches it** — the lightbox is an
+`if is_lightbox_open` branch and its Buttons are the highest pre-order
+ids, so focusing the close control and then removing it is the same shape.
+The first probe run measured nothing because it sent DIP coordinates where
+`wnd_proc` expects physical; that is recorded because the null result was
+*the probe's*, not the runtime's, and re-rolling it as "no crash here"
+would have closed the question falsely.
+
+Disposition: fixed in this task (`05d46f9`), not carried. Three call paths
+could reach a stale id — `FocusProjection::path`, `focused_path`, and
+`FocusTree::tab` through `focus_core`'s own node vec — and all three are
+closed, the first by returning `Option` so the case is unrepresentable at
+the call site. The regression fixture crashes rather than merely failing
+if the fix regresses.
+
+**Nine mutation witnesses.** Every one was applied with an edit, **read
+back from the file** to confirm it was present before the run, run, then
+reverted with the revert confirmed by re-reading (the T2 corrective,
+carried by T3 and T4). No failure was re-rolled: the suite went red only
+where a mutation was deliberately introduced.
+
+| Witness | Mutation | Went red | Reading |
+|---|---|---|---|
+| **W1 — the pre-T5 arm restored** (the T4 corrective's required restoring witness) | `WM_KEYDOWN` swallows every key again: no traversal call, `return LRESULT(0)` after the host slot | F1, F2, F3, F5 — and **nothing else in the workspace** | The decisive one. It reconstructs the before-state of this task rather than mutating its implementation, so it answers "do these fixtures catch the absence of the feature", not merely "do they watch their own code". That F4 stays green is correct — click-to-focus does not travel `WM_KEYDOWN` — and that the other 43 binaries stay green is the measurement behind "the key path was entirely unpinned" |
+| **W2 — the pair, enter half** | `move_focus` drops `set_button_focused_at(.., true)` | **All five** of F1–F5, F1 on the trap-#3 pairing message | The record and the paint cannot be edited apart without every fixture noticing |
+| **W3 — the pair, leave half** | `move_focus` drops the previous node's clear | F2 and F3 alone, on "the previously focused node must have stopped painting" | Only the two fixtures that move focus twice can see it, which is why the leave is asserted separately from the enter |
+| **W4 — Shift ignored** | `tab_direction` always returns `Forward` | `focus::tests::tab_with_shift_is_backward` **and** F2's two Shift+Tab legs | The division of labour: the unit test names the property, the fixture shows it survives the real message path — and incidentally confirms `SetKeyboardState` reaches `wnd_proc`'s own `GetKeyState` |
+| **W5 — a disabled stop counts as enabled** | `focus_role` returns `enabled: true` for Button-family | F3's difference leg alone | The agreement leg stays green, which is exactly why the pair exists |
+| **W6 — click-to-focus loses its stop filter** | `focus_on_click` focuses the resolved target whether or not it is a stop | F4 (leg B) and F3's third leg | "At or above the nearest **focusable**" is what fails, not "a click focuses something" |
+| **W7 — the host slot runs before traversal** | `key_down_fn` invoked ahead of `traverse_on_key` | F5 alone, on "routing consumes ahead of the host key slot", reporting the recorder saw `[9]` | The mutation the fixture could not have caught as first written: the returned `LRESULT` is 0 either way, and the original leg asserted only that. The recorder is what makes the ordering claim falsifiable |
+| **W8 — the indicator is not distinguishable** | `focus_indicator_color` returns `base` | `widget::tests::focused_normal_is_distinct_…` alone — **and none of the six fixtures** | A stated coverage boundary, measured rather than assumed: the fixtures read a boolean flag, so the indicator's *appearance* is invisible to them. Only the pure colour test and the GUI capture at #7 can see it, which is why trap #7 applies to this task |
+| **W9 — the stale-id fix removed** | `discard_stale_focus` and the `Option`-returning `path` reverted, the new fixture kept | `a_focus_record_naming_a_removed_stop_is_cleared_…` **by panicking**, with the same `index out of bounds: the len is 2 but the index is 4` | The regression fixture fails by crashing, not by assertion, which is the failure mode the defect actually has |
+
+Suite state after all reverts, on the post-commit tree:
+`cargo fmt --all -- --check` zero exit, `git diff --check` clean,
+`cargo test --workspace --no-fail-fast` **44 binaries/sections, 1,051
+passed, 0 failed, 0 ignored, 0 skipped**. T4's baseline was 1,036; the
+fifteen added are `focus.rs`'s seven unit tests, `widget.rs`'s two
+distinctness tests, and `focus_traversal_integration.rs`'s six fixtures.
+Skip 0 means the Compositor was available, so the integration assertions
+actually ran.
+
+#### #7 — GUI evidence with a positive control
+
+[evidence/capture-t5-focus.ps1](./evidence/capture-t5-focus.ps1), run
+against `cargo build --release --workspace` on a 982x703 client at 120 DPI
+(**scale 125%**), two frames per side, the **client** rectangle mapped with
+`ClientToScreen`, PMv2 declared **and read back** (Phase 1 F-48).
+
+The sample is the gallery's first Tab stop, the **checked** "All"
+`ToggleButton` — the hardest of DD-M4-P2-003's three comparisons rather
+than a constructed one, because it is already painting the selected colour
+before focus arrives. The mask is derived once from the baseline frame by
+the same blue predicate T4's capture used, so no frame showing an effect
+can influence where the effect is measured; it came out **byte-identical
+to T4's** (2,559 px, bbox x[10..69] y[13..56]), which makes the two runs
+directly comparable.
+
+| Mean RGB over the mask | R | G | B |
+|---|---|---|---|
+| N — nothing focused, cursor away | 46.99 | 117.65 | 213.41 |
+| H — hovered, nothing focused | 74.06 | 138.90 | 224.06 |
+| FA — Tab ×1, focused, cursor away | 140.88 | 150.55 | 146.65 |
+| FB — Tab ×4, focus moved on | 46.99 | 117.65 | 213.41 |
+| **FA − N (focused vs selected)** | **+93.89** | **+32.90** | **−66.76** |
+| **FA − H (focused vs hovered)** | **+66.82** | **+11.65** | **−77.41** |
+| **FB − N (agreement leg)** | **0.00** | **0.00** | **0.00** |
+| within-side jitter, every side | 0.00 | 0.00 | 0.00 |
+
+**All three legs are needed.** The two difference legs are DD-M4-P2-003's
+requirement made numeric, and they move in a direction hover cannot: hover
+brightens (+27 / +21 / +11, every channel up), while focus shifts hue (R
+strongly up, B strongly down), so the two are not two degrees of one
+signal. **FB − N is the control**: when focus moves to the fourth stop the
+sampled button returns to *exactly* its unfocused colour, so an
+implementation that painted the indicator but never cleared it fails here
+while passing every difference leg above. The script also carries a guard
+that is not a leg — if FA were within the noise floor of N it throws,
+because that would mean the key never arrived and every comparison below
+it would be vacuous.
+
+N and H reproduce T4's numbers for the same pixels to the last recorded
+digit, and two independent runs of this script (separate process launches)
+were bit-identical on all eight frames.
+
+**The input path was measured, not assumed.** The script tries to earn
+foreground activation with a real click and reports which path it then
+uses: real `keybd_event` key presses when the window holds foreground,
+posted `WM_KEYDOWN` otherwise — a **weaker claim**, printed as such. Both
+recorded runs used **real key presses**. That is worth recording because
+an earlier attempt on this same box failed to take foreground at all
+(`GetForegroundWindow` returned 0 — the session had no foreground window
+for synthesized keyboard input to reach). The capability is therefore
+**intermittent on this machine**, which is a finding T12 inherits (its
+control B is Tab-driven), and the fallback branch has consequently never
+been exercised.
+
+This is the assistant baseline and does **not** replace the owner's
+human-visible smoke ([CLAUDE.md §Testing rules](../../../../CLAUDE.md)).
+
+#### #8 — Carry-forward
+
+| Constraint | Evidence | Placement | Re-trigger criterion |
+|---|---|---|---|
+| **CF-T5-1 — a retained `FocusId` that is still *in range* but names a different node after a rebuild is not detected.** `discard_stale_focus` catches only the out-of-range case | The fix's own doc comment; the in-range case has no tree shape M4-Phase 2 can build, so no test fires it | `carry-forward` → this ledger | **T7** (modal-scope materialisation and removal) and **T9** (`for` regeneration) — the two tasks that add paths creating or replacing subtrees. This is the focus twin of T4's CF-T4-1 for hover; both are the same index-shift class |
+| **CF-T5-2 — the eager successor rule is not implemented.** DD-M4-P2-003 requires the successor of a removed or disabled stop to be computed **before** the mutation; T5 applies it lazily at the next traversal, landing on the domain's first stop | F3's third leg and F6 assert the lazy behaviour by name | `carry-forward` → this ledger | **T7**, which owns the materialisation seam that can call in *before* a mutation. Until then the observable difference is that a removal falls to the first stop rather than to the structural successor |
+| **CF-T5-3 — the fixtures cannot see the indicator's appearance.** W8 deletes the colour distinction and none of the six fixtures notices; they read a boolean flag | Witness W8 | `carry-forward` → this ledger | **T12**, whose control B reads traversal order off captured frames. Any later change to `effective_button_color` needs the pure colour tests or a capture, not the fixtures |
+| **CF-T5-4 — real key input to a foreground window is intermittently unavailable on the evidence machine.** One capture attempt found `GetForegroundWindow() == 0`; two later runs earned activation with a real click and used real key presses | The capture script's measured branch, printed on every run | `carry-forward` → this ledger | **T12** (control B is Tab-driven) and **T11** (synthesized pointer injection has the same class of environment dependency). The script's shape — measure the capability, use the strongest available, print which — is the pattern to copy rather than the fallback itself |
+| **CF-T5-5 — the host key slot is now load-bearing for evidence, and still uninstalled in production.** F5's discrimination depends on `key_down_fn` being reached only after traversal declines | F5 and witness W7 | `carry-forward` → this ledger | **T8**, which adds authored `key-down` handlers between the consumption and the fallthrough. A dispatch inserted on the wrong side of the slot breaks F5, which is the intended tripwire |
+| **CF-T5-6 — §13.3's indicator sentence cannot be implemented literally.** "Applied by the same pass that writes visual geometry" would require a focus change to trigger a layout pass; the landed indicator is a brush colour written through the same primitive hover uses, and adds no geometry write | The #3 enumeration (six calls, unchanged) | `finding` → **T13's re-verification list** | **T13**, which re-verifies §13.3 against the landed runtime. The clause that *is* satisfied literally is the same sentence's second half, "not a visual written at focus-change time" |
+
+#### Re-decided at close
+
+The start gate selected traps 1–5 and 7 with 6 armed. **The selection
+survived, and trap 6 fired.** It was armed against "a failure that appears
+during implementation"; what happened instead is that a crash was found by
+*reading* the landed code and then reproduced deliberately — the trap's
+artifact obligation (minimal repro, root cause, disposition) applies
+unchanged, and #6 discharges it against a real defect rather than leaving
+it armed as T4's stayed.
+
+Two things were built that the gate did not predict: a regression fixture
+for that crash (F6, which the gate could not have named because the defect
+was not known then), and a fallback input path in the capture tool that
+the measured environment then did not need. Neither changes the review
+lane: full independent review was predicted, confirmed at the start gate,
+and is what the change still is.
+
+#### Re-audit of the whole task list
+
+Per [plan.md](./plan.md) §Cross-task obligations, the full list was re-read
+at this close gate rather than only T5's item.
+
+- **T6** — unaffected by what this task built; it adds the `focus-group` /
+  `modal-scope` attributes the projection will read. What it inherits is
+  the shape of the reader: `WidgetNode::focus_role` is the single
+  derivation, so T6's attributes reach traversal by widening that function
+  rather than by adding a second source of roles.
+- **T7** — inherits three things concretely. CF-T5-1 and CF-T5-2 are its to
+  close (the materialisation seam is the only place a successor can be
+  computed before the mutation). It also retires `focus_spike`, the
+  `__focus_spike` seam and the override map, at which point
+  `tests/focus_mechanism_fixture.rs` re-points at the production
+  projection — which now exists, so that retirement is a deletion rather
+  than a rewrite. And `discard_stale_focus` is the function whose reason
+  disappears once entry / exit compute the successor properly; it should be
+  re-examined then rather than left as a permanent fallback.
+- **T8** — inherits CF-T5-5. Its key dispatch lands **between** traversal's
+  consumption and the `DefWindowProc` fallthrough this task built, and its
+  assertions about the keys the runtime keeps (`Tab` always) run against
+  `focus::tab_direction`, which is where that answer now lives. Its CF-2
+  work is re-confirmed still open: F3 had to author its disabled stop as a
+  `ToggleButton` literal or a state-bound `Button`, and says so.
+- **T9** — the same index-shift exposure as T7, through `for` regeneration.
+- **T10** — first production consumer of Tab traversal in a `.ui` the owner
+  drives. The gallery already traverses correctly (the #7 capture is a
+  gallery frame), so T10's work starts from a gallery whose keyboard
+  already works rather than from one that needs wiring.
+- **T11** — touch inherits nothing from focus: a `WM_POINTER*` arm would
+  have to call `focus_on_click` explicitly, exactly as CF-T4-4 records for
+  hover. Whether a touch contact should move focus is that task's explicit
+  decision, not something to inherit by omission.
+- **T12** — inherits CF-T5-3 and CF-T5-4. Control B (traversal order) is
+  Tab-driven, so it needs the input-capability measurement this task's
+  script makes; and its frames are the only thing that can see the
+  indicator, which is what makes control B possible at all.
+- **T13** — gains CF-T5-6 on its re-verification list. The §4.19 focus
+  bullets otherwise match the landed runtime and are a **confirmation**
+  rather than a re-derivation: nothing is focused at open, Tab / Shift+Tab
+  walk declaration order and wrap at both ends, a disabled Button is
+  skipped, a click focuses the nearest focusable at or above and never
+  clears, and activation does not change focus. Each has a named fixture in
+  the #5 table, so T13 can check the list rather than re-read the code.
+- **Cross-task obligation "no new ABI function"** — held. `focus.rs` is a
+  private module and the one new symbol on the `ffi` surface is a
+  `__*_for_test` seam, not a C entry point; no `extern "C"` function was
+  added or changed.
+
+#### Verification means
+
+The six fixtures reuse `tests/common/mod.rs`'s skip guard **unchanged**, so
+the standing obligation to verify a newly authored guard on an environment
+that lacks the capability
+([CLAUDE.md §Testing rules](../../../../CLAUDE.md)) is discharged by the
+existing helper; `tests/common/mod.rs` was not touched, so the
+`0x80070005` two-conjunct check
+([constraints §8](../requirements/constraints.md)) is intact.
+
+No fixture changes scale. Each normalises to 96 DPI at a 360x240 physical
+client — below the 480x320 ceiling M4-Phase 1 T8 settled on
+([constraints §10](../requirements/constraints.md)) — and asserts both the
+realised extent and the committed scale rather than assuming the
+developer's monitor (Phase 1 F-47). Every click coordinate is derived from
+`__arranged_rect_for_test()` and multiplied by the factor the runtime
+**committed**, and every geometric relationship a fixture depends on is
+asserted before the point is used.
+
+**What these fixtures cannot show, stated rather than implied.** They run
+at scale 1, so they do not re-exercise the pointer conversion T2's
+non-unit-scale fixture owns; traversal is geometry-independent, and the
+click legs inherit a conversion that fixture still pins. They read the
+focus record and a boolean flag, so the indicator's *colour* is invisible
+to them — W8 measures exactly that boundary, and the GUI control at #7 is
+what covers the painted side, at one scale, on one widget. And the
+`LRESULT` half of F5's fallthrough leg is a measured coincidence rather
+than evidence: `DefWindowProcW` returns 0 for `WM_KEYDOWN` for every
+candidate key tried, so what discriminates consumption there is the host
+key slot, not the return value.
