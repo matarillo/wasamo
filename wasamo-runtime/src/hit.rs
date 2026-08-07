@@ -141,6 +141,33 @@ pub(crate) fn dispatch_chain(target_path: &[usize]) -> Vec<Vec<usize>> {
         .collect()
 }
 
+/// The node a leave transition must reset to `Normal`, or `None` if there is
+/// nothing to leave (M4-Phase 2 T4; `docs/architecture.md` §13.2 "computed
+/// as enter / leave transitions against the resolved target").
+///
+/// Returns `previous` when there **is** a previous target and it differs
+/// from `next`; `None` otherwise.
+///
+/// **The `previous == next` arm is load-bearing.** Without it, every
+/// `WM_MOUSEMOVE` inside the same button's rectangle would read as "leave
+/// then re-enter": the leave writes `Normal` and the immediately following
+/// enter writes `Hovered` again, restarting the `ColorKeyFrameAnimation`
+/// (`start_color_anim`) on every message the mouse produces while sitting
+/// still over the button. Treating "the target didn't change" as "nothing
+/// to leave" is what keeps the paint a single steady-state colour instead of
+/// an animation that never settles.
+pub(crate) fn hover_leave_target<'a>(
+    previous: Option<&'a [usize]>,
+    next: Option<&[usize]>,
+) -> Option<&'a [usize]> {
+    let prev = previous?;
+    if Some(prev) == next {
+        None
+    } else {
+        Some(prev)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -405,5 +432,60 @@ mod tests {
     #[test]
     fn a_target_that_is_the_root_yields_only_the_root() {
         assert_eq!(dispatch_chain(&[]), vec![Vec::<usize>::new()]);
+    }
+
+    #[test]
+    fn hover_leave_target_is_none_when_previous_equals_next_so_a_stationary_mouse_never_restarts_the_animation(
+    ) {
+        let path = vec![1, 0];
+        assert_eq!(
+            hover_leave_target(Some(&path), Some(&path)),
+            None,
+            "previous == next must be a no-op, or every WM_MOUSEMOVE inside the same button's \
+             rectangle would leave (write Normal) then immediately re-enter (write Hovered), \
+             restarting the colour animation on every message"
+        );
+    }
+
+    #[test]
+    fn hover_leave_target_returns_previous_when_it_differs_from_next() {
+        let previous = vec![0];
+        let next = vec![1];
+        assert_eq!(
+            hover_leave_target(Some(&previous), Some(&next)),
+            Some(previous.as_slice()),
+            "moving the resolved target from one node to a different one must leave the \
+             previous node"
+        );
+    }
+
+    #[test]
+    fn hover_leave_target_returns_previous_when_next_is_none() {
+        let previous = vec![0];
+        assert_eq!(
+            hover_leave_target(Some(&previous), None),
+            Some(previous.as_slice()),
+            "resolving to no target at all (e.g. the pointer left every paintable widget) must \
+             still leave whatever was previously entered"
+        );
+    }
+
+    #[test]
+    fn hover_leave_target_is_none_when_there_is_no_previous_target() {
+        let next = vec![0];
+        assert_eq!(
+            hover_leave_target(None, Some(&next)),
+            None,
+            "with nothing previously entered, there is nothing to leave"
+        );
+    }
+
+    #[test]
+    fn hover_leave_target_is_none_when_both_previous_and_next_are_none() {
+        assert_eq!(
+            hover_leave_target(None, None),
+            None,
+            "with no previous target and no next target, there is nothing to leave"
+        );
     }
 }

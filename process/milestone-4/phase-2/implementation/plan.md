@@ -185,18 +185,41 @@ T2); this task changes who owns the state transitions.
 - Single-target consistency: the widget that paints pressed is the
   widget a release would dispatch to; overlapping widgets no longer both
   hover. Hover and pressed gain **no authored surface** — they stay
-  Button-family presentation (DD-001).
+  Button-family presentation (DD-001). The two descriptions coincide for
+  every shape the widget set can build, and that is measured rather than
+  assumed: `build_layout_tree` maps Button-family to a childless
+  `LayoutNode`, so a Button-family node on the dispatch chain is always
+  the target ([log.md](./log.md) §T4 start gate fact 3).
+- **Replacing the walk needs a retained record, not a narrowed walk.**
+  The normative text names the whole-tree walk as the thing being
+  replaced, so the window holds *which node currently paints a
+  non-`Normal` state* and each pointer message is a leave/enter against
+  it. The record and the painted state are a derived pair written in one
+  primitive (implementation-gates trap #3), and the paths that can
+  invalidate the record from outside — a binding write that disables a
+  Button, a root swap, a handler's rebuild mid-message — are enumerated
+  at the close gate rather than left to chance.
 - `WM_MOUSELEAVE` clears through the same transition path; the
-  disabled-Button arm keeps its no-reaction contract while the walk's
-  descend-into-children behaviour follows T2's topmost rule.
+  disabled-Button arm keeps its no-reaction contract, and the old walk's
+  descend-into-children behaviour is **deleted rather than adapted** —
+  under topmost resolution a Button-family widget's `WidgetNode` children
+  hold no rectangle and were never reachable candidates.
 - The synthesised pointer update after a scale change stays **not
   adopted** (DD-001): hover self-corrects on the next move, and a second
-  producer of hover state is the shape DD-M4-P1-002 closed.
+  producer of hover state is the shape DD-M4-P1-002 closed. This needs no
+  code — [architecture.md §12.5](../../../../docs/architecture.md)
+  already states it, which discharges
+  [constraints §5](../requirements/constraints.md).
 - **Evidence:** integration tests driving enter / leave / press /
   release sequences and reading back state transitions, including the
-  overlap case where only the topmost widget reacts.
+  overlap case where only the topmost widget reacts — **plus a GUI
+  positive control**, because the gallery's overlap is reachable today:
+  with the lightbox open its stretch/stretch scrim covers the toolbar,
+  and the checked `ToggleButton` underneath hovered through it before
+  this task. The lane is correspondingly **full independent review**, not
+  the branch/test-focused review [preamble.md](./preamble.md) predicted.
 
-- [ ] T4
+- [x] T4
 
 ## T5 — Per-window focus state and Tab traversal
 
@@ -472,6 +495,17 @@ The four controls from the [framing](../requirements/framing.md)
 | A — click routing and item identity | clicking thumbnail N and thumbnail M give different lightbox content | clicking N twice gives the same content |
 | B — traversal order | Tab ×1 / ×2 / ×3 and Shift+Tab reach the expected stops in reverse | two frames with no input agree within the measured text-pixel jitter (F-33: up to 13/channel), with the tolerance and comparison recorded — not asserted as bit-identical |
 | C — containment and occlusion | with the lightbox open, a background click does nothing and Tab cycles inside | with it closed, the same coordinate fires **and the same Tab reaches the background** (the DD-004 agreement leg — containment distinguished from an empty background) |
+
+- **Control C also discharges T4's CF-T4-5** (owner-settled 2026-08-07,
+  [log.md](./log.md) §Owner disposition of CF-T4-5). T2 resolved
+  hit-testing to a single target without taking a gallery frame, because
+  the phase predicted the gallery had no reachable overlap; T4 measured
+  that prediction false. T2 is not reopened — its rule is pinned by
+  pure-logic tests over a constructed overlapping tree, which bounds the
+  rule rather than one instance of it — and the gallery frame it did not
+  take is taken **here**, once, in exactly the shape control C already
+  has. Recorded on this row so the obligation is visible where it is
+  executed.
 | D — Esc | Esc closes the lightbox | an unrelated key does not |
 
 - Capture is preceded by `cargo build --release --workspace`, takes

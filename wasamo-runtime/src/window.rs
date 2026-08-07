@@ -1,6 +1,6 @@
 use crate::dip_scale::DipScale;
 use crate::runtime;
-use crate::widget::WidgetNode;
+use crate::widget::{HoverState, WidgetNode};
 use windows::{
     core::Interface,
     Foundation::Numerics::Vector2,
@@ -106,6 +106,17 @@ pub struct WindowState {
     pub root_widget: Option<Box<WidgetNode>>,
     // Last reported mouse-down state, for hover/press routing through `root_widget`.
     mouse_down: bool,
+    /// This window's retained hover/press record (M4-Phase 2 T4;
+    /// `docs/architecture.md` §13.2). Reset by `set_root` (a previous root's
+    /// indices mean nothing in the new tree) and otherwise owned entirely by
+    /// `WidgetNode::update_hover` / `WidgetNode::clear_hover`, which the four
+    /// pointer arms below call with `&mut self.hover`.
+    ///
+    /// `pub(crate)` rather than private, matching `scale` above: the
+    /// integration-test crate's `lib.rs::ffi::__hover_target_for_test` seam
+    /// needs to read it, and no host does — DD-M4-P1-004 keeps state like
+    /// this off the `pub use`-exported surface.
+    pub(crate) hover: HoverState,
 }
 
 // Safety: same single-thread contract as Runtime.
@@ -141,6 +152,7 @@ pub fn create(title: &str, width: i32, height: i32) -> windows::core::Result<Box
         tracking_mouse: false,
         root_widget: None,
         mouse_down: false,
+        hover: HoverState::default(),
     });
     // Store a raw pointer to WindowState in GWLP_USERDATA so wnd_proc can reach it.
     // Safety: state is heap-allocated (Box) and will outlive the HWND.
@@ -340,6 +352,10 @@ pub fn set_root(state: &mut WindowState, mut root: Box<WidgetNode>) -> windows::
         }
     };
     state.root_widget = Some(root);
+    // The previous root (if any) is already dropped above; its indices name
+    // nothing in the new tree, so a stale retained path must not survive
+    // the swap (M4-Phase 2 T4).
+    state.hover = HoverState::default();
     if let Some(r) = state.root_widget.as_mut() {
         let _ = r.run_layout_as_window_root_at_scale(cw, ch, state.scale);
     }
@@ -921,7 +937,13 @@ unsafe extern "system" fn wnd_proc(
                 f(x, y);
             }
             if let Some(root) = state.root_widget.as_mut() {
-                let _ = root.update_hover(&runtime::get().compositor, x, y, state.mouse_down);
+                let _ = root.update_hover(
+                    &runtime::get().compositor,
+                    &mut state.hover,
+                    x,
+                    y,
+                    state.mouse_down,
+                );
             }
             return LRESULT(0);
         }
@@ -932,7 +954,7 @@ unsafe extern "system" fn wnd_proc(
                 f();
             }
             if let Some(root) = state.root_widget.as_mut() {
-                let _ = root.clear_hover(&runtime::get().compositor);
+                let _ = root.clear_hover(&runtime::get().compositor, &mut state.hover);
             }
             return LRESULT(0);
         }
@@ -944,7 +966,7 @@ unsafe extern "system" fn wnd_proc(
                 f(x, y);
             }
             if let Some(root) = state.root_widget.as_mut() {
-                let _ = root.update_hover(&runtime::get().compositor, x, y, true);
+                let _ = root.update_hover(&runtime::get().compositor, &mut state.hover, x, y, true);
             }
             return LRESULT(0);
         }
@@ -956,8 +978,22 @@ unsafe extern "system" fn wnd_proc(
                 f(x, y);
             }
             if let Some(root) = state.root_widget.as_mut() {
+                // Deliberate order (T3's carry-forward to T4): the release
+                // must dispatch against the tree the user actually saw, so
+                // `hit_test_click` runs first. Its handler can rebuild or
+                // remove subtrees synchronously (see `run_clicked_handlers`'s
+                // safety note); a newly materialised node has no
+                // `arranged_rect` yet (T1's store, refreshed only by the
+                // next layout pass), so it is not a hit candidate and the
+                // `update_hover` immediately below can resolve against a
+                // tree that has already moved out from under it. That
+                // staleness is not corrected here — it self-corrects on the
+                // next real pointer message, after the message-loop
+                // boundary's drain (`emit::drain_if_outermost`) has
+                // re-laid-out whatever the handler rebuilt.
                 root.hit_test_click(x, y);
-                let _ = root.update_hover(&runtime::get().compositor, x, y, false);
+                let _ =
+                    root.update_hover(&runtime::get().compositor, &mut state.hover, x, y, false);
             }
             return LRESULT(0);
         }
