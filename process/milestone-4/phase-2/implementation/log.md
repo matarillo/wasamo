@@ -2155,3 +2155,238 @@ what covers the painted side, at one scale, on one widget. And the
 than evidence: `DefWindowProcW` returns 0 for `WM_KEYDOWN` for every
 candidate key tried, so what discriminates consumption there is the host
 key slot, not the return value.
+
+## T6 — DSL: `focus-group`, `modal-scope`, and `dismiss`
+
+### Start gate (recorded 2026-08-07, before any source edit)
+
+Read before selecting:
+[AGENTS.md](../../../../AGENTS.md),
+[implementation-gates.md](../../../procedures/implementation-gates.md),
+[plan.md](./plan.md) §T6 / §T7 / §T8 / §T13 and §Cross-task obligations,
+[preamble.md](./preamble.md) (§The sequencing thesis, §What "green" is
+worth, §Review lanes),
+[DD-M4-P2-005](../decisions/dd-m4-p2-005-dsl-handler-surface.md) in full,
+[DD-M4-P2-003](../decisions/dd-m4-p2-003-focus-model-and-traversal.md)
+§Eligibility F3 and §Group traversal,
+[DD-M4-P2-004](../decisions/dd-m4-p2-004-modal-focus-scope.md)
+§Recommendation,
+[constraints.md](../requirements/constraints.md) §2 / §8 / §9,
+the Moment-1 normative text
+([dsl_spec.md §4.19](../../../../docs/dsl_spec.md) in full, §2.1 / §2.2 /
+§3 grammar, §8.5 / §8.6 / §8.8 IR grammar;
+[architecture.md §13.3 / §13.4 / §13.5](../../../../docs/architecture.md)),
+the T5 close gate and the
+[T5 retrospective](../retrospectives/t5.md), and the landed source
+(`wasamoc/src/lexer.rs` ident rule, `parser.rs` member dispatch,
+`check.rs` `check_members_inner` / `check_grid` / `check_cell` /
+`check_zstack_unknown_attr` / `check_scrollview_unknown_attr` /
+`check_togglebutton_property_name` / `check_host_property_bind`,
+`lower.rs::lower_node_with_loop`, `emit.rs::emit_prop`;
+`wasamo-runtime/src/ir_loader.rs` validate / `construct_widget` /
+`build_node`, `widget.rs::focus_role` and the ten `WidgetNode`
+constructors, `focus.rs::FocusProjection`, `focus_spike.rs`,
+`focus_core.rs::FocusRole` / `tab_stops`).
+
+#### Normative statements that already answer this task's behaviour
+
+Recorded per
+[DD-V-031](../../../cross-milestone/decisions/dd-v-031-normative-answers-at-start-gate.md).
+The phase synchronised its normative text at Moment 1, so these are
+**answers**, not open questions.
+
+| Question | Document | What it fixes |
+|---|---|---|
+| How the two annotations are spelled | [dsl_spec.md §4.19](../../../../docs/dsl_spec.md) §`focus-group` / §`modal-scope` / §Attribute admission | `focus-group: true` and `modal-scope: true`, `bool`, default `false`, "admitted on **any container**" |
+| Whether they may be bound | §4.19 §Attribute admission | "Both are **constant-only**: the value must be a `true` / `false` literal, and a binding-expression RHS is rejected — the same rule `Box.fill` and the `WrapPanel` attributes carry" |
+| Whether they change layout | §4.19 §Attribute admission | "Neither attribute changes layout: an annotated container measures and arranges exactly as an unannotated one" |
+| Where `dismiss` may be written | §4.19 §`dismiss` / §Attribute admission | "admitted **only on a container that carries `modal-scope: true`**. Written anywhere else it could never be raised, so it is rejected at `wasamoc check` rather than silently never firing" |
+| What `dismiss` *is* | §4.19 §`dismiss`, [architecture.md §13.5](../../../../docs/architecture.md) | A request addressed to the innermost scope; "the runtime does not act on the request". Esc is its only source — and the Esc-to-request conversion is T7's, not this task's |
+| What the group annotation means | §4.19 §`focus-group` | One Tab stop, arrows within, per-group memory — all **behaviour**, which [plan.md](./plan.md) §T7 owns |
+| What the scope annotation means | §4.19 §`modal-scope`, [architecture.md §13.4](../../../../docs/architecture.md) | "Being there is being open" — presence is the entry, and entry runs "on the structural seam that materialises the subtree", which is T7's |
+| Whether the role derivation is the extension point | [DD-M4-P2-003](../decisions/dd-m4-p2-003-focus-model-and-traversal.md) F3, and the T5 close gate re-audit | "the derivation is the extension point"; T5 recorded that T6's attributes "reach traversal by widening that function rather than by adding a second source of roles" — so `WidgetNode::focus_role` is the one place the annotation lands |
+| Whether the IR needs a new carrier | §4.19 (no new value type), [dsl_spec.md §8.6](../../../../docs/dsl_spec.md) | `property_set ::= "prop" IDENT "=" literal` already has a `BOOL` alternative; `handler ::= "on" IDENT "{" expr "}"` already takes any signal name. No new token, `IrType`, `IrLiteral` or `PropertyValue` |
+
+**One divergence is recorded rather than resolved here.** §4.19's
+attribute table says "any container" and lists no exception, but
+`check_grid`'s M3-Phase 5 arm rejects **every** signal handler on a
+`Grid` (fact 4 below). This task admits `dismiss` on a `Grid` that
+carries `modal-scope: true` so the normative sentence holds uniformly,
+and leaves the rest of Grid's blanket handler rejection to
+[plan.md](./plan.md) §T8, which owns widening `clicked`. The divergence
+between §T8's premise and the landed checker is fact 4.
+
+#### Scope re-decided against the code — five facts measured first
+
+Throwaway probes (`wasamoc check` / `wasamoc build` over a constructed
+`.ui` exercising the widget kinds), run before the approach was chosen.
+The probe `.ui` and its emitted IR are not retained; the results are.
+
+1. **The grammar, the lexer, `lower` and `emit` need no change at all.**
+   `focus-group` and `modal-scope` already lex as one `Ident`
+   (§2.2's `[A-Za-z_][A-Za-z0-9_]*(?:-[A-Za-z][A-Za-z0-9_]*)*`, the rule
+   `item-cross-size` already uses), parse as `property_bind`, lower
+   through the generic `Member::PropertyBind` arm to
+   `IrProp { value: IrLiteral::Bool(_) }`, and emit as
+   `prop focus-group = true`. `dismiss => { ... }` parses as
+   `signal_handler` and emits as `on dismiss { ... }`. **Measured**: the
+   probe built to valid IR text containing both lines with the compiler
+   untouched. The plan's T6 heading ("Grammar, checker, IR, loader")
+   over-predicts two of its four; the work is **checker + loader + role
+   derivation + tests**.
+2. **Nothing is rejected today that should be, and nothing accepted
+   today stays accepted.** On `VStack` / `HStack` / `Box` / `WrapPanel` —
+   and on `Text` and `Button` — `focus-group: true` is accepted with
+   **zero diagnostics** and lowered into the IR, where the loader
+   ignores it. `focus-group: <bool state>` is accepted and lowered to a
+   **binding**. `modal-scope: 1` is accepted and lowered as an `Int`
+   prop. `dismiss => { ... }` is accepted on any node, including at
+   component level and on a container with no `modal-scope`. This is the
+   silent-drop class T3's CF-2 recorded for `Button.enabled`, and it is
+   what the three rejects exist to close.
+3. **Three per-kind attribute gates already reject the new names, and
+   each is a call site this task must pass through.** Measured
+   diagnostics: "`modal-scope` is not a recognised ScrollView attribute"
+   (`check_scrollview_unknown_attr`), "unknown ZStack attribute
+   `focus-group`" (`check_zstack_unknown_attr`), "unknown Grid attribute
+   `modal-scope`" (`check_grid`). A fourth,
+   `check_togglebutton_property_name`, rejects them on `ToggleButton` —
+   the **right** answer for a non-container, with the wrong diagnostic.
+   These four are the semantic-migration audit's rows on the checker
+   side, and Rust enumerates none of them.
+4. **`plan.md` §T8's premise "`clicked` needs no checker widening —
+   `check` has no per-kind signal admission rule" is false for one
+   kind.** `check_grid`'s `SignalHandler` arm emits "`Grid` takes no
+   signal handlers" — measured. `Box`, `ZStack`, `VStack` and the rest
+   do accept handlers, so T3's CF-3 holds everywhere except `Grid`.
+   Recorded as a finding for T8 rather than fixed here beyond the
+   `dismiss` case this task owns.
+5. **`WidgetNode` has ten struct-literal construction sites and no
+   `Default` / `..` update syntax**, so adding a per-node annotation
+   field is **compiler-forcing** — the one part of this task's migration
+   Rust enumerates. `WidgetNode::focus_role` has two callers
+   (`focus::FocusProjection::project`, `focus_spike::walk`); it is the
+   single role derivation T5 left as the extension point.
+
+**What T6 therefore is.** Not "add grammar and IR", but four things:
+
+- **Checker admission** — the two attributes on the seven container
+  kinds, constant-only `true` / `false`, routed **ahead of** the four
+  per-kind gates of fact 3 so a `ZStack` / `ScrollView` / `Grid` can
+  carry them and a `Text` / `Button` / `ToggleButton` / `Rectangle` /
+  `Cell` cannot.
+- **`dismiss` admission** — a checker rule over the enclosing body's
+  sibling members: the handler is admitted only where
+  `modal-scope: true` is written on the same node.
+- **A loader gate for the same rules** (recorded deviation from the
+  plan's checker-only list, argued below).
+- **The node's focus role** — a per-node annotation the loader writes
+  and `WidgetNode::focus_role` reads, so `Group` and `ModalScope` become
+  reachable roles for the first time.
+
+Three boundaries are drawn deliberately:
+
+- **No behaviour is built.** Group traversal, per-group memory, scope
+  entry / exit / restore and the Esc-to-`dismiss` conversion are all
+  T7's. This task's tests assert the **role that reaches the node**,
+  never what traversal then does with it — asserting traversal here
+  would be asserting T7's unbuilt behaviour.
+- **The intermediate state is named rather than discovered.** Between
+  this task and T7 a `modal-scope: true` subtree projects as
+  `FocusRole::ModalScope` with no entry seam, so `focus_core::tab_stops`
+  skips it: a **present but un-entered scope**, which is exactly the
+  state [DD-M4-P2-004](../decisions/dd-m4-p2-004-modal-focus-scope.md)
+  says must not be reachable ("nothing present is un-entered"). It is
+  unreachable from any shipped `.ui` — no example file carries the
+  attribute, and T10 is what adds one, after T7 — but it is real for a
+  test or a hand-written `.ui` in between. Recorded as a carry-forward
+  to T7 rather than left for T7 to find.
+- **The both-at-once case is expressible and single-valued.**
+  DD-M4-P2-005 records "a container that is a group and a scope" as
+  expressible under A1 and untested in M4; `focus_core::FocusRole` is
+  one-of-six, so the projection cannot carry both. The derivation gives
+  `modal-scope` precedence, states why at the site, tests it, and
+  carries the composite question to T7.
+
+**Why the loader gate is added** (deviation from
+[plan.md](./plan.md) §T6, which names three checker rejects). The loader
+must read these props anyway to write the annotation, so the gate is
+adjacent rather than additional; `wasamo_load_ui` admits memory IR that
+never passed through `wasamoc` (the two-gate shape §4.9 / §4.12 / §4.16
+already use); and without it the failure mode is *silent* — an
+annotation on a `Button`, or `prop modal-scope = 1`, is dropped with no
+diagnostic, which is the defect class this phase already has on its
+books twice (T3's CF-2, and fact 2 above). The plan's §T6 item is
+revised to record what was actually built
+([AGENTS.md §Commit rules](../../../../AGENTS.md#commit-rules)).
+
+#### Trap selection
+
+| # | Trap | Applies | Reason |
+|---|---|---|---|
+| 1 | Semantic-migration miss | **yes** | Two migrations, and Rust enumerates one. `WidgetNode` gains a field — compiler-forcing across ten construction sites (fact 5). The **checker's per-kind attribute dispatch** gains two admitted names, and the compiler enumerates nothing of it: four existing gates (fact 3) would each swallow a new name plausibly, and the generic `else` arm accepts it with no diagnostic at all. The audit table therefore covers every per-kind attribute gate, every signal-handler gate, every reader of the new field, and the IR-side `prop` / `on` paths |
+| 2 | Missed side effects | **yes** | A per-node field on `WidgetNode` is read by a derivation with two callers, one of them the spike's override projection — a widened `focus_role` changes what `focus_spike::project` derives *before* overrides apply, so `tests/focus_mechanism_fixture.rs` is in the blast radius. Also enumerated before writing: whether the annotation must survive `set_root` / subtree re-materialisation (it is built-time state on the node, not window state); whether it can reach layout (it must not — §4.19 "neither attribute changes layout"); and whether it can reach the Composition geometry writes (it must not — the six-call enumeration DD-M4-P2-003 requires of any task touching focus presentation) |
+| 3 | Parallel/derived data drift | **no** | The annotation has exactly one writer (the loader, at construction) and no derived copy: `focus_role` computes from it on demand rather than caching a role. Nothing is written twice. The trap-3 pair this phase carries — the focus record and the painted flag — is untouched, and the group **memory** whose single-writer discipline DD-M4-P2-003 requires is written by `focus_core::FocusState::set_focus`, which this task does not call |
+| 4 | Untested authored branch | **yes** | The task is almost entirely branches. Accept side: each attribute on each admitting kind, both attributes together, `dismiss` beside `modal-scope: true`. Reject side: a binding RHS; a non-bool literal RHS; the attribute on each non-admitting kind and at component level; `dismiss` without `modal-scope`; `dismiss` beside `modal-scope: false`; and the same rules on the loader side. Every one ships with a test that fires it directly, named in the close artifact |
+| 5 | Carry-forward underweighted | **yes** | Three named already: the present-but-un-entered intermediate (T7), the both-at-once role collapse (T7), and fact 4's Grid handler rejection (T8). Per the T3 retrospective's corrective, anything this task requires *as evidence of a later task* is built and run here, or recorded as a finding with an owner |
+| 6 | Symptom taken at face value | **conditional** | No deterministic failure is in hand at the start gate. Armed: any failure during implementation gets a minimal repro and a root cause, not a re-roll |
+| 7 | Weak GUI evidence | **no** | The deliverable is a compiler surface and inert node state. Nothing this task lands is painted: the annotation adds no `Visual`, no brush and no geometry write, and §4.19 fixes that it changes no layout. A captured frame could not distinguish an annotated container from an unannotated one, which is precisely why this is not a GUI-evidence task. The first frame that can see a group or a scope is T12's, after T7 gives them behaviour |
+
+```
+- [x] #1 semantic migration   - [x] #2 side effects   - [ ] #3 parallel data   - [x] #4 branch tests
+- [x] #5 carry-forward        - [~] #6 root cause     - [ ] #7 GUI positive control
+```
+
+#### Review lane
+
+**Branch/test-focused review**, as
+[preamble.md §Review lanes](./preamble.md) predicts and as the change
+confirms: checker and loader additions whose deliverable *is* the reject
+branches, plus a compiler-forced field addition. It is **not** a runtime
+structural change — no new store with a lifetime, no message-arm return
+path, no second writer — and it carries no GUI-render evidence (trap 7).
+The one judgment that would raise the lane if it were wrong is whether
+widening `focus_role` counts as structural; it does not, because the
+function's shape, its callers and its single-derivation property are
+unchanged and only its *value set* widens, which fact 5 makes
+compiler-visible at every construction site and which the fixture re-run
+measures.
+
+#### The T4 and T5 correctives, applied
+
+Later start gates inherit one line each from T4 and T5:
+
+- *Which negative prediction of the phase documents does this task depend
+  on, and has it been measured once?* Three, and all three are measured
+  (facts 1–4). The plan's "No new token, `IrType`, `IrLiteral` or
+  `PropertyValue`" is measured true and stronger than written — no
+  grammar, `lower` or `emit` change either. The plan's implicit premise
+  that the checker is silent about these names is measured **half
+  false**: four per-kind gates already reject them. And §T8's "check has
+  no per-kind signal admission rule" is measured **false for `Grid`**.
+- *What does this task retain across messages or frames, and is the
+  identity stable?* (T5's new line.) **Nothing.** The annotation is
+  per-node built-time state read on demand by a derivation that already
+  runs fresh per operation; this task introduces no retained identifier
+  and reads no `FocusId`. The identifier hazard T5 recorded (CF-T5-1)
+  is untouched and stays T7's.
+
+#### Planned proof obligations
+
+Each closed at the T6 close gate:
+
+1. The call-site audit table over every per-kind attribute gate, every
+   signal-handler gate, the new field's writer and readers, and the
+   IR-text `prop` / `on` paths.
+2. The structural side-effect enumeration, including the spike
+   projection's re-derivation and the "changes no layout, writes no
+   geometry" statements with the `SetOffset` / `SetSize` count.
+3. The branch table: one test per accept arm and one per reject arm, on
+   both the checker and the loader side.
+4. A round-trip assertion that the attributes survive `.ui` → IR text →
+   loaded IR, and that the loaded node's `focus_role` is the annotated
+   one.
+5. Mutation witnesses, including at least one that is **not** a mutation
+   of this task's own implementation (T5's close-gate line).
+6. The whole task list re-read at the close gate (the re-audit
+   discipline, [plan.md](./plan.md) §Cross-task obligations).
