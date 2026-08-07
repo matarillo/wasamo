@@ -661,6 +661,54 @@ fn check_focus_annotation_admission(
     ));
 }
 
+/// Emit a warning when a container carries both `focus-group: true` and
+/// `modal-scope: true` (dsl_spec §4.19). The surface stays *accepted* —
+/// DD-M4-P2-005 chose two separate constant-only attributes precisely so
+/// a container could carry both — but `focus_core::FocusRole`
+/// (`wasamo-runtime/src/widget.rs`) holds one role per node, and
+/// `WidgetNode::focus_role` gives `modal-scope` precedence, so the
+/// `focus-group` half of such a node is inert at runtime. That is worth
+/// flagging even though it is not rejected.
+///
+/// Takes the already-computed `carries_modal_scope` rather than
+/// rescanning for it, so this stays a cheap second pass over `members`
+/// guarded by the same `FOCUS_ANNOTATION_CONTAINERS` test the caller
+/// already applied. Anchored on the `focus-group` bind's own span, not
+/// the enclosing widget's — `check_members_inner` has the member list
+/// but not the widget's span, and the attribute with no effect is the
+/// more useful thing to point at anyway.
+fn check_focus_group_inert_beside_modal_scope_warning(
+    members: &[Member],
+    carries_modal_scope: bool,
+    filename: &str,
+    diags: &mut Vec<Diagnostic>,
+) {
+    if !carries_modal_scope {
+        return;
+    }
+    let focus_group_span = members.iter().find_map(|m| match m {
+        Member::PropertyBind {
+            name,
+            value: Expr::BoolLit { value: true, .. },
+            span,
+        } if name == "focus-group" => Some(span),
+        _ => None,
+    });
+    let Some(span) = focus_group_span else {
+        return;
+    };
+    diags.push(Diagnostic::warning(
+        filename,
+        span.line,
+        span.col,
+        "this container carries both `focus-group: true` and `modal-scope: true`; a container \
+         can behave as one or the other, not both, and a modal scope wins, so `focus-group` \
+         has no effect here. Remove it, or move the group to a child container \
+         (dsl_spec §4.19)."
+            .to_string(),
+    ));
+}
+
 /// Emit a warning when a WrapPanel directly contains one or more
 /// `Box { aspect: <ratio>; … }` children and `item-cross-size` is not
 /// set on the WrapPanel itself (DD-M3-P3-004 Recommendation companion;
@@ -2097,6 +2145,15 @@ fn check_members_inner(
                 } if name == "modal-scope"
             )
         });
+
+    // Both halves accepted, but not silently — see the function doc for
+    // why `focus-group` is inert once `modal-scope` is also present.
+    check_focus_group_inert_beside_modal_scope_warning(
+        members,
+        carries_modal_scope,
+        filename,
+        diags,
+    );
 
     for member in members {
         match member {
@@ -6309,10 +6366,82 @@ mod tests {
     }
 
     #[test]
-    fn focus_group_and_modal_scope_together_on_one_container_accepted() {
-        let result =
-            check_src("component C inherits W { VStack { focus-group: true modal-scope: true } }");
+    fn focus_group_and_modal_scope_together_on_one_container_accepted_with_warning() {
+        // Both halves stay accepted — DD-M4-P2-005 A1 chose two separate
+        // constant-only attributes precisely so a container could carry
+        // both — but `WidgetNode::focus_role`
+        // (wasamo-runtime/src/widget.rs) holds one `FocusRole` per node
+        // and gives `modal-scope` precedence, so `focus-group` is inert
+        // here. That is not silent: exactly one warning fires, naming the
+        // ineffective `focus-group`.
+        let src = "component C inherits W { VStack { focus-group: true modal-scope: true } }";
+        let result = check_src(src);
         assert!(!result.has_errors(), "{:?}", result.diagnostics);
+        let ws = warnings(src);
+        assert_eq!(ws.len(), 1, "{:?}", ws);
+        // Assert what the message must convey — both attribute names, and
+        // that `focus-group` is the one with no effect — rather than its
+        // exact wording, which is presentation.
+        assert!(
+            ws[0].contains("focus-group")
+                && ws[0].contains("modal-scope")
+                && ws[0].contains("no effect")
+                && ws[0].contains("§4.19"),
+            "{:?}",
+            ws
+        );
+    }
+
+    #[test]
+    fn focus_group_true_modal_scope_false_no_warning() {
+        // `focus-group: true` beside `modal-scope: false` is not the both-
+        // true shape — the group half is not overridden.
+        let src = "component C inherits W { VStack { focus-group: true modal-scope: false } }";
+        let result = check_src(src);
+        assert!(!result.has_errors(), "{:?}", result.diagnostics);
+        assert!(warnings(src).is_empty(), "{:?}", warnings(src));
+    }
+
+    #[test]
+    fn focus_group_false_modal_scope_true_no_warning() {
+        // The mirror case: `modal-scope: true` beside `focus-group: false`
+        // is an ordinary, unremarked scope.
+        let src = "component C inherits W { VStack { focus-group: false modal-scope: true } }";
+        let result = check_src(src);
+        assert!(!result.has_errors(), "{:?}", result.diagnostics);
+        assert!(warnings(src).is_empty(), "{:?}", warnings(src));
+    }
+
+    #[test]
+    fn focus_group_or_modal_scope_alone_no_warning() {
+        // Either attribute alone is the ordinary single-role case; the
+        // warning requires both present and both `true`.
+        let group_only = "component C inherits W { VStack { focus-group: true } }";
+        assert!(
+            warnings(group_only).is_empty(),
+            "{:?}",
+            warnings(group_only)
+        );
+        let scope_only = "component C inherits W { VStack { modal-scope: true } }";
+        assert!(
+            warnings(scope_only).is_empty(),
+            "{:?}",
+            warnings(scope_only)
+        );
+    }
+
+    #[test]
+    fn focus_group_and_modal_scope_together_inside_if_body_still_one_warning() {
+        // Proves the scan runs at the `Member::Conditional` recursive call
+        // in `check_members_inner`, the same as `carries_modal_scope`
+        // itself (see the `if`-wrapped tests further below). The `if`
+        // body admits exactly one widget child in M3-Phase 6, so an outer
+        // `Box` wraps the `if`.
+        let src = "component C inherits W { state open: bool = true Box { if open { VStack { focus-group: true modal-scope: true } } } }";
+        let result = check_src(src);
+        assert!(!result.has_errors(), "{:?}", result.diagnostics);
+        let ws = warnings(src);
+        assert_eq!(ws.len(), 1, "{:?}", ws);
     }
 
     #[test]
