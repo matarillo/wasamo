@@ -1734,6 +1734,81 @@ impl WidgetNode {
         run_signal_handlers(widget_ptr, "dismiss", handlers);
     }
 
+    /// Deliver an authored `key-down("<key>")` event, walking from
+    /// `start_path` through its ancestors until a handler runs (M4-Phase 2
+    /// T8; `docs/dsl_spec.md` §4.19 "Keyboard events start at the focused
+    /// widget... and walk the same way" as a pointer event; "the first
+    /// matching handler runs and consumes the key"). The caller
+    /// (`focus::key_down_on_key`) has already resolved `start_path` — the
+    /// focused widget, or the innermost modal focus scope when nothing is
+    /// focused — against the same live tree this call runs against, so no
+    /// staleness check is needed on `start_path` itself, the same
+    /// precondition [`Self::hit_test_click`] relies on for the path
+    /// `hit::resolve_topmost` just returned.
+    ///
+    /// Mirrors [`Self::hit_test_click`]'s two-pass shape: resolve every
+    /// node of the dispatch chain to a raw pointer up front, before any
+    /// handler runs (a handler's synchronous state write can rebuild or
+    /// remove subtrees — see `run_clicked_handlers`'s safety note, which
+    /// this inherits rather than restates), then walk front-to-back
+    /// looking up `wasamo_ir::signal_key("key-down", Some(key))` — the one
+    /// string the IR loader and this dispatcher both compose it from
+    /// (DD-M4-P2-005; "Nothing else may compose this string").
+    ///
+    /// Returns `true` as soon as some node in the chain actually runs a
+    /// handler; `false` if the walk reaches the root with nothing run —
+    /// the caller reads that as "not consumed" and lets the key continue
+    /// toward the host key slot and then `DefWindowProcW`
+    /// (`docs/architecture.md` §13.2).
+    ///
+    /// **No `enabled` suppression arm, deliberately — unlike
+    /// [`ClickDisposition::Suppressed`].** `docs/dsl_spec.md` §4.8's
+    /// disabled contract is written over *clicks* ("suppresses
+    /// click-handler dispatch") and says nothing about `key-down`. The
+    /// case is also unreachable from any authored tree today, so a
+    /// suppression branch here would be a branch no test could ever fire
+    /// (implementation-gates trap #4): a disabled Button is excluded from
+    /// Tab-stop enumeration and click landing
+    /// (`focus_core::FocusTree::collect_stops` / `focus_landing`, both
+    /// gated on `node.enabled`), so it can never become the *focused*
+    /// widget and therefore never `start_path`'s target; and a Button can
+    /// carry no children at all (the M4-Phase 2 T8 loader gate,
+    /// `ir_loader.rs`'s Button-family child rejection), so it can never be
+    /// a *non-start* node on any chain either — a Button only ever appears
+    /// on a `key-down` chain as the chain's own first (start) entry, never
+    /// as an ancestor reached afterwards.
+    pub(crate) fn deliver_key_down(&mut self, start_path: &[usize], key: &str) -> bool {
+        let signal = wasamo_ir::signal_key("key-down", Some(key));
+
+        // Same two-step split as `hit_test_click`: resolve every chain
+        // node to a raw pointer first, before any handler runs.
+        let mut chain: Vec<*mut WidgetNode> = Vec::new();
+        for node_path in hit::dispatch_chain(start_path) {
+            // Reborrow `self` fresh for each node_path instead of moving
+            // it, so the outer loop can walk down from the root again for
+            // the next ancestor — the same pattern `hit_test_click` uses.
+            let mut node: &mut WidgetNode = &mut *self;
+            for index in node_path {
+                node = node.children[index].as_mut();
+            }
+            chain.push(node as *mut WidgetNode);
+        }
+
+        for widget_ptr in chain {
+            // Safety: every pointer in `chain` was resolved above, before
+            // any handler in this dispatch ran, so it is still live the
+            // first time the walk reaches it — the same argument
+            // `hit_test_click` makes for its own chain.
+            let handlers = unsafe { signal_handlers_for(widget_ptr, &signal) };
+            if handlers.inline.is_empty() && !handlers.has_host_listener {
+                continue;
+            }
+            run_signal_handlers(widget_ptr, &signal, handlers);
+            return true;
+        }
+        false
+    }
+
     /// Update hover/press state as an enter/leave transition against the
     /// single resolved hit-test target (M4-Phase 2 T4; replaces the pre-T4
     /// whole-tree walk per `docs/architecture.md` §13.2 "computed as enter /
