@@ -924,6 +924,26 @@ fn validate_phase2_node_invariants(node: &IrNode) -> Result<(), IrLoadError> {
             child_member_count
         )));
     }
+    // M4-Phase 2 T8 (CF-1, owner disposition 2026-08-07): a Button-family
+    // node (`Button` / `ToggleButton`) carrying any child member is
+    // rejected here too. `wasamoc check`'s `check_button_family_children`
+    // rejects the same shape at compile time (defense in depth); this is
+    // the runtime gate for memory IR that reaches `wasamo_load_ui` without
+    // traversing `wasamoc`. Unlike Box's "at most one", every child member
+    // (widget, conditional, or `for`) is unknown to `build_layout_tree`
+    // (widget.rs), which maps both kinds to a childless
+    // `LayoutNode::rectangle` — so the admitted count here is zero, not
+    // one. `Text` / `Rectangle` share the identical layout gap but are
+    // deliberately out of scope for this rule (tracked as a separate
+    // finding).
+    if (node.widget_type == "Button" || node.widget_type == "ToggleButton")
+        && child_member_count > 0
+    {
+        return Err(IrLoadError::Validate(format!(
+            "`{}` node accepts no children, got {} (Button-family widgets take a `text:` label rather than authored content; dsl_spec §4.8)",
+            node.widget_type, child_member_count
+        )));
+    }
     // Ratio / Color literal placement (DD-M3-P2-002 / DD-M3-P2-003,
     // variant strategy Option A). These literals materialise directly
     // into Box-internal `Ratio` / `Color` at `build_node` and never
@@ -3839,12 +3859,25 @@ fn construct_widget(
         "Button" => {
             let label = extract_str_prop(&node.props, "text").unwrap_or_default();
             let style = extract_button_style(&node.props, "style");
+            // CF-2 disposition (2026-08-07): read `enabled` exactly the way
+            // the `ToggleButton` arm below does. A literal `enabled: false`
+            // was previously silently dropped here — this arm read only
+            // `text` / `style`, and `WidgetNode::button` hard-coded
+            // `enabled: true` — so only a *state-bound* `enabled` could
+            // disable a plain Button. `has_binding` still defers to the
+            // binding's initial run, same as ToggleButton.
+            let enabled = extract_bool_prop(&node.props, "enabled").unwrap_or(true);
             let initial = if has_binding(&node.bindings, "text") {
                 String::new()
             } else {
                 label
             };
-            WidgetNode::button(compositor, renderer, &initial, style)
+            let initial_enabled = if has_binding(&node.bindings, "enabled") {
+                true
+            } else {
+                enabled
+            };
+            WidgetNode::button_with_enabled(compositor, renderer, &initial, style, initial_enabled)
                 .map_err(|e| IrLoadError::Build(format!("button: {e}")))
         }
         "ToggleButton" => {
@@ -6436,6 +6469,38 @@ mod tests {
         );
         assert_eq!(c.root.children.len(), 1);
         assert_eq!(child_widget(&c.root, 0).widget_type, "Text");
+    }
+
+    // ── M4-Phase 2 T8: Button-family child rejection (CF-1, owner
+    // disposition 2026-08-07) ──────────────────────────────────────────
+
+    #[test]
+    fn validate_rejects_button_with_widget_child() {
+        assert_validate_err(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             node Button { node Text {} }\n\
+             }",
+            "`Button` node accepts no children",
+        );
+    }
+
+    #[test]
+    fn validate_rejects_togglebutton_with_widget_child() {
+        assert_validate_err(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             node ToggleButton { node Text {} }\n\
+             }",
+            "`ToggleButton` node accepts no children",
+        );
+    }
+
+    #[test]
+    fn childless_button_is_valid() {
+        let c = parse_ok(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             node Button { prop text = \"hi\" }\n}",
+        );
+        assert!(c.root.children.is_empty());
     }
 
     // ── M3-Phase 3 T6: WrapPanel validate() defense-in-depth ─────────────

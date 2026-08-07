@@ -979,6 +979,53 @@ fn check_box_child_count(
     }
 }
 
+/// Reject a Button-family widget (`Button` / `ToggleButton`) carrying any
+/// child-materialising member (owner disposition CF-1, 2026-08-07).
+/// `build_layout_tree` (`wasamo-runtime/src/widget.rs`) maps both widget
+/// kinds to a childless `LayoutNode::rectangle`: an authored child is
+/// accepted here by the generic widget-decl walk, built by the IR loader,
+/// but unknown to layout — it renders nothing in release and aborts a
+/// debug build during `wasamo_load_ui` on the `sync_visuals` child-count
+/// assertion.
+///
+/// Mirrors `check_box_child_count`'s completeness: every member that can
+/// materialise a child counts (`WidgetDecl`, `Conditional`, `For`), not
+/// widget declarations only, so `Button { if c { Text {} } }` is caught
+/// even though it authors no bare widget child. Property binds, signal
+/// handlers, and `slot.*` placement binds are unaffected — those are not
+/// `Member::WidgetDecl` / `Conditional` / `For` variants.
+///
+/// `Text` and `Rectangle` share the identical layout gap but are
+/// deliberately out of scope for this rule; they are tracked as a
+/// separate finding.
+fn check_button_family_children(
+    widget_kind: &str,
+    members: &[Member],
+    span: &Span,
+    filename: &str,
+    diags: &mut Vec<Diagnostic>,
+) {
+    let child_count = members
+        .iter()
+        .filter(|m| {
+            matches!(
+                m,
+                Member::WidgetDecl { .. } | Member::Conditional { .. } | Member::For { .. }
+            )
+        })
+        .count();
+    if child_count > 0 {
+        diags.push(error(
+            filename,
+            span,
+            format!(
+                "`{}` admits no widget children (found {}); Button-family widgets take a `text:` label rather than authored content (dsl_spec §4.8)",
+                widget_kind, child_count
+            ),
+        ));
+    }
+}
+
 fn check_zstack_unknown_attr(name: &str, span: &Span, filename: &str, diags: &mut Vec<Diagnostic>) {
     diags.push(error(
         filename,
@@ -2402,6 +2449,9 @@ fn check_members_inner(
                     }
                     if type_name == "Grid" {
                         check_grid(children, span, filename, diags);
+                    }
+                    if type_name == "Button" || type_name == "ToggleButton" {
+                        check_button_family_children(type_name, children, span, filename, diags);
                     }
                     check_members_inner(
                         children,
@@ -4156,6 +4206,94 @@ mod tests {
         let result = check_src(src);
         assert!(!result.has_errors(), "{:?}", result.diagnostics);
         assert!(warnings(src).is_empty(), "{:?}", warnings(src));
+    }
+
+    // --- M4-Phase 2 T8: Button-family child rejection (CF-1, owner
+    // disposition 2026-08-07) ---
+
+    #[test]
+    fn button_with_widget_child_rejected() {
+        let errs = errors(r#"component C inherits W { Button { Text { text: "ok" } } }"#);
+        assert_eq!(errs.len(), 1, "{:?}", errs);
+        assert!(
+            errs[0].contains("`Button` admits no widget children")
+                && errs[0].contains("text:")
+                && errs[0].contains("dsl_spec §4.8"),
+            "{:?}",
+            errs
+        );
+    }
+
+    #[test]
+    fn togglebutton_with_widget_child_rejected() {
+        let errs = errors(r#"component C inherits W { ToggleButton { Text { text: "ok" } } }"#);
+        assert_eq!(errs.len(), 1, "{:?}", errs);
+        assert!(
+            errs[0].contains("`ToggleButton` admits no widget children")
+                && errs[0].contains("dsl_spec §4.8"),
+            "{:?}",
+            errs
+        );
+    }
+
+    #[test]
+    fn button_with_conditional_member_rejected() {
+        // Measured (T8 start gate): a `Conditional` member's own position
+        // inside a Button is not rejected by `check_if_body` (that pass
+        // only validates the `if`'s own body) nor by any Button-specific
+        // placement rule — before this rule, `Button { if c { Text {} } }`
+        // passed unrejected. Mirrors `check_box_child_count`'s completeness
+        // requirement: a conditional sibling must count toward the
+        // child-materialising total, not just bare `WidgetDecl` members.
+        let errs =
+            errors("component C inherits W { state c: bool = true Button { if c { Text {} } } }");
+        assert!(
+            errs.iter()
+                .any(|e| e.contains("`Button` admits no widget children")),
+            "{:?}",
+            errs
+        );
+    }
+
+    #[test]
+    fn button_with_for_member_rejected() {
+        // Measured (T8 start gate): `check_for_member`'s enclosing-widget
+        // match special-cases `None` / `ScrollView` / `Box` / `Grid` /
+        // `Cell` only; `Some("Button")` falls through to its `_ => {}`
+        // arm, so a direct `for` inside a Button was not rejected before
+        // this rule.
+        let errs = errors(
+            "component C inherits W { state xs: i32[] = [] Button { for x in xs { Text {} } } }",
+        );
+        assert!(
+            errs.iter()
+                .any(|e| e.contains("`Button` admits no widget children")),
+            "{:?}",
+            errs
+        );
+    }
+
+    #[test]
+    fn button_with_only_admitted_members_accepted() {
+        // The control that bounds the narrowing: `text:` / `enabled:` /
+        // a `clicked` handler / a `slot.*` bind are not child-materialising
+        // members, so a legitimate Button must not be rejected.
+        let src = r#"component C inherits W {
+            state on: bool = true
+            Grid {
+                columns: 1*
+                rows: 1*
+                Button {
+                    text: "Click"
+                    enabled: on
+                    slot.row: 0
+                    slot.column: 0
+                    clicked => { on = false; }
+                }
+            }
+        }"#;
+        let result = check_src(src);
+        assert!(!result.has_errors(), "{:?}", result.diagnostics);
     }
 
     // --- T3: Box accept shapes (dsl_spec §4.9) ---

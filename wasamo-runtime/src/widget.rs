@@ -975,6 +975,25 @@ impl WidgetNode {
         Self::button_family(compositor, renderer, label, style, true, false, false)
     }
 
+    /// Same as [`Self::button`], but with an explicit initial `enabled`
+    /// state (M4-Phase 2 T8, CF-2 disposition). `button` keeps its
+    /// hard-coded `enabled: true` so every other caller — the C ABI
+    /// `wasamo_button_create`, and the pre-existing `WidgetNode::button`
+    /// call sites in `tests/arranged_rect_integration.rs` and
+    /// `tests/button_enabled.rs` — stays source-compatible; only the IR
+    /// loader's `"Button"` materialisation arm needs a literal
+    /// `enabled: false` to reach construction, matching `toggle_button`'s
+    /// `enabled` parameter.
+    pub fn button_with_enabled(
+        compositor: &Compositor,
+        renderer: &TextRenderer,
+        label: &str,
+        style: ButtonStyle,
+        enabled: bool,
+    ) -> windows::core::Result<Box<Self>> {
+        Self::button_family(compositor, renderer, label, style, enabled, false, false)
+    }
+
     pub fn toggle_button(
         compositor: &Compositor,
         renderer: &TextRenderer,

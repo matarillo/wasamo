@@ -2764,7 +2764,7 @@ ZStack {
 Grid {
     columns: 1* 1*
     rows: 64
-    Button { slot.row: 0  slot.column: 1  Text { text: "ok" } }
+    Button { slot.row: 0  slot.column: 1  text: "ok" }
 }
 ```
 
