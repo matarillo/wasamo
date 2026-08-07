@@ -1,31 +1,41 @@
 //! Focus traversal core — the Win32-independent half of the M4-Phase 2 focus
-//! model, built as the pre-ADR spike required by
-//! `process/milestone-4/phase-2/requirements/framing.md` agreement 5.
+//! model (DD-M4-P2-003 "the spike's traversal core is adopted as the
+//! implementation").
 //!
-//! **This module has no production caller.** It exists so the Phase 2 ADR can
-//! compare options against running code rather than against prose, and so the
-//! two semantics M5's official widget set will consume — group traversal, and
-//! separation of focus from the active item — are demonstrated before the
-//! decisions are Accepted. Whether it ships in this shape is DD-M4-P2-003's
-//! decision, not this module's claim.
+//! **Consumed through a projection, never directly.** `crate::focus`
+//! projects a live `WidgetNode` tree onto the [`FocusTree`] this module
+//! defines and drives it from `WindowState`'s keyboard and pointer arms
+//! (M4-Phase 2 T5) — that projection, not this module, is what a caller
+//! outside this file reaches for. `focus_spike` is a second, override-map
+//! projection kept only for `tests/focus_mechanism_fixture.rs` until
+//! M4-Phase 2 T7 retires it. Neither caller changes this module's logic:
+//! the core stays exactly what the Phase 2 ADR compared options against.
 //!
 //! # Why an annotated tree of its own rather than annotations on `WidgetNode`
 //!
-//! Putting focus annotations on `WidgetData` now would fix the production
-//! representation before the ADR chose one, and would drag the OS types into
-//! what is deliberately pure logic. The core therefore consumes its own
-//! index-based tree; a caller projects whatever it has onto that shape. This
-//! is the mirror-structure allowance in `CLAUDE.md` §Testing rules used at
-//! design time rather than at test time.
+//! Putting focus annotations on `WidgetData` would drag the OS types into
+//! what is deliberately pure logic, and would make every focus rule a
+//! method on a type this crate also uses for Composition and layout. The
+//! core therefore consumes its own index-based tree; a caller projects
+//! whatever it has onto that shape. This is the mirror-structure allowance
+//! in `CLAUDE.md` §Testing rules, used here at design time rather than
+//! only at test time.
 //!
 //! # What the core deliberately does not know
 //!
 //! It does not know how an event reached it (the routing model is
 //! DD-M4-P2-001), where a node is on screen (hit geometry is DD-M4-P2-002),
-//! or how any of this is spelled in `.ui` (DD-M4-P2-005). It answers exactly
-//! one question: given a tree, its annotations, and the current focus state,
-//! what is the next focus target.
+//! or how any of this is spelled in `.ui` (DD-M4-P2-005, landing at
+//! M4-Phase 2 T6). It answers exactly one question: given a tree, its
+//! annotations, and the current focus state, what is the next focus
+//! target.
 
+// `Group`, `ActiveItemList` / `ActiveItem`, and `ModalScope` have no
+// production caller yet: `crate::focus`'s T5 projection derives only
+// `Stop` / `Container` from the widget kind (DD-M4-P2-003 F3), and the
+// authored annotations that would produce the other four roles arrive at
+// M4-Phase 2 T6, projected into production at T7. The allow stays until
+// T7 makes every variant reachable from production.
 #![allow(dead_code)]
 
 use std::collections::BTreeMap;

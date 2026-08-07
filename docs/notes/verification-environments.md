@@ -94,6 +94,30 @@ M4-Phase 1 evidence, is:
   `GetDpiForWindow` and `GetWindowDpiAwarenessContext` themselves are not
   virtualized. Plausible DPI and awareness reads therefore do not make an
   unaware rectangle physical.
+- **Anything that synthesizes keyboard input must acquire foreground
+  activation first, verify it, and retry.** Mouse input is routed by cursor
+  position and needs no activation; keyboard input is routed to the focused
+  window of the *foreground* thread, so a synthesized key press without
+  foreground goes to another window — or nowhere, when the session has no
+  foreground window at all and `GetForegroundWindow` returns `0`.
+  `SetForegroundWindow` alone is refused unless the caller is already
+  foreground, so activation is **earned** with a real click inside the
+  target's client area (choose a point that changes nothing being measured)
+  and then **read back**, never requested and assumed. A single refusal is
+  not an environment verdict: a window just created, shown and repositioned
+  takes a moment to become activatable, so retry before concluding
+  anything. This is a property of how Windows routes input, not of a
+  particular machine — a tool that clicks-verifies-retries works on any
+  interactive desktop session, and one that does not is unreliable
+  everywhere.
+- **A capture that delivers keys by posting `WM_KEYDOWN` instead supports a
+  weaker claim, and says so.** A posted message still travels the window's
+  real message loop and window procedure, so it evidences "this message
+  makes the runtime do X"; it skips the OS input stack that decides *which
+  window* a key reaches, so it evidences nothing about real keyboard
+  delivery. Every capture records which of the two paths it used, because
+  the resulting numbers look identical and a silent fallback would be
+  invisible in the artifact.
 
 The old premise for that second rule was false after M4-Phase 1: the Wasamo
 runtime now declares Per-Monitor-Aware V2 itself; DWM is not bitmap-stretching

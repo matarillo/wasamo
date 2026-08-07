@@ -12,7 +12,7 @@
 //!
 //! # What the widget tree can and cannot supply today
 //!
-//! [`WidgetNode::spike_focus_role`] derives a role from the widget kind alone.
+//! [`WidgetNode::focus_role`] derives a role from the widget kind alone.
 //! It can produce exactly two of the six roles: `Stop` (Button family) and
 //! `Container` (everything else). `Group`, `ModalScope`, `ActiveItemList` and
 //! `ActiveItem` have **no representation in `WidgetData`** — nothing an author
@@ -70,7 +70,7 @@ fn walk(
     out: &mut Projection,
 ) {
     let index = out.widgets.len();
-    let (derived_role, enabled) = node.spike_focus_role();
+    let (derived_role, enabled) = node.focus_role();
     let role = overrides.get(&index).copied().unwrap_or(derived_role);
     let id = out.tree.push(parent, role, enabled);
     debug_assert_eq!(id, index, "FocusId is the pre-order index by construction");

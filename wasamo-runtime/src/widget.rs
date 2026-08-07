@@ -74,6 +74,13 @@ struct ButtonData {
     // greyed with no animation. Focus / a11y / hover-state semantics are
     // deferred to M4–M5.
     enabled: bool,
+    /// Whether this node currently paints the focus indicator (M4-Phase 2
+    /// T5; DD-M4-P2-003 "the indicator is presentation state on the
+    /// node... and not a new visual written at focus-change time").
+    /// Paired with the window's `WindowFocus` record; written only by
+    /// [`WidgetNode::set_button_focused_at`], whose only caller is
+    /// `crate::focus::move_focus`.
+    focused: bool,
 }
 
 // ── Widget kinds ──────────────────────────────────────────────────────────────
@@ -965,7 +972,7 @@ impl WidgetNode {
         // Root visual: background.
         let bg_visual = compositor.CreateSpriteVisual()?;
         let initial_color =
-            effective_button_color(style, ButtonState::Normal, accent, enabled, checked);
+            effective_button_color(style, ButtonState::Normal, accent, enabled, checked, false);
         let bg_brush = compositor.CreateColorBrushWithColor(initial_color)?;
         bg_visual.SetBrush(&bg_brush)?;
 
@@ -1021,6 +1028,7 @@ impl WidgetNode {
             clicked_fn: None,
             accent,
             enabled,
+            focused: false,
         });
         let data = if toggle {
             WidgetData::ToggleButton(btn_data)
@@ -1099,16 +1107,20 @@ impl WidgetNode {
         }
     }
 
-    /// M4-Phase 2 spike seam: the focus role and enabled state derivable from
-    /// this node's **widget kind alone**, with no authored annotation.
+    /// The focus role and enabled state derivable from this node's
+    /// **widget kind alone**, with no authored annotation (DD-M4-P2-003 F3:
+    /// "Button-family focusable by default via a derivation that is
+    /// exhaustive over widget kinds; the derivation is the extension
+    /// point"). `crate::focus::FocusProjection::project` calls this once
+    /// per node in its pre-order walk over the window's live tree.
     ///
-    /// Deliberately total over `WidgetData` rather than a `_` arm, so a later
-    /// widget kind cannot become a silent `Container`. The measurement it
-    /// exists for is the size of the gap: only two of `FocusRole`'s six
-    /// variants are reachable from here, which is what
-    /// `process/milestone-4/phase-2/decisions/exploration/` records as the
-    /// annotation surface DD-M4-P2-005 must design.
-    pub(crate) fn spike_focus_role(&self) -> (crate::focus_core::FocusRole, bool) {
+    /// Deliberately total over `WidgetData` rather than a `_` arm, so a
+    /// later widget kind cannot become a silent `Container`. Only two of
+    /// `FocusRole`'s six variants are reachable from here — `Stop`
+    /// (Button family) and `Container` (everything else); `Group` and
+    /// `ModalScope` arrive with the authored annotations M4-Phase 2 T6
+    /// adds and T7 projects.
+    pub(crate) fn focus_role(&self) -> (crate::focus_core::FocusRole, bool) {
         use crate::focus_core::FocusRole;
         match &self.data {
             WidgetData::Button(btn) | WidgetData::ToggleButton(btn) => {
@@ -1299,8 +1311,14 @@ impl WidgetNode {
             return Ok(());
         }
         btn.style = new_style;
-        let target =
-            effective_button_color(btn.style, btn.state, btn.accent, btn.enabled, btn.checked);
+        let target = effective_button_color(
+            btn.style,
+            btn.state,
+            btn.accent,
+            btn.enabled,
+            btn.checked,
+            btn.focused,
+        );
         let new_brush = compositor.CreateColorBrushWithColor(target)?;
         visual.SetBrush(&new_brush)?;
         btn.bg_brush = new_brush;
@@ -1323,8 +1341,14 @@ impl WidgetNode {
         // only repaint the background and reset the transient state so the
         // grey colour isn't immediately overridden by a stale hover/press.
         btn.state = ButtonState::Normal;
-        let target =
-            effective_button_color(btn.style, btn.state, btn.accent, btn.enabled, btn.checked);
+        let target = effective_button_color(
+            btn.style,
+            btn.state,
+            btn.accent,
+            btn.enabled,
+            btn.checked,
+            btn.focused,
+        );
         let new_brush = compositor.CreateColorBrushWithColor(target)?;
         visual.SetBrush(&new_brush)?;
         btn.bg_brush = new_brush;
@@ -1342,8 +1366,14 @@ impl WidgetNode {
             return Ok(());
         }
         btn.checked = new_checked;
-        let target =
-            effective_button_color(btn.style, btn.state, btn.accent, btn.enabled, btn.checked);
+        let target = effective_button_color(
+            btn.style,
+            btn.state,
+            btn.accent,
+            btn.enabled,
+            btn.checked,
+            btn.focused,
+        );
         let new_brush = compositor.CreateColorBrushWithColor(target)?;
         visual.SetBrush(&new_brush)?;
         btn.bg_brush = new_brush;
@@ -1692,10 +1722,66 @@ impl WidgetNode {
         if new_state != btn.state {
             let old_state = btn.state;
             btn.state = new_state;
-            let target =
-                effective_button_color(btn.style, new_state, btn.accent, true, btn.checked);
+            let target = effective_button_color(
+                btn.style,
+                new_state,
+                btn.accent,
+                true,
+                btn.checked,
+                btn.focused,
+            );
             let ticks = transition_duration(old_state, new_state);
             start_color_anim(compositor, &btn.bg_brush, target, ticks)?;
+        }
+        Ok(())
+    }
+
+    /// Paint (or unpaint) this node's focus indicator (M4-Phase 2 T5;
+    /// DD-M4-P2-003 "the indicator is presentation state on the node...
+    /// not a new visual written at focus-change time"). Shares
+    /// [`Self::node_at_path_mut`]'s bounds-checked descent with
+    /// [`Self::set_button_state_at`]: a stale `path` is a silent no-op,
+    /// for the reason recorded there.
+    ///
+    /// **The only caller is `crate::focus::move_focus`.** That is what
+    /// keeps `WindowFocus`'s focused id and this painted flag written by
+    /// one primitive — the same pairing discipline [`HoverState`] carries
+    /// for hover (T4 trap #3), and the shape DD-M4-P2-003 fixes for focus
+    /// ("the focus pointer... is written by one primitive").
+    ///
+    /// **`enabled` is read off the node here, where
+    /// [`Self::set_button_state_at`] passes a constant `true`.** That
+    /// sibling can afford the constant because `update_button_enabled`
+    /// forces `state` back to `Normal` when it disables a node, so its own
+    /// guard makes every later hover transition on a disabled node a no-op.
+    /// No equivalent invariant holds for `focused`: a node can be disabled
+    /// by a binding write while it still holds focus (DD-M4-P2-003's
+    /// successor rule applies at the next traversal, not at the write), so
+    /// the leave that eventually runs here would animate a disabled node
+    /// away from its flat grey if this call claimed it was enabled.
+    pub(crate) fn set_button_focused_at(
+        &mut self,
+        compositor: &Compositor,
+        path: &[usize],
+        focused: bool,
+    ) -> windows::core::Result<()> {
+        let Some(node) = self.node_at_path_mut(path) else {
+            return Ok(());
+        };
+        let Some(btn) = node.button_data_mut() else {
+            return Ok(());
+        };
+        if focused != btn.focused {
+            btn.focused = focused;
+            let target = effective_button_color(
+                btn.style,
+                btn.state,
+                btn.accent,
+                btn.enabled,
+                btn.checked,
+                btn.focused,
+            );
+            start_color_anim(compositor, &btn.bg_brush, target, FOCUS_TRANSITION_TICKS)?;
         }
         Ok(())
     }
@@ -1752,6 +1838,14 @@ impl WidgetNode {
             ButtonState::Hovered => "hovered",
             ButtonState::Pressed => "pressed",
         })
+    }
+
+    /// Test-only accessor for this node's painted focus indicator
+    /// (M4-Phase 2 T5). `None` for non-Button-family widgets, matching
+    /// [`Self::__button_state_for_test`]'s shape.
+    #[doc(hidden)]
+    pub fn __button_focused_for_test(&self) -> Option<bool> {
+        self.button_data().map(|btn| btn.focused)
     }
 
     #[doc(hidden)]
@@ -2754,19 +2848,60 @@ const BUTTON_DISABLED_COLOR: Color = Color {
     B: 0x80,
 };
 
+/// M4-Phase 2 T5's focus colour (DD-M4-P2-003 "shares its only means — a
+/// background change — with hover and the selected state, so the three
+/// must remain visually distinct"). Until M5's theming surface there is no
+/// border and no focus ring to draw instead (`docs/dsl_spec.md` §4.18), so
+/// a background blend is the only means available, and the colour itself
+/// is provisional — M5's theming surface may absorb it.
+const FOCUS_INDICATOR_COLOR: Color = Color {
+    A: 0xF0,
+    R: 0xFF,
+    G: 0xC4,
+    B: 0x4D,
+};
+
+fn blend_half(a: u8, b: u8) -> u8 {
+    ((a as u16 + b as u16) / 2) as u8
+}
+
+/// Blend `base` halfway toward [`FOCUS_INDICATOR_COLOR`], every channel
+/// including alpha. Blending rather than replacing is what keeps the
+/// hover / selected colour underneath legible — DD-M4-P2-003 requires the
+/// focused state to be visibly distinct from *both*, not to erase either.
+fn focus_indicator_color(base: Color) -> Color {
+    Color {
+        A: blend_half(base.A, FOCUS_INDICATOR_COLOR.A),
+        R: blend_half(base.R, FOCUS_INDICATOR_COLOR.R),
+        G: blend_half(base.G, FOCUS_INDICATOR_COLOR.G),
+        B: blend_half(base.B, FOCUS_INDICATOR_COLOR.B),
+    }
+}
+
 fn effective_button_color(
     style: ButtonStyle,
     state: ButtonState,
     accent: Color,
     enabled: bool,
     checked: bool,
+    focused: bool,
 ) -> Color {
     if !enabled {
+        // A disabled widget is not a stop at all (DD-M4-P2-003; `docs/dsl_spec.md`
+        // §4.8 / §4.19), so its flat disabled grey must survive regardless
+        // of `focused` — checked *before* `focused` is even read.
         BUTTON_DISABLED_COLOR
-    } else if checked {
-        toggle_checked_color(style, state, accent)
     } else {
-        button_state_color(style, state, accent)
+        let base = if checked {
+            toggle_checked_color(style, state, accent)
+        } else {
+            button_state_color(style, state, accent)
+        };
+        if focused {
+            focus_indicator_color(base)
+        } else {
+            base
+        }
     }
 }
 
@@ -2835,6 +2970,15 @@ fn transition_duration(old: ButtonState, new: ButtonState) -> i64 {
         _ => 1_670_000,                         // hover-out: slow
     }
 }
+
+/// Duration for the focus-indicator colour transition (M4-Phase 2 T5).
+/// `transition_duration` above takes an (old, new) *hover/press* state
+/// pair; the focus indicator is a second, independent axis on the same
+/// brush (DD-M4-P2-003), so reusing that function's two-argument shape
+/// here would be a meaningless pair rather than a shared rule. "fast"
+/// (83 ms) matches the enter-state duration hover/press already use, so a
+/// focus change reads as similarly immediate.
+const FOCUS_TRANSITION_TICKS: i64 = 830_000;
 
 fn start_color_anim(
     compositor: &Compositor,
@@ -3029,10 +3173,15 @@ mod tests {
                 ButtonState::Hovered,
                 ButtonState::Pressed,
             ] {
-                assert_eq!(
-                    effective_button_color(style, state, accent, false, true),
-                    BUTTON_DISABLED_COLOR
-                );
+                for focused in [false, true] {
+                    assert_eq!(
+                        effective_button_color(style, state, accent, false, true, focused),
+                        BUTTON_DISABLED_COLOR,
+                        "DD-M4-P2-003: a disabled widget is not a stop at all, so its flat \
+                         disabled grey must survive regardless of the focus flag \
+                         (style={style:?}, state={state:?}, focused={focused})"
+                    );
+                }
             }
         }
     }
@@ -3046,7 +3195,8 @@ mod tests {
                 ButtonState::Normal,
                 accent,
                 true,
-                true
+                true,
+                false,
             ),
             color(0xE6, 0x2F, 0x80, 0xED)
         );
@@ -3056,7 +3206,8 @@ mod tests {
                 ButtonState::Hovered,
                 accent,
                 true,
-                true
+                true,
+                false,
             ),
             color(0xF0, 0x4B, 0x93, 0xF0)
         );
@@ -3066,12 +3217,20 @@ mod tests {
                 ButtonState::Pressed,
                 accent,
                 true,
-                true
+                true,
+                false,
             ),
             color(0xF0, 0x1F, 0x66, 0xCC)
         );
         assert_eq!(
-            effective_button_color(ButtonStyle::Accent, ButtonState::Normal, accent, true, true),
+            effective_button_color(
+                ButtonStyle::Accent,
+                ButtonState::Normal,
+                accent,
+                true,
+                true,
+                false,
+            ),
             color(0xFF, 0x04, 0x64, 0xB4)
         );
         assert_eq!(
@@ -3080,7 +3239,8 @@ mod tests {
                 ButtonState::Hovered,
                 accent,
                 true,
-                true
+                true,
+                false,
             ),
             color(0xFF, 0x30, 0x90, 0xE0)
         );
@@ -3090,10 +3250,71 @@ mod tests {
                 ButtonState::Pressed,
                 accent,
                 true,
-                true
+                true,
+                false,
             ),
             color(0xFF, 0x00, 0x54, 0xA4)
         );
+    }
+
+    // ── Focus indicator distinctness (M4-Phase 2 T5, DD-M4-P2-003) ────────
+
+    /// Do `a` and `b` differ by at least `min` in at least one channel
+    /// (A/R/G/B)? `u8::abs_diff` is not used so the comparison reads the
+    /// same shape as the ADR's wording ("distinct... by at least N").
+    fn channel_delta_at_least(a: Color, b: Color, min: u8) -> bool {
+        fn delta(x: u8, y: u8) -> u8 {
+            x.max(y) - x.min(y)
+        }
+        delta(a.A, b.A) >= min
+            || delta(a.R, b.R) >= min
+            || delta(a.G, b.G) >= min
+            || delta(a.B, b.B) >= min
+    }
+
+    #[test]
+    fn focused_normal_is_distinct_from_every_unfocused_hover_state() {
+        let accent = color(0xFF, 0x20, 0x80, 0xD0);
+        for style in [ButtonStyle::Default, ButtonStyle::Accent] {
+            for checked in [false, true] {
+                let focused_normal =
+                    effective_button_color(style, ButtonState::Normal, accent, true, checked, true);
+                for (label, state) in [
+                    ("Normal", ButtonState::Normal),
+                    ("Hovered", ButtonState::Hovered),
+                    ("Pressed", ButtonState::Pressed),
+                ] {
+                    let unfocused =
+                        effective_button_color(style, state, accent, true, checked, false);
+                    assert!(
+                        channel_delta_at_least(focused_normal, unfocused, 8),
+                        "DD-M4-P2-003: the focused state must be visibly distinct from \
+                         unfocused {label} ({style:?}, checked={checked}) by at least 8 in \
+                         at least one channel, or a captured frame cannot say which stop \
+                         holds focus"
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn focused_unchecked_is_distinct_from_unfocused_checked_the_selected_confusion() {
+        // The gallery's first Tab stop is a *checked* ToggleButton (T5 scope
+        // fact 5), so this is not a constructed edge case: it is the first
+        // frame any traversal evidence produces.
+        let accent = color(0xFF, 0x20, 0x80, 0xD0);
+        for style in [ButtonStyle::Default, ButtonStyle::Accent] {
+            let focused_unchecked =
+                effective_button_color(style, ButtonState::Normal, accent, true, false, true);
+            let unfocused_checked =
+                effective_button_color(style, ButtonState::Normal, accent, true, true, false);
+            assert!(
+                channel_delta_at_least(focused_unchecked, unfocused_checked, 8),
+                "DD-M4-P2-003 names this confusion directly: focused-but-unchecked \
+                 ({style:?}) must not read as unfocused-but-checked (selected)"
+            );
+        }
     }
 
     #[test]

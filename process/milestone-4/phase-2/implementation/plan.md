@@ -231,7 +231,9 @@ widget kind — the two roles the tree can already supply.
   order, wrapping both ends, so the first Tab lands on the first stop.
   A disabled Button is skipped. Click focuses the **nearest focusable
   widget at or above** the resolved target and leaves focus unchanged
-  when there is none; window activation does not change it.
+  when there is none; window activation does not change it. The click's
+  focus write is ordered **before** dispatch, because a handler's
+  synchronous rebuild can invalidate the path the click resolved.
 - The key path integrates with the **existing** `WM_KEYDOWN` arm, which
   today forwards to the uninstalled `key_down_fn` host slot and returns.
   Routing consumes ahead of that slot without installing it — the first
@@ -240,21 +242,46 @@ widget kind — the two roles the tree can already supply.
   must not be that installer. **An unconsumed key now falls through to
   `DefWindowProc`** instead of being swallowed (DD-001); the arm's
   return path changes here and the change has its own assertion.
-- The focus indicator is drawn through `sync_visuals` and nowhere else —
-  a `SetOffset` / `SetSize` outside that pass silently breaks the
-  property DD-002's audit depends on (Phase 1, T3). Close artifact: the
-  enumeration of every `SetOffset` / `SetSize` in the runtime with its
-  pass (DD-003).
+- **The key *walk* is not built here** (decided at the start gate). No
+  authored key handler can exist until T8 adds `key-down("<key>")`, so a
+  dispatch built now would be a branch no test could fire. T5 lands the
+  consumption half and the fallthrough half; T8 lands the dispatch
+  between them.
+- **`DefWindowProc`'s return value cannot distinguish the fallthrough**
+  (measured over eight candidate keys: every one returns 0 either way).
+  What discriminates is the **host key slot**, which the arm reaches only
+  after traversal declines — a fixture installs a recorder there, and
+  that is what makes "routing consumes ahead of the slot" falsifiable.
+- The focus indicator adds **no** `SetOffset` / `SetSize`: it is a brush
+  colour written through the same primitive hover uses, and creates no
+  `Visual`. Close artifact: the enumeration of every `SetOffset` /
+  `SetSize` in the runtime with its pass (DD-003) — still the six inside
+  `sync_visuals`. [architecture.md §13.3](../../../../docs/architecture.md)'s
+  "applied by the same pass that writes visual geometry" cannot be
+  implemented literally, because a focus change triggers no layout pass;
+  the divergence is recorded for T13 rather than resolved here.
 - The indicator must be **distinguishable** (DD-003): M4's only means is
   a background change, and the ToggleButton selected state and hover
   state are also background changes. Evidence includes a frame pair
   showing focused versus hovered/selected as visibly distinct states.
+  The gallery's **first** Tab stop is a checked `ToggleButton`, so the
+  hardest of the three comparisons is the one the evidence meets first.
+- **A stop disabled or removed while focused applies the successor rule
+  lazily**, at the next traversal, landing on the domain's first stop.
+  Computing the correct successor *before* the mutation needs the
+  materialisation seam, which is T7's; both halves are carried forward
+  rather than left implicit.
+- **A retained focus id outliving its projection was a reachable crash**,
+  found in review and fixed here rather than carried: the id is the
+  pre-order index of a projection rebuilt per operation, and a handler
+  that removes its own subtree shrinks the projection out from under it.
+  The shipped gallery reaches it through the lightbox's close control.
 - **Evidence:** integration tests establishing their own initial focus
   state, then asserting the **expected next stop** rather than that
   focus moved; the indicator distinctness frames; the write-site
   enumeration.
 
-- [ ] T5
+- [x] T5
 
 ## T6 — DSL: `focus-group`, `modal-scope`, and `dismiss`
 
@@ -521,6 +548,17 @@ The four controls from the [framing](../requirements/framing.md)
   from a broken one. Every capture states its scale either way.
 - Any tool that reads window geometry or cursor position declares
   Per-Monitor-Aware V2 first (Phase 1 F-48).
+- **Control B is Tab-driven, so its capture acquires foreground
+  activation before sending a key, verifies it, and retries** — keyboard
+  input goes to the focused window of the foreground thread, unlike the
+  cursor-routed input every earlier control used
+  ([verification-environments.md](../../../../docs/notes/verification-environments.md)
+  Observation 4). Each capture **records which input path it used**: real
+  key presses, or posted `WM_KEYDOWN`, which is the weaker claim. The
+  numbers look identical either way, so a silent fallback would be
+  invisible in the artifact. T5's
+  [capture-t5-focus.ps1](./evidence/capture-t5-focus.ps1) is the working
+  shape.
 - **The owner smoke guide is written out here** (framing §オーナー目視)
   and verified against the target commit before it is used.
 
@@ -559,6 +597,18 @@ The four controls from the [framing](../requirements/framing.md)
   - §4.19's `dismiss` admission rule (only beside `modal-scope: true`)
     and its keys-the-runtime-keeps table match the landed checker and
     runtime behaviour;
+  - **§13.3's focus-indicator sentence matches the landed runtime.** Its
+    second half ("not a visual written at focus-change time") is
+    satisfied literally — no `Visual` is created and the runtime still
+    has exactly six `SetOffset` / `SetSize` calls, all inside
+    `sync_visuals`. Its first half ("applied by the same pass that writes
+    visual geometry") is not implementable: that pass runs only from
+    layout, and a Tab press triggers none, so an indicator applied there
+    would not appear until something else re-laid the tree out. The
+    landed indicator is presentation state on the node applied by the
+    same means hover and pressed use, which is what DD-003's own
+    "the same shape as Button hover / pressed" says. Owner-settled
+    2026-08-07: correct the wording here (T5 close gate CF-T5-6);
   - the entry rule (presence is the entry; focus moves in) and the clip
     bound in §13 match the landed runtime;
   - **no fixture spelling appears in `docs/dsl_spec.md`** (DD-005 /
